@@ -99,6 +99,23 @@ describe('explainUpgradeFailure', () => {
   })
 })
 
+describe('explainUpgradeFailure for the control plane step', () => {
+  it('names a web server that did not start and gives the one command', () => {
+    const explained = explainUpgradeFailure({ errorCode: 'web_server_failed' })
+    expect(explained.title).toBe('The web server did not start')
+    expect(explained.command).toBe('sudo systemctl restart turbopanel-caddy')
+  })
+
+  it('leads with the plain fact for recovery_required and says to check health first', () => {
+    const explained = explainUpgradeFailure({
+      errorCode: 'recovery_required',
+      errorMessage: 'recovery_required: rollback ...',
+    })
+    expect(explained.title).toBe('The previous build could not be confirmed')
+    expect(explained.body).toContain('Check whether the control plane is answering')
+  })
+})
+
 describe('runToShow', () => {
   it('prefers the active run', () => {
     const active = run()
@@ -119,6 +136,47 @@ describe('runToShow', () => {
     expect(runToShow({ run: null, lastRun: run({ status: 'succeeded' }) }).run).toBeNull()
     expect(runToShow({ run: null }).run).toBeNull()
     expect(runToShow(undefined).run).toBeNull()
+  })
+})
+
+describe('runToShow with the running build', () => {
+  const failedPlane = (toCommit: string) =>
+    run({
+      status: 'failed',
+      steps: [
+        step({
+          phase: 'control_plane',
+          unit: 'instance',
+          status: 'failed',
+          toCommit,
+          toVersion: '0.1.5',
+        }),
+      ],
+    })
+
+  it('hides a failed control-plane run whose target build is running', () => {
+    expect(runToShow({ run: null, lastRun: failedPlane('abc') }, { commit: 'abc' }).run).toBeNull()
+    expect(
+      runToShow({ run: null, lastRun: failedPlane('abc') }, { version: '0.1.5' }).run
+    ).toBeNull()
+  })
+
+  it('keeps it when another build is running or nothing is known', () => {
+    const failed = failedPlane('abc')
+    expect(runToShow({ run: null, lastRun: failed }, { commit: 'zzz' }).run).toBe(failed)
+    expect(runToShow({ run: null, lastRun: failed }, {}).run).toBe(failed)
+    expect(runToShow({ run: null, lastRun: failed }).run).toBe(failed)
+  })
+
+  it('keeps a failure that is not only the control plane', () => {
+    const mixed = run({
+      status: 'partially_failed',
+      steps: [
+        step({ phase: 'control_plane', unit: 'instance', status: 'failed', toCommit: 'abc' }),
+        step({ id: 's2', phase: 'fleet', status: 'failed', toCommit: 'abc' }),
+      ],
+    })
+    expect(runToShow({ run: null, lastRun: mixed }, { commit: 'abc' }).run).toBe(mixed)
   })
 })
 

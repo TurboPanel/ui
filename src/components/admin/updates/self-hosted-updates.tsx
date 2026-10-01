@@ -1,4 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router'
+import { getInstanceRevision, getInstanceVersion } from '@/lib/instance-version'
 import { useEffect, useMemo, useRef, useState, type ComponentProps } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { readConsoleBuild } from '@/components/admin/updates/console-build'
@@ -332,7 +333,10 @@ export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>)
   const { cancel, cancelling } = useCancelRun(flow.setNotice)
   const { retryingStepId, retry } = useRetryFleetStep()
 
-  const shown = runToShow(activeRun.data)
+  const shown = runToShow(activeRun.data, {
+    version: getInstanceVersion(),
+    commit: getInstanceRevision(),
+  })
   const run = shown.run
   const failure = runFailure(run)
   const nowMs = useStallClock(run, shown.finished)
