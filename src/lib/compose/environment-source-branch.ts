@@ -95,10 +95,7 @@ function overlayDefinesImageOrBuild(overlayService: OverlayService): boolean {
   return typeof overlayService.image === 'string' || overlayService.build !== undefined
 }
 
-function blockedReasonFor(
-  merged: ServiceView,
-  overlayService: OverlayService
-): string | null {
+function blockedReasonFor(merged: ServiceView, overlayService: OverlayService): string | null {
   if (overlayService === 'tagged') {
     return 'This environment replaces or resets the service in its own compose. Edit it in the compose editor.'
   }
