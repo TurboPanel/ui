@@ -18,6 +18,7 @@ import type {
 } from '@/lib/managed-services'
 import type { ManagedSslMode } from '@/lib/managed-ssl'
 import { getActiveOrganizationId, ORG_ID_HEADER } from '@/lib/org-context'
+import { fetchWithStepUp, reauthFailureMessage } from '@/lib/step-up'
 export {
   isForbiddenError,
   isHttpStatusError,
@@ -193,7 +194,7 @@ export type InstallStatus = {
 }
 
 export async function fetchSession(): Promise<SessionInfo | null> {
-  const response = await fetch(controlPlaneUrl(`${CLIENT_API}/authn/session`), {
+  const response = await fetchWithStepUp(controlPlaneUrl(`${CLIENT_API}/authn/session`), {
     credentials: 'include',
     headers: { 'content-type': 'application/json' },
   })
@@ -1088,6 +1089,43 @@ export async function saveOrgTlsSettings(
   })
 }
 
+export type OrgReauthSettings = {
+  /** Owner opt-in: permanent actions ask the person to prove who they are again. Off by default. */
+  requireReauthForDestructive: boolean
+}
+
+export async function fetchOrgReauthSettings(orgId: string): Promise<OrgReauthSettings> {
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/reauth-settings`)
+}
+
+export async function saveOrgReauthSettings(
+  orgId: string,
+  patch: OrgReauthSettings
+): Promise<OrgReauthSettings> {
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/reauth-settings`, {
+    method: 'PUT',
+    body: JSON.stringify(patch),
+  })
+}
+
+/**
+ * Prove who you are again (`POST /auth/reauth`) so permanent actions unlock
+ * for a few minutes on this sign-in. Deliberately a plain `fetch`: a wrong
+ * proof must show its own message, never open the prompt again.
+ */
+export async function submitReauth(
+  body: { password: string } | { code: string }
+): Promise<{ ok: true; expiresAt: string }> {
+  const response = await fetch(controlPlaneUrl(`${CLIENT_API}/auth/reauth`), {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json', ...clientVersionHeaders() },
+    body: JSON.stringify(body),
+  })
+  if (!response.ok) throw new Error(reauthFailureMessage(response.status))
+  return (await response.json()) as { ok: true; expiresAt: string }
+}
+
 export type OrgComposeGatedFields = {
   /** Owner opt-in for the ten root-equivalent compose fields. Off by default. */
   composeGatedFieldsEnabled: boolean
@@ -1599,7 +1637,7 @@ export async function deleteServer(
   }
 
   const path = `${CLIENT_API}/servers/${serverId}`
-  const response = await fetch(controlPlaneUrl(path), {
+  const response = await fetchWithStepUp(controlPlaneUrl(path), {
     method: 'DELETE',
     credentials: 'include',
     headers,
@@ -1700,7 +1738,7 @@ async function apiFetch<T>(
     headers[ORG_ID_HEADER] = resolvedOrgId
   }
 
-  const response = await fetch(controlPlaneUrl(path), {
+  const response = await fetchWithStepUp(controlPlaneUrl(path), {
     ...init,
     credentials: 'include',
     headers,
@@ -1958,7 +1996,7 @@ export async function createLicense(
     headers[ORG_ID_HEADER] = resolvedOrgId
   }
 
-  const response = await fetch(controlPlaneUrl(`${CLIENT_API}/licenses`), {
+  const response = await fetchWithStepUp(controlPlaneUrl(`${CLIENT_API}/licenses`), {
     method: 'POST',
     credentials: 'include',
     headers,
@@ -2234,7 +2272,7 @@ async function billingPost<T>(path: string, body: Record<string, unknown>): Prom
   const headers: Record<string, string> = { 'content-type': 'application/json' }
   const resolvedOrgId = getActiveOrganizationId()
   if (resolvedOrgId) headers[ORG_ID_HEADER] = resolvedOrgId
-  const response = await fetch(controlPlaneUrl(path), {
+  const response = await fetchWithStepUp(controlPlaneUrl(path), {
     method: 'POST',
     credentials: 'include',
     headers,
@@ -3676,7 +3714,7 @@ async function cidrWriteFetch<T>(path: string, init: RequestInit): Promise<T> {
   }
   const resolvedOrgId = getActiveOrganizationId()
   if (resolvedOrgId) headers[ORG_ID_HEADER] = resolvedOrgId
-  const response = await fetch(controlPlaneUrl(path), {
+  const response = await fetchWithStepUp(controlPlaneUrl(path), {
     ...init,
     credentials: 'include',
     headers,
@@ -4316,7 +4354,7 @@ async function adminJson<T>(path: string, init: RequestInit): Promise<T> {
   }
   const orgId = getActiveOrganizationId()
   if (orgId) headers[ORG_ID_HEADER] = orgId
-  const response = await fetch(controlPlaneUrl(path), {
+  const response = await fetchWithStepUp(controlPlaneUrl(path), {
     ...init,
     credentials: 'include',
     headers,
@@ -5931,7 +5969,7 @@ export async function deployEnvironment(
     headers[ORG_ID_HEADER] = resolvedOrgId
   }
 
-  const response = await fetch(controlPlaneUrl(path), {
+  const response = await fetchWithStepUp(controlPlaneUrl(path), {
     method: 'POST',
     credentials: 'include',
     headers,
@@ -7157,7 +7195,7 @@ async function fetchServerMetricsJson<T>(
   }
 
   const path = `${CLIENT_API}/servers/${serverId}/metrics/${pathSuffix}?${query.toString()}`
-  const response = await fetch(controlPlaneUrl(path), {
+  const response = await fetchWithStepUp(controlPlaneUrl(path), {
     credentials: 'include',
     headers,
   })
@@ -7292,7 +7330,7 @@ export async function fetchFleetMetricsLatest(
   }
 
   const path = `${CLIENT_API}/servers/metrics/latest`
-  const response = await fetch(controlPlaneUrl(path), {
+  const response = await fetchWithStepUp(controlPlaneUrl(path), {
     credentials: 'include',
     headers,
   })
@@ -7381,7 +7419,7 @@ export async function startServerMetricsLive(
   }
 
   const path = `${CLIENT_API}/servers/${serverId}/metrics/live`
-  const response = await fetch(controlPlaneUrl(path), {
+  const response = await fetchWithStepUp(controlPlaneUrl(path), {
     method: 'POST',
     credentials: 'include',
     headers,
@@ -7566,7 +7604,7 @@ export async function fetchServerMetricsCapabilities(
   }
 
   const path = `${CLIENT_API}/servers/${serverId}/metrics/capabilities`
-  const response = await fetch(controlPlaneUrl(path), {
+  const response = await fetchWithStepUp(controlPlaneUrl(path), {
     credentials: 'include',
     headers,
   })
@@ -8504,7 +8542,7 @@ export async function downloadOrganizationCaPem(): Promise<string> {
   if (resolvedOrgId) {
     headers[ORG_ID_HEADER] = resolvedOrgId
   }
-  const response = await fetch(controlPlaneUrl(`${CLIENT_API}/tls/ca/download`), {
+  const response = await fetchWithStepUp(controlPlaneUrl(`${CLIENT_API}/tls/ca/download`), {
     credentials: 'include',
     headers,
   })
@@ -8595,7 +8633,7 @@ export async function importDockerRunCommand(body: {
     headers[ORG_ID_HEADER] = organizationId
   }
 
-  const response = await fetch(controlPlaneUrl(path), {
+  const response = await fetchWithStepUp(controlPlaneUrl(path), {
     method: 'POST',
     credentials: 'include',
     headers,
