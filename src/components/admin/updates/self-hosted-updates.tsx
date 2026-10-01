@@ -56,6 +56,7 @@ import {
   withStartTimeout,
 } from '@/lib/update-status'
 import { colors, spacing } from '@/lib/theme'
+import { UPDATE_ALREADY_ACTIVE_COPY, apiErrorCopy, userErrorMessage } from '@/lib/user-error'
 
 type ShownRun = NonNullable<ReturnType<typeof runToShow>['run']>
 type FleetServers = ComponentProps<typeof UpgradeFleetTable>['servers']
@@ -90,7 +91,7 @@ function useStartUpgradeFlow(refetchActiveRun: () => unknown, consoleCommit?: st
       setPreflight(result)
       setPreflightOpen(true)
     } catch (err) {
-      setNotice(err instanceof Error ? err.message : 'Preflight failed')
+      setNotice(userErrorMessage(err, 'Preflight failed'))
     }
   }
 
@@ -111,12 +112,12 @@ function useStartUpgradeFlow(refetchActiveRun: () => unknown, consoleCommit?: st
           'Still waiting for the control plane to confirm the update started. The progress below refreshes on its own; if nothing appears, check the daemon log on the server.'
         )
         void refetchActiveRun()
-      } else if (err instanceof Error && err.message.includes('upgrade_run_active')) {
+      } else if (apiErrorCopy(err) === UPDATE_ALREADY_ACTIVE_COPY) {
         setPreflightOpen(false)
-        setNotice('Another update is already in progress. Wait for it to finish, or cancel it.')
+        setNotice(UPDATE_ALREADY_ACTIVE_COPY)
         void refetchActiveRun()
       } else {
-        setNotice(err instanceof Error ? err.message : 'Update failed to start')
+        setNotice(userErrorMessage(err, 'Update failed to start'))
       }
     } finally {
       setStarting(false)
@@ -158,7 +159,7 @@ function useCancelRun(setNotice: (notice: string | null) => void) {
         setNotice('Update cancelled. Start a fresh update to try again.')
       },
       onError: (err) => {
-        setNotice(err instanceof Error ? err.message : 'Failed to cancel the update')
+        setNotice(userErrorMessage(err, 'Failed to cancel the update'))
       },
     })
   }

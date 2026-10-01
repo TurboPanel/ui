@@ -9,9 +9,10 @@ import {
 } from '@/lib/queries/admin'
 import { HA_SIGNUP_SETTINGS_NOTE } from '@/lib/platform-copy'
 import { spacing } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 function errorMessage(err: unknown, fallback: string): string {
-  return err instanceof Error ? err.message : fallback
+  return userErrorMessage(err, fallback)
 }
 
 export function SignupSettingsSection() {

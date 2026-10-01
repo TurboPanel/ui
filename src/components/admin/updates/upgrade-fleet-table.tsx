@@ -26,7 +26,7 @@ const ALL_COLUMNS: readonly DataTableColumn[] = [
   { key: 'target', header: 'Target', flex: 1, minWidth: 110 },
   { key: 'step', header: 'Step', width: 120 },
   { key: 'error', header: 'Error', flex: 1.2, minWidth: 160 },
-  { key: 'action', header: '', width: 88 },
+  { key: 'action', header: '', width: 110 },
 ]
 
 /** Below this width the Component column folds into a prefix on the server name. */
@@ -41,7 +41,7 @@ function stepLabel(step: FleetRow): string {
 /**
  * What the server runs now: its exact build (`0.1.4-canary.425 · ea1d63a`) when
  * it is the target build, else its version and commit. The Target column is the
- * build this rollout is moving it to, so a server that is already there reads
+ * build this update is moving it to, so a server that is already there reads
  * the same in both.
  */
 function installedText(row: FleetRow): string {
@@ -113,7 +113,7 @@ export function UpgradeFleetTable({
             <DataTableCell column={col('action')}>
               {row.status === 'needs_attention' || row.status === 'failed' ? (
                 <Button
-                  label="Retry"
+                  label="Retry step"
                   size="sm"
                   busy={retryingId === row.id}
                   onPress={() => {

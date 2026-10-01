@@ -150,14 +150,14 @@ const STEP_ERROR_LABELS: Readonly<Record<string, string>> = {
   rolled_back: 'Rolled back to the previous build',
   server_offline: 'Server offline for over an hour',
   step_timeout: 'Stopped reporting progress',
-  managed_upgrade_required: 'This server needs a managed upgrade',
+  managed_upgrade_required: 'This server needs a managed update',
   downgrade_refused: 'Already newer than the target',
 }
 
 /** Run `error` codes (the control plane's `UPGRADE_RUN_ERROR_CODES`). */
 const RUN_ERROR_LABELS: Readonly<Record<string, string>> = {
-  colocated_daemon_failed: 'The co-located daemon step failed',
-  control_plane_failed: 'The control-plane step failed',
+  colocated_daemon_failed: 'The daemon step failed',
+  control_plane_failed: 'The control plane step failed',
 }
 
 export function upgradeStepErrorLabel(code: string | null | undefined): string | null {
@@ -226,7 +226,7 @@ export function stepHasStarted(status: UpgradeStepStatus | null | undefined): bo
   return status != null && status !== 'pending' && status !== 'waiting'
 }
 
-/** The fleet table's Status column: what the rollout is doing with this server, in plain words. */
+/** The fleet table's Status column: what the update is doing with this server, in plain words. */
 export function fleetStatusBadge(status: UpgradeStepStatus): {
   tone: 'ok' | 'muted' | 'danger' | 'pending' | 'info'
   label: string
@@ -392,13 +392,13 @@ export function fleetComponentLabel(
 export function upgradePhaseLabel(phase: UpgradePhase | null | undefined): string {
   switch (phase) {
     case 'colocated_daemon':
-      return 'Co-located daemon'
+      return 'Daemon step'
     case 'control_plane':
-      return 'Control plane'
+      return 'Control plane step'
     case 'fleet':
-      return 'Servers'
+      return 'Server updates'
     default:
-      return 'Upgrade'
+      return 'Update'
   }
 }
 

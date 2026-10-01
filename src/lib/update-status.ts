@@ -171,8 +171,8 @@ export function runToShow(
 
 /** What a failed step is called: its phase, or for a fleet step the server it ran on. */
 function failedStepTitle(step: UpgradeStepRow): string {
-  if (step.phase === 'colocated_daemon') return 'Co-located daemon'
-  if (step.phase === 'control_plane') return 'Control plane'
+  if (step.phase === 'colocated_daemon') return 'Daemon step'
+  if (step.phase === 'control_plane') return 'Control plane step'
   return step.serverName ?? step.hostname ?? 'Server'
 }
 
@@ -187,13 +187,13 @@ export function runFailure(
     if (run.status === 'cancelled') {
       return {
         title: 'The update was cancelled',
-        body: 'Nothing else will be installed from this run.',
+        body: 'Nothing else will be installed from this update.',
         command: null,
         docsUrl: null,
-        stepTitle: 'Upgrade',
+        stepTitle: 'Update',
       }
     }
-    return { ...explainUpgradeFailure({ errorCode: run.error }, run.channel), stepTitle: 'Upgrade' }
+    return { ...explainUpgradeFailure({ errorCode: run.error }, run.channel), stepTitle: 'Update' }
   }
   return { ...explainUpgradeFailure(step, run.channel), stepTitle: failedStepTitle(step) }
 }
@@ -315,7 +315,7 @@ export function updateBanner(
   return {
     key,
     title: `Update available: ${labels}`,
-    body: `Updates ${names} in one managed run.`,
+    body: `Updates ${names} together.`,
   }
 }
 

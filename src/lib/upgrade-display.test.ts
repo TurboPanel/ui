@@ -145,8 +145,8 @@ describe('upgrade display helpers', () => {
   })
 
   it('labels phases and maps pipeline edge cases', () => {
-    expect(upgradePhaseLabel('fleet')).toBe('Servers')
-    expect(upgradePhaseLabel(null)).toBe('Upgrade')
+    expect(upgradePhaseLabel('fleet')).toBe('Server updates')
+    expect(upgradePhaseLabel(null)).toBe('Update')
     expect(mapStepStatusToPipeline(null)).toBe('preparing')
     expect(mapStepStatusToPipeline('failed')).toBe('verifying')
     expect(mapStepStatusToPipeline('installing')).toBe('installing')
@@ -202,9 +202,9 @@ describe('upgradeStepOutcome', () => {
 
   it('names the run errors the control plane ends a run with', () => {
     expect(upgradeRunErrorLabel('colocated_daemon_failed')).toBe(
-      'The co-located daemon step failed'
+      'The daemon step failed'
     )
-    expect(upgradeRunErrorLabel('control_plane_failed')).toBe('The control-plane step failed')
+    expect(upgradeRunErrorLabel('control_plane_failed')).toBe('The control plane step failed')
     expect(upgradeRunErrorLabel('')).toBeNull()
   })
 })
