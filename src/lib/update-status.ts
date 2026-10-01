@@ -5,7 +5,7 @@ import type {
   UpgradeStepRow,
 } from '@/lib/instance-api'
 import {
-  platformUpdateAvailable,
+  selfHostedUpdateAvailable,
   updatePieceLabel,
   updatePieces,
   type ConsoleBuild,
@@ -261,6 +261,8 @@ export type UpdateBanner = Readonly<{
 type UpdateOfferInput = Readonly<{
   updates: Pick<InstanceUpdates, 'units' | 'runtime' | 'updatesManaged'> | null | undefined
   activeRun: boolean
+  /** This console's build, so a UI-only update counts as an offer. */
+  consoleBuild?: ConsoleBuild | null
 }>
 
 /**
@@ -272,8 +274,10 @@ export function updateOffered(input: UpdateOfferInput): boolean {
   const updates = input.updates
   if (!updates || input.activeRun) return false
   if (updates.updatesManaged === true || updates.runtime === 'workers') return false
-  if (!platformUpdateAvailable(updates.units)) return false
-  return Boolean(updates.units.instance.target ?? updates.units.daemon.target)
+  if (!selfHostedUpdateAvailable(updates.units, input.consoleBuild ?? null)) return false
+  return Boolean(
+    updates.units.instance.target ?? updates.units.daemon.target ?? updates.units.instance.uiTarget
+  )
 }
 
 /** How the banner body names each piece. */

@@ -372,11 +372,17 @@ export function instanceUpdatesPollInterval(
   return false
 }
 
-export function useInstanceUpdates(options?: Readonly<{ enabled?: boolean }>) {
+export function useInstanceUpdates(
+  options?: Readonly<{
+    enabled?: boolean
+    /** The commit this console bundle was built from; see `fetchInstanceUpdates`. */
+    consoleCommit?: string
+  }>
+) {
   const activeRun = useUpgradeActiveRun({ enabled: options?.enabled ?? true })
   return useQuery({
     queryKey: queryKeys.admin.instanceUpdates,
-    queryFn: fetchInstanceUpdates,
+    queryFn: () => fetchInstanceUpdates(options?.consoleCommit),
     enabled: options?.enabled ?? true,
     refetchInterval: () => instanceUpdatesPollInterval(activeRun.data?.run?.status),
   })
@@ -429,14 +435,14 @@ export function useRunUpgradePreflight() {
   })
 }
 
-export function useStartPlatformUpgrade() {
+export function useStartPlatformUpgrade(consoleCommit?: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
     // Returns as soon as the run exists. Progress comes from the active-run
     // query, which polls while the run is active — never from holding this
     // mutation open for the length of an upgrade.
     mutationFn: async (runId?: string): Promise<UpgradeStartResult> => {
-      const started = await startPlatformUpgradeRun(runId)
+      const started = await startPlatformUpgradeRun(runId, consoleCommit)
       markControlPlaneUpgradeWatch()
       return { kind: 'started', runId: started.runId }
     },

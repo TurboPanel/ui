@@ -21,7 +21,7 @@ import { panelStyles } from '@/components/ui/panel-styles'
 import type { InstanceUpdates, UpgradePreflightResult } from '@/lib/instance-api'
 import {
   consoleUpdateAvailable,
-  platformUpdateAvailable,
+  selfHostedUpdateAvailable,
   unitUpdateAvailable,
   updatePieceLabel,
   updatePieces,
@@ -74,9 +74,9 @@ function useStallClock(run: ShownRun | null, finished: boolean): number {
 }
 
 /** The preflight sheet, starting an update, and the notice line they report through. */
-function useStartUpgradeFlow(refetchActiveRun: () => unknown) {
+function useStartUpgradeFlow(refetchActiveRun: () => unknown, consoleCommit?: string) {
   const preflightMutation = useRunUpgradePreflight()
-  const startUpgrade = useStartPlatformUpgrade()
+  const startUpgrade = useStartPlatformUpgrade(consoleCommit)
   const [preflightOpen, setPreflightOpen] = useState(false)
   const [preflight, setPreflight] = useState<UpgradePreflightResult | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
@@ -312,7 +312,7 @@ export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>)
   const serversPage = useUpgradeServersPage(fleetServersQuery(offset, ''))
   const settingsQuery = useUpgradeSettings()
   const saveSettings = useSaveUpgradeSettings()
-  const flow = useStartUpgradeFlow(() => activeRun.refetch())
+  const flow = useStartUpgradeFlow(() => activeRun.refetch(), consoleBuild?.commit)
   const { cancel, cancelling } = useCancelRun(flow.setNotice)
   const { retryingStepId, retry } = useRetryFleetStep()
 
@@ -329,7 +329,7 @@ export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>)
 
   const headline = resolvePlatformUpgradeHeadline({
     activeRunStatus: shown.finished ? null : (run?.status ?? null),
-    updateAvailable: platformUpdateAvailable(data.units),
+    updateAvailable: selfHostedUpdateAvailable(data.units, consoleBuild),
     needsAttentionCount: needsAttention,
   })
 
@@ -343,7 +343,7 @@ export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>)
   const canStart =
     data.managedUpgrade === true &&
     data.units.daemon.connected &&
-    platformUpdateAvailable(data.units) &&
+    selfHostedUpdateAvailable(data.units, consoleBuild) &&
     headline !== 'updating' &&
     !flow.starting
 
