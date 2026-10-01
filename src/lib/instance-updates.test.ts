@@ -4,6 +4,7 @@ import {
   consoleUpdateAvailable,
   installedIdentity,
   platformUpdateAvailable,
+  selfHostedUpdateAvailable,
   unitUpdateAvailable,
   unitUpdateFeedback,
   updatePieceLabel,
@@ -404,6 +405,32 @@ describe('consoleUpdateAvailable', () => {
     expect(consoleUpdateAvailable(consoleBuild, { commit: 'unknown' })).toBeNull()
     expect(consoleUpdateAvailable(consoleBuild, null)).toBeNull()
     expect(consoleUpdateAvailable(null, { commit: 'fff9999' })).toBeNull()
+  })
+})
+
+describe('selfHostedUpdateAvailable', () => {
+  const current = { installed: { version: '0.1.4', commit: 'same' }, target: { commit: 'same' } }
+  const units = {
+    instance: { ...current, updateAvailable: false, uiTarget: { commit: 'fff9999' } },
+    daemon: { ...current, updateAvailable: false },
+  } as unknown as InstanceUpdates['units']
+
+  it('counts a UI-only change, because the UI ships inside the control-plane install', () => {
+    expect(platformUpdateAvailable(units)).toBe(false)
+    expect(selfHostedUpdateAvailable(units, { version: '0.1.4', commit: 'abc1234' })).toBe(true)
+  })
+
+  it('is off when the console already runs the UI target or its build is unknown', () => {
+    expect(selfHostedUpdateAvailable(units, { version: '0.1.4', commit: 'fff99999' })).toBe(false)
+    expect(selfHostedUpdateAvailable(units, null)).toBe(false)
+  })
+
+  it('still follows the control plane and daemon', () => {
+    const behind = {
+      ...units,
+      instance: { ...units.instance, updateAvailable: true },
+    } as unknown as InstanceUpdates['units']
+    expect(selfHostedUpdateAvailable(behind, null)).toBe(true)
   })
 })
 

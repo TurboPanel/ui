@@ -61,6 +61,7 @@ import {
   verifyAdminTier,
   verifyAllAdminTiers,
 } from '@/lib/instance-api'
+import { readConsoleBuild } from '@/components/admin/updates/console-build'
 import { useApiMutation, queryKeys } from '@/lib/query-client'
 import {
   draftUsesLetsEncryptSource,
@@ -376,7 +377,7 @@ export function useInstanceUpdates(options?: Readonly<{ enabled?: boolean }>) {
   const activeRun = useUpgradeActiveRun({ enabled: options?.enabled ?? true })
   return useQuery({
     queryKey: queryKeys.admin.instanceUpdates,
-    queryFn: fetchInstanceUpdates,
+    queryFn: () => fetchInstanceUpdates(readConsoleBuild()?.commit),
     enabled: options?.enabled ?? true,
     refetchInterval: () => instanceUpdatesPollInterval(activeRun.data?.run?.status),
   })
@@ -436,7 +437,7 @@ export function useStartPlatformUpgrade() {
     // query, which polls while the run is active — never from holding this
     // mutation open for the length of an upgrade.
     mutationFn: async (runId?: string): Promise<UpgradeStartResult> => {
-      const started = await startPlatformUpgradeRun(runId)
+      const started = await startPlatformUpgradeRun(runId, readConsoleBuild()?.commit)
       markControlPlaneUpgradeWatch()
       return { kind: 'started', runId: started.runId }
     },

@@ -4035,6 +4035,11 @@ export type InstanceUpdates = {
       uiTarget: InstanceUpdateTarget | null
       /** The server's answer. Absent on a control plane older than the field. */
       updateAvailable?: boolean
+      /**
+       * Self-hosted only: the channel's UI build differs from the bundle the
+       * console reported (`?consoleCommit=`). Absent on an older control plane.
+       */
+      uiUpdateAvailable?: boolean
     }
     daemon: {
       installed: {
@@ -4168,8 +4173,14 @@ export type UpgradeServersPage = {
   total: number
 }
 
-export async function fetchInstanceUpdates(): Promise<InstanceUpdates> {
-  return await apiFetch(`${ADMIN_API}/instance/updates`)
+/**
+ * `consoleCommit` is the commit this console bundle was built from; the
+ * control plane cannot see which UI it serves, so it compares it with the
+ * channel's UI build (`units.instance.uiUpdateAvailable`).
+ */
+export async function fetchInstanceUpdates(consoleCommit?: string): Promise<InstanceUpdates> {
+  const query = consoleCommit ? `?consoleCommit=${encodeURIComponent(consoleCommit)}` : ''
+  return await apiFetch(`${ADMIN_API}/instance/updates${query}`)
 }
 
 export async function fetchUpgradeActiveRun(): Promise<UpgradeActiveRunResponse> {
@@ -4219,11 +4230,15 @@ export async function runUpgradePreflight(): Promise<UpgradePreflightResult> {
 }
 
 export async function startPlatformUpgradeRun(
-  runId?: string
+  runId?: string,
+  consoleCommit?: string
 ): Promise<{ ok: boolean; runId: string }> {
   return await apiFetch(`${ADMIN_API}/instance/updates/runs`, {
     method: 'POST',
-    body: JSON.stringify(runId ? { runId } : {}),
+    body: JSON.stringify({
+      ...(runId ? { runId } : {}),
+      ...(consoleCommit ? { consoleCommit } : {}),
+    }),
   })
 }
 

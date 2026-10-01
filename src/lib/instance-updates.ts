@@ -60,6 +60,23 @@ export function platformUpdateAvailable(
   return unitUpdateAvailable(units.instance) || unitUpdateAvailable(units.daemon)
 }
 
+/**
+ * Self-hosted: any of the control plane, the daemon or the UI has an update.
+ * The UI ships inside the control-plane install, so a UI-only change is still
+ * a run (and lights the button), even though the binary and daemon are current.
+ */
+export function selfHostedUpdateAvailable(
+  units: Readonly<{
+    instance: UpdateUnitView & Pick<InstanceUpdates['units']['instance'], 'uiTarget'>
+    daemon: UpdateUnitView
+  }>,
+  consoleBuild: ConsoleBuild | null
+): boolean {
+  return (
+    platformUpdateAvailable(units) || consoleUpdateAvailable(consoleBuild, units.instance.uiTarget) === true
+  )
+}
+
 /** This console's own build (the bundle the control plane serves). */
 export type ConsoleBuild = Readonly<{ version: string; commit: string }>
 

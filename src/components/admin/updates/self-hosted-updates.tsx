@@ -21,7 +21,7 @@ import { panelStyles } from '@/components/ui/panel-styles'
 import type { InstanceUpdates, UpgradePreflightResult } from '@/lib/instance-api'
 import {
   consoleUpdateAvailable,
-  platformUpdateAvailable,
+  selfHostedUpdateAvailable,
   unitUpdateAvailable,
   updatePieceLabel,
   updatePieces,
@@ -329,7 +329,7 @@ export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>)
 
   const headline = resolvePlatformUpgradeHeadline({
     activeRunStatus: shown.finished ? null : (run?.status ?? null),
-    updateAvailable: platformUpdateAvailable(data.units),
+    updateAvailable: selfHostedUpdateAvailable(data.units, consoleBuild),
     needsAttentionCount: needsAttention,
   })
 
@@ -343,7 +343,7 @@ export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>)
   const canStart =
     data.managedUpgrade === true &&
     data.units.daemon.connected &&
-    platformUpdateAvailable(data.units) &&
+    selfHostedUpdateAvailable(data.units, consoleBuild) &&
     headline !== 'updating' &&
     !flow.starting
 

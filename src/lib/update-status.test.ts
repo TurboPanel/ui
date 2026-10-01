@@ -401,6 +401,10 @@ describe('updateOffered (the admin sidebar badge)', () => {
     uiOnly.units.instance.updateAvailable = false
     uiOnly.units.daemon.updateAvailable = false
     expect(updateOffered({ updates: uiOnly, activeRun: false })).toBe(false)
+    // The console running an older UI than the channel serves is an offer by itself.
+    expect(updateOffered({ updates: uiOnly, activeRun: false, consoleBuild: OLD_CONSOLE })).toBe(
+      true
+    )
     const noTarget = updates()
     noTarget.units.instance.target = null
     noTarget.units.daemon.target = null

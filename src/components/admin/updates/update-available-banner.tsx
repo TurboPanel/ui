@@ -41,9 +41,9 @@ export function useUpdateAvailable(): Readonly<{
   const active = useUpgradeActiveRun({ enabled: eligible })
   const consoleBuild = useMemo(() => readConsoleBuild(), [])
   const [dismissedKey, setDismissedKey] = useState(() => readDismissedUpdateBanner(webStorage()))
-  const offer = { updates: updates.data, activeRun: Boolean(active.data?.run) }
+  const offer = { updates: updates.data, activeRun: Boolean(active.data?.run), consoleBuild }
   return {
-    banner: eligible ? updateBanner({ ...offer, dismissedKey, consoleBuild }) : null,
+    banner: eligible ? updateBanner({ ...offer, dismissedKey }) : null,
     available: eligible && updateOffered(offer),
     dismiss: (key) => {
       writeDismissedUpdateBanner(webStorage(), key)
