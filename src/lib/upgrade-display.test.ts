@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  fleetComponentLabel,
   fleetStatusBadge,
   formatUpgradeBuildDisplayName,
   installedBuildLabel,
@@ -494,5 +495,15 @@ describe('pieceIdentityLines', () => {
     })
     expect(lines.installedOnDisk).toBeNull()
     expect(lines.updatingTo).toBeNull()
+  })
+})
+
+describe('fleetComponentLabel', () => {
+  it('names the daemon for server rows', () => {
+    expect(fleetComponentLabel({ unit: 'daemon' })).toBe('Daemon')
+    expect(fleetComponentLabel({})).toBe('Daemon')
+  })
+  it('names the control plane for an instance row', () => {
+    expect(fleetComponentLabel({ unit: 'instance' })).toBe('Control plane')
   })
 })

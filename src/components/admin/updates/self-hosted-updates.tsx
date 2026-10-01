@@ -300,7 +300,7 @@ function UpgradeProgressPanel({
       <Text style={panelStyles.pageCopy}>
         {fleetSummary.total > 0
           ? `${fleetSummary.upToDate} of ${fleetSummary.total} servers up to date`
-          : 'Server updates start after the control plane step is done.'}
+          : 'Server updates: each server’s daemon updates after the control plane is on target.'}
       </Text>
       <UpgradeFleetTable
         servers={fleetServers}

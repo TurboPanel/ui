@@ -382,6 +382,13 @@ export function updateAvailableSentence(items: readonly string[]): string | null
   return sentence.charAt(0).toUpperCase() + sentence.slice(1)
 }
 
+/** Which component a server row of the update describes: a server's daemon, or the control plane. */
+export function fleetComponentLabel(
+  row: Readonly<{ unit?: 'daemon' | 'instance' | null }>
+): string {
+  return row.unit === 'instance' ? 'Control plane' : 'Daemon'
+}
+
 export function upgradePhaseLabel(phase: UpgradePhase | null | undefined): string {
   switch (phase) {
     case 'colocated_daemon':
