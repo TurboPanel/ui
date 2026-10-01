@@ -59,6 +59,7 @@ export function StartOverBar({
 const styles = StyleSheet.create({
   bar: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'flex-end',
     alignItems: 'center',
     gap: spacing.sm,
