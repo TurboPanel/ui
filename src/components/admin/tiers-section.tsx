@@ -45,6 +45,7 @@ import {
   verifyBadge,
   type LadderRow as LadderRowModel,
 } from '@/lib/tier-form'
+import { taxDefaultNoticeContent } from '@/lib/tax-default-notice'
 import { colors, spacing } from '@/lib/theme'
 
 const COLUMNS = [
@@ -436,23 +437,8 @@ function ProductsUnavailableNotice({
  */
 function TaxDefaultNotice({ taxDefaults }: Readonly<{ taxDefaults: AdminTierTaxDefaults | null }>) {
   if (!taxDefaults) return null
-  const behaviour = taxDefaults.taxBehavior
-  if (behaviour === 'inclusive' || behaviour === 'exclusive') {
-    return (
-      <InlineNotice
-        tone="info"
-        title={`Prices are tax ${behaviour} by default`}
-        body={`Set on the payment account, so a price that does not name its own tax behaviour uses this. Those prices verify normally. Change it on the provider, under tax settings.`}
-      />
-    )
-  }
-  return (
-    <InlineNotice
-      tone="warning"
-      title="No default tax behaviour on the account"
-      body="Every price must then name its own, or it will not verify. Setting a default on the provider's tax settings covers all of them at once and is the recommended setup."
-    />
-  )
+  const { tone, title, body } = taxDefaultNoticeContent(taxDefaults.taxBehavior)
+  return <InlineNotice tone={tone} title={title} body={body} />
 }
 
 function FailingNotice({ count }: Readonly<{ count: number }>) {
