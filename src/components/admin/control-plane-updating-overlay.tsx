@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Platform, StyleSheet, Text, View } from 'react-native'
 import { Button, LoadingState } from '@/components/ui'
 import { useAuth } from '@/lib/auth-context'
@@ -7,6 +7,12 @@ import { canQueryControlPlane } from '@/lib/control-plane-accounts'
 import { getClientVersion, getInstanceRevision, getInstanceVersion } from '@/lib/instance-version'
 import { useUpgradeActiveRun } from '@/lib/queries/admin'
 import { isUpgradeRunActive } from '@/lib/upgrade-run-poll'
+import {
+  RECONNECT_SLOW_COPY,
+  RECONNECTING_TITLE,
+  isControlPlaneUnreachable,
+} from '@/lib/control-plane-reconnect'
+import { useControlPlaneReconnect } from '@/lib/use-control-plane-reconnect'
 import {
   noteLoadedControlPlaneRevision,
   reloadWebClient,
@@ -31,6 +37,12 @@ export function ControlPlaneUpdatingOverlay() {
   const [dismissedUpdating, setDismissedUpdating] = useState(false)
   // Re-render when the watch lapses so a stale flag can never hold the scrim.
   const [tick, setTick] = useState(0)
+
+  const unreachable = activeRun.isError && isControlPlaneUnreachable(activeRun.error)
+  const retryRun = useCallback(() => {
+    void activeRun.refetch()
+  }, [activeRun])
+  const reconnect = useControlPlaneReconnect(unreachable, retryRun)
 
   const runActive = isUpgradeRunActive(activeRun.data?.run?.status)
   const watchRemainingMs = controlPlaneUpgradeWatchRemainingMs()
@@ -95,14 +107,21 @@ export function ControlPlaneUpdatingOverlay() {
 
   if (!visible) return null
 
+  const slow = reconnect.view?.phase === 'slow'
   return (
     <View style={styles.scrim} accessibilityViewIsModal>
       <View style={styles.card}>
-        <LoadingState label="TurboPanel is updating" />
+        <LoadingState label={reconnect.view ? RECONNECTING_TITLE : 'TurboPanel is updating'} />
         <Text style={styles.copy}>
-          The control plane is restarting. This page will reconnect automatically.
+          {reconnect.view
+            ? `Waiting for the control plane to come back (${reconnect.view.elapsedLabel}).`
+            : 'The control plane is restarting. This page will reconnect automatically.'}
         </Text>
+        {slow ? <Text style={styles.copy}>{RECONNECT_SLOW_COPY}</Text> : null}
         <View style={styles.actions}>
+          {slow ? (
+            <Button label="Keep waiting" variant="primary" onPress={reconnect.keepWaiting} />
+          ) : null}
           <Button
             label="Continue without waiting"
             variant="secondary"
