@@ -30,6 +30,7 @@ import { DISPLAY_NAME_MAX_LENGTH } from '@/lib/display-name'
 import { useOrgDefaultEnvironmentName } from '@/lib/org-default-environment'
 import { useCan } from '@/lib/query-client'
 import { chrome, colors, spacing } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 function environmentLabel(environment: EnvironmentRecord): string {
   return environment.name?.trim() || 'Unnamed environment'
@@ -346,9 +347,7 @@ export function ProjectEnvironmentsSection({
   ])
 
   const queryError =
-    environmentsQuery.error instanceof Error
-      ? environmentsQuery.error.message
-      : null
+    environmentsQuery.error instanceof Error ? userErrorMessage(environmentsQuery.error, '') : null
 
   const selectEnvironment = (id: string) => {
     setSelectedId(id)

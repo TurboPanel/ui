@@ -30,6 +30,7 @@ import { useOrganizationManaged } from '@/lib/queries/managed'
 import { orEmptyArray } from '@/lib/or-empty-array'
 import { useCan } from '@/lib/query-client'
 import { chrome, colors, spacing } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 /** Restrained fleet refresh — one org list call, never per-row status polling. */
 const MANAGED_REFRESH_MS = 30_000
@@ -263,7 +264,7 @@ function uniqueServers(
 
 function managedListErrorMessage(error: unknown): string | null {
   if (!error) return null
-  if (error instanceof Error) return error.message
+  if (error instanceof Error) return userErrorMessage(error, '')
   return 'Failed to load managed services'
 }
 

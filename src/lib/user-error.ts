@@ -19,6 +19,11 @@ const API_ERROR_COPY: Readonly<Record<string, string>> = {
   environment_running: ENVIRONMENT_RUNNING_COPY,
 }
 
+export const TOO_MANY_ATTEMPTS_COPY = 'Too many attempts. Wait a minute and try again.'
+
+/** A bare 429 or a generic rate-limit code (specific codes keep their own copy). */
+const RATE_LIMITED = /HTTP 429(?::\s*(?:rate_limited|too_many_requests))?\s*$/
+
 /** What browsers throw when `fetch` never got an answer. */
 const NETWORK_FAILURE =
   /^(failed to fetch|load failed|network request failed|networkerror|fetch failed)/i
@@ -34,6 +39,7 @@ export function isNetworkFetchError(err: unknown): boolean {
 /** The fixed sentence for a known API error code inside the message, or null. */
 export function apiErrorCopy(err: unknown): string | null {
   if (!(err instanceof Error)) return null
+  if (RATE_LIMITED.test(err.message.trim())) return TOO_MANY_ATTEMPTS_COPY
   for (const [code, copy] of Object.entries(API_ERROR_COPY)) {
     if (err.message.includes(code)) return copy
   }

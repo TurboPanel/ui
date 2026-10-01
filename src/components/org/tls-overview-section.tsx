@@ -27,9 +27,10 @@ import {
 } from '@/lib/queries/tls'
 import { useApiMutation, useCan, queryKeys } from '@/lib/query-client'
 import { colors, spacing } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 function errorMessage(err: unknown, fallback: string): string {
-  return err instanceof Error ? err.message : fallback
+  return userErrorMessage(err, fallback)
 }
 
 function tlsTitle(row: TlsRecord): string {
@@ -215,9 +216,7 @@ export function TlsOverviewSection({
   let queryError: string | null = null
   if (tlsQuery.isError) {
     queryError =
-      tlsQuery.error instanceof Error
-        ? tlsQuery.error.message
-        : 'Failed to load TLS library'
+      userErrorMessage(tlsQuery.error, 'Failed to load TLS library')
   }
   const displayError =
     error ?? createMutation.actionError ?? deleteMutation.actionError ?? queryError

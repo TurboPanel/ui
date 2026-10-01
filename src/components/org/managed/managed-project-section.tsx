@@ -81,6 +81,7 @@ import { chrome, colors, spacing, webPointer } from '@/lib/theme'
 import { useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { useEffect, useCallback, useRef, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { userErrorMessage } from '@/lib/user-error'
 
 /** Fire-and-forget without the `void` operator (typescript:S3735). */
 function ignorePromise(promise: Promise<unknown>): void {
@@ -1119,9 +1120,7 @@ export function ManagedProjectSection({
   useEffect(() => {
     if (environmentsQuery.error) {
       setError(
-        environmentsQuery.error instanceof Error
-          ? environmentsQuery.error.message
-          : 'Failed to load environments'
+        userErrorMessage(environmentsQuery.error, 'Failed to load environments')
       )
     }
   }, [environmentsQuery.error])

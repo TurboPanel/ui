@@ -16,6 +16,7 @@ import {
 } from '@/lib/system-inventory'
 import { projectEnvironmentHref } from '@/lib/project-navigation'
 import { colors, spacing, webPointer } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 function statusCopy(
   status: ReturnType<typeof useServerSystemIngress>['status'],
@@ -120,9 +121,7 @@ function IngressStatusBody({
   if (ingress.error) {
     return (
       <Text style={panelStyles.error}>
-        {ingress.error instanceof Error
-          ? ingress.error.message
-          : 'Failed to load system component'}
+        {userErrorMessage(ingress.error, 'Failed to load system component')}
       </Text>
     )
   }

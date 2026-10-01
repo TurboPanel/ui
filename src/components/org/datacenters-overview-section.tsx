@@ -33,6 +33,7 @@ import { colors, spacing } from '@/lib/theme'
 import { useRouter } from 'expo-router'
 import { useMemo } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
+import { userErrorMessage } from '@/lib/user-error'
 
 function datacentersListHint(loading: boolean, count: number): string {
   if (loading) return 'Loading…'
@@ -42,7 +43,7 @@ function datacentersListHint(loading: boolean, count: number): string {
 
 function datacentersErrorMessage(error: unknown): string | null {
   if (!error) return null
-  if (error instanceof Error) return error.message
+  if (error instanceof Error) return userErrorMessage(error, '')
   return 'Failed to load datacenters'
 }
 

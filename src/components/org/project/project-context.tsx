@@ -36,6 +36,7 @@ import {
   isTurbopanelProject,
   systemComponentKey,
 } from '@/lib/system-inventory'
+import { userErrorMessage } from '@/lib/user-error'
 
 /**
  * An unsaved project the operator is still composing in the create wizard.
@@ -185,7 +186,7 @@ export function ProjectProvider({
     const err =
       projectQuery.error ?? environmentsQuery.error ?? workspacesQuery.error
     if (!err) return null
-    return err instanceof Error ? err.message : 'Failed to load project'
+    return userErrorMessage(err, 'Failed to load project')
   }, [
     isDraft,
     projectQuery.error,

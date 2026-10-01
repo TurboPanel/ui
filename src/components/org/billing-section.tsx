@@ -84,6 +84,7 @@ import {
 } from '@/components/org/billing-license-dialog'
 import { useOrgServers } from '@/lib/queries/servers'
 import { spacing } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 /**
  * Fallback sizing line for a control plane that does not send `sizeCommand`
@@ -92,7 +93,7 @@ import { spacing } from '@/lib/theme'
 const FALLBACK_SIZING_COMMAND = 'nproc && free -g'
 
 function errorText(err: unknown, fallback: string): string {
-  return err instanceof Error ? err.message : fallback
+  return userErrorMessage(err, fallback)
 }
 
 function isNotConfigured(err: unknown): boolean {

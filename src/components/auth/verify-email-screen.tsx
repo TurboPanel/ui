@@ -23,6 +23,7 @@ import { signInForInvitationHref } from '@/lib/invitation-return'
 import { useVerifyEmail } from '@/lib/queries/auth'
 import { useAuthStatus } from '@/lib/query-client'
 import { colors, spacing } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 function normalizeParam(param: string | string[] | undefined): string {
   if (param == null) return ''
@@ -96,7 +97,7 @@ export function VerifyEmailScreenContent() {
       },
       onError: (err) => {
         setStatus('error')
-        setErrorMessage(err instanceof Error ? err.message : 'Verification failed')
+        setErrorMessage(userErrorMessage(err, 'Verification failed'))
       },
     })
   }, [token, verifyEmailMutation])

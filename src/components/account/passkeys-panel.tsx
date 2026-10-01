@@ -35,6 +35,7 @@ import {
   resolvePasskeyName,
 } from '@/lib/security-display'
 import { colors, spacing } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 const COLUMNS: readonly DataTableColumn[] = [
   { key: 'name', header: 'Passkey', flex: 2, minWidth: 160 },
@@ -228,7 +229,7 @@ function AddPasskey() {
       })
       .catch((err: unknown) => {
         setMessage(
-          err instanceof Error ? err.message : 'Passkey registration failed',
+          userErrorMessage(err, 'Passkey registration failed'),
         )
       })
       .finally(() => {

@@ -23,9 +23,10 @@ import {
 } from '@/lib/host-defaults'
 import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
 import { useApiMutation, useCan, queryKeys } from '@/lib/query-client'
+import { userErrorMessage } from '@/lib/user-error'
 
 function errorMessage(err: unknown, fallback: string): string {
-  return err instanceof Error ? err.message : fallback
+  return userErrorMessage(err, fallback)
 }
 
 function hostDefaultsPatchFromDrafts(input: {

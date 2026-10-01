@@ -39,6 +39,7 @@ import {
 } from '@/lib/queries/tls'
 import { useCan, queryKeys } from '@/lib/query-client'
 import { colors, spacing } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 const CA_NEAR_EXPIRY_MS = 30 * 24 * 60 * 60 * 1000
 
@@ -162,8 +163,7 @@ function retireErrorCopy(message: string): string {
 }
 
 function errorMessage(err: unknown, fallback: string): string {
-  if (err instanceof Error && err.message.length > 0) return err.message
-  return fallback
+  return userErrorMessage(err, fallback)
 }
 
 function orgConfirmName(

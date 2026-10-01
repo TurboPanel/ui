@@ -34,6 +34,7 @@ import {
 import { useOrgServers } from '@/lib/queries/servers'
 import { useCan } from '@/lib/query-client'
 import { colors, spacing, webPointer } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 function serverInventoryTitle(server: OrgServerRecord): string {
   return server.name?.trim() || server.hostname?.trim() || server.id
@@ -52,7 +53,7 @@ function createBlockedCopy(canManage: boolean, reason: string | null): string {
 
 function serversLoadError(isError: boolean, error: unknown): string | null {
   if (!isError) return null
-  if (error instanceof Error) return error.message
+  if (error instanceof Error) return userErrorMessage(error, '')
   return 'Failed to load servers'
 }
 
@@ -70,7 +71,7 @@ function createDatacenterErrorMessage(error: unknown): string {
     if (error.message.includes(ADDRESS_IN_USE_ERROR)) {
       return 'That address is already pinned.'
     }
-    return error.message
+    return userErrorMessage(error, '')
   }
   return 'Failed to create datacenter'
 }

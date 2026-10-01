@@ -114,6 +114,7 @@ import { orEmptyArray } from '@/lib/or-empty-array'
 import { useCan } from '@/lib/query-client'
 import { useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/lib/query-keys'
+import { userErrorMessage } from '@/lib/user-error'
 
 type HostingBind = 'public' | 'datacenter' | 'local'
 type HostingProtocol = 'http' | 'tcp' | 'udp'
@@ -2379,9 +2380,7 @@ export function EnvironmentDetailBody({
   useEffect(() => {
     if (queryError) {
       setError(
-        queryError instanceof Error
-          ? queryError.message
-          : 'Failed to load environment',
+        userErrorMessage(queryError, 'Failed to load environment'),
       )
     }
   }, [queryError])

@@ -24,6 +24,7 @@ import { useGitConnections } from '@/lib/queries/releases'
 import { colors, spacing } from '@/lib/theme'
 import { ForgeEditor, SealedBadge } from './forge-editor'
 import { GithubAppWizard } from './github-app-wizard'
+import { userErrorMessage } from '@/lib/user-error'
 
 type Provider = 'github' | 'gitlab'
 type Scope = 'admin' | 'org'
@@ -34,7 +35,7 @@ const PROVIDER_LABEL: Record<Provider, string> = {
 }
 
 function errorMessage(error: unknown, fallback: string): string {
-  return error instanceof Error ? error.message : fallback
+  return userErrorMessage(error, fallback)
 }
 
 /** One row: what the app is, whether it can see anything yet, and how to open it. */

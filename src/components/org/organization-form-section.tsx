@@ -18,6 +18,7 @@ import type { OrganizationRecord } from '@/lib/instance-api'
 import { useOrganizationsQuery, useUpdateOrganization } from '@/lib/queries/auth'
 import { useCan } from '@/lib/query-client'
 import { colors } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 function OrganizationNameField({
   canManage,
@@ -118,9 +119,7 @@ export function OrganizationFormSection({
   if (!orgsQuery.isLoading && !organization) {
     body = (
       <Text style={panelStyles.error}>
-        {orgsQuery.error instanceof Error
-          ? orgsQuery.error.message
-          : 'Organization not found.'}
+        {userErrorMessage(orgsQuery.error, 'Organization not found.')}
       </Text>
     )
   } else if (organization) {

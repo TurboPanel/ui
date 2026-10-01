@@ -28,6 +28,7 @@ import {
 import { shouldShowOrgSwitcherSearch } from '@/lib/organization-switcher'
 import { useCreateOrganization, useOrganizationsQuery } from '@/lib/queries/auth'
 import { chrome, colors, spacing, webPointer } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 /**
  * Full-page organization switcher (`/organizations`).
@@ -50,7 +51,7 @@ export function OrganizationSwitcherScreen() {
 
   let error = ''
   if (orgsQuery.error instanceof Error) {
-    error = orgsQuery.error.message
+    error = userErrorMessage(orgsQuery.error, '')
   } else if (orgsQuery.error) {
     error = 'Failed to load organizations'
   }

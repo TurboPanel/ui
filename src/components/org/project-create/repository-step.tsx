@@ -33,6 +33,7 @@ import {
   repositoryProviderLabel,
 } from '@/lib/repository-label'
 import { colors, spacing } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 const SIMPLE_KIND_OPTIONS: readonly {
   value: SimpleAppKind
@@ -247,7 +248,7 @@ function CheckedRepositoryForm({
           <InlineNotice
             tone="warning"
             title="Could not read the repository"
-            body={`${inspectionError.message} You can still configure it below.`}
+            body={`${userErrorMessage(inspectionError, '')} You can still configure it below.`}
           />
         )
         : null}
