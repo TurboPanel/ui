@@ -3,9 +3,9 @@ import { StyleSheet, Text, View } from 'react-native'
 import { Button, ButtonRow, InlineNotice, TextField } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { changePasswordErrorMessage, changePasswordFormProblem } from '@/lib/password-change'
-import { COMPROMISED_PASSWORD_MESSAGE, type PwnedLookup } from '@/lib/password-policy'
+import { COMPROMISED_PASSWORD_MESSAGE } from '@/lib/password-policy'
 import { useChangePassword } from '@/lib/queries/auth'
-import { pwnedFieldNotice, pwnedSubmitDecision } from '@/lib/pwned-check'
+import { pwnedFieldNotice } from '@/lib/pwned-check'
 import { usePwnedCheck } from '@/lib/use-pwned-check'
 import { spacing } from '@/lib/theme'
 
@@ -63,13 +63,8 @@ export function ChangePasswordPanel() {
       return
     }
     setVerifying(true)
-    let lookup: PwnedLookup = 'unavailable'
-    try {
-      lookup = await pwned.settle(next)
-    } finally {
-      setVerifying(false)
-    }
-    if (pwnedSubmitDecision(lookup) === 'block') {
+    const decision = await pwned.gate(next).finally(() => setVerifying(false))
+    if (decision === 'block') {
       setError(COMPROMISED_PASSWORD_MESSAGE)
       return
     }

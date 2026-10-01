@@ -6,6 +6,7 @@ import {
   needsPwnedLookup,
   type PwnedState,
   pwnedStatusFor,
+  pwnedSubmitDecision,
   type PwnedStatus,
   startPwnedCheck,
 } from '@/lib/pwned-check'
@@ -21,6 +22,8 @@ export function usePwnedCheck(password: string): {
   status: PwnedStatus
   /** Resolves with the lookup for `value` (cached or in flight, else new). */
   settle: (value: string) => Promise<PwnedLookup>
+  /** `settle`, then what a submit does: `block` (send nothing) or `send`. */
+  gate: (value: string) => Promise<'block' | 'send'>
   /** Start the lookup now (on blur); no-op when already known or running. */
   checkNow: () => void
 } {
@@ -45,6 +48,12 @@ export function usePwnedCheck(password: string): {
     return promise
   }, [])
 
+  const gate = useCallback(
+    async (value: string): Promise<'block' | 'send'> =>
+      pwnedSubmitDecision(await settle(value)) === 'block' ? 'block' : 'send',
+    [settle]
+  )
+
   const checkNow = useCallback(() => {
     if (!validatePassword(password).isValid) return
     if (needsPwnedLookup(stateRef.current, password)) void settle(password)
@@ -56,5 +65,5 @@ export function usePwnedCheck(password: string): {
     return () => clearTimeout(timer)
   }, [password, checkNow])
 
-  return { status: pwnedStatusFor(state, password), settle, checkNow }
+  return { status: pwnedStatusFor(state, password), settle, gate, checkNow }
 }
