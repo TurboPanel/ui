@@ -13,6 +13,7 @@ import {
   type ComposeGraphNode,
 } from '@/lib/compose'
 import type { ContainerRecord, ServiceRecord } from '@/lib/instance-api'
+import { appTagLabel } from '@/lib/compose/app-facts'
 import { bindingTagLabel, type ServiceBindingFacts } from '@/lib/compose/binding-facts'
 import { projectServiceHref } from '@/lib/project-navigation'
 import { colors, spacing, webPointer } from '@/lib/theme'
@@ -263,7 +264,9 @@ function ServiceNodeOverlay({
   const tone = showStatus ? serviceStatusTone(containers) : null
   const subtitle = node.image ?? null
   const ports = joinPorts(node.ports)
-  const kindLabel = node.serviceKind === 'site' ? 'site' : 'service'
+  const baseKindLabel = node.serviceKind === 'site' ? 'site' : 'service'
+  // A recognised application (WordPress) is a more useful tag than "site".
+  const kindLabel = appTagLabel(service?.app) ?? baseKindLabel
 
   const content = (
     <View
