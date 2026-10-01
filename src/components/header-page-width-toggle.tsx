@@ -6,8 +6,9 @@ import { colors, layout } from '@/lib/theme'
 
 /**
  * Header control for the page-width preference. The icon is a page outline
- * with one column inside: a narrow column when the page is contained, a column
- * filling the page when it is wide. Compact screens have no max-width column,
+ * with one column inside and shows what a click will do: a column filling the
+ * page while contained (click to widen), a narrow left column while wide
+ * (click to narrow). Compact screens have no max-width column,
  * so it is not drawn there.
  */
 export function HeaderPageWidthSegment() {
@@ -50,7 +51,7 @@ function WidthIcon({ wide }: Readonly<{ wide: boolean }>) {
       <Rect
         x={6.5}
         y={8}
-        width={wide ? 11 : 6}
+        width={wide ? 6 : 11}
         height={8}
         rx={1}
         stroke={colors.textDim}
