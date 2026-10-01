@@ -1,4 +1,5 @@
 import type { ComposeDocument } from '@/lib/compose'
+import type { NameScheme } from '@/lib/principal-name-scheme'
 import { resolveApiUrl } from '@/lib/control-plane'
 import { clientVersionHeaders, recordInstanceVersion } from '@/lib/instance-version'
 import { getActiveControlPlaneOrigin } from '@/lib/control-plane-accounts'
@@ -1330,15 +1331,24 @@ export async function updateOrganizationDockerNetworking(
 }
 
 /**
- * Org randomized-usernames default. When on (platform default), every newly
- * created principal's applied login (Linux account / database role) gets a
- * random `_<11 chars>` suffix. `randomizedUsernames` is the configured
- * override (`null` = inheriting the platform default); `effective…` is what
- * new principals actually get. Toggling never renames existing principals.
+ * Org principal name-scheme default. `nameScheme` is the configured scheme
+ * (`null` = inheriting the platform default, `partial`); `effectiveNameScheme`
+ * is what new principals get. `schemeLocked` forces that scheme for every new
+ * principal (creators cannot choose). Existing principals are never renamed.
+ * `randomizedUsernames` / `effectiveRandomizedUsernames` are the legacy toggle
+ * the scheme replaces.
  */
 export type OrgPrincipalDefaults = {
+  nameScheme: NameScheme | null
+  effectiveNameScheme: NameScheme
+  schemeLocked: boolean
   randomizedUsernames: boolean | null
   effectiveRandomizedUsernames: boolean
+}
+
+export type OrgPrincipalDefaultsUpdate = {
+  nameScheme?: NameScheme | null
+  schemeLocked?: boolean
 }
 
 export async function fetchOrgPrincipalDefaults(orgId: string): Promise<OrgPrincipalDefaults> {
@@ -1347,11 +1357,11 @@ export async function fetchOrgPrincipalDefaults(orgId: string): Promise<OrgPrinc
 
 export async function saveOrgPrincipalDefaults(
   orgId: string,
-  randomizedUsernames: boolean | null
+  update: OrgPrincipalDefaultsUpdate
 ): Promise<OrgPrincipalDefaults & { ok: true }> {
   return await apiFetch(`${CLIENT_API}/organizations/${orgId}/principal-defaults`, {
     method: 'PUT',
-    body: JSON.stringify({ randomizedUsernames }),
+    body: JSON.stringify(update),
   })
 }
 
@@ -6487,13 +6497,15 @@ export type ProjectPrincipalRecord = {
   id: string
   kind: string
   provider: string
+  /** Display name: what the operator typed. */
   username: string
   /**
-   * Login actually created on the host — the short `username` plus a random
-   * `_<11 chars>` suffix when the org randomized-usernames default was on at
-   * create. SSH/SFTP with this name; `username` is the panel identity.
+   * System name — the login actually created on the host, per `nameScheme`
+   * (plain, typed + `_<11 chars>`, or fully random). SSH/SFTP with this name.
    */
   appliedUsername: string
+  /** Scheme the system name was generated with. */
+  nameScheme?: NameScheme
   projectId: string | null
   metadata: { uid?: number; gid?: number; home?: string } | null
   options: Record<string, unknown> | null
@@ -6602,6 +6614,8 @@ export async function createProjectPrincipal(
   projectId: string,
   body: {
     username: string
+    /** Omit to use the org default; 409 `principal_scheme_locked` when the org locks it. */
+    nameScheme?: NameScheme
     serviceIds?: string[]
     entitlements?: { runtime: string; series: string }[]
     access?: PrincipalAccessLevel
@@ -7909,6 +7923,8 @@ export async function createManagedUser(
   environmentId: string,
   body: {
     username: string
+    /** Omit to use the org default; 409 `principal_scheme_locked` when the org locks it. */
+    nameScheme?: NameScheme
     databases: string[]
     privileges?: string[]
     /** Omit for `read-write`; `read-only` requires a read-eligible replica (422 `managed_no_read_targets`). */

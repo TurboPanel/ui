@@ -19,6 +19,8 @@ import {
 } from '@/lib/managed-services'
 import { useManagedEnvironmentBindings } from '@/lib/queries/bindings'
 import { orEmptyArray } from '@/lib/or-empty-array'
+import { PrincipalNameSchemeField, usePrincipalNameScheme } from '@/components/org/principal-name-scheme-field'
+import { principalNamesLabel, principalSchemeErrorMessage, type NameScheme } from '@/lib/principal-name-scheme'
 import { chrome, colors, spacing, webPointer } from '@/lib/theme'
 
 const USERNAME_PATTERN = /^[a-zA-Z_]\w{0,62}$/
@@ -163,6 +165,7 @@ export function ManagedUsersPanel({
     username: string
     databases: string[]
     connectionRole: ManagedConnectionRole
+    nameScheme?: NameScheme
   }) => Promise<{ password: string; appliedUsername?: string } | null>
   onDeleteUser: (principalId: string) => Promise<void>
   onRotateUserPassword: (principalId: string) => Promise<{
@@ -173,6 +176,7 @@ export function ManagedUsersPanel({
   onReload: () => Promise<void>
 }>) {
   const bindingsQuery = useManagedEnvironmentBindings(orgId, environmentId)
+  const nameScheme = usePrincipalNameScheme(orgId)
   const [dbName, setDbName] = useState('')
   const [username, setUsername] = useState('')
   const [selectedDbs, setSelectedDbs] = useState<string[]>([])
@@ -283,6 +287,7 @@ export function ManagedUsersPanel({
         username: trimmed,
         databases: selectedDbs,
         connectionRole,
+        nameScheme: nameScheme.requestScheme,
       })
       if (result?.password) {
         // Reveal the applied login — the name the engine actually accepts.
@@ -291,9 +296,12 @@ export function ManagedUsersPanel({
       }
       setUsername('')
       setConnectionRole('read-write')
+      nameScheme.reset()
       await onReload()
     } catch (err) {
-      const message = managedErrorMessage(err, 'Failed to create user')
+      const message = principalSchemeErrorMessage(
+        managedErrorMessage(err, 'Failed to create user'),
+      )
       const code =
         err instanceof Error
           ? /HTTP \d+:\s*([a-z0-9_]+)/i.exec(err.message)?.[1]
@@ -439,12 +447,9 @@ export function ManagedUsersPanel({
           const deleteBlocked = bindingCount > 0
           return (
             <View key={user.id} style={styles.userCard}>
-              <Text style={styles.rowLabel}>{user.username}</Text>
-              {user.appliedUsername !== user.username ? (
-                <Text style={panelStyles.muted}>
-                  Login: {user.appliedUsername}
-                </Text>
-              ) : null}
+              <Text style={styles.rowLabel}>
+                {principalNamesLabel(user.username, user.appliedUsername)}
+              </Text>
               <View style={styles.chipRow}>
                 {user.databases.map((db) => (
                   <Chip key={db} label={db} />
@@ -518,6 +523,7 @@ export function ManagedUsersPanel({
           {usernameHint ? (
             <Text style={panelStyles.calloutWarning}>{usernameHint}</Text>
           ) : null}
+          <PrincipalNameSchemeField scheme={nameScheme} disabled={disabled} />
           <Text style={panelStyles.detailLabel}>Databases</Text>
           <View style={styles.chipRow}>
             {databases.map((name) => {

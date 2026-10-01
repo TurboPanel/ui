@@ -8,6 +8,7 @@ import type { ManagedSslMode } from '@/lib/managed-ssl'
 import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
 
 import type { ManagedSqlAccessScope } from '@/lib/managed-access-scope'
+import type { NameScheme } from '@/lib/principal-name-scheme'
 
 export type ManagedServiceEngine = 'postgres' | 'mysql' | 'mariadb' | 'redis' | 'clickhouse'
 
@@ -240,12 +241,9 @@ export type ManagedConnectionRole = 'read-write' | 'read-only'
 export type ManagedUserRecord = {
   id: string
   username: string
-  /**
-   * Engine login actually created — the short `username` plus a random
-   * `_<11 chars>` suffix when the org randomized-usernames default was on at
-   * create. Connect with this name.
-   */
+  /** Engine login actually created, per `nameScheme`. Connect with this name. */
   appliedUsername: string
+  nameScheme?: NameScheme
   databases: string[]
   privileges: string[]
   connectionRole: ManagedConnectionRole
