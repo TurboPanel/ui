@@ -8732,16 +8732,39 @@ export type CreateNotificationChannelBody = {
   rules: NotificationRule[]
 }
 
+/**
+ * An email channel goes through `/notification-channels/email`: the person's
+ * own or a member's address is verified at once, any other address is created
+ * unverified (`verifiedAt: null`) and sent a confirmation link. That route
+ * answers with the channel's identity fields only; the list refresh supplies
+ * the rest.
+ */
 export async function createNotificationChannel(
   body: CreateNotificationChannelBody,
   organizationId?: string | null
 ): Promise<NotificationChannel> {
+  const path =
+    body.kind === 'email'
+      ? `${CLIENT_API}/notification-channels/email`
+      : `${CLIENT_API}/notification-channels`
   const res = await apiFetch<{ channel: NotificationChannel }>(
-    `${CLIENT_API}/notification-channels`,
+    path,
     { method: 'POST', body: JSON.stringify(body) },
     organizationId
   )
   return res.channel
+}
+
+/** Send an unverified email channel's confirmation link again (the control plane waits a minute between sends). */
+export async function resendNotificationChannelVerification(
+  id: string,
+  organizationId?: string | null
+): Promise<void> {
+  await apiFetch(
+    `${CLIENT_API}/notification-channels/${encodeURIComponent(id)}/verify`,
+    { method: 'POST' },
+    organizationId
+  )
 }
 
 export async function updateNotificationChannel(

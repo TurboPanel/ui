@@ -1,4 +1,5 @@
 import type {
+  NotificationChannel,
   NotificationChannelKind,
   NotificationRule,
   NotificationSeverity,
@@ -28,7 +29,7 @@ export type RulesDraft = {
 export function addressHint(kind: NotificationChannelKind): string {
   switch (kind) {
     case 'email':
-      return 'Your own address for a personal channel, or a member\'s account email for an organization one. Each event arrives as its own message.'
+      return 'Any address. Your own, or a member\'s account email, works at once; any other address gets a confirmation link and receives nothing until it is confirmed. Each event arrives as its own message.'
     case 'webhook':
       return 'An https URL that accepts a JSON POST. Add a signing secret to get an X-TurboPanel-Signature header.'
     case 'slack':
@@ -62,7 +63,10 @@ export function draftFromRules(rules: readonly NotificationRule[]): RulesDraft {
 const CHANNEL_ERROR_COPY: Record<string, string> = {
   address_rejected: 'That address is refused: it must be https, carry no credentials, and name a public host (a LAN address is allowed on a self-hosted control plane).',
   address_invalid: 'That address does not look right for this kind of channel.',
-  address_not_a_member: 'An email channel can only name an address TurboPanel already knows: your own for a personal channel, a member\'s account email for an organization one.',
+  email_unavailable: 'This control plane cannot send email right now, so a new address cannot be confirmed. Ask an administrator to set up email.',
+  email_send_failed: 'The confirmation email could not be sent, so the channel was not added. Try again.',
+  too_soon: 'A confirmation link was sent a moment ago. Wait a minute before sending another.',
+  already_verified: 'This address is already confirmed.',
   address_required: 'Enter an address.',
   label_required: 'Give the channel a name.',
   label_invalid: 'The name is too long or contains characters that cannot be shown.',
@@ -85,4 +89,38 @@ export function channelErrorCopy(err: unknown): string {
   const match = /HTTP \d+:\s*([a-z_]+)/i.exec(message)
   const code = match?.[1]
   return (code && CHANNEL_ERROR_COPY[code]) ?? message
+}
+
+/** An email channel whose address has not been confirmed yet: it receives nothing. */
+export function channelAwaitsConfirmation(
+  channel: Readonly<Pick<NotificationChannel, 'kind' | 'verifiedAt'>>
+): boolean {
+  return channel.kind === 'email' && channel.verifiedAt === null
+}
+
+/** The sentence shown after a confirmation link was sent for a newly added address. */
+export function confirmationSentCopy(address: string): string {
+  return `We sent a confirmation link to ${address}. Nothing is sent to it until the link is opened.`
+}
+
+/** The banner for the page the confirmation link lands on (`?channelVerified=1|0`). */
+export function channelVerifiedBanner(
+  param: string | readonly string[] | undefined
+): { tone: 'info' | 'warning'; title: string; body: string } | null {
+  const value = Array.isArray(param) ? param[0] : param
+  if (value === '1') {
+    return {
+      tone: 'info',
+      title: 'Address confirmed',
+      body: 'That email channel is active and will receive the events its rules choose.',
+    }
+  }
+  if (value === '0') {
+    return {
+      tone: 'warning',
+      title: 'That link did not work',
+      body: 'It may have expired or already been used. Use Send again on the channel to get a new one.',
+    }
+  }
+  return null
 }

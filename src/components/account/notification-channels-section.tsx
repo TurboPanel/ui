@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
-import { useRouter } from 'expo-router'
+import { useLocalSearchParams, useRouter } from 'expo-router'
 import { ScreenSafeArea } from '@/components/screen-safe-area'
 import {
   Badge,
@@ -28,7 +28,10 @@ import {
 import {
   addressHint,
   addressFieldLabel,
+  channelAwaitsConfirmation,
   channelErrorCopy,
+  channelVerifiedBanner,
+  confirmationSentCopy,
   draftFromRules,
   KIND_LABEL,
   rulesFromDraft,
@@ -39,6 +42,7 @@ import {
   useDeleteNotificationChannel,
   useNotificationChannelsQuery,
   useNotificationEventsQuery,
+  useResendChannelVerification,
   useUpdateNotificationChannel,
 } from '@/lib/queries/notifications'
 import { getActiveOrganizationId, resolvePreferredOrganizationId } from '@/lib/org-context'
@@ -118,9 +122,12 @@ function ChannelRow({
 }>) {
   const update = useUpdateNotificationChannel(scope, organizationId)
   const remove = useDeleteNotificationChannel(scope, organizationId)
+  const resend = useResendChannelVerification(organizationId)
+  const awaitingConfirmation = channelAwaitsConfirmation(channel)
   const [draft, setDraft] = useState(() => draftFromRules(channel.rules))
   const [dirty, setDirty] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  const [sentNote, setSentNote] = useState<string | null>(null)
   const disabled = channel.disabledAt !== null
   const lastDelivery = channel.recentDeliveries[0]
 
@@ -139,6 +146,15 @@ function ChannelRow({
       })
   }, [channel.id, draft, update])
 
+  const sendAgain = useCallback(() => {
+    setMessage(null)
+    setSentNote(null)
+    void resend.run(channel.id).then((result) => {
+      if (result.ok) setSentNote('Confirmation link sent again.')
+      else setMessage(channelErrorCopy(result.error))
+    })
+  }, [channel.id, resend])
+
   return (
     <View style={styles.channel}>
       <View style={styles.channelHead}>
@@ -147,8 +163,14 @@ function ChannelRow({
           <Badge tone={disabled ? 'muted' : 'ok'} label={KIND_LABEL[channel.kind as NotificationChannelKind] ?? channel.kind} />
           {channel.signed ? <Badge tone="info" label="Signed" /> : null}
           {disabled ? <Badge tone="pending" label="Paused" /> : null}
+          {awaitingConfirmation ? <Badge tone="pending" label="Awaiting confirmation" /> : null}
         </View>
         <Text style={panelStyles.muted}>{channel.address}</Text>
+        {awaitingConfirmation ? (
+          <Text style={panelStyles.muted}>
+            Nothing is sent to this address until the confirmation link in the email is opened.
+          </Text>
+        ) : null}
         {lastDelivery ? (
           <Text style={panelStyles.muted}>
             Last delivery: {lastDelivery.status}
@@ -160,7 +182,11 @@ function ChannelRow({
       </View>
       <RulesEditor events={events} draft={draft} onChange={onDraft} disabled={update.isPending} />
       {message ? <Text style={panelStyles.error}>{message}</Text> : null}
+      {sentNote ? <Text style={panelStyles.muted}>{sentNote}</Text> : null}
       <ButtonRow>
+        {awaitingConfirmation ? (
+          <Button label="Send again" onPress={sendAgain} busy={resend.isPending} busyLabel="Sending…" />
+        ) : null}
         <Button
           label="Save rules"
           variant="primary"
@@ -205,9 +231,12 @@ function AddChannelForm({
     events: new Set(),
   })
   const [message, setMessage] = useState<string | null>(null)
+  const [sentNote, setSentNote] = useState<string | null>(null)
 
   const onAdd = useCallback(() => {
     setMessage(null)
+    setSentNote(null)
+    const typedAddress = address.trim()
     void create
       .run({
         kind,
@@ -218,6 +247,7 @@ function AddChannelForm({
       })
       .then((result) => {
         if (result.ok) {
+          if (channelAwaitsConfirmation(result.value)) setSentNote(confirmationSentCopy(typedAddress))
           setLabel('')
           setAddress('')
           setSigningSecret('')
@@ -260,6 +290,7 @@ function AddChannelForm({
       ) : null}
       <RulesEditor events={events} draft={draft} onChange={setDraft} disabled={create.isPending} />
       {message ? <Text style={panelStyles.error}>{message}</Text> : null}
+      {sentNote ? <Text style={panelStyles.muted}>{sentNote}</Text> : null}
       <ButtonRow>
         <Button
           label="Add channel"
@@ -343,6 +374,8 @@ export function NotificationChannelsSectionContent() {
     return getActiveOrganizationId() ?? resolvePreferredOrganizationId(organizations)
   }, [organizationsQuery.data])
   const organizationName = organizationsQuery.data?.organizations.find((o) => o.id === organizationId)?.name ?? null
+  // The confirmation link redirects here with `?channelVerified=1|0`.
+  const verifiedBanner = channelVerifiedBanner(useLocalSearchParams<{ channelVerified?: string }>().channelVerified)
 
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.page} showsVerticalScrollIndicator={false}>
@@ -370,6 +403,10 @@ export function NotificationChannelsSectionContent() {
           reach it.
         </Text>
       </View>
+
+      {verifiedBanner ? (
+        <InlineNotice tone={verifiedBanner.tone} title={verifiedBanner.title} body={verifiedBanner.body} />
+      ) : null}
 
       <SectionPanel title="Your channels" hint="Yours alone; they follow your account across organizations.">
         <ChannelsPanel scope="user" events={events} organizationId={null} />
