@@ -51,7 +51,7 @@ function emit(): void {
   for (const listener of listeners) listener()
 }
 
-function subscribe(listener: () => void): () => void {
+export function subscribePageWidth(listener: () => void): () => void {
   listeners.add(listener)
   return () => {
     listeners.delete(listener)
@@ -74,5 +74,5 @@ export function togglePageWidth(): void {
 }
 
 export function usePageWidth(): PageWidthMode {
-  return useSyncExternalStore(subscribe, getPageWidth, () => 'contained')
+  return useSyncExternalStore(subscribePageWidth, getPageWidth, () => 'contained')
 }
