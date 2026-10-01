@@ -70,6 +70,32 @@ function clean(value: string | null | undefined): string | null {
   return trimmed === '' ? null : trimmed
 }
 
+/** Control-plane step failures that are not a rollback: the web server and an unconfirmed recovery. */
+function explainControlPlaneFailure(
+  code: string | null,
+  message: string | null
+): UpdateFailureExplanation | null {
+  if (code === 'web_server_failed') {
+    return {
+      title: 'The web server did not start',
+      body: 'The new control plane is running and healthy, but the web server in front of it did not start. Start it on the control-plane host, then reload this page.',
+      command: 'sudo systemctl restart turbopanel-caddy',
+      docsUrl: null,
+    }
+  }
+  if (code === 'recovery_required') {
+    return {
+      title: 'The previous build could not be confirmed',
+      body: `The new control plane did not become healthy and the automatic rollback could not be confirmed. Check whether the control plane is answering before running any recovery command.${
+        message ? ` Details: ${message}` : ''
+      }`,
+      command: DAEMON_LOGS_COMMAND,
+      docsUrl: UPGRADE_DOCS_URL,
+    }
+  }
+  return null
+}
+
 /** Why a step failed, in words an operator can act on. */
 export function explainUpgradeFailure(
   input: FailureInput,
@@ -131,24 +157,8 @@ export function explainUpgradeFailure(
       docsUrl: null,
     }
   }
-  if (code === 'web_server_failed') {
-    return {
-      title: 'The web server did not start',
-      body: 'The new control plane is running and healthy, but the web server in front of it did not start. Start it on the control-plane host, then reload this page.',
-      command: 'sudo systemctl restart turbopanel-caddy',
-      docsUrl: null,
-    }
-  }
-  if (code === 'recovery_required') {
-    return {
-      title: 'The previous build could not be confirmed',
-      body: `The new control plane did not become healthy and the automatic rollback could not be confirmed. Check whether the control plane is answering before running any recovery command.${
-        message ? ` Details: ${message}` : ''
-      }`,
-      command: DAEMON_LOGS_COMMAND,
-      docsUrl: UPGRADE_DOCS_URL,
-    }
-  }
+  const controlPlane = explainControlPlaneFailure(code, message)
+  if (controlPlane) return controlPlane
   if (code === 'rolled_back' || code === 'update_rollback') {
     return {
       title: 'Rolled back to the previous build',
