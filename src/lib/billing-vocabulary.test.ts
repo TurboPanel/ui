@@ -58,7 +58,7 @@ describe('billing vocabulary', () => {
       visibleStrings("hint: 'Subscription, seats per tier'").some((s) => SEAT_WORD.test(s))
     ).toBe(true)
     expect(visibleStrings("const kind = 'release-seat'").some((s) => SEAT_WORD.test(s))).toBe(false)
-    expect(visibleStrings('// buy a seat').length).toBe(0)
+    expect(visibleStrings('// buy a seat')).toHaveLength(0)
     expect(visibleStrings('`bought by ${seats} orgs`').some((s) => SEAT_WORD.test(s))).toBe(false)
   })
 })
