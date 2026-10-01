@@ -198,6 +198,11 @@ Notifications (`/api/client/v1/notifications`, `/notification-channels`, `/notif
 - `resendNotificationChannelVerification(id, organizationId?)` → `POST /notification-channels/:id/verify` — sends an unverified email channel's link again; refusals `too_soon` (**429**, one per minute), `already_verified` (**409**), `email_unavailable` (**503**), `email_send_failed` (**502**) map in `notification-channels.ts`. The link itself is `GET /notification-channels/verify/:token` (no session) and redirects to `/account/notifications?channelVerified=1|0`.
 - `updateNotificationChannel(id, { label?, disabled?, rules? })` → `PATCH /notification-channels/:id`; `deleteNotificationChannel(id)` → `DELETE /notification-channels/:id`. Both **404** for a channel the caller does not own.
 
+Organization members (`src/lib/queries/members.ts`, rules in `src/lib/org-members.ts`):
+
+- `fetchOrganizationMembers(orgId)` → `GET /organizations/:id/members` (owners and managers) — `{ members: [{ id, name, email, role: 'owner' | 'manager' | 'member', joinedAt }] }`.
+- `removeOrganizationMember(orgId, memberId)` → `DELETE /organizations/:id/members/:memberId` — `{ ok: true }`; your own id leaves. Refusals carry the API text (`403` only an owner can remove an owner, `409` last owner).
+
 Firewall (owners and managers; `src/lib/queries/firewall.ts`, copy and validation in `src/lib/firewall.ts`):
 
 - `fetchFirewallPolicy(orgId)` / `saveFirewallPolicy(orgId, patch)` → `GET` / `PUT /organizations/:id/firewall` — `{ policy: { inputDefault: 'accept' | 'drop', ipv6: 'mirror' | 'skip', sshSources: string[] } }`; PUT sends only changed fields.

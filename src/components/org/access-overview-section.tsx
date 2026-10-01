@@ -7,6 +7,7 @@ import {
   View,
 } from 'react-native'
 import { panelStyles } from '@/components/ui/panel-styles'
+import { OrgMembersPanel } from '@/components/org/org-members-panel'
 import {
   Badge,
   Button,
@@ -621,6 +622,8 @@ export function AccessOverviewSection({
       <Text style={panelStyles.pageCopy}>
         Manage permission grants for organizations and teams.
       </Text>
+
+      <OrgMembersPanel orgId={orgId} />
 
       {canInvite ? (
         <>

@@ -316,6 +316,9 @@ export const queryKeys = {
         logs: (environmentId: string) => ['org', orgId, 'managed', environmentId, 'logs'] as const,
       },
 
+      /** The people in the organization (owners and managers). */
+      members: ['org', orgId, 'members'] as const,
+
       /** The organization firewall: policy, typed rules, and each server's mode + preview. */
       firewall: {
         all: ['org', orgId, 'firewall'] as const,
