@@ -1578,7 +1578,7 @@ function EnvironmentDeployChromePanels({
               accessibilityLabel="Preview options"
               accessibilityState={{ expanded: previewMenuOpen }}
             >
-              <Text style={styles.splitCaretText}>▾</Text>
+              <HeaderChevron size={12} color={colors.textChip} />
             </Pressable>
           </View>
           <Button
@@ -2822,11 +2822,6 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 0,
     paddingHorizontal: 10,
     minWidth: 32,
-  },
-  splitCaretText: {
-    color: colors.textChip,
-    fontSize: 12,
-    fontWeight: '700',
   },
   menuBackdrop: {
     flex: 1,

@@ -7,6 +7,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native'
+import { HeaderChevron } from '@/components/header-chevron'
 import { Button, InlineNotice, SectionPanel, StatTiles } from '@/components/ui'
 import {
   CpuMetricIcon,
@@ -2776,9 +2777,13 @@ function CollapsibleChartGroup({
         accessibilityState={{ expanded }}
         accessibilityLabel={`${expanded ? 'Collapse' : 'Expand'} ${label} charts`}
       >
-        <Text style={[styles.chartGroupChevron, expanded && styles.chartGroupChevronOpen]}>
-          {expanded ? '▾' : '▸'}
-        </Text>
+        <View style={styles.chartGroupChevron}>
+          <HeaderChevron
+            size={12}
+            color={expanded ? colors.accent : colors.textDim}
+            open={expanded}
+          />
+        </View>
         <View style={styles.chartGroupCopy}>
           <Text style={styles.chartGroupTitle}>{label}</Text>
           <Text style={styles.chartGroupHint}>{hint}</Text>
@@ -3927,12 +3932,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgActive,
   },
   chartGroupChevron: {
-    color: colors.textDim,
-    fontSize: 12,
     width: 12,
-  },
-  chartGroupChevronOpen: {
-    color: colors.accent,
   },
   chartGroupCopy: {
     flex: 1,

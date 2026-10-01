@@ -16,6 +16,7 @@ import {
 } from 'react-native'
 import { useQueryClient } from '@tanstack/react-query'
 import { Link, type Href } from 'expo-router'
+import { HeaderChevron } from '@/components/header-chevron'
 import { LogTranscriptView } from '@/components/org/logs/log-transcript-view'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { EnvironmentDeploymentHistoryPanel } from '@/components/org/project/environment-deployment-history-panel'
@@ -271,11 +272,7 @@ function ToolbarSplitButton({
           accessibilityLabel={caretAccessibilityLabel}
           accessibilityState={{ expanded: menuOpen }}
         >
-          <Text
-            style={primary ? styles.caretGlyphPrimary : styles.caretGlyph}
-          >
-            ▾
-          </Text>
+          <HeaderChevron size={12} color={primary ? chrome.accent : colors.textChip} />
         </Pressable>
       </View>
 
@@ -1874,18 +1871,6 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 0,
     paddingHorizontal: 8,
     minWidth: 28,
-  },
-  caretGlyph: {
-    color: colors.textChip,
-    fontSize: 12,
-    fontWeight: '700',
-    lineHeight: 14,
-  },
-  caretGlyphPrimary: {
-    color: chrome.accent,
-    fontSize: 12,
-    fontWeight: '700',
-    lineHeight: 14,
   },
   menuBackdrop: {
     flex: 1,

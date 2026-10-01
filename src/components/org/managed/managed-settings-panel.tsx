@@ -14,6 +14,7 @@ import {
   SegmentedControl,
   TextField,
 } from '@/components/ui'
+import { HeaderChevron } from '@/components/header-chevron'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { ManagedSslModePicker } from '@/components/org/managed/managed-ssl-mode-picker'
 import { ManagedAccessScopePicker } from '@/components/org/managed/managed-access-scope-picker'
@@ -629,9 +630,10 @@ export function ManagedSettingsPanel({
         style={[panelStyles.expandedSection, webPointer]}
         onPress={() => setExpanded((current) => !current)}
       >
-        <Text style={styles.disclosure}>
-          {expanded ? '▾' : '▸'} Advanced settings
-        </Text>
+        <View style={styles.disclosureRow}>
+          <HeaderChevron size={12} color={colors.textBody} open={expanded} />
+          <Text style={styles.disclosure}>Advanced settings</Text>
+        </View>
       </Pressable>
 
       {expanded ? (
@@ -656,6 +658,11 @@ export function ManagedSettingsPanel({
 }
 
 const styles = StyleSheet.create({
+  disclosureRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.xs,
+  },
   disclosure: {
     color: colors.textBody,
     fontSize: 13,
