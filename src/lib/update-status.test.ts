@@ -74,6 +74,7 @@ describe('explainUpgradeFailure', () => {
     ['preflight_in_progress', 'Another update is already running', null],
     ['step_timeout', 'The server stopped reporting progress', DAEMON_LOGS_COMMAND],
     ['server_offline', 'The server went offline', null],
+    ['dispatch_failed', "The update couldn't reach the server", null],
     ['rolled_back', 'Rolled back to the previous build', DAEMON_LOGS_COMMAND],
     ['update_rollback', 'Rolled back to the previous build', DAEMON_LOGS_COMMAND],
   ])('explains %s', (code, title, command) => {

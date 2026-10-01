@@ -170,6 +170,12 @@ describe('upgradeStepOutcome', () => {
     })
   })
 
+  it('words a failed update delivery in plain language, not as the raw code', () => {
+    const outcome = upgradeStepOutcome({ status: 'needs_attention', errorCode: 'dispatch_failed' })
+    expect(outcome.detail).toBe("Couldn't reach the server")
+    expect(outcome.detail).not.toContain('dispatch_failed')
+  })
+
   it('explains a skipped server that is already newer than the target', () => {
     expect(upgradeStepOutcome({ status: 'skipped', errorCode: 'downgrade_refused' }).detail).toBe(
       'Already newer than the target'
@@ -201,9 +207,7 @@ describe('upgradeStepOutcome', () => {
   })
 
   it('names the run errors the control plane ends a run with', () => {
-    expect(upgradeRunErrorLabel('colocated_daemon_failed')).toBe(
-      'The daemon step failed'
-    )
+    expect(upgradeRunErrorLabel('colocated_daemon_failed')).toBe('The daemon step failed')
     expect(upgradeRunErrorLabel('control_plane_failed')).toBe('The control plane step failed')
     expect(upgradeRunErrorLabel('')).toBeNull()
   })

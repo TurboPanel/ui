@@ -150,6 +150,7 @@ const STEP_ERROR_LABELS: Readonly<Record<string, string>> = {
   rolled_back: 'Rolled back to the previous build',
   server_offline: 'Server offline for over an hour',
   step_timeout: 'Stopped reporting progress',
+  dispatch_failed: "Couldn't reach the server",
   managed_upgrade_required: 'This server needs a managed update',
   downgrade_refused: 'Already newer than the target',
 }
