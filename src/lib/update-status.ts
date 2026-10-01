@@ -261,7 +261,7 @@ export type UpdateBanner = Readonly<{
 type UpdateOfferInput = Readonly<{
   updates: Pick<InstanceUpdates, 'units' | 'runtime' | 'updatesManaged'> | null | undefined
   activeRun: boolean
-  /** This console's build, so a UI-only update counts as an offer. */
+  /** This app's build, so a UI-only update counts as an offer. */
   consoleBuild?: ConsoleBuild | null
 }>
 
