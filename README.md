@@ -3,7 +3,6 @@
 **Web-first signed-in product console** for [TurboPanel](https://turbopanel.io), one place to run everything you host — fleet management, deploy workflows, managed services, networking, and admin surfaces.
 
 [![Release](https://img.shields.io/github/v/release/TurboPanel/ui?label=release)](https://github.com/TurboPanel/ui/releases)
-[![Release candidate](https://img.shields.io/github/v/tag/TurboPanel/ui?filter=*-rc.*&sort=semver&include_prereleases&label=release%20candidate&color=orange)](https://github.com/TurboPanel/ui/releases)
 [![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=turbopanel_ui&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=turbopanel_ui)
 [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=turbopanel_ui&metric=coverage)](https://sonarcloud.io/component_measures?id=turbopanel_ui&metric=coverage)
 [![Code Smells](https://sonarcloud.io/api/project_badges/measure?project=turbopanel_ui&metric=code_smells)](https://sonarcloud.io/project/issues?id=turbopanel_ui&resolved=false&types=CODE_SMELL)
