@@ -22,7 +22,7 @@ export function AdminShell() {
   const pageWidth = usePageWidth()
   const contentMaxWidth = contentMaxWidthFor(
     pageWidth,
-    width - (isDesktop ? layout.sidebarWidth : 0) - layout.contentGutter * 2,
+    width - (isDesktop ? layout.sidebarWidth : 0),
     layout.contentMaxWidth,
   )
 
