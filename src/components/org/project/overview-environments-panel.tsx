@@ -20,6 +20,7 @@ import { HeaderChevron } from '@/components/header-chevron'
 import { LogTranscriptView } from '@/components/org/logs/log-transcript-view'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { EnvironmentDeploymentHistoryPanel } from '@/components/org/project/environment-deployment-history-panel'
+import { EnvironmentGitSourcePanel } from '@/components/org/project/environment-git-source-panel'
 import { StatusDot, TextField } from '@/components/ui'
 import { useProjectContext } from '@/components/org/project/project-context'
 import {
@@ -1546,6 +1547,13 @@ function EnvironmentDetailSections({
   if (!selectedEnvironment || baseSelected) return null
   return (
     <>
+      <EnvironmentGitSourcePanel
+        orgId={orgId}
+        environmentId={selectedEnvironment.id}
+        projectCompose={project?.options?.compose}
+        environmentCompose={selectedEnvironment.options?.compose}
+        canEdit={canMutateLifecycle}
+      />
       <EnvironmentDeploymentHistoryPanel
         orgId={orgId}
         environmentId={selectedEnvironment.id}

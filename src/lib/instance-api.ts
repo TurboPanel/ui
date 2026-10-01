@@ -5208,6 +5208,18 @@ export type DeploymentHistoryRecord = {
   errorMessage: string | null
   /** Whether a retained execution log exists (resolved store-side). */
   hasLog: boolean
+  /** What set the attempt off when it was a git push; null for a deploy a person started. */
+  trigger?: DeploymentTriggerRecord | null
+}
+
+/** A deploy started by a git push rather than a person. */
+export type DeploymentTriggerRecord = {
+  kind: 'push'
+  /** Branch that was pushed, or null when only a commit was recorded. */
+  branch: string | null
+  commitSha: string | null
+  /** The repository the push came from. */
+  sourceId: string | null
 }
 
 /** Per-server convergence for one generation, read from *current* state. */
