@@ -4,6 +4,7 @@ import {
   deleteNotificationChannel,
   dismissNotification,
   fetchNotificationChannels,
+  resendNotificationChannelVerification,
   fetchNotificationEvents,
   fetchNotifications,
   fetchUnreadNotificationCount,
@@ -122,5 +123,11 @@ export function useDeleteNotificationChannel(scope: 'user' | 'organization', org
     onSuccess: async () => {
       await invalidateChannels(queryClient, scope)
     },
+  })
+}
+
+export function useResendChannelVerification(organizationId?: string | null) {
+  return useApiMutation({
+    mutationFn: (id: string) => resendNotificationChannelVerification(id, organizationId),
   })
 }
