@@ -6,6 +6,7 @@ import { SystemManagedNotice } from '@/components/org/system-managed-notice'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { CatalogStep } from '@/components/org/project-create/catalog-step'
 import { ChoiceTileGrid } from '@/components/org/project-create/choice-card'
+import { StartOverBar } from '@/components/org/project-create/start-over-bar'
 import { ComposeStep } from '@/components/org/project-create/compose-step'
 import { DetailsStep } from '@/components/org/project-create/details-step'
 import {
@@ -29,6 +30,7 @@ import { RepositoryStep } from '@/components/org/project-create/repository-step'
 import { resolveWizardSelectedSource } from '@/lib/project-create/selected-source'
 import { SetupTypeChoiceCard } from '@/components/org/project-create/setup-type-icons'
 import {
+  SETUP_TYPE_GROUPS,
   SETUP_TYPE_OPTIONS,
   setupOptionForChoice,
   type SetupChoice,
@@ -144,8 +146,8 @@ const STEP_COPY: Record<Step, { title: string; hint: string }> = {
     hint: 'Name it and pick where it lives. Nothing is created yet.',
   },
   type: {
-    title: 'What are you starting from?',
-    hint: '',
+    title: 'How should this run?',
+    hint: 'Pick how the project starts. You can add more services later.',
   },
   repository: {
     title: 'Link a repository',
@@ -316,6 +318,24 @@ function composeStepSections(repositoryAppDraft: boolean) {
  * half-made project to clean up.
  */
 export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
+  // Start over remounts the wizard, which drops every field, pick and draft in
+  // one step instead of resetting twenty pieces of state by hand.
+  const [run, setRun] = useState(0)
+  return (
+    <ProjectCreateWizard
+      key={run}
+      orgId={orgId}
+      onStartOver={() => {
+        setRun((value) => value + 1)
+      }}
+    />
+  )
+}
+
+function ProjectCreateWizard({
+  orgId,
+  onStartOver,
+}: Readonly<{ orgId: string; onStartOver: () => void }>) {
   const router = useRouter()
   const params = useLocalSearchParams<{ workspaceId?: string; type?: string }>()
   const workspaceScope = useOptionalWorkspaceScope()
@@ -750,6 +770,10 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
         ) : null}
       </View>
 
+      {step === 'details' ? null : (
+        <StartOverBar onStartOver={onStartOver} disabled={submitting} />
+      )}
+
       <PanelShell>
         {surfaceError ? (
           <Text style={panelStyles.error}>{surfaceError}</Text>
@@ -823,16 +847,23 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
         ) : null}
 
         {step === 'type' ? (
-          <ChoiceTileGrid>
-            {SETUP_TYPE_OPTIONS.map((option) => (
-              <SetupTypeChoiceCard
-                key={option.choice}
-                option={option}
-                selected={selectedChoice === option.choice}
-                onPress={() => selectType(option)}
-              />
+          <View style={styles.typeGroups}>
+            {SETUP_TYPE_GROUPS.map((group) => (
+              <View key={group.title} style={styles.typeGroup}>
+                <Text style={styles.typeGroupLabel}>{group.title}</Text>
+                <ChoiceTileGrid>
+                  {group.options.map((option) => (
+                    <SetupTypeChoiceCard
+                      key={option.choice}
+                      option={option}
+                      selected={selectedChoice === option.choice}
+                      onPress={() => selectType(option)}
+                    />
+                  ))}
+                </ChoiceTileGrid>
+              </View>
             ))}
-          </ChoiceTileGrid>
+          </View>
         ) : null}
 
         {isCatalogStep(step, selectedOption) ? (
@@ -1005,6 +1036,15 @@ const styles = StyleSheet.create({
   },
   plainPanelBody: {
     gap: spacing.md,
+  },
+  typeGroups: { gap: spacing.md },
+  typeGroup: { gap: spacing.xs },
+  typeGroupLabel: {
+    color: colors.textDim,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   cancelLink: {
     alignSelf: 'center',
