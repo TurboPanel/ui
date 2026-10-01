@@ -111,6 +111,10 @@ function useStartUpgradeFlow(refetchActiveRun: () => unknown, consoleCommit?: st
           'Still waiting for the control plane to confirm the update started. The progress below refreshes on its own; if nothing appears, check the daemon log on the server.'
         )
         void refetchActiveRun()
+      } else if (err instanceof Error && err.message.includes('upgrade_run_active')) {
+        setPreflightOpen(false)
+        setNotice('Another update is already in progress. Wait for it to finish, or cancel it.')
+        void refetchActiveRun()
       } else {
         setNotice(err instanceof Error ? err.message : 'Update failed to start')
       }

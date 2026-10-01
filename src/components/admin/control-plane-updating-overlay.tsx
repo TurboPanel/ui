@@ -15,6 +15,7 @@ import {
 import {
   clearControlPlaneUpgradeWatch,
   controlPlaneOverlayState,
+  controlPlaneStepStale,
   controlPlaneUpgradeWatchRemainingMs,
 } from '@/lib/upgrade-watch'
 import { colors, spacing } from '@/lib/theme'
@@ -33,8 +34,12 @@ export function ControlPlaneUpdatingOverlay() {
 
   const runActive = isUpgradeRunActive(activeRun.data?.run?.status)
   const watchRemainingMs = controlPlaneUpgradeWatchRemainingMs()
+  // A step the daemon never answered (or that went quiet for far too long)
+  // must not hold the scrim; the Updates page says what it needs.
   const controlPlaneStepActive =
-    activeRun.data?.run?.phase === 'control_plane' && runActive
+    activeRun.data?.run?.phase === 'control_plane' &&
+    runActive &&
+    !controlPlaneStepStale(activeRun.data?.run?.steps)
   const overlay = controlPlaneOverlayState({
     canReadRun: adminQuery,
     runAnswered: activeRun.isSuccess && !activeRun.isFetching,
