@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { HeaderChevron } from '@/components/header-chevron'
 import { Badge, SectionPanel } from '@/components/ui'
 import { UpgradeRunDetail } from '@/components/admin/updates/upgrade-run-detail'
 import { panelStyles } from '@/components/ui/panel-styles'
@@ -32,7 +33,7 @@ function RunRow({ run, last }: Readonly<{ run: UpgradeHistoryEntry; last: boolea
           <Text style={panelStyles.muted}>{run.startedByEmail ?? 'Automatic'}</Text>
         </View>
         <Badge tone={resultTone(run.status)} label={run.resultLabel ?? run.status} />
-        <Text style={panelStyles.muted}>{open ? '▾' : '▸'}</Text>
+        <HeaderChevron size={14} color={colors.textMuted} open={open} />
       </Pressable>
       {open ? <UpgradeRunDetail runId={run.id} /> : null}
     </View>
