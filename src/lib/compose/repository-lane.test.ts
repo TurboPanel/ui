@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  laneEvidenceLine,
   detectedComposePath,
   rankRepositoryLanes,
   recommendedLane,
@@ -105,5 +106,53 @@ describe('rootFromEntries', () => {
 
   it('returns undefined so the caller keeps the daemon default', () => {
     expect(rootFromEntries([])).toBeUndefined()
+  })
+})
+
+describe('rankRepositoryLanes found flag', () => {
+  it('marks a lane found only when the repository holds its evidence', () => {
+    const lanes = rankRepositoryLanes([
+      { path: 'package.json', found: true },
+      { path: 'composer.json', found: false },
+    ])
+    const found = Object.fromEntries(lanes.map((l) => [l.lane, l.found]))
+    expect(found).toEqual({
+      compose: false,
+      'site-php': false,
+      app: true,
+      static: false,
+    })
+  })
+})
+
+describe('laneEvidenceLine', () => {
+  it('shows a tick for found evidence and says which lane is the best match', () => {
+    expect(
+      laneEvidenceLine({
+        lane: 'app',
+        evidence: 'package.json',
+        found: true,
+        recommended: true,
+      }),
+    ).toBe('✓ package.json found · best match')
+    expect(
+      laneEvidenceLine({
+        lane: 'app',
+        evidence: 'package.json',
+        found: true,
+        recommended: false,
+      }),
+    ).toBe('✓ package.json found')
+  })
+
+  it('shows a cross and the missing file for an absent lane', () => {
+    expect(
+      laneEvidenceLine({
+        lane: 'compose',
+        evidence: 'no compose file found',
+        found: false,
+        recommended: false,
+      }),
+    ).toBe('✕ no compose file found')
   })
 })
