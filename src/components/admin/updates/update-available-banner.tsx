@@ -37,9 +37,9 @@ export function useUpdateAvailable(): Readonly<{
   const { session } = useAuth()
   const status = useInstallStatusQuery()
   const eligible = isSuperadminSession(session) && status.data?.runtime === 'deno'
-  const updates = useInstanceUpdates({ enabled: eligible })
-  const active = useUpgradeActiveRun({ enabled: eligible })
   const consoleBuild = useMemo(() => readConsoleBuild(), [])
+  const updates = useInstanceUpdates({ enabled: eligible, consoleCommit: consoleBuild?.commit })
+  const active = useUpgradeActiveRun({ enabled: eligible })
   const [dismissedKey, setDismissedKey] = useState(() => readDismissedUpdateBanner(webStorage()))
   const offer = { updates: updates.data, activeRun: Boolean(active.data?.run), consoleBuild }
   return {

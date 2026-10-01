@@ -1,4 +1,6 @@
+import { useMemo } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
+import { readConsoleBuild } from '@/components/admin/updates/console-build'
 import { HighAvailabilityUpdates } from '@/components/admin/updates/ha-updates'
 import { SelfHostedUpdates } from '@/components/admin/updates/self-hosted-updates'
 import { InlineNotice, LoadingState } from '@/components/ui'
@@ -8,7 +10,8 @@ import { useInstanceUpdates } from '@/lib/queries/admin'
 import { spacing } from '@/lib/theme'
 
 export function UpdatesSection() {
-  const query = useInstanceUpdates()
+  const consoleCommit = useMemo(() => readConsoleBuild()?.commit, [])
+  const query = useInstanceUpdates({ consoleCommit })
   const statusQuery = useInstallStatusQuery()
   const runtime = statusQuery.data?.runtime
 
