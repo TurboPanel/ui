@@ -1,0 +1,10 @@
+# Cloudflare Workers static assets: applied to every response the hosted UI serves.
+# The self-hosted panel gets its own set from Caddy; the API's from src/app/security-headers.ts
+# in the turbopanel repo. No Content-Security-Policy script rules yet: that needs a pass over the
+# Expo web bundle's inline scripts first. frame-ancestors alone is safe.
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Content-Security-Policy: frame-ancestors 'none'
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
