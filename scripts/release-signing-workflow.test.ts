@@ -26,8 +26,8 @@ describe('release manifest signing', () => {
     expect(ref).toMatch(/^[0-9a-f]{40}$/)
   })
 
-  it('reads the signing key from the canary or release environment, not a repo secret', () => {
-    expect(release).toContain("environment: ${{ inputs.channel == 'canary' && 'canary' || 'release' }}")
+  it('reads the signing key from the canary, rc or release environment, not a repo secret', () => {
+    expect(release).toContain("environment: ${{ inputs.channel == 'canary' && 'canary' || (inputs.channel == 'rc' && 'rc' || 'release') }}")
     expect(release).not.toContain('secrets.RELEASE_SIGNING_KEY')
     expect(canary).not.toContain('secrets.RELEASE_SIGNING_KEY')
   })
