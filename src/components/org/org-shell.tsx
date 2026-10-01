@@ -13,6 +13,7 @@ import { OrgSidebar } from '@/components/org/org-sidebar'
 import { WorkspaceScopeProvider } from '@/lib/workspace-scope-context'
 import { PullToRefreshProvider } from '@/lib/pull-to-refresh'
 import { glass } from '@/lib/glass'
+import { contentMaxWidthFor, usePageWidth } from '@/lib/page-width'
 import { colors, layout } from '@/lib/theme'
 
 export function OrgShell({
@@ -23,9 +24,11 @@ export function OrgShell({
   const isDesktop = width >= layout.desktopBreakpoint
   const [drawerOpen, setDrawerOpen] = useState(false)
 
-  const contentMaxWidth = Math.min(
-    layout.contentMaxWidth,
+  const pageWidth = usePageWidth()
+  const contentMaxWidth = contentMaxWidthFor(
+    pageWidth,
     width - (isDesktop ? layout.sidebarWidth : 0) - layout.contentGutter * 2,
+    layout.contentMaxWidth,
   )
 
   return (
