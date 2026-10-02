@@ -157,6 +157,14 @@ export function explainUpgradeFailure(
       docsUrl: null,
     }
   }
+  if (code === 'dispatch_failed') {
+    return {
+      title: "The update couldn't reach the server",
+      body: "The control plane could not deliver the update command to the server's daemon after several tries. Check that the server is online and connected, then retry.",
+      command: null,
+      docsUrl: null,
+    }
+  }
   const controlPlane = explainControlPlaneFailure(code, message)
   if (controlPlane) return controlPlane
   if (code === 'rolled_back' || code === 'update_rollback') {
