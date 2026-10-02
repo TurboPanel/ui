@@ -4,6 +4,8 @@ import {
   BASELINE_PHP_EXTENSIONS,
   DEFAULT_NODE_SERIES,
   DEFAULT_PHP_SERIES,
+  ENGINE_PHP_MODES,
+  PHP_MODES,
   OPTIONAL_PHP_EXTENSIONS,
   SUPPORTED_NODE_SERIES,
   SUPPORTED_PHP_SERIES,
@@ -415,6 +417,28 @@ describe('parseServiceTurbopanelExtension shapes', () => {
     expect(
       parseServiceTurbopanelExtension({ php: { settings: { skip: true } } })?.php,
     ).toBeUndefined()
+  })
+
+  it('keeps a known php.mode and drops anything else', () => {
+    expect(
+      parseServiceTurbopanelExtension({ serviceKind: 'site', php: { mode: 'fastcgi' } })?.php,
+    ).toEqual({ mode: 'fastcgi' })
+    expect(
+      parseServiceTurbopanelExtension({ php: { version: '8.4', mode: 'cgi' } })?.php,
+    ).toEqual({ version: '8.4' })
+    // A patch that touches another field keeps the authored mode.
+    const patched = patchServiceTurbopanelExtension(
+      { 'x-turbopanel': { serviceKind: 'site', engine: 'nginx', php: { mode: 'fpm' } } },
+      { engine: 'apache' },
+    )
+    expect(patched['x-turbopanel']).toMatchObject({ engine: 'apache', php: { mode: 'fpm' } })
+  })
+
+  it('maps each engine to the PHP modes it can run', () => {
+    expect(ENGINE_PHP_MODES.caddy).toEqual([])
+    expect(ENGINE_PHP_MODES.nginx).toEqual(['fastcgi', 'fpm'])
+    expect(ENGINE_PHP_MODES.apache).toEqual(['fastcgi', 'fpm'])
+    expect(ENGINE_PHP_MODES.openlitespeed).toEqual(PHP_MODES)
   })
 
   it('keeps a managed-directory sourceKind on a site', () => {

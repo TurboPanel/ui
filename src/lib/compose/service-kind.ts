@@ -539,6 +539,11 @@ export type ComposeServiceCronJob = {
 export type ComposeServicePhpExtension = {
   /** Series (`8.4`). Omitted means the host default. */
   version?: string
+  /**
+   * How PHP runs. Omitted keeps the mode the site already runs, or gives a new
+   * site the default its organization and server allow (FastCGI first).
+   */
+  mode?: PhpMode
   /** Opt-in extensions on top of the always-installed baseline. */
   extensions?: string[]
   /** `php_admin_value` directives, validated by the instance settings table. */
@@ -800,6 +805,7 @@ function parseServicePhpExtension(
   const php: ComposeServicePhpExtension = {}
   const version = readBoundedString(value.version, 16)
   if (version) php.version = version
+  if (isPhpMode(value.mode)) php.mode = value.mode
   const extensions = parsePhpExtensionNames(value.extensions)
   if (extensions) php.extensions = extensions
   for (const field of ['settings', 'pool'] as const) {
@@ -979,6 +985,32 @@ export const DEFAULT_SITE_ENGINE: SiteEngine = 'caddy'
  * deploy installs it.
  */
 export const SUPPORTED_PHP_SERIES: readonly string[] = ['8.3', '8.4']
+
+/** PHP modes, mirroring the instance's `contracts/commands/schemas.ts`. */
+export type PhpMode = 'fastcgi' | 'fpm' | 'lsphp-detached' | 'lsphp-attached'
+
+export const PHP_MODES: readonly PhpMode[] = [
+  'fastcgi',
+  'fpm',
+  'lsphp-detached',
+  'lsphp-attached',
+]
+
+/**
+ * Modes each engine can run, mirroring the instance's
+ * `features/hostings/php-mode.ts`. Caddy has none. Whether the organization
+ * and server offer a mode is checked at deploy.
+ */
+export const ENGINE_PHP_MODES: Readonly<Record<SiteEngine, readonly PhpMode[]>> = {
+  caddy: [],
+  nginx: ['fastcgi', 'fpm'],
+  apache: ['fastcgi', 'fpm'],
+  openlitespeed: PHP_MODES,
+}
+
+export function isPhpMode(value: unknown): value is PhpMode {
+  return typeof value === 'string' && (PHP_MODES as readonly string[]).includes(value)
+}
 
 /**
  * Extensions installed on every PHP series whether or not a site asks.
