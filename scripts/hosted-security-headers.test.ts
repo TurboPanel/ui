@@ -21,6 +21,11 @@ describe('hosted UI security headers', () => {
     expect(headers).toContain('Permissions-Policy:')
   })
 
+  it('sends HSTS with the same value as the API, without preload', () => {
+    expect(headers).toMatch(/^ {2}Strict-Transport-Security: max-age=31536000; includeSubDomains$/m)
+    expect(headers).not.toMatch(/preload/i)
+  })
+
   it('ships the script CSP report-only, never enforced', () => {
     expect(headers).toMatch(/^ {2}Content-Security-Policy-Report-Only: .*script-src 'self'/m)
     const enforced = headers.match(/^ {2}Content-Security-Policy: (.*)$/m)?.[1]
