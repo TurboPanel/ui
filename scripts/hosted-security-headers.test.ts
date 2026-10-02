@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
@@ -18,5 +19,23 @@ describe('hosted UI security headers', () => {
     expect(headers).toContain("Content-Security-Policy: frame-ancestors 'none'")
     expect(headers).toContain('Referrer-Policy: strict-origin-when-cross-origin')
     expect(headers).toContain('Permissions-Policy:')
+  })
+
+  it('ships the script CSP report-only, never enforced', () => {
+    expect(headers).toMatch(/^ {2}Content-Security-Policy-Report-Only: .*script-src 'self'/m)
+    const enforced = headers.match(/^ {2}Content-Security-Policy: (.*)$/m)?.[1]
+    expect(enforced).toBe("frame-ancestors 'none'")
+  })
+
+  it('allows exactly the inline scripts the exported pages contain', () => {
+    const index = path.join(ROOT, 'dist', 'index.html')
+    if (!existsSync(index)) return // needs `pnpm run export`; CI export steps run it
+    const html = readFileSync(index, 'utf8')
+    const inline = [...html.matchAll(/<script(?![^>]*\ssrc=)[^>]*>([\s\S]*?)<\/script>/g)]
+    expect(inline.length).toBeGreaterThan(0)
+    for (const [, body] of inline) {
+      const hash = createHash('sha256').update(body).digest('base64')
+      expect(headers).toContain(`'sha256-${hash}'`)
+    }
   })
 })
