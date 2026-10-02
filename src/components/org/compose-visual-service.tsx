@@ -39,9 +39,12 @@ import {
 } from '@/lib/compose/visual-fields'
 import {
   BASELINE_PHP_EXTENSIONS,
+  ENGINE_PHP_MODES,
+  isPhpMode,
   OPTIONAL_PHP_EXTENSIONS,
   SUPPORTED_PHP_SERIES,
   type ComposeServicePhpExtension,
+  type PhpMode,
   DEFAULT_SITE_ENGINE,
   isHostNativeServiceKind,
   isSiteComposeService,
@@ -162,6 +165,13 @@ const PHP_SETTING_FIELDS: readonly {
   { key: 'date.timezone', label: 'Timezone', placeholder: 'UTC' },
 ]
 
+const PHP_MODE_LABELS: Readonly<Record<PhpMode, string>> = {
+  fastcgi: 'FastCGI (php-cgi)',
+  fpm: 'php-fpm',
+  'lsphp-detached': 'lsphp, detached',
+  'lsphp-attached': 'lsphp, attached to OpenLiteSpeed',
+}
+
 /**
  * PHP configuration for a site, edited where it lives.
  *
@@ -195,6 +205,7 @@ function PhpFields({
       if (block && Object.keys(block).length === 0) delete next[field]
     }
     if (next.extensions?.length === 0) delete next.extensions
+    if (next.mode === undefined) delete next.mode
     onChange(Object.keys(next).length > 0 ? next : undefined)
   }
   const setBlockValue = (
@@ -235,6 +246,26 @@ function PhpFields({
         disabled={disabled}
         onChange={(version) => emit({ ...php, version: version || undefined })}
       />
+      {ENGINE_PHP_MODES[engine].length > 0 ? (
+        <>
+          <OptionSelect
+            value={php?.mode ?? ''}
+            options={[
+              { value: '', label: 'Automatic mode' },
+              ...ENGINE_PHP_MODES[engine].map((mode) => ({
+                value: mode,
+                label: PHP_MODE_LABELS[mode],
+              })),
+            ]}
+            disabled={disabled}
+            onChange={(mode) => emit({ ...php, mode: isPhpMode(mode) ? mode : undefined })}
+          />
+          <Text style={styles.hint}>
+            Automatic keeps the mode the site already runs. A new site gets
+            FastCGI, or the next mode its organization and server allow.
+          </Text>
+        </>
+      ) : null}
       <Text style={styles.hint}>
         Leave every field blank to serve this site as static files. Setting any
         of them turns PHP on, running in {mechanism}.
