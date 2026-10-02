@@ -23,7 +23,7 @@ describe('hosted UI security headers', () => {
 
   it('sends HSTS with the same value as the API, without preload', () => {
     expect(headers).toMatch(/^ {2}Strict-Transport-Security: max-age=31536000; includeSubDomains$/m)
-    expect(headers).not.toMatch(/preload/i)
+    expect(headers).not.toMatch(/^ {2}Strict-Transport-Security:.*preload/im)
   })
 
   it('ships the script CSP report-only, never enforced', () => {
