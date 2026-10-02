@@ -19,11 +19,19 @@ const SMALL = new Set(['a', 'an', 'and', 'for', 'of', 'on', 'or', 'the', 'to'])
 const titleCase = (name: string) =>
   name.split(' ').every((w, i) => (i > 0 && SMALL.has(w)) || /^[A-Z\d]/.test(w))
 
+// Explicit per-file allowances for write scopes at the top level.
+const ALLOWED_WRITES: Record<string, string[]> = {
+  'osv-scheduled.yml': ['issues'], // opens the weekly OSV sweep issue
+}
+
 describe('every workflow', () => {
   it.each(files)('%s declares a read-only top-level token', (f) => {
     const permissions = workflow(f).permissions
     expect(permissions).toBeDefined()
-    expect(Object.values(permissions ?? {})).not.toContain('write')
+    const writes = Object.entries(permissions ?? {})
+      .filter(([, level]) => level === 'write')
+      .map(([scope]) => scope)
+    expect(writes).toEqual(ALLOWED_WRITES[f] ?? [])
   })
 
   it.each(files)('%s has a Title Case name', (f) => {
