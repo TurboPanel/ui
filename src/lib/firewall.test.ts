@@ -8,6 +8,7 @@ import {
   firewallActionLabel,
   firewallBanner,
   firewallErrorMessage,
+  isSshExcludesYouError,
   firewallModeChoiceText,
   firewallModeLabel,
   firewallModeNote,
@@ -396,5 +397,17 @@ describe('state and banner', () => {
     expect(pending).toContain('undone automatically')
     expect(firewallStateNote({ ...idle, state: 'rolled_back' })).toContain('rolled back')
     expect(firewallStateNote({ ...idle, state: 'pending' })).toContain('waiting for confirmation;')
+  })
+})
+
+describe('isSshExcludesYouError', () => {
+  it('recognises the 409 that asks for an acknowledgement', () => {
+    expect(isSshExcludesYouError(new Error('HTTP 409: firewall_ssh_excludes_you'))).toBe(true)
+  })
+
+  it('ignores other refusals and non-errors', () => {
+    expect(isSshExcludesYouError(new Error('HTTP 409: firewall_rule_limit'))).toBe(false)
+    expect(isSshExcludesYouError(new Error('HTTP 400: firewall_ssh_excludes_you'))).toBe(false)
+    expect(isSshExcludesYouError('firewall_ssh_excludes_you')).toBe(false)
   })
 })
