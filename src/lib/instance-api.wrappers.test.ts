@@ -10,6 +10,8 @@ import {
   fetchNotificationEvents,
   fetchNotifications,
   fetchOrgComposeGatedFields,
+  fetchOrgComposeRemoteBuildSources,
+  saveOrgComposeRemoteBuildSources,
   fetchUnreadNotificationCount,
   fetchUpgradeHistory,
   fetchUpgradeRun,
@@ -59,6 +61,19 @@ describe('instance-api upgrade, notification and compose-gated-field wrappers', 
       composeGatedFieldsEnabled: true,
     })
     expect(urlOf(0)).toContain('/organizations/org-1/compose-privileged-fields')
+  })
+
+  it('org remote build sources read and write the compose-remote-build-sources route', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ composeRemoteBuildSourcesEnabled: false }))
+    await expect(fetchOrgComposeRemoteBuildSources('org-1')).resolves.toEqual({
+      composeRemoteBuildSourcesEnabled: false,
+    })
+    expect(urlOf(0)).toContain('/organizations/org-1/compose-remote-build-sources')
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ composeRemoteBuildSourcesEnabled: true }))
+    await saveOrgComposeRemoteBuildSources('org-1', { composeRemoteBuildSourcesEnabled: true })
+    expect(initOf(1)?.method).toBe('PUT')
+    expect(initOf(1)?.body).toBe(JSON.stringify({ composeRemoteBuildSourcesEnabled: true }))
   })
 
   it('upgrade reads build the query string only from the params given', async () => {

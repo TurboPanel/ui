@@ -18,6 +18,7 @@ import {
 import { useApiMutation, useCan, queryKeys } from '@/lib/query-client'
 import { colors, spacing } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
+import { ComposeRemoteSourcesRow } from './compose-remote-sources-row'
 
 function errorMessage(err: unknown, fallback: string): string {
   return userErrorMessage(err, fallback)
@@ -138,6 +139,10 @@ export function ComposeSettingsSection({ orgId }: Readonly<{ orgId: string }>) {
           accessibilityLabel="Allow host-level Compose features"
         />
       </SettingRow>
+
+      <View style={styles.divider} />
+
+      <ComposeRemoteSourcesRow orgId={orgId} canOwn={canOwn} />
 
       <View style={styles.divider} />
 
