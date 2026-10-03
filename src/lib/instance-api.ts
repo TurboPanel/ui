@@ -1157,6 +1157,27 @@ export async function saveOrgComposeGatedFields(
   })
 }
 
+export type OrgComposeRemoteBuildSources = {
+  /** Owner opt-in for builds that fetch a public URL or git source. Off by default. */
+  composeRemoteBuildSourcesEnabled: boolean
+}
+
+export async function fetchOrgComposeRemoteBuildSources(
+  orgId: string
+): Promise<OrgComposeRemoteBuildSources> {
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/compose-remote-build-sources`)
+}
+
+export async function saveOrgComposeRemoteBuildSources(
+  orgId: string,
+  patch: OrgComposeRemoteBuildSources
+): Promise<OrgComposeRemoteBuildSources> {
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/compose-remote-build-sources`, {
+    method: 'PUT',
+    body: JSON.stringify(patch),
+  })
+}
+
 export type OrgComposeResourceDefaults = {
   /** `null` = no default ceiling; otherwise cores and/or bytes. */
   composeDefaultResourceLimits: { cpus?: number; memoryBytes?: number } | null
