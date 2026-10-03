@@ -8,6 +8,7 @@ import { getClientVersion, getInstanceRevision, getInstanceVersion } from '@/lib
 import { useUpgradeActiveRun } from '@/lib/queries/admin'
 import { isUpgradeRunActive } from '@/lib/upgrade-run-poll'
 import {
+  RECONNECT_COPY,
   RECONNECT_SLOW_COPY,
   RECONNECTING_TITLE,
   isControlPlaneUnreachable,
@@ -127,8 +128,8 @@ function UpdatingCard({
   const slow = view?.phase === 'slow'
   const label = view ? RECONNECTING_TITLE : 'TurboPanel is updating'
   const copy = view
-    ? `Waiting for the control plane to come back (${view.elapsedLabel}).`
-    : 'The control plane is restarting. This page will reconnect automatically.'
+    ? `${RECONNECT_COPY} Waiting ${view.elapsedLabel}.`
+    : RECONNECT_COPY
   return (
     <View style={styles.scrim} accessibilityViewIsModal>
       <View style={styles.card}>
