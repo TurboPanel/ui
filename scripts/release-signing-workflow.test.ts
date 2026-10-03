@@ -16,7 +16,9 @@ describe('release manifest signing', () => {
     expect(written).toBeGreaterThanOrEqual(0)
     expect(signed).toBeGreaterThan(written)
     expect(uploaded).toBeGreaterThan(signed)
-    expect(release).toContain('.manifest-signer/scripts/sign-manifest.ts release-assets/manifest.json')
+    expect(release).toContain(
+      '.manifest-signer/scripts/sign-manifest.ts release-assets/manifest.json'
+    )
     expect(release).toContain('RELEASE_SIGNING_KEY: ${{ secrets.TURBOPANEL_RELEASE_SIGNING_KEY }}')
   })
 
@@ -27,16 +29,21 @@ describe('release manifest signing', () => {
   })
 
   it('reads the signing key from the canary, rc or release environment only', () => {
-    expect(release).toContain("environment: ${{ inputs.channel == 'canary' && 'canary' || (inputs.channel == 'rc' && 'rc' || 'release') }}")
+    expect(release).toContain(
+      "environment: ${{ inputs.channel == 'canary' && 'canary' || (inputs.channel == 'rc' && 'rc' || 'release') }}"
+    )
     expect(release).not.toContain('secrets.RELEASE_SIGNING_KEY')
-    expect(canary).not.toContain('secrets: inherit')
+    // The environment secret only reaches a called workflow when its caller inherits secrets.
+    expect(canary).toMatch(/^\s*secrets:\s*inherit\b/m)
   })
 
-  it('no workflow inherits secrets or falls back to a repo-level signing key', () => {
+  it('only callers of release.yml inherit secrets, and none falls back to a repo-level signing key', () => {
     const dir = join(root, '.github/workflows')
-    for (const name of readdirSync(dir).filter(n => n.endsWith('.yml'))) {
+    for (const name of readdirSync(dir).filter((n) => n.endsWith('.yml'))) {
       const text = readFileSync(join(dir, name), 'utf8')
-      expect(text, name).not.toMatch(/^\s*secrets:\s*inherit\b/m)
+      if (!text.includes('uses: ./.github/workflows/release.yml')) {
+        expect(text, name).not.toMatch(/^\s*secrets:\s*inherit\b/m)
+      }
       expect(text, name).not.toContain('secrets.RELEASE_SIGNING_KEY')
     }
   })
