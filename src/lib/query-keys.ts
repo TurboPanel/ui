@@ -132,6 +132,8 @@ export const queryKeys = {
         networkPanel: (serverId: string) =>
           ['org', orgId, 'server', serverId, 'network-panel'] as const,
         labels: (serverId: string) => ['org', orgId, 'server', serverId, 'labels'] as const,
+        /** PHP mode policy one server offers (`/servers/:id/php-modes`). */
+        phpModes: (serverId: string) => ['org', orgId, 'server', serverId, 'php-modes'] as const,
       },
 
       settings: {
@@ -139,6 +141,8 @@ export const queryKeys = {
         defaultTimezone: ['org', orgId, 'default-timezone'] as const,
         temperatureUnit: ['org', orgId, 'temperature-unit'] as const,
         hostDefaults: ['org', orgId, 'host-defaults'] as const,
+        /** PHP modes the organization offers (`/organizations/:id/php-modes`). */
+        phpModes: ['org', orgId, 'php-modes'] as const,
         defaultEnvironment: ['org', orgId, 'default-environment'] as const,
         managedDefaults: ['org', orgId, 'managed-defaults'] as const,
         /** Org-wide dockerd `default-address-pools` + `bip` (`/organizations/:id/docker-networking`). */

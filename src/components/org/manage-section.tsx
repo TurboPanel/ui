@@ -1,6 +1,7 @@
 import { useRouter, type Href } from 'expo-router'
 import { StyleSheet, Text, View } from 'react-native'
 import { ComposeSettingsSection } from '@/components/org/compose-settings-section'
+import { PhpModePolicyPanel } from '@/components/org/php-mode-policy-panel'
 import { OrganizationFormSection } from '@/components/org/organization-form-section'
 import { ReauthSettingsSection } from '@/components/org/reauth-settings-section'
 import { Button, ButtonRow, SectionPanel } from '@/components/ui'
@@ -46,6 +47,7 @@ export function ManageSection({ orgId }: Readonly<{ orgId: string }>) {
       {billingEnabled ? <BillingLinkSection orgId={orgId} /> : null}
       <ReauthSettingsSection orgId={orgId} />
       <ComposeSettingsSection orgId={orgId} />
+      <PhpModePolicyPanel orgId={orgId} />
     </View>
   )
 }

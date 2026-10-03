@@ -1178,6 +1178,67 @@ export async function saveOrgComposeResourceDefaults(
   })
 }
 
+export type PhpModeValue = 'fastcgi' | 'fpm' | 'lsphp-detached' | 'lsphp-attached'
+
+/** Per web server: the modes a site may pick under the policy, and what a new site gets. */
+export type PhpModeEngineChoices = Record<
+  string,
+  { allowed: PhpModeValue[]; default: PhpModeValue | null }
+>
+
+export type PhpModeAffectedSite = {
+  environmentId: string
+  serverId: string
+  composeServiceName: string
+  mode: PhpModeValue
+}
+
+export type PhpModePolicy = {
+  /** `null` = every mode offered. */
+  phpModes: PhpModeValue[] | null
+  engines: PhpModeEngineChoices
+}
+
+export type ServerPhpModePolicy = PhpModePolicy & {
+  /** The organization's list the server narrows; `null` = every mode. */
+  organizationPhpModes: PhpModeValue[] | null
+}
+
+export type PhpModePolicySaved = {
+  ok: true
+  phpModes: PhpModeValue[] | null
+  /** Sites whose recorded mode the new policy no longer offers; they keep it until changed. */
+  affectedSites: PhpModeAffectedSite[]
+}
+
+export async function fetchOrgPhpModes(orgId: string): Promise<PhpModePolicy> {
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/php-modes`)
+}
+
+export async function saveOrgPhpModes(
+  orgId: string,
+  phpModes: PhpModeValue[] | null
+): Promise<PhpModePolicySaved> {
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/php-modes`, {
+    method: 'PUT',
+    body: JSON.stringify({ phpModes }),
+  })
+}
+
+export async function fetchServerPhpModes(serverId: string): Promise<ServerPhpModePolicy> {
+  return await apiFetch(`${CLIENT_API}/servers/${serverId}/php-modes`)
+}
+
+export async function saveServerPhpModes(
+  serverId: string,
+  phpModes: PhpModeValue[] | null
+): Promise<PhpModePolicySaved> {
+  return await apiFetch(`${CLIENT_API}/servers/${serverId}/php-modes`, {
+    method: 'PUT',
+    body: JSON.stringify({ phpModes }),
+  })
+}
+
 export async function fetchOrgHostDefaults(orgId: string): Promise<OrgHostDefaults> {
   return await apiFetch(`${CLIENT_API}/organizations/${orgId}/host-defaults`)
 }
