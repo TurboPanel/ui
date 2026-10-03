@@ -13,6 +13,8 @@ const RETRY_FIRST_MS = 2_000
 const RETRY_MAX_MS = 10_000
 
 export const RECONNECTING_TITLE = 'Reconnecting to the control plane…'
+export const RECONNECT_COPY =
+  'The panel is restarting to finish an update. This page will reconnect by itself.'
 export const RECONNECT_SLOW_COPY =
   'This is taking longer than usual. The update may still be running.'
 

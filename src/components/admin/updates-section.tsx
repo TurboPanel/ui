@@ -5,7 +5,11 @@ import { HighAvailabilityUpdates } from '@/components/admin/updates/ha-updates'
 import { SelfHostedUpdates } from '@/components/admin/updates/self-hosted-updates'
 import { InlineNotice, LoadingState } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
-import { RECONNECTING_TITLE, isControlPlaneUnreachable } from '@/lib/control-plane-reconnect'
+import {
+  RECONNECT_COPY,
+  RECONNECTING_TITLE,
+  isControlPlaneUnreachable,
+} from '@/lib/control-plane-reconnect'
 import { useControlPlaneReconnect } from '@/lib/use-control-plane-reconnect'
 import { useInstallStatusQuery } from '@/lib/queries/auth'
 import { useInstanceUpdates } from '@/lib/queries/admin'
@@ -26,12 +30,19 @@ export function UpdatesSection() {
 
   if (query.isLoading) return <LoadingState label="Loading updates" />
 
+  if (query.isError && reconnect.view) {
+    return (
+      <InlineNotice
+        tone="warning"
+        title={RECONNECTING_TITLE}
+        body={`${RECONNECT_COPY} Waiting ${reconnect.view.elapsedLabel}.`}
+      />
+    )
+  }
+
   if (query.isError) {
     const message = userErrorMessage(query.error, 'Failed to load updates')
-    const detail = reconnect.view
-      ? `${RECONNECTING_TITLE} (${reconnect.view.elapsedLabel})`
-      : undefined
-    return <InlineNotice tone="warning" title={message} body={detail} />
+    return <InlineNotice tone="warning" title={message} />
   }
 
   const data = query.data

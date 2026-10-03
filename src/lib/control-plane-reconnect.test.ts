@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  RECONNECT_COPY,
   RECONNECT_SLOW_AFTER_MS,
   formatReconnectElapsed,
   isControlPlaneUnreachable,
@@ -50,5 +51,14 @@ describe('isControlPlaneUnreachable', () => {
     expect(isControlPlaneUnreachable(new TypeError('Failed to fetch'))).toBe(true)
     expect(isControlPlaneUnreachable(new Error('/api/x failed: HTTP 502'))).toBe(true)
     expect(isControlPlaneUnreachable(new Error('HTTP 403: no'))).toBe(false)
+  })
+})
+
+describe('RECONNECT_COPY', () => {
+  it('is plain words with no raw error text', () => {
+    expect(RECONNECT_COPY).toBe(
+      'The panel is restarting to finish an update. This page will reconnect by itself.'
+    )
+    expect(RECONNECT_COPY).not.toMatch(/fetch|HTTP|error/i)
   })
 })
