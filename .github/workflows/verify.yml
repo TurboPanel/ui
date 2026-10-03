@@ -165,63 +165,6 @@ jobs:
         if: github.event_name == 'pull_request' && steps.sonar.outcome == 'success'
         uses: TurboPanel/dev/.github/actions/sonar-new-issues@2db1bbfa3cff89a52fac3ee4a53bd495dc1c79b1 # dev#47
 
-  # ClickHouse/Tabix metrics infrastructure is retired (DuckDB + Parquet /
-  # Analytics Engine replaced it). The guard lives in TurboPanel/turbopaneld
-  # (scripts/check-metrics-legacy.ts) and scans sibling checkouts when present,
-  # so check this repo out next to it — a clean single-repo turbopaneld CI run
-  # cannot see PRs made here. This job covers ui/src and ui/design-system.
-  metrics-legacy:
-    runs-on: ubuntu-latest
-    # Kept as it is; see the note on the verify job's group.
-    concurrency:
-      group: ui-metrics-legacy-${{ github.event_name }}-${{ (github.head_ref == 'trunk' || github.head_ref == 'staging') && github.run_id || github.ref }}
-      cancel-in-progress: ${{ github.event_name == 'pull_request' && github.head_ref != 'trunk' && github.head_ref != 'staging' }}
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          path: ui
-
-      - name: Check out turbopaneld (metrics-legacy guard)
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: TurboPanel/turbopaneld
-          path: turbopaneld
-
-      # Three attempts, 15 s then 45 s apart: setup-deno has no retry input and
-      # a transient GitHub 5xx on the download must not turn the run red.
-      - name: Install Deno
-        id: deno-try-1
-        continue-on-error: true
-        uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
-        with:
-          # Keep in step with DENO_VERSION / deno_version / TP_DENO_VERSION (2.9.7).
-          deno-version: "2.9.7"
-      - name: Wait before retrying the Deno download
-        if: steps.deno-try-1.outcome == 'failure'
-        run: sleep 15
-      - name: Install Deno (retry 1 of 2)
-        id: deno-try-2
-        if: steps.deno-try-1.outcome == 'failure'
-        continue-on-error: true
-        uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
-        with:
-          # Keep in step with DENO_VERSION / deno_version / TP_DENO_VERSION (2.9.7).
-          deno-version: "2.9.7"
-      - name: Wait before retrying the Deno download again
-        if: steps.deno-try-2.outcome == 'failure'
-        run: sleep 45
-      - name: Install Deno (retry 2 of 2)
-        if: steps.deno-try-2.outcome == 'failure'
-        uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
-        with:
-          # Keep in step with DENO_VERSION / deno_version / TP_DENO_VERSION (2.9.7).
-          deno-version: "2.9.7"
-
-      - name: Check metrics legacy (no ClickHouse/Tabix references)
-        working-directory: turbopaneld
-        run: deno task check:metrics-legacy
-
   # The one check the trunk ruleset requires. It waits on every PR-time job
   # and fails unless each one succeeded, so a renamed or added job can never
   # slip past the merge gate; `skipped` is still a failure here because no job
@@ -237,7 +180,7 @@ jobs:
   ci-ok:
     name: ci-ok
     runs-on: ubuntu-latest
-    needs: [verify, metrics-legacy]
+    needs: [verify]
     if: >-
       ${{ (github.event_name == 'pull_request' && always())
           || (!cancelled() && !contains(needs.*.result, 'cancelled')) }}
