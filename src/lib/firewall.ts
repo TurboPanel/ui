@@ -301,6 +301,19 @@ const ERROR_COPY: Record<string, string> = {
   firewall_mode_invalid: 'That is not a firewall mode this server can use.',
 }
 
+/** Shown when a narrowed SSH list leaves out the address the admin is using right now. */
+export const SSH_EXCLUDES_YOU_COPY =
+  'Your current address is not in this list. If you save, you may lose SSH access to your servers from here.'
+
+/** The API refused a narrowed SSH list that does not cover the caller (409 `firewall_ssh_excludes_you`). */
+export function isSshExcludesYouError(err: unknown): boolean {
+  return (
+    err instanceof Error &&
+    /HTTP 409(?!\d)/.test(err.message) &&
+    err.message.includes('firewall_ssh_excludes_you')
+  )
+}
+
 const FORBIDDEN_COPY = 'Only organization owners and managers can see or change the firewall.'
 
 /** Plain words for an API refusal; the API's own explanation is kept for an invalid rule. */

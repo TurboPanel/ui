@@ -16,9 +16,11 @@ import {
   firewallErrorMessage,
   firewallPolicyPatch,
   formatSshSources,
+  isSshExcludesYouError,
   parseSshSources,
+  SSH_EXCLUDES_YOU_COPY,
 } from '@/lib/firewall'
-import type { FirewallPolicy } from '@/lib/instance-api'
+import type { FirewallPolicy, FirewallPolicyUpdate } from '@/lib/instance-api'
 import { useFirewallPolicy, useSaveFirewallPolicy } from '@/lib/queries/firewall'
 import { spacing } from '@/lib/theme'
 
@@ -30,6 +32,7 @@ function PolicyForm({ orgId, policy }: Readonly<{ orgId: string; policy: Firewal
   const [sshError, setSshError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
+  const [pendingAnyway, setPendingAnyway] = useState<FirewallPolicyUpdate | null>(null)
 
   const save = async () => {
     setError(null)
@@ -42,10 +45,19 @@ function PolicyForm({ orgId, policy }: Readonly<{ orgId: string; policy: Firewal
     setSshError(null)
     const patch = firewallPolicyPatch(policy, { inputDefault, ipv6, sshSources: sources.sources })
     if (!patch) return
+    await send(patch)
+  }
+
+  const send = async (patch: FirewallPolicyUpdate) => {
+    setPendingAnyway(null)
     try {
       await mutation.mutateAsync(patch)
       setSaved(true)
     } catch (err) {
+      if (isSshExcludesYouError(err)) {
+        setPendingAnyway(patch)
+        return
+      }
       setError(firewallErrorMessage(err, 'Failed to save the firewall policy'))
     }
   }
@@ -77,6 +89,7 @@ function PolicyForm({ orgId, policy }: Readonly<{ orgId: string; policy: Firewal
         autoCorrect={false}
         onChangeText={(value) => {
           setSaved(false)
+          setPendingAnyway(null)
           setSsh(value)
         }}
       />
@@ -90,6 +103,30 @@ function PolicyForm({ orgId, policy }: Readonly<{ orgId: string; policy: Firewal
         />
       </FormField>
       {error ? <Text style={panelStyles.error}>{error}</Text> : null}
+      {pendingAnyway ? (
+        <View style={styles.warning}>
+          <Text style={panelStyles.error}>{SSH_EXCLUDES_YOU_COPY}</Text>
+          <ButtonRow>
+            <Button
+              label="Save anyway"
+              busyLabel="Saving…"
+              variant="primary"
+              size="sm"
+              busy={mutation.isPending}
+              onPress={() => {
+                void send({ ...pendingAnyway, acknowledgeSshExcludesMe: true })
+              }}
+            />
+            <Button
+              label="Cancel"
+              variant="secondary"
+              size="sm"
+              disabled={mutation.isPending}
+              onPress={() => setPendingAnyway(null)}
+            />
+          </ButtonRow>
+        </View>
+      ) : null}
       <ButtonRow>
         <Button
           label="Save policy"
@@ -141,5 +178,8 @@ export function FirewallPolicyPanel({ orgId }: Readonly<{ orgId: string }>) {
 const styles = StyleSheet.create({
   form: {
     gap: spacing.md,
+  },
+  warning: {
+    gap: spacing.sm,
   },
 })
