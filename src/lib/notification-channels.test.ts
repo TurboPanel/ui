@@ -3,6 +3,7 @@ import {
   addressFieldLabel,
   addressHint,
   channelErrorCopy,
+  channelHasTiming,
   draftFromRules,
   QUIET_TIME_OPTIONS,
   quietWindowValid,
@@ -111,7 +112,16 @@ describe('digest and quiet hours on a channel row', () => {
   })
 
   it('the new refusal codes become sentences', () => {
-    expect(channelErrorCopy(new Error('HTTP 422: timing_email_only'))).toContain('email channels')
+    expect(channelErrorCopy(new Error('HTTP 422: timing_push_unsupported'))).toContain('push channels')
     expect(channelErrorCopy(new Error('HTTP 400: quiet_hours_invalid'))).toContain('cannot be the same time')
+  })
+})
+
+describe('channelHasTiming', () => {
+  it('is false only for push channels', () => {
+    expect(channelHasTiming({ kind: 'push' })).toBe(false)
+    for (const kind of ['email', 'slack', 'discord', 'telegram', 'webhook']) {
+      expect(channelHasTiming({ kind })).toBe(true)
+    }
   })
 })

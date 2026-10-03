@@ -42,6 +42,7 @@ import {
   type RulesDraft,
   timingDraftFromChannel,
   timingPatch,
+  channelHasTiming,
   timingSummary,
   type TimingDraft,
 } from '@/lib/notification-channels'
@@ -119,7 +120,7 @@ function RulesEditor({
 }
 
 /**
- * Delivery timing for an email channel: a digest instead of one message per
+ * Delivery timing for a channel: a digest instead of one message per
  * event, and quiet hours. Urgent events (outages, security) are never held.
  * The zone is the person's own for a personal channel; an organization
  * channel is read in the organization's zone.
@@ -240,7 +241,8 @@ function ChannelRow({
   const [sentNote, setSentNote] = useState<string | null>(null)
   const disabled = channel.disabledAt !== null
   const lastDelivery = channel.recentDeliveries[0]
-  const summary = channel.kind === 'email' ? timingSummary(channel) : null
+  const hasTiming = channelHasTiming(channel)
+  const summary = hasTiming ? timingSummary(channel) : null
 
   const onTiming = useCallback((next: TimingDraft) => {
     setTiming(next)
@@ -299,7 +301,7 @@ function ChannelRow({
         <LastDelivery delivery={lastDelivery} />
       </View>
       <RulesEditor events={events} draft={draft} onChange={onDraft} disabled={update.isPending} />
-      {channel.kind === 'email' ? (
+      {hasTiming ? (
         <TimingEditor channel={channel} draft={timing} onChange={onTiming} disabled={update.isPending} />
       ) : null}
       {message ? <Text style={panelStyles.error}>{message}</Text> : null}
@@ -315,7 +317,7 @@ function ChannelRow({
           disabled={!dirty}
           onPress={save}
         />
-        {channel.kind === 'email' ? (
+        {hasTiming ? (
           <Button
             label="Save timing"
             variant="primary"
