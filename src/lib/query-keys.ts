@@ -49,9 +49,7 @@ export type ContainerListFilters = Readonly<{
 }>
 
 export type StorageParentFilter =
-  | { environmentId: string }
-  | { projectId: string }
-  | { serviceId: string }
+  { environmentId: string } | { projectId: string } | { serviceId: string }
 
 function storageParentKey(filter: StorageParentFilter): readonly [string, string] {
   if ('environmentId' in filter) return ['environmentId', filter.environmentId]
@@ -300,6 +298,10 @@ export const queryKeys = {
           ['org', orgId, 'storage', ...storageParentKey(filter)] as const,
         copyBackups: (copyId: string) =>
           ['org', orgId, 'storage', 'copy', copyId, 'backups'] as const,
+        copyBackupPolicies: (copyId: string) =>
+          ['org', orgId, 'storage', 'copy', copyId, 'backup-policies'] as const,
+        copyBackupRuns: (copyId: string, policyId: string) =>
+          ['org', orgId, 'storage', 'copy', copyId, 'backup-policies', policyId, 'runs'] as const,
       },
 
       managed: {
@@ -339,9 +341,7 @@ export const queryKeys = {
         all: ['org', orgId, 'bindings'] as const,
         list: (
           filter:
-            | { serviceId: string }
-            | { environmentId: string }
-            | { managedEnvironmentId: string }
+            { serviceId: string } | { environmentId: string } | { managedEnvironmentId: string }
         ) => {
           if ('serviceId' in filter) {
             return ['org', orgId, 'bindings', 'serviceId', filter.serviceId] as const

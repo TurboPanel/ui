@@ -119,11 +119,35 @@ describe('instance-api backup policy wrappers', () => {
   })
 
   it('surfaces the refusal code in the error', async () => {
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({ error: 'backup_policy_limit', limit: 20 }, 409)
-    )
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'backup_policy_limit', limit: 20 }, 409))
     await expect(
       createBackupPolicy('env-1', { name: 'X', schedule: '0 1 * * *', retentionKeep: 1 })
     ).rejects.toThrow(/HTTP 409: backup_policy_limit/)
+  })
+
+  it('uses the storage copy routes for a copy target', async () => {
+    const copy = { storageId: 'sto-1', copyId: 'cp-1' }
+    const base = '/storage/sto-1/copies/cp-1/backup-policies'
+    fetchMock.mockResolvedValueOnce(jsonResponse({ policies: [] }))
+    await fetchBackupPolicies(copy)
+    expect(lastCall().url).toContain(base)
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ policy, reconcile }, 201))
+    await createBackupPolicy(copy, { name: 'X', schedule: '0 1 * * *', retentionKeep: 3 })
+    expect(lastCall().url).toContain(base)
+    expect(lastCall().init.method).toBe('POST')
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ policy, reconcile: null }))
+    await updateBackupPolicy(copy, 'pol-1', { enabled: false })
+    expect(lastCall().url).toContain(`${base}/pol-1`)
+    expect(lastCall().init.method).toBe('PATCH')
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, reconcile }))
+    await deleteBackupPolicy(copy, 'pol-1')
+    expect(lastCall().init.method).toBe('DELETE')
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ runs: [] }))
+    await fetchBackupRuns(copy, 'pol-1', 5)
+    expect(lastCall().url).toContain(`${base}/pol-1/runs?limit=5`)
   })
 })
