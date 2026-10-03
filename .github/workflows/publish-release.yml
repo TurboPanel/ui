@@ -115,7 +115,9 @@ jobs:
       # Same signer pin as promote.yml.
       signer-ref: 93c4f94510c9499e6bf04366a9500fe9f8e38aaa
       # Default: the `release` environment approval stays for the release hop.
-    secrets: inherit
+    secrets:
+      RELEASE_APP_ID: ${{ secrets.RELEASE_APP_ID }}
+      RELEASE_APP_PRIVATE_KEY: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
 
   publish:
     needs: prepare
@@ -130,7 +132,9 @@ jobs:
       assets-artifact-name: ${{ needs.prepare.outputs.assets-artifact-name }}
       manifest-filename: ${{ needs.prepare.outputs.manifest-filename }}
       target-commit: ${{ needs.prepare.outputs.commit }}
-    secrets: inherit
+    secrets:
+      RELEASE_APP_ID: ${{ secrets.RELEASE_APP_ID }}
+      RELEASE_APP_PRIVATE_KEY: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
 
   finalize:
     needs: [prepare, publish]
@@ -144,4 +148,6 @@ jobs:
       commit: ${{ needs.prepare.outputs.commit }}
       branch: ${{ needs.prepare.outputs.branch }}
       manifest-filename: ${{ needs.prepare.outputs.manifest-filename }}
-    secrets: inherit
+    secrets:
+      RELEASE_APP_ID: ${{ secrets.RELEASE_APP_ID }}
+      RELEASE_APP_PRIVATE_KEY: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
