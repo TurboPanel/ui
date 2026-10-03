@@ -1,3 +1,4 @@
+import { PhpModePolicyPanel } from '@/components/org/php-mode-policy-panel'
 import {
   useCallback,
   useEffect,
@@ -1082,6 +1083,8 @@ function ServerControlTab({
           onReboot={onReboot}
         />
       </SectionPanel>
+
+      <PhpModePolicyPanel orgId={orgId} serverId={server.id} />
 
       <SectionPanel title="Server proxy" hint="Platform managed">
         <ServerSystemComponentPanel
