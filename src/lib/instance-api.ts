@@ -8288,7 +8288,10 @@ export type FirewallPolicy = {
   sshSources: string[]
 }
 
-export type FirewallPolicyUpdate = Partial<FirewallPolicy>
+export type FirewallPolicyUpdate = Partial<FirewallPolicy> & {
+  /** Save an `sshSources` list that leaves the caller out; without it the API answers 409 `firewall_ssh_excludes_you`. */
+  acknowledgeSshExcludesMe?: boolean
+}
 
 export type FirewallRuleScope = 'host' | 'published'
 export type FirewallRuleAction = 'accept' | 'drop' | 'reject'
