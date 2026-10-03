@@ -4,75 +4,96 @@ import {
   fetchBackupPolicies,
   fetchBackupRuns,
   updateBackupPolicy,
+  type BackupPolicyTarget,
   type CreateBackupPolicyBody,
   type UpdateBackupPolicyBody,
 } from '@/lib/instance-api'
 import { queryKeys, useApiMutation } from '@/lib/query-client'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
+function policiesKey(orgId: string, target: BackupPolicyTarget) {
+  const keys = queryKeys.org(orgId)
+  return typeof target === 'string'
+    ? keys.managed.backupPolicies(target)
+    : keys.storage.copyBackupPolicies(target.copyId)
+}
+
+function runsKey(orgId: string, target: BackupPolicyTarget, policyId: string) {
+  const keys = queryKeys.org(orgId)
+  return typeof target === 'string'
+    ? keys.managed.backupRuns(target, policyId)
+    : keys.storage.copyBackupRuns(target.copyId, policyId)
+}
+
+function targetReady(target: BackupPolicyTarget): boolean {
+  return typeof target === 'string'
+    ? target.length > 0
+    : target.storageId.length > 0 && target.copyId.length > 0
+}
+
 /**
- * Scheduled backup policies for an environment's managed engine. No timer:
+ * Scheduled backup policies for an environment's managed engine, or for one
+ * storage copy (pass `{ storageId, copyId }` instead of the environment id). No timer:
  * `nextRunAt` / `lastRun` change only when the host reports a run, and every
  * mutation below invalidates this list (it sits under the managed environment
  * key, so `invalidateEnvironmentManagedQueries` refreshes it too).
  */
 export function useBackupPolicies(
   orgId: string,
-  environmentId: string,
+  target: BackupPolicyTarget,
   options?: Readonly<{ enabled?: boolean }>
 ) {
   return useQuery({
-    queryKey: queryKeys.org(orgId).managed.backupPolicies(environmentId),
-    queryFn: () => fetchBackupPolicies(environmentId),
-    enabled: (options?.enabled ?? true) && orgId.length > 0 && environmentId.length > 0,
+    queryKey: policiesKey(orgId, target),
+    queryFn: () => fetchBackupPolicies(target),
+    enabled: (options?.enabled ?? true) && orgId.length > 0 && targetReady(target),
   })
 }
 
 /** One policy's run history, newest first; opt-in so it loads only when the history is opened. */
 export function useBackupRuns(
   orgId: string,
-  environmentId: string,
+  target: BackupPolicyTarget,
   policyId: string | null,
   options?: Readonly<{ enabled?: boolean; limit?: number }>
 ) {
   const id = policyId ?? ''
   return useQuery({
-    queryKey: queryKeys.org(orgId).managed.backupRuns(environmentId, id),
-    queryFn: () => fetchBackupRuns(environmentId, id, options?.limit),
-    enabled:
-      (options?.enabled ?? true) && orgId.length > 0 && environmentId.length > 0 && id.length > 0,
+    queryKey: runsKey(orgId, target, id),
+    queryFn: () => fetchBackupRuns(target, id, options?.limit),
+    enabled: (options?.enabled ?? true) && orgId.length > 0 && targetReady(target) && id.length > 0,
   })
 }
 
-function useInvalidateBackupPolicies(orgId: string, environmentId: string) {
+function useInvalidateBackupPolicies(orgId: string, target: BackupPolicyTarget) {
   const queryClient = useQueryClient()
-  return () =>
-    queryClient.invalidateQueries({
-      queryKey: queryKeys.org(orgId).managed.backupPolicies(environmentId),
-    })
+  return () => queryClient.invalidateQueries({ queryKey: policiesKey(orgId, target) })
 }
 
-export function useCreateBackupPolicy(orgId: string, environmentId: string) {
-  const invalidate = useInvalidateBackupPolicies(orgId, environmentId)
+export function useCreateBackupPolicy(orgId: string, target: BackupPolicyTarget) {
+  const invalidate = useInvalidateBackupPolicies(orgId, target)
   return useApiMutation({
-    mutationFn: (body: CreateBackupPolicyBody) => createBackupPolicy(environmentId, body),
+    mutationFn: (body: CreateBackupPolicyBody) => createBackupPolicy(target, body),
     onSuccess: invalidate,
   })
 }
 
-export function useUpdateBackupPolicy(orgId: string, environmentId: string) {
-  const invalidate = useInvalidateBackupPolicies(orgId, environmentId)
+export function useUpdateBackupPolicy(orgId: string, target: BackupPolicyTarget) {
+  const invalidate = useInvalidateBackupPolicies(orgId, target)
   return useApiMutation({
-    mutationFn: ({ policyId, body }: Readonly<{ policyId: string; body: UpdateBackupPolicyBody }>) =>
-      updateBackupPolicy(environmentId, policyId, body),
+    mutationFn: ({
+      policyId,
+      body,
+    }: Readonly<{ policyId: string; body: UpdateBackupPolicyBody }>) =>
+      updateBackupPolicy(target, policyId, body),
     onSuccess: invalidate,
   })
 }
 
-export function useDeleteBackupPolicy(orgId: string, environmentId: string) {
-  const invalidate = useInvalidateBackupPolicies(orgId, environmentId)
+export function useDeleteBackupPolicy(orgId: string, target: BackupPolicyTarget) {
+  const invalidate = useInvalidateBackupPolicies(orgId, target)
   return useApiMutation({
-    mutationFn: (policyId: string) => deleteBackupPolicy(environmentId, policyId),
+    mutationFn: (policyId: string) => deleteBackupPolicy(target, policyId),
     onSuccess: invalidate,
   })
 }

@@ -8258,8 +8258,11 @@ export type BackupRunRecord = {
 export type BackupPolicyRecord = {
   id: string
   name: string
-  targetKind: 'managed'
-  managedId: string
+  targetKind: 'managed' | 'copy'
+  /** Set for a managed engine's schedule, otherwise null. */
+  managedId: string | null
+  /** Set for a storage copy's schedule, otherwise null. */
+  copyId?: string | null
   /** Cron text as stored — presets are stored in their cron form. */
   schedule: string
   /** The preset {@link schedule} matches; null for custom cron. */
@@ -8300,26 +8303,35 @@ export type UpdateBackupPolicyBody = Partial<{
   enabled: boolean
 }>
 
-function backupPoliciesPath(environmentId: string): string {
-  return `${CLIENT_API}/environments/${environmentId}/managed/backup-policies`
+/**
+ * What a schedule belongs to: an environment's managed engine (its id), or one
+ * copy of a storage. Both use the same policy and run shapes.
+ */
+export type BackupPolicyTarget = string | Readonly<{ storageId: string; copyId: string }>
+
+function backupPoliciesPath(target: BackupPolicyTarget): string {
+  if (typeof target === 'string') {
+    return `${CLIENT_API}/environments/${target}/managed/backup-policies`
+  }
+  return `${CLIENT_API}/storage/${encodeURIComponent(target.storageId)}/copies/${encodeURIComponent(target.copyId)}/backup-policies`
 }
 
-function backupPolicyPath(environmentId: string, policyId: string): string {
-  return `${backupPoliciesPath(environmentId)}/${encodeURIComponent(policyId)}`
+function backupPolicyPath(target: BackupPolicyTarget, policyId: string): string {
+  return `${backupPoliciesPath(target)}/${encodeURIComponent(policyId)}`
 }
 
 /** Scheduled backup policies for the environment's managed engine, oldest first; each carries its newest run. */
 export async function fetchBackupPolicies(
-  environmentId: string
+  target: BackupPolicyTarget
 ): Promise<{ policies: BackupPolicyRecord[] }> {
-  return await apiFetch(backupPoliciesPath(environmentId))
+  return await apiFetch(backupPoliciesPath(target))
 }
 
 export async function createBackupPolicy(
-  environmentId: string,
+  target: BackupPolicyTarget,
   body: CreateBackupPolicyBody
 ): Promise<{ policy: BackupPolicyRecord; reconcile: BackupsReconcileOutcome }> {
-  return await apiFetch(backupPoliciesPath(environmentId), {
+  return await apiFetch(backupPoliciesPath(target), {
     method: 'POST',
     body: JSON.stringify(body),
   })
@@ -8327,11 +8339,11 @@ export async function createBackupPolicy(
 
 /** `reconcile` is null when the change does not affect what the host runs (a rename). */
 export async function updateBackupPolicy(
-  environmentId: string,
+  target: BackupPolicyTarget,
   policyId: string,
   body: UpdateBackupPolicyBody
 ): Promise<{ policy: BackupPolicyRecord; reconcile: BackupsReconcileOutcome | null }> {
-  return await apiFetch(backupPolicyPath(environmentId, policyId), {
+  return await apiFetch(backupPolicyPath(target, policyId), {
     method: 'PATCH',
     body: JSON.stringify(body),
   })
@@ -8339,20 +8351,20 @@ export async function updateBackupPolicy(
 
 /** Run history goes with the policy; artifacts already on the host stay. */
 export async function deleteBackupPolicy(
-  environmentId: string,
+  target: BackupPolicyTarget,
   policyId: string
 ): Promise<{ ok: true; reconcile: BackupsReconcileOutcome }> {
-  return await apiFetch(backupPolicyPath(environmentId, policyId), { method: 'DELETE' })
+  return await apiFetch(backupPolicyPath(target, policyId), { method: 'DELETE' })
 }
 
 /** A policy's runs, newest first (instance default 20, max 100). */
 export async function fetchBackupRuns(
-  environmentId: string,
+  target: BackupPolicyTarget,
   policyId: string,
   limit?: number
 ): Promise<{ runs: BackupRunRecord[] }> {
   const query = typeof limit === 'number' ? `?limit=${encodeURIComponent(String(limit))}` : ''
-  return await apiFetch(`${backupPolicyPath(environmentId, policyId)}/runs${query}`)
+  return await apiFetch(`${backupPolicyPath(target, policyId)}/runs${query}`)
 }
 
 /** Whether a server's firewall is previewed (`observe`), meant to be enforced (`managed`), or left alone (`off`). */

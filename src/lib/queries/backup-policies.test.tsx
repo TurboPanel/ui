@@ -141,4 +141,32 @@ describe('backup policy queries', () => {
     )
     expect(listInvalidations).toHaveLength(3)
   })
+
+  it('keys a storage copy target under the storage keys and passes the target through', async () => {
+    const copy = { storageId: 'sto-1', copyId: 'cp-1' }
+    const client = createAppQueryClient()
+    fetchBackupPolicies.mockResolvedValueOnce({ policies: [] })
+    fetchBackupRuns.mockResolvedValueOnce({ runs: [] })
+    const list = renderHook(() => useBackupPolicies(orgId, copy), {
+      wrapper: createWrapper(client),
+    })
+    await waitFor(() => expect(list.result.current.isSuccess).toBe(true))
+    expect(fetchBackupPolicies).toHaveBeenCalledWith(copy)
+    expect(client.getQueryData(queryKeys.org(orgId).storage.copyBackupPolicies('cp-1'))).toEqual({
+      policies: [],
+    })
+
+    const runs = renderHook(() => useBackupRuns(orgId, copy, 'pol-1'), {
+      wrapper: createWrapper(client),
+    })
+    await waitFor(() => expect(runs.result.current.isSuccess).toBe(true))
+    expect(fetchBackupRuns).toHaveBeenCalledWith(copy, 'pol-1', undefined)
+  })
+
+  it('does not load a copy target with a missing id', () => {
+    renderHook(() => useBackupPolicies(orgId, { storageId: 'sto-1', copyId: '' }), {
+      wrapper: createWrapper(),
+    })
+    expect(fetchBackupPolicies).not.toHaveBeenCalled()
+  })
 })
