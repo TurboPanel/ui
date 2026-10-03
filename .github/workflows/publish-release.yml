@@ -53,7 +53,7 @@ jobs:
       # The newest rc above the newest release — what staging holds.
       - name: Work out the rc to release from the tags
         id: rc
-        uses: TurboPanel/dev/.github/actions/version@387788e9e64344fc5de32f6b93abd178e956d6a1 # dev#42
+        uses: TurboPanel/dev/.github/actions/version@d9127ee03a6a3b42e9435ebec3542db5fab09bc0 # dev#49
         with:
           mode: release-rc
 
@@ -106,23 +106,25 @@ jobs:
     # gh-promote.yml asks for contents: write (the release tag).
     permissions:
       contents: write
-    uses: TurboPanel/dev/.github/workflows/gh-promote.yml@387788e9e64344fc5de32f6b93abd178e956d6a1 # dev#42
+    uses: TurboPanel/dev/.github/workflows/gh-promote.yml@d9127ee03a6a3b42e9435ebec3542db5fab09bc0 # dev#49
     with:
       repo-kind: ui
       to: release
       source: ${{ needs.resolve.outputs.rc-tag }}
-      dev-ref: 387788e9e64344fc5de32f6b93abd178e956d6a1 # dev#42
+      dev-ref: d9127ee03a6a3b42e9435ebec3542db5fab09bc0 # dev#49
       # Same signer pin as promote.yml.
       signer-ref: 93c4f94510c9499e6bf04366a9500fe9f8e38aaa
       # Default: the `release` environment approval stays for the release hop.
-    secrets: inherit
+    secrets:
+      RELEASE_APP_ID: ${{ secrets.RELEASE_APP_ID }}
+      RELEASE_APP_PRIVATE_KEY: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
 
   publish:
     needs: prepare
     # gh-release.yml creates the release and uploads its assets.
     permissions:
       contents: write
-    uses: TurboPanel/dev/.github/workflows/gh-release.yml@387788e9e64344fc5de32f6b93abd178e956d6a1 # dev#42
+    uses: TurboPanel/dev/.github/workflows/gh-release.yml@d9127ee03a6a3b42e9435ebec3542db5fab09bc0 # dev#49
     with:
       version: ${{ needs.prepare.outputs.version }}
       channel: release
@@ -130,18 +132,22 @@ jobs:
       assets-artifact-name: ${{ needs.prepare.outputs.assets-artifact-name }}
       manifest-filename: ${{ needs.prepare.outputs.manifest-filename }}
       target-commit: ${{ needs.prepare.outputs.commit }}
-    secrets: inherit
+    secrets:
+      RELEASE_APP_ID: ${{ secrets.RELEASE_APP_ID }}
+      RELEASE_APP_PRIVATE_KEY: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
 
   finalize:
     needs: [prepare, publish]
     # gh-promote-finalize.yml moves `live` (GITHUB_TOKEN when the App cannot).
     permissions:
       contents: write
-    uses: TurboPanel/dev/.github/workflows/gh-promote-finalize.yml@387788e9e64344fc5de32f6b93abd178e956d6a1 # dev#42
+    uses: TurboPanel/dev/.github/workflows/gh-promote-finalize.yml@d9127ee03a6a3b42e9435ebec3542db5fab09bc0 # dev#49
     with:
       to: release
       version: ${{ needs.prepare.outputs.version }}
       commit: ${{ needs.prepare.outputs.commit }}
       branch: ${{ needs.prepare.outputs.branch }}
       manifest-filename: ${{ needs.prepare.outputs.manifest-filename }}
-    secrets: inherit
+    secrets:
+      RELEASE_APP_ID: ${{ secrets.RELEASE_APP_ID }}
+      RELEASE_APP_PRIVATE_KEY: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}

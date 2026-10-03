@@ -49,6 +49,7 @@ import {
 import { DraftEnvironmentNotice } from '@/components/org/project/draft-environment-notice'
 import { OverviewEnvironmentsPanel } from '@/components/org/project/overview-environments-panel'
 import { ComposeBasePanel } from '@/components/org/compose-base-panel'
+import { appFactsByService, type ServiceAppFacts } from '@/lib/compose/app-facts'
 import { composePrincipalAliases } from '@/lib/compose/principals-document'
 import { EnvironmentDetailBody } from '@/components/org/environment-detail-section'
 import type {
@@ -115,6 +116,7 @@ import {
   resolveEffectiveServerId,
 } from '@/lib/project-options'
 import { spacing } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 /** Stable empty list so the facts memo does not thrash on every render. */
 const EMPTY_STORAGE: readonly StorageRecord[] = []
@@ -919,7 +921,7 @@ export function ComposeServicesTab() {
 
   useEffect(() => {
     if (servicesQuery.error instanceof Error) {
-      setError(servicesQuery.error.message)
+      setError(userErrorMessage(servicesQuery.error, ''))
     }
   }, [servicesQuery.error, setError])
 
@@ -1002,6 +1004,7 @@ function serviceFactsByName(
     containersByService: Record<string, ContainerRecord[]>
     hostingsByService: Record<string, HostingRecord[]>
     liveCommitByService: ReadonlyMap<string, string>
+    appFacts: Readonly<Record<string, ServiceAppFacts>>
     showStatus: boolean
   }>,
 ): Record<string, ComposeDocServiceFacts> {
@@ -1011,8 +1014,13 @@ function serviceFactsByName(
     if (!name) continue
     const tone = serviceStatusTone(params.containersByService[service.id] ?? [])
     const liveCommit = params.liveCommitByService.get(name)
+    const app = params.appFacts[name]
     byService[name] = {
       serviceId: service.id,
+      ...(app ? { appLabel: app.label } : {}),
+      ...(app?.warning
+        ? { appWarning: { title: app.warning.title, body: app.warning.body } }
+        : {}),
       hostname: params.hostingsByService[service.id]?.[0]?.name ?? null,
       ...(liveCommit ? { releaseLabel: `${liveCommit} live` } : {}),
       ...(params.showStatus
@@ -1084,6 +1092,14 @@ function useComposeDocumentFacts({
     { enabled: Boolean(selectedEnvironment) },
   )
   const releases = releasesQuery.data?.releases
+  // Bindings are what decide whether a recognised application (WordPress) has a
+  // database it can use; the same read the Overview diagram makes.
+  const bindingsQuery = useEnvironmentBindings(
+    orgId,
+    selectedEnvironment?.id ?? '',
+    { enabled: Boolean(selectedEnvironment) },
+  )
+  const bindings = bindingsQuery.data?.bindings
 
   return useMemo(() => {
     const effectiveServerId = baseSelected
@@ -1102,6 +1118,7 @@ function useComposeDocumentFacts({
         containersByService,
         hostingsByService,
         liveCommitByService: liveCommitsByService(releases),
+        appFacts: appFactsByService(services, bindings),
         showStatus,
       }),
       placementLabel: placementServer
@@ -1120,5 +1137,6 @@ function useComposeDocumentFacts({
     selectedEnvironment?.serverId,
     servers,
     releases,
+    bindings,
   ])
 }

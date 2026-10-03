@@ -22,24 +22,31 @@ permissions:
 # own Verify and so their own canary. With the default single-pending queue
 # the middle merge's run would be replaced, conclude cancelled, and that
 # commit would never get a canary.
+# The trunk -> staging and staging -> live promotion PRs are the exception: a
+# merge moves their head every few minutes, and cancelling the run on the old
+# head left a cancelled (red) mark on that trunk commit. Their groups end in the
+# run id, so every head gets its own run and nothing is cancelled.
 concurrency:
-  group: ui-verify-${{ github.event_name }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ui-verify-${{ github.event_name }}-${{ (github.head_ref == 'trunk' || github.head_ref == 'staging') && github.run_id || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' && github.head_ref != 'trunk' && github.head_ref != 'staging' }}
   queue: ${{ github.event_name == 'pull_request' && 'single' || 'max' }}
 
 jobs:
-  # Lint + typecheck + Vitest LCOV, then Sonar quality gate. If Sonar fails,
-  # the workflow stops. Automatic Analysis must stay off
+  # Lint + typecheck + Vitest LCOV, then, on a pull request, the SonarCloud
+  # scan and its quality gate: a failed gate fails this job, so ci-ok is red.
+  # On a trunk push the job uploads the LCOV and stops there; sonar-trunk.yml
+  # analyses the commit after Verify completes, next to the canary instead of
+  # ahead of it. Automatic Analysis must stay off
   # (Administration → Analysis Method).
   verify:
     runs-on: ubuntu-latest
-    # Kept as a second guard so two Sonar analyses of one ref never overlap.
-    # The workflow-level block above is what queues runs: it admits one run
-    # per event and ref at a time, so on a push this group never holds a
-    # second job and never cancels one.
+    # Kept as a second guard so two runs of this job for one ref never
+    # overlap. The workflow-level block above is what queues runs: it admits
+    # one run per event and ref at a time, so on a push this group never holds
+    # a second job and never cancels one.
     concurrency:
-      group: ui-sonar-${{ github.event_name }}-${{ github.ref }}
-      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+      group: ui-sonar-${{ github.event_name }}-${{ (github.head_ref == 'trunk' || github.head_ref == 'staging') && github.run_id || github.ref }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' && github.head_ref != 'trunk' && github.head_ref != 'staging' }}
     env:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     steps:
@@ -84,23 +91,32 @@ jobs:
         # The pre-commit hook scans staged files only; CI scans the whole tree.
         run: sh scripts/scan-secrets.sh --all
 
+      # The commits a PR adds, not just its final tree: a secret committed and
+      # removed again inside the PR still sits in the history that gets merged.
+      # PRs into staging/live carry trunk commits that were already scanned on
+      # their own PRs, so only PRs into trunk are scanned by range.
+      - name: Scan pull request commits for secrets
+        if: github.event_name == 'pull_request' && github.base_ref == 'trunk'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: sh scripts/scan-secrets.sh --range "$BASE_SHA..$HEAD_SHA"
+
+      - name: Secret scanner self-test
+        run: sh scripts/scan-secrets.selftest.sh
+
       - name: Check vocabulary
         run: pnpm check:vocabulary
 
       - name: Check third-party notices
         run: pnpm notices:check
 
-      - name: Install osv-scanner
-        run: |
-          curl -sSfL --proto "=https" --proto-redir "=https" --retry 3 --retry-connrefused --retry-delay 2 -o /usr/local/bin/osv-scanner \
-            https://github.com/google/osv-scanner/releases/download/v2.6.0/osv-scanner_linux_amd64
-          echo "ca69b3d3cd08f889a49dc0a383122f71cc528b83803671df5fd874d97485b108  /usr/local/bin/osv-scanner" | sha256sum -c -
-          chmod +x /usr/local/bin/osv-scanner
-
-      # Accepted-risk exceptions (no fix available, or verified non-exploitable
-      # in this codebase) live in osv-scanner.toml, each with a written reason.
-      - name: Dependency vulnerability scan (osv-scanner)
-        run: osv-scanner scan source --recursive .
+      # Dependency Advisory Gate (TurboPanel/dev): fails only on a HIGH or
+      # CRITICAL advisory that already has a fixed version; everything else is
+      # a warning annotation. Override for one verified not exploitable here:
+      # an [[IgnoredVulns]] entry with a reason in osv-scanner.toml.
+      - name: Dependency advisory gate (osv-scanner)
+        uses: TurboPanel/dev/.github/actions/osv-scan@8512d65091c662383a4aa6ff2848e16230ccc5e1 # dev#55
 
       # Clean-checkout CI is JS-only (`notices:check --js-only`). Native
       # CocoaPods / Gradle / AAR graphs are required by `pnpm notices:check:native`
@@ -121,13 +137,20 @@ jobs:
           retention-days: 7
 
       - name: SonarQube Scan
-        # Skipped when SONAR_TOKEN is empty (fork or Dependabot PR) and on the
-        # automatic promotion PRs into staging/live, which carry only commits
-        # already analysed on trunk (no new code to gate).
+        id: sonar
+        # Pull requests only; the quality gate blocks pull requests only. A
+        # trunk push is analysed by sonar-trunk.yml after Verify completes,
+        # from the ui-coverage-lcov artifact uploaded above, so the scan does
+        # not hold back the canary (decision 4, 2026-09-30).
+        #
+        # Also skipped when SONAR_TOKEN is empty (fork or Dependabot PR) and on
+        # the automatic promotion PRs into staging/live, which carry only
+        # commits already analysed on trunk (no new code to gate).
         if: >-
           env.SONAR_TOKEN != ''
-          && !(github.event_name == 'pull_request'
-               && (github.base_ref == 'staging' || github.base_ref == 'live'))
+          && github.event_name == 'pull_request'
+          && github.base_ref != 'staging'
+          && github.base_ref != 'live'
         uses: SonarSource/sonarqube-scan-action@ba9859eae8dd6bd29e412f25ddbbef3d032000f4 # v8.2.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -135,38 +158,12 @@ jobs:
           args: >
             -Dsonar.qualitygate.wait=true
 
-  # ClickHouse/Tabix metrics infrastructure is retired (DuckDB + Parquet /
-  # Analytics Engine replaced it). The guard lives in TurboPanel/turbopaneld
-  # (scripts/check-metrics-legacy.ts) and scans sibling checkouts when present,
-  # so check this repo out next to it — a clean single-repo turbopaneld CI run
-  # cannot see PRs made here. This job covers ui/src and ui/design-system.
-  metrics-legacy:
-    runs-on: ubuntu-latest
-    # Kept as it is; see the note on the verify job's group.
-    concurrency:
-      group: ui-metrics-legacy-${{ github.event_name }}-${{ github.ref }}
-      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          path: ui
-
-      - name: Check out turbopaneld (metrics-legacy guard)
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: TurboPanel/turbopaneld
-          path: turbopaneld
-
-      - name: Install Deno
-        uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
-        with:
-          # Keep in step with DENO_VERSION / deno_version / TP_DENO_VERSION (2.9.7).
-          deno-version: "2.9.7"
-
-      - name: Check metrics legacy (no ClickHouse/Tabix references)
-        working-directory: turbopaneld
-        run: deno task check:metrics-legacy
+      # The Sonar way gate fails only on ratings, so one new code smell passes
+      # it; this fails the PR on any new issue (owner rule, 2026-09-30). Runs
+      # only where the PR scan above ran, so it skips the promotion PRs too.
+      - name: No new Sonar issues
+        if: github.event_name == 'pull_request' && steps.sonar.outcome == 'success'
+        uses: TurboPanel/dev/.github/actions/sonar-new-issues@2db1bbfa3cff89a52fac3ee4a53bd495dc1c79b1 # dev#47
 
   # The one check the trunk ruleset requires. It waits on every PR-time job
   # and fails unless each one succeeded, so a renamed or added job can never
@@ -183,7 +180,7 @@ jobs:
   ci-ok:
     name: ci-ok
     runs-on: ubuntu-latest
-    needs: [verify, metrics-legacy]
+    needs: [verify]
     if: >-
       ${{ (github.event_name == 'pull_request' && always())
           || (!cancelled() && !contains(needs.*.result, 'cancelled')) }}

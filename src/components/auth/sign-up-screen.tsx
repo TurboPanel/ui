@@ -23,6 +23,7 @@ import {
 } from '@/lib/auth-accent'
 import { signInForInvitationHref } from '@/lib/invitation-return'
 import {
+  breachedPasswordCopy,
   checkPwnedPassword,
   COMPROMISED_PASSWORD_MESSAGE,
   passwordHint,
@@ -214,7 +215,7 @@ export function SignUpScreenContent() {
       )
       setSuccess(true)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Sign up failed')
+      setError(err instanceof Error ? breachedPasswordCopy(err.message) : 'Sign up failed')
     }
   }, [
     email,

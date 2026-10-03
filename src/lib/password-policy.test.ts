@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  breachedPasswordCopy,
   checkPwnedPassword,
+  COMPROMISED_PASSWORD_MESSAGE,
   passwordHint,
   passwordProgress,
   resolveMeterStatus,
@@ -75,5 +77,17 @@ describe('checkPwnedPassword', () => {
   it('treats network failures as not compromised (the server still enforces rules)', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => Promise.reject(new Error('offline'))))
     expect(await checkPwnedPassword(ACCEPTED)).toBe(false)
+  })
+})
+
+describe('breachedPasswordCopy', () => {
+  it('turns the control plane password_breached code into the friendly copy', () => {
+    expect(breachedPasswordCopy('/auth/sign-up failed: HTTP 400: password_breached')).toBe(
+      COMPROMISED_PASSWORD_MESSAGE,
+    )
+  })
+
+  it('leaves every other message alone', () => {
+    expect(breachedPasswordCopy('Sign up failed')).toBe('Sign up failed')
   })
 })

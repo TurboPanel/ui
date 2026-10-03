@@ -16,6 +16,15 @@ export type PasswordValidation = {
 export const COMPROMISED_PASSWORD_MESSAGE =
   "That password isn't safe to use. Please choose a different one."
 
+/**
+ * The control plane checks every new password against the breach list too and
+ * answers `password_breached` (the browser check below fails open, so the server
+ * is authoritative). Swap that code for the same friendly copy the screens show.
+ */
+export function breachedPasswordCopy(message: string): string {
+  return message.includes('password_breached') ? COMPROMISED_PASSWORD_MESSAGE : message
+}
+
 const PWNED_PASSWORDS_RANGE_URL = 'https://api.pwnedpasswords.com/range/'
 const PWNED_PASSWORDS_TIMEOUT_MS = 5000
 
@@ -90,7 +99,10 @@ async function sha1Hex(password: string): Promise<string> {
     .toUpperCase()
 }
 
-export async function checkPwnedPassword(password: string): Promise<boolean> {
+export type PwnedLookup = 'breached' | 'clean' | 'unavailable'
+
+/** Breach lookup that tells "service unreachable" apart from "not found". */
+export async function lookupPwnedPassword(password: string): Promise<PwnedLookup> {
   try {
     const fullHash = await sha1Hex(password)
     const prefix = fullHash.slice(0, 5)
@@ -102,7 +114,7 @@ export async function checkPwnedPassword(password: string): Promise<boolean> {
         headers: { 'Add-Padding': 'true' },
         signal: controller.signal,
       })
-      if (!res.ok) return false
+      if (!res.ok) return 'unavailable'
       const text = await res.text()
       for (const line of text.split(/\r?\n/)) {
         const colon = line.indexOf(':')
@@ -111,14 +123,19 @@ export async function checkPwnedPassword(password: string): Promise<boolean> {
         const countStr = line.slice(colon + 1).trim()
         if (lineSuffix === suffix) {
           const count = Number.parseInt(countStr, 10)
-          return Number.isFinite(count) && count > 0
+          return Number.isFinite(count) && count > 0 ? 'breached' : 'clean'
         }
       }
-      return false
+      return 'clean'
     } finally {
       clearTimeout(timeoutId)
     }
   } catch {
-    return false
+    return 'unavailable'
   }
+}
+
+/** True only when the password is in the breach list; fails open otherwise. */
+export async function checkPwnedPassword(password: string): Promise<boolean> {
+  return (await lookupPwnedPassword(password)) === 'breached'
 }

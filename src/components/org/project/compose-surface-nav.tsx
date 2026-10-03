@@ -1,5 +1,5 @@
 import { Link, usePathname, type Href } from 'expo-router'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
 import {
   ComposeEditorIcon,
   ComposeHostingIcon,
@@ -36,6 +36,9 @@ const NAV_TAB_ICONS = {
   Record<ComposeProjectTabId, typeof ComposeEditorIcon>
 >
 
+/** Below this width inactive tabs show only their icon. */
+const COMPACT_NAV_WIDTH = 520
+
 type NavTabId = keyof typeof NAV_TAB_ICONS
 
 function isNavTab(tabId: ComposeProjectTabId): tabId is NavTabId {
@@ -47,12 +50,17 @@ function NavTabFace({
   active,
 }: Readonly<{ tabId: NavTabId; active: boolean }>) {
   const Icon = NAV_TAB_ICONS[tabId]
+  const { width } = useWindowDimensions()
+  // Five labelled tabs do not fit a phone: only the lit tab keeps its name.
+  const showLabel = active || width >= COMPACT_NAV_WIDTH
   return (
     <View style={styles.face}>
       <Icon size={14} color={active ? chrome.accent : colors.textMuted} />
-      <Text style={[styles.label, active && styles.labelActive]}>
-        {COMPOSE_PROJECT_TAB_LABELS[tabId]}
-      </Text>
+      {showLabel ? (
+        <Text style={[styles.label, active && styles.labelActive]}>
+          {COMPOSE_PROJECT_TAB_LABELS[tabId]}
+        </Text>
+      ) : null}
     </View>
   )
 }

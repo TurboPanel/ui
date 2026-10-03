@@ -11,8 +11,9 @@ import { useAuth } from '@/lib/auth-context'
 import { colors } from '@/lib/theme'
 
 /**
- * Fills the organization-switcher slot on the admin chrome: leave instance
- * admin and return to the user's preferred org dashboard (or welcome).
+ * Fills the organization-switcher slot (left, by the logo) on the admin
+ * chrome: leave admin and return to the user's preferred org dashboard (or
+ * welcome).
  */
 export function ReturnToInstanceSegment() {
   const router = useRouter()
@@ -39,7 +40,7 @@ export function ReturnToInstanceSegment() {
         onPress={handlePress}
         disabled={busy}
         accessibilityRole="button"
-        accessibilityLabel="Return to instance"
+        accessibilityLabel="Return to app"
         accessibilityState={{ busy }}
       >
         <View style={headerMenuGroupStyles.triggerGlyph}>
@@ -47,7 +48,7 @@ export function ReturnToInstanceSegment() {
         </View>
         <View style={headerMenuGroupStyles.triggerCopy}>
           <Text style={headerMenuGroupStyles.triggerLabel} numberOfLines={1}>
-            Return to instance
+            Return to app
           </Text>
         </View>
       </HeaderMenuTrigger>

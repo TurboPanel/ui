@@ -4,12 +4,14 @@ import {
   deleteNotificationChannel,
   dismissNotification,
   fetchNotificationChannels,
+  resendNotificationChannelVerification,
   fetchNotificationEvents,
   fetchNotifications,
   fetchUnreadNotificationCount,
   markNotificationsRead,
   updateNotificationChannel,
   type CreateNotificationChannelBody,
+  type NotificationChannelTiming,
   type NotificationRule,
 } from '@/lib/instance-api'
 import { queryKeys } from '@/lib/query-keys'
@@ -107,7 +109,10 @@ export function useCreateNotificationChannel(scope: 'user' | 'organization', org
 export function useUpdateNotificationChannel(scope: 'user' | 'organization', organizationId?: string | null) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: ({ id, ...patch }: { id: string; label?: string; disabled?: boolean; rules?: NotificationRule[] }) =>
+    mutationFn: ({
+      id,
+      ...patch
+    }: { id: string; label?: string; disabled?: boolean; rules?: NotificationRule[] } & NotificationChannelTiming) =>
       updateNotificationChannel(id, patch, organizationId),
     onSuccess: async () => {
       await invalidateChannels(queryClient, scope)
@@ -122,5 +127,11 @@ export function useDeleteNotificationChannel(scope: 'user' | 'organization', org
     onSuccess: async () => {
       await invalidateChannels(queryClient, scope)
     },
+  })
+}
+
+export function useResendChannelVerification(organizationId?: string | null) {
+  return useApiMutation({
+    mutationFn: (id: string) => resendNotificationChannelVerification(id, organizationId),
   })
 }

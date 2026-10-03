@@ -9,51 +9,12 @@ import { UPGRADE_STEP_PIPELINE } from '@/lib/upgrade-vocabulary'
 
 const PIPELINE_SET = new Set<string>(UPGRADE_STEP_PIPELINE)
 
-/** Human channel label for build names (`canary` → `Canary`, `rc` → `RC`). */
+/** Human channel label (`canary` → `Canary`, `rc` → `RC`), for a build with nothing else to name it. */
 export function upgradeChannelTitle(channel: string | null | undefined): string {
   const trimmed = channel?.trim()
   if (!trimmed) return 'Build'
   if (trimmed.toLowerCase() === 'rc') return 'RC'
   return trimmed.charAt(0).toUpperCase() + trimmed.slice(1)
-}
-
-/**
- * A counter build's version: `0.1.3-canary.417` (canary build 417) or
- * `0.1.3-rc.2` (release candidate 2 of 0.1.3). The older timestamp canaries
- * (`0.1.1-canary.20260919-143000-abc1234`) and plain releases have no counter.
- */
-const COUNTER_BUILD = /^v?(\d+\.\d+\.\d+)-(canary|rc)\.(\d{1,9})$/
-
-/** A plain release version: `0.1.3`. */
-const PLAIN_RELEASE = /^v?(\d+\.\d+\.\d+)$/
-
-export type BuildCounter = Readonly<{ base: string; channel: 'canary' | 'rc'; number: number }>
-
-export function parseBuildCounter(version: string | null | undefined): BuildCounter | null {
-  const match = COUNTER_BUILD.exec(version?.trim() ?? '')
-  if (!match) return null
-  return { base: match[1], channel: match[2] as 'canary' | 'rc', number: Number(match[3]) }
-}
-
-/** `Canary #417`, `RC 2`, or null when the version carries no build counter. */
-export function buildCounterLabel(version: string | null | undefined): string | null {
-  const counter = parseBuildCounter(version)
-  if (!counter) return null
-  return counter.channel === 'canary' ? `Canary #${counter.number}` : `RC ${counter.number}`
-}
-
-function buildHeadline(
-  target: Pick<InstanceUpdateTarget, 'channel' | 'version'>,
-  counter: BuildCounter | null
-): string {
-  if (counter) {
-    return counter.channel === 'rc'
-      ? `RC ${counter.number} (${counter.base})`
-      : `Canary #${counter.number}`
-  }
-  const release = PLAIN_RELEASE.exec(target.version?.trim() ?? '')
-  if (release && target.channel?.trim().toLowerCase() === 'release') return `Release ${release[1]}`
-  return upgradeChannelTitle(target.channel)
 }
 
 /** The localized build time, or null when `builtAt` is missing or not a date. */
@@ -74,11 +35,16 @@ function formatBuiltAt(
   }).format(date)
 }
 
-/** Version, else short commit, else short build id, for a build with no `builtAt`. */
-function buildIdentityFallback(
+/**
+ * A build's name is its version: `v0.1.5-canary.1`, `v0.1.5-rc.2`, `v0.1.5`
+ * (older timestamp canaries too: `v0.1.1-canary.20260919-143000-abc1234`).
+ * Without a version, the short commit, else the short build id; null when
+ * nothing names the build.
+ */
+export function upgradeBuildVersionLabel(
   target: Pick<InstanceUpdateTarget, 'version' | 'commit' | 'buildId'>
 ): string | null {
-  const version = target.version?.trim()
+  const version = target.version?.trim().replace(/^v/i, '')
   if (version) return `v${version}`
   const commit = target.commit?.trim()
   if (commit && commit !== 'unknown') return commit.slice(0, 12)
@@ -88,11 +54,10 @@ function buildIdentityFallback(
 }
 
 /**
- * Readable build line from manifest metadata: `Canary #417 · Sep 19, 14:30`,
- * `RC 2 (0.1.3) · Sep 19, 14:30`, `Release 0.1.3 · Sep 19, 14:30`. The build number
- * comes from the version; without a counter (older timestamp canaries, plain
- * releases) it is the channel alone. Falls back to version or short commit
- * when `builtAt` is missing.
+ * Readable build line from manifest metadata: `v0.1.5-canary.1 · Sep 30, 14:30`,
+ * `v0.1.5-rc.2 · Sep 30, 14:30`, `v0.1.5 · Sep 30, 14:30`. Without a date, the
+ * version alone. A build with no version, commit or build id is named by its
+ * channel.
  */
 export function formatUpgradeBuildDisplayName(
   target: Pick<
@@ -102,13 +67,9 @@ export function formatUpgradeBuildDisplayName(
   options?: Readonly<{ locale?: string; timeZone?: string }>
 ): string {
   if (!target) return 'No package on this channel'
-  const counter = parseBuildCounter(target.version)
-  const head = buildHeadline(target, counter)
+  const head = upgradeBuildVersionLabel(target) ?? upgradeChannelTitle(target.channel)
   const formatted = formatBuiltAt(target.builtAt, options)
-  if (formatted !== null) return `${head} · ${formatted}`
-  if (counter || head !== upgradeChannelTitle(target.channel)) return head
-  const fallback = buildIdentityFallback(target)
-  return fallback ? `${head} · ${fallback}` : head
+  return formatted === null ? head : `${head} · ${formatted}`
 }
 
 function sameCommit(a: string, b: string): boolean {
@@ -189,14 +150,15 @@ const STEP_ERROR_LABELS: Readonly<Record<string, string>> = {
   rolled_back: 'Rolled back to the previous build',
   server_offline: 'Server offline for over an hour',
   step_timeout: 'Stopped reporting progress',
-  managed_upgrade_required: 'This server needs a managed upgrade',
+  dispatch_failed: "Couldn't reach the server",
+  managed_upgrade_required: 'This server needs a managed update',
   downgrade_refused: 'Already newer than the target',
 }
 
 /** Run `error` codes (the control plane's `UPGRADE_RUN_ERROR_CODES`). */
 const RUN_ERROR_LABELS: Readonly<Record<string, string>> = {
-  colocated_daemon_failed: 'The co-located daemon step failed',
-  control_plane_failed: 'The control-plane step failed',
+  colocated_daemon_failed: 'The daemon step failed',
+  control_plane_failed: 'The control plane step failed',
 }
 
 export function upgradeStepErrorLabel(code: string | null | undefined): string | null {
@@ -265,7 +227,7 @@ export function stepHasStarted(status: UpgradeStepStatus | null | undefined): bo
   return status != null && status !== 'pending' && status !== 'waiting'
 }
 
-/** The fleet table's Status column: what the rollout is doing with this server, in plain words. */
+/** The fleet table's Status column: what the update is doing with this server, in plain words. */
 export function fleetStatusBadge(status: UpgradeStepStatus): {
   tone: 'ok' | 'muted' | 'danger' | 'pending' | 'info'
   label: string
@@ -291,27 +253,153 @@ export function fleetStatusBadge(status: UpgradeStepStatus): {
 }
 
 /**
- * "The control plane and the UI can be updated." — which pieces have an update,
- * in reading order, for the sentence under the Status headline.
+ * What each step says in the progress bar. The wire ids never change; only the
+ * words do, and they say which version is running: until the restart the OLD
+ * process is still the one answering.
  */
-export function updateAvailableSentence(names: readonly string[]): string | null {
-  if (names.length === 0) return null
-  const head = names.slice(0, -1).join(', ')
-  const sentence =
-    names.length === 1 ? `${names[0]} can be updated.` : `${head} and ${names.at(-1)} can be updated.`
+const STEP_LABELS: Readonly<Record<UpgradeStepPipelineId, string>> = {
+  preparing: 'Preparing',
+  downloading: 'Downloading',
+  installing: 'Writing new files (still running the old version)',
+  restarting: 'Restarting onto the new version',
+  verifying: 'Checking the new version is running',
+  done: 'Done',
+}
+
+export function upgradeStepLabel(id: UpgradeStepPipelineId): string {
+  return STEP_LABELS[id]
+}
+
+const STEP_TERMINAL = new Set<UpgradeStepStatus>([
+  'done',
+  'skipped',
+  'failed',
+  'rolled_back',
+  'needs_attention',
+])
+
+/** A run is still working on this piece: it has a step that has not ended. */
+export function stepInFlight(status: UpgradeStepStatus | null | undefined): boolean {
+  return status != null && !STEP_TERMINAL.has(status)
+}
+
+/** The step has written the new files to disk (installing is over). */
+const STEP_FILES_WRITTEN = new Set<UpgradeStepStatus>(['restarting', 'verifying'])
+
+export type PieceIdentity = Readonly<{
+  version?: string | null
+  commit?: string | null
+  label?: string | null
+}>
+
+export type PieceStepView = Readonly<{
+  status: UpgradeStepStatus | null | undefined
+  toVersion?: string | null
+  toCommit?: string | null
+}>
+
+export type PieceIdentityLines = Readonly<{
+  /** The new files are on disk (known from the run step), else null. */
+  installedOnDisk: string | null
+  /** What the live process reports about itself. */
+  runningNow: string
+  /** The target of an in-flight run, while the files are not written yet. */
+  updatingTo: string | null
+  /** New files on disk, old process still running. */
+  restartPending: boolean
+}>
+
+function stepTargetLabel(step: PieceStepView): string | null {
+  const version = step.toVersion?.trim() || null
+  const commit = step.toCommit?.trim() || null
+  if (!version && !commit) return null
+  return installedBuildLabel({ version, commit })
+}
+
+/**
+ * The two lines under a piece's Details. `running` is what the piece reports
+ * about itself (heartbeat or hello), so it is always the live process. The
+ * control plane does not report the files on disk, so "Installed on disk" is
+ * only known from the run step: from Restarting on, the step's target is on
+ * disk. While that differs from what runs, a restart is pending.
+ */
+export function pieceIdentityLines(
+  input: Readonly<{
+    running: PieceIdentity | null | undefined
+    runningLabel: string
+    step: PieceStepView | null | undefined
+  }>
+): PieceIdentityLines {
+  const { step } = input
+  const target = step && stepInFlight(step.status) ? stepTargetLabel(step) : null
+  const written = step?.status != null && STEP_FILES_WRITTEN.has(step.status)
+  const sameAsRunning = Boolean(
+    target &&
+    input.running?.commit &&
+    step?.toCommit &&
+    sameCommit(input.running.commit, step.toCommit)
+  )
+  const installedOnDisk = written ? target : null
+  return {
+    installedOnDisk,
+    runningNow: input.runningLabel,
+    updatingTo: written ? null : target,
+    restartPending: installedOnDisk !== null && !sameAsRunning,
+  }
+}
+
+/**
+ * A piece's update status: `null` means the channel state is not known (daemon
+ * not connected). While a run is working on the piece it is never "Up to date".
+ */
+export function updateAvailabilityBadge(
+  updateAvailable: boolean | null,
+  inFlight = false
+): {
+  tone: 'ok' | 'muted' | 'pending'
+  label: string
+} {
+  if (inFlight) return { tone: 'pending', label: 'Updating' }
+  if (updateAvailable === null) return { tone: 'muted', label: 'Not connected' }
+  if (updateAvailable) return { tone: 'pending', label: 'Update available' }
+  return { tone: 'ok', label: 'Up to date' }
+}
+
+/** `a`, `a and b`, `a, b and c`. */
+export function joinWithAnd(items: readonly string[]): string {
+  if (items.length <= 1) return items.join('')
+  const head = items.slice(0, -1).join(', ')
+  return `${head} and ${items.at(-1)}`
+}
+
+/**
+ * "Control plane v0.1.5-canary.1 and UI v0.1.5-canary.2 can be updated." —
+ * which pieces have an update, each with its version, for the sentence under
+ * the Status headline.
+ */
+export function updateAvailableSentence(items: readonly string[]): string | null {
+  if (items.length === 0) return null
+  const sentence = `${joinWithAnd(items)} can be updated.`
   return sentence.charAt(0).toUpperCase() + sentence.slice(1)
+}
+
+/** Which component a server row of the update describes: a server's daemon, or the control plane. */
+export function fleetComponentLabel(
+  row: Readonly<{ unit?: 'daemon' | 'instance' | null }>
+): string {
+  return row.unit === 'instance' ? 'Control plane' : 'Daemon'
 }
 
 export function upgradePhaseLabel(phase: UpgradePhase | null | undefined): string {
   switch (phase) {
     case 'colocated_daemon':
-      return 'Co-located daemon'
+      return 'Daemon step'
     case 'control_plane':
-      return 'Control plane'
+      return 'Control plane step'
     case 'fleet':
-      return 'Fleet'
+      return 'Server updates'
     default:
-      return 'Upgrade'
+      return 'Update'
   }
 }
 

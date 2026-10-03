@@ -60,10 +60,11 @@ on:
         description: The trunk commit to build (the head of the green Verify run)
         required: true
         type: string
-    secrets:
-      RELEASE_SIGNING_KEY:
-        description: PKCS#8 PEM of the offline release key the manifest is signed with
-        required: true
+      verify-run-id:
+        description: The Verify run that triggered this canary; checked directly instead of searching the commit's runs
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -95,7 +96,7 @@ jobs:
       - name: Work out the canary version from the tags
         id: canary
         if: inputs.channel == 'canary' && inputs.ref != ''
-        uses: TurboPanel/dev/.github/actions/version@387788e9e64344fc5de32f6b93abd178e956d6a1 # dev#42
+        uses: TurboPanel/dev/.github/actions/version@d9127ee03a6a3b42e9435ebec3542db5fab09bc0 # dev#49
         with:
           mode: canary
 
@@ -140,15 +141,57 @@ jobs:
         # never a PR's run of it.
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          COMMIT: ${{ steps.resolve.outputs.commit }}
+          RUN_ID: ${{ inputs.verify-run-id }}
         run: |
           set -eu
-          _ok="$(gh run list --repo "${{ github.repository }}" --workflow Verify --commit "${{ steps.resolve.outputs.commit }}" --status success --json event --jq '[.[] | select(.event == "push" or .event == "workflow_dispatch")] | length')"
-          if [ "${_ok:-0}" -lt 1 ]; then
-            echo "::error::no successful push (or manual) Verify run found for ${{ steps.resolve.outputs.commit }} — tag a trunk commit whose Verify is green"
-            exit 1
+          # The canary passes the exact run that triggered it: read that run
+          # directly (no search index, no race with a newer run on the commit).
+          if [ -n "${RUN_ID:-}" ]; then
+            _row="$(gh api "repos/$REPO/actions/runs/$RUN_ID" --jq '[.head_sha, .event, .status, .conclusion] | @tsv')"
+            _sha="$(printf '%s' "$_row" | cut -f1)"
+            _event="$(printf '%s' "$_row" | cut -f2)"
+            _result="$(printf '%s' "$_row" | cut -f4)"
+            if [ "$_sha" = "$COMMIT" ] && [ "$_result" = "success" ] && { [ "$_event" = "push" ] || [ "$_event" = "workflow_dispatch" ]; }; then
+              echo "Verify run $RUN_ID is green for $COMMIT"
+              exit 0
+            fi
+            echo "::warning::run $RUN_ID is not a green push Verify of $COMMIT (head $_sha, $_event, $_result); searching the commit's runs"
           fi
+          # Search the commit's runs. A run still going is waited for (up to 30
+          # minutes); a run that never shows up is retried a few times, because
+          # the run search can lag behind a run that has just finished.
+          _missing=0
+          for _attempt in $(seq 1 60); do
+            _rows="$(gh run list --repo "$REPO" --workflow Verify --commit "$COMMIT" --limit 20 --json event,status,conclusion --jq '[.[] | select(.event == "push" or .event == "workflow_dispatch")]')"
+            if [ "$(printf '%s' "$_rows" | jq '[.[] | select(.conclusion == "success")] | length')" -ge 1 ]; then
+              echo "a green push Verify run exists for $COMMIT"
+              exit 0
+            fi
+            _total="$(printf '%s' "$_rows" | jq 'length')"
+            _going="$(printf '%s' "$_rows" | jq '[.[] | select(.status != "completed")] | length')"
+            if [ "$_total" -gt 0 ] && [ "$_going" -eq 0 ]; then
+              _last="$(printf '%s' "$_rows" | jq -r '.[0].conclusion')"
+              echo "::error::the Verify run of $COMMIT ended '$_last', not green (a cancelled run means a newer run replaced it: re-run Verify for this commit, or work from a commit whose Verify is green)"
+              exit 1
+            fi
+            if [ "$_total" -eq 0 ]; then
+              _missing=$((_missing + 1))
+              if [ "$_missing" -ge 6 ]; then
+                echo "::error::no push (or manual) Verify run found for $COMMIT after 3 minutes — tag a trunk commit whose Verify is green"
+                exit 1
+              fi
+            fi
+            sleep 30
+          done
+          echo "::error::the Verify run of $COMMIT was still running after 30 minutes"
+          exit 1
 
   build:
+    # Signing key = environment secret TURBOPANEL_RELEASE_SIGNING_KEY, one environment per
+    # channel: `canary` (trunk), `rc` (staging), `release` (live, owner approval).
+    environment: ${{ inputs.channel == 'canary' && 'canary' || (inputs.channel == 'rc' && 'rc' || 'release') }}
     needs: prepare
     runs-on: ubuntu-latest
     steps:
@@ -287,7 +330,7 @@ jobs:
 
       - name: Sign the manifest
         env:
-          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+          RELEASE_SIGNING_KEY: ${{ secrets.TURBOPANEL_RELEASE_SIGNING_KEY }}
         run: |
           set -eu
           deno run --config .manifest-signer/deno.json \
@@ -324,7 +367,7 @@ jobs:
     # gh-canary.yml moves the canary tag and uploads to the canary release.
     permissions:
       contents: write
-    uses: TurboPanel/dev/.github/workflows/gh-canary.yml@387788e9e64344fc5de32f6b93abd178e956d6a1 # dev#42
+    uses: TurboPanel/dev/.github/workflows/gh-canary.yml@d9127ee03a6a3b42e9435ebec3542db5fab09bc0 # dev#49
     with:
       version: ${{ needs.prepare.outputs.version }}
       commit: ${{ needs.prepare.outputs.commit }}

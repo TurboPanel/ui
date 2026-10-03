@@ -8,6 +8,7 @@
 - Addresses → `network-addresses-section.tsx` at `/network/addresses`
 - Docker networks → `network-docker-section.tsx` at `/network/docker`
 - Reserved ranges → `network-reserved-section.tsx` at `/network/reserved`
+- Firewall → `network-firewall-section.tsx` at `/network/firewall` (policy panel + rules panel from `components/org/firewall/`; owners/managers)
 
 **Job:** Mesh, address pool, Docker registry + host addressing, and reserved ranges. **Private subnets live on Datacenters** (`/servers/datacenters`) — a datacenter is a logical routing domain, not a building, and a server may belong to several — do not duplicate that CRUD here.
 
@@ -16,7 +17,7 @@
 ## Hub
 
 - Title **Network** + one line: private subnets live on Datacenters; this area is mesh / addresses / Docker / reserved ranges
-- Five `detailCard` links (Datacenters, TurboFabric, Addresses, Docker networks, Reserved ranges) — not a second sites inventory
+- Six `detailCard` links (Datacenters, TurboFabric, Addresses, Docker networks, Reserved ranges, Firewall) — not a second sites inventory
 - Legacy `/network/sites/:id` redirects to `/servers/datacenters/:id`
 
 ## Error copy (shared)

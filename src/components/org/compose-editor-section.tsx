@@ -76,6 +76,7 @@ import {
 } from '@/lib/compose/yaml-indent'
 import { Button, SectionNav } from '@/components/ui'
 import { colors, spacing } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 type EditorTab = ComposeEditorView
 
@@ -142,7 +143,7 @@ function flushYamlIntoDraft(
     return { draft: parsed, yaml: visibleYaml(parsed) }
   } catch (err) {
     return {
-      error: err instanceof Error ? err.message : 'Compose YAML is invalid',
+      error: userErrorMessage(err, 'Compose YAML is invalid'),
     }
   }
 }
@@ -987,7 +988,7 @@ export function ComposeEditorSection({
       })
     } catch (err) {
       setShowSaveLint(true)
-      setError(err instanceof Error ? err.message : 'Compose YAML is invalid')
+      setError(userErrorMessage(err, 'Compose YAML is invalid'))
     }
   }
 

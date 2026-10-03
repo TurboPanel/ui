@@ -88,7 +88,7 @@ export function letsEncryptSaveBlockedMessage(input: Readonly<{
   if (letsEncryptTermsAccepted(input.acme.data)) return null
   const source = input.acme.data.settings?.[INSTANCE_ACME_TOS_SETTING_KEY]?.source
   if (source === 'env') {
-    return `${INSTANCE_ACME_TOS_NOT_ACCEPTED_MESSAGE}. Set TURBOPANEL_INSTANCE_ACME__TOS_ACCEPTED=true in the instance environment (Admin cannot override an env-sourced value), then restart the control plane.`
+    return `${INSTANCE_ACME_TOS_NOT_ACCEPTED_MESSAGE}. Set TURBOPANEL_INSTANCE_ACME__TOS_ACCEPTED=true in the control plane environment (Admin cannot override an env-sourced value), then restart the control plane.`
   }
   return `${INSTANCE_ACME_TOS_NOT_ACCEPTED_MESSAGE}. Open Access → Certificates, check Terms accepted, click Save Let's Encrypt, then save your hostnames here.`
 }

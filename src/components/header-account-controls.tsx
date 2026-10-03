@@ -1,60 +1,32 @@
-import { Platform, View } from 'react-native'
+import { Platform, View, useWindowDimensions } from 'react-native'
 import { headerMenuGroupStyles } from '@/components/header-menu-group-styles'
+import { HeaderPageWidthSegment } from '@/components/header-page-width-toggle'
 import { HeaderNotificationsSegment } from '@/components/header-notifications-control'
-import { OrganizationSwitcherSegment } from '@/components/organization-switcher'
-import { ReturnToInstanceSegment } from '@/components/return-to-instance'
 import { UserAccountMenuSegment } from '@/components/user-account-menu'
+import { headerLayoutFor } from '@/lib/header-layout'
 
-const showSeparateNotifications = Platform.OS === 'web'
+const isNative = Platform.OS !== 'web'
 
-type HeaderAccountControlsProps = Readonly<{
-  orgId: string
-  email: string
-  onSignOut: () => void | Promise<void>
-}>
-
+/**
+ * Right-hand header controls, shared by the org, admin and organizations
+ * screens: page-width toggle (desktop), profile menu, and the notifications
+ * bell (wide web). On compact widths this is just the profile icon; the
+ * organization (or the way back from admin) sits on the left, by the logo.
+ */
 export function HeaderAccountControls({
-  orgId,
-  email,
-  onSignOut,
-}: HeaderAccountControlsProps) {
-  return (
-    <View style={headerMenuGroupStyles.group}>
-      <OrganizationSwitcherSegment orgId={orgId} />
-      <UserAccountMenuSegment email={email} onSignOut={onSignOut} />
-      {showSeparateNotifications ? <HeaderNotificationsSegment /> : null}
-    </View>
-  )
-}
-
-/** Admin header: return control + account (no org switcher). */
-export function HeaderAdminAccountControls({
   email,
   onSignOut,
 }: Readonly<{
   email: string
   onSignOut: () => void | Promise<void>
 }>) {
+  const { width } = useWindowDimensions()
+  const header = headerLayoutFor(width, isNative)
   return (
     <View style={headerMenuGroupStyles.group}>
-      <ReturnToInstanceSegment />
+      {header.showPageWidthToggle ? <HeaderPageWidthSegment /> : null}
       <UserAccountMenuSegment email={email} onSignOut={onSignOut} />
-      {showSeparateNotifications ? <HeaderNotificationsSegment /> : null}
-    </View>
-  )
-}
-
-export function HeaderUserAccountControl({
-  email,
-  onSignOut,
-}: Readonly<{
-  email: string
-  onSignOut: () => void | Promise<void>
-}>) {
-  return (
-    <View style={headerMenuGroupStyles.group}>
-      <UserAccountMenuSegment email={email} onSignOut={onSignOut} />
-      {showSeparateNotifications ? <HeaderNotificationsSegment /> : null}
+      {header.showBell ? <HeaderNotificationsSegment /> : null}
     </View>
   )
 }

@@ -223,8 +223,9 @@ function ScopeChip({
  * Compose scope selector: **Project** · environments.
  *
  * Lives in the project header (not the compose toolbar). Pure scope switch —
- * per-scope configuration is the Settings tab inside the compose surface, so
- * the chips carry no settings gear.
+ * per-scope configuration is the Settings tab inside the compose surface, and
+ * a trailing visible **Settings** chip opens it for the scope in view (it is
+ * on no other nav bar, so without it Settings and Danger are unreachable).
  *
  * Project is always the first control and never collapses into the picker.
  * Environments sit to its right: chips while there is only one, and a
@@ -351,6 +352,23 @@ export function ProjectScopeSelector() {
           onSelect={() => navigateScope()}
         />
         {environmentControl()}
+        <ScopeChip
+          label="Settings"
+          selected={sectionTab === 'settings'}
+          accessibilityLabel={
+            baseSelected ? 'Project settings' : 'Environment settings'
+          }
+          onSelect={() =>
+            router.push(
+              projectComposeSectionHref(
+                orgId,
+                projectId,
+                'settings',
+                baseSelected ? null : pathEnvironmentId,
+              ) as Href,
+            )
+          }
+        />
       </View>
     </ScrollView>
   )

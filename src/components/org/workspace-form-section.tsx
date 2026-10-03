@@ -24,6 +24,7 @@ import { useOptionalWorkspaceScope } from '@/lib/workspace-scope-context'
 import { useRouter } from 'expo-router'
 import { useEffect, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
+import { userErrorMessage } from '@/lib/user-error'
 
 type WorkspaceFormMode = 'create' | 'edit'
 type WorkspaceFieldErrors = {
@@ -61,7 +62,7 @@ function workspaceFormApiError(
   updateError: string | null,
 ): string | undefined {
   if (queryError instanceof Error) {
-    return queryError.message
+    return userErrorMessage(queryError, '')
   }
   return createError ?? updateError ?? undefined
 }

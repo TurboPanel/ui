@@ -5,6 +5,7 @@ import {
   mapStepStatusToPipeline,
   stepHasStarted,
   upgradePhaseLabel,
+  upgradeStepLabel,
   upgradeStepOutcome,
 } from '@/lib/upgrade-display'
 import type { UpgradePhase, UpgradeStepStatus } from '@/lib/instance-api'
@@ -14,7 +15,7 @@ import { spacing } from '@/lib/theme'
 const PIPELINE_STEPS: readonly WizardStepItem<(typeof UPGRADE_STEP_PIPELINE)[number]>[] =
   UPGRADE_STEP_PIPELINE.map((id) => ({
     id,
-    label: id.charAt(0).toUpperCase() + id.slice(1),
+    label: upgradeStepLabel(id),
   }))
 
 export function UpgradeStepTracker({

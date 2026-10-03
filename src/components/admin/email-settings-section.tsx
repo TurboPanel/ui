@@ -8,6 +8,7 @@ import { effectiveEmailProvider, emailProviderSegmentValue } from '@/lib/email-s
 import { useEmailSettings, useSaveEmailSettings } from '@/lib/queries/admin'
 import { useInstallStatusQuery } from '@/lib/queries/auth'
 import { colors, spacing } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 function LockIcon() {
   return (
@@ -379,9 +380,7 @@ export function EmailSettingsSection() {
       >
         {emailQuery.isError ? (
           <Text style={panelStyles.error}>
-            {emailQuery.error instanceof Error
-              ? emailQuery.error.message
-              : 'Failed to load email settings'}
+            {userErrorMessage(emailQuery.error, 'Failed to load email settings')}
           </Text>
         ) : null}
         {saveError ? <Text style={panelStyles.error}>{saveError}</Text> : null}

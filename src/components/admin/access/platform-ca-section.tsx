@@ -16,6 +16,7 @@ import {
   useReconcilePlatformCaTrust,
 } from '@/lib/queries/admin'
 import { colors, spacing } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 const RUNTIME_MARK = 'platform CA is not available'
 
@@ -56,7 +57,7 @@ export function PlatformCaSection() {
       )
     } catch (err) {
       setActionError(
-        err instanceof Error ? err.message : 'Failed to download the Platform CA',
+        userErrorMessage(err, 'Failed to download the Platform CA'),
       )
     }
   }
@@ -81,9 +82,7 @@ export function PlatformCaSection() {
         {query.isLoading ? <LoadingState /> : null}
         {query.isError && !unavailable ? (
           <Text style={panelStyles.error}>
-            {query.error instanceof Error
-              ? query.error.message
-              : 'Failed to load the Platform CA'}
+            {userErrorMessage(query.error, 'Failed to load the Platform CA')}
           </Text>
         ) : null}
         {query.data?.ok === false && !query.isError ? (

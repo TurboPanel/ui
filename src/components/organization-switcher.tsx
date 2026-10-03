@@ -21,6 +21,7 @@ import { HeaderMenuOverlay } from '@/components/header-menu-overlay'
 import { HeaderMenuTrigger } from '@/components/header-menu-trigger'
 import { BillingNavIcon, GearIcon, OrganizationIcon, PlusIcon } from '@/components/icons/nav-icons'
 import { OrganizationSwitcherList } from '@/components/org/organization-switcher-list'
+import { dropdownLeft, headerLayoutFor } from '@/lib/header-layout'
 import { truncateDisplayName } from '@/lib/display-name'
 import { organizationLabel, shouldShowOrgSwitcherSearch } from '@/lib/organization-switcher'
 import { setActiveOrganizationId } from '@/lib/org-context'
@@ -33,7 +34,7 @@ import {
   replaceOrganization,
 } from '@/lib/org-navigation'
 import { useCreateOrganization, useOrganizationsQuery } from '@/lib/queries/auth'
-import { chrome, colors, layout, spacing, webPointer } from '@/lib/theme'
+import { chrome, colors, spacing, webPointer } from '@/lib/theme'
 
 const isNative = Platform.OS !== 'web'
 const COMPACT_FOOTER_HEIGHT = 108
@@ -64,7 +65,8 @@ export function OrganizationSwitcherSegment({ orgId }: OrganizationSwitcherSegme
   const router = useRouter()
   const pathname = usePathname()
   const { width, height } = useWindowDimensions()
-  const isCompact = Platform.OS !== 'web' || width < layout.desktopBreakpoint
+  const header = headerLayoutFor(width, isNative)
+  const isCompact = header.compact
   const orgsQuery = useOrganizationsQuery()
   const createOrganization = useCreateOrganization()
   // Billing lives here, behind the organization menu, rather than in the
@@ -84,12 +86,20 @@ export function OrganizationSwitcherSegment({ orgId }: OrganizationSwitcherSegme
       return
     }
     buttonRef.current?.measureInWindow((x, y, w, h) => {
+      // The trigger sits at the left of the header, so the menu opens flush
+      // with its left edge (and is kept on screen).
       setMenuPosition({
         top: y + h + 6,
-        left: Math.max(12, x + w - HEADER_MENU_WIDTH),
+        left: dropdownLeft({
+          x,
+          triggerWidth: w,
+          menuWidth: HEADER_MENU_WIDTH,
+          windowWidth: width,
+          align: 'start',
+        }),
       })
     })
-  }, [menuOpen, isCompact])
+  }, [menuOpen, isCompact, width])
 
   const closeMenu = () => {
     setMenuOpen(false)
@@ -236,9 +246,11 @@ export function OrganizationSwitcherSegment({ orgId }: OrganizationSwitcherSegme
           accessibilityLabel={`Organization: ${label}`}
           accessibilityState={{ expanded: menuOpen }}
         >
-          <View style={headerMenuGroupStyles.triggerGlyph}>
-            <OrganizationIcon size={HEADER_TRIGGER_ICON_SIZE} color={colors.textDim} />
-          </View>
+          {header.showOrgGlyph ? (
+            <View style={headerMenuGroupStyles.triggerGlyph}>
+              <OrganizationIcon size={HEADER_TRIGGER_ICON_SIZE} color={colors.textDim} />
+            </View>
+          ) : null}
           <View style={headerMenuGroupStyles.triggerCopy}>
             <Text
               style={headerMenuGroupStyles.triggerLabel}

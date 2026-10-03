@@ -1,4 +1,5 @@
 import type { ComposeDocument } from '@/lib/compose'
+import type { NameScheme } from '@/lib/principal-name-scheme'
 import { resolveApiUrl } from '@/lib/control-plane'
 import { clientVersionHeaders, recordInstanceVersion } from '@/lib/instance-version'
 import { getActiveControlPlaneOrigin } from '@/lib/control-plane-accounts'
@@ -18,6 +19,7 @@ import type {
 } from '@/lib/managed-services'
 import type { ManagedSslMode } from '@/lib/managed-ssl'
 import { getActiveOrganizationId, ORG_ID_HEADER } from '@/lib/org-context'
+import { fetchWithStepUp, reauthFailureMessage } from '@/lib/step-up'
 export {
   isForbiddenError,
   isHttpStatusError,
@@ -193,7 +195,7 @@ export type InstallStatus = {
 }
 
 export async function fetchSession(): Promise<SessionInfo | null> {
-  const response = await fetch(controlPlaneUrl(`${CLIENT_API}/authn/session`), {
+  const response = await fetchWithStepUp(controlPlaneUrl(`${CLIENT_API}/authn/session`), {
     credentials: 'include',
     headers: { 'content-type': 'application/json' },
   })
@@ -328,6 +330,17 @@ export async function resetPassword(body: {
   token: string
 }): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/auth/reset-password`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+/** Signed-in password change: signs out every other session, keeps this one. */
+export async function changePassword(body: {
+  currentPassword: string
+  newPassword: string
+}): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/auth/change-password`, {
     method: 'POST',
     body: JSON.stringify(body),
   })
@@ -1088,6 +1101,43 @@ export async function saveOrgTlsSettings(
   })
 }
 
+export type OrgReauthSettings = {
+  /** Owner opt-in: permanent actions ask the person to prove who they are again. Off by default. */
+  requireReauthForDestructive: boolean
+}
+
+export async function fetchOrgReauthSettings(orgId: string): Promise<OrgReauthSettings> {
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/reauth-settings`)
+}
+
+export async function saveOrgReauthSettings(
+  orgId: string,
+  patch: OrgReauthSettings
+): Promise<OrgReauthSettings> {
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/reauth-settings`, {
+    method: 'PUT',
+    body: JSON.stringify(patch),
+  })
+}
+
+/**
+ * Prove who you are again (`POST /auth/reauth`) so permanent actions unlock
+ * for a few minutes on this sign-in. Deliberately a plain `fetch`: a wrong
+ * proof must show its own message, never open the prompt again.
+ */
+export async function submitReauth(
+  body: { password: string } | { code: string }
+): Promise<{ ok: true; expiresAt: string }> {
+  const response = await fetch(controlPlaneUrl(`${CLIENT_API}/auth/reauth`), {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json', ...clientVersionHeaders() },
+    body: JSON.stringify(body),
+  })
+  if (!response.ok) throw new Error(reauthFailureMessage(response.status))
+  return (await response.json()) as { ok: true; expiresAt: string }
+}
+
 export type OrgComposeGatedFields = {
   /** Owner opt-in for the ten root-equivalent compose fields. Off by default. */
   composeGatedFieldsEnabled: boolean
@@ -1125,6 +1175,67 @@ export async function saveOrgComposeResourceDefaults(
   return await apiFetch(`${CLIENT_API}/organizations/${orgId}/compose-resource-defaults`, {
     method: 'PUT',
     body: JSON.stringify(patch),
+  })
+}
+
+export type PhpModeValue = 'fastcgi' | 'fpm' | 'lsphp-detached' | 'lsphp-attached'
+
+/** Per web server: the modes a site may pick under the policy, and what a new site gets. */
+export type PhpModeEngineChoices = Record<
+  string,
+  { allowed: PhpModeValue[]; default: PhpModeValue | null }
+>
+
+export type PhpModeAffectedSite = {
+  environmentId: string
+  serverId: string
+  composeServiceName: string
+  mode: PhpModeValue
+}
+
+export type PhpModePolicy = {
+  /** `null` = every mode offered. */
+  phpModes: PhpModeValue[] | null
+  engines: PhpModeEngineChoices
+}
+
+export type ServerPhpModePolicy = PhpModePolicy & {
+  /** The organization's list the server narrows; `null` = every mode. */
+  organizationPhpModes: PhpModeValue[] | null
+}
+
+export type PhpModePolicySaved = {
+  ok: true
+  phpModes: PhpModeValue[] | null
+  /** Sites whose recorded mode the new policy no longer offers; they keep it until changed. */
+  affectedSites: PhpModeAffectedSite[]
+}
+
+export async function fetchOrgPhpModes(orgId: string): Promise<PhpModePolicy> {
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/php-modes`)
+}
+
+export async function saveOrgPhpModes(
+  orgId: string,
+  phpModes: PhpModeValue[] | null
+): Promise<PhpModePolicySaved> {
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/php-modes`, {
+    method: 'PUT',
+    body: JSON.stringify({ phpModes }),
+  })
+}
+
+export async function fetchServerPhpModes(serverId: string): Promise<ServerPhpModePolicy> {
+  return await apiFetch(`${CLIENT_API}/servers/${serverId}/php-modes`)
+}
+
+export async function saveServerPhpModes(
+  serverId: string,
+  phpModes: PhpModeValue[] | null
+): Promise<PhpModePolicySaved> {
+  return await apiFetch(`${CLIENT_API}/servers/${serverId}/php-modes`, {
+    method: 'PUT',
+    body: JSON.stringify({ phpModes }),
   })
 }
 
@@ -1281,15 +1392,24 @@ export async function updateOrganizationDockerNetworking(
 }
 
 /**
- * Org randomized-usernames default. When on (platform default), every newly
- * created principal's applied login (Linux account / database role) gets a
- * random `_<11 chars>` suffix. `randomizedUsernames` is the configured
- * override (`null` = inheriting the platform default); `effective…` is what
- * new principals actually get. Toggling never renames existing principals.
+ * Org principal name-scheme default. `nameScheme` is the configured scheme
+ * (`null` = inheriting the platform default, `partial`); `effectiveNameScheme`
+ * is what new principals get. `schemeLocked` forces that scheme for every new
+ * principal (creators cannot choose). Existing principals are never renamed.
+ * `randomizedUsernames` / `effectiveRandomizedUsernames` are the legacy toggle
+ * the scheme replaces.
  */
 export type OrgPrincipalDefaults = {
+  nameScheme: NameScheme | null
+  effectiveNameScheme: NameScheme
+  schemeLocked: boolean
   randomizedUsernames: boolean | null
   effectiveRandomizedUsernames: boolean
+}
+
+export type OrgPrincipalDefaultsUpdate = {
+  nameScheme?: NameScheme | null
+  schemeLocked?: boolean
 }
 
 export async function fetchOrgPrincipalDefaults(orgId: string): Promise<OrgPrincipalDefaults> {
@@ -1298,11 +1418,11 @@ export async function fetchOrgPrincipalDefaults(orgId: string): Promise<OrgPrinc
 
 export async function saveOrgPrincipalDefaults(
   orgId: string,
-  randomizedUsernames: boolean | null
+  update: OrgPrincipalDefaultsUpdate
 ): Promise<OrgPrincipalDefaults & { ok: true }> {
   return await apiFetch(`${CLIENT_API}/organizations/${orgId}/principal-defaults`, {
     method: 'PUT',
-    body: JSON.stringify({ randomizedUsernames }),
+    body: JSON.stringify(update),
   })
 }
 
@@ -1599,7 +1719,7 @@ export async function deleteServer(
   }
 
   const path = `${CLIENT_API}/servers/${serverId}`
-  const response = await fetch(controlPlaneUrl(path), {
+  const response = await fetchWithStepUp(controlPlaneUrl(path), {
     method: 'DELETE',
     credentials: 'include',
     headers,
@@ -1700,7 +1820,7 @@ async function apiFetch<T>(
     headers[ORG_ID_HEADER] = resolvedOrgId
   }
 
-  const response = await fetch(controlPlaneUrl(path), {
+  const response = await fetchWithStepUp(controlPlaneUrl(path), {
     ...init,
     credentials: 'include',
     headers,
@@ -1958,7 +2078,7 @@ export async function createLicense(
     headers[ORG_ID_HEADER] = resolvedOrgId
   }
 
-  const response = await fetch(controlPlaneUrl(`${CLIENT_API}/licenses`), {
+  const response = await fetchWithStepUp(controlPlaneUrl(`${CLIENT_API}/licenses`), {
     method: 'POST',
     credentials: 'include',
     headers,
@@ -2020,6 +2140,10 @@ export async function deleteLicense(id: string): Promise<{ ok: true }> {
 // ---------------------------------------------------------------------------
 
 export const BILLING_NOT_CONFIGURED_ERROR = 'billing_not_configured'
+/** `409` on checkout while one is already open for the organization. */
+export const CHECKOUT_PENDING_ERROR = 'checkout_pending'
+/** `502` when the payment provider refused or failed. */
+export const STRIPE_ERROR = 'stripe_error'
 export const BILLING_MUTATION_IN_PROGRESS_ERROR = 'billing_mutation_in_progress'
 export const SUBSCRIPTION_PAST_DUE_ERROR = 'subscription_past_due'
 export const SUBSCRIPTION_EXISTS_ERROR = 'subscription_exists'
@@ -2130,7 +2254,7 @@ export type BillingSubscriptionState = {
   status: string
   currentPeriodEnd: string | null
   pastDueSince: string | null
-  /** Entitlement survives until this moment while past due; the grace clock cancels after it. */
+  /** @deprecated Always null: TurboPanel keeps no grace expiry; the provider's retries end a past-due subscription. Still sent by the API; nothing reads it. */
   graceExpiresAt: string | null
   /** A deferred change (downgrade / release) is parked on a subscription schedule. */
   scheduleAttached: boolean
@@ -2234,7 +2358,7 @@ async function billingPost<T>(path: string, body: Record<string, unknown>): Prom
   const headers: Record<string, string> = { 'content-type': 'application/json' }
   const resolvedOrgId = getActiveOrganizationId()
   if (resolvedOrgId) headers[ORG_ID_HEADER] = resolvedOrgId
-  const response = await fetch(controlPlaneUrl(path), {
+  const response = await fetchWithStepUp(controlPlaneUrl(path), {
     method: 'POST',
     credentials: 'include',
     headers,
@@ -2672,9 +2796,21 @@ export type ServiceRecord = {
   /** Derived from the compose document — read-only; never send this on create/update. */
   composeServiceName: string
   metadata?: Record<string, unknown> | null
+  /**
+   * Application the daemon recognised in a site's document root at the last
+   * deploy. Read-only; absent for plain PHP / static sites and until a deploy
+   * has looked.
+   */
+  app?: ServiceApp | null
   options?: ServiceOptions | Record<string, unknown> | null
   createdAt: string
   updatedAt: string
+}
+
+export type ServiceApp = {
+  kind: 'wordpress'
+  /** Release the application reports, when the daemon could read it. */
+  version?: string
 }
 
 export type HostingRecord = {
@@ -2979,6 +3115,7 @@ export const PROJECT_HAS_CHILDREN_ERROR = 'Cannot delete while child resources e
 
 export const PROJECT_HAS_RUNNING_SERVICES_ERROR = 'project_has_running_services'
 export const MANAGED_RUNTIME_PRESENT_ERROR = 'managed_runtime_present'
+export const ENVIRONMENT_RUNNING_ERROR = 'environment_running'
 
 export const UNKNOWN_SYSTEM_COMPONENT_ERROR = 'unknown_system_component'
 export const SYSTEM_COMPONENT_NOT_PROVISIONED_ERROR = 'system_component_not_provisioned'
@@ -3663,7 +3800,7 @@ async function cidrWriteFetch<T>(path: string, init: RequestInit): Promise<T> {
   }
   const resolvedOrgId = getActiveOrganizationId()
   if (resolvedOrgId) headers[ORG_ID_HEADER] = resolvedOrgId
-  const response = await fetch(controlPlaneUrl(path), {
+  const response = await fetchWithStepUp(controlPlaneUrl(path), {
     ...init,
     credentials: 'include',
     headers,
@@ -4035,6 +4172,11 @@ export type InstanceUpdates = {
       uiTarget: InstanceUpdateTarget | null
       /** The server's answer. Absent on a control plane older than the field. */
       updateAvailable?: boolean
+      /**
+       * Self-hosted only: the channel's UI build differs from the bundle the
+       * console reported (`?consoleCommit=`). Absent on an older control plane.
+       */
+      uiUpdateAvailable?: boolean
     }
     daemon: {
       installed: {
@@ -4168,8 +4310,14 @@ export type UpgradeServersPage = {
   total: number
 }
 
-export async function fetchInstanceUpdates(): Promise<InstanceUpdates> {
-  return await apiFetch(`${ADMIN_API}/instance/updates`)
+/**
+ * `consoleCommit` is the commit this console bundle was built from; the
+ * control plane cannot see which UI it serves, so it compares it with the
+ * channel's UI build (`units.instance.uiUpdateAvailable`).
+ */
+export async function fetchInstanceUpdates(consoleCommit?: string): Promise<InstanceUpdates> {
+  const query = consoleCommit ? `?consoleCommit=${encodeURIComponent(consoleCommit)}` : ''
+  return await apiFetch(`${ADMIN_API}/instance/updates${query}`)
 }
 
 export async function fetchUpgradeActiveRun(): Promise<UpgradeActiveRunResponse> {
@@ -4219,11 +4367,15 @@ export async function runUpgradePreflight(): Promise<UpgradePreflightResult> {
 }
 
 export async function startPlatformUpgradeRun(
-  runId?: string
+  runId?: string,
+  consoleCommit?: string
 ): Promise<{ ok: boolean; runId: string }> {
   return await apiFetch(`${ADMIN_API}/instance/updates/runs`, {
     method: 'POST',
-    body: JSON.stringify(runId ? { runId } : {}),
+    body: JSON.stringify({
+      ...(runId ? { runId } : {}),
+      ...(consoleCommit ? { consoleCommit } : {}),
+    }),
   })
 }
 
@@ -4288,7 +4440,7 @@ async function adminJson<T>(path: string, init: RequestInit): Promise<T> {
   }
   const orgId = getActiveOrganizationId()
   if (orgId) headers[ORG_ID_HEADER] = orgId
-  const response = await fetch(controlPlaneUrl(path), {
+  const response = await fetchWithStepUp(controlPlaneUrl(path), {
     ...init,
     credentials: 'include',
     headers,
@@ -4460,7 +4612,7 @@ export async function fetchAdminTiers(): Promise<{
  * Surfaced so the operator can see why such a price verifies.
  */
 export type AdminTierTaxDefaults = {
-  /** `inclusive`, `exclusive`, or null when the account names no default. */
+  /** `inclusive`, `exclusive`, `inferred_by_currency` (Automatic), or null when unreadable or none set. */
   taxBehavior: string | null
   /** `active` once the provider can calculate tax; `pending` while incomplete. */
   status: string | null
@@ -5208,6 +5360,29 @@ export type DeploymentHistoryRecord = {
   errorMessage: string | null
   /** Whether a retained execution log exists (resolved store-side). */
   hasLog: boolean
+  /** The engine the attempt ran; null (or absent) for attempts queued before it was recorded. */
+  strategy?: DeploymentStrategy | null
+  /** How a sequential deploy that did not finish ended; null otherwise. */
+  strategyOutcome?: DeploymentStrategyOutcome | null
+  /** Why it rolled back or needs attention. */
+  strategyOutcomeReason?: string | null
+  /** What set the attempt off when it was a git push; null for a deploy a person started. */
+  trigger?: DeploymentTriggerRecord | null
+}
+
+export type DeploymentStrategy = 'inplace' | 'sequential'
+
+/** `rolled_back`: the previous version is running again. `needs_attention`: stopped on purpose. */
+export type DeploymentStrategyOutcome = 'rolled_back' | 'needs_attention'
+
+/** A deploy started by a git push rather than a person. */
+export type DeploymentTriggerRecord = {
+  kind: 'push'
+  /** Branch that was pushed, or null when only a commit was recorded. */
+  branch: string | null
+  commitSha: string | null
+  /** The repository the push came from. */
+  sourceId: string | null
 }
 
 /** Per-server convergence for one generation, read from *current* state. */
@@ -5880,7 +6055,7 @@ export async function deployEnvironment(
     headers[ORG_ID_HEADER] = resolvedOrgId
   }
 
-  const response = await fetch(controlPlaneUrl(path), {
+  const response = await fetchWithStepUp(controlPlaneUrl(path), {
     method: 'POST',
     credentials: 'include',
     headers,
@@ -6387,13 +6562,15 @@ export type ProjectPrincipalRecord = {
   id: string
   kind: string
   provider: string
+  /** Display name: what the operator typed. */
   username: string
   /**
-   * Login actually created on the host — the short `username` plus a random
-   * `_<11 chars>` suffix when the org randomized-usernames default was on at
-   * create. SSH/SFTP with this name; `username` is the panel identity.
+   * System name — the login actually created on the host, per `nameScheme`
+   * (plain, typed + `_<11 chars>`, or fully random). SSH/SFTP with this name.
    */
   appliedUsername: string
+  /** Scheme the system name was generated with. */
+  nameScheme?: NameScheme
   projectId: string | null
   metadata: { uid?: number; gid?: number; home?: string } | null
   options: Record<string, unknown> | null
@@ -6502,6 +6679,8 @@ export async function createProjectPrincipal(
   projectId: string,
   body: {
     username: string
+    /** Omit to use the org default; 409 `principal_scheme_locked` when the org locks it. */
+    nameScheme?: NameScheme
     serviceIds?: string[]
     entitlements?: { runtime: string; series: string }[]
     access?: PrincipalAccessLevel
@@ -7106,7 +7285,7 @@ async function fetchServerMetricsJson<T>(
   }
 
   const path = `${CLIENT_API}/servers/${serverId}/metrics/${pathSuffix}?${query.toString()}`
-  const response = await fetch(controlPlaneUrl(path), {
+  const response = await fetchWithStepUp(controlPlaneUrl(path), {
     credentials: 'include',
     headers,
   })
@@ -7241,7 +7420,7 @@ export async function fetchFleetMetricsLatest(
   }
 
   const path = `${CLIENT_API}/servers/metrics/latest`
-  const response = await fetch(controlPlaneUrl(path), {
+  const response = await fetchWithStepUp(controlPlaneUrl(path), {
     credentials: 'include',
     headers,
   })
@@ -7330,7 +7509,7 @@ export async function startServerMetricsLive(
   }
 
   const path = `${CLIENT_API}/servers/${serverId}/metrics/live`
-  const response = await fetch(controlPlaneUrl(path), {
+  const response = await fetchWithStepUp(controlPlaneUrl(path), {
     method: 'POST',
     credentials: 'include',
     headers,
@@ -7515,7 +7694,7 @@ export async function fetchServerMetricsCapabilities(
   }
 
   const path = `${CLIENT_API}/servers/${serverId}/metrics/capabilities`
-  const response = await fetch(controlPlaneUrl(path), {
+  const response = await fetchWithStepUp(controlPlaneUrl(path), {
     credentials: 'include',
     headers,
   })
@@ -7809,6 +7988,8 @@ export async function createManagedUser(
   environmentId: string,
   body: {
     username: string
+    /** Omit to use the org default; 409 `principal_scheme_locked` when the org locks it. */
+    nameScheme?: NameScheme
     databases: string[]
     privileges?: string[]
     /** Omit for `read-write`; `read-only` requires a read-eligible replica (422 `managed_no_read_targets`). */
@@ -7966,6 +8147,352 @@ export async function restoreManagedBackup(
     `${CLIENT_API}/environments/${environmentId}/managed/backups/${encodeURIComponent(backupId)}/restore`,
     { method: 'POST', body: JSON.stringify({}) }
   )
+}
+
+/** One archive of a storage copy, manual or from a schedule (`policyId` null = manual). */
+export type StorageCopyBackupRecord = {
+  id: string
+  createdAt: string
+  copyId: string
+  policyId: string | null
+  sizeBytes: number
+  checksum: string
+  path: string
+}
+
+export type StorageCopyBackupQueued = {
+  ok: true
+  backupId: string
+  commandId: string
+  serverId: string
+}
+
+function storageCopyBackupsUrl(storageId: string, copyId: string): string {
+  return `${CLIENT_API}/storage/${storageId}/copies/${copyId}/backups`
+}
+
+export async function fetchStorageCopyBackups(
+  storageId: string,
+  copyId: string
+): Promise<{ backups: StorageCopyBackupRecord[] }> {
+  return await apiFetch(storageCopyBackupsUrl(storageId, copyId))
+}
+
+export async function createStorageCopyBackup(
+  storageId: string,
+  copyId: string
+): Promise<StorageCopyBackupQueued> {
+  return await apiFetch(storageCopyBackupsUrl(storageId, copyId), {
+    method: 'POST',
+    body: JSON.stringify({}),
+  })
+}
+
+export async function deleteStorageCopyBackup(
+  storageId: string,
+  copyId: string,
+  backupId: string
+): Promise<StorageCopyBackupQueued> {
+  return await apiFetch(
+    `${storageCopyBackupsUrl(storageId, copyId)}/${encodeURIComponent(backupId)}`,
+    { method: 'DELETE' }
+  )
+}
+
+export async function restoreStorageCopyBackup(
+  storageId: string,
+  copyId: string,
+  backupId: string
+): Promise<StorageCopyBackupQueued> {
+  return await apiFetch(
+    `${storageCopyBackupsUrl(storageId, copyId)}/${encodeURIComponent(backupId)}/restore`,
+    { method: 'POST', body: JSON.stringify({}) }
+  )
+}
+
+/** `sun`…`sat`, the instance's weekday vocabulary for weekly backup presets. */
+export type BackupWeekday = 'sun' | 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat'
+
+/** A preset schedule; the instance stores it as cron and reads it back out for display. */
+export type BackupSchedulePreset =
+  | { preset: 'hourly' }
+  | { preset: 'daily'; time: string }
+  | { preset: 'weekly'; day: BackupWeekday; time: string }
+
+/** A schedule as sent: a preset object, or raw cron text (5 fields or an `@alias`). */
+export type BackupScheduleInput = BackupSchedulePreset | string
+
+/** One finished scheduled run, as its host reported it. */
+export type BackupRunRecord = {
+  runId: string
+  serverId: string
+  startedAt: string
+  finishedAt: string
+  status: 'succeeded' | 'failed'
+  error: string | null
+  /** The artifact's `bk_` id; null when the run failed. */
+  backupId: string | null
+}
+
+/** A scheduled backup of a managed engine (`/environments/:id/managed/backup-policies`). */
+export type BackupPolicyRecord = {
+  id: string
+  name: string
+  targetKind: 'managed'
+  managedId: string
+  /** Cron text as stored — presets are stored in their cron form. */
+  schedule: string
+  /** The preset {@link schedule} matches; null for custom cron. */
+  preset: BackupSchedulePreset | null
+  /** IANA zone; null means the host's local time. */
+  timezone: string | null
+  retentionKeep: number
+  enabled: boolean
+  /** True for the daily policy the instance creates with a new engine. */
+  automatic: boolean
+  /** When the host's timer next fires, as last reported; null until a report arrives. */
+  nextRunAt: string | null
+  lastRun: BackupRunRecord | null
+  createdAt: string
+  updatedAt: string
+}
+
+/** Best-effort push of the host's full policy set; a failed server catches up on reconnect. */
+export type BackupsReconcileOutcome = {
+  queuedServerIds: string[]
+  failedServerIds: string[]
+}
+
+export type CreateBackupPolicyBody = {
+  name: string
+  schedule: BackupScheduleInput
+  timezone?: string | null
+  retentionKeep: number
+  enabled?: boolean
+}
+
+export type UpdateBackupPolicyBody = Partial<{
+  name: string
+  schedule: BackupScheduleInput
+  /** null clears it (host local time). */
+  timezone: string | null
+  retentionKeep: number
+  enabled: boolean
+}>
+
+function backupPoliciesPath(environmentId: string): string {
+  return `${CLIENT_API}/environments/${environmentId}/managed/backup-policies`
+}
+
+function backupPolicyPath(environmentId: string, policyId: string): string {
+  return `${backupPoliciesPath(environmentId)}/${encodeURIComponent(policyId)}`
+}
+
+/** Scheduled backup policies for the environment's managed engine, oldest first; each carries its newest run. */
+export async function fetchBackupPolicies(
+  environmentId: string
+): Promise<{ policies: BackupPolicyRecord[] }> {
+  return await apiFetch(backupPoliciesPath(environmentId))
+}
+
+export async function createBackupPolicy(
+  environmentId: string,
+  body: CreateBackupPolicyBody
+): Promise<{ policy: BackupPolicyRecord; reconcile: BackupsReconcileOutcome }> {
+  return await apiFetch(backupPoliciesPath(environmentId), {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+/** `reconcile` is null when the change does not affect what the host runs (a rename). */
+export async function updateBackupPolicy(
+  environmentId: string,
+  policyId: string,
+  body: UpdateBackupPolicyBody
+): Promise<{ policy: BackupPolicyRecord; reconcile: BackupsReconcileOutcome | null }> {
+  return await apiFetch(backupPolicyPath(environmentId, policyId), {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  })
+}
+
+/** Run history goes with the policy; artifacts already on the host stay. */
+export async function deleteBackupPolicy(
+  environmentId: string,
+  policyId: string
+): Promise<{ ok: true; reconcile: BackupsReconcileOutcome }> {
+  return await apiFetch(backupPolicyPath(environmentId, policyId), { method: 'DELETE' })
+}
+
+/** A policy's runs, newest first (instance default 20, max 100). */
+export async function fetchBackupRuns(
+  environmentId: string,
+  policyId: string,
+  limit?: number
+): Promise<{ runs: BackupRunRecord[] }> {
+  const query = typeof limit === 'number' ? `?limit=${encodeURIComponent(String(limit))}` : ''
+  return await apiFetch(`${backupPolicyPath(environmentId, policyId)}/runs${query}`)
+}
+
+/** Whether a server's firewall is previewed (`observe`), meant to be enforced (`managed`), or left alone (`off`). */
+export type FirewallMode = 'observe' | 'managed' | 'off'
+
+export type FirewallInputDefault = 'accept' | 'drop'
+export type FirewallIpv6 = 'mirror' | 'skip'
+
+/** The organization's firewall policy (`/organizations/:id/firewall`). */
+export type FirewallPolicy = {
+  inputDefault: FirewallInputDefault
+  ipv6: FirewallIpv6
+  /** `any`, or the CIDRs SSH is open to. */
+  sshSources: string[]
+}
+
+export type FirewallPolicyUpdate = Partial<FirewallPolicy> & {
+  /** Save an `sshSources` list that leaves the caller out; without it the API answers 409 `firewall_ssh_excludes_you`. */
+  acknowledgeSshExcludesMe?: boolean
+}
+
+export type FirewallRuleScope = 'host' | 'published'
+export type FirewallRuleAction = 'accept' | 'drop' | 'reject'
+export type FirewallRuleProto = 'tcp' | 'udp' | 'any'
+export type FirewallSourceKind = 'any' | 'servers' | 'datacenter' | 'fabric' | 'addresses'
+
+/** One rule an operator typed (`edict`). Rules derived from what is deployed are not listed. */
+export type FirewallRule = {
+  id: string
+  label: string
+  scope: FirewallRuleScope
+  action: FirewallRuleAction
+  proto: FirewallRuleProto
+  /** One port or an ascending range like `5432-5440`; null is every port (a block only). */
+  ports: string | null
+  sourceKind: FirewallSourceKind
+  /** IPs or CIDRs; only for `sourceKind` `addresses`. */
+  sourceAddresses: string[]
+  isEnabled: boolean
+  /** One server of the organization, or null for every server. */
+  serverId: string | null
+  createdBy: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type FirewallRuleBody = {
+  label: string
+  scope: FirewallRuleScope
+  action: FirewallRuleAction
+  proto: FirewallRuleProto
+  ports?: string | null
+  sourceKind: FirewallSourceKind
+  sourceAddresses?: string[]
+  isEnabled?: boolean
+  serverId?: string | null
+}
+
+export type FirewallRuleUpdate = Partial<FirewallRuleBody>
+
+/** A server's firewall state (`bulwark`). Never configured reads as observe, generation 0, idle. */
+export type FirewallServerState = {
+  serverId: string
+  mode: FirewallMode
+  generation: number
+  lastDigest: string | null
+  /** Opaque on purpose: the preview below is the typed view of it. */
+  lastResult: unknown
+  state: 'idle' | 'pending' | 'confirmed' | 'rolled_back'
+  deadlineAt: string | null
+  lastAppliedAt: string | null
+  confirmedAt: string | null
+}
+
+export type FirewallPreviewStatus = 'queued' | 'previewed' | 'refused' | 'failed'
+
+/**
+ * What the host was last sent as a PREVIEW: rendered and checked by the kernel
+ * (`iptables-restore --test`), never loaded. `host` is the host's own answer.
+ */
+export type FirewallPreview = {
+  kind: 'preview'
+  status: FirewallPreviewStatus
+  desiredDigest: string
+  generation: number
+  sentAt: string
+  ruleCount: number
+  /** What could not be derived, in words. */
+  notes: string[]
+  host: unknown
+}
+
+export type FirewallServerView = {
+  bulwark: FirewallServerState
+  preview: FirewallPreview | null
+}
+
+function firewallPath(orgId: string): string {
+  return `${CLIENT_API}/organizations/${orgId}/firewall`
+}
+
+export async function fetchFirewallPolicy(orgId: string): Promise<{ policy: FirewallPolicy }> {
+  return await apiFetch(firewallPath(orgId))
+}
+
+export async function saveFirewallPolicy(
+  orgId: string,
+  patch: FirewallPolicyUpdate
+): Promise<{ policy: FirewallPolicy }> {
+  return await apiFetch(firewallPath(orgId), { method: 'PUT', body: JSON.stringify(patch) })
+}
+
+/** The rules operators typed, oldest first. */
+export async function fetchFirewallRules(orgId: string): Promise<{ rules: FirewallRule[] }> {
+  return await apiFetch(`${firewallPath(orgId)}/rules`)
+}
+
+export async function createFirewallRule(
+  orgId: string,
+  body: FirewallRuleBody
+): Promise<{ rule: FirewallRule }> {
+  return await apiFetch(`${firewallPath(orgId)}/rules`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function updateFirewallRule(
+  orgId: string,
+  ruleId: string,
+  patch: FirewallRuleUpdate
+): Promise<{ rule: FirewallRule }> {
+  return await apiFetch(`${firewallPath(orgId)}/rules/${encodeURIComponent(ruleId)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  })
+}
+
+export async function deleteFirewallRule(orgId: string, ruleId: string): Promise<{ ok: true }> {
+  return await apiFetch(`${firewallPath(orgId)}/rules/${encodeURIComponent(ruleId)}`, {
+    method: 'DELETE',
+  })
+}
+
+export async function fetchFirewallServer(
+  orgId: string,
+  serverId: string
+): Promise<FirewallServerView> {
+  return await apiFetch(`${firewallPath(orgId)}/servers/${encodeURIComponent(serverId)}`)
+}
+
+export async function saveFirewallServerMode(
+  orgId: string,
+  serverId: string,
+  mode: FirewallMode
+): Promise<{ bulwark: FirewallServerState }> {
+  return await apiFetch(`${firewallPath(orgId)}/servers/${encodeURIComponent(serverId)}`, {
+    method: 'PUT',
+    body: JSON.stringify({ mode }),
+  })
 }
 
 export async function fetchManagedMembers(
@@ -8171,7 +8698,7 @@ export async function downloadOrganizationCaPem(): Promise<string> {
   if (resolvedOrgId) {
     headers[ORG_ID_HEADER] = resolvedOrgId
   }
-  const response = await fetch(controlPlaneUrl(`${CLIENT_API}/tls/ca/download`), {
+  const response = await fetchWithStepUp(controlPlaneUrl(`${CLIENT_API}/tls/ca/download`), {
     credentials: 'include',
     headers,
   })
@@ -8262,7 +8789,7 @@ export async function importDockerRunCommand(body: {
     headers[ORG_ID_HEADER] = organizationId
   }
 
-  const response = await fetch(controlPlaneUrl(path), {
+  const response = await fetchWithStepUp(controlPlaneUrl(path), {
     method: 'POST',
     credentials: 'include',
     headers,
@@ -8335,6 +8862,17 @@ export const NOTIFICATION_CHANNEL_KINDS = [
 ] as const
 export type NotificationChannelKind = (typeof NOTIFICATION_CHANNEL_KINDS)[number]
 
+export type NotificationDigestCadence = 'hourly' | 'daily'
+export type NotificationQuietHours = { start: string; end: string }
+
+/** Delivery timing a channel row can change; `null` clears, a field left out keeps its value. */
+export type NotificationChannelTiming = {
+  digestCadence?: NotificationDigestCadence | null
+  quietHours?: NotificationQuietHours | null
+  /** The signed-in person's own zone; only a personal channel accepts it. */
+  timeZone?: string | null
+}
+
 export type NotificationRule = { event: string; minSeverity: NotificationSeverity }
 
 export type NotificationChannel = {
@@ -8349,11 +8887,17 @@ export type NotificationChannel = {
   verifiedAt: string | null
   disabledAt: string | null
   createdAt: string
+  /** Email only: one summary per window instead of one message per event; null sends each as it happens. */
+  digestCadence: NotificationDigestCadence | null
+  /** Email only: events wait until this local window ends (24-hour `HH:MM`, may cross midnight); null = none. */
+  quietHours: NotificationQuietHours | null
+  /** The zone quiet hours and digest windows are read in: owner profile, organization default, else UTC. */
+  timeZone: string
   rules: NotificationRule[]
   recentDeliveries: {
     id: string
     event: string
-    status: 'pending' | 'sent' | 'failed' | 'abandoned'
+    status: 'pending' | 'sent' | 'failed' | 'abandoned' | 'held'
     attempts: number
     at: string
   }[]
@@ -8423,21 +8967,48 @@ export type CreateNotificationChannelBody = {
   rules: NotificationRule[]
 }
 
+/**
+ * An email channel goes through `/notification-channels/email`: the person's
+ * own or a member's address is verified at once, any other address is created
+ * unverified (`verifiedAt: null`) and sent a confirmation link. That route
+ * answers with the channel's identity fields only; the list refresh supplies
+ * the rest.
+ */
 export async function createNotificationChannel(
   body: CreateNotificationChannelBody,
   organizationId?: string | null
 ): Promise<NotificationChannel> {
+  const path =
+    body.kind === 'email'
+      ? `${CLIENT_API}/notification-channels/email`
+      : `${CLIENT_API}/notification-channels`
   const res = await apiFetch<{ channel: NotificationChannel }>(
-    `${CLIENT_API}/notification-channels`,
+    path,
     { method: 'POST', body: JSON.stringify(body) },
     organizationId
   )
   return res.channel
 }
 
+/** Send an unverified email channel's confirmation link again (the control plane waits a minute between sends). */
+export async function resendNotificationChannelVerification(
+  id: string,
+  organizationId?: string | null
+): Promise<void> {
+  await apiFetch(
+    `${CLIENT_API}/notification-channels/${encodeURIComponent(id)}/verify`,
+    { method: 'POST' },
+    organizationId
+  )
+}
+
 export async function updateNotificationChannel(
   id: string,
-  patch: { label?: string; disabled?: boolean; rules?: NotificationRule[] },
+  patch: {
+    label?: string
+    disabled?: boolean
+    rules?: NotificationRule[]
+  } & NotificationChannelTiming,
   organizationId?: string | null
 ): Promise<NotificationChannel | null> {
   const res = await apiFetch<{ channel: NotificationChannel | null }>(
@@ -8456,5 +9027,38 @@ export async function deleteNotificationChannel(
     `${CLIENT_API}/notification-channels/${encodeURIComponent(id)}`,
     { method: 'DELETE' },
     organizationId
+  )
+}
+
+export type OrganizationMemberRole = 'owner' | 'manager' | 'member'
+
+export type OrganizationMember = {
+  id: string
+  name: string | null
+  email: string
+  role: OrganizationMemberRole
+  joinedAt: string
+}
+
+function organizationMembersPath(orgId: string): string {
+  return `${CLIENT_API}/organizations/${orgId}/members`
+}
+
+/** The people in an organization. Owners and managers only; everyone else gets a 403. */
+export async function fetchOrganizationMembers(
+  orgId: string
+): Promise<{ members: OrganizationMember[] }> {
+  return await apiFetch(organizationMembersPath(orgId), undefined, orgId)
+}
+
+/** Remove a person from the organization, or leave it when `memberId` is yourself. */
+export async function removeOrganizationMember(
+  orgId: string,
+  memberId: string
+): Promise<{ ok: true }> {
+  return await apiFetch(
+    `${organizationMembersPath(orgId)}/${encodeURIComponent(memberId)}`,
+    { method: 'DELETE' },
+    orgId
   )
 }

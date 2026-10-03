@@ -1,0 +1,16 @@
+# Cloudflare Workers static assets: applied to every response the hosted UI serves.
+# The self-hosted panel gets its own set from Caddy (turbopaneld, instance-launch Caddyfile.j2);
+# the API's from src/app/security-headers.ts in the turbopanel repo.
+# HSTS matches the API (HSTS_VALUE in turbopanel src/app/security-headers.ts); never submitted to the list.
+# The script CSP is REPORT-ONLY: it logs violations in the browser console and blocks nothing.
+# The enforced CSP is frame-ancestors only. To enforce later, see the PR that added this file.
+# The sha256 is the Expo router hydrate inline script in every exported page; the guard test
+# in scripts/hosted-security-headers.test.ts re-derives it from dist/ when a build exists.
+/*
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Content-Security-Policy: frame-ancestors 'none'
+  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self' 'sha256-67fhrP0+BkBqmgGGXTtgiVO/9EQs3QruYNU/7fnRkI8='; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https: wss:; object-src 'none'; base-uri 'self'; form-action 'self' https:; frame-ancestors 'none'
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()

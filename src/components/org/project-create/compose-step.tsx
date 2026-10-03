@@ -10,7 +10,7 @@ import { ProjectShell } from '@/components/org/project/project-shell'
 import { Button } from '@/components/ui'
 import type { ComposeDocument, ProjectRecord } from '@/lib/instance-api'
 import type { ComposeProjectTabId } from '@/lib/project-navigation'
-import { layout, spacing } from '@/lib/theme'
+import { spacing } from '@/lib/theme'
 
 /**
  * Id the draft surface runs under. Real ids are UUIDs, so this can never
@@ -161,8 +161,6 @@ const styles = StyleSheet.create({
   // Match the shell's own content column so the actions line up with it.
   footer: {
     width: '100%',
-    maxWidth: layout.contentMaxWidth,
-    alignSelf: 'center',
     paddingHorizontal: spacing.md,
     paddingBottom: spacing.lg,
     gap: spacing.xs,

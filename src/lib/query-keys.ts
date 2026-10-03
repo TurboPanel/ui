@@ -132,6 +132,8 @@ export const queryKeys = {
         networkPanel: (serverId: string) =>
           ['org', orgId, 'server', serverId, 'network-panel'] as const,
         labels: (serverId: string) => ['org', orgId, 'server', serverId, 'labels'] as const,
+        /** PHP mode policy one server offers (`/servers/:id/php-modes`). */
+        phpModes: (serverId: string) => ['org', orgId, 'server', serverId, 'php-modes'] as const,
       },
 
       settings: {
@@ -139,12 +141,16 @@ export const queryKeys = {
         defaultTimezone: ['org', orgId, 'default-timezone'] as const,
         temperatureUnit: ['org', orgId, 'temperature-unit'] as const,
         hostDefaults: ['org', orgId, 'host-defaults'] as const,
+        /** PHP modes the organization offers (`/organizations/:id/php-modes`). */
+        phpModes: ['org', orgId, 'php-modes'] as const,
         defaultEnvironment: ['org', orgId, 'default-environment'] as const,
         managedDefaults: ['org', orgId, 'managed-defaults'] as const,
         /** Org-wide dockerd `default-address-pools` + `bip` (`/organizations/:id/docker-networking`). */
         dockerNetworking: ['org', orgId, 'docker-networking'] as const,
         /** Let's Encrypt / ACME opt-in gate (`/organizations/:id/tls-settings`). */
         tlsSettings: ['org', orgId, 'tls-settings'] as const,
+        /** Owner opt-in: ask again before permanent actions (`/organizations/:id/reauth-settings`). */
+        reauthSettings: ['org', orgId, 'reauth-settings'] as const,
         /** Owner opt-in for gated compose fields (`/organizations/:id/compose-privileged-fields`). */
         composeGatedFields: ['org', orgId, 'compose-privileged-fields'] as const,
         /** Org default resource ceiling for compose services (`/organizations/:id/compose-resource-defaults`). */
@@ -292,6 +298,8 @@ export const queryKeys = {
         all: ['org', orgId, 'storage'] as const,
         list: (filter: StorageParentFilter) =>
           ['org', orgId, 'storage', ...storageParentKey(filter)] as const,
+        copyBackups: (copyId: string) =>
+          ['org', orgId, 'storage', 'copy', copyId, 'backups'] as const,
       },
 
       managed: {
@@ -309,7 +317,22 @@ export const queryKeys = {
           ['org', orgId, 'managed', environmentId, 'databases'] as const,
         backups: (environmentId: string) =>
           ['org', orgId, 'managed', environmentId, 'backups'] as const,
+        backupPolicies: (environmentId: string) =>
+          ['org', orgId, 'managed', environmentId, 'backup-policies'] as const,
+        backupRuns: (environmentId: string, policyId: string) =>
+          ['org', orgId, 'managed', environmentId, 'backup-policies', policyId, 'runs'] as const,
         logs: (environmentId: string) => ['org', orgId, 'managed', environmentId, 'logs'] as const,
+      },
+
+      /** The people in the organization (owners and managers). */
+      members: ['org', orgId, 'members'] as const,
+
+      /** The organization firewall: policy, typed rules, and each server's mode + preview. */
+      firewall: {
+        all: ['org', orgId, 'firewall'] as const,
+        policy: ['org', orgId, 'firewall', 'policy'] as const,
+        rules: ['org', orgId, 'firewall', 'rules'] as const,
+        server: (serverId: string) => ['org', orgId, 'firewall', 'server', serverId] as const,
       },
 
       bindings: {

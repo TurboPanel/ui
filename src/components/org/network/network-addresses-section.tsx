@@ -34,6 +34,7 @@ import { orEmptyArray } from '@/lib/or-empty-array'
 import { useCan } from '@/lib/query-client'
 import { DESCRIPTION_MAX_LENGTH } from '@/lib/display-name'
 import { chrome, colors, spacing } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 const SCOPES: IpScope[] = ['public', 'datacenter']
 const ALLOCATIONS: IpAllocation[] = ['dedicated', 'shared']
@@ -138,7 +139,7 @@ function resolveSubmittedNetworkId(
 }
 
 function mutationErrorMessage(err: unknown, fallback: string): string {
-  return err instanceof Error ? err.message : fallback
+  return userErrorMessage(err, fallback)
 }
 
 function buildIpListFilters(
@@ -166,7 +167,7 @@ function resolveIpsQueryError(
   error: unknown,
 ): string | null {
   if (!isError) return null
-  if (error instanceof Error) return error.message
+  if (error instanceof Error) return userErrorMessage(error, '')
   return 'Failed to load IP addresses'
 }
 

@@ -13,6 +13,7 @@ import {
 } from '@/components/ui'
 import { useTrustedProxies } from '@/lib/queries/admin'
 import { colors, spacing } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 const COLUMNS: readonly DataTableColumn[] = [
   { key: 'cidr', header: 'CIDR', flex: 1, minWidth: 180 },
@@ -39,9 +40,7 @@ export function TrustedProxiesSection() {
   let loadError: string | null = null
   if (query.isError) {
     loadError =
-      query.error instanceof Error
-        ? query.error.message
-        : 'Failed to load trusted proxies'
+      userErrorMessage(query.error, 'Failed to load trusted proxies')
   }
 
   return (

@@ -500,6 +500,22 @@ describe('queryKeys.org(…) remaining factories', () => {
       'env-1',
       'backups',
     ])
+    expect(managed.backupPolicies('env-1')).toEqual([
+      'org',
+      'org-1',
+      'managed',
+      'env-1',
+      'backup-policies',
+    ])
+    expect(managed.backupRuns('env-1', 'pol-1')).toEqual([
+      'org',
+      'org-1',
+      'managed',
+      'env-1',
+      'backup-policies',
+      'pol-1',
+      'runs',
+    ])
     expect(managed.logs('env-1')).toEqual([
       'org',
       'org-1',
@@ -688,5 +704,15 @@ describe('queryKeys.org(…) remaining factories', () => {
       'logs',
       200,
     ])
+  })
+})
+
+describe('queryKeys.org(…).firewall', () => {
+  it('nests policy, rules and per-server keys under one prefix', () => {
+    const firewall = queryKeys.org('org-1').firewall
+    expect(firewall.all).toEqual(['org', 'org-1', 'firewall'])
+    expect(firewall.policy).toEqual(['org', 'org-1', 'firewall', 'policy'])
+    expect(firewall.rules).toEqual(['org', 'org-1', 'firewall', 'rules'])
+    expect(firewall.server('srv-1')).toEqual(['org', 'org-1', 'firewall', 'server', 'srv-1'])
   })
 })

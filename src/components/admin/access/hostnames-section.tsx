@@ -57,6 +57,7 @@ import {
 } from '@/lib/queries/admin'
 import { coversHostname } from '@/lib/tls-match'
 import { colors, spacing } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 const WORKERS_APPLY_MESSAGE = 'cert apply is not applicable on this runtime'
 
@@ -174,9 +175,7 @@ export function HostnamesSection() {
   let queryError: string | null = null
   if (hostnamesQuery.isError) {
     queryError =
-      hostnamesQuery.error instanceof Error
-        ? hostnamesQuery.error.message
-        : 'Failed to load hostnames'
+      userErrorMessage(hostnamesQuery.error, 'Failed to load hostnames')
   }
   const displayError = error ?? saveMutation.actionError ?? queryError
 

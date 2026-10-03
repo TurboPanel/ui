@@ -2,12 +2,14 @@ import { describe, expect, it } from 'vitest'
 import {
   FORBIDDEN_PHRASES,
   formatVocabularyFailure,
+  formatVocabularyWarning,
   GENERATED_TYPE_FILES,
   isAllowlisted,
   isSkippedDirName,
   isSkippedFileName,
   isSkippedPath,
   scanTextForForbiddenPhrases,
+  scanTextForWarnings,
   shouldScanFile,
   SKIP_DIR_NAMES,
   SKIP_FILENAMES,
@@ -144,6 +146,45 @@ describe('formatVocabularyFailure', () => {
       }),
     ).toBe(
       `docs/x.md:4 uses forbidden phrase "${FORBIDDEN_PHRASES[0]}"`,
+    )
+  })
+})
+
+describe('scanTextForWarnings (warn mode)', () => {
+  it('reports the retired customer words', () => {
+    const text = [
+      'Sign in to the console.',
+      'Ask the instance owner.',
+      'Instance CA downloaded',
+      'On a hosted instance.',
+      'Enrol a remote node.',
+      'Update the fleet.',
+    ].join('\n')
+    expect(scanTextForWarnings('src/x.tsx', text).map((w) => w.phrase)).toEqual([
+      'the console',
+      'instance owner',
+      'Instance CA',
+      'hosted instance',
+      'remote node',
+      'fleet',
+    ])
+  })
+
+  it('leaves tool names and identifiers alone', () => {
+    const text = [
+      'console.log("the console")',
+      'Run ./console from the dev checkout',
+      'The dev console converges the stack.',
+      "case 'fleet':",
+      'fleet-capacity.ts and fleet.mass_disconnect and summarizeFleetSteps',
+    ].join('\n')
+    expect(scanTextForWarnings('src/x.ts', text)).toEqual([])
+  })
+
+  it('skips the glossary page and formats a warning line', () => {
+    expect(scanTextForWarnings('docs/terminology.mdx', 'console fleet the console')).toEqual([])
+    expect(formatVocabularyWarning({ rel: 'a.md', line: 3, phrase: 'fleet' })).toBe(
+      'a.md:3 says "fleet" (see the terminology page)',
     )
   })
 })
