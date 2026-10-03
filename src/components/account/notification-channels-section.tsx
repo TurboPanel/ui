@@ -119,7 +119,7 @@ function RulesEditor({
 }
 
 /**
- * Delivery timing for an email channel: a digest instead of one message per
+ * Delivery timing for a channel: a digest instead of one message per
  * event, and quiet hours. Urgent events (outages, security) are never held.
  * The zone is the person's own for a personal channel; an organization
  * channel is read in the organization's zone.
@@ -240,7 +240,7 @@ function ChannelRow({
   const [sentNote, setSentNote] = useState<string | null>(null)
   const disabled = channel.disabledAt !== null
   const lastDelivery = channel.recentDeliveries[0]
-  const summary = channel.kind === 'email' ? timingSummary(channel) : null
+  const summary = timingSummary(channel)
 
   const onTiming = useCallback((next: TimingDraft) => {
     setTiming(next)
@@ -299,9 +299,7 @@ function ChannelRow({
         <LastDelivery delivery={lastDelivery} />
       </View>
       <RulesEditor events={events} draft={draft} onChange={onDraft} disabled={update.isPending} />
-      {channel.kind === 'email' ? (
-        <TimingEditor channel={channel} draft={timing} onChange={onTiming} disabled={update.isPending} />
-      ) : null}
+      <TimingEditor channel={channel} draft={timing} onChange={onTiming} disabled={update.isPending} />
       {message ? <Text style={panelStyles.error}>{message}</Text> : null}
       {sentNote ? <Text style={panelStyles.muted}>{sentNote}</Text> : null}
       <ButtonRow>
@@ -315,15 +313,13 @@ function ChannelRow({
           disabled={!dirty}
           onPress={save}
         />
-        {channel.kind === 'email' ? (
-          <Button
-            label="Save timing"
-            variant="primary"
-            busy={update.isPending}
-            disabled={!timingDirty || !quietWindowValid(timing)}
-            onPress={saveTiming}
-          />
-        ) : null}
+        <Button
+          label="Save timing"
+          variant="primary"
+          busy={update.isPending}
+          disabled={!timingDirty || !quietWindowValid(timing)}
+          onPress={saveTiming}
+        />
         <Button
           label={disabled ? 'Resume' : 'Pause'}
           onPress={() => void update.run({ id: channel.id, disabled: !disabled })}

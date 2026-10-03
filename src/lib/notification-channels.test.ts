@@ -111,7 +111,7 @@ describe('digest and quiet hours on a channel row', () => {
   })
 
   it('the new refusal codes become sentences', () => {
-    expect(channelErrorCopy(new Error('HTTP 422: timing_email_only'))).toContain('email channels')
+    expect(channelErrorCopy(new Error('HTTP 422: timing_push_unsupported'))).toContain('push channels')
     expect(channelErrorCopy(new Error('HTTP 400: quiet_hours_invalid'))).toContain('cannot be the same time')
   })
 })

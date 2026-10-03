@@ -138,7 +138,7 @@ export function timingSummary(
 }
 
 const CHANNEL_ERROR_COPY: Record<string, string> = {
-  timing_email_only: 'Digest and quiet hours are for email channels. Chat and webhook channels get every event as it happens.',
+  timing_push_unsupported: 'Digest and quiet hours are not available for push channels.',
   digest_cadence_invalid: 'Choose every event, an hourly digest or a daily digest.',
   quiet_hours_invalid: 'Quiet hours need a start and an end, and they cannot be the same time.',
   time_zone_invalid: 'That is not a time zone the app knows. Pick one from the list.',
