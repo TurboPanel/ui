@@ -126,6 +126,11 @@ export function timingPatch(
   return patch
 }
 
+/** Timing (digest, quiet hours) is accepted on every channel kind except push. */
+export function channelHasTiming(channel: { kind: string }): boolean {
+  return channel.kind !== 'push'
+}
+
 /** One line under the channel name: "Hourly digest · quiet 22:00–07:00 (America/New_York)". */
 export function timingSummary(
   channel: Readonly<Pick<NotificationChannel, 'digestCadence' | 'quietHours' | 'timeZone'>>,
