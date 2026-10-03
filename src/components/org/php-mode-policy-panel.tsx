@@ -136,8 +136,7 @@ export function PhpModePolicyPanel({ orgId, serverId }: PolicyScope) {
         someone picks another.
       </Text>
       {PHP_POLICY_MODES.map((mode) => {
-        const selectable =
-          policy != null && isPolicyModeSelectable(mode, policy.engines, organizationModes)
+        const selectable = policy != null && isPolicyModeSelectable(mode, organizationModes)
         const note = selectable ? undefined : phpModeUnavailableNote(mode, organizationModes)
         return (
           <SettingRow
@@ -146,7 +145,7 @@ export function PhpModePolicyPanel({ orgId, serverId }: PolicyScope) {
             description={note || undefined}
           >
             <Toggle
-              value={selectable && current.includes(mode)}
+              value={(selectable || mode === 'lsphp-attached') && current.includes(mode)}
               disabled={!selectable || busy}
               accessibilityLabel={PHP_POLICY_MODE_LABELS[mode]}
               onValueChange={() => setDraft(toggleDraftMode(current, mode))}

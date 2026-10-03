@@ -58,18 +58,16 @@ export function sameModes(a: readonly PhpModeValue[], b: readonly PhpModeValue[]
 }
 
 /**
- * Whether a mode can be switched. Attached lsphp is "coming soon" unless the
- * API reports OpenLiteSpeed allowing it; a server cannot offer what its
- * organization does not.
+ * Whether a mode can be switched. Attached lsphp is always "coming soon" (its
+ * root launcher has not shipped), whatever the API reports; a saved policy that
+ * already holds it keeps it. A server cannot offer what its organization does
+ * not.
  */
 export function isPolicyModeSelectable(
   mode: PhpModeValue,
-  engines: PhpModeEngineChoices,
   organizationModes: readonly PhpModeValue[] | null = null
 ): boolean {
-  if (mode === 'lsphp-attached') {
-    return engines.openlitespeed?.allowed.includes(mode) === true
-  }
+  if (mode === 'lsphp-attached') return false
   return organizationModes == null || organizationModes.includes(mode)
 }
 
