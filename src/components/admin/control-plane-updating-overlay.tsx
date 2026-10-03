@@ -29,10 +29,12 @@ import { colors, spacing } from '@/lib/theme'
 
 export function ControlPlaneUpdatingOverlay() {
   const { session, isLoading } = useAuth()
-  const adminQuery = !isLoading && upgradeStatusQueryEnabled({
-    session,
-    canQuery: canQueryControlPlane(),
-  })
+  const adminQuery =
+    !isLoading &&
+    upgradeStatusQueryEnabled({
+      session,
+      canQuery: canQueryControlPlane(),
+    })
   const activeRun = useUpgradeActiveRun({ enabled: adminQuery })
   const [dismissReload, setDismissReload] = useState(false)
   const [dismissedUpdating, setDismissedUpdating] = useState(false)
@@ -127,9 +129,7 @@ function UpdatingCard({
   const view = reconnect.view
   const slow = view?.phase === 'slow'
   const label = view ? RECONNECTING_TITLE : 'TurboPanel is updating'
-  const copy = view
-    ? `${RECONNECT_COPY} Waiting ${view.elapsedLabel}.`
-    : RECONNECT_COPY
+  const copy = view ? `${RECONNECT_COPY} Waiting ${view.elapsedLabel}.` : RECONNECT_COPY
   return (
     <View style={styles.scrim} accessibilityViewIsModal>
       <View style={styles.card}>

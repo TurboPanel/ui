@@ -5,7 +5,11 @@ import { HighAvailabilityUpdates } from '@/components/admin/updates/ha-updates'
 import { SelfHostedUpdates } from '@/components/admin/updates/self-hosted-updates'
 import { InlineNotice, LoadingState } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
-import { RECONNECT_COPY, RECONNECTING_TITLE, isControlPlaneUnreachable } from '@/lib/control-plane-reconnect'
+import {
+  RECONNECT_COPY,
+  RECONNECTING_TITLE,
+  isControlPlaneUnreachable,
+} from '@/lib/control-plane-reconnect'
 import { useControlPlaneReconnect } from '@/lib/use-control-plane-reconnect'
 import { useInstallStatusQuery } from '@/lib/queries/auth'
 import { useInstanceUpdates } from '@/lib/queries/admin'
