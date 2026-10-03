@@ -51,5 +51,7 @@ jobs:
       channel: canary
       ref: ${{ github.event.workflow_run.head_sha }}
       verify-run-id: ${{ github.event.workflow_run.id }}
-    # No secrets are passed: the called workflow's `build` job declares the `canary` environment and
-    # reads TURBOPANEL_RELEASE_SIGNING_KEY there.
+    # `secrets: inherit` is required: environment secrets are not visible in a called workflow
+    # unless the caller passes secrets down. The `build` job declares the `canary` environment and
+    # reads TURBOPANEL_RELEASE_SIGNING_KEY from it.
+    secrets: inherit
