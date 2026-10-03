@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
@@ -17,7 +17,7 @@ describe('release manifest signing', () => {
     expect(signed).toBeGreaterThan(written)
     expect(uploaded).toBeGreaterThan(signed)
     expect(release).toContain('.manifest-signer/scripts/sign-manifest.ts release-assets/manifest.json')
-    expect(release).toContain('RELEASE_SIGNING_KEY: ${{ secrets.TURBOPANEL_RELEASE_SIGNING_KEY || secrets.RELEASE_SIGNING_KEY }}')
+    expect(release).toContain('RELEASE_SIGNING_KEY: ${{ secrets.TURBOPANEL_RELEASE_SIGNING_KEY }}')
   })
 
   it('pins the signer to an exact turbopaneld commit', () => {
@@ -26,9 +26,18 @@ describe('release manifest signing', () => {
     expect(ref).toMatch(/^[0-9a-f]{40}$/)
   })
 
-  it('reads the signing key from the canary, rc or release environment, with the repo secret as a fallback', () => {
+  it('reads the signing key from the canary, rc or release environment only', () => {
     expect(release).toContain("environment: ${{ inputs.channel == 'canary' && 'canary' || (inputs.channel == 'rc' && 'rc' || 'release') }}")
-    expect(release).toContain('secrets.TURBOPANEL_RELEASE_SIGNING_KEY || secrets.RELEASE_SIGNING_KEY')
-    expect(canary).toContain('secrets: inherit')
+    expect(release).not.toContain('secrets.RELEASE_SIGNING_KEY')
+    expect(canary).not.toContain('secrets: inherit')
+  })
+
+  it('no workflow inherits secrets or falls back to a repo-level signing key', () => {
+    const dir = join(root, '.github/workflows')
+    for (const name of readdirSync(dir).filter(n => n.endsWith('.yml'))) {
+      const text = readFileSync(join(dir, name), 'utf8')
+      expect(text, name).not.toMatch(/^\s*secrets:\s*inherit\b/m)
+      expect(text, name).not.toContain('secrets.RELEASE_SIGNING_KEY')
+    }
   })
 })
