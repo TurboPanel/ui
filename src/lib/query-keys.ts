@@ -298,6 +298,8 @@ export const queryKeys = {
         all: ['org', orgId, 'storage'] as const,
         list: (filter: StorageParentFilter) =>
           ['org', orgId, 'storage', ...storageParentKey(filter)] as const,
+        copyBackups: (copyId: string) =>
+          ['org', orgId, 'storage', 'copy', copyId, 'backups'] as const,
       },
 
       managed: {

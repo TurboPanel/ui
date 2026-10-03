@@ -205,6 +205,11 @@ Organization members (`src/lib/queries/members.ts`, rules in `src/lib/org-member
 - `fetchOrganizationMembers(orgId)` → `GET /organizations/:id/members` (owners and managers) — `{ members: [{ id, name, email, role: 'owner' | 'manager' | 'member', joinedAt }] }`.
 - `removeOrganizationMember(orgId, memberId)` → `DELETE /organizations/:id/members/:memberId` — `{ ok: true }`; your own id leaves. Refusals carry the API text (`403` only an owner can remove an owner, `409` last owner).
 
+Storage copy backups (owners and managers; `src/lib/queries/storage.ts`, copy in `src/lib/storage-backups.ts`, panel `storage-backups-panel.tsx` on each storage row whose primary copy is a Docker volume or directory placed on a server):
+
+- `fetchStorageCopyBackups(storageId, copyId)` → `GET /storage/:id/copies/:copyId/backups` — `{ backups: StorageCopyBackupRecord[] }`, newest first; `policyId` null = manual.
+- `createStorageCopyBackup` → `POST …/backups`; `deleteStorageCopyBackup` → `DELETE …/backups/:backupId`; `restoreStorageCopyBackup` → `POST …/backups/:backupId/restore` (stops the services that mount the copy, replaces files, starts them again). All three queue a host command and return `{ ok, backupId, commandId, serverId }`. Errors `server_offline`, `server_placement_required`, `backup_target_unsupported`, `backup_not_found` have plain copy in `user-error.ts`. Scheduled policies (`…/backup-policies`) have no screen yet.
+
 Firewall (owners and managers; `src/lib/queries/firewall.ts`, copy and validation in `src/lib/firewall.ts`):
 
 - `fetchFirewallPolicy(orgId)` / `saveFirewallPolicy(orgId, patch)` → `GET` / `PUT /organizations/:id/firewall` — `{ policy: { inputDefault: 'accept' | 'drop', ipv6: 'mirror' | 'skip', sshSources: string[] } }`; PUT sends only changed fields.
