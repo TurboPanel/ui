@@ -8149,6 +8149,67 @@ export async function restoreManagedBackup(
   )
 }
 
+/** One archive of a storage copy, manual or from a schedule (`policyId` null = manual). */
+export type StorageCopyBackupRecord = {
+  id: string
+  createdAt: string
+  copyId: string
+  policyId: string | null
+  sizeBytes: number
+  checksum: string
+  path: string
+}
+
+export type StorageCopyBackupQueued = {
+  ok: true
+  backupId: string
+  commandId: string
+  serverId: string
+}
+
+function storageCopyBackupsUrl(storageId: string, copyId: string): string {
+  return `${CLIENT_API}/storage/${storageId}/copies/${copyId}/backups`
+}
+
+export async function fetchStorageCopyBackups(
+  storageId: string,
+  copyId: string
+): Promise<{ backups: StorageCopyBackupRecord[] }> {
+  return await apiFetch(storageCopyBackupsUrl(storageId, copyId))
+}
+
+export async function createStorageCopyBackup(
+  storageId: string,
+  copyId: string
+): Promise<StorageCopyBackupQueued> {
+  return await apiFetch(storageCopyBackupsUrl(storageId, copyId), {
+    method: 'POST',
+    body: JSON.stringify({}),
+  })
+}
+
+export async function deleteStorageCopyBackup(
+  storageId: string,
+  copyId: string,
+  backupId: string
+): Promise<StorageCopyBackupQueued> {
+  return await apiFetch(
+    `${storageCopyBackupsUrl(storageId, copyId)}/${encodeURIComponent(backupId)}`,
+    { method: 'DELETE' }
+  )
+}
+
+export async function restoreStorageCopyBackup(
+  storageId: string,
+  copyId: string,
+  backupId: string
+): Promise<StorageCopyBackupQueued> {
+  return await apiFetch(
+    `${storageCopyBackupsUrl(storageId, copyId)}/${encodeURIComponent(backupId)}/restore`,
+    { method: 'POST', body: JSON.stringify({}) }
+  )
+}
+
 /** `sun`…`sat`, the instance's weekday vocabulary for weekly backup presets. */
 export type BackupWeekday = 'sun' | 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat'
 

@@ -26,6 +26,8 @@ import {
   useStorage,
   useUpdateStorageMount,
 } from '@/lib/queries/storage'
+import { StorageBackupsPanel } from '@/components/org/storage-backups-panel'
+import { backupCopyFor, canBackUpCopy } from '@/lib/storage-backups'
 import { useServices } from '@/lib/queries/services'
 import { useOrgServers } from '@/lib/queries/servers'
 import { useCan } from '@/lib/query-client'
@@ -480,6 +482,7 @@ function MountDestination({
 }
 
 function StorageRow({
+  orgId,
   row,
   servers,
   canManage,
@@ -487,6 +490,7 @@ function StorageRow({
   onDelete,
   onDestinationPathSave,
 }: Readonly<{
+  orgId: string
   row: StorageRecord
   servers: OrgServerRecord[]
   canManage: boolean
@@ -499,6 +503,7 @@ function StorageRow({
   ) => Promise<void>
 }>) {
   const location = primaryCopy(row)
+  const backupCopy = backupCopyFor(row)
   return (
     <View style={panelStyles.detailCard}>
       <View style={styles.rowHeader}>
@@ -519,6 +524,9 @@ function StorageRow({
           />
         ))
       )}
+      {canManage && backupCopy && canBackUpCopy(row.kind, backupCopy) ? (
+        <StorageBackupsPanel orgId={orgId} storageId={row.id} copyId={backupCopy.id} />
+      ) : null}
       {canManage ? (
         <ConfirmButton
           label={deleting ? 'Deleting…' : 'Delete'}
@@ -594,6 +602,7 @@ export function StorageSection({
         {storage.rows.map((row) => (
           <StorageRow
             key={row.id}
+            orgId={orgId}
             row={row}
             servers={storage.servers}
             canManage={canManage}

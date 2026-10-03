@@ -17,6 +17,10 @@ export const ENVIRONMENT_RUNNING_COPY = 'This environment is still running. Stop
 const API_ERROR_COPY: Readonly<Record<string, string>> = {
   upgrade_run_active: UPDATE_ALREADY_ACTIVE_COPY,
   environment_running: ENVIRONMENT_RUNNING_COPY,
+  server_offline: 'The server is offline. Try again when it is back.',
+  server_placement_required: 'Put this storage on a server first.',
+  backup_target_unsupported: 'This kind of storage cannot be backed up yet.',
+  backup_not_found: 'That backup no longer exists.',
 }
 
 export const TOO_MANY_ATTEMPTS_COPY = 'Too many attempts. Wait a minute and try again.'
