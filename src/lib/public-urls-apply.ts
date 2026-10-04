@@ -17,6 +17,9 @@ export type PublicUrlsApplyStatus =
   | 'reconnecting'
   | 'applied'
   | 'reconnected'
+  | 'reconnected-trusted'
+  | 'reconnected-mixed'
+  | 'reconnected-kept'
   | 'not-saved'
   | 'unreachable'
   | 'failed'
@@ -51,6 +54,21 @@ const FEEDBACK: Record<
     message:
       'Applied — the control plane came back on the new certificate. If your browser warns about it, accept the new self-signed certificate.',
   },
+  'reconnected-trusted': {
+    tone: 'done',
+    message:
+      'Applied — the control plane came back and its certificate is in place.',
+  },
+  'reconnected-mixed': {
+    tone: 'done',
+    message:
+      'Applied — the control plane came back. If your browser warns about a name that uses the Platform CA, accept its self-signed certificate.',
+  },
+  'reconnected-kept': {
+    tone: 'done',
+    message:
+      "The server kept its existing certificate; Let's Encrypt did not confirm a new one yet.",
+  },
   'not-saved': {
     tone: 'failed',
     message:
@@ -73,4 +91,30 @@ export function publicUrlsApplyFeedback(
     return { tone: 'failed', message: `Apply failed: ${error ?? 'unknown error'}` }
   }
   return FEEDBACK[status]
+}
+
+/** Which kinds of certificate a hostname set asks for, in the words the banner needs. */
+export function applyCertificateKind(
+  hostnames: readonly { source: string }[],
+): 'platform' | 'trusted' | 'mixed' {
+  const platform = hostnames.filter(
+    (entry) => entry.source === 'platform-ca',
+  ).length
+  if (platform === hostnames.length) return 'platform'
+  return platform === 0 ? 'trusted' : 'mixed'
+}
+
+const RECONNECTED_STATUS = {
+  platform: 'reconnected',
+  trusted: 'reconnected-trusted',
+  mixed: 'reconnected-mixed',
+} as const
+
+/** The banner state for an apply that finished by way of the reconnect wait. */
+export function reconnectedStatus(
+  hostnames: readonly { source: string }[],
+  kept = false,
+): PublicUrlsApplyStatus {
+  if (kept) return 'reconnected-kept'
+  return RECONNECTED_STATUS[applyCertificateKind(hostnames)]
 }

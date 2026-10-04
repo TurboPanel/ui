@@ -45,7 +45,10 @@ import {
   parsePublicUrlEntry,
   type PublicUrlDraft,
 } from '@/lib/public-url-entry'
-import { type PublicUrlsApplyStatus } from '@/lib/public-urls-apply'
+import {
+  reconnectedStatus,
+  type PublicUrlsApplyStatus,
+} from '@/lib/public-urls-apply'
 import {
   type ApplyPublicUrlsOutcome,
   useApplyPublicUrls,
@@ -69,6 +72,7 @@ const OUTCOME_STATUS: Record<
 > = {
   applied: 'applied',
   reconnected: 'reconnected',
+  'not-issued': 'failed',
   'not-saved': 'not-saved',
   unreachable: 'unreachable',
 }
@@ -253,10 +257,17 @@ export function HostnamesSection() {
       return
     }
     const outcome = applied.value
-    if (outcome.kind === 'reconnected' || outcome.kind === 'not-saved') {
+    if (outcome.kind !== 'applied' && outcome.kind !== 'unreachable') {
       setDraft(outcome.hostnames)
     }
-    setApplyStatus(OUTCOME_STATUS[outcome.kind])
+    if (outcome.kind === 'not-issued') {
+      setApplyError(outcome.error)
+    }
+    setApplyStatus(
+      outcome.kind === 'reconnected'
+        ? reconnectedStatus(outcome.hostnames, outcome.kept)
+        : OUTCOME_STATUS[outcome.kind],
+    )
   }
 
   const handleApplyFailure = (message: string | null) => {

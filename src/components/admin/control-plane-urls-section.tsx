@@ -22,7 +22,10 @@ import {
 } from '@/lib/queries/admin'
 import { HA_CERT_APPLY_NOTE } from '@/lib/platform-copy'
 import { addPublicUrlEntry, type PublicUrlDraft } from '@/lib/public-url-entry'
-import { type PublicUrlsApplyStatus } from '@/lib/public-urls-apply'
+import {
+  reconnectedStatus,
+  type PublicUrlsApplyStatus,
+} from '@/lib/public-urls-apply'
 import { colors, spacing } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
 
@@ -36,6 +39,7 @@ const OUTCOME_STATUS: Record<
 > = {
   applied: 'applied',
   reconnected: 'reconnected',
+  'not-issued': 'failed',
   'not-saved': 'not-saved',
   unreachable: 'unreachable',
 }
@@ -133,10 +137,17 @@ export function ControlPlaneUrlsSection() {
       return
     }
     const outcome = result.value
-    if (outcome.kind === 'reconnected' || outcome.kind === 'not-saved') {
+    if (outcome.kind !== 'applied' && outcome.kind !== 'unreachable') {
       setDraft(outcome.hostnames.map((entry) => entry.host))
     }
-    setApplyStatus(OUTCOME_STATUS[outcome.kind])
+    if (outcome.kind === 'not-issued') {
+      setApplyError(outcome.error)
+    }
+    setApplyStatus(
+      outcome.kind === 'reconnected'
+        ? reconnectedStatus(outcome.hostnames, outcome.kept)
+        : OUTCOME_STATUS[outcome.kind],
+    )
   }
 
   return (
