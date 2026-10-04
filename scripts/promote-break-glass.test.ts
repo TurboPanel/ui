@@ -9,6 +9,20 @@ function read(file: string): string {
   return readFileSync(path.join(ROOT, file), 'utf8')
 }
 
+/** Every TurboPanel/dev reusable workflow and the signer in the three promotion workflows. */
+function promotionPins(): { dev: string[]; signer: string[] } {
+  const files = ['promote.yml', 'publish-rc.yml', 'publish-release.yml']
+  const text = files.map((file) => read(`.github/workflows/${file}`)).join('\n')
+  const dev = [
+    ...text.matchAll(
+      /TurboPanel\/dev\/\.github\/(?:workflows|actions)\/[\w-]+(?:\.yml)?@([0-9a-f]{40})/g
+    ),
+  ].map((match) => match[1])
+  const devRef = [...text.matchAll(/^\s+dev-ref:\s*([0-9a-f]{40})/gm)].map((match) => match[1])
+  const signer = [...text.matchAll(/^\s+signer-ref:\s*([0-9a-f]{40})/gm)].map((match) => match[1])
+  return { dev: [...dev, ...devRef], signer }
+}
+
 describe('promote.yml', () => {
   it('is labelled break-glass and only runs when dispatched by hand', () => {
     const workflow = read('.github/workflows/promote.yml')
@@ -23,5 +37,13 @@ describe('promote.yml', () => {
       expect(read(`.github/workflows/${file}`).length, file).toBeGreaterThan(0)
     }
     expect(read('AGENTS.md').toLowerCase()).toContain('break-glass')
+  })
+
+  it('the promotion workflows pin ONE dev commit and ONE signer commit', () => {
+    const { dev, signer } = promotionPins()
+    expect(dev.length).toBeGreaterThanOrEqual(9)
+    expect([...new Set(dev)]).toHaveLength(1)
+    expect(signer.length).toBeGreaterThanOrEqual(3)
+    expect([...new Set(signer)]).toHaveLength(1)
   })
 })
