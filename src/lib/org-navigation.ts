@@ -11,6 +11,13 @@ export const ORG_AREAS = [
     subRoutes: [],
   },
   {
+    id: 'activity',
+    label: 'Activity',
+    pathSegment: 'activity',
+    hint: 'Running and recently failed deploys across the organization',
+    subRoutes: [],
+  },
+  {
     id: 'projects',
     label: 'Projects',
     pathSegment: 'projects',
