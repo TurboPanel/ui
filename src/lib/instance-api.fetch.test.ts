@@ -70,6 +70,7 @@ import {
   signOut,
   signUp,
   stopEnvironment,
+  cancelDeployment,
   updateEnvironment,
   updateOrganization,
   updateProject,
@@ -594,6 +595,23 @@ describe('instance-api fetch wrappers', () => {
     await expect(stopEnvironment('env-1')).resolves.toMatchObject({
       commandId: 'cmd-stop',
     })
+
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        ok: true,
+        state: 'cancelling',
+        environmentId: 'env-1',
+        deploymentId: 'dep-1',
+      }),
+    )
+    await expect(cancelDeployment('env-1', 'dep-1')).resolves.toMatchObject({
+      state: 'cancelling',
+    })
+    const [cancelUrl, cancelInit] = fetchMock.mock.calls.at(-1) ?? []
+    expect(String(cancelUrl)).toContain(
+      '/environments/env-1/deployments/dep-1/cancel',
+    )
+    expect(cancelInit).toMatchObject({ method: 'POST' })
 
     fetchMock.mockResolvedValueOnce(
       jsonResponse({ ok: true, commandId: 'cmd-start', status: 'queued' }),

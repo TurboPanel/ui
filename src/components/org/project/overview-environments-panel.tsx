@@ -1787,6 +1787,7 @@ function EnvironmentDetailSections({
       <EnvironmentDeploymentHistoryPanel
         orgId={orgId}
         environmentId={selectedEnvironment.id}
+        canManage={canMutateLifecycle}
       />
       <PreviewDeploymentModal
         visible={previewOpen != null}

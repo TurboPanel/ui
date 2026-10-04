@@ -58,3 +58,14 @@ describe('userErrorMessage', () => {
     expect(userErrorMessage(undefined, 'f')).toBe('f')
   })
 })
+
+describe('cancel deploy errors', () => {
+  it('maps the two refusals to plain sentences', () => {
+    expect(userErrorMessage(new Error('HTTP 409: deploy_not_cancellable'), 'x')).toBe(
+      'This deploy has already finished.',
+    )
+    expect(userErrorMessage(new Error('HTTP 409: cancel_unsupported'), 'x')).toBe(
+      "This server's TurboPanel daemon is too old to cancel deploys. Update it first.",
+    )
+  })
+})

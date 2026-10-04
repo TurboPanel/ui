@@ -9,6 +9,7 @@ import {
   isServerPlacementRequiredError,
   runEnvironmentLifecycle,
   stopEnvironment,
+  cancelDeployment,
   updateEnvironment,
   type EnvironmentLifecycleAction,
 } from '@/lib/instance-api'
@@ -146,6 +147,21 @@ export function useStopEnvironment(orgId: string, environmentId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
     mutationFn: () => stopEnvironment(environmentId),
+    onSuccess: async () => {
+      await invalidateEnvironmentSubtree(queryClient, orgId, environmentId)
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.org(orgId).commands.all,
+      })
+    },
+  })
+}
+
+/** Cancel a running or queued deploy; refreshes history and environment status. */
+export function useCancelDeployment(orgId: string, environmentId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (deploymentId: string) =>
+      cancelDeployment(environmentId, deploymentId),
     onSuccess: async () => {
       await invalidateEnvironmentSubtree(queryClient, orgId, environmentId)
       await queryClient.invalidateQueries({

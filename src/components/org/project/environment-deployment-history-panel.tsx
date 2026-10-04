@@ -7,7 +7,9 @@ import {
 } from '@/components/org/logs/nested-scroll'
 import { panelStyles } from '@/components/ui/panel-styles'
 import {
+  ConfirmButton,
   EmptyState,
+  InlineNotice,
   LoadingState,
   SectionPanel,
   SegmentedControl,
@@ -15,6 +17,11 @@ import {
   type StatusTone,
 } from '@/components/ui'
 import {
+  canCancelDeployment,
+  cancelTooLateNote,
+  cancelledDeploymentNote,
+  findInFlightDeployment,
+  isDeploymentCancelling,
   deploymentServerLabel,
   deploymentStrategyLabel,
   deploymentStatusTone,
@@ -32,6 +39,7 @@ import {
   useCommandLog,
   useEnvironmentDeployments,
 } from '@/lib/queries/execution-logs'
+import { useCancelDeployment } from '@/lib/queries/environments'
 import { colors, spacing, webPointer } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
 
@@ -45,7 +53,11 @@ function statusDotTone(tone: 'success' | 'failed' | 'pending'): StatusTone {
 }
 
 function StatusCell({ group }: Readonly<{ group: DeploymentGroup }>) {
-  const tone = deploymentStatusTone(group.status, group.strategyOutcome)
+  const tone = deploymentStatusTone(
+    group.status,
+    group.strategyOutcome,
+    isDeploymentCancelling(group),
+  )
   return (
     <View style={styles.statusCell}>
       <StatusDot size="sm" tone={statusDotTone(tone.tone)} />
@@ -93,9 +105,14 @@ function DeploymentDetail({
     group.commands[0]?.serverId ?? '',
   )
   const active =
-    group.commands.find((row) => row.serverId === serverId) ??
-    group.commands[0]
-  const failure = active?.strategyOutcomeReason ?? active?.errorMessage ?? null
+    group.commands.find((row) => row.serverId === serverId) ?? group.commands[0]
+  const cancelledNote = cancelledDeploymentNote(group)
+  // A cancelled deploy is not an error: say what happened in plain words
+  // instead of echoing the host's `cancelled: …` text.
+  const failure = cancelledNote
+    ? null
+    : (active?.strategyOutcomeReason ?? active?.errorMessage ?? null)
+  const tooLate = cancelTooLateNote(group)
   const strategy = deploymentStrategyLabel(active?.strategy)
   const stalledHint = stalledDeploymentHint(active?.errorCode ?? null)
 
@@ -117,7 +134,13 @@ function DeploymentDetail({
           {failure}
         </Text>
       ) : null}
-      {stalledHint ? <Text style={panelStyles.muted}>{stalledHint}</Text> : null}
+      {cancelledNote ? (
+        <Text style={panelStyles.muted}>{cancelledNote}</Text>
+      ) : null}
+      {tooLate ? <Text style={panelStyles.muted}>{tooLate}</Text> : null}
+      {stalledHint ? (
+        <Text style={panelStyles.muted}>{stalledHint}</Text>
+      ) : null}
       {strategy ? (
         <Text style={panelStyles.muted}>{`${strategy} deploy`}</Text>
       ) : null}
@@ -180,7 +203,11 @@ function DeploymentRow({
         accessibilityRole="button"
         accessibilityState={{ expanded }}
         accessibilityLabel={`Deploy ${formatDeployTimestamp(group.startedAt)} — ${
-          deploymentStatusTone(group.status, group.strategyOutcome).label
+          deploymentStatusTone(
+            group.status,
+            group.strategyOutcome,
+            isDeploymentCancelling(group),
+          ).label
         }`}
       >
         <View style={[styles.cell, styles.colStatus]}>
@@ -231,6 +258,68 @@ function HistoryHeader() {
 }
 
 /**
+ * The deploy that is running now, with the Cancel control. Cancelling is
+ * reversible (deploy again), so it asks once and says nothing changes.
+ */
+function RunningDeployNotice({
+  orgId,
+  environmentId,
+  group,
+  canManage,
+}: Readonly<{
+  orgId: string
+  environmentId: string
+  group: DeploymentGroup
+  canManage: boolean
+}>) {
+  const cancel = useCancelDeployment(orgId, environmentId)
+  const [error, setError] = useState<string | null>(null)
+  const cancelling = isDeploymentCancelling(group)
+
+  const onConfirm = async () => {
+    setError(null)
+    const result = await cancel.run(group.id)
+    if (!result.ok && result.error !== null) {
+      setError(userErrorMessage(result.cause, 'Could not cancel this deploy'))
+    }
+  }
+
+  let title = 'A deploy is running'
+  let body: string | undefined
+  if (cancelling) {
+    title = 'Cancelling this deploy…'
+    body = 'The current version keeps running. This takes a moment.'
+  }
+  const showCancel = canManage && canCancelDeployment(group)
+
+  return (
+    <View style={styles.runningWrap}>
+      <InlineNotice
+        title={title}
+        body={body}
+        actions={
+          showCancel ? (
+            <ConfirmButton
+              label="Cancel deploy"
+              confirmLabel="Cancel deploy"
+              dismissLabel="Keep deploying"
+              prompt="Cancel this deploy? The current version keeps running and nothing is changed. You can deploy again any time."
+              busy={cancel.isPending}
+              onConfirm={() => ignorePromise(onConfirm())}
+            />
+          ) : undefined
+        }
+      />
+      {error ? (
+        <Text style={panelStyles.error} accessibilityRole="alert">
+          {error}
+        </Text>
+      ) : null}
+    </View>
+  )
+}
+
+/**
  * Past deploy attempts for one environment, with the transcript of the expanded
  * row. Multi-host deploys arrive as several rows sharing a generation and are
  * grouped into one deploy with a per-host switcher — no per-row detail fetch.
@@ -240,65 +329,85 @@ function HistoryHeader() {
 export function EnvironmentDeploymentHistoryPanel({
   orgId,
   environmentId,
-}: Readonly<{ orgId: string; environmentId: string }>) {
+  canManage = false,
+}: Readonly<{ orgId: string; environmentId: string; canManage?: boolean }>) {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const deploymentsQuery = useEnvironmentDeployments(orgId, environmentId)
   const groups = useMemo(
-    () => groupDeploymentsByGeneration(deploymentsQuery.data?.deployments ?? []),
+    () =>
+      groupDeploymentsByGeneration(deploymentsQuery.data?.deployments ?? []),
     [deploymentsQuery.data?.deployments],
   )
 
+  const running = findInFlightDeployment(groups)
+
   return (
-    <SectionPanel
-      title="Deployment history"
-      hint="Past deploy attempts and their output"
-      collapsible
-      defaultCollapsed
-    >
-      {deploymentsQuery.isLoading ? (
-        <LoadingState label="Loading deploy history…" />
+    <>
+      {running ? (
+        <RunningDeployNotice
+          orgId={orgId}
+          environmentId={environmentId}
+          group={running}
+          canManage={canManage}
+        />
       ) : null}
-      {deploymentsQuery.error ? (
-        <Text style={panelStyles.error}>
-          {userErrorMessage(deploymentsQuery.error, 'Failed to load deploy history')}
-        </Text>
-      ) : null}
-      {!deploymentsQuery.isLoading && groups.length === 0 ? (
-        <EmptyState title="No deploys yet." />
-      ) : null}
-      {groups.length > 0 ? (
-        <View style={styles.table}>
-          <HistoryHeader />
-          <ScrollView
-            style={[styles.tableBody, webNestedScrollStyle]}
-            nestedScrollEnabled
-            showsVerticalScrollIndicator
-            persistentScrollbar
-            indicatorStyle="white"
-            {...nestedScrollDomProps}
-          >
-            {groups.map((group, index) => (
-              <DeploymentRow
-                key={group.id}
-                orgId={orgId}
-                group={group}
-                index={index}
-                expanded={expandedId === group.id}
-                onToggle={() =>
-                  setExpandedId((current) =>
-                    current === group.id ? null : group.id,
-                  )
-                }
-              />
-            ))}
-          </ScrollView>
-        </View>
-      ) : null}
-    </SectionPanel>
+      <SectionPanel
+        title="Deployment history"
+        hint="Past deploy attempts and their output"
+        collapsible
+        defaultCollapsed
+      >
+        {deploymentsQuery.isLoading ? (
+          <LoadingState label="Loading deploy history…" />
+        ) : null}
+        {deploymentsQuery.error ? (
+          <Text style={panelStyles.error}>
+            {userErrorMessage(
+              deploymentsQuery.error,
+              'Failed to load deploy history',
+            )}
+          </Text>
+        ) : null}
+        {!deploymentsQuery.isLoading && groups.length === 0 ? (
+          <EmptyState title="No deploys yet." />
+        ) : null}
+        {groups.length > 0 ? (
+          <View style={styles.table}>
+            <HistoryHeader />
+            <ScrollView
+              style={[styles.tableBody, webNestedScrollStyle]}
+              nestedScrollEnabled
+              showsVerticalScrollIndicator
+              persistentScrollbar
+              indicatorStyle="white"
+              {...nestedScrollDomProps}
+            >
+              {groups.map((group, index) => (
+                <DeploymentRow
+                  key={group.id}
+                  orgId={orgId}
+                  group={group}
+                  index={index}
+                  expanded={expandedId === group.id}
+                  onToggle={() =>
+                    setExpandedId((current) =>
+                      current === group.id ? null : group.id,
+                    )
+                  }
+                />
+              ))}
+            </ScrollView>
+          </View>
+        ) : null}
+      </SectionPanel>
+    </>
   )
 }
 
 const styles = StyleSheet.create({
+  runningWrap: {
+    gap: spacing.xs,
+  },
   table: {
     borderRadius: 8,
     borderWidth: 1,
@@ -394,3 +503,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgArea,
   },
 })
+
+/** Fire-and-forget without the `void` operator (typescript:S3735). */
+function ignorePromise(promise: Promise<unknown>): void {
+  promise.catch(() => {
+    // `onConfirm` surfaces its own errors through component state.
+  })
+}

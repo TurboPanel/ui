@@ -5392,6 +5392,12 @@ export type DeploymentHistoryRecord = {
   strategyOutcomeReason?: string | null
   /** What set the attempt off when it was a git push; null for a deploy a person started. */
   trigger?: DeploymentTriggerRecord | null
+  /**
+   * When someone asked to cancel this attempt; null (or absent) if nobody did.
+   * Set and not yet finished = "Cancelling"; set on a `succeeded` row = the
+   * cancel came too late.
+   */
+  cancelRequestedAt?: string | null
 }
 
 export type DeploymentStrategy = 'inplace' | 'sequential'
@@ -6830,6 +6836,35 @@ export async function saveServerResourceLimits(
     method: 'PUT',
     body: JSON.stringify({ resourceLimits }),
   })
+}
+
+/**
+ * `cancelled`: the deploy never started on the host. `cancelling`: the host was
+ * told to stop. `already_cancelled`: nothing to do.
+ */
+export type CancelDeploymentState = 'cancelled' | 'cancelling' | 'already_cancelled'
+
+export type CancelDeploymentResponse = {
+  ok: true
+  state: CancelDeploymentState
+  environmentId: string
+  deploymentId: string
+}
+
+/**
+ * Ask the control plane to cancel a running or queued deploy (the whole deploy,
+ * every host). `deploymentId` is the deploy command id. No step-up: a re-deploy
+ * fully reverses it. **409** `deploy_not_cancellable` (already finished) or
+ * `cancel_unsupported` (the server's agent is too old).
+ */
+export async function cancelDeployment(
+  environmentId: string,
+  deploymentId: string
+): Promise<CancelDeploymentResponse> {
+  return await apiFetch(
+    `${CLIENT_API}/environments/${environmentId}/deployments/${deploymentId}/cancel`,
+    { method: 'POST', body: JSON.stringify({}) }
+  )
 }
 
 export async function stopEnvironment(environmentId: string): Promise<CommandEnqueueResponse> {

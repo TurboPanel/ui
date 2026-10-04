@@ -21,6 +21,9 @@ const API_ERROR_COPY: Readonly<Record<string, string>> = {
   server_placement_required: 'Put this storage on a server first.',
   backup_target_unsupported: 'This kind of storage cannot be backed up yet.',
   backup_not_found: 'That backup no longer exists.',
+  deploy_not_cancellable: 'This deploy has already finished.',
+  cancel_unsupported:
+    "This server's TurboPanel daemon is too old to cancel deploys. Update it first.",
 }
 
 export const TOO_MANY_ATTEMPTS_COPY = 'Too many attempts. Wait a minute and try again.'
