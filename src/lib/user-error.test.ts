@@ -68,4 +68,13 @@ describe('cancel deploy errors', () => {
       "This server's TurboPanel daemon is too old to cancel deploys. Update it first.",
     )
   })
+
+  it('maps the too-late and unreachable-server refusals', () => {
+    expect(userErrorMessage(new Error('HTTP 409: deploy_too_late'), 'x')).toBe(
+      'This deploy is already switching over, so it can no longer be stopped. It will finish.',
+    )
+    expect(userErrorMessage(new Error('HTTP 503: daemon_unavailable'), 'x')).toBe(
+      'TurboPanel could not reach this server right now. Try again in a moment.',
+    )
+  })
 })

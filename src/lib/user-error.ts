@@ -22,6 +22,10 @@ const API_ERROR_COPY: Readonly<Record<string, string>> = {
   backup_target_unsupported: 'This kind of storage cannot be backed up yet.',
   backup_not_found: 'That backup no longer exists.',
   deploy_not_cancellable: 'This deploy has already finished.',
+  deploy_too_late:
+    'This deploy is already switching over, so it can no longer be stopped. It will finish.',
+  daemon_unavailable:
+    'TurboPanel could not reach this server right now. Try again in a moment.',
   cancel_unsupported:
     "This server's TurboPanel daemon is too old to cancel deploys. Update it first.",
 }
