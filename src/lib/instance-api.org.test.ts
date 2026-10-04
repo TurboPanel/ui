@@ -159,8 +159,11 @@ describe('instance-api org wrappers', () => {
     })
   })
 
-  it('fetchOrgPrincipalDefaults and saveOrgPrincipalDefaults proxy username defaults', async () => {
+  it('fetchOrgPrincipalDefaults and saveOrgPrincipalDefaults proxy name-scheme defaults', async () => {
     const defaults = {
+      nameScheme: null,
+      effectiveNameScheme: 'partial',
+      schemeLocked: false,
       randomizedUsernames: null,
       effectiveRandomizedUsernames: true,
     }
@@ -174,18 +177,24 @@ describe('instance-api org wrappers', () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse({
         ok: true,
-        randomizedUsernames: false,
-        effectiveRandomizedUsernames: false,
+        ...defaults,
+        nameScheme: 'random',
+        effectiveNameScheme: 'random',
+        schemeLocked: true,
       }),
     )
-    await expect(saveOrgPrincipalDefaults('org-1', false)).resolves.toMatchObject({
+    await expect(
+      saveOrgPrincipalDefaults('org-1', { nameScheme: 'random', schemeLocked: true }),
+    ).resolves.toMatchObject({
       ok: true,
-      randomizedUsernames: false,
+      nameScheme: 'random',
+      schemeLocked: true,
     })
     const [, saveInit] = fetchMock.mock.calls[1] ?? []
     expect((saveInit as RequestInit).method).toBe('PUT')
     expect(JSON.parse(String((saveInit as RequestInit).body))).toEqual({
-      randomizedUsernames: false,
+      nameScheme: 'random',
+      schemeLocked: true,
     })
   })
 

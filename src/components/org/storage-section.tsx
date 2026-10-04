@@ -26,10 +26,14 @@ import {
   useStorage,
   useUpdateStorageMount,
 } from '@/lib/queries/storage'
+import { BackupSchedulesPanel } from '@/components/org/managed/managed-backup-schedules-panel'
+import { StorageBackupsPanel } from '@/components/org/storage-backups-panel'
+import { backupCopyFor, canBackUpCopy } from '@/lib/storage-backups'
 import { useServices } from '@/lib/queries/services'
 import { useOrgServers } from '@/lib/queries/servers'
 import { useCan } from '@/lib/query-client'
 import { chrome, colors, spacing } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 const KIND_LABELS: Record<StorageKind, string> = {
   volume: 'Volume',
@@ -100,10 +104,7 @@ function useStorageSection({
 
   let queryError: string | null = null
   if (storageQuery.isError) {
-    queryError =
-      storageQuery.error instanceof Error
-        ? storageQuery.error.message
-        : 'Failed to load storage'
+    queryError = userErrorMessage(storageQuery.error, 'Failed to load storage')
   }
   const displayError =
     error ??
@@ -137,9 +138,7 @@ function useStorageSection({
         copy: {
           provider,
           serverId,
-          ...(provider === 'path' && sourcePath.trim()
-            ? { path: sourcePath.trim() }
-            : {}),
+          ...(provider === 'path' && sourcePath.trim() ? { path: sourcePath.trim() } : {}),
         },
         ...(trimmedDest && mountServiceId
           ? { mount: { serviceId: mountServiceId, destinationPath: trimmedDest } }
@@ -156,14 +155,14 @@ function useStorageSection({
         onError: () => {
           setError(createMutation.actionError ?? 'Failed to create storage')
         },
-      },
+      }
     )
   }
 
   const handleDestinationPathSave = async (
     storageId: string,
     mountId: string,
-    nextDestinationPath: string,
+    nextDestinationPath: string
   ) => {
     setError(null)
     const result = await updateMountMutation.run({
@@ -186,8 +185,7 @@ function useStorageSection({
   }
 
   const deletingId =
-    deleteMutation.isPending &&
-    typeof deleteMutation.variables === 'string'
+    deleteMutation.isPending && typeof deleteMutation.variables === 'string'
       ? deleteMutation.variables
       : null
 
@@ -219,10 +217,7 @@ function useStorageSection({
   }
 }
 
-function StorageListStatus({
-  loading,
-  isEmpty,
-}: Readonly<{ loading: boolean; isEmpty: boolean }>) {
+function StorageListStatus({ loading, isEmpty }: Readonly<{ loading: boolean; isEmpty: boolean }>) {
   if (loading && isEmpty) {
     return <LoadingState />
   }
@@ -292,10 +287,7 @@ function StorageAddForm({
           {servers.map((server) => (
             <Pressable
               key={server.id}
-              style={[
-                styles.serverOption,
-                serverId === server.id && styles.serverOptionSelected,
-              ]}
+              style={[styles.serverOption, serverId === server.id && styles.serverOptionSelected]}
               disabled={adding}
               onPress={() => onServerIdChange(server.id)}
             >
@@ -352,10 +344,7 @@ function StorageAddForm({
   )
 }
 
-function locationServerText(
-  location: StorageCopyRecord,
-  servers: OrgServerRecord[],
-): string {
+function locationServerText(location: StorageCopyRecord, servers: OrgServerRecord[]): string {
   if (!location.serverId) return 'shared'
   const server = servers.find((row) => row.id === location.serverId)
   if (server) return serverLabel(server)
@@ -481,6 +470,7 @@ function MountDestination({
 }
 
 function StorageRow({
+  orgId,
   row,
   servers,
   canManage,
@@ -488,6 +478,7 @@ function StorageRow({
   onDelete,
   onDestinationPathSave,
 }: Readonly<{
+  orgId: string
   row: StorageRecord
   servers: OrgServerRecord[]
   canManage: boolean
@@ -496,10 +487,11 @@ function StorageRow({
   onDestinationPathSave: (
     storageId: string,
     mountId: string,
-    destinationPath: string,
+    destinationPath: string
   ) => Promise<void>
 }>) {
   const location = primaryCopy(row)
+  const backupCopy = backupCopyFor(row)
   return (
     <View style={panelStyles.detailCard}>
       <View style={styles.rowHeader}>
@@ -520,6 +512,17 @@ function StorageRow({
           />
         ))
       )}
+      {canManage && backupCopy && canBackUpCopy(row.kind, backupCopy) ? (
+        <>
+          <StorageBackupsPanel orgId={orgId} storageId={row.id} copyId={backupCopy.id} />
+          <BackupSchedulesPanel
+            orgId={orgId}
+            target={{ storageId: row.id, copyId: backupCopy.id }}
+            enabled
+            hint="Automatic backups of this storage, run by its server on its own"
+          />
+        </>
+      ) : null}
       {canManage ? (
         <ConfirmButton
           label={deleting ? 'Deleting…' : 'Delete'}
@@ -595,6 +598,7 @@ export function StorageSection({
         {storage.rows.map((row) => (
           <StorageRow
             key={row.id}
+            orgId={orgId}
             row={row}
             servers={storage.servers}
             canManage={canManage}

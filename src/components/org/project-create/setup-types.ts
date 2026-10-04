@@ -102,6 +102,35 @@ export const SETUP_TYPE_OPTIONS: readonly SetupTypeOption[] = [
   },
 ]
 
+export type SetupGroup = {
+  title: string
+  options: readonly SetupTypeOption[]
+}
+
+const SETUP_GROUP_CHOICES: readonly {
+  title: string
+  choices: readonly SetupChoice[]
+}[] = [
+  {
+    title: 'Define your stack',
+    choices: ['compose', 'services', 'repository', 'hosting'],
+  },
+  { title: 'Start from a catalog', choices: ['template', 'managed'] },
+]
+
+/**
+ * The type cards in two labelled groups so the choice reads faster. Same
+ * cards, same order as {@link SETUP_TYPE_OPTIONS}; only the headings are new.
+ */
+export const SETUP_TYPE_GROUPS: readonly SetupGroup[] = SETUP_GROUP_CHOICES.map(
+  (group) => ({
+    title: group.title,
+    options: SETUP_TYPE_OPTIONS.filter((option) =>
+      group.choices.includes(option.choice),
+    ),
+  }),
+)
+
 export function setupOptionForChoice(
   choice: SetupChoice,
 ): SetupTypeOption | undefined {

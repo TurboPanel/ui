@@ -36,7 +36,7 @@ export function AboutScreenContent() {
       <Text style={panelStyles.pageEyebrow}>TurboPanel UI</Text>
       <Text style={panelStyles.pageTitle}>About</Text>
       <Text style={panelStyles.pageCopy}>
-        This console is licensed under the GNU Affero General Public License
+        This app is licensed under the GNU Affero General Public License
         version 3 only. Corresponding Source is the exact revision that produced
         this build — not the default branch.
       </Text>

@@ -16,8 +16,10 @@ import {
 } from '@/components/ui'
 import {
   deploymentServerLabel,
+  deploymentStrategyLabel,
   deploymentStatusTone,
   formatDeployActor,
+  formatDeployTrigger,
   formatDeployDuration,
   formatDeployTimestamp,
   groupDeploymentsByGeneration,
@@ -31,6 +33,7 @@ import {
   useEnvironmentDeployments,
 } from '@/lib/queries/execution-logs'
 import { colors, spacing, webPointer } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 /** Cap the history table so a long run of deploys scrolls inside the panel. */
 const HISTORY_LIST_MAX_HEIGHT = 560
@@ -41,10 +44,8 @@ function statusDotTone(tone: 'success' | 'failed' | 'pending'): StatusTone {
   return 'pending'
 }
 
-function StatusCell({
-  status,
-}: Readonly<{ status: DeploymentGroup['status'] }>) {
-  const tone = deploymentStatusTone(status)
+function StatusCell({ group }: Readonly<{ group: DeploymentGroup }>) {
+  const tone = deploymentStatusTone(group.status, group.strategyOutcome)
   return (
     <View style={styles.statusCell}>
       <StatusDot size="sm" tone={statusDotTone(tone.tone)} />
@@ -94,7 +95,8 @@ function DeploymentDetail({
   const active =
     group.commands.find((row) => row.serverId === serverId) ??
     group.commands[0]
-  const failure = active?.errorMessage ?? null
+  const failure = active?.strategyOutcomeReason ?? active?.errorMessage ?? null
+  const strategy = deploymentStrategyLabel(active?.strategy)
   const stalledHint = stalledDeploymentHint(active?.errorCode ?? null)
 
   return (
@@ -116,8 +118,31 @@ function DeploymentDetail({
         </Text>
       ) : null}
       {stalledHint ? <Text style={panelStyles.muted}>{stalledHint}</Text> : null}
+      {strategy ? (
+        <Text style={panelStyles.muted}>{`${strategy} deploy`}</Text>
+      ) : null}
       {active ? <DeploymentTranscript orgId={orgId} row={active} /> : null}
     </View>
+  )
+}
+
+/** Who or what started a deploy: a person, the system, or a git push (branch and commit). */
+function ActorCell({ group }: Readonly<{ group: DeploymentGroup }>) {
+  const trigger = formatDeployTrigger(group.trigger)
+  if (!trigger) {
+    return (
+      <Text style={styles.cellMuted}>
+        {formatDeployActor(group.actorEntityType)}
+      </Text>
+    )
+  }
+  return (
+    <>
+      <Text style={styles.cellMuted}>{trigger.headline}</Text>
+      {trigger.detail ? (
+        <Text style={styles.cellMono}>{trigger.detail}</Text>
+      ) : null}
+    </>
   )
 }
 
@@ -155,11 +180,11 @@ function DeploymentRow({
         accessibilityRole="button"
         accessibilityState={{ expanded }}
         accessibilityLabel={`Deploy ${formatDeployTimestamp(group.startedAt)} — ${
-          deploymentStatusTone(group.status).label
+          deploymentStatusTone(group.status, group.strategyOutcome).label
         }`}
       >
         <View style={[styles.cell, styles.colStatus]}>
-          <StatusCell status={group.status} />
+          <StatusCell group={group} />
         </View>
         <View style={[styles.cell, styles.colWhen]}>
           <Text style={styles.cellText}>
@@ -167,9 +192,7 @@ function DeploymentRow({
           </Text>
         </View>
         <View style={[styles.cell, styles.colActor]}>
-          <Text style={styles.cellMuted}>
-            {formatDeployActor(group.actorEntityType)}
-          </Text>
+          <ActorCell group={group} />
         </View>
         <View style={[styles.cell, styles.colDuration]}>
           <Text style={styles.cellMono}>
@@ -237,9 +260,7 @@ export function EnvironmentDeploymentHistoryPanel({
       ) : null}
       {deploymentsQuery.error ? (
         <Text style={panelStyles.error}>
-          {deploymentsQuery.error instanceof Error
-            ? deploymentsQuery.error.message
-            : 'Failed to load deploy history'}
+          {userErrorMessage(deploymentsQuery.error, 'Failed to load deploy history')}
         </Text>
       ) : null}
       {!deploymentsQuery.isLoading && groups.length === 0 ? (

@@ -26,9 +26,10 @@ import {
 } from '@/lib/managed-ingress-ports'
 import { queryKeys, useApiMutation, useCan } from '@/lib/query-client'
 import { colors } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 function errorMessage(err: unknown, fallback: string): string {
-  return err instanceof Error ? err.message : fallback
+  return userErrorMessage(err, fallback)
 }
 
 function useManagedDefaults(

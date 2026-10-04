@@ -44,15 +44,16 @@ jobs:
     # gh-promote.yml asks for contents: write (the tag).
     permissions:
       contents: write
-    uses: TurboPanel/dev/.github/workflows/gh-promote.yml@5464e72c40aec3528fb10e6fc660583ad963b3cb # dev#35
+    uses: TurboPanel/dev/.github/workflows/gh-promote.yml@d9127ee03a6a3b42e9435ebec3542db5fab09bc0 # dev#49
     with:
       repo-kind: ui
       to: ${{ inputs.to }}
       source: ${{ inputs.source }}
-      dev-ref: 5464e72c40aec3528fb10e6fc660583ad963b3cb
+      dev-ref: d9127ee03a6a3b42e9435ebec3542db5fab09bc0 # dev#49
       # turbopaneld commit carrying scripts/sign-manifest.ts and the release
       # public-key pin. Bump it when the key is rotated.
       signer-ref: 93c4f94510c9499e6bf04366a9500fe9f8e38aaa
+    # The environment signing secret only reaches the called workflow when the caller passes secrets down.
     secrets: inherit
 
   publish:
@@ -68,6 +69,7 @@ jobs:
       assets-artifact-name: ${{ needs.prepare.outputs.assets-artifact-name }}
       manifest-filename: ${{ needs.prepare.outputs.manifest-filename }}
       target-commit: ${{ needs.prepare.outputs.commit }}
+    # The environment signing secret only reaches the called workflow when the caller passes secrets down.
     secrets: inherit
 
   finalize:
@@ -82,4 +84,5 @@ jobs:
       commit: ${{ needs.prepare.outputs.commit }}
       branch: ${{ needs.prepare.outputs.branch }}
       manifest-filename: ${{ needs.prepare.outputs.manifest-filename }}
+    # The environment signing secret only reaches the called workflow when the caller passes secrets down.
     secrets: inherit

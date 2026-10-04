@@ -108,6 +108,7 @@ function engineLabel(engine: SiteEngine | undefined): string {
   if (engine === 'apache') return 'Apache'
   if (engine === 'openlitespeed') return 'OpenLiteSpeed'
   if (engine === 'nginx') return 'nginx'
+  if (engine === 'nginx+apache') return 'nginx + Apache'
   return 'site'
 }
 
@@ -237,7 +238,7 @@ function phpRuntimeCopy(engine: SiteEngine | undefined): {
     }
   }
   const label = engineLabel(engine)
-  const handler = engine === 'apache' ? 'mod_proxy_fcgi' : 'fastcgi_pass'
+  const handler = engine === 'apache' || engine === 'nginx+apache' ? 'mod_proxy_fcgi' : 'fastcgi_pass'
   return {
     title: `PHP settings (${label} php-fpm)`,
     hint: `Deploy installs a per-site php-fpm pool, points ${label} at its unix socket via ${handler}, and applies memory_limit / max_execution_time as pool php_admin_value.`,

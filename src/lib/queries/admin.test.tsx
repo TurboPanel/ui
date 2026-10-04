@@ -360,6 +360,168 @@ describe('admin query hooks', () => {
     expect(onReconnecting).toHaveBeenCalledTimes(1)
   })
 
+  describe('after a dropped apply on a Let\'s Encrypt name', () => {
+    const oldCert = '2026-11-01T00:00:00.000Z'
+    const newCert = '2027-01-30T00:00:00.000Z'
+    const letsEncrypt = (overrides: Record<string, unknown> = {}) => ({
+      ...savedHostname('https://panel.example.com'),
+      source: 'lets-encrypt' as const,
+      ...overrides,
+    })
+
+    /** The first read is the baseline before the apply, the second the reconnect probe. */
+    function dropApply(...reads: unknown[][]) {
+      applyPublicUrls.mockRejectedValueOnce(
+        new Error('/api/admin/v1/instance/public-urls/apply failed: HTTP 502'),
+      )
+      for (const hostnames of reads) {
+        fetchInstanceHostnames.mockResolvedValueOnce({ ok: true, hostnames })
+      }
+      return renderHook(() => useApplyPublicUrls(), {
+        wrapper: createWrapper(),
+      })
+    }
+
+    async function runDropped(...reads: unknown[][]) {
+      const { result } = dropApply(...reads)
+      vi.useFakeTimers()
+      try {
+        const pending = result.current.run({})
+        await vi.advanceTimersByTimeAsync(120_000)
+        return await pending
+      } finally {
+        vi.useRealTimers()
+      }
+    }
+
+    it('reports success once a first certificate appears', async () => {
+      const row = letsEncrypt({ notAfter: newCert })
+      const outcome = await runDropped([letsEncrypt()], [row])
+      expect(outcome).toMatchObject({
+        ok: true,
+        value: { kind: 'reconnected', kept: false },
+      })
+    })
+
+    it('waits for a slow issuance instead of failing', async () => {
+      const outcome = await runDropped(
+        [letsEncrypt()],
+        [letsEncrypt()],
+        [letsEncrypt({ notAfter: newCert })],
+      )
+      expect(outcome).toMatchObject({ ok: true, value: { kind: 'reconnected' } })
+    })
+
+    it('lets a still-valid old certificate stand only after the wait, and says it was kept', async () => {
+      const old = letsEncrypt({
+        notAfter: oldCert,
+        acmeLastAttemptAt: '2026-10-03T10:00:00.000Z',
+      })
+      const before = fetchInstanceHostnames.mock.calls.length
+      const outcome = await runDropped(...Array.from({ length: 6 }, () => [old]))
+      expect(outcome).toMatchObject({
+        ok: true,
+        value: { kind: 'reconnected', kept: true },
+      })
+      expect(fetchInstanceHostnames.mock.calls.length - before).toBeGreaterThan(3)
+    })
+
+    it('never takes an old certificate as proof when the baseline read fails', async () => {
+      const old = letsEncrypt({
+        notAfter: oldCert,
+        acmeLastAttemptAt: '2026-10-03T10:00:00.000Z',
+      })
+      applyPublicUrls.mockRejectedValueOnce(
+        new Error('/api/admin/v1/instance/public-urls/apply failed: HTTP 502'),
+      )
+      fetchInstanceHostnames.mockRejectedValueOnce(new Error('boom'))
+      fetchInstanceHostnames.mockResolvedValue({ ok: true, hostnames: [old] })
+      const { result } = renderHook(() => useApplyPublicUrls(), {
+        wrapper: createWrapper(),
+      })
+      vi.useFakeTimers()
+      try {
+        const pending = result.current.run({})
+        await vi.advanceTimersByTimeAsync(120_000)
+        await expect(pending).resolves.toMatchObject({
+          ok: true,
+          value: { kind: 'not-issued' },
+        })
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('does not let a hung baseline read hold the apply back', async () => {
+      const old = letsEncrypt({ notAfter: oldCert })
+      applyPublicUrls.mockRejectedValueOnce(
+        new Error('/api/admin/v1/instance/public-urls/apply failed: HTTP 502'),
+      )
+      fetchInstanceHostnames.mockImplementationOnce(() => new Promise(() => {}))
+      fetchInstanceHostnames.mockResolvedValue({ ok: true, hostnames: [old] })
+      const { result } = renderHook(() => useApplyPublicUrls(), {
+        wrapper: createWrapper(),
+      })
+      vi.useFakeTimers()
+      try {
+        const pending = result.current.run({})
+        await vi.advanceTimersByTimeAsync(10_000)
+        expect(applyPublicUrls).toHaveBeenCalledTimes(1)
+        await vi.advanceTimersByTimeAsync(120_000)
+        await expect(pending).resolves.toMatchObject({
+          ok: true,
+          value: { kind: 'not-issued' },
+        })
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('reports not issued for an error that appeared during this apply', async () => {
+      const outcome = await runDropped(
+        [letsEncrypt()],
+        [
+          letsEncrypt({
+            acmeLastError: 'rate limited',
+            acmeLastAttemptAt: '2026-10-04T10:00:00.000Z',
+          }),
+        ],
+      )
+      expect(outcome).toMatchObject({
+        ok: true,
+        value: { kind: 'not-issued', error: expect.stringContaining('rate limited') },
+      })
+    })
+
+    it('ignores an identical error left over from an earlier attempt', async () => {
+      const stale = letsEncrypt({
+        notAfter: newCert,
+        acmeLastError: 'old failure',
+        acmeLastAttemptAt: '2020-01-01T00:00:00.000Z',
+      })
+      const outcome = await runDropped([stale], [stale])
+      expect(outcome).toMatchObject({ ok: true, value: { kind: 'reconnected' } })
+    })
+
+    it('stops reading once the screen is gone', async () => {
+      const row = letsEncrypt()
+      const { result, unmount } = dropApply([row], [row])
+      fetchInstanceHostnames.mockResolvedValue({ ok: true, hostnames: [row] })
+      vi.useFakeTimers()
+      try {
+        void result.current.run({})
+        await vi.advanceTimersByTimeAsync(10_000)
+        unmount()
+        await vi.advanceTimersByTimeAsync(2_000)
+        const reads = fetchInstanceHostnames.mock.calls.length
+        await vi.advanceTimersByTimeAsync(60_000)
+        expect(fetchInstanceHostnames.mock.calls).toHaveLength(reads)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+  })
+
   it('useApplyPublicUrls aborts a hung apply after the request deadline', async () => {
     applyPublicUrls.mockImplementation(
       (_urls: string[] | undefined, signal?: AbortSignal) =>
@@ -390,7 +552,7 @@ describe('admin query hooks', () => {
       const pending = result.current.run({
         hostnames: [hostnameInput('https://panel.example.com')],
       })
-      await vi.advanceTimersByTimeAsync(120_000)
+      await vi.advanceTimersByTimeAsync(200_000)
       await vi.advanceTimersByTimeAsync(2_000)
       await expect(pending).resolves.toMatchObject({
         ok: true,

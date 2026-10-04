@@ -41,7 +41,7 @@ export function AdminSidebar({
           <TurboPanelLogo size={36} />
           <HighAvailabilityWordmark />
         </View>
-        <Text style={styles.brandHint}>Instance administration</Text>
+        <Text style={styles.brandHint}>Administration</Text>
       </View>
 
       <View style={styles.nav}>

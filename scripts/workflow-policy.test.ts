@@ -19,11 +19,19 @@ const SMALL = new Set(['a', 'an', 'and', 'for', 'of', 'on', 'or', 'the', 'to'])
 const titleCase = (name: string) =>
   name.split(' ').every((w, i) => (i > 0 && SMALL.has(w)) || /^[A-Z\d]/.test(w))
 
+// Explicit per-file allowances for write scopes at the top level.
+const ALLOWED_WRITES: Record<string, string[]> = {
+  'osv-scheduled.yml': ['issues'], // opens the weekly OSV sweep issue
+}
+
 describe('every workflow', () => {
   it.each(files)('%s declares a read-only top-level token', (f) => {
     const permissions = workflow(f).permissions
     expect(permissions).toBeDefined()
-    expect(Object.values(permissions ?? {})).not.toContain('write')
+    const writes = Object.entries(permissions ?? {})
+      .filter(([, level]) => level === 'write')
+      .map(([scope]) => scope)
+    expect(writes).toEqual(ALLOWED_WRITES[f] ?? [])
   })
 
   it.each(files)('%s has a Title Case name', (f) => {
@@ -78,12 +86,20 @@ describe('Verify concurrency', () => {
     expect(text('verify.yml')).toContain(
       [
         'concurrency:',
-        '  group: ui-verify-${{ github.event_name }}-${{ github.ref }}',
-        "  cancel-in-progress: ${{ github.event_name == 'pull_request' }}",
+        "  group: ui-verify-${{ github.event_name }}-${{ (github.head_ref == 'trunk' || github.head_ref == 'staging') && github.run_id || github.ref }}",
+        "  cancel-in-progress: ${{ github.event_name == 'pull_request' && github.head_ref != 'trunk' && github.head_ref != 'staging' }}",
         "  queue: ${{ github.event_name == 'pull_request' && 'single' || 'max' }}",
         '',
       ].join('\n')
     )
+  })
+
+  it('never cancels a promotion PR run (head trunk or staging): its group ends in the run id', () => {
+    expect(text('promote-ok.yml')).toContain(
+      "cancel-in-progress: ${{ github.head_ref != 'trunk' && github.head_ref != 'staging' }}"
+    )
+    expect(text('promote-ok.yml')).toContain("format('-{0}', github.run_id)")
+    expect(text('promote-prs.yml')).toContain('  cancel-in-progress: false\n  queue: max\n')
   })
 })
 

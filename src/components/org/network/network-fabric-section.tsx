@@ -52,6 +52,7 @@ import { orEmptyArray } from '@/lib/or-empty-array'
 import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
 import { useCan, queryKeys } from '@/lib/query-client'
 import { colors, spacing, webPointer } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 const HANDSHAKE_STALE_MS = 3 * 60 * 1000
 
@@ -68,7 +69,7 @@ function fabricLoadError(
   error: unknown,
 ): string | null {
   if (!isError || unavailable) return null
-  if (error instanceof Error) return error.message
+  if (error instanceof Error) return userErrorMessage(error, '')
   return `Failed to load ${TURBOFABRIC_PRODUCT_NAME}`
 }
 
@@ -86,7 +87,7 @@ function fabricMutationError(err: unknown): string {
   if (raw.includes(PREFERRED_GATEWAY_INVALID_ERROR)) {
     return 'Preferred gateways must be gateway-role relays in this mesh.'
   }
-  return raw
+  return userErrorMessage(err, raw)
 }
 
 function serverTitle(server: OrgServerRecord): string {

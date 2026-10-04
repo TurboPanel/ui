@@ -43,6 +43,7 @@ import {
   TURBOPANEL_WORKSPACE_DESCRIPTION,
 } from '@/lib/system-inventory'
 import { colors, spacing } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 export function systemRestartErrorMessage(
   error: string | null | undefined,
@@ -117,9 +118,7 @@ function useSystemRestartPoll(orgId: string) {
   useEffect(() => {
     if (!commandsQuery.error || pollCommands.length === 0) return
     setPollError(
-      commandsQuery.error instanceof Error
-        ? commandsQuery.error.message
-        : 'Failed to poll restart command',
+      userErrorMessage(commandsQuery.error, 'Failed to poll restart command'),
     )
     setPollCommands([])
   }, [commandsQuery.error, pollCommands.length])

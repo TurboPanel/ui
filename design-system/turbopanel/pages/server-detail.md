@@ -28,6 +28,7 @@
 | Control | Ping, hostname, reboot; read-only **Server proxy** panel (platform hosting-ingress status + one allowlisted Restart); trunk update; delete (two-step) |
 | Time | NTP status, timezone picker (org/datacenter enforce), NTP apply form (prefill from inherited `ntpDefaults` when host facts are empty) |
 | Network | Read-only: observe-not-configure notice, Interfaces (grouped by interface, pinned-into datacenter, Stale badges), datacenter memberships + pins, mesh membership, managed IPs |
+| Firewall | Owners/managers: preview-only `InlineNotice` banner, mode `SegmentedControl` with a confirmation sentence per mode, last preview (status `Badge`, version / rule count, digest, kernel verdict, notes), rendered v4/v6 ruleset in collapsed `SectionPanel`s |
 | Metrics | Embedded `ServerMetricsSection` (no duplicate page title) |
 
 ## SSH port (Overview)

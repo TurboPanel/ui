@@ -24,6 +24,7 @@ import {
   updateOrganization,
   requestPasswordReset,
   resetPassword,
+  changePassword,
   verifyEmail,
   verifyTotp,
   type InstallCompleteResult,
@@ -290,6 +291,12 @@ export function useRequestPasswordReset() {
 
 export function useResetPassword() {
   return useApiMutation({ mutationFn: resetPassword })
+}
+
+export function useChangePassword() {
+  return useApiMutation({
+    mutationFn: (body: { currentPassword: string; newPassword: string }) => changePassword(body),
+  })
 }
 
 export function useVerifyEmail() {

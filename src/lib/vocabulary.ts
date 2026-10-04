@@ -136,3 +136,48 @@ export function scanTextForForbiddenPhrases(
 export function formatVocabularyFailure(failure: VocabularyFailure): string {
   return `${failure.rel}:${failure.line} uses forbidden phrase "${failure.phrase}"`
 }
+
+/**
+ * Warn-mode phrases (not blocking). The terminology page on the website names
+ * one word for each part: control plane, app / web app, daemon, server,
+ * administrator. These retired words are reported as warnings so new customer
+ * copy can be corrected before the list is promoted to FORBIDDEN_PHRASES.
+ * Keep in sync with the sibling checks.
+ */
+export const WARN_PHRASES = [
+  { label: 'the console', pattern: /(?<![\w./-])the console(?![\w-])/i },
+  { label: 'instance owner', pattern: /\binstance owner\b/i },
+  { label: 'Instance CA', pattern: /\bInstance CA\b/ },
+  { label: 'hosted instance', pattern: /\bhosted instance\b/i },
+  { label: 'remote node', pattern: /\bremote nodes?\b/i },
+  { label: 'fleet', pattern: /(?<![\w./'"`-])fleet(?![\w'"`-])(?!\.\w)/i },
+] as const
+
+/** Lines where a warn phrase is a real tool or identifier name. */
+export const WARN_ALLOWLIST_LINE_PATTERNS = [
+  /console\.(log|error|warn|info|debug|table)/,
+  /\.\/console|dev console|developer console|dev\/console|\.local\/console/i,
+  /^\s*(import|export)\b.*from\b/,
+] as const
+
+/** Files that must name the retired words (the glossary itself). */
+export const WARN_SKIP_FILENAMES = new Set(['terminology.mdx'])
+
+export function scanTextForWarnings(rel: string, text: string): VocabularyFailure[] {
+  const base = rel.split('/').pop() ?? rel
+  if (WARN_SKIP_FILENAMES.has(base)) return []
+  const warnings: VocabularyFailure[] = []
+  const lines = text.split('\n')
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i] ?? ''
+    if (WARN_ALLOWLIST_LINE_PATTERNS.some((pattern) => pattern.test(line))) continue
+    for (const { label, pattern } of WARN_PHRASES) {
+      if (pattern.test(line)) warnings.push({ rel, line: i + 1, phrase: label })
+    }
+  }
+  return warnings
+}
+
+export function formatVocabularyWarning(warning: VocabularyFailure): string {
+  return `${warning.rel}:${warning.line} says "${warning.phrase}" (see the terminology page)`
+}

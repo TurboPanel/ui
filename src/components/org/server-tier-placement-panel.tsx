@@ -12,9 +12,10 @@ import {
 } from '@/components/ui'
 import { useAuth } from '@/lib/auth-context'
 import { formatRelativeLocalDateTime } from '@/lib/format-datetime'
-import type { ServerDetailRecord, TierNoticeState, TierPlacementRecord } from '@/lib/instance-api'
+import type { ServerDetailRecord, TierNoticeState } from '@/lib/instance-api'
 import { orgBillingHref } from '@/lib/org-navigation'
 import { useBillingCatalog } from '@/lib/queries/billing'
+import { licenseLine, shortfallCopy, type TierLabels } from '@/lib/tier-shortfall-copy'
 import {
   describeUnwatchedDevices,
   isTierShortfall,
@@ -59,37 +60,6 @@ function describeTierNotice(notice: TierNoticeState): string {
   return `${reason} · last sent ${formatRelativeLocalDateTime(notice.lastNotifiedAt)}`
 }
 
-type TierLabels = Pick<TierPlacementRecord, 'licenseTier' | 'requiredTier' | 'recommendedTier'>
-
-type PlacementCopy = Readonly<{ title: string; body: string; cta: string }>
-
-/**
- * What to say when the server is short: not covered at all, over the
- * hard floor, or missing slots. Every variant names the tier the billing
- * page should open on.
- */
-function shortfallCopy(state: TierPlacementState, placement: TierLabels): PlacementCopy {
-  if (state === 'unlicensed') {
-    return {
-      title: `Not covered — needs ${placement.requiredTier}`,
-      body: `Nothing bought covers this server yet. Buy a license at ${placement.requiredTier} or move one up, and it is covered as soon as the change lands.`,
-      cta: `Get a license at ${placement.requiredTier}`,
-    }
-  }
-  if (state === 'below-required') {
-    return {
-      title: `This host exceeds what ${placement.licenseTier} covers`,
-      body: `Cores or RAM are above the ${placement.licenseTier} ceiling; ${placement.requiredTier} is the floor for this hardware.`,
-      cta: `Upgrade to ${placement.recommendedTier}`,
-    }
-  }
-  return {
-    title: `Some devices are not monitored on ${placement.licenseTier}`,
-    body: `Moving to ${placement.recommendedTier} adds slots for every monitored NIC and every discovered drive and GPU.`,
-    cta: `Upgrade to ${placement.recommendedTier}`,
-  }
-}
-
 /**
  * The warning for a server below what its hardware needs. The button only
  * exists where billing is on — self-hosted has nowhere to send the
@@ -125,11 +95,6 @@ function ShortfallNotice({
       }
     />
   )
-}
-
-/** `License: S3` or `Not covered — needs S5`. */
-function licenseLine(placement: TierLabels): string {
-  return placement.licenseTier ?? `Not covered — needs ${placement.requiredTier}`
 }
 
 /**

@@ -6,7 +6,7 @@ import {
 import { queryKeys } from '@/lib/query-keys'
 
 /** Platform fallback when the org has no custom default (or the manage-gated read fails). */
-export const PLATFORM_DEFAULT_ENVIRONMENT_NAME = 'Production'
+export const PLATFORM_DEFAULT_ENVIRONMENT_NAME = 'production'
 
 /**
  * Resolved org default environment name for auto-provision paths.

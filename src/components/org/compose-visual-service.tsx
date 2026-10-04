@@ -39,9 +39,12 @@ import {
 } from '@/lib/compose/visual-fields'
 import {
   BASELINE_PHP_EXTENSIONS,
+  ENGINE_PHP_MODES,
+  isPhpMode,
   OPTIONAL_PHP_EXTENSIONS,
   SUPPORTED_PHP_SERIES,
   type ComposeServicePhpExtension,
+  type PhpMode,
   DEFAULT_SITE_ENGINE,
   isHostNativeServiceKind,
   isSiteComposeService,
@@ -65,7 +68,7 @@ import {
   type RepositoryAutoDeploy,
   type RepositoryRecord,
 } from '@/lib/instance-api'
-import { Button, Select } from '@/components/ui'
+import { Button, Select, Toggle } from '@/components/ui'
 import { useProjectRepositoryId } from '@/components/org/project/project-context'
 import { getActiveOrganizationId } from '@/lib/org-context'
 import { projectGitSourcesHref } from '@/lib/org-navigation'
@@ -118,6 +121,7 @@ export function servingPathLine(
   // A Caddy site is served by the site Caddy, still behind the edge one.
   if (resolved === 'caddy') return 'Caddy → Caddy → :443'
   if (resolved === 'apache') return 'Apache → Caddy → :443'
+  if (resolved === 'nginx+apache') return 'nginx → Apache → Caddy → :443'
   if (resolved === 'openlitespeed') return 'OpenLiteSpeed → Caddy → :443'
   return 'nginx → Caddy → :443'
 }
@@ -130,6 +134,9 @@ function siteEngineHint(
   }
   if (engine === 'openlitespeed') {
     return 'Files are served from the host document root via OpenLiteSpeed; PHP runs as a per-vhost LSAPI process under suEXEC. web.env is not injected into the process — use Apache when you need SetEnv. Hosting Caddy terminates TLS.'
+  }
+  if (engine === 'nginx+apache') {
+    return 'nginx in front of one shared Apache, for sites that need .htaccess or Apache modules. nginx serves common static files itself and passes the rest to Apache; PHP runs in a per-site php-fpm pool. Hosting Caddy terminates TLS.'
   }
   if (engine === 'apache') {
     return 'Files are served from the host document root via Apache; PHP runs in a per-site php-fpm pool over mod_proxy_fcgi (never mod_php), and web.env is applied as SetEnv. Hosting Caddy terminates TLS.'
@@ -161,6 +168,13 @@ const PHP_SETTING_FIELDS: readonly {
   },
   { key: 'date.timezone', label: 'Timezone', placeholder: 'UTC' },
 ]
+
+const PHP_MODE_LABELS: Readonly<Record<PhpMode, string>> = {
+  fastcgi: 'FastCGI (php-cgi)',
+  fpm: 'php-fpm',
+  'lsphp-detached': 'lsphp, detached',
+  'lsphp-attached': 'lsphp, attached to OpenLiteSpeed',
+}
 
 /**
  * PHP configuration for a site, edited where it lives.
@@ -195,6 +209,7 @@ function PhpFields({
       if (block && Object.keys(block).length === 0) delete next[field]
     }
     if (next.extensions?.length === 0) delete next.extensions
+    if (next.mode === undefined) delete next.mode
     onChange(Object.keys(next).length > 0 ? next : undefined)
   }
   const setBlockValue = (
@@ -235,6 +250,26 @@ function PhpFields({
         disabled={disabled}
         onChange={(version) => emit({ ...php, version: version || undefined })}
       />
+      {ENGINE_PHP_MODES[engine].length > 0 ? (
+        <>
+          <OptionSelect
+            value={php?.mode ?? ''}
+            options={[
+              { value: '', label: 'Automatic mode' },
+              ...ENGINE_PHP_MODES[engine].map((mode) => ({
+                value: mode,
+                label: PHP_MODE_LABELS[mode],
+              })),
+            ]}
+            disabled={disabled}
+            onChange={(mode) => emit({ ...php, mode: isPhpMode(mode) ? mode : undefined })}
+          />
+          <Text style={styles.hint}>
+            Automatic keeps the mode the site already runs. A new site gets
+            FastCGI, or the next mode its organization and server allow.
+          </Text>
+        </>
+      ) : null}
       <Text style={styles.hint}>
         Leave every field blank to serve this site as static files. Setting any
         of them turns PHP on, running in {mechanism}.
@@ -1040,6 +1075,8 @@ function commitSourceExtension(
   // `native` is the default, so writing it out would add a key that says
   // nothing. Dropping it keeps a plain binding free of TurboPanel noise.
   if (next.buildKind === 'native') delete next.buildKind
+  // Push deploys are on unless said otherwise, so only the opt-out is written.
+  if (next.deployOnPush !== false) delete next.deployOnPush
   onChange(next)
 }
 
@@ -1156,6 +1193,19 @@ function BoundSourceFields({
         style={styles.input}
       />
       <Text style={styles.hint}>{sourceBranchHint(row?.defaultBranch)}</Text>
+
+      <Text style={styles.label}>Deploy on push</Text>
+      <Toggle
+        value={binding.deployOnPush !== false}
+        onValueChange={(on) => commit({ deployOnPush: on ? undefined : false })}
+        disabled={disabled}
+        accessibilityLabel="Deploy when this branch is pushed"
+      />
+      <Text style={styles.hint}>
+        Off keeps pushes from deploying this service; you can still deploy it
+        by hand. To give one environment its own branch, use the Git branch
+        panel on that environment.
+      </Text>
 
       <Text style={styles.label}>Subdirectory</Text>
       <TextInput

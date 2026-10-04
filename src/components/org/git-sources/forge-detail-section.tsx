@@ -22,6 +22,7 @@ import {
 import { usePublicUrlsOptional, useForges, useSyncForge } from '@/lib/queries/admin'
 import { useGitConnections } from '@/lib/queries/releases'
 import { colors, spacing } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 export type { ForgeSummary } from '@/lib/instance-api'
 
@@ -40,14 +41,14 @@ function returnNotice(
       not_configured:
         'This application is missing credentials, so the connection could not be recorded.',
       claimed:
-        'Another organization on this instance already connected that account through this application. One account belongs to one organization per app.',
+        'Another organization on this control plane already connected that account through this application. One account belongs to one organization per app.',
       provider_failed: 'The provider refused the request. Nothing was recorded.',
       install_authorization_required:
         'GitHub did not send an authorization code. On the GitHub App\u2019s settings, enable \u201cRequest user authorization (OAuth) during installation\u201d and set its Callback URL to this instance\u2019s /api/client/v1/repositories/github/callback, then install again.',
       install_not_authorized:
         'The GitHub account that came back cannot see that installation, so it was not recorded. Install the App from the account that owns the repositories.',
       rate_limited: 'Too many connection attempts. Wait a minute and try again.',
-      unavailable: 'The instance could not complete the connection. Try again.',
+      unavailable: 'The control plane could not complete the connection. Try again.',
       invalid_request: 'The provider sent back an incomplete response.',
     }
     return {
@@ -166,13 +167,13 @@ function WebhookPanel({ app }: Readonly<{ app: ForgeSummary }>) {
         <InlineNotice
           tone="warning"
           title="No public URL configured"
-          body="Set an instance public URL before pointing a provider at this application."
+          body="Set a public URL for this control plane before pointing a provider at this application."
         />
       )}
       {unreachable ? (
         <InlineNotice
           tone="warning"
-          title="Deliveries may not reach this instance"
+          title="Deliveries may not reach this control plane"
           body={unreachable}
         />
       ) : null}
@@ -215,7 +216,7 @@ function ProviderRecordPanel({
                 onSynced(`Synced. GitHub calls this app "${data.app.name}".`)
               },
               onError: (err) => {
-                onError(err instanceof Error ? err.message : 'Sync failed')
+                onError(userErrorMessage(err, 'Sync failed'))
               },
             })
           }}

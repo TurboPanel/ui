@@ -3,11 +3,14 @@ import type { CommandStatus, DeploymentHistoryRecord } from '@/lib/instance-api'
 import {
   deploymentServerLabel,
   deploymentStatusTone,
+  deploymentStrategyLabel,
   formatDeployActor,
   formatDeployDuration,
+  formatDeployTrigger,
   formatDeployTimestamp,
   groupDeploymentsByGeneration,
   worstDeploymentStatus,
+  worstStrategyOutcome,
   stalledDeploymentHint,
 } from './deployment-history'
 
@@ -364,5 +367,99 @@ describe('stalledDeploymentHint', () => {
     // Any other failure speaks for itself through errorMessage.
     expect(stalledDeploymentHint('deploy_failed')).toBeNull()
     expect(stalledDeploymentHint(null)).toBeNull()
+  })
+})
+
+describe('push-triggered deploys', () => {
+  it('carries the trigger of the anchor row onto the group', () => {
+    const trigger = {
+      kind: 'push' as const,
+      branch: 'staging',
+      commitSha: 'abc123def456',
+      sourceId: 'repo-1',
+    }
+    const [group] = groupDeploymentsByGeneration([
+      row({ id: 'a', actorEntityType: 'system', trigger }),
+      row({ id: 'b', actorEntityType: 'system', serverId: 'srv-b', trigger }),
+    ])
+    expect(group?.trigger).toEqual(trigger)
+  })
+
+  it('has no trigger for a person\'s deploy or an older API', () => {
+    const [group] = groupDeploymentsByGeneration([row({ id: 'a' })])
+    expect(group?.trigger).toBeNull()
+  })
+
+  it('formats the branch and a short commit', () => {
+    expect(
+      formatDeployTrigger({
+        kind: 'push',
+        branch: 'release/1.4',
+        commitSha: 'abc123def456',
+        sourceId: null,
+      }),
+    ).toEqual({ headline: 'Push to release/1.4', detail: 'abc123d' })
+  })
+
+  it('degrades when only part of the attribution was recorded', () => {
+    expect(
+      formatDeployTrigger({ kind: 'push', branch: null, commitSha: 'abc123def', sourceId: null }),
+    ).toEqual({ headline: 'Git push', detail: 'abc123d' })
+    expect(
+      formatDeployTrigger({ kind: 'push', branch: ' ', commitSha: null, sourceId: null }),
+    ).toEqual({ headline: 'Git push', detail: null })
+    expect(formatDeployTrigger(null)).toBeNull()
+    expect(formatDeployTrigger(undefined)).toBeNull()
+  })
+})
+
+describe('deploy strategy and outcome', () => {
+  it('labels a rolled back and a needs attention deploy instead of plain Failed', () => {
+    expect(deploymentStatusTone('failed', 'rolled_back')).toEqual({
+      label: 'Rolled back',
+      tone: 'failed',
+    })
+    expect(deploymentStatusTone('failed', 'needs_attention')).toEqual({
+      label: 'Needs attention',
+      tone: 'failed',
+    })
+    expect(deploymentStatusTone('failed', null).label).toBe('Failed')
+    expect(deploymentStatusTone('succeeded').label).toBe('Succeeded')
+  })
+
+  it('lets needs attention outrank rolled back across a fan-out', () => {
+    expect(
+      worstStrategyOutcome([
+        row({ id: 'a', strategyOutcome: 'rolled_back' }),
+        row({ id: 'b', strategyOutcome: 'needs_attention' }),
+      ]),
+    ).toBe('needs_attention')
+    expect(
+      worstStrategyOutcome([
+        row({ id: 'a', strategyOutcome: null }),
+        row({ id: 'b' }),
+      ]),
+    ).toBeNull()
+  })
+
+  it('carries strategy and outcome onto the group', () => {
+    const [group] = groupDeploymentsByGeneration([
+      row({
+        id: 'a',
+        status: 'failed',
+        strategy: 'sequential',
+        strategyOutcome: 'rolled_back',
+      }),
+      row({ id: 'b', serverId: 'srv-b', strategy: 'sequential' }),
+    ])
+    expect(group?.strategy).toBe('sequential')
+    expect(group?.strategyOutcome).toBe('rolled_back')
+  })
+
+  it('names the engine, and says nothing for older rows', () => {
+    expect(deploymentStrategyLabel('sequential')).toBe('Sequential')
+    expect(deploymentStrategyLabel('inplace')).toBe('In place')
+    expect(deploymentStrategyLabel(null)).toBeNull()
+    expect(deploymentStrategyLabel(undefined)).toBeNull()
   })
 })

@@ -13,11 +13,13 @@ import {
   type ComposeGraphNode,
 } from '@/lib/compose'
 import type { ContainerRecord, ServiceRecord } from '@/lib/instance-api'
+import { appTagLabel } from '@/lib/compose/app-facts'
+import { bindingTagLabel, type ServiceBindingFacts } from '@/lib/compose/binding-facts'
 import { projectServiceHref } from '@/lib/project-navigation'
 import { colors, spacing, webPointer } from '@/lib/theme'
 
 const SERVICE_W = 176
-const SERVICE_H = 60
+const SERVICE_H = 72
 const RESOURCE_W = 116
 const RESOURCE_H = 34
 const HOSTING_W = 176
@@ -247,6 +249,7 @@ function ServiceNodeOverlay({
   service,
   containers,
   showStatus,
+  bindingFacts,
 }: Readonly<{
   node: ComposeGraphNode
   rect: PixelRect
@@ -255,11 +258,15 @@ function ServiceNodeOverlay({
   service: ServiceRecord | undefined
   containers: ContainerRecord[]
   showStatus: boolean
+  bindingFacts?: ServiceBindingFacts
 }>) {
+  const bindingTag = bindingTagLabel(bindingFacts, node.serviceKind === 'site')
   const tone = showStatus ? serviceStatusTone(containers) : null
   const subtitle = node.image ?? null
   const ports = joinPorts(node.ports)
-  const kindLabel = node.serviceKind === 'site' ? 'site' : 'service'
+  const baseKindLabel = node.serviceKind === 'site' ? 'site' : 'service'
+  // A recognised application (WordPress) is a more useful tag than "site".
+  const kindLabel = appTagLabel(service?.app) ?? baseKindLabel
 
   const content = (
     <View
@@ -291,6 +298,11 @@ function ServiceNodeOverlay({
         {ports ? (
           <Text style={styles.servicePorts} numberOfLines={1}>
             {ports}
+          </Text>
+        ) : null}
+        {bindingTag ? (
+          <Text style={styles.serviceBinding} numberOfLines={1}>
+            {bindingTag}
           </Text>
         ) : null}
       </View>
@@ -422,6 +434,7 @@ export function ComposeGraphView({
   projectId,
   services,
   containersByService,
+  bindingFactsByService,
   showServiceStatus,
   placementLabel,
 }: Readonly<{
@@ -430,6 +443,8 @@ export function ComposeGraphView({
   projectId: string
   services: ServiceRecord[]
   containersByService: Record<string, ContainerRecord[]>
+  /** Database bindings per compose service name, for the env-variable tag. */
+  bindingFactsByService?: Record<string, ServiceBindingFacts>
   showServiceStatus: boolean
   /** Effective server for this scope — draws the server frame when set. */
   placementLabel?: string | null
@@ -520,6 +535,7 @@ export function ComposeGraphView({
                     projectId={projectId}
                     service={service}
                     containers={service ? containersByService[service.id] ?? [] : []}
+                    bindingFacts={bindingFactsByService?.[node.name]}
                     showStatus={showServiceStatus}
                   />
                 )
@@ -578,6 +594,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     flexShrink: 1,
+  },
+  serviceBinding: {
+    color: colors.accent,
+    fontSize: 10,
+    fontWeight: '600',
   },
   serviceKind: {
     marginLeft: 'auto',

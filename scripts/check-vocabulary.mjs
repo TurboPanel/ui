@@ -15,9 +15,11 @@ import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import {
   formatVocabularyFailure,
+  formatVocabularyWarning,
   isSkippedDirName,
   isSkippedFileName,
   scanTextForForbiddenPhrases,
+  scanTextForWarnings,
   shouldScanFile,
 } from '../src/lib/vocabulary.ts'
 
@@ -60,6 +62,7 @@ export function runVocabularyCheck({
   exit,
 } = {}) {
   const failures = []
+  const warnings = []
 
   for (const file of walk(root, root, selfRel)) {
     if (!shouldScanFile(file)) continue
@@ -68,6 +71,15 @@ export function runVocabularyCheck({
     for (const failure of scanTextForForbiddenPhrases(rel, text)) {
       failures.push(formatVocabularyFailure(failure))
     }
+    for (const warning of scanTextForWarnings(rel, text)) {
+      warnings.push(formatVocabularyWarning(warning))
+    }
+  }
+
+  if (warnings.length > 0) {
+    io.log(`check-vocabulary: ${warnings.length} terminology warning(s) (warn mode, not blocking):`)
+    for (const warning of warnings.slice(0, 40)) io.log(`  ! ${warning}`)
+    if (warnings.length > 40) io.log(`  ... and ${warnings.length - 40} more`)
   }
 
   if (failures.length > 0) {

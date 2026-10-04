@@ -33,6 +33,7 @@ import {
   workspaceName,
 } from '@/lib/workspace-scope'
 import { useOptionalWorkspaceScope } from '@/lib/workspace-scope-context'
+import { userErrorMessage } from '@/lib/user-error'
 
 function projectTypeBadge(type: ProjectRecord['metadata']) {
   const projectType = type?.type
@@ -56,10 +57,10 @@ function queryErrorMessage(
   workspacesError: unknown,
 ): string | null {
   if (projectsError instanceof Error) {
-    return projectsError.message
+    return userErrorMessage(projectsError, '')
   }
   if (workspacesError instanceof Error) {
-    return workspacesError.message
+    return userErrorMessage(workspacesError, '')
   }
   return null
 }

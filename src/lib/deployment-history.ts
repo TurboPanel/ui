@@ -7,7 +7,13 @@
  * every row (which would be an N+1 read of state the list already carries).
  */
 
-import type { CommandStatus, DeploymentHistoryRecord } from '@/lib/instance-api'
+import type {
+  CommandStatus,
+  DeploymentHistoryRecord,
+  DeploymentStrategy,
+  DeploymentStrategyOutcome,
+  DeploymentTriggerRecord,
+} from '@/lib/instance-api'
 
 /** One deploy — the fan-out across every participating host. */
 export type DeploymentGroup = Readonly<{
@@ -19,6 +25,12 @@ export type DeploymentGroup = Readonly<{
   /** Worst status across the fan-out (failed ≫ running ≫ queued ≫ succeeded). */
   status: CommandStatus
   actorEntityType: string
+  /** The git push behind this deploy, or null when a person started it. */
+  trigger: DeploymentTriggerRecord | null
+  /** The engine the deploy ran; null for older rows. */
+  strategy: DeploymentStrategy | null
+  /** Worst unfinished-deploy outcome across the fan-out (needs attention over rolled back). */
+  strategyOutcome: DeploymentStrategyOutcome | null
   /** Earliest queue time across the fan-out. */
   startedAt: string | null
   /** Longest attempt in the fan-out; null while any attempt is still running. */
@@ -86,6 +98,19 @@ function fanOutDuration(
   return longest
 }
 
+/** Needs attention outranks rolled back: one host stopped on purpose is what the owner must see. */
+export function worstStrategyOutcome(
+  rows: readonly DeploymentHistoryRecord[],
+): DeploymentStrategyOutcome | null {
+  if (rows.some((row) => row.strategyOutcome === 'needs_attention')) {
+    return 'needs_attention'
+  }
+  if (rows.some((row) => row.strategyOutcome === 'rolled_back')) {
+    return 'rolled_back'
+  }
+  return null
+}
+
 /**
  * Group list rows into deploys. Rows sharing a non-null `generation` are one
  * fan-out; a row whose command recorded no generation in its context bag
@@ -118,6 +143,9 @@ export function groupDeploymentsByGeneration(
       commands,
       status: worstDeploymentStatus(commands),
       actorEntityType: anchor?.actorEntityType ?? 'unknown',
+      trigger: anchor?.trigger ?? null,
+      strategy: anchor?.strategy ?? null,
+      strategyOutcome: worstStrategyOutcome(commands),
       startedAt: earliestTimestamp(commands),
       durationMs: fanOutDuration(commands),
     }
@@ -163,6 +191,21 @@ export function formatDeployActor(actorEntityType: string): string {
   return actorEntityType.charAt(0).toUpperCase() + actorEntityType.slice(1)
 }
 
+/**
+ * What the Actor column says about a push-triggered deploy, as two short lines:
+ * the branch and the commit. `null` for a deploy a person started, which keeps
+ * the plain actor label.
+ */
+export function formatDeployTrigger(
+  trigger: DeploymentTriggerRecord | null | undefined,
+): Readonly<{ headline: string; detail: string | null }> | null {
+  if (!trigger) return null
+  const branch = trigger.branch?.trim()
+  const headline = branch ? `Push to ${branch}` : 'Git push'
+  const detail = trigger.commitSha ? trigger.commitSha.slice(0, 7) : null
+  return { headline, detail }
+}
+
 export type DeploymentStatusTone = Readonly<{
   label: string
   tone: 'success' | 'failed' | 'pending'
@@ -171,13 +214,29 @@ export type DeploymentStatusTone = Readonly<{
 /** Status label + tone. Callers pair the tone with the label — never colour alone. */
 export function deploymentStatusTone(
   status: CommandStatus,
+  strategyOutcome: DeploymentStrategyOutcome | null = null,
 ): DeploymentStatusTone {
+  if (strategyOutcome === 'rolled_back') {
+    return { label: 'Rolled back', tone: 'failed' }
+  }
+  if (strategyOutcome === 'needs_attention') {
+    return { label: 'Needs attention', tone: 'failed' }
+  }
   if (status === 'succeeded') return { label: 'Succeeded', tone: 'success' }
   if (status === 'failed') return { label: 'Failed', tone: 'failed' }
   if (status === 'timed_out') return { label: 'Timed out', tone: 'failed' }
   if (status === 'cancelled') return { label: 'Cancelled', tone: 'failed' }
   if (status === 'running') return { label: 'Running', tone: 'pending' }
   return { label: 'Queued', tone: 'pending' }
+}
+
+/** `Sequential` / `In place` for the engine a deploy ran; null for older rows. */
+export function deploymentStrategyLabel(
+  strategy: DeploymentStrategy | null | undefined,
+): string | null {
+  if (strategy === 'sequential') return 'Sequential'
+  if (strategy === 'inplace') return 'In place'
+  return null
 }
 
 /** Host label for a fan-out row — display name first, id as the fallback. */

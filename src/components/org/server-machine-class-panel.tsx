@@ -4,6 +4,7 @@ import { panelStyles } from '@/components/ui/panel-styles'
 import { InlineNotice, SectionPanel, SegmentedControl, type SegmentedOption } from '@/components/ui'
 import type { ServerDetailRecord, ServerMachineClass } from '@/lib/instance-api'
 import { useSetServerMachineClass } from '@/lib/queries/servers'
+import { userErrorMessage } from '@/lib/user-error'
 
 type MachineClassChoice = 'auto' | ServerMachineClass
 
@@ -60,7 +61,7 @@ export function ServerMachineClassPanel({
     setError(null)
     mutation.mutate(fromChoice(choice), {
       onError: (err) => {
-        setError(err instanceof Error ? err.message : 'Failed to save machine class')
+        setError(userErrorMessage(err, 'Failed to save machine class'))
       },
     })
   }

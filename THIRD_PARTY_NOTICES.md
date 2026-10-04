@@ -7,7 +7,7 @@ Third-party components remain under their own copyright and license terms and ar
 Third-party OS artwork under `assets/os/` is recorded separately in `assets/os/NOTICE.md` and is not licensed under this repository’s AGPL or the Apple App Store additional permission.
 
 <!-- lockfiles
-pnpm-lock.yaml sha256:ebc9a2a72ce6bc64896db604476f0f704f6145c26e5af515bb8c475946c5b199
+pnpm-lock.yaml sha256:a639cc52342f2c16d528c0dc9492b8187757a672540b3379a065d7bc0259fc18
 -->
 
 ## Production dependencies
@@ -516,11 +516,6 @@ pnpm-lock.yaml sha256:ebc9a2a72ce6bc64896db604476f0f704f6145c26e5af515bb8c475946
 - Copyright: Expo
 - Homepage: https://github.com/expo/code-signing-certificates/tree/main#readme
 
-### @expo/config@57.0.7
-
-- License: MIT
-- Homepage: https://github.com/expo/expo/tree/main/packages/@expo/config#readme
-
 ### @expo/config@57.0.8
 
 - License: MIT
@@ -597,7 +592,7 @@ pnpm-lock.yaml sha256:ebc9a2a72ce6bc64896db604476f0f704f6145c26e5af515bb8c475946
 - Copyright: Expo
 - Homepage: https://github.com/expo/expo/tree/main/packages/@expo/log-box
 
-### @expo/metro@56.0.0
+### @expo/metro@56.0.2
 
 - License: MIT
 - Copyright: Expo
@@ -2802,12 +2797,6 @@ pnpm-lock.yaml sha256:ebc9a2a72ce6bc64896db604476f0f704f6145c26e5af515bb8c475946
 - Copyright: kael
 - Homepage: https://github.com/kaelzhang/node-ignore#readme
 
-### image-size@1.2.1
-
-- License: MIT
-- Copyright: netroy
-- Homepage: https://github.com/image-size/image-size#readme
-
 ### indent-string@4.0.0
 
 - License: MIT
@@ -3110,75 +3099,75 @@ pnpm-lock.yaml sha256:ebc9a2a72ce6bc64896db604476f0f704f6145c26e5af515bb8c475946
 - License: MIT
 - Homepage: https://github.com/teambition/merge2
 
-### metro@0.84.4
+### metro@0.84.5
 
 - License: MIT
-- Homepage: https://github.com/facebook/metro#readme
+- Homepage: https://github.com/react/metro#readme
 
-### metro-babel-transformer@0.84.4
-
-- License: MIT
-- Homepage: https://github.com/facebook/metro#readme
-
-### metro-cache@0.84.4
+### metro-babel-transformer@0.84.5
 
 - License: MIT
-- Homepage: https://github.com/facebook/metro#readme
+- Homepage: https://github.com/react/metro#readme
 
-### metro-cache-key@0.84.4
-
-- License: MIT
-- Homepage: https://github.com/facebook/metro#readme
-
-### metro-config@0.84.4
+### metro-cache@0.84.5
 
 - License: MIT
-- Homepage: https://github.com/facebook/metro#readme
+- Homepage: https://github.com/react/metro#readme
 
-### metro-core@0.84.4
-
-- License: MIT
-- Homepage: https://github.com/facebook/metro#readme
-
-### metro-file-map@0.84.4
+### metro-cache-key@0.84.5
 
 - License: MIT
-- Homepage: https://github.com/facebook/metro#readme
+- Homepage: https://github.com/react/metro#readme
 
-### metro-minify-terser@0.84.4
-
-- License: MIT
-- Homepage: https://github.com/facebook/metro#readme
-
-### metro-resolver@0.84.4
+### metro-config@0.84.5
 
 - License: MIT
-- Homepage: https://github.com/facebook/metro#readme
+- Homepage: https://github.com/react/metro#readme
 
-### metro-runtime@0.84.4
-
-- License: MIT
-- Homepage: https://github.com/facebook/metro#readme
-
-### metro-source-map@0.84.4
+### metro-core@0.84.5
 
 - License: MIT
-- Homepage: https://github.com/facebook/metro#readme
+- Homepage: https://github.com/react/metro#readme
 
-### metro-symbolicate@0.84.4
-
-- License: MIT
-- Homepage: https://github.com/facebook/metro#readme
-
-### metro-transform-plugins@0.84.4
+### metro-file-map@0.84.5
 
 - License: MIT
-- Homepage: https://github.com/facebook/metro#readme
+- Homepage: https://github.com/react/metro#readme
 
-### metro-transform-worker@0.84.4
+### metro-minify-terser@0.84.5
 
 - License: MIT
-- Homepage: https://github.com/facebook/metro#readme
+- Homepage: https://github.com/react/metro#readme
+
+### metro-resolver@0.84.5
+
+- License: MIT
+- Homepage: https://github.com/react/metro#readme
+
+### metro-runtime@0.84.5
+
+- License: MIT
+- Homepage: https://github.com/react/metro#readme
+
+### metro-source-map@0.84.5
+
+- License: MIT
+- Homepage: https://github.com/react/metro#readme
+
+### metro-symbolicate@0.84.5
+
+- License: MIT
+- Homepage: https://github.com/react/metro#readme
+
+### metro-transform-plugins@0.84.5
+
+- License: MIT
+- Homepage: https://github.com/react/metro#readme
+
+### metro-transform-worker@0.84.5
+
+- License: MIT
+- Homepage: https://github.com/react/metro#readme
 
 ### micromatch@4.0.8
 
@@ -3338,10 +3327,10 @@ pnpm-lock.yaml sha256:ebc9a2a72ce6bc64896db604476f0f704f6145c26e5af515bb8c475946
 - Copyright: Andres Suarez
 - Homepage: https://github.com/zertosh/nullthrows#readme
 
-### ob1@0.84.4
+### ob1@0.84.5
 
 - License: MIT
-- Homepage: https://github.com/facebook/metro#readme
+- Homepage: https://github.com/react/metro#readme
 
 ### object-assign@4.1.1
 
@@ -3536,12 +3525,6 @@ pnpm-lock.yaml sha256:ebc9a2a72ce6bc64896db604476f0f704f6145c26e5af515bb8c475946
 - License: MIT
 - Copyright: Sindre Sorhus
 - Homepage: https://github.com/sindresorhus/query-string#readme
-
-### queue@6.0.2
-
-- License: MIT
-- Copyright: Jesse Tane
-- Homepage: https://github.com/jessetane/queue#readme
 
 ### queue-microtask@1.2.3
 

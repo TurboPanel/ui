@@ -3,6 +3,8 @@ import {
   RECOVERY_INTERVAL_MS,
   waitForControlPlaneRecovery,
 } from '@/lib/control-plane-recovery'
+import type { InstanceUpdates, InstanceUpdateTarget } from '@/lib/instance-api'
+import { upgradeBuildVersionLabel } from '@/lib/upgrade-display'
 
 /**
  * Legacy per-unit wait ceiling. Platform upgrades prefer
@@ -22,10 +24,7 @@ export type UpdateTargetIdentity = {
   buildId?: string | null
 }
 
-export type UnitUpdateWait =
-  | { kind: 'applied' }
-  | { kind: 'reconnected' }
-  | { kind: 'unreachable' }
+export type UnitUpdateWait = { kind: 'applied' } | { kind: 'reconnected' } | { kind: 'unreachable' }
 
 export function installedIdentity(installed: InstalledIdentity): string {
   return `${installed.version ?? ''}:${installed.commit ?? ''}`
@@ -52,11 +51,80 @@ export function unitUpdateAvailable(unit: UpdateUnitView): boolean {
 }
 
 /** Either platform unit (control plane or co-located daemon) has an update. */
-export function platformUpdateAvailable(units: Readonly<{
-  instance: UpdateUnitView
-  daemon: UpdateUnitView
-}>): boolean {
+export function platformUpdateAvailable(
+  units: Readonly<{
+    instance: UpdateUnitView
+    daemon: UpdateUnitView
+  }>
+): boolean {
   return unitUpdateAvailable(units.instance) || unitUpdateAvailable(units.daemon)
+}
+
+/**
+ * Self-hosted: any of the control plane, the daemon or the UI has an update.
+ * The UI ships inside the control-plane install, so a UI-only change is still
+ * a run (and lights the button), even though the binary and daemon are current.
+ */
+export function selfHostedUpdateAvailable(
+  units: Readonly<{
+    instance: UpdateUnitView & Pick<InstanceUpdates['units']['instance'], 'uiTarget'>
+    daemon: UpdateUnitView
+  }>,
+  consoleBuild: ConsoleBuild | null
+): boolean {
+  return (
+    platformUpdateAvailable(units) || consoleUpdateAvailable(consoleBuild, units.instance.uiTarget) === true
+  )
+}
+
+/** This console's own build (the bundle the control plane serves). */
+export type ConsoleBuild = Readonly<{ version: string; commit: string }>
+
+/** Whether the console bundle differs from the one the channel serves; `null` when either is unknown. */
+export function consoleUpdateAvailable(
+  consoleBuild: ConsoleBuild | null,
+  uiTarget: Pick<InstanceUpdateTarget, 'commit'> | null | undefined
+): boolean | null {
+  const want = uiTarget?.commit?.trim()
+  const have = consoleBuild?.commit.trim()
+  if (!want || want === 'unknown' || !have) return null
+  return !(want.startsWith(have) || have.startsWith(want))
+}
+
+/** A piece of TurboPanel that has an update, and the build it would move to. */
+export type UpdatePiece = Readonly<{
+  name: 'control plane' | 'web app' | 'daemon'
+  target: InstanceUpdateTarget
+}>
+
+/**
+ * The pieces that have an update, always in the order control plane, UI,
+ * daemon. Each versions on its own, so each carries its own target. The
+ * daemon counts only while it is connected; a piece with no target to name
+ * is left out.
+ */
+export function updatePieces(
+  units: InstanceUpdates['units'],
+  consoleBuild: ConsoleBuild | null
+): UpdatePiece[] {
+  const { instance, daemon } = units
+  const pieces: UpdatePiece[] = []
+  if (instance.target && unitUpdateAvailable(instance)) {
+    pieces.push({ name: 'control plane', target: instance.target })
+  }
+  if (instance.uiTarget && consoleUpdateAvailable(consoleBuild, instance.uiTarget)) {
+    pieces.push({ name: 'web app', target: instance.uiTarget })
+  }
+  if (daemon.target && daemon.connected && unitUpdateAvailable(daemon)) {
+    pieces.push({ name: 'daemon', target: daemon.target })
+  }
+  return pieces
+}
+
+/** `control plane v0.1.5-canary.1`: the piece and the version it would move to. */
+export function updatePieceLabel(piece: UpdatePiece): string {
+  const version = upgradeBuildVersionLabel(piece.target) ?? 'a new build'
+  return `${piece.name} ${version}`
 }
 
 function presentIdentity(value: string | null | undefined): string | null {
@@ -68,7 +136,7 @@ function presentIdentity(value: string | null | undefined): string | null {
 function updateLanded(
   installed: InstalledIdentity,
   target: UpdateTargetIdentity,
-  before: string,
+  before: string
 ): boolean {
   const commit = presentIdentity(target.commit)
   if (commit) return presentIdentity(installed.commit) === commit
@@ -82,20 +150,14 @@ function updateLanded(
 const defaultSleep = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms))
 
-type ReadStep =
-  | { kind: 'answered'; installed: InstalledIdentity }
-  | { kind: 'unreachable' }
+type ReadStep = { kind: 'answered'; installed: InstalledIdentity } | { kind: 'unreachable' }
 
 function finishAtDeadline(answered: boolean): UnitUpdateWait {
   if (answered) return { kind: 'reconnected' }
   return { kind: 'unreachable' }
 }
 
-function pollDelay(
-  now: () => number,
-  deadline: number,
-  intervalMs: number,
-): number | null {
+function pollDelay(now: () => number, deadline: number, intervalMs: number): number | null {
   const remaining = deadline - now()
   if (remaining <= 0) return null
   return Math.min(intervalMs, remaining)
@@ -104,7 +166,7 @@ function pollDelay(
 function handleAnsweredStep(
   step: ReadStep,
   target: UpdateTargetIdentity,
-  before: string,
+  before: string
 ): { answered: boolean; done: UnitUpdateWait | null } {
   if (step.kind === 'unreachable') return { answered: false, done: step }
   if (updateLanded(step.installed, target, before)) {
@@ -191,7 +253,7 @@ async function readInstalledOrRecover({
 
 export function unitUpdateFeedback(
   unit: 'instance' | 'daemon',
-  kind: UnitUpdateWait['kind'],
+  kind: UnitUpdateWait['kind']
 ): string {
   const name = unit === 'instance' ? 'Control plane' : 'Daemon'
   switch (kind) {

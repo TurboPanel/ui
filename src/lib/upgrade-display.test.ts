@@ -1,20 +1,24 @@
 import { describe, expect, it } from 'vitest'
 import {
-  buildCounterLabel,
+  fleetComponentLabel,
   fleetStatusBadge,
   formatUpgradeBuildDisplayName,
   installedBuildLabel,
-  parseBuildCounter,
   mapStepStatusToPipeline,
+  pieceIdentityLines,
+  stepInFlight,
   platformUpgradeHeadlineCopy,
   resolvePlatformUpgradeHeadline,
   stepHasStarted,
   summarizeFleetSteps,
+  updateAvailabilityBadge,
   updateAvailableSentence,
   upgradeBuildDetailLines,
+  upgradeBuildVersionLabel,
   upgradeChannelTitle,
   upgradePhaseLabel,
   upgradeRunErrorLabel,
+  upgradeStepLabel,
   upgradeStepErrorLabel,
   upgradeStepOutcome,
 } from '@/lib/upgrade-display'
@@ -30,7 +34,7 @@ describe('formatUpgradeBuildDisplayName', () => {
       },
       { locale: 'en-US', timeZone: 'UTC' }
     )
-    expect(label).toMatch(/^Canary · Sep 19/)
+    expect(label).toBe('abc · Sep 19, 07:30 PM')
   })
 
   it('falls back to version when builtAt is invalid', () => {
@@ -42,7 +46,7 @@ describe('formatUpgradeBuildDisplayName', () => {
         commit: 'unknown',
         buildId: '',
       })
-    ).toBe('Release 0.1.2')
+    ).toBe('v0.1.2')
   })
 })
 
@@ -125,7 +129,7 @@ describe('upgrade display helpers', () => {
         commit: 'unknown',
         buildId: 'build-abcdef123456',
       })
-    ).toBe('RC · v1.0.0')
+    ).toBe('v1.0.0')
     expect(
       upgradeBuildDetailLines({
         version: ' 1.2 ',
@@ -141,8 +145,8 @@ describe('upgrade display helpers', () => {
   })
 
   it('labels phases and maps pipeline edge cases', () => {
-    expect(upgradePhaseLabel('fleet')).toBe('Fleet')
-    expect(upgradePhaseLabel(null)).toBe('Upgrade')
+    expect(upgradePhaseLabel('fleet')).toBe('Server updates')
+    expect(upgradePhaseLabel(null)).toBe('Update')
     expect(mapStepStatusToPipeline(null)).toBe('preparing')
     expect(mapStepStatusToPipeline('failed')).toBe('verifying')
     expect(mapStepStatusToPipeline('installing')).toBe('installing')
@@ -164,6 +168,12 @@ describe('upgradeStepOutcome', () => {
       label: 'Needs attention',
       detail: 'Server offline for over an hour',
     })
+  })
+
+  it('words a failed update delivery in plain language, not as the raw code', () => {
+    const outcome = upgradeStepOutcome({ status: 'needs_attention', errorCode: 'dispatch_failed' })
+    expect(outcome.detail).toBe("Couldn't reach the server")
+    expect(outcome.detail).not.toContain('dispatch_failed')
   })
 
   it('explains a skipped server that is already newer than the target', () => {
@@ -197,44 +207,29 @@ describe('upgradeStepOutcome', () => {
   })
 
   it('names the run errors the control plane ends a run with', () => {
-    expect(upgradeRunErrorLabel('colocated_daemon_failed')).toBe(
-      'The co-located daemon step failed'
-    )
-    expect(upgradeRunErrorLabel('control_plane_failed')).toBe('The control-plane step failed')
+    expect(upgradeRunErrorLabel('colocated_daemon_failed')).toBe('The daemon step failed')
+    expect(upgradeRunErrorLabel('control_plane_failed')).toBe('The control plane step failed')
     expect(upgradeRunErrorLabel('')).toBeNull()
   })
 })
 
-describe('build numbers', () => {
-  it('reads the counter from canary and rc versions only', () => {
-    expect(parseBuildCounter('0.1.3-canary.417')).toEqual({
-      base: '0.1.3',
-      channel: 'canary',
-      number: 417,
-    })
-    expect(parseBuildCounter('v0.1.3-rc.2')).toEqual({ base: '0.1.3', channel: 'rc', number: 2 })
-    expect(parseBuildCounter('0.1.3')).toBeNull()
-    expect(parseBuildCounter('0.1.1-canary.20260919-143000-abc1234')).toBeNull()
-    expect(parseBuildCounter(undefined)).toBeNull()
-    expect(buildCounterLabel('0.1.3-canary.417')).toBe('Canary #417')
-    expect(buildCounterLabel('0.1.3-rc.2')).toBe('RC 2')
+describe('build names', () => {
+  const at = { builtAt: '2026-09-29T09:10:00.000Z', commit: 'abc', buildId: 'b' }
+  const opts = { locale: 'en-US', timeZone: 'UTC' }
+
+  it('names canary, rc and release builds by their version, with the date', () => {
+    expect(
+      formatUpgradeBuildDisplayName({ ...at, channel: 'canary', version: '0.1.5-canary.1' }, opts)
+    ).toBe('v0.1.5-canary.1 · Sep 29, 09:10 AM')
+    expect(
+      formatUpgradeBuildDisplayName({ ...at, channel: 'rc', version: '0.1.5-rc.2' }, opts)
+    ).toBe('v0.1.5-rc.2 · Sep 29, 09:10 AM')
+    expect(
+      formatUpgradeBuildDisplayName({ ...at, channel: 'release', version: '0.1.5' }, opts)
+    ).toBe('v0.1.5 · Sep 29, 09:10 AM')
   })
 
-  it('puts the build number in the target line for canary, rc and release', () => {
-    const at = { builtAt: '2026-09-29T09:10:00.000Z', commit: 'abc', buildId: 'b' }
-    const opts = { locale: 'en-US', timeZone: 'UTC' }
-    expect(
-      formatUpgradeBuildDisplayName({ ...at, channel: 'canary', version: '0.1.3-canary.417' }, opts)
-    ).toBe('Canary #417 · Sep 29, 09:10 AM')
-    expect(
-      formatUpgradeBuildDisplayName({ ...at, channel: 'rc', version: '0.1.3-rc.2' }, opts)
-    ).toBe('RC 2 (0.1.3) · Sep 29, 09:10 AM')
-    expect(
-      formatUpgradeBuildDisplayName({ ...at, channel: 'release', version: '0.1.3' }, opts)
-    ).toBe('Release 0.1.3 · Sep 29, 09:10 AM')
-  })
-
-  it('keeps the plain channel for an older timestamp canary', () => {
+  it('names an older timestamp canary by its version too', () => {
     expect(
       formatUpgradeBuildDisplayName(
         {
@@ -244,22 +239,30 @@ describe('build numbers', () => {
           commit: 'abc',
           buildId: 'b',
         },
-        { locale: 'en-US', timeZone: 'UTC' }
+        opts
       )
-    ).toMatch(/^Canary · Sep 19/)
+    ).toBe('v0.1.1-canary.20260919-143000-abc1234 · Sep 19, 07:30 PM')
   })
 
-  it('names the build number without a date too', () => {
+  it('names the version alone without a date, and never says Canary # or RC n', () => {
+    const noDate = { ...at, builtAt: '' }
     expect(
-      formatUpgradeBuildDisplayName({
-        channel: 'canary',
-        builtAt: '',
-        version: '0.1.3-canary.417',
-        commit: 'x',
-        buildId: '',
-      })
-    ).toBe('Canary #417')
+      formatUpgradeBuildDisplayName({ ...noDate, channel: 'canary', version: '0.1.3-canary.417' })
+    ).toBe('v0.1.3-canary.417')
+    expect(formatUpgradeBuildDisplayName({ ...noDate, channel: 'rc', version: '0.1.3-rc.2' })).toBe(
+      'v0.1.3-rc.2'
+    )
     expect(upgradeChannelTitle('rc')).toBe('RC')
+  })
+
+  it('keeps a single v on a version that already has one', () => {
+    expect(
+      upgradeBuildVersionLabel({ version: 'v0.1.5-canary.1', commit: 'abc', buildId: 'b' })
+    ).toBe('v0.1.5-canary.1')
+    expect(upgradeBuildVersionLabel({ version: ' 0.1.5 ', commit: 'abc', buildId: 'b' })).toBe(
+      'v0.1.5'
+    )
+    expect(upgradeBuildVersionLabel({ commit: 'unknown', buildId: '' })).toBeNull()
   })
 })
 
@@ -269,7 +272,7 @@ describe('build identity fallback', () => {
   it('names a build with no date by version, then commit, then build id', () => {
     expect(
       formatUpgradeBuildDisplayName({ ...noDate, channel: 'canary', version: ' 0.1.1 ' })
-    ).toBe('Canary · v0.1.1')
+    ).toBe('v0.1.1')
     expect(
       formatUpgradeBuildDisplayName({
         ...noDate,
@@ -277,7 +280,7 @@ describe('build identity fallback', () => {
         commit: 'a96b655123456789abcdef',
         buildId: 'b1',
       })
-    ).toBe('Canary · a96b65512345')
+    ).toBe('a96b65512345')
     expect(
       formatUpgradeBuildDisplayName({
         ...noDate,
@@ -285,29 +288,29 @@ describe('build identity fallback', () => {
         commit: 'unknown',
         buildId: 'build-abcdef123456',
       })
-    ).toBe('Canary · build-abcdef')
+    ).toBe('build-abcdef')
     expect(formatUpgradeBuildDisplayName({ ...noDate, channel: 'canary', commit: 'unknown' })).toBe(
       'Canary'
     )
     expect(formatUpgradeBuildDisplayName({ ...noDate, channel: '' })).toBe('Build')
   })
 
-  it('only calls a plain version a release on the release channel', () => {
+  it('names a plain version the same on every channel', () => {
     expect(
       formatUpgradeBuildDisplayName({ ...noDate, channel: ' Release ', version: 'v0.1.3' })
-    ).toBe('Release 0.1.3')
+    ).toBe('v0.1.3')
     expect(formatUpgradeBuildDisplayName({ ...noDate, channel: 'rc', version: '0.1.3' })).toBe(
-      'RC · v0.1.3'
+      'v0.1.3'
     )
   })
 
-  it('shows the date for a plain release without a counter', () => {
+  it('shows the date for a plain release', () => {
     expect(
       formatUpgradeBuildDisplayName(
         { ...noDate, channel: 'release', version: '0.1.3', builtAt: ' 2026-09-29T09:10:00.000Z ' },
         { locale: 'en-US', timeZone: 'UTC' }
       )
-    ).toBe('Release 0.1.3 · Sep 29, 09:10 AM')
+    ).toBe('v0.1.3 · Sep 29, 09:10 AM')
   })
 })
 
@@ -377,6 +380,14 @@ describe('a run that has not started reads as not started', () => {
   })
 })
 
+describe('updateAvailabilityBadge', () => {
+  it('names each state in words', () => {
+    expect(updateAvailabilityBadge(null)).toEqual({ tone: 'muted', label: 'Not connected' })
+    expect(updateAvailabilityBadge(true)).toEqual({ tone: 'pending', label: 'Update available' })
+    expect(updateAvailabilityBadge(false)).toEqual({ tone: 'ok', label: 'Up to date' })
+  })
+})
+
 describe('fleetStatusBadge', () => {
   it('names what the rollout is doing with a server', () => {
     expect(fleetStatusBadge('pending')).toEqual({ tone: 'muted', label: 'Waiting' })
@@ -385,19 +396,118 @@ describe('fleetStatusBadge', () => {
     expect(fleetStatusBadge('done')).toEqual({ tone: 'ok', label: 'Updated' })
     expect(fleetStatusBadge('failed')).toEqual({ tone: 'danger', label: 'Failed' })
     expect(fleetStatusBadge('rolled_back')).toEqual({ tone: 'danger', label: 'Rolled back' })
-    expect(fleetStatusBadge('needs_attention')).toEqual({ tone: 'pending', label: 'Needs attention' })
+    expect(fleetStatusBadge('needs_attention')).toEqual({
+      tone: 'pending',
+      label: 'Needs attention',
+    })
   })
 })
 
 describe('updateAvailableSentence', () => {
-  it('names the pieces in reading order', () => {
+  it('names the pieces with their versions in reading order', () => {
     expect(updateAvailableSentence([])).toBeNull()
-    expect(updateAvailableSentence(['the UI'])).toBe('The UI can be updated.')
-    expect(updateAvailableSentence(['the control plane', 'the UI'])).toBe(
-      'The control plane and the UI can be updated.'
+    expect(updateAvailableSentence(['daemon v0.1.6-canary.3'])).toBe(
+      'Daemon v0.1.6-canary.3 can be updated.'
     )
-    expect(updateAvailableSentence(['the control plane', 'the UI', 'the co-located daemon'])).toBe(
-      'The control plane, the UI and the co-located daemon can be updated.'
+    expect(updateAvailableSentence(['control plane v0.1.5-canary.1', 'UI v0.1.5-canary.2'])).toBe(
+      'Control plane v0.1.5-canary.1 and UI v0.1.5-canary.2 can be updated.'
     )
+    expect(
+      updateAvailableSentence([
+        'control plane v0.1.5-canary.1',
+        'UI v0.1.5-canary.2',
+        'daemon v0.1.6-canary.3',
+      ])
+    ).toBe(
+      'Control plane v0.1.5-canary.1, UI v0.1.5-canary.2 and daemon v0.1.6-canary.3 can be updated.'
+    )
+  })
+})
+
+describe('upgrade step wording', () => {
+  it('says which version runs at each step', () => {
+    expect(upgradeStepLabel('installing')).toBe('Writing new files (still running the old version)')
+    expect(upgradeStepLabel('restarting')).toBe('Restarting onto the new version')
+    expect(upgradeStepLabel('verifying')).toBe('Checking the new version is running')
+    expect(upgradeStepLabel('preparing')).toBe('Preparing')
+  })
+
+  it('is in flight until the step ends', () => {
+    expect(stepInFlight('installing')).toBe(true)
+    expect(stepInFlight('pending')).toBe(true)
+    expect(stepInFlight('done')).toBe(false)
+    expect(stepInFlight('failed')).toBe(false)
+    expect(stepInFlight(null)).toBe(false)
+  })
+
+  it('never says Up to date while a run is working on the piece', () => {
+    expect(updateAvailabilityBadge(false, true)).toEqual({ tone: 'pending', label: 'Updating' })
+    expect(updateAvailabilityBadge(false)).toEqual({ tone: 'ok', label: 'Up to date' })
+  })
+})
+
+describe('pieceIdentityLines', () => {
+  const running = { version: '0.1.4', commit: 'aaaaaaa1111' }
+  const to = { toVersion: '0.1.5', toCommit: 'bbbbbbb2222' }
+
+  it('shows only the running line with no run', () => {
+    expect(pieceIdentityLines({ running, runningLabel: '0.1.4 · aaaaaaa', step: null })).toEqual({
+      installedOnDisk: null,
+      runningNow: '0.1.4 · aaaaaaa',
+      updatingTo: null,
+      restartPending: false,
+    })
+  })
+
+  it('names the target as Updating to before the files are written', () => {
+    const lines = pieceIdentityLines({
+      running,
+      runningLabel: '0.1.4 · aaaaaaa',
+      step: { status: 'installing', ...to },
+    })
+    expect(lines.updatingTo).toBe('0.1.5 · bbbbbbb')
+    expect(lines.installedOnDisk).toBeNull()
+    expect(lines.restartPending).toBe(false)
+  })
+
+  it('shows the new files on disk and a pending restart once restarting', () => {
+    const lines = pieceIdentityLines({
+      running,
+      runningLabel: '0.1.4 · aaaaaaa',
+      step: { status: 'restarting', ...to },
+    })
+    expect(lines.installedOnDisk).toBe('0.1.5 · bbbbbbb')
+    expect(lines.updatingTo).toBeNull()
+    expect(lines.restartPending).toBe(true)
+  })
+
+  it('has no pending restart once the running commit is the target', () => {
+    const lines = pieceIdentityLines({
+      running: { version: '0.1.5', commit: 'bbbbbbb2222' },
+      runningLabel: '0.1.5 · bbbbbbb',
+      step: { status: 'verifying', ...to },
+    })
+    expect(lines.installedOnDisk).toBe('0.1.5 · bbbbbbb')
+    expect(lines.restartPending).toBe(false)
+  })
+
+  it('shows nothing about disk when the step has ended', () => {
+    const lines = pieceIdentityLines({
+      running,
+      runningLabel: 'x',
+      step: { status: 'done', ...to },
+    })
+    expect(lines.installedOnDisk).toBeNull()
+    expect(lines.updatingTo).toBeNull()
+  })
+})
+
+describe('fleetComponentLabel', () => {
+  it('names the daemon for server rows', () => {
+    expect(fleetComponentLabel({ unit: 'daemon' })).toBe('Daemon')
+    expect(fleetComponentLabel({})).toBe('Daemon')
+  })
+  it('names the control plane for an instance row', () => {
+    expect(fleetComponentLabel({ unit: 'instance' })).toBe('Control plane')
   })
 })

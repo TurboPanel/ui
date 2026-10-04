@@ -4,6 +4,7 @@ import { panelStyles } from '@/components/ui/panel-styles'
 import { Button, ButtonRow, SectionPanel, TextField } from '@/components/ui'
 import type { ManagedStatus } from '@/lib/managed-services'
 import { colors, spacing } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 export function ManagedLifecyclePanel({
   status,
@@ -37,7 +38,7 @@ export function ManagedLifecyclePanel({
     try {
       await action()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Action failed')
+      setError(userErrorMessage(err, 'Action failed'))
     } finally {
       setWorking(false)
     }

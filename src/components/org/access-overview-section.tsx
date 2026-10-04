@@ -7,6 +7,7 @@ import {
   View,
 } from 'react-native'
 import { panelStyles } from '@/components/ui/panel-styles'
+import { OrgMembersPanel } from '@/components/org/org-members-panel'
 import {
   Badge,
   Button,
@@ -42,6 +43,7 @@ import {
 } from '@/lib/query-client'
 import { orEmptyArray } from '@/lib/or-empty-array'
 import { chrome, colors, spacing } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 type SubjectKind = CreateAccessBody['subjectKind']
 
@@ -67,7 +69,7 @@ type ScopeItem = {
 }
 
 function errorMessage(err: unknown, fallback: string): string {
-  return err instanceof Error ? err.message : fallback
+  return userErrorMessage(err, fallback)
 }
 
 function TeamScopePicker({
@@ -621,6 +623,8 @@ export function AccessOverviewSection({
       <Text style={panelStyles.pageCopy}>
         Manage permission grants for organizations and teams.
       </Text>
+
+      <OrgMembersPanel orgId={orgId} />
 
       {canInvite ? (
         <>

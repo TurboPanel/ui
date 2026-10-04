@@ -85,7 +85,7 @@ export function CertificatesSection() {
       <Text style={panelStyles.pageTitle}>Certificates</Text>
       <Text style={panelStyles.pageCopy}>
         Certificate material for this control plane. An uploaded pair and
-        Let&apos;s Encrypt are instance settings. They are unrelated to any
+        Let&apos;s Encrypt are control plane settings. They are unrelated to any
         organization&apos;s Let&apos;s Encrypt opt-in.
       </Text>
       {capabilitiesKnown && !capable ? (
@@ -568,7 +568,7 @@ function ReachabilityList({
         only while a certificate is being issued or renewed. During that window
         the daemon answers a nonce and requires
         http://&lt;hostname&gt;/.well-known/acme-challenge/&lt;nonce&gt; to
-        reach the instance ACME issuer. A private or wildcard name is refused
+        reach the control plane’s ACME issuer. A private or wildcard name is refused
         before that check. Issuance errors are listed separately from that
         preflight.
       </Text>

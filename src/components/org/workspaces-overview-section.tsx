@@ -29,6 +29,7 @@ import { spacing } from '@/lib/theme'
 import { validateWorkspaceName } from '@/lib/workspace-validation'
 import { orEmptyArray } from '@/lib/or-empty-array'
 import { useOptionalWorkspaceScope } from '@/lib/workspace-scope-context'
+import { userErrorMessage } from '@/lib/user-error'
 
 function workspaceDescriptionText(
   system: boolean,
@@ -63,9 +64,7 @@ export function WorkspacesOverviewSection({ orgId }: Readonly<{ orgId: string }>
   const [createError, setCreateError] = useState<string | null>(null)
 
   const queryError =
-    workspacesQuery.error instanceof Error
-      ? workspacesQuery.error.message
-      : null
+    workspacesQuery.error instanceof Error ? userErrorMessage(workspacesQuery.error, '') : null
 
   const handleCreateWorkspace = async () => {
     const nameError = validateWorkspaceName(createName)

@@ -108,7 +108,7 @@ export function systemComponentLabel(component: string | null | undefined): stri
     case SYSTEM_MANAGED_HA_COMPONENT:
       return 'Database High-Availability'
     case SYSTEM_SELF_HOST_COMPONENT:
-      return 'Self Hosted TurboPanel Instance'
+      return 'Self-hosted TurboPanel'
     default:
       return component?.trim() || '—'
   }

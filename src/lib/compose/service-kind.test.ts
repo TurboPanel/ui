@@ -4,6 +4,8 @@ import {
   BASELINE_PHP_EXTENSIONS,
   DEFAULT_NODE_SERIES,
   DEFAULT_PHP_SERIES,
+  ENGINE_PHP_MODES,
+  PHP_MODES,
   OPTIONAL_PHP_EXTENSIONS,
   SUPPORTED_NODE_SERIES,
   SUPPORTED_PHP_SERIES,
@@ -12,6 +14,7 @@ import {
   isSiteComposeService,
   parseServiceSourceExtension,
   parseServiceTurbopanelExtension,
+  SITE_ENGINE_OPTIONS,
   patchServiceTurbopanelExtension,
   readServiceSourceExtension,
   readServiceTurbopanelExtension,
@@ -197,6 +200,31 @@ describe('patchServiceTurbopanelExtension node fields', () => {
       serviceKind: 'node',
       packageManager: 'npm',
     })
+  })
+})
+
+describe('x-turbopanel.source.deployOnPush', () => {
+  const sourceId = '11111111-2222-3333-4444-555555555555'
+
+  it('keeps false and true as authored, and nothing when absent', () => {
+    expect(
+      parseServiceTurbopanelExtension({ source: { sourceId, deployOnPush: false } })?.source
+        ?.deployOnPush,
+    ).toBe(false)
+    expect(
+      parseServiceTurbopanelExtension({ source: { sourceId, deployOnPush: true } })?.source
+        ?.deployOnPush,
+    ).toBe(true)
+    expect(
+      parseServiceTurbopanelExtension({ source: { sourceId } })?.source?.deployOnPush,
+    ).toBeUndefined()
+  })
+
+  it('drops a value that is not a boolean', () => {
+    expect(
+      parseServiceTurbopanelExtension({ source: { sourceId, deployOnPush: 'false' } })?.source
+        ?.deployOnPush,
+    ).toBeUndefined()
   })
 })
 
@@ -390,6 +418,36 @@ describe('parseServiceTurbopanelExtension shapes', () => {
     expect(
       parseServiceTurbopanelExtension({ php: { settings: { skip: true } } })?.php,
     ).toBeUndefined()
+  })
+
+  it('keeps a known php.mode and drops anything else', () => {
+    expect(
+      parseServiceTurbopanelExtension({ serviceKind: 'site', php: { mode: 'fastcgi' } })?.php,
+    ).toEqual({ mode: 'fastcgi' })
+    expect(
+      parseServiceTurbopanelExtension({ php: { version: '8.4', mode: 'cgi' } })?.php,
+    ).toEqual({ version: '8.4' })
+    // A patch that touches another field keeps the authored mode.
+    const patched = patchServiceTurbopanelExtension(
+      { 'x-turbopanel': { serviceKind: 'site', engine: 'nginx', php: { mode: 'fpm' } } },
+      { engine: 'apache' },
+    )
+    expect(patched['x-turbopanel']).toMatchObject({ engine: 'apache', php: { mode: 'fpm' } })
+  })
+
+  it('maps each engine to the PHP modes it can run', () => {
+    expect(ENGINE_PHP_MODES.caddy).toEqual([])
+    expect(ENGINE_PHP_MODES.nginx).toEqual(['fastcgi', 'fpm'])
+    expect(ENGINE_PHP_MODES.apache).toEqual(['fastcgi', 'fpm'])
+    expect(ENGINE_PHP_MODES['nginx+apache']).toEqual(['fastcgi', 'fpm'])
+    expect(ENGINE_PHP_MODES.openlitespeed).toEqual(PHP_MODES)
+  })
+
+  it('reads nginx+apache as an engine and offers it in the picker', () => {
+    const parsed = parseServiceTurbopanelExtension({ serviceKind: 'site', engine: 'nginx+apache' })
+    expect(parsed?.engine).toBe('nginx+apache')
+    const option = SITE_ENGINE_OPTIONS.find((o) => o.value === 'nginx+apache')
+    expect(option?.label).toContain('one shared Apache')
   })
 
   it('keeps a managed-directory sourceKind on a site', () => {

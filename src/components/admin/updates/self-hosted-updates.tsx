@@ -1,7 +1,8 @@
-import Constants from 'expo-constants'
 import { useLocalSearchParams, useRouter } from 'expo-router'
+import { getInstanceRevision, getInstanceVersion } from '@/lib/instance-version'
 import { useEffect, useMemo, useRef, useState, type ComponentProps } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
+import { readConsoleBuild } from '@/components/admin/updates/console-build'
 import { UpgradeBuildBlock } from '@/components/admin/updates/upgrade-build-block'
 import { UpgradeFailureNotice } from '@/components/admin/updates/upgrade-failure-notice'
 import { UpgradeFleetTable } from '@/components/admin/updates/upgrade-fleet-table'
@@ -19,12 +20,19 @@ import {
 } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
 import type { InstanceUpdates, UpgradePreflightResult } from '@/lib/instance-api'
-import { platformUpdateAvailable, unitUpdateAvailable } from '@/lib/instance-updates'
-import { readAppSourceRelease } from '@/lib/source-release'
+import {
+  consoleUpdateAvailable,
+  selfHostedUpdateAvailable,
+  unitUpdateAvailable,
+  updatePieceLabel,
+  updatePieces,
+  type ConsoleBuild,
+} from '@/lib/instance-updates'
 import { fleetServersQuery, UPGRADE_FLEET_PAGE_SIZE } from '@/lib/upgrade-batch'
 import {
   installedBuildLabel,
   platformUpgradeHeadlineCopy,
+  type PieceStepView,
   resolvePlatformUpgradeHeadline,
   summarizeFleetSteps,
   updateAvailableSentence,
@@ -49,16 +57,7 @@ import {
   withStartTimeout,
 } from '@/lib/update-status'
 import { colors, spacing } from '@/lib/theme'
-
-/** This console's own build (the bundle the control plane serves), from the app config. */
-function readConsoleBuild(): { version: string; commit: string } | null {
-  try {
-    const release = readAppSourceRelease(Constants.expoConfig)
-    return { version: release.version, commit: release.gitCommit }
-  } catch {
-    return null
-  }
-}
+import { UPDATE_ALREADY_ACTIVE_COPY, apiErrorCopy, userErrorMessage } from '@/lib/user-error'
 
 type ShownRun = NonNullable<ReturnType<typeof runToShow>['run']>
 type FleetServers = ComponentProps<typeof UpgradeFleetTable>['servers']
@@ -78,9 +77,9 @@ function useStallClock(run: ShownRun | null, finished: boolean): number {
 }
 
 /** The preflight sheet, starting an update, and the notice line they report through. */
-function useStartUpgradeFlow(refetchActiveRun: () => unknown) {
+function useStartUpgradeFlow(refetchActiveRun: () => unknown, consoleCommit?: string) {
   const preflightMutation = useRunUpgradePreflight()
-  const startUpgrade = useStartPlatformUpgrade()
+  const startUpgrade = useStartPlatformUpgrade(consoleCommit)
   const [preflightOpen, setPreflightOpen] = useState(false)
   const [preflight, setPreflight] = useState<UpgradePreflightResult | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
@@ -93,7 +92,7 @@ function useStartUpgradeFlow(refetchActiveRun: () => unknown) {
       setPreflight(result)
       setPreflightOpen(true)
     } catch (err) {
-      setNotice(err instanceof Error ? err.message : 'Preflight failed')
+      setNotice(userErrorMessage(err, 'Preflight failed'))
     }
   }
 
@@ -103,7 +102,7 @@ function useStartUpgradeFlow(refetchActiveRun: () => unknown) {
       const outcome = await withStartTimeout(startUpgrade.mutateAsync(preflight?.runId))
       setPreflightOpen(false)
       setNotice(
-        `Upgrade started (run ${outcome.runId.slice(0, 8)}). Progress shows below as each step reports.`
+        `Update started (${outcome.runId.slice(0, 8)}). Progress shows below as each step reports.`
       )
     } catch (err) {
       if (err instanceof UpgradeStartTimeoutError) {
@@ -114,8 +113,12 @@ function useStartUpgradeFlow(refetchActiveRun: () => unknown) {
           'Still waiting for the control plane to confirm the update started. The progress below refreshes on its own; if nothing appears, check the daemon log on the server.'
         )
         void refetchActiveRun()
+      } else if (apiErrorCopy(err) === UPDATE_ALREADY_ACTIVE_COPY) {
+        setPreflightOpen(false)
+        setNotice(UPDATE_ALREADY_ACTIVE_COPY)
+        void refetchActiveRun()
       } else {
-        setNotice(err instanceof Error ? err.message : 'Upgrade failed to start')
+        setNotice(userErrorMessage(err, 'Update failed to start'))
       }
     } finally {
       setStarting(false)
@@ -154,10 +157,10 @@ function useCancelRun(setNotice: (notice: string | null) => void) {
     setNotice(null)
     cancelRun.mutate(runId, {
       onSuccess: () => {
-        setNotice('Run cancelled. Start a fresh update to try again.')
+        setNotice('Update cancelled. Start a fresh update to try again.')
       },
       onError: (err) => {
-        setNotice(err instanceof Error ? err.message : 'Failed to cancel the run')
+        setNotice(userErrorMessage(err, 'Failed to cancel the update'))
       },
     })
   }
@@ -178,36 +181,17 @@ function useRetryFleetStep() {
   return { retryingStepId, retry }
 }
 
-/** Whether the console bundle differs from the one the channel serves; `null` when either is unknown. */
-function consoleUpdateAvailable(
-  consoleBuild: { version: string; commit: string } | null,
-  uiTarget: InstanceUpdates['units']['instance']['uiTarget']
-): boolean | null {
-  const want = uiTarget?.commit?.trim()
-  const have = consoleBuild?.commit.trim()
-  if (!want || want === 'unknown' || !have) return null
-  return !(want.startsWith(have) || have.startsWith(want))
-}
-
-/** The pieces that have an update, named the way the panel names them. */
-function componentsWithUpdates(
-  units: InstanceUpdates['units'],
-  consoleBuild: { version: string; commit: string } | null
-): string[] {
-  const names: string[] = []
-  if (unitUpdateAvailable(units.instance)) names.push('the control plane')
-  if (consoleUpdateAvailable(consoleBuild, units.instance.uiTarget)) names.push('the UI')
-  if (units.daemon.connected && unitUpdateAvailable(units.daemon)) names.push('the co-located daemon')
-  return names
-}
-
 function ComponentsPanel({
   units,
   consoleBuild,
   channel,
+  daemonStep,
+  controlPlaneStep,
 }: Readonly<{
   units: InstanceUpdates['units']
-  consoleBuild: { version: string; commit: string } | null
+  daemonStep?: PieceStepView | null
+  controlPlaneStep?: PieceStepView | null
+  consoleBuild: ConsoleBuild | null
   /** The instance-wide update channel; on `release` the version is the whole story. */
   channel: string
 }>) {
@@ -220,12 +204,16 @@ function ComponentsPanel({
         target={instance.target}
         installedLabel={installedBuildLabel(instance.installed, instance.target, hideCommit)}
         updateAvailable={unitUpdateAvailable(instance)}
+        running={instance.installed}
+        step={controlPlaneStep}
       />
       <UpgradeBuildBlock
-        title="UI"
+        title="Web app"
         target={instance.uiTarget}
         installedLabel={installedBuildLabel(consoleBuild, instance.uiTarget, hideCommit)}
         updateAvailable={consoleUpdateAvailable(consoleBuild, instance.uiTarget)}
+        running={consoleBuild}
+        step={controlPlaneStep}
       />
       <UpgradeBuildBlock
         title="Co-located daemon"
@@ -236,6 +224,8 @@ function ComponentsPanel({
             : 'Not connected'
         }
         updateAvailable={daemon.connected ? unitUpdateAvailable(daemon) : null}
+        running={daemon.installed}
+        step={daemonStep}
       />
     </SectionPanel>
   )
@@ -278,9 +268,9 @@ function UpgradeProgressPanel({
       headerRight={
         run && !finished ? (
           <ConfirmButton
-            label="Cancel run"
-            confirmLabel="Cancel run"
-            prompt="Stop this run? Steps already applied stay applied; anything still pending is skipped. Start a fresh update afterward to pick up the current target build."
+            label="Cancel update"
+            confirmLabel="Cancel update"
+            prompt="Stop this update? Steps already applied stay applied; anything still pending is skipped. Start a fresh update afterward to pick up the current target build."
             busy={cancelling}
             onConfirm={() => {
               onCancel(run.id)
@@ -293,13 +283,13 @@ function UpgradeProgressPanel({
         phase="colocated_daemon"
         status={daemonStep?.status ?? null}
         errorCode={daemonStep?.errorCode ?? null}
-        title="Co-located daemon"
+        title="Daemon step"
       />
       <UpgradeStepTracker
         phase="control_plane"
         status={controlPlaneStep?.status ?? null}
         errorCode={controlPlaneStep?.errorCode ?? null}
-        title="Control plane"
+        title="Control plane step"
       />
       {hasUiTarget ? (
         // The UI package is unpacked and swapped in by the same control-plane
@@ -308,15 +298,15 @@ function UpgradeProgressPanel({
           phase="control_plane"
           status={controlPlaneStep?.status ?? null}
           errorCode={controlPlaneStep?.errorCode ?? null}
-          title="UI"
+          title="Web app step"
           note="Installed together with the control plane."
         />
       ) : null}
       {runError ? <Text style={panelStyles.error}>{runError}</Text> : null}
       <Text style={panelStyles.pageCopy}>
         {fleetSummary.total > 0
-          ? `${fleetSummary.upToDate} of ${fleetSummary.total} fleet servers up to date`
-          : 'Fleet wave starts after the control plane is on target.'}
+          ? `${fleetSummary.upToDate} of ${fleetSummary.total} servers up to date`
+          : 'Server updates: each server’s daemon updates after the control plane is on target.'}
       </Text>
       <UpgradeFleetTable
         servers={fleetServers}
@@ -339,11 +329,14 @@ export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>)
   const serversPage = useUpgradeServersPage(fleetServersQuery(offset, ''))
   const settingsQuery = useUpgradeSettings()
   const saveSettings = useSaveUpgradeSettings()
-  const flow = useStartUpgradeFlow(() => activeRun.refetch())
+  const flow = useStartUpgradeFlow(() => activeRun.refetch(), consoleBuild?.commit)
   const { cancel, cancelling } = useCancelRun(flow.setNotice)
   const { retryingStepId, retry } = useRetryFleetStep()
 
-  const shown = runToShow(activeRun.data)
+  const shown = runToShow(activeRun.data, {
+    version: getInstanceVersion(),
+    commit: getInstanceRevision(),
+  })
   const run = shown.run
   const failure = runFailure(run)
   const nowMs = useStallClock(run, shown.finished)
@@ -352,11 +345,13 @@ export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>)
     [run?.steps]
   )
   const fleetSummary = summarizeFleetSteps(run?.steps ?? [])
+  const daemonStep = run?.steps.find((step) => step.phase === 'colocated_daemon')
+  const controlPlaneStep = run?.steps.find((step) => step.phase === 'control_plane')
   const needsAttention = fleetSummary.needsAttention + (run?.counts?.needsAttention ?? 0)
 
   const headline = resolvePlatformUpgradeHeadline({
     activeRunStatus: shown.finished ? null : (run?.status ?? null),
-    updateAvailable: platformUpdateAvailable(data.units),
+    updateAvailable: selfHostedUpdateAvailable(data.units, consoleBuild),
     needsAttentionCount: needsAttention,
   })
 
@@ -370,7 +365,7 @@ export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>)
   const canStart =
     data.managedUpgrade === true &&
     data.units.daemon.connected &&
-    platformUpdateAvailable(data.units) &&
+    selfHostedUpdateAvailable(data.units, consoleBuild) &&
     headline !== 'updating' &&
     !flow.starting
 
@@ -389,7 +384,9 @@ export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>)
             </View>
             {headline === 'update_available' ? (
               <Text style={panelStyles.muted}>
-                {updateAvailableSentence(componentsWithUpdates(data.units, consoleBuild)) ?? ''}
+                {updateAvailableSentence(
+                  updatePieces(data.units, consoleBuild).map(updatePieceLabel)
+                ) ?? ''}
               </Text>
             ) : null}
             <View style={styles.row}>
@@ -408,7 +405,13 @@ export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>)
         </View>
       </SectionPanel>
 
-      <ComponentsPanel units={data.units} consoleBuild={consoleBuild} channel={data.channel} />
+      <ComponentsPanel
+        units={data.units}
+        consoleBuild={consoleBuild}
+        channel={data.channel}
+        daemonStep={shown.finished ? null : daemonStep}
+        controlPlaneStep={shown.finished ? null : controlPlaneStep}
+      />
 
       {failure ? (
         <UpgradeFailureNotice

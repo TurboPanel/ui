@@ -29,6 +29,7 @@ import {
   useTimezones,
 } from '@/lib/queries/servers'
 import { chrome, colors, spacing, webPointer } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 type TimeSyncMaybe = ServerDetailRecord['timeSync']
 
@@ -231,7 +232,7 @@ function TimezoneSettingsPanel({
           style={webPointer}
           accessibilityRole="link"
         >
-          <Text style={styles.linkText}>Open fleet timezone settings</Text>
+          <Text style={styles.linkText}>Open server timezone settings</Text>
         </Pressable>
       ) : null}
 
@@ -431,7 +432,7 @@ export function ServerTimeSection({
       },
       onError: (err) => {
         setTimezoneError(
-          err instanceof Error ? err.message : 'Failed to apply timezone',
+          userErrorMessage(err, 'Failed to apply timezone'),
         )
       },
       onSettled: () => {
@@ -460,7 +461,7 @@ export function ServerTimeSection({
       },
       onError: (err) => {
         setNtpError(
-          err instanceof Error ? err.message : 'Failed to apply NTP settings',
+          userErrorMessage(err, 'Failed to apply NTP settings'),
         )
       },
       onSettled: () => {

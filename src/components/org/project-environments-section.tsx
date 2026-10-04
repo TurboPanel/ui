@@ -14,15 +14,23 @@ import {
   useCreateEnvironment,
   useDeleteEnvironment,
   useEnvironments,
+  useStopEnvironmentMutation,
   useUpdateEnvironment,
 } from '@/lib/queries'
 import type { EnvironmentRecord } from '@/lib/instance-api'
+import {
+  ENVIRONMENT_STOP_QUEUED_COPY,
+  environmentDeleteFailure,
+  environmentDeletePrompt,
+  type EnvironmentDeleteFailure,
+} from '@/lib/environment-delete'
 import { validateEnvironmentName } from '@/lib/environment-validation'
 import { orEmptyArray } from '@/lib/or-empty-array'
 import { DISPLAY_NAME_MAX_LENGTH } from '@/lib/display-name'
 import { useOrgDefaultEnvironmentName } from '@/lib/org-default-environment'
 import { useCan } from '@/lib/query-client'
 import { chrome, colors, spacing } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 function environmentLabel(environment: EnvironmentRecord): string {
   return environment.name?.trim() || 'Unnamed environment'
@@ -150,6 +158,33 @@ function EnvironmentCreateForm({
   )
 }
 
+function EnvironmentDeleteNotice({
+  failure,
+  stopping,
+  onStop,
+}: Readonly<{
+  failure: EnvironmentDeleteFailure | null
+  stopping: boolean
+  onStop: () => void
+}>) {
+  if (!failure) return null
+  return (
+    <View style={styles.deleteNotice}>
+      <Text style={panelStyles.error}>{failure.text}</Text>
+      {failure.needsStop ? (
+        <Button
+          label="Stop"
+          busyLabel="Stopping…"
+          variant="danger"
+          size="sm"
+          busy={stopping}
+          onPress={onStop}
+        />
+      ) : null}
+    </View>
+  )
+}
+
 function EnvironmentToolbar({
   activeEnvironment,
   canOwn,
@@ -184,7 +219,7 @@ function EnvironmentToolbar({
               key={activeEnvironment.id}
               label={deleting ? 'Deleting…' : 'Delete'}
               confirmLabel="Confirm delete"
-              prompt="Delete this environment?"
+              prompt={environmentDeletePrompt(environmentLabel(activeEnvironment))}
               busy={deleting}
               onConfirm={onConfirmDelete}
             />
@@ -193,6 +228,50 @@ function EnvironmentToolbar({
       ) : null}
     </View>
   )
+}
+
+function useEnvironmentDeleteFlow(
+  orgId: string,
+  activeEnvironment: EnvironmentRecord | null,
+  setError: (message: string | null) => void,
+) {
+  const deleteEnvironment = useDeleteEnvironment(orgId)
+  const stopEnvironment = useStopEnvironmentMutation(orgId)
+  const [failure, setFailure] = useState<EnvironmentDeleteFailure | null>(null)
+
+  const deleteActive = async () => {
+    if (!activeEnvironment) return
+    setError(null)
+    setFailure(null)
+    const result = await deleteEnvironment.run(activeEnvironment.id)
+    if (!result.ok && deleteEnvironment.actionError) {
+      setFailure(
+        environmentDeleteFailure(
+          deleteEnvironment.actionError,
+          environmentLabel(activeEnvironment),
+        ),
+      )
+    }
+  }
+
+  const stopActive = async () => {
+    if (!activeEnvironment) return
+    const result = await stopEnvironment.run(activeEnvironment.id)
+    if (result.ok) {
+      setFailure({ text: ENVIRONMENT_STOP_QUEUED_COPY, needsStop: false })
+    } else if (stopEnvironment.actionError) {
+      setFailure({ text: stopEnvironment.actionError, needsStop: true })
+    }
+  }
+
+  return {
+    failure,
+    clearFailure: () => setFailure(null),
+    deleting: deleteEnvironment.isPending,
+    stopping: stopEnvironment.isPending,
+    deleteActive,
+    stopActive,
+  }
 }
 
 export function ProjectEnvironmentsSection({
@@ -232,7 +311,7 @@ export function ProjectEnvironmentsSection({
     orgId,
     activeEnvironment?.id ?? '',
   )
-  const deleteEnvironment = useDeleteEnvironment(orgId)
+  const deleteFlow = useEnvironmentDeleteFlow(orgId, activeEnvironment, setError)
 
   useEffect(() => {
     setSelectedId((previous) => resolveSelectedId(previous, environments))
@@ -268,12 +347,11 @@ export function ProjectEnvironmentsSection({
   ])
 
   const queryError =
-    environmentsQuery.error instanceof Error
-      ? environmentsQuery.error.message
-      : null
+    environmentsQuery.error instanceof Error ? userErrorMessage(environmentsQuery.error, '') : null
 
   const selectEnvironment = (id: string) => {
     setSelectedId(id)
+    deleteFlow.clearFailure()
     setRenaming(false)
     setShowCreate(false)
   }
@@ -328,17 +406,6 @@ export function ProjectEnvironmentsSection({
     setShowCreate(false)
   }
 
-  const deleteActive = async () => {
-    if (!activeEnvironment) return
-    setError(null)
-    const result = await deleteEnvironment.run(activeEnvironment.id)
-    if (!result.ok) {
-      if (deleteEnvironment.actionError) {
-        setError(deleteEnvironment.actionError)
-      }
-    }
-  }
-
   let content
   if (loading && environments.length === 0) {
     content = <LoadingState label="Loading environments…" />
@@ -373,10 +440,15 @@ export function ProjectEnvironmentsSection({
             onAdd={() => {
               setShowCreate(true)
             }}
-            deleting={deleteEnvironment.isPending}
-            onConfirmDelete={() => void deleteActive()}
+            deleting={deleteFlow.deleting}
+            onConfirmDelete={() => void deleteFlow.deleteActive()}
           />
         )}
+        <EnvironmentDeleteNotice
+          failure={deleteFlow.failure}
+          stopping={deleteFlow.stopping}
+          onStop={() => void deleteFlow.stopActive()}
+        />
         {showCreate && canOwn ? (
           <EnvironmentCreateForm
             value={createName}
@@ -419,6 +491,10 @@ export function ProjectEnvironmentsSection({
 }
 
 const styles = StyleSheet.create({
+  deleteNotice: {
+    gap: spacing.sm,
+    alignItems: 'flex-start',
+  },
   root: {
     width: '100%',
     gap: spacing.md,

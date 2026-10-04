@@ -45,7 +45,10 @@ import {
   parsePublicUrlEntry,
   type PublicUrlDraft,
 } from '@/lib/public-url-entry'
-import { type PublicUrlsApplyStatus } from '@/lib/public-urls-apply'
+import {
+  reconnectedStatus,
+  type PublicUrlsApplyStatus,
+} from '@/lib/public-urls-apply'
 import {
   type ApplyPublicUrlsOutcome,
   useApplyPublicUrls,
@@ -57,6 +60,7 @@ import {
 } from '@/lib/queries/admin'
 import { coversHostname } from '@/lib/tls-match'
 import { colors, spacing } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 const WORKERS_APPLY_MESSAGE = 'cert apply is not applicable on this runtime'
 
@@ -68,6 +72,7 @@ const OUTCOME_STATUS: Record<
 > = {
   applied: 'applied',
   reconnected: 'reconnected',
+  'not-issued': 'failed',
   'not-saved': 'not-saved',
   unreachable: 'unreachable',
 }
@@ -174,9 +179,7 @@ export function HostnamesSection() {
   let queryError: string | null = null
   if (hostnamesQuery.isError) {
     queryError =
-      hostnamesQuery.error instanceof Error
-        ? hostnamesQuery.error.message
-        : 'Failed to load hostnames'
+      userErrorMessage(hostnamesQuery.error, 'Failed to load hostnames')
   }
   const displayError = error ?? saveMutation.actionError ?? queryError
 
@@ -254,10 +257,17 @@ export function HostnamesSection() {
       return
     }
     const outcome = applied.value
-    if (outcome.kind === 'reconnected' || outcome.kind === 'not-saved') {
+    if (outcome.kind !== 'applied' && outcome.kind !== 'unreachable') {
       setDraft(outcome.hostnames)
     }
-    setApplyStatus(OUTCOME_STATUS[outcome.kind])
+    if (outcome.kind === 'not-issued') {
+      setApplyError(outcome.error)
+    }
+    setApplyStatus(
+      outcome.kind === 'reconnected'
+        ? reconnectedStatus(outcome.hostnames, outcome.kept)
+        : OUTCOME_STATUS[outcome.kind],
+    )
   }
 
   const handleApplyFailure = (message: string | null) => {

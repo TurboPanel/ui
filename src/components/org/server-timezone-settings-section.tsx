@@ -13,9 +13,10 @@ import { useTimezones } from '@/lib/queries/servers'
 import { useApiMutation, useCan, queryKeys } from '@/lib/query-client'
 import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
 import { spacing } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 function errorMessage(err: unknown, fallback: string): string {
-  return err instanceof Error ? err.message : fallback
+  return userErrorMessage(err, fallback)
 }
 
 export function ServerTimezoneSettingsSection({
@@ -46,7 +47,7 @@ export function ServerTimezoneSettingsSection({
       queryClient.setQueryData(settingsKey, data)
     },
     onError: (err) => {
-      setError(errorMessage(err, 'Failed to save fleet timezone settings'))
+      setError(errorMessage(err, 'Failed to save server timezone settings'))
     },
   })
 
@@ -69,7 +70,7 @@ export function ServerTimezoneSettingsSection({
 
   return (
     <View style={styles.root}>
-      <Text style={panelStyles.pageTitle}>Server fleet settings</Text>
+      <Text style={panelStyles.pageTitle}>Server timezone settings</Text>
       <Text style={panelStyles.pageCopy}>
         Default timezone applied to new hosts and optionally enforced across the
         fleet. SSH port, NTP, and a {TURBOFABRIC_PRODUCT_NAME} preference sit in

@@ -6,6 +6,8 @@ import { SystemManagedNotice } from '@/components/org/system-managed-notice'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { CatalogStep } from '@/components/org/project-create/catalog-step'
 import { ChoiceTileGrid } from '@/components/org/project-create/choice-card'
+import { RepositoryLaneStep } from '@/components/org/project-create/repository-lane-step'
+import { StartOverBar } from '@/components/org/project-create/start-over-bar'
 import { ComposeStep } from '@/components/org/project-create/compose-step'
 import { DetailsStep } from '@/components/org/project-create/details-step'
 import {
@@ -13,6 +15,10 @@ import {
   seedComposeForLane,
   seedHostingCompose,
 } from '@/lib/project-create/repository-seed'
+import {
+  builderForLane,
+  laneForBuilder,
+} from '@/lib/project-create/lane-builder'
 import {
   detectedComposePath,
   rankRepositoryLanes,
@@ -29,6 +35,7 @@ import { RepositoryStep } from '@/components/org/project-create/repository-step'
 import { resolveWizardSelectedSource } from '@/lib/project-create/selected-source'
 import { SetupTypeChoiceCard } from '@/components/org/project-create/setup-type-icons'
 import {
+  SETUP_TYPE_GROUPS,
   SETUP_TYPE_OPTIONS,
   setupOptionForChoice,
   type SetupChoice,
@@ -70,16 +77,18 @@ import { userWorkspaces } from '@/lib/system-inventory'
 import { colors, spacing, webPointer } from '@/lib/theme'
 import { ALL_WORKSPACES_SCOPE } from '@/lib/workspace-scope'
 import { useOptionalWorkspaceScope } from '@/lib/workspace-scope-context'
+import { userErrorMessage } from '@/lib/user-error'
 
 const FORM_MAX_WIDTH = 440
 
 /**
  * Wizard position. Nothing is persisted until the final step's Create button,
  * so every step is freely reversible. The repository step owns everything
- * about the picked repository — check, branch, builder, Simple-application
- * settings — so there is no separate lane step anymore.
+ * about the picked repository — pick it, name the branch, read it. The lane
+ * step ("What is this?") then asks what the read found, with the evidence for
+ * each answer, and carries the Simple-application settings.
  */
-type Step = 'details' | 'type' | 'repository' | 'catalog' | 'compose'
+type Step = 'details' | 'type' | 'repository' | 'lane' | 'catalog' | 'compose'
 
 function resolveScopedWorkspaceId(
   paramWorkspaceId: string | string[] | undefined,
@@ -98,8 +107,8 @@ function resolveLoadError(
   workspacesError: unknown,
   projectsError: unknown,
 ): string | null {
-  if (workspacesError instanceof Error) return workspacesError.message
-  if (projectsError instanceof Error) return projectsError.message
+  if (workspacesError instanceof Error) return userErrorMessage(workspacesError, '')
+  if (projectsError instanceof Error) return userErrorMessage(projectsError, '')
   return null
 }
 
@@ -144,12 +153,16 @@ const STEP_COPY: Record<Step, { title: string; hint: string }> = {
     hint: 'Name it and pick where it lives. Nothing is created yet.',
   },
   type: {
-    title: 'What are you starting from?',
-    hint: '',
+    title: 'How should this run?',
+    hint: 'Pick how the project starts. You can add more services later.',
   },
   repository: {
     title: 'Link a repository',
-    hint: 'Pick it, then set up how it builds and runs. Nothing is created yet.',
+    hint: 'Pick it and the branch to deploy. Nothing is created yet.',
+  },
+  lane: {
+    title: 'What is this?',
+    hint: "Here is what TurboPanel found in the repository. Pick the one that's right.",
   },
   catalog: { title: 'Choose a service', hint: '' },
   compose: { title: '', hint: '' },
@@ -200,10 +213,12 @@ function canContinueFromStep(
   selectedOption: SetupTypeOption | null,
   builder: RepositoryBuilder | null,
   selectedSource: RepositoryRecord | null,
+  inspectionPending: boolean,
 ): boolean {
   if (step === 'type') return selectedOption != null
-  // The repository step ends only once a builder is chosen, which itself
-  // waits on the read — everything the seed needs lives on this one screen.
+  // The repository screen ends once the read has landed (or failed); the lane
+  // screen ends once an answer is chosen — everything the seed needs is there.
+  if (step === 'repository') return selectedSource != null && !inspectionPending
   return selectedSource != null && builder != null
 }
 
@@ -215,19 +230,7 @@ function canContinueFromStep(
  * the production branch afterwards re-reads at the new ref.
  */
 function sourceInspectionEnabled(step: Step, sourceId: string): boolean {
-  return step === 'repository' && sourceId.length > 0
-}
-
-/** The compose lane the chosen builder seeds. */
-function laneForBuilder(
-  builder: RepositoryBuilder,
-  kind: SimpleAppConfig['kind'],
-): RepositoryLane {
-  if (builder === 'compose') return 'compose'
-  if (builder === 'site-php') return 'site-php'
-  // Railpack's card is disabled until the wizard can seed it; `simple` is the
-  // only builder left, split by what it produces.
-  return kind === 'static' ? 'static' : 'app'
+  return (step === 'repository' || step === 'lane') && sourceId.length > 0
 }
 
 /**
@@ -279,7 +282,8 @@ function seedForRepositoryLane(
  */
 function resolveBackStep(step: Step, selectedChoice: SetupChoice | null): Step {
   if (step === 'type') return 'details'
-  if (step === 'compose' && selectedChoice === 'repository') return 'repository'
+  if (step === 'compose' && selectedChoice === 'repository') return 'lane'
+  if (step === 'lane') return 'repository'
   return 'type'
 }
 
@@ -316,6 +320,24 @@ function composeStepSections(repositoryAppDraft: boolean) {
  * half-made project to clean up.
  */
 export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
+  // Start over remounts the wizard, which drops every field, pick and draft in
+  // one step instead of resetting twenty pieces of state by hand.
+  const [run, setRun] = useState(0)
+  return (
+    <ProjectCreateWizard
+      key={run}
+      orgId={orgId}
+      onStartOver={() => {
+        setRun((value) => value + 1)
+      }}
+    />
+  )
+}
+
+function ProjectCreateWizard({
+  orgId,
+  onStartOver,
+}: Readonly<{ orgId: string; onStartOver: () => void }>) {
   const router = useRouter()
   const params = useLocalSearchParams<{ workspaceId?: string; type?: string }>()
   const workspaceScope = useOptionalWorkspaceScope()
@@ -585,13 +607,38 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
     inspection.data,
   ])
 
+  const laneCandidates = useMemo(
+    () =>
+      rankRepositoryLanes(
+        inspection.data?.files ?? [],
+        inspection.data?.entries ?? [],
+      ),
+    [inspection.data],
+  )
+
   const changeSimpleConfig = (patch: Partial<SimpleAppConfig>) => {
     setSimpleConfigTouched(true)
     setSimpleConfig((current) => ({ ...current, ...patch }))
   }
 
-  /** Everything chosen on the repository screen — seed the draft and move on. */
-  const continueFromRepository = () => {
+  /** "What is this?" answered: set the builder, and Simple's kind if it applies. */
+  const selectLane = (lane: RepositoryLane) => {
+    const next = builderForLane(lane)
+    setBuilder(next.builder)
+    if (next.kind) {
+      const kind = next.kind
+      setSimpleConfig((current) => ({ ...current, kind }))
+    }
+  }
+
+  /** The repository is read — ask what it is. */
+  const continueToLane = () => {
+    setApiError(null)
+    setStep('lane')
+  }
+
+  /** Everything chosen on the lane screen — seed the draft and move on. */
+  const continueFromLane = () => {
     if (!selectedSource || !builder) return
     setApiError(null)
     const lane = laneForBuilder(builder, simpleConfig.kind)
@@ -618,6 +665,13 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
     }
     setStep('compose')
   }
+
+  const continueHandlers: Partial<Record<Step, () => void>> = {
+    type: continueFromType,
+    repository: continueToLane,
+    lane: continueFromLane,
+  }
+  const continueHandler = continueHandlers[step] ?? continueFromLane
 
   const goBack = () => {
     setApiError(null)
@@ -750,6 +804,10 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
         ) : null}
       </View>
 
+      {step === 'details' ? null : (
+        <StartOverBar onStartOver={onStartOver} disabled={submitting} />
+      )}
+
       <PanelShell>
         {surfaceError ? (
           <Text style={panelStyles.error}>{surfaceError}</Text>
@@ -797,8 +855,6 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
             inspectionLoading={inspection.isPending}
             inspectionError={asError(inspection.error)}
             defaultEnvironmentName={defaultEnvironmentName}
-            builder={builder}
-            simple={simpleConfig}
             disabled={submitting}
             onSelectSourceId={(sourceId, record) => {
               setSelectedSourceId(sourceId)
@@ -816,23 +872,42 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
               setSimpleConfigTouched(false)
             }}
             onBranchChange={setRepositoryBranch}
-            onSelectBuilder={setBuilder}
-            onSimpleChange={changeSimpleConfig}
             onCloneUrlLaneChange={setCloneUrlLaneOpen}
           />
         ) : null}
 
+        {step === 'lane' ? (
+          <RepositoryLaneStep
+            candidates={laneCandidates}
+            selectedLane={
+              builder ? laneForBuilder(builder, simpleConfig.kind) : null
+            }
+            inspection={inspection.data}
+            simple={simpleConfig}
+            disabled={submitting}
+            onSelectLane={selectLane}
+            onSimpleChange={changeSimpleConfig}
+          />
+        ) : null}
+
         {step === 'type' ? (
-          <ChoiceTileGrid>
-            {SETUP_TYPE_OPTIONS.map((option) => (
-              <SetupTypeChoiceCard
-                key={option.choice}
-                option={option}
-                selected={selectedChoice === option.choice}
-                onPress={() => selectType(option)}
-              />
+          <View style={styles.typeGroups}>
+            {SETUP_TYPE_GROUPS.map((group) => (
+              <View key={group.title} style={styles.typeGroup}>
+                <Text style={styles.typeGroupLabel}>{group.title}</Text>
+                <ChoiceTileGrid>
+                  {group.options.map((option) => (
+                    <SetupTypeChoiceCard
+                      key={option.choice}
+                      option={option}
+                      selected={selectedChoice === option.choice}
+                      onPress={() => selectType(option)}
+                    />
+                  ))}
+                </ChoiceTileGrid>
+              </View>
             ))}
-          </ChoiceTileGrid>
+          </View>
         ) : null}
 
         {isCatalogStep(step, selectedOption) ? (
@@ -862,10 +937,11 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
               selectedOption,
               builder,
               selectedSource,
+              inspection.isPending,
             )}
             onBack={goBack}
             onNext={goToTypeStep}
-            onContinue={step === 'type' ? continueFromType : continueFromRepository}
+            onContinue={continueHandler}
             onCreate={() => {
               void create()
             }}
@@ -931,7 +1007,7 @@ function StepActions({
     )
   }
 
-  if (step === 'type' || step === 'repository') {
+  if (step === 'type' || step === 'repository' || step === 'lane') {
     const continueLabel = step === 'type' ? 'Next' : 'Continue'
     return (
       <ButtonRow>
@@ -983,7 +1059,7 @@ const styles = StyleSheet.create({
   column: {
     width: '100%',
     maxWidth: FORM_MAX_WIDTH,
-    alignSelf: 'center',
+    alignSelf: 'flex-start',
     gap: spacing.md,
   },
   pageHeader: {
@@ -1005,6 +1081,15 @@ const styles = StyleSheet.create({
   },
   plainPanelBody: {
     gap: spacing.md,
+  },
+  typeGroups: { gap: spacing.md },
+  typeGroup: { gap: spacing.xs },
+  typeGroupLabel: {
+    color: colors.textDim,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   cancelLink: {
     alignSelf: 'center',

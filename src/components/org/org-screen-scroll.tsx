@@ -97,7 +97,8 @@ const styles = StyleSheet.create({
   },
   content: {
     width: '100%',
-    alignSelf: 'center',
+    // Left-aligned: a contained page hugs the sidebar instead of floating mid-screen.
+    alignSelf: 'flex-start',
     gap: spacing.md,
   },
 })

@@ -88,6 +88,7 @@ import {
   type ViewStyle,
 } from 'react-native'
 import Svg, { Path } from 'react-native-svg'
+import { userErrorMessage } from '@/lib/user-error'
 
 /** Group TurboFabric tp0 addresses by server — O(1) page-level fan-in. */
 function overlayByServerId(
@@ -149,7 +150,7 @@ function pruneSelectedServerIds(
 }
 
 function serversRefreshErrorMessage(err: unknown, forbidden: boolean): string {
-  if (err instanceof Error) return err.message
+  if (err instanceof Error) return userErrorMessage(err, 'Failed to load servers')
   if (forbidden) return 'Access to servers was denied'
   return 'Failed to load servers'
 }
@@ -729,7 +730,7 @@ function ServersFleetEmptyState() {
     <EmptyState
       panel
       title="Add your first server"
-      hint="Use + Server to enroll a host and start deploying projects to your fleet."
+      hint="Use + Server to enroll a host and start deploying projects to your servers."
     />
   )
 }
@@ -906,7 +907,7 @@ function ServersOverviewFleet({
       {fleetSurface.showFleetPanel ? (
         <SectionPanel>
           {error ? <Text style={panelStyles.error}>{error}</Text> : null}
-          {loading && serverCount === 0 ? <LoadingState label="Loading fleet…" /> : null}
+          {loading && serverCount === 0 ? <LoadingState label="Loading servers…" /> : null}
           {!loading && serverCount === 0 ? <ServersFleetEmptyState /> : null}
           {fleetSurface.showDetailInPanel ? (
             <ServersFleetDetailView compactList={false} {...fleetViewProps} />

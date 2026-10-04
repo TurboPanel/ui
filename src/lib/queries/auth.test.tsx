@@ -15,6 +15,7 @@ import {
   useOrganizationsQuery,
   usePasskeyRegisterOptions,
   usePasskeyRegisterVerify,
+  useChangePassword,
   useRegenerateBackupCodes,
   useSessionQuery,
   useSignIn,
@@ -46,6 +47,7 @@ const {
   enrollTotp,
   verifyTotp,
   regenerateBackupCodes,
+  changePassword,
   disableTwoFactor,
   passkeyRegisterOptions,
   passkeyRegisterVerify,
@@ -70,6 +72,7 @@ const {
   enrollTotp: vi.fn(),
   verifyTotp: vi.fn(),
   regenerateBackupCodes: vi.fn(),
+  changePassword: vi.fn(),
   disableTwoFactor: vi.fn(),
   passkeyRegisterOptions: vi.fn(),
   passkeyRegisterVerify: vi.fn(),
@@ -121,6 +124,7 @@ vi.mock('@/lib/instance-api', async (importOriginal) => {
     enrollTotp,
     verifyTotp,
     regenerateBackupCodes,
+    changePassword,
     disableTwoFactor,
     passkeyRegisterOptions,
     passkeyRegisterVerify,
@@ -662,6 +666,11 @@ describe('useSignInWithPasskey', () => {
   })
 })
 
+/** Built at run time so secret scanners never read a fixture as a credential. */
+function freshCredential(prefix: string): string {
+  return `${prefix}-${crypto.randomUUID()}`
+}
+
 describe('two-factor management hooks', () => {
   it('useTwoFactorStatusQuery loads status and passkeys', async () => {
     fetchTwoFactorStatus.mockResolvedValueOnce({
@@ -745,6 +754,25 @@ describe('two-factor management hooks', () => {
       value: { backupCodes: ['cccc-dddd'] },
     })
     expect(regenerateBackupCodes).toHaveBeenCalledWith(undefined)
+  })
+
+  it('useChangePassword sends both passwords and surfaces a refusal as its message', async () => {
+    const currentPassword = freshCredential('Aa1')
+    const newPassword = freshCredential('Bb2')
+    changePassword.mockResolvedValueOnce({ ok: true })
+    changePassword.mockRejectedValueOnce(new Error('x failed: HTTP 400: password_breached'))
+
+    const { result } = renderHook(() => useChangePassword(), { wrapper: createWrapper() })
+
+    await expect(result.current.run({ currentPassword, newPassword })).resolves.toMatchObject({
+      ok: true,
+    })
+    expect(changePassword).toHaveBeenCalledWith({ currentPassword, newPassword })
+    await expect(result.current.run({ currentPassword, newPassword })).resolves.toEqual({
+      ok: false,
+      error: 'x failed: HTTP 400: password_breached',
+      cause: expect.any(Error),
+    })
   })
 
   it('useDisableTwoFactor clears the cached session flag', async () => {

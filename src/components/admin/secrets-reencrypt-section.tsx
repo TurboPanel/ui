@@ -9,6 +9,7 @@ import {
   type ReencryptSecretsResponse,
 } from '@/lib/instance-api'
 import { colors, spacing } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 type SweepTotals = {
   scanned: number
@@ -37,10 +38,7 @@ function reencryptErrorMessage(error: unknown): string {
       return message
     }
   }
-  if (error instanceof Error && error.message) {
-    return error.message
-  }
-  return 'Re-encryption failed'
+  return userErrorMessage(error, 'Re-encryption failed')
 }
 
 function sweepStatusLabel(

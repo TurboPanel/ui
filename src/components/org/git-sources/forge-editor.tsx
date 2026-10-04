@@ -20,6 +20,7 @@ import {
 import type { ForgeCreate, ForgeSummary, ForgeUpdate } from '@/lib/instance-api'
 import { useCreateForge, useUpdateForge } from '@/lib/queries/admin'
 import { spacing } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 type Provider = 'github' | 'gitlab'
 type Scope = 'admin' | 'org'
@@ -49,7 +50,7 @@ function nullable(value: string): string | null {
 }
 
 function errorMessage(error: unknown, fallback: string): string {
-  return error instanceof Error ? error.message : fallback
+  return userErrorMessage(error, fallback)
 }
 
 type EditorState = {
