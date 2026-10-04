@@ -27,6 +27,7 @@ import {
   SectionPanel,
   TextField,
 } from '@/components/ui'
+import { HostingCertificatePanel } from '@/components/org/hosting-certificate-panel'
 import { ComposeEditorSection } from '@/components/org/compose-editor-section'
 import { usePersistEnvironmentCompose } from '@/components/org/compose-persistence'
 import {
@@ -1209,6 +1210,15 @@ function HostingPanelRow({
         locked={locked}
         onChange={onChange}
       />
+
+      {isHttp && hostingId ? (
+        <HostingCertificatePanel
+          orgId={orgId}
+          hostingId={hostingId}
+          composeOwned={composeOwned}
+          disabled={disabled}
+        />
+      ) : null}
 
       <HostingBindPicker editor={editor} locked={locked} onChange={onChange} />
 

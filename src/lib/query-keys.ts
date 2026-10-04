@@ -276,6 +276,7 @@ export const queryKeys = {
       hostings: {
         all: ['org', orgId, 'hostings'] as const,
         list: (serviceId: string) => ['org', orgId, 'hostings', serviceId] as const,
+        detail: (hostingId: string) => ['org', orgId, 'hostings', 'detail', hostingId] as const,
       },
 
       containers: {
