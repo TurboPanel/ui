@@ -22,7 +22,10 @@ import {
 } from '@/lib/queries/admin'
 import { HA_CERT_APPLY_NOTE } from '@/lib/platform-copy'
 import { addPublicUrlEntry, type PublicUrlDraft } from '@/lib/public-url-entry'
-import { reconnectedStatus, type PublicUrlsApplyStatus } from '@/lib/public-urls-apply'
+import {
+  reconnectedStatus,
+  type PublicUrlsApplyStatus,
+} from '@/lib/public-urls-apply'
 import { colors, spacing } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
 
@@ -30,7 +33,10 @@ const WORKERS_APPLY_MESSAGE = 'cert apply is not applicable on this runtime'
 
 const EMPTY_ENTRY: PublicUrlDraft = { scheme: 'https', host: '', port: '' }
 
-const OUTCOME_STATUS: Record<ApplyPublicUrlsOutcome['kind'], PublicUrlsApplyStatus> = {
+const OUTCOME_STATUS: Record<
+  ApplyPublicUrlsOutcome['kind'],
+  PublicUrlsApplyStatus
+> = {
   applied: 'applied',
   reconnected: 'reconnected',
   'not-issued': 'failed',
@@ -59,9 +65,11 @@ export function ControlPlaneUrlsSection() {
 
   let queryError: string | null = null
   if (publicUrlsQuery.isError) {
-    queryError = userErrorMessage(publicUrlsQuery.error, 'Failed to load public URLs')
+    queryError =
+      userErrorMessage(publicUrlsQuery.error, 'Failed to load public URLs')
   }
-  const displayError = error ?? saveMutation.actionError ?? queryError
+  const displayError =
+    error ?? saveMutation.actionError ?? queryError
 
   const clearApplyFeedback = () => {
     setApplyStatus('idle')
@@ -138,7 +146,7 @@ export function ControlPlaneUrlsSection() {
     setApplyStatus(
       outcome.kind === 'reconnected'
         ? reconnectedStatus(outcome.hostnames)
-        : OUTCOME_STATUS[outcome.kind]
+        : OUTCOME_STATUS[outcome.kind],
     )
   }
 
@@ -146,10 +154,10 @@ export function ControlPlaneUrlsSection() {
     <View style={styles.root}>
       <Text style={panelStyles.pageTitle}>Networking</Text>
       <Text style={panelStyles.pageCopy}>
-        Every address this control plane answers on. They become the Platform CA leaf SANs used for
-        daemon → control-plane trust (explicitly not the per-organization Organization CA), the
-        webhook endpoint a Git provider delivers to, and the origin baked into generated install
-        commands.
+        Every address this control plane answers on. They become the Platform CA
+        leaf SANs used for daemon → control-plane trust (explicitly not the
+        per-organization Organization CA), the webhook endpoint a Git provider
+        delivers to, and the origin baked into generated install commands.
       </Text>
 
       <SectionPanel
@@ -235,7 +243,9 @@ function PublicUrlsEditor({
         {!applyNotAvailable ? (
           <Button
             label="Save & Apply"
-            busyLabel={applyStatus === 'reconnecting' ? 'Reconnecting…' : 'Saving & Applying…'}
+            busyLabel={
+              applyStatus === 'reconnecting' ? 'Reconnecting…' : 'Saving & Applying…'
+            }
             variant="primary"
             busy={applying}
             disabled={saving}
@@ -274,7 +284,12 @@ function UrlList({
           <PublicUrlParts url={url} fill />
           <View style={styles.urlActions}>
             <CopyButton value={url} />
-            <Button label="Remove" size="sm" disabled={busy} onPress={() => onRemoveUrl(index)} />
+            <Button
+              label="Remove"
+              size="sm"
+              disabled={busy}
+              onPress={() => onRemoveUrl(index)}
+            />
           </View>
         </View>
       ))}
@@ -282,16 +297,21 @@ function UrlList({
   )
 }
 
-function ApplyAvailabilityNote({ applyNotAvailable }: Readonly<{ applyNotAvailable: boolean }>) {
+function ApplyAvailabilityNote({
+  applyNotAvailable,
+}: Readonly<{ applyNotAvailable: boolean }>) {
   if (applyNotAvailable) {
-    return <Text style={panelStyles.muted}>{HA_CERT_APPLY_NOTE}</Text>
+    return (
+      <Text style={panelStyles.muted}>{HA_CERT_APPLY_NOTE}</Text>
+    )
   }
 
   return (
     <Text style={panelStyles.muted}>
-      Apply regenerates the Platform CA leaf for LAN / :8443 listeners and reloads Caddy. Public
-      HTTPS on port 443 (Cloudflare tunnel, Let’s Encrypt, or an uploaded certificate) is trusted by
-      clients via the system store. Let’s Encrypt is never issued automatically — it stays opt-in.
+      Apply regenerates the Platform CA leaf for LAN / :8443 listeners and reloads
+      Caddy. Public HTTPS on port 443 (Cloudflare tunnel, Let’s Encrypt, or an
+      uploaded certificate) is trusted by clients via the system store. Let’s
+      Encrypt is never issued automatically — it stays opt-in.
     </Text>
   )
 }

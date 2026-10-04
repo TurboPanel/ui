@@ -51,12 +51,18 @@ describe('publicUrlsApplyFeedback', () => {
 describe('certificate kind wording', () => {
   it('only mentions self-signed for Platform CA names', () => {
     expect(reconnectedStatus([{ source: 'platform-ca' }])).toBe('reconnected')
-    expect(reconnectedStatus([{ source: 'lets-encrypt' }])).toBe('reconnected-trusted')
-    expect(reconnectedStatus([{ source: 'platform-ca' }, { source: 'lets-encrypt' }])).toBe(
-      'reconnected-mixed'
+    expect(reconnectedStatus([{ source: 'lets-encrypt' }])).toBe(
+      'reconnected-trusted',
     )
+    expect(
+      reconnectedStatus([{ source: 'platform-ca' }, { source: 'lets-encrypt' }]),
+    ).toBe('reconnected-mixed')
     expect(applyCertificateKind([{ source: 'uploaded' }])).toBe('trusted')
-    expect(publicUrlsApplyFeedback('reconnected-trusted')?.message).not.toContain('self-signed')
-    expect(publicUrlsApplyFeedback('reconnected')?.message).toContain('self-signed')
+    expect(
+      publicUrlsApplyFeedback('reconnected-trusted')?.message,
+    ).not.toContain('self-signed')
+    expect(publicUrlsApplyFeedback('reconnected')?.message).toContain(
+      'self-signed',
+    )
   })
 })
