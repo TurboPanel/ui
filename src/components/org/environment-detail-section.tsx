@@ -69,6 +69,7 @@ import {
   useEnvironment,
   useUpdateEnvironment,
 } from '@/lib/queries/environments'
+import { commandErrorLine } from '@/lib/command-error'
 import { useProject } from '@/lib/queries/projects'
 import { useOrgServers } from '@/lib/queries/servers'
 import {
@@ -550,7 +551,7 @@ function deployStatusMessage(command: CommandStatusRecord): string {
   if (command.status === 'succeeded') {
     return 'Deployment completed.'
   }
-  return command.errorMessage ?? `Deployment ${command.status}.`
+  return commandErrorLine(command) ?? `Deployment ${command.status}.`
 }
 
 

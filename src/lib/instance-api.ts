@@ -5190,6 +5190,8 @@ export type CommandRecord = {
   payload: Record<string, unknown> | null
   result: Record<string, unknown> | null
   error: string | null
+  /** The one line of the error that says what went wrong; absent on an older control plane. */
+  errorLine?: string | null
   attempts: number
   createdAt: string
   updatedAt: string
@@ -5266,6 +5268,8 @@ export type CommandStatusRecord = {
   finishedAt: string | null
   errorCode: string | null
   errorMessage: string | null
+  /** The one line of `errorMessage` that says what went wrong; absent on an older control plane. */
+  errorLine?: string | null
   /** Whether a retained execution log exists for this command. */
   hasLog: boolean
 }
@@ -5382,6 +5386,8 @@ export type DeploymentHistoryRecord = {
   durationMs: number | null
   errorCode: string | null
   errorMessage: string | null
+  /** The one line of `errorMessage` that says what went wrong; absent on an older control plane. */
+  errorLine?: string | null
   /** Whether a retained execution log exists (resolved store-side). */
   hasLog: boolean
   /** The engine the attempt ran; null (or absent) for attempts queued before it was recorded. */
