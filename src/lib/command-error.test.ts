@@ -27,7 +27,7 @@ describe('commandErrorLine', () => {
 
   it('keeps the end of a very long line', () => {
     const line = commandErrorLine({ errorMessage: `${'x'.repeat(1000)} the cause` }) ?? ''
-    expect(line.length).toBe(300)
+    expect(line).toHaveLength(300)
     expect(line.endsWith('the cause')).toBe(true)
   })
 
