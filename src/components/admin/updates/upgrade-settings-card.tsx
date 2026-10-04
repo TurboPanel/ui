@@ -14,7 +14,7 @@ import { spacing } from '@/lib/theme'
 
 const DEFAULT_SETTINGS: UpgradeSettings = {
   autoUpdate: false,
-  batch: { mode: 'percent', value: 100 },
+  batch: { mode: 'count', value: 1 },
   maintenanceWindow: {
     enabled: false,
     startMinute: 120,
@@ -65,7 +65,7 @@ export function UpgradeSettingsCard({
   return (
     <SectionPanel title="Automatic updates">
       {hideAutoUpdate ? null : (
-        <SettingRow label={loading ? 'Loading…' : 'Auto-update fleet'}>
+        <SettingRow label={loading ? 'Loading…' : 'Auto-update servers'}>
           <Toggle
             value={draft.autoUpdate}
             onValueChange={(value) => {
@@ -78,7 +78,7 @@ export function UpgradeSettingsCard({
         </SettingRow>
       )}
       <View style={{ gap: spacing.sm, marginTop: spacing.sm }}>
-        <Text style={panelStyles.detailLabel}>Batch size</Text>
+        <Text style={panelStyles.detailLabel}>Servers updated at once</Text>
         <SegmentedControl
           value={draft.batch.mode}
           onChange={(mode) => {
@@ -95,7 +95,7 @@ export function UpgradeSettingsCard({
           onChangeText={setBatchValue}
           keyboardType="number-pad"
           placeholder={draft.batch.mode === 'percent' ? '100' : '5'}
-          hint={formatUpgradeBatchLabel(draft.batch.mode, draft.batch.value)}
+          hint={`${formatUpgradeBatchLabel(draft.batch.mode, draft.batch.value)}. The next group starts on a later check, once every server in this one has finished or failed.`}
           error={batchError}
         />
         <SettingRow label="Maintenance window">

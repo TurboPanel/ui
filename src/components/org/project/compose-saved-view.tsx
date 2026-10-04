@@ -1,9 +1,11 @@
 import { useMemo, type ReactNode } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
 import { ComposeEditorChrome } from '@/components/org/compose-editor-section'
 import { ComposeSurfaceNav } from '@/components/org/project/compose-surface-nav'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { ComposeGraphView } from '@/components/org/project/compose-graph-view'
+import { ComposeStackList } from '@/components/org/project/compose-stack-list'
+import { buildStackRows } from '@/lib/compose/stack-rows'
 import { EmptyState } from '@/components/ui'
 import type { ComposeDocFacts } from '@/components/org/project/compose-document-view'
 import {
@@ -16,12 +18,18 @@ import {
   isBlankComposeData,
   normalizeCompose,
 } from '@/lib/compose'
+import { useProjectContext } from '@/components/org/project/project-context'
+import { bindingFactsByService } from '@/lib/compose/binding-facts'
+import { useEnvironmentBindings } from '@/lib/queries/bindings'
 import { useRepositoryLabelsById } from '@/lib/queries/releases'
 import type {
   ContainerRecord,
   ServiceRecord,
 } from '@/lib/instance-api'
 import { colors, spacing, webPointer } from '@/lib/theme'
+
+/** Below this width the Overview lists the stack instead of drawing the diagram. */
+const COMPACT_OVERVIEW_WIDTH = 600
 
 export type OverviewComposeSource = 'proposed' | 'saved'
 
@@ -104,6 +112,21 @@ export function ComposeSavedView({
     () => annotateComposeGraphSources(topologyGraph, repositoryLabelsById),
     [topologyGraph, repositoryLabelsById],
   )
+  const { selectedEnvironmentId } = useProjectContext()
+  const bindingsQuery = useEnvironmentBindings(
+    orgId,
+    selectedEnvironmentId ?? '',
+  )
+  const bindingFacts = useMemo(
+    () => bindingFactsByService(bindingsQuery.data?.bindings ?? [], services),
+    [bindingsQuery.data?.bindings, services],
+  )
+  const { width } = useWindowDimensions()
+  const compact = width < COMPACT_OVERVIEW_WIDTH
+  const stackRows = useMemo(
+    () => buildStackRows(graph, { hostnamesByService, bindingFacts }),
+    [graph, hostnamesByService, bindingFacts],
+  )
   const hasDiagram = graph.nodes.length > 0
   const showSourceToggle =
     draftSource != null && onDraftSourceChange != null
@@ -111,6 +134,17 @@ export function ComposeSavedView({
   let overviewBody: ReactNode
   if (blank) {
     overviewBody = <EmptyState title="No compose defined yet." />
+  } else if (hasDiagram && compact) {
+    overviewBody = (
+      <ComposeStackList
+        rows={stackRows}
+        orgId={orgId}
+        projectId={projectId}
+        services={services}
+        containersByService={containersByService}
+        showServiceStatus={showServiceStatus}
+      />
+    )
   } else if (hasDiagram) {
     overviewBody = (
       <ComposeGraphView
@@ -119,6 +153,7 @@ export function ComposeSavedView({
         projectId={projectId}
         services={services}
         containersByService={containersByService}
+        bindingFactsByService={bindingFacts}
         showServiceStatus={showServiceStatus}
         placementLabel={documentFacts?.placementLabel ?? null}
       />

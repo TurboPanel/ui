@@ -20,6 +20,7 @@ import {
   twoFactorAutoComplete,
   twoFactorKeyboard,
 } from '@/lib/two-factor-prompt'
+import { userErrorMessage } from '@/lib/user-error'
 
 /**
  * Second step of a sign-in that answered with a pending factor.
@@ -68,7 +69,7 @@ export function TwoFactorStep({
       )
       onAuthenticated(session)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Verification failed')
+      setError(userErrorMessage(err, 'Verification failed'))
     } finally {
       setBusy(false)
     }

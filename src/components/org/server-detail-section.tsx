@@ -1,3 +1,4 @@
+import { PhpModePolicyPanel } from '@/components/org/php-mode-policy-panel'
 import {
   useCallback,
   useEffect,
@@ -21,6 +22,7 @@ import {
   type ActiveCommand,
   type ServerCommandState,
 } from '@/components/org/server-commands-panel'
+import { ServerFirewallSection } from '@/components/org/firewall/server-firewall-section'
 import { ServerMetricsSection } from '@/components/org/server-metrics-section'
 import { ServerNetworkSection } from '@/components/org/server-network-section'
 import { ServerHardwareProfileEditor } from '@/components/org/server-hardware-profile-editor'
@@ -90,6 +92,7 @@ import {
 import { countryCodeToFlagEmoji } from '@/lib/server-geo'
 import { locationDisplayGeo } from '@/lib/location'
 import { colors, layout, spacing, webPointer } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 type DetailActiveCommand = ActiveCommand
 
@@ -312,6 +315,8 @@ function DetailTabBody({
       )
     case 'network':
       return <ServerNetworkSection orgId={orgId} server={server} />
+    case 'firewall':
+      return <ServerFirewallSection orgId={orgId} serverId={serverId} canManage={canManage} />
     case 'metrics':
       return <ServerMetricsSection orgId={orgId} serverId={serverId} embedded />
   }
@@ -433,17 +438,17 @@ function applyPollFailure(
   }
   if (entry.kind === 'timezone') {
     handlers.setTimezonePollError(
-      err instanceof Error ? err.message : 'Failed to poll timezone command'
+      userErrorMessage(err, 'Failed to poll timezone command')
     )
     return
   }
   if (entry.kind === 'systemRestart') {
     handlers.setSystemRestartPollError(
-      err instanceof Error ? err.message : 'Failed to poll system restart'
+      userErrorMessage(err, 'Failed to poll system restart')
     )
     return
   }
-  handlers.setNtpPollError(err instanceof Error ? err.message : 'Failed to poll NTP command')
+  handlers.setNtpPollError(userErrorMessage(err, 'Failed to poll NTP command'))
 }
 
 type PollHandlers = Readonly<{
@@ -556,7 +561,7 @@ export function ServerDetailSection({
     } else if (resetUpdateMutation.actionError) {
       error = resetUpdateMutation.actionError
     } else if (updateStatusQuery.error instanceof Error) {
-      error = updateStatusQuery.error.message
+      error = userErrorMessage(updateStatusQuery.error, 'Failed to load update status')
     }
     return {
       loading: updateStatusQuery.isLoading,
@@ -674,7 +679,7 @@ export function ServerDetailSection({
 
   if (serverQuery.isError || !server) {
     const message =
-      serverQuery.error instanceof Error ? serverQuery.error.message : 'Failed to load server'
+      userErrorMessage(serverQuery.error, 'Failed to load server')
     return <ServerDetailError message={message} />
   }
 
@@ -696,7 +701,7 @@ export function ServerDetailSection({
       onError: (err) => {
         if (isForbiddenError(err)) return
         patchCommand({
-          pingError: err instanceof Error ? err.message : 'Ping failed',
+          pingError: userErrorMessage(err, 'Ping failed'),
           pingRunning: false,
         })
       },
@@ -721,7 +726,7 @@ export function ServerDetailSection({
       onError: (err) => {
         if (isForbiddenError(err)) return
         patchCommand({
-          hostnameError: err instanceof Error ? err.message : 'Hostname change failed',
+          hostnameError: userErrorMessage(err, 'Hostname change failed'),
           hostnameRunning: false,
         })
       },
@@ -739,7 +744,7 @@ export function ServerDetailSection({
       onError: (err) => {
         if (isForbiddenError(err)) return
         patchCommand({
-          rebootError: err instanceof Error ? err.message : 'Reboot failed',
+          rebootError: userErrorMessage(err, 'Reboot failed'),
           rebootRunning: false,
         })
       },
@@ -768,7 +773,7 @@ export function ServerDetailSection({
         onError: (err) => {
           if (isForbiddenError(err)) return
           setRevokeKeyState({
-            error: err instanceof Error ? err.message : 'Revoke failed',
+            error: userErrorMessage(err, 'Revoke failed'),
             result: null,
           })
         },
@@ -801,9 +806,9 @@ export function ServerDetailSection({
         <Pressable
           style={({ pressed }) => [styles.backLink, pressed && styles.pressed, webPointer]}
           accessibilityRole="link"
-          accessibilityLabel="Back to fleet"
+          accessibilityLabel="Back to servers"
         >
-          <Text style={styles.backText}>← Fleet</Text>
+          <Text style={styles.backText}>← Servers</Text>
         </Pressable>
       </Link>
 
@@ -1078,6 +1083,8 @@ function ServerControlTab({
           onReboot={onReboot}
         />
       </SectionPanel>
+
+      <PhpModePolicyPanel orgId={orgId} serverId={server.id} />
 
       <SectionPanel title="Server proxy" hint="Platform managed">
         <ServerSystemComponentPanel

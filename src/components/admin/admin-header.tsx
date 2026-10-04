@@ -1,43 +1,38 @@
-import { Pressable, StyleSheet, View } from 'react-native'
+import { StyleSheet, View, useWindowDimensions } from 'react-native'
+import { TurboPanelLogo } from '@/components/brand/turbopanel-logo'
 import { GlassSurface } from '@/components/glass/glass-surface'
-import { HeaderAdminAccountControls } from '@/components/header-account-controls'
+import { HeaderAccountControls } from '@/components/header-account-controls'
+import { HeaderMenuButton } from '@/components/header-menu-button'
+import { ReturnToInstanceSegment } from '@/components/return-to-instance'
 import { useAuth } from '@/lib/auth-context'
-import { colors, spacing, webPointer } from '@/lib/theme'
+import { headerLayoutFor } from '@/lib/header-layout'
+import { spacing } from '@/lib/theme'
 
 export function AdminHeader({
   onMenuPress,
 }: Readonly<{ onMenuPress?: () => void }>) {
   const { session, signOut } = useAuth()
   const userLabel = session?.email
+  const { width } = useWindowDimensions()
+  const header = headerLayoutFor(width, false)
 
   return (
-    <GlassSurface style={styles.header} intensity="strong" rim="bottom">
+    <GlassSurface
+      style={[styles.header, header.compact && styles.headerCompact]}
+      intensity="strong"
+      rim="bottom"
+    >
       <View style={styles.headerMain}>
-        {onMenuPress ? (
-          <Pressable
-            style={({ pressed }) => [
-              styles.menuButton,
-              pressed && styles.buttonPressed,
-              webPointer,
-            ]}
-            onPress={onMenuPress}
-            accessibilityRole="button"
-            accessibilityLabel="Open navigation menu"
-          >
-            <View style={styles.menuIcon}>
-              <View style={styles.menuBar} />
-              <View style={styles.menuBar} />
-              <View style={styles.menuBarShort} />
-            </View>
-          </Pressable>
-        ) : (
-          <View style={styles.headerSpacer} />
-        )}
+        {onMenuPress ? <HeaderMenuButton onPress={onMenuPress} /> : null}
+        {header.showLogo ? <TurboPanelLogo size={28} /> : null}
+        <View style={styles.backSlot}>
+          <ReturnToInstanceSegment />
+        </View>
       </View>
 
       <View style={styles.headerActions}>
         {session && userLabel ? (
-          <HeaderAdminAccountControls email={userLabel} onSignOut={signOut} />
+          <HeaderAccountControls email={userLabel} onSignOut={signOut} />
         ) : null}
       </View>
     </GlassSurface>
@@ -60,43 +55,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.md,
     flexShrink: 1,
+    minWidth: 0,
     flex: 1,
   },
-  headerSpacer: {
-    flex: 1,
+  headerCompact: {
+    paddingHorizontal: spacing.md,
   },
-  menuButton: {
-    borderColor: colors.borderChip,
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    backgroundColor: colors.bgSecondary,
-  },
-  menuIcon: {
-    width: 16,
-    gap: 3,
-  },
-  menuBar: {
-    height: 2,
-    borderRadius: 1,
-    backgroundColor: colors.textChip,
-    width: 16,
-  },
-  menuBarShort: {
-    height: 2,
-    borderRadius: 1,
-    backgroundColor: colors.textChip,
-    width: 11,
-  },
-  buttonPressed: {
-    opacity: 0.85,
+  backSlot: {
+    flexShrink: 1,
+    minWidth: 0,
   },
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    flexWrap: 'wrap',
     justifyContent: 'flex-end',
+    flexShrink: 0,
   },
 })

@@ -27,6 +27,7 @@ import { usePullToRefresh } from '@/lib/pull-to-refresh'
 import { useDeleteLicense, useOrgLicenses } from '@/lib/queries/servers'
 import { useCan } from '@/lib/query-client'
 import { colors, spacing, webPointer } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 function pendingKeysHint(loading: boolean, count: number): string {
   if (loading) return 'Loading…'
@@ -212,9 +213,7 @@ export function PendingKeysSection({ orgId }: Readonly<{ orgId: string }>) {
   let queryError: string | null = null
   if (licensesQuery.isError) {
     queryError =
-      licensesQuery.error instanceof Error
-        ? licensesQuery.error.message
-        : 'Failed to load registration keys'
+      userErrorMessage(licensesQuery.error, 'Failed to load registration keys')
   }
   const displayError = deleteError ?? deleteMutation.actionError ?? queryError
 
@@ -235,7 +234,7 @@ export function PendingKeysSection({ orgId }: Readonly<{ orgId: string }>) {
       },
       onError: (err) => {
         setDeleteError(
-          err instanceof Error ? err.message : 'Failed to delete registration key',
+          userErrorMessage(err, 'Failed to delete registration key'),
         )
       },
     })

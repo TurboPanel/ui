@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { GearIcon } from '@/components/icons/nav-icons'
-import { EmptyState } from '@/components/ui'
+import { EmptyState, InlineNotice } from '@/components/ui'
 import {
   buildComposeDocModel,
   type ComposeDocServiceBlock,
@@ -25,6 +25,10 @@ export type ComposeDocServiceFacts = Readonly<{
   hostname?: string | null
   /** Persisted service row — hosting needs one before it can be edited. */
   serviceId?: string | null
+  /** Application the daemon recognised in the site (`WordPress`). */
+  appLabel?: string
+  /** Shown under the row when the recognised application cannot work as bound. */
+  appWarning?: Readonly<{ title: string; body: string }>
 }>
 
 export type ComposeDocFacts = Readonly<{
@@ -146,6 +150,7 @@ function ServiceRowHeader({
         ) : null}
       </Pressable>
       <View style={styles.gutter}>
+        {facts.appLabel ? <Fact label={facts.appLabel} /> : null}
         {block.ports.length > 0 ? (
           <Fact label={block.ports.join(', ')} />
         ) : null}
@@ -206,6 +211,15 @@ function ServiceRow({
         canMutate={canMutate}
         showReleases={showReleases}
       />
+      {facts.appWarning ? (
+        <View style={styles.appWarning}>
+          <InlineNotice
+            tone="warning"
+            title={facts.appWarning.title}
+            body={facts.appWarning.body}
+          />
+        </View>
+      ) : null}
       {expandedFacet ? (
         <View style={styles.expansion}>
           {renderExpansion(expandedFacet, block.name, {
@@ -446,6 +460,10 @@ const styles = StyleSheet.create({
   },
   factTextActive: {
     color: chrome.accent,
+  },
+  appWarning: {
+    marginTop: spacing.xs,
+    marginHorizontal: spacing.sm,
   },
   expansion: {
     marginTop: spacing.xs,

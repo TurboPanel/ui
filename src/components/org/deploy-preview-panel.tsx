@@ -14,6 +14,7 @@ import {
 } from '@/lib/instance-api'
 import { colors, spacing } from '@/lib/theme'
 import { preparedPerServerCompose } from '@/lib/deploy-preview-display'
+import { userErrorMessage } from '@/lib/user-error'
 
 function formatWarningLine(warning: DeployPreviewResponse['warnings'][number]): string {
   if (warning.code === 'health_check_missing') {
@@ -249,7 +250,7 @@ function preparedPreviewError(
   if (isServerPlacementRequiredError(queryError)) {
     return 'Select a server for this environment before previewing deploy.'
   }
-  if (queryError instanceof Error) return queryError.message
+  if (queryError instanceof Error) return userErrorMessage(queryError, '')
   return null
 }
 

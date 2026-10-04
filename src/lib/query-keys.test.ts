@@ -9,63 +9,49 @@ import {
 
 describe('isVisibilityQuery', () => {
   it('matches org-scoped hierarchical keys', () => {
-    expect(
-      isVisibilityQuery({ queryKey: queryKeys.org('org-1').servers.list }),
-    ).toBe(true)
-    expect(
-      isVisibilityQuery({ queryKey: queryKeys.org('org-1').projects.list() }),
-    ).toBe(true)
+    expect(isVisibilityQuery({ queryKey: queryKeys.org('org-1').servers.list })).toBe(true)
+    expect(isVisibilityQuery({ queryKey: queryKeys.org('org-1').projects.list() })).toBe(true)
     expect(
       isVisibilityQuery({
         queryKey: queryKeys.org('org-1').workspaces.detail('ws-1'),
-      }),
+      })
     ).toBe(true)
     expect(
       isVisibilityQuery({
         queryKey: queryKeys.org('org-1').settings.defaultEnvironment,
-      }),
+      })
     ).toBe(true)
   })
 
   it('matches auth permission and grant keys', () => {
-    expect(
-      isVisibilityQuery({ queryKey: queryKeys.auth.permissions }),
-    ).toBe(true)
+    expect(isVisibilityQuery({ queryKey: queryKeys.auth.permissions })).toBe(true)
     expect(
       isVisibilityQuery({
         queryKey: queryKeys.auth.accessGrants('resource-1'),
-      }),
+      })
     ).toBe(true)
     expect(
       isVisibilityQuery({
         queryKey: queryKeys.auth.can('resource-1', 'organization:manage'),
-      }),
+      })
     ).toBe(true)
     expect(
       isVisibilityQuery({
         queryKey: queryKeys.auth.resourceId('organization', 'org-1'),
-      }),
+      })
     ).toBe(true)
     expect(isVisibilityQuery({ queryKey: queryKeys.auth.teams })).toBe(true)
   })
 
   it('rejects non-visibility keys', () => {
     expect(isVisibilityQuery({ queryKey: queryKeys.timezones })).toBe(false)
-    expect(
-      isVisibilityQuery({ queryKey: queryKeys.admin.publicUrls }),
-    ).toBe(false)
-    expect(
-      isVisibilityQuery({ queryKey: queryKeys.recovery }),
-    ).toBe(false)
+    expect(isVisibilityQuery({ queryKey: queryKeys.admin.publicUrls })).toBe(false)
+    expect(isVisibilityQuery({ queryKey: queryKeys.recovery })).toBe(false)
   })
 
   it('treats all auth-root keys as visibility-scoped', () => {
-    expect(
-      isVisibilityQuery({ queryKey: queryKeys.auth.status }),
-    ).toBe(true)
-    expect(
-      isVisibilityQuery({ queryKey: queryKeys.auth.session }),
-    ).toBe(true)
+    expect(isVisibilityQuery({ queryKey: queryKeys.auth.status })).toBe(true)
+    expect(isVisibilityQuery({ queryKey: queryKeys.auth.session })).toBe(true)
   })
 
   it('rejects retired flat visibility roots', () => {
@@ -84,20 +70,11 @@ describe('queryKeys.org(…).topology', () => {
     const prefix = topology.all
 
     expect(topology.datacenters.slice(0, prefix.length)).toEqual([...prefix])
-    expect(topology.datacenter('dc-1').slice(0, prefix.length)).toEqual([
-      ...prefix,
-    ])
-    expect(topology.nameSuggestions.slice(0, prefix.length)).toEqual([
-      ...prefix,
-    ])
+    expect(topology.datacenter('dc-1').slice(0, prefix.length)).toEqual([...prefix])
+    expect(topology.nameSuggestions.slice(0, prefix.length)).toEqual([...prefix])
     expect(topology.ips().slice(0, prefix.length)).toEqual([...prefix])
     expect(topology.ip('ip-1').slice(0, prefix.length)).toEqual([...prefix])
-    expect(topology.networksAll).toEqual([
-      'org',
-      'org-1',
-      'topology',
-      'networks',
-    ])
+    expect(topology.networksAll).toEqual(['org', 'org-1', 'topology', 'networks'])
     expect(topology.networks().slice(0, topology.networksAll.length)).toEqual([
       ...topology.networksAll,
     ])
@@ -107,13 +84,7 @@ describe('queryKeys.org(…).topology', () => {
 describe('queryKeys.org(…).managed.members / bindings / tlsCa', () => {
   it('scopes members under the managed environment prefix', () => {
     const managed = queryKeys.org('org-1').managed
-    expect(managed.members('env-1')).toEqual([
-      'org',
-      'org-1',
-      'managed',
-      'env-1',
-      'members',
-    ])
+    expect(managed.members('env-1')).toEqual(['org', 'org-1', 'managed', 'env-1', 'members'])
   })
 
   it('discriminates bindings list keys by serviceId / environmentId / managedEnvironmentId', () => {
@@ -175,6 +146,24 @@ describe('queryKeys.org(…).variables / storage / containers / commands', () =>
       'serverId',
       's1',
     ])
+    expect(org.storage.copyBackupPolicies('cp-1')).toEqual([
+      'org',
+      'org-1',
+      'storage',
+      'copy',
+      'cp-1',
+      'backup-policies',
+    ])
+    expect(org.storage.copyBackupRuns('cp-1', 'pol-1')).toEqual([
+      'org',
+      'org-1',
+      'storage',
+      'copy',
+      'cp-1',
+      'backup-policies',
+      'pol-1',
+      'runs',
+    ])
     expect(org.storage.list({ environmentId: 'e1' })).toEqual([
       'org',
       'org-1',
@@ -211,20 +200,12 @@ describe('queryKeys.org(…).variables / storage / containers / commands', () =>
       org.commands.batch([
         { serverId: 'b', commandId: '2' },
         { serverId: 'a', commandId: '1' },
-      ]),
-    ).toEqual([
-      'org',
-      'org-1',
-      'commands',
-      'batch',
-      ['a:1', 'b:2'],
-    ])
+      ])
+    ).toEqual(['org', 'org-1', 'commands', 'batch', ['a:1', 'b:2']])
   })
 
   it('returns the fixed access-management permission key', () => {
-    expect(getAccessManagementPermissionKey('organization')).toBe(
-      'organization:own',
-    )
+    expect(getAccessManagementPermissionKey('organization')).toBe('organization:own')
     expect(getAccessManagementPermissionKey('team')).toBe('organization:own')
   })
 })
@@ -260,12 +241,7 @@ describe('queryKeys.org(…) remaining factories', () => {
       'serviceId',
       's1',
     ])
-    expect(org.variables.detail('var-1')).toEqual([
-      'org',
-      'org-1',
-      'variable',
-      'var-1',
-    ])
+    expect(org.variables.detail('var-1')).toEqual(['org', 'org-1', 'variable', 'var-1'])
   })
 
   it('builds storage, project, environment, and repository keys', () => {
@@ -277,25 +253,10 @@ describe('queryKeys.org(…) remaining factories', () => {
       'projectId',
       'p1',
     ])
-    expect(org.projects.list('ws-1')).toEqual([
-      'org',
-      'org-1',
-      'projects',
-      'ws-1',
-    ])
+    expect(org.projects.list('ws-1')).toEqual(['org', 'org-1', 'projects', 'ws-1'])
     expect(org.projects.list()).toEqual(['org', 'org-1', 'projects', 'all'])
-    expect(org.environments.list('proj-1')).toEqual([
-      'org',
-      'org-1',
-      'environments',
-      'proj-1',
-    ])
-    expect(org.environments.list()).toEqual([
-      'org',
-      'org-1',
-      'environments',
-      'all',
-    ])
+    expect(org.environments.list('proj-1')).toEqual(['org', 'org-1', 'environments', 'proj-1'])
+    expect(org.environments.list()).toEqual(['org', 'org-1', 'environments', 'all'])
     expect(org.environments.deployPreview('env-1')).toEqual([
       'org',
       'org-1',
@@ -335,13 +296,7 @@ describe('queryKeys.org(…) remaining factories', () => {
       'projectId',
       'p1',
     ])
-    expect(org.tags.markers('tag-1')).toEqual([
-      'org',
-      'org-1',
-      'tags',
-      'tag-1',
-      'markers',
-    ])
+    expect(org.tags.markers('tag-1')).toEqual(['org', 'org-1', 'tags', 'tag-1', 'markers'])
     expect(org.tasks.list({ serviceId: 'svc-1' })).toEqual([
       'org',
       'org-1',
@@ -356,13 +311,7 @@ describe('queryKeys.org(…) remaining factories', () => {
       'environmentId',
       'env-1',
     ])
-    expect(org.tasks.detail('task-1')).toEqual([
-      'org',
-      'org-1',
-      'tasks',
-      'detail',
-      'task-1',
-    ])
+    expect(org.tasks.detail('task-1')).toEqual(['org', 'org-1', 'tasks', 'detail', 'task-1'])
   })
 
   it('constrains tags.forEntity to the taggable parent-key union', () => {
@@ -429,14 +378,8 @@ describe('queryKeys.org(…) remaining factories', () => {
   it('exposes stable auth and admin roots', () => {
     expect(queryKeys.auth.all).toEqual(['auth'])
     expect(queryKeys.admin.all).toEqual(['admin'])
-    expect(queryKeys.admin.instanceHostnames).toEqual([
-      'admin',
-      'instance-hostnames',
-    ])
-    expect(queryKeys.admin.instanceCertificates).toEqual([
-      'admin',
-      'instance-certificates',
-    ])
+    expect(queryKeys.admin.instanceHostnames).toEqual(['admin', 'instance-hostnames'])
+    expect(queryKeys.admin.instanceCertificates).toEqual(['admin', 'instance-certificates'])
     expect(queryKeys.admin.instanceAcme).toEqual(['admin', 'instance-acme'])
     expect(queryKeys.admin.instanceDaemon).toEqual(['admin', 'instance-daemon'])
     expect(queryKeys.admin.instanceUpdates).toEqual(['admin', 'instance-updates'])
@@ -447,171 +390,87 @@ describe('queryKeys.org(…) remaining factories', () => {
 
   it('builds auth.session and scope-separated forge keys', () => {
     expect(queryKeys.auth.session).toEqual(['auth', 'session'])
-    expect(queryKeys.admin.forges).toEqual([
-      'admin',
-      'settings',
-      'forges',
-    ])
+    expect(queryKeys.admin.forges).toEqual(['admin', 'settings', 'forges'])
     // The org collection also contains instance-wide forges, and its readOnly
     // flags differ per org, so it is keyed by organization — never shared with
     // the admin list or with another org's.
-    expect(queryKeys.org('org-1').forges).toEqual([
-      'org',
-      'org-1',
-      'forges',
-    ])
+    expect(queryKeys.org('org-1').forges).toEqual(['org', 'org-1', 'forges'])
     expect(queryKeys.org('org-1').forges).not.toEqual(queryKeys.admin.forges)
   })
 
   it('builds managed leaf factories under the managed prefix', () => {
     const managed = queryKeys.org('org-1').managed
     expect(managed.orgList).toEqual(['org', 'org-1', 'managed'])
-    expect(managed.environment('env-1')).toEqual([
+    expect(managed.environment('env-1')).toEqual(['org', 'org-1', 'managed', 'env-1'])
+    expect(managed.status('env-1')).toEqual(['org', 'org-1', 'managed', 'env-1', 'status'])
+    expect(managed.users('env-1')).toEqual(['org', 'org-1', 'managed', 'env-1', 'users'])
+    expect(managed.databases('env-1')).toEqual(['org', 'org-1', 'managed', 'env-1', 'databases'])
+    expect(managed.backups('env-1')).toEqual(['org', 'org-1', 'managed', 'env-1', 'backups'])
+    expect(managed.backupPolicies('env-1')).toEqual([
       'org',
       'org-1',
       'managed',
       'env-1',
+      'backup-policies',
     ])
-    expect(managed.status('env-1')).toEqual([
+    expect(managed.backupRuns('env-1', 'pol-1')).toEqual([
       'org',
       'org-1',
       'managed',
       'env-1',
-      'status',
+      'backup-policies',
+      'pol-1',
+      'runs',
     ])
-    expect(managed.users('env-1')).toEqual([
-      'org',
-      'org-1',
-      'managed',
-      'env-1',
-      'users',
-    ])
-    expect(managed.databases('env-1')).toEqual([
-      'org',
-      'org-1',
-      'managed',
-      'env-1',
-      'databases',
-    ])
-    expect(managed.backups('env-1')).toEqual([
-      'org',
-      'org-1',
-      'managed',
-      'env-1',
-      'backups',
-    ])
-    expect(managed.logs('env-1')).toEqual([
-      'org',
-      'org-1',
-      'managed',
-      'env-1',
-      'logs',
-    ])
-    expect(managed.status('env-1').slice(0, managed.all.length)).toEqual([
-      ...managed.all,
-    ])
+    expect(managed.logs('env-1')).toEqual(['org', 'org-1', 'managed', 'env-1', 'logs'])
+    expect(managed.status('env-1').slice(0, managed.all.length)).toEqual([...managed.all])
   })
 
   it('builds services and hostings list keys', () => {
     const org = queryKeys.org('org-1')
-    expect(org.services.list('env-1')).toEqual([
-      'org',
-      'org-1',
-      'services',
-      'env-1',
-    ])
+    expect(org.services.list('env-1')).toEqual(['org', 'org-1', 'services', 'env-1'])
     expect(org.services.list()).toEqual(['org', 'org-1', 'services', 'all'])
     expect(org.services.all).toEqual(['org', 'org-1', 'services'])
-    expect(org.hostings.list('svc-1')).toEqual([
-      'org',
-      'org-1',
-      'hostings',
-      'svc-1',
-    ])
+    expect(org.hostings.list('svc-1')).toEqual(['org', 'org-1', 'hostings', 'svc-1'])
     expect(org.hostings.all).toEqual(['org', 'org-1', 'hostings'])
   })
 
   it('matches every /metrics/* subtree under a server, regardless of leaf', () => {
     const org = queryKeys.org('org-1')
     expect(
-      isServerMetricsQuery(
-        { queryKey: org.servers.metricsSeries('srv-1', '1h') },
-        'org-1',
-      ),
+      isServerMetricsQuery({ queryKey: org.servers.metricsSeries('srv-1', '1h') }, 'org-1')
     ).toBe(true)
     expect(
-      isServerMetricsQuery(
-        { queryKey: org.servers.metricsSummary('srv-1', '1h') },
-        'org-1',
-      ),
+      isServerMetricsQuery({ queryKey: org.servers.metricsSummary('srv-1', '1h') }, 'org-1')
     ).toBe(true)
     expect(
-      isServerMetricsQuery(
-        { queryKey: org.servers.metricsCapabilities('srv-1') },
-        'org-1',
-      ),
+      isServerMetricsQuery({ queryKey: org.servers.metricsCapabilities('srv-1') }, 'org-1')
     ).toBe(true)
     expect(
-      isServerMetricsQuery(
-        { queryKey: org.servers.metricsConnection('srv-1', '1h') },
-        'org-1',
-      ),
+      isServerMetricsQuery({ queryKey: org.servers.metricsConnection('srv-1', '1h') }, 'org-1')
     ).toBe(true)
+    expect(isServerMetricsQuery({ queryKey: org.servers.metrics('srv-1') }, 'org-1')).toBe(true)
     expect(
-      isServerMetricsQuery({ queryKey: org.servers.metrics('srv-1') }, 'org-1'),
-    ).toBe(true)
-    expect(
-      isServerMetricsQuery(
-        { queryKey: org.servers.metricsSeries('srv-1', '1h') },
-        'org-other',
-      ),
+      isServerMetricsQuery({ queryKey: org.servers.metricsSeries('srv-1', '1h') }, 'org-other')
     ).toBe(false)
-    expect(
-      isServerMetricsQuery({ queryKey: org.servers.detail('srv-1') }, 'org-1'),
-    ).toBe(false)
-    expect(isServerMetricsQuery({ queryKey: queryKeys.auth.status }, 'org-1')).toBe(
-      false,
-    )
+    expect(isServerMetricsQuery({ queryKey: org.servers.detail('srv-1') }, 'org-1')).toBe(false)
+    expect(isServerMetricsQuery({ queryKey: queryKeys.auth.status }, 'org-1')).toBe(false)
   })
 
   it('builds topology.networks with filter identity', () => {
     const topology = queryKeys.org('org-1').topology
     const filters = { kind: 'docker' as const, serverId: 'srv-1' }
-    expect(topology.networks(filters)).toEqual([
-      'org',
-      'org-1',
-      'topology',
-      'networks',
-      filters,
+    expect(topology.networks(filters)).toEqual(['org', 'org-1', 'topology', 'networks', filters])
+    expect(topology.networks()).toEqual(['org', 'org-1', 'topology', 'networks', {}])
+    expect(topology.networks(filters).slice(0, topology.networksAll.length)).toEqual([
+      ...topology.networksAll,
     ])
-    expect(topology.networks()).toEqual([
-      'org',
-      'org-1',
-      'topology',
-      'networks',
-      {},
-    ])
-    expect(topology.networks(filters).slice(0, topology.networksAll.length)).toEqual(
-      [...topology.networksAll],
-    )
   })
 
   it('builds remaining server, project, environment, and container factories', () => {
     const org = queryKeys.org('org-1')
-    expect(org.servers.status('srv-1')).toEqual([
-      'org',
-      'org-1',
-      'server',
-      'srv-1',
-      'status',
-    ])
-    expect(org.servers.updateStatus('srv-1')).toEqual([
-      'org',
-      'org-1',
-      'server',
-      'srv-1',
-      'update',
-    ])
+    expect(org.servers.status('srv-1')).toEqual(['org', 'org-1', 'server', 'srv-1', 'status'])
+    expect(org.servers.updateStatus('srv-1')).toEqual(['org', 'org-1', 'server', 'srv-1', 'update'])
     expect(org.servers.metricsEvents('srv-1', '1h')).toEqual([
       'org',
       'org-1',
@@ -621,29 +480,10 @@ describe('queryKeys.org(…) remaining factories', () => {
       'events',
       '1h',
     ])
-    expect(org.servers.labels('srv-1')).toEqual([
-      'org',
-      'org-1',
-      'server',
-      'srv-1',
-      'labels',
-    ])
-    expect(org.servers.ips('srv-1')).toEqual([
-      'org',
-      'org-1',
-      'server',
-      'srv-1',
-      'ips',
-      {},
-    ])
+    expect(org.servers.labels('srv-1')).toEqual(['org', 'org-1', 'server', 'srv-1', 'labels'])
+    expect(org.servers.ips('srv-1')).toEqual(['org', 'org-1', 'server', 'srv-1', 'ips', {}])
     expect(org.projects.detail('p1')).toEqual(['org', 'org-1', 'project', 'p1'])
-    expect(org.projects.principals('p1')).toEqual([
-      'org',
-      'org-1',
-      'project',
-      'p1',
-      'principals',
-    ])
+    expect(org.projects.principals('p1')).toEqual(['org', 'org-1', 'project', 'p1', 'principals'])
     expect(org.projects.principalSshKeys('p1', 'prin-1')).toEqual([
       'org',
       'org-1',
@@ -653,12 +493,7 @@ describe('queryKeys.org(…) remaining factories', () => {
       'prin-1',
       'ssh-keys',
     ])
-    expect(org.environments.detail('env-1')).toEqual([
-      'org',
-      'org-1',
-      'environment',
-      'env-1',
-    ])
+    expect(org.environments.detail('env-1')).toEqual(['org', 'org-1', 'environment', 'env-1'])
     expect(org.environments.deployments('env-1')).toEqual([
       'org',
       'org-1',
@@ -673,12 +508,7 @@ describe('queryKeys.org(…) remaining factories', () => {
       'detail',
       'src-1',
     ])
-    expect(org.containers.detail('ctr-1')).toEqual([
-      'org',
-      'org-1',
-      'container',
-      'ctr-1',
-    ])
+    expect(org.containers.detail('ctr-1')).toEqual(['org', 'org-1', 'container', 'ctr-1'])
     expect(org.containers.list()).toEqual(['org', 'org-1', 'containers', {}])
     expect(org.containers.logs('ctr-1')).toEqual([
       'org',
@@ -688,5 +518,15 @@ describe('queryKeys.org(…) remaining factories', () => {
       'logs',
       200,
     ])
+  })
+})
+
+describe('queryKeys.org(…).firewall', () => {
+  it('nests policy, rules and per-server keys under one prefix', () => {
+    const firewall = queryKeys.org('org-1').firewall
+    expect(firewall.all).toEqual(['org', 'org-1', 'firewall'])
+    expect(firewall.policy).toEqual(['org', 'org-1', 'firewall', 'policy'])
+    expect(firewall.rules).toEqual(['org', 'org-1', 'firewall', 'rules'])
+    expect(firewall.server('srv-1')).toEqual(['org', 'org-1', 'firewall', 'server', 'srv-1'])
   })
 })

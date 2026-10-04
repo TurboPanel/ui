@@ -6,6 +6,7 @@ import {
   networkAddressesHref,
   networkDockerHref,
   networkFabricHref,
+  networkFirewallHref,
   networkReservedHref,
   serversDatacentersHref,
 } from '@/lib/org-navigation'
@@ -44,6 +45,11 @@ function hubLinks(orgId: string): NetworkHubLink[] {
       title: 'Reserved ranges',
       hint: 'Ranges something outside TurboPanel already routes — never assigned to containers, the mesh, or internal services.',
       href: networkReservedHref(orgId),
+    },
+    {
+      title: 'Firewall',
+      hint: 'The policy and rules behind each server’s firewall. Each server’s own Firewall tab shows what it was sent.',
+      href: networkFirewallHref(orgId),
     },
   ]
 }

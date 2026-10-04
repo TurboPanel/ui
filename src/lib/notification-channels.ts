@@ -1,5 +1,8 @@
 import type {
+  NotificationChannel,
   NotificationChannelKind,
+  NotificationChannelTiming,
+  NotificationDigestCadence,
   NotificationRule,
   NotificationSeverity,
 } from '@/lib/instance-api'
@@ -28,7 +31,7 @@ export type RulesDraft = {
 export function addressHint(kind: NotificationChannelKind): string {
   switch (kind) {
     case 'email':
-      return 'Your own address for a personal channel, or a member\'s account email for an organization one. Each event arrives as its own message.'
+      return 'Any address. Your own, or a member\'s account email, works at once; any other address gets a confirmation link and receives nothing until it is confirmed. Each event arrives as its own message.'
     case 'webhook':
       return 'An https URL that accepts a JSON POST. Add a signing secret to get an X-TurboPanel-Signature header.'
     case 'slack':
@@ -59,10 +62,98 @@ export function draftFromRules(rules: readonly NotificationRule[]): RulesDraft {
   return { everything: false, floor: 'info', events: new Set(rules.map((r) => r.event)) }
 }
 
+/** The delivery-timing controls on an email channel's row, as the person has set them so far. */
+export type TimingDraft = {
+  digest: NotificationDigestCadence | 'off'
+  quietOn: boolean
+  start: string
+  end: string
+  /** The person's own zone, for a personal channel; null = UTC. */
+  timeZone: string | null
+}
+
+export const DEFAULT_QUIET_START = '22:00'
+export const DEFAULT_QUIET_END = '07:00'
+
+/** Every half hour of the day, as `HH:MM` — the choices for a quiet-hours start or end. */
+export const QUIET_TIME_OPTIONS: readonly { value: string; label: string }[] = Array.from(
+  { length: 48 },
+  (_, i) => {
+    const hh = String(Math.floor(i / 2)).padStart(2, '0')
+    const label = `${hh}:${i % 2 === 0 ? '00' : '30'}`
+    return { value: label, label }
+  },
+)
+
+export const DIGEST_OPTIONS: readonly { value: TimingDraft['digest']; label: string }[] = [
+  { value: 'off', label: 'Every event' },
+  { value: 'hourly', label: 'Hourly digest' },
+  { value: 'daily', label: 'Daily digest' },
+]
+
+export function timingDraftFromChannel(
+  channel: Readonly<Pick<NotificationChannel, 'digestCadence' | 'quietHours' | 'timeZone'>>,
+): TimingDraft {
+  return {
+    digest: channel.digestCadence ?? 'off',
+    quietOn: channel.quietHours !== null,
+    start: channel.quietHours?.start ?? DEFAULT_QUIET_START,
+    end: channel.quietHours?.end ?? DEFAULT_QUIET_END,
+    timeZone: channel.timeZone === 'UTC' ? null : channel.timeZone,
+  }
+}
+
+/** True when the quiet window is usable: both ends set and not the same time. */
+export function quietWindowValid(draft: Readonly<Pick<TimingDraft, 'quietOn' | 'start' | 'end'>>): boolean {
+  return !draft.quietOn || draft.start !== draft.end
+}
+
+/**
+ * What to PATCH: only what differs from the saved channel, so saving a digest
+ * never rewrites the time zone. The zone is sent for a personal channel only.
+ */
+export function timingPatch(
+  draft: Readonly<TimingDraft>,
+  channel: Readonly<Pick<NotificationChannel, 'digestCadence' | 'quietHours' | 'timeZone' | 'scope'>>,
+): NotificationChannelTiming {
+  const saved = timingDraftFromChannel(channel)
+  const patch: NotificationChannelTiming = {}
+  if (draft.digest !== saved.digest) patch.digestCadence = draft.digest === 'off' ? null : draft.digest
+  if (draft.quietOn !== saved.quietOn || (draft.quietOn && (draft.start !== saved.start || draft.end !== saved.end))) {
+    patch.quietHours = draft.quietOn ? { start: draft.start, end: draft.end } : null
+  }
+  if (channel.scope === 'user' && draft.timeZone !== saved.timeZone) patch.timeZone = draft.timeZone
+  return patch
+}
+
+/** Timing (digest, quiet hours) is accepted on every channel kind except push. */
+export function channelHasTiming(channel: { kind: string }): boolean {
+  return channel.kind !== 'push'
+}
+
+/** One line under the channel name: "Hourly digest · quiet 22:00–07:00 (America/New_York)". */
+export function timingSummary(
+  channel: Readonly<Pick<NotificationChannel, 'digestCadence' | 'quietHours' | 'timeZone'>>,
+): string | null {
+  const parts: string[] = []
+  if (channel.digestCadence) parts.push(channel.digestCadence === 'hourly' ? 'Hourly digest' : 'Daily digest')
+  if (channel.quietHours) parts.push(`quiet ${channel.quietHours.start}–${channel.quietHours.end}`)
+  if (parts.length === 0) return null
+  return `${parts.join(' · ')} (${channel.timeZone})`
+}
+
 const CHANNEL_ERROR_COPY: Record<string, string> = {
-  address_rejected: 'That address is refused: it must be https, carry no credentials, and name a public host (a LAN address is allowed on a self-hosted instance).',
+  timing_push_unsupported: 'Digest and quiet hours are not available for push channels.',
+  digest_cadence_invalid: 'Choose every event, an hourly digest or a daily digest.',
+  quiet_hours_invalid: 'Quiet hours need a start and an end, and they cannot be the same time.',
+  time_zone_invalid: 'That is not a time zone the app knows. Pick one from the list.',
+  time_zone_user_channels_only: 'A time zone is set on your own profile, from one of your personal channels. An organization channel uses the organization time zone.',
+  address_rejected: 'That address is refused: it must be https, carry no credentials, and name a public host (a LAN address is allowed on a self-hosted control plane).',
   address_invalid: 'That address does not look right for this kind of channel.',
-  address_not_a_member: 'An email channel can only name an address TurboPanel already knows: your own for a personal channel, a member\'s account email for an organization one.',
+  email_unavailable: 'This control plane cannot send email right now, so a new address cannot be confirmed. Ask an administrator to set up email.',
+  email_send_failed: 'The confirmation email could not be sent, so the channel was not added. Try again.',
+  too_soon: 'A confirmation link was sent a moment ago. Wait a minute before sending another.',
+  already_verified: 'This address is already confirmed.',
   address_required: 'Enter an address.',
   label_required: 'Give the channel a name.',
   label_invalid: 'The name is too long or contains characters that cannot be shown.',
@@ -72,9 +163,51 @@ const CHANNEL_ERROR_COPY: Record<string, string> = {
   kind_invalid: 'That kind of channel cannot be added here.',
 }
 
+const CHANNEL_ERROR_FALLBACK = 'The channel could not be saved. Try again.'
+
+function errorText(err: unknown): string {
+  if (err instanceof Error) return err.message
+  if (typeof err === 'string') return err
+  return CHANNEL_ERROR_FALLBACK
+}
+
 export function channelErrorCopy(err: unknown): string {
-  const message = err instanceof Error ? err.message : String(err)
+  const message = errorText(err)
   const match = /HTTP \d+:\s*([a-z_]+)/i.exec(message)
   const code = match?.[1]
   return (code && CHANNEL_ERROR_COPY[code]) ?? message
+}
+
+/** An email channel whose address has not been confirmed yet: it receives nothing. */
+export function channelAwaitsConfirmation(
+  channel: Readonly<Pick<NotificationChannel, 'kind' | 'verifiedAt'>>
+): boolean {
+  return channel.kind === 'email' && channel.verifiedAt === null
+}
+
+/** The sentence shown after a confirmation link was sent for a newly added address. */
+export function confirmationSentCopy(address: string): string {
+  return `We sent a confirmation link to ${address}. Nothing is sent to it until the link is opened.`
+}
+
+/** The banner for the page the confirmation link lands on (`?channelVerified=1|0`). */
+export function channelVerifiedBanner(
+  param: string | readonly string[] | undefined
+): { tone: 'info' | 'warning'; title: string; body: string } | null {
+  const value = Array.isArray(param) ? param[0] : param
+  if (value === '1') {
+    return {
+      tone: 'info',
+      title: 'Address confirmed',
+      body: 'That email channel is active and will receive the events its rules choose.',
+    }
+  }
+  if (value === '0') {
+    return {
+      tone: 'warning',
+      title: 'That link did not work',
+      body: 'It may have expired or already been used. Use Send again on the channel to get a new one.',
+    }
+  }
+  return null
 }

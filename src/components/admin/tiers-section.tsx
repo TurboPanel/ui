@@ -45,7 +45,9 @@ import {
   verifyBadge,
   type LadderRow as LadderRowModel,
 } from '@/lib/tier-form'
+import { taxDefaultNoticeContent } from '@/lib/tax-default-notice'
 import { colors, spacing } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 const COLUMNS = [
   { key: 'tier', header: 'Tier', flex: 0.7, minWidth: 80 },
@@ -415,7 +417,7 @@ function ProductsUnavailableNotice({
   error,
   onRetry,
 }: Readonly<{ error: unknown; onRetry: () => void }>) {
-  const detail = error instanceof Error ? error.message : 'Unknown error'
+  const detail = userErrorMessage(error, 'Unknown error')
   return (
     <InlineNotice
       tone="warning"
@@ -436,23 +438,8 @@ function ProductsUnavailableNotice({
  */
 function TaxDefaultNotice({ taxDefaults }: Readonly<{ taxDefaults: AdminTierTaxDefaults | null }>) {
   if (!taxDefaults) return null
-  const behaviour = taxDefaults.taxBehavior
-  if (behaviour === 'inclusive' || behaviour === 'exclusive') {
-    return (
-      <InlineNotice
-        tone="info"
-        title={`Prices are tax ${behaviour} by default`}
-        body={`Set on the payment account, so a price that does not name its own tax behaviour uses this. Those prices verify normally. Change it on the provider, under tax settings.`}
-      />
-    )
-  }
-  return (
-    <InlineNotice
-      tone="warning"
-      title="No default tax behaviour on the account"
-      body="Every price must then name its own, or it will not verify. Setting a default on the provider's tax settings covers all of them at once and is the recommended setup."
-    />
-  )
+  const { tone, title, body } = taxDefaultNoticeContent(taxDefaults.taxBehavior)
+  return <InlineNotice tone={tone} title={title} body={body} />
 }
 
 function FailingNotice({ count }: Readonly<{ count: number }>) {
@@ -468,9 +455,8 @@ function FailingNotice({ count }: Readonly<{ count: number }>) {
 
 function errorLineText(error: unknown): string | null {
   if (!error) return null
-  if (error instanceof Error) return error.message
   if (typeof error === 'string') return error
-  return 'Unknown error'
+  return userErrorMessage(error, 'Unknown error')
 }
 
 function ErrorLine({ error }: Readonly<{ error: unknown }>) {
@@ -556,7 +542,7 @@ export function TiersSection() {
       <SectionPanel title="Tiers">
         <InlineNotice
           title="Superadmin only"
-          body="The billing tier catalogue is managed by the instance owner."
+          body="The billing tier catalogue is managed by the administrator."
         />
       </SectionPanel>
     )

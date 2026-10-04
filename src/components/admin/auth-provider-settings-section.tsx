@@ -12,6 +12,7 @@ import {
   useSaveAuthProviderSettings,
 } from '@/lib/queries/admin'
 import { colors, spacing } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 function LockIcon() {
   return (
@@ -291,9 +292,7 @@ export function AuthProviderSettingsSection() {
 
       {settingsQuery.isError ? (
         <Text style={panelStyles.error}>
-          {settingsQuery.error instanceof Error
-            ? settingsQuery.error.message
-            : 'Failed to load sign-in provider settings'}
+          {userErrorMessage(settingsQuery.error, 'Failed to load sign-in provider settings')}
         </Text>
       ) : null}
       {saveError ? <Text style={panelStyles.error}>{saveError}</Text> : null}

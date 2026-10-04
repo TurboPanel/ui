@@ -11,6 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { AdminHeader } from '@/components/admin/admin-header'
 import { AdminSidebar } from '@/components/admin/admin-sidebar'
+import { contentMaxWidthFor, usePageWidth } from '@/lib/page-width'
 import { colors, layout, spacing } from '@/lib/theme'
 
 export function AdminShell() {
@@ -18,9 +19,11 @@ export function AdminShell() {
   const isDesktop = width >= layout.desktopBreakpoint
   const [drawerOpen, setDrawerOpen] = useState(false)
 
-  const contentMaxWidth = Math.min(
+  const pageWidth = usePageWidth()
+  const contentMaxWidth = contentMaxWidthFor(
+    pageWidth,
+    width - (isDesktop ? layout.sidebarWidth : 0),
     layout.contentMaxWidth,
-    width - (isDesktop ? layout.sidebarWidth : 0) - layout.contentGutter * 2,
   )
 
   return (
@@ -81,7 +84,7 @@ const styles = StyleSheet.create({
   },
   content: {
     width: '100%',
-    alignSelf: 'center',
+    alignSelf: 'flex-start',
     paddingHorizontal: layout.contentGutter,
     paddingVertical: spacing.xl,
     gap: spacing.md,

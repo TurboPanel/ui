@@ -110,13 +110,14 @@ import {
   parseSshPortDraft,
 } from '@/lib/host-defaults'
 import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
+import { userErrorMessage } from '@/lib/user-error'
 
 function serverTitle(server: OrgServerRecord): string {
   return server.name?.trim() || server.hostname?.trim() || server.id
 }
 
 function mutationErrorMessage(err: unknown, fallback: string): string {
-  if (err instanceof Error) return err.message
+  if (err instanceof Error) return userErrorMessage(err, '')
   return fallback
 }
 
@@ -884,7 +885,7 @@ function datacenterLoadError(
   error: unknown,
 ): string | null {
   if (!isError) return null
-  if (error instanceof Error) return error.message
+  if (error instanceof Error) return userErrorMessage(error, '')
   return 'Failed to load datacenter'
 }
 

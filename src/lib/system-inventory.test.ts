@@ -164,7 +164,7 @@ describe('system-inventory', () => {
       'Database High-Availability',
     )
     expect(systemComponentLabel(SYSTEM_SELF_HOST_COMPONENT)).toBe(
-      'Self Hosted TurboPanel Instance',
+      'Self-hosted TurboPanel',
     )
     expect(systemComponentLabel('custom-component')).toBe('custom-component')
     expect(systemComponentLabel('  ')).toBe('—')

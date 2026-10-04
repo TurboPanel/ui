@@ -19,6 +19,7 @@ import {
 } from '@/lib/queries/admin'
 import { fleetServersQuery, UPGRADE_FLEET_PAGE_SIZE } from '@/lib/upgrade-batch'
 import { spacing } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 export function HighAvailabilityUpdates({ data }: Readonly<{ data: InstanceUpdates }>) {
   const [statusFilter, setStatusFilter] = useState('')
@@ -41,7 +42,7 @@ export function HighAvailabilityUpdates({ data }: Readonly<{ data: InstanceUpdat
       <InlineNotice
         tone="info"
         title={`${HA_PRODUCT_NAME} manages the control plane`}
-        body="Connected daemons follow the rollout below. Per-server Update actions stay off while updates are platform-managed."
+        body="Connected daemons follow the update below. Per-server Update actions stay off while updates are platform-managed."
       />
       {notice ? <InlineNotice tone="info" title={notice} /> : null}
 
@@ -52,23 +53,23 @@ export function HighAvailabilityUpdates({ data }: Readonly<{ data: InstanceUpdat
 
       {run ? (
         <SectionPanel
-          title="Rollout"
+          title="Server updates"
           headerRight={
             // A run keeps the target it was created with. Cancelling a stale one
             // lets the next maintenance tick start fresh against the current build.
             <ConfirmButton
-              label="Cancel rollout"
-              confirmLabel="Cancel rollout"
-              prompt="Stop this rollout? Daemons already updated stay updated; anything still pending is skipped. The next rollout starts against the current build."
+              label="Cancel update"
+              confirmLabel="Cancel update"
+              prompt="Stop this update? Daemons already updated stay updated; anything still pending is skipped. The next update starts against the current build."
               busy={cancelRun.isPending}
               onConfirm={() => {
                 setNotice(null)
                 cancelRun.mutate(run.id, {
                   onSuccess: () => {
-                    setNotice('Rollout cancelled. A fresh one starts on the next maintenance tick.')
+                    setNotice('Update cancelled. A fresh one starts on the next maintenance tick.')
                   },
                   onError: (err) => {
-                    setNotice(err instanceof Error ? err.message : 'Failed to cancel the rollout')
+                    setNotice(userErrorMessage(err, 'Failed to cancel the update'))
                   },
                 })
               }}
@@ -78,7 +79,7 @@ export function HighAvailabilityUpdates({ data }: Readonly<{ data: InstanceUpdat
           <Text style={panelStyles.pageCopy}>
             {fleetSummary.total > 0
               ? `${fleetSummary.upToDate} of ${fleetSummary.total} connected daemons up to date`
-              : 'Waiting for the fleet wave to start.'}
+              : 'Waiting for servers to start updating.'}
           </Text>
         </SectionPanel>
       ) : null}

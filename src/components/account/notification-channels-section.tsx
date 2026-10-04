@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
-import { useRouter } from 'expo-router'
+import { useLocalSearchParams, useRouter } from 'expo-router'
 import { ScreenSafeArea } from '@/components/screen-safe-area'
 import {
   Badge,
@@ -12,6 +12,7 @@ import {
   InlineNotice,
   LoadingState,
   SectionPanel,
+  Select,
   SegmentedControl,
   type SegmentedOption,
   TextField,
@@ -28,17 +29,30 @@ import {
 import {
   addressHint,
   addressFieldLabel,
+  channelAwaitsConfirmation,
   channelErrorCopy,
+  channelVerifiedBanner,
+  confirmationSentCopy,
+  DIGEST_OPTIONS,
   draftFromRules,
   KIND_LABEL,
+  QUIET_TIME_OPTIONS,
+  quietWindowValid,
   rulesFromDraft,
   type RulesDraft,
+  timingDraftFromChannel,
+  timingPatch,
+  channelHasTiming,
+  timingSummary,
+  type TimingDraft,
 } from '@/lib/notification-channels'
+import { useTimezones } from '@/lib/queries/servers'
 import {
   useCreateNotificationChannel,
   useDeleteNotificationChannel,
   useNotificationChannelsQuery,
   useNotificationEventsQuery,
+  useResendChannelVerification,
   useUpdateNotificationChannel,
 } from '@/lib/queries/notifications'
 import { getActiveOrganizationId, resolvePreferredOrganizationId } from '@/lib/org-context'
@@ -105,6 +119,105 @@ function RulesEditor({
   )
 }
 
+/**
+ * Delivery timing for a channel: a digest instead of one message per
+ * event, and quiet hours. Urgent events (outages, security) are never held.
+ * The zone is the person's own for a personal channel; an organization
+ * channel is read in the organization's zone.
+ */
+function TimingEditor({
+  channel,
+  draft,
+  onChange,
+  disabled,
+}: Readonly<{
+  channel: NotificationChannel
+  draft: TimingDraft
+  onChange: (next: TimingDraft) => void
+  disabled?: boolean
+}>) {
+  const personal = channel.scope === 'user'
+  const zones = useTimezones({ enabled: personal })
+  const zoneOptions = useMemo(
+    () => [...(zones.data?.timezones ?? [])].sort((a, b) => a.localeCompare(b)).map((tz) => ({ value: tz, label: tz })),
+    [zones.data],
+  )
+  return (
+    <View style={styles.rules}>
+      <Text style={panelStyles.muted}>
+        Outages and security changes always arrive at once, whatever you choose here.
+      </Text>
+      <SegmentedControl
+        options={DIGEST_OPTIONS}
+        value={draft.digest}
+        onChange={(digest) => onChange({ ...draft, digest })}
+        disabled={disabled}
+        accessibilityLabel="Digest"
+      />
+      <Toggle
+        value={draft.quietOn}
+        onValueChange={(quietOn) => onChange({ ...draft, quietOn })}
+        onLabel="Quiet hours on"
+        offLabel="No quiet hours"
+        disabled={disabled}
+        accessibilityLabel="Quiet hours"
+      />
+      {draft.quietOn ? (
+        <View style={styles.eventList}>
+          <Select
+            value={draft.start}
+            options={QUIET_TIME_OPTIONS}
+            placeholder="Start"
+            disabled={disabled}
+            mono
+            accessibilityLabel="Quiet hours start"
+            onChange={(start) => onChange({ ...draft, start: start ?? draft.start })}
+          />
+          <Select
+            value={draft.end}
+            options={QUIET_TIME_OPTIONS}
+            placeholder="End"
+            disabled={disabled}
+            mono
+            accessibilityLabel="Quiet hours end"
+            onChange={(end) => onChange({ ...draft, end: end ?? draft.end })}
+          />
+          {quietWindowValid(draft) ? null : (
+            <Text style={panelStyles.error}>The start and the end cannot be the same time.</Text>
+          )}
+          <Text style={panelStyles.muted}>Events that arrive in this window are sent as one summary when it ends.</Text>
+        </View>
+      ) : null}
+      {personal ? (
+        <Select
+          value={draft.timeZone}
+          options={zoneOptions}
+          placeholder="Time zone"
+          noneLabel="UTC"
+          disabled={disabled}
+          mono
+          searchPlaceholder="Filter timezones"
+          accessibilityLabel="Time zone"
+          onChange={(timeZone) => onChange({ ...draft, timeZone })}
+        />
+      ) : (
+        <Text style={panelStyles.muted}>Read in {channel.timeZone}, the organization&apos;s time zone.</Text>
+      )}
+    </View>
+  )
+}
+
+function LastDelivery({ delivery }: Readonly<{ delivery: NotificationChannel['recentDeliveries'][number] | undefined }>) {
+  if (!delivery) return <Text style={panelStyles.muted}>No deliveries in the last week.</Text>
+  const attempts = delivery.attempts > 1 ? ` after ${delivery.attempts} attempts` : ''
+  return (
+    <Text style={panelStyles.muted}>
+      Last delivery: {delivery.status}
+      {attempts} · {delivery.event}
+    </Text>
+  )
+}
+
 function ChannelRow({
   channel,
   events,
@@ -118,11 +231,31 @@ function ChannelRow({
 }>) {
   const update = useUpdateNotificationChannel(scope, organizationId)
   const remove = useDeleteNotificationChannel(scope, organizationId)
+  const resend = useResendChannelVerification(organizationId)
+  const awaitingConfirmation = channelAwaitsConfirmation(channel)
   const [draft, setDraft] = useState(() => draftFromRules(channel.rules))
   const [dirty, setDirty] = useState(false)
+  const [timing, setTiming] = useState(() => timingDraftFromChannel(channel))
+  const [timingDirty, setTimingDirty] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  const [sentNote, setSentNote] = useState<string | null>(null)
   const disabled = channel.disabledAt !== null
   const lastDelivery = channel.recentDeliveries[0]
+  const hasTiming = channelHasTiming(channel)
+  const summary = hasTiming ? timingSummary(channel) : null
+
+  const onTiming = useCallback((next: TimingDraft) => {
+    setTiming(next)
+    setTimingDirty(true)
+  }, [])
+
+  const saveTiming = useCallback(() => {
+    setMessage(null)
+    void update.run({ id: channel.id, ...timingPatch(timing, channel) }).then((result) => {
+      if (result.ok) setTimingDirty(false)
+      else setMessage(channelErrorCopy(result.error))
+    })
+  }, [channel, timing, update])
 
   const onDraft = useCallback((next: RulesDraft) => {
     setDraft(next)
@@ -139,6 +272,15 @@ function ChannelRow({
       })
   }, [channel.id, draft, update])
 
+  const sendAgain = useCallback(() => {
+    setMessage(null)
+    setSentNote(null)
+    void resend.run(channel.id).then((result) => {
+      if (result.ok) setSentNote('Confirmation link sent again.')
+      else setMessage(channelErrorCopy(result.error))
+    })
+  }, [channel.id, resend])
+
   return (
     <View style={styles.channel}>
       <View style={styles.channelHead}>
@@ -147,20 +289,27 @@ function ChannelRow({
           <Badge tone={disabled ? 'muted' : 'ok'} label={KIND_LABEL[channel.kind as NotificationChannelKind] ?? channel.kind} />
           {channel.signed ? <Badge tone="info" label="Signed" /> : null}
           {disabled ? <Badge tone="pending" label="Paused" /> : null}
+          {awaitingConfirmation ? <Badge tone="pending" label="Awaiting confirmation" /> : null}
         </View>
         <Text style={panelStyles.muted}>{channel.address}</Text>
-        {lastDelivery ? (
+        {summary ? <Text style={panelStyles.muted}>{summary}</Text> : null}
+        {awaitingConfirmation ? (
           <Text style={panelStyles.muted}>
-            Last delivery: {lastDelivery.status}
-            {lastDelivery.attempts > 1 ? ` after ${lastDelivery.attempts} attempts` : ''} · {lastDelivery.event}
+            Nothing is sent to this address until the confirmation link in the email is opened.
           </Text>
-        ) : (
-          <Text style={panelStyles.muted}>No deliveries in the last week.</Text>
-        )}
+        ) : null}
+        <LastDelivery delivery={lastDelivery} />
       </View>
       <RulesEditor events={events} draft={draft} onChange={onDraft} disabled={update.isPending} />
+      {hasTiming ? (
+        <TimingEditor channel={channel} draft={timing} onChange={onTiming} disabled={update.isPending} />
+      ) : null}
       {message ? <Text style={panelStyles.error}>{message}</Text> : null}
+      {sentNote ? <Text style={panelStyles.muted}>{sentNote}</Text> : null}
       <ButtonRow>
+        {awaitingConfirmation ? (
+          <Button label="Send again" onPress={sendAgain} busy={resend.isPending} busyLabel="Sending…" />
+        ) : null}
         <Button
           label="Save rules"
           variant="primary"
@@ -168,6 +317,15 @@ function ChannelRow({
           disabled={!dirty}
           onPress={save}
         />
+        {hasTiming ? (
+          <Button
+            label="Save timing"
+            variant="primary"
+            busy={update.isPending}
+            disabled={!timingDirty || !quietWindowValid(timing)}
+            onPress={saveTiming}
+          />
+        ) : null}
         <Button
           label={disabled ? 'Resume' : 'Pause'}
           onPress={() => void update.run({ id: channel.id, disabled: !disabled })}
@@ -205,9 +363,12 @@ function AddChannelForm({
     events: new Set(),
   })
   const [message, setMessage] = useState<string | null>(null)
+  const [sentNote, setSentNote] = useState<string | null>(null)
 
   const onAdd = useCallback(() => {
     setMessage(null)
+    setSentNote(null)
+    const typedAddress = address.trim()
     void create
       .run({
         kind,
@@ -218,6 +379,7 @@ function AddChannelForm({
       })
       .then((result) => {
         if (result.ok) {
+          if (channelAwaitsConfirmation(result.value)) setSentNote(confirmationSentCopy(typedAddress))
           setLabel('')
           setAddress('')
           setSigningSecret('')
@@ -260,6 +422,7 @@ function AddChannelForm({
       ) : null}
       <RulesEditor events={events} draft={draft} onChange={setDraft} disabled={create.isPending} />
       {message ? <Text style={panelStyles.error}>{message}</Text> : null}
+      {sentNote ? <Text style={panelStyles.muted}>{sentNote}</Text> : null}
       <ButtonRow>
         <Button
           label="Add channel"
@@ -343,6 +506,8 @@ export function NotificationChannelsSectionContent() {
     return getActiveOrganizationId() ?? resolvePreferredOrganizationId(organizations)
   }, [organizationsQuery.data])
   const organizationName = organizationsQuery.data?.organizations.find((o) => o.id === organizationId)?.name ?? null
+  // The confirmation link redirects here with `?channelVerified=1|0`.
+  const verifiedBanner = channelVerifiedBanner(useLocalSearchParams<{ channelVerified?: string }>().channelVerified)
 
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.page} showsVerticalScrollIndicator={false}>
@@ -370,6 +535,10 @@ export function NotificationChannelsSectionContent() {
           reach it.
         </Text>
       </View>
+
+      {verifiedBanner ? (
+        <InlineNotice tone={verifiedBanner.tone} title={verifiedBanner.title} body={verifiedBanner.body} />
+      ) : null}
 
       <SectionPanel title="Your channels" hint="Yours alone; they follow your account across organizations.">
         <ChannelsPanel scope="user" events={events} organizationId={null} />

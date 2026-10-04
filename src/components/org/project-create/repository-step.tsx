@@ -11,9 +11,7 @@ import {
   MonoText,
   SectionPanel,
   SegmentedControl,
-  Select,
   TextField,
-  type SelectOption,
 } from '@/components/ui'
 import {
   SOURCE_BRANCH_MAX_LENGTH,
@@ -21,14 +19,8 @@ import {
   type NodePackageManager,
 } from '@/lib/compose/service-kind'
 import {
-  rankRepositoryLanes,
-  type LaneCandidate,
-  type RepositoryLane,
-} from '@/lib/compose/repository-lane'
-import {
   detectPackageManager,
   isNodeApp,
-  type RepositoryBuilder,
   type SimpleAppConfig,
   type SimpleAppKind,
 } from '@/lib/project-create/simple-app'
@@ -41,54 +33,7 @@ import {
   repositoryProviderLabel,
 } from '@/lib/repository-label'
 import { colors, spacing } from '@/lib/theme'
-
-/**
- * The builder cards, in fixed display order. Detection moves the selection,
- * never the order — a list that reshuffles as the read completes is
- * disorienting.
- *
- * Railpack is real in the platform (`buildKind: 'railpack'` builds an OCI
- * image on the daemon) but is not wired into this wizard yet, so its card is
- * visible-but-disabled: the roadmap belongs on the screen, a dead end does not.
- */
-const BUILDER_ORDER: readonly RepositoryBuilder[] = [
-  'simple',
-  'railpack',
-  'compose',
-  'site-php',
-]
-
-const BUILDER_COPY: Record<
-  RepositoryBuilder,
-  { label: string; description: string }
-> = {
-  simple: {
-    label: 'Simple application',
-    description:
-      'Your build and start commands, run on the server — no containers to define.',
-  },
-  railpack: {
-    label: 'Railpack',
-    description: 'Builds a Docker image from your repository automatically.',
-  },
-  compose: {
-    label: 'Compose file',
-    description:
-      "Use the compose file already in this repository as the project's compose.",
-  },
-  'site-php': {
-    label: 'PHP site',
-    description:
-      'Serve with a web engine and PHP — WordPress, Laravel, or anything expecting php-fpm.',
-  },
-}
-
-/** Evidence lanes the builder cards borrow from the repository ranking. */
-const BUILDER_EVIDENCE_LANE: Partial<Record<RepositoryBuilder, RepositoryLane>> =
-  {
-    compose: 'compose',
-    'site-php': 'site-php',
-  }
+import { userErrorMessage } from '@/lib/user-error'
 
 const SIMPLE_KIND_OPTIONS: readonly {
   value: SimpleAppKind
@@ -120,13 +65,9 @@ export function RepositoryStep({
   inspectionLoading,
   inspectionError,
   defaultEnvironmentName,
-  builder,
-  simple,
   disabled = false,
   onSelectSourceId,
   onBranchChange,
-  onSelectBuilder,
-  onSimpleChange,
   onCloneUrlLaneChange,
 }: Readonly<{
   orgId: string
@@ -137,13 +78,9 @@ export function RepositoryStep({
   inspectionError: Error | null
   /** Org default environment name — what the branch deploys to. */
   defaultEnvironmentName: string
-  builder: RepositoryBuilder | null
-  simple: SimpleAppConfig
   disabled?: boolean
   onSelectSourceId: (sourceId: string, record?: RepositoryRecord) => void
   onBranchChange: (branch: string) => void
-  onSelectBuilder: (builder: RepositoryBuilder) => void
-  onSimpleChange: (patch: Partial<SimpleAppConfig>) => void
   /** Forwarded to the picker — see its own doc for why the wizard needs this. */
   onCloneUrlLaneChange?: (open: boolean) => void
 }>) {
@@ -162,15 +99,6 @@ export function RepositoryStep({
     [repositoriesQuery.data?.repositories],
   )
   const selected = sources.find((source) => source.id === selectedSourceId) ?? null
-
-  const candidates = useMemo<LaneCandidate[]>(
-    () => rankRepositoryLanes(inspection?.files ?? [], inspection?.entries ?? []),
-    [inspection],
-  )
-  const byLane = useMemo(
-    () => new Map(candidates.map((candidate) => [candidate.lane, candidate])),
-    [candidates],
-  )
 
   if (!selectedSourceId) {
     return (
@@ -249,11 +177,6 @@ export function RepositoryStep({
         disabled={disabled}
         record={record}
         defaultEnvironmentName={defaultEnvironmentName}
-        builder={builder}
-        byLane={byLane}
-        onSelectBuilder={onSelectBuilder}
-        simple={simple}
-        onSimpleChange={onSimpleChange}
       />
     </View>
   )
@@ -277,11 +200,6 @@ type CheckedRepositoryDetailsProps = Readonly<{
   disabled: boolean
   record: RepositoryRecord | null
   defaultEnvironmentName: string
-  builder: RepositoryBuilder | null
-  byLane: Map<RepositoryLane, LaneCandidate>
-  onSelectBuilder: (builder: RepositoryBuilder) => void
-  simple: SimpleAppConfig
-  onSimpleChange: (patch: Partial<SimpleAppConfig>) => void
 }>
 
 /**
@@ -320,11 +238,6 @@ function CheckedRepositoryForm({
   disabled,
   record,
   defaultEnvironmentName,
-  builder,
-  byLane,
-  onSelectBuilder,
-  simple,
-  onSimpleChange,
 }: Omit<CheckedRepositoryDetailsProps, 'inspectionLoading'>) {
   const readable = inspectionError === null && inspection !== undefined
 
@@ -335,7 +248,7 @@ function CheckedRepositoryForm({
           <InlineNotice
             tone="warning"
             title="Could not read the repository"
-            body={`${inspectionError.message} You can still configure it below.`}
+            body={`${userErrorMessage(inspectionError, '')} You can still configure it below.`}
           />
         )
         : null}
@@ -354,48 +267,6 @@ function CheckedRepositoryForm({
         accessibilityLabel="Production branch"
         hint={branchHint(defaultEnvironmentName, record?.defaultBranch)}
       />
-
-      <FormField
-        label="Builder"
-        hint={builder ? BUILDER_COPY[builder].description : undefined}
-      >
-        <Select
-          value={builder}
-          options={BUILDER_ORDER.map((option) => {
-            const evidenceLane = BUILDER_EVIDENCE_LANE[option]
-            const candidate = evidenceLane
-              ? byLane.get(evidenceLane)
-              : undefined
-            return {
-              value: option,
-              label: BUILDER_COPY[option].label,
-              detail:
-                builderDetail(option, readable, candidate, inspection) ??
-                  BUILDER_COPY[option].description,
-              disabled: option === 'railpack',
-            } satisfies SelectOption
-          })}
-          placeholder="Choose how to build it"
-          disabled={disabled}
-          accessibilityLabel="Builder"
-          onChange={(value) => {
-            if (value !== null) onSelectBuilder(value as RepositoryBuilder)
-          }}
-        />
-      </FormField>
-
-      {builder === 'simple'
-        ? (
-          <SimpleAppFields
-            simple={simple}
-            manager={readable
-              ? detectPackageManager(inspection.files)?.manager
-              : undefined}
-            disabled={disabled}
-            onSimpleChange={onSimpleChange}
-          />
-        )
-        : null}
     </>
   )
 }
@@ -426,7 +297,7 @@ function CheckSummary({
  * for a static site) are two different phases of a deploy that happen to
  * share a screen, not one undifferentiated list.
  */
-function SimpleAppFields({
+export function SimpleAppFields({
   simple,
   manager,
   disabled,
@@ -566,30 +437,6 @@ function branchHint(
     // No fallback exists on deploy for a repository with no recorded default
     // branch — an empty binding is `source_ref_unresolved`.
     : `${deploysTo} This repository records no default branch — name one to deploy.`
-}
-
-/**
- * Row detail in the builder picker: "Coming soon" for Railpack, the ranking's
- * evidence for the rows borrowed from lane detection, and the app evidence for
- * Simple. `undefined` lets the row fall back to the builder's description.
- */
-function builderDetail(
-  option: RepositoryBuilder,
-  readable: boolean,
-  candidate: LaneCandidate | undefined,
-  inspection: RepositoryInspection | undefined,
-): string | undefined {
-  if (option === 'railpack') return 'Coming soon'
-  if (!readable) return undefined
-  if (option === 'simple') {
-    const files = inspection?.files ?? []
-    if (!isNodeApp(files)) return undefined
-    const manager = detectPackageManager(files)
-    return manager
-      ? `Detected · package.json + ${manager.evidence}`
-      : 'Detected · package.json'
-  }
-  return candidate ? candidate.evidence : undefined
 }
 
 const styles = StyleSheet.create({

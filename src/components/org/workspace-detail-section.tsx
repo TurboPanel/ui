@@ -16,6 +16,7 @@ import {
   TURBOPANEL_WORKSPACE_DESCRIPTION,
 } from '@/lib/system-inventory'
 import { spacing } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 function workspaceDescription(workspace: WorkspaceRecord): string | null {
   if (isTurbopanelWorkspace(workspace)) {
@@ -113,9 +114,9 @@ export function WorkspaceDetailSection({
   const system = workspace != null && isTurbopanelWorkspace(workspace)
   let error: string | null = null
   if (workspaceQuery.error instanceof Error) {
-    error = workspaceQuery.error.message
+    error = userErrorMessage(workspaceQuery.error, '')
   } else if (projectsQuery.error instanceof Error) {
-    error = projectsQuery.error.message
+    error = userErrorMessage(projectsQuery.error, '')
   }
 
   return (

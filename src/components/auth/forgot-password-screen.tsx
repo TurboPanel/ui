@@ -13,6 +13,7 @@ import { authAccentForRuntime, resolveControlPlaneRuntime } from '@/lib/auth-acc
 import { useRequestPasswordReset } from '@/lib/queries/auth'
 import { useAuthStatus } from '@/lib/query-client'
 import { colors } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 const styles = StyleSheet.create({
   copy: {
@@ -52,7 +53,7 @@ export function ForgotPasswordScreenContent() {
       await requestReset.mutateAsync(trimmed)
       setSent(true)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not send the reset link')
+      setError(userErrorMessage(err, 'Could not send the reset link'))
     }
   }, [email, requestReset])
 

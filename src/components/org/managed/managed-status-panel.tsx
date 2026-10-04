@@ -21,6 +21,7 @@ import { plainTextTranscriptLines } from '@/lib/execution-log-lines'
 import { useCommandLog } from '@/lib/queries/execution-logs'
 import { useManagedLogs } from '@/lib/queries/managed'
 import { colors, spacing } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 const TAIL_OPTIONS = [200, 500, 1000] as const
 
@@ -137,7 +138,7 @@ export function ManagedStatusPanel({
       }
       setLogs(result.data?.logs ?? '')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load logs')
+      setError(userErrorMessage(err, 'Failed to load logs'))
     }
   }
 

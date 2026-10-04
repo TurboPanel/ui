@@ -33,6 +33,7 @@ import { useSignIn } from '@/lib/queries/auth'
 import { useAuthStatus } from '@/lib/query-client'
 import { TWO_FACTOR_PROMPT_TITLE } from '@/lib/two-factor-prompt'
 import { oauthSignInError } from '@/lib/oauth-sign-in-errors'
+import { userErrorMessage } from '@/lib/user-error'
 
 const PROVIDER_LABEL: Record<OAuthProvider, string> = {
   github: 'GitHub',
@@ -127,7 +128,7 @@ export function SignInScreenContent() {
       }
       await goAfterAuth()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Sign In failed')
+      setError(userErrorMessage(err, 'Sign In failed'))
     }
   }, [email, goAfterAuth, password, signInMutation])
 
@@ -137,7 +138,7 @@ export function SignInScreenContent() {
     signInWithPasskey()
       .then(goAfterAuth)
       .catch((err: unknown) => {
-        setError(err instanceof Error ? err.message : 'Passkey sign in failed')
+        setError(userErrorMessage(err, 'Passkey sign in failed'))
       })
       .finally(() => {
         setPasskeyBusy(false)

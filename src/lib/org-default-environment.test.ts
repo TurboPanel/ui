@@ -18,8 +18,8 @@ vi.mock('@/lib/instance-api', () => ({
 }))
 
 describe('PLATFORM_DEFAULT_ENVIRONMENT_NAME', () => {
-  it('is Production', () => {
-    expect(PLATFORM_DEFAULT_ENVIRONMENT_NAME).toBe('Production')
+  it('is lowercase production', () => {
+    expect(PLATFORM_DEFAULT_ENVIRONMENT_NAME).toBe('production')
   })
 })
 

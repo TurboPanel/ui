@@ -90,6 +90,25 @@ describe('createAppQueryClient', () => {
     expect(handler.mock.calls[0]?.[0].message).toContain('HTTP 403')
   })
 
+  it('does not sign out on a container_not_owned 403', async () => {
+    const handler = vi.fn()
+    setForbiddenHandler(handler)
+    const client = createAppQueryClient()
+    client.setDefaultOptions({ queries: { retry: false } })
+
+    await expect(
+      client.fetchQuery({
+        queryKey: ['probe', 'container-not-owned'],
+        queryFn: () => {
+          throw new Error('GET /x failed: HTTP 403: container_not_owned — friendly')
+        },
+      }),
+    ).rejects.toThrow('friendly')
+
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(handler).not.toHaveBeenCalled()
+  })
+
   it('routes mutation 403 errors through the forbidden handler', async () => {
     const handler = vi.fn()
     setForbiddenHandler(handler)

@@ -9,7 +9,7 @@ export const TURBOPANEL_SERVICE_EXTENSION_KEY = 'x-turbopanel'
 
 export type ComposeServiceKind = 'container' | 'site' | 'node'
 
-export type SiteEngine = 'caddy' | 'apache' | 'nginx' | 'openlitespeed'
+export type SiteEngine = 'caddy' | 'apache' | 'nginx' | 'nginx+apache' | 'openlitespeed'
 
 /**
  * Runtime family for a `serviceKind: node` service. Mirrors the instance type.
@@ -92,6 +92,12 @@ export type ComposeServiceSourceExtension = {
    * instance rejects the combination on save.
    */
   buildKind?: ComposeSourceBuildKind
+  /**
+   * `false` keeps this binding out of push-triggered deploys: a person can
+   * still deploy the branch, but a push to it does not. Omitted means push
+   * deploys are allowed (subject to the repository's auto-deploy switch).
+   */
+  deployOnPush?: boolean
 }
 
 /** Injection point for callers that can resolve source ids. */
@@ -351,7 +357,7 @@ const SERVICE_EXTENSION_FIELDS: Readonly<
   hosting: { kinds: ALL_SERVICE_KINDS },
   engine: {
     kinds: SITE_KIND_ONLY,
-    typeMessage: 'engine must be "caddy", "apache", "nginx", or "openlitespeed"',
+    typeMessage: 'engine must be "caddy", "apache", "nginx", "nginx+apache", or "openlitespeed"',
   },
   root: { kinds: SITE_KIND_ONLY },
   sourceKind: { kinds: SITE_KIND_ONLY },
@@ -533,6 +539,11 @@ export type ComposeServiceCronJob = {
 export type ComposeServicePhpExtension = {
   /** Series (`8.4`). Omitted means the host default. */
   version?: string
+  /**
+   * How PHP runs. Omitted keeps the mode the site already runs, or gives a new
+   * site the default its organization and server allow (FastCGI first).
+   */
+  mode?: PhpMode
   /** Opt-in extensions on top of the always-installed baseline. */
   extensions?: string[]
   /** `php_admin_value` directives, validated by the instance settings table. */
@@ -547,6 +558,7 @@ const SITE_ENGINES = new Set<SiteEngine>([
   'caddy',
   'apache',
   'nginx',
+  'nginx+apache',
   'openlitespeed',
 ])
 const SOURCE_BUILD_KINDS = new Set<ComposeSourceBuildKind>(['native', 'railpack'])
@@ -689,6 +701,10 @@ export function parseServiceSourceExtension(value: unknown): ComposeServiceSourc
 
   const buildKind = readSourceBuildKind(value.buildKind)
   if (buildKind) source.buildKind = buildKind
+  // `false` must survive the round-trip — never a truthiness guard here.
+  if (typeof value.deployOnPush === 'boolean') {
+    source.deployOnPush = value.deployOnPush
+  }
 
   return source
 }
@@ -790,6 +806,7 @@ function parseServicePhpExtension(
   const php: ComposeServicePhpExtension = {}
   const version = readBoundedString(value.version, 16)
   if (version) php.version = version
+  if (isPhpMode(value.mode)) php.mode = value.mode
   const extensions = parsePhpExtensionNames(value.extensions)
   if (extensions) php.extensions = extensions
   for (const field of ['settings', 'pool'] as const) {
@@ -970,6 +987,33 @@ export const DEFAULT_SITE_ENGINE: SiteEngine = 'caddy'
  */
 export const SUPPORTED_PHP_SERIES: readonly string[] = ['8.3', '8.4']
 
+/** PHP modes, mirroring the instance's `contracts/commands/schemas.ts`. */
+export type PhpMode = 'fastcgi' | 'fpm' | 'lsphp-detached' | 'lsphp-attached'
+
+export const PHP_MODES: readonly PhpMode[] = [
+  'fastcgi',
+  'fpm',
+  'lsphp-detached',
+  'lsphp-attached',
+]
+
+/**
+ * Modes each engine can run, mirroring the instance's
+ * `features/hostings/php-mode.ts`. Caddy has none. Whether the organization
+ * and server offer a mode is checked at deploy.
+ */
+export const ENGINE_PHP_MODES: Readonly<Record<SiteEngine, readonly PhpMode[]>> = {
+  caddy: [],
+  nginx: ['fastcgi', 'fpm'],
+  apache: ['fastcgi', 'fpm'],
+  'nginx+apache': ['fastcgi', 'fpm'],
+  openlitespeed: PHP_MODES,
+}
+
+export function isPhpMode(value: unknown): value is PhpMode {
+  return typeof value === 'string' && (PHP_MODES as readonly string[]).includes(value)
+}
+
 /**
  * Extensions installed on every PHP series whether or not a site asks.
  *
@@ -1050,6 +1094,11 @@ export const SITE_ENGINE_OPTIONS: readonly {
     // Never mod_php: Apache reaches php-fpm over mod_proxy_fcgi. `.htaccess`
     // is real and worth naming — the vhost already emits `AllowOverride All`.
     label: 'Apache — static and PHP-FPM, .htaccess support',
+    deployable: true,
+  },
+  {
+    value: 'nginx+apache',
+    label: 'nginx + Apache — nginx in front of one shared Apache, for sites that need .htaccess or Apache modules',
     deployable: true,
   },
   {

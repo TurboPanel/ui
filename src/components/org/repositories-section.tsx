@@ -40,6 +40,7 @@ import {
 } from '@/lib/queries/releases'
 import { useCan } from '@/lib/query-client'
 import { colors, spacing } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 const AUTH_LANE_TONES: Record<string, BadgeTone> = {
   connection: 'ok',
@@ -204,7 +205,7 @@ function RepositoryRow({
 /** `repositoriesQuery.isError` case, unwrapped to a message worth showing. */
 function resolveQueryError(isError: boolean, error: unknown): string | null {
   if (!isError) return null
-  return error instanceof Error ? error.message : 'Failed to load repositories'
+  return userErrorMessage(error, 'Failed to load repositories')
 }
 
 /** The row id a mutation is in flight for, so its own row can show a spinner. */

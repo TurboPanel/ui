@@ -24,6 +24,7 @@ import {
 } from '@/lib/queries/releases'
 import { colors, spacing, webPointer } from '@/lib/theme'
 import { useQueryClient } from '@tanstack/react-query'
+import { userErrorMessage } from '@/lib/user-error'
 
 /** Cap the list so a long release history scrolls inside the panel. */
 const RELEASE_LIST_MAX_HEIGHT = 480
@@ -350,9 +351,7 @@ export function ServiceReleasesPanel({
       {releasesQuery.isLoading ? <LoadingState label="Loading releases…" /> : null}
       {releasesQuery.error ? (
         <Text style={panelStyles.error}>
-          {releasesQuery.error instanceof Error
-            ? releasesQuery.error.message
-            : 'Failed to load releases'}
+          {userErrorMessage(releasesQuery.error, 'Failed to load releases')}
         </Text>
       ) : null}
       {rollback.actionError ? (

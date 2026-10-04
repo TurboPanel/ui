@@ -24,6 +24,7 @@ import { useGitConnections } from '@/lib/queries/releases'
 import { colors, spacing } from '@/lib/theme'
 import { ForgeEditor, SealedBadge } from './forge-editor'
 import { GithubAppWizard } from './github-app-wizard'
+import { userErrorMessage } from '@/lib/user-error'
 
 type Provider = 'github' | 'gitlab'
 type Scope = 'admin' | 'org'
@@ -34,7 +35,7 @@ const PROVIDER_LABEL: Record<Provider, string> = {
 }
 
 function errorMessage(error: unknown, fallback: string): string {
-  return error instanceof Error ? error.message : fallback
+  return userErrorMessage(error, fallback)
 }
 
 /** One row: what the app is, whether it can see anything yet, and how to open it. */
@@ -68,7 +69,7 @@ function GitAppRow({
 
       <View style={styles.badges}>
         {app.organizationId === null
-          ? <Badge label="Instance-wide" tone="info" />
+          ? <Badge label="All organizations" tone="info" />
           : <Badge label="This organization" tone="muted" />}
         {app.readOnly ? <Badge label="Read-only" tone="muted" /> : null}
         {installed
@@ -198,8 +199,8 @@ export function GitSourcesSection({
       <Text style={panelStyles.pageTitle}>Git sources</Text>
       <Text style={panelStyles.pageCopy}>
         {scope === 'admin'
-          ? 'Applications the whole instance shares. Every organization can connect accounts through these.'
-          : 'Applications this organization connects repositories through, plus any the instance shares. Repositories themselves are attached when you create or edit a project, and listed under Repositories.'}
+          ? 'Applications shared with every organization on this control plane. Every organization can connect accounts through these.'
+          : 'Applications this organization connects repositories through, plus any this control plane shares. Repositories themselves are attached when you create or edit a project, and listed under Repositories.'}
       </Text>
 
       {returnNotice

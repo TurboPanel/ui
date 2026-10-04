@@ -13,6 +13,7 @@ import {
 } from '@/lib/queries/auth'
 import { useAuthStatus } from '@/lib/query-client'
 import { colors, spacing } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 /** Neutral chrome for install — no runtime accent wash or CTA tint. */
 const INSTALL_CHROME = colors.borderMuted
@@ -98,7 +99,7 @@ export function InstallScreenContent() {
       })
       setHostVerified(true)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Host authentication failed')
+      setError(userErrorMessage(err, 'Host authentication failed'))
     }
   }, [username, password, bootstrapInstallMutation])
 
@@ -127,7 +128,7 @@ export function InstallScreenContent() {
         defaultOrgDashboardHref(result.organizationId) as Href,
       )
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Setup failed')
+      setError(userErrorMessage(err, 'Setup failed'))
       setSuccess(false)
     }
   }, [

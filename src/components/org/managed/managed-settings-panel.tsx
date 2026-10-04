@@ -14,6 +14,7 @@ import {
   SegmentedControl,
   TextField,
 } from '@/components/ui'
+import { HeaderChevron } from '@/components/header-chevron'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { ManagedSslModePicker } from '@/components/org/managed/managed-ssl-mode-picker'
 import { ManagedAccessScopePicker } from '@/components/org/managed/managed-access-scope-picker'
@@ -185,11 +186,13 @@ function buildManagedSettingsPayload(form: SettingsForm): BuildSettingsResult {
 
 function LabeledNumber({
   label,
+  hint,
   value,
   disabled,
   onChange,
 }: Readonly<{
   label: string
+  hint?: string
   value: string
   disabled: boolean
   onChange: (value: string) => void
@@ -197,6 +200,7 @@ function LabeledNumber({
   return (
     <TextField
       label={label}
+      hint={hint}
       value={value}
       onChangeText={onChange}
       keyboardType="numeric"
@@ -511,7 +515,8 @@ function SettingsFormBody({
       />
 
       <LabeledNumber
-        label="Backup retention (keep N)"
+        label="Manual backups to keep"
+        hint="Applies to backups made with Back up now. Each schedule keeps its own count."
         value={form.backupRetentionKeep}
         disabled={disabled}
         onChange={(backupRetentionKeep) =>
@@ -625,9 +630,10 @@ export function ManagedSettingsPanel({
         style={[panelStyles.expandedSection, webPointer]}
         onPress={() => setExpanded((current) => !current)}
       >
-        <Text style={styles.disclosure}>
-          {expanded ? '▾' : '▸'} Advanced settings
-        </Text>
+        <View style={styles.disclosureRow}>
+          <HeaderChevron size={12} color={colors.textBody} open={expanded} />
+          <Text style={styles.disclosure}>Advanced settings</Text>
+        </View>
       </Pressable>
 
       {expanded ? (
@@ -652,6 +658,11 @@ export function ManagedSettingsPanel({
 }
 
 const styles = StyleSheet.create({
+  disclosureRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.xs,
+  },
   disclosure: {
     color: colors.textBody,
     fontSize: 13,

@@ -25,6 +25,7 @@ import {
 } from '@/lib/managed-read-endpoint'
 import { useOrganizationCa } from '@/lib/queries/managed'
 import { colors, spacing } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 function endpointLabel(
   managed: ManagedEnvironmentRecord,
@@ -198,7 +199,7 @@ export function ManagedConnectionPanel({
       setCaMessage(downloadSuccessMessage())
     } catch (err) {
       setCaError(
-        err instanceof Error ? err.message : 'Failed to download Organization CA',
+        userErrorMessage(err, 'Failed to download Organization CA'),
       )
     } finally {
       setCaBusy(false)

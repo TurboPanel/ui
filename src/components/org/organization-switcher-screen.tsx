@@ -12,7 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { TurboPanelLogo } from '@/components/brand/turbopanel-logo'
 import { CreateOrganizationModal } from '@/components/create-organization-modal'
 import { GlassSurface } from '@/components/glass/glass-surface'
-import { HeaderUserAccountControl } from '@/components/header-account-controls'
+import { HeaderAccountControls } from '@/components/header-account-controls'
 import { PlusIcon } from '@/components/icons/nav-icons'
 import { OrganizationSwitcherList } from '@/components/org/organization-switcher-list'
 import { panelStyles } from '@/components/ui/panel-styles'
@@ -28,6 +28,7 @@ import {
 import { shouldShowOrgSwitcherSearch } from '@/lib/organization-switcher'
 import { useCreateOrganization, useOrganizationsQuery } from '@/lib/queries/auth'
 import { chrome, colors, spacing, webPointer } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 /**
  * Full-page organization switcher (`/organizations`).
@@ -50,7 +51,7 @@ export function OrganizationSwitcherScreen() {
 
   let error = ''
   if (orgsQuery.error instanceof Error) {
-    error = orgsQuery.error.message
+    error = userErrorMessage(orgsQuery.error, '')
   } else if (orgsQuery.error) {
     error = 'Failed to load organizations'
   }
@@ -124,7 +125,7 @@ export function OrganizationSwitcherScreen() {
         <TurboPanelLogo size={28} />
         <View style={styles.topBarSpacer} />
         {session && userLabel ? (
-          <HeaderUserAccountControl email={userLabel} onSignOut={signOut} />
+          <HeaderAccountControls email={userLabel} onSignOut={signOut} />
         ) : null}
       </GlassSurface>
 
@@ -167,9 +168,9 @@ export function OrganizationSwitcherScreen() {
             ]}
             onPress={() => router.push(adminAreaHref('access') as Href)}
             accessibilityRole="link"
-            accessibilityLabel="Instance administration"
+            accessibilityLabel="Administration"
           >
-            <Text style={styles.adminLinkText}>Instance administration</Text>
+            <Text style={styles.adminLinkText}>Administration</Text>
           </Pressable>
         ) : null}
       </KeyboardAvoidingView>

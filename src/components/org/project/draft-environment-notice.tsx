@@ -7,7 +7,7 @@ import { colors, spacing } from '@/lib/theme'
 /**
  * Draft stand-in for the Overview environments panel: the wizard provisions
  * one environment together with the project — named by the org default
- * ("Production" unless the org renamed it) — and this row says so in the slot
+ * ("production" unless the org renamed it) — and this row says so in the slot
  * where the real panel will appear once the row exists. Display only; nothing
  * is created until the footer's Create button.
  */

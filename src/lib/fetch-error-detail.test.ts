@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   formatFetchFailureDetail,
+  friendlyErrorMessage,
   isForbiddenError,
   isHttpStatusError,
   isServerPlacementRequiredError,
@@ -33,6 +34,13 @@ describe('isForbiddenError', () => {
   })
 })
 
+describe('isForbiddenError and container_not_owned', () => {
+  it('does not treat container_not_owned as a permission 403', () => {
+    const error = new Error('/containers/x/logs failed: HTTP 403: container_not_owned — msg')
+    expect(isForbiddenError(error)).toBe(false)
+  })
+})
+
 describe('isHttpStatusError', () => {
   it('matches the status token in fetch error messages', () => {
     const error = new Error('path failed: HTTP 503: Database unavailable')
@@ -59,5 +67,22 @@ describe('isServerPlacementRequiredError', () => {
     expect(isServerPlacementRequiredError('HTTP 409: server_placement_required')).toBe(
       false,
     )
+  })
+})
+
+describe('friendlyErrorMessage', () => {
+  it('names the update step for an old daemon', () => {
+    expect(friendlyErrorMessage('site_engine_feature_missing')).toBe(
+      "This server's daemon is too old for the nginx+apache engine: update the server first.",
+    )
+  })
+
+  it('does not read container_not_owned as a permission problem', () => {
+    expect(friendlyErrorMessage('container_not_owned')).toContain('not a permission problem')
+  })
+
+  it('has nothing for unknown or missing codes', () => {
+    expect(friendlyErrorMessage('other')).toBeUndefined()
+    expect(friendlyErrorMessage(undefined)).toBeUndefined()
   })
 })
