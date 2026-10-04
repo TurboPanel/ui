@@ -6179,6 +6179,35 @@ export type DeployPreviewSecretPlanEntry = {
   forRuntime: boolean
 }
 
+/** Why a variable that was set on a Node app does not reach its process. */
+export type NativeAppVariableReason =
+  | 'platform'
+  | 'invalid_name'
+  | 'invalid_value'
+  | 'too_many'
+  | 'not_referenced'
+
+/**
+ * One environment variable of a Node app. `source` is the scope that set it —
+ * `organization`, `workspace`, `project`, `environment`, `service`, `hosting`,
+ * `server`, `binding` (a managed database), `platform` (TurboPanel sets it for
+ * every app) or `unknown`. `value` is `null` for a secret.
+ */
+export type DeployPreviewNativeAppVariable = {
+  name: string
+  source: string
+  isSecret: boolean
+  value: string | null
+  delivered: boolean
+  reason?: NativeAppVariableReason
+}
+
+/** Every environment variable one Node app's process gets (or is refused). */
+export type DeployPreviewNativeAppVariables = {
+  composeServiceName: string
+  variables: DeployPreviewNativeAppVariable[]
+}
+
 export type DeployPreviewResponse = {
   ok: true
   /**
@@ -6208,6 +6237,8 @@ export type DeployPreviewResponse = {
   envFile?: string
   /** Host/container secret file plan — no envelopes or plaintext. */
   secretPlan?: DeployPreviewSecretPlanEntry[]
+  /** Environment variables each Node app (native service) would get; secrets masked. */
+  nativeAppVariables?: DeployPreviewNativeAppVariables[]
 }
 
 /**
