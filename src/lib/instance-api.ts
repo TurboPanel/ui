@@ -5,6 +5,7 @@ import { clientVersionHeaders, recordInstanceVersion } from '@/lib/instance-vers
 import { getActiveControlPlaneOrigin } from '@/lib/control-plane-accounts'
 import {
   formatFetchFailureDetail,
+  friendlyAppendsToServerMessage,
   friendlyErrorMessage,
   isHttpStatusError,
 } from '@/lib/fetch-error-detail'
@@ -1878,15 +1879,14 @@ async function apiFetch<T>(
         // deploy-prepare 422s). Append rather than replace — callers match on
         // the code with `.includes(...)`, so it must stay in the message.
         const friendly = friendlyErrorMessage(body.error)
-        if (friendly) {
-          detail = `${detail} — ${friendly}`
-        } else if (
-          typeof body.message === 'string' &&
-          body.message.length > 0 &&
-          body.message !== body.error
-        ) {
-          detail = `${detail} — ${body.message}`
-        }
+        const serverMessage =
+          typeof body.message === 'string' && body.message.length > 0 && body.message !== body.error
+            ? body.message
+            : undefined
+        const keepServerMessage =
+          serverMessage !== undefined && (!friendly || friendlyAppendsToServerMessage(body.error))
+        if (keepServerMessage) detail = `${detail} — ${serverMessage}`
+        if (friendly) detail = `${detail} — ${friendly}`
       }
     } catch {
       // Non-JSON error body — keep the status-only message.

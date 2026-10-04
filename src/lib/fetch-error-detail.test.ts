@@ -34,6 +34,13 @@ describe('isForbiddenError', () => {
   })
 })
 
+describe('isForbiddenError and container_not_owned', () => {
+  it('does not treat container_not_owned as a permission 403', () => {
+    const error = new Error('/containers/x/logs failed: HTTP 403: container_not_owned — msg')
+    expect(isForbiddenError(error)).toBe(false)
+  })
+})
+
 describe('isHttpStatusError', () => {
   it('matches the status token in fetch error messages', () => {
     const error = new Error('path failed: HTTP 503: Database unavailable')
