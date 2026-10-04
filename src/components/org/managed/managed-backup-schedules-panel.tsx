@@ -39,6 +39,7 @@ import { formatLocalDateTime } from '@/lib/format-datetime'
 import type {
   BackupPolicyRecord,
   BackupRunRecord,
+  BackupPolicyTarget,
   BackupWeekday,
   CreateBackupPolicyBody,
 } from '@/lib/instance-api'
@@ -277,10 +278,10 @@ function RunLine({ run }: Readonly<{ run: BackupRunRecord }>) {
 
 function RunHistory({
   orgId,
-  environmentId,
+  target,
   policyId,
-}: Readonly<{ orgId: string; environmentId: string; policyId: string }>) {
-  const runsQuery = useBackupRuns(orgId, environmentId, policyId)
+}: Readonly<{ orgId: string; target: BackupPolicyTarget; policyId: string }>) {
+  const runsQuery = useBackupRuns(orgId, target, policyId)
   if (runsQuery.isLoading) return <LoadingState label="Loading runs…" />
   if (runsQuery.error) {
     return (
@@ -383,10 +384,10 @@ function PolicyRow({
 type PanelNotice = { tone: 'info' | 'warning'; title: string } | null
 
 /** Mutations plus the notice/error state they report into. */
-function useScheduleActions(orgId: string, environmentId: string) {
-  const createMutation = useCreateBackupPolicy(orgId, environmentId)
-  const updateMutation = useUpdateBackupPolicy(orgId, environmentId)
-  const deleteMutation = useDeleteBackupPolicy(orgId, environmentId)
+function useScheduleActions(orgId: string, target: BackupPolicyTarget) {
+  const createMutation = useCreateBackupPolicy(orgId, target)
+  const updateMutation = useUpdateBackupPolicy(orgId, target)
+  const deleteMutation = useDeleteBackupPolicy(orgId, target)
   const [notice, setNotice] = useState<PanelNotice>(null)
   const [pendingId, setPendingId] = useState<string | null>(null)
 
@@ -421,7 +422,11 @@ function useScheduleActions(orgId: string, environmentId: string) {
     }
   }
 
-  const runRowAction = async (policyId: string, action: () => Promise<unknown>, fallback: string) => {
+  const runRowAction = async (
+    policyId: string,
+    action: () => Promise<unknown>,
+    fallback: string
+  ) => {
     setPendingId(policyId)
     try {
       await action()
@@ -466,13 +471,13 @@ type Editing = { kind: 'create' } | { kind: 'edit'; policy: BackupPolicyRecord }
 
 function PolicyList({
   orgId,
-  environmentId,
+  target,
   policies,
   actions,
   onEdit,
 }: Readonly<{
   orgId: string
-  environmentId: string
+  target: BackupPolicyTarget
   policies: readonly BackupPolicyRecord[]
   actions: ReturnType<typeof useScheduleActions>
   onEdit: (policy: BackupPolicyRecord) => void
@@ -499,9 +504,7 @@ function PolicyList({
           onToggleHistory={() =>
             setHistoryId((current) => (current === policy.id ? null : policy.id))
           }
-          history={
-            <RunHistory orgId={orgId} environmentId={environmentId} policyId={policy.id} />
-          }
+          history={<RunHistory orgId={orgId} target={target} policyId={policy.id} />}
         />
       ))}
     </View>
@@ -545,29 +548,27 @@ function EditorView({
 }
 
 /**
- * Scheduled backups for a managed engine: each schedule is a timer on the
- * engine's server that runs on its own; this panel only edits the schedule
- * and shows what the server last reported. Org owners and managers only —
- * the API refuses everyone else, so the panel is not rendered for them.
+ * The schedules list and editor for one target: a managed engine or a storage
+ * copy. Each schedule is a timer on the target's server that runs on its own;
+ * this panel only edits the schedule and shows what the server last reported.
  */
-export function ManagedBackupSchedulesPanel({
+export function BackupSchedulesPanel({
   orgId,
-  environmentId,
-  canManage,
-  supported,
+  target,
+  enabled,
+  hint,
 }: Readonly<{
   orgId: string
-  environmentId: string
-  canManage: boolean
-  /** False when the engine has no backup capability. */
-  supported: boolean
+  target: BackupPolicyTarget
+  /** False keeps the panel hidden and the list unloaded. */
+  enabled: boolean
+  hint: string
 }>) {
-  const visible = canManage && supported
-  const policiesQuery = useBackupPolicies(orgId, environmentId, { enabled: visible })
-  const actions = useScheduleActions(orgId, environmentId)
+  const policiesQuery = useBackupPolicies(orgId, target, { enabled })
+  const actions = useScheduleActions(orgId, target)
   const [editing, setEditing] = useState<Editing>(null)
 
-  if (!visible) return null
+  if (!enabled) return null
 
   const policies = policiesQuery.data?.policies ?? []
   const loadError = policiesQuery.error
@@ -575,10 +576,7 @@ export function ManagedBackupSchedulesPanel({
     : null
 
   return (
-    <SectionPanel
-      title="Schedules"
-      hint="Automatic backups the server runs on its own, even while the control plane is unreachable"
-    >
+    <SectionPanel title="Schedules" hint={hint}>
       {actions.notice ? (
         <InlineNotice tone={actions.notice.tone} title={actions.notice.title} />
       ) : null}
@@ -602,13 +600,39 @@ export function ManagedBackupSchedulesPanel({
       {policiesQuery.data ? (
         <PolicyList
           orgId={orgId}
-          environmentId={environmentId}
+          target={target}
           policies={policies}
           actions={actions}
           onEdit={(policy) => setEditing({ kind: 'edit', policy })}
         />
       ) : null}
     </SectionPanel>
+  )
+}
+
+/**
+ * Scheduled backups for a managed engine. Org owners and managers only — the
+ * API refuses everyone else, so the panel is not rendered for them.
+ */
+export function ManagedBackupSchedulesPanel({
+  orgId,
+  environmentId,
+  canManage,
+  supported,
+}: Readonly<{
+  orgId: string
+  environmentId: string
+  canManage: boolean
+  /** False when the engine has no backup capability. */
+  supported: boolean
+}>) {
+  return (
+    <BackupSchedulesPanel
+      orgId={orgId}
+      target={environmentId}
+      enabled={canManage && supported}
+      hint="Automatic backups the server runs on its own, even while the control plane is unreachable"
+    />
   )
 }
 
