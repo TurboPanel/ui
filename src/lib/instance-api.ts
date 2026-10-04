@@ -2755,7 +2755,7 @@ export type CreateProjectBody = {
   /**
    * Required. `empty` creates an untyped project with one environment named
    * from the org default (`defaultEnvironmentName`, falling back to
-   * `Production`); configure later via setup.
+   * `production`); configure later via setup.
    */
   type: 'empty' | 'docker-compose' | 'template' | 'managed'
   code?: string
@@ -2766,7 +2766,7 @@ export type CreateProjectBody = {
    */
   options?: { compose?: ComposeDocument }
   /**
-   * Pins the scaffolded default environment (org default name, else `Production`)
+   * Pins the scaffolded default environment (org default name, else `production`)
    * when creating a managed project.
    */
   serverId?: string
