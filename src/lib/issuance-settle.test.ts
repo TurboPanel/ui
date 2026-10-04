@@ -1,8 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { InstanceHostnameRecord } from '@/lib/instance-api'
-import { judgeIssuance, settleIssuance } from '@/lib/issuance-settle'
-
-const START = Date.parse('2026-10-04T10:00:00.000Z')
+import { judgeIssuance, settleIssuance, takeIssuanceBaseline } from '@/lib/issuance-settle'
 
 function row(overrides: Partial<InstanceHostnameRecord> = {}): InstanceHostnameRecord {
   return {
@@ -18,57 +16,108 @@ function row(overrides: Partial<InstanceHostnameRecord> = {}): InstanceHostnameR
   }
 }
 
-const issuedRow = row({ notAfter: '2027-01-01T00:00:00.000Z' })
-const freshError = row({
-  acmeLastError: 'rate limited',
-  acmeLastAttemptAt: '2026-10-04T10:00:30.000Z',
-})
-const staleError = row({
-  acmeLastError: 'rate limited',
-  acmeLastAttemptAt: '2026-10-03T10:00:00.000Z',
-})
+const OLD_CERT = '2026-11-01T00:00:00.000Z'
+const NEW_CERT = '2027-01-30T00:00:00.000Z'
+const oldAttempt = '2026-10-03T10:00:00.000Z'
+const newAttempt = '2026-10-04T10:00:00.000Z'
+
+const none = takeIssuanceBaseline([])
+const sleep = () => Promise.resolve()
 
 describe('judgeIssuance', () => {
-  it("is issued when every Let's Encrypt name has a certificate", () => {
-    expect(judgeIssuance([issuedRow, row({ source: 'platform-ca' })], START)).toEqual({
+  it('is issued when a name with no earlier certificate now has one', () => {
+    expect(judgeIssuance([row({ notAfter: NEW_CERT })], none)).toEqual({
       state: 'issued',
     })
   })
 
-  it('fails on an error from after the apply started, even with an old certificate', () => {
-    const verdict = judgeIssuance([{ ...freshError, notAfter: '2027-01-01T00:00:00.000Z' }], START)
-    expect(verdict).toMatchObject({ state: 'failed' })
-    expect(verdict).toMatchObject({ message: expect.stringContaining('rate limited') })
+  it('does not call an old certificate success while it is renewing', () => {
+    const baseline = takeIssuanceBaseline([row({ notAfter: OLD_CERT })])
+    expect(judgeIssuance([row({ notAfter: OLD_CERT })], baseline)).toMatchObject({
+      state: 'pending',
+    })
+    expect(judgeIssuance([row({ notAfter: NEW_CERT })], baseline)).toEqual({ state: 'issued' })
   })
 
-  it('ignores an error from an earlier attempt', () => {
-    expect(judgeIssuance([{ ...staleError, notAfter: '2027-01-01T00:00:00.000Z' }], START)).toEqual(
-      { state: 'issued' }
-    )
-    expect(judgeIssuance([staleError], START)).toMatchObject({ state: 'pending' })
+  it('lets a still-valid earlier certificate stand once the wait is over', () => {
+    const baseline = takeIssuanceBaseline([row({ notAfter: OLD_CERT })])
+    const same = [row({ notAfter: OLD_CERT })]
+    expect(judgeIssuance(same, baseline, true)).toEqual({ state: 'issued' })
+    expect(judgeIssuance([row()], none, true)).toMatchObject({
+      state: 'pending',
+    })
+  })
+
+  it('accepts a kept certificate once the server records a clean run', () => {
+    const baseline = takeIssuanceBaseline([
+      row({ notAfter: OLD_CERT, acmeLastAttemptAt: oldAttempt }),
+    ])
+    expect(
+      judgeIssuance([row({ notAfter: OLD_CERT, acmeLastAttemptAt: newAttempt })], baseline)
+    ).toEqual({ state: 'issued' })
+  })
+
+  it('treats an error identical to the one before the apply as stale', () => {
+    const stale = row({
+      notAfter: NEW_CERT,
+      acmeLastError: 'rate limited',
+      acmeLastAttemptAt: oldAttempt,
+    })
+    const baseline = takeIssuanceBaseline([stale])
+    expect(judgeIssuance([stale], baseline)).toMatchObject({ state: 'pending' })
+    expect(judgeIssuance([stale], baseline, true)).toEqual({ state: 'issued' })
+  })
+
+  it('treats an error with a newer attempt time as new, whatever the browser clock says', () => {
+    const before = row({
+      acmeLastError: 'rate limited',
+      acmeLastAttemptAt: oldAttempt,
+    })
+    const after = { ...before, acmeLastAttemptAt: newAttempt }
+    for (const skewMs of [-3_600_000, 0, 3_600_000]) {
+      vi.useFakeTimers({ now: Date.now() + skewMs })
+      try {
+        expect(judgeIssuance([after], takeIssuanceBaseline([before]))).toMatchObject({
+          state: 'failed',
+        })
+        expect(judgeIssuance([before], takeIssuanceBaseline([before]))).toMatchObject({
+          state: 'pending',
+        })
+      } finally {
+        vi.useRealTimers()
+      }
+    }
+  })
+
+  it('treats a different error text as new', () => {
+    const before = row({ acmeLastError: 'a', acmeLastAttemptAt: oldAttempt })
+    expect(
+      judgeIssuance([{ ...before, acmeLastError: 'b' }], takeIssuanceBaseline([before]))
+    ).toMatchObject({ state: 'failed' })
   })
 })
 
 describe('settleIssuance', () => {
-  const sleep = vi.fn(() => Promise.resolve())
-
-  it('answers at once when there is nothing to wait for', async () => {
-    const refetch = vi.fn()
-    const result = await settleIssuance({ rows: [issuedRow], startedAt: START, refetch, sleep })
-    expect(result.kind).toBe('issued')
-    expect(refetch).not.toHaveBeenCalled()
-  })
-
   it('waits for a slow issuance and then reports it issued', async () => {
-    const refetch = vi.fn().mockResolvedValueOnce([row()]).mockResolvedValueOnce([issuedRow])
-    const result = await settleIssuance({ rows: [row()], startedAt: START, refetch, sleep })
+    const refetch = vi.fn().mockResolvedValueOnce([row({ notAfter: NEW_CERT })])
+    const result = await settleIssuance({
+      rows: [row()],
+      baseline: none,
+      refetch,
+      sleep,
+    })
     expect(result.kind).toBe('issued')
-    expect(refetch).toHaveBeenCalledTimes(2)
+    expect(refetch).toHaveBeenCalledTimes(1)
   })
 
-  it('reports a fresh error without waiting', async () => {
+  it('reports a new error without waiting', async () => {
     const refetch = vi.fn()
-    const result = await settleIssuance({ rows: [freshError], startedAt: START, refetch, sleep })
+    const result = await settleIssuance({
+      rows: [row({ acmeLastError: 'rate limited', acmeLastAttemptAt: newAttempt })],
+      baseline: none,
+      refetch,
+      sleep,
+    })
     expect(result).toMatchObject({
       kind: 'not-issued',
       error: expect.stringContaining('rate limited'),
@@ -76,11 +125,11 @@ describe('settleIssuance', () => {
     expect(refetch).not.toHaveBeenCalled()
   })
 
-  it('gives up with a plain message when no certificate shows up in time', async () => {
+  it('gives up in plain words when nothing new shows up in time', async () => {
     let clock = 0
     const result = await settleIssuance({
       rows: [row()],
-      startedAt: START,
+      baseline: none,
       refetch: () => Promise.resolve([row()]),
       timeoutMs: 10,
       intervalMs: 4,
@@ -92,7 +141,7 @@ describe('settleIssuance', () => {
     })
     expect(result).toMatchObject({
       kind: 'not-issued',
-      error: expect.stringContaining('has not confirmed a certificate'),
+      error: expect.stringContaining('has not confirmed a new certificate'),
     })
   })
 
@@ -100,8 +149,53 @@ describe('settleIssuance', () => {
     const refetch = vi
       .fn()
       .mockRejectedValueOnce(new Error('/x failed: HTTP 502'))
-      .mockResolvedValueOnce([issuedRow])
-    const result = await settleIssuance({ rows: [row()], startedAt: START, refetch, sleep })
+      .mockResolvedValueOnce([row({ notAfter: NEW_CERT })])
+    const result = await settleIssuance({
+      rows: [row()],
+      baseline: none,
+      refetch,
+      sleep,
+    })
     expect(result.kind).toBe('issued')
+  })
+
+  it('stops at the deadline even when a read hangs', async () => {
+    vi.useFakeTimers()
+    try {
+      const pending = settleIssuance({
+        rows: [row()],
+        baseline: none,
+        refetch: () => new Promise(() => {}),
+        timeoutMs: 20_000,
+        intervalMs: 1_000,
+      })
+      await vi.advanceTimersByTimeAsync(25_000)
+      await expect(pending).resolves.toMatchObject({ kind: 'not-issued' })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('stops when the caller goes away, without reading again', async () => {
+    const controller = new AbortController()
+    const refetch = vi.fn(() => new Promise<InstanceHostnameRecord[]>(() => {}))
+    vi.useFakeTimers()
+    try {
+      const pending = settleIssuance({
+        rows: [row()],
+        baseline: none,
+        refetch,
+        signal: controller.signal,
+        intervalMs: 1_000,
+      })
+      await vi.advanceTimersByTimeAsync(1_500)
+      expect(refetch).toHaveBeenCalledTimes(1)
+      controller.abort()
+      await expect(pending).resolves.toMatchObject({ kind: 'not-issued' })
+      await vi.advanceTimersByTimeAsync(30_000)
+      expect(refetch).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

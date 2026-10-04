@@ -1,4 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useRef } from 'react'
 import {
   applyPublicUrls,
   applyReencryptSecrets,
@@ -61,7 +62,11 @@ import {
   verifyAdminTier,
   verifyAllAdminTiers,
 } from '@/lib/instance-api'
-import { settleIssuance } from '@/lib/issuance-settle'
+import {
+  settleIssuance,
+  takeIssuanceBaseline,
+  type IssuanceBaseline,
+} from '@/lib/issuance-settle'
 import { useApiMutation, queryKeys } from '@/lib/query-client'
 import {
   draftUsesLetsEncryptSource,
@@ -170,6 +175,24 @@ export type ApplyPublicUrlsOutcome =
   /** It never came back inside the wait window. */
   | { kind: 'unreachable' }
 
+/**
+ * Rows as the server holds them just before the apply, so the wait afterwards
+ * compares server values with server values. Only a Let's Encrypt name needs
+ * it; a failed read leaves an empty baseline, which counts every error as new.
+ */
+async function issuanceBaselineBeforeApply(
+  hostnames: readonly InstanceHostnameInput[] | undefined,
+): Promise<IssuanceBaseline> {
+  if (hostnames && !hostnames.some((entry) => entry.source === 'lets-encrypt')) {
+    return new Map()
+  }
+  try {
+    return takeIssuanceBaseline((await fetchInstanceHostnames()).hostnames)
+  } catch {
+    return new Map()
+  }
+}
+
 function hostnameIdentity(entry: {
   host: string
   source: string
@@ -214,12 +237,15 @@ function hostnameInputs(
  */
 export function useApplyPublicUrls() {
   const queryClient = useQueryClient()
+  // Stops the post-apply wait when the screen goes away.
+  const waiting = useRef<AbortController | null>(null)
+  useEffect(() => () => waiting.current?.abort(), [])
   return useApiMutation({
     mutationFn: async ({
       hostnames,
       onReconnecting,
     }: ApplyPublicUrlsVariables = {}): Promise<ApplyPublicUrlsOutcome> => {
-      const startedAt = Date.now()
+      const baseline = await issuanceBaselineBeforeApply(hostnames)
       try {
         await requestPublicUrlsApply()
         return { kind: 'applied' }
@@ -234,9 +260,12 @@ export function useApplyPublicUrls() {
         if (hostnames && !sameHostnameSet(recovery.value.hostnames, hostnames)) {
           return { kind: 'not-saved', hostnames: saved }
         }
+        const controller = new AbortController()
+        waiting.current = controller
         const issuance = await settleIssuance({
           rows: recovery.value.hostnames,
-          startedAt,
+          baseline,
+          signal: controller.signal,
           refetch: async () => (await fetchInstanceHostnames()).hostnames,
         })
         if (issuance.kind === 'not-issued') {

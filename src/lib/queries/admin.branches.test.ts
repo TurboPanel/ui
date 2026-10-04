@@ -59,7 +59,8 @@ describe('admin apply and forge key branches', () => {
     applyPublicUrls.mockRejectedValueOnce(
       new Error('/api/admin/v1/instance/public-urls/apply failed: HTTP 502'),
     )
-    fetchInstanceHostnames.mockResolvedValueOnce({
+    // Read twice: the baseline before the apply, then the reconnect probe.
+    fetchInstanceHostnames.mockResolvedValue({
       ok: true,
       hostnames: [
         {
