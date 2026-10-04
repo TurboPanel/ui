@@ -5,8 +5,7 @@ import { clientVersionHeaders, recordInstanceVersion } from '@/lib/instance-vers
 import { getActiveControlPlaneOrigin } from '@/lib/control-plane-accounts'
 import {
   formatFetchFailureDetail,
-  friendlyAppendsToServerMessage,
-  friendlyErrorMessage,
+  errorExplanation,
   isHttpStatusError,
 } from '@/lib/fetch-error-detail'
 import type { ManagedIngressPorts } from '@/lib/managed-ingress-ports'
@@ -1878,15 +1877,8 @@ async function apiFetch<T>(
         // Many route errors carry a human explanation beside the code (e.g.
         // deploy-prepare 422s). Append rather than replace — callers match on
         // the code with `.includes(...)`, so it must stay in the message.
-        const friendly = friendlyErrorMessage(body.error)
-        const serverMessage =
-          typeof body.message === 'string' && body.message.length > 0 && body.message !== body.error
-            ? body.message
-            : undefined
-        const keepServerMessage =
-          serverMessage !== undefined && (!friendly || friendlyAppendsToServerMessage(body.error))
-        if (keepServerMessage) detail = `${detail} — ${serverMessage}`
-        if (friendly) detail = `${detail} — ${friendly}`
+        const explanation = errorExplanation(body.error, body.message)
+        if (explanation) detail = `${detail} — ${explanation}`
       }
     } catch {
       // Non-JSON error body — keep the status-only message.

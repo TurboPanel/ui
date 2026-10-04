@@ -46,10 +46,20 @@ const FRIENDLY_ERROR_MESSAGES: Readonly<Record<string, string>> = {
 /** Codes whose friendly text goes after the server's own message (it names the site). */
 const APPEND_TO_SERVER_MESSAGE = new Set(['site_engine_feature_missing'])
 
-export function friendlyAppendsToServerMessage(code: string | undefined): boolean {
-  return code !== undefined && APPEND_TO_SERVER_MESSAGE.has(code)
-}
-
 export function friendlyErrorMessage(code: string | undefined): string | undefined {
   return code ? FRIENDLY_ERROR_MESSAGES[code] : undefined
+}
+
+/**
+ * The human text that follows an error code: the server's own message, the
+ * friendly one for known codes (replacing the server's, or after it for codes
+ * whose message names the site), or nothing.
+ */
+export function errorExplanation(code: string | undefined, message: unknown): string | undefined {
+  const friendly = friendlyErrorMessage(code)
+  const server =
+    typeof message === 'string' && message.length > 0 && message !== code ? message : undefined
+  if (!friendly) return server
+  if (server && code && APPEND_TO_SERVER_MESSAGE.has(code)) return `${server} — ${friendly}`
+  return friendly
 }
