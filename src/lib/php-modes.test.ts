@@ -49,9 +49,14 @@ describe('php-modes helpers', () => {
       engineDefaultLines({
         caddy: { allowed: [], default: null },
         nginx: { allowed: ['fpm'], default: 'fpm' },
+        'nginx+apache': { allowed: ['fastcgi'], default: 'fastcgi' },
         openlitespeed: { allowed: [], default: null },
       })
-    ).toEqual(['nginx: PHP-FPM (scales with traffic)', 'OpenLiteSpeed: no mode offered'])
+    ).toEqual([
+      'nginx: PHP-FPM (scales with traffic)',
+      'nginx + Apache: FastCGI (default, light)',
+      'OpenLiteSpeed: no mode offered',
+    ])
   })
 
   it('names an affected site with its kept mode', () => {

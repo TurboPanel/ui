@@ -101,7 +101,7 @@ export function seedComposeForLane(params: {
   /** Document root the detection found (`public`, `dist`, else `.`). */
   root?: string
   /** Engine for the PHP lane. */
-  engine?: 'caddy' | 'nginx' | 'apache' | 'openlitespeed'
+  engine?: 'caddy' | 'nginx' | 'apache' | 'nginx+apache' | 'openlitespeed'
   /**
    * Simple-application fields the repository screen collects for the `app` and
    * `static` lanes. Empty strings mean "platform default" and are written as
@@ -242,7 +242,7 @@ export function parseRepositoryCompose(
 export function seedHostingCompose(params: {
   serviceName?: string
   root?: string
-  engine?: 'caddy' | 'nginx' | 'apache' | 'openlitespeed'
+  engine?: 'caddy' | 'nginx' | 'apache' | 'nginx+apache' | 'openlitespeed'
   /** Turn PHP on with the default series. Omit for a static site. */
   php?: boolean
   /** Account the site runs as, when the operator already chose one. */

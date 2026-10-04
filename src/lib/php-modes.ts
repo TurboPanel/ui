@@ -25,6 +25,7 @@ export const PHP_POLICY_MODE_LABELS: Readonly<Record<PhpModeValue, string>> = {
 const ENGINE_LABELS: Readonly<Record<string, string>> = {
   nginx: 'nginx',
   apache: 'Apache',
+  'nginx+apache': 'nginx + Apache',
   openlitespeed: 'OpenLiteSpeed',
 }
 

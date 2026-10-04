@@ -121,6 +121,7 @@ export function servingPathLine(
   // A Caddy site is served by the site Caddy, still behind the edge one.
   if (resolved === 'caddy') return 'Caddy → Caddy → :443'
   if (resolved === 'apache') return 'Apache → Caddy → :443'
+  if (resolved === 'nginx+apache') return 'nginx → Apache → Caddy → :443'
   if (resolved === 'openlitespeed') return 'OpenLiteSpeed → Caddy → :443'
   return 'nginx → Caddy → :443'
 }
@@ -133,6 +134,9 @@ function siteEngineHint(
   }
   if (engine === 'openlitespeed') {
     return 'Files are served from the host document root via OpenLiteSpeed; PHP runs as a per-vhost LSAPI process under suEXEC. web.env is not injected into the process — use Apache when you need SetEnv. Hosting Caddy terminates TLS.'
+  }
+  if (engine === 'nginx+apache') {
+    return 'nginx in front of one shared Apache, for sites that need .htaccess or Apache modules. nginx serves common static files itself and passes the rest to Apache; PHP runs in a per-site php-fpm pool. Hosting Caddy terminates TLS.'
   }
   if (engine === 'apache') {
     return 'Files are served from the host document root via Apache; PHP runs in a per-site php-fpm pool over mod_proxy_fcgi (never mod_php), and web.env is applied as SetEnv. Hosting Caddy terminates TLS.'

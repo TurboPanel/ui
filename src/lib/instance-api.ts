@@ -3,7 +3,11 @@ import type { NameScheme } from '@/lib/principal-name-scheme'
 import { resolveApiUrl } from '@/lib/control-plane'
 import { clientVersionHeaders, recordInstanceVersion } from '@/lib/instance-version'
 import { getActiveControlPlaneOrigin } from '@/lib/control-plane-accounts'
-import { formatFetchFailureDetail, isHttpStatusError } from '@/lib/fetch-error-detail'
+import {
+  formatFetchFailureDetail,
+  errorExplanation,
+  isHttpStatusError,
+} from '@/lib/fetch-error-detail'
 import type { ManagedIngressPorts } from '@/lib/managed-ingress-ports'
 import type {
   ManagedBackupRecord,
@@ -1873,13 +1877,8 @@ async function apiFetch<T>(
         // Many route errors carry a human explanation beside the code (e.g.
         // deploy-prepare 422s). Append rather than replace — callers match on
         // the code with `.includes(...)`, so it must stay in the message.
-        if (
-          typeof body.message === 'string' &&
-          body.message.length > 0 &&
-          body.message !== body.error
-        ) {
-          detail = `${detail} — ${body.message}`
-        }
+        const explanation = errorExplanation(body.error, body.message)
+        if (explanation) detail = `${detail} — ${explanation}`
       }
     } catch {
       // Non-JSON error body — keep the status-only message.
