@@ -228,10 +228,9 @@ describe('admin query hooks', () => {
   })
 
   it('usePublicUrlsOptional stays idle when enabled is false', () => {
-    const { result } = renderHook(
-      () => usePublicUrlsOptional({ enabled: false }),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => usePublicUrlsOptional({ enabled: false }), {
+      wrapper: createWrapper(),
+    })
     expect(result.current.fetchStatus).toBe('idle')
     expect(fetchPublicUrls).not.toHaveBeenCalled()
   })
@@ -239,10 +238,9 @@ describe('admin query hooks', () => {
   it('usePublicUrlsOptional fetches when enabled is true', async () => {
     fetchPublicUrls.mockResolvedValueOnce({ urls: ['https://panel.example.com'] })
 
-    const { result } = renderHook(
-      () => usePublicUrlsOptional({ enabled: true }),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => usePublicUrlsOptional({ enabled: true }), {
+      wrapper: createWrapper(),
+    })
 
     await waitFor(() => {
       expect(result.current.isSuccess).toBe(true)
@@ -280,9 +278,9 @@ describe('admin query hooks', () => {
       wrapper: createWrapper(client),
     })
 
-    await expect(
-      result.current.run(['https://panel.example.com']),
-    ).resolves.toMatchObject({ ok: true })
+    await expect(result.current.run(['https://panel.example.com'])).resolves.toMatchObject({
+      ok: true,
+    })
 
     await waitFor(() => {
       expect(invalidate).toHaveBeenCalledWith({
@@ -309,7 +307,7 @@ describe('admin query hooks', () => {
             uploadedCertId: null,
           },
         ],
-      }),
+      })
     ).resolves.toMatchObject({ ok: true, value: { kind: 'applied' } })
 
     await waitFor(() => {
@@ -326,7 +324,7 @@ describe('admin query hooks', () => {
   // for it commonly dies in transit even though the work succeeded.
   it('useApplyPublicUrls confirms the change after the control plane restarts', async () => {
     applyPublicUrls.mockRejectedValueOnce(
-      new Error('/api/admin/v1/instance/public-urls/apply failed: HTTP 502'),
+      new Error('/api/admin/v1/instance/public-urls/apply failed: HTTP 502')
     )
     fetchInstanceHostnames
       .mockRejectedValueOnce(new TypeError('Failed to fetch'))
@@ -360,6 +358,36 @@ describe('admin query hooks', () => {
     expect(onReconnecting).toHaveBeenCalledTimes(1)
   })
 
+  it("useApplyPublicUrls never reports success when a Let's Encrypt name has no certificate", async () => {
+    applyPublicUrls.mockRejectedValueOnce(
+      new Error('/api/admin/v1/instance/public-urls/apply failed: HTTP 502')
+    )
+    fetchInstanceHostnames.mockResolvedValueOnce({
+      ok: true,
+      hostnames: [
+        {
+          ...savedHostname('https://panel.example.com'),
+          source: 'lets-encrypt' as const,
+          acmeLastError: 'rate limited',
+        },
+      ],
+    })
+    const { result } = renderHook(() => useApplyPublicUrls(), {
+      wrapper: createWrapper(),
+    })
+    vi.useFakeTimers()
+    try {
+      const pending = result.current.run({})
+      await vi.advanceTimersByTimeAsync(10_000)
+      await expect(pending).resolves.toMatchObject({
+        ok: true,
+        value: { kind: 'not-issued', error: expect.stringContaining('rate limited') },
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('useApplyPublicUrls aborts a hung apply after the request deadline', async () => {
     applyPublicUrls.mockImplementation(
       (_urls: string[] | undefined, signal?: AbortSignal) =>
@@ -374,7 +402,7 @@ describe('admin query hooks', () => {
             return
           }
           signal?.addEventListener('abort', onAbort, { once: true })
-        }),
+        })
     )
     fetchInstanceHostnames.mockResolvedValueOnce({
       ok: true,
@@ -390,7 +418,7 @@ describe('admin query hooks', () => {
       const pending = result.current.run({
         hostnames: [hostnameInput('https://panel.example.com')],
       })
-      await vi.advanceTimersByTimeAsync(120_000)
+      await vi.advanceTimersByTimeAsync(200_000)
       await vi.advanceTimersByTimeAsync(2_000)
       await expect(pending).resolves.toMatchObject({
         ok: true,
@@ -406,7 +434,7 @@ describe('admin query hooks', () => {
 
   it('useApplyPublicUrls reports unreachable when the control plane never returns', async () => {
     applyPublicUrls.mockRejectedValueOnce(
-      new Error('/api/admin/v1/instance/public-urls/apply failed: HTTP 502'),
+      new Error('/api/admin/v1/instance/public-urls/apply failed: HTTP 502')
     )
     fetchInstanceHostnames.mockRejectedValue(new TypeError('Failed to fetch'))
 
@@ -455,8 +483,8 @@ describe('admin query hooks', () => {
   it('useApplyPublicUrls still surfaces a failure the control plane answered', async () => {
     applyPublicUrls.mockRejectedValueOnce(
       new Error(
-        '/api/admin/v1/instance/public-urls/apply failed: HTTP 503: no co-located daemon connected',
-      ),
+        '/api/admin/v1/instance/public-urls/apply failed: HTTP 503: no co-located daemon connected'
+      )
     )
 
     const { result } = renderHook(() => useApplyPublicUrls(), {
@@ -466,7 +494,7 @@ describe('admin query hooks', () => {
     await expect(
       result.current.run({
         hostnames: [hostnameInput('https://panel.example.com')],
-      }),
+      })
     ).resolves.toMatchObject({
       ok: false,
       error: expect.stringContaining('no co-located daemon connected'),
@@ -517,9 +545,7 @@ describe('admin query hooks', () => {
       wrapper: createWrapper(client),
     })
 
-    await expect(
-      result.current.run({ provider: 'mailgun' }),
-    ).resolves.toMatchObject({ ok: true })
+    await expect(result.current.run({ provider: 'mailgun' })).resolves.toMatchObject({ ok: true })
 
     await waitFor(() => {
       expect(client.getQueryData(queryKeys.admin.email)).toEqual(payload)
@@ -540,10 +566,9 @@ describe('admin query hooks', () => {
   })
 
   it('useAuthProviderSettings stays idle when enabled is false', () => {
-    const { result } = renderHook(
-      () => useAuthProviderSettings({ enabled: false }),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useAuthProviderSettings({ enabled: false }), {
+      wrapper: createWrapper(),
+    })
     expect(result.current.fetchStatus).toBe('idle')
     expect(fetchAuthProviderSettings).not.toHaveBeenCalled()
   })
@@ -560,7 +585,7 @@ describe('admin query hooks', () => {
     await expect(
       result.current.run({
         TURBOPANEL_AUTH_PROVIDERS__GITHUB_CLIENT_ID: 'Iv1.example',
-      }),
+      })
     ).resolves.toMatchObject({ ok: true })
 
     await waitFor(() => {
@@ -600,10 +625,9 @@ describe('admin query hooks', () => {
   })
 
   it('useForges stays idle when enabled is false', () => {
-    const { result } = renderHook(
-      () => useForges('admin', { enabled: false }),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useForges('admin', { enabled: false }), {
+      wrapper: createWrapper(),
+    })
     expect(result.current.fetchStatus).toBe('idle')
     expect(fetchForges).not.toHaveBeenCalled()
   })
@@ -611,10 +635,9 @@ describe('admin query hooks', () => {
   it('useForges fetches when enabled is true', async () => {
     fetchForges.mockResolvedValueOnce([])
 
-    const { result } = renderHook(
-      () => useForges('admin', { enabled: true }),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useForges('admin', { enabled: true }), {
+      wrapper: createWrapper(),
+    })
 
     await waitFor(() => {
       expect(result.current.isSuccess).toBe(true)
@@ -636,9 +659,7 @@ describe('admin query hooks', () => {
       expect(client.getQueryData(queryKeys.admin.forges)).toBeDefined()
     })
     expect(queryKeys.admin.forges).not.toEqual(queryKeys.org('org-1').forges)
-    expect(queryKeys.org('org-1').forges).not.toEqual(
-      queryKeys.org('org-2').forges,
-    )
+    expect(queryKeys.org('org-1').forges).not.toEqual(queryKeys.org('org-2').forges)
   })
 
   it('useCreateForge invalidates its scope', async () => {
@@ -655,7 +676,7 @@ describe('admin query hooks', () => {
         provider: 'github',
         name: 'TurboPanel',
         externalAppId: '123',
-      }),
+      })
     ).resolves.toMatchObject({ ok: true })
 
     await waitFor(() => {
@@ -778,10 +799,9 @@ describe('admin query hooks', () => {
   })
 
   it('useServerMetricsLiveSettings stays idle when disabled', () => {
-    const { result } = renderHook(
-      () => useServerMetricsLiveSettings({ enabled: false }),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useServerMetricsLiveSettings({ enabled: false }), {
+      wrapper: createWrapper(),
+    })
 
     expect(result.current.fetchStatus).toBe('idle')
     expect(fetchServerMetricsLiveSettings).not.toHaveBeenCalled()
@@ -802,8 +822,6 @@ describe('admin query hooks', () => {
     }
 
     expect(saveServerMetricsLiveSettings.mock.calls[0]?.[0]).toBe(15)
-    expect(
-      client.getQueryData(queryKeys.admin.metricsLiveSettings),
-    ).toEqual(saved)
+    expect(client.getQueryData(queryKeys.admin.metricsLiveSettings)).toEqual(saved)
   })
 })

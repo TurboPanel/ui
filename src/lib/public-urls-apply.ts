@@ -17,6 +17,8 @@ export type PublicUrlsApplyStatus =
   | 'reconnecting'
   | 'applied'
   | 'reconnected'
+  | 'reconnected-trusted'
+  | 'reconnected-mixed'
   | 'not-saved'
   | 'unreachable'
   | 'failed'
@@ -39,8 +41,7 @@ const FEEDBACK: Record<
   },
   reconnecting: {
     tone: 'pending',
-    message:
-      'The control plane restarted mid-request — waiting for it to come back…',
+    message: 'The control plane restarted mid-request — waiting for it to come back…',
   },
   applied: {
     tone: 'done',
@@ -50,6 +51,15 @@ const FEEDBACK: Record<
     tone: 'done',
     message:
       'Applied — the control plane came back on the new certificate. If your browser warns about it, accept the new self-signed certificate.',
+  },
+  'reconnected-trusted': {
+    tone: 'done',
+    message: 'Applied — the control plane came back and its certificate is in place.',
+  },
+  'reconnected-mixed': {
+    tone: 'done',
+    message:
+      'Applied — the control plane came back. If your browser warns about a name that uses the Platform CA, accept its self-signed certificate.',
   },
   'not-saved': {
     tone: 'failed',
@@ -66,11 +76,31 @@ const FEEDBACK: Record<
 /** The one line to show under the Save & Apply row, or nothing when idle. */
 export function publicUrlsApplyFeedback(
   status: PublicUrlsApplyStatus,
-  error?: string | null,
+  error?: string | null
 ): PublicUrlsApplyFeedback {
   if (status === 'idle') return null
   if (status === 'failed') {
     return { tone: 'failed', message: `Apply failed: ${error ?? 'unknown error'}` }
   }
   return FEEDBACK[status]
+}
+
+/** Which kinds of certificate a hostname set asks for, in the words the banner needs. */
+export function applyCertificateKind(
+  hostnames: readonly { source: string }[]
+): 'platform' | 'trusted' | 'mixed' {
+  const platform = hostnames.filter((entry) => entry.source === 'platform-ca').length
+  if (platform === hostnames.length) return 'platform'
+  return platform === 0 ? 'trusted' : 'mixed'
+}
+
+const RECONNECTED_STATUS = {
+  platform: 'reconnected',
+  trusted: 'reconnected-trusted',
+  mixed: 'reconnected-mixed',
+} as const
+
+/** The banner state for an apply that finished by way of the reconnect wait. */
+export function reconnectedStatus(hostnames: readonly { source: string }[]): PublicUrlsApplyStatus {
+  return RECONNECTED_STATUS[applyCertificateKind(hostnames)]
 }

@@ -1,9 +1,6 @@
 import { useEffect, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
-import {
-  AddPublicUrlRow,
-  PublicUrlsApplyFeedback,
-} from '@/components/admin/public-url-fields'
+import { AddPublicUrlRow, PublicUrlsApplyFeedback } from '@/components/admin/public-url-fields'
 import { panelStyles } from '@/components/ui/panel-styles'
 import {
   Badge,
@@ -40,12 +37,8 @@ import {
   type UploadedCertificateRecord,
 } from '@/lib/instance-api'
 import { HA_CERT_APPLY_NOTE } from '@/lib/platform-copy'
-import {
-  addPublicUrlEntry,
-  parsePublicUrlEntry,
-  type PublicUrlDraft,
-} from '@/lib/public-url-entry'
-import { type PublicUrlsApplyStatus } from '@/lib/public-urls-apply'
+import { addPublicUrlEntry, parsePublicUrlEntry, type PublicUrlDraft } from '@/lib/public-url-entry'
+import { reconnectedStatus, type PublicUrlsApplyStatus } from '@/lib/public-urls-apply'
 import {
   type ApplyPublicUrlsOutcome,
   useApplyPublicUrls,
@@ -63,12 +56,10 @@ const WORKERS_APPLY_MESSAGE = 'cert apply is not applicable on this runtime'
 
 const EMPTY_ENTRY: PublicUrlDraft = { scheme: 'https', host: '', port: '' }
 
-const OUTCOME_STATUS: Record<
-  ApplyPublicUrlsOutcome['kind'],
-  PublicUrlsApplyStatus
-> = {
+const OUTCOME_STATUS: Record<ApplyPublicUrlsOutcome['kind'], PublicUrlsApplyStatus> = {
   applied: 'applied',
   reconnected: 'reconnected',
+  'not-issued': 'failed',
   'not-saved': 'not-saved',
   unreachable: 'unreachable',
 }
@@ -97,9 +88,7 @@ function toInput(record: InstanceHostnameRecord): InstanceHostnameInput {
 }
 
 function isSource(value: string | null): value is InstanceHostnameSource {
-  return (
-    value === 'platform-ca' || value === 'uploaded' || value === 'lets-encrypt'
-  )
+  return value === 'platform-ca' || value === 'uploaded' || value === 'lets-encrypt'
 }
 
 function hostnameOf(entry: string): string {
@@ -116,10 +105,10 @@ function PlatformManagedHostnames({ origin }: Readonly<{ origin: string | null }
     <View style={styles.root}>
       <Text style={panelStyles.pageTitle}>Hostnames</Text>
       <Text style={panelStyles.pageCopy}>
-        Every address this control plane answers on. They become the Platform CA
-        leaf SANs used for daemon → control-plane trust (explicitly not the
-        per-organization Organization CA), the webhook endpoint a Git provider
-        delivers to, and the origin baked into generated install commands.
+        Every address this control plane answers on. They become the Platform CA leaf SANs used for
+        daemon → control-plane trust (explicitly not the per-organization Organization CA), the
+        webhook endpoint a Git provider delivers to, and the origin baked into generated install
+        commands.
       </Text>
       <InlineNotice
         title="Platform-managed"
@@ -127,15 +116,13 @@ function PlatformManagedHostnames({ origin }: Readonly<{ origin: string | null }
       />
       <SectionPanel title="Address" hint="Fixed by this deployment's environment">
         <DataTable columns={ADDRESS_ONLY_COLUMNS} minWidth={280}>
-          {origin
-            ? (
-              <DataTableRow last>
-                <DataTableCell column={ADDRESS_ONLY_COLUMNS[0]!}>
-                  {origin}
-                </DataTableCell>
-              </DataTableRow>
-            )
-            : <DataTableEmpty>No fixed address configured</DataTableEmpty>}
+          {origin ? (
+            <DataTableRow last>
+              <DataTableCell column={ADDRESS_ONLY_COLUMNS[0]!}>{origin}</DataTableCell>
+            </DataTableRow>
+          ) : (
+            <DataTableEmpty>No fixed address configured</DataTableEmpty>
+          )}
         </DataTable>
       </SectionPanel>
     </View>
@@ -174,8 +161,7 @@ export function HostnamesSection() {
 
   let queryError: string | null = null
   if (hostnamesQuery.isError) {
-    queryError =
-      userErrorMessage(hostnamesQuery.error, 'Failed to load hostnames')
+    queryError = userErrorMessage(hostnamesQuery.error, 'Failed to load hostnames')
   }
   const displayError = error ?? saveMutation.actionError ?? queryError
 
@@ -187,7 +173,7 @@ export function HostnamesSection() {
   const onAddUrl = () => {
     const result = addPublicUrlEntry(
       draft.map((row) => row.host),
-      entry,
+      entry
     )
     if (!result.ok) {
       setEntryError(result.error)
@@ -253,10 +239,17 @@ export function HostnamesSection() {
       return
     }
     const outcome = applied.value
-    if (outcome.kind === 'reconnected' || outcome.kind === 'not-saved') {
+    if (outcome.kind !== 'applied' && outcome.kind !== 'unreachable') {
       setDraft(outcome.hostnames)
     }
-    setApplyStatus(OUTCOME_STATUS[outcome.kind])
+    if (outcome.kind === 'not-issued') {
+      setApplyError(outcome.error)
+    }
+    setApplyStatus(
+      outcome.kind === 'reconnected'
+        ? reconnectedStatus(outcome.hostnames)
+        : OUTCOME_STATUS[outcome.kind]
+    )
   }
 
   const handleApplyFailure = (message: string | null) => {
@@ -282,21 +275,17 @@ export function HostnamesSection() {
   }
 
   if (hostnamesQuery.data && 'platformManagedOrigin' in hostnamesQuery.data) {
-    return (
-      <PlatformManagedHostnames
-        origin={hostnamesQuery.data.platformManagedOrigin ?? null}
-      />
-    )
+    return <PlatformManagedHostnames origin={hostnamesQuery.data.platformManagedOrigin ?? null} />
   }
 
   return (
     <View style={styles.root}>
       <Text style={panelStyles.pageTitle}>Hostnames</Text>
       <Text style={panelStyles.pageCopy}>
-        Every address this control plane answers on. They become the Platform CA
-        leaf SANs used for daemon → control-plane trust (explicitly not the
-        per-organization Organization CA), the webhook endpoint a Git provider
-        delivers to, and the origin baked into generated install commands.
+        Every address this control plane answers on. They become the Platform CA leaf SANs used for
+        daemon → control-plane trust (explicitly not the per-organization Organization CA), the
+        webhook endpoint a Git provider delivers to, and the origin baked into generated install
+        commands.
       </Text>
 
       <SectionPanel
@@ -394,9 +383,7 @@ function HostnamesEditor({
   const byHost = new Map(stored.map((record) => [record.host, record]))
   return (
     <>
-      {warning ? (
-        <InlineNotice tone="warning" title="Recovery address" body={warning} />
-      ) : null}
+      {warning ? <InlineNotice tone="warning" title="Recovery address" body={warning} /> : null}
       <HostnameTable
         draft={draft}
         byHost={byHost}
@@ -426,9 +413,7 @@ function HostnamesEditor({
         {applyNotAvailable ? null : (
           <Button
             label="Save & Apply"
-            busyLabel={
-              applyStatus === 'reconnecting' ? 'Reconnecting…' : 'Saving & Applying…'
-            }
+            busyLabel={applyStatus === 'reconnecting' ? 'Reconnecting…' : 'Saving & Applying…'}
             variant="primary"
             busy={applying}
             disabled={saving}
@@ -528,9 +513,7 @@ function HostnameRow({
         <Text selectable style={styles.address}>
           {address}
         </Text>
-        {invalid ? (
-          <Text style={styles.rowError}>This hostname was refused.</Text>
-        ) : null}
+        {invalid ? <Text style={styles.rowError}>This hostname was refused.</Text> : null}
       </DataTableCell>
       <DataTableCell column={COLUMNS[1]}>
         <CertificatePicker
@@ -586,13 +569,11 @@ function CertificatePicker({
     capabilitiesStatus,
   })
   const covering = certificates.filter((certificate) =>
-    coversHostname(certificate.dnsNames, hostnameOf(row.host)),
+    coversHostname(certificate.dnsNames, hostnameOf(row.host))
   )
   return (
     <View style={styles.certStack}>
-      <Text style={styles.sourceLabel}>
-        {INSTANCE_HOSTNAME_SOURCE_LABELS[row.source]}
-      </Text>
+      <Text style={styles.sourceLabel}>{INSTANCE_HOSTNAME_SOURCE_LABELS[row.source]}</Text>
       <Select
         value={row.source}
         disabled={busy}
@@ -640,7 +621,7 @@ function CertificatePicker({
 function uploadedIdFor(
   source: InstanceHostnameSource,
   covering: readonly UploadedCertificateRecord[],
-  current: string | null,
+  current: string | null
 ): string | null {
   if (source !== 'uploaded') return null
   if (current && covering.some((certificate) => certificate.id === current)) {
@@ -649,9 +630,7 @@ function uploadedIdFor(
   return covering.length === 1 ? covering[0].id : null
 }
 
-function ApplyAvailabilityNote({
-  applyNotAvailable,
-}: Readonly<{ applyNotAvailable: boolean }>) {
+function ApplyAvailabilityNote({ applyNotAvailable }: Readonly<{ applyNotAvailable: boolean }>) {
   if (applyNotAvailable) {
     return <Text style={panelStyles.muted}>{HA_CERT_APPLY_NOTE}</Text>
   }

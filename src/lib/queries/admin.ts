@@ -73,10 +73,7 @@ import {
 } from '@/lib/control-plane-recovery'
 import { getActiveOrganizationId } from '@/lib/org-context'
 import { isManagedUpgradeApiMissing } from '@/lib/upgrade-api'
-import {
-  isUpgradeRunActive,
-  UPGRADE_RUN_POLL_MS,
-} from '@/lib/upgrade-run-poll'
+import { isUpgradeRunActive, UPGRADE_RUN_POLL_MS } from '@/lib/upgrade-run-poll'
 import { markControlPlaneUpgradeWatch } from '@/lib/upgrade-watch'
 import {
   waitForUnitUpdate,
@@ -128,11 +125,12 @@ export function useSavePublicUrls() {
 
 /**
  * Client-side ceiling on the apply request. The control plane gives the
- * co-located daemon 180 s, but a connection killed by the Caddy reload can hang
+ * co-located daemon 180 s (the issuer waits up to 180 s too), so this must stay
+ * longer than that or a slow issuance is cut off and misread. A connection killed by the Caddy reload can hang
  * far longer than that with nothing on the other end — this bounds it and hands
  * over to the reconnect wait, which finds out what really happened.
  */
-const APPLY_REQUEST_DEADLINE_MS = 120_000
+const APPLY_REQUEST_DEADLINE_MS = 200_000
 
 async function requestPublicUrlsApply(): Promise<void> {
   const controller = new AbortController()
@@ -161,10 +159,17 @@ export type ApplyPublicUrlsOutcome =
   | { kind: 'applied' }
   /** The request died, the control plane came back, and the change is there. */
   | { kind: 'reconnected'; hostnames: InstanceHostnameInput[] }
+  /** It came back, but a Let's Encrypt name has no certificate or an issuance error. */
+  | { kind: 'not-issued'; hostnames: InstanceHostnameInput[]; error: string }
   /** It came back, but holding a different set — the write never landed. */
   | { kind: 'not-saved'; hostnames: InstanceHostnameInput[] }
   /** It never came back inside the wait window. */
   | { kind: 'unreachable' }
+
+function issuanceNotConfirmedMessage(row: InstanceHostnameRecord): string {
+  const reason = row.acmeLastError ? ` ${row.acmeLastError}` : ''
+  return `The connection dropped and Let's Encrypt has not confirmed a certificate for ${row.host}.${reason} Check the Certificate column, then apply again.`
+}
 
 function hostnameIdentity(entry: {
   host: string
@@ -176,7 +181,7 @@ function hostnameIdentity(entry: {
 
 function sameHostnameSet(
   saved: readonly InstanceHostnameRecord[],
-  expected: readonly InstanceHostnameInput[],
+  expected: readonly InstanceHostnameInput[]
 ): boolean {
   const left = saved.map(hostnameIdentity).sort((a, b) => a.localeCompare(b))
   const right = expected.map(hostnameIdentity).sort((a, b) => a.localeCompare(b))
@@ -184,9 +189,7 @@ function sameHostnameSet(
   return left.every((value, index) => value === right[index])
 }
 
-function hostnameInputs(
-  records: readonly InstanceHostnameRecord[],
-): InstanceHostnameInput[] {
+function hostnameInputs(records: readonly InstanceHostnameRecord[]): InstanceHostnameInput[] {
   return records.map((record) => ({
     host: record.host,
     source: record.source,
@@ -226,8 +229,18 @@ export function useApplyPublicUrls() {
         })
         if (recovery.kind === 'unreachable') return { kind: 'unreachable' }
         const saved = hostnameInputs(recovery.value.hostnames)
+        const unissued = recovery.value.hostnames.find(
+          (row) => row.source === 'lets-encrypt' && (row.acmeLastError || !row.notAfter)
+        )
         if (hostnames && !sameHostnameSet(recovery.value.hostnames, hostnames)) {
           return { kind: 'not-saved', hostnames: saved }
+        }
+        if (unissued) {
+          return {
+            kind: 'not-issued',
+            hostnames: saved,
+            error: issuanceNotConfirmedMessage(unissued),
+          }
         }
         return { kind: 'reconnected', hostnames: saved }
       }
@@ -318,7 +331,7 @@ export function useInstanceAcmeSettings(options?: Readonly<{ enabled?: boolean }
  * `null` when the save may go ahead.
  */
 export function useLetsEncryptTermsGuard(): (
-  rows: readonly HostnameSourceDraft[],
+  rows: readonly HostnameSourceDraft[]
 ) => string | null {
   const acme = useInstanceAcmeSettings()
   return (rows) =>
@@ -363,9 +376,7 @@ export function useUpgradeActiveRun(options?: Readonly<{ enabled?: boolean }>) {
  * target identities here used to spin a 2 s loop whenever the ui's reading of
  * "behind" disagreed with the server's.
  */
-export function instanceUpdatesPollInterval(
-  activeRunStatus: string | undefined,
-): number | false {
+export function instanceUpdatesPollInterval(activeRunStatus: string | undefined): number | false {
   if (activeRunStatus && isUpgradeRunActive(activeRunStatus as 'running')) {
     return UPGRADE_RUN_POLL_MS
   }
@@ -392,7 +403,7 @@ async function dispatchThenWait(
   request: () => Promise<unknown>,
   read: () => Promise<{ version: string | null; commit: string | null }>,
   target: UpdateTargetIdentity,
-  before: string,
+  before: string
 ): Promise<UnitUpdateWait> {
   try {
     await request()
@@ -410,14 +421,12 @@ async function dispatchThenWait(
 export function useUpgradeInstance() {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (
-      vars: Readonly<{ target: UpdateTargetIdentity; before: string }>,
-    ) =>
+    mutationFn: (vars: Readonly<{ target: UpdateTargetIdentity; before: string }>) =>
       dispatchThenWait(
         requestInstanceUpdate,
         async () => (await fetchInstanceUpdates()).units.instance.installed,
         vars.target,
-        vars.before,
+        vars.before
       ),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
@@ -490,7 +499,7 @@ export function useUpgradeRun(runId: string | null) {
 
 export function useUpgradeHistory(
   page: Readonly<{ offset: number; limit: number }>,
-  options?: Readonly<{ enabled?: boolean }>,
+  options?: Readonly<{ enabled?: boolean }>
 ) {
   return useQuery({
     queryKey: queryKeys.admin.upgradeHistory(page.offset, page.limit),
@@ -510,7 +519,7 @@ export function useUpgradeHistory(
 
 export function useUpgradeServersPage(
   page: Readonly<{ offset: number; limit: number; status: string }>,
-  options?: Readonly<{ enabled?: boolean }>,
+  options?: Readonly<{ enabled?: boolean }>
 ) {
   const activeRun = useUpgradeActiveRun({ enabled: options?.enabled ?? true })
   return useQuery({
@@ -567,9 +576,7 @@ export function useCheckUpgradeManifests() {
 export function useUpgradeColocatedDaemon() {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (
-      vars: Readonly<{ target: UpdateTargetIdentity; before: string }>,
-    ) =>
+    mutationFn: (vars: Readonly<{ target: UpdateTargetIdentity; before: string }>) =>
       dispatchThenWait(
         requestColocatedDaemonUpdate,
         async () => {
@@ -577,7 +584,7 @@ export function useUpgradeColocatedDaemon() {
           return installed ?? { version: null, commit: null }
         },
         vars.target,
-        vars.before,
+        vars.before
       ),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
@@ -647,14 +654,11 @@ export function useEmailSettings(options?: Readonly<{ enabled?: boolean }>) {
 
 export function useApplyReencryptSecrets() {
   return useApiMutation({
-    mutationFn: (body?: Parameters<typeof applyReencryptSecrets>[0]) =>
-      applyReencryptSecrets(body),
+    mutationFn: (body?: Parameters<typeof applyReencryptSecrets>[0]) => applyReencryptSecrets(body),
   })
 }
 
-export function useServerMetricsLiveSettings(
-  options?: Readonly<{ enabled?: boolean }>,
-) {
+export function useServerMetricsLiveSettings(options?: Readonly<{ enabled?: boolean }>) {
   return useQuery({
     queryKey: queryKeys.admin.metricsLiveSettings,
     queryFn: fetchServerMetricsLiveSettings,
@@ -735,10 +739,7 @@ function forgesKey(scope: 'admin' | 'org') {
  * would mean two copies of the cache-invalidation rules for one collection.
  * Org-scoped screens importing from here is deliberate, not a stray import.
  */
-export function useForges(
-  scope: 'admin' | 'org',
-  options?: Readonly<{ enabled?: boolean }>
-) {
+export function useForges(scope: 'admin' | 'org', options?: Readonly<{ enabled?: boolean }>) {
   return useQuery({
     queryKey: forgesKey(scope),
     queryFn: () => fetchForges(scope),
@@ -785,8 +786,7 @@ export function useDeleteForge(scope: 'admin' | 'org') {
  */
 export function useStartGithubAppManifest(scope: 'admin' | 'org') {
   return useApiMutation({
-    mutationFn: (input: GithubManifestStartInput) =>
-      startGithubAppManifest(scope, input),
+    mutationFn: (input: GithubManifestStartInput) => startGithubAppManifest(scope, input),
   })
 }
 
