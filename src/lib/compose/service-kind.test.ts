@@ -14,6 +14,7 @@ import {
   isSiteComposeService,
   parseServiceSourceExtension,
   parseServiceTurbopanelExtension,
+  SITE_ENGINE_OPTIONS,
   patchServiceTurbopanelExtension,
   readServiceSourceExtension,
   readServiceTurbopanelExtension,
@@ -438,7 +439,15 @@ describe('parseServiceTurbopanelExtension shapes', () => {
     expect(ENGINE_PHP_MODES.caddy).toEqual([])
     expect(ENGINE_PHP_MODES.nginx).toEqual(['fastcgi', 'fpm'])
     expect(ENGINE_PHP_MODES.apache).toEqual(['fastcgi', 'fpm'])
+    expect(ENGINE_PHP_MODES['nginx+apache']).toEqual(['fastcgi', 'fpm'])
     expect(ENGINE_PHP_MODES.openlitespeed).toEqual(PHP_MODES)
+  })
+
+  it('reads nginx+apache as an engine and offers it in the picker', () => {
+    const parsed = parseServiceTurbopanelExtension({ serviceKind: 'site', engine: 'nginx+apache' })
+    expect(parsed?.engine).toBe('nginx+apache')
+    const option = SITE_ENGINE_OPTIONS.find((o) => o.value === 'nginx+apache')
+    expect(option?.label).toContain('one shared Apache')
   })
 
   it('keeps a managed-directory sourceKind on a site', () => {

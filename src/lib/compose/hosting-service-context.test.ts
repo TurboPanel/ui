@@ -55,6 +55,18 @@ describe('resolveHostingServiceContext', () => {
     expect(hostingWebEnvSectionCopy(apache).showFields).toBe(true)
   })
 
+  it('labels the nginx+apache engine', () => {
+    const document = yamlToComposeDocument(`services:
+  blog:
+    x-turbopanel:
+      serviceKind: site
+      engine: nginx+apache
+`)
+    const context = resolveHostingServiceContext(document, 'blog')
+    expect(hostingServiceKindLabel(context)).toBe('Site · nginx + Apache')
+    expect(hostingPhpSectionCopy(context).hint).toContain('mod_proxy_fcgi')
+  })
+
   it('offers PHP on every site engine, naming each mechanism', () => {
     const document = yamlToComposeDocument(`services:
   static:

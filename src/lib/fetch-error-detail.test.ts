@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   formatFetchFailureDetail,
+  friendlyErrorMessage,
   isForbiddenError,
   isHttpStatusError,
   isServerPlacementRequiredError,
@@ -59,5 +60,22 @@ describe('isServerPlacementRequiredError', () => {
     expect(isServerPlacementRequiredError('HTTP 409: server_placement_required')).toBe(
       false,
     )
+  })
+})
+
+describe('friendlyErrorMessage', () => {
+  it('names the update step for an old daemon', () => {
+    expect(friendlyErrorMessage('site_engine_feature_missing')).toBe(
+      "This server's daemon is too old for the nginx+apache engine: update the server first.",
+    )
+  })
+
+  it('does not read container_not_owned as a permission problem', () => {
+    expect(friendlyErrorMessage('container_not_owned')).toContain('not a permission problem')
+  })
+
+  it('has nothing for unknown or missing codes', () => {
+    expect(friendlyErrorMessage('other')).toBeUndefined()
+    expect(friendlyErrorMessage(undefined)).toBeUndefined()
   })
 })

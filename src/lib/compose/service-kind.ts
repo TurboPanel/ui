@@ -9,7 +9,7 @@ export const TURBOPANEL_SERVICE_EXTENSION_KEY = 'x-turbopanel'
 
 export type ComposeServiceKind = 'container' | 'site' | 'node'
 
-export type SiteEngine = 'caddy' | 'apache' | 'nginx' | 'openlitespeed'
+export type SiteEngine = 'caddy' | 'apache' | 'nginx' | 'nginx+apache' | 'openlitespeed'
 
 /**
  * Runtime family for a `serviceKind: node` service. Mirrors the instance type.
@@ -357,7 +357,7 @@ const SERVICE_EXTENSION_FIELDS: Readonly<
   hosting: { kinds: ALL_SERVICE_KINDS },
   engine: {
     kinds: SITE_KIND_ONLY,
-    typeMessage: 'engine must be "caddy", "apache", "nginx", or "openlitespeed"',
+    typeMessage: 'engine must be "caddy", "apache", "nginx", "nginx+apache", or "openlitespeed"',
   },
   root: { kinds: SITE_KIND_ONLY },
   sourceKind: { kinds: SITE_KIND_ONLY },
@@ -558,6 +558,7 @@ const SITE_ENGINES = new Set<SiteEngine>([
   'caddy',
   'apache',
   'nginx',
+  'nginx+apache',
   'openlitespeed',
 ])
 const SOURCE_BUILD_KINDS = new Set<ComposeSourceBuildKind>(['native', 'railpack'])
@@ -1005,6 +1006,7 @@ export const ENGINE_PHP_MODES: Readonly<Record<SiteEngine, readonly PhpMode[]>> 
   caddy: [],
   nginx: ['fastcgi', 'fpm'],
   apache: ['fastcgi', 'fpm'],
+  'nginx+apache': ['fastcgi', 'fpm'],
   openlitespeed: PHP_MODES,
 }
 
@@ -1092,6 +1094,11 @@ export const SITE_ENGINE_OPTIONS: readonly {
     // Never mod_php: Apache reaches php-fpm over mod_proxy_fcgi. `.htaccess`
     // is real and worth naming — the vhost already emits `AllowOverride All`.
     label: 'Apache — static and PHP-FPM, .htaccess support',
+    deployable: true,
+  },
+  {
+    value: 'nginx+apache',
+    label: 'nginx + Apache — nginx in front of one shared Apache, for sites that need .htaccess or Apache modules',
     deployable: true,
   },
   {
