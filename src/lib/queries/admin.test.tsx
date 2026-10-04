@@ -456,7 +456,7 @@ describe('admin query hooks', () => {
         await vi.advanceTimersByTimeAsync(2_000)
         const reads = fetchInstanceHostnames.mock.calls.length
         await vi.advanceTimersByTimeAsync(60_000)
-        expect(fetchInstanceHostnames.mock.calls.length).toBe(reads)
+        expect(fetchInstanceHostnames.mock.calls).toHaveLength(reads)
       } finally {
         vi.useRealTimers()
       }
