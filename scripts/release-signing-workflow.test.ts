@@ -37,14 +37,21 @@ describe('release manifest signing', () => {
     expect(canary).toMatch(/^\s*secrets:\s*inherit\b/m)
   })
 
-  it('only callers of release.yml inherit secrets, and none falls back to a repo-level signing key', () => {
+  it('every caller of a signing reusable workflow inherits secrets, with no repo-level signing key', () => {
     const dir = join(root, '.github/workflows')
+    const signing =
+      /uses:\s*(\.\/\.github\/workflows\/release\.yml|TurboPanel\/dev\/\.github\/workflows\/gh-(promote|release|promote-finalize)\.yml@)/
     for (const name of readdirSync(dir).filter((n) => n.endsWith('.yml'))) {
       const text = readFileSync(join(dir, name), 'utf8')
-      if (!text.includes('uses: ./.github/workflows/release.yml')) {
-        expect(text, name).not.toMatch(/^\s*secrets:\s*inherit\b/m)
-      }
       expect(text, name).not.toContain('secrets.RELEASE_SIGNING_KEY')
+      const calls = text.match(new RegExp(signing.source, 'g')) ?? []
+      const inherits = text.match(/^\s*secrets:\s*inherit\b/gm) ?? []
+      if (name === 'release.yml') continue
+      // Every such job passes secrets down; an explicit secret pair leaves the environment secret empty.
+      expect(inherits.length, name).toBeGreaterThanOrEqual(calls.length)
+      if (calls.length > 0) {
+        expect(text, name).not.toMatch(/^\s*secrets:\s*\n\s+RELEASE_APP_ID:/m)
+      }
     }
   })
 })
