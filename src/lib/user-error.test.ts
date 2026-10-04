@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
   CONTROL_PLANE_UNREACHABLE_COPY,
+  STEP_NETWORK_FAILURE_COPY,
   ENVIRONMENT_RUNNING_COPY,
   TOO_MANY_ATTEMPTS_COPY,
   UPDATE_ALREADY_ACTIVE_COPY,
   apiErrorCopy,
   isNetworkFetchError,
+  plainStepFailureMessage,
   userErrorMessage,
 } from '@/lib/user-error'
 
@@ -56,5 +58,30 @@ describe('userErrorMessage', () => {
     expect(userErrorMessage(new Error('Nope'), 'f')).toBe('Nope')
     expect(userErrorMessage(new Error('  '), 'f')).toBe('f')
     expect(userErrorMessage(undefined, 'f')).toBe('f')
+  })
+})
+
+describe('plainStepFailureMessage', () => {
+  it.each([
+    'TypeError: Failed to fetch',
+    'fetch failed',
+    'dial tcp 10.0.0.4:443: connect: connection refused',
+    'read tcp 10.0.0.4:5->10.0.0.9:443: i/o timeout',
+    'Get "https://x/y": context deadline exceeded',
+    'connect ECONNREFUSED 127.0.0.1:8080',
+    'getaddrinfo ENOTFOUND updates.example',
+  ])('turns raw network text into one plain sentence: %s', (message) => {
+    expect(plainStepFailureMessage(message)).toBe(STEP_NETWORK_FAILURE_COPY)
+  })
+
+  it('keeps every other message and trims it', () => {
+    expect(plainStepFailureMessage('  health check failed after 90 s ')).toBe(
+      'health check failed after 90 s'
+    )
+  })
+
+  it('is null when there is nothing to say', () => {
+    expect(plainStepFailureMessage(null)).toBeNull()
+    expect(plainStepFailureMessage('   ')).toBeNull()
   })
 })

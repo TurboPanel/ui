@@ -12,6 +12,7 @@ import {
   type UpdatePiece,
 } from '@/lib/instance-updates'
 import { joinWithAnd } from '@/lib/upgrade-display'
+import { plainStepFailureMessage } from '@/lib/user-error'
 
 /**
  * Plain-language update status for the self-hosted Updates screen and the
@@ -102,7 +103,7 @@ export function explainUpgradeFailure(
   channel?: string | null
 ): UpdateFailureExplanation {
   const code = clean(input.errorCode)
-  const message = clean(input.errorMessage)
+  const message = plainStepFailureMessage(clean(input.errorMessage))
   const mentions = (pattern: RegExp) => message !== null && pattern.test(message)
 
   if (code === 'preflight_manifest' && mentions(/signature/i)) {
