@@ -397,7 +397,10 @@ describe('admin query hooks', () => {
     it('reports success once a first certificate appears', async () => {
       const row = letsEncrypt({ notAfter: newCert })
       const outcome = await runDropped([letsEncrypt()], [row])
-      expect(outcome).toMatchObject({ ok: true, value: { kind: 'reconnected' } })
+      expect(outcome).toMatchObject({
+        ok: true,
+        value: { kind: 'reconnected', kept: false },
+      })
     })
 
     it('waits for a slow issuance instead of failing', async () => {
@@ -409,13 +412,69 @@ describe('admin query hooks', () => {
       expect(outcome).toMatchObject({ ok: true, value: { kind: 'reconnected' } })
     })
 
-    it('keeps waiting while only the old certificate is there, then lets it stand', async () => {
-      const old = letsEncrypt({ notAfter: oldCert })
-      const reads = [[old], [old], [old], [old], [old], [old]]
+    it('lets a still-valid old certificate stand only after the wait, and says it was kept', async () => {
+      const old = letsEncrypt({
+        notAfter: oldCert,
+        acmeLastAttemptAt: '2026-10-03T10:00:00.000Z',
+      })
       const before = fetchInstanceHostnames.mock.calls.length
-      const outcome = await runDropped(...reads)
-      expect(outcome).toMatchObject({ ok: true, value: { kind: 'reconnected' } })
+      const outcome = await runDropped(...Array.from({ length: 6 }, () => [old]))
+      expect(outcome).toMatchObject({
+        ok: true,
+        value: { kind: 'reconnected', kept: true },
+      })
       expect(fetchInstanceHostnames.mock.calls.length - before).toBeGreaterThan(3)
+    })
+
+    it('never takes an old certificate as proof when the baseline read fails', async () => {
+      const old = letsEncrypt({
+        notAfter: oldCert,
+        acmeLastAttemptAt: '2026-10-03T10:00:00.000Z',
+      })
+      applyPublicUrls.mockRejectedValueOnce(
+        new Error('/api/admin/v1/instance/public-urls/apply failed: HTTP 502'),
+      )
+      fetchInstanceHostnames.mockRejectedValueOnce(new Error('boom'))
+      fetchInstanceHostnames.mockResolvedValue({ ok: true, hostnames: [old] })
+      const { result } = renderHook(() => useApplyPublicUrls(), {
+        wrapper: createWrapper(),
+      })
+      vi.useFakeTimers()
+      try {
+        const pending = result.current.run({})
+        await vi.advanceTimersByTimeAsync(120_000)
+        await expect(pending).resolves.toMatchObject({
+          ok: true,
+          value: { kind: 'not-issued' },
+        })
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('does not let a hung baseline read hold the apply back', async () => {
+      const old = letsEncrypt({ notAfter: oldCert })
+      applyPublicUrls.mockRejectedValueOnce(
+        new Error('/api/admin/v1/instance/public-urls/apply failed: HTTP 502'),
+      )
+      fetchInstanceHostnames.mockImplementationOnce(() => new Promise(() => {}))
+      fetchInstanceHostnames.mockResolvedValue({ ok: true, hostnames: [old] })
+      const { result } = renderHook(() => useApplyPublicUrls(), {
+        wrapper: createWrapper(),
+      })
+      vi.useFakeTimers()
+      try {
+        const pending = result.current.run({})
+        await vi.advanceTimersByTimeAsync(10_000)
+        expect(applyPublicUrls).toHaveBeenCalledTimes(1)
+        await vi.advanceTimersByTimeAsync(120_000)
+        await expect(pending).resolves.toMatchObject({
+          ok: true,
+          value: { kind: 'not-issued' },
+        })
+      } finally {
+        vi.useRealTimers()
+      }
     })
 
     it('reports not issued for an error that appeared during this apply', async () => {

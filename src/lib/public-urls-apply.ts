@@ -19,6 +19,7 @@ export type PublicUrlsApplyStatus =
   | 'reconnected'
   | 'reconnected-trusted'
   | 'reconnected-mixed'
+  | 'reconnected-kept'
   | 'not-saved'
   | 'unreachable'
   | 'failed'
@@ -62,6 +63,11 @@ const FEEDBACK: Record<
     tone: 'done',
     message:
       'Applied — the control plane came back. If your browser warns about a name that uses the Platform CA, accept its self-signed certificate.',
+  },
+  'reconnected-kept': {
+    tone: 'done',
+    message:
+      "The server kept its existing certificate; Let's Encrypt did not confirm a new one yet.",
   },
   'not-saved': {
     tone: 'failed',
@@ -107,6 +113,8 @@ const RECONNECTED_STATUS = {
 /** The banner state for an apply that finished by way of the reconnect wait. */
 export function reconnectedStatus(
   hostnames: readonly { source: string }[],
+  kept = false,
 ): PublicUrlsApplyStatus {
+  if (kept) return 'reconnected-kept'
   return RECONNECTED_STATUS[applyCertificateKind(hostnames)]
 }

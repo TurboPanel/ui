@@ -59,8 +59,8 @@ describe('admin apply and forge key branches', () => {
     applyPublicUrls.mockRejectedValueOnce(
       new Error('/api/admin/v1/instance/public-urls/apply failed: HTTP 502'),
     )
-    // Read twice: the baseline before the apply, then the reconnect probe.
-    fetchInstanceHostnames.mockResolvedValue({
+    // Two reads: the baseline before the apply, then the reconnect probe.
+    const read = {
       ok: true,
       hostnames: [
         {
@@ -74,7 +74,10 @@ describe('admin apply and forge key branches', () => {
           acmeLastError: null,
         },
       ],
-    })
+    }
+    fetchInstanceHostnames
+      .mockResolvedValueOnce(read)
+      .mockResolvedValueOnce(read)
 
     const { result } = renderHook(() => useApplyPublicUrls(), {
       wrapper: createWrapper(),
@@ -97,6 +100,7 @@ describe('admin apply and forge key branches', () => {
           ],
         },
       })
+      expect(fetchInstanceHostnames).toHaveBeenCalledTimes(2)
     } finally {
       vi.useRealTimers()
     }

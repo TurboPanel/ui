@@ -63,6 +63,7 @@ import {
   verifyAllAdminTiers,
 } from '@/lib/instance-api'
 import {
+  raceWindow,
   settleIssuance,
   takeIssuanceBaseline,
   type IssuanceBaseline,
@@ -134,10 +135,11 @@ export function useSavePublicUrls() {
 
 /**
  * Client-side ceiling on the apply request. The control plane gives the
- * co-located daemon 180 s (the issuer waits up to 180 s too), so this must stay
- * longer than that or a slow issuance is cut off and misread. A connection killed by the Caddy reload can hang
- * far longer than that with nothing on the other end — this bounds it and hands
- * over to the reconnect wait, which finds out what really happened.
+ * co-located daemon 180 s (the issuer waits up to 180 s too), so this must
+ * stay longer than that or a slow issuance is cut off and misread. A
+ * connection killed by the Caddy reload can hang far longer than that with
+ * nothing on the other end — this bounds it and hands over to the reconnect
+ * wait, which finds out what really happened.
  */
 const APPLY_REQUEST_DEADLINE_MS = 200_000
 
@@ -167,7 +169,12 @@ export type ApplyPublicUrlsOutcome =
   /** The request survived the reload and the control plane confirmed it. */
   | { kind: 'applied' }
   /** The request died, the control plane came back, and the change is there. */
-  | { kind: 'reconnected'; hostnames: InstanceHostnameInput[] }
+  | {
+      kind: 'reconnected'
+      hostnames: InstanceHostnameInput[]
+      /** An earlier certificate stands; no new one was confirmed. */
+      kept: boolean
+    }
   /** It came back, but a Let's Encrypt name has no certificate or a fresh error. */
   | { kind: 'not-issued'; hostnames: InstanceHostnameInput[]; error: string }
   /** It came back, but holding a different set — the write never landed. */
@@ -175,21 +182,31 @@ export type ApplyPublicUrlsOutcome =
   /** It never came back inside the wait window. */
   | { kind: 'unreachable' }
 
+/** How long the read before the apply may take; past it the baseline is unknown. */
+const BASELINE_READ_MS = 10_000
+
 /**
  * Rows as the server holds them just before the apply, so the wait afterwards
  * compares server values with server values. Only a Let's Encrypt name needs
- * it; a failed read leaves an empty baseline, which counts every error as new.
+ * it. A read that fails or hangs gives `null` (unknown), never an empty
+ * snapshot: an unknown baseline accepts no earlier certificate as proof.
  */
 async function issuanceBaselineBeforeApply(
   hostnames: readonly InstanceHostnameInput[] | undefined,
+  signal: AbortSignal,
 ): Promise<IssuanceBaseline> {
   if (hostnames && !hostnames.some((entry) => entry.source === 'lets-encrypt')) {
     return new Map()
   }
   try {
-    return takeIssuanceBaseline((await fetchInstanceHostnames()).hostnames)
+    const read = await raceWindow(
+      fetchInstanceHostnames({ signal }),
+      BASELINE_READ_MS,
+      signal,
+    )
+    return read ? takeIssuanceBaseline(read.hostnames) : null
   } catch {
-    return new Map()
+    return null
   }
 }
 
@@ -237,41 +254,26 @@ function hostnameInputs(
  */
 export function useApplyPublicUrls() {
   const queryClient = useQueryClient()
-  // Stops the post-apply wait when the screen goes away.
-  const waiting = useRef<AbortController | null>(null)
-  useEffect(() => () => waiting.current?.abort(), [])
+  // Every apply in flight; all of them stop waiting when the screen goes away.
+  const waiting = useRef(new Set<AbortController>())
+  useEffect(() => {
+    const pending = waiting.current
+    return () => pending.forEach((controller) => controller.abort())
+  }, [])
   return useApiMutation({
     mutationFn: async ({
       hostnames,
       onReconnecting,
     }: ApplyPublicUrlsVariables = {}): Promise<ApplyPublicUrlsOutcome> => {
-      const baseline = await issuanceBaselineBeforeApply(hostnames)
+      const controller = new AbortController()
+      waiting.current.add(controller)
       try {
-        await requestPublicUrlsApply()
-        return { kind: 'applied' }
-      } catch (err) {
-        if (!isControlPlaneRestartError(err)) throw err
-        onReconnecting?.()
-        const recovery = await waitForControlPlaneRecovery({
-          probe: fetchInstanceHostnames,
-        })
-        if (recovery.kind === 'unreachable') return { kind: 'unreachable' }
-        const saved = hostnameInputs(recovery.value.hostnames)
-        if (hostnames && !sameHostnameSet(recovery.value.hostnames, hostnames)) {
-          return { kind: 'not-saved', hostnames: saved }
-        }
-        const controller = new AbortController()
-        waiting.current = controller
-        const issuance = await settleIssuance({
-          rows: recovery.value.hostnames,
-          baseline,
-          signal: controller.signal,
-          refetch: async () => (await fetchInstanceHostnames()).hostnames,
-        })
-        if (issuance.kind === 'not-issued') {
-          return { kind: 'not-issued', hostnames: saved, error: issuance.error }
-        }
-        return { kind: 'reconnected', hostnames: saved }
+        return await applyAndConfirm(
+          { hostnames, onReconnecting },
+          controller.signal,
+        )
+      } finally {
+        waiting.current.delete(controller)
       }
     },
     onSuccess: async () => {
@@ -283,6 +285,39 @@ export function useApplyPublicUrls() {
       })
     },
   })
+}
+
+async function applyAndConfirm(
+  { hostnames, onReconnecting }: ApplyPublicUrlsVariables,
+  signal: AbortSignal,
+): Promise<ApplyPublicUrlsOutcome> {
+  const baseline = await issuanceBaselineBeforeApply(hostnames, signal)
+  try {
+    await requestPublicUrlsApply()
+    return { kind: 'applied' }
+  } catch (err) {
+    if (!isControlPlaneRestartError(err)) throw err
+    onReconnecting?.()
+    const recovery = await waitForControlPlaneRecovery({
+      probe: () => fetchInstanceHostnames(),
+    })
+    if (recovery.kind === 'unreachable') return { kind: 'unreachable' }
+    const saved = hostnameInputs(recovery.value.hostnames)
+    if (hostnames && !sameHostnameSet(recovery.value.hostnames, hostnames)) {
+      return { kind: 'not-saved', hostnames: saved }
+    }
+    const issuance = await settleIssuance({
+      rows: recovery.value.hostnames,
+      baseline,
+      signal,
+      refetch: async (readSignal) =>
+        (await fetchInstanceHostnames({ signal: readSignal })).hostnames,
+    })
+    if (issuance.kind === 'not-issued') {
+      return { kind: 'not-issued', hostnames: saved, error: issuance.error }
+    }
+    return { kind: 'reconnected', hostnames: saved, kept: issuance.kept }
+  }
 }
 
 function invalidateHostnameProjection(queryClient: ReturnType<typeof useQueryClient>) {

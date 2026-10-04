@@ -4076,7 +4076,9 @@ export class InstanceHostnameValidationError extends Error {
   }
 }
 
-export async function fetchInstanceHostnames(): Promise<{
+export async function fetchInstanceHostnames(
+  options: { signal?: AbortSignal } = {}
+): Promise<{
   ok: boolean
   hostnames: InstanceHostnameRecord[]
   /** The server's Let's Encrypt terms answer. Absent on an older control plane. */
@@ -4088,7 +4090,9 @@ export async function fetchInstanceHostnames(): Promise<{
    */
   platformManagedOrigin?: string | null
 }> {
-  return await apiFetch(`${ADMIN_API}/instance/hostnames`)
+  return await apiFetch(`${ADMIN_API}/instance/hostnames`, {
+    signal: options.signal,
+  })
 }
 
 export async function saveInstanceHostnames(

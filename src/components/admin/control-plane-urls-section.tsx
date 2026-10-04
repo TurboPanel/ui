@@ -145,7 +145,7 @@ export function ControlPlaneUrlsSection() {
     }
     setApplyStatus(
       outcome.kind === 'reconnected'
-        ? reconnectedStatus(outcome.hostnames)
+        ? reconnectedStatus(outcome.hostnames, outcome.kept)
         : OUTCOME_STATUS[outcome.kind],
     )
   }

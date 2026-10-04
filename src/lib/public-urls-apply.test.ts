@@ -65,4 +65,13 @@ describe('certificate kind wording', () => {
       'self-signed',
     )
   })
+
+  it('is honest when an earlier certificate was kept', () => {
+    expect(reconnectedStatus([{ source: 'lets-encrypt' }], true)).toBe(
+      'reconnected-kept',
+    )
+    expect(publicUrlsApplyFeedback('reconnected-kept')?.message).toContain(
+      'kept its existing certificate',
+    )
+  })
 })

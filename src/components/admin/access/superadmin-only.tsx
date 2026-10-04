@@ -15,7 +15,10 @@ export function SuperadminOnly({
   if (isSuperadminSession(session)) return <>{children}</>
   return (
     <SectionPanel title={title}>
-      <InlineNotice title="Superadmin only" body="Only the superadmin can change these settings." />
+      <InlineNotice
+        title="Superadmin only"
+        body="Only the superadmin can change these settings."
+      />
     </SectionPanel>
   )
 }
