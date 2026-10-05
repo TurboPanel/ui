@@ -21,6 +21,7 @@ function group(overrides: Partial<DeploymentGroup> = {}): DeploymentGroup {
     strategyOutcome: null,
     startedAt: '2026-10-05T10:00:00.000Z',
     durationMs: 1000,
+    cancelRequestedAt: null,
     ...overrides,
   }
 }
