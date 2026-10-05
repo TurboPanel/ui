@@ -246,6 +246,16 @@ describe('Linux users', () => {
     expect(linuxUsers[1].runsAs.user).toBe('')
   })
 
+  it('offers only users the Base declares, sorted', () => {
+    expect(staging().linuxUserNames).toEqual(['staging-web', 'website'])
+    const view = stagingView()
+    view.effective.linuxUsers = [
+      ...view.effective.linuxUsers,
+      { name: 'only-here', access: 'none', description: null, source: 'environment', usedBy: [] },
+    ]
+    expect(buildConfigViewModel({ envName: 'Staging', view }).linuxUserNames).not.toContain('only-here')
+  })
+
   it('tags a Base assignment as Base', () => {
     const { linuxUsers } = buildConfigViewModel({ envName: 'Staging', view: plainView() })
     expect(linuxUsers[0]).toMatchObject({
