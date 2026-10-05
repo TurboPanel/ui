@@ -14,9 +14,7 @@ import {
 } from '@/lib/platform-copy'
 import { useControlPlaneHealth } from '@/lib/queries/system'
 import { colors, webPointer } from '@/lib/theme'
-
-/** HA blue fading to its light tint: the pill's 1px border. */
-const BORDER_GRADIENT = [colors.blue, colors.command] as const
+import { useColors } from '@/lib/theme-preference'
 
 /**
  * "HIGH AVAILABILITY" beside the T mark on the hosted (Workers) control
@@ -48,6 +46,8 @@ export function HighAvailabilityWordmark({
   showVersion = true,
 }: Readonly<{ compact?: boolean; showVersion?: boolean }>) {
   const { controlPlaneRuntime } = useAuth()
+  // The gradient needs real colour values, not theme variables.
+  const palette = useColors()
   const shown = showsHighAvailabilityWordmark(controlPlaneRuntime)
   const selfHosted = controlPlaneRuntime === 'deno'
   const withVersion = showVersion && !compact
@@ -63,7 +63,8 @@ export function HighAvailabilityWordmark({
 
   const pill = (
     <LinearGradient
-      colors={BORDER_GRADIENT}
+      // HA blue fading to its light tint: the pill's 1px border.
+      colors={[palette.brand, palette.link]}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={[styles.border, withVersion && styles.borderInStack]}

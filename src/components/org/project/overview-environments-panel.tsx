@@ -291,7 +291,7 @@ function ToolbarSplitButton({
           accessibilityLabel={caretAccessibilityLabel}
           accessibilityState={{ expanded: menuOpen }}
         >
-          <HeaderChevron size={12} color={primary ? chrome.accent : colors.textChip} />
+          <HeaderChevron size={12} color={primary ? colors.link : colors.textChip} />
         </Pressable>
       </View>
 
@@ -2048,7 +2048,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
   },
   outcomeSuccessText: {
-    color: chrome.accent,
+    color: colors.link,
     fontSize: 13,
     fontWeight: '600',
   },
@@ -2076,7 +2076,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   hostingLink: {
-    color: chrome.accent,
+    color: colors.link,
     fontWeight: '600',
   },
   barSpacer: {
@@ -2171,7 +2171,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   quietBtnTextPrimary: {
-    color: chrome.accent,
+    color: colors.link,
     fontSize: 12,
     fontWeight: '700',
   },

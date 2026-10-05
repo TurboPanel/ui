@@ -262,7 +262,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   subLabelActive: {
-    color: chrome.accent,
+    color: colors.link,
   },
   adminNav: {
     marginTop: 'auto',

@@ -1,5 +1,5 @@
 import { Platform } from 'react-native'
-import { colors } from '@/lib/theme'
+import { navyPalette } from '@/lib/theme-palettes'
 
 export type ControlPlaneRuntime = 'deno' | 'workers'
 
@@ -17,8 +17,8 @@ export type AuthAccentTheme = {
 const RUNTIME_STORAGE_KEY = 'tp.controlPlaneRuntime'
 
 /**
- * Last-known runtime from this browser tab (web). Used so refresh can paint
- * HA blue / Deno green immediately instead of muted → wrong-brand flashes.
+ * Last-known runtime from this browser tab (web), so a refresh knows it before
+ * `/status` answers.
  */
 export function readStoredControlPlaneRuntime(): ControlPlaneRuntime | undefined {
   if (Platform.OS !== 'web') return undefined
@@ -32,7 +32,11 @@ export function readStoredControlPlaneRuntime(): ControlPlaneRuntime | undefined
   return undefined
 }
 
-function persistControlPlaneRuntime(
+/**
+ * Remember the runtime for this browser tab (web), so a refresh knows it
+ * before `/status` answers. No-ops when the runtime is unknown.
+ */
+export function rememberControlPlaneRuntime(
   runtime: ControlPlaneRuntime | undefined,
 ): void {
   if (Platform.OS !== 'web') return
@@ -46,73 +50,25 @@ function persistControlPlaneRuntime(
 }
 
 /**
- * Auth chrome accent by control-plane runtime:
- * - Workers (TurboPanel High Availability) → blue `#3366cc`
- * - Deno (self-hosted) → green
- * - Unknown → green form chrome (console primary); bootstrap spinners should
- *   use {@link authSpinnerColor} instead so HA never flashes green
+ * Auth screens always paint on the dark Navy backdrop (their animated wash does
+ * colour maths on real hex values), so these are Navy values, not theme
+ * variables. Both runtimes use the brand blue; only the label differs. Green
+ * is reserved for "running / live".
  */
 export function authAccentForRuntime(
   runtime: ControlPlaneRuntime | undefined,
 ): AuthAccentTheme {
-  if (runtime === 'workers') {
-    return {
-      accent: colors.blue,
-      onAccent: colors.buttonTextOnBlue,
-      bgActive: colors.bgActiveBlue,
-      label: 'High Availability',
-    }
-  }
-
   return {
-    accent: colors.green,
-    onAccent: colors.buttonText,
-    bgActive: colors.bgActive,
-    label: 'Self-hosted',
+    accent: navyPalette.accent,
+    onAccent: navyPalette.accentInk,
+    bgActive: navyPalette.accentSoft,
+    label: runtime === 'workers' ? 'High Availability' : 'Self-hosted',
   }
 }
 
-/**
- * Spinner color once runtime is known (or remembered); muted only when
- * nothing is known yet so HA never flashes green on refresh.
- */
-export function authSpinnerColor(
-  runtime: ControlPlaneRuntime | undefined,
-): string {
-  const resolved = runtime ?? readStoredControlPlaneRuntime()
-  if (resolved === 'workers') return colors.blue
-  if (resolved === 'deno') return colors.green
-  return colors.textMuted
-}
-
-/**
- * Push runtime chrome into CSS variables (web) so StyleSheet-baked
- * `chrome.*` tokens follow Workers blue / Deno green without remounts.
- * No-ops when runtime is unknown so a prior HA blue paint is not wiped to green.
- */
-export function applyConsoleChromeRuntime(
-  runtime: ControlPlaneRuntime | undefined,
-): void {
-  if (runtime !== 'deno' && runtime !== 'workers') return
-  if (Platform.OS !== 'web') return
-  if (typeof document === 'undefined') return
-
-  persistControlPlaneRuntime(runtime)
-
-  const theme = authAccentForRuntime(runtime)
-  const root = document.documentElement
-  root.style.setProperty('--tp-chrome-accent', theme.accent)
-  root.style.setProperty('--tp-chrome-bg-active', theme.bgActive)
-  root.style.setProperty('--tp-chrome-on-accent', theme.onAccent)
-}
-
-/** Hydrate CSS vars from the last tab session before React paints (web). */
-export function hydrateConsoleChromeFromStorage(): void {
-  applyConsoleChromeRuntime(readStoredControlPlaneRuntime())
-}
-
-if (Platform.OS === 'web') {
-  hydrateConsoleChromeFromStorage()
+/** Spinner colour for loading screens: brand blue, readable in both themes. */
+export function authSpinnerColor(): string {
+  return navyPalette.brand
 }
 
 /**

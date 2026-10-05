@@ -21,6 +21,7 @@ import {
 } from '@/components/header-menu-group-styles'
 import { HeaderMenuOverlay } from '@/components/header-menu-overlay'
 import { HeaderMenuTrigger } from '@/components/header-menu-trigger'
+import { ThemeSwitch } from '@/components/header-theme-switch'
 import { UserIcon } from '@/components/icons/nav-icons'
 import { NotificationsPanelBody } from '@/components/notifications-panel-body'
 import {
@@ -105,6 +106,7 @@ function UserAccountMenuBody({
   email,
   panelStyle,
   foldNotifications,
+  showThemeSwitch,
   showSwitcher,
   activeOrigin,
   activeKind,
@@ -121,6 +123,8 @@ function UserAccountMenuBody({
   panelStyle?: StyleProp<ViewStyle>
   /** Notifications live in this menu instead of a separate bell. */
   foldNotifications: boolean
+  /** Narrow web: the Light / Dark / Match computer choice lives here. */
+  showThemeSwitch: boolean
   showSwitcher: boolean
   activeOrigin: string | null
   activeKind: ControlPlaneAccount['kind'] | undefined
@@ -205,6 +209,13 @@ function UserAccountMenuBody({
               Add control plane…
             </Text>
           </Pressable>
+        </>
+      ) : null}
+
+      {showThemeSwitch ? (
+        <>
+          <View style={headerMenuGroupStyles.menuDivider} />
+          <ThemeSwitch variant="menu" />
         </>
       ) : null}
 
@@ -363,6 +374,7 @@ export function UserAccountMenuSegment({ email, onSignOut }: UserAccountMenuSegm
           email={email}
           panelStyle={isCompact ? styles.rightPanel : undefined}
           foldNotifications={header.iconOnlyAccount}
+          showThemeSwitch={header.themeSwitchInMenu}
           showSwitcher={showSwitcher}
           activeOrigin={store.activeOrigin}
           activeKind={activeAccount?.kind}

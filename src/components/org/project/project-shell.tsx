@@ -653,7 +653,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   envChipTextActive: {
-    color: chrome.accent,
+    color: colors.link,
   },
   body: {
     width: '100%',

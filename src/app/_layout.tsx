@@ -76,7 +76,6 @@ function AuthGuard() {
     session,
     needsInstall,
     isLoading,
-    controlPlaneRuntime,
     needsControlPlane,
   } = useAuth()
   const segments = useSegments()
@@ -88,7 +87,7 @@ function AuthGuard() {
       <View style={styles.loading}>
         <ActivityIndicator
           size="large"
-          color={authSpinnerColor(controlPlaneRuntime)}
+          color={authSpinnerColor()}
         />
       </View>
     )

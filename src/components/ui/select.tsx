@@ -374,7 +374,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.fieldBorder,
     borderRadius: 8,
     backgroundColor: colors.bgInput,
     paddingHorizontal: spacing.md,
@@ -429,7 +429,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.fieldBorder,
     backgroundColor: colors.bgInput,
     paddingHorizontal: spacing.sm,
     minHeight: 40,
@@ -480,7 +480,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   rowLabelActive: {
-    color: chrome.accent,
+    color: colors.link,
     fontWeight: '600',
   },
   rowLabelDisabled: {
