@@ -57,6 +57,19 @@ function groupTitle(group: DeploymentGroup): string {
   return group.actorEntityType === 'user' ? 'Started in the console' : 'Started by the system'
 }
 
+/**
+ * The line under a deploy: how long it took, or - while it has no duration -
+ * what it is doing. Only a deploy that is running reads "In progress"; one
+ * waiting its turn says so, and a finished deploy that never recorded a time
+ * (cancelled before it started, say) shows a dash rather than a false claim.
+ */
+function groupSub(group: DeploymentGroup): string {
+  if (group.durationMs !== null) return formatDeployDuration(group.durationMs)
+  if (group.status === 'running') return 'In progress'
+  if (group.status === 'queued') return 'Waiting to start'
+  return formatDeployDuration(null)
+}
+
 /** The newest deploys, newest first. `running` marks the newest good one as live. */
 export function deployRows(
   rows: readonly DeploymentHistoryRecord[],
@@ -71,7 +84,7 @@ export function deployRows(
     statusKey: groupStatusKey(group),
     title: groupTitle(group),
     sha: groupSha(group),
-    sub: group.durationMs === null ? 'In progress' : formatDeployDuration(group.durationMs),
+    sub: groupSub(group),
     when: formatAgo(group.startedAt, now) ?? '',
     live: group.id === liveId,
   }))
