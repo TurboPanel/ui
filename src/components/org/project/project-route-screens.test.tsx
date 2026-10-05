@@ -10,6 +10,7 @@ import {
   EnvironmentOverviewScreen,
   EnvironmentSettingsScreen,
   LegacyProjectRedirect,
+  ProjectBaseLensScreen,
   ProjectBaseScreen,
   ProjectEnvironmentsScreen,
 } from './project-route-screens'
@@ -51,6 +52,9 @@ vi.mock('@/components/org/project/managed-focus-tab', () => ({
   ManagedFocusTab: ({ focus }: Readonly<{ focus: string }>) => (
     <div data-testid="managed" data-focus={focus} />
   ),
+}))
+vi.mock('@/components/org/project/base-tab/base-tab', () => ({
+  ProjectBaseTab: () => <div data-testid="base-tab" />,
 }))
 vi.mock('@/components/org/project/environment-overview/environment-overview-tab', () => ({
   EnvironmentOverviewTab: () => <div data-testid="env-overview" />,
@@ -175,9 +179,10 @@ describe('project tabs', () => {
     expect(screen.getByTestId('managed')).toBeTruthy()
   })
 
-  it('shows the compose surface on Base, and sends platform and managed projects home', () => {
+  it('shows the Base tab on the web, and sends platform and managed projects home', () => {
     render(<ProjectBaseScreen />)
-    expect(screen.getByTestId('compose-surface')).toBeTruthy()
+    expect(screen.getByTestId('base-tab')).toBeTruthy()
+    expect(screen.queryByTestId('compose-surface')).toBeNull()
     cleanup()
     setContext({ isSystemProject: true })
     render(<ProjectBaseScreen />)
@@ -185,6 +190,26 @@ describe('project tabs', () => {
     cleanup()
     setContext({ project: project({ type: 'managed', code: 'postgres' }) })
     render(<ProjectBaseScreen />)
+    expect(redirectHref()).toBe('/o/projects/p/overview')
+  })
+
+  it('keeps the compose surface for Base on the phone app', () => {
+    state.os = 'ios'
+    render(<ProjectBaseScreen />)
+    expect(screen.getByTestId('compose-surface')).toBeTruthy()
+    expect(screen.queryByTestId('base-tab')).toBeNull()
+  })
+
+  it('keeps the compose surface on the Base lens routes, and sends platform and managed projects home', () => {
+    render(<ProjectBaseLensScreen />)
+    expect(screen.getByTestId('compose-surface')).toBeTruthy()
+    cleanup()
+    setContext({ isSystemProject: true })
+    render(<ProjectBaseLensScreen />)
+    expect(redirectHref()).toBe('/o/projects/p/overview')
+    cleanup()
+    setContext({ project: project({ type: 'managed', code: 'postgres' }) })
+    render(<ProjectBaseLensScreen />)
     expect(redirectHref()).toBe('/o/projects/p/overview')
   })
 })

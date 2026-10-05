@@ -1,5 +1,6 @@
 import { Redirect, useLocalSearchParams, type Href } from 'expo-router'
 import { Platform, View } from 'react-native'
+import { ProjectBaseTab } from '@/components/org/project/base-tab/base-tab'
 import { EnvironmentOverviewTab } from '@/components/org/project/environment-overview/environment-overview-tab'
 import { EnvironmentConfigurationScreen } from '@/components/org/project/configuration/environment-configuration'
 import { useEnvironmentChrome } from '@/components/org/project/environment-shell'
@@ -37,8 +38,26 @@ export function ProjectEnvironmentsScreen() {
   return <ProjectEnvironmentsTab />
 }
 
-/** The Base tab and its lens routes: the shared compose, as today's project scope. */
+/**
+ * The Base tab. Compose projects on the web get the Base map and what the
+ * Base holds; the phone app keeps the screen it had until the Base has its own
+ * native layout. Platform and managed projects have no Base: they go home.
+ */
 export function ProjectBaseScreen() {
+  const { orgId, projectId, project, isSystemProject } = useProjectContext()
+  if (isSystemProject || (project && isManagedProject(project))) {
+    return <Redirect href={projectOverviewHref(orgId, projectId) as Href} />
+  }
+  if (Platform.OS === 'web') return <ProjectBaseTab />
+  return <ProjectOverviewTab />
+}
+
+/**
+ * The Base lens routes (`/base/compose`, `/base/services`, `/base/bindings`,
+ * `/base/storage`, `/base/hosting`): the shared compose, as today's project
+ * scope. The Compose file editor lives here, linked from the Base tab.
+ */
+export function ProjectBaseLensScreen() {
   const { orgId, projectId, project, isSystemProject } = useProjectContext()
   if (isSystemProject || (project && isManagedProject(project))) {
     return <Redirect href={projectOverviewHref(orgId, projectId) as Href} />
