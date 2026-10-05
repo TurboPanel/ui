@@ -154,7 +154,7 @@ describe.each(SCENARIOS)('project Environments tab ($name)', (scenario) => {
   it('names the server in words', () => {
     render(<ProjectEnvironmentsTab />)
     expect(screen.getByText('Frankfurt 1')).toBeTruthy()
-    expect(screen.getAllByText("Frankfurt 1 (the project's server)").length).toBe(2)
+    expect(screen.getAllByText("Frankfurt 1 (the project's server)")).toHaveLength(2)
   })
 
   it('goes quiet about what the control plane has not answered', () => {

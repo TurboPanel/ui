@@ -121,7 +121,7 @@ describe('useLatestDeployments', () => {
       await waitFor(() => expect(result.current.latest.e1?.status).toBe('succeeded'))
       const calls = fetchEnvironmentDeployments.mock.calls.length
       await vi.advanceTimersByTimeAsync(5000)
-      expect(fetchEnvironmentDeployments.mock.calls.length).toBe(calls)
+      expect(fetchEnvironmentDeployments.mock.calls).toHaveLength(calls)
     } finally {
       vi.useRealTimers()
     }

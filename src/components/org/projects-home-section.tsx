@@ -204,7 +204,11 @@ export function ProjectsHomeSection({
   const containersByEnvironment = useMemo(() => {
     if (!containersQuery.data) return undefined
     const map: Record<string, ContainerRecord[]> = {}
-    for (const row of containersQuery.data.containers) (map[row.environmentId] ??= []).push(row)
+    for (const row of containersQuery.data.containers) {
+      const bucket = map[row.environmentId] ?? []
+      bucket.push(row)
+      map[row.environmentId] = bucket
+    }
     return map
   }, [containersQuery.data])
 
