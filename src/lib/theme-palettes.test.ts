@@ -143,6 +143,25 @@ describe('palettes', () => {
     expect(paperPalette.ok).not.toBe(paperPalette.accent)
   })
 
+  it('tints notice and tag borders from the tone colour, in both themes', () => {
+    const pairs = [
+      ['okLine', 'ok'],
+      ['busyLine', 'busy'],
+      ['warnLine', 'warn'],
+      ['badLine', 'bad'],
+      ['baseLine', 'base'],
+    ] as const
+    for (const p of [navyPalette, paperPalette]) {
+      for (const [line, tone] of pairs) {
+        const [r, g, b, a] = parseColor(p[line])
+        const [tr, tg, tb] = parseColor(p[tone])
+        expect([r, g, b], line).toEqual([tr, tg, tb])
+        expect(a, line).toBeGreaterThan(0.25)
+        expect(a, line).toBeLessThan(0.5)
+      }
+    }
+  })
+
   it('paletteFor picks by scheme', () => {
     expect(paletteFor('dark')).toBe(navyPalette)
     expect(paletteFor('light')).toBe(paperPalette)

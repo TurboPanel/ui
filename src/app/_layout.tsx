@@ -41,6 +41,17 @@ export default function RootLayout() {
     InterBold: require('@tamagui/font-inter/otf/Inter-Bold.otf'),
     InterMediumItalic: require('@tamagui/font-inter/otf/Inter-MediumItalic.otf'),
     InterBoldItalic: require('@tamagui/font-inter/otf/Inter-BoldItalic.otf'),
+    // v4 type. The keys are the family names in `src/lib/v4/typography.ts`;
+    // the fonts-registered test keeps the two lists equal. Each weight is its
+    // own file so a phone never has to synthesise one.
+    Geist_400Regular: require('@expo-google-fonts/geist/400Regular/Geist_400Regular.ttf'),
+    Geist_500Medium: require('@expo-google-fonts/geist/500Medium/Geist_500Medium.ttf'),
+    Geist_600SemiBold: require('@expo-google-fonts/geist/600SemiBold/Geist_600SemiBold.ttf'),
+    GeistMono_400Regular: require('@expo-google-fonts/geist-mono/400Regular/GeistMono_400Regular.ttf'),
+    GeistMono_500Medium: require('@expo-google-fonts/geist-mono/500Medium/GeistMono_500Medium.ttf'),
+    GeistMono_600SemiBold: require('@expo-google-fonts/geist-mono/600SemiBold/GeistMono_600SemiBold.ttf'),
+    PlusJakartaSans_700Bold: require('@expo-google-fonts/plus-jakarta-sans/700Bold/PlusJakartaSans_700Bold.ttf'),
+    PlusJakartaSans_800ExtraBold_Italic: require('@expo-google-fonts/plus-jakarta-sans/800ExtraBold_Italic/PlusJakartaSans_800ExtraBold_Italic.ttf'),
   })
 
   useEffect(() => {

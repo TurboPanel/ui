@@ -108,7 +108,7 @@ Authored Tamagui config lives in `babel.config.cjs`, `src/lib/tamagui.config.ts`
 - **Expo SDK 57** (React Native 0.86, React 19.2) — keep Expo module versions aligned with `pnpm expo install --fix`. Native `ios/` / `android/` are not checked in (CNG).
 - **Tamagui** `^2.0.0-rc.26` — configured via `babel.config.cjs` (not `app.json` plugins); `reactCompiler` experiment is disabled to avoid conflicts with the Tamagui babel plugin.
 - **React Query** `^5.90.14` — see [Server state (React Query)](#server-state-react-query) below.
-- **Fonts** — `@tamagui/font-inter` OTF files loaded in `RootLayout` via `useFonts`; layout returns `null` until fonts are ready.
+- **Fonts** — `RootLayout` registers everything through `useFonts` and returns `null` until the fonts are ready. v4 type is Plus Jakarta Sans (700; 800 italic for page titles), Geist (400 / 500 / 600) and Geist Mono (400 / 500 / 600), packaged from `@expo-google-fonts/*` and bundled as same-origin assets: on the web `font-src 'self' data:` already covers them (`scripts/hosted-security-headers.test.ts` keeps it that way), and no font host is linked. Each weight is its own family name (`Geist_500Medium`); `src/lib/v4/typography.ts` maps roles to those names and never sets `fontWeight` beside them, because a phone applies it unreliably to a custom font. A test keeps the `useFonts` map and the role table equal. The old `@tamagui/font-inter` files stay loaded until no screen uses them. A new font weight needs the same three steps: `pnpm add`, a `useFonts` entry, a role in `typography.ts`; then `pnpm notices:generate`.
 
 ## Testing & pre-commit
 
@@ -194,7 +194,7 @@ This repo is the **signed-in product console** (org + admin + install/sign-in), 
 | Tokens | `src/lib/theme-palettes.ts` + `src/lib/theme.ts` (`colors`, `chrome`, `spacing`, `layout`) | `--tp-*` in `src/app/globals.css` |
 | Stack search | `--stack react-native` | `--stack nextjs` |
 
-Shared brand cues only: blue `#3366cc` (ours) and green `#3dd68c` (running). The console follows the v4 "Navy & Tee" system in its own `design-system/turbopanel/`, including Plus Jakarta Sans display type for titles (loaded by the fonts slice; Inter until then). Do **not** copy the website's light-first marketing layout or the website Master into the console — and do not apply console density / Tamagui patterns to the marketing site.
+Shared brand cues only: blue `#3366cc` (ours) and green `#3dd68c` (running). The console follows the v4 "Navy & Tee" system in its own `design-system/turbopanel/`, including Plus Jakarta Sans display type for titles (Geist for text, Geist Mono for code; see Stack › Fonts). Do **not** copy the website's light-first marketing layout or the website Master into the console — and do not apply console density / Tamagui patterns to the marketing site.
 
 ### When to use (mandatory)
 
@@ -239,6 +239,8 @@ and drifts the moment one copy is edited.
 | Shared panel styles | `src/components/ui/panel-styles.ts` | `panelStyles` — page titles, muted copy, detail cards, callouts, toolbar buttons. |
 | Tokens | `src/lib/theme.ts` | `colors`, `chrome`, `spacing`, `layout`, `webPointer`. No one-off hex in components. |
 | Features | `src/components/org/*`, `src/components/admin/*` | Screen-specific composition only. |
+
+**v4 primitives** live in `src/components/ui/v4/` (barrel `@/components/ui/v4`, one file and one test file each): status chip and triplet, source tag, "Runs as" chip, underline tabs, page title and section heading, card, list group and row, notice (with the raw error line), action button hierarchy (primary, secondary, quiet, danger; 36 px, 44 px on touch), sheet, empty panel, pending bar, Tee stripe, layer cards and choice cards. They paint through `usePalette()` (web: the CSS-variable `colors`, native: the live palette) and build styles with `themedStyles`, so both themes work without a re-render on the web. Words, status keys, glyph shapes, sizes and fonts live in pure `src/lib/v4/` files (`status-vocab.ts`, `ui-scale.ts`, `typography.ts`) that carry the coverage gate. Tests run each primitive three ways (web, phone Navy, phone Paper) over the DOM stand-ins in `rn-stub.tsx`. Screens built in later v4 slices compose these; do not restyle them per screen.
 
 **Dependency direction is one-way: `ui/` must never import from `org/` or
 `admin/`.** A primitive that needs a token takes it from `src/lib/theme.ts`.

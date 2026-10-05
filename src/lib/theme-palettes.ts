@@ -89,6 +89,13 @@ const SPEC = {
   idleSoft: ['rgba(148,160,182,.15)', 'rgba(15,23,42,.06)'],
   base: ['#7fa4ff', '#2b59c3'],
   baseSoft: ['rgba(127,164,255,.16)', 'rgba(43,89,195,.10)'],
+  // Tinted borders for notices and the "changed" source tag: the tone colour
+  // at a fixed alpha (the spec's `color-mix`, which a phone cannot do).
+  okLine: ['rgba(61,214,140,.30)', 'rgba(11,116,68,.30)'],
+  busyLine: ['rgba(180,157,255,.30)', 'rgba(91,63,208,.30)'],
+  warnLine: ['rgba(242,184,75,.35)', 'rgba(138,87,0,.35)'],
+  badLine: ['rgba(255,122,122,.35)', 'rgba(194,42,42,.35)'],
+  baseLine: ['rgba(127,164,255,.45)', 'rgba(43,89,195,.45)'],
   railHttps: ['#86a8ff', '#2b59c3'],
   railInternal: ['#9fb0cb', '#52607a'],
   railData: ['#2fc4b2', '#0f7f74'],
