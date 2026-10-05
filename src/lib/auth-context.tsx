@@ -8,7 +8,7 @@ import {
 } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import {
-  applyConsoleChromeRuntime,
+  rememberControlPlaneRuntime,
   readStoredControlPlaneRuntime,
   resolveControlPlaneRuntime,
   type ControlPlaneRuntime,
@@ -126,7 +126,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
     if (!statusQuery.data) return
     const runtime = resolveControlPlaneRuntime(statusQuery.data)
     if (runtime !== undefined) {
-      applyConsoleChromeRuntime(runtime)
+      rememberControlPlaneRuntime(runtime)
     }
   }, [statusQuery.data])
 

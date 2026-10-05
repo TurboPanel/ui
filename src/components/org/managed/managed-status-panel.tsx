@@ -33,9 +33,9 @@ function statusPillStyle(status: ManagedStatus): {
   switch (status) {
     case 'ready':
       return {
-        borderColor: colors.accent,
-        backgroundColor: colors.bgActive,
-        color: colors.accent,
+        borderColor: colors.ok,
+        backgroundColor: colors.okSoft,
+        color: colors.ok,
       }
     case 'failed':
       return {

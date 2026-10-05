@@ -9,6 +9,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient'
 import { hexWithAlpha } from '@/components/auth/auth-hex'
 import { colors, spacing } from '@/lib/theme'
+import { navyPalette as navy } from '@/lib/theme-palettes'
 
 /**
  * Single-indicator password feedback.
@@ -222,14 +223,14 @@ export function AuthPasswordMeter({
     return () => shine.stop()
   }, [isValid, reduceMotion, sweep, trackWidth])
 
-  const stateColor = isWarning ? colors.pending : accentColor
+  const stateColor = isWarning ? navy.pending : accentColor
   const fillColor = fill.interpolate({
     inputRange: [0, 0.5, 1],
-    outputRange: [colors.borderChip, hexWithAlpha(stateColor, 0.65), stateColor],
+    outputRange: [navy.borderChip, hexWithAlpha(stateColor, 0.65), stateColor],
   })
   const ringColor = settle.interpolate({
     inputRange: [0, 1],
-    outputRange: [isWarning ? colors.pending : colors.borderChip, stateColor],
+    outputRange: [isWarning ? navy.pending : navy.borderChip, stateColor],
   })
   const ringFill = settle.interpolate({
     inputRange: [0, 1],
@@ -373,8 +374,8 @@ export function AuthPasswordMeter({
           <Animated.Text
             style={[
               styles.hint,
-              isValid ? { color: accentColor } : null,
-              isWarning ? { color: colors.pending } : null,
+              isValid ? { color: colors.link } : null,
+              isWarning ? { color: navy.pending } : null,
               {
                 opacity: hintFade,
                 transform: [
@@ -405,7 +406,7 @@ const styles = StyleSheet.create({
   track: {
     height: TRACK_HEIGHT,
     borderRadius: TRACK_HEIGHT,
-    backgroundColor: colors.borderSubtle,
+    backgroundColor: navy.borderSubtle,
     overflow: 'hidden',
   },
   trackFill: {
@@ -448,7 +449,7 @@ const styles = StyleSheet.create({
     width: 5.5,
     height: 5.5,
     borderRadius: 3,
-    backgroundColor: colors.pending,
+    backgroundColor: navy.pending,
   },
   /** Absolute children sit inside the border box — re-anchor to the 18px badge. */
   checkLayer: {
@@ -469,7 +470,7 @@ const styles = StyleSheet.create({
   hint: {
     fontSize: 12,
     lineHeight: 16,
-    color: colors.textMuted,
+    color: navy.textMuted,
     flexShrink: 1,
   },
 })

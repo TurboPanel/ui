@@ -32,6 +32,15 @@ describe('hosted UI security headers', () => {
     expect(enforced).toBe("frame-ancestors 'none'")
   })
 
+  it('serves the v4 fonts from our own origin: no font host is allowed or linked', () => {
+    // The Geist and Plus Jakarta Sans files ship inside the export (expo-font
+    // registers them as same-origin assets), so font-src stays 'self' data:.
+    expect(headers).toMatch(/font-src 'self' data:(;|$)/m)
+    expect(headers).not.toMatch(/fonts\.(googleapis|gstatic)\.com/)
+    const shell = readFileSync(path.join(ROOT, 'src', 'app', '+html.tsx'), 'utf8')
+    expect(shell).not.toMatch(/fonts\.(googleapis|gstatic)\.com/)
+  })
+
   it('allows exactly the inline scripts the exported pages contain', () => {
     const index = path.join(ROOT, 'dist', 'index.html')
     if (!existsSync(index)) return // needs `pnpm run export`; CI export steps run it

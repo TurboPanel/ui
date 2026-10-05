@@ -13,11 +13,13 @@ import {
 } from '@/lib/queries/auth'
 import { useAuthStatus } from '@/lib/query-client'
 import { colors, spacing } from '@/lib/theme'
+import { navyPalette } from '@/lib/theme-palettes'
 import { userErrorMessage } from '@/lib/user-error'
 
 /** Neutral chrome for install — no runtime accent wash or CTA tint. */
-const INSTALL_CHROME = colors.borderMuted
-const INSTALL_FOCUS = colors.textMuted
+// Solid Navy hex: the wash does colour maths on the accent.
+const INSTALL_CHROME = navyPalette.surface3
+const INSTALL_FOCUS = navyPalette.text3
 
 function submitButtonLabel(loading: boolean, hostVerified: boolean): string {
   if (loading) {
@@ -268,9 +270,10 @@ export function InstallScreenContent() {
         busyLabel={submitButtonLabel(true, hostVerified)}
         tint={{
           primaryButton: { backgroundColor: colors.text },
-          primaryButtonText: { color: colors.buttonText },
+          // Dark text on the light button (the install screen is always Navy).
+          primaryButtonText: { color: colors.bg },
         }}
-        spinnerColor={colors.buttonText}
+        spinnerColor={navyPalette.bg}
       />
     </AuthScreenShell>
   )

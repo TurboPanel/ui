@@ -55,7 +55,7 @@ function NavTabFace({
   const showLabel = active || width >= COMPACT_NAV_WIDTH
   return (
     <View style={styles.face}>
-      <Icon size={14} color={active ? chrome.accent : colors.textMuted} />
+      <Icon size={14} color={active ? colors.link : colors.textMuted} />
       {showLabel ? (
         <Text style={[styles.label, active && styles.labelActive]}>
           {COMPOSE_PROJECT_TAB_LABELS[tabId]}
@@ -193,7 +193,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   labelActive: {
-    color: chrome.accent,
+    color: colors.link,
     fontWeight: '700',
   },
 })

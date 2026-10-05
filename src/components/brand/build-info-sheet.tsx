@@ -93,6 +93,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   link: {
-    color: colors.accent,
+    color: colors.ok,
   },
 })

@@ -2844,8 +2844,47 @@ export type HostingRecord = {
   ipId?: string | null
   metadata?: Record<string, unknown> | null
   options?: Record<string, unknown> | null
+  /** Derived by the server on GET responses; absent on older control planes. */
+  certificate?: HostingCertificate | null
   createdAt: string
   updatedAt: string
+}
+
+export type HostingCertificateState =
+  | 'test_certificate'
+  | 'uploaded'
+  | 'secure'
+  | 'waiting_for_dns'
+  | 'issuing'
+  | 'renewal_failed'
+
+export type HostingDnsReport = {
+  ready: boolean
+  checkedAt: string
+  hostnames: { hostname: string; resolves: boolean; addresses: string[] }[]
+  expectedAddresses: string[]
+}
+
+/** What a hosting shows about its certificate; the server decides every field. */
+export type HostingCertificate = {
+  state: HostingCertificateState
+  source: 'test' | 'uploaded' | 'lets_encrypt'
+  expiresAt: string | null
+  expiresInDays: number | null
+  renewsAutomatically: boolean
+  lastError: string | null
+  lastIssuedAt: string | null
+  uploadedExpiryWarning: 'none' | '14d' | '3d' | '1d' | 'expired'
+  dns: HostingDnsReport | null
+  letsEncryptAvailable: boolean
+  wwwRedirect: boolean
+  needsDeploy: boolean
+}
+
+export type UseLetsEncryptResult = {
+  hosting: HostingRecord
+  certificate: HostingCertificate | null
+  needsDeploy: boolean
 }
 
 export type TlsSource = 'upload' | 'lets_encrypt' | 'self_signed' | 'organization_ca'
@@ -3386,6 +3425,25 @@ export async function fetchVisibleHostings(
 ): Promise<{ hostings: HostingRecord[] }> {
   const params = new URLSearchParams({ serviceId })
   return await apiFetch(`${CLIENT_API}/hostings?${params.toString()}`)
+}
+
+export async function fetchHosting(hostingId: string): Promise<{ hosting: HostingRecord }> {
+  return await apiFetch(`${CLIENT_API}/hostings/${hostingId}`)
+}
+
+/** One click: check DNS, then pin a Let's Encrypt certificate (or wait for DNS). */
+export async function requestLetsEncryptForHosting(
+  hostingId: string,
+  body: { wwwRedirect?: boolean } = {}
+): Promise<UseLetsEncryptResult> {
+  return await apiFetch(`${CLIENT_API}/hostings/${hostingId}/use-letsencrypt`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function fetchHostingDnsCheck(hostingId: string): Promise<{ dns: HostingDnsReport }> {
+  return await apiFetch(`${CLIENT_API}/hostings/${hostingId}/dns-check`)
 }
 
 export async function createHosting(
@@ -5190,6 +5248,8 @@ export type CommandRecord = {
   payload: Record<string, unknown> | null
   result: Record<string, unknown> | null
   error: string | null
+  /** The one line of the error that says what went wrong; absent on an older control plane. */
+  errorLine?: string | null
   attempts: number
   createdAt: string
   updatedAt: string
@@ -5266,6 +5326,8 @@ export type CommandStatusRecord = {
   finishedAt: string | null
   errorCode: string | null
   errorMessage: string | null
+  /** The one line of `errorMessage` that says what went wrong; absent on an older control plane. */
+  errorLine?: string | null
   /** Whether a retained execution log exists for this command. */
   hasLog: boolean
 }
@@ -5382,6 +5444,8 @@ export type DeploymentHistoryRecord = {
   durationMs: number | null
   errorCode: string | null
   errorMessage: string | null
+  /** The one line of `errorMessage` that says what went wrong; absent on an older control plane. */
+  errorLine?: string | null
   /** Whether a retained execution log exists (resolved store-side). */
   hasLog: boolean
   /** The engine the attempt ran; null (or absent) for attempts queued before it was recorded. */
@@ -5392,6 +5456,12 @@ export type DeploymentHistoryRecord = {
   strategyOutcomeReason?: string | null
   /** What set the attempt off when it was a git push; null for a deploy a person started. */
   trigger?: DeploymentTriggerRecord | null
+  /**
+   * When someone asked to cancel this attempt; null (or absent) if nobody did.
+   * Set and not yet finished = "Cancelling"; set on a `succeeded` row = the
+   * cancel came too late.
+   */
+  cancelRequestedAt?: string | null
 }
 
 export type DeploymentStrategy = 'inplace' | 'sequential'
@@ -6249,6 +6319,106 @@ export async function fetchDeployPreview(environmentId: string): Promise<DeployP
   return await apiFetch(`${CLIENT_API}/environments/${environmentId}/deploy-preview`)
 }
 
+/** Where a config-view value comes from (the control plane's `ConfigViewSource`). */
+export type ConfigViewSource = 'base' | 'project' | 'environment'
+export type ConfigViewArea = 'service' | 'domain' | 'linuxUser' | 'variable'
+export type ConfigViewServiceKind = 'container' | 'site' | 'node'
+export type ConfigViewLinuxUserAccess = 'none' | 'sftp' | 'ssh'
+
+/** One setting of one app (or its domain / Linux user) in the effective configuration. */
+export type ConfigViewFieldRow = {
+  /** Stable id, e.g. `svc:web:command`. */
+  key: string
+  area: 'service' | 'domain' | 'linuxUser'
+  field: string
+  label: string
+  /** Display text; `null` when `masked`. */
+  value: string | null
+  masked: boolean
+  source: ConfigViewSource
+}
+
+export type ConfigViewService = {
+  name: string
+  /** This environment's service row; `null` when the Base has it but none is saved yet. */
+  serviceId: string | null
+  kind: ConfigViewServiceKind
+  /** `environment` when added here, or when the environment stands alone. */
+  source: ConfigViewSource
+  rows: ConfigViewFieldRow[]
+}
+
+export type ConfigViewLinuxUser = {
+  name: string
+  access: ConfigViewLinuxUserAccess
+  description: string | null
+  source: ConfigViewSource
+  /** Service names that run as this user. */
+  usedBy: string[]
+}
+
+export type ConfigViewVariable = {
+  /** `var:<NAME>`. */
+  key: string
+  name: string
+  variableId: string
+  /** `null` when secret: the server never sends a secret value. */
+  value: string | null
+  isSecret: boolean
+  forBuild: boolean
+  forRuntime: boolean
+  source: 'project' | 'environment'
+}
+
+export type ConfigViewChange = {
+  /** `svc:<service>`, `svc:<service>:<field>`, `user:<name>` or `var:<NAME>`. */
+  key: string
+  area: ConfigViewArea
+  /** Plain-words name of what changed. */
+  label: string
+  field: string | null
+  serviceName: string | null
+  serviceId: string | null
+  kind: 'added' | 'changed' | 'removed'
+  /** `null` when the Base has nothing, or when masked. */
+  baseValue: string | null
+  baseSource: 'base' | 'project' | null
+  /** `null` when this environment has nothing, or when masked. */
+  envValue: string | null
+  envSource: 'environment' | null
+  /** A side is a secret: the change is real but no value is sent. */
+  masked: boolean
+}
+
+export type ConfigViewSide = {
+  services: ConfigViewService[]
+  variables: ConfigViewVariable[]
+  linuxUsers: ConfigViewLinuxUser[]
+}
+
+export type EnvironmentConfigViewResponse = {
+  ok: true
+  environmentId: string
+  projectId: string
+  /** Derived from the saved compose, never stored: `false` for `services: !override` / `!reset`. */
+  followsBase: boolean
+  base: ConfigViewSide
+  effective: ConfigViewSide
+  changes: ConfigViewChange[]
+}
+
+/**
+ * Read-only effective configuration of one environment: the Base, what the
+ * environment really runs (the same merge a deploy uses) and what differs.
+ * Secrets carry no value. **422** `compose_invalid` when a saved compose cannot
+ * be read.
+ */
+export async function fetchEnvironmentConfigView(
+  environmentId: string
+): Promise<EnvironmentConfigViewResponse> {
+  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/config-view`)
+}
+
 export type StorageKind = 'volume' | 'directory' | 'file'
 export type StorageAccessMode = 'single_writer' | 'multi_reader' | 'multi_writer'
 export type StorageRetention = 'retain' | 'delete'
@@ -6861,6 +7031,35 @@ export async function saveServerResourceLimits(
     method: 'PUT',
     body: JSON.stringify({ resourceLimits }),
   })
+}
+
+/**
+ * `cancelled`: the deploy never started on the host. `cancelling`: the host was
+ * told to stop. `already_cancelled`: nothing to do.
+ */
+export type CancelDeploymentState = 'cancelled' | 'cancelling' | 'already_cancelled'
+
+export type CancelDeploymentResponse = {
+  ok: true
+  state: CancelDeploymentState
+  environmentId: string
+  deploymentId: string
+}
+
+/**
+ * Ask the control plane to cancel a running or queued deploy (the whole deploy,
+ * every host). `deploymentId` is the deploy command id. No step-up: a re-deploy
+ * fully reverses it. **409** `deploy_not_cancellable` (already finished) or
+ * `cancel_unsupported` (the server's agent is too old).
+ */
+export async function cancelDeployment(
+  environmentId: string,
+  deploymentId: string
+): Promise<CancelDeploymentResponse> {
+  return await apiFetch(
+    `${CLIENT_API}/environments/${environmentId}/deployments/${deploymentId}/cancel`,
+    { method: 'POST', body: JSON.stringify({}) }
+  )
 }
 
 export async function stopEnvironment(environmentId: string): Promise<CommandEnqueueResponse> {
@@ -9094,6 +9293,55 @@ export async function deleteNotificationChannel(
     `${CLIENT_API}/notification-channels/${encodeURIComponent(id)}`,
     { method: 'DELETE' },
     organizationId
+  )
+}
+
+export type OrganizationActivityFilter = 'all' | 'deploying' | 'failed'
+
+export type OrganizationActivityItem = {
+  /** The command id. */
+  id: string
+  projectId: string | null
+  projectName: string | null
+  environmentId: string | null
+  environmentName: string | null
+  serverId: string
+  action: 'deploy' | 'start' | 'restart' | 'stop'
+  state: 'deploying' | 'failed'
+  startedAt: string
+  /** Not recorded yet; always null. */
+  step: number | null
+  totalSteps: number | null
+  durationSecs: number
+  errorMessage: string | null
+  /** Not recorded yet; always null. */
+  crashCount: number | null
+}
+
+export type OrganizationActivityPage = {
+  ok: true
+  items: OrganizationActivityItem[]
+  total: number
+  hasMore: boolean
+}
+
+/**
+ * Running and recently failed deploys, restarts and stops across the
+ * organization, newest first. Owners and managers only (403 otherwise); poll it.
+ */
+export async function fetchOrganizationActivity(
+  orgId: string,
+  params: Readonly<{ filter?: OrganizationActivityFilter; limit?: number; offset?: number }> = {}
+): Promise<OrganizationActivityPage> {
+  const query = new URLSearchParams()
+  if (params.filter) query.set('filter', params.filter)
+  if (params.limit !== undefined) query.set('limit', String(params.limit))
+  if (params.offset !== undefined) query.set('offset', String(params.offset))
+  const suffix = query.size > 0 ? `?${query.toString()}` : ''
+  return await apiFetch(
+    `${CLIENT_API}/organizations/${encodeURIComponent(orgId)}/activity${suffix}`,
+    undefined,
+    orgId
   )
 }
 

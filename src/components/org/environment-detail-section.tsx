@@ -27,6 +27,7 @@ import {
   SectionPanel,
   TextField,
 } from '@/components/ui'
+import { HostingCertificatePanel } from '@/components/org/hosting-certificate-panel'
 import { ComposeEditorSection } from '@/components/org/compose-editor-section'
 import { usePersistEnvironmentCompose } from '@/components/org/compose-persistence'
 import {
@@ -69,6 +70,7 @@ import {
   useEnvironment,
   useUpdateEnvironment,
 } from '@/lib/queries/environments'
+import { commandErrorLine } from '@/lib/command-error'
 import { useProject } from '@/lib/queries/projects'
 import { useOrgServers } from '@/lib/queries/servers'
 import {
@@ -550,7 +552,7 @@ function deployStatusMessage(command: CommandStatusRecord): string {
   if (command.status === 'succeeded') {
     return 'Deployment completed.'
   }
-  return command.errorMessage ?? `Deployment ${command.status}.`
+  return commandErrorLine(command) ?? `Deployment ${command.status}.`
 }
 
 
@@ -1209,6 +1211,15 @@ function HostingPanelRow({
         locked={locked}
         onChange={onChange}
       />
+
+      {isHttp && hostingId ? (
+        <HostingCertificatePanel
+          orgId={orgId}
+          hostingId={hostingId}
+          composeOwned={composeOwned}
+          disabled={disabled}
+        />
+      ) : null}
 
       <HostingBindPicker editor={editor} locked={locked} onChange={onChange} />
 
@@ -2990,7 +3001,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: colors.overlay,
     alignItems: 'center',
     justifyContent: 'center',
     padding: spacing.lg,

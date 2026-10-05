@@ -13,14 +13,13 @@ function webSelectStyle(mono: boolean): CSSProperties {
     width: '100%',
     borderWidth: 1,
     borderStyle: 'solid',
-    borderColor: colors.border,
+    borderColor: colors.fieldBorder,
     borderRadius: 8,
     backgroundColor: colors.bgInput,
     color: colors.text,
     fontSize: 16,
     padding: 10,
     minHeight: 44,
-    colorScheme: 'dark',
   }
   if (mono) {
     style.fontFamily = 'monospace'
@@ -198,7 +197,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   nativeOptionTextSelected: {
-    color: chrome.accent,
+    color: colors.link,
     fontWeight: '600',
   },
 })

@@ -1061,7 +1061,7 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   readsChipText: {
-    color: chrome.accent,
+    color: colors.link,
     fontSize: 11,
     fontWeight: '600',
   },
@@ -1126,7 +1126,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   linkText: {
-    color: chrome.accent,
+    color: colors.link,
     fontSize: 12,
     fontWeight: '600',
   },

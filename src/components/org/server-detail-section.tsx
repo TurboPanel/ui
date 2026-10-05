@@ -71,6 +71,7 @@ import {
   type ServerDetailRecord,
   type ServerUpdateStatus,
 } from '@/lib/instance-api'
+import { commandErrorLine } from '@/lib/command-error'
 import { useCommandRecordsBatch } from '@/lib/queries/commands'
 import {
   useDeleteServer,
@@ -199,7 +200,7 @@ function applyDetailCommandPollResult(
   if (activeCommand.kind === 'ping') {
     updated.pingRunning = false
     if (record.status !== 'succeeded') {
-      updated.pingError = record.error ?? `Ping ${record.status}`
+      updated.pingError = commandErrorLine(record) ?? `Ping ${record.status}`
     }
     return updated
   }
@@ -207,7 +208,7 @@ function applyDetailCommandPollResult(
   if (activeCommand.kind === 'reboot') {
     updated.rebootRunning = false
     if (record.status !== 'succeeded') {
-      updated.rebootError = record.error ?? `Reboot ${record.status}`
+      updated.rebootError = commandErrorLine(record) ?? `Reboot ${record.status}`
     } else {
       onSucceeded()
     }
@@ -218,7 +219,7 @@ function applyDetailCommandPollResult(
   if (record.status === 'succeeded') {
     onSucceeded()
   } else {
-    updated.hostnameError = record.error ?? `Hostname change ${record.status}`
+    updated.hostnameError = commandErrorLine(record) ?? `Hostname change ${record.status}`
   }
   return updated
 }
@@ -395,7 +396,7 @@ function applyTerminalPollSuccess(
       handlers.onRefreshServer()
       return
     }
-    handlers.setTimezonePollError(record.error ?? `Timezone change ${record.status}`)
+    handlers.setTimezonePollError(commandErrorLine(record) ?? `Timezone change ${record.status}`)
     return
   }
 
@@ -405,7 +406,7 @@ function applyTerminalPollSuccess(
       handlers.invalidateSystemContainers(entry.environmentId)
       return
     }
-    handlers.setSystemRestartPollError(record.error ?? `System restart ${record.status}`)
+    handlers.setSystemRestartPollError(commandErrorLine(record) ?? `System restart ${record.status}`)
     return
   }
 
@@ -414,7 +415,7 @@ function applyTerminalPollSuccess(
     handlers.onRefreshServer()
     return
   }
-  handlers.setNtpPollError(record.error ?? `NTP change ${record.status}`)
+  handlers.setNtpPollError(commandErrorLine(record) ?? `NTP change ${record.status}`)
 }
 
 function applyPollFailure(
@@ -1272,7 +1273,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   backText: {
-    color: colors.accent,
+    color: colors.ok,
     fontWeight: '600',
     fontSize: 14,
   },
