@@ -34,10 +34,8 @@ Provider buttons sit **below** the passkey link and use the same footer-styled a
 
 ## Style
 
-- Same OLED dark as the console (no light marketing theme swap)  
-- **Runtime accent** from `GET /api/client/v1/status` → `runtime` (`src/lib/auth-accent.ts`):  
-  - `workers` (TurboPanel High Availability) → blue `#3366cc`  
-  - `deno` (self-hosted) → green `#3dd68c`  
+- Always Navy (the dark palette), whichever theme the console uses: the animated backdrop is built from fixed Navy hex, so the screen pins `data-theme="dark"` on web (`DARK_SCOPE` in `auth-screen-shell.tsx`). No light marketing theme swap  
+- **Accent** is the brand blue `#3366cc` on both runtimes (`src/lib/auth-accent.ts`, Navy hex values); `runtime` from `GET /api/client/v1/status` only changes the label (High Availability / Self-hosted). Link text uses the lighter `link` blue for 4.5:1  
 - Form panel: **frosted chrome** via `GlassSurface` (`glass.fill` + blur/saturate on web; native `GlassView` on iOS 26+), radius 12, soft lift, **2px runtime-accent top edge** — interaction container only, not a decorative card stack  
 - Floating fields: soft glass fill on web (`glass.fillSoft` + light blur) so they sit inside the frosted panel  
 - Page title ~22px / 500 weight above the panel; optional description under the title  
@@ -47,7 +45,7 @@ Provider buttons sit **below** the passkey link and use the same footer-styled a
 - **Backdrop** (`AuthScreenBackground`): LinearGradient wash + tiled dashed SVG grid on all platforms (RN Web drops CSS `backgroundImage` on `View`); wash uses **opaque** accent→black mixes + extra stops (Safari bands/dithers alpha gradients); 4 Reanimated streaks via shared values; honor reduced motion  
 - **Floating labels** (`AuthFloatingField`): label sits inside the field as the resting “placeholder”, then shrinks to the top on focus or when the field has a value; focused border + raised label use the runtime accent. The label paints **above** the input (Chrome autofill would hide a label behind an opaque fill) but must ignore pointer events for the whole raise — first click focuses and stays focused so paste works.  
 - Password visibility toggle is an **eye / eye-slash** icon button (`auth-eye-icons.tsx`) with an accessible name — not “Show” / “Hide” text  
-- Bootstrap/recovery spinners: muted until `runtime` is known, then blue/green (`authSpinnerColor`); Sign In CTA spinner uses `onAccent`
+- Bootstrap/recovery spinners are brand blue (`authSpinnerColor()`); Sign In CTA spinner uses `onAccent`
 
 ## Motion
 
@@ -61,8 +59,7 @@ Provider buttons sit **below** the passkey link and use the same footer-styled a
 - ❌ Purple gradient auth cards  
 - ❌ Full-width inputs on desktop (≥768)  
 - ❌ “Ops console” / dual-line product chrome above the form  
-- ❌ Hardcoding blue on Deno auth (or green on Workers auth)  
-- ❌ Defaulting the HA bootstrap spinner to green before `/status` returns  
+- ❌ Green as the accent on any runtime (green means running / live only)  
 - ❌ Emoji in validation messages as primary icons  
 - ❌ Placeholder-only fields with no visible label when empty *and* when filled (floating label must remain visible when raised)  
 - ❌ Letting the floating-label animation eat the first click (label must ignore pointer events for the whole raise, including mid-tween frames)  

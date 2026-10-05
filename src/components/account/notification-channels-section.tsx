@@ -494,6 +494,41 @@ function ChannelsPanel({
  * channels are the signed-in person's own; organization channels belong to
  * the organization in context and need a manager.
  */
+/**
+ * The organization's own channels, on their own: what Organization settings
+ * shows under Notifications. Personal channels stay on the account page.
+ */
+export function OrganizationChannelsSection({
+  orgId,
+}: Readonly<{ orgId: string }>) {
+  const router = useRouter()
+  const eventsQuery = useNotificationEventsQuery()
+  const events = useMemo(() => eventsQuery.data ?? [], [eventsQuery.data])
+  return (
+    <View style={styles.page}>
+      <SectionPanel
+        title="Organization channels"
+        hint="Shared by the organization; managers may edit them."
+      >
+        <ChannelsPanel scope="organization" events={events} organizationId={orgId} />
+      </SectionPanel>
+      <SectionPanel
+        title="Your own channels"
+        hint="Yours alone; they follow your account across organizations."
+      >
+        <Pressable
+          onPress={() => router.push('/account/notifications')}
+          accessibilityRole="link"
+          accessibilityLabel="Open your notification channels"
+          style={webPointer}
+        >
+          <Text style={panelStyles.muted}>Open your notification channels</Text>
+        </Pressable>
+      </SectionPanel>
+    </View>
+  )
+}
+
 export function NotificationChannelsSectionContent() {
   const router = useRouter()
   const eventsQuery = useNotificationEventsQuery()

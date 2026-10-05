@@ -203,7 +203,7 @@ const toneStyles = StyleSheet.create({
     fontWeight: '600',
   },
   done: {
-    color: colors.accent,
+    color: colors.ok,
     fontSize: 13,
     fontWeight: '600',
   },

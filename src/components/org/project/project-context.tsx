@@ -36,6 +36,7 @@ import {
   isTurbopanelProject,
   systemComponentKey,
 } from '@/lib/system-inventory'
+import { recordProjectTouch } from '@/lib/recent-projects'
 import { userErrorMessage } from '@/lib/user-error'
 
 /**
@@ -197,6 +198,13 @@ export function ProjectProvider({
   useEffect(() => {
     setError(queryError)
   }, [queryError])
+
+  // Opening a project puts it first in the sidebar's Recent projects (this
+  // device only). A draft is not a project yet.
+  const openedProjectId = !isDraft && project ? project.id : null
+  useEffect(() => {
+    if (openedProjectId) recordProjectTouch(orgId, openedProjectId)
+  }, [orgId, openedProjectId])
 
   const invalidateProject = useCallback(async () => {
     await Promise.all([

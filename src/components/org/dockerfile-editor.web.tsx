@@ -6,6 +6,7 @@ import {
   indentUnit,
 } from '@codemirror/language'
 import { spacing } from '@/lib/theme'
+import { useColorScheme } from '@/lib/theme-preference'
 import {
   CODE_EDITOR_LINE_HEIGHT,
   codeEditorTheme,
@@ -133,14 +134,15 @@ export function DockerfileEditor({
   onChangeText,
   embedded = false,
 }: DockerfileEditorProps) {
+  const dark = useColorScheme() === 'dark'
   const extensions = useMemo(
     () => [
       dockerfileLanguage,
       indentUnit.of('    '),
       syntaxHighlighting(codeHighlightStyle),
-      codeEditorTheme(embedded),
+      codeEditorTheme(embedded, dark),
     ],
-    [embedded],
+    [embedded, dark],
   )
 
   const minHeight = minLines * CODE_EDITOR_LINE_HEIGHT + spacing.sm * 2

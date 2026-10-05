@@ -168,7 +168,7 @@ function edgeStyle(kind: ComposeGraphEdge['kind']): {
 } {
   if (kind === 'depends_on') return { stroke: colors.command, strokeWidth: 1.5 }
   if (kind === 'hosting') {
-    return { stroke: colors.accent, strokeWidth: 1.2, opacity: 0.8 }
+    return { stroke: colors.ok, strokeWidth: 1.2, opacity: 0.8 }
   }
   if (kind === 'volume') {
     return { stroke: colors.textDim, strokeWidth: 1, dash: '4 3' }
@@ -596,7 +596,7 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   serviceBinding: {
-    color: colors.accent,
+    color: colors.ok,
     fontSize: 10,
     fontWeight: '600',
   },
@@ -666,7 +666,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: colors.accent,
+    borderColor: colors.ok,
     backgroundColor: colors.bgInset,
     alignItems: 'center',
     justifyContent: 'center',
@@ -752,7 +752,7 @@ const styles = StyleSheet.create({
     height: 7,
     borderRadius: 3,
     borderWidth: 1,
-    borderColor: colors.accent,
+    borderColor: colors.ok,
     backgroundColor: colors.bgInset,
   },
   legendSwatchServer: {

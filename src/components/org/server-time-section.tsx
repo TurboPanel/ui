@@ -28,7 +28,7 @@ import {
   useSetServerTimezone,
   useTimezones,
 } from '@/lib/queries/servers'
-import { chrome, colors, spacing, webPointer } from '@/lib/theme'
+import { colors, spacing, webPointer } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
 
 type TimeSyncMaybe = ServerDetailRecord['timeSync']
@@ -528,7 +528,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   linkText: {
-    color: chrome.accent,
+    color: colors.link,
     fontSize: 13,
     fontWeight: '600',
   },
