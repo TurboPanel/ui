@@ -3862,7 +3862,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 0,
     bottom: 0,
-    backgroundColor: colors.warn,
+    backgroundColor: 'rgba(224, 179, 65, 0.45)',
   },
   coverageMetaRow: {
     flexDirection: 'row',

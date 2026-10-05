@@ -8,7 +8,7 @@ import {
 } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { hexWithAlpha } from '@/components/auth/auth-hex'
-import { spacing } from '@/lib/theme'
+import { colors, spacing } from '@/lib/theme'
 import { navyPalette as navy } from '@/lib/theme-palettes'
 
 /**
@@ -374,7 +374,7 @@ export function AuthPasswordMeter({
           <Animated.Text
             style={[
               styles.hint,
-              isValid ? { color: navy.link } : null,
+              isValid ? { color: colors.link } : null,
               isWarning ? { color: navy.pending } : null,
               {
                 opacity: hintFade,

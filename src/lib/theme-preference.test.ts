@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
+import { runInNewContext } from 'node:vm'
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { navyPalette, paperPalette } from '@/lib/theme-palettes'
@@ -104,7 +105,7 @@ describe('themeBootScript', () => {
         return key === KEY ? stored : null
       },
     }
-    new Function('localStorage', 'document', script)(storage, { documentElement: root })
+    runInNewContext(script, { localStorage: storage, document: { documentElement: root } })
     return root.value
   }
 

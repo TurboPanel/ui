@@ -895,10 +895,10 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 0,
     bottom: 0,
-    backgroundColor: colors.warnSoft,
+    backgroundColor: 'rgba(224, 179, 65, 0.14)',
     borderLeftWidth: 1,
     borderRightWidth: 1,
-    borderColor: colors.warn,
+    borderColor: 'rgba(224, 179, 65, 0.28)',
   },
   breakLine: {
     position: 'absolute',

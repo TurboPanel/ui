@@ -1,7 +1,6 @@
 import { Platform, StyleSheet, type TextStyle, type ViewStyle } from 'react-native'
 import type { AuthAccentTheme } from '@/lib/auth-accent'
 import { colors, spacing } from '@/lib/theme'
-import { navyPalette } from '@/lib/theme-palettes'
 
 /** Constrained auth column — email/password forms should not stretch on desktop. */
 export const AUTH_FORM_MAX_WIDTH = 400
@@ -312,7 +311,7 @@ export function authAccentStyles(theme: AuthAccentTheme): AuthAccentStyles {
   return {
     primaryButton: { backgroundColor: theme.accent },
     primaryButtonText: { color: theme.onAccent },
-    // Text on the dark backdrop needs the lighter link blue (4.5:1), not the fill blue.
-    footerLinkAccent: { color: navyPalette.link },
+    // Link text needs the lighter link blue (4.5:1), not the fill blue; it follows the theme.
+    footerLinkAccent: { color: colors.link },
   }
 }
