@@ -73,7 +73,7 @@ describe.each(SCENARIOS)('EnvironmentMap ($name)', (scenario) => {
     )
     expect(colors.has(token(scenario, 'railHttps'))).toBe(true)
     expect(colors.has(token(scenario, 'railData'))).toBe(true)
-    expect(container.querySelectorAll('path[d="M0 0 8 4 0 8Z"]').length).toBe(layout.heads.length)
+    expect(container.querySelectorAll('path[d="M0 0 8 4 0 8Z"]')).toHaveLength(layout.heads.length)
   })
 
   it('paints a changed station on the blue tint and the others on the surface', () => {

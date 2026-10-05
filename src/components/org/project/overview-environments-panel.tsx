@@ -1462,6 +1462,7 @@ function SystemEnvironmentPanelBody() {
       <EnvironmentDeploymentHistoryPanel
         orgId={model.orgId}
         environmentId={selectedEnvironment.id}
+        canManage={model.canMutateLifecycle}
       />
     </View>
   )

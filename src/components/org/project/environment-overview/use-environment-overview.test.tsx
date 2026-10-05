@@ -22,7 +22,7 @@ vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub'))
 vi.mock('@/components/org/project/project-context', () => ({
   useProjectContext: () => ({ orgId: 'o', projectId: 'p', selectedEnvironment: { id: 'env-1', name: 'Staging' } }),
 }))
-vi.mock('@/components/org/project/environment-overview/use-config-view', () => ({ useEnvironmentConfigView: () => q.view }))
+vi.mock('@/lib/queries/environments', () => ({ useEnvironmentConfigView: () => q.view }))
 vi.mock('@/lib/queries/services', () => ({
   useServices: () => q.services,
   useHostingsByServices: () => q.hostings,

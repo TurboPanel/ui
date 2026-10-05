@@ -2,19 +2,17 @@
 
 import type {
   BindingRecord,
+  ConfigViewChange,
+  ConfigViewFieldRow,
+  ConfigViewService,
   ContainerRecord,
+  EnvironmentConfigViewResponse as EnvironmentConfigView,
   HostingRecord,
   ProjectPrincipalRecord,
   ServiceRecord,
   StorageRecord,
   TlsRecord,
 } from '@/lib/instance-api'
-import type {
-  ConfigViewChange,
-  ConfigViewFieldRow,
-  ConfigViewService,
-  EnvironmentConfigView,
-} from '@/lib/v4/config-view-client'
 import type { OverviewSource } from './environment-overview'
 
 export function row(
@@ -57,7 +55,7 @@ const api = viewService('api', 'container', [
 const redis = viewService('redis', 'container', [row('redis', 'image', 'redis:8')])
 const old = viewService('old', 'container', [row('old', 'image', 'nginx:1')], { serviceId: null })
 
-export const CHANGES: readonly ConfigViewChange[] = [
+export const CHANGES: ConfigViewChange[] = [
   {
     key: 'svc:web:command',
     area: 'service',

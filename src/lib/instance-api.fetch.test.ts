@@ -27,6 +27,7 @@ import {
   fetchDatacenters,
   fetchDeployPreview,
   fetchEnvironment,
+  fetchEnvironmentConfigView,
   fetchForges,
   fetchLicenses,
   fetchOrgHostDefaults,
@@ -70,6 +71,7 @@ import {
   signOut,
   signUp,
   stopEnvironment,
+  cancelDeployment,
   updateEnvironment,
   updateOrganization,
   updateProject,
@@ -564,6 +566,26 @@ describe('instance-api fetch wrappers', () => {
     })
   })
 
+  it('fetchEnvironmentConfigView reads the derived config-view route', async () => {
+    const side = { services: [], variables: [], linuxUsers: [] }
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        ok: true,
+        environmentId: 'env-1',
+        projectId: 'p1',
+        followsBase: true,
+        base: side,
+        effective: side,
+        changes: [],
+      }),
+    )
+    await expect(fetchEnvironmentConfigView('env-1')).resolves.toMatchObject({
+      followsBase: true,
+      changes: [],
+    })
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/environments/env-1/config-view')
+  })
+
   it('deploy preview and lifecycle wrappers proxy environment routes', async () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse({
@@ -594,6 +616,23 @@ describe('instance-api fetch wrappers', () => {
     await expect(stopEnvironment('env-1')).resolves.toMatchObject({
       commandId: 'cmd-stop',
     })
+
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        ok: true,
+        state: 'cancelling',
+        environmentId: 'env-1',
+        deploymentId: 'dep-1',
+      }),
+    )
+    await expect(cancelDeployment('env-1', 'dep-1')).resolves.toMatchObject({
+      state: 'cancelling',
+    })
+    const [cancelUrl, cancelInit] = fetchMock.mock.calls.at(-1) ?? []
+    expect(String(cancelUrl)).toContain(
+      '/environments/env-1/deployments/dep-1/cancel',
+    )
+    expect(cancelInit).toMatchObject({ method: 'POST' })
 
     fetchMock.mockResolvedValueOnce(
       jsonResponse({ ok: true, commandId: 'cmd-start', status: 'queued' }),

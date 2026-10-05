@@ -204,6 +204,11 @@ function Station({ node, href }: Readonly<{ node: MapNode; href: string | null }
   )
 }
 
+/** A line is placed by its position and size, so those make its key. */
+function segmentKey(segment: MapSegment): string {
+  return `${segment.orientation}-${segment.kind}-${segment.x}-${segment.y}-${segment.w}-${segment.h}`
+}
+
 /** The wide form: three bands, stations and lines at the positions the layout gives. */
 function WideMap({ layout, hrefFor }: Readonly<{ layout: MapLayout; hrefFor: StationHref }>) {
   const s = styles(usePalette())
@@ -216,11 +221,11 @@ function WideMap({ layout, hrefFor }: Readonly<{ layout: MapLayout; hrefFor: Sta
             {band.note === '' ? null : <Text style={s.bandNote}>{band.note}</Text>}
           </View>
         ))}
-        {layout.segments.map((segment, index) => (
-          <Line key={`${segment.orientation}-${index}`} segment={segment} />
+        {layout.segments.map((segment) => (
+          <Line key={segmentKey(segment)} segment={segment} />
         ))}
-        {layout.heads.map((head, index) => (
-          <Head key={`head-${index}`} head={head} />
+        {layout.heads.map((head) => (
+          <Head key={`head-${head.kind}-${head.x}-${head.y}`} head={head} />
         ))}
         {layout.nodes.map((node) => (
           <Station key={node.id} node={node} href={hrefFor(node.target)} />

@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { useEnvironmentConfigView } from '@/components/org/project/environment-overview/use-config-view'
+import { useEnvironmentConfigView } from '@/lib/queries/environments'
 import { useProjectContext } from '@/components/org/project/project-context'
 import { environmentStatusTone } from '@/lib/container-status'
 import type { DeploymentHistoryRecord } from '@/lib/instance-api'

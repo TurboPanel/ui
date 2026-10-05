@@ -13,7 +13,7 @@ import { usePathname, useRouter, type Href } from 'expo-router'
 import { scheduleOnRN } from 'react-native-worklets'
 import { ActivitySection } from '@/components/org/activity-section'
 import { OrgScreenScroll } from '@/components/org/org-screen-scroll'
-import { ProjectsOverviewSection } from '@/components/org/projects-overview-section'
+import { ProjectsHomeSection } from '@/components/org/projects-home-section'
 import { ServersOverviewSection } from '@/components/org/servers-overview-section'
 import {
   ORG_TAB_AREA_IDS,
@@ -177,13 +177,13 @@ export function OrgTabPager({ orgId }: Readonly<{ orgId: string }>) {
           ]}
         >
           <PagerPage width={width}>
-            <ProjectsOverviewSection
+            <ProjectsHomeSection
               orgId={orgId}
               workspaceId={projectsWorkspaceId}
             />
           </PagerPage>
           <PagerPage width={width}>
-            <ActivitySection />
+            <ActivitySection orgId={orgId} />
           </PagerPage>
           <PagerPage width={width}>
             <ServersOverviewSection orgId={orgId} />

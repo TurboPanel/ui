@@ -61,6 +61,38 @@ describe('userErrorMessage', () => {
   })
 })
 
+describe('cancel deploy errors', () => {
+  it('maps the two refusals to plain sentences', () => {
+    expect(userErrorMessage(new Error('HTTP 409: deploy_not_cancellable'), 'x')).toBe(
+      'This deploy has already finished.',
+    )
+    expect(userErrorMessage(new Error('HTTP 409: cancel_unsupported'), 'x')).toBe(
+      "This server's TurboPanel daemon is too old to cancel deploys. Update it first.",
+    )
+  })
+
+  it('maps the too-late and unreachable-server refusals', () => {
+    expect(userErrorMessage(new Error('HTTP 409: deploy_too_late'), 'x')).toBe(
+      'This deploy is already switching over, so it can no longer be stopped. It will finish.',
+    )
+    expect(userErrorMessage(new Error('HTTP 503: daemon_unavailable'), 'x')).toBe(
+      'TurboPanel could not reach this server right now. Try again in a moment.',
+    )
+  })
+})
+
+describe('Let’s Encrypt refusals', () => {
+  it.each([
+    ['lets_encrypt_not_enabled', 'has not turned on'],
+    ['acme_requires_public_bind', 'reachable from the internet'],
+    ['hosting_not_http', 'web domains'],
+    ['hosting_has_no_hostnames', 'Add a domain name'],
+    ['letsencrypt_hostname_unsupported', 'wildcard'],
+  ])('%s reads as a sentence', (code, fragment) => {
+    expect(apiErrorCopy(new Error(`HTTP 400: ${code}`))).toContain(fragment)
+  })
+})
+
 describe('plainStepFailureMessage', () => {
   it.each([
     'TypeError: Failed to fetch',

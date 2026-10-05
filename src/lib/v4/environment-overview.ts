@@ -15,19 +15,17 @@
 
 import type {
   BindingRecord,
+  ConfigViewChange,
+  ConfigViewService,
+  ConfigViewSide,
   ContainerRecord,
+  EnvironmentConfigViewResponse as EnvironmentConfigView,
   HostingRecord,
   ProjectPrincipalRecord,
   ServiceRecord,
   StorageRecord,
   TlsRecord,
 } from '@/lib/instance-api'
-import type {
-  ConfigViewChange,
-  ConfigViewService,
-  ConfigViewSide,
-  EnvironmentConfigView,
-} from '@/lib/v4/config-view-client'
 import { accessText, RUNS_IN_CONTAINER, type RunsAs } from './linux-users'
 import type { MapDomain, MapInput, MapLink, MapMode, MapStatus, MapVolume } from './map-layout'
 import { isAppService, isDataStoreContainer, serviceKindLabel } from './service-roles'
