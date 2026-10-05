@@ -12,6 +12,7 @@ import {
   useEnvironmentConfigView,
   useEnvironments,
   useRunEnvironmentLifecycle,
+  useCancelDeployment,
   useStopEnvironment,
   useStopEnvironmentMutation,
   useUpdateEnvironment,
@@ -28,6 +29,7 @@ const {
   updateEnvironment,
   deleteEnvironment,
   stopEnvironment,
+  cancelDeployment,
 } = vi.hoisted(() => ({
   fetchVisibleEnvironments: vi.fn(),
   fetchDeployPreview: vi.fn(),
@@ -39,6 +41,7 @@ const {
   updateEnvironment: vi.fn(),
   deleteEnvironment: vi.fn(),
   stopEnvironment: vi.fn(),
+  cancelDeployment: vi.fn(),
 }))
 
 vi.mock('@/lib/instance-api', async (importOriginal) => {
@@ -55,6 +58,7 @@ vi.mock('@/lib/instance-api', async (importOriginal) => {
     updateEnvironment,
     deleteEnvironment,
     stopEnvironment,
+    cancelDeployment,
   }
 })
 
@@ -345,6 +349,33 @@ describe('environments query hooks', () => {
     await waitFor(() => {
       expect(invalidate).toHaveBeenCalledWith({
         queryKey: queryKeys.org(orgId).commands.all,
+      })
+    })
+  })
+
+  it('useCancelDeployment cancels one deploy and refreshes history', async () => {
+    cancelDeployment.mockResolvedValueOnce({
+      ok: true,
+      state: 'cancelling',
+      environmentId,
+      deploymentId: 'dep-1',
+    })
+    const client = createAppQueryClient()
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
+
+    const { result } = renderHook(
+      () => useCancelDeployment(orgId, environmentId),
+      { wrapper: createWrapper(client) },
+    )
+
+    await expect(result.current.run('dep-1')).resolves.toMatchObject({ ok: true })
+    expect(cancelDeployment).toHaveBeenCalledWith(environmentId, 'dep-1')
+    await waitFor(() => {
+      expect(invalidate).toHaveBeenCalledWith({
+        queryKey: queryKeys.org(orgId).environments.deployments(environmentId),
+      })
+      expect(invalidate).toHaveBeenCalledWith({
+        queryKey: queryKeys.org(orgId).environments.detail(environmentId),
       })
     })
   })

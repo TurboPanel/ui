@@ -97,8 +97,14 @@ export function EnvironmentSettingsScreen() {
 
 /** Environment Deployments: the deploy history, open. */
 export function EnvironmentDeploymentsScreen() {
-  const { orgId, projectId, project, isSystemProject, pathEnvironmentId } =
-    useProjectContext()
+  const {
+    orgId,
+    projectId,
+    project,
+    isSystemProject,
+    pathEnvironmentId,
+    canManage,
+  } = useProjectContext()
   if (isSystemProject) {
     return <Redirect href={projectOverviewHref(orgId, projectId) as Href} />
   }
@@ -111,6 +117,7 @@ export function EnvironmentDeploymentsScreen() {
       orgId={orgId}
       environmentId={pathEnvironmentId}
       alwaysOpen
+      canManage={canManage}
     />
   )
 }

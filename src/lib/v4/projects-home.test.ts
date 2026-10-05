@@ -241,6 +241,7 @@ describe('deploys in progress', () => {
       strategyOutcome: null,
       startedAt: '2026-10-05T11:58:00Z',
       durationMs: null,
+      cancelRequestedAt: null,
       ...partial,
     }
   }

@@ -103,6 +103,7 @@ function group(partial: Partial<DeploymentGroup>): DeploymentGroup {
     strategyOutcome: null,
     startedAt: '2026-10-05T11:56:00Z',
     durationMs: 1000,
+    cancelRequestedAt: null,
     ...partial,
   }
 }
