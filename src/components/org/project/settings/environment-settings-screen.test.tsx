@@ -12,6 +12,7 @@ const h = vi.hoisted(() => ({
   setError: vi.fn(),
   actionError: null as string | null,
   servers: undefined as unknown,
+  serversError: false,
 }))
 
 vi.mock('expo-router', () => ({ useRouter: () => ({ push: h.push }) }))
@@ -22,7 +23,9 @@ vi.mock('@/components/org/project/settings/environment-settings-view', () => ({
     return <div data-testid="view" />
   },
 }))
-vi.mock('@/components/org/project/overview-environments-panel', () => ({ EnvironmentGitSourceSection: () => null }))
+vi.mock('@/components/org/project/overview-environments-panel', () => ({
+  EnvironmentGitSourceSection: () => null,
+}))
 vi.mock('@/components/org/project-settings-area', () => ({
   EnvironmentDeleteControl: (props: Readonly<{ onOpenProjectSettings: () => void }>) => (
     <button type="button" onClick={props.onOpenProjectSettings}>
@@ -38,7 +41,7 @@ vi.mock('@/lib/queries', () => ({
       return h.actionError
     },
   }),
-  useOrgServers: () => ({ data: h.servers }),
+  useOrgServers: () => ({ data: h.servers, isError: h.serversError }),
 }))
 
 const STAGING = { id: 'e1', name: 'Staging', serverId: 's1' }
@@ -71,6 +74,7 @@ beforeEach(() => {
   h.push.mockReset()
   h.setError.mockReset()
   h.actionError = null
+  h.serversError = false
   h.servers = {
     servers: [
       { id: 's1', name: 'Frankfurt 1', connected: true },
@@ -92,7 +96,12 @@ describe('EnvironmentSettingsBody', () => {
   it('starts from the saved name and where it runs', () => {
     render(<EnvironmentSettingsBody showGitSource />)
     expect(h.view.environmentName).toBe('Staging')
-    expect(h.view.rename).toMatchObject({ name: 'Staging', dirty: false, canSave: false, error: null })
+    expect(h.view.rename).toMatchObject({
+      name: 'Staging',
+      dirty: false,
+      canSave: false,
+      error: null,
+    })
     expect(h.view.server).toMatchObject({ server: 'Frankfurt 1', source: 'pinned' })
     expect(h.view.moveChoices.map((choice) => choice.serverId)).toEqual([null, 's3', 's2'])
     expect(h.view.canEdit).toBe(true)
@@ -143,11 +152,46 @@ describe('EnvironmentSettingsBody', () => {
     expect(h.view.moving).toBe(false)
   })
 
-  it('offers only the project server, and names no server, before the server list arrives', () => {
+  it('says servers are loading, offers no move, and does not call the server gone, before the list arrives', () => {
     h.servers = undefined
     render(<EnvironmentSettingsBody showGitSource />)
-    expect(h.view.moveChoices.map((choice) => choice.serverId)).toEqual([null])
+    expect(h.view.moveChoices).toEqual([])
+    expect(h.view.server).toMatchObject({
+      server: 'Loading servers',
+      source: 'pinned',
+      offline: false,
+    })
+  })
+
+  it('says the list could not be loaded, and offers no move, when the servers request failed', () => {
+    h.servers = undefined
+    h.serversError = true
+    render(<EnvironmentSettingsBody showGitSource />)
+    expect(h.view.moveChoices).toEqual([])
+    expect(h.view.server.server).toBe('Could not load servers')
+  })
+
+  it('calls a pinned server gone only when the loaded list lacks it', () => {
+    h.servers = { servers: [{ id: 's2', name: 'Berlin', connected: true }] }
+    render(<EnvironmentSettingsBody showGitSource />)
     expect(h.view.server.server).toBe('A server that is no longer in this organization')
+    expect(h.view.moveChoices.map((choice) => choice.serverId)).toEqual([null, 's2'])
+  })
+
+  it('does not carry a typed name over to another environment', async () => {
+    const { rerender } = render(<EnvironmentSettingsBody showGitSource />)
+    await press(() => h.view.rename.onName('Typed for staging'))
+    expect(h.view.rename.name).toBe('Typed for staging')
+    setup({ selectedEnvironment: PRODUCTION })
+    rerender(<EnvironmentSettingsBody showGitSource />)
+    expect(h.view.rename).toMatchObject({
+      name: 'Production',
+      dirty: false,
+      canSave: false,
+      error: null,
+    })
+    await press(() => h.view.rename.onSave())
+    expect(h.run).not.toHaveBeenCalled()
   })
 
   it('is read-only for a viewer and leaves the danger zone to the owner', () => {

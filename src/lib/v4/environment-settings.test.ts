@@ -5,6 +5,7 @@ import {
   buildServerMovePatch,
   environmentRenameProblem,
   environmentServerFacts,
+  serverListState,
   serverMoveChoices,
   serverMoveCopy,
 } from './environment-settings'
@@ -17,6 +18,10 @@ function server(id: string, name: string | null, connected = true): OrgServerRec
   return { id, name, hostname: null, connected } as OrgServerRecord
 }
 
+function ready(servers: readonly OrgServerRecord[]) {
+  return { status: 'ready', servers } as const
+}
+
 const STAGING = env('e1', 'Staging')
 const SIBLINGS = [STAGING, env('e2', 'Production')]
 
@@ -24,7 +29,7 @@ describe('environment rename', () => {
   it('names an empty name and a name another environment already has', () => {
     expect(environmentRenameProblem('  ', STAGING, SIBLINGS)).toBeTruthy()
     expect(environmentRenameProblem('production', STAGING, SIBLINGS)).toBe(
-      'Another environment in this project already has that name.',
+      'Another environment in this project already has that name.'
     )
     expect(environmentRenameProblem('Preview', STAGING, SIBLINGS)).toBeNull()
   })
@@ -46,7 +51,7 @@ describe('where an environment runs', () => {
   const servers = [server('s1', 'Frankfurt 1'), server('s2', 'Berlin', false)]
 
   it('says nothing is set when neither the environment nor the project names a server', () => {
-    expect(environmentServerFacts(STAGING, null, servers)).toEqual({
+    expect(environmentServerFacts(STAGING, null, ready(servers))).toEqual({
       server: null,
       source: 'none',
       offline: false,
@@ -55,13 +60,13 @@ describe('where an environment runs', () => {
   })
 
   it('uses its own server first, then the project server', () => {
-    expect(environmentServerFacts(env('e', 'x', 's1'), 's2', servers)).toMatchObject({
+    expect(environmentServerFacts(env('e', 'x', 's1'), 's2', ready(servers))).toMatchObject({
       server: 'Frankfurt 1',
       source: 'pinned',
       offline: false,
       effectiveServerId: 's1',
     })
-    expect(environmentServerFacts(STAGING, 's2', servers)).toMatchObject({
+    expect(environmentServerFacts(STAGING, 's2', ready(servers))).toMatchObject({
       server: 'Berlin',
       source: 'project',
       offline: true,
@@ -69,32 +74,83 @@ describe('where an environment runs', () => {
   })
 
   it('does not guess the name of a server the list does not have', () => {
-    const facts = environmentServerFacts(env('e', 'x', 'gone'), null, servers)
+    const facts = environmentServerFacts(env('e', 'x', 'gone'), null, ready(servers))
     expect(facts.server).toBe('A server that is no longer in this organization')
     expect(facts.offline).toBe(false)
+  })
+
+  it('says only that servers are loading, and does not call a pinned server gone, until the list arrives', () => {
+    const facts = environmentServerFacts(env('e', 'x', 'gone'), null, { status: 'loading' })
+    expect(facts).toEqual({
+      server: 'Loading servers',
+      source: 'pinned',
+      offline: false,
+      effectiveServerId: 'gone',
+    })
+  })
+
+  it('says the list could not be loaded, and does not call a project server gone', () => {
+    const facts = environmentServerFacts(STAGING, 's2', { status: 'error' })
+    expect(facts).toEqual({
+      server: 'Could not load servers',
+      source: 'project',
+      offline: false,
+      effectiveServerId: 's2',
+    })
+  })
+
+  it('still says nothing is set while servers load when no server is named', () => {
+    expect(environmentServerFacts(STAGING, null, { status: 'loading' }).server).toBeNull()
+  })
+})
+
+describe('the server list state', () => {
+  it('is ready once data arrived, even when a later refresh failed, and loading or failed before', () => {
+    expect(serverListState({ servers: [server('s1', 'A')] }, true)).toMatchObject({
+      status: 'ready',
+    })
+    expect(serverListState({}, false)).toEqual({ status: 'ready', servers: [] })
+    expect(serverListState(undefined, false)).toEqual({ status: 'loading' })
+    expect(serverListState(undefined, true)).toEqual({ status: 'error' })
   })
 })
 
 describe('moving to another server', () => {
-  const servers = [server('s1', 'Frankfurt 1'), server('s3', 'Amsterdam'), server('s2', 'Berlin', false)]
+  const servers = [
+    server('s1', 'Frankfurt 1'),
+    server('s3', 'Amsterdam'),
+    server('s2', 'Berlin', false),
+  ]
 
   it('lists connected servers other than the current one, by name', () => {
-    const choices = serverMoveChoices(env('e', 'x', 's1'), null, servers)
+    const choices = serverMoveChoices(env('e', 'x', 's1'), null, ready(servers))
     expect(choices).toEqual([{ serverId: 's3', label: 'Amsterdam' }])
   })
 
   it('offers the project server when this environment has its own and the project names another', () => {
-    const choices = serverMoveChoices(env('e', 'x', 's1'), 's3', servers)
-    expect(choices[0]).toMatchObject({ serverId: null, label: "Use the project's server (Amsterdam)" })
+    const choices = serverMoveChoices(env('e', 'x', 's1'), 's3', ready(servers))
+    expect(choices[0]).toMatchObject({
+      serverId: null,
+      label: "Use the project's server (Amsterdam)",
+    })
     expect(choices).toHaveLength(2)
-    const unknown = serverMoveChoices(env('e', 'x', 's1'), 'gone', servers)
+    const unknown = serverMoveChoices(env('e', 'x', 's1'), 'gone', ready(servers))
     expect(unknown[0]?.label).toBe("Use the project's server")
   })
 
   it('does not offer the project server when it is the same one, or the environment has no server of its own', () => {
-    expect(serverMoveChoices(env('e', 'x', 's1'), 's1', servers).every((c) => c.serverId !== null)).toBe(true)
-    expect(serverMoveChoices(STAGING, 's1', servers).every((c) => c.serverId !== null)).toBe(true)
-    expect(serverMoveChoices(STAGING, 's1', servers).map((c) => c.serverId)).toEqual(['s3'])
+    expect(
+      serverMoveChoices(env('e', 'x', 's1'), 's1', ready(servers)).every((c) => c.serverId !== null)
+    ).toBe(true)
+    expect(serverMoveChoices(STAGING, 's1', ready(servers)).every((c) => c.serverId !== null)).toBe(
+      true
+    )
+    expect(serverMoveChoices(STAGING, 's1', ready(servers)).map((c) => c.serverId)).toEqual(['s3'])
+  })
+
+  it('offers no move while the server list loads or failed to load', () => {
+    expect(serverMoveChoices(env('e', 'x', 's1'), 's3', { status: 'loading' })).toEqual([])
+    expect(serverMoveChoices(env('e', 'x', 's1'), 's3', { status: 'error' })).toEqual([])
   })
 
   it('sends the new server, or null to hand the choice back', () => {

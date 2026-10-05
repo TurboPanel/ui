@@ -7,20 +7,24 @@ import { serverDisplayName } from '@/lib/resource-labels'
 export function environmentRenameProblem(
   name: string,
   environment: EnvironmentRecord,
-  siblings: readonly EnvironmentRecord[],
+  siblings: readonly EnvironmentRecord[]
 ): string | null {
   const trimmed = name.trim()
   const invalid = validateEnvironmentName(trimmed)
   if (invalid) return invalid
-  const others = siblings.filter((sibling) => sibling.id !== environment.id).map((sibling) => sibling.name)
-  return isDisplayNameTaken(trimmed, others) ? 'Another environment in this project already has that name.' : null
+  const others = siblings
+    .filter((sibling) => sibling.id !== environment.id)
+    .map((sibling) => sibling.name)
+  return isDisplayNameTaken(trimmed, others)
+    ? 'Another environment in this project already has that name.'
+    : null
 }
 
 /** The PATCH body for a rename: the trimmed name, or null when unchanged or not valid (Save stays hidden). */
 export function buildEnvironmentRenamePatch(
   name: string,
   environment: EnvironmentRecord,
-  siblings: readonly EnvironmentRecord[],
+  siblings: readonly EnvironmentRecord[]
 ): { name: string } | null {
   const trimmed = name.trim()
   if (trimmed === (environment.name ?? '').trim()) return null
@@ -39,19 +43,44 @@ export type EnvironmentServerFacts = Readonly<{
   effectiveServerId: string | null
 }>
 
+/** The organization's server list as the screen knows it: still loading, failed to load, or loaded. */
+export type ServerListState =
+  | Readonly<{ status: 'loading' | 'error' }>
+  | Readonly<{ status: 'ready'; servers: readonly OrgServerRecord[] }>
+
+/** The list state for a servers query: a list that arrived is used even when a later refresh failed. */
+export function serverListState(
+  data: Readonly<{ servers?: readonly OrgServerRecord[] }> | undefined,
+  isError: boolean
+): ServerListState {
+  if (data) return { status: 'ready', servers: data.servers ?? [] }
+  return { status: isError ? 'error' : 'loading' }
+}
+
+const UNKNOWN_SERVER_NAME = { loading: 'Loading servers', error: 'Could not load servers' } as const
+
+/**
+ * Where the environment runs. A server is called "no longer in this
+ * organization" only once the list has loaded and really lacks it; while the
+ * list is loading or failed, the line says so and claims nothing else.
+ */
 export function environmentServerFacts(
   environment: EnvironmentRecord,
   projectServerId: string | null,
-  servers: readonly OrgServerRecord[],
+  list: ServerListState
 ): EnvironmentServerFacts {
   const effectiveServerId = environment.serverId ?? projectServerId
   if (!effectiveServerId) {
     return { server: null, source: 'none', offline: false, effectiveServerId: null }
   }
-  const row = servers.find((server) => server.id === effectiveServerId)
+  const source = environment.serverId ? 'pinned' : 'project'
+  if (list.status !== 'ready') {
+    return { server: UNKNOWN_SERVER_NAME[list.status], source, offline: false, effectiveServerId }
+  }
+  const row = list.servers.find((server) => server.id === effectiveServerId)
   return {
     server: row ? serverDisplayName(row) : 'A server that is no longer in this organization',
-    source: environment.serverId ? 'pinned' : 'project',
+    source,
     offline: row ? !row.connected : false,
     effectiveServerId,
   }
@@ -63,13 +92,16 @@ export type MoveChoice = Readonly<{ serverId: string | null; label: string; sub?
 /**
  * Where an environment can move to: every connected server except the one it
  * already runs on, by name, plus "use the project's server" when it has its own
- * server and the project names a different one.
+ * server and the project names a different one. Nothing is offered until the
+ * server list has loaded.
  */
 export function serverMoveChoices(
   environment: EnvironmentRecord,
   projectServerId: string | null,
-  servers: readonly OrgServerRecord[],
+  list: ServerListState
 ): readonly MoveChoice[] {
+  if (list.status !== 'ready') return []
+  const { servers } = list
   const current = environment.serverId ?? projectServerId
   const choices: MoveChoice[] = servers
     .filter((server) => server.connected && server.id !== current)
@@ -79,7 +111,9 @@ export function serverMoveChoices(
   if (environment.serverId && projectServerId && environment.serverId !== projectServerId) {
     choices.unshift({
       serverId: null,
-      label: projectRow ? `Use the project's server (${serverDisplayName(projectRow)})` : "Use the project's server",
+      label: projectRow
+        ? `Use the project's server (${serverDisplayName(projectRow)})`
+        : "Use the project's server",
       sub: 'Stop giving this environment a server of its own.',
     })
   }
@@ -99,7 +133,7 @@ export function buildServerMovePatch(choice: MoveChoice): { serverId: string | n
 export function serverMoveCopy(
   environmentName: string,
   from: string | null,
-  to: MoveChoice,
+  to: MoveChoice
 ): Readonly<{ title: string; lines: readonly string[]; confirm: string }> {
   const target = to.serverId === null ? "the project's server" : to.label
   const lines = [
