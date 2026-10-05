@@ -2844,8 +2844,47 @@ export type HostingRecord = {
   ipId?: string | null
   metadata?: Record<string, unknown> | null
   options?: Record<string, unknown> | null
+  /** Derived by the server on GET responses; absent on older control planes. */
+  certificate?: HostingCertificate | null
   createdAt: string
   updatedAt: string
+}
+
+export type HostingCertificateState =
+  | 'test_certificate'
+  | 'uploaded'
+  | 'secure'
+  | 'waiting_for_dns'
+  | 'issuing'
+  | 'renewal_failed'
+
+export type HostingDnsReport = {
+  ready: boolean
+  checkedAt: string
+  hostnames: { hostname: string; resolves: boolean; addresses: string[] }[]
+  expectedAddresses: string[]
+}
+
+/** What a hosting shows about its certificate; the server decides every field. */
+export type HostingCertificate = {
+  state: HostingCertificateState
+  source: 'test' | 'uploaded' | 'lets_encrypt'
+  expiresAt: string | null
+  expiresInDays: number | null
+  renewsAutomatically: boolean
+  lastError: string | null
+  lastIssuedAt: string | null
+  uploadedExpiryWarning: 'none' | '14d' | '3d' | '1d' | 'expired'
+  dns: HostingDnsReport | null
+  letsEncryptAvailable: boolean
+  wwwRedirect: boolean
+  needsDeploy: boolean
+}
+
+export type UseLetsEncryptResult = {
+  hosting: HostingRecord
+  certificate: HostingCertificate | null
+  needsDeploy: boolean
 }
 
 export type TlsSource = 'upload' | 'lets_encrypt' | 'self_signed' | 'organization_ca'
@@ -3386,6 +3425,25 @@ export async function fetchVisibleHostings(
 ): Promise<{ hostings: HostingRecord[] }> {
   const params = new URLSearchParams({ serviceId })
   return await apiFetch(`${CLIENT_API}/hostings?${params.toString()}`)
+}
+
+export async function fetchHosting(hostingId: string): Promise<{ hosting: HostingRecord }> {
+  return await apiFetch(`${CLIENT_API}/hostings/${hostingId}`)
+}
+
+/** One click: check DNS, then pin a Let's Encrypt certificate (or wait for DNS). */
+export async function requestLetsEncryptForHosting(
+  hostingId: string,
+  body: { wwwRedirect?: boolean } = {}
+): Promise<UseLetsEncryptResult> {
+  return await apiFetch(`${CLIENT_API}/hostings/${hostingId}/use-letsencrypt`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function fetchHostingDnsCheck(hostingId: string): Promise<{ dns: HostingDnsReport }> {
+  return await apiFetch(`${CLIENT_API}/hostings/${hostingId}/dns-check`)
 }
 
 export async function createHosting(
