@@ -4,8 +4,8 @@ import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { EnvironmentOverviewBody } from '@/components/org/project/environment-overview/environment-overview-body'
 import { applyScenario, SCENARIOS, styleOf, token } from '@/components/ui/v4/rn-stub'
-import type { DeploymentHistoryRecord } from '@/lib/instance-api'
-import { configView, overviewSource } from '@/lib/v4/environment-overview.fixtures'
+import type { DeploymentHistoryRecord, ServiceRunStateRecord } from '@/lib/instance-api'
+import { configView, overviewSource, serviceRecord } from '@/lib/v4/environment-overview.fixtures'
 
 const push = vi.hoisted(() => vi.fn())
 
@@ -46,6 +46,8 @@ function deploy(id: string, generation: number, extra: Partial<DeploymentHistory
   }
 }
 
+const retry = { canRetry: true, busy: false, requested: false, error: null, onRetry: vi.fn() }
+
 function renderBody(
   overrides: Partial<Parameters<typeof EnvironmentOverviewBody>[0]> = {},
 ) {
@@ -57,6 +59,7 @@ function renderBody(
       running
       environmentCount={2}
       now={NOW}
+      retry={retry}
       {...overrides}
     />,
   )
@@ -198,8 +201,78 @@ describe.each(SCENARIOS)('EnvironmentOverviewBody ($name)', (scenario) => {
     expect(push).toHaveBeenLastCalledWith(`${BASE}/configuration`)
   })
 
-  it('says nothing about a crash: the server does not report one yet', () => {
+  it('says nothing about a crash until the daemon reports one', () => {
     renderBody()
     expect(screen.queryByText(/crash/i)).toBeNull()
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  describe('an app the daemon reports as failing', () => {
+    const crashing = (extra: Partial<ServiceRunStateRecord> = {}) =>
+      overviewSource({
+        services: ['web', 'blog', 'api', 'redis'].map((name) =>
+          name === 'web'
+            ? {
+                ...serviceRecord(name),
+                runState: {
+                  state: 'crashing',
+                  running: false,
+                  restartCount: 7,
+                  lastError: 'Error: listen EADDRINUSE :::3000',
+                  asOf: '2026-10-05T11:55:00Z',
+                  ...extra,
+                },
+              }
+            : serviceRecord(name),
+        ),
+      })
+
+    it('shows a notice and the crash word on the app row', () => {
+      renderBody({ source: crashing() })
+      const notice = screen.getByRole('alert')
+      expect(within(notice).getByText('web keeps crashing')).toBeTruthy()
+      expect(within(notice).getByText('It starts, fails and starts again. It has restarted 7 times.')).toBeTruthy()
+      expect(within(screen.getByRole('button', { name: 'web' })).getByLabelText('Keeps crashing')).toBeTruthy()
+    })
+
+    it('opens the Crash sheet from the notice with the last line it printed', () => {
+      renderBody({ source: crashing() })
+      fireEvent.click(screen.getByRole('button', { name: 'See why' }))
+      const sheet = screen.getByRole('dialog')
+      expect(within(sheet).getByText('Error: listen EADDRINUSE :::3000')).toBeTruthy()
+      expect(within(sheet).getByText('Seen 5m ago')).toBeTruthy()
+      fireEvent.click(within(sheet).getByRole('button', { name: 'Close web keeps crashing' }))
+      expect(screen.queryByRole('dialog')).toBeNull()
+    })
+
+    it('opens the sheet from the app row instead of its page, and the page from the sheet', () => {
+      renderBody({ source: crashing() })
+      fireEvent.click(screen.getByRole('button', { name: 'web' }))
+      expect(push).not.toHaveBeenCalled()
+      fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Open web' }))
+      expect(push).toHaveBeenLastCalledWith('/o/projects/p/services/s-web')
+      expect(screen.queryByRole('dialog')).toBeNull()
+    })
+
+    it('retries through the hook it was given', () => {
+      retry.onRetry.mockReset()
+      renderBody({ source: crashing() })
+      fireEvent.click(screen.getByRole('button', { name: 'See why' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+      expect(retry.onRetry).toHaveBeenCalledTimes(1)
+    })
+
+    it('warns, rather than alarms, for an app that runs but fails its health check', () => {
+      renderBody({ source: crashing({ state: 'unhealthy', restartCount: 0, lastError: null }) })
+      expect(screen.queryByRole('alert')).toBeNull()
+      expect(screen.getByText('web is not healthy')).toBeTruthy()
+    })
+
+    it('leaves a stopped-on-purpose app alone', () => {
+      renderBody({ source: crashing({ state: 'stopped' }) })
+      expect(screen.queryByText('See why')).toBeNull()
+      fireEvent.click(screen.getByRole('button', { name: 'web' }))
+      expect(push).toHaveBeenLastCalledWith('/o/projects/p/services/s-web')
+    })
   })
 })

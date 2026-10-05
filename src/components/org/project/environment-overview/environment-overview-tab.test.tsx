@@ -10,10 +10,13 @@ const model = vi.hoisted(() => ({ current: { state: 'loading' } as Record<string
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
 vi.mock('@/lib/theme-preference', async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub)
 vi.mock('@/components/org/project/project-context', () => ({
-  useProjectContext: () => ({ orgId: 'o', projectId: 'p', environments: [{}, {}], selectedEnvironment: { id: 'env-1' } }),
+  useProjectContext: () => ({ orgId: 'o', projectId: 'p', environments: [{}, {}], selectedEnvironment: { id: 'env-1' }, canManage: true }),
 }))
 vi.mock('@/components/org/project/environment-overview/use-environment-overview', () => ({
   useEnvironmentOverviewModel: () => model.current,
+}))
+vi.mock('@/components/org/project/environment-overview/use-crash-retry', () => ({
+  useCrashRetry: () => ({ canRetry: true, busy: false, requested: false, error: null, onRetry: () => undefined }),
 }))
 vi.mock('@/components/org/project/project-overview-tab', () => ({
   ProjectOverviewTab: () => <div data-testid="old-screen" />,
