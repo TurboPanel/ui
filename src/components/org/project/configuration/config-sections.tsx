@@ -15,7 +15,7 @@ import { webPointer } from '@/lib/theme'
 import {
   SECTION_ROW_LIMIT,
   showAllLabel,
-  visibleRows,
+  firstRows,
   type AppRowModel,
   type ChangeRowModel,
   type DataRowModel,
@@ -48,7 +48,7 @@ function Rows<T>({
   const [showAll, setShowAll] = useState(false)
   return (
     <>
-      {visibleRows(rows, showAll).map(render)}
+      {(showAll ? rows : firstRows(rows)).map(render)}
       {rows.length > SECTION_ROW_LIMIT && !showAll ? (
         <Pressable
           accessibilityRole="button"

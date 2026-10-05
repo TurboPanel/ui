@@ -409,7 +409,7 @@ export function showAllLabel(total: number): string {
   return `Show all ${total}`
 }
 
-/** Rows to draw: the first few, or all of them. */
-export function visibleRows<T>(rows: readonly T[], showAll: boolean): readonly T[] {
-  return showAll ? rows : rows.slice(0, SECTION_ROW_LIMIT)
+/** The rows a section shows before "Show all N". */
+export function firstRows<T>(rows: readonly T[]): readonly T[] {
+  return rows.slice(0, SECTION_ROW_LIMIT)
 }

@@ -6,7 +6,7 @@ import {
   SECRET_VALUE,
   SECTION_ROW_LIMIT,
   showAllLabel,
-  visibleRows,
+  firstRows,
 } from './config-view-model'
 import {
   domainRow,
@@ -268,8 +268,7 @@ describe('a plain environment', () => {
 describe('section disclosure', () => {
   it('shows the first rows, then all', () => {
     const rows = Array.from({ length: 8 }, (_, index) => index)
-    expect(visibleRows(rows, false)).toHaveLength(SECTION_ROW_LIMIT)
-    expect(visibleRows(rows, true)).toHaveLength(8)
+    expect(firstRows(rows)).toHaveLength(SECTION_ROW_LIMIT)
     expect(showAllLabel(8)).toBe('Show all 8')
   })
 })
