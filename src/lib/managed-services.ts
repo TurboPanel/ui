@@ -411,7 +411,7 @@ const MANAGED_ERROR_COPY: Record<string, string> = {
   managed_database_has_bindings:
     'Still connected to one or more services. Remove those connections first.',
   managed_database_has_users:
-    'SQL users still have access to this database. Remove those users, or take this database off their list, first.',
+    'SQL users still have access to this database. Delete those users first.',
   binding_key_prefix_in_use:
     'This service already has a connection using that prefix — pick another.',
   binding_engine_defaults_in_use:
