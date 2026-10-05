@@ -282,6 +282,11 @@ function appTags(
   return { tags: [changedSummary(shorts)], changed: true, removed: false }
 }
 
+/** Spoken description: the parts that exist, separated by commas. */
+function joinAria(parts: readonly (string | false | null | undefined)[]): string {
+  return parts.filter((part) => typeof part === 'string' && part !== '').join(', ')
+}
+
 function appAria(parts: {
   app: V4Service
   status: MapStatus | null
@@ -343,9 +348,12 @@ function domainNode(build: Build, domain: DomainEntry): MapNode {
     removed: false,
     jobsLabel: '',
     target: { kind: 'domain', id: domain.host },
-    aria: `${domain.host}, domain, ${domain.status.label.toLowerCase()}${
-      app === undefined ? '' : `, shows ${app.name}`
-    }`,
+    aria: joinAria([
+      domain.host,
+      'domain',
+      domain.status.label.toLowerCase(),
+      app && `shows ${app.name}`,
+    ]),
   }
 }
 
@@ -409,7 +417,7 @@ function serviceDataNode(build: Build, service: V4Service, row: number): MapNode
     removed: false,
     jobsLabel: '',
     target: { kind: 'data', id: service.id },
-    aria: `${service.name}, ${what}${status === null ? '' : `, ${status.label.toLowerCase()}`}`,
+    aria: joinAria([service.name, what, status?.label.toLowerCase()]),
   }
 }
 

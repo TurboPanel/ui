@@ -16,8 +16,9 @@ export function joinNames(names: readonly string[]): string {
 export function slugify(text: string): string {
   const slug = text
     .toLowerCase()
-    .replaceAll(/[^a-z0-9]+/g, '-')
-    .replaceAll(/^-+|-+$/g, '')
+    .split(/[^a-z0-9]+/)
+    .filter((part) => part !== '')
+    .join('-')
   return slug === '' ? 'env' : slug
 }
 
