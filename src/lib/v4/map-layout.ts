@@ -51,15 +51,18 @@ export type MapDomain = Readonly<{
   status: MapStatus
   /** The host this domain forwards to, when it only redirects. */
   redirectTo?: string
+  /** The app that answers this domain; without it the first web app is assumed. */
+  serviceId?: string
 }>
 
 export type MapVolume = Readonly<{
   name: string
   /** "web:/app/cache": the service (name or id) and the path. */
   mount: string
-  size: string
-  /** When it was last backed up ("Today 04:00"), or null. */
-  lastBackup: string | null
+  /** "2.1 GB", or null when the size is not known. */
+  size: string | null
+  /** When it was last backed up ("Today 04:00"); null = never; undefined = not known. */
+  lastBackup: string | null | undefined
 }>
 
 /** A line from an app to another service (data link) or to a volume. */
@@ -230,10 +233,17 @@ function entryName(entry: DataEntry): string {
   return 'service' in entry ? entry.service.name : entry.volume.name
 }
 
-function backupText(volume: MapVolume): string {
+function backupText(volume: MapVolume): string | null {
+  if (volume.lastBackup === undefined) return null
   return volume.lastBackup === null
     ? 'no backups'
     : `backed up ${volume.lastBackup.replace(/^Today/, 'today')}`
+}
+
+/** What is known about a volume besides its name; the mount when nothing else is. */
+function volumeFacts(volume: MapVolume): string[] {
+  const facts = [volume.size, backupText(volume)].filter((fact): fact is string => fact !== null)
+  return facts.length > 0 || volume.mount === '' ? facts : [volume.mount]
 }
 
 /** Labels of what each station is joined to, keyed by station id. */
@@ -279,7 +289,14 @@ function appTags(
   if (removed) {
     return { tags: [`Removed in ${input.envName}`], changed: false, removed: true }
   }
+  const added = input.changes.some((change) => change.key === `svc:${app.id}` && change.added)
+  if (added) return { tags: [`Added in ${input.envName}`], changed: true, removed: false }
   return { tags: [changedSummary(shorts)], changed: true, removed: false }
+}
+
+/** The app a domain says it belongs to, when that app is drawn. */
+function answeringApp(apps: readonly V4Service[], domain: MapDomain): string | undefined {
+  return apps.find((app) => app.id === domain.serviceId)?.id
 }
 
 /** Spoken description: the parts that exist, separated by commas. */
@@ -298,7 +315,8 @@ function appAria(parts: {
   const { app, status, runs, shows, uses, tag } = parts
   const words = [app.name, serviceKindLabel(app.kind)]
   if (status !== null) words.push(status.label.toLowerCase())
-  words.push(runs.runsInContainer ? 'runs inside its container' : `runs as ${runs.user}`)
+  if (runs.runsInContainer) words.push('runs inside its container')
+  else if (runs.user !== '') words.push(`runs as ${runs.user}`)
   if (shows.length > 0) words.push(`shows ${shows.join(', ')}`)
   if (uses.length > 0) words.push(`uses ${uses.join(', ')}`)
   if (tag !== undefined) words.push(tag)
@@ -422,12 +440,12 @@ function serviceDataNode(build: Build, service: V4Service, row: number): MapNode
 }
 
 function volumeNode(build: Build, id: string, volume: MapVolume, row: number): MapNode {
-  const backup = backupText(volume)
+  const facts = volumeFacts(volume)
   return {
     ...baseNode(build, `s:${id}`, 'data', row, MAP.h.data),
     kind: 'volume',
     name: volume.name,
-    sub: `${volume.size} · ${backup}`,
+    sub: facts.join(' · '),
     runs: '',
     status: null,
     tags: [],
@@ -435,7 +453,7 @@ function volumeNode(build: Build, id: string, volume: MapVolume, row: number): M
     removed: false,
     jobsLabel: '',
     target: { kind: 'volume', id },
-    aria: `${volume.name}, storage, ${volume.size}, ${backup}`,
+    aria: [volume.name, 'storage', ...facts].join(', '),
   }
 }
 
@@ -568,7 +586,7 @@ export function mapLayout(input: MapInput): MapLayout {
   const links = [...input.links, ...volumeLinks(input.services, volumes)]
   const web = apps.find((app) => app.web === true) ?? apps[0]
   const domains: DomainEntry[] = useEnv
-    ? input.domains.map((domain) => ({ ...domain, to: web?.id ?? null }))
+    ? input.domains.map((domain) => ({ ...domain, to: answeringApp(apps, domain) ?? web?.id ?? null }))
     : []
   const plan = planRows(apps, domains, data, links)
   const build: Build = {

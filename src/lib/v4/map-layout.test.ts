@@ -265,6 +265,82 @@ describe('map details', () => {
     expect(layout.nodes.find((n) => n.name === 'loose')?.connections).toEqual([])
   })
 
+  it('joins a domain to the app it names, and to the first web app when it names none', () => {
+    const input = sampleMapInput(api, sampleEnvironment(api, 'production'), 'env')
+    const second = input.services.filter((s) => s.kind !== 'database')[1]
+    const layout = mapLayout({
+      ...input,
+      domains: [
+        { host: 'one.example.com', status: { key: 'ok', label: 'Secure' }, serviceId: second?.id },
+        { host: 'two.example.com', status: { key: 'ok', label: 'Secure' }, serviceId: 'not-an-app' },
+        { host: 'three.example.com', status: { key: 'ok', label: 'Secure' } },
+      ],
+    })
+    const aria = (host: string) => layout.nodes.find((n) => n.name === host)?.aria
+    expect(aria('one.example.com')).toContain(`shows ${second?.name}`)
+    expect(aria('two.example.com')).toBe(aria('three.example.com')?.replace('three', 'two'))
+  })
+
+  it('says only what is known about a volume', () => {
+    const input = sampleMapInput(website, sampleEnvironment(website, 'production'), 'env')
+    const layout = mapLayout({
+      ...input,
+      volumes: [
+        { name: 'size-only', mount: 'web:/a', size: '3 MB', lastBackup: undefined },
+        { name: 'backup-only', mount: 'web:/b', size: null, lastBackup: 'Today 04:00' },
+        { name: 'mount-only', mount: 'web:/uploads', size: null, lastBackup: undefined },
+        { name: 'nothing', mount: '', size: null, lastBackup: undefined },
+      ],
+    })
+    const node = (name: string) => layout.nodes.find((n) => n.name === name)
+    expect(node('size-only')).toMatchObject({ sub: '3 MB', aria: 'size-only, storage, 3 MB' })
+    expect(node('backup-only')?.sub).toBe('backed up today 04:00')
+    expect(node('mount-only')).toMatchObject({ sub: 'web:/uploads', aria: 'mount-only, storage, web:/uploads' })
+    expect(node('nothing')).toMatchObject({ sub: '', aria: 'nothing, storage' })
+  })
+
+  it('does not say who an app runs as when that is not known', () => {
+    const input = sampleMapInput(website, sampleEnvironment(website, 'production'), 'env')
+    const unknown = {
+      runsInContainer: false,
+      user: '',
+      label: 'Linux user not set',
+      short: '',
+      source: 'base' as const,
+      sourceLabel: '',
+      access: '',
+      hasAccess: false,
+    }
+    const app = mapLayout({ ...input, runsAs: () => unknown }).nodes.find((n) => n.kind === 'app')
+    expect(app?.aria).not.toContain('runs as')
+    expect(app?.runs).toBe('')
+  })
+
+  it('marks an app the environment adds in the Differences view', () => {
+    const input = sampleMapInput(website, sampleEnvironment(website, 'testing'), 'diff')
+    const layout = mapLayout({
+      ...input,
+      changes: [
+        {
+          key: 'svc:web',
+          area: 'services',
+          label: 'web',
+          short: 'web',
+          serviceId: 'web',
+          serviceName: 'web',
+          baseValue: 'Not set',
+          envValue: 'node',
+          added: true,
+          removed: false,
+          envName: 'Testing',
+          tag: 'Testing change',
+        },
+      ],
+    })
+    const app = layout.nodes.find((n) => n.kind === 'app')
+    expect(app).toMatchObject({ changed: true, removed: false, tags: ['Added in Testing'] })
+  })
+
   it('draws a database without an engine and a link to a missing station', () => {
     const input = sampleMapInput(portal, sampleEnvironment(portal, 'production'), 'env')
     const layout = mapLayout({
