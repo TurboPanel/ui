@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { MANAGED_SERIES_IMMUTABLE_ERROR, MANAGED_VARIANT_SWAP_UNSAFE_ERROR } from './instance-api'
 import { TURBOFABRIC_PRODUCT_NAME } from './platform-copy'
 import {
   MANAGED_INGRESS_MYSQL_PORT,
