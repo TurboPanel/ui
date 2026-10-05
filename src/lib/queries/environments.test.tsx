@@ -9,6 +9,7 @@ import {
   useDeployEnvironment,
   useDeployPreview,
   useEnvironment,
+  useEnvironmentConfigView,
   useEnvironments,
   useRunEnvironmentLifecycle,
   useCancelDeployment,
@@ -23,6 +24,7 @@ const {
   deployEnvironment,
   runEnvironmentLifecycle,
   fetchEnvironment,
+  fetchEnvironmentConfigView,
   createEnvironment,
   updateEnvironment,
   deleteEnvironment,
@@ -34,6 +36,7 @@ const {
   deployEnvironment: vi.fn(),
   runEnvironmentLifecycle: vi.fn(),
   fetchEnvironment: vi.fn(),
+  fetchEnvironmentConfigView: vi.fn(),
   createEnvironment: vi.fn(),
   updateEnvironment: vi.fn(),
   deleteEnvironment: vi.fn(),
@@ -50,6 +53,7 @@ vi.mock('@/lib/instance-api', async (importOriginal) => {
     deployEnvironment,
     runEnvironmentLifecycle,
     fetchEnvironment,
+    fetchEnvironmentConfigView,
     createEnvironment,
     updateEnvironment,
     deleteEnvironment,
@@ -95,6 +99,23 @@ describe('environments query hooks', () => {
     )
     expect(result.current.fetchStatus).toBe('idle')
     expect(fetchVisibleEnvironments).not.toHaveBeenCalled()
+  })
+
+  it('useEnvironmentConfigView loads the config view and waits for an environment id', async () => {
+    fetchEnvironmentConfigView.mockResolvedValueOnce({ ok: true, followsBase: true })
+
+    const { result } = renderHook(() => useEnvironmentConfigView(orgId, environmentId), {
+      wrapper: createWrapper(),
+    })
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+    expect(fetchEnvironmentConfigView).toHaveBeenCalledWith(environmentId)
+
+    const idle = renderHook(() => useEnvironmentConfigView(orgId, ''), {
+      wrapper: createWrapper(),
+    })
+    expect(idle.result.current.fetchStatus).toBe('idle')
   })
 
   it('useDeployPreview does not retry placement-required errors', async () => {

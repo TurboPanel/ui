@@ -209,9 +209,15 @@ export const queryKeys = {
         detail: (environmentId: string) => ['org', orgId, 'environment', environmentId] as const,
         deployPreview: (environmentId: string) =>
           ['org', orgId, 'environment', environmentId, 'deploy-preview'] as const,
+        /** Effective configuration and changes from the Base (no interval; invalidated by every config save). */
+        configView: (environmentId: string) =>
+          ['org', orgId, 'environment', environmentId, 'config-view'] as const,
         /** Deploy history page (no interval — invalidated by deploy mutations). */
         deployments: (environmentId: string) =>
           ['org', orgId, 'environment', environmentId, 'deployments'] as const,
+        /** Newest few deploys only (cards, in-progress lists); a child of `deployments`. */
+        latestDeployments: (environmentId: string) =>
+          ['org', orgId, 'environment', environmentId, 'deployments', 'latest'] as const,
         /**
          * Git-backed releases for one compose service (or the whole
          * environment when unscoped). No interval, like deploy history — the
@@ -276,6 +282,7 @@ export const queryKeys = {
       hostings: {
         all: ['org', orgId, 'hostings'] as const,
         list: (serviceId: string) => ['org', orgId, 'hostings', serviceId] as const,
+        detail: (hostingId: string) => ['org', orgId, 'hostings', 'detail', hostingId] as const,
       },
 
       containers: {

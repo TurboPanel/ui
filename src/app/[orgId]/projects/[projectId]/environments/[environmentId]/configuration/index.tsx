@@ -1,2 +1,2 @@
-/** Environment the Configuration tab. */
-export { EnvironmentComposeScreen as default } from '@/components/org/project/project-route-screens'
+/** Environment Configuration tab. */
+export { EnvironmentConfigurationTabScreen as default } from '@/components/org/project/project-route-screens'

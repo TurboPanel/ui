@@ -1,5 +1,6 @@
 import { Redirect, useLocalSearchParams, type Href } from 'expo-router'
 import { View } from 'react-native'
+import { EnvironmentConfigurationScreen } from '@/components/org/project/configuration/environment-configuration'
 import { useEnvironmentChrome } from '@/components/org/project/environment-shell'
 import { ManagedFocusTab } from '@/components/org/project/managed-focus-tab'
 import { EnvironmentDeploymentHistoryPanel } from '@/components/org/project/environment-deployment-history-panel'
@@ -66,6 +67,21 @@ export function EnvironmentComposeScreen() {
     return <ManagedFocusTab focus="overview" />
   }
   return <ProjectOverviewTab />
+}
+
+/**
+ * Environment Configuration: what the environment runs and where each value
+ * comes from. Platform and managed projects keep the screens they had.
+ */
+export function EnvironmentConfigurationTabScreen() {
+  const { orgId, projectId, project, isSystemProject } = useProjectContext()
+  if (isSystemProject) {
+    return <Redirect href={projectOverviewHref(orgId, projectId) as Href} />
+  }
+  if (project && isManagedProject(project)) {
+    return <ManagedFocusTab focus="overview" />
+  }
+  return <EnvironmentConfigurationScreen />
 }
 
 /** Environment Settings: the compose settings plus branch and deploy-on-push. */

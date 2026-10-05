@@ -81,6 +81,18 @@ describe('cancel deploy errors', () => {
   })
 })
 
+describe('Let’s Encrypt refusals', () => {
+  it.each([
+    ['lets_encrypt_not_enabled', 'has not turned on'],
+    ['acme_requires_public_bind', 'reachable from the internet'],
+    ['hosting_not_http', 'web domains'],
+    ['hosting_has_no_hostnames', 'Add a domain name'],
+    ['letsencrypt_hostname_unsupported', 'wildcard'],
+  ])('%s reads as a sentence', (code, fragment) => {
+    expect(apiErrorCopy(new Error(`HTTP 400: ${code}`))).toContain(fragment)
+  })
+})
+
 describe('plainStepFailureMessage', () => {
   it.each([
     'TypeError: Failed to fetch',

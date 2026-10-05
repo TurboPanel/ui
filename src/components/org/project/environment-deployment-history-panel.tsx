@@ -33,6 +33,7 @@ import {
   type DeploymentGroup,
   stalledDeploymentHint,
 } from '@/lib/deployment-history'
+import { commandErrorDetail, commandErrorLine } from '@/lib/command-error'
 import type { DeploymentHistoryRecord } from '@/lib/instance-api'
 import { isTerminalCommandStatus } from '@/lib/queries/commands'
 import {
@@ -97,6 +98,12 @@ function DeploymentTranscript({
   )
 }
 
+/** The one line that says why this host's deploy failed, or null. */
+function failureLine(row: DeploymentHistoryRecord | undefined): string | null {
+  if (!row) return null
+  return row.strategyOutcomeReason ?? commandErrorLine(row)
+}
+
 function DeploymentDetail({
   orgId,
   group,
@@ -110,9 +117,11 @@ function DeploymentDetail({
   const cancelledNote = cancelledDeploymentNote(group)
   // A cancelled deploy is not an error: say what happened in plain words
   // instead of echoing the host's `cancelled: …` text.
-  const failure = cancelledNote
-    ? null
-    : (active?.strategyOutcomeReason ?? active?.errorMessage ?? null)
+  const failure = cancelledNote ? null : failureLine(active)
+  const failureDetail =
+    !cancelledNote && active && !active.strategyOutcomeReason
+      ? commandErrorDetail(active)
+      : null
   const tooLate = cancelTooLateNote(group)
   const strategy = deploymentStrategyLabel(active?.strategy)
   const stalledHint = stalledDeploymentHint(active?.errorCode ?? null)
@@ -135,6 +144,7 @@ function DeploymentDetail({
           {failure}
         </Text>
       ) : null}
+      {failureDetail ? <FailureDetail text={failureDetail} /> : null}
       {cancelledNote ? (
         <Text style={panelStyles.muted}>{cancelledNote}</Text>
       ) : null}
@@ -144,6 +154,28 @@ function DeploymentDetail({
         <Text style={panelStyles.muted}>{`${strategy} deploy`}</Text>
       ) : null}
       {active ? <DeploymentTranscript orgId={orgId} row={active} /> : null}
+    </View>
+  )
+}
+
+/** The whole failure text behind the one-line cause, collapsed until asked for. */
+function FailureDetail({ text }: Readonly<{ text: string }>) {
+  const [open, setOpen] = useState(false)
+  return (
+    <View style={styles.failureDetail}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        onPress={() => setOpen((value) => !value)}
+        style={webPointer}
+      >
+        <Text style={panelStyles.muted}>{open ? 'Hide full error' : 'Show full error'}</Text>
+      </Pressable>
+      {open ? (
+        <Text selectable style={[panelStyles.muted, styles.failureText]}>
+          {text}
+        </Text>
+      ) : null}
     </View>
   )
 }
@@ -495,6 +527,12 @@ const styles = StyleSheet.create({
     color: colors.textBody,
     fontSize: 13,
     fontWeight: '600',
+  },
+  failureDetail: {
+    gap: spacing.xs,
+  },
+  failureText: {
+    fontFamily: 'monospace',
   },
   detail: {
     gap: spacing.sm,
