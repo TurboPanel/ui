@@ -7,7 +7,7 @@ function CheckGlyph({ indeterminate }: Readonly<{ indeterminate: boolean }>) {
     <Svg width={12} height={12} viewBox="0 0 12 12" fill="none">
       <Path
         d={indeterminate ? 'M2.5 6h7' : 'M2.25 6.25 4.75 8.75 9.75 3.25'}
-        stroke={chrome.accent}
+        stroke={colors.link}
         strokeWidth={1.75}
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -85,7 +85,7 @@ const styles = StyleSheet.create({
     height: 18,
     borderRadius: 4,
     borderWidth: 1,
-    borderColor: colors.borderChip,
+    borderColor: colors.fieldBorder,
     backgroundColor: colors.bgInput,
     alignItems: 'center',
     justifyContent: 'center',

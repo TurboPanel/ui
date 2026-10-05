@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { colors } from '@/lib/theme'
+import { navyPalette } from '@/lib/theme-palettes'
 
 const platform = vi.hoisted(() => ({ OS: 'web' as string }))
 
@@ -23,42 +23,20 @@ function createSessionStorage() {
   }
 }
 
-function createDocumentMock() {
-  const properties = new Map<string, string>()
-  return {
-    documentElement: {
-      style: {
-        setProperty: (name: string, value: string) => {
-          properties.set(name, value)
-        },
-        getPropertyValue: (name: string) => properties.get(name) ?? '',
-      },
-    },
-    _properties: properties,
-  }
-}
-
 describe('auth-accent', () => {
   let sessionStorageMock: ReturnType<typeof createSessionStorage>
-  let documentMock: ReturnType<typeof createDocumentMock>
 
   beforeEach(() => {
     platform.OS = 'web'
     sessionStorageMock = createSessionStorage()
-    documentMock = createDocumentMock()
     Object.defineProperty(globalThis, 'sessionStorage', {
       configurable: true,
       value: sessionStorageMock,
-    })
-    Object.defineProperty(globalThis, 'document', {
-      configurable: true,
-      value: documentMock,
     })
   })
 
   afterEach(() => {
     Reflect.deleteProperty(globalThis, 'sessionStorage')
-    Reflect.deleteProperty(globalThis, 'document')
     vi.resetModules()
   })
 
@@ -67,26 +45,26 @@ describe('auth-accent', () => {
   }
 
   describe('authAccentForRuntime', () => {
-    it('returns HA blue theme for workers', async () => {
+    it('uses the Navy brand blue for both runtimes, with white text on it', async () => {
       const { authAccentForRuntime } = await loadAuthAccent()
-      expect(authAccentForRuntime('workers')).toEqual({
-        accent: colors.blue,
-        onAccent: colors.buttonTextOnBlue,
-        bgActive: colors.bgActiveBlue,
-        label: 'High Availability',
-      })
+      for (const runtime of ['workers', 'deno', undefined] as const) {
+        const theme = authAccentForRuntime(runtime)
+        expect(theme.accent).toBe(navyPalette.accent)
+        expect(theme.onAccent).toBe(navyPalette.accentInk)
+        expect(theme.bgActive).toBe(navyPalette.accentSoft)
+      }
     })
 
-    it('returns self-hosted green theme for deno and unknown', async () => {
+    it('labels High Availability for workers and Self-hosted otherwise', async () => {
       const { authAccentForRuntime } = await loadAuthAccent()
-      const expected = {
-        accent: colors.green,
-        onAccent: colors.buttonText,
-        bgActive: colors.bgActive,
-        label: 'Self-hosted',
-      }
-      expect(authAccentForRuntime('deno')).toEqual(expected)
-      expect(authAccentForRuntime(undefined)).toEqual(expected)
+      expect(authAccentForRuntime('workers').label).toBe('High Availability')
+      expect(authAccentForRuntime('deno').label).toBe('Self-hosted')
+      expect(authAccentForRuntime(undefined).label).toBe('Self-hosted')
+    })
+
+    it('returns real hex values, safe for colour maths', async () => {
+      const { authAccentForRuntime } = await loadAuthAccent()
+      expect(authAccentForRuntime('deno').accent).toMatch(/^#[0-9a-f]{6}$/i)
     })
   })
 
@@ -131,74 +109,35 @@ describe('auth-accent', () => {
   })
 
   describe('authSpinnerColor', () => {
-    it('uses explicit runtime before stored value', async () => {
-      sessionStorageMock.setItem('tp.controlPlaneRuntime', 'workers')
+    it('is the brand blue whatever the runtime', async () => {
       const { authSpinnerColor } = await loadAuthAccent()
-      expect(authSpinnerColor('deno')).toBe(colors.green)
-      expect(authSpinnerColor('workers')).toBe(colors.blue)
-    })
-
-    it('falls back to stored runtime and muted when unknown', async () => {
-      const { authSpinnerColor } = await loadAuthAccent()
-      expect(authSpinnerColor(undefined)).toBe(colors.textMuted)
-
-      sessionStorageMock.setItem('tp.controlPlaneRuntime', 'workers')
-      expect(authSpinnerColor(undefined)).toBe(colors.blue)
-
-      sessionStorageMock.setItem('tp.controlPlaneRuntime', 'deno')
-      expect(authSpinnerColor(undefined)).toBe(colors.green)
+      expect(authSpinnerColor()).toBe(navyPalette.brand)
     })
   })
 
-  describe('applyConsoleChromeRuntime', () => {
-    it('persists runtime and sets CSS variables on web', async () => {
-      const { applyConsoleChromeRuntime } = await loadAuthAccent()
-      applyConsoleChromeRuntime('workers')
-
+  describe('rememberControlPlaneRuntime', () => {
+    it('persists deno and workers on web', async () => {
+      const { rememberControlPlaneRuntime } = await loadAuthAccent()
+      rememberControlPlaneRuntime('workers')
       expect(sessionStorageMock.getItem('tp.controlPlaneRuntime')).toBe('workers')
-      expect(documentMock._properties.get('--tp-chrome-accent')).toBe(colors.blue)
-      expect(documentMock._properties.get('--tp-chrome-bg-active')).toBe(
-        colors.bgActiveBlue,
-      )
-      expect(documentMock._properties.get('--tp-chrome-on-accent')).toBe(
-        colors.buttonTextOnBlue,
-      )
-    })
-
-    it('persists deno runtime and sets green CSS variables on web', async () => {
-      const { applyConsoleChromeRuntime } = await loadAuthAccent()
-      applyConsoleChromeRuntime('deno')
-
+      rememberControlPlaneRuntime('deno')
       expect(sessionStorageMock.getItem('tp.controlPlaneRuntime')).toBe('deno')
-      expect(documentMock._properties.get('--tp-chrome-accent')).toBe(colors.green)
-      expect(documentMock._properties.get('--tp-chrome-bg-active')).toBe(colors.bgActive)
-      expect(documentMock._properties.get('--tp-chrome-on-accent')).toBe(colors.buttonText)
     })
 
-    it('no-ops for unknown runtime, native, or missing document', async () => {
-      const { applyConsoleChromeRuntime } = await loadAuthAccent()
-      applyConsoleChromeRuntime(undefined)
+    it('no-ops for unknown runtime and on native', async () => {
+      const { rememberControlPlaneRuntime } = await loadAuthAccent()
+      rememberControlPlaneRuntime(undefined)
       expect(sessionStorageMock.getItem('tp.controlPlaneRuntime')).toBeNull()
-
-      applyConsoleChromeRuntime('deno')
-      sessionStorageMock.clear()
-      documentMock._properties.clear()
 
       platform.OS = 'ios'
-      applyConsoleChromeRuntime('deno')
-      expect(sessionStorageMock.getItem('tp.controlPlaneRuntime')).toBeNull()
-
-      platform.OS = 'web'
-      Reflect.deleteProperty(globalThis, 'document')
-      applyConsoleChromeRuntime('deno')
+      rememberControlPlaneRuntime('deno')
       expect(sessionStorageMock.getItem('tp.controlPlaneRuntime')).toBeNull()
     })
 
     it('skips persist when sessionStorage is missing on web', async () => {
       Reflect.deleteProperty(globalThis, 'sessionStorage')
-      const { applyConsoleChromeRuntime } = await loadAuthAccent()
-      expect(() => applyConsoleChromeRuntime('workers')).not.toThrow()
-      expect(documentMock._properties.get('--tp-chrome-accent')).toBe(colors.blue)
+      const { rememberControlPlaneRuntime } = await loadAuthAccent()
+      expect(() => rememberControlPlaneRuntime('workers')).not.toThrow()
     })
 
     it('ignores sessionStorage write failures', async () => {
@@ -210,20 +149,8 @@ describe('auth-accent', () => {
           },
         },
       })
-      const { applyConsoleChromeRuntime } = await loadAuthAccent()
-      expect(() => applyConsoleChromeRuntime('deno')).not.toThrow()
-    })
-  })
-
-  describe('hydrateConsoleChromeFromStorage', () => {
-    it('applies stored runtime on import and when called explicitly', async () => {
-      sessionStorageMock.setItem('tp.controlPlaneRuntime', 'deno')
-      const mod = await loadAuthAccent()
-      expect(documentMock._properties.get('--tp-chrome-accent')).toBe(colors.green)
-
-      sessionStorageMock.setItem('tp.controlPlaneRuntime', 'workers')
-      mod.hydrateConsoleChromeFromStorage()
-      expect(documentMock._properties.get('--tp-chrome-accent')).toBe(colors.blue)
+      const { rememberControlPlaneRuntime } = await loadAuthAccent()
+      expect(() => rememberControlPlaneRuntime('deno')).not.toThrow()
     })
   })
 

@@ -232,7 +232,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   subLabelActive: {
-    color: chrome.accent,
+    color: colors.link,
   },
   itemPressed: {
     opacity: 0.85,

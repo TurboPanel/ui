@@ -1,5 +1,5 @@
 import {
-  applyConsoleChromeRuntime,
+  rememberControlPlaneRuntime,
   resolveControlPlaneRuntime,
 } from '@/lib/auth-accent'
 import { parseControlPlaneOrigin } from '@/lib/control-plane'
@@ -45,7 +45,7 @@ export async function connectToControlPlane(
     }
     const runtime = resolveControlPlaneRuntime(status)
     if (runtime !== undefined) {
-      applyConsoleChromeRuntime(runtime)
+      rememberControlPlaneRuntime(runtime)
     }
     return { ok: true, origin: parsed.origin, status }
   } catch (error) {

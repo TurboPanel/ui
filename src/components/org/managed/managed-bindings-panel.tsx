@@ -36,7 +36,7 @@ import {
 } from '@/lib/queries/bindings'
 import { useEnvironments } from '@/lib/queries/environments'
 import { useServices } from '@/lib/queries/services'
-import { chrome, colors, spacing, webPointer } from '@/lib/theme'
+import { colors, spacing, webPointer } from '@/lib/theme'
 
 type ServiceMeta = { name: string; projectId: string }
 
@@ -638,7 +638,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   linkText: {
-    color: chrome.accent,
+    color: colors.link,
     fontSize: 12,
     fontWeight: '600',
     marginBottom: spacing.sm,

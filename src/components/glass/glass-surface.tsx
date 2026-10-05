@@ -16,6 +16,7 @@ import {
   glassSurfaceStyle,
   type GlassIntensity,
 } from '@/lib/glass'
+import { useColorScheme } from '@/lib/theme-preference'
 
 /** Which edges get the default glass hairline rim. */
 export type GlassRim = 'all' | 'none' | 'top' | 'bottom'
@@ -83,6 +84,7 @@ export function GlassSurface({
     style,
   ]
   const native = useNativeGlassEffect()
+  const scheme = useColorScheme()
 
   if (native) {
     return (
@@ -90,7 +92,7 @@ export function GlassSurface({
         style={fallback}
         glassEffectStyle={nativeStyle}
         tintColor={glass.tint}
-        colorScheme="dark"
+        colorScheme={scheme}
       >
         {children}
       </GlassView>

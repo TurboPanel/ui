@@ -10,6 +10,7 @@ import { indentationMarkers } from '@replit/codemirror-indentation-markers'
 import { composeLintIssuesToDiagnostics } from '@/lib/compose/lint-diagnostics'
 import { indentAfterNewline, YAML_INDENT } from '@/lib/compose/yaml-indent'
 import { colors, spacing } from '@/lib/theme'
+import { useColorScheme } from '@/lib/theme-preference'
 import {
   CODE_EDITOR_LINE_HEIGHT,
   codeEditorTheme,
@@ -96,21 +97,22 @@ export const ComposeYamlEditor = forwardRef<ComposeYamlEditorHandle, ComposeYaml
       [],
     )
 
+    const dark = useColorScheme() === 'dark'
     const extensions = useMemo(
       () => [
         yamlLanguage(),
         // Matches `YAML_INDENT` in `yaml-indent.ts` (2 spaces).
         indentUnit.of(YAML_INDENT),
         syntaxHighlighting(codeHighlightStyle),
-        indentationMarkers({ highlightActiveBlock: false, colors: { dark: colors.borderMuted } }),
+        indentationMarkers({ highlightActiveBlock: false, colors: { light: colors.borderMuted, dark: colors.borderMuted } }),
         lintGutter(),
         linter(() => []),
         // `Prec.highest` so this wins over the basic-setup default keymap's
         // own Enter binding (`insertNewlineAndIndent`).
         Prec.highest(keymap.of([{ key: 'Enter', run: insertYamlNewline }])),
-        codeEditorTheme(embedded),
+        codeEditorTheme(embedded, dark),
       ],
-      [embedded],
+      [embedded, dark],
     )
 
     useEffect(() => {

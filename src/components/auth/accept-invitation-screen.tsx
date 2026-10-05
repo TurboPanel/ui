@@ -158,7 +158,7 @@ export function AcceptInvitationScreenContent() {
   const spinner = (copy: string) =>
     shell(
       <View style={styles.statusRow} accessibilityRole="progressbar">
-        <ActivityIndicator size="small" color={authSpinnerColor(runtime)} />
+        <ActivityIndicator size="small" color={authSpinnerColor()} />
         <Text style={styles.statusCopy}>{copy}</Text>
       </View>,
     )

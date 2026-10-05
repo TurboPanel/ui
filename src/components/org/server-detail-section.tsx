@@ -1272,7 +1272,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   backText: {
-    color: colors.accent,
+    color: colors.ok,
     fontWeight: '600',
     fontSize: 14,
   },

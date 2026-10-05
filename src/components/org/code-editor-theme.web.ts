@@ -30,7 +30,8 @@ export const codeHighlightStyle = HighlightStyle.define([
   { tag: tags.meta, color: colors.textFaint },
 ])
 
-export function codeEditorTheme(embedded: boolean) {
+/** `dark` tells CodeMirror which of its built-in defaults (cursor, selection) to use. */
+export function codeEditorTheme(embedded: boolean, dark: boolean) {
   return EditorView.theme(
     {
       '&': {
@@ -54,11 +55,11 @@ export function codeEditorTheme(embedded: boolean) {
         border: 'none',
       },
       '.cm-activeLineGutter': {
-        backgroundColor: 'rgba(255, 255, 255, 0.04)',
+        backgroundColor: colors.hover,
         color: colors.textMuted,
       },
       '.cm-activeLine': {
-        backgroundColor: 'rgba(255, 255, 255, 0.03)',
+        backgroundColor: colors.hover,
       },
       '&.cm-focused .cm-selectionBackground, .cm-selectionBackground': {
         // `chrome.bgActive` already resolves per control-plane runtime (blue on
@@ -79,6 +80,6 @@ export function codeEditorTheme(embedded: boolean) {
         fontSize: '12px',
       },
     },
-    { dark: true },
+    { dark },
   )
 }

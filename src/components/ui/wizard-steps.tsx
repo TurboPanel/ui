@@ -98,7 +98,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   dotTextActive: {
-    color: chrome.accent,
+    color: colors.link,
   },
   dotTextDone: {
     color: colors.buttonText,

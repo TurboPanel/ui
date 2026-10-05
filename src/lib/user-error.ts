@@ -22,7 +22,7 @@ const API_ERROR_COPY: Readonly<Record<string, string>> = {
   backup_target_unsupported: 'This kind of storage cannot be backed up yet.',
   backup_not_found: 'That backup no longer exists.',
   lets_encrypt_not_enabled:
-    'Your organization has not turned on Let\u2019s Encrypt. An owner can allow it under Domains & certificates.',
+    'Your organization has not turned on Let\u2019s Encrypt. An owner can allow it in the Let\u2019s Encrypt settings on the TLS certificates page.',
   acme_requires_public_bind: 'Let\u2019s Encrypt needs this domain to be reachable from the internet.',
   hosting_not_http: 'Let\u2019s Encrypt only works for web domains, not raw ports.',
   hosting_has_no_hostnames: 'Add a domain name first.',
@@ -64,4 +64,22 @@ export function userErrorMessage(err: unknown, fallback: string): string {
   if (mapped) return mapped
   if (err instanceof Error && err.message.trim()) return err.message
   return fallback
+}
+
+export const STEP_NETWORK_FAILURE_COPY =
+  'A network problem interrupted this step, so it could not finish. Try the update again.'
+
+/** Raw transport wording from browsers, Node and Go that must not reach an Updates page. */
+const RAW_NETWORK_TEXT =
+  /failed to fetch|fetch failed|load failed|network request failed|networkerror|typeerror: |econn(?:refused|reset|aborted)|enotfound|etimedout|socket hang up|dial tcp|connection (?:refused|reset by peer)|i\/o timeout|context deadline exceeded|no such host/i
+
+/**
+ * A failure message a server or the daemon stored for an update step, made
+ * safe to show: raw network text becomes one plain sentence, anything else is
+ * kept. Null for an empty message.
+ */
+export function plainStepFailureMessage(message: string | null | undefined): string | null {
+  const trimmed = message?.trim() ?? ''
+  if (trimmed === '') return null
+  return RAW_NETWORK_TEXT.test(trimmed) ? STEP_NETWORK_FAILURE_COPY : trimmed
 }

@@ -90,7 +90,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   textOn: {
-    color: chrome.accent,
+    color: colors.link,
     fontWeight: '700',
   },
 })

@@ -241,6 +241,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   labelSelected: {
-    color: chrome.accent,
+    color: colors.link,
   },
 })

@@ -91,7 +91,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
   },
   online: {
-    backgroundColor: colors.accent,
+    backgroundColor: colors.ok,
   },
   initializing: {
     backgroundColor: colors.pending,

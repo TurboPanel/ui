@@ -530,7 +530,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   tabTextActive: {
-    color: chrome.accent,
+    color: colors.link,
   },
   toolbar: {
     flexDirection: 'row',
