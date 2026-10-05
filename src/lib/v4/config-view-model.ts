@@ -120,7 +120,7 @@ export type ConfigViewModel = Readonly<{
   domains: readonly DomainRowModel[]
   variables: readonly VariableRowModel[]
   linuxUsers: readonly LinuxUserRowModel[]
-  /** Every Linux user the Base declares, for the "Run as" choice. */
+  /** Every Linux user the Base declares (and only those), for the "Run as" choice. */
   linuxUserNames: readonly string[]
 }>
 
@@ -386,9 +386,9 @@ function buildLinuxUsers(envName: string, apps: readonly AppRowModel[]): LinuxUs
     }))
 }
 
+/** Only users the Base declares: the Base is where they live, and a Base save refuses any other. */
 function linuxUserNames(view: EnvironmentConfigViewResponse): string[] {
-  const names = new Set([...view.base.linuxUsers, ...view.effective.linuxUsers].map((user) => user.name))
-  return [...names].sort((a, b) => a.localeCompare(b))
+  return view.base.linuxUsers.map((user) => user.name).sort((a, b) => a.localeCompare(b))
 }
 
 /** The whole Configuration tab, from one config-view answer. */
