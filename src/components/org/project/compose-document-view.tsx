@@ -459,7 +459,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   factTextActive: {
-    color: chrome.accent,
+    color: colors.link,
   },
   appWarning: {
     marginTop: spacing.xs,

@@ -1481,7 +1481,7 @@ const styles = StyleSheet.create({
     backgroundColor: chrome.bgActive,
   },
   primaryButtonText: {
-    color: chrome.accent,
+    color: colors.link,
     fontSize: 12,
     fontWeight: '600',
   },
@@ -1562,7 +1562,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   monoKey: {
-    color: colors.accent,
+    color: colors.ok,
     fontSize: 13,
     fontFamily: 'monospace',
     fontWeight: '600',
@@ -1609,7 +1609,7 @@ const styles = StyleSheet.create({
   },
   flagChipActive: {
     borderColor: colors.pending,
-    backgroundColor: colors.bgActive,
+    backgroundColor: colors.warnSoft,
   },
   flagChipText: {
     color: colors.textMuted,
@@ -1637,7 +1637,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   actionLinkTextPrimary: {
-    color: chrome.accent,
+    color: colors.link,
   },
   actionLinkTextDanger: {
     color: colors.errorText,

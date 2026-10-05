@@ -129,7 +129,7 @@ function isLiveRange(rangeId: MetricsRangeId): boolean {
 }
 
 const SERIES_COLORS = [
-  colors.accent,
+  colors.ok,
   colors.command,
   colors.pending,
   colors.errorSoft,
@@ -594,7 +594,7 @@ const HOST_CHART_DEFINITIONS: readonly ChartDefinition[] = [
       {
         id: 'avg',
         label: 'Average',
-        color: colors.accent,
+        color: colors.ok,
         read: hostMetric('diagnostics', 'averageFrequencyMHz'),
       },
       { id: 'max', label: 'Max', color: colors.pending, read: hostMetric('diagnostics', 'maximumFrequencyMHz') },
@@ -2319,7 +2319,7 @@ function stateToneStyles(tone: StateTone): {
     case 'info':
       return { border: colors.command, stripe: colors.command, title: colors.command }
     default:
-      return { border: colors.borderArea, stripe: colors.accent, title: colors.textTitle }
+      return { border: colors.borderArea, stripe: colors.ok, title: colors.textTitle }
   }
 }
 
@@ -2387,7 +2387,7 @@ function MetricsStatusMessages({
     <>
       {isLoading && !hasData ? (
         <View style={styles.loadingRow}>
-          <ActivityIndicator color={colors.accent} />
+          <ActivityIndicator color={colors.ok} />
           <Text style={panelStyles.muted}>Loading metrics…</Text>
         </View>
       ) : null}
@@ -2534,14 +2534,14 @@ function MetricsChartCard({
         {
           key: 'range',
           label: 'Range',
-          color: colors.accent,
+          color: colors.ok,
           lastValue: rangeLabel ?? '—',
           swatch: 'band' as const,
         },
         {
           key: 'avg',
           label: 'Average',
-          color: colors.accent,
+          color: colors.ok,
           lastValue: lastSeriesValue(series, 'avg', definition.yFormat) ?? '—',
         },
       ]
@@ -2671,7 +2671,7 @@ function summarizeGroup(
 function summaryBarColor(tone: SummaryTone): string {
   if (tone === 'critical') return colors.error
   if (tone === 'warning') return colors.pending
-  return colors.accent
+  return colors.ok
 }
 
 function SummaryBars({
@@ -2780,7 +2780,7 @@ function CollapsibleChartGroup({
         <View style={styles.chartGroupChevron}>
           <HeaderChevron
             size={12}
-            color={expanded ? colors.accent : colors.textDim}
+            color={expanded ? colors.ok : colors.textDim}
             open={expanded}
           />
         </View>
@@ -3514,7 +3514,7 @@ function MetricsRefreshingBanner({
   }
   return (
     <View style={styles.refetchBanner}>
-      <ActivityIndicator size="small" color={colors.accent} />
+      <ActivityIndicator size="small" color={colors.ok} />
       <Text style={panelStyles.muted}>Refreshing charts…</Text>
     </View>
   )
@@ -3862,7 +3862,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 0,
     bottom: 0,
-    backgroundColor: 'rgba(224, 179, 65, 0.45)',
+    backgroundColor: colors.warn,
   },
   coverageMetaRow: {
     flexDirection: 'row',
@@ -3969,7 +3969,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   chartGroupCountTextActive: {
-    color: chrome.accent,
+    color: colors.link,
   },
   /** Collapsed-section summary: headline figure, mini bar chart, state chip. */
   groupSummary: {
@@ -4055,7 +4055,7 @@ const styles = StyleSheet.create({
     color: colors.pending,
   },
   coverageStatAccent: {
-    color: chrome.accent,
+    color: colors.link,
   },
   eventsList: {
     gap: spacing.sm,

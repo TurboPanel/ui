@@ -108,7 +108,7 @@ const styles = StyleSheet.create({
     gap: spacing.lg,
   },
   saved: {
-    color: colors.accent,
+    color: colors.ok,
     fontSize: 13,
     fontWeight: '600',
     lineHeight: 18,

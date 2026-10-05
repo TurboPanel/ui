@@ -437,7 +437,7 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   menuItemLabelActive: {
-    color: chrome.accent,
+    color: colors.link,
   },
   emptyHint: {
     paddingHorizontal: spacing.sm,

@@ -1194,7 +1194,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   serviceChipTextOn: {
-    color: chrome.accent,
+    color: colors.link,
     fontWeight: '600',
   },
   principalForm: {

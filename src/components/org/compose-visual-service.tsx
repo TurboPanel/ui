@@ -1996,7 +1996,7 @@ const styles = StyleSheet.create({
     backgroundColor: chrome.bgActive,
   },
   optionChipText: { color: colors.textMuted, fontSize: 12, fontWeight: '600' },
-  optionChipTextActive: { color: chrome.accent },
+  optionChipTextActive: { color: colors.link },
   optionChipDisabled: {
     borderStyle: 'dashed',
     opacity: 0.5,

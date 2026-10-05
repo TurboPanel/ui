@@ -19,7 +19,7 @@ import {
   useServiceBindings,
 } from '@/lib/queries/bindings'
 import { useOrganizationManaged } from '@/lib/queries/managed'
-import { chrome, colors, spacing } from '@/lib/theme'
+import { colors, spacing } from '@/lib/theme'
 
 function KeyChip({ label }: Readonly<{ label: string }>) {
   return (
@@ -257,7 +257,7 @@ const styles = StyleSheet.create({
   },
   lockGlyph: {
     fontSize: 10,
-    color: chrome.accent,
+    color: colors.link,
   },
   actions: {
     flexDirection: 'row',

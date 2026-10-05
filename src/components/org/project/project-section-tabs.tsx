@@ -34,7 +34,7 @@ import {
 } from '@/lib/project-scope'
 import { environmentDisplayName } from '@/lib/resource-labels'
 import { useContainersByProject, useOrgServers } from '@/lib/queries'
-import { chrome, colors, webPointer } from '@/lib/theme'
+import { colors, webPointer } from '@/lib/theme'
 
 /** RN Web ScrollView expands by default; keep the chip strip content-sized. */
 const scrollHostWebStyle = {
@@ -424,7 +424,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   tabTextActive: {
-    color: chrome.accent,
+    color: colors.link,
     fontWeight: '700',
   },
 })

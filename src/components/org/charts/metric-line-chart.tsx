@@ -387,7 +387,7 @@ function buildPointerConfig(
     pointerStripColor: colors.borderMuted,
     pointerStripWidth: 1,
     pointerStripUptoDataPoint: true,
-    pointerColor: colors.accent,
+    pointerColor: colors.ok,
     radius: 4,
     pointerLabelWidth: 120,
     autoAdjustPointerLabelPosition: true,
@@ -589,7 +589,7 @@ function RangeEnvelopeLayer({
     ? rangeLinePaths(avgSeries.points, yAxis, chartHeight, pointSpacing)
     : []
   if (bandPaths.length === 0 && linePaths.length === 0) return null
-  const lineColor = avgSeries?.color ?? colors.accent
+  const lineColor = avgSeries?.color ?? colors.ok
   return (
     <View
       style={[
@@ -602,7 +602,7 @@ function RangeEnvelopeLayer({
           <Path
             key={`range-${segment.startIndex}`}
             d={segment.d}
-            fill={colors.accent}
+            fill={colors.ok}
             fillOpacity={0.28}
           />
         ))}
@@ -895,10 +895,10 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 0,
     bottom: 0,
-    backgroundColor: 'rgba(224, 179, 65, 0.14)',
+    backgroundColor: colors.warnSoft,
     borderLeftWidth: 1,
     borderRightWidth: 1,
-    borderColor: 'rgba(224, 179, 65, 0.28)',
+    borderColor: colors.warn,
   },
   breakLine: {
     position: 'absolute',
