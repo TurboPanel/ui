@@ -51,7 +51,7 @@ function EnvironmentRow({
           )}
         </>
       }
-      accessibilityLabel={`${row.name}${row.relationText === '' ? '' : `, ${row.relationText}`}`}
+      accessibilityLabel={[row.name, row.relationText].filter((part) => part !== '').join(', ')}
     />
   )
 }

@@ -108,7 +108,7 @@ describe('baseMapInput', () => {
     })
     expect(input.mode).toBe('diff')
     expect(input.envName).toBe('Staging')
-    expect(input.changes.length).toBe(4)
+    expect(input.changes).toHaveLength(4)
     expect(input.status(input.services[0]!)).toBeNull()
     expect(mapLayout(input).aria).toContain('Staging')
   })
