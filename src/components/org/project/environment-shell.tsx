@@ -2,7 +2,7 @@ import { Link, Redirect, useLocalSearchParams, usePathname, useRouter, type Href
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native'
 import { BreadcrumbChevron } from '@/components/header-chevron'
-import { PageTabs, type PageTab } from '@/components/org/nav/page-tabs'
+import { UnderlineTabs, type UnderlineTab } from '@/components/ui/v4'
 import { readHostingIdParam } from '@/components/org/project-settings-area'
 import {
   EnvironmentLifecycleActions,
@@ -29,6 +29,7 @@ import {
   parseEnvironmentPageTab,
   projectEnvironmentHostingHref,
   projectOverviewHref,
+  type EnvironmentPageTabId,
 } from '@/lib/project-navigation'
 import type { ProjectScopeOption } from '@/lib/project-scope'
 import { useEnvironmentDeployments } from '@/lib/queries/execution-logs'
@@ -234,28 +235,35 @@ function EnvironmentCrumb() {
 
 function EnvironmentChrome({ children }: Readonly<{ children: ReactNode }>) {
   const pathname = usePathname()
+  const router = useRouter()
   const { orgId, projectId, pathEnvironmentId } = useProjectContext()
   useHostingDeepLink(pathEnvironmentId)
-  const tabs = useMemo<PageTab[]>(
+  const tabs = useMemo<UnderlineTab[]>(
     () =>
-      pathEnvironmentId
-        ? ENVIRONMENT_PAGE_TAB_IDS.map((id) => ({
-            id,
-            label: ENVIRONMENT_PAGE_TAB_LABELS[id],
-            href: environmentPageTabHref(orgId, projectId, pathEnvironmentId, id),
-          }))
-        : [],
-    [orgId, projectId, pathEnvironmentId],
+      ENVIRONMENT_PAGE_TAB_IDS.map((key) => ({ key, label: ENVIRONMENT_PAGE_TAB_LABELS[key] })),
+    [],
   )
   return (
     <View style={styles.root}>
       <EnvironmentCrumb />
       <EnvironmentHeader />
-      <PageTabs
-        tabs={tabs}
-        activeId={parseEnvironmentPageTab(pathname, projectId)}
-        accessibilityLabel="Environment sections"
-      />
+      {pathEnvironmentId ? (
+        <UnderlineTabs
+          tabs={tabs}
+          value={parseEnvironmentPageTab(pathname, projectId) ?? ''}
+          onChange={(key) =>
+            router.push(
+              environmentPageTabHref(
+                orgId,
+                projectId,
+                pathEnvironmentId,
+                key as EnvironmentPageTabId,
+              ) as Href,
+            )
+          }
+          ariaLabel="Environment sections"
+        />
+      ) : null}
       <EnvironmentLifecycleNotices />
       <View style={styles.body}>{children}</View>
     </View>
