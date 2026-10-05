@@ -11,67 +11,6 @@
 
 export type ColorScheme = 'light' | 'dark'
 
-/** The spec's tokens. Soft colours are 9 to 16 percent tints over a surface. */
-type SpecTokens = {
-  bg: string
-  sidebar: string
-  surface: string
-  surface2: string
-  surface3: string
-  field: string
-  hover: string
-  press: string
-  sep: string
-  sepStrong: string
-  /** Boundary of inputs and toggles: 3:1 against the surface it sits on. */
-  fieldBorder: string
-  text: string
-  text2: string
-  text3: string
-  brand: string
-  brandInk: string
-  brand2: string
-  accent: string
-  accentInk: string
-  accentSoft: string
-  link: string
-  ok: string
-  okSoft: string
-  busy: string
-  busySoft: string
-  warn: string
-  warnSoft: string
-  bad: string
-  badSoft: string
-  idle: string
-  idleSoft: string
-  base: string
-  baseSoft: string
-  railHttps: string
-  railInternal: string
-  railData: string
-  knob: string
-  logBg: string
-  logFg: string
-  logDim: string
-  logErr: string
-  logOk: string
-  logHl: string
-  logoBars: string
-  logoTee: string
-  shadow: string
-  shadowPop: string
-  scrim: string
-  /** Frosted header and menu fills (the blur itself is web decoration). */
-  glassFill: string
-  glassFillStrong: string
-  glassFillSoft: string
-  glassBorder: string
-  glassBorderBright: string
-  glassSpecular: string
-  glassShadow: string
-}
-
 /** Old `colors.*` keys, defined per palette from the spec tokens. */
 type LegacyTokens = {
   bgPanel: string
@@ -112,121 +51,77 @@ type LegacyTokens = {
 export type Palette = SpecTokens & LegacyTokens
 export type PaletteKey = keyof Palette
 
-const navySpec: SpecTokens = {
-  bg: '#0b1220',
-  sidebar: '#0e1627',
-  surface: '#121b2e',
-  surface2: '#17223a',
-  surface3: '#1e2b47',
-  field: '#0f1828',
-  hover: 'rgba(168,181,204,.07)',
-  press: 'rgba(168,181,204,.12)',
-  sep: 'rgba(168,181,204,.14)',
-  sepStrong: 'rgba(168,181,204,.24)',
-  fieldBorder: '#5b6b8a',
-  text: '#e8eef7',
-  text2: '#c9d4e5',
-  text3: '#9fb0cb',
-  brand: '#3366cc',
-  brandInk: '#ffffff',
-  brand2: '#3dd68c',
-  accent: '#3366cc',
-  accentInk: '#ffffff',
-  accentSoft: 'rgba(51,102,204,.20)',
-  link: '#86a8ff',
-  ok: '#3dd68c',
-  okSoft: 'rgba(61,214,140,.15)',
-  busy: '#b49dff',
-  busySoft: 'rgba(180,157,255,.15)',
-  warn: '#f2b84b',
-  warnSoft: 'rgba(242,184,75,.15)',
-  bad: '#ff7a7a',
-  badSoft: 'rgba(255,122,122,.15)',
-  idle: '#94a0b6',
-  idleSoft: 'rgba(148,160,182,.15)',
-  base: '#7fa4ff',
-  baseSoft: 'rgba(127,164,255,.16)',
-  railHttps: '#86a8ff',
-  railInternal: '#9fb0cb',
-  railData: '#2fc4b2',
-  knob: '#ffffff',
-  logBg: '#070c16',
-  logFg: '#d5deec',
-  logDim: '#7d8aa3',
-  logErr: '#ff8a8a',
-  logOk: '#6fe3a8',
-  logHl: 'rgba(255,138,138,.12)',
-  logoBars: '#3dd68c',
-  logoTee: '#3366cc',
-  shadow: '0 8px 28px rgba(3,7,15,.40)',
-  shadowPop: '0 1px 0 rgba(168,181,204,.05) inset,0 12px 32px rgba(3,7,15,.55)',
-  scrim: 'rgba(11,18,32,.72)',
-  glassFill: 'rgba(18,27,46,.74)',
-  glassFillStrong: 'rgba(14,22,39,.86)',
-  glassFillSoft: 'rgba(23,34,58,.58)',
-  glassBorder: 'rgba(168,181,204,.18)',
-  glassBorderBright: 'rgba(168,181,204,.30)',
-  glassSpecular: 'rgba(255,255,255,.08)',
-  glassShadow: '0 12px 40px rgba(3,7,15,.50)',
+/**
+ * Every spec token as `[Navy, Paper]`, side by side so a change to one theme
+ * is reviewed against the other.
+ */
+const SPEC = {
+  bg: ['#0b1220', '#f5f7fa'],
+  sidebar: ['#0e1627', '#edf1f7'],
+  surface: ['#121b2e', '#ffffff'],
+  surface2: ['#17223a', '#f7f9fc'],
+  surface3: ['#1e2b47', '#e9eef6'],
+  field: ['#0f1828', '#ffffff'],
+  hover: ['rgba(168,181,204,.07)', 'rgba(15,23,42,.04)'],
+  press: ['rgba(168,181,204,.12)', 'rgba(15,23,42,.07)'],
+  sep: ['rgba(168,181,204,.14)', 'rgba(15,23,42,.09)'],
+  sepStrong: ['rgba(168,181,204,.24)', 'rgba(15,23,42,.16)'],
+  fieldBorder: ['#5b6b8a', 'rgba(15,23,42,.5)'],
+  text: ['#e8eef7', '#0f172a'],
+  text2: ['#c9d4e5', '#334155'],
+  text3: ['#9fb0cb', '#52607a'],
+  brand: ['#3366cc', '#3366cc'],
+  brandInk: ['#ffffff', '#ffffff'],
+  brand2: ['#3dd68c', '#3dd68c'],
+  accent: ['#3366cc', '#2b59c3'],
+  accentInk: ['#ffffff', '#ffffff'],
+  accentSoft: ['rgba(51,102,204,.20)', 'rgba(43,89,195,.09)'],
+  link: ['#86a8ff', '#2b59c3'],
+  ok: ['#3dd68c', '#0b7444'],
+  okSoft: ['rgba(61,214,140,.15)', 'rgba(11,116,68,.10)'],
+  busy: ['#b49dff', '#5b3fd0'],
+  busySoft: ['rgba(180,157,255,.15)', 'rgba(91,63,208,.09)'],
+  warn: ['#f2b84b', '#8a5700'],
+  warnSoft: ['rgba(242,184,75,.15)', 'rgba(196,128,0,.12)'],
+  bad: ['#ff7a7a', '#c22a2a'],
+  badSoft: ['rgba(255,122,122,.15)', 'rgba(194,42,42,.09)'],
+  idle: ['#94a0b6', '#5d6678'],
+  idleSoft: ['rgba(148,160,182,.15)', 'rgba(15,23,42,.06)'],
+  base: ['#7fa4ff', '#2b59c3'],
+  baseSoft: ['rgba(127,164,255,.16)', 'rgba(43,89,195,.10)'],
+  railHttps: ['#86a8ff', '#2b59c3'],
+  railInternal: ['#9fb0cb', '#52607a'],
+  railData: ['#2fc4b2', '#0f7f74'],
+  knob: ['#ffffff', '#ffffff'],
+  logBg: ['#070c16', '#0f1828'],
+  logFg: ['#d5deec', '#d5deec'],
+  logDim: ['#7d8aa3', '#8593ab'],
+  logErr: ['#ff8a8a', '#ff8a8a'],
+  logOk: ['#6fe3a8', '#6fe3a8'],
+  logHl: ['rgba(255,138,138,.12)', 'rgba(255,138,138,.14)'],
+  logoBars: ['#3dd68c', '#1fa86a'],
+  logoTee: ['#3366cc', '#3366cc'],
+  shadow: ['0 8px 28px rgba(3,7,15,.40)', '0 8px 24px rgba(15,23,42,.08)'],
+  shadowPop: ['0 1px 0 rgba(168,181,204,.05) inset,0 12px 32px rgba(3,7,15,.55)', '0 1px 2px rgba(15,23,42,.06),0 8px 24px rgba(15,23,42,.10)'],
+  scrim: ['rgba(11,18,32,.72)', 'rgba(245,247,250,.72)'],
+  glassFill: ['rgba(18,27,46,.74)', 'rgba(255,255,255,.78)'],
+  glassFillStrong: ['rgba(14,22,39,.86)', 'rgba(255,255,255,.90)'],
+  glassFillSoft: ['rgba(23,34,58,.58)', 'rgba(247,249,252,.70)'],
+  glassBorder: ['rgba(168,181,204,.18)', 'rgba(15,23,42,.12)'],
+  glassBorderBright: ['rgba(168,181,204,.30)', 'rgba(15,23,42,.20)'],
+  glassSpecular: ['rgba(255,255,255,.08)', 'rgba(255,255,255,.70)'],
+  glassShadow: ['0 12px 40px rgba(3,7,15,.50)', '0 12px 32px rgba(15,23,42,.14)'],
+} as const satisfies Record<string, readonly [string, string]>
+
+type SpecTokens = { [K in keyof typeof SPEC]: string }
+
+function specFor(index: 0 | 1): SpecTokens {
+  const entries = Object.entries(SPEC).map(([key, pair]) => [key, pair[index]])
+  return Object.fromEntries(entries) as SpecTokens
 }
 
-const paperSpec: SpecTokens = {
-  bg: '#f5f7fa',
-  sidebar: '#edf1f7',
-  surface: '#ffffff',
-  surface2: '#f7f9fc',
-  surface3: '#e9eef6',
-  field: '#ffffff',
-  hover: 'rgba(15,23,42,.04)',
-  press: 'rgba(15,23,42,.07)',
-  sep: 'rgba(15,23,42,.09)',
-  sepStrong: 'rgba(15,23,42,.16)',
-  fieldBorder: 'rgba(15,23,42,.5)',
-  text: '#0f172a',
-  text2: '#334155',
-  text3: '#52607a',
-  brand: '#3366cc',
-  brandInk: '#ffffff',
-  brand2: '#3dd68c',
-  accent: '#2b59c3',
-  accentInk: '#ffffff',
-  accentSoft: 'rgba(43,89,195,.09)',
-  link: '#2b59c3',
-  ok: '#0b7444',
-  okSoft: 'rgba(11,116,68,.10)',
-  busy: '#5b3fd0',
-  busySoft: 'rgba(91,63,208,.09)',
-  warn: '#8a5700',
-  warnSoft: 'rgba(196,128,0,.12)',
-  bad: '#c22a2a',
-  badSoft: 'rgba(194,42,42,.09)',
-  idle: '#5d6678',
-  idleSoft: 'rgba(15,23,42,.06)',
-  base: '#2b59c3',
-  baseSoft: 'rgba(43,89,195,.10)',
-  railHttps: '#2b59c3',
-  railInternal: '#52607a',
-  railData: '#0f7f74',
-  knob: '#ffffff',
-  logBg: '#0f1828',
-  logFg: '#d5deec',
-  logDim: '#8593ab',
-  logErr: '#ff8a8a',
-  logOk: '#6fe3a8',
-  logHl: 'rgba(255,138,138,.14)',
-  logoBars: '#1fa86a',
-  logoTee: '#3366cc',
-  shadow: '0 8px 24px rgba(15,23,42,.08)',
-  shadowPop: '0 1px 2px rgba(15,23,42,.06),0 8px 24px rgba(15,23,42,.10)',
-  scrim: 'rgba(245,247,250,.72)',
-  glassFill: 'rgba(255,255,255,.78)',
-  glassFillStrong: 'rgba(255,255,255,.90)',
-  glassFillSoft: 'rgba(247,249,252,.70)',
-  glassBorder: 'rgba(15,23,42,.12)',
-  glassBorderBright: 'rgba(15,23,42,.20)',
-  glassSpecular: 'rgba(255,255,255,.70)',
-  glassShadow: '0 12px 32px rgba(15,23,42,.14)',
-}
+const navySpec = specFor(0)
+const paperSpec = specFor(1)
 
 /**
  * Old key to spec token. `inset` is the one recessed surface the two themes
