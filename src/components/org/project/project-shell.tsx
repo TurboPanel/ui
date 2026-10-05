@@ -468,8 +468,8 @@ export function ProjectShell({ children }: Readonly<{ children: ReactNode }>) {
   const activeTab = activeProjectTabFromPathname(pathname, projectId)
   const managed = project ? isManagedProject(project) : false
   // Managed: hide selector on Overview / Environments (those surfaces own their
-  // own env chrome). Compose never uses EnvironmentSelector — scope chips live
-  // in the header via ProjectScopeSelector.
+  // own env chrome). Compose never uses EnvironmentSelector — its environment
+  // header carries the picker.
   const hideEnvSelector = managed
     ? activeTab === 'environments' || activeTab === 'overview'
     : true
