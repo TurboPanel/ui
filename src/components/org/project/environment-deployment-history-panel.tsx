@@ -240,7 +240,13 @@ function HistoryHeader() {
 export function EnvironmentDeploymentHistoryPanel({
   orgId,
   environmentId,
-}: Readonly<{ orgId: string; environmentId: string }>) {
+  alwaysOpen = false,
+}: Readonly<{
+  orgId: string
+  environmentId: string
+  /** The Deployments tab shows the list open; elsewhere it folds away. */
+  alwaysOpen?: boolean
+}>) {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const deploymentsQuery = useEnvironmentDeployments(orgId, environmentId)
   const groups = useMemo(
@@ -252,8 +258,8 @@ export function EnvironmentDeploymentHistoryPanel({
     <SectionPanel
       title="Deployment history"
       hint="Past deploy attempts and their output"
-      collapsible
-      defaultCollapsed
+      collapsible={!alwaysOpen}
+      defaultCollapsed={!alwaysOpen}
     >
       {deploymentsQuery.isLoading ? (
         <LoadingState label="Loading deploy history…" />
