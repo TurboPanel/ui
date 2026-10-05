@@ -420,6 +420,12 @@ environment map layout (`map-layout.ts`), "Runs as" and Linux user rules (`linux
   (config-view endpoint), so there is no third copy of the merge rules here.
 - "Stands alone" is never stored: it is derived from the saved environment compose (`services: !override`).
 - Linux user names follow the server limit (28 characters, 16 with the default name scheme), not just the design spec's 28.
+- **Environment Configuration tab** (`configuration/index.tsx` -> `components/org/project/configuration/`): reads
+  `GET /environments/:id/config-view` (`useEnvironmentConfigView`, key `environments.configView`) and shows
+  Apps, Domains, Variables, Linux users and Data with a source tag on every row; `config-view-model.ts` turns the answer into rows.
+  The config-view keys use the compose service **name** (`svc:web:command`), not the flat `svc:{serviceId}:{row}` keys above, so the
+  model reads the server's own labels. "Only changes from Base" swaps the page for one row per change. Variables show "Project" when
+  they come from the project, and secret values are never shown.
 - Copy uses the v4 words (Base, "{env} change", Follows the Base, Stands alone, Runs as). `vocabulary.test.ts` fails on
   banned words in module output and text literals.
 
@@ -430,6 +436,8 @@ Moved to `src/app/admin/AGENTS.md`. **`/admin/updates`** is the managed upgrade 
 ## Command Pipeline UI
 
 Per-server command actions use `src/components/org/server-commands-panel.tsx` on the server detail **Control** tab. Commands follow a create-then-poll pattern: the UI enqueues via a mutation hook, receives a `commandId`, then polls with `useCommandsBatch` from `src/lib/queries/commands.ts` (`COMMAND_POLL_MS`, `isTerminalCommandStatus`) — a single React Query with `refetchInterval` while any tracked command is non-terminal. Each tick is **one** `POST /commands/status` request for every tracked id (via `fetchCommandStatuses`), not one `GET` per command; results are re-aligned to entry order so index-based consumers stay correct, and unreadable ids simply drop out. `useCommandRecordsBatch` is the per-id variant (one `fetchCommand` per entry, full `CommandRecord`) kept for the server-detail Control tab, which renders the ping latency breakdown. No hand-rolled `setInterval` per page or per server.
+
+**Failure text.** A failed command's error is a block of daemon output with the cause printed last. The control plane derives `errorLine` (on `CommandRecord`, `CommandStatusRecord` and `DeploymentHistoryRecord`; absent on an older control plane) and screens show that one line through `commandErrorLine` in `src/lib/command-error.ts` (it falls back to the last non-empty line of the text). The deploy history detail keeps the whole text one tap away (`commandErrorDetail`, "Show full error"). There is no separate Activity screen: the failure shows in deploy history, the server Control tab, the environment deploy status and the project delete flow.
 
 ### API helpers — `src/lib/instance-api.ts`
 

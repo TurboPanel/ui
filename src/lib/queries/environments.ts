@@ -5,6 +5,7 @@ import {
   deployEnvironment,
   fetchDeployPreview,
   fetchEnvironment,
+  fetchEnvironmentConfigView,
   fetchVisibleEnvironments,
   isServerPlacementRequiredError,
   runEnvironmentLifecycle,
@@ -34,6 +35,22 @@ export function useEnvironment(
   return useQuery({
     queryKey: queryKeys.org(orgId).environments.detail(environmentId),
     queryFn: () => fetchEnvironment(environmentId),
+    enabled:
+      (options?.enabled ?? true) &&
+      orgId.length > 0 &&
+      environmentId.length > 0,
+  })
+}
+
+/** What the environment runs and what it changes from the Base (read-only, derived on the server). */
+export function useEnvironmentConfigView(
+  orgId: string,
+  environmentId: string,
+  options?: Readonly<{ enabled?: boolean }>,
+) {
+  return useQuery({
+    queryKey: queryKeys.org(orgId).environments.configView(environmentId),
+    queryFn: () => fetchEnvironmentConfigView(environmentId),
     enabled:
       (options?.enabled ?? true) &&
       orgId.length > 0 &&

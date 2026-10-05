@@ -2844,8 +2844,47 @@ export type HostingRecord = {
   ipId?: string | null
   metadata?: Record<string, unknown> | null
   options?: Record<string, unknown> | null
+  /** Derived by the server on GET responses; absent on older control planes. */
+  certificate?: HostingCertificate | null
   createdAt: string
   updatedAt: string
+}
+
+export type HostingCertificateState =
+  | 'test_certificate'
+  | 'uploaded'
+  | 'secure'
+  | 'waiting_for_dns'
+  | 'issuing'
+  | 'renewal_failed'
+
+export type HostingDnsReport = {
+  ready: boolean
+  checkedAt: string
+  hostnames: { hostname: string; resolves: boolean; addresses: string[] }[]
+  expectedAddresses: string[]
+}
+
+/** What a hosting shows about its certificate; the server decides every field. */
+export type HostingCertificate = {
+  state: HostingCertificateState
+  source: 'test' | 'uploaded' | 'lets_encrypt'
+  expiresAt: string | null
+  expiresInDays: number | null
+  renewsAutomatically: boolean
+  lastError: string | null
+  lastIssuedAt: string | null
+  uploadedExpiryWarning: 'none' | '14d' | '3d' | '1d' | 'expired'
+  dns: HostingDnsReport | null
+  letsEncryptAvailable: boolean
+  wwwRedirect: boolean
+  needsDeploy: boolean
+}
+
+export type UseLetsEncryptResult = {
+  hosting: HostingRecord
+  certificate: HostingCertificate | null
+  needsDeploy: boolean
 }
 
 export type TlsSource = 'upload' | 'lets_encrypt' | 'self_signed' | 'organization_ca'
@@ -3386,6 +3425,25 @@ export async function fetchVisibleHostings(
 ): Promise<{ hostings: HostingRecord[] }> {
   const params = new URLSearchParams({ serviceId })
   return await apiFetch(`${CLIENT_API}/hostings?${params.toString()}`)
+}
+
+export async function fetchHosting(hostingId: string): Promise<{ hosting: HostingRecord }> {
+  return await apiFetch(`${CLIENT_API}/hostings/${hostingId}`)
+}
+
+/** One click: check DNS, then pin a Let's Encrypt certificate (or wait for DNS). */
+export async function requestLetsEncryptForHosting(
+  hostingId: string,
+  body: { wwwRedirect?: boolean } = {}
+): Promise<UseLetsEncryptResult> {
+  return await apiFetch(`${CLIENT_API}/hostings/${hostingId}/use-letsencrypt`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function fetchHostingDnsCheck(hostingId: string): Promise<{ dns: HostingDnsReport }> {
+  return await apiFetch(`${CLIENT_API}/hostings/${hostingId}/dns-check`)
 }
 
 export async function createHosting(
@@ -5190,6 +5248,8 @@ export type CommandRecord = {
   payload: Record<string, unknown> | null
   result: Record<string, unknown> | null
   error: string | null
+  /** The one line of the error that says what went wrong; absent on an older control plane. */
+  errorLine?: string | null
   attempts: number
   createdAt: string
   updatedAt: string
@@ -5266,6 +5326,8 @@ export type CommandStatusRecord = {
   finishedAt: string | null
   errorCode: string | null
   errorMessage: string | null
+  /** The one line of `errorMessage` that says what went wrong; absent on an older control plane. */
+  errorLine?: string | null
   /** Whether a retained execution log exists for this command. */
   hasLog: boolean
 }
@@ -5382,6 +5444,8 @@ export type DeploymentHistoryRecord = {
   durationMs: number | null
   errorCode: string | null
   errorMessage: string | null
+  /** The one line of `errorMessage` that says what went wrong; absent on an older control plane. */
+  errorLine?: string | null
   /** Whether a retained execution log exists (resolved store-side). */
   hasLog: boolean
   /** The engine the attempt ran; null (or absent) for attempts queued before it was recorded. */
@@ -9163,6 +9227,55 @@ export async function deleteNotificationChannel(
     `${CLIENT_API}/notification-channels/${encodeURIComponent(id)}`,
     { method: 'DELETE' },
     organizationId
+  )
+}
+
+export type OrganizationActivityFilter = 'all' | 'deploying' | 'failed'
+
+export type OrganizationActivityItem = {
+  /** The command id. */
+  id: string
+  projectId: string | null
+  projectName: string | null
+  environmentId: string | null
+  environmentName: string | null
+  serverId: string
+  action: 'deploy' | 'start' | 'restart' | 'stop'
+  state: 'deploying' | 'failed'
+  startedAt: string
+  /** Not recorded yet; always null. */
+  step: number | null
+  totalSteps: number | null
+  durationSecs: number
+  errorMessage: string | null
+  /** Not recorded yet; always null. */
+  crashCount: number | null
+}
+
+export type OrganizationActivityPage = {
+  ok: true
+  items: OrganizationActivityItem[]
+  total: number
+  hasMore: boolean
+}
+
+/**
+ * Running and recently failed deploys, restarts and stops across the
+ * organization, newest first. Owners and managers only (403 otherwise); poll it.
+ */
+export async function fetchOrganizationActivity(
+  orgId: string,
+  params: Readonly<{ filter?: OrganizationActivityFilter; limit?: number; offset?: number }> = {}
+): Promise<OrganizationActivityPage> {
+  const query = new URLSearchParams()
+  if (params.filter) query.set('filter', params.filter)
+  if (params.limit !== undefined) query.set('limit', String(params.limit))
+  if (params.offset !== undefined) query.set('offset', String(params.offset))
+  const suffix = query.size > 0 ? `?${query.toString()}` : ''
+  return await apiFetch(
+    `${CLIENT_API}/organizations/${encodeURIComponent(orgId)}/activity${suffix}`,
+    undefined,
+    orgId
   )
 }
 

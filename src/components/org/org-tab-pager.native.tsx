@@ -183,7 +183,7 @@ export function OrgTabPager({ orgId }: Readonly<{ orgId: string }>) {
             />
           </PagerPage>
           <PagerPage width={width}>
-            <ActivitySection />
+            <ActivitySection orgId={orgId} />
           </PagerPage>
           <PagerPage width={width}>
             <ServersOverviewSection orgId={orgId} />

@@ -21,6 +21,13 @@ const API_ERROR_COPY: Readonly<Record<string, string>> = {
   server_placement_required: 'Put this storage on a server first.',
   backup_target_unsupported: 'This kind of storage cannot be backed up yet.',
   backup_not_found: 'That backup no longer exists.',
+  lets_encrypt_not_enabled:
+    'Your organization has not turned on Let\u2019s Encrypt. An owner can allow it in the Let\u2019s Encrypt settings on the TLS certificates page.',
+  acme_requires_public_bind: 'Let\u2019s Encrypt needs this domain to be reachable from the internet.',
+  hosting_not_http: 'Let\u2019s Encrypt only works for web domains, not raw ports.',
+  hosting_has_no_hostnames: 'Add a domain name first.',
+  letsencrypt_hostname_unsupported:
+    'Let\u2019s Encrypt cannot issue for wildcard names, IP addresses or private names.',
 }
 
 export const TOO_MANY_ATTEMPTS_COPY = 'Too many attempts. Wait a minute and try again.'
