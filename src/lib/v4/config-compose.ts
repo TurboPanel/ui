@@ -160,7 +160,8 @@ function setEnvironmentEntry(container: Mapping, name: string, value: unknown): 
   if (!Array.isArray(raw)) {
     return { ...container, environment: { ...cloneMapping(raw), [name]: value } }
   }
-  const item = value === null || value === undefined ? name : `${name}=${String(value)}`
+  const text = typeof value === 'string' ? value : JSON.stringify(value)
+  const item = value === null || value === undefined ? name : `${name}=${text}`
   const at = envListEntry(raw, name)
   const list = [...raw]
   if (at < 0) list.push(item)
