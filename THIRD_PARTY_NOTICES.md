@@ -7,7 +7,7 @@ Third-party components remain under their own copyright and license terms and ar
 Third-party OS artwork under `assets/os/` is recorded separately in `assets/os/NOTICE.md` and is not licensed under this repository’s AGPL or the Apple App Store additional permission.
 
 <!-- lockfiles
-pnpm-lock.yaml sha256:a639cc52342f2c16d528c0dc9492b8187757a672540b3379a065d7bc0259fc18
+pnpm-lock.yaml sha256:fa289299a6bc1fc3f0d726c65b7f84e79f0775ead116bc3555ceaa957153c912
 -->
 
 ## Production dependencies
@@ -498,11 +498,29 @@ pnpm-lock.yaml sha256:a639cc52342f2c16d528c0dc9492b8187757a672540b3379a065d7bc02
 - License: MIT
 - Homepage: http://naver.github.io/egjs
 
+### @expo-google-fonts/geist@0.4.2
+
+- License: MIT AND OFL-1.1
+- Copyright: Expo Team
+- Homepage: https://github.com/expo/google-fonts/tree/master/font-packages/geist#readme
+
+### @expo-google-fonts/geist-mono@0.4.3
+
+- License: MIT AND OFL-1.1
+- Copyright: Expo Team
+- Homepage: https://github.com/expo/google-fonts/tree/master/font-packages/geist-mono#readme
+
 ### @expo-google-fonts/material-symbols@0.4.38
 
 - License: MIT AND Apache-2.0
 - Copyright: Expo Team
 - Homepage: https://github.com/expo/google-fonts/tree/master/font-packages/material-symbols#readme
+
+### @expo-google-fonts/plus-jakarta-sans@0.4.2
+
+- License: MIT AND OFL-1.1
+- Copyright: Expo Team
+- Homepage: https://github.com/expo/google-fonts/tree/master/font-packages/plus-jakarta-sans#readme
 
 ### @expo/cli@57.0.16
 
