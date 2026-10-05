@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { ServiceRecord, ServiceRunStateName } from '@/lib/instance-api'
 import {
   appRows,
   certificateKey,
@@ -24,6 +25,7 @@ import {
   overviewSource,
   principal,
   row,
+  serviceRecord,
   tlsRecord,
   viewService,
 } from './environment-overview.fixtures'
@@ -145,6 +147,22 @@ describe('runStatusKey', () => {
     [undefined, 'never'],
   ])('%s -> %s', (id, key) => {
     expect(runStatusKey(id, containers)).toBe(key)
+  })
+  it('takes the daemon report over the stored container status', () => {
+    const report = (state: ServiceRunStateName): ServiceRecord[] => [
+      { ...serviceRecord('web'), runState: { state, running: state === 'running', restartCount: 3, lastError: null, asOf: '2026-10-05T12:00:00Z' } },
+    ]
+    expect(runStatusKey('s-web', containers, report('crashing'))).toBe('crashing')
+    expect(runStatusKey('s-web', containers, report('stopped_after_crashes'))).toBe('crashstop')
+    expect(runStatusKey('s-web', containers, report('starting'))).toBe('busy')
+    expect(runStatusKey('s-web', undefined, report('crashing'))).toBe('crashing')
+  })
+  it('falls back to the containers when the report is unknown or for another app', () => {
+    const unknown: ServiceRecord[] = [
+      { ...serviceRecord('web'), runState: { state: 'unknown', running: false, restartCount: 0, lastError: null, asOf: '2026-10-05T12:00:00Z' } },
+    ]
+    expect(runStatusKey('s-web', containers, unknown)).toBe('running')
+    expect(runStatusKey('s-blog', containers, unknown)).toBe('busy')
   })
   it('ignores ingress containers and reads an odd state as unknown', () => {
     expect(runStatusKey('s-x', [container('x', 'running', 'ingress')])).toBe('never')
@@ -362,6 +380,16 @@ describe('the lists under the map', () => {
     expect(rows[1]).toMatchObject({ sub: 'Website', source: 'base', sourceLabel: 'Base', host: null })
     expect(rows[2]).toMatchObject({ sub: 'Container · ghcr.io/acme/api:1', statusKey: 'never' })
     expect(rows[2]?.runsAs.runsInContainer).toBe(true)
+  })
+
+  it('carries the daemon report on an app row, and null until there is one', () => {
+    const runState = { state: 'crashing', running: false, restartCount: 4, lastError: 'boom', asOf: '2026-10-05T12:00:00Z' } as const
+    const services = ['web', 'blog', 'api', 'redis'].map((name) =>
+      name === 'web' ? { ...serviceRecord(name), runState } : serviceRecord(name),
+    )
+    const rows = appRows(overviewSource({ services }))
+    expect(rows[0]).toMatchObject({ statusKey: 'crashing', runState })
+    expect(rows[1]?.runState).toBeNull()
   })
 
   it('calls every app "Set in" when the environment stands alone, and an added app a change', () => {

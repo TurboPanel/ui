@@ -24,6 +24,7 @@ describe('status vocabulary', () => {
   it('reads the words people expect', () => {
     expect(statusInfo('running')).toMatchObject({ label: 'Running', tone: 'ok' })
     expect(statusInfo('crashstop').label).toBe('Stopped after 10 crashes')
+    expect(statusInfo('unhealthy')).toMatchObject({ label: 'Not healthy', tone: 'warn' })
     expect(statusInfo('changes')).toMatchObject({ label: 'Not deployed', tone: 'warn' })
     expect(statusInfo('ok').label).toBe('Secure')
     expect(statusInfo('failed').tone).toBe('bad')
