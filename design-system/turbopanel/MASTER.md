@@ -18,7 +18,7 @@
 
 TurboPanel is a **precise ops console in two first-class themes**: **Navy** (dark) and **Paper** (light). The default follows the device; the user can pick Light, Dark or Match computer, and the choice is saved in the browser only (never on the server). Blue is ours (chrome, primary action, links); green means running / live and nothing else. Dense scannable tables, no decorative fluff. Speed is the brand; the UI should feel like a precise instrument, not a marketing site.
 
-The v4 redesign ("Navy & Tee") replaced the earlier rules (one dark theme, no display font). Dark is no longer the default or the priority: every screen must work and read well in both themes. v4 display type is **Plus Jakarta Sans** (page titles 800 italic, section titles 700); UI text is Geist Sans and code is Geist Mono (see Typography for what is loaded today).
+The v4 redesign ("Navy & Tee") replaced the earlier rules (one dark theme, no display font). Dark is no longer the default or the priority: every screen must work and read well in both themes. v4 display type is **Plus Jakarta Sans** (page titles 800 italic, section titles 700); UI text is Geist Sans and code is Geist Mono (see Typography).
 
 **Style blend:** Navy and Paper palettes + hairline borders + restrained **frosted chrome**. Not cyberpunk neon, not purple SaaS, not iridescent chromatic aberration. Banned looks: near-black `#0b0b0c` neutrals, a neutral ink primary button, purple gradients, glassy cards on content, left-border accent cards.
 
@@ -61,11 +61,13 @@ Source of truth: the v4 spec tokens in `src/lib/theme-palettes.ts` (two palettes
 
 ### Typography
 
-| Role | Font (v4 target) | Loaded today |
+| Role | Font | Where it is set |
 |------|-------|-------|
-| Page titles (800 italic, 28px, -0.5 tracking), section titles (700) | Plus Jakarta Sans | not yet (v4 slice 2 adds the font files; until then Inter) |
-| UI / body | Geist Sans 400 / 500 / 600 | Inter (`@tamagui/font-inter`) |
-| SHAs, commands, paths, logs, metrics | Geist Mono | system mono |
+| Page titles (800 italic, 28px, -0.5 tracking), section titles (700) | Plus Jakarta Sans | `src/lib/v4/typography.ts` roles `displayItalic`, `display` (the v4 primitives use them; unconverted screens still use Inter) |
+| UI / body | Geist Sans 400 / 500 / 600 | roles `body`, `bodyMedium`, `bodySemibold` |
+| SHAs, commands, paths, logs, metrics | Geist Mono 400 / 500 / 600 | roles `mono`, `monoMedium`, `monoSemibold` |
+
+Each weight is a separate font file and family name (a phone applies `fontWeight` unreliably to a custom font), so a component picks a role and never sets `fontWeight` beside it. The files come from `@expo-google-fonts/*` and ship inside the app; no font host is linked.
 
 - Italic is for page titles and the Live hero URL only
 - Type scale: 28 / 20 / 17 / 14 / 13 / 12 / 11 (mono 12.5); base size at least 16px on interactive web inputs
