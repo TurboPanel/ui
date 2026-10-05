@@ -420,6 +420,12 @@ environment map layout (`map-layout.ts`), "Runs as" and Linux user rules (`linux
   (config-view endpoint), so there is no third copy of the merge rules here.
 - "Stands alone" is never stored: it is derived from the saved environment compose (`services: !override`).
 - Linux user names follow the server limit (28 characters, 16 with the default name scheme), not just the design spec's 28.
+- **Environment Configuration tab** (`configuration/index.tsx` -> `components/org/project/configuration/`): reads
+  `GET /environments/:id/config-view` (`useEnvironmentConfigView`, key `environments.configView`) and shows
+  Apps, Domains, Variables, Linux users and Data with a source tag on every row; `config-view-model.ts` turns the answer into rows.
+  The config-view keys use the compose service **name** (`svc:web:command`), not the flat `svc:{serviceId}:{row}` keys above, so the
+  model reads the server's own labels. "Only changes from Base" swaps the page for one row per change. Variables show "Project" when
+  they come from the project, and secret values are never shown.
 - Copy uses the v4 words (Base, "{env} change", Follows the Base, Stands alone, Runs as). `vocabulary.test.ts` fails on
   banned words in module output and text literals.
 
