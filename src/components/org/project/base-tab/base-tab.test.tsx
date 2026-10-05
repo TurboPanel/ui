@@ -128,6 +128,7 @@ describe('environments built from this Base', () => {
     expect(screen.getByText('Follows the Base · 4 changes')).toBeTruthy()
     expect(screen.getByText('Stands alone')).toBeTruthy()
     expect(screen.getAllByRole('link', { name: /^See / })).toHaveLength(1)
+    expect(screen.getAllByRole('link', { name: /^Open / })).toHaveLength(3)
   })
 
   it('opens an environment, and its changes on the Configuration tab', () => {
@@ -135,7 +136,7 @@ describe('environments built from this Base', () => {
     render(<ProjectBaseTab />)
     fireEvent.click(screen.getByRole('link', { name: "See Staging's changes" }))
     expect(push).toHaveBeenCalledWith('/o/projects/p/environments/e2/configuration')
-    fireEvent.click(screen.getByRole('button', { name: 'Preview, Stands alone' }))
+    fireEvent.click(screen.getByRole('link', { name: 'Open Preview' }))
     expect(push).toHaveBeenCalledWith('/o/projects/p/environments/e3')
   })
 
@@ -152,7 +153,27 @@ describe('environments built from this Base', () => {
         principals={undefined}
       />,
     )
-    expect(screen.getByRole('button', { name: 'Testing' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Open Testing' })).toBeTruthy()
+    expect(screen.getByLabelText('Testing')).toBeTruthy()
+  })
+})
+
+describe('Linux users of an environment that could not be read', () => {
+  it('names no claim about who uses a user, rather than saying nobody does', () => {
+    const list: BaseEnvironment[] = [{ id: 'e4', name: 'Testing', view: undefined }]
+    render(
+      <BaseTabBody
+        orgId="o"
+        projectId="p"
+        base={view.base}
+        view={view}
+        environments={list}
+        rows={baseEnvironmentRows(list)}
+        principals={[]}
+      />,
+    )
+    expect(screen.queryByText(/No app runs as this user yet/)).toBeNull()
+    expect(screen.getByText(/web in the Base/)).toBeTruthy()
   })
 })
 

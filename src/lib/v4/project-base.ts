@@ -99,13 +99,6 @@ export function baseEnvironmentRows(
   })
 }
 
-/** The environments a Base change reaches: the ones that follow it. */
-export function followingEnvironments(
-  rows: readonly BaseEnvironmentRow[],
-): BaseEnvironmentRow[] {
-  return rows.filter((row) => row.followsBase === true)
-}
-
 /** "Production and Staging follow it · Preview stands alone". */
 export function reachLine(rows: readonly BaseEnvironmentRow[]): string {
   return followLine(rows.map((row) => ({ name: row.name, followsBase: row.followsBase })))
@@ -279,17 +272,33 @@ export function baseLinuxUsers(
   return [...fromRecords, ...declared]
 }
 
-function linuxUserOf(service: ConfigViewService): string | null {
-  return service.rows.find((row) => row.field === 'linuxUser')?.value ?? null
+/**
+ * The user an app runs as: the Linux user row of its settings, else the user
+ * whose record lists this service (the same fallback the Services list uses,
+ * so the two sections agree).
+ */
+function linuxUserOf(
+  service: ConfigViewService,
+  records: readonly ProjectPrincipalRecord[],
+): string | null {
+  const row = service.rows.find((item) => item.field === 'linuxUser')?.value
+  if (row !== undefined && row !== null && row !== '') return row
+  const id = service.serviceId
+  if (id === null) return null
+  return records.find((record) => record.serviceIds.includes(id))?.username ?? null
 }
 
 type EnvUse = { service: string; environments: string[] }
 
-function usesOf(environments: readonly BaseEnvironment[], userName: string): string[] {
+function usesOf(
+  environments: readonly BaseEnvironment[],
+  records: readonly ProjectPrincipalRecord[],
+  userName: string,
+): string[] {
   const byService = new Map<string, EnvUse>()
   for (const environment of environments) {
     for (const service of environment.view?.effective.services ?? []) {
-      if (linuxUserOf(service) !== userName) continue
+      if (linuxUserOf(service, records) !== userName) continue
       const entry = byService.get(service.name) ?? { service: service.name, environments: [] }
       entry.environments.push(environment.name)
       byService.set(service.name, entry)
@@ -300,15 +309,16 @@ function usesOf(environments: readonly BaseEnvironment[], userName: string): str
 
 function differencesOf(
   environments: readonly BaseEnvironment[],
+  records: readonly ProjectPrincipalRecord[],
   base: ConfigViewSide,
   userName: string,
 ): string[] {
   const lines: string[] = []
   for (const service of base.services) {
-    if (linuxUserOf(service) !== userName) continue
+    if (linuxUserOf(service, records) !== userName) continue
     for (const environment of environments) {
       const own = environment.view?.effective.services.find((item) => item.name === service.name)
-      const runsAs = own === undefined ? null : linuxUserOf(own)
+      const runsAs = own === undefined ? null : linuxUserOf(own, records)
       if (runsAs !== null && runsAs !== userName) {
         lines.push(`${service.name} in ${environment.name} runs as ${runsAs}`)
       }
@@ -317,15 +327,33 @@ function differencesOf(
   return lines
 }
 
+/**
+ * What to say about a user's apps. Nothing found is only "No app runs as this
+ * user yet" when every environment could be read; otherwise it names the apps
+ * the Base says run as the user, and says nothing more.
+ */
+function usesTextOf(
+  uses: readonly string[],
+  allRead: boolean,
+  declared: readonly string[],
+): string {
+  if (uses.length > 0) return uses.join(' · ')
+  if (allRead) return 'No app runs as this user yet'
+  return declared.length > 0 ? `${declared.join(', ')} in the Base` : ''
+}
+
 /** Each Linux user with the apps (per environment) that run as it. */
 export function baseLinuxUserRows(
   base: ConfigViewSide,
   principals: readonly ProjectPrincipalRecord[] | undefined,
   environments: readonly BaseEnvironment[],
 ): BaseLinuxUserRow[] {
+  const records = principals ?? []
+  const allRead = environments.every((environment) => environment.view !== undefined)
   return baseLinuxUsers(base, principals).map(({ user, recordId }) => {
-    const uses = usesOf(environments, user.name)
-    const other = differencesOf(environments, base, user.name)
+    const uses = usesOf(environments, records, user.name)
+    const other = differencesOf(environments, records, base, user.name)
+    const declared = base.linuxUsers.find((item) => item.name === user.name)?.usedBy ?? []
     return {
       name: user.name,
       systemName: user.systemName,
@@ -333,10 +361,10 @@ export function baseLinuxUserRows(
       access: user.access,
       sub: userSub(user),
       uses,
-      usesText: uses.length > 0 ? uses.join(' · ') : 'No app runs as this user yet',
+      usesText: usesTextOf(uses, allRead, declared),
       otherText: other.join(' · '),
       hasOther: other.length > 0,
-      inUse: uses.length > 0,
+      inUse: uses.length > 0 || (!allRead && declared.length > 0),
     }
   })
 }

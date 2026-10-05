@@ -5,13 +5,17 @@ import { ListRow } from '@/components/ui/v4/list-row'
 import { SectionHeading } from '@/components/ui/v4/section-heading'
 import { baseLinuxUsersNote, type BaseLinuxUserRow } from '@/lib/v4/project-base'
 
+function joined(parts: readonly string[], separator: string): string {
+  return parts.filter((part) => part !== '').join(separator)
+}
+
 function userSub(row: BaseLinuxUserRow): string {
   const login = row.systemName === row.name ? '' : `Login on the server: ${row.systemName}`
-  return [row.sub, login].filter((part) => part !== '').join(' · ')
+  return joined([row.sub, login], ' · ')
 }
 
 function usesLine(row: BaseLinuxUserRow): string {
-  return row.hasOther ? `${row.usesText} · ${row.otherText}` : row.usesText
+  return joined([row.usesText, row.hasOther ? row.otherText : ''], ' · ')
 }
 
 /**
@@ -33,9 +37,9 @@ export function BaseLinuxUsersSection({ rows }: Readonly<{ rows: readonly BaseLi
           <ListRow
             key={row.name}
             title={row.name}
-            sub={`${userSub(row)}\n${usesLine(row)}`}
+            sub={joined([userSub(row), usesLine(row)], '\n')}
             tall
-            accessibilityLabel={`${row.name}. ${userSub(row)}. ${usesLine(row)}`}
+            accessibilityLabel={joined([row.name, userSub(row), usesLine(row)], '. ')}
           />
         ))}
       </ListGroup>

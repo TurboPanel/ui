@@ -12,7 +12,6 @@ import {
   baseServicesNote,
   baseViewOf,
   baseVariableRows,
-  followingEnvironments,
   reachLine,
   type BaseEnvironment,
 } from './project-base'
@@ -81,10 +80,6 @@ describe('baseEnvironmentRows', () => {
 
 describe('the affected-environment list', () => {
   const rows = baseEnvironmentRows([...ENVIRONMENTS, { id: 'e4', name: 'Testing', view: undefined }])
-
-  it('lists the environments that follow the Base: the ones a Base change reaches', () => {
-    expect(followingEnvironments(rows).map((item) => item.name)).toEqual(['Production', 'Staging'])
-  })
 
   it('names who follows and who stands alone, and skips the unknown one', () => {
     expect(reachLine(rows)).toBe('Production and Staging follow it · Preview stands alone')
@@ -247,6 +242,26 @@ describe('Linux users', () => {
       inUse: true,
     })
     expect(rows[1]?.sub).toContain('created on the first deploy')
+  })
+
+  it('uses the same fallback as the Services list: the user whose record lists the app', () => {
+    const noRow = viewService('web', 'node', [])
+    const env: BaseEnvironment[] = [
+      { id: 'e1', name: 'Production', view: configView({ effective: { services: [noRow], variables: [], linuxUsers: [] } }) },
+    ]
+    const rows = baseLinuxUserRows(base, [record('website', { serviceIds: ['s-web'] })], env)
+    expect(rows[0]).toMatchObject({ usesText: 'web in Production', inUse: true })
+  })
+
+  it('does not say nobody runs as a user when an environment could not be read', () => {
+    const none: BaseEnvironment[] = [{ id: 'e1', name: 'Production', view: undefined }]
+    const rows = baseLinuxUserRows(
+      { ...base, linuxUsers: [{ ...base.linuxUsers[0]!, usedBy: ['web'] }, { ...base.linuxUsers[1]!, usedBy: [] }] },
+      [],
+      none,
+    )
+    expect(rows[0]).toMatchObject({ usesText: 'web in the Base', inUse: true })
+    expect(rows[1]).toMatchObject({ usesText: '', inUse: false })
   })
 
   it('says so when no app runs as a user', () => {

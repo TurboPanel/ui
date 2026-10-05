@@ -15,32 +15,42 @@ const styles = themedStyles((p) => ({
   link: { ...typeStyle('bodySemibold', 'subhead'), color: p.link },
 }))
 
+function RowLink({ label, name, onPress }: Readonly<{ label: string; name: string; onPress: () => void }>) {
+  const s = styles(usePalette())
+  return (
+    <Pressable accessibilityRole="link" accessibilityLabel={name} onPress={onPress} style={webPointer}>
+      <Text style={s.link}>{label}</Text>
+    </Pressable>
+  )
+}
+
 function EnvironmentRow({
   orgId,
   projectId,
   row,
 }: Readonly<{ orgId: string; projectId: string; row: BaseEnvironmentRow }>) {
-  const s = styles(usePalette())
   const router = useRouter()
+  const open = (href: string) => router.push(href as Href)
   return (
     <ListRow
       title={row.name}
       chips={row.relationText === '' ? undefined : <SourceTag source={row.source} label={row.relationText} />}
       trailing={
-        row.seeChanges === null ? undefined : (
-          <Pressable
-            accessibilityRole="link"
-            accessibilityLabel={row.seeChanges}
-            onPress={() =>
-              router.push(projectEnvironmentConfigurationHref(orgId, projectId, row.id) as Href)
-            }
-            style={webPointer}
-          >
-            <Text style={s.link}>{row.seeChanges}</Text>
-          </Pressable>
-        )
+        <>
+          <RowLink
+            label="Open"
+            name={`Open ${row.name}`}
+            onPress={() => open(projectEnvironmentHref(orgId, projectId, row.id))}
+          />
+          {row.seeChanges === null ? null : (
+            <RowLink
+              label={row.seeChanges}
+              name={row.seeChanges}
+              onPress={() => open(projectEnvironmentConfigurationHref(orgId, projectId, row.id))}
+            />
+          )}
+        </>
       }
-      onPress={() => router.push(projectEnvironmentHref(orgId, projectId, row.id) as Href)}
       accessibilityLabel={`${row.name}${row.relationText === '' ? '' : `, ${row.relationText}`}`}
     />
   )
