@@ -212,6 +212,12 @@ export const queryKeys = {
         /** Deploy history page (no interval — invalidated by deploy mutations). */
         deployments: (environmentId: string) =>
           ['org', orgId, 'environment', environmentId, 'deployments'] as const,
+        /** Newest few deploys only (cards, in-progress lists); a child of `deployments`. */
+        latestDeployments: (environmentId: string) =>
+          ['org', orgId, 'environment', environmentId, 'deployments', 'latest'] as const,
+        /** Effective configuration and changes from the Base. */
+        configView: (environmentId: string) =>
+          ['org', orgId, 'environment', environmentId, 'config-view'] as const,
         /**
          * Git-backed releases for one compose service (or the whole
          * environment when unscoped). No interval, like deploy history — the
