@@ -35,6 +35,8 @@ const API_ERROR_COPY: Readonly<Record<string, string>> = {
   hosting_has_no_hostnames: 'Add a domain name first.',
   letsencrypt_hostname_unsupported:
     'Let\u2019s Encrypt cannot issue for wildcard names, IP addresses or private names.',
+  www_redirect_conflict:
+    'This site lists both a name and its www version, so \u201cAlso send www to the main name\u201d cannot be turned on. Remove one of the two names, or leave the option off.',
 }
 
 export const TOO_MANY_ATTEMPTS_COPY = 'Too many attempts. Wait a minute and try again.'
