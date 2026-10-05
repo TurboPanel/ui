@@ -26,6 +26,7 @@ import {
   type DeploymentGroup,
   stalledDeploymentHint,
 } from '@/lib/deployment-history'
+import { commandErrorDetail, commandErrorLine } from '@/lib/command-error'
 import type { DeploymentHistoryRecord } from '@/lib/instance-api'
 import { isTerminalCommandStatus } from '@/lib/queries/commands'
 import {
@@ -95,7 +96,8 @@ function DeploymentDetail({
   const active =
     group.commands.find((row) => row.serverId === serverId) ??
     group.commands[0]
-  const failure = active?.strategyOutcomeReason ?? active?.errorMessage ?? null
+  const failure = active?.strategyOutcomeReason ?? (active ? commandErrorLine(active) : null)
+  const failureDetail = active && !active.strategyOutcomeReason ? commandErrorDetail(active) : null
   const strategy = deploymentStrategyLabel(active?.strategy)
   const stalledHint = stalledDeploymentHint(active?.errorCode ?? null)
 
@@ -117,11 +119,34 @@ function DeploymentDetail({
           {failure}
         </Text>
       ) : null}
+      {failureDetail ? <FailureDetail text={failureDetail} /> : null}
       {stalledHint ? <Text style={panelStyles.muted}>{stalledHint}</Text> : null}
       {strategy ? (
         <Text style={panelStyles.muted}>{`${strategy} deploy`}</Text>
       ) : null}
       {active ? <DeploymentTranscript orgId={orgId} row={active} /> : null}
+    </View>
+  )
+}
+
+/** The whole failure text behind the one-line cause, collapsed until asked for. */
+function FailureDetail({ text }: Readonly<{ text: string }>) {
+  const [open, setOpen] = useState(false)
+  return (
+    <View style={styles.failureDetail}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        onPress={() => setOpen((value) => !value)}
+        style={webPointer}
+      >
+        <Text style={panelStyles.muted}>{open ? 'Hide full error' : 'Show full error'}</Text>
+      </Pressable>
+      {open ? (
+        <Text selectable style={[panelStyles.muted, styles.failureText]}>
+          {text}
+        </Text>
+      ) : null}
     </View>
   )
 }
@@ -389,6 +414,12 @@ const styles = StyleSheet.create({
     color: colors.textBody,
     fontSize: 13,
     fontWeight: '600',
+  },
+  failureDetail: {
+    gap: spacing.xs,
+  },
+  failureText: {
+    fontFamily: 'monospace',
   },
   detail: {
     gap: spacing.sm,
