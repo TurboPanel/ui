@@ -7,7 +7,7 @@ Third-party components remain under their own copyright and license terms and ar
 Third-party OS artwork under `assets/os/` is recorded separately in `assets/os/NOTICE.md` and is not licensed under this repository’s AGPL or the Apple App Store additional permission.
 
 <!-- lockfiles
-pnpm-lock.yaml sha256:fa289299a6bc1fc3f0d726c65b7f84e79f0775ead116bc3555ceaa957153c912
+pnpm-lock.yaml sha256:ed4bad13ee059356650485eb394e98add7296e484cb02eb56a21ce0af7545072
 -->
 
 ## Production dependencies
@@ -4587,6 +4587,12 @@ These packages are used for development, test, or build tooling and are not bund
 - License: MIT
 - Homepage: https://github.com/pkgjs/parseargs#readme
 
+### @playwright/test@1.63.0
+
+- License: Apache-2.0
+- Copyright: Microsoft Corporation
+- Homepage: https://playwright.dev
+
 ### @poppinss/colors@4.1.6
 
 - License: MIT
@@ -5825,6 +5831,18 @@ These packages are used for development, test, or build tooling and are not bund
 - License: MIT
 - Copyright: Veselin Todorov
 - Homepage: https://github.com/chaijs/pathval
+
+### playwright@1.63.0
+
+- License: Apache-2.0
+- Copyright: Microsoft Corporation
+- Homepage: https://playwright.dev
+
+### playwright-core@1.63.0
+
+- License: Apache-2.0
+- Copyright: Microsoft Corporation
+- Homepage: https://playwright.dev
 
 ### possible-typed-array-names@1.1.0
 

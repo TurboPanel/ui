@@ -85,3 +85,7 @@ __pycache__/
 *$py.class
 .agents/skills/**/__pycache__/
 .agents/skills/**/*.pyc
+
+# Playwright
+test-results/
+playwright-report/
