@@ -57,6 +57,9 @@ function groupTitle(group: DeploymentGroup): string {
   return group.actorEntityType === 'user' ? 'Started in the console' : 'Started by the system'
 }
 
+/** Not started yet: the status chip reads these as queued too (see `groupStatusKey`). */
+const WAITING_STATUSES: ReadonlySet<string> = new Set(['queued', 'dispatching', 'sent', 'acked'])
+
 /**
  * The line under a deploy: how long it took, or - while it has no duration -
  * what it is doing. Only a deploy that is running reads "In progress"; one
@@ -66,7 +69,7 @@ function groupTitle(group: DeploymentGroup): string {
 function groupSub(group: DeploymentGroup): string {
   if (group.durationMs !== null) return formatDeployDuration(group.durationMs)
   if (group.status === 'running') return 'In progress'
-  if (group.status === 'queued') return 'Waiting to start'
+  if (WAITING_STATUSES.has(group.status)) return 'Waiting to start'
   return formatDeployDuration(null)
 }
 

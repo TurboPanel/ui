@@ -68,6 +68,9 @@ describe('deployRows', () => {
       deployRows([deploy('d1', null, extra)], NOW, false)[0]?.sub
     expect(sub({ durationMs: null, status: 'running' })).toBe('In progress')
     expect(sub({ durationMs: null, status: 'queued' })).toBe('Waiting to start')
+    for (const status of ['dispatching', 'sent', 'acked'] as const) {
+      expect(sub({ durationMs: null, status })).toBe('Waiting to start')
+    }
     expect(sub({ durationMs: null, status: 'cancelled' })).toBe('—')
     expect(sub({ durationMs: null, status: 'failed' })).toBe('—')
     expect(sub({ durationMs: null, status: 'succeeded' })).toBe('—')
