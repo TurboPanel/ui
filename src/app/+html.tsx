@@ -10,7 +10,7 @@ import { themeCss } from '@/lib/theme-palettes'
  * that applies a saved Light / Dark choice before the first paint, so the page
  * never flashes the wrong theme.
  */
-export default function Root({ children }: PropsWithChildren) {
+export default function Root({ children }: Readonly<PropsWithChildren>) {
   return (
     <html lang="en">
       <head>

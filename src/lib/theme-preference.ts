@@ -80,9 +80,9 @@ function applyToDocument(mode: ThemeMode): void {
   if (typeof document === 'undefined') return
   const root = document.documentElement
   if (mode === 'system') {
-    root.removeAttribute('data-theme')
+    delete root.dataset.theme
   } else {
-    root.setAttribute('data-theme', mode)
+    root.dataset.theme = mode
   }
 }
 
