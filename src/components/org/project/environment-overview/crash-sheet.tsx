@@ -17,6 +17,8 @@ export type CrashRetry = Readonly<{
   requested: boolean
   error: string | null
   onRetry: () => void
+  /** Forget the last result; called when the sheet closes so it never shows an old one. */
+  reset: () => void
 }>
 
 const styles = themedStyles((p) => ({
@@ -98,7 +100,7 @@ export function CrashSheet({
           {info.seen === null ? null : <Text style={s.seen}>{info.seen}</Text>}
         </View>
         {retry.requested ? (
-          <Notice tone="busy" title={`Restart asked for ${envName}`} body="It can take a minute. Check back here." />
+          <Notice tone="busy" title={`Restart requested for ${envName}`} body="It can take a minute. Check back here." />
         ) : null}
         {retry.error === null ? null : <Notice tone="bad" title="Could not restart" body={retry.error} />}
       </View>

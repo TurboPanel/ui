@@ -98,6 +98,10 @@ export function EnvironmentOverviewBody({
   const notice = useMemo(() => problemNotice(deployments, running), [deployments, running])
   const deploys = useMemo(() => deployRows(deployments, now, running), [deployments, now, running])
   const crashes = useMemo(() => crashesOf(apps, now), [apps, now])
+  const closeCrash = () => {
+    setOpen(null)
+    retry.reset()
+  }
   const openCrash = crashes.find((info) => info.service === open)
   const relation = relationCard(source.view, source.envName, environmentCount)
   const deploymentsHref = projectEnvironmentDeploymentsHref(orgId, projectId, environmentId)
@@ -125,10 +129,10 @@ export function EnvironmentOverviewBody({
           info={openCrash}
           envName={source.envName}
           retry={retry}
-          onClose={() => setOpen(null)}
+          onClose={closeCrash}
           onOpen={() => {
             const href = hrefs.service(apps.find((row) => row.name === openCrash.service)?.recordId)
-            setOpen(null)
+            closeCrash()
             if (href !== null) router.push(href as Href)
           }}
         />

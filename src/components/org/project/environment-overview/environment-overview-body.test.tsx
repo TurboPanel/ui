@@ -46,7 +46,7 @@ function deploy(id: string, generation: number, extra: Partial<DeploymentHistory
   }
 }
 
-const retry = { canRetry: true, busy: false, requested: false, error: null, onRetry: vi.fn() }
+const retry = { canRetry: true, busy: false, requested: false, error: null, onRetry: vi.fn(), reset: vi.fn() }
 
 function renderBody(
   overrides: Partial<Parameters<typeof EnvironmentOverviewBody>[0]> = {},
@@ -252,6 +252,17 @@ describe.each(SCENARIOS)('EnvironmentOverviewBody ($name)', (scenario) => {
       fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Open web' }))
       expect(push).toHaveBeenLastCalledWith('/o/projects/p/services/s-web')
       expect(screen.queryByRole('dialog')).toBeNull()
+    })
+
+    it('forgets the last restart result whenever the sheet closes', () => {
+      retry.reset.mockReset()
+      renderBody({ source: crashing() })
+      fireEvent.click(screen.getByRole('button', { name: 'See why' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Close web keeps crashing' }))
+      expect(retry.reset).toHaveBeenCalledTimes(1)
+      fireEvent.click(screen.getByRole('button', { name: 'See why' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Open web' }))
+      expect(retry.reset).toHaveBeenCalledTimes(2)
     })
 
     it('retries through the hook it was given', () => {

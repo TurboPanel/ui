@@ -21,5 +21,9 @@ export function useCrashRetry(orgId: string, environmentId: string, canManage: b
       else setError(userErrorMessage(result.cause, result.error ?? 'Could not restart. Try again.'))
     }, () => setError('Could not restart. Try again.'))
   }
-  return { canRetry: canManage, busy: lifecycle.isPending, requested, error, onRetry }
+  const reset = () => {
+    setRequested(false)
+    setError(null)
+  }
+  return { canRetry: canManage, busy: lifecycle.isPending, requested, error, onRetry, reset }
 }

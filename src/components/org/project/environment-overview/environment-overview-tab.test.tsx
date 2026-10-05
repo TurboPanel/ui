@@ -16,7 +16,7 @@ vi.mock('@/components/org/project/environment-overview/use-environment-overview'
   useEnvironmentOverviewModel: () => model.current,
 }))
 vi.mock('@/components/org/project/environment-overview/use-crash-retry', () => ({
-  useCrashRetry: () => ({ canRetry: true, busy: false, requested: false, error: null, onRetry: () => undefined }),
+  useCrashRetry: () => ({ canRetry: true, busy: false, requested: false, error: null, onRetry: () => undefined, reset: () => undefined }),
 }))
 vi.mock('@/components/org/project/project-overview-tab', () => ({
   ProjectOverviewTab: () => <div data-testid="old-screen" />,

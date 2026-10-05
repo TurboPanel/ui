@@ -25,7 +25,7 @@ function crashOf(lastError: string | null, restartCount = 7): CrashInfo {
 const INFO = crashOf('Error: boom')
 
 function retryOf(extra: Partial<CrashRetry> = {}): CrashRetry {
-  return { canRetry: true, busy: false, requested: false, error: null, onRetry: vi.fn(), ...extra }
+  return { canRetry: true, busy: false, requested: false, error: null, onRetry: vi.fn(), reset: vi.fn(), ...extra }
 }
 
 function show(retry: CrashRetry = retryOf(), info = INFO) {
@@ -79,7 +79,7 @@ describe.each(SCENARIOS)('CrashSheet ($name)', (scenario) => {
 
   it('confirms the restart was asked for', () => {
     show(retryOf({ requested: true }))
-    expect(screen.getByText('Restart asked for Production')).toBeTruthy()
+    expect(screen.getByText('Restart requested for Production')).toBeTruthy()
   })
 
   it('shows why a restart failed', () => {

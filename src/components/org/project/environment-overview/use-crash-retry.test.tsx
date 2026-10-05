@@ -56,6 +56,20 @@ describe('useCrashRetry', () => {
     await waitFor(() => expect(result.current.error).toBe('Could not restart. Try again.'))
   })
 
+  it('forgets a result on reset, so a closed sheet never shows an old one', async () => {
+    lifecycle.run.mockResolvedValueOnce({ ok: true, value: {} })
+    const { result } = renderHook(() => useCrashRetry('o', 'env-1', true))
+    act(() => result.current.onRetry())
+    await waitFor(() => expect(result.current.requested).toBe(true))
+    act(() => result.current.reset())
+    expect(result.current).toMatchObject({ requested: false, error: null })
+    lifecycle.run.mockResolvedValueOnce({ ok: false, error: 'x', cause: new Error('Nope.') })
+    act(() => result.current.onRetry())
+    await waitFor(() => expect(result.current.error).toBe('Nope.'))
+    act(() => result.current.reset())
+    expect(result.current.error).toBeNull()
+  })
+
   it('does nothing while a restart is already in flight, and passes the manage right through', () => {
     lifecycle.isPending = true
     const { result } = renderHook(() => useCrashRetry('o', 'env-1', false))
