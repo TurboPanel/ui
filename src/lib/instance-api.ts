@@ -1828,7 +1828,7 @@ export async function completeInstall(body: {
   }
 }
 
-async function apiFetch<T>(
+export async function apiFetch<T>(
   path: string,
   init?: RequestInit,
   organizationId?: string | null
