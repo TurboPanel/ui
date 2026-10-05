@@ -1,4 +1,2 @@
-import { EnvironmentSettingsScreen } from '@/components/org/project/project-route-screens'
-
 /** Environment Settings tab (`/environments/:environmentId/settings`). */
-export default EnvironmentSettingsScreen
+export { EnvironmentSettingsScreen as default } from '@/components/org/project/project-route-screens'

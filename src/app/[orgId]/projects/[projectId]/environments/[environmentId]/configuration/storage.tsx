@@ -1,4 +1,2 @@
-import { EnvironmentComposeScreen } from '@/components/org/project/project-route-screens'
-
 /** Environment Configuration, storage. */
-export default EnvironmentComposeScreen
+export { EnvironmentComposeScreen as default } from '@/components/org/project/project-route-screens'
