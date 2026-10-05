@@ -31,11 +31,15 @@ export type OverviewModel =
  * `unavailable` means the config view could not be read (no manage access, or
  * a saved compose that does not parse), or the service list failed; the screen
  * then keeps the old page rather than drawing a map with no services.
+ * With no environment selected there is nothing to read: the model is
+ * `loading` only while the project's environments are still being fetched, and
+ * `unavailable` after that, so the old page answers instead of a spinner that
+ * never ends.
  * The other calls may fail on their own: what they would have said is simply
  * left out.
  */
 export function useEnvironmentOverviewModel(): OverviewModel {
-  const { orgId, projectId, selectedEnvironment } = useProjectContext()
+  const { orgId, projectId, selectedEnvironment, loading: projectLoading } = useProjectContext()
   const environmentId = selectedEnvironment?.id ?? ''
   const view = useEnvironmentConfigView(orgId, environmentId)
   const services = useServices(orgId, environmentId, { enabled: environmentId !== '' })
@@ -76,6 +80,7 @@ export function useEnvironmentOverviewModel(): OverviewModel {
     principals.data,
   ])
 
+  if (environmentId === '') return { state: projectLoading ? 'loading' : 'unavailable' }
   if (view.isError || services.isError) return { state: 'unavailable' }
   if (!loaded || source === null) return { state: 'loading' }
   return {

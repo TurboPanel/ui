@@ -1,12 +1,12 @@
 import { Redirect, useLocalSearchParams, type Href } from 'expo-router'
-import { Platform, View } from 'react-native'
+import { Platform } from 'react-native'
 import { ProjectBaseTab } from '@/components/org/project/base-tab/base-tab'
 import { EnvironmentOverviewTab } from '@/components/org/project/environment-overview/environment-overview-tab'
 import { EnvironmentConfigurationScreen } from '@/components/org/project/configuration/environment-configuration'
 import { useEnvironmentChrome } from '@/components/org/project/environment-shell'
+import { EnvironmentSettingsBody } from '@/components/org/project/settings/environment-settings-screen'
 import { ManagedFocusTab } from '@/components/org/project/managed-focus-tab'
 import { EnvironmentDeploymentHistoryPanel } from '@/components/org/project/environment-deployment-history-panel'
-import { EnvironmentGitSourceSection } from '@/components/org/project/overview-environments-panel'
 import { useProjectContext } from '@/components/org/project/project-context'
 import { ProjectEnvironmentsTab } from '@/components/org/project/project-environments-tab'
 import { ProjectOverviewTab } from '@/components/org/project/project-overview-tab'
@@ -17,7 +17,6 @@ import {
   withCarriedQuery,
   type LegacyProjectSegment,
 } from '@/lib/project-navigation'
-import { spacing } from '@/lib/theme'
 
 // Route files stay a few lines: each names a screen from here. The checks
 // (platform and managed projects keep their own pages) live in one place.
@@ -108,15 +107,20 @@ export function EnvironmentConfigurationTabScreen() {
   return <EnvironmentConfigurationScreen />
 }
 
-/** Environment Settings: the compose settings plus branch and deploy-on-push. */
+/**
+ * Environment Settings: branch and deploy on push, server, name and the
+ * danger zone. Platform and managed projects keep the screens they had.
+ */
 export function EnvironmentSettingsScreen() {
+  const { orgId, projectId, project, isSystemProject } = useProjectContext()
   const withChrome = useEnvironmentChrome()
-  return (
-    <View style={{ gap: spacing.lg }}>
-      <EnvironmentComposeScreen />
-      {withChrome ? <EnvironmentGitSourceSection /> : null}
-    </View>
-  )
+  if (isSystemProject) {
+    return <Redirect href={projectOverviewHref(orgId, projectId) as Href} />
+  }
+  if (project && isManagedProject(project)) {
+    return <ManagedFocusTab focus="overview" />
+  }
+  return <EnvironmentSettingsBody showGitSource={withChrome} />
 }
 
 /** Environment Deployments: the deploy history, open. */

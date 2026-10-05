@@ -547,6 +547,9 @@ export function readHostingIdParam(
   return readFocusHostingId(value)
 }
 
+/** The environment delete control, shared with the Environment Settings screen. */
+export { EnvironmentDeleteControl }
+
 const styles = StyleSheet.create({
   panelBody: {
     width: '100%',

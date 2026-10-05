@@ -8,10 +8,10 @@ import { ReauthSettingsSection } from '@/components/org/reauth-settings-section'
 import { OrganizationChannelsSection } from '@/components/account/notification-channels-section'
 import { AccessOverviewSection } from '@/components/org/access-overview-section'
 import { GitSourcesSection } from '@/components/org/git-sources/git-sources-section'
-import { PageTabs, type PageTab } from '@/components/org/nav/page-tabs'
 import { TlsOverviewSection } from '@/components/org/tls-overview-section'
 import { Button, ButtonRow, SectionPanel } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
+import { UnderlineTabs, type UnderlineTab } from '@/components/ui/v4'
 import { useAuth } from '@/lib/auth-context'
 import {
   ORG_SETTINGS_TAB_IDS,
@@ -87,14 +87,10 @@ export function ManageSection({ orgId }: Readonly<{ orgId: string }>) {
   const orgsQuery = useOrganizationsQuery()
   const { tab: tabParam } = useLocalSearchParams<{ tab?: string | string[] }>()
   const activeTab = parseOrgSettingsTab(tabParam)
-  const tabs = useMemo<PageTab[]>(
-    () =>
-      ORG_SETTINGS_TAB_IDS.map((id) => ({
-        id,
-        label: ORG_SETTINGS_TAB_LABELS[id],
-        href: orgSettingsTabHref(orgId, id),
-      })),
-    [orgId],
+  const router = useRouter()
+  const tabs = useMemo<UnderlineTab[]>(
+    () => ORG_SETTINGS_TAB_IDS.map((key) => ({ key, label: ORG_SETTINGS_TAB_LABELS[key] })),
+    [],
   )
 
   usePullToRefresh(async () => {
@@ -104,10 +100,13 @@ export function ManageSection({ orgId }: Readonly<{ orgId: string }>) {
   return (
     <View style={styles.root}>
       <Text style={panelStyles.pageTitle}>Organization settings</Text>
-      <PageTabs
+      <UnderlineTabs
         tabs={tabs}
-        activeId={activeTab}
-        accessibilityLabel="Organization settings sections"
+        value={activeTab}
+        onChange={(key) =>
+          router.push(orgSettingsTabHref(orgId, key as OrgSettingsTabId) as Href)
+        }
+        ariaLabel="Organization settings sections"
       />
       <SettingsTabBody orgId={orgId} tab={activeTab} />
     </View>

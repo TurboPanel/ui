@@ -11,10 +11,10 @@ import {
 } from 'react-native'
 import { BreadcrumbChevron } from '@/components/header-chevron'
 import { panelStyles } from '@/components/ui/panel-styles'
+import { UnderlineTabs, type UnderlineTab } from '@/components/ui/v4'
 import { PlatformBadge } from '@/components/org/platform-badge'
 import { ProjectDeletePanel } from '@/components/org/project-delete-panel'
 import { useProjectContext } from '@/components/org/project/project-context'
-import { PageTabs, type PageTab } from '@/components/org/nav/page-tabs'
 import {
   ProjectSectionTabs,
   activeProjectTabFromPathname,
@@ -29,6 +29,7 @@ import {
   parseProjectPageTab,
   projectOverviewHref,
   projectPageTabHref,
+  type ProjectPageTabId,
 } from '@/lib/project-navigation'
 import {
   commandStatusById,
@@ -402,21 +403,20 @@ function ProjectHeader({
 /** Environments · Base · Settings, under the header of a Compose project's own pages. */
 function ProjectPageTabs() {
   const pathname = usePathname()
+  const router = useRouter()
   const { orgId, projectId } = useProjectContext()
-  const tabs = useMemo<PageTab[]>(
-    () =>
-      PROJECT_PAGE_TAB_IDS.map((id) => ({
-        id,
-        label: PROJECT_PAGE_TAB_LABELS[id],
-        href: projectPageTabHref(orgId, projectId, id),
-      })),
-    [orgId, projectId],
+  const tabs = useMemo<UnderlineTab[]>(
+    () => PROJECT_PAGE_TAB_IDS.map((key) => ({ key, label: PROJECT_PAGE_TAB_LABELS[key] })),
+    [],
   )
   return (
-    <PageTabs
+    <UnderlineTabs
       tabs={tabs}
-      activeId={parseProjectPageTab(pathname, projectId)}
-      accessibilityLabel="Project sections"
+      value={parseProjectPageTab(pathname, projectId) ?? ''}
+      onChange={(key) =>
+        router.push(projectPageTabHref(orgId, projectId, key as ProjectPageTabId) as Href)
+      }
+      ariaLabel="Project sections"
     />
   )
 }

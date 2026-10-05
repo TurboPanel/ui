@@ -489,20 +489,29 @@ export type ServiceKindFieldIssue = {
  * (`root:`) is the one exception — that is a half-typed line, not a claim.
  */
 export function collectServiceKindFieldIssues(
-  extension: Record<string, unknown>
+  extension: Record<string, unknown>,
+  options?: { partialLayer?: boolean }
 ): ServiceKindFieldIssue[] {
   const kind = readServiceKind(extension.serviceKind)
+  const partialLayer = options?.partialLayer === true
   const issues: ServiceKindFieldIssue[] = []
 
+  // A partial layer (an environment's changes) that does not restate
+  // `serviceKind` is not saying the service is a container: its kind is the
+  // Base's, so which fields fit it is asked of the merged document.
+  const kindDeferred = partialLayer && kind === undefined
   for (const [field, value] of Object.entries(extension)) {
+    if (kindDeferred) break
     if (value === null || value === undefined) continue
     const message = serviceKindFieldMessage(field, kind)
     if (message) issues.push({ field, message })
   }
 
   // Required fields are a statement about a kind, so an omitted `serviceKind`
-  // has nothing to require: it means `container`, which requires nothing.
-  if (kind === undefined) return issues
+  // has nothing to require: it means `container`, which requires nothing. A
+  // partial layer may restate a kind and leave the rest (a node app's
+  // repository) to the Base, so it requires nothing either.
+  if (kind === undefined || partialLayer) return issues
   for (const field of SERVICE_KIND_FIELD_TABLE[kind].requiredFields) {
     const value = extension[field]
     if (value !== null && value !== undefined) continue
