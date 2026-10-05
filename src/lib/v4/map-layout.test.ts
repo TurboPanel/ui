@@ -56,11 +56,25 @@ describe('map layout geometry', () => {
       }
     })
 
-    it.each(MODES)('has one arrowhead per line (%s)', (mode) => {
+    it.each(MODES)('ends every arrowhead on the end of a line of its own kind (%s)', (mode) => {
       const layout = mapLayout(sampleMapInput(project, env, mode))
-      const bends = layout.segments.filter((s) => s.orientation === 'v').length
-      const straight = layout.segments.filter((s) => s.orientation === 'h').length - 2 * bends
-      expect(layout.heads).toHaveLength(bends + straight)
+      for (const head of layout.heads) {
+        const ends = layout.segments.some(
+          (s) =>
+            s.orientation === 'h' && s.kind === head.kind && s.y === head.y && s.x + s.w === head.x,
+        )
+        expect(ends).toBe(true)
+      }
+    })
+
+    it.each(MODES)('never repeats a line or an arrowhead (%s)', (mode) => {
+      const layout = mapLayout(sampleMapInput(project, env, mode))
+      const lines = layout.segments.map(
+        (s) => `${s.orientation}-${s.kind}-${s.x}-${s.y}-${s.w}-${s.h}`,
+      )
+      const heads = layout.heads.map((h) => `${h.kind}-${h.x}-${h.y}`)
+      expect(new Set(lines).size).toBe(lines.length)
+      expect(new Set(heads).size).toBe(heads.length)
     })
   })
 

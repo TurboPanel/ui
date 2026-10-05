@@ -520,16 +520,35 @@ function drawLines(build: Build, nodes: ReadonlyMap<string, MapNode>): Lines {
     route(lines, from, to, link.kind, MAP.gutters.data + ((dataIndex.get(link.to) ?? 0) % 4) * 10)
   }
   const round = (n: number) => Math.round(n)
+  // Two apps on one data store, or two domains on one app, route to the same
+  // arrowhead and the same last stretch; drawn twice they only darken it, and
+  // the position-based React keys would repeat. Keep one of each.
   return {
-    segments: lines.segments.map((s) => ({
-      ...s,
-      x: round(s.x),
-      y: round(s.y),
-      w: round(s.w),
-      h: round(s.h),
-    })),
-    heads: lines.heads.map((s) => ({ ...s, x: round(s.x), y: round(s.y) })),
+    segments: uniqueBy(
+      lines.segments.map((s) => ({
+        ...s,
+        x: round(s.x),
+        y: round(s.y),
+        w: round(s.w),
+        h: round(s.h),
+      })),
+      (s) => `${s.orientation}-${s.kind}-${s.x}-${s.y}-${s.w}-${s.h}`,
+    ),
+    heads: uniqueBy(
+      lines.heads.map((s) => ({ ...s, x: round(s.x), y: round(s.y) })),
+      (s) => `${s.kind}-${s.x}-${s.y}`,
+    ),
   }
+}
+
+function uniqueBy<T>(items: readonly T[], keyOf: (item: T) => string): T[] {
+  const seen = new Set<string>()
+  return items.filter((item) => {
+    const key = keyOf(item)
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 }
 
 // --- assembly ------------------------------------------------------------------
