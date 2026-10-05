@@ -1,5 +1,4 @@
-import { Link, useLocalSearchParams, usePathname, useRouter, type Href } from 'expo-router'
-import { useEffect, useMemo } from 'react'
+import { Link, usePathname, type Href } from 'expo-router'
 import {
   Platform,
   Pressable,
@@ -10,13 +9,7 @@ import {
   type ViewStyle,
 } from 'react-native'
 import { panelStyles } from '@/components/ui/panel-styles'
-import { StatusDot } from '@/components/ui'
 import { useProjectContext } from '@/components/org/project/project-context'
-import { readHostingIdParam } from '@/components/org/project-settings-area'
-import { ProjectScopePicker } from '@/components/org/project/project-scope-picker'
-import {
-  environmentStatusTone,
-} from '@/lib/container-status'
 import {
   COMPOSE_PROJECT_TAB_IDS,
   MANAGED_PROJECT_TAB_IDS,
@@ -24,16 +17,9 @@ import {
   isManagedProject,
   parseComposeProjectTab,
   parseProjectEnvironmentId,
-  projectComposeSectionHref,
   projectTabHref,
   type ProjectTabId,
 } from '@/lib/project-navigation'
-import {
-  shouldUseScopePicker,
-  type ProjectScopeOption,
-} from '@/lib/project-scope'
-import { environmentDisplayName } from '@/lib/resource-labels'
-import { useContainersByProject, useOrgServers } from '@/lib/queries'
 import { colors, webPointer } from '@/lib/theme'
 
 /** RN Web ScrollView expands by default; keep the chip strip content-sized. */
@@ -177,203 +163,6 @@ function ManagedSectionTabs() {
   )
 }
 
-function ScopeChip({
-  label,
-  selected,
-  statusColor,
-  accessibilityLabel,
-  onSelect,
-}: Readonly<{
-  label: string
-  selected: boolean
-  statusColor?: string
-  accessibilityLabel: string
-  onSelect: () => void
-}>) {
-  return (
-    <Pressable
-      accessibilityRole="tab"
-      accessibilityState={{ selected }}
-      accessibilityLabel={accessibilityLabel}
-      hitSlop={{ top: 8, bottom: 8 }}
-      style={[
-        panelStyles.segmentChip,
-        styles.chip,
-        selected && panelStyles.segmentChipActive,
-        webPointer,
-      ]}
-      onPress={onSelect}
-    >
-      <View style={styles.chipContent}>
-        {statusColor ? (
-          <StatusDot size="sm" color={statusColor} />
-        ) : null}
-        <Text
-          style={[styles.tabText, selected && styles.tabTextActive]}
-          numberOfLines={1}
-        >
-          {label}
-        </Text>
-      </View>
-    </Pressable>
-  )
-}
-
-/**
- * Compose scope selector: **Project** · environments.
- *
- * Lives in the project header (not the compose toolbar). Pure scope switch —
- * per-scope configuration is the Settings tab inside the compose surface, and
- * a trailing visible **Settings** chip opens it for the scope in view (it is
- * on no other nav bar, so without it Settings and Danger are unreachable).
- *
- * Project is always the first control and never collapses into the picker.
- * Environments sit to its right: chips while there is only one, and a
- * searchable {@link ProjectScopePicker} past that, since platform projects
- * place one environment per server and the list grows with the fleet. Either
- * way an environment is always named on screen — on Project scope the picker
- * shows the first one, unhighlighted.
- */
-export function ProjectScopeSelector() {
-  const pathname = usePathname()
-  const router = useRouter()
-  const { orgId, projectId, environments, baseSelected, isSystemProject } =
-    useProjectContext()
-  const { hostingId: hostingIdParam } = useLocalSearchParams<{
-    hostingId?: string | string[]
-  }>()
-  const focusHostingId = readHostingIdParam(hostingIdParam)
-  const pathEnvironmentId = parseProjectEnvironmentId(pathname, projectId)
-  const sectionTab = parseComposeProjectTab(pathname, projectId)
-
-  const environmentIds = useMemo(
-    () => environments.map((env) => env.id),
-    [environments],
-  )
-  const containersQuery = useContainersByProject(orgId, projectId, {
-    environmentIds,
-    observeUntilHostDeployed: isSystemProject,
-  })
-  const containersByEnv = containersQuery.containersByEnv
-  // Platform projects run one environment per server and name every one after
-  // the component, so the scopes only differ once the placement is resolved.
-  const serversQuery = useOrgServers(orgId, { enabled: isSystemProject })
-  const servers = serversQuery.data?.servers
-
-  const navigateScope = (environmentId?: string | null) => {
-    router.push(
-      projectComposeSectionHref(
-        orgId,
-        projectId,
-        sectionTab,
-        environmentId,
-      ) as Href,
-    )
-  }
-
-  // Deep link: ?hostingId= on an environment path opens the Hosting tab.
-  useEffect(() => {
-    if (!focusHostingId || !pathEnvironmentId) return
-    if (sectionTab === 'hosting') return
-    const href = `${projectComposeSectionHref(
-      orgId,
-      projectId,
-      'hosting',
-      pathEnvironmentId,
-    )}?hostingId=${encodeURIComponent(focusHostingId)}`
-    router.replace(href as Href)
-  }, [
-    focusHostingId,
-    pathEnvironmentId,
-    sectionTab,
-    orgId,
-    projectId,
-    router,
-  ])
-
-  const environmentTone = (environmentId: string) =>
-    environmentStatusTone(containersByEnv[environmentId] ?? [])
-
-  const environmentControl = () => {
-    if (environments.length === 0) return null
-
-    const options: ProjectScopeOption[] = environments.map((env) => ({
-      environmentId: env.id,
-      label: environmentDisplayName(env, {
-        servers,
-        preferServer: isSystemProject,
-      }),
-      detail: environmentTone(env.id).label,
-    }))
-
-    if (shouldUseScopePicker(environments.length)) {
-      return (
-        <ProjectScopePicker
-          options={options}
-          activeEnvironmentId={pathEnvironmentId}
-          statusColorFor={(option) =>
-            environmentTone(option.environmentId).color
-          }
-          onSelect={(option) => navigateScope(option.environmentId)}
-        />
-      )
-    }
-
-    return options.map((option) => {
-      const tone = environmentTone(option.environmentId)
-      return (
-        <ScopeChip
-          key={option.environmentId}
-          label={option.label}
-          selected={option.environmentId === pathEnvironmentId}
-          statusColor={tone.color}
-          accessibilityLabel={`${option.label}, ${tone.label}`}
-          onSelect={() => navigateScope(option.environmentId)}
-        />
-      )
-    })
-  }
-
-  return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      style={scrollHostStyle}
-      contentContainerStyle={styles.scroll}
-      accessibilityRole="tablist"
-      accessibilityLabel="Project and environments"
-    >
-      <View style={[panelStyles.segmentGroup, styles.group]}>
-        {/* Project is always first and never collapses into the picker. */}
-        <ScopeChip
-          label="Project"
-          selected={baseSelected}
-          accessibilityLabel="Project"
-          onSelect={() => navigateScope()}
-        />
-        {environmentControl()}
-        <ScopeChip
-          label="Settings"
-          selected={sectionTab === 'settings'}
-          accessibilityLabel={
-            baseSelected ? 'Project settings' : 'Environment settings'
-          }
-          onSelect={() =>
-            router.push(
-              projectComposeSectionHref(
-                orgId,
-                projectId,
-                'settings',
-                baseSelected ? null : pathEnvironmentId,
-              ) as Href,
-            )
-          }
-        />
-      </View>
-    </ScrollView>
-  )
-}
-
 /**
  * Project area nav. Managed projects only — compose Overview / Compose /
  * Services / Hosting / Servers tabs live inside the compose surface chrome.
@@ -406,17 +195,6 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     justifyContent: 'center',
     overflow: 'hidden',
-  },
-  chipContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    flexShrink: 0,
   },
   tabText: {
     color: colors.textDim,

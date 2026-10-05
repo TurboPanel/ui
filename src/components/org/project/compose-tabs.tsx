@@ -47,7 +47,6 @@ import {
   VolumeResourceIcon,
 } from '@/components/icons/resource-icons'
 import { DraftEnvironmentNotice } from '@/components/org/project/draft-environment-notice'
-import { OverviewEnvironmentsPanel } from '@/components/org/project/overview-environments-panel'
 import { ComposeBasePanel } from '@/components/org/compose-base-panel'
 import { appFactsByService, type ServiceAppFacts } from '@/lib/compose/app-facts'
 import { composePrincipalAliases } from '@/lib/compose/principals-document'
@@ -974,7 +973,7 @@ export function ComposeServicesTab() {
             onSaveEnvironmentCompose={handleSaveEnvironmentCompose}
           />,
         )}
-        {draft ? <DraftEnvironmentNotice /> : <OverviewEnvironmentsPanel />}
+        {draft ? <DraftEnvironmentNotice /> : null}
       </View>
     </View>
   )

@@ -12,7 +12,7 @@ import {
   StatusDot,
 } from '@/components/ui'
 import { useProjectContext } from '@/components/org/project/project-context'
-import { OverviewEnvironmentsPanel } from '@/components/org/project/overview-environments-panel'
+import { SystemEnvironmentPanel } from '@/components/org/project/overview-environments-panel'
 import {
   SYSTEM_COMPONENT_NOT_PROVISIONED_ERROR,
   SYSTEM_RECONCILE_UNAVAILABLE_ERROR,
@@ -314,7 +314,7 @@ export function SystemProjectOverviewPanel() {
 
   return (
     <View style={styles.root}>
-      <OverviewEnvironmentsPanel />
+      <SystemEnvironmentPanel />
 
       <SectionPanel title="Platform component" hint="Read only">
         <View style={styles.badgeRow}>

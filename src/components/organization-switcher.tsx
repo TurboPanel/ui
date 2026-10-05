@@ -199,8 +199,8 @@ export function OrganizationSwitcherSegment({ orgId }: OrganizationSwitcherSegme
 
         <View style={styles.footerRow}>
           <FooterAction
-            label="Manage"
-            accessibilityLabel="Manage Organization"
+            label="Settings"
+            accessibilityLabel="Organization settings"
             onPress={openSettings}
             icon={<GearIcon size={14} color={colors.textChip} />}
           />
