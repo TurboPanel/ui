@@ -33,7 +33,7 @@ Main product shell for signed-in users. Web keeps the sidebar + narrow-viewport 
 | Route | Component | Purpose |
 |-------|-----------|---------|
 | `/<orgId>/overview` | redirect | Retired: the organization opens on Projects (`defaultOrgDashboardHref`) |
-| `/<orgId>/activity` | `activity-section.tsx` | Activity. Until the org-wide deploy feed lands it shows the notifications inbox (the bell's list); native tab and web sidebar |
+| `/<orgId>/activity` | `activity-section.tsx` | Org Activity (owners/managers; `useCan('organization','…','organization:manage')`, others get a sentence): running and recently failed (7 days) deploys, restarts and stops from `GET /organizations/:id/activity`, polled every 2 s (`ACTIVITY_POLL_MS`, `src/lib/queries/activity.ts`; paused while the tab is hidden). All / In progress / Failed filter, 25 per page (Previous / Next). Crash states and step progress are not served by the API yet, so there is no such column. Native tab and web sidebar |
 | `/<orgId>/servers` | `servers-overview-section.tsx` | Fleet Detail/Summary — batch update, row/tile opens control panel |
 | `/<orgId>/servers/[serverId]` | `server-detail-section.tsx` | Server control panel (Overview, Control, Time, Network, Metrics tabs) |
 | `/<orgId>/servers/datacenters` | `datacenters-overview-section.tsx` | Org datacenter inventory (private subnets). A datacenter is a logical routing domain of one or more mutually routable subnets — not a building; a server may belong to several. Table carries a Routing column (`P{priority}` + Trusted/Untrusted chip from the list payload). Empty list + **+ Datacenter** (no auto-opened create form). **+ Datacenter** when ≥1 server reports a private IP; opens `/servers/datacenters/new` |

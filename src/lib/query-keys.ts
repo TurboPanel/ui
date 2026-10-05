@@ -328,6 +328,10 @@ export const queryKeys = {
         logs: (environmentId: string) => ['org', orgId, 'managed', environmentId, 'logs'] as const,
       },
 
+      /** The org-wide activity feed (running and recently failed deploys). */
+      activity: (filter: string, offset: number) =>
+        ['org', orgId, 'activity', filter, offset] as const,
+
       /** The people in the organization (owners and managers). */
       members: ['org', orgId, 'members'] as const,
 

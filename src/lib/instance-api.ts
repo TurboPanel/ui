@@ -9066,6 +9066,55 @@ export async function deleteNotificationChannel(
   )
 }
 
+export type OrganizationActivityFilter = 'all' | 'deploying' | 'failed'
+
+export type OrganizationActivityItem = {
+  /** The command id. */
+  id: string
+  projectId: string | null
+  projectName: string | null
+  environmentId: string | null
+  environmentName: string | null
+  serverId: string
+  action: 'deploy' | 'start' | 'restart' | 'stop'
+  state: 'deploying' | 'failed'
+  startedAt: string
+  /** Not recorded yet; always null. */
+  step: number | null
+  totalSteps: number | null
+  durationSecs: number
+  errorMessage: string | null
+  /** Not recorded yet; always null. */
+  crashCount: number | null
+}
+
+export type OrganizationActivityPage = {
+  ok: true
+  items: OrganizationActivityItem[]
+  total: number
+  hasMore: boolean
+}
+
+/**
+ * Running and recently failed deploys, restarts and stops across the
+ * organization, newest first. Owners and managers only (403 otherwise); poll it.
+ */
+export async function fetchOrganizationActivity(
+  orgId: string,
+  params: Readonly<{ filter?: OrganizationActivityFilter; limit?: number; offset?: number }> = {}
+): Promise<OrganizationActivityPage> {
+  const query = new URLSearchParams()
+  if (params.filter) query.set('filter', params.filter)
+  if (params.limit !== undefined) query.set('limit', String(params.limit))
+  if (params.offset !== undefined) query.set('offset', String(params.offset))
+  const suffix = query.size > 0 ? `?${query.toString()}` : ''
+  return await apiFetch(
+    `${CLIENT_API}/organizations/${encodeURIComponent(orgId)}/activity${suffix}`,
+    undefined,
+    orgId
+  )
+}
+
 export type OrganizationMemberRole = 'owner' | 'manager' | 'member'
 
 export type OrganizationMember = {
