@@ -34,6 +34,7 @@ export function ProjectSettingsScreen() {
   const repositories = useRepositories(orgId, { enabled: Boolean(project?.repositoryId) })
   const [edit, setEdit] = useState<{ name: string; description: string } | null>(null)
   const [busy, setBusy] = useState<'general' | 'move' | 'names' | null>(null)
+  const [dangerOpen, setDangerOpen] = useState(false)
 
   const git = useMemo(
     () => (project ? projectGitFacts(project, repositories.data?.repositories ?? []) : null),
@@ -97,16 +98,18 @@ export function ProjectSettingsScreen() {
       onOpenBaseCompose={() => router.push(projectComposeHref(orgId, projectId) as Href)}
       danger={
         canOwn && projectAllowsMutations
-          ? (close) => (
+          ? (
               <ProjectDeletePanel
                 orgId={orgId}
                 project={project}
-                onCancel={close}
+                onCancel={() => setDangerOpen(false)}
                 onDeleted={() => router.replace(`/${orgId}/projects` as Href)}
               />
             )
           : null
       }
+      dangerOpen={dangerOpen}
+      onToggleDanger={() => setDangerOpen((open) => !open)}
     />
   )
 }

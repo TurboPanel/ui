@@ -183,9 +183,18 @@ describe('ProjectSettingsScreen', () => {
   it('returns to the project list after the project is deleted', () => {
     const { rerender } = render(<ProjectSettingsScreen />)
     expect(h.view.danger).not.toBeNull()
-    const panel = h.view.danger?.(vi.fn()) as { props: { onDeleted: () => void } }
+    const panel = h.view.danger as { props: { onDeleted: () => void } }
     panel.props.onDeleted()
     expect(h.replace).toHaveBeenCalledWith('/o/projects')
     rerender(<ProjectSettingsScreen />)
+  })
+
+  it('toggles the delete panel and closes it from the panel Cancel', () => {
+    render(<ProjectSettingsScreen />)
+    expect(h.view.dangerOpen).toBe(false)
+    act(() => h.view.onToggleDanger())
+    expect(h.view.dangerOpen).toBe(true)
+    act(() => (h.view.danger as { props: { onCancel: () => void } }).props.onCancel())
+    expect(h.view.dangerOpen).toBe(false)
   })
 })

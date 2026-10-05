@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { Text, View } from 'react-native'
 import { TextField, Toggle } from '@/components/ui'
 import { ActionButton, ListGroup, ListRow, SectionHeading } from '@/components/ui/v4'
@@ -52,8 +52,10 @@ export type ProjectSettingsViewProps = Readonly<{
   git: ProjectGitFacts | null
   onOpenRepositories: () => void
   onOpenBaseCompose: () => void
-  /** The delete panel (given a way to close it); present only for the organization owner. */
-  danger: ((close: () => void) => ReactNode) | null
+  /** The delete panel; present only for the organization owner. */
+  danger: ReactNode | null
+  dangerOpen: boolean
+  onToggleDanger: () => void
 }>
 
 function GeneralSection({
@@ -182,8 +184,11 @@ function ContainerNamesSection({
   )
 }
 
-function DangerSection({ panel }: Readonly<{ panel: (close: () => void) => ReactNode }>) {
-  const [open, setOpen] = useState(false)
+function DangerSection({
+  panel,
+  open,
+  onToggle,
+}: Readonly<{ panel: ReactNode; open: boolean; onToggle: () => void }>) {
   return (
     <View>
       <SectionHeading title="Danger zone" danger />
@@ -193,11 +198,11 @@ function DangerSection({ panel }: Readonly<{ panel: (close: () => void) => React
           sub="Removes the project, its environments and what they run."
           danger
           value={open ? 'Hide' : undefined}
-          onPress={() => setOpen((value) => !value)}
+          onPress={onToggle}
           accessibilityLabel="Delete this project"
         />
       </ListGroup>
-      {open ? <View>{panel(() => setOpen(false))}</View> : null}
+      {open ? <View>{panel}</View> : null}
     </View>
   )
 }
@@ -248,7 +253,9 @@ export function ProjectSettingsView(props: ProjectSettingsViewProps) {
           />
         </ListGroup>
       </View>
-      {props.danger ? <DangerSection panel={props.danger} /> : null}
+      {props.danger ? (
+        <DangerSection panel={props.danger} open={props.dangerOpen} onToggle={props.onToggleDanger} />
+      ) : null}
     </View>
   )
 }

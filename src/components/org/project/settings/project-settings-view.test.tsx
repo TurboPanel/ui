@@ -66,11 +66,9 @@ function props(over: Partial<ProjectSettingsViewProps> = {}): ProjectSettingsVie
     git: { repository: 'acme/shop', pushTiming: 'Only after CI passes' },
     onOpenRepositories: vi.fn(),
     onOpenBaseCompose: vi.fn(),
-    danger: (close) => (
-      <button type="button" onClick={close}>
-        delete panel
-      </button>
-    ),
+    danger: <div>delete panel</div>,
+    dangerOpen: false,
+    onToggleDanger: vi.fn(),
     ...over,
   }
 }
@@ -180,11 +178,13 @@ describe.each(SCENARIOS)('project settings ($name)', (scenario) => {
     expect(screen.queryByRole('heading', { name: 'Danger zone' })).toBeNull()
   })
 
-  it('opens the delete panel on press and closes it again', () => {
-    render(<ProjectSettingsView {...props()} />)
+  it('shows the delete panel only while open, and asks to toggle it on press', () => {
+    const onToggleDanger = vi.fn()
+    const { rerender } = render(<ProjectSettingsView {...props({ onToggleDanger })} />)
     expect(screen.queryByText('delete panel')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Delete this project' }))
-    fireEvent.click(screen.getByText('delete panel'))
-    expect(screen.queryByText('delete panel')).toBeNull()
+    expect(onToggleDanger).toHaveBeenCalledTimes(1)
+    rerender(<ProjectSettingsView {...props({ onToggleDanger, dangerOpen: true })} />)
+    expect(screen.getByText('delete panel')).toBeTruthy()
   })
 })
