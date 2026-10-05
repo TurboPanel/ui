@@ -9,7 +9,6 @@
 import { createElement, type ReactNode } from 'react'
 import { cssVarRef, paletteFor, type ColorScheme, type PaletteKey } from '@/lib/theme-palettes'
 
-type Style = unknown
 type Props = Readonly<Record<string, unknown> & { children?: ReactNode }>
 
 export type Scenario = Readonly<{ name: string; os: 'web' | 'ios'; scheme: ColorScheme }>
@@ -39,16 +38,16 @@ export function token(scenario: Scenario, key: PaletteKey): string {
   return scenario.os === 'web' ? cssVarRef(key) : paletteFor(scenario.scheme)[key]
 }
 
-export function flatten(style: Style): Record<string, unknown> {
+export function flatten(style: unknown): Record<string, unknown> {
   if (!style) return {}
   if (Array.isArray(style)) return Object.assign({}, ...style.map(flatten))
-  if (typeof style === 'function') return flatten((style as (s: { pressed: boolean }) => Style)({ pressed: false }))
+  if (typeof style === 'function') return flatten((style as (s: { pressed: boolean }) => unknown)({ pressed: false }))
   return style as Record<string, unknown>
 }
 
 /** The flattened style a component put on a DOM node. */
 export function styleOf(element: Element | null | undefined): Record<string, unknown> {
-  const raw = element?.getAttribute('data-style')
+  const raw = (element as HTMLElement | null | undefined)?.dataset.style
   return raw ? (JSON.parse(raw) as Record<string, unknown>) : {}
 }
 

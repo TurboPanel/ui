@@ -6,6 +6,12 @@ import { RADIUS } from '@/lib/v4/ui-scale'
 
 export type NoticeTone = 'info' | 'ok' | 'busy' | 'warn' | 'bad'
 
+/** One trailing full stop off, so "A." and "B" join as "A. B". */
+function withoutFinalStop(text: string): string {
+  const trimmed = text.trimEnd()
+  return trimmed.endsWith('.') ? trimmed.slice(0, -1) : trimmed
+}
+
 const styles = themedStyles((p) => ({
   notice: {
     flexDirection: 'row',
@@ -70,7 +76,7 @@ export function Notice({
   const toneStyle = tone === 'info' ? undefined : s[tone]
   const spoken = [title, body, errorLine]
     .filter((part): part is string => Boolean(part))
-    .map((part) => part.replace(/[.\s]+$/, ''))
+    .map(withoutFinalStop)
     .join('. ')
   return (
     <View

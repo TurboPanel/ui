@@ -7,6 +7,12 @@ import {
   type GlyphShape,
 } from '@/lib/v4/status-vocab'
 
+/** A key from what the shape is; no two shapes of one glyph share it. */
+function shapeKey(shape: GlyphShape): string {
+  if (shape.kind === 'path') return `path:${shape.d}`
+  return shape.kind === 'circle' ? `circle:${shape.r}:${shape.paint}` : `rect:${shape.rx}`
+}
+
 function shapePaint(shape: GlyphShape, color: string) {
   if (shape.paint === 'fill') return { fill: color }
   return {
@@ -51,9 +57,8 @@ export function StatusGlyph({
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
     >
-      {GLYPHS[glyph].map((shape, index) => (
-        // The shapes of one glyph never reorder, so the index is a stable key.
-        <Shape key={index} shape={shape} glyph={glyph} color={color} />
+      {GLYPHS[glyph].map((shape) => (
+        <Shape key={shapeKey(shape)} shape={shape} glyph={glyph} color={color} />
       ))}
     </Svg>
   )
