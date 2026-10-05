@@ -64,6 +64,6 @@ describe('hosting certificate queries', () => {
     await act(async () => {
       await result.current.run()
     })
-    expect(result.current.data).toEqual({ dns: { ready: false } })
+    await waitFor(() => expect(result.current.data).toEqual({ dns: { ready: false } }))
   })
 })
