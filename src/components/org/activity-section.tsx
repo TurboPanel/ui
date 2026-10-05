@@ -23,7 +23,7 @@ import { usePullToRefresh } from '@/lib/pull-to-refresh'
 import { ACTIVITY_PAGE_SIZE, useOrganizationActivity } from '@/lib/queries/activity'
 import { useCan } from '@/lib/query-client'
 import { colors, spacing, webPointer } from '@/lib/theme'
-import { userErrorMessage } from '@/lib/user-error'
+import { plainStepFailureMessage, userErrorMessage } from '@/lib/user-error'
 
 const FILTERS: readonly { id: OrganizationActivityFilter; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -68,7 +68,7 @@ function ActivityRow({
       </DataTableCell>
       <DataTableCell column={detail}>
         <Text style={styles.mutedText} numberOfLines={2}>
-          {item.errorMessage ?? '—'}
+          {plainStepFailureMessage(item.errorMessage) ?? '—'}
         </Text>
       </DataTableCell>
     </DataTableRow>
