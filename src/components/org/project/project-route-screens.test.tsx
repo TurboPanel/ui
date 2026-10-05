@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ProjectRecord } from '@/lib/instance-api'
 import {
   EnvironmentComposeScreen,
+  EnvironmentConfigurationTabScreen,
   EnvironmentDeploymentsScreen,
   EnvironmentOverviewScreen,
   EnvironmentSettingsScreen,
@@ -44,6 +45,9 @@ vi.mock('@/components/org/project/managed-focus-tab', () => ({
   ManagedFocusTab: ({ focus }: Readonly<{ focus: string }>) => (
     <div data-testid="managed" data-focus={focus} />
   ),
+}))
+vi.mock('@/components/org/project/configuration/environment-configuration', () => ({
+  EnvironmentConfigurationScreen: () => <div data-testid="configuration" />,
 }))
 vi.mock('@/components/org/project/project-overview-tab', () => ({
   ProjectOverviewTab: () => <div data-testid="compose-surface" />,
@@ -199,6 +203,19 @@ describe('environment tabs', () => {
     cleanup()
     setContext({ project: project({ type: 'managed', code: 'postgres' }) })
     render(<EnvironmentComposeScreen />)
+    expect(screen.getByTestId('managed')).toBeTruthy()
+  })
+
+  it('renders the Configuration tab for Compose, home for platform, managed focus for managed', () => {
+    render(<EnvironmentConfigurationTabScreen />)
+    expect(screen.getByTestId('configuration')).toBeTruthy()
+    cleanup()
+    setContext({ isSystemProject: true })
+    render(<EnvironmentConfigurationTabScreen />)
+    expect(redirectHref()).toBe('/o/projects/p/overview')
+    cleanup()
+    setContext({ project: project({ type: 'managed', code: 'postgres' }) })
+    render(<EnvironmentConfigurationTabScreen />)
     expect(screen.getByTestId('managed')).toBeTruthy()
   })
 

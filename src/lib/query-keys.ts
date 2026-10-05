@@ -209,6 +209,9 @@ export const queryKeys = {
         detail: (environmentId: string) => ['org', orgId, 'environment', environmentId] as const,
         deployPreview: (environmentId: string) =>
           ['org', orgId, 'environment', environmentId, 'deploy-preview'] as const,
+        /** Effective configuration and changes from the Base (no interval; invalidated by every config save). */
+        configView: (environmentId: string) =>
+          ['org', orgId, 'environment', environmentId, 'config-view'] as const,
         /** Deploy history page (no interval — invalidated by deploy mutations). */
         deployments: (environmentId: string) =>
           ['org', orgId, 'environment', environmentId, 'deployments'] as const,
