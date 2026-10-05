@@ -246,6 +246,10 @@ describe('Linux users', () => {
     expect(linuxUsers[1].runsAs.user).toBe('')
   })
 
+  it('lists every declared user once, sorted', () => {
+    expect(staging().linuxUserNames).toEqual(['staging-web', 'website'])
+  })
+
   it('tags a Base assignment as Base', () => {
     const { linuxUsers } = buildConfigViewModel({ envName: 'Staging', view: plainView() })
     expect(linuxUsers[0]).toMatchObject({

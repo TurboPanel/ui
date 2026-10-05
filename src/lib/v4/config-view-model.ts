@@ -39,6 +39,8 @@ export type ChangeRowModel = Readonly<{
   key: string
   area: ConfigViewChange['area']
   kind: ConfigViewChange['kind']
+  /** The field inside the app (`command`, `linuxUser`); `null` for a whole app, user or variable. */
+  field: string | null
   label: string
   /** "App web", "Variable", "Linux users". */
   where: string
@@ -118,6 +120,8 @@ export type ConfigViewModel = Readonly<{
   domains: readonly DomainRowModel[]
   variables: readonly VariableRowModel[]
   linuxUsers: readonly LinuxUserRowModel[]
+  /** Every Linux user the Base declares, for the "Run as" choice. */
+  linuxUserNames: readonly string[]
 }>
 
 function tagFor(source: ConfigSource, envName: string, isVariable = false): SourceTagModel {
@@ -187,6 +191,7 @@ function buildChanges(view: EnvironmentConfigViewResponse, envName: string): Cha
     key: change.key,
     area: change.area,
     kind: change.kind,
+    field: change.field,
     label: changeLabel(change),
     where: changeWhere(change),
     tag,
@@ -381,6 +386,11 @@ function buildLinuxUsers(envName: string, apps: readonly AppRowModel[]): LinuxUs
     }))
 }
 
+function linuxUserNames(view: EnvironmentConfigViewResponse): string[] {
+  const names = new Set([...view.base.linuxUsers, ...view.effective.linuxUsers].map((user) => user.name))
+  return [...names].sort((a, b) => a.localeCompare(b))
+}
+
 /** The whole Configuration tab, from one config-view answer. */
 export function buildConfigViewModel(input: Readonly<{
   envName: string
@@ -401,6 +411,7 @@ export function buildConfigViewModel(input: Readonly<{
     domains: buildDomains(view, envName),
     variables: buildVariables(view, envName),
     linuxUsers: buildLinuxUsers(envName, apps),
+    linuxUserNames: linuxUserNames(view),
   }
 }
 
