@@ -426,6 +426,14 @@ environment map layout (`map-layout.ts`), "Runs as" and Linux user rules (`linux
   The config-view keys use the compose service **name** (`svc:web:command`), not the flat `svc:{serviceId}:{row}` keys above, so the
   model reads the server's own labels. "Only changes from Base" swaps the page for one row per change. Variables show "Project" when
   they come from the project, and secret values are never shown.
+- **Editing on that tab is staged, then saved.** Row editors and the change buttons (Go back to Base, Make this the Base) only stage edits
+  (`config-edits.ts`, one per row key); the pending bar says "N unsaved changes" and **Save changes** runs `saveEdits` (`config-save.ts`):
+  fresh project, environment and variable data first, then Base compose, environment compose, variables (writes before deletes), using
+  `PATCH /projects/:id`, `PATCH /environments/:id` and the variable routes. It never deploys; a saved change goes live on the next deploy.
+  The writers (`config-compose.ts`) delete the environment's entry to go back (never `!reset`, which removes the Base value) and restate
+  `serviceKind` and `source.sourceId` in the environment's layer for any `x-turbopanel` change, because the control plane checks a layer
+  alone (a Node.js app "requires source"; `principal` is only valid on a site or Node.js app). Scope: one environment in the project means
+  the Base; a stand-alone environment (the control plane's rule: `services: !override` or `!reset`) means that environment only.
 - Copy uses the v4 words (Base, "{env} change", Follows the Base, Stands alone, Runs as). `vocabulary.test.ts` fails on
   banned words in module output and text literals.
 

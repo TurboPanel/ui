@@ -1,7 +1,14 @@
 import { useState, type ReactNode } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import {
+  LinuxUserEditor,
+  NewVariableEditor,
+  VariableEditor,
+} from '@/components/org/project/configuration/row-editors'
+import type { EditingApi } from '@/components/org/project/configuration/editing'
+import {
   ActionButton,
+  Notice,
   EmptyPanel,
   ListGroup,
   ListRow,
@@ -23,6 +30,14 @@ import {
   type LinuxUserRowModel,
   type VariableRowModel,
 } from '@/lib/v4/config-view-model'
+import {
+  goBackEdit,
+  makeBaseConfirmText,
+  makeBaseEdit,
+  stagedEditFor,
+  stagedNote,
+} from '@/lib/v4/config-edits'
+import type { EditTarget } from '@/lib/v4/config-edits'
 import { plural } from '@/lib/v4/text'
 
 const styles = themedStyles((p) => ({
@@ -33,6 +48,13 @@ const styles = themedStyles((p) => ({
   changeTop: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
   changeTitle: { ...typeStyle('bodyMedium', 'body'), color: p.text },
   changeSub: { ...typeStyle('body', 'footnote'), color: p.text3 },
+  changeActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+  },
   diff: { ...typeStyle('mono', 'mono'), color: p.text2 },
   was: { color: p.text3, textDecorationLine: 'line-through' },
   now: { color: p.text },
@@ -63,14 +85,99 @@ function Rows<T>({
   )
 }
 
+function ChangeRow({
+  change,
+  editing,
+}: Readonly<{ change: ChangeRowModel; editing?: EditingApi }>) {
+  const s = styles(usePalette())
+  const [confirming, setConfirming] = useState(false)
+  const actions = editing?.actionsFor(change)
+  const staged = editing ? stagedEditFor(editing.staged, change.key) : undefined
+  return (
+    <View>
+      <View
+        accessible
+        accessibilityLabel={`${change.label}: ${change.baseText} to ${change.envText}`}
+        style={s.changeRow}
+      >
+        <View style={s.changeTop}>
+          <Text style={s.changeTitle}>{change.label}</Text>
+          <SourceTag source={change.tag.source} label={change.tag.label} />
+        </View>
+        <Text style={s.changeSub}>{change.where}</Text>
+        <Text style={s.diff}>
+          <Text style={s.was}>{change.baseText}</Text>
+          {' → '}
+          <Text style={s.now}>{change.envText}</Text>
+        </Text>
+        {staged ? <Text style={s.changeSub}>{stagedNote(staged)}</Text> : null}
+      </View>
+      {editing && staged ? (
+        <View style={s.changeActions}>
+          <ActionButton
+            label="Undo"
+            variant="quiet"
+            size="sm"
+            accessibilityLabel={`Undo ${change.label}`}
+            onPress={() => editing.onUnstage(change.key)}
+          />
+        </View>
+      ) : null}
+      {editing && !staged && actions && (actions.goBack || actions.makeBase) ? (
+        <View style={s.changeActions}>
+          {actions.goBack ? (
+            <ActionButton
+              label="Go back to Base"
+              size="sm"
+              accessibilityLabel={`Go back to Base: ${change.label}`}
+              onPress={() => editing.onStage(goBackEdit(change, actions.goBack as EditTarget))}
+            />
+          ) : null}
+          {actions.makeBase ? (
+            <ActionButton
+              label="Make this the Base"
+              size="sm"
+              accessibilityLabel={`Make this the Base: ${change.label}`}
+              onPress={() => setConfirming(true)}
+            />
+          ) : null}
+        </View>
+      ) : null}
+      {editing && actions?.makeBase && confirming ? (
+        <Notice
+          tone="warn"
+          title="Make this the Base?"
+          body={makeBaseConfirmText(editing.envName, editing.others)}
+          actions={
+            <>
+              <ActionButton
+                label="Make this the Base"
+                size="sm"
+                accessibilityLabel={`Confirm: make ${change.label} the Base`}
+                onPress={() => {
+                  editing.onStage(makeBaseEdit(change, actions.makeBase as EditTarget))
+                  setConfirming(false)
+                }}
+              />
+              <ActionButton label="Cancel" variant="quiet" size="sm" onPress={() => setConfirming(false)} />
+            </>
+          }
+        />
+      ) : null}
+    </View>
+  )
+}
+
 export function ChangesSection({
   changes,
   envName,
   onShowEverything,
+  editing,
 }: Readonly<{
   changes: readonly ChangeRowModel[]
   envName: string
   onShowEverything: () => void
+  editing?: EditingApi
 }>) {
   const s = styles(usePalette())
   if (changes.length === 0) {
@@ -87,23 +194,7 @@ export function ChangesSection({
       <SectionHeading title="Changes from Base" note={plural(changes.length, 'change')} />
       <ListGroup>
         {changes.map((change) => (
-          <View
-            key={change.key}
-            accessible
-            accessibilityLabel={`${change.label}: ${change.baseText} to ${change.envText}`}
-            style={s.changeRow}
-          >
-            <View style={s.changeTop}>
-              <Text style={s.changeTitle}>{change.label}</Text>
-              <SourceTag source={change.tag.source} label={change.tag.label} />
-            </View>
-            <Text style={s.changeSub}>{change.where}</Text>
-            <Text style={s.diff}>
-              <Text style={s.was}>{change.baseText}</Text>
-              {' → '}
-              <Text style={s.now}>{change.envText}</Text>
-            </Text>
-          </View>
+          <ChangeRow key={change.key} change={change} editing={editing} />
         ))}
       </ListGroup>
     </View>
@@ -192,14 +283,102 @@ export function DomainsSection({
   )
 }
 
+/** Undo for a row with an unsaved edit, else the edit button when the row can be edited. */
+function RowAction({
+  staged,
+  canEdit,
+  editLabel,
+  editName,
+  undoName,
+  onUndo,
+  onEdit,
+}: Readonly<{
+  staged: boolean
+  canEdit: boolean
+  editLabel: string
+  editName: string
+  undoName: string
+  onUndo: () => void
+  onEdit: () => void
+}>) {
+  if (staged) {
+    return (
+      <ActionButton label="Undo" variant="quiet" size="sm" accessibilityLabel={undoName} onPress={onUndo} />
+    )
+  }
+  if (!canEdit) return null
+  return (
+    <ActionButton
+      label={editLabel}
+      variant="quiet"
+      size="sm"
+      accessibilityLabel={editName}
+      onPress={onEdit}
+    />
+  )
+}
+
+function VariableRow({
+  variable,
+  editing,
+}: Readonly<{ variable: VariableRowModel; editing?: EditingApi }>) {
+  const [open, setOpen] = useState(false)
+  const facts = editing?.variableFacts(variable.name) ?? null
+  const staged = editing ? stagedEditFor(editing.staged, variable.key) : undefined
+  const sub = [variable.usedFor, variable.sourceNote, staged ? stagedNote(staged) : '']
+    .filter((part) => part !== '')
+    .join(' · ')
+  const editable = editing !== undefined && facts?.editable === true
+  return (
+    <View>
+      <ListRow
+        title={variable.name}
+        sub={sub}
+        value={variable.valueText}
+        chips={<SourceTag source={variable.tag.source} label={variable.tag.label} />}
+        trailing={
+          <RowAction
+            staged={staged !== undefined}
+            canEdit={editable}
+            editLabel="Edit"
+            editName={`Edit ${variable.name}`}
+            undoName={`Undo ${variable.name}`}
+            onUndo={() => editing?.onUnstage(variable.key)}
+            onEdit={() => setOpen((value) => !value)}
+          />
+        }
+        accessibilityLabel={`${variable.name}, ${variable.isSecret ? 'secret' : variable.valueText}, ${variable.tag.label}`}
+      />
+      {open && editing && facts ? (
+        <VariableEditor
+          name={variable.name}
+          facts={facts}
+          was={variable.valueText}
+          editing={editing}
+          onClose={() => setOpen(false)}
+        />
+      ) : null}
+    </View>
+  )
+}
+
 export function VariablesSection({
   variables,
   envName,
-}: Readonly<{ variables: readonly VariableRowModel[]; envName: string }>) {
+  editing,
+}: Readonly<{
+  variables: readonly VariableRowModel[]
+  envName: string
+  editing?: EditingApi
+}>) {
   const s = styles(usePalette())
+  const [adding, setAdding] = useState(false)
+  const add = editing ? (
+    <ActionButton label="Add variable" size="sm" onPress={() => setAdding((value) => !value)} />
+  ) : undefined
   return (
     <View style={s.section}>
-      <SectionHeading title="Variables" note={plural(variables.length, 'variable')} />
+      <SectionHeading title="Variables" note={plural(variables.length, 'variable')} action={add} />
       <ListGroup
         foot={`Variables set on the project reach every environment. A ${envName} change replaces the project value here only. Secret values are never shown.`}
         empty={
@@ -214,25 +393,66 @@ export function VariablesSection({
           <Rows
             rows={variables}
             render={(variable) => (
-              <ListRow
-                key={variable.key}
-                title={variable.name}
-                sub={[variable.usedFor, variable.sourceNote].filter((part) => part !== '').join(' · ')}
-                value={variable.valueText}
-                chips={<SourceTag source={variable.tag.source} label={variable.tag.label} />}
-                accessibilityLabel={`${variable.name}, ${variable.isSecret ? 'secret' : variable.valueText}, ${variable.tag.label}`}
-              />
-          )}
-        />
+              <VariableRow key={variable.key} variable={variable} editing={editing} />
+            )}
+          />
         )}
+        {adding && editing ? (
+          <NewVariableEditor editing={editing} onClose={() => setAdding(false)} />
+        ) : null}
       </ListGroup>
+    </View>
+  )
+}
+
+function LinuxUserRow({
+  user,
+  editing,
+}: Readonly<{ user: LinuxUserRowModel; editing?: EditingApi }>) {
+  const [open, setOpen] = useState(false)
+  const key = `svc:${user.serviceName}:linuxUser`
+  const staged = editing ? stagedEditFor(editing.staged, key) : undefined
+  const sub = [user.access, staged ? stagedNote(staged) : ''].filter((part) => part !== '').join(' · ')
+  const canEdit = editing !== undefined && editing.linuxUserNames.length > 0
+  return (
+    <View>
+      <ListRow
+        title={user.serviceName}
+        sub={sub}
+        chips={<SourceTag source={user.tag.source} label={user.tag.label} />}
+        trailing={
+          <>
+            <RunsAsChip runsAs={user.runsAs} showSource={false} />
+            <RowAction
+              staged={staged !== undefined}
+              canEdit={canEdit}
+              editLabel="Change"
+              editName={`Change the Linux user of ${user.serviceName}`}
+              undoName={`Undo ${user.serviceName} runs as`}
+              onUndo={() => editing?.onUnstage(key)}
+              onEdit={() => setOpen((value) => !value)}
+            />
+          </>
+        }
+        accessibilityLabel={`${user.serviceName}, ${user.runsAs.label}, ${user.tag.label}`}
+      />
+      {open && editing ? (
+        <LinuxUserEditor
+          serviceName={user.serviceName}
+          current={user.runsAs.user}
+          hasOwnChange={user.isChange}
+          editing={editing}
+          onClose={() => setOpen(false)}
+        />
+      ) : null}
     </View>
   )
 }
 
 export function LinuxUsersSection({
   users,
-}: Readonly<{ users: readonly LinuxUserRowModel[] }>) {
+  editing,
+}: Readonly<{ users: readonly LinuxUserRowModel[]; editing?: EditingApi }>) {
   const s = styles(usePalette())
   if (users.length === 0) return null
   return (
@@ -244,16 +464,7 @@ export function LinuxUsersSection({
       <ListGroup>
         <Rows
           rows={users}
-          render={(user) => (
-            <ListRow
-              key={user.serviceName}
-              title={user.serviceName}
-              sub={user.access}
-              chips={<SourceTag source={user.tag.source} label={user.tag.label} />}
-              trailing={<RunsAsChip runsAs={user.runsAs} showSource={false} />}
-              accessibilityLabel={`${user.serviceName}, ${user.runsAs.label}, ${user.tag.label}`}
-            />
-          )}
+          render={(user) => <LinuxUserRow key={user.serviceName} user={user} editing={editing} />}
         />
       </ListGroup>
     </View>

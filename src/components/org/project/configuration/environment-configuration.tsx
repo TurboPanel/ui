@@ -1,5 +1,5 @@
 import { useRouter, type Href } from 'expo-router'
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { Linking, Pressable, Text, View } from 'react-native'
 import {
   AppsSection,
@@ -9,6 +9,8 @@ import {
   LinuxUsersSection,
   VariablesSection,
 } from '@/components/org/project/configuration/config-sections'
+import type { EditingApi } from '@/components/org/project/configuration/editing'
+import { SaveBar } from '@/components/org/project/configuration/save-bar'
 import { useProjectContext } from '@/components/org/project/project-context'
 import { LoadingState } from '@/components/ui'
 import { ActionButton, Notice } from '@/components/ui/v4'
@@ -19,13 +21,26 @@ import {
   projectEnvironmentHostingHref,
   projectServiceHref,
 } from '@/lib/project-navigation'
+import { useSaveConfiguration } from '@/lib/queries/configuration'
 import { useEnvironmentConfigView } from '@/lib/queries/environments'
+import { useVariables } from '@/lib/queries/variables'
 import { environmentDisplayName } from '@/lib/resource-labels'
 import { webPointer } from '@/lib/theme'
+import {
+  changeActions,
+  environmentDetachedFromBase,
+  scopeDecision,
+  stageEdit,
+  unstageEdit,
+  variableFacts,
+  type SaveProblem,
+  type StagedEdit,
+} from '@/lib/v4/config-edits'
 import { buildConfigViewModel, type ConfigViewModel } from '@/lib/v4/config-view-model'
 
 const styles = themedStyles((p) => ({
   page: { gap: 24 },
+  stack: { gap: 16 },
   lede: { ...typeStyle('body', 'subhead'), color: p.text3 },
   top: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 12 },
   filter: {
@@ -89,6 +104,7 @@ export function EnvironmentConfigurationView({
   onOpenUrl,
   onManageDomains,
   onOpenBase,
+  editing,
 }: Readonly<{
   model: ConfigViewModel
   /** The project has more than one environment (the Base can differ from this one). */
@@ -97,6 +113,8 @@ export function EnvironmentConfigurationView({
   onOpenUrl: (url: string) => void
   onManageDomains: () => void
   onOpenBase: () => void
+  /** Present when the person can edit; absent means every row is read-only. */
+  editing?: EditingApi
 }>) {
   const s = styles(usePalette())
   const [only, setOnly] = useState(false)
@@ -126,6 +144,7 @@ export function EnvironmentConfigurationView({
           changes={model.changes}
           envName={model.envName}
           onShowEverything={() => setOnly(false)}
+          editing={editing}
         />
       ) : (
         <>
@@ -135,8 +154,12 @@ export function EnvironmentConfigurationView({
             onOpenUrl={onOpenUrl}
             onManage={onManageDomains}
           />
-          <VariablesSection variables={model.variables} envName={model.envName} />
-          <LinuxUsersSection users={model.linuxUsers} />
+          <VariablesSection
+            variables={model.variables}
+            envName={model.envName}
+            editing={editing}
+          />
+          <LinuxUsersSection users={model.linuxUsers} editing={editing} />
           <DataSection data={model.data} />
         </>
       )}
@@ -146,17 +169,90 @@ export function EnvironmentConfigurationView({
 
 /** Environment Configuration tab: everything this environment runs, and where each value comes from. */
 export function EnvironmentConfigurationScreen() {
+  const s = styles(usePalette())
   const router = useRouter()
-  const { orgId, projectId, environments, selectedEnvironment, pathEnvironmentId } =
-    useProjectContext()
+  const {
+    orgId,
+    projectId,
+    environments,
+    selectedEnvironment,
+    pathEnvironmentId,
+    canOwn,
+    projectAllowsMutations,
+  } = useProjectContext()
   const environmentId = pathEnvironmentId ?? selectedEnvironment?.id ?? ''
   const query = useEnvironmentConfigView(orgId, environmentId)
+  const projectVariables = useVariables(orgId, { projectId })
+  const environmentVariables = useVariables(orgId, { environmentId })
+  const save = useSaveConfiguration(orgId, projectId, environmentId)
   const environment = environments.find((item) => item.id === environmentId)
   const envName = environment ? environmentDisplayName(environment) : 'This environment'
   const model = useMemo(
     () => (query.data ? buildConfigViewModel({ envName, view: query.data }) : null),
     [query.data, envName],
   )
+  const [staged, setStaged] = useState<readonly StagedEdit[]>([])
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [problems, setProblems] = useState<readonly SaveProblem[]>([])
+  const [savedCount, setSavedCount] = useState(0)
+
+  const stage = useCallback((edit: StagedEdit) => {
+    setStaged((current) => stageEdit(current, edit))
+    setSavedCount(0)
+  }, [])
+  const unstage = useCallback((key: string) => setStaged((current) => unstageEdit(current, key)), [])
+  const discard = useCallback(() => {
+    setStaged([])
+    setSaveError(null)
+    setProblems([])
+  }, [])
+  const saveAll = useCallback(async () => {
+    setSaveError(null)
+    setProblems([])
+    const result = await save.run(staged)
+    if (!result.ok) {
+      setSaveError(save.actionError ?? 'Could not save these changes.')
+      return
+    }
+    setStaged(result.value.remaining)
+    setProblems(result.value.problems)
+    setSaveError(result.value.error)
+    setSavedCount(result.value.error === null ? result.value.saved : 0)
+  }, [save, staged])
+
+  const editable = canOwn && projectAllowsMutations
+  const envVariableRecords = environmentVariables.data?.variables
+  const projectVariableRecords = projectVariables.data?.variables
+  const editing = useMemo<EditingApi | undefined>(() => {
+    if (!editable || !model || !envVariableRecords || !projectVariableRecords) return undefined
+    return {
+      envName,
+      staged,
+      scopeMode: scopeDecision(environments.length, model.followsBase),
+      others: environments
+        .filter((item) => item.id !== environmentId)
+        .map((item) => ({
+          name: environmentDisplayName(item),
+          standsAlone: environmentDetachedFromBase(item.options?.compose),
+        })),
+      linuxUserNames: model.linuxUserNames,
+      variableFacts: (name) => variableFacts(name, envVariableRecords, projectVariableRecords),
+      actionsFor: (change) => changeActions(change, envVariableRecords, model.followsBase),
+      onStage: stage,
+      onUnstage: unstage,
+    }
+  }, [
+    editable,
+    model,
+    envVariableRecords,
+    projectVariableRecords,
+    envName,
+    staged,
+    environments,
+    environmentId,
+    stage,
+    unstage,
+  ])
 
   if (query.isPending) return <LoadingState label="Loading configuration…" />
   if (query.error || !model) {
@@ -170,19 +266,39 @@ export function EnvironmentConfigurationScreen() {
     )
   }
   return (
-    <EnvironmentConfigurationView
-      model={model}
-      multiple={environments.length > 1}
-      onOpenApp={(serviceId) => router.push(projectServiceHref(orgId, projectId, serviceId) as Href)}
-      onOpenUrl={(url) => {
-        Linking.openURL(url).catch(() => {
-          // A blocked link has nothing to recover; the domain stays listed.
-        })
-      }}
-      onManageDomains={() =>
-        router.push(projectEnvironmentHostingHref(orgId, projectId, environmentId) as Href)
-      }
-      onOpenBase={() => router.push(projectBaseHref(orgId, projectId) as Href)}
-    />
+    <View style={s.stack}>
+      {savedCount > 0 && staged.length === 0 ? (
+        <Notice
+          tone="ok"
+          title="Saved"
+          body={`The changes go live when you deploy ${envName}.`}
+        />
+      ) : null}
+      <EnvironmentConfigurationView
+        model={model}
+        multiple={environments.length > 1}
+        editing={editing}
+        onOpenApp={(serviceId) => router.push(projectServiceHref(orgId, projectId, serviceId) as Href)}
+        onOpenUrl={(url) => {
+          Linking.openURL(url).catch(() => {
+            // A blocked link has nothing to recover; the domain stays listed.
+          })
+        }}
+        onManageDomains={() =>
+          router.push(projectEnvironmentHostingHref(orgId, projectId, environmentId) as Href)
+        }
+        onOpenBase={() => router.push(projectBaseHref(orgId, projectId) as Href)}
+      />
+      <SaveBar
+        edits={staged}
+        envName={envName}
+        saving={save.isPending}
+        error={saveError}
+        problems={problems}
+        onSave={() => void saveAll()}
+        onDiscard={discard}
+        onUndo={unstage}
+      />
+    </View>
   )
 }

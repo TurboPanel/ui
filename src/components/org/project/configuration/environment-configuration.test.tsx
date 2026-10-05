@@ -37,6 +37,12 @@ vi.mock('@/components/org/project/project-context', () => ({
 vi.mock('@/lib/queries/environments', () => ({
   useEnvironmentConfigView: () => state.query,
 }))
+vi.mock('@/lib/queries/variables', () => ({
+  useVariables: () => ({ data: { variables: [] } }),
+}))
+vi.mock('@/lib/queries/configuration', () => ({
+  useSaveConfiguration: () => ({ run: vi.fn(), isPending: false, actionError: null }),
+}))
 vi.mock('@/components/ui', () => ({
   LoadingState: ({ label }: Readonly<{ label: string }>) => <div role="progressbar">{label}</div>,
 }))
