@@ -134,7 +134,9 @@ export function homeProject(
     sub: projectSub(kind, environments.length),
     baseLine: base ? baseLine(base) : null,
     runs: base ? baseRunsAs(base, name) : [],
-    environments: rows,
+    // A platform project has one environment per server, all named alike: its
+    // card stays plain and only the dot carries their status.
+    environments: kind === 'platform' ? [] : rows,
     status: worstStatus(rows.map((row) => row.status)),
   }
 }

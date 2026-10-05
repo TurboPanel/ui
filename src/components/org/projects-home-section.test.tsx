@@ -15,6 +15,7 @@ const state = vi.hoisted(() => ({
   containers: { data: undefined, refetch: vi.fn() } as Record<string, unknown>,
   views: {} as Record<string, unknown>,
   latest: {} as Record<string, unknown>,
+  readIds: { views: [] as string[], latest: [] as string[] },
   recent: [] as string[],
   platformIds: [] as string[],
   pullHandler: undefined as undefined | (() => Promise<void> | void),
@@ -37,8 +38,14 @@ vi.mock('@/lib/queries', () => ({
 vi.mock('@/lib/queries/environments', () => ({ useEnvironments: () => state.environments }))
 vi.mock('@/lib/queries/containers', () => ({ useContainers: () => state.containers }))
 vi.mock('@/lib/queries/environment-cards', () => ({
-  useEnvironmentConfigViews: () => ({ views: state.views, isLoading: false }),
-  useLatestDeployments: () => ({ latest: state.latest }),
+  useEnvironmentConfigViews: (_org: string, ids: string[]) => {
+    state.readIds.views = ids
+    return { views: state.views, isLoading: false }
+  },
+  useLatestDeployments: (_org: string, ids: string[]) => {
+    state.readIds.latest = ids
+    return { latest: state.latest }
+  },
 }))
 vi.mock('@/lib/recent-projects', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/recent-projects')>()),
@@ -167,6 +174,33 @@ describe.each(SCENARIOS)('Projects home ($name)', (scenario) => {
   it('shows the workspace of each project when every workspace is listed', () => {
     render(<ProjectsHomeSection orgId="o" />)
     expect(screen.getAllByText(/· Acme$/).length).toBeGreaterThan(0)
+  })
+
+  it('reads configuration and deploys only for Compose projects, never per managed or platform environment', () => {
+    state.projects = {
+      ...state.projects,
+      data: {
+        projects: [
+          project('p1', 'Shop', 'docker-compose'),
+          project('p2', 'Orders DB', 'managed'),
+          project('p3', 'Platform', 'system'),
+        ],
+      },
+    }
+    state.environments = {
+      ...state.environments,
+      data: {
+        environments: [
+          environment('e1', 'Production', 'p1'),
+          environment('e2', 'Production', 'p2'),
+          environment('e3', 'HTTP Ingress', 'p3'),
+          environment('e4', 'HTTP Ingress', 'p3'),
+        ],
+      },
+    }
+    render(<ProjectsHomeSection orgId="o" workspaceId="platform" />)
+    expect(state.readIds.views).toEqual(['e1'])
+    expect(state.readIds.latest).toEqual(['e1'])
   })
 
   it('omits the running count until containers arrive', () => {

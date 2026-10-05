@@ -181,13 +181,15 @@ export function ProjectsHomeSection({
     const ids = new Set(projects.map((project) => project.id))
     return orEmptyArray(environmentsQuery.data?.environments).filter((env) => ids.has(env.projectId))
   }, [projects, environmentsQuery.data?.environments])
+  // Only Compose projects are read per environment (config-view, newest deploy):
+  // a platform project has one environment per server, so reading each would
+  // scale with the fleet.
   const composeEnvironmentIds = useMemo(() => {
     const compose = new Set(projects.filter(wantsConfigView).map((project) => project.id))
     return environments.filter((env) => compose.has(env.projectId)).map((env) => env.id)
   }, [projects, environments])
-  const allEnvironmentIds = useMemo(() => environments.map((env) => env.id), [environments])
   const { views } = useEnvironmentConfigViews(orgId, composeEnvironmentIds)
-  const { latest } = useLatestDeployments(orgId, allEnvironmentIds)
+  const { latest } = useLatestDeployments(orgId, composeEnvironmentIds)
 
   usePullToRefresh(async () => {
     await Promise.all([

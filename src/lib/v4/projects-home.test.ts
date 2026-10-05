@@ -196,6 +196,17 @@ describe('a project card', () => {
     expect(card.environments[0]?.host).toBeNull()
   })
 
+  it('gives a platform project no environment rows, only its status', () => {
+    const card = homeProject({
+      project: project({ metadata: { type: 'system' } }),
+      environments: [env('e1', 'HTTP Ingress'), env('e2', 'HTTP Ingress')],
+      containersByEnvironment: { e1: [container('e1', 'running')], e2: [container('e2', 'exited')] },
+      views: {},
+    })
+    expect(card.environments).toEqual([])
+    expect(card.status).toBe('stopped')
+  })
+
   it('names the other kinds without a count', () => {
     const none = { containersByEnvironment: {}, views: {} }
     expect(
