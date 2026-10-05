@@ -136,6 +136,15 @@ describe('managedErrorMessage', () => {
     expect(managedErrorMessage(new Error(''), 'use this')).toBe('use this')
   })
 
+  it('maps the refused image changes to plain words', () => {
+    expect(
+      managedErrorMessage(new Error(`HTTP 409: ${MANAGED_SERIES_IMMUTABLE_ERROR}`), 'fallback')
+    ).toContain('cannot be changed')
+    expect(
+      managedErrorMessage(new Error(`HTTP 409: ${MANAGED_VARIANT_SWAP_UNSAFE_ERROR}`), 'fallback')
+    ).toContain('restore a backup')
+  })
+
   it('maps binding, placement, and recovery error codes', () => {
     expect(managedErrorMessage(new Error('HTTP 409: managed_user_has_bindings'), 'fallback')).toBe(
       'Still connected to one or more services. Remove those connections first.'

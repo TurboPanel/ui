@@ -114,6 +114,8 @@ export const MANAGED_REPLICA_HEALTH_STALE_ERROR = 'managed_replica_health_stale'
 export const MANAGED_PRIMARY_FENCE_FAILED_ERROR = 'managed_primary_fence_failed'
 export const MANAGED_USER_HAS_BINDINGS_ERROR = 'managed_user_has_bindings'
 export const MANAGED_DATABASE_HAS_BINDINGS_ERROR = 'managed_database_has_bindings'
+export const MANAGED_SERIES_IMMUTABLE_ERROR = 'managed_series_immutable'
+export const MANAGED_VARIANT_SWAP_UNSAFE_ERROR = 'managed_variant_swap_unsafe'
 export const BINDING_KEY_PREFIX_IN_USE_ERROR = 'binding_key_prefix_in_use'
 export const BINDING_ENGINE_DEFAULTS_IN_USE_ERROR = 'binding_engine_defaults_in_use'
 export const BINDING_KEY_CONFLICT_ERROR = 'binding_key_conflict'
@@ -2851,12 +2853,7 @@ export type HostingRecord = {
 }
 
 export type HostingCertificateState =
-  | 'test_certificate'
-  | 'uploaded'
-  | 'secure'
-  | 'waiting_for_dns'
-  | 'issuing'
-  | 'renewal_failed'
+  'test_certificate' | 'uploaded' | 'secure' | 'waiting_for_dns' | 'issuing' | 'renewal_failed'
 
 export type HostingDnsReport = {
   ready: boolean
@@ -4134,9 +4131,7 @@ export class InstanceHostnameValidationError extends Error {
   }
 }
 
-export async function fetchInstanceHostnames(
-  options: { signal?: AbortSignal } = {}
-): Promise<{
+export async function fetchInstanceHostnames(options: { signal?: AbortSignal } = {}): Promise<{
   ok: boolean
   hostnames: InstanceHostnameRecord[]
   /** The server's Let's Encrypt terms answer. Absent on an older control plane. */
@@ -6251,11 +6246,7 @@ export type DeployPreviewSecretPlanEntry = {
 
 /** Why a variable that was set on a Node app does not reach its process. */
 export type NativeAppVariableReason =
-  | 'platform'
-  | 'invalid_name'
-  | 'invalid_value'
-  | 'too_many'
-  | 'not_referenced'
+  'platform' | 'invalid_name' | 'invalid_value' | 'too_many' | 'not_referenced'
 
 /**
  * One environment variable of a Node app. `source` is the scope that set it —
