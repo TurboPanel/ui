@@ -395,6 +395,20 @@ Moved to `src/app/[orgId]/AGENTS.md` — layout/chrome, area routes, instance
 API usage, servers/metrics pages, compose panels. Read it before editing
 anything under `src/app/[orgId]/`.
 
+## Project editor logic (`src/lib/v4/`)
+
+Framework-free logic for the Base + environment changes screens (no UI, no storage, no network):
+environment map layout (`map-layout.ts`), "Runs as" and Linux user rules (`linux-users.ts`), change labels
+(`change-labels.ts`), the Base-plus-changes comparison (`effective-config.ts`) and the derived
+"Follows the Base / Stands alone" rule (`follows-base.ts`).
+
+- Configurations are flat maps (`svc:{serviceId}:{row}`, `var:{NAME}`); the compose merge itself stays on the server
+  (config-view endpoint), so there is no third copy of the merge rules here.
+- "Stands alone" is never stored: it is derived from the saved environment compose (`services: !override`).
+- Linux user names follow the server limit (28 characters, 16 with the default name scheme), not just the design spec's 28.
+- Copy uses the v4 words (Base, "{env} change", Follows the Base, Stands alone, Runs as). `vocabulary.test.ts` fails on
+  banned words in module output and text literals.
+
 ## Admin area (`/admin/*`)
 
 Moved to `src/app/admin/AGENTS.md`. **`/admin/updates`** is the managed upgrade console (self-hosted vs TurboPanel High Availability layouts, preflight `ModalSheet`, run polling via `src/lib/upgrade-run-poll.ts`, full-screen restart overlay). Page override: `design-system/turbopanel/pages/updates.md`.
