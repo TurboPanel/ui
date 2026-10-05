@@ -133,7 +133,7 @@ function ScopeTrigger({
       </Text>
       <BreadcrumbChevron
         size={12}
-        color={selected ? chrome.accent : colors.textMuted}
+        color={selected ? colors.link : colors.textMuted}
       />
     </Pressable>
   )
@@ -333,7 +333,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   triggerLabelSelected: {
-    color: chrome.accent,
+    color: colors.link,
     fontWeight: '700',
   },
   backdrop: {
@@ -406,7 +406,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   rowLabelActive: {
-    color: chrome.accent,
+    color: colors.link,
   },
   rowDetail: {
     color: colors.textMuted,

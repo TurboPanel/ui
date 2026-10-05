@@ -1261,7 +1261,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   unusedKeysLinkText: {
-    color: chrome.accent,
+    color: colors.link,
     fontSize: 13,
     fontWeight: '600',
   },
@@ -1338,8 +1338,8 @@ const styles = StyleSheet.create({
     overflow: 'visible',
   },
   statusOnline: {
-    borderColor: colors.accent,
-    backgroundColor: colors.bgActive,
+    borderColor: colors.ok,
+    backgroundColor: colors.okSoft,
   },
   statusInitializing: {
     borderColor: colors.pending,
@@ -1356,7 +1356,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
   },
   statusTextOnline: {
-    color: colors.accent,
+    color: colors.ok,
   },
   statusTextInitializing: {
     color: colors.pending,

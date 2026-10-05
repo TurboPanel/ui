@@ -721,7 +721,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   saved: {
-    color: colors.accent,
+    color: colors.ok,
     fontSize: 13,
     fontWeight: '600',
   },

@@ -3,7 +3,7 @@ import Svg, { Path } from 'react-native-svg'
 import { PlatformShieldIcon } from '@/components/org/platform-badge'
 import type { ProjectRecord } from '@/lib/instance-api'
 import { SYSTEM_PROJECT_METADATA_TYPE } from '@/lib/system-inventory'
-import { chrome } from '@/lib/theme'
+import { colors } from '@/lib/theme'
 
 type ProjectType = NonNullable<ProjectRecord['metadata']>['type']
 
@@ -119,7 +119,7 @@ export function ProjectTitleIcon({
       accessibilityRole="image"
       accessibilityLabel={label}
     >
-      <ProjectTypeGlyph type={type} size={glyphSize} color={chrome.accent} />
+      <ProjectTypeGlyph type={type} size={glyphSize} color={colors.link} />
     </View>
   )
 }

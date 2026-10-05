@@ -4,29 +4,30 @@ import { colors } from '@/lib/theme'
 /**
  * TurboPanel frosted chrome tokens.
  *
- * Secondary polish on Dark OLED — frosted fill + saturate blur + hairline
- * specular edge. Not iridescent / chromatic aberration (reserved for marketing
- * excess; ops console stays instrument-like).
+ * Secondary polish: a translucent fill, a hairline edge and (web only) a
+ * backdrop blur. The fills, edges and shadow come from the active theme
+ * (Navy or Paper), so header menus and panels stay readable in both. Not
+ * iridescent / chromatic aberration; the ops console stays instrument-like.
  *
  * Keep in step with website `--tp-glass-*` in `globals.css`.
  */
 export const glass = {
   /** Panel / auth fill over animated or scrolling chrome */
-  fill: 'rgba(10, 10, 10, 0.72)',
-  /** Sticky header / sidebar — denser for type contrast */
-  fillStrong: 'rgba(8, 8, 8, 0.82)',
+  fill: colors.glassFill,
+  /** Sticky header / sidebar: denser for type contrast */
+  fillStrong: colors.glassFillStrong,
   /** Soft chips / nested glass */
-  fillSoft: 'rgba(17, 17, 17, 0.55)',
+  fillSoft: colors.glassFillSoft,
   /** Hairline glass rim */
-  border: 'rgba(255, 255, 255, 0.12)',
-  borderBright: 'rgba(255, 255, 255, 0.2)',
+  border: colors.glassBorder,
+  borderBright: colors.glassBorderBright,
   /** Top-edge specular (light reflection) */
-  specular: 'rgba(255, 255, 255, 0.1)',
+  specular: colors.glassSpecular,
   blurPx: 16,
   saturatePct: 160,
-  /** Soft lift — not multi-layer neumorphism */
-  shadow: '0 12px 40px rgba(0, 0, 0, 0.45)',
-  /** iOS GlassView tint — near OLED panel */
+  /** Soft lift, not multi-layer neumorphism */
+  shadow: colors.glassShadow,
+  /** iOS GlassView tint, near the panel colour */
   tint: colors.bgPanel,
 } as const
 

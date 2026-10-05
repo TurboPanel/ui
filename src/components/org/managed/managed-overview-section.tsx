@@ -567,7 +567,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgSecondary,
   },
   engineBadgeText: {
-    color: colors.accent,
+    color: colors.ok,
     fontSize: 11,
     fontWeight: '700',
     textTransform: 'uppercase',
@@ -624,7 +624,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
   },
   statusTextReady: {
-    color: colors.accent,
+    color: colors.ok,
   },
   statusTextStopped: {
     color: colors.textDim,

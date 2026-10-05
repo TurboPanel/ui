@@ -175,58 +175,58 @@ export function projectTabHref(
 }
 
 /**
- * Overview (topology diagram) for Project scope — no environment segment,
- * no query. Path: `/projects/:projectId/overview`
+ * The project's Environments tab (one row per environment) — no environment
+ * segment, no query. Path: `/projects/:projectId/overview`
  */
 export function projectOverviewHref(orgId: string, projectId: string): string {
   return projectTabHref(orgId, projectId, 'overview')
 }
 
 /**
- * Compose YAML editor for Project scope.
- * Path: `/projects/:projectId/compose`
+ * Compose YAML editor for Project scope (the Base tab).
+ * Path: `/projects/:projectId/base/compose`
  */
 export function projectComposeHref(orgId: string, projectId: string): string {
-  return `${projectHref(orgId, projectId)}/compose`
+  return `${projectBaseHref(orgId, projectId)}/compose`
 }
 
 /**
- * Services (visual) editor for Project scope.
- * Path: `/projects/:projectId/services` (bare — not `/services/:serviceId`).
+ * Services (visual) editor for Project scope (the Base tab).
+ * Path: `/projects/:projectId/base/services` (not `/services/:serviceId`).
  */
 export function projectServicesEditHref(
   orgId: string,
   projectId: string,
 ): string {
-  return `${projectHref(orgId, projectId)}/services`
+  return `${projectBaseHref(orgId, projectId)}/services`
 }
 
 /**
  * Hosting (server placement + hostnames / ports / TLS) for Project scope.
- * Path: `/projects/:projectId/hosting`
+ * Path: `/projects/:projectId/base/hosting`
  */
 export function projectHostingHref(orgId: string, projectId: string): string {
-  return `${projectHref(orgId, projectId)}/hosting`
+  return `${projectBaseHref(orgId, projectId)}/hosting`
 }
 
 /**
  * Bindings (system users + bound databases) for Project scope.
- * Path: `/projects/:projectId/bindings`
+ * Path: `/projects/:projectId/base/bindings`
  */
 export function projectBindingsHref(orgId: string, projectId: string): string {
-  return `${projectHref(orgId, projectId)}/bindings`
+  return `${projectBaseHref(orgId, projectId)}/bindings`
 }
 
 /**
  * Storage (persistent volumes) for Project scope.
- * Path: `/projects/:projectId/storage`
+ * Path: `/projects/:projectId/base/storage`
  */
 export function projectStorageHref(orgId: string, projectId: string): string {
-  return `${projectHref(orgId, projectId)}/storage`
+  return `${projectBaseHref(orgId, projectId)}/storage`
 }
 
 /**
- * Scope settings (variables, system users, workspace, naming, danger).
+ * Project Settings tab (variables, system users, workspace, naming, danger).
  * Path: `/projects/:projectId/settings`
  */
 export function projectSettingsHref(orgId: string, projectId: string): string {
@@ -234,8 +234,16 @@ export function projectSettingsHref(orgId: string, projectId: string): string {
 }
 
 /**
- * Overview (topology diagram) with a concrete environment selected —
- * compose overlay / lifecycle scope.
+ * The Base tab: the shared compose every environment starts from. Its default
+ * lens is the topology diagram.
+ * Path: `/projects/:projectId/base`
+ */
+export function projectBaseHref(orgId: string, projectId: string): string {
+  return `${projectHref(orgId, projectId)}/base`
+}
+
+/**
+ * Environment Overview tab (topology diagram, services, latest deploys).
  * Path: `/projects/:projectId/environments/:environmentId`
  */
 export function projectEnvironmentHref(
@@ -246,70 +254,73 @@ export function projectEnvironmentHref(
   return `${projectHref(orgId, projectId)}/environments/${encodeURIComponent(environmentId)}`
 }
 
+/** Environment Deployments tab. */
+export function projectEnvironmentDeploymentsHref(
+  orgId: string,
+  projectId: string,
+  environmentId: string,
+): string {
+  return `${projectEnvironmentHref(orgId, projectId, environmentId)}/deployments`
+}
+
 /**
- * Compose YAML editor for an environment overlay.
- * Path: `/projects/:projectId/environments/:environmentId/compose`
+ * Environment Configuration tab. Its default lens is the Services list.
+ * Path: `/projects/:projectId/environments/:environmentId/configuration`
  */
+export function projectEnvironmentConfigurationHref(
+  orgId: string,
+  projectId: string,
+  environmentId: string,
+): string {
+  return `${projectEnvironmentHref(orgId, projectId, environmentId)}/configuration`
+}
+
+/** Compose YAML editor for an environment's own changes. */
 export function projectEnvironmentComposeHref(
   orgId: string,
   projectId: string,
   environmentId: string,
 ): string {
-  return `${projectEnvironmentHref(orgId, projectId, environmentId)}/compose`
+  return `${projectEnvironmentConfigurationHref(orgId, projectId, environmentId)}/compose`
 }
 
-/**
- * Services (visual) editor for an environment overlay.
- * Path: `/projects/:projectId/environments/:environmentId/services`
- */
+/** Services (visual) editor for an environment's own changes. */
 export function projectEnvironmentServicesHref(
   orgId: string,
   projectId: string,
   environmentId: string,
 ): string {
-  return `${projectEnvironmentHref(orgId, projectId, environmentId)}/services`
+  return projectEnvironmentConfigurationHref(orgId, projectId, environmentId)
 }
 
-/**
- * Hosting editor for an environment.
- * Path: `/projects/:projectId/environments/:environmentId/hosting`
- */
+/** Hosting editor for an environment. */
 export function projectEnvironmentHostingHref(
   orgId: string,
   projectId: string,
   environmentId: string,
 ): string {
-  return `${projectEnvironmentHref(orgId, projectId, environmentId)}/hosting`
+  return `${projectEnvironmentConfigurationHref(orgId, projectId, environmentId)}/hosting`
 }
 
-/**
- * Bindings for an environment.
- * Path: `/projects/:projectId/environments/:environmentId/bindings`
- */
+/** Bindings for an environment. */
 export function projectEnvironmentBindingsHref(
   orgId: string,
   projectId: string,
   environmentId: string,
 ): string {
-  return `${projectEnvironmentHref(orgId, projectId, environmentId)}/bindings`
+  return `${projectEnvironmentConfigurationHref(orgId, projectId, environmentId)}/bindings`
 }
 
-/**
- * Storage for an environment.
- * Path: `/projects/:projectId/environments/:environmentId/storage`
- */
+/** Storage for an environment. */
 export function projectEnvironmentStorageHref(
   orgId: string,
   projectId: string,
   environmentId: string,
 ): string {
-  return `${projectEnvironmentHref(orgId, projectId, environmentId)}/storage`
+  return `${projectEnvironmentConfigurationHref(orgId, projectId, environmentId)}/storage`
 }
 
-/**
- * Settings for an environment.
- * Path: `/projects/:projectId/environments/:environmentId/settings`
- */
+/** Environment Settings tab. */
 export function projectEnvironmentSettingsHref(
   orgId: string,
   projectId: string,
@@ -330,6 +341,59 @@ export function projectServiceHref(
 export type ComposeEditView = 'editor' | 'visual'
 
 /**
+ * Where a pathname sits inside a project: the environment it names (null at
+ * project scope) and the path segments after the project, or after the
+ * environment. Query and hash are dropped. Null when the path is not under
+ * this project at all.
+ */
+type ProjectPathParts = Readonly<{
+  environmentId: string | null
+  segments: readonly string[]
+}>
+
+function splitProjectPath(
+  pathname: string,
+  projectId: string,
+): ProjectPathParts | null {
+  const marker = `/projects/${projectId}`
+  const idx = pathname.indexOf(marker)
+  if (idx < 0) return null
+  const after = pathname.slice(idx + marker.length)
+  if (after !== '' && !/^[/?#]/.test(after)) return null
+  const segments = after.split(/[?#]/)[0]!.split('/').filter(Boolean)
+  const environmentId = parseProjectEnvironmentId(pathname, projectId)
+  if (environmentId == null) return { environmentId: null, segments }
+  return { environmentId, segments: segments.slice(2) }
+}
+
+/** Lens routes that sit under a tab (`base/…`, `configuration/…`). */
+const LENS_SUBROUTES: ReadonlyMap<string, ComposeProjectTabId> = new Map([
+  ['compose', 'compose'],
+  ['services', 'services'],
+  ['hosting', 'hosting'],
+  ['bindings', 'bindings'],
+  ['storage', 'storage'],
+])
+
+/** Retired section routes that now redirect to a tab, mapped to their lens. */
+const LEGACY_SECTION_LENS: ReadonlyMap<string, ComposeProjectTabId> = new Map([
+  ...LENS_SUBROUTES,
+  ['servers', 'hosting'],
+  ['map', 'overview'],
+])
+
+function lensFromSegments(
+  segments: readonly string[],
+  tabSegment: 'base' | 'configuration',
+  defaultLens: ComposeProjectTabId,
+): ComposeProjectTabId | null {
+  if (segments[0] === tabSegment) {
+    return LENS_SUBROUTES.get(segments[1] ?? '') ?? defaultLens
+  }
+  return null
+}
+
+/**
  * Resolve the Compose / Services section from the pathname.
  * Returns null on Overview / environment index / service detail paths.
  */
@@ -337,55 +401,21 @@ export function parseComposeEditView(
   pathname: string,
   projectId: string,
 ): ComposeEditView | null {
-  const base = `/projects/${projectId}`
-  const envId = parseProjectEnvironmentId(pathname, projectId)
-  if (envId) {
-    const envMarker = `${base}/environments/`
-    const envIdx = pathname.indexOf(envMarker)
-    if (envIdx < 0) return null
-    const afterEnv = pathname.slice(envIdx + envMarker.length)
-    const parts = afterEnv.split(/[/?#]/).filter(Boolean)
-    // parts[0] = environmentId, parts[1] = compose | services
-    const suffix = parts[1] ?? ''
-    if (suffix === 'compose') return 'editor'
-    if (suffix === 'services') return 'visual'
-    return null
+  const parts = splitProjectPath(pathname, projectId)
+  if (!parts) return null
+  const { environmentId, segments } = parts
+  const tabSegment = environmentId ? 'configuration' : 'base'
+  if (segments[0] === tabSegment) {
+    if (segments[1] === 'compose') return 'editor'
+    if (segments[1] === 'services') return 'visual'
+    // The Configuration tab opens on the Services list; the Base tab on the map.
+    return environmentId && segments.length === 1 ? 'visual' : null
   }
-  if (pathname.includes(`${base}/compose`)) return 'editor'
+  // Retired paths keep their view while a redirect resolves.
+  if (segments[0] === 'compose') return 'editor'
   // Bare `/services` only — `/services/:id` is service detail.
-  const servicesMarker = `${base}/services`
-  const servicesIdx = pathname.indexOf(servicesMarker)
-  if (servicesIdx < 0) return null
-  const after = pathname.slice(servicesIdx + servicesMarker.length)
-  if (after === '' || after.startsWith('?') || after.startsWith('#')) {
-    return 'visual'
-  }
+  if (segments[0] === 'services' && segments.length === 1) return 'visual'
   return null
-}
-
-/**
- * Trailing section segment on a compose project path (`compose`, `hosting`, …).
- * Empty on Overview and on `/environments/:id` with no suffix.
- */
-function composePathSectionSegment(
-  pathname: string,
-  projectId: string,
-): string {
-  const base = `/projects/${projectId}`
-  const envId = parseProjectEnvironmentId(pathname, projectId)
-  if (envId) {
-    const envMarker = `${base}/environments/`
-    const envIdx = pathname.indexOf(envMarker)
-    if (envIdx < 0) return ''
-    const afterEnv = pathname.slice(envIdx + envMarker.length)
-    const parts = afterEnv.split(/[/?#]/).filter(Boolean)
-    return parts[1] ?? ''
-  }
-  const marker = `${base}/`
-  const idx = pathname.indexOf(marker)
-  if (idx < 0) return ''
-  const rest = pathname.slice(idx + marker.length)
-  return rest.split(/[/?#]/)[0] ?? ''
 }
 
 /** Active compose section tab for the path (Overview when not a named section). */
@@ -393,22 +423,17 @@ export function parseComposeProjectTab(
   pathname: string,
   projectId: string,
 ): ComposeProjectTabId {
-  const view = parseComposeEditView(pathname, projectId)
-  if (view === 'editor') return 'compose'
-  // The visual editor is the Services lens (`/services` paths).
-  if (view === 'visual') return 'services'
-  const suffix = composePathSectionSegment(pathname, projectId)
-  // Retired `/map` — the topology diagram lives on the Overview path now.
-  if (suffix === 'map') return 'overview'
-  // `/services/:serviceId` detail (bare `/services` already resolved above).
-  if (suffix === 'services') return 'services'
-  if (suffix === 'hosting') return 'hosting'
-  // Retired `/servers` — placement lives on the Hosting tab now.
-  if (suffix === 'servers') return 'hosting'
-  if (suffix === 'bindings') return 'bindings'
-  if (suffix === 'storage') return 'storage'
-  if (suffix === 'settings') return 'settings'
-  return 'overview'
+  const parts = splitProjectPath(pathname, projectId)
+  if (!parts) return 'overview'
+  const { environmentId, segments } = parts
+  const tabbed = environmentId
+    ? lensFromSegments(segments, 'configuration', 'services')
+    : lensFromSegments(segments, 'base', 'overview')
+  if (tabbed) return tabbed
+  const first = segments[0] ?? ''
+  if (first === 'settings') return 'settings'
+  // `/services/:serviceId` detail keeps the Services lens lit.
+  return LEGACY_SECTION_LENS.get(first) ?? 'overview'
 }
 
 /**
@@ -430,7 +455,7 @@ const COMPOSE_SECTION_HREFS: Readonly<
 > = {
   overview: {
     environment: projectEnvironmentHref,
-    project: projectOverviewHref,
+    project: projectBaseHref,
   },
   services: {
     environment: projectEnvironmentServicesHref,
@@ -534,28 +559,34 @@ export function parseProjectEnvironmentId(
 }
 
 /**
- * True on Overview Base (`…/overview`, `/compose`, `/services`, `/hosting`,
- * `/bindings`, retired `/servers` and `/map`, `/storage`, `/settings`, or
- * bare index).
+ * True at project scope: the Environments tab (`…/overview`), the Base tab and
+ * its lens routes (`/base`, `/base/compose`, …), Settings, the retired
+ * section paths that redirect there, and the bare index.
  */
 export function isProjectOverviewBasePath(
   pathname: string,
   projectId: string,
 ): boolean {
-  if (parseProjectEnvironmentId(pathname, projectId)) return false
-  if (pathname.endsWith(`/projects/${projectId}`)) return true
-  if (pathname.includes(`/projects/${projectId}/overview`)) return true
-  if (pathname.includes(`/projects/${projectId}/compose`)) return true
-  // Bare `/services` (edit) and `/services/:id` (detail) live under Project scope.
-  if (pathname.includes(`/projects/${projectId}/services`)) return true
-  if (pathname.includes(`/projects/${projectId}/hosting`)) return true
-  if (pathname.includes(`/projects/${projectId}/bindings`)) return true
-  if (pathname.includes(`/projects/${projectId}/servers`)) return true
-  if (pathname.includes(`/projects/${projectId}/map`)) return true
-  if (pathname.includes(`/projects/${projectId}/storage`)) return true
-  if (pathname.includes(`/projects/${projectId}/settings`)) return true
-  return false
+  const parts = splitProjectPath(pathname, projectId)
+  if (!parts || parts.environmentId) return false
+  // The managed Environments index (`/environments`) is not project scope.
+  const first = parts.segments[0]
+  return first === undefined || PROJECT_SCOPE_SEGMENTS.has(first)
 }
+
+/** Project-scope first segments (tabs, lens routes and retired paths). */
+const PROJECT_SCOPE_SEGMENTS: ReadonlySet<string> = new Set([
+  'overview',
+  'base',
+  'settings',
+  'compose',
+  'services',
+  'hosting',
+  'bindings',
+  'servers',
+  'map',
+  'storage',
+])
 
 /**
  * Overview edits shared Base compose when on the Overview Base path.
@@ -577,4 +608,183 @@ export function resolveSelectedEnvironmentId(
     return preferred
   }
   return environments[0]?.id ?? null
+}
+
+/**
+ * Where a "Recent projects" entry opens: the environment itself for a Compose
+ * project with exactly one, otherwise the project. `environments` is
+ * `undefined` until they have loaded (the project opens meanwhile).
+ */
+export function recentProjectHref(
+  orgId: string,
+  project: ProjectRecord,
+  environments: readonly Readonly<{ id: string }>[] | undefined,
+): string {
+  const only = environments?.length === 1 ? environments[0] : undefined
+  if (only && isComposeProject(project)) {
+    return projectEnvironmentHref(orgId, project.id, only.id)
+  }
+  return projectHref(orgId, project.id)
+}
+
+/** Tabs on a compose project page, in bar order. */
+export const PROJECT_PAGE_TAB_IDS = ['overview', 'base', 'settings'] as const
+
+export type ProjectPageTabId = (typeof PROJECT_PAGE_TAB_IDS)[number]
+
+/** `overview` is the Environments tab: the environments are what it lists. */
+export const PROJECT_PAGE_TAB_LABELS: Record<ProjectPageTabId, string> = {
+  overview: 'Environments',
+  base: 'Base',
+  settings: 'Settings',
+}
+
+/** Tabs on an environment page, in bar order. */
+export const ENVIRONMENT_PAGE_TAB_IDS = [
+  'overview',
+  'deployments',
+  'configuration',
+  'settings',
+] as const
+
+export type EnvironmentPageTabId = (typeof ENVIRONMENT_PAGE_TAB_IDS)[number]
+
+export const ENVIRONMENT_PAGE_TAB_LABELS: Record<EnvironmentPageTabId, string> = {
+  overview: 'Overview',
+  deployments: 'Deployments',
+  configuration: 'Configuration',
+  settings: 'Settings',
+}
+
+export function projectPageTabHref(
+  orgId: string,
+  projectId: string,
+  tabId: ProjectPageTabId,
+): string {
+  return `${projectHref(orgId, projectId)}/${tabId}`
+}
+
+export function environmentPageTabHref(
+  orgId: string,
+  projectId: string,
+  environmentId: string,
+  tabId: EnvironmentPageTabId,
+): string {
+  const root = projectEnvironmentHref(orgId, projectId, environmentId)
+  return tabId === 'overview' ? root : `${root}/${tabId}`
+}
+
+/**
+ * Which project tab a path belongs to. Null outside project scope (an
+ * environment page, managed tabs, setup). Retired section paths belong to the
+ * tab they redirect to.
+ */
+export function parseProjectPageTab(
+  pathname: string,
+  projectId: string,
+): ProjectPageTabId | null {
+  const parts = splitProjectPath(pathname, projectId)
+  if (!parts || parts.environmentId) return null
+  const first = parts.segments[0]
+  if (first === undefined || first === 'overview' || first === 'map') {
+    return 'overview'
+  }
+  if (first === 'settings') return 'settings'
+  if (first === 'base' || LEGACY_SECTION_LENS.has(first)) return 'base'
+  return null
+}
+
+/**
+ * Which environment tab a path belongs to. Null outside an environment.
+ * Retired lens paths belong to Configuration, where they now live.
+ */
+export function parseEnvironmentPageTab(
+  pathname: string,
+  projectId: string,
+): EnvironmentPageTabId | null {
+  const parts = splitProjectPath(pathname, projectId)
+  if (!parts?.environmentId) return null
+  const first = parts.segments[0]
+  if (first === undefined || first === 'map') return 'overview'
+  if (first === 'deployments' || first === 'settings') return first
+  if (first === 'configuration' || LEGACY_SECTION_LENS.has(first)) {
+    return 'configuration'
+  }
+  return null
+}
+
+/** Retired project-scope section → where it lives now. */
+function legacyProjectHrefFor(
+  orgId: string,
+  projectId: string,
+  segment: string,
+): string | null {
+  if (segment === 'map') return projectOverviewHref(orgId, projectId)
+  const lens = LEGACY_SECTION_LENS.get(segment)
+  if (!lens || lens === 'overview') return null
+  return projectComposeSectionHref(orgId, projectId, lens)
+}
+
+/** Retired environment-scope section → where it lives now. */
+function legacyEnvironmentHrefFor(
+  orgId: string,
+  projectId: string,
+  environmentId: string,
+  segment: string,
+): string | null {
+  if (segment === 'map') {
+    return projectEnvironmentHref(orgId, projectId, environmentId)
+  }
+  const lens = LEGACY_SECTION_LENS.get(segment)
+  if (!lens || lens === 'overview') return null
+  return projectComposeSectionHref(orgId, projectId, lens, environmentId)
+}
+
+/**
+ * New home of a retired route, or null when the segment is not retired. Pass
+ * the environment id for `/environments/:id/<segment>` routes.
+ */
+export function legacyProjectRedirectHref(
+  orgId: string,
+  projectId: string,
+  segment: string,
+  environmentId?: string | null,
+): string | null {
+  return environmentId
+    ? legacyEnvironmentHrefFor(orgId, projectId, environmentId, segment)
+    : legacyProjectHrefFor(orgId, projectId, segment)
+}
+
+/** Retired segments, one redirect route file each. */
+export const LEGACY_PROJECT_SEGMENTS = [
+  'compose',
+  'services',
+  'bindings',
+  'hosting',
+  'storage',
+  'servers',
+  'map',
+] as const
+
+export type LegacyProjectSegment = (typeof LEGACY_PROJECT_SEGMENTS)[number]
+
+/**
+ * Append the query a retired deep link carried (`?hostingId=…`) to its new
+ * home. `omit` drops the router's path params, which `useLocalSearchParams`
+ * mixes in with the query.
+ */
+export function withCarriedQuery(
+  href: string,
+  params: Readonly<Record<string, string | readonly string[] | undefined>>,
+  omit: readonly string[],
+): string {
+  const query = new URLSearchParams()
+  for (const [key, value] of Object.entries(params)) {
+    if (omit.includes(key) || value === undefined) continue
+    for (const entry of typeof value === 'string' ? [value] : value) {
+      query.append(key, entry)
+    }
+  }
+  const text = query.toString()
+  return text ? `${href}?${text}` : href
 }

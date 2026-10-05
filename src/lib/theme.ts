@@ -1,83 +1,31 @@
 import { Platform } from 'react-native'
+import { colorTokens, type Palette } from '@/lib/theme-palettes'
 
 /**
- * TurboPanel console brand tokens.
+ * TurboPanel console colour tokens (v4 "Navy & Tee", two themes).
  *
- * Dual brand: green (self-hosted / “run”) + blue `#3366cc` (HA).
- * Interactive chrome (nav, CTAs, toolbar) follows control-plane runtime via
- * {@link chrome} CSS variables on web (Workers → blue, Deno → green).
- * Online / live status stays {@link colors.green} always.
- * Keep in step with website `--tp-green` / `--tp-blue` in `globals.css`.
+ * The palettes live in `theme-palettes.ts` (spec tokens plus the old key names
+ * as aliases). What `colors` holds depends on the platform:
+ * - Web: each entry is a CSS variable reference (`var(--tp-bg, ...)`), so every
+ *   screen follows Light / Dark / Match computer without per-file edits. The
+ *   variables are defined by the stylesheet in `src/app/+html.tsx`.
+ * - Native: the Navy hex values. Screens there migrate to `useColors()`
+ *   (`theme-preference.ts`) as they are rebuilt.
+ *
+ * Because web values are variable references, do not do colour maths on them
+ * (no `colors.x + '33'`, no hex parsing, no animated colour ranges). Use
+ * `useColors()` for real values, or a `*Soft` token for a tint.
  */
-export const colors = {
-  bg: '#000',
-  bgPanel: '#0a0a0a',
-  bgArea: '#080808',
-  bgAreaHeader: '#0d0d0d',
-  bgInput: '#111',
-  bgSecondary: '#1a1a1a',
-  bgInset: '#050505',
-  bgSidebar: '#0a0a0a',
-  /** Green-tinted selected / active surface (status / Deno chrome fallback) */
-  bgActive: '#10241a',
-  /** Blue-tinted selected surface (HA chrome) */
-  bgActiveBlue: '#0a1628',
-  border: '#222',
-  borderSubtle: '#1e1e1e',
-  borderMuted: '#2a2a2a',
-  borderChip: '#333',
-  borderArea: '#1a1a1a',
-  text: '#fff',
-  textTitle: '#ddd',
-  textBody: '#ccc',
-  textMuted: '#888',
-  textDim: '#666',
-  textFaint: '#555',
-  textLabel: '#777',
-  textChip: '#bbb',
-  /** Self-hosted / run / online green */
-  green: '#3dd68c',
-  /** TurboPanel High Availability blue */
-  blue: '#3366cc',
-  /**
-   * Online / success green. Prefer {@link chrome} for nav, CTAs, and toolbar
-   * so Workers HA can resolve blue via CSS variables.
-   */
-  accent: '#3dd68c',
-  error: '#ff6b6b',
-  errorText: '#ff8a8a',
-  errorSoft: '#ff9a9a',
-  pending: '#e0b341',
-  command: '#9ad2ff',
-  stdout: '#cfd3d6',
-  log: '#9aa0a6',
-  /** On green fills */
-  buttonText: '#000',
-  /** On blue fills */
-  buttonTextOnBlue: '#fff',
-  overlay: 'rgba(0, 0, 0, 0.6)',
-} as const
+export const colors: Palette = colorTokens(Platform.OS === 'web')
 
 /**
- * Runtime interactive chrome (sidebar, primary buttons, toolbar chips).
- * On web these are CSS variables updated by {@link applyConsoleChromeRuntime}
- * when `/status` resolves — StyleSheet can bake the `var(...)` string and still
- * follow Workers blue vs Deno green. Native falls back to green until a
- * later per-tree accent pass.
+ * Interactive chrome (sidebar, primary buttons, toolbar chips): brand blue in
+ * both runtimes and both themes. Green is reserved for "running / live".
  */
 export const chrome = {
-  accent:
-    Platform.OS === 'web'
-      ? 'var(--tp-chrome-accent, #3dd68c)'
-      : colors.green,
-  bgActive:
-    Platform.OS === 'web'
-      ? 'var(--tp-chrome-bg-active, #10241a)'
-      : colors.bgActive,
-  onAccent:
-    Platform.OS === 'web'
-      ? 'var(--tp-chrome-on-accent, #000000)'
-      : colors.buttonText,
+  accent: colors.accent,
+  bgActive: colors.accentSoft,
+  onAccent: colors.accentInk,
 } as const
 
 export const layout = {
