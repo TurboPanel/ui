@@ -21,12 +21,8 @@ export default function RecoveringScreen() {
   const router = useRouter()
   const params = useLocalSearchParams<{ reason?: string }>()
   const reason = parseRecoveryReason(params.reason)
-  const {
-    clearSession,
-    refreshInstallStatus,
-    controlPlaneRuntime,
-  } = useAuth()
-  const spinnerColor = authSpinnerColor(controlPlaneRuntime)
+  const { clearSession, refreshInstallStatus } = useAuth()
+  const spinnerColor = authSpinnerColor()
   const [navigated, setNavigated] = useState(false)
 
   useEffect(() => {

@@ -1,5 +1,6 @@
 import { Platform, View, useWindowDimensions } from 'react-native'
 import { headerMenuGroupStyles } from '@/components/header-menu-group-styles'
+import { ThemeSwitch } from '@/components/header-theme-switch'
 import { HeaderPageWidthSegment } from '@/components/header-page-width-toggle'
 import { HeaderNotificationsSegment } from '@/components/header-notifications-control'
 import { UserAccountMenuSegment } from '@/components/user-account-menu'
@@ -24,6 +25,7 @@ export function HeaderAccountControls({
   const header = headerLayoutFor(width, isNative)
   return (
     <View style={headerMenuGroupStyles.group}>
+      {header.showThemeSwitch ? <ThemeSwitch variant="header" /> : null}
       {header.showPageWidthToggle ? <HeaderPageWidthSegment /> : null}
       <UserAccountMenuSegment email={email} onSignOut={onSignOut} />
       {header.showBell ? <HeaderNotificationsSegment /> : null}

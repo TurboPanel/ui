@@ -1,13 +1,8 @@
-import { useLocalSearchParams } from 'expo-router'
-import { OverviewSection } from '@/components/org/overview-section'
-import { useOrgTabPagerOwnership } from '@/components/org/org-tab-pager-ownership'
+import { Redirect, useLocalSearchParams, type Href } from 'expo-router'
+import { defaultOrgDashboardHref } from '@/lib/org-navigation'
 
-export default function OverviewScreen() {
-  const ownedByPager = useOrgTabPagerOwnership()
+/** Retired route: the organization opens on Projects now. */
+export default function OverviewRoute() {
   const { orgId } = useLocalSearchParams<{ orgId: string }>()
-  if (ownedByPager) {
-    return null
-  }
-
-  return <OverviewSection orgId={orgId ?? ''} />
+  return <Redirect href={defaultOrgDashboardHref(orgId ?? '') as Href} />
 }

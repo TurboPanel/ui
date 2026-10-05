@@ -13,7 +13,7 @@ import Animated, {
 import { scheduleOnRN } from 'react-native-worklets'
 import { AuthGridLayer } from '@/components/auth/auth-grid-layer'
 import { hexWithAlpha } from '@/components/auth/auth-hex'
-import { colors } from '@/lib/theme'
+import { navyPalette as navy } from '@/lib/theme-palettes'
 
 export const GRID_SIZE = 36
 const STREAK_THICKNESS = 2
@@ -129,8 +129,8 @@ const AuthGridStreak = memo(function AuthGridStreak({
   const travel = span + streakLength
 
   const palette = useMemo(() => {
-    const hot = hexWithAlpha(colors.text, Math.min(0.18, peakAlpha + 0.06))
-    const bright = hexWithAlpha(colors.text, peakAlpha * 0.55)
+    const hot = hexWithAlpha(navy.text, Math.min(0.18, peakAlpha + 0.06))
+    const bright = hexWithAlpha(navy.text, peakAlpha * 0.55)
     const mid = hexWithAlpha(accentColor, peakAlpha * 0.35)
     const soft = hexWithAlpha(accentColor, peakAlpha * 0.08)
     const colorsAlong = (
@@ -144,7 +144,7 @@ const AuthGridStreak = memo(function AuthGridStreak({
     return {
       colorsAlong,
       locations,
-      tip: hexWithAlpha(colors.text, Math.min(0.22, peakAlpha + 0.08)),
+      tip: hexWithAlpha(navy.text, Math.min(0.22, peakAlpha + 0.08)),
       tipGlow: hexWithAlpha(accentColor, Math.min(0.08, peakAlpha * 0.9)),
     }
   }, [accentColor, peakAlpha, tipForward])
@@ -322,7 +322,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     left: 0,
-    backgroundColor: colors.bg,
+    backgroundColor: navy.bg,
     overflow: 'hidden',
   },
   streak: {

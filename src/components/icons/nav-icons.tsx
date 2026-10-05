@@ -37,6 +37,21 @@ export function OverviewNavIcon({ size = 16, color }: NavIconProps) {
   )
 }
 
+/** Pulse line — Activity. */
+export function ActivityNavIcon({ size = 16, color }: NavIconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M3 12h4l2.5-6.5 4 13 2.5-6.5h5"
+        stroke={color}
+        strokeWidth={1.75}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  )
+}
+
 /** Database cylinder — Managed. */
 export function ManagedNavIcon({ size = 16, color }: NavIconProps) {
   return (
@@ -399,6 +414,7 @@ export function BillingNavIcon({ size = 16, color }: NavIconProps) {
 
 const AREA_ICONS = {
   overview: OverviewNavIcon,
+  activity: ActivityNavIcon,
   projects: ProjectsNavIcon,
   managed: ManagedNavIcon,
   servers: ServersNavIcon,

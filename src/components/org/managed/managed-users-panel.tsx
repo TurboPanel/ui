@@ -621,14 +621,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   chipTextSelected: {
-    color: chrome.accent,
+    color: colors.link,
   },
   createUser: {
     gap: spacing.sm,
     marginTop: spacing.sm,
   },
   connectedChip: {
-    color: chrome.accent,
+    color: colors.link,
     fontSize: 11,
     fontWeight: '600',
   },

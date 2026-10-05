@@ -105,7 +105,8 @@ function DeploymentDetail({
     group.commands[0]?.serverId ?? '',
   )
   const active =
-    group.commands.find((row) => row.serverId === serverId) ?? group.commands[0]
+    group.commands.find((row) => row.serverId === serverId) ??
+    group.commands[0]
   const cancelledNote = cancelledDeploymentNote(group)
   // A cancelled deploy is not an error: say what happened in plain words
   // instead of echoing the host's `cancelled: …` text.
@@ -138,9 +139,7 @@ function DeploymentDetail({
         <Text style={panelStyles.muted}>{cancelledNote}</Text>
       ) : null}
       {tooLate ? <Text style={panelStyles.muted}>{tooLate}</Text> : null}
-      {stalledHint ? (
-        <Text style={panelStyles.muted}>{stalledHint}</Text>
-      ) : null}
+      {stalledHint ? <Text style={panelStyles.muted}>{stalledHint}</Text> : null}
       {strategy ? (
         <Text style={panelStyles.muted}>{`${strategy} deploy`}</Text>
       ) : null}
@@ -329,13 +328,20 @@ function RunningDeployNotice({
 export function EnvironmentDeploymentHistoryPanel({
   orgId,
   environmentId,
+  alwaysOpen = false,
   canManage = false,
-}: Readonly<{ orgId: string; environmentId: string; canManage?: boolean }>) {
+}: Readonly<{
+  orgId: string
+  environmentId: string
+  /** Shows the Cancel deploy control while a deploy is running. */
+  canManage?: boolean
+  /** The Deployments tab shows the list open; elsewhere it folds away. */
+  alwaysOpen?: boolean
+}>) {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const deploymentsQuery = useEnvironmentDeployments(orgId, environmentId)
   const groups = useMemo(
-    () =>
-      groupDeploymentsByGeneration(deploymentsQuery.data?.deployments ?? []),
+    () => groupDeploymentsByGeneration(deploymentsQuery.data?.deployments ?? []),
     [deploymentsQuery.data?.deployments],
   )
 
@@ -354,18 +360,15 @@ export function EnvironmentDeploymentHistoryPanel({
       <SectionPanel
         title="Deployment history"
         hint="Past deploy attempts and their output"
-        collapsible
-        defaultCollapsed
+        collapsible={!alwaysOpen}
+        defaultCollapsed={!alwaysOpen}
       >
         {deploymentsQuery.isLoading ? (
           <LoadingState label="Loading deploy history…" />
         ) : null}
         {deploymentsQuery.error ? (
           <Text style={panelStyles.error}>
-            {userErrorMessage(
-              deploymentsQuery.error,
-              'Failed to load deploy history',
-            )}
+            {userErrorMessage(deploymentsQuery.error, 'Failed to load deploy history')}
           </Text>
         ) : null}
         {!deploymentsQuery.isLoading && groups.length === 0 ? (

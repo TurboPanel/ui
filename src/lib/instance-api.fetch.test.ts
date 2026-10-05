@@ -27,6 +27,7 @@ import {
   fetchDatacenters,
   fetchDeployPreview,
   fetchEnvironment,
+  fetchEnvironmentConfigView,
   fetchForges,
   fetchLicenses,
   fetchOrgHostDefaults,
@@ -563,6 +564,26 @@ describe('instance-api fetch wrappers', () => {
       fabricId: 'fab-1',
       interfaceName: 'tp0',
     })
+  })
+
+  it('fetchEnvironmentConfigView reads the derived config-view route', async () => {
+    const side = { services: [], variables: [], linuxUsers: [] }
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        ok: true,
+        environmentId: 'env-1',
+        projectId: 'p1',
+        followsBase: true,
+        base: side,
+        effective: side,
+        changes: [],
+      }),
+    )
+    await expect(fetchEnvironmentConfigView('env-1')).resolves.toMatchObject({
+      followsBase: true,
+      changes: [],
+    })
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/environments/env-1/config-view')
   })
 
   it('deploy preview and lifecycle wrappers proxy environment routes', async () => {

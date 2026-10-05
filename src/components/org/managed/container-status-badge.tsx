@@ -26,8 +26,8 @@ const statusBadgeVariantStyles: Record<
   { badge: { borderColor: string; backgroundColor: string }; text: { color: string } }
 > = {
   running: {
-    badge: { borderColor: colors.accent, backgroundColor: colors.bgActive },
-    text: { color: colors.accent },
+    badge: { borderColor: colors.ok, backgroundColor: colors.okSoft },
+    text: { color: colors.ok },
   },
   pending: {
     badge: { borderColor: colors.pending, backgroundColor: colors.bgSecondary },
