@@ -63,6 +63,19 @@ describe('deployRows', () => {
     ])
   })
 
+  it('reads In progress only for a deploy that is running', () => {
+    const sub = (extra: Parameters<typeof deploy>[2]) =>
+      deployRows([deploy('d1', null, extra)], NOW, false)[0]?.sub
+    expect(sub({ durationMs: null, status: 'running' })).toBe('In progress')
+    expect(sub({ durationMs: null, status: 'queued' })).toBe('Waiting to start')
+    for (const status of ['dispatching', 'sent', 'acked'] as const) {
+      expect(sub({ durationMs: null, status })).toBe('Waiting to start')
+    }
+    expect(sub({ durationMs: null, status: 'cancelled' })).toBe('—')
+    expect(sub({ durationMs: null, status: 'failed' })).toBe('—')
+    expect(sub({ durationMs: null, status: 'succeeded' })).toBe('—')
+  })
+
   it('marks the newest good deploy live only while the environment runs', () => {
     expect(deployRows(rows, NOW, true).find((r) => r.live)?.id).toBe('d3')
     expect(deployRows(rows, NOW, false).some((r) => r.live)).toBe(false)
