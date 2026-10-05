@@ -19,10 +19,16 @@ const state = vi.hoisted(() => ({
   ctx: {} as Record<string, unknown>,
   params: {} as Record<string, string | string[] | undefined>,
   chrome: true,
+  os: 'web',
 }))
 
 vi.mock('react-native', () => ({
-  Platform: { OS: 'web', select: (o: Record<string, unknown>) => o.web ?? o.default },
+  Platform: {
+    get OS() {
+      return state.os
+    },
+    select: (o: Record<string, unknown>) => o[state.os] ?? o.default,
+  },
   StyleSheet: { create: (styles: unknown) => styles, flatten: (style: unknown) => style },
   View: ({ children }: Props) => <div>{children}</div>,
 }))
@@ -44,6 +50,9 @@ vi.mock('@/components/org/project/managed-focus-tab', () => ({
   ManagedFocusTab: ({ focus }: Readonly<{ focus: string }>) => (
     <div data-testid="managed" data-focus={focus} />
   ),
+}))
+vi.mock('@/components/org/project/environment-overview/environment-overview-tab', () => ({
+  EnvironmentOverviewTab: () => <div data-testid="env-overview" />,
 }))
 vi.mock('@/components/org/project/project-overview-tab', () => ({
   ProjectOverviewTab: () => <div data-testid="compose-surface" />,
@@ -85,6 +94,7 @@ const redirectHref = () => screen.getByTestId('redirect').getAttribute('data-hre
 beforeEach(() => {
   state.params = { orgId: 'o', projectId: 'p' }
   state.chrome = true
+  state.os = 'web'
   setContext()
 })
 afterEach(cleanup)
@@ -176,14 +186,25 @@ describe('project tabs', () => {
 })
 
 describe('environment tabs', () => {
-  it('renders the environment Overview for Compose and platform projects, managed focus otherwise', () => {
+  it('renders the map Overview for a Compose project on the web', () => {
+    render(<EnvironmentOverviewScreen />)
+    expect(screen.getByTestId('env-overview')).toBeTruthy()
+    expect(screen.queryByTestId('compose-surface')).toBeNull()
+  })
+
+  it('keeps the old screen on the phone app and for platform projects (no environment header)', () => {
+    state.os = 'ios'
     render(<EnvironmentOverviewScreen />)
     expect(screen.getByTestId('compose-surface')).toBeTruthy()
     cleanup()
+    state.os = 'web'
+    state.chrome = false
     setContext({ isSystemProject: true })
     render(<EnvironmentOverviewScreen />)
     expect(screen.getByTestId('compose-surface')).toBeTruthy()
-    cleanup()
+  })
+
+  it('renders managed focus for a managed project', () => {
     setContext({ project: project({ type: 'managed', code: 'postgres' }) })
     render(<EnvironmentOverviewScreen />)
     expect(screen.getByTestId('managed')).toBeTruthy()

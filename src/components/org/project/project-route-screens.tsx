@@ -1,5 +1,6 @@
 import { Redirect, useLocalSearchParams, type Href } from 'expo-router'
-import { View } from 'react-native'
+import { Platform, View } from 'react-native'
+import { EnvironmentOverviewTab } from '@/components/org/project/environment-overview/environment-overview-tab'
 import { useEnvironmentChrome } from '@/components/org/project/environment-shell'
 import { ManagedFocusTab } from '@/components/org/project/managed-focus-tab'
 import { EnvironmentDeploymentHistoryPanel } from '@/components/org/project/environment-deployment-history-panel'
@@ -45,14 +46,18 @@ export function ProjectBaseScreen() {
 }
 
 /**
- * Environment Overview. Platform projects keep it too: their environment page
- * is the read-only component panel the shared compose tab renders.
+ * Environment Overview. Compose projects on the web get the map, the services
+ * and the latest deployments. Platform projects keep the read-only component
+ * panel the shared compose tab renders, and the phone app keeps the screen it
+ * had until the map has its own native layout.
  */
 export function EnvironmentOverviewScreen() {
   const { project } = useProjectContext()
+  const withChrome = useEnvironmentChrome()
   if (project && isManagedProject(project)) {
     return <ManagedFocusTab focus="overview" />
   }
+  if (withChrome && Platform.OS === 'web') return <EnvironmentOverviewTab />
   return <ProjectOverviewTab />
 }
 
