@@ -24,6 +24,8 @@ import {
   projectBaseHref,
   recentProjectHref,
   projectEnvironmentConfigurationHref,
+  projectEnvironmentDeploymentHref,
+  projectEnvironmentDeploymentLogHref,
   projectEnvironmentDeploymentsHref,
   projectPageTabHref,
   withCarriedQuery,
@@ -534,6 +536,18 @@ describe('project and environment tabs', () => {
     expect(projectEnvironmentConfigurationHref('o', 'p', 'e')).toBe(
       '/o/projects/p/environments/e/configuration',
     )
+  })
+
+  it('builds the deploy and log hrefs, which stay on the Deployments tab', () => {
+    const deploy = projectEnvironmentDeploymentHref('o', 'p', 'e', 'd 1')
+    expect(deploy).toBe('/o/projects/p/environments/e/deployments/d%201')
+    expect(projectEnvironmentDeploymentLogHref('o', 'p', 'e', 'd1')).toBe(
+      '/o/projects/p/environments/e/deployments/d1/log',
+    )
+    const log = projectEnvironmentDeploymentLogHref('o', 'p', 'e', 'd1', 'srv/1')
+    expect(log).toBe('/o/projects/p/environments/e/deployments/d1/log?server=srv%2F1')
+    expect(parseEnvironmentPageTab(deploy, 'p')).toBe('deployments')
+    expect(parseEnvironmentPageTab(log.split('?')[0] ?? '', 'p')).toBe('deployments')
   })
 
   it('names the project tab a path belongs to', () => {

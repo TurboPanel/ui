@@ -10,16 +10,19 @@ import { createAppQueryClient } from '@/lib/query-client'
 import {
   accumulateCommandLog,
   classifyCommandLogFailure,
+  DEPLOY_DETAIL_POLL_MS,
   EMPTY_COMMAND_LOG_SNAPSHOT,
   orderDeploymentsNewestFirst,
   resolveCommandLogState,
   useCommandLog,
+  useEnvironmentDeploymentDetail,
   useEnvironmentDeployments,
   type CommandLogSnapshot,
 } from './execution-logs'
 
-const { fetchCommandLog, fetchEnvironmentDeployments } = vi.hoisted(() => ({
+const { fetchCommandLog, fetchEnvironmentDeployment, fetchEnvironmentDeployments } = vi.hoisted(() => ({
   fetchCommandLog: vi.fn(),
+  fetchEnvironmentDeployment: vi.fn(),
   fetchEnvironmentDeployments: vi.fn(),
 }))
 
@@ -28,6 +31,7 @@ vi.mock('@/lib/instance-api', async (importOriginal) => {
   return {
     ...actual,
     fetchCommandLog,
+    fetchEnvironmentDeployment,
     fetchEnvironmentDeployments,
   }
 })
@@ -465,6 +469,49 @@ describe('useEnvironmentDeployments', () => {
       { wrapper: createWrapper() },
     )
     expect(fetchEnvironmentDeployments).not.toHaveBeenCalled()
+  })
+})
+
+describe('useEnvironmentDeploymentDetail', () => {
+  const detail = (status: string) => ({
+    ok: true,
+    deployment: { id: 'd1', environmentId: 'env-1', commands: [{ status }], servers: [] },
+  })
+
+  it('reads one deploy by id, and stops asking once every server has finished', async () => {
+    fetchEnvironmentDeployment.mockResolvedValue(detail('succeeded'))
+    const { result } = renderHook(() => useEnvironmentDeploymentDetail('org-1', 'env-1', 'd1'), {
+      wrapper: createWrapper(),
+    })
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+    expect(fetchEnvironmentDeployment).toHaveBeenCalledWith('env-1', 'd1')
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(fetchEnvironmentDeployment).toHaveBeenCalledTimes(1)
+  })
+
+  it('reads again while a server is still going', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      fetchEnvironmentDeployment.mockResolvedValue(detail('running'))
+      const { result } = renderHook(() => useEnvironmentDeploymentDetail('org-1', 'env-1', 'd1'), {
+        wrapper: createWrapper(),
+      })
+      await waitFor(() => {
+        expect(result.current.isSuccess).toBe(true)
+      })
+      await vi.advanceTimersByTimeAsync(DEPLOY_DETAIL_POLL_MS + 50)
+      expect(fetchEnvironmentDeployment.mock.calls.length).toBeGreaterThan(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('stays off without an environment or a deploy', () => {
+    renderHook(() => useEnvironmentDeploymentDetail('org-1', '', 'd1'), { wrapper: createWrapper() })
+    renderHook(() => useEnvironmentDeploymentDetail('org-1', 'env-1', ''), { wrapper: createWrapper() })
+    expect(fetchEnvironmentDeployment).not.toHaveBeenCalled()
   })
 })
 

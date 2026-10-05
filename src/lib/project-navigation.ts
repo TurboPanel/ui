@@ -263,6 +263,28 @@ export function projectEnvironmentDeploymentsHref(
   return `${projectEnvironmentHref(orgId, projectId, environmentId)}/deployments`
 }
 
+/** One deploy of an environment: its steps and the last lines of its log. */
+export function projectEnvironmentDeploymentHref(
+  orgId: string,
+  projectId: string,
+  environmentId: string,
+  deploymentId: string,
+): string {
+  return `${projectEnvironmentDeploymentsHref(orgId, projectId, environmentId)}/${encodeURIComponent(deploymentId)}`
+}
+
+/** The full log of one deploy; `serverId` picks the server when the deploy ran on several. */
+export function projectEnvironmentDeploymentLogHref(
+  orgId: string,
+  projectId: string,
+  environmentId: string,
+  deploymentId: string,
+  serverId?: string,
+): string {
+  const base = `${projectEnvironmentDeploymentHref(orgId, projectId, environmentId, deploymentId)}/log`
+  return serverId === undefined ? base : `${base}?server=${encodeURIComponent(serverId)}`
+}
+
 /**
  * Environment Configuration tab. Its default lens is the Services list.
  * Path: `/projects/:projectId/environments/:environmentId/configuration`

@@ -215,6 +215,9 @@ export const queryKeys = {
         /** Deploy history page (no interval — invalidated by deploy mutations). */
         deployments: (environmentId: string) =>
           ['org', orgId, 'environment', environmentId, 'deployments'] as const,
+        /** One deploy and every server it ran on; a child of `deployments`. */
+        deployment: (environmentId: string, deploymentId: string) =>
+          ['org', orgId, 'environment', environmentId, 'deployments', 'detail', deploymentId] as const,
         /** Newest few deploys only (cards, in-progress lists); a child of `deployments`. */
         latestDeployments: (environmentId: string) =>
           ['org', orgId, 'environment', environmentId, 'deployments', 'latest'] as const,

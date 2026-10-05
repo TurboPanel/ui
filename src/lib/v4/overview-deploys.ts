@@ -46,12 +46,12 @@ export function groupStatusKey(group: DeploymentGroup): string {
   }
 }
 
-function groupSha(group: DeploymentGroup): string | null {
+export function groupSha(group: DeploymentGroup): string | null {
   const sha = group.trigger?.commitSha
   return sha ? sha.slice(0, SHA_LENGTH) : null
 }
 
-function groupTitle(group: DeploymentGroup): string {
+export function groupTitle(group: DeploymentGroup): string {
   const branch = group.trigger?.branch?.trim()
   if (group.trigger) return branch ? `Push to ${branch}` : 'Git push'
   return group.actorEntityType === 'user' ? 'Started in the console' : 'Started by the system'

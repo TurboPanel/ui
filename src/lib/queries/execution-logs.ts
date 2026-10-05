@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   fetchCommandLog,
+  fetchEnvironmentDeployment,
   fetchEnvironmentDeployments,
   isForbiddenError,
   type CommandLogResponse,
@@ -12,6 +13,7 @@ import {
   parseCommandLogChunk,
   type LogTranscriptLine,
 } from '@/lib/execution-log-lines'
+import { isDeploymentInFlight } from '@/lib/deployment-history'
 import { queryKeys } from '@/lib/query-keys'
 
 /** Transcript poll cadence while a command is live. Sealed transcripts stop. */
@@ -266,6 +268,30 @@ export function useEnvironmentDeployments(
       orgId.length > 0 &&
       environmentId.length > 0,
     refetchInterval: false,
+  })
+}
+
+/** How often a running deploy is read again on the Deploy screen. */
+export const DEPLOY_DETAIL_POLL_MS = 3000
+
+/**
+ * One deploy and every server it ran on (`deploymentId` is any of its command
+ * ids). Read again every few seconds while a server is still going, and left
+ * alone once all have finished.
+ */
+export function useEnvironmentDeploymentDetail(
+  orgId: string,
+  environmentId: string,
+  deploymentId: string,
+) {
+  return useQuery({
+    queryKey: queryKeys.org(orgId).environments.deployment(environmentId, deploymentId),
+    queryFn: () => fetchEnvironmentDeployment(environmentId, deploymentId),
+    enabled: orgId.length > 0 && environmentId.length > 0 && deploymentId.length > 0,
+    refetchInterval: (query) => {
+      const commands = query.state.data?.deployment.commands
+      return commands !== undefined && isDeploymentInFlight(commands) ? DEPLOY_DETAIL_POLL_MS : false
+    },
   })
 }
 
