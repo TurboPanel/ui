@@ -6,6 +6,7 @@ import {
   MANAGED_SERVICE_CATALOG,
   clusterHasUnhealthyMember,
   formatClusterTopologyLabel,
+  currentSlotRetention,
   formatReplicationLag,
   isReplicaCutOff,
   managedCatalogEntryForCode,
@@ -666,6 +667,30 @@ describe('cut-off replica visibility', () => {
     expect(isReplicaCutOff(replica(2), [primary(lagging), replica(2)])).toBe(false)
     expect(isReplicaCutOff(replica(2), [primary(), replica(2)])).toBe(false)
     expect(isReplicaCutOff(replica(2), null)).toBe(false)
+  })
+
+  it('stops reporting the cut-off once the replica itself reads streaming, newer than the primary', () => {
+    const stale = {
+      ...critical,
+      observedAt: '2026-01-01T00:00:00.000Z',
+    }
+    const streamingAgain = (observedAt: string): ManagedMemberRecord => ({
+      ...replica(2),
+      replication: { state: 'streaming', observedAt },
+    })
+    const newer = [primary(stale), streamingAgain('2026-01-01T00:05:00.000Z')]
+    expect(isReplicaCutOff(newer[1]!, newer)).toBe(false)
+    expect(currentSlotRetention(newer)).toBeUndefined()
+    // A streaming reading older than the primary's report does not override it.
+    const older = [primary(stale), streamingAgain('2025-12-31T23:00:00.000Z')]
+    expect(isReplicaCutOff(older[1]!, older)).toBe(true)
+    expect(currentSlotRetention(older)?.state).toBe('critical')
+    // A replica that is not streaming stays cut off whatever its timestamp.
+    const stopped: ManagedMemberRecord = {
+      ...replica(2),
+      replication: { state: 'stopped', observedAt: '2026-01-01T00:05:00.000Z' },
+    }
+    expect(isReplicaCutOff(stopped, [primary(stale), stopped])).toBe(true)
   })
 
   it('says it in words, for the primary and for the replica', () => {

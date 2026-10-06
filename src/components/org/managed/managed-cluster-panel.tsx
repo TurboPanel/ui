@@ -20,6 +20,7 @@ import type {
   ManagedReplicaClass,
 } from '@/lib/managed-services'
 import {
+  currentSlotRetention,
   formatReplicationLag,
   isReplicaCutOff,
   managedErrorMessage,
@@ -130,6 +131,7 @@ export function ManagedClusterPanel({
   onRegisterCommand: (commandId: string, label: string, serverId?: string) => void
 }>) {
   const router = useRouter()
+  const slotRetention = currentSlotRetention(members)
   const serversQuery = useOrgServers(orgId)
   const datacentersQuery = useDatacenters(orgId)
   const fabricQuery = useOrgFabric(orgId)
@@ -437,11 +439,8 @@ export function ManagedClusterPanel({
             key={member.id}
             member={member}
             cutOff={isReplicaCutOff(member, members)}
-            slotNotice={
-              member.role === 'primary'
-                ? slotRetentionNotice(member.replication?.slotRetention)
-                : null
-            }
+            slotNotice={member.role === 'primary' ? slotRetentionNotice(slotRetention) : null}
+            slotCritical={member.role === 'primary' && slotRetention?.state === 'critical'}
             canManage={canManage}
             disabled={disabled}
             serverLabel={serverLabel(member)}
@@ -560,6 +559,7 @@ function ClusterMemberRow({
   member,
   cutOff,
   slotNotice,
+  slotCritical,
   canManage,
   disabled,
   serverLabel,
@@ -577,6 +577,8 @@ function ClusterMemberRow({
   cutOff: boolean
   /** Primary row only: what its slots report while a replica is behind or cut off. */
   slotNotice: string | null
+  /** Primary row only: its current slot report is critical. */
+  slotCritical: boolean
   canManage: boolean
   disabled: boolean
   serverLabel: string
@@ -590,10 +592,7 @@ function ClusterMemberRow({
   onStartPromote: () => void
   onStartDisasterRecovery: () => void
 }>) {
-  const healthy =
-    isHealthyMemberStatus(member.status) &&
-    !cutOff &&
-    member.replication?.slotRetention?.state !== 'critical'
+  const healthy = isHealthyMemberStatus(member.status) && !cutOff && !slotCritical
   const healthLine = resolveHealthLine(member, cutOff, slotNotice)
   const classLabel = memberReplicaClassLabel(member.replicaClass)
   const promoteAction = managedReplicaPromoteAction(member.replicaClass)

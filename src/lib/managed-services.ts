@@ -611,11 +611,35 @@ export function replicationStateLabel(state: string | null | undefined): string 
   }
 }
 
-/** The primary's slot report, when it has one. */
-function primarySlotRetention(
+function observedAtMs(health: ManagedReplicationHealth | undefined): number {
+  const parsed = health ? Date.parse(health.observedAt) : Number.NaN
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+/**
+ * The primary's slot report, unless a newer reading of the replica it names
+ * says that replica is streaming again. The report is stored when the primary
+ * last answered (an apply or a refresh); right after a Resync the replica can
+ * be newer than it, and must not keep reading as cut off.
+ */
+export function currentSlotRetention(
   members: readonly ManagedMemberRecord[] | null | undefined
 ): ManagedSlotRetention | undefined {
-  return (members ?? []).find((m) => m.role === 'primary')?.replication?.slotRetention
+  const list = members ?? []
+  const primary = list.find((m) => m.role === 'primary')
+  const retention = primary?.replication?.slotRetention
+  if (!retention || retention.state === 'ok') return retention
+  const named = list.find(
+    (m) => m.role === 'replica' && retention.slot === `tp_member_${m.ordinal}`
+  )
+  const replicaHealth = named?.replication
+  if (
+    replicaHealth?.state === 'streaming' &&
+    observedAtMs(replicaHealth) > observedAtMs(primary?.replication)
+  ) {
+    return undefined
+  }
+  return retention
 }
 
 /**
@@ -628,7 +652,7 @@ export function isReplicaCutOff(
   members: readonly ManagedMemberRecord[] | null | undefined
 ): boolean {
   if (member.role !== 'replica') return false
-  const retention = primarySlotRetention(members)
+  const retention = currentSlotRetention(members)
   return retention?.state === 'critical' && retention.slot === `tp_member_${member.ordinal}`
 }
 
