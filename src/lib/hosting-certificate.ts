@@ -129,17 +129,21 @@ export function describeCertificate(cert: HostingCertificate): CertificateView {
   return BUILDERS[cert.state](cert)
 }
 
-/** One line per name that does not point here yet, then where it should point. */
+/**
+ * One line per name that does not point here yet (including a www name the
+ * hosting's www choice added), then where it should point.
+ */
 export function dnsSummaryLines(dns: HostingDnsReport): string[] {
   const lines = dns.hostnames
     .filter((entry) => !entry.resolves)
     .map((entry) =>
       entry.addresses.length === 0
-        ? `${entry.hostname}: no DNS record found.`
-        : `${entry.hostname}: points to ${entry.addresses.join(', ')}.`
+        ? `${entry.hostname} doesn’t point at this server yet: no DNS record found.`
+        : `${entry.hostname} doesn’t point at this server yet: it points to ${entry.addresses.join(', ')}.`
     )
   if (lines.length > 0 && dns.expectedAddresses.length > 0) {
-    lines.push(`Point it at ${dns.expectedAddresses.join(', ')}.`)
+    const them = lines.length === 1 ? 'it' : 'them'
+    lines.push(`Point ${them} at ${dns.expectedAddresses.join(', ')}.`)
   }
   return lines
 }

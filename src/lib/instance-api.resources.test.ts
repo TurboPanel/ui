@@ -329,17 +329,17 @@ describe('instance-api resource fetch wrappers', () => {
     })
   })
 
-  it('requestLetsEncryptForHosting PUTs the www choice, fetchHosting and the DNS check GET', async () => {
+  it('requestLetsEncryptForHosting PUTs an empty body, fetchHosting and the DNS check GET', async () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse({ hosting: HOSTING, certificate: null, needsDeploy: true }),
     )
     await expect(
-      requestLetsEncryptForHosting('host-1', { wwwRedirect: true }),
+      requestLetsEncryptForHosting('host-1'),
     ).resolves.toMatchObject({ needsDeploy: true })
     const put = nthCall(0)
     expect(put.url).toContain('/api/client/v1/hostings/host-1/use-letsencrypt')
     expect(put.init.method).toBe('PUT')
-    expect(requestBody(0)).toEqual({ wwwRedirect: true })
+    expect(requestBody(0)).toEqual({})
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ hosting: HOSTING }))
     await fetchHosting('host-1')

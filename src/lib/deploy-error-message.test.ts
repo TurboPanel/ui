@@ -31,4 +31,13 @@ describe('deployErrorMessage', () => {
     expect(deployErrorMessage(new Error('something else'))).toBe('something else')
     expect(deployErrorMessage('not an error')).toBe('Failed to deploy environment')
   })
+
+  it('shows the plain sentence when a certificate misses a www name', () => {
+    const sentence =
+      'The certificate on this hosting must also cover www.example.com because of its www setting.'
+    expect(deployErrorMessage(wrapped('tls_pin_mismatch', sentence))).toBe(sentence)
+    expect(deployErrorMessage(new Error('deploy failed: 400 tls_pin_mismatch'))).toContain(
+      'does not cover every name',
+    )
+  })
 })

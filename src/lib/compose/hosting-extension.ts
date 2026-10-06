@@ -121,6 +121,30 @@ export const HOSTING_HOSTNAME_RE: RegExp = new RegExp(
   'i',
 )
 
+/**
+ * What a hosting does with the other spelling of its hostname (`www.` added,
+ * or removed when it starts with `www.`): `off` answers only on the hostname,
+ * `both` serves the site on both names, `www-to-root` serves the bare name and
+ * redirects `www.` there, `root-to-www` the other way round. Twin of the
+ * control plane's `HostingWwwMode`; the panel helpers live in `@/lib/hosting-www`.
+ */
+export type HostingWwwMode = 'off' | 'both' | 'www-to-root' | 'root-to-www'
+
+export const HOSTING_WWW_MODES: readonly HostingWwwMode[] = [
+  'off',
+  'both',
+  'www-to-root',
+  'root-to-www',
+]
+
+export function isHostingWwwMode(value: unknown): value is HostingWwwMode {
+  return typeof value === 'string' && (HOSTING_WWW_MODES as readonly string[]).includes(value)
+}
+
+/** Message for a `www` value outside the four modes. */
+export const HOSTING_WWW_MODE_MESSAGE =
+  'www must be "off", "both", "www-to-root", or "root-to-www"'
+
 /** `tls` on one entry. `certificateRef` is required by `certificate` alone. */
 export type ComposeHostingTlsSpec = {
   mode: ComposeHostingTlsMode
@@ -168,6 +192,8 @@ export type ComposeHostingExtensionEntry = {
   targetPort?: number
   /** Redirect plain HTTP to HTTPS. Omitted means the row default (`true`). */
   forceHttps?: boolean
+  /** The www choice ({@link HostingWwwMode}). Omitted means `off`. */
+  www?: HostingWwwMode
   tls?: ComposeHostingTlsSpec
   bind?: ComposeHostingBindSpec
 }
@@ -178,6 +204,7 @@ export const HOSTING_ENTRY_KEYS: ReadonlySet<string> = new Set([
   'pathPrefix',
   'targetPort',
   'forceHttps',
+  'www',
   'tls',
   'bind',
 ])
@@ -358,6 +385,7 @@ function parseHostingEntry(
   if (targetPort !== undefined) entry.targetPort = targetPort
   // `false` must survive the round-trip — never a truthiness guard here.
   if (typeof value.forceHttps === 'boolean') entry.forceHttps = value.forceHttps
+  if (isHostingWwwMode(value.www) && value.www !== 'off') entry.www = value.www
   const tls = parseHostingTlsSpec(value.tls)
   if (tls) entry.tls = tls
   const bind = parseHostingBindSpec(value.bind)
@@ -519,6 +547,10 @@ function validateHostingEntry(
       path: `${entryPath}.forceHttps`,
       message: 'forceHttps must be true or false',
     })
+  }
+
+  if ('www' in raw && !isHostingWwwMode(raw.www)) {
+    issues.push({ path: `${entryPath}.www`, message: HOSTING_WWW_MODE_MESSAGE })
   }
 
   if ('tls' in raw) issues.push(...validateHostingTls(entryPath, raw.tls))

@@ -23,7 +23,7 @@ export function useHostingCertificate(
 export function useUseLetsEncrypt(orgId: string, hostingId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (body: { wwwRedirect?: boolean }) => requestLetsEncryptForHosting(hostingId, body),
+    mutationFn: () => requestLetsEncryptForHosting(hostingId),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.org(orgId).hostings.all })
     },

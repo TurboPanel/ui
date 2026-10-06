@@ -13,6 +13,7 @@ import {
   HOSTING_TARGET_PORT_NOT_FOR_SITE_MESSAGE,
   HOSTING_TARGET_PORT_RANGE_MESSAGE,
   HOSTING_TLS_MODE_AUTOMATIC_UNSUPPORTED_MESSAGE,
+  HOSTING_WWW_MODE_MESSAGE,
   hostingTargetPortAuthorable,
   hostingTlsModeOf,
   hostingTlsRefUnresolvedMessage,
@@ -443,5 +444,24 @@ describe('collectHostingExtensionValidationIssues bind rules', () => {
       path: `${BASE}.hosting[0].bind.ipRef`,
       message: expect.stringContaining('bind.ipRef must name a managed address'),
     }])
+  })
+})
+
+describe('hosting www key', () => {
+  it('keeps a www mode on parse and drops off or junk', () => {
+    const parse = (www: unknown) =>
+      parseHostingExtensionEntries([{ hostname: 'example.com', www }])?.[0]?.www
+    expect(parse('www-to-root')).toBe('www-to-root')
+    expect(parse('root-to-www')).toBe('root-to-www')
+    expect(parse('both')).toBe('both')
+    expect(parse('off')).toBeUndefined()
+    expect(parse(true)).toBeUndefined()
+  })
+
+  it('reports a www value outside the four modes', () => {
+    expect(issuesFor({ hostname: 'example.com', www: 'www-to-root' })).toEqual([])
+    expect(issuesFor({ hostname: 'example.com', www: 'yes' })).toEqual([
+      { path: `${BASE}.hosting[0].www`, message: HOSTING_WWW_MODE_MESSAGE },
+    ])
   })
 })
