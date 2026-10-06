@@ -80,11 +80,28 @@ export const AUTOMATIC_FAILOVER_BLOCKED_MESSAGE =
 /** Private path used for replication (mirrors `PrivateEndpointTransport`). */
 export type ManagedMemberTransport = 'local' | 'datacenter' | 'fabric' | 'public'
 
+/**
+ * Primary only: how much log the replicas' replication slots hold back.
+ * `critical` means a replica was cut off (or is about to be) and needs a
+ * Resync; `walStatus: 'awaiting_resync'` is a cut-off replica whose slot was
+ * already replaced and is waiting to be re-seeded.
+ */
+export type ManagedSlotRetention = {
+  state: 'ok' | 'lagging' | 'critical'
+  /** The worst slot, `tp_member_<ordinal>` of the replica it belongs to. */
+  slot?: string
+  walStatus?: string
+  retainedBytes?: number
+  safeBytes?: number
+  active?: boolean
+}
+
 export type ManagedReplicationHealth = {
   state: string
   observedAt: string
   lagBytes?: number
   lagSeconds?: number
+  slotRetention?: ManagedSlotRetention
 }
 
 /**
@@ -593,6 +610,74 @@ export function replicationStateLabel(state: string | null | undefined): string 
       return state.replaceAll('_', ' ')
   }
 }
+
+function observedAtMs(health: ManagedReplicationHealth | undefined): number {
+  const parsed = health ? Date.parse(health.observedAt) : Number.NaN
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+/**
+ * The primary's slot report, unless a newer reading of the replica it names
+ * says that replica is streaming again. The report is stored when the primary
+ * last answered (an apply or a refresh); right after a Resync the replica can
+ * be newer than it, and must not keep reading as cut off.
+ */
+export function currentSlotRetention(
+  members: readonly ManagedMemberRecord[] | null | undefined
+): ManagedSlotRetention | undefined {
+  const list = members ?? []
+  const primary = list.find((m) => m.role === 'primary')
+  const retention = primary?.replication?.slotRetention
+  if (!retention || retention.state === 'ok') return retention
+  const named = list.find(
+    (m) => m.role === 'replica' && retention.slot === `tp_member_${m.ordinal}`
+  )
+  // The named replica is gone (removed instead of resynced): nothing is cut off.
+  if (retention.slot !== undefined && named === undefined) return undefined
+  const replicaHealth = named?.replication
+  if (
+    replicaHealth?.state === 'streaming' &&
+    observedAtMs(replicaHealth) > observedAtMs(primary?.replication)
+  ) {
+    return undefined
+  }
+  return retention
+}
+
+/**
+ * True when the primary reports this replica's slot as cut off: the log it
+ * needed is gone, so it cannot catch up and needs a Resync. The slot is named
+ * after the replica's ordinal.
+ */
+export function isReplicaCutOff(
+  member: Pick<ManagedMemberRecord, 'role' | 'ordinal'>,
+  members: readonly ManagedMemberRecord[] | null | undefined
+): boolean {
+  if (member.role !== 'replica') return false
+  const retention = currentSlotRetention(members)
+  return retention?.state === 'critical' && retention.slot === `tp_member_${member.ordinal}`
+}
+
+/**
+ * One plain sentence for the primary's row while a replica is behind or cut
+ * off; `null` when nothing is wrong. Say it in words, not only with a color.
+ */
+export function slotRetentionNotice(
+  retention: ManagedSlotRetention | null | undefined
+): string | null {
+  if (!retention || retention.state === 'ok') return null
+  if (retention.state === 'critical') {
+    return 'A replica fell too far behind and was cut off (or is about to be). Resync it to bring it back.'
+  }
+  const held =
+    typeof retention.retainedBytes === 'number' && Number.isFinite(retention.retainedBytes)
+      ? ` (${formatCompactBytes(retention.retainedBytes)} so far)`
+      : ''
+  return `A replica is far behind, so this server is keeping extra log files for it${held}.`
+}
+
+/** Row label for a replica the primary has cut off. */
+export const REPLICA_CUT_OFF_LABEL = 'Cut off · Resync needed'
 
 function formatCompactBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes < 0) return '—'
