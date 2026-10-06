@@ -654,6 +654,11 @@ function ManagedEnvironmentReadyPanels({
           engineCode={managed.engine}
           organizationSslMode={detail.ssl?.organizationDefault ?? null}
           exposure={detail.exposure ?? null}
+          onRetryExposure={async () => {
+            const applyResult = await applyManagedMutation.mutateAsync()
+            registerCommand(applyResult.commandId, 'Apply settings')
+            invalidateManagedData()
+          }}
           canManage={canManage}
           busy={inFlight}
           onApply={async (next: ManagedSettings) => {
@@ -661,6 +666,8 @@ function ManagedEnvironmentReadyPanels({
               settings: next,
             })
             if (!updateResult.ok) {
+              // A refused push (502) still saved the setting: show what is pending.
+              invalidateManagedData()
               throw new Error(updateManagedMutation.actionError ?? 'Failed to save settings')
             }
             const applyResult = await applyManagedMutation.mutateAsync()

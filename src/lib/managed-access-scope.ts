@@ -46,7 +46,7 @@ const SCOPE_HINTS: Record<ManagedSqlAccessScope, string> = {
     'Clients on the same datacenter private network dial the server pin address.',
   turbofabric: `Clients on the org ${TURBOFABRIC_PRODUCT_NAME} mesh dial the relay address.`,
   public:
-    'Clients reach the shared ProxySQL listener on a public or hostname address.',
+    'Clients reach the shared ProxySQL listener on a public or hostname address. Every other database on this server becomes reachable the same way, because they share one listener.',
 }
 
 export function managedAccessScopeLabel(scope: ManagedSqlAccessScope): string {
