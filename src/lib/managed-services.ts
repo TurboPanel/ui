@@ -658,7 +658,9 @@ export function formatReplicationAge(health: ManagedReplicationHealth | null | u
  */
 export function isReplicationHealthy(health: ManagedReplicationHealth | null | undefined): boolean {
   if (!health) return true
-  return health.state === 'streaming' || health.state === 'catching_up' || health.state === 'catchup'
+  return (
+    health.state === 'streaming' || health.state === 'catching_up' || health.state === 'catchup'
+  )
 }
 
 function observedAtMs(health: ManagedReplicationHealth | undefined): number {
