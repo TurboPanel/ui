@@ -410,6 +410,8 @@ const MANAGED_ERROR_COPY: Record<string, string> = {
     'Still connected to one or more services. Remove those connections first.',
   managed_database_has_bindings:
     'Still connected to one or more services. Remove those connections first.',
+  managed_has_bindings:
+    'One or more services are still connected to this cluster. Remove those connections first, then destroy it.',
   binding_key_prefix_in_use:
     'This service already has a connection using that prefix — pick another.',
   binding_engine_defaults_in_use:
