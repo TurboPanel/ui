@@ -549,14 +549,30 @@ function validateHostingEntry(
     })
   }
 
-  if ('www' in raw && !isHostingWwwMode(raw.www)) {
-    issues.push({ path: `${entryPath}.www`, message: HOSTING_WWW_MODE_MESSAGE })
-  }
+  if ('www' in raw) issues.push(...validateHostingWww(entryPath, raw))
 
   if ('tls' in raw) issues.push(...validateHostingTls(entryPath, raw.tls))
   if ('bind' in raw) issues.push(...validateHostingBind(entryPath, raw.bind))
 
   return issues
+}
+
+/** Same refusals as the instance: a bad value, or a mode on a name with no www spelling. */
+function validateHostingWww(
+  entryPath: string,
+  raw: Record<string, unknown>,
+): HostingExtensionIssue[] {
+  const path = `${entryPath}.www`
+  if (!isHostingWwwMode(raw.www)) return [{ path, message: HOSTING_WWW_MODE_MESSAGE }]
+  const hostname = readHostingHostname(raw.hostname)
+  if (raw.www === 'off' || !hostname || hasWwwSpelling(hostname)) return []
+  return [{ path, message: `${hostname} has no www or bare spelling, so www must be "off" for it` }]
+}
+
+/** Whether `www.` can be added to (or removed from) the name and still route. */
+function hasWwwSpelling(hostname: string): boolean {
+  const sibling = hostname.startsWith('www.') ? hostname.slice(4) : `www.${hostname}`
+  return sibling.includes('.') && readHostingHostname(sibling) === sibling
 }
 
 /**

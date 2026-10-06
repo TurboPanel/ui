@@ -463,5 +463,12 @@ describe('hosting www key', () => {
     expect(issuesFor({ hostname: 'example.com', www: 'yes' })).toEqual([
       { path: `${BASE}.hosting[0].www`, message: HOSTING_WWW_MODE_MESSAGE },
     ])
+    expect(issuesFor({ hostname: '*.example.com', www: 'both' })).toEqual([
+      {
+        path: `${BASE}.hosting[0].www`,
+        message: '*.example.com has no www or bare spelling, so www must be "off" for it',
+      },
+    ])
+    expect(issuesFor({ hostname: '*.example.com', www: 'off' })).toEqual([])
   })
 })
