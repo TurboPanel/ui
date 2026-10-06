@@ -18,7 +18,12 @@ export const MANAGED_SQL_ACCESS_SCOPES: readonly ManagedSqlAccessScope[] = [
   'public',
 ]
 
-export const DEFAULT_MANAGED_SQL_ACCESS_SCOPE: ManagedSqlAccessScope = 'public'
+/**
+ * Same as the control plane: a cluster that does not name a scope listens on
+ * this server only. Saving settings echoes the scope back, so this must match,
+ * or an unrelated save would widen an older cluster.
+ */
+export const DEFAULT_MANAGED_SQL_ACCESS_SCOPE: ManagedSqlAccessScope = 'local'
 
 export function isManagedSqlAccessScope(
   value: unknown,
@@ -35,7 +40,8 @@ const SCOPE_LABELS: Record<ManagedSqlAccessScope, string> = {
 }
 
 const SCOPE_HINTS: Record<ManagedSqlAccessScope, string> = {
-  local: 'Loopback and co-located Docker networks only — no host publish.',
+  local:
+    'This server only: sites on this server connect on 127.0.0.1, and containers bound to the database use the private Docker network.',
   datacenter:
     'Clients on the same datacenter private network dial the server pin address.',
   turbofabric: `Clients on the org ${TURBOFABRIC_PRODUCT_NAME} mesh dial the relay address.`,

@@ -18,7 +18,7 @@ describe('managed-access-scope', () => {
   })
 
   it('describes each scope for picker hints', () => {
-    expect(managedAccessScopeHint('local')).toContain('Loopback')
+    expect(managedAccessScopeHint('local')).toContain('127.0.0.1')
     expect(managedAccessScopeHint('datacenter')).toContain('private network')
     expect(managedAccessScopeHint('turbofabric')).toContain(
       TURBOFABRIC_PRODUCT_NAME,
@@ -32,6 +32,11 @@ describe('managed-access-scope', () => {
     expect(isManagedSqlAccessScope('turbofabric')).toBe(true)
     expect(isManagedSqlAccessScope('internet')).toBe(false)
     expect(isManagedSqlAccessScope(42)).toBe(false)
+  })
+
+  it('defaults to this server only, matching the control plane', () => {
+    expect(DEFAULT_MANAGED_SQL_ACCESS_SCOPE).toBe('local')
+    expect(readManagedExposureScope({ enabled: true })).toBe('local')
   })
 
   it('reads scope and defaults when omitted or invalid', () => {
