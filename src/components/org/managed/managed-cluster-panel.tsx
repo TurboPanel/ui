@@ -21,6 +21,7 @@ import type {
 } from '@/lib/managed-services'
 import {
   formatReplicationLag,
+  isReplicaCutOff,
   managedErrorMessage,
   managedRecoveryBanner,
   managedReplicaPromoteAction,
@@ -31,7 +32,9 @@ import {
   memberRoleLabel,
   memberStatusLabel,
   memberTransportLabel,
+  REPLICA_CUT_OFF_LABEL,
   replicationStateLabel,
+  slotRetentionNotice,
 } from '@/lib/managed-services'
 import {
   replicaIneligibleReasonLabel,
@@ -89,10 +92,15 @@ function isHealthyMemberStatus(status: string | null): boolean {
   return status === 'ready' || status === 'running'
 }
 
-function resolveHealthLine(member: ManagedMemberRecord): string {
+function resolveHealthLine(
+  member: ManagedMemberRecord,
+  cutOff: boolean,
+  slotNotice: string | null
+): string {
   if (member.role !== 'replica') {
-    return memberStatusLabel(member.status)
+    return [memberStatusLabel(member.status), slotNotice].filter(Boolean).join(' · ')
   }
+  if (cutOff) return REPLICA_CUT_OFF_LABEL
   const lag = formatReplicationLag(member.replication)
   return (
     [replicationStateLabel(member.replication?.state ?? null), lag].filter(Boolean).join(' · ') ||
@@ -428,6 +436,12 @@ export function ManagedClusterPanel({
           <ClusterMemberRow
             key={member.id}
             member={member}
+            cutOff={isReplicaCutOff(member, members)}
+            slotNotice={
+              member.role === 'primary'
+                ? slotRetentionNotice(member.replication?.slotRetention)
+                : null
+            }
             canManage={canManage}
             disabled={disabled}
             serverLabel={serverLabel(member)}
@@ -544,6 +558,8 @@ export function ManagedClusterPanel({
 
 function ClusterMemberRow({
   member,
+  cutOff,
+  slotNotice,
   canManage,
   disabled,
   serverLabel,
@@ -557,6 +573,10 @@ function ClusterMemberRow({
   onStartDisasterRecovery,
 }: Readonly<{
   member: ManagedMemberRecord
+  /** The primary reports this replica's slot as cut off: it needs a Resync. */
+  cutOff: boolean
+  /** Primary row only: what its slots report while a replica is behind or cut off. */
+  slotNotice: string | null
   canManage: boolean
   disabled: boolean
   serverLabel: string
@@ -570,8 +590,11 @@ function ClusterMemberRow({
   onStartPromote: () => void
   onStartDisasterRecovery: () => void
 }>) {
-  const healthy = isHealthyMemberStatus(member.status)
-  const healthLine = resolveHealthLine(member)
+  const healthy =
+    isHealthyMemberStatus(member.status) &&
+    !cutOff &&
+    member.replication?.slotRetention?.state !== 'critical'
+  const healthLine = resolveHealthLine(member, cutOff, slotNotice)
   const classLabel = memberReplicaClassLabel(member.replicaClass)
   const promoteAction = managedReplicaPromoteAction(member.replicaClass)
   const isReadReplica = promoteAction === 'disaster-recovery'
