@@ -141,3 +141,17 @@ describe('composeHostingEntryFromEditorFields', () => {
       .toEqual([])
   })
 })
+
+describe('composeHostingEntryFromEditorFields www', () => {
+  it('writes www only when it says something', () => {
+    expect(
+      composeHostingEntryFromEditorFields(editor({ www: 'www-to-root' }), 'container')?.www,
+    ).toBe('www-to-root')
+    expect(
+      composeHostingEntryFromEditorFields(editor({ www: 'off' }), 'container'),
+    ).not.toHaveProperty('www')
+    expect(
+      composeHostingEntryFromEditorFields(editor({ www: null }), 'container'),
+    ).not.toHaveProperty('www')
+  })
+})
