@@ -1764,9 +1764,11 @@ export function ComposeVisualServiceCard({
       })
       return
     }
+    // Written out rather than cleared: on an environment overlay whose Base says
+    // Deno, removing the key would leave the Base's Deno in force.
     applyExtension({
       serviceKind: 'node',
-      runtime: undefined,
+      runtime: 'node',
       denoVersion: undefined,
       framework: extension.framework ?? 'auto',
     })
