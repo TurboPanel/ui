@@ -28,6 +28,8 @@ import {
   memberTransportLabel,
   REPLICA_CUT_OFF_LABEL,
   replicationStateLabel,
+  formatReplicationAge,
+  isReplicationHealthy,
   shortBackupChecksum,
   slotRetentionNotice,
   sortManagedCatalogEntries,
@@ -304,6 +306,7 @@ describe('replicationStateLabel / formatReplicationLag', () => {
     expect(replicationStateLabel('catchup')).toBe('Catching up')
     expect(replicationStateLabel('not_streaming')).toBe('Not streaming')
     expect(replicationStateLabel('stopped')).toBe('Stopped')
+    expect(replicationStateLabel('unknown')).toBe('Unknown')
     expect(replicationStateLabel('unknown_phase')).toBe('unknown phase')
   })
 
@@ -543,12 +546,38 @@ describe('managedRecoveryKindLabel / managedRecoveryStateLabel', () => {
       'Fencing',
       'Promoting',
       'Repointing',
-      'Reconciling ingress',
+      'Switching database proxies',
       'Verifying',
       'Completed',
       'Failed',
       'Blocked',
     ])
+  })
+})
+
+describe('stale replica health', () => {
+  const at = '2026-01-01T00:00:00.000Z'
+
+  it('says how old an out-of-date reading is, and nothing for a fresh one', () => {
+    expect(formatReplicationAge({ state: 'streaming', observedAt: at })).toBeNull()
+    expect(
+      formatReplicationAge({ state: 'unknown', observedAt: at, stale: true, ageSeconds: 45 })
+    ).toBe('last seen 45s ago')
+    expect(
+      formatReplicationAge({ state: 'unknown', observedAt: at, stale: true, ageSeconds: 300 })
+    ).toBe('last seen 5 min ago')
+    expect(
+      formatReplicationAge({ state: 'unknown', observedAt: at, stale: true, ageSeconds: 7200 })
+    ).toBe('last seen 2 h ago')
+    expect(formatReplicationAge({ state: 'unknown', observedAt: at, stale: true })).toBeNull()
+  })
+
+  it('a replica is healthy only while its reading says it is keeping up', () => {
+    expect(isReplicationHealthy(undefined)).toBe(true)
+    expect(isReplicationHealthy({ state: 'streaming', observedAt: at })).toBe(true)
+    expect(isReplicationHealthy({ state: 'catching_up', observedAt: at })).toBe(true)
+    expect(isReplicationHealthy({ state: 'unknown', observedAt: at, stale: true })).toBe(false)
+    expect(isReplicationHealthy({ state: 'not_streaming', observedAt: at })).toBe(false)
   })
 })
 
@@ -590,6 +619,20 @@ describe('managedRecoveryBanner', () => {
       kind: 'blocked',
       text: 'Primary still accepting writes',
     })
+  })
+
+  it('shows why a failed recovery stopped when the control plane says', () => {
+    expect(
+      managedRecoveryBanner(
+        recoveryRecord({
+          id: 'r9',
+          kind: 'switchover',
+          state: 'failed',
+          sourcePrimaryMemberId: 'p1',
+          failedReason: '  Degraded: the database proxy on alpha has not switched.  ',
+        })
+      )
+    ).toEqual({ kind: 'failed', text: 'Degraded: the database proxy on alpha has not switched.' })
   })
 
   it('surfaces failed and in-flight recoveries', () => {

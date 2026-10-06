@@ -67,6 +67,8 @@ export type ManagedRecoveryRecord = {
   startedAt: string
   completedAt: string | null
   blockedReason: string | null
+  /** Why a `failed` recovery stopped (for example a proxy that did not switch). */
+  failedReason?: string | null
   lagBytes: number | null
   sourceDatacenterId: string | null
   targetDatacenterId: string | null
@@ -101,6 +103,11 @@ export type ManagedReplicationHealth = {
   observedAt: string
   lagBytes?: number
   lagSeconds?: number
+  /** The reading is older than the freshness window; `state` is then `unknown`. */
+  stale?: boolean
+  /** What the state was before it went out of date. */
+  lastState?: string
+  ageSeconds?: number
   slotRetention?: ManagedSlotRetention
 }
 
@@ -543,7 +550,7 @@ export function managedRecoveryStateLabel(state: ManagedRecoveryState): string {
     case 'repointing':
       return 'Repointing'
     case 'reconciling-ingress':
-      return 'Reconciling ingress'
+      return 'Switching database proxies'
     case 'verifying':
       return 'Verifying'
     case 'completed':
@@ -568,7 +575,7 @@ export function managedRecoveryBanner(
   if (recovery.state === 'failed') {
     return {
       kind: 'failed',
-      text: `${managedRecoveryKindLabel(recovery.kind)} failed`,
+      text: recovery.failedReason?.trim() || `${managedRecoveryKindLabel(recovery.kind)} failed`,
     }
   }
   return {
@@ -624,9 +631,36 @@ export function replicationStateLabel(state: string | null | undefined): string 
       return 'Not streaming'
     case 'stopped':
       return 'Stopped'
+    case 'unknown':
+      return 'Unknown'
     default:
       return state.replaceAll('_', ' ')
   }
+}
+
+/**
+ * "last seen 5 min ago" for a reading that went out of date; null for a fresh
+ * one. Pair with {@link replicationStateLabel} (`Unknown`).
+ */
+export function formatReplicationAge(health: ManagedReplicationHealth | null | undefined) {
+  if (!health?.stale || typeof health.ageSeconds !== 'number') return null
+  const seconds = health.ageSeconds
+  if (seconds < 90) return `last seen ${Math.max(1, Math.round(seconds))}s ago`
+  const minutes = Math.round(seconds / 60)
+  if (minutes < 90) return `last seen ${minutes} min ago`
+  return `last seen ${Math.round(minutes / 60)} h ago`
+}
+
+/**
+ * A replica is only shown healthy while its last reading says it is keeping up.
+ * No reading yet keeps the member's own status; an unknown, stopped or
+ * not-streaming reading is attention needed.
+ */
+export function isReplicationHealthy(health: ManagedReplicationHealth | null | undefined): boolean {
+  if (!health) return true
+  return (
+    health.state === 'streaming' || health.state === 'catching_up' || health.state === 'catchup'
+  )
 }
 
 function observedAtMs(health: ManagedReplicationHealth | undefined): number {

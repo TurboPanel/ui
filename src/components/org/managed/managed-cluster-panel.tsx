@@ -35,6 +35,8 @@ import {
   memberTransportLabel,
   REPLICA_CUT_OFF_LABEL,
   replicationStateLabel,
+  formatReplicationAge,
+  isReplicationHealthy,
   slotRetentionNotice,
 } from '@/lib/managed-services'
 import {
@@ -103,9 +105,11 @@ function resolveHealthLine(
   }
   if (cutOff) return REPLICA_CUT_OFF_LABEL
   const lag = formatReplicationLag(member.replication)
+  const age = formatReplicationAge(member.replication)
   return (
-    [replicationStateLabel(member.replication?.state ?? null), lag].filter(Boolean).join(' · ') ||
-    '—'
+    [replicationStateLabel(member.replication?.state ?? null), age ?? lag]
+      .filter(Boolean)
+      .join(' · ') || '—'
   )
 }
 
@@ -592,7 +596,11 @@ function ClusterMemberRow({
   onStartPromote: () => void
   onStartDisasterRecovery: () => void
 }>) {
-  const healthy = isHealthyMemberStatus(member.status) && !cutOff && !slotCritical
+  const healthy =
+    isHealthyMemberStatus(member.status) &&
+    !cutOff &&
+    !slotCritical &&
+    (member.role !== 'replica' || isReplicationHealthy(member.replication))
   const healthLine = resolveHealthLine(member, cutOff, slotNotice)
   const classLabel = memberReplicaClassLabel(member.replicaClass)
   const promoteAction = managedReplicaPromoteAction(member.replicaClass)
