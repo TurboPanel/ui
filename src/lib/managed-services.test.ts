@@ -6,7 +6,9 @@ import {
   MANAGED_SERVICE_CATALOG,
   clusterHasUnhealthyMember,
   formatClusterTopologyLabel,
+  currentSlotRetention,
   formatReplicationLag,
+  isReplicaCutOff,
   managedCatalogEntryForCode,
   managedEngineSupportsBackup,
   managedErrorMessage,
@@ -24,8 +26,10 @@ import {
   memberRoleLabel,
   memberStatusLabel,
   memberTransportLabel,
+  REPLICA_CUT_OFF_LABEL,
   replicationStateLabel,
   shortBackupChecksum,
+  slotRetentionNotice,
   sortManagedCatalogEntries,
   type ManagedMemberRecord,
   type ManagedRecoveryKind,
@@ -636,5 +640,100 @@ describe('managedHealthRefreshNotice', () => {
     expect(managedHealthRefreshNotice({ observed: 1, unavailable: 2 })).toBe(
       'Refreshed 1 of 3 replicas. Showing the last known health for 2 replicas (offline, not yet updated, or not responding).'
     )
+  })
+})
+
+describe('cut-off replica visibility', () => {
+  const primary = (slotRetention?: ManagedMemberRecord['replication']): ManagedMemberRecord => ({
+    id: 'p',
+    serverId: 's1',
+    serverName: null,
+    role: 'primary',
+    replicaClass: null,
+    readEligible: true,
+    ordinal: 1,
+    status: 'ready',
+    replicationTransport: null,
+    privatePort: null,
+    ...(slotRetention ? { replication: slotRetention } : {}),
+  })
+  const replica = (ordinal: number): ManagedMemberRecord => ({
+    ...primary(),
+    id: `r${ordinal}`,
+    role: 'replica',
+    replicaClass: 'failover',
+    ordinal,
+  })
+  const critical = {
+    state: 'streaming',
+    observedAt: '2026-01-01T00:00:00.000Z',
+    slotRetention: {
+      state: 'critical' as const,
+      slot: 'tp_member_2',
+      walStatus: 'awaiting_resync',
+    },
+  }
+
+  it('marks only the replica whose slot the primary reports as cut off', () => {
+    const members = [primary(critical), replica(2), replica(3)]
+    expect(isReplicaCutOff(members[1]!, members)).toBe(true)
+    expect(isReplicaCutOff(members[2]!, members)).toBe(false)
+    expect(isReplicaCutOff(members[0]!, members)).toBe(false)
+  })
+
+  it('does not mark anything while the slot is only behind, ok, or unreported', () => {
+    const lagging = {
+      ...critical,
+      slotRetention: { state: 'lagging' as const, slot: 'tp_member_2' },
+    }
+    expect(isReplicaCutOff(replica(2), [primary(lagging), replica(2)])).toBe(false)
+    expect(isReplicaCutOff(replica(2), [primary(), replica(2)])).toBe(false)
+    expect(isReplicaCutOff(replica(2), null)).toBe(false)
+  })
+
+  it('stops reporting the cut-off once the replica itself reads streaming, newer than the primary', () => {
+    const stale = {
+      ...critical,
+      observedAt: '2026-01-01T00:00:00.000Z',
+    }
+    const streamingAgain = (observedAt: string): ManagedMemberRecord => ({
+      ...replica(2),
+      replication: { state: 'streaming', observedAt },
+    })
+    const newer = [primary(stale), streamingAgain('2026-01-01T00:05:00.000Z')]
+    expect(isReplicaCutOff(newer[1]!, newer)).toBe(false)
+    expect(currentSlotRetention(newer)).toBeUndefined()
+    // A streaming reading older than the primary's report does not override it.
+    const older = [primary(stale), streamingAgain('2025-12-31T23:00:00.000Z')]
+    expect(isReplicaCutOff(older[1]!, older)).toBe(true)
+    expect(currentSlotRetention(older)?.state).toBe('critical')
+    // A replica that is not streaming stays cut off whatever its timestamp.
+    const stopped: ManagedMemberRecord = {
+      ...replica(2),
+      replication: { state: 'stopped', observedAt: '2026-01-01T00:05:00.000Z' },
+    }
+    expect(isReplicaCutOff(stopped, [primary(stale), stopped])).toBe(true)
+  })
+
+  it('reports nothing once the replica the slot names has been removed', () => {
+    const alone = [primary(critical)]
+    expect(currentSlotRetention(alone)).toBeUndefined()
+    // Another replica exists, but not the one the slot names.
+    const other = [primary(critical), replica(3)]
+    expect(currentSlotRetention(other)).toBeUndefined()
+    expect(isReplicaCutOff(other[1]!, other)).toBe(false)
+  })
+
+  it('says it in words, for the primary and for the replica', () => {
+    expect(slotRetentionNotice(undefined)).toBeNull()
+    expect(slotRetentionNotice({ state: 'ok' })).toBeNull()
+    expect(slotRetentionNotice({ state: 'critical', slot: 'tp_member_2' })).toContain('Resync')
+    expect(slotRetentionNotice({ state: 'lagging', retainedBytes: 2 * 1024 ** 3 })).toBe(
+      'A replica is far behind, so this server is keeping extra log files for it (2 GB so far).'
+    )
+    expect(slotRetentionNotice({ state: 'lagging' })).toBe(
+      'A replica is far behind, so this server is keeping extra log files for it.'
+    )
+    expect(REPLICA_CUT_OFF_LABEL).toContain('Resync needed')
   })
 })

@@ -20,7 +20,9 @@ import type {
   ManagedReplicaClass,
 } from '@/lib/managed-services'
 import {
+  currentSlotRetention,
   formatReplicationLag,
+  isReplicaCutOff,
   managedErrorMessage,
   managedRecoveryBanner,
   managedReplicaPromoteAction,
@@ -31,7 +33,9 @@ import {
   memberRoleLabel,
   memberStatusLabel,
   memberTransportLabel,
+  REPLICA_CUT_OFF_LABEL,
   replicationStateLabel,
+  slotRetentionNotice,
 } from '@/lib/managed-services'
 import {
   replicaIneligibleReasonLabel,
@@ -89,10 +93,15 @@ function isHealthyMemberStatus(status: string | null): boolean {
   return status === 'ready' || status === 'running'
 }
 
-function resolveHealthLine(member: ManagedMemberRecord): string {
+function resolveHealthLine(
+  member: ManagedMemberRecord,
+  cutOff: boolean,
+  slotNotice: string | null
+): string {
   if (member.role !== 'replica') {
-    return memberStatusLabel(member.status)
+    return [memberStatusLabel(member.status), slotNotice].filter(Boolean).join(' · ')
   }
+  if (cutOff) return REPLICA_CUT_OFF_LABEL
   const lag = formatReplicationLag(member.replication)
   return (
     [replicationStateLabel(member.replication?.state ?? null), lag].filter(Boolean).join(' · ') ||
@@ -122,6 +131,7 @@ export function ManagedClusterPanel({
   onRegisterCommand: (commandId: string, label: string, serverId?: string) => void
 }>) {
   const router = useRouter()
+  const slotRetention = currentSlotRetention(members)
   const serversQuery = useOrgServers(orgId)
   const datacentersQuery = useDatacenters(orgId)
   const fabricQuery = useOrgFabric(orgId)
@@ -428,6 +438,9 @@ export function ManagedClusterPanel({
           <ClusterMemberRow
             key={member.id}
             member={member}
+            cutOff={isReplicaCutOff(member, members)}
+            slotNotice={member.role === 'primary' ? slotRetentionNotice(slotRetention) : null}
+            slotCritical={member.role === 'primary' && slotRetention?.state === 'critical'}
             canManage={canManage}
             disabled={disabled}
             serverLabel={serverLabel(member)}
@@ -544,6 +557,9 @@ export function ManagedClusterPanel({
 
 function ClusterMemberRow({
   member,
+  cutOff,
+  slotNotice,
+  slotCritical,
   canManage,
   disabled,
   serverLabel,
@@ -557,6 +573,12 @@ function ClusterMemberRow({
   onStartDisasterRecovery,
 }: Readonly<{
   member: ManagedMemberRecord
+  /** The primary reports this replica's slot as cut off: it needs a Resync. */
+  cutOff: boolean
+  /** Primary row only: what its slots report while a replica is behind or cut off. */
+  slotNotice: string | null
+  /** Primary row only: its current slot report is critical. */
+  slotCritical: boolean
   canManage: boolean
   disabled: boolean
   serverLabel: string
@@ -570,8 +592,8 @@ function ClusterMemberRow({
   onStartPromote: () => void
   onStartDisasterRecovery: () => void
 }>) {
-  const healthy = isHealthyMemberStatus(member.status)
-  const healthLine = resolveHealthLine(member)
+  const healthy = isHealthyMemberStatus(member.status) && !cutOff && !slotCritical
+  const healthLine = resolveHealthLine(member, cutOff, slotNotice)
   const classLabel = memberReplicaClassLabel(member.replicaClass)
   const promoteAction = managedReplicaPromoteAction(member.replicaClass)
   const isReadReplica = promoteAction === 'disaster-recovery'
