@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ActivityIndicator, View } from 'react-native'
+import { useCrashRetry } from '@/components/org/project/environment-overview/use-crash-retry'
 import { EnvironmentOverviewBody } from '@/components/org/project/environment-overview/environment-overview-body'
 import { useEnvironmentOverviewModel } from '@/components/org/project/environment-overview/use-environment-overview'
 import { ProjectOverviewTab } from '@/components/org/project/project-overview-tab'
@@ -23,11 +24,12 @@ function useNow(intervalMs: number): number {
  * before stays, so nothing is hidden behind a blank page.
  */
 export function EnvironmentOverviewTab() {
-  const { orgId, projectId, environments, selectedEnvironment } = useProjectContext()
+  const { orgId, projectId, environments, selectedEnvironment, canManage } = useProjectContext()
   const model = useEnvironmentOverviewModel()
   const now = useNow(60_000)
   const p = usePalette()
   const environmentId = selectedEnvironment?.id ?? ''
+  const retry = useCrashRetry(orgId, environmentId, canManage)
   const ids = useMemo(() => ({ orgId, projectId, environmentId }), [orgId, projectId, environmentId])
   if (model.state === 'unavailable') return <ProjectOverviewTab />
   if (model.state === 'loading') {
@@ -45,6 +47,7 @@ export function EnvironmentOverviewTab() {
       running={model.running}
       environmentCount={environments.length}
       now={now}
+      retry={retry}
     />
   )
 }
