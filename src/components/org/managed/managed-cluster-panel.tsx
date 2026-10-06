@@ -32,6 +32,8 @@ import {
   memberStatusLabel,
   memberTransportLabel,
   replicationStateLabel,
+  formatReplicationAge,
+  isReplicationHealthy,
 } from '@/lib/managed-services'
 import {
   replicaIneligibleReasonLabel,
@@ -94,9 +96,11 @@ function resolveHealthLine(member: ManagedMemberRecord): string {
     return memberStatusLabel(member.status)
   }
   const lag = formatReplicationLag(member.replication)
+  const age = formatReplicationAge(member.replication)
   return (
-    [replicationStateLabel(member.replication?.state ?? null), lag].filter(Boolean).join(' · ') ||
-    '—'
+    [replicationStateLabel(member.replication?.state ?? null), age ?? lag]
+      .filter(Boolean)
+      .join(' · ') || '—'
   )
 }
 
@@ -570,7 +574,9 @@ function ClusterMemberRow({
   onStartPromote: () => void
   onStartDisasterRecovery: () => void
 }>) {
-  const healthy = isHealthyMemberStatus(member.status)
+  const healthy =
+    isHealthyMemberStatus(member.status) &&
+    (member.role !== 'replica' || isReplicationHealthy(member.replication))
   const healthLine = resolveHealthLine(member)
   const classLabel = memberReplicaClassLabel(member.replicaClass)
   const promoteAction = managedReplicaPromoteAction(member.replicaClass)
