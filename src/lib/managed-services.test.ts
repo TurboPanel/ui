@@ -113,6 +113,28 @@ describe('shortBackupChecksum', () => {
 })
 
 describe('managedErrorMessage', () => {
+  it('keeps the server name in refusals that carry one, and has copy for the rest', () => {
+    expect(
+      managedErrorMessage(
+        new Error(
+          '/x failed: HTTP 422: fabric_address_required — Server db-2 has no TurboFabric address, so the TurboFabric scope cannot be used on it.',
+        ),
+        'fallback',
+      ),
+    ).toBe(
+      'Server db-2 has no TurboFabric address, so the TurboFabric scope cannot be used on it.',
+    )
+    expect(
+      managedErrorMessage(new Error('HTTP 422: fabric_address_required'), 'fallback'),
+    ).toContain('no TurboFabric address')
+    expect(
+      managedErrorMessage(
+        new Error('/x failed: HTTP 502: ingress_reconcile_failed — Saved, but db-1 could not be told yet.'),
+        'fallback',
+      ),
+    ).toBe('Saved, but db-1 could not be told yet.')
+  })
+
   it('maps known HTTP error codes to operator copy', () => {
     expect(managedErrorMessage(new Error('HTTP 422: server_placement_required'), 'fallback')).toBe(
       'Select a server before creating this managed service.'

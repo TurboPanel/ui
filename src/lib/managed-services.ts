@@ -333,6 +333,8 @@ export type ManagedExposureView = {
   scopes: ManagedSqlAccessScope[]
   /** Published only because another cluster on the same host asked for it. */
   viaCoResidentCluster: boolean
+  /** Servers told to listen the new way that have not confirmed it yet. */
+  pendingServers?: { id: string; name: string }[]
 }
 
 export type ManagedDetailResponse = {
@@ -407,6 +409,9 @@ const MANAGED_ERROR_COPY: Record<string, string> = {
   datacenter_required: 'That server is not assigned to a datacenter.',
   datacenter_cidr_required: 'That datacenter has no private network yet.',
   datacenter_ip_required: 'That server has no private address in its datacenter.',
+  fabric_address_required: `That server has no ${TURBOFABRIC_PRODUCT_NAME} address yet, so the ${TURBOFABRIC_PRODUCT_NAME} scope cannot be used on it.`,
+  ingress_reconcile_failed:
+    'Saved, but the server could not be told the new setting yet, so it still listens the old way. It is retried automatically; press Apply to try now.',
   private_family_mismatch:
     'Those servers share a datacenter but not an address family (one is IPv4-only, the other IPv6-only).',
   private_path_unavailable: 'No private path between that server and the primary.',
@@ -445,10 +450,23 @@ const MANAGED_ERROR_COPY: Record<string, string> = {
  * Map instance managed error codes (inside `HTTP <status>: <code>`) to
  * operator-readable copy; otherwise return the raw message.
  */
+const SERVER_NAMED_ERROR_CODES = new Set([
+  'datacenter_ip_required',
+  'fabric_address_required',
+  'daemon_key_unavailable',
+  'ingress_reconcile_failed',
+])
+
 export function managedErrorMessage(err: unknown, fallback: string): string {
   const raw = err instanceof Error ? err.message : fallback
   const match = /HTTP \d+:\s*([a-z0-9_]+)/i.exec(raw)
   const code = match?.[1]
+  // These refusals say which server they are about; the general copy would
+  // lose that.
+  if (code && SERVER_NAMED_ERROR_CODES.has(code)) {
+    const named = /\s—\s(.+)$/s.exec(raw)?.[1]
+    if (named) return named
+  }
   if (code && MANAGED_ERROR_COPY[code]) {
     return MANAGED_ERROR_COPY[code]
   }
