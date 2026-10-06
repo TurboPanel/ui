@@ -12,6 +12,7 @@ import {
   LegacyProjectRedirect,
   ProjectBaseScreen,
   ProjectEnvironmentsScreen,
+  ProjectSettingsRouteScreen,
 } from './project-route-screens'
 
 type Props = Readonly<Record<string, unknown> & { children?: ReactNode }>
@@ -60,6 +61,9 @@ vi.mock('@/components/org/project/configuration/environment-configuration', () =
 }))
 vi.mock('@/components/org/project/project-overview-tab', () => ({
   ProjectOverviewTab: () => <div data-testid="compose-surface" />,
+}))
+vi.mock('@/components/org/project/settings/project-settings-screen', () => ({
+  ProjectSettingsScreen: () => <div data-testid="project-settings" />,
 }))
 vi.mock('@/components/org/project/project-environments-tab', () => ({
   ProjectEnvironmentsTab: () => <div data-testid="environments-tab" />,
@@ -187,6 +191,21 @@ describe('project tabs', () => {
     cleanup()
     setContext({ project: project({ type: 'managed', code: 'postgres' }) })
     render(<ProjectBaseScreen />)
+    expect(redirectHref()).toBe('/o/projects/p/overview')
+  })
+})
+
+describe('project settings tab', () => {
+  it('shows Project Settings, and sends platform and managed projects home', () => {
+    render(<ProjectSettingsRouteScreen />)
+    expect(screen.getByTestId('project-settings')).toBeTruthy()
+    cleanup()
+    setContext({ isSystemProject: true })
+    render(<ProjectSettingsRouteScreen />)
+    expect(redirectHref()).toBe('/o/projects/p/overview')
+    cleanup()
+    setContext({ project: project({ type: 'managed', code: 'postgres' }) })
+    render(<ProjectSettingsRouteScreen />)
     expect(redirectHref()).toBe('/o/projects/p/overview')
   })
 })

@@ -1,5 +1,8 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
+import { useRouter, type Href } from 'expo-router'
 import { View } from 'react-native'
+import { CrashNotices } from '@/components/org/project/environment-overview/crash-notices'
+import { CrashSheet, type CrashRetry } from '@/components/org/project/environment-overview/crash-sheet'
 import { DeploymentsSection } from '@/components/org/project/environment-overview/deployments-section'
 import { MapSection } from '@/components/org/project/environment-overview/map-section'
 import { ProblemNoticeCard } from '@/components/org/project/environment-overview/problem-notice'
@@ -27,6 +30,7 @@ import {
   type OverviewSource,
 } from '@/lib/v4/environment-overview'
 import { deployRows, problemNotice } from '@/lib/v4/overview-deploys'
+import { crashInfo, type CrashInfo } from '@/lib/v4/run-state'
 
 export type OverviewIds = Readonly<{ orgId: string; projectId: string; environmentId: string }>
 
@@ -55,6 +59,13 @@ function rowHrefs(ids: OverviewIds): RowHrefs {
   }
 }
 
+function crashesOf(apps: ReturnType<typeof appRows>, now: number): CrashInfo[] {
+  return apps.flatMap((row) => {
+    const info = crashInfo(row.name, row.runState, now)
+    return info === null ? [] : [info]
+  })
+}
+
 /**
  * The Overview body under the environment header and tabs: a notice when the
  * last deploy went wrong, the map, the services, the changes card and the
@@ -67,6 +78,7 @@ export function EnvironmentOverviewBody({
   running,
   environmentCount,
   now,
+  retry,
 }: Readonly<{
   ids: OverviewIds
   source: OverviewSource
@@ -74,7 +86,10 @@ export function EnvironmentOverviewBody({
   running: boolean
   environmentCount: number
   now: number
+  retry: CrashRetry
 }>) {
+  const router = useRouter()
+  const [open, setOpen] = useState<string | null>(null)
   const { orgId, projectId, environmentId } = ids
   const hrefFor = useMemo(() => stationHref(ids, source), [ids, source])
   const hrefs = useMemo(() => rowHrefs(ids), [ids])
@@ -82,6 +97,12 @@ export function EnvironmentOverviewBody({
   const data = useMemo(() => dataRows(source), [source])
   const notice = useMemo(() => problemNotice(deployments, running), [deployments, running])
   const deploys = useMemo(() => deployRows(deployments, now, running), [deployments, now, running])
+  const crashes = useMemo(() => crashesOf(apps, now), [apps, now])
+  const closeCrash = () => {
+    setOpen(null)
+    retry.reset()
+  }
+  const openCrash = crashes.find((info) => info.service === open)
   const relation = relationCard(source.view, source.envName, environmentCount)
   const deploymentsHref = projectEnvironmentDeploymentsHref(orgId, projectId, environmentId)
   const configurationHref = projectEnvironmentConfigurationHref(orgId, projectId, environmentId)
@@ -94,14 +115,28 @@ export function EnvironmentOverviewBody({
           configurationHref={configurationHref}
         />
       )}
+      <CrashNotices crashes={crashes} onOpen={setOpen} />
       <MapSection source={source} hrefFor={hrefFor} />
-      <ServicesSection apps={apps} data={data} hrefs={hrefs} />
+      <ServicesSection apps={apps} data={data} hrefs={hrefs} troubled={crashes} onTroubled={setOpen} />
       <RelationCard
         relation={relation}
         changesHref={configurationHref}
         settingsHref={projectEnvironmentSettingsHref(orgId, projectId, environmentId)}
       />
       <DeploymentsSection rows={deploys} envName={source.envName} deploymentsHref={deploymentsHref} />
+      {openCrash === undefined ? null : (
+        <CrashSheet
+          info={openCrash}
+          envName={source.envName}
+          retry={retry}
+          onClose={closeCrash}
+          onOpen={() => {
+            const href = hrefs.service(apps.find((row) => row.name === openCrash.service)?.recordId)
+            closeCrash()
+            if (href !== null) router.push(href as Href)
+          }}
+        />
+      )}
     </View>
   )
 }

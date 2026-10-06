@@ -2824,9 +2824,36 @@ export type ServiceRecord = {
    * has looked.
    */
   app?: ServiceApp | null
+  /**
+   * The daemon's last report of how the service is running. Read-only; absent
+   * until the service's server has reported it, and the latest report only,
+   * never a history.
+   */
+  runState?: ServiceRunStateRecord
   options?: ServiceOptions | Record<string, unknown> | null
   createdAt: string
   updatedAt: string
+}
+
+export type ServiceRunStateName =
+  | 'starting'
+  | 'running'
+  | 'unhealthy'
+  | 'crashing'
+  | 'stopped'
+  | 'stopped_after_crashes'
+  | 'unknown'
+
+/** Mirrors the control plane's `ServiceRunStateView` (turbopanel#317). */
+export type ServiceRunStateRecord = {
+  state: ServiceRunStateName
+  /** True only for `running`, which the daemon reports after 60 s up. */
+  running: boolean
+  restartCount: number
+  /** The last log line the daemon saw, up to 400 characters; null when none. */
+  lastError: string | null
+  /** When the daemon last saw this exact state. */
+  asOf: string
 }
 
 export type ServiceApp = {
