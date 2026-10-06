@@ -10,6 +10,7 @@ import { EnvironmentDeploymentHistoryPanel } from '@/components/org/project/envi
 import { useProjectContext } from '@/components/org/project/project-context'
 import { ProjectEnvironmentsTab } from '@/components/org/project/project-environments-tab'
 import { ProjectOverviewTab } from '@/components/org/project/project-overview-tab'
+import { ProjectSettingsScreen } from '@/components/org/project/settings/project-settings-screen'
 import {
   isManagedProject,
   legacyProjectRedirectHref,
@@ -62,6 +63,15 @@ export function ProjectBaseLensScreen() {
     return <Redirect href={projectOverviewHref(orgId, projectId) as Href} />
   }
   return <ProjectOverviewTab />
+}
+
+/** `/projects/:id/settings` — Project Settings. Platform and managed projects have none. */
+export function ProjectSettingsRouteScreen() {
+  const { orgId, projectId, project, isSystemProject } = useProjectContext()
+  if (isSystemProject || (project && isManagedProject(project))) {
+    return <Redirect href={projectOverviewHref(orgId, projectId) as Href} />
+  }
+  return <ProjectSettingsScreen />
 }
 
 /**

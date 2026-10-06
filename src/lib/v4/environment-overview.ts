@@ -23,12 +23,14 @@ import type {
   HostingRecord,
   ProjectPrincipalRecord,
   ServiceRecord,
+  ServiceRunStateRecord,
   StorageRecord,
   TlsRecord,
 } from '@/lib/instance-api'
 import { accessText, RUNS_IN_CONTAINER, type RunsAs } from './linux-users'
 import type { MapDomain, MapInput, MapLink, MapMode, MapStatus, MapVolume } from './map-layout'
 import { isAppService, isDataStoreContainer, serviceKindLabel } from './service-roles'
+import { runStateKey } from './run-state'
 import { statusInfo } from './status-vocab'
 import { relationText, sourceLabel } from './change-labels'
 import { NOT_SET } from './text'
@@ -157,11 +159,18 @@ export function recordIds(source: OverviewSource): Map<string, string> {
 const BUSY_CONTAINER = new Set(['restarting', 'created', 'paused'])
 const STOPPED_CONTAINER = new Set(['exited', 'dead', 'removing'])
 
-/** Run state of one service from its containers; no crash words until the server sends them. */
+/**
+ * Run state of one service. The daemon's own report wins when it has one
+ * (starting, running, crashing, stopped after crashes); without it the stored
+ * container status gives the plain words.
+ */
 export function runStatusKey(
   recordId: string | undefined,
   containers: readonly ContainerRecord[] | undefined,
+  services: readonly ServiceRecord[] = [],
 ): string | null {
+  const reported = services.find((service) => service.id === recordId)?.runState
+  if (reported !== undefined && reported.state !== 'unknown') return runStateKey(reported.state)
   if (containers === undefined) return null
   const own = containers.filter(
     (container) => container.serviceId === recordId && container.role === 'service',
@@ -172,6 +181,10 @@ export function runStatusKey(
   if (states.some((state) => BUSY_CONTAINER.has(state))) return 'busy'
   if (states.some((state) => STOPPED_CONTAINER.has(state))) return 'stopped'
   return 'unknown'
+}
+
+function runStateOf(source: OverviewSource, recordId: string | undefined): ServiceRunStateRecord | null {
+  return source.services.find((service) => service.id === recordId)?.runState ?? null
 }
 
 function mapStatus(key: string | null): MapStatus | null {
@@ -403,7 +416,7 @@ export function mapInputOf(source: OverviewSource, mode: MapMode): MapInput {
     status: (service) =>
       service.kind === 'database' || !present.has(service.id)
         ? null
-        : mapStatus(runStatusKey(recordOf.get(service.id), source.containers)),
+        : mapStatus(runStatusKey(recordOf.get(service.id), source.containers, source.services)),
   }
 }
 
@@ -416,6 +429,8 @@ export type OverviewServiceRow = Readonly<{
   recordId: string | undefined
   runsAs: RunsAs
   statusKey: string | null
+  /** The daemon's last report for this app; null until it has one. */
+  runState: ServiceRunStateRecord | null
   source: ConfigSource
   sourceLabel: string
   host: string | null
@@ -472,7 +487,8 @@ export function appRows(source: OverviewSource): OverviewServiceRow[] {
         sub: serviceSub(v4),
         recordId: recordOf.get(service.name),
         runsAs: runsAsOf(source, v4, true),
-        statusKey: runStatusKey(recordOf.get(service.name), source.containers),
+        statusKey: runStatusKey(recordOf.get(service.name), source.containers, source.services),
+        runState: runStateOf(source, recordOf.get(service.name)),
         source: origin,
         sourceLabel: sourceLabel(origin, source.envName),
         host: hostOf(source, service),
@@ -492,7 +508,7 @@ export function dataRows(source: OverviewSource): OverviewDataRow[] {
       kind: 'store',
       name: service.name,
       sub: service.image ?? serviceKindLabel(service.kind),
-      statusKey: runStatusKey(recordOf.get(service.name), source.containers),
+      statusKey: runStatusKey(recordOf.get(service.name), source.containers, source.services),
       recordId: recordOf.get(service.name),
     }))
   const databases = databasesOf(source).map<OverviewDataRow>((service) => ({

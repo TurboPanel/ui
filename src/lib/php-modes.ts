@@ -59,10 +59,22 @@ export function sameModes(a: readonly PhpModeValue[], b: readonly PhpModeValue[]
 }
 
 /**
- * Whether a mode can be switched. Attached lsphp is always "coming soon" (its
- * root launcher has not shipped), whatever the API reports; a saved policy that
- * already holds it keeps it. A server cannot offer what its organization does
- * not.
+ * Whether the settings panels list a mode. Attached lsphp is not listed at all
+ * (its root launcher has not shipped); a saved policy that already holds it
+ * keeps it, unseen, until the launcher ships and it can be listed again.
+ */
+export function isPolicyModeListed(mode: PhpModeValue): boolean {
+  return mode !== 'lsphp-attached'
+}
+
+/** Whether a draft picks at least one mode the panel lists (attached lsphp alone is not a choice). */
+export function draftHasListedMode(draft: readonly PhpModeValue[]): boolean {
+  return draft.some(isPolicyModeListed)
+}
+
+/**
+ * Whether a mode can be switched. Attached lsphp never can, whatever the API
+ * reports. A server cannot offer what its organization does not.
  */
 export function isPolicyModeSelectable(
   mode: PhpModeValue,
@@ -76,7 +88,6 @@ export function phpModeUnavailableNote(
   mode: PhpModeValue,
   organizationModes: readonly PhpModeValue[] | null
 ): string {
-  if (mode === 'lsphp-attached') return 'Coming soon'
   return organizationModes != null && !organizationModes.includes(mode)
     ? 'Not offered by the organization'
     : ''
