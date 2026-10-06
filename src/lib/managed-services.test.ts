@@ -693,6 +693,15 @@ describe('cut-off replica visibility', () => {
     expect(isReplicaCutOff(stopped, [primary(stale), stopped])).toBe(true)
   })
 
+  it('reports nothing once the replica the slot names has been removed', () => {
+    const alone = [primary(critical)]
+    expect(currentSlotRetention(alone)).toBeUndefined()
+    // Another replica exists, but not the one the slot names.
+    const other = [primary(critical), replica(3)]
+    expect(currentSlotRetention(other)).toBeUndefined()
+    expect(isReplicaCutOff(other[1]!, other)).toBe(false)
+  })
+
   it('says it in words, for the primary and for the replica', () => {
     expect(slotRetentionNotice(undefined)).toBeNull()
     expect(slotRetentionNotice({ state: 'ok' })).toBeNull()

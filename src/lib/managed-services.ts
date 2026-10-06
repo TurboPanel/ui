@@ -632,6 +632,8 @@ export function currentSlotRetention(
   const named = list.find(
     (m) => m.role === 'replica' && retention.slot === `tp_member_${m.ordinal}`
   )
+  // The named replica is gone (removed instead of resynced): nothing is cut off.
+  if (retention.slot !== undefined && named === undefined) return undefined
   const replicaHealth = named?.replication
   if (
     replicaHealth?.state === 'streaming' &&
