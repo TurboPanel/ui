@@ -82,6 +82,22 @@ export const AUTOMATIC_FAILOVER_BLOCKED_MESSAGE =
 /** Private path used for replication (mirrors `PrivateEndpointTransport`). */
 export type ManagedMemberTransport = 'local' | 'datacenter' | 'fabric' | 'public'
 
+/**
+ * Primary only: how much log the replicas' replication slots hold back.
+ * `critical` means a replica was cut off (or is about to be) and needs a
+ * Resync; `walStatus: 'awaiting_resync'` is a cut-off replica whose slot was
+ * already replaced and is waiting to be re-seeded.
+ */
+export type ManagedSlotRetention = {
+  state: 'ok' | 'lagging' | 'critical'
+  /** The worst slot, `tp_member_<ordinal>` of the replica it belongs to. */
+  slot?: string
+  walStatus?: string
+  retainedBytes?: number
+  safeBytes?: number
+  active?: boolean
+}
+
 export type ManagedReplicationHealth = {
   state: string
   observedAt: string
@@ -92,6 +108,7 @@ export type ManagedReplicationHealth = {
   /** What the state was before it went out of date. */
   lastState?: string
   ageSeconds?: number
+  slotRetention?: ManagedSlotRetention
 }
 
 /**
@@ -323,6 +340,8 @@ export type ManagedExposureView = {
   scopes: ManagedSqlAccessScope[]
   /** Published only because another cluster on the same host asked for it. */
   viaCoResidentCluster: boolean
+  /** Servers told to listen the new way that have not confirmed it yet. */
+  pendingServers?: { id: string; name: string }[]
 }
 
 export type ManagedDetailResponse = {
@@ -397,6 +416,9 @@ const MANAGED_ERROR_COPY: Record<string, string> = {
   datacenter_required: 'That server is not assigned to a datacenter.',
   datacenter_cidr_required: 'That datacenter has no private network yet.',
   datacenter_ip_required: 'That server has no private address in its datacenter.',
+  fabric_address_required: `That server has no ${TURBOFABRIC_PRODUCT_NAME} address yet, so the ${TURBOFABRIC_PRODUCT_NAME} scope cannot be used on it.`,
+  ingress_reconcile_failed:
+    'Saved, but the server could not be told the new setting yet, so it still listens the old way. It is retried automatically; press Apply to try now.',
   private_family_mismatch:
     'Those servers share a datacenter but not an address family (one is IPv4-only, the other IPv6-only).',
   private_path_unavailable: 'No private path between that server and the primary.',
@@ -435,10 +457,23 @@ const MANAGED_ERROR_COPY: Record<string, string> = {
  * Map instance managed error codes (inside `HTTP <status>: <code>`) to
  * operator-readable copy; otherwise return the raw message.
  */
+const SERVER_NAMED_ERROR_CODES = new Set([
+  'datacenter_ip_required',
+  'fabric_address_required',
+  'daemon_key_unavailable',
+  'ingress_reconcile_failed',
+])
+
 export function managedErrorMessage(err: unknown, fallback: string): string {
   const raw = err instanceof Error ? err.message : fallback
   const match = /HTTP \d+:\s*([a-z0-9_]+)/i.exec(raw)
   const code = match?.[1]
+  // These refusals say which server they are about; the general copy would
+  // lose that.
+  if (code && SERVER_NAMED_ERROR_CODES.has(code)) {
+    const named = /\s—\s(.+)$/s.exec(raw)?.[1]
+    if (named) return named
+  }
   if (code && MANAGED_ERROR_COPY[code]) {
     return MANAGED_ERROR_COPY[code]
   }
@@ -625,6 +660,74 @@ export function isReplicationHealthy(health: ManagedReplicationHealth | null | u
   if (!health) return true
   return health.state === 'streaming' || health.state === 'catching_up' || health.state === 'catchup'
 }
+
+function observedAtMs(health: ManagedReplicationHealth | undefined): number {
+  const parsed = health ? Date.parse(health.observedAt) : Number.NaN
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+/**
+ * The primary's slot report, unless a newer reading of the replica it names
+ * says that replica is streaming again. The report is stored when the primary
+ * last answered (an apply or a refresh); right after a Resync the replica can
+ * be newer than it, and must not keep reading as cut off.
+ */
+export function currentSlotRetention(
+  members: readonly ManagedMemberRecord[] | null | undefined
+): ManagedSlotRetention | undefined {
+  const list = members ?? []
+  const primary = list.find((m) => m.role === 'primary')
+  const retention = primary?.replication?.slotRetention
+  if (!retention || retention.state === 'ok') return retention
+  const named = list.find(
+    (m) => m.role === 'replica' && retention.slot === `tp_member_${m.ordinal}`
+  )
+  // The named replica is gone (removed instead of resynced): nothing is cut off.
+  if (retention.slot !== undefined && named === undefined) return undefined
+  const replicaHealth = named?.replication
+  if (
+    replicaHealth?.state === 'streaming' &&
+    observedAtMs(replicaHealth) > observedAtMs(primary?.replication)
+  ) {
+    return undefined
+  }
+  return retention
+}
+
+/**
+ * True when the primary reports this replica's slot as cut off: the log it
+ * needed is gone, so it cannot catch up and needs a Resync. The slot is named
+ * after the replica's ordinal.
+ */
+export function isReplicaCutOff(
+  member: Pick<ManagedMemberRecord, 'role' | 'ordinal'>,
+  members: readonly ManagedMemberRecord[] | null | undefined
+): boolean {
+  if (member.role !== 'replica') return false
+  const retention = currentSlotRetention(members)
+  return retention?.state === 'critical' && retention.slot === `tp_member_${member.ordinal}`
+}
+
+/**
+ * One plain sentence for the primary's row while a replica is behind or cut
+ * off; `null` when nothing is wrong. Say it in words, not only with a color.
+ */
+export function slotRetentionNotice(
+  retention: ManagedSlotRetention | null | undefined
+): string | null {
+  if (!retention || retention.state === 'ok') return null
+  if (retention.state === 'critical') {
+    return 'A replica fell too far behind and was cut off (or is about to be). Resync it to bring it back.'
+  }
+  const held =
+    typeof retention.retainedBytes === 'number' && Number.isFinite(retention.retainedBytes)
+      ? ` (${formatCompactBytes(retention.retainedBytes)} so far)`
+      : ''
+  return `A replica is far behind, so this server is keeping extra log files for it${held}.`
+}
+
+/** Row label for a replica the primary has cut off. */
+export const REPLICA_CUT_OFF_LABEL = 'Cut off · Resync needed'
 
 function formatCompactBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes < 0) return '—'
