@@ -580,6 +580,12 @@ describe('control-plane account store', () => {
     expect(secureStore.getItemAsync).toHaveBeenCalledWith(
       'turbopanel.controlPlaneAccounts.v1',
     )
+    // Let hydration's own write finish first: under Vitest 4 a second dynamic
+    // import of the mocked module started while the first is still loading
+    // fails, and the later write would fall back to in-memory storage.
+    await vi.waitFor(() => {
+      expect(secureStore.setItemAsync).toHaveBeenCalledTimes(1)
+    })
     expect(getActiveControlPlaneAccount()).toEqual({
       origin: LOCAL_HTTPS_ORIGIN,
       kind: 'self-hosted',
@@ -589,7 +595,7 @@ describe('control-plane account store', () => {
     })
     rememberSignedInAccount({ email: 'updated@example.com' })
     await vi.waitFor(() => {
-      expect(secureStore.setItemAsync).toHaveBeenCalled()
+      expect(secureStore.setItemAsync).toHaveBeenCalledTimes(2)
     })
     const writeCall = secureStore.setItemAsync.mock.calls.at(-1)
     if (!writeCall) {

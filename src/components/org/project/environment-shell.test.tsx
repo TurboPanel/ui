@@ -55,24 +55,29 @@ vi.mock('@/components/header-chevron', () => ({ BreadcrumbChevron: () => null })
 vi.mock('@/components/ui', () => ({
   StatusDot: ({ color }: Readonly<{ color: string }>) => <i data-color={color} />,
 }))
-vi.mock('@/components/org/nav/page-tabs', () => ({
-  PageTabs: ({
+vi.mock('@/components/ui/v4', () => ({
+  UnderlineTabs: ({
     tabs,
-    activeId,
+    value,
+    onChange,
+    ariaLabel,
   }: Readonly<{
-    tabs: readonly { id: string; label: string; href: string }[]
-    activeId: string | null
+    tabs: readonly { key: string; label: string }[]
+    value: string
+    onChange: (key: string) => void
+    ariaLabel: string
   }>) => (
-    <div role="tablist">
+    <div role="tablist" aria-label={ariaLabel}>
       {tabs.map((tab) => (
-        <a
-          key={tab.id}
+        <button
+          key={tab.key}
+          type="button"
           role="tab"
-          href={tab.href}
-          aria-selected={tab.id === activeId}
+          aria-selected={tab.key === value}
+          onClick={() => onChange(tab.key)}
         >
           {tab.label}
-        </a>
+        </button>
       ))}
     </div>
   ),
@@ -214,6 +219,17 @@ describe('EnvironmentShell gating', () => {
     )
   })
 
+  it('shows no tabs while the path names no environment', () => {
+    setContext({ pathEnvironmentId: null })
+    render(
+      <EnvironmentShell>
+        <p>page body</p>
+      </EnvironmentShell>,
+    )
+    expect(screen.getByText('page body')).toBeTruthy()
+    expect(screen.queryByRole('tablist')).toBeNull()
+  })
+
   it('waits for environments to load before deciding one is gone', () => {
     setContext({ pathEnvironmentId: 'gone', loading: true })
     render(
@@ -251,7 +267,8 @@ describe('environment header', () => {
           .filter((tab) => tab.getAttribute('aria-selected') === 'true')
           .map((tab) => tab.textContent),
       ).toEqual([active])
-      expect(tabs[1]?.getAttribute('href')).toBe(
+      fireEvent.click(tabs[1] as HTMLElement)
+      expect(state.push).toHaveBeenLastCalledWith(
         '/o/projects/p/environments/e/deployments',
       )
       cleanup()

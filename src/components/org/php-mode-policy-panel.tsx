@@ -17,6 +17,8 @@ import {
   affectedSiteLine,
   draftFromPolicy,
   engineDefaultLines,
+  draftHasListedMode,
+  isPolicyModeListed,
   isPolicyModeSelectable,
   PHP_POLICY_MODE_LABELS,
   PHP_POLICY_MODES,
@@ -109,7 +111,7 @@ export function PhpModePolicyPanel({ orgId, serverId }: PolicyScope) {
 
   const save = () => {
     if (!policy || draft == null) return
-    if (draft.length === 0) {
+    if (!draftHasListedMode(draft)) {
       setError('Choose at least one PHP mode.')
       return
     }
@@ -135,7 +137,7 @@ export function PhpModePolicyPanel({ orgId, serverId }: PolicyScope) {
         Saving never changes a site. A site whose current mode is no longer offered keeps it until
         someone picks another.
       </Text>
-      {PHP_POLICY_MODES.map((mode) => {
+      {PHP_POLICY_MODES.filter(isPolicyModeListed).map((mode) => {
         const selectable = policy != null && isPolicyModeSelectable(mode, organizationModes)
         const note = selectable ? undefined : phpModeUnavailableNote(mode, organizationModes)
         return (
@@ -145,7 +147,7 @@ export function PhpModePolicyPanel({ orgId, serverId }: PolicyScope) {
             description={note || undefined}
           >
             <Toggle
-              value={(selectable || mode === 'lsphp-attached') && current.includes(mode)}
+              value={selectable && current.includes(mode)}
               disabled={!selectable || busy}
               accessibilityLabel={PHP_POLICY_MODE_LABELS[mode]}
               onValueChange={() => setDraft(toggleDraftMode(current, mode))}

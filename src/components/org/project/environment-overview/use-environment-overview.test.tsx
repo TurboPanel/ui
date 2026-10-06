@@ -16,11 +16,18 @@ const q = vi.hoisted(() => ({
   bindings: {} as Query,
   principals: {} as Query,
   history: {} as Query,
+  selected: { id: 'env-1', name: 'Staging' } as { id: string; name: string } | null,
+  projectLoading: false,
 }))
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
 vi.mock('@/components/org/project/project-context', () => ({
-  useProjectContext: () => ({ orgId: 'o', projectId: 'p', selectedEnvironment: { id: 'env-1', name: 'Staging' } }),
+  useProjectContext: () => ({
+    orgId: 'o',
+    projectId: 'p',
+    selectedEnvironment: q.selected,
+    loading: q.projectLoading,
+  }),
 }))
 vi.mock('@/lib/queries/environments', () => ({ useEnvironmentConfigView: () => q.view }))
 vi.mock('@/lib/queries/services', () => ({
@@ -35,6 +42,8 @@ vi.mock('@/lib/queries/projects', () => ({ useProjectPrincipals: () => q.princip
 vi.mock('@/lib/queries/execution-logs', () => ({ useEnvironmentDeployments: () => q.history }))
 
 beforeEach(() => {
+  q.selected = { id: 'env-1', name: 'Staging' }
+  q.projectLoading = false
   q.view = { data: configView(), isError: false }
   q.services = { data: { services: [serviceRecord('web')] }, isSuccess: true }
   q.containers = { data: { containers: [container('web', 'running')] } }
@@ -74,6 +83,19 @@ describe('useEnvironmentOverviewModel', () => {
   it('is unavailable when the service list fails, instead of spinning for ever', () => {
     q.services = { data: undefined, isSuccess: false, isError: true }
     expect(renderHook(() => useEnvironmentOverviewModel()).result.current.state).toBe('unavailable')
+  })
+
+  it('with no environment selected, hands over to the old screen instead of spinning for ever', () => {
+    q.selected = null
+    q.view = { data: undefined, isError: false }
+    expect(renderHook(() => useEnvironmentOverviewModel()).result.current.state).toBe('unavailable')
+  })
+
+  it('with no environment yet, waits only while the project is still loading', () => {
+    q.selected = null
+    q.projectLoading = true
+    q.view = { data: undefined, isError: false }
+    expect(renderHook(() => useEnvironmentOverviewModel()).result.current.state).toBe('loading')
   })
 
   it('leaves out what a failed call would have said instead of guessing', () => {
