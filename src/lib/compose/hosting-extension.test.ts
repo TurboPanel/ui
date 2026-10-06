@@ -471,4 +471,16 @@ describe('hosting www key', () => {
     ])
     expect(issuesFor({ hostname: '*.example.com', www: 'off' })).toEqual([])
   })
+
+  it('refuses a www mode on an IP or a one-word name', () => {
+    for (const hostname of ['203.0.113.5', 'localhost', 'www.com', 'www.localhost']) {
+      expect(issuesFor({ hostname, www: 'both' })).toEqual([
+        {
+          path: `${BASE}.hosting[0].www`,
+          message: `${hostname} has no www or bare spelling, so www must be "off" for it`,
+        },
+      ])
+    }
+    expect(issuesFor({ hostname: 'www.example.com', www: 'www-to-root' })).toEqual([])
+  })
 })

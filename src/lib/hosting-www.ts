@@ -11,23 +11,43 @@
  * `x-turbopanel.hosting` entry; omitted means `off`.
  */
 
+import { parseHostnameList } from './compose/hosting-editor-entry'
 import {
+  type ComposeHostingExtensionEntry,
   type HostingWwwMode,
   isHostingWwwMode,
   readHostingHostname,
+  wwwSiblingHostname,
 } from './compose/hosting-extension'
 
 export type { HostingWwwMode }
-export { HOSTING_WWW_MODES, isHostingWwwMode } from './compose/hosting-extension'
+export {
+  HOSTING_WWW_MODES,
+  isHostingWwwMode,
+  wwwSiblingHostname,
+} from './compose/hosting-extension'
 
 const WWW_PREFIX = 'www.'
 
-/** `www.example.com` for `example.com` and back; null when no valid name results. */
-export function wwwSiblingHostname(hostname: string): string | null {
-  const sibling = hostname.startsWith(WWW_PREFIX)
-    ? hostname.slice(WWW_PREFIX.length)
-    : WWW_PREFIX + hostname
-  return readHostingHostname(sibling) === sibling && sibling.includes('.') ? sibling : null
+/**
+ * Names that only resolve on a private network or never resolve at all. A new
+ * hosting on one of them is not guessed to want `www.` (`www.nas.lan` would
+ * never resolve). Plain suffix checks, kept in step with the reserved names.
+ */
+const PRIVATE_SUFFIXES: readonly string[] = [
+  '.lan',
+  '.local',
+  '.test',
+  '.internal',
+  '.home.arpa',
+  '.localhost',
+  '.invalid',
+  '.example',
+]
+
+/** The typed hostnames as the www rules read them: lowercased, each one once. */
+export function wwwHostnames(text: string): string[] {
+  return [...new Set(parseHostnameList(text.toLowerCase()))]
 }
 
 /** What one hostname turns into under a mode: the names served and the one redirected. */
@@ -65,6 +85,7 @@ function rootOf(hostname: string): string {
 export function defaultWwwMode(hostname: string): HostingWwwMode {
   const name = hostname.trim().toLowerCase()
   if (wwwSiblingHostname(name) === null) return 'off'
+  if (PRIVATE_SUFFIXES.some((suffix) => name.endsWith(suffix))) return 'off'
   if (name.startsWith(WWW_PREFIX)) return 'root-to-www'
   return name.split('.').length === 2 ? 'www-to-root' : 'off'
 }
@@ -84,37 +105,83 @@ export function readWwwMode(options: unknown): HostingWwwMode {
   return first.startsWith(WWW_PREFIX) ? 'root-to-www' : 'www-to-root'
 }
 
+/**
+ * Why no www choice can apply to these names, or null when one can: a name
+ * with no www spelling (a wildcard, an IP, a one-word name), a name that is
+ * not a valid hostname yet, or both spellings of a name typed already. The
+ * server refuses any choice but "Only" in each case.
+ */
+export function wwwUnavailableReason(hostnames: readonly string[]): string | null {
+  const typed = new Set(hostnames)
+  for (const name of hostnames) {
+    if (readHostingHostname(name) !== name) {
+      return `${name} isn’t a valid hostname yet, so the www choice stays off.`
+    }
+    const sibling = wwwSiblingHostname(name)
+    if (sibling === null) return `${name} has no www spelling, so the www choice stays off.`
+    if (typed.has(sibling)) {
+      return `${name} and ${sibling} are both listed already, so the www choice stays off.`
+    }
+  }
+  return null
+}
+
+function wwwUsable(hostnames: readonly string[]): boolean {
+  return hostnames.length > 0 && wwwUnavailableReason(hostnames) === null
+}
+
 export type WwwChoiceOption = Readonly<{
   value: HostingWwwMode
   label: string
+  /** What a screen reader says, so the arrow is read as words. */
+  accessibilityLabel: string
   disabled?: boolean
 }>
 
 /**
  * The four choices, labelled with the real names when there is one hostname
- * ("Only turbopanel.io", "www.turbopanel.io → turbopanel.io"), and in words
- * when there are several. A name with no www spelling (a wildcard) can only
- * be "Only".
+ * ("Only turbopanel.io", "www.turbopanel.io → turbopanel.io"), and with
+ * "name" standing in when there are several. Only "Only" stays enabled when
+ * the names leave no www choice ({@link wwwUnavailableReason}).
  */
 export function wwwChoiceOptions(hostnames: readonly string[]): WwwChoiceOption[] {
+  const disabled = !wwwUsable(hostnames)
   const single = hostnames.length === 1 ? hostnames[0] : undefined
-  const usable =
-    hostnames.length > 0 && hostnames.every((name) => wwwSiblingHostname(name) !== null)
   if (single === undefined) {
     return [
-      { value: 'off', label: 'Only these names' },
-      { value: 'both', label: 'Both, no redirect', disabled: !usable },
-      { value: 'www-to-root', label: 'Send www → name', disabled: !usable },
-      { value: 'root-to-www', label: 'Send name → www', disabled: !usable },
+      { value: 'off', label: 'Only these names', accessibilityLabel: 'Only these names' },
+      { value: 'both', label: 'Both names', accessibilityLabel: 'Serve both names', disabled },
+      {
+        value: 'www-to-root',
+        label: 'www.name → name',
+        accessibilityLabel: 'Send each www name to the name without www',
+        disabled,
+      },
+      {
+        value: 'root-to-www',
+        label: 'name → www.name',
+        accessibilityLabel: 'Send each name to its www name',
+        disabled,
+      },
     ]
   }
   const root = rootOf(single)
   const www = WWW_PREFIX + root
   return [
-    { value: 'off', label: `Only ${single}` },
-    { value: 'both', label: 'Both names', disabled: !usable },
-    { value: 'www-to-root', label: `${www} → ${root}`, disabled: !usable },
-    { value: 'root-to-www', label: `${root} → ${www}`, disabled: !usable },
+    { value: 'off', label: `Only ${single}`, accessibilityLabel: `Only ${single}` },
+    { value: 'both', label: 'Both names', accessibilityLabel: 'Serve both names', disabled },
+    {
+      value: 'www-to-root',
+      label: `${www} → ${root}`,
+      accessibilityLabel: `Send ${www} to ${root}`,
+      disabled,
+    },
+    {
+      value: 'root-to-www',
+      label: `${root} → ${www}`,
+      accessibilityLabel: `Send ${root} to ${www}`,
+      disabled,
+    },
   ]
 }
 
@@ -161,14 +228,38 @@ export function wwwDnsHint(hostnames: readonly string[], mode: HostingWwwMode): 
 
 /**
  * The choice that applies: the saved or picked one, or, while nothing is
- * picked yet on a new hosting, the default for its single hostname.
+ * picked yet on a new hosting, the default for its single hostname. Always
+ * `off` when the names leave no www choice ({@link wwwUnavailableReason}), so
+ * the screen never shows, and never saves, a choice the server would refuse.
+ * The picked choice itself is kept and comes back once the names allow it.
  */
 export function effectiveWwwMode(
   choice: HostingWwwMode | null,
   hostnames: readonly string[]
 ): HostingWwwMode {
+  if (!wwwUsable(hostnames)) return 'off'
   if (choice !== null) return choice
   return hostnames.length === 1 ? defaultWwwMode(hostnames[0] ?? '') : 'off'
+}
+
+/**
+ * The `www` value a panel hosting or compose entry saves for the hostname
+ * field's text: the choice that applies, or undefined for `off` (omitted
+ * means off).
+ */
+export function wwwOptionForSave(
+  choice: HostingWwwMode | null,
+  hostnamesText: string
+): Exclude<HostingWwwMode, 'off'> | undefined {
+  const mode = effectiveWwwMode(choice, wwwHostnames(hostnamesText))
+  return mode === 'off' ? undefined : mode
+}
+
+/** The editor's choice for a compose route: what it says, else `off` (never a guess). */
+export function wwwChoiceFromComposeEntry(
+  entry: Pick<ComposeHostingExtensionEntry, 'www'>
+): HostingWwwMode {
+  return entry.www ?? 'off'
 }
 
 /**

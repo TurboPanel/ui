@@ -81,16 +81,23 @@ import {
 } from '@/lib/queries/services'
 import { useTlsLibrary } from '@/lib/queries/tls'
 import { useIps } from '@/lib/queries/topology'
-import { coversAllHostnames } from '@/lib/tls-match'
 import {
   type HostingWwwMode,
   effectiveWwwMode,
   initialWwwChoice,
-  wwwCertificateNames,
+  wwwChoiceFromComposeEntry,
   wwwChoiceOptions,
   wwwDnsHint,
+  wwwHostnames,
+  wwwOptionForSave,
   wwwResultLines,
+  wwwUnavailableReason,
 } from '@/lib/hosting-www'
+import {
+  type PinnedCertificateGap,
+  coveringCertificates,
+  pinnedCertificateGap,
+} from '@/lib/hosting-tls-picker'
 import {
   composeHostingEntryFromEditorFields,
   findComposeHostingEntryIndex,
@@ -290,10 +297,9 @@ function buildHostingOptions(editor: HostingEditorState): Record<string, unknown
     options.ports = parsePortsList(editor.ports)
     return options
   }
-  const hostnames = parseHostnameList(editor.hostnames)
-  options.hostnames = hostnames
-  const www = effectiveWwwMode(editor.www, hostnames)
-  if (www !== 'off') options.www = www
+  options.hostnames = parseHostnameList(editor.hostnames)
+  const www = wwwOptionForSave(editor.www, editor.hostnames)
+  if (www) options.www = www
   options.proxy = {
     forceHttps: editor.forceHttps,
     gzip: editor.gzip,
@@ -389,7 +395,7 @@ function readComposeHostingEditor(
     pathPrefix: entry.pathPrefix ?? '',
     targetPort: entry.targetPort === undefined ? '' : String(entry.targetPort),
     forceHttps: entry.forceHttps !== false,
-    www: entry.www ?? 'off',
+    www: wwwChoiceFromComposeEntry(entry),
     bind: hostingBindScopeOf(entry),
     ipId: entry.bind?.ipRef ?? null,
     tlsId: entry.tls?.mode === 'certificate'
@@ -411,8 +417,9 @@ function composeHostingEntryFromEditor(
   editor: HostingEditorState,
   serviceContext: HostingServiceContext,
 ): ComposeHostingExtensionEntry | null {
+  // Save the choice that applies, never one the names leave no room for.
   return composeHostingEntryFromEditorFields(
-    editor,
+    { ...editor, www: wwwOptionForSave(editor.www, editor.hostnames) ?? null },
     composeServiceKindOf(serviceContext),
   )
 }
@@ -849,10 +856,11 @@ function HostingWwwField({
   locked: boolean
   onChange: (patch: Partial<HostingEditorState>) => void
 }>) {
-  const hostnames = parseHostnameList(editor.hostnames.toLowerCase())
+  const hostnames = wwwHostnames(editor.hostnames)
   if (!isHttp || hostnames.length === 0) return null
   const mode = effectiveWwwMode(editor.www, hostnames)
   const dnsHint = wwwDnsHint(hostnames, mode)
+  const unavailable = wwwUnavailableReason(hostnames)
   return (
     <>
       <Text style={styles.tlsLabel}>www</Text>
@@ -868,7 +876,7 @@ function HostingWwwField({
           {line}
         </Text>
       ))}
-      <HostingHintText hint={dnsHint} />
+      <HostingHintText hint={unavailable ?? dnsHint} />
     </>
   )
 }
@@ -878,6 +886,7 @@ function HostingTlsPicker({
   composeOwned,
   editor,
   covering,
+  pinnedGap,
   locked,
   onChange,
 }: Readonly<{
@@ -885,10 +894,13 @@ function HostingTlsPicker({
   composeOwned: boolean
   editor: HostingEditorState
   covering: TlsRecord[]
+  /** A pinned certificate that no longer covers the names: still shown, with a note. */
+  pinnedGap: PinnedCertificateGap<TlsRecord> | null
   locked: boolean
   onChange: (patch: Partial<HostingEditorState>) => void
 }>) {
   if (!isHttp) return null
+  const chips = pinnedGap ? [...covering, pinnedGap.row] : covering
   return (
     <>
       <Text style={styles.tlsLabel}>TLS certificate</Text>
@@ -905,7 +917,7 @@ function HostingTlsPicker({
         >
           <Text style={styles.tlsChipText}>Self-signed</Text>
         </Pressable>
-        {covering.map((row) => (
+        {chips.map((row) => (
           <Pressable
             key={row.id}
             style={[styles.tlsChip, editor.tlsId === row.id && styles.tlsChipActive]}
@@ -916,6 +928,7 @@ function HostingTlsPicker({
           </Pressable>
         ))}
       </View>
+      <HostingHintText hint={pinnedGap?.note ?? null} />
     </>
   )
 }
@@ -1177,16 +1190,12 @@ function HostingPanelRow({
   onChange: (patch: Partial<HostingEditorState>) => void
   onSave: () => void
 }>) {
-  const hostnames = parseHostnameList(editor.hostnames)
-  // A pinned certificate has to cover every name the www choice adds too.
-  const certificateNames = wwwCertificateNames(
-    hostnames,
-    effectiveWwwMode(editor.www, hostnames),
-  )
-  const covering = tlsOptions.filter(
-    (row) =>
-      (row.metadata.status === 'ready' || row.metadata.status === 'managed') &&
-      coversAllHostnames(row.metadata.dnsNames, certificateNames),
+  const covering = coveringCertificates(tlsOptions, editor.hostnames, editor.www)
+  const pinnedGap = pinnedCertificateGap(
+    tlsOptions,
+    editor.tlsId,
+    editor.hostnames,
+    editor.www,
   )
 
   const composeOwned = composeRoute !== null
@@ -1280,6 +1289,7 @@ function HostingPanelRow({
         composeOwned={composeOwned}
         editor={editor}
         covering={covering}
+        pinnedGap={pinnedGap}
         locked={locked}
         onChange={onChange}
       />

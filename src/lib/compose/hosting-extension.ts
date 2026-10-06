@@ -565,14 +565,25 @@ function validateHostingWww(
   const path = `${entryPath}.www`
   if (!isHostingWwwMode(raw.www)) return [{ path, message: HOSTING_WWW_MODE_MESSAGE }]
   const hostname = readHostingHostname(raw.hostname)
-  if (raw.www === 'off' || !hostname || hasWwwSpelling(hostname)) return []
+  if (raw.www === 'off' || !hostname || wwwSiblingHostname(hostname) !== null) return []
   return [{ path, message: `${hostname} has no www or bare spelling, so www must be "off" for it` }]
 }
 
-/** Whether `www.` can be added to (or removed from) the name and still route. */
-function hasWwwSpelling(hostname: string): boolean {
-  const sibling = hostname.startsWith('www.') ? hostname.slice(4) : `www.${hostname}`
-  return sibling.includes('.') && readHostingHostname(sibling) === sibling
+/**
+ * The other spelling of a hostname: `www.example.com` for `example.com` and
+ * back. Null unless the flipped name is a valid hostname, the bare name (no
+ * leading `www.`) has a dot, and its last label is not all digits, so an IP
+ * (`203.0.113.5`), a one-word name (`localhost`, `com`) and `www.com` have no
+ * www spelling. Same rule as the control plane and the daemon.
+ */
+export function wwwSiblingHostname(hostname: string): string | null {
+  const typedIsWww = hostname.startsWith('www.')
+  const bare = typedIsWww ? hostname.slice(4) : hostname
+  const sibling = typedIsWww ? bare : `www.${hostname}`
+  if (readHostingHostname(sibling) !== sibling) return null
+  const dot = bare.lastIndexOf('.')
+  if (dot === -1) return null
+  return /^\d+$/.test(bare.slice(dot + 1)) ? null : sibling
 }
 
 /**
