@@ -2,7 +2,3 @@
 # why the finding is not exploitable in this codebase, verified by reading
 # both the advisory and the actual dependency chain before adding it here.
 # Revisit whenever a fix becomes available upstream.
-
-[[IgnoredVulns]]
-id = "GHSA-82fw-gwwq-j7x9"
-reason = "vitest/@vitest/mocker: only exploitable if the Vitest UI server is exposed to the network via --api.host, which this repo never does. Fix requires a vitest v3->v4 major bump; revisit when that's done for other reasons."
