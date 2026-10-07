@@ -6,6 +6,7 @@
 import { defaultManagedImage, managedAllowedImagesForEngine } from '@/lib/managed-releases'
 import type { ManagedSslMode } from '@/lib/managed-ssl'
 import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
+import { MANAGED_HAS_BINDINGS_COPY } from '@/lib/user-error'
 
 import type { ManagedSqlAccessScope } from '@/lib/managed-access-scope'
 import type { NameScheme } from '@/lib/principal-name-scheme'
@@ -439,8 +440,9 @@ const MANAGED_ERROR_COPY: Record<string, string> = {
     'Still connected to one or more services. Remove those connections first.',
   managed_database_has_bindings:
     'Still connected to one or more services. Remove those connections first.',
-  managed_has_bindings:
-    'One or more services are still connected to this cluster. Remove those connections first, then destroy it.',
+  managed_has_bindings: MANAGED_HAS_BINDINGS_COPY,
+  managed_database_has_users:
+    'SQL users still have access to this database. Delete those users first.',
   binding_key_prefix_in_use:
     'This service already has a connection using that prefix — pick another.',
   binding_engine_defaults_in_use:

@@ -91,7 +91,7 @@ export function accessText(access: LinuxUserAccess): string {
   return access === 'none' ? 'No sign-in' : `${LINUX_ACCESS_LABELS[access]} on`
 }
 
-function sshKeysText(count: number): string {
+export function sshKeysText(count: number): string {
   return count > 0 ? plural(count, 'SSH key') : 'No SSH keys'
 }
 
@@ -197,7 +197,7 @@ export type LinuxUsersInput = Readonly<{
   defaultUser: string
 }>
 
-function userSub(user: LinuxUser): string {
+export function userSub(user: LinuxUser): string {
   const parts = [
     user.access === 'none'
       ? 'No sign-in'

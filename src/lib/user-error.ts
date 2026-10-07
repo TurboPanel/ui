@@ -13,10 +13,14 @@ export const UPDATE_ALREADY_ACTIVE_COPY = 'Another update is already in progress
 
 export const ENVIRONMENT_RUNNING_COPY = 'This environment is still running. Stop it first.'
 
+export const MANAGED_HAS_BINDINGS_COPY =
+  'One or more services are still connected to this cluster. Remove those connections first, then destroy it.'
+
 /** API error codes (the part after `HTTP <status>:`) with one fixed sentence. */
 const API_ERROR_COPY: Readonly<Record<string, string>> = {
   upgrade_run_active: UPDATE_ALREADY_ACTIVE_COPY,
   environment_running: ENVIRONMENT_RUNNING_COPY,
+  managed_has_bindings: MANAGED_HAS_BINDINGS_COPY,
   server_offline: 'The server is offline. Try again when it is back.',
   server_placement_required: 'Put this storage on a server first.',
   backup_target_unsupported: 'This kind of storage cannot be backed up yet.',

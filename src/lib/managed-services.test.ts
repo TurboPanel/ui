@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { TURBOFABRIC_PRODUCT_NAME } from './platform-copy'
+import { MANAGED_HAS_BINDINGS_COPY } from './user-error'
 import {
   MANAGED_INGRESS_MYSQL_PORT,
   MANAGED_INGRESS_PGSQL_PORT,
@@ -172,7 +173,10 @@ describe('managedErrorMessage', () => {
       managedErrorMessage(new Error('HTTP 409: managed_database_has_bindings'), 'fallback')
     ).toBe('Still connected to one or more services. Remove those connections first.')
     expect(managedErrorMessage(new Error('HTTP 409: managed_has_bindings'), 'fallback')).toBe(
-      'One or more services are still connected to this cluster. Remove those connections first, then destroy it.'
+      MANAGED_HAS_BINDINGS_COPY
+    )
+    expect(managedErrorMessage(new Error('HTTP 409: managed_database_has_users'), 'fallback')).toBe(
+      'SQL users still have access to this database. Delete those users first.'
     )
     expect(managedErrorMessage(new Error('HTTP 409: binding_key_prefix_in_use'), 'fallback')).toBe(
       'This service already has a connection using that prefix — pick another.'
