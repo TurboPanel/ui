@@ -672,7 +672,7 @@ export function ProjectDeletePanel({
       markStopFailed(
         environmentId,
         result.error
-          ? userErrorMessage(new Error(result.error), '')
+          ? userErrorMessage(result.cause ?? new Error(result.error), '')
           : 'Failed to destroy database',
       )
       return

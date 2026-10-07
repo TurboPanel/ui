@@ -216,7 +216,7 @@ function ManagedProjectTrashButton({
       const deletedId = selectedEnvironment.id
       const destroy = await destroyManaged.run(deletedId)
       if (!destroy.ok) {
-        if (destroy.error) setError(userErrorMessage(new Error(destroy.error), ''))
+        if (destroy.error) setError(userErrorMessage(destroy.cause ?? new Error(destroy.error), ''))
         return
       }
       if (destroy.value.deleted) {
