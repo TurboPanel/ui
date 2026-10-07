@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { useEnvironmentConfigView } from '@/lib/queries/environments'
 import { useProjectContext } from '@/components/org/project/project-context'
 import { environmentStatusTone } from '@/lib/container-status'
+import { groupDeploymentsByGeneration } from '@/lib/deployment-history'
 import type { DeploymentHistoryRecord } from '@/lib/instance-api'
 import { useContainers } from '@/lib/queries/containers'
 import { useEnvironmentBindings } from '@/lib/queries/bindings'
@@ -62,6 +63,7 @@ export function useEnvironmentOverviewModel(): OverviewModel {
       view: view.data,
       services: serviceRows,
       containers: containers.data?.containers,
+      latestDeploy: history.data ? (groupDeploymentsByGeneration(history.data.deployments)[0] ?? null) : undefined,
       hostings: hostings.hostingsByService,
       tls: tls.data?.tls,
       storage: storage.data?.storage ?? NONE,
@@ -73,6 +75,7 @@ export function useEnvironmentOverviewModel(): OverviewModel {
     envName,
     serviceRows,
     containers.data,
+    history.data,
     hostings.hostingsByService,
     tls.data,
     storage.data,

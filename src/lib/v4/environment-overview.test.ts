@@ -1,3 +1,4 @@
+import type { DeploymentGroup } from '@/lib/deployment-history'
 import { describe, expect, it } from 'vitest'
 import type { ServiceRecord, ServiceRunStateName } from '@/lib/instance-api'
 import {
@@ -156,6 +157,13 @@ describe('runStatusKey', () => {
     expect(runStatusKey('s-web', containers, report('stopped_after_crashes'))).toBe('crashstop')
     expect(runStatusKey('s-web', containers, report('starting'))).toBe('busy')
     expect(runStatusKey('s-web', undefined, report('crashing'))).toBe('crashing')
+  })
+  it('gives a native app with no containers the newest deploy', () => {
+    const ok = { latest: { status: 'succeeded' } as DeploymentGroup }
+    expect(runStatusKey('s-api', containers, [], ok)).toBe('deployed')
+    expect(runStatusKey('s-api', containers, [], { latest: null })).toBe('never')
+    expect(runStatusKey('s-api', containers, [], { latest: undefined })).toBeNull()
+    expect(runStatusKey('s-web', containers, [], ok)).toBe('running')
   })
   it('falls back to the containers when the report is unknown or for another app', () => {
     const unknown: ServiceRecord[] = [
