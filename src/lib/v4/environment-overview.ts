@@ -13,6 +13,7 @@
  * record id (needed to open a service page) is kept in `recordIds`.
  */
 
+import type { DeploymentGroup } from '@/lib/deployment-history'
 import type {
   BindingRecord,
   ConfigViewChange,
@@ -30,6 +31,7 @@ import type {
 import { accessText, RUNS_IN_CONTAINER, type RunsAs } from './linux-users'
 import type { MapDomain, MapInput, MapLink, MapMode, MapStatus, MapVolume } from './map-layout'
 import { isAppService, isDataStoreContainer, serviceKindLabel } from './service-roles'
+import { nativeDeployKey, type NativeRunFallback } from './project-home'
 import { runStateKey } from './run-state'
 import { statusInfo } from './status-vocab'
 import { relationText, sourceLabel } from './change-labels'
@@ -42,6 +44,8 @@ export type OverviewSource = Readonly<{
   view: EnvironmentConfigView
   services: readonly ServiceRecord[]
   containers: readonly ContainerRecord[] | undefined
+  /** Newest deploy; a native app has no containers, so this is its run state. */
+  latestDeploy?: DeploymentGroup | null
   hostings: Readonly<Record<string, readonly HostingRecord[]>>
   tls: readonly TlsRecord[] | undefined
   storage: readonly StorageRecord[]
@@ -168,6 +172,7 @@ export function runStatusKey(
   recordId: string | undefined,
   containers: readonly ContainerRecord[] | undefined,
   services: readonly ServiceRecord[] = [],
+  native?: NativeRunFallback,
 ): string | null {
   const reported = services.find((service) => service.id === recordId)?.runState
   if (reported !== undefined && reported.state !== 'unknown') return runStateKey(reported.state)
@@ -175,7 +180,7 @@ export function runStatusKey(
   const own = containers.filter(
     (container) => container.serviceId === recordId && container.role === 'service',
   )
-  if (own.length === 0) return 'never'
+  if (own.length === 0) return native ? (nativeDeployKey(native.latest) ?? null) : 'never'
   const states = own.map((container) => container.status)
   if (states.includes('running')) return 'running'
   if (states.some((state) => BUSY_CONTAINER.has(state))) return 'busy'
@@ -185,6 +190,10 @@ export function runStatusKey(
 
 function runStateOf(source: OverviewSource, recordId: string | undefined): ServiceRunStateRecord | null {
   return source.services.find((service) => service.id === recordId)?.runState ?? null
+}
+
+function nativeOf(source: OverviewSource, kind: V4Service['kind']): NativeRunFallback | undefined {
+  return kind === 'node' || kind === 'site' ? { latest: source.latestDeploy } : undefined
 }
 
 function mapStatus(key: string | null): MapStatus | null {
@@ -416,7 +425,14 @@ export function mapInputOf(source: OverviewSource, mode: MapMode): MapInput {
     status: (service) =>
       service.kind === 'database' || !present.has(service.id)
         ? null
-        : mapStatus(runStatusKey(recordOf.get(service.id), source.containers, source.services)),
+        : mapStatus(
+            runStatusKey(
+              recordOf.get(service.id),
+              source.containers,
+              source.services,
+              nativeOf(source, service.kind),
+            ),
+          ),
   }
 }
 
@@ -487,7 +503,12 @@ export function appRows(source: OverviewSource): OverviewServiceRow[] {
         sub: serviceSub(v4),
         recordId: recordOf.get(service.name),
         runsAs: runsAsOf(source, v4, true),
-        statusKey: runStatusKey(recordOf.get(service.name), source.containers, source.services),
+        statusKey: runStatusKey(
+          recordOf.get(service.name),
+          source.containers,
+          source.services,
+          nativeOf(source, v4.kind),
+        ),
         runState: runStateOf(source, recordOf.get(service.name)),
         source: origin,
         sourceLabel: sourceLabel(origin, source.envName),
