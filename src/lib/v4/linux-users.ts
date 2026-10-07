@@ -64,10 +64,7 @@ export function linuxUserFromRecord(record: LinuxUserRecordFields): LinuxUser {
 }
 
 /** A user the Base declares that no deploy has created yet. */
-export function linuxUserFromDeclared(
-  name: string,
-  access: PrincipalAccess = 'none',
-): LinuxUser {
+export function linuxUserFromDeclared(name: string, access: PrincipalAccess = 'none'): LinuxUser {
   return {
     name,
     systemName: name,
@@ -79,10 +76,7 @@ export function linuxUserFromDeclared(
 }
 
 /** The user a service falls back to: the first Linux user, else the project name. */
-export function defaultLinuxUser(
-  users: readonly LinuxUser[],
-  projectName: string,
-): string {
+export function defaultLinuxUser(users: readonly LinuxUser[], projectName: string): string {
   return users[0]?.name ?? slugify(projectName)
 }
 
@@ -251,14 +245,19 @@ export function linuxUserRows(input: LinuxUsersInput): LinuxUserRow[] {
 
 // --- Name rule ---------------------------------------------------------------
 
-/** Longest login the server accepts (it must fit `<name>-grp` in a Linux group name). */
+/** Longest login the server accepts. The server names the user's own group after it. */
 export const LINUX_USER_NAME_MAX = 28
 /** Characters a name scheme adds: an underscore and 11 random ones. */
 export const LINUX_USER_NAME_SUFFIX = 12
 
 const LINUX_USER_NAME_RE = /^[a-z][a-z0-9_-]*$/
 
-/** Names the system keeps for itself. Mirrors the control plane's naming rule. */
+/**
+ * Names the system keeps for itself. Mirrors the control plane's naming rule.
+ * The server gives each Linux user a group of the same name, and some group
+ * names hand out administrator power (sudo, admin, wheel), so the usual
+ * system and privilege group names are kept too.
+ */
 const SYSTEM_USER_NAMES: ReadonlySet<string> = new Set([
   'root',
   'daemon',
@@ -275,6 +274,62 @@ const SYSTEM_USER_NAMES: ReadonlySet<string> = new Set([
   'postgres',
   'redis',
   'docker',
+  'containers',
+  'lp',
+  'uucp',
+  'proxy',
+  'backup',
+  'list',
+  'irc',
+  'gnats',
+  'nogroup',
+  'ssh',
+  '_ssh',
+  '_apt',
+  '_chrony',
+  'mysql',
+  'adm',
+  'admin',
+  'audio',
+  'avahi',
+  'cdrom',
+  'crontab',
+  'dialout',
+  'dip',
+  'disk',
+  'floppy',
+  'fuse',
+  'incus',
+  'incus-admin',
+  'input',
+  'kmem',
+  'kvm',
+  'libvirt',
+  'libvirt-qemu',
+  'lpadmin',
+  'lxd',
+  'messagebus',
+  'microk8s',
+  'netdev',
+  'operator',
+  'plugdev',
+  'polkitd',
+  'render',
+  'sambashare',
+  'sasl',
+  'sgx',
+  'shadow',
+  'src',
+  'ssl-cert',
+  'staff',
+  'sudo',
+  'tape',
+  'tty',
+  'users',
+  'utmp',
+  'video',
+  'voice',
+  'wheel',
 ])
 
 /** True for names the system keeps: its own accounts and everything starting `tp`. */
@@ -300,7 +355,7 @@ export function linuxUserNameLimit(scheme: NameScheme = 'plain'): number {
 function isTaken(name: string, taken: LinuxUserNameOptions['taken']): boolean {
   const key = name.trim().toLowerCase()
   return (taken ?? []).some(
-    (user) => user.name.trim().toLowerCase() === key || user.systemName.trim().toLowerCase() === key,
+    (user) => user.name.trim().toLowerCase() === key || user.systemName.trim().toLowerCase() === key
   )
 }
 
@@ -310,7 +365,7 @@ function isTaken(name: string, taken: LinuxUserNameOptions['taken']): boolean {
  */
 export function checkLinuxUserName(
   name: string,
-  options: LinuxUserNameOptions = {},
+  options: LinuxUserNameOptions = {}
 ): LinuxUserNameCheck {
   const limit = linuxUserNameLimit(options.scheme)
   if (name === '') return { ok: false, msg: 'Give the user a name' }
