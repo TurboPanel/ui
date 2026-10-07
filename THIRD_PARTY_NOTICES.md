@@ -4439,7 +4439,7 @@ These packages are used for development, test, or build tooling and are not bund
 - License: MIT OR Apache-2.0
 - Homepage: https://github.com/cloudflare/workers-sdk#readme
 
-### @cloudflare/workerd-darwin-arm64@1.20260815.1
+### @cloudflare/workerd-linux-64@1.20260815.1
 
 - License: Apache-2.0
 - Homepage: https://github.com/cloudflare/workerd#readme
@@ -4449,7 +4449,7 @@ These packages are used for development, test, or build tooling and are not bund
 - License: MIT
 - Homepage: https://github.com/cspotcode/node-source-map-support#readme
 
-### @esbuild/darwin-arm64@0.28.1
+### @esbuild/linux-x64@0.28.1
 
 - License: MIT
 - Homepage: https://github.com/evanw/esbuild#readme
@@ -4541,15 +4541,15 @@ These packages are used for development, test, or build tooling and are not bund
 - License: MIT
 - Homepage: https://github.com/lovell/colour#readme
 
-### @img/sharp-darwin-arm64@0.35.5
+### @img/sharp-libvips-linux-x64@1.3.4
 
-- License: Apache-2.0
+- License: LGPL-3.0-or-later
 - Copyright: Lovell Fuller
 - Homepage: https://sharp.pixelplumbing.com
 
-### @img/sharp-libvips-darwin-arm64@1.3.4
+### @img/sharp-linux-x64@0.35.5
 
-- License: LGPL-3.0-or-later
+- License: Apache-2.0
 - Copyright: Lovell Fuller
 - Homepage: https://sharp.pixelplumbing.com
 
@@ -4593,12 +4593,12 @@ These packages are used for development, test, or build tooling and are not bund
 - License: MPL-2.0
 - Homepage: https://github.com/yisibl/resvg-js#readme
 
-### @resvg/resvg-js-darwin-arm64@2.6.2
+### @resvg/resvg-js-linux-x64-gnu@2.6.2
 
 - License: MPL-2.0
 - Homepage: https://github.com/yisibl/resvg-js#readme
 
-### @rollup/rollup-darwin-arm64@4.62.2
+### @rollup/rollup-linux-x64-gnu@4.62.2
 
 - License: MIT
 - Copyright: Lukas Taegert-Atkinson
@@ -4731,7 +4731,7 @@ These packages are used for development, test, or build tooling and are not bund
 - License: MIT
 - Homepage: https://typescript-eslint.io
 
-### @unrs/resolver-binding-darwin-arm64@1.12.2
+### @unrs/resolver-binding-linux-x64-gnu@1.12.2
 
 - License: MIT
 - Homepage: https://github.com/unrs/unrs-resolver
@@ -5186,11 +5186,6 @@ These packages are used for development, test, or build tooling and are not bund
 - Copyright: Raynos
 - Homepage: https://github.com/Raynos/for-each
 
-### fsevents@2.3.3
-
-- License: MIT
-- Homepage: https://github.com/fsevents/fsevents
-
 ### function.prototype.name@1.1.8
 
 - License: MIT
@@ -5555,7 +5550,7 @@ These packages are used for development, test, or build tooling and are not bund
 - Copyright: George Zahariev
 - Homepage: https://github.com/gkz/levn
 
-### lightningcss-darwin-arm64@1.32.0
+### lightningcss-linux-x64-gnu@1.32.0
 
 - License: MPL-2.0
 - Homepage: https://github.com/parcel-bundler/lightningcss#readme
