@@ -327,14 +327,14 @@ function buildDomains(view: EnvironmentConfigViewResponse, envName: string): Dom
   return rows
 }
 
-function usedFor(variable: ConfigViewVariable): string {
+export function usedFor(variable: ConfigViewVariable): string {
   if (variable.forBuild && variable.forRuntime) return 'Build and run'
   if (variable.forBuild) return 'Build only'
   if (variable.forRuntime) return 'Run only'
   return 'Not used'
 }
 
-function variableValueText(variable: ConfigViewVariable): string {
+export function variableValueText(variable: ConfigViewVariable): string {
   if (variable.isSecret || variable.value === null) return SECRET_VALUE
   return variable.value === '' ? EMPTY_VALUE : variable.value
 }
