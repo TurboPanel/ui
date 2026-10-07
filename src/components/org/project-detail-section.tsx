@@ -597,8 +597,11 @@ function principalRowSummary(row: ProjectPrincipalRecord): string {
  * registry, which stays the authority on what a given host can offer.
  */
 const RUNTIME_GRANTS: readonly RuntimeGrant[] = [
+  { runtime: 'php', series: '8.1', label: 'PHP 8.1' },
+  { runtime: 'php', series: '8.2', label: 'PHP 8.2' },
   { runtime: 'php', series: '8.3', label: 'PHP 8.3' },
   { runtime: 'php', series: '8.4', label: 'PHP 8.4' },
+  { runtime: 'php', series: '8.5', label: 'PHP 8.5' },
   { runtime: 'node', series: '22', label: 'Node 22' },
   { runtime: 'node', series: '24', label: 'Node 24' },
 ]
