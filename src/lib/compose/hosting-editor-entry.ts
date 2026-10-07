@@ -8,7 +8,7 @@
  * disk is decided here.
  */
 
-import type { ComposeHostingExtensionEntry } from './hosting-extension'
+import type { ComposeHostingExtensionEntry, HostingWwwMode } from './hosting-extension'
 import { hostingTargetPortAuthorable } from './hosting-extension'
 import type { ComposeServiceKind } from './service-kind'
 
@@ -33,6 +33,8 @@ export type ComposeHostingEditorFields = {
   pathPrefix: string
   targetPort: string
   forceHttps: boolean
+  /** The www choice; omitted or `off` writes no `www` key (the default). */
+  www?: HostingWwwMode | null
   tlsId: string | null
   ipId: string | null
   bind: 'public' | 'datacenter' | 'local'
@@ -73,6 +75,7 @@ export function composeHostingEntryFromEditorFields(
   }
 
   if (!editor.forceHttps) entry.forceHttps = false
+  if (editor.www && editor.www !== 'off') entry.www = editor.www
 
   entry.tls = editor.tlsId
     ? { mode: 'certificate', certificateRef: editor.tlsId }

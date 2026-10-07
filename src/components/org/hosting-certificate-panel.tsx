@@ -1,6 +1,5 @@
-import { useState } from 'react'
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
-import { Button, ButtonRow, Checkbox } from '@/components/ui'
+import { Button, ButtonRow } from '@/components/ui'
 import {
   describeCertificate,
   dnsResultHeadline,
@@ -59,13 +58,11 @@ export function HostingCertificatePanel({
   const query = useHostingCertificate(orgId, hostingId)
   const letsEncrypt = useUseLetsEncrypt(orgId, hostingId)
   const dnsCheck = useHostingDnsCheck(hostingId)
-  const [wwwChoice, setWwwChoice] = useState<boolean | null>(null)
 
   const certificate = query.data?.hosting.certificate ?? null
   if (!certificate) return null
 
   const view = describeCertificate(certificate)
-  const www = wwwChoice ?? certificate.wwwRedirect
   const busy = letsEncrypt.isPending
   const requestError = letsEncrypt.error
     ? userErrorMessage(letsEncrypt.error, 'Could not start Let’s Encrypt.')
@@ -77,7 +74,7 @@ export function HostingCertificatePanel({
   const canRequest = view.actions.includes('use_lets_encrypt') && !composeOwned
 
   const request = () => {
-    void letsEncrypt.run({ wwwRedirect: www })
+    void letsEncrypt.run()
   }
 
   return (
@@ -98,14 +95,6 @@ export function HostingCertificatePanel({
       {requestError ? <Text style={styles.reason}>{requestError}</Text> : null}
       {dnsError ? <Text style={styles.reason}>{dnsError}</Text> : null}
 
-      {canRequest ? (
-        <Checkbox
-          label="Also redirect www to this domain"
-          checked={www}
-          disabled={disabled || busy}
-          onPress={() => setWwwChoice(!www)}
-        />
-      ) : null}
       <ButtonRow>
         {canRequest ? (
           <Button

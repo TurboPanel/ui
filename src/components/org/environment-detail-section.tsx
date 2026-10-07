@@ -25,6 +25,7 @@ import {
   EmptyState,
   LoadingState,
   SectionPanel,
+  SegmentedControl,
   TextField,
 } from '@/components/ui'
 import { HostingCertificatePanel } from '@/components/org/hosting-certificate-panel'
@@ -80,7 +81,23 @@ import {
 } from '@/lib/queries/services'
 import { useTlsLibrary } from '@/lib/queries/tls'
 import { useIps } from '@/lib/queries/topology'
-import { coversAllHostnames } from '@/lib/tls-match'
+import {
+  type HostingWwwMode,
+  effectiveWwwMode,
+  initialWwwChoice,
+  wwwChoiceFromComposeEntry,
+  wwwChoiceOptions,
+  wwwDnsHint,
+  wwwHostnames,
+  wwwOptionForSave,
+  wwwResultLines,
+  wwwUnavailableReason,
+} from '@/lib/hosting-www'
+import {
+  type PinnedCertificateGap,
+  coveringCertificates,
+  pinnedCertificateGap,
+} from '@/lib/hosting-tls-picker'
 import {
   composeHostingEntryFromEditorFields,
   findComposeHostingEntryIndex,
@@ -127,6 +144,11 @@ type HostingEditorState = {
   ipId: string | null
   bind: HostingBind
   forceHttps: boolean
+  /**
+   * The www choice; null while a new hosting has none saved or picked, which
+   * means "the default for the typed name" (`effectiveWwwMode`).
+   */
+  www: HostingWwwMode | null
   gzip: boolean
   brotli: boolean
   stripPrefix: string
@@ -253,6 +275,7 @@ function readHostingEditor(hostings: HostingRecord[]): HostingEditorState {
     ipId: hostings[0]?.ipId ?? null,
     bind: readHostingBind(optionsRecord),
     forceHttps: proxy?.forceHttps !== false,
+    www: initialWwwChoice(optionsRecord),
     gzip: proxy?.gzip !== false,
     brotli: proxy?.brotli === true,
     stripPrefix: typeof proxy?.stripPrefix === 'string' ? proxy.stripPrefix : '',
@@ -275,6 +298,8 @@ function buildHostingOptions(editor: HostingEditorState): Record<string, unknown
     return options
   }
   options.hostnames = parseHostnameList(editor.hostnames)
+  const www = wwwOptionForSave(editor.www, editor.hostnames)
+  if (www) options.www = www
   options.proxy = {
     forceHttps: editor.forceHttps,
     gzip: editor.gzip,
@@ -370,6 +395,7 @@ function readComposeHostingEditor(
     pathPrefix: entry.pathPrefix ?? '',
     targetPort: entry.targetPort === undefined ? '' : String(entry.targetPort),
     forceHttps: entry.forceHttps !== false,
+    www: wwwChoiceFromComposeEntry(entry),
     bind: hostingBindScopeOf(entry),
     ipId: entry.bind?.ipRef ?? null,
     tlsId: entry.tls?.mode === 'certificate'
@@ -391,8 +417,9 @@ function composeHostingEntryFromEditor(
   editor: HostingEditorState,
   serviceContext: HostingServiceContext,
 ): ComposeHostingExtensionEntry | null {
+  // Save the choice that applies, never one the names leave no room for.
   return composeHostingEntryFromEditorFields(
-    editor,
+    { ...editor, www: wwwOptionForSave(editor.www, editor.hostnames) ?? null },
     composeServiceKindOf(serviceContext),
   )
 }
@@ -813,11 +840,53 @@ function HostingAddressField({
   )
 }
 
+/**
+ * The www choice for the hostname(s): four options named with the real names,
+ * the resulting redirect underneath, and a DNS reminder for any name it adds.
+ * Shown wherever a hostname is edited, compose route or panel hosting alike.
+ */
+function HostingWwwField({
+  isHttp,
+  editor,
+  locked,
+  onChange,
+}: Readonly<{
+  isHttp: boolean
+  editor: HostingEditorState
+  locked: boolean
+  onChange: (patch: Partial<HostingEditorState>) => void
+}>) {
+  const hostnames = wwwHostnames(editor.hostnames)
+  if (!isHttp || hostnames.length === 0) return null
+  const mode = effectiveWwwMode(editor.www, hostnames)
+  const dnsHint = wwwDnsHint(hostnames, mode)
+  const unavailable = wwwUnavailableReason(hostnames)
+  return (
+    <>
+      <Text style={styles.tlsLabel}>www</Text>
+      <SegmentedControl
+        options={wwwChoiceOptions(hostnames)}
+        value={mode}
+        onChange={(www) => onChange({ www })}
+        disabled={locked}
+        accessibilityLabel="What happens to the www name"
+      />
+      {wwwResultLines(hostnames, mode).map((line) => (
+        <Text key={line} style={styles.wwwResult}>
+          {line}
+        </Text>
+      ))}
+      <HostingHintText hint={unavailable ?? dnsHint} />
+    </>
+  )
+}
+
 function HostingTlsPicker({
   isHttp,
   composeOwned,
   editor,
   covering,
+  pinnedGap,
   locked,
   onChange,
 }: Readonly<{
@@ -825,10 +894,13 @@ function HostingTlsPicker({
   composeOwned: boolean
   editor: HostingEditorState
   covering: TlsRecord[]
+  /** A pinned certificate that no longer covers the names: still shown, with a note. */
+  pinnedGap: PinnedCertificateGap<TlsRecord> | null
   locked: boolean
   onChange: (patch: Partial<HostingEditorState>) => void
 }>) {
   if (!isHttp) return null
+  const chips = pinnedGap ? [...covering, pinnedGap.row] : covering
   return (
     <>
       <Text style={styles.tlsLabel}>TLS certificate</Text>
@@ -845,7 +917,7 @@ function HostingTlsPicker({
         >
           <Text style={styles.tlsChipText}>Self-signed</Text>
         </Pressable>
-        {covering.map((row) => (
+        {chips.map((row) => (
           <Pressable
             key={row.id}
             style={[styles.tlsChip, editor.tlsId === row.id && styles.tlsChipActive]}
@@ -856,6 +928,7 @@ function HostingTlsPicker({
           </Pressable>
         ))}
       </View>
+      <HostingHintText hint={pinnedGap?.note ?? null} />
     </>
   )
 }
@@ -1117,11 +1190,12 @@ function HostingPanelRow({
   onChange: (patch: Partial<HostingEditorState>) => void
   onSave: () => void
 }>) {
-  const hostnames = parseHostnameList(editor.hostnames)
-  const covering = tlsOptions.filter(
-    (row) =>
-      (row.metadata.status === 'ready' || row.metadata.status === 'managed') &&
-      coversAllHostnames(row.metadata.dnsNames, hostnames),
+  const covering = coveringCertificates(tlsOptions, editor.hostnames, editor.www)
+  const pinnedGap = pinnedCertificateGap(
+    tlsOptions,
+    editor.tlsId,
+    editor.hostnames,
+    editor.www,
   )
 
   const composeOwned = composeRoute !== null
@@ -1203,11 +1277,19 @@ function HostingPanelRow({
         onChange={onChange}
       />
 
+      <HostingWwwField
+        isHttp={isHttp}
+        editor={editor}
+        locked={locked}
+        onChange={onChange}
+      />
+
       <HostingTlsPicker
         isHttp={isHttp}
         composeOwned={composeOwned}
         editor={editor}
         covering={covering}
+        pinnedGap={pinnedGap}
         locked={locked}
         onChange={onChange}
       />
@@ -2951,6 +3033,12 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 16,
     marginBottom: spacing.xs,
+  },
+  wwwResult: {
+    color: colors.textBody,
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: spacing.xs,
   },
   tlsOptions: {
     flexDirection: 'row',

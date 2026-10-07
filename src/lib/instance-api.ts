@@ -2905,7 +2905,8 @@ export type HostingCertificate = {
   uploadedExpiryWarning: 'none' | '14d' | '3d' | '1d' | 'expired'
   dns: HostingDnsReport | null
   letsEncryptAvailable: boolean
-  wwwRedirect: boolean
+  /** The hosting's www choice (`options.www`); Let’s Encrypt covers every name it adds. */
+  www: 'off' | 'both' | 'www-to-root' | 'root-to-www'
   needsDeploy: boolean
 }
 
@@ -3459,14 +3460,16 @@ export async function fetchHosting(hostingId: string): Promise<{ hosting: Hostin
   return await apiFetch(`${CLIENT_API}/hostings/${hostingId}`)
 }
 
-/** One click: check DNS, then pin a Let's Encrypt certificate (or wait for DNS). */
+/**
+ * One click: check DNS, then pin a Let's Encrypt certificate (or wait for DNS).
+ * The names covered follow the hosting's own www choice (`options.www`).
+ */
 export async function requestLetsEncryptForHosting(
-  hostingId: string,
-  body: { wwwRedirect?: boolean } = {}
+  hostingId: string
 ): Promise<UseLetsEncryptResult> {
   return await apiFetch(`${CLIENT_API}/hostings/${hostingId}/use-letsencrypt`, {
     method: 'PUT',
-    body: JSON.stringify(body),
+    body: JSON.stringify({}),
   })
 }
 
