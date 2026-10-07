@@ -19,7 +19,7 @@ function cert(overrides: Partial<HostingCertificate>): HostingCertificate {
     uploadedExpiryWarning: 'none',
     dns: null,
     letsEncryptAvailable: false,
-    wwwRedirect: false,
+    www: 'off',
     needsDeploy: false,
     ...overrides,
   }
@@ -88,9 +88,13 @@ describe('describeCertificate', () => {
     const view = describeCertificate(cert({ state: 'waiting_for_dns', dns: DNS_NOT_READY }))
     expect(view.label).toBe('Waiting for DNS')
     expect(view.actions).toEqual(['check_dns'])
-    expect(view.lines).toContain('shop.example.com: no DNS record found.')
-    expect(view.lines).toContain('www.shop.example.com: points to 198.51.100.4.')
-    expect(view.lines).toContain('Point it at 203.0.113.7.')
+    expect(view.lines).toContain(
+      'shop.example.com doesn’t point at this server yet: no DNS record found.',
+    )
+    expect(view.lines).toContain(
+      'www.shop.example.com doesn’t point at this server yet: it points to 198.51.100.4.',
+    )
+    expect(view.lines).toContain('Point them at 203.0.113.7.')
     expect(view.lines.join(' ')).not.toContain('ok.example.com')
   })
 
@@ -125,5 +129,7 @@ describe('dns wording', () => {
     const ready = { ...DNS_NOT_READY, ready: true, hostnames: [DNS_NOT_READY.hostnames[2]!] }
     expect(dnsResultHeadline(ready)).toBe('Every name points at this server.')
     expect(dnsSummaryLines(ready)).toEqual([])
+    const oneWrong = { ...DNS_NOT_READY, hostnames: [DNS_NOT_READY.hostnames[0]!] }
+    expect(dnsSummaryLines(oneWrong).at(-1)).toBe('Point it at 203.0.113.7.')
   })
 })

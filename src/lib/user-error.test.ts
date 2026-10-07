@@ -88,6 +88,7 @@ describe('Let’s Encrypt refusals', () => {
     ['hosting_not_http', 'web domains'],
     ['hosting_has_no_hostnames', 'Add a domain name'],
     ['letsencrypt_hostname_unsupported', 'wildcard'],
+    ['www_redirect_conflict', 'www version'],
   ])('%s reads as a sentence', (code, fragment) => {
     expect(apiErrorCopy(new Error(`HTTP 400: ${code}`))).toContain(fragment)
   })

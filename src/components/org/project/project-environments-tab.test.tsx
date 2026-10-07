@@ -139,10 +139,19 @@ describe.each(SCENARIOS)('project Environments tab ($name)', (scenario) => {
   })
 
   it("shows each environment's running word from its containers", () => {
+    state.latest = { e2: null }
     render(<ProjectEnvironmentsTab />)
     const statuses = screen.getAllByRole('group', { name: 'Status' })
     expect(statuses[0]?.textContent).toContain('Running')
     expect(statuses[1]?.textContent).toContain('Not deployed yet')
+  })
+
+  it('reads a native app with no containers from its newest deploy', () => {
+    state.latest = { e2: { status: 'succeeded', strategyOutcome: null, startedAt: '2026-10-05T11:56:00Z', trigger: null } }
+    render(<ProjectEnvironmentsTab />)
+    const statuses = screen.getAllByRole('group', { name: 'Status' })
+    expect(statuses[1]?.textContent).toContain('Deployed')
+    expect(statuses[1]?.textContent).not.toContain('Not deployed yet')
   })
 
   it('says Checking while the containers load', () => {
