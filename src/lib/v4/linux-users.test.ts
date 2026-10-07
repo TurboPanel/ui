@@ -294,6 +294,8 @@ describe('Linux user name rule', () => {
       'staff',
       'lxd',
       'containers',
+      'wireshark',
+      'bob-grp',
     ]) {
       expect(checkLinuxUserName(name)).toEqual({ ok: false, msg: 'The system keeps that name' })
     }

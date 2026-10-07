@@ -330,12 +330,29 @@ const SYSTEM_USER_NAMES: ReadonlySet<string> = new Set([
   'video',
   'voice',
   'wheel',
+  'bluetooth',
+  'gpio',
+  'i2c',
+  'nopasswdlogin',
+  'rdma',
+  'scanner',
+  'syslog',
+  'tss',
+  'uuidd',
+  'vboxusers',
+  'wireshark',
 ])
 
 /** True for names the system keeps: its own accounts and everything starting `tp`. */
 export function isSystemUserName(name: string): boolean {
   const key = name.trim().toLowerCase()
-  return SYSTEM_USER_NAMES.has(key) || key.startsWith('tp') || key.startsWith('systemd-')
+  // `<name>-grp` is an older site owner's group: a new user called that would share it.
+  return (
+    SYSTEM_USER_NAMES.has(key) ||
+    key.startsWith('tp') ||
+    key.startsWith('systemd-') ||
+    key.endsWith('-grp')
+  )
 }
 
 export type LinuxUserNameCheck = Readonly<{ ok: boolean; msg: string }>
