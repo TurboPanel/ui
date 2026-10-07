@@ -35,16 +35,17 @@ describe('MANAGED_ENGINE_RELEASES', () => {
     ])
   })
 
-  it('only three verified series are creatable', () => {
+  it('only the verified series are creatable', () => {
     expect(
       managedCreatableReleasesForEngine('postgres').map((row) => row.series),
     ).toEqual(['18'])
     expect(managedCreatableReleasesForEngine('mysql').map((row) => row.series)).toEqual([
       '9.7',
+      '8.4',
     ])
     expect(
       managedCreatableReleasesForEngine('mariadb').map((row) => row.series),
-    ).toEqual(['12.3'])
+    ).toEqual(['12.3', '11.8'])
     // The untested series stay catalogued so an existing image can be named.
     expect(managedCreatableReleasesForEngine('postgres', { includeUntested: true })).toEqual(
       managedReleasesForEngine('postgres'),
@@ -59,10 +60,14 @@ describe('MANAGED_ENGINE_RELEASES', () => {
     expect(managedAllowedImagesForEngine('mysql')).toEqual([
       'docker.io/library/mysql:9.7',
       'docker.io/library/mysql:9.7-oraclelinux9',
+      'docker.io/library/mysql:8.4',
+      'docker.io/library/mysql:8.4-oraclelinux9',
     ])
     expect(managedAllowedImagesForEngine('mariadb')).toEqual([
       'docker.io/library/mariadb:12.3',
       'docker.io/library/mariadb:12.3-ubi',
+      'docker.io/library/mariadb:11.8',
+      'docker.io/library/mariadb:11.8-ubi',
     ])
   })
 
@@ -136,6 +141,13 @@ describe('resolveManagedImage', () => {
     )
   })
 
+  it('resolves the 8.4 and 11.8 series', () => {
+    expect(resolveManagedImage('mysql', '8.4')).toBe('docker.io/library/mysql:8.4')
+    expect(resolveManagedImage('mariadb', '11.8', 'ubi')).toBe(
+      'docker.io/library/mariadb:11.8-ubi',
+    )
+  })
+
   it('falls back to the series default variant when none is given', () => {
     expect(resolveManagedImage('postgres', '18')).toBe(
       'docker.io/library/postgres:18-alpine',
@@ -150,8 +162,7 @@ describe('resolveManagedImage', () => {
 
   it('refuses an untested series unless the gate is opened', () => {
     expect(resolveManagedImage('postgres', '17')).toBeUndefined()
-    expect(resolveManagedImage('mysql', '8.4')).toBeUndefined()
-    expect(resolveManagedImage('mariadb', '11.8')).toBeUndefined()
+    expect(resolveManagedImage('mariadb', '11.4')).toBeUndefined()
     expect(resolveManagedImage('postgres', '17', undefined, { includeUntested: true })).toBe(
       'docker.io/library/postgres:17-alpine',
     )
@@ -204,6 +215,13 @@ describe('managedVariantImagesForImage', () => {
     )
     expect(options).not.toContain('docker.io/library/postgres:17-alpine')
     expect(options).not.toContain('docker.io/library/postgres:15')
+  })
+
+  it('resolves the 8.4 and 11.8 series', () => {
+    expect(resolveManagedImage('mysql', '8.4')).toBe('docker.io/library/mysql:8.4')
+    expect(resolveManagedImage('mariadb', '11.8', 'ubi')).toBe(
+      'docker.io/library/mariadb:11.8-ubi',
+    )
   })
 
   it('falls back to the engine allowlist for an uncatalogued image', () => {
