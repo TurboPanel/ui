@@ -385,6 +385,40 @@ function ExposureRealityNote({
   )
 }
 
+/** Servers that were told a new listener setting but have not confirmed it. */
+function ExposurePendingNote({
+  exposure,
+  onRetry,
+  disabled,
+}: Readonly<{
+  exposure: ManagedExposureView | null
+  onRetry?: () => Promise<void>
+  disabled: boolean
+}>) {
+  const pending = exposure?.pendingServers ?? []
+  if (pending.length === 0) return null
+  return (
+    <>
+      <Text style={panelStyles.muted}>
+        Not applied yet on {pending.map((entry) => entry.name).join(', ')}. It
+        may still listen the old way. It is retried automatically once the
+        server can take it.
+      </Text>
+      {onRetry ? (
+        <Pressable
+          disabled={disabled}
+          onPress={() => {
+            onRetry().catch(() => undefined)
+          }}
+          style={webPointer}
+        >
+          <Text style={styles.disclosure}>Retry now</Text>
+        </Pressable>
+      ) : null}
+    </>
+  )
+}
+
 function SettingsFormBody({
   form,
   setForm,
@@ -569,6 +603,7 @@ export function ManagedSettingsPanel({
   canManage,
   busy,
   onApply,
+  onRetryExposure,
 }: Readonly<{
   settings: ManagedSettings
   /** Selects the release catalog used for the base-image picker (see `managedVariantImagesForImage`). */
@@ -580,6 +615,8 @@ export function ManagedSettingsPanel({
   canManage: boolean
   busy: boolean
   onApply: (next: ManagedSettings) => Promise<void>
+  /** Push the saved listener setting to servers that have not confirmed it (an apply). */
+  onRetryExposure?: () => Promise<void>
 }>) {
   const catalog = engineCode ? managedCatalogEntryForCode(engineCode) : undefined
   const defaultImage = catalog?.defaultImage ?? ''
@@ -617,6 +654,19 @@ export function ManagedSettingsPanel({
     }
   }
 
+  const retryExposure = async () => {
+    if (!onRetryExposure) return
+    setSaving(true)
+    setError(null)
+    try {
+      await onRetryExposure()
+    } catch (err) {
+      setError(managedErrorMessage(err, 'Failed to retry'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const disabled = busy || saving || !canManage
 
   return (
@@ -626,6 +676,11 @@ export function ManagedSettingsPanel({
       collapsible
       defaultCollapsed
     >
+      <ExposurePendingNote
+        exposure={exposure ?? null}
+        onRetry={onRetryExposure ? retryExposure : undefined}
+        disabled={disabled}
+      />
       <Pressable
         style={[panelStyles.expandedSection, webPointer]}
         onPress={() => setExpanded((current) => !current)}

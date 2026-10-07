@@ -28,11 +28,11 @@ minimumReleaseAgeExclude:
   - expo-dev-launcher@57.0.12
   - expo-dev-menu@57.0.12
 overrides:
-  sharp: ^0.35.4
+  sharp: ^0.35.5
   nanoid: ^3.3.18
   postcss: ^8.5.23
   uuid: ^11.1.1
-  shell-quote: ^1.9.0
+  shell-quote: ^1.11.0
   js-yaml: ^4.3.2
   browserslist: ^4.28.7
   baseline-browser-mapping: ^2.11.0
