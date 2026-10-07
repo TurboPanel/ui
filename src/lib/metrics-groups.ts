@@ -54,6 +54,9 @@ export const GROUP_SUMMARY_SPECS: Readonly<Record<string, GroupSummarySpec>> = {
   router: { chartId: 'router-backends', reachability: { upSeriesId: 'up', totalSeriesId: 'total' } },
 }
 
+const HOST_HEALTH_HINT = 'Processes killed for memory, process limit, root disk queue, failed services and RAID'
+const HOST_HEALTH_CHART_IDS = ['health-oom-kills', 'health-pid-limit', 'health-root-disk-queue', 'health-root-disk-ops', 'health-systemd-failed', 'health-raid'] as const
+
 /** v7 container health and totals, shown first in the Docker group. */
 const DOCKER_HEALTH_CHART_IDS = [
   'docker-containers-health',
@@ -139,22 +142,8 @@ export const HOST_CHART_GROUPS: readonly HostChartGroup[] = [
       'router-tls-expiry',
     ],
   },
-  {
-    // v7 counts and limits (`extended.host`): what a daemon new enough to
-    // report them says about the host's health. A v6 daemon sends none, so
-    // the section hides itself.
-    id: 'host-health',
-    label: 'Host health',
-    hint: 'Processes killed for memory, process limit, root disk queue, failed services and RAID',
-    chartIds: [
-      'health-oom-kills',
-      'health-pid-limit',
-      'health-root-disk-queue',
-      'health-root-disk-ops',
-      'health-systemd-failed',
-      'health-raid',
-    ],
-  },
+  // v7 counts and limits (`extended.host`); a v6 daemon sends none, so the section hides itself.
+  { id: 'host-health', label: 'Host health', hint: HOST_HEALTH_HINT, chartIds: HOST_HEALTH_CHART_IDS },
   {
     // `managed.storage` — where the host's bytes actually went. Distinct
     // from `storage` above (block-layer I/O + root capacity): that answers
