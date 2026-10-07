@@ -299,7 +299,7 @@ type CompactSeries = readonly [
 
 /**
  * A chart whose series are plain host-singleton reads, written as one table
- * row. Used for the v7 numbers, every one of which is `hideWhenEmpty`: a v6
+ * row. Used for the v8 numbers, every one of which is `hideWhenEmpty`: a v6
  * daemon sends none of them and a gap must never paint as zero.
  */
 function compactChart(
@@ -326,8 +326,8 @@ function compactChart(
   }
 }
 
-/** Sample sizes and v7 health, in the order their groups show them (see `metrics-groups.ts`). */
-const V7_CHART_DEFINITIONS: readonly ChartDefinition[] = [
+/** Sample sizes and v8 health, in the order their groups show them (see `metrics-groups.ts`). */
+const V8_CHART_DEFINITIONS: readonly ChartDefinition[] = [
   // CPU pressure's interrupt half, shown with the CPU numbers (see `metrics-groups.ts`).
   compactChart(
     'cpu-pressure-irq',
@@ -989,7 +989,7 @@ const HOST_CHART_DEFINITIONS: readonly ChartDefinition[] = [
     title: 'Soonest TLS expiry',
     unit: 'days',
     // The minimum across every hosting certificate, not a mean — one cert about
-    // to lapse matters regardless of how healthy the others are. v7 reports it
+    // to lapse matters regardless of how healthy the others are. v8 reports it
     // from the hosting Caddy (`extended.ingress`); the router's own figure is
     // no longer stored.
     series: [
@@ -1186,7 +1186,7 @@ const HOST_CHART_DEFINITIONS: readonly ChartDefinition[] = [
     yFormat: (v) => formatCount(v),
     hideWhenEmpty: true,
   },
-  ...V7_CHART_DEFINITIONS,
+  ...V8_CHART_DEFINITIONS,
 ]
 
 /** Every host canonical id referenced by `HOST_CHART_DEFINITIONS` above — the single request list for the host series query. */

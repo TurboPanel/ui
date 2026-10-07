@@ -6,7 +6,7 @@ import { GROUP_SUMMARY_SPECS, HOST_CHART_GROUPS } from './metrics-groups'
 /**
  * Chart ids are read out of the component source rather than imported: the
  * component pulls in react-native, which this vitest project cannot parse.
- * The definitions are a flat literal list plus the v7 `compactChart(...)`
+ * The definitions are a flat literal list plus the v8 `compactChart(...)`
  * table, so a source scan is exact.
  */
 function definedChartIds(): Set<string> {
@@ -19,7 +19,7 @@ function definedChartIds(): Set<string> {
     source.indexOf('// Per-entity chart builders')
   )
   const compact = source.slice(
-    source.indexOf('const V7_CHART_DEFINITIONS'),
+    source.indexOf('const V8_CHART_DEFINITIONS'),
     source.indexOf('const HOST_CHART_DEFINITIONS')
   )
   return new Set([
