@@ -4,6 +4,7 @@ import {
   BINDING_KEY_PREFIX_IN_USE_ERROR,
   DOCKER_RUN_UNSUPPORTED_ERROR,
   MANAGED_DATABASE_HAS_BINDINGS_ERROR,
+  MANAGED_DATABASE_HAS_USERS_ERROR,
   MANAGED_MEMBER_EXISTS_ERROR,
   MANAGED_NO_READ_TARGETS_ERROR,
   MANAGED_REPLICA_NOT_PROMOTABLE_ERROR,
@@ -419,6 +420,15 @@ describe('instance-api managed-engine fetch wrappers', () => {
     )
     await expect(deleteManagedDatabase('env-1', 'app')).rejects.toThrow(
       `HTTP 409: ${MANAGED_DATABASE_HAS_BINDINGS_ERROR}`
+    )
+  })
+
+  it('deleteManagedDatabase surfaces 409 managed_database_has_users', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ error: MANAGED_DATABASE_HAS_USERS_ERROR, users: ['appuser'] }, 409)
+    )
+    await expect(deleteManagedDatabase('env-1', 'app')).rejects.toThrow(
+      `HTTP 409: ${MANAGED_DATABASE_HAS_USERS_ERROR}`
     )
   })
 

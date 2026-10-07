@@ -9,10 +9,10 @@ import { mapInputOf, type OverviewSource } from '@/lib/v4/environment-overview'
 import { mapLayout, type MapLayout, type MapMode } from '@/lib/v4/map-layout'
 import { RADIUS } from '@/lib/v4/ui-scale'
 
-const MODES: readonly Readonly<{ mode: MapMode; label: string }>[] = [
-  { mode: 'env', label: 'This environment' },
-  { mode: 'base', label: 'Base' },
-  { mode: 'diff', label: 'Differences' },
+const MODES: readonly SwitchOption<MapMode>[] = [
+  { value: 'env', label: 'This environment' },
+  { value: 'base', label: 'Base' },
+  { value: 'diff', label: 'Differences' },
 ]
 
 const styles = themedStyles((p) => ({
@@ -34,19 +34,31 @@ const styles = themedStyles((p) => ({
   legendText: { ...typeStyle('body', 'caption'), color: p.text3 },
 }))
 
-/** A view filter above the map (This environment, Base, Differences), not navigation. */
-function ModeSwitch({ mode, onChange }: Readonly<{ mode: MapMode; onChange: (mode: MapMode) => void }>) {
+export type SwitchOption<T extends string> = Readonly<{ value: T; label: string }>
+
+/** A small row of radio options above a map: a view filter, not navigation. */
+export function OptionSwitch<T extends string>({
+  label,
+  options,
+  value,
+  onChange,
+}: Readonly<{
+  label: string
+  options: readonly SwitchOption<T>[]
+  value: T
+  onChange: (value: T) => void
+}>) {
   const s = styles(usePalette())
   return (
-    <View accessibilityRole="radiogroup" accessibilityLabel="Map view" style={s.switch}>
-      {MODES.map((option) => {
-        const on = option.mode === mode
+    <View accessibilityRole="radiogroup" accessibilityLabel={label} style={s.switch}>
+      {options.map((option) => {
+        const on = option.value === value
         return (
           <Pressable
-            key={option.mode}
+            key={option.value}
             accessibilityRole="radio"
             accessibilityState={{ checked: on }}
-            onPress={() => onChange(option.mode)}
+            onPress={() => onChange(option.value)}
             style={[s.option, on && s.optionOn, webPointer]}
           >
             <Text style={[s.optionText, on && s.optionTextOn]}>{option.label}</Text>
@@ -60,7 +72,7 @@ function ModeSwitch({ mode, onChange }: Readonly<{ mode: MapMode; onChange: (mod
 const LINE_KEY_COLOR = { https: 'railHttps', internal: 'railInternal', data: 'railData' } as const
 
 /** One legend entry per kind of line the map actually draws. */
-function Legend({ layout }: Readonly<{ layout: MapLayout }>) {
+export function Legend({ layout }: Readonly<{ layout: MapLayout }>) {
   const p = usePalette()
   const s = styles(p)
   const drawn = new Set(layout.segments.map((segment) => segment.kind))
@@ -87,7 +99,10 @@ export function MapSection({
   const layout = useMemo(() => mapLayout(mapInputOf(source, mode)), [source, mode])
   return (
     <View>
-      <SectionHeading title="Map" action={<ModeSwitch mode={mode} onChange={setMode} />} />
+      <SectionHeading
+        title="Map"
+        action={<OptionSwitch label="Map view" options={MODES} value={mode} onChange={setMode} />}
+      />
       <EnvironmentMap layout={layout} hrefFor={hrefFor} legend={<Legend layout={layout} />} />
     </View>
   )
