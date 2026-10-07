@@ -51,21 +51,50 @@ function statusOfRows(rows: readonly ContainerRecord[]): StatusKey {
 }
 
 /**
+ * A native app (a Node.js app or a site the host's web server runs) has no
+ * container rows and the control plane sends no run state for it, so the newest
+ * deploy's outcome is the honest answer. `undefined` while the history loads.
+ */
+export type NativeRunFallback = Readonly<{ latest: DeploymentGroup | null | undefined }>
+
+/** True when the effective config has an app that runs natively, not in a container. */
+export function hasNativeApp(services: readonly Pick<ConfigViewService, 'kind'>[] | undefined): boolean {
+  return (services ?? []).some((service) => service.kind === 'node' || service.kind === 'site')
+}
+
+/** A native app's state from its newest deploy: deployed, deploying, failed, or never deployed. */
+export function nativeDeployKey(latest: DeploymentGroup | null | undefined): StatusKey | undefined {
+  if (latest === undefined) return undefined
+  if (latest === null) return 'never'
+  return deployWords(latest).status
+}
+
+/**
  * What an environment is running now, in the words of the status vocabulary.
  * Same buckets as the environment header (`environmentStatusTone`), so a card
  * and the page it opens never disagree. `undefined` while containers load.
+ * With no containers, a native app falls back to its newest deploy.
  */
 export function runningStatusKey(
   containers: readonly ContainerRecord[] | undefined,
+  native?: NativeRunFallback,
 ): StatusKey | undefined {
   if (containers === undefined) return undefined
-  if (containers.length === 0 || !hasHostDeployedContainers(containers)) return 'never'
+  if (containers.length === 0 || !hasHostDeployedContainers(containers)) {
+    return native ? nativeDeployKey(native.latest) : 'never'
+  }
   return statusOfRows(serviceContainers(containers))
 }
 
 /** The state of one app on the mini map; `null` until it has been deployed. */
-export function serviceStatusKey(containers: readonly ContainerRecord[]): StatusKey | null {
-  if (containers.length === 0 || !hasHostDeployedContainers(containers)) return null
+export function serviceStatusKey(
+  containers: readonly ContainerRecord[],
+  native?: NativeRunFallback,
+): StatusKey | null {
+  if (containers.length === 0 || !hasHostDeployedContainers(containers)) {
+    const key = native ? nativeDeployKey(native.latest) : undefined
+    return key === undefined || key === 'never' ? null : key
+  }
   return statusOfRows(serviceContainers(containers))
 }
 
@@ -378,9 +407,18 @@ export function environmentCardData(
   }>,
 ): EnvironmentCardData {
   const { view, containers } = input
-  const runningKey = runningStatusKey(containers)
+  const nativeNames = new Set(
+    (view?.effective.services ?? []).filter((service) => hasNativeApp([service])).map((service) => service.name),
+  )
+  const runningKey = runningStatusKey(
+    containers,
+    hasNativeApp(view?.effective.services) ? { latest: input.latest } : undefined,
+  )
   const statusOf = (serviceName: string) =>
-    serviceStatusKey((containers ?? []).filter((row) => row.composeServiceName === serviceName))
+    serviceStatusKey(
+      (containers ?? []).filter((row) => row.composeServiceName === serviceName),
+      nativeNames.has(serviceName) ? { latest: input.latest } : undefined,
+    )
   return {
     name: input.name,
     relation: environmentRelation(view),

@@ -17,10 +17,12 @@ import {
   environmentDomains,
   environmentRelation,
   followLine,
+  hasNativeApp,
   inProgressSub,
   isDeployInProgress,
   lastDeployPart,
   miniMapColumns,
+  nativeDeployKey,
   newEnvironmentBody,
   runningStatusKey,
   serverLine,
@@ -142,6 +144,58 @@ describe('running status', () => {
     expect(serviceStatusKey([])).toBeNull()
     expect(serviceStatusKey([container({ containerId: '', status: 'pending' })])).toBeNull()
     expect(serviceStatusKey([container({ status: 'running' })])).toBe('running')
+  })
+})
+
+describe('native apps (no container rows)', () => {
+  it('spots a native app in the config', () => {
+    expect(hasNativeApp(SIDE.services)).toBe(true)
+    expect(hasNativeApp([service('cache', 'container')])).toBe(false)
+    expect(hasNativeApp(undefined)).toBe(false)
+  })
+  it('reads the newest deploy', () => {
+    expect(nativeDeployKey(undefined)).toBeUndefined()
+    expect(nativeDeployKey(null)).toBe('never')
+    expect(nativeDeployKey(group({ status: 'succeeded' }))).toBe('deployed')
+    expect(nativeDeployKey(group({ status: 'failed' }))).toBe('failed')
+    expect(nativeDeployKey(group({ status: 'running' }))).toBe('deploying')
+  })
+  it('shows a succeeded deploy as deployed, not never deployed', () => {
+    expect(runningStatusKey([], { latest: group({ status: 'succeeded' }) })).toBe('deployed')
+    expect(runningStatusKey([], { latest: group({ status: 'failed' }) })).toBe('failed')
+    expect(runningStatusKey([], { latest: null })).toBe('never')
+    expect(runningStatusKey([], { latest: undefined })).toBeUndefined()
+    expect(runningStatusKey([])).toBe('never')
+  })
+  it('lets real containers win over the deploy', () => {
+    expect(runningStatusKey([container({ status: 'running' })], { latest: group({ status: 'failed' }) })).toBe('running')
+  })
+  it('gives an app on the map the deploy state, or nothing before a deploy', () => {
+    expect(serviceStatusKey([], { latest: group({ status: 'succeeded' }) })).toBe('deployed')
+    expect(serviceStatusKey([], { latest: null })).toBeNull()
+    expect(serviceStatusKey([], { latest: undefined })).toBeNull()
+  })
+  it('puts it on the card: native apps deployed, container apps untouched', () => {
+    const native: EnvironmentConfigViewResponse = {
+      ok: true,
+      environmentId: 'e',
+      projectId: 'p',
+      followsBase: true,
+      base: SIDE,
+      effective: SIDE,
+      changes: [],
+    }
+    const data = environmentCardData({
+      name: 'Live',
+      containers: [],
+      view: native,
+      latest: group({}),
+      serverLine: 'x',
+      now: NOW,
+    })
+    expect(data.running).toEqual({ status: 'deployed' })
+    const apps = data.columns?.find((column) => column.key === 'apps')
+    expect(apps?.items[0]?.status).toBe('deployed')
   })
 })
 
@@ -458,7 +512,7 @@ describe('environment card data', () => {
     expect(data.serverLine).toBe('Frankfurt 1')
     const apps = data.columns?.find((column) => column.key === 'apps')
     expect(apps?.items[0]).toEqual({ name: 'web', status: 'running', changed: true })
-    expect(apps?.items[1]).toEqual({ name: 'worker', status: null, changed: false })
+    expect(apps?.items[1]).toEqual({ name: 'worker', status: 'deployed', changed: false })
   })
 
   it('leaves out what is not known yet', () => {
