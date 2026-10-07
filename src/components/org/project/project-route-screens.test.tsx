@@ -12,6 +12,7 @@ import {
   LegacyProjectRedirect,
   ProjectBaseScreen,
   ProjectEnvironmentsScreen,
+  ProjectSettingsRouteScreen,
 } from './project-route-screens'
 
 type Props = Readonly<Record<string, unknown> & { children?: ReactNode }>
@@ -61,11 +62,16 @@ vi.mock('@/components/org/project/configuration/environment-configuration', () =
 vi.mock('@/components/org/project/project-overview-tab', () => ({
   ProjectOverviewTab: () => <div data-testid="compose-surface" />,
 }))
+vi.mock('@/components/org/project/settings/project-settings-screen', () => ({
+  ProjectSettingsScreen: () => <div data-testid="project-settings" />,
+}))
 vi.mock('@/components/org/project/project-environments-tab', () => ({
   ProjectEnvironmentsTab: () => <div data-testid="environments-tab" />,
 }))
-vi.mock('@/components/org/project/overview-environments-panel', () => ({
-  EnvironmentGitSourceSection: () => <div data-testid="git-source" />,
+vi.mock('@/components/org/project/settings/environment-settings-screen', () => ({
+  EnvironmentSettingsBody: ({ showGitSource }: Readonly<{ showGitSource: boolean }>) => (
+    <div data-testid="env-settings" data-git={String(showGitSource)} />
+  ),
 }))
 vi.mock('@/components/org/project/environment-deployment-history-panel', () => ({
   EnvironmentDeploymentHistoryPanel: (props: Props) => (
@@ -189,6 +195,21 @@ describe('project tabs', () => {
   })
 })
 
+describe('project settings tab', () => {
+  it('shows Project Settings, and sends platform and managed projects home', () => {
+    render(<ProjectSettingsRouteScreen />)
+    expect(screen.getByTestId('project-settings')).toBeTruthy()
+    cleanup()
+    setContext({ isSystemProject: true })
+    render(<ProjectSettingsRouteScreen />)
+    expect(redirectHref()).toBe('/o/projects/p/overview')
+    cleanup()
+    setContext({ project: project({ type: 'managed', code: 'postgres' }) })
+    render(<ProjectSettingsRouteScreen />)
+    expect(redirectHref()).toBe('/o/projects/p/overview')
+  })
+})
+
 describe('environment tabs', () => {
   it('renders the map Overview for a Compose project on the web', () => {
     render(<EnvironmentOverviewScreen />)
@@ -240,14 +261,24 @@ describe('environment tabs', () => {
     expect(screen.getByTestId('managed')).toBeTruthy()
   })
 
-  it('adds branch and deploy-on-push to Settings only where the environment header exists', () => {
+  it('draws Environment Settings, with branch and deploy-on-push only where the environment header exists', () => {
     render(<EnvironmentSettingsScreen />)
-    expect(screen.getByTestId('compose-surface')).toBeTruthy()
-    expect(screen.getByTestId('git-source')).toBeTruthy()
+    expect(screen.getByTestId('env-settings').getAttribute('data-git')).toBe('true')
     cleanup()
     state.chrome = false
     render(<EnvironmentSettingsScreen />)
-    expect(screen.queryByTestId('git-source')).toBeNull()
+    expect(screen.getByTestId('env-settings').getAttribute('data-git')).toBe('false')
+  })
+
+  it('sends platform projects away from Settings and shows managed focus for managed ones', () => {
+    setContext({ isSystemProject: true })
+    render(<EnvironmentSettingsScreen />)
+    expect(redirectHref()).toBe('/o/projects/p/overview')
+    cleanup()
+    setContext({ project: project({ type: 'managed', code: 'postgres' }) })
+    render(<EnvironmentSettingsScreen />)
+    expect(screen.getByTestId('managed')).toBeTruthy()
+    expect(screen.queryByTestId('env-settings')).toBeNull()
   })
 
   it('opens the deploy history, fully open, for the environment in the path', () => {

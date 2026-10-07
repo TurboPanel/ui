@@ -8,6 +8,7 @@ import { SectionHeading } from '@/components/ui/v4/section-heading'
 import { SourceTag } from '@/components/ui/v4/source-tag'
 import { StatusChip } from '@/components/ui/v4/status-chip'
 import type { OverviewDataRow, OverviewServiceRow } from '@/lib/v4/environment-overview'
+import type { CrashInfo } from '@/lib/v4/run-state'
 import { plural } from '@/lib/v4/text'
 
 /** Where each row opens; null when there is no page for it yet. */
@@ -21,8 +22,13 @@ function serviceCount(apps: readonly OverviewServiceRow[], data: readonly Overvi
   return plural(apps.length + data.filter((row) => row.kind === 'store').length, 'service')
 }
 
-function AppRow({ row, href }: Readonly<{ row: OverviewServiceRow; href: string | null }>) {
+function AppRow({
+  row,
+  href,
+  onTroubled,
+}: Readonly<{ row: OverviewServiceRow; href: string | null; onTroubled: (() => void) | undefined }>) {
   const router = useRouter()
+  const open = onTroubled ?? (href === null ? undefined : () => router.push(href as Href))
   const sub = row.host === null ? row.sub : `${row.sub} · ${row.host}`
   return (
     <ListRow
@@ -36,7 +42,7 @@ function AppRow({ row, href }: Readonly<{ row: OverviewServiceRow; href: string 
         </>
       }
       tall
-      onPress={href === null ? undefined : () => router.push(href as Href)}
+      onPress={open}
     />
   )
 }
@@ -62,7 +68,16 @@ export function ServicesSection({
   apps,
   data,
   hrefs,
-}: Readonly<{ apps: readonly OverviewServiceRow[]; data: readonly OverviewDataRow[]; hrefs: RowHrefs }>) {
+  troubled = [],
+  onTroubled,
+}: Readonly<{
+  apps: readonly OverviewServiceRow[]
+  data: readonly OverviewDataRow[]
+  hrefs: RowHrefs
+  /** Apps the daemon reports as failing: pressing one opens the Crash sheet instead of its page. */
+  troubled?: readonly CrashInfo[]
+  onTroubled?: (service: string) => void
+}>) {
   return (
     <View>
       <SectionHeading title="Services" note={serviceCount(apps, data)} />
@@ -70,7 +85,16 @@ export function ServicesSection({
         empty={<EmptyPanel inline title="No services yet" body="Add one in the Compose file, then deploy." />}
       >
         {apps.map((row) => (
-          <AppRow key={`app-${row.name}`} row={row} href={hrefs.service(row.recordId)} />
+          <AppRow
+            key={`app-${row.name}`}
+            row={row}
+            href={hrefs.service(row.recordId)}
+            onTroubled={
+              onTroubled !== undefined && troubled.some((info) => info.service === row.name)
+                ? () => onTroubled(row.name)
+                : undefined
+            }
+          />
         ))}
         {data.map((row) => (
           <DataRow key={`data-${row.id}`} row={row} href={hrefs.data(row)} />

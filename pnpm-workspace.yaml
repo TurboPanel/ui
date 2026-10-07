@@ -28,11 +28,11 @@ minimumReleaseAgeExclude:
   - expo-dev-launcher@57.0.12
   - expo-dev-menu@57.0.12
 overrides:
-  sharp: ^0.35.4
+  sharp: ^0.35.5
   nanoid: ^3.3.18
   postcss: ^8.5.23
   uuid: ^11.1.1
-  shell-quote: ^1.9.0
+  shell-quote: ^1.11.0
   js-yaml: ^4.3.2
   browserslist: ^4.28.7
   baseline-browser-mapping: ^2.11.0
@@ -46,3 +46,7 @@ overrides:
   '@xmldom/xmldom@0.9': ^0.9.12
   # GHSA-3wwx-pv8p-q78v: miniflare pins undici 7.29.0 exactly; force the fixed release.
   undici: 7.29.1
+  # GHSA-68fv-2mgg-jv7q: source-map-js < 1.2.2 (event-loop DoS); pulled in by postcss and metro.
+  source-map-js: 1.2.2
+  # GHSA-vc2v-76pw-4v95: compression 1.8.1; @expo/cli pins it exactly.
+  compression: 1.8.2

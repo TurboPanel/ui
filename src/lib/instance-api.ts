@@ -2822,9 +2822,36 @@ export type ServiceRecord = {
    * has looked.
    */
   app?: ServiceApp | null
+  /**
+   * The daemon's last report of how the service is running. Read-only; absent
+   * until the service's server has reported it, and the latest report only,
+   * never a history.
+   */
+  runState?: ServiceRunStateRecord
   options?: ServiceOptions | Record<string, unknown> | null
   createdAt: string
   updatedAt: string
+}
+
+export type ServiceRunStateName =
+  | 'starting'
+  | 'running'
+  | 'unhealthy'
+  | 'crashing'
+  | 'stopped'
+  | 'stopped_after_crashes'
+  | 'unknown'
+
+/** Mirrors the control plane's `ServiceRunStateView` (turbopanel#317). */
+export type ServiceRunStateRecord = {
+  state: ServiceRunStateName
+  /** True only for `running`, which the daemon reports after 60 s up. */
+  running: boolean
+  restartCount: number
+  /** The last log line the daemon saw, up to 400 characters; null when none. */
+  lastError: string | null
+  /** When the daemon last saw this exact state. */
+  asOf: string
 }
 
 export type ServiceApp = {
@@ -2877,7 +2904,8 @@ export type HostingCertificate = {
   uploadedExpiryWarning: 'none' | '14d' | '3d' | '1d' | 'expired'
   dns: HostingDnsReport | null
   letsEncryptAvailable: boolean
-  wwwRedirect: boolean
+  /** The hosting's www choice (`options.www`); Let’s Encrypt covers every name it adds. */
+  www: 'off' | 'both' | 'www-to-root' | 'root-to-www'
   needsDeploy: boolean
 }
 
@@ -3431,14 +3459,16 @@ export async function fetchHosting(hostingId: string): Promise<{ hosting: Hostin
   return await apiFetch(`${CLIENT_API}/hostings/${hostingId}`)
 }
 
-/** One click: check DNS, then pin a Let's Encrypt certificate (or wait for DNS). */
+/**
+ * One click: check DNS, then pin a Let's Encrypt certificate (or wait for DNS).
+ * The names covered follow the hosting's own www choice (`options.www`).
+ */
 export async function requestLetsEncryptForHosting(
-  hostingId: string,
-  body: { wwwRedirect?: boolean } = {}
+  hostingId: string
 ): Promise<UseLetsEncryptResult> {
   return await apiFetch(`${CLIENT_API}/hostings/${hostingId}/use-letsencrypt`, {
     method: 'PUT',
-    body: JSON.stringify(body),
+    body: JSON.stringify({}),
   })
 }
 

@@ -41,6 +41,7 @@ export const STATUS = {
   // What is running now
   running: { label: 'Running', glyph: 'dot', tone: 'ok' },
   busy: { label: 'Starting', glyph: 'spinner', tone: 'busy' },
+  unhealthy: { label: 'Not healthy', glyph: 'triangle', tone: 'warn' },
   crashing: { label: 'Keeps crashing', glyph: 'triangle', tone: 'bad' },
   crashstop: { label: 'Stopped after 10 crashes', glyph: 'octagon', tone: 'bad' },
   stopped: { label: 'Stopped', glyph: 'ring', tone: 'idle' },
