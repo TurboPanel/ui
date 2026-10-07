@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { MANAGED_SERIES_IMMUTABLE_ERROR, MANAGED_VARIANT_SWAP_UNSAFE_ERROR } from './instance-api'
 import { TURBOFABRIC_PRODUCT_NAME } from './platform-copy'
+import { MANAGED_HAS_BINDINGS_COPY } from './user-error'
 import {
   MANAGED_INGRESS_MYSQL_PORT,
   MANAGED_INGRESS_PGSQL_PORT,
@@ -181,6 +182,9 @@ describe('managedErrorMessage', () => {
     expect(
       managedErrorMessage(new Error('HTTP 409: managed_database_has_bindings'), 'fallback')
     ).toBe('Still connected to one or more services. Remove those connections first.')
+    expect(managedErrorMessage(new Error('HTTP 409: managed_has_bindings'), 'fallback')).toBe(
+      MANAGED_HAS_BINDINGS_COPY
+    )
     expect(managedErrorMessage(new Error('HTTP 409: managed_database_has_users'), 'fallback')).toBe(
       'SQL users still have access to this database. Delete those users first.'
     )
