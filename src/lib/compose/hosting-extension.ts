@@ -121,6 +121,30 @@ export const HOSTING_HOSTNAME_RE: RegExp = new RegExp(
   'i',
 )
 
+/**
+ * What a hosting does with the other spelling of its hostname (`www.` added,
+ * or removed when it starts with `www.`): `off` answers only on the hostname,
+ * `both` serves the site on both names, `www-to-root` serves the bare name and
+ * redirects `www.` there, `root-to-www` the other way round. Twin of the
+ * control plane's `HostingWwwMode`; the panel helpers live in `@/lib/hosting-www`.
+ */
+export type HostingWwwMode = 'off' | 'both' | 'www-to-root' | 'root-to-www'
+
+export const HOSTING_WWW_MODES: readonly HostingWwwMode[] = [
+  'off',
+  'both',
+  'www-to-root',
+  'root-to-www',
+]
+
+export function isHostingWwwMode(value: unknown): value is HostingWwwMode {
+  return typeof value === 'string' && (HOSTING_WWW_MODES as readonly string[]).includes(value)
+}
+
+/** Message for a `www` value outside the four modes. */
+export const HOSTING_WWW_MODE_MESSAGE =
+  'www must be "off", "both", "www-to-root", or "root-to-www"'
+
 /** `tls` on one entry. `certificateRef` is required by `certificate` alone. */
 export type ComposeHostingTlsSpec = {
   mode: ComposeHostingTlsMode
@@ -168,6 +192,8 @@ export type ComposeHostingExtensionEntry = {
   targetPort?: number
   /** Redirect plain HTTP to HTTPS. Omitted means the row default (`true`). */
   forceHttps?: boolean
+  /** The www choice ({@link HostingWwwMode}). Omitted means `off`. */
+  www?: HostingWwwMode
   tls?: ComposeHostingTlsSpec
   bind?: ComposeHostingBindSpec
 }
@@ -178,6 +204,7 @@ export const HOSTING_ENTRY_KEYS: ReadonlySet<string> = new Set([
   'pathPrefix',
   'targetPort',
   'forceHttps',
+  'www',
   'tls',
   'bind',
 ])
@@ -358,6 +385,7 @@ function parseHostingEntry(
   if (targetPort !== undefined) entry.targetPort = targetPort
   // `false` must survive the round-trip — never a truthiness guard here.
   if (typeof value.forceHttps === 'boolean') entry.forceHttps = value.forceHttps
+  if (isHostingWwwMode(value.www) && value.www !== 'off') entry.www = value.www
   const tls = parseHostingTlsSpec(value.tls)
   if (tls) entry.tls = tls
   const bind = parseHostingBindSpec(value.bind)
@@ -521,10 +549,41 @@ function validateHostingEntry(
     })
   }
 
+  if ('www' in raw) issues.push(...validateHostingWww(entryPath, raw))
+
   if ('tls' in raw) issues.push(...validateHostingTls(entryPath, raw.tls))
   if ('bind' in raw) issues.push(...validateHostingBind(entryPath, raw.bind))
 
   return issues
+}
+
+/** Same refusals as the instance: a bad value, or a mode on a name with no www spelling. */
+function validateHostingWww(
+  entryPath: string,
+  raw: Record<string, unknown>,
+): HostingExtensionIssue[] {
+  const path = `${entryPath}.www`
+  if (!isHostingWwwMode(raw.www)) return [{ path, message: HOSTING_WWW_MODE_MESSAGE }]
+  const hostname = readHostingHostname(raw.hostname)
+  if (raw.www === 'off' || !hostname || wwwSiblingHostname(hostname) !== null) return []
+  return [{ path, message: `${hostname} has no www or bare spelling, so www must be "off" for it` }]
+}
+
+/**
+ * The other spelling of a hostname: `www.example.com` for `example.com` and
+ * back. Null unless the flipped name is a valid hostname, the bare name (no
+ * leading `www.`) has a dot, and its last label is not all digits, so an IP
+ * (`203.0.113.5`), a one-word name (`localhost`, `com`) and `www.com` have no
+ * www spelling. Same rule as the control plane and the daemon.
+ */
+export function wwwSiblingHostname(hostname: string): string | null {
+  const typedIsWww = hostname.startsWith('www.')
+  const bare = typedIsWww ? hostname.slice(4) : hostname
+  const sibling = typedIsWww ? bare : `www.${hostname}`
+  if (readHostingHostname(sibling) !== sibling) return null
+  const dot = bare.lastIndexOf('.')
+  if (dot === -1) return null
+  return /^\d+$/.test(bare.slice(dot + 1)) ? null : sibling
 }
 
 /**

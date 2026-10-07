@@ -7,7 +7,7 @@ Third-party components remain under their own copyright and license terms and ar
 Third-party OS artwork under `assets/os/` is recorded separately in `assets/os/NOTICE.md` and is not licensed under this repository’s AGPL or the Apple App Store additional permission.
 
 <!-- lockfiles
-pnpm-lock.yaml sha256:4c90dc7be4275c91d4dd6af05bd1b7cf728c87c116489c569f163e6960d71f17
+pnpm-lock.yaml sha256:30589c7180644e2f77305107812c1fae74e27033ad2eac0b4f2af56606ed7234
 -->
 
 ## Production dependencies
@@ -3883,7 +3883,7 @@ pnpm-lock.yaml sha256:4c90dc7be4275c91d4dd6af05bd1b7cf728c87c116489c569f163e6960
 - Copyright: Sindre Sorhus
 - Homepage: https://github.com/sindresorhus/shebang-regex#readme
 
-### shell-quote@1.10.0
+### shell-quote@1.12.0
 
 - License: MIT
 - Copyright: James Halliday
@@ -4541,13 +4541,13 @@ These packages are used for development, test, or build tooling and are not bund
 - License: MIT
 - Homepage: https://github.com/lovell/colour#readme
 
-### @img/sharp-libvips-linux-x64@1.3.3
+### @img/sharp-libvips-linux-x64@1.3.4
 
 - License: LGPL-3.0-or-later
 - Copyright: Lovell Fuller
 - Homepage: https://sharp.pixelplumbing.com
 
-### @img/sharp-linux-x64@0.35.4
+### @img/sharp-linux-x64@0.35.5
 
 - License: Apache-2.0
 - Copyright: Lovell Fuller
@@ -5803,7 +5803,7 @@ These packages are used for development, test, or build tooling and are not bund
 - Copyright: Jordan Harband
 - Homepage: https://github.com/ljharb/set-proto#readme
 
-### sharp@0.35.4
+### sharp@0.35.5
 
 - License: Apache-2.0
 - Copyright: Lovell Fuller

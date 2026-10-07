@@ -44,7 +44,7 @@ describe('hosting certificate queries', () => {
     expect(fetchHosting).toHaveBeenCalledWith('h1')
   })
 
-  it('use Let’s Encrypt sends the choice and refreshes the hosting lists', async () => {
+  it('use Let’s Encrypt asks for the hosting and refreshes the hosting lists', async () => {
     requestLetsEncryptForHosting.mockResolvedValue({ needsDeploy: true })
     const client = createAppQueryClient()
     const invalidate = vi.spyOn(client, 'invalidateQueries')
@@ -52,9 +52,9 @@ describe('hosting certificate queries', () => {
       wrapper: createWrapper(client),
     })
     await act(async () => {
-      await result.current.run({ wwwRedirect: true })
+      await result.current.run()
     })
-    expect(requestLetsEncryptForHosting).toHaveBeenCalledWith('h1', { wwwRedirect: true })
+    expect(requestLetsEncryptForHosting).toHaveBeenCalledWith('h1')
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['org', 'org-1', 'hostings'] })
   })
 
