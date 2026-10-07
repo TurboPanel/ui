@@ -171,6 +171,9 @@ describe('managedErrorMessage', () => {
     expect(
       managedErrorMessage(new Error('HTTP 409: managed_database_has_bindings'), 'fallback')
     ).toBe('Still connected to one or more services. Remove those connections first.')
+    expect(managedErrorMessage(new Error('HTTP 409: managed_database_has_users'), 'fallback')).toBe(
+      'SQL users still have access to this database. Delete those users first.'
+    )
     expect(managedErrorMessage(new Error('HTTP 409: binding_key_prefix_in_use'), 'fallback')).toBe(
       'This service already has a connection using that prefix — pick another.'
     )
