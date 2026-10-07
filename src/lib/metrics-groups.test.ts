@@ -87,7 +87,7 @@ describe('host chart groups', () => {
       'utf8'
     )
     const start = source.indexOf("id: 'router-backends'")
-    const block = source.slice(start, source.indexOf('hideWhenEmpty', start))
+    const block = source.slice(start, source.indexOf('yFormat', start))
     expect(block).toContain("id: 'up'")
     expect(block).toContain("id: 'total'")
   })

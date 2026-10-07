@@ -70,7 +70,7 @@ export const HOST_CHART_GROUPS: readonly HostChartGroup[] = [
     id: 'cpu',
     label: 'CPU',
     hint: 'Utilisation, pressure, and what is waiting to run',
-    chartIds: ['cpu-modes', 'cpu-pressure', 'cpu-saturated-cores', 'cpu-processes', 'sizes-cores'],
+    chartIds: ['cpu-modes', 'cpu-pressure', 'cpu-pressure-irq', 'cpu-saturated-cores', 'cpu-processes', 'sizes-cores'],
   },
   {
     id: 'memory',

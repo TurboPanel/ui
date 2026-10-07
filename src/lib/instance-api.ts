@@ -7337,8 +7337,6 @@ export type HostSeriesChartPoint = {
   expectedSampleCount?: number
   /** Seconds between stored samples in this bucket (collection interval × store sampling weight). */
   sampleSpacingSeconds?: number
-  /** `null`/absent means unknown or a mixed-generation bucket. */
-  topologyGeneration?: number | null
 }
 
 /** Resolved CPU thermal/power limits for headroom display. Mirrors `EffectiveCpuThermalLimits`. */
@@ -7366,14 +7364,6 @@ export type HostSeriesChartResponse = {
    */
   gapBuckets?: string[]
   points: HostSeriesChartPoint[]
-  /**
-   * Point indices where `topologyGeneration` differs from the previous known
-   * generation — a boundary marker for segmenting chart continuity without
-   * inferring it from raw generation numbers. Replaces v3's `generationBreaks`.
-   */
-  topologyGenerationBreaks: number[]
-  /** Distinct topology generations observed anywhere in the queried range. */
-  topologyGenerations?: number[]
 }
 
 /**
@@ -7433,7 +7423,6 @@ export type MetricsSeriesResponse = {
   /** One entry per requested per-entity family. */
   entities: EntitySeriesResult[]
   inventory: TopologyInventory | null
-  topologyGeneration: number | null
   cpuLimits: EffectiveCpuThermalLimits
   temperatureUnit: 'celsius' | 'fahrenheit'
   /** How many network interfaces this server may monitor (its effective NIC-slot count). */
@@ -7461,7 +7450,6 @@ export type FleetServerUsageRecord = {
   sampleCount: number
   /** Keyed by canonical name — see `FLEET_HOST_METRICS` for the requested set. */
   values: Partial<Record<string, number | null>>
-  topologyGeneration?: number | null
   derived: DerivedHostValues
 }
 
