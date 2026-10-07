@@ -22,6 +22,7 @@ import {
   fetchServer,
   fetchServerMetricsCapabilities,
   fetchServerMetricsConnection,
+  fetchServerMetricsFacts,
   fetchServerMetricsEvents,
   fetchServerMetricsLiveSettings,
   fetchServerMetricsSeries,
@@ -1127,6 +1128,18 @@ describe('fetch wrappers (mocked fetch)', () => {
       samples: [],
     })
     expect(String(fetchMock.mock.calls[1]?.[0])).toContain('/metrics/connection')
+  })
+
+  it('fetchServerMetricsFacts hits the facts path with the organization header', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ ok: true, available: true, facts: { text: {}, blockDevices: [], gpus: [] } })
+    )
+    await expect(fetchServerMetricsFacts('srv-1', 'org-metrics')).resolves.toMatchObject({
+      available: true,
+    })
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/servers/srv-1/metrics/facts')
+    const [, init] = fetchMock.mock.calls[0] ?? []
+    expect((init as RequestInit).headers).toMatchObject({ [ORG_ID_HEADER]: 'org-metrics' })
   })
 
   it('fetchServerMetricsSeries throws MetricsBackendUnavailableError on 503', async () => {

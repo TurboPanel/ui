@@ -34,6 +34,7 @@ import {
   useServerMetricsConnection,
   useServerMetricsCpuLimits,
   useServerMetricsEvents,
+  useServerMetricsFacts,
   useServerMetricsSeries,
   useServerMetricsSeriesBatches,
   useServerNicSlotContext,
@@ -57,6 +58,7 @@ const {
   fetchServerMetricsSeries,
   fetchServerMetricsEvents,
   fetchServerMetricsConnection,
+  fetchServerMetricsFacts,
   pingDaemon,
   fetchServer,
   fetchServerLabels,
@@ -90,6 +92,7 @@ const {
   fetchServerMetricsSeries: vi.fn(),
   fetchServerMetricsEvents: vi.fn(),
   fetchServerMetricsConnection: vi.fn(),
+  fetchServerMetricsFacts: vi.fn(),
   pingDaemon: vi.fn(),
   fetchServer: vi.fn(),
   fetchServerLabels: vi.fn(),
@@ -128,6 +131,7 @@ vi.mock('@/lib/instance-api', async (importOriginal) => {
     fetchServerMetricsSeries,
     fetchServerMetricsEvents,
     fetchServerMetricsConnection,
+    fetchServerMetricsFacts,
     pingDaemon,
     fetchServer,
     fetchServerLabels,
@@ -422,6 +426,49 @@ describe('servers query hooks', () => {
       expect(result.current.isSuccess).toBe(true)
     })
     expect(result.current.data).toBeNull()
+  })
+
+  it('useServerMetricsFacts loads the newest host facts for a server', async () => {
+    fetchServerMetricsFacts.mockResolvedValueOnce({
+      ok: true,
+      available: true,
+      facts: { text: { kernel: '6.12.0' }, blockDevices: [], gpus: [] },
+    })
+
+    const { result } = renderHook(() => useServerMetricsFacts(orgId, serverId), {
+      wrapper: createWrapper(),
+    })
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+    expect(fetchServerMetricsFacts).toHaveBeenCalledWith(serverId, orgId)
+    expect(result.current.data?.facts.text.kernel).toBe('6.12.0')
+  })
+
+  it('useServerMetricsFacts returns null when the metrics backend is unavailable', async () => {
+    fetchServerMetricsFacts.mockRejectedValueOnce(new MetricsBackendUnavailableError('duckdb'))
+
+    const { result } = renderHook(() => useServerMetricsFacts(orgId, serverId), {
+      wrapper: createWrapper(),
+    })
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+    expect(result.current.data).toBeNull()
+  })
+
+  it('useServerMetricsFacts propagates non-backend errors', async () => {
+    fetchServerMetricsFacts.mockRejectedValue(new Error('HTTP 500: boom'))
+
+    const { result } = renderHook(() => useServerMetricsFacts(orgId, serverId), {
+      wrapper: createWrapper(createTestQueryClient()),
+    })
+
+    await waitFor(() => {
+      expect(result.current.isError).toBe(true)
+    })
   })
 
   it('useServerMetricsConnection loads uptime totals for a range', async () => {

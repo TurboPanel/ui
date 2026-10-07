@@ -285,6 +285,100 @@ function hostMetric(scope: HostScope, field: string): PointValueReader {
   return metric(id)
 }
 
+type ValueFormat = 'count' | 'percent' | 'bytes' | 'perSecond'
+
+const VALUE_FORMATTERS: Readonly<Record<ValueFormat, (value: number) => string>> = {
+  count: (v) => formatCount(v),
+  percent: (v) => formatPercent(v),
+  bytes: (v) => formatBytes(v),
+  perSecond: (v) => `${formatCount(v)}/s`,
+}
+
+/** `[series id, label, scope, field, color?]` — one line of a compact chart table. */
+type CompactSeries = readonly [
+  id: string,
+  label: string,
+  scope: HostScope,
+  field: string,
+  color?: string,
+]
+
+/**
+ * A chart whose series are plain host-singleton reads, written as one table
+ * row. Used for the v7 numbers, every one of which is `hideWhenEmpty`: a v6
+ * daemon sends none of them and a gap must never paint as zero.
+ */
+function compactChart(
+  id: string,
+  title: string,
+  unit: string,
+  format: ValueFormat,
+  series: readonly CompactSeries[],
+  yDomain?: readonly [number, number]
+): ChartDefinition {
+  return {
+    id,
+    title,
+    unit,
+    series: series.map(([seriesId, label, scope, field, color]) => ({
+      id: seriesId,
+      label,
+      color,
+      read: hostMetric(scope, field),
+    })),
+    yFormat: VALUE_FORMATTERS[format],
+    yDomain,
+    hideWhenEmpty: true,
+  }
+}
+
+/** Sample sizes and v7 health, in the order their groups show them (see `metrics-groups.ts`). */
+const V7_CHART_DEFINITIONS: readonly ChartDefinition[] = [
+  compactChart('health-oom-kills', 'Processes killed for memory', 'count', 'count', [
+    ['kills', 'OOM kills', 'extended.host', 'oomKills'],
+  ]),
+  compactChart('health-pid-limit', 'Process limit used', '%', 'percent', [['used', 'Tasks / limit', 'extended.host', 'pidLimitUsedPercent']], [0, 100]),
+  compactChart('health-root-disk-queue', 'Root disk queue', 'count', 'count', [
+    ['queue', 'Queue depth', 'extended.host', 'rootDiskQueueDepth'],
+  ]),
+  compactChart('health-root-disk-ops', 'Root disk operations', '/s', 'perSecond', [
+    ['ops', 'Reads + writes', 'extended.host', 'rootDiskOpsPerSecond'],
+  ]),
+  compactChart('health-systemd-failed', 'Failed system services', 'count', 'count', [
+    ['failed', 'Failed units', 'extended.host', 'systemdUnitsFailed'],
+  ]),
+  compactChart('health-raid', 'Software RAID', 'count', 'count', [
+    ['degraded', 'Degraded arrays', 'extended.host', 'mdArraysDegraded'],
+    ['resyncing', 'Resyncing arrays', 'extended.host', 'mdArraysResyncing', colors.pending],
+  ]),
+  // Every sample carries the sizes its percentages are measured against, so a
+  // resize or a balloon shows here as a step and never rewrites a past percentage.
+  compactChart('sizes-memory', 'Memory size', 'bytes', 'bytes', [
+    ['ram', 'Memory', 'extended.sizes', 'memoryTotalBytes'],
+    ['swap', 'Swap', 'extended.sizes', 'swapTotalBytes', colors.pending],
+    ['commit', 'Commit limit', 'extended.sizes', 'commitLimitBytes', colors.command],
+  ]),
+  compactChart('sizes-cores', 'CPU cores', 'count', 'count', [
+    ['cores', 'Logical cores', 'extended.sizes', 'logicalCores'],
+  ]),
+  compactChart('docker-containers-health', 'Docker · Container health', 'count', 'count', [
+    ['running', 'Running', 'extended.docker', 'containersRunning'],
+    ['unhealthy', 'Unhealthy', 'extended.docker', 'containersUnhealthy', colors.pending],
+    ['restarting', 'Restarting', 'extended.docker', 'containersRestarting', colors.command],
+  ]),
+  compactChart('docker-container-events', 'Docker · Containers that stopped unexpectedly', 'count', 'count', [
+    ['died', 'Exits', 'extended.docker', 'containerDieEvents'],
+    ['oom', 'Out of memory', 'extended.docker', 'containerOomEvents', colors.pending],
+  ]),
+  compactChart('docker-container-cpu', 'Docker · Containers CPU', '%', 'percent', [['cpu', 'Share of host', 'extended.docker', 'containersCpuPercent']], [0, 100]),
+  compactChart('docker-container-memory', 'Docker · Containers memory', 'bytes', 'bytes', [
+    ['memory', 'In use', 'extended.docker', 'containersMemoryBytes'],
+  ]),
+  compactChart('docker-reclaimable', 'Docker · Reclaimable', 'bytes', 'bytes', [
+    ['reclaimable', 'A prune would free', 'extended.docker', 'reclaimableBytes'],
+  ]),
+]
+
 const HOST_CHART_DEFINITIONS: readonly ChartDefinition[] = [
   {
     id: 'cpu-modes',
@@ -319,8 +413,6 @@ const HOST_CHART_DEFINITIONS: readonly ChartDefinition[] = [
         label: 'SoftIRQ',
         color: colors.pending,
         read: hostMetric('host.cpu', 'softirqPercent'),
-        // Not stored on the hosted layout (the sizes took its slot); self-hosted still has it.
-        hideWhenEmpty: true,
       },
     ],
     yFormat: (v) => formatPercent(v),
@@ -421,8 +513,6 @@ const HOST_CHART_DEFINITIONS: readonly ChartDefinition[] = [
         label: 'Full',
         color: colors.pending,
         read: hostMetric('host.memory', 'pressureFullPercent'),
-        // Not stored on the hosted layout (the sizes took its slot); self-hosted still has it.
-        hideWhenEmpty: true,
       },
     ],
     yFormat: (v) => formatPercent(v),
@@ -776,25 +866,18 @@ const HOST_CHART_DEFINITIONS: readonly ChartDefinition[] = [
     title: 'Router · Backend requests',
     unit: 'count',
     series: [
-      {
-        id: 'requests',
-        label: 'Requests',
-        read: hostMetric('router', 'backendRequests'),
-        hideWhenEmpty: true,
-      },
+      { id: 'requests', label: 'Requests', read: hostMetric('router', 'backendRequests') },
       {
         id: 'errors',
         label: '5xx',
         color: colors.pending,
         read: hostMetric('router', 'backendErrors5xx'),
-        hideWhenEmpty: true,
       },
       {
         id: 'retries',
         label: 'Retries',
         color: colors.command,
         read: hostMetric('router', 'retries'),
-        hideWhenEmpty: true,
       },
     ],
     yFormat: (v) => formatCount(v),
@@ -889,10 +972,10 @@ const HOST_CHART_DEFINITIONS: readonly ChartDefinition[] = [
     id: 'router-tls-expiry',
     title: 'Soonest TLS expiry',
     unit: 'days',
-    // The minimum across every hosting certificate, not a mean — one cert
-    // about to lapse matters regardless of how healthy the others are. v7
-    // reports it from the hosting Caddy (`extended.ingress`); the router's own
-    // figure is no longer stored.
+    // The minimum across every hosting certificate, not a mean — one cert about
+    // to lapse matters regardless of how healthy the others are. v7 reports it
+    // from the hosting Caddy (`extended.ingress`); the router's own figure is
+    // no longer stored.
     series: [
       {
         id: 'expiry',
@@ -901,111 +984,6 @@ const HOST_CHART_DEFINITIONS: readonly ChartDefinition[] = [
       },
     ],
     yFormat: (v) => `${formatCount(v)}d`,
-    hideWhenEmpty: true,
-  },
-
-  // --- v7 host health: counts and limits a v7 daemon reports --------------------
-  // Each is `hideWhenEmpty`: a v6 daemon sends none of them, and a gap must
-  // never paint as zero.
-  {
-    id: 'health-oom-kills',
-    title: 'Processes killed for memory',
-    unit: 'count',
-    series: [{ id: 'kills', label: 'OOM kills', read: hostMetric('extended.host', 'oomKills') }],
-    yFormat: (v) => formatCount(v),
-    hideWhenEmpty: true,
-  },
-  {
-    id: 'health-pid-limit',
-    title: 'Process limit used',
-    unit: '%',
-    series: [
-      { id: 'used', label: 'Tasks / limit', read: hostMetric('extended.host', 'pidLimitUsedPercent') },
-    ],
-    yFormat: (v) => formatPercent(v),
-    yDomain: [0, 100],
-    hideWhenEmpty: true,
-  },
-  {
-    id: 'health-root-disk-queue',
-    title: 'Root disk queue',
-    unit: 'count',
-    series: [
-      { id: 'queue', label: 'Queue depth', read: hostMetric('extended.host', 'rootDiskQueueDepth') },
-    ],
-    yFormat: (v) => formatCount(v),
-    hideWhenEmpty: true,
-  },
-  {
-    id: 'health-root-disk-ops',
-    title: 'Root disk operations',
-    unit: '/s',
-    series: [
-      { id: 'ops', label: 'Reads + writes', read: hostMetric('extended.host', 'rootDiskOpsPerSecond') },
-    ],
-    yFormat: (v) => `${formatCount(v)}/s`,
-    hideWhenEmpty: true,
-  },
-  {
-    id: 'health-systemd-failed',
-    title: 'Failed system services',
-    unit: 'count',
-    series: [
-      { id: 'failed', label: 'Failed units', read: hostMetric('extended.host', 'systemdUnitsFailed') },
-    ],
-    yFormat: (v) => formatCount(v),
-    hideWhenEmpty: true,
-  },
-  {
-    id: 'health-raid',
-    title: 'Software RAID',
-    unit: 'count',
-    series: [
-      { id: 'degraded', label: 'Degraded arrays', read: hostMetric('extended.host', 'mdArraysDegraded') },
-      {
-        id: 'resyncing',
-        label: 'Resyncing arrays',
-        color: colors.pending,
-        read: hostMetric('extended.host', 'mdArraysResyncing'),
-      },
-    ],
-    yFormat: (v) => formatCount(v),
-    hideWhenEmpty: true,
-  },
-
-  // --- What the percentages are measured against ---------------------------------
-  // Every sample carries the sizes its percentages use, so a resize or a
-  // balloon shows here as a step and never rewrites a past percentage.
-  {
-    id: 'sizes-memory',
-    title: 'Memory size',
-    unit: 'bytes',
-    series: [
-      { id: 'ram', label: 'Memory', read: hostMetric('extended.sizes', 'memoryTotalBytes') },
-      {
-        id: 'swap',
-        label: 'Swap',
-        color: colors.pending,
-        read: hostMetric('extended.sizes', 'swapTotalBytes'),
-        hideWhenEmpty: true,
-      },
-      {
-        id: 'commit',
-        label: 'Commit limit',
-        color: colors.command,
-        read: hostMetric('extended.sizes', 'commitLimitBytes'),
-        hideWhenEmpty: true,
-      },
-    ],
-    yFormat: (v) => formatBytes(v),
-    hideWhenEmpty: true,
-  },
-  {
-    id: 'sizes-cores',
-    title: 'CPU cores',
-    unit: 'count',
-    series: [{ id: 'cores', label: 'Logical cores', read: hostMetric('extended.sizes', 'logicalCores') }],
-    yFormat: (v) => formatCount(v),
     hideWhenEmpty: true,
   },
 
@@ -1186,76 +1164,7 @@ const HOST_CHART_DEFINITIONS: readonly ChartDefinition[] = [
     yFormat: (v) => formatCount(v),
     hideWhenEmpty: true,
   },
-  // v7 container health and totals (`extended.docker`): present only when a v7 daemon reports them.
-  {
-    id: 'docker-containers-health',
-    title: 'Docker · Container health',
-    unit: 'count',
-    series: [
-      { id: 'running', label: 'Running', read: hostMetric('extended.docker', 'containersRunning') },
-      {
-        id: 'unhealthy',
-        label: 'Unhealthy',
-        color: colors.pending,
-        read: hostMetric('extended.docker', 'containersUnhealthy'),
-      },
-      {
-        id: 'restarting',
-        label: 'Restarting',
-        color: colors.command,
-        read: hostMetric('extended.docker', 'containersRestarting'),
-      },
-    ],
-    yFormat: (v) => formatCount(v),
-    hideWhenEmpty: true,
-  },
-  {
-    id: 'docker-container-events',
-    title: 'Docker · Containers that stopped unexpectedly',
-    unit: 'count',
-    series: [
-      { id: 'died', label: 'Exits', read: hostMetric('extended.docker', 'containerDieEvents') },
-      {
-        id: 'oom',
-        label: 'Out of memory',
-        color: colors.pending,
-        read: hostMetric('extended.docker', 'containerOomEvents'),
-      },
-    ],
-    yFormat: (v) => formatCount(v),
-    hideWhenEmpty: true,
-  },
-  {
-    id: 'docker-container-cpu',
-    title: 'Docker · Containers CPU',
-    unit: '%',
-    series: [
-      { id: 'cpu', label: 'Share of host', read: hostMetric('extended.docker', 'containersCpuPercent') },
-    ],
-    yFormat: (v) => formatPercent(v),
-    yDomain: [0, 100],
-    hideWhenEmpty: true,
-  },
-  {
-    id: 'docker-container-memory',
-    title: 'Docker · Containers memory',
-    unit: 'bytes',
-    series: [
-      { id: 'memory', label: 'In use', read: hostMetric('extended.docker', 'containersMemoryBytes') },
-    ],
-    yFormat: (v) => formatBytes(v),
-    hideWhenEmpty: true,
-  },
-  {
-    id: 'docker-reclaimable',
-    title: 'Docker · Reclaimable',
-    unit: 'bytes',
-    series: [
-      { id: 'reclaimable', label: 'A prune would free', read: hostMetric('extended.docker', 'reclaimableBytes') },
-    ],
-    yFormat: (v) => formatBytes(v),
-    hideWhenEmpty: true,
-  },
+  ...V7_CHART_DEFINITIONS,
 ]
 
 /** Every host canonical id referenced by `HOST_CHART_DEFINITIONS` above — the single request list for the host series query. */
@@ -2286,6 +2195,18 @@ function normalizeHostGrid(data: MetricsSeriesResponse): NormalizedHostGrid {
  * Maps grid points through a chart's readers. Per-device charts may also
  * null the topology-generation boundary (see {@link ChartDefinition.gapOnGenerationBreak}).
  */
+/**
+ * Series the hosted layout stopped storing to make room for the per-sample
+ * sizes (self-hosted still has them). They hide when empty instead of painting
+ * an empty legend entry beside series that do have data.
+ */
+const HOSTED_UNSTORED_SERIES: ReadonlySet<string> = new Set([
+  'cpu-modes/softirq',
+  'memory-pressure/full',
+  'router-backend-requests/requests',
+  'router-backend-requests/errors',
+])
+
 function buildChartSeries(
   points: GridPoint[],
   definition: ChartDefinition,
@@ -2303,7 +2224,7 @@ function buildChartSeries(
       })),
     }
     if (
-      entry.hideWhenEmpty &&
+      (entry.hideWhenEmpty || HOSTED_UNSTORED_SERIES.has(`${definition.id}/${entry.id}`)) &&
       mapped.points.every((point) => point.value === null || point.value === undefined)
     ) {
       return []

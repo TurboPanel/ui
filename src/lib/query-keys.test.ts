@@ -449,6 +449,7 @@ describe('queryKeys.org(…) remaining factories', () => {
     expect(
       isServerMetricsQuery({ queryKey: org.servers.metricsConnection('srv-1', '1h') }, 'org-1')
     ).toBe(true)
+    expect(isServerMetricsQuery({ queryKey: org.servers.metricsFacts('srv-1') }, 'org-1')).toBe(true)
     expect(isServerMetricsQuery({ queryKey: org.servers.metrics('srv-1') }, 'org-1')).toBe(true)
     expect(
       isServerMetricsQuery({ queryKey: org.servers.metricsSeries('srv-1', '1h') }, 'org-other')

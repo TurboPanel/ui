@@ -54,6 +54,14 @@ export const GROUP_SUMMARY_SPECS: Readonly<Record<string, GroupSummarySpec>> = {
   router: { chartId: 'router-backends', reachability: { upSeriesId: 'up', totalSeriesId: 'total' } },
 }
 
+/** v7 container health and totals, shown first in the Docker group. */
+const DOCKER_HEALTH_CHART_IDS = [
+  'docker-containers-health',
+  'docker-container-events',
+  'docker-container-cpu',
+  'docker-container-memory',
+] as const
+
 export const HOST_CHART_GROUPS: readonly HostChartGroup[] = [
   {
     id: 'cpu',
@@ -120,7 +128,7 @@ export const HOST_CHART_GROUPS: readonly HostChartGroup[] = [
     // `managed.ingress` sources; the Ingress group below is Caddy-only now.
     id: 'router',
     label: 'Router',
-    hint: 'Shared HTTP router — backends reachable, retries, 5xx, latency, config reloads and their age',
+    hint: 'Shared HTTP router — backends reachable, retries, 5xx, latency, config reloads and their age, soonest TLS expiry',
     chartIds: [
       'router-backend-requests',
       'router-backend-latency',
@@ -128,15 +136,16 @@ export const HOST_CHART_GROUPS: readonly HostChartGroup[] = [
       'router-connections',
       'router-config',
       'router-config-age',
+      'router-tls-expiry',
     ],
   },
   {
-    // v7 counts and limits (`extended.host`, `extended.ingress`): what a daemon
-    // new enough to report them says about the host's health. A v6 daemon sends
-    // none, so the section hides itself.
+    // v7 counts and limits (`extended.host`): what a daemon new enough to
+    // report them says about the host's health. A v6 daemon sends none, so
+    // the section hides itself.
     id: 'host-health',
     label: 'Host health',
-    hint: 'Processes killed for memory, process limit, root disk queue, failed services, RAID and the soonest TLS expiry',
+    hint: 'Processes killed for memory, process limit, root disk queue, failed services and RAID',
     chartIds: [
       'health-oom-kills',
       'health-pid-limit',
@@ -144,7 +153,6 @@ export const HOST_CHART_GROUPS: readonly HostChartGroup[] = [
       'health-root-disk-ops',
       'health-systemd-failed',
       'health-raid',
-      'router-tls-expiry',
     ],
   },
   {
@@ -165,16 +173,13 @@ export const HOST_CHART_GROUPS: readonly HostChartGroup[] = [
   },
   {
     // `managed.docker` — Docker's own `/system/df` breakdown plus (v7)
-    // container health and totals. On every plan: Docker metrics are no longer
-    // a tier feature.
+    // container health and totals. On every plan: Docker metrics are no
+    // longer a tier feature.
     id: 'managed-docker',
     label: 'Docker',
-    hint: 'Container health, image layers, containers, volumes, and build cache — with what a prune would reclaim',
+    hint: 'Image layers, containers, volumes, and build cache — with what a prune would reclaim',
     chartIds: [
-      'docker-containers-health',
-      'docker-container-events',
-      'docker-container-cpu',
-      'docker-container-memory',
+      ...DOCKER_HEALTH_CHART_IDS,
       'managed-docker-layers',
       'managed-docker-containers',
       'managed-docker-volumes',
