@@ -9,6 +9,7 @@ import {
 } from 'react-native'
 import { HeaderChevron } from '@/components/header-chevron'
 import { Button, InlineNotice, SectionPanel, StatTiles } from '@/components/ui'
+import { hostFactRows } from '@/lib/host-facts'
 import {
   CpuMetricIcon,
   MemoryMetricIcon,
@@ -78,12 +79,12 @@ import {
   type TopologyInventory,
 } from '@/lib/instance-api'
 import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
-import { isEntryTierLicense } from '@/lib/tier-placement'
 import { useCan } from '@/lib/query-client'
 import {
   useOrgServers,
   useServerMetricsConnection,
   useServerMetricsEvents,
+  useServerMetricsFacts,
   useServerMetricsSeries,
   useServerMetricsSeriesBatches,
   useServerUpdateStatus,
@@ -269,6 +270,10 @@ type HostScope = Extract<
   | 'router'
   | 'storage'
   | 'dockerUsage'
+  | 'extended.host'
+  | 'extended.docker'
+  | 'extended.ingress'
+  | 'extended.sizes'
 >
 
 /** Every host canonical id this screen ever requests, collected as chart definitions below reference them — see `HOST_METRIC_IDS`. */
@@ -314,6 +319,8 @@ const HOST_CHART_DEFINITIONS: readonly ChartDefinition[] = [
         label: 'SoftIRQ',
         color: colors.pending,
         read: hostMetric('host.cpu', 'softirqPercent'),
+        // Not stored on the hosted layout (the sizes took its slot); self-hosted still has it.
+        hideWhenEmpty: true,
       },
     ],
     yFormat: (v) => formatPercent(v),
@@ -414,6 +421,8 @@ const HOST_CHART_DEFINITIONS: readonly ChartDefinition[] = [
         label: 'Full',
         color: colors.pending,
         read: hostMetric('host.memory', 'pressureFullPercent'),
+        // Not stored on the hosted layout (the sizes took its slot); self-hosted still has it.
+        hideWhenEmpty: true,
       },
     ],
     yFormat: (v) => formatPercent(v),
@@ -767,18 +776,25 @@ const HOST_CHART_DEFINITIONS: readonly ChartDefinition[] = [
     title: 'Router · Backend requests',
     unit: 'count',
     series: [
-      { id: 'requests', label: 'Requests', read: hostMetric('router', 'backendRequests') },
+      {
+        id: 'requests',
+        label: 'Requests',
+        read: hostMetric('router', 'backendRequests'),
+        hideWhenEmpty: true,
+      },
       {
         id: 'errors',
         label: '5xx',
         color: colors.pending,
         read: hostMetric('router', 'backendErrors5xx'),
+        hideWhenEmpty: true,
       },
       {
         id: 'retries',
         label: 'Retries',
         color: colors.command,
         read: hostMetric('router', 'retries'),
+        hideWhenEmpty: true,
       },
     ],
     yFormat: (v) => formatCount(v),
@@ -871,18 +887,125 @@ const HOST_CHART_DEFINITIONS: readonly ChartDefinition[] = [
   },
   {
     id: 'router-tls-expiry',
-    title: 'Router · Soonest TLS expiry',
+    title: 'Soonest TLS expiry',
     unit: 'days',
-    // The minimum across every certificate, not a mean — one cert about to
-    // lapse matters regardless of how healthy the others are.
+    // The minimum across every hosting certificate, not a mean — one cert
+    // about to lapse matters regardless of how healthy the others are. v7
+    // reports it from the hosting Caddy (`extended.ingress`); the router's own
+    // figure is no longer stored.
     series: [
       {
         id: 'expiry',
         label: 'Days to expiry',
-        read: hostMetric('router', 'tlsCertSoonestExpiryDays'),
+        read: hostMetric('extended.ingress', 'tlsCertSoonestExpiryDays'),
       },
     ],
     yFormat: (v) => `${formatCount(v)}d`,
+    hideWhenEmpty: true,
+  },
+
+  // --- v7 host health: counts and limits a v7 daemon reports --------------------
+  // Each is `hideWhenEmpty`: a v6 daemon sends none of them, and a gap must
+  // never paint as zero.
+  {
+    id: 'health-oom-kills',
+    title: 'Processes killed for memory',
+    unit: 'count',
+    series: [{ id: 'kills', label: 'OOM kills', read: hostMetric('extended.host', 'oomKills') }],
+    yFormat: (v) => formatCount(v),
+    hideWhenEmpty: true,
+  },
+  {
+    id: 'health-pid-limit',
+    title: 'Process limit used',
+    unit: '%',
+    series: [
+      { id: 'used', label: 'Tasks / limit', read: hostMetric('extended.host', 'pidLimitUsedPercent') },
+    ],
+    yFormat: (v) => formatPercent(v),
+    yDomain: [0, 100],
+    hideWhenEmpty: true,
+  },
+  {
+    id: 'health-root-disk-queue',
+    title: 'Root disk queue',
+    unit: 'count',
+    series: [
+      { id: 'queue', label: 'Queue depth', read: hostMetric('extended.host', 'rootDiskQueueDepth') },
+    ],
+    yFormat: (v) => formatCount(v),
+    hideWhenEmpty: true,
+  },
+  {
+    id: 'health-root-disk-ops',
+    title: 'Root disk operations',
+    unit: '/s',
+    series: [
+      { id: 'ops', label: 'Reads + writes', read: hostMetric('extended.host', 'rootDiskOpsPerSecond') },
+    ],
+    yFormat: (v) => `${formatCount(v)}/s`,
+    hideWhenEmpty: true,
+  },
+  {
+    id: 'health-systemd-failed',
+    title: 'Failed system services',
+    unit: 'count',
+    series: [
+      { id: 'failed', label: 'Failed units', read: hostMetric('extended.host', 'systemdUnitsFailed') },
+    ],
+    yFormat: (v) => formatCount(v),
+    hideWhenEmpty: true,
+  },
+  {
+    id: 'health-raid',
+    title: 'Software RAID',
+    unit: 'count',
+    series: [
+      { id: 'degraded', label: 'Degraded arrays', read: hostMetric('extended.host', 'mdArraysDegraded') },
+      {
+        id: 'resyncing',
+        label: 'Resyncing arrays',
+        color: colors.pending,
+        read: hostMetric('extended.host', 'mdArraysResyncing'),
+      },
+    ],
+    yFormat: (v) => formatCount(v),
+    hideWhenEmpty: true,
+  },
+
+  // --- What the percentages are measured against ---------------------------------
+  // Every sample carries the sizes its percentages use, so a resize or a
+  // balloon shows here as a step and never rewrites a past percentage.
+  {
+    id: 'sizes-memory',
+    title: 'Memory size',
+    unit: 'bytes',
+    series: [
+      { id: 'ram', label: 'Memory', read: hostMetric('extended.sizes', 'memoryTotalBytes') },
+      {
+        id: 'swap',
+        label: 'Swap',
+        color: colors.pending,
+        read: hostMetric('extended.sizes', 'swapTotalBytes'),
+        hideWhenEmpty: true,
+      },
+      {
+        id: 'commit',
+        label: 'Commit limit',
+        color: colors.command,
+        read: hostMetric('extended.sizes', 'commitLimitBytes'),
+        hideWhenEmpty: true,
+      },
+    ],
+    yFormat: (v) => formatBytes(v),
+    hideWhenEmpty: true,
+  },
+  {
+    id: 'sizes-cores',
+    title: 'CPU cores',
+    unit: 'count',
+    series: [{ id: 'cores', label: 'Logical cores', read: hostMetric('extended.sizes', 'logicalCores') }],
+    yFormat: (v) => formatCount(v),
     hideWhenEmpty: true,
   },
 
@@ -1061,6 +1184,76 @@ const HOST_CHART_DEFINITIONS: readonly ChartDefinition[] = [
       { id: 'volumes', label: 'Volumes', color: colors.pending, read: hostMetric('dockerUsage', 'volumesCount') },
     ],
     yFormat: (v) => formatCount(v),
+    hideWhenEmpty: true,
+  },
+  // v7 container health and totals (`extended.docker`): present only when a v7 daemon reports them.
+  {
+    id: 'docker-containers-health',
+    title: 'Docker · Container health',
+    unit: 'count',
+    series: [
+      { id: 'running', label: 'Running', read: hostMetric('extended.docker', 'containersRunning') },
+      {
+        id: 'unhealthy',
+        label: 'Unhealthy',
+        color: colors.pending,
+        read: hostMetric('extended.docker', 'containersUnhealthy'),
+      },
+      {
+        id: 'restarting',
+        label: 'Restarting',
+        color: colors.command,
+        read: hostMetric('extended.docker', 'containersRestarting'),
+      },
+    ],
+    yFormat: (v) => formatCount(v),
+    hideWhenEmpty: true,
+  },
+  {
+    id: 'docker-container-events',
+    title: 'Docker · Containers that stopped unexpectedly',
+    unit: 'count',
+    series: [
+      { id: 'died', label: 'Exits', read: hostMetric('extended.docker', 'containerDieEvents') },
+      {
+        id: 'oom',
+        label: 'Out of memory',
+        color: colors.pending,
+        read: hostMetric('extended.docker', 'containerOomEvents'),
+      },
+    ],
+    yFormat: (v) => formatCount(v),
+    hideWhenEmpty: true,
+  },
+  {
+    id: 'docker-container-cpu',
+    title: 'Docker · Containers CPU',
+    unit: '%',
+    series: [
+      { id: 'cpu', label: 'Share of host', read: hostMetric('extended.docker', 'containersCpuPercent') },
+    ],
+    yFormat: (v) => formatPercent(v),
+    yDomain: [0, 100],
+    hideWhenEmpty: true,
+  },
+  {
+    id: 'docker-container-memory',
+    title: 'Docker · Containers memory',
+    unit: 'bytes',
+    series: [
+      { id: 'memory', label: 'In use', read: hostMetric('extended.docker', 'containersMemoryBytes') },
+    ],
+    yFormat: (v) => formatBytes(v),
+    hideWhenEmpty: true,
+  },
+  {
+    id: 'docker-reclaimable',
+    title: 'Docker · Reclaimable',
+    unit: 'bytes',
+    series: [
+      { id: 'reclaimable', label: 'A prune would free', read: hostMetric('extended.docker', 'reclaimableBytes') },
+    ],
+    yFormat: (v) => formatBytes(v),
     hideWhenEmpty: true,
   },
 ]
@@ -3139,7 +3332,6 @@ const EMPTY_EXPANDED_GROUPS: ReadonlySet<string> = new Set()
 
 const EMPTY_GENERATION_BREAKS: readonly number[] = []
 
-const DOCKER_GROUP_ID = 'managed-docker'
 const MANAGED_STORAGE_GROUP_ID = 'managed-storage'
 const DOCKER_STORAGE_CHART_ID = 'managed-storage-docker'
 
@@ -3317,10 +3509,6 @@ function MetricsCharts({
     () => new Map(hostCharts.map((chart) => [chart.definition.id, chart])),
     [hostCharts]
   )
-  // Entry-tier licenses do not buy `managed.docker` (the capability plan's
-  // `managedDockerEnabled` is off there). A missing tier — self-hosted, or an
-  // unassigned host — keeps the group: the platform default plan grants it.
-  const dockerUsageWithheld = isEntryTierLicense(server?.tierPlacement?.licenseTier)
   const storageInodeCharts = useMemo(
     () => storageRoleInodeCharts(data.inventory, entityGroups, hostChartsById),
     [data.inventory, entityGroups, hostChartsById]
@@ -3375,17 +3563,6 @@ function MetricsCharts({
       </View>
 
       {HOST_CHART_GROUPS.map((group) => {
-        if (group.id === DOCKER_GROUP_ID && dockerUsageWithheld) {
-          // Gate on the *tier*, not on whether the family happened to be in
-          // the response: the operator should see why it is absent.
-          return (
-            <InlineNotice
-              key={group.id}
-              title="Docker usage charts need a higher tier"
-              body={`Image, container, volume, and build-cache accounting is not included on ${server?.tierPlacement?.licenseTier ?? 'the entry tier'}. The Docker data root's total still appears under Storage usage.`}
-            />
-          )
-        }
         return (
           <CollapsibleChartGroup
             key={group.id}
@@ -3701,6 +3878,8 @@ export function ServerMetricsSection({
         }}
       />
 
+      {viewState === 'charts' ? <HostFactsPanel orgId={orgId} serverId={serverId} /> : null}
+
       {chartsView ? (
         <MetricsCharts
           data={chartsView.data}
@@ -3722,10 +3901,58 @@ export function ServerMetricsSection({
   )
 }
 
+/**
+ * What the host last told us about itself: kernel, OS, versions, drive and GPU
+ * details. Text only; hidden entirely when a host (an older daemon) reports none.
+ */
+function HostFactsPanel({ orgId, serverId }: Readonly<{ orgId: string; serverId: string }>) {
+  const factsQuery = useServerMetricsFacts(orgId, serverId)
+  const response = factsQuery.data
+  const rows = response ? hostFactRows(response.facts) : []
+  if (!response?.available || rows.length === 0) return null
+  return (
+    <SectionPanel
+      title="About this host"
+      hint={response.sampledAt ? `Reported ${new Date(response.sampledAt).toLocaleString()}` : undefined}
+    >
+      <View style={styles.hostFacts}>
+        {rows.map((row) => (
+          <View key={row.key} style={styles.hostFactRow}>
+            <Text style={styles.hostFactLabel}>{row.label}</Text>
+            <Text style={styles.hostFactValue} selectable>
+              {row.value}
+            </Text>
+          </View>
+        ))}
+      </View>
+    </SectionPanel>
+  )
+}
+
 const styles = StyleSheet.create({
   root: {
     width: '100%',
     gap: spacing.lg,
+  },
+  hostFacts: {
+    gap: spacing.xs,
+  },
+  hostFactRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    paddingVertical: 2,
+  },
+  hostFactLabel: {
+    color: colors.textDim,
+    fontSize: 12,
+    minWidth: 180,
+  },
+  hostFactValue: {
+    color: colors.text,
+    fontSize: 12,
+    flex: 1,
+    minWidth: 160,
   },
   rangeRow: {
     gap: spacing.sm,

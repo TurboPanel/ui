@@ -59,7 +59,7 @@ export const HOST_CHART_GROUPS: readonly HostChartGroup[] = [
     id: 'cpu',
     label: 'CPU',
     hint: 'Utilisation, pressure, and what is waiting to run',
-    chartIds: ['cpu-modes', 'cpu-pressure', 'cpu-saturated-cores', 'cpu-processes'],
+    chartIds: ['cpu-modes', 'cpu-pressure', 'cpu-saturated-cores', 'cpu-processes', 'sizes-cores'],
   },
   {
     id: 'memory',
@@ -71,6 +71,7 @@ export const HOST_CHART_GROUPS: readonly HostChartGroup[] = [
       'swap-bytes',
       'swap-percent',
       'memory-pressure',
+      'sizes-memory',
     ],
   },
   {
@@ -119,7 +120,7 @@ export const HOST_CHART_GROUPS: readonly HostChartGroup[] = [
     // `managed.ingress` sources; the Ingress group below is Caddy-only now.
     id: 'router',
     label: 'Router',
-    hint: 'Shared HTTP router — backends reachable, retries, 5xx, latency, config reloads and their age, soonest TLS expiry',
+    hint: 'Shared HTTP router — backends reachable, retries, 5xx, latency, config reloads and their age',
     chartIds: [
       'router-backend-requests',
       'router-backend-latency',
@@ -127,6 +128,22 @@ export const HOST_CHART_GROUPS: readonly HostChartGroup[] = [
       'router-connections',
       'router-config',
       'router-config-age',
+    ],
+  },
+  {
+    // v7 counts and limits (`extended.host`, `extended.ingress`): what a daemon
+    // new enough to report them says about the host's health. A v6 daemon sends
+    // none, so the section hides itself.
+    id: 'host-health',
+    label: 'Host health',
+    hint: 'Processes killed for memory, process limit, root disk queue, failed services, RAID and the soonest TLS expiry',
+    chartIds: [
+      'health-oom-kills',
+      'health-pid-limit',
+      'health-root-disk-queue',
+      'health-root-disk-ops',
+      'health-systemd-failed',
+      'health-raid',
       'router-tls-expiry',
     ],
   },
@@ -147,18 +164,23 @@ export const HOST_CHART_GROUPS: readonly HostChartGroup[] = [
     ],
   },
   {
-    // `managed.docker` — Docker's own `/system/df` breakdown. Hidden
-    // entirely (with a notice in its place) on the entry tier, where the
-    // capability plan does not grant the family; see `server-metrics.md`.
+    // `managed.docker` — Docker's own `/system/df` breakdown plus (v7)
+    // container health and totals. On every plan: Docker metrics are no longer
+    // a tier feature.
     id: 'managed-docker',
     label: 'Docker',
-    hint: 'Image layers, containers, volumes, and build cache — with what a prune would reclaim',
+    hint: 'Container health, image layers, containers, volumes, and build cache — with what a prune would reclaim',
     chartIds: [
+      'docker-containers-health',
+      'docker-container-events',
+      'docker-container-cpu',
+      'docker-container-memory',
       'managed-docker-layers',
       'managed-docker-containers',
       'managed-docker-volumes',
       'managed-docker-build-cache',
       'managed-docker-counts',
+      'docker-reclaimable',
     ],
   },
   {

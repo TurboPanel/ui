@@ -7138,6 +7138,10 @@ export type EntityMetricScope =
   | 'router'
   | 'storage'
   | 'dockerUsage'
+  | 'extended.host'
+  | 'extended.docker'
+  | 'extended.ingress'
+  | 'extended.sizes'
   | 'network'
   | 'filesystem'
   | 'block'
@@ -7156,6 +7160,10 @@ const HOST_SINGLETON_ENTITY_SCOPES: ReadonlySet<EntityMetricScope> = new Set([
   'router',
   'storage',
   'dockerUsage',
+  'extended.host',
+  'extended.docker',
+  'extended.ingress',
+  'extended.sizes',
 ])
 
 /** Per-entity scope -> wire alias. Only `hardwareSignal` differs from its scope name. */
@@ -7668,6 +7676,37 @@ export async function fetchServerMetricsEvents(
     serverId,
     'events',
     query,
+    organizationId
+  )
+}
+
+/** What a host last told us about itself: short text, never numbers (kernel, OS, versions, drive and GPU details). */
+export type HostFacts = {
+  /** Host-wide short text by name; only fields the host reported. */
+  text: Partial<Record<string, string>>
+  blockDevices: { deviceId: string; model?: string; smart?: string }[]
+  gpus: { gpuId: string; driver?: string; model?: string }[]
+}
+
+export type HostFactsResponse = {
+  ok: true
+  serverId: string
+  backend: MetricsBackendKind
+  available: boolean
+  /** When the sample the facts came from was taken; `null` when none is in the last day. */
+  sampledAt: string | null
+  facts: HostFacts
+}
+
+/** The newest host facts (kernel, OS, versions, drive and GPU text) for a server. */
+export async function fetchServerMetricsFacts(
+  serverId: string,
+  organizationId?: string | null
+): Promise<HostFactsResponse> {
+  return await fetchServerMetricsJson<HostFactsResponse>(
+    serverId,
+    'facts',
+    new URLSearchParams(),
     organizationId
   )
 }
