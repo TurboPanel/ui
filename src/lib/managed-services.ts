@@ -439,6 +439,10 @@ const MANAGED_ERROR_COPY: Record<string, string> = {
     'Still connected to one or more services. Remove those connections first.',
   managed_database_has_bindings:
     'Still connected to one or more services. Remove those connections first.',
+  managed_series_immutable:
+    'The database version cannot be changed on an existing cluster. Create a new cluster on the version you want and restore a backup into it.',
+  managed_variant_swap_unsafe:
+    'Switching this PostgreSQL cluster between the Alpine and Debian images would silently break its text indexes, because the two sort text differently and the data would need re-indexing. Create a new cluster on the image you want and restore a backup into it.',
   managed_database_has_users:
     'SQL users still have access to this database. Delete those users first.',
   binding_key_prefix_in_use:

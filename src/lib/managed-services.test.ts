@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { MANAGED_SERIES_IMMUTABLE_ERROR, MANAGED_VARIANT_SWAP_UNSAFE_ERROR } from './instance-api'
 import { TURBOFABRIC_PRODUCT_NAME } from './platform-copy'
 import {
   MANAGED_INGRESS_MYSQL_PORT,
@@ -162,6 +163,15 @@ describe('managedErrorMessage', () => {
     expect(managedErrorMessage(new Error('plain failure'), 'fallback')).toBe('plain failure')
     expect(managedErrorMessage('not-an-error', 'use this')).toBe('use this')
     expect(managedErrorMessage(new Error(''), 'use this')).toBe('use this')
+  })
+
+  it('maps the refused image changes to plain words', () => {
+    expect(
+      managedErrorMessage(new Error(`HTTP 409: ${MANAGED_SERIES_IMMUTABLE_ERROR}`), 'fallback')
+    ).toContain('cannot be changed')
+    expect(
+      managedErrorMessage(new Error(`HTTP 409: ${MANAGED_VARIANT_SWAP_UNSAFE_ERROR}`), 'fallback')
+    ).toContain('restore a backup')
   })
 
   it('maps binding, placement, and recovery error codes', () => {
