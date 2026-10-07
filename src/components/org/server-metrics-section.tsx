@@ -335,17 +335,17 @@ function compactChart(
 /** Sample sizes and v7 health, in the order their groups show them (see `metrics-groups.ts`). */
 const V7_CHART_DEFINITIONS: readonly ChartDefinition[] = [
   compactChart('health-oom-kills', 'Processes killed for memory', 'count', 'count', [
-    ['kills', 'OOM kills', 'extended.host', 'oomKills'],
+    ['kills', 'Killed for memory', 'extended.host', 'oomKills'],
   ]),
-  compactChart('health-pid-limit', 'Process limit used', '%', 'percent', [['used', 'Tasks / limit', 'extended.host', 'pidLimitUsedPercent']], [0, 100]),
+  compactChart('health-pid-limit', 'Process limit used', '%', 'percent', [['used', 'Processes / limit', 'extended.host', 'pidLimitUsedPercent']], [0, 100]),
   compactChart('health-root-disk-queue', 'Root disk queue', 'count', 'count', [
-    ['queue', 'Queue depth', 'extended.host', 'rootDiskQueueDepth'],
+    ['queue', 'Waiting disk requests', 'extended.host', 'rootDiskQueueDepth'],
   ]),
   compactChart('health-root-disk-ops', 'Root disk operations', '/s', 'perSecond', [
     ['ops', 'Reads + writes', 'extended.host', 'rootDiskOpsPerSecond'],
   ]),
   compactChart('health-systemd-failed', 'Failed system services', 'count', 'count', [
-    ['failed', 'Failed units', 'extended.host', 'systemdUnitsFailed'],
+    ['failed', 'Failed services', 'extended.host', 'systemdUnitsFailed'],
   ]),
   compactChart('health-raid', 'Software RAID', 'count', 'count', [
     ['degraded', 'Degraded arrays', 'extended.host', 'mdArraysDegraded'],
@@ -359,7 +359,7 @@ const V7_CHART_DEFINITIONS: readonly ChartDefinition[] = [
     ['commit', 'Commit limit', 'extended.sizes', 'commitLimitBytes', colors.command],
   ]),
   compactChart('sizes-cores', 'CPU cores', 'count', 'count', [
-    ['cores', 'Logical cores', 'extended.sizes', 'logicalCores'],
+    ['cores', 'CPU cores', 'extended.sizes', 'logicalCores'],
   ]),
   compactChart('docker-containers-health', 'Docker · Container health', 'count', 'count', [
     ['running', 'Running', 'extended.docker', 'containersRunning'],
