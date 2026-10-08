@@ -31,6 +31,7 @@ import {
   managedErrorMessage,
   type ManagedExternalAccessView,
   type ManagedSettings,
+  managedStoredImage,
 } from '@/lib/managed-services'
 import { useCan } from '@/lib/query-client'
 import { useSaveServerManagedExternalAccess } from '@/lib/queries/managed'
@@ -77,7 +78,8 @@ type SettingsForm = {
   backupRetentionKeep: string
 }
 
-function settingsToForm(settings: ManagedSettings, defaultImage: string): SettingsForm {
+/** Exported for tests. */
+export function settingsToForm(settings: ManagedSettings, storedImage: string): SettingsForm {
   const labels = Object.entries(settings.dockerOptions?.labels ?? {}).map(
     ([key, value]) => createKvRow(key, value),
   )
@@ -85,7 +87,7 @@ function settingsToForm(settings: ManagedSettings, defaultImage: string): Settin
     ([key, value]) => createKvRow(key, value),
   )
   return {
-    image: settings.image ?? defaultImage,
+    image: storedImage,
     sslMode: settings.ssl.mode ?? null,
     engineConfig: settings.engineConfig ?? '',
     restart: settings.dockerOptions?.restart ?? 'unless-stopped',
@@ -137,8 +139,9 @@ type BuildSettingsResult =
   | { ok: false; error: string }
 
 /** Pure validation + payload construction, pulled out of the component so
- * `apply()` stays a flat couple of statements instead of nested branches. */
-function buildManagedSettingsPayload(form: SettingsForm): BuildSettingsResult {
+ * `apply()` stays a flat couple of statements instead of nested branches.
+ * Exported for tests. */
+export function buildManagedSettingsPayload(form: SettingsForm): BuildSettingsResult {
   if (form.engineConfig.length > ENGINE_CONFIG_MAX) {
     return {
       ok: false,
@@ -558,23 +561,20 @@ export function ManagedSettingsPanel({
   onApply: (next: ManagedSettings) => Promise<void>
 }>) {
   const catalog = engineCode ? managedCatalogEntryForCode(engineCode) : undefined
-  const defaultImage = catalog?.defaultImage ?? ''
+  // An imageless stored service runs the legacy default, never the new one.
+  const storedImage = managedStoredImage(catalog, settings.image)
   // Series changes are refused by the control plane (`managed_series_immutable`),
   // so only offer other base-OS variants of the version already running.
-  const imageOptions = managedVariantImagesForImage(
-    engineCode,
-    settings.image ?? defaultImage,
-  )
-  const versionLabel =
-    describeManagedImage(settings.image ?? defaultImage)?.series ?? null
+  const imageOptions = managedVariantImagesForImage(engineCode, storedImage)
+  const versionLabel = describeManagedImage(storedImage)?.series ?? null
   const [expanded, setExpanded] = useState(false)
-  const [form, setForm] = useState(() => settingsToForm(settings, defaultImage))
+  const [form, setForm] = useState(() => settingsToForm(settings, storedImage))
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    setForm(settingsToForm(settings, defaultImage))
-  }, [settings, defaultImage])
+    setForm(settingsToForm(settings, storedImage))
+  }, [settings, storedImage])
 
   const apply = async () => {
     const result = buildManagedSettingsPayload(form)
