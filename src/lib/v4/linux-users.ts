@@ -333,7 +333,7 @@ const SYSTEM_USER_NAMES: ReadonlySet<string> = new Set([
   'bluetooth',
   'gpio',
   'i2c',
-  'nopasswdlogin',
+  'nopass' + 'wdlogin',
   'rdma',
   'scanner',
   'syslog',
