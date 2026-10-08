@@ -28,6 +28,7 @@ import {
   fetchSession,
   formatEntityMetricId,
   formatBlockedDatabaseReason,
+  formatBlockedEnvironmentReason,
   formatServerDeleteBlockedError,
   getServerDeletePreview,
   IP_IN_USE_ERROR,
@@ -293,6 +294,9 @@ describe('formatServerDeleteBlockedError', () => {
     )
     expect(formatBlockedDatabaseReason('analytics', 'primary_here')).toBe(
       'Database "analytics" has its primary copy on this server. Promote another member or delete the database first.'
+    )
+    expect(formatBlockedEnvironmentReason('Shop', 'staging', ['Worker 2'], 'present_elsewhere')).toBe(
+      'App "Shop / staging" also runs on "Worker 2". Move or delete it first.'
     )
     expect(
       formatServerDeleteBlockedError(
@@ -995,6 +999,49 @@ describe('fetch wrappers (mocked fetch)', () => {
     }
   })
 
+  it('deleteServer throws ServerDeleteBlockedError with blocked environments', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(
+        {
+          code: 'server_has_blockers',
+          error: 'Cannot delete',
+          blockers: [],
+          blockedEnvironments: [
+            {
+              id: 'env-1',
+              name: 'production',
+              projectId: 'proj-1',
+              projectName: 'Shop',
+              reason: 'present_elsewhere',
+              serverNames: ['Worker 2'],
+            },
+          ],
+        },
+        409
+      )
+    )
+    try {
+      await deleteServer('srv-1', 'org-del', { forgetResources: true })
+      throw new TypeError('expected deleteServer to throw')
+    } catch (err) {
+      expect(err).toBeInstanceOf(ServerDeleteBlockedError)
+      if (!(err instanceof ServerDeleteBlockedError)) {
+        throw new TypeError('expected ServerDeleteBlockedError')
+      }
+      expect(err.blockedEnvironments).toEqual([
+        {
+          id: 'env-1',
+          name: 'production',
+          projectId: 'proj-1',
+          projectName: 'Shop',
+          reason: 'present_elsewhere',
+          serverNames: ['Worker 2'],
+        },
+      ])
+      expect(formatServerDeleteBlockedError(err)).toContain('also runs on "Worker 2"')
+    }
+  })
+
   it('deleteServer throws ServerDeleteBlockedError with blocked databases', async () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse(
@@ -1115,6 +1162,7 @@ describe('fetch wrappers (mocked fetch)', () => {
       environments: { items: [], more: 0 },
       members: { items: [], more: 0 },
       blockedDatabases: { items: [], more: 0 },
+      blockedEnvironments: { items: [], more: 0 },
     }
     fetchMock.mockResolvedValueOnce(jsonResponse(body))
     await expect(getServerDeletePreview('srv-1', 'org-del')).resolves.toEqual(body)

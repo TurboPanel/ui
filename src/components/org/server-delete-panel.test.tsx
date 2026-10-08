@@ -136,6 +136,7 @@ function preview(patch: Partial<ServerDeletePreview> = {}): ServerDeletePreview 
     environments: emptyList,
     members: emptyList,
     blockedDatabases: emptyList,
+    blockedEnvironments: emptyList,
     ...patch,
   }
 }
@@ -180,6 +181,7 @@ describe('ServerDeletePanel', () => {
         environments: emptyList,
         members: emptyList,
         blockedDatabases: emptyList,
+    blockedEnvironments: emptyList,
       }
     )
     expect(screen.queryByText(SERVER_DELETE_FORGET_REVEAL_LABEL)).toBeNull()

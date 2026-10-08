@@ -4,9 +4,10 @@ import { panelStyles } from '@/components/ui/panel-styles'
 import { useServerDeletePreview } from '@/lib/queries/servers'
 import {
   blockedDatabaseMessages,
+  blockedEnvironmentMessages,
   environmentForgetCopy,
   forgottenResourceGroups,
-  hasBlockedDatabases,
+  hasBlockedForget,
   membersForgetCopy,
   moreLabel,
   SERVER_DELETE_FORGET_CONFIRM_LABEL,
@@ -81,15 +82,17 @@ export function ServerDeletePanel({
   const previewQuery = useServerDeletePreview(orgId, serverId)
   const preview = previewQuery.data
   const showForget = shouldShowServerForgetPath(preview, { serverConnected })
-  const blockedLines = blockedDatabaseMessages(preview)
+  const blockedDatabaseLines = blockedDatabaseMessages(preview)
+  const blockedEnvironmentLines = blockedEnvironmentMessages(preview)
   const blockerLines = serverDeleteBlockerMessages(preview)
-  const forgetBlocked = hasBlockedDatabases(preview) || !showForget
+  const forgetBlocked = hasBlockedForget(preview) || !showForget
   const [forgetArmed, setForgetArmed] = useState(false)
   const busy = deleting
   const showError =
     Boolean(deleteError) &&
     blockerLines.length === 0 &&
-    blockedLines.length === 0 &&
+    blockedDatabaseLines.length === 0 &&
+    blockedEnvironmentLines.length === 0 &&
     !(showForget && deleteBlocked)
 
   return (
@@ -108,7 +111,12 @@ export function ServerDeletePanel({
             )
           })
         : null}
-      {blockedLines.map((line) => (
+      {blockedDatabaseLines.map((line) => (
+        <Text key={line} style={[panelStyles.error, styles.wrapText]}>
+          {line}
+        </Text>
+      ))}
+      {blockedEnvironmentLines.map((line) => (
         <Text key={line} style={[panelStyles.error, styles.wrapText]}>
           {line}
         </Text>

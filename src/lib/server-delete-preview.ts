@@ -1,5 +1,6 @@
 import {
   formatBlockedDatabaseReason,
+  formatBlockedEnvironmentReason,
   type CappedPreviewList,
   type ServerDeleteBlocker,
   type ServerDeletePreview,
@@ -61,6 +62,7 @@ export function isServerDeletePreview(value: unknown): value is ServerDeletePrev
   if (!optionalCappedOk(value.environments)) return false
   if (!optionalCappedOk(value.members)) return false
   if (!optionalCappedOk(value.blockedDatabases)) return false
+  if (!optionalCappedOk(value.blockedEnvironments)) return false
   return (
     isCappedPreviewList(value.containers) &&
     isCappedPreviewList(value.networks) &&
@@ -201,6 +203,37 @@ export function hasBlockedDatabases(preview: unknown): boolean {
   return list.items.length > 0 || list.more > 0
 }
 
+export function blockedEnvironmentMessages(preview: unknown): string[] {
+  if (!isServerDeletePreview(preview)) return []
+  const list = cappedOrEmpty(preview.blockedEnvironments)
+  const lines: string[] = []
+  for (const item of list.items) {
+    if (!isRecord(item) || typeof item.name !== 'string' || typeof item.reason !== 'string') {
+      continue
+    }
+    const projectName = typeof item.projectName === 'string' ? item.projectName : ''
+    const serverNames = Array.isArray(item.serverNames)
+      ? item.serverNames.filter((name): name is string => typeof name === 'string')
+      : []
+    const line = formatBlockedEnvironmentReason(projectName, item.name, serverNames, item.reason)
+    if (line.length > 0) lines.push(line)
+  }
+  if (list.more > 0) {
+    lines.push(moreLabel(list.more))
+  }
+  return lines
+}
+
+export function hasBlockedEnvironments(preview: unknown): boolean {
+  if (!isServerDeletePreview(preview)) return false
+  const list = cappedOrEmpty(preview.blockedEnvironments)
+  return list.items.length > 0 || list.more > 0
+}
+
+export function hasBlockedForget(preview: unknown): boolean {
+  return hasBlockedDatabases(preview) || hasBlockedEnvironments(preview)
+}
+
 export function serverDeleteBlockerMessages(preview: unknown): string[] {
   try {
     if (!isServerDeletePreview(preview) || preview.canForget) return []
@@ -228,7 +261,7 @@ export function shouldShowServerForgetPath(
     if (!isServerDeletePreview(preview)) return false
     if (options.serverConnected) return false
     if (preview.online) return false
-    if (hasBlockedDatabases(preview)) return false
+    if (hasBlockedForget(preview)) return false
     return preview.canForget
   } catch {
     return false

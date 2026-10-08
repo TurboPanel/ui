@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import type { CappedPreviewList, ServerDeletePreview } from '@/lib/instance-api'
 import {
   blockedDatabaseMessages,
+  blockedEnvironmentMessages,
+  hasBlockedEnvironments,
   environmentForgetCopy,
   forgottenResourceGroups,
   hasBlockedDatabases,
@@ -34,6 +36,7 @@ function preview(patch: Partial<ServerDeletePreview> = {}): ServerDeletePreview 
     environments: emptyList,
     members: emptyList,
     blockedDatabases: emptyList,
+    blockedEnvironments: emptyList,
     ...patch,
   }
 }
@@ -57,6 +60,7 @@ const offlineLeftoversPreview: ServerDeletePreview = {
   environments: emptyList,
   members: emptyList,
   blockedDatabases: emptyList,
+  blockedEnvironments: emptyList,
 }
 
 const onlineEmptyPreview: ServerDeletePreview = {
@@ -70,6 +74,7 @@ const onlineEmptyPreview: ServerDeletePreview = {
   environments: emptyList,
   members: emptyList,
   blockedDatabases: emptyList,
+  blockedEnvironments: emptyList,
 }
 
 const malformedArrayPreview = {
@@ -222,6 +227,28 @@ describe('server delete forget preview', () => {
     ])
     expect(hasBlockedDatabases(blocked)).toBe(true)
     expect(shouldShowServerForgetPath(blocked, { serverConnected: false })).toBe(false)
+
+    const crossHost = preview({
+      canForget: false,
+      blockedEnvironments: capped(
+        [
+          {
+            id: 'env-1',
+            name: 'production',
+            projectId: 'proj-1',
+            projectName: 'Shop',
+            reason: 'present_elsewhere',
+            serverNames: ['Worker 2'],
+          },
+        ],
+        0
+      ),
+    })
+    expect(blockedEnvironmentMessages(crossHost)).toEqual([
+      'App "Shop / production" also runs on "Worker 2". Move or delete it first.',
+    ])
+    expect(hasBlockedEnvironments(crossHost)).toBe(true)
+    expect(shouldShowServerForgetPath(crossHost, { serverConnected: false })).toBe(false)
   })
 
   it('skips incomplete names and treats a bad extra list as malformed', () => {
