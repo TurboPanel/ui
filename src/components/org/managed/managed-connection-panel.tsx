@@ -14,7 +14,6 @@ import type {
   ManagedUserRecord,
 } from '@/lib/managed-services'
 import { managedIngressPortForEngine } from '@/lib/managed-ingress-ports'
-import { managedAccessScopeLabel } from '@/lib/managed-access-scope'
 import {
   DEFAULT_MANAGED_SSL_MODE,
   describeManagedSslPolicy,
@@ -145,11 +144,11 @@ function EndpointList({
   }
   return (
     <View style={styles.endpointList}>
-      <Text style={panelStyles.detailLabel}>Reachable endpoints</Text>
+      <Text style={panelStyles.detailLabel}>Ways in</Text>
       {endpoints.map((entry) => (
-        <Text key={`${entry.scope}-${entry.host}`} style={panelStyles.detailLine}>
+        <Text key={`${entry.reach}-${entry.host}`} style={panelStyles.detailLine}>
           <Text style={panelStyles.detailLabel}>
-            {managedAccessScopeLabel(entry.scope)}:{' '}
+            {entry.reach === 'external' ? 'From outside the server' : 'This server only'}:{' '}
           </Text>
           {entry.host}:{entry.port}
         </Text>

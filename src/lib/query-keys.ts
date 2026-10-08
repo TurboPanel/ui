@@ -132,6 +132,9 @@ export const queryKeys = {
         labels: (serverId: string) => ['org', orgId, 'server', serverId, 'labels'] as const,
         /** PHP mode policy one server offers (`/servers/:id/php-modes`). */
         phpModes: (serverId: string) => ['org', orgId, 'server', serverId, 'php-modes'] as const,
+        /** "Allow external access to the databases on this server" (`/servers/:id/managed-external-access`). */
+        managedExternalAccess: (serverId: string) =>
+          ['org', orgId, 'server', serverId, 'managed-external-access'] as const,
       },
 
       settings: {

@@ -17,6 +17,7 @@ import {
   fetchManagedUsers,
   fetchOrganizationCa,
   fetchOrganizationManaged,
+  fetchServerManagedExternalAccess,
   isForbiddenError,
   promoteManagedDisasterRecovery,
   promoteManagedMember,
@@ -26,6 +27,7 @@ import {
   rotateManagedRootPassword,
   rotateManagedUserPassword,
   runManagedLifecycle,
+  saveServerManagedExternalAccess,
   updateEnvironmentManaged,
   updateManagedMember,
 } from '@/lib/instance-api'
@@ -627,5 +629,38 @@ export function useOrganizationCa(orgId: string, options?: Readonly<{ enabled?: 
     queryFn: () => fetchOrganizationCa(),
     enabled: (options?.enabled ?? true) && orgId.length > 0,
     staleTime: 60 * 60 * 1000,
+  })
+}
+
+/** "Allow external access to the databases on this server": the server's current value. */
+export function useServerManagedExternalAccess(
+  orgId: string,
+  serverId: string | null,
+  options?: Readonly<{ enabled?: boolean }>
+) {
+  return useQuery({
+    queryKey: queryKeys.org(orgId).servers.managedExternalAccess(serverId ?? ''),
+    queryFn: () => fetchServerManagedExternalAccess(serverId ?? ''),
+    enabled: (options?.enabled ?? true) && orgId.length > 0 && Boolean(serverId),
+  })
+}
+
+/**
+ * Saves the server's setting. A saved-but-not-yet-delivered answer (502) is an
+ * error here too, so the screen says so; either way the cluster views refresh.
+ */
+export function useSaveServerManagedExternalAccess(orgId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (input: { serverId: string; enabled: boolean }) =>
+      saveServerManagedExternalAccess(input.serverId, input.enabled),
+    fallbackError: 'Failed to save external access',
+    onSettled: (_data, _error, input) =>
+      Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.org(orgId).servers.managedExternalAccess(input.serverId),
+        }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.org(orgId).managed.all }),
+      ]),
   })
 }

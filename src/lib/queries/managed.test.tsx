@@ -571,11 +571,11 @@ describe('managed query hooks', () => {
 
     await expect(
       result.current.run({
-        settings: { ssl: { mode: 'require' }, exposure: { enabled: true } },
+        settings: { ssl: { mode: 'require' } },
       })
     ).resolves.toMatchObject({ ok: true })
     expect(updateEnvironmentManaged).toHaveBeenCalledWith(environmentId, {
-      settings: { ssl: { mode: 'require' }, exposure: { enabled: true } },
+      settings: { ssl: { mode: 'require' } },
     })
     await waitFor(() => {
       expect(invalidate).toHaveBeenCalledWith({

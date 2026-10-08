@@ -8,7 +8,6 @@ import type { ManagedSslMode } from '@/lib/managed-ssl'
 import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
 import { MANAGED_HAS_BINDINGS_COPY } from '@/lib/user-error'
 
-import type { ManagedSqlAccessScope } from '@/lib/managed-access-scope'
 import type { NameScheme } from '@/lib/principal-name-scheme'
 
 export type ManagedServiceEngine = 'postgres' | 'mysql' | 'mariadb' | 'redis' | 'clickhouse'
@@ -19,7 +18,6 @@ export type ManagedEngineAvailability = 'available' | 'coming-soon'
 /** Runtime status for a managed row (mirrors instance `ManagedStatus`). */
 export type ManagedStatus = 'provisioning' | 'applying' | 'ready' | 'stopped' | 'failed'
 
-export type { ManagedSqlAccessScope }
 
 /**
  * Client listener ports on the shared ProxySQL frontend (not engine-native).
@@ -236,10 +234,6 @@ export type ManagedSettings = {
     extraEnv?: Record<string, string>
   }
   engineConfig?: string
-  exposure: {
-    enabled: boolean
-    scope?: ManagedSqlAccessScope
-  }
   /** Retention (keep-N) for `managed.backup` — clamped to the engine's `maxRetentionKeep`. */
   backups?: {
     retentionKeep?: number
@@ -319,37 +313,33 @@ export type ManagedSslView = {
 }
 
 export type ManagedAccessEndpoint = {
-  scope: ManagedSqlAccessScope
+  /** `local`: from this server only. `external`: from outside the server. */
+  reach: 'local' | 'external'
   host: string
   port: number
 }
 
 /**
- * What the host's shared ProxySQL actually publishes for this cluster, next to
- * what the cluster's own settings asked for.
- *
- * The listener is shared by every managed database on the server, so a cluster
- * with `requested: false` can still be `published: true` — the control plane
- * reports that as `viaCoResidentCluster` instead of claiming it is unreachable.
+ * "Allow external access to the databases on this server", for every server
+ * that fronts the cluster. The setting belongs to the server and covers every
+ * database on it, so `otherClusters` tells how many others the switch also moves.
  */
-export type ManagedExposureView = {
-  /** `settings.exposure.enabled` for this cluster. */
-  requested: boolean
-  /** A host listener publishes in front of this cluster. */
-  published: boolean
-  /** Scopes the published listener covers, widest first. */
-  scopes: ManagedSqlAccessScope[]
-  /** Published only because another cluster on the same host asked for it. */
-  viaCoResidentCluster: boolean
-  /** Servers told to listen the new way that have not confirmed it yet. */
-  pendingServers?: { id: string; name: string }[]
+export type ManagedExternalAccessView = {
+  servers: {
+    id: string
+    name: string
+    enabled: boolean
+    /** The server was told and has not confirmed yet; retried automatically. */
+    pending: boolean
+    otherClusters: number
+  }[]
 }
 
 export type ManagedDetailResponse = {
   managed: ManagedEnvironmentRecord | null
   connection: ManagedConnectionInfo | null
   endpoints?: ManagedAccessEndpoint[]
-  exposure?: ManagedExposureView | null
+  externalAccess?: ManagedExternalAccessView | null
   settings: ManagedSettings | null
   ssl: ManagedSslView | null
   release: ManagedReleaseView | null
