@@ -115,7 +115,7 @@ function mariadbRelease(
  * bound the replication test matrix; MySQL 8.0 is absent because it reached EOL
  * in April 2026.
  *
- * Only PostgreSQL 18, MySQL 9.7 and MariaDB 12.3 are `tested` — the rest are
+ * Only PostgreSQL 18, MySQL 9.7 and 8.4, and MariaDB 12.3 and 11.8 are `tested` — the rest are
  * kept so {@link describeManagedImage} can still name an already-persisted
  * image, and are hidden from the create picker.
  */
@@ -125,9 +125,9 @@ export const MANAGED_ENGINE_RELEASES: readonly ManagedEngineRelease[] = [
   postgresRelease('16'),
   postgresRelease('15'),
   mysqlRelease('9.7', true, true),
-  mysqlRelease('8.4'),
+  mysqlRelease('8.4', false, true),
   mariadbRelease('12.3', true, true),
-  mariadbRelease('11.8'),
+  mariadbRelease('11.8', false, true),
   mariadbRelease('11.4'),
   mariadbRelease('10.11'),
 ]
