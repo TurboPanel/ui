@@ -56,6 +56,16 @@ describe('UpgradeSettingsCard', () => {
     expect(onSave).toHaveBeenCalledWith({ ...SAVED, autoUpdate: true })
   })
 
+  it('does not save when the saved settings failed to load', () => {
+    const onSave = vi.fn()
+    render(<UpgradeSettingsCard settings={null} loading={false} saving={false} onSave={onSave} />)
+    const toggle = within(screen.getByTestId('Auto-update servers')).getByRole('button')
+    expect((toggle as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.click(toggle)
+    expect(onSave).not.toHaveBeenCalled()
+    expect(screen.getByText(/Settings could not be loaded/)).toBeTruthy()
+  })
+
   it('hides the toggle when hideAutoUpdate is set', () => {
     render(
       <UpgradeSettingsCard
