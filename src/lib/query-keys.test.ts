@@ -380,6 +380,7 @@ describe('queryKeys.org(…) remaining factories', () => {
       'srv-1',
       'network-panel',
     ])
+    expect(org.servers.services('srv-1')).toEqual(['org', 'org-1', 'server', 'srv-1', 'services'])
   })
 
   it('exposes stable auth and admin roots', () => {

@@ -129,6 +129,8 @@ export const queryKeys = {
          */
         networkPanel: (serverId: string) =>
           ['org', orgId, 'server', serverId, 'network-panel'] as const,
+        /** What is attached to one server (`GET /servers/:id/services`). */
+        services: (serverId: string) => ['org', orgId, 'server', serverId, 'services'] as const,
         labels: (serverId: string) => ['org', orgId, 'server', serverId, 'labels'] as const,
         /** PHP mode policy one server offers (`/servers/:id/php-modes`). */
         phpModes: (serverId: string) => ['org', orgId, 'server', serverId, 'php-modes'] as const,

@@ -381,3 +381,12 @@ describe('server detail firewall tab', () => {
     )
   })
 })
+
+describe('server detail services tab', () => {
+  it('lists the services tab and builds its link', () => {
+    expect(SERVER_DETAIL_TAB_IDS).toContain('services')
+    expect(serverDetailTabHref('org-1', 'srv-9', 'services')).toBe(
+      '/org-1/servers/srv-9?tab=services',
+    )
+  })
+})

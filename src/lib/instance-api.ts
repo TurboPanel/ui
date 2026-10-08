@@ -991,6 +991,101 @@ export async function fetchServerLabels(serverId: string): Promise<ServerLabelPa
   return body.labels
 }
 
+export type ServerRemovalReasonKind =
+  | 'network'
+  | 'container'
+  | 'ip'
+  | 'colocated'
+  | 'managed'
+  | 'backup'
+
+export type ServerRemovalReason = {
+  kind: ServerRemovalReasonKind
+  count: number
+  message: string
+}
+
+export type ServerServicesAppContainer = {
+  name: string
+  status: string
+  role: string
+}
+
+export type ServerServicesApp = {
+  serviceId: string
+  name: string
+  project: string
+  environment: string
+  containers: ServerServicesAppContainer[]
+  domains: string[]
+}
+
+export type ServerServicesDatabaseRole = 'primary' | 'replica'
+
+export type ServerServicesDatabase = {
+  managedId: string
+  name: string
+  engine: string
+  role: ServerServicesDatabaseRole
+  status: string
+  readEligible: boolean
+  ordinal: number
+}
+
+export type ServerServicesDatabaseUser = {
+  serviceId: string
+  serviceName: string
+  databaseName: string
+  databaseServiceName: string
+}
+
+export type ServerServicesBackup = {
+  managedId: string
+  managedName: string
+  count: number
+  latestAt: string | null
+}
+
+export type ServerServicesNetwork = {
+  id: string
+  name: string
+  kind: string
+}
+
+export type ServerHostServiceState = 'up' | 'down' | 'unknown'
+
+export type ServerHostService = {
+  key: string
+  label: string
+  state: ServerHostServiceState
+}
+
+export type ServerRuntime = {
+  kind: string
+  versions: string[]
+}
+
+/** `GET /servers/:id/services` — one O(1) inventory of what is attached to a host. */
+export type ServerServicesRecord = {
+  serverId: string
+  removal: {
+    canRemove: boolean
+    reasons: ServerRemovalReason[]
+  }
+  apps: ServerServicesApp[]
+  databases: ServerServicesDatabase[]
+  databaseUsers: ServerServicesDatabaseUser[]
+  backups: ServerServicesBackup[]
+  networks: ServerServicesNetwork[]
+  ipCount: number
+  hostServices: ServerHostService[]
+  runtimes: ServerRuntime[]
+}
+
+export async function fetchServerServices(serverId: string): Promise<ServerServicesRecord> {
+  return await apiFetch<ServerServicesRecord>(`${CLIENT_API}/servers/${serverId}/services`)
+}
+
 /** Replace-all. Pass `{}` to clear every label. */
 export async function saveServerLabels(
   serverId: string,
