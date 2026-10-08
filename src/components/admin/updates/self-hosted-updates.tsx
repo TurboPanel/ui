@@ -257,6 +257,14 @@ function UpgradeProgressPanel({
   )
 }
 
+/** An update in progress blocks a new one, unless it is only waiting on offline servers. */
+function runBlocksNewUpdate(
+  headline: ReturnType<typeof resolvePlatformUpgradeHeadline>,
+  run: Parameters<typeof runWaitsOnlyOnOffline>[0]
+): boolean {
+  return headline === 'updating' && !runWaitsOnlyOnOffline(run)
+}
+
 export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>) {
   const [offset, setOffset] = useState(0)
   const consoleBuild = useMemo(() => readConsoleBuild(), [])
@@ -302,7 +310,7 @@ export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>)
     data.managedUpgrade === true &&
     data.units.daemon.connected &&
     selfHostedUpdateAvailable(data.units, consoleBuild) &&
-    (headline !== 'updating' || runWaitsOnlyOnOffline(run)) &&
+    !runBlocksNewUpdate(headline, run) &&
     !flow.starting
 
   useAutoOpenPreflight(canStart, flow.openPreflight)
