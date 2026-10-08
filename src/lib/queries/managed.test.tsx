@@ -32,6 +32,8 @@ import {
   useRotateManagedRootPassword,
   useRotateManagedUserPassword,
   useRunManagedLifecycle,
+  useSaveServerManagedExternalAccess,
+  useServerManagedExternalAccess,
   useUpdateEnvironmentManaged,
   useUpdateManagedMemberReadEligible,
   useUpdateManagedMemberReplicaClass,
@@ -66,6 +68,8 @@ const {
   resyncManagedMember,
   promoteManagedMember,
   promoteManagedDisasterRecovery,
+  fetchServerManagedExternalAccess,
+  saveServerManagedExternalAccess,
 } = vi.hoisted(() => ({
   fetchOrganizationManaged: vi.fn(),
   fetchEnvironmentManaged: vi.fn(),
@@ -95,6 +99,8 @@ const {
   resyncManagedMember: vi.fn(),
   promoteManagedMember: vi.fn(),
   promoteManagedDisasterRecovery: vi.fn(),
+  fetchServerManagedExternalAccess: vi.fn(),
+  saveServerManagedExternalAccess: vi.fn(),
 }))
 
 vi.mock('@/lib/instance-api', async (importOriginal) => {
@@ -129,6 +135,8 @@ vi.mock('@/lib/instance-api', async (importOriginal) => {
     resyncManagedMember,
     promoteManagedMember,
     promoteManagedDisasterRecovery,
+    fetchServerManagedExternalAccess,
+    saveServerManagedExternalAccess,
   }
 })
 
@@ -1097,6 +1105,45 @@ describe('managed query hooks', () => {
       expect(invalidate).toHaveBeenCalledWith({
         queryKey: queryKeys.org(orgId).managed.members(environmentId),
       })
+    })
+  })
+
+  it('reads the per-server external access setting only once a server is picked', async () => {
+    const answer = { enabled: true, pending: false, clusterCount: 1 }
+    fetchServerManagedExternalAccess.mockResolvedValue(answer)
+    const idle = renderHook(() => useServerManagedExternalAccess(orgId, null), {
+      wrapper: createWrapper(),
+    })
+    expect(idle.result.current.fetchStatus).toBe('idle')
+    expect(fetchServerManagedExternalAccess).not.toHaveBeenCalled()
+
+    const { result } = renderHook(() => useServerManagedExternalAccess(orgId, 'srv-1'), {
+      wrapper: createWrapper(),
+    })
+    await waitFor(() => expect(result.current.data).toEqual(answer))
+    expect(fetchServerManagedExternalAccess).toHaveBeenCalledWith('srv-1')
+  })
+
+  it('saves the setting and refreshes that server and the managed views', async () => {
+    saveServerManagedExternalAccess.mockResolvedValue({
+      enabled: true,
+      pending: true,
+      clusterCount: 2,
+    })
+    const client = createAppQueryClient()
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
+    const { result } = renderHook(() => useSaveServerManagedExternalAccess(orgId), {
+      wrapper: createWrapper(client),
+    })
+    await expect(result.current.run({ serverId: 'srv-1', enabled: true })).resolves.toMatchObject({
+      ok: true,
+    })
+    expect(saveServerManagedExternalAccess).toHaveBeenCalledWith('srv-1', true)
+    await waitFor(() => {
+      expect(invalidate).toHaveBeenCalledWith({
+        queryKey: queryKeys.org(orgId).servers.managedExternalAccess('srv-1'),
+      })
+      expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.org(orgId).managed.all })
     })
   })
 })

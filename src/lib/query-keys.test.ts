@@ -358,6 +358,13 @@ describe('queryKeys.org(…) remaining factories', () => {
       'series',
       '2026-01-01T00:00:00.000Z',
     ])
+    expect(org.servers.managedExternalAccess('srv-1')).toEqual([
+      'org',
+      'org-1',
+      'server',
+      'srv-1',
+      'managed-external-access',
+    ])
     expect(org.servers.ips('srv-1', { scope: 'public' })).toEqual([
       'org',
       'org-1',
