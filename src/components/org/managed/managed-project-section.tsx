@@ -14,6 +14,7 @@ import { ManagedBindingsPanel } from '@/components/org/managed/managed-bindings-
 import { ManagedClusterPanel } from '@/components/org/managed/managed-cluster-panel'
 import { ManagedConnectionPanel } from '@/components/org/managed/managed-connection-panel'
 import { ManagedCredentialsPanel } from '@/components/org/managed/managed-credentials-panel'
+import { ManagedExternalAccessSwitch } from '@/components/org/managed/managed-external-access-switch'
 import { ManagedLifecyclePanel } from '@/components/org/managed/managed-lifecycle-panel'
 import { ManagedSettingsPanel } from '@/components/org/managed/managed-settings-panel'
 import { ManagedStatusPanel } from '@/components/org/managed/managed-status-panel'
@@ -71,6 +72,8 @@ import {
     useRotateManagedRootPassword,
     useRotateManagedUserPassword,
     useRunManagedLifecycle,
+    useSaveServerManagedExternalAccess,
+    useServerManagedExternalAccess,
     useUpdateEnvironmentManaged,
 } from '@/lib/queries/managed'
 import { useOrgServers } from '@/lib/queries/servers'
@@ -185,7 +188,7 @@ function EnvironmentTabs({
   )
 }
 
-function ManagedSetupPanel({
+export function ManagedSetupPanel({
   orgId,
   environmentId,
   engineCode,
@@ -208,10 +211,25 @@ function ManagedSetupPanel({
   const serversQuery = useOrgServers(orgId)
   const updateEnvironmentMutation = useUpdateEnvironment(orgId, environmentId)
   const createManagedMutation = useCreateEnvironmentManaged(orgId, environmentId)
+  const externalAccessQuery = useServerManagedExternalAccess(orgId, serverId)
+  const saveExternalAccessMutation = useSaveServerManagedExternalAccess(orgId)
+  const canEditServer = useCan('server', serverId ?? '', 'organization:manage')
+  // `null` until the person touches the switch: then nothing is saved for it.
+  const [externalAccessChoice, setExternalAccessChoice] = useState<boolean | null>(null)
+  const savedExternalAccess = externalAccessQuery.data?.enabled ?? false
+  const externalAccess = externalAccessChoice ?? savedExternalAccess
 
   const servers = orEmptyArray(serversQuery.data?.servers)
   const loading = serversQuery.isLoading
-  const submitting = updateEnvironmentMutation.isPending || createManagedMutation.isPending
+  const submitting =
+    updateEnvironmentMutation.isPending ||
+    createManagedMutation.isPending ||
+    saveExternalAccessMutation.isPending
+
+  // The switch is per server: picking another server starts from that server's value.
+  useEffect(() => {
+    setExternalAccessChoice(null)
+  }, [serverId])
 
   useEffect(() => {
     if (serverId || servers.length === 0) return
@@ -236,6 +254,16 @@ function ManagedSetupPanel({
           setError(updateEnvironmentMutation.actionError)
         }
         return
+      }
+      // Saved before the service exists, and only when it changed, so the
+      // first apply already publishes the way the person chose.
+      if (externalAccess !== savedExternalAccess) {
+        const saved = await saveExternalAccessMutation.run({ serverId, enabled: externalAccess })
+        if (!saved.ok) {
+          // `actionError` is render state and stale inside this running call.
+          setError(saved.error ?? 'Failed to save external access')
+          return
+        }
       }
       const result = await createManagedMutation.run(
         version ? { engineSeries: version.series, imageVariant: version.variantId } : {}
@@ -290,6 +318,15 @@ function ManagedSetupPanel({
         disabled={submitting}
         onChange={setVersion}
       />
+
+      {serverId ? (
+        <ManagedExternalAccessSwitch
+          value={externalAccess}
+          otherClusters={externalAccessQuery.data?.clusterCount ?? 0}
+          disabled={submitting || externalAccessQuery.isLoading || !canManage || !canEditServer}
+          onChange={setExternalAccessChoice}
+        />
+      ) : null}
 
       {canManage ? (
         <Button
@@ -653,12 +690,8 @@ function ManagedEnvironmentReadyPanels({
           settings={settings}
           engineCode={managed.engine}
           organizationSslMode={detail.ssl?.organizationDefault ?? null}
-          exposure={detail.exposure ?? null}
-          onRetryExposure={async () => {
-            const applyResult = await applyManagedMutation.mutateAsync()
-            registerCommand(applyResult.commandId, 'Apply settings')
-            invalidateManagedData()
-          }}
+          orgId={orgId}
+          externalAccess={detail.externalAccess ?? null}
           canManage={canManage}
           busy={inFlight}
           onApply={async (next: ManagedSettings) => {
@@ -666,7 +699,6 @@ function ManagedEnvironmentReadyPanels({
               settings: next,
             })
             if (!updateResult.ok) {
-              // A refused push (502) still saved the setting: show what is pending.
               invalidateManagedData()
               throw new Error(updateManagedMutation.actionError ?? 'Failed to save settings')
             }
