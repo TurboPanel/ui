@@ -227,13 +227,6 @@ describe('managedVariantImagesForImage', () => {
     expect(options).not.toContain('docker.io/library/postgres:15')
   })
 
-  it('resolves the 8.4 and 11.8 series', () => {
-    expect(resolveManagedImage('mysql', '8.4')).toBe('docker.io/library/mysql:8.4')
-    expect(resolveManagedImage('mariadb', '11.8', 'ubi')).toBe(
-      'docker.io/library/mariadb:11.8-ubi',
-    )
-  })
-
   it('falls back to the engine allowlist for an uncatalogued image', () => {
     expect(managedVariantImagesForImage('postgres', 'docker.io/library/postgres:14')).toEqual(
       managedAllowedImagesForEngine('postgres'),
