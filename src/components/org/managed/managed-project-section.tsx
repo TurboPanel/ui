@@ -188,7 +188,7 @@ function EnvironmentTabs({
   )
 }
 
-function ManagedSetupPanel({
+export function ManagedSetupPanel({
   orgId,
   environmentId,
   engineCode,
@@ -260,9 +260,8 @@ function ManagedSetupPanel({
       if (externalAccess !== savedExternalAccess) {
         const saved = await saveExternalAccessMutation.run({ serverId, enabled: externalAccess })
         if (!saved.ok) {
-          if (saveExternalAccessMutation.actionError) {
-            setError(saveExternalAccessMutation.actionError)
-          }
+          // `actionError` is render state and stale inside this running call.
+          setError(saved.error ?? 'Failed to save external access')
           return
         }
       }
@@ -700,7 +699,7 @@ function ManagedEnvironmentReadyPanels({
               settings: next,
             })
             if (!updateResult.ok) {
-                            invalidateManagedData()
+              invalidateManagedData()
               throw new Error(updateManagedMutation.actionError ?? 'Failed to save settings')
             }
             const applyResult = await applyManagedMutation.mutateAsync()

@@ -144,7 +144,7 @@ function EndpointList({
   }
   return (
     <View style={styles.endpointList}>
-      <Text style={panelStyles.detailLabel}>Ways in</Text>
+      <Text style={panelStyles.detailLabel}>Reachable endpoints</Text>
       {endpoints.map((entry) => (
         <Text key={`${entry.reach}-${entry.host}`} style={panelStyles.detailLine}>
           <Text style={panelStyles.detailLabel}>

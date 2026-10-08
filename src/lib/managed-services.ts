@@ -18,7 +18,6 @@ export type ManagedEngineAvailability = 'available' | 'coming-soon'
 /** Runtime status for a managed row (mirrors instance `ManagedStatus`). */
 export type ManagedStatus = 'provisioning' | 'applying' | 'ready' | 'stopped' | 'failed'
 
-
 /**
  * Client listener ports on the shared ProxySQL frontend (not engine-native).
  *
