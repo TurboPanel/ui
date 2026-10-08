@@ -991,18 +991,28 @@ export async function fetchServerLabels(serverId: string): Promise<ServerLabelPa
   return body.labels
 }
 
+/** Delete blockers plus the co-located host. Mirrors turbopanel `ServerServicesRemovalKind`. */
 export type ServerRemovalReasonKind =
   | 'network'
   | 'container'
   | 'ip'
-  | 'colocated'
+  | 'environment'
   | 'managed'
-  | 'backup'
+  | 'replica'
+  | 'deployment'
+  | 'slot'
+  | 'copy'
+  | 'colocated'
 
 export type ServerRemovalReason = {
   kind: ServerRemovalReasonKind
   count: number
   message: string
+}
+
+export type CappedPreviewList<T> = {
+  items: T[]
+  more: number
 }
 
 export type ServerServicesAppContainer = {
@@ -1016,8 +1026,8 @@ export type ServerServicesApp = {
   name: string
   project: string
   environment: string
-  containers: ServerServicesAppContainer[]
-  domains: string[]
+  containers: CappedPreviewList<ServerServicesAppContainer>
+  domains: CappedPreviewList<string>
 }
 
 export type ServerServicesDatabaseRole = 'primary' | 'replica'
@@ -1035,15 +1045,14 @@ export type ServerServicesDatabase = {
 export type ServerServicesDatabaseUser = {
   serviceId: string
   serviceName: string
-  databaseName: string
-  databaseServiceName: string
+  databases: string[]
 }
 
 export type ServerServicesBackup = {
   managedId: string
   managedName: string
   count: number
-  latestAt: string | null
+  latestAt: string
 }
 
 export type ServerServicesNetwork = {
@@ -1052,33 +1061,26 @@ export type ServerServicesNetwork = {
   kind: string
 }
 
-export type ServerHostServiceState = 'up' | 'down' | 'unknown'
-
-export type ServerHostService = {
-  key: string
-  label: string
-  state: ServerHostServiceState
-}
-
 export type ServerRuntime = {
   kind: string
   versions: string[]
 }
 
-/** `GET /servers/:id/services` — one O(1) inventory of what is attached to a host. */
+/** `GET /servers/:id/services` — bounded queries of what is attached to a host. */
 export type ServerServicesRecord = {
   serverId: string
   removal: {
     canRemove: boolean
+    online: boolean
+    canForget: boolean
     reasons: ServerRemovalReason[]
   }
-  apps: ServerServicesApp[]
+  apps: CappedPreviewList<ServerServicesApp>
   databases: ServerServicesDatabase[]
-  databaseUsers: ServerServicesDatabaseUser[]
-  backups: ServerServicesBackup[]
-  networks: ServerServicesNetwork[]
+  databaseUsers: CappedPreviewList<ServerServicesDatabaseUser>
+  backups: CappedPreviewList<ServerServicesBackup>
+  networks: CappedPreviewList<ServerServicesNetwork>
   ipCount: number
-  hostServices: ServerHostService[]
   runtimes: ServerRuntime[]
 }
 
@@ -1832,11 +1834,6 @@ export type ServerDeletePreviewNetwork = {
 export type ServerDeletePreviewIp = {
   id: string
   address: string
-}
-
-export type CappedPreviewList<T> = {
-  items: T[]
-  more: number
 }
 
 export type ServerDeletePreview = {

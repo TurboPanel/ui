@@ -1241,14 +1241,13 @@ describe('servers query hooks', () => {
   it('useServerServices loads inventory and polls at 30s', async () => {
     const payload = {
       serverId,
-      removal: { canRemove: true, reasons: [] },
-      apps: [],
+      removal: { canRemove: true, online: true, canForget: false, reasons: [] },
+      apps: { items: [], more: 0 },
       databases: [],
-      databaseUsers: [],
-      backups: [],
-      networks: [],
+      databaseUsers: { items: [], more: 0 },
+      backups: { items: [], more: 0 },
+      networks: { items: [], more: 0 },
       ipCount: 0,
-      hostServices: [],
       runtimes: [],
     }
     fetchServerServices.mockResolvedValueOnce(payload)

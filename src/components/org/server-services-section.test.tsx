@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ServerServicesRecord } from '@/lib/instance-api'
+import type { CappedPreviewList, ServerServicesRecord } from '@/lib/instance-api'
 import {
   SERVER_CAN_REMOVE_NO_TITLE,
   SERVER_CAN_REMOVE_YES_TITLE,
@@ -56,17 +56,20 @@ vi.mock('@/lib/queries/servers', () => ({
   useServerServices: () => state.result,
 }))
 
+function capped<T>(items: T[], more = 0): CappedPreviewList<T> {
+  return { items, more }
+}
+
 function emptyRecord(overrides: Partial<ServerServicesRecord> = {}): ServerServicesRecord {
   return {
     serverId: 'srv-1',
-    removal: { canRemove: true, reasons: [] },
-    apps: [],
+    removal: { canRemove: true, online: true, canForget: false, reasons: [] },
+    apps: capped([]),
     databases: [],
-    databaseUsers: [],
-    backups: [],
-    networks: [],
+    databaseUsers: capped([]),
+    backups: capped([]),
+    networks: capped([]),
     ipCount: 0,
-    hostServices: [],
     runtimes: [],
     ...overrides,
   }
@@ -108,8 +111,8 @@ describe('ServerServicesSection', () => {
     expect(screen.getByText(SERVER_SERVICES_EMPTY.databaseUsers)).toBeTruthy()
     expect(screen.getByText(SERVER_SERVICES_EMPTY.backups)).toBeTruthy()
     expect(screen.getByText(SERVER_SERVICES_EMPTY.networks)).toBeTruthy()
-    expect(screen.getByText(SERVER_SERVICES_EMPTY.hostServices)).toBeTruthy()
     expect(screen.getByText(SERVER_SERVICES_EMPTY.runtimes)).toBeTruthy()
+    expect(screen.queryByText('Host services')).toBeNull()
   })
 
   it('lists blockers when the server cannot be removed', () => {
@@ -119,11 +122,13 @@ describe('ServerServicesSection', () => {
       data: emptyRecord({
         removal: {
           canRemove: false,
+          online: true,
+          canForget: false,
           reasons: [
             {
               kind: 'container',
               count: 2,
-              message: '2 containers still run here: stop or move the apps first',
+              message: '2 containers are still on this server: stop or move the apps first.',
             },
           ],
         },
@@ -132,73 +137,148 @@ describe('ServerServicesSection', () => {
     render(<ServerServicesSection orgId="org-1" serverId="srv-1" />)
     expect(screen.getAllByText(SERVER_CAN_REMOVE_NO_TITLE).length).toBeGreaterThan(0)
     expect(
-      screen.getByText('2 containers still run here: stop or move the apps first')
+      screen.getByText('2 containers are still on this server: stop or move the apps first.')
     ).toBeTruthy()
+    expect(screen.getByText(/Clear the items below first/)).toBeTruthy()
   })
 
-  it('renders attached inventory without vendor names', () => {
+  it('names the control-panel host and skips clear-first copy', () => {
+    state.result = {
+      isLoading: false,
+      error: null,
+      data: emptyRecord({
+        removal: {
+          canRemove: false,
+          online: true,
+          canForget: false,
+          reasons: [
+            {
+              kind: 'colocated',
+              count: 1,
+              message: 'This is the machine running the control panel itself and cannot be removed.',
+            },
+          ],
+        },
+      }),
+    }
+    render(<ServerServicesSection orgId="org-1" serverId="srv-1" />)
+    expect(
+      screen.getAllByText(
+        'This is the machine running the control panel itself and cannot be removed.'
+      ).length
+    ).toBeGreaterThan(0)
+    expect(screen.queryByText(/Clear the items below first/)).toBeNull()
+  })
+
+  it('points an offline forgettable host at Delete server → Host is gone', () => {
+    state.result = {
+      isLoading: false,
+      error: null,
+      data: emptyRecord({
+        removal: {
+          canRemove: false,
+          online: false,
+          canForget: true,
+          reasons: [
+            {
+              kind: 'container',
+              count: 1,
+              message:
+                'One container is still recorded on this server. Because the host is offline, you can remove it with Delete server → Host is gone.',
+            },
+          ],
+        },
+      }),
+    }
+    render(<ServerServicesSection orgId="org-1" serverId="srv-1" />)
+    expect(screen.getAllByText(/Delete server → Host is gone/).length).toBeGreaterThan(0)
+    expect(screen.queryByText(/Clear the items below first/)).toBeNull()
+  })
+
+  it('renders attached inventory, grouped database users, caps, and lsphp/compose labels', () => {
     state.result = {
       isLoading: false,
       error: null,
       data: emptyRecord({
         ipCount: 2,
-        apps: [
-          {
-            serviceId: 'svc-1',
-            name: 'shop',
-            project: 'Store',
-            environment: 'Live',
-            domains: ['shop.example.com'],
-            containers: [{ name: 'shop-1', status: 'running', role: 'service' }],
-          },
-        ],
+        apps: capped(
+          [
+            {
+              serviceId: 'svc-1',
+              name: 'shop',
+              project: 'Store',
+              environment: 'Live',
+              domains: capped(['shop.example.com'], 7),
+              containers: capped([{ name: 'shop-1', status: 'running', role: 'service' }], 2),
+            },
+          ],
+          3
+        ),
         databases: [
           {
             managedId: 'db-1',
             name: 'orders',
             engine: 'postgres',
             role: 'primary',
-            status: 'running',
+            status: 'ready',
             readEligible: true,
             ordinal: 1,
           },
-        ],
-        databaseUsers: [
-          {
-            serviceId: 'svc-1',
-            serviceName: 'shop',
-            databaseName: 'orders',
-            databaseServiceName: 'db',
-          },
-        ],
-        backups: [
           {
             managedId: 'db-1',
-            managedName: 'orders copies',
-            count: 1,
-            latestAt: null,
+            name: 'orders',
+            engine: 'postgres',
+            role: 'replica',
+            status: 'needs_resync',
+            readEligible: false,
+            ordinal: 2,
           },
         ],
-        networks: [{ id: 'net-1', name: 'apps', kind: 'docker' }],
-        hostServices: [{ key: 'proxysql', label: 'ProxySQL', state: 'up' }],
-        runtimes: [{ kind: 'php', versions: ['8.3'] }],
+        databaseUsers: capped(
+          [
+            {
+              serviceId: 'svc-1',
+              serviceName: 'shop',
+              databases: ['catalog', 'orders'],
+            },
+          ],
+          4
+        ),
+        backups: capped(
+          [
+            {
+              managedId: 'db-1',
+              managedName: 'orders copies',
+              count: 1,
+              latestAt: '2026-01-01T00:00:00.000Z',
+            },
+          ],
+          6
+        ),
+        networks: capped([{ id: 'net-1', name: 'apps', kind: 'compose' }], 5),
+        runtimes: [{ kind: 'lsphp', versions: ['8.3'] }],
       }),
     }
     render(<ServerServicesSection orgId="org-1" serverId="srv-1" />)
     expect(screen.getAllByText('shop').length).toBeGreaterThan(0)
     expect(screen.getByText('Store · Live')).toBeTruthy()
     expect(screen.getByText('shop.example.com')).toBeTruthy()
-    expect(screen.getByText('orders')).toBeTruthy()
-    expect(screen.getByText('PostgreSQL')).toBeTruthy()
+    expect(screen.getAllByText('orders').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('PostgreSQL').length).toBe(2)
     expect(screen.getByText('Takes reads')).toBeTruthy()
-    expect(screen.getByText('Uses orders (db)')).toBeTruthy()
+    expect(screen.getByText('Needs a resync')).toBeTruthy()
+    expect(screen.getByText('Uses catalog, orders')).toBeTruthy()
     expect(screen.getByText(/1 copy/)).toBeTruthy()
     expect(screen.getByText('apps')).toBeTruthy()
-    expect(screen.getByText('Apps network')).toBeTruthy()
+    expect(screen.getByText('TurboFabric')).toBeTruthy()
     expect(screen.getByText('2 addresses on this server')).toBeTruthy()
-    expect(screen.getByText('Database connector')).toBeTruthy()
-    expect(screen.queryByText(/ProxySQL/i)).toBeNull()
-    expect(screen.getByText('PHP')).toBeTruthy()
+    expect(screen.getByText('LiteSpeed PHP')).toBeTruthy()
     expect(screen.getByText('8.3')).toBeTruthy()
+    expect(screen.getByText('and 3 more')).toBeTruthy()
+    expect(screen.getByText('and 2 more')).toBeTruthy()
+    expect(screen.getByText('and 7 more')).toBeTruthy()
+    expect(screen.getByText('and 4 more')).toBeTruthy()
+    expect(screen.getByText('and 5 more')).toBeTruthy()
+    expect(screen.getByText('and 6 more')).toBeTruthy()
   })
 })

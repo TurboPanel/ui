@@ -1,39 +1,58 @@
 import { describe, expect, it } from 'vitest'
+import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
 import {
   SERVER_SERVICES_EMPTY,
   addressCountLine,
   backupCountLine,
   backupLatestLine,
+  cappedMoreLine,
   containerRoleLabel,
   containerStatusLabel,
   containerStatusTone,
   databaseEngineLabel,
   databaseRoleLabel,
-  hostServiceDisplayName,
-  hostServiceStateLabel,
-  hostServiceStateTone,
+  databaseUserDatabasesLine,
   networkKindLabel,
+  removalNoticeBody,
+  replicaStatusLabel,
+  replicaStatusTone,
   runtimeKindLabel,
   runtimeVersionsLine,
 } from '@/lib/server-services'
 
-describe('server services display copy', () => {
-  it('maps host helpers without vendor names', () => {
-    expect(hostServiceDisplayName('proxysql', 'ProxySQL')).toBe('Database connector')
-    expect(hostServiceDisplayName('nginx', 'nginx')).toBe('Web front door')
-    expect(hostServiceDisplayName('caddy', 'Caddy')).toBe('Web front door')
-    expect(hostServiceDisplayName('openlitespeed', 'OpenLiteSpeed')).toBe('Site web server')
-    expect(hostServiceDisplayName('other', 'Mail helper')).toBe('Mail helper')
-    expect(hostServiceDisplayName('other', '  ')).toBe('Host helper')
-  })
+function removal(
+  overrides: Partial<Parameters<typeof removalNoticeBody>[0]> = {}
+): Parameters<typeof removalNoticeBody>[0] {
+  return {
+    canRemove: true,
+    online: true,
+    canForget: false,
+    reasons: [],
+    ...overrides,
+  }
+}
 
-  it('labels host helper state with a word', () => {
-    expect(hostServiceStateLabel('up')).toBe('Running')
-    expect(hostServiceStateLabel('down')).toBe('Stopped')
-    expect(hostServiceStateLabel('unknown')).toBe('Unknown')
-    expect(hostServiceStateTone('up')).toBe('ok')
-    expect(hostServiceStateTone('down')).toBe('danger')
-    expect(hostServiceStateTone('unknown')).toBe('muted')
+describe('server services display copy', () => {
+  it('uses a colocated or forget notice instead of clear-first copy', () => {
+    expect(removalNoticeBody(removal())).toMatch(/Nothing on this server/)
+    expect(
+      removalNoticeBody(
+        removal({
+          canRemove: false,
+          reasons: [
+            {
+              kind: 'colocated',
+              count: 1,
+              message: 'This is the machine running the control panel itself and cannot be removed.',
+            },
+          ],
+        })
+      )
+    ).toMatch(/control panel itself/)
+    expect(
+      removalNoticeBody(removal({ canRemove: false, online: false, canForget: true }))
+    ).toMatch(/Host is gone/)
+    expect(removalNoticeBody(removal({ canRemove: false }))).toMatch(/Clear the items below first/)
   })
 
   it('uses plain database role and engine words', () => {
@@ -48,13 +67,15 @@ describe('server services display copy', () => {
     expect(databaseEngineLabel('custom')).toBe('custom')
   })
 
-  it('names networks, runtimes and container roles in plain words', () => {
-    expect(networkKindLabel('docker')).toBe('Apps network')
+  it('names every network registry kind and lsphp runtimes in plain words', () => {
+    expect(networkKindLabel('docker')).toBe('Docker')
+    expect(networkKindLabel('compose')).toBe(TURBOFABRIC_PRODUCT_NAME)
     expect(networkKindLabel('datacenter')).toBe('Datacenter')
-    expect(networkKindLabel('reserved')).toBe('Set-aside range')
-    expect(networkKindLabel('managed')).toBe('Platform network')
+    expect(networkKindLabel('reserved')).toBe('Reserved range')
+    expect(networkKindLabel('managed')).toBe('Managed databases')
     expect(networkKindLabel('other')).toBe('Network')
     expect(runtimeKindLabel('php')).toBe('PHP')
+    expect(runtimeKindLabel('lsphp')).toBe('LiteSpeed PHP')
     expect(runtimeKindLabel('node')).toBe('Node')
     expect(runtimeKindLabel('deno')).toBe('Deno')
     expect(runtimeKindLabel('python')).toBe('Python')
@@ -82,15 +103,35 @@ describe('server services display copy', () => {
     expect(containerStatusTone('weird')).toBe('muted')
   })
 
-  it('counts addresses, backups and versions', () => {
+  it('maps every replica status to a word', () => {
+    expect(replicaStatusLabel('provisioning')).toBe('Provisioning')
+    expect(replicaStatusTone('provisioning')).toBe('pending')
+    expect(replicaStatusLabel('applying')).toBe('Applying')
+    expect(replicaStatusTone('applying')).toBe('pending')
+    expect(replicaStatusLabel('ready')).toBe('Running')
+    expect(replicaStatusTone('ready')).toBe('ok')
+    expect(replicaStatusLabel('stopped')).toBe('Stopped')
+    expect(replicaStatusTone('stopped')).toBe('muted')
+    expect(replicaStatusLabel('failed')).toBe('Failed')
+    expect(replicaStatusTone('failed')).toBe('danger')
+    expect(replicaStatusLabel('needs_resync')).toBe('Needs a resync')
+    expect(replicaStatusTone('needs_resync')).toBe('danger')
+  })
+
+  it('counts addresses, backups, versions, leftover rows, and grouped databases', () => {
     expect(addressCountLine(1)).toBe('1 address on this server')
     expect(addressCountLine(3)).toBe('3 addresses on this server')
     expect(backupCountLine(1)).toBe('1 copy')
     expect(backupCountLine(4)).toBe('4 copies')
-    expect(backupLatestLine(null)).toBe('No copies yet')
+    expect(backupLatestLine('')).toBe('No copies yet')
     expect(backupLatestLine('not-a-date')).toBe('Latest Never')
     expect(runtimeVersionsLine([])).toBe('No versions reported')
     expect(runtimeVersionsLine(['8.3', '8.4'])).toBe('8.3, 8.4')
+    expect(cappedMoreLine(0)).toBeNull()
+    expect(cappedMoreLine(2)).toBe('and 2 more')
+    expect(databaseUserDatabasesLine(['orders'])).toBe('Uses orders')
+    expect(databaseUserDatabasesLine(['orders', 'catalog'])).toBe('Uses orders, catalog')
     expect(SERVER_SERVICES_EMPTY.apps).toMatch(/No apps/)
+    expect(SERVER_SERVICES_EMPTY.backups).toMatch(/member on this server/)
   })
 })

@@ -25,7 +25,7 @@
 | Tab | Content |
 |-----|---------|
 | Overview | Identity, OS, geo when reported, timezone (incl. datacenter source/enforce), license tier placement, SSH port (effective + override), machine class pin, hardware profile, labels editor |
-| Services | Read-only inventory (`GET /servers/:id/services`, one query, 30 s refresh). Top card **Can this server be removed?** with a Yes/No `Badge` + `InlineNotice` and the plain-word blocker list. Then `SectionPanel`s: Apps, Databases, Apps using databases through this host, Backups, Networks and addresses, Host services, Runtimes. Empty section = one quiet `EmptyState` line. Stacked wrapping rows (no `DataTable` minWidth scroll). Status via `Badge` + words. No vendor names (map known host helpers to Database connector / Web front door / Site web server). |
+| Services | Read-only inventory (`GET /servers/:id/services`, one query, 30 s refresh). Top card **Can this server be removed?** with a Yes/No `Badge` + `InlineNotice` and the plain-word blocker list (colocated: this is the machine running the control panel; offline `canForget`: Delete server → Host is gone). Then `SectionPanel`s: Apps, Databases, Apps connected to a database, Backups, Networks and addresses, Runtimes. Capped `{ items, more }` lists show “and N more”. Empty section = one quiet `EmptyState` line. Stacked wrapping rows (no `DataTable` minWidth scroll). Status via `Badge` + words. |
 | Control | Ping, hostname, reboot; read-only **Server proxy** panel (platform hosting-ingress status + one allowlisted Restart); trunk update; delete (two-step). Offline leftover records (`canForget`): a second two-step **Forget these and delete server** lists names from each capped `{ items, more }` list (“and N more”) and explains that forgetting removes records only. When `canForget` is false, show preview blocker sentences (known kinds plus a generic “N other item(s) still placed on this server — remove them first”) and never the forget path. A malformed preview falls back to the plain Delete button. |
 | Time | NTP status, timezone picker (org/datacenter enforce), NTP apply form (prefill from inherited `ntpDefaults` when host facts are empty) |
 | Network | Read-only: observe-not-configure notice, Interfaces (grouped by interface, pinned-into datacenter, Stale badges), datacenter memberships + pins, mesh membership, managed IPs |
@@ -73,8 +73,8 @@
 
 ## Services tab
 
-- One `useServerServices` query; never fan out per app, database, or network.
-- Removal reasons reuse the DELETE blockers (plus colocated) — the tab and delete must never disagree. Show the server's `message` text as-is.
+- One `useServerServices` query; never fan out per app, database, or network. Lists are bounded (`{ items, more }`).
+- Removal reasons reuse the DELETE blockers (plus colocated) — the tab and delete must never disagree. Show the server's `message` text as-is. The co-located notice must not say to clear items first.
 - Phone width: wrap chips and names; no horizontal scroll inside the tab body.
 
 ## Network tab

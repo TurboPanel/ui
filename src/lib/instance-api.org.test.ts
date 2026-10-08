@@ -70,14 +70,13 @@ describe('instance-api org wrappers', () => {
   it('fetchServerServices reads the server inventory route', async () => {
     const payload = {
       serverId: 'srv-1',
-      removal: { canRemove: true, reasons: [] },
-      apps: [],
+      removal: { canRemove: true, online: true, canForget: false, reasons: [] },
+      apps: { items: [], more: 0 },
       databases: [],
-      databaseUsers: [],
-      backups: [],
-      networks: [],
+      databaseUsers: { items: [], more: 0 },
+      backups: { items: [], more: 0 },
+      networks: { items: [], more: 0 },
       ipCount: 0,
-      hostServices: [],
       runtimes: [],
     }
 

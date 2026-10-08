@@ -1,5 +1,10 @@
 import { formatRelativeLocalDateTime } from '@/lib/format-datetime'
-import type { ServerHostServiceState, ServerServicesDatabaseRole } from '@/lib/instance-api'
+import type {
+  ServerServicesDatabaseRole,
+  ServerServicesRecord,
+} from '@/lib/instance-api'
+import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
+import { moreLabel } from '@/lib/server-delete-preview'
 
 type StatusTone = 'ok' | 'muted' | 'danger' | 'pending' | 'info'
 
@@ -7,9 +12,8 @@ export const SERVER_SERVICES_EMPTY = {
   apps: 'No apps on this server.',
   databases: 'No databases on this server.',
   databaseUsers: 'No apps on this server talk to a database through it.',
-  backups: 'No backups stored on this server.',
+  backups: 'No backups of databases that have a member on this server.',
   networks: 'No networks on this server.',
-  hostServices: 'No extra host helpers reported.',
   runtimes: 'No language versions reported.',
 } as const
 
@@ -17,43 +21,25 @@ export const SERVER_CAN_REMOVE_YES_TITLE = 'Yes'
 export const SERVER_CAN_REMOVE_YES_BODY = 'Nothing on this server would stop you from removing it.'
 export const SERVER_CAN_REMOVE_NO_TITLE = 'No'
 export const SERVER_CAN_REMOVE_NO_BODY = 'Clear the items below first, then try again.'
+export const SERVER_CAN_REMOVE_NO_COLOCATED_BODY =
+  'This is the machine running the control panel itself and cannot be removed.'
+export const SERVER_CAN_REMOVE_NO_FORGET_BODY =
+  'Because this host is offline, you can still remove it with Delete server → Host is gone.'
 
-export function hostServiceDisplayName(key: string, label: string): string {
-  switch (key) {
-    case 'proxysql':
-      return 'Database connector'
-    case 'nginx':
-    case 'caddy':
-      return 'Web front door'
-    case 'openlitespeed':
-      return 'Site web server'
-    default: {
-      const trimmed = label.trim()
-      return trimmed.length > 0 ? trimmed : 'Host helper'
-    }
+export function removalNoticeBody(
+  removal: Readonly<ServerServicesRecord['removal']>
+): string {
+  if (removal.canRemove) return SERVER_CAN_REMOVE_YES_BODY
+  if (removal.reasons.some((reason) => reason.kind === 'colocated')) {
+    return SERVER_CAN_REMOVE_NO_COLOCATED_BODY
   }
+  if (removal.canForget) return SERVER_CAN_REMOVE_NO_FORGET_BODY
+  return SERVER_CAN_REMOVE_NO_BODY
 }
 
-export function hostServiceStateLabel(state: ServerHostServiceState): string {
-  switch (state) {
-    case 'up':
-      return 'Running'
-    case 'down':
-      return 'Stopped'
-    default:
-      return 'Unknown'
-  }
-}
-
-export function hostServiceStateTone(state: ServerHostServiceState): StatusTone {
-  switch (state) {
-    case 'up':
-      return 'ok'
-    case 'down':
-      return 'danger'
-    default:
-      return 'muted'
-  }
+export function cappedMoreLine(more: number): string | null {
+  if (more <= 0) return null
+  return moreLabel(more)
 }
 
 export function databaseRoleLabel(role: ServerServicesDatabaseRole): string {
@@ -78,16 +64,19 @@ export function databaseEngineLabel(engine: string): string {
   }
 }
 
+/** Network registry kinds from turbopanel `network.kind`. */
 export function networkKindLabel(kind: string): string {
   switch (kind) {
     case 'docker':
-      return 'Apps network'
+      return 'Docker'
+    case 'compose':
+      return TURBOFABRIC_PRODUCT_NAME
     case 'datacenter':
       return 'Datacenter'
     case 'reserved':
-      return 'Set-aside range'
+      return 'Reserved range'
     case 'managed':
-      return 'Platform network'
+      return 'Managed databases'
     default:
       return 'Network'
   }
@@ -97,6 +86,8 @@ export function runtimeKindLabel(kind: string): string {
   switch (kind) {
     case 'php':
       return 'PHP'
+    case 'lsphp':
+      return 'LiteSpeed PHP'
     case 'node':
       return 'Node'
     case 'deno':
@@ -163,6 +154,43 @@ export function containerStatusTone(status: string): StatusTone {
   }
 }
 
+/** Replica `status` values from turbopanel `replica_status_check`. */
+export function replicaStatusLabel(status: string): string {
+  switch (status) {
+    case 'ready':
+      return 'Running'
+    case 'provisioning':
+      return 'Provisioning'
+    case 'applying':
+      return 'Applying'
+    case 'stopped':
+      return 'Stopped'
+    case 'failed':
+      return 'Failed'
+    case 'needs_resync':
+      return 'Needs a resync'
+    default:
+      return containerStatusLabel(status)
+  }
+}
+
+export function replicaStatusTone(status: string): StatusTone {
+  switch (status) {
+    case 'ready':
+      return 'ok'
+    case 'provisioning':
+    case 'applying':
+      return 'pending'
+    case 'stopped':
+      return 'muted'
+    case 'failed':
+    case 'needs_resync':
+      return 'danger'
+    default:
+      return containerStatusTone(status)
+  }
+}
+
 export function addressCountLine(ipCount: number): string {
   if (ipCount === 1) return '1 address on this server'
   return `${ipCount} addresses on this server`
@@ -173,7 +201,7 @@ export function backupCountLine(count: number): string {
   return `${count} copies`
 }
 
-export function backupLatestLine(latestAt: string | null): string {
+export function backupLatestLine(latestAt: string): string {
   if (!latestAt) return 'No copies yet'
   return `Latest ${formatRelativeLocalDateTime(latestAt)}`
 }
@@ -181,4 +209,9 @@ export function backupLatestLine(latestAt: string | null): string {
 export function runtimeVersionsLine(versions: readonly string[]): string {
   if (versions.length === 0) return 'No versions reported'
   return versions.join(', ')
+}
+
+export function databaseUserDatabasesLine(databases: readonly string[]): string {
+  if (databases.length === 1) return `Uses ${databases[0]}`
+  return `Uses ${databases.join(', ')}`
 }

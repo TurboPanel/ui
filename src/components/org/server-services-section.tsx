@@ -2,34 +2,34 @@ import { StyleSheet, Text, View } from 'react-native'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { Badge, EmptyState, InlineNotice, LoadingState, SectionPanel } from '@/components/ui'
 import type {
+  CappedPreviewList,
   ServerServicesApp,
   ServerServicesBackup,
   ServerServicesDatabase,
   ServerServicesDatabaseUser,
   ServerServicesNetwork,
-  ServerHostService,
   ServerRuntime,
   ServerServicesRecord,
 } from '@/lib/instance-api'
 import { useServerServices } from '@/lib/queries/servers'
 import {
-  SERVER_CAN_REMOVE_NO_BODY,
   SERVER_CAN_REMOVE_NO_TITLE,
-  SERVER_CAN_REMOVE_YES_BODY,
   SERVER_CAN_REMOVE_YES_TITLE,
   SERVER_SERVICES_EMPTY,
   addressCountLine,
   backupCountLine,
   backupLatestLine,
+  cappedMoreLine,
   containerRoleLabel,
   containerStatusLabel,
   containerStatusTone,
   databaseEngineLabel,
   databaseRoleLabel,
-  hostServiceDisplayName,
-  hostServiceStateLabel,
-  hostServiceStateTone,
+  databaseUserDatabasesLine,
   networkKindLabel,
+  removalNoticeBody,
+  replicaStatusLabel,
+  replicaStatusTone,
   runtimeKindLabel,
   runtimeVersionsLine,
 } from '@/lib/server-services'
@@ -66,25 +66,21 @@ export function ServerServicesSection({
 function ServerServicesBody({ data }: Readonly<{ data: ServerServicesRecord }>) {
   return (
     <View style={styles.stack}>
-      <RemovalCard canRemove={data.removal.canRemove} reasons={data.removal.reasons} />
+      <RemovalCard removal={data.removal} />
       <AppsSection apps={data.apps} />
       <DatabasesSection databases={data.databases} />
       <DatabaseUsersSection users={data.databaseUsers} />
       <BackupsSection backups={data.backups} />
       <NetworksSection networks={data.networks} ipCount={data.ipCount} />
-      <HostServicesSection services={data.hostServices} />
       <RuntimesSection runtimes={data.runtimes} />
     </View>
   )
 }
 
 function RemovalCard({
-  canRemove,
-  reasons,
-}: Readonly<{
-  canRemove: boolean
-  reasons: ServerServicesRecord['removal']['reasons']
-}>) {
+  removal,
+}: Readonly<{ removal: ServerServicesRecord['removal'] }>) {
+  const canRemove = removal.canRemove
   return (
     <SectionPanel title="Can this server be removed?">
       <View style={styles.wrapRow}>
@@ -93,16 +89,12 @@ function RemovalCard({
           tone={canRemove ? 'ok' : 'danger'}
         />
       </View>
-      {canRemove ? (
-        <InlineNotice title={SERVER_CAN_REMOVE_YES_TITLE} body={SERVER_CAN_REMOVE_YES_BODY} />
-      ) : (
-        <InlineNotice
-          tone="warning"
-          title={SERVER_CAN_REMOVE_NO_TITLE}
-          body={SERVER_CAN_REMOVE_NO_BODY}
-        />
-      )}
-      {reasons.map((reason) => (
+      <InlineNotice
+        tone={canRemove ? undefined : 'warning'}
+        title={canRemove ? SERVER_CAN_REMOVE_YES_TITLE : SERVER_CAN_REMOVE_NO_TITLE}
+        body={removalNoticeBody(removal)}
+      />
+      {removal.reasons.map((reason) => (
         <Text key={`${reason.kind}-${reason.count}-${reason.message}`} style={panelStyles.muted}>
           {reason.message}
         </Text>
@@ -115,16 +107,23 @@ function QuietLine({ title }: Readonly<{ title: string }>) {
   return <EmptyState title={title} />
 }
 
-function AppsSection({ apps }: Readonly<{ apps: readonly ServerServicesApp[] }>) {
+function MoreLine({ more }: Readonly<{ more: number }>) {
+  const line = cappedMoreLine(more)
+  if (!line) return null
+  return <Text style={panelStyles.muted}>{line}</Text>
+}
+
+function AppsSection({ apps }: Readonly<{ apps: CappedPreviewList<ServerServicesApp> }>) {
   return (
     <SectionPanel title="Apps">
-      {apps.length === 0 ? (
+      {apps.items.length === 0 ? (
         <QuietLine title={SERVER_SERVICES_EMPTY.apps} />
       ) : (
         <View style={styles.stack}>
-          {apps.map((app) => (
+          {apps.items.map((app) => (
             <AppBlock key={app.serviceId} app={app} />
           ))}
+          <MoreLine more={apps.more} />
         </View>
       )}
     </SectionPanel>
@@ -137,10 +136,11 @@ function AppBlock({ app }: Readonly<{ app: ServerServicesApp }>) {
     <View style={styles.block}>
       <Text style={panelStyles.pageCopy}>{app.name}</Text>
       {place ? <Text style={panelStyles.muted}>{place}</Text> : null}
-      {app.domains.length > 0 ? (
-        <Text style={panelStyles.muted}>{app.domains.join(', ')}</Text>
+      {app.domains.items.length > 0 ? (
+        <Text style={panelStyles.muted}>{app.domains.items.join(', ')}</Text>
       ) : null}
-      {app.containers.map((container) => (
+      <MoreLine more={app.domains.more} />
+      {app.containers.items.map((container) => (
         <View key={container.name} style={styles.wrapRow}>
           <Text style={panelStyles.muted}>{container.name}</Text>
           <Badge label={containerRoleLabel(container.role)} tone="muted" />
@@ -150,6 +150,7 @@ function AppBlock({ app }: Readonly<{ app: ServerServicesApp }>) {
           />
         </View>
       ))}
+      <MoreLine more={app.containers.more} />
     </View>
   )
 }
@@ -164,14 +165,14 @@ function DatabasesSection({
       ) : (
         <View style={styles.stack}>
           {databases.map((database) => (
-            <View key={database.managedId} style={styles.block}>
+            <View key={`${database.managedId}:${database.ordinal}`} style={styles.block}>
               <Text style={panelStyles.pageCopy}>{database.name}</Text>
               <View style={styles.wrapRow}>
                 <Badge label={databaseEngineLabel(database.engine)} tone="muted" />
                 <Badge label={databaseRoleLabel(database.role)} tone="info" />
                 <Badge
-                  label={containerStatusLabel(database.status)}
-                  tone={containerStatusTone(database.status)}
+                  label={replicaStatusLabel(database.status)}
+                  tone={replicaStatusTone(database.status)}
                 />
                 {database.readEligible ? <Badge label="Takes reads" tone="ok" /> : null}
               </View>
@@ -185,35 +186,36 @@ function DatabasesSection({
 
 function DatabaseUsersSection({
   users,
-}: Readonly<{ users: readonly ServerServicesDatabaseUser[] }>) {
+}: Readonly<{ users: CappedPreviewList<ServerServicesDatabaseUser> }>) {
   return (
-    <SectionPanel title="Apps using databases through this host">
-      {users.length === 0 ? (
+    <SectionPanel title="Apps connected to a database">
+      {users.items.length === 0 ? (
         <QuietLine title={SERVER_SERVICES_EMPTY.databaseUsers} />
       ) : (
         <View style={styles.stack}>
-          {users.map((user) => (
+          {users.items.map((user) => (
             <View key={user.serviceId} style={styles.block}>
               <Text style={panelStyles.pageCopy}>{user.serviceName}</Text>
-              <Text style={panelStyles.muted}>
-                Uses {user.databaseName} ({user.databaseServiceName})
-              </Text>
+              <Text style={panelStyles.muted}>{databaseUserDatabasesLine(user.databases)}</Text>
             </View>
           ))}
+          <MoreLine more={users.more} />
         </View>
       )}
     </SectionPanel>
   )
 }
 
-function BackupsSection({ backups }: Readonly<{ backups: readonly ServerServicesBackup[] }>) {
+function BackupsSection({
+  backups,
+}: Readonly<{ backups: CappedPreviewList<ServerServicesBackup> }>) {
   return (
     <SectionPanel title="Backups">
-      {backups.length === 0 ? (
+      {backups.items.length === 0 ? (
         <QuietLine title={SERVER_SERVICES_EMPTY.backups} />
       ) : (
         <View style={styles.stack}>
-          {backups.map((backup) => (
+          {backups.items.map((backup) => (
             <View key={backup.managedId} style={styles.block}>
               <Text style={panelStyles.pageCopy}>{backup.managedName}</Text>
               <Text style={panelStyles.muted}>
@@ -221,6 +223,7 @@ function BackupsSection({ backups }: Readonly<{ backups: readonly ServerServices
               </Text>
             </View>
           ))}
+          <MoreLine more={backups.more} />
         </View>
       )}
     </SectionPanel>
@@ -230,43 +233,20 @@ function BackupsSection({ backups }: Readonly<{ backups: readonly ServerServices
 function NetworksSection({
   networks,
   ipCount,
-}: Readonly<{ networks: readonly ServerServicesNetwork[]; ipCount: number }>) {
+}: Readonly<{ networks: CappedPreviewList<ServerServicesNetwork>; ipCount: number }>) {
   return (
     <SectionPanel title="Networks and addresses" hint={addressCountLine(ipCount)}>
-      {networks.length === 0 ? (
+      {networks.items.length === 0 ? (
         <QuietLine title={SERVER_SERVICES_EMPTY.networks} />
       ) : (
         <View style={styles.stack}>
-          {networks.map((network) => (
+          {networks.items.map((network) => (
             <View key={network.id} style={styles.wrapRow}>
               <Text style={[panelStyles.pageCopy, styles.grow]}>{network.name}</Text>
               <Badge label={networkKindLabel(network.kind)} tone="muted" />
             </View>
           ))}
-        </View>
-      )}
-    </SectionPanel>
-  )
-}
-
-function HostServicesSection({ services }: Readonly<{ services: readonly ServerHostService[] }>) {
-  return (
-    <SectionPanel title="Host services">
-      {services.length === 0 ? (
-        <QuietLine title={SERVER_SERVICES_EMPTY.hostServices} />
-      ) : (
-        <View style={styles.stack}>
-          {services.map((service) => (
-            <View key={service.key} style={styles.wrapRow}>
-              <Text style={[panelStyles.pageCopy, styles.grow]}>
-                {hostServiceDisplayName(service.key, service.label)}
-              </Text>
-              <Badge
-                label={hostServiceStateLabel(service.state)}
-                tone={hostServiceStateTone(service.state)}
-              />
-            </View>
-          ))}
+          <MoreLine more={networks.more} />
         </View>
       )}
     </SectionPanel>
