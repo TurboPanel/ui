@@ -3,7 +3,7 @@
 > Overrides `design-system/turbopanel/MASTER.md` for `/[orgId]/servers/[serverId]`.
 
 **Route:** `src/app/[orgId]/servers/[serverId]/index.tsx` → `server-detail-section.tsx`  
-**Job:** Single-host control — identity, commands, time/NTP, network addresses, embedded metrics.
+**Job:** Single-host control — identity, what is attached, commands, time/NTP, network addresses, embedded metrics.
 
 ---
 
@@ -25,7 +25,8 @@
 | Tab | Content |
 |-----|---------|
 | Overview | Identity, OS, geo when reported, timezone (incl. datacenter source/enforce), license tier placement, SSH port (effective + override), machine class pin, hardware profile, labels editor |
-| Control | Ping, hostname, reboot; read-only **Server proxy** panel (platform hosting-ingress status + one allowlisted Restart); trunk update; delete (two-step) |
+| Services | Read-only inventory (`GET /servers/:id/services`, one query, 30 s refresh). Top card **Can this server be removed?** with a Yes/No `Badge` + `InlineNotice` and the plain-word blocker list (colocated: this is the machine running the control panel; offline `canForget`: Delete server → Host is gone). Then `SectionPanel`s: Apps, Databases, Apps connected to a database, Backups, Networks and addresses, Runtimes. Capped `{ items, more }` lists show “and N more”. Empty section = one quiet `EmptyState` line. Stacked wrapping rows (no `DataTable` minWidth scroll). Status via `Badge` + words. |
+| Control | Ping, hostname, reboot; read-only **Server proxy** panel (platform hosting-ingress status + one allowlisted Restart); trunk update; delete (two-step). Offline leftover records (`canForget`): a second two-step **Forget these and delete server** lists names from each capped `{ items, more }` list (“and N more”) and explains that forgetting removes records only. When `canForget` is false, show preview blocker sentences (known kinds plus a generic “N other item(s) still placed on this server — remove them first”) and never the forget path. A malformed preview falls back to the plain Delete button. |
 | Time | NTP status, timezone picker (org/datacenter enforce), NTP apply form (prefill from inherited `ntpDefaults` when host facts are empty) |
 | Network | Read-only: observe-not-configure notice, Interfaces (grouped by interface, pinned-into datacenter, Stale badges), datacenter memberships + pins, mesh membership, managed IPs |
 | Firewall | Owners/managers: preview-only `InlineNotice` banner, mode `SegmentedControl` with a confirmation sentence per mode, last preview (status `Badge`, version / rule count, digest, kernel verdict, notes), rendered v4/v6 ruleset in collapsed `SectionPanel`s |
@@ -70,6 +71,12 @@
 - **CPU TDP/Tjmax prefill:** when no manual override is set, the placeholder shows the resolved catalog value (`EffectiveCpuThermalLimits`, read from the summary endpoint) and the hint notes whether it's an exact catalog match or a family-regex estimate.
 - **Hosting storage path** is a `Select` over `capabilities.storageMounts.candidates`, never free text — the stored override is injected as an extra option when the daemon no longer discovers it, so it never silently disappears from the picker.
 
+## Services tab
+
+- One `useServerServices` query; never fan out per app, database, or network. Lists are bounded (`{ items, more }`).
+- Removal reasons reuse the DELETE blockers (plus colocated) — the tab and delete must never disagree. Show the server's `message` text as-is. The co-located notice must not say to clear items first.
+- Phone width: wrap chips and names; no horizontal scroll inside the tab body.
+
 ## Network tab
 
 - **Read-only contract:** TurboPanel observes host interfaces, it does not configure them. An `InlineNotice` (`info`) at the top says so — addresses are expected to change; membership pins follow the host automatically when exactly one unambiguous replacement is reported, otherwise they go stale rather than guess. Nothing on the tab may imply bringing an interface up, assigning an address, or writing a route.
@@ -90,7 +97,8 @@
 ## Anti-patterns (page-specific)
 
 - ❌ `fetchServerCell` / Durable Object reads  
-- ❌ Per-server polling beyond the single detail refresh + one command timer  
+- ❌ Per-server polling beyond the single detail refresh + one command timer + the Services inventory 30 s refresh
+- ❌ Vendor names on the Services tab  
 - ❌ Modal-per-action for ping, timezone, or NTP  
 - ❌ Emoji icons for actions  
 - ❌ Raw hex outside `theme.ts` tokens

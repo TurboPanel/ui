@@ -991,6 +991,103 @@ export async function fetchServerLabels(serverId: string): Promise<ServerLabelPa
   return body.labels
 }
 
+/** Delete blockers plus the co-located host. Mirrors turbopanel `ServerServicesRemovalKind`. */
+export type ServerRemovalReasonKind =
+  | 'network'
+  | 'container'
+  | 'ip'
+  | 'environment'
+  | 'managed'
+  | 'replica'
+  | 'deployment'
+  | 'slot'
+  | 'copy'
+  | 'colocated'
+
+export type ServerRemovalReason = {
+  kind: ServerRemovalReasonKind
+  count: number
+  message: string
+}
+
+export type CappedPreviewList<T> = {
+  items: T[]
+  more: number
+}
+
+export type ServerServicesAppContainer = {
+  name: string
+  status: string
+  role: string
+}
+
+export type ServerServicesApp = {
+  serviceId: string
+  name: string
+  project: string
+  environment: string
+  containers: CappedPreviewList<ServerServicesAppContainer>
+  domains: CappedPreviewList<string>
+}
+
+export type ServerServicesDatabaseRole = 'primary' | 'replica'
+
+export type ServerServicesDatabase = {
+  managedId: string
+  name: string
+  engine: string
+  role: ServerServicesDatabaseRole
+  status: string
+  readEligible: boolean
+  ordinal: number
+}
+
+export type ServerServicesDatabaseUser = {
+  serviceId: string
+  serviceName: string
+  databases: string[]
+}
+
+export type ServerServicesBackup = {
+  managedId: string
+  managedName: string
+  count: number
+  latestAt: string
+}
+
+export type ServerServicesNetwork = {
+  id: string
+  name: string
+  kind: string
+}
+
+export type ServerRuntime = {
+  kind: string
+  versions: string[]
+}
+
+/** `GET /servers/:id/services` — bounded queries of what is attached to a host. */
+export type ServerServicesRecord = {
+  serverId: string
+  removal: {
+    canRemove: boolean
+    online: boolean
+    canForget: boolean
+    reasons: ServerRemovalReason[]
+  }
+  apps: CappedPreviewList<ServerServicesApp>
+  databases: ServerServicesDatabase[]
+  databaseUsers: CappedPreviewList<ServerServicesDatabaseUser>
+  backups: CappedPreviewList<ServerServicesBackup>
+  networks: CappedPreviewList<ServerServicesNetwork>
+  ipCount: number
+  runtimes: ServerRuntime[]
+}
+
+export async function fetchServerServices(serverId: string): Promise<ServerServicesRecord> {
+  return await apiFetch<ServerServicesRecord>(`${CLIENT_API}/servers/${serverId}/services`)
+}
+
 /** Replace-all. Pass `{}` to clear every label. */
 export async function saveServerLabels(
   serverId: string,
@@ -1712,9 +1809,41 @@ export async function applyOrgFabric(orgId: string): Promise<FabricApplyResponse
   })
 }
 
+export type ServerDeleteBlockerKind = 'network' | 'container' | 'ip'
+
 export type ServerDeleteBlocker = {
-  kind: 'network' | 'container'
+  kind: string
   count: number
+}
+
+export const SERVER_HAS_BLOCKERS_CODE = 'server_has_blockers'
+export const SERVER_ONLINE_CODE = 'server_online'
+
+export type ServerDeletePreviewContainer = {
+  id: string
+  name: string
+  status: string
+  serviceName?: string
+}
+
+export type ServerDeletePreviewNetwork = {
+  id: string
+  name: string
+}
+
+export type ServerDeletePreviewIp = {
+  id: string
+  address: string
+}
+
+export type ServerDeletePreview = {
+  online: boolean
+  canForget: boolean
+  colocated: boolean
+  blockers: ServerDeleteBlocker[]
+  containers: CappedPreviewList<ServerDeletePreviewContainer>
+  networks: CappedPreviewList<ServerDeletePreviewNetwork>
+  ips: CappedPreviewList<ServerDeletePreviewIp>
 }
 
 export class ServerDeleteBlockedError extends Error {
@@ -1728,26 +1857,43 @@ export class ServerDeleteBlockedError extends Error {
   }
 }
 
-function formatDeleteBlockerMessage(kind: 'network' | 'container', count: number): string {
-  let label: string
-  if (kind === 'network') {
-    label = count === 1 ? 'network' : 'networks'
-  } else {
-    label = count === 1 ? 'container' : 'containers'
+export class ServerDeleteOnlineError extends Error {
+  readonly code = 'server_online'
+
+  constructor(message = 'This host is connected. Forgetting records is only available while it is offline.') {
+    super(message)
+    this.name = 'ServerDeleteOnlineError'
   }
-  return `Remove ${count} ${label} on this server before deleting it.`
+}
+
+export function formatServerDeleteBlockerLine(kind: string, count: number): string {
+  if (kind === 'network') {
+    const label = count === 1 ? 'network' : 'networks'
+    return `Remove ${count} ${label} on this server before deleting it.`
+  }
+  if (kind === 'container') {
+    const label = count === 1 ? 'container' : 'containers'
+    return `Remove ${count} ${label} on this server before deleting it.`
+  }
+  if (kind === 'ip') {
+    const label = count === 1 ? 'address' : 'addresses'
+    return `Remove ${count} ${label} on this server before deleting it.`
+  }
+  const noun = count === 1 ? 'item' : 'items'
+  return `${count} other ${noun} still placed on this server — remove them first`
 }
 
 export function formatServerDeleteBlockedError(err: unknown): string {
+  if (err instanceof ServerDeleteOnlineError) {
+    return err.message
+  }
   if (err instanceof ServerDeleteBlockedError) {
     const parts: string[] = []
-    const networkBlock = err.blockers.find((blocker) => blocker.kind === 'network')
-    if (networkBlock) {
-      parts.push(formatDeleteBlockerMessage('network', networkBlock.count))
-    }
-    const containerBlock = err.blockers.find((blocker) => blocker.kind === 'container')
-    if (containerBlock) {
-      parts.push(formatDeleteBlockerMessage('container', containerBlock.count))
+    for (const blocker of err.blockers) {
+      if (typeof blocker.kind !== 'string' || typeof blocker.count !== 'number') {
+        continue
+      }
+      parts.push(formatServerDeleteBlockerLine(blocker.kind, blocker.count))
     }
     if (parts.length > 0) {
       return parts.join(' ')
@@ -1757,9 +1903,17 @@ export function formatServerDeleteBlockedError(err: unknown): string {
   return err instanceof Error ? err.message : 'Failed to delete server'
 }
 
-export async function deleteServer(
+export async function getServerDeletePreview(
   serverId: string,
   organizationId?: string | null
+): Promise<ServerDeletePreview> {
+  return await apiFetch(`${CLIENT_API}/servers/${serverId}/delete-preview`, undefined, organizationId)
+}
+
+export async function deleteServer(
+  serverId: string,
+  organizationId?: string | null,
+  options?: Readonly<{ forgetResources?: boolean }>
 ): Promise<{ ok: true; serverId: string }> {
   const resolvedOrgId = organizationId ?? getActiveOrganizationId()
   const headers: Record<string, string> = {
@@ -1770,10 +1924,12 @@ export async function deleteServer(
   }
 
   const path = `${CLIENT_API}/servers/${serverId}`
+  const forgetResources = options?.forgetResources === true
   const response = await fetchWithStepUp(controlPlaneUrl(path), {
     method: 'DELETE',
     credentials: 'include',
     headers,
+    ...(forgetResources ? { body: JSON.stringify({ forgetResources: true }) } : {}),
   })
 
   if (!response.ok) {
@@ -1788,7 +1944,14 @@ export async function deleteServer(
       // Non-JSON error body.
     }
 
-    if (response.status === 409 && body.code === 'server_has_blockers' && body.blockers) {
+    if (response.status === 409 && body.code === SERVER_ONLINE_CODE) {
+      if (body.error) {
+        throw new ServerDeleteOnlineError(body.error)
+      }
+      throw new ServerDeleteOnlineError()
+    }
+
+    if (response.status === 409 && body.code === SERVER_HAS_BLOCKERS_CODE && body.blockers) {
       throw new ServerDeleteBlockedError(
         body.error ?? 'Cannot delete this server while dependent resources still exist',
         body.blockers

@@ -25,11 +25,13 @@ import {
   useRebootServer,
   useResetServerUpdateStatus,
   useRevokeServerDaemonKey,
+  useServerDeletePreview,
   useSaveOrgTemperatureUnit,
   useSaveServerLabels,
   useSaveServerHardwareProfile,
   useServerDetail,
   useServerLabels,
+  useServerServices,
   useServerMetricsCapabilities,
   useServerMetricsConnection,
   useServerMetricsCpuLimits,
@@ -60,8 +62,10 @@ const {
   pingDaemon,
   fetchServer,
   fetchServerLabels,
+  fetchServerServices,
   fetchTimezones,
   deleteServer,
+  getServerDeletePreview,
   fetchServersUpdateStatus,
   fetchServerUpdate,
   fetchOrgServerCapacity,
@@ -93,8 +97,10 @@ const {
   pingDaemon: vi.fn(),
   fetchServer: vi.fn(),
   fetchServerLabels: vi.fn(),
+  fetchServerServices: vi.fn(),
   fetchTimezones: vi.fn(),
   deleteServer: vi.fn(),
+  getServerDeletePreview: vi.fn(),
   fetchServersUpdateStatus: vi.fn(),
   fetchServerUpdate: vi.fn(),
   fetchOrgServerCapacity: vi.fn(),
@@ -131,8 +137,10 @@ vi.mock('@/lib/instance-api', async (importOriginal) => {
     pingDaemon,
     fetchServer,
     fetchServerLabels,
+    fetchServerServices,
     fetchTimezones,
     deleteServer,
+    getServerDeletePreview,
     fetchServersUpdateStatus,
     fetchServerUpdate,
     fetchOrgServerCapacity,
@@ -1230,6 +1238,52 @@ describe('servers query hooks', () => {
     })
   })
 
+  it('useServerServices loads inventory and polls at 30s', async () => {
+    const payload = {
+      serverId,
+      removal: { canRemove: true, online: true, canForget: false, reasons: [] },
+      apps: { items: [], more: 0 },
+      databases: [],
+      databaseUsers: { items: [], more: 0 },
+      backups: { items: [], more: 0 },
+      networks: { items: [], more: 0 },
+      ipCount: 0,
+      runtimes: [],
+    }
+    fetchServerServices.mockResolvedValueOnce(payload)
+    const client = createTestQueryClient()
+
+    const { result } = renderHook(() => useServerServices(orgId, serverId), {
+      wrapper: createWrapper(client),
+    })
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+    expect(result.current.data).toEqual(payload)
+    expect(
+      resolveRefetchInterval(client, queryKeys.org(orgId).servers.services(serverId)),
+    ).toBe(SERVERS_REFRESH_MS)
+  })
+
+  it('useServerServices stays idle when serverId is empty', () => {
+    const { result } = renderHook(() => useServerServices(orgId, ''), {
+      wrapper: createWrapper(),
+    })
+
+    expect(result.current.fetchStatus).toBe('idle')
+    expect(fetchServerServices).not.toHaveBeenCalled()
+  })
+
+  it('useServerServices respects enabled:false', () => {
+    const { result } = renderHook(
+      () => useServerServices(orgId, serverId, { enabled: false }),
+      { wrapper: createWrapper() },
+    )
+    expect(result.current.fetchStatus).toBe('idle')
+    expect(fetchServerServices).not.toHaveBeenCalled()
+  })
+
   it('useServerLabels loads label map', async () => {
     fetchServerLabels.mockResolvedValueOnce([{ key: 'role', value: 'gateway' }])
 
@@ -1296,9 +1350,41 @@ describe('servers query hooks', () => {
       wrapper: createWrapper(client),
     })
 
-    await result.current.run(serverId)
-    expect(deleteServer).toHaveBeenCalledWith(serverId, orgId)
+    await result.current.run({ serverId })
+    expect(deleteServer).toHaveBeenCalledWith(serverId, orgId, undefined)
+
+    deleteServer.mockResolvedValueOnce({ ok: true })
+    await result.current.run({ serverId, forgetResources: true })
+    expect(deleteServer).toHaveBeenCalledWith(serverId, orgId, { forgetResources: true })
     expect(invalidateSpy).toHaveBeenCalled()
+  })
+
+  it('useServerDeletePreview loads the forget list', async () => {
+    getServerDeletePreview.mockResolvedValueOnce({
+      online: false,
+      canForget: true,
+      colocated: false,
+      blockers: [],
+      containers: { items: [], more: 0 },
+      networks: { items: [], more: 0 },
+      ips: { items: [], more: 0 },
+    })
+    const { result } = renderHook(() => useServerDeletePreview(orgId, serverId), {
+      wrapper: createWrapper(),
+    })
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+    expect(getServerDeletePreview).toHaveBeenCalledWith(serverId, orgId)
+  })
+
+  it('useServerDeletePreview stays idle when disabled', () => {
+    const { result } = renderHook(
+      () => useServerDeletePreview(orgId, serverId, { enabled: false }),
+      { wrapper: createWrapper() }
+    )
+    expect(result.current.fetchStatus).toBe('idle')
+    expect(getServerDeletePreview).not.toHaveBeenCalled()
   })
 
   it('useOrgLicenses rethrows non-403 failures as query errors', async () => {

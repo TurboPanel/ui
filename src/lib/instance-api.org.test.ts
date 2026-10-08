@@ -9,6 +9,7 @@ import {
   fetchOrgServerCapacity,
   fetchOrgTemperatureUnit,
   fetchServerLabels,
+  fetchServerServices,
   fetchVisibleTeams,
   saveOrgDefaultEnvironment,
   saveOrgDefaultTimezone,
@@ -63,6 +64,29 @@ describe('instance-api org wrappers', () => {
     )
     expect(JSON.parse(String((saveInit as RequestInit).body))).toEqual({
       labels: { role: 'database' },
+    })
+  })
+
+  it('fetchServerServices reads the server inventory route', async () => {
+    const payload = {
+      serverId: 'srv-1',
+      removal: { canRemove: true, online: true, canForget: false, reasons: [] },
+      apps: { items: [], more: 0 },
+      databases: [],
+      databaseUsers: { items: [], more: 0 },
+      backups: { items: [], more: 0 },
+      networks: { items: [], more: 0 },
+      ipCount: 0,
+      runtimes: [],
+    }
+
+    fetchMock.mockResolvedValueOnce(jsonResponse(payload))
+    await expect(fetchServerServices('srv-1')).resolves.toEqual(payload)
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe(
+      '/api/client/v1/servers/srv-1/services',
+    )
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
+      credentials: 'include',
     })
   })
 
