@@ -1,9 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import type { CappedPreviewList, ServerDeletePreview } from '@/lib/instance-api'
 import {
+  blockedDatabaseMessages,
+  environmentForgetCopy,
   forgottenResourceGroups,
+  hasBlockedDatabases,
+  isServerDeletePreview,
+  membersForgetCopy,
   moreLabel,
+  SERVER_DELETE_ENVIRONMENTS_LEAD,
   SERVER_DELETE_FORGET_COPY,
+  SERVER_DELETE_MEMBERS_LEAD,
   serverDeleteBlockerMessages,
   shouldShowServerForgetPath,
 } from '@/lib/server-delete-preview'
@@ -24,6 +31,9 @@ function preview(patch: Partial<ServerDeletePreview> = {}): ServerDeletePreview 
     containers: emptyList,
     networks: emptyList,
     ips: emptyList,
+    environments: emptyList,
+    members: emptyList,
+    blockedDatabases: emptyList,
     ...patch,
   }
 }
@@ -44,6 +54,9 @@ const offlineLeftoversPreview: ServerDeletePreview = {
   ),
   networks: capped([{ id: 'net-1', name: 'leftover-net' }], 1),
   ips: capped([{ id: 'ip-1', address: '203.0.113.10' }], 2),
+  environments: emptyList,
+  members: emptyList,
+  blockedDatabases: emptyList,
 }
 
 const onlineEmptyPreview: ServerDeletePreview = {
@@ -54,6 +67,9 @@ const onlineEmptyPreview: ServerDeletePreview = {
   containers: emptyList,
   networks: emptyList,
   ips: emptyList,
+  environments: emptyList,
+  members: emptyList,
+  blockedDatabases: emptyList,
 }
 
 const malformedArrayPreview = {
@@ -120,6 +136,38 @@ describe('server delete forget preview', () => {
     expect(shouldShowServerForgetPath(blocked, { serverConnected: false })).toBe(false)
   })
 
+  it('names placed environments in blocker copy when items are present', () => {
+    const blocked = preview({
+      canForget: false,
+      blockers: [
+        {
+          kind: 'environment',
+          count: 2,
+          items: [
+            {
+              id: 'env-1',
+              name: 'staging',
+              projectId: 'proj-1',
+              projectName: 'Shop',
+              hasDatabase: false,
+            },
+            {
+              id: 'env-2',
+              name: 'prod',
+              projectId: 'proj-1',
+              projectName: 'Shop',
+              hasDatabase: true,
+            },
+          ],
+          more: 0,
+        },
+      ],
+    })
+    expect(serverDeleteBlockerMessages(blocked)).toEqual([
+      'App environments "Shop / staging" and "Shop / prod" are still placed on this server.',
+    ])
+  })
+
   it('hides blocker sentences on the forget path', () => {
     expect(serverDeleteBlockerMessages(offlineLeftoversPreview)).toEqual([])
   })
@@ -136,5 +184,93 @@ describe('server delete forget preview', () => {
       shouldShowServerForgetPath(preview({ canForget: false }), { serverConnected: false })
     ).toBe(false)
     expect(shouldShowServerForgetPath(undefined, { serverConnected: false })).toBe(false)
+  })
+
+  it('lists apps by name in project, extra copies, and blocked databases', () => {
+    const listed = preview({
+      environments: capped(
+        [
+          { id: 'env-1', name: 'staging', projectName: 'Shop' },
+          { id: 'env-2', name: 'prod', projectName: 'Blog' },
+        ],
+        2
+      ),
+      members: capped([{ id: 'rep-1', databaseName: 'catalog' }], 1),
+    })
+    expect(environmentForgetCopy(listed)).toBe(
+      `${SERVER_DELETE_ENVIRONMENTS_LEAD} staging in Shop, prod in Blog, and 2 more`
+    )
+    expect(membersForgetCopy(listed)).toBe(
+      `${SERVER_DELETE_MEMBERS_LEAD} catalog, and 1 more`
+    )
+    expect(hasBlockedDatabases(listed)).toBe(false)
+
+    const blocked = preview({
+      canForget: false,
+      blockedDatabases: capped(
+        [
+          { id: 'db-1', name: 'orders', reason: 'only_member' },
+          { id: 'db-2', name: 'analytics', reason: 'primary_here' },
+        ],
+        1
+      ),
+    })
+    expect(blockedDatabaseMessages(blocked)).toEqual([
+      'Database "orders" has its only copy on this server. Delete the database first.',
+      'Database "analytics" has its primary copy on this server. Promote another member or delete the database first.',
+      'and 1 more',
+    ])
+    expect(hasBlockedDatabases(blocked)).toBe(true)
+    expect(shouldShowServerForgetPath(blocked, { serverConnected: false })).toBe(false)
+  })
+
+  it('skips incomplete names and treats a bad extra list as malformed', () => {
+    expect(environmentForgetCopy(undefined)).toBeNull()
+    expect(membersForgetCopy(null)).toBeNull()
+    expect(blockedDatabaseMessages(undefined)).toEqual([])
+    expect(hasBlockedDatabases(undefined)).toBe(false)
+    expect(
+      environmentForgetCopy(
+        preview({
+          environments: capped([
+            { id: 'env-1', name: '   ', projectName: 'Shop' },
+            { id: 'env-2', name: 'staging', projectName: '  ' },
+            { id: 'env-3', name: 'only', projectName: '' },
+          ]),
+        })
+      )
+    ).toBe(`${SERVER_DELETE_ENVIRONMENTS_LEAD} staging, only`)
+    expect(
+      membersForgetCopy(
+        preview({
+          members: capped([{ id: 'rep-1', databaseName: '  catalog  ' }]),
+        })
+      )
+    ).toBe(`${SERVER_DELETE_MEMBERS_LEAD} catalog`)
+    expect(
+      blockedDatabaseMessages(
+        preview({
+          canForget: false,
+          blockedDatabases: {
+            items: [
+              { id: 'x' },
+              { id: 'db-1', name: '   ', reason: 'only_member' },
+              { id: 'db-2', name: 'orders', reason: 'only_member' },
+            ],
+            more: 0,
+          } as ServerDeletePreview['blockedDatabases'],
+        })
+      )
+    ).toEqual(['Database "orders" has its only copy on this server. Delete the database first.'])
+    expect(
+      hasBlockedDatabases(preview({ blockedDatabases: capped([], 3) }))
+    ).toBe(true)
+    expect(
+      isServerDeletePreview(
+        preview({
+          environments: { items: 'nope', more: 0 } as unknown as CappedPreviewList<never>,
+        })
+      )
+    ).toBe(false)
   })
 })
