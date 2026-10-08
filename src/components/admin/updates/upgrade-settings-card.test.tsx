@@ -38,6 +38,13 @@ vi.mock('@/components/ui', () => ({
     />
   ),
 }))
+vi.mock('@/components/ui/v4/action-button', () => ({
+  ActionButton: (props: { label?: string; disabled?: boolean; onPress?: () => void }) => (
+    <button type="button" disabled={Boolean(props.disabled)} onClick={() => props.onPress?.()}>
+      {props.label}
+    </button>
+  ),
+}))
 
 const SAVED: UpgradeSettings = {
   autoUpdate: false,
@@ -64,6 +71,23 @@ describe('UpgradeSettingsCard', () => {
     fireEvent.click(toggle)
     expect(onSave).not.toHaveBeenCalled()
     expect(screen.getByText(/Settings could not be loaded/)).toBeTruthy()
+  })
+
+  it('disables Apply until saved settings have loaded', () => {
+    const onSave = vi.fn()
+    const { rerender } = render(
+      <UpgradeSettingsCard settings={null} loading={false} saving={false} onSave={onSave} />
+    )
+    const apply = within(screen.getByTestId('Save batch size')).getByRole('button')
+    expect((apply as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.click(apply)
+    expect(onSave).not.toHaveBeenCalled()
+
+    rerender(
+      <UpgradeSettingsCard settings={SAVED} loading={false} saving={false} onSave={onSave} />
+    )
+    const applySaved = within(screen.getByTestId('Save batch size')).getByRole('button')
+    expect((applySaved as HTMLButtonElement).disabled).toBe(false)
   })
 
   it('hides the toggle when hideAutoUpdate is set', () => {
