@@ -35,6 +35,8 @@ import {
 } from '@/lib/server-services'
 import { spacing } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
+import { ServerBlockerItemsFromRow } from '@/components/org/server-blocker-items'
+import { blockerNamedItems } from '@/lib/server-delete-blockers'
 
 export function ServerServicesSection({
   orgId,
@@ -60,13 +62,16 @@ export function ServerServicesSection({
     return <EmptyState title="Nothing to show for this server yet." />
   }
 
-  return <ServerServicesBody data={query.data} />
+  return <ServerServicesBody orgId={orgId} data={query.data} />
 }
 
-function ServerServicesBody({ data }: Readonly<{ data: ServerServicesRecord }>) {
+function ServerServicesBody({
+  orgId,
+  data,
+}: Readonly<{ orgId: string; data: ServerServicesRecord }>) {
   return (
     <View style={styles.stack}>
-      <RemovalCard removal={data.removal} />
+      <RemovalCard orgId={orgId} removal={data.removal} />
       <AppsSection apps={data.apps} />
       <DatabasesSection databases={data.databases} />
       <DatabaseUsersSection users={data.databaseUsers} />
@@ -78,8 +83,9 @@ function ServerServicesBody({ data }: Readonly<{ data: ServerServicesRecord }>) 
 }
 
 function RemovalCard({
+  orgId,
   removal,
-}: Readonly<{ removal: ServerServicesRecord['removal'] }>) {
+}: Readonly<{ orgId: string; removal: ServerServicesRecord['removal'] }>) {
   const canRemove = removal.canRemove
   return (
     <SectionPanel title="Can this server be removed?">
@@ -94,11 +100,15 @@ function RemovalCard({
         title={canRemove ? SERVER_CAN_REMOVE_YES_TITLE : SERVER_CAN_REMOVE_NO_TITLE}
         body={removalNoticeBody(removal)}
       />
-      {removal.reasons.map((reason) => (
-        <Text key={`${reason.kind}-${reason.count}-${reason.message}`} style={panelStyles.muted}>
-          {reason.message}
-        </Text>
-      ))}
+      {removal.reasons.map((reason) => {
+        const { items } = blockerNamedItems(reason)
+        return (
+          <View key={`${reason.kind}-${reason.count}-${reason.message}`} style={styles.reasonBlock}>
+            <Text style={panelStyles.muted}>{reason.message}</Text>
+            {items.length > 0 ? <ServerBlockerItemsFromRow orgId={orgId} row={reason} /> : null}
+          </View>
+        )
+      })}
     </SectionPanel>
   )
 }
@@ -292,5 +302,10 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     flexShrink: 1,
     minWidth: 0,
+  },
+  reasonBlock: {
+    gap: spacing.xs,
+    minWidth: 0,
+    width: '100%',
   },
 })

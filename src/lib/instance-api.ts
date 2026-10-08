@@ -1004,11 +1004,23 @@ export type ServerRemovalReasonKind =
   | 'slot'
   | 'copy'
   | 'colocated'
+  | 'present_elsewhere'
+
+import type { ServerBlockerItem, ServerDeleteBlocker } from '@/lib/server-delete-blockers'
+import { formatServerDeleteBlocker } from '@/lib/server-delete-blockers'
+
+export type {
+  ServerBlockerDatabaseItem,
+  ServerBlockerEnvironmentItem,
+  ServerBlockerItem,
+} from '@/lib/server-delete-blockers'
 
 export type ServerRemovalReason = {
   kind: ServerRemovalReasonKind
   count: number
   message: string
+  items?: ServerBlockerItem[]
+  more?: number
 }
 
 export type CappedPreviewList<T> = {
@@ -1812,10 +1824,7 @@ export async function applyOrgFabric(orgId: string): Promise<FabricApplyResponse
 
 export type ServerDeleteBlockerKind = 'network' | 'container' | 'ip'
 
-export type ServerDeleteBlocker = {
-  kind: string
-  count: number
-}
+export type { ServerDeleteBlocker } from '@/lib/server-delete-blockers'
 
 export const SERVER_HAS_BLOCKERS_CODE = 'server_has_blockers'
 export const SERVER_ONLINE_CODE = 'server_online'
@@ -1837,6 +1846,36 @@ export type ServerDeletePreviewIp = {
   address: string
 }
 
+export type ServerDeletePreviewEnvironment = {
+  id: string
+  name: string
+  projectName: string
+}
+
+export type ServerDeletePreviewMember = {
+  id: string
+  databaseName: string
+}
+
+export type ServerDeleteBlockedDatabaseReason = 'only_member' | 'primary_here'
+
+export type ServerDeleteBlockedDatabase = {
+  id: string
+  name: string
+  reason: ServerDeleteBlockedDatabaseReason
+}
+
+export type ServerDeleteBlockedEnvironmentReason = 'present_elsewhere'
+
+export type ServerDeleteBlockedEnvironment = {
+  id: string
+  name: string
+  projectId: string
+  projectName: string
+  reason: ServerDeleteBlockedEnvironmentReason
+  serverNames: string[]
+}
+
 export type ServerDeletePreview = {
   online: boolean
   canForget: boolean
@@ -1845,16 +1884,29 @@ export type ServerDeletePreview = {
   containers: CappedPreviewList<ServerDeletePreviewContainer>
   networks: CappedPreviewList<ServerDeletePreviewNetwork>
   ips: CappedPreviewList<ServerDeletePreviewIp>
+  environments: CappedPreviewList<ServerDeletePreviewEnvironment>
+  members: CappedPreviewList<ServerDeletePreviewMember>
+  blockedDatabases: CappedPreviewList<ServerDeleteBlockedDatabase>
+  blockedEnvironments: CappedPreviewList<ServerDeleteBlockedEnvironment>
 }
 
 export class ServerDeleteBlockedError extends Error {
   readonly code = 'server_has_blockers'
   readonly blockers: ServerDeleteBlocker[]
+  readonly blockedDatabases: ServerDeleteBlockedDatabase[]
+  readonly blockedEnvironments: ServerDeleteBlockedEnvironment[]
 
-  constructor(message: string, blockers: ServerDeleteBlocker[]) {
+  constructor(
+    message: string,
+    blockers: ServerDeleteBlocker[],
+    blockedDatabases: ServerDeleteBlockedDatabase[] = [],
+    blockedEnvironments: ServerDeleteBlockedEnvironment[] = []
+  ) {
     super(message)
     this.name = 'ServerDeleteBlockedError'
     this.blockers = blockers
+    this.blockedDatabases = blockedDatabases
+    this.blockedEnvironments = blockedEnvironments
   }
 }
 
@@ -1868,20 +1920,71 @@ export class ServerDeleteOnlineError extends Error {
 }
 
 export function formatServerDeleteBlockerLine(kind: string, count: number): string {
-  if (kind === 'network') {
-    const label = count === 1 ? 'network' : 'networks'
-    return `Remove ${count} ${label} on this server before deleting it.`
+  return formatServerDeleteBlocker({ kind, count })
+}
+
+export { formatServerDeleteBlocker, serverBlockerItemName } from '@/lib/server-delete-blockers'
+
+export function formatBlockedDatabaseReason(name: string, reason: string): string {
+  if (reason === 'primary_here') {
+    return `Database "${name}" has its primary copy on this server. Promote another member or delete the database first.`
   }
-  if (kind === 'container') {
-    const label = count === 1 ? 'container' : 'containers'
-    return `Remove ${count} ${label} on this server before deleting it.`
+  return `Database "${name}" has its only copy on this server. Delete the database first.`
+}
+
+function joinQuotedNames(parts: readonly string[]): string {
+  if (parts.length <= 1) return parts[0] ?? ''
+  return `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}`
+}
+
+export function formatBlockedEnvironmentReason(
+  projectName: string,
+  environmentName: string,
+  serverNames: readonly string[],
+  reason: string
+): string {
+  if (reason !== 'present_elsewhere') return ''
+  const label =
+    projectName.trim().length > 0 ? `${projectName.trim()} / ${environmentName.trim()}` : environmentName.trim()
+  const hosts = joinQuotedNames(serverNames.map((name) => `"${name}"`))
+  return `App "${label}" also runs on ${hosts}. Move or delete it first.`
+}
+
+function parseBlockedDatabases(value: unknown): ServerDeleteBlockedDatabase[] {
+  if (!Array.isArray(value)) return []
+  const rows: ServerDeleteBlockedDatabase[] = []
+  for (const item of value) {
+    if (typeof item !== 'object' || item === null) continue
+    const rec = item as Record<string, unknown>
+    if (typeof rec.id !== 'string' || typeof rec.name !== 'string') continue
+    if (rec.reason !== 'only_member' && rec.reason !== 'primary_here') continue
+    rows.push({ id: rec.id, name: rec.name, reason: rec.reason })
   }
-  if (kind === 'ip') {
-    const label = count === 1 ? 'address' : 'addresses'
-    return `Remove ${count} ${label} on this server before deleting it.`
+  return rows
+}
+
+function parseBlockedEnvironments(value: unknown): ServerDeleteBlockedEnvironment[] {
+  if (!Array.isArray(value)) return []
+  const rows: ServerDeleteBlockedEnvironment[] = []
+  for (const item of value) {
+    if (typeof item !== 'object' || item === null) continue
+    const rec = item as Record<string, unknown>
+    if (typeof rec.id !== 'string' || typeof rec.name !== 'string') continue
+    if (typeof rec.projectId !== 'string' || typeof rec.projectName !== 'string') continue
+    if (rec.reason !== 'present_elsewhere') continue
+    if (!Array.isArray(rec.serverNames)) continue
+    const serverNames = rec.serverNames.filter((name): name is string => typeof name === 'string')
+    if (serverNames.length === 0) continue
+    rows.push({
+      id: rec.id,
+      name: rec.name,
+      projectId: rec.projectId,
+      projectName: rec.projectName,
+      reason: 'present_elsewhere',
+      serverNames,
+    })
   }
-  const noun = count === 1 ? 'item' : 'items'
-  return `${count} other ${noun} still placed on this server — remove them first`
+  return rows
 }
 
 export function formatServerDeleteBlockedError(err: unknown): string {
@@ -1890,11 +1993,17 @@ export function formatServerDeleteBlockedError(err: unknown): string {
   }
   if (err instanceof ServerDeleteBlockedError) {
     const parts: string[] = []
+    for (const row of err.blockedDatabases) {
+      parts.push(formatBlockedDatabaseReason(row.name, row.reason))
+    }
+    for (const row of err.blockedEnvironments) {
+      parts.push(
+        formatBlockedEnvironmentReason(row.projectName, row.name, row.serverNames, row.reason)
+      )
+    }
     for (const blocker of err.blockers) {
-      if (typeof blocker.kind !== 'string' || typeof blocker.count !== 'number') {
-        continue
-      }
-      parts.push(formatServerDeleteBlockerLine(blocker.kind, blocker.count))
+      const line = formatServerDeleteBlocker(blocker)
+      if (line.length > 0) parts.push(line)
     }
     if (parts.length > 0) {
       return parts.join(' ')
@@ -1902,6 +2011,42 @@ export function formatServerDeleteBlockedError(err: unknown): string {
     return err.message
   }
   return err instanceof Error ? err.message : 'Failed to delete server'
+}
+
+function throwIfServerDeleteConflict(
+  status: number,
+  body: Readonly<{
+    error?: string
+    code?: string
+    blockers?: ServerDeleteBlocker[]
+    blockedDatabases?: unknown
+    blockedEnvironments?: unknown
+  }>
+): void {
+  if (status !== 409) return
+  if (body.code === SERVER_ONLINE_CODE) {
+    if (body.error) {
+      throw new ServerDeleteOnlineError(body.error)
+    }
+    throw new ServerDeleteOnlineError()
+  }
+  if (body.code !== SERVER_HAS_BLOCKERS_CODE) return
+  const blockers = Array.isArray(body.blockers) ? body.blockers : []
+  const blockedDatabases = parseBlockedDatabases(body.blockedDatabases)
+  const blockedEnvironments = parseBlockedEnvironments(body.blockedEnvironments)
+  if (
+    !Array.isArray(body.blockers) &&
+    blockedDatabases.length === 0 &&
+    blockedEnvironments.length === 0
+  ) {
+    return
+  }
+  throw new ServerDeleteBlockedError(
+    body.error ?? 'Cannot delete this server while dependent resources still exist',
+    blockers,
+    blockedDatabases,
+    blockedEnvironments
+  )
 }
 
 export async function getServerDeletePreview(
@@ -1938,6 +2083,8 @@ export async function deleteServer(
       error?: string
       code?: string
       blockers?: ServerDeleteBlocker[]
+      blockedDatabases?: unknown
+      blockedEnvironments?: unknown
     } = {}
     try {
       body = (await response.json()) as typeof body
@@ -1945,19 +2092,7 @@ export async function deleteServer(
       // Non-JSON error body.
     }
 
-    if (response.status === 409 && body.code === SERVER_ONLINE_CODE) {
-      if (body.error) {
-        throw new ServerDeleteOnlineError(body.error)
-      }
-      throw new ServerDeleteOnlineError()
-    }
-
-    if (response.status === 409 && body.code === SERVER_HAS_BLOCKERS_CODE && body.blockers) {
-      throw new ServerDeleteBlockedError(
-        body.error ?? 'Cannot delete this server while dependent resources still exist',
-        body.blockers
-      )
-    }
+    throwIfServerDeleteConflict(response.status, body)
 
     const detail = body.error ?? `HTTP ${response.status}`
     throw new Error(`${path} failed: ${detail}`)

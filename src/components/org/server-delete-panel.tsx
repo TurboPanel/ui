@@ -1,16 +1,26 @@
-import { ConfirmButton, InlineNotice, MonoText } from '@/components/ui'
+import { useState } from 'react'
+import { Button, ConfirmButton, InlineNotice, MonoText } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { useServerDeletePreview } from '@/lib/queries/servers'
 import {
+  blockedDatabaseMessages,
+  blockedEnvironmentMessages,
+  environmentForgetCopy,
   forgottenResourceGroups,
+  hasBlockedForget,
+  membersForgetCopy,
   moreLabel,
+  SERVER_DELETE_FORGET_CONFIRM_LABEL,
   SERVER_DELETE_FORGET_COPY,
+  SERVER_DELETE_FORGET_REVEAL_LABEL,
   serverDeleteBlockerMessages,
   shouldShowServerForgetPath,
   type ForgottenResourceGroup,
 } from '@/lib/server-delete-preview'
 import { spacing } from '@/lib/theme'
 import { StyleSheet, Text, View } from 'react-native'
+import { ServerBlockerItemsFromRow } from '@/components/org/server-blocker-items'
+import { formatServerDeleteBlocker } from '@/lib/server-delete-blockers'
 
 function ForgetResourceGroups({
   groups,
@@ -29,6 +39,26 @@ function ForgetResourceGroups({
         </View>
       ))}
     </>
+  )
+}
+
+function ForgetWarningBody({
+  preview,
+}: Readonly<{ preview: unknown }>) {
+  const environmentCopy = environmentForgetCopy(preview)
+  const membersCopy = membersForgetCopy(preview)
+  const groups = forgottenResourceGroups(preview)
+  return (
+    <View style={styles.group}>
+      <InlineNotice title="Host is gone" body={SERVER_DELETE_FORGET_COPY} tone="warning" />
+      {environmentCopy ? (
+        <Text style={[panelStyles.pageCopy, styles.wrapText]}>{environmentCopy}</Text>
+      ) : null}
+      {membersCopy ? (
+        <Text style={[panelStyles.pageCopy, styles.wrapText]}>{membersCopy}</Text>
+      ) : null}
+      <ForgetResourceGroups groups={groups} />
+    </View>
   )
 }
 
@@ -52,28 +82,46 @@ export function ServerDeletePanel({
   const previewQuery = useServerDeletePreview(orgId, serverId)
   const preview = previewQuery.data
   const showForget = shouldShowServerForgetPath(preview, { serverConnected })
-  const groups = forgottenResourceGroups(preview)
+  const blockedDatabaseLines = blockedDatabaseMessages(preview)
+  const blockedEnvironmentLines = blockedEnvironmentMessages(preview)
   const blockerLines = serverDeleteBlockerMessages(preview)
+  const forgetBlocked = hasBlockedForget(preview) || !showForget
+  const [forgetArmed, setForgetArmed] = useState(false)
   const busy = deleting
   const showError =
     Boolean(deleteError) &&
     blockerLines.length === 0 &&
+    blockedDatabaseLines.length === 0 &&
+    blockedEnvironmentLines.length === 0 &&
     !(showForget && deleteBlocked)
 
   return (
     <View style={styles.root}>
       {showError ? <Text style={panelStyles.error}>{deleteError}</Text> : null}
-      {blockerLines.map((line) => (
-        <Text key={line} style={panelStyles.error}>
+      {preview && !preview.canForget
+        ? preview.blockers.map((row) => {
+            if (row.count < 1) return null
+            const message = formatServerDeleteBlocker(row)
+            if (message.length === 0) return null
+            return (
+              <View key={`${row.kind}-${row.count}`} style={styles.group}>
+                <Text style={[panelStyles.error, styles.wrapText]}>{message}</Text>
+                <ServerBlockerItemsFromRow orgId={orgId} row={row} />
+              </View>
+            )
+          })
+        : null}
+      {blockedDatabaseLines.map((line) => (
+        <Text key={line} style={[panelStyles.error, styles.wrapText]}>
           {line}
         </Text>
       ))}
-      {showForget ? (
-        <>
-          <InlineNotice title="Host is gone" body={SERVER_DELETE_FORGET_COPY} tone="warning" />
-          <ForgetResourceGroups groups={groups} />
-        </>
-      ) : null}
+      {blockedEnvironmentLines.map((line) => (
+        <Text key={line} style={[panelStyles.error, styles.wrapText]}>
+          {line}
+        </Text>
+      ))}
+      {showForget && forgetArmed ? <ForgetWarningBody preview={preview} /> : null}
       <ConfirmButton
         label={busy ? 'Deleting…' : 'Delete server'}
         confirmLabel="Confirm delete"
@@ -82,14 +130,23 @@ export function ServerDeletePanel({
         disabled={busy}
         onConfirm={() => onConfirm(false)}
       />
-      {showForget ? (
-        <ConfirmButton
-          label={busy ? 'Deleting…' : 'Forget these and delete server'}
-          confirmLabel="Confirm forget and delete"
-          prompt="Forget the listed records and permanently remove this server?"
+      {showForget && !forgetArmed ? (
+        <Button
+          label={SERVER_DELETE_FORGET_REVEAL_LABEL}
+          variant="danger"
+          size="sm"
+          disabled={busy || forgetBlocked}
+          onPress={() => setForgetArmed(true)}
+        />
+      ) : null}
+      {showForget && forgetArmed ? (
+        <Button
+          label={busy ? 'Deleting…' : SERVER_DELETE_FORGET_CONFIRM_LABEL}
+          variant="danger"
+          size="sm"
           busy={busy}
-          disabled={busy}
-          onConfirm={() => onConfirm(true)}
+          disabled={busy || forgetBlocked}
+          onPress={() => onConfirm(true)}
         />
       ) : null}
     </View>
@@ -103,5 +160,10 @@ const styles = StyleSheet.create({
   },
   group: {
     gap: spacing.xs,
+    width: '100%',
+  },
+  wrapText: {
+    flexShrink: 1,
+    width: '100%',
   },
 })
