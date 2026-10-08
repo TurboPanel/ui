@@ -8,7 +8,7 @@ import { UpgradeBuildBlock } from '@/components/admin/updates/upgrade-build-bloc
 import { UpgradeFailureNotice } from '@/components/admin/updates/upgrade-failure-notice'
 import { UpgradeFleetTable } from '@/components/admin/updates/upgrade-fleet-table'
 import { UpgradeHistoryPanel } from '@/components/admin/updates/upgrade-history-panel'
-import { UpgradePreflightSheet } from '@/components/admin/updates/upgrade-preflight-sheet'
+import { StartUpgradeSheet } from '@/components/admin/updates/start-upgrade-sheet'
 import { UpgradeSettingsCard } from '@/components/admin/updates/upgrade-settings-card'
 import { UpgradeStepTracker } from '@/components/admin/updates/upgrade-step-tracker'
 import {
@@ -380,17 +380,7 @@ export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>)
         }}
       />
 
-      <UpgradePreflightSheet
-        visible={flow.preflightOpen}
-        preflight={flow.preflight}
-        busy={flow.starting}
-        onClose={() => {
-          flow.setPreflightOpen(false)
-        }}
-        onConfirm={() => {
-          void flow.confirmUpgrade()
-        }}
-      />
+      <StartUpgradeSheet flow={flow} />
     </View>
   )
 }

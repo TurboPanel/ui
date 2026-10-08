@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { UpgradeFleetTable } from '@/components/admin/updates/upgrade-fleet-table'
 import { UpgradeHistoryPanel } from '@/components/admin/updates/upgrade-history-panel'
-import { UpgradePreflightSheet } from '@/components/admin/updates/upgrade-preflight-sheet'
+import { StartUpgradeSheet } from '@/components/admin/updates/start-upgrade-sheet'
 import { UpgradeSettingsCard } from '@/components/admin/updates/upgrade-settings-card'
 import { useStartUpgradeFlow } from '@/components/admin/updates/use-start-upgrade-flow'
 import {
@@ -157,17 +157,7 @@ export function HighAvailabilityUpdates({ data }: Readonly<{ data: InstanceUpdat
         }}
       />
 
-      <UpgradePreflightSheet
-        visible={flow.preflightOpen}
-        preflight={flow.preflight}
-        busy={flow.starting}
-        onClose={() => {
-          flow.setPreflightOpen(false)
-        }}
-        onConfirm={() => {
-          void flow.confirmUpgrade()
-        }}
-      />
+      <StartUpgradeSheet flow={flow} />
     </View>
   )
 }
