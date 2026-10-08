@@ -29,8 +29,8 @@ test('sign in, Projects, theme switch, project and environment tabs', async ({
   await page.getByRole('radio', { name: 'Light' }).click()
   await expect(html).toHaveClass(/t_light/)
 
-  // Project tabs (the Environments tab is `overview`). The tab bar's entries
-  // are links, so that is the role they answer to.
+  // Project tabs (the Environments tab is `overview`). A Compose project's
+  // tab bar entries answer to the tab role.
   await page.getByText('Open', { exact: true }).first().click()
   await expect(page).toHaveURL(`${PROJECT_URL}/overview`)
   const projectTabs = page.getByRole('tablist', { name: 'Project sections' })
@@ -39,7 +39,7 @@ test('sign in, Projects, theme switch, project and environment tabs', async ({
     ['Settings', 'settings'],
     ['Environments', 'overview'],
   ] as const) {
-    await projectTabs.getByRole('link', { name: label }).click()
+    await projectTabs.getByRole('tab', { name: label }).click()
     await expect(page).toHaveURL(`${PROJECT_URL}/${path}`)
   }
 
@@ -55,7 +55,7 @@ test('sign in, Projects, theme switch, project and environment tabs', async ({
     ['Settings', '/settings'],
     ['Overview', ''],
   ] as const) {
-    await environmentTabs.getByRole('link', { name: label }).click()
+    await environmentTabs.getByRole('tab', { name: label }).click()
     await expect(page).toHaveURL(`${ENVIRONMENT_URL}${path}`)
   }
 
