@@ -139,6 +139,12 @@ export type ManagedServiceCatalogEntry = {
   defaultPort: number
   defaultImage: string
   /**
+   * Image an already-stored service with no `settings.image` runs, when the
+   * default moved after it was written (MariaDB 12.3 before 11.8). Mirrors the
+   * control plane's `legacyDefaultImage`. Use {@link managedStoredImage}.
+   */
+  legacyDefaultImage?: string
+  /**
    * Every image reference this engine's settings parser will accept
    * (`settings.image`), in display order — derived from the release catalog
    * mirror in `./managed-releases.ts`.
@@ -146,6 +152,19 @@ export type ManagedServiceCatalogEntry = {
   allowedImages: readonly string[]
   /** `true` when the backend engine spec declares a `backup` descriptor (see instance `getManagedBackupDescriptor`). */
   supportsBackup: boolean
+}
+
+/**
+ * The image a stored service actually runs: its own `settings.image`, else the
+ * legacy default, else the current default. New services always store their
+ * image, so only services written before the default moved reach the legacy
+ * branch — and those must keep their series.
+ */
+export function managedStoredImage(
+  entry: { defaultImage: string; legacyDefaultImage?: string } | undefined,
+  image: string | undefined,
+): string {
+  return image ?? entry?.legacyDefaultImage ?? entry?.defaultImage ?? ''
 }
 
 /** Catalog default image for an engine that must have a release entry. */
@@ -190,6 +209,7 @@ export const MANAGED_SERVICE_CATALOG: readonly ManagedServiceCatalogEntry[] = [
     status: 'available',
     defaultPort: 3306,
     defaultImage: releaseDefaultImage('mariadb'),
+    legacyDefaultImage: 'docker.io/library/mariadb:12.3',
     allowedImages: managedAllowedImagesForEngine('mariadb'),
     supportsBackup: true,
   },
