@@ -265,7 +265,7 @@ describe('ServerServicesSection', () => {
     expect(screen.getByText('Store · Live')).toBeTruthy()
     expect(screen.getByText('shop.example.com')).toBeTruthy()
     expect(screen.getAllByText('orders').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('PostgreSQL').length).toBe(2)
+    expect(screen.getAllByText('PostgreSQL')).toHaveLength(2)
     expect(screen.getByText('Takes reads')).toBeTruthy()
     expect(screen.getByText('Needs a resync')).toBeTruthy()
     expect(screen.getByText('Uses catalog, orders')).toBeTruthy()
