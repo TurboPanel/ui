@@ -38,7 +38,7 @@ describe('project principal remaining branches', () => {
   const projectId = 'proj-1'
   const principalId = 'pr-1'
 
-  it('useUpdateProjectPrincipal forwards optional steward and entitlement fields', async () => {
+  it('useUpdateProjectPrincipal forwards optional steward and access fields', async () => {
     updateProjectPrincipal.mockResolvedValueOnce({ ok: true })
 
     const { result } = renderHook(
@@ -49,7 +49,6 @@ describe('project principal remaining branches', () => {
     await result.current.run({
       principalId,
       serviceIds: ['svc-1'],
-      entitlements: [{ runtime: 'node', series: '22' }],
       access: 'shell',
     })
 
@@ -58,7 +57,6 @@ describe('project principal remaining branches', () => {
       principalId,
       {
         serviceIds: ['svc-1'],
-        entitlements: [{ runtime: 'node', series: '22' }],
         access: 'shell',
       },
     )

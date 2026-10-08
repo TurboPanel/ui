@@ -18,7 +18,6 @@ import type {
   ManagedMemberRecord,
   ManagedServiceEngine,
   ManagedSettings,
-  ManagedSqlAccessScope,
   ManagedUserRecord,
 } from '@/lib/managed-services'
 import type { ManagedSslMode } from '@/lib/managed-ssl'
@@ -50,7 +49,6 @@ export type {
   ManagedServerSummary,
   ManagedServiceEngine,
   ManagedSettings,
-  ManagedSqlAccessScope,
   ManagedSslView,
   ManagedStatus,
   ManagedUserRecord,
@@ -1264,6 +1262,31 @@ export async function saveServerPhpModes(
   return await apiFetch(`${CLIENT_API}/servers/${serverId}/php-modes`, {
     method: 'PUT',
     body: JSON.stringify({ phpModes }),
+  })
+}
+
+/** "Allow external access to the databases on this server" (default no). */
+export type ServerManagedExternalAccess = {
+  enabled: boolean
+  /** The server was told and has not confirmed yet; retried automatically. */
+  pending: boolean
+  /** Managed databases on the server that the setting covers. */
+  clusterCount: number
+}
+
+export async function fetchServerManagedExternalAccess(
+  serverId: string
+): Promise<ServerManagedExternalAccess> {
+  return await apiFetch(`${CLIENT_API}/servers/${serverId}/managed-external-access`)
+}
+
+export async function saveServerManagedExternalAccess(
+  serverId: string,
+  enabled: boolean
+): Promise<ServerManagedExternalAccess> {
+  return await apiFetch(`${CLIENT_API}/servers/${serverId}/managed-external-access`, {
+    method: 'PUT',
+    body: JSON.stringify({ enabled }),
   })
 }
 
@@ -6834,13 +6857,6 @@ export type ProjectPrincipalRecord = {
   options: Record<string, unknown> | null
   serviceIds: string[]
   /**
-   * Runtime series this principal may execute on the host, each becoming a
-   * unix group membership. `grantedBy` says whether an operator granted it or
-   * a deploy inserted it because a service declared the runtime — both are
-   * real, revocable grants; the distinction exists so the UI can say why.
-   */
-  entitlements: PrincipalEntitlement[]
-  /**
    * How this account may log in, as the operator set it.
    *
    * Derived server-side from `options.shell` rather than stored separately —
@@ -6862,12 +6878,6 @@ export type ProjectPrincipalRecord = {
   passwordAuth: boolean
   createdAt: string
   updatedAt: string
-}
-
-export type PrincipalEntitlement = {
-  runtime: string
-  series: string
-  grantedBy: 'operator' | 'deploy'
 }
 
 export type PrincipalAccessLevel = 'none' | 'sftp' | 'shell'
@@ -6940,7 +6950,6 @@ export async function createProjectPrincipal(
     /** Omit to use the org default; 409 `principal_scheme_locked` when the org locks it. */
     nameScheme?: NameScheme
     serviceIds?: string[]
-    entitlements?: { runtime: string; series: string }[]
     access?: PrincipalAccessLevel
     options?: Record<string, unknown>
   }
@@ -6960,23 +6969,22 @@ export async function createProjectPrincipal(
 }
 
 /**
- * Patch a principal's tenancies, runtime entitlements, and/or SSH access.
+ * Patch a principal's tenancies and/or SSH access.
  *
  * Each field is **omitted when undefined** and sent when present, because the
  * API distinguishes the two: absent means "leave them alone", `[]` means
- * "revoke everything". Collapsing them would make a tenancy-only edit silently
- * strip every entitlement.
+ * "revoke everything". Collapsing them would make an access-only edit silently
+ * unassign every service.
  *
- * `reconciled` reports which servers the change was pushed to. Entitlements and
- * access are enforced on the host as unix group membership, so a change that
- * only landed in the database has not actually happened yet.
+ * `reconciled` reports which servers the change was pushed to. Access is
+ * enforced on the host as unix group membership, so a change that only landed
+ * in the database has not actually happened yet.
  */
 export async function updateProjectPrincipal(
   projectId: string,
   principalId: string,
   patch: {
     serviceIds?: string[]
-    entitlements?: { runtime: string; series: string }[]
     access?: PrincipalAccessLevel
   }
 ): Promise<{
@@ -8142,10 +8150,6 @@ export async function createEnvironmentManaged(
     engineSeries?: string
     /** Base-OS variant of `engineSeries` (`alpine` / `debian` / `oraclelinux9` / `ubi`). */
     imageVariant?: string
-    exposure?: {
-      enabled: boolean
-      scope?: ManagedSqlAccessScope
-    }
   }
 ): Promise<{
   ok: true
