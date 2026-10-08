@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { GROUP_SUMMARY_SPECS, HOST_CHART_GROUPS } from './metrics-groups'
+import { GROUP_SUMMARY_SPECS, HOST_CHART_GROUPS, isChartShown } from './metrics-groups'
 
 /**
  * Chart ids are read out of the component source rather than imported: the
@@ -101,5 +101,21 @@ describe('host chart groups', () => {
   it('keeps the out-of-RAM signals together in Paging', () => {
     const paging = HOST_CHART_GROUPS.find((group) => group.id === 'paging')
     expect(paging?.chartIds).toEqual(['memory-swap-io', 'memory-major-faults'])
+  })
+})
+
+describe('isChartShown', () => {
+  it('is shown when the chart has data', () => {
+    expect(isChartShown({ hideWhenEmpty: true }, true)).toBe(true)
+    expect(isChartShown({ hideWhenEmpty: true, emptyLabel: 'Not reported' }, true)).toBe(true)
+    expect(isChartShown({}, true)).toBe(true)
+  })
+
+  it('is hidden when empty and hideWhenEmpty with no emptyLabel', () => {
+    expect(isChartShown({ hideWhenEmpty: true }, false)).toBe(false)
+  })
+
+  it('is shown when empty with emptyLabel', () => {
+    expect(isChartShown({ hideWhenEmpty: true, emptyLabel: 'Not reported' }, false)).toBe(true)
   })
 })

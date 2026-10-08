@@ -65,6 +65,18 @@ const DOCKER_HEALTH_CHART_IDS = [
   'docker-container-memory',
 ] as const
 
+/**
+ * Whether a metrics card stays in its group. Data always shows. Cards without
+ * `hideWhenEmpty` always show. An empty `hideWhenEmpty` chart stays when
+ * `emptyLabel` is set (the card then shows that copy instead of hiding).
+ */
+export function isChartShown(
+  definition: Readonly<{ hideWhenEmpty?: boolean; emptyLabel?: string }>,
+  hasData: boolean
+): boolean {
+  return hasData || !definition.hideWhenEmpty || definition.emptyLabel != null
+}
+
 export const HOST_CHART_GROUPS: readonly HostChartGroup[] = [
   {
     id: 'cpu',

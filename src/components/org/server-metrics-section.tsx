@@ -28,7 +28,7 @@ import {
   type MetricLineSeries,
 } from '@/components/org/charts/metric-line-chart'
 import { panelStyles } from '@/components/ui/panel-styles'
-import { GROUP_SUMMARY_SPECS, HOST_CHART_GROUPS } from '@/lib/metrics-groups'
+import { GROUP_SUMMARY_SPECS, HOST_CHART_GROUPS, isChartShown } from '@/lib/metrics-groups'
 import { attributedSignalTitle } from '@/lib/sensor-commands'
 import {
   lastFiniteValue,
@@ -232,6 +232,8 @@ type ChartDefinition = Readonly<{
    * a missing sensor/entity field must never paint a 0-value flatline.
    */
   hideWhenEmpty?: boolean
+  /** Keep the card, with this text, when no series has a sample (instead of hiding it). */
+  emptyLabel?: string
   /** Dashed horizontal limit line — raw units, matching the plotted series. */
   referenceLine?: ChartReferenceLine
 }>
@@ -308,7 +310,8 @@ function compactChart(
   unit: string,
   format: ValueFormat,
   series: readonly CompactSeries[],
-  yDomain?: readonly [number, number]
+  yDomain?: readonly [number, number],
+  emptyLabel?: string
 ): ChartDefinition {
   return {
     id,
@@ -323,6 +326,7 @@ function compactChart(
     yFormat: VALUE_FORMATTERS[format],
     yDomain,
     hideWhenEmpty: true,
+    ...(emptyLabel != null ? { emptyLabel } : {}),
   }
 }
 
@@ -335,7 +339,8 @@ const V8_CHART_DEFINITIONS: readonly ChartDefinition[] = [
     '%',
     'percent',
     [['full', 'Full', 'extended.host', 'irqPressureFullPercent']],
-    [0, 100]
+    [0, 100],
+    'Not reported'
   ),
   compactChart('health-oom-kills', 'Processes killed for memory', 'count', 'count', [
     ['kills', 'Killed for memory', 'extended.host', 'oomKills'],
@@ -2686,6 +2691,7 @@ function MetricsChartCard({
       headline={unavailable ? undefined : headline}
       legend={legendEntries.length === 0 ? undefined : <ChartLegend entries={legendEntries} />}
       unavailable={unavailable}
+      unavailableLabel={definition.emptyLabel}
     >
       <MetricLineChart
         series={visibleSeries}
@@ -2858,8 +2864,8 @@ function CollapsibleChartGroup({
   const setExpanded = (next: (open: boolean) => boolean) => onToggle(id, next(expanded))
   // hideWhenEmpty cards drop out entirely when nothing reported in range — a
   // missing sensor/entity field is absence, not zero.
-  const visibleCharts = charts.filter(
-    (chart) => !chart.definition.hideWhenEmpty || chartHasAnyData(chart.points, chart.definition)
+  const visibleCharts = charts.filter((chart) =>
+    isChartShown(chart.definition, chartHasAnyData(chart.points, chart.definition))
   )
 
   const summary = summarizeGroup(id, visibleCharts)
