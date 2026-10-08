@@ -155,7 +155,8 @@ describe('ServerServicesSection', () => {
             {
               kind: 'colocated',
               count: 1,
-              message: 'This is the machine running the control panel itself and cannot be removed.',
+              message:
+                'This is the machine running the control panel itself and cannot be removed.',
             },
           ],
         },
@@ -270,7 +271,7 @@ describe('ServerServicesSection', () => {
     expect(screen.getByText('Uses catalog, orders')).toBeTruthy()
     expect(screen.getByText(/1 copy/)).toBeTruthy()
     expect(screen.getByText('apps')).toBeTruthy()
-    expect(screen.getByText('TurboFabric')).toBeTruthy()
+    expect(screen.getByText('App network (Compose)')).toBeTruthy()
     expect(screen.getByText('2 addresses on this server')).toBeTruthy()
     expect(screen.getByText('LiteSpeed PHP')).toBeTruthy()
     expect(screen.getByText('8.3')).toBeTruthy()

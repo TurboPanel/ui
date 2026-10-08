@@ -1,9 +1,5 @@
 import { formatRelativeLocalDateTime } from '@/lib/format-datetime'
-import type {
-  ServerServicesDatabaseRole,
-  ServerServicesRecord,
-} from '@/lib/instance-api'
-import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
+import type { ServerServicesDatabaseRole, ServerServicesRecord } from '@/lib/instance-api'
 import { moreLabel } from '@/lib/server-delete-preview'
 
 type StatusTone = 'ok' | 'muted' | 'danger' | 'pending' | 'info'
@@ -26,9 +22,7 @@ export const SERVER_CAN_REMOVE_NO_COLOCATED_BODY =
 export const SERVER_CAN_REMOVE_NO_FORGET_BODY =
   'Because this host is offline, you can still remove it with Delete server → Host is gone.'
 
-export function removalNoticeBody(
-  removal: Readonly<ServerServicesRecord['removal']>
-): string {
+export function removalNoticeBody(removal: Readonly<ServerServicesRecord['removal']>): string {
   if (removal.canRemove) return SERVER_CAN_REMOVE_YES_BODY
   if (removal.reasons.some((reason) => reason.kind === 'colocated')) {
     return SERVER_CAN_REMOVE_NO_COLOCATED_BODY
@@ -68,15 +62,15 @@ export function databaseEngineLabel(engine: string): string {
 export function networkKindLabel(kind: string): string {
   switch (kind) {
     case 'docker':
-      return 'Docker'
+      return 'Docker network'
     case 'compose':
-      return TURBOFABRIC_PRODUCT_NAME
+      return 'App network (Compose)'
     case 'datacenter':
-      return 'Datacenter'
+      return 'Datacenter network'
     case 'reserved':
-      return 'Reserved range'
+      return 'Reserved address range'
     case 'managed':
-      return 'Managed databases'
+      return 'Managed database network'
     default:
       return 'Network'
   }

@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
 import {
   SERVER_SERVICES_EMPTY,
   addressCountLine,
@@ -43,7 +42,8 @@ describe('server services display copy', () => {
             {
               kind: 'colocated',
               count: 1,
-              message: 'This is the machine running the control panel itself and cannot be removed.',
+              message:
+                'This is the machine running the control panel itself and cannot be removed.',
             },
           ],
         })
@@ -68,11 +68,11 @@ describe('server services display copy', () => {
   })
 
   it('names every network registry kind and lsphp runtimes in plain words', () => {
-    expect(networkKindLabel('docker')).toBe('Docker')
-    expect(networkKindLabel('compose')).toBe(TURBOFABRIC_PRODUCT_NAME)
-    expect(networkKindLabel('datacenter')).toBe('Datacenter')
-    expect(networkKindLabel('reserved')).toBe('Reserved range')
-    expect(networkKindLabel('managed')).toBe('Managed databases')
+    expect(networkKindLabel('docker')).toBe('Docker network')
+    expect(networkKindLabel('compose')).toBe('App network (Compose)')
+    expect(networkKindLabel('datacenter')).toBe('Datacenter network')
+    expect(networkKindLabel('reserved')).toBe('Reserved address range')
+    expect(networkKindLabel('managed')).toBe('Managed database network')
     expect(networkKindLabel('other')).toBe('Network')
     expect(runtimeKindLabel('php')).toBe('PHP')
     expect(runtimeKindLabel('lsphp')).toBe('LiteSpeed PHP')
