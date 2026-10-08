@@ -25,6 +25,7 @@ import {
   useRebootServer,
   useResetServerUpdateStatus,
   useRevokeServerDaemonKey,
+  useServerDeletePreview,
   useSaveOrgTemperatureUnit,
   useSaveServerLabels,
   useSaveServerHardwareProfile,
@@ -62,6 +63,7 @@ const {
   fetchServerLabels,
   fetchTimezones,
   deleteServer,
+  getServerDeletePreview,
   fetchServersUpdateStatus,
   fetchServerUpdate,
   fetchOrgServerCapacity,
@@ -95,6 +97,7 @@ const {
   fetchServerLabels: vi.fn(),
   fetchTimezones: vi.fn(),
   deleteServer: vi.fn(),
+  getServerDeletePreview: vi.fn(),
   fetchServersUpdateStatus: vi.fn(),
   fetchServerUpdate: vi.fn(),
   fetchOrgServerCapacity: vi.fn(),
@@ -133,6 +136,7 @@ vi.mock('@/lib/instance-api', async (importOriginal) => {
     fetchServerLabels,
     fetchTimezones,
     deleteServer,
+    getServerDeletePreview,
     fetchServersUpdateStatus,
     fetchServerUpdate,
     fetchOrgServerCapacity,
@@ -1296,9 +1300,41 @@ describe('servers query hooks', () => {
       wrapper: createWrapper(client),
     })
 
-    await result.current.run(serverId)
-    expect(deleteServer).toHaveBeenCalledWith(serverId, orgId)
+    await result.current.run({ serverId })
+    expect(deleteServer).toHaveBeenCalledWith(serverId, orgId, undefined)
+
+    deleteServer.mockResolvedValueOnce({ ok: true })
+    await result.current.run({ serverId, forgetResources: true })
+    expect(deleteServer).toHaveBeenCalledWith(serverId, orgId, { forgetResources: true })
     expect(invalidateSpy).toHaveBeenCalled()
+  })
+
+  it('useServerDeletePreview loads the forget list', async () => {
+    getServerDeletePreview.mockResolvedValueOnce({
+      online: false,
+      canForget: true,
+      colocated: false,
+      blockers: [],
+      containers: [],
+      networks: [],
+      ips: [],
+    })
+    const { result } = renderHook(() => useServerDeletePreview(orgId, serverId), {
+      wrapper: createWrapper(),
+    })
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+    expect(getServerDeletePreview).toHaveBeenCalledWith(serverId, orgId)
+  })
+
+  it('useServerDeletePreview stays idle when disabled', () => {
+    const { result } = renderHook(
+      () => useServerDeletePreview(orgId, serverId, { enabled: false }),
+      { wrapper: createWrapper() }
+    )
+    expect(result.current.fetchStatus).toBe('idle')
+    expect(getServerDeletePreview).not.toHaveBeenCalled()
   })
 
   it('useOrgLicenses rethrows non-403 failures as query errors', async () => {

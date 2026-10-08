@@ -130,6 +130,8 @@ export const queryKeys = {
         networkPanel: (serverId: string) =>
           ['org', orgId, 'server', serverId, 'network-panel'] as const,
         labels: (serverId: string) => ['org', orgId, 'server', serverId, 'labels'] as const,
+        deletePreview: (serverId: string) =>
+          ['org', orgId, 'server', serverId, 'delete-preview'] as const,
         /** PHP mode policy one server offers (`/servers/:id/php-modes`). */
         phpModes: (serverId: string) => ['org', orgId, 'server', serverId, 'php-modes'] as const,
         /** "Allow external access to the databases on this server" (`/servers/:id/managed-external-access`). */

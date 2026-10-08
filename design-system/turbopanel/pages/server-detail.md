@@ -25,7 +25,7 @@
 | Tab | Content |
 |-----|---------|
 | Overview | Identity, OS, geo when reported, timezone (incl. datacenter source/enforce), license tier placement, SSH port (effective + override), machine class pin, hardware profile, labels editor |
-| Control | Ping, hostname, reboot; read-only **Server proxy** panel (platform hosting-ingress status + one allowlisted Restart); trunk update; delete (two-step) |
+| Control | Ping, hostname, reboot; read-only **Server proxy** panel (platform hosting-ingress status + one allowlisted Restart); trunk update; delete (two-step). Offline leftover records: a second two-step **Forget these and delete server** lists names (capped with “and N more”) and explains that forgetting removes records only. Online hosts keep the blocker sentence — never the forget path. |
 | Time | NTP status, timezone picker (org/datacenter enforce), NTP apply form (prefill from inherited `ntpDefaults` when host facts are empty) |
 | Network | Read-only: observe-not-configure notice, Interfaces (grouped by interface, pinned-into datacenter, Stale badges), datacenter memberships + pins, mesh membership, managed IPs |
 | Firewall | Owners/managers: preview-only `InlineNotice` banner, mode `SegmentedControl` with a confirmation sentence per mode, last preview (status `Badge`, version / rule count, digest, kernel verdict, notes), rendered v4/v6 ruleset in collapsed `SectionPanel`s |
