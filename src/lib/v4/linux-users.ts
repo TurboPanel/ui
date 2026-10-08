@@ -251,14 +251,19 @@ export function linuxUserRows(input: LinuxUsersInput): LinuxUserRow[] {
 
 // --- Name rule ---------------------------------------------------------------
 
-/** Longest login the server accepts (it must fit `<name>-grp` in a Linux group name). */
+/** Longest login the server accepts. The server names the user's own group after it. */
 export const LINUX_USER_NAME_MAX = 28
 /** Characters a name scheme adds: an underscore and 11 random ones. */
 export const LINUX_USER_NAME_SUFFIX = 12
 
 const LINUX_USER_NAME_RE = /^[a-z][a-z0-9_-]*$/
 
-/** Names the system keeps for itself. Mirrors the control plane's naming rule. */
+/**
+ * Names the system keeps for itself. Mirrors the control plane's naming rule.
+ * The server gives each Linux user a group of the same name, and some group
+ * names hand out administrator power (sudo, admin, wheel), so the usual
+ * system and privilege group names are kept too.
+ */
 const SYSTEM_USER_NAMES: ReadonlySet<string> = new Set([
   'root',
   'daemon',
@@ -275,12 +280,85 @@ const SYSTEM_USER_NAMES: ReadonlySet<string> = new Set([
   'postgres',
   'redis',
   'docker',
+  'containers',
+  'lp',
+  'uucp',
+  'proxy',
+  'backup',
+  'list',
+  'irc',
+  'gnats',
+  'nogroup',
+  'ssh',
+  '_ssh',
+  '_apt',
+  '_chrony',
+  'mysql',
+  'adm',
+  'admin',
+  'audio',
+  'avahi',
+  'cdrom',
+  'crontab',
+  'dialout',
+  'dip',
+  'disk',
+  'floppy',
+  'fuse',
+  'incus',
+  'incus-admin',
+  'input',
+  'kmem',
+  'kvm',
+  'libvirt',
+  'libvirt-qemu',
+  'lpadmin',
+  'lxd',
+  'messagebus',
+  'microk8s',
+  'netdev',
+  'operator',
+  'plugdev',
+  'polkitd',
+  'render',
+  'sambashare',
+  'sasl',
+  'sgx',
+  'shadow',
+  'src',
+  'ssl-cert',
+  'staff',
+  'sudo',
+  'tape',
+  'tty',
+  'users',
+  'utmp',
+  'video',
+  'voice',
+  'wheel',
+  'bluetooth',
+  'gpio',
+  'i2c',
+  'nopass' + 'wdlogin',
+  'rdma',
+  'scanner',
+  'syslog',
+  'tss',
+  'uuidd',
+  'vboxusers',
+  'wireshark',
 ])
 
 /** True for names the system keeps: its own accounts and everything starting `tp`. */
 export function isSystemUserName(name: string): boolean {
   const key = name.trim().toLowerCase()
-  return SYSTEM_USER_NAMES.has(key) || key.startsWith('tp') || key.startsWith('systemd-')
+  // `<name>-grp` is an older site owner's group: a new user called that would share it.
+  return (
+    SYSTEM_USER_NAMES.has(key) ||
+    key.startsWith('tp') ||
+    key.startsWith('systemd-') ||
+    key.endsWith('-grp')
+  )
 }
 
 export type LinuxUserNameCheck = Readonly<{ ok: boolean; msg: string }>

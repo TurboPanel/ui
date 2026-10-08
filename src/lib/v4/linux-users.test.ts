@@ -265,7 +265,25 @@ describe('Linux user name rule', () => {
   })
 
   it('refuses names the system keeps', () => {
-    for (const name of ['root', 'www-data', 'postgres', 'tp', 'tpdata', 'tpanything', 'systemd-x']) {
+    for (const name of [
+      'root',
+      'www-data',
+      'postgres',
+      'tp',
+      'tpdata',
+      'tpanything',
+      'systemd-x',
+      // The user's own group carries its name; these groups grant power.
+      'sudo',
+      'admin',
+      'wheel',
+      'adm',
+      'staff',
+      'lxd',
+      'containers',
+      'wireshark',
+      'bob-grp',
+    ]) {
       expect(checkLinuxUserName(name)).toEqual({ ok: false, msg: 'The system keeps that name' })
     }
     expect(isSystemUserName(' Root ')).toBe(true)
