@@ -7,6 +7,7 @@ import {
   TextField,
   Toggle,
 } from '@/components/ui'
+import { ActionButton } from '@/components/ui/v4/action-button'
 import { panelStyles } from '@/components/ui/panel-styles'
 import type { UpgradeSettings } from '@/lib/instance-api'
 import { formatUpgradeBatchLabel, validateUpgradeBatchInput } from '@/lib/upgrade-batch'
@@ -133,13 +134,15 @@ export function UpgradeSettingsCard({
           Default batch is 100% — every server in a wave upgrades together unless you lower it.
         </Text>
         <SettingRow label="Save batch size">
-          <Text
-            style={panelStyles.muted}
+          <ActionButton
+            label="Apply"
+            variant="quiet"
+            size="sm"
             onPress={saveBatch}
-            accessibilityRole="button"
-          >
-            {saving ? 'Saving…' : 'Apply'}
-          </Text>
+            busy={saving}
+            busyLabel="Saving…"
+            disabled={!ready}
+          />
         </SettingRow>
       </View>
     </SectionPanel>
