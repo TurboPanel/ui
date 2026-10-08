@@ -671,7 +671,9 @@ export function ProjectDeletePanel({
     if (!result.ok) {
       markStopFailed(
         environmentId,
-        destroyManagedMutation.actionError ?? 'Failed to destroy database',
+        result.error
+          ? userErrorMessage(result.cause ?? new Error(result.error), '')
+          : 'Failed to destroy database',
       )
       return
     }

@@ -1062,9 +1062,12 @@ export const DEFAULT_SITE_ENGINE: SiteEngine = 'caddy'
  * environments can span servers, so "installed here" is not well defined in a
  * compose editor. Picking an unsupported series is a hard error at prepare;
  * picking a supported one the target host lacks is a warning, because the
- * deploy installs it.
+ * deploy installs it (on first use; nothing is installed in advance).
+ *
+ * The daemon offers the series LiteSpeed publishes for the server's operating
+ * system; this is the list for Debian 13, the only supported OS today.
  */
-export const SUPPORTED_PHP_SERIES: readonly string[] = ['8.3', '8.4']
+export const SUPPORTED_PHP_SERIES: readonly string[] = ['8.1', '8.2', '8.3', '8.4', '8.5']
 
 /** PHP modes, mirroring the instance's `contracts/commands/schemas.ts`. */
 export type PhpMode = 'fastcgi' | 'fpm' | 'lsphp-detached' | 'lsphp-attached'

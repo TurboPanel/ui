@@ -42,6 +42,7 @@ import {
 } from '@/lib/queries'
 import { MANAGED_RUNTIME_PRESENT_ERROR } from '@/lib/instance-api'
 import { chrome, colors, spacing, webPointer } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 
 function EnvironmentSelector() {
@@ -215,7 +216,7 @@ function ManagedProjectTrashButton({
       const deletedId = selectedEnvironment.id
       const destroy = await destroyManaged.run(deletedId)
       if (!destroy.ok) {
-        if (destroyManaged.actionError) setError(destroyManaged.actionError)
+        if (destroy.error) setError(userErrorMessage(destroy.cause ?? new Error(destroy.error), ''))
         return
       }
       if (destroy.value.deleted) {
