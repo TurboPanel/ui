@@ -28,7 +28,7 @@ function moved(step: UpgradeStepRow): string | null {
 }
 
 function StepLine({ step }: Readonly<{ step: UpgradeStepRow }>) {
-  const badge = fleetStatusBadge(step.status)
+  const badge = fleetStatusBadge(step.status, step.errorCode)
   const outcome = upgradeStepOutcome(step)
   const reason = plainStepFailureMessage(step.errorMessage) ?? outcome.detail
   const when = step.lastStageAt ? new Date(step.lastStageAt).toLocaleString() : null

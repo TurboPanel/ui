@@ -148,7 +148,7 @@ export function mapStepStatusToPipeline(
  */
 const STEP_ERROR_LABELS: Readonly<Record<string, string>> = {
   rolled_back: 'Rolled back to the previous build',
-  server_offline: 'Server offline for over an hour',
+  server_offline: 'The server was offline and was skipped',
   step_timeout: 'Stopped reporting progress',
   dispatch_failed: "Couldn't reach the server",
   managed_upgrade_required: 'This server needs a managed update',
@@ -198,6 +198,9 @@ export function upgradeStepOutcome(
     case 'done':
       return { tone: 'ok', label: 'Done', detail: null }
     case 'skipped':
+      if (step.errorCode === 'server_offline') {
+        return { tone: 'muted', label: 'Skipped: offline', detail }
+      }
       return { tone: 'muted', label: 'Skipped', detail }
     case 'failed':
       return { tone: 'danger', label: 'Failed', detail }
@@ -228,7 +231,10 @@ export function stepHasStarted(status: UpgradeStepStatus | null | undefined): bo
 }
 
 /** The fleet table's Status column: what the update is doing with this server, in plain words. */
-export function fleetStatusBadge(status: UpgradeStepStatus): {
+export function fleetStatusBadge(
+  status: UpgradeStepStatus,
+  errorCode?: string | null
+): {
   tone: 'ok' | 'muted' | 'danger' | 'pending' | 'info'
   label: string
 } {
@@ -236,6 +242,9 @@ export function fleetStatusBadge(status: UpgradeStepStatus): {
     case 'done':
       return { tone: 'ok', label: 'Updated' }
     case 'skipped':
+      if (errorCode === 'server_offline') {
+        return { tone: 'muted', label: 'Skipped: offline' }
+      }
       return { tone: 'muted', label: 'Skipped' }
     case 'failed':
       return { tone: 'danger', label: 'Failed' }
@@ -281,6 +290,62 @@ const STEP_TERMINAL = new Set<UpgradeStepStatus>([
 /** A run is still working on this piece: it has a step that has not ended. */
 export function stepInFlight(status: UpgradeStepStatus | null | undefined): boolean {
   return status != null && !STEP_TERMINAL.has(status)
+}
+
+function remainingSteps<T extends Readonly<{ status: UpgradeStepStatus }>>(
+  steps: readonly T[]
+): T[] {
+  return steps.filter((step) => !STEP_TERMINAL.has(step.status))
+}
+
+/**
+ * Copy when every unfinished step is waiting on an offline server; null
+ * otherwise. N is the count of those waiting steps.
+ */
+export function offlineWaitingNotice(
+  steps: readonly Readonly<{ status: UpgradeStepStatus; phase?: string }>[]
+): string | null {
+  const remaining = remainingSteps(steps)
+  if (
+    remaining.length === 0 ||
+    remaining.some((step) => step.status !== 'waiting' || !isFleetOrUnknownPhase(step.phase))
+  ) {
+    return null
+  }
+  const n = remaining.length
+  const head = n === 1 ? '1 server is' : `${n} servers are`
+  return `${head} offline, so this update is waiting for them. They are skipped after 15 minutes, and they update on the first run after they reconnect.`
+}
+
+type OfflineWaitStep = Readonly<{
+  status: UpgradeStepStatus
+  phase?: string
+  connected?: boolean
+}>
+
+/** Only fleet steps are skipped when offline; platform phases still fail the run. */
+function isFleetOrUnknownPhase(phase: string | undefined): boolean {
+  return phase === undefined || phase === 'fleet'
+}
+
+function isOfflineWaitStep(step: OfflineWaitStep): boolean {
+  if (!isFleetOrUnknownPhase(step.phase)) return false
+  if (step.status === 'waiting') return true
+  return step.status === 'pending' && step.connected === false
+}
+
+/**
+ * True when unfinished steps are only waiting or pending for offline servers
+ * (none in flight, none queued on a connected host). Starting a new update
+ * settles that run on the control plane.
+ */
+export function runWaitsOnlyOnOffline(
+  run: Readonly<{ steps: readonly OfflineWaitStep[] }> | null | undefined
+): boolean {
+  if (!run) return false
+  const remaining = remainingSteps(run.steps)
+  if (remaining.length === 0) return false
+  return remaining.every(isOfflineWaitStep)
 }
 
 /** The step has written the new files to disk (installing is over). */

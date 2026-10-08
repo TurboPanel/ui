@@ -32,9 +32,11 @@ import {
 import { fleetServersQuery, UPGRADE_FLEET_PAGE_SIZE } from '@/lib/upgrade-batch'
 import {
   installedBuildLabel,
+  offlineWaitingNotice,
   platformUpgradeHeadlineCopy,
   type PieceStepView,
   resolvePlatformUpgradeHeadline,
+  runWaitsOnlyOnOffline,
   summarizeFleetSteps,
   updateAvailableSentence,
   upgradeRunErrorLabel,
@@ -192,6 +194,7 @@ function UpgradeProgressPanel({
   const daemonStep = run?.steps.find((step) => step.phase === 'colocated_daemon')
   const controlPlaneStep = run?.steps.find((step) => step.phase === 'control_plane')
   const runError = upgradeRunErrorLabel(run?.error)
+  const waitingOffline = offlineWaitingNotice(run?.steps ?? [])
 
   return (
     <SectionPanel
@@ -200,8 +203,9 @@ function UpgradeProgressPanel({
         run && !finished ? (
           <ConfirmButton
             label="Cancel update"
-            confirmLabel="Cancel update"
-            prompt="Stop this update? Steps already applied stay applied; anything still pending is skipped. Start a fresh update afterward to pick up the current target build."
+            confirmLabel="Yes, cancel the update"
+            dismissLabel="No, keep it"
+            prompt="Stop this update? Finished steps stay; pending ones are skipped."
             busy={cancelling}
             onConfirm={() => {
               onCancel(run.id)
@@ -239,6 +243,7 @@ function UpgradeProgressPanel({
           ? `${fleetSummary.upToDate} of ${fleetSummary.total} servers up to date`
           : 'Server updates: each server’s daemon updates after the control plane is on target.'}
       </Text>
+      {waitingOffline ? <InlineNotice tone="info" title={waitingOffline} /> : null}
       <UpgradeFleetTable
         servers={fleetServers}
         total={fleetTotal}
@@ -297,7 +302,7 @@ export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>)
     data.managedUpgrade === true &&
     data.units.daemon.connected &&
     selfHostedUpdateAvailable(data.units, consoleBuild) &&
-    headline !== 'updating' &&
+    (headline !== 'updating' || runWaitsOnlyOnOffline(run)) &&
     !flow.starting
 
   useAutoOpenPreflight(canStart, flow.openPreflight)
