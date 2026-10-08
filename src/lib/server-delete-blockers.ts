@@ -78,7 +78,7 @@ export function serverBlockerItemName(item: ServerBlockerItem): string {
 
 function joinNames(parts: readonly string[]): string {
   if (parts.length <= 1) return parts[0] ?? ''
-  return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`
+  return `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}`
 }
 
 /** Up to three quoted names, then "and N more" (matches services-tab reasons). */
