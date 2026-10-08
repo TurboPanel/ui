@@ -489,6 +489,13 @@ describe('queryKeys.org(…) remaining factories', () => {
       '1h',
     ])
     expect(org.servers.labels('srv-1')).toEqual(['org', 'org-1', 'server', 'srv-1', 'labels'])
+    expect(org.servers.deletePreview('srv-1')).toEqual([
+      'org',
+      'org-1',
+      'server',
+      'srv-1',
+      'delete-preview',
+    ])
     expect(org.servers.ips('srv-1')).toEqual(['org', 'org-1', 'server', 'srv-1', 'ips', {}])
     expect(org.projects.detail('p1')).toEqual(['org', 'org-1', 'project', 'p1'])
     expect(org.projects.principals('p1')).toEqual(['org', 'org-1', 'project', 'p1', 'principals'])

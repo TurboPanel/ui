@@ -132,6 +132,8 @@ export const queryKeys = {
         /** What is attached to one server (`GET /servers/:id/services`). */
         services: (serverId: string) => ['org', orgId, 'server', serverId, 'services'] as const,
         labels: (serverId: string) => ['org', orgId, 'server', serverId, 'labels'] as const,
+        deletePreview: (serverId: string) =>
+          ['org', orgId, 'server', serverId, 'delete-preview'] as const,
         /** PHP mode policy one server offers (`/servers/:id/php-modes`). */
         phpModes: (serverId: string) => ['org', orgId, 'server', serverId, 'php-modes'] as const,
         /** "Allow external access to the databases on this server" (`/servers/:id/managed-external-access`). */

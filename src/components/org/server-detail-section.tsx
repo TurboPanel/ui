@@ -62,9 +62,11 @@ import {
   SERVER_DETAIL_TAB_LABELS,
   type ServerDetailTabId,
 } from '@/lib/org-navigation'
+import { ServerDeletePanel } from '@/components/org/server-delete-panel'
 import {
   formatServerDeleteBlockedError,
   isForbiddenError,
+  ServerDeleteBlockedError,
   type CommandEnqueueResponse,
   type CommandRecord,
   type OrgServerRecord,
@@ -496,9 +498,13 @@ function renderServerDeletePanel(
   input: Readonly<{
     canManage: boolean
     colocated: boolean
+    orgId: string
+    serverId: string
+    serverConnected: boolean
     deleting: boolean
     deleteError: string | null
-    onConfirm: () => void
+    deleteBlocked: boolean
+    onConfirm: (forgetResources: boolean) => void
   }>
 ): ReactNode {
   if (!input.canManage) return null
@@ -509,8 +515,12 @@ function renderServerDeletePanel(
   }
   return (
     <ServerDeletePanel
+      orgId={input.orgId}
+      serverId={input.serverId}
+      serverConnected={input.serverConnected}
       deleting={input.deleting}
       deleteError={input.deleteError}
+      deleteBlocked={input.deleteBlocked}
       onConfirm={input.onConfirm}
     />
   )
@@ -550,6 +560,7 @@ export function ServerDetailSection({
   const [ntpPollError, setNtpPollError] = useState<string | null>(null)
   const [systemRestartPollError, setSystemRestartPollError] = useState<string | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [deleteBlocked, setDeleteBlocked] = useState(false)
   const [revokeKeyState, setRevokeKeyState] = useState<RevokeKeyPanelState>({
     error: null,
     result: null,
@@ -788,19 +799,34 @@ export function ServerDetailSection({
   const deletePanel = renderServerDeletePanel({
     canManage,
     colocated: updateVm.colocated,
+    orgId,
+    serverId,
+    serverConnected: server?.connected === true,
     deleting: deleteMutation.isPending,
     deleteError,
-    onConfirm: () => {
+    deleteBlocked,
+    onConfirm: (forgetResources) => {
       setDeleteError(null)
-      deleteMutation.mutate(serverId, {
-        onSuccess: () => {
-          router.replace(defaultOrgDashboardHref(orgId))
-        },
-        onError: (err) => {
-          if (isForbiddenError(err)) return
-          setDeleteError(formatServerDeleteBlockedError(err))
-        },
-      })
+      setDeleteBlocked(false)
+      deleteMutation.mutate(
+        { serverId, forgetResources },
+        {
+          onSuccess: () => {
+            router.replace(defaultOrgDashboardHref(orgId))
+          },
+          onError: (err) => {
+            if (isForbiddenError(err)) return
+            const blocked = err instanceof ServerDeleteBlockedError
+            setDeleteBlocked(blocked)
+            setDeleteError(formatServerDeleteBlockedError(err))
+            if (blocked) {
+              queryClient.invalidateQueries({
+                queryKey: queryKeys.org(orgId).servers.deletePreview(serverId),
+              })
+            }
+          },
+        }
+      )
     },
   })
 
@@ -1223,29 +1249,6 @@ function ServerRevokeKeyPanel({
         confirmLabel="Confirm revoke"
         prompt="Cut this host off from the control plane now? Recovery is deleting the server and enrolling a rebuilt host."
         busy={revoking}
-        onConfirm={onConfirm}
-      />
-    </>
-  )
-}
-
-function ServerDeletePanel({
-  deleting,
-  deleteError,
-  onConfirm,
-}: Readonly<{
-  deleting: boolean
-  deleteError: string | null
-  onConfirm: () => void
-}>) {
-  return (
-    <>
-      {deleteError ? <Text style={panelStyles.error}>{deleteError}</Text> : null}
-      <ConfirmButton
-        label={deleting ? 'Deleting…' : 'Delete server'}
-        confirmLabel="Confirm delete"
-        prompt="Permanently remove this server from the organization?"
-        busy={deleting}
         onConfirm={onConfirm}
       />
     </>

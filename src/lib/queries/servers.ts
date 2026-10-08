@@ -3,6 +3,7 @@ import {
   createLicense,
   deleteLicense,
   deleteServer,
+  getServerDeletePreview,
   fetchFleetMetricsLatest,
   fetchLicenses,
   fetchOrgServerCapacity,
@@ -140,6 +141,19 @@ export function useServerServices(
     queryFn: () => fetchServerServices(serverId),
     enabled: (options?.enabled ?? true) && orgId.length > 0 && serverId.length > 0,
     refetchInterval: SERVERS_REFRESH_MS,
+  })
+}
+
+export function useServerDeletePreview(
+  orgId: string,
+  serverId: string,
+  options?: Readonly<{ enabled?: boolean }>
+) {
+  return useQuery({
+    queryKey: queryKeys.org(orgId).servers.deletePreview(serverId),
+    queryFn: () => getServerDeletePreview(serverId, orgId),
+    enabled: (options?.enabled ?? true) && orgId.length > 0 && serverId.length > 0,
+    refetchInterval: false,
   })
 }
 
@@ -557,7 +571,12 @@ export function useResetServerUpdateStatus(orgId: string, serverId: string) {
 export function useDeleteServer(orgId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (serverId: string) => deleteServer(serverId, orgId),
+    mutationFn: (input: Readonly<{ serverId: string; forgetResources?: boolean }>) =>
+      deleteServer(
+        input.serverId,
+        orgId,
+        input.forgetResources ? { forgetResources: true } : undefined
+      ),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
         queryKey: queryKeys.org(orgId).servers.list,
