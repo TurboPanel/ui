@@ -24,6 +24,7 @@ import {
 } from '@/components/org/server-commands-panel'
 import { ServerFirewallSection } from '@/components/org/firewall/server-firewall-section'
 import { ServerMetricsSection } from '@/components/org/server-metrics-section'
+import { ServerServicesSection } from '@/components/org/server-services-section'
 import { ServerNetworkSection } from '@/components/org/server-network-section'
 import { ServerHardwareProfileEditor } from '@/components/org/server-hardware-profile-editor'
 import { ServerLabelsEditor } from '@/components/org/server-labels-editor'
@@ -316,6 +317,8 @@ function DetailTabBody({
           onEnqueueCommand={onEnqueueCommand}
         />
       )
+    case 'services':
+      return <ServerServicesSection orgId={orgId} serverId={serverId} />
     case 'network':
       return <ServerNetworkSection orgId={orgId} server={server} />
     case 'firewall':

@@ -476,6 +476,7 @@ export function networkReservedHref(
 
 export const SERVER_DETAIL_TAB_IDS = [
   'overview',
+  'services',
   'control',
   'time',
   'network',
@@ -487,6 +488,7 @@ export type ServerDetailTabId = (typeof SERVER_DETAIL_TAB_IDS)[number]
 
 export const SERVER_DETAIL_TAB_LABELS: Record<ServerDetailTabId, string> = {
   overview: 'Overview',
+  services: 'Services',
   control: 'Control',
   time: 'Time',
   network: 'Network',

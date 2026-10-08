@@ -991,6 +991,103 @@ export async function fetchServerLabels(serverId: string): Promise<ServerLabelPa
   return body.labels
 }
 
+/** Delete blockers plus the co-located host. Mirrors turbopanel `ServerServicesRemovalKind`. */
+export type ServerRemovalReasonKind =
+  | 'network'
+  | 'container'
+  | 'ip'
+  | 'environment'
+  | 'managed'
+  | 'replica'
+  | 'deployment'
+  | 'slot'
+  | 'copy'
+  | 'colocated'
+
+export type ServerRemovalReason = {
+  kind: ServerRemovalReasonKind
+  count: number
+  message: string
+}
+
+export type CappedPreviewList<T> = {
+  items: T[]
+  more: number
+}
+
+export type ServerServicesAppContainer = {
+  name: string
+  status: string
+  role: string
+}
+
+export type ServerServicesApp = {
+  serviceId: string
+  name: string
+  project: string
+  environment: string
+  containers: CappedPreviewList<ServerServicesAppContainer>
+  domains: CappedPreviewList<string>
+}
+
+export type ServerServicesDatabaseRole = 'primary' | 'replica'
+
+export type ServerServicesDatabase = {
+  managedId: string
+  name: string
+  engine: string
+  role: ServerServicesDatabaseRole
+  status: string
+  readEligible: boolean
+  ordinal: number
+}
+
+export type ServerServicesDatabaseUser = {
+  serviceId: string
+  serviceName: string
+  databases: string[]
+}
+
+export type ServerServicesBackup = {
+  managedId: string
+  managedName: string
+  count: number
+  latestAt: string
+}
+
+export type ServerServicesNetwork = {
+  id: string
+  name: string
+  kind: string
+}
+
+export type ServerRuntime = {
+  kind: string
+  versions: string[]
+}
+
+/** `GET /servers/:id/services` — bounded queries of what is attached to a host. */
+export type ServerServicesRecord = {
+  serverId: string
+  removal: {
+    canRemove: boolean
+    online: boolean
+    canForget: boolean
+    reasons: ServerRemovalReason[]
+  }
+  apps: CappedPreviewList<ServerServicesApp>
+  databases: ServerServicesDatabase[]
+  databaseUsers: CappedPreviewList<ServerServicesDatabaseUser>
+  backups: CappedPreviewList<ServerServicesBackup>
+  networks: CappedPreviewList<ServerServicesNetwork>
+  ipCount: number
+  runtimes: ServerRuntime[]
+}
+
+export async function fetchServerServices(serverId: string): Promise<ServerServicesRecord> {
+  return await apiFetch<ServerServicesRecord>(`${CLIENT_API}/servers/${serverId}/services`)
+}
+
 /** Replace-all. Pass `{}` to clear every label. */
 export async function saveServerLabels(
   serverId: string,
@@ -1737,11 +1834,6 @@ export type ServerDeletePreviewNetwork = {
 export type ServerDeletePreviewIp = {
   id: string
   address: string
-}
-
-export type CappedPreviewList<T> = {
-  items: T[]
-  more: number
 }
 
 export type ServerDeletePreview = {

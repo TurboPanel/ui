@@ -31,6 +31,7 @@ import {
   useSaveServerHardwareProfile,
   useServerDetail,
   useServerLabels,
+  useServerServices,
   useServerMetricsCapabilities,
   useServerMetricsConnection,
   useServerMetricsCpuLimits,
@@ -61,6 +62,7 @@ const {
   pingDaemon,
   fetchServer,
   fetchServerLabels,
+  fetchServerServices,
   fetchTimezones,
   deleteServer,
   getServerDeletePreview,
@@ -95,6 +97,7 @@ const {
   pingDaemon: vi.fn(),
   fetchServer: vi.fn(),
   fetchServerLabels: vi.fn(),
+  fetchServerServices: vi.fn(),
   fetchTimezones: vi.fn(),
   deleteServer: vi.fn(),
   getServerDeletePreview: vi.fn(),
@@ -134,6 +137,7 @@ vi.mock('@/lib/instance-api', async (importOriginal) => {
     pingDaemon,
     fetchServer,
     fetchServerLabels,
+    fetchServerServices,
     fetchTimezones,
     deleteServer,
     getServerDeletePreview,
@@ -1232,6 +1236,52 @@ describe('servers query hooks', () => {
         ),
       ).toBe(12_000)
     })
+  })
+
+  it('useServerServices loads inventory and polls at 30s', async () => {
+    const payload = {
+      serverId,
+      removal: { canRemove: true, online: true, canForget: false, reasons: [] },
+      apps: { items: [], more: 0 },
+      databases: [],
+      databaseUsers: { items: [], more: 0 },
+      backups: { items: [], more: 0 },
+      networks: { items: [], more: 0 },
+      ipCount: 0,
+      runtimes: [],
+    }
+    fetchServerServices.mockResolvedValueOnce(payload)
+    const client = createTestQueryClient()
+
+    const { result } = renderHook(() => useServerServices(orgId, serverId), {
+      wrapper: createWrapper(client),
+    })
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+    expect(result.current.data).toEqual(payload)
+    expect(
+      resolveRefetchInterval(client, queryKeys.org(orgId).servers.services(serverId)),
+    ).toBe(SERVERS_REFRESH_MS)
+  })
+
+  it('useServerServices stays idle when serverId is empty', () => {
+    const { result } = renderHook(() => useServerServices(orgId, ''), {
+      wrapper: createWrapper(),
+    })
+
+    expect(result.current.fetchStatus).toBe('idle')
+    expect(fetchServerServices).not.toHaveBeenCalled()
+  })
+
+  it('useServerServices respects enabled:false', () => {
+    const { result } = renderHook(
+      () => useServerServices(orgId, serverId, { enabled: false }),
+      { wrapper: createWrapper() },
+    )
+    expect(result.current.fetchStatus).toBe('idle')
+    expect(fetchServerServices).not.toHaveBeenCalled()
   })
 
   it('useServerLabels loads label map', async () => {

@@ -10,6 +10,7 @@ import {
   fetchOrgServers,
   fetchServer,
   fetchServerLabels,
+  fetchServerServices,
   fetchOrgTemperatureUnit,
   fetchServerMetricsCapabilities,
   fetchServerMetricsConnection,
@@ -127,6 +128,19 @@ export function useServerLabels(
     queryKey: queryKeys.org(orgId).servers.labels(serverId),
     queryFn: () => fetchServerLabels(serverId),
     enabled: (options?.enabled ?? true) && orgId.length > 0 && serverId.length > 0,
+  })
+}
+
+export function useServerServices(
+  orgId: string,
+  serverId: string,
+  options?: Readonly<{ enabled?: boolean }>
+) {
+  return useQuery({
+    queryKey: queryKeys.org(orgId).servers.services(serverId),
+    queryFn: () => fetchServerServices(serverId),
+    enabled: (options?.enabled ?? true) && orgId.length > 0 && serverId.length > 0,
+    refetchInterval: SERVERS_REFRESH_MS,
   })
 }
 
