@@ -154,11 +154,11 @@ export function useCreateProjectPrincipal(orgId: string, projectId: string) {
 }
 
 /**
- * Patch a principal's stewards, runtime entitlements, and/or SSH access.
+ * Patch a principal's stewards and/or SSH access.
  *
  * Every field is optional and forwarded only when present: the API reads
- * absent as "leave them alone" and `[]` as "revoke everything", so a
- * steward-only edit must not carry an empty entitlement list.
+ * absent as "leave them alone" and `[]` as "revoke everything", so an
+ * access-only edit must not carry an empty steward list.
  */
 export function useUpdateProjectPrincipal(orgId: string, projectId: string) {
   const queryClient = useQueryClient()
@@ -169,7 +169,6 @@ export function useUpdateProjectPrincipal(orgId: string, projectId: string) {
     }: {
       principalId: string
       serviceIds?: string[]
-      entitlements?: { runtime: string; series: string }[]
       access?: PrincipalAccessLevel
     }) => updateProjectPrincipal(projectId, principalId, patch),
     onSuccess: async () => {
