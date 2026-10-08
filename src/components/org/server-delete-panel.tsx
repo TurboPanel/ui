@@ -5,10 +5,32 @@ import {
   forgottenResourceGroups,
   moreLabel,
   SERVER_DELETE_FORGET_COPY,
+  serverDeleteBlockerMessages,
   shouldShowServerForgetPath,
+  type ForgottenResourceGroup,
 } from '@/lib/server-delete-preview'
 import { spacing } from '@/lib/theme'
 import { StyleSheet, Text, View } from 'react-native'
+
+function ForgetResourceGroups({
+  groups,
+}: Readonly<{ groups: ForgottenResourceGroup[] }>) {
+  return (
+    <>
+      {groups.map((group) => (
+        <View key={group.heading} style={styles.group}>
+          <Text style={panelStyles.detailTitle}>{group.heading}</Text>
+          {group.names.map((name) => (
+            <MonoText key={name}>{name}</MonoText>
+          ))}
+          {group.more > 0 ? (
+            <Text style={panelStyles.muted}>{moreLabel(group.more)}</Text>
+          ) : null}
+        </View>
+      ))}
+    </>
+  )
+}
 
 export function ServerDeletePanel({
   orgId,
@@ -30,27 +52,26 @@ export function ServerDeletePanel({
   const previewQuery = useServerDeletePreview(orgId, serverId)
   const preview = previewQuery.data
   const showForget = shouldShowServerForgetPath(preview, { serverConnected })
-  const groups = preview ? forgottenResourceGroups(preview) : []
+  const groups = forgottenResourceGroups(preview)
+  const blockerLines = serverDeleteBlockerMessages(preview)
   const busy = deleting
-  const showError = Boolean(deleteError) && !(showForget && deleteBlocked)
+  const showError =
+    Boolean(deleteError) &&
+    blockerLines.length === 0 &&
+    !(showForget && deleteBlocked)
 
   return (
     <View style={styles.root}>
       {showError ? <Text style={panelStyles.error}>{deleteError}</Text> : null}
+      {blockerLines.map((line) => (
+        <Text key={line} style={panelStyles.error}>
+          {line}
+        </Text>
+      ))}
       {showForget ? (
         <>
           <InlineNotice title="Host is gone" body={SERVER_DELETE_FORGET_COPY} tone="warning" />
-          {groups.map((group) => (
-            <View key={group.heading} style={styles.group}>
-              <Text style={panelStyles.detailTitle}>{group.heading}</Text>
-              {group.names.map((name) => (
-                <MonoText key={name}>{name}</MonoText>
-              ))}
-              {group.more > 0 ? (
-                <Text style={panelStyles.muted}>{moreLabel(group.more)}</Text>
-              ) : null}
-            </View>
-          ))}
+          <ForgetResourceGroups groups={groups} />
         </>
       ) : null}
       <ConfirmButton

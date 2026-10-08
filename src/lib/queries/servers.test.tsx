@@ -1315,9 +1315,9 @@ describe('servers query hooks', () => {
       canForget: true,
       colocated: false,
       blockers: [],
-      containers: [],
-      networks: [],
-      ips: [],
+      containers: { items: [], more: 0 },
+      networks: { items: [], more: 0 },
+      ips: { items: [], more: 0 },
     })
     const { result } = renderHook(() => useServerDeletePreview(orgId, serverId), {
       wrapper: createWrapper(),

@@ -1,6 +1,8 @@
-import type {
-  ServerDeletePreview,
-  ServerDeletePreviewContainer,
+import {
+  formatServerDeleteBlockerLine,
+  type CappedPreviewList,
+  type ServerDeleteBlocker,
+  type ServerDeletePreview,
 } from '@/lib/instance-api'
 
 export const SERVER_DELETE_FORGET_COPY =
@@ -12,14 +14,46 @@ export type ForgottenResourceGroup = {
   more: number
 }
 
-function containerLabel(container: ServerDeletePreviewContainer): string {
-  const status = container.status.trim()
-  const service = container.serviceName?.trim()
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function isCappedPreviewList(value: unknown): value is CappedPreviewList<unknown> {
+  if (!isRecord(value) || !Array.isArray(value.items) || typeof value.more !== 'number') {
+    return false
+  }
+  return Number.isFinite(value.more)
+}
+
+function isBlocker(value: unknown): value is ServerDeleteBlocker {
+  if (!isRecord(value) || typeof value.kind !== 'string' || typeof value.count !== 'number') {
+    return false
+  }
+  return Number.isFinite(value.count)
+}
+
+export function isServerDeletePreview(value: unknown): value is ServerDeletePreview {
+  if (!isRecord(value)) return false
+  if (typeof value.online !== 'boolean') return false
+  if (typeof value.canForget !== 'boolean') return false
+  if (typeof value.colocated !== 'boolean') return false
+  if (!Array.isArray(value.blockers)) return false
+  return (
+    isCappedPreviewList(value.containers) &&
+    isCappedPreviewList(value.networks) &&
+    isCappedPreviewList(value.ips)
+  )
+}
+
+function containerLabel(container: unknown): string {
+  if (!isRecord(container) || typeof container.name !== 'string') return ''
   let label = container.name
+  const status = typeof container.status === 'string' ? container.status.trim() : ''
   if (status.length > 0) {
     label = `${label} (${status})`
   }
-  if (service && service.length > 0) {
+  const service = typeof container.serviceName === 'string' ? container.serviceName.trim() : ''
+  if (service.length > 0) {
     label = `${label} · ${service}`
   }
   return label
@@ -34,28 +68,55 @@ function group(
   return { heading, names, more }
 }
 
-export function forgottenResourceGroups(
-  preview: ServerDeletePreview
-): ForgottenResourceGroup[] {
-  const more = preview.more
-  const groups = [
-    group(
-      'Containers',
-      preview.containers.map((item) => containerLabel(item)),
-      more?.containers ?? 0
-    ),
-    group(
-      'Networks',
-      preview.networks.map((item) => item.name),
-      more?.networks ?? 0
-    ),
-    group(
-      'Addresses',
-      preview.ips.map((item) => item.address),
-      more?.ips ?? 0
-    ),
-  ]
-  return groups.filter((item): item is ForgottenResourceGroup => item !== null)
+function namesFromList(
+  list: CappedPreviewList<unknown>,
+  label: (item: unknown) => string
+): string[] {
+  return list.items.map(label).filter((name) => name.length > 0)
+}
+
+export function forgottenResourceGroups(preview: unknown): ForgottenResourceGroup[] {
+  try {
+    if (!isServerDeletePreview(preview)) return []
+    const groups = [
+      group(
+        'Containers',
+        namesFromList(preview.containers, containerLabel),
+        Math.max(0, preview.containers.more)
+      ),
+      group(
+        'Networks',
+        namesFromList(preview.networks, (item) =>
+          isRecord(item) && typeof item.name === 'string' ? item.name : ''
+        ),
+        Math.max(0, preview.networks.more)
+      ),
+      group(
+        'Addresses',
+        namesFromList(preview.ips, (item) =>
+          isRecord(item) && typeof item.address === 'string' ? item.address : ''
+        ),
+        Math.max(0, preview.ips.more)
+      ),
+    ]
+    return groups.filter((item): item is ForgottenResourceGroup => item !== null)
+  } catch {
+    return []
+  }
+}
+
+export function serverDeleteBlockerMessages(preview: unknown): string[] {
+  try {
+    if (!isServerDeletePreview(preview) || preview.canForget) return []
+    const lines: string[] = []
+    for (const row of preview.blockers) {
+      if (!isBlocker(row) || row.count < 1) continue
+      lines.push(formatServerDeleteBlockerLine(row.kind, row.count))
+    }
+    return lines
+  } catch {
+    return []
+  }
 }
 
 export function moreLabel(count: number): string {
@@ -63,10 +124,15 @@ export function moreLabel(count: number): string {
 }
 
 export function shouldShowServerForgetPath(
-  preview: ServerDeletePreview | undefined,
+  preview: unknown,
   options: Readonly<{ serverConnected: boolean }>
 ): boolean {
-  if (options.serverConnected) return false
-  if (preview?.online === true) return false
-  return preview?.canForget === true
+  try {
+    if (!isServerDeletePreview(preview)) return false
+    if (options.serverConnected) return false
+    if (preview.online) return false
+    return preview.canForget
+  } catch {
+    return false
+  }
 }

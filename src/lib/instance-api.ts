@@ -1715,7 +1715,7 @@ export async function applyOrgFabric(orgId: string): Promise<FabricApplyResponse
 export type ServerDeleteBlockerKind = 'network' | 'container' | 'ip'
 
 export type ServerDeleteBlocker = {
-  kind: ServerDeleteBlockerKind
+  kind: string
   count: number
 }
 
@@ -1739,10 +1739,9 @@ export type ServerDeletePreviewIp = {
   address: string
 }
 
-export type ServerDeletePreviewMore = {
-  containers: number
-  networks: number
-  ips: number
+export type CappedPreviewList<T> = {
+  items: T[]
+  more: number
 }
 
 export type ServerDeletePreview = {
@@ -1750,10 +1749,9 @@ export type ServerDeletePreview = {
   canForget: boolean
   colocated: boolean
   blockers: ServerDeleteBlocker[]
-  containers: ServerDeletePreviewContainer[]
-  networks: ServerDeletePreviewNetwork[]
-  ips: ServerDeletePreviewIp[]
-  more?: ServerDeletePreviewMore
+  containers: CappedPreviewList<ServerDeletePreviewContainer>
+  networks: CappedPreviewList<ServerDeletePreviewNetwork>
+  ips: CappedPreviewList<ServerDeletePreviewIp>
 }
 
 export class ServerDeleteBlockedError extends Error {
@@ -1776,16 +1774,21 @@ export class ServerDeleteOnlineError extends Error {
   }
 }
 
-function formatDeleteBlockerMessage(kind: ServerDeleteBlockerKind, count: number): string {
-  let label: string
+export function formatServerDeleteBlockerLine(kind: string, count: number): string {
   if (kind === 'network') {
-    label = count === 1 ? 'network' : 'networks'
-  } else if (kind === 'container') {
-    label = count === 1 ? 'container' : 'containers'
-  } else {
-    label = count === 1 ? 'address' : 'addresses'
+    const label = count === 1 ? 'network' : 'networks'
+    return `Remove ${count} ${label} on this server before deleting it.`
   }
-  return `Remove ${count} ${label} on this server before deleting it.`
+  if (kind === 'container') {
+    const label = count === 1 ? 'container' : 'containers'
+    return `Remove ${count} ${label} on this server before deleting it.`
+  }
+  if (kind === 'ip') {
+    const label = count === 1 ? 'address' : 'addresses'
+    return `Remove ${count} ${label} on this server before deleting it.`
+  }
+  const noun = count === 1 ? 'item' : 'items'
+  return `${count} other ${noun} still placed on this server — remove them first`
 }
 
 export function formatServerDeleteBlockedError(err: unknown): string {
@@ -1794,17 +1797,11 @@ export function formatServerDeleteBlockedError(err: unknown): string {
   }
   if (err instanceof ServerDeleteBlockedError) {
     const parts: string[] = []
-    const networkBlock = err.blockers.find((blocker) => blocker.kind === 'network')
-    if (networkBlock) {
-      parts.push(formatDeleteBlockerMessage('network', networkBlock.count))
-    }
-    const containerBlock = err.blockers.find((blocker) => blocker.kind === 'container')
-    if (containerBlock) {
-      parts.push(formatDeleteBlockerMessage('container', containerBlock.count))
-    }
-    const ipBlock = err.blockers.find((blocker) => blocker.kind === 'ip')
-    if (ipBlock) {
-      parts.push(formatDeleteBlockerMessage('ip', ipBlock.count))
+    for (const blocker of err.blockers) {
+      if (typeof blocker.kind !== 'string' || typeof blocker.count !== 'number') {
+        continue
+      }
+      parts.push(formatServerDeleteBlockerLine(blocker.kind, blocker.count))
     }
     if (parts.length > 0) {
       return parts.join(' ')

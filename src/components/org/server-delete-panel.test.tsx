@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ServerDeletePreview } from '@/lib/instance-api'
+import type { CappedPreviewList, ServerDeletePreview } from '@/lib/instance-api'
 import { SERVER_DELETE_FORGET_COPY } from '@/lib/server-delete-preview'
 import { ServerDeletePanel } from './server-delete-panel'
 
@@ -58,19 +58,27 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
+const emptyList: CappedPreviewList<never> = { items: [], more: 0 }
+
+function capped<T>(items: T[], more = 0): CappedPreviewList<T> {
+  return { items, more }
+}
+
 function preview(patch: Partial<ServerDeletePreview> = {}): ServerDeletePreview {
   return {
     online: false,
     canForget: true,
     colocated: false,
     blockers: [{ kind: 'container', count: 2 }],
-    containers: [
-      { id: 'c1', name: 'web', status: 'running', serviceName: 'shop' },
-      { id: 'c2', name: 'api', status: 'exited' },
-    ],
-    networks: [{ id: 'n1', name: 'project_default' }],
-    ips: [{ id: 'i1', address: '10.0.0.5' }],
-    more: { containers: 2, networks: 0, ips: 0 },
+    containers: capped(
+      [
+        { id: 'c1', name: 'web', status: 'running', serviceName: 'shop' },
+        { id: 'c2', name: 'api', status: 'exited' },
+      ],
+      2
+    ),
+    networks: capped([{ id: 'n1', name: 'project_default' }]),
+    ips: capped([{ id: 'i1', address: '10.0.0.5' }]),
     ...patch,
   }
 }
@@ -83,7 +91,7 @@ function renderPanel(
     deleteBlocked: boolean
     onConfirm: (forgetResources: boolean) => void
   }> = {},
-  data: ServerDeletePreview | undefined = undefined
+  data: unknown = undefined
 ) {
   useServerDeletePreview.mockReturnValue({ data })
   return render(
@@ -101,16 +109,40 @@ function renderPanel(
 }
 
 describe('ServerDeletePanel', () => {
-  it('keeps the online path to the blockers message only', () => {
+  it('keeps an online host with no leftovers on the plain delete button', () => {
     renderPanel(
+      { serverConnected: true },
       {
-        serverConnected: true,
-        deleteError: 'Remove 2 containers on this server before deleting it.',
-        deleteBlocked: true,
-      },
-      preview({ online: true, canForget: false })
+        online: true,
+        canForget: false,
+        colocated: false,
+        blockers: [],
+        containers: emptyList,
+        networks: emptyList,
+        ips: emptyList,
+      }
+    )
+    expect(screen.queryByText('Host is gone')).toBeNull()
+    expect(screen.queryByText('Forget these and delete server')).toBeNull()
+    expect(screen.getByText('Delete server')).toBeTruthy()
+  })
+
+  it('shows blockers and hides forget when canForget is false', () => {
+    renderPanel(
+      { serverConnected: true },
+      preview({
+        online: true,
+        canForget: false,
+        blockers: [
+          { kind: 'container', count: 2 },
+          { kind: 'database_member', count: 1 },
+        ],
+      })
     )
     expect(screen.getByText('Remove 2 containers on this server before deleting it.')).toBeTruthy()
+    expect(
+      screen.getByText('1 other item still placed on this server — remove them first')
+    ).toBeTruthy()
     expect(screen.queryByText('Host is gone')).toBeNull()
     expect(screen.queryByText('Forget these and delete server')).toBeNull()
     expect(screen.getByText('Delete server')).toBeTruthy()
@@ -130,6 +162,27 @@ describe('ServerDeletePanel', () => {
     expect(screen.getByText('Confirm forget and delete')).toBeTruthy()
     fireEvent.click(screen.getByText('Forget these and delete server'))
     expect(onConfirm).toHaveBeenCalledWith(true)
+  })
+
+  it('falls back to the plain delete panel on a malformed preview', () => {
+    expect(() =>
+      renderPanel(
+        {},
+        {
+          online: false,
+          canForget: true,
+          colocated: false,
+          blockers: [{ kind: 'container', count: 1 }],
+          containers: [{ id: 'c1', name: 'web', status: 'running' }],
+          networks: [],
+          ips: [],
+          more: { containers: 1, networks: 0, ips: 0 },
+        }
+      )
+    ).not.toThrow()
+    expect(screen.queryByText('Host is gone')).toBeNull()
+    expect(screen.queryByText('Forget these and delete server')).toBeNull()
+    expect(screen.getByText('Delete server')).toBeTruthy()
   })
 
   it('disables both confirms while a delete is in flight', () => {

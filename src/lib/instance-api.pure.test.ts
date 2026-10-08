@@ -257,6 +257,16 @@ describe('formatServerDeleteBlockedError', () => {
         new ServerDeleteBlockedError('blocked', [{ kind: 'ip', count: 1 }])
       )
     ).toBe('Remove 1 address on this server before deleting it.')
+    expect(
+      formatServerDeleteBlockedError(
+        new ServerDeleteBlockedError('blocked', [
+          { kind: 'database_member', count: 1 },
+          { kind: 'app_environment', count: 3 },
+        ])
+      )
+    ).toBe(
+      '1 other item still placed on this server — remove them first 3 other items still placed on this server — remove them first'
+    )
   })
 
   it('formats a connected-host refuse of forget', () => {
@@ -992,10 +1002,9 @@ describe('fetch wrappers (mocked fetch)', () => {
       canForget: true,
       colocated: false,
       blockers: [{ kind: 'container', count: 1 }],
-      containers: [{ id: 'c1', name: 'web', status: 'running' }],
-      networks: [{ id: 'n1', name: 'net' }],
-      ips: [{ id: 'i1', address: '10.0.0.5' }],
-      more: { containers: 1, networks: 0, ips: 0 },
+      containers: { items: [{ id: 'c1', name: 'web', status: 'running' }], more: 1 },
+      networks: { items: [{ id: 'n1', name: 'net' }], more: 0 },
+      ips: { items: [{ id: 'i1', address: '10.0.0.5' }], more: 0 },
     }
     fetchMock.mockResolvedValueOnce(jsonResponse(body))
     await expect(getServerDeletePreview('srv-1', 'org-del')).resolves.toEqual(body)
