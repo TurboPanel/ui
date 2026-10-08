@@ -3,7 +3,11 @@
  * `environment_id` for engine projects created from the catalog.
  */
 
-import { defaultManagedImage, managedAllowedImagesForEngine } from '@/lib/managed-releases'
+import {
+  defaultManagedImage,
+  managedAllowedImagesForEngine,
+  MANAGED_FAILOVER_UNSUPPORTED_REASON,
+} from '@/lib/managed-releases'
 import type { ManagedSslMode } from '@/lib/managed-ssl'
 import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
 import { MANAGED_HAS_BINDINGS_COPY } from '@/lib/user-error'
@@ -430,6 +434,7 @@ const MANAGED_ERROR_COPY: Record<string, string> = {
   managed_database_has_bindings:
     'Still connected to one or more services. Remove those connections first.',
   managed_has_bindings: MANAGED_HAS_BINDINGS_COPY,
+  managed_failover_unsupported: MANAGED_FAILOVER_UNSUPPORTED_REASON,
   managed_series_immutable:
     'The database version cannot be changed on an existing cluster. Create a new cluster on the version you want and restore a backup into it.',
   managed_variant_swap_unsafe:

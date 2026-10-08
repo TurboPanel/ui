@@ -569,6 +569,8 @@ function ManagedEnvironmentReadyPanels({
           environmentId={environmentId}
           members={members}
           managedDisplayName={managed.name?.trim() || projectName}
+          engine={managed.engine}
+          imageOrSeries={detail.release?.series ?? detail.settings?.image ?? null}
           canManage={canManage}
           busy={inFlight}
           recovery={detail.recovery}
