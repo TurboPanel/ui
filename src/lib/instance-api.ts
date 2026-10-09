@@ -855,13 +855,33 @@ export type TierNoticeState = {
  * `notice` is the daily-notice marker (hosted only) — `null` when no notice
  * is active, absent on a control plane that predates the field.
  */
+export type TierFreeCount = Readonly<{
+  tierId: string
+  label: string
+  free: number
+}>
+
 export type TierPlacementRecord<U extends number | string[] = number | string[]> = {
   licenseTier: string | null
   requiredTier: string
   recommendedTier: string
   unwatched: TierUnwatched<U>
+  pickedTier: string | null
+  tierPickNotice: string | null
+  /** Spare purchased licenses per tier (server detail only). */
+  tiersFree?: readonly TierFreeCount[]
   notice?: TierNoticeState | null
 }
+
+export type SetServerLicenseTierResponse = Readonly<{
+  ok: true
+  assignedTier: string | null
+  assignedTierId: string | null
+  pickedTier: string | null
+  pickedTierId: string | null
+  tierPickNotice: string | null
+  tiersFree: readonly TierFreeCount[]
+}>
 
 export type ServerLayoutPaths = {
   backup: string
@@ -1090,6 +1110,19 @@ export async function fetchServerServices(serverId: string): Promise<ServerServi
 }
 
 /** Replace-all. Pass `{}` to clear every label. */
+export async function setServerLicenseTier(
+  serverId: string,
+  tierId: string | null
+): Promise<SetServerLicenseTierResponse> {
+  return await apiFetch<SetServerLicenseTierResponse>(
+    `${CLIENT_API}/servers/${serverId}/license-tier`,
+    {
+      method: 'PUT',
+      body: JSON.stringify({ tierId }),
+    }
+  )
+}
+
 export async function saveServerLabels(
   serverId: string,
   labels: Record<string, string>
