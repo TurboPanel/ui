@@ -4,7 +4,6 @@ import { StyleSheet, Text, View } from 'react-native'
 import { openHostedPage } from '@/lib/open-hosted-page'
 import { AccessNavIcon, BillingNavIcon, ServersNavIcon } from '@/components/icons/nav-icons'
 import { panelStyles } from '@/components/ui/panel-styles'
-import { colors } from '@/lib/theme'
 import {
   Badge,
   Button,
@@ -84,7 +83,7 @@ import {
   type LicenseDialogTier,
 } from '@/components/org/billing-license-dialog'
 import { useOrgServers } from '@/lib/queries/servers'
-import { spacing } from '@/lib/theme'
+import { colors, spacing } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
 
 /**

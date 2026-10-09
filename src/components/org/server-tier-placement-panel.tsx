@@ -19,7 +19,7 @@ import { orgBillingHref } from '@/lib/org-navigation'
 import { useBillingCatalog } from '@/lib/queries/billing'
 import { useSetServerLicenseTier } from '@/lib/queries/servers'
 import { confirmLicenseTierMove } from '@/lib/server-license-tier-copy'
-import { licenseLine, type TierLabels } from '@/lib/tier-shortfall-copy'
+import { licenseLine } from '@/lib/tier-shortfall-copy'
 import {
   describeUnwatchedDevices,
   isTierShortfall,
@@ -79,6 +79,89 @@ function eligibleTiers(
 
 type PendingPick = Readonly<{ tier: BillingTier; free: number }>
 
+function LicenseTierPickRow({
+  orgId,
+  tier,
+  free,
+  pickedLabel,
+  busy,
+  onPick,
+}: Readonly<{
+  orgId: string
+  tier: BillingTier
+  free: number
+  pickedLabel: string | null
+  busy: boolean
+  onPick: (pick: PendingPick) => void
+}>) {
+  const router = useRouter()
+  const isCurrent = pickedLabel === tier.label
+  return (
+    <View style={styles.pickRow}>
+      <Text style={styles.pickLabel}>{tier.label}</Text>
+      <Text style={panelStyles.muted}>{free > 0 ? `${free} free` : 'None free'}</Text>
+      {free > 0 ? (
+        <Button
+          label={isCurrent ? 'Current pick' : 'Use'}
+          variant={isCurrent ? 'secondary' : 'primary'}
+          size="sm"
+          disabled={isCurrent || busy}
+          onPress={() => onPick({ tier, free })}
+        />
+      ) : (
+        <Button
+          label="Buy one"
+          variant="secondary"
+          size="sm"
+          onPress={() => router.push(orgBillingHref(orgId, { tier: tier.label }))}
+        />
+      )}
+    </View>
+  )
+}
+
+function LicenseTierPickList({
+  orgId,
+  placement,
+  choices,
+  busy,
+  onPick,
+  onClear,
+  hasPick,
+}: Readonly<{
+  orgId: string
+  placement: NonNullable<ServerDetailRecord['tierPlacement']>
+  choices: readonly BillingTier[]
+  busy: boolean
+  onPick: (pick: PendingPick) => void
+  onClear: () => void
+  hasPick: boolean
+}>) {
+  return (
+    <View style={styles.pickList}>
+      <Text style={panelStyles.detailLabel}>Put this server on</Text>
+      {choices.map((tier) => (
+        <LicenseTierPickRow
+          key={tier.id}
+          orgId={orgId}
+          tier={tier}
+          free={freeAtTier(placement, tier.id)}
+          pickedLabel={placement.pickedTier}
+          busy={busy}
+          onPick={onPick}
+        />
+      ))}
+      <Button
+        label="Use the smallest that fits"
+        variant="ghost"
+        size="sm"
+        disabled={!hasPick || busy}
+        onPress={onClear}
+      />
+    </View>
+  )
+}
+
 /**
  * Server overview: license tier the control plane assigned, optional owner
  * pick onto a spare license, and hardware context (required / recommended).
@@ -90,7 +173,6 @@ export function ServerTierPlacementPanel({
   orgId: string
   server: ServerDetailRecord
 }>) {
-  const router = useRouter()
   const { billingEnabled } = useAuth()
   const catalogQuery = useBillingCatalog(orgId, { enabled: billingEnabled })
   const setTier = useSetServerLicenseTier(orgId, server.id)
@@ -122,8 +204,6 @@ export function ServerTierPlacementPanel({
     }
     setPending(null)
   }
-
-  const placementLabels: TierLabels = placement
 
   return (
     <>
@@ -165,46 +245,15 @@ export function ServerTierPlacementPanel({
         </View>
 
         {billingEnabled && choices.length > 0 ? (
-          <View style={styles.pickList}>
-            <Text style={panelStyles.detailLabel}>Put this server on</Text>
-            {choices.map((tier) => {
-              const free = freeAtTier(placement, tier.id)
-              const isCurrent = placement.pickedTier === tier.label
-              return (
-                <View key={tier.id} style={styles.pickRow}>
-                  <Text style={styles.pickLabel}>{tier.label}</Text>
-                  <Text style={panelStyles.muted}>
-                    {free > 0 ? `${free} free` : 'None free'}
-                  </Text>
-                  {free > 0 ? (
-                    <Button
-                      label={isCurrent ? 'Current pick' : 'Use'}
-                      variant={isCurrent ? 'secondary' : 'primary'}
-                      size="sm"
-                      disabled={isCurrent || setTier.isPending}
-                      onPress={() => setPending({ tier, free })}
-                    />
-                  ) : (
-                    <Button
-                      label="Buy one"
-                      variant="secondary"
-                      size="sm"
-                      onPress={() =>
-                        router.push(orgBillingHref(orgId, { tier: tier.label }))
-                      }
-                    />
-                  )}
-                </View>
-              )
-            })}
-            <Button
-              label="Use the smallest that fits"
-              variant="ghost"
-              size="sm"
-              disabled={!placement.pickedTier || setTier.isPending}
-              onPress={() => void applyPick(null)}
-            />
-          </View>
+          <LicenseTierPickList
+            orgId={orgId}
+            placement={placement}
+            choices={choices}
+            busy={setTier.isPending}
+            hasPick={placement.pickedTier != null}
+            onPick={setPending}
+            onClear={() => void applyPick(null)}
+          />
         ) : null}
 
         {error ? <InlineNotice tone="warning" title={error} /> : null}
