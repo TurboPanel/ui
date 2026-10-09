@@ -8,6 +8,7 @@ import {
 } from '@/lib/instance-api'
 import { createAppQueryClient } from '@/lib/query-client'
 import { queryKeys } from '@/lib/query-keys'
+import { licenseTierUserErrorMessage } from '@/lib/user-error'
 import {
   SERVERS_REFRESH_MS,
   UPDATE_PROGRESS_POLL_MS,
@@ -1151,6 +1152,26 @@ describe('servers query hooks', () => {
 
     await result.current.run(null)
     expect(setServerLicenseTier).toHaveBeenCalledWith(serverId, null)
+  })
+
+  it('useSetServerLicenseTier forwards forbidden cause for owner-only tier pick copy', async () => {
+    const forbidden = new Error('HTTP 403: Forbidden')
+    setServerLicenseTier.mockRejectedValueOnce(forbidden)
+
+    const { result } = renderHook(() => useSetServerLicenseTier(orgId, serverId), {
+      wrapper: createWrapper(createAppQueryClient()),
+    })
+
+    const outcome = await result.current.run('tier-s2')
+    expect(outcome).toEqual({ ok: false, error: null, cause: forbidden })
+    if (!outcome.ok) {
+      expect(
+        licenseTierUserErrorMessage(
+          outcome.cause ?? outcome.error,
+          'Could not update license tier',
+        ),
+      ).toContain('organization owners')
+    }
   })
 
   it('usePatchServer updates a server and invalidates topology', async () => {

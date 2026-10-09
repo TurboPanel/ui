@@ -203,6 +203,39 @@ describe('ServerTierPlacementPanel', () => {
     expect(await screen.findByText(/below what this server needs/)).toBeTruthy()
   })
 
+  it('shows owner-only copy when apply returns a forbidden mutation outcome', async () => {
+    useAuth.mockReturnValue({ billingEnabled: true })
+    useCan.mockReturnValue(true)
+    useBillingCatalog.mockReturnValue({ data: { tiers: [] } })
+    const forbidden = new Error('HTTP 403: Forbidden')
+    const run = vi.fn().mockResolvedValue({
+      ok: false,
+      error: null,
+      cause: forbidden,
+    })
+    useSetServerLicenseTier.mockReturnValue({ run, isPending: false })
+
+    const detail = server({
+      licenseTier: 'S1',
+      requiredTier: 'S6',
+      recommendedTier: 'S6',
+      unwatched: { nics: [], drives: [], gpus: [] },
+      pickedTier: null,
+      tierPickNotice: null,
+      tiersFree: [
+        { tierId: 'id-s1', label: 'S1', free: 0 },
+        { tierId: 'id-s6', label: 'S6', free: 1 },
+      ],
+    })
+
+    render(<ServerTierPlacementPanel orgId="org-1" server={detail} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Use' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+
+    expect(await screen.findByText(/organization owners/)).toBeTruthy()
+  })
+
   it('opens a confirm sheet before clearing an owner pick', () => {
     useAuth.mockReturnValue({ billingEnabled: true })
     useCan.mockReturnValue(true)
