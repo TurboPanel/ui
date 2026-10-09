@@ -20,6 +20,6 @@ describe('confirmLicenseTierMove', () => {
 describe('confirmClearLicenseTierPick', () => {
   it('names the pinned tier when clearing a pick', () => {
     expect(confirmClearLicenseTierPick('S4')).toContain('S4')
-    expect(confirmClearLicenseTierPick('S4')).toContain('smallest tier that fits')
+    expect(confirmClearLicenseTierPick()).toContain('your current pick')
   })
 })

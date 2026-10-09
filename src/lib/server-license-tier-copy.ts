@@ -9,9 +9,8 @@ export function confirmLicenseTierMove(input: Readonly<{
 }
 
 /** Plain confirmation before clearing an owner pick back to automatic placement. */
-export function confirmClearLicenseTierPick(pickedLabel: string | null = null): string {
-  const displayLabel = pickedLabel === null ? 'your current pick' : pickedLabel
-  return `Stop pinning this server to ${displayLabel} and let TurboPanel use the smallest tier that fits again.`
+export function confirmClearLicenseTierPick(pickedLabel: string = 'your current pick'): string {
+  return `Stop pinning this server to ${pickedLabel} and let TurboPanel use the smallest tier that fits again.`
 }
 
 /** Shown when the required tier label cannot be ranked but picks still start at the entry tier. */

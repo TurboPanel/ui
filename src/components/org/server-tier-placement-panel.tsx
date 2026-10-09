@@ -204,7 +204,7 @@ function confirmSheetCopy(
   pickedTier: string | null
 ): string {
   if ('kind' in pending && pending.kind === 'clear') {
-    return confirmClearLicenseTierPick(pickedTier)
+    return confirmClearLicenseTierPick(pickedTier ?? undefined)
   }
   const pick = pending as PendingPick
   return confirmLicenseTierMove({
