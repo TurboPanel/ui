@@ -1136,6 +1136,23 @@ describe('servers query hooks', () => {
     })
   })
 
+  it('useSetServerLicenseTier clears the pick with null', async () => {
+    setServerLicenseTier.mockResolvedValueOnce({
+      ok: true,
+      assignedTier: 'S1',
+      pickedTier: null,
+      tierPickNotice: null,
+      tiersFree: [],
+    })
+
+    const { result } = renderHook(() => useSetServerLicenseTier(orgId, serverId), {
+      wrapper: createWrapper(createAppQueryClient()),
+    })
+
+    await result.current.run(null)
+    expect(setServerLicenseTier).toHaveBeenCalledWith(serverId, null)
+  })
+
   it('usePatchServer updates a server and invalidates topology', async () => {
     updateServer.mockResolvedValueOnce({ ok: true })
     const client = createAppQueryClient()

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { confirmLicenseTierMove } from './server-license-tier-copy'
+import { confirmClearLicenseTierPick, confirmLicenseTierMove } from './server-license-tier-copy'
 
 describe('confirmLicenseTierMove', () => {
   it('names the from tier and free count in plain words', () => {
@@ -14,5 +14,12 @@ describe('confirmLicenseTierMove', () => {
     ).toBe(
       'Move this server from the smallest that fits to S3. Uses 1 of your 1 free S3 licenses. No charge.'
     )
+  })
+})
+
+describe('confirmClearLicenseTierPick', () => {
+  it('names the pinned tier when clearing a pick', () => {
+    expect(confirmClearLicenseTierPick('S4')).toContain('S4')
+    expect(confirmClearLicenseTierPick('S4')).toContain('smallest tier that fits')
   })
 })

@@ -1109,7 +1109,12 @@ export async function fetchServerServices(serverId: string): Promise<ServerServi
   return await apiFetch<ServerServicesRecord>(`${CLIENT_API}/servers/${serverId}/services`)
 }
 
-/** Replace-all. Pass `{}` to clear every label. */
+/**
+ * Owner-only (`organization:own`). Sets or clears `server.preferred_tier_id`
+ * (`tierId` `null` clears the pick). The control plane recomputes the assigned
+ * tier from spare licenses; **422** `tier_below_required` when the pick is under
+ * the hardware floor; **404** `tier_not_found` / `server_not_licensed`.
+ */
 export async function setServerLicenseTier(
   serverId: string,
   tierId: string | null

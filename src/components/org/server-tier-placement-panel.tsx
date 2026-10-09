@@ -16,10 +16,20 @@ import { useAuth } from '@/lib/auth-context'
 import { formatRelativeLocalDateTime } from '@/lib/format-datetime'
 import type { BillingTier, ServerDetailRecord, TierNoticeState } from '@/lib/instance-api'
 import { orgBillingHref } from '@/lib/org-navigation'
+import { useCan } from '@/lib/query-client'
 import { useBillingCatalog } from '@/lib/queries/billing'
 import { useSetServerLicenseTier } from '@/lib/queries/servers'
-import { confirmLicenseTierMove } from '@/lib/server-license-tier-copy'
-import { licenseLine } from '@/lib/tier-shortfall-copy'
+import {
+  confirmClearLicenseTierPick,
+  confirmLicenseTierMove,
+  LICENSE_TIER_UNKNOWN_FLOOR_COPY,
+} from '@/lib/server-license-tier-copy'
+import {
+  eligibleTiersForPick,
+  hasLicenseTierPickerData,
+  pickerCatalogTiers,
+} from '@/lib/server-license-tier-eligible'
+import { licenseLine, shortfallCopy, type TierLabels } from '@/lib/tier-shortfall-copy'
 import {
   describeUnwatchedDevices,
   isTierShortfall,
@@ -28,7 +38,7 @@ import {
   type TierPlacementState,
 } from '@/lib/tier-placement'
 import { spacing } from '@/lib/theme'
-import { userErrorMessage } from '@/lib/user-error'
+import { licenseTierUserErrorMessage } from '@/lib/user-error'
 
 function tierBadgeTone(state: TierPlacementState): BadgeTone {
   switch (state) {
@@ -67,17 +77,38 @@ function freeAtTier(
   return row?.free ?? 0
 }
 
-function eligibleTiers(
-  tiers: readonly BillingTier[],
-  requiredLabel: string,
-  rankOf: (label: string | null | undefined) => number | null
-): BillingTier[] {
-  const need = rankOf(requiredLabel)
-  if (need == null) return [...tiers].sort((a, b) => a.rank - b.rank)
-  return tiers.filter((tier) => tier.rank >= need).sort((a, b) => a.rank - b.rank)
-}
-
 type PendingPick = Readonly<{ tier: BillingTier; free: number }>
+type PendingLicenseTierAction = PendingPick | Readonly<{ kind: 'clear' }>
+
+function ShortfallNotice({
+  state,
+  placement,
+  billingHref,
+}: Readonly<{
+  state: TierPlacementState
+  placement: TierLabels
+  billingHref: string | null
+}>) {
+  const router = useRouter()
+  const copy = shortfallCopy(state, placement)
+  return (
+    <InlineNotice
+      tone="warning"
+      title={copy.title}
+      body={copy.body}
+      actions={
+        billingHref ? (
+          <Button
+            label={copy.cta}
+            variant="primary"
+            size="sm"
+            onPress={() => router.push(billingHref)}
+          />
+        ) : undefined
+      }
+    />
+  )
+}
 
 function LicenseTierPickRow({
   orgId,
@@ -128,6 +159,7 @@ function LicenseTierPickList({
   onPick,
   onClear,
   hasPick,
+  requiredRankUnknown,
 }: Readonly<{
   orgId: string
   placement: NonNullable<ServerDetailRecord['tierPlacement']>
@@ -136,10 +168,14 @@ function LicenseTierPickList({
   onPick: (pick: PendingPick) => void
   onClear: () => void
   hasPick: boolean
+  requiredRankUnknown: boolean
 }>) {
   return (
     <View style={styles.pickList}>
       <Text style={panelStyles.detailLabel}>Put this server on</Text>
+      {requiredRankUnknown ? (
+        <InlineNotice tone="warning" title={LICENSE_TIER_UNKNOWN_FLOOR_COPY} />
+      ) : null}
       {choices.map((tier) => (
         <LicenseTierPickRow
           key={tier.id}
@@ -162,37 +198,63 @@ function LicenseTierPickList({
   )
 }
 
+function confirmSheetCopy(
+  pending: PendingLicenseTierAction,
+  licenseTier: string | null,
+  pickedTier: string | null
+): string {
+  if ('kind' in pending && pending.kind === 'clear') {
+    return confirmClearLicenseTierPick(pickedTier)
+  }
+  const pick = pending as PendingPick
+  return confirmLicenseTierMove({
+    fromLabel: licenseTier,
+    toLabel: pick.tier.label,
+    free: pick.free,
+  })
+}
+
 function LicenseTierConfirmSheet({
   pending,
   licenseTier,
+  pickedTier,
   busy,
   onDismiss,
-  onApply,
+  onApplyPick,
+  onApplyClear,
 }: Readonly<{
-  pending: PendingPick | null
+  pending: PendingLicenseTierAction | null
   licenseTier: string | null
+  pickedTier: string | null
   busy: boolean
   onDismiss: () => void
-  onApply: (tierId: string) => void
+  onApplyPick: (tierId: string) => void
+  onApplyClear: () => void
 }>) {
+  const isClear = pending != null && 'kind' in pending && pending.kind === 'clear'
+  const pick: PendingPick | null =
+    pending != null && !('kind' in pending) ? (pending as PendingPick) : null
   return (
-    <ModalSheet visible={pending != null} title="Confirm license tier" onRequestClose={onDismiss}>
+    <ModalSheet
+      visible={pending != null}
+      title={isClear ? 'Clear license tier pick' : 'Confirm license tier'}
+      onRequestClose={onDismiss}
+    >
       {pending ? (
         <View style={styles.confirmBody}>
           <Text style={panelStyles.detailLine}>
-            {confirmLicenseTierMove({
-              fromLabel: licenseTier,
-              toLabel: pending.tier.label,
-              free: pending.free,
-            })}
+            {confirmSheetCopy(pending, licenseTier, pickedTier)}
           </Text>
           <ButtonRow>
             <Button label="Cancel" variant="secondary" onPress={onDismiss} />
             <Button
-              label="Apply"
+              label={isClear ? 'Clear pick' : 'Apply'}
               variant="primary"
               disabled={busy}
-              onPress={() => onApply(pending.tier.id)}
+              onPress={() => {
+                if (isClear) onApplyClear()
+                else if (pick) onApplyPick(pick.tier.id)
+              }}
             />
           </ButtonRow>
         </View>
@@ -208,8 +270,13 @@ function LicenseTierPanelBody({
   notice,
   unwatchedLines,
   shortfall,
+  needsAttention,
+  billingHref,
   billingEnabled,
+  canOwn,
+  showPicker,
   choices,
+  requiredRankUnknown,
   error,
   busy,
   onPick,
@@ -221,8 +288,13 @@ function LicenseTierPanelBody({
   notice: TierNoticeState | null
   unwatchedLines: readonly string[]
   shortfall: boolean
+  needsAttention: boolean
+  billingHref: string | null
   billingEnabled: boolean
+  canOwn: boolean
+  showPicker: boolean
   choices: readonly BillingTier[]
+  requiredRankUnknown: boolean
   error: string | null
   busy: boolean
   onPick: (pick: PendingPick) => void
@@ -246,6 +318,14 @@ function LicenseTierPanelBody({
           <Text style={panelStyles.detailLabel}>On: </Text>
           {licenseLine(placement)}
         </Text>
+        <Text style={panelStyles.detailLine}>
+          <Text style={panelStyles.detailLabel}>Required by cores and RAM: </Text>
+          {placement.requiredTier}
+        </Text>
+        <Text style={panelStyles.detailLine}>
+          <Text style={panelStyles.detailLabel}>Recommended for monitored NICs and discovered drives and GPUs: </Text>
+          {placement.recommendedTier}
+        </Text>
         {placement.pickedTier ? (
           <Text style={panelStyles.detailLine}>
             <Text style={panelStyles.detailLabel}>Picked: </Text>
@@ -266,16 +346,25 @@ function LicenseTierPanelBody({
         ) : null}
       </View>
 
-      {billingEnabled && choices.length > 0 ? (
+      {needsAttention ? (
+        <ShortfallNotice state={state} placement={placement} billingHref={billingHref} />
+      ) : null}
+
+      {billingEnabled && showPicker && canOwn ? (
         <LicenseTierPickList
           orgId={orgId}
           placement={placement}
           choices={choices}
           busy={busy}
           hasPick={placement.pickedTier != null}
+          requiredRankUnknown={requiredRankUnknown}
           onPick={onPick}
           onClear={onClear}
         />
+      ) : null}
+
+      {billingEnabled && showPicker && !canOwn ? (
+        <Text style={panelStyles.muted}>Only organization owners can pick a license tier for this server.</Text>
       ) : null}
 
       {error ? <InlineNotice tone="warning" title={error} /> : null}
@@ -311,9 +400,10 @@ export function ServerTierPlacementPanel({
   server: ServerDetailRecord
 }>) {
   const { billingEnabled } = useAuth()
+  const canOwn = useCan('organization', orgId, 'organization:own')
   const catalogQuery = useBillingCatalog(orgId, { enabled: billingEnabled })
   const setTier = useSetServerLicenseTier(orgId, server.id)
-  const [pending, setPending] = useState<PendingPick | null>(null)
+  const [pending, setPending] = useState<PendingLicenseTierAction | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const rankOf = useMemo(() => tierRankResolver(catalogQuery.data?.tiers), [catalogQuery.data])
@@ -329,14 +419,23 @@ export function ServerTierPlacementPanel({
     joinNamed('GPUs', unwatched.gpus),
   ].filter((line): line is string => line != null)
   const shortfall = isTierShortfall(state)
-  const tiers = catalogQuery.data?.tiers ?? []
-  const choices = billingEnabled ? eligibleTiers(tiers, placement.requiredTier, rankOf) : []
+  const needsAttention = shortfall || state === 'unlicensed'
+  const targetTier = state === 'unlicensed' ? placement.requiredTier : placement.recommendedTier
+  const billingHref = billingEnabled ? orgBillingHref(orgId, { tier: targetTier }) : null
+
+  const catalogTiers = pickerCatalogTiers(catalogQuery.data?.tiers ?? [], placement.tiersFree, rankOf)
+  const { choices, requiredRankUnknown } = eligibleTiersForPick(
+    catalogTiers,
+    placement.requiredTier,
+    rankOf
+  )
+  const showPicker = hasLicenseTierPickerData(placement.tiersFree)
 
   const applyPick = async (tierId: string | null) => {
     setError(null)
     const outcome = await setTier.run(tierId)
     if (!outcome.ok) {
-      setError(userErrorMessage(outcome.error, 'Could not update license tier'))
+      setError(licenseTierUserErrorMessage(outcome.error, 'Could not update license tier'))
       return
     }
     setPending(null)
@@ -351,19 +450,26 @@ export function ServerTierPlacementPanel({
         notice={notice}
         unwatchedLines={unwatchedLines}
         shortfall={shortfall}
+        needsAttention={needsAttention}
+        billingHref={billingHref}
         billingEnabled={billingEnabled}
+        canOwn={canOwn}
+        showPicker={showPicker}
         choices={choices}
+        requiredRankUnknown={requiredRankUnknown}
         error={error}
         busy={setTier.isPending}
         onPick={setPending}
-        onClear={() => void applyPick(null)}
+        onClear={() => setPending({ kind: 'clear' })}
       />
       <LicenseTierConfirmSheet
         pending={pending}
         licenseTier={placement.licenseTier}
+        pickedTier={placement.pickedTier}
         busy={setTier.isPending}
         onDismiss={() => setPending(null)}
-        onApply={(tierId) => void applyPick(tierId)}
+        onApplyPick={(tierId) => void applyPick(tierId)}
+        onApplyClear={() => void applyPick(null)}
       />
     </>
   )

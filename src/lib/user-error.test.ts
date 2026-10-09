@@ -7,6 +7,7 @@ import {
   UPDATE_ALREADY_ACTIVE_COPY,
   apiErrorCopy,
   isNetworkFetchError,
+  licenseTierUserErrorMessage,
   plainStepFailureMessage,
   userErrorMessage,
 } from '@/lib/user-error'
@@ -116,5 +117,19 @@ describe('plainStepFailureMessage', () => {
   it('is null when there is nothing to say', () => {
     expect(plainStepFailureMessage(null)).toBeNull()
     expect(plainStepFailureMessage('   ')).toBeNull()
+  })
+})
+
+describe('licenseTierUserErrorMessage', () => {
+  it('maps tier pick refusals and owner-only 403', () => {
+    expect(licenseTierUserErrorMessage(new Error('HTTP 422: tier_below_required'), 'x')).toContain(
+      'below what this server needs'
+    )
+    expect(licenseTierUserErrorMessage(new Error('HTTP 403: Forbidden'), 'x')).toContain(
+      'organization owners'
+    )
+    expect(licenseTierUserErrorMessage(new Error('HTTP 404: server_not_licensed'), 'x')).toContain(
+      'active license'
+    )
   })
 })

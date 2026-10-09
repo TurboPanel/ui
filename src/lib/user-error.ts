@@ -41,6 +41,22 @@ const API_ERROR_COPY: Readonly<Record<string, string>> = {
     'Let\u2019s Encrypt cannot issue for wildcard names, IP addresses or private names.',
   www_redirect_conflict:
     'This site lists both a name and its www version as separate domains, so its www choice cannot cover them. Remove one of the two names, or set www to \u201cOnly\u201d this name.',
+  tier_below_required:
+    'That tier is below what this server needs. Pick a tier at or above the required floor.',
+  tier_not_found: 'That tier is no longer available. Refresh and pick again.',
+  server_not_licensed:
+    'This server does not have an active license yet. Add the server with a license before picking a tier.',
+  invalid_body: 'Choose a tier from the list, or clear the pick to use automatic placement.',
+}
+
+const LICENSE_TIER_FORBIDDEN = /HTTP 403:\s*Forbidden\b/
+
+/** Maps license-tier `PUT` refusals without treating every 403 Forbidden as a tier error. */
+export function licenseTierUserErrorMessage(err: unknown, fallback: string): string {
+  if (err instanceof Error && LICENSE_TIER_FORBIDDEN.test(err.message)) {
+    return 'Only organization owners can change which license tier covers this server.'
+  }
+  return userErrorMessage(err, fallback)
 }
 
 export const TOO_MANY_ATTEMPTS_COPY = 'Too many attempts. Wait a minute and try again.'
