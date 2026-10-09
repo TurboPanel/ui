@@ -5,7 +5,7 @@
 **Route:** `src/app/[orgId]/billing/index.tsx` → `billing-section.tsx`  
 **Job:** Hosted-only subscription management — buy the first licenses, see how many licenses are bought and in use (org-wide and per tier), see which servers are not covered, add or release one license at a tier, move one license between tiers, and hand off to the Stripe Customer Portal for invoices and payment methods.
 
-**Vocabulary (owner decision):** the admin buys **licenses** for **servers**. Never "seat" in copy. A license is plumbing — it is minted by the Add server wizard and never shown as an object here, and this page never assigns a tier to a server: the instance derives each server's tier from what was bought and its hardware, and the page only reports the result. Buying is "buy a license" / "licenses at S3" and is not front and center.
+**Vocabulary (owner decision):** the admin buys **licenses** for **servers**. Never "seat" in copy. A license is plumbing — it is minted by the Add server wizard and never shown as an object here. This page changes **how many** licenses sit on each tier (buy, release, move quantity); **which tier covers a given server** is an owner pick on that server's Overview (`PUT /servers/:id/license-tier`), always at or above the hardware floor. Buying is "buy a license" / "licenses at S3" and is not front and center.
 
 **Availability:** `GET /api/client/v1/status` `billingEnabled` gates the whole area. Self-hosted answers `false`: the sidebar omits the entry and the route redirects to Overview — never an error page, never a probe of `/billing/*` (every route 503s `billing_not_configured` there). `billing` is **not** in `ORG_TAB_AREA_IDS`; native reaches it by deep link only, like Managed / Network / Access.
 
@@ -68,7 +68,7 @@
 - ❌ Rendering the checkout panel under a `checkout=success` return before the projection confirms the subscription
 - ❌ Computing any amount client-side (price × licenses, proration, credit) — show the preview verbatim
 - ❌ Marking an upgrade applied before the projection confirms it
-- ❌ Saying "seat", showing a license id or token, offering a tier picker on a license, or assigning a tier to a server from the client
+- ❌ Saying "seat", showing a license id or token, or offering a tier picker on a license row (per-server picks live on Server detail, not here)
 - ❌ Building an invoice list — the Customer Portal owns invoices and payment methods
 - ❌ Bare "HA" / "High Availability" in copy
 - ❌ Marketing pricing-card layouts, "most popular" badges, annual-discount ribbons

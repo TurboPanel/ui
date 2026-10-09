@@ -35,7 +35,14 @@ function placement(
   requiredTier: string,
   recommendedTier: string
 ): TierPlacementRecord<number> {
-  return { licenseTier, requiredTier, recommendedTier, unwatched: { nics: 0, drives: 0, gpus: 0 } }
+  return {
+    licenseTier,
+    requiredTier,
+    recommendedTier,
+    unwatched: { nics: 0, drives: 0, gpus: 0 },
+    pickedTier: null,
+    tierPickNotice: null,
+  }
 }
 
 describe('tierRankFromLabel', () => {

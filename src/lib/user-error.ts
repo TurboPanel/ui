@@ -41,6 +41,33 @@ const API_ERROR_COPY: Readonly<Record<string, string>> = {
     'Let\u2019s Encrypt cannot issue for wildcard names, IP addresses or private names.',
   www_redirect_conflict:
     'This site lists both a name and its www version as separate domains, so its www choice cannot cover them. Remove one of the two names, or set www to \u201cOnly\u201d this name.',
+  tier_below_required:
+    'That tier is below what this server needs. Pick a tier at or above the required floor.',
+  tier_not_found: 'That tier is no longer available. Refresh and pick again.',
+  server_not_licensed:
+    'This server does not have an active license yet. Add the server with a license before picking a tier.',
+  invalid_body: 'Choose a tier from the list, or clear the pick to use automatic placement.',
+}
+
+const LICENSE_TIER_FORBIDDEN = /HTTP 403:\s*Forbidden\b/
+
+/** `useApiMutation().run` surfaces `error` as a string; thrown values stay `Error`. */
+function asErrorForCopy(err: unknown): Error | null {
+  if (err instanceof Error) return err
+  if (typeof err === 'string') {
+    const trimmed = err.trim()
+    if (trimmed) return new Error(trimmed)
+  }
+  return null
+}
+
+/** Maps license-tier `PUT` refusals without treating every 403 Forbidden as a tier error. */
+export function licenseTierUserErrorMessage(err: unknown, fallback: string): string {
+  const source = asErrorForCopy(err)
+  if (LICENSE_TIER_FORBIDDEN.test(source?.message ?? '')) {
+    return 'Only organization owners can change which license tier covers this server.'
+  }
+  return userErrorMessage(err, fallback)
 }
 
 export const TOO_MANY_ATTEMPTS_COPY = 'Too many attempts. Wait a minute and try again.'
@@ -62,20 +89,23 @@ export function isNetworkFetchError(err: unknown): boolean {
 
 /** The fixed sentence for a known API error code inside the message, or null. */
 export function apiErrorCopy(err: unknown): string | null {
-  if (!(err instanceof Error)) return null
-  if (RATE_LIMITED.test(err.message.trim())) return TOO_MANY_ATTEMPTS_COPY
+  const source = asErrorForCopy(err)
+  if (!source) return null
+  if (RATE_LIMITED.test(source.message.trim())) return TOO_MANY_ATTEMPTS_COPY
   for (const [code, copy] of Object.entries(API_ERROR_COPY)) {
-    if (err.message.includes(code)) return copy
+    if (source.message.includes(code)) return copy
   }
   return null
 }
 
 /** `err` as customer text: network failures and known codes mapped, else its message, else `fallback`. */
 export function userErrorMessage(err: unknown, fallback: string): string {
-  if (isNetworkFetchError(err)) return CONTROL_PLANE_UNREACHABLE_COPY
+  const source = asErrorForCopy(err)
+  if (isNetworkFetchError(source)) return CONTROL_PLANE_UNREACHABLE_COPY
   const mapped = apiErrorCopy(err)
   if (mapped) return mapped
-  if (err instanceof Error && err.message.trim()) return err.message
+  const message = source?.message.trim()
+  if (message) return message
   return fallback
 }
 

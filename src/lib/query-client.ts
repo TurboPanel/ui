@@ -130,7 +130,7 @@ export function useApiMutation<TData, TVariables = void, TContext = unknown>(
         return { ok: true, value }
       } catch (err) {
         if (isForbiddenError(err)) {
-          return { ok: false, error: null }
+          return { ok: false, error: null, cause: err }
         }
         return {
           ok: false,

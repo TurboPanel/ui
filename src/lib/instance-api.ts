@@ -855,13 +855,33 @@ export type TierNoticeState = {
  * `notice` is the daily-notice marker (hosted only) — `null` when no notice
  * is active, absent on a control plane that predates the field.
  */
+export type TierFreeCount = Readonly<{
+  tierId: string
+  label: string
+  free: number
+}>
+
 export type TierPlacementRecord<U extends number | string[] = number | string[]> = {
   licenseTier: string | null
   requiredTier: string
   recommendedTier: string
   unwatched: TierUnwatched<U>
+  pickedTier: string | null
+  tierPickNotice: string | null
+  /** Spare purchased licenses per tier (server detail only). */
+  tiersFree?: readonly TierFreeCount[]
   notice?: TierNoticeState | null
 }
+
+export type SetServerLicenseTierResponse = Readonly<{
+  ok: true
+  assignedTier: string | null
+  assignedTierId: string | null
+  pickedTier: string | null
+  pickedTierId: string | null
+  tierPickNotice: string | null
+  tiersFree: readonly TierFreeCount[]
+}>
 
 export type ServerLayoutPaths = {
   backup: string
@@ -1089,7 +1109,25 @@ export async function fetchServerServices(serverId: string): Promise<ServerServi
   return await apiFetch<ServerServicesRecord>(`${CLIENT_API}/servers/${serverId}/services`)
 }
 
-/** Replace-all. Pass `{}` to clear every label. */
+/**
+ * Owner-only (`organization:own`). Sets or clears `server.preferred_tier_id`
+ * (`tierId` `null` clears the pick). The control plane recomputes the assigned
+ * tier from spare licenses; **422** `tier_below_required` when the pick is under
+ * the hardware floor; **404** `tier_not_found` / `server_not_licensed`.
+ */
+export async function setServerLicenseTier(
+  serverId: string,
+  tierId: string | null
+): Promise<SetServerLicenseTierResponse> {
+  return await apiFetch<SetServerLicenseTierResponse>(
+    `${CLIENT_API}/servers/${serverId}/license-tier`,
+    {
+      method: 'PUT',
+      body: JSON.stringify({ tierId }),
+    }
+  )
+}
+
 export async function saveServerLabels(
   serverId: string,
   labels: Record<string, string>

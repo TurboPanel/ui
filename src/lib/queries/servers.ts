@@ -31,6 +31,7 @@ import {
   startServerMetricsLive,
   stopServerMetricsLive,
   saveServerLabels,
+  setServerLicenseTier,
   saveServerHardwareProfile,
   setServerHostname,
   setServerNtp,
@@ -716,6 +717,21 @@ export function useSaveServerLabels(orgId: string, serverId: string) {
       ])
     },
     fallbackError: 'Failed to save server labels',
+  })
+}
+
+export function useSetServerLicenseTier(orgId: string, serverId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (tierId: string | null) => setServerLicenseTier(serverId, tierId),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.org(orgId).servers.detail(serverId) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.org(orgId).servers.list }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.org(orgId).billing.subscription }),
+      ])
+    },
+    fallbackError: 'Failed to set license tier',
   })
 }
 

@@ -7,6 +7,7 @@ import {
   UPDATE_ALREADY_ACTIVE_COPY,
   apiErrorCopy,
   isNetworkFetchError,
+  licenseTierUserErrorMessage,
   plainStepFailureMessage,
   userErrorMessage,
 } from '@/lib/user-error'
@@ -116,5 +117,33 @@ describe('plainStepFailureMessage', () => {
   it('is null when there is nothing to say', () => {
     expect(plainStepFailureMessage(null)).toBeNull()
     expect(plainStepFailureMessage('   ')).toBeNull()
+  })
+})
+
+describe('licenseTierUserErrorMessage', () => {
+  it('maps tier pick refusals and owner-only 403', () => {
+    const cases = [
+      new Error('HTTP 422: tier_below_required'),
+      'HTTP 422: tier_below_required',
+      new Error('HTTP 403: Forbidden'),
+      'HTTP 403: Forbidden',
+      new Error('HTTP 404: server_not_licensed'),
+      'HTTP 404: server_not_licensed',
+    ] as const
+    expect(licenseTierUserErrorMessage(cases[0], 'x')).toContain('below what this server needs')
+    expect(licenseTierUserErrorMessage(cases[1], 'x')).toContain('below what this server needs')
+    expect(licenseTierUserErrorMessage(cases[2], 'x')).toContain('organization owners')
+    expect(licenseTierUserErrorMessage(cases[3], 'x')).toContain('organization owners')
+    expect(licenseTierUserErrorMessage(cases[4], 'x')).toContain('active license')
+    expect(licenseTierUserErrorMessage(cases[5], 'x')).toContain('active license')
+  })
+
+  it('falls back when the mutation error string is unknown', () => {
+    expect(licenseTierUserErrorMessage('HTTP 500: boom', 'Could not update license tier')).toBe(
+      'HTTP 500: boom',
+    )
+    expect(licenseTierUserErrorMessage('   ', 'Could not update license tier')).toBe(
+      'Could not update license tier',
+    )
   })
 })
