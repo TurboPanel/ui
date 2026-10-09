@@ -435,6 +435,7 @@ export function ServerTierPlacementPanel({
     setError(null)
     const outcome = await setTier.run(tierId)
     if (!outcome.ok) {
+      setPending(null)
       setError(
         licenseTierUserErrorMessage(
           outcome.cause ?? outcome.error,

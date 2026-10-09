@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ServerDetailRecord } from '@/lib/instance-api'
 import { ServerTierPlacementPanel } from './server-tier-placement-panel'
@@ -200,7 +200,10 @@ describe('ServerTierPlacementPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Use' }))
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
 
-    expect(await screen.findByText(/below what this server needs/)).toBeTruthy()
+    await waitFor(() => {
+      expect(screen.queryByTestId('modal')).toBeNull()
+      expect(screen.getByText(/below what this server needs/)).toBeTruthy()
+    })
   })
 
   it('shows owner-only copy when apply returns a forbidden mutation outcome', async () => {
@@ -233,7 +236,12 @@ describe('ServerTierPlacementPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Use' }))
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
 
-    expect(await screen.findByText(/organization owners/)).toBeTruthy()
+    await waitFor(() => {
+      expect(screen.queryByTestId('modal')).toBeNull()
+      expect(
+        screen.getByText(/Only organization owners can change which license tier/),
+      ).toBeTruthy()
+    })
   })
 
   it('opens a confirm sheet before clearing an owner pick', () => {
