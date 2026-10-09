@@ -28,6 +28,7 @@ import {
   useServerDeletePreview,
   useSaveOrgTemperatureUnit,
   useSaveServerLabels,
+  useSetServerLicenseTier,
   useSaveServerHardwareProfile,
   useServerDetail,
   useServerLabels,
@@ -78,6 +79,7 @@ const {
   setServerTimezone,
   updateServer,
   saveServerLabels,
+  setServerLicenseTier,
   createLicense,
   deleteLicense,
   fetchServerMetricsCapabilities,
@@ -113,6 +115,7 @@ const {
   setServerTimezone: vi.fn(),
   updateServer: vi.fn(),
   saveServerLabels: vi.fn(),
+  setServerLicenseTier: vi.fn(),
   createLicense: vi.fn(),
   deleteLicense: vi.fn(),
   fetchServerMetricsCapabilities: vi.fn(),
@@ -153,6 +156,7 @@ vi.mock('@/lib/instance-api', async (importOriginal) => {
     setServerTimezone,
     updateServer,
     saveServerLabels,
+    setServerLicenseTier,
     createLicense,
     deleteLicense,
     fetchServerMetricsCapabilities,
@@ -1101,6 +1105,34 @@ describe('servers query hooks', () => {
     })
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: queryKeys.org(orgId).servers.labels(serverId),
+    })
+  })
+
+  it('useSetServerLicenseTier sets the pick and refreshes server and billing views', async () => {
+    setServerLicenseTier.mockResolvedValueOnce({
+      ok: true,
+      assignedTier: 'S2',
+      pickedTier: 'S2',
+      tierPickNotice: null,
+      tiersFree: [],
+    })
+    const client = createAppQueryClient()
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
+
+    const { result } = renderHook(() => useSetServerLicenseTier(orgId, serverId), {
+      wrapper: createWrapper(client),
+    })
+
+    await result.current.run('tier-s2')
+    expect(setServerLicenseTier).toHaveBeenCalledWith(serverId, 'tier-s2')
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.org(orgId).servers.detail(serverId),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.org(orgId).servers.list,
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.org(orgId).billing.subscription,
     })
   })
 

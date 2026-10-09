@@ -65,6 +65,7 @@ import {
   saveOrgFabric,
   saveOrgHostDefaults,
   setServerHostname,
+  setServerLicenseTier,
   setServerNtp,
   setServerTimezone,
   signIn,
@@ -449,6 +450,27 @@ describe('instance-api fetch wrappers', () => {
     await expect(setServerHostname('srv-1', 'huey')).resolves.toMatchObject({
       commandId: 'cmd-2',
     })
+
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        ok: true,
+        assignedTier: 'S2',
+        pickedTier: 'S2',
+        tierPickNotice: null,
+        tiersFree: [],
+      }),
+    )
+    await expect(setServerLicenseTier('srv-1', 'tier-s2')).resolves.toMatchObject({
+      ok: true,
+      assignedTier: 'S2',
+    })
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      '/api/client/v1/servers/srv-1/license-tier',
+      expect.objectContaining({
+        method: 'PUT',
+        body: JSON.stringify({ tierId: 'tier-s2' }),
+      }),
+    )
 
     fetchMock.mockResolvedValueOnce(
       jsonResponse({ ok: true, commandId: 'cmd-3', status: 'queued' }),
