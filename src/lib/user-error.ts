@@ -51,9 +51,20 @@ const API_ERROR_COPY: Readonly<Record<string, string>> = {
 
 const LICENSE_TIER_FORBIDDEN = /HTTP 403:\s*Forbidden\b/
 
+/** `useApiMutation().run` surfaces `error` as a string; thrown values stay `Error`. */
+function asErrorForCopy(err: unknown): Error | null {
+  if (err instanceof Error) return err
+  if (typeof err === 'string') {
+    const trimmed = err.trim()
+    if (trimmed) return new Error(trimmed)
+  }
+  return null
+}
+
 /** Maps license-tier `PUT` refusals without treating every 403 Forbidden as a tier error. */
 export function licenseTierUserErrorMessage(err: unknown, fallback: string): string {
-  if (err instanceof Error && LICENSE_TIER_FORBIDDEN.test(err.message)) {
+  const source = asErrorForCopy(err)
+  if (LICENSE_TIER_FORBIDDEN.test(source?.message ?? '')) {
     return 'Only organization owners can change which license tier covers this server.'
   }
   return userErrorMessage(err, fallback)
@@ -78,20 +89,23 @@ export function isNetworkFetchError(err: unknown): boolean {
 
 /** The fixed sentence for a known API error code inside the message, or null. */
 export function apiErrorCopy(err: unknown): string | null {
-  if (!(err instanceof Error)) return null
-  if (RATE_LIMITED.test(err.message.trim())) return TOO_MANY_ATTEMPTS_COPY
+  const source = asErrorForCopy(err)
+  if (!source) return null
+  if (RATE_LIMITED.test(source.message.trim())) return TOO_MANY_ATTEMPTS_COPY
   for (const [code, copy] of Object.entries(API_ERROR_COPY)) {
-    if (err.message.includes(code)) return copy
+    if (source.message.includes(code)) return copy
   }
   return null
 }
 
 /** `err` as customer text: network failures and known codes mapped, else its message, else `fallback`. */
 export function userErrorMessage(err: unknown, fallback: string): string {
-  if (isNetworkFetchError(err)) return CONTROL_PLANE_UNREACHABLE_COPY
+  const source = asErrorForCopy(err)
+  if (isNetworkFetchError(source)) return CONTROL_PLANE_UNREACHABLE_COPY
   const mapped = apiErrorCopy(err)
   if (mapped) return mapped
-  if (err instanceof Error && err.message.trim()) return err.message
+  const message = source?.message.trim()
+  if (message) return message
   return fallback
 }
 

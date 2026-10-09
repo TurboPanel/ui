@@ -435,7 +435,12 @@ export function ServerTierPlacementPanel({
     setError(null)
     const outcome = await setTier.run(tierId)
     if (!outcome.ok) {
-      setError(licenseTierUserErrorMessage(outcome.error, 'Could not update license tier'))
+      setError(
+        licenseTierUserErrorMessage(
+          outcome.cause ?? outcome.error,
+          'Could not update license tier',
+        ),
+      )
       return
     }
     setPending(null)

@@ -141,6 +141,68 @@ describe('ServerTierPlacementPanel', () => {
     expect(screen.queryByRole('button', { name: 'Buy one' })).toBeNull()
   })
 
+  it('opens a confirm sheet before applying a tier pick', () => {
+    useAuth.mockReturnValue({ billingEnabled: true })
+    useCan.mockReturnValue(true)
+    useBillingCatalog.mockReturnValue({ data: { tiers: [] } })
+    const run = vi.fn().mockResolvedValue({ ok: true })
+    useSetServerLicenseTier.mockReturnValue({ run, isPending: false })
+
+    const detail = server({
+      licenseTier: 'S1',
+      requiredTier: 'S6',
+      recommendedTier: 'S6',
+      unwatched: { nics: [], drives: [], gpus: [] },
+      pickedTier: null,
+      tierPickNotice: null,
+      tiersFree: [
+        { tierId: 'id-s1', label: 'S1', free: 0 },
+        { tierId: 'id-s6', label: 'S6', free: 1 },
+      ],
+    })
+
+    render(<ServerTierPlacementPanel orgId="org-1" server={detail} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Use' }))
+    expect(screen.getByTestId('modal').textContent).toContain('Confirm license tier')
+    expect(run).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+    expect(run).toHaveBeenCalledWith('id-s6')
+  })
+
+  it('shows mapped refusal copy when apply returns a mutation error string', async () => {
+    useAuth.mockReturnValue({ billingEnabled: true })
+    useCan.mockReturnValue(true)
+    useBillingCatalog.mockReturnValue({ data: { tiers: [] } })
+    const run = vi.fn().mockResolvedValue({
+      ok: false,
+      error: 'HTTP 422: tier_below_required',
+      cause: new Error('HTTP 422: tier_below_required'),
+    })
+    useSetServerLicenseTier.mockReturnValue({ run, isPending: false })
+
+    const detail = server({
+      licenseTier: 'S1',
+      requiredTier: 'S6',
+      recommendedTier: 'S6',
+      unwatched: { nics: [], drives: [], gpus: [] },
+      pickedTier: null,
+      tierPickNotice: null,
+      tiersFree: [
+        { tierId: 'id-s1', label: 'S1', free: 0 },
+        { tierId: 'id-s6', label: 'S6', free: 1 },
+      ],
+    })
+
+    render(<ServerTierPlacementPanel orgId="org-1" server={detail} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Use' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+
+    expect(await screen.findByText(/below what this server needs/)).toBeTruthy()
+  })
+
   it('opens a confirm sheet before clearing an owner pick', () => {
     useAuth.mockReturnValue({ billingEnabled: true })
     useCan.mockReturnValue(true)
