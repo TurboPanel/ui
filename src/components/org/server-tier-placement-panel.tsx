@@ -162,6 +162,143 @@ function LicenseTierPickList({
   )
 }
 
+function LicenseTierConfirmSheet({
+  pending,
+  licenseTier,
+  busy,
+  onDismiss,
+  onApply,
+}: Readonly<{
+  pending: PendingPick | null
+  licenseTier: string | null
+  busy: boolean
+  onDismiss: () => void
+  onApply: (tierId: string) => void
+}>) {
+  return (
+    <ModalSheet visible={pending != null} title="Confirm license tier" onRequestClose={onDismiss}>
+      {pending ? (
+        <View style={styles.confirmBody}>
+          <Text style={panelStyles.detailLine}>
+            {confirmLicenseTierMove({
+              fromLabel: licenseTier,
+              toLabel: pending.tier.label,
+              free: pending.free,
+            })}
+          </Text>
+          <ButtonRow>
+            <Button label="Cancel" variant="secondary" onPress={onDismiss} />
+            <Button
+              label="Apply"
+              variant="primary"
+              disabled={busy}
+              onPress={() => onApply(pending.tier.id)}
+            />
+          </ButtonRow>
+        </View>
+      ) : null}
+    </ModalSheet>
+  )
+}
+
+function LicenseTierPanelBody({
+  orgId,
+  placement,
+  state,
+  notice,
+  unwatchedLines,
+  shortfall,
+  billingEnabled,
+  choices,
+  error,
+  busy,
+  onPick,
+  onClear,
+}: Readonly<{
+  orgId: string
+  placement: NonNullable<ServerDetailRecord['tierPlacement']>
+  state: TierPlacementState
+  notice: TierNoticeState | null
+  unwatchedLines: readonly string[]
+  shortfall: boolean
+  billingEnabled: boolean
+  choices: readonly BillingTier[]
+  error: string | null
+  busy: boolean
+  onPick: (pick: PendingPick) => void
+  onClear: () => void
+}>) {
+  return (
+    <SectionPanel
+      title="License tier"
+      hint={`Required ${placement.requiredTier} · recommended ${placement.recommendedTier}`}
+      headerRight={
+        <View style={styles.badges}>
+          {notice ? (
+            <Badge label="Daily notice" tone={notice.kind === 'exceeds' ? 'pending' : 'info'} />
+          ) : null}
+          <Badge label={placement.licenseTier ?? 'Not covered'} tone={tierBadgeTone(state)} />
+        </View>
+      }
+    >
+      <View style={styles.lines}>
+        <Text style={panelStyles.detailLine}>
+          <Text style={panelStyles.detailLabel}>On: </Text>
+          {licenseLine(placement)}
+        </Text>
+        {placement.pickedTier ? (
+          <Text style={panelStyles.detailLine}>
+            <Text style={panelStyles.detailLabel}>Picked: </Text>
+            {placement.pickedTier}
+          </Text>
+        ) : null}
+        {placement.tierPickNotice ? (
+          <InlineNotice tone="warning" title={placement.tierPickNotice} />
+        ) : null}
+        {notice ? (
+          <Text
+            style={panelStyles.detailLine}
+            accessibilityLabel={`Daily notice: ${describeTierNotice(notice)}`}
+          >
+            <Text style={panelStyles.detailLabel}>Daily notice: </Text>
+            {describeTierNotice(notice)}
+          </Text>
+        ) : null}
+      </View>
+
+      {billingEnabled && choices.length > 0 ? (
+        <LicenseTierPickList
+          orgId={orgId}
+          placement={placement}
+          choices={choices}
+          busy={busy}
+          hasPick={placement.pickedTier != null}
+          onPick={onPick}
+          onClear={onClear}
+        />
+      ) : null}
+
+      {error ? <InlineNotice tone="warning" title={error} /> : null}
+
+      {shortfall && unwatchedLines.length > 0 ? (
+        <View style={styles.unwatched}>
+          <Text style={panelStyles.detailLabel}>Not monitored</Text>
+          {unwatchedLines.map((line) => (
+            <MonoText key={line}>{line}</MonoText>
+          ))}
+        </View>
+      ) : null}
+
+      {state === 'above-hardware' ? (
+        <InlineNotice
+          title={`${placement.licenseTier} is well above what this host needs`}
+          body={`${placement.recommendedTier} would cover every discovered device. You can pick a lower tier on this page when a license is free, or change billed quantities on Billing.`}
+        />
+      ) : null}
+    </SectionPanel>
+  )
+}
+
 /**
  * Server overview: license tier the control plane assigned, optional owner
  * pick onto a spare license, and hardware context (required / recommended).
@@ -207,100 +344,27 @@ export function ServerTierPlacementPanel({
 
   return (
     <>
-      <SectionPanel
-        title="License tier"
-        hint={`Required ${placement.requiredTier} · recommended ${placement.recommendedTier}`}
-        headerRight={
-          <View style={styles.badges}>
-            {notice ? (
-              <Badge
-                label="Daily notice"
-                tone={notice.kind === 'exceeds' ? 'pending' : 'info'}
-              />
-            ) : null}
-            <Badge label={placement.licenseTier ?? 'Not covered'} tone={tierBadgeTone(state)} />
-          </View>
-        }
-      >
-        <View style={styles.lines}>
-          <Text style={panelStyles.detailLine}>
-            <Text style={panelStyles.detailLabel}>On: </Text>
-            {licenseLine(placement)}
-          </Text>
-          {placement.pickedTier ? (
-            <Text style={panelStyles.detailLine}>
-              <Text style={panelStyles.detailLabel}>Picked: </Text>
-              {placement.pickedTier}
-            </Text>
-          ) : null}
-          {placement.tierPickNotice ? (
-            <InlineNotice tone="warning" title={placement.tierPickNotice} />
-          ) : null}
-          {notice ? (
-            <Text style={panelStyles.detailLine} accessibilityLabel={`Daily notice: ${describeTierNotice(notice)}`}>
-              <Text style={panelStyles.detailLabel}>Daily notice: </Text>
-              {describeTierNotice(notice)}
-            </Text>
-          ) : null}
-        </View>
-
-        {billingEnabled && choices.length > 0 ? (
-          <LicenseTierPickList
-            orgId={orgId}
-            placement={placement}
-            choices={choices}
-            busy={setTier.isPending}
-            hasPick={placement.pickedTier != null}
-            onPick={setPending}
-            onClear={() => void applyPick(null)}
-          />
-        ) : null}
-
-        {error ? <InlineNotice tone="warning" title={error} /> : null}
-
-        {shortfall && unwatchedLines.length > 0 ? (
-          <View style={styles.unwatched}>
-            <Text style={panelStyles.detailLabel}>Not monitored</Text>
-            {unwatchedLines.map((line) => (
-              <MonoText key={line}>{line}</MonoText>
-            ))}
-          </View>
-        ) : null}
-
-        {state === 'above-hardware' ? (
-          <InlineNotice
-            title={`${placement.licenseTier} is well above what this host needs`}
-            body={`${placement.recommendedTier} would cover every discovered device. You can pick a lower tier on this page when a license is free, or change billed quantities on Billing.`}
-          />
-        ) : null}
-      </SectionPanel>
-
-      <ModalSheet
-        visible={pending != null}
-        title="Confirm license tier"
-        onRequestClose={() => setPending(null)}
-      >
-        {pending ? (
-          <View style={styles.confirmBody}>
-            <Text style={panelStyles.detailLine}>
-              {confirmLicenseTierMove({
-                fromLabel: placement.licenseTier,
-                toLabel: pending.tier.label,
-                free: pending.free,
-              })}
-            </Text>
-            <ButtonRow>
-              <Button label="Cancel" variant="secondary" onPress={() => setPending(null)} />
-              <Button
-                label="Apply"
-                variant="primary"
-                disabled={setTier.isPending}
-                onPress={() => void applyPick(pending.tier.id)}
-              />
-            </ButtonRow>
-          </View>
-        ) : null}
-      </ModalSheet>
+      <LicenseTierPanelBody
+        orgId={orgId}
+        placement={placement}
+        state={state}
+        notice={notice}
+        unwatchedLines={unwatchedLines}
+        shortfall={shortfall}
+        billingEnabled={billingEnabled}
+        choices={choices}
+        error={error}
+        busy={setTier.isPending}
+        onPick={setPending}
+        onClear={() => void applyPick(null)}
+      />
+      <LicenseTierConfirmSheet
+        pending={pending}
+        licenseTier={placement.licenseTier}
+        busy={setTier.isPending}
+        onDismiss={() => setPending(null)}
+        onApply={(tierId) => void applyPick(tierId)}
+      />
     </>
   )
 }
