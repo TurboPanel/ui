@@ -731,7 +731,14 @@ export type ServerGpu = {
 export type ServerHostResources = {
   cpus?: ServerCpuSocket[]
   gpus?: ServerGpu[]
-  memory?: { totalBytes?: number }
+  memory?: {
+    totalBytes?: number
+    /**
+     * Kernel memory page size in bytes (`getconf PAGESIZE`). Linux only;
+     * omitted elsewhere or when unreadable. Positive integer when present.
+     */
+    pageSizeBytes?: number
+  }
   swap?: { totalBytes?: number }
   ips?: ServerReportedIp[]
 }

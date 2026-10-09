@@ -56,6 +56,7 @@ import {
 } from '@/lib/daemon-update-labels'
 import { formatLocalDateTime } from '@/lib/format-datetime'
 import { configuredSourceLabel } from '@/lib/host-defaults'
+import { formatMemoryPageSize, memoryPageSizeHint } from '@/lib/memory-page-size'
 import {
   defaultOrgDashboardHref,
   SERVER_DETAIL_TAB_IDS,
@@ -133,9 +134,7 @@ function isColocatedServer(
   server: ServerDetailRecord,
   updateData?: ServerUpdateStatus | null
 ): boolean {
-  return (
-    server.colocatedWithInstance === true || updateData?.colocatedWithInstance === true
-  )
+  return server.colocatedWithInstance === true || updateData?.colocatedWithInstance === true
 }
 
 function resolveUpdateBadgeVariant(input: {
@@ -161,7 +160,7 @@ function resolveUpdateBadgeVariant(input: {
 function updateBadgeLabel(
   variant: UpdateBadgeVariant,
   runningVersionUnknown: boolean,
-  blockedLabel: string | null,
+  blockedLabel: string | null
 ): string {
   switch (variant) {
     case 'updating':
@@ -411,7 +410,9 @@ function applyTerminalPollSuccess(
       handlers.invalidateSystemContainers(entry.environmentId)
       return
     }
-    handlers.setSystemRestartPollError(commandErrorLine(record) ?? `System restart ${record.status}`)
+    handlers.setSystemRestartPollError(
+      commandErrorLine(record) ?? `System restart ${record.status}`
+    )
     return
   }
 
@@ -443,15 +444,11 @@ function applyPollFailure(
     return
   }
   if (entry.kind === 'timezone') {
-    handlers.setTimezonePollError(
-      userErrorMessage(err, 'Failed to poll timezone command')
-    )
+    handlers.setTimezonePollError(userErrorMessage(err, 'Failed to poll timezone command'))
     return
   }
   if (entry.kind === 'systemRestart') {
-    handlers.setSystemRestartPollError(
-      userErrorMessage(err, 'Failed to poll system restart')
-    )
+    handlers.setSystemRestartPollError(userErrorMessage(err, 'Failed to poll system restart'))
     return
   }
   handlers.setNtpPollError(userErrorMessage(err, 'Failed to poll NTP command'))
@@ -490,7 +487,11 @@ function renderServerRevokeKeyPanel(
     )
   }
   return (
-    <ServerRevokeKeyPanel revoking={input.revoking} state={input.state} onConfirm={input.onConfirm} />
+    <ServerRevokeKeyPanel
+      revoking={input.revoking}
+      state={input.state}
+      onConfirm={input.onConfirm}
+    />
   )
 }
 
@@ -693,8 +694,7 @@ export function ServerDetailSection({
   }
 
   if (serverQuery.isError || !server) {
-    const message =
-      userErrorMessage(serverQuery.error, 'Failed to load server')
+    const message = userErrorMessage(serverQuery.error, 'Failed to load server')
     return <ServerDetailError message={message} />
   }
 
@@ -914,7 +914,7 @@ export function ServerDetailSection({
         systemRestartInFlight={systemRestartInFlight}
         systemRestartPollError={systemRestartPollError}
         revokeKeyPanel={revokeKeyPanel}
-          deletePanel={deletePanel}
+        deletePanel={deletePanel}
       />
     </View>
   )
@@ -959,6 +959,8 @@ function ServerOverviewTab({
   const twoColumn = width >= layout.desktopBreakpoint
   const updateServerMutation = useUpdateServer(orgId, server.id)
   const timezoneSource = configuredSourceLabel(server.timezoneSource)
+  const pageSizeBytes = server.resources?.memory?.pageSizeBytes
+  const pageSizeHint = memoryPageSizeHint(pageSizeBytes)
   const groupStyle = [styles.detailGroup, twoColumn && styles.detailGroupHalf]
 
   return (
@@ -1014,6 +1016,15 @@ function ServerOverviewTab({
                 Not reported yet — the daemon sends its paths with its first topology report.
               </Text>
             )}
+          </View>
+
+          <View style={groupStyle}>
+            <Text style={panelStyles.detailTitle}>Memory</Text>
+            <Text style={panelStyles.detailLine}>
+              <Text style={panelStyles.detailLabel}>Memory page size: </Text>
+              {formatMemoryPageSize(pageSizeBytes)}
+            </Text>
+            {pageSizeHint ? <Text style={panelStyles.muted}>{pageSizeHint}</Text> : null}
           </View>
 
           <View style={groupStyle}>
@@ -1155,7 +1166,7 @@ function ServerControlTab({
           label={updateBadgeLabel(
             viewModel.badgeVariant,
             viewModel.runningVersionUnknown,
-            viewModel.blockedLabel,
+            viewModel.blockedLabel
           )}
         />
         {viewModel.blockedLabel ? (
@@ -1236,9 +1247,9 @@ function ServerRevokeKeyPanel({
   return (
     <>
       <Text style={panelStyles.muted}>
-        Use this when the host is known to be compromised. The daemon&apos;s identity key is
-        revoked immediately and its connection is closed; the license token still on the host
-        cannot re-enroll it.
+        Use this when the host is known to be compromised. The daemon&apos;s identity key is revoked
+        immediately and its connection is closed; the license token still on the host cannot
+        re-enroll it.
       </Text>
       {state.error ? <Text style={panelStyles.error}>{state.error}</Text> : null}
       {state.result ? (
