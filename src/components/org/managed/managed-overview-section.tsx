@@ -1,3 +1,4 @@
+import { useQuery } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 import { useRouter, type Href } from 'expo-router'
 import { StyleSheet, Text, View } from 'react-native'
@@ -16,7 +17,20 @@ import {
   StatusDot,
   type StatusTone,
 } from '@/components/ui'
-import { type ManagedListRecord } from '@/lib/instance-api'
+import { fetchOrgManagedDefaults, type ManagedListRecord } from '@/lib/instance-api'
+import {
+  DEFAULT_MANAGED_INGRESS_PORTS,
+  resolveManagedIngressPorts,
+  type ManagedIngressPorts,
+} from '@/lib/managed-ingress-ports'
+import {
+  managedOrgListProjectEnvironmentLabel,
+  managedOrgListServerPresentation,
+  managedListProjectName,
+  managedSharedListenerLabel,
+  resolveManagedSharedListener,
+} from '@/lib/managed-org-list'
+import { queryKeys } from '@/lib/query-keys'
 import {
   MANAGED_SERVICE_CATALOG,
   clusterHasUnhealthyMember,
@@ -47,7 +61,7 @@ const STATUS_FILTERS: readonly (ManagedStatus | 'all')[] = [
 function serviceTitle(row: ManagedListRecord): string {
   return (
     row.name?.trim() ||
-    row.projectName?.trim() ||
+    managedListProjectName(row) ||
     row.engineDisplayName?.trim() ||
     'Managed service'
   )
@@ -59,22 +73,6 @@ function engineLabel(row: ManagedListRecord): string {
     return managedCatalogEntryForCode(row.engine)?.label ?? row.engine
   }
   return 'Unknown'
-}
-
-function serverLabel(row: ManagedListRecord): string {
-  return row.serverName?.trim() || (row.serverId ? row.serverId : '—')
-}
-
-function projectEnvironmentLabel(row: ManagedListRecord): string {
-  const project = row.projectName?.trim() || 'Project'
-  const environment = row.environmentName?.trim()
-  if (environment) return `${project} / ${environment}`
-  return project
-}
-
-function endpointLabel(row: ManagedListRecord): string {
-  if (row.host && row.port != null) return `${row.host}:${row.port}`
-  return 'Not exposed'
 }
 
 function topologyLabel(row: ManagedListRecord): string {
@@ -96,15 +94,8 @@ const MANAGED_COLUMNS = [
   { key: 'endpoint', header: 'Shared listener', flex: 1.6, minWidth: 140 },
 ] as const satisfies readonly DataTableColumn[]
 
-const [
-  MG_ENGINE,
-  MG_NAME,
-  MG_PROJECT,
-  MG_SERVER,
-  MG_STATUS,
-  MG_TOPOLOGY,
-  MG_ENDPOINT,
-] = MANAGED_COLUMNS
+const [MG_ENGINE, MG_NAME, MG_PROJECT, MG_SERVER, MG_STATUS, MG_TOPOLOGY, MG_ENDPOINT] =
+  MANAGED_COLUMNS
 
 function statusTone(status: ManagedStatus) {
   switch (status) {
@@ -142,9 +133,7 @@ function ManagedStatusCell({ status }: Readonly<{ status: ManagedStatus }>) {
     <DataTableCell column={MG_STATUS}>
       <View style={[styles.statusBadge, tone.badge]}>
         <StatusDot size="sm" tone={tone.dot} />
-        <Text style={[styles.statusText, tone.text]}>
-          {managedStatusLabel(status)}
-        </Text>
+        <Text style={[styles.statusText, tone.text]}>{managedStatusLabel(status)}</Text>
       </View>
     </DataTableCell>
   )
@@ -154,14 +143,19 @@ function ManagedTableRow({
   orgId,
   row,
   rowIndex,
+  ingressPorts,
 }: Readonly<{
   orgId: string
   row: ManagedListRecord
   rowIndex: number
+  ingressPorts: ManagedIngressPorts | null
 }>) {
   const router = useRouter()
   const title = serviceTitle(row)
   const href = `/${orgId}/projects/${row.projectId}` as Href
+  const listenerLabel = managedSharedListenerLabel(row, ingressPorts)
+  const sharedListener = resolveManagedSharedListener(row, ingressPorts)
+  const server = managedOrgListServerPresentation(row)
 
   return (
     <DataTableRow
@@ -181,22 +175,23 @@ function ManagedTableRow({
       </DataTableCell>
       <DataTableCell column={MG_PROJECT}>
         <Text style={styles.secondaryText} numberOfLines={1}>
-          {projectEnvironmentLabel(row)}
+          {managedOrgListProjectEnvironmentLabel(row)}
         </Text>
       </DataTableCell>
       <DataTableCell column={MG_SERVER}>
-        <Text style={styles.secondaryText} numberOfLines={1}>
-          {serverLabel(row)}
+        <Text
+          style={styles.secondaryText}
+          numberOfLines={1}
+          accessibilityLabel={server.accessibilityLabel}
+        >
+          {server.display}
         </Text>
       </DataTableCell>
       <ManagedStatusCell status={row.status} />
       <DataTableCell column={MG_TOPOLOGY}>
         <View style={styles.topologyCell}>
           {clusterHasUnhealthyMember(row.members) ? (
-            <View
-              style={styles.topologyWarnDot}
-              accessibilityLabel="Member needs attention"
-            />
+            <View style={styles.topologyWarnDot} accessibilityLabel="Member needs attention" />
           ) : (
             <View style={styles.topologyDot} accessibilityLabel="Healthy topology" />
           )}
@@ -206,15 +201,8 @@ function ManagedTableRow({
         </View>
       </DataTableCell>
       <DataTableCell column={MG_ENDPOINT}>
-        <Text
-          style={
-            row.host && row.port != null
-              ? styles.endpointText
-              : styles.endpointMuted
-          }
-          numberOfLines={1}
-        >
-          {endpointLabel(row)}
+        <Text style={sharedListener ? styles.endpointText : styles.endpointMuted} numberOfLines={1}>
+          {listenerLabel}
         </Text>
       </DataTableCell>
     </DataTableRow>
@@ -225,7 +213,7 @@ function filterManagedRows(
   rows: readonly ManagedListRecord[],
   engineFilter: ManagedServiceEngine | 'all',
   statusFilter: ManagedStatus | 'all',
-  serverFilter: string,
+  serverFilter: string
 ): ManagedListRecord[] {
   return rows.filter((row) => {
     if (engineFilter !== 'all' && row.engine !== engineFilter) return false
@@ -235,26 +223,20 @@ function filterManagedRows(
   })
 }
 
-function uniqueEngines(
-  rows: readonly ManagedListRecord[],
-): ManagedServiceEngine[] {
+function uniqueEngines(rows: readonly ManagedListRecord[]): ManagedServiceEngine[] {
   const found = new Set<ManagedServiceEngine>()
   for (const row of rows) {
     if (row.engine) found.add(row.engine)
   }
-  return MANAGED_SERVICE_CATALOG.map((entry) => entry.engine).filter((engine) =>
-    found.has(engine),
-  )
+  return MANAGED_SERVICE_CATALOG.map((entry) => entry.engine).filter((engine) => found.has(engine))
 }
 
-function uniqueServers(
-  rows: readonly ManagedListRecord[],
-): { id: string; label: string }[] {
+function uniqueServers(rows: readonly ManagedListRecord[]): { id: string; label: string }[] {
   const byId = new Map<string, string>()
   for (const row of rows) {
     if (!row.serverId) continue
     if (!byId.has(row.serverId)) {
-      byId.set(row.serverId, serverLabel(row))
+      byId.set(row.serverId, managedOrgListServerPresentation(row).display)
     }
   }
   return [...byId.entries()]
@@ -360,7 +342,12 @@ function ManagedEmptyState({
 function ManagedFleetTable({
   orgId,
   rows,
-}: Readonly<{ orgId: string; rows: readonly ManagedListRecord[] }>) {
+  ingressPorts,
+}: Readonly<{
+  orgId: string
+  rows: readonly ManagedListRecord[]
+  ingressPorts: ManagedIngressPorts | null
+}>) {
   return (
     <DataTable columns={MANAGED_COLUMNS} minWidth={1080} bordered>
       {rows.map((row, index) => (
@@ -369,9 +356,30 @@ function ManagedFleetTable({
           orgId={orgId}
           row={row}
           rowIndex={index}
+          ingressPorts={ingressPorts}
         />
       ))}
     </DataTable>
+  )
+}
+
+function ManagedIngressDefaultsNotice({
+  message,
+  onRetry,
+}: Readonly<{ message: string; onRetry: () => void }>) {
+  return (
+    <View style={styles.defaultsNotice}>
+      <Text style={styles.defaultsNoticeText}>
+        {message} Shared listener ports use the platform default (15432 / 13306) until
+        managed defaults load.
+      </Text>
+      <Button
+        label="Retry"
+        variant="secondary"
+        accessibilityLabel="Retry loading managed defaults"
+        onPress={onRetry}
+      />
+    </View>
   )
 }
 
@@ -384,6 +392,9 @@ function ManagedFleetBody({
   filtersActive,
   canManage,
   onCreate,
+  ingressPorts,
+  ingressDefaultsNotice,
+  onRetryIngressDefaults,
 }: Readonly<{
   orgId: string
   loading: boolean
@@ -393,6 +404,9 @@ function ManagedFleetBody({
   filtersActive: boolean
   canManage: boolean
   onCreate: () => void
+  ingressPorts: ManagedIngressPorts | null
+  ingressDefaultsNotice: string | null
+  onRetryIngressDefaults: () => void
 }>) {
   if (loading) {
     return <LoadingState label="Loading managed services…" />
@@ -407,9 +421,7 @@ function ManagedFleetBody({
     return <ManagedEmptyState canManage={canManage} onCreate={onCreate} />
   }
 
-  const refreshError = error ? (
-    <Text style={panelStyles.error}>{error}</Text>
-  ) : null
+  const refreshError = error ? <Text style={panelStyles.error}>{error}</Text> : null
 
   if (filtered.length === 0) {
     return (
@@ -431,19 +443,21 @@ function ManagedFleetBody({
   return (
     <View style={styles.fleetBody}>
       {refreshError}
-      <ManagedFleetTable orgId={orgId} rows={filtered} />
+      {ingressDefaultsNotice ? (
+        <ManagedIngressDefaultsNotice
+          message={ingressDefaultsNotice}
+          onRetry={onRetryIngressDefaults}
+        />
+      ) : null}
+      <ManagedFleetTable orgId={orgId} rows={filtered} ingressPorts={ingressPorts} />
     </View>
   )
 }
 
-export function ManagedOverviewSection({
-  orgId,
-}: Readonly<{ orgId: string }>) {
+export function ManagedOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
   const router = useRouter()
   const canManage = useCan('organization', orgId, 'organization:manage')
-  const [engineFilter, setEngineFilter] = useState<ManagedServiceEngine | 'all'>(
-    'all',
-  )
+  const [engineFilter, setEngineFilter] = useState<ManagedServiceEngine | 'all'>('all')
   const [statusFilter, setStatusFilter] = useState<ManagedStatus | 'all'>('all')
   const [serverFilter, setServerFilter] = useState('')
 
@@ -451,11 +465,41 @@ export function ManagedOverviewSection({
     refetchInterval: MANAGED_REFRESH_MS,
     staleTime: MANAGED_REFRESH_MS / 2,
   })
+  const managedDefaultsQuery = useQuery({
+    queryKey: queryKeys.org(orgId).settings.managedDefaults,
+    queryFn: () => fetchOrgManagedDefaults(orgId),
+    staleTime: 60_000,
+  })
+  const { ingressPorts, ingressDefaultsNotice } = useMemo(() => {
+    const { data, isPending, isError, isFetched, error } = managedDefaultsQuery
+    if (isPending && !data) {
+      return { ingressPorts: null as ManagedIngressPorts | null, ingressDefaultsNotice: null }
+    }
+    if (data) {
+      return {
+        ingressPorts: resolveManagedIngressPorts(data.effectivePorts ?? data.ports),
+        ingressDefaultsNotice: null,
+      }
+    }
+    if (isError || isFetched) {
+      const message = isError
+        ? userErrorMessage(error, 'Could not load managed defaults.')
+        : 'Managed defaults are unavailable.'
+      return {
+        ingressPorts: DEFAULT_MANAGED_INGRESS_PORTS,
+        ingressDefaultsNotice: message,
+      }
+    }
+    return { ingressPorts: null as ManagedIngressPorts | null, ingressDefaultsNotice: null }
+  }, [managedDefaultsQuery])
+  const retryIngressDefaults = () => {
+    void managedDefaultsQuery.refetch()
+  }
 
   const rows = orEmptyArray(managedQuery.data?.managed)
   const filtered = useMemo(
     () => filterManagedRows(rows, engineFilter, statusFilter, serverFilter),
-    [rows, engineFilter, statusFilter, serverFilter],
+    [rows, engineFilter, statusFilter, serverFilter]
   )
   const engines = useMemo(() => uniqueEngines(rows), [rows])
   const servers = useMemo(() => uniqueServers(rows), [rows])
@@ -464,8 +508,7 @@ export function ManagedOverviewSection({
   const loading = managedQuery.isLoading && rows.length === 0
   const error = managedListErrorMessage(managedQuery.error)
   const createHref = `/${orgId}/projects/new?type=managed` as Href
-  const filtersActive =
-    engineFilter !== 'all' || statusFilter !== 'all' || serverFilter.length > 0
+  const filtersActive = engineFilter !== 'all' || statusFilter !== 'all' || serverFilter.length > 0
   const listHint = loading
     ? 'Loading…'
     : `${filtered.length} of ${rows.length} service(s) · Postgres-backed status`
@@ -478,8 +521,7 @@ export function ManagedOverviewSection({
     <View style={styles.root}>
       <Text style={panelStyles.pageTitle}>Managed services</Text>
       <Text style={panelStyles.pageCopy}>
-        Every managed engine in this organization. Open a row for the project
-        detail surface.
+        Every managed engine in this organization. Open a row for the project detail surface.
       </Text>
 
       <ManagedFiltersPanel
@@ -514,6 +556,9 @@ export function ManagedOverviewSection({
           filtersActive={filtersActive}
           canManage={canManage}
           onCreate={openCreate}
+          ingressPorts={ingressPorts}
+          ingressDefaultsNotice={ingressDefaultsNotice}
+          onRetryIngressDefaults={retryIngressDefaults}
         />
       </SectionPanel>
     </View>
@@ -527,6 +572,19 @@ const styles = StyleSheet.create({
   },
   fleetBody: {
     gap: spacing.sm,
+  },
+  defaultsNotice: {
+    gap: spacing.sm,
+    padding: spacing.sm,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: colors.borderArea,
+    backgroundColor: colors.bgSecondary,
+  },
+  defaultsNoticeText: {
+    color: colors.textBody,
+    fontSize: 13,
+    lineHeight: 18,
   },
   toolbarRow: {
     flexDirection: 'row',
