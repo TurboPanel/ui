@@ -22,6 +22,7 @@ import { resolveManagedIngressPorts } from '@/lib/managed-ingress-ports'
 import {
   managedOrgListProjectEnvironmentLabel,
   managedOrgListServerPresentation,
+  managedListProjectName,
   managedSharedListenerLabel,
   resolveManagedSharedListener,
 } from '@/lib/managed-org-list'
@@ -56,7 +57,7 @@ const STATUS_FILTERS: readonly (ManagedStatus | 'all')[] = [
 function serviceTitle(row: ManagedListRecord): string {
   return (
     row.name?.trim() ||
-    row.projectName?.trim() ||
+    managedListProjectName(row) ||
     row.engineDisplayName?.trim() ||
     'Managed service'
   )
@@ -152,12 +153,16 @@ function ManagedTableRow({
   orgId: string
   row: ManagedListRecord
   rowIndex: number
-  ingressPorts: ReturnType<typeof resolveManagedIngressPorts>
+  ingressPorts: ReturnType<typeof resolveManagedIngressPorts> | null
 }>) {
   const router = useRouter()
   const title = serviceTitle(row)
   const href = `/${orgId}/projects/${row.projectId}` as Href
-  const sharedListener = resolveManagedSharedListener(row, ingressPorts)
+  const listenerLabel = managedSharedListenerLabel(row, ingressPorts)
+  const sharedListener =
+    ingressPorts === null
+      ? null
+      : resolveManagedSharedListener(row, ingressPorts)
   const server = managedOrgListServerPresentation(row)
 
   return (
@@ -213,7 +218,7 @@ function ManagedTableRow({
           }
           numberOfLines={1}
         >
-          {managedSharedListenerLabel(row, ingressPorts)}
+          {listenerLabel}
         </Text>
       </DataTableCell>
     </DataTableRow>
@@ -363,7 +368,7 @@ function ManagedFleetTable({
 }: Readonly<{
   orgId: string
   rows: readonly ManagedListRecord[]
-  ingressPorts: ReturnType<typeof resolveManagedIngressPorts>
+  ingressPorts: ReturnType<typeof resolveManagedIngressPorts> | null
 }>) {
   return (
     <DataTable columns={MANAGED_COLUMNS} minWidth={1080} bordered>
@@ -399,7 +404,7 @@ function ManagedFleetBody({
   filtersActive: boolean
   canManage: boolean
   onCreate: () => void
-  ingressPorts: ReturnType<typeof resolveManagedIngressPorts>
+  ingressPorts: ReturnType<typeof resolveManagedIngressPorts> | null
 }>) {
   if (loading) {
     return <LoadingState label="Loading managed services…" />
@@ -467,14 +472,17 @@ export function ManagedOverviewSection({
     queryFn: () => fetchOrgManagedDefaults(orgId),
     staleTime: 60_000,
   })
-  const ingressPorts = useMemo(
-    () =>
-      resolveManagedIngressPorts(
-        managedDefaultsQuery.data?.effectivePorts ??
-          managedDefaultsQuery.data?.ports,
-      ),
-    [managedDefaultsQuery.data?.effectivePorts, managedDefaultsQuery.data?.ports],
-  )
+  const ingressPorts = useMemo((): ReturnType<
+    typeof resolveManagedIngressPorts
+  > | null => {
+    if (managedDefaultsQuery.isPending && !managedDefaultsQuery.data) {
+      return null
+    }
+    return resolveManagedIngressPorts(
+      managedDefaultsQuery.data?.effectivePorts ??
+        managedDefaultsQuery.data?.ports,
+    )
+  }, [managedDefaultsQuery.data, managedDefaultsQuery.isPending])
 
   const rows = orEmptyArray(managedQuery.data?.managed)
   const filtered = useMemo(
