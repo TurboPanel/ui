@@ -42,18 +42,20 @@ function managedListServerName(row: ManagedOrgListWireRow): string | null {
   return row.serverName?.trim() || row.serverDisplayName?.trim() || null
 }
 
-function isSharedIngressEndpoint(
-  host: string,
-  port: number,
-  ingressPort: number,
-): boolean {
-  return host === MANAGED_SHARED_LOOPBACK_HOST && port === ingressPort
+function authoritativeLoopbackListener(
+  host: string | null | undefined,
+  port: number | null | undefined,
+): { host: string; port: number } | null {
+  if (host === MANAGED_SHARED_LOOPBACK_HOST && port != null) {
+    return { host, port }
+  }
+  return null
 }
 
 /**
  * Resolve the shared ProxySQL listener clients dial on the host.
  *
- * Prefers API `host`/`port` when they already carry the ingress listener.
+ * Loopback `host`/`port` from the list API are authoritative (custom ingress).
  * Remaps stale residual host/port (engine backends, wrong hosts) to loopback ingress.
  */
 export function resolveManagedSharedListener(
@@ -64,14 +66,15 @@ export function resolveManagedSharedListener(
   ingressPorts: ManagedIngressPorts | null = DEFAULT_MANAGED_INGRESS_PORTS,
 ): { host: string; port: number } | null {
   if (!row.serverId || !row.engine) return null
+
+  const loopbackListener = authoritativeLoopbackListener(row.host, row.port)
+  if (loopbackListener) return loopbackListener
+
   if (ingressPorts === null) return null
 
   const ingressPort = managedIngressPortForEngine(row.engine, ingressPorts)
 
   if (row.host && row.port != null) {
-    if (isSharedIngressEndpoint(row.host, row.port, ingressPort)) {
-      return { host: row.host, port: row.port }
-    }
     return { host: MANAGED_SHARED_LOOPBACK_HOST, port: ingressPort }
   }
 
@@ -89,7 +92,11 @@ export function managedSharedListenerLabel(
   >,
   ingressPorts?: ManagedIngressPorts | null,
 ): string {
-  if (ingressPorts === null) return MANAGED_SHARED_LISTENER_PENDING_LABEL
+  if (ingressPorts === null) {
+    const endpoint = resolveManagedSharedListener(row, null)
+    if (!endpoint) return MANAGED_SHARED_LISTENER_PENDING_LABEL
+    return `${endpoint.host}:${endpoint.port}`
+  }
   const endpoint = resolveManagedSharedListener(row, ingressPorts)
   if (!endpoint) return 'Not exposed'
   return `${endpoint.host}:${endpoint.port}`

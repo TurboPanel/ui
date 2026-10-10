@@ -19,7 +19,7 @@ function listRow(
     name: 'db',
     status: 'ready',
     host: MANAGED_SHARED_LOOPBACK_HOST,
-    port: 5432,
+    port: MANAGED_INGRESS_PGSQL_PORT,
     serverId: 'srv-1',
     metadata: {},
     options: null,
@@ -38,27 +38,36 @@ function listRow(
 }
 
 describe('managedSharedListenerLabel', () => {
-  it('maps postgres backend port to default ingress', () => {
-    expect(managedSharedListenerLabel(listRow({ engine: 'postgres' }))).toBe(
-      `${MANAGED_SHARED_LOOPBACK_HOST}:${MANAGED_INGRESS_PGSQL_PORT}`
-    )
+  it('maps postgres stale backend host/port to default ingress', () => {
+    expect(
+      managedSharedListenerLabel(
+        listRow({ engine: 'postgres', host: 'postgres.internal', port: 5432 })
+      )
+    ).toBe(`${MANAGED_SHARED_LOOPBACK_HOST}:${MANAGED_INGRESS_PGSQL_PORT}`)
   })
 
   it('maps mysql and mariadb backend ports to the mysql-family ingress', () => {
-    expect(managedSharedListenerLabel(listRow({ engine: 'mysql', port: 3306 }))).toBe(
-      `${MANAGED_SHARED_LOOPBACK_HOST}:${MANAGED_INGRESS_MYSQL_PORT}`
-    )
-    expect(managedSharedListenerLabel(listRow({ engine: 'mariadb', port: 3306 }))).toBe(
-      `${MANAGED_SHARED_LOOPBACK_HOST}:${MANAGED_INGRESS_MYSQL_PORT}`
-    )
+    expect(
+      managedSharedListenerLabel(
+        listRow({ engine: 'mysql', host: 'mysql.internal', port: 3306 })
+      )
+    ).toBe(`${MANAGED_SHARED_LOOPBACK_HOST}:${MANAGED_INGRESS_MYSQL_PORT}`)
+    expect(
+      managedSharedListenerLabel(
+        listRow({ engine: 'mariadb', host: 'mariadb.internal', port: 3306 })
+      )
+    ).toBe(`${MANAGED_SHARED_LOOPBACK_HOST}:${MANAGED_INGRESS_MYSQL_PORT}`)
   })
 
   it('honors custom org ingress ports', () => {
     expect(
-      managedSharedListenerLabel(listRow({ engine: 'postgres', port: 5432 }), {
-        postgres: 25432,
-        mysqlFamily: 23306,
-      })
+      managedSharedListenerLabel(
+        listRow({ engine: 'postgres', port: 25432 }),
+        {
+          postgres: 25432,
+          mysqlFamily: 23306,
+        }
+      )
     ).toBe(`${MANAGED_SHARED_LOOPBACK_HOST}:25432`)
   })
 
@@ -76,7 +85,7 @@ describe('managedSharedListenerLabel', () => {
       managedSharedListenerLabel(
         listRow({
           engine: 'mysql',
-          host: '127.0.0.1',
+          host: 'mysql.internal',
           port: 3306,
         })
       )
@@ -103,19 +112,71 @@ describe('managedSharedListenerLabel', () => {
     ).toBe('Not exposed')
   })
 
-  it('shows a neutral placeholder while ingress ports are still loading', () => {
-    expect(managedSharedListenerLabel(listRow({ engine: 'postgres' }), null)).toBe(
-      MANAGED_SHARED_LISTENER_PENDING_LABEL
-    )
-  })
+  describe('managed-defaults query states', () => {
+    const platformIngress = {
+      postgres: MANAGED_INGRESS_PGSQL_PORT,
+      mysqlFamily: MANAGED_INGRESS_MYSQL_PORT,
+    }
 
-  it('uses platform default ports when org defaults are unavailable', () => {
-    expect(
-      managedSharedListenerLabel(listRow({ engine: 'postgres', host: null, port: null }), {
-        postgres: MANAGED_INGRESS_PGSQL_PORT,
-        mysqlFamily: MANAGED_INGRESS_MYSQL_PORT,
-      })
-    ).toBe(`${MANAGED_SHARED_LOOPBACK_HOST}:${MANAGED_INGRESS_PGSQL_PORT}`)
+    it('pending: shows loopback listener from the list row when the API returned it', () => {
+      expect(
+        managedSharedListenerLabel(
+          listRow({ engine: 'postgres', host: MANAGED_SHARED_LOOPBACK_HOST, port: 25432 }),
+          null
+        )
+      ).toBe(`${MANAGED_SHARED_LOOPBACK_HOST}:25432`)
+    })
+
+    it('pending: shows a dash when neither the row nor org defaults carry a listener', () => {
+      expect(
+        managedSharedListenerLabel(
+          listRow({ engine: 'postgres', host: 'postgres.internal', port: 5432 }),
+          null
+        )
+      ).toBe(MANAGED_SHARED_LISTENER_PENDING_LABEL)
+      expect(
+        managedSharedListenerLabel(
+          listRow({ engine: 'postgres', host: null, port: null, status: 'ready' }),
+          null
+        )
+      ).toBe(MANAGED_SHARED_LISTENER_PENDING_LABEL)
+    })
+
+    it('failed defaults: trusts loopback list port over wrong platform fallback ports', () => {
+      expect(
+        managedSharedListenerLabel(
+          listRow({ engine: 'postgres', host: MANAGED_SHARED_LOOPBACK_HOST, port: 25432 }),
+          platformIngress
+        )
+      ).toBe(`${MANAGED_SHARED_LOOPBACK_HOST}:25432`)
+    })
+
+    it('failed defaults: falls back to platform ingress when the row has no listener', () => {
+      expect(
+        managedSharedListenerLabel(
+          listRow({ engine: 'postgres', host: null, port: null }),
+          platformIngress
+        )
+      ).toBe(`${MANAGED_SHARED_LOOPBACK_HOST}:${MANAGED_INGRESS_PGSQL_PORT}`)
+    })
+
+    it('loaded defaults: remaps stale backends using org ingress ports', () => {
+      expect(
+        managedSharedListenerLabel(
+          listRow({ engine: 'postgres', host: 'postgres.internal', port: 5432 }),
+          { postgres: 25432, mysqlFamily: 23306 }
+        )
+      ).toBe(`${MANAGED_SHARED_LOOPBACK_HOST}:25432`)
+    })
+
+    it('loaded defaults: keeps authoritative loopback listener from the list row', () => {
+      expect(
+        managedSharedListenerLabel(
+          listRow({ engine: 'postgres', host: MANAGED_SHARED_LOOPBACK_HOST, port: 25432 }),
+          { postgres: 25432, mysqlFamily: 23306 }
+        )
+      ).toBe(`${MANAGED_SHARED_LOOPBACK_HOST}:25432`)
+    })
   })
 
   it('infers loopback ingress for ready rows before host metadata exists', () => {

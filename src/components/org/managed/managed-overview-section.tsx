@@ -154,8 +154,7 @@ function ManagedTableRow({
   const title = serviceTitle(row)
   const href = `/${orgId}/projects/${row.projectId}` as Href
   const listenerLabel = managedSharedListenerLabel(row, ingressPorts)
-  const sharedListener =
-    ingressPorts === null ? null : resolveManagedSharedListener(row, ingressPorts)
+  const sharedListener = resolveManagedSharedListener(row, ingressPorts)
   const server = managedOrgListServerPresentation(row)
 
   return (
