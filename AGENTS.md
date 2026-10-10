@@ -115,7 +115,7 @@ Authored Tamagui config lives in `babel.config.cjs`, `src/lib/tamagui.config.ts`
 | Command | Purpose |
 | --- | --- |
 | `pnpm typecheck` | `tsc --noEmit` — same gate as CI `verify.yml` and deploy |
-| (CI only) `ci-ok` | Aggregator job in `verify.yml`: needs `verify`, fails on any failure/cancel/skip — the one check the trunk ruleset requires. On a PR it always runs (a cancelled PR run is red); on a trunk push a cancelled run leaves it skipped (grey), so only a real failure is red |
+| (CI only) `ci-ok` | Aggregator job in `verify.yml`: needs `verify` and `e2e`, fails on any failure/cancel/skip — the one check the trunk ruleset requires. On a PR it always runs (a cancelled PR run is red); on a trunk push a cancelled run leaves it skipped (grey), so only a real failure is red |
 | `pnpm lint` | Expo ESLint |
 | `pnpm check:vocabulary` | Reject daemon-as-agent and Apple-associated chrome phrasing (`src/lib/vocabulary.ts` + `scripts/check-vocabulary.mjs`) |
 | `pnpm notices:generate` | Write `THIRD_PARTY_NOTICES.md` from the resolved pnpm graph plus committed bundled resources (fonts). After Expo prebuild / EAS, the same script collects CocoaPods, Gradle, and AAR/POM metadata (`--native`) |
@@ -123,6 +123,9 @@ Authored Tamagui config lives in `babel.config.cjs`, `src/lib/tamagui.config.ts`
 | `pnpm notices:check:native` | Same check plus fail when a native build is expected but the CocoaPods / Gradle / AAR graph is absent. EAS `eas-build-post-install` generates with `--native` |
 | `pnpm test` | Vitest once |
 | `pnpm test:coverage` | Vitest + LCOV (`coverage/lcov.info`) — CI `verify.yml` runs this, then SonarCloud |
+| `pnpm test:e2e` | Playwright smoke test (`e2e/`) against the web export: run `pnpm export` first, and once per machine `pnpm exec playwright install chromium` |
+
+**Playwright smoke test (`e2e/`, `playwright.config.ts`).** One Chromium, one project, one test that signs in, opens Projects, flips the theme, then walks the project tabs and the environment tabs. `e2e/serve-dist.mjs` serves `dist/` with the hosted Worker's single-page-app fallback, and the export (not Metro) calls `/api/...` on its own origin, so `page.route` in `e2e/fixtures/api.ts` answers every call in the browser: no control plane, no server, nothing sensitive. The fixture is signed out until the sign-in form posts. A call the fixture does not answer gets a 404 and shows up as an `unmocked` annotation on the test (run with `--reporter=json` to read them); a page that throws fails the test. **When you add a screen the walk reaches, or a new read on one it already reaches, add that read to `readBody` in `e2e/fixtures/api.ts`**, and extend the walk in `e2e/smoke.spec.ts` for new tabs. The tab bars render their entries as links (Link `asChild` replaces the `tab` role), so tests find them with `getByRole('link')` inside the `tablist`. CI runs this as the `e2e` job in `verify.yml`, beside `verify`, not after it.
 
 **Where to run tests:** host VirtFS checkouts lack a usable Node/pnpm tree
 (`node_modules` is bind-mounted inside the guest). Run suites **inside the
