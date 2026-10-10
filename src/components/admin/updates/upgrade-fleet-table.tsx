@@ -95,7 +95,7 @@ export function UpgradeFleetTable({
               </DataTableCell>
             )}
             <DataTableCell column={col('status')}>
-              <Badge {...fleetStatusBadge(row.status)} />
+              <Badge {...fleetStatusBadge(row.status, row.errorCode)} />
             </DataTableCell>
             <DataTableCell column={col('installed')}>
               <Text style={styles.cell}>{installedText(row)}</Text>
