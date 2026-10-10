@@ -3,6 +3,7 @@ import { panelStyles } from '@/components/ui/panel-styles'
 import { SegmentedControl } from '@/components/ui'
 import {
   managedCreatableReleasesForEngine,
+  managedSeriesFailoverSupport,
   managedSeriesLabel,
 } from '@/lib/managed-releases'
 import { spacing } from '@/lib/theme'
@@ -60,6 +61,8 @@ export function ManagedVersionPicker({
   if (releases.length === 0 || !value) return null
 
   const selected = releases.find((row) => row.series === value.series)
+  const failoverSupport = managedSeriesFailoverSupport(engine, value.series)
+  const failoverNote = failoverSupport === 'supported' ? null : failoverSupport
 
   return (
     <View style={styles.group}>
@@ -82,6 +85,7 @@ export function ManagedVersionPicker({
           })
         }}
       />
+      {failoverNote ? <Text style={panelStyles.muted}>{failoverNote}</Text> : null}
 
       {selected && selected.variants.length > 1 ? (
         <>

@@ -39,6 +39,12 @@ export function deployErrorMessage(err: unknown): string {
   if (message.includes('acme_requires_org_opt_in')) {
     return "A hosting is pinned to a Let's Encrypt certificate, but this organization has not enabled Let's Encrypt. Turn on \"Allow Let's Encrypt certificates\" in TLS settings, or pin a different certificate."
   }
+  if (message.includes('tls_pin_mismatch')) {
+    return (
+      serverSentence(message) ??
+      'A pinned certificate does not cover every name of a hosting. Upload one that lists them all, or pin another.'
+    )
+  }
   if (message.includes('acme_requires_public_bind')) {
     return "A hosting pinned to a Let's Encrypt certificate is bound to a local or datacenter-only address — ACME issuance needs a public bind scope."
   }

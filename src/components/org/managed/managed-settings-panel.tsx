@@ -9,7 +9,6 @@ import {
 } from 'react-native'
 import {
   Button,
-  Checkbox,
   SectionPanel,
   SegmentedControl,
   TextField,
@@ -17,7 +16,7 @@ import {
 import { HeaderChevron } from '@/components/header-chevron'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { ManagedSslModePicker } from '@/components/org/managed/managed-ssl-mode-picker'
-import { ManagedAccessScopePicker } from '@/components/org/managed/managed-access-scope-picker'
+import { ManagedExternalAccessSwitch } from '@/components/org/managed/managed-external-access-switch'
 import {
   managedSslInheritLabel,
   type ManagedSslMode,
@@ -28,15 +27,14 @@ import {
   managedVariantImagesForImage,
 } from '@/lib/managed-releases'
 import {
-  DEFAULT_MANAGED_SQL_ACCESS_SCOPE,
-  type ManagedSqlAccessScope,
-} from '@/lib/managed-access-scope'
-import {
   managedCatalogEntryForCode,
   managedErrorMessage,
-  type ManagedExposureView,
+  type ManagedExternalAccessView,
   type ManagedSettings,
+  managedStoredImage,
 } from '@/lib/managed-services'
+import { useCan } from '@/lib/query-client'
+import { useSaveServerManagedExternalAccess } from '@/lib/queries/managed'
 import { chrome, colors, spacing, webPointer } from '@/lib/theme'
 
 const ENGINE_CONFIG_MAX = 16 * 1024
@@ -75,14 +73,13 @@ type SettingsForm = {
   cpus: string
   memoryBytes: string
   memoryReservationBytes: string
-  exposureEnabled: boolean
-  accessScope: ManagedSqlAccessScope
   labels: KvRow[]
   extraEnv: KvRow[]
   backupRetentionKeep: string
 }
 
-function settingsToForm(settings: ManagedSettings, defaultImage: string): SettingsForm {
+/** Exported for tests. */
+export function settingsToForm(settings: ManagedSettings, storedImage: string): SettingsForm {
   const labels = Object.entries(settings.dockerOptions?.labels ?? {}).map(
     ([key, value]) => createKvRow(key, value),
   )
@@ -90,7 +87,7 @@ function settingsToForm(settings: ManagedSettings, defaultImage: string): Settin
     ([key, value]) => createKvRow(key, value),
   )
   return {
-    image: settings.image ?? defaultImage,
+    image: storedImage,
     sslMode: settings.ssl.mode ?? null,
     engineConfig: settings.engineConfig ?? '',
     restart: settings.dockerOptions?.restart ?? 'unless-stopped',
@@ -111,8 +108,6 @@ function settingsToForm(settings: ManagedSettings, defaultImage: string): Settin
       settings.resources?.memoryReservationBytes != null
         ? String(settings.resources.memoryReservationBytes)
         : '',
-    exposureEnabled: settings.exposure.enabled,
-    accessScope: settings.exposure.scope ?? DEFAULT_MANAGED_SQL_ACCESS_SCOPE,
     labels: labels.length > 0 ? labels : [createKvRow()],
     extraEnv: extraEnv.length > 0 ? extraEnv : [createKvRow()],
     backupRetentionKeep:
@@ -144,8 +139,9 @@ type BuildSettingsResult =
   | { ok: false; error: string }
 
 /** Pure validation + payload construction, pulled out of the component so
- * `apply()` stays a flat couple of statements instead of nested branches. */
-function buildManagedSettingsPayload(form: SettingsForm): BuildSettingsResult {
+ * `apply()` stays a flat couple of statements instead of nested branches.
+ * Exported for tests. */
+export function buildManagedSettingsPayload(form: SettingsForm): BuildSettingsResult {
   if (form.engineConfig.length > ENGINE_CONFIG_MAX) {
     return {
       ok: false,
@@ -172,10 +168,6 @@ function buildManagedSettingsPayload(form: SettingsForm): BuildSettingsResult {
         cpus: parseOptionalNumber(form.cpus),
         memoryBytes: parseOptionalNumber(form.memoryBytes),
         memoryReservationBytes: parseOptionalNumber(form.memoryReservationBytes),
-      },
-      exposure: {
-        enabled: form.exposureEnabled,
-        ...(form.exposureEnabled ? { scope: form.accessScope } : {}),
       },
       ...(retentionKeep !== undefined
         ? { backups: { retentionKeep } }
@@ -313,31 +305,6 @@ function ImagePicker({
   )
 }
 
-function ExposureExtraFields({
-  scope,
-  disabled,
-  onScopeChange,
-}: Readonly<{
-  scope: ManagedSqlAccessScope
-  disabled: boolean
-  onScopeChange: (value: ManagedSqlAccessScope) => void
-}>) {
-  return (
-    <>
-      <Text style={panelStyles.detailLabel}>Client access</Text>
-      <Text style={panelStyles.muted}>
-        Where clients may reach the shared ProxySQL listener on this server.
-        Public clients always dial ProxySQL — never the engine container port.
-      </Text>
-      <ManagedAccessScopePicker
-        value={scope}
-        disabled={disabled}
-        onSelect={onScopeChange}
-      />
-    </>
-  )
-}
-
 function ApplyButton({
   canManage,
   disabled,
@@ -365,23 +332,63 @@ function ApplyButton({
 }
 
 /**
- * The gap between the toggle and the network, stated plainly.
- *
- * One ProxySQL fronts every managed database on a server and publishes one set
- * of host ports for all of them, so turning this cluster's exposure off does
- * not close the port while a co-resident cluster is exposed. Saying nothing
- * would leave an operator believing a reachable database is private.
+ * One switch per server that fronts the cluster. It saves on its own (it is a
+ * server setting, not part of the cluster's Apply) and covers every database
+ * on that server.
  */
-function ExposureRealityNote({
-  exposure,
-}: Readonly<{ exposure: ManagedExposureView | null }>) {
-  if (!exposure?.viaCoResidentCluster) return null
+function ExternalAccessRow({
+  orgId,
+  server,
+  disabled,
+  showName,
+}: Readonly<{
+  orgId: string
+  server: ManagedExternalAccessView['servers'][number]
+  disabled: boolean
+  showName: boolean
+}>) {
+  const canEdit = useCan('server', server.id, 'organization:manage')
+  const save = useSaveServerManagedExternalAccess(orgId)
   return (
-    <Text style={panelStyles.muted}>
-      Still reachable on the host: another managed database on this server is
-      exposed, and they share one proxy listener. Turn that one off too to close
-      the published port.
-    </Text>
+    <>
+      {save.actionError ? <Text style={panelStyles.error}>{save.actionError}</Text> : null}
+      <ManagedExternalAccessSwitch
+        serverName={showName ? server.name : undefined}
+        value={server.enabled}
+        otherClusters={server.otherClusters}
+        pending={server.pending}
+        disabled={disabled || !canEdit}
+        busy={save.isPending}
+        onChange={(enabled) => {
+          void save.run({ serverId: server.id, enabled })
+        }}
+      />
+    </>
+  )
+}
+
+function ExternalAccessSection({
+  orgId,
+  externalAccess,
+  disabled,
+}: Readonly<{
+  orgId: string
+  externalAccess: ManagedExternalAccessView | null
+  disabled: boolean
+}>) {
+  const servers = externalAccess?.servers ?? []
+  return (
+    <>
+      {servers.map((server) => (
+        <ExternalAccessRow
+          key={server.id}
+          orgId={orgId}
+          server={server}
+          disabled={disabled}
+          showName={servers.length > 1}
+        />
+      ))}
+    </>
   )
 }
 
@@ -395,7 +402,6 @@ function SettingsFormBody({
   imageOptions,
   versionLabel,
   organizationSslMode,
-  exposure,
   onApply,
 }: Readonly<{
   form: SettingsForm
@@ -409,8 +415,6 @@ function SettingsFormBody({
   versionLabel: string | null
   /** Org default the inherit row resolves to; `null` falls back to the platform mode. */
   organizationSslMode: ManagedSslMode | null
-  /** What the shared listener really publishes; `null` before the row exists. */
-  exposure: ManagedExposureView | null
   onApply: () => void
 }>) {
   return (
@@ -524,33 +528,6 @@ function SettingsFormBody({
         }
       />
 
-      {/* The toggle is enforced: with it off (and no other cluster on the
-          host exposed) the daemon publishes no host ports at all and the
-          engine is reachable only over the managed Docker network. */}
-      <Checkbox
-        label="Expose externally"
-        checked={form.exposureEnabled}
-        disabled={disabled}
-        onPress={() =>
-          setForm((current) => ({
-            ...current,
-            exposureEnabled: !current.exposureEnabled,
-          }))
-        }
-      />
-
-      {form.exposureEnabled ? (
-        <ExposureExtraFields
-          scope={form.accessScope}
-          disabled={disabled}
-          onScopeChange={(accessScope) =>
-            setForm((current) => ({ ...current, accessScope }))
-          }
-        />
-      ) : null}
-
-      <ExposureRealityNote exposure={exposure} />
-
       <ApplyButton
         canManage={canManage}
         disabled={disabled}
@@ -564,8 +541,9 @@ function SettingsFormBody({
 export function ManagedSettingsPanel({
   settings,
   engineCode,
+  orgId,
   organizationSslMode,
-  exposure,
+  externalAccess,
   canManage,
   busy,
   onApply,
@@ -575,30 +553,28 @@ export function ManagedSettingsPanel({
   engineCode: string | null
   /** From the detail response `ssl.organizationDefault`; labels the inherit row. */
   organizationSslMode: ManagedSslMode | null
-  /** From the detail response `exposure`; what the shared listener really publishes. */
-  exposure?: ManagedExposureView | null
+  orgId: string
+  /** From the detail response `externalAccess`; the per-server switch lives outside Apply. */
+  externalAccess?: ManagedExternalAccessView | null
   canManage: boolean
   busy: boolean
   onApply: (next: ManagedSettings) => Promise<void>
 }>) {
   const catalog = engineCode ? managedCatalogEntryForCode(engineCode) : undefined
-  const defaultImage = catalog?.defaultImage ?? ''
+  // An imageless stored service runs the legacy default, never the new one.
+  const storedImage = managedStoredImage(catalog, settings.image)
   // Series changes are refused by the control plane (`managed_series_immutable`),
   // so only offer other base-OS variants of the version already running.
-  const imageOptions = managedVariantImagesForImage(
-    engineCode,
-    settings.image ?? defaultImage,
-  )
-  const versionLabel =
-    describeManagedImage(settings.image ?? defaultImage)?.series ?? null
+  const imageOptions = managedVariantImagesForImage(engineCode, storedImage)
+  const versionLabel = describeManagedImage(storedImage)?.series ?? null
   const [expanded, setExpanded] = useState(false)
-  const [form, setForm] = useState(() => settingsToForm(settings, defaultImage))
+  const [form, setForm] = useState(() => settingsToForm(settings, storedImage))
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    setForm(settingsToForm(settings, defaultImage))
-  }, [settings, defaultImage])
+    setForm(settingsToForm(settings, storedImage))
+  }, [settings, storedImage])
 
   const apply = async () => {
     const result = buildManagedSettingsPayload(form)
@@ -622,10 +598,15 @@ export function ManagedSettingsPanel({
   return (
     <SectionPanel
       title="Settings"
-      hint="Image, resources, exposure, and Docker options"
+      hint="Image, resources, external access, and Docker options"
       collapsible
       defaultCollapsed
     >
+      <ExternalAccessSection
+        orgId={orgId}
+        externalAccess={externalAccess ?? null}
+        disabled={busy || saving || !canManage}
+      />
       <Pressable
         style={[panelStyles.expandedSection, webPointer]}
         onPress={() => setExpanded((current) => !current)}
@@ -647,7 +628,6 @@ export function ManagedSettingsPanel({
           imageOptions={imageOptions}
           versionLabel={versionLabel}
           organizationSslMode={organizationSslMode}
-          exposure={exposure ?? null}
           onApply={() => {
             void apply()
           }}

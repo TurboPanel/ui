@@ -8,6 +8,9 @@ import {
   deleteContainer,
   deleteTlsCertificate,
   fetchContainer,
+  fetchHosting,
+  fetchHostingDnsCheck,
+  requestLetsEncryptForHosting,
   fetchTlsLibrary,
   fetchVisibleHostings,
   fetchVisibleServices,
@@ -324,6 +327,36 @@ describe('instance-api resource fetch wrappers', () => {
       autoRenew: true,
       challengeType: 'http-01',
     })
+  })
+
+  it('requestLetsEncryptForHosting PUTs an empty body, fetchHosting and the DNS check GET', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ hosting: HOSTING, certificate: null, needsDeploy: true }),
+    )
+    await expect(
+      requestLetsEncryptForHosting('host-1'),
+    ).resolves.toMatchObject({ needsDeploy: true })
+    const put = nthCall(0)
+    expect(put.url).toContain('/api/client/v1/hostings/host-1/use-letsencrypt')
+    expect(put.init.method).toBe('PUT')
+    expect(requestBody(0)).toEqual({})
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ hosting: HOSTING }))
+    await fetchHosting('host-1')
+    expect(nthCall(1).url).toContain('/api/client/v1/hostings/host-1')
+    expect(nthCall(1).init.method).toBeUndefined()
+
+    const dns = { ready: true, checkedAt: 'x', hostnames: [], expectedAddresses: [] }
+    fetchMock.mockResolvedValueOnce(jsonResponse({ dns }))
+    await expect(fetchHostingDnsCheck('host-1')).resolves.toEqual({ dns })
+    expect(nthCall(2).url).toContain('/api/client/v1/hostings/host-1/dns-check')
+  })
+
+  it('requestLetsEncryptForHosting surfaces the refusal code', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'lets_encrypt_not_enabled' }, 403))
+    await expect(requestLetsEncryptForHosting('host-1')).rejects.toThrow(
+      /lets_encrypt_not_enabled/,
+    )
   })
 
   it('deleteTlsCertificate DELETEs the certificate id', async () => {

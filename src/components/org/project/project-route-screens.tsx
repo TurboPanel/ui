@@ -1,0 +1,190 @@
+import { Redirect, useLocalSearchParams, type Href } from 'expo-router'
+import { Platform } from 'react-native'
+import { ProjectBaseTab } from '@/components/org/project/base-tab/base-tab'
+import { EnvironmentOverviewTab } from '@/components/org/project/environment-overview/environment-overview-tab'
+import { EnvironmentConfigurationScreen } from '@/components/org/project/configuration/environment-configuration'
+import { useEnvironmentChrome } from '@/components/org/project/environment-shell'
+import { EnvironmentSettingsBody } from '@/components/org/project/settings/environment-settings-screen'
+import { ManagedFocusTab } from '@/components/org/project/managed-focus-tab'
+import { EnvironmentDeploymentHistoryPanel } from '@/components/org/project/environment-deployment-history-panel'
+import { useProjectContext } from '@/components/org/project/project-context'
+import { ProjectEnvironmentsTab } from '@/components/org/project/project-environments-tab'
+import { ProjectOverviewTab } from '@/components/org/project/project-overview-tab'
+import { ProjectSettingsScreen } from '@/components/org/project/settings/project-settings-screen'
+import {
+  isManagedProject,
+  legacyProjectRedirectHref,
+  projectOverviewHref,
+  withCarriedQuery,
+  type LegacyProjectSegment,
+} from '@/lib/project-navigation'
+
+// Route files stay a few lines: each names a screen from here. The checks
+// (platform and managed projects keep their own pages) live in one place.
+
+function firstParam(value: string | string[] | undefined): string {
+  if (Array.isArray(value)) return value[0] ?? ''
+  return value ?? ''
+}
+
+/** `/projects/:id/overview` — the Environments tab. */
+export function ProjectEnvironmentsScreen() {
+  const { project, isSystemProject } = useProjectContext()
+  if (project && isManagedProject(project)) {
+    return <ManagedFocusTab focus="overview" />
+  }
+  // Platform projects render their own panel through the shared compose tab.
+  if (isSystemProject) return <ProjectOverviewTab />
+  return <ProjectEnvironmentsTab />
+}
+
+/**
+ * The Base tab. Compose projects on the web get the Base map and what the
+ * Base holds; the phone app keeps the screen it had until the Base has its own
+ * native layout. Platform and managed projects have no Base: they go home.
+ */
+export function ProjectBaseScreen() {
+  const { orgId, projectId, project, isSystemProject } = useProjectContext()
+  if (isSystemProject || (project && isManagedProject(project))) {
+    return <Redirect href={projectOverviewHref(orgId, projectId) as Href} />
+  }
+  if (Platform.OS === 'web') return <ProjectBaseTab />
+  return <ProjectOverviewTab />
+}
+
+/**
+ * The Base lens routes (`/base/compose`, `/base/services`, `/base/bindings`,
+ * `/base/storage`, `/base/hosting`): the shared compose, as today's project
+ * scope. The Compose file editor lives here, linked from the Base tab.
+ */
+export function ProjectBaseLensScreen() {
+  const { orgId, projectId, project, isSystemProject } = useProjectContext()
+  if (isSystemProject || (project && isManagedProject(project))) {
+    return <Redirect href={projectOverviewHref(orgId, projectId) as Href} />
+  }
+  return <ProjectOverviewTab />
+}
+
+/** `/projects/:id/settings` — Project Settings. Platform and managed projects have none. */
+export function ProjectSettingsRouteScreen() {
+  const { orgId, projectId, project, isSystemProject } = useProjectContext()
+  if (isSystemProject || (project && isManagedProject(project))) {
+    return <Redirect href={projectOverviewHref(orgId, projectId) as Href} />
+  }
+  return <ProjectSettingsScreen />
+}
+
+/**
+ * Environment Overview. Compose projects on the web get the map, the services
+ * and the latest deployments. Platform projects keep the read-only component
+ * panel the shared compose tab renders, and the phone app keeps the screen it
+ * had until the map has its own native layout.
+ */
+export function EnvironmentOverviewScreen() {
+  const { project } = useProjectContext()
+  const withChrome = useEnvironmentChrome()
+  if (project && isManagedProject(project)) {
+    return <ManagedFocusTab focus="overview" />
+  }
+  if (withChrome && Platform.OS === 'web') return <EnvironmentOverviewTab />
+  return <ProjectOverviewTab />
+}
+
+/** Environment routes that render the compose surface (Configuration, Settings). */
+export function EnvironmentComposeScreen() {
+  const { orgId, projectId, project, isSystemProject } = useProjectContext()
+  if (isSystemProject) {
+    return <Redirect href={projectOverviewHref(orgId, projectId) as Href} />
+  }
+  if (project && isManagedProject(project)) {
+    return <ManagedFocusTab focus="overview" />
+  }
+  return <ProjectOverviewTab />
+}
+
+/**
+ * Environment Configuration: what the environment runs and where each value
+ * comes from. Platform and managed projects keep the screens they had.
+ */
+export function EnvironmentConfigurationTabScreen() {
+  const { orgId, projectId, project, isSystemProject } = useProjectContext()
+  if (isSystemProject) {
+    return <Redirect href={projectOverviewHref(orgId, projectId) as Href} />
+  }
+  if (project && isManagedProject(project)) {
+    return <ManagedFocusTab focus="overview" />
+  }
+  return <EnvironmentConfigurationScreen />
+}
+
+/**
+ * Environment Settings: branch and deploy on push, server, name and the
+ * danger zone. Platform and managed projects keep the screens they had.
+ */
+export function EnvironmentSettingsScreen() {
+  const { orgId, projectId, project, isSystemProject } = useProjectContext()
+  const withChrome = useEnvironmentChrome()
+  if (isSystemProject) {
+    return <Redirect href={projectOverviewHref(orgId, projectId) as Href} />
+  }
+  if (project && isManagedProject(project)) {
+    return <ManagedFocusTab focus="overview" />
+  }
+  return <EnvironmentSettingsBody showGitSource={withChrome} />
+}
+
+/** Environment Deployments: the deploy history, open. */
+export function EnvironmentDeploymentsScreen() {
+  const {
+    orgId,
+    projectId,
+    project,
+    isSystemProject,
+    pathEnvironmentId,
+    canManage,
+  } = useProjectContext()
+  if (isSystemProject) {
+    return <Redirect href={projectOverviewHref(orgId, projectId) as Href} />
+  }
+  if (project && isManagedProject(project)) {
+    return <ManagedFocusTab focus="overview" />
+  }
+  if (!pathEnvironmentId) return null
+  return (
+    <EnvironmentDeploymentHistoryPanel
+      orgId={orgId}
+      environmentId={pathEnvironmentId}
+      alwaysOpen
+      canManage={canManage}
+    />
+  )
+}
+
+/**
+ * A retired route (`/compose`, `/services`, `/bindings`, `/hosting`,
+ * `/storage`, `/servers`, `/map`, at project or environment scope). Sends the
+ * visitor to where that screen lives now and carries the query along
+ * (`?hostingId=` is a live deep link).
+ */
+export function LegacyProjectRedirect({
+  segment,
+}: Readonly<{ segment: LegacyProjectSegment }>) {
+  const { orgId, projectId, project, isSystemProject } = useProjectContext()
+  const params = useLocalSearchParams()
+  const environmentId = firstParam(params.environmentId) || null
+  const managed = project != null && isManagedProject(project)
+  if (isSystemProject || (managed && !environmentId)) {
+    return <Redirect href={projectOverviewHref(orgId, projectId) as Href} />
+  }
+  if (managed) return <ManagedFocusTab focus="overview" />
+  const target = legacyProjectRedirectHref(orgId, projectId, segment, environmentId)
+  if (!target) {
+    return <Redirect href={projectOverviewHref(orgId, projectId) as Href} />
+  }
+  const href = withCarriedQuery(target, params, [
+    'orgId',
+    'projectId',
+    'environmentId',
+  ])
+  return <Redirect href={href as Href} />
+}

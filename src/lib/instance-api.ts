@@ -18,7 +18,6 @@ import type {
   ManagedMemberRecord,
   ManagedServiceEngine,
   ManagedSettings,
-  ManagedSqlAccessScope,
   ManagedUserRecord,
 } from '@/lib/managed-services'
 import type { ManagedSslMode } from '@/lib/managed-ssl'
@@ -50,7 +49,6 @@ export type {
   ManagedServerSummary,
   ManagedServiceEngine,
   ManagedSettings,
-  ManagedSqlAccessScope,
   ManagedSslView,
   ManagedStatus,
   ManagedUserRecord,
@@ -114,6 +112,10 @@ export const MANAGED_REPLICA_HEALTH_STALE_ERROR = 'managed_replica_health_stale'
 export const MANAGED_PRIMARY_FENCE_FAILED_ERROR = 'managed_primary_fence_failed'
 export const MANAGED_USER_HAS_BINDINGS_ERROR = 'managed_user_has_bindings'
 export const MANAGED_DATABASE_HAS_BINDINGS_ERROR = 'managed_database_has_bindings'
+export const MANAGED_SERIES_IMMUTABLE_ERROR = 'managed_series_immutable'
+export const MANAGED_FAILOVER_UNSUPPORTED_ERROR = 'managed_failover_unsupported'
+export const MANAGED_VARIANT_SWAP_UNSAFE_ERROR = 'managed_variant_swap_unsafe'
+export const MANAGED_DATABASE_HAS_USERS_ERROR = 'managed_database_has_users'
 export const BINDING_KEY_PREFIX_IN_USE_ERROR = 'binding_key_prefix_in_use'
 export const BINDING_ENGINE_DEFAULTS_IN_USE_ERROR = 'binding_engine_defaults_in_use'
 export const BINDING_KEY_CONFLICT_ERROR = 'binding_key_conflict'
@@ -729,7 +731,14 @@ export type ServerGpu = {
 export type ServerHostResources = {
   cpus?: ServerCpuSocket[]
   gpus?: ServerGpu[]
-  memory?: { totalBytes?: number }
+  memory?: {
+    totalBytes?: number
+    /**
+     * Kernel memory page size in bytes (`getconf PAGESIZE`). Linux only;
+     * omitted elsewhere or when unreadable. Positive integer when present.
+     */
+    pageSizeBytes?: number
+  }
   swap?: { totalBytes?: number }
   ips?: ServerReportedIp[]
 }
@@ -853,13 +862,33 @@ export type TierNoticeState = {
  * `notice` is the daily-notice marker (hosted only) — `null` when no notice
  * is active, absent on a control plane that predates the field.
  */
+export type TierFreeCount = Readonly<{
+  tierId: string
+  label: string
+  free: number
+}>
+
 export type TierPlacementRecord<U extends number | string[] = number | string[]> = {
   licenseTier: string | null
   requiredTier: string
   recommendedTier: string
   unwatched: TierUnwatched<U>
+  pickedTier: string | null
+  tierPickNotice: string | null
+  /** Spare purchased licenses per tier (server detail only). */
+  tiersFree?: readonly TierFreeCount[]
   notice?: TierNoticeState | null
 }
+
+export type SetServerLicenseTierResponse = Readonly<{
+  ok: true
+  assignedTier: string | null
+  assignedTierId: string | null
+  pickedTier: string | null
+  pickedTierId: string | null
+  tierPickNotice: string | null
+  tiersFree: readonly TierFreeCount[]
+}>
 
 export type ServerLayoutPaths = {
   backup: string
@@ -990,7 +1019,122 @@ export async function fetchServerLabels(serverId: string): Promise<ServerLabelPa
   return body.labels
 }
 
-/** Replace-all. Pass `{}` to clear every label. */
+/** Delete blockers plus the co-located host. Mirrors turbopanel `ServerServicesRemovalKind`. */
+export type ServerRemovalReasonKind =
+  | 'network'
+  | 'container'
+  | 'ip'
+  | 'environment'
+  | 'managed'
+  | 'replica'
+  | 'deployment'
+  | 'slot'
+  | 'copy'
+  | 'colocated'
+
+export type ServerRemovalReason = {
+  kind: ServerRemovalReasonKind
+  count: number
+  message: string
+}
+
+export type CappedPreviewList<T> = {
+  items: T[]
+  more: number
+}
+
+export type ServerServicesAppContainer = {
+  name: string
+  status: string
+  role: string
+}
+
+export type ServerServicesApp = {
+  serviceId: string
+  name: string
+  project: string
+  environment: string
+  containers: CappedPreviewList<ServerServicesAppContainer>
+  domains: CappedPreviewList<string>
+}
+
+export type ServerServicesDatabaseRole = 'primary' | 'replica'
+
+export type ServerServicesDatabase = {
+  managedId: string
+  name: string
+  engine: string
+  role: ServerServicesDatabaseRole
+  status: string
+  readEligible: boolean
+  ordinal: number
+}
+
+export type ServerServicesDatabaseUser = {
+  serviceId: string
+  serviceName: string
+  databases: string[]
+}
+
+export type ServerServicesBackup = {
+  managedId: string
+  managedName: string
+  count: number
+  latestAt: string
+}
+
+export type ServerServicesNetwork = {
+  id: string
+  name: string
+  kind: string
+}
+
+export type ServerRuntime = {
+  kind: string
+  versions: string[]
+}
+
+/** `GET /servers/:id/services` — bounded queries of what is attached to a host. */
+export type ServerServicesRecord = {
+  serverId: string
+  removal: {
+    canRemove: boolean
+    online: boolean
+    canForget: boolean
+    reasons: ServerRemovalReason[]
+  }
+  apps: CappedPreviewList<ServerServicesApp>
+  databases: ServerServicesDatabase[]
+  databaseUsers: CappedPreviewList<ServerServicesDatabaseUser>
+  backups: CappedPreviewList<ServerServicesBackup>
+  networks: CappedPreviewList<ServerServicesNetwork>
+  ipCount: number
+  runtimes: ServerRuntime[]
+}
+
+export async function fetchServerServices(serverId: string): Promise<ServerServicesRecord> {
+  return await apiFetch<ServerServicesRecord>(`${CLIENT_API}/servers/${serverId}/services`)
+}
+
+/**
+ * Owner-only (`organization:own`). Sets or clears `server.preferred_tier_id`
+ * (`tierId` `null` clears the pick). The control plane recomputes the assigned
+ * tier from spare licenses; **422** `tier_below_required` when the pick is under
+ * the hardware floor; **404** `tier_not_found` / `server_not_licensed`.
+ */
+export async function setServerLicenseTier(
+  serverId: string,
+  tierId: string | null
+): Promise<SetServerLicenseTierResponse> {
+  return await apiFetch<SetServerLicenseTierResponse>(
+    `${CLIENT_API}/servers/${serverId}/license-tier`,
+    {
+      method: 'PUT',
+      body: JSON.stringify({ tierId }),
+    }
+  )
+}
+
 export async function saveServerLabels(
   serverId: string,
   labels: Record<string, string>
@@ -1261,6 +1405,31 @@ export async function saveServerPhpModes(
   return await apiFetch(`${CLIENT_API}/servers/${serverId}/php-modes`, {
     method: 'PUT',
     body: JSON.stringify({ phpModes }),
+  })
+}
+
+/** "Allow external access to the databases on this server" (default no). */
+export type ServerManagedExternalAccess = {
+  enabled: boolean
+  /** The server was told and has not confirmed yet; retried automatically. */
+  pending: boolean
+  /** Managed databases on the server that the setting covers. */
+  clusterCount: number
+}
+
+export async function fetchServerManagedExternalAccess(
+  serverId: string
+): Promise<ServerManagedExternalAccess> {
+  return await apiFetch(`${CLIENT_API}/servers/${serverId}/managed-external-access`)
+}
+
+export async function saveServerManagedExternalAccess(
+  serverId: string,
+  enabled: boolean
+): Promise<ServerManagedExternalAccess> {
+  return await apiFetch(`${CLIENT_API}/servers/${serverId}/managed-external-access`, {
+    method: 'PUT',
+    body: JSON.stringify({ enabled }),
   })
 }
 
@@ -1686,9 +1855,41 @@ export async function applyOrgFabric(orgId: string): Promise<FabricApplyResponse
   })
 }
 
+export type ServerDeleteBlockerKind = 'network' | 'container' | 'ip'
+
 export type ServerDeleteBlocker = {
-  kind: 'network' | 'container'
+  kind: string
   count: number
+}
+
+export const SERVER_HAS_BLOCKERS_CODE = 'server_has_blockers'
+export const SERVER_ONLINE_CODE = 'server_online'
+
+export type ServerDeletePreviewContainer = {
+  id: string
+  name: string
+  status: string
+  serviceName?: string
+}
+
+export type ServerDeletePreviewNetwork = {
+  id: string
+  name: string
+}
+
+export type ServerDeletePreviewIp = {
+  id: string
+  address: string
+}
+
+export type ServerDeletePreview = {
+  online: boolean
+  canForget: boolean
+  colocated: boolean
+  blockers: ServerDeleteBlocker[]
+  containers: CappedPreviewList<ServerDeletePreviewContainer>
+  networks: CappedPreviewList<ServerDeletePreviewNetwork>
+  ips: CappedPreviewList<ServerDeletePreviewIp>
 }
 
 export class ServerDeleteBlockedError extends Error {
@@ -1702,26 +1903,43 @@ export class ServerDeleteBlockedError extends Error {
   }
 }
 
-function formatDeleteBlockerMessage(kind: 'network' | 'container', count: number): string {
-  let label: string
-  if (kind === 'network') {
-    label = count === 1 ? 'network' : 'networks'
-  } else {
-    label = count === 1 ? 'container' : 'containers'
+export class ServerDeleteOnlineError extends Error {
+  readonly code = 'server_online'
+
+  constructor(message = 'This host is connected. Forgetting records is only available while it is offline.') {
+    super(message)
+    this.name = 'ServerDeleteOnlineError'
   }
-  return `Remove ${count} ${label} on this server before deleting it.`
+}
+
+export function formatServerDeleteBlockerLine(kind: string, count: number): string {
+  if (kind === 'network') {
+    const label = count === 1 ? 'network' : 'networks'
+    return `Remove ${count} ${label} on this server before deleting it.`
+  }
+  if (kind === 'container') {
+    const label = count === 1 ? 'container' : 'containers'
+    return `Remove ${count} ${label} on this server before deleting it.`
+  }
+  if (kind === 'ip') {
+    const label = count === 1 ? 'address' : 'addresses'
+    return `Remove ${count} ${label} on this server before deleting it.`
+  }
+  const noun = count === 1 ? 'item' : 'items'
+  return `${count} other ${noun} still placed on this server — remove them first`
 }
 
 export function formatServerDeleteBlockedError(err: unknown): string {
+  if (err instanceof ServerDeleteOnlineError) {
+    return err.message
+  }
   if (err instanceof ServerDeleteBlockedError) {
     const parts: string[] = []
-    const networkBlock = err.blockers.find((blocker) => blocker.kind === 'network')
-    if (networkBlock) {
-      parts.push(formatDeleteBlockerMessage('network', networkBlock.count))
-    }
-    const containerBlock = err.blockers.find((blocker) => blocker.kind === 'container')
-    if (containerBlock) {
-      parts.push(formatDeleteBlockerMessage('container', containerBlock.count))
+    for (const blocker of err.blockers) {
+      if (typeof blocker.kind !== 'string' || typeof blocker.count !== 'number') {
+        continue
+      }
+      parts.push(formatServerDeleteBlockerLine(blocker.kind, blocker.count))
     }
     if (parts.length > 0) {
       return parts.join(' ')
@@ -1731,9 +1949,17 @@ export function formatServerDeleteBlockedError(err: unknown): string {
   return err instanceof Error ? err.message : 'Failed to delete server'
 }
 
-export async function deleteServer(
+export async function getServerDeletePreview(
   serverId: string,
   organizationId?: string | null
+): Promise<ServerDeletePreview> {
+  return await apiFetch(`${CLIENT_API}/servers/${serverId}/delete-preview`, undefined, organizationId)
+}
+
+export async function deleteServer(
+  serverId: string,
+  organizationId?: string | null,
+  options?: Readonly<{ forgetResources?: boolean }>
 ): Promise<{ ok: true; serverId: string }> {
   const resolvedOrgId = organizationId ?? getActiveOrganizationId()
   const headers: Record<string, string> = {
@@ -1744,10 +1970,12 @@ export async function deleteServer(
   }
 
   const path = `${CLIENT_API}/servers/${serverId}`
+  const forgetResources = options?.forgetResources === true
   const response = await fetchWithStepUp(controlPlaneUrl(path), {
     method: 'DELETE',
     credentials: 'include',
     headers,
+    ...(forgetResources ? { body: JSON.stringify({ forgetResources: true }) } : {}),
   })
 
   if (!response.ok) {
@@ -1762,7 +1990,14 @@ export async function deleteServer(
       // Non-JSON error body.
     }
 
-    if (response.status === 409 && body.code === 'server_has_blockers' && body.blockers) {
+    if (response.status === 409 && body.code === SERVER_ONLINE_CODE) {
+      if (body.error) {
+        throw new ServerDeleteOnlineError(body.error)
+      }
+      throw new ServerDeleteOnlineError()
+    }
+
+    if (response.status === 409 && body.code === SERVER_HAS_BLOCKERS_CODE && body.blockers) {
       throw new ServerDeleteBlockedError(
         body.error ?? 'Cannot delete this server while dependent resources still exist',
         body.blockers
@@ -2822,9 +3057,36 @@ export type ServiceRecord = {
    * has looked.
    */
   app?: ServiceApp | null
+  /**
+   * The daemon's last report of how the service is running. Read-only; absent
+   * until the service's server has reported it, and the latest report only,
+   * never a history.
+   */
+  runState?: ServiceRunStateRecord
   options?: ServiceOptions | Record<string, unknown> | null
   createdAt: string
   updatedAt: string
+}
+
+export type ServiceRunStateName =
+  | 'starting'
+  | 'running'
+  | 'unhealthy'
+  | 'crashing'
+  | 'stopped'
+  | 'stopped_after_crashes'
+  | 'unknown'
+
+/** Mirrors the control plane's `ServiceRunStateView` (turbopanel#317). */
+export type ServiceRunStateRecord = {
+  state: ServiceRunStateName
+  /** True only for `running`, which the daemon reports after 60 s up. */
+  running: boolean
+  restartCount: number
+  /** The last log line the daemon saw, up to 400 characters; null when none. */
+  lastError: string | null
+  /** When the daemon last saw this exact state. */
+  asOf: string
 }
 
 export type ServiceApp = {
@@ -2844,8 +3106,48 @@ export type HostingRecord = {
   ipId?: string | null
   metadata?: Record<string, unknown> | null
   options?: Record<string, unknown> | null
+  /** Derived by the server on GET responses; absent on older control planes. */
+  certificate?: HostingCertificate | null
   createdAt: string
   updatedAt: string
+}
+
+export type HostingCertificateState =
+  | 'test_certificate'
+  | 'uploaded'
+  | 'secure'
+  | 'waiting_for_dns'
+  | 'issuing'
+  | 'renewal_failed'
+
+export type HostingDnsReport = {
+  ready: boolean
+  checkedAt: string
+  hostnames: { hostname: string; resolves: boolean; addresses: string[] }[]
+  expectedAddresses: string[]
+}
+
+/** What a hosting shows about its certificate; the server decides every field. */
+export type HostingCertificate = {
+  state: HostingCertificateState
+  source: 'test' | 'uploaded' | 'lets_encrypt'
+  expiresAt: string | null
+  expiresInDays: number | null
+  renewsAutomatically: boolean
+  lastError: string | null
+  lastIssuedAt: string | null
+  uploadedExpiryWarning: 'none' | '14d' | '3d' | '1d' | 'expired'
+  dns: HostingDnsReport | null
+  letsEncryptAvailable: boolean
+  /** The hosting's www choice (`options.www`); Let’s Encrypt covers every name it adds. */
+  www: 'off' | 'both' | 'www-to-root' | 'root-to-www'
+  needsDeploy: boolean
+}
+
+export type UseLetsEncryptResult = {
+  hosting: HostingRecord
+  certificate: HostingCertificate | null
+  needsDeploy: boolean
 }
 
 export type TlsSource = 'upload' | 'lets_encrypt' | 'self_signed' | 'organization_ca'
@@ -3386,6 +3688,27 @@ export async function fetchVisibleHostings(
 ): Promise<{ hostings: HostingRecord[] }> {
   const params = new URLSearchParams({ serviceId })
   return await apiFetch(`${CLIENT_API}/hostings?${params.toString()}`)
+}
+
+export async function fetchHosting(hostingId: string): Promise<{ hosting: HostingRecord }> {
+  return await apiFetch(`${CLIENT_API}/hostings/${hostingId}`)
+}
+
+/**
+ * One click: check DNS, then pin a Let's Encrypt certificate (or wait for DNS).
+ * The names covered follow the hosting's own www choice (`options.www`).
+ */
+export async function requestLetsEncryptForHosting(
+  hostingId: string
+): Promise<UseLetsEncryptResult> {
+  return await apiFetch(`${CLIENT_API}/hostings/${hostingId}/use-letsencrypt`, {
+    method: 'PUT',
+    body: JSON.stringify({}),
+  })
+}
+
+export async function fetchHostingDnsCheck(hostingId: string): Promise<{ dns: HostingDnsReport }> {
+  return await apiFetch(`${CLIENT_API}/hostings/${hostingId}/dns-check`)
 }
 
 export async function createHosting(
@@ -5190,6 +5513,8 @@ export type CommandRecord = {
   payload: Record<string, unknown> | null
   result: Record<string, unknown> | null
   error: string | null
+  /** The one line of the error that says what went wrong; absent on an older control plane. */
+  errorLine?: string | null
   attempts: number
   createdAt: string
   updatedAt: string
@@ -5266,6 +5591,8 @@ export type CommandStatusRecord = {
   finishedAt: string | null
   errorCode: string | null
   errorMessage: string | null
+  /** The one line of `errorMessage` that says what went wrong; absent on an older control plane. */
+  errorLine?: string | null
   /** Whether a retained execution log exists for this command. */
   hasLog: boolean
 }
@@ -5382,6 +5709,8 @@ export type DeploymentHistoryRecord = {
   durationMs: number | null
   errorCode: string | null
   errorMessage: string | null
+  /** The one line of `errorMessage` that says what went wrong; absent on an older control plane. */
+  errorLine?: string | null
   /** Whether a retained execution log exists (resolved store-side). */
   hasLog: boolean
   /** The engine the attempt ran; null (or absent) for attempts queued before it was recorded. */
@@ -5392,6 +5721,12 @@ export type DeploymentHistoryRecord = {
   strategyOutcomeReason?: string | null
   /** What set the attempt off when it was a git push; null for a deploy a person started. */
   trigger?: DeploymentTriggerRecord | null
+  /**
+   * When someone asked to cancel this attempt; null (or absent) if nobody did.
+   * Set and not yet finished = "Cancelling"; set on a `succeeded` row = the
+   * cancel came too late.
+   */
+  cancelRequestedAt?: string | null
 }
 
 export type DeploymentStrategy = 'inplace' | 'sequential'
@@ -6179,6 +6514,35 @@ export type DeployPreviewSecretPlanEntry = {
   forRuntime: boolean
 }
 
+/** Why a variable that was set on a Node app does not reach its process. */
+export type NativeAppVariableReason =
+  | 'platform'
+  | 'invalid_name'
+  | 'invalid_value'
+  | 'too_many'
+  | 'not_referenced'
+
+/**
+ * One environment variable of a Node app. `source` is the scope that set it —
+ * `organization`, `workspace`, `project`, `environment`, `service`, `hosting`,
+ * `server`, `binding` (a managed database), `platform` (TurboPanel sets it for
+ * every app) or `unknown`. `value` is `null` for a secret.
+ */
+export type DeployPreviewNativeAppVariable = {
+  name: string
+  source: string
+  isSecret: boolean
+  value: string | null
+  delivered: boolean
+  reason?: NativeAppVariableReason
+}
+
+/** Every environment variable one Node app's process gets (or is refused). */
+export type DeployPreviewNativeAppVariables = {
+  composeServiceName: string
+  variables: DeployPreviewNativeAppVariable[]
+}
+
 export type DeployPreviewResponse = {
   ok: true
   /**
@@ -6208,6 +6572,8 @@ export type DeployPreviewResponse = {
   envFile?: string
   /** Host/container secret file plan — no envelopes or plaintext. */
   secretPlan?: DeployPreviewSecretPlanEntry[]
+  /** Environment variables each Node app (native service) would get; secrets masked. */
+  nativeAppVariables?: DeployPreviewNativeAppVariables[]
 }
 
 /**
@@ -6216,6 +6582,106 @@ export type DeployPreviewResponse = {
  */
 export async function fetchDeployPreview(environmentId: string): Promise<DeployPreviewResponse> {
   return await apiFetch(`${CLIENT_API}/environments/${environmentId}/deploy-preview`)
+}
+
+/** Where a config-view value comes from (the control plane's `ConfigViewSource`). */
+export type ConfigViewSource = 'base' | 'project' | 'environment'
+export type ConfigViewArea = 'service' | 'domain' | 'linuxUser' | 'variable'
+export type ConfigViewServiceKind = 'container' | 'site' | 'node'
+export type ConfigViewLinuxUserAccess = 'none' | 'sftp' | 'ssh'
+
+/** One setting of one app (or its domain / Linux user) in the effective configuration. */
+export type ConfigViewFieldRow = {
+  /** Stable id, e.g. `svc:web:command`. */
+  key: string
+  area: 'service' | 'domain' | 'linuxUser'
+  field: string
+  label: string
+  /** Display text; `null` when `masked`. */
+  value: string | null
+  masked: boolean
+  source: ConfigViewSource
+}
+
+export type ConfigViewService = {
+  name: string
+  /** This environment's service row; `null` when the Base has it but none is saved yet. */
+  serviceId: string | null
+  kind: ConfigViewServiceKind
+  /** `environment` when added here, or when the environment stands alone. */
+  source: ConfigViewSource
+  rows: ConfigViewFieldRow[]
+}
+
+export type ConfigViewLinuxUser = {
+  name: string
+  access: ConfigViewLinuxUserAccess
+  description: string | null
+  source: ConfigViewSource
+  /** Service names that run as this user. */
+  usedBy: string[]
+}
+
+export type ConfigViewVariable = {
+  /** `var:<NAME>`. */
+  key: string
+  name: string
+  variableId: string
+  /** `null` when secret: the server never sends a secret value. */
+  value: string | null
+  isSecret: boolean
+  forBuild: boolean
+  forRuntime: boolean
+  source: 'project' | 'environment'
+}
+
+export type ConfigViewChange = {
+  /** `svc:<service>`, `svc:<service>:<field>`, `user:<name>` or `var:<NAME>`. */
+  key: string
+  area: ConfigViewArea
+  /** Plain-words name of what changed. */
+  label: string
+  field: string | null
+  serviceName: string | null
+  serviceId: string | null
+  kind: 'added' | 'changed' | 'removed'
+  /** `null` when the Base has nothing, or when masked. */
+  baseValue: string | null
+  baseSource: 'base' | 'project' | null
+  /** `null` when this environment has nothing, or when masked. */
+  envValue: string | null
+  envSource: 'environment' | null
+  /** A side is a secret: the change is real but no value is sent. */
+  masked: boolean
+}
+
+export type ConfigViewSide = {
+  services: ConfigViewService[]
+  variables: ConfigViewVariable[]
+  linuxUsers: ConfigViewLinuxUser[]
+}
+
+export type EnvironmentConfigViewResponse = {
+  ok: true
+  environmentId: string
+  projectId: string
+  /** Derived from the saved compose, never stored: `false` for `services: !override` / `!reset`. */
+  followsBase: boolean
+  base: ConfigViewSide
+  effective: ConfigViewSide
+  changes: ConfigViewChange[]
+}
+
+/**
+ * Read-only effective configuration of one environment: the Base, what the
+ * environment really runs (the same merge a deploy uses) and what differs.
+ * Secrets carry no value. **422** `compose_invalid` when a saved compose cannot
+ * be read.
+ */
+export async function fetchEnvironmentConfigView(
+  environmentId: string
+): Promise<EnvironmentConfigViewResponse> {
+  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/config-view`)
 }
 
 export type StorageKind = 'volume' | 'directory' | 'file'
@@ -6600,13 +7066,6 @@ export type ProjectPrincipalRecord = {
   options: Record<string, unknown> | null
   serviceIds: string[]
   /**
-   * Runtime series this principal may execute on the host, each becoming a
-   * unix group membership. `grantedBy` says whether an operator granted it or
-   * a deploy inserted it because a service declared the runtime — both are
-   * real, revocable grants; the distinction exists so the UI can say why.
-   */
-  entitlements: PrincipalEntitlement[]
-  /**
    * How this account may log in, as the operator set it.
    *
    * Derived server-side from `options.shell` rather than stored separately —
@@ -6628,12 +7087,6 @@ export type ProjectPrincipalRecord = {
   passwordAuth: boolean
   createdAt: string
   updatedAt: string
-}
-
-export type PrincipalEntitlement = {
-  runtime: string
-  series: string
-  grantedBy: 'operator' | 'deploy'
 }
 
 export type PrincipalAccessLevel = 'none' | 'sftp' | 'shell'
@@ -6706,7 +7159,6 @@ export async function createProjectPrincipal(
     /** Omit to use the org default; 409 `principal_scheme_locked` when the org locks it. */
     nameScheme?: NameScheme
     serviceIds?: string[]
-    entitlements?: { runtime: string; series: string }[]
     access?: PrincipalAccessLevel
     options?: Record<string, unknown>
   }
@@ -6726,23 +7178,22 @@ export async function createProjectPrincipal(
 }
 
 /**
- * Patch a principal's tenancies, runtime entitlements, and/or SSH access.
+ * Patch a principal's tenancies and/or SSH access.
  *
  * Each field is **omitted when undefined** and sent when present, because the
  * API distinguishes the two: absent means "leave them alone", `[]` means
- * "revoke everything". Collapsing them would make a tenancy-only edit silently
- * strip every entitlement.
+ * "revoke everything". Collapsing them would make an access-only edit silently
+ * unassign every service.
  *
- * `reconciled` reports which servers the change was pushed to. Entitlements and
- * access are enforced on the host as unix group membership, so a change that
- * only landed in the database has not actually happened yet.
+ * `reconciled` reports which servers the change was pushed to. Access is
+ * enforced on the host as unix group membership, so a change that only landed
+ * in the database has not actually happened yet.
  */
 export async function updateProjectPrincipal(
   projectId: string,
   principalId: string,
   patch: {
     serviceIds?: string[]
-    entitlements?: { runtime: string; series: string }[]
     access?: PrincipalAccessLevel
   }
 ): Promise<{
@@ -6830,6 +7281,35 @@ export async function saveServerResourceLimits(
     method: 'PUT',
     body: JSON.stringify({ resourceLimits }),
   })
+}
+
+/**
+ * `cancelled`: the deploy never started on the host. `cancelling`: the host was
+ * told to stop. `already_cancelled`: nothing to do.
+ */
+export type CancelDeploymentState = 'cancelled' | 'cancelling' | 'already_cancelled'
+
+export type CancelDeploymentResponse = {
+  ok: true
+  state: CancelDeploymentState
+  environmentId: string
+  deploymentId: string
+}
+
+/**
+ * Ask the control plane to cancel a running or queued deploy (the whole deploy,
+ * every host). `deploymentId` is the deploy command id. No step-up: a re-deploy
+ * fully reverses it. **409** `deploy_not_cancellable` (already finished) or
+ * `cancel_unsupported` (the server's agent is too old).
+ */
+export async function cancelDeployment(
+  environmentId: string,
+  deploymentId: string
+): Promise<CancelDeploymentResponse> {
+  return await apiFetch(
+    `${CLIENT_API}/environments/${environmentId}/deployments/${deploymentId}/cancel`,
+    { method: 'POST', body: JSON.stringify({}) }
+  )
 }
 
 export async function stopEnvironment(environmentId: string): Promise<CommandEnqueueResponse> {
@@ -7879,10 +8359,6 @@ export async function createEnvironmentManaged(
     engineSeries?: string
     /** Base-OS variant of `engineSeries` (`alpine` / `debian` / `oraclelinux9` / `ubi`). */
     imageVariant?: string
-    exposure?: {
-      enabled: boolean
-      scope?: ManagedSqlAccessScope
-    }
   }
 ): Promise<{
   ok: true
@@ -9063,6 +9539,55 @@ export async function deleteNotificationChannel(
     `${CLIENT_API}/notification-channels/${encodeURIComponent(id)}`,
     { method: 'DELETE' },
     organizationId
+  )
+}
+
+export type OrganizationActivityFilter = 'all' | 'deploying' | 'failed'
+
+export type OrganizationActivityItem = {
+  /** The command id. */
+  id: string
+  projectId: string | null
+  projectName: string | null
+  environmentId: string | null
+  environmentName: string | null
+  serverId: string
+  action: 'deploy' | 'start' | 'restart' | 'stop'
+  state: 'deploying' | 'failed'
+  startedAt: string
+  /** Not recorded yet; always null. */
+  step: number | null
+  totalSteps: number | null
+  durationSecs: number
+  errorMessage: string | null
+  /** Not recorded yet; always null. */
+  crashCount: number | null
+}
+
+export type OrganizationActivityPage = {
+  ok: true
+  items: OrganizationActivityItem[]
+  total: number
+  hasMore: boolean
+}
+
+/**
+ * Running and recently failed deploys, restarts and stops across the
+ * organization, newest first. Owners and managers only (403 otherwise); poll it.
+ */
+export async function fetchOrganizationActivity(
+  orgId: string,
+  params: Readonly<{ filter?: OrganizationActivityFilter; limit?: number; offset?: number }> = {}
+): Promise<OrganizationActivityPage> {
+  const query = new URLSearchParams()
+  if (params.filter) query.set('filter', params.filter)
+  if (params.limit !== undefined) query.set('limit', String(params.limit))
+  if (params.offset !== undefined) query.set('offset', String(params.offset))
+  const suffix = query.size > 0 ? `?${query.toString()}` : ''
+  return await apiFetch(
+    `${CLIENT_API}/organizations/${encodeURIComponent(orgId)}/activity${suffix}`,
+    undefined,
+    orgId
   )
 }
 

@@ -108,7 +108,7 @@ Authored Tamagui config lives in `babel.config.cjs`, `src/lib/tamagui.config.ts`
 - **Expo SDK 57** (React Native 0.86, React 19.2) — keep Expo module versions aligned with `pnpm expo install --fix`. Native `ios/` / `android/` are not checked in (CNG).
 - **Tamagui** `^2.0.0-rc.26` — configured via `babel.config.cjs` (not `app.json` plugins); `reactCompiler` experiment is disabled to avoid conflicts with the Tamagui babel plugin.
 - **React Query** `^5.90.14` — see [Server state (React Query)](#server-state-react-query) below.
-- **Fonts** — `@tamagui/font-inter` OTF files loaded in `RootLayout` via `useFonts`; layout returns `null` until fonts are ready.
+- **Fonts** — `RootLayout` registers everything through `useFonts` and returns `null` until the fonts are ready. v4 type is Plus Jakarta Sans (700; 800 italic for page titles), Geist (400 / 500 / 600) and Geist Mono (400 / 500 / 600), packaged from `@expo-google-fonts/*` and bundled as same-origin assets: on the web `font-src 'self' data:` already covers them (`scripts/hosted-security-headers.test.ts` keeps it that way), and no font host is linked. Each weight is its own family name (`Geist_500Medium`); `src/lib/v4/typography.ts` maps roles to those names and never sets `fontWeight` beside them, because a phone applies it unreliably to a custom font. A test keeps the `useFonts` map and the role table equal. The old `@tamagui/font-inter` files stay loaded until no screen uses them. A new font weight needs the same three steps: `pnpm add`, a `useFonts` entry, a role in `typography.ts`; then `pnpm notices:generate`.
 
 ## Testing & pre-commit
 
@@ -188,13 +188,13 @@ This repo is the **signed-in product console** (org + admin + install/sign-in), 
 | | **ui** (this repo) | **website** (`~/website`) |
 | --- | --- | --- |
 | Surface | Org console, admin, install/sign-in product UI | Marketing pages, landing/heroes, docs chrome, pricing/roadmap |
-| North star | Dark-first **OLED** ops console, dense tables | Fast, trustworthy, **light-first** marketing + readable docs (dark mode supported) |
+| North star | Ops console in two first-class themes (Navy dark, Paper light), dense tables | Fast, trustworthy, **light-first** marketing + readable docs (dark mode supported) |
 | Design system | `design-system/turbopanel/` | `design-system/turbopanel-website/` |
 | Skill path | `.agents/skills/ui-ux-pro-max/` | `.agents/skills/ui-ux-pro-max/` |
-| Tokens | `src/lib/theme.ts` (Tamagui: `colors`, `spacing`, `layout`) | `--tp-*` in `src/app/globals.css` |
+| Tokens | `src/lib/theme-palettes.ts` + `src/lib/theme.ts` (`colors`, `chrome`, `spacing`, `layout`) | `--tp-*` in `src/app/globals.css` |
 | Stack search | `--stack react-native` | `--stack nextjs` |
 
-Shared brand cue only: accent green **`#3dd68c`**. Do **not** copy light-first marketing layout, Plus Jakarta display rules, or website Master into the console — and do not apply OLED console density / Tamagui patterns to the marketing site.
+Shared brand cues only: blue `#3366cc` (ours) and green `#3dd68c` (running). The console follows the v4 "Navy & Tee" system in its own `design-system/turbopanel/`, including Plus Jakarta Sans display type for titles (Geist for text, Geist Mono for code; see Stack › Fonts). Do **not** copy the website's light-first marketing layout or the website Master into the console — and do not apply console density / Tamagui patterns to the marketing site.
 
 ### When to use (mandatory)
 
@@ -217,7 +217,7 @@ Skip the skill for pure non-visual work (API wiring with no UI change, types-onl
 | Cursor rule | [`.cursor/rules/ui-ux-pro-max.mdc`](.cursor/rules/ui-ux-pro-max.mdc) |
 | Master (global SoT) | [`design-system/turbopanel/MASTER.md`](design-system/turbopanel/MASTER.md) |
 | Page overrides | `design-system/turbopanel/pages/<page>.md` (page **wins** over Master) |
-| Runtime tokens | `src/lib/theme.ts` — no one-off hex in components |
+| Runtime tokens | `src/lib/theme.ts` over `src/lib/theme-palettes.ts` — no one-off hex in components |
 | Frosted chrome | `src/lib/glass.ts` + `src/components/glass/glass-surface.tsx` (frosted surface; iOS 26+ `expo-glass-effect`) |
 | Shared UI primitives | `src/components/ui/` — barrel `src/components/ui/index.ts` (see [Component layer](#component-layer)) |
 | Shared panel patterns | `src/components/ui/panel-styles.ts` (`panelStyles`) |
@@ -239,6 +239,8 @@ and drifts the moment one copy is edited.
 | Shared panel styles | `src/components/ui/panel-styles.ts` | `panelStyles` — page titles, muted copy, detail cards, callouts, toolbar buttons. |
 | Tokens | `src/lib/theme.ts` | `colors`, `chrome`, `spacing`, `layout`, `webPointer`. No one-off hex in components. |
 | Features | `src/components/org/*`, `src/components/admin/*` | Screen-specific composition only. |
+
+**v4 primitives** live in `src/components/ui/v4/` (barrel `@/components/ui/v4`, one file and one test file each): status chip and triplet, source tag, "Runs as" chip, underline tabs, page title and section heading, card, list group and row, notice (with the raw error line), action button hierarchy (primary, secondary, quiet, danger; 36 px, 44 px on touch), sheet, empty panel, pending bar, Tee stripe, layer cards and choice cards. They paint through `usePalette()` (web: the CSS-variable `colors`, native: the live palette) and build styles with `themedStyles`, so both themes work without a re-render on the web. Words, status keys, glyph shapes, sizes and fonts live in pure `src/lib/v4/` files (`status-vocab.ts`, `ui-scale.ts`, `typography.ts`) that carry the coverage gate. Tests run each primitive three ways (web, phone Navy, phone Paper) over the DOM stand-ins in `rn-stub.tsx`. Screens built in later v4 slices compose these; do not restyle them per screen.
 
 **Dependency direction is one-way: `ui/` must never import from `org/` or
 `admin/`.** A primitive that needs a token takes it from `src/lib/theme.ts`.
@@ -312,8 +314,9 @@ Apply in this order (later steps only fill gaps; they do not override earlier pr
 
 These are non-negotiable for the console (detail lives in Master):
 
-- Dark-first **OLED** console; dense ops tables
-- Interactive chrome (nav, CTAs, toolbar) follows runtime via `chrome.*`: Workers / HA → blue `#3366cc`, Deno → green `#3dd68c`; **online / live status stays green** (`colors.green` / `colors.accent`)
+- Two first-class themes, **Navy** (dark) and **Paper** (light); the default follows the device, and the choice (Light / Dark / Match computer) is saved in the browser only. Every screen must work in both. See [Theme](#theme)
+- Dense ops tables
+- Interactive chrome (nav, CTAs, toolbar) is brand blue via `chrome.*` on both control-plane runtimes; **online / live status stays green** (`colors.ok`, alias `colors.green`); blue **text** uses `colors.link`
 - Soft elevation / hairline borders + restrained **frosted chrome** on shell chrome — **not** light SaaS, purple gradients, cyberpunk neon, or iridescent aberration
 - Design dials already chosen: variance ~4, motion ~4, density ~8 (dashboard)
 - Tokens only from `src/lib/theme.ts` (`colors` + `chrome`) and `src/lib/glass.ts` — no parallel hex systems
@@ -322,12 +325,23 @@ These are non-negotiable for the console (detail lives in Master):
 ### Anti-patterns / do-not
 
 - Skip the skill and freestyle a purple/indigo SaaS or cream+serif “AI default” look
-- Apply `~/website` light-first marketing / docs chrome / Plus Jakarta hero rules to the console
+- Apply the `~/website` light-first marketing / docs chrome or its Master to the console
+- A screen that is only checked in one theme; colour maths on `colors.*` (web values are CSS variables)
 - Raw hex in components when a `theme.ts` token exists
 - Ignore a page override when one exists for the surface you’re editing
 - Silent `--persist --force` of Master (discards curated decisions)
 - Decorative card stacks, emoji-as-icons, status conveyed by color alone
 - Copy website search project name (`TurboPanel Website`) or `--stack nextjs` into this repo
+
+### Theme
+
+Two palettes (v4 "Navy & Tee"): **Navy** (dark) and **Paper** (light), defined once in `src/lib/theme-palettes.ts` with the spec's token names; the old `colors.*` keys (`bgPanel`, `textMuted`, ...) are aliases of those tokens, so older screens follow the theme untouched.
+
+- **Choice:** Light, Dark or Match computer (default). Stored in this browser only (`localStorage` key `turbopanel.theme`, never on the server), kept by `src/lib/theme-preference.ts` (`useThemeMode`, `useColorScheme`, `useColors`, `setThemeMode`). The switch is `ThemeSwitch` (`src/components/header-theme-switch.tsx`): icons in the header at desktop widths, rows in the account menu on narrow web.
+- **Web:** `colors.*` are CSS variable references (`var(--tp-bg, <navy>)`). The stylesheet that defines them is generated by `themeCss()` and shipped in `src/app/+html.tsx`; `public/theme-boot.js` (a file, not inline script, so the CSP hash list stays valid; a test keeps it equal to `themeBootScript()`) applies a saved Light or Dark choice before first paint. Any element with `data-theme="dark"` or `"light"` re-points the variables for its subtree (the auth screens pin Navy this way).
+- **Phone app:** `colors.*` are the Navy values and the resolved scheme is always dark; the switch is not drawn there. Native screens read fixed values at import time, so a native Light theme needs each screen moved to `useColors()` first (do that as each screen is rebuilt).
+- **Rules for code:** no raw hex; never do colour maths on `colors.*` (no `colors.x + '33'`, no hex parsing, no `Animated` colour ranges): use a `*Soft` token or `useColors()`, which returns real values. Libraries that parse colours themselves (`expo-linear-gradient`, `Animated.interpolate`) need `useColors()` or Navy hex. Blue text uses `colors.link`; `chrome.accent` is a fill and border colour. Tamagui follows the same scheme through `<Theme name={scheme}>` in `app-providers.tsx`.
+- **Checks:** `theme-palettes.test.ts` holds the contrast table (4.5:1 text, 3:1 field borders, every old key pair, both themes). Look at any changed screen in both themes before opening the PR.
 
 ### Console surfaces and shared patterns (web)
 
@@ -350,7 +364,7 @@ Plans and roadmaps live outside the repo. The console overhaul roadmap is the [T
 - **Billing flag** — `GET /api/client/v1/status` also carries `billingEnabled` (both Stripe secrets; always `false` self-hosted or API-key-only). `AuthProvider` exposes it as `useAuth().billingEnabled`; the org sidebar drops the **Billing** area and `/[orgId]/billing` redirects to Overview when it is false. Never probe `/billing/*` to discover availability — every route 503s `billing_not_configured` there. Hooks: `src/lib/queries/billing.ts` (no polling; the projection is webhook-driven and invalidated on mutation success). Vocabulary: the admin buys **licenses** for **servers** — never "seat" in rendered copy; a license is hidden plumbing (minted by the Add server wizard, never shown as an object, no tier picker on it), and a server's tier is **derived** by the instance — the UI only shows the tier it landed on (or "Not covered — needs Sn") and links to billing with `?tier=`. Upgrade / downgrade are quantity moves between tiers (`{ fromTierId, toTierId }`). Admin → Tiers is one provider-product dropdown per ladder label (`src/components/admin/tiers-section.tsx`, `src/lib/tier-form.ts`); entitlements and list prices are read-only from the in-code ladder. Page override: `design-system/turbopanel/pages/billing.md`.
 - **Account > Security > Password** — `change-password-panel.tsx` (current, new, confirm) calls `POST /auth/change-password`; the control plane verifies the current password, applies the sign-up rules and the breach check, and signs out every other device.
 - **Sign-up** — `/sign-up` when `isSignupEnabled` (from `GET /install/status`). Calls `POST /auth/sign-up`; no session is returned — user is redirected to `/sign-in` on success. Route is guest-only (authenticated users are redirected to dashboard). Not available when `needsInstall` is true. `sign-up.tsx` inlines `validatePassword` and `checkPwnedPassword` (no shared validation package). Pwned-password check uses `crypto.subtle.digest('SHA-1', …)` against `https://api.pwnedpasswords.com/range/{prefix}` with `Add-Padding: true` and a 5000ms timeout; fails open on error. The control plane now enforces the same check server-side (`password_breached`, `src/lib/password-policy.ts` `breachedPasswordCopy` maps it), so this browser check is only an early hint. The "Learn more" link hardcodes `https://turbopanel.io/docs/security/password-safety` — no `DOCS_BASE_URL` env var.
-- **Sign-in** — `/sign-in` after install; superadmin **email** + password (body `{ email, password }`; host accounts cannot sign in), plus optional GitHub/Google footer links when `GET /status` `authProviders` is non-empty (`oauthStartUrl(provider, { redirectTo: currentRedirect })` is a top-level navigation, never `fetch`; `currentRedirect` is `signInOAuthRedirect` of the current `/sign-in` route plus leftover query; native / cross-origin shows `OAUTH_WEB_ONLY_NOTE`). When `POST /auth/sign-in` (or the OAuth callback) returns a pending challenge, the screen shows the two-factor code step (`TwoFactorStep`) with a **Use a backup code** toggle; OAuth lands on `/sign-in?challenge=`. A passkey button is shown when `isPasskeySupported()` is true (web same-origin only; native shows `PASSKEY_WEB_ONLY_NOTE`). Session has no `username` field — labels use `session.email`. Layout: centered column via `AuthScreenShell` (`src/components/auth/auth-screen-shell.tsx` + `auth-form-styles.ts`), form `maxWidth` 400 — **TurboPanel T mark** and **Sign In** title on one row above the form panel (mark left, title right-aligned; accent top edge on the **frosted chrome** panel via `GlassSurface`), `© {year} TurboPanel` copyright below. Shell backdrop (`AuthScreenBackground`): LinearGradient wash + tiled dashed SVG grid + vignette (`auth-grid-layer`) + 2×2 Reanimated accent streaks on random grid lines via shared values (skipped when reduced motion). Fields use floating labels (`AuthFloatingField`): resting label inside the field, shrinks to the top on focus/value; password toggle is eye / eye-slash icons (`auth-eye-icons.tsx`). **Accent by runtime** (`src/lib/auth-accent.ts` + `GET /api/client/v1/status` `runtime`): Workers / HA → blue `#3366cc`, Deno self-hosted → green `#3dd68c`. Bootstrap stores `controlPlaneRuntime`, persists it in `sessionStorage`, and calls `applyConsoleChromeRuntime` so signed-in `chrome.*` tokens resolve via CSS variables on web (hydrated on refresh before paint). Online status stays `colors.green`. Loading spinners (root AuthGuard + org layout) use `authSpinnerColor` — remembered runtime on refresh, muted only when unknown; never hardcode `colors.accent` on full-screen loaders. Sign In CTA spinner uses `onAccent`. Tokens in `src/lib/theme.ts` + `src/lib/glass.ts`; page override in `design-system/turbopanel/pages/sign-in.md`.
+- **Sign-in** — `/sign-in` after install; superadmin **email** + password (body `{ email, password }`; host accounts cannot sign in), plus optional GitHub/Google footer links when `GET /status` `authProviders` is non-empty (`oauthStartUrl(provider, { redirectTo: currentRedirect })` is a top-level navigation, never `fetch`; `currentRedirect` is `signInOAuthRedirect` of the current `/sign-in` route plus leftover query; native / cross-origin shows `OAUTH_WEB_ONLY_NOTE`). When `POST /auth/sign-in` (or the OAuth callback) returns a pending challenge, the screen shows the two-factor code step (`TwoFactorStep`) with a **Use a backup code** toggle; OAuth lands on `/sign-in?challenge=`. A passkey button is shown when `isPasskeySupported()` is true (web same-origin only; native shows `PASSKEY_WEB_ONLY_NOTE`). Session has no `username` field — labels use `session.email`. Layout: centered column via `AuthScreenShell` (`src/components/auth/auth-screen-shell.tsx` + `auth-form-styles.ts`), form `maxWidth` 400 — **TurboPanel T mark** and **Sign In** title on one row above the form panel (mark left, title right-aligned; accent top edge on the **frosted chrome** panel via `GlassSurface`), `© {year} TurboPanel` copyright below. Shell backdrop (`AuthScreenBackground`): LinearGradient wash + tiled dashed SVG grid + vignette (`auth-grid-layer`) + 2×2 Reanimated accent streaks on random grid lines via shared values (skipped when reduced motion). Fields use floating labels (`AuthFloatingField`): resting label inside the field, shrinks to the top on focus/value; password toggle is eye / eye-slash icons (`auth-eye-icons.tsx`). **Accent** (`src/lib/auth-accent.ts`): brand blue `#3366cc` (Navy hex) on both runtimes; `GET /api/client/v1/status` `runtime` only picks the label (High Availability / Self-hosted). Bootstrap stores `controlPlaneRuntime` and persists it in `sessionStorage` (`rememberControlPlaneRuntime`). Auth screens always paint on Navy (`data-theme="dark"` pinned in `auth-screen-shell.tsx`). Online status stays `colors.ok`. Loading spinners use `authSpinnerColor()` (brand blue); never hardcode `colors.accent` on full-screen loaders. Sign In CTA spinner uses `onAccent`. Tokens in `src/lib/theme.ts` + `src/lib/glass.ts`; page override in `design-system/turbopanel/pages/sign-in.md`.
 - **Security screen** — `/account/security` (`src/app/account/security.tsx` → `src/components/account/security-section.tsx`), reached from `user-account-menu.tsx`. Three cards: two-factor, passkeys, linked accounts. Passkey register/assert splits `passkey-client.web.ts` / `passkey-client.native.ts`; native surfaces `PASSKEY_WEB_ONLY_NOTE` rather than a broken button. Sensitive mutations take an optional `password` for step-up; `resolveSecurityAction` maps a reauth **403** so it does not read as a mutation failure. `/account/*` is an authenticated route in `auth-guard.ts`.
 - **Notifications screen** — `/account/notifications` (`src/app/account/notifications.tsx` → `src/components/account/notification-channels-section.tsx`), reached from the account menu and from the bell's **Notification settings**. Two panels: the person's own channels and the organization's (manager-only, org in the header); each channel is a row with its rules matrix (every event at a severity floor, or chosen events), pause/resume, remove, and the last week's delivery outcome; the add form asks for kind, name, address (per-kind hint), an optional webhook signing secret and rules. An email channel is added through `POST /notification-channels/email`: the person's own or a member's address is active at once; any other address shows **Awaiting confirmation** (nothing is sent) with **Send again** (`POST /notification-channels/:id/verify`, one per minute) until the emailed link — which needs no session — is opened and redirects here with `?channelVerified=1|0` (an `InlineNotice` banner). The pure half — matrix ↔ rule rows, hints, refusal-code copy — is `src/lib/notification-channels.ts`. The bell (`notifications-panel-body.tsx`) is the inbox: `GET /notifications`, mark read, dismiss, a row that names a server opens it.
 - **Dashboard** — `/welcome` after install/session restore: last or only org opens Overview (`defaultOrgDashboardHref`); otherwise `/organizations`. The header **View all organizations** action goes straight to `/organizations` and does not auto-leave.
@@ -367,7 +381,7 @@ Identifiers for Cloudflare and Expo deployments:
 - `app.json` `slug`: `ui` — Expo project slug for web/EAS builds (`@turbopanel/ui`).
 - `app.json` native IDs: iOS `ios.bundleIdentifier` and Android `android.package` are both **`app.turbopanel`** (required for GitHub-triggered EAS builds; reverse-DNS of [turbopanel.app](https://turbopanel.app)). Deep-link scheme is `turbopanel`. iOS `ITSAppUsesNonExemptEncryption` is `false` (HTTPS / standard APIs only). **GitHub iOS builds are non-interactive:** run one local `eas build -p ios --profile development` (or `eas credentials -p ios`) plus `eas device:create` so EAS has an Ad Hoc cert/profile before CI can sign `distribution: "internal"`.
 - **Development client → Metro HTTP (`:8081`):** Metro is plaintext HTTP. Caddy TLS is `:8443` — `https://studio.lan:8081` always fails (no TLS on that port). iOS App Transport Security then blocks `http://studio.lan:8081` because `.lan` is not a Bonjour `.local` name, so `NSAllowsLocalNetworking` alone is not enough. `app.config.ts` applies `src/lib/metro-cleartext-node.mjs` on the EAS **development** profile (and local prebuild): `NSAllowsArbitraryLoads` + `NSAllowsLocalNetworking` + insecure-HTTP exceptions for `localhost` / `.lan` / `.local`, plus Android `usesCleartextTraffic`. Preview and production profiles stay ATS-strict. Changing Info.plist requires a **new native development build** — EAS Update cannot change it. In the Expo Dev Client, enter `http://<lan-host>:8081` (not https).
-- `wrangler.jsonc` Worker names: top-level `dev-ui` (local `wrangler dev` only, never deployed), `env.testing` → `testing-ui` (testing.turbopanel.dev), `env.live` → `ui` (turbopanel.app). No two share a name, and `scripts/wrangler-envs.test.ts` pins that. Deploy only through `pnpm deploy:testing` / `pnpm deploy:live` — bare `pnpm deploy` refuses (`scripts/deploy-refuse.mjs`), because a bare `wrangler deploy` would otherwise be a silent production deploy. Cloudflare Workers Builds deploy commands: `testing-ui` → `pnpm deploy:testing`, `ui` → `pnpm deploy:live`.
+- `wrangler.jsonc` Worker names: top-level `dev-ui` (local `wrangler dev` only, never deployed), `env.testing` → `testing-ui` (testing.turbopanel.dev), `env.staging` → `staging-ui` (staging.turbopanel.dev), `env.live` → `ui` (turbopanel.app). No two share a name, and `scripts/wrangler-envs.test.ts` pins that. Deploy only through `pnpm deploy:testing` / `pnpm deploy:staging` / `pnpm deploy:live` — bare `pnpm deploy` refuses (`scripts/deploy-refuse.mjs`), because a bare `wrangler deploy` would otherwise be a silent production deploy. Cloudflare Workers Builds deploy commands: `testing-ui` → `pnpm deploy:testing`, `staging-ui` (branch `staging`) → `pnpm deploy:staging`, `ui` (branch `live`) → `pnpm deploy:live`.
 
 ## Build output & deployment (dev vs prod)
 
@@ -395,6 +409,34 @@ Moved to `src/app/[orgId]/AGENTS.md` — layout/chrome, area routes, instance
 API usage, servers/metrics pages, compose panels. Read it before editing
 anything under `src/app/[orgId]/`.
 
+## Project editor logic (`src/lib/v4/`)
+
+Framework-free logic for the Base + environment changes screens (no UI, no storage, no network):
+environment map layout (`map-layout.ts`), "Runs as" and Linux user rules (`linux-users.ts`), change labels
+(`change-labels.ts`), the Base-plus-changes comparison (`effective-config.ts`) and the derived
+"Follows the Base / Stands alone" rule (`follows-base.ts`).
+
+- Configurations are flat maps (`svc:{serviceId}:{row}`, `var:{NAME}`); the compose merge itself stays on the server
+  (config-view endpoint), so there is no third copy of the merge rules here.
+- "Stands alone" is never stored: it is derived from the saved environment compose (`services: !override`).
+- Linux user names follow the server limit (28 characters, 16 with the default name scheme), not just the design spec's 28.
+- **Environment Configuration tab** (`configuration/index.tsx` -> `components/org/project/configuration/`): reads
+  `GET /environments/:id/config-view` (`useEnvironmentConfigView`, key `environments.configView`) and shows
+  Apps, Domains, Variables, Linux users and Data with a source tag on every row; `config-view-model.ts` turns the answer into rows.
+  The config-view keys use the compose service **name** (`svc:web:command`), not the flat `svc:{serviceId}:{row}` keys above, so the
+  model reads the server's own labels. "Only changes from Base" swaps the page for one row per change. Variables show "Project" when
+  they come from the project, and secret values are never shown.
+- **Editing on that tab is staged, then saved.** Row editors and the change buttons (Go back to Base, Make this the Base) only stage edits
+  (`config-edits.ts`, one per row key); the pending bar says "N unsaved changes" and **Save changes** runs `saveEdits` (`config-save.ts`):
+  fresh project, environment and variable data first, then Base compose, environment compose, variables (writes before deletes), using
+  `PATCH /projects/:id`, `PATCH /environments/:id` and the variable routes. It never deploys; a saved change goes live on the next deploy.
+  The writers (`config-compose.ts`) delete the environment's entry to go back (never `!reset`, which removes the Base value) and restate
+  `serviceKind` and `source.sourceId` in the environment's layer for any `x-turbopanel` change, because the control plane checks a layer
+  alone (a Node.js app "requires source"; `principal` is only valid on a site or Node.js app). Scope: one environment in the project means
+  the Base; a stand-alone environment (the control plane's rule: `services: !override` or `!reset`) means that environment only.
+- Copy uses the v4 words (Base, "{env} change", Follows the Base, Stands alone, Runs as). `vocabulary.test.ts` fails on
+  banned words in module output and text literals.
+
 ## Admin area (`/admin/*`)
 
 Moved to `src/app/admin/AGENTS.md`. **`/admin/updates`** is the managed upgrade console (self-hosted vs TurboPanel High Availability layouts, preflight `ModalSheet`, run polling via `src/lib/upgrade-run-poll.ts`, full-screen restart overlay). Page override: `design-system/turbopanel/pages/updates.md`.
@@ -402,6 +444,8 @@ Moved to `src/app/admin/AGENTS.md`. **`/admin/updates`** is the managed upgrade 
 ## Command Pipeline UI
 
 Per-server command actions use `src/components/org/server-commands-panel.tsx` on the server detail **Control** tab. Commands follow a create-then-poll pattern: the UI enqueues via a mutation hook, receives a `commandId`, then polls with `useCommandsBatch` from `src/lib/queries/commands.ts` (`COMMAND_POLL_MS`, `isTerminalCommandStatus`) — a single React Query with `refetchInterval` while any tracked command is non-terminal. Each tick is **one** `POST /commands/status` request for every tracked id (via `fetchCommandStatuses`), not one `GET` per command; results are re-aligned to entry order so index-based consumers stay correct, and unreadable ids simply drop out. `useCommandRecordsBatch` is the per-id variant (one `fetchCommand` per entry, full `CommandRecord`) kept for the server-detail Control tab, which renders the ping latency breakdown. No hand-rolled `setInterval` per page or per server.
+
+**Failure text.** A failed command's error is a block of daemon output with the cause printed last. The control plane derives `errorLine` (on `CommandRecord`, `CommandStatusRecord` and `DeploymentHistoryRecord`; absent on an older control plane) and screens show that one line through `commandErrorLine` in `src/lib/command-error.ts` (it falls back to the last non-empty line of the text). The deploy history detail keeps the whole text one tap away (`commandErrorDetail`, "Show full error"). There is no separate Activity screen: the failure shows in deploy history, the server Control tab, the environment deploy status and the project delete flow.
 
 ### API helpers — `src/lib/instance-api.ts`
 

@@ -76,7 +76,7 @@ import {
   serverConnectionStatusLabel,
   resolveServerConnectionStatus,
 } from '@/lib/server-connection-status'
-import { chrome, colors, spacing, webPointer } from '@/lib/theme'
+import { colors, spacing, webPointer } from '@/lib/theme'
 import {
   addressFamilyLabel,
   cidrsOverlap,
@@ -1774,7 +1774,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   primaryBadge: {
-    color: chrome.accent,
+    color: colors.link,
     fontSize: 11,
     fontWeight: '700',
     textTransform: 'uppercase',

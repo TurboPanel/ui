@@ -98,9 +98,6 @@ export function ProjectPrincipalsSection({
   const deletePrincipal = useDeleteProjectPrincipal(orgId, projectId)
   const updateAssignments = useUpdateProjectPrincipalAssignments(orgId, projectId)
   const updatePrincipal = useUpdateProjectPrincipal(orgId, projectId)
-  const [savingEntitlements, setSavingEntitlements] = useState<Set<string>>(
-    new Set(),
-  )
   const [savingAccess, setSavingAccess] = useState<Set<string>>(new Set())
 
   // Memoized because the `?? []` fallback is a fresh array on every render,
@@ -211,54 +208,11 @@ export function ProjectPrincipalsSection({
   }
 
   /**
-   * Grant or revoke one runtime series.
-   *
-   * Sends `entitlements` only — never `serviceIds` — because the API reads an
-   * absent field as "leave them alone". Including an empty steward list here
-   * would silently unassign every service.
-   */
-  const toggleEntitlement = async (
-    principalId: string,
-    runtime: string,
-    series: string,
-  ) => {
-    const row = principals.find((p) => p.id === principalId)
-    if (!row) return
-    const held = row.entitlements.some(
-      (entry) => entry.runtime === runtime && entry.series === series,
-    )
-    const next = held
-      ? row.entitlements.filter(
-        (entry) => !(entry.runtime === runtime && entry.series === series),
-      )
-      : [...row.entitlements, { runtime, series, grantedBy: 'operator' as const }]
-
-    setSavingEntitlements((current) => new Set(current).add(principalId))
-    setError(null)
-    const result = await updatePrincipal.run({
-      principalId,
-      entitlements: next.map(({ runtime: r, series: v }) => ({
-        runtime: r,
-        series: v,
-      })),
-    })
-    if (!result.ok && updatePrincipal.actionError) {
-      setError(updatePrincipal.actionError)
-    }
-    setSavingEntitlements((current) => {
-      const copy = new Set(current)
-      copy.delete(principalId)
-      return copy
-    })
-  }
-
-  /**
    * Set how an account may sign in.
    *
-   * Sends `access` only, for the same reason `toggleEntitlement` sends only
-   * `entitlements`: the API reads an absent field as "leave it alone", so
-   * including an empty steward or entitlement list here would silently revoke
-   * something the operator never touched.
+   * Sends `access` only: the API reads an absent field as "leave it alone",
+   * so including an empty steward list here would silently revoke something
+   * the operator never touched.
    */
   const changeAccess = async (
     principalId: string,
@@ -415,62 +369,6 @@ export function ProjectPrincipalsSection({
               </View>
             ) : null}
             <View style={styles.serviceAssignRow}>
-              <Text style={panelStyles.muted}>
-                Runtimes this user may execute. Without a grant its processes
-                cannot start the interpreter at all — the check is the kernel&apos;s,
-                not ours.
-              </Text>
-              <View style={styles.serviceChipRow}>
-                {RUNTIME_GRANTS.map((grant: RuntimeGrant) => {
-                  const held = row.entitlements.find(
-                    (entry) =>
-                      entry.runtime === grant.runtime &&
-                      entry.series === grant.series,
-                  )
-                  const disabled =
-                    !canManage || savingEntitlements.has(row.id)
-                  return (
-                    <Pressable
-                      key={`${grant.runtime}-${grant.series}`}
-                      disabled={disabled}
-                      accessibilityRole="checkbox"
-                      accessibilityState={{ checked: held != null, disabled }}
-                      accessibilityLabel={grant.label}
-                      style={[
-                        styles.serviceChip,
-                        held && styles.serviceChipOn,
-                        disabled && styles.buttonDisabled,
-                      ]}
-                      onPress={() => {
-                        void toggleEntitlement(
-                          row.id,
-                          grant.runtime,
-                          grant.series,
-                        )
-                      }}
-                    >
-                      <Text
-                        style={[
-                          styles.serviceChipText,
-                          held && styles.serviceChipTextOn,
-                        ]}
-                      >
-                        {/* A deploy-inserted grant is still a real, revocable
-                            grant — the marker says why it is there, not that
-                            it is different. */}
-                        {held?.grantedBy === 'deploy'
-                          ? `${grant.label} · from a service`
-                          : grant.label}
-                      </Text>
-                    </Pressable>
-                  )
-                })}
-              </View>
-              {savingEntitlements.has(row.id) ? (
-                <Text style={panelStyles.muted}>Saving runtimes…</Text>
-              ) : null}
-            </View>
-            <View style={styles.serviceAssignRow}>
               <PrincipalAccessPanel
                 orgId={orgId}
                 projectId={projectId}
@@ -548,8 +446,6 @@ export function ProjectPrincipalsSection({
   )
 }
 
-type RuntimeGrant = { runtime: string; series: string; label: string }
-
 const ACCESS_SUMMARY_LABELS: Record<PrincipalAccessLevel, string> = {
   none: 'No access',
   sftp: 'Files only',
@@ -578,30 +474,8 @@ function principalRowSummary(row: ProjectPrincipalRecord): string {
         : `${row.serviceIds.length} services`,
     )
   }
-  const runtimeLabels = row.entitlements.map((entry) => {
-    const grant = RUNTIME_GRANTS.find(
-      (g) => g.runtime === entry.runtime && g.series === entry.series,
-    )
-    return grant?.label ?? `${entry.runtime} ${entry.series}`
-  })
-  if (runtimeLabels.length > 0) parts.push(runtimeLabels.join(', '))
   return parts.join(' · ')
 }
-
-/**
- * Runtime grants an operator can hand out.
- *
- * Per `(runtime, series)`, not per runtime: co-installed PHP versions are
- * distinct binaries, so granting 8.4 must not also grant 8.3 with whatever CVEs
- * another tenant's pinned app is carrying. Mirrors the daemon's runtime
- * registry, which stays the authority on what a given host can offer.
- */
-const RUNTIME_GRANTS: readonly RuntimeGrant[] = [
-  { runtime: 'php', series: '8.3', label: 'PHP 8.3' },
-  { runtime: 'php', series: '8.4', label: 'PHP 8.4' },
-  { runtime: 'node', series: '22', label: 'Node 22' },
-  { runtime: 'node', series: '24', label: 'Node 24' },
-]
 
 function projectTypeBadge(project: ProjectRecord) {
   const type = project.metadata?.type
@@ -1194,7 +1068,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   serviceChipTextOn: {
-    color: chrome.accent,
+    color: colors.link,
     fontWeight: '600',
   },
   principalForm: {

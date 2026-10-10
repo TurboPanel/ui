@@ -358,6 +358,13 @@ describe('queryKeys.org(…) remaining factories', () => {
       'series',
       '2026-01-01T00:00:00.000Z',
     ])
+    expect(org.servers.managedExternalAccess('srv-1')).toEqual([
+      'org',
+      'org-1',
+      'server',
+      'srv-1',
+      'managed-external-access',
+    ])
     expect(org.servers.ips('srv-1', { scope: 'public' })).toEqual([
       'org',
       'org-1',
@@ -373,6 +380,7 @@ describe('queryKeys.org(…) remaining factories', () => {
       'srv-1',
       'network-panel',
     ])
+    expect(org.servers.services('srv-1')).toEqual(['org', 'org-1', 'server', 'srv-1', 'services'])
   })
 
   it('exposes stable auth and admin roots', () => {
@@ -481,6 +489,13 @@ describe('queryKeys.org(…) remaining factories', () => {
       '1h',
     ])
     expect(org.servers.labels('srv-1')).toEqual(['org', 'org-1', 'server', 'srv-1', 'labels'])
+    expect(org.servers.deletePreview('srv-1')).toEqual([
+      'org',
+      'org-1',
+      'server',
+      'srv-1',
+      'delete-preview',
+    ])
     expect(org.servers.ips('srv-1')).toEqual(['org', 'org-1', 'server', 'srv-1', 'ips', {}])
     expect(org.projects.detail('p1')).toEqual(['org', 'org-1', 'project', 'p1'])
     expect(org.projects.principals('p1')).toEqual(['org', 'org-1', 'project', 'p1', 'principals'])

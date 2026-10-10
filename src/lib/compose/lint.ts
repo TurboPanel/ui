@@ -126,6 +126,27 @@ export type ComposeLintOptions = {
    * {@link ComposeLintOptions.knownTlsIds}.
    */
   knownIpIds?: ReadonlySet<string>
+  /**
+   * Whether a Docker service must name its own `image` or `build`. Defaults to
+   * `true`. Mirrors the instance option.
+   *
+   * Pass `false` for a partial layer: an environment's "Changes for {env}" may
+   * set one field of a service the project's Base defines, so the layer alone
+   * cannot say whether the service has something to run. `false` also marks the
+   * document as partial for the `x-turbopanel` kind rules: a block that does
+   * not restate `serviceKind` is not read as a container (its kind is the
+   * Base's), and `node services require source` is not asked of it. The caller
+   * lints the **merged** document (Base plus this layer) with the default
+   * afterwards, because the rules are moved to where they can be answered, not
+   * dropped.
+   */
+  requireImageOrBuild?: boolean
+  /**
+   * The document being linted is the merge of the Base and an environment's
+   * changes, not a stored layer. Only changes the wording of the missing
+   * image / build refusal, so it names where to put one.
+   */
+  merged?: boolean
 }
 
 /**
@@ -439,7 +460,10 @@ function lintServiceTurbopanelFields(
   }
   if (plain === null || typeof plain !== 'object' || Array.isArray(plain)) return
 
-  for (const issue of collectServiceKindFieldIssues(plain as Record<string, unknown>)) {
+  const kindIssues = collectServiceKindFieldIssues(plain as Record<string, unknown>, {
+    partialLayer: options?.requireImageOrBuild === false,
+  })
+  for (const issue of kindIssues) {
     issues.push({
       level: 'error',
       message: issue.message,
@@ -1260,6 +1284,7 @@ function lintService(
   )
 
   if (
+    options?.requireImageOrBuild !== false &&
     !isHostNativeForLint(name, valueNode, options) &&
     !serviceIsRailpackBuilt(valueNode) &&
     !hasImage &&
@@ -1267,12 +1292,17 @@ function lintService(
   ) {
     issues.push({
       level: 'error',
-      message: `Service "${name}" must define "image" or "build"`,
+      message: `Service "${name}" must define "image" or "build"${
+        options?.merged ? MERGED_MISSING_IMAGE_SUFFIX : ''
+      }`,
       path,
       line: keyLine,
     })
   }
 }
+
+const MERGED_MISSING_IMAGE_SUFFIX =
+  " - neither the project's Base nor this environment's changes give it one"
 
 function lintServices(
   servicesNode: Node | null | undefined,

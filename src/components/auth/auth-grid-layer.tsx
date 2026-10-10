@@ -2,7 +2,7 @@ import { StyleSheet, View, useWindowDimensions } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import Svg, { Defs, Path, Pattern, Rect } from 'react-native-svg'
 import { hexWithAlpha, mixHexWithBlack } from '@/components/auth/auth-hex'
-import { colors } from '@/lib/theme'
+import { navyPalette as navy } from '@/lib/theme-palettes'
 
 const GRID_SIZE = 36
 
@@ -24,9 +24,9 @@ export function AuthGridLayer({
     mixHexWithBlack(accentColor, 0.07),
     mixHexWithBlack(accentColor, 0.04),
     mixHexWithBlack(accentColor, 0.018),
-    colors.bg,
+    navy.bg,
   ] as const
-  const gridStroke = hexWithAlpha(colors.borderMuted, 0.7)
+  const gridStroke = hexWithAlpha(navy.borderMuted, 0.7)
   const ready = width > 0 && height > 0
 
   return (
@@ -72,7 +72,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     left: 0,
-    backgroundColor: colors.bg,
+    backgroundColor: navy.bg,
     overflow: 'hidden',
   },
 })

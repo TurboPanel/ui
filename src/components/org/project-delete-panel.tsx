@@ -29,6 +29,7 @@ import {
   useStopEnvironmentMutation,
   type TrackedCommandEntry,
 } from '@/lib/queries'
+import { commandErrorLine } from '@/lib/command-error'
 import { orEmptyArray } from '@/lib/or-empty-array'
 import type { ManagedListRecord } from '@/lib/managed-services'
 import { isManagedProject } from '@/lib/project-navigation'
@@ -461,7 +462,7 @@ function useSyncTerminalProjectDeleteCommands(input: Readonly<{
           [environmentId]: {
             stopping: false,
             status: null,
-            error: command.errorMessage ??
+            error: commandErrorLine(command) ??
               `${managedProject ? 'Destroy' : 'Stop'} ${command.status}`,
             serverId: entry.serverId,
           },
@@ -670,7 +671,9 @@ export function ProjectDeletePanel({
     if (!result.ok) {
       markStopFailed(
         environmentId,
-        destroyManagedMutation.actionError ?? 'Failed to destroy database',
+        result.error
+          ? userErrorMessage(result.cause ?? new Error(result.error), '')
+          : 'Failed to destroy database',
       )
       return
     }

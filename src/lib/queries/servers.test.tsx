@@ -8,6 +8,7 @@ import {
 } from '@/lib/instance-api'
 import { createAppQueryClient } from '@/lib/query-client'
 import { queryKeys } from '@/lib/query-keys'
+import { licenseTierUserErrorMessage } from '@/lib/user-error'
 import {
   SERVERS_REFRESH_MS,
   UPDATE_PROGRESS_POLL_MS,
@@ -25,11 +26,14 @@ import {
   useRebootServer,
   useResetServerUpdateStatus,
   useRevokeServerDaemonKey,
+  useServerDeletePreview,
   useSaveOrgTemperatureUnit,
   useSaveServerLabels,
+  useSetServerLicenseTier,
   useSaveServerHardwareProfile,
   useServerDetail,
   useServerLabels,
+  useServerServices,
   useServerMetricsCapabilities,
   useServerMetricsConnection,
   useServerMetricsCpuLimits,
@@ -60,8 +64,10 @@ const {
   pingDaemon,
   fetchServer,
   fetchServerLabels,
+  fetchServerServices,
   fetchTimezones,
   deleteServer,
+  getServerDeletePreview,
   fetchServersUpdateStatus,
   fetchServerUpdate,
   fetchOrgServerCapacity,
@@ -74,6 +80,7 @@ const {
   setServerTimezone,
   updateServer,
   saveServerLabels,
+  setServerLicenseTier,
   createLicense,
   deleteLicense,
   fetchServerMetricsCapabilities,
@@ -93,8 +100,10 @@ const {
   pingDaemon: vi.fn(),
   fetchServer: vi.fn(),
   fetchServerLabels: vi.fn(),
+  fetchServerServices: vi.fn(),
   fetchTimezones: vi.fn(),
   deleteServer: vi.fn(),
+  getServerDeletePreview: vi.fn(),
   fetchServersUpdateStatus: vi.fn(),
   fetchServerUpdate: vi.fn(),
   fetchOrgServerCapacity: vi.fn(),
@@ -107,6 +116,7 @@ const {
   setServerTimezone: vi.fn(),
   updateServer: vi.fn(),
   saveServerLabels: vi.fn(),
+  setServerLicenseTier: vi.fn(),
   createLicense: vi.fn(),
   deleteLicense: vi.fn(),
   fetchServerMetricsCapabilities: vi.fn(),
@@ -131,8 +141,10 @@ vi.mock('@/lib/instance-api', async (importOriginal) => {
     pingDaemon,
     fetchServer,
     fetchServerLabels,
+    fetchServerServices,
     fetchTimezones,
     deleteServer,
+    getServerDeletePreview,
     fetchServersUpdateStatus,
     fetchServerUpdate,
     fetchOrgServerCapacity,
@@ -145,6 +157,7 @@ vi.mock('@/lib/instance-api', async (importOriginal) => {
     setServerTimezone,
     updateServer,
     saveServerLabels,
+    setServerLicenseTier,
     createLicense,
     deleteLicense,
     fetchServerMetricsCapabilities,
@@ -1096,6 +1109,71 @@ describe('servers query hooks', () => {
     })
   })
 
+  it('useSetServerLicenseTier sets the pick and refreshes server and billing views', async () => {
+    setServerLicenseTier.mockResolvedValueOnce({
+      ok: true,
+      assignedTier: 'S2',
+      pickedTier: 'S2',
+      tierPickNotice: null,
+      tiersFree: [],
+    })
+    const client = createAppQueryClient()
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
+
+    const { result } = renderHook(() => useSetServerLicenseTier(orgId, serverId), {
+      wrapper: createWrapper(client),
+    })
+
+    await result.current.run('tier-s2')
+    expect(setServerLicenseTier).toHaveBeenCalledWith(serverId, 'tier-s2')
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.org(orgId).servers.detail(serverId),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.org(orgId).servers.list,
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.org(orgId).billing.subscription,
+    })
+  })
+
+  it('useSetServerLicenseTier clears the pick with null', async () => {
+    setServerLicenseTier.mockResolvedValueOnce({
+      ok: true,
+      assignedTier: 'S1',
+      pickedTier: null,
+      tierPickNotice: null,
+      tiersFree: [],
+    })
+
+    const { result } = renderHook(() => useSetServerLicenseTier(orgId, serverId), {
+      wrapper: createWrapper(createAppQueryClient()),
+    })
+
+    await result.current.run(null)
+    expect(setServerLicenseTier).toHaveBeenCalledWith(serverId, null)
+  })
+
+  it('useSetServerLicenseTier forwards forbidden cause for owner-only tier pick copy', async () => {
+    const forbidden = new Error('HTTP 403: Forbidden')
+    setServerLicenseTier.mockRejectedValueOnce(forbidden)
+
+    const { result } = renderHook(() => useSetServerLicenseTier(orgId, serverId), {
+      wrapper: createWrapper(createAppQueryClient()),
+    })
+
+    const outcome = await result.current.run('tier-s2')
+    expect(outcome).toEqual({ ok: false, error: null, cause: forbidden })
+    if (!outcome.ok) {
+      expect(
+        licenseTierUserErrorMessage(
+          outcome.cause ?? outcome.error,
+          'Could not update license tier',
+        ),
+      ).toContain('organization owners')
+    }
+  })
+
   it('usePatchServer updates a server and invalidates topology', async () => {
     updateServer.mockResolvedValueOnce({ ok: true })
     const client = createAppQueryClient()
@@ -1230,6 +1308,52 @@ describe('servers query hooks', () => {
     })
   })
 
+  it('useServerServices loads inventory and polls at 30s', async () => {
+    const payload = {
+      serverId,
+      removal: { canRemove: true, online: true, canForget: false, reasons: [] },
+      apps: { items: [], more: 0 },
+      databases: [],
+      databaseUsers: { items: [], more: 0 },
+      backups: { items: [], more: 0 },
+      networks: { items: [], more: 0 },
+      ipCount: 0,
+      runtimes: [],
+    }
+    fetchServerServices.mockResolvedValueOnce(payload)
+    const client = createTestQueryClient()
+
+    const { result } = renderHook(() => useServerServices(orgId, serverId), {
+      wrapper: createWrapper(client),
+    })
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+    expect(result.current.data).toEqual(payload)
+    expect(
+      resolveRefetchInterval(client, queryKeys.org(orgId).servers.services(serverId)),
+    ).toBe(SERVERS_REFRESH_MS)
+  })
+
+  it('useServerServices stays idle when serverId is empty', () => {
+    const { result } = renderHook(() => useServerServices(orgId, ''), {
+      wrapper: createWrapper(),
+    })
+
+    expect(result.current.fetchStatus).toBe('idle')
+    expect(fetchServerServices).not.toHaveBeenCalled()
+  })
+
+  it('useServerServices respects enabled:false', () => {
+    const { result } = renderHook(
+      () => useServerServices(orgId, serverId, { enabled: false }),
+      { wrapper: createWrapper() },
+    )
+    expect(result.current.fetchStatus).toBe('idle')
+    expect(fetchServerServices).not.toHaveBeenCalled()
+  })
+
   it('useServerLabels loads label map', async () => {
     fetchServerLabels.mockResolvedValueOnce([{ key: 'role', value: 'gateway' }])
 
@@ -1296,9 +1420,41 @@ describe('servers query hooks', () => {
       wrapper: createWrapper(client),
     })
 
-    await result.current.run(serverId)
-    expect(deleteServer).toHaveBeenCalledWith(serverId, orgId)
+    await result.current.run({ serverId })
+    expect(deleteServer).toHaveBeenCalledWith(serverId, orgId, undefined)
+
+    deleteServer.mockResolvedValueOnce({ ok: true })
+    await result.current.run({ serverId, forgetResources: true })
+    expect(deleteServer).toHaveBeenCalledWith(serverId, orgId, { forgetResources: true })
     expect(invalidateSpy).toHaveBeenCalled()
+  })
+
+  it('useServerDeletePreview loads the forget list', async () => {
+    getServerDeletePreview.mockResolvedValueOnce({
+      online: false,
+      canForget: true,
+      colocated: false,
+      blockers: [],
+      containers: { items: [], more: 0 },
+      networks: { items: [], more: 0 },
+      ips: { items: [], more: 0 },
+    })
+    const { result } = renderHook(() => useServerDeletePreview(orgId, serverId), {
+      wrapper: createWrapper(),
+    })
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+    expect(getServerDeletePreview).toHaveBeenCalledWith(serverId, orgId)
+  })
+
+  it('useServerDeletePreview stays idle when disabled', () => {
+    const { result } = renderHook(
+      () => useServerDeletePreview(orgId, serverId, { enabled: false }),
+      { wrapper: createWrapper() }
+    )
+    expect(result.current.fetchStatus).toBe('idle')
+    expect(getServerDeletePreview).not.toHaveBeenCalled()
   })
 
   it('useOrgLicenses rethrows non-403 failures as query errors', async () => {

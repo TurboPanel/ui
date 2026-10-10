@@ -10,6 +10,10 @@ export type HeaderLayout = Readonly<{
   showLogo: boolean
   /** Page-width toggle is a desktop-only control. */
   showPageWidthToggle: boolean
+  /** Light / Dark / Match computer switch beside the page-width toggle (wide web). */
+  showThemeSwitch: boolean
+  /** Compact web: the same switch sits in the account menu instead. */
+  themeSwitchInMenu: boolean
   /** Profile control is a small icon; notifications fold into its menu. */
   iconOnlyAccount: boolean
   /** Separate bell beside the profile control (wide web only). */
@@ -34,6 +38,9 @@ export function headerLayoutFor(width: number, isNative: boolean): HeaderLayout 
     compact,
     showLogo: compact,
     showPageWidthToggle: width >= layout.desktopBreakpoint,
+    // The phone app has one theme until its screens move to `useColors()`.
+    showThemeSwitch: !isNative && width >= layout.desktopBreakpoint,
+    themeSwitchInMenu: !isNative && width < layout.desktopBreakpoint,
     iconOnlyAccount: compact,
     showBell: !compact,
     showOrgGlyph: !compact,
