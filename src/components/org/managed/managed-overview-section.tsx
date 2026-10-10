@@ -18,7 +18,11 @@ import {
   type StatusTone,
 } from '@/components/ui'
 import { fetchOrgManagedDefaults, type ManagedListRecord } from '@/lib/instance-api'
-import { resolveManagedIngressPorts } from '@/lib/managed-ingress-ports'
+import {
+  DEFAULT_MANAGED_INGRESS_PORTS,
+  resolveManagedIngressPorts,
+  type ManagedIngressPorts,
+} from '@/lib/managed-ingress-ports'
 import {
   managedOrgListProjectEnvironmentLabel,
   managedOrgListServerPresentation,
@@ -144,7 +148,7 @@ function ManagedTableRow({
   orgId: string
   row: ManagedListRecord
   rowIndex: number
-  ingressPorts: ReturnType<typeof resolveManagedIngressPorts> | null
+  ingressPorts: ManagedIngressPorts | null
 }>) {
   const router = useRouter()
   const title = serviceTitle(row)
@@ -343,7 +347,7 @@ function ManagedFleetTable({
 }: Readonly<{
   orgId: string
   rows: readonly ManagedListRecord[]
-  ingressPorts: ReturnType<typeof resolveManagedIngressPorts> | null
+  ingressPorts: ManagedIngressPorts | null
 }>) {
   return (
     <DataTable columns={MANAGED_COLUMNS} minWidth={1080} bordered>
@@ -360,6 +364,26 @@ function ManagedFleetTable({
   )
 }
 
+function ManagedIngressDefaultsNotice({
+  message,
+  onRetry,
+}: Readonly<{ message: string; onRetry: () => void }>) {
+  return (
+    <View style={styles.defaultsNotice}>
+      <Text style={styles.defaultsNoticeText}>
+        {message} Shared listener ports use the platform default (15432 / 13306) until
+        managed defaults load.
+      </Text>
+      <Button
+        label="Retry"
+        variant="secondary"
+        accessibilityLabel="Retry loading managed defaults"
+        onPress={onRetry}
+      />
+    </View>
+  )
+}
+
 function ManagedFleetBody({
   orgId,
   loading,
@@ -370,6 +394,8 @@ function ManagedFleetBody({
   canManage,
   onCreate,
   ingressPorts,
+  ingressDefaultsNotice,
+  onRetryIngressDefaults,
 }: Readonly<{
   orgId: string
   loading: boolean
@@ -379,7 +405,9 @@ function ManagedFleetBody({
   filtersActive: boolean
   canManage: boolean
   onCreate: () => void
-  ingressPorts: ReturnType<typeof resolveManagedIngressPorts> | null
+  ingressPorts: ManagedIngressPorts | null
+  ingressDefaultsNotice: string | null
+  onRetryIngressDefaults: () => void
 }>) {
   if (loading) {
     return <LoadingState label="Loading managed services…" />
@@ -416,6 +444,12 @@ function ManagedFleetBody({
   return (
     <View style={styles.fleetBody}>
       {refreshError}
+      {ingressDefaultsNotice ? (
+        <ManagedIngressDefaultsNotice
+          message={ingressDefaultsNotice}
+          onRetry={onRetryIngressDefaults}
+        />
+      ) : null}
       <ManagedFleetTable orgId={orgId} rows={filtered} ingressPorts={ingressPorts} />
     </View>
   )
@@ -437,17 +471,31 @@ export function ManagedOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
     queryFn: () => fetchOrgManagedDefaults(orgId),
     staleTime: 60_000,
   })
-  const ingressPorts = useMemo((): ReturnType<typeof resolveManagedIngressPorts> | null => {
-    if (managedDefaultsQuery.isPending && !managedDefaultsQuery.data) {
-      return null
+  const { ingressPorts, ingressDefaultsNotice } = useMemo(() => {
+    const { data, isPending, isError, isFetched, error } = managedDefaultsQuery
+    if (isPending && !data) {
+      return { ingressPorts: null as ManagedIngressPorts | null, ingressDefaultsNotice: null }
     }
-    if (!managedDefaultsQuery.data) {
-      return null
+    if (data) {
+      return {
+        ingressPorts: resolveManagedIngressPorts(data.effectivePorts ?? data.ports),
+        ingressDefaultsNotice: null,
+      }
     }
-    return resolveManagedIngressPorts(
-      managedDefaultsQuery.data.effectivePorts ?? managedDefaultsQuery.data.ports
-    )
-  }, [managedDefaultsQuery.data, managedDefaultsQuery.isPending])
+    if (isError || isFetched) {
+      const message = isError
+        ? userErrorMessage(error, 'Could not load managed defaults.')
+        : 'Managed defaults are unavailable.'
+      return {
+        ingressPorts: DEFAULT_MANAGED_INGRESS_PORTS,
+        ingressDefaultsNotice: message,
+      }
+    }
+    return { ingressPorts: null as ManagedIngressPorts | null, ingressDefaultsNotice: null }
+  }, [managedDefaultsQuery])
+  const retryIngressDefaults = () => {
+    void managedDefaultsQuery.refetch()
+  }
 
   const rows = orEmptyArray(managedQuery.data?.managed)
   const filtered = useMemo(
@@ -510,6 +558,8 @@ export function ManagedOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
           canManage={canManage}
           onCreate={openCreate}
           ingressPorts={ingressPorts}
+          ingressDefaultsNotice={ingressDefaultsNotice}
+          onRetryIngressDefaults={retryIngressDefaults}
         />
       </SectionPanel>
     </View>
@@ -523,6 +573,19 @@ const styles = StyleSheet.create({
   },
   fleetBody: {
     gap: spacing.sm,
+  },
+  defaultsNotice: {
+    gap: spacing.sm,
+    padding: spacing.sm,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: colors.borderArea,
+    backgroundColor: colors.bgSecondary,
+  },
+  defaultsNoticeText: {
+    color: colors.textBody,
+    fontSize: 13,
+    lineHeight: 18,
   },
   toolbarRow: {
     flexDirection: 'row',

@@ -109,6 +109,15 @@ describe('managedSharedListenerLabel', () => {
     )
   })
 
+  it('uses platform default ports when org defaults are unavailable', () => {
+    expect(
+      managedSharedListenerLabel(listRow({ engine: 'postgres', host: null, port: null }), {
+        postgres: MANAGED_INGRESS_PGSQL_PORT,
+        mysqlFamily: MANAGED_INGRESS_MYSQL_PORT,
+      })
+    ).toBe(`${MANAGED_SHARED_LOOPBACK_HOST}:${MANAGED_INGRESS_PGSQL_PORT}`)
+  })
+
   it('infers loopback ingress for ready rows before host metadata exists', () => {
     expect(
       managedSharedListenerLabel(
@@ -164,18 +173,26 @@ const ORG_MANAGED_LIST_API_ROW = {
   ],
 }
 
+/** OpenAPI `OrganizationManagedListItem` uses `*Name`, not `*DisplayName`. */
+type ApiNameWireRow = Omit<
+  typeof ORG_MANAGED_LIST_API_ROW,
+  'projectDisplayName' | 'environmentDisplayName' | 'serverDisplayName'
+>
+
+const ORG_MANAGED_LIST_API_NAME_WIRE: ApiNameWireRow = ORG_MANAGED_LIST_API_ROW
+
 describe('organization managed list wire labels', () => {
-  it('renders project, environment, and server from API field names', () => {
-    expect(managedOrgListProjectEnvironmentLabel(ORG_MANAGED_LIST_API_ROW)).toBe(
+  it('renders project, environment, and server from OpenAPI *Name fields', () => {
+    expect(managedOrgListProjectEnvironmentLabel(ORG_MANAGED_LIST_API_NAME_WIRE)).toBe(
       'Managed Postgres Project / Production'
     )
-    expect(managedOrgListServerPresentation(ORG_MANAGED_LIST_API_ROW)).toEqual({
+    expect(managedOrgListServerPresentation(ORG_MANAGED_LIST_API_NAME_WIRE)).toEqual({
       display: 'Managed Route Server',
       accessibilityLabel: 'Managed Route Server (66666666-6666-4666-8666-666666666666)',
     })
     expect(
       managedSharedListenerLabel(
-        { ...ORG_MANAGED_LIST_API_ROW, engine: 'postgres' },
+        { ...ORG_MANAGED_LIST_API_NAME_WIRE, engine: 'postgres' },
         { postgres: 15432, mysqlFamily: 13306 }
       )
     ).toBe('127.0.0.1:15432')
