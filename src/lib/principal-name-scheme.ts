@@ -116,14 +116,26 @@ export function principalNamesLabel(username: string, appliedUsername?: string |
   return `${username} -> ${appliedUsername}`
 }
 
-const SCHEME_ERROR_COPY: Record<string, string> = {
+/** Control plane 400: the site owner's Linux user collides with a host account. */
+export const USERNAME_RESERVED_COPY =
+  "That name is used by the server itself (for example ftp, git, root or a service account), so a site owner can't use it. Pick another name, such as your site's name."
+
+export const USERNAME_TOO_LONG_COPY =
+  "That site owner's Linux user name is too long. Use at most 28 characters (16 with the default name scheme)."
+
+export const USERNAME_IN_USE_COPY = 'That name is already used on this server. Pick another name.'
+
+const PRINCIPAL_ERROR_COPY: Record<string, string> = {
   principal_scheme_locked:
     'Your organization locks the name scheme for new principals. Reload to see the current setting.',
   invalid_name_scheme: 'That name scheme is not valid. Pick Plain, Partial, or Random.',
+  username_reserved: USERNAME_RESERVED_COPY,
+  username_too_long: USERNAME_TOO_LONG_COPY,
+  username_in_use: USERNAME_IN_USE_COPY,
 }
 
-/** Friendly copy for scheme errors; returns the message unchanged for anything else. */
+/** Friendly copy for principal create errors; returns the message unchanged for anything else. */
 export function principalSchemeErrorMessage(message: string): string {
   const code = /HTTP \d+:\s*([a-z0-9_]+)/i.exec(message)?.[1] ?? message.trim()
-  return SCHEME_ERROR_COPY[code] ?? message
+  return PRINCIPAL_ERROR_COPY[code] ?? message
 }
