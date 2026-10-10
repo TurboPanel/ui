@@ -1,3 +1,4 @@
+import { useQuery } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 import { useRouter, type Href } from 'expo-router'
 import { StyleSheet, Text, View } from 'react-native'
@@ -16,7 +17,15 @@ import {
   StatusDot,
   type StatusTone,
 } from '@/components/ui'
-import { type ManagedListRecord } from '@/lib/instance-api'
+import { fetchOrgManagedDefaults, type ManagedListRecord } from '@/lib/instance-api'
+import { resolveManagedIngressPorts } from '@/lib/managed-ingress-ports'
+import {
+  managedOrgListProjectEnvironmentLabel,
+  managedOrgListServerPresentation,
+  managedSharedListenerLabel,
+  resolveManagedSharedListener,
+} from '@/lib/managed-org-list'
+import { queryKeys } from '@/lib/query-keys'
 import {
   MANAGED_SERVICE_CATALOG,
   clusterHasUnhealthyMember,
@@ -59,22 +68,6 @@ function engineLabel(row: ManagedListRecord): string {
     return managedCatalogEntryForCode(row.engine)?.label ?? row.engine
   }
   return 'Unknown'
-}
-
-function serverLabel(row: ManagedListRecord): string {
-  return row.serverName?.trim() || (row.serverId ? row.serverId : '—')
-}
-
-function projectEnvironmentLabel(row: ManagedListRecord): string {
-  const project = row.projectName?.trim() || 'Project'
-  const environment = row.environmentName?.trim()
-  if (environment) return `${project} / ${environment}`
-  return project
-}
-
-function endpointLabel(row: ManagedListRecord): string {
-  if (row.host && row.port != null) return `${row.host}:${row.port}`
-  return 'Not exposed'
 }
 
 function topologyLabel(row: ManagedListRecord): string {
@@ -154,14 +147,18 @@ function ManagedTableRow({
   orgId,
   row,
   rowIndex,
+  ingressPorts,
 }: Readonly<{
   orgId: string
   row: ManagedListRecord
   rowIndex: number
+  ingressPorts: ReturnType<typeof resolveManagedIngressPorts>
 }>) {
   const router = useRouter()
   const title = serviceTitle(row)
   const href = `/${orgId}/projects/${row.projectId}` as Href
+  const sharedListener = resolveManagedSharedListener(row, ingressPorts)
+  const server = managedOrgListServerPresentation(row)
 
   return (
     <DataTableRow
@@ -181,12 +178,16 @@ function ManagedTableRow({
       </DataTableCell>
       <DataTableCell column={MG_PROJECT}>
         <Text style={styles.secondaryText} numberOfLines={1}>
-          {projectEnvironmentLabel(row)}
+          {managedOrgListProjectEnvironmentLabel(row)}
         </Text>
       </DataTableCell>
       <DataTableCell column={MG_SERVER}>
-        <Text style={styles.secondaryText} numberOfLines={1}>
-          {serverLabel(row)}
+        <Text
+          style={styles.secondaryText}
+          numberOfLines={1}
+          accessibilityLabel={server.accessibilityLabel}
+        >
+          {server.display}
         </Text>
       </DataTableCell>
       <ManagedStatusCell status={row.status} />
@@ -208,13 +209,11 @@ function ManagedTableRow({
       <DataTableCell column={MG_ENDPOINT}>
         <Text
           style={
-            row.host && row.port != null
-              ? styles.endpointText
-              : styles.endpointMuted
+            sharedListener ? styles.endpointText : styles.endpointMuted
           }
           numberOfLines={1}
         >
-          {endpointLabel(row)}
+          {managedSharedListenerLabel(row, ingressPorts)}
         </Text>
       </DataTableCell>
     </DataTableRow>
@@ -254,7 +253,7 @@ function uniqueServers(
   for (const row of rows) {
     if (!row.serverId) continue
     if (!byId.has(row.serverId)) {
-      byId.set(row.serverId, serverLabel(row))
+      byId.set(row.serverId, managedOrgListServerPresentation(row).display)
     }
   }
   return [...byId.entries()]
@@ -360,7 +359,12 @@ function ManagedEmptyState({
 function ManagedFleetTable({
   orgId,
   rows,
-}: Readonly<{ orgId: string; rows: readonly ManagedListRecord[] }>) {
+  ingressPorts,
+}: Readonly<{
+  orgId: string
+  rows: readonly ManagedListRecord[]
+  ingressPorts: ReturnType<typeof resolveManagedIngressPorts>
+}>) {
   return (
     <DataTable columns={MANAGED_COLUMNS} minWidth={1080} bordered>
       {rows.map((row, index) => (
@@ -369,6 +373,7 @@ function ManagedFleetTable({
           orgId={orgId}
           row={row}
           rowIndex={index}
+          ingressPorts={ingressPorts}
         />
       ))}
     </DataTable>
@@ -384,6 +389,7 @@ function ManagedFleetBody({
   filtersActive,
   canManage,
   onCreate,
+  ingressPorts,
 }: Readonly<{
   orgId: string
   loading: boolean
@@ -393,6 +399,7 @@ function ManagedFleetBody({
   filtersActive: boolean
   canManage: boolean
   onCreate: () => void
+  ingressPorts: ReturnType<typeof resolveManagedIngressPorts>
 }>) {
   if (loading) {
     return <LoadingState label="Loading managed services…" />
@@ -431,7 +438,11 @@ function ManagedFleetBody({
   return (
     <View style={styles.fleetBody}>
       {refreshError}
-      <ManagedFleetTable orgId={orgId} rows={filtered} />
+      <ManagedFleetTable
+        orgId={orgId}
+        rows={filtered}
+        ingressPorts={ingressPorts}
+      />
     </View>
   )
 }
@@ -451,6 +462,19 @@ export function ManagedOverviewSection({
     refetchInterval: MANAGED_REFRESH_MS,
     staleTime: MANAGED_REFRESH_MS / 2,
   })
+  const managedDefaultsQuery = useQuery({
+    queryKey: queryKeys.org(orgId).settings.managedDefaults,
+    queryFn: () => fetchOrgManagedDefaults(orgId),
+    staleTime: 60_000,
+  })
+  const ingressPorts = useMemo(
+    () =>
+      resolveManagedIngressPorts(
+        managedDefaultsQuery.data?.effectivePorts ??
+          managedDefaultsQuery.data?.ports,
+      ),
+    [managedDefaultsQuery.data?.effectivePorts, managedDefaultsQuery.data?.ports],
+  )
 
   const rows = orEmptyArray(managedQuery.data?.managed)
   const filtered = useMemo(
@@ -514,6 +538,7 @@ export function ManagedOverviewSection({
           filtersActive={filtersActive}
           canManage={canManage}
           onCreate={openCreate}
+          ingressPorts={ingressPorts}
         />
       </SectionPanel>
     </View>
