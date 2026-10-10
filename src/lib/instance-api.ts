@@ -7355,6 +7355,10 @@ export type EntityMetricScope =
   | 'router'
   | 'storage'
   | 'dockerUsage'
+  | 'extended.host'
+  | 'extended.docker'
+  | 'extended.ingress'
+  | 'extended.sizes'
   | 'network'
   | 'filesystem'
   | 'block'
@@ -7373,6 +7377,10 @@ const HOST_SINGLETON_ENTITY_SCOPES: ReadonlySet<EntityMetricScope> = new Set([
   'router',
   'storage',
   'dockerUsage',
+  'extended.host',
+  'extended.docker',
+  'extended.ingress',
+  'extended.sizes',
 ])
 
 /** Per-entity scope -> wire alias. Only `hardwareSignal` differs from its scope name. */
@@ -7546,8 +7554,6 @@ export type HostSeriesChartPoint = {
   expectedSampleCount?: number
   /** Seconds between stored samples in this bucket (collection interval × store sampling weight). */
   sampleSpacingSeconds?: number
-  /** `null`/absent means unknown or a mixed-generation bucket. */
-  topologyGeneration?: number | null
 }
 
 /** Resolved CPU thermal/power limits for headroom display. Mirrors `EffectiveCpuThermalLimits`. */
@@ -7575,14 +7581,6 @@ export type HostSeriesChartResponse = {
    */
   gapBuckets?: string[]
   points: HostSeriesChartPoint[]
-  /**
-   * Point indices where `topologyGeneration` differs from the previous known
-   * generation — a boundary marker for segmenting chart continuity without
-   * inferring it from raw generation numbers. Replaces v3's `generationBreaks`.
-   */
-  topologyGenerationBreaks: number[]
-  /** Distinct topology generations observed anywhere in the queried range. */
-  topologyGenerations?: number[]
 }
 
 /**
@@ -7642,7 +7640,6 @@ export type MetricsSeriesResponse = {
   /** One entry per requested per-entity family. */
   entities: EntitySeriesResult[]
   inventory: TopologyInventory | null
-  topologyGeneration: number | null
   cpuLimits: EffectiveCpuThermalLimits
   temperatureUnit: 'celsius' | 'fahrenheit'
   /** How many network interfaces this server may monitor (its effective NIC-slot count). */
@@ -7670,7 +7667,6 @@ export type FleetServerUsageRecord = {
   sampleCount: number
   /** Keyed by canonical name — see `FLEET_HOST_METRICS` for the requested set. */
   values: Partial<Record<string, number | null>>
-  topologyGeneration?: number | null
   derived: DerivedHostValues
 }
 
@@ -7885,6 +7881,37 @@ export async function fetchServerMetricsEvents(
     serverId,
     'events',
     query,
+    organizationId
+  )
+}
+
+/** What a host last told us about itself: short text, never numbers (kernel, OS, versions, drive and GPU details). */
+export type HostFacts = {
+  /** Host-wide short text by name; only fields the host reported. */
+  text: Partial<Record<string, string>>
+  blockDevices: { deviceId: string; model?: string; smart?: string }[]
+  gpus: { gpuId: string; driver?: string; model?: string }[]
+}
+
+export type HostFactsResponse = {
+  ok: true
+  serverId: string
+  backend: MetricsBackendKind
+  available: boolean
+  /** When the sample the facts came from was taken; `null` when none is in the last day. */
+  sampledAt: string | null
+  facts: HostFacts
+}
+
+/** The newest host facts (kernel, OS, versions, drive and GPU text) for a server. */
+export async function fetchServerMetricsFacts(
+  serverId: string,
+  organizationId?: string | null
+): Promise<HostFactsResponse> {
+  return await fetchServerMetricsJson<HostFactsResponse>(
+    serverId,
+    'facts',
+    new URLSearchParams(),
     organizationId
   )
 }

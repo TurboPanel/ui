@@ -10,6 +10,7 @@ export function ChartCard({
   headline,
   caption,
   unavailable,
+  unavailableLabel,
   accent = true,
   children,
 }: Readonly<{
@@ -20,6 +21,7 @@ export function ChartCard({
   /** Muted line under the legend — e.g. a Tjmax/TDP headroom readout. */
   caption?: string
   unavailable?: boolean
+  unavailableLabel?: string
   accent?: boolean
   children?: ReactNode
 }>) {
@@ -46,7 +48,7 @@ export function ChartCard({
           <View style={styles.unavailableBlock}>
             <View style={styles.unavailableDot} />
             <Text style={panelStyles.muted}>
-              Metric unavailable for this range
+              {unavailableLabel ?? 'Metric unavailable for this range'}
             </Text>
           </View>
         ) : (
