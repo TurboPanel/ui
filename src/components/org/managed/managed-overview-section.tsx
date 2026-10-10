@@ -90,15 +90,8 @@ const MANAGED_COLUMNS = [
   { key: 'endpoint', header: 'Shared listener', flex: 1.6, minWidth: 140 },
 ] as const satisfies readonly DataTableColumn[]
 
-const [
-  MG_ENGINE,
-  MG_NAME,
-  MG_PROJECT,
-  MG_SERVER,
-  MG_STATUS,
-  MG_TOPOLOGY,
-  MG_ENDPOINT,
-] = MANAGED_COLUMNS
+const [MG_ENGINE, MG_NAME, MG_PROJECT, MG_SERVER, MG_STATUS, MG_TOPOLOGY, MG_ENDPOINT] =
+  MANAGED_COLUMNS
 
 function statusTone(status: ManagedStatus) {
   switch (status) {
@@ -136,9 +129,7 @@ function ManagedStatusCell({ status }: Readonly<{ status: ManagedStatus }>) {
     <DataTableCell column={MG_STATUS}>
       <View style={[styles.statusBadge, tone.badge]}>
         <StatusDot size="sm" tone={tone.dot} />
-        <Text style={[styles.statusText, tone.text]}>
-          {managedStatusLabel(status)}
-        </Text>
+        <Text style={[styles.statusText, tone.text]}>{managedStatusLabel(status)}</Text>
       </View>
     </DataTableCell>
   )
@@ -160,9 +151,7 @@ function ManagedTableRow({
   const href = `/${orgId}/projects/${row.projectId}` as Href
   const listenerLabel = managedSharedListenerLabel(row, ingressPorts)
   const sharedListener =
-    ingressPorts === null
-      ? null
-      : resolveManagedSharedListener(row, ingressPorts)
+    ingressPorts === null ? null : resolveManagedSharedListener(row, ingressPorts)
   const server = managedOrgListServerPresentation(row)
 
   return (
@@ -199,10 +188,7 @@ function ManagedTableRow({
       <DataTableCell column={MG_TOPOLOGY}>
         <View style={styles.topologyCell}>
           {clusterHasUnhealthyMember(row.members) ? (
-            <View
-              style={styles.topologyWarnDot}
-              accessibilityLabel="Member needs attention"
-            />
+            <View style={styles.topologyWarnDot} accessibilityLabel="Member needs attention" />
           ) : (
             <View style={styles.topologyDot} accessibilityLabel="Healthy topology" />
           )}
@@ -212,12 +198,7 @@ function ManagedTableRow({
         </View>
       </DataTableCell>
       <DataTableCell column={MG_ENDPOINT}>
-        <Text
-          style={
-            sharedListener ? styles.endpointText : styles.endpointMuted
-          }
-          numberOfLines={1}
-        >
+        <Text style={sharedListener ? styles.endpointText : styles.endpointMuted} numberOfLines={1}>
           {listenerLabel}
         </Text>
       </DataTableCell>
@@ -229,7 +210,7 @@ function filterManagedRows(
   rows: readonly ManagedListRecord[],
   engineFilter: ManagedServiceEngine | 'all',
   statusFilter: ManagedStatus | 'all',
-  serverFilter: string,
+  serverFilter: string
 ): ManagedListRecord[] {
   return rows.filter((row) => {
     if (engineFilter !== 'all' && row.engine !== engineFilter) return false
@@ -239,21 +220,15 @@ function filterManagedRows(
   })
 }
 
-function uniqueEngines(
-  rows: readonly ManagedListRecord[],
-): ManagedServiceEngine[] {
+function uniqueEngines(rows: readonly ManagedListRecord[]): ManagedServiceEngine[] {
   const found = new Set<ManagedServiceEngine>()
   for (const row of rows) {
     if (row.engine) found.add(row.engine)
   }
-  return MANAGED_SERVICE_CATALOG.map((entry) => entry.engine).filter((engine) =>
-    found.has(engine),
-  )
+  return MANAGED_SERVICE_CATALOG.map((entry) => entry.engine).filter((engine) => found.has(engine))
 }
 
-function uniqueServers(
-  rows: readonly ManagedListRecord[],
-): { id: string; label: string }[] {
+function uniqueServers(rows: readonly ManagedListRecord[]): { id: string; label: string }[] {
   const byId = new Map<string, string>()
   for (const row of rows) {
     if (!row.serverId) continue
@@ -419,9 +394,7 @@ function ManagedFleetBody({
     return <ManagedEmptyState canManage={canManage} onCreate={onCreate} />
   }
 
-  const refreshError = error ? (
-    <Text style={panelStyles.error}>{error}</Text>
-  ) : null
+  const refreshError = error ? <Text style={panelStyles.error}>{error}</Text> : null
 
   if (filtered.length === 0) {
     return (
@@ -443,23 +416,15 @@ function ManagedFleetBody({
   return (
     <View style={styles.fleetBody}>
       {refreshError}
-      <ManagedFleetTable
-        orgId={orgId}
-        rows={filtered}
-        ingressPorts={ingressPorts}
-      />
+      <ManagedFleetTable orgId={orgId} rows={filtered} ingressPorts={ingressPorts} />
     </View>
   )
 }
 
-export function ManagedOverviewSection({
-  orgId,
-}: Readonly<{ orgId: string }>) {
+export function ManagedOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
   const router = useRouter()
   const canManage = useCan('organization', orgId, 'organization:manage')
-  const [engineFilter, setEngineFilter] = useState<ManagedServiceEngine | 'all'>(
-    'all',
-  )
+  const [engineFilter, setEngineFilter] = useState<ManagedServiceEngine | 'all'>('all')
   const [statusFilter, setStatusFilter] = useState<ManagedStatus | 'all'>('all')
   const [serverFilter, setServerFilter] = useState('')
 
@@ -472,22 +437,22 @@ export function ManagedOverviewSection({
     queryFn: () => fetchOrgManagedDefaults(orgId),
     staleTime: 60_000,
   })
-  const ingressPorts = useMemo((): ReturnType<
-    typeof resolveManagedIngressPorts
-  > | null => {
+  const ingressPorts = useMemo((): ReturnType<typeof resolveManagedIngressPorts> | null => {
     if (managedDefaultsQuery.isPending && !managedDefaultsQuery.data) {
       return null
     }
+    if (!managedDefaultsQuery.data) {
+      return null
+    }
     return resolveManagedIngressPorts(
-      managedDefaultsQuery.data?.effectivePorts ??
-        managedDefaultsQuery.data?.ports,
+      managedDefaultsQuery.data.effectivePorts ?? managedDefaultsQuery.data.ports
     )
   }, [managedDefaultsQuery.data, managedDefaultsQuery.isPending])
 
   const rows = orEmptyArray(managedQuery.data?.managed)
   const filtered = useMemo(
     () => filterManagedRows(rows, engineFilter, statusFilter, serverFilter),
-    [rows, engineFilter, statusFilter, serverFilter],
+    [rows, engineFilter, statusFilter, serverFilter]
   )
   const engines = useMemo(() => uniqueEngines(rows), [rows])
   const servers = useMemo(() => uniqueServers(rows), [rows])
@@ -496,8 +461,7 @@ export function ManagedOverviewSection({
   const loading = managedQuery.isLoading && rows.length === 0
   const error = managedListErrorMessage(managedQuery.error)
   const createHref = `/${orgId}/projects/new?type=managed` as Href
-  const filtersActive =
-    engineFilter !== 'all' || statusFilter !== 'all' || serverFilter.length > 0
+  const filtersActive = engineFilter !== 'all' || statusFilter !== 'all' || serverFilter.length > 0
   const listHint = loading
     ? 'Loading…'
     : `${filtered.length} of ${rows.length} service(s) · Postgres-backed status`
@@ -510,8 +474,7 @@ export function ManagedOverviewSection({
     <View style={styles.root}>
       <Text style={panelStyles.pageTitle}>Managed services</Text>
       <Text style={panelStyles.pageCopy}>
-        Every managed engine in this organization. Open a row for the project
-        detail surface.
+        Every managed engine in this organization. Open a row for the project detail surface.
       </Text>
 
       <ManagedFiltersPanel
