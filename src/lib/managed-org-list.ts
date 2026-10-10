@@ -65,9 +65,7 @@ export function managedSharedListenerLabel(
 export function managedOrgListProjectEnvironmentLabel(
   row: Pick<ManagedListRecord, 'projectName' | 'environmentName' | 'projectId'>,
 ): string {
-  const project =
-    row.projectName?.trim() ||
-    (row.projectId ? DELETED_PROJECT_LABEL : DELETED_PROJECT_LABEL)
+  const project = row.projectName?.trim() || DELETED_PROJECT_LABEL
   const environment = row.environmentName?.trim()
   if (environment) return `${project} / ${environment}`
   return project

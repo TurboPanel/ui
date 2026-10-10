@@ -87,6 +87,19 @@ describe('managedSharedListenerLabel', () => {
       ),
     ).toBe('Not exposed')
   })
+
+  it('infers loopback ingress for ready rows before host metadata exists', () => {
+    expect(
+      managedSharedListenerLabel(
+        listRow({
+          engine: 'postgres',
+          host: null,
+          port: null,
+          status: 'ready',
+        }),
+      ),
+    ).toBe(`${MANAGED_SHARED_LOOPBACK_HOST}:${MANAGED_INGRESS_PGSQL_PORT}`)
+  })
 })
 
 describe('managedOrgListProjectEnvironmentLabel', () => {
@@ -109,6 +122,16 @@ describe('managedOrgListProjectEnvironmentLabel', () => {
       }),
     ).toBe(`${DELETED_PROJECT_LABEL} / Production`)
   })
+
+  it('omits the environment segment when the name is blank', () => {
+    expect(
+      managedOrgListProjectEnvironmentLabel({
+        projectId: 'p1',
+        projectName: 'Shop',
+        environmentName: '   ',
+      }),
+    ).toBe('Shop')
+  })
 })
 
 describe('managedOrgListServerPresentation', () => {
@@ -129,5 +152,11 @@ describe('managedOrgListServerPresentation', () => {
     expect(
       managedOrgListServerPresentation({ serverName: null, serverId: id }),
     ).toEqual({ display: id, accessibilityLabel: id })
+  })
+
+  it('shows an em dash when neither name nor id exists', () => {
+    expect(
+      managedOrgListServerPresentation({ serverName: null, serverId: null }),
+    ).toEqual({ display: '—', accessibilityLabel: 'No server' })
   })
 })
