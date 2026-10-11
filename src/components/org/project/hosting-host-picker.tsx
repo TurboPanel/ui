@@ -55,5 +55,5 @@ const styles = StyleSheet.create({
     backgroundColor: chrome.bgActive,
   },
   label: { color: colors.textMuted, fontSize: 13, fontWeight: '600' },
-  labelSelected: { color: chrome.accent },
+  labelSelected: { color: colors.link },
 })

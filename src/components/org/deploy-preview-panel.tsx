@@ -13,7 +13,10 @@ import {
   type DeployPreviewServer,
 } from '@/lib/instance-api'
 import { colors, spacing } from '@/lib/theme'
-import { preparedPerServerCompose } from '@/lib/deploy-preview-display'
+import {
+  nativeAppVariableLine,
+  preparedPerServerCompose,
+} from '@/lib/deploy-preview-display'
 import { userErrorMessage } from '@/lib/user-error'
 
 function formatWarningLine(warning: DeployPreviewResponse['warnings'][number]): string {
@@ -144,6 +147,9 @@ function PreparedComposeSnapshot({
   const envFile = preview.envFile?.trim() ?? ''
   const secretPlan = preview.secretPlan ?? []
   const sources = preview.sources ?? []
+  const nativeApps = (preview.nativeAppVariables ?? []).filter(
+    (app) => app.variables.length > 0,
+  )
 
   return (
     <View style={styles.layersList}>
@@ -183,6 +189,24 @@ function PreparedComposeSnapshot({
           ))}
         </View>
       ) : null}
+      {nativeApps.map((app) => (
+        <View key={app.composeServiceName} style={styles.layerSection}>
+          <View style={styles.layerHeader}>
+            <Text style={styles.layerFilename}>{app.composeServiceName}</Text>
+            <View style={styles.roleBadge}>
+              <Text style={styles.roleBadgeText}>Node app variables</Text>
+            </View>
+          </View>
+          {app.variables.map((entry) => (
+            <Text
+              key={`${entry.name}:${entry.source}`}
+              style={panelStyles.muted}
+            >
+              {nativeAppVariableLine(entry)}
+            </Text>
+          ))}
+        </View>
+      ))}
       {sources.length > 0 ? (
         <View style={styles.layerSection}>
           <View style={styles.layerHeader}>

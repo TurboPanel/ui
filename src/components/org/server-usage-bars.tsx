@@ -137,7 +137,7 @@ export function ServerUsageBars({
           usage == null ? { text: 'unavailable' } : { min: 0, max: 100, now: Math.round(usage) }
         }
       >
-        <SimpleColumn percent={usage} color={colors.accent} trackStyle={trackStyle} />
+        <SimpleColumn percent={usage} color={colors.ok} trackStyle={trackStyle} />
       </UsageMetricColumn>
 
       <UsageMetricColumn
@@ -223,7 +223,7 @@ const styles = StyleSheet.create({
   },
   fill: {
     width: '100%',
-    backgroundColor: colors.accent,
+    backgroundColor: colors.ok,
   },
   fillEmpty: {
     backgroundColor: colors.borderMuted,

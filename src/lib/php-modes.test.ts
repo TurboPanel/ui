@@ -3,6 +3,8 @@ import {
   affectedSiteLine,
   draftFromPolicy,
   engineDefaultLines,
+  draftHasListedMode,
+  isPolicyModeListed,
   isPolicyModeSelectable,
   phpModeUnavailableNote,
   policyFromDraft,
@@ -34,12 +36,17 @@ describe('php-modes helpers', () => {
     expect(sameModes(['fpm'], [])).toBe(false)
   })
 
-  it('always keeps attached lsphp disabled', () => {
+  it('does not list attached lsphp and never lets it be switched', () => {
+    expect(isPolicyModeListed('lsphp-attached')).toBe(false)
+    expect(isPolicyModeListed('lsphp-detached')).toBe(true)
+    expect(draftHasListedMode(['lsphp-attached'])).toBe(false)
+    expect(draftHasListedMode(['lsphp-attached', 'fpm'])).toBe(true)
+    expect(draftHasListedMode([])).toBe(false)
     expect(isPolicyModeSelectable('lsphp-attached')).toBe(false)
     expect(isPolicyModeSelectable('lsphp-attached', [...ALL])).toBe(false)
     expect(isPolicyModeSelectable('fpm')).toBe(true)
     expect(isPolicyModeSelectable('fpm', ['fastcgi'])).toBe(false)
-    expect(phpModeUnavailableNote('lsphp-attached', null)).toBe('Coming soon')
+    expect(phpModeUnavailableNote('lsphp-attached', null)).toBe('')
     expect(phpModeUnavailableNote('fpm', ['fastcgi'])).toBe('Not offered by the organization')
     expect(phpModeUnavailableNote('fpm', null)).toBe('')
   })

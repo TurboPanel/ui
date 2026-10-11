@@ -4,6 +4,7 @@ import {
   RECONNECT_SLOW_AFTER_MS,
   formatReconnectElapsed,
   isControlPlaneUnreachable,
+  reconnectBody,
   reconnectRetryDelayMs,
   reconnectView,
 } from '@/lib/control-plane-reconnect'
@@ -60,5 +61,14 @@ describe('RECONNECT_COPY', () => {
       'The panel is restarting to finish an update. This page will reconnect by itself.'
     )
     expect(RECONNECT_COPY).not.toMatch(/fetch|HTTP|error/i)
+  })
+})
+
+describe('reconnectBody', () => {
+  it('says how long it has been waiting', () => {
+    expect(reconnectBody(reconnectView(65_000))).toBe(`${RECONNECT_COPY} Waiting 1 min 05 s.`)
+  })
+  it('is the plain sentence without a view', () => {
+    expect(reconnectBody(null)).toBe(RECONNECT_COPY)
   })
 })

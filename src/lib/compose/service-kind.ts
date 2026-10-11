@@ -18,6 +18,9 @@ export type SiteEngine = 'caddy' | 'apache' | 'nginx' | 'nginx+apache' | 'openli
  */
 export type NativeRuntimeFramework = 'auto' | 'node' | 'next'
 
+/** What a native app runs on: the vendored Node (default) or the vendored Deno. */
+export type NativeRuntime = 'node' | 'deno'
+
 /**
  * Package manager used to install a `serviceKind: node` build. Mirrors the
  * instance type. Omitted means auto-detect from the lockfile at build time.
@@ -120,6 +123,10 @@ export type ComposeServiceExtensionFields = {
   framework?: NativeRuntimeFramework
   /** Pinned Node series for `serviceKind: node` (`24`, `24.17`, `24.17.0`). */
   nodeVersion?: string
+  /** `deno` runs a `serviceKind: node` service on Deno. Omitted means `node`. */
+  runtime?: NativeRuntime
+  /** Pinned Deno series for a `runtime: deno` service (`2`, `2.9`, `2.9.7`). */
+  denoVersion?: string
   /**
    * Package manager for a `serviceKind: node` build. Omitted means
    * auto-detect from the lockfile at build time.
@@ -186,11 +193,9 @@ export type ComposeServiceExtensionFields = {
    * Scheduled jobs for a `site` or `node` service.
    *
    * Rendered by the daemon as a systemd timer per entry, with `User=` set to
-   * the service's principal. That is what makes this the cleanest proof
-   * entitlement had to be an OS grant: `ExecStart` reaches `execve` **after**
-   * systemd has dropped privileges, so `/usr/bin/php8.4` succeeds or fails
-   * purely on the account's group membership. Nothing in the generated unit
-   * grants anything.
+   * the service's principal: `ExecStart` runs **after** systemd has dropped
+   * privileges, as the site owner's Linux user, which may run every PHP,
+   * Node or Deno version installed on the server.
    */
   cron?: ComposeServiceCronJob[]
   /**
@@ -244,6 +249,8 @@ type SiteOnlyExtensionField = 'engine' | 'root' | 'sourceKind' | 'php'
 type NodeOnlyExtensionField =
   | 'framework'
   | 'nodeVersion'
+  | 'runtime'
+  | 'denoVersion'
   | 'packageManager'
   | 'appMode'
   | 'enabled'
@@ -376,6 +383,14 @@ const SERVICE_EXTENSION_FIELDS: Readonly<
     kinds: NODE_KIND_ONLY,
     typeMessage: 'nodeVersion must be a pinned version like "24" or "24.17.0"',
   },
+  runtime: {
+    kinds: NODE_KIND_ONLY,
+    typeMessage: 'runtime must be "node" or "deno"',
+  },
+  denoVersion: {
+    kinds: NODE_KIND_ONLY,
+    typeMessage: 'denoVersion must be a pinned version like "2" or "2.9.7"',
+  },
   packageManager: {
     kinds: NODE_KIND_ONLY,
     typeMessage: 'packageManager must be "npm", "yarn", or "pnpm"',
@@ -488,21 +503,69 @@ export type ServiceKindFieldIssue = {
  * authored php block, and saying so beats silence. A key present with no value
  * (`root:`) is the one exception — that is a half-typed line, not a claim.
  */
+/**
+ * The two runtimes keep their own hints apart: a Deno service takes no
+ * `nodeVersion`, `packageManager` or non-`auto` `framework`, and `denoVersion`
+ * needs `runtime: deno`. Mirrors the instance's `validateDenoRuntimeConsistency`.
+ */
+function denoRuntimeIssues(
+  extension: Record<string, unknown>,
+  partialLayer: boolean
+): ServiceKindFieldIssue[] {
+  const runtime = readNativeRuntime(extension.runtime)
+  // A partial layer that does not restate `runtime` leaves it to the Base.
+  if (partialLayer && runtime === undefined) return []
+  const present = (field: string) =>
+    extension[field] !== null && extension[field] !== undefined
+  if (runtime !== 'deno') {
+    return present('denoVersion')
+      ? [{ field: 'denoVersion', message: 'denoVersion is only valid when runtime is "deno"' }]
+      : []
+  }
+  return [
+    ['nodeVersion', present('nodeVersion')],
+    ['packageManager', present('packageManager')],
+    ['framework', present('framework') && extension.framework !== 'auto'],
+  ].flatMap(([field, isPresent]) =>
+    isPresent
+      ? [
+          {
+            field: field as string,
+            message: `${field} is only valid when runtime is node (this service runs on Deno)`,
+          },
+        ]
+      : []
+  )
+}
+
 export function collectServiceKindFieldIssues(
-  extension: Record<string, unknown>
+  extension: Record<string, unknown>,
+  options?: { partialLayer?: boolean }
 ): ServiceKindFieldIssue[] {
   const kind = readServiceKind(extension.serviceKind)
+  const partialLayer = options?.partialLayer === true
   const issues: ServiceKindFieldIssue[] = []
 
+  // A partial layer (an environment's changes) that does not restate
+  // `serviceKind` is not saying the service is a container: its kind is the
+  // Base's, so which fields fit it is asked of the merged document.
+  const kindDeferred = partialLayer && kind === undefined
   for (const [field, value] of Object.entries(extension)) {
+    if (kindDeferred) break
     if (value === null || value === undefined) continue
     const message = serviceKindFieldMessage(field, kind)
     if (message) issues.push({ field, message })
   }
 
+  if (kind === 'node') {
+    issues.push(...denoRuntimeIssues(extension, partialLayer))
+  }
+
   // Required fields are a statement about a kind, so an omitted `serviceKind`
-  // has nothing to require: it means `container`, which requires nothing.
-  if (kind === undefined) return issues
+  // has nothing to require: it means `container`, which requires nothing. A
+  // partial layer may restate a kind and leave the rest (a node app's
+  // repository) to the Base, so it requires nothing either.
+  if (kind === undefined || partialLayer) return issues
   for (const field of SERVICE_KIND_FIELD_TABLE[kind].requiredFields) {
     const value = extension[field]
     if (value !== null && value !== undefined) continue
@@ -554,6 +617,7 @@ export type ComposeServicePhpExtension = {
 
 const SERVICE_KINDS = new Set<ComposeServiceKind>(['container', 'site', 'node'])
 const NATIVE_RUNTIME_FRAMEWORKS = new Set<NativeRuntimeFramework>(['auto', 'node', 'next'])
+const NATIVE_RUNTIMES = new Set<NativeRuntime>(['node', 'deno'])
 const SITE_ENGINES = new Set<SiteEngine>([
   'caddy',
   'apache',
@@ -633,6 +697,14 @@ function readSourceBuildKind(value: unknown): ComposeSourceBuildKind | undefined
     return undefined
   }
   return trimmed as ComposeSourceBuildKind
+}
+
+function readNativeRuntime(value: unknown): NativeRuntime | undefined {
+  if (typeof value !== 'string') return undefined
+  const trimmed = value.trim()
+  return NATIVE_RUNTIMES.has(trimmed as NativeRuntime)
+    ? (trimmed as NativeRuntime)
+    : undefined
 }
 
 function readNodeVersion(value: unknown): string | undefined {
@@ -745,6 +817,9 @@ export function parseServiceTurbopanelExtension(
     engine: readSiteEngine(value.engine),
     framework: readNativeRuntimeFramework(value.framework),
     nodeVersion: readNodeVersion(value.nodeVersion),
+    runtime: readNativeRuntime(value.runtime),
+    // Same shape as a Node pin (`2`, `2.9`, `2.9.7`).
+    denoVersion: readNodeVersion(value.denoVersion),
     packageManager: readNodePackageManager(value.packageManager),
     appMode: readNodeAppMode(value.appMode),
     documentRoot: readBoundedString(value.documentRoot, 200),
@@ -932,6 +1007,8 @@ export function patchServiceTurbopanelExtension(
     sourceKind: next.sourceKind,
     framework: next.framework,
     nodeVersion: next.nodeVersion,
+    runtime: next.runtime,
+    denoVersion: next.denoVersion,
     packageManager: next.packageManager,
     appMode: next.appMode,
     // Only `false` is persisted — `true` is the default and would just be
@@ -983,9 +1060,12 @@ export const DEFAULT_SITE_ENGINE: SiteEngine = 'caddy'
  * environments can span servers, so "installed here" is not well defined in a
  * compose editor. Picking an unsupported series is a hard error at prepare;
  * picking a supported one the target host lacks is a warning, because the
- * deploy installs it.
+ * deploy installs it (on first use; nothing is installed in advance).
+ *
+ * The daemon offers the series LiteSpeed publishes for the server's operating
+ * system; this is the list for Debian 13, the only supported OS today.
  */
-export const SUPPORTED_PHP_SERIES: readonly string[] = ['8.3', '8.4']
+export const SUPPORTED_PHP_SERIES: readonly string[] = ['8.1', '8.2', '8.3', '8.4', '8.5']
 
 /** PHP modes, mirroring the instance's `contracts/commands/schemas.ts`. */
 export type PhpMode = 'fastcgi' | 'fpm' | 'lsphp-detached' | 'lsphp-attached'
@@ -1077,6 +1157,16 @@ export const SUPPORTED_NODE_SERIES: readonly string[] = ['22', '24']
 
 /** Series a node app gets when it pins none. Mirrors the instance default. */
 export const DEFAULT_NODE_SERIES = '24'
+
+/**
+ * Deno series TurboPanel offers in pickers: Deno ships one major, so a series
+ * is the major and the host runs its newest 2.x. Mirrors `SUPPORTED_DENO_SERIES`
+ * on the instance.
+ */
+export const SUPPORTED_DENO_SERIES: readonly string[] = ['2']
+
+/** Series a Deno app gets when it pins none. Mirrors the instance default. */
+export const DEFAULT_DENO_SERIES = '2'
 
 export const SITE_ENGINE_OPTIONS: readonly {
   value: SiteEngine

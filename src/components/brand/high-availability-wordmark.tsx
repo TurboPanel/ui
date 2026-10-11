@@ -5,6 +5,7 @@ import { BuildInfoSheet } from '@/components/brand/build-info-sheet'
 import { useAuth } from '@/lib/auth-context'
 import { showsBuildInfo } from '@/lib/build-info'
 import { controlPlaneVersionLine } from '@/lib/control-plane-version'
+import { haWordmarkColors } from '@/lib/ha-wordmark-colors'
 import type { HealthResponse } from '@/lib/instance-api'
 import {
   HA_PRODUCT_NAME,
@@ -14,9 +15,7 @@ import {
 } from '@/lib/platform-copy'
 import { useControlPlaneHealth } from '@/lib/queries/system'
 import { colors, webPointer } from '@/lib/theme'
-
-/** HA blue fading to its light tint: the pill's 1px border. */
-const BORDER_GRADIENT = [colors.blue, colors.command] as const
+import { useColors, useColorScheme } from '@/lib/theme-preference'
 
 /**
  * "HIGH AVAILABILITY" beside the T mark on the hosted (Workers) control
@@ -27,7 +26,8 @@ const BORDER_GRADIENT = [colors.blue, colors.command] as const
  * and nothing at all on self-hosted.
  *
  * The border is an outer gradient with 1px padding around an inner
- * blue-tinted fill, so it reads the same on every surface it sits on.
+ * blue-tinted fill, so it reads the same on every surface it sits on. In
+ * light mode the text is white on a solid HA-blue fill (`haWordmarkColors`).
  *
  * Under the full pill, right-aligned to its edge: the control plane's version
  * (and short commit, linked to the source) from `/api/health`, followed on a
@@ -48,6 +48,9 @@ export function HighAvailabilityWordmark({
   showVersion = true,
 }: Readonly<{ compact?: boolean; showVersion?: boolean }>) {
   const { controlPlaneRuntime } = useAuth()
+  // The gradient needs real colour values, not theme variables.
+  const palette = useColors()
+  const pillColors = haWordmarkColors(useColorScheme(), palette)
   const shown = showsHighAvailabilityWordmark(controlPlaneRuntime)
   const selfHosted = controlPlaneRuntime === 'deno'
   const withVersion = showVersion && !compact
@@ -63,7 +66,8 @@ export function HighAvailabilityWordmark({
 
   const pill = (
     <LinearGradient
-      colors={BORDER_GRADIENT}
+      // HA blue fading to its light tint: the pill's 1px border.
+      colors={[palette.brand, palette.link]}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={[styles.border, withVersion && styles.borderInStack]}
@@ -71,9 +75,11 @@ export function HighAvailabilityWordmark({
       accessibilityRole="text"
       accessibilityLabel={HA_PRODUCT_NAME}
     >
-      <View style={[styles.fill, compact && styles.fillCompact]}>
+      <View
+        style={[styles.fill, compact && styles.fillCompact, { backgroundColor: pillColors.fill }]}
+      >
         <Text
-          style={[styles.text, compact && styles.textCompact]}
+          style={[styles.text, compact && styles.textCompact, { color: pillColors.text }]}
           numberOfLines={1}
           importantForAccessibility="no"
         >
@@ -198,13 +204,11 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     paddingHorizontal: 8,
     paddingVertical: 3,
-    backgroundColor: colors.bgActiveBlue,
   },
   fillCompact: {
     paddingHorizontal: 6,
   },
   text: {
-    color: colors.textTitle,
     fontSize: 9,
     lineHeight: 11,
     fontWeight: '700',

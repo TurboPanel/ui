@@ -11,9 +11,9 @@ import Animated, {
 } from 'react-native-reanimated'
 import { usePathname, useRouter, type Href } from 'expo-router'
 import { scheduleOnRN } from 'react-native-worklets'
-import { OverviewSection } from '@/components/org/overview-section'
+import { ActivitySection } from '@/components/org/activity-section'
 import { OrgScreenScroll } from '@/components/org/org-screen-scroll'
-import { ProjectsOverviewSection } from '@/components/org/projects-overview-section'
+import { ProjectsHomeSection } from '@/components/org/projects-home-section'
 import { ServersOverviewSection } from '@/components/org/servers-overview-section'
 import {
   ORG_TAB_AREA_IDS,
@@ -41,7 +41,7 @@ const pagerTiming = {
 } as const
 
 /**
- * Finger-following pager for native tab overviews (Overview · Projects · Servers).
+ * Finger-following pager for native tab overviews (Projects · Activity · Servers).
  *
  * Nested routes (server detail, project, datacenters, …) unmount this and
  * leave the org stack in charge so vertical scroll, pull-to-refresh, and
@@ -177,13 +177,13 @@ export function OrgTabPager({ orgId }: Readonly<{ orgId: string }>) {
           ]}
         >
           <PagerPage width={width}>
-            <OverviewSection orgId={orgId} />
-          </PagerPage>
-          <PagerPage width={width}>
-            <ProjectsOverviewSection
+            <ProjectsHomeSection
               orgId={orgId}
               workspaceId={projectsWorkspaceId}
             />
+          </PagerPage>
+          <PagerPage width={width}>
+            <ActivitySection orgId={orgId} />
           </PagerPage>
           <PagerPage width={width}>
             <ServersOverviewSection orgId={orgId} />

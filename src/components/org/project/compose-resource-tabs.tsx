@@ -9,10 +9,10 @@ import { ProjectPrincipalsSection } from '@/components/org/project-detail-sectio
 import { panelStyles } from '@/components/ui/panel-styles'
 import { useProjectContext } from '@/components/org/project/project-context'
 import { ProjectServerHeaderControl } from '@/components/org/project/project-server-pin'
+import { ProjectSettingsScreen } from '@/components/org/project/settings/project-settings-screen'
 import { ServerPinSelect } from '@/components/org/project/server-pin-select'
 import {
   EnvironmentSettingsPanel,
-  ProjectSettingsPanel,
   readHostingIdParam,
 } from '@/components/org/project-settings-area'
 import { EmptyState, SectionPanel } from '@/components/ui'
@@ -480,7 +480,7 @@ export function ComposeSettingsTab() {
   if (baseSelected) {
     return (
       <ResourceTabChrome>
-        <ProjectSettingsPanel />
+        <ProjectSettingsScreen />
       </ResourceTabChrome>
     )
   }

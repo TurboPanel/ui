@@ -15,7 +15,7 @@ export function isActiveContainerStatus(status: string | undefined): boolean {
  * **not** count — Overview Start must call deploy, not lifecycle, for those.
  */
 export function hasHostDeployedContainers(
-  containers: ContainerRecord[],
+  containers: readonly ContainerRecord[],
 ): boolean {
   return containers.some((row) => {
     if (typeof row.containerId === 'string' && row.containerId.trim() !== '') {

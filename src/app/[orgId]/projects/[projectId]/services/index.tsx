@@ -1,21 +1,6 @@
-import { Redirect, type Href } from 'expo-router'
-import { ProjectOverviewTab } from '@/components/org/project/project-overview-tab'
-import { useProjectContext } from '@/components/org/project/project-context'
-import {
-  isManagedProject,
-  projectOverviewHref,
-} from '@/lib/project-navigation'
+import { LegacyProjectRedirect } from '@/components/org/project/project-route-screens'
 
-/**
- * Services lens — the compose services as cards, for Project scope
- * (`/projects/:projectId/services`). Service detail stays at
- * `/services/:serviceId`.
- */
-export default function ProjectServicesScreen() {
-  const { orgId, projectId, project, isSystemProject } = useProjectContext()
-
-  if (isSystemProject || (project && isManagedProject(project))) {
-    return <Redirect href={projectOverviewHref(orgId, projectId) as Href} />
-  }
-  return <ProjectOverviewTab />
+/** Retired route: redirects to its new tab, keeping the query (`/projects/:projectId/services`). */
+export default function RetiredServicesRoute() {
+  return <LegacyProjectRedirect segment="services" />
 }

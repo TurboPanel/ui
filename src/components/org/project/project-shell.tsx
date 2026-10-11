@@ -11,20 +11,25 @@ import {
 } from 'react-native'
 import { BreadcrumbChevron } from '@/components/header-chevron'
 import { panelStyles } from '@/components/ui/panel-styles'
+import { UnderlineTabs, type UnderlineTab } from '@/components/ui/v4'
 import { PlatformBadge } from '@/components/org/platform-badge'
 import { ProjectDeletePanel } from '@/components/org/project-delete-panel'
 import { useProjectContext } from '@/components/org/project/project-context'
 import {
-  ProjectScopeSelector,
   ProjectSectionTabs,
   activeProjectTabFromPathname,
 } from '@/components/org/project/project-section-tabs'
 import { ProjectTitleIcon } from '@/components/org/project/project-title-icon'
 import { TrashIcon } from '@/components/org/project/trash-icon'
 import {
+  PROJECT_PAGE_TAB_IDS,
+  PROJECT_PAGE_TAB_LABELS,
   isManagedProject,
   parseProjectEnvironmentId,
+  parseProjectPageTab,
   projectOverviewHref,
+  projectPageTabHref,
+  type ProjectPageTabId,
 } from '@/lib/project-navigation'
 import {
   commandStatusById,
@@ -37,6 +42,7 @@ import {
 } from '@/lib/queries'
 import { MANAGED_RUNTIME_PRESENT_ERROR } from '@/lib/instance-api'
 import { chrome, colors, spacing, webPointer } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 
 function EnvironmentSelector() {
@@ -101,7 +107,7 @@ function EnvironmentSelector() {
 /**
  * Managed projects still delete from the header trash; compose projects use
  * Danger sections in scope-chip settings
- * (ProjectSettingsPanel / EnvironmentSettingsPanel).
+ * (ProjectSettingsScreen / EnvironmentSettingsPanel).
  */
 function ManagedProjectTrashButton({
   deletingProject,
@@ -210,7 +216,7 @@ function ManagedProjectTrashButton({
       const deletedId = selectedEnvironment.id
       const destroy = await destroyManaged.run(deletedId)
       if (!destroy.ok) {
-        if (destroyManaged.actionError) setError(destroyManaged.actionError)
+        if (destroy.error) setError(userErrorMessage(destroy.cause ?? new Error(destroy.error), ''))
         return
       }
       if (destroy.value.deleted) {
@@ -281,12 +287,10 @@ function ProjectHeader({
   showManagedTrash,
   deletingProject,
   onRequestDeleteProject,
-  showScopeSelector,
 }: Readonly<{
   showManagedTrash: boolean
   deletingProject: boolean
   onRequestDeleteProject: () => void
-  showScopeSelector: boolean
 }>) {
   const {
     orgId,
@@ -382,7 +386,6 @@ function ProjectHeader({
             )}
           </View>
         </View>
-        {showScopeSelector ? <ProjectScopeSelector /> : null}
         {showManagedTrash && showMutableChrome ? (
           <ManagedProjectTrashButton
             deletingProject={deletingProject}
@@ -398,14 +401,37 @@ function ProjectHeader({
   )
 }
 
+/** Environments · Base · Settings, under the header of a Compose project's own pages. */
+function ProjectPageTabs() {
+  const pathname = usePathname()
+  const router = useRouter()
+  const { orgId, projectId } = useProjectContext()
+  const tabs = useMemo<UnderlineTab[]>(
+    () => PROJECT_PAGE_TAB_IDS.map((key) => ({ key, label: PROJECT_PAGE_TAB_LABELS[key] })),
+    [],
+  )
+  return (
+    <UnderlineTabs
+      tabs={tabs}
+      value={parseProjectPageTab(pathname, projectId) ?? ''}
+      onChange={(key) =>
+        router.push(projectPageTabHref(orgId, projectId, key as ProjectPageTabId) as Href)
+      }
+      ariaLabel="Project sections"
+    />
+  )
+}
+
 function ProjectShellChrome({
   hideEnvSelector,
   showManagedSectionTabs,
+  showPageTabs,
   needsSetup,
   activeTab,
 }: Readonly<{
   hideEnvSelector: boolean
   showManagedSectionTabs: boolean
+  showPageTabs: boolean
   needsSetup: boolean
   activeTab: ReturnType<typeof activeProjectTabFromPathname>
 }>) {
@@ -413,6 +439,7 @@ function ProjectShellChrome({
   return (
     <>
       {hideEnvSelector ? null : <EnvironmentSelector />}
+      {showPageTabs ? <ProjectPageTabs /> : null}
       {showManagedSectionTabs ? (
         <View style={styles.sectionTabsRow}>
           <ProjectSectionTabs />
@@ -433,6 +460,7 @@ export function ProjectShell({ children }: Readonly<{ children: ReactNode }>) {
     error,
     needsSetup,
     isWorkspaceKindResolved,
+    isSystemProject,
     projectAllowsMutations,
     draft,
   } = useProjectContext()
@@ -441,18 +469,21 @@ export function ProjectShell({ children }: Readonly<{ children: ReactNode }>) {
   const activeTab = activeProjectTabFromPathname(pathname, projectId)
   const managed = project ? isManagedProject(project) : false
   // Managed: hide selector on Overview / Environments (those surfaces own their
-  // own env chrome). Compose never uses EnvironmentSelector — scope chips live
-  // in the header via ProjectScopeSelector.
+  // own env chrome). Compose never uses EnvironmentSelector — its environment
+  // header carries the picker.
   const hideEnvSelector = managed
     ? activeTab === 'environments' || activeTab === 'overview'
     : true
-  // Drafts have no environments to scope to and no settings to open yet.
-  const showScopeSelector =
+  // A Compose project's own pages (Environments, Base, Settings) carry tabs.
+  // Drafts, managed and platform projects keep their own chrome, and an
+  // environment page brings its own header and tabs.
+  const showPageTabs =
     Boolean(project) &&
     !managed &&
+    !isSystemProject &&
     !needsSetup &&
     !draft &&
-    activeTab !== 'setup'
+    parseProjectPageTab(pathname, projectId) != null
 
   // Hold the shell until the owning workspace kind is known so system projects
   // never briefly mount rename/trash/compose mutation chrome as user projects.
@@ -470,7 +501,6 @@ export function ProjectShell({ children }: Readonly<{ children: ReactNode }>) {
         showManagedTrash={managed}
         deletingProject={deletingProject}
         onRequestDeleteProject={() => setDeletingProject(true)}
-        showScopeSelector={showScopeSelector}
       />
 
       {error ? <Text style={panelStyles.error}>{error}</Text> : null}
@@ -489,6 +519,7 @@ export function ProjectShell({ children }: Readonly<{ children: ReactNode }>) {
           <ProjectShellChrome
             hideEnvSelector={hideEnvSelector}
             showManagedSectionTabs={managed}
+            showPageTabs={showPageTabs}
             needsSetup={needsSetup}
             activeTab={activeTab}
           />
@@ -653,7 +684,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   envChipTextActive: {
-    color: chrome.accent,
+    color: colors.link,
   },
   body: {
     width: '100%',

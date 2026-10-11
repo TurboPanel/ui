@@ -122,6 +122,7 @@ export type {
   ComposeHostingTlsMode,
   ComposeHostingTlsSpec,
   HostingExtensionIssue,
+  HostingWwwMode,
 } from './hosting-extension'
 export {
   collectHostingExtensionValidationIssues,
@@ -142,6 +143,8 @@ export {
   HOSTING_TARGET_PORT_RANGE_MESSAGE,
   HOSTING_TLS_MODE_AUTOMATIC_UNSUPPORTED_MESSAGE,
   HOSTING_TLS_MODES,
+  HOSTING_WWW_MODE_MESSAGE,
+  HOSTING_WWW_MODES,
   hostingBindScopeOf,
   hostingEntryKey,
   hostingIpRefUnresolvedMessage,
@@ -151,6 +154,7 @@ export {
   hostingTlsRefUnresolvedMessage,
   isHostingBindScope,
   isHostingTlsMode,
+  isHostingWwwMode,
   MAX_HOSTING_ENTRIES_PER_SERVICE,
   parseHostingExtensionEntries,
   readHostingHostname,

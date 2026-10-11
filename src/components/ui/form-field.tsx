@@ -123,7 +123,7 @@ const styles = StyleSheet.create({
   },
   input: {
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.fieldBorder,
     borderRadius: 8,
     backgroundColor: colors.bgInput,
     color: colors.text,

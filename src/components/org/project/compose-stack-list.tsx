@@ -113,5 +113,5 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   muted: { color: colors.textMuted, fontSize: 12 },
-  database: { color: colors.accent, fontSize: 11, fontWeight: '600' },
+  database: { color: colors.ok, fontSize: 11, fontWeight: '600' },
 })

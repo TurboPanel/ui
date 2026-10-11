@@ -86,7 +86,7 @@ Topology rows ordered primary first then `ordinal`:
 
 ### Connection (Connect)
 
-- **Write endpoint** = shared ProxySQL `host:port` (protocol port 5432 / 3306 stated plainly)
+- **Write endpoint** = shared ProxySQL `host:port` on the org ingress listener (defaults `127.0.0.1:15432` / `127.0.0.1:13306`, configurable under Managed settings)
 - **Login** = routing username (“the username is how the proxy routes you to this cluster”)
 - **Read endpoint** only when any member is `readEligible` — same host/port
 - TLS: `sslmode=verify-full` required + **Download CA certificate** (never private key)

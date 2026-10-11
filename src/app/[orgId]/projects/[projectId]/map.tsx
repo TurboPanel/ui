@@ -1,12 +1,6 @@
-import { Redirect, type Href } from 'expo-router'
-import { useProjectContext } from '@/components/org/project/project-context'
-import { projectOverviewHref } from '@/lib/project-navigation'
+import { LegacyProjectRedirect } from '@/components/org/project/project-route-screens'
 
-/**
- * Retired route — the topology Overview lens lives at
- * `/projects/:projectId/overview` now.
- */
-export default function ProjectMapScreen() {
-  const { orgId, projectId } = useProjectContext()
-  return <Redirect href={projectOverviewHref(orgId, projectId) as Href} />
+/** Retired route: redirects to its new tab, keeping the query (`/projects/:projectId/map`). */
+export default function RetiredMapRoute() {
+  return <LegacyProjectRedirect segment="map" />
 }

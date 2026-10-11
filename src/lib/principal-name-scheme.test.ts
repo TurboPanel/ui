@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   NAME_SCHEME_OPTIONS,
+  USERNAME_IN_USE_COPY,
+  USERNAME_RESERVED_COPY,
+  USERNAME_TOO_LONG_COPY,
   effectiveNameScheme,
   isNameScheme,
   lockedSchemeNotice,
@@ -62,5 +65,17 @@ describe('principal-name-scheme', () => {
     expect(principalSchemeErrorMessage('HTTP 409: principal_scheme_locked')).toContain('locks')
     expect(principalSchemeErrorMessage('HTTP 400: invalid_name_scheme')).toContain('not valid')
     expect(principalSchemeErrorMessage('HTTP 500: boom')).toBe('HTTP 500: boom')
+  })
+
+  it('maps Linux user name refusals to plain words', () => {
+    expect(principalSchemeErrorMessage('HTTP 400: username_reserved')).toBe(USERNAME_RESERVED_COPY)
+    expect(principalSchemeErrorMessage('create failed: HTTP 400: username_reserved')).toBe(
+      USERNAME_RESERVED_COPY,
+    )
+    expect(principalSchemeErrorMessage('username_reserved')).toBe(USERNAME_RESERVED_COPY)
+    expect(principalSchemeErrorMessage('HTTP 400: username_too_long')).toBe(USERNAME_TOO_LONG_COPY)
+    expect(principalSchemeErrorMessage('HTTP 409: username_in_use')).toBe(USERNAME_IN_USE_COPY)
+    expect(USERNAME_RESERVED_COPY).toContain('site owner')
+    expect(USERNAME_RESERVED_COPY).not.toMatch(/username_reserved/)
   })
 })

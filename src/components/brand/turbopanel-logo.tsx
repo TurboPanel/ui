@@ -36,7 +36,7 @@ function fillsForVariant(variant: TurboPanelLogoVariant): Readonly<{
   if (variant === 'mono') {
     return { bars: colors.text, tee: colors.text }
   }
-  return { bars: colors.green, tee: colors.blue }
+  return { bars: colors.logoBars, tee: colors.logoTee }
 }
 
 /**

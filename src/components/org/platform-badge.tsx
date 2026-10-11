@@ -50,7 +50,7 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   badgeText: {
-    color: chrome.accent,
+    color: colors.link,
     fontSize: 10,
     fontWeight: '700',
     textTransform: 'uppercase',

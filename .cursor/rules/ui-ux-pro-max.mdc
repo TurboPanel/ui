@@ -5,7 +5,7 @@ alwaysApply: true
 
 # UI/UX skill (product console)
 
-This repo is the **signed-in OLED ops console** (Tamagui / Expo). Visual work must follow **ui-ux-pro-max** plus the persisted design system — never invent a parallel look or copy `~/website` marketing chrome.
+This repo is the **signed-in ops console** (two themes, Navy and Paper) (Tamagui / Expo). Visual work must follow **ui-ux-pro-max** plus the persisted design system — never invent a parallel look or copy `~/website` marketing chrome.
 
 ## Canonical skill path (only this one)
 

@@ -13,6 +13,7 @@ import { colors, spacing } from '@/lib/theme'
 export function ConfirmButton({
   label,
   confirmLabel = 'Confirm',
+  dismissLabel = 'Cancel',
   prompt = 'Are you sure?',
   onConfirm,
   onArmedChange,
@@ -22,6 +23,8 @@ export function ConfirmButton({
 }: Readonly<{
   label: string
   confirmLabel?: string
+  /** Label of the button that backs out of the armed state. */
+  dismissLabel?: string
   prompt?: string
   onConfirm: () => void
   /**
@@ -95,7 +98,7 @@ export function ConfirmButton({
         }}
       />
       <Button
-        label="Cancel"
+        label={dismissLabel}
         variant="ghost"
         size={size}
         disabled={busy}

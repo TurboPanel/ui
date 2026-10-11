@@ -7,6 +7,8 @@ export type SegmentedOption<T extends string> = Readonly<{
   label: string
   /** Disable just this option (others stay selectable). */
   disabled?: boolean
+  /** What a screen reader says for this option; defaults to `label`. */
+  accessibilityLabel?: string
 }>
 
 /**
@@ -42,6 +44,7 @@ export function SegmentedControl<T extends string>({
             onPress={() => onChange(option.value)}
             disabled={optionDisabled}
             accessibilityRole="tab"
+            accessibilityLabel={option.accessibilityLabel ?? option.label}
             accessibilityState={{ selected: active, disabled: optionDisabled }}
             style={[
               panelStyles.segmentChip,

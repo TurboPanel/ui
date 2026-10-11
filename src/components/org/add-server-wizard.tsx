@@ -658,7 +658,7 @@ const styles = StyleSheet.create({
     backgroundColor: chrome.bgActive,
   },
   devUrlChipTextActive: {
-    color: chrome.accent,
+    color: colors.link,
   },
   secondaryButton: {
     alignSelf: 'flex-start',
@@ -709,7 +709,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   successHostname: {
-    color: colors.accent,
+    color: colors.ok,
     fontWeight: '700',
   },
 })

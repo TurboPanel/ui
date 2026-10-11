@@ -4,6 +4,7 @@ import {
   BINDING_KEY_PREFIX_IN_USE_ERROR,
   DOCKER_RUN_UNSUPPORTED_ERROR,
   MANAGED_DATABASE_HAS_BINDINGS_ERROR,
+  MANAGED_DATABASE_HAS_USERS_ERROR,
   MANAGED_MEMBER_EXISTS_ERROR,
   MANAGED_NO_READ_TARGETS_ERROR,
   MANAGED_REPLICA_NOT_PROMOTABLE_ERROR,
@@ -30,12 +31,14 @@ import {
   fetchManagedStatus,
   fetchManagedUsers,
   fetchOrganizationManaged,
+  fetchServerManagedExternalAccess,
   importDockerRunCommand,
   promoteManagedDisasterRecovery,
   promoteManagedMember,
   removeManagedMember,
   resyncManagedMember,
   restoreManagedBackup,
+  saveServerManagedExternalAccess,
   rotateManagedRootPassword,
   rotateManagedUserPassword,
   runEnvironmentLifecycle,
@@ -112,7 +115,7 @@ describe('instance-api managed-engine fetch wrappers', () => {
       jsonResponse({
         managed: null,
         connection: null,
-        settings: { ssl: {}, exposure: { enabled: false } },
+        settings: { ssl: {} },
         ssl: {
           configured: null,
           effective: 'require',
@@ -182,11 +185,22 @@ describe('instance-api managed-engine fetch wrappers', () => {
     ).rejects.toThrow('HTTP 422: managed_version_unsupported')
   })
 
+  it('reads and saves the per-server external access switch', async () => {
+    const answer = { enabled: false, pending: false, clusterCount: 2 }
+    fetchMock.mockResolvedValueOnce(jsonResponse(answer))
+    await expect(fetchServerManagedExternalAccess('srv-1')).resolves.toEqual(answer)
+    expect(String(lastFetch().url)).toContain('/servers/srv-1/managed-external-access')
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ...answer, enabled: true, pending: true }))
+    await expect(saveServerManagedExternalAccess('srv-1', true)).resolves.toMatchObject({
+      enabled: true,
+    })
+    expect(lastFetch().init.method).toBe('PUT')
+    expect(lastJsonBody()).toEqual({ enabled: true })
+  })
+
   it('updateEnvironmentManaged PATCHes settings and apply/lifecycle/delete enqueue commands', async () => {
-    const settings = {
-      ssl: {},
-      exposure: { enabled: true, scope: 'public' as const },
-    }
+    const settings = { ssl: {} }
     fetchMock.mockResolvedValueOnce(
       jsonResponse({
         ok: true,
@@ -419,6 +433,15 @@ describe('instance-api managed-engine fetch wrappers', () => {
     )
     await expect(deleteManagedDatabase('env-1', 'app')).rejects.toThrow(
       `HTTP 409: ${MANAGED_DATABASE_HAS_BINDINGS_ERROR}`
+    )
+  })
+
+  it('deleteManagedDatabase surfaces 409 managed_database_has_users', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ error: MANAGED_DATABASE_HAS_USERS_ERROR, users: ['appuser'] }, 409)
+    )
+    await expect(deleteManagedDatabase('env-1', 'app')).rejects.toThrow(
+      `HTTP 409: ${MANAGED_DATABASE_HAS_USERS_ERROR}`
     )
   })
 

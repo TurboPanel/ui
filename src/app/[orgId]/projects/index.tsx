@@ -1,5 +1,5 @@
 import { useLocalSearchParams } from 'expo-router'
-import { ProjectsOverviewSection } from '@/components/org/projects-overview-section'
+import { ProjectsHomeSection } from '@/components/org/projects-home-section'
 import { useOrgTabPagerOwnership } from '@/components/org/org-tab-pager-ownership'
 
 export default function ProjectsOverviewScreen() {
@@ -13,7 +13,7 @@ export default function ProjectsOverviewScreen() {
   }
 
   return (
-    <ProjectsOverviewSection
+    <ProjectsHomeSection
       orgId={orgId ?? ''}
       workspaceId={typeof workspaceId === 'string' ? workspaceId : undefined}
     />

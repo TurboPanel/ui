@@ -3,11 +3,15 @@
  * `environment_id` for engine projects created from the catalog.
  */
 
-import { defaultManagedImage, managedAllowedImagesForEngine } from '@/lib/managed-releases'
+import {
+  defaultManagedImage,
+  managedAllowedImagesForEngine,
+  MANAGED_FAILOVER_UNSUPPORTED_REASON,
+} from '@/lib/managed-releases'
 import type { ManagedSslMode } from '@/lib/managed-ssl'
 import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
+import { MANAGED_HAS_BINDINGS_COPY } from '@/lib/user-error'
 
-import type { ManagedSqlAccessScope } from '@/lib/managed-access-scope'
 import type { NameScheme } from '@/lib/principal-name-scheme'
 
 export type ManagedServiceEngine = 'postgres' | 'mysql' | 'mariadb' | 'redis' | 'clickhouse'
@@ -17,8 +21,6 @@ export type ManagedEngineAvailability = 'available' | 'coming-soon'
 
 /** Runtime status for a managed row (mirrors instance `ManagedStatus`). */
 export type ManagedStatus = 'provisioning' | 'applying' | 'ready' | 'stopped' | 'failed'
-
-export type { ManagedSqlAccessScope }
 
 /**
  * Client listener ports on the shared ProxySQL frontend (not engine-native).
@@ -67,6 +69,8 @@ export type ManagedRecoveryRecord = {
   startedAt: string
   completedAt: string | null
   blockedReason: string | null
+  /** Why a `failed` recovery stopped (for example a proxy that did not switch). */
+  failedReason?: string | null
   lagBytes: number | null
   sourceDatacenterId: string | null
   targetDatacenterId: string | null
@@ -80,11 +84,33 @@ export const AUTOMATIC_FAILOVER_BLOCKED_MESSAGE =
 /** Private path used for replication (mirrors `PrivateEndpointTransport`). */
 export type ManagedMemberTransport = 'local' | 'datacenter' | 'fabric' | 'public'
 
+/**
+ * Primary only: how much log the replicas' replication slots hold back.
+ * `critical` means a replica was cut off (or is about to be) and needs a
+ * Resync; `walStatus: 'awaiting_resync'` is a cut-off replica whose slot was
+ * already replaced and is waiting to be re-seeded.
+ */
+export type ManagedSlotRetention = {
+  state: 'ok' | 'lagging' | 'critical'
+  /** The worst slot, `tp_member_<ordinal>` of the replica it belongs to. */
+  slot?: string
+  walStatus?: string
+  retainedBytes?: number
+  safeBytes?: number
+  active?: boolean
+}
+
 export type ManagedReplicationHealth = {
   state: string
   observedAt: string
   lagBytes?: number
   lagSeconds?: number
+  /** The reading is older than the freshness window; `state` is then `unknown`. */
+  stale?: boolean
+  /** What the state was before it went out of date. */
+  lastState?: string
+  ageSeconds?: number
+  slotRetention?: ManagedSlotRetention
 }
 
 /**
@@ -113,6 +139,12 @@ export type ManagedServiceCatalogEntry = {
   defaultPort: number
   defaultImage: string
   /**
+   * Image an already-stored service with no `settings.image` runs, when the
+   * default moved after it was written (MariaDB 12.3 before 11.8). Mirrors the
+   * control plane's `legacyDefaultImage`. Use {@link managedStoredImage}.
+   */
+  legacyDefaultImage?: string
+  /**
    * Every image reference this engine's settings parser will accept
    * (`settings.image`), in display order — derived from the release catalog
    * mirror in `./managed-releases.ts`.
@@ -120,6 +152,19 @@ export type ManagedServiceCatalogEntry = {
   allowedImages: readonly string[]
   /** `true` when the backend engine spec declares a `backup` descriptor (see instance `getManagedBackupDescriptor`). */
   supportsBackup: boolean
+}
+
+/**
+ * The image a stored service actually runs: its own `settings.image`, else the
+ * legacy default, else the current default. New services always store their
+ * image, so only services written before the default moved reach the legacy
+ * branch — and those must keep their series.
+ */
+export function managedStoredImage(
+  entry: { defaultImage: string; legacyDefaultImage?: string } | undefined,
+  image: string | undefined,
+): string {
+  return image ?? entry?.legacyDefaultImage ?? entry?.defaultImage ?? ''
 }
 
 /** Catalog default image for an engine that must have a release entry. */
@@ -164,6 +209,7 @@ export const MANAGED_SERVICE_CATALOG: readonly ManagedServiceCatalogEntry[] = [
     status: 'available',
     defaultPort: 3306,
     defaultImage: releaseDefaultImage('mariadb'),
+    legacyDefaultImage: 'docker.io/library/mariadb:12.3',
     allowedImages: managedAllowedImagesForEngine('mariadb'),
     supportsBackup: true,
   },
@@ -211,10 +257,6 @@ export type ManagedSettings = {
     extraEnv?: Record<string, string>
   }
   engineConfig?: string
-  exposure: {
-    enabled: boolean
-    scope?: ManagedSqlAccessScope
-  }
   /** Retention (keep-N) for `managed.backup` — clamped to the engine's `maxRetentionKeep`. */
   backups?: {
     retentionKeep?: number
@@ -294,35 +336,33 @@ export type ManagedSslView = {
 }
 
 export type ManagedAccessEndpoint = {
-  scope: ManagedSqlAccessScope
+  /** `local`: from this server only. `external`: from outside the server. */
+  reach: 'local' | 'external'
   host: string
   port: number
 }
 
 /**
- * What the host's shared ProxySQL actually publishes for this cluster, next to
- * what the cluster's own settings asked for.
- *
- * The listener is shared by every managed database on the server, so a cluster
- * with `requested: false` can still be `published: true` — the control plane
- * reports that as `viaCoResidentCluster` instead of claiming it is unreachable.
+ * "Allow external access to the databases on this server", for every server
+ * that fronts the cluster. The setting belongs to the server and covers every
+ * database on it, so `otherClusters` tells how many others the switch also moves.
  */
-export type ManagedExposureView = {
-  /** `settings.exposure.enabled` for this cluster. */
-  requested: boolean
-  /** A host listener publishes in front of this cluster. */
-  published: boolean
-  /** Scopes the published listener covers, widest first. */
-  scopes: ManagedSqlAccessScope[]
-  /** Published only because another cluster on the same host asked for it. */
-  viaCoResidentCluster: boolean
+export type ManagedExternalAccessView = {
+  servers: {
+    id: string
+    name: string
+    enabled: boolean
+    /** The server was told and has not confirmed yet; retried automatically. */
+    pending: boolean
+    otherClusters: number
+  }[]
 }
 
 export type ManagedDetailResponse = {
   managed: ManagedEnvironmentRecord | null
   connection: ManagedConnectionInfo | null
   endpoints?: ManagedAccessEndpoint[]
-  exposure?: ManagedExposureView | null
+  externalAccess?: ManagedExternalAccessView | null
   settings: ManagedSettings | null
   ssl: ManagedSslView | null
   release: ManagedReleaseView | null
@@ -390,6 +430,9 @@ const MANAGED_ERROR_COPY: Record<string, string> = {
   datacenter_required: 'That server is not assigned to a datacenter.',
   datacenter_cidr_required: 'That datacenter has no private network yet.',
   datacenter_ip_required: 'That server has no private address in its datacenter.',
+  fabric_address_required: `That server has no ${TURBOFABRIC_PRODUCT_NAME} address yet, so the ${TURBOFABRIC_PRODUCT_NAME} scope cannot be used on it.`,
+  ingress_reconcile_failed:
+    'Saved, but the server could not be told the new setting yet, so it still listens the old way. It is retried automatically; press Apply to try now.',
   private_family_mismatch:
     'Those servers share a datacenter but not an address family (one is IPv4-only, the other IPv6-only).',
   private_path_unavailable: 'No private path between that server and the primary.',
@@ -410,6 +453,14 @@ const MANAGED_ERROR_COPY: Record<string, string> = {
     'Still connected to one or more services. Remove those connections first.',
   managed_database_has_bindings:
     'Still connected to one or more services. Remove those connections first.',
+  managed_has_bindings: MANAGED_HAS_BINDINGS_COPY,
+  managed_failover_unsupported: MANAGED_FAILOVER_UNSUPPORTED_REASON,
+  managed_series_immutable:
+    'The database version cannot be changed on an existing cluster. Create a new cluster on the version you want and restore a backup into it.',
+  managed_variant_swap_unsafe:
+    'Switching this PostgreSQL cluster between the Alpine and Debian images would silently break its text indexes, because the two sort text differently and the data would need re-indexing. Create a new cluster on the image you want and restore a backup into it.',
+  managed_database_has_users:
+    'SQL users still have access to this database. Delete those users first.',
   binding_key_prefix_in_use:
     'This service already has a connection using that prefix — pick another.',
   binding_engine_defaults_in_use:
@@ -428,10 +479,23 @@ const MANAGED_ERROR_COPY: Record<string, string> = {
  * Map instance managed error codes (inside `HTTP <status>: <code>`) to
  * operator-readable copy; otherwise return the raw message.
  */
+const SERVER_NAMED_ERROR_CODES = new Set([
+  'datacenter_ip_required',
+  'fabric_address_required',
+  'daemon_key_unavailable',
+  'ingress_reconcile_failed',
+])
+
 export function managedErrorMessage(err: unknown, fallback: string): string {
   const raw = err instanceof Error ? err.message : fallback
   const match = /HTTP \d+:\s*([a-z0-9_]+)/i.exec(raw)
   const code = match?.[1]
+  // These refusals say which server they are about; the general copy would
+  // lose that.
+  if (code && SERVER_NAMED_ERROR_CODES.has(code)) {
+    const named = /\s—\s(.+)$/s.exec(raw)?.[1]
+    if (named) return named
+  }
   if (code && MANAGED_ERROR_COPY[code]) {
     return MANAGED_ERROR_COPY[code]
   }
@@ -508,7 +572,7 @@ export function managedRecoveryStateLabel(state: ManagedRecoveryState): string {
     case 'repointing':
       return 'Repointing'
     case 'reconciling-ingress':
-      return 'Reconciling ingress'
+      return 'Switching database proxies'
     case 'verifying':
       return 'Verifying'
     case 'completed':
@@ -533,7 +597,7 @@ export function managedRecoveryBanner(
   if (recovery.state === 'failed') {
     return {
       kind: 'failed',
-      text: `${managedRecoveryKindLabel(recovery.kind)} failed`,
+      text: recovery.failedReason?.trim() || `${managedRecoveryKindLabel(recovery.kind)} failed`,
     }
   }
   return {
@@ -589,10 +653,105 @@ export function replicationStateLabel(state: string | null | undefined): string 
       return 'Not streaming'
     case 'stopped':
       return 'Stopped'
+    case 'unknown':
+      return 'Unknown'
     default:
       return state.replaceAll('_', ' ')
   }
 }
+
+/**
+ * "last seen 5 min ago" for a reading that went out of date; null for a fresh
+ * one. Pair with {@link replicationStateLabel} (`Unknown`).
+ */
+export function formatReplicationAge(health: ManagedReplicationHealth | null | undefined) {
+  if (!health?.stale || typeof health.ageSeconds !== 'number') return null
+  const seconds = health.ageSeconds
+  if (seconds < 90) return `last seen ${Math.max(1, Math.round(seconds))}s ago`
+  const minutes = Math.round(seconds / 60)
+  if (minutes < 90) return `last seen ${minutes} min ago`
+  return `last seen ${Math.round(minutes / 60)} h ago`
+}
+
+/**
+ * A replica is only shown healthy while its last reading says it is keeping up.
+ * No reading yet keeps the member's own status; an unknown, stopped or
+ * not-streaming reading is attention needed.
+ */
+export function isReplicationHealthy(health: ManagedReplicationHealth | null | undefined): boolean {
+  if (!health) return true
+  return (
+    health.state === 'streaming' || health.state === 'catching_up' || health.state === 'catchup'
+  )
+}
+
+function observedAtMs(health: ManagedReplicationHealth | undefined): number {
+  const parsed = health ? Date.parse(health.observedAt) : Number.NaN
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+/**
+ * The primary's slot report, unless a newer reading of the replica it names
+ * says that replica is streaming again. The report is stored when the primary
+ * last answered (an apply or a refresh); right after a Resync the replica can
+ * be newer than it, and must not keep reading as cut off.
+ */
+export function currentSlotRetention(
+  members: readonly ManagedMemberRecord[] | null | undefined
+): ManagedSlotRetention | undefined {
+  const list = members ?? []
+  const primary = list.find((m) => m.role === 'primary')
+  const retention = primary?.replication?.slotRetention
+  if (!retention || retention.state === 'ok') return retention
+  const named = list.find(
+    (m) => m.role === 'replica' && retention.slot === `tp_member_${m.ordinal}`
+  )
+  // The named replica is gone (removed instead of resynced): nothing is cut off.
+  if (retention.slot !== undefined && named === undefined) return undefined
+  const replicaHealth = named?.replication
+  if (
+    replicaHealth?.state === 'streaming' &&
+    observedAtMs(replicaHealth) > observedAtMs(primary?.replication)
+  ) {
+    return undefined
+  }
+  return retention
+}
+
+/**
+ * True when the primary reports this replica's slot as cut off: the log it
+ * needed is gone, so it cannot catch up and needs a Resync. The slot is named
+ * after the replica's ordinal.
+ */
+export function isReplicaCutOff(
+  member: Pick<ManagedMemberRecord, 'role' | 'ordinal'>,
+  members: readonly ManagedMemberRecord[] | null | undefined
+): boolean {
+  if (member.role !== 'replica') return false
+  const retention = currentSlotRetention(members)
+  return retention?.state === 'critical' && retention.slot === `tp_member_${member.ordinal}`
+}
+
+/**
+ * One plain sentence for the primary's row while a replica is behind or cut
+ * off; `null` when nothing is wrong. Say it in words, not only with a color.
+ */
+export function slotRetentionNotice(
+  retention: ManagedSlotRetention | null | undefined
+): string | null {
+  if (!retention || retention.state === 'ok') return null
+  if (retention.state === 'critical') {
+    return 'A replica fell too far behind and was cut off (or is about to be). Resync it to bring it back.'
+  }
+  const held =
+    typeof retention.retainedBytes === 'number' && Number.isFinite(retention.retainedBytes)
+      ? ` (${formatCompactBytes(retention.retainedBytes)} so far)`
+      : ''
+  return `A replica is far behind, so this server is keeping extra log files for it${held}.`
+}
+
+/** Row label for a replica the primary has cut off. */
+export const REPLICA_CUT_OFF_LABEL = 'Cut off · Resync needed'
 
 function formatCompactBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes < 0) return '—'

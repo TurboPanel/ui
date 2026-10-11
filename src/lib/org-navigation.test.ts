@@ -1,5 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  ORG_AREAS,
+  ORG_SETTINGS_TAB_IDS,
+  ORG_SETTINGS_TAB_LABELS,
+  ORG_SIDEBAR_AREA_IDS,
+  ORG_SIDEBAR_MORE_AREA_IDS,
+  ORG_TAB_AREA_IDS,
+  orgSettingsTabHref,
+  parseOrgSettingsTab,
   adjacentOrgTabHref,
   isOrgAreaActive,
   isOrgTabOverviewPath,
@@ -99,22 +107,24 @@ describe('orgAreaFromPathname', () => {
 })
 
 describe('orgTabIndexFromPathname', () => {
-  it('returns 0, 1, 2 for Overview · Projects · Servers', () => {
-    expect(orgTabIndexFromPathname('/org/overview', 'org')).toBe(0)
-    expect(orgTabIndexFromPathname('/org/projects', 'org')).toBe(1)
+  it('returns 0, 1, 2 for Projects · Activity · Servers', () => {
+    expect(orgTabIndexFromPathname('/org/projects', 'org')).toBe(0)
+    expect(orgTabIndexFromPathname('/org/activity', 'org')).toBe(1)
     expect(orgTabIndexFromPathname('/org/servers', 'org')).toBe(2)
   })
 
   it('returns -1 off a tab overview', () => {
     expect(orgTabIndexFromPathname('/org/servers/srv-1', 'org')).toBe(-1)
     expect(orgTabIndexFromPathname('/org/projects/p-1', 'org')).toBe(-1)
+    // Overview is no longer a tab: its route redirects to Projects.
+    expect(orgTabIndexFromPathname('/org/overview', 'org')).toBe(-1)
   })
 })
 
 describe('isOrgTabOverviewRouteName', () => {
   it('matches nested-stack names for the three tab overviews', () => {
-    expect(isOrgTabOverviewRouteName('overview')).toBe(true)
-    expect(isOrgTabOverviewRouteName('overview/index')).toBe(true)
+    expect(isOrgTabOverviewRouteName('activity')).toBe(true)
+    expect(isOrgTabOverviewRouteName('activity/index')).toBe(true)
     expect(isOrgTabOverviewRouteName('projects/index')).toBe(true)
     expect(isOrgTabOverviewRouteName('[orgId]/servers')).toBe(true)
   })
@@ -127,12 +137,13 @@ describe('isOrgTabOverviewRouteName', () => {
     expect(isOrgTabOverviewRouteName('servers/datacenters')).toBe(false)
     expect(isOrgTabOverviewRouteName('projects/new')).toBe(false)
     expect(isOrgTabOverviewRouteName('manage/index')).toBe(false)
+    expect(isOrgTabOverviewRouteName('overview/index')).toBe(false)
   })
 })
 
 describe('isOrgTabOverviewPath', () => {
   it('matches each native tab overview, including a projects query', () => {
-    expect(isOrgTabOverviewPath('/org/overview', 'org')).toBe(true)
+    expect(isOrgTabOverviewPath('/org/activity', 'org')).toBe(true)
     expect(isOrgTabOverviewPath('/org/projects', 'org')).toBe(true)
     expect(
       isOrgTabOverviewPath('/org/projects?workspaceId=ws-1', 'org'),
@@ -146,13 +157,14 @@ describe('isOrgTabOverviewPath', () => {
     expect(isOrgTabOverviewPath('/org/projects/new', 'org')).toBe(false)
     expect(isOrgTabOverviewPath('/org/projects/p-1', 'org')).toBe(false)
     expect(isOrgTabOverviewPath('/org/network', 'org')).toBe(false)
-    expect(isOrgTabOverviewPath('/org/overview/extra', 'org')).toBe(false)
+    expect(isOrgTabOverviewPath('/org/activity/extra', 'org')).toBe(false)
+    expect(isOrgTabOverviewPath('/org/overview', 'org')).toBe(false)
   })
 })
 
 describe('orgTabHref', () => {
-  it('builds overview and servers area paths', () => {
-    expect(orgTabHref('org-1', 'overview', 'all')).toBe('/org-1/overview')
+  it('builds activity and servers area paths', () => {
+    expect(orgTabHref('org-1', 'activity', 'all')).toBe('/org-1/activity')
     expect(orgTabHref('org-1', 'servers', 'all')).toBe('/org-1/servers')
   })
 
@@ -165,31 +177,28 @@ describe('orgTabHref', () => {
 })
 
 describe('adjacentOrgTabHref', () => {
-  it('moves Overview → Projects → Servers and does not wrap', () => {
-    expect(adjacentOrgTabHref('/org/overview', 'org', 'next', 'all')).toBe(
-      '/org/projects',
-    )
+  it('moves Projects → Activity → Servers and does not wrap', () => {
     expect(adjacentOrgTabHref('/org/projects', 'org', 'next', 'all')).toBe(
+      '/org/activity',
+    )
+    expect(adjacentOrgTabHref('/org/activity', 'org', 'next', 'all')).toBe(
       '/org/servers',
     )
     expect(adjacentOrgTabHref('/org/servers', 'org', 'next', 'all')).toBeNull()
     expect(
-      adjacentOrgTabHref('/org/overview', 'org', 'previous', 'all'),
+      adjacentOrgTabHref('/org/projects', 'org', 'previous', 'all'),
     ).toBeNull()
     expect(adjacentOrgTabHref('/org/servers', 'org', 'previous', 'all')).toBe(
-      '/org/projects',
+      '/org/activity',
     )
     expect(
       adjacentOrgTabHref('/org/projects?workspaceId=ws-1', 'org', 'next', 'all'),
-    ).toBe('/org/servers')
+    ).toBe('/org/activity')
   })
 
   it('preserves the projects workspace filter when swiping onto Projects', () => {
     expect(
-      adjacentOrgTabHref('/org/overview', 'org', 'next', 'ws-9'),
-    ).toBe('/org/projects?workspaceId=ws-9')
-    expect(
-      adjacentOrgTabHref('/org/servers', 'org', 'previous', 'ws-9'),
+      adjacentOrgTabHref('/org/activity', 'org', 'previous', 'ws-9'),
     ).toBe('/org/projects?workspaceId=ws-9')
   })
 
@@ -234,8 +243,58 @@ describe('orgManageHref', () => {
 })
 
 describe('defaultOrgDashboardHref', () => {
-  it('opens the organization Overview', () => {
-    expect(defaultOrgDashboardHref('org-1')).toBe('/org-1/overview')
+  it('opens the organization Projects', () => {
+    expect(defaultOrgDashboardHref('org-1')).toBe('/org-1/projects')
+  })
+})
+
+describe('sidebar areas', () => {
+  it('lists Projects, Activity, Servers, with the unchanged areas below', () => {
+    expect([...ORG_SIDEBAR_AREA_IDS]).toEqual(['projects', 'activity', 'servers'])
+    expect([...ORG_SIDEBAR_MORE_AREA_IDS]).toEqual(['managed', 'network', 'access'])
+    const known = ORG_AREAS.map((area) => area.id) as string[]
+    for (const id of [...ORG_SIDEBAR_AREA_IDS, ...ORG_SIDEBAR_MORE_AREA_IDS]) {
+      expect(known).toContain(id)
+    }
+  })
+
+  it('keeps the native tab set to the same three areas', () => {
+    expect([...ORG_TAB_AREA_IDS]).toEqual([...ORG_SIDEBAR_AREA_IDS])
+  })
+})
+
+describe('organization settings tabs', () => {
+  it('has five tabs, each with a label and a link', () => {
+    expect([...ORG_SETTINGS_TAB_IDS]).toEqual([
+      'general',
+      'members',
+      'notifications',
+      'domains',
+      'git',
+    ])
+    expect(ORG_SETTINGS_TAB_IDS.map((id) => ORG_SETTINGS_TAB_LABELS[id])).toEqual([
+      'General',
+      'Members',
+      'Notifications',
+      'Domains & certificates',
+      'Git connections',
+    ])
+    expect(ORG_SETTINGS_TAB_IDS.map((id) => orgSettingsTabHref('o', id))).toEqual([
+      '/o/manage',
+      '/o/manage?tab=members',
+      '/o/manage?tab=notifications',
+      '/o/manage?tab=domains',
+      '/o/manage?tab=git',
+    ])
+  })
+
+  it('opens General for a missing or unknown ?tab=', () => {
+    expect(parseOrgSettingsTab(undefined)).toBe('general')
+    expect(parseOrgSettingsTab(null)).toBe('general')
+    expect(parseOrgSettingsTab('nope')).toBe('general')
+    expect(parseOrgSettingsTab('members')).toBe('members')
+    expect(parseOrgSettingsTab(['git', 'members'])).toBe('git')
+    expect(parseOrgSettingsTab([])).toBe('general')
   })
 })
 
@@ -319,6 +378,15 @@ describe('server detail firewall tab', () => {
     expect(SERVER_DETAIL_TAB_IDS).toContain('firewall')
     expect(serverDetailTabHref('org-1', 'srv-9', 'firewall')).toBe(
       '/org-1/servers/srv-9?tab=firewall',
+    )
+  })
+})
+
+describe('server detail services tab', () => {
+  it('lists the services tab and builds its link', () => {
+    expect(SERVER_DETAIL_TAB_IDS).toContain('services')
+    expect(serverDetailTabHref('org-1', 'srv-9', 'services')).toBe(
+      '/org-1/servers/srv-9?tab=services',
     )
   })
 })

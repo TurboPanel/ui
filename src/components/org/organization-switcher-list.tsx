@@ -117,7 +117,7 @@ const OrganizationSwitcherRow = memo(function OrganizationSwitcherRow({
         accessibilityState={{ selected: active }}
       >
         <View style={headerMenuGroupStyles.menuItemMark}>
-          {active ? <HeaderCheck color={chrome.accent} /> : null}
+          {active ? <HeaderCheck color={colors.link} /> : null}
         </View>
         <Text
           style={rowLabelStyle(compactWeb, active)}
@@ -276,7 +276,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   currentBadge: {
-    color: chrome.accent,
+    color: colors.link,
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.4,

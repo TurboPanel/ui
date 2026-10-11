@@ -53,7 +53,7 @@ were reserved for exactly this:
 | Role | Token | Notes |
 |------|-------|-------|
 | stdout line | `colors.stdout` | Default body colour for transcript text |
-| stderr line | `colors.errorText` | Never `colors.error` (too hot at 12px on OLED) |
+| stderr line | `colors.errorText` | Never `colors.error` (too hot at 12px on a dark log surface) |
 | phase header | `colors.command` | Phase name; the rule above it is `borderArea` |
 | timestamp / seq | `colors.log` → `colors.textFaint` | Muted, never the same weight as the message |
 | truncation banner | `orgPanelStyles.calloutWarning` | Existing warning callout, not a new banner |
@@ -120,7 +120,7 @@ Escape sequences are **stripped** before render (`stripAnsi`), not translated to
 colour. Rationale: the only semantic distinction the console cares about is
 stdout vs stderr vs phase, all of which arrive as structured fields; honouring
 arbitrary 256-colour SGR from a build tool would put uncontrolled foreground
-colours on an OLED surface and break the contrast floor. Do not add an
+colours on a log surface and break the contrast floor. Do not add an
 "interpret ANSI" toggle.
 
 ## Copy / download

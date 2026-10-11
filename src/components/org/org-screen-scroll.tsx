@@ -62,8 +62,8 @@ export function OrgScreenScroll({
         onRefresh={() => {
           void pull.onRefresh()
         }}
-        tintColor={colors.accent}
-        colors={[colors.accent]}
+        tintColor={colors.ok}
+        colors={[colors.ok]}
         progressBackgroundColor={colors.bgSecondary}
       />
     ) : undefined

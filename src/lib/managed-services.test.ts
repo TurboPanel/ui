@@ -1,12 +1,17 @@
 import { describe, expect, it } from 'vitest'
+import { MANAGED_FAILOVER_UNSUPPORTED_ERROR, MANAGED_SERIES_IMMUTABLE_ERROR, MANAGED_VARIANT_SWAP_UNSAFE_ERROR } from './instance-api'
+import { MANAGED_FAILOVER_UNSUPPORTED_REASON } from './managed-releases'
 import { TURBOFABRIC_PRODUCT_NAME } from './platform-copy'
+import { MANAGED_HAS_BINDINGS_COPY } from './user-error'
 import {
   MANAGED_INGRESS_MYSQL_PORT,
   MANAGED_INGRESS_PGSQL_PORT,
   MANAGED_SERVICE_CATALOG,
   clusterHasUnhealthyMember,
   formatClusterTopologyLabel,
+  currentSlotRetention,
   formatReplicationLag,
+  isReplicaCutOff,
   managedCatalogEntryForCode,
   managedEngineSupportsBackup,
   managedErrorMessage,
@@ -24,8 +29,12 @@ import {
   memberRoleLabel,
   memberStatusLabel,
   memberTransportLabel,
+  REPLICA_CUT_OFF_LABEL,
   replicationStateLabel,
+  formatReplicationAge,
+  isReplicationHealthy,
   shortBackupChecksum,
+  slotRetentionNotice,
   sortManagedCatalogEntries,
   type ManagedMemberRecord,
   type ManagedRecoveryKind,
@@ -53,12 +62,11 @@ describe('MANAGED_SERVICE_CATALOG image allowlists', () => {
     expect(managedCatalogEntryForCode('postgres')?.defaultImage).toBe(
       'docker.io/library/postgres:18-alpine'
     )
-    // MySQL/MariaDB defaults must stay on the approved LTS majors — never an
-    // old major like `mysql:8` / `mariadb:11` (mirrors the instance
-    // allowlists in `turbopanel/src/features/managed/settings.ts`).
+    // MySQL/MariaDB defaults must stay on the approved LTS series (mirrors the
+    // instance allowlists in `turbopanel/src/features/managed/settings.ts`).
     expect(managedCatalogEntryForCode('mysql')?.defaultImage).toBe('docker.io/library/mysql:9.7')
     expect(managedCatalogEntryForCode('mariadb')?.defaultImage).toBe(
-      'docker.io/library/mariadb:12.3'
+      'docker.io/library/mariadb:11.8'
     )
   })
 
@@ -109,6 +117,28 @@ describe('shortBackupChecksum', () => {
 })
 
 describe('managedErrorMessage', () => {
+  it('keeps the server name in refusals that carry one, and has copy for the rest', () => {
+    expect(
+      managedErrorMessage(
+        new Error(
+          '/x failed: HTTP 422: fabric_address_required — Server db-2 has no TurboFabric address, so the TurboFabric scope cannot be used on it.',
+        ),
+        'fallback',
+      ),
+    ).toBe(
+      'Server db-2 has no TurboFabric address, so the TurboFabric scope cannot be used on it.',
+    )
+    expect(
+      managedErrorMessage(new Error('HTTP 422: fabric_address_required'), 'fallback'),
+    ).toContain('no TurboFabric address')
+    expect(
+      managedErrorMessage(
+        new Error('/x failed: HTTP 502: ingress_reconcile_failed — Saved, but db-1 could not be told yet.'),
+        'fallback',
+      ),
+    ).toBe('Saved, but db-1 could not be told yet.')
+  })
+
   it('maps known HTTP error codes to operator copy', () => {
     expect(managedErrorMessage(new Error('HTTP 422: server_placement_required'), 'fallback')).toBe(
       'Select a server before creating this managed service.'
@@ -125,6 +155,9 @@ describe('managedErrorMessage', () => {
     expect(
       managedErrorMessage(new Error('HTTP 409: managed_automatic_failover_blocked'), 'fallback')
     ).toBe('Automatic failover blocked: unable to verify previous primary is fenced')
+    expect(
+      managedErrorMessage(new Error(`HTTP 422: ${MANAGED_FAILOVER_UNSUPPORTED_ERROR}`), 'fallback')
+    ).toBe(MANAGED_FAILOVER_UNSUPPORTED_REASON)
   })
 
   it('returns the raw message or fallback when the code is unknown', () => {
@@ -136,6 +169,15 @@ describe('managedErrorMessage', () => {
     expect(managedErrorMessage(new Error(''), 'use this')).toBe('use this')
   })
 
+  it('maps the refused image changes to plain words', () => {
+    expect(
+      managedErrorMessage(new Error(`HTTP 409: ${MANAGED_SERIES_IMMUTABLE_ERROR}`), 'fallback')
+    ).toContain('cannot be changed')
+    expect(
+      managedErrorMessage(new Error(`HTTP 409: ${MANAGED_VARIANT_SWAP_UNSAFE_ERROR}`), 'fallback')
+    ).toContain('restore a backup')
+  })
+
   it('maps binding, placement, and recovery error codes', () => {
     expect(managedErrorMessage(new Error('HTTP 409: managed_user_has_bindings'), 'fallback')).toBe(
       'Still connected to one or more services. Remove those connections first.'
@@ -143,6 +185,12 @@ describe('managedErrorMessage', () => {
     expect(
       managedErrorMessage(new Error('HTTP 409: managed_database_has_bindings'), 'fallback')
     ).toBe('Still connected to one or more services. Remove those connections first.')
+    expect(managedErrorMessage(new Error('HTTP 409: managed_has_bindings'), 'fallback')).toBe(
+      MANAGED_HAS_BINDINGS_COPY
+    )
+    expect(managedErrorMessage(new Error('HTTP 409: managed_database_has_users'), 'fallback')).toBe(
+      'SQL users still have access to this database. Delete those users first.'
+    )
     expect(managedErrorMessage(new Error('HTTP 409: binding_key_prefix_in_use'), 'fallback')).toBe(
       'This service already has a connection using that prefix — pick another.'
     )
@@ -278,6 +326,7 @@ describe('replicationStateLabel / formatReplicationLag', () => {
     expect(replicationStateLabel('catchup')).toBe('Catching up')
     expect(replicationStateLabel('not_streaming')).toBe('Not streaming')
     expect(replicationStateLabel('stopped')).toBe('Stopped')
+    expect(replicationStateLabel('unknown')).toBe('Unknown')
     expect(replicationStateLabel('unknown_phase')).toBe('unknown phase')
   })
 
@@ -517,12 +566,38 @@ describe('managedRecoveryKindLabel / managedRecoveryStateLabel', () => {
       'Fencing',
       'Promoting',
       'Repointing',
-      'Reconciling ingress',
+      'Switching database proxies',
       'Verifying',
       'Completed',
       'Failed',
       'Blocked',
     ])
+  })
+})
+
+describe('stale replica health', () => {
+  const at = '2026-01-01T00:00:00.000Z'
+
+  it('says how old an out-of-date reading is, and nothing for a fresh one', () => {
+    expect(formatReplicationAge({ state: 'streaming', observedAt: at })).toBeNull()
+    expect(
+      formatReplicationAge({ state: 'unknown', observedAt: at, stale: true, ageSeconds: 45 })
+    ).toBe('last seen 45s ago')
+    expect(
+      formatReplicationAge({ state: 'unknown', observedAt: at, stale: true, ageSeconds: 300 })
+    ).toBe('last seen 5 min ago')
+    expect(
+      formatReplicationAge({ state: 'unknown', observedAt: at, stale: true, ageSeconds: 7200 })
+    ).toBe('last seen 2 h ago')
+    expect(formatReplicationAge({ state: 'unknown', observedAt: at, stale: true })).toBeNull()
+  })
+
+  it('a replica is healthy only while its reading says it is keeping up', () => {
+    expect(isReplicationHealthy(undefined)).toBe(true)
+    expect(isReplicationHealthy({ state: 'streaming', observedAt: at })).toBe(true)
+    expect(isReplicationHealthy({ state: 'catching_up', observedAt: at })).toBe(true)
+    expect(isReplicationHealthy({ state: 'unknown', observedAt: at, stale: true })).toBe(false)
+    expect(isReplicationHealthy({ state: 'not_streaming', observedAt: at })).toBe(false)
   })
 })
 
@@ -564,6 +639,20 @@ describe('managedRecoveryBanner', () => {
       kind: 'blocked',
       text: 'Primary still accepting writes',
     })
+  })
+
+  it('shows why a failed recovery stopped when the control plane says', () => {
+    expect(
+      managedRecoveryBanner(
+        recoveryRecord({
+          id: 'r9',
+          kind: 'switchover',
+          state: 'failed',
+          sourcePrimaryMemberId: 'p1',
+          failedReason: '  Degraded: the database proxy on alpha has not switched.  ',
+        })
+      )
+    ).toEqual({ kind: 'failed', text: 'Degraded: the database proxy on alpha has not switched.' })
   })
 
   it('surfaces failed and in-flight recoveries', () => {
@@ -614,5 +703,100 @@ describe('managedHealthRefreshNotice', () => {
     expect(managedHealthRefreshNotice({ observed: 1, unavailable: 2 })).toBe(
       'Refreshed 1 of 3 replicas. Showing the last known health for 2 replicas (offline, not yet updated, or not responding).'
     )
+  })
+})
+
+describe('cut-off replica visibility', () => {
+  const primary = (slotRetention?: ManagedMemberRecord['replication']): ManagedMemberRecord => ({
+    id: 'p',
+    serverId: 's1',
+    serverName: null,
+    role: 'primary',
+    replicaClass: null,
+    readEligible: true,
+    ordinal: 1,
+    status: 'ready',
+    replicationTransport: null,
+    privatePort: null,
+    ...(slotRetention ? { replication: slotRetention } : {}),
+  })
+  const replica = (ordinal: number): ManagedMemberRecord => ({
+    ...primary(),
+    id: `r${ordinal}`,
+    role: 'replica',
+    replicaClass: 'failover',
+    ordinal,
+  })
+  const critical = {
+    state: 'streaming',
+    observedAt: '2026-01-01T00:00:00.000Z',
+    slotRetention: {
+      state: 'critical' as const,
+      slot: 'tp_member_2',
+      walStatus: 'awaiting_resync',
+    },
+  }
+
+  it('marks only the replica whose slot the primary reports as cut off', () => {
+    const members = [primary(critical), replica(2), replica(3)]
+    expect(isReplicaCutOff(members[1]!, members)).toBe(true)
+    expect(isReplicaCutOff(members[2]!, members)).toBe(false)
+    expect(isReplicaCutOff(members[0]!, members)).toBe(false)
+  })
+
+  it('does not mark anything while the slot is only behind, ok, or unreported', () => {
+    const lagging = {
+      ...critical,
+      slotRetention: { state: 'lagging' as const, slot: 'tp_member_2' },
+    }
+    expect(isReplicaCutOff(replica(2), [primary(lagging), replica(2)])).toBe(false)
+    expect(isReplicaCutOff(replica(2), [primary(), replica(2)])).toBe(false)
+    expect(isReplicaCutOff(replica(2), null)).toBe(false)
+  })
+
+  it('stops reporting the cut-off once the replica itself reads streaming, newer than the primary', () => {
+    const stale = {
+      ...critical,
+      observedAt: '2026-01-01T00:00:00.000Z',
+    }
+    const streamingAgain = (observedAt: string): ManagedMemberRecord => ({
+      ...replica(2),
+      replication: { state: 'streaming', observedAt },
+    })
+    const newer = [primary(stale), streamingAgain('2026-01-01T00:05:00.000Z')]
+    expect(isReplicaCutOff(newer[1]!, newer)).toBe(false)
+    expect(currentSlotRetention(newer)).toBeUndefined()
+    // A streaming reading older than the primary's report does not override it.
+    const older = [primary(stale), streamingAgain('2025-12-31T23:00:00.000Z')]
+    expect(isReplicaCutOff(older[1]!, older)).toBe(true)
+    expect(currentSlotRetention(older)?.state).toBe('critical')
+    // A replica that is not streaming stays cut off whatever its timestamp.
+    const stopped: ManagedMemberRecord = {
+      ...replica(2),
+      replication: { state: 'stopped', observedAt: '2026-01-01T00:05:00.000Z' },
+    }
+    expect(isReplicaCutOff(stopped, [primary(stale), stopped])).toBe(true)
+  })
+
+  it('reports nothing once the replica the slot names has been removed', () => {
+    const alone = [primary(critical)]
+    expect(currentSlotRetention(alone)).toBeUndefined()
+    // Another replica exists, but not the one the slot names.
+    const other = [primary(critical), replica(3)]
+    expect(currentSlotRetention(other)).toBeUndefined()
+    expect(isReplicaCutOff(other[1]!, other)).toBe(false)
+  })
+
+  it('says it in words, for the primary and for the replica', () => {
+    expect(slotRetentionNotice(undefined)).toBeNull()
+    expect(slotRetentionNotice({ state: 'ok' })).toBeNull()
+    expect(slotRetentionNotice({ state: 'critical', slot: 'tp_member_2' })).toContain('Resync')
+    expect(slotRetentionNotice({ state: 'lagging', retainedBytes: 2 * 1024 ** 3 })).toBe(
+      'A replica is far behind, so this server is keeping extra log files for it (2 GB so far).'
+    )
+    expect(slotRetentionNotice({ state: 'lagging' })).toBe(
+      'A replica is far behind, so this server is keeping extra log files for it.'
+    )
+    expect(REPLICA_CUT_OFF_LABEL).toContain('Resync needed')
   })
 })

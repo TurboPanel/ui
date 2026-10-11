@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { CommandStatus, DeploymentHistoryRecord } from '@/lib/instance-api'
 import {
+  canCancelDeployment,
+  cancelTooLateNote,
+  cancelledDeploymentNote,
+  findInFlightDeployment,
+  isDeploymentCancelling,
+  isDeploymentInFlight,
   deploymentServerLabel,
   deploymentStatusTone,
   deploymentStrategyLabel,
@@ -461,5 +467,83 @@ describe('deploy strategy and outcome', () => {
     expect(deploymentStrategyLabel('inplace')).toBe('In place')
     expect(deploymentStrategyLabel(null)).toBeNull()
     expect(deploymentStrategyLabel(undefined)).toBeNull()
+  })
+})
+
+describe('cancelling a deploy', () => {
+  const requested = '2026-08-21T12:00:03.000Z'
+
+  it('shows Cancel only for an in-flight deploy nobody asked to cancel', () => {
+    const [running] = groupDeploymentsByGeneration([
+      row({ id: 'a', status: 'running', durationMs: null }),
+    ])
+    const [asked] = groupDeploymentsByGeneration([
+      row({ id: 'a', status: 'running', durationMs: null, cancelRequestedAt: requested }),
+    ])
+    const [done] = groupDeploymentsByGeneration([row({ id: 'a' })])
+    expect(canCancelDeployment(running!)).toBe(true)
+    expect(canCancelDeployment(asked!)).toBe(false)
+    expect(canCancelDeployment(done!)).toBe(false)
+  })
+
+  it('treats queued, sent and acked hosts as in flight', () => {
+    for (const status of ['queued', 'dispatching', 'sent', 'acked', 'running'] as const) {
+      expect(isDeploymentInFlight([row({ id: 'a', status })])).toBe(true)
+    }
+    for (const status of ['succeeded', 'failed', 'timed_out', 'cancelled'] as const) {
+      expect(isDeploymentInFlight([row({ id: 'a', status })])).toBe(false)
+    }
+  })
+
+  it('reads Cancelling while a requested cancel has not finished', () => {
+    const [group] = groupDeploymentsByGeneration([
+      row({ id: 'a', status: 'running', durationMs: null, cancelRequestedAt: requested }),
+    ])
+    expect(isDeploymentCancelling(group!)).toBe(true)
+    expect(deploymentStatusTone(group!.status, null, true)).toEqual({
+      label: 'Cancelling…',
+      tone: 'pending',
+    })
+  })
+
+  it('keeps the earliest cancel request across a fan-out', () => {
+    const [group] = groupDeploymentsByGeneration([
+      row({ id: 'a', serverId: 's1', cancelRequestedAt: '2026-08-21T12:00:09.000Z' }),
+      row({ id: 'b', serverId: 's2', cancelRequestedAt: requested }),
+      row({ id: 'c', serverId: 's3' }),
+    ])
+    expect(group!.cancelRequestedAt).toBe(requested)
+  })
+
+  it('labels a cancelled deploy in the failed tone with a plain note', () => {
+    const [group] = groupDeploymentsByGeneration([
+      row({ id: 'a', status: 'cancelled', errorCode: 'deploy_cancelled' }),
+    ])
+    expect(deploymentStatusTone(group!.status)).toEqual({ label: 'Cancelled', tone: 'failed' })
+    expect(isDeploymentCancelling(group!)).toBe(false)
+    expect(cancelledDeploymentNote(group!)).toContain('previous version is still running')
+  })
+
+  it('notes a cancel that came too late only on a succeeded deploy', () => {
+    const [late] = groupDeploymentsByGeneration([
+      row({ id: 'a', cancelRequestedAt: requested }),
+    ])
+    const [plain] = groupDeploymentsByGeneration([row({ id: 'a' })])
+    const [cancelled] = groupDeploymentsByGeneration([
+      row({ id: 'a', status: 'cancelled', cancelRequestedAt: requested }),
+    ])
+    expect(cancelTooLateNote(late!)).toBe('Finished before it could be cancelled.')
+    expect(cancelTooLateNote(plain!)).toBeNull()
+    expect(cancelTooLateNote(cancelled!)).toBeNull()
+    expect(cancelledDeploymentNote(plain!)).toBeNull()
+  })
+
+  it('finds the newest in-flight deploy', () => {
+    const groups = groupDeploymentsByGeneration([
+      row({ id: 'n', generation: 9, status: 'running', durationMs: null }),
+      row({ id: 'o', generation: 8 }),
+    ])
+    expect(findInFlightDeployment(groups)?.id).toBe('n')
+    expect(findInFlightDeployment(groups.slice(1))).toBeNull()
   })
 })

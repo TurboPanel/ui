@@ -1480,11 +1480,11 @@ const styles = StyleSheet.create({
   },
   lintBadgeError: {
     color: colors.errorText,
-    backgroundColor: 'rgba(255, 107, 107, 0.15)',
+    backgroundColor: colors.badSoft,
   },
   lintBadgeWarning: {
     color: colors.pending,
-    backgroundColor: 'rgba(224, 179, 65, 0.15)',
+    backgroundColor: colors.warnSoft,
   },
   lintMessage: { fontSize: 12, lineHeight: 18, flex: 1 },
   lintMessageError: { color: colors.errorText },

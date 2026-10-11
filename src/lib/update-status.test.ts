@@ -47,6 +47,18 @@ const SIGNATURE_MESSAGE =
   'preflight_manifest: channel manifest signature is invalid (keyId c72c6744)'
 
 describe('explainUpgradeFailure', () => {
+  it('never quotes raw network text back to the operator', () => {
+    const explained = explainUpgradeFailure({
+      errorCode: 'rolled_back',
+      errorMessage: 'Get "https://x": dial tcp 10.0.0.4:443: connection refused',
+    })
+    expect(explained.body).not.toMatch(/dial tcp|refused/)
+    expect(explained.body).toContain('A network problem interrupted this step')
+    expect(
+      explainUpgradeFailure({ errorCode: 'x', errorMessage: 'TypeError: Failed to fetch' }).body
+    ).toBe('A network problem interrupted this step, so it could not finish. Try the update again.')
+  })
+
   it('tells an old daemon to reinstall once for a bad signature', () => {
     const explained = explainUpgradeFailure({
       errorCode: 'preflight_manifest',

@@ -11,6 +11,13 @@ export const ORG_AREAS = [
     subRoutes: [],
   },
   {
+    id: 'activity',
+    label: 'Activity',
+    pathSegment: 'activity',
+    hint: 'Running and recently failed deploys across the organization',
+    subRoutes: [],
+  },
+  {
     id: 'projects',
     label: 'Projects',
     pathSegment: 'projects',
@@ -146,9 +153,27 @@ export type OrgSubRouteId =
 
 /** Native bottom-tab set. Other org areas stay reachable by deep link only on native. */
 export const ORG_TAB_AREA_IDS = [
-  'overview',
   'projects',
+  'activity',
   'servers',
+] as const satisfies readonly OrgAreaId[]
+
+/** Web sidebar, in order: the three places people work. Recent projects follow. */
+export const ORG_SIDEBAR_AREA_IDS = [
+  'projects',
+  'activity',
+  'servers',
+] as const satisfies readonly OrgAreaId[]
+
+/**
+ * Areas the redesign leaves as they are (managed databases, network, access).
+ * They stay one click away in a quiet group under Recent projects so none of
+ * their routes becomes a deep link only.
+ */
+export const ORG_SIDEBAR_MORE_AREA_IDS = [
+  'managed',
+  'network',
+  'access',
 ] as const satisfies readonly OrgAreaId[]
 
 export type OrgTabAreaId = (typeof ORG_TAB_AREA_IDS)[number]
@@ -285,8 +310,9 @@ export function orgRouteHref(
   return `/${orgId}/${areaPathSegment}/${subRoutePathSegment}`
 }
 
-export function defaultOrgDashboardHref(orgId: string): `/${string}/overview` {
-  return `/${orgId}/overview`
+/** Where an organization opens: its Projects. The old Overview route redirects here. */
+export function defaultOrgDashboardHref(orgId: string): `/${string}/projects` {
+  return `/${orgId}/projects`
 }
 
 /** Signed-in organization picker — searchable list, create, manage. */
@@ -296,6 +322,39 @@ export function organizationsHref(): '/organizations' {
 
 export function orgManageHref(orgId: string): `/${string}/manage` {
   return `/${orgId}/manage`
+}
+
+/** Tabs on Organization settings, in bar order (the picker menu is the only way in). */
+export const ORG_SETTINGS_TAB_IDS = [
+  'general',
+  'members',
+  'notifications',
+  'domains',
+  'git',
+] as const
+
+export type OrgSettingsTabId = (typeof ORG_SETTINGS_TAB_IDS)[number]
+
+export const ORG_SETTINGS_TAB_LABELS: Record<OrgSettingsTabId, string> = {
+  general: 'General',
+  members: 'Members',
+  notifications: 'Notifications',
+  domains: 'Domains & certificates',
+  git: 'Git connections',
+}
+
+/** The tab a `?tab=` value names; anything else opens General. */
+export function parseOrgSettingsTab(
+  value: string | readonly string[] | null | undefined,
+): OrgSettingsTabId {
+  const first = typeof value === 'string' ? value : value?.[0]
+  return ORG_SETTINGS_TAB_IDS.find((id) => id === first) ?? 'general'
+}
+
+export function orgSettingsTabHref(orgId: string, tab: OrgSettingsTabId): string {
+  return tab === 'general'
+    ? orgManageHref(orgId)
+    : `${orgManageHref(orgId)}?tab=${tab}`
 }
 
 /**
@@ -417,6 +476,7 @@ export function networkReservedHref(
 
 export const SERVER_DETAIL_TAB_IDS = [
   'overview',
+  'services',
   'control',
   'time',
   'network',
@@ -428,6 +488,7 @@ export type ServerDetailTabId = (typeof SERVER_DETAIL_TAB_IDS)[number]
 
 export const SERVER_DETAIL_TAB_LABELS: Record<ServerDetailTabId, string> = {
   overview: 'Overview',
+  services: 'Services',
   control: 'Control',
   time: 'Time',
   network: 'Network',

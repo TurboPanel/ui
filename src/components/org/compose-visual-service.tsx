@@ -50,16 +50,19 @@ import {
   isSiteComposeService,
   patchServiceTurbopanelExtension,
   readServiceTurbopanelExtension,
+  DEFAULT_DENO_SERIES,
   DEFAULT_NODE_SERIES,
   SERVICE_DESCRIPTION_MAX_LENGTH,
   SOURCE_BRANCH_MAX_LENGTH,
   SOURCE_COMMAND_MAX_LENGTH,
   SITE_ENGINE_OPTIONS,
+  SUPPORTED_DENO_SERIES,
   SUPPORTED_NODE_SERIES,
   TURBOPANEL_SERVICE_EXTENSION_KEY,
   type ComposeServiceKind,
   type ComposeServiceSourceExtension,
   type ComposeSourceBuildKind,
+  type NativeRuntime,
   type NativeRuntimeFramework,
   type SiteEngine,
 } from '@/lib/compose/service-kind'
@@ -864,6 +867,12 @@ const SOURCE_BUILD_KIND_OPTIONS: readonly {
  * a repository whose build emits something the heuristic reads wrong, where the
  * operator has to be able to say which lane it is.
  */
+const NATIVE_RUNTIME_MODES: readonly { value: NativeRuntime; label: string }[] =
+  [
+    { value: 'node', label: 'Node.js' },
+    { value: 'deno', label: 'Deno' },
+  ]
+
 const NATIVE_FRAMEWORK_MODES: readonly {
   value: NativeRuntimeFramework
   label: string
@@ -915,23 +924,98 @@ const NATIVE_FRAMEWORK_MODES: readonly {
 function NodeRuntimeBlock({
   framework,
   nodeVersion,
+  runtime,
+  denoVersion,
   disabled,
   onSelectNative,
   onNodeVersionChange,
+  onRuntimeChange,
+  onDenoVersionChange,
 }: Readonly<{
   framework: NativeRuntimeFramework | undefined
   nodeVersion: string | undefined
+  runtime: NativeRuntime | undefined
+  denoVersion: string | undefined
   disabled: boolean
   onSelectNative: (framework: NativeRuntimeFramework) => void
   onNodeVersionChange: (nodeVersion: string) => void
+  onRuntimeChange: (runtime: NativeRuntime) => void
+  onDenoVersionChange: (denoVersion: string) => void
 }>) {
   const activeFramework = framework ?? 'auto'
   const activeHint = NATIVE_FRAMEWORK_MODES.find(
     (mode) => mode.value === activeFramework,
   )?.hint
 
+  const runtimeChooser = (
+    <>
+      <Text style={styles.label}>Runtime</Text>
+      <View style={styles.modeRow}>
+        {NATIVE_RUNTIME_MODES.map((mode) => {
+          const selected = (runtime ?? 'node') === mode.value
+          return (
+            <Pressable
+              key={mode.value}
+              style={[styles.optionChip, selected && styles.optionChipActive]}
+              disabled={disabled}
+              accessibilityRole="button"
+              accessibilityState={{ selected, disabled }}
+              onPress={() => onRuntimeChange(mode.value)}
+            >
+              <Text
+                style={[
+                  styles.optionChipText,
+                  selected && styles.optionChipTextActive,
+                ]}
+              >
+                {mode.label}
+              </Text>
+            </Pressable>
+          )
+        })}
+      </View>
+    </>
+  )
+
+  if (runtime === 'deno') {
+    return (
+      <View style={styles.fieldBlock}>
+        {runtimeChooser}
+        <Text style={styles.hint}>
+          Starts with deno task start when deno.json defines a start task,
+          otherwise deno run --allow-all on the entry file (main.ts, mod.ts,
+          server.ts, main.js, or index.ts). The app must listen on 127.0.0.1
+          and the PORT variable.
+        </Text>
+        <View style={styles.nativeFieldBlock}>
+          <Text style={styles.label}>Deno version</Text>
+          <OptionSelect
+            value={denoVersion ?? ''}
+            options={[
+              { value: '', label: `Host default (${DEFAULT_DENO_SERIES}.x)` },
+              // A pinned value outside the offered series still displays as itself.
+              ...(denoVersion && !SUPPORTED_DENO_SERIES.includes(denoVersion)
+                ? [{ value: denoVersion, label: denoVersion }]
+                : []),
+              ...SUPPORTED_DENO_SERIES.map((series) => ({
+                value: series,
+                label: `${series}.x`,
+              })),
+            ]}
+            disabled={disabled}
+            onChange={onDenoVersionChange}
+          />
+          <Text style={styles.hint}>
+            The host runs the newest release of this Deno major version.
+          </Text>
+        </View>
+      </View>
+    )
+  }
+
   return (
     <View style={styles.fieldBlock}>
+      {runtimeChooser}
       <Text style={styles.label}>Framework</Text>
       <View style={styles.modeRow}>
         {NATIVE_FRAMEWORK_MODES.map((mode) => {
@@ -1663,6 +1747,42 @@ export function ComposeVisualServiceCard({
     })
   }
 
+  /**
+   * Switch a native service between Node and Deno. One patch carries the kind
+   * with the runtime so the hints that belong to the other runtime go in the
+   * same write: the instance refuses `nodeVersion` / `framework` on a Deno
+   * service and `denoVersion` without `runtime: deno`.
+   */
+  const applyRuntime = (runtime: NativeRuntime) => {
+    if (runtime === 'deno') {
+      applyExtension({
+        serviceKind: 'node',
+        runtime: 'deno',
+        framework: undefined,
+        nodeVersion: undefined,
+        packageManager: undefined,
+      })
+      return
+    }
+    // Written out rather than cleared: on an environment overlay whose Base says
+    // Deno, removing the key would leave the Base's Deno in force.
+    applyExtension({
+      serviceKind: 'node',
+      runtime: 'node',
+      denoVersion: undefined,
+      framework: extension.framework ?? 'auto',
+    })
+  }
+
+  const applyDenoVersion = (denoVersion: string) => {
+    const trimmed = denoVersion.trim()
+    applyExtension({
+      serviceKind: 'node',
+      runtime: 'deno',
+      denoVersion: trimmed.length === 0 ? undefined : trimmed,
+    })
+  }
+
   const principalDeclareProps = onDeclarePrincipalAlias
     ? { onDeclare: onDeclarePrincipalAlias }
     : {}
@@ -1780,9 +1900,13 @@ export function ComposeVisualServiceCard({
         <NodeRuntimeBlock
           framework={extension.framework}
           nodeVersion={extension.nodeVersion}
+          runtime={extension.runtime}
+          denoVersion={extension.denoVersion}
           disabled={saving}
           onSelectNative={applyNativeFramework}
           onNodeVersionChange={applyNodeVersion}
+          onRuntimeChange={applyRuntime}
+          onDenoVersionChange={applyDenoVersion}
         />
       ) : null}
 
@@ -1996,7 +2120,7 @@ const styles = StyleSheet.create({
     backgroundColor: chrome.bgActive,
   },
   optionChipText: { color: colors.textMuted, fontSize: 12, fontWeight: '600' },
-  optionChipTextActive: { color: chrome.accent },
+  optionChipTextActive: { color: colors.link },
   optionChipDisabled: {
     borderStyle: 'dashed',
     opacity: 0.5,

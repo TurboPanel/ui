@@ -34,7 +34,7 @@ import {
   replaceOrganization,
 } from '@/lib/org-navigation'
 import { useCreateOrganization, useOrganizationsQuery } from '@/lib/queries/auth'
-import { chrome, colors, spacing, webPointer } from '@/lib/theme'
+import { colors, spacing, webPointer } from '@/lib/theme'
 
 const isNative = Platform.OS !== 'web'
 const COMPACT_FOOTER_HEIGHT = 108
@@ -199,8 +199,8 @@ export function OrganizationSwitcherSegment({ orgId }: OrganizationSwitcherSegme
 
         <View style={styles.footerRow}>
           <FooterAction
-            label="Manage"
-            accessibilityLabel="Manage Organization"
+            label="Settings"
+            accessibilityLabel="Organization settings"
             onPress={openSettings}
             icon={<GearIcon size={14} color={colors.textChip} />}
           />
@@ -354,7 +354,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
   },
   viewAllLabel: {
-    color: chrome.accent,
+    color: colors.link,
     fontSize: 13,
     fontWeight: '600',
   },

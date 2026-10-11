@@ -16,6 +16,7 @@ import {
   installedBuildLabel,
   upgradeStepOutcome,
 } from '@/lib/upgrade-display'
+import { plainStepFailureMessage } from '@/lib/user-error'
 import { colors } from '@/lib/theme'
 
 const ALL_COLUMNS: readonly DataTableColumn[] = [
@@ -107,7 +108,7 @@ export function UpgradeFleetTable({
             </DataTableCell>
             <DataTableCell column={col('error')}>
               <Text style={panelStyles.muted} numberOfLines={2}>
-                {row.errorMessage ?? upgradeStepOutcome(row).detail ?? '—'}
+                {plainStepFailureMessage(row.errorMessage) ?? upgradeStepOutcome(row).detail ?? '—'}
               </Text>
             </DataTableCell>
             <DataTableCell column={col('action')}>

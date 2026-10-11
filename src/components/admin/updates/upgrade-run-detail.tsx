@@ -4,7 +4,13 @@ import { panelStyles } from '@/components/ui/panel-styles'
 import type { UpgradeStepRow } from '@/lib/instance-api'
 import { useUpgradeRun } from '@/lib/queries/admin'
 import { colors, spacing } from '@/lib/theme'
-import { fleetStatusBadge, upgradePhaseLabel, upgradeStepOutcome } from '@/lib/upgrade-display'
+import {
+  fleetStatusBadge,
+  upgradePhaseLabel,
+  upgradeRunErrorLabel,
+  upgradeStepOutcome,
+} from '@/lib/upgrade-display'
+import { plainStepFailureMessage } from '@/lib/user-error'
 
 /** What a step ran on: its phase for the platform pieces, the server for a fleet step. */
 function stepTitle(step: UpgradeStepRow): string {
@@ -24,7 +30,7 @@ function moved(step: UpgradeStepRow): string | null {
 function StepLine({ step }: Readonly<{ step: UpgradeStepRow }>) {
   const badge = fleetStatusBadge(step.status)
   const outcome = upgradeStepOutcome(step)
-  const reason = step.errorMessage?.trim() || outcome.detail
+  const reason = plainStepFailureMessage(step.errorMessage) ?? outcome.detail
   const when = step.lastStageAt ? new Date(step.lastStageAt).toLocaleString() : null
   const change = moved(step)
   return (
@@ -48,11 +54,12 @@ export function UpgradeRunDetail({ runId }: Readonly<{ runId: string }>) {
   if (query.isError || !run) {
     return <Text style={panelStyles.muted}>The details of this update are not available.</Text>
   }
+  const runError = upgradeRunErrorLabel(run.error)
   const platform = run.steps.filter((step) => step.phase !== 'fleet')
   const fleet = run.steps.filter((step) => step.phase === 'fleet')
   return (
     <View style={styles.root}>
-      {run.error ? <Text style={panelStyles.error}>{run.error}</Text> : null}
+      {runError ? <Text style={panelStyles.error}>{runError}</Text> : null}
       {platform.map((step) => (
         <StepLine key={step.id} step={step} />
       ))}

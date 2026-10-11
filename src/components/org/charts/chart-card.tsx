@@ -103,7 +103,7 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   headline: {
-    color: colors.accent,
+    color: colors.ok,
     fontSize: 13,
     fontWeight: '700',
     fontFamily: 'monospace',

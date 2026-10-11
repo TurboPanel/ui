@@ -38,7 +38,7 @@ const styles = StyleSheet.create({
 })
 
 const toneStyles = StyleSheet.create({
-  ok: { borderColor: colors.green, backgroundColor: colors.bgActive },
+  ok: { borderColor: colors.ok, backgroundColor: colors.okSoft },
   muted: { borderColor: colors.borderChip, backgroundColor: colors.bgSecondary },
   danger: { borderColor: colors.error, backgroundColor: 'transparent' },
   pending: { borderColor: colors.pending, backgroundColor: 'transparent' },
@@ -46,7 +46,7 @@ const toneStyles = StyleSheet.create({
 })
 
 const toneTextStyles = StyleSheet.create({
-  ok: { color: colors.green },
+  ok: { color: colors.ok },
   muted: { color: colors.textMuted },
   danger: { color: colors.errorText },
   pending: { color: colors.pending },

@@ -467,7 +467,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   success: {
-    color: colors.accent,
+    color: colors.ok,
     fontSize: 13,
     fontWeight: '600',
   },
