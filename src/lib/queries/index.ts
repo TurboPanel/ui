@@ -1,4 +1,5 @@
 export * from '@/lib/queries/access'
+export * from '@/lib/queries/activity'
 export * from '@/lib/queries/admin'
 export * from '@/lib/queries/auth'
 export * from '@/lib/queries/backup-policies'

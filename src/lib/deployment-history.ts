@@ -35,6 +35,8 @@ export type DeploymentGroup = Readonly<{
   startedAt: string | null
   /** Longest attempt in the fan-out; null while any attempt is still running. */
   durationMs: number | null
+  /** Earliest time someone asked to cancel this deploy; null when nobody did. */
+  cancelRequestedAt: string | null
 }>
 
 /**
@@ -148,8 +150,67 @@ export function groupDeploymentsByGeneration(
       strategyOutcome: worstStrategyOutcome(commands),
       startedAt: earliestTimestamp(commands),
       durationMs: fanOutDuration(commands),
+      cancelRequestedAt: earliestCancelRequest(commands),
     }
   })
+}
+
+function earliestCancelRequest(
+  rows: readonly DeploymentHistoryRecord[],
+): string | null {
+  let earliest: string | null = null
+  for (const row of rows) {
+    const requested = row.cancelRequestedAt
+    if (!requested) continue
+    if (earliest === null || requested < earliest) earliest = requested
+  }
+  return earliest
+}
+
+const FINISHED_STATUSES: ReadonlySet<CommandStatus> = new Set([
+  'succeeded',
+  'failed',
+  'timed_out',
+  'cancelled',
+])
+
+/** True while at least one host of the deploy has not reached a final status. */
+export function isDeploymentInFlight(
+  commands: readonly DeploymentHistoryRecord[],
+): boolean {
+  return commands.some((row) => !FINISHED_STATUSES.has(row.status))
+}
+
+/** Someone asked to cancel and the hosts have not all finished yet. */
+export function isDeploymentCancelling(group: DeploymentGroup): boolean {
+  return group.cancelRequestedAt !== null && isDeploymentInFlight(group.commands)
+}
+
+/** The Cancel button shows for a deploy that is still going and has no cancel request yet. */
+export function canCancelDeployment(group: DeploymentGroup): boolean {
+  return isDeploymentInFlight(group.commands) && group.cancelRequestedAt === null
+}
+
+/** The newest deploy that is still in flight, or null. Groups arrive newest first. */
+export function findInFlightDeployment(
+  groups: readonly DeploymentGroup[],
+): DeploymentGroup | null {
+  return groups.find((group) => isDeploymentInFlight(group.commands)) ?? null
+}
+
+/**
+ * A quiet note for a deploy that finished although someone asked to cancel it:
+ * the host was already past the point where it can stop safely.
+ */
+export function cancelTooLateNote(group: DeploymentGroup): string | null {
+  if (group.cancelRequestedAt === null || group.status !== 'succeeded') return null
+  return 'Finished before it could be cancelled.'
+}
+
+/** What a Cancelled row says, so the owner knows nothing was changed. */
+export function cancelledDeploymentNote(group: DeploymentGroup): string | null {
+  if (group.status !== 'cancelled') return null
+  return 'Stopped before it changed anything. The previous version is still running.'
 }
 
 /** `1.4s` / `48s` / `3m 12s` — never a bare millisecond count in the UI. */
@@ -215,7 +276,9 @@ export type DeploymentStatusTone = Readonly<{
 export function deploymentStatusTone(
   status: CommandStatus,
   strategyOutcome: DeploymentStrategyOutcome | null = null,
+  cancelling = false,
 ): DeploymentStatusTone {
+  if (cancelling) return { label: 'Cancelling…', tone: 'pending' }
   if (strategyOutcome === 'rolled_back') {
     return { label: 'Rolled back', tone: 'failed' }
   }

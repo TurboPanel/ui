@@ -15,8 +15,14 @@ const RETRY_MAX_MS = 10_000
 export const RECONNECTING_TITLE = 'Reconnecting to the control plane…'
 export const RECONNECT_COPY =
   'The panel is restarting to finish an update. This page will reconnect by itself.'
+export const RECONNECT_RETRY_LABEL = 'Try again now'
 export const RECONNECT_SLOW_COPY =
   'This is taking longer than usual. The update may still be running.'
+
+/** The sentence under the title: what is happening and how long it has been. */
+export function reconnectBody(view: ReconnectView | null): string {
+  return view ? `${RECONNECT_COPY} Waiting ${view.elapsedLabel}.` : RECONNECT_COPY
+}
 
 /** Retry gap for the nth failed attempt (0-based): 2 s, 3 s, 4.5 s ... capped at 10 s. */
 export function reconnectRetryDelayMs(attempt: number): number {

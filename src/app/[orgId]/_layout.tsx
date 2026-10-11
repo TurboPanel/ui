@@ -43,7 +43,7 @@ function orgNestedStackScreenOptions({
 }
 
 export default function OrganizationLayout() {
-  const { session, needsInstall, isLoading, controlPlaneRuntime } = useAuth()
+  const { session, needsInstall, isLoading } = useAuth()
   const { orgId } = useLocalSearchParams<{ orgId: string }>()
   const orgsQuery = useOrganizationsQuery({
     enabled: Boolean(orgId && session),
@@ -69,7 +69,7 @@ export default function OrganizationLayout() {
       <View style={{ flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator
           size="large"
-          color={authSpinnerColor(controlPlaneRuntime)}
+          color={authSpinnerColor()}
         />
       </View>
     )

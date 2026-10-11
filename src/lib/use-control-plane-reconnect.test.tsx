@@ -71,4 +71,28 @@ describe('useControlPlaneReconnect', () => {
     })
     expect(result.current.view?.elapsedLabel).toBe('1 s')
   })
+
+  it('keeps the backoff timer when the retry callback changes on every render', () => {
+    const calls: number[] = []
+    const { rerender } = renderHook(
+      ({ n }) => useControlPlaneReconnect(true, () => calls.push(n)),
+      { initialProps: { n: 0 } }
+    )
+    for (let n = 1; n <= 4; n += 1) {
+      act(() => {
+        vi.advanceTimersByTime(500)
+      })
+      rerender({ n })
+    }
+    expect(calls).toHaveLength(1)
+  })
+
+  it('retryNow tries again straight away', () => {
+    const retry = vi.fn()
+    const { result } = renderHook(() => useControlPlaneReconnect(true, retry))
+    act(() => {
+      result.current.retryNow()
+    })
+    expect(retry).toHaveBeenCalledTimes(1)
+  })
 })

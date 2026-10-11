@@ -116,7 +116,7 @@ export function VerifyEmailScreenContent() {
       <AuthScreenShell title="Verify Email" accentColor={accent.accent}>
         <View style={styles.statusRow} accessibilityRole="progressbar">
           {/* Muted until runtime is known so HA never flashes green. */}
-          <ActivityIndicator size="small" color={authSpinnerColor(runtime)} />
+          <ActivityIndicator size="small" color={authSpinnerColor()} />
           <Text style={styles.statusCopy}>Verifying your email…</Text>
         </View>
       </AuthScreenShell>

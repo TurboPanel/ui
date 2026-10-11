@@ -266,7 +266,7 @@ export function PendingKeysSection({ orgId }: Readonly<{ orgId: string }>) {
       <SectionPanel title="Unused keys" hint={pendingKeysHint(loading, rows.length)}>
         {loading ? (
           <View style={styles.loadingRow}>
-            <ActivityIndicator size="small" color={colors.accent} />
+            <ActivityIndicator size="small" color={colors.ok} />
             <Text style={panelStyles.muted}>Loading keys…</Text>
           </View>
         ) : null}

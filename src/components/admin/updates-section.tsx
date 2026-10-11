@@ -3,12 +3,14 @@ import { StyleSheet, Text, View } from 'react-native'
 import { readConsoleBuild } from '@/components/admin/updates/console-build'
 import { HighAvailabilityUpdates } from '@/components/admin/updates/ha-updates'
 import { SelfHostedUpdates } from '@/components/admin/updates/self-hosted-updates'
-import { InlineNotice, LoadingState } from '@/components/ui'
+import { Button, InlineNotice, LoadingState } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
 import {
-  RECONNECT_COPY,
+  RECONNECT_RETRY_LABEL,
+  RECONNECT_SLOW_COPY,
   RECONNECTING_TITLE,
   isControlPlaneUnreachable,
+  reconnectBody,
 } from '@/lib/control-plane-reconnect'
 import { useControlPlaneReconnect } from '@/lib/use-control-plane-reconnect'
 import { useInstallStatusQuery } from '@/lib/queries/auth'
@@ -23,19 +25,27 @@ export function UpdatesSection() {
   const runtime = statusQuery.data?.runtime
 
   const unreachable = query.isError && isControlPlaneUnreachable(query.error)
+  const { refetch } = query
   const retryUpdates = useCallback(() => {
-    void query.refetch()
-  }, [query])
+    void refetch()
+  }, [refetch])
   const reconnect = useControlPlaneReconnect(unreachable, retryUpdates)
 
   if (query.isLoading) return <LoadingState label="Loading updates" />
 
   if (query.isError && reconnect.view) {
+    const slow = reconnect.view.phase === 'slow'
+    const body = reconnectBody(reconnect.view)
     return (
       <InlineNotice
         tone="warning"
         title={RECONNECTING_TITLE}
-        body={`${RECONNECT_COPY} Waiting ${reconnect.view.elapsedLabel}.`}
+        body={slow ? `${body} ${RECONNECT_SLOW_COPY}` : body}
+        actions={
+          slow ? (
+            <Button label={RECONNECT_RETRY_LABEL} variant="primary" onPress={reconnect.retryNow} />
+          ) : undefined
+        }
       />
     )
   }

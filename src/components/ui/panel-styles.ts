@@ -40,7 +40,7 @@ export const panelStyles = StyleSheet.create({
     gap: spacing.sm,
   },
   detailTitle: {
-    color: chrome.accent,
+    color: colors.link,
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0.5,
@@ -108,7 +108,7 @@ export const panelStyles = StyleSheet.create({
     backgroundColor: colors.bgSecondary,
   },
   toolbarBtnTextPrimary: {
-    color: chrome.accent,
+    color: colors.link,
     fontSize: 13,
     fontWeight: '700',
   },
@@ -178,7 +178,7 @@ export const panelStyles = StyleSheet.create({
     fontFamily: 'monospace',
   },
   segmentChipTextActive: {
-    color: chrome.accent,
+    color: colors.link,
     fontWeight: '700',
   },
 })

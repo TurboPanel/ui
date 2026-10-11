@@ -1,22 +1,6 @@
-import { Redirect, type Href } from 'expo-router'
-import { useProjectContext } from '@/components/org/project/project-context'
-import {
-  isManagedProject,
-  projectHostingHref,
-  projectOverviewHref,
-} from '@/lib/project-navigation'
+import { LegacyProjectRedirect } from '@/components/org/project/project-route-screens'
 
-/**
- * Retired route — server placement lives on the Hosting tab
- * (`/projects/:projectId/hosting`).
- */
-export default function ProjectServersScreen() {
-  const { orgId, projectId, project, isSystemProject } = useProjectContext()
-
-  if (isSystemProject || (project && isManagedProject(project))) {
-    return (
-      <Redirect href={projectOverviewHref(orgId, projectId) as Href} />
-    )
-  }
-  return <Redirect href={projectHostingHref(orgId, projectId) as Href} />
+/** Retired route: redirects to its new tab, keeping the query (`/projects/:projectId/servers`). */
+export default function RetiredServersRoute() {
+  return <LegacyProjectRedirect segment="servers" />
 }

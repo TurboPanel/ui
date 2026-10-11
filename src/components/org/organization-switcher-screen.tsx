@@ -27,7 +27,7 @@ import {
 } from '@/lib/org-navigation'
 import { shouldShowOrgSwitcherSearch } from '@/lib/organization-switcher'
 import { useCreateOrganization, useOrganizationsQuery } from '@/lib/queries/auth'
-import { chrome, colors, spacing, webPointer } from '@/lib/theme'
+import { colors, spacing, webPointer } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
 
 /**
@@ -152,7 +152,7 @@ export function OrganizationSwitcherScreen() {
             accessibilityRole="button"
             accessibilityLabel="Create organization"
           >
-            <PlusIcon size={14} color={chrome.accent} />
+            <PlusIcon size={14} color={colors.link} />
             <Text style={panelStyles.toolbarBtnTextPrimary}>New</Text>
           </Pressable>
         </View>

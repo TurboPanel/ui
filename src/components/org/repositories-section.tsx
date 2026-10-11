@@ -298,7 +298,7 @@ export function RepositoriesSection({ orgId }: Readonly<{ orgId: string }>) {
         {loading
           ? (
             <View style={styles.loadingRow}>
-              <ActivityIndicator size="small" color={colors.accent} />
+              <ActivityIndicator size="small" color={colors.ok} />
               <Text style={panelStyles.muted}>Loading repositories…</Text>
             </View>
           )

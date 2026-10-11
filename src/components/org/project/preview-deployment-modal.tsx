@@ -185,8 +185,8 @@ function ModalFooterActions({
 }
 
 /**
- * Environment-scope compose review. Opens from the lifecycle **Preview ▾**
- * control (inspect) or **Deploy / Redeploy** (confirm). Not used for
+ * Environment-scope compose review. Opens from the header **⋯** menu
+ * (inspect) or **Deploy** (confirm). Not used for
  * project-level compose editing or lifecycle Start/Stop.
  */
 export function PreviewDeploymentModal({

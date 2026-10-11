@@ -1472,3 +1472,69 @@ services:
     expect(Array.isArray(root)).toBe(true)
   })
 })
+
+describe('lintComposeYaml: an environment\'s changes as a partial layer', () => {
+  const messages = (source: string, options?: Parameters<typeof lintComposeYaml>[1]) =>
+    lintComposeYaml(source, options).map((issue) => issue.message)
+  const NO_IMAGE = `services:
+  web:
+    command: npm start
+`
+
+  it('asks every Docker service for an image or build by default', () => {
+    expect(messages(NO_IMAGE)).toEqual(['Service "web" must define "image" or "build"'])
+  })
+
+  it('does not ask a partial layer for one: the merge with the Base answers that', () => {
+    expect(messages(NO_IMAGE, { requireImageOrBuild: false })).toEqual([])
+  })
+
+  it('names where to put the image when the merged document still has none', () => {
+    expect(messages(NO_IMAGE, { merged: true })).toEqual([
+      'Service "web" must define "image" or "build" - neither the project\'s Base nor this environment\'s changes give it one',
+    ])
+  })
+
+  it('reads an unstated kind as the Base\'s, and does not demand a node app\'s source', () => {
+    const changes = `services:
+  app:
+    x-turbopanel:
+      framework: next
+`
+    expect(messages(changes, { requireImageOrBuild: false })).toEqual([])
+    const restated = `services:
+  app:
+    x-turbopanel:
+      serviceKind: node
+      nodeVersion: "24"
+`
+    expect(messages(restated, { requireImageOrBuild: false })).toEqual([])
+  })
+
+  it('still holds a standalone document, and the merge, to the kind rules', () => {
+    const changes = `services:
+  app:
+    x-turbopanel:
+      framework: next
+`
+    expect(messages(changes)).toContain('framework is only valid when serviceKind is node')
+    const restated = `services:
+  app:
+    x-turbopanel:
+      serviceKind: node
+`
+    expect(messages(restated, { merged: true })).toContain('node services require source')
+  })
+
+  it('still checks what a partial layer does state', () => {
+    const wrong = `services:
+  app:
+    x-turbopanel:
+      serviceKind: container
+      framework: next
+`
+    expect(messages(wrong, { requireImageOrBuild: false })).toContain(
+      'framework is only valid when serviceKind is node',
+    )
+  })
+})

@@ -54,6 +54,7 @@ describe('ORG_AREAS navigation', () => {
     expect(areaIds.includes('manage')).toBe(false)
     expect(areaIds).toEqual([
       'overview',
+      'activity',
       'projects',
       'managed',
       'servers',

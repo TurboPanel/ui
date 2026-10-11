@@ -52,7 +52,7 @@ const styles = StyleSheet.create({
 
 const toneStyles = StyleSheet.create({
   online: {
-    backgroundColor: colors.accent,
+    backgroundColor: colors.ok,
   },
   pending: {
     backgroundColor: colors.pending,

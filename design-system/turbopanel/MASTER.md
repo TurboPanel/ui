@@ -7,18 +7,20 @@
 ---
 
 **Project:** TurboPanel  
-**Generated:** 2026-07-19 (curated from ui-ux-pro-max + existing `src/lib/theme.ts`)  
+**Generated:** 2026-07-19 (curated from ui-ux-pro-max). Rewritten 2026-10-04 for the v4 "Navy & Tee" redesign.  
 **Category:** Developer Tool / DevOps Control Plane (B2B SaaS)  
-**Stack:** Expo 56 · React Native · Tamagui · Expo Router · React Query · gifted-charts  
+**Stack:** Expo 57 · React Native · Tamagui · Expo Router · React Query · gifted-charts  
 **Design Dials:** Variance 4/10 (Balanced) | Motion 4/10 (Standard) | Density 8/10 (Dense / Dashboard)
 
 ---
 
 ## North Star
 
-TurboPanel is a **dark-first ops console** — deep OLED blacks, one electric green for "live / go", dense scannable tables, zero decorative fluff. Speed is the brand; the UI should feel like a precise instrument, not a marketing site.
+TurboPanel is a **precise ops console in two first-class themes**: **Navy** (dark) and **Paper** (light). The default follows the device; the user can pick Light, Dark or Match computer, and the choice is saved in the browser only (never on the server). Blue is ours (chrome, primary action, links); green means running / live and nothing else. Dense scannable tables, no decorative fluff. Speed is the brand; the UI should feel like a precise instrument, not a marketing site.
 
-**Style blend:** Dark Mode (OLED) + Soft UI Evolution + **frosted chrome** — not cyberpunk neon, not light SaaS purple, not iridescent chromatic aberration.
+The v4 redesign ("Navy & Tee") replaced the earlier rules (one dark theme, no display font). Dark is no longer the default or the priority: every screen must work and read well in both themes. v4 display type is **Plus Jakarta Sans** (page titles 800 italic, section titles 700); UI text is Geist Sans and code is Geist Mono (see Typography).
+
+**Style blend:** Navy and Paper palettes + hairline borders + restrained **frosted chrome**. Not cyberpunk neon, not purple SaaS, not iridescent chromatic aberration. Banned looks: near-black `#0b0b0c` neutrals, a neutral ink primary button, purple gradients, glassy cards on content, left-border accent cards.
 
 ---
 
@@ -26,40 +28,50 @@ TurboPanel is a **dark-first ops console** — deep OLED blacks, one electric gr
 
 ### Color Palette
 
-Canonical tokens live in `src/lib/theme.ts`. Design system maps onto those — do not invent parallel hex values in components.
+Source of truth: the v4 spec tokens in `src/lib/theme-palettes.ts` (two palettes, Navy and Paper, same token names). Components read `colors.*` from `src/lib/theme.ts`; on web each entry is a CSS variable (`var(--tp-bg)`) that the page switches per theme, so a screen follows the theme with no per-file code. Never write one-off hex in components, never do colour maths on a `colors.*` value (it is a variable reference on web), and use `useColors()` (`src/lib/theme-preference.ts`) in the rare place that needs a real hex.
 
-| Role | Hex | Token / Notes |
-|------|-----|---------------|
-| Background (deep) | `#000000` | `colors.bg` — true OLED black |
-| Panel / sidebar | `#0a0a0a` | `colors.bgPanel` / `bgSidebar` |
-| Elevated surface | `#111111` | `colors.bgInput` |
-| Secondary surface | `#1a1a1a` | `colors.bgSecondary` |
-| Active / selected | `#10241a` | `colors.bgActive` — green-tinted |
-| Border | `#222222` | `colors.border` |
-| Border muted | `#2a2a2a` | `colors.borderMuted` |
-| Text primary | `#ffffff` | `colors.text` |
-| Text body | `#cccccc` | `colors.textBody` |
-| Text muted | `#888888` | `colors.textMuted` |
-| Green (self-hosted / run / online) | `#3dd68c` | `colors.green` / `colors.accent` — online status always; Deno chrome |
-| Blue (HA) | `#3366cc` | `colors.blue` — Workers / HA interactive chrome |
-| Pending / warn | `#e0b341` | `colors.pending` |
-| Error | `#ff6b6b` | `colors.error` |
-| Info / command | `#9ad2ff` | `colors.command` |
-| Overlay | `rgba(0,0,0,0.6)` | `colors.overlay` |
+| Role (v4 token) | Navy (dark) | Paper (light) | Old key still in use |
+|------|------|------|------|
+| Page `bg` | `#0b1220` | `#f5f7fa` | `colors.bg` |
+| Sidebar | `#0e1627` | `#edf1f7` | `bgSidebar` |
+| Card `surface` | `#121b2e` | `#ffffff` | `bgPanel`, `bgArea` |
+| `surface-2` / `surface-3` | `#17223a` / `#1e2b47` | `#f7f9fc` / `#e9eef6` | `bgAreaHeader` / `bgSecondary` |
+| Field | `#0f1828` | `#ffffff` | `bgInput` |
+| Hairline `sep` / `sep-strong` | white-blue at 14% / 24% | navy at 9% / 16% | `borderSubtle`, `borderArea` / `border`, `borderMuted`, `borderChip` |
+| Field border | `#5b6b8a` | navy at 50% | `fieldBorder` (inputs, checkboxes: 3:1) |
+| Text / `text-2` / `text-3` | `#e8eef7` / `#c9d4e5` / `#9fb0cb` | `#0f172a` / `#334155` / `#52607a` | `text`, `textTitle` / `textBody`, `textChip`, `stdout` / `textMuted`, `textDim`, `textFaint`, `textLabel` |
+| Brand / primary action `accent` | `#3366cc` (white text, 5.4:1) | `#2b59c3` (white text, 6.3:1) | `chrome.accent`, `chrome.onAccent`, `chrome.bgActive` |
+| Link / text on dark blue `link` | `#86a8ff` | `#2b59c3` | `colors.link`, `command` |
+| `ok` (running / live) | `#3dd68c` | `#0b7444` | `green` |
+| `busy` (in progress) | `#b49dff` | `#5b3fd0` | |
+| `warn` (not deployed, warning) | `#f2b84b` | `#8a5700` | `pending` |
+| `bad` (failed, crashed) | `#ff7a7a` | `#c22a2a` | `error`, `errorText` |
+| `idle`, `base` | `#94a0b6`, `#7fa4ff` | `#5d6678`, `#2b59c3` | `log` |
+| Scrim | `rgba(11,18,32,.72)` | `rgba(245,247,250,.72)` | `overlay` |
 
-**Color notes:** Dual brand — light green + `#3366cc` blue (aligned with website `--tp-green` / `--tp-blue`). Interactive chrome (sidebar active states, primary CTAs, toolbar chips) follows control-plane runtime via `chrome.*` tokens (`applyConsoleChromeRuntime`): **Workers (HA) → blue**, **Deno (self-hosted) → green**. **Online / live status stays green** always (`colors.green` / `colors.accent`). Auth screens use the same runtime mapping. Status must never rely on color alone (pair with label/dot shape).
+**Colour jobs, one per hue:** blue = ours (chrome, primary action, links, Base); green = running / live; violet = in progress; amber = not deployed / warning; red = failed / crashed; teal = data lines on the map only. `*Soft` tokens are the 9 to 16 percent tints behind a tone's text.
+
+**Rules:**
+- Text on a surface and on a tone's soft tint must stay at **4.5:1 or better** in both themes; `src/lib/theme-palettes.test.ts` checks the v4 table and every old key pair. Change a palette value only with that test green.
+- Brand blue is a **fill and border** colour. Blue **text** on a dark surface uses `colors.link` (the lighter blue), never `chrome.accent`.
+- `colors.green` / `colors.ok` is for running / live / success only; `colors.accent` is now the brand-blue fill, no longer a green: use `colors.ok` where it meant online.
+- Status is never colour alone: pair it with a word and a glyph.
+- Interactive chrome is brand blue on both control-plane runtimes (self-hosted and High Availability); the runtime only changes the label, not the colour.
+- The sign-in and other auth screens always paint on Navy (their animated wash uses fixed hex); they pin it with `data-theme="dark"` on web.
 
 ### Typography
 
-| Role | Font | Notes |
-|------|------|-------|
-| UI / headings / body | Inter (current `@tamagui/font-inter`) | Keep Inter for continuity with Tamagui load path |
-| Optional display upgrade | Plus Jakarta Sans | Only if we deliberately migrate away from Inter |
-| Metrics / IDs / install cmds / code | System mono → JetBrains Mono or Fira Code when added | Monospace for hostname, UUIDs, curl install lines, chart axes |
+| Role | Font | Where it is set |
+|------|-------|-------|
+| Page titles (800 italic, 28px, -0.5 tracking), section titles (700) | Plus Jakarta Sans | `src/lib/v4/typography.ts` roles `displayItalic`, `display` (the v4 primitives use them; unconverted screens still use Inter) |
+| UI / body | Geist Sans 400 / 500 / 600 | roles `body`, `bodyMedium`, `bodySemibold` |
+| SHAs, commands, paths, logs, metrics | Geist Mono 400 / 500 / 600 | roles `mono`, `monoMedium`, `monoSemibold` |
 
-- Base size ≥ 16px on interactive web inputs  
-- Line-height ~1.45–1.5 for body; tighter (1.2–1.3) for dense table rows  
-- Weights: 400 body, 500 labels, 600 titles/buttons — avoid 800+ shouting
+Each weight is a separate font file and family name (a phone applies `fontWeight` unreliably to a custom font), so a component picks a role and never sets `fontWeight` beside it. The files come from `@expo-google-fonts/*` and ship inside the app; no font host is linked.
+
+- Italic is for page titles and the Live hero URL only
+- Type scale: 28 / 20 / 17 / 14 / 13 / 12 / 11 (mono 12.5); base size at least 16px on interactive web inputs
+- Line-height ~1.45 for body; tighter (1.2 to 1.3) for dense table rows
 
 ### Spacing (Density 8 — dashboard)
 
@@ -78,21 +90,21 @@ Layout constants: `sidebarWidth` 220, `contentMaxWidth` 1400, `desktopBreakpoint
 
 ### Elevation & Radius
 
-- Prefer **hairline borders** (`borderSubtle` / `rgba(255,255,255,0.06)`) over heavy shadows on dark OLED  
-- Radius: **8px** controls/inputs, **10–12px** panels — not pill-everything  
+- Prefer **hairline borders** (`borderSubtle`) over heavy shadows, in both themes  
+- Radius: **8px** buttons / fields / segmented controls, **12px** cards and groups, **14px** layer cards, pills 999 — not pill-everything  
 - Shadows only for floating menus/modals (`overlay` + slight lift); no multi-layer neumorphism
 
 ### Frosted chrome (secondary polish)
 
 Canonical tokens: `src/lib/glass.ts` (`glass.*`). Surface primitive: `src/components/glass/glass-surface.tsx`.
 
-| Token | Value | Usage |
-|-------|-------|-------|
-| `glass.fill` | `rgba(10,10,10,0.72)` | Auth / panel frosted fill |
-| `glass.fillStrong` | `rgba(8,8,8,0.82)` | Sticky header, sidebar |
-| `glass.fillSoft` | `rgba(17,17,17,0.55)` | Nested chips / section headers |
-| `glass.border` | `rgba(255,255,255,0.12)` | Glass rim (replaces flat border on chrome) |
-| Blur / saturate | `16px` / `160%` | Web `backdrop-filter`; soft `12px`, strong `20px` |
+| Token | Navy | Paper | Usage |
+|-------|-------|-------|-------|
+| `glass.fill` | `rgba(18,27,46,.74)` | `rgba(255,255,255,.78)` | Auth / panel frosted fill |
+| `glass.fillStrong` | `rgba(14,22,39,.86)` | `rgba(255,255,255,.90)` | Sticky header, sidebar, menus |
+| `glass.fillSoft` | `rgba(23,34,58,.58)` | `rgba(247,249,252,.70)` | Nested chips / section headers |
+| `glass.border` | `rgba(168,181,204,.18)` | `rgba(15,23,42,.12)` | Glass rim (replaces flat border on chrome) |
+| Blur / saturate | `16px` / `160%` | same | Web `backdrop-filter`; soft `12px`, strong `20px` (decoration only: phone drops it) |
 
 **Where to use:** sticky header, sidebars / drawer, auth form panel (over the grid wash), `SectionPanel` shells, floating menus.  
 **Where not:** dense table cells, chart plots, monospace log blocks, every nested inset.  
@@ -104,7 +116,7 @@ Canonical tokens: `src/lib/glass.ts` (`glass.*`). Surface primitive: `src/compon
 ## Logo / brand mark
 
 - Geometry lives in **`assets/brand/`** (`turbopanel-logo*`) and the inline SVG component **`src/components/brand/turbopanel-logo.tsx`** — landscape mark is ink-tight `628×370` (no embedded clear-space pad)
-- Color mark uses `colors.green` + `colors.blue`; `white` / `mono` variants for special surfaces
+- Color mark uses `colors.logoBars` + `colors.logoTee` (theme-aware); `white` / `mono` variants for special surfaces
 - Org sidebar, admin sidebar, auth shell, and `AppShell` use `TurboPanelLogo` / `TurboPanelLogoMark` — **T mark only** in product chrome (full “urboPanel” lockup is **website-only**). Mark sizing via `consoleMarkRenderSize` in `src/lib/wordmark-lockup.ts`. The mark **is** the T — never render “TurboPanel” beside it in the console. On the hosted (Workers) control plane a slim **HIGH AVAILABILITY** pill sits beside the T (`src/components/brand/high-availability-wordmark.tsx`: one line of tiny letter-spaced caps, 1px HA-blue gradient border, blue-tinted fill; `compact` = the same pill reading “HA” on narrow headers); nothing renders on self-hosted or before the runtime is known. Under the full pill, right-aligned to its edge, a tiny muted tabular line carries the control plane's version from `/api/health` (`v0.1.1 · 18ad2b0`, the sha linked to its source commit; version only when the commit is unknown), followed on a testing or staging deployment by the environment in colour (**Testing** amber `pending`, **Staging** blue `command`; nothing on live) — its line is reserved from the first render so the pill never shifts; the compact pill has none. Self-hosted has no pill: the same muted line sits beside the T alone, showing the exact installed build label (`v0.1.1-canary.…`, `v0.1.1-rc.1`) when `/api/health` reports one. Formatting lives in `src/lib/control-plane-version.ts`.
 - Public downloads + usage copy: marketing site **`/about/logo`**
 
@@ -112,7 +124,7 @@ Canonical tokens: `src/lib/glass.ts` (`glass.*`). Surface primitive: `src/compon
 
 ### Buttons
 
-- **Primary:** `accent` fill, `buttonText` (`#000`), weight 600, radius 8, min height 40 (44 on touch)  
+- **Primary:** brand-blue `chrome.accent` fill, `chrome.onAccent` (white) text, weight 600, radius 8, min height 40 (44 on touch)  
 - **Secondary:** transparent + `borderMuted`, text body color  
 - **Danger:** `error` border/text; confirm destructive in two-step (existing reboot/delete pattern)  
 - Transitions 150–200ms; press scale ≤ 0.98 (Reanimated), no layout-shifting scale on hover  
@@ -168,7 +180,7 @@ Default: **no decorative cards**. Use bordered panels only when they group an in
 
 ### Inputs
 
-- `bgInput`, border `borderMuted`, focus ring using accent at ~25% opacity  
+- `bgInput`, border `fieldBorder` (3:1 against the surface), focus ring `chrome.accent`  
 - Visible labels (never placeholder-only)  
 - Errors adjacent to the field (`errorText`)
 
@@ -176,10 +188,10 @@ Default: **no decorative cards**. Use bordered panels only when they group an in
 
 | State | Color | Extra cue |
 |-------|-------|-----------|
-| Online / success | `accent` | Filled or pulsing dot |
+| Online / success | `ok` | Filled or pulsing dot + word |
 | Offline | `textMuted` | Hollow / dim |
 | Pending | `pending` | Optional spinner |
-| Failed | `error` | Text + icon |
+| Failed | `bad` | Text + icon |
 
 ### Charts (server metrics)
 
@@ -205,10 +217,10 @@ Default: **no decorative cards**. Use bordered panels only when they group an in
 
 ## Style Guidelines
 
-**Primary style:** Dark Mode (OLED)  
+**Primary style:** two first-class themes, Navy (dark) and Paper (light), Match computer by default  
 **Secondary polish:** Soft elevation + **frosted chrome** (via `GlassSurface` / `glass.*` tokens)  
 
-**Keywords:** dense, scannable, ops, instrument, green live, monochrome chrome, hairline borders, frosted glass, Reanimated micro-motion  
+**Keywords:** dense, scannable, ops, instrument, navy and paper, blue chrome, green live, hairline borders, frosted glass, Reanimated micro-motion  
 
 **Key effects (keep restrained):**
 - Frosted chrome on shell surfaces (header, sidebar, auth panel, section shells)  
@@ -244,7 +256,9 @@ Default: **no decorative cards**. Use bordered panels only when they group an in
 
 ## Anti-Patterns (Do NOT Use)
 
-- ❌ Light-mode-first layouts or cream/serif "AI brochure" looks  
+- ❌ A screen that only works in one theme (check Navy and Paper), and cream/serif "AI brochure" looks  
+- ❌ Near-black `#0b0b0c` neutrals, a neutral ink primary button, left-border accent cards  
+- ❌ Colour maths on `colors.*` values (they are CSS variable references on web)  
 - ❌ Purple / indigo gradient SaaS clichés  
 - ❌ Neon cyberpunk / matrix green / glitch / scanlines  
 - ❌ Full iridescent / chromatic-aberration marketing excess on ops chrome  
@@ -264,14 +278,14 @@ Default: **no decorative cards**. Use bordered panels only when they group an in
 - [ ] No emojis as icons (SVG / Symbols only)  
 - [ ] `cursor-pointer` (web) on clickable elements  
 - [ ] Hover/press transitions 150–300ms  
-- [ ] Text contrast ≥ 4.5:1 (7:1 preferred on OLED body text)  
+- [ ] Checked in both Navy and Paper (switch in the header); text contrast ≥ 4.5:1 in each  
 - [ ] Focus rings visible for keyboard nav  
 - [ ] `prefers-reduced-motion` respected  
 - [ ] Responsive: 375 / 768 / 1024 / 1440  
 - [ ] Touch targets ≥ 44×44 on native  
 - [ ] Loading feedback for waits > 300ms  
 - [ ] Destructive actions use two-step confirm  
-- [ ] Colors come from `theme.ts` tokens  
+- [ ] Colors come from `theme.ts` tokens (no raw hex); blue text uses `colors.link`  
 
 ---
 

@@ -318,10 +318,12 @@ describe('useApiMutation', () => {
       { wrapper: createWrapper(client) },
     )
 
-    // No `cause` either: a 403 is auth recovery, not something to explain.
+    // `error` stays null so actionError does not flash session copy; `cause` is
+    // still available for callers that map owner-only refusals (license tier pick).
     await expect(result.current.run()).resolves.toEqual({
       ok: false,
       error: null,
+      cause: expect.any(Error),
     })
     expect(result.current.actionError).toBeNull()
     await waitFor(() => {

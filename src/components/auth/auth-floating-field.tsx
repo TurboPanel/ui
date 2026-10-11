@@ -206,7 +206,7 @@ export function AuthFloatingField({
   const fieldRef = useWebFieldFocus(setFocused)
   const raised = focused || value.length > 0
   const reduceMotion = useReducedMotion() === true
-  const labelColor = focused ? accentColor : colors.textLabel
+  const labelColor = focused ? colors.link : colors.textLabel
 
   return (
     <View

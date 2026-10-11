@@ -15,7 +15,7 @@ import {
 } from '@/lib/instance-version'
 
 const authAccentMocks = vi.hoisted(() => ({
-  applyConsoleChromeRuntime: vi.fn(),
+  rememberControlPlaneRuntime: vi.fn(),
   resolveControlPlaneRuntime: vi.fn((): 'deno' | 'workers' | undefined => 'deno'),
 }))
 
@@ -24,7 +24,7 @@ vi.mock('@/lib/instance-api', () => ({
 }))
 
 vi.mock('@/lib/auth-accent', () => ({
-  applyConsoleChromeRuntime: authAccentMocks.applyConsoleChromeRuntime,
+  rememberControlPlaneRuntime: authAccentMocks.rememberControlPlaneRuntime,
   resolveControlPlaneRuntime: authAccentMocks.resolveControlPlaneRuntime,
 }))
 
@@ -33,7 +33,7 @@ describe('connectToControlPlane', () => {
     resetControlPlaneStoreForTests()
     vi.mocked(fetchInstallStatus).mockReset()
     resetInstanceVersionStateForTests()
-    authAccentMocks.applyConsoleChromeRuntime.mockReset()
+    authAccentMocks.rememberControlPlaneRuntime.mockReset()
     authAccentMocks.resolveControlPlaneRuntime.mockReset()
     authAccentMocks.resolveControlPlaneRuntime.mockReturnValue('deno')
   })
@@ -63,7 +63,7 @@ describe('connectToControlPlane', () => {
     })
     expect(getActiveControlPlaneOrigin()).toBe(LOCAL_HTTPS_ORIGIN)
     expect(authAccentMocks.resolveControlPlaneRuntime).toHaveBeenCalled()
-    expect(authAccentMocks.applyConsoleChromeRuntime).toHaveBeenCalledWith('deno')
+    expect(authAccentMocks.rememberControlPlaneRuntime).toHaveBeenCalledWith('deno')
   })
 
   it('skips console chrome when status does not resolve a runtime', async () => {
@@ -74,7 +74,7 @@ describe('connectToControlPlane', () => {
     })
     const result = await connectToControlPlane(LOCAL_HTTPS_ORIGIN)
     expect(result.ok).toBe(true)
-    expect(authAccentMocks.applyConsoleChromeRuntime).not.toHaveBeenCalled()
+    expect(authAccentMocks.rememberControlPlaneRuntime).not.toHaveBeenCalled()
   })
 
   it('refuses an instance older than this app supports, and forgets it', async () => {
@@ -91,7 +91,7 @@ describe('connectToControlPlane', () => {
       'That control plane runs TurboPanel 0.0.9; this app needs 0.1.0 or newer. Update the instance, then connect again.',
     )
     expect(getActiveControlPlaneOrigin()).toBeNull()
-    expect(authAccentMocks.applyConsoleChromeRuntime).not.toHaveBeenCalled()
+    expect(authAccentMocks.rememberControlPlaneRuntime).not.toHaveBeenCalled()
   })
 
   it('connects to an instance that sends no version header — the wire is expand-only', async () => {

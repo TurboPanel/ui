@@ -5,10 +5,12 @@ import {
   deployEnvironment,
   fetchDeployPreview,
   fetchEnvironment,
+  fetchEnvironmentConfigView,
   fetchVisibleEnvironments,
   isServerPlacementRequiredError,
   runEnvironmentLifecycle,
   stopEnvironment,
+  cancelDeployment,
   updateEnvironment,
   type EnvironmentLifecycleAction,
 } from '@/lib/instance-api'
@@ -34,6 +36,22 @@ export function useEnvironment(
   return useQuery({
     queryKey: queryKeys.org(orgId).environments.detail(environmentId),
     queryFn: () => fetchEnvironment(environmentId),
+    enabled:
+      (options?.enabled ?? true) &&
+      orgId.length > 0 &&
+      environmentId.length > 0,
+  })
+}
+
+/** What the environment runs and what it changes from the Base (read-only, derived on the server). */
+export function useEnvironmentConfigView(
+  orgId: string,
+  environmentId: string,
+  options?: Readonly<{ enabled?: boolean }>,
+) {
+  return useQuery({
+    queryKey: queryKeys.org(orgId).environments.configView(environmentId),
+    queryFn: () => fetchEnvironmentConfigView(environmentId),
     enabled:
       (options?.enabled ?? true) &&
       orgId.length > 0 &&
@@ -146,6 +164,21 @@ export function useStopEnvironment(orgId: string, environmentId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
     mutationFn: () => stopEnvironment(environmentId),
+    onSuccess: async () => {
+      await invalidateEnvironmentSubtree(queryClient, orgId, environmentId)
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.org(orgId).commands.all,
+      })
+    },
+  })
+}
+
+/** Cancel a running or queued deploy; refreshes history and environment status. */
+export function useCancelDeployment(orgId: string, environmentId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (deploymentId: string) =>
+      cancelDeployment(environmentId, deploymentId),
     onSuccess: async () => {
       await invalidateEnvironmentSubtree(queryClient, orgId, environmentId)
       await queryClient.invalidateQueries({

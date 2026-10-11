@@ -2,7 +2,6 @@ import { useEffect } from 'react'
 import { ActivityIndicator, StyleSheet, View } from 'react-native'
 import { useRouter, type Href } from 'expo-router'
 import { authSpinnerColor } from '@/lib/auth-accent'
-import { useAuth } from '@/lib/auth-context'
 import {
   resolvePreferredOrganizationId,
   setActiveOrganizationId,
@@ -21,7 +20,6 @@ import { colors } from '@/lib/theme'
  */
 export default function WelcomeScreen() {
   const router = useRouter()
-  const { controlPlaneRuntime } = useAuth()
   const orgsQuery = useOrganizationsQuery()
 
   useEffect(() => {
@@ -43,7 +41,7 @@ export default function WelcomeScreen() {
     <View style={styles.loading}>
       <ActivityIndicator
         size="large"
-        color={authSpinnerColor(controlPlaneRuntime)}
+        color={authSpinnerColor()}
       />
     </View>
   )

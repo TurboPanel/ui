@@ -14,7 +14,15 @@ import {
 import { HighAvailabilityWordmark } from '@/components/brand/high-availability-wordmark'
 import { TurboPanelLogo } from '@/components/brand/turbopanel-logo'
 import { GlassSurface } from '@/components/glass/glass-surface'
-import { colors } from '@/lib/theme'
+import { navyPalette } from '@/lib/theme-palettes'
+
+/**
+ * Sign-in and the other auth screens always paint dark: their animated wash is
+ * built from fixed Navy colours. On the web this re-points every theme
+ * variable inside the screen at Navy (`[data-theme="dark"]` in the theme
+ * stylesheet); native is Navy already.
+ */
+const DARK_SCOPE = { dataSet: { theme: 'dark' } } as object
 
 const COPYRIGHT_YEAR = new Date().getFullYear()
 
@@ -22,21 +30,21 @@ export function AuthScreenShell({
   title,
   description,
   footer,
-  accentColor = colors.accent,
+  accentColor = navyPalette.accent,
   animateBackdrop = true,
   children,
 }: Readonly<{
   title: string
   description?: string
   footer?: ReactNode
-  /** Runtime accent for the gradient wash (Workers blue / Deno green). */
+  /** Accent for the gradient wash (Navy hex: the wash does colour maths on it). */
   accentColor?: string
   /** When false, skip backdrop streak motion (static wash + grid only). */
   animateBackdrop?: boolean
   children: ReactNode
 }>) {
   return (
-    <View style={authFormStyles.shell}>
+    <View style={authFormStyles.shell} {...DARK_SCOPE}>
       <AuthScreenBackground
         accentColor={accentColor}
         animate={animateBackdrop}

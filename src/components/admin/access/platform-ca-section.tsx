@@ -230,7 +230,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   saved: {
-    color: colors.accent,
+    color: colors.ok,
     fontSize: 13,
     fontWeight: '600',
     lineHeight: 18,

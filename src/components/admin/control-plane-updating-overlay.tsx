@@ -8,10 +8,11 @@ import { getClientVersion, getInstanceRevision, getInstanceVersion } from '@/lib
 import { useUpgradeActiveRun } from '@/lib/queries/admin'
 import { isUpgradeRunActive } from '@/lib/upgrade-run-poll'
 import {
-  RECONNECT_COPY,
+  RECONNECT_RETRY_LABEL,
   RECONNECT_SLOW_COPY,
   RECONNECTING_TITLE,
   isControlPlaneUnreachable,
+  reconnectBody,
 } from '@/lib/control-plane-reconnect'
 import { useControlPlaneReconnect } from '@/lib/use-control-plane-reconnect'
 import {
@@ -42,9 +43,10 @@ export function ControlPlaneUpdatingOverlay() {
   const [tick, setTick] = useState(0)
 
   const unreachable = activeRun.isError && isControlPlaneUnreachable(activeRun.error)
+  const { refetch: refetchRun } = activeRun
   const retryRun = useCallback(() => {
-    void activeRun.refetch()
-  }, [activeRun])
+    void refetchRun()
+  }, [refetchRun])
   const reconnect = useControlPlaneReconnect(unreachable, retryRun)
 
   const runActive = isUpgradeRunActive(activeRun.data?.run?.status)
@@ -129,7 +131,7 @@ function UpdatingCard({
   const view = reconnect.view
   const slow = view?.phase === 'slow'
   const label = view ? RECONNECTING_TITLE : 'TurboPanel is updating'
-  const copy = view ? `${RECONNECT_COPY} Waiting ${view.elapsedLabel}.` : RECONNECT_COPY
+  const copy = reconnectBody(view)
   return (
     <View style={styles.scrim} accessibilityViewIsModal>
       <View style={styles.card}>
@@ -138,7 +140,10 @@ function UpdatingCard({
         {slow ? <Text style={styles.copy}>{RECONNECT_SLOW_COPY}</Text> : null}
         <View style={styles.actions}>
           {slow ? (
-            <Button label="Keep waiting" variant="primary" onPress={reconnect.keepWaiting} />
+            <>
+              <Button label={RECONNECT_RETRY_LABEL} variant="primary" onPress={reconnect.retryNow} />
+              <Button label="Keep waiting" variant="secondary" onPress={reconnect.keepWaiting} />
+            </>
           ) : null}
           <Button label="Continue without waiting" variant="secondary" onPress={onContinue} />
         </View>

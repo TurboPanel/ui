@@ -24,7 +24,7 @@ function NavItemFace({
   const hasBadge = item.badge != null && item.badge !== ''
   return (
     <View style={styles.face}>
-      <Icon size={15} color={active ? chrome.accent : colors.textMuted} />
+      <Icon size={15} color={active ? colors.link : colors.textMuted} />
       <Text
         style={[styles.label, active && styles.labelActive]}
         numberOfLines={1}
@@ -143,7 +143,7 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   labelActive: {
-    color: chrome.accent,
+    color: colors.link,
   },
   badge: {
     color: colors.textDim,
@@ -153,6 +153,6 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   badgeActive: {
-    color: chrome.accent,
+    color: colors.link,
   },
 })

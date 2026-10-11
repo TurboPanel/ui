@@ -2,13 +2,16 @@ import { describe, expect, it } from 'vitest'
 import {
   ALLOWED_PHP_EXTENSIONS,
   BASELINE_PHP_EXTENSIONS,
+  DEFAULT_DENO_SERIES,
   DEFAULT_NODE_SERIES,
   DEFAULT_PHP_SERIES,
   ENGINE_PHP_MODES,
   PHP_MODES,
   OPTIONAL_PHP_EXTENSIONS,
+  SUPPORTED_DENO_SERIES,
   SUPPORTED_NODE_SERIES,
   SUPPORTED_PHP_SERIES,
+  collectServiceKindFieldIssues,
   isHostNativeServiceKind,
   isNodeComposeService,
   isSiteComposeService,
@@ -597,5 +600,91 @@ describe('serviceKindFieldMessage', () => {
     expect(serviceKindFieldMessage('futureField', 'container')).toBeNull()
     expect(serviceKindFieldMessage('hosting', 'site')).toBeNull()
     expect(serviceKindFieldMessage('source', 'node')).toBeNull()
+  })
+})
+
+describe('x-turbopanel.runtime: deno', () => {
+  const sourceId = '11111111-2222-3333-4444-555555555555'
+
+  it('parses runtime and denoVersion, and drops what is not a value', () => {
+    const parsed = parseServiceTurbopanelExtension({
+      serviceKind: 'node',
+      runtime: 'deno',
+      denoVersion: '2.9.7',
+      source: { sourceId },
+    })
+    expect(parsed?.runtime).toBe('deno')
+    expect(parsed?.denoVersion).toBe('2.9.7')
+    const bad = parseServiceTurbopanelExtension({
+      serviceKind: 'node',
+      runtime: 'bun',
+      denoVersion: 'latest',
+      source: { sourceId },
+    })
+    expect(bad?.runtime).toBeUndefined()
+    expect(bad?.denoVersion).toBeUndefined()
+  })
+
+  it('keeps runtime and denoVersion through a patch, and drops them off a node service', () => {
+    const deno = patchServiceTurbopanelExtension(
+      {},
+      { serviceKind: 'node', runtime: 'deno', denoVersion: '2', source: { sourceId } }
+    )
+    expect(deno['x-turbopanel']).toEqual({
+      serviceKind: 'node',
+      runtime: 'deno',
+      denoVersion: '2',
+      source: { sourceId },
+    })
+    // An unrelated edit does not lose them.
+    const renamed = patchServiceTurbopanelExtension(deno, { description: 'api' })
+    expect((renamed['x-turbopanel'] as Record<string, unknown>).runtime).toBe('deno')
+    // Back to Node: the Deno hints go in the same write.
+    const node = patchServiceTurbopanelExtension(deno, {
+      runtime: undefined,
+      denoVersion: undefined,
+      framework: 'auto',
+    })
+    expect(node['x-turbopanel']).toEqual({
+      serviceKind: 'node',
+      framework: 'auto',
+      source: { sourceId },
+    })
+    // A container keeps neither.
+    const container = patchServiceTurbopanelExtension(deno, { serviceKind: 'container' })
+    expect(container['x-turbopanel']).toEqual({
+      serviceKind: 'container',
+      source: { sourceId },
+    })
+  })
+
+  it('refuses the Node hints on a Deno service and denoVersion without runtime: deno', () => {
+    const messages = (extension: Record<string, unknown>) =>
+      collectServiceKindFieldIssues(extension)
+        .map((issue) => issue.field)
+        .sort()
+    const base = { serviceKind: 'node', source: { sourceId } }
+    expect(messages({ ...base, runtime: 'deno', denoVersion: '2' })).toEqual([])
+    expect(messages({ ...base, runtime: 'deno', framework: 'auto' })).toEqual([])
+    expect(
+      messages({
+        ...base,
+        runtime: 'deno',
+        nodeVersion: '24',
+        packageManager: 'pnpm',
+        framework: 'next',
+      })
+    ).toEqual(['framework', 'nodeVersion', 'packageManager'])
+    expect(messages({ ...base, denoVersion: '2' })).toEqual(['denoVersion'])
+    expect(messages({ serviceKind: 'container', runtime: 'deno' })).toEqual(['runtime'])
+    // A partial layer may set one without restating the other.
+    expect(
+      collectServiceKindFieldIssues({ serviceKind: 'node', denoVersion: '2' }, { partialLayer: true })
+    ).toEqual([])
+  })
+
+  it('offers the one Deno series the host runs', () => {
+    expect(SUPPORTED_DENO_SERIES).toEqual(['2'])
+    expect(DEFAULT_DENO_SERIES).toBe('2')
   })
 })
