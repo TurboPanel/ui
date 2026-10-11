@@ -419,7 +419,7 @@ environment map layout (`map-layout.ts`), "Runs as" and Linux user rules (`linux
 - Configurations are flat maps (`svc:{serviceId}:{row}`, `var:{NAME}`); the compose merge itself stays on the server
   (config-view endpoint), so there is no third copy of the merge rules here.
 - "Stands alone" is never stored: it is derived from the saved environment compose (`services: !override`).
-- Linux user names follow the server limit (28 characters, 16 with the default name scheme), not just the design spec's 28.
+- Linux user names follow the server limit (28 characters, 16 with the default name scheme), not just the design spec's 28. The control plane answers 400 `username_reserved` when a site owner's Linux user would collide with a host system user or group; the add form maps that (and `username_too_long` / `username_in_use`) to plain words and does not keep a second copy of those names.
 - **Environment Configuration tab** (`configuration/index.tsx` -> `components/org/project/configuration/`): reads
   `GET /environments/:id/config-view` (`useEnvironmentConfigView`, key `environments.configView`) and shows
   Apps, Domains, Variables, Linux users and Data with a source tag on every row; `config-view-model.ts` turns the answer into rows.

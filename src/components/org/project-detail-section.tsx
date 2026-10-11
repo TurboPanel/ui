@@ -243,8 +243,9 @@ export function ProjectPrincipalsSection({
       nameScheme: nameScheme.requestScheme,
     })
     if (!result.ok) {
-      if (createPrincipal.actionError) {
-        setError(principalSchemeErrorMessage(createPrincipal.actionError))
+      const raw = result.error ?? createPrincipal.actionError
+      if (raw) {
+        setError(principalSchemeErrorMessage(raw))
       }
       return
     }
