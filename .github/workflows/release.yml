@@ -26,8 +26,8 @@
 # gh-canary.yml instead of a versioned release. A canary is refused when the
 # committed version (package.json, app.json, sonar-project.properties) is not
 # that base: right after each release the Release App opens a
-# "chore: start X.Y.Z" PR that bumps them (scripts/set-version.mjs), and
-# merging it lets canaries through again.
+# "chore: start X.Y.Z" PR that bumps them (scripts/set-version.mjs); it
+# merges itself once its checks pass, which lets canaries through again.
 #
 # Whatever the path, the app reports the plain base X.Y.Z: it is stamped into
 # this checkout's app.json (expo.version, what the about screen shows) and
@@ -108,8 +108,8 @@ jobs:
       - name: Refuse a canary whose committed version disagrees
         # The tags say what the version should be; package.json, app.json and
         # sonar-project.properties must say the same. Right after a release
-        # the Release App opens a "chore: start X.Y.Z" PR that bumps them, and
-        # canaries are refused until it merges. Canary only: rc and release
+        # the Release App opens a "chore: start X.Y.Z" PR that bumps them and
+        # merges itself once its checks pass; canaries are refused until then. Canary only: rc and release
         # reuse the canary's bytes.
         if: inputs.channel == 'canary' && inputs.ref != ''
         env:

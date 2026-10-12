@@ -13,8 +13,8 @@
 #               tags is its next patch: the Release App opens the PR
 #               "chore: start <next>" (TurboPanel/dev's Start Version PR) that
 #               moves package.json and the other committed version numbers on.
-#               Until the owner merges it, canaries are refused
-#               (scripts/set-version.mjs --check). Minors and majors are
+#               It merges itself once its checks pass (auto-merge); until
+#               then canaries are refused (scripts/set-version.mjs --check). Minors and majors are
 #               started with turbopaneld's Start Next Version, which opens the
 #               same PR.
 #
@@ -155,8 +155,8 @@ jobs:
 
   start-version-pr:
     # Right after the release: open the "chore: start <next patch>" PR that
-    # moves the committed version numbers on. Canaries are refused until the
-    # owner merges it. The PR and its commit are made with the Release App
+    # moves the committed version numbers on. It merges itself once its checks
+    # pass; until then canaries are refused. The PR and its commit are made with the Release App
     # token (GitHub signs the commit), never the GITHUB_TOKEN. This job's two
     # dev actions are pinned on their own, apart from the promote chain above.
     needs: [prepare, finalize]
@@ -203,6 +203,8 @@ jobs:
           version: ${{ steps.next.outputs.base }}
           github-token: ${{ steps.app.outputs.token }}
           reason: It was opened after v${{ needs.prepare.outputs.version }} was released.
+          # Merges itself once its checks pass; canaries wait until then.
+          auto-merge: "true"
 
       - name: Report the start PR
         env:

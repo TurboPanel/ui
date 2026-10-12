@@ -238,6 +238,7 @@ describe('versions from tags', () => {
     expect(job).toContain('version: ${{ steps.next.outputs.base }}')
     expect(job).toContain('github-token: ${{ steps.app.outputs.token }}')
     expect(job).toContain('reason: It was opened after v${{ needs.prepare.outputs.version }} was released.')
+    expect(job).toContain('auto-merge: "true"')
     // One dev commit for both of the job's actions.
     const pins = new Set([...job.matchAll(/TurboPanel\/dev\/\.github\/actions\/[\w-]+@([0-9a-f]{40})/g)].map((m) => m[1]))
     expect([...pins]).toHaveLength(1)
