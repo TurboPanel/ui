@@ -42,13 +42,16 @@ import {
   fetchAdminTiers,
   fetchAuthProviderSettings,
   fetchEmailSettings,
+  fetchForgeWebhookOrigins,
   fetchForges,
   fetchPublicUrls,
   fetchServerMetricsLiveSettings,
   fetchSignupSettings,
   type ForgeCreate,
+  type ForgeWebhookOrigins,
   type ForgeUpdate,
   isForbiddenError,
+  isHttpStatusError,
   patchAdminTier,
   saveAuthProviderSettings,
   saveEmailSettings,
@@ -820,6 +823,41 @@ export function useForges(
     queryKey: forgesKey(scope),
     queryFn: () => fetchForges(scope),
     enabled: options?.enabled ?? true,
+  })
+}
+
+/**
+ * Where a new app may deliver webhooks, for the GitHub App wizard and the
+ * app detail page.
+ *
+ * Reads `GET …/forges/webhook-origins` on the same surface as the collection,
+ * so an organization manager does not need the admin-only public URL list. A
+ * control plane that predates that route answers 404; the admin public URL
+ * list (403 → empty) stands in, as it did before. A 403 is answered with an
+ * empty list rather than signing the person out, like `usePublicUrlsOptional`.
+ */
+export function useForgeWebhookOrigins(
+  scope: 'admin' | 'org',
+  options?: Readonly<{ enabled?: boolean }>
+) {
+  return useQuery({
+    queryKey: [...forgesKey(scope), 'webhook-origins'] as const,
+    queryFn: async (): Promise<ForgeWebhookOrigins> => {
+      try {
+        return await fetchForgeWebhookOrigins(scope)
+      } catch (err) {
+        if (isForbiddenError(err)) return { origins: [], platformManaged: false }
+        if (!isHttpStatusError(err, 404)) throw err
+      }
+      try {
+        return { origins: (await fetchPublicUrls()).urls, platformManaged: false }
+      } catch (err) {
+        if (isForbiddenError(err)) return { origins: [], platformManaged: false }
+        throw err
+      }
+    },
+    enabled: options?.enabled ?? true,
+    retry: false,
   })
 }
 

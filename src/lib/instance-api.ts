@@ -5384,6 +5384,29 @@ export async function fetchForges(scope: ForgeScope): Promise<ForgeSummary[]> {
   return raw.apps
 }
 
+/**
+ * The addresses a new app may deliver webhooks to — exactly the set the
+ * manifest flow accepts as `webhookOrigin`, preferred first.
+ *
+ * `platformManaged` is true on the hosted control plane, whose address is set
+ * by the platform rather than under Networking: an empty list there is not
+ * something the person can fix, so the console must not tell them to.
+ */
+export type ForgeWebhookOrigins = {
+  origins: string[]
+  platformManaged: boolean
+}
+
+export async function fetchForgeWebhookOrigins(scope: ForgeScope): Promise<ForgeWebhookOrigins> {
+  const raw = await apiFetch<Partial<ForgeWebhookOrigins>>(forgesUrl(scope, '/webhook-origins'))
+  return {
+    origins: Array.isArray(raw.origins)
+      ? raw.origins.filter((origin): origin is string => typeof origin === 'string')
+      : [],
+    platformManaged: raw.platformManaged === true,
+  }
+}
+
 export async function createForge(scope: ForgeScope, input: ForgeCreate): Promise<ForgeSummary> {
   const raw = await apiFetch<{ app: ForgeSummary }>(forgesUrl(scope), {
     method: 'POST',

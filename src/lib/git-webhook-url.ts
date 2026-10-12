@@ -52,6 +52,62 @@ export const NO_URL_WEBHOOK_NOTE =
   '/environments/:id/deploy is not supported yet (the route answers 501 ' +
   'source_ref_unsupported).'
 
+/**
+ * The hosted control plane's version of {@link NO_URL_WEBHOOK_NOTE}. Its
+ * address is set by the platform, so there is no public URL to add under
+ * Networking, and saying so would send people looking for a setting they do
+ * not have.
+ */
+export const PLATFORM_NO_URL_WEBHOOK_NOTE =
+  'This control plane has not published a webhook address yet, so the Git ' +
+  'provider has nowhere to deliver. The address is set for you on this ' +
+  'service; contact support if this persists. Until ' +
+  'then, deploy the environment manually, which builds each service’s ' +
+  'declared branch.'
+
+/** What to say when there is no address to deliver webhooks to. */
+export type NoWebhookOriginCopy = {
+  /** Notice title. */
+  title: string
+  /** Notice body in the GitHub App wizard. */
+  wizardBody: string
+  /** The error shown if the wizard is submitted anyway. */
+  registerError: string
+  /** Notice body on an app's detail page. */
+  detailBody: string
+}
+
+/**
+ * Copy for an empty webhook-origin list. Self-hosted operators fix it under
+ * Networking; on the hosted control plane (`platformManaged`) the address is
+ * not theirs to set, so the copy never points them there.
+ */
+export function noWebhookOriginCopy(platformManaged: boolean): NoWebhookOriginCopy {
+  if (platformManaged) {
+    return {
+      title: 'No webhook address yet',
+      wizardBody:
+        'GitHub needs somewhere to deliver, and this control plane has not published an ' +
+        'address yet. It is set for you on this service; contact support if this persists.',
+      registerError:
+        'This control plane has not published a webhook address yet, so GitHub would have ' +
+        'nowhere to deliver to. Contact support if this persists.',
+      detailBody:
+        'This control plane has not published a webhook address yet. It is set for you on ' +
+        'this service; contact support if this persists.',
+    }
+  }
+  return {
+    title: 'No public URL configured',
+    wizardBody:
+      'GitHub needs somewhere to deliver. Add a public URL under Networking, then come back.',
+    registerError:
+      'This control plane has no public URL yet, so GitHub would have nowhere to deliver to. Set one under Networking first.',
+    detailBody:
+      'Set a public URL for this control plane before pointing a provider at this application.',
+  }
+}
+
 /** Each provider has its own ingress path; the reachability rule is shared. */
 const WEBHOOK_PATH_BY_PROVIDER: Record<GitWebhookProvider, string> = {
   github: GITHUB_WEBHOOK_PATH,

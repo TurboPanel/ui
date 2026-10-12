@@ -12,14 +12,19 @@ import {
   MonoText,
   SectionPanel,
 } from '@/components/ui'
-import { gitWebhookHint } from '@/lib/git-webhook-url'
+import {
+  gitWebhookHint,
+  NO_URL_WEBHOOK_NOTE,
+  noWebhookOriginCopy,
+  PLATFORM_NO_URL_WEBHOOK_NOTE,
+} from '@/lib/git-webhook-url'
 import {
   githubAppInstallUrl,
   gitlabOauthConnectUrl,
   type ForgeSummary,
   type GitConnectionRecord,
 } from '@/lib/instance-api'
-import { usePublicUrlsOptional, useForges, useSyncForge } from '@/lib/queries/admin'
+import { useForgeWebhookOrigins, useForges, useSyncForge } from '@/lib/queries/admin'
 import { useGitConnections } from '@/lib/queries/releases'
 import { colors, spacing } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
@@ -147,12 +152,18 @@ function RepositoryAccessPanel({
 }
 
 /** Where this application's deliveries arrive, and whether they can reach us. */
-function WebhookPanel({ app }: Readonly<{ app: ForgeSummary }>) {
-  const publicUrls = usePublicUrlsOptional()
-  const unreachable =
-    publicUrls.data && app.webhookUrl
-      ? gitWebhookHint(publicUrls.data.urls, app.provider, app.webhookRef, app.baseUrl).note
+function WebhookPanel({ app, scope }: Readonly<{ app: ForgeSummary; scope: 'admin' | 'org' }>) {
+  const webhookOrigins = useForgeWebhookOrigins(scope)
+  const platformManaged = webhookOrigins.data?.platformManaged === true
+  const empty = noWebhookOriginCopy(platformManaged)
+  const hint =
+    webhookOrigins.data && app.webhookUrl
+      ? gitWebhookHint(webhookOrigins.data.origins, app.provider, app.webhookRef, app.baseUrl).note
       : null
+  // The generic note sends people to Networking, which the hosted control
+  // plane does not have for this.
+  const unreachable =
+    platformManaged && hint === NO_URL_WEBHOOK_NOTE ? PLATFORM_NO_URL_WEBHOOK_NOTE : hint
 
   return (
     <SectionPanel title="Webhook" hint="Where this application's deliveries arrive">
@@ -164,11 +175,7 @@ function WebhookPanel({ app }: Readonly<{ app: ForgeSummary }>) {
           <CopyButton value={app.webhookUrl} />
         </View>
       ) : (
-        <InlineNotice
-          tone="warning"
-          title="No public URL configured"
-          body="Set a public URL for this control plane before pointing a provider at this application."
-        />
+        <InlineNotice tone="warning" title={empty.title} body={empty.detailBody} />
       )}
       {unreachable ? (
         <InlineNotice
@@ -283,7 +290,7 @@ export function ForgeDetailSection({
         />
       ) : null}
 
-      <WebhookPanel app={app} />
+      <WebhookPanel app={app} scope={scope} />
 
       {app.provider === 'github' && !app.readOnly ? (
         <ProviderRecordPanel app={app} scope={scope} onError={setError} onSynced={setSynced} />

@@ -15,7 +15,7 @@ import {
   type WizardStepItem,
   WizardSteps,
 } from '@/components/ui'
-import { gitWebhookHint } from '@/lib/git-webhook-url'
+import { gitWebhookHint, noWebhookOriginCopy } from '@/lib/git-webhook-url'
 import {
   githubAppNameError,
   suggestGithubAppName,
@@ -26,7 +26,7 @@ import {
   submitGithubAppManifest,
 } from '@/lib/github-manifest-submit'
 import type { GithubManifestStartInput } from '@/lib/instance-api'
-import { usePublicUrlsOptional, useStartGithubAppManifest } from '@/lib/queries/admin'
+import { useForgeWebhookOrigins, useStartGithubAppManifest } from '@/lib/queries/admin'
 import { colors, spacing } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
 
@@ -81,10 +81,12 @@ function identityError(identity: Identity): string | null {
 }
 
 /** What still stops registration; `null` once GitHub can be handed the manifest. */
-function registerError(identity: Identity, resolvedOrigin: string): string | null {
-  if (!resolvedOrigin) {
-    return 'This control plane has no public URL yet, so GitHub would have nowhere to deliver to. Set one under Networking first.'
-  }
+function registerError(
+  identity: Identity,
+  resolvedOrigin: string,
+  platformManaged: boolean,
+): string | null {
+  if (!resolvedOrigin) return noWebhookOriginCopy(platformManaged).registerError
   const port = Number(identity.customGitPort)
   if (identity.selfHosted && (!Number.isInteger(port) || port < 1 || port > 65535)) {
     return 'Custom Git port must be a number between 1 and 65535.'
@@ -272,6 +274,7 @@ function IdentityStep({
 /** Step 2: where deliveries land, and the one permission that is not read-only. */
 function WebhookStep({
   origins,
+  platformManaged,
   resolvedOrigin,
   previewUrl,
   onOriginChange,
@@ -282,6 +285,7 @@ function WebhookStep({
   onRegister,
 }: Readonly<{
   origins: readonly string[]
+  platformManaged: boolean
   resolvedOrigin: string
   previewUrl: string | null
   onOriginChange: (origin: string) => void
@@ -291,6 +295,7 @@ function WebhookStep({
   onBack: () => void
   onRegister: () => void
 }>) {
+  const empty = noWebhookOriginCopy(platformManaged)
   return (
     <>
       <FormField
@@ -309,11 +314,7 @@ function WebhookStep({
             />
           )
           : (
-            <InlineNotice
-              tone="warning"
-              title="No public URL configured"
-              body="GitHub needs somewhere to deliver. Add a public URL under Networking, then come back."
-            />
+            <InlineNotice tone="warning" title={empty.title} body={empty.wizardBody} />
           )}
       </FormField>
 
@@ -387,7 +388,7 @@ export function GithubAppWizard({
   onCancel: () => void
 }>) {
   const start = useStartGithubAppManifest(scope)
-  const publicUrls = usePublicUrlsOptional()
+  const webhookOrigins = useForgeWebhookOrigins(scope)
 
   const [step, setStep] = useState<Step>('identity')
   const [identity, setIdentity] = useState<Identity>(blankIdentity)
@@ -395,7 +396,8 @@ export function GithubAppWizard({
   const [pullRequests, setPullRequests] = useState<'read' | 'write'>('read')
   const [error, setError] = useState<string | null>(null)
 
-  const origins = useMemo(() => publicUrls.data?.urls ?? [], [publicUrls.data])
+  const origins = useMemo(() => webhookOrigins.data?.origins ?? [], [webhookOrigins.data])
+  const platformManaged = webhookOrigins.data?.platformManaged === true
   const resolvedOrigin = webhookOrigin || origins[0] || ''
 
   // The path shape follows the origin: a hosted App resolves from the App-id
@@ -419,7 +421,7 @@ export function GithubAppWizard({
   }
 
   const register = () => {
-    const problem = registerError(identity, resolvedOrigin)
+    const problem = registerError(identity, resolvedOrigin, platformManaged)
     setError(problem)
     if (problem) return
 
@@ -451,6 +453,7 @@ export function GithubAppWizard({
         : (
           <WebhookStep
             origins={origins}
+            platformManaged={platformManaged}
             resolvedOrigin={resolvedOrigin}
             previewUrl={previewUrl}
             onOriginChange={setWebhookOrigin}
