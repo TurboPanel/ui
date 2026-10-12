@@ -37,7 +37,7 @@ const PLAIN_VERSION = /^\d+\.\d+\.\d+$/
 export const VERSION_FIELDS = [
   { file: 'package.json', pattern: /^( {2}"version": ")([^"]*)(")/m, jsonPath: ['version'] },
   { file: 'app.json', pattern: /^( {4}"version": ")([^"]*)(")/m, jsonPath: ['expo', 'version'] },
-  { file: 'sonar-project.properties', pattern: /^(sonar\.projectVersion=)([^\r\n]*?)([ \t]*)$/m },
+  { file: 'sonar-project.properties', pattern: /^(sonar\.projectVersion=)(\S*)([ \t]*)$/m },
 ]
 
 /** @param {string} version */
@@ -62,7 +62,7 @@ function withValueAt(doc, keys, value) {
   const copy = structuredClone(doc)
   let node = /** @type {Record<string, unknown>} */ (copy)
   for (const key of keys.slice(0, -1)) node = /** @type {Record<string, unknown>} */ (node[key])
-  node[keys[keys.length - 1]] = value
+  node[keys.at(-1)] = value
   return copy
 }
 
