@@ -147,9 +147,14 @@ describe('ci-ok', () => {
   })
 })
 
-// Versions come from git tags (Road to 0.2.x, versioning Phase 3): no "Start
-// x.y.z" PR, no minor gate, no version read from package.json by a release
-// step; minors and majors are started by turbopaneld's Start Next Version.
+// The tags work out the version (Road to 0.2.x, versioning Phase 3); the
+// committed files must agree, and a canary is refused until they do. The bump
+// is the "chore: start X.Y.Z" PR the Release App opens after a release (or
+// Start Next Version opens for a minor or major), made with
+// scripts/set-version.mjs. No minor gate, and no release step reads a version
+// out of package.json.
+const START_JOB = '\n  start-version-pr:\n'
+
 describe('versions from tags', () => {
   const GONE = [
     /gh-next-version/,
@@ -159,7 +164,7 @@ describe('versions from tags', () => {
     /--title "Start /,
   ]
 
-  it.each(files)('%s opens no Start PR, has no minor gate and reads no version file', (f) => {
+  it.each(files)('%s has none of the old Start PR or minor gate steps and reads no version out of package.json', (f) => {
     for (const gone of GONE) expect(text(f)).not.toMatch(gone)
     expect(text(f)).not.toMatch(/contents\/package\.json|version-file:|GITHUB_RUN_NUMBER/)
   })
@@ -178,6 +183,20 @@ describe('versions from tags', () => {
     expect(release).not.toContain('Require the tag to match package.json')
   })
 
+  it('refuses a canary whose committed version is not the base from the tags', () => {
+    const release = text('release.yml')
+    const canary = release.indexOf('mode: canary')
+    const check = release.indexOf('- name: Refuse a canary whose committed version disagrees')
+    const resolve = release.indexOf('- name: Resolve version, channel and commit')
+    expect(canary).toBeGreaterThan(0)
+    expect(check).toBeGreaterThan(canary)
+    expect(resolve).toBeGreaterThan(check)
+    const step = release.slice(check, resolve)
+    expect(step).toContain("if: inputs.channel == 'canary' && inputs.ref != ''")
+    expect(step).toContain('CANARY_BASE: ${{ steps.canary.outputs.base }}')
+    expect(step).toContain('run: node scripts/set-version.mjs --check "$CANARY_BASE"')
+  })
+
   it('hands gh-promote the canary found by commit, not a run number', () => {
     expect(text('publish-rc.yml')).toContain('source: ${{ needs.resolve.outputs.canary }}')
   })
@@ -191,15 +210,39 @@ describe('versions from tags', () => {
       'promote-ok.yml',
       'promote-ok-recheck.yml',
     ]) {
-      for (const m of text(f).matchAll(
+      // The start-version-pr job's dev actions are pinned on their own.
+      const promote = text(f).split(START_JOB)[0]
+      for (const m of promote.matchAll(
         /TurboPanel\/dev\/\.github\/(?:workflows\/[\w.-]+|actions\/version)@([0-9a-f]{40})/g
       )) {
         pins.add(m[1])
       }
-      for (const m of text(f).matchAll(/^ +(?:dev-)?ref: ([0-9a-f]{40})(?: #.*)?$/gm))
-        pins.add(m[1])
+      for (const m of promote.matchAll(/^ +(?:dev-)?ref: ([0-9a-f]{40})(?: #.*)?$/gm)) pins.add(m[1])
     }
     expect([...pins]).toHaveLength(1)
+  })
+
+  it('opens the "chore: start" PR for the next patch after the release is finalized', () => {
+    const release = text('publish-release.yml')
+    const job = release.split(START_JOB)[1] ?? ''
+    expect(job).toMatch(/^ {4}needs: \[prepare, finalize\]$/m)
+    expect(job).toMatch(/^ {6}contents: read/m)
+    expect(job).toContain('uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0')
+    expect(job).toContain('repositories: ${{ github.event.repository.name }}')
+    expect(job).toMatch(
+      /uses: TurboPanel\/dev\/\.github\/actions\/version@[0-9a-f]{40} # dev#\d+\n {8}with:\n {10}mode: base\n/
+    )
+    expect(job).toContain('NEWEST: ${{ steps.next.outputs.release }}')
+    expect(job).toContain('RELEASED: ${{ needs.prepare.outputs.version }}')
+    expect(job).toMatch(/uses: TurboPanel\/dev\/\.github\/actions\/start-version-pr@[0-9a-f]{40} # dev#\d+\n/)
+    expect(job).toContain('version: ${{ steps.next.outputs.base }}')
+    expect(job).toContain('github-token: ${{ steps.app.outputs.token }}')
+    expect(job).toContain('reason: It was opened after v${{ needs.prepare.outputs.version }} was released.')
+    expect(job).toContain('auto-merge: "true"')
+    // One dev commit for both of the job's actions.
+    const pins = new Set([...job.matchAll(/TurboPanel\/dev\/\.github\/actions\/[\w-]+@([0-9a-f]{40})/g)].map((m) => m[1]))
+    expect([...pins]).toHaveLength(1)
+    expect(release).not.toContain('Nothing opens a "Start <next>" PR')
   })
 })
 
