@@ -23,12 +23,17 @@
 # base X.Y.Z is the newest release's next patch, or a started / in-flight
 # version, plus `-canary.<N>` with N restarting at 1 for each base. The package
 # goes to the rolling `canary` pre-release through TurboPanel/dev's
-# gh-canary.yml instead of a versioned release.
+# gh-canary.yml instead of a versioned release. A canary is refused when the
+# committed version (package.json, app.json, sonar-project.properties) is not
+# that base: right after each release the Release App opens a
+# "chore: start X.Y.Z" PR that bumps them (scripts/set-version.mjs); it
+# merges itself once its checks pass, which lets canaries through again.
 #
 # Whatever the path, the app reports the plain base X.Y.Z: it is stamped into
 # this checkout's app.json (expo.version, what the about screen shows) and
-# package.json before the export, so their committed number is only what a
-# local build reports.
+# package.json before the export. On a canary that changes nothing (the canary
+# check has already matched them); a hand-pushed tag or a dispatch still gets its
+# own number.
 
 name: Release
 
@@ -100,6 +105,17 @@ jobs:
         with:
           mode: canary
 
+      - name: Refuse a canary whose committed version disagrees
+        # The tags say what the version should be; package.json, app.json and
+        # sonar-project.properties must say the same. Right after a release
+        # the Release App opens a "chore: start X.Y.Z" PR that bumps them and
+        # merges itself once its checks pass; canaries are refused until then. Canary only: rc and release
+        # reuse the canary's bytes.
+        if: inputs.channel == 'canary' && inputs.ref != ''
+        env:
+          CANARY_BASE: ${{ steps.canary.outputs.base }}
+        run: node scripts/set-version.mjs --check "$CANARY_BASE"
+
       - name: Resolve version, channel and commit
         id: resolve
         env:
@@ -133,7 +149,7 @@ jobs:
             echo "channel=${INPUT_CHANNEL}" >> "$GITHUB_OUTPUT"
           else
             # A tag pushed by hand: its number is the version (stamped in the
-            # build, not checked against package.json — versions come from tags).
+            # build; only the canary path checks it against package.json).
             _ref="$REF_NAME"
             echo "version=${_ref#v}" >> "$GITHUB_OUTPUT"
             echo "base=${_ref#v}" >> "$GITHUB_OUTPUT"
