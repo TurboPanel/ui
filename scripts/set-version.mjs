@@ -18,11 +18,11 @@
  * Only the one version value in each file is rewritten (textually), so the
  * rest of the file keeps its formatting.
  */
-import { readFileSync, writeFileSync } from 'node:fs'
+import { readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { fileURLToPath } from 'node:url'
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const ROOT = path.resolve(path.dirname(realScriptPath(fileURLToPath(import.meta.url))), '..')
 
 const PLAIN_VERSION = /^\d+\.\d+\.\d+$/
 
@@ -90,11 +90,16 @@ export function readField(field, text) {
  */
 export function rewriteField(field, text, version) {
   readField(field, text)
-  const next = text.replace(field.pattern, (_all, before, _value, after) => `${before}${version}${after}`)
+  const next = text.replace(
+    field.pattern,
+    (_all, before, _value, after) => `${before}${version}${after}`
+  )
   if (field.jsonPath) {
     const expected = JSON.stringify(withValueAt(JSON.parse(text), field.jsonPath, version))
     if (JSON.stringify(JSON.parse(next)) !== expected) {
-      throw new Error(`${field.file}: rewriting the version would change more than ${field.jsonPath.join('.')}`)
+      throw new Error(
+        `${field.file}: rewriting the version would change more than ${field.jsonPath.join('.')}`
+      )
     }
   }
   return next
@@ -176,7 +181,16 @@ export function main(args, io = {}) {
 }
 
 export function isExecutedAsCli(metaUrl = import.meta.url, argv1 = process.argv[1]) {
-  return Boolean(argv1) && metaUrl === pathToFileURL(path.resolve(argv1)).href
+  return Boolean(argv1) && realScriptPath(fileURLToPath(metaUrl)) === realScriptPath(argv1)
+}
+
+/** A path with symlinks resolved (Node resolves import.meta.url, Deno does not); a missing path stays as given. */
+function realScriptPath(p) {
+  try {
+    return realpathSync(path.resolve(p))
+  } catch {
+    return path.resolve(p)
+  }
 }
 
 /**
