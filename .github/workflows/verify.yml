@@ -6,8 +6,8 @@ on:
       - trunk
   pull_request:
     types: [opened, synchronize, reopened]
-  # A manual run of trunk tests the trunk commit itself, like a push: turbopaneld's
-  # "Start Next Version" uses it so a started minor gets its canary at once
+  # A manual run of trunk tests the trunk commit itself, like a push, so it
+  # gives a canary at once
   # (canary.yml accepts it; a run of any other branch never publishes).
   workflow_dispatch:
 
