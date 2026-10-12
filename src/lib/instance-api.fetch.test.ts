@@ -28,6 +28,7 @@ import {
   fetchDeployPreview,
   fetchEnvironment,
   fetchEnvironmentConfigView,
+  fetchForgeWebhookOrigins,
   fetchForges,
   fetchLicenses,
   fetchOrgHostDefaults,
@@ -894,6 +895,35 @@ describe('instance-api fetch wrappers', () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ apps: [] }))
     await expect(fetchForges('org')).resolves.toEqual([])
     expect(String(fetchMock.mock.calls[1]?.[0])).toContain('/api/client/v1/forges')
+  })
+
+  it('reads webhook origins from the scope-appropriate collection', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ origins: ['https://panel.example.com'], platformManaged: true }),
+    )
+    await expect(fetchForgeWebhookOrigins('org')).resolves.toEqual({
+      origins: ['https://panel.example.com'],
+      platformManaged: true,
+    })
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
+      '/api/client/v1/forges/webhook-origins',
+    )
+
+    // A malformed answer still reads as "nothing published, self-hosted".
+    fetchMock.mockResolvedValueOnce(jsonResponse({ origins: [42, 'https://a.example.com'] }))
+    await expect(fetchForgeWebhookOrigins('admin')).resolves.toEqual({
+      origins: ['https://a.example.com'],
+      platformManaged: false,
+    })
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain(
+      '/api/admin/v1/forges/webhook-origins',
+    )
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({}))
+    await expect(fetchForgeWebhookOrigins('org')).resolves.toEqual({
+      origins: [],
+      platformManaged: false,
+    })
   })
 
   it('POSTs a create and PATCHes only the supplied patch keys', async () => {
