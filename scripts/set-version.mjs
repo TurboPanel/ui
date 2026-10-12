@@ -50,12 +50,7 @@ export function isPlainVersion(version) {
  * @param {string[]} keys
  */
 function valueAt(doc, keys) {
-  let node = doc
-  for (const key of keys) {
-    if (node === null || typeof node !== 'object') return undefined
-    node = /** @type {Record<string, unknown>} */ (node)[key]
-  }
-  return node
+  return keys.reduce((node, key) => /** @type {any} */ (node)?.[key], doc)
 }
 
 /**
@@ -67,7 +62,7 @@ function withValueAt(doc, keys, value) {
   const copy = structuredClone(doc)
   let node = /** @type {Record<string, unknown>} */ (copy)
   for (const key of keys.slice(0, -1)) node = /** @type {Record<string, unknown>} */ (node[key])
-  node[keys.at(-1) ?? ''] = value
+  node[keys[keys.length - 1]] = value
   return copy
 }
 
@@ -175,7 +170,7 @@ export function main(args, io = {}) {
     log(changed.length > 0 ? `set ${version} in ${changed.join(', ')}` : `already at ${version}`)
     return 0
   } catch (err) {
-    error(err instanceof Error ? err.message : String(err))
+    error(/** @type {Error} */ (err).message)
     return 1
   }
 }
@@ -184,6 +179,12 @@ export function isExecutedAsCli(metaUrl = import.meta.url, argv1 = process.argv[
   return Boolean(argv1) && metaUrl === pathToFileURL(path.resolve(argv1)).href
 }
 
-if (isExecutedAsCli()) {
-  process.exitCode = main(process.argv.slice(2))
+/**
+ * @param {() => boolean} [isCli]
+ * @param {string[]} [args]
+ */
+export function startCli(isCli = isExecutedAsCli, args = process.argv.slice(2)) {
+  if (isCli()) process.exitCode = main(args)
 }
+
+startCli()

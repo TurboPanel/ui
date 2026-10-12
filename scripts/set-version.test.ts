@@ -3,8 +3,17 @@ import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from '
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { VERSION_FIELDS, checkVersion, isExecutedAsCli, main, readField, setVersion } from './set-version.mjs'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  VERSION_FIELDS,
+  checkVersion,
+  isExecutedAsCli,
+  main,
+  readField,
+  rewriteField,
+  setVersion,
+  startCli,
+} from './set-version.mjs'
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const SCRIPT = path.join(ROOT, 'scripts', 'set-version.mjs')
@@ -79,6 +88,12 @@ describe('set-version', () => {
     expect(read('package.json')).toBe(pkg)
   })
 
+  it('refuses a rewrite that would change a different field holding the same number', () => {
+    const field = { file: 'x.json', pattern: /^( {2}"version": ")([^"]*)(")/m, jsonPath: ['version'] }
+    const text = '{\n"nested": {\n  "version": "1.0.0"\n},\n"version": "1.0.0"\n}\n'
+    expect(() => rewriteField(field, text, '2.0.0')).toThrow(/would change more than version/)
+  })
+
   it('refuses a file with no version field', () => {
     writeFileSync(path.join(dir, 'sonar-project.properties'), 'sonar.projectKey=x\n')
     expect(() => checkVersion('9.8.7', dir)).toThrow(/no version field/)
@@ -97,6 +112,25 @@ describe('set-version', () => {
     expect(out).toContain('already at 9.8.7')
     rmSync(path.join(dir, 'app.json'))
     expect(main(['--check', '9.8.7'], io)).toBe(1)
+  })
+
+  it('defaults to the real tree and the console', () => {
+    expect(checkVersion(committedVersion())).toEqual([])
+    expect(setVersion(committedVersion())).toEqual([])
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      expect(main(['--check', committedVersion()])).toBe(0)
+      expect(log).toHaveBeenCalledWith(`every version field says ${committedVersion()}`)
+      startCli(() => true, ['nope'])
+      expect(process.exitCode).toBe(2)
+      expect(error).toHaveBeenCalledWith('usage: node scripts/set-version.mjs [--check] X.Y.Z')
+      startCli(() => false, ['nope'])
+    } finally {
+      process.exitCode = undefined
+      log.mockRestore()
+      error.mockRestore()
+    }
   })
 
   it('runs as a CLI against the real tree', () => {
