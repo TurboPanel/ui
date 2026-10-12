@@ -147,9 +147,12 @@ describe('ci-ok', () => {
   })
 })
 
-// Versions come from git tags (Road to 0.2.x, versioning Phase 3): no "Start
-// x.y.z" PR, no minor gate, no version read from package.json by a release
-// step; minors and majors are started by turbopaneld's Start Next Version.
+// The tags work out the version (Road to 0.2.x, versioning Phase 3); the
+// committed files must agree, and a canary is refused until they do. The bump
+// is the "chore: start X.Y.Z" PR the Release App opens after a release (or
+// Start Next Version opens for a minor or major), made with
+// scripts/set-version.mjs. No minor gate, and no release step reads a version
+// out of package.json.
 describe('versions from tags', () => {
   const GONE = [
     /gh-next-version/,
@@ -159,7 +162,7 @@ describe('versions from tags', () => {
     /--title "Start /,
   ]
 
-  it.each(files)('%s opens no Start PR, has no minor gate and reads no version file', (f) => {
+  it.each(files)('%s has none of the old Start PR or minor gate steps and reads no version out of package.json', (f) => {
     for (const gone of GONE) expect(text(f)).not.toMatch(gone)
     expect(text(f)).not.toMatch(/contents\/package\.json|version-file:|GITHUB_RUN_NUMBER/)
   })
@@ -176,6 +179,20 @@ describe('versions from tags', () => {
     expect(release).toContain('BASE_VERSION: ${{ needs.prepare.outputs.base }}')
     expect(release).toContain('app.expo.version = version;')
     expect(release).not.toContain('Require the tag to match package.json')
+  })
+
+  it('refuses a canary whose committed version is not the base from the tags', () => {
+    const release = text('release.yml')
+    const canary = release.indexOf('mode: canary')
+    const check = release.indexOf('- name: Refuse a canary whose committed version disagrees')
+    const resolve = release.indexOf('- name: Resolve version, channel and commit')
+    expect(canary).toBeGreaterThan(0)
+    expect(check).toBeGreaterThan(canary)
+    expect(resolve).toBeGreaterThan(check)
+    const step = release.slice(check, resolve)
+    expect(step).toContain("if: inputs.channel == 'canary' && inputs.ref != ''")
+    expect(step).toContain('CANARY_BASE: ${{ steps.canary.outputs.base }}')
+    expect(step).toContain('run: node scripts/set-version.mjs --check "$CANARY_BASE"')
   })
 
   it('hands gh-promote the canary found by commit, not a run number', () => {
