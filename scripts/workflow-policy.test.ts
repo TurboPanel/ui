@@ -153,6 +153,8 @@ describe('ci-ok', () => {
 // Start Next Version opens for a minor or major), made with
 // scripts/set-version.mjs. No minor gate, and no release step reads a version
 // out of package.json.
+const START_JOB = '\n  start-version-pr:\n'
+
 describe('versions from tags', () => {
   const GONE = [
     /gh-next-version/,
@@ -208,15 +210,38 @@ describe('versions from tags', () => {
       'promote-ok.yml',
       'promote-ok-recheck.yml',
     ]) {
-      for (const m of text(f).matchAll(
+      // The start-version-pr job's dev actions are pinned on their own.
+      const promote = text(f).split(START_JOB)[0]
+      for (const m of promote.matchAll(
         /TurboPanel\/dev\/\.github\/(?:workflows\/[\w.-]+|actions\/version)@([0-9a-f]{40})/g
       )) {
         pins.add(m[1])
       }
-      for (const m of text(f).matchAll(/^ +(?:dev-)?ref: ([0-9a-f]{40})(?: #.*)?$/gm))
-        pins.add(m[1])
+      for (const m of promote.matchAll(/^ +(?:dev-)?ref: ([0-9a-f]{40})(?: #.*)?$/gm)) pins.add(m[1])
     }
     expect([...pins]).toHaveLength(1)
+  })
+
+  it('opens the "chore: start" PR for the next patch after the release is finalized', () => {
+    const release = text('publish-release.yml')
+    const job = release.split(START_JOB)[1] ?? ''
+    expect(job).toMatch(/^ {4}needs: \[prepare, finalize\]$/m)
+    expect(job).toMatch(/^ {6}contents: read/m)
+    expect(job).toContain('uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0')
+    expect(job).toContain('repositories: ${{ github.event.repository.name }}')
+    expect(job).toMatch(
+      /uses: TurboPanel\/dev\/\.github\/actions\/version@[0-9a-f]{40} # dev#\d+\n {8}with:\n {10}mode: base\n/
+    )
+    expect(job).toContain('NEWEST: ${{ steps.next.outputs.release }}')
+    expect(job).toContain('RELEASED: ${{ needs.prepare.outputs.version }}')
+    expect(job).toMatch(/uses: TurboPanel\/dev\/\.github\/actions\/start-version-pr@[0-9a-f]{40} # dev#\d+\n/)
+    expect(job).toContain('version: ${{ steps.next.outputs.base }}')
+    expect(job).toContain('github-token: ${{ steps.app.outputs.token }}')
+    expect(job).toContain('reason: It was opened after v${{ needs.prepare.outputs.version }} was released.')
+    // One dev commit for both of the job's actions.
+    const pins = new Set([...job.matchAll(/TurboPanel\/dev\/\.github\/actions\/[\w-]+@([0-9a-f]{40})/g)].map((m) => m[1]))
+    expect([...pins]).toHaveLength(1)
+    expect(release).not.toContain('Nothing opens a "Start <next>" PR')
   })
 })
 

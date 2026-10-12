@@ -12,7 +12,8 @@ function read(file: string): string {
 /** Every TurboPanel/dev reusable workflow and the signer in the three promotion workflows. */
 function promotionPins(): { dev: string[]; signer: string[] } {
   const files = ['promote.yml', 'publish-rc.yml', 'publish-release.yml']
-  const text = files.map((file) => read(`.github/workflows/${file}`)).join('\n')
+  // publish-release.yml's start-version-pr job pins its dev actions on its own.
+  const text = files.map((file) => read(`.github/workflows/${file}`).split('\n  start-version-pr:\n')[0]).join('\n')
   const dev = [
     ...text.matchAll(
       /TurboPanel\/dev\/\.github\/(?:workflows|actions)\/[\w-]+(?:\.yml)?@([0-9a-f]{40})/g
