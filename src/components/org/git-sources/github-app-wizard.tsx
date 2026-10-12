@@ -8,6 +8,7 @@ import {
   Checkbox,
   FormField,
   InlineNotice,
+  LoadingState,
   MonoText,
   SectionPanel,
   SegmentedControl,
@@ -15,7 +16,14 @@ import {
   type WizardStepItem,
   WizardSteps,
 } from '@/components/ui'
-import { gitWebhookHint } from '@/lib/git-webhook-url'
+import {
+  gitWebhookHint,
+  noWebhookOriginCopy,
+  WEBHOOK_ORIGINS_LOAD_ERROR,
+  WEBHOOK_ORIGINS_LOADING,
+  type WebhookOriginsState,
+  webhookOriginsState,
+} from '@/lib/git-webhook-url'
 import {
   githubAppNameError,
   suggestGithubAppName,
@@ -26,7 +34,7 @@ import {
   submitGithubAppManifest,
 } from '@/lib/github-manifest-submit'
 import type { GithubManifestStartInput } from '@/lib/instance-api'
-import { usePublicUrlsOptional, useStartGithubAppManifest } from '@/lib/queries/admin'
+import { useForgeWebhookOrigins, useStartGithubAppManifest } from '@/lib/queries/admin'
 import { colors, spacing } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
 
@@ -81,10 +89,14 @@ function identityError(identity: Identity): string | null {
 }
 
 /** What still stops registration; `null` once GitHub can be handed the manifest. */
-function registerError(identity: Identity, resolvedOrigin: string): string | null {
-  if (!resolvedOrigin) {
-    return 'This control plane has no public URL yet, so GitHub would have nowhere to deliver to. Set one under Networking first.'
-  }
+function registerError(
+  identity: Identity,
+  resolvedOrigin: string,
+  originsState: WebhookOriginsState,
+): string | null {
+  if (originsState.kind === 'loading') return 'Webhook addresses are still loading.'
+  if (originsState.kind === 'error') return WEBHOOK_ORIGINS_LOAD_ERROR.body
+  if (!resolvedOrigin) return noWebhookOriginCopy(originsState.platformManaged).registerError
   const port = Number(identity.customGitPort)
   if (identity.selfHosted && (!Number.isInteger(port) || port < 1 || port > 65535)) {
     return 'Custom Git port must be a number between 1 and 65535.'
@@ -269,9 +281,51 @@ function IdentityStep({
   )
 }
 
+/**
+ * The endpoint picker, once the addresses are known. Loading and a failed read
+ * are their own states: neither is an empty list, and the empty notice would
+ * tell a configured operator they have no public URL.
+ */
+function EndpointField({
+  originsState,
+  resolvedOrigin,
+  onOriginChange,
+  busy,
+}: Readonly<{
+  originsState: WebhookOriginsState
+  resolvedOrigin: string
+  onOriginChange: (origin: string) => void
+  busy: boolean
+}>) {
+  if (originsState.kind === 'loading') return <LoadingState label={WEBHOOK_ORIGINS_LOADING} />
+  if (originsState.kind === 'error') {
+    return (
+      <InlineNotice
+        tone="warning"
+        title={WEBHOOK_ORIGINS_LOAD_ERROR.title}
+        body={WEBHOOK_ORIGINS_LOAD_ERROR.body}
+      />
+    )
+  }
+  if (originsState.origins.length === 0) {
+    const empty = noWebhookOriginCopy(originsState.platformManaged)
+    return <InlineNotice tone="warning" title={empty.title} body={empty.wizardBody} />
+  }
+  return (
+    <FormSelect
+      value={resolvedOrigin}
+      options={originsState.origins.map((origin) => ({ value: origin, label: origin }))}
+      placeholder="Select an endpoint…"
+      onChange={onOriginChange}
+      disabled={busy}
+      accessibilityLabel="Webhook endpoint"
+    />
+  )
+}
+
 /** Step 2: where deliveries land, and the one permission that is not read-only. */
-function WebhookStep({
-  origins,
+export function WebhookStep({
+  originsState,
   resolvedOrigin,
   previewUrl,
   onOriginChange,
@@ -281,7 +335,7 @@ function WebhookStep({
   onBack,
   onRegister,
 }: Readonly<{
-  origins: readonly string[]
+  originsState: WebhookOriginsState
   resolvedOrigin: string
   previewUrl: string | null
   onOriginChange: (origin: string) => void
@@ -291,30 +345,19 @@ function WebhookStep({
   onBack: () => void
   onRegister: () => void
 }>) {
+  const ready = originsState.kind === 'ready' && originsState.origins.length > 0
   return (
     <>
       <FormField
         label="Webhook endpoint"
         hint="GitHub stores one address at creation and never revisits it, so pick the URL this control plane will still answer on."
       >
-        {origins.length > 0
-          ? (
-            <FormSelect
-              value={resolvedOrigin}
-              options={origins.map((origin) => ({ value: origin, label: origin }))}
-              placeholder="Select an endpoint…"
-              onChange={onOriginChange}
-              disabled={busy}
-              accessibilityLabel="Webhook endpoint"
-            />
-          )
-          : (
-            <InlineNotice
-              tone="warning"
-              title="No public URL configured"
-              body="GitHub needs somewhere to deliver. Add a public URL under Networking, then come back."
-            />
-          )}
+        <EndpointField
+          originsState={originsState}
+          resolvedOrigin={resolvedOrigin}
+          onOriginChange={onOriginChange}
+          busy={busy}
+        />
       </FormField>
 
       {previewUrl
@@ -354,7 +397,7 @@ function WebhookStep({
           busyLabel="Preparing…"
           variant="primary"
           busy={busy}
-          disabled={origins.length === 0}
+          disabled={!ready}
           onPress={onRegister}
         />
       </ButtonRow>
@@ -387,7 +430,7 @@ export function GithubAppWizard({
   onCancel: () => void
 }>) {
   const start = useStartGithubAppManifest(scope)
-  const publicUrls = usePublicUrlsOptional()
+  const webhookOrigins = useForgeWebhookOrigins(scope)
 
   const [step, setStep] = useState<Step>('identity')
   const [identity, setIdentity] = useState<Identity>(blankIdentity)
@@ -395,8 +438,9 @@ export function GithubAppWizard({
   const [pullRequests, setPullRequests] = useState<'read' | 'write'>('read')
   const [error, setError] = useState<string | null>(null)
 
-  const origins = useMemo(() => publicUrls.data?.urls ?? [], [publicUrls.data])
-  const resolvedOrigin = webhookOrigin || origins[0] || ''
+  const originsState = webhookOriginsState(webhookOrigins)
+  const firstOrigin = originsState.kind === 'ready' ? (originsState.origins[0] ?? '') : ''
+  const resolvedOrigin = webhookOrigin || firstOrigin
 
   // The path shape follows the origin: a hosted App resolves from the App-id
   // header and gets the clean URL, a self-hosted one carries its routing ref.
@@ -419,7 +463,7 @@ export function GithubAppWizard({
   }
 
   const register = () => {
-    const problem = registerError(identity, resolvedOrigin)
+    const problem = registerError(identity, resolvedOrigin, originsState)
     setError(problem)
     if (problem) return
 
@@ -450,7 +494,7 @@ export function GithubAppWizard({
         )
         : (
           <WebhookStep
-            origins={origins}
+            originsState={originsState}
             resolvedOrigin={resolvedOrigin}
             previewUrl={previewUrl}
             onOriginChange={setWebhookOrigin}
