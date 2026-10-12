@@ -105,6 +105,21 @@ describe('instance hostname and update queries', () => {
     })
   })
 
+  it('a hostname save refreshes every webhook-origins read', async () => {
+    const client = createAppQueryClient()
+    const keys = [
+      [...queryKeys.admin.forges, 'webhook-origins'],
+      [...queryKeys.org('org-1').forges, 'webhook-origins'],
+    ]
+    for (const key of keys) client.setQueryData(key, { origins: [], platformManaged: false })
+    api.saveInstanceHostnames.mockResolvedValue({ ok: true, hostnames: [] })
+    const save = renderHook(() => useSaveInstanceHostnames(), { wrapper: createWrapper(client) })
+    await expect(save.result.current.run([])).resolves.toMatchObject({ ok: true })
+    await waitFor(() => {
+      for (const key of keys) expect(client.getQueryState(key)?.isInvalidated).toBe(true)
+    })
+  })
+
   it('saves hostnames, certificates, ACME, trust, and the tunnel token', async () => {
     const client = createAppQueryClient()
     const wrapper = createWrapper(client)

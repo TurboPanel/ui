@@ -108,6 +108,42 @@ export function noWebhookOriginCopy(platformManaged: boolean): NoWebhookOriginCo
   }
 }
 
+/** Where the webhook-origin read stands, as the wizard and detail page render it. */
+export type WebhookOriginsState =
+  | { kind: 'loading' }
+  | { kind: 'error' }
+  | { kind: 'ready'; origins: readonly string[]; platformManaged: boolean }
+
+/**
+ * Collapse the webhook-origins query into what to render.
+ *
+ * Only resolved data counts as "ready": an unresolved or failed read is not
+ * an empty list, and treating it as one would tell a configured operator they
+ * have no public URL. Data already in hand wins over a later refetch error.
+ */
+export function webhookOriginsState(
+  query: Readonly<{
+    data?: Readonly<{ origins: readonly string[]; platformManaged: boolean }>
+    isError: boolean
+  }>,
+): WebhookOriginsState {
+  if (query.data) {
+    return {
+      kind: 'ready',
+      origins: query.data.origins,
+      platformManaged: query.data.platformManaged,
+    }
+  }
+  return query.isError ? { kind: 'error' } : { kind: 'loading' }
+}
+
+export const WEBHOOK_ORIGINS_LOADING = 'Loading webhook addresses…'
+
+export const WEBHOOK_ORIGINS_LOAD_ERROR = {
+  title: 'Could not load webhook addresses',
+  body: 'The control plane did not answer with its webhook addresses. Reload the page to try again.',
+} as const
+
 /** Each provider has its own ingress path; the reachability rule is shared. */
 const WEBHOOK_PATH_BY_PROVIDER: Record<GitWebhookProvider, string> = {
   github: GITHUB_WEBHOOK_PATH,

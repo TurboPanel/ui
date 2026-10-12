@@ -275,6 +275,56 @@ describe('admin query hooks', () => {
     expect(fetchSignupSettings).toHaveBeenCalled()
   })
 
+  it('public URL save and apply refresh every webhook-origins read', async () => {
+    // Those reads live under the forges keys, so without naming them the
+    // wizard keeps an empty list after "add a public URL, then come back".
+    const keys = [
+      [...queryKeys.admin.forges, 'webhook-origins'],
+      [...queryKeys.org('org-1').forges, 'webhook-origins'],
+    ]
+    const empty = { origins: [], platformManaged: false }
+
+    savePublicUrls.mockResolvedValueOnce({ ok: true })
+    const saveClient = createAppQueryClient()
+    for (const key of keys) saveClient.setQueryData(key, empty)
+    const save = renderHook(() => useSavePublicUrls(), { wrapper: createWrapper(saveClient) })
+    await expect(save.result.current.run(['https://panel.example.com'])).resolves.toMatchObject({
+      ok: true,
+    })
+    await waitFor(() => {
+      for (const key of keys) expect(saveClient.getQueryState(key)?.isInvalidated).toBe(true)
+    })
+
+    applyPublicUrls.mockResolvedValueOnce({ ok: true, applied: true })
+    const applyClient = createAppQueryClient()
+    for (const key of keys) applyClient.setQueryData(key, empty)
+    const apply = renderHook(() => useApplyPublicUrls(), { wrapper: createWrapper(applyClient) })
+    await expect(
+      apply.result.current.run({
+        hostnames: [{ host: 'https://panel.example.com', source: 'platform-ca', uploadedCertId: null }],
+      }),
+    ).resolves.toMatchObject({ ok: true })
+    await waitFor(() => {
+      for (const key of keys) expect(applyClient.getQueryState(key)?.isInvalidated).toBe(true)
+    })
+  })
+
+  it('useForgeWebhookOrigins rereads when a screen mounts again', async () => {
+    fetchForgeWebhookOrigins.mockResolvedValue({ origins: [], platformManaged: false })
+    const client = createAppQueryClient()
+    const first = renderHook(() => useForgeWebhookOrigins('admin'), {
+      wrapper: createWrapper(client),
+    })
+    await waitFor(() => {
+      expect(first.result.current.isSuccess).toBe(true)
+    })
+    first.unmount()
+    renderHook(() => useForgeWebhookOrigins('admin'), { wrapper: createWrapper(client) })
+    await waitFor(() => {
+      expect(fetchForgeWebhookOrigins).toHaveBeenCalledTimes(2)
+    })
+  })
+
   it('useSavePublicUrls invalidates public URL cache', async () => {
     savePublicUrls.mockResolvedValueOnce({ ok: true })
     const client = createAppQueryClient()

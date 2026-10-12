@@ -5,6 +5,7 @@ import {
   NO_URL_WEBHOOK_NOTE,
   noWebhookOriginCopy,
   PLATFORM_NO_URL_WEBHOOK_NOTE,
+  webhookOriginsState,
   webhookPathFor,
 } from '@/lib/git-webhook-url'
 
@@ -163,5 +164,20 @@ describe('noWebhookOriginCopy', () => {
     }
     expect(PLATFORM_NO_URL_WEBHOOK_NOTE).not.toContain('Networking')
     expect(PLATFORM_NO_URL_WEBHOOK_NOTE).not.toMatch(/public URL/i)
+  })
+})
+
+describe('webhookOriginsState', () => {
+  it('is loading until data arrives, and an error only without data', () => {
+    expect(webhookOriginsState({ isError: false })).toEqual({ kind: 'loading' })
+    expect(webhookOriginsState({ isError: true })).toEqual({ kind: 'error' })
+  })
+
+  it('keeps data in hand over a later refetch error', () => {
+    const data = { origins: ['https://panel.example.com'], platformManaged: true }
+    expect(webhookOriginsState({ data, isError: true })).toEqual({ kind: 'ready', ...data })
+    expect(
+      webhookOriginsState({ data: { origins: [], platformManaged: false }, isError: false }),
+    ).toEqual({ kind: 'ready', origins: [], platformManaged: false })
   })
 })

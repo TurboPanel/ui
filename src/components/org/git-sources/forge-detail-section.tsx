@@ -17,6 +17,10 @@ import {
   NO_URL_WEBHOOK_NOTE,
   noWebhookOriginCopy,
   PLATFORM_NO_URL_WEBHOOK_NOTE,
+  WEBHOOK_ORIGINS_LOAD_ERROR,
+  WEBHOOK_ORIGINS_LOADING,
+  type WebhookOriginsState,
+  webhookOriginsState,
 } from '@/lib/git-webhook-url'
 import {
   githubAppInstallUrl,
@@ -151,20 +155,57 @@ function RepositoryAccessPanel({
   )
 }
 
-/** Where this application's deliveries arrive, and whether they can reach us. */
-function WebhookPanel({ app, scope }: Readonly<{ app: ForgeSummary; scope: 'admin' | 'org' }>) {
-  const webhookOrigins = useForgeWebhookOrigins(scope)
-  const platformManaged = webhookOrigins.data?.platformManaged === true
-  const empty = noWebhookOriginCopy(platformManaged)
-  const hint =
-    webhookOrigins.data && app.webhookUrl
-      ? gitWebhookHint(webhookOrigins.data.origins, app.provider, app.webhookRef, app.baseUrl).note
-      : null
-  // The generic note sends people to Networking, which the hosted control
-  // plane does not have for this.
-  const unreachable =
-    platformManaged && hint === NO_URL_WEBHOOK_NOTE ? PLATFORM_NO_URL_WEBHOOK_NOTE : hint
+/**
+ * The reachability note for a resolved origin list. The generic note sends
+ * people to Networking, which the hosted control plane does not have for this.
+ */
+function reachabilityNote(app: ForgeSummary, origins: readonly string[], platformManaged: boolean) {
+  if (!app.webhookUrl) return null
+  const note = gitWebhookHint(origins, app.provider, app.webhookRef, app.baseUrl).note
+  return platformManaged && note === NO_URL_WEBHOOK_NOTE ? PLATFORM_NO_URL_WEBHOOK_NOTE : note
+}
 
+/**
+ * Everything below the URL row, by read state. Loading and a failed read are
+ * not an empty list: rendering the empty notice for them would tell a
+ * configured operator they have no public URL.
+ */
+function WebhookPanelNotices({
+  app,
+  originsState,
+}: Readonly<{ app: ForgeSummary; originsState: WebhookOriginsState }>) {
+  if (originsState.kind === 'loading') return <LoadingState label={WEBHOOK_ORIGINS_LOADING} />
+  if (originsState.kind === 'error') {
+    return (
+      <InlineNotice
+        tone="warning"
+        title={WEBHOOK_ORIGINS_LOAD_ERROR.title}
+        body={WEBHOOK_ORIGINS_LOAD_ERROR.body}
+      />
+    )
+  }
+  const { origins, platformManaged } = originsState
+  if (!app.webhookUrl) {
+    const empty = noWebhookOriginCopy(platformManaged)
+    return <InlineNotice tone="warning" title={empty.title} body={empty.detailBody} />
+  }
+  const unreachable = reachabilityNote(app, origins, platformManaged)
+  if (!unreachable) return null
+  return (
+    <InlineNotice
+      tone="warning"
+      title="Deliveries may not reach this control plane"
+      body={unreachable}
+    />
+  )
+}
+
+/** Where this application's deliveries arrive, and whether they can reach us. */
+export function WebhookPanel({
+  app,
+  scope,
+}: Readonly<{ app: ForgeSummary; scope: 'admin' | 'org' }>) {
+  const originsState = webhookOriginsState(useForgeWebhookOrigins(scope))
   return (
     <SectionPanel title="Webhook" hint="Where this application's deliveries arrive">
       {app.webhookUrl ? (
@@ -174,16 +215,8 @@ function WebhookPanel({ app, scope }: Readonly<{ app: ForgeSummary; scope: 'admi
           </MonoText>
           <CopyButton value={app.webhookUrl} />
         </View>
-      ) : (
-        <InlineNotice tone="warning" title={empty.title} body={empty.detailBody} />
-      )}
-      {unreachable ? (
-        <InlineNotice
-          tone="warning"
-          title="Deliveries may not reach this control plane"
-          body={unreachable}
-        />
       ) : null}
+      <WebhookPanelNotices app={app} originsState={originsState} />
     </SectionPanel>
   )
 }

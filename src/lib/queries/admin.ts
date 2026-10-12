@@ -124,14 +124,32 @@ export function usePublicUrlsOptional(options?: Readonly<{ enabled?: boolean }>)
   })
 }
 
+/** Last segment of every webhook-origins key, whatever the scope or organization. */
+const WEBHOOK_ORIGINS_SEGMENT = 'webhook-origins'
+
+/**
+ * Refetch every webhook-origins read. Those keys sit under the forges keys
+ * (per scope, per organization), not under the public URL key, so the
+ * public URL and hostname writes have to name them or the wizard keeps an
+ * empty list after "add a public URL, then come back".
+ */
+function invalidateForgeWebhookOrigins(queryClient: ReturnType<typeof useQueryClient>) {
+  return queryClient.invalidateQueries({
+    predicate: (query) => query.queryKey.at(-1) === WEBHOOK_ORIGINS_SEGMENT,
+  })
+}
+
 export function useSavePublicUrls() {
   const queryClient = useQueryClient()
   return useApiMutation({
     mutationFn: savePublicUrls,
     onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: queryKeys.admin.publicUrls,
-      })
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.admin.publicUrls,
+        }),
+        invalidateForgeWebhookOrigins(queryClient),
+      ])
     },
   })
 }
@@ -286,6 +304,7 @@ export function useApplyPublicUrls() {
       await queryClient.invalidateQueries({
         queryKey: queryKeys.admin.instanceHostnames,
       })
+      await invalidateForgeWebhookOrigins(queryClient)
     },
   })
 }
@@ -327,6 +346,7 @@ function invalidateHostnameProjection(queryClient: ReturnType<typeof useQueryCli
   return Promise.all([
     queryClient.invalidateQueries({ queryKey: queryKeys.admin.instanceHostnames }),
     queryClient.invalidateQueries({ queryKey: queryKeys.admin.publicUrls }),
+    invalidateForgeWebhookOrigins(queryClient),
   ])
 }
 
@@ -841,7 +861,7 @@ export function useForgeWebhookOrigins(
   options?: Readonly<{ enabled?: boolean }>
 ) {
   return useQuery({
-    queryKey: [...forgesKey(scope), 'webhook-origins'] as const,
+    queryKey: [...forgesKey(scope), WEBHOOK_ORIGINS_SEGMENT] as const,
     queryFn: async (): Promise<ForgeWebhookOrigins> => {
       try {
         return await fetchForgeWebhookOrigins(scope)
@@ -858,6 +878,8 @@ export function useForgeWebhookOrigins(
     },
     enabled: options?.enabled ?? true,
     retry: false,
+    // Networking may be in another tab: opening the wizard again rereads.
+    refetchOnMount: 'always',
   })
 }
 
