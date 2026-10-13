@@ -51,7 +51,7 @@ import {
   patchServiceTurbopanelExtension,
   readServiceTurbopanelExtension,
   DEFAULT_DENO_SERIES,
-  DEFAULT_NODE_SERIES,
+  NEWEST_NODE_SERIES,
   SERVICE_DESCRIPTION_MAX_LENGTH,
   SOURCE_BRANCH_MAX_LENGTH,
   SOURCE_COMMAND_MAX_LENGTH,
@@ -1055,7 +1055,7 @@ function NodeRuntimeBlock({
         <OptionSelect
           value={nodeVersion ?? ''}
           options={[
-            { value: '', label: `Host default (${DEFAULT_NODE_SERIES}.x)` },
+            { value: '', label: `Newest available (${NEWEST_NODE_SERIES}.x)` },
             // A pinned value outside the offered series still displays as itself.
             ...(nodeVersion && !SUPPORTED_NODE_SERIES.includes(nodeVersion)
               ? [{ value: nodeVersion, label: nodeVersion }]
