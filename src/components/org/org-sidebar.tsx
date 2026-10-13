@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 import { usePathname, useRouter, type Href } from 'expo-router'
 import { HighAvailabilityWordmark } from '@/components/brand/high-availability-wordmark'
 import { TurboPanelLogo } from '@/components/brand/turbopanel-logo'
@@ -234,7 +234,9 @@ export function OrgSidebar({
       <View style={styles.brand}>
         <View style={styles.brandRow}>
           <TurboPanelLogo size={36} />
-          <HighAvailabilityWordmark />
+          <View style={styles.brandPill}>
+            <HighAvailabilityWordmark />
+          </View>
         </View>
       </View>
 
@@ -300,6 +302,11 @@ export function OrgSidebar({
   )
 }
 
+// Light theme: a faint edge shadow; dark keeps the glass lift. Web only, the
+// shared glass shadow is untouched.
+const sidebarShadow =
+  Platform.OS === 'web' ? ({ boxShadow: colors.sideShadow } as const) : {}
+
 const styles = StyleSheet.create({
   sidebar: {
     width: layout.sidebarWidth,
@@ -309,8 +316,14 @@ const styles = StyleSheet.create({
     borderRadius: 0,
     borderWidth: 0,
     borderRightWidth: 1,
+    ...sidebarShadow,
     paddingVertical: spacing.lg,
     paddingHorizontal: spacing.md,
+  },
+  // Two pixels down so the pill and version line centre on the T.
+  brandPill: {
+    position: 'relative',
+    top: 2,
   },
   brand: {
     marginBottom: spacing.xl,

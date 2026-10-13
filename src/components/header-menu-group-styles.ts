@@ -141,7 +141,7 @@ export const headerMenuGroupStyles = StyleSheet.create({
     borderWidth: 1,
     borderColor: glass.border,
     borderRadius: 10,
-    backgroundColor: glass.fillStrong,
+    backgroundColor: colors.menuFill,
     padding: spacing.sm,
     gap: 2,
     ...menuShadow,
