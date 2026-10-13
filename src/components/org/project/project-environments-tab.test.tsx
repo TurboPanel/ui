@@ -13,6 +13,7 @@ const state = vi.hoisted(() => ({
   views: {} as Record<string, unknown>,
   latest: {} as Record<string, unknown>,
   servers: undefined as unknown[] | undefined,
+  commandStatuses: undefined as unknown[] | undefined,
   sheet: undefined as Record<string, unknown> | undefined,
   invalidate: vi.fn(),
 }))
@@ -31,6 +32,10 @@ vi.mock('@/lib/queries/containers', () => ({
 vi.mock('@/lib/queries/environment-cards', () => ({
   useEnvironmentConfigViews: () => ({ views: state.views, isLoading: false }),
   useLatestDeployments: () => ({ latest: state.latest }),
+}))
+vi.mock('@/lib/queries/commands', async () => ({
+  ...(await vi.importActual<typeof import('@/lib/queries/commands')>('@/lib/queries/commands')),
+  useCommandsBatch: () => ({ data: state.commandStatuses }),
 }))
 vi.mock('@/lib/queries/servers', () => ({
   useOrgServers: () => ({ data: state.servers ? { servers: state.servers } : undefined }),

@@ -5549,6 +5549,8 @@ export type CommandRecord = {
   finishedAt: string | null
   expiresAt: string | null
   latency?: PingLatencyBreakdown
+  /** The step plan and current step of a deploy; null or absent on an older control plane. */
+  progress?: CommandProgress | null
 }
 
 export type CommandEnqueueResponse = {
@@ -5618,6 +5620,46 @@ export type CommandStatusRecord = {
   errorLine?: string | null
   /** Whether a retained execution log exists for this command. */
   hasLog: boolean
+  /** The step plan and current step of a deploy; null or absent on an older control plane. */
+  progress?: CommandProgress | null
+}
+
+/** One state of a step in a deploy's plan. */
+export type CommandProgressStepState =
+  /** Already on the server, nothing to do (ticked from the start). */
+  | 'ready'
+  /** Planned, not started. */
+  | 'pending'
+  | 'running'
+  | 'done'
+  | 'failed'
+  /** Never ran because an earlier step failed or the deploy was cancelled. */
+  | 'skipped'
+
+export type CommandProgressStep = {
+  /** Stable id: a kind, optionally `:` and a target (`install-php:8.3`). */
+  id: string
+  /** Plain words, user facing. */
+  label: string
+  state: CommandProgressStepState
+  startedAt?: string
+  finishedAt?: string
+  /** Live ticker text for the running step (the current task). */
+  detail?: string
+}
+
+/**
+ * What the server is doing for one deploy: the plan the daemon computed up
+ * front and the step it is on. Sent whole with every change, so the newest
+ * copy is always complete.
+ */
+export type CommandProgress = {
+  version: 1
+  /** In execution order. */
+  steps: CommandProgressStep[]
+  /** Id of the running step, or null when none is running. */
+  current: string | null
+  updatedAt: string
 }
 
 /**
@@ -9578,9 +9620,11 @@ export type OrganizationActivityItem = {
   action: 'deploy' | 'start' | 'restart' | 'stop'
   state: 'deploying' | 'failed'
   startedAt: string
-  /** Not recorded yet; always null. */
+  /** Steps done so far (plus the running one) and steps planned; null before the daemon reports a plan. */
   step: number | null
   totalSteps: number | null
+  /** Label of the running step ("Install Docker"); absent on an older control plane. */
+  stepLabel?: string | null
   durationSecs: number
   errorMessage: string | null
   /** Not recorded yet; always null. */

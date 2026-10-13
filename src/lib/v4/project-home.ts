@@ -8,10 +8,12 @@
  * `undefined` for "still loading") and the screen leaves it out.
  */
 
+import { progressChipLabel } from '@/lib/deploy-progress'
 import type { DeploymentGroup } from '@/lib/deployment-history'
 import { formatAgo, siteUrlFromHostname } from '@/lib/environment-status'
 import { hasHostDeployedContainers, isActiveContainerStatus } from '@/lib/container-status-guards'
 import type {
+  CommandProgress,
   ConfigViewChange,
   ConfigViewService,
   ConfigViewSide,
@@ -139,13 +141,56 @@ export type DeployPart = Readonly<{ status: string; label?: string; sub?: string
 export function lastDeployPart(
   group: DeploymentGroup | null | undefined,
   now: number,
+  /** "Step 3 of 7 · Installing Docker" from the command status poll; replaces the word while the deploy runs. */
+  progressLabel?: string | null,
 ): DeployPart | undefined {
   if (group === undefined) return undefined
   if (group === null) return { status: 'never', label: 'No deploys yet' }
-  const words = deployWords(group)
+  const words =
+    progressLabel && isDeployInProgress(group)
+      ? { status: 'deploying' as const, label: progressLabel }
+      : deployWords(group)
   const sha = group.trigger?.commitSha?.slice(0, 7)
   const sub = [sha, formatAgo(group.startedAt, now)].filter(Boolean).join(' · ')
   return { status: words.status, ...(words.label ? { label: words.label } : {}), ...(sub ? { sub } : {}) }
+}
+
+/** Lifecycle states a command can still be in: the ones worth polling for progress. */
+const COMMAND_IN_FLIGHT = new Set(['queued', 'dispatching', 'sent', 'acked', 'running'])
+
+/**
+ * The commands of every deploy still going, for the batched status poll that
+ * carries their step plan. Empty when nothing is in flight, so the poll stays
+ * off between deploys.
+ */
+export function inFlightDeployEntries(
+  latest: Readonly<Record<string, DeploymentGroup | null | undefined>>,
+): { serverId: string; commandId: string }[] {
+  const entries: { serverId: string; commandId: string }[] = []
+  for (const group of Object.values(latest)) {
+    if (!group || !isDeployInProgress(group)) continue
+    for (const command of group.commands) {
+      if (!COMMAND_IN_FLIGHT.has(command.status)) continue
+      entries.push({ serverId: command.serverId, commandId: command.id })
+    }
+  }
+  return entries
+}
+
+/**
+ * "Step 3 of 7 · Installing Docker" for a deploy still going, from the first
+ * of its hosts whose status record carries a running step; null otherwise.
+ */
+export function deployProgressLabel(
+  group: DeploymentGroup | null | undefined,
+  records: ReadonlyMap<string, Readonly<{ progress?: CommandProgress | null }>>,
+): string | null {
+  if (!group || !isDeployInProgress(group)) return null
+  for (const command of group.commands) {
+    const label = progressChipLabel(records.get(command.id)?.progress)
+    if (label) return label
+  }
+  return null
 }
 
 /** "Started 4m ago" or "Started 4m ago · push to main", for a deploy that is still going. */
@@ -402,6 +447,8 @@ export function environmentCardData(
     containers: readonly ContainerRecord[] | undefined
     view: EnvironmentConfigViewResponse | undefined
     latest: DeploymentGroup | null | undefined
+    /** The running deploy's step, when the screen polls command status. */
+    progressLabel?: string | null
     serverLine: string
     now: number
   }>,
@@ -423,7 +470,7 @@ export function environmentCardData(
     name: input.name,
     relation: environmentRelation(view),
     running: runningKey === undefined ? { status: 'unknown', label: 'Checking…' } : { status: runningKey },
-    lastDeploy: lastDeployPart(input.latest, input.now),
+    lastDeploy: lastDeployPart(input.latest, input.now, input.progressLabel),
     columns: view ? miniMapColumns(view.effective, view.changes, statusOf) : null,
     branch: view ? builtBranch(view.effective) : null,
     serverLine: input.serverLine,

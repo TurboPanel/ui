@@ -20,10 +20,12 @@ import {
 import { useQueryClient } from '@tanstack/react-query'
 import { Link, useRouter, type Href } from 'expo-router'
 import { LogTranscriptView } from '@/components/org/logs/log-transcript-view'
+import { DeployProgressRail } from '@/components/org/project/deploy-progress-rail'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { EnvironmentDeploymentHistoryPanel } from '@/components/org/project/environment-deployment-history-panel'
 import { EnvironmentGitSourcePanel } from '@/components/org/project/environment-git-source-panel'
 import { StatusDot } from '@/components/ui'
+import { StatusChip } from '@/components/ui/v4/status-chip'
 import { useProjectContext } from '@/components/org/project/project-context'
 import {
   PreviewDeploymentModal,
@@ -37,6 +39,7 @@ import {
 import {
   DeployHealthCheckMissingError,
   DeployResourceLimitExceededError,
+  type CommandProgress,
   type CommandStatus,
   type CommandStatusRecord,
   type EnvironmentRecord,
@@ -57,6 +60,7 @@ import {
   type TrackedCommandEntry,
 } from '@/lib/queries'
 import { mergeComposeOverlay } from '@/lib/compose'
+import { progressChipLabel } from '@/lib/deploy-progress'
 import { unownedPrincipalRequiredServices } from '@/lib/compose/principal-required'
 import {
   environmentDeleteFailure,
@@ -573,6 +577,7 @@ function DeployLogSection({
   environmentLabel,
   status,
   error,
+  progress,
   collapsed,
   onToggle,
   onDismiss,
@@ -583,6 +588,8 @@ function DeployLogSection({
   environmentLabel: string | null
   status: CommandStatus
   error: string | null
+  /** The step plan from the same status poll; null until the daemon reports one. */
+  progress: CommandProgress | null
   collapsed: boolean
   onToggle: () => void
   /** Provided once the command is terminal; hidden while it is still running. */
@@ -616,6 +623,7 @@ function DeployLogSection({
           />
         ) : null}
       </View>
+      <DeployProgressRail progress={progress} />
       <DeployOutcomeBanner status={status} error={error} />
       {collapsed ? null : (
         <LogTranscriptView
@@ -831,6 +839,9 @@ type OverviewEnvironmentsPanelModel = Readonly<{
   openDeployLog: OpenDeployLog | null
   deployLogCollapsed: boolean
   deployLogStatus: CommandStatus
+  deployLogProgress: CommandProgress | null
+  /** "Step 3 of 7 · Installing Docker" while a deploy of the environment in view is running. */
+  deployProgressLabel: string | null
   /** Owning environment name while the transcript is not the selected one. */
   deployLogEnvironmentLabel: string | null
   deployLogError: string | null
@@ -1167,6 +1178,22 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
     : null
   const deployLogStatus: CommandStatus = deployLogMeta?.status ?? 'queued'
   const deployLogTerminal = isTerminalCommandStatus(deployLogStatus)
+  // Progress is read from the poll's records, not the tracked meta: the meta
+  // only changes on a status or error change and would drop step updates.
+  const statusRecords = commandStatusById(commandsQuery.data)
+  const deployLogProgress = openDeployLog
+    ? (statusRecords.get(openDeployLog.commandId)?.progress ?? null)
+    : null
+  const selectedCommandId = Object.keys(commands)
+    .filter((id) => commands[id]?.environmentId === selectedEnvironmentId)
+    .at(-1)
+  const selectedCommandRecord = selectedCommandId
+    ? statusRecords.get(selectedCommandId)
+    : undefined
+  const deployProgressLabel =
+    selectedCommandRecord && !isTerminalCommandStatus(selectedCommandRecord.status)
+      ? progressChipLabel(selectedCommandRecord.progress)
+      : null
   const deployLogEnvironmentId = openDeployLog?.environmentId ?? null
   const deployLogEnvironmentLabel = useMemo(() => {
     if (!deployLogEnvironmentId) return null
@@ -1233,6 +1260,8 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
     openDeployLog,
     deployLogCollapsed,
     deployLogStatus,
+    deployLogProgress,
+    deployProgressLabel,
     deployLogEnvironmentLabel,
     deployLogError: deployLogMeta?.error ?? null,
     toggleDeployLog: () => setDeployLogCollapsed((current) => !current),
@@ -1371,6 +1400,7 @@ export function EnvironmentLifecycleNotices() {
           environmentLabel={model.deployLogEnvironmentLabel}
           status={model.deployLogStatus}
           error={model.deployLogError}
+          progress={model.deployLogProgress}
           collapsed={model.deployLogCollapsed}
           onToggle={model.toggleDeployLog}
           onDismiss={model.dismissDeployLog}
@@ -1442,6 +1472,9 @@ function SystemEnvironmentPanelBody() {
           <Text style={styles.statusText} numberOfLines={1}>
             {model.loading ? 'Loading…' : model.statusLabel}
           </Text>
+          {model.deployProgressLabel ? (
+            <StatusChip status="deploying" label={model.deployProgressLabel} size="sm" />
+          ) : null}
         </View>
         <View style={styles.barSpacer} />
         <QuietButton
