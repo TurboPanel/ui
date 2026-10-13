@@ -1472,10 +1472,10 @@ function SystemEnvironmentPanelBody() {
           <Text style={styles.statusText} numberOfLines={1}>
             {model.loading ? 'Loading…' : model.statusLabel}
           </Text>
-          {model.deployProgressLabel ? (
-            <StatusChip status="deploying" label={model.deployProgressLabel} size="sm" />
-          ) : null}
         </View>
+        {model.deployProgressLabel ? (
+          <StatusChip status="deploying" label={model.deployProgressLabel} size="sm" />
+        ) : null}
         <View style={styles.barSpacer} />
         <QuietButton
           label="Refresh"

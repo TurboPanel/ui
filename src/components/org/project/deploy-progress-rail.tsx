@@ -41,7 +41,7 @@ const styles = themedStyles((p) => ({
     alignItems: 'center',
     rowGap: 8,
   },
-  item: { flexDirection: 'row', alignItems: 'center', gap: 6, minWidth: 0 },
+  item: { flexDirection: 'row', alignItems: 'center', gap: 6, minWidth: 0, flexShrink: 1, maxWidth: '100%' },
   nodeWrap: {
     width: NODE,
     height: NODE,
