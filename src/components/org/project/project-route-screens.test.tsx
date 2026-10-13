@@ -221,7 +221,7 @@ describe('project tabs', () => {
 })
 
 describe('project settings tab', () => {
-  it('shows Project Settings, and sends platform and managed projects home', () => {
+  it('shows Project Settings, sends platform projects home, and shows managed settings', () => {
     render(<ProjectSettingsRouteScreen />)
     expect(screen.getByTestId('project-settings')).toBeTruthy()
     cleanup()
@@ -231,7 +231,7 @@ describe('project settings tab', () => {
     cleanup()
     setContext({ project: project({ type: 'managed', code: 'postgres' }) })
     render(<ProjectSettingsRouteScreen />)
-    expect(redirectHref()).toBe('/o/projects/p/overview')
+    expect(screen.getByTestId('managed').getAttribute('data-focus')).toBe('settings')
   })
 })
 
