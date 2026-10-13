@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { PrincipalDefaultsSettingsSection } from '@/components/org/principal-defaults-settings-section'
 import {
@@ -70,6 +71,21 @@ function PrincipalRow({
   onDelete: (principalId: string) => void
 }>) {
   const blocked = principalDeleteBlockedReason(row)
+  let actionCell: ReactNode = null
+  if (canManage && row.canDelete) {
+    actionCell = (
+      <ConfirmButton
+        label="Delete"
+        confirmLabel="Confirm delete"
+        prompt={deletePrompt(row)}
+        busy={deleting}
+        disabled={deleting}
+        onConfirm={() => onDelete(row.id)}
+      />
+    )
+  } else if (blocked) {
+    actionCell = <Text style={panelStyles.muted}>{blocked}</Text>
+  }
   return (
     <DataTableRow last={last} alt={alt} accessibilityLabel={`Principal ${row.name}`}>
       <DataTableCell column={C_NAME}>
@@ -107,18 +123,7 @@ function PrincipalRow({
         )}
       </DataTableCell>
       <DataTableCell column={C_ACTION}>
-        {canManage && row.canDelete ? (
-          <ConfirmButton
-            label="Delete"
-            confirmLabel="Confirm delete"
-            prompt={deletePrompt(row)}
-            busy={deleting}
-            disabled={deleting}
-            onConfirm={() => onDelete(row.id)}
-          />
-        ) : blocked ? (
-          <Text style={panelStyles.muted}>{blocked}</Text>
-        ) : null}
+        {actionCell}
       </DataTableCell>
     </DataTableRow>
   )

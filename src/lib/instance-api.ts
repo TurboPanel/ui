@@ -2071,6 +2071,23 @@ export async function getServerDeletePreview(
   return await apiFetch(`${CLIENT_API}/servers/${serverId}/delete-preview`, undefined, organizationId)
 }
 
+const PRINCIPAL_CHOICE_REFUSED_MESSAGE =
+  'Something changed while you were choosing: a principal is now used elsewhere or is no longer on this server. Check the list below and try again.'
+
+function isPrincipalChoiceRefusal(code: string | undefined): boolean {
+  return code === 'principal_delete_refused' || code === 'principal_not_on_server'
+}
+
+function serverDeleteRequestBody(
+  forgetResources: boolean,
+  principals: readonly PrincipalRemovalChoice[]
+): Record<string, unknown> {
+  return {
+    ...(forgetResources ? { forgetResources: true } : {}),
+    ...(principals.length > 0 ? { principals } : {}),
+  }
+}
+
 export async function deleteServer(
   serverId: string,
   organizationId?: string | null,
@@ -2090,11 +2107,7 @@ export async function deleteServer(
 
   const path = `${CLIENT_API}/servers/${serverId}`
   const forgetResources = options?.forgetResources === true
-  const principals = options?.principals ?? []
-  const requestBody = {
-    ...(forgetResources ? { forgetResources: true } : {}),
-    ...(principals.length > 0 ? { principals } : {}),
-  }
+  const requestBody = serverDeleteRequestBody(forgetResources, options?.principals ?? [])
   const response = await fetchWithStepUp(controlPlaneUrl(path), {
     method: 'DELETE',
     credentials: 'include',
@@ -2121,10 +2134,8 @@ export async function deleteServer(
       throw new ServerDeleteOnlineError()
     }
 
-    if (body.code === 'principal_delete_refused' || body.code === 'principal_not_on_server') {
-      throw new ServerPrincipalChoiceRefusedError(
-        'Something changed while you were choosing: a principal is now used elsewhere or is no longer on this server. Check the list below and try again.'
-      )
+    if (isPrincipalChoiceRefusal(body.code)) {
+      throw new ServerPrincipalChoiceRefusedError(PRINCIPAL_CHOICE_REFUSED_MESSAGE)
     }
 
     if (response.status === 409 && body.code === SERVER_HAS_BLOCKERS_CODE && body.blockers) {
