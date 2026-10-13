@@ -1184,9 +1184,9 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
   const deployLogProgress = openDeployLog
     ? (statusRecords.get(openDeployLog.commandId)?.progress ?? null)
     : null
-  const selectedCommandId = Object.keys(commands)
-    .filter((id) => commands[id]?.environmentId === selectedEnvironmentId)
-    .at(-1)
+  const selectedCommandId = Object.keys(commands).findLast(
+    (id) => commands[id]?.environmentId === selectedEnvironmentId,
+  )
   const selectedCommandRecord = selectedCommandId
     ? statusRecords.get(selectedCommandId)
     : undefined
