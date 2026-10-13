@@ -131,6 +131,14 @@ describe('palettes', () => {
     }
   })
 
+  it('gives header menus an opaque fill and the sidebar its own shadow', () => {
+    expect(navyPalette.menuFill).toBe('#0e1526')
+    expect(paperPalette.menuFill).toBe('#ffffff')
+    expect(navyPalette.sideShadow).toBe(navyPalette.glassShadow)
+    expect(paperPalette.sideShadow).toBe('0 0 10px rgba(15,23,42,.04)')
+    expect(paperPalette.glassShadow).not.toBe(paperPalette.sideShadow)
+  })
+
   it('differ where it matters: Navy is dark, Paper is light', () => {
     expect(luminance(parseColor(navyPalette.bg).slice(0, 3) as unknown as Rgb)).toBeLessThan(0.05)
     expect(luminance(parseColor(paperPalette.bg).slice(0, 3) as unknown as Rgb)).toBeGreaterThan(0.85)
