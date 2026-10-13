@@ -8,6 +8,8 @@ import {
   normalizeTranscriptMessage,
   mergeTranscriptLines,
   parseCommandLogChunk,
+  PHASE_LABELS,
+  phaseLabel,
   dockerTimestampTranscriptLines,
   plainTextTranscriptLines,
   stripAnsi,
@@ -735,5 +737,22 @@ describe('groupTranscriptByPhase', () => {
 
   it('returns no groups for an empty transcript', () => {
     expect(groupTranscriptByPhase([])).toEqual([])
+  })
+})
+
+describe('phaseLabel', () => {
+  it('names the install phases in plain words', () => {
+    expect(phaseLabel('install-docker')).toBe('Installing Docker')
+    expect(phaseLabel('install-gateway')).toBe('Setting up the web gateway')
+    expect(phaseLabel('install-runtime')).toBe('Installing the runtime')
+    expect(phaseLabel('install-web-server')).toBe('Installing the web server')
+    expect(phaseLabel('install-build-tool')).toBe('Installing the build tool')
+  })
+
+  it('keeps the existing phases and shows an unknown phase by its id', () => {
+    expect(phaseLabel('build')).toBe('Build')
+    expect(phaseLabel('compose-up')).toBe('Compose up')
+    expect(phaseLabel('mystery')).toBe('mystery')
+    expect(Object.keys(PHASE_LABELS)).toContain('prepare')
   })
 })
