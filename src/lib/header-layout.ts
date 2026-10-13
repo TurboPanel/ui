@@ -8,12 +8,6 @@ export type HeaderLayout = Readonly<{
   compact: boolean
   /** Logo sits in the header (the desktop sidebar already carries it). */
   showLogo: boolean
-  /** Page-width toggle is a desktop-only control. */
-  showPageWidthToggle: boolean
-  /** Light / Dark / Match computer switch beside the page-width toggle (wide web). */
-  showThemeSwitch: boolean
-  /** Compact web: the same switch sits in the account menu instead. */
-  themeSwitchInMenu: boolean
   /** Profile control is a small icon; notifications fold into its menu. */
   iconOnlyAccount: boolean
   /** Separate bell beside the profile control (wide web only). */
@@ -29,18 +23,13 @@ export const HEADER_WORDMARK_MIN_WIDTH = 480
 
 /**
  * Which header controls show at a given window width. Native always has the
- * drawer-style chrome and the avatar profile control, whatever its width; the
- * page-width toggle follows the width alone (as it always has).
+ * drawer-style chrome and the avatar profile control, whatever its width.
  */
 export function headerLayoutFor(width: number, isNative: boolean): HeaderLayout {
   const compact = isNative || width < layout.desktopBreakpoint
   return {
     compact,
     showLogo: compact,
-    showPageWidthToggle: width >= layout.desktopBreakpoint,
-    // The phone app has one theme until its screens move to `useColors()`.
-    showThemeSwitch: !isNative && width >= layout.desktopBreakpoint,
-    themeSwitchInMenu: !isNative && width < layout.desktopBreakpoint,
     iconOnlyAccount: compact,
     showBell: !compact,
     showOrgGlyph: !compact,

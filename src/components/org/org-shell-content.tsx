@@ -13,6 +13,7 @@ import { layout, spacing } from '@/lib/theme'
 export function OrgShellContent({
   orgId,
   maxWidth,
+  align,
   contentPaddingBottom,
   contentPaddingHorizontal = layout.contentGutter,
   contentPaddingVertical = spacing.xl,
@@ -20,6 +21,7 @@ export function OrgShellContent({
 }: Readonly<{
   orgId: string
   maxWidth: number
+  align?: 'flex-start' | 'center'
   contentPaddingBottom?: number
   /** Horizontal inset; native phone shells pass a tight gutter for full-bleed width. */
   contentPaddingHorizontal?: number
@@ -31,6 +33,7 @@ export function OrgShellContent({
     Platform.OS !== 'web' && isOrgTabOverviewPath(pathname, orgId)
   const insets: OrgScreenScrollInsets = {
     maxWidth,
+    align,
     paddingHorizontal: contentPaddingHorizontal,
     paddingVertical: contentPaddingVertical,
     paddingBottom: contentPaddingBottom,
