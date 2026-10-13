@@ -155,6 +155,11 @@ export function lastDeployPart(
   return { status: words.status, ...(words.label ? { label: words.label } : {}), ...(sub ? { sub } : {}) }
 }
 
+/** The per-host commands of a deploy; a row from an older control plane may lack them. */
+function hostCommands(group: DeploymentGroup): readonly DeploymentGroup['commands'][number][] {
+  return Array.isArray(group.commands) ? group.commands : []
+}
+
 /** Lifecycle states a command can still be in: the ones worth polling for progress. */
 const COMMAND_IN_FLIGHT = new Set(['queued', 'dispatching', 'sent', 'acked', 'running'])
 
@@ -169,7 +174,7 @@ export function inFlightDeployEntries(
   const entries: { serverId: string; commandId: string }[] = []
   for (const group of Object.values(latest)) {
     if (!group || !isDeployInProgress(group)) continue
-    for (const command of group.commands) {
+    for (const command of hostCommands(group)) {
       if (!COMMAND_IN_FLIGHT.has(command.status)) continue
       entries.push({ serverId: command.serverId, commandId: command.id })
     }
@@ -186,7 +191,7 @@ export function deployProgressLabel(
   records: ReadonlyMap<string, Readonly<{ progress?: CommandProgress | null }>>,
 ): string | null {
   if (!group || !isDeployInProgress(group)) return null
-  for (const command of group.commands) {
+  for (const command of hostCommands(group)) {
     const label = progressChipLabel(records.get(command.id)?.progress)
     if (label) return label
   }

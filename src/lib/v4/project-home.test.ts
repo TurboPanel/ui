@@ -559,6 +559,12 @@ describe('deploy progress on a card', () => {
     expect(inFlightDeployEntries(latest)).toEqual([{ serverId: 'srv-c1', commandId: 'c1' }])
   })
 
+  it('copes with a deploy row that has no host commands', () => {
+    const bare = group({ status: 'running', commands: undefined as unknown as DeploymentGroup['commands'] })
+    expect(inFlightDeployEntries({ a: bare })).toEqual([])
+    expect(deployProgressLabel(bare, new Map())).toBeNull()
+  })
+
   it('reads the step of the first host that reports one', () => {
     const running = group({ status: 'running', commands: [hostCommand('c0', 'running'), hostCommand('c1', 'running')] })
     const records = new Map([

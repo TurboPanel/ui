@@ -2,17 +2,22 @@ import { describe, expect, it } from 'vitest'
 import {
   activityStepText,
   countedSteps,
+  counterDigits,
   elapsedSeconds,
   failedStep,
   firstTimeSetupCaption,
   formatElapsed,
   gerundLabel,
+  planElapsedSeconds,
   progressChipLabel,
   progressHeadline,
+  progressSummary,
   runningStep,
+  stepAccessibilityLabel,
   stepCountText,
   stepNodeInfo,
   stepPosition,
+  stepsOf,
 } from '@/lib/deploy-progress'
 import type { CommandProgressStep, CommandProgressStepState } from '@/lib/instance-api'
 
@@ -54,20 +59,34 @@ describe('gerundLabel', () => {
   })
 })
 
-describe('counting steps', () => {
+describe('reading the payload', () => {
+  it('tolerates a missing or malformed step list', () => {
+    expect(stepsOf(null)).toEqual([])
+    expect(stepsOf(undefined)).toEqual([])
+    expect(stepsOf({})).toEqual([])
+    expect(stepsOf({ steps: 'nope' })).toEqual([])
+    expect(stepsOf({ steps: [null, 4, { label: 'no id' }, step('build', 'Build', 'pending')] })).toEqual([
+      step('build', 'Build', 'pending'),
+    ])
+    expect(countedSteps(undefined)).toEqual([])
+    expect(runningStep({ steps: 7 as unknown as [] , current: 'x' })).toBeNull()
+    expect(failedStep(null)).toBeNull()
+    expect(firstTimeSetupCaption(undefined)).toBeNull()
+    expect(progressSummary({ steps: {} })).toBeNull()
+  })
+
   it('counts every step that is not already there', () => {
     expect(countedSteps(FRESH_HOST)).toHaveLength(6)
     expect(stepPosition(FRESH_HOST, FRESH_HOST[2]!)).toBe(2)
     expect(stepPosition(FRESH_HOST, FRESH_HOST[1]!)).toBe(0)
   })
 
-  it('finds the running step by `current`, then by state', () => {
-    expect(runningStep({ steps: FRESH_HOST, current: 'install-runtime:node-22' })?.id).toBe(
-      'install-runtime:node-22',
-    )
+  it('finds the running step by `current` only when that step is running, then by state', () => {
+    expect(runningStep({ steps: FRESH_HOST, current: 'install-runtime:node-22' })?.id).toBe('install-runtime:node-22')
+    expect(runningStep({ steps: FRESH_HOST, current: 'fetch' })?.id).toBe('install-runtime:node-22')
     expect(runningStep({ steps: FRESH_HOST, current: 'not-a-step' })?.id).toBe('install-runtime:node-22')
     expect(runningStep({ steps: FRESH_HOST, current: null })?.id).toBe('install-runtime:node-22')
-    expect(runningStep({ steps: [step('build', 'Build', 'pending')], current: null })).toBeNull()
+    expect(runningStep({ steps: [step('build', 'Build', 'pending')], current: 'build' })).toBeNull()
   })
 
   it('finds the failed step', () => {
@@ -82,8 +101,15 @@ describe('counting steps', () => {
   })
 })
 
-describe('progressHeadline', () => {
+describe('progressSummary', () => {
   it('says where the deploy is and what it is doing now', () => {
+    expect(progressSummary({ steps: FRESH_HOST, current: 'install-runtime:node-22' })).toMatchObject({
+      phase: 'running',
+      step: 2,
+      total: 6,
+      title: 'Installing Node 22',
+      focus: FRESH_HOST[2],
+    })
     expect(progressHeadline({ steps: FRESH_HOST, current: 'install-runtime:node-22' })).toBe(
       'Step 2 of 6 · Installing Node 22',
     )
@@ -95,33 +121,41 @@ describe('progressHeadline', () => {
       step('build', 'Build', 'failed'),
       step('start', 'Start the app', 'skipped'),
     ]
-    expect(progressHeadline({ steps, current: null })).toBe('Step 2 of 3 · Build failed')
+    expect(progressSummary({ steps, current: null })).toMatchObject({
+      phase: 'failed',
+      step: 2,
+      total: 3,
+      title: 'Failed at step 2 of 3 · Build',
+    })
+    expect(progressHeadline({ steps, current: null })).toBe('Failed at step 2 of 3 · Build')
   })
 
-  it('reads done, stopped and getting ready when nothing is running', () => {
+  it('reads done with the time it took, stopped, and getting ready', () => {
+    const done = [
+      step('build', 'Build', 'done', { startedAt: '2026-10-12T10:00:00Z', finishedAt: '2026-10-12T10:01:00Z' }),
+      step('start', 'Start the app', 'done', { startedAt: '2026-10-12T10:01:00Z', finishedAt: '2026-10-12T10:03:12Z' }),
+    ]
+    expect(progressSummary({ steps: done, current: null })).toMatchObject({
+      phase: 'done',
+      step: 2,
+      total: 2,
+      title: 'All 2 steps done · 03:12',
+    })
     expect(
-      progressHeadline({
-        steps: [step('build', 'Build', 'done'), step('start', 'Start the app', 'done')],
-        current: null,
-      }),
+      progressSummary({ steps: [step('build', 'Build', 'done'), step('start', 'Start the app', 'done')] })?.title,
     ).toBe('All 2 steps done')
     expect(
-      progressHeadline({
-        steps: [step('build', 'Build', 'done'), step('start', 'Start the app', 'skipped')],
-        current: null,
-      }),
-    ).toBe('Stopped after step 1 of 2')
+      progressSummary({ steps: [step('build', 'Build', 'done'), step('start', 'Start the app', 'skipped')] }),
+    ).toMatchObject({ phase: 'stopped', step: 1, total: 2, title: 'Stopped after step 1 of 2' })
     expect(
-      progressHeadline({
-        steps: [step('build', 'Build', 'pending'), step('start', 'Start the app', 'pending')],
-        current: null,
-      }),
-    ).toBe('Getting ready · 2 steps')
+      progressSummary({ steps: [step('build', 'Build', 'pending'), step('start', 'Start the app', 'pending')] }),
+    ).toMatchObject({ phase: 'waiting', step: 0, total: 2, title: 'Getting ready' })
   })
 
   it('has nothing to say when every step was already there', () => {
-    expect(progressHeadline({ steps: [step('install-docker', 'Install Docker', 'ready')], current: null })).toBeNull()
+    expect(progressSummary({ steps: [step('install-docker', 'Install Docker', 'ready')], current: null })).toBeNull()
     expect(progressHeadline({ steps: [], current: null })).toBeNull()
+    expect(progressHeadline(null)).toBeNull()
   })
 })
 
@@ -143,6 +177,10 @@ describe('activityStepText', () => {
     )
     expect(activityStepText({ step: 3, totalSteps: 7, stepLabel: null })).toBe('Step 3 of 7')
     expect(activityStepText({ step: 3, totalSteps: 7 })).toBe('Step 3 of 7')
+  })
+
+  it('never says step 0', () => {
+    expect(activityStepText({ step: 0, totalSteps: 7 })).toBe('Starting · 7 steps')
   })
 
   it('is empty for rows without a plan', () => {
@@ -190,11 +228,30 @@ describe('elapsed time', () => {
     expect(formatElapsed(4325.9)).toBe('72:05')
     expect(formatElapsed(-3)).toBe('00:00')
   })
+
+  it('measures the whole plan from the first start to the last finish', () => {
+    expect(
+      planElapsedSeconds([
+        step('a', 'A', 'done', { startedAt: '2026-10-12T10:00:00Z', finishedAt: '2026-10-12T10:00:30Z' }),
+        step('b', 'B', 'done', { startedAt: '2026-10-12T10:00:30Z', finishedAt: '2026-10-12T10:02:00Z' }),
+        step('c', 'C', 'ready'),
+      ]),
+    ).toBe(120)
+    expect(planElapsedSeconds([step('a', 'A', 'done', { startedAt: 'bad', finishedAt: '2026-10-12T10:02:00Z' })])).toBeNull()
+    expect(planElapsedSeconds([step('a', 'A', 'done')])).toBeNull()
+    expect(planElapsedSeconds(null)).toBeNull()
+  })
+
+  it('pads the counter to two digits', () => {
+    expect(counterDigits(3)).toBe('03')
+    expect(counterDigits(12)).toBe('12')
+    expect(counterDigits(-1)).toBe('00')
+  })
 })
 
-describe('stepNodeInfo', () => {
+describe('step nodes', () => {
   it('pairs every state with a word, a glyph and a tone', () => {
-    expect(stepNodeInfo('ready')).toMatchObject({ word: 'already there', glyph: 'check', tone: 'ok', complete: true })
+    expect(stepNodeInfo('ready')).toMatchObject({ word: 'already on this server', glyph: 'check', tone: 'ok', complete: true })
     expect(stepNodeInfo('done')).toMatchObject({ word: 'done', glyph: 'check', tone: 'ok', complete: true })
     expect(stepNodeInfo('running')).toMatchObject({ word: 'in progress', glyph: 'spinner', tone: 'busy', complete: false })
     expect(stepNodeInfo('pending')).toMatchObject({ word: 'not started', glyph: null, tone: 'idle' })
@@ -204,5 +261,10 @@ describe('stepNodeInfo', () => {
 
   it('reads an unknown state as not started', () => {
     expect(stepNodeInfo('surprise')).toEqual(stepNodeInfo('pending'))
+  })
+
+  it('tells a screen reader the position, the step and its state', () => {
+    expect(stepAccessibilityLabel(FRESH_HOST, FRESH_HOST[2]!)).toBe('Step 2 of 6, Install Node 22, in progress')
+    expect(stepAccessibilityLabel(FRESH_HOST, FRESH_HOST[1]!)).toBe('Set up the web gateway, already on this server')
   })
 })

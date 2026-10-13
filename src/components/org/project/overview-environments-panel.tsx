@@ -48,6 +48,7 @@ import {
   commandStatusById,
   isTerminalCommandStatus,
   useCommandLog,
+  useCommandRecordsBatch,
   useCommandsBatch,
   useContainersByProject,
   useDeleteEnvironment,
@@ -802,6 +803,45 @@ function syncTrackedCommandBatch(
   }
 }
 
+/**
+ * The step plan shown above the transcript, kept alive past the end of the
+ * deploy. The batched poll drops a command the moment it is terminal, so the
+ * last plan it carried is held per command id, and once the command is
+ * terminal the full record is read once (`GET …/commands/:id` carries the
+ * finalised plan) so the end state stays on screen until the log is closed.
+ */
+function useDeployLogProgress(
+  orgId: string,
+  openLog: OpenDeployLog | null,
+  polled: CommandProgress | null,
+  terminal: boolean,
+): CommandProgress | null {
+  const commandId = openLog?.commandId ?? null
+  const [held, setHeld] = useState<{ commandId: string; progress: CommandProgress } | null>(null)
+  const finalEntries = useMemo<readonly TrackedCommandEntry[]>(
+    () => (openLog && terminal ? [{ serverId: openLog.serverId, commandId: openLog.commandId }] : []),
+    [openLog, terminal],
+  )
+  const finalRecord = useCommandRecordsBatch(orgId, finalEntries, {
+    enabled: finalEntries.length > 0,
+  }).data?.[0]
+  const finalised = finalRecord?.id === commandId ? (finalRecord.progress ?? null) : null
+  const latest = polled ?? finalised
+
+  useEffect(() => {
+    if (!commandId || !latest) return
+    setHeld((current) =>
+      current?.commandId === commandId && current.progress === latest
+        ? current
+        : { commandId, progress: latest },
+    )
+  }, [commandId, latest])
+
+  if (!commandId) return null
+  if (latest) return latest
+  return held?.commandId === commandId ? held.progress : null
+}
+
 /** Fire-and-forget without the `void` operator (typescript:S3735). */
 function ignorePromise(promise: Promise<unknown>): void {
   promise.catch(() => {
@@ -1181,9 +1221,12 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
   // Progress is read from the poll's records, not the tracked meta: the meta
   // only changes on a status or error change and would drop step updates.
   const statusRecords = commandStatusById(commandsQuery.data)
-  const deployLogProgress = openDeployLog
-    ? (statusRecords.get(openDeployLog.commandId)?.progress ?? null)
-    : null
+  const deployLogProgress = useDeployLogProgress(
+    orgId,
+    openDeployLog,
+    statusRecords.get(openDeployLog?.commandId ?? '')?.progress ?? null,
+    deployLogTerminal,
+  )
   const selectedCommandId = Object.keys(commands).findLast(
     (id) => commands[id]?.environmentId === selectedEnvironmentId,
   )

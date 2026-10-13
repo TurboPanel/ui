@@ -2,12 +2,16 @@
 import { act, cleanup, render, screen } from '@testing-library/react'
 import { createElement, type ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { applyScenario, SCENARIOS, styleOf, token } from '@/components/ui/v4/rn-stub'
+import { applyScenario, env, SCENARIOS, styleOf, token } from '@/components/ui/v4/rn-stub'
 import { fontFamily } from '@/lib/v4/typography'
 import type { CommandProgress, CommandProgressStep, CommandProgressStepState } from '@/lib/instance-api'
 import { DeployProgressRail } from './deploy-progress-rail'
 
-const motion = vi.hoisted(() => ({ reduce: false }))
+const motion = vi.hoisted(() => ({
+  reduce: false,
+  timing: vi.fn((value: unknown) => value),
+  repeat: vi.fn((value: unknown) => value),
+}))
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
 vi.mock('react-native-svg', async () => (await import('@/components/ui/v4/rn-stub')).svgStub)
@@ -18,14 +22,14 @@ vi.mock('react-native-reanimated', async () => {
     createElement('div', { 'data-animated': 'yes', 'data-style': JSON.stringify(flatten(props.style)) }, props.children)
   return {
     default: { View: AnimatedView },
-    Easing: { inOut: (fn: unknown) => fn, sin: 'sin' },
+    Easing: { inOut: (fn: unknown) => fn, sin: 'sin', linear: 'linear', steps: () => 'steps' },
     cancelAnimation: () => {},
     interpolate: (value: number) => value,
     useAnimatedStyle: (factory: () => Record<string, unknown>) => factory(),
     useReducedMotion: () => motion.reduce,
     useSharedValue: (value: unknown) => ({ value }),
-    withRepeat: (value: unknown) => value,
-    withTiming: (value: unknown) => value,
+    withRepeat: motion.repeat,
+    withTiming: motion.timing,
   }
 })
 
@@ -33,6 +37,8 @@ afterEach(() => {
   cleanup()
   vi.useRealTimers()
   motion.reduce = false
+  motion.timing.mockClear()
+  motion.repeat.mockClear()
 })
 
 function step(
@@ -63,95 +69,140 @@ const EVERY_STATE = progress(
   'install-runtime:node-22',
 )
 
-/** The drawn node inside a rail item: the one box with a hairline border. */
+/** The drawn node inside a rail segment: the one box with a hairline border and a radius of 7. */
 function nodeOf(item: HTMLElement): HTMLElement {
-  const node = [...item.querySelectorAll('div')].find((el) => styleOf(el).borderWidth === 1)
+  const node = [...item.querySelectorAll('div')].find((el) => styleOf(el).borderRadius === 7 && styleOf(el).borderWidth === 1)
   if (!node) throw new Error('no node drawn')
   return node
 }
 
-/** The `Animated.View` halos: absolutely placed divs behind a node. */
-function halos(container: HTMLElement): Element[] {
-  return [...container.querySelectorAll('[data-animated]')].filter(
-    (el) => styleOf(el).position === 'absolute',
-  )
+/** Animated views by what they are: a halo is absolute and round, a fill is absolute with a width. */
+function animated(container: ParentNode): { halos: Element[]; fills: Element[]; sweeps: Element[] } {
+  const all = [...container.querySelectorAll('[data-animated]')]
+  return {
+    halos: all.filter((el) => styleOf(el).borderRadius === 7),
+    fills: all.filter((el) => styleOf(el).left === 0 && typeof styleOf(el).width === 'string'),
+    sweeps: all.filter((el) => styleOf(el).width === '40%'),
+  }
 }
 
 describe.each(SCENARIOS)('DeployProgressRail ($name)', (scenario) => {
   beforeEach(() => applyScenario(scenario))
 
-  it('draws nothing without a plan', () => {
+  it('draws nothing without a plan, or with a broken one', () => {
     const { container, rerender } = render(<DeployProgressRail progress={null} />)
     expect(container.textContent).toBe('')
     rerender(<DeployProgressRail progress={undefined} />)
     expect(container.textContent).toBe('')
     rerender(<DeployProgressRail progress={progress([])} />)
     expect(container.textContent).toBe('')
+    rerender(<DeployProgressRail progress={{ version: 1, steps: 'oops' as unknown as [], current: null, updatedAt: '' }} />)
+    expect(container.textContent).toBe('')
   })
 
   it.each([
-    ['Set up the web gateway: already there', 'path', 'ok'],
-    ['Install Docker: done', 'path', 'ok'],
-    ['Install Node 22: in progress', 'path', 'busy'],
-    ['Fetch the code: not started', null, 'idle'],
-    ['Build: failed', 'path', 'bad'],
-    ['Start the app: skipped', 'circle', 'idle'],
-  ] as const)('names %s as a word with its glyph and tone', (name, shape, tone) => {
+    ['Set up the web gateway, already on this server', 'path', 'ok', 'okLine'],
+    ['Step 1 of 5, Install Docker, done', 'path', 'ok', 'ok'],
+    ['Step 2 of 5, Install Node 22, in progress', 'path', 'busy', 'busyLine'],
+    ['Step 3 of 5, Fetch the code, not started', null, 'sepStrong', null],
+    ['Step 4 of 5, Build, failed', 'path', 'bad', 'bad'],
+    ['Step 5 of 5, Start the app, skipped', 'circle', 'sep', null],
+  ] as const)('reads %s to a screen reader, with its glyph, node tone and segment fill', (name, shape, border, fill) => {
     render(<DeployProgressRail progress={EVERY_STATE} />)
-    const item = screen.getByLabelText(name)
-    const drawn = item.querySelector('svg')
+    const segment = screen.getByLabelText(name)
+    const drawn = segment.querySelector('svg')
     if (shape === null) {
       expect(drawn).toBeNull()
     } else {
       expect(drawn?.querySelector(shape)).not.toBeNull()
     }
-    const node = nodeOf(item)
-    if (tone !== 'idle') expect(styleOf(node).borderColor).toBe(token(scenario, tone))
-    expect(styleOf(node).borderRadius).toBe(9)
+    expect(styleOf(nodeOf(segment)).borderColor).toBe(token(scenario, border))
+    const fills = animated(segment).fills
+    if (fill === null) {
+      expect(fills).toHaveLength(0)
+    } else {
+      expect(styleOf(fills[0]).backgroundColor).toBe(token(scenario, fill))
+    }
   })
 
-  it('shows the failed and skipped words beside the label, not only the mark', () => {
+  it('is one full-width track of equal segments with an end cap', () => {
+    render(<DeployProgressRail progress={EVERY_STATE} />)
+    const track = screen.getByRole('list')
+    expect(styleOf(track).width).toBe('100%')
+    const segments = [...track.children].filter((el) => el.getAttribute('aria-label'))
+    expect(segments).toHaveLength(6)
+    for (const segment of segments) expect(styleOf(segment).flex).toBe(1)
+    const cap = track.lastElementChild as HTMLElement
+    expect(styleOf(cap).borderColor).toBe(token(scenario, 'sepStrong'))
+  })
+
+  it('shows the counter in mono small caps, the step name in the body face and the task in mono with a caret', () => {
+    render(<DeployProgressRail progress={EVERY_STATE} />)
+    const counter = screen.getByText('Step 02 / 05')
+    expect(styleOf(counter).fontFamily).toBe(fontFamily('monoSemibold', scenario.os === 'web'))
+    expect(styleOf(counter).textTransform).toBe('uppercase')
+    expect(styleOf(counter).letterSpacing).toBe(0.5)
+    expect(styleOf(counter).fontVariant).toEqual(['tabular-nums'])
+    expect(styleOf(counter).color).toBe(token(scenario, 'busy'))
+    expect(counter.getAttribute('aria-label')).toBe('Step 2 of 5')
+    const title = screen.getByText('Installing Node 22')
+    expect(styleOf(title).fontFamily).toBe(fontFamily('bodyMedium', scenario.os === 'web'))
+    const detail = screen.getByText('Unpack the archive')
+    expect(styleOf(detail).fontFamily).toBe(fontFamily('mono', scenario.os === 'web'))
+    const caret = detail.nextElementSibling as HTMLElement
+    expect(caret.getAttribute('data-animated')).toBe('yes')
+    expect(styleOf(caret).backgroundColor).toBe(token(scenario, 'busy'))
+    expect(
+      screen.getByText('First-time setup on this server. Installing what the app needs; this can take a few minutes.'),
+    ).toBeTruthy()
+  })
+
+  it('labels every node under the track on a wide screen', () => {
     render(<DeployProgressRail progress={EVERY_STATE} />)
     expect(screen.getByText('Build · failed')).toBeTruthy()
     expect(screen.getByText('Start the app · skipped')).toBeTruthy()
     expect(screen.getByText('Install Docker')).toBeTruthy()
+    expect(screen.queryByText('in progress')).toBeNull()
   })
 
-  it('fills the track after a ticked step and leaves it empty after the rest', () => {
+  it('lists the steps as a checklist with the state word at phone width', () => {
+    env.width = 390
     render(<DeployProgressRail progress={EVERY_STATE} />)
-    const fills = [...document.querySelectorAll('[data-animated]')]
-      .filter((el) => styleOf(el).position !== 'absolute')
-      .map((el) => styleOf(el).width)
-    expect(fills).toEqual(['100%', '100%', '0%', '0%', '0%'])
-    const [fill] = document.querySelectorAll('[data-animated]')
-    expect(styleOf(fill).backgroundColor).toBe(token(scenario, 'ok'))
+    expect(styleOf(screen.getByRole('list')).width).toBe('100%')
+    expect(screen.getByText('in progress')).toBeTruthy()
+    expect(screen.getByText('already on this server')).toBeTruthy()
+    expect(screen.getByText('not started')).toBeTruthy()
+    expect(screen.getByText('Build')).toBeTruthy()
+    expect(screen.queryByText('Build · failed')).toBeNull()
   })
 
-  it('reads the step count in the body face, the task in the mono face and the first-time caption', () => {
-    render(<DeployProgressRail progress={EVERY_STATE} />)
-    const headline = screen.getByText('Step 2 of 5 · Installing Node 22')
-    expect(styleOf(headline).fontFamily).toBe(fontFamily('bodyMedium', scenario.os === 'web'))
-    const detail = screen.getByText('Unpack the archive')
-    expect(styleOf(detail).fontFamily).toBe(fontFamily('mono', scenario.os === 'web'))
-    expect(
-      screen.getByText(
-        'First-time setup on this server. Installing what the app needs; this can take a few minutes.',
-      ),
-    ).toBeTruthy()
-  })
-
-  it('pulses the running node only, and not under reduced motion', () => {
+  it('pulses and sweeps the running step, animating fills, but not under reduced motion', () => {
     const { container, unmount } = render(<DeployProgressRail progress={EVERY_STATE} />)
-    expect(halos(container)).toHaveLength(1)
-    expect(styleOf(halos(container)[0]).backgroundColor).toBe(token(scenario, 'busy'))
+    expect(animated(container).halos).toHaveLength(1)
+    expect(styleOf(animated(container).halos[0]).backgroundColor).toBe(token(scenario, 'busy'))
+    expect(animated(container).sweeps).toHaveLength(1)
+    expect(motion.repeat).toHaveBeenCalled()
+    expect(motion.timing).toHaveBeenCalledWith(100, { duration: 200 })
     unmount()
+    motion.timing.mockClear()
+    motion.repeat.mockClear()
+
     motion.reduce = true
     const reduced = render(<DeployProgressRail progress={EVERY_STATE} />)
-    expect(halos(reduced.container)).toHaveLength(0)
-    expect(screen.getByLabelText('Install Node 22: in progress')).toBeTruthy()
+    expect(animated(reduced.container).halos).toHaveLength(0)
+    expect(animated(reduced.container).sweeps).toHaveLength(0)
+    expect(motion.repeat).not.toHaveBeenCalled()
+    expect(motion.timing).not.toHaveBeenCalled()
+    const fills = animated(reduced.container).fills
+    expect(fills.length).toBeGreaterThan(0)
+    for (const fill of fills) expect(styleOf(fill).width).toBe('100%')
+    const runningFill = animated(screen.getByLabelText('Step 2 of 5, Install Node 22, in progress')).fills[0]
+    expect(styleOf(runningFill).backgroundColor).toBe(token(scenario, 'busy'))
+    const caret = screen.getByText('Unpack the archive').nextElementSibling as HTMLElement
+    expect(styleOf(caret).opacity).toBe(1)
   })
 
-  it('times the running step in mm:ss and stops when nothing runs', () => {
+  it('times the running step in mm:ss, stops when nothing runs, and needs a start time', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-10-12T10:03:07.000Z'))
     const { rerender } = render(<DeployProgressRail progress={EVERY_STATE} />)
@@ -161,6 +212,8 @@ describe.each(SCENARIOS)('DeployProgressRail ($name)', (scenario) => {
       vi.advanceTimersByTime(60_000)
     })
     expect(screen.getByText('01:07')).toBeTruthy()
+    rerender(<DeployProgressRail progress={progress([step('build', 'Build', 'running')], 'build')} />)
+    expect(screen.queryByText(/^\d\d:\d\d$/)).toBeNull()
     rerender(
       <DeployProgressRail
         progress={progress([step('build', 'Build', 'done'), step('start', 'Start the app', 'done')])}
@@ -170,21 +223,24 @@ describe.each(SCENARIOS)('DeployProgressRail ($name)', (scenario) => {
     expect(screen.getByText('All 2 steps done')).toBeTruthy()
   })
 
-  it('ticks every step and drops the caption once the deploy succeeded', () => {
-    render(
+  it('ends green with the time it took and no caption once the deploy succeeded', () => {
+    const { container } = render(
       <DeployProgressRail
         progress={progress([
-          step('install-docker', 'Install Docker', 'done'),
-          step('build', 'Build', 'done'),
+          step('install-docker', 'Install Docker', 'done', { startedAt: '2026-10-12T10:00:00Z', finishedAt: '2026-10-12T10:02:00Z' }),
+          step('build', 'Build', 'done', { startedAt: '2026-10-12T10:02:00Z', finishedAt: '2026-10-12T10:03:12Z' }),
         ])}
       />,
     )
-    expect(screen.getByLabelText('Install Docker: done').querySelector('path')).not.toBeNull()
-    expect(screen.getByLabelText('Build: done').querySelector('path')).not.toBeNull()
+    expect(screen.getByText('All 2 steps done · 03:12')).toBeTruthy()
+    expect(styleOf(screen.getByText('Step 02 / 02')).color).toBe(token(scenario, 'ok'))
+    for (const fill of animated(container).fills) expect(styleOf(fill).backgroundColor).toBe(token(scenario, 'ok'))
+    const cap = screen.getByRole('list').lastElementChild as HTMLElement
+    expect(styleOf(cap).backgroundColor).toBe(token(scenario, 'ok'))
     expect(screen.queryByText(/First-time setup/)).toBeNull()
   })
 
-  it('names the failed step when the deploy stopped', () => {
+  it('names the failed step and paints its segment red', () => {
     render(
       <DeployProgressRail
         progress={progress([
@@ -194,7 +250,10 @@ describe.each(SCENARIOS)('DeployProgressRail ($name)', (scenario) => {
         ])}
       />,
     )
-    expect(screen.getByText('Step 2 of 3 · Build failed')).toBeTruthy()
-    expect(styleOf(nodeOf(screen.getByLabelText('Build: failed'))).borderColor).toBe(token(scenario, 'bad'))
+    expect(screen.getByText('Failed at step 2 of 3 · Build')).toBeTruthy()
+    expect(styleOf(screen.getByText('Step 02 / 03')).color).toBe(token(scenario, 'bad'))
+    const failed = screen.getByLabelText('Step 2 of 3, Build, failed')
+    expect(styleOf(nodeOf(failed)).borderColor).toBe(token(scenario, 'bad'))
+    expect(styleOf(animated(failed).fills[0]).backgroundColor).toBe(token(scenario, 'bad'))
   })
 })
