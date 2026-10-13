@@ -141,7 +141,7 @@ describe('suggestedSimpleAppConfig', () => {
       inspection([
         found(
           'package.json',
-          JSON.stringify({ scripts: { build: 'next build', start: 'next start' } }),
+          JSON.stringify({ scripts: { build: 'tsc', start: 'node dist/server.js' } }),
         ),
         found('pnpm-lock.yaml'),
       ]),
@@ -149,6 +149,32 @@ describe('suggestedSimpleAppConfig', () => {
     expect(config.kind).toBe('web')
     expect(config.buildCommand).toBe('pnpm run build')
     expect(config.startCommand).toBe('pnpm start')
+  })
+
+  it.each(['next start', 'next start -p 3000', 'npx next start', 'node_modules/.bin/next start'])(
+    'leaves the start command empty for a Next.js start script (%s) — the daemon starts it',
+    (start) => {
+      const config = suggestedSimpleAppConfig(
+        inspection([
+          found('package.json', JSON.stringify({ scripts: { build: 'next build', start } })),
+          found('pnpm-lock.yaml'),
+        ]),
+      )
+      expect(config.buildCommand).toBe('pnpm run build')
+      expect(config.startCommand).toBe('')
+    },
+  )
+
+  it('still prefills a start script that only resembles next start', () => {
+    const config = suggestedSimpleAppConfig(
+      inspection([
+        found(
+          'package.json',
+          JSON.stringify({ scripts: { start: 'node next-server.js', build: 'tsc' } }),
+        ),
+      ]),
+    )
+    expect(config.startCommand).toBe('npm start')
   })
 
   it('suggests no command the package.json does not declare', () => {
@@ -166,7 +192,7 @@ describe('suggestedSimpleAppConfig', () => {
           'package.json',
           JSON.stringify({
             packageManager: 'pnpm@12.3.4',
-            scripts: { build: 'next build', start: 'next start' },
+            scripts: { build: 'tsc', start: 'node .' },
           }),
         ),
         refused('pnpm-lock.yaml', 'too_large'),
