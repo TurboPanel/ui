@@ -2115,7 +2115,8 @@ async function serverDeleteError(response: Response, path: string): Promise<Erro
     )
   }
 
-  return new Error(`${path} failed: ${body.error ?? `HTTP ${response.status}`}`)
+  const detail = body.error ?? `HTTP ${response.status}`
+  return new Error(`${path} failed: ${detail}`)
 }
 
 export async function deleteServer(
