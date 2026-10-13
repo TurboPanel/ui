@@ -132,6 +132,11 @@ export const queryKeys = {
         /** What is attached to one server (`GET /servers/:id/services`). */
         services: (serverId: string) => ['org', orgId, 'server', serverId, 'services'] as const,
         labels: (serverId: string) => ['org', orgId, 'server', serverId, 'labels'] as const,
+        /** Principals placed on one server (`GET /servers/:id/principals`). */
+        principals: (serverId: string) => ['org', orgId, 'server', serverId, 'principals'] as const,
+        /** Per-principal choices when removing the server (`/servers/:id/principal-removal-plan`). */
+        principalRemovalPlan: (serverId: string) =>
+          ['org', orgId, 'server', serverId, 'principal-removal-plan'] as const,
         deletePreview: (serverId: string) =>
           ['org', orgId, 'server', serverId, 'delete-preview'] as const,
         /** PHP mode policy one server offers (`/servers/:id/php-modes`). */
@@ -140,6 +145,9 @@ export const queryKeys = {
         managedExternalAccess: (serverId: string) =>
           ['org', orgId, 'server', serverId, 'managed-external-access'] as const,
       },
+
+      /** Every principal in the organization (`GET /organizations/:id/principals`). */
+      principals: ['org', orgId, 'principals'] as const,
 
       settings: {
         all: ['org', orgId, 'settings'] as const,

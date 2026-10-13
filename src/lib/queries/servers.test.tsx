@@ -27,6 +27,8 @@ import {
   useResetServerUpdateStatus,
   useRevokeServerDaemonKey,
   useServerDeletePreview,
+  useServerPrincipals,
+  useServerPrincipalRemovalPlan,
   useSaveOrgTemperatureUnit,
   useSaveServerLabels,
   useSetServerLicenseTier,
@@ -65,6 +67,8 @@ const {
   fetchServer,
   fetchServerLabels,
   fetchServerServices,
+  fetchServerPrincipals,
+  fetchServerPrincipalRemovalPlan,
   fetchTimezones,
   deleteServer,
   getServerDeletePreview,
@@ -101,6 +105,8 @@ const {
   fetchServer: vi.fn(),
   fetchServerLabels: vi.fn(),
   fetchServerServices: vi.fn(),
+  fetchServerPrincipals: vi.fn(),
+  fetchServerPrincipalRemovalPlan: vi.fn(),
   fetchTimezones: vi.fn(),
   deleteServer: vi.fn(),
   getServerDeletePreview: vi.fn(),
@@ -142,6 +148,8 @@ vi.mock('@/lib/instance-api', async (importOriginal) => {
     fetchServer,
     fetchServerLabels,
     fetchServerServices,
+    fetchServerPrincipals,
+    fetchServerPrincipalRemovalPlan,
     fetchTimezones,
     deleteServer,
     getServerDeletePreview,
@@ -1427,6 +1435,28 @@ describe('servers query hooks', () => {
     await result.current.run({ serverId, forgetResources: true })
     expect(deleteServer).toHaveBeenCalledWith(serverId, orgId, { forgetResources: true })
     expect(invalidateSpy).toHaveBeenCalled()
+
+    deleteServer.mockResolvedValueOnce({ ok: true })
+    const choices = [{ principalId: 'p1', action: 'delete' as const }]
+    await result.current.run({ serverId, principals: choices })
+    expect(deleteServer).toHaveBeenLastCalledWith(serverId, orgId, { principals: choices })
+  })
+
+  it('useServerPrincipals and useServerPrincipalRemovalPlan load the server principals', async () => {
+    fetchServerPrincipals.mockResolvedValueOnce({ serverId, principals: [] })
+    fetchServerPrincipalRemovalPlan.mockResolvedValueOnce({ serverId, principals: [] })
+    const list = renderHook(() => useServerPrincipals(orgId, serverId), {
+      wrapper: createWrapper(),
+    })
+    const plan = renderHook(() => useServerPrincipalRemovalPlan(orgId, serverId), {
+      wrapper: createWrapper(),
+    })
+    await waitFor(() => {
+      expect(list.result.current.isSuccess).toBe(true)
+      expect(plan.result.current.isSuccess).toBe(true)
+    })
+    expect(fetchServerPrincipals).toHaveBeenCalledWith(serverId, orgId)
+    expect(fetchServerPrincipalRemovalPlan).toHaveBeenCalledWith(serverId, orgId)
   })
 
   it('useServerDeletePreview loads the forget list', async () => {

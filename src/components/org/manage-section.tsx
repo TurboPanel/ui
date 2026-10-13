@@ -8,6 +8,7 @@ import { ReauthSettingsSection } from '@/components/org/reauth-settings-section'
 import { OrganizationChannelsSection } from '@/components/account/notification-channels-section'
 import { AccessOverviewSection } from '@/components/org/access-overview-section'
 import { GitSourcesSection } from '@/components/org/git-sources/git-sources-section'
+import { OrgPrincipalsTab } from '@/components/org/org-principals-tab'
 import { TlsOverviewSection } from '@/components/org/tls-overview-section'
 import { Button, ButtonRow, SectionPanel } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
@@ -71,14 +72,16 @@ function SettingsTabBody({
       return <TlsOverviewSection orgId={orgId} />
     case 'git':
       return <GitSourcesSection scope="org" orgId={orgId} />
+    case 'principals':
+      return <OrgPrincipalsTab orgId={orgId} />
     default:
       return <GeneralTab orgId={orgId} />
   }
 }
 
 /**
- * Organization settings: five tabs (General, Members, Notifications, Domains
- * & certificates, Git connections), reached from the organization menu in the
+ * Organization settings: six tabs (General, Members, Notifications, Domains
+ * & certificates, Git connections, Principals), reached from the organization menu in the
  * header. Each tab hosts the screen that already did the job, so every setting
  * keeps its place and its route (`/access`, `/servers/tls`,
  * `/projects/git-sources`, `/account/notifications`).
