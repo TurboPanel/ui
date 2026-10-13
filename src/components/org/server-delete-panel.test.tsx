@@ -226,7 +226,7 @@ describe('ServerDeletePanel', () => {
   it('sends no principal choices by default, so every principal is kept', () => {
     const onConfirm = vi.fn()
     useServerPrincipalRemovalPlan.mockReturnValue({
-      data: { principals: [{ principalId: 'p1', appliedUsername: 'alice_x' }] },
+      data: { principals: [{ principalId: 'p1', appliedUsername: 'alice_x', canDeleteOutright: true }] },
       isLoading: false,
       error: null,
     })
@@ -238,7 +238,7 @@ describe('ServerDeletePanel', () => {
   it('sends the principals chosen for outright deletion', () => {
     const onConfirm = vi.fn()
     useServerPrincipalRemovalPlan.mockReturnValue({
-      data: { principals: [{ principalId: 'p1', appliedUsername: 'alice_x' }] },
+      data: { principals: [{ principalId: 'p1', appliedUsername: 'alice_x', canDeleteOutright: true }] },
       isLoading: false,
       error: null,
     })

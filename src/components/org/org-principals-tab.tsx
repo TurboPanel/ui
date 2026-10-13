@@ -48,6 +48,12 @@ function usedByLines(row: OrgPrincipalRecord): string[] {
   return [...lines, ...usage]
 }
 
+function deletePrompt(row: OrgPrincipalRecord): string {
+  if (row.servers.length === 0) return `Delete ${row.name}? Nothing uses it.`
+  const where = row.servers.length === 1 ? 'its server' : 'its servers'
+  return `Delete ${row.name} and remove its system user from ${where}? Nothing uses it.`
+}
+
 function PrincipalRow({
   row,
   last,
@@ -69,7 +75,7 @@ function PrincipalRow({
       <DataTableCell column={C_NAME}>
         <MonoText>{row.name}</MonoText>
         {row.appliedUsername !== row.name ? (
-          <Text style={panelStyles.muted}>Login {row.appliedUsername}</Text>
+          <Text style={panelStyles.muted}>Linux name {row.appliedUsername}</Text>
         ) : null}
         <Text style={panelStyles.muted}>{principalFormLabels(row.forms)}</Text>
       </DataTableCell>
@@ -86,8 +92,9 @@ function PrincipalRow({
         )}
       </DataTableCell>
       <DataTableCell column={C_USED_BY}>
-        {usedByLines(row).map((line) => (
-          <Text key={line} style={panelStyles.detailLine}>
+        {usedByLines(row).map((line, lineIndex) => (
+           
+          <Text key={`${lineIndex}-${line}`} style={panelStyles.detailLine}>
             {line}
           </Text>
         ))}
@@ -104,9 +111,7 @@ function PrincipalRow({
           <ConfirmButton
             label="Delete"
             confirmLabel="Confirm delete"
-            prompt={`Delete ${row.name} and remove its system user from ${
-              row.servers.length === 1 ? 'its server' : 'its servers'
-            }? Nothing uses it.`}
+            prompt={deletePrompt(row)}
             busy={deleting}
             disabled={deleting}
             onConfirm={() => onDelete(row.id)}
@@ -141,7 +146,12 @@ export function OrgPrincipalsTab({ orgId }: Readonly<{ orgId: string }>) {
         {deleteMutation.actionError ? (
           <Text style={panelStyles.error}>{deleteMutation.actionError}</Text>
         ) : null}
-        {query.isLoading ? <LoadingState label="Loading principals…" /> : null}
+        {canManage ? null : (
+          <Text style={panelStyles.muted}>
+            Only organization owners and managers can see the list of principals.
+          </Text>
+        )}
+        {canManage && query.isLoading ? <LoadingState label="Loading principals…" /> : null}
         {query.error && !query.data ? (
           <InlineNotice
             tone="warning"

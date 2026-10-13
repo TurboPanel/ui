@@ -76,7 +76,7 @@ describe('ServerPrincipalsSection', () => {
         },
       ],
     }
-    render(<ServerPrincipalsSection orgId="org-1" serverId="s1" />)
+    render(<ServerPrincipalsSection orgId="org-1" serverId="s1" canManage />)
     expect(screen.getByText('shop_abc')).toBeTruthy()
     expect(screen.getByText('15002')).toBeTruthy()
     expect(screen.getByText('Being set up')).toBeTruthy()
@@ -87,11 +87,16 @@ describe('ServerPrincipalsSection', () => {
 
   it('says so when nothing is placed, and when loading fails', () => {
     state.query.data = { serverId: 's1', principals: [] }
-    const { unmount } = render(<ServerPrincipalsSection orgId="org-1" serverId="s1" />)
+    const { unmount } = render(<ServerPrincipalsSection orgId="org-1" serverId="s1" canManage />)
     expect(screen.getByText('No principals are placed on this server.')).toBeTruthy()
     unmount()
     state.query = { isLoading: false, error: new Error('x'), data: undefined }
-    render(<ServerPrincipalsSection orgId="org-1" serverId="s1" />)
+    render(<ServerPrincipalsSection orgId="org-1" serverId="s1" canManage />)
     expect(screen.getByText('Could not load the principals on this server')).toBeTruthy()
+  })
+
+  it('asks members without manager rights to ask a manager, without loading', () => {
+    render(<ServerPrincipalsSection orgId="org-1" serverId="s1" canManage={false} />)
+    expect(screen.getByText(/Only organization owners and managers/)).toBeTruthy()
   })
 })

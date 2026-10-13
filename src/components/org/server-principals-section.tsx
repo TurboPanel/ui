@@ -48,14 +48,20 @@ function idsLine(row: ServerPrincipalRecord): string {
 export function ServerPrincipalsSection({
   orgId,
   serverId,
-}: Readonly<{ orgId: string; serverId: string }>) {
-  const query = useServerPrincipals(orgId, serverId)
+  canManage,
+}: Readonly<{ orgId: string; serverId: string; canManage: boolean }>) {
+  const query = useServerPrincipals(orgId, serverId, { enabled: canManage })
   const rows = query.data?.principals ?? []
 
   return (
     <View style={styles.stack}>
       <SectionPanel title="Principals" hint={PRINCIPAL_SERVER_TAB_HINT}>
-        {query.isLoading && !query.data ? <LoadingState label="Loading principals…" /> : null}
+        {canManage ? null : (
+          <Text style={panelStyles.muted}>
+            Only organization owners and managers can see the principals on a server.
+          </Text>
+        )}
+        {canManage && query.isLoading && !query.data ? <LoadingState label="Loading principals…" /> : null}
         {query.error && !query.data ? (
           <InlineNotice
             tone="warning"

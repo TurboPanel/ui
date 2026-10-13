@@ -76,6 +76,7 @@ import {
   type ServerDetailRecord,
   type ServerUpdateStatus,
   type PrincipalRemovalChoice,
+  ServerPrincipalChoiceRefusedError,
 } from '@/lib/instance-api'
 import { commandErrorLine } from '@/lib/command-error'
 import { useCommandRecordsBatch } from '@/lib/queries/commands'
@@ -323,7 +324,7 @@ function DetailTabBody({
     case 'network':
       return <ServerNetworkSection orgId={orgId} server={server} />
     case 'principals':
-      return <ServerPrincipalsSection orgId={orgId} serverId={serverId} />
+      return <ServerPrincipalsSection orgId={orgId} serverId={serverId} canManage={canManage} />
     case 'firewall':
       return <ServerFirewallSection orgId={orgId} serverId={serverId} canManage={canManage} />
     case 'metrics':
@@ -826,6 +827,11 @@ export function ServerDetailSection({
             if (blocked) {
               queryClient.invalidateQueries({
                 queryKey: queryKeys.org(orgId).servers.deletePreview(serverId),
+              })
+            }
+            if (err instanceof ServerPrincipalChoiceRefusedError) {
+              queryClient.invalidateQueries({
+                queryKey: queryKeys.org(orgId).servers.principalRemovalPlan(serverId),
               })
             }
           },

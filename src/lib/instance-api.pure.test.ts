@@ -10,6 +10,7 @@ import {
   completeInstall,
   createLicense,
   deleteOrgPrincipal,
+  ServerPrincipalChoiceRefusedError,
   deleteServer,
   fetchOrgPrincipals,
   fetchServerPrincipalRemovalPlan,
@@ -995,6 +996,15 @@ describe('fetch wrappers (mocked fetch)', () => {
     expect(JSON.parse(String((init as RequestInit).body))).toEqual({
       principals: [{ principalId: 'p1', action: 'delete' }],
     })
+  })
+
+  it('deleteServer explains a refused principal choice without the API path', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ error: 'x', code: 'principal_delete_refused', principals: [] }, 409)
+    )
+    await expect(deleteServer('srv-1', 'org-1')).rejects.toBeInstanceOf(
+      ServerPrincipalChoiceRefusedError
+    )
   })
 
   it('deleteServer sends no body when nothing was chosen', async () => {

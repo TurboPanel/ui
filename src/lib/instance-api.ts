@@ -1903,6 +1903,16 @@ export class ServerDeleteBlockedError extends Error {
   }
 }
 
+/** 409 `principal_delete_refused` or 400 `principal_not_on_server`: the plan changed under the dialog. */
+export class ServerPrincipalChoiceRefusedError extends Error {
+  readonly code = 'principal_choice_refused'
+
+  constructor(message: string) {
+    super(message)
+    this.name = 'ServerPrincipalChoiceRefusedError'
+  }
+}
+
 export class ServerDeleteOnlineError extends Error {
   readonly code = 'server_online'
 
@@ -2109,6 +2119,12 @@ export async function deleteServer(
         throw new ServerDeleteOnlineError(body.error)
       }
       throw new ServerDeleteOnlineError()
+    }
+
+    if (body.code === 'principal_delete_refused' || body.code === 'principal_not_on_server') {
+      throw new ServerPrincipalChoiceRefusedError(
+        'Something changed while you were choosing: a principal is now used elsewhere or is no longer on this server. Check the list below and try again.'
+      )
     }
 
     if (response.status === 409 && body.code === SERVER_HAS_BLOCKERS_CODE && body.blockers) {

@@ -138,9 +138,11 @@ describe('ServerRemovalPrincipals', () => {
     expect(container.textContent).toBe('')
   })
 
-  it('deleteChoices keeps only the outright deletions', () => {
-    expect(deleteChoices({ a: 'keep', b: 'delete' })).toEqual([
-      { principalId: 'b', action: 'delete' },
+  it('deleteChoices keeps only outright deletions that are still in the plan and allowed', () => {
+    const plan = [entry({}), entry({ principalId: 'p-2', canDeleteOutright: false })]
+    expect(deleteChoices({ 'p-1': 'delete', 'p-2': 'delete', gone: 'delete', other: 'keep' }, plan)).toEqual([
+      { principalId: 'p-1', action: 'delete' },
     ])
+    expect(deleteChoices({ 'p-1': 'delete' }, undefined)).toEqual([])
   })
 })

@@ -122,4 +122,16 @@ describe('OrgPrincipalsTab', () => {
     render(<OrgPrincipalsTab orgId="org-1" />)
     expect(screen.getByText('Could not load principals')).toBeTruthy()
   })
+
+  it('tells members without manager rights the list is for managers', () => {
+    state.canManage = false
+    render(<OrgPrincipalsTab orgId="org-1" />)
+    expect(screen.getByText(/Only organization owners and managers/)).toBeTruthy()
+  })
+
+  it('asks a shorter question when the principal is on no server', () => {
+    state.query.data = { principals: [row({ servers: [], state: 'none' })] }
+    render(<OrgPrincipalsTab orgId="org-1" />)
+    expect(screen.getByText('Linux name shop_abc')).toBeTruthy()
+  })
 })

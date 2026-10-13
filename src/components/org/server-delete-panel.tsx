@@ -99,7 +99,7 @@ export function ServerDeletePanel({
         prompt="Permanently remove this server from the organization?"
         busy={busy}
         disabled={busy}
-        onConfirm={() => onConfirm(false, deleteChoices(choices))}
+        onConfirm={() => onConfirm(false, deleteChoices(choices, planQuery.data?.principals))}
       />
       {showForget ? (
         <ConfirmButton
@@ -108,7 +108,7 @@ export function ServerDeletePanel({
           prompt="Forget the listed records and permanently remove this server?"
           busy={busy}
           disabled={busy}
-          onConfirm={() => onConfirm(true, deleteChoices(choices))}
+          onConfirm={() => onConfirm(true, deleteChoices(choices, planQuery.data?.principals))}
         />
       ) : null}
     </View>

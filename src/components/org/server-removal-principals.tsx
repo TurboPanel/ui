@@ -17,10 +17,16 @@ export type PrincipalRemovalChoices = Readonly<Record<string, PrincipalRemovalAc
 
 /** The principals to delete outright; everything else keeps its identity (the default). */
 export function deleteChoices(
-  choices: PrincipalRemovalChoices
+  choices: PrincipalRemovalChoices,
+  plan: readonly PrincipalRemovalPlanEntry[] | undefined
 ): { principalId: string; action: 'delete' }[] {
+  // Only principals still in the plan and still deletable: a stale choice
+  // would be refused by the server.
+  const allowed = new Set(
+    (plan ?? []).filter((entry) => entry.canDeleteOutright).map((entry) => entry.principalId)
+  )
   return Object.entries(choices)
-    .filter(([, action]) => action === 'delete')
+    .filter(([principalId, action]) => action === 'delete' && allowed.has(principalId))
     .map(([principalId]) => ({ principalId, action: 'delete' as const }))
 }
 
@@ -71,7 +77,11 @@ export function ServerRemovalPrincipals({
               </Text>
             ) : null}
             <Select
-              value={choices[entry.principalId] ?? entry.defaultAction}
+              value={
+                entry.canDeleteOutright
+                  ? (choices[entry.principalId] ?? entry.defaultAction)
+                  : 'keep'
+              }
               options={options}
               placeholder="Choose what to do"
               disabled={disabled}
