@@ -4,13 +4,17 @@ import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 let windowWidth = 1280
+let platformOS = 'web'
 
 type Props = Readonly<Record<string, unknown> & { children?: ReactNode }>
 
 // Plain DOM stand-ins for the few React Native pieces the panel uses, so the
 // test checks roles, labels and behaviour without a native runtime.
 vi.mock('react-native', () => ({
-  Platform: { OS: 'web', select: (o: Record<string, unknown>) => o.web ?? o.default },
+  Platform: {
+    get OS() {
+      return platformOS
+    }, select: (o: Record<string, unknown>) => o.web ?? o.default },
   StyleSheet: { create: (styles: unknown) => styles },
   View: ({ children, accessibilityRole, accessibilityLabel, onKeyDown }: Props) => (
     <div
@@ -78,6 +82,7 @@ async function openPanel() {
 
 beforeEach(() => {
   windowWidth = 1280
+  platformOS = 'web'
   storage = memoryStorage()
   vi.stubGlobal('localStorage', storage)
   vi.stubGlobal('matchMedia', () => ({
@@ -146,6 +151,21 @@ describe('UiSettings', () => {
     storage.setItem('turbopanel.theme', 'dark')
     await openPanel()
     expect(checkedNames('Theme')).toEqual(['Dark'])
+  })
+
+  it('Home and End jump to the first and last option', async () => {
+    await openPanel()
+    fireEvent.keyDown(screen.getByRole('radio', { name: 'Match computer' }), { key: 'Home' })
+    expect(checkedNames('Theme')).toEqual(['Light'])
+    fireEvent.keyDown(screen.getByRole('radio', { name: 'Light' }), { key: 'End' })
+    expect(checkedNames('Theme')).toEqual(['Match computer'])
+  })
+
+  it('hides the Page layout row off web but keeps Theme', async () => {
+    platformOS = 'ios'
+    await openPanel()
+    expect(screen.getByRole('radiogroup', { name: 'Theme' })).toBeTruthy()
+    expect(screen.queryByRole('radiogroup', { name: 'Page layout' })).toBeNull()
   })
 
   it('has a Page layout group of Left, Center and Wide that follows the stored choice', async () => {

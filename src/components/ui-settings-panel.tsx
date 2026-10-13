@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import {
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -52,7 +53,7 @@ type Choice<T extends string> = Readonly<{
 
 /**
  * One radio group of equal buttons. Exactly one option is checked and only it
- * is a tab stop; the arrow keys move the choice (web).
+ * is a tab stop; the arrow keys move the choice and Home/End jump to the first/last (web).
  */
 function ChoiceRow<T extends string>({
   label,
@@ -71,19 +72,19 @@ function ChoiceRow<T extends string>({
     currentTarget: unknown
     preventDefault: () => void
   }) => {
-    const step =
-      event.key === 'ArrowRight' || event.key === 'ArrowDown'
-        ? 1
-        : event.key === 'ArrowLeft' || event.key === 'ArrowUp'
-          ? -1
-          : 0
-    if (step === 0) return
+    const jump = event.key === 'Home' || event.key === 'End'
+    let step = 0
+    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') step = 1
+    else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') step = -1
+    if (step === 0 && !jump) return
     const group = event.currentTarget as HTMLElement
     const radios = Array.from(group.querySelectorAll<HTMLElement>('[role="radio"]'))
     const at = radios.indexOf(event.target as HTMLElement)
     if (at < 0) return
     event.preventDefault()
-    const next = (at + step + radios.length) % radios.length
+    let next = (at + step + radios.length) % radios.length
+    if (event.key === 'Home') next = 0
+    else if (event.key === 'End') next = radios.length - 1
     radios[next]?.focus()
     const choice = choices[next]
     if (choice) onChange(choice.value)
@@ -143,7 +144,7 @@ const LAYOUT_CHOICES: readonly Choice<PageWidthMode>[] = PAGE_WIDTH_MODES.map((m
 
 /**
  * "UI settings" row for the profile menu: collapsed by default, opens to a
- * Theme row (Light, Dark, System) and, on wide windows, a Page layout row
+ * Theme row (Light, Dark, System) and, on wide web windows, a Page layout row
  * (Left, Center, Wide). Both choices are saved in this browser only.
  */
 export function UiSettings() {
@@ -152,7 +153,8 @@ export function UiSettings() {
   const themeMode = useThemeMode()
   const pageWidth = usePageWidth()
   const showTheme = themeSwitchSupported()
-  const showLayout = width >= PAGE_LAYOUT_MIN_WIDTH
+  // The phone shell already passes maxWidth=width, so the choice does nothing there.
+  const showLayout = Platform.OS === 'web' && width >= PAGE_LAYOUT_MIN_WIDTH
   if (!showTheme && !showLayout) return null
 
   return (
