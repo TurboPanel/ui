@@ -151,7 +151,15 @@ describe('suggestedSimpleAppConfig', () => {
     expect(config.startCommand).toBe('pnpm start')
   })
 
-  it.each(['next start', 'next start -p 3000', 'npx next start', 'node_modules/.bin/next start'])(
+  it.each([
+    'next start',
+    'next start -p 3000',
+    'NODE_ENV=production next start',
+    'npx next start',
+    'node_modules/.bin/next start',
+    'prisma migrate deploy && next start',
+    'node .next/standalone/server.js',
+  ])(
     'leaves the start command empty for a Next.js start script (%s) — the daemon starts it',
     (start) => {
       const config = suggestedSimpleAppConfig(
@@ -165,17 +173,15 @@ describe('suggestedSimpleAppConfig', () => {
     },
   )
 
-  it('still prefills a start script that only resembles next start', () => {
-    const config = suggestedSimpleAppConfig(
-      inspection([
-        found(
-          'package.json',
-          JSON.stringify({ scripts: { start: 'node next-server.js', build: 'tsc' } }),
-        ),
-      ]),
-    )
-    expect(config.startCommand).toBe('npm start')
-  })
+  it.each(['node next-server.js', 'nuxt start', 'next-start'])(
+    'still prefills a start script that only resembles next start (%s)',
+    (start) => {
+      const config = suggestedSimpleAppConfig(
+        inspection([found('package.json', JSON.stringify({ scripts: { start, build: 'tsc' } }))]),
+      )
+      expect(config.startCommand).toBe('npm start')
+    },
+  )
 
   it('suggests no command the package.json does not declare', () => {
     const config = suggestedSimpleAppConfig(

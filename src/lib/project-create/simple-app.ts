@@ -157,14 +157,15 @@ function runScript(manager: NodePackageManager | undefined, script: string): str
 const NEXT_START_RE = /(?:^|\s|\/)next\s+start(?:\s|$)/
 
 /**
- * True when the daemon already knows how to start this app, so suggesting the
- * package start script would be wrong. A Next.js app is started by the daemon
- * itself: `node server.js` for a standalone build (that tree has no `next`
- * command, so `pnpm start` cannot run there and fails the build), `next start`
- * otherwise.
+ * True when suggesting the package start script would be wrong because the
+ * daemon starts this app itself. A Next.js app is one: for a standalone build
+ * the daemon publishes the standalone tree as the release and runs
+ * `node server.js` (that tree has no `next` command, so `pnpm start` cannot
+ * run there and fails the build, and a script path under `.next/standalone/`
+ * does not exist there); without standalone output it runs the script itself.
  */
-export function daemonStartsItself(startScript: string): boolean {
-  return NEXT_START_RE.test(startScript.trim())
+function daemonStartsItself(startScript: string): boolean {
+  return NEXT_START_RE.test(startScript) || startScript.includes('.next/standalone/')
 }
 
 /**
