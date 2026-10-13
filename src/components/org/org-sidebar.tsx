@@ -234,9 +234,7 @@ export function OrgSidebar({
       <View style={styles.brand}>
         <View style={styles.brandRow}>
           <TurboPanelLogo size={36} />
-          <View style={styles.brandPill}>
-            <HighAvailabilityWordmark />
-          </View>
+          <HighAvailabilityWordmark style={styles.brandPill} />
         </View>
       </View>
 
@@ -322,7 +320,6 @@ const styles = StyleSheet.create({
   },
   // Two pixels down so the pill and version line centre on the T.
   brandPill: {
-    position: 'relative',
     top: 2,
   },
   brand: {
