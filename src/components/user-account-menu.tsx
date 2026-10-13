@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   Platform,
   Pressable,
@@ -15,14 +15,18 @@ import { AccountAvatar } from '@/components/account-avatar'
 import { GlassSurface } from '@/components/glass/glass-surface'
 import { HeaderChevron } from '@/components/header-chevron'
 import {
-  HEADER_MENU_WIDTH,
   HEADER_TRIGGER_ICON_SIZE,
   headerMenuGroupStyles,
 } from '@/components/header-menu-group-styles'
 import { HeaderMenuOverlay } from '@/components/header-menu-overlay'
 import { HeaderMenuTrigger } from '@/components/header-menu-trigger'
-import { ThemeSwitch } from '@/components/header-theme-switch'
-import { UserIcon } from '@/components/icons/nav-icons'
+import {
+  AboutMenuIcon,
+  SecurityMenuIcon,
+  SignOutMenuIcon,
+} from '@/components/icons/account-menu-icons'
+import { NotificationsBellIcon, UserIcon } from '@/components/icons/nav-icons'
+import { UiSettings } from '@/components/ui-settings-panel'
 import { NotificationsPanelBody } from '@/components/notifications-panel-body'
 import {
   formatControlPlaneHostLabel,
@@ -40,6 +44,9 @@ import { HA_PRODUCT_NAME } from '@/lib/platform-copy'
 import { colors, layout, webPointer } from '@/lib/theme'
 
 const isNative = Platform.OS !== 'web'
+
+/** Profile menu width; compact panels shrink to the window minus 24. */
+const ACCOUNT_MENU_WIDTH = 296
 
 type UserAccountMenuSegmentProps = Readonly<{
   email: string
@@ -102,11 +109,40 @@ function UserAccountTriggerContent({
   )
 }
 
+function AccountRow({
+  label,
+  icon,
+  onPress,
+  danger = false,
+}: Readonly<{
+  label: string
+  icon: ReactNode
+  onPress: () => void
+  danger?: boolean
+}>) {
+  return (
+    <Pressable
+      style={({ pressed }) => [
+        styles.row,
+        pressed && headerMenuGroupStyles.itemPressed,
+        webPointer,
+      ]}
+      onPress={onPress}
+      accessibilityRole="menuitem"
+      accessibilityLabel={label}
+    >
+      {icon}
+      <Text style={danger ? styles.signOutLabel : headerMenuGroupStyles.menuActionLabel}>
+        {label}
+      </Text>
+    </Pressable>
+  )
+}
+
 function UserAccountMenuBody({
   email,
   panelStyle,
   foldNotifications,
-  showThemeSwitch,
   showSwitcher,
   activeOrigin,
   activeKind,
@@ -123,8 +159,6 @@ function UserAccountMenuBody({
   panelStyle?: StyleProp<ViewStyle>
   /** Notifications live in this menu instead of a separate bell. */
   foldNotifications: boolean
-  /** Narrow web: the Light / Dark / Match computer choice lives here. */
-  showThemeSwitch: boolean
   showSwitcher: boolean
   activeOrigin: string | null
   activeKind: ControlPlaneAccount['kind'] | undefined
@@ -150,20 +184,22 @@ function UserAccountMenuBody({
         </>
       ) : null}
 
-      <View style={styles.accountBlock}>
-        <Text style={headerMenuGroupStyles.menuHeading}>Signed in as</Text>
-        <Text style={styles.accountEmail} selectable numberOfLines={2}>
-          {email}
-        </Text>
-        {showSwitcher && activeOrigin ? (
-          <Text style={styles.accountOrigin} numberOfLines={1}>
-            {controlPlaneLabel({
-              kind: activeKind ?? 'self-hosted',
-              origin: activeOrigin,
-            })}
+      {showSwitcher ? (
+        <View style={styles.accountBlock}>
+          <Text style={headerMenuGroupStyles.menuHeading}>Signed in as</Text>
+          <Text style={styles.accountEmail} selectable numberOfLines={2}>
+            {email}
           </Text>
-        ) : null}
-      </View>
+          {activeOrigin ? (
+            <Text style={styles.accountOrigin} numberOfLines={1}>
+              {controlPlaneLabel({
+                kind: activeKind ?? 'self-hosted',
+                origin: activeOrigin,
+              })}
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
 
       {showSwitcher && otherAccounts.length > 0 ? (
         <>
@@ -212,66 +248,30 @@ function UserAccountMenuBody({
         </>
       ) : null}
 
-      {showThemeSwitch ? (
-        <>
-          <View style={headerMenuGroupStyles.menuDivider} />
-          <ThemeSwitch variant="menu" />
-        </>
-      ) : null}
+      {showSwitcher ? <View style={headerMenuGroupStyles.menuDivider} /> : null}
 
-      <View style={headerMenuGroupStyles.menuDivider} />
-
-      <Pressable
-        style={({ pressed }) => [
-          headerMenuGroupStyles.menuAction,
-          pressed && headerMenuGroupStyles.itemPressed,
-          webPointer,
-        ]}
+      <AccountRow
+        label="Security"
         onPress={onSecurity}
-        accessibilityRole="menuitem"
-        accessibilityLabel="Security"
-      >
-        <Text style={headerMenuGroupStyles.menuActionLabel}>Security</Text>
-      </Pressable>
-
-      <Pressable
-        style={({ pressed }) => [
-          headerMenuGroupStyles.menuAction,
-          pressed && headerMenuGroupStyles.itemPressed,
-          webPointer,
-        ]}
+        icon={<SecurityMenuIcon size={16} color={colors.textDim} />}
+      />
+      <AccountRow
+        label="Notifications"
         onPress={onNotifications}
-        accessibilityRole="menuitem"
-        accessibilityLabel="Notifications"
-      >
-        <Text style={headerMenuGroupStyles.menuActionLabel}>Notifications</Text>
-      </Pressable>
-
-      <Pressable
-        style={({ pressed }) => [
-          headerMenuGroupStyles.menuAction,
-          pressed && headerMenuGroupStyles.itemPressed,
-          webPointer,
-        ]}
+        icon={<NotificationsBellIcon size={16} color={colors.textDim} />}
+      />
+      <AccountRow
+        label="About"
         onPress={onAbout}
-        accessibilityRole="menuitem"
-        accessibilityLabel="About"
-      >
-        <Text style={headerMenuGroupStyles.menuActionLabel}>About</Text>
-      </Pressable>
-
-      <Pressable
-        style={({ pressed }) => [
-          headerMenuGroupStyles.menuAction,
-          pressed && headerMenuGroupStyles.itemPressed,
-          webPointer,
-        ]}
+        icon={<AboutMenuIcon size={16} color={colors.textDim} />}
+      />
+      <AccountRow
+        label="Sign out"
+        danger
         onPress={onSignOut}
-        accessibilityRole="menuitem"
-        accessibilityLabel="Sign out"
-      >
-        <Text style={styles.signOutLabel}>Sign out</Text>
-      </Pressable>
+        icon={<SignOutMenuIcon size={16} color={colors.errorText} />}
+      />
+      <UiSettings />
     </GlassSurface>
   )
 }
@@ -302,7 +302,7 @@ export function UserAccountMenuSegment({ email, onSignOut }: UserAccountMenuSegm
     buttonRef.current?.measureInWindow((x, y, w, h) => {
       setMenuPosition({
         top: y + h + 6,
-        left: Math.max(12, x + w - HEADER_MENU_WIDTH),
+        left: Math.max(12, x + w - ACCOUNT_MENU_WIDTH),
       })
     })
   }, [open, isCompact])
@@ -369,12 +369,12 @@ export function UserAccountMenuSegment({ email, onSignOut }: UserAccountMenuSegm
         closeAccessibilityLabel="Close account menu"
         presentation={isCompact ? 'fromRight' : 'dropdown'}
         dropdownPosition={menuPosition}
+        menuWidth={ACCOUNT_MENU_WIDTH}
       >
         <UserAccountMenuBody
           email={email}
           panelStyle={isCompact ? styles.rightPanel : undefined}
           foldNotifications={header.iconOnlyAccount}
-          showThemeSwitch={header.themeSwitchInMenu}
           showSwitcher={showSwitcher}
           activeOrigin={store.activeOrigin}
           activeKind={activeAccount?.kind}
@@ -402,6 +402,15 @@ const styles = StyleSheet.create({
     maxHeight: '100%',
     borderTopRightRadius: 0,
     borderBottomRightRadius: 0,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    minHeight: 36,
+    paddingHorizontal: 8,
+    paddingVertical: 9,
+    borderRadius: 8,
   },
   accountBlock: {
     paddingBottom: 2,

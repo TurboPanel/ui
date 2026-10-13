@@ -12,6 +12,8 @@ import { colors, layout, spacing } from '@/lib/theme'
 
 export type OrgScreenScrollInsets = Readonly<{
   maxWidth: number
+  /** Column placement beside the nav; defaults to the left edge. */
+  align?: 'flex-start' | 'center'
   paddingBottom?: number
   paddingHorizontal: number
   paddingVertical: number
@@ -75,6 +77,7 @@ export function OrgScreenScroll({
         styles.content,
         {
           maxWidth: insets.maxWidth,
+          alignSelf: insets.align ?? 'flex-start',
           paddingHorizontal: insets.paddingHorizontal,
           paddingVertical: insets.paddingVertical,
         },
@@ -97,8 +100,6 @@ const styles = StyleSheet.create({
   },
   content: {
     width: '100%',
-    // Left-aligned: a contained page hugs the sidebar instead of floating mid-screen.
-    alignSelf: 'flex-start',
     gap: spacing.md,
   },
 })
