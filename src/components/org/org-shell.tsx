@@ -13,7 +13,7 @@ import { OrgSidebar } from '@/components/org/org-sidebar'
 import { WorkspaceScopeProvider } from '@/lib/workspace-scope-context'
 import { PullToRefreshProvider } from '@/lib/pull-to-refresh'
 import { glass } from '@/lib/glass'
-import { contentMaxWidthFor, usePageWidth } from '@/lib/page-width'
+import { contentAlignFor, contentMaxWidthFor, usePageWidth } from '@/lib/page-width'
 import { colors, layout } from '@/lib/theme'
 
 export function OrgShell({
@@ -65,7 +65,11 @@ export function OrgShell({
                 onMenuPress={isDesktop ? undefined : () => setDrawerOpen(true)}
               />
               <UpdateAvailableBanner />
-              <OrgShellContent orgId={orgId} maxWidth={contentMaxWidth}>
+              <OrgShellContent
+                orgId={orgId}
+                maxWidth={contentMaxWidth}
+                align={contentAlignFor(pageWidth)}
+              >
                 {children}
               </OrgShellContent>
             </View>
