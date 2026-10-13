@@ -2088,6 +2088,36 @@ function serverDeleteRequestBody(
   }
 }
 
+async function serverDeleteError(response: Response, path: string): Promise<Error> {
+  let body: {
+    error?: string
+    code?: string
+    blockers?: ServerDeleteBlocker[]
+  } = {}
+  try {
+    body = (await response.json()) as typeof body
+  } catch {
+    // Non-JSON error body.
+  }
+
+  if (response.status === 409 && body.code === SERVER_ONLINE_CODE) {
+    return body.error ? new ServerDeleteOnlineError(body.error) : new ServerDeleteOnlineError()
+  }
+
+  if (isPrincipalChoiceRefusal(body.code)) {
+    return new ServerPrincipalChoiceRefusedError(PRINCIPAL_CHOICE_REFUSED_MESSAGE)
+  }
+
+  if (response.status === 409 && body.code === SERVER_HAS_BLOCKERS_CODE && body.blockers) {
+    return new ServerDeleteBlockedError(
+      body.error ?? 'Cannot delete this server while dependent resources still exist',
+      body.blockers
+    )
+  }
+
+  return new Error(`${path} failed: ${body.error ?? `HTTP ${response.status}`}`)
+}
+
 export async function deleteServer(
   serverId: string,
   organizationId?: string | null,
@@ -2116,37 +2146,7 @@ export async function deleteServer(
   })
 
   if (!response.ok) {
-    let body: {
-      error?: string
-      code?: string
-      blockers?: ServerDeleteBlocker[]
-    } = {}
-    try {
-      body = (await response.json()) as typeof body
-    } catch {
-      // Non-JSON error body.
-    }
-
-    if (response.status === 409 && body.code === SERVER_ONLINE_CODE) {
-      if (body.error) {
-        throw new ServerDeleteOnlineError(body.error)
-      }
-      throw new ServerDeleteOnlineError()
-    }
-
-    if (isPrincipalChoiceRefusal(body.code)) {
-      throw new ServerPrincipalChoiceRefusedError(PRINCIPAL_CHOICE_REFUSED_MESSAGE)
-    }
-
-    if (response.status === 409 && body.code === SERVER_HAS_BLOCKERS_CODE && body.blockers) {
-      throw new ServerDeleteBlockedError(
-        body.error ?? 'Cannot delete this server while dependent resources still exist',
-        body.blockers
-      )
-    }
-
-    const detail = body.error ?? `HTTP ${response.status}`
-    throw new Error(`${path} failed: ${detail}`)
+    throw await serverDeleteError(response, path)
   }
 
   return (await response.json()) as { ok: true; serverId: string }
@@ -3254,12 +3254,7 @@ export type HostingRecord = {
 }
 
 export type HostingCertificateState =
-  | 'test_certificate'
-  | 'uploaded'
-  | 'secure'
-  | 'waiting_for_dns'
-  | 'issuing'
-  | 'renewal_failed'
+  'test_certificate' | 'uploaded' | 'secure' | 'waiting_for_dns' | 'issuing' | 'renewal_failed'
 
 export type HostingDnsReport = {
   ready: boolean
@@ -4540,9 +4535,7 @@ export class InstanceHostnameValidationError extends Error {
   }
 }
 
-export async function fetchInstanceHostnames(
-  options: { signal?: AbortSignal } = {}
-): Promise<{
+export async function fetchInstanceHostnames(options: { signal?: AbortSignal } = {}): Promise<{
   ok: boolean
   hostnames: InstanceHostnameRecord[]
   /** The server's Let's Encrypt terms answer. Absent on an older control plane. */
@@ -6722,11 +6715,7 @@ export type DeployPreviewSecretPlanEntry = {
 
 /** Why a variable that was set on a Node app does not reach its process. */
 export type NativeAppVariableReason =
-  | 'platform'
-  | 'invalid_name'
-  | 'invalid_value'
-  | 'too_many'
-  | 'not_referenced'
+  'platform' | 'invalid_name' | 'invalid_value' | 'too_many' | 'not_referenced'
 
 /**
  * One environment variable of a Node app. `source` is the scope that set it —
