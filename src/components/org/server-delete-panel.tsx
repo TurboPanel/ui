@@ -1,6 +1,13 @@
+import { useState } from 'react'
 import { ConfirmButton, InlineNotice, MonoText } from '@/components/ui'
+import {
+  deleteChoices,
+  ServerRemovalPrincipals,
+  type PrincipalRemovalChoices,
+} from '@/components/org/server-removal-principals'
 import { panelStyles } from '@/components/ui/panel-styles'
-import { useServerDeletePreview } from '@/lib/queries/servers'
+import type { PrincipalRemovalChoice } from '@/lib/instance-api'
+import { useServerDeletePreview, useServerPrincipalRemovalPlan } from '@/lib/queries/servers'
 import {
   forgottenResourceGroups,
   moreLabel,
@@ -47,9 +54,11 @@ export function ServerDeletePanel({
   deleting: boolean
   deleteError: string | null
   deleteBlocked: boolean
-  onConfirm: (forgetResources: boolean) => void
+  onConfirm: (forgetResources: boolean, principals: PrincipalRemovalChoice[]) => void
 }>) {
   const previewQuery = useServerDeletePreview(orgId, serverId)
+  const planQuery = useServerPrincipalRemovalPlan(orgId, serverId)
+  const [choices, setChoices] = useState<PrincipalRemovalChoices>({})
   const preview = previewQuery.data
   const showForget = shouldShowServerForgetPath(preview, { serverConnected })
   const groups = forgottenResourceGroups(preview)
@@ -68,6 +77,16 @@ export function ServerDeletePanel({
           {line}
         </Text>
       ))}
+      <ServerRemovalPrincipals
+        plan={planQuery.data?.principals}
+        loading={planQuery.isLoading}
+        error={planQuery.error}
+        choices={choices}
+        disabled={busy}
+        onChange={(principalId, action) =>
+          setChoices((current) => ({ ...current, [principalId]: action }))
+        }
+      />
       {showForget ? (
         <>
           <InlineNotice title="Host is gone" body={SERVER_DELETE_FORGET_COPY} tone="warning" />
@@ -80,7 +99,7 @@ export function ServerDeletePanel({
         prompt="Permanently remove this server from the organization?"
         busy={busy}
         disabled={busy}
-        onConfirm={() => onConfirm(false)}
+        onConfirm={() => onConfirm(false, deleteChoices(choices))}
       />
       {showForget ? (
         <ConfirmButton
@@ -89,7 +108,7 @@ export function ServerDeletePanel({
           prompt="Forget the listed records and permanently remove this server?"
           busy={busy}
           disabled={busy}
-          onConfirm={() => onConfirm(true)}
+          onConfirm={() => onConfirm(true, deleteChoices(choices))}
         />
       ) : null}
     </View>

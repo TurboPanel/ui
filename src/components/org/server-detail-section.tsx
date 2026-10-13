@@ -22,6 +22,7 @@ import {
   type ActiveCommand,
   type ServerCommandState,
 } from '@/components/org/server-commands-panel'
+import { ServerPrincipalsSection } from '@/components/org/server-principals-section'
 import { ServerFirewallSection } from '@/components/org/firewall/server-firewall-section'
 import { ServerMetricsSection } from '@/components/org/server-metrics-section'
 import { ServerServicesSection } from '@/components/org/server-services-section'
@@ -74,6 +75,7 @@ import {
   type ServerDaemonKeyRevokeResult,
   type ServerDetailRecord,
   type ServerUpdateStatus,
+  type PrincipalRemovalChoice,
 } from '@/lib/instance-api'
 import { commandErrorLine } from '@/lib/command-error'
 import { useCommandRecordsBatch } from '@/lib/queries/commands'
@@ -320,6 +322,8 @@ function DetailTabBody({
       return <ServerServicesSection orgId={orgId} serverId={serverId} />
     case 'network':
       return <ServerNetworkSection orgId={orgId} server={server} />
+    case 'principals':
+      return <ServerPrincipalsSection orgId={orgId} serverId={serverId} />
     case 'firewall':
       return <ServerFirewallSection orgId={orgId} serverId={serverId} canManage={canManage} />
     case 'metrics':
@@ -505,7 +509,7 @@ function renderServerDeletePanel(
     deleting: boolean
     deleteError: string | null
     deleteBlocked: boolean
-    onConfirm: (forgetResources: boolean) => void
+    onConfirm: (forgetResources: boolean, principals: PrincipalRemovalChoice[]) => void
   }>
 ): ReactNode {
   if (!input.canManage) return null
@@ -805,11 +809,11 @@ export function ServerDetailSection({
     deleting: deleteMutation.isPending,
     deleteError,
     deleteBlocked,
-    onConfirm: (forgetResources) => {
+    onConfirm: (forgetResources, principals) => {
       setDeleteError(null)
       setDeleteBlocked(false)
       deleteMutation.mutate(
-        { serverId, forgetResources },
+        { serverId, forgetResources, principals },
         {
           onSuccess: () => {
             router.replace(defaultOrgDashboardHref(orgId))

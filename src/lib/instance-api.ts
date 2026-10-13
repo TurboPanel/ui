@@ -1949,6 +1949,111 @@ export function formatServerDeleteBlockedError(err: unknown): string {
   return err instanceof Error ? err.message : 'Failed to delete server'
 }
 
+// --- Principals (organization list, server list, server removal) -------------
+
+export type PlacementState = 'pending' | 'present' | 'retiring' | 'absent'
+export type OrgPrincipalState = PlacementState | 'none'
+
+export type PrincipalUsage = Readonly<{
+  tenancies: number
+  bindings: number
+  storages: number
+  secrets: number
+  logins: number
+  otherPlacements: number
+}>
+
+export type OrgPrincipalRecord = Readonly<{
+  id: string
+  name: string
+  appliedUsername: string
+  kind: string
+  provider: string
+  forms: readonly ('system' | 'database')[]
+  projectId: string | null
+  projectName: string | null
+  servers: readonly {
+    serverId: string
+    serverName: string | null
+    state: PlacementState
+    uid: number | null
+    gid: number | null
+  }[]
+  logins: readonly {
+    id: string
+    managedId: string
+    role: string
+    appliedUsername: string
+  }[]
+  usedBy: Omit<PrincipalUsage, 'otherPlacements'>
+  state: OrgPrincipalState
+  orphaned: boolean
+  canDelete: boolean
+  createdAt: string
+}>
+
+export type ServerPrincipalRecord = Readonly<{
+  placementId: string
+  principalId: string
+  username: string
+  appliedUsername: string
+  projectId: string | null
+  state: PlacementState
+  uid: number | null
+  gid: number | null
+  home: string
+  source: 'compose' | 'manual' | 'storage'
+  usedBy: PrincipalUsage
+}>
+
+export type PrincipalRemovalAction = 'keep' | 'delete'
+
+export type PrincipalRemovalChoice = Readonly<{
+  principalId: string
+  action: PrincipalRemovalAction
+}>
+
+export type PrincipalRemovalPlanEntry = ServerPrincipalRecord &
+  Readonly<{
+    defaultAction: PrincipalRemovalAction
+    canDeleteOutright: boolean
+  }>
+
+export async function fetchOrgPrincipals(
+  orgId: string
+): Promise<{ principals: OrgPrincipalRecord[] }> {
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/principals`, undefined, orgId)
+}
+
+export async function deleteOrgPrincipal(
+  orgId: string,
+  principalId: string
+): Promise<{ ok: true }> {
+  return await apiFetch(
+    `${CLIENT_API}/organizations/${orgId}/principals/${principalId}`,
+    { method: 'DELETE' },
+    orgId
+  )
+}
+
+export async function fetchServerPrincipals(
+  serverId: string,
+  orgId?: string | null
+): Promise<{ serverId: string; principals: ServerPrincipalRecord[] }> {
+  return await apiFetch(`${CLIENT_API}/servers/${serverId}/principals`, undefined, orgId)
+}
+
+export async function fetchServerPrincipalRemovalPlan(
+  serverId: string,
+  orgId?: string | null
+): Promise<{ serverId: string; principals: PrincipalRemovalPlanEntry[] }> {
+  return await apiFetch(
+    `${CLIENT_API}/servers/${serverId}/principal-removal-plan`,
+    undefined,
+    orgId
+  )
+}
+
 export async function getServerDeletePreview(
   serverId: string,
   organizationId?: string | null
@@ -1959,7 +2064,11 @@ export async function getServerDeletePreview(
 export async function deleteServer(
   serverId: string,
   organizationId?: string | null,
-  options?: Readonly<{ forgetResources?: boolean }>
+  options?: Readonly<{
+    forgetResources?: boolean
+    /** Only the principals to delete outright; any not named stay (the default). */
+    principals?: readonly PrincipalRemovalChoice[]
+  }>
 ): Promise<{ ok: true; serverId: string }> {
   const resolvedOrgId = organizationId ?? getActiveOrganizationId()
   const headers: Record<string, string> = {
@@ -1971,11 +2080,16 @@ export async function deleteServer(
 
   const path = `${CLIENT_API}/servers/${serverId}`
   const forgetResources = options?.forgetResources === true
+  const principals = options?.principals ?? []
+  const requestBody = {
+    ...(forgetResources ? { forgetResources: true } : {}),
+    ...(principals.length > 0 ? { principals } : {}),
+  }
   const response = await fetchWithStepUp(controlPlaneUrl(path), {
     method: 'DELETE',
     credentials: 'include',
     headers,
-    ...(forgetResources ? { body: JSON.stringify({ forgetResources: true }) } : {}),
+    ...(Object.keys(requestBody).length > 0 ? { body: JSON.stringify(requestBody) } : {}),
   })
 
   if (!response.ok) {

@@ -5,8 +5,15 @@ import type { CappedPreviewList, ServerDeletePreview } from '@/lib/instance-api'
 import { SERVER_DELETE_FORGET_COPY } from '@/lib/server-delete-preview'
 import { ServerDeletePanel } from './server-delete-panel'
 
-const { useServerDeletePreview } = vi.hoisted(() => ({
+const { useServerDeletePreview, useServerPrincipalRemovalPlan } = vi.hoisted(() => ({
   useServerDeletePreview: vi.fn(),
+  useServerPrincipalRemovalPlan: vi.fn(
+    (): { data: unknown; isLoading: boolean; error: unknown } => ({
+      data: undefined,
+      isLoading: false,
+      error: null,
+    })
+  ),
 }))
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
@@ -15,6 +22,28 @@ vi.mock('@/lib/theme-preference', async () => (await import('@/components/ui/v4/
 
 vi.mock('@/lib/queries/servers', () => ({
   useServerDeletePreview,
+  useServerPrincipalRemovalPlan,
+}))
+
+// The per-principal list has its own tests; here it is a button per principal
+// that flips that principal to "delete outright".
+vi.mock('@/components/org/server-removal-principals', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./server-removal-principals')>()),
+  ServerRemovalPrincipals: ({
+    plan,
+    onChange,
+  }: {
+    plan?: { principalId: string; appliedUsername: string }[]
+    onChange: (principalId: string, action: 'keep' | 'delete') => void
+  }) => (
+    <div>
+      {(plan ?? []).map((entry) => (
+        <button key={entry.principalId} onClick={() => onChange(entry.principalId, 'delete')}>
+          {`delete ${entry.appliedUsername}`}
+        </button>
+      ))}
+    </div>
+  ),
 }))
 
 vi.mock('@/components/ui/panel-styles', () => ({
@@ -56,6 +85,7 @@ vi.mock('@/components/ui', () => ({
 afterEach(() => {
   cleanup()
   vi.clearAllMocks()
+  useServerPrincipalRemovalPlan.mockReturnValue({ data: undefined, isLoading: false, error: null })
 })
 
 const emptyList: CappedPreviewList<never> = { items: [], more: 0 }
@@ -89,7 +119,7 @@ function renderPanel(
     deleting: boolean
     deleteError: string | null
     deleteBlocked: boolean
-    onConfirm: (forgetResources: boolean) => void
+    onConfirm: (forgetResources: boolean, principals: unknown[]) => void
   }> = {},
   data: unknown = undefined
 ) {
@@ -161,7 +191,7 @@ describe('ServerDeletePanel', () => {
     expect(screen.getByText('Forget these and delete server')).toBeTruthy()
     expect(screen.getByText('Confirm forget and delete')).toBeTruthy()
     fireEvent.click(screen.getByText('Forget these and delete server'))
-    expect(onConfirm).toHaveBeenCalledWith(true)
+    expect(onConfirm).toHaveBeenCalledWith(true, [])
   })
 
   it('falls back to the plain delete panel on a malformed preview', () => {
@@ -191,5 +221,30 @@ describe('ServerDeletePanel', () => {
     for (const button of buttons) {
       expect(button).toHaveProperty('disabled', true)
     }
+  })
+
+  it('sends no principal choices by default, so every principal is kept', () => {
+    const onConfirm = vi.fn()
+    useServerPrincipalRemovalPlan.mockReturnValue({
+      data: { principals: [{ principalId: 'p1', appliedUsername: 'alice_x' }] },
+      isLoading: false,
+      error: null,
+    })
+    renderPanel({ onConfirm }, preview({ canForget: false }))
+    fireEvent.click(screen.getByText('Delete server'))
+    expect(onConfirm).toHaveBeenCalledWith(false, [])
+  })
+
+  it('sends the principals chosen for outright deletion', () => {
+    const onConfirm = vi.fn()
+    useServerPrincipalRemovalPlan.mockReturnValue({
+      data: { principals: [{ principalId: 'p1', appliedUsername: 'alice_x' }] },
+      isLoading: false,
+      error: null,
+    })
+    renderPanel({ onConfirm }, preview({ canForget: false }))
+    fireEvent.click(screen.getByText('delete alice_x'))
+    fireEvent.click(screen.getByText('Delete server'))
+    expect(onConfirm).toHaveBeenCalledWith(false, [{ principalId: 'p1', action: 'delete' }])
   })
 })

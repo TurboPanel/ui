@@ -15,7 +15,8 @@ import {
   EnvironmentSettingsPanel,
   readHostingIdParam,
 } from '@/components/org/project-settings-area'
-import { EmptyState, SectionPanel } from '@/components/ui'
+import { Button, ButtonRow, EmptyState, SectionPanel } from '@/components/ui'
+import { orgSettingsTabHref } from '@/lib/org-navigation'
 import type { EnvironmentRecord, OrgServerRecord } from '@/lib/instance-api'
 import { projectComposeSectionHref } from '@/lib/project-navigation'
 import { serverDisplayName } from '@/lib/resource-labels'
@@ -180,6 +181,7 @@ export function ComposeHostingTab() {
 function SystemUsersPanel() {
   const { orgId, projectId, canManage, projectAllowsMutations } =
     useProjectContext()
+  const router = useRouter()
   return (
     <SectionPanel
       title="System users"
@@ -191,6 +193,13 @@ function SystemUsersPanel() {
         canManage={canManage && projectAllowsMutations}
         embedded
       />
+      <ButtonRow>
+        <Button
+          label="All principals in the organization"
+          size="sm"
+          onPress={() => router.push(orgSettingsTabHref(orgId, 'principals') as Href)}
+        />
+      </ButtonRow>
     </SectionPanel>
   )
 }
