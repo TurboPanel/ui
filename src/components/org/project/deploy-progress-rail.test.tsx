@@ -223,6 +223,18 @@ describe.each(SCENARIOS)('DeployProgressRail ($name)', (scenario) => {
     expect(screen.getByText('All 2 steps done')).toBeTruthy()
   })
 
+  it('never counts step zero while the plan is getting ready', () => {
+    render(
+      <DeployProgressRail
+        progress={progress([step('fetch', 'Fetch the code', 'pending'), step('build', 'Build', 'pending')])}
+      />,
+    )
+    const counter = screen.getByText('Step -- / 02')
+    expect(counter.getAttribute('aria-label')).toBe('Getting ready, 2 steps')
+    expect(screen.getByText('Getting ready')).toBeTruthy()
+    expect(screen.queryByText(/00 \//)).toBeNull()
+  })
+
   it('ends green with the time it took and no caption once the deploy succeeded', () => {
     const { container } = render(
       <DeployProgressRail

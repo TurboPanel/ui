@@ -324,6 +324,17 @@ function Caret({ reduceMotion }: Readonly<{ reduceMotion: boolean }>) {
   return <Animated.View style={[s.caret, caretStyle]} />
 }
 
+/** `Step 03 / 07`; before the first step runs the position is a dash, never 00. */
+function counterText(summary: ProgressSummary): string {
+  const position = summary.phase === 'waiting' ? '--' : counterDigits(summary.step)
+  return `Step ${position} / ${counterDigits(summary.total)}`
+}
+
+function counterSpoken(summary: ProgressSummary): string {
+  if (summary.phase === 'waiting') return `Getting ready, ${summary.total} steps`
+  return `Step ${summary.step} of ${summary.total}`
+}
+
 function counterStyle(s: Sheet, phase: ProgressSummary['phase']): TextStyle[] {
   if (phase === 'running') return [s.counter, s.counterLive]
   if (phase === 'failed') return [s.counter, s.counterBad]
@@ -384,8 +395,8 @@ export function DeployProgressRail({
     <View style={s.root} accessibilityRole="summary" accessibilityLabel="Deploy progress">
       <View style={s.head}>
         <View style={s.headRow}>
-          <Text style={counterStyle(s, summary.phase)} accessibilityLabel={`Step ${summary.step} of ${summary.total}`}>
-            {`Step ${counterDigits(summary.step)} / ${counterDigits(summary.total)}`}
+          <Text style={counterStyle(s, summary.phase)} accessibilityLabel={counterSpoken(summary)}>
+            {counterText(summary)}
           </Text>
           <Text style={s.title} numberOfLines={2} accessibilityLiveRegion="polite">
             {summary.title}
