@@ -10,6 +10,8 @@ import {
   COMPOSE_PROJECT_SURFACE_TAB_IDS,
   COMPOSE_PROJECT_TAB_IDS,
   DRAFT_COMPOSE_PROJECT_TAB_IDS,
+  MANAGED_PROJECT_TAB_IDS,
+  MANAGED_PROJECT_TAB_LABELS,
   isComposeOrTemplateProject,
   isComposeProject,
   isManagedProject,
@@ -378,6 +380,19 @@ describe('path-based environment selection', () => {
         'proj',
       ),
     ).toBe('env1')
+  })
+
+  it('gives managed projects a Settings tab, last', () => {
+    // Settings holds the image, resources, client TLS and external access switch.
+    expect([...MANAGED_PROJECT_TAB_IDS]).toEqual([
+      'overview',
+      'connect',
+      'data',
+      'backups',
+      'environments',
+      'settings',
+    ])
+    expect(MANAGED_PROJECT_TAB_LABELS.settings).toBe('Settings')
   })
 
   it('offers every lens on the create-wizard draft', () => {

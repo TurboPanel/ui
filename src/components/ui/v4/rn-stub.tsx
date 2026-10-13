@@ -62,7 +62,8 @@ function aria(props: Props) {
   const state = (props.accessibilityState ?? {}) as Record<string, boolean>
   const role = props.accessibilityRole as string | undefined
   return {
-    role: role ? (ROLE[role] ?? role) : undefined,
+    // RN's `role` prop is already an ARIA role; `accessibilityRole` is translated.
+    role: (props.role as string | undefined) ?? (role ? (ROLE[role] ?? role) : undefined),
     'aria-label': props.accessibilityLabel as string | undefined,
     'aria-selected': state.selected,
     'aria-checked': state.checked,

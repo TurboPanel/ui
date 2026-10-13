@@ -76,11 +76,15 @@ const RUNNING_TONES: Readonly<Record<string, StatusFactTone>> = {
 function lastDeployFact(
   lastDeploy: DeploymentGroup | null,
   now: number,
+  progressLabel: string | null | undefined,
 ): EnvironmentStatusFact {
   if (!lastDeploy) {
     return { key: 'lastDeploy', caption: 'Last deploy', value: 'Never', tone: 'idle' }
   }
   const verdict = deploymentStatusTone(lastDeploy.status, lastDeploy.strategyOutcome)
+  if (progressLabel && verdict.tone === 'pending') {
+    return { key: 'lastDeploy', caption: 'Deploying', value: progressLabel, tone: 'busy' }
+  }
   const ago = formatAgo(lastDeploy.startedAt, now)
   let tone: StatusFactTone = 'busy'
   if (verdict.tone === 'success') tone = 'ok'
@@ -107,6 +111,8 @@ export function environmentStatusFacts(
     runningLabel: string
     /** Newest deploy, or null when there is none; `undefined` while history loads. */
     lastDeploy: DeploymentGroup | null | undefined
+    /** "Step 3 of 7 · Installing Docker" from the command status poll while the deploy runs. */
+    progressLabel?: string | null
     changesNotDeployed?: number | null
     now: number
   }>,
@@ -120,7 +126,7 @@ export function environmentStatusFacts(
     },
   ]
   if (input.lastDeploy !== undefined) {
-    facts.push(lastDeployFact(input.lastDeploy, input.now))
+    facts.push(lastDeployFact(input.lastDeploy, input.now, input.progressLabel))
   }
   const changes = input.changesNotDeployed
   if (changes != null && changes > 0) {

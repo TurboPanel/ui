@@ -13,6 +13,7 @@ const state = vi.hoisted(() => ({
   views: {} as Record<string, unknown>,
   latest: {} as Record<string, unknown>,
   servers: undefined as unknown[] | undefined,
+  commandStatuses: undefined as unknown[] | undefined,
   sheet: undefined as Record<string, unknown> | undefined,
   invalidate: vi.fn(),
 }))
@@ -31,6 +32,10 @@ vi.mock('@/lib/queries/containers', () => ({
 vi.mock('@/lib/queries/environment-cards', () => ({
   useEnvironmentConfigViews: () => ({ views: state.views, isLoading: false }),
   useLatestDeployments: () => ({ latest: state.latest }),
+}))
+vi.mock('@/lib/queries/commands', async () => ({
+  ...(await vi.importActual<typeof import('@/lib/queries/commands')>('@/lib/queries/commands')),
+  useCommandsBatch: () => ({ data: state.commandStatuses }),
 }))
 vi.mock('@/lib/queries/servers', () => ({
   useOrgServers: () => ({ data: state.servers ? { servers: state.servers } : undefined }),
@@ -152,6 +157,37 @@ describe.each(SCENARIOS)('project Environments tab ($name)', (scenario) => {
     const statuses = screen.getAllByRole('group', { name: 'Status' })
     expect(statuses[1]?.textContent).toContain('Deployed')
     expect(statuses[1]?.textContent).not.toContain('Not deployed yet')
+  })
+
+  it('shows the step a running deploy is on, from the command status poll', () => {
+    state.latest = {
+      e2: {
+        status: 'running',
+        strategyOutcome: null,
+        startedAt: '2026-10-05T11:56:00Z',
+        trigger: null,
+        commands: [{ id: 'cmd-1', commandId: 'cmd-1', serverId: 's1', status: 'running' }],
+      },
+    }
+    state.commandStatuses = [
+      {
+        id: 'cmd-1',
+        status: 'running',
+        progress: {
+          version: 1,
+          current: 'build',
+          updatedAt: '2026-10-05T11:57:00Z',
+          steps: [
+            { id: 'fetch', label: 'Fetch the code', state: 'done' },
+            { id: 'build', label: 'Build', state: 'running' },
+          ],
+        },
+      },
+    ]
+    render(<ProjectEnvironmentsTab />)
+    expect(screen.getByLabelText('Step 2 of 2 · Building')).toBeTruthy()
+    const statuses = screen.getAllByRole('group', { name: 'Status' })
+    expect(statuses[1]?.textContent).toContain('Step 2 of 2 · Building')
   })
 
   it('says Checking while the containers load', () => {

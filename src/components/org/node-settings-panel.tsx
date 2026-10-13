@@ -17,7 +17,7 @@ import {
   usePersistProjectCompose,
 } from '@/components/org/compose-persistence'
 import {
-  DEFAULT_NODE_SERIES,
+  NEWEST_NODE_SERIES,
   SUPPORTED_NODE_SERIES,
   isNodeComposeService,
   patchServiceTurbopanelExtension,
@@ -526,7 +526,7 @@ function NodeSettingsFields({
           value={nodeVersion || null}
           options={buildVersionOptions(nodeVersion)}
           placeholder="Select a version"
-          noneLabel={`Host default (${DEFAULT_NODE_SERIES}.x)`}
+          noneLabel={`Newest available (${NEWEST_NODE_SERIES}.x)`}
           mono
           disabled={fieldsDisabled}
           accessibilityLabel="Node.js version"

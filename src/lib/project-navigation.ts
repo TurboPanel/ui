@@ -138,6 +138,7 @@ export const MANAGED_PROJECT_TAB_IDS = [
   'data',
   'backups',
   'environments',
+  'settings',
 ] as const
 
 export type ManagedProjectTabId = (typeof MANAGED_PROJECT_TAB_IDS)[number]
@@ -148,6 +149,7 @@ export const MANAGED_PROJECT_TAB_LABELS: Record<ManagedProjectTabId, string> = {
   environments: 'Environments',
   data: 'Data',
   backups: 'Backups',
+  settings: 'Settings',
 }
 
 export type ProjectTabId = ComposeProjectTabId | ManagedProjectTabId

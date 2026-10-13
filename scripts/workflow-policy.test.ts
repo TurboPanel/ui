@@ -155,6 +155,24 @@ describe('ci-ok', () => {
 // out of package.json.
 const START_JOB = '\n  start-version-pr:\n'
 
+/** One top-level job of a workflow file (empty when there is none). */
+function jobText(source: string, name: string): string {
+  const start = source.indexOf(`\n  ${name}:\n`)
+  if (start < 0) return ''
+  const rest = source.slice(start + 1)
+  const end = rest.slice(1).search(/\n {2}[\w-]+:\n/)
+  return end < 0 ? rest : rest.slice(0, end + 2)
+}
+
+/**
+ * The jobs that call gh-promote-ok.yml. The Promote OK check pins its own dev
+ * commit, so its fixes can ship without moving the rest of the promotion chain.
+ */
+const PROMOTE_OK_JOBS: Record<string, string> = {
+  'promote-ok.yml': 'evaluate',
+  'promote-ok-recheck.yml': 'dry-run',
+}
+
 describe('versions from tags', () => {
   const GONE = [
     /gh-next-version/,
@@ -210,14 +228,32 @@ describe('versions from tags', () => {
       'promote-ok.yml',
       'promote-ok-recheck.yml',
     ]) {
-      // The start-version-pr job's dev actions are pinned on their own.
-      const promote = text(f).split(START_JOB)[0]
+      // The start-version-pr job's dev actions and the Promote OK jobs are
+      // pinned on their own.
+      let promote = text(f).split(START_JOB)[0]
+      const ok = jobText(promote, PROMOTE_OK_JOBS[f] ?? '')
+      if (ok) promote = promote.replace(ok, '')
+      expect(promote).not.toContain('gh-promote-ok.yml@')
       for (const m of promote.matchAll(
         /TurboPanel\/dev\/\.github\/(?:workflows\/[\w.-]+|actions\/version)@([0-9a-f]{40})/g
       )) {
         pins.add(m[1])
       }
       for (const m of promote.matchAll(/^ +(?:dev-)?ref: ([0-9a-f]{40})(?: #.*)?$/gm)) pins.add(m[1])
+    }
+    expect([...pins]).toHaveLength(1)
+  })
+
+  it('pins the Promote OK jobs to one TurboPanel/dev commit, handed on as dev-ref', () => {
+    const pins = new Set<string>()
+    for (const [file, name] of Object.entries(PROMOTE_OK_JOBS)) {
+      const job = jobText(text(file), name)
+      const uses = [...job.matchAll(/gh-promote-ok\.yml@([0-9a-f]{40}) # dev#\d+$/gm)]
+      const refs = [...job.matchAll(/^ +dev-ref: ([0-9a-f]{40})(?: #.*)?$/gm)]
+      expect(uses, `${file} ${name}`).toHaveLength(1)
+      expect(refs, `${file} ${name}`).toHaveLength(1)
+      pins.add(uses[0][1])
+      pins.add(refs[0][1])
     }
     expect([...pins]).toHaveLength(1)
   })
