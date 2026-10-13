@@ -193,9 +193,10 @@ function EnvironmentHeader() {
     return environmentStatusFacts({
       runningLabel: lifecycle.toneLabel,
       lastDeploy,
+      progressLabel: lifecycle.deployProgressLabel,
       now,
     })
-  }, [deploymentsQuery.isLoading, deploymentRows, lifecycle.toneLabel, now])
+  }, [deploymentsQuery.isLoading, deploymentRows, lifecycle.toneLabel, lifecycle.deployProgressLabel, now])
 
   if (!selectedEnvironment) return null
   return (

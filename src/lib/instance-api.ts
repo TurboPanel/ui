@@ -1903,6 +1903,16 @@ export class ServerDeleteBlockedError extends Error {
   }
 }
 
+/** 409 `principal_delete_refused` or 400 `principal_not_on_server`: the plan changed under the dialog. */
+export class ServerPrincipalChoiceRefusedError extends Error {
+  readonly code = 'principal_choice_refused'
+
+  constructor(message: string) {
+    super(message)
+    this.name = 'ServerPrincipalChoiceRefusedError'
+  }
+}
+
 export class ServerDeleteOnlineError extends Error {
   readonly code = 'server_online'
 
@@ -1949,6 +1959,111 @@ export function formatServerDeleteBlockedError(err: unknown): string {
   return err instanceof Error ? err.message : 'Failed to delete server'
 }
 
+// --- Principals (organization list, server list, server removal) -------------
+
+export type PlacementState = 'pending' | 'present' | 'retiring' | 'absent'
+export type OrgPrincipalState = PlacementState | 'none'
+
+export type PrincipalUsage = Readonly<{
+  tenancies: number
+  bindings: number
+  storages: number
+  secrets: number
+  logins: number
+  otherPlacements: number
+}>
+
+export type OrgPrincipalRecord = Readonly<{
+  id: string
+  name: string
+  appliedUsername: string
+  kind: string
+  provider: string
+  forms: readonly ('system' | 'database')[]
+  projectId: string | null
+  projectName: string | null
+  servers: readonly {
+    serverId: string
+    serverName: string | null
+    state: PlacementState
+    uid: number | null
+    gid: number | null
+  }[]
+  logins: readonly {
+    id: string
+    managedId: string
+    role: string
+    appliedUsername: string
+  }[]
+  usedBy: Omit<PrincipalUsage, 'otherPlacements'>
+  state: OrgPrincipalState
+  orphaned: boolean
+  canDelete: boolean
+  createdAt: string
+}>
+
+export type ServerPrincipalRecord = Readonly<{
+  placementId: string
+  principalId: string
+  username: string
+  appliedUsername: string
+  projectId: string | null
+  state: PlacementState
+  uid: number | null
+  gid: number | null
+  home: string
+  source: 'compose' | 'manual' | 'storage'
+  usedBy: PrincipalUsage
+}>
+
+export type PrincipalRemovalAction = 'keep' | 'delete'
+
+export type PrincipalRemovalChoice = Readonly<{
+  principalId: string
+  action: PrincipalRemovalAction
+}>
+
+export type PrincipalRemovalPlanEntry = ServerPrincipalRecord &
+  Readonly<{
+    defaultAction: PrincipalRemovalAction
+    canDeleteOutright: boolean
+  }>
+
+export async function fetchOrgPrincipals(
+  orgId: string
+): Promise<{ principals: OrgPrincipalRecord[] }> {
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/principals`, undefined, orgId)
+}
+
+export async function deleteOrgPrincipal(
+  orgId: string,
+  principalId: string
+): Promise<{ ok: true }> {
+  return await apiFetch(
+    `${CLIENT_API}/organizations/${orgId}/principals/${principalId}`,
+    { method: 'DELETE' },
+    orgId
+  )
+}
+
+export async function fetchServerPrincipals(
+  serverId: string,
+  orgId?: string | null
+): Promise<{ serverId: string; principals: ServerPrincipalRecord[] }> {
+  return await apiFetch(`${CLIENT_API}/servers/${serverId}/principals`, undefined, orgId)
+}
+
+export async function fetchServerPrincipalRemovalPlan(
+  serverId: string,
+  orgId?: string | null
+): Promise<{ serverId: string; principals: PrincipalRemovalPlanEntry[] }> {
+  return await apiFetch(
+    `${CLIENT_API}/servers/${serverId}/principal-removal-plan`,
+    undefined,
+    orgId
+  )
+}
+
 export async function getServerDeletePreview(
   serverId: string,
   organizationId?: string | null
@@ -1956,10 +2071,62 @@ export async function getServerDeletePreview(
   return await apiFetch(`${CLIENT_API}/servers/${serverId}/delete-preview`, undefined, organizationId)
 }
 
+const PRINCIPAL_CHOICE_REFUSED_MESSAGE =
+  'Something changed while you were choosing: a principal is now used elsewhere or is no longer on this server. Check the list below and try again.'
+
+function isPrincipalChoiceRefusal(code: string | undefined): boolean {
+  return code === 'principal_delete_refused' || code === 'principal_not_on_server'
+}
+
+function serverDeleteRequestBody(
+  forgetResources: boolean,
+  principals: readonly PrincipalRemovalChoice[]
+): Record<string, unknown> {
+  return {
+    ...(forgetResources ? { forgetResources: true } : {}),
+    ...(principals.length > 0 ? { principals } : {}),
+  }
+}
+
+async function serverDeleteError(response: Response, path: string): Promise<Error> {
+  let body: {
+    error?: string
+    code?: string
+    blockers?: ServerDeleteBlocker[]
+  } = {}
+  try {
+    body = (await response.json()) as typeof body
+  } catch {
+    // Non-JSON error body.
+  }
+
+  if (response.status === 409 && body.code === SERVER_ONLINE_CODE) {
+    return body.error ? new ServerDeleteOnlineError(body.error) : new ServerDeleteOnlineError()
+  }
+
+  if (isPrincipalChoiceRefusal(body.code)) {
+    return new ServerPrincipalChoiceRefusedError(PRINCIPAL_CHOICE_REFUSED_MESSAGE)
+  }
+
+  if (response.status === 409 && body.code === SERVER_HAS_BLOCKERS_CODE && body.blockers) {
+    return new ServerDeleteBlockedError(
+      body.error ?? 'Cannot delete this server while dependent resources still exist',
+      body.blockers
+    )
+  }
+
+  const detail = body.error ?? `HTTP ${response.status}`
+  return new Error(`${path} failed: ${detail}`)
+}
+
 export async function deleteServer(
   serverId: string,
   organizationId?: string | null,
-  options?: Readonly<{ forgetResources?: boolean }>
+  options?: Readonly<{
+    forgetResources?: boolean
+    /** Only the principals to delete outright; any not named stay (the default). */
+    principals?: readonly PrincipalRemovalChoice[]
+  }>
 ): Promise<{ ok: true; serverId: string }> {
   const resolvedOrgId = organizationId ?? getActiveOrganizationId()
   const headers: Record<string, string> = {
@@ -1971,41 +2138,16 @@ export async function deleteServer(
 
   const path = `${CLIENT_API}/servers/${serverId}`
   const forgetResources = options?.forgetResources === true
+  const requestBody = serverDeleteRequestBody(forgetResources, options?.principals ?? [])
   const response = await fetchWithStepUp(controlPlaneUrl(path), {
     method: 'DELETE',
     credentials: 'include',
     headers,
-    ...(forgetResources ? { body: JSON.stringify({ forgetResources: true }) } : {}),
+    ...(Object.keys(requestBody).length > 0 ? { body: JSON.stringify(requestBody) } : {}),
   })
 
   if (!response.ok) {
-    let body: {
-      error?: string
-      code?: string
-      blockers?: ServerDeleteBlocker[]
-    } = {}
-    try {
-      body = (await response.json()) as typeof body
-    } catch {
-      // Non-JSON error body.
-    }
-
-    if (response.status === 409 && body.code === SERVER_ONLINE_CODE) {
-      if (body.error) {
-        throw new ServerDeleteOnlineError(body.error)
-      }
-      throw new ServerDeleteOnlineError()
-    }
-
-    if (response.status === 409 && body.code === SERVER_HAS_BLOCKERS_CODE && body.blockers) {
-      throw new ServerDeleteBlockedError(
-        body.error ?? 'Cannot delete this server while dependent resources still exist',
-        body.blockers
-      )
-    }
-
-    const detail = body.error ?? `HTTP ${response.status}`
-    throw new Error(`${path} failed: ${detail}`)
+    throw await serverDeleteError(response, path)
   }
 
   return (await response.json()) as { ok: true; serverId: string }
@@ -3113,12 +3255,7 @@ export type HostingRecord = {
 }
 
 export type HostingCertificateState =
-  | 'test_certificate'
-  | 'uploaded'
-  | 'secure'
-  | 'waiting_for_dns'
-  | 'issuing'
-  | 'renewal_failed'
+  'test_certificate' | 'uploaded' | 'secure' | 'waiting_for_dns' | 'issuing' | 'renewal_failed'
 
 export type HostingDnsReport = {
   ready: boolean
@@ -4399,9 +4536,7 @@ export class InstanceHostnameValidationError extends Error {
   }
 }
 
-export async function fetchInstanceHostnames(
-  options: { signal?: AbortSignal } = {}
-): Promise<{
+export async function fetchInstanceHostnames(options: { signal?: AbortSignal } = {}): Promise<{
   ok: boolean
   hostnames: InstanceHostnameRecord[]
   /** The server's Let's Encrypt terms answer. Absent on an older control plane. */
@@ -5549,6 +5684,8 @@ export type CommandRecord = {
   finishedAt: string | null
   expiresAt: string | null
   latency?: PingLatencyBreakdown
+  /** The step plan and current step of a deploy; null or absent on an older control plane. */
+  progress?: CommandProgress | null
 }
 
 export type CommandEnqueueResponse = {
@@ -5618,6 +5755,46 @@ export type CommandStatusRecord = {
   errorLine?: string | null
   /** Whether a retained execution log exists for this command. */
   hasLog: boolean
+  /** The step plan and current step of a deploy; null or absent on an older control plane. */
+  progress?: CommandProgress | null
+}
+
+/** One state of a step in a deploy's plan. */
+export type CommandProgressStepState =
+  /** Already on the server, nothing to do (ticked from the start). */
+  | 'ready'
+  /** Planned, not started. */
+  | 'pending'
+  | 'running'
+  | 'done'
+  | 'failed'
+  /** Never ran because an earlier step failed or the deploy was cancelled. */
+  | 'skipped'
+
+export type CommandProgressStep = {
+  /** Stable id: a kind, optionally `:` and a target (`install-php:8.3`). */
+  id: string
+  /** Plain words, user facing. */
+  label: string
+  state: CommandProgressStepState
+  startedAt?: string
+  finishedAt?: string
+  /** Live ticker text for the running step (the current task). */
+  detail?: string
+}
+
+/**
+ * What the server is doing for one deploy: the plan the daemon computed up
+ * front and the step it is on. Sent whole with every change, so the newest
+ * copy is always complete.
+ */
+export type CommandProgress = {
+  version: 1
+  /** In execution order. */
+  steps: CommandProgressStep[]
+  /** Id of the running step, or null when none is running. */
+  current: string | null
+  updatedAt: string
 }
 
 /**
@@ -6539,11 +6716,7 @@ export type DeployPreviewSecretPlanEntry = {
 
 /** Why a variable that was set on a Node app does not reach its process. */
 export type NativeAppVariableReason =
-  | 'platform'
-  | 'invalid_name'
-  | 'invalid_value'
-  | 'too_many'
-  | 'not_referenced'
+  'platform' | 'invalid_name' | 'invalid_value' | 'too_many' | 'not_referenced'
 
 /**
  * One environment variable of a Node app. `source` is the scope that set it —
@@ -9578,9 +9751,11 @@ export type OrganizationActivityItem = {
   action: 'deploy' | 'start' | 'restart' | 'stop'
   state: 'deploying' | 'failed'
   startedAt: string
-  /** Not recorded yet; always null. */
+  /** Steps done so far (plus the running one) and steps planned; null before the daemon reports a plan. */
   step: number | null
   totalSteps: number | null
+  /** Label of the running step ("Install Docker"); absent on an older control plane. */
+  stepLabel?: string | null
   durationSecs: number
   errorMessage: string | null
   /** Not recorded yet; always null. */

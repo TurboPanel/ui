@@ -12,12 +12,14 @@ import {
   baseLine,
   baseRunsAs,
   builtBranch,
+  deployProgressLabel,
   EMPTY_SIDE,
   environmentCardData,
   environmentDomains,
   environmentRelation,
   followLine,
   hasNativeApp,
+  inFlightDeployEntries,
   inProgressSub,
   isDeployInProgress,
   lastDeployPart,
@@ -530,5 +532,57 @@ describe('environment card data', () => {
     expect(data.columns).toBeNull()
     expect(data.branch).toBeNull()
     expect(data.visitHost).toBeNull()
+  })
+})
+
+describe('deploy progress on a card', () => {
+  const hostCommand = (id: string, status: DeploymentGroup['status']) =>
+    ({ id, commandId: id, serverId: `srv-${id}`, status }) as unknown as DeploymentGroup['commands'][number]
+  const progress = {
+    version: 1 as const,
+    current: 'build',
+    updatedAt: '2026-10-05T12:00:00Z',
+    steps: [
+      { id: 'fetch', label: 'Fetch the code', state: 'done' as const },
+      { id: 'build', label: 'Build', state: 'running' as const },
+      { id: 'start', label: 'Start the app', state: 'pending' as const },
+    ],
+  }
+
+  it('polls only the commands of deploys still going', () => {
+    const latest = {
+      a: group({ status: 'running', commands: [hostCommand('c1', 'running'), hostCommand('c2', 'succeeded')] }),
+      b: group({ status: 'succeeded', commands: [hostCommand('c3', 'succeeded')] }),
+      c: null,
+      d: undefined,
+    }
+    expect(inFlightDeployEntries(latest)).toEqual([{ serverId: 'srv-c1', commandId: 'c1' }])
+  })
+
+  it('copes with a deploy row that has no host commands', () => {
+    const bare = group({ status: 'running', commands: undefined as unknown as DeploymentGroup['commands'] })
+    expect(inFlightDeployEntries({ a: bare })).toEqual([])
+    expect(deployProgressLabel(bare, new Map())).toBeNull()
+  })
+
+  it('reads the step of the first host that reports one', () => {
+    const running = group({ status: 'running', commands: [hostCommand('c0', 'running'), hostCommand('c1', 'running')] })
+    const records = new Map([
+      ['c0', { progress: null }],
+      ['c1', { progress }],
+    ])
+    expect(deployProgressLabel(running, records)).toBe('Step 2 of 3 · Building')
+    expect(deployProgressLabel(running, new Map())).toBeNull()
+    expect(deployProgressLabel(group({ status: 'succeeded' }), records)).toBeNull()
+    expect(deployProgressLabel(null, records)).toBeNull()
+  })
+
+  it('puts the step on the last-deploy part only while the deploy runs', () => {
+    expect(lastDeployPart(group({ status: 'running' }), NOW, 'Step 2 of 3 · Building')).toMatchObject({
+      status: 'deploying',
+      label: 'Step 2 of 3 · Building',
+    })
+    expect(lastDeployPart(group({ status: 'succeeded' }), NOW, 'Step 2 of 3 · Building')?.label).toBeUndefined()
+    expect(lastDeployPart(group({ status: 'running' }), NOW, null)).toMatchObject({ status: 'deploying' })
   })
 })

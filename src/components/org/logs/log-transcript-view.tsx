@@ -19,6 +19,7 @@ import {
   collapseRepeatedProgressLines,
   groupTranscriptByPhase,
   isErrorLine,
+  phaseLabel,
   transcriptPlainText,
   type LogTranscriptLine,
 } from '@/lib/execution-log-lines'
@@ -30,28 +31,6 @@ const FOLLOW_THRESHOLD_PX = 24
 
 /** Rows mounted ahead of the viewport. Transcripts can run to many thousands. */
 const INITIAL_ROWS = 60
-
-const PHASE_LABELS: Readonly<Record<string, string>> = {
-  prepare: 'Prepare',
-  pull: 'Pull',
-  fetch: 'Fetch source',
-  build: 'Build',
-  'release-promote': 'Promote release',
-  'pre-deploy': 'Pre-deploy hooks',
-  'compose-up': 'Compose up',
-  health: 'Health check',
-  'post-deploy': 'Post-deploy hooks',
-  hooks: 'Hooks',
-  'managed-apply': 'Managed apply',
-  'lifecycle-start': 'Start',
-  'lifecycle-stop': 'Stop',
-  'lifecycle-restart': 'Restart',
-  stop: 'Stop',
-}
-
-function phaseLabel(phase: string): string {
-  return PHASE_LABELS[phase] ?? phase
-}
 
 /** `12:04:37` — transcripts are read while watching, not audited by date. */
 function formatLineTime(timestamp: string | null): string | null {

@@ -1153,10 +1153,15 @@ export const DEFAULT_PHP_SERIES = '8.4'
  * on the instance, which mirrors the daemon's runtime registry. Advisory like
  * the PHP list: the deploy vendors what the operator picked.
  */
-export const SUPPORTED_NODE_SERIES: readonly string[] = ['22', '24']
+export const SUPPORTED_NODE_SERIES: readonly string[] = ['22', '24', '26']
 
-/** Series a node app gets when it pins none. Mirrors the instance default. */
-export const DEFAULT_NODE_SERIES = '24'
+/**
+ * Series a node app gets when it pins none: the newest one offered, compared as
+ * numbers. There is no separately chosen default version.
+ */
+export const NEWEST_NODE_SERIES: string = [...SUPPORTED_NODE_SERIES]
+  .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+  .at(-1) as string
 
 /**
  * Deno series TurboPanel offers in pickers: Deno ships one major, so a series

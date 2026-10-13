@@ -65,11 +65,18 @@ export function ProjectBaseLensScreen() {
   return <ProjectOverviewTab />
 }
 
-/** `/projects/:id/settings` — Project Settings. Platform and managed projects have none. */
+/**
+ * `/projects/:id/settings` — Project Settings. Managed projects get their
+ * Settings panel (image, resources, client TLS, external access); platform
+ * projects have none.
+ */
 export function ProjectSettingsRouteScreen() {
   const { orgId, projectId, project, isSystemProject } = useProjectContext()
-  if (isSystemProject || (project && isManagedProject(project))) {
+  if (isSystemProject) {
     return <Redirect href={projectOverviewHref(orgId, projectId) as Href} />
+  }
+  if (project && isManagedProject(project)) {
+    return <ManagedFocusTab focus="settings" />
   }
   return <ProjectSettingsScreen />
 }
@@ -119,7 +126,8 @@ export function EnvironmentConfigurationTabScreen() {
 
 /**
  * Environment Settings: branch and deploy on push, server, name and the
- * danger zone. Platform and managed projects keep the screens they had.
+ * danger zone. Platform projects keep the screen they had; managed projects
+ * show their Settings panel for the environment in the path.
  */
 export function EnvironmentSettingsScreen() {
   const { orgId, projectId, project, isSystemProject } = useProjectContext()
@@ -128,7 +136,7 @@ export function EnvironmentSettingsScreen() {
     return <Redirect href={projectOverviewHref(orgId, projectId) as Href} />
   }
   if (project && isManagedProject(project)) {
-    return <ManagedFocusTab focus="overview" />
+    return <ManagedFocusTab focus="settings" />
   }
   return <EnvironmentSettingsBody showGitSource={withChrome} />
 }

@@ -331,6 +331,7 @@ export const ORG_SETTINGS_TAB_IDS = [
   'notifications',
   'domains',
   'git',
+  'principals',
 ] as const
 
 export type OrgSettingsTabId = (typeof ORG_SETTINGS_TAB_IDS)[number]
@@ -341,6 +342,7 @@ export const ORG_SETTINGS_TAB_LABELS: Record<OrgSettingsTabId, string> = {
   notifications: 'Notifications',
   domains: 'Domains & certificates',
   git: 'Git connections',
+  principals: 'Principals',
 }
 
 /** The tab a `?tab=` value names; anything else opens General. */
@@ -481,6 +483,7 @@ export const SERVER_DETAIL_TAB_IDS = [
   'time',
   'network',
   'firewall',
+  'principals',
   'metrics',
 ] as const
 
@@ -493,6 +496,7 @@ export const SERVER_DETAIL_TAB_LABELS: Record<ServerDetailTabId, string> = {
   time: 'Time',
   network: 'Network',
   firewall: 'Firewall',
+  principals: 'Principals',
   metrics: 'Metrics',
 }
 

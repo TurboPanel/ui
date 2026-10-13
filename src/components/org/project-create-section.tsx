@@ -33,6 +33,7 @@ import {
 } from '@/lib/project-create/simple-app'
 import { RepositoryStep } from '@/components/org/project-create/repository-step'
 import { resolveWizardSelectedSource } from '@/lib/project-create/selected-source'
+import { useDebouncedValue } from '@/lib/use-debounced-value'
 import { SetupTypeChoiceCard } from '@/components/org/project-create/setup-type-icons'
 import {
   SETUP_TYPE_GROUPS,
@@ -207,6 +208,14 @@ function isCatalogStep(
 } {
   return step === 'catalog' && option != null && option.type !== 'docker-compose'
 }
+
+/**
+ * How long the production branch field must sit still before it is read.
+ * Every read is a provider round-trip or a clone on a connected server, and
+ * a half-typed name ("l" on the way to "live") only ever answers "no such
+ * branch". Leaving the field reads at once.
+ */
+const BRANCH_READ_DEBOUNCE_MS = 500
 
 function canContinueFromStep(
   step: Step,
@@ -418,10 +427,21 @@ function ProjectCreateWizard({
    * what the operator typed.
    */
   const [simpleConfigTouched, setSimpleConfigTouched] = useState(false)
+  const typedBranch = repositoryBranch.trim()
+  const [settledBranch, settleBranch] = useDebouncedValue(
+    typedBranch,
+    BRANCH_READ_DEBOUNCE_MS,
+  )
+  /**
+   * The field is ahead of the last read: Continue waits for it, or the lane
+   * screen would be seeded from a read of a branch the operator has since
+   * changed.
+   */
+  const branchSettling = settledBranch !== typedBranch
   const inspection = useRepositoryInspection(
     orgId,
     selectedSourceId,
-    repositoryBranch.trim(),
+    settledBranch,
     {
       enabled: sourceInspectionEnabled(step, selectedSourceId),
     },
@@ -847,6 +867,7 @@ function ProjectCreateWizard({
             orgId={orgId}
             selectedSourceId={selectedSourceId}
             branch={repositoryBranch}
+            inspectedBranch={settledBranch}
             inspection={inspection.data}
             // `isPending`, not `isFetching`: true for the whole gap between a
             // fresh pick and the read landing (data or error), including the
@@ -872,6 +893,7 @@ function ProjectCreateWizard({
               setSimpleConfigTouched(false)
             }}
             onBranchChange={setRepositoryBranch}
+            onBranchBlur={settleBranch}
             onCloneUrlLaneChange={setCloneUrlLaneOpen}
           />
         ) : null}
@@ -937,7 +959,7 @@ function ProjectCreateWizard({
               selectedOption,
               builder,
               selectedSource,
-              inspection.isPending,
+              inspection.isPending || branchSettling,
             )}
             onBack={goBack}
             onNext={goToTypeStep}

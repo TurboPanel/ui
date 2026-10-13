@@ -11,7 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { AdminHeader } from '@/components/admin/admin-header'
 import { AdminSidebar } from '@/components/admin/admin-sidebar'
-import { contentMaxWidthFor, usePageWidth } from '@/lib/page-width'
+import { contentAlignFor, contentMaxWidthFor, usePageWidth } from '@/lib/page-width'
 import { colors, layout, spacing } from '@/lib/theme'
 
 export function AdminShell() {
@@ -52,7 +52,7 @@ export function AdminShell() {
             style={styles.contentScroll}
             contentContainerStyle={[
               styles.content,
-              { maxWidth: contentMaxWidth },
+              { maxWidth: contentMaxWidth, alignSelf: contentAlignFor(pageWidth) },
             ]}
             contentInsetAdjustmentBehavior="automatic"
             keyboardShouldPersistTaps="handled"

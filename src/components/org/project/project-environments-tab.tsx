@@ -15,6 +15,7 @@ import { SectionHeading } from '@/components/ui/v4/section-heading'
 import { typeStyle } from '@/components/ui/v4/type-styles'
 import { themedStyles, usePalette } from '@/components/ui/v4/use-palette'
 import { projectBaseHref, projectEnvironmentHref } from '@/lib/project-navigation'
+import { commandStatusById, useCommandsBatch } from '@/lib/queries/commands'
 import { useContainersByProject } from '@/lib/queries/containers'
 import {
   useEnvironmentConfigViews,
@@ -24,8 +25,10 @@ import { useOrgServers } from '@/lib/queries/servers'
 import { environmentDisplayName } from '@/lib/resource-labels'
 import {
   baseCounts,
+  deployProgressLabel,
   environmentCardData,
   followLine,
+  inFlightDeployEntries,
   serverLine,
   type EnvironmentCardData,
 } from '@/lib/v4/project-home'
@@ -68,6 +71,11 @@ export function ProjectEnvironmentsTab() {
   const containers = useContainersByProject(orgId, projectId, { environmentIds })
   const { views } = useEnvironmentConfigViews(orgId, environmentIds)
   const { latest } = useLatestDeployments(orgId, environmentIds)
+  // The step a running deploy is on comes from the command status poll; it
+  // is only asked for while a deploy is in flight.
+  const inFlightEntries = useMemo(() => inFlightDeployEntries(latest), [latest])
+  const progressQuery = useCommandsBatch(orgId, inFlightEntries)
+  const progressRecords = useMemo(() => commandStatusById(progressQuery.data), [progressQuery.data])
   const servers = useOrgServers(orgId).data?.servers
   const defaultServerId = project?.options?.defaultServerId ?? null
   const canAdd = canManage && projectAllowsMutations
@@ -81,11 +89,12 @@ export function ProjectEnvironmentsTab() {
           containers: containers.isLoading ? undefined : containers.containersByEnv[env.id],
           view: views[env.id],
           latest: latest[env.id],
+          progressLabel: deployProgressLabel(latest[env.id], progressRecords),
           serverLine: serverLine(env.serverId, defaultServerId, servers),
           now,
         }) satisfies EnvironmentCardData,
       })),
-    [environments, containers.isLoading, containers.containersByEnv, views, latest, defaultServerId, servers, now],
+    [environments, containers.isLoading, containers.containersByEnv, views, latest, progressRecords, defaultServerId, servers, now],
   )
 
   const base = environmentIds.map((id) => views[id]?.base).find((side) => side !== undefined) ?? null

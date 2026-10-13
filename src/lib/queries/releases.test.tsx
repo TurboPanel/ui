@@ -287,6 +287,34 @@ describe('releases query hooks', () => {
     expect(inspectRepository).toHaveBeenCalledWith(repositoryId, 'main')
   })
 
+  it('useRepositoryInspection surfaces a missing branch once, and reads a new branch afresh', async () => {
+    inspectRepository.mockRejectedValueOnce(
+      new Error(
+        `/api/client/v1/repositories/${repositoryId}/inspect?ref=l failed: HTTP 404: ref_not_found`,
+      ),
+    )
+    inspectRepository.mockResolvedValueOnce({ files: [] })
+
+    const { result, rerender } = renderHook(
+      ({ ref }: { ref: string }) =>
+        useRepositoryInspection(orgId, repositoryId, ref, { enabled: true }),
+      { wrapper: createWrapper(), initialProps: { ref: 'l' } },
+    )
+
+    await waitFor(() => {
+      expect(result.current.isError).toBe(true)
+    })
+    // No retry: a branch that is not there is an answer, not a blip.
+    expect(inspectRepository).toHaveBeenCalledTimes(1)
+    expect(String(result.current.error)).toContain('ref_not_found')
+
+    rerender({ ref: 'live' })
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+    expect(inspectRepository).toHaveBeenLastCalledWith(repositoryId, 'live')
+  })
+
   it('useGitConnections loads provider connections', async () => {
     fetchGitConnections.mockResolvedValueOnce({ connections: [] })
 
