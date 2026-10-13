@@ -221,7 +221,7 @@ describe('project tabs', () => {
 })
 
 describe('project settings tab', () => {
-  it('shows Project Settings, and sends platform and managed projects home', () => {
+  it('shows Project Settings, sends platform projects home, and shows managed settings', () => {
     render(<ProjectSettingsRouteScreen />)
     expect(screen.getByTestId('project-settings')).toBeTruthy()
     cleanup()
@@ -231,7 +231,7 @@ describe('project settings tab', () => {
     cleanup()
     setContext({ project: project({ type: 'managed', code: 'postgres' }) })
     render(<ProjectSettingsRouteScreen />)
-    expect(redirectHref()).toBe('/o/projects/p/overview')
+    expect(screen.getByTestId('managed').getAttribute('data-focus')).toBe('settings')
   })
 })
 
@@ -295,14 +295,14 @@ describe('environment tabs', () => {
     expect(screen.getByTestId('env-settings').getAttribute('data-git')).toBe('false')
   })
 
-  it('sends platform projects away from Settings and shows managed focus for managed ones', () => {
+  it('sends platform projects away from Settings and shows managed settings for managed ones', () => {
     setContext({ isSystemProject: true })
     render(<EnvironmentSettingsScreen />)
     expect(redirectHref()).toBe('/o/projects/p/overview')
     cleanup()
     setContext({ project: project({ type: 'managed', code: 'postgres' }) })
     render(<EnvironmentSettingsScreen />)
-    expect(screen.getByTestId('managed')).toBeTruthy()
+    expect(screen.getByTestId('managed').getAttribute('data-focus')).toBe('settings')
     expect(screen.queryByTestId('env-settings')).toBeNull()
   })
 
