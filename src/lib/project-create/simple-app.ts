@@ -153,6 +153,21 @@ function runScript(manager: NodePackageManager | undefined, script: string): str
   return `${manager ?? 'npm'} run ${script}`
 }
 
+/** Any `next start` invocation, however the script reaches it. */
+const NEXT_START_RE = /(?:^|\s|\/)next\s+start(?:\s|$)/
+
+/**
+ * True when suggesting the package start script would be wrong because the
+ * daemon starts this app itself. A Next.js app is one: for a standalone build
+ * the daemon publishes the standalone tree as the release and runs
+ * `node server.js` (that tree has no `next` command, so `pnpm start` cannot
+ * run there and fails the build, and a script path under `.next/standalone/`
+ * does not exist there); without standalone output it runs the script itself.
+ */
+function daemonStartsItself(startScript: string): boolean {
+  return NEXT_START_RE.test(startScript) || startScript.includes('.next/standalone/')
+}
+
 /**
  * Suggested Simple-application config for what the inspection found.
  *
@@ -160,7 +175,9 @@ function runScript(manager: NodePackageManager | undefined, script: string): str
  * own `package.json` declares the script, because a suggested command that
  * fails on the first deploy is worse than an empty field with a good hint. The
  * daemon derives the install command itself, so suggestions never include
- * `npm install` — the build command is the build alone.
+ * `npm install` — the build command is the build alone. A start script the
+ * daemon starts on its own ({@link daemonStartsItself}) is left empty for the
+ * same reason.
  */
 export function suggestedSimpleAppConfig(
   inspection: RepositoryInspection | undefined,
@@ -183,7 +200,8 @@ export function suggestedSimpleAppConfig(
     kind,
     buildRoot: '',
     buildCommand: scripts?.build ? runScript(manager, 'build') : '',
-    startCommand: scripts?.start ? `${manager ?? 'npm'} start` : '',
+    startCommand:
+      scripts?.start && !daemonStartsItself(scripts.start) ? `${manager ?? 'npm'} start` : '',
     outputDirectory: staticRoot ?? '',
   }
 }

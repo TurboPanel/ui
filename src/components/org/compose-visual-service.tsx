@@ -1204,7 +1204,7 @@ function sourceStartCommandHint(railpack: boolean): string {
   if (railpack) {
     return 'Overrides the start command Railpack detected for the image. Leave empty to use its own.'
   }
-  return 'Only a native (node) service runs a start command; other kinds ignore it.'
+  return 'Only a native (node) service runs a start command; other kinds ignore it. Leave empty to use the detected default: a Next.js standalone build starts with node server.js, and a package start script such as pnpm start does not work there.'
 }
 
 function sourceOutputDirectoryHint(railpack: boolean): string {

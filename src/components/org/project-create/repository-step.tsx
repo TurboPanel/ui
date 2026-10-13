@@ -401,9 +401,9 @@ export function SimpleAppFields({
               maxLength={SOURCE_COMMAND_MAX_LENGTH}
               autoCapitalize="none"
               autoCorrect={false}
-              placeholder={`${manager ?? 'npm'} start`}
+              placeholder="node server.js"
               accessibilityLabel="Start command"
-              hint="Leave empty to run server.js with the vendored Node."
+              hint="Leave empty to use the detected default. A Next.js app is started for you — node server.js for a standalone build — and a package start script such as pnpm start does not work there."
             />
             <FormField
               label="Port"
