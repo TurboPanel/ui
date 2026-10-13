@@ -126,7 +126,8 @@ export function EnvironmentConfigurationTabScreen() {
 
 /**
  * Environment Settings: branch and deploy on push, server, name and the
- * danger zone. Platform and managed projects keep the screens they had.
+ * danger zone. Platform projects keep the screen they had; managed projects
+ * show their Settings panel for the environment in the path.
  */
 export function EnvironmentSettingsScreen() {
   const { orgId, projectId, project, isSystemProject } = useProjectContext()
@@ -135,7 +136,7 @@ export function EnvironmentSettingsScreen() {
     return <Redirect href={projectOverviewHref(orgId, projectId) as Href} />
   }
   if (project && isManagedProject(project)) {
-    return <ManagedFocusTab focus="overview" />
+    return <ManagedFocusTab focus="settings" />
   }
   return <EnvironmentSettingsBody showGitSource={withChrome} />
 }

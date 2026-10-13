@@ -295,14 +295,14 @@ describe('environment tabs', () => {
     expect(screen.getByTestId('env-settings').getAttribute('data-git')).toBe('false')
   })
 
-  it('sends platform projects away from Settings and shows managed focus for managed ones', () => {
+  it('sends platform projects away from Settings and shows managed settings for managed ones', () => {
     setContext({ isSystemProject: true })
     render(<EnvironmentSettingsScreen />)
     expect(redirectHref()).toBe('/o/projects/p/overview')
     cleanup()
     setContext({ project: project({ type: 'managed', code: 'postgres' }) })
     render(<EnvironmentSettingsScreen />)
-    expect(screen.getByTestId('managed')).toBeTruthy()
+    expect(screen.getByTestId('managed').getAttribute('data-focus')).toBe('settings')
     expect(screen.queryByTestId('env-settings')).toBeNull()
   })
 
