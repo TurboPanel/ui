@@ -251,9 +251,9 @@ describe('elapsed time', () => {
 
 describe('step nodes', () => {
   it('pairs every state with a word, a glyph and a tone', () => {
-    expect(stepNodeInfo('ready')).toMatchObject({ word: 'already on this server', glyph: 'check', tone: 'ok', complete: true })
-    expect(stepNodeInfo('done')).toMatchObject({ word: 'done', glyph: 'check', tone: 'ok', complete: true })
-    expect(stepNodeInfo('running')).toMatchObject({ word: 'in progress', glyph: 'spinner', tone: 'busy', complete: false })
+    expect(stepNodeInfo('ready')).toMatchObject({ word: 'already on this server', glyph: 'check', tone: 'ok' })
+    expect(stepNodeInfo('done')).toMatchObject({ word: 'done', glyph: 'check', tone: 'ok' })
+    expect(stepNodeInfo('running')).toMatchObject({ word: 'in progress', glyph: 'spinner', tone: 'busy' })
     expect(stepNodeInfo('pending')).toMatchObject({ word: 'not started', glyph: null, tone: 'idle' })
     expect(stepNodeInfo('failed')).toMatchObject({ word: 'failed', glyph: 'diamond', tone: 'bad' })
     expect(stepNodeInfo('skipped')).toMatchObject({ word: 'skipped', glyph: 'dashed', tone: 'idle' })

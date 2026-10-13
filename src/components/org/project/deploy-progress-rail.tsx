@@ -90,10 +90,10 @@ const styles = themedStyles((p) => ({
   endCapDone: { borderColor: p.ok, backgroundColor: p.ok },
   labels: { flexDirection: 'row', width: '100%' },
   labelCell: { flex: 1, minWidth: 0, paddingRight: 8 },
-  label: { ...typeStyle('body', 'caption'), color: p.text2 },
-  labelStrong: { ...typeStyle('bodyMedium', 'caption'), color: p.text },
-  labelMuted: { ...typeStyle('body', 'caption'), color: p.text3 },
-  labelBad: { ...typeStyle('bodyMedium', 'caption'), color: p.bad },
+  label: { ...typeStyle('body', 'caption'), color: p.text2, flexShrink: 1 },
+  labelStrong: { ...typeStyle('bodyMedium', 'caption'), color: p.text, flexShrink: 1 },
+  labelMuted: { ...typeStyle('body', 'caption'), color: p.text3, flexShrink: 1 },
+  labelBad: { ...typeStyle('bodyMedium', 'caption'), color: p.bad, flexShrink: 1 },
   checklist: { gap: 4 },
   checkRow: { flexDirection: 'row', alignItems: 'center', gap: 8, minWidth: 0 },
   checkGlyph: { width: 10, alignItems: 'center' },
@@ -104,7 +104,7 @@ const styles = themedStyles((p) => ({
 type Sheet = ReturnType<typeof styles>
 
 /** Fill and border of a node: soft tint for the quiet states, solid for done. */
-function nodePaint(p: Palette, state: string, info: StepNodeInfo): ViewStyle {
+function nodePaint(p: Palette, state: string): ViewStyle {
   switch (state) {
     case 'done':
       return { backgroundColor: p.ok, borderColor: p.ok }
@@ -190,7 +190,11 @@ function Sweep() {
   )
 }
 
-/** The filled part of a segment: grows in one beat when the step completes, instantly under reduced motion. */
+/**
+ * The filled part of a segment. It is keyed by the step's state, so it grows
+ * in from the left in one beat each time the state changes (violet when the
+ * step starts, green again when it completes); instant under reduced motion.
+ */
 function SegmentFill({ color, reduceMotion }: Readonly<{ color: string; reduceMotion: boolean }>) {
   const s = styles(usePalette())
   const width = useSharedValue(reduceMotion ? 100 : 0)
@@ -215,7 +219,7 @@ function StepNode({
   return (
     <View style={s.nodeWrap}>
       {pulse ? <RunningHalo color={p.busy} /> : null}
-      <View style={[s.node, nodePaint(p, step.state, info)]}>
+      <View style={[s.node, nodePaint(p, step.state)]}>
         {info.glyph ? <StatusGlyph glyph={info.glyph} color={glyphColor(p, step.state, info)} size={GLYPH} /> : null}
       </View>
     </View>
@@ -233,9 +237,9 @@ function Segment({
   const info = stepNodeInfo(step.state)
   const fill = segmentFill(p, step.state, reduceMotion)
   return (
-    <View style={s.segment} accessible accessibilityLabel={stepAccessibilityLabel(steps, step)}>
+    <View style={s.segment} role="listitem" accessible accessibilityLabel={stepAccessibilityLabel(steps, step)}>
       <View style={s.line} />
-      {fill ? <SegmentFill color={fill} reduceMotion={reduceMotion} /> : null}
+      {fill ? <SegmentFill key={step.state} color={fill} reduceMotion={reduceMotion} /> : null}
       {step.state === 'running' && !reduceMotion ? <Sweep /> : null}
       <StepNode step={step} info={info} reduceMotion={reduceMotion} />
     </View>
@@ -416,7 +420,7 @@ export function DeployProgressRail({
           </View>
         ) : null}
       </View>
-      <View style={s.track} accessibilityRole="list">
+      <View style={s.track} role="list">
         {steps.map((step) => (
           <Segment key={step.id} step={step} steps={steps} reduceMotion={reduceMotion} />
         ))}

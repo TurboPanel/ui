@@ -217,17 +217,15 @@ export type StepNodeInfo = Readonly<{
   word: string
   glyph: GlyphKey | null
   tone: StatusTone
-  /** True for the two ticked states: the segment after the node is filled. */
-  complete: boolean
 }>
 
 const STEP_NODES: Readonly<Record<CommandProgressStepState, StepNodeInfo>> = {
-  ready: { word: 'already on this server', glyph: 'check', tone: 'ok', complete: true },
-  done: { word: 'done', glyph: 'check', tone: 'ok', complete: true },
-  running: { word: 'in progress', glyph: 'spinner', tone: 'busy', complete: false },
-  pending: { word: 'not started', glyph: null, tone: 'idle', complete: false },
-  failed: { word: 'failed', glyph: 'diamond', tone: 'bad', complete: false },
-  skipped: { word: 'skipped', glyph: 'dashed', tone: 'idle', complete: false },
+  ready: { word: 'already on this server', glyph: 'check', tone: 'ok' },
+  done: { word: 'done', glyph: 'check', tone: 'ok' },
+  running: { word: 'in progress', glyph: 'spinner', tone: 'busy' },
+  pending: { word: 'not started', glyph: null, tone: 'idle' },
+  failed: { word: 'failed', glyph: 'diamond', tone: 'bad' },
+  skipped: { word: 'skipped', glyph: 'dashed', tone: 'idle' },
 }
 
 /** Word, glyph and tone for a step state; an unknown state reads as not started. */

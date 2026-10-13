@@ -109,7 +109,7 @@ describe.each(SCENARIOS)('DeployProgressRail ($name)', (scenario) => {
     ['Step 5 of 5, Start the app, skipped', 'circle', 'sep', null],
   ] as const)('reads %s to a screen reader, with its glyph, node tone and segment fill', (name, shape, border, fill) => {
     render(<DeployProgressRail progress={EVERY_STATE} />)
-    const segment = screen.getByLabelText(name)
+    const segment = screen.getByRole('listitem', { name })
     const drawn = segment.querySelector('svg')
     if (shape === null) {
       expect(drawn).toBeNull()
@@ -129,9 +129,13 @@ describe.each(SCENARIOS)('DeployProgressRail ($name)', (scenario) => {
     render(<DeployProgressRail progress={EVERY_STATE} />)
     const track = screen.getByRole('list')
     expect(styleOf(track).width).toBe('100%')
-    const segments = [...track.children].filter((el) => el.getAttribute('aria-label'))
+    const segments = screen.getAllByRole('listitem')
     expect(segments).toHaveLength(6)
-    for (const segment of segments) expect(styleOf(segment).flex).toBe(1)
+    expect(segments[1]?.getAttribute('aria-label')).toBe('Step 1 of 5, Install Docker, done')
+    for (const segment of segments) {
+      expect(segment.parentElement).toBe(track)
+      expect(styleOf(segment).flex).toBe(1)
+    }
     const cap = track.lastElementChild as HTMLElement
     expect(styleOf(cap).borderColor).toBe(token(scenario, 'sepStrong'))
   })
@@ -170,6 +174,7 @@ describe.each(SCENARIOS)('DeployProgressRail ($name)', (scenario) => {
     render(<DeployProgressRail progress={EVERY_STATE} />)
     expect(styleOf(screen.getByRole('list')).width).toBe('100%')
     expect(screen.getByText('in progress')).toBeTruthy()
+    expect(styleOf(screen.getByText('Install Node 22')).flexShrink).toBe(1)
     expect(screen.getByText('already on this server')).toBeTruthy()
     expect(screen.getByText('not started')).toBeTruthy()
     expect(screen.getByText('Build')).toBeTruthy()
