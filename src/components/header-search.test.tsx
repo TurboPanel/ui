@@ -29,10 +29,12 @@ vi.mock('react-native', () => ({
     id,
     accessibilityLabel,
     accessibilityRole,
+    onMouseDown,
     ...rest
   }: Props) => (
     <div
       id={id as string}
+      onMouseDown={onMouseDown as () => void}
       role={(role ?? accessibilityRole) as string}
       aria-label={accessibilityLabel as string}
       aria-selected={rest['aria-selected'] as boolean}
@@ -154,6 +156,13 @@ describe('HeaderSearch', () => {
     expect(screen.getByRole('listbox')).toBeTruthy()
     fireEvent.blur(input)
     expect(screen.queryByRole('listbox')).toBeNull()
+  })
+
+  it('keeps focus in the input when the field padding or icon is pressed', async () => {
+    const input = await mount(true, vi.fn())
+    const field = screen.getByRole('search').firstElementChild as HTMLElement
+    expect(fireEvent.mouseDown(field)).toBe(false)
+    expect(fireEvent.mouseDown(input)).toBe(true)
   })
 
   it('does not let Escape reach other handlers', async () => {

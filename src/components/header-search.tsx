@@ -41,6 +41,12 @@ const LISTBOX_ROLE = { role: 'listbox' } as object
 const KEEP_FOCUS = {
   onMouseDown: (event: { preventDefault: () => void }) => event.preventDefault(),
 } as object
+/** Presses on the field's padding or icon must not blur the input (which would close the overlay). */
+const FIELD_KEEP_FOCUS = {
+  onMouseDown: (event: { target: EventTarget | null; preventDefault: () => void }) => {
+    if (!targetIsTextField(event.target)) event.preventDefault()
+  },
+} as object
 const optionId = (id: string) => `header-search-option-${id}`
 
 function targetIsTextField(target: EventTarget | null): boolean {
@@ -160,6 +166,14 @@ export function HeaderSearchButton({ onPress }: Readonly<{ onPress: () => void }
   )
 }
 
+function useScrollActiveIntoView(popoverOpen: boolean, activeId: string | undefined) {
+  useEffect(() => {
+    if (!isWeb || !popoverOpen || !activeId) return
+    const row = document.getElementById(optionId(activeId))
+    if (typeof row?.scrollIntoView === 'function') row.scrollIntoView({ block: 'nearest' })
+  }, [popoverOpen, activeId])
+}
+
 /**
  * Header search: jumps to the organization's own pages. Nothing here calls the
  * API; the destinations come from the navigation registry.
@@ -196,11 +210,7 @@ export function HeaderSearch({
   const popoverOpen = open && focused
   const activeId = active?.id
 
-  useEffect(() => {
-    if (!isWeb || !popoverOpen || !activeId) return
-    const row = document.getElementById(optionId(activeId))
-    if (typeof row?.scrollIntoView === 'function') row.scrollIntoView({ block: 'nearest' })
-  }, [popoverOpen, activeId])
+  useScrollActiveIntoView(popoverOpen, activeId)
   const isMac = isWeb && /mac|iphone|ipad/i.test(globalThis.navigator?.platform ?? '')
 
   useEffect(() => {
@@ -258,6 +268,7 @@ export function HeaderSearch({
         onPress={() => inputRef.current?.focus()}
         accessible={false}
         tabIndex={-1}
+        {...FIELD_KEEP_FOCUS}
       >
         <SearchIcon size={16} color={focused ? colors.link : colors.textDim} />
         <TextInput
