@@ -858,20 +858,11 @@ function ProjectCreateWizard({
 
   return (
     <View style={[styles.column, step === 'type' && styles.columnWide]}>
-      <View style={styles.pageHeader}>
-        <Text style={[panelStyles.pageTitle, styles.centeredText]}>
-          {title}
-        </Text>
-        {hint ? (
-          <Text style={[panelStyles.pageCopy, styles.centeredText]}>
-            {hint}
-          </Text>
-        ) : null}
-      </View>
+      <WizardPageHeader title={title} hint={hint} />
 
-      {step === 'details' || step === 'type' ? null : (
+      {showsStartOver(step) ? (
         <StartOverBar onStartOver={onStartOver} disabled={submitting} />
-      )}
+      ) : null}
 
       <PanelShell>
         {surfaceError ? (
@@ -991,8 +982,7 @@ function ProjectCreateWizard({
           wizard's Back/Continue on top read as two Back buttons and a
           Continue that could never be pressed, since nothing is picked yet.
         */}
-        {step === 'type' ||
-        (step === 'repository' && cloneUrlLaneOpen) ? null : (
+        {showsInlineActions(step, cloneUrlLaneOpen) ? (
           <StepActions
             step={step}
             submitting={submitting}
@@ -1011,7 +1001,7 @@ function ProjectCreateWizard({
               void create()
             }}
           />
-        )}
+        ) : null}
       </PanelShell>
 
       {step === 'type' ? (
@@ -1033,19 +1023,56 @@ function ProjectCreateWizard({
         />
       ) : null}
 
-      {step === 'type' ? null : (
-        <Pressable
-          style={[styles.cancelLink, webPointer]}
-          onPress={() => {
-            router.replace(`/${orgId}/projects` as Href)
-          }}
-          accessibilityRole="button"
-          accessibilityLabel="Cancel"
-        >
-          <Text style={styles.cancelLinkText}>Cancel</Text>
-        </Pressable>
-      )}
+      <CancelLink orgId={orgId} visible={step !== 'type'} />
     </View>
+  )
+}
+
+/** The details and type steps are the start, so there is nothing to start over from. */
+function showsStartOver(step: Step): boolean {
+  return step !== 'details' && step !== 'type'
+}
+
+/**
+ * The type step has its own footer below the panel, and the clone-URL lane
+ * ends in its own Connect and Back.
+ */
+function showsInlineActions(step: Step, cloneUrlLaneOpen: boolean): boolean {
+  if (step === 'type') return false
+  return !(step === 'repository' && cloneUrlLaneOpen)
+}
+
+function WizardPageHeader({
+  title,
+  hint,
+}: Readonly<{ title: string; hint: string | null | undefined }>) {
+  return (
+    <View style={styles.pageHeader}>
+      <Text style={[panelStyles.pageTitle, styles.centeredText]}>{title}</Text>
+      {hint ? (
+        <Text style={[panelStyles.pageCopy, styles.centeredText]}>{hint}</Text>
+      ) : null}
+    </View>
+  )
+}
+
+function CancelLink({
+  orgId,
+  visible,
+}: Readonly<{ orgId: string; visible: boolean }>) {
+  const router = useRouter()
+  if (!visible) return null
+  return (
+    <Pressable
+      style={[styles.cancelLink, webPointer]}
+      onPress={() => {
+        router.replace(`/${orgId}/projects` as Href)
+      }}
+      accessibilityRole="button"
+      accessibilityLabel="Cancel"
+    >
+      <Text style={styles.cancelLinkText}>Cancel</Text>
+    </Pressable>
   )
 }
 
