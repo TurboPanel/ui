@@ -1,20 +1,20 @@
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { forwardRef, type ReactNode } from 'react'
+import type { ReactNode, Ref } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-type Props = Readonly<Record<string, unknown> & { children?: ReactNode }>
+type Props = Readonly<Record<string, unknown> & { children?: ReactNode; ref?: Ref<never> }>
 
 const push = vi.hoisted(() => vi.fn())
 
 vi.mock('react-native', () => ({
   Platform: { OS: 'web', select: (o: Record<string, unknown>) => o.web ?? o.default },
   StyleSheet: { create: (s: unknown) => s, absoluteFill: {}, flatten: (s: unknown) => s },
-  View: forwardRef<HTMLDivElement, Props>(({ children, role, id, accessibilityRole }, ref) => (
+  View: ({ children, role, id, accessibilityRole, ref }: Props) => (
     <div ref={ref} id={id as string} role={(role ?? accessibilityRole) as string}>
       {children}
     </div>
-  )),
+  ),
   Text: ({ children, id }: Props) => <span id={id as string}>{children}</span>,
   Pressable: ({ children, onPress, role, id, accessibilityLabel, accessibilityRole, ...rest }: Props) => (
     <div
@@ -27,9 +27,9 @@ vi.mock('react-native', () => ({
       {typeof children === 'function' ? (children as (s: object) => ReactNode)({}) : children}
     </div>
   ),
-  TextInput: forwardRef<HTMLInputElement, Props>((props, ref) => (
+  TextInput: (props: Props) => (
     <input
-      ref={ref}
+      ref={props.ref}
       role={props.role as string}
       aria-label={props.accessibilityLabel as string}
       aria-activedescendant={props['aria-activedescendant'] as string}
@@ -44,7 +44,7 @@ vi.mock('react-native', () => ({
         })
       }
     />
-  )),
+  ),
 }))
 vi.mock('react-native-svg', () => ({
   default: () => null,

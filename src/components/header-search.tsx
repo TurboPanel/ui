@@ -52,7 +52,9 @@ function targetIsTextField(target: EventTarget | null): boolean {
 /** Cmd/Ctrl+K and `/` call `onTrigger` (web only). */
 export function useHeaderSearchShortcut(onTrigger: () => void, enabled = true) {
   const latest = useRef(onTrigger)
-  latest.current = onTrigger
+  useEffect(() => {
+    latest.current = onTrigger
+  })
   useEffect(() => {
     if (!isWeb || !enabled) return
     const onKeyDown = (event: KeyboardEvent) => {
