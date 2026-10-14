@@ -2,11 +2,11 @@ import { useRouter, type Href } from 'expo-router'
 import { useMemo } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { ProjectHomeCard } from '@/components/org/project-home-card'
+import { ProjectsWelcomeCard } from '@/components/org/projects-welcome-card'
 import { useNow } from '@/components/org/project/use-now'
 import { WorkspaceSwitcher } from '@/components/org/workspace-switcher'
 import { LoadingState } from '@/components/ui'
 import { ActionButton } from '@/components/ui/v4/action-button'
-import { EmptyPanel } from '@/components/ui/v4/empty-panel'
 import { ListGroup } from '@/components/ui/v4/list-group'
 import { ListRow } from '@/components/ui/v4/list-row'
 import { Notice } from '@/components/ui/v4/notice'
@@ -23,6 +23,7 @@ import {
   projectEnvironmentHref,
   projectHref,
 } from '@/lib/project-navigation'
+import { orgAreaHref } from '@/lib/org-navigation'
 import { usePullToRefresh } from '@/lib/pull-to-refresh'
 import { useCan } from '@/lib/query-client'
 import { useProjects, useWorkspaces } from '@/lib/queries'
@@ -32,6 +33,7 @@ import {
   useLatestDeployments,
 } from '@/lib/queries/environment-cards'
 import { useEnvironments } from '@/lib/queries/environments'
+import { useOrgServers } from '@/lib/queries/servers'
 import { resolveRecentProjects, useRecentProjectIds } from '@/lib/recent-projects'
 import {
   isTurbopanelProject,
@@ -241,21 +243,20 @@ export function ProjectsHomeSection({
   const loading = projectsQuery.isLoading && projects.length === 0
   const error = queryErrorMessage(projectsQuery.error, workspacesQuery.error)
   const newProjectHref = newProjectHrefForScope(orgId, scopeId) as Href
+  const canCreate = canOwn && !isSystemScope
+  const showWelcome = !loading && cards.length === 0
+  const serversQuery = useOrgServers(orgId, { enabled: showWelcome && canCreate })
+  const serverCount = serversQuery.data ? serversQuery.data.servers.length : null
 
   let list
   if (loading) {
     list = <LoadingState />
   } else if (cards.length === 0) {
     list = (
-      <EmptyPanel
-        hero
-        title="No projects yet"
-        body="Deploy your first app, site or stack. It takes about a minute."
-        action={
-          canOwn && !isSystemScope ? (
-            <ActionButton label="New project" onPress={() => router.push(newProjectHref)} />
-          ) : null
-        }
+      <ProjectsWelcomeCard
+        serverCount={serverCount}
+        onAddServer={canCreate ? () => router.push(orgAreaHref(orgId, 'servers') as Href) : undefined}
+        onNewProject={canCreate ? () => router.push(newProjectHref) : undefined}
       />
     )
   } else {
@@ -288,7 +289,7 @@ export function ProjectsHomeSection({
         title="Projects"
         sub={cards.length > 0 ? summaryLine(cards.length, environments.length, runningCount) : undefined}
         actions={
-          canOwn && !isSystemScope ? (
+          canCreate && !showWelcome ? (
             <ActionButton label="New project" variant="primary" onPress={() => router.push(newProjectHref)} />
           ) : null
         }
