@@ -5,7 +5,6 @@ import { GlassSurface } from '@/components/glass/glass-surface'
 import { SystemManagedNotice } from '@/components/org/system-managed-notice'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { CatalogStep } from '@/components/org/project-create/catalog-step'
-import { ChoiceTileGrid } from '@/components/org/project-create/choice-card'
 import { RepositoryLaneStep } from '@/components/org/project-create/repository-lane-step'
 import { StartOverBar } from '@/components/org/project-create/start-over-bar'
 import { ComposeStep } from '@/components/org/project-create/compose-step'
@@ -36,7 +35,6 @@ import { resolveWizardSelectedSource } from '@/lib/project-create/selected-sourc
 import { useDebouncedValue } from '@/lib/use-debounced-value'
 import { SetupTypeChoiceCard } from '@/components/org/project-create/setup-type-icons'
 import {
-  SETUP_TYPE_GROUPS,
   SETUP_TYPE_OPTIONS,
   setupOptionForChoice,
   type SetupChoice,
@@ -81,6 +79,8 @@ import { useOptionalWorkspaceScope } from '@/lib/workspace-scope-context'
 import { userErrorMessage } from '@/lib/user-error'
 
 const FORM_MAX_WIDTH = 440
+/** The setup step is wider so the option descriptions have room. */
+const TYPE_STEP_MAX_WIDTH = 640
 
 /**
  * Wizard position. Nothing is persisted until the final step's Create button,
@@ -150,12 +150,12 @@ function stepForOption(option: SetupTypeOption): Step {
 
 const STEP_COPY: Record<Step, { title: string; hint: string }> = {
   details: {
-    title: 'New project',
-    hint: 'Name it and pick where it lives. Nothing is created yet.',
+    title: 'New Project',
+    hint: '',
   },
   type: {
-    title: 'How should this run?',
-    hint: 'Pick how the project starts. You can add more services later.',
+    title: 'Project Setup',
+    hint: "Choose where your project's files come from.",
   },
   repository: {
     title: 'Link a repository',
@@ -183,17 +183,6 @@ function resolveSelectedOption(
 ): SetupTypeOption | null {
   if (!choice) return null
   return setupOptionForChoice(choice) ?? null
-}
-
-function wizardHint(
-  step: Step,
-  defaultEnvironmentName: string,
-  fallback: string,
-): string {
-  if (step === 'details') {
-    return `Creates a ${defaultEnvironmentName} environment when you finish. Nothing is created yet.`
-  }
-  return fallback
 }
 
 function asError(error: unknown): Error | null {
@@ -381,6 +370,11 @@ function ProjectCreateWizard({
   /** Latest editor draft — `null` while the YAML does not parse. */
   const [displayName, setDisplayName] = useState('')
   const [description, setDescription] = useState('')
+  /** `null` until edited, so the field follows the org default as it loads. */
+  const [editedEnvironmentName, setEditedEnvironmentName] = useState<
+    string | null
+  >(null)
+  const environmentName = editedEnvironmentName ?? defaultEnvironmentName
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('existing')
   const [pickedWorkspaceId, setPickedWorkspaceId] = useState('')
   const [newWorkspaceName, setNewWorkspaceName] = useState('')
@@ -548,6 +542,7 @@ function ProjectCreateWizard({
     const errors = validateProjectCreateFields({
       name: trimmedProjectName,
       description,
+      environmentName,
       workspaceMode,
       pickedWorkspaceId,
       allowedWorkspaceIds,
@@ -755,6 +750,7 @@ function ProjectCreateWizard({
       type: selectedType,
       workspaceId,
       name: trimmedProjectName,
+      environmentName: environmentName.trim(),
       ...(trimmedDescription ? { description: trimmedDescription } : {}),
       ...(selectedCode ? { code: selectedCode } : {}),
       ...(compose ? { options: { compose } } : {}),
@@ -809,10 +805,10 @@ function ProjectCreateWizard({
 
   const copy = STEP_COPY[step]
   const title = stepTitle(step, selectedOption)
-  const hint = wizardHint(step, defaultEnvironmentName, copy.hint)
+  const hint = copy.hint
 
   return (
-    <View style={styles.column}>
+    <View style={[styles.column, step === 'type' && styles.columnWide]}>
       <View style={styles.pageHeader}>
         <Text style={[panelStyles.pageTitle, styles.centeredText]}>
           {title}
@@ -824,7 +820,7 @@ function ProjectCreateWizard({
         ) : null}
       </View>
 
-      {step === 'details' ? null : (
+      {step === 'details' || step === 'type' ? null : (
         <StartOverBar onStartOver={onStartOver} disabled={submitting} />
       )}
 
@@ -846,6 +842,10 @@ function ProjectCreateWizard({
 
         {step === 'details' ? (
           <DetailsStep
+            orgId={orgId}
+            environmentName={environmentName}
+            defaultEnvironmentName={defaultEnvironmentName}
+            onEnvironmentNameChange={setEditedEnvironmentName}
             displayName={displayName}
             description={description}
             workspaceMode={workspaceMode}
@@ -913,21 +913,14 @@ function ProjectCreateWizard({
         ) : null}
 
         {step === 'type' ? (
-          <View style={styles.typeGroups}>
-            {SETUP_TYPE_GROUPS.map((group) => (
-              <View key={group.title} style={styles.typeGroup}>
-                <Text style={styles.typeGroupLabel}>{group.title}</Text>
-                <ChoiceTileGrid>
-                  {group.options.map((option) => (
-                    <SetupTypeChoiceCard
-                      key={option.choice}
-                      option={option}
-                      selected={selectedChoice === option.choice}
-                      onPress={() => selectType(option)}
-                    />
-                  ))}
-                </ChoiceTileGrid>
-              </View>
+          <View style={styles.typeRows}>
+            {SETUP_TYPE_OPTIONS.map((option) => (
+              <SetupTypeChoiceCard
+                key={option.choice}
+                option={option}
+                selected={selectedChoice === option.choice}
+                onPress={() => selectType(option)}
+              />
             ))}
           </View>
         ) : null}
@@ -949,7 +942,8 @@ function ProjectCreateWizard({
           wizard's Back/Continue on top read as two Back buttons and a
           Continue that could never be pressed, since nothing is picked yet.
         */}
-        {step === 'repository' && cloneUrlLaneOpen ? null : (
+        {step === 'type' ||
+        (step === 'repository' && cloneUrlLaneOpen) ? null : (
           <StepActions
             step={step}
             submitting={submitting}
@@ -971,16 +965,37 @@ function ProjectCreateWizard({
         )}
       </PanelShell>
 
-      <Pressable
-        style={[styles.cancelLink, webPointer]}
-        onPress={() => {
-          router.replace(`/${orgId}/projects` as Href)
-        }}
-        accessibilityRole="button"
-        accessibilityLabel="Cancel"
-      >
-        <Text style={styles.cancelLinkText}>Cancel</Text>
-      </Pressable>
+      {step === 'type' ? (
+        <StepActions
+          step={step}
+          submitting={submitting}
+          canCreate={false}
+          canContinue={canContinueFromStep(
+            step,
+            selectedOption,
+            builder,
+            selectedSource,
+            false,
+          )}
+          onBack={goBack}
+          onNext={goToTypeStep}
+          onContinue={continueHandler}
+          onCreate={() => {}}
+        />
+      ) : null}
+
+      {step === 'type' ? null : (
+        <Pressable
+          style={[styles.cancelLink, webPointer]}
+          onPress={() => {
+            router.replace(`/${orgId}/projects` as Href)
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Cancel"
+        >
+          <Text style={styles.cancelLinkText}>Cancel</Text>
+        </Pressable>
+      )}
     </View>
   )
 }
@@ -992,6 +1007,10 @@ function PanelShell({ children }: Readonly<{ children: ReactNode }>) {
       <View style={styles.panelBody}>{children}</View>
     </GlassSurface>
   )
+}
+
+function SpreadRow({ children }: Readonly<{ children: ReactNode }>) {
+  return <View style={styles.spreadRow}>{children}</View>
 }
 
 /**
@@ -1031,8 +1050,10 @@ function StepActions({
 
   if (step === 'type' || step === 'repository' || step === 'lane') {
     const continueLabel = step === 'type' ? 'Next' : 'Continue'
+    // On the setup step the row sits below the panel, Back left, Next right.
+    const Row = step === 'type' ? SpreadRow : ButtonRow
     return (
-      <ButtonRow>
+      <Row>
         <Button
           label="Back"
           variant="secondary"
@@ -1047,7 +1068,7 @@ function StepActions({
           onPress={onContinue}
           accessibilityLabel={continueLabel}
         />
-      </ButtonRow>
+      </Row>
     )
   }
 
@@ -1084,6 +1105,9 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     gap: spacing.md,
   },
+  columnWide: {
+    maxWidth: TYPE_STEP_MAX_WIDTH,
+  },
   pageHeader: {
     gap: spacing.xs,
     alignItems: 'center',
@@ -1104,14 +1128,12 @@ const styles = StyleSheet.create({
   plainPanelBody: {
     gap: spacing.md,
   },
-  typeGroups: { gap: spacing.md },
-  typeGroup: { gap: spacing.xs },
-  typeGroupLabel: {
-    color: colors.textDim,
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
+  typeRows: { gap: spacing.sm },
+  spreadRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
   },
   cancelLink: {
     alignSelf: 'center',

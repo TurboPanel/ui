@@ -1,3 +1,4 @@
+import { Link, type Href } from 'expo-router'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { panelStyles } from '@/components/ui/panel-styles'
 import type {
@@ -168,8 +169,11 @@ function ProjectWorkspaceFields({
 
 /** Wizard step 1: name, description, and the workspace the project lands in. */
 export function DetailsStep({
+  orgId,
   displayName,
   description,
+  environmentName,
+  defaultEnvironmentName,
   workspaceMode,
   workspaces,
   loadingWorkspaces,
@@ -178,12 +182,16 @@ export function DetailsStep({
   fieldErrors,
   onDisplayNameChange,
   onDescriptionChange,
+  onEnvironmentNameChange,
   onWorkspaceModeChange,
   onPickedWorkspaceIdChange,
   onNewWorkspaceNameChange,
 }: Readonly<{
+  orgId: string
   displayName: string
   description: string
+  environmentName: string
+  defaultEnvironmentName: string
   workspaceMode: WorkspaceMode
   workspaces: WorkspaceRecord[]
   loadingWorkspaces: boolean
@@ -192,6 +200,7 @@ export function DetailsStep({
   fieldErrors: FieldErrors
   onDisplayNameChange: (value: string) => void
   onDescriptionChange: (value: string) => void
+  onEnvironmentNameChange: (value: string) => void
   onWorkspaceModeChange: (mode: WorkspaceMode) => void
   onPickedWorkspaceIdChange: (id: string) => void
   onNewWorkspaceNameChange: (name: string) => void
@@ -224,6 +233,41 @@ export function DetailsStep({
         error={fieldErrors.description}
       />
 
+      <TextField
+        label="Environment Name"
+        value={environmentName}
+        onChangeText={onEnvironmentNameChange}
+        autoCapitalize="none"
+        autoCorrect={false}
+        spellCheck={false}
+        accessibilityLabel="Environment name"
+        maxLength={DISPLAY_NAME_MAX_LENGTH}
+        style={
+          environmentName === defaultEnvironmentName
+            ? styles.environmentInputWithPill
+            : undefined
+        }
+        adornment={
+          environmentName === defaultEnvironmentName ? (
+            <Text style={styles.defaultPill}>Organization Default</Text>
+          ) : null
+        }
+        footer={
+          <Link href={`/${orgId}/projects/settings` as Href} asChild>
+            <Pressable
+              style={StyleSheet.flatten([styles.hintLink, webPointer])}
+              accessibilityRole="link"
+              accessibilityLabel="Set the default for this organization"
+            >
+              <Text style={styles.hintLinkText}>
+                Set the default for this organization
+              </Text>
+            </Pressable>
+          </Link>
+        }
+        error={fieldErrors.environmentName}
+      />
+
       <ProjectWorkspaceFields
         workspaceMode={workspaceMode}
         workspaces={workspaces}
@@ -240,6 +284,30 @@ export function DetailsStep({
 }
 
 const styles = StyleSheet.create({
+  environmentInputWithPill: {
+    paddingRight: 158,
+  },
+  defaultPill: {
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 999,
+    overflow: 'hidden',
+    backgroundColor: colors.accentSoft,
+    color: colors.link,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  hintLink: {
+    alignSelf: 'flex-start',
+  },
+  hintLinkText: {
+    color: colors.link,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '600',
+  },
   fieldBlock: {
     gap: spacing.xs,
   },

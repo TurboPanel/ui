@@ -20,12 +20,15 @@ export function FormField({
   label,
   labelRight,
   hint,
+  footer,
   error,
   children,
 }: Readonly<{
   label: string
   labelRight?: ReactNode
   hint?: string
+  /** Rich caption (e.g. a link) shown when there is no error or hint text. */
+  footer?: ReactNode
   error?: string | null
   children: ReactNode
 }>) {
@@ -34,6 +37,8 @@ export function FormField({
     caption = <Text style={styles.error}>{error}</Text>
   } else if (hint) {
     caption = <Text style={styles.hint}>{hint}</Text>
+  } else if (footer) {
+    caption = footer
   }
   return (
     <View style={styles.field}>
@@ -55,6 +60,8 @@ export function TextField({
   label,
   labelRight,
   hint,
+  footer,
+  adornment,
   error,
   mono = false,
   style,
@@ -64,34 +71,50 @@ export function TextField({
     label: string
     labelRight?: ReactNode
     hint?: string
+    footer?: ReactNode
+    /** Non-interactive element drawn inside the input at the right. */
+    adornment?: ReactNode
     error?: string | null
     mono?: boolean
   } & Omit<TextInputProps, 'placeholderTextColor'>
 >) {
   const [focused, setFocused] = useState(false)
   return (
-    <FormField label={label} labelRight={labelRight} hint={hint} error={error}>
-      <TextInput
-        {...inputProps}
-        placeholderTextColor={colors.textDim}
-        onFocus={(e) => {
-          setFocused(true)
-          inputProps.onFocus?.(e)
-        }}
-        onBlur={(e) => {
-          setFocused(false)
-          inputProps.onBlur?.(e)
-        }}
-        style={[
-          styles.input,
-          mono && styles.mono,
-          inputProps.multiline && styles.multiline,
-          focused && styles.inputFocused,
-          error ? styles.inputInvalid : null,
-          inputProps.editable === false && styles.inputDisabled,
-          style,
-        ]}
-      />
+    <FormField
+      label={label}
+      labelRight={labelRight}
+      hint={hint}
+      footer={footer}
+      error={error}
+    >
+      <View>
+        <TextInput
+          {...inputProps}
+          placeholderTextColor={colors.textDim}
+          onFocus={(e) => {
+            setFocused(true)
+            inputProps.onFocus?.(e)
+          }}
+          onBlur={(e) => {
+            setFocused(false)
+            inputProps.onBlur?.(e)
+          }}
+          style={[
+            styles.input,
+            mono && styles.mono,
+            inputProps.multiline && styles.multiline,
+            focused && styles.inputFocused,
+            error ? styles.inputInvalid : null,
+            inputProps.editable === false && styles.inputDisabled,
+            style,
+          ]}
+        />
+        {adornment ? (
+          <View style={styles.adornment} pointerEvents="none">
+            {adornment}
+          </View>
+        ) : null}
+      </View>
     </FormField>
   )
 }
@@ -140,6 +163,13 @@ const styles = StyleSheet.create({
   },
   inputDisabled: {
     opacity: 0.5,
+  },
+  adornment: {
+    position: 'absolute',
+    right: 10,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
   },
   mono: {
     fontFamily: 'monospace',

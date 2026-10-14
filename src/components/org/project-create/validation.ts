@@ -11,6 +11,7 @@ export type WorkspaceMode = 'existing' | 'new'
 export type FieldErrors = {
   name?: string
   description?: string
+  environmentName?: string
   workspaceId?: string
   workspaceName?: string
 }
@@ -35,6 +36,7 @@ export function conflictOrRawError(
 export function validateProjectCreateFields(options: {
   name: string
   description: string
+  environmentName: string
   workspaceMode: WorkspaceMode
   pickedWorkspaceId: string
   /** Ids the picker offers — existing mode must pick one of these. */
@@ -49,6 +51,14 @@ export function validateProjectCreateFields(options: {
   if (nameError) errors.name = nameError
   else if (isDisplayNameTaken(options.name, options.projectNames)) {
     errors.name = 'A project with this name already exists in the organization.'
+  }
+
+  const environmentError = validateDisplayName(options.environmentName)
+  if (environmentError) {
+    errors.environmentName = environmentError.replace(
+      /\bName\b/,
+      'Environment name',
+    )
   }
 
   const descriptionError = validateDescription(options.description)

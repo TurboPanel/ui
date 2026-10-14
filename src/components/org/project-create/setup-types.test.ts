@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  SETUP_TYPE_GROUPS,
   SETUP_TYPE_OPTIONS,
   filterSetupCatalog,
   isCatalogEntrySelectable,
@@ -24,32 +23,12 @@ const CATALOG: CatalogSummary[] = [
   entry('cockroach', 'managed'),
 ]
 
-describe('SETUP_TYPE_GROUPS', () => {
-  it('splits the cards into "Define your stack" and "Start from a catalog"', () => {
-    expect(
-      SETUP_TYPE_GROUPS.map((group) => [
-        group.title,
-        group.options.map((option) => option.choice),
-      ]),
-    ).toEqual([
-      ['Define your stack', ['compose', 'services', 'repository', 'hosting']],
-      ['Start from a catalog', ['template', 'managed']],
-    ])
-  })
-
-  it('shows every card exactly once, in the flat order', () => {
-    expect(
-      SETUP_TYPE_GROUPS.flatMap((group) => group.options.map((o) => o.choice)),
-    ).toEqual(SETUP_TYPE_OPTIONS.map((option) => option.choice))
-  })
-})
-
 describe('SETUP_TYPE_OPTIONS', () => {
-  it('groups the four compose lenses before the two catalog cards', () => {
+  it('lists the four compose lenses before the two catalog cards', () => {
     expect(SETUP_TYPE_OPTIONS.map((option) => option.label)).toEqual([
-      'Compose',
+      'Docker Compose',
       'Services',
-      'Repository',
+      'Git Repository',
       'Hosting',
       'Template',
       'Managed',
@@ -186,7 +165,9 @@ describe('the Hosting card', () => {
 
   it('does not sit ahead of Compose', () => {
     const labels = SETUP_TYPE_OPTIONS.map((option) => option.label)
-    expect(labels.indexOf('Hosting')).toBeGreaterThan(labels.indexOf('Compose'))
+    expect(labels.indexOf('Hosting')).toBeGreaterThan(
+      labels.indexOf('Docker Compose'),
+    )
   })
 
   it('describes the capability without disparaging it', () => {
