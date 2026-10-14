@@ -346,7 +346,7 @@ function useWorkspaceSelectionDefaults({
   setWorkspaceMode,
   setPickedWorkspaceId,
 }: Readonly<{
-  workspaces: ReadonlyArray<{ id: string }>
+  workspaces: readonly { id: string }[]
   loadingWorkspaces: boolean
   scopedWorkspaceId: string | undefined
   allowedWorkspaceIds: string[]
