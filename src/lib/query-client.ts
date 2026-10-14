@@ -159,7 +159,7 @@ export function useAuthStatus() {
  * other entity — a server, a managed cluster — is checked by its own UUID,
  * which `GET /access/check` takes as the resource id directly.
  */
-function needsResourceIdLookup(entityType: string): entityType is AccessScopeKind {
+function needsResourceIdLookup(entityType: string): boolean {
   return entityType === 'organization' || entityType === 'team'
 }
 
@@ -180,8 +180,9 @@ export function useCan(
     staleTime: 60_000,
   })
 
-  const resourceId =
-    entityType === null ? '' : lookup ? (resourceQuery.data?.resourceId ?? '') : entityId
+  let resourceId = ''
+  if (lookup) resourceId = resourceQuery.data?.resourceId ?? ''
+  else if (entityType !== null) resourceId = entityId
 
   const canQuery = useQuery({
     queryKey: queryKeys.auth.can(resourceId, permissionKey),
