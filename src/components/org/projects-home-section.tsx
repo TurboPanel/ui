@@ -224,15 +224,19 @@ function ProjectGrid({
   orgId,
   cards,
   projects,
-  workspaceNameById,
+  workspaces,
   showWorkspaceLabels,
 }: Readonly<{
   orgId: string
   cards: readonly HomeProject[]
   projects: ReturnType<typeof useScopedProjects>['projects']
-  workspaceNameById: ReadonlyMap<string, string>
+  workspaces: ReturnType<typeof useScopedProjects>['allWorkspaces']
   showWorkspaceLabels: boolean
 }>) {
+  const workspaceNameById = useMemo(
+    () => new Map(workspaces.map((workspace) => [workspace.id, workspaceName(workspace)])),
+    [workspaces],
+  )
   const s = styles(usePalette())
   const router = useRouter()
   const projectById = useMemo(() => new Map(projects.map((project) => [project.id, project])), [projects])
@@ -283,6 +287,56 @@ function DeploysInProgress({ orgId, rows }: Readonly<{ orgId: string; rows: read
   )
 }
 
+type HomeData = ReturnType<typeof useScopedProjects> & ReturnType<typeof useHomeCards>
+
+/** Pull to refresh re-reads everything the page shows. */
+function useRefreshHome(data: HomeData, showWorkspaceLabels: boolean) {
+  const workspaceScope = useOptionalWorkspaceScope()
+  usePullToRefresh(async () => {
+    await Promise.all([
+      data.projectsQuery.refetch(),
+      data.environmentsQuery.refetch(),
+      data.containersQuery.refetch(),
+      ...(showWorkspaceLabels ? [data.workspacesQuery.refetch()] : []),
+    ])
+    await workspaceScope?.refreshWorkspaces()
+  })
+}
+
+/** The project list body: loading, the first-run welcome, or the project grid. */
+function ProjectsList({
+  orgId,
+  scopeId,
+  data,
+  loading,
+  canCreate,
+}: Readonly<{ orgId: string; scopeId: string; data: HomeData; loading: boolean; canCreate: boolean }>) {
+  const router = useRouter()
+  const showWelcome = !loading && data.cards.length === 0
+  const serversQuery = useOrgServers(orgId, { enabled: showWelcome && canCreate })
+  if (loading) return <LoadingState />
+  if (showWelcome) {
+    const newProjectHref = newProjectHrefForScope(orgId, scopeId) as Href
+    const serverCount = serversQuery.data ? serversQuery.data.servers.length : null
+    return (
+      <ProjectsWelcomeCard
+        serverCount={serverCount}
+        onAddServer={canCreate ? () => router.push(orgAreaHref(orgId, 'servers') as Href) : undefined}
+        onNewProject={canCreate ? () => router.push(newProjectHref) : undefined}
+      />
+    )
+  }
+  return (
+    <ProjectGrid
+      orgId={orgId}
+      cards={data.cards}
+      projects={data.projects}
+      workspaces={data.allWorkspaces}
+      showWorkspaceLabels={scopeId === ALL_WORKSPACES_SCOPE}
+    />
+  )
+}
+
 /**
  * The Projects home: every project as a layer card (its Base, who runs it,
  * each environment's status and relation to the Base), the projects you opened
@@ -303,82 +357,39 @@ export function ProjectsHomeSection({
   const scopeWorkspace = workspaceScope?.scope.workspace
   const isSystemScope = scopeWorkspace != null && isTurbopanelWorkspace(scopeWorkspace)
 
-  const { projectsQuery, workspacesQuery, allWorkspaces, projects } = useScopedProjects(
-    orgId,
-    scopeId,
-    showWorkspaceLabels,
-  )
-  const { environmentsQuery, containersQuery, environments, cards, inProgress, runningCount } = useHomeCards(
-    orgId,
-    projects,
-    now,
-  )
+  const scoped = useScopedProjects(orgId, scopeId, showWorkspaceLabels)
+  const data = { ...scoped, ...useHomeCards(orgId, scoped.projects, now) }
+  useRefreshHome(data, showWorkspaceLabels)
 
-  usePullToRefresh(async () => {
-    await Promise.all([
-      projectsQuery.refetch(),
-      environmentsQuery.refetch(),
-      containersQuery.refetch(),
-      ...(showWorkspaceLabels ? [workspacesQuery.refetch()] : []),
-    ])
-    await workspaceScope?.refreshWorkspaces()
-  })
-
-  const workspaceNameById = useMemo(
-    () => new Map(allWorkspaces.map((workspace) => [workspace.id, workspaceName(workspace)])),
-    [allWorkspaces],
-  )
-
-  const loading = projectsQuery.isLoading && projects.length === 0
-  const error = queryErrorMessage(projectsQuery.error, workspacesQuery.error)
-  const newProjectHref = newProjectHrefForScope(orgId, scopeId) as Href
+  const loading = data.projectsQuery.isLoading && data.projects.length === 0
+  const error = queryErrorMessage(data.projectsQuery.error, data.workspacesQuery.error)
   const canCreate = canOwn && !isSystemScope
-  const showWelcome = !loading && cards.length === 0
-  const serversQuery = useOrgServers(orgId, { enabled: showWelcome && canCreate })
-  const serverCount = serversQuery.data ? serversQuery.data.servers.length : null
-
-  let list
-  if (loading) {
-    list = <LoadingState />
-  } else if (showWelcome) {
-    list = (
-      <ProjectsWelcomeCard
-        serverCount={serverCount}
-        onAddServer={canCreate ? () => router.push(orgAreaHref(orgId, 'servers') as Href) : undefined}
-        onNewProject={canCreate ? () => router.push(newProjectHref) : undefined}
-      />
-    )
-  } else {
-    list = (
-      <ProjectGrid
-        orgId={orgId}
-        cards={cards}
-        projects={projects}
-        workspaceNameById={workspaceNameById}
-        showWorkspaceLabels={showWorkspaceLabels}
-      />
-    )
-  }
-  const headerNewProject = canCreate && !(showWelcome && !error)
+  // While the first-run welcome shows, it carries the New Project button.
+  const welcomeShown = !loading && data.cards.length === 0 && !error
+  const newProjectHref = newProjectHrefForScope(orgId, scopeId) as Href
 
   return (
     <View style={s.root}>
       <PageTitle
         title="Projects"
-        sub={cards.length > 0 ? summaryLine(cards.length, environments.length, runningCount) : undefined}
+        sub={
+          data.cards.length > 0
+            ? summaryLine(data.cards.length, data.environments.length, data.runningCount)
+            : undefined
+        }
         actions={
-          headerNewProject ? (
+          canCreate && !welcomeShown ? (
             <ActionButton label="New project" variant="primary" onPress={() => router.push(newProjectHref)} />
           ) : null
         }
       />
       <WorkspaceSwitcher orgId={orgId} />
       {error ? <Notice tone="bad" title="Could not load projects" body={error} /> : null}
-      <RecentProjects orgId={orgId} projects={cards} environments={environments} />
-      <DeploysInProgress orgId={orgId} rows={inProgress} />
+      <RecentProjects orgId={orgId} projects={data.cards} environments={data.environments} />
+      <DeploysInProgress orgId={orgId} rows={data.inProgress} />
       <View style={s.section}>
         <SectionHeading title="All projects" />
-        {list}
+        <ProjectsList orgId={orgId} scopeId={scopeId} data={data} loading={loading} canCreate={canCreate} />
       </View>
     </View>
   )
