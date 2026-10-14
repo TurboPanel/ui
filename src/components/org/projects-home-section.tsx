@@ -206,9 +206,10 @@ function useHomeCards(
           environments: environments.filter((env) => env.projectId === project.id),
           containersByEnvironment,
           views,
+          latest,
         }),
       ),
-    [projects, environments, containersByEnvironment, views],
+    [projects, environments, containersByEnvironment, views, latest],
   )
   const inProgress = useMemo(
     () => deploysInProgress({ projects, environments, latest, now }),

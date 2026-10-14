@@ -27,6 +27,7 @@ import {
   baseRunsAs,
   environmentRelation,
   inProgressSub,
+  hasNativeApp,
   isDeployInProgress,
   runningStatusKey,
   visitHost,
@@ -107,9 +108,11 @@ export function homeProject(
     /** `undefined` while the organization's containers load. */
     containersByEnvironment: Readonly<Record<string, readonly ContainerRecord[]>> | undefined
     views: Readonly<Record<string, EnvironmentConfigViewResponse | undefined>>
+    /** Each environment's newest deploy: what a native app's status comes from. */
+    latest?: Readonly<Record<string, DeploymentGroup | null | undefined>>
   }>,
 ): HomeProject {
-  const { project, environments, views } = input
+  const { project, environments, views, latest } = input
   const kind = homeKind(project)
   const name = project.name?.trim() || 'Unnamed project'
   const compose = kind === 'compose'
@@ -120,7 +123,11 @@ export function homeProject(
     return {
       id: env.id,
       name: environmentDisplayName(env),
-      status: runningStatusKey(containersOf(env.id)) ?? 'unknown',
+      status:
+        runningStatusKey(
+          containersOf(env.id),
+          hasNativeApp(view?.effective.services) ? { latest: latest?.[env.id] } : undefined,
+        ) ?? 'unknown',
       relation: environmentRelation(view),
       host: view ? visitHost(view.effective) : null,
     }

@@ -367,6 +367,8 @@ export function miniMapColumns(
   side: ConfigViewSide,
   changes: readonly Pick<ConfigViewChange, 'serviceName'>[],
   statusOf: (serviceName: string) => string | null,
+  /** Domains attached on the Hosting screen: they live in hosting rows, not in the compose. */
+  extraDomains: readonly string[] = [],
 ): MiniMapColumn[] {
   const changed = new Set(changes.map((change) => change.serviceName).filter((name) => name !== null))
   const services = side.services.map((service) => ({ service, v4: v4ServiceOf(service) }))
@@ -380,7 +382,11 @@ export function miniMapColumns(
       key: 'visitors',
       label: 'Visitors',
       emptyText: 'No domains yet',
-      items: environmentDomains(side).map((host) => ({ name: host, status: null, changed: false })),
+      items: [...new Set([...environmentDomains(side), ...extraDomains])].map((host) => ({
+        name: host,
+        status: null,
+        changed: false,
+      })),
     },
     {
       key: 'apps',
@@ -456,9 +462,12 @@ export function environmentCardData(
     progressLabel?: string | null
     serverLine: string
     now: number
+    /** Hostnames of the environment's hosting rows (read separately from the config view). */
+    hostingDomains?: readonly string[]
   }>,
 ): EnvironmentCardData {
   const { view, containers } = input
+  const hostingDomains = input.hostingDomains ?? []
   const nativeNames = new Set(
     (view?.effective.services ?? []).filter((service) => hasNativeApp([service])).map((service) => service.name),
   )
@@ -476,10 +485,12 @@ export function environmentCardData(
     relation: environmentRelation(view),
     running: runningKey === undefined ? { status: 'unknown', label: 'Checking…' } : { status: runningKey },
     lastDeploy: lastDeployPart(input.latest, input.now, input.progressLabel),
-    columns: view ? miniMapColumns(view.effective, view.changes, statusOf) : null,
+    columns: view ? miniMapColumns(view.effective, view.changes, statusOf, hostingDomains) : null,
     branch: view ? builtBranch(view.effective) : null,
     serverLine: input.serverLine,
-    visitHost: view ? visitHost(view.effective) : null,
+    visitHost: view
+      ? (visitHost(view.effective) ?? hostingDomains.find((host) => siteUrlFromHostname(host) !== null) ?? null)
+      : null,
   }
 }
 
