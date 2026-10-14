@@ -336,6 +336,63 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
   )
 }
 
+/** Keeps the workspace mode and pick in step with what loaded and the URL scope. */
+function useWorkspaceSelectionDefaults({
+  workspaces,
+  loadingWorkspaces,
+  scopedWorkspaceId,
+  allowedWorkspaceIds,
+  pickedWorkspaceId,
+  setWorkspaceMode,
+  setPickedWorkspaceId,
+}: Readonly<{
+  workspaces: ReadonlyArray<{ id: string }>
+  loadingWorkspaces: boolean
+  scopedWorkspaceId: string | undefined
+  allowedWorkspaceIds: string[]
+  pickedWorkspaceId: string
+  setWorkspaceMode: (mode: WorkspaceMode) => void
+  setPickedWorkspaceId: (id: string) => void
+}>) {
+  useEffect(() => {
+    if (workspaces.length === 0 && !loadingWorkspaces) {
+      setWorkspaceMode('new')
+    }
+  }, [workspaces.length, loadingWorkspaces, setWorkspaceMode])
+
+  useEffect(() => {
+    if (!scopedWorkspaceId || loadingWorkspaces) return
+    if (!allowedWorkspaceIds.includes(scopedWorkspaceId)) {
+      setPickedWorkspaceId('')
+      return
+    }
+    setWorkspaceMode('existing')
+    setPickedWorkspaceId(scopedWorkspaceId)
+  }, [
+    scopedWorkspaceId,
+    loadingWorkspaces,
+    allowedWorkspaceIds,
+    setWorkspaceMode,
+    setPickedWorkspaceId,
+  ])
+
+  useEffect(() => {
+    if (pickedWorkspaceId) return
+    if (scopedWorkspaceId && allowedWorkspaceIds.includes(scopedWorkspaceId)) {
+      return
+    }
+    if (workspaces.length === 1) {
+      setPickedWorkspaceId(workspaces[0]?.id ?? '')
+    }
+  }, [
+    workspaces,
+    pickedWorkspaceId,
+    scopedWorkspaceId,
+    allowedWorkspaceIds,
+    setPickedWorkspaceId,
+  ])
+}
+
 function ProjectCreateWizard({
   orgId,
   onStartOver,
@@ -489,31 +546,15 @@ function ProjectCreateWizard({
 
   const loadError = resolveLoadError(workspacesQuery.error, projectsQuery.error)
 
-  useEffect(() => {
-    if (workspaces.length === 0 && !loadingWorkspaces) {
-      setWorkspaceMode('new')
-    }
-  }, [workspaces.length, loadingWorkspaces])
-
-  useEffect(() => {
-    if (!scopedWorkspaceId || loadingWorkspaces) return
-    if (!allowedWorkspaceIds.includes(scopedWorkspaceId)) {
-      setPickedWorkspaceId('')
-      return
-    }
-    setWorkspaceMode('existing')
-    setPickedWorkspaceId(scopedWorkspaceId)
-  }, [scopedWorkspaceId, loadingWorkspaces, allowedWorkspaceIds])
-
-  useEffect(() => {
-    if (pickedWorkspaceId) return
-    if (scopedWorkspaceId && allowedWorkspaceIds.includes(scopedWorkspaceId)) {
-      return
-    }
-    if (workspaces.length === 1) {
-      setPickedWorkspaceId(workspaces[0]?.id ?? '')
-    }
-  }, [workspaces, pickedWorkspaceId, scopedWorkspaceId, allowedWorkspaceIds])
+  useWorkspaceSelectionDefaults({
+    workspaces,
+    loadingWorkspaces,
+    scopedWorkspaceId,
+    allowedWorkspaceIds,
+    pickedWorkspaceId,
+    setWorkspaceMode,
+    setPickedWorkspaceId,
+  })
 
   const submitting = createWorkspace.isPending || createProject.isPending
   const trimmedProjectName = displayName.trim()
