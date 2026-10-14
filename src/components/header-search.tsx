@@ -174,6 +174,121 @@ function useScrollActiveIntoView(popoverOpen: boolean, activeId: string | undefi
   }, [popoverOpen, activeId])
 }
 
+const detectMac = () => isWeb && /mac|iphone|ipad/i.test(globalThis.navigator?.platform ?? '')
+
+type SearchKeyEvent = {
+  nativeEvent: { key: string }
+  preventDefault: () => void
+  stopPropagation?: () => void
+}
+
+type SearchKeyActions = {
+  move: (direction: 'down' | 'up') => void
+  pickActive: () => void
+  close: () => void
+}
+
+function handleSearchKey(event: SearchKeyEvent, actions: SearchKeyActions) {
+  const { key } = event.nativeEvent
+  if (key === 'ArrowDown' || key === 'ArrowUp') {
+    event.preventDefault()
+    actions.move(key === 'ArrowDown' ? 'down' : 'up')
+  } else if (key === 'Enter') {
+    event.preventDefault()
+    actions.pickActive()
+  } else if (key === 'Escape') {
+    event.stopPropagation?.()
+    actions.close()
+  }
+}
+
+/** The shortcut badge (wide header) or close button (narrow header) at the end of the field. */
+function FieldAdornments({
+  collapsed,
+  focused,
+  isMac,
+  onClose,
+}: Readonly<{ collapsed: boolean; focused: boolean; isMac: boolean; onClose: () => void }>) {
+  if (collapsed) {
+    return (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Close search"
+        style={[styles.closeButton, webPointer]}
+        onPress={onClose}
+      >
+        <Text style={styles.closeGlyph}>{'✕'}</Text>
+      </Pressable>
+    )
+  }
+  if (focused) return null
+  return (
+    <View style={styles.kbd} aria-hidden>
+      <Text style={styles.kbdLabel}>{isMac ? '⌘K' : 'Ctrl K'}</Text>
+    </View>
+  )
+}
+
+function SearchFoot() {
+  return (
+    <View style={styles.foot}>
+      <Text style={styles.footText}>
+        <Text style={styles.footKey}>{'↑↓'}</Text> to move
+      </Text>
+      <Text style={styles.footText}>
+        <Text style={styles.footKey}>Enter</Text> to open
+      </Text>
+      <Text style={styles.footText}>
+        <Text style={styles.footKey}>Esc</Text> to close
+      </Text>
+    </View>
+  )
+}
+
+function SearchPopover({
+  shown,
+  active,
+  query,
+  collapsed,
+  onHover,
+  onPick,
+}: Readonly<{
+  shown: SearchDestination[]
+  active: SearchDestination | undefined
+  query: string
+  collapsed: boolean
+  onHover: (position: number) => void
+  onPick: (item: SearchDestination) => void
+}>) {
+  const trimmed = query.trim()
+  return (
+    <View style={styles.popover} {...KEEP_FOCUS}>
+      <Text id={HEADING_ID} style={styles.heading}>
+        {trimmed ? 'Results' : 'Jump to'}
+      </Text>
+      {shown.length > 0 ? (
+        <>
+          <View id={LIST_ID} {...LISTBOX_ROLE} aria-labelledby={HEADING_ID} style={styles.list}>
+            {shown.map((item, position) => (
+              <SearchRow
+                key={item.id}
+                item={item}
+                query={query}
+                selected={item.id === active?.id}
+                onHover={() => onHover(position)}
+                onPick={() => onPick(item)}
+              />
+            ))}
+          </View>
+          {collapsed ? null : <SearchFoot />}
+        </>
+      ) : (
+        <Text style={styles.none}>{`No matches for “${trimmed}”.`}</Text>
+      )}
+    </View>
+  )
+}
+
 /**
  * Header search: jumps to the organization's own pages. Nothing here calls the
  * API; the destinations come from the navigation registry.
@@ -211,7 +326,7 @@ export function HeaderSearch({
   const activeId = active?.id
 
   useScrollActiveIntoView(popoverOpen, activeId)
-  const isMac = isWeb && /mac|iphone|ipad/i.test(globalThis.navigator?.platform ?? '')
+  const isMac = detectMac()
 
   useEffect(() => {
     if (collapsed) inputRef.current?.focus()
@@ -234,24 +349,15 @@ export function HeaderSearch({
     router.push(item.href as Href)
   }
 
-  const onKeyPress = (event: {
-    nativeEvent: { key: string }
-    preventDefault: () => void
-    stopPropagation?: () => void
-  }) => {
-    const { key } = event.nativeEvent
-    if (key === 'ArrowDown' || key === 'ArrowUp') {
-      event.preventDefault()
-      setOpen(true)
-      setIndex(moveSearchIndex(index, shown.length, key === 'ArrowDown' ? 'down' : 'up'))
-    } else if (key === 'Enter') {
-      event.preventDefault()
-      pick(active)
-    } else if (key === 'Escape') {
-      event.stopPropagation?.()
-      close()
-    }
-  }
+  const onKeyPress = (event: SearchKeyEvent) =>
+    handleSearchKey(event, {
+      move: (direction) => {
+        setOpen(true)
+        setIndex(moveSearchIndex(index, shown.length, direction))
+      },
+      pickActive: () => pick(active),
+      close,
+    })
 
   // Pointer presses inside the popover never move focus (see KEEP_FOCUS), so a
   // blur is always focus really leaving the field and can safely close it.
@@ -298,60 +404,18 @@ export function HeaderSearch({
           onBlur={onBlur}
           onKeyPress={onKeyPress}
         />
-        {!collapsed && !focused ? (
-          <View style={styles.kbd} aria-hidden>
-            <Text style={styles.kbdLabel}>{isMac ? '⌘K' : 'Ctrl K'}</Text>
-          </View>
-        ) : null}
-        {collapsed ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Close search"
-            style={[styles.closeButton, webPointer]}
-            onPress={close}
-          >
-            <Text style={styles.closeGlyph}>{'✕'}</Text>
-          </Pressable>
-        ) : null}
+        <FieldAdornments collapsed={collapsed} focused={focused} isMac={isMac} onClose={close} />
       </Pressable>
 
       {popoverOpen ? (
-        <View style={styles.popover} {...KEEP_FOCUS}>
-          <Text id={HEADING_ID} style={styles.heading}>
-            {trimmed ? 'Results' : 'Jump to'}
-          </Text>
-          {shown.length > 0 ? (
-            <>
-              <View id={LIST_ID} {...LISTBOX_ROLE} aria-labelledby={HEADING_ID} style={styles.list}>
-                {shown.map((item, position) => (
-                  <SearchRow
-                    key={item.id}
-                    item={item}
-                    query={query}
-                    selected={item.id === active?.id}
-                    onHover={() => setIndex(position)}
-                    onPick={() => pick(item)}
-                  />
-                ))}
-              </View>
-              {collapsed ? null : (
-                <View style={styles.foot}>
-                  <Text style={styles.footText}>
-                    <Text style={styles.footKey}>{'↑↓'}</Text> to move
-                  </Text>
-                  <Text style={styles.footText}>
-                    <Text style={styles.footKey}>Enter</Text> to open
-                  </Text>
-                  <Text style={styles.footText}>
-                    <Text style={styles.footKey}>Esc</Text> to close
-                  </Text>
-                </View>
-              )}
-            </>
-          ) : (
-            <Text style={styles.none}>{`No matches for “${trimmed}”.`}</Text>
-          )}
-        </View>
+        <SearchPopover
+          shown={shown}
+          active={active}
+          query={query}
+          collapsed={collapsed}
+          onHover={setIndex}
+          onPick={pick}
+        />
       ) : null}
     </View>
   )
