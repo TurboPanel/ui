@@ -127,6 +127,7 @@ describe('a project card', () => {
       environments: [production, staging],
       containersByEnvironment: { e1: [container('e1', 'running')], e2: [] },
       views: { e1: view(true, 2), e2: view(false) },
+      latest: { e2: null },
     })
     expect(card.name).toBe('Shop')
     expect(card.description).toBe('The shop')
