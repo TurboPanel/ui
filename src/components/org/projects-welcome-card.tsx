@@ -60,7 +60,8 @@ const styles = themedStyles((p) => ({
 /**
  * First-run welcome for an organization with no projects. Add Server leads while
  * there are no servers; New Project leads once one is connected. `serverCount`
- * is null until the servers list has loaded (the note is left out until then).
+ * is null until the servers list has loaded (or if it failed); both buttons are then
+ * secondary and the note is left out.
  */
 export function ProjectsWelcomeCard({
   serverCount,
@@ -76,12 +77,16 @@ export function ProjectsWelcomeCard({
   const s = styles(p)
   const [line] = useState(() => WELCOME_LINES[Math.floor(Math.random() * WELCOME_LINES.length)]!)
   const hasServer = (serverCount ?? 0) > 0
+  // Until the count is known, neither button leads, so the primary never flips on arrival.
+  const known = serverCount != null
+  const serverPrimary = known && !hasServer
+  const projectPrimary = known && hasServer
   const hasActions = onAddServer != null || onNewProject != null
   const projectIcon = (
     <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
       <Path
         d="M12 5v14M5 12h14"
-        stroke={hasServer ? p.accentInk : p.text}
+        stroke={projectPrimary ? p.accentInk : p.text}
         strokeWidth={2}
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -92,7 +97,7 @@ export function ProjectsWelcomeCard({
     <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
       <Path
         d="M5.25 4.5h13.5A1.5 1.5 0 0 1 20.25 6v3a1.5 1.5 0 0 1-1.5 1.5H5.25A1.5 1.5 0 0 1 3.75 9V6A1.5 1.5 0 0 1 5.25 4.5ZM5.25 13.5h13.5a1.5 1.5 0 0 1 1.5 1.5v3a1.5 1.5 0 0 1-1.5 1.5H5.25a1.5 1.5 0 0 1-1.5-1.5v-3a1.5 1.5 0 0 1 1.5-1.5ZM7.5 7.5h.008M7.5 16.5h.008"
-        stroke={hasServer ? p.text : p.accentInk}
+        stroke={serverPrimary ? p.accentInk : p.text}
         strokeWidth={1.75}
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -122,7 +127,7 @@ export function ProjectsWelcomeCard({
             {onAddServer ? (
               <ActionButton
                 label="Add Server"
-                variant={hasServer ? 'secondary' : 'primary'}
+                variant={serverPrimary ? 'primary' : 'secondary'}
                 icon={serverIcon}
                 onPress={onAddServer}
               />
@@ -130,7 +135,7 @@ export function ProjectsWelcomeCard({
             {onNewProject ? (
               <ActionButton
                 label="New Project"
-                variant={hasServer ? 'primary' : 'secondary'}
+                variant={projectPrimary ? 'primary' : 'secondary'}
                 icon={projectIcon}
                 onPress={onNewProject}
               />

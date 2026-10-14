@@ -289,7 +289,7 @@ export function ProjectsHomeSection({
         title="Projects"
         sub={cards.length > 0 ? summaryLine(cards.length, environments.length, runningCount) : undefined}
         actions={
-          canCreate && !showWelcome ? (
+          canCreate && !(showWelcome && !error) ? (
             <ActionButton label="New project" variant="primary" onPress={() => router.push(newProjectHref)} />
           ) : null
         }

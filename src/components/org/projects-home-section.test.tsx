@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { applyScenario, SCENARIOS } from '@/components/ui/v4/rn-stub'
+import { applyScenario, SCENARIOS, styleOf } from '@/components/ui/v4/rn-stub'
 import type { ConfigViewSide, EnvironmentConfigViewResponse } from '@/lib/instance-api'
 import { ProjectsHomeSection } from './projects-home-section'
 import { WELCOME_LINES } from './projects-welcome-card'
@@ -331,6 +331,53 @@ describe.each(SCENARIOS)('Projects home ($name)', (scenario) => {
     expect(state.serversEnabled).toBe(false)
   })
 
+  const isPrimary = (name: string) => styleOf(screen.getByRole('button', { name })).borderColor === 'transparent'
+
+  it('welcome buttons are both secondary while the server count is unknown, then one leads', () => {
+    state.projects = { data: { projects: [] }, isLoading: false, error: null, refetch: vi.fn() }
+    state.servers = { data: undefined }
+    const view = render(<ProjectsHomeSection orgId="o" />)
+    expect(isPrimary('Add Server')).toBe(false)
+    expect(isPrimary('New Project')).toBe(false)
+    state.servers = { data: { servers: [] } }
+    view.rerender(<ProjectsHomeSection orgId="o" />)
+    expect(isPrimary('Add Server')).toBe(true)
+    expect(isPrimary('New Project')).toBe(false)
+    state.servers = { data: { servers: [{ id: 's1' }] } }
+    view.rerender(<ProjectsHomeSection orgId="o" />)
+    expect(isPrimary('Add Server')).toBe(false)
+    expect(isPrimary('New Project')).toBe(true)
+  })
+
+  it('welcome buttons stay both secondary when the servers query failed', () => {
+    state.projects = { data: { projects: [] }, isLoading: false, error: null, refetch: vi.fn() }
+    state.servers = { data: undefined, error: new Error('down') }
+    render(<ProjectsHomeSection orgId="o" />)
+    expect(isPrimary('Add Server')).toBe(false)
+    expect(isPrimary('New Project')).toBe(false)
+  })
+
+  it('welcome headline stays the same across re-renders', () => {
+    state.projects = { data: { projects: [] }, isLoading: false, error: null, refetch: vi.fn() }
+    state.servers = { data: undefined }
+    const view = render(<ProjectsHomeSection orgId="o" />)
+    const titles = WELCOME_LINES.map(([title]) => title)
+    const read = () => screen.getAllByRole('heading').map((h) => h.textContent ?? '').find((x) => titles.includes(x))
+    const first = read()
+    expect(first).toBeTruthy()
+    state.servers = { data: { servers: [{ id: 's1' }] } }
+    view.rerender(<ProjectsHomeSection orgId="o" />)
+    view.rerender(<ProjectsHomeSection orgId="o" />)
+    expect(read()).toBe(first)
+  })
+
+  it('keeps the header New project button when the projects load failed', () => {
+    state.projects = { data: undefined, isLoading: false, error: new Error('Network down'), refetch: vi.fn() }
+    state.servers = { data: undefined }
+    render(<ProjectsHomeSection orgId="o" />)
+    expect(screen.getByRole('button', { name: 'New project' })).toBeTruthy()
+  })
+
   it('shows the reason when projects cannot be loaded', () => {
     state.projects = { data: undefined, isLoading: false, error: new Error('Network down'), refetch: vi.fn() }
     render(<ProjectsHomeSection orgId="o" />)
@@ -367,5 +414,19 @@ describe.each(SCENARIOS)('Projects home ($name)', (scenario) => {
     expect(screen.getByRole('heading', { name: 'Platform' })).toBeTruthy()
     expect(screen.queryByText(/· Acme$/)).toBeNull()
     expect(screen.queryByRole('button', { name: 'New project' })).toBeNull()
+  })
+
+  it('the platform workspace with no projects shows the welcome with no buttons', () => {
+    state.scope = {
+      scopeId: 'platform',
+      workspaces: [{ id: 'platform', name: 'TurboPanel' }],
+      scope: { label: 'TurboPanel', workspace: { id: 'platform', name: 'TurboPanel' } },
+      refreshWorkspaces: vi.fn(),
+    }
+    state.projects = { data: { projects: [] }, isLoading: false, error: null, refetch: vi.fn() }
+    render(<ProjectsHomeSection orgId="o" workspaceId="platform" />)
+    expectWelcomeHeading()
+    expect(screen.queryByRole('button')).toBeNull()
+    expect(state.serversEnabled).toBe(false)
   })
 })
