@@ -37,6 +37,9 @@ vi.mock('@/lib/queries/commands', async () => ({
   ...(await vi.importActual<typeof import('@/lib/queries/commands')>('@/lib/queries/commands')),
   useCommandsBatch: () => ({ data: state.commandStatuses }),
 }))
+vi.mock('@/lib/queries/services', () => ({
+  useHostingsByServices: () => ({ hostingsByService: {}, isLoading: false }),
+}))
 vi.mock('@/lib/queries/servers', () => ({
   useOrgServers: () => ({ data: state.servers ? { servers: state.servers } : undefined }),
 }))
