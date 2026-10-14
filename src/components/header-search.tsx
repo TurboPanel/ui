@@ -321,7 +321,6 @@ export function HeaderSearch({
     [orgId, billingEnabled, scopeId, query]
   )
   const active = shown[Math.min(index, shown.length - 1)]
-  const trimmed = query.trim()
   const popoverOpen = open && focused
   const activeId = active?.id
 
