@@ -2,7 +2,7 @@
   "expo": {
     "name": "TurboPanel",
     "slug": "ui",
-    "version": "0.1.9",
+    "version": "0.1.10",
     "web": {
       "output": "static"
     },
