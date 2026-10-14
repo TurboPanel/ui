@@ -63,6 +63,10 @@ import {
   useRepositories,
   useWorkspaces,
 } from '@/lib/queries'
+import {
+  environmentFieldValue,
+  environmentNamePayload,
+} from '@/components/org/project-create/environment-name'
 import { useOrgDefaultEnvironmentName } from '@/lib/org-default-environment'
 import {
   DRAFT_REPOSITORY_APP_TAB_IDS,
@@ -339,7 +343,8 @@ function ProjectCreateWizard({
   const router = useRouter()
   const params = useLocalSearchParams<{ workspaceId?: string; type?: string }>()
   const workspaceScope = useOptionalWorkspaceScope()
-  const { defaultEnvironmentName } = useOrgDefaultEnvironmentName(orgId)
+  const { defaultEnvironmentName, customDefaultEnvironmentName } =
+    useOrgDefaultEnvironmentName(orgId)
 
   const workspacesQuery = useWorkspaces(orgId)
   const projectsQuery = useProjects(orgId)
@@ -374,7 +379,10 @@ function ProjectCreateWizard({
   const [editedEnvironmentName, setEditedEnvironmentName] = useState<
     string | null
   >(null)
-  const environmentName = editedEnvironmentName ?? defaultEnvironmentName
+  const environmentName = environmentFieldValue(
+    editedEnvironmentName,
+    customDefaultEnvironmentName,
+  )
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('existing')
   const [pickedWorkspaceId, setPickedWorkspaceId] = useState('')
   const [newWorkspaceName, setNewWorkspaceName] = useState('')
@@ -750,7 +758,7 @@ function ProjectCreateWizard({
       type: selectedType,
       workspaceId,
       name: trimmedProjectName,
-      environmentName: environmentName.trim(),
+      ...environmentNamePayload(editedEnvironmentName),
       ...(trimmedDescription ? { description: trimmedDescription } : {}),
       ...(selectedCode ? { code: selectedCode } : {}),
       ...(compose ? { options: { compose } } : {}),
@@ -844,7 +852,7 @@ function ProjectCreateWizard({
           <DetailsStep
             orgId={orgId}
             environmentName={environmentName}
-            defaultEnvironmentName={defaultEnvironmentName}
+            defaultEnvironmentName={customDefaultEnvironmentName}
             onEnvironmentNameChange={setEditedEnvironmentName}
             displayName={displayName}
             description={description}

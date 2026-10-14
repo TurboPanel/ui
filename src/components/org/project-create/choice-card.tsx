@@ -11,17 +11,6 @@ export function ChoiceGrid({
 }
 
 /**
- * Wrapping two-up grid for tile-shaped choices (the setup type picker). Tiles
- * size themselves via `flexBasis`, so wider containers get more columns.
- */
-export function ChoiceTileGrid({
-  children,
-  style,
-}: Readonly<{ children: ReactNode; style?: ViewStyle }>) {
-  return <View style={[styles.tileGrid, style]}>{children}</View>
-}
-
-/**
  * Selectable card in the create wizard. Selection is local state only — nothing
  * is provisioned until the step's own Create button is pressed.
  */
@@ -82,11 +71,6 @@ export function ChoiceCard({
 
 const styles = StyleSheet.create({
   grid: {
-    gap: spacing.sm,
-  },
-  tileGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: spacing.sm,
   },
   card: {

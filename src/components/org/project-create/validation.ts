@@ -1,10 +1,29 @@
 /** Field-level validation for the create wizard's details step. */
 import {
+  DISPLAY_NAME_MAX_LENGTH,
+  displayNameCodePointLength,
   displayNameConflictMessage,
+  hasDisallowedDisplayNameChars,
   isDisplayNameTaken,
+  normalizeDisplayName,
   validateDescription,
   validateDisplayName,
 } from '@/lib/display-name'
+
+/**
+ * The environment name is optional (empty lets the server apply the org
+ * default); when given it follows the display-name rules.
+ */
+function validateEnvironmentNameField(name: string): string | null {
+  if (!name.trim()) return null
+  if (displayNameCodePointLength(normalizeDisplayName(name)) > DISPLAY_NAME_MAX_LENGTH) {
+    return `Environment name must be ${String(DISPLAY_NAME_MAX_LENGTH)} characters or fewer.`
+  }
+  if (hasDisallowedDisplayNameChars(normalizeDisplayName(name))) {
+    return 'Environment name cannot contain control characters.'
+  }
+  return null
+}
 
 export type WorkspaceMode = 'existing' | 'new'
 
@@ -53,13 +72,8 @@ export function validateProjectCreateFields(options: {
     errors.name = 'A project with this name already exists in the organization.'
   }
 
-  const environmentError = validateDisplayName(options.environmentName)
-  if (environmentError) {
-    errors.environmentName = environmentError.replace(
-      /\bName\b/,
-      'Environment name',
-    )
-  }
+  const environmentError = validateEnvironmentNameField(options.environmentName)
+  if (environmentError) errors.environmentName = environmentError
 
   const descriptionError = validateDescription(options.description)
   if (descriptionError) errors.description = descriptionError

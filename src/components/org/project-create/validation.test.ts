@@ -22,13 +22,20 @@ describe('validateProjectCreateFields environment name', () => {
     ).toEqual({})
   })
 
-  it('requires an environment name', () => {
+  it('treats an empty environment name as "use the organization default"', () => {
+    expect(
+      validateProjectCreateFields({ ...base, environmentName: '  ' }),
+    ).toEqual({})
+  })
+
+  it('rejects an over-long environment name', () => {
     const errors = validateProjectCreateFields({
       ...base,
-      environmentName: '  ',
+      environmentName: 'a'.repeat(256),
     })
-    expect(errors.environmentName).toBe('Environment name is required.')
-    expect(errors.name).toBeUndefined()
+    expect(errors.environmentName).toBe(
+      'Environment name must be 255 characters or fewer.',
+    )
   })
 
   it('rejects control characters', () => {
@@ -36,6 +43,8 @@ describe('validateProjectCreateFields environment name', () => {
       ...base,
       environmentName: 'a\u0000b',
     })
-    expect(errors.environmentName).toMatch(/control characters/)
+    expect(errors.environmentName).toBe(
+      'Environment name cannot contain control characters.',
+    )
   })
 })

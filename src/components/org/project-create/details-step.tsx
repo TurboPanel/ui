@@ -1,5 +1,7 @@
 import { Link, type Href } from 'expo-router'
+import { useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { showsDefaultPill } from '@/components/org/project-create/environment-name'
 import { panelStyles } from '@/components/ui/panel-styles'
 import type {
   FieldErrors,
@@ -167,6 +169,67 @@ function ProjectWorkspaceFields({
   )
 }
 
+/**
+ * Name of the project's first environment. Empty means "let the server apply
+ * the organization default"; the pill shows only while the value is that default.
+ */
+export function EnvironmentNameField({
+  orgId,
+  value,
+  defaultName,
+  onChange,
+  error,
+}: Readonly<{
+  orgId: string
+  value: string
+  defaultName: string | null
+  onChange: (value: string) => void
+  error?: string
+}>) {
+  const [pillWidth, setPillWidth] = useState(0)
+  const showPill = showsDefaultPill(value, defaultName)
+  return (
+  <TextField
+    label="Environment Name"
+    value={value}
+    onChangeText={onChange}
+    autoCapitalize="none"
+    autoCorrect={false}
+    spellCheck={false}
+    accessibilityLabel="Environment name"
+    maxLength={DISPLAY_NAME_MAX_LENGTH}
+    placeholder="Organization default"
+    style={
+      showPill ? { paddingRight: pillWidth + PILL_INSET } : undefined
+    }
+    adornment={
+      showPill ? (
+        <Text
+          style={styles.defaultPill}
+          onLayout={(e) => setPillWidth(e.nativeEvent.layout.width)}
+        >
+          Organization Default
+        </Text>
+      ) : null
+    }
+    footer={
+      <Link href={`/${orgId}/projects/settings` as Href} asChild>
+        <Pressable
+          style={StyleSheet.flatten([styles.hintLink, webPointer])}
+          accessibilityRole="link"
+          accessibilityLabel="Set the default for this organization"
+        >
+          <Text style={styles.hintLinkText}>
+            Set the default for this organization
+          </Text>
+        </Pressable>
+      </Link>
+    }
+    error={error}
+  />
+  )
+}
+
 /** Wizard step 1: name, description, and the workspace the project lands in. */
 export function DetailsStep({
   orgId,
@@ -191,7 +254,8 @@ export function DetailsStep({
   displayName: string
   description: string
   environmentName: string
-  defaultEnvironmentName: string
+  /** The org's real default, or null while unknown (loading, unreadable, none). */
+  defaultEnvironmentName: string | null
   workspaceMode: WorkspaceMode
   workspaces: WorkspaceRecord[]
   loadingWorkspaces: boolean
@@ -233,38 +297,11 @@ export function DetailsStep({
         error={fieldErrors.description}
       />
 
-      <TextField
-        label="Environment Name"
+      <EnvironmentNameField
+        orgId={orgId}
         value={environmentName}
-        onChangeText={onEnvironmentNameChange}
-        autoCapitalize="none"
-        autoCorrect={false}
-        spellCheck={false}
-        accessibilityLabel="Environment name"
-        maxLength={DISPLAY_NAME_MAX_LENGTH}
-        style={
-          environmentName === defaultEnvironmentName
-            ? styles.environmentInputWithPill
-            : undefined
-        }
-        adornment={
-          environmentName === defaultEnvironmentName ? (
-            <Text style={styles.defaultPill}>Organization Default</Text>
-          ) : null
-        }
-        footer={
-          <Link href={`/${orgId}/projects/settings` as Href} asChild>
-            <Pressable
-              style={StyleSheet.flatten([styles.hintLink, webPointer])}
-              accessibilityRole="link"
-              accessibilityLabel="Set the default for this organization"
-            >
-              <Text style={styles.hintLinkText}>
-                Set the default for this organization
-              </Text>
-            </Pressable>
-          </Link>
-        }
+        defaultName={defaultEnvironmentName}
+        onChange={onEnvironmentNameChange}
         error={fieldErrors.environmentName}
       />
 
@@ -283,10 +320,10 @@ export function DetailsStep({
   )
 }
 
+/** Gap between the pill and the input's right edge, plus room before the text. */
+const PILL_INSET = 20
+
 const styles = StyleSheet.create({
-  environmentInputWithPill: {
-    paddingRight: 158,
-  },
   defaultPill: {
     paddingVertical: 3,
     paddingHorizontal: 8,
