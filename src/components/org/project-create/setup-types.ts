@@ -41,15 +41,15 @@ export const SETUP_TYPE_OPTIONS: readonly SetupTypeOption[] = [
   {
     choice: 'compose',
     type: 'docker-compose',
-    label: 'Compose',
-    description: 'A blank slate. You define the whole stack in YAML.',
+    label: 'Docker Compose',
+    description: 'A blank slate. You write the whole setup in YAML.',
     section: 'compose',
   },
   {
     choice: 'services',
     type: 'docker-compose',
     label: 'Services',
-    description: 'The same stack, defined with service cards instead of YAML.',
+    description: 'The same setup, built with service cards instead of YAML.',
     section: 'services',
   },
   {
@@ -60,11 +60,9 @@ export const SETUP_TYPE_OPTIONS: readonly SetupTypeOption[] = [
     // card offering that type, and that has always meant the blank YAML slate.
     choice: 'repository',
     type: 'docker-compose',
-    // "Git" is dropped: the org has already connected it, and the provider is
-    // irrelevant to what happens next.
-    label: 'Repository',
+    label: 'Git Repository',
     description:
-      "Read a repository you've connected — its compose file, a site, or an app. Pick the repo and branch.",
+      "Read a repository you've connected: its compose file, a site, or an app. Pick the repo and branch.",
     section: 'services',
   },
   {
@@ -82,14 +80,14 @@ export const SETUP_TYPE_OPTIONS: readonly SetupTypeOption[] = [
     // No mention of "traditional", "legacy", or "classic". This describes a
     // capability, and it is one a very large share of the web actually uses.
     description:
-      'A directory and an account. Upload over SFTP and serve it — static, PHP, or WordPress.',
+      'A directory and an account. Upload over SFTP and serve it: static, PHP, or WordPress.',
     section: 'services',
   },
   {
     choice: 'template',
     type: 'template',
     label: 'Template',
-    description: 'A ready-made stack from the catalog.',
+    description: 'A ready-made setup from the catalog.',
     section: 'services',
   },
   {
@@ -97,39 +95,10 @@ export const SETUP_TYPE_OPTIONS: readonly SetupTypeOption[] = [
     type: 'managed',
     label: 'Managed',
     description:
-      'Fully configured on your own servers — provisioning, backups, and connections included.',
+      'Fully configured on your own servers: provisioning, backups, and connections included.',
     section: 'overview',
   },
 ]
-
-export type SetupGroup = {
-  title: string
-  options: readonly SetupTypeOption[]
-}
-
-const SETUP_GROUP_CHOICES: readonly {
-  title: string
-  choices: readonly SetupChoice[]
-}[] = [
-  {
-    title: 'Define your stack',
-    choices: ['compose', 'services', 'repository', 'hosting'],
-  },
-  { title: 'Start from a catalog', choices: ['template', 'managed'] },
-]
-
-/**
- * The type cards in two labelled groups so the choice reads faster. Same
- * cards, same order as {@link SETUP_TYPE_OPTIONS}; only the headings are new.
- */
-export const SETUP_TYPE_GROUPS: readonly SetupGroup[] = SETUP_GROUP_CHOICES.map(
-  (group) => ({
-    title: group.title,
-    options: SETUP_TYPE_OPTIONS.filter((option) =>
-      group.choices.includes(option.choice),
-    ),
-  }),
-)
 
 export function setupOptionForChoice(
   choice: SetupChoice,
