@@ -114,6 +114,23 @@ export function managedSslRequiresTls(mode: ManagedSslMode): boolean {
   return mode === 'require' || mode === 'verify-ca' || mode === 'verify-full'
 }
 
+/**
+ * The weakest mode a database may use while a server serving it allows external
+ * access. The control plane refuses anything weaker (409
+ * `managed_ssl_external_access_minimum`, `managed_ssl_default_external_access_minimum`,
+ * `external_access_weak_ssl`); the pickers disable those rows to match.
+ */
+export const MANAGED_SSL_MINIMUM_WITH_EXTERNAL_ACCESS: ManagedSslMode = 'require'
+
+/** One-line reason shown on the rows a picker disables under external access. */
+export const MANAGED_SSL_EXTERNAL_ACCESS_REASON =
+  'External access is on, so connections must use SSL.'
+
+/** True for the modes that let a client connect without SSL (`disable`, `allow`, `prefer`). */
+export function isWeakManagedSslMode(mode: ManagedSslMode): boolean {
+  return !managedSslRequiresTls(mode)
+}
+
 /** True when the client is told to validate the server certificate chain. */
 export function managedSslVerifiesServer(mode: ManagedSslMode): boolean {
   return mode === 'verify-ca' || mode === 'verify-full'

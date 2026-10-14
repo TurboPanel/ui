@@ -18,7 +18,9 @@ import { panelStyles } from '@/components/ui/panel-styles'
 import { ManagedSslModePicker } from '@/components/org/managed/managed-ssl-mode-picker'
 import { ManagedExternalAccessSwitch } from '@/components/org/managed/managed-external-access-switch'
 import {
+  MANAGED_SSL_EXTERNAL_ACCESS_REASON,
   managedSslInheritLabel,
+  resolveManagedSslMode,
   type ManagedSslMode,
 } from '@/lib/managed-ssl'
 import {
@@ -351,7 +353,9 @@ function ExternalAccessRow({
   const save = useSaveServerManagedExternalAccess(orgId)
   return (
     <>
-      {save.actionError ? <Text style={panelStyles.error}>{save.actionError}</Text> : null}
+      {save.actionError ? (
+        <Text style={panelStyles.error}>{managedErrorMessage(save.error, save.actionError)}</Text>
+      ) : null}
       <ManagedExternalAccessSwitch
         serverName={showName ? server.name : undefined}
         value={server.enabled}
@@ -402,6 +406,7 @@ function SettingsFormBody({
   imageOptions,
   versionLabel,
   organizationSslMode,
+  externalAccessOn,
   onApply,
 }: Readonly<{
   form: SettingsForm
@@ -415,6 +420,8 @@ function SettingsFormBody({
   versionLabel: string | null
   /** Org default the inherit row resolves to; `null` falls back to the platform mode. */
   organizationSslMode: ManagedSslMode | null
+  /** A server serving this database allows external access: SSL is required. */
+  externalAccessOn: boolean
   onApply: () => void
 }>) {
   return (
@@ -442,6 +449,8 @@ function SettingsFormBody({
       <ManagedSslModePicker
         value={form.sslMode}
         inheritLabel={managedSslInheritLabel(organizationSslMode)}
+        inheritMode={resolveManagedSslMode(null, organizationSslMode)}
+        weakModesDisabledReason={externalAccessOn ? MANAGED_SSL_EXTERNAL_ACCESS_REASON : null}
         disabled={disabled}
         onSelect={(sslMode) => setForm((current) => ({ ...current, sslMode }))}
       />
@@ -628,6 +637,7 @@ export function ManagedSettingsPanel({
           imageOptions={imageOptions}
           versionLabel={versionLabel}
           organizationSslMode={organizationSslMode}
+          externalAccessOn={(externalAccess?.servers ?? []).some((server) => server.enabled)}
           onApply={() => {
             void apply()
           }}
