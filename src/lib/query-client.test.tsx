@@ -421,6 +421,31 @@ describe('useCan', () => {
     expect(checkPermission).not.toHaveBeenCalled()
   })
 
+  it('checks a server by its own id, without the resource-id lookup', async () => {
+    checkPermission.mockResolvedValueOnce({ allowed: true })
+
+    const { result } = renderHook(
+      () => useCan('server', 'srv-1', 'organization:manage'),
+      { wrapper: createWrapper() },
+    )
+
+    await waitFor(() => {
+      expect(result.current).toBe(true)
+    })
+    expect(checkPermission).toHaveBeenCalledWith('srv-1', 'organization:manage')
+    expect(resolveResourceId).not.toHaveBeenCalled()
+  })
+
+  it('is false for a server not chosen yet, with no request', () => {
+    const { result } = renderHook(
+      () => useCan('server', '', 'organization:manage'),
+      { wrapper: createWrapper() },
+    )
+    expect(result.current).toBe(false)
+    expect(resolveResourceId).not.toHaveBeenCalled()
+    expect(checkPermission).not.toHaveBeenCalled()
+  })
+
   it('is false when permission is denied', async () => {
     resolveResourceId.mockResolvedValueOnce({ resourceId: 'res-2' })
     checkPermission.mockResolvedValueOnce({ allowed: false })

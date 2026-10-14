@@ -50,5 +50,5 @@ Console-wide rules: `../AGENTS.md`; API helper contract: `../../../lib/instance-
 - `DaemonCellSnapshot` / `FetchServerCellResponse` types remain in `instance-api.ts` for admin surfaces only; do not import them in normal org views.
 - Durable Object billing, cell storage schema, and the "no DO polling / O(1) status reads" rationale are canonical in `../turbopanel/AGENTS.md` (Daemon Cell); UI must never introduce per-server DO/Redis reads.
 
-`useCan(scopeKind, itemId, permissionKey)` in `src/lib/query-client.ts` is a **display hint only** — never a security boundary. On `403`, call `handleUnauthorized()` from `useAuth()` to clear the session and redirect.
+`useCan(entityKind, entityId, permissionKey)` (organization and team ids are looked up; a server or managed cluster is checked by its own id) in `src/lib/query-client.ts` is a **display hint only** — never a security boundary. On `403`, call `handleUnauthorized()` from `useAuth()` to clear the session and redirect.
 - Server delete asks per principal: `ServerDeletePanel` loads `GET /servers/:id/principal-removal-plan`; every row defaults to keeping the identity, and only rows set to delete outright go in `DELETE /servers/:id` as `principals`.
