@@ -3134,6 +3134,11 @@ export type CreateProjectBody = {
    * `production`); configure later via setup.
    */
   type: 'empty' | 'docker-compose' | 'template' | 'managed'
+  /**
+   * Name of the project's first environment. Omitted means the organization
+   * default (else `production`).
+   */
+  environmentName?: string
   code?: string
   /**
    * Seeds the project's stored options at insert time. The create wizard sends

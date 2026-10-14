@@ -22,6 +22,7 @@ import {
   useLatestDeployments,
 } from '@/lib/queries/environment-cards'
 import { useOrgServers } from '@/lib/queries/servers'
+import { useHostingsByServices } from '@/lib/queries/services'
 import { environmentDisplayName } from '@/lib/resource-labels'
 import {
   baseCounts,
@@ -71,6 +72,17 @@ export function ProjectEnvironmentsTab() {
   const containers = useContainersByProject(orgId, projectId, { environmentIds })
   const { views } = useEnvironmentConfigViews(orgId, environmentIds)
   const { latest } = useLatestDeployments(orgId, environmentIds)
+  const serviceIds = useMemo(
+    () => [
+      ...new Set(
+        Object.values(views).flatMap((view) =>
+          (view?.effective.services ?? []).flatMap((service) => (service.serviceId ? [service.serviceId] : [])),
+        ),
+      ),
+    ],
+    [views],
+  )
+  const { hostingsByService } = useHostingsByServices(orgId, serviceIds)
   // The step a running deploy is on comes from the command status poll; it
   // is only asked for while a deploy is in flight.
   const inFlightEntries = useMemo(() => inFlightDeployEntries(latest), [latest])
@@ -92,9 +104,14 @@ export function ProjectEnvironmentsTab() {
           progressLabel: deployProgressLabel(latest[env.id], progressRecords),
           serverLine: serverLine(env.serverId, defaultServerId, servers),
           now,
+          hostingDomains: (views[env.id]?.effective.services ?? []).flatMap((service) =>
+            (service.serviceId ? (hostingsByService[service.serviceId] ?? []) : []).flatMap((row) =>
+              row.name ? [row.name] : [],
+            ),
+          ),
         }) satisfies EnvironmentCardData,
       })),
-    [environments, containers.isLoading, containers.containersByEnv, views, latest, progressRecords, defaultServerId, servers, now],
+    [environments, containers.isLoading, containers.containersByEnv, views, latest, progressRecords, defaultServerId, servers, now, hostingsByService],
   )
 
   const base = environmentIds.map((id) => views[id]?.base).find((side) => side !== undefined) ?? null
