@@ -37,6 +37,10 @@ const LIST_ID = 'header-search-list'
 const HEADING_ID = 'header-search-heading'
 /** React Native's role type omits `listbox`; React Native Web passes it through. */
 const LISTBOX_ROLE = { role: 'listbox' } as object
+/** Keeps focus in the input when the pointer goes down inside the popover. */
+const KEEP_FOCUS = {
+  onMouseDown: (event: { preventDefault: () => void }) => event.preventDefault(),
+} as object
 const optionId = (id: string) => `header-search-option-${id}`
 
 function targetIsTextField(target: EventTarget | null): boolean {
@@ -49,6 +53,15 @@ function targetIsTextField(target: EventTarget | null): boolean {
   )
 }
 
+/** True when `/` should be left alone: a select or button has focus, or a dialog is open. */
+function slashIsBlocked(target: EventTarget | null): boolean {
+  const element = target as HTMLElement | null
+  if (element?.closest?.('select, button, [role="button"]')) return true
+  return (
+    document.querySelector('[role="dialog"], [role="alertdialog"], [aria-modal="true"]') !== null
+  )
+}
+
 /** Cmd/Ctrl+K and `/` call `onTrigger` (web only). */
 export function useHeaderSearchShortcut(onTrigger: () => void, enabled = true) {
   const latest = useRef(onTrigger)
@@ -58,6 +71,7 @@ export function useHeaderSearchShortcut(onTrigger: () => void, enabled = true) {
   useEffect(() => {
     if (!isWeb || !enabled) return
     const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === '/' && slashIsBlocked(event.target)) return
       if (
         isSearchShortcut({
           key: event.key,
@@ -75,10 +89,7 @@ export function useHeaderSearchShortcut(onTrigger: () => void, enabled = true) {
   }, [enabled])
 }
 
-function DestinationIcon({
-  icon,
-  color,
-}: Readonly<{ icon: SearchIconId; color: string }>) {
+function DestinationIcon({ icon, color }: Readonly<{ icon: SearchIconId; color: string }>) {
   switch (icon) {
     case 'git-sources':
       return <GitNavIcon size={14} color={color} />
@@ -119,10 +130,7 @@ function SearchRow({
       onPress={onPick}
     >
       <View style={[styles.rowIcon, selected && styles.rowIconSelected]}>
-        <DestinationIcon
-          icon={item.icon}
-          color={selected ? colors.link : colors.textDim}
-        />
+        <DestinationIcon icon={item.icon} color={selected ? colors.link : colors.textDim} />
       </View>
       <Text style={styles.rowName} numberOfLines={1}>
         {before}
@@ -170,7 +178,6 @@ export function HeaderSearch({
   const { billingEnabled } = useAuth()
   const scopeId = useOptionalWorkspaceScope()?.scopeId ?? ALL_WORKSPACES_SCOPE
   const inputRef = useRef<TextInputHandle>(null)
-  const wrapRef = useRef<View>(null)
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
   const [focused, setFocused] = useState(false)
@@ -180,12 +187,20 @@ export function HeaderSearch({
     () =>
       filterSearchDestinations(
         searchDestinations(orgId, { billingEnabled, projectsScopeId: scopeId }),
-        query,
+        query
       ),
-    [orgId, billingEnabled, scopeId, query],
+    [orgId, billingEnabled, scopeId, query]
   )
   const active = shown[Math.min(index, shown.length - 1)]
   const trimmed = query.trim()
+  const popoverOpen = open && focused
+  const activeId = active?.id
+
+  useEffect(() => {
+    if (!isWeb || !popoverOpen || !activeId) return
+    const row = document.getElementById(optionId(activeId))
+    if (typeof row?.scrollIntoView === 'function') row.scrollIntoView({ block: 'nearest' })
+  }, [popoverOpen, activeId])
   const isMac = isWeb && /mac|iphone|ipad/i.test(globalThis.navigator?.platform ?? '')
 
   useEffect(() => {
@@ -212,6 +227,7 @@ export function HeaderSearch({
   const onKeyPress = (event: {
     nativeEvent: { key: string }
     preventDefault: () => void
+    stopPropagation?: () => void
   }) => {
     const { key } = event.nativeEvent
     if (key === 'ArrowDown' || key === 'ArrowUp') {
@@ -222,29 +238,21 @@ export function HeaderSearch({
       event.preventDefault()
       pick(active)
     } else if (key === 'Escape') {
+      event.stopPropagation?.()
       close()
     }
   }
 
-  const onBlur = (blurEvent: unknown) => {
-    const event = blurEvent as { relatedTarget?: unknown }
-    const wrap = wrapRef.current as unknown as HTMLElement | null
-    const next = event.relatedTarget as Node | null
-    // Clicking a result moves focus to the row first; keep the list open for it.
-    if (next && wrap?.contains(next)) return
+  // Pointer presses inside the popover never move focus (see KEEP_FOCUS), so a
+  // blur is always focus really leaving the field and can safely close it.
+  const onBlur = () => {
     setFocused(false)
     setOpen(false)
     if (collapsed) onClose?.()
   }
 
-  const popoverOpen = open && focused
-
   return (
-    <View
-      ref={wrapRef}
-      accessibilityRole="search"
-      style={collapsed ? styles.wrapCollapsed : styles.wrap}
-    >
+    <View accessibilityRole="search" style={collapsed ? styles.wrapCollapsed : styles.wrap}>
       <Pressable
         style={[styles.field, focused && styles.fieldFocused]}
         onPress={() => inputRef.current?.focus()}
@@ -260,7 +268,7 @@ export function HeaderSearch({
           accessibilityLabel="Search"
           role="combobox"
           aria-expanded={popoverOpen}
-          aria-controls={LIST_ID}
+          aria-controls={popoverOpen && shown.length > 0 ? LIST_ID : undefined}
           aria-autocomplete="list"
           aria-activedescendant={popoverOpen && active ? optionId(active.id) : undefined}
           autoComplete="off"
@@ -297,18 +305,13 @@ export function HeaderSearch({
       </Pressable>
 
       {popoverOpen ? (
-        <View style={styles.popover} tabIndex={-1}>
+        <View style={styles.popover} {...KEEP_FOCUS}>
           <Text id={HEADING_ID} style={styles.heading}>
             {trimmed ? 'Results' : 'Jump to'}
           </Text>
           {shown.length > 0 ? (
             <>
-              <View
-                id={LIST_ID}
-                {...LISTBOX_ROLE}
-                aria-labelledby={HEADING_ID}
-                style={styles.list}
-              >
+              <View id={LIST_ID} {...LISTBOX_ROLE} aria-labelledby={HEADING_ID} style={styles.list}>
                 {shown.map((item, position) => (
                   <SearchRow
                     key={item.id}
@@ -335,9 +338,7 @@ export function HeaderSearch({
               )}
             </>
           ) : (
-            <Text id={LIST_ID} style={styles.none}>
-              {`No matches for “${trimmed}”.`}
-            </Text>
+            <Text style={styles.none}>{`No matches for “${trimmed}”.`}</Text>
           )}
         </View>
       ) : null}
@@ -436,7 +437,7 @@ const styles = StyleSheet.create({
     paddingTop: spacing.xs,
     paddingBottom: 6,
   },
-  list: { gap: 2, maxHeight: 320 },
+  list: { gap: 2, maxHeight: 320, overflowY: 'auto' } as ViewStyle,
   row: {
     flexDirection: 'row',
     alignItems: 'center',
