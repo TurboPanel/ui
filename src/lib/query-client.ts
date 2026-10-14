@@ -16,6 +16,7 @@ import {
   fetchInstallStatus,
   isForbiddenError,
   resolveResourceId,
+  type AccessScopeKind,
   type PermissionKey,
 } from '@/lib/instance-api'
 import { queryKeys } from '@/lib/query-keys'
@@ -154,6 +155,15 @@ export function useAuthStatus() {
 }
 
 /**
+ * Kinds `GET /access/resource-id` resolves (the grant-management scopes). Every
+ * other entity — a server, a managed cluster — is checked by its own UUID,
+ * which `GET /access/check` takes as the resource id directly.
+ */
+function needsResourceIdLookup(entityType: string): entityType is AccessScopeKind {
+  return entityType === 'organization' || entityType === 'team'
+}
+
+/**
  * Client-side display hint for whether the current user likely has a permission
  * on a resource. This is **not** a security boundary — the API enforces authz.
  */
@@ -162,18 +172,16 @@ export function useCan(
   entityId: string,
   permissionKey: PermissionKey,
 ): boolean {
+  const lookup = entityType !== null && needsResourceIdLookup(entityType)
   const resourceQuery = useQuery({
     queryKey: queryKeys.auth.resourceId(entityType ?? '', entityId),
-    queryFn: () =>
-      resolveResourceId(
-        entityType as Parameters<typeof resolveResourceId>[0],
-        entityId,
-      ),
-    enabled: entityType !== null && entityId.length > 0,
+    queryFn: () => resolveResourceId(entityType as AccessScopeKind, entityId),
+    enabled: lookup && entityId.length > 0,
     staleTime: 60_000,
   })
 
-  const resourceId = resourceQuery.data?.resourceId ?? ''
+  const resourceId =
+    entityType === null ? '' : lookup ? (resourceQuery.data?.resourceId ?? '') : entityId
 
   const canQuery = useQuery({
     queryKey: queryKeys.auth.can(resourceId, permissionKey),

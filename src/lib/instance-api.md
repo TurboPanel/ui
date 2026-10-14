@@ -34,6 +34,7 @@ Authorization helpers:
 - `GET /api/client/v1/permissions` → `fetchPermissions()`
 - `GET /api/client/v1/access?resourceId=<uuid>` → `fetchAccessGrants(resourceId)` — returns `{ access: AccessGrantRecord[] }`; each row carries `subjectKind`, `subjectId`, `resourceId`, `effect`, and `permissionKey`
 - `GET /api/client/v1/access/resource-id?kind=<organization|team>&itemId=<uuid>` → `resolveResourceId(kind, itemId)`
+- `GET /api/client/v1/access/check?resourceId=<uuid>&permissionKey=<key>` → `checkPermission(resourceId, permissionKey)`. Any entity's own UUID is its resource id, so `useCan` looks up only organization and team ids and checks a server or managed cluster by its id directly (resource-id answers 404 for those kinds).
 - `POST /api/client/v1/access` → `createAccessGrant(body: CreateAccessBody)` — body: `{ resourceId, subjectKind, subjectId, effect, permissionKey }`; grant targets are organization or team entities only
 - `DELETE /api/client/v1/access/:id` → `revokeAccessGrant(id)`
 - `POST /api/client/v1/invitations` → `createInvitation({ teamId, email, grants? })`
