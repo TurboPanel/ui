@@ -91,10 +91,13 @@ export function describeManagedSslPolicy(
     configured: ManagedSslMode | null
     effective: ManagedSslMode
     organizationDefault: ManagedSslMode | null
+    raisedForExternalAccess?: boolean
   },
 ): { param: string; enforcement: string; source: string; verifies: boolean } {
   let source = 'platform default'
-  if (view.configured) {
+  if (view.raisedForExternalAccess) {
+    source = MANAGED_SSL_RAISED_SOURCE
+  } else if (view.configured) {
     source = 'service override'
   } else if (view.organizationDefault) {
     source = 'organization default'
@@ -121,6 +124,9 @@ export function managedSslRequiresTls(mode: ManagedSslMode): boolean {
  * `external_access_weak_ssl`); the pickers disable those rows to match.
  */
 export const MANAGED_SSL_MINIMUM_WITH_EXTERNAL_ACCESS: ManagedSslMode = 'require'
+
+/** Where the Connect view says the mode came from when the minimum raised it. */
+export const MANAGED_SSL_RAISED_SOURCE = 'raised to require because external access is on'
 
 /** One-line reason shown on the rows a picker disables under external access. */
 export const MANAGED_SSL_EXTERNAL_ACCESS_REASON =

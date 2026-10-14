@@ -333,6 +333,12 @@ export type ManagedSslView = {
   configured: ManagedSslMode | null
   effective: ManagedSslMode
   organizationDefault: ManagedSslMode | null
+  /**
+   * The resolved mode let clients skip SSL and `effective` was raised to
+   * `require` because a server serving the database allows external access.
+   * Absent from older control planes.
+   */
+  raisedForExternalAccess?: boolean
 }
 
 export type ManagedAccessEndpoint = {

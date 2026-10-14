@@ -117,6 +117,18 @@ describe('describeManagedSslPolicy', () => {
     organizationDefault,
   })
 
+  it('says when external access raised a mode without SSL to require', () => {
+    const raised = describeManagedSslPolicy('postgres', {
+      configured: 'disable',
+      effective: 'require',
+      organizationDefault: null,
+      raisedForExternalAccess: true,
+    })
+    expect(raised.source).toBe('raised to require because external access is on')
+    expect(raised.param).toBe('sslmode=require')
+    expect(raised.enforcement).toBe('plaintext refused')
+  })
+
   it('attributes the mode to the layer that set it', () => {
     expect(describeManagedSslPolicy('postgres', view(null, null)).source).toBe(
       'platform default',
