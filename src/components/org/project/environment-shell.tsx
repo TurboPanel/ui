@@ -13,7 +13,9 @@ import {
 import { ProjectScopePicker } from '@/components/org/project/project-scope-picker'
 import { useProjectContext } from '@/components/org/project/project-context'
 import { StatusDot } from '@/components/ui'
-import { groupDeploymentsByGeneration } from '@/lib/deployment-history'
+import { groupDeploymentsByGeneration, type DeploymentGroup } from '@/lib/deployment-history'
+import { hasNativeApp, nativeDeployKey } from '@/lib/v4/project-home'
+import { useEnvironmentConfigViews } from '@/lib/queries/environment-cards'
 import {
   environmentStatusFacts,
   firstSiteHostname,
@@ -162,6 +164,15 @@ function EnvironmentTitle() {
   )
 }
 
+/** `Not started yet` is a container answer; a native app's comes from its newest deploy. */
+function nativeRunningLabel(label: string, lastDeploy: DeploymentGroup | null | undefined): string {
+  if (label !== 'Not started yet' || !lastDeploy) return label
+  const key = nativeDeployKey(lastDeploy)
+  if (key === 'deployed' || key === 'live' || key === 'settling') return 'Running'
+  if (key === 'deploying' || key === 'building' || key === 'queued') return 'Starting…'
+  return label
+}
+
 /**
  * Name, site link, status, Deploy, Restart and the menu — the same header on
  * every tab of an environment.
@@ -185,18 +196,21 @@ function EnvironmentHeader() {
     enabled: environmentId.length > 0,
   })
   const deploymentRows = deploymentsQuery.data?.deployments
+  const { views } = useEnvironmentConfigViews(orgId, [environmentId], { enabled: environmentId.length > 0 })
+  const native = hasNativeApp(views[environmentId]?.effective.services)
   const now = useNow(60_000)
   const facts = useMemo(() => {
     const lastDeploy = deploymentsQuery.isLoading
       ? undefined
       : (groupDeploymentsByGeneration(deploymentRows ?? [])[0] ?? null)
     return environmentStatusFacts({
-      runningLabel: lifecycle.toneLabel,
+      // A native app has no containers: its newest deploy says whether it runs.
+      runningLabel: native ? nativeRunningLabel(lifecycle.toneLabel, lastDeploy) : lifecycle.toneLabel,
       lastDeploy,
       progressLabel: lifecycle.deployProgressLabel,
       now,
     })
-  }, [deploymentsQuery.isLoading, deploymentRows, lifecycle.toneLabel, lifecycle.deployProgressLabel, now])
+  }, [deploymentsQuery.isLoading, deploymentRows, native, lifecycle.toneLabel, lifecycle.deployProgressLabel, now])
 
   if (!selectedEnvironment) return null
   return (
