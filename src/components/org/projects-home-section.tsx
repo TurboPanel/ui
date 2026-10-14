@@ -44,6 +44,7 @@ import { webPointer } from '@/lib/theme'
 import {
   deploysInProgress,
   homeProject,
+  type InProgressRow,
   summaryLine,
   wantsConfigView,
   type HomeProject,
@@ -136,27 +137,10 @@ function RecentProjects({
   )
 }
 
-/**
- * The Projects home: every project as a layer card (its Base, who runs it,
- * each environment's status and relation to the Base), the projects you opened
- * last, and the deploys running now. Only data the app has read is shown.
- */
-export function ProjectsHomeSection({
-  orgId,
-  workspaceId,
-}: Readonly<{ orgId: string; workspaceId?: string }>) {
-  const s = styles(usePalette())
-  const router = useRouter()
+/** Projects in scope (platform infrastructure hidden under all workspaces) and the workspaces to name them. */
+function useScopedProjects(orgId: string, scopeId: string, showWorkspaceLabels: boolean) {
   const workspaceScope = useOptionalWorkspaceScope()
-  const canOwn = useCan('organization', orgId, 'organization:own')
-  const now = useNow(CLOCK_MS)
-
-  const scopeId = workspaceId ?? workspaceScope?.scopeId ?? ALL_WORKSPACES_SCOPE
   const scopedWorkspaceId = scopeId === ALL_WORKSPACES_SCOPE ? undefined : scopeId
-  const showWorkspaceLabels = !scopedWorkspaceId
-  const scopeWorkspace = workspaceScope?.scope.workspace
-  const isSystemScope = scopeWorkspace != null && isTurbopanelWorkspace(scopeWorkspace)
-
   const projectsQuery = useProjects(orgId, scopedWorkspaceId)
   const workspacesQuery = useWorkspaces(orgId, { enabled: showWorkspaceLabels })
   const scopeWorkspaces = workspaceScope?.workspaces
@@ -176,9 +160,27 @@ export function ProjectsHomeSection({
         : rawProjects,
     [rawProjects, scopeId, allWorkspaces],
   )
+  return { projectsQuery, workspacesQuery, allWorkspaces, projects }
+}
+
+function groupByEnvironment(containers: readonly ContainerRecord[]): Record<string, ContainerRecord[]> {
+  const map: Record<string, ContainerRecord[]> = {}
+  for (const row of containers) {
+    const bucket = map[row.environmentId] ?? []
+    bucket.push(row)
+    map[row.environmentId] = bucket
+  }
+  return map
+}
+
+/** Environments, containers and deploy state for the projects, folded into home cards. */
+function useHomeCards(
+  orgId: string,
+  projects: ReturnType<typeof useScopedProjects>['projects'],
+  now: number,
+) {
   const environmentsQuery = useEnvironments(orgId, undefined, { enabled: projects.length > 0 })
   const containersQuery = useContainers(orgId, undefined, { enabled: projects.length > 0 })
-
   const environments = useMemo(() => {
     const ids = new Set(projects.map((project) => project.id))
     return orEmptyArray(environmentsQuery.data?.environments).filter((env) => ids.has(env.projectId))
@@ -192,28 +194,10 @@ export function ProjectsHomeSection({
   }, [projects, environments])
   const { views } = useEnvironmentConfigViews(orgId, composeEnvironmentIds)
   const { latest } = useLatestDeployments(orgId, composeEnvironmentIds)
-
-  usePullToRefresh(async () => {
-    await Promise.all([
-      projectsQuery.refetch(),
-      environmentsQuery.refetch(),
-      containersQuery.refetch(),
-      ...(showWorkspaceLabels ? [workspacesQuery.refetch()] : []),
-    ])
-    await workspaceScope?.refreshWorkspaces()
-  })
-
-  const containersByEnvironment = useMemo(() => {
-    if (!containersQuery.data) return undefined
-    const map: Record<string, ContainerRecord[]> = {}
-    for (const row of containersQuery.data.containers) {
-      const bucket = map[row.environmentId] ?? []
-      bucket.push(row)
-      map[row.environmentId] = bucket
-    }
-    return map
-  }, [containersQuery.data])
-
+  const containersByEnvironment = useMemo(
+    () => (containersQuery.data ? groupByEnvironment(containersQuery.data.containers) : undefined),
+    [containersQuery.data],
+  )
   const cards = useMemo(
     () =>
       projects.map((project) =>
@@ -230,16 +214,121 @@ export function ProjectsHomeSection({
     () => deploysInProgress({ projects, environments, latest, now }),
     [projects, environments, latest, now],
   )
+  const runningCount = containersByEnvironment
+    ? cards.reduce((sum, card) => sum + card.environments.filter((env) => env.status === 'running').length, 0)
+    : null
+  return { environmentsQuery, containersQuery, environments, cards, inProgress, runningCount }
+}
+
+function ProjectGrid({
+  orgId,
+  cards,
+  projects,
+  workspaceNameById,
+  showWorkspaceLabels,
+}: Readonly<{
+  orgId: string
+  cards: readonly HomeProject[]
+  projects: ReturnType<typeof useScopedProjects>['projects']
+  workspaceNameById: ReadonlyMap<string, string>
+  showWorkspaceLabels: boolean
+}>) {
+  const s = styles(usePalette())
+  const router = useRouter()
+  const projectById = useMemo(() => new Map(projects.map((project) => [project.id, project])), [projects])
+  return (
+    <View style={s.grid}>
+      {cards.map((card) => (
+        <View key={card.id} style={s.cell}>
+          <ProjectHomeCard
+            project={card}
+            workspace={
+              showWorkspaceLabels
+                ? workspaceNameById.get(projectById.get(card.id)?.workspaceId ?? '')
+                : undefined
+            }
+            onOpen={() => router.push(projectHref(orgId, card.id) as Href)}
+            onOpenBase={() => router.push(projectBaseHref(orgId, card.id) as Href)}
+            onOpenEnvironment={(environmentId) =>
+              router.push(projectEnvironmentHref(orgId, card.id, environmentId) as Href)
+            }
+          />
+        </View>
+      ))}
+    </View>
+  )
+}
+
+function DeploysInProgress({ orgId, rows }: Readonly<{ orgId: string; rows: readonly InProgressRow[] }>) {
+  const s = styles(usePalette())
+  const router = useRouter()
+  if (rows.length === 0) return null
+  return (
+    <View style={s.section}>
+      <SectionHeading title="Deploys in progress" />
+      <ListGroup>
+        {rows.map((row) => (
+          <ListRow
+            key={row.environmentId}
+            title={row.title}
+            sub={row.sub}
+            chips={<StatusChip status={row.status} size="sm" />}
+            onPress={() =>
+              router.push(environmentPageTabHref(orgId, row.projectId, row.environmentId, 'deployments') as Href)
+            }
+          />
+        ))}
+      </ListGroup>
+    </View>
+  )
+}
+
+/**
+ * The Projects home: every project as a layer card (its Base, who runs it,
+ * each environment's status and relation to the Base), the projects you opened
+ * last, and the deploys running now. Only data the app has read is shown.
+ */
+export function ProjectsHomeSection({
+  orgId,
+  workspaceId,
+}: Readonly<{ orgId: string; workspaceId?: string }>) {
+  const s = styles(usePalette())
+  const router = useRouter()
+  const workspaceScope = useOptionalWorkspaceScope()
+  const canOwn = useCan('organization', orgId, 'organization:own')
+  const now = useNow(CLOCK_MS)
+
+  const scopeId = workspaceId ?? workspaceScope?.scopeId ?? ALL_WORKSPACES_SCOPE
+  const showWorkspaceLabels = scopeId === ALL_WORKSPACES_SCOPE
+  const scopeWorkspace = workspaceScope?.scope.workspace
+  const isSystemScope = scopeWorkspace != null && isTurbopanelWorkspace(scopeWorkspace)
+
+  const { projectsQuery, workspacesQuery, allWorkspaces, projects } = useScopedProjects(
+    orgId,
+    scopeId,
+    showWorkspaceLabels,
+  )
+  const { environmentsQuery, containersQuery, environments, cards, inProgress, runningCount } = useHomeCards(
+    orgId,
+    projects,
+    now,
+  )
+
+  usePullToRefresh(async () => {
+    await Promise.all([
+      projectsQuery.refetch(),
+      environmentsQuery.refetch(),
+      containersQuery.refetch(),
+      ...(showWorkspaceLabels ? [workspacesQuery.refetch()] : []),
+    ])
+    await workspaceScope?.refreshWorkspaces()
+  })
 
   const workspaceNameById = useMemo(
     () => new Map(allWorkspaces.map((workspace) => [workspace.id, workspaceName(workspace)])),
     [allWorkspaces],
   )
-  const projectById = useMemo(() => new Map(projects.map((project) => [project.id, project])), [projects])
 
-  const runningCount = containersByEnvironment
-    ? cards.reduce((sum, card) => sum + card.environments.filter((env) => env.status === 'running').length, 0)
-    : null
   const loading = projectsQuery.isLoading && projects.length === 0
   const error = queryErrorMessage(projectsQuery.error, workspacesQuery.error)
   const newProjectHref = newProjectHrefForScope(orgId, scopeId) as Href
@@ -251,7 +340,7 @@ export function ProjectsHomeSection({
   let list
   if (loading) {
     list = <LoadingState />
-  } else if (cards.length === 0) {
+  } else if (showWelcome) {
     list = (
       <ProjectsWelcomeCard
         serverCount={serverCount}
@@ -261,27 +350,16 @@ export function ProjectsHomeSection({
     )
   } else {
     list = (
-      <View style={s.grid}>
-        {cards.map((card) => (
-          <View key={card.id} style={s.cell}>
-            <ProjectHomeCard
-              project={card}
-              workspace={
-                showWorkspaceLabels
-                  ? workspaceNameById.get(projectById.get(card.id)?.workspaceId ?? '')
-                  : undefined
-              }
-              onOpen={() => router.push(projectHref(orgId, card.id) as Href)}
-              onOpenBase={() => router.push(projectBaseHref(orgId, card.id) as Href)}
-              onOpenEnvironment={(environmentId) =>
-                router.push(projectEnvironmentHref(orgId, card.id, environmentId) as Href)
-              }
-            />
-          </View>
-        ))}
-      </View>
+      <ProjectGrid
+        orgId={orgId}
+        cards={cards}
+        projects={projects}
+        workspaceNameById={workspaceNameById}
+        showWorkspaceLabels={showWorkspaceLabels}
+      />
     )
   }
+  const headerNewProject = canCreate && !(showWelcome && !error)
 
   return (
     <View style={s.root}>
@@ -289,7 +367,7 @@ export function ProjectsHomeSection({
         title="Projects"
         sub={cards.length > 0 ? summaryLine(cards.length, environments.length, runningCount) : undefined}
         actions={
-          canCreate && !(showWelcome && !error) ? (
+          headerNewProject ? (
             <ActionButton label="New project" variant="primary" onPress={() => router.push(newProjectHref)} />
           ) : null
         }
@@ -297,29 +375,7 @@ export function ProjectsHomeSection({
       <WorkspaceSwitcher orgId={orgId} />
       {error ? <Notice tone="bad" title="Could not load projects" body={error} /> : null}
       <RecentProjects orgId={orgId} projects={cards} environments={environments} />
-      {inProgress.length > 0 ? (
-        <View style={s.section}>
-          <SectionHeading title="Deploys in progress" />
-          <ListGroup>
-            {inProgress.map((row) => {
-              const projectId = row.projectId
-              return (
-                <ListRow
-                  key={row.environmentId}
-                  title={row.title}
-                  sub={row.sub}
-                  chips={<StatusChip status={row.status} size="sm" />}
-                  onPress={() =>
-                    router.push(
-                      environmentPageTabHref(orgId, projectId, row.environmentId, 'deployments') as Href,
-                    )
-                  }
-                />
-              )
-            })}
-          </ListGroup>
-        </View>
-      ) : null}
+      <DeploysInProgress orgId={orgId} rows={inProgress} />
       <View style={s.section}>
         <SectionHeading title="All projects" />
         {list}
