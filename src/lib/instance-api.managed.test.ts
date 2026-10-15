@@ -770,6 +770,17 @@ describe('instance-api managed-engine fetch wrappers', () => {
     )
   })
 
+  it('downloadOrganizationCaPem asks for the named organization over the active one', async () => {
+    setActiveOrganizationId('org-99')
+    fetchMock.mockResolvedValueOnce(
+      new Response('-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n', {
+        status: 200,
+      })
+    )
+    await downloadOrganizationCaPem('org-42')
+    expect(lastFetch().init.headers).toMatchObject({ [ORG_ID_HEADER]: 'org-42' })
+  })
+
   it('resyncManagedMember posts to the member resync endpoint', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, commandId: 'cmd-1' }))
 
