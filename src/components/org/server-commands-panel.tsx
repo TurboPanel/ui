@@ -174,10 +174,11 @@ function HostnameBlock({
   return (
     <View style={styles.hostnameBlock}>
       <TextField
-        label="Change hostname"
+        label="Change the server's own name (Linux hostname)"
+        hint="The name inside the server. The DNS name clients use is set under Network, Addresses clients use."
         value={hostnameInput}
         onChangeText={onHostnameInputChange}
-        placeholder="hostname.example"
+        placeholder="omega"
         autoCapitalize="none"
         autoCorrect={false}
         editable={connected && !hostnameRunning && !commandInFlight}

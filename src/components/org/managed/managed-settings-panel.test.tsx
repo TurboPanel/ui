@@ -9,6 +9,7 @@ vi.mock('react-native-svg', async () => (await import('@/components/ui/v4/rn-stu
 vi.mock('@/lib/theme-preference', async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub)
 vi.mock('@/components/ui/panel-styles', () => ({ panelStyles: {} }))
 vi.mock('@/components/ui', () => ({}))
+vi.mock('expo-router', () => ({ useRouter: () => ({ push: vi.fn() }) }))
 vi.mock('@/lib/query-client', () => ({ useCan: () => true }))
 vi.mock('@/lib/queries/managed', () => ({ useSaveServerManagedExternalAccess: () => ({}) }))
 

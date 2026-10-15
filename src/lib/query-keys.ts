@@ -144,6 +144,8 @@ export const queryKeys = {
         /** "Allow external access to the databases on this server" (`/servers/:id/managed-external-access`). */
         managedExternalAccess: (serverId: string) =>
           ['org', orgId, 'server', serverId, 'managed-external-access'] as const,
+        /** Addresses clients use (`/servers/:id/addresses`). */
+        addresses: (serverId: string) => ['org', orgId, 'server', serverId, 'addresses'] as const,
       },
 
       /** Every principal in the organization (`GET /organizations/:id/principals`). */

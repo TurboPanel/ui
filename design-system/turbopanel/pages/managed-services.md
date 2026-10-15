@@ -91,6 +91,9 @@ Topology rows ordered primary first then `ordinal`:
 - **Read endpoint** only when any member is `readEligible` — same host/port
 - TLS: `sslmode=verify-full` required + **Download CA certificate** (never private key)
 - Masked DSN + Copy; pointer to **Connect to a service**
+- When the detail carries `connections[]`: one copyable string per address clients use, labelled `Public: <host>` / `Datacenter <name>: <host>`, main first and marked **(main)**; otherwise the single DSN
+- `addressNeeded`: warning line + **Set the address clients use** link to the server's Network tab
+- External access switch Yes hint names the server's addresses clients use and links to that card; it never lists addresses itself
 
 ### Bindings (Connect · Connected services)
 

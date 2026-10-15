@@ -1408,6 +1408,138 @@ export async function saveServerPhpModes(
   })
 }
 
+// --- Addresses clients use (`/servers/:id/addresses`) ------------------------
+
+export type ServerAddressScope = 'public' | 'datacenter'
+
+/** Router port overrides. Absent key: the server's own listen port. `null`: not reachable through this address. */
+export type ServerAddressPorts = Partial<Record<'postgres' | 'mysql' | 'http' | 'https', number | null>>
+
+/** Where an effective address came from: entered here, the organization's address list, reported by the server, or the datacenter pin. */
+export type ClientAddressSource = 'entry' | 'ip' | 'reported' | 'pin'
+
+/** What the host clients type is made of. */
+export type ClientAddressHostSource = 'hostname' | 'address' | 'linux-hostname'
+
+/** One side of the server (Public, or one datacenter it belongs to): what was saved and what the panel uses. */
+export type ServerAddressEntry = {
+  scope: ServerAddressScope
+  datacenterId: string | null
+  /** `Public`, or the datacenter's name. */
+  label: string
+  /** An entry is saved for this side; otherwise every value below is detected. */
+  saved: boolean
+  hostname: string | null
+  /** Saved override (a router or 1:1 NAT in front of the server). */
+  addressV4: string | null
+  addressV6: string | null
+  ports: ServerAddressPorts
+  /** Saved "use in the main connection string" choice. */
+  primary: boolean
+  /** Fills the main connection string right now. */
+  main: boolean
+  effective: {
+    v4: string | null
+    v4Source: ClientAddressSource | null
+    v6: string | null
+    v6Source: ClientAddressSource | null
+    host: string | null
+    hostSource: ClientAddressHostSource | null
+  }
+}
+
+export type ServerAddressesView = {
+  externalAccess: boolean
+  linuxHostname: string | null
+  /** External access is on and no side gives clients a host. */
+  addressNeeded: boolean
+  /** Public first, then one per datacenter. */
+  addresses: ServerAddressEntry[]
+}
+
+/** One saved side in a `PUT` body. Blank strings read as `null` on the server. */
+export type ServerAddressInput = {
+  scope: ServerAddressScope
+  datacenterId?: string | null
+  hostname?: string | null
+  addressV4?: string | null
+  addressV6?: string | null
+  ports?: ServerAddressPorts
+  primary?: boolean
+}
+
+export type ServerAddressesSaveResult = ServerAddressesView & {
+  /**
+   * `true` on a 502 `ingress_reconcile_failed`: the entries are saved, and the
+   * database certificate picks them up the next time the listener is updated.
+   */
+  certificateUpdatePending: boolean
+}
+
+/** A refused `PUT /servers/:id/addresses`. `code` is the API `error`; `index` points into the sent list. */
+export class ServerAddressesSaveError extends Error {
+  readonly status: number
+  readonly code: string | null
+  readonly index: number | null
+
+  constructor(path: string, status: number, body: Readonly<Record<string, unknown>> | null) {
+    const code = typeof body?.error === 'string' ? body.error : null
+    super(`${path} failed: ${formatFetchFailureDetail(status, code ?? undefined)}`)
+    this.name = 'ServerAddressesSaveError'
+    this.status = status
+    this.code = code
+    this.index = typeof body?.index === 'number' ? body.index : null
+  }
+}
+
+/** Manage-gated. 404 also on control planes without the route. */
+export async function fetchServerAddresses(serverId: string): Promise<ServerAddressesView> {
+  return await apiFetch(`${CLIENT_API}/servers/${serverId}/addresses`)
+}
+
+function isAddressesView(body: Readonly<Record<string, unknown>> | null): boolean {
+  return Array.isArray(body?.addresses)
+}
+
+/**
+ * Replaces every saved entry (`[]` clears). A 502 that carries the saved view
+ * resolves with `certificateUpdatePending`; every other failure throws
+ * {@link ServerAddressesSaveError} so the dialog can name the field.
+ */
+export async function saveServerAddresses(
+  serverId: string,
+  addresses: readonly ServerAddressInput[]
+): Promise<ServerAddressesSaveResult> {
+  const path = `${CLIENT_API}/servers/${serverId}/addresses`
+  const resolvedOrgId = getActiveOrganizationId()
+  const response = await fetchWithStepUp(controlPlaneUrl(path), {
+    method: 'PUT',
+    credentials: 'include',
+    headers: {
+      'content-type': 'application/json',
+      ...clientVersionHeaders(),
+      ...(resolvedOrgId ? { [ORG_ID_HEADER]: resolvedOrgId } : {}),
+    },
+    body: JSON.stringify({ addresses }),
+  })
+  recordInstanceVersion(response.headers)
+  let body: Record<string, unknown> | null = null
+  try {
+    const parsed: unknown = await response.json()
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      body = parsed as Record<string, unknown>
+    }
+  } catch {
+    // Non-JSON body: status only.
+  }
+  const view = body as unknown as ServerAddressesView
+  if (response.ok && isAddressesView(body)) return { ...view, certificateUpdatePending: false }
+  if (response.status === 502 && isAddressesView(body)) {
+    return { ...view, certificateUpdatePending: true }
+  }
+  throw new ServerAddressesSaveError(path, response.status, body)
+}
+
 /** "Allow external access to the databases on this server" (default no). */
 export type ServerManagedExternalAccess = {
   enabled: boolean

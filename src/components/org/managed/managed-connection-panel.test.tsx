@@ -1,7 +1,9 @@
 // @vitest-environment happy-dom
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+const { push } = vi.hoisted(() => ({ push: vi.fn() }))
+vi.mock('expo-router', () => ({ useRouter: () => ({ push }) }))
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
 vi.mock('react-native-svg', async () => (await import('@/components/ui/v4/rn-stub')).svgStub)
 vi.mock('@/lib/theme-preference', async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub)
@@ -9,7 +11,7 @@ vi.mock('@/components/ui/panel-styles', () => ({ panelStyles: {} }))
 vi.mock('@/components/ui', () => ({
   SectionPanel: ({ children }: { children?: unknown }) => <div>{children as never}</div>,
   Button: ({ label }: { label: string }) => <button>{label}</button>,
-  CopyButton: () => null,
+  CopyButton: ({ value }: { value: string }) => <button data-copy={value}>Copy DSN</button>,
 }))
 vi.mock('@/lib/queries/managed', () => ({ useOrganizationCa: () => ({ data: null }) }))
 vi.mock('@/lib/download-ca', () => ({ downloadCaBundle: vi.fn(), downloadSuccessMessage: () => '' }))
@@ -38,5 +40,76 @@ describe('managed connection panel endpoints', () => {
     expect(screen.getByText(/From outside the server/)).toBeTruthy()
     expect(screen.getByText(/This server only/)).toBeTruthy()
     expect(screen.queryByText(/turbofabric|datacenter|public/i)).toBeNull()
+  })
+})
+
+const connection = {
+  dsn: 'postgresql://app@omega.example.com:15432/app',
+  host: 'omega.example.com',
+  port: 15432,
+  database: 'app',
+  username: 'app',
+}
+
+describe('managed connection panel connection strings', () => {
+  it('keeps the single DSN when the control plane sends no list', () => {
+    render(<ManagedConnectionPanel orgId="org-1" managed={managed} connection={connection} server={null} />)
+    expect(screen.getByText('DSN')).toBeTruthy()
+    expect(screen.getAllByText('Copy DSN')).toHaveLength(1)
+    expect(screen.queryByText(/Set the address clients use/)).toBeNull()
+  })
+
+  it('shows one labelled, copyable string per address, main first', () => {
+    const dc = {
+      ...connection,
+      dsn: 'postgresql://app@omega.dc1.example.com:15432/app',
+      host: 'omega.dc1.example.com',
+      label: 'Ashburn',
+      scope: 'datacenter' as const,
+      datacenterId: 'dc-1',
+      primary: false,
+    }
+    render(
+      <ManagedConnectionPanel
+        orgId="org-1"
+        managed={managed}
+        connection={connection}
+        server={null}
+        connections={[{ ...connection, label: 'Public', scope: 'public', primary: true }, dc]}
+        endpoints={[
+          { reach: 'external', host: 'omega.example.com', port: 15432, label: 'Public', scope: 'public' },
+          { reach: 'external', host: 'omega.dc1.example.com', port: 15432, label: 'Ashburn', scope: 'datacenter' },
+          { reach: 'local', host: '127.0.0.1', port: 15432 },
+        ]}
+      />,
+    )
+    const labels = [
+      screen.getByText('Public: omega.example.com (main)'),
+      screen.getByText('Datacenter Ashburn: omega.dc1.example.com'),
+    ]
+    expect(labels[0].compareDocumentPosition(labels[1]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    const copies = screen.getAllByText('Copy DSN').map((el) => el.dataset.copy)
+    expect(copies).toEqual([connection.dsn, dc.dsn])
+    expect(screen.getByText(/From outside the server \(Datacenter Ashburn\)/)).toBeTruthy()
+    expect(screen.queryByText(/^DSN$/)).toBeNull()
+  })
+
+  it('prompts to set the address clients use with a link to the Network tab', () => {
+    render(
+      <ManagedConnectionPanel
+        orgId="org-1"
+        managed={managed}
+        connection={null}
+        server={{ id: 'srv-1', name: 'omega', hostname: 'omega' }}
+        addressNeeded
+      />,
+    )
+    fireEvent.click(screen.getByText('Set the address clients use'))
+    expect(push).toHaveBeenCalledWith('/org-1/servers/srv-1?tab=network')
+  })
+
+  it('still names the Network tab when the server is unknown', () => {
+    render(<ManagedConnectionPanel orgId="org-1" managed={managed} connection={null} server={null} addressNeeded />)
+    expect(screen.getByText(/on the server's Network tab/)).toBeTruthy()
   })
 })

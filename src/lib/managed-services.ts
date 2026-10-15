@@ -340,6 +340,24 @@ export type ManagedAccessEndpoint = {
   reach: 'local' | 'external'
   host: string
   port: number
+  /** External only, newer control planes: `Public`, or the datacenter's name. */
+  label?: string | null
+  /** External only: which side of the server this address is on. */
+  scope?: 'public' | 'datacenter' | null
+  datacenterId?: string | null
+  /** External only: fills the main connection string. */
+  primary?: boolean
+}
+
+/**
+ * One connection string per address clients use (newer control planes),
+ * main one first; the main one also fills `connection`.
+ */
+export type ManagedConnectionEntry = ManagedConnectionInfo & {
+  label?: string | null
+  scope?: 'public' | 'datacenter' | null
+  datacenterId?: string | null
+  primary?: boolean
 }
 
 /**
@@ -362,6 +380,10 @@ export type ManagedDetailResponse = {
   managed: ManagedEnvironmentRecord | null
   connection: ManagedConnectionInfo | null
   endpoints?: ManagedAccessEndpoint[]
+  /** Absent on control planes that predate the addresses clients use. */
+  connections?: ManagedConnectionEntry[]
+  /** External access is on and no address gives clients a host: prompt to set one. */
+  addressNeeded?: boolean
   externalAccess?: ManagedExternalAccessView | null
   settings: ManagedSettings | null
   ssl: ManagedSslView | null

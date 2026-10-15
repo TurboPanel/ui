@@ -2,9 +2,11 @@ import { useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { Button, CopyButton, SectionPanel } from '@/components/ui'
+import { ServerAddressesLink } from '@/components/org/server-addresses-link'
 import { downloadCaBundle, downloadSuccessMessage } from '@/lib/download-ca'
 import type {
   ManagedAccessEndpoint,
+  ManagedConnectionEntry,
   ManagedConnectionInfo,
   ManagedEnvironmentRecord,
   ManagedMemberRecord,
@@ -23,6 +25,7 @@ import {
   readOnlyLoginNames,
 } from '@/lib/managed-read-endpoint'
 import { useOrganizationCa } from '@/lib/queries/managed'
+import { addressSideLabel, connectionStringLabel } from '@/lib/server-addresses'
 import { colors, spacing } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
 
@@ -136,6 +139,12 @@ function TlsPolicyLines({
   )
 }
 
+function endpointReachLabel(entry: ManagedAccessEndpoint): string {
+  if (entry.reach !== 'external') return 'This server only'
+  // Newer control planes name the address; older ones send one unnamed endpoint.
+  return entry.label ? `From outside the server (${addressSideLabel(entry.scope, entry.label)})` : 'From outside the server'
+}
+
 function EndpointList({
   endpoints,
 }: Readonly<{ endpoints: readonly ManagedAccessEndpoint[] }>) {
@@ -146,13 +155,69 @@ function EndpointList({
     <View style={styles.endpointList}>
       <Text style={panelStyles.detailLabel}>Reachable endpoints</Text>
       {endpoints.map((entry) => (
-        <Text key={`${entry.reach}-${entry.host}`} style={panelStyles.detailLine}>
-          <Text style={panelStyles.detailLabel}>
-            {entry.reach === 'external' ? 'From outside the server' : 'This server only'}:{' '}
-          </Text>
+        <Text key={`${entry.reach}-${entry.host}-${entry.port}`} style={panelStyles.detailLine}>
+          <Text style={panelStyles.detailLabel}>{endpointReachLabel(entry)}: </Text>
           {entry.host}:{entry.port}
         </Text>
       ))}
+    </View>
+  )
+}
+
+function DsnBlock({ label, dsn }: Readonly<{ label: string; dsn: string }>) {
+  return (
+    <>
+      <Text style={panelStyles.detailLabel}>{label}</Text>
+      <View style={panelStyles.commandCodeBlock}>
+        <Text style={styles.dsn} selectable>
+          {dsn}
+        </Text>
+      </View>
+      <CopyButton value={dsn} label="Copy DSN" size="md" />
+    </>
+  )
+}
+
+/**
+ * One copyable string per address clients use, main one first (the API orders
+ * them); falls back to the single DSN when the control plane predates the list.
+ */
+function ConnectionStrings({
+  connection,
+  connections,
+}: Readonly<{
+  connection: ManagedConnectionInfo
+  connections: readonly ManagedConnectionEntry[]
+}>) {
+  if (connections.length === 0) return <DsnBlock label="DSN" dsn={connection.dsn} />
+  return (
+    <View style={styles.connectionList}>
+      {connections.map((entry, index) => (
+        <View key={`${entry.scope ?? 'public'}-${entry.datacenterId ?? ''}-${entry.host}`} style={styles.connectionItem}>
+          <DsnBlock
+            label={index === 0 ? `${connectionStringLabel(entry)} (main)` : connectionStringLabel(entry)}
+            dsn={entry.dsn}
+          />
+        </View>
+      ))}
+    </View>
+  )
+}
+
+function AddressNeededPrompt({
+  orgId,
+  server,
+}: Readonly<{ orgId: string; server: ManagedServerSummary | null }>) {
+  return (
+    <View style={styles.addressPrompt}>
+      <Text style={panelStyles.calloutWarningText}>
+        External access is on, but clients have no DNS name or address to connect to yet.
+      </Text>
+      {server ? (
+        <ServerAddressesLink orgId={orgId} serverId={server.id} label="Set the address clients use" />
+      ) : (
+        <Text style={panelStyles.muted}>{"Set the address clients use on the server's Network tab."}</Text>
+      )}
     </View>
   )
 }
@@ -162,6 +227,8 @@ export function ManagedConnectionPanel({
   managed,
   connection,
   endpoints,
+  connections,
+  addressNeeded = false,
   server,
   members,
   users,
@@ -171,6 +238,10 @@ export function ManagedConnectionPanel({
   managed: ManagedEnvironmentRecord
   connection: ManagedConnectionInfo | null
   endpoints?: readonly ManagedAccessEndpoint[]
+  /** Newer control planes: one connection string per address clients use, main first. */
+  connections?: readonly ManagedConnectionEntry[]
+  /** External access is on and no address gives clients a host. */
+  addressNeeded?: boolean
   server: ManagedServerSummary | null
   members?: readonly ManagedMemberRecord[]
   users?: readonly ManagedUserRecord[]
@@ -227,6 +298,7 @@ export function ManagedConnectionPanel({
           {serverLabel(server)}
         </Text>
         <EndpointList endpoints={visibleEndpoints} />
+        {addressNeeded ? <AddressNeededPrompt orgId={orgId} server={server} /> : null}
         {connection ? (
           <>
             <Text style={panelStyles.detailLine}>
@@ -269,13 +341,7 @@ export function ManagedConnectionPanel({
             {caError ? (
               <Text style={panelStyles.error}>{caError}</Text>
             ) : null}
-            <Text style={panelStyles.detailLabel}>DSN</Text>
-            <View style={panelStyles.commandCodeBlock}>
-              <Text style={styles.dsn} selectable>
-                {connection.dsn}
-              </Text>
-            </View>
-            <CopyButton value={connection.dsn} label="Copy DSN" size="md" />
+            <ConnectionStrings connection={connection} connections={connections ?? []} />
           </>
         ) : null}
       </View>
@@ -322,6 +388,16 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   endpointList: {
+    gap: spacing.xs,
+    marginTop: spacing.xs,
+  },
+  connectionList: {
+    gap: spacing.md,
+  },
+  connectionItem: {
+    gap: spacing.xs,
+  },
+  addressPrompt: {
     gap: spacing.xs,
     marginTop: spacing.xs,
   },

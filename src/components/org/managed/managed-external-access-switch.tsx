@@ -1,5 +1,6 @@
 import { Text, View } from 'react-native'
 import { SettingRow, Toggle } from '@/components/ui'
+import { ServerAddressesLink } from '@/components/org/server-addresses-link'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { spacing } from '@/lib/theme'
 
@@ -8,7 +9,7 @@ export const EXTERNAL_ACCESS_LABEL = 'Allow external access to the databases on 
 /** What the switch means, in the words an owner needs. */
 export function externalAccessHint(enabled: boolean): string {
   return enabled
-    ? "Yes: the database ports are open on all of this server's addresses. The firewall and network rules decide who can reach them."
+    ? "Yes: clients connect using this server's addresses clients use. The firewall and network rules decide who can reach them."
     : "No: only this server can connect. That means sites run by a site owner's Linux user and containers bound to the database."
 }
 
@@ -33,6 +34,7 @@ export function ManagedExternalAccessSwitch({
   pending = false,
   disabled,
   busy = false,
+  addresses,
   onChange,
 }: Readonly<{
   /** Named when a cluster spans several servers, so each row says which one it moves. */
@@ -42,6 +44,8 @@ export function ManagedExternalAccessSwitch({
   pending?: boolean
   disabled: boolean
   busy?: boolean
+  /** The server whose "Addresses clients use" card the link opens; no link without it. */
+  addresses?: Readonly<{ orgId: string; serverId: string }>
   onChange: (next: boolean) => void
 }>) {
   const warning = externalAccessSharedWarning(otherClusters)
@@ -61,6 +65,13 @@ export function ManagedExternalAccessSwitch({
           onValueChange={onChange}
         />
       </SettingRow>
+      {addresses ? (
+        <ServerAddressesLink
+          orgId={addresses.orgId}
+          serverId={addresses.serverId}
+          label="See the addresses clients use"
+        />
+      ) : null}
       {warning ? <Text style={panelStyles.muted}>{warning}</Text> : null}
       {pending ? (
         <Text style={panelStyles.muted}>

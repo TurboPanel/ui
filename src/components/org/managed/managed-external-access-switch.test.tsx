@@ -8,6 +8,8 @@ import {
   externalAccessSharedWarning,
 } from './managed-external-access-switch'
 
+const { push } = vi.hoisted(() => ({ push: vi.fn() }))
+vi.mock('expo-router', () => ({ useRouter: () => ({ push }) }))
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
 vi.mock('react-native-svg', async () => (await import('@/components/ui/v4/rn-stub')).svgStub)
 vi.mock('@/lib/theme-preference', async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub)
@@ -62,6 +64,24 @@ describe('ManagedExternalAccessSwitch', () => {
     expect(screen.getByText(/2 other databases on this server share it/)).toBeTruthy()
     fireEvent.click(screen.getByRole('switch'))
     expect(onChange).toHaveBeenCalledWith(true)
+  })
+
+  it('links Yes to the addresses clients use only when it knows the server', () => {
+    expect(externalAccessHint(true)).toContain("this server's addresses clients use")
+    render(
+      <ManagedExternalAccessSwitch
+        value
+        otherClusters={0}
+        disabled={false}
+        addresses={{ orgId: 'org-1', serverId: 'srv-1' }}
+        onChange={vi.fn()}
+      />,
+    )
+    fireEvent.click(screen.getByText('See the addresses clients use'))
+    expect(push).toHaveBeenCalledWith('/org-1/servers/srv-1?tab=network')
+    cleanup()
+    render(<ManagedExternalAccessSwitch value otherClusters={0} disabled={false} onChange={vi.fn()} />)
+    expect(screen.queryByText('See the addresses clients use')).toBeNull()
   })
 
   it('is disabled when the person cannot edit the server and shows pending', () => {

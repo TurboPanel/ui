@@ -324,6 +324,7 @@ export function ManagedSetupPanel({
           value={externalAccess}
           otherClusters={externalAccessQuery.data?.clusterCount ?? 0}
           disabled={submitting || externalAccessQuery.isLoading || !canManage || !canEditServer}
+          addresses={{ orgId, serverId }}
           onChange={setExternalAccessChoice}
         />
       ) : null}
@@ -585,6 +586,8 @@ function ManagedEnvironmentReadyPanels({
             managed={managed}
             connection={detail.connection}
             endpoints={detail.endpoints}
+            connections={detail.connections}
+            addressNeeded={detail.addressNeeded === true}
             server={detail.server}
             members={members}
             users={users}
