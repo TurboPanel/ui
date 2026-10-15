@@ -211,13 +211,13 @@ function AddressNeededPrompt({
   return (
     <View style={styles.addressPrompt}>
       <Text style={panelStyles.calloutWarningText}>
-        External access is on, but clients have no DNS name or address to connect to yet.
+        External access is on, but clients have no DNS name or address to connect to yet. An
+        organization owner or manager can set the address clients use on the server&apos;s Network
+        tab.
       </Text>
       {server ? (
         <ServerAddressesLink orgId={orgId} serverId={server.id} label="Set the address clients use" />
-      ) : (
-        <Text style={panelStyles.muted}>{"Set the address clients use on the server's Network tab."}</Text>
-      )}
+      ) : null}
     </View>
   )
 }

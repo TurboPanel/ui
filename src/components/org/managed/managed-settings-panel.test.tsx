@@ -12,6 +12,7 @@ vi.mock('@/components/ui', () => ({}))
 vi.mock('expo-router', () => ({ useRouter: () => ({ push: vi.fn() }) }))
 vi.mock('@/lib/query-client', () => ({ useCan: () => true }))
 vi.mock('@/lib/queries/managed', () => ({ useSaveServerManagedExternalAccess: () => ({}) }))
+vi.mock('@/lib/queries/servers', () => ({ useServerAddresses: () => ({ data: null }) }))
 
 describe('settings form for an imageless MariaDB service', () => {
   it('shows the legacy 12.3 series and never sends 11.8 on save', async () => {

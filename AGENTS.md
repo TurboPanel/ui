@@ -540,5 +540,5 @@ and when a tracked deploy command reaches a terminal status.
 - Mutations: `usePingDaemon` / `useSetServerHostname` / `useRebootServer` from `src/lib/queries/servers.ts`.
 - In-flight command ids feed `useCommandsBatch`; terminal success invalidates the server detail key.
 - Hostname/reboot gated by `useCan(…, 'organization:manage')` as a display hint; disabled when `!server.connected`.
-- The hostname field is labelled **Change the server's own name (Linux hostname)** with a hint pointing at Network → **Addresses clients use**: it renames the Linux hostname only, never the DNS name clients dial.
+- The hostname field is labelled **Change the server's own name (Linux hostname)** with a hint that it is not the DNS name clients use: it renames the Linux hostname only. The DNS name clients dial lives in the Network tab's **Addresses clients use** card.
 - Reboot uses two-step confirm. Do not add per-server background polling loops — O(1) shared batch query only.

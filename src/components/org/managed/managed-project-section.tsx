@@ -324,7 +324,6 @@ export function ManagedSetupPanel({
           value={externalAccess}
           otherClusters={externalAccessQuery.data?.clusterCount ?? 0}
           disabled={submitting || externalAccessQuery.isLoading || !canManage || !canEditServer}
-          addresses={{ orgId, serverId }}
           onChange={setExternalAccessChoice}
         />
       ) : null}

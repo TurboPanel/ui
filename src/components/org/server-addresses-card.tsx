@@ -254,6 +254,11 @@ function AddressEditDialog({
           label="Use in the main connection string"
           onPress={() => dialog.update({ primary: !form.primary })}
         />
+        {entry.main && !entry.primary ? (
+          <Text style={panelStyles.muted}>
+            This row fills the main connection string now because no row is chosen.
+          </Text>
+        ) : null}
         {dialog.saveError ? <Text style={panelStyles.error}>{dialog.saveError}</Text> : null}
       </View>
     </ModalSheet>

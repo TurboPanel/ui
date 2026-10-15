@@ -50,7 +50,7 @@ describe('ServerCommandsPanel hostname', () => {
         onReboot={vi.fn()}
       />,
     )
-    expect(screen.getByText(/The DNS name clients use is set under Network/)).toBeTruthy()
+    expect(screen.getByText(/not the DNS name clients use/)).toBeTruthy()
     fireEvent.change(screen.getByLabelText(LABEL), { target: { value: ' omega2 ' } })
     fireEvent.click(screen.getByText('Apply hostname'))
     expect(onSetHostname).toHaveBeenCalledWith('omega2')

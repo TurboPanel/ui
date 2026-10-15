@@ -2,8 +2,14 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const { push } = vi.hoisted(() => ({ push: vi.fn() }))
+const { push, useServerAddresses, useCan } = vi.hoisted(() => ({
+  push: vi.fn(),
+  useServerAddresses: vi.fn(() => ({ data: { addresses: [] } as unknown })),
+  useCan: vi.fn(() => true),
+}))
 vi.mock('expo-router', () => ({ useRouter: () => ({ push }) }))
+vi.mock('@/lib/queries/servers', () => ({ useServerAddresses }))
+vi.mock('@/lib/query-client', () => ({ useCan }))
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
 vi.mock('react-native-svg', async () => (await import('@/components/ui/v4/rn-stub')).svgStub)
 vi.mock('@/lib/theme-preference', async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub)
@@ -108,8 +114,9 @@ describe('managed connection panel connection strings', () => {
     expect(push).toHaveBeenCalledWith('/org-1/servers/srv-1?tab=network')
   })
 
-  it('still names the Network tab when the server is unknown', () => {
+  it('still says who can set it when there is no link to show', () => {
     render(<ManagedConnectionPanel orgId="org-1" managed={managed} connection={null} server={null} addressNeeded />)
-    expect(screen.getByText(/on the server's Network tab/)).toBeTruthy()
+    expect(screen.getByText(/owner or manager can set the address clients use/)).toBeTruthy()
+    expect(screen.queryByText('Set the address clients use')).toBeNull()
   })
 })
