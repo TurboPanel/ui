@@ -591,6 +591,8 @@ function ManagedEnvironmentReadyPanels({
             managed={managed}
             connection={detail.connection}
             endpoints={detail.endpoints}
+            connections={detail.connections}
+            addressNeeded={detail.addressNeeded === true}
             server={detail.server}
             members={members}
             users={users}

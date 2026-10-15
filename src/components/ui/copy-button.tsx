@@ -8,11 +8,14 @@ export function CopyButton({
   label = 'Copy',
   copiedLabel = 'Copied',
   size = 'sm',
+  accessibilityLabel,
 }: Readonly<{
   value: string
   label?: string
   copiedLabel?: string
   size?: ButtonSize
+  /** Screen-reader name when several copy buttons share one label. */
+  accessibilityLabel?: string
 }>) {
   const [copied, setCopied] = useState(false)
   const mounted = useRef(true)
@@ -35,7 +38,7 @@ export function CopyButton({
       label={copied ? copiedLabel : label}
       variant="secondary"
       size={size}
-      accessibilityLabel={label === 'Copy' ? 'Copy to clipboard' : label}
+      accessibilityLabel={accessibilityLabel ?? (label === 'Copy' ? 'Copy to clipboard' : label)}
       onPress={() => {
         Clipboard.setStringAsync(value)
           .then(() => {

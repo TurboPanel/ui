@@ -363,6 +363,7 @@ function ExternalAccessRow({
         pending={server.pending}
         disabled={disabled || !canEdit}
         busy={save.isPending}
+        addresses={{ orgId, serverId: server.id }}
         onChange={(enabled) => {
           void save.run({ serverId: server.id, enabled })
         }}
