@@ -261,7 +261,13 @@ export function ManagedSetupPanel({
         const saved = await saveExternalAccessMutation.run({ serverId, enabled: externalAccess })
         if (!saved.ok) {
           // `actionError` is render state and stale inside this running call.
-          setError(saved.error ?? 'Failed to save external access')
+          // Through `managedErrorMessage`, so a refusal that names databases
+          // (`external_access_weak_ssl`) shows its own sentence.
+          setError(
+            saved.error === null
+              ? 'Failed to save external access'
+              : managedErrorMessage(saved.cause, saved.error)
+          )
           return
         }
       }
@@ -585,6 +591,8 @@ function ManagedEnvironmentReadyPanels({
             managed={managed}
             connection={detail.connection}
             endpoints={detail.endpoints}
+            connections={detail.connections}
+            addressNeeded={detail.addressNeeded === true}
             server={detail.server}
             members={members}
             users={users}

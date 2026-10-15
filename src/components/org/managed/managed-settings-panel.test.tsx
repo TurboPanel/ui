@@ -9,8 +9,10 @@ vi.mock('react-native-svg', async () => (await import('@/components/ui/v4/rn-stu
 vi.mock('@/lib/theme-preference', async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub)
 vi.mock('@/components/ui/panel-styles', () => ({ panelStyles: {} }))
 vi.mock('@/components/ui', () => ({}))
+vi.mock('expo-router', () => ({ Link: () => null }))
 vi.mock('@/lib/query-client', () => ({ useCan: () => true }))
 vi.mock('@/lib/queries/managed', () => ({ useSaveServerManagedExternalAccess: () => ({}) }))
+vi.mock('@/lib/queries/servers', () => ({ useServerAddresses: () => ({ data: null }) }))
 
 describe('settings form for an imageless MariaDB service', () => {
   it('shows the legacy 12.3 series and never sends 11.8 on save', async () => {

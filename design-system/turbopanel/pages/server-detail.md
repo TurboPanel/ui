@@ -28,7 +28,7 @@
 | Services | Read-only inventory (`GET /servers/:id/services`, one query, 30 s refresh). Top card **Can this server be removed?** with a Yes/No `Badge` + `InlineNotice` and the plain-word blocker list (colocated: this is the machine running the control panel; offline `canForget`: Delete server → Host is gone). Then `SectionPanel`s: Apps, Databases, Apps connected to a database, Backups, Networks and addresses, Runtimes. Capped `{ items, more }` lists show “and N more”. Empty section = one quiet `EmptyState` line. Stacked wrapping rows (no `DataTable` minWidth scroll). Status via `Badge` + words. |
 | Control | Ping, hostname, reboot; read-only **Server proxy** panel (platform hosting-ingress status + one allowlisted Restart); trunk update; delete (two-step). Offline leftover records (`canForget`): a second two-step **Forget these and delete server** lists names from each capped `{ items, more }` list (“and N more”) and explains that forgetting removes records only. When `canForget` is false, show preview blocker sentences (known kinds plus a generic “N other item(s) still placed on this server — remove them first”) and never the forget path. A malformed preview falls back to the plain Delete button. |
 | Time | NTP status, timezone picker (org/datacenter enforce), NTP apply form (prefill from inherited `ntpDefaults` when host facts are empty) |
-| Network | Read-only: observe-not-configure notice, Interfaces (grouped by interface, pinned-into datacenter, Stale badges), datacenter memberships + pins, mesh membership, managed IPs |
+| Network | **Addresses clients use** card on top (manage-gated edit, hidden on 404/403), then read-only: observe-not-configure notice, Interfaces (grouped by interface, pinned-into datacenter, Stale badges), datacenter memberships + pins, mesh membership, managed IPs |
 | Firewall | Owners/managers: preview-only `InlineNotice` banner, mode `SegmentedControl` with a confirmation sentence per mode, last preview (status `Badge`, version / rule count, digest, kernel verdict, notes), rendered v4/v6 ruleset in collapsed `SectionPanel`s |
 | Metrics | Embedded `ServerMetricsSection` (no duplicate page title) |
 
@@ -80,7 +80,8 @@
 
 ## Network tab
 
-- **Read-only contract:** TurboPanel observes host interfaces, it does not configure them. An `InlineNotice` (`info`) at the top says so — addresses are expected to change; membership pins follow the host automatically when exactly one unambiguous replacement is reported, otherwise they go stale rather than guess. Nothing on the tab may imply bringing an interface up, assigning an address, or writing a route.
+- **Addresses clients use** sits above everything: Public plus one row per datacenter, an edit dialog with plain questions, saved as one replace-all list. It only says what clients dial and never configures the host. Details: `network.md` → Server detail Network tab.
+- **Read-only contract** (everything below that card): TurboPanel observes host interfaces, it does not configure them. An `InlineNotice` (`info`) at the top says so — addresses are expected to change; membership pins follow the host automatically when exactly one unambiguous replacement is reported, otherwise they go stale rather than guess. Nothing on the tab may imply bringing an interface up, assigning an address, or writing a route.
 - **Interfaces** panel first: daemon-reported addresses grouped by `interface` (default-route interface first, fallback to public/private × v4/v6), reported CIDR in mono, family badge, scope, `default route` marker, and **Pinned into: <datacenter>** joined on address from the `scope: 'datacenter'` rows already fetched. **Stale** `Badge` (`pending`) + `staleSince` + plain `staleReason` on stale pins.
 - Then Datacenters (memberships link to datacenter detail; every pin listed), Mesh (manage-gated), Managed addresses. Details and copy rules: `network.md` → Server detail Network tab.
 
@@ -104,4 +105,4 @@
 - ❌ Emoji icons for actions  
 - ❌ Raw hex outside `theme.ts` tokens
 - ❌ Implying SSH port save rewrites sshd
-- ❌ Any Network-tab affordance that reads as configuring an interface, address, or route
+- ❌ Any Network-tab affordance that reads as configuring an interface, address, or route (Addresses clients use records what clients dial, not host configuration)
