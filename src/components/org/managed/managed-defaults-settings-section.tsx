@@ -27,9 +27,11 @@ import {
 import { queryKeys, useApiMutation, useCan } from '@/lib/query-client'
 import { colors } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
+import { managedNamedErrorMessage } from '@/lib/managed-services'
 
+/** A refusal that names databases (the SSL minimum under external access) keeps its own sentence. */
 function errorMessage(err: unknown, fallback: string): string {
-  return userErrorMessage(err, fallback)
+  return managedNamedErrorMessage(err) ?? userErrorMessage(err, fallback)
 }
 
 function useManagedDefaults(
