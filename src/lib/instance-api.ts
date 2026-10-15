@@ -9572,8 +9572,8 @@ export async function retireOrganizationCa(): Promise<{
  * Download the organization CA PEM (`application/x-pem-file`). Private key is
  * never included. Returns PEM text for browser save / clipboard copy.
  */
-export async function downloadOrganizationCaPem(): Promise<string> {
-  const resolvedOrgId = getActiveOrganizationId()
+export async function downloadOrganizationCaPem(organizationId?: string | null): Promise<string> {
+  const resolvedOrgId = organizationId ?? getActiveOrganizationId()
   const headers: Record<string, string> = {}
   if (resolvedOrgId) {
     headers[ORG_ID_HEADER] = resolvedOrgId
