@@ -1,13 +1,14 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const { push, useServerAddresses, useCan } = vi.hoisted(() => ({
-  push: vi.fn(),
+const { useServerAddresses, useCan } = vi.hoisted(() => ({
   useServerAddresses: vi.fn(() => ({ data: { addresses: [] } as unknown })),
   useCan: vi.fn(() => true),
 }))
-vi.mock('expo-router', () => ({ useRouter: () => ({ push }) }))
+vi.mock('expo-router', () => ({
+  Link: ({ href, children }: { href: string; children?: unknown }) => <a href={href}>{children as never}</a>,
+}))
 vi.mock('@/lib/queries/servers', () => ({ useServerAddresses }))
 vi.mock('@/lib/query-client', () => ({ useCan }))
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
@@ -17,7 +18,11 @@ vi.mock('@/components/ui/panel-styles', () => ({ panelStyles: {} }))
 vi.mock('@/components/ui', () => ({
   SectionPanel: ({ children }: { children?: unknown }) => <div>{children as never}</div>,
   Button: ({ label }: { label: string }) => <button>{label}</button>,
-  CopyButton: ({ value }: { value: string }) => <button data-copy={value}>Copy DSN</button>,
+  CopyButton: ({ value, accessibilityLabel }: { value: string; accessibilityLabel?: string }) => (
+    <button data-copy={value} aria-label={accessibilityLabel}>
+      Copy DSN
+    </button>
+  ),
 }))
 vi.mock('@/lib/queries/managed', () => ({ useOrganizationCa: () => ({ data: null }) }))
 vi.mock('@/lib/download-ca', () => ({ downloadCaBundle: vi.fn(), downloadSuccessMessage: () => '' }))
@@ -96,8 +101,26 @@ describe('managed connection panel connection strings', () => {
     expect(labels[0].compareDocumentPosition(labels[1]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     const copies = screen.getAllByText('Copy DSN').map((el) => el.dataset.copy)
     expect(copies).toEqual([connection.dsn, dc.dsn])
+    expect(screen.getByLabelText('Copy DSN for Datacenter Ashburn: omega.dc1.example.com')).toBeTruthy()
     expect(screen.getByText(/From outside the server \(Datacenter Ashburn\)/)).toBeTruthy()
     expect(screen.queryByText(/^DSN$/)).toBeNull()
+  })
+
+  it('marks the main string by its flag, not by its position', () => {
+    render(
+      <ManagedConnectionPanel
+        orgId="org-1"
+        managed={managed}
+        connection={connection}
+        server={null}
+        connections={[
+          { ...connection, host: 'a.example.com', label: 'Public', scope: 'public', primary: false },
+          { ...connection, host: 'b.example.com', label: 'Ashburn', scope: 'datacenter', primary: true },
+        ]}
+      />,
+    )
+    expect(screen.getByText('Public: a.example.com')).toBeTruthy()
+    expect(screen.getByText('Datacenter Ashburn: b.example.com (main)')).toBeTruthy()
   })
 
   it('prompts to set the address clients use with a link to the Network tab', () => {
@@ -110,8 +133,9 @@ describe('managed connection panel connection strings', () => {
         addressNeeded
       />,
     )
-    fireEvent.click(screen.getByText('Set the address clients use'))
-    expect(push).toHaveBeenCalledWith('/org-1/servers/srv-1?tab=network')
+    expect(screen.getByText('Set the address clients use').closest('a')?.getAttribute('href')).toBe(
+      '/org-1/servers/srv-1?tab=network',
+    )
   })
 
   it('still says who can set it when there is no link to show', () => {

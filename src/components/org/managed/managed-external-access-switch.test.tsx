@@ -8,12 +8,13 @@ import {
   externalAccessSharedWarning,
 } from './managed-external-access-switch'
 
-const { push, useServerAddresses, useCan } = vi.hoisted(() => ({
-  push: vi.fn(),
+const { useServerAddresses, useCan } = vi.hoisted(() => ({
   useServerAddresses: vi.fn(() => ({ data: { addresses: [] } as unknown })),
   useCan: vi.fn(() => true),
 }))
-vi.mock('expo-router', () => ({ useRouter: () => ({ push }) }))
+vi.mock('expo-router', () => ({
+  Link: ({ href, children }: { href: string; children?: unknown }) => <a href={href}>{children as never}</a>,
+}))
 vi.mock('@/lib/queries/servers', () => ({ useServerAddresses }))
 vi.mock('@/lib/query-client', () => ({ useCan }))
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
@@ -73,7 +74,7 @@ describe('ManagedExternalAccessSwitch', () => {
   })
 
   it('links Yes to the addresses clients use only when it knows the server', () => {
-    expect(externalAccessHint(true)).toContain("this server's addresses clients use")
+    expect(externalAccessHint(true)).toContain("open on all of this server's addresses")
     render(
       <ManagedExternalAccessSwitch
         value
@@ -83,10 +84,22 @@ describe('ManagedExternalAccessSwitch', () => {
         onChange={vi.fn()}
       />,
     )
-    fireEvent.click(screen.getByText('See the addresses clients use'))
-    expect(push).toHaveBeenCalledWith('/org-1/servers/srv-1?tab=network')
+    expect(screen.getByText('See the addresses clients use').closest('a')?.getAttribute('href')).toBe(
+      '/org-1/servers/srv-1?tab=network',
+    )
     cleanup()
     render(<ManagedExternalAccessSwitch value otherClusters={0} disabled={false} onChange={vi.fn()} />)
+    expect(screen.queryByText('See the addresses clients use')).toBeNull()
+    cleanup()
+    render(
+      <ManagedExternalAccessSwitch
+        value={false}
+        otherClusters={0}
+        disabled={false}
+        addresses={{ orgId: 'org-1', serverId: 'srv-1' }}
+        onChange={vi.fn()}
+      />,
+    )
     expect(screen.queryByText('See the addresses clients use')).toBeNull()
   })
 

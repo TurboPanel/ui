@@ -9,7 +9,7 @@ export const EXTERNAL_ACCESS_LABEL = 'Allow external access to the databases on 
 /** What the switch means, in the words an owner needs. */
 export function externalAccessHint(enabled: boolean): string {
   return enabled
-    ? "Yes: clients connect using this server's addresses clients use. The firewall and network rules decide who can reach them."
+    ? "Yes: the database ports are open on all of this server's addresses. The firewall and network rules decide who can reach them."
     : "No: only this server can connect. That means sites run by a site owner's Linux user and containers bound to the database."
 }
 
@@ -44,7 +44,7 @@ export function ManagedExternalAccessSwitch({
   pending?: boolean
   disabled: boolean
   busy?: boolean
-  /** The server whose "Addresses clients use" card the link opens; no link without it. */
+  /** The server whose "Addresses clients use" card the link opens (shown while Yes); no link without it. */
   addresses?: Readonly<{ orgId: string; serverId: string }>
   onChange: (next: boolean) => void
 }>) {
@@ -65,7 +65,7 @@ export function ManagedExternalAccessSwitch({
           onValueChange={onChange}
         />
       </SettingRow>
-      {addresses ? (
+      {addresses && value ? (
         <ServerAddressesLink
           orgId={addresses.orgId}
           serverId={addresses.serverId}

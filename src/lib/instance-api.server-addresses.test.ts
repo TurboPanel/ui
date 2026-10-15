@@ -45,6 +45,7 @@ describe('server addresses API', () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, reconcile: 'queued', ...view }))
     const result = await saveServerAddresses('srv-1', [{ scope: 'public', hostname: 'omega.example.com' }])
     expect(result.certificateUpdatePending).toBe(false)
+    expect(result.certificateUpdateReason).toBeNull()
     const init = fetchMock.mock.calls[0]?.[1] as RequestInit
     expect(init.method).toBe('PUT')
     expect(JSON.parse(String(init.body))).toEqual({
@@ -59,7 +60,28 @@ describe('server addresses API', () => {
     )
     const result = await saveServerAddresses('srv-1', [])
     expect(result.certificateUpdatePending).toBe(true)
+    expect(result.certificateUpdateReason).toBeNull()
     expect(result.addresses).toEqual([])
+
+    for (const reason of ['enqueue_failed', 'prepare_failed'] as const) {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({ error: 'ingress_reconcile_failed', reason, message: 'Saved, but…', ...view }, 502),
+      )
+      await expect(saveServerAddresses('srv-1', [])).resolves.toMatchObject({
+        certificateUpdatePending: true,
+        certificateUpdateReason: reason,
+        certificateUpdateMessage: 'Saved, but…',
+      })
+    }
+  })
+
+  it('throws when the server is not ready to take the change (422, nothing saved)', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'daemon_key_unavailable' }, 422))
+    const err = (await saveServerAddresses('srv-1', []).catch((e: unknown) => e)) as ServerAddressesSaveError
+    expect(err).toBeInstanceOf(ServerAddressesSaveError)
+    expect(err.status).toBe(422)
+    expect(err.code).toBe('daemon_key_unavailable')
+    expect(err.serverMessage).toBeNull()
   })
 
   it('throws the refusal code and index on a 400', async () => {
@@ -72,6 +94,7 @@ describe('server addresses API', () => {
     expect(refused.status).toBe(400)
     expect(refused.code).toBe('address_v4_invalid')
     expect(refused.index).toBe(1)
+    expect(refused.serverMessage).toBe('Enter…')
     expect(refused.message).toContain('HTTP 400: address_v4_invalid')
   })
 

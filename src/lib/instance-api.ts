@@ -1412,6 +1412,12 @@ export async function saveServerPhpModes(
 
 export type ServerAddressScope = 'public' | 'datacenter'
 
+/** Database engine families a side can fill the main connection string for. */
+export type ServerAddressEngine = 'postgres' | 'mysql'
+
+/** Why a saved list has not reached the database certificate yet (502 `reason`). */
+export type ServerAddressesCertificateReason = 'enqueue_failed' | 'prepare_failed'
+
 /** Router port overrides. Absent key: the server's own listen port. `null`: not reachable through this address. */
 export type ServerAddressPorts = Partial<Record<'postgres' | 'mysql' | 'http' | 'https', number | null>>
 
@@ -1436,8 +1442,10 @@ export type ServerAddressEntry = {
   ports: ServerAddressPorts
   /** Saved "use in the main connection string" choice. */
   primary: boolean
-  /** Fills the main connection string right now. */
+  /** Fills the main connection string right now (for at least one engine). */
   main: boolean
+  /** Newer control planes: the engines this side fills the main connection string for. */
+  mainFor?: ServerAddressEngine[]
   effective: {
     v4: string | null
     v4Source: ClientAddressSource | null
@@ -1451,7 +1459,7 @@ export type ServerAddressEntry = {
 export type ServerAddressesView = {
   externalAccess: boolean
   linuxHostname: string | null
-  /** External access is on and no side gives clients a host. */
+  /** External access is on and no side fills the main connection string for any engine. */
   addressNeeded: boolean
   /** Public first, then one per datacenter. */
   addresses: ServerAddressEntry[]
@@ -1474,6 +1482,10 @@ export type ServerAddressesSaveResult = ServerAddressesView & {
    * database certificate picks them up the next time the listener is updated.
    */
   certificateUpdatePending: boolean
+  /** The 502 `reason`, when the control plane sends one (`null` otherwise). */
+  certificateUpdateReason: ServerAddressesCertificateReason | null
+  /** The 502 `message` (the server's own words), `null` otherwise. */
+  certificateUpdateMessage: string | null
 }
 
 /** A refused `PUT /servers/:id/addresses`. `code` is the API `error`; `index` points into the sent list. */
@@ -1481,6 +1493,8 @@ export class ServerAddressesSaveError extends Error {
   readonly status: number
   readonly code: string | null
   readonly index: number | null
+  /** The server's own explanation, used when the code has no plain message here. */
+  readonly serverMessage: string | null
 
   constructor(path: string, status: number, body: Readonly<Record<string, unknown>> | null) {
     const code = typeof body?.error === 'string' ? body.error : null
@@ -1489,6 +1503,7 @@ export class ServerAddressesSaveError extends Error {
     this.status = status
     this.code = code
     this.index = typeof body?.index === 'number' ? body.index : null
+    this.serverMessage = readNonEmptyString(body?.message)
   }
 }
 
@@ -1501,9 +1516,17 @@ function isAddressesView(body: Readonly<Record<string, unknown>> | null): boolea
   return Array.isArray(body?.addresses)
 }
 
+function certificateReason(
+  body: Readonly<Record<string, unknown>> | null
+): ServerAddressesCertificateReason | null {
+  const reason = body?.reason
+  return reason === 'enqueue_failed' || reason === 'prepare_failed' ? reason : null
+}
+
 /**
  * Replaces every saved entry (`[]` clears). A 502 that carries the saved view
- * resolves with `certificateUpdatePending`; every other failure throws
+ * resolves with `certificateUpdatePending` and its `reason`; every other
+ * failure (400, 422 `daemon_key_unavailable`, 503: nothing saved) throws
  * {@link ServerAddressesSaveError} so the dialog can name the field.
  */
 export async function saveServerAddresses(
@@ -1533,9 +1556,21 @@ export async function saveServerAddresses(
     // Non-JSON body: status only.
   }
   const view = body as unknown as ServerAddressesView
-  if (response.ok && isAddressesView(body)) return { ...view, certificateUpdatePending: false }
+  if (response.ok && isAddressesView(body)) {
+    return {
+      ...view,
+      certificateUpdatePending: false,
+      certificateUpdateReason: null,
+      certificateUpdateMessage: null,
+    }
+  }
   if (response.status === 502 && isAddressesView(body)) {
-    return { ...view, certificateUpdatePending: true }
+    return {
+      ...view,
+      certificateUpdatePending: true,
+      certificateUpdateReason: certificateReason(body),
+      certificateUpdateMessage: readNonEmptyString(body?.message),
+    }
   }
   throw new ServerAddressesSaveError(path, response.status, body)
 }

@@ -1,4 +1,4 @@
-import { useRouter, type Href } from 'expo-router'
+import { Link, type Href } from 'expo-router'
 import { Pressable, StyleSheet, Text } from 'react-native'
 import { serverDetailTabHref } from '@/lib/org-navigation'
 import { useServerAddresses } from '@/lib/queries/servers'
@@ -16,18 +16,15 @@ export function ServerAddressesLink({
   serverId,
   label,
 }: Readonly<{ orgId: string; serverId: string; label: string }>) {
-  const router = useRouter()
   const canManage = useCan('server', serverId, 'organization:manage')
   const query = useServerAddresses(orgId, serverId, { enabled: canManage })
   if (!canManage || !query.data) return null
   return (
-    <Pressable
-      onPress={() => router.push(serverDetailTabHref(orgId, serverId, 'network') as Href)}
-      style={webPointer}
-      accessibilityRole="link"
-    >
-      <Text style={styles.linkText}>{label}</Text>
-    </Pressable>
+    <Link href={serverDetailTabHref(orgId, serverId, 'network') as Href} asChild>
+      <Pressable style={webPointer} accessibilityRole="link">
+        <Text style={styles.linkText}>{label}</Text>
+      </Pressable>
+    </Link>
   )
 }
 

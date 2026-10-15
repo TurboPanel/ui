@@ -20,13 +20,14 @@ import { useCan } from '@/lib/query-client'
 import {
   ADDRESS_PORT_KEYS,
   ADDRESS_PORT_LABELS,
-  ADDRESSES_CERTIFICATE_PENDING,
   addressLine,
   addressRowTitle,
   addressSaveErrorMessage,
   buildAddressesPayload,
+  certificatePendingMessage,
   dnsNameLine,
   formFromEntry,
+  mainConnectionLine,
   portOverridesLine,
   SERVER_ADDRESSES_TITLE,
   validateAddressForm,
@@ -49,11 +50,12 @@ function AddressRow({
 }: Readonly<{ entry: ServerAddressEntry; canManage: boolean; onEdit: () => void }>) {
   const title = addressRowTitle(entry)
   const ports = portOverridesLine(entry.ports)
+  const main = mainConnectionLine(entry)
   return (
     <View style={styles.row}>
       <View style={styles.rowHead}>
         <Text style={panelStyles.detailTitle}>{title}</Text>
-        {entry.main ? <Badge label="Fills the main connection string" tone="info" /> : null}
+        {main ? <Badge label={main} tone="info" /> : null}
         {canManage ? (
           <Button
             label="Edit"
@@ -88,7 +90,7 @@ function useAddressDialog(
   serverId: string,
   view: ServerAddressesView,
   entry: ServerAddressEntry,
-  onSaved: (certificateUpdatePending: boolean) => void,
+  onSaved: (pendingMessage: string | null) => void,
 ) {
   const [form, setForm] = useState<ServerAddressForm>(() => formFromEntry(entry))
   const [errors, setErrors] = useState<ServerAddressFormErrors>({})
@@ -107,7 +109,12 @@ function useAddressDialog(
     const payload = buildAddressesPayload(view, entry, form)
     const result = await save.run(payload.addresses)
     if (result.ok) {
-      onSaved(result.value.certificateUpdatePending)
+      const saved = result.value
+      onSaved(
+        saved.certificateUpdatePending
+          ? certificatePendingMessage(saved.certificateUpdateReason, saved.certificateUpdateMessage)
+          : null,
+      )
       return
     }
     if (result.error !== null) setSaveError(addressSaveErrorMessage(result.cause, payload))
@@ -167,7 +174,7 @@ function AddressEditDialog({
   view: ServerAddressesView
   entry: ServerAddressEntry
   onClose: () => void
-  onSaved: (certificateUpdatePending: boolean) => void
+  onSaved: (pendingMessage: string | null) => void
 }>) {
   const dialog = useAddressDialog(orgId, serverId, view, entry, onSaved)
   const { form, errors, busy } = dialog
@@ -177,7 +184,10 @@ function AddressEditDialog({
       title={`Edit ${addressRowTitle(entry)} address`}
       description="What clients are told to connect to. This does not change the server's own network settings."
       maxWidth={520}
-      onRequestClose={onClose}
+      onRequestClose={() => {
+        // Escape, backdrop and Android back wait for an in-flight save.
+        if (!busy) onClose()
+      }}
       footer={
         <ButtonRow align="end">
           <Button label="Cancel" variant="secondary" disabled={busy} onPress={onClose} />
@@ -259,7 +269,11 @@ function AddressEditDialog({
             This row fills the main connection string now because no row is chosen.
           </Text>
         ) : null}
-        {dialog.saveError ? <Text style={panelStyles.error}>{dialog.saveError}</Text> : null}
+        {dialog.saveError ? (
+          <Text style={panelStyles.error} accessibilityRole="alert">
+            {dialog.saveError}
+          </Text>
+        ) : null}
       </View>
     </ModalSheet>
   )
@@ -276,13 +290,16 @@ export function ServerAddressesCard({
   const canManage = useCan('server', serverId, 'organization:manage')
   const query = useServerAddresses(orgId, serverId, { enabled: canManage })
   const [editing, setEditing] = useState<ServerAddressEntry | null>(null)
-  const [pendingNotice, setPendingNotice] = useState(false)
+  const [pendingNotice, setPendingNotice] = useState<string | null>(null)
   const view = query.data
 
-  if (query.isError) {
+  // A failed background re-read keeps showing the last good list.
+  if (query.isError && !view) {
     return (
       <SectionPanel title={SERVER_ADDRESSES_TITLE}>
-        <Text style={panelStyles.error}>Could not load the addresses clients use.</Text>
+        <Text style={panelStyles.error} accessibilityRole="alert">
+          Could not load the addresses clients use.
+        </Text>
       </SectionPanel>
     )
   }
@@ -300,7 +317,7 @@ export function ServerAddressesCard({
           body="External access is on, but no row gives clients a DNS name or an address yet."
         />
       ) : null}
-      {pendingNotice ? <InlineNotice tone="warning" title={ADDRESSES_CERTIFICATE_PENDING} /> : null}
+      {pendingNotice ? <InlineNotice tone="warning" title={pendingNotice} /> : null}
       <View style={styles.list}>
         {view.addresses.map((entry) => (
           <AddressRow
@@ -318,9 +335,9 @@ export function ServerAddressesCard({
           view={view}
           entry={editing}
           onClose={() => setEditing(null)}
-          onSaved={(certificateUpdatePending) => {
+          onSaved={(pendingMessage) => {
             setEditing(null)
-            setPendingNotice(certificateUpdatePending)
+            setPendingNotice(pendingMessage)
           }}
         />
       ) : null}

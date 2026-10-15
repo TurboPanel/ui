@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ServerAddressesSaveError, type ServerAddressesView } from '@/lib/instance-api'
-import { ADDRESSES_CERTIFICATE_PENDING } from '@/lib/server-addresses'
+import { ADDRESSES_CERTIFICATE_PENDING, certificatePendingMessage } from '@/lib/server-addresses'
 import { ServerAddressesCard } from './server-addresses-card'
 
 const { useServerAddresses, useSaveServerAddresses, useCan, run } = vi.hoisted(() => ({
@@ -105,6 +105,7 @@ const view: ServerAddressesView = {
       ports: { postgres: 25432, mysql: null },
       primary: false,
       main: true,
+      mainFor: ['postgres', 'mysql'],
       effective: { v4: '203.0.113.7', v4Source: 'entry', v6: null, v6Source: null, host: 'omega.example.com', hostSource: 'hostname' },
     },
     {
@@ -158,6 +159,12 @@ describe('ServerAddressesCard', () => {
     expect(screen.getByText('Could not load the addresses clients use.')).toBeTruthy()
   })
 
+  it('keeps showing the last good list when a background re-read fails', () => {
+    showCard(view, true, true)
+    expect(screen.queryByText('Could not load the addresses clients use.')).toBeNull()
+    expect(screen.getByText('Datacenter Ashburn')).toBeTruthy()
+  })
+
   it('shows one row per side with name, address, overridden ports and the main string', () => {
     showCard(view)
     expect(screen.getByText('Addresses clients use')).toBeTruthy()
@@ -168,7 +175,8 @@ describe('ServerAddressesCard', () => {
     expect(screen.getByText('Through a router: 203.0.113.7')).toBeTruthy()
     expect(screen.getByText("This server's own: 10.0.0.5 (its address in this datacenter)")).toBeTruthy()
     expect(screen.getByText('Postgres 25432, MySQL not forwarded')).toBeTruthy()
-    expect(screen.getAllByText('Fills the main connection string')).toHaveLength(1)
+    expect(screen.getAllByText(/^Fills the main connection string/)).toHaveLength(1)
+    expect(screen.getByText('Fills the main connection string for Postgres and MySQL')).toBeTruthy()
   })
 
   it('prompts when external access is on and nothing gives clients a host', () => {
@@ -222,6 +230,46 @@ describe('ServerAddressesCard', () => {
     expect(screen.getByText('Saved as not forwarded here.')).toBeTruthy()
     fireEvent.click(screen.getByText('Save'))
     await waitFor(() => expect(screen.getByText(ADDRESSES_CERTIFICATE_PENDING)).toBeTruthy())
+  })
+
+  it("falls back to the server's own words for a 502 without a known reason", async () => {
+    run.mockResolvedValue({
+      ok: true,
+      value: {
+        ...view,
+        certificateUpdatePending: true,
+        certificateUpdateReason: null,
+        certificateUpdateMessage: 'Saved, but omega could not be told yet.',
+      },
+    })
+    showCard(view)
+    fireEvent.click(screen.getByLabelText('Edit Public'))
+    fireEvent.click(screen.getByText('Save'))
+    await waitFor(() => expect(screen.getByText('Saved, but omega could not be told yet.')).toBeTruthy())
+  })
+
+  it('names the 502 reason in plain words', async () => {
+    run.mockResolvedValue({
+      ok: true,
+      value: { ...view, certificateUpdatePending: true, certificateUpdateReason: 'prepare_failed' },
+    })
+    showCard(view)
+    fireEvent.click(screen.getByLabelText('Edit Public'))
+    fireEvent.click(screen.getByText('Save'))
+    await waitFor(() => expect(screen.getByText(certificatePendingMessage('prepare_failed'))).toBeTruthy())
+  })
+
+  it('maps the not-ready refusal (422) and keeps the dialog open', async () => {
+    run.mockResolvedValue({
+      ok: false,
+      error: 'raw',
+      cause: new ServerAddressesSaveError('/x', 422, { error: 'daemon_key_unavailable' }),
+    })
+    showCard(view)
+    fireEvent.click(screen.getByLabelText('Edit Public'))
+    fireEvent.click(screen.getByText('Save'))
+    await waitFor(() => expect(screen.getByText(/Nothing was saved: the server isn't ready to take this yet/)).toBeTruthy())
+    expect(screen.getByTestId('dialog')).toBeTruthy()
   })
 
   it('maps a refusal to a plain message and keeps the dialog open', async () => {

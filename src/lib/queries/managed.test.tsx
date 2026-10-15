@@ -1143,6 +1143,9 @@ describe('managed query hooks', () => {
       expect(invalidate).toHaveBeenCalledWith({
         queryKey: queryKeys.org(orgId).servers.managedExternalAccess('srv-1'),
       })
+      expect(invalidate).toHaveBeenCalledWith({
+        queryKey: queryKeys.org(orgId).servers.addresses('srv-1'),
+      })
       expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.org(orgId).managed.all })
     })
   })

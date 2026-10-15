@@ -10,6 +10,8 @@
 import { ipVersionOf } from '@/lib/cidr'
 import {
   ServerAddressesSaveError,
+  type ServerAddressEngine,
+  type ServerAddressesCertificateReason,
   type ServerAddressEntry,
   type ServerAddressInput,
   type ServerAddressPorts,
@@ -76,6 +78,26 @@ export function addressLine(
     withSource(entry.effective.v6, entry.effective.v6Source),
   )
   return `This server's own: ${own || 'not known yet'}`
+}
+
+const ENGINE_LABELS: Readonly<Record<ServerAddressEngine, string>> = {
+  postgres: 'Postgres',
+  mysql: 'MySQL',
+}
+
+/**
+ * The badge on the row that fills the main connection string: naming the
+ * engines when the control plane says which (`mainFor`), else the plain line.
+ * `null` when the row fills it for nothing.
+ */
+export function mainConnectionLine(
+  entry: Pick<ServerAddressEntry, 'main' | 'mainFor'>,
+): string | null {
+  if (entry.mainFor) {
+    const engines = entry.mainFor.map((engine) => ENGINE_LABELS[engine] ?? engine)
+    return engines.length > 0 ? `Fills the main connection string for ${engines.join(' and ')}` : null
+  }
+  return entry.main ? 'Fills the main connection string' : null
 }
 
 /** Router port overrides only, e.g. "Postgres 25432, MySQL not forwarded"; `null` when none. */
@@ -282,7 +304,7 @@ export function buildAddressesPayload(
 const SAVE_ERROR_MESSAGES: Readonly<Record<string, string>> = {
   invalid_addresses: 'The panel could not read what was sent. Refresh the page and try again.',
   address_scope_invalid: 'That row is not Public or one of this server\'s datacenters. Refresh the page and try again.',
-  address_datacenter_not_member: 'This server is no longer in that datacenter. Refresh the page to see its current datacenters.',
+  address_datacenter_not_member: 'This server is no longer in that datacenter. The rows have been reloaded; close this and check them again.',
   address_duplicate: 'That row was sent twice. Refresh the page and try again.',
   address_hostname_invalid: 'The DNS name is not valid. Use letters, numbers, dashes and dots, like db.example.com.',
   address_hostname_single_label: 'Use the full DNS name with a dot, like db.example.com. A one-word name only works inside its own network.',
@@ -297,8 +319,30 @@ export const ADDRESSES_SAVE_FALLBACK = 'Could not save the addresses clients use
 export const ADDRESSES_CERTIFICATE_PENDING =
   'Saved. The server could not be told yet, so its database certificate still has the old names and addresses. They are added the next time its database listener is updated.'
 
-function statusMessage(status: number): string | null {
-  if (status === 503) return 'Nothing was saved: the panel cannot reach the server right now. Try again in a minute.'
+const CERTIFICATE_REASON_MESSAGES: Readonly<Record<ServerAddressesCertificateReason, string>> = {
+  enqueue_failed:
+    'Saved, but the server could not be told yet, so its database certificate still has the old names and addresses. Save again to update the certificate.',
+  prepare_failed:
+    "Saved, but the server's database listener can't be updated until its database problem is fixed. Fix that, then save again to update the certificate.",
+}
+
+/**
+ * What a saved-but-not-delivered answer (502) means: by its `reason` when the
+ * control plane sends a known one, else the server's own message, else a
+ * generic line.
+ */
+export function certificatePendingMessage(
+  reason: ServerAddressesCertificateReason | null,
+  serverMessage: string | null = null,
+): string {
+  return (reason && CERTIFICATE_REASON_MESSAGES[reason]) || serverMessage || ADDRESSES_CERTIFICATE_PENDING
+}
+
+function statusMessage(status: number, code: string | null): string | null {
+  if (status === 422 && code === 'daemon_key_unavailable') {
+    return "Nothing was saved: the server isn't ready to take this yet, so the panel can't send changes to it right now. Try again once it has finished connecting."
+  }
+  if (status === 503) return "Nothing was saved: the panel can't send changes right now. Try again in a minute."
   if (status === 404) return 'This server was not found. Refresh the page.'
   return null
 }
@@ -311,9 +355,10 @@ export function addressSaveErrorMessage(
   if (!(err instanceof ServerAddressesSaveError)) {
     return err instanceof Error ? err.message : ADDRESSES_SAVE_FALLBACK
   }
-  const byStatus = statusMessage(err.status)
+  const byStatus = statusMessage(err.status, err.code)
   if (byStatus) return byStatus
-  const message = (err.code && SAVE_ERROR_MESSAGES[err.code]) || ADDRESSES_SAVE_FALLBACK
+  const message =
+    (err.code && SAVE_ERROR_MESSAGES[err.code]) || err.serverMessage || ADDRESSES_SAVE_FALLBACK
   const index = err.index
   const other = index !== null && index !== payload?.editedIndex ? payload?.titles[index] : undefined
   return other ? `${message} (in the ${other} row)` : message

@@ -5,15 +5,18 @@ import {
   type ServerAddressesView,
 } from '@/lib/instance-api'
 import {
+  ADDRESSES_CERTIFICATE_PENDING,
   ADDRESSES_SAVE_FALLBACK,
   addressLine,
   addressRowTitle,
   addressSaveErrorMessage,
   addressSideLabel,
   buildAddressesPayload,
+  certificatePendingMessage,
   connectionStringLabel,
   dnsNameLine,
   formFromEntry,
+  mainConnectionLine,
   normalizeAddressHostname,
   portOverridesLine,
   validateAddressForm,
@@ -105,6 +108,18 @@ describe('row display', () => {
     expect(addressLine(entry({ addressV4: '203.0.113.7', addressV6: '2001:db8::7' }))).toBe(
       'Through a router: 203.0.113.7, 2001:db8::7',
     )
+  })
+
+  it('names the engines a row fills the main connection string for, when the control plane says', () => {
+    expect(mainConnectionLine({ main: false })).toBeNull()
+    expect(mainConnectionLine({ main: true })).toBe('Fills the main connection string')
+    expect(mainConnectionLine({ main: true, mainFor: ['postgres'] })).toBe(
+      'Fills the main connection string for Postgres',
+    )
+    expect(mainConnectionLine({ main: true, mainFor: ['postgres', 'mysql'] })).toBe(
+      'Fills the main connection string for Postgres and MySQL',
+    )
+    expect(mainConnectionLine({ main: false, mainFor: [] })).toBeNull()
   })
 
   it('lists ports only when overridden', () => {
@@ -280,14 +295,40 @@ describe('addressSaveErrorMessage', () => {
     ).not.toMatch(/in the/)
   })
 
+  it('says nothing was saved when the server is not ready for the change (422)', () => {
+    const message = addressSaveErrorMessage(saveError(422, { error: 'daemon_key_unavailable' }), payload)
+    expect(message).toMatch(/isn't ready to take this yet/)
+    expect(message).toMatch(/^Nothing was saved/)
+    expect(addressSaveErrorMessage(saveError(422, { error: 'other' }), payload)).toBe(ADDRESSES_SAVE_FALLBACK)
+  })
+
   it('explains 503 and 404, and falls back for unknown codes and errors', () => {
-    expect(addressSaveErrorMessage(saveError(503, null), payload)).toMatch(/Nothing was saved/)
+    expect(addressSaveErrorMessage(saveError(503, null), payload)).toBe(
+      "Nothing was saved: the panel can't send changes right now. Try again in a minute.",
+    )
+    expect(addressSaveErrorMessage(saveError(400, { error: 'new_code', message: 'Server words.' }), payload)).toBe(
+      'Server words.',
+    )
     expect(addressSaveErrorMessage(saveError(404, null), payload)).toMatch(/not found/)
     expect(addressSaveErrorMessage(saveError(400, { error: 'new_code' }), null)).toBe(
       ADDRESSES_SAVE_FALLBACK,
     )
     expect(addressSaveErrorMessage(new Error('offline'), payload)).toBe('offline')
     expect(addressSaveErrorMessage('nope', payload)).toBe(ADDRESSES_SAVE_FALLBACK)
+  })
+})
+
+describe('certificatePendingMessage', () => {
+  it('explains a saved list the certificate has not picked up yet, by reason', () => {
+    expect(certificatePendingMessage('enqueue_failed')).toMatch(/Saved.*Save again to update the certificate/)
+    expect(certificatePendingMessage('prepare_failed')).toMatch(
+      /Saved, but the server's database listener can't be updated until its database problem is fixed/,
+    )
+    expect(certificatePendingMessage(null)).toBe(ADDRESSES_CERTIFICATE_PENDING)
+    expect(certificatePendingMessage(null, 'Saved, but omega could not be told yet.')).toBe(
+      'Saved, but omega could not be told yet.',
+    )
+    expect(certificatePendingMessage('prepare_failed', 'server words')).not.toBe('server words')
   })
 })
 

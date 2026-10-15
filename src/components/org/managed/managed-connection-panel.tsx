@@ -164,7 +164,11 @@ function EndpointList({
   )
 }
 
-function DsnBlock({ label, dsn }: Readonly<{ label: string; dsn: string }>) {
+function DsnBlock({
+  label,
+  dsn,
+  copyLabel,
+}: Readonly<{ label: string; dsn: string; copyLabel?: string }>) {
   return (
     <>
       <Text style={panelStyles.detailLabel}>{label}</Text>
@@ -173,7 +177,7 @@ function DsnBlock({ label, dsn }: Readonly<{ label: string; dsn: string }>) {
           {dsn}
         </Text>
       </View>
-      <CopyButton value={dsn} label="Copy DSN" size="md" />
+      <CopyButton value={dsn} label="Copy DSN" size="md" accessibilityLabel={copyLabel} />
     </>
   )
 }
@@ -192,14 +196,18 @@ function ConnectionStrings({
   if (connections.length === 0) return <DsnBlock label="DSN" dsn={connection.dsn} />
   return (
     <View style={styles.connectionList}>
-      {connections.map((entry, index) => (
-        <View key={`${entry.scope ?? 'public'}-${entry.datacenterId ?? ''}-${entry.host}`} style={styles.connectionItem}>
-          <DsnBlock
-            label={index === 0 ? `${connectionStringLabel(entry)} (main)` : connectionStringLabel(entry)}
-            dsn={entry.dsn}
-          />
-        </View>
-      ))}
+      {connections.map((entry) => {
+        const label = connectionStringLabel(entry)
+        return (
+          <View key={`${entry.scope ?? 'public'}-${entry.datacenterId ?? ''}-${entry.host}`} style={styles.connectionItem}>
+            <DsnBlock
+              label={entry.primary === true ? `${label} (main)` : label}
+              dsn={entry.dsn}
+              copyLabel={`Copy DSN for ${label}`}
+            />
+          </View>
+        )
+      })}
     </View>
   )
 }
