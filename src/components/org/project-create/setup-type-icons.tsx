@@ -5,7 +5,7 @@ import type {
   SetupChoice,
   SetupTypeOption,
 } from '@/components/org/project-create/setup-types'
-import { chrome, colors, spacing, webPointer } from '@/lib/theme'
+import { chrome, colors, webPointer } from '@/lib/theme'
 
 type IconProps = Readonly<{
   size?: number
@@ -155,9 +155,8 @@ function SetupTypeGlyph({
 }
 
 /**
- * Setup type tile: a large glyph in a rounded well with the name beneath it.
- * The title carries the card alone — the option's description is spoken to
- * screen readers but never drawn. Render inside {@link ChoiceTileGrid}.
+ * Setup type row: a glyph in a rounded well on the left, the name and a
+ * one-line description on the right. Full width; the column stacks them.
  */
 export function SetupTypeChoiceCard({
   option,
@@ -193,21 +192,24 @@ export function SetupTypeChoiceCard({
       >
         <SetupTypeGlyph choice={option.choice} size={26} color={iconColor} />
       </View>
-      <Text style={[styles.label, selected && styles.labelSelected]}>
-        {option.label}
-      </Text>
+      <View style={styles.text}>
+        <Text style={[styles.label, selected && styles.labelSelected]}>
+          {option.label}
+        </Text>
+        <Text style={styles.description}>{option.description}</Text>
+      </View>
     </Pressable>
   )
 }
 
 const styles = StyleSheet.create({
   tile: {
-    flexGrow: 1,
-    flexBasis: 150,
+    width: '100%',
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.xl,
-    paddingHorizontal: spacing.md,
+    gap: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
     borderWidth: 1,
     borderColor: colors.borderChip,
     borderRadius: 14,
@@ -221,6 +223,7 @@ const styles = StyleSheet.create({
     opacity: 0.55,
   },
   iconWell: {
+    flexShrink: 0,
     width: 52,
     height: 52,
     borderRadius: 14,
@@ -234,13 +237,22 @@ const styles = StyleSheet.create({
     borderColor: chrome.accent,
     backgroundColor: 'transparent',
   },
+  text: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
   label: {
     color: colors.text,
     fontSize: 14,
     fontWeight: '600',
-    textAlign: 'center',
   },
   labelSelected: {
     color: colors.link,
+  },
+  description: {
+    color: colors.textFaint,
+    fontSize: 12.5,
+    lineHeight: 17,
   },
 })

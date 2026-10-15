@@ -9,6 +9,7 @@ import {
   fetchOrgServerCapacity,
   fetchOrgServers,
   fetchServer,
+  fetchServerAddresses,
   fetchServerLabels,
   fetchServerPrincipals,
   fetchServerPrincipalRemovalPlan,
@@ -24,6 +25,7 @@ import {
   fetchTimezones,
   formatEntityMetricId,
   isForbiddenError,
+  isHttpStatusError,
   MetricsBackendUnavailableError,
   pingDaemon,
   rebootServer,
@@ -32,6 +34,7 @@ import {
   saveOrgTemperatureUnit,
   startServerMetricsLive,
   stopServerMetricsLive,
+  saveServerAddresses,
   saveServerLabels,
   setServerLicenseTier,
   saveServerHardwareProfile,
@@ -55,6 +58,7 @@ import {
   type OrgServerRecord,
   type ServerDetailRecord,
   type PrincipalRemovalChoice,
+  type ServerAddressInput,
 } from '@/lib/instance-api'
 import { unboundPendingKeys } from '@/lib/pending-keys'
 import { useApiMutation, queryKeys } from '@/lib/query-client'
@@ -132,6 +136,50 @@ export function useServerLabels(
     queryKey: queryKeys.org(orgId).servers.labels(serverId),
     queryFn: () => fetchServerLabels(serverId),
     enabled: (options?.enabled ?? true) && orgId.length > 0 && serverId.length > 0,
+  })
+}
+
+/**
+ * Addresses clients use. `null` hides the card: a control plane without the
+ * route answers 404 (the ui can ship first), and a viewer without manage gets
+ * 403, which must not reach the global sign-out handler.
+ */
+export function useServerAddresses(
+  orgId: string,
+  serverId: string,
+  options?: Readonly<{ enabled?: boolean }>
+) {
+  return useQuery({
+    queryKey: queryKeys.org(orgId).servers.addresses(serverId),
+    queryFn: async () => {
+      try {
+        return await fetchServerAddresses(serverId)
+      } catch (err) {
+        if (isHttpStatusError(err, 404) || isForbiddenError(err)) return null
+        throw err
+      }
+    },
+    enabled: (options?.enabled ?? true) && orgId.length > 0 && serverId.length > 0,
+  })
+}
+
+/**
+ * Replace the saved addresses. Settles either way (a 502 saved the entries),
+ * so the card and every managed Connect panel refresh.
+ */
+export function useSaveServerAddresses(orgId: string, serverId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (addresses: readonly ServerAddressInput[]) =>
+      saveServerAddresses(serverId, addresses),
+    fallbackError: 'Could not save the addresses clients use.',
+    onSettled: () =>
+      Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.org(orgId).servers.addresses(serverId),
+        }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.org(orgId).managed.all }),
+      ]),
   })
 }
 

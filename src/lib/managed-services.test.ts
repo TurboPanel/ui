@@ -15,6 +15,7 @@ import {
   managedCatalogEntryForCode,
   managedEngineSupportsBackup,
   managedErrorMessage,
+  managedNamedErrorMessage,
   managedHealthRefreshNotice,
   managedIngressPortForEngine,
   managedRecoveryBanner,
@@ -137,6 +138,32 @@ describe('managedErrorMessage', () => {
         'fallback',
       ),
     ).toBe('Saved, but db-1 could not be told yet.')
+  })
+
+  it('keeps the names in SSL minimum refusals, with plain copy when the message is missing', () => {
+    expect(
+      managedErrorMessage(
+        new Error(
+          '/x failed: HTTP 409: external_access_weak_ssl — These databases on this server still accept connections without SSL: Orders. Set them to Require or stronger before allowing external access.',
+        ),
+        'fallback',
+      ),
+    ).toBe(
+      'These databases on this server still accept connections without SSL: Orders. Set them to Require or stronger before allowing external access.',
+    )
+    expect(
+      managedNamedErrorMessage(
+        new Error('/x failed: HTTP 409: managed_ssl_external_access_minimum — External access is on for db-1.'),
+      ),
+    ).toBe('External access is on for db-1.')
+    expect(managedNamedErrorMessage(new Error('HTTP 409: managed_busy'))).toBeNull()
+    for (const code of [
+      'managed_ssl_external_access_minimum',
+      'managed_ssl_default_external_access_minimum',
+      'external_access_weak_ssl',
+    ]) {
+      expect(managedErrorMessage(new Error(`HTTP 409: ${code}`), 'fallback')).toMatch(/SSL/)
+    }
   })
 
   it('maps known HTTP error codes to operator copy', () => {

@@ -17,7 +17,7 @@ export function displayNameCodePointLength(value: string): number {
   return [...value].length
 }
 
-function hasDisallowedDisplayNameChars(value: string): boolean {
+export function hasDisallowedDisplayNameChars(value: string): boolean {
   return DISPLAY_NAME_CONTROL_CHARS_RE.test(value)
 }
 

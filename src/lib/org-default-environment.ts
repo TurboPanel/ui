@@ -39,6 +39,14 @@ export function useOrgDefaultEnvironmentName(
     defaultEnvironmentName:
       query.data?.defaultEnvironmentName?.trim() ||
       PLATFORM_DEFAULT_ENVIRONMENT_NAME,
+    /**
+     * The org's own custom default, or `null` while loading, when it cannot be
+     * read (403 for non-managers, or an error) or when the org has none. Unlike
+     * `defaultEnvironmentName` this never falls back to Production, so a form
+     * can tell a real default from a guess.
+     */
+    customDefaultEnvironmentName:
+      query.data?.defaultEnvironmentName?.trim() || null,
     isLoading: query.isLoading,
     isError: query.isError,
   }

@@ -660,6 +660,10 @@ export function useSaveServerManagedExternalAccess(orgId: string) {
         queryClient.invalidateQueries({
           queryKey: queryKeys.org(orgId).servers.managedExternalAccess(input.serverId),
         }),
+        // The card reads `externalAccess` / `addressNeeded` from the same setting.
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.org(orgId).servers.addresses(input.serverId),
+        }),
         queryClient.invalidateQueries({ queryKey: queryKeys.org(orgId).managed.all }),
       ]),
   })
