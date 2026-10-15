@@ -333,6 +333,12 @@ export type ManagedSslView = {
   configured: ManagedSslMode | null
   effective: ManagedSslMode
   organizationDefault: ManagedSslMode | null
+  /**
+   * The resolved mode let clients skip SSL and `effective` was raised to
+   * `require` because a server serving the database allows external access.
+   * Absent from older control planes.
+   */
+  raisedForExternalAccess?: boolean
 }
 
 export type ManagedAccessEndpoint = {
@@ -495,6 +501,12 @@ const MANAGED_ERROR_COPY: Record<string, string> = {
   binding_owned_variable:
     'That variable is provided by a connected database and cannot be edited here.',
   database_not_found: 'That database was not found on this cluster.',
+  managed_ssl_external_access_minimum:
+    'External access is on for a server this database uses, so connections must use SSL. Choose Require or stronger, or turn external access off first.',
+  managed_ssl_default_external_access_minimum:
+    'External access is on for a server that runs databases following the organization default, so the default must use SSL. Choose Require or stronger.',
+  external_access_weak_ssl:
+    'A database on this server still accepts connections without SSL. Set it to Require or stronger before allowing external access.',
 }
 
 /**
@@ -506,18 +518,34 @@ const SERVER_NAMED_ERROR_CODES = new Set([
   'fabric_address_required',
   'daemon_key_unavailable',
   'ingress_reconcile_failed',
+  // These name the servers or databases to change.
+  'managed_ssl_external_access_minimum',
+  'managed_ssl_default_external_access_minimum',
+  'external_access_weak_ssl',
 ])
+
+function managedErrorCode(raw: string): string | undefined {
+  return /HTTP \d+:\s*([a-z0-9_]+)/i.exec(raw)?.[1]
+}
+
+/**
+ * The server's own sentence for refusals that name what they are about (a
+ * server, the databases to change); `null` for any other error.
+ */
+export function managedNamedErrorMessage(err: unknown): string | null {
+  const raw = err instanceof Error ? err.message : ''
+  const code = managedErrorCode(raw)
+  if (!code || !SERVER_NAMED_ERROR_CODES.has(code)) return null
+  return /\s—\s(.+)$/s.exec(raw)?.[1] ?? null
+}
 
 export function managedErrorMessage(err: unknown, fallback: string): string {
   const raw = err instanceof Error ? err.message : fallback
-  const match = /HTTP \d+:\s*([a-z0-9_]+)/i.exec(raw)
-  const code = match?.[1]
+  const code = managedErrorCode(raw)
   // These refusals say which server they are about; the general copy would
   // lose that.
-  if (code && SERVER_NAMED_ERROR_CODES.has(code)) {
-    const named = /\s—\s(.+)$/s.exec(raw)?.[1]
-    if (named) return named
-  }
+  const named = managedNamedErrorMessage(err)
+  if (named) return named
   if (code && MANAGED_ERROR_COPY[code]) {
     return MANAGED_ERROR_COPY[code]
   }
