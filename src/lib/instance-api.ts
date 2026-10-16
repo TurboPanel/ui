@@ -8860,7 +8860,7 @@ export async function createManagedUser(
     nameScheme?: NameScheme
     databases: string[]
     privileges?: string[]
-    /** Omit for `read-write`; `read-only` requires a read-eligible replica (422 `managed_no_read_targets`). */
+    /** Omit for `read-write`; `read-only` is allowed on a single server (it uses the primary and the database refuses writes). */
     connectionRole?: ManagedConnectionRole
     /** Omit for `recipe` (the panel keeps the permissions right). `self` = the owner sets them. */
     grantMode?: 'recipe' | 'self'

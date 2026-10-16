@@ -102,6 +102,10 @@ export function NewLoginModeFields({
   )
 }
 
+function isResetNeeded(err: unknown): boolean {
+  return err instanceof Error && err.message.includes('managed_grant_reset_needs_confirm')
+}
+
 type PendingSwitch = {
   mode: LoginMode
   statements: string[]
@@ -144,9 +148,7 @@ export function LoginModeEditor({
       try {
         result = await onUpdate(user.id, { grantMode: mode, dryRun: true })
       } catch (err) {
-        if (!String(err instanceof Error ? err.message : '').includes('managed_grant_reset_needs_confirm')) {
-          throw err
-        }
+        if (!isResetNeeded(err)) throw err
         needsReset = true
         result = await onUpdate(user.id, { grantMode: mode, dryRun: true, confirmReset: true })
       }
@@ -169,6 +171,11 @@ export function LoginModeEditor({
       })
       setPending(null)
     } catch (err) {
+      if (isResetNeeded(err) && !pending.needsReset) {
+        // The state changed since the preview: ask again with the reset warning.
+        setPending({ ...pending, needsReset: true })
+        return
+      }
       setPending(null)
       onError(managedErrorMessage(err, 'Failed to change the permission mode'))
     } finally {
@@ -222,7 +229,7 @@ export function LoginModeEditor({
             ? 'Manage permissions yourself?'
             : 'Let the panel manage permissions?'
         }
-        description={pending ? (pending.needsReset ? resetWarning(user, pending.mode) : undefined) : undefined}
+        description={pending?.needsReset ? resetWarning(user, pending.mode) : undefined}
         onRequestClose={() => setPending(null)}
         footer={
           <ButtonRow align="end">
@@ -241,8 +248,8 @@ export function LoginModeEditor({
       >
         <Text style={panelStyles.detailLabel}>What the panel will run</Text>
         {pending?.statements.length ? (
-          pending.statements.map((line) => (
-            <Text key={line} style={panelStyles.muted}>
+          pending.statements.map((line, index) => (
+            <Text key={`${index}-${line}`} style={panelStyles.muted}>
               {`• ${line}`}
             </Text>
           ))
