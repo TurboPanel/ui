@@ -8860,8 +8860,12 @@ export async function createManagedUser(
     nameScheme?: NameScheme
     databases: string[]
     privileges?: string[]
-    /** Omit for `read-write`; `read-only` requires a read-eligible replica (422 `managed_no_read_targets`). */
+    /** Omit for `read-write`; `read-only` is allowed on a single server (it uses the primary and the database refuses writes). */
     connectionRole?: ManagedConnectionRole
+    /** Omit for `recipe` (the panel keeps the permissions right). `self` = the owner sets them. */
+    grantMode?: 'recipe' | 'self'
+    /** A database tool uses this login: always the primary, no read splitting. */
+    tool?: boolean
   }
 ): Promise<{
   ok: true
@@ -8874,6 +8878,39 @@ export async function createManagedUser(
     method: 'POST',
     body: JSON.stringify(body),
   })
+}
+
+export type ManagedUserPatch = {
+  grantMode?: 'recipe' | 'self'
+  tool?: boolean
+  databases?: string[]
+  connectionRole?: ManagedConnectionRole
+  /** Required (409 `managed_grant_reset_needs_confirm`) when the change resets permissions. */
+  confirmReset?: boolean
+  /** Preview only: nothing is written; the answer lists what would run, in plain words. */
+  dryRun?: boolean
+}
+
+export type ManagedUserPatchResult = {
+  ok: true
+  dryRun?: boolean
+  grantMode?: 'preset' | 'recipe' | 'self'
+  /** Dry run only. */
+  statements?: string[]
+  user?: ManagedUserRecord | null
+  commandId?: string
+}
+
+/** Change a login's permission mode, tool flag, databases or connection role. */
+export async function updateManagedUser(
+  environmentId: string,
+  principalId: string,
+  body: ManagedUserPatch
+): Promise<ManagedUserPatchResult> {
+  return await apiFetch(
+    `${CLIENT_API}/environments/${environmentId}/managed/users/${encodeURIComponent(principalId)}`,
+    { method: 'PATCH', body: JSON.stringify(body) }
+  )
 }
 
 export async function deleteManagedUser(

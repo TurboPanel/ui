@@ -26,6 +26,7 @@ import {
   resyncManagedMember,
   rotateManagedRootPassword,
   rotateManagedUserPassword,
+  updateManagedUser,
   runManagedLifecycle,
   saveServerManagedExternalAccess,
   updateEnvironmentManaged,
@@ -351,6 +352,25 @@ export function useCreateManagedUser(orgId: string, environmentId: string) {
       ]),
   })
   return useShowOnceSecretMutation(mutation, 'Failed to create managed user')
+}
+
+export function useUpdateManagedUser(orgId: string, environmentId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: { principalId: string; body: Parameters<typeof updateManagedUser>[2] }) =>
+      updateManagedUser(environmentId, input.principalId, input.body),
+    onSuccess: (result) =>
+      result.dryRun
+        ? undefined
+        : Promise.all([
+            queryClient.invalidateQueries({
+              queryKey: queryKeys.org(orgId).managed.users(environmentId),
+            }),
+            queryClient.invalidateQueries({
+              queryKey: queryKeys.org(orgId).commands.all,
+            }),
+          ]),
+  })
 }
 
 export function useDeleteManagedUser(orgId: string, environmentId: string) {

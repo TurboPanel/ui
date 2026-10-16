@@ -280,6 +280,14 @@ export type ManagedConnectionInfo = {
  */
 export type ManagedConnectionRole = 'read-write' | 'read-only'
 
+/**
+ * Who keeps a login's permissions right. `recipe` = the panel sets them and
+ * puts them back on every apply; `self` = the owner sets them in their own
+ * tools and the panel never resets them. `preset` is an old login made before
+ * this choice existed; it cannot be switched back to once left.
+ */
+export type ManagedGrantMode = 'preset' | 'recipe' | 'self'
+
 export type ManagedUserRecord = {
   id: string
   username: string
@@ -289,6 +297,10 @@ export type ManagedUserRecord = {
   databases: string[]
   privileges: string[]
   connectionRole: ManagedConnectionRole
+  /** Absent on a control plane that predates permission modes. */
+  grantMode?: ManagedGrantMode
+  /** Used by a database tool: always the primary, never split between reader and writer. */
+  tool?: boolean
   createdAt: string
 }
 
@@ -455,6 +467,15 @@ const MANAGED_ERROR_COPY: Record<string, string> = {
   managed_member_is_primary: 'Promote another member first — the primary cannot be removed.',
   managed_no_read_targets:
     'This cluster has no replica serving read traffic yet. Add a replica with reads enabled, then create the read-only login.',
+  managed_grant_reset_needs_confirm:
+    'This change resets permissions the panel does not manage. Confirm the reset to continue.',
+  managed_grant_mode_invalid_transition:
+    'An older login cannot be switched back to its original permissions. Choose one of the two modes shown.',
+  managed_login_not_editable:
+    'This login is kept by the panel and cannot be changed here.',
+  managed_grant_mode_invalid: 'That permission mode is not valid.',
+  managed_self_login_has_no_privileges:
+    'A login you manage yourself has no permissions yet. Set them in your own tools first.',
   datacenter_required: 'That server is not assigned to a datacenter.',
   datacenter_cidr_required: 'That datacenter has no private network yet.',
   datacenter_ip_required: 'That server has no private address in its datacenter.',

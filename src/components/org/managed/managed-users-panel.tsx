@@ -11,7 +11,18 @@ import {
   SegmentedControl,
   TextField,
 } from '@/components/ui'
-import type { BindingRedeployRequired } from '@/lib/instance-api'
+import {
+  LoginModeBadges,
+  LoginModeEditor,
+  NewLoginModeFields,
+  READ_ONLY_HINT,
+  type LoginMode,
+} from '@/components/org/managed/managed-login-mode'
+import type {
+  BindingRedeployRequired,
+  ManagedUserPatch,
+  ManagedUserPatchResult,
+} from '@/lib/instance-api'
 import {
   managedErrorMessage,
   type ManagedConnectionRole,
@@ -47,7 +58,7 @@ const CONNECTION_ROLE_OPTIONS: readonly {
   {
     value: 'read-only',
     label: 'Read-only',
-    hint: 'Routed to replicas that serve read traffic. The engine refuses writes on this login.',
+    hint: READ_ONLY_HINT,
   },
 ]
 
@@ -60,37 +71,23 @@ function ConnectionRolePicker({
   value,
   onChange,
   disabled,
-  readOnlyAvailable,
 }: Readonly<{
   value: ManagedConnectionRole
   onChange: (role: ManagedConnectionRole) => void
   disabled: boolean
-  readOnlyAvailable: boolean
 }>) {
   const active = CONNECTION_ROLE_OPTIONS.find((row) => row.value === value)
   return (
     <>
       <Text style={panelStyles.detailLabel}>Connection role</Text>
       <SegmentedControl
-        options={CONNECTION_ROLE_OPTIONS.map((option) => ({
-          value: option.value,
-          label: option.label,
-          // With no read-eligible replica only the Read-only option locks;
-          // Read/write stays selectable.
-          disabled: option.value === 'read-only' && !readOnlyAvailable,
-        }))}
+        options={CONNECTION_ROLE_OPTIONS.map(({ value, label }) => ({ value, label }))}
         value={value}
         onChange={onChange}
         disabled={disabled}
         accessibilityLabel="Connection role"
       />
       {active ? <Text style={panelStyles.muted}>{active.hint}</Text> : null}
-      {readOnlyAvailable ? null : (
-        <Text style={panelStyles.muted}>
-          Read-only needs a replica with read traffic enabled — add one on
-          Overview first.
-        </Text>
-      )}
     </>
   )
 }
@@ -142,11 +139,11 @@ export function ManagedUsersPanel({
   users,
   canManage,
   busy,
-  hasReadTargets = false,
   onCreateDatabase,
   onDeleteDatabase,
   onCreateUser,
   onDeleteUser,
+  onUpdateUser,
   onRotateUserPassword,
   onRedeployService,
   onReload,
@@ -157,17 +154,18 @@ export function ManagedUsersPanel({
   users: ManagedUserRecord[]
   canManage: boolean
   busy: boolean
-  /** A replica serves read traffic, so a `read-only` login has somewhere to go. */
-  hasReadTargets?: boolean
   onCreateDatabase: (name: string) => Promise<void>
   onDeleteDatabase: (name: string) => Promise<void>
   onCreateUser: (input: {
     username: string
     databases: string[]
     connectionRole: ManagedConnectionRole
+    grantMode: LoginMode
+    tool: boolean
     nameScheme?: NameScheme
   }) => Promise<{ password: string; appliedUsername?: string } | null>
   onDeleteUser: (principalId: string) => Promise<void>
+  onUpdateUser: (principalId: string, body: ManagedUserPatch) => Promise<ManagedUserPatchResult>
   onRotateUserPassword: (principalId: string) => Promise<{
     password: string
     redeployRequired?: BindingRedeployRequired
@@ -182,6 +180,8 @@ export function ManagedUsersPanel({
   const [selectedDbs, setSelectedDbs] = useState<string[]>([])
   const [connectionRole, setConnectionRole] =
     useState<ManagedConnectionRole>('read-write')
+  const [grantMode, setGrantMode] = useState<LoginMode>('recipe')
+  const [tool, setTool] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [usernameHint, setUsernameHint] = useState<string | null>(null)
   const [working, setWorking] = useState(false)
@@ -221,12 +221,6 @@ export function ManagedUsersPanel({
       return filtered
     })
   }, [databases])
-
-  useEffect(() => {
-    if (!hasReadTargets) {
-      setConnectionRole('read-write')
-    }
-  }, [hasReadTargets])
 
   const toggleDb = (name: string) => {
     setSelectedDbs((current) => {
@@ -287,6 +281,8 @@ export function ManagedUsersPanel({
         username: trimmed,
         databases: selectedDbs,
         connectionRole,
+        grantMode,
+        tool,
         nameScheme: nameScheme.requestScheme,
       })
       if (result?.password) {
@@ -296,6 +292,8 @@ export function ManagedUsersPanel({
       }
       setUsername('')
       setConnectionRole('read-write')
+      setGrantMode('recipe')
+      setTool(false)
       nameScheme.reset()
       await onReload()
     } catch (err) {
@@ -455,9 +453,10 @@ export function ManagedUsersPanel({
                   <Chip key={db} label={db} />
                 ))}
               </View>
+              <LoginModeBadges user={user} />
               <Text style={panelStyles.muted}>
                 {user.connectionRole === 'read-only'
-                  ? 'Read-only login — routed to replicas serving reads'
+                  ? 'Read-only login — the database refuses writes; reads go to replicas when some serve reads'
                   : 'Read/write login — routed to the current primary'}
               </Text>
               {bindingCount > 0 ? (
@@ -470,6 +469,14 @@ export function ManagedUsersPanel({
                 <Text style={panelStyles.muted}>
                   {user.privileges.join(', ')}
                 </Text>
+              ) : null}
+              {canManage ? (
+                <LoginModeEditor
+                  user={user}
+                  disabled={disabled}
+                  onUpdate={onUpdateUser}
+                  onError={setError}
+                />
               ) : null}
               {canManage ? (
                 <ButtonRow>
@@ -549,7 +556,13 @@ export function ManagedUsersPanel({
             value={connectionRole}
             onChange={setConnectionRole}
             disabled={disabled}
-            readOnlyAvailable={hasReadTargets}
+          />
+          <NewLoginModeFields
+            mode={grantMode}
+            onModeChange={setGrantMode}
+            tool={tool}
+            onToolChange={setTool}
+            disabled={disabled}
           />
           <Button
             label="Create user"
