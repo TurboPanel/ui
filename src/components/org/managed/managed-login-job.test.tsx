@@ -71,7 +71,7 @@ describe('login job', () => {
   it('offers the three jobs with plain explanations', () => {
     const onJobChange = vi.fn()
     render(<NewLoginJobField job="read-write" onJobChange={onJobChange} disabled={false} />)
-    expect(screen.getByText(/create, change and drop tables/)).toBeTruthy()
+    expect(screen.getByText(/cannot create, change or drop tables/)).toBeTruthy()
     fireEvent.click(screen.getByText('Migration'))
     expect(onJobChange).toHaveBeenCalledWith('owner')
     expect(screen.getByText('Read-only')).toBeTruthy()
