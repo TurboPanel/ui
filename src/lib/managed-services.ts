@@ -301,6 +301,10 @@ export type ManagedUserRecord = {
   grantMode?: ManagedGrantMode
   /** Used by a database tool: always the primary, never split between reader and writer. */
   tool?: boolean
+  /** Places the login may connect from; `['any']` (or absent on an older control plane) = anywhere. */
+  allowedSources?: string[]
+  /** Most connections at once; `null`/absent = no cap. */
+  maxConnections?: number | null
   createdAt: string
 }
 
@@ -473,6 +477,18 @@ const MANAGED_ERROR_COPY: Record<string, string> = {
     'An older login cannot be switched back to its original permissions. Choose one of the two modes shown.',
   managed_login_not_editable:
     'This login is kept by the panel and cannot be changed here.',
+  managed_login_limits_need_daemon_update:
+    'This server needs updating before it can limit where a login connects from or how many connections it holds. Update the server, then try again.',
+  managed_login_sources_empty:
+    'Choose at least one place, or choose Anywhere to remove the limit.',
+  managed_login_source_range_not_exact:
+    'That range can’t be matched exactly. List the addresses one by one, or use a prefix such as 203.0.113.%.',
+  managed_login_source_invalid: 'One of the places is not a valid address, prefix or range.',
+  managed_login_sources_invalid: 'The list of places is not valid.',
+  managed_login_sources_too_many: 'Too many places. Use an address prefix such as 203.0.113.% to cover more.',
+  managed_login_sources_any_alone: 'Anywhere can’t be combined with other places.',
+  managed_login_source_server_unknown: 'One of the chosen servers is not in this organization.',
+  managed_login_max_connections_invalid: 'Most connections at once must be a whole number from 1 to 10000.',
   managed_grant_mode_invalid: 'That permission mode is not valid.',
   managed_self_login_has_no_privileges:
     'A login you manage yourself has no permissions yet. Set them in your own tools first.',
@@ -543,6 +559,10 @@ const SERVER_NAMED_ERROR_CODES = new Set([
   'managed_ssl_external_access_minimum',
   'managed_ssl_default_external_access_minimum',
   'external_access_weak_ssl',
+  // The server's sentence says which place or number was wrong.
+  'managed_login_source_range_not_exact',
+  'managed_login_source_invalid',
+  'managed_login_source_server_unknown',
 ])
 
 function managedErrorCode(raw: string): string | undefined {

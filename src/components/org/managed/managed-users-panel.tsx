@@ -12,6 +12,11 @@ import {
   TextField,
 } from '@/components/ui'
 import {
+  LoginLimitBadges,
+  LoginLimitsEditor,
+  LoginLimitsFields,
+} from '@/components/org/managed/managed-login-limits'
+import {
   LoginModeBadges,
   LoginModeEditor,
   NewLoginModeFields,
@@ -29,6 +34,14 @@ import {
   type ManagedUserRecord,
 } from '@/lib/managed-services'
 import { useManagedEnvironmentBindings } from '@/lib/queries/bindings'
+import { useOrgServers } from '@/lib/queries/servers'
+import {
+  EMPTY_LIMITS_DRAFT,
+  describeCap,
+  describeWhere,
+  limitsFromDraft,
+  type LoginLimitsDraft,
+} from '@/lib/managed-login-limits'
 import { orEmptyArray } from '@/lib/or-empty-array'
 import { PrincipalNameSchemeField, usePrincipalNameScheme } from '@/components/org/principal-name-scheme-field'
 import { principalNamesLabel, principalSchemeErrorMessage, type NameScheme } from '@/lib/principal-name-scheme'
@@ -162,6 +175,8 @@ export function ManagedUsersPanel({
     connectionRole: ManagedConnectionRole
     grantMode: LoginMode
     tool: boolean
+    allowedSources?: string[]
+    maxConnections?: number
     nameScheme?: NameScheme
   }) => Promise<{ password: string; appliedUsername?: string } | null>
   onDeleteUser: (principalId: string) => Promise<void>
@@ -175,6 +190,8 @@ export function ManagedUsersPanel({
 }>) {
   const bindingsQuery = useManagedEnvironmentBindings(orgId, environmentId)
   const nameScheme = usePrincipalNameScheme(orgId)
+  const serversQuery = useOrgServers(orgId)
+  const servers = orEmptyArray(serversQuery.data?.servers)
   const [dbName, setDbName] = useState('')
   const [username, setUsername] = useState('')
   const [selectedDbs, setSelectedDbs] = useState<string[]>([])
@@ -182,6 +199,8 @@ export function ManagedUsersPanel({
     useState<ManagedConnectionRole>('read-write')
   const [grantMode, setGrantMode] = useState<LoginMode>('recipe')
   const [tool, setTool] = useState(false)
+  const [limits, setLimits] = useState<LoginLimitsDraft>(EMPTY_LIMITS_DRAFT)
+  const [limitsProblem, setLimitsProblem] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [usernameHint, setUsernameHint] = useState<string | null>(null)
   const [working, setWorking] = useState(false)
@@ -273,6 +292,14 @@ export function ManagedUsersPanel({
       setError('Select at least one database.')
       return
     }
+    const parsedLimits = limitsFromDraft(limits)
+    if (!parsedLimits.ok) {
+      // Next to the fields, where the owner is looking.
+      setLimitsProblem(parsedLimits.error)
+      return
+    }
+    setLimitsProblem(null)
+    const { allowedSources, maxConnections } = parsedLimits.payload
     setWorking(true)
     setError(null)
     setUsernameHint(null)
@@ -283,6 +310,8 @@ export function ManagedUsersPanel({
         connectionRole,
         grantMode,
         tool,
+        ...(allowedSources ? { allowedSources } : {}),
+        ...(maxConnections ? { maxConnections } : {}),
         nameScheme: nameScheme.requestScheme,
       })
       if (result?.password) {
@@ -294,6 +323,7 @@ export function ManagedUsersPanel({
       setConnectionRole('read-write')
       setGrantMode('recipe')
       setTool(false)
+      setLimits(EMPTY_LIMITS_DRAFT)
       nameScheme.reset()
       await onReload()
     } catch (err) {
@@ -454,6 +484,7 @@ export function ManagedUsersPanel({
                 ))}
               </View>
               <LoginModeBadges user={user} />
+              <LoginLimitBadges user={user} />
               <Text style={panelStyles.muted}>
                 {user.connectionRole === 'read-only'
                   ? 'Read-only login — the database refuses writes; reads go to replicas when some serve reads'
@@ -470,6 +501,19 @@ export function ManagedUsersPanel({
                   {user.privileges.join(', ')}
                 </Text>
               ) : null}
+              {canManage ? (
+                <LoginLimitsEditor
+                  user={user}
+                  servers={servers}
+                  disabled={disabled}
+                  onUpdate={onUpdateUser}
+                  onError={setError}
+                />
+              ) : (
+                <Text style={panelStyles.muted}>
+                  {describeWhere(user.allowedSources, servers)} {describeCap(user.maxConnections)}
+                </Text>
+              )}
               {canManage ? (
                 <LoginModeEditor
                   user={user}
@@ -564,6 +608,16 @@ export function ManagedUsersPanel({
             onToolChange={setTool}
             disabled={disabled}
           />
+          <LoginLimitsFields
+            draft={limits}
+            onChange={(next) => {
+              setLimits(next)
+              setLimitsProblem(null)
+            }}
+            servers={servers}
+            disabled={disabled}
+          />
+          {limitsProblem ? <Text style={panelStyles.error}>{limitsProblem}</Text> : null}
           <Button
             label="Create user"
             variant="primary"

@@ -398,6 +398,22 @@ describe('instance-api managed-engine fetch wrappers', () => {
     )
   })
 
+  it('updateManagedUser sends places and the cap, and null clears them', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
+    await updateManagedUser('env-1', 'p1', { allowedSources: ['internal', 'address:10.1.%'], maxConnections: 5 })
+    expect(JSON.parse(String(lastFetch().init.body))).toEqual({
+      allowedSources: ['internal', 'address:10.1.%'],
+      maxConnections: 5,
+    })
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
+    await updateManagedUser('env-1', 'p1', { allowedSources: null, maxConnections: null })
+    expect(JSON.parse(String(lastFetch().init.body))).toEqual({ allowedSources: null, maxConnections: null })
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'managed_login_limits_need_daemon_update' }, 409))
+    await expect(updateManagedUser('env-1', 'p1', { maxConnections: 3 })).rejects.toThrow(
+      'HTTP 409: managed_login_limits_need_daemon_update'
+    )
+  })
+
   it('deleteManagedUser surfaces 409 managed_user_has_bindings', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ error: MANAGED_USER_HAS_BINDINGS_ERROR }, 409))
     await expect(deleteManagedUser('env-1', 'u-1')).rejects.toThrow(
