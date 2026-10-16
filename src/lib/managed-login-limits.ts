@@ -67,28 +67,34 @@ function isIpv6(value: string): boolean {
   return groups.length <= 8 && groups.every((group) => group.length <= 4)
 }
 
+function cidr4Problem(value: string, match: RegExpExecArray): string | null {
+  const bits = Number(match[2])
+  if (!isIpv4(match[1]!) || bits > 32) return `${value} is not a valid address range.`
+  if (bits === 32 || (bits > 0 && bits % 8 === 0)) return null
+  return `${value} can't be matched exactly. Use a whole /8, /16 or /24 range, list the addresses one by one, or type a prefix such as 203.0.113.%.`
+}
+
+function cidr6Problem(value: string, match: RegExpExecArray): string | null {
+  const bits = Number(match[2])
+  if (!isIpv6(match[1]!) || bits > 128) return `${value} is not a valid address range.`
+  if (bits === 128 || (bits >= 16 && bits <= 112 && bits % 16 === 0)) return null
+  return `${value} can't be matched exactly. Use a range that ends on a whole group (/16, /32, /48, /64 and so on up to /112), or list the addresses one by one.`
+}
+
+function prefixProblem(value: string): string | null {
+  if (IPV4_PREFIX.test(value) && octetsOk(value.slice(0, -2).split('.'))) return null
+  if (IPV6_PREFIX.test(value)) return null
+  return `${value} is not a valid address prefix. Use something like 203.0.113.% or 2001:db8:1:%.`
+}
+
 /** Plain-words refusal for one typed entry, or `null` when it looks fine. */
 export function addressProblem(entry: string): string | null {
   const value = entry.trim()
   const cidr4 = IPV4_CIDR.exec(value)
-  if (cidr4) {
-    const bits = Number(cidr4[2])
-    if (!isIpv4(cidr4[1]!) || bits > 32) return `${value} is not a valid address range.`
-    if (bits === 32 || (bits > 0 && bits % 8 === 0)) return null
-    return `${value} can't be matched exactly. Use a whole /8, /16 or /24 range, list the addresses one by one, or type a prefix such as 203.0.113.%.`
-  }
+  if (cidr4) return cidr4Problem(value, cidr4)
   const cidr6 = IPV6_CIDR.exec(value)
-  if (cidr6) {
-    const bits = Number(cidr6[2])
-    if (!isIpv6(cidr6[1]!) || bits > 128) return `${value} is not a valid address range.`
-    if (bits === 128 || (bits >= 16 && bits <= 112 && bits % 16 === 0)) return null
-    return `${value} can't be matched exactly. Use a range that ends on a whole group (/16, /32, /48, /64 and so on up to /112), or list the addresses one by one.`
-  }
-  if (value.endsWith('%')) {
-    if (IPV4_PREFIX.test(value) && octetsOk(value.slice(0, -2).split('.'))) return null
-    if (IPV6_PREFIX.test(value)) return null
-    return `${value} is not a valid address prefix. Use something like 203.0.113.% or 2001:db8:1:%.`
-  }
+  if (cidr6) return cidr6Problem(value, cidr6)
+  if (value.endsWith('%')) return prefixProblem(value)
   if (isIpv4(value) || isIpv6(value)) return null
   return `${value} is not a valid IP address, prefix or range.`
 }
