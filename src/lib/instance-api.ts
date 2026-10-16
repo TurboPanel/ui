@@ -8866,6 +8866,10 @@ export async function createManagedUser(
     grantMode?: 'recipe' | 'self'
     /** A database tool uses this login: always the primary, no read splitting. */
     tool?: boolean
+    /** Places the login may connect from; omit (or `any`) for anywhere. 400 `managed_login_source*` when a place is wrong; 409 `managed_login_limits_need_daemon_update`. */
+    allowedSources?: string[]
+    /** Most connections at once, 1 to 10000; omit for no cap. */
+    maxConnections?: number
   }
 ): Promise<{
   ok: true
@@ -8887,6 +8891,10 @@ export type ManagedUserPatch = {
   connectionRole?: ManagedConnectionRole
   /** Required (409 `managed_grant_reset_needs_confirm`) when the change resets permissions. */
   confirmReset?: boolean
+  /** `null` (or `['any']`) lets the login connect from anywhere. */
+  allowedSources?: string[] | null
+  /** `null` removes the cap. */
+  maxConnections?: number | null
   /** Preview only: nothing is written; the answer lists what would run, in plain words. */
   dryRun?: boolean
 }
