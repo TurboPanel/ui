@@ -604,7 +604,7 @@ export function OrganizationCaPanel({ orgId }: Readonly<{ orgId: string }>) {
     setCaBusy(true)
     setError(null)
     setCaMessage(null)
-    void downloadCaBundle()
+    void downloadCaBundle(orgId)
       .then(() => setCaMessage(downloadSuccessMessage()))
       .catch((err: unknown) => {
         setError(errorMessage(err, 'Failed to download Organization CA'))

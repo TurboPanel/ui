@@ -273,7 +273,7 @@ export function ManagedConnectionPanel({
     setCaError(null)
     setCaMessage(null)
     try {
-      await downloadCaBundle()
+      await downloadCaBundle(orgId)
       setCaMessage(downloadSuccessMessage())
     } catch (err) {
       setCaError(

@@ -280,6 +280,14 @@ export type ManagedConnectionInfo = {
  */
 export type ManagedConnectionRole = 'read-write' | 'read-only'
 
+/**
+ * Who keeps a login's permissions right. `recipe` = the panel sets them and
+ * puts them back on every apply; `self` = the owner sets them in their own
+ * tools and the panel never resets them. `preset` is an old login made before
+ * this choice existed; it cannot be switched back to once left.
+ */
+export type ManagedGrantMode = 'preset' | 'recipe' | 'self'
+
 export type ManagedUserRecord = {
   id: string
   username: string
@@ -289,7 +297,109 @@ export type ManagedUserRecord = {
   databases: string[]
   privileges: string[]
   connectionRole: ManagedConnectionRole
+  /** Absent on a control plane that predates permission modes. */
+  grantMode?: ManagedGrantMode
+  /** Used by a database tool: always the primary, never split between reader and writer. */
+  tool?: boolean
+  /** Places the login may connect from; `['any']` (or absent on an older control plane) = anywhere. */
+  allowedSources?: string[]
+  /** Most connections at once; `null`/absent = no cap. */
+  maxConnections?: number | null
   createdAt: string
+}
+
+/** Privilege name of the Database admin login (stored alone). */
+export const MANAGED_ADMIN_PRIVILEGE = 'admin'
+
+export type ManagedPrivilegeAllowance = 'yes' | 'needs-admin' | 'no'
+
+export type ManagedPrivilegeLevelInfo = { id: string; label: string; explanation: string }
+
+/** `GET …/managed/privilege-catalogue`; only the parts the login screens read. */
+export type ManagedPrivilegeCatalogue = {
+  engine: string
+  series: string
+  levels: ManagedPrivilegeLevelInfo[]
+}
+
+export type ManagedEffectivePrivilege = {
+  keyword: string
+  catalogueId: string | null
+  label: string
+  explanation: string
+  allowed: ManagedPrivilegeAllowance | 'unknown'
+  reason?: string
+  grantable: boolean
+}
+
+export type ManagedEffectiveGrant = {
+  level: string
+  database?: string
+  schema?: string
+  object?: string
+  columns?: string[]
+  host?: string
+  /** MySQL / MariaDB: the database name is a wildcard pattern. */
+  pattern?: boolean
+  via?: string
+  /** `everyone` for a Postgres PUBLIC grant. */
+  viaLabel?: string
+  grantor?: string
+  privileges: ManagedEffectivePrivilege[]
+  origin: 'observed'
+}
+
+export type ManagedEffectiveDefault = {
+  database: string
+  creator: string
+  schema?: string
+  appliesTo: string
+  objectType: string
+  via?: string
+  privileges: ManagedEffectivePrivilege[]
+  origin: 'observed'
+}
+
+export type ManagedEffectiveMembership = {
+  role: string
+  label?: string
+  explanation?: string
+  kind: 'predefined' | 'panel' | 'other'
+  allowed: ManagedPrivilegeAllowance | 'unknown'
+  reason?: string
+  host?: string
+  via?: string
+  origin: 'observed'
+}
+
+export type ManagedEffectiveAttribute = {
+  name: string
+  label: string
+  explanation: string
+  value: boolean | number
+  allowed: ManagedPrivilegeAllowance
+}
+
+/** `GET …/managed/users/:principalId/effective-permissions` (everything `observed` for now). */
+export type ManagedEffectivePermissions = {
+  username: string
+  exists: boolean
+  engine: string
+  series: string
+  observedAt: string
+  serverVersion?: string
+  attributes: ManagedEffectiveAttribute[]
+  accounts: { host: string; locked?: boolean }[]
+  memberships: ManagedEffectiveMembership[]
+  grants: ManagedEffectiveGrant[]
+  defaults: ManagedEffectiveDefault[]
+  truncated: boolean
+  outsidePolicyCount: number
+  databases?: string[]
+  databasesRead?: string[]
+  databasesFailed?: string[]
+  databasesNotAsked?: string[]
+  versionMatchesCatalogue?: boolean
 }
 
 export type ManagedServerSummary = {
@@ -455,6 +565,31 @@ const MANAGED_ERROR_COPY: Record<string, string> = {
   managed_member_is_primary: 'Promote another member first — the primary cannot be removed.',
   managed_no_read_targets:
     'This cluster has no replica serving read traffic yet. Add a replica with reads enabled, then create the read-only login.',
+  managed_grant_reset_needs_confirm:
+    'This change resets permissions the panel does not manage. Confirm the reset to continue.',
+  managed_grant_mode_invalid_transition:
+    'An older login cannot be switched back to its original permissions. Choose one of the two modes shown.',
+  managed_login_not_editable:
+    'This login is kept by the panel and cannot be changed here.',
+  managed_login_limits_need_daemon_update:
+    'This server needs updating before it can limit where a login connects from or how many connections it holds. Update the server, then try again.',
+  managed_login_sources_empty:
+    'Choose at least one place, or choose Anywhere to remove the limit.',
+  managed_login_source_range_not_exact:
+    'That range can’t be matched exactly. List the addresses one by one, or use a prefix such as 203.0.113.%.',
+  managed_login_source_invalid: 'One of the places is not a valid address, prefix or range.',
+  managed_login_sources_invalid: 'The list of places is not valid.',
+  managed_login_sources_too_many: 'Too many places. Use an address prefix such as 203.0.113.% to cover more.',
+  managed_login_sources_any_alone: 'Anywhere can’t be combined with other places.',
+  managed_login_source_server_unknown: 'One of the chosen servers is not in this organization.',
+  managed_login_max_connections_invalid: 'Most connections at once must be a whole number from 1 to 10000.',
+  managed_grant_mode_invalid: 'That permission mode is not valid.',
+  managed_admin_needs_owner_role:
+    'A Database admin login cannot be made on some of these databases. Choose different databases, or use a different kind of login.',
+  managed_admin_login_not_read_only:
+    'A Database admin login changes things, so it cannot be read-only. Use Read/write.',
+  managed_self_login_has_no_privileges:
+    'A login you manage yourself has no permissions yet. Set them in your own tools first.',
   datacenter_required: 'That server is not assigned to a datacenter.',
   datacenter_cidr_required: 'That datacenter has no private network yet.',
   datacenter_ip_required: 'That server has no private address in its datacenter.',
@@ -522,6 +657,12 @@ const SERVER_NAMED_ERROR_CODES = new Set([
   'managed_ssl_external_access_minimum',
   'managed_ssl_default_external_access_minimum',
   'external_access_weak_ssl',
+  // The server's sentence says which place or number was wrong.
+  'managed_login_source_range_not_exact',
+  'managed_login_source_invalid',
+  'managed_login_source_server_unknown',
+  // The server's sentence lists the databases that stop it.
+  'managed_admin_needs_owner_role',
 ])
 
 function managedErrorCode(raw: string): string | undefined {

@@ -21,6 +21,8 @@ import {
   useManagedLogs,
   useManagedStatus,
   useManagedUsers,
+  useManagedEffectivePermissions,
+  useManagedPrivilegeCatalogue,
   useOrganizationCa,
   useOrganizationManaged,
   usePromoteManagedDisasterRecovery,
@@ -37,6 +39,7 @@ import {
   useUpdateEnvironmentManaged,
   useUpdateManagedMemberReadEligible,
   useUpdateManagedMemberReplicaClass,
+  useUpdateManagedUser,
 } from '@/lib/queries/managed'
 
 const {
@@ -45,6 +48,8 @@ const {
   fetchManagedStatus,
   fetchManagedLogs,
   fetchManagedUsers,
+  fetchManagedEffectivePermissions,
+  fetchManagedPrivilegeCatalogue,
   fetchManagedDatabases,
   fetchManagedBackups,
   fetchOrganizationCa,
@@ -57,6 +62,7 @@ const {
   rotateManagedUserPassword,
   createManagedUser,
   deleteManagedUser,
+  updateManagedUser,
   createManagedDatabase,
   deleteManagedDatabase,
   createManagedBackup,
@@ -76,6 +82,8 @@ const {
   fetchManagedStatus: vi.fn(),
   fetchManagedLogs: vi.fn(),
   fetchManagedUsers: vi.fn(),
+  fetchManagedEffectivePermissions: vi.fn(),
+  fetchManagedPrivilegeCatalogue: vi.fn(),
   fetchManagedDatabases: vi.fn(),
   fetchManagedBackups: vi.fn(),
   fetchOrganizationCa: vi.fn(),
@@ -88,6 +96,7 @@ const {
   rotateManagedUserPassword: vi.fn(),
   createManagedUser: vi.fn(),
   deleteManagedUser: vi.fn(),
+  updateManagedUser: vi.fn(),
   createManagedDatabase: vi.fn(),
   deleteManagedDatabase: vi.fn(),
   createManagedBackup: vi.fn(),
@@ -112,6 +121,8 @@ vi.mock('@/lib/instance-api', async (importOriginal) => {
     fetchManagedStatus,
     fetchManagedLogs,
     fetchManagedUsers,
+    fetchManagedEffectivePermissions,
+    fetchManagedPrivilegeCatalogue,
     fetchManagedDatabases,
     fetchManagedBackups,
     fetchOrganizationCa,
@@ -124,6 +135,7 @@ vi.mock('@/lib/instance-api', async (importOriginal) => {
     rotateManagedUserPassword,
     createManagedUser,
     deleteManagedUser,
+    updateManagedUser,
     createManagedDatabase,
     deleteManagedDatabase,
     createManagedBackup,
@@ -349,6 +361,22 @@ describe('managed query hooks', () => {
     })
     expect(emptyOrg.result.current.fetchStatus).toBe('idle')
     expect(fetchManagedStatus).not.toHaveBeenCalled()
+  })
+
+  it('useManagedEffectivePermissions and useManagedPrivilegeCatalogue read on demand', async () => {
+    fetchManagedEffectivePermissions.mockResolvedValueOnce({ username: 'u1', grants: [] })
+    fetchManagedPrivilegeCatalogue.mockResolvedValueOnce({ engine: 'postgres', series: '18', levels: [] })
+    const off = renderHook(() => useManagedEffectivePermissions(orgId, environmentId, 'p1', { enabled: false }), {
+      wrapper: createWrapper(),
+    })
+    expect(off.result.current.fetchStatus).toBe('idle')
+    expect(fetchManagedEffectivePermissions).not.toHaveBeenCalled()
+    const on = renderHook(() => useManagedEffectivePermissions(orgId, environmentId, 'p1'), { wrapper: createWrapper() })
+    await waitFor(() => expect(on.result.current.isSuccess).toBe(true))
+    expect(fetchManagedEffectivePermissions).toHaveBeenCalledWith(environmentId, 'p1')
+    const cat = renderHook(() => useManagedPrivilegeCatalogue(orgId, environmentId), { wrapper: createWrapper() })
+    await waitFor(() => expect(cat.result.current.isSuccess).toBe(true))
+    expect(fetchManagedPrivilegeCatalogue).toHaveBeenCalledWith(environmentId)
   })
 
   it('useManagedUsers loads users', async () => {
@@ -840,6 +868,25 @@ describe('managed query hooks', () => {
       ok: true,
     })
     expect(deleteManagedUser).toHaveBeenCalledWith(environmentId, 'principal-1')
+    await waitFor(() => {
+      expect(invalidate).toHaveBeenCalledWith({
+        queryKey: queryKeys.org(orgId).managed.users(environmentId),
+      })
+    })
+  })
+
+  it('useUpdateManagedUser refreshes users only after a real change, not a dry run', async () => {
+    const client = createAppQueryClient()
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
+    const { result } = renderHook(() => useUpdateManagedUser(orgId, environmentId), {
+      wrapper: createWrapper(client),
+    })
+    updateManagedUser.mockResolvedValueOnce({ ok: true, dryRun: true, statements: [] })
+    await result.current.mutateAsync({ principalId: 'p1', body: { grantMode: 'self', dryRun: true } })
+    expect(invalidate).not.toHaveBeenCalled()
+    updateManagedUser.mockResolvedValueOnce({ ok: true, commandId: 'c1' })
+    await result.current.mutateAsync({ principalId: 'p1', body: { tool: true } })
+    expect(updateManagedUser).toHaveBeenLastCalledWith(environmentId, 'p1', { tool: true })
     await waitFor(() => {
       expect(invalidate).toHaveBeenCalledWith({
         queryKey: queryKeys.org(orgId).managed.users(environmentId),

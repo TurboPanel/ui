@@ -1,10 +1,11 @@
 // @vitest-environment happy-dom
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const { useServerAddresses, useCan } = vi.hoisted(() => ({
+const { useServerAddresses, useCan, downloadCaBundle } = vi.hoisted(() => ({
   useServerAddresses: vi.fn(() => ({ data: { addresses: [] } as unknown })),
   useCan: vi.fn(() => true),
+  downloadCaBundle: vi.fn(async () => undefined),
 }))
 vi.mock('expo-router', () => ({
   Link: ({ href, children }: { href: string; children?: unknown }) => <a href={href}>{children as never}</a>,
@@ -17,7 +18,7 @@ vi.mock('@/lib/theme-preference', async () => (await import('@/components/ui/v4/
 vi.mock('@/components/ui/panel-styles', () => ({ panelStyles: {} }))
 vi.mock('@/components/ui', () => ({
   SectionPanel: ({ children }: { children?: unknown }) => <div>{children as never}</div>,
-  Button: ({ label }: { label: string }) => <button>{label}</button>,
+  Button: ({ label, onPress }: { label: string; onPress?: () => void }) => <button onClick={onPress}>{label}</button>,
   CopyButton: ({ value, accessibilityLabel }: { value: string; accessibilityLabel?: string }) => (
     <button data-copy={value} aria-label={accessibilityLabel}>
       Copy DSN
@@ -25,7 +26,7 @@ vi.mock('@/components/ui', () => ({
   ),
 }))
 vi.mock('@/lib/queries/managed', () => ({ useOrganizationCa: () => ({ data: null }) }))
-vi.mock('@/lib/download-ca', () => ({ downloadCaBundle: vi.fn(), downloadSuccessMessage: () => '' }))
+vi.mock('@/lib/download-ca', () => ({ downloadCaBundle, downloadSuccessMessage: () => '' }))
 
 import { ManagedConnectionPanel } from './managed-connection-panel'
 
@@ -63,6 +64,12 @@ const connection = {
 }
 
 describe('managed connection panel connection strings', () => {
+  it('downloads the Organization CA of the organization the panel shows', () => {
+    render(<ManagedConnectionPanel orgId="org-1" managed={managed} connection={connection} server={null} />)
+    fireEvent.click(screen.getByText('Download Organization CA'))
+    expect(downloadCaBundle).toHaveBeenCalledExactlyOnceWith('org-1')
+  })
+
   it('keeps the single DSN when the control plane sends no list', () => {
     render(<ManagedConnectionPanel orgId="org-1" managed={managed} connection={connection} server={null} />)
     expect(screen.getByText('DSN')).toBeTruthy()
