@@ -818,7 +818,8 @@ function ManagedDataPanels({
         onCreateUser={async (input) => {
           const result = await createUserMutation.run(input)
           if (!result.ok) {
-            throw new Error(createUserMutation.actionError ?? 'Failed to create user')
+            // The run result carries the server's refusal; `actionError` is stale until the next render.
+            throw new Error(result.error ?? 'Failed to create user')
           }
           registerCommand(result.value.commandId, 'Create user')
           return {
