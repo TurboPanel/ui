@@ -47,6 +47,8 @@ import {
   updateEnvironmentManaged,
   updateManagedMember,
   updateManagedUser,
+  fetchManagedEffectivePermissions,
+  fetchManagedPrivilegeCatalogue,
 } from './instance-api'
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -396,6 +398,24 @@ describe('instance-api managed-engine fetch wrappers', () => {
     await expect(updateManagedUser('env-1', 'p1', { grantMode: 'recipe' })).rejects.toThrow(
       'HTTP 409: managed_grant_reset_needs_confirm'
     )
+  })
+
+  it('reads a login\'s effective permissions and the privilege catalogue', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ username: 'u1', grants: [] }))
+    const view = await fetchManagedEffectivePermissions('env-1', 'p/1')
+    expect(view.username).toBe('u1')
+    expect(String(lastFetch().url)).toContain('/environments/env-1/managed/users/p%2F1/effective-permissions')
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'daemon_update_required' }, 409))
+    await expect(fetchManagedEffectivePermissions('env-1', 'p1')).rejects.toThrow('HTTP 409: daemon_update_required')
+    fetchMock.mockResolvedValueOnce(jsonResponse({ engine: 'postgres', series: '18', levels: [] }))
+    expect((await fetchManagedPrivilegeCatalogue('env-1')).series).toBe('18')
+    expect(String(lastFetch().url)).toContain('/environments/env-1/managed/privilege-catalogue')
+  })
+
+  it('updateManagedUser sends privileges for a Database admin login', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
+    await updateManagedUser('env-1', 'p1', { privileges: ['admin'], connectionRole: 'read-write' })
+    expect(JSON.parse(String(lastFetch().init.body))).toEqual({ privileges: ['admin'], connectionRole: 'read-write' })
   })
 
   it('updateManagedUser sends places and the cap, and null clears them', async () => {
