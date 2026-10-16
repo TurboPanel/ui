@@ -13,9 +13,11 @@ import type {
   ManagedBackupRecord,
   ManagedConnectionRole,
   ManagedDetailResponse,
+  ManagedEffectivePermissions,
   ManagedEnvironmentRecord,
   ManagedListRecord,
   ManagedMemberRecord,
+  ManagedPrivilegeCatalogue,
   ManagedServiceEngine,
   ManagedSettings,
   ManagedUserRecord,
@@ -37,12 +39,14 @@ export type {
   ManagedConnectionInfo,
   ManagedConnectionRole,
   ManagedDetailResponse,
+  ManagedEffectivePermissions,
   ManagedEngineAvailability,
   ManagedEnvironmentRecord,
   ManagedListRecord,
   ManagedMemberRecord,
   ManagedMemberRole,
   ManagedMemberTransport,
+  ManagedPrivilegeCatalogue,
   ManagedReleaseView,
   ManagedReplicaClass,
   ManagedReplicationHealth,
@@ -8859,9 +8863,18 @@ export async function createManagedUser(
     /** Omit to use the org default; 409 `principal_scheme_locked` when the org locks it. */
     nameScheme?: NameScheme
     databases: string[]
+    /** Omit for the default of the connection role. `['admin']` = Database admin login (alone, never read-only, `tool` true by default; 400 `managed_admin_login_not_read_only`, 422 `managed_admin_needs_owner_role`). */
     privileges?: string[]
-    /** Omit for `read-write`; `read-only` requires a read-eligible replica (422 `managed_no_read_targets`). */
+    /** Omit for `read-write`; `read-only` is allowed on a single server (it uses the primary and the database refuses writes). */
     connectionRole?: ManagedConnectionRole
+    /** Omit for `recipe` (the panel keeps the permissions right). `self` = the owner sets them. */
+    grantMode?: 'recipe' | 'self'
+    /** A database tool uses this login: always the primary, no read splitting. */
+    tool?: boolean
+    /** Places the login may connect from; omit (or `any`) for anywhere. 400 `managed_login_source*` when a place is wrong; 409 `managed_login_limits_need_daemon_update`. */
+    allowedSources?: string[]
+    /** Most connections at once, 1 to 10000; omit for no cap. */
+    maxConnections?: number
   }
 ): Promise<{
   ok: true
@@ -8874,6 +8887,66 @@ export async function createManagedUser(
     method: 'POST',
     body: JSON.stringify(body),
   })
+}
+
+/**
+ * What the engine says a login can do right now (read from the server, joined
+ * to the privilege catalogue; everything is `observed`). Errors: 409
+ * `daemon_update_required` / `server_offline`, 502 / 504 `permissions_read_failed`,
+ * 422 `privilege_catalogue_unsupported_version`, 404 not a panel login.
+ */
+export async function fetchManagedEffectivePermissions(
+  environmentId: string,
+  principalId: string
+): Promise<ManagedEffectivePermissions> {
+  return await apiFetch(
+    `${CLIENT_API}/environments/${environmentId}/managed/users/${encodeURIComponent(principalId)}/effective-permissions`
+  )
+}
+
+/** Plain-words names of every privilege level and privilege for the cluster's exact version. */
+export async function fetchManagedPrivilegeCatalogue(
+  environmentId: string
+): Promise<ManagedPrivilegeCatalogue> {
+  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/managed/privilege-catalogue`)
+}
+
+export type ManagedUserPatch = {
+  privileges?: string[]
+  grantMode?: 'recipe' | 'self'
+  tool?: boolean
+  databases?: string[]
+  connectionRole?: ManagedConnectionRole
+  /** Required (409 `managed_grant_reset_needs_confirm`) when the change resets permissions. */
+  confirmReset?: boolean
+  /** `null` (or `['any']`) lets the login connect from anywhere. */
+  allowedSources?: string[] | null
+  /** `null` removes the cap. */
+  maxConnections?: number | null
+  /** Preview only: nothing is written; the answer lists what would run, in plain words. */
+  dryRun?: boolean
+}
+
+export type ManagedUserPatchResult = {
+  ok: true
+  dryRun?: boolean
+  grantMode?: 'preset' | 'recipe' | 'self'
+  /** Dry run only. */
+  statements?: string[]
+  user?: ManagedUserRecord | null
+  commandId?: string
+}
+
+/** Change a login's permission mode, tool flag, databases or connection role. */
+export async function updateManagedUser(
+  environmentId: string,
+  principalId: string,
+  body: ManagedUserPatch
+): Promise<ManagedUserPatchResult> {
+  return await apiFetch(
+    `${CLIENT_API}/environments/${environmentId}/managed/users/${encodeURIComponent(principalId)}`,
+    { method: 'PATCH', body: JSON.stringify(body) }
+  )
 }
 
 export async function deleteManagedUser(
@@ -9572,8 +9645,8 @@ export async function retireOrganizationCa(): Promise<{
  * Download the organization CA PEM (`application/x-pem-file`). Private key is
  * never included. Returns PEM text for browser save / clipboard copy.
  */
-export async function downloadOrganizationCaPem(): Promise<string> {
-  const resolvedOrgId = getActiveOrganizationId()
+export async function downloadOrganizationCaPem(organizationId?: string | null): Promise<string> {
+  const resolvedOrgId = organizationId ?? getActiveOrganizationId()
   const headers: Record<string, string> = {}
   if (resolvedOrgId) {
     headers[ORG_ID_HEADER] = resolvedOrgId

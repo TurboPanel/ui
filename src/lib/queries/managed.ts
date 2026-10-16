@@ -12,6 +12,8 @@ import {
   fetchEnvironmentManaged,
   fetchManagedBackups,
   fetchManagedDatabases,
+  fetchManagedEffectivePermissions,
+  fetchManagedPrivilegeCatalogue,
   fetchManagedLogs,
   fetchManagedStatus,
   fetchManagedUsers,
@@ -26,6 +28,7 @@ import {
   resyncManagedMember,
   rotateManagedRootPassword,
   rotateManagedUserPassword,
+  updateManagedUser,
   runManagedLifecycle,
   saveServerManagedExternalAccess,
   updateEnvironmentManaged,
@@ -137,6 +140,40 @@ export function useManagedUsers(
     queryKey: queryKeys.org(orgId).managed.users(environmentId),
     queryFn: () => fetchManagedUsers(environmentId),
     enabled: (options?.enabled ?? true) && orgId.length > 0 && environmentId.length > 0,
+  })
+}
+
+/** Read from the server on demand (`enabled`), never cached for long: it is a live read. */
+export function useManagedEffectivePermissions(
+  orgId: string,
+  environmentId: string,
+  principalId: string,
+  options?: Readonly<{ enabled?: boolean }>
+) {
+  return useQuery({
+    queryKey: queryKeys.org(orgId).managed.effectivePermissions(environmentId, principalId),
+    queryFn: () => fetchManagedEffectivePermissions(environmentId, principalId),
+    enabled:
+      (options?.enabled ?? true) &&
+      orgId.length > 0 &&
+      environmentId.length > 0 &&
+      principalId.length > 0,
+    staleTime: 0,
+    retry: false,
+  })
+}
+
+export function useManagedPrivilegeCatalogue(
+  orgId: string,
+  environmentId: string,
+  options?: Readonly<{ enabled?: boolean }>
+) {
+  return useQuery({
+    queryKey: queryKeys.org(orgId).managed.privilegeCatalogue(environmentId),
+    queryFn: () => fetchManagedPrivilegeCatalogue(environmentId),
+    enabled: (options?.enabled ?? true) && orgId.length > 0 && environmentId.length > 0,
+    staleTime: 5 * 60_000,
+    retry: false,
   })
 }
 
@@ -351,6 +388,25 @@ export function useCreateManagedUser(orgId: string, environmentId: string) {
       ]),
   })
   return useShowOnceSecretMutation(mutation, 'Failed to create managed user')
+}
+
+export function useUpdateManagedUser(orgId: string, environmentId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: { principalId: string; body: Parameters<typeof updateManagedUser>[2] }) =>
+      updateManagedUser(environmentId, input.principalId, input.body),
+    onSuccess: (result) =>
+      result.dryRun
+        ? undefined
+        : Promise.all([
+            queryClient.invalidateQueries({
+              queryKey: queryKeys.org(orgId).managed.users(environmentId),
+            }),
+            queryClient.invalidateQueries({
+              queryKey: queryKeys.org(orgId).commands.all,
+            }),
+          ]),
+  })
 }
 
 export function useDeleteManagedUser(orgId: string, environmentId: string) {
