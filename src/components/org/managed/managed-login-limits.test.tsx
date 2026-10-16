@@ -242,6 +242,25 @@ describe('LoginLimitsEditor', () => {
     expect(screen.queryByText(/A blocked address can still connect/)).toBeNull()
   })
 
+  it('sends only the cap when only the cap changed', async () => {
+    const onUpdate = vi.fn(async () => ({ ok: true as const, dryRun: true, statements: [] }))
+    setup({}, onUpdate)
+    fireEvent.click(screen.getByText('Change where it connects from'))
+    fireEvent.change(screen.getByLabelText(/^Most connections at once/), { target: { value: '8' } })
+    fireEvent.click(screen.getByText('Review change'))
+    await screen.findByRole('dialog')
+    expect(onUpdate).toHaveBeenCalledWith('u1', { maxConnections: 8, dryRun: true })
+  })
+
+  it('keeps a chosen server that is not in the list so it can be unticked', () => {
+    setup({ allowedSources: ['server:gone'] })
+    fireEvent.click(screen.getByText('Change where it connects from'))
+    const box = screen.getByRole('checkbox', { name: 'Unknown server gone' })
+    expect(box.getAttribute('aria-checked')).toBe('true')
+    fireEvent.click(box)
+    expect(screen.queryByRole('checkbox', { name: 'Unknown server gone' })).toBeNull()
+  })
+
   it('stops on plain validation problems without calling the server', () => {
     const { onUpdate } = setup()
     fireEvent.click(screen.getByText('Change where it connects from'))

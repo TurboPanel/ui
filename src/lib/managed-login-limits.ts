@@ -42,7 +42,7 @@ export type LoginLimitsResult =
 const IPV4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/
 const IPV4_PREFIX = /^(\d{1,3})(\.\d{1,3}){0,2}\.%$/
 const IPV4_CIDR = /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\/(\d{1,2})$/
-const IPV6 = /^[0-9a-f:]+$/i
+const IPV6 = /^[0-9a-f:.]+$/i
 const IPV6_PREFIX = /^([0-9a-f]{1,4}:){1,7}%$/i
 const IPV6_CIDR = /^([0-9a-f:]+)\/(\d{1,3})$/i
 
@@ -58,6 +58,12 @@ function isIpv6(value: string): boolean {
   if (!value.includes(':') || !IPV6.test(value)) return false
   if (value.split('::').length > 2) return false
   const groups = value.split(':').filter((group) => group !== '')
+  // An IPv4 tail (::ffff:1.2.3.4) stands for the last two groups.
+  const tail = groups.at(-1)
+  if (tail?.includes('.')) {
+    if (!isIpv4(tail)) return false
+    groups.splice(-1, 1, '0', '0')
+  }
   return groups.length <= 8 && groups.every((group) => group.length <= 4)
 }
 
@@ -182,14 +188,14 @@ export function describeCap(maxConnections: number | null | undefined): string {
     : 'No limit on connections at once.'
 }
 
-export function sameLimits(a: LoginLimitsPayload, b: LoginLimitsPayload): boolean {
+export function sameSources(a: LoginLimitsPayload, b: LoginLimitsPayload): boolean {
   const left = [...(a.allowedSources ?? [])].sort((x, y) => x.localeCompare(y))
   const right = [...(b.allowedSources ?? [])].sort((x, y) => x.localeCompare(y))
-  return (
-    left.length === right.length &&
-    left.every((value, index) => value === right[index]) &&
-    (a.maxConnections ?? null) === (b.maxConnections ?? null)
-  )
+  return left.length === right.length && left.every((value, index) => value === right[index])
+}
+
+export function sameLimits(a: LoginLimitsPayload, b: LoginLimitsPayload): boolean {
+  return sameSources(a, b) && (a.maxConnections ?? null) === (b.maxConnections ?? null)
 }
 
 /** The stored limits of a login as a request, for comparing with an edit. */

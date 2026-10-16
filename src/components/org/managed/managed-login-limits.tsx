@@ -19,6 +19,7 @@ import {
   limitsFromDraft,
   payloadFromStored,
   sameLimits,
+  sameSources,
   serverLabel,
   type LimitServerName,
   type LoginLimitsDraft,
@@ -70,6 +71,13 @@ export function LoginLimitsFields({
   label?: string
 }>) {
   const suffix = label ? `: ${label}` : ''
+  // A chosen server that is not in the list (still loading, or deleted) stays visible so it can be unticked.
+  const choices = [
+    ...servers,
+    ...draft.serverIds
+      .filter((id) => !servers.some((server) => server.id === id))
+      .map((id) => ({ id, name: `Unknown server ${id}`, hostname: null })),
+  ]
   const toggleServer = (id: string) =>
     onChange({
       ...draft,
@@ -98,11 +106,11 @@ export function LoginLimitsFields({
             onPress={() => onChange({ ...draft, internal: !draft.internal })}
           />
           <Text style={panelStyles.muted}>{THIS_SERVER_NOTE}</Text>
-          <Text style={panelStyles.detailLabel}>Other servers in this organization</Text>
-          {servers.length === 0 ? (
+          <Text style={panelStyles.detailLabel}>Servers in this organization</Text>
+          {choices.length === 0 ? (
             <Text style={panelStyles.muted}>No servers to pick.</Text>
           ) : (
-            servers.map((server) => (
+            choices.map((server) => (
               <Checkbox
                 key={server.id}
                 checked={draft.serverIds.includes(server.id)}
@@ -195,7 +203,13 @@ export function LoginLimitsEditor({
     setBusy(true)
     onError(null)
     try {
-      const body: ManagedUserPatch = { ...result.payload }
+      const stored = payloadFromStored(user.allowedSources, user.maxConnections)
+      const body: ManagedUserPatch = {
+        ...(sameSources(result.payload, stored) ? {} : { allowedSources: result.payload.allowedSources }),
+        ...((result.payload.maxConnections ?? null) === (stored.maxConnections ?? null)
+          ? {}
+          : { maxConnections: result.payload.maxConnections }),
+      }
       const answer = await onUpdate(user.id, { ...body, dryRun: true })
       setPending({
         body,
@@ -271,7 +285,9 @@ export function LoginLimitsEditor({
       <ModalSheet
         visible={pending !== null}
         title="Change where this login connects from?"
-        onRequestClose={() => setPending(null)}
+        onRequestClose={() => {
+          if (!busy) setPending(null)
+        }}
         footer={
           <ButtonRow align="end">
             <Button label="Cancel" disabled={busy} onPress={() => setPending(null)} />
