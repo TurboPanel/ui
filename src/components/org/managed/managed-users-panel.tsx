@@ -8,7 +8,6 @@ import {
   ConfirmButton,
   EmptyState,
   SectionPanel,
-  SegmentedControl,
   TextField,
 } from '@/components/ui'
 import {
@@ -21,12 +20,17 @@ import {
   LoginAdminEditor,
   NewLoginAdminField,
 } from '@/components/org/managed/managed-login-admin'
+import {
+  jobConnectionRole,
+  LoginJobEditor,
+  NewLoginJobField,
+  type LoginJob,
+} from '@/components/org/managed/managed-login-job'
 import { LoginPermissionsPanel } from '@/components/org/managed/managed-login-permissions'
 import {
   LoginModeBadges,
   LoginModeEditor,
   NewLoginModeFields,
-  READ_ONLY_HINT,
   type LoginMode,
 } from '@/components/org/managed/managed-login-mode'
 import type {
@@ -62,53 +66,6 @@ function Chip({ label }: Readonly<{ label: string }>) {
     <View style={styles.chip}>
       <Text style={styles.chipText}>{label}</Text>
     </View>
-  )
-}
-
-const CONNECTION_ROLE_OPTIONS: readonly {
-  value: ManagedConnectionRole
-  label: string
-  hint: string
-}[] = [
-  {
-    value: 'read-write',
-    label: 'Read/write',
-    hint: 'Routed to the current primary — reads and writes both follow failover.',
-  },
-  {
-    value: 'read-only',
-    label: 'Read-only',
-    hint: READ_ONLY_HINT,
-  },
-]
-
-/**
- * The role decides the login's proxy hostgroup. It is a per-credential choice
- * on purpose: TurboPanel never moves an existing login's `SELECT`s to a replica
- * behind an application's back.
- */
-function ConnectionRolePicker({
-  value,
-  onChange,
-  disabled,
-}: Readonly<{
-  value: ManagedConnectionRole
-  onChange: (role: ManagedConnectionRole) => void
-  disabled: boolean
-}>) {
-  const active = CONNECTION_ROLE_OPTIONS.find((row) => row.value === value)
-  return (
-    <>
-      <Text style={panelStyles.detailLabel}>Connection role</Text>
-      <SegmentedControl
-        options={CONNECTION_ROLE_OPTIONS.map(({ value, label }) => ({ value, label }))}
-        value={value}
-        onChange={onChange}
-        disabled={disabled}
-        accessibilityLabel="Connection role"
-      />
-      {active ? <Text style={panelStyles.muted}>{active.hint}</Text> : null}
-    </>
   )
 }
 
@@ -203,8 +160,7 @@ export function ManagedUsersPanel({
   const [dbName, setDbName] = useState('')
   const [username, setUsername] = useState('')
   const [selectedDbs, setSelectedDbs] = useState<string[]>([])
-  const [connectionRole, setConnectionRole] =
-    useState<ManagedConnectionRole>('read-write')
+  const [job, setJob] = useState<LoginJob>('read-write')
   const [grantMode, setGrantMode] = useState<LoginMode>('recipe')
   const [tool, setTool] = useState(false)
   const [admin, setAdmin] = useState(false)
@@ -317,8 +273,8 @@ export function ManagedUsersPanel({
       const result = await onCreateUser({
         username: trimmed,
         databases: selectedDbs,
-        ...(admin ? { privileges: [MANAGED_ADMIN_PRIVILEGE] } : {}),
-        connectionRole: admin ? 'read-write' : connectionRole,
+        privileges: [admin ? MANAGED_ADMIN_PRIVILEGE : job],
+        connectionRole: admin ? 'read-write' : jobConnectionRole(job),
         grantMode,
         tool,
         ...(allowedSources ? { allowedSources } : {}),
@@ -331,7 +287,7 @@ export function ManagedUsersPanel({
         setRevealedPassword(result.password)
       }
       setUsername('')
-      setConnectionRole('read-write')
+      setJob('read-write')
       setGrantMode('recipe')
       setTool(false)
       setAdmin(false)
@@ -536,6 +492,14 @@ export function ManagedUsersPanel({
                 />
               ) : null}
               {canManage ? (
+                <LoginJobEditor
+                  user={user}
+                  disabled={disabled}
+                  onUpdate={onUpdateUser}
+                  onError={setError}
+                />
+              ) : null}
+              {canManage ? (
                 <LoginAdminEditor
                   user={user}
                   disabled={disabled}
@@ -630,18 +594,14 @@ export function ManagedUsersPanel({
               A Database admin login always reads and writes.
             </Text>
           ) : (
-            <ConnectionRolePicker
-              value={connectionRole}
-              onChange={setConnectionRole}
-              disabled={disabled}
-            />
+            <NewLoginJobField job={job} onJobChange={setJob} disabled={disabled} />
           )}
           <NewLoginAdminField
             admin={admin}
             onAdminChange={(next) => {
               setAdmin(next)
               if (next) {
-                setConnectionRole('read-write')
+                setJob('read-write')
                 setToolBeforeAdmin(tool)
                 setTool(true)
               } else {
