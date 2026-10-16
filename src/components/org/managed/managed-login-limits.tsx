@@ -38,7 +38,7 @@ export const BLOCKED_NOTE =
   'A blocked address can still connect. Every query it sends is then refused with “This login is not allowed from this address”, so a database tool may look connected and then fail at once.'
 
 export const THIS_SERVER_NOTE =
-  'A program on the database server that connects to the server’s own public address counts as “this server” only if that server is also picked from the list below.'
+  'A program on the database server that connects to the server’s own public address counts as “this server” only if that server is also picked from the server list.'
 
 /** Badges for a limited login; nothing for one that can connect from anywhere with no cap. */
 export function LoginLimitBadges({ user }: Readonly<{ user: ManagedUserRecord }>) {
@@ -290,7 +290,11 @@ export function LoginLimitsEditor({
         <Text style={panelStyles.detailLabel}>After this change</Text>
         <Text style={panelStyles.muted}>{pending?.where}</Text>
         <Text style={panelStyles.muted}>{pending?.cap}</Text>
-        {pending?.limited ? <Text style={panelStyles.calloutWarning}>{BLOCKED_NOTE}</Text> : null}
+        {pending?.limited ? (
+          <View style={panelStyles.calloutWarning}>
+            <Text style={panelStyles.calloutWarningText}>{BLOCKED_NOTE}</Text>
+          </View>
+        ) : null}
         {pending?.limited ? <Text style={panelStyles.muted}>{THIS_SERVER_NOTE}</Text> : null}
         {pending?.statements.length ? (
           <>

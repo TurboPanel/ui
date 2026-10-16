@@ -200,6 +200,7 @@ export function ManagedUsersPanel({
   const [grantMode, setGrantMode] = useState<LoginMode>('recipe')
   const [tool, setTool] = useState(false)
   const [limits, setLimits] = useState<LoginLimitsDraft>(EMPTY_LIMITS_DRAFT)
+  const [limitsProblem, setLimitsProblem] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [usernameHint, setUsernameHint] = useState<string | null>(null)
   const [working, setWorking] = useState(false)
@@ -293,9 +294,11 @@ export function ManagedUsersPanel({
     }
     const parsedLimits = limitsFromDraft(limits)
     if (!parsedLimits.ok) {
-      setError(parsedLimits.error)
+      // Next to the fields, where the owner is looking.
+      setLimitsProblem(parsedLimits.error)
       return
     }
+    setLimitsProblem(null)
     const { allowedSources, maxConnections } = parsedLimits.payload
     setWorking(true)
     setError(null)
@@ -607,10 +610,14 @@ export function ManagedUsersPanel({
           />
           <LoginLimitsFields
             draft={limits}
-            onChange={setLimits}
+            onChange={(next) => {
+              setLimits(next)
+              setLimitsProblem(null)
+            }}
             servers={servers}
             disabled={disabled}
           />
+          {limitsProblem ? <Text style={panelStyles.error}>{limitsProblem}</Text> : null}
           <Button
             label="Create user"
             variant="primary"
