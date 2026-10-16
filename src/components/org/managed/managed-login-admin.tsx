@@ -11,7 +11,7 @@ import {
 
 export const ADMIN_LABEL = 'Database admin login'
 export const ADMIN_HINT =
-  'Can manage who else has access to this database, cannot create other databases or logins. Good for tools like pgAdmin. It always reads and writes, and connects to the primary.'
+  'Can manage who else has access to this database, cannot create other databases or logins. Good for tools like pgAdmin. It always reads and writes.'
 
 /** The privilege a login falls back to when it stops being a Database admin login. */
 const ORDINARY_PRIVILEGE = 'read-write'
@@ -55,6 +55,14 @@ export function adminPatch(user: ManagedUserRecord, admin: boolean): ManagedUser
     privileges: [MANAGED_ADMIN_PRIVILEGE],
     ...(user.connectionRole === 'read-only' ? { connectionRole: 'read-write' as const } : {}),
   }
+}
+
+function adminDescription(user: ManagedUserRecord, admin: boolean): string {
+  if (!admin) {
+    return `${user.username} will go back to reading and writing its databases, without managing access for others.`
+  }
+  const readOnly = user.connectionRole === 'read-only' ? ', and will no longer be read-only' : ''
+  return `${user.username} will be able to manage who else has access to its databases${readOnly}.`
 }
 
 /** Switch for an existing login, with the same preview-then-confirm step as the permission mode. */
@@ -126,13 +134,7 @@ export function LoginAdminEditor({
       <ModalSheet
         visible={pending !== null}
         title={pending?.admin ? 'Make this a Database admin login?' : 'Make this an ordinary login?'}
-        description={
-          pending?.admin
-            ? `${user.username} will be able to manage who else has access to its databases${
-                user.connectionRole === 'read-only' ? ', and will no longer be read-only' : ''
-              }.`
-            : `${user.username} will go back to reading and writing its databases, without managing access for others.`
-        }
+        description={pending ? adminDescription(user, pending.admin) : undefined}
         onRequestClose={() => setPending(null)}
         footer={
           <ButtonRow align="end">

@@ -208,6 +208,7 @@ export function ManagedUsersPanel({
   const [grantMode, setGrantMode] = useState<LoginMode>('recipe')
   const [tool, setTool] = useState(false)
   const [admin, setAdmin] = useState(false)
+  const [toolBeforeAdmin, setToolBeforeAdmin] = useState(false)
   const [limits, setLimits] = useState<LoginLimitsDraft>(EMPTY_LIMITS_DRAFT)
   const [limitsProblem, setLimitsProblem] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -641,7 +642,10 @@ export function ManagedUsersPanel({
               setAdmin(next)
               if (next) {
                 setConnectionRole('read-write')
+                setToolBeforeAdmin(tool)
                 setTool(true)
+              } else {
+                setTool(toolBeforeAdmin)
               }
             }}
             disabled={disabled}

@@ -37,6 +37,7 @@ function PrivilegeChips({ privileges }: Readonly<{ privileges: readonly ManagedE
         >
           <Text style={styles.chipText}>{privilege.label}</Text>
           {privilege.grantable ? <Text style={styles.chipMeta}>can pass on</Text> : null}
+          {privilege.allowed === 'no' ? <Text style={styles.chipMeta}>wider than the panel gives</Text> : null}
         </View>
       ))}
     </View>
@@ -118,6 +119,8 @@ function DefaultRow({ item }: Readonly<{ item: ManagedEffectiveDefault }>) {
 
 function Advanced({ view }: Readonly<{ view: ManagedEffectivePermissions }>) {
   const [open, setOpen] = useState(false)
+  // Only Postgres has default permissions; nothing to open otherwise.
+  if (view.defaults.length === 0) return null
   return (
     <View style={styles.group}>
       <ButtonRow>
@@ -133,13 +136,9 @@ function Advanced({ view }: Readonly<{ view: ManagedEffectivePermissions }>) {
           <Text style={panelStyles.muted}>
             When the person named makes something new, these permissions are given automatically.
           </Text>
-          {view.defaults.length === 0 ? (
-            <Text style={panelStyles.muted}>None set.</Text>
-          ) : (
-            view.defaults.map((item, index) => (
-              <DefaultRow key={`${item.database}-${item.creator}-${item.objectType}-${index}`} item={item} />
-            ))
-          )}
+          {view.defaults.map((item, index) => (
+            <DefaultRow key={`${item.database}-${item.creator}-${item.objectType}-${index}`} item={item} />
+          ))}
         </>
       ) : null}
     </View>
@@ -211,7 +210,9 @@ export function LoginPermissionsPanel({
   const [open, setOpen] = useState(false)
   const query = useManagedEffectivePermissions(orgId, environmentId, principalId, { enabled: open })
   const catalogue = useManagedPrivilegeCatalogue(orgId, environmentId, { enabled: open })
-  const loading = open && query.isFetching && !query.data
+  const loading = open && query.isFetching
+  const showError = open && query.isError && !query.isFetching
+  const showData = open && !!query.data && !query.isFetching && !query.isError
   return (
     <View style={styles.panel}>
       <ButtonRow>
@@ -234,10 +235,10 @@ export function LoginPermissionsPanel({
         ) : null}
       </ButtonRow>
       {loading ? <LoadingState label="Reading permissions from the server…" /> : null}
-      {open && query.isError ? (
+      {showError ? (
         <Text style={panelStyles.error}>{permissionsErrorMessage(query.error)}</Text>
       ) : null}
-      {open && query.data ? <LoginPermissionsView view={query.data} catalogue={catalogue.data} /> : null}
+      {showData && query.data ? <LoginPermissionsView view={query.data} catalogue={catalogue.data} /> : null}
     </View>
   )
 }

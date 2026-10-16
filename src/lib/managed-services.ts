@@ -585,7 +585,7 @@ const MANAGED_ERROR_COPY: Record<string, string> = {
   managed_login_max_connections_invalid: 'Most connections at once must be a whole number from 1 to 10000.',
   managed_grant_mode_invalid: 'That permission mode is not valid.',
   managed_admin_needs_owner_role:
-    'A Database admin login cannot be made on a database that was created before owner roles existed. Choose a newer database, or use a different kind of login.',
+    'A Database admin login cannot be made on some of these databases. Choose different databases, or use a different kind of login.',
   managed_admin_login_not_read_only:
     'A Database admin login changes things, so it cannot be read-only. Use Read/write.',
   managed_self_login_has_no_privileges:
@@ -661,6 +661,8 @@ const SERVER_NAMED_ERROR_CODES = new Set([
   'managed_login_source_range_not_exact',
   'managed_login_source_invalid',
   'managed_login_source_server_unknown',
+  // The server's sentence lists the databases that stop it.
+  'managed_admin_needs_owner_role',
 ])
 
 function managedErrorCode(raw: string): string | undefined {
