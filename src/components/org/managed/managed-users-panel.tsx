@@ -17,6 +17,12 @@ import {
   LoginLimitsFields,
 } from '@/components/org/managed/managed-login-limits'
 import {
+  LoginAdminBadge,
+  LoginAdminEditor,
+  NewLoginAdminField,
+} from '@/components/org/managed/managed-login-admin'
+import { LoginPermissionsPanel } from '@/components/org/managed/managed-login-permissions'
+import {
   LoginModeBadges,
   LoginModeEditor,
   NewLoginModeFields,
@@ -30,6 +36,7 @@ import type {
 } from '@/lib/instance-api'
 import {
   managedErrorMessage,
+  MANAGED_ADMIN_PRIVILEGE,
   type ManagedConnectionRole,
   type ManagedUserRecord,
 } from '@/lib/managed-services'
@@ -172,6 +179,7 @@ export function ManagedUsersPanel({
   onCreateUser: (input: {
     username: string
     databases: string[]
+    privileges?: string[]
     connectionRole: ManagedConnectionRole
     grantMode: LoginMode
     tool: boolean
@@ -199,6 +207,7 @@ export function ManagedUsersPanel({
     useState<ManagedConnectionRole>('read-write')
   const [grantMode, setGrantMode] = useState<LoginMode>('recipe')
   const [tool, setTool] = useState(false)
+  const [admin, setAdmin] = useState(false)
   const [limits, setLimits] = useState<LoginLimitsDraft>(EMPTY_LIMITS_DRAFT)
   const [limitsProblem, setLimitsProblem] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -307,7 +316,8 @@ export function ManagedUsersPanel({
       const result = await onCreateUser({
         username: trimmed,
         databases: selectedDbs,
-        connectionRole,
+        ...(admin ? { privileges: [MANAGED_ADMIN_PRIVILEGE] } : {}),
+        connectionRole: admin ? 'read-write' : connectionRole,
         grantMode,
         tool,
         ...(allowedSources ? { allowedSources } : {}),
@@ -323,6 +333,7 @@ export function ManagedUsersPanel({
       setConnectionRole('read-write')
       setGrantMode('recipe')
       setTool(false)
+      setAdmin(false)
       setLimits(EMPTY_LIMITS_DRAFT)
       nameScheme.reset()
       await onReload()
@@ -484,6 +495,7 @@ export function ManagedUsersPanel({
                 ))}
               </View>
               <LoginModeBadges user={user} />
+              <LoginAdminBadge user={user} />
               <LoginLimitBadges user={user} />
               <Text style={panelStyles.muted}>
                 {user.connectionRole === 'read-only'
@@ -520,6 +532,22 @@ export function ManagedUsersPanel({
                   disabled={disabled}
                   onUpdate={onUpdateUser}
                   onError={setError}
+                />
+              ) : null}
+              {canManage ? (
+                <LoginAdminEditor
+                  user={user}
+                  disabled={disabled}
+                  onUpdate={onUpdateUser}
+                  onError={setError}
+                />
+              ) : null}
+              {canManage ? (
+                <LoginPermissionsPanel
+                  orgId={orgId}
+                  environmentId={environmentId}
+                  principalId={user.id}
+                  username={user.username}
                 />
               ) : null}
               {canManage ? (
@@ -596,9 +624,26 @@ export function ManagedUsersPanel({
               )
             })}
           </View>
-          <ConnectionRolePicker
-            value={connectionRole}
-            onChange={setConnectionRole}
+          {admin ? (
+            <Text style={panelStyles.muted}>
+              A Database admin login always reads and writes.
+            </Text>
+          ) : (
+            <ConnectionRolePicker
+              value={connectionRole}
+              onChange={setConnectionRole}
+              disabled={disabled}
+            />
+          )}
+          <NewLoginAdminField
+            admin={admin}
+            onAdminChange={(next) => {
+              setAdmin(next)
+              if (next) {
+                setConnectionRole('read-write')
+                setTool(true)
+              }
+            }}
             disabled={disabled}
           />
           <NewLoginModeFields

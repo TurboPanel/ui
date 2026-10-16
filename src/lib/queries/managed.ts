@@ -12,6 +12,8 @@ import {
   fetchEnvironmentManaged,
   fetchManagedBackups,
   fetchManagedDatabases,
+  fetchManagedEffectivePermissions,
+  fetchManagedPrivilegeCatalogue,
   fetchManagedLogs,
   fetchManagedStatus,
   fetchManagedUsers,
@@ -138,6 +140,40 @@ export function useManagedUsers(
     queryKey: queryKeys.org(orgId).managed.users(environmentId),
     queryFn: () => fetchManagedUsers(environmentId),
     enabled: (options?.enabled ?? true) && orgId.length > 0 && environmentId.length > 0,
+  })
+}
+
+/** Read from the server on demand (`enabled`), never cached for long: it is a live read. */
+export function useManagedEffectivePermissions(
+  orgId: string,
+  environmentId: string,
+  principalId: string,
+  options?: Readonly<{ enabled?: boolean }>
+) {
+  return useQuery({
+    queryKey: queryKeys.org(orgId).managed.effectivePermissions(environmentId, principalId),
+    queryFn: () => fetchManagedEffectivePermissions(environmentId, principalId),
+    enabled:
+      (options?.enabled ?? true) &&
+      orgId.length > 0 &&
+      environmentId.length > 0 &&
+      principalId.length > 0,
+    staleTime: 0,
+    retry: false,
+  })
+}
+
+export function useManagedPrivilegeCatalogue(
+  orgId: string,
+  environmentId: string,
+  options?: Readonly<{ enabled?: boolean }>
+) {
+  return useQuery({
+    queryKey: queryKeys.org(orgId).managed.privilegeCatalogue(environmentId),
+    queryFn: () => fetchManagedPrivilegeCatalogue(environmentId),
+    enabled: (options?.enabled ?? true) && orgId.length > 0 && environmentId.length > 0,
+    staleTime: 5 * 60_000,
+    retry: false,
   })
 }
 

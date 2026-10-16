@@ -308,6 +308,100 @@ export type ManagedUserRecord = {
   createdAt: string
 }
 
+/** Privilege name of the Database admin login (stored alone). */
+export const MANAGED_ADMIN_PRIVILEGE = 'admin'
+
+export type ManagedPrivilegeAllowance = 'yes' | 'needs-admin' | 'no'
+
+export type ManagedPrivilegeLevelInfo = { id: string; label: string; explanation: string }
+
+/** `GET …/managed/privilege-catalogue`; only the parts the login screens read. */
+export type ManagedPrivilegeCatalogue = {
+  engine: string
+  series: string
+  levels: ManagedPrivilegeLevelInfo[]
+}
+
+export type ManagedEffectivePrivilege = {
+  keyword: string
+  catalogueId: string | null
+  label: string
+  explanation: string
+  allowed: ManagedPrivilegeAllowance | 'unknown'
+  reason?: string
+  grantable: boolean
+}
+
+export type ManagedEffectiveGrant = {
+  level: string
+  database?: string
+  schema?: string
+  object?: string
+  columns?: string[]
+  host?: string
+  /** MySQL / MariaDB: the database name is a wildcard pattern. */
+  pattern?: boolean
+  via?: string
+  /** `everyone` for a Postgres PUBLIC grant. */
+  viaLabel?: string
+  grantor?: string
+  privileges: ManagedEffectivePrivilege[]
+  origin: 'observed'
+}
+
+export type ManagedEffectiveDefault = {
+  database: string
+  creator: string
+  schema?: string
+  appliesTo: string
+  objectType: string
+  via?: string
+  privileges: ManagedEffectivePrivilege[]
+  origin: 'observed'
+}
+
+export type ManagedEffectiveMembership = {
+  role: string
+  label?: string
+  explanation?: string
+  kind: 'predefined' | 'panel' | 'other'
+  allowed: ManagedPrivilegeAllowance | 'unknown'
+  reason?: string
+  host?: string
+  via?: string
+  origin: 'observed'
+}
+
+export type ManagedEffectiveAttribute = {
+  name: string
+  label: string
+  explanation: string
+  value: boolean | number
+  allowed: ManagedPrivilegeAllowance
+}
+
+/** `GET …/managed/users/:principalId/effective-permissions` (everything `observed` for now). */
+export type ManagedEffectivePermissions = {
+  username: string
+  exists: boolean
+  engine: string
+  series: string
+  observedAt: string
+  serverVersion?: string
+  attributes: ManagedEffectiveAttribute[]
+  accounts: { host: string; locked?: boolean }[]
+  memberships: ManagedEffectiveMembership[]
+  grants: ManagedEffectiveGrant[]
+  defaults: ManagedEffectiveDefault[]
+  truncated: boolean
+  outsidePolicyCount: number
+  databases?: string[]
+  databasesRead?: string[]
+  databasesFailed?: string[]
+  databasesNotAsked?: string[]
+  versionMatchesCatalogue?: boolean
+}
+
 export type ManagedServerSummary = {
   id: string
   name: string | null
@@ -490,6 +584,10 @@ const MANAGED_ERROR_COPY: Record<string, string> = {
   managed_login_source_server_unknown: 'One of the chosen servers is not in this organization.',
   managed_login_max_connections_invalid: 'Most connections at once must be a whole number from 1 to 10000.',
   managed_grant_mode_invalid: 'That permission mode is not valid.',
+  managed_admin_needs_owner_role:
+    'A Database admin login cannot be made on a database that was created before owner roles existed. Choose a newer database, or use a different kind of login.',
+  managed_admin_login_not_read_only:
+    'A Database admin login changes things, so it cannot be read-only. Use Read/write.',
   managed_self_login_has_no_privileges:
     'A login you manage yourself has no permissions yet. Set them in your own tools first.',
   datacenter_required: 'That server is not assigned to a datacenter.',
