@@ -21,6 +21,8 @@ import {
   useManagedLogs,
   useManagedStatus,
   useManagedUsers,
+  useManagedEffectivePermissions,
+  useManagedPrivilegeCatalogue,
   useOrganizationCa,
   useOrganizationManaged,
   usePromoteManagedDisasterRecovery,
@@ -46,6 +48,8 @@ const {
   fetchManagedStatus,
   fetchManagedLogs,
   fetchManagedUsers,
+  fetchManagedEffectivePermissions,
+  fetchManagedPrivilegeCatalogue,
   fetchManagedDatabases,
   fetchManagedBackups,
   fetchOrganizationCa,
@@ -78,6 +82,8 @@ const {
   fetchManagedStatus: vi.fn(),
   fetchManagedLogs: vi.fn(),
   fetchManagedUsers: vi.fn(),
+  fetchManagedEffectivePermissions: vi.fn(),
+  fetchManagedPrivilegeCatalogue: vi.fn(),
   fetchManagedDatabases: vi.fn(),
   fetchManagedBackups: vi.fn(),
   fetchOrganizationCa: vi.fn(),
@@ -115,6 +121,8 @@ vi.mock('@/lib/instance-api', async (importOriginal) => {
     fetchManagedStatus,
     fetchManagedLogs,
     fetchManagedUsers,
+    fetchManagedEffectivePermissions,
+    fetchManagedPrivilegeCatalogue,
     fetchManagedDatabases,
     fetchManagedBackups,
     fetchOrganizationCa,
@@ -353,6 +361,22 @@ describe('managed query hooks', () => {
     })
     expect(emptyOrg.result.current.fetchStatus).toBe('idle')
     expect(fetchManagedStatus).not.toHaveBeenCalled()
+  })
+
+  it('useManagedEffectivePermissions and useManagedPrivilegeCatalogue read on demand', async () => {
+    fetchManagedEffectivePermissions.mockResolvedValueOnce({ username: 'u1', grants: [] })
+    fetchManagedPrivilegeCatalogue.mockResolvedValueOnce({ engine: 'postgres', series: '18', levels: [] })
+    const off = renderHook(() => useManagedEffectivePermissions(orgId, environmentId, 'p1', { enabled: false }), {
+      wrapper: createWrapper(),
+    })
+    expect(off.result.current.fetchStatus).toBe('idle')
+    expect(fetchManagedEffectivePermissions).not.toHaveBeenCalled()
+    const on = renderHook(() => useManagedEffectivePermissions(orgId, environmentId, 'p1'), { wrapper: createWrapper() })
+    await waitFor(() => expect(on.result.current.isSuccess).toBe(true))
+    expect(fetchManagedEffectivePermissions).toHaveBeenCalledWith(environmentId, 'p1')
+    const cat = renderHook(() => useManagedPrivilegeCatalogue(orgId, environmentId), { wrapper: createWrapper() })
+    await waitFor(() => expect(cat.result.current.isSuccess).toBe(true))
+    expect(fetchManagedPrivilegeCatalogue).toHaveBeenCalledWith(environmentId)
   })
 
   it('useManagedUsers loads users', async () => {

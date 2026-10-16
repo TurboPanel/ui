@@ -13,9 +13,11 @@ import type {
   ManagedBackupRecord,
   ManagedConnectionRole,
   ManagedDetailResponse,
+  ManagedEffectivePermissions,
   ManagedEnvironmentRecord,
   ManagedListRecord,
   ManagedMemberRecord,
+  ManagedPrivilegeCatalogue,
   ManagedServiceEngine,
   ManagedSettings,
   ManagedUserRecord,
@@ -37,12 +39,14 @@ export type {
   ManagedConnectionInfo,
   ManagedConnectionRole,
   ManagedDetailResponse,
+  ManagedEffectivePermissions,
   ManagedEngineAvailability,
   ManagedEnvironmentRecord,
   ManagedListRecord,
   ManagedMemberRecord,
   ManagedMemberRole,
   ManagedMemberTransport,
+  ManagedPrivilegeCatalogue,
   ManagedReleaseView,
   ManagedReplicaClass,
   ManagedReplicationHealth,
@@ -8859,6 +8863,7 @@ export async function createManagedUser(
     /** Omit to use the org default; 409 `principal_scheme_locked` when the org locks it. */
     nameScheme?: NameScheme
     databases: string[]
+    /** Omit for the default of the connection role. `['admin']` = Database admin login (alone, never read-only, `tool` true by default; 400 `managed_admin_login_not_read_only`, 422 `managed_admin_needs_owner_role`). */
     privileges?: string[]
     /** Omit for `read-write`; `read-only` is allowed on a single server (it uses the primary and the database refuses writes). */
     connectionRole?: ManagedConnectionRole
@@ -8884,7 +8889,30 @@ export async function createManagedUser(
   })
 }
 
+/**
+ * What the engine says a login can do right now (read from the server, joined
+ * to the privilege catalogue; everything is `observed`). Errors: 409
+ * `daemon_update_required` / `server_offline`, 502 / 504 `permissions_read_failed`,
+ * 422 `privilege_catalogue_unsupported_version`, 404 not a panel login.
+ */
+export async function fetchManagedEffectivePermissions(
+  environmentId: string,
+  principalId: string
+): Promise<ManagedEffectivePermissions> {
+  return await apiFetch(
+    `${CLIENT_API}/environments/${environmentId}/managed/users/${encodeURIComponent(principalId)}/effective-permissions`
+  )
+}
+
+/** Plain-words names of every privilege level and privilege for the cluster's exact version. */
+export async function fetchManagedPrivilegeCatalogue(
+  environmentId: string
+): Promise<ManagedPrivilegeCatalogue> {
+  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/managed/privilege-catalogue`)
+}
+
 export type ManagedUserPatch = {
+  privileges?: string[]
   grantMode?: 'recipe' | 'self'
   tool?: boolean
   databases?: string[]

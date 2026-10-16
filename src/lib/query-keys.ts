@@ -339,6 +339,10 @@ export const queryKeys = {
         /** Identity-only cache key — members ride environment + status queries. */
         members: (environmentId: string) =>
           ['org', orgId, 'managed', environmentId, 'members'] as const,
+        effectivePermissions: (environmentId: string, principalId: string) =>
+          ['org', orgId, 'managed', environmentId, 'users', principalId, 'effective-permissions'] as const,
+        privilegeCatalogue: (environmentId: string) =>
+          ['org', orgId, 'managed', environmentId, 'privilege-catalogue'] as const,
         users: (environmentId: string) =>
           ['org', orgId, 'managed', environmentId, 'users'] as const,
         databases: (environmentId: string) =>

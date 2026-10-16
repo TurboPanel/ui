@@ -22,7 +22,7 @@ export type LoginMode = 'recipe' | 'self'
 
 export const TOOL_LABEL = 'Used by a database tool'
 export const TOOL_HINT =
-  'A database tool (a desktop client, a migration or admin tool) always connects to the primary. Its queries are never split between a reader and a writer.'
+  'A database tool (a desktop client or an admin tool) always connects to the primary. Its queries are never split between a reader and a writer. This does not change what the login is allowed to do.'
 
 export const MODE_OPTIONS: readonly { value: LoginMode; label: string; hint: string }[] = [
   {
