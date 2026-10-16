@@ -101,7 +101,7 @@ describe('Database admin login', () => {
     })
     const { unmount } = render(<LoginAdminEditor user={user()} disabled={false} onUpdate={onUpdate} onError={onError} />)
     fireEvent.click(screen.getByRole('switch'))
-    await waitFor(() => expect(onError).toHaveBeenLastCalledWith(expect.stringMatching(/owner roles existed/)))
+    await waitFor(() => expect(onError).toHaveBeenLastCalledWith(expect.stringMatching(/cannot be made on some of these databases/)))
     unmount()
     render(<LoginAdminEditor user={user({ grantMode: 'self' })} disabled={false} onUpdate={onUpdate} onError={onError} />)
     expect((screen.getByRole('switch') as HTMLButtonElement).disabled).toBe(true)
