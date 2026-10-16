@@ -46,6 +46,7 @@ import {
   updateBinding,
   updateEnvironmentManaged,
   updateManagedMember,
+  updateManagedUser,
 } from './instance-api'
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -382,6 +383,19 @@ describe('instance-api managed-engine fetch wrappers', () => {
         connectionRole: 'read-only',
       })
     ).rejects.toThrow(`HTTP 422: ${MANAGED_NO_READ_TARGETS_ERROR}`)
+  })
+
+  it('updateManagedUser PATCHes the encoded login and surfaces the reset confirmation', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, dryRun: true, statements: ['x'] }))
+    const preview = await updateManagedUser('env-1', 'p/1', { grantMode: 'self', dryRun: true })
+    expect(preview.statements).toEqual(['x'])
+    expect(lastFetch().init.method).toBe('PATCH')
+    expect(String(lastFetch().url)).toContain('/managed/users/p%2F1')
+    expect(JSON.parse(String(lastFetch().init.body))).toEqual({ grantMode: 'self', dryRun: true })
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'managed_grant_reset_needs_confirm' }, 409))
+    await expect(updateManagedUser('env-1', 'p1', { grantMode: 'recipe' })).rejects.toThrow(
+      'HTTP 409: managed_grant_reset_needs_confirm'
+    )
   })
 
   it('deleteManagedUser surfaces 409 managed_user_has_bindings', async () => {

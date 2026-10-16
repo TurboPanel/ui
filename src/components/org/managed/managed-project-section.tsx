@@ -27,7 +27,6 @@ import {
 import { SecretReveal } from '@/components/org/managed/secret-reveal'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { type EnvironmentRecord } from '@/lib/instance-api'
-import { hasReadEligibleReplica } from '@/lib/managed-read-endpoint'
 import { managedReleaseSummary } from '@/lib/managed-releases'
 import {
     managedCatalogEntryForCode,
@@ -75,6 +74,7 @@ import {
     useSaveServerManagedExternalAccess,
     useServerManagedExternalAccess,
     useUpdateEnvironmentManaged,
+    useUpdateManagedUser,
 } from '@/lib/queries/managed'
 import { useOrgServers } from '@/lib/queries/servers'
 import { orEmptyArray } from '@/lib/or-empty-array'
@@ -618,7 +618,6 @@ function ManagedEnvironmentReadyPanels({
           users={users}
           canManage={canManage}
           inFlight={inFlight}
-          hasReadTargets={hasReadEligibleReplica(members)}
           rotatePasswordMutation={rotatePasswordMutation}
           rotateUserPasswordMutation={rotateUserPasswordMutation}
           createDatabaseMutation={createDatabaseMutation}
@@ -746,7 +745,6 @@ function ManagedDataPanels({
   users,
   canManage,
   inFlight,
-  hasReadTargets,
   rotatePasswordMutation,
   rotateUserPasswordMutation,
   createDatabaseMutation,
@@ -764,7 +762,6 @@ function ManagedDataPanels({
   users: ManagedUserRecord[]
   canManage: boolean
   inFlight: boolean
-  hasReadTargets: boolean
   rotatePasswordMutation: ReturnType<typeof useRotateManagedRootPassword>
   rotateUserPasswordMutation: ReturnType<typeof useRotateManagedUserPassword>
   createDatabaseMutation: ReturnType<typeof useCreateManagedDatabase>
@@ -775,6 +772,7 @@ function ManagedDataPanels({
   databasesQuery: ReturnType<typeof useManagedDatabases>
   registerCommand: (commandId: string, label: string, commandServerId?: string) => void
 }>) {
+  const updateUserMutation = useUpdateManagedUser(orgId, environmentId)
   return (
     <>
       <ManagedCredentialsPanel
@@ -803,7 +801,6 @@ function ManagedDataPanels({
         users={users}
         canManage={canManage}
         busy={inFlight}
-        hasReadTargets={hasReadTargets}
         onCreateDatabase={async (name) => {
           const result = await createDatabaseMutation.run({ name })
           if (!result.ok) {
@@ -835,6 +832,11 @@ function ManagedDataPanels({
             throw new Error(deleteUserMutation.actionError ?? 'Failed to delete user')
           }
           registerCommand(result.value.commandId, 'Delete user')
+        }}
+        onUpdateUser={async (principalId, body) => {
+          const result = await updateUserMutation.mutateAsync({ principalId, body })
+          if (result.commandId) registerCommand(result.commandId, 'Change user permissions')
+          return result
         }}
         onRotateUserPassword={async (principalId) => {
           const result = await rotateUserPasswordMutation.mutateAsync(principalId)
