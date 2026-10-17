@@ -165,6 +165,49 @@ jobs:
         if: github.event_name == 'pull_request' && steps.sonar.outcome == 'success'
         uses: TurboPanel/dev/.github/actions/sonar-new-issues@2db1bbfa3cff89a52fac3ee4a53bd495dc1c79b1 # dev#47
 
+  # Browser smoke test on the web export: one Chromium, one test, the API
+  # mocked in the page (e2e/fixtures/api.ts), so no server is involved. It runs
+  # beside `verify` (not after it) and holds one runner for a few minutes; the
+  # timeout keeps a stuck browser from holding it longer. Reproduce locally with
+  # `pnpm export && pnpm test:e2e`.
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "26.7.0"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Install Chromium
+        # The headless shell only: the smaller download, no full browser.
+        run: pnpm exec playwright install --with-deps --only-shell chromium
+
+      - name: Export the web app
+        run: pnpm export
+
+      - name: Smoke test
+        run: pnpm test:e2e
+
+      - name: Upload Playwright traces
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ui-e2e-test-results
+          path: test-results
+          if-no-files-found: ignore
+          retention-days: 7
+
   # The one check the trunk ruleset requires. It waits on every PR-time job
   # and fails unless each one succeeded, so a renamed or added job can never
   # slip past the merge gate; `skipped` is still a failure here because no job
@@ -180,7 +223,7 @@ jobs:
   ci-ok:
     name: ci-ok
     runs-on: ubuntu-latest
-    needs: [verify]
+    needs: [verify, e2e]
     if: >-
       ${{ (github.event_name == 'pull_request' && always())
           || (!cancelled() && !contains(needs.*.result, 'cancelled')) }}
