@@ -1,12 +1,13 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { GROUP_SUMMARY_SPECS, HOST_CHART_GROUPS } from './metrics-groups'
+import { GROUP_SUMMARY_SPECS, HOST_CHART_GROUPS, isChartShown } from './metrics-groups'
 
 /**
  * Chart ids are read out of the component source rather than imported: the
  * component pulls in react-native, which this vitest project cannot parse.
- * The definitions are a flat literal list, so a source scan is exact.
+ * The definitions are a flat literal list plus the v8 `compactChart(...)`
+ * table, so a source scan is exact.
  */
 function definedChartIds(): Set<string> {
   const source = readFileSync(
@@ -17,7 +18,14 @@ function definedChartIds(): Set<string> {
     source.indexOf('const HOST_CHART_DEFINITIONS'),
     source.indexOf('// Per-entity chart builders')
   )
-  return new Set([...block.matchAll(/^ {4}id: '([a-z0-9-]+)',$/gm)].map((match) => match[1]!))
+  const compact = source.slice(
+    source.indexOf('const V8_CHART_DEFINITIONS'),
+    source.indexOf('const HOST_CHART_DEFINITIONS')
+  )
+  return new Set([
+    ...[...block.matchAll(/^ {4}id: '([a-z0-9-]+)',$/gm)].map((match) => match[1]!),
+    ...[...compact.matchAll(/compactChart\(\s*'([a-z0-9-]+)'/g)].map((match) => match[1]!),
+  ])
 }
 
 describe('host chart groups', () => {
@@ -79,7 +87,7 @@ describe('host chart groups', () => {
       'utf8'
     )
     const start = source.indexOf("id: 'router-backends'")
-    const block = source.slice(start, source.indexOf('hideWhenEmpty', start))
+    const block = source.slice(start, source.indexOf('yFormat', start))
     expect(block).toContain("id: 'up'")
     expect(block).toContain("id: 'total'")
   })
@@ -93,5 +101,21 @@ describe('host chart groups', () => {
   it('keeps the out-of-RAM signals together in Paging', () => {
     const paging = HOST_CHART_GROUPS.find((group) => group.id === 'paging')
     expect(paging?.chartIds).toEqual(['memory-swap-io', 'memory-major-faults'])
+  })
+})
+
+describe('isChartShown', () => {
+  it('is shown when the chart has data', () => {
+    expect(isChartShown({ hideWhenEmpty: true }, true)).toBe(true)
+    expect(isChartShown({ hideWhenEmpty: true, emptyLabel: 'Not reported' }, true)).toBe(true)
+    expect(isChartShown({}, true)).toBe(true)
+  })
+
+  it('is hidden when empty and hideWhenEmpty with no emptyLabel', () => {
+    expect(isChartShown({ hideWhenEmpty: true }, false)).toBe(false)
+  })
+
+  it('is shown when empty with emptyLabel', () => {
+    expect(isChartShown({ hideWhenEmpty: true, emptyLabel: 'Not reported' }, false)).toBe(true)
   })
 })

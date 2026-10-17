@@ -54,12 +54,35 @@ export const GROUP_SUMMARY_SPECS: Readonly<Record<string, GroupSummarySpec>> = {
   router: { chartId: 'router-backends', reachability: { upSeriesId: 'up', totalSeriesId: 'total' } },
 }
 
+const HOST_HEALTH_HINT = 'Processes killed for memory, process limit, root disk queue, failed services and RAID'
+const HOST_HEALTH_CHART_IDS = ['health-oom-kills', 'health-pid-limit', 'health-root-disk-queue', 'health-root-disk-ops', 'health-systemd-failed', 'health-raid'] as const
+
+/** v8 container health and totals, shown first in the Docker group. */
+const DOCKER_HEALTH_CHART_IDS = [
+  'docker-containers-health',
+  'docker-container-events',
+  'docker-container-cpu',
+  'docker-container-memory',
+] as const
+
+/**
+ * Whether a metrics card stays in its group. Data always shows. Cards without
+ * `hideWhenEmpty` always show. An empty `hideWhenEmpty` chart stays when
+ * `emptyLabel` is set (the card then shows that copy instead of hiding).
+ */
+export function isChartShown(
+  definition: Readonly<{ hideWhenEmpty?: boolean; emptyLabel?: string }>,
+  hasData: boolean
+): boolean {
+  return hasData || !definition.hideWhenEmpty || definition.emptyLabel != null
+}
+
 export const HOST_CHART_GROUPS: readonly HostChartGroup[] = [
   {
     id: 'cpu',
     label: 'CPU',
     hint: 'Utilisation, pressure, and what is waiting to run',
-    chartIds: ['cpu-modes', 'cpu-pressure', 'cpu-saturated-cores', 'cpu-processes'],
+    chartIds: ['cpu-modes', 'cpu-pressure', 'cpu-pressure-irq', 'cpu-saturated-cores', 'cpu-processes', 'sizes-cores'],
   },
   {
     id: 'memory',
@@ -71,6 +94,7 @@ export const HOST_CHART_GROUPS: readonly HostChartGroup[] = [
       'swap-bytes',
       'swap-percent',
       'memory-pressure',
+      'sizes-memory',
     ],
   },
   {
@@ -130,6 +154,8 @@ export const HOST_CHART_GROUPS: readonly HostChartGroup[] = [
       'router-tls-expiry',
     ],
   },
+  // v8 counts and limits (`extended.host`); a v6 daemon sends none, so the section hides itself.
+  { id: 'host-health', label: 'Host health', hint: HOST_HEALTH_HINT, chartIds: HOST_HEALTH_CHART_IDS },
   {
     // `managed.storage` — where the host's bytes actually went. Distinct
     // from `storage` above (block-layer I/O + root capacity): that answers
@@ -147,18 +173,20 @@ export const HOST_CHART_GROUPS: readonly HostChartGroup[] = [
     ],
   },
   {
-    // `managed.docker` — Docker's own `/system/df` breakdown. Hidden
-    // entirely (with a notice in its place) on the entry tier, where the
-    // capability plan does not grant the family; see `server-metrics.md`.
+    // `managed.docker` — Docker's own `/system/df` breakdown plus (v8)
+    // container health and totals. On every plan: Docker metrics are no
+    // longer a tier feature.
     id: 'managed-docker',
     label: 'Docker',
     hint: 'Image layers, containers, volumes, and build cache — with what a prune would reclaim',
     chartIds: [
+      ...DOCKER_HEALTH_CHART_IDS,
       'managed-docker-layers',
       'managed-docker-containers',
       'managed-docker-volumes',
       'managed-docker-build-cache',
       'managed-docker-counts',
+      'docker-reclaimable',
     ],
   },
   {

@@ -9,6 +9,7 @@ import {
 } from 'react-native'
 import { HeaderChevron } from '@/components/header-chevron'
 import { Button, InlineNotice, SectionPanel, StatTiles } from '@/components/ui'
+import { hostFactRows } from '@/lib/host-facts'
 import {
   CpuMetricIcon,
   MemoryMetricIcon,
@@ -27,7 +28,7 @@ import {
   type MetricLineSeries,
 } from '@/components/org/charts/metric-line-chart'
 import { panelStyles } from '@/components/ui/panel-styles'
-import { GROUP_SUMMARY_SPECS, HOST_CHART_GROUPS } from '@/lib/metrics-groups'
+import { GROUP_SUMMARY_SPECS, HOST_CHART_GROUPS, isChartShown } from '@/lib/metrics-groups'
 import { attributedSignalTitle } from '@/lib/sensor-commands'
 import {
   lastFiniteValue,
@@ -78,12 +79,12 @@ import {
   type TopologyInventory,
 } from '@/lib/instance-api'
 import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
-import { isEntryTierLicense } from '@/lib/tier-placement'
 import { useCan } from '@/lib/query-client'
 import {
   useOrgServers,
   useServerMetricsConnection,
   useServerMetricsEvents,
+  useServerMetricsFacts,
   useServerMetricsSeries,
   useServerMetricsSeriesBatches,
   useServerUpdateStatus,
@@ -231,14 +232,10 @@ type ChartDefinition = Readonly<{
    * a missing sensor/entity field must never paint a 0-value flatline.
    */
   hideWhenEmpty?: boolean
+  /** Keep the card, with this text, when no series has a sample (instead of hiding it). */
+  emptyLabel?: string
   /** Dashed horizontal limit line — raw units, matching the plotted series. */
   referenceLine?: ChartReferenceLine
-  /**
-   * Null the sample at a topology-generation boundary so a per-device series
-   * does not draw one line across two physical identities. Host-scoped charts
-   * leave this off — a NIC/GPU swap must not punch a hole in CPU or memory.
-   */
-  gapOnGenerationBreak?: boolean
 }>
 
 /** One resolved chart paired with the grid it reads from — a host chart and an entity chart never share a `points` array. */
@@ -269,6 +266,10 @@ type HostScope = Extract<
   | 'router'
   | 'storage'
   | 'dockerUsage'
+  | 'extended.host'
+  | 'extended.docker'
+  | 'extended.ingress'
+  | 'extended.sizes'
 >
 
 /** Every host canonical id this screen ever requests, collected as chart definitions below reference them — see `HOST_METRIC_IDS`. */
@@ -279,6 +280,112 @@ function hostMetric(scope: HostScope, field: string): PointValueReader {
   HOST_METRIC_ID_SET.add(id)
   return metric(id)
 }
+
+type ValueFormat = 'count' | 'percent' | 'bytes' | 'perSecond'
+
+const VALUE_FORMATTERS: Readonly<Record<ValueFormat, (value: number) => string>> = {
+  count: (v) => formatCount(v),
+  percent: (v) => formatPercent(v),
+  bytes: (v) => formatBytes(v),
+  perSecond: (v) => `${formatCount(v)}/s`,
+}
+
+/** `[series id, label, scope, field, color?]` — one line of a compact chart table. */
+type CompactSeries = readonly [
+  id: string,
+  label: string,
+  scope: HostScope,
+  field: string,
+  color?: string,
+]
+
+/**
+ * A chart whose series are plain host-singleton reads, written as one table
+ * row. Used for the v8 numbers, every one of which is `hideWhenEmpty`: a v6
+ * daemon sends none of them and a gap must never paint as zero.
+ */
+function compactChart(
+  id: string,
+  title: string,
+  unit: string,
+  format: ValueFormat,
+  series: readonly CompactSeries[],
+  yDomain?: readonly [number, number],
+  emptyLabel?: string
+): ChartDefinition {
+  return {
+    id,
+    title,
+    unit,
+    series: series.map(([seriesId, label, scope, field, color]) => ({
+      id: seriesId,
+      label,
+      color,
+      read: hostMetric(scope, field),
+    })),
+    yFormat: VALUE_FORMATTERS[format],
+    yDomain,
+    hideWhenEmpty: true,
+    ...(emptyLabel != null ? { emptyLabel } : {}),
+  }
+}
+
+/** Sample sizes and v8 health, in the order their groups show them (see `metrics-groups.ts`). */
+const V8_CHART_DEFINITIONS: readonly ChartDefinition[] = [
+  // CPU pressure's interrupt half, shown with the CPU numbers (see `metrics-groups.ts`).
+  compactChart(
+    'cpu-pressure-irq',
+    'CPU interrupt pressure (PSI)',
+    '%',
+    'percent',
+    [['full', 'Full', 'extended.host', 'irqPressureFullPercent']],
+    [0, 100],
+    'Not reported'
+  ),
+  compactChart('health-oom-kills', 'Processes killed for memory', 'count', 'count', [
+    ['kills', 'Killed for memory', 'extended.host', 'oomKills'],
+  ]),
+  compactChart('health-pid-limit', 'Process limit used', '%', 'percent', [['used', 'Processes / limit', 'extended.host', 'pidLimitUsedPercent']], [0, 100]),
+  compactChart('health-root-disk-queue', 'Root disk queue', 'count', 'count', [
+    ['queue', 'Waiting disk requests', 'extended.host', 'rootDiskQueueDepth'],
+  ]),
+  compactChart('health-root-disk-ops', 'Root disk operations', '/s', 'perSecond', [
+    ['ops', 'Reads + writes', 'extended.host', 'rootDiskOpsPerSecond'],
+  ]),
+  compactChart('health-systemd-failed', 'Failed system services', 'count', 'count', [
+    ['failed', 'Failed services', 'extended.host', 'systemdUnitsFailed'],
+  ]),
+  compactChart('health-raid', 'Software RAID', 'count', 'count', [
+    ['degraded', 'Degraded arrays', 'extended.host', 'mdArraysDegraded'],
+    ['resyncing', 'Resyncing arrays', 'extended.host', 'mdArraysResyncing', colors.pending],
+  ]),
+  // Every sample carries the sizes its percentages are measured against, so a
+  // resize or a balloon shows here as a step and never rewrites a past percentage.
+  compactChart('sizes-memory', 'Memory size', 'bytes', 'bytes', [
+    ['ram', 'Memory', 'extended.sizes', 'memoryTotalBytes'],
+    ['swap', 'Swap', 'extended.sizes', 'swapTotalBytes', colors.pending],
+    ['commit', 'Commit limit', 'extended.sizes', 'commitLimitBytes', colors.command],
+  ]),
+  compactChart('sizes-cores', 'CPU cores', 'count', 'count', [
+    ['cores', 'CPU cores', 'extended.sizes', 'logicalCores'],
+  ]),
+  compactChart('docker-containers-health', 'Docker · Container health', 'count', 'count', [
+    ['running', 'Running', 'extended.docker', 'containersRunning'],
+    ['unhealthy', 'Unhealthy', 'extended.docker', 'containersUnhealthy', colors.pending],
+    ['restarting', 'Restarting', 'extended.docker', 'containersRestarting', colors.command],
+  ]),
+  compactChart('docker-container-events', 'Docker · Containers that stopped unexpectedly', 'count', 'count', [
+    ['died', 'Exits', 'extended.docker', 'containerDieEvents'],
+    ['oom', 'Out of memory', 'extended.docker', 'containerOomEvents', colors.pending],
+  ]),
+  compactChart('docker-container-cpu', 'Docker · Containers CPU', '%', 'percent', [['cpu', 'Share of host', 'extended.docker', 'containersCpuPercent']], [0, 100]),
+  compactChart('docker-container-memory', 'Docker · Containers memory', 'bytes', 'bytes', [
+    ['memory', 'In use', 'extended.docker', 'containersMemoryBytes'],
+  ]),
+  compactChart('docker-reclaimable', 'Docker · Reclaimable', 'bytes', 'bytes', [
+    ['reclaimable', 'A prune would free', 'extended.docker', 'reclaimableBytes'],
+  ]),
+]
 
 const HOST_CHART_DEFINITIONS: readonly ChartDefinition[] = [
   {
@@ -342,6 +449,8 @@ const HOST_CHART_DEFINITIONS: readonly ChartDefinition[] = [
       },
     ],
     yFormat: (v) => formatCount(v),
+    // Not stored on hosted (layout v8 keeps the per-sample sizes instead), still kept self-hosted.
+    hideWhenEmpty: true,
   },
   {
     id: 'cpu-processes',
@@ -676,6 +785,7 @@ const HOST_CHART_DEFINITIONS: readonly ChartDefinition[] = [
         label: 'Unreclaimable',
         color: colors.pending,
         read: hostMetric('diagnostics', 'slabUnreclaimableBytes'),
+        hideWhenEmpty: true,
       },
     ],
     yFormat: (v) => formatBytes(v),
@@ -767,7 +877,12 @@ const HOST_CHART_DEFINITIONS: readonly ChartDefinition[] = [
     title: 'Router · Backend requests',
     unit: 'count',
     series: [
-      { id: 'requests', label: 'Requests', read: hostMetric('router', 'backendRequests') },
+      {
+        id: 'requests',
+        label: 'Requests',
+        read: hostMetric('router', 'backendRequests'),
+        hideWhenEmpty: true,
+      },
       {
         id: 'errors',
         label: '5xx',
@@ -803,7 +918,12 @@ const HOST_CHART_DEFINITIONS: readonly ChartDefinition[] = [
     title: 'Router · Backends & services',
     unit: 'count',
     series: [
-      { id: 'up', label: 'Backends up', read: hostMetric('router', 'backendsUp') },
+      {
+        id: 'up',
+        label: 'Backends up',
+        read: hostMetric('router', 'backendsUp'),
+        hideWhenEmpty: true,
+      },
       {
         id: 'total',
         label: 'Backends total',
@@ -871,15 +991,17 @@ const HOST_CHART_DEFINITIONS: readonly ChartDefinition[] = [
   },
   {
     id: 'router-tls-expiry',
-    title: 'Router · Soonest TLS expiry',
+    title: 'Soonest TLS expiry',
     unit: 'days',
-    // The minimum across every certificate, not a mean — one cert about to
-    // lapse matters regardless of how healthy the others are.
+    // The minimum across every hosting certificate, not a mean — one cert about
+    // to lapse matters regardless of how healthy the others are. v8 reports it
+    // from the hosting Caddy (`extended.ingress`); the router's own figure is
+    // no longer stored.
     series: [
       {
         id: 'expiry',
         label: 'Days to expiry',
-        read: hostMetric('router', 'tlsCertSoonestExpiryDays'),
+        read: hostMetric('extended.ingress', 'tlsCertSoonestExpiryDays'),
       },
     ],
     yFormat: (v) => `${formatCount(v)}d`,
@@ -902,6 +1024,7 @@ const HOST_CHART_DEFINITIONS: readonly ChartDefinition[] = [
         label: 'Free on filesystem',
         color: colors.command,
         read: hostMetric('storage', 'hostingFreeBytes'),
+        hideWhenEmpty: true,
       },
     ],
     yFormat: (v) => formatBytes(v),
@@ -944,7 +1067,12 @@ const HOST_CHART_DEFINITIONS: readonly ChartDefinition[] = [
     title: 'Logs · Used vs free',
     unit: 'bytes',
     series: [
-      { id: 'used', label: 'Used', read: hostMetric('storage', 'logsUsedBytes') },
+      {
+        id: 'used',
+        label: 'Used',
+        read: hostMetric('storage', 'logsUsedBytes'),
+        hideWhenEmpty: true,
+      },
       {
         id: 'free',
         label: 'Free on filesystem',
@@ -1063,6 +1191,7 @@ const HOST_CHART_DEFINITIONS: readonly ChartDefinition[] = [
     yFormat: (v) => formatCount(v),
     hideWhenEmpty: true,
   },
+  ...V8_CHART_DEFINITIONS,
 ]
 
 /** Every host canonical id referenced by `HOST_CHART_DEFINITIONS` above — the single request list for the host series query. */
@@ -1314,16 +1443,12 @@ function mergeEntityBatchResults(
   return [...byFamily.values()]
 }
 
-function asEntityCharts(definitions: ChartDefinition[]): ChartDefinition[] {
-  return definitions.map((definition) => ({ ...definition, gapOnGenerationBreak: true }))
-}
-
 function gpuChartDefinitions(
   gpu: GpuInventoryEntry,
   temperatureUnit: TemperatureUnit
 ): ChartDefinition[] {
   const title = `${gpu.vendor} ${gpu.chip}`.trim() || gpu.gpuId
-  return asEntityCharts([
+  return [
     {
       id: `gpu:${gpu.gpuId}:utilization`,
       title: `${title} · Utilization`,
@@ -1381,12 +1506,12 @@ function gpuChartDefinitions(
       yDomain: [0, 100],
       hideWhenEmpty: true,
     },
-  ])
+  ]
 }
 
 function networkDeviceChartDefinitions(device: NetworkInventoryEntry): ChartDefinition[] {
   const title = device.name || device.deviceId
-  return asEntityCharts([
+  return [
     {
       id: `network:${device.deviceId}:throughput`,
       title: `${title} · Throughput`,
@@ -1430,13 +1555,13 @@ function networkDeviceChartDefinitions(device: NetworkInventoryEntry): ChartDefi
       yFormat: (v) => `${formatCount(v)}/s`,
       hideWhenEmpty: true,
     },
-  ])
+  ]
 }
 
 function filesystemChartDefinitions(fs: FilesystemInventoryEntry): ChartDefinition[] {
   const roleSuffix = fs.roles.length > 0 ? ` (${fs.roles.join(', ')})` : ''
   const title = `${fs.mountpoint}${roleSuffix}`
-  return asEntityCharts([
+  return [
     {
       id: `filesystem:${fs.filesystemId}:available`,
       title: `${title} · Available`,
@@ -1451,7 +1576,7 @@ function filesystemChartDefinitions(fs: FilesystemInventoryEntry): ChartDefiniti
       series: [{ id: 'free', label: 'Free inodes', read: metric('freeInodes') }],
       yFormat: (v) => formatCount(v),
     },
-  ])
+  ]
 }
 
 function blockDeviceChartDefinitions(
@@ -1459,7 +1584,7 @@ function blockDeviceChartDefinitions(
   temperatureUnit: TemperatureUnit
 ): ChartDefinition[] {
   const title = device.model ? `${device.kernelName} (${device.model})` : device.kernelName
-  return asEntityCharts([
+  return [
     {
       id: `block:${device.deviceId}:throughput`,
       title: `${title} · Throughput`,
@@ -1511,7 +1636,7 @@ function blockDeviceChartDefinitions(
       yFormat: (v) => formatQueueDepth(v),
       referenceLine: { value: 1, label: 'Saturated 1.00' },
     },
-  ])
+  ]
 }
 
 function hardwareSignalChartDefinition(
@@ -1525,7 +1650,6 @@ function hardwareSignalChartDefinition(
     title,
     unit: physicalSignalUnitLabel(signal.unit, temperatureUnit),
     series: [{ id: 'value', label: title, read: metric('value') }],
-    gapOnGenerationBreak: true,
     yFormat: (v) => formatPhysicalSignalValue(v, signal.unit, temperatureUnit),
     referenceLine:
       threshold != null
@@ -1543,7 +1667,7 @@ function hardwareSignalChartDefinition(
 
 function ingressChartDefinitions(entityId: string): ChartDefinition[] {
   const title = INGRESS_SOURCE_TITLES[entityId] ?? entityId
-  return asEntityCharts([
+  return [
     {
       id: `ingress:${entityId}:requests`,
       title: `${title} · Requests`,
@@ -1565,7 +1689,7 @@ function ingressChartDefinitions(entityId: string): ChartDefinition[] {
       unit: 'count',
       stacked: true,
       series: [
-        { id: '2xx', label: '2xx', read: metric('responses2xx') },
+        { id: '2xx', label: '2xx', read: metric('responses2xx'), hideWhenEmpty: true },
         { id: '3xx', label: '3xx', color: colors.command, read: metric('responses3xx') },
         { id: '4xx', label: '4xx', color: colors.pending, read: metric('responses4xx') },
         { id: '5xx', label: '5xx', color: colors.errorSoft, read: metric('responses5xx') },
@@ -1655,13 +1779,13 @@ function ingressChartDefinitions(entityId: string): ChartDefinition[] {
       yFormat: (v) => formatCount(v),
       hideWhenEmpty: true,
     },
-  ])
+  ]
 }
 
 
 function databaseProxyChartDefinitions(entityId: string): ChartDefinition[] {
   const title = DATABASE_PROXY_SOURCE_TITLES[entityId] ?? entityId
-  return asEntityCharts([
+  return [
     {
       id: `databaseProxy:${entityId}:queries`,
       title: `${title} · Queries`,
@@ -1795,7 +1919,7 @@ function databaseProxyChartDefinitions(entityId: string): ChartDefinition[] {
       ],
       yFormat: (v) => formatCount(v),
     },
-  ])
+  ]
 }
 
 type EntityChartGroup = Readonly<{
@@ -2090,24 +2214,17 @@ function normalizeHostGrid(data: MetricsSeriesResponse): NormalizedHostGrid {
 }
 
 /**
- * Maps grid points through a chart's readers. Per-device charts may also
- * null the topology-generation boundary (see {@link ChartDefinition.gapOnGenerationBreak}).
+ * Maps grid points through a chart's readers. A series marked `hideWhenEmpty`
+ * drops out when nothing in range reported it, instead of painting an empty
+ * legend entry beside series that do have data.
  */
-function buildChartSeries(
-  points: GridPoint[],
-  definition: ChartDefinition,
-  breakMs?: ReadonlySet<number>
-): MetricLineSeries[] {
-  const nullAtBreaks = Boolean(definition.gapOnGenerationBreak && breakMs && breakMs.size > 0)
+function buildChartSeries(points: GridPoint[], definition: ChartDefinition): MetricLineSeries[] {
   return definition.series.flatMap((entry, index) => {
     const mapped: MetricLineSeries = {
       key: entry.id,
       label: entry.label,
       color: entry.color ?? SERIES_COLORS[index % SERIES_COLORS.length]!,
-      points: points.map((point) => ({
-        tMs: point.tMs,
-        value: nullAtBreaks && breakMs?.has(point.tMs) ? null : entry.read(point),
-      })),
+      points: points.map((point) => ({ tMs: point.tMs, value: entry.read(point) })),
     }
     if (
       entry.hideWhenEmpty &&
@@ -2468,13 +2585,11 @@ function MetricsChartCard({
   chartDomainMs,
   gapBands,
   xTickFormat,
-  breakLines,
 }: Readonly<{
   chart: RenderableChart
   chartDomainMs: readonly [number, number]
   gapBands: MetricGapBand[]
   xTickFormat: (ms: number) => string
-  breakLines?: readonly number[]
 }>) {
   const { definition, points } = chart
   const [hiddenKeys, setHiddenKeys] = useState<ReadonlySet<string>>(() => new Set())
@@ -2497,11 +2612,7 @@ function MetricsChartCard({
     [definition.series.length]
   )
 
-  const breakMs = useMemo(
-    () => (breakLines && breakLines.length > 0 ? new Set(breakLines) : undefined),
-    [breakLines]
-  )
-  const series = buildChartSeries(points, definition, breakMs)
+  const series = buildChartSeries(points, definition)
   const isRange = definition.range === true
   const plotIds = definition.plotIds
   let plottedSeries = series
@@ -2580,6 +2691,7 @@ function MetricsChartCard({
       headline={unavailable ? undefined : headline}
       legend={legendEntries.length === 0 ? undefined : <ChartLegend entries={legendEntries} />}
       unavailable={unavailable}
+      unavailableLabel={definition.emptyLabel}
     >
       <MetricLineChart
         series={visibleSeries}
@@ -2594,7 +2706,6 @@ function MetricsChartCard({
         gapBands={gapBands}
         xTickFormat={xTickFormat}
         referenceLine={referenceLine}
-        breakLines={breakLines}
       />
     </ChartCard>
   )
@@ -2734,7 +2845,6 @@ function CollapsibleChartGroup({
   chartDomainMs,
   gapBands,
   xTickFormat,
-  breakLines,
 }: Readonly<{
   id: string
   label: string
@@ -2746,7 +2856,6 @@ function CollapsibleChartGroup({
   chartDomainMs: readonly [number, number]
   gapBands: MetricGapBand[]
   xTickFormat: (ms: number) => string
-  breakLines?: readonly number[]
 }>) {
   // Collapse state is owned by the screen, not by this component: a local
   // `useState` reset on every range change, which is why the sections used to
@@ -2755,8 +2864,8 @@ function CollapsibleChartGroup({
   const setExpanded = (next: (open: boolean) => boolean) => onToggle(id, next(expanded))
   // hideWhenEmpty cards drop out entirely when nothing reported in range — a
   // missing sensor/entity field is absence, not zero.
-  const visibleCharts = charts.filter(
-    (chart) => !chart.definition.hideWhenEmpty || chartHasAnyData(chart.points, chart.definition)
+  const visibleCharts = charts.filter((chart) =>
+    isChartShown(chart.definition, chartHasAnyData(chart.points, chart.definition))
   )
 
   const summary = summarizeGroup(id, visibleCharts)
@@ -2804,7 +2913,6 @@ function CollapsibleChartGroup({
               chartDomainMs={chartDomainMs}
               gapBands={gapBands}
               xTickFormat={xTickFormat}
-              breakLines={breakLines}
             />
           ))}
         </View>
@@ -3134,12 +3242,8 @@ function LiveModeIndicator({
   return null
 }
 
-/** Fallback for a stale cache predating `topologyGenerationBreaks`. */
 const EMPTY_EXPANDED_GROUPS: ReadonlySet<string> = new Set()
 
-const EMPTY_GENERATION_BREAKS: readonly number[] = []
-
-const DOCKER_GROUP_ID = 'managed-docker'
 const MANAGED_STORAGE_GROUP_ID = 'managed-storage'
 const DOCKER_STORAGE_CHART_ID = 'managed-storage-docker'
 
@@ -3300,15 +3404,6 @@ function MetricsCharts({
     })
   }, [])
 
-  const topologyGenerationBreaks = data.host?.topologyGenerationBreaks ?? EMPTY_GENERATION_BREAKS
-
-  const breakLines = useMemo(() => {
-    if (!data.host || topologyGenerationBreaks.length === 0) return undefined
-    return topologyGenerationBreaks
-      .map((index) => Date.parse(data.host!.points[index]?.at ?? ''))
-      .filter((ms) => Number.isFinite(ms))
-  }, [topologyGenerationBreaks, data.host])
-
   const hostCharts: RenderableChart[] = useMemo(
     () => HOST_CHART_DEFINITIONS.map((definition) => ({ definition, points })),
     [points]
@@ -3317,10 +3412,6 @@ function MetricsCharts({
     () => new Map(hostCharts.map((chart) => [chart.definition.id, chart])),
     [hostCharts]
   )
-  // Entry-tier licenses do not buy `managed.docker` (the capability plan's
-  // `managedDockerEnabled` is off there). A missing tier — self-hosted, or an
-  // unassigned host — keeps the group: the platform default plan grants it.
-  const dockerUsageWithheld = isEntryTierLicense(server?.tierPlacement?.licenseTier)
   const storageInodeCharts = useMemo(
     () => storageRoleInodeCharts(data.inventory, entityGroups, hostChartsById),
     [data.inventory, entityGroups, hostChartsById]
@@ -3375,17 +3466,6 @@ function MetricsCharts({
       </View>
 
       {HOST_CHART_GROUPS.map((group) => {
-        if (group.id === DOCKER_GROUP_ID && dockerUsageWithheld) {
-          // Gate on the *tier*, not on whether the family happened to be in
-          // the response: the operator should see why it is absent.
-          return (
-            <InlineNotice
-              key={group.id}
-              title="Docker usage charts need a higher tier"
-              body={`Image, container, volume, and build-cache accounting is not included on ${server?.tierPlacement?.licenseTier ?? 'the entry tier'}. The Docker data root's total still appears under Storage usage.`}
-            />
-          )
-        }
         return (
           <CollapsibleChartGroup
             key={group.id}
@@ -3404,7 +3484,6 @@ function MetricsCharts({
             chartDomainMs={chartDomainMs}
             gapBands={gapBands}
             xTickFormat={xTickFormat}
-            breakLines={breakLines}
           />
         )
       })}
@@ -3422,7 +3501,6 @@ function MetricsCharts({
             chartDomainMs={chartDomainMs}
             gapBands={gapBands}
             xTickFormat={xTickFormat}
-            breakLines={breakLines}
           />
         </Fragment>
       ))}
@@ -3597,7 +3675,6 @@ export function ServerMetricsSection({
 
   const data = metricsQuery.data
   const inventory = data?.inventory ?? null
-  const topologyGeneration = data?.topologyGeneration ?? null
   const entityMetricBatches = useMemo(
     () => buildEntityMetricPlan(inventory),
     [inventory]
@@ -3615,7 +3692,7 @@ export function ServerMetricsSection({
       enabled: entityMetricBatches.length > 0,
       refetchInterval: queryTiming.refetchInterval,
       staleTime: queryTiming.staleTime,
-      rangeKey: `${rangeId}:${topologyGeneration ?? 'none'}`,
+      rangeKey: rangeId,
     }
   )
   const entityResults = useMemo(
@@ -3701,6 +3778,8 @@ export function ServerMetricsSection({
         }}
       />
 
+      {viewState === 'charts' ? <HostFactsPanel orgId={orgId} serverId={serverId} /> : null}
+
       {chartsView ? (
         <MetricsCharts
           data={chartsView.data}
@@ -3722,10 +3801,58 @@ export function ServerMetricsSection({
   )
 }
 
+/**
+ * What the host last told us about itself: kernel, OS, versions, drive and GPU
+ * details. Text only; hidden entirely when a host (an older daemon) reports none.
+ */
+function HostFactsPanel({ orgId, serverId }: Readonly<{ orgId: string; serverId: string }>) {
+  const factsQuery = useServerMetricsFacts(orgId, serverId)
+  const response = factsQuery.data
+  const rows = response ? hostFactRows(response.facts) : []
+  if (!response?.available || rows.length === 0) return null
+  return (
+    <SectionPanel
+      title="About this host"
+      hint={response.sampledAt ? `Reported ${new Date(response.sampledAt).toLocaleString()}` : undefined}
+    >
+      <View style={styles.hostFacts}>
+        {rows.map((row) => (
+          <View key={row.key} style={styles.hostFactRow}>
+            <Text style={styles.hostFactLabel}>{row.label}</Text>
+            <Text style={styles.hostFactValue} selectable>
+              {row.value}
+            </Text>
+          </View>
+        ))}
+      </View>
+    </SectionPanel>
+  )
+}
+
 const styles = StyleSheet.create({
   root: {
     width: '100%',
     gap: spacing.lg,
+  },
+  hostFacts: {
+    gap: spacing.xs,
+  },
+  hostFactRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    paddingVertical: 2,
+  },
+  hostFactLabel: {
+    color: colors.textDim,
+    fontSize: 12,
+    minWidth: 180,
+  },
+  hostFactValue: {
+    color: colors.text,
+    fontSize: 12,
+    flex: 1,
+    minWidth: 160,
   },
   rangeRow: {
     gap: spacing.sm,
