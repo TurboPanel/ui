@@ -152,8 +152,8 @@ export function explainUpgradeFailure(
   }
   if (code === 'server_offline') {
     return {
-      title: 'The server went offline',
-      body: 'It was offline for over an hour, so the update stopped waiting. Bring it back online, then retry.',
+      title: 'The server was offline and was skipped',
+      body: 'The server was offline, so this update skipped it. It will update on the first run after it reconnects.',
       command: null,
       docsUrl: null,
     }

@@ -32,10 +32,14 @@ vi.mock('@/components/ui', () => ({
       {props.label}
     </button>
   ),
-  ConfirmButton: (props: MockProps) => (
-    <button type="button" disabled={Boolean(props.busy)} onClick={props.onConfirm}>
-      {props.label}
-    </button>
+  ConfirmButton: (props: MockProps & { confirmLabel?: string; dismissLabel?: string }) => (
+    <div>
+      <button type="button" disabled={Boolean(props.busy)} onClick={props.onConfirm}>
+        {props.label}
+      </button>
+      <span>{props.confirmLabel}</span>
+      <span>{props.dismissLabel}</span>
+    </div>
   ),
   InlineNotice: (props: MockProps) => (
     <p>
@@ -165,13 +169,58 @@ describe('HighAvailabilityUpdates', () => {
   it('disables Update fleet now when the active run is in progress', () => {
     useUpgradeActiveRun.mockReturnValue({
       data: {
-        run: { id: 'run-1', status: 'running', steps: [] },
+        run: {
+          id: 'run-1',
+          status: 'running',
+          steps: [{ status: 'installing' }, { status: 'waiting' }],
+        },
       },
       refetch: vi.fn(),
     })
     render(<HighAvailabilityUpdates data={DATA} />)
     const button = screen.getByRole('button', { name: 'Update fleet now' })
     expect((button as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('keeps Update fleet now enabled when the run is only waiting on offline servers', () => {
+    useUpgradeActiveRun.mockReturnValue({
+      data: {
+        run: {
+          id: 'run-1',
+          status: 'running',
+          steps: [
+            { status: 'done' },
+            { status: 'waiting' },
+            { status: 'pending', connected: false },
+          ],
+        },
+      },
+      refetch: vi.fn(),
+    })
+    render(<HighAvailabilityUpdates data={DATA} />)
+    const button = screen.getByRole('button', { name: 'Update fleet now' })
+    expect((button as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  it('explains that leftover steps are waiting on offline servers', () => {
+    useUpgradeActiveRun.mockReturnValue({
+      data: {
+        run: {
+          id: 'run-1',
+          status: 'running',
+          steps: [{ status: 'done' }, { status: 'waiting' }],
+        },
+      },
+      refetch: vi.fn(),
+    })
+    render(<HighAvailabilityUpdates data={DATA} />)
+    expect(
+      screen.getByText(
+        /1 server is offline, so this update is waiting for them. They are skipped after 15 minutes/
+      )
+    ).toBeTruthy()
+    expect(screen.getByText('Yes, cancel the update')).toBeTruthy()
+    expect(screen.getByText('No, keep it')).toBeTruthy()
   })
 
   it('starts preflight when Update fleet now is pressed', async () => {

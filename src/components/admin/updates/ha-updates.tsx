@@ -16,7 +16,11 @@ import {
 import { panelStyles } from '@/components/ui/panel-styles'
 import type { InstanceUpdates } from '@/lib/instance-api'
 import { HA_PRODUCT_NAME } from '@/lib/platform-copy'
-import { summarizeFleetSteps } from '@/lib/upgrade-display'
+import {
+  offlineWaitingNotice,
+  runWaitsOnlyOnOffline,
+  summarizeFleetSteps,
+} from '@/lib/upgrade-display'
 import {
   useCancelUpgradeRun,
   useRetryUpgradeStep,
@@ -47,7 +51,9 @@ export function HighAvailabilityUpdates({ data }: Readonly<{ data: InstanceUpdat
 
   const run = activeRun.data?.run
   const runActive = Boolean(run && isUpgradeRunActive(run.status))
+  const fleetBlocked = runActive && !runWaitsOnlyOnOffline(run)
   const fleetSummary = summarizeFleetSteps(run?.steps ?? [])
+  const waitingOffline = offlineWaitingNotice(run?.steps ?? [])
   const displayNotice = flow.notice ?? notice
 
   return (
@@ -72,8 +78,9 @@ export function HighAvailabilityUpdates({ data }: Readonly<{ data: InstanceUpdat
             // lets Update fleet now, or the next automatic check, start fresh.
             <ConfirmButton
               label="Cancel update"
-              confirmLabel="Cancel update"
-              prompt="Stop this update? Daemons already updated stay updated; anything still pending is skipped. The next update starts against the current build."
+              confirmLabel="Yes, cancel the update"
+              dismissLabel="No, keep it"
+              prompt="Stop this update? Updated daemons stay; pending ones are skipped."
               busy={cancelRun.isPending}
               onConfirm={() => {
                 setNotice(null)
@@ -97,6 +104,7 @@ export function HighAvailabilityUpdates({ data }: Readonly<{ data: InstanceUpdat
               ? `${fleetSummary.upToDate} of ${fleetSummary.total} connected daemons up to date`
               : 'Waiting for servers to start updating.'}
           </Text>
+          {waitingOffline ? <InlineNotice tone="info" title={waitingOffline} /> : null}
         </SectionPanel>
       ) : null}
 
@@ -107,7 +115,7 @@ export function HighAvailabilityUpdates({ data }: Readonly<{ data: InstanceUpdat
             label="Update fleet now"
             variant="primary"
             busy={flow.starting || flow.preflightPending}
-            disabled={runActive || flow.starting}
+            disabled={fleetBlocked || flow.starting}
             onPress={() => {
               setNotice(null)
               void flow.openPreflight()

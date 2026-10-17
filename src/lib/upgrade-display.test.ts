@@ -5,10 +5,12 @@ import {
   formatUpgradeBuildDisplayName,
   installedBuildLabel,
   mapStepStatusToPipeline,
+  offlineWaitingNotice,
   pieceIdentityLines,
   stepInFlight,
   platformUpgradeHeadlineCopy,
   resolvePlatformUpgradeHeadline,
+  runWaitsOnlyOnOffline,
   stepHasStarted,
   summarizeFleetSteps,
   updateAvailabilityBadge,
@@ -166,7 +168,12 @@ describe('upgradeStepOutcome', () => {
     expect(upgradeStepOutcome({ status: 'needs_attention', errorCode: 'server_offline' })).toEqual({
       tone: 'pending',
       label: 'Needs attention',
-      detail: 'Server offline for over an hour',
+      detail: 'The server was offline and was skipped',
+    })
+    expect(upgradeStepOutcome({ status: 'skipped', errorCode: 'server_offline' })).toEqual({
+      tone: 'muted',
+      label: 'Skipped: offline',
+      detail: 'The server was offline and was skipped',
     })
   })
 
@@ -400,6 +407,68 @@ describe('fleetStatusBadge', () => {
       tone: 'pending',
       label: 'Needs attention',
     })
+    expect(fleetStatusBadge('skipped')).toEqual({ tone: 'muted', label: 'Skipped' })
+    expect(fleetStatusBadge('skipped', 'server_offline')).toEqual({
+      tone: 'muted',
+      label: 'Skipped: offline',
+    })
+  })
+})
+
+describe('offlineWaitingNotice', () => {
+  it('names how many unfinished steps are waiting on offline servers', () => {
+    expect(
+      offlineWaitingNotice([
+        { status: 'done' },
+        { status: 'waiting' },
+        { status: 'waiting' },
+      ])
+    ).toBe(
+      '2 servers are offline, so this update is waiting for them. They are skipped after 15 minutes, and they update on the first run after they reconnect.'
+    )
+    expect(offlineWaitingNotice([{ status: 'waiting' }])).toBe(
+      '1 server is offline, so this update is waiting for them. They are skipped after 15 minutes, and they update on the first run after they reconnect.'
+    )
+  })
+
+  it('is silent when nothing is waiting, or work is still in flight', () => {
+    expect(offlineWaitingNotice([{ status: 'done' }])).toBeNull()
+    expect(offlineWaitingNotice([{ status: 'waiting' }, { status: 'installing' }])).toBeNull()
+    expect(offlineWaitingNotice([])).toBeNull()
+  })
+})
+
+describe('runWaitsOnlyOnOffline', () => {
+  it('is true when leftover steps are waiting or pending on offline servers', () => {
+    expect(
+      runWaitsOnlyOnOffline({
+        steps: [
+          { status: 'done' },
+          { status: 'waiting' },
+          { status: 'pending', connected: false },
+        ],
+      })
+    ).toBe(true)
+  })
+
+  it('is false when a step is in flight or queued on a connected server', () => {
+    expect(
+      runWaitsOnlyOnOffline({
+        steps: [{ status: 'waiting' }, { status: 'installing' }],
+      })
+    ).toBe(false)
+    expect(
+      runWaitsOnlyOnOffline({
+        steps: [{ status: 'pending', connected: true }],
+      })
+    ).toBe(false)
+    expect(
+      runWaitsOnlyOnOffline({
+        steps: [{ status: 'pending' }],
+      })
+    ).toBe(false)
+    expect(runWaitsOnlyOnOffline({ steps: [] })).toBe(false)
+    expect(runWaitsOnlyOnOffline(null)).toBe(false)
   })
 })
 
@@ -509,5 +578,16 @@ describe('fleetComponentLabel', () => {
   })
   it('names the control plane for an instance row', () => {
     expect(fleetComponentLabel({ unit: 'instance' })).toBe('Control plane')
+  })
+})
+
+describe('runWaitsOnlyOnOffline platform phases', () => {
+  it('does not treat a waiting platform-phase step as skippable', () => {
+    expect(
+      runWaitsOnlyOnOffline({
+        steps: [{ status: 'waiting', phase: 'colocated_daemon' }],
+      })
+    ).toBe(false)
+    expect(runWaitsOnlyOnOffline({ steps: [{ status: 'waiting', phase: 'fleet' }] })).toBe(true)
   })
 })
