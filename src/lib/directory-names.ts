@@ -102,6 +102,19 @@ export function folderStateLabel(state: FolderState): string {
   return FOLDER_STATE_LABELS[state]
 }
 
+/** Ids of services whose folder is an orphan: the service was taken out of the compose file but its files remain. */
+export function removedFromComposeServiceIds(
+  folders: readonly EnvironmentFolderRecord[]
+): Set<string> {
+  const ids = new Set<string>()
+  for (const folder of folders) {
+    if (folder.kind === 'service' && folder.state === 'orphan' && folder.assetId) {
+      ids.add(folder.assetId)
+    }
+  }
+  return ids
+}
+
 /** What a person can do with a folder in this state: remove an orphan, ask a stuck removal again, forget a missing row. */
 export function folderActionFor(state: FolderState): 'remove' | 'retry' | 'forget' | null {
   if (state === 'orphan') return 'remove'
