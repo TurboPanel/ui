@@ -18,9 +18,9 @@ import type {
   ConfigViewSource,
   ConfigViewVariable,
   EnvironmentConfigViewResponse,
+  HostingRecord,
 } from '@/lib/instance-api'
 import { describeCertificate, type CertificateTone } from '@/lib/hosting-certificate'
-import type { HostingRecord } from '@/lib/instance-api'
 import { onlyChangesLabel, relationText, sourceLabel, valueText } from './change-labels'
 import { accessText, RUNS_IN_CONTAINER, type RunsAs } from './linux-users'
 import { isDataStoreContainer, serviceKindLabel } from './service-roles'
