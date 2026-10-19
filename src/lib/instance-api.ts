@@ -9947,6 +9947,8 @@ export type NotificationEventInfo = {
   event: string
   severity: NotificationSeverity
   scope: 'organization' | 'instance'
+  /** The plain name a person picks the event by; absent from a control plane that predates it. */
+  label?: string
   example: string
 }
 
