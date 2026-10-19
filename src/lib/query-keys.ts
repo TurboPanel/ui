@@ -174,6 +174,8 @@ export const queryKeys = {
         composeResourceDefaults: ['org', orgId, 'compose-resource-defaults'] as const,
         principalDefaults: ['org', orgId, 'principal-defaults'] as const,
         directoryDefaults: ['org', orgId, 'directory-defaults'] as const,
+        /** Folders across the organization that need a person (orphans, stuck removals, missing). */
+        folders: ['org', orgId, 'folders'] as const,
         serverCapacity: ['org', orgId, 'server-capacity'] as const,
         fabric: ['org', orgId, 'fabric'] as const,
       },

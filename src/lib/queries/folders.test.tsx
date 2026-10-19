@@ -9,7 +9,9 @@ import {
   useDirectoryNamesMode,
   useEnvironmentFolders,
   useEnvironmentShares,
+  useOrgFolders,
   useRemoveEnvironmentShare,
+  useRemoveFolder,
 } from '@/lib/queries/folders'
 
 const api = vi.hoisted(() => ({
@@ -17,6 +19,8 @@ const api = vi.hoisted(() => ({
   fetchEnvironmentFolders: vi.fn(),
   fetchEnvironmentShares: vi.fn(),
   fetchOrgDirectoryDefaults: vi.fn(),
+  fetchOrgFolders: vi.fn(),
+  removeFolder: vi.fn(),
   fetchStorage: vi.fn(),
   removeEnvironmentShare: vi.fn(),
 }))
@@ -35,7 +39,11 @@ afterEach(() => {
 
 describe('folder hooks', () => {
   it('useEnvironmentFolders loads the folders under an environment', async () => {
-    api.fetchEnvironmentFolders.mockResolvedValueOnce({ ok: true, total: 1, folders: [{ id: 'f1' }] })
+    api.fetchEnvironmentFolders.mockResolvedValueOnce({
+      ok: true,
+      total: 1,
+      folders: [{ id: 'f1' }],
+    })
     const { result } = renderHook(() => useEnvironmentFolders('org-1', 'env-1'), {
       wrapper: createWrapper(),
     })
@@ -115,5 +123,43 @@ describe('folder hooks', () => {
     })
     expect(other.result.current).toBe('slug')
     expect(api.fetchOrgDirectoryDefaults).toHaveBeenCalledTimes(1)
+  })
+
+  it('useOrgFolders asks for the folders that need a person with the page size, for managers only', async () => {
+    api.fetchOrgFolders.mockResolvedValue({ ok: true, total: 1, folders: [{ id: 'f1' }] })
+    const manager = renderHook(() => useOrgFolders('org-1', true, 100), {
+      wrapper: createWrapper(),
+    })
+    await waitFor(() => expect(manager.result.current.isSuccess).toBe(true))
+    expect(api.fetchOrgFolders).toHaveBeenCalledWith('org-1', { limit: 100 })
+    renderHook(() => useOrgFolders('org-1', false), { wrapper: createWrapper() })
+    const first = renderHook(() => useOrgFolders('org-2', true), { wrapper: createWrapper() })
+    await waitFor(() => expect(first.result.current.isSuccess).toBe(true))
+    expect(api.fetchOrgFolders).toHaveBeenLastCalledWith('org-2', { limit: 50 })
+    expect(api.fetchOrgFolders).toHaveBeenCalledTimes(2)
+  })
+
+  it('settling a folder reloads the organization list and every environment folder list of that organization', async () => {
+    api.removeFolder.mockResolvedValueOnce({ ok: true, outcome: 'removing' })
+    const client = createAppQueryClient()
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
+    const { result } = renderHook(() => useRemoveFolder('org-1'), {
+      wrapper: createWrapper(client),
+    })
+    await result.current.mutateAsync('f1')
+    expect(api.removeFolder).toHaveBeenCalledWith('f1')
+    await waitFor(() => expect(invalidate).toHaveBeenCalledTimes(2))
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: queryKeys.org('org-1').settings.folders,
+    })
+    const predicate = (
+      invalidate.mock.calls.find((call) => 'predicate' in (call[0] ?? {}))?.[0] as {
+        predicate: (query: { queryKey: readonly unknown[] }) => boolean
+      }
+    ).predicate
+    expect(predicate({ queryKey: ['org', 'org-1', 'environment', 'e1', 'folders'] })).toBe(true)
+    expect(predicate({ queryKey: ['org', 'org-2', 'environment', 'e1', 'folders'] })).toBe(false)
+    expect(predicate({ queryKey: ['org', 'org-1', 'environment', 'e1', 'shares'] })).toBe(false)
+    expect(predicate({ queryKey: ['org', 'org-1', 'projects'] })).toBe(false)
   })
 })

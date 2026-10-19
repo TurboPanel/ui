@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { EnvironmentFoldersPanel } from './environment-folders-panel'
 
@@ -8,6 +8,7 @@ const state = vi.hoisted(() => ({
   isLoading: false,
   isError: false,
   error: null as unknown,
+  mutate: vi.fn(),
 }))
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
@@ -26,9 +27,16 @@ vi.mock('@/lib/queries/folders', () => ({
     isError: state.isError,
     error: state.error,
   }),
+  useRemoveFolder: () => ({ mutate: state.mutate, isPending: false, isError: false }),
 }))
 vi.mock('@/components/ui', () => ({
   Badge: ({ label }: { label: string }) => <span>{label}</span>,
+  Button: ({ label, onPress }: { label: string; onPress: () => void }) => (
+    <button onClick={onPress}>{label}</button>
+  ),
+  ConfirmButton: ({ label, onConfirm }: { label: string; onConfirm: () => void }) => (
+    <button onClick={onConfirm}>{label}</button>
+  ),
   LoadingState: ({ label }: { label?: string }) => <div>{label}</div>,
   SectionPanel: ({ title, children }: { title?: string; children?: unknown }) => (
     <section>
@@ -103,5 +111,49 @@ describe('EnvironmentFoldersPanel', () => {
     expect(screen.getByText('Being removed')).toBeTruthy()
     expect(screen.getByText('Not in TurboPanel')).toBeTruthy()
     expect(screen.getByText('and 20 more.')).toBeTruthy()
+  })
+
+  it('offers to remove an orphan and to retry a stuck removal only to someone who can manage', () => {
+    state.data = {
+      ok: true,
+      total: 2,
+      folders: [
+        { id: 'f1', kind: 'volume', state: 'removing', scope: 'p', slug: 'a', serverId: 's' },
+        { id: 'f2', kind: 'service', state: 'orphan', scope: 'p', slug: 'b', serverId: 's' },
+      ],
+    }
+    const { unmount } = render(<EnvironmentFoldersPanel orgId="o" environmentId="e" />)
+    expect(screen.queryByText('Remove from server')).toBeNull()
+    expect(screen.queryByText('Try again now')).toBeNull()
+    unmount()
+
+    render(<EnvironmentFoldersPanel orgId="o" environmentId="e" canManage />)
+    fireEvent.click(screen.getByText('Remove from server'))
+    expect(state.mutate).toHaveBeenCalledWith('f2')
+    fireEvent.click(screen.getByText('Try again now'))
+    expect(state.mutate).toHaveBeenCalledWith('f1')
+  })
+
+  it('offers no removal for an orphan a service or volume still names', () => {
+    state.data = {
+      ok: true,
+      total: 2,
+      folders: [
+        {
+          id: 'f1',
+          kind: 'service',
+          state: 'orphan',
+          scope: 'p',
+          slug: 'named',
+          serverId: 's',
+          assetId: 'svc-1',
+        },
+        { id: 'f2', kind: 'service', state: 'orphan', scope: 'p', slug: 'free', serverId: 's' },
+      ],
+    }
+    render(<EnvironmentFoldersPanel orgId="o" environmentId="e" canManage />)
+    expect(screen.getAllByText('Remove from server')).toHaveLength(1)
+    fireEvent.click(screen.getByText('Remove from server'))
+    expect(state.mutate).toHaveBeenCalledWith('f2')
   })
 })

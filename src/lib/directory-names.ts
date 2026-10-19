@@ -102,6 +102,14 @@ export function folderStateLabel(state: FolderState): string {
   return FOLDER_STATE_LABELS[state]
 }
 
+/** What a person can do with a folder in this state: remove an orphan, ask a stuck removal again, forget a missing row. */
+export function folderActionFor(state: FolderState): 'remove' | 'retry' | 'forget' | null {
+  if (state === 'orphan') return 'remove'
+  if (state === 'removing') return 'retry'
+  if (state === 'missing') return 'forget'
+  return null
+}
+
 /** One plain line for a folder row: what it is, where, and why it is still there. */
 export function folderLine(folder: EnvironmentFolderRecord): string {
   const what = folder.assetName ?? folder.slug

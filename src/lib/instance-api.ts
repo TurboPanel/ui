@@ -1848,6 +1848,36 @@ export async function fetchEnvironmentFolders(
   return await apiFetch(`${CLIENT_API}/environments/${environmentId}/folders`)
 }
 
+/** One folder in the organization-wide list of folders that need a person. */
+export type OrgFolderRecord = EnvironmentFolderRecord & {
+  /** The site owner's Linux user whose tree holds the folder. */
+  owner: string
+  hasAsset: boolean
+  /** What a click does: remove an orphan, ask a stuck removal again, forget a missing row; null while in use. */
+  action: 'remove' | 'retry' | 'forget' | null
+  updatedAt: string
+}
+
+/** Orphans, stuck removals and missing folders across the organization (managers only). */
+export async function fetchOrgFolders(
+  orgId: string,
+  query: Readonly<{ states?: readonly FolderState[]; limit?: number; offset?: number }> = {}
+): Promise<{ ok: true; total: number; folders: OrgFolderRecord[] }> {
+  const params = new URLSearchParams()
+  if (query.states && query.states.length > 0) params.set('state', query.states.join(','))
+  if (query.limit !== undefined) params.set('limit', String(query.limit))
+  if (query.offset !== undefined) params.set('offset', String(query.offset))
+  const suffix = params.size > 0 ? `?${params.toString()}` : ''
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/folders${suffix}`)
+}
+
+/** Remove an orphan from its server, ask a stuck removal again, or forget a missing row. */
+export async function removeFolder(
+  folderId: string
+): Promise<{ ok: true; outcome: 'removing' | 'forgotten' }> {
+  return await apiFetch(`${CLIENT_API}/folders/${folderId}/remove`, { method: 'POST' })
+}
+
 export type EnvironmentShareRecord = {
   id: string
   environmentId: string
