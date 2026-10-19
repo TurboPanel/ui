@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { PrincipalDefaultsSettingsSection } from '@/components/org/principal-defaults-settings-section'
 import { DirectoryDefaultsSettingsSection } from '@/components/org/directory-defaults-settings-section'
+import { OrgFoldersSection } from '@/components/org/org-folders-section'
 import {
   Badge,
   ConfirmButton,
@@ -189,6 +190,7 @@ export function OrgPrincipalsTab({ orgId }: Readonly<{ orgId: string }>) {
       </SectionPanel>
       <PrincipalDefaultsSettingsSection orgId={orgId} />
       <DirectoryDefaultsSettingsSection orgId={orgId} />
+      <OrgFoldersSection orgId={orgId} />
     </View>
   )
 }

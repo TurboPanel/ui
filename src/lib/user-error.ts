@@ -68,6 +68,8 @@ const API_ERROR_COPY: Readonly<Record<string, string>> = {
   service_slug_locked: 'The folder name is locked because this service already has a folder.',
   storage_slug_locked: 'The folder name is locked because this volume already has a folder.',
   scope_locked: 'Whether this is shared across environments is locked once its folder exists.',
+  folder_in_use:
+    'A service or volume is using this folder. Delete that service or volume to remove its folder.',
   common_asset_in_use:
     'Other environments are still using this shared item. Stop using it there first.',
   asset_not_common: 'Only items shared across environments can be used by other environments.',

@@ -5,7 +5,9 @@ import {
   fetchEnvironmentFolders,
   fetchEnvironmentShares,
   fetchOrgDirectoryDefaults,
+  fetchOrgFolders,
   removeEnvironmentShare,
+  removeFolder,
   saveOrgDirectoryDefaults,
 } from './instance-api'
 import { apiErrorCopy } from './user-error'
@@ -81,5 +83,26 @@ describe('instance-api folder wrappers', () => {
     ]) {
       expect(apiErrorCopy(new Error(`HTTP 409: ${code}`))).toEqual(expect.any(String))
     }
+  })
+
+  it('lists the folders that need attention with filters and settles one', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, total: 0, folders: [] }))
+    await fetchOrgFolders('org-1')
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe('/api/client/v1/organizations/org-1/folders')
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, total: 0, folders: [] }))
+    await fetchOrgFolders('org-1', { states: ['orphan', 'removing'], limit: 20, offset: 40 })
+    expect(String(fetchMock.mock.calls[1]?.[0])).toBe(
+      '/api/client/v1/organizations/org-1/folders?state=orphan%2Cremoving&limit=20&offset=40'
+    )
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, outcome: 'removing' }))
+    await expect(removeFolder('f-1')).resolves.toEqual({ ok: true, outcome: 'removing' })
+    expect(String(fetchMock.mock.calls[2]?.[0])).toBe('/api/client/v1/folders/f-1/remove')
+    expect((fetchMock.mock.calls[2]?.[1] as RequestInit).method).toBe('POST')
+  })
+
+  it('explains a folder that is in use in plain words', () => {
+    expect(apiErrorCopy(new Error('HTTP 409: folder_in_use'))).toMatch(/Delete that service or volume/)
   })
 })

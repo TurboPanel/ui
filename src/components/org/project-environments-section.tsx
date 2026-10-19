@@ -451,7 +451,11 @@ export function ProjectEnvironmentsSection({
           stopping={deleteFlow.stopping}
           onStop={() => void deleteFlow.stopActive()}
         />
-        <EnvironmentFoldersPanel orgId={orgId} environmentId={activeEnvironment.id} />
+        <EnvironmentFoldersPanel
+          orgId={orgId}
+          environmentId={activeEnvironment.id}
+          canManage={canOwn}
+        />
         <EnvironmentSharesPanel
           orgId={orgId}
           projectId={projectId}

@@ -1,9 +1,15 @@
 import { StyleSheet, Text, View } from 'react-native'
 import { Badge, LoadingState, SectionPanel, type BadgeTone } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
-import { folderLine, folderLockExplanation, folderStateLabel } from '@/lib/directory-names'
+import { FolderActionButton } from '@/components/org/folder-action-button'
+import {
+  folderActionFor,
+  folderLine,
+  folderLockExplanation,
+  folderStateLabel,
+} from '@/lib/directory-names'
 import type { EnvironmentFolderRecord, FolderState } from '@/lib/instance-api'
-import { useEnvironmentFolders } from '@/lib/queries/folders'
+import { useEnvironmentFolders, useRemoveFolder } from '@/lib/queries/folders'
 import { colors, spacing } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
 
@@ -15,7 +21,20 @@ const STATE_TONES: Record<FolderState, BadgeTone> = {
   missing: 'danger',
 }
 
-function FolderRow({ folder }: Readonly<{ folder: EnvironmentFolderRecord }>) {
+function FolderRow({
+  folder,
+  canManage,
+  busy,
+  disabled,
+  onRun,
+}: Readonly<{
+  folder: EnvironmentFolderRecord
+  canManage: boolean
+  busy: boolean
+  disabled: boolean
+  onRun: (folderId: string) => void
+}>) {
+  const action = canManage ? folderActionFor(folder.state) : null
   return (
     <View style={styles.row}>
       <View style={styles.rowTop}>
@@ -23,6 +42,12 @@ function FolderRow({ folder }: Readonly<{ folder: EnvironmentFolderRecord }>) {
         <Badge label={folderStateLabel(folder.state)} tone={STATE_TONES[folder.state]} />
       </View>
       {folder.reason ? <Text style={panelStyles.muted}>{folder.reason}</Text> : null}
+      <FolderActionButton
+        action={action}
+        busy={busy}
+        disabled={disabled}
+        onRun={() => onRun(folder.id)}
+      />
     </View>
   )
 }
@@ -37,8 +62,10 @@ function FolderRow({ folder }: Readonly<{ folder: EnvironmentFolderRecord }>) {
 export function EnvironmentFoldersPanel({
   orgId,
   environmentId,
-}: Readonly<{ orgId: string; environmentId: string }>) {
+  canManage = false,
+}: Readonly<{ orgId: string; environmentId: string; canManage?: boolean }>) {
   const query = useEnvironmentFolders(orgId, environmentId)
+  const remove = useRemoveFolder(orgId)
   const total = query.data?.total ?? 0
   const folders = query.data?.folders ?? []
   if (query.isLoading) {
@@ -66,8 +93,20 @@ export function EnvironmentFoldersPanel({
       hint={total === 1 ? '1 folder' : `${total} folders`}
     >
       <Text style={panelStyles.muted}>{explanation}</Text>
+      {remove.isError ? (
+        <Text style={panelStyles.error}>
+          {userErrorMessage(remove.error, 'Could not change that folder.')}
+        </Text>
+      ) : null}
       {folders.map((folder) => (
-        <FolderRow key={folder.id} folder={folder} />
+        <FolderRow
+          key={folder.id}
+          folder={folder}
+          canManage={canManage}
+          busy={remove.isPending && remove.variables === folder.id}
+          disabled={remove.isPending}
+          onRun={(folderId) => remove.mutate(folderId)}
+        />
       ))}
       {total > folders.length ? (
         <Text style={panelStyles.muted}>and {total - folders.length} more.</Text>

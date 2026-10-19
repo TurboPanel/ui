@@ -5,8 +5,10 @@ import {
   fetchOrgDirectoryDefaults,
   type DirectoryNamesMode,
   fetchEnvironmentShares,
+  fetchOrgFolders,
   fetchStorage,
   removeEnvironmentShare,
+  removeFolder,
 } from '@/lib/instance-api'
 import { useApiMutation, queryKeys } from '@/lib/query-client'
 
@@ -85,4 +87,36 @@ export function useDirectoryNamesMode(orgId: string, canManage: boolean): Direct
     enabled: canManage && orgId.length > 0,
   })
   return query.data?.effectiveNames ?? 'slug'
+}
+
+/** Orphans, stuck removals and missing folders across the organization; managers only. */
+export function useOrgFolders(orgId: string, canManage: boolean) {
+  return useQuery({
+    queryKey: queryKeys.org(orgId).settings.folders,
+    queryFn: () => fetchOrgFolders(orgId, { limit: 50 }),
+    enabled: canManage && orgId.length > 0,
+  })
+}
+
+/**
+ * Remove, retry or forget one folder. Refreshes the organization list and every
+ * environment's folder list, since the same row shows in both.
+ */
+export function useRemoveFolder(orgId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (folderId: string) => removeFolder(folderId),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.org(orgId).settings.folders }),
+        queryClient.invalidateQueries({
+          predicate: (query) =>
+            query.queryKey[0] === 'org' &&
+            query.queryKey[1] === orgId &&
+            query.queryKey[2] === 'environment' &&
+            query.queryKey[4] === 'folders',
+        }),
+      ])
+    },
+  })
 }
