@@ -59,6 +59,7 @@ const styles = themedStyles((p) => ({
   was: { color: p.text3, textDecorationLine: 'line-through' },
   now: { color: p.text },
   link: { ...typeStyle('bodyMedium', 'subhead'), color: p.link },
+  problem: { ...typeStyle('body', 'footnote'), color: p.bad },
 }))
 
 /** A section's rows, five at first and "Show all N" for the rest. */
@@ -231,28 +232,43 @@ export function AppsSection({
   )
 }
 
+/** Whether the hostnames added on the Hosting screen have loaded. */
+export type HostingsStatus = 'ready' | 'loading' | 'error'
+
 export function HostingSection({
   domains,
+  hostingsStatus = 'ready',
   onOpenUrl,
   onManage,
 }: Readonly<{
   domains: readonly DomainRowModel[]
+  hostingsStatus?: HostingsStatus
   onOpenUrl: (url: string) => void
   onManage: () => void
 }>) {
   const s = styles(usePalette())
+  const checking = hostingsStatus === 'loading' && domains.length === 0
   const manage = <ActionButton label="Add or change hostnames" size="sm" onPress={onManage} />
   return (
     <View style={s.section}>
       <SectionHeading title="Hosting" note={plural(domains.length, 'hostname')} action={manage} />
+      {hostingsStatus === 'error' ? (
+        <Text style={s.problem}>
+          Could not check the hostnames added on the Hosting screen, so this list may be missing some. Try again in a moment.
+        </Text>
+      ) : null}
       <ListGroup
         foot="Hostnames belong to this environment only. Let’s Encrypt renews certificates automatically once DNS checks out."
         empty={
-          <EmptyPanel
-            inline
-            title="No hostnames yet"
-            body="Until you add one, the site answers at its temporary address."
-          />
+          checking ? (
+            <EmptyPanel inline title="Checking hostnames…" body="One moment." />
+          ) : (
+            <EmptyPanel
+              inline
+              title="No hostnames yet"
+              body="Until you add one, the site answers at its temporary address."
+            />
+          )
         }
       >
         {domains.length === 0 ? null : (

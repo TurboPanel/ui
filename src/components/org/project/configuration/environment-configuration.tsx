@@ -6,6 +6,7 @@ import {
   ChangesSection,
   DataSection,
   HostingSection,
+  type HostingsStatus,
   LinuxUsersSection,
   VariablesSection,
 } from '@/components/org/project/configuration/config-sections'
@@ -104,6 +105,7 @@ function lede(model: ConfigViewModel): string {
 /** The tab body once the config-view answer is in. Presentational: links go through the callbacks. */
 export function EnvironmentConfigurationView({
   model,
+  hostingsStatus = 'ready',
   multiple,
   onOpenApp,
   onOpenUrl,
@@ -114,6 +116,8 @@ export function EnvironmentConfigurationView({
   model: ConfigViewModel
   /** The project has more than one environment (the Base can differ from this one). */
   multiple: boolean
+  /** Whether the hostnames added on the Hosting screen have loaded (the compose ones are in the model). */
+  hostingsStatus?: HostingsStatus
   onOpenApp: (serviceId: string) => void
   onOpenUrl: (url: string) => void
   onManageHosting: () => void
@@ -156,6 +160,7 @@ export function EnvironmentConfigurationView({
           <AppsSection apps={model.apps} onOpenApp={onOpenApp} />
           <HostingSection
             domains={model.domains}
+            hostingsStatus={hostingsStatus}
             onOpenUrl={onOpenUrl}
             onManage={onManageHosting}
           />
@@ -206,6 +211,9 @@ export function EnvironmentConfigurationScreen() {
     () => (baseModel ? withHostingHostnames(baseModel, hostings.hostingsByService) : null),
     [baseModel, hostings.hostingsByService],
   )
+  let hostingsStatus: HostingsStatus = 'ready'
+  if (hostings.hasError) hostingsStatus = 'error'
+  else if (hostings.isLoading) hostingsStatus = 'loading'
   const [staged, setStaged] = useState<readonly StagedEdit[]>([])
   const [saveError, setSaveError] = useState<string | null>(null)
   const [problems, setProblems] = useState<readonly SaveProblem[]>([])
@@ -292,6 +300,7 @@ export function EnvironmentConfigurationScreen() {
       <EnvironmentConfigurationView
         model={model}
         multiple={environments.length > 1}
+        hostingsStatus={hostingsStatus}
         editing={editing}
         onOpenApp={(serviceId) => router.push(projectServiceHref(orgId, projectId, serviceId) as Href)}
         onOpenUrl={(url) => {
