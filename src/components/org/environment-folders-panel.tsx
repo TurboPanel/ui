@@ -34,7 +34,9 @@ function FolderRow({
   disabled: boolean
   onRun: (folderId: string) => void
 }>) {
-  const action = canManage ? folderActionFor(folder.state) : null
+  // An orphan a service or volume row still names goes with that row: the panel would refuse.
+  const named = folder.state === 'orphan' && !!folder.assetId
+  const action = canManage && !named ? folderActionFor(folder.state) : null
   return (
     <View style={styles.row}>
       <View style={styles.rowTop}>

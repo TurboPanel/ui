@@ -133,4 +133,27 @@ describe('EnvironmentFoldersPanel', () => {
     fireEvent.click(screen.getByText('Try again now'))
     expect(state.mutate).toHaveBeenCalledWith('f1')
   })
+
+  it('offers no removal for an orphan a service or volume still names', () => {
+    state.data = {
+      ok: true,
+      total: 2,
+      folders: [
+        {
+          id: 'f1',
+          kind: 'service',
+          state: 'orphan',
+          scope: 'p',
+          slug: 'named',
+          serverId: 's',
+          assetId: 'svc-1',
+        },
+        { id: 'f2', kind: 'service', state: 'orphan', scope: 'p', slug: 'free', serverId: 's' },
+      ],
+    }
+    render(<EnvironmentFoldersPanel orgId="o" environmentId="e" canManage />)
+    expect(screen.getAllByText('Remove from server')).toHaveLength(1)
+    fireEvent.click(screen.getByText('Remove from server'))
+    expect(state.mutate).toHaveBeenCalledWith('f2')
+  })
 })
