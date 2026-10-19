@@ -377,10 +377,13 @@ export function updateBanner(
   if (key === input.dismissedKey) return null
   const labels = pieces.map(updatePieceLabel).join(', ')
   const names = joinWithAnd(pieces.map((piece) => BODY_NAMES[piece.name]))
+  const restarts = pieces.some((piece) => piece.name === 'control plane')
   return {
     key,
     title: `TurboPanel update available: ${labels}`,
-    body: `This updates ${names}. Choose Update to review it first; nothing changes until you confirm.`,
+    body:
+      `This updates ${names}. Choose Update to review it first; nothing changes until you confirm.` +
+      (restarts ? ' This page may briefly show “TurboPanel is updating” while it restarts.' : ''),
   }
 }
 
