@@ -78,7 +78,7 @@ export function DirectoryDefaultsSettingsSection({ orgId }: Readonly<{ orgId: st
       ) : null}
       <SettingRow
         label="How folders are named"
-        description="Each service and volume gets its own folder under its site owner's directory on the server. Readable names use a name like example.com. Ids use the long id TurboPanel gives the item. Choose for each lets whoever creates the item pick."
+        description="Each service and volume gets its own folder under its Hosting Account's directory on the server. Readable names use a name like example.com. Ids use the long id TurboPanel gives the item. Choose for each lets whoever creates the item pick."
       >
         <Select
           value={names}

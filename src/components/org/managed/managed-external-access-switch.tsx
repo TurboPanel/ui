@@ -10,7 +10,7 @@ export const EXTERNAL_ACCESS_LABEL = 'Allow external access to the databases on 
 export function externalAccessHint(enabled: boolean): string {
   return enabled
     ? "Yes: the database ports are open on all of this server's addresses. The firewall and network rules decide who can reach them."
-    : "No: only this server can connect. That means sites run by a site owner's Linux user and containers bound to the database."
+    : 'No: only this server can connect. That means sites run by a Hosting Account and containers bound to the database.'
 }
 
 /** Plain warning shown when the switch also moves other databases. */

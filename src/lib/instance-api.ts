@@ -2366,7 +2366,7 @@ export async function getServerDeletePreview(
 }
 
 const PRINCIPAL_CHOICE_REFUSED_MESSAGE =
-  'Something changed while you were choosing: a principal is now used elsewhere or is no longer on this server. Check the list below and try again.'
+  'Something changed while you were choosing: a Hosting Account is now used elsewhere or is no longer on this server. Check the list below and try again.'
 
 function isPrincipalChoiceRefusal(code: string | undefined): boolean {
   return code === 'principal_delete_refused' || code === 'principal_not_on_server'

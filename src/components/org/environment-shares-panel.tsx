@@ -94,7 +94,7 @@ export function EnvironmentSharesPanel({
   return (
     <SectionPanel
       title="Shared across environments"
-      hint="Services and volumes kept in the site owner's shared folder"
+      hint="Services and volumes kept in the Hosting Account's shared folder"
     >
       {error ? <Text style={panelStyles.error}>{userErrorMessage(error, error)}</Text> : null}
       {shares.map((share) => (

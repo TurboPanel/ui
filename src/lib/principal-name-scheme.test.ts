@@ -75,7 +75,7 @@ describe('principal-name-scheme', () => {
     expect(principalSchemeErrorMessage('username_reserved')).toBe(USERNAME_RESERVED_COPY)
     expect(principalSchemeErrorMessage('HTTP 400: username_too_long')).toBe(USERNAME_TOO_LONG_COPY)
     expect(principalSchemeErrorMessage('HTTP 409: username_in_use')).toBe(USERNAME_IN_USE_COPY)
-    expect(USERNAME_RESERVED_COPY).toContain('site owner')
+    expect(USERNAME_RESERVED_COPY).toContain('Hosting Account')
     expect(USERNAME_RESERVED_COPY).not.toMatch(/username_reserved/)
   })
 })
