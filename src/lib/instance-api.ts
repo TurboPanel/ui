@@ -2148,8 +2148,6 @@ export type OrgPrincipalRecord = Readonly<{
   id: string
   name: string
   appliedUsername: string
-  kind: string
-  provider: string
   forms: readonly ('system' | 'database')[]
   projectId: string | null
   projectName: string | null
@@ -3240,7 +3238,7 @@ export type VariableRecord = {
  */
 export type BindingRecord = {
   id: string
-  principalId: string
+  loginId: string
   serviceId: string
   databaseName: string
   keyPrefix: string
@@ -7422,8 +7420,6 @@ export async function deleteTask(id: string): Promise<{ ok: true }> {
 
 export type ProjectPrincipalRecord = {
   id: string
-  kind: string
-  provider: string
   /** Display name: what the operator typed. */
   username: string
   /**
@@ -9572,7 +9568,7 @@ export async function fetchBindings(
 }
 
 export async function createBinding(body: {
-  principalId: string
+  loginId: string
   serviceId: string
   databaseName: string
   keyPrefix?: string

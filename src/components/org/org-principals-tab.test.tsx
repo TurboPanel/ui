@@ -67,8 +67,6 @@ function row(patch: Partial<OrgPrincipalRecord>): OrgPrincipalRecord {
     id: 'p1',
     name: 'shop',
     appliedUsername: 'shop_abc',
-    kind: 'system',
-    provider: 'server',
     forms: ['system'],
     projectId: null,
     projectName: null,

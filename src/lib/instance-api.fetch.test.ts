@@ -782,7 +782,7 @@ describe('instance-api fetch wrappers', () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, id: 'bind-1' }))
     await expect(
       createBinding({
-        principalId: 'principal-1',
+        loginId: 'login-1',
         serviceId: 'svc-1',
         databaseName: 'app',
         keyPrefix: 'APP_DB',

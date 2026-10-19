@@ -179,7 +179,7 @@ export function ManagedUsersPanel({
   const bindingCountByPrincipal = useMemo(() => {
     const map = new Map<string, number>()
     for (const binding of bindings) {
-      map.set(binding.principalId, (map.get(binding.principalId) ?? 0) + 1)
+      map.set(binding.loginId, (map.get(binding.loginId) ?? 0) + 1)
     }
     return map
   }, [bindings])
