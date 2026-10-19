@@ -24,7 +24,8 @@ vi.mock(
 vi.mock('@/components/ui/panel-styles', () => ({ panelStyles: { muted: {}, error: {} } }))
 vi.mock('@/lib/query-client', () => ({ useCan: () => state.canManage }))
 vi.mock('@/lib/queries/folders', () => ({
-  useOrgFolders: () => ({
+  useOrgFolders: (_orgId: string, _canManage: boolean, limit?: number) => ({
+    limit,
     data: state.data,
     isLoading: state.isLoading,
     isError: state.isError,
@@ -152,12 +153,12 @@ describe('OrgFoldersSection', () => {
     state.data = { ok: true, total: 5, folders: ROWS }
     render(<OrgFoldersSection orgId="o" />)
     expect(
-      screen.getByText('1 folder on your servers no longer belong to a service or volume')
+      screen.getByText('1 folder on your servers no longer belongs to a service or volume')
     ).toBeTruthy()
     expect(screen.getByText('old.example.com (service on server Beta)')).toBeTruthy()
     expect(screen.getByText('Not in TurboPanel')).toBeTruthy()
     expect(screen.getByText(/a container still has the folder open/)).toBeTruthy()
-    expect(screen.getByText('and 2 more.')).toBeTruthy()
+    expect(screen.getByText('Show more (2 not shown)')).toBeTruthy()
     fireEvent.click(screen.getByText('Remove from server'))
     expect(state.mutate).toHaveBeenCalledWith('f1')
     fireEvent.click(screen.getByText('Try again now'))
@@ -173,5 +174,25 @@ describe('OrgFoldersSection', () => {
     state.removeError = true
     render(<OrgFoldersSection orgId="o" />)
     expect(screen.getByText(/A service or volume is using this folder/)).toBeTruthy()
+  })
+
+  it('uses plural wording for several orphans', () => {
+    state.data = {
+      ok: true,
+      total: 2,
+      folders: [ROWS[0], { ...ROWS[0], id: 'f4', slug: 'second.example.com' }],
+    }
+    render(<OrgFoldersSection orgId="o" />)
+    expect(
+      screen.getByText('2 folders on your servers no longer belong to a service or volume')
+    ).toBeTruthy()
+  })
+
+  it('shows more on request, and is honest when even a full page is not everything', () => {
+    state.data = { ok: true, total: 150, folders: ROWS }
+    render(<OrgFoldersSection orgId="o" />)
+    fireEvent.click(screen.getByText('Show more (147 not shown)'))
+    expect(screen.getByText(/and 147 more\. Settle some of these to see the rest\./)).toBeTruthy()
+    expect(screen.queryByText(/Show more/)).toBeNull()
   })
 })

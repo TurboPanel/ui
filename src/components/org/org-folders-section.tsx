@@ -1,5 +1,13 @@
+import { useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
-import { Badge, InlineNotice, LoadingState, SectionPanel, type BadgeTone } from '@/components/ui'
+import {
+  Badge,
+  Button,
+  InlineNotice,
+  LoadingState,
+  SectionPanel,
+  type BadgeTone,
+} from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { FolderActionButton } from '@/components/org/folder-action-button'
 import { folderLine, folderStateLabel } from '@/lib/directory-names'
@@ -20,6 +28,10 @@ const STATE_TONES: Record<FolderState, BadgeTone> = {
 function countLabel(count: number): string {
   return count === 1 ? '1 folder' : `${count} folders`
 }
+
+/** Rows shown at first, and the most the list asks the panel for (the panel's own page cap). */
+const FIRST_PAGE = 50
+const MAX_PAGE = 100
 
 function FolderRow({
   folder,
@@ -61,7 +73,8 @@ function FolderRow({
  */
 export function OrgFoldersSection({ orgId }: Readonly<{ orgId: string }>) {
   const canManage = useCan('organization', orgId, 'organization:manage')
-  const query = useOrgFolders(orgId, canManage)
+  const [limit, setLimit] = useState(FIRST_PAGE)
+  const query = useOrgFolders(orgId, canManage, limit)
   const remove = useRemoveFolder(orgId)
   if (!canManage) return null
   if (query.isLoading) {
@@ -89,7 +102,11 @@ export function OrgFoldersSection({ orgId }: Readonly<{ orgId: string }>) {
       {orphans > 0 ? (
         <InlineNotice
           tone="warning"
-          title={`${countLabel(orphans)} on your servers no longer belong to a service or volume`}
+          title={
+            orphans === 1
+              ? '1 folder on your servers no longer belongs to a service or volume'
+              : `${orphans} folders on your servers no longer belong to a service or volume`
+          }
           body="They keep their files and stop their environment from being renamed, moved or deleted. Remove them, or create a service or volume with the same name to take one over."
         />
       ) : null}
@@ -107,8 +124,17 @@ export function OrgFoldersSection({ orgId }: Readonly<{ orgId: string }>) {
           onRun={(folderId) => remove.mutate(folderId)}
         />
       ))}
-      {total > folders.length ? (
-        <Text style={panelStyles.muted}>and {total - folders.length} more.</Text>
+      {total > folders.length && limit < MAX_PAGE ? (
+        <Button
+          label={`Show more (${total - folders.length} not shown)`}
+          size="sm"
+          onPress={() => setLimit(MAX_PAGE)}
+        />
+      ) : null}
+      {total > folders.length && limit >= MAX_PAGE ? (
+        <Text style={panelStyles.muted}>
+          and {total - folders.length} more. Settle some of these to see the rest.
+        </Text>
       ) : null}
     </SectionPanel>
   )

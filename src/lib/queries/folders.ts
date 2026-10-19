@@ -90,10 +90,10 @@ export function useDirectoryNamesMode(orgId: string, canManage: boolean): Direct
 }
 
 /** Orphans, stuck removals and missing folders across the organization; managers only. */
-export function useOrgFolders(orgId: string, canManage: boolean) {
+export function useOrgFolders(orgId: string, canManage: boolean, limit = 50) {
   return useQuery({
-    queryKey: queryKeys.org(orgId).settings.folders,
-    queryFn: () => fetchOrgFolders(orgId, { limit: 50 }),
+    queryKey: [...queryKeys.org(orgId).settings.folders, limit] as const,
+    queryFn: () => fetchOrgFolders(orgId, { limit }),
     enabled: canManage && orgId.length > 0,
   })
 }
