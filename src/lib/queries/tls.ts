@@ -1,9 +1,13 @@
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import {
   createTlsCertificate,
+  deleteOrganizationCaLeaf,
   deleteTlsCertificate,
+  fetchOrganizationCaLeaves,
   fetchOrganizationCaRotation,
   fetchTlsLibrary,
+  markOrganizationCaLeafStale,
+  renewOrganizationCaLeaf,
   retireOrganizationCa,
   rotateOrganizationCa,
 } from '@/lib/instance-api'
@@ -63,7 +67,45 @@ function invalidateOrganizationCaQueries(
     queryClient.invalidateQueries({
       queryKey: queryKeys.org(orgId).tlsCaRotation,
     }),
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.org(orgId).tlsCaLeaves,
+    }),
   ])
+}
+
+export function useOrganizationCaLeaves(
+  orgId: string,
+  options?: Readonly<{ enabled?: boolean }>,
+) {
+  return useQuery({
+    queryKey: queryKeys.org(orgId).tlsCaLeaves,
+    queryFn: fetchOrganizationCaLeaves,
+    enabled: (options?.enabled ?? true) && orgId.length > 0,
+  })
+}
+
+export function useRenewOrganizationCaLeaf(orgId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: renewOrganizationCaLeaf,
+    onSuccess: () => invalidateOrganizationCaQueries(queryClient, orgId),
+  })
+}
+
+export function useMarkOrganizationCaLeafStale(orgId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: markOrganizationCaLeafStale,
+    onSuccess: () => invalidateOrganizationCaQueries(queryClient, orgId),
+  })
+}
+
+export function useDeleteOrganizationCaLeaf(orgId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: deleteOrganizationCaLeaf,
+    onSuccess: () => invalidateOrganizationCaQueries(queryClient, orgId),
+  })
 }
 
 export function useRotateOrganizationCa(orgId: string) {
