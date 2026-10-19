@@ -1,6 +1,13 @@
 import { useMemo, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
-import { Button, ConfirmButton, SectionPanel, Select, type SelectOption } from '@/components/ui'
+import {
+  Button,
+  ConfirmButton,
+  LoadingState,
+  SectionPanel,
+  Select,
+  type SelectOption,
+} from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
 import {
   useAddEnvironmentShare,
@@ -56,6 +63,22 @@ export function EnvironmentSharesPanel({
       .map((volume) => ({ value: `volume:${volume.id}`, label: `${volume.name} (volume)` })),
   ]
 
+  if (sharesQuery.isLoading) {
+    return (
+      <SectionPanel title="Shared across environments">
+        <LoadingState label="Checking shared items…" />
+      </SectionPanel>
+    )
+  }
+  if (sharesQuery.isError) {
+    return (
+      <SectionPanel title="Shared across environments">
+        <Text style={panelStyles.error}>
+          {userErrorMessage(sharesQuery.error, 'Could not load the shared items.')}
+        </Text>
+      </SectionPanel>
+    )
+  }
   if (shares.length === 0 && options.length === 0) return null
 
   const start = () => {
@@ -66,6 +89,7 @@ export function EnvironmentSharesPanel({
       onSuccess: () => setPick(null),
     })
   }
+  const removingId = remove.isPending && typeof remove.variables === 'string' ? remove.variables : null
   const error = add.actionError ?? remove.actionError
   return (
     <SectionPanel
@@ -82,6 +106,8 @@ export function EnvironmentSharesPanel({
             <ConfirmButton
               label="Stop using"
               confirmLabel="Stop using it"
+              busy={removingId === share.id}
+              disabled={remove.isPending}
               onConfirm={() => remove.mutate(share.id)}
             />
           ) : null}

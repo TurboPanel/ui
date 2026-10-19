@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Text, View } from 'react-native'
 import { Button, FormField, SegmentedControl, TextField, Toggle } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
-import { folderNameProblem, folderPathPreview } from '@/lib/directory-names'
+import { folderNameKindOf, folderNameProblem, serviceFolderWhere } from '@/lib/directory-names'
 import type { DirectoryNameKind, ServiceRecord } from '@/lib/instance-api'
 import { useEnvironmentFolders, useDirectoryNamesMode } from '@/lib/queries/folders'
 import { useUpdateService } from '@/lib/queries/services'
@@ -30,15 +30,17 @@ export function ServiceFolderSettings({
   const folders = useEnvironmentFolders(orgId, service.environmentId)
   const update = useUpdateService(orgId, service.id)
   const [name, setName] = useState(service.slug ?? '')
-  const [kind, setKind] = useState<DirectoryNameKind>('slug')
+  const [kind, setKind] = useState<DirectoryNameKind>(folderNameKindOf(service.slug))
   const [error, setError] = useState<string | null>(null)
 
+  const checking = folders.isLoading
+  const checkFailed = folders.isError
   const locked = (folders.data?.folders ?? []).some((folder) => folder.assetId === service.id)
   const common = service.common === true
   const typedAllowed = mode === 'slug' || (mode === 'both' && kind === 'slug')
   const problem = typedAllowed ? folderNameProblem(name) : null
   const changed = typedAllowed && name.trim() !== '' && name.trim() !== (service.slug ?? '')
-  const disabled = !canManage || locked || update.isPending
+  const disabled = !canManage || locked || checking || checkFailed || update.isPending
 
   const save = (body: Parameters<typeof update.mutate>[0]) => {
     setError(null)
@@ -50,9 +52,15 @@ export function ServiceFolderSettings({
       <Text style={panelStyles.detailTitle}>Folder on the server</Text>
       <Text style={panelStyles.muted}>
         {service.slug
-          ? folderPathPreview(common ? 'common' : '<environment>', 'service', service.slug)
+          ? serviceFolderWhere(service.slug, common)
           : 'Created at the first deploy. A website named by its domain uses the domain.'}
       </Text>
+      {checking ? <Text style={panelStyles.muted}>Checking whether it already has a folder…</Text> : null}
+      {checkFailed ? (
+        <Text style={panelStyles.muted}>
+          Could not check whether it already has a folder, so these settings are read-only for now.
+        </Text>
+      ) : null}
       {locked ? (
         <Text style={panelStyles.muted}>
           Locked: this service already has a folder on a server, and folders are never renamed.

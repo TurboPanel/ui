@@ -49,13 +49,12 @@ export function DirectoryDefaultsSettingsSection({ orgId }: Readonly<{ orgId: st
 
   const settings = query.data
   const names = draft.names ?? settings?.effectiveNames ?? 'slug'
-  const handLocked = draft.locked ?? (settings?.locked === true && !settings.lockedByFolders)
   const lockedByFolders = settings?.lockedByFolders === true
+  const locked = settings?.locked === true
+  const lockOn = locked || draft.locked === true
   const pending = mutation.isPending || query.isLoading
   const dirty =
-    settings != null &&
-    !lockedByFolders &&
-    (names !== settings.effectiveNames || handLocked !== settings.locked)
+    settings != null && !locked && (names !== settings.effectiveNames || lockOn)
 
   if (!canManage) return null
 
@@ -72,6 +71,11 @@ export function DirectoryDefaultsSettingsSection({ orgId }: Readonly<{ orgId: st
           Locked: folders already exist on your servers, and existing folders are never renamed.
         </Text>
       ) : null}
+      {locked && !lockedByFolders ? (
+        <Text style={panelStyles.muted}>
+          Locked by an owner of this organization. It stays as it is and cannot be changed here.
+        </Text>
+      ) : null}
       <SettingRow
         label="How folders are named"
         description="Each service and volume gets its own folder under its site owner's directory on the server. Readable names use a name like example.com. Ids use the long id TurboPanel gives the item. Choose for each lets whoever creates the item pick."
@@ -80,7 +84,7 @@ export function DirectoryDefaultsSettingsSection({ orgId }: Readonly<{ orgId: st
           value={names}
           options={DIRECTORY_NAMES_OPTIONS}
           placeholder="Select how folders are named"
-          disabled={pending || !settings || lockedByFolders}
+          disabled={pending || !settings || locked}
           accessibilityLabel="How folders are named"
           onChange={(value) => {
             if (isDirectoryNamesMode(value)) setDraft((d) => ({ ...d, names: value }))
@@ -92,10 +96,10 @@ export function DirectoryDefaultsSettingsSection({ orgId }: Readonly<{ orgId: st
         description="Stops it from being changed by mistake. It also locks by itself when the first folder is created."
       >
         <Toggle
-          value={lockedByFolders ? true : handLocked}
-          disabled={pending || !settings || lockedByFolders}
+          value={lockOn}
+          disabled={pending || !settings || locked}
           accessibilityLabel="Lock folder naming"
-          onValueChange={() => setDraft((d) => ({ ...d, locked: !handLocked }))}
+          onValueChange={() => setDraft((d) => ({ ...d, locked: !lockOn }))}
         />
       </SettingRow>
       {dirty ? (
@@ -104,7 +108,7 @@ export function DirectoryDefaultsSettingsSection({ orgId }: Readonly<{ orgId: st
           busyLabel="Saving…"
           busy={mutation.isPending}
           onPress={() => {
-            mutation.mutate({ names, locked: handLocked })
+            mutation.mutate({ names, locked: lockOn })
           }}
         />
       ) : null}

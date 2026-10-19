@@ -97,7 +97,7 @@ describe('LoginPermissionsPanel', () => {
 
   it('loads only when opened and shows a plain-words error', () => {
     mock.mockReturnValue({ ...base, isError: true, error: new Error('HTTP 409: daemon_update_required') } as never)
-    render(<LoginPermissionsPanel orgId="o1" environmentId="e1" principalId="p1" username="u1" />)
+    render(<LoginPermissionsPanel orgId="o1" environmentId="e1" loginId="p1" username="u1" />)
     expect(mock).toHaveBeenLastCalledWith('o1', 'e1', 'p1', { enabled: false })
     expect(screen.queryByText(/newer TurboPanel/)).toBeNull()
     fireEvent.click(screen.getByText('What can this login do?'))
@@ -107,7 +107,7 @@ describe('LoginPermissionsPanel', () => {
 
   it('shows loading', () => {
     mock.mockReturnValue({ ...base, isFetching: true } as never)
-    render(<LoginPermissionsPanel orgId="o1" environmentId="e1" principalId="p1" username="u1" />)
+    render(<LoginPermissionsPanel orgId="o1" environmentId="e1" loginId="p1" username="u1" />)
     fireEvent.click(screen.getByText('What can this login do?'))
     expect(screen.getByRole('progressbar')).toBeTruthy()
   })

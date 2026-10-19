@@ -9,8 +9,8 @@ type Pending<T> = { value: T; body: ManagedUserPatch; statements: string[] }
 
 /** Preview a change with a dry run, then apply it once the owner confirms. */
 export function usePreviewedChange<T>(
-  principalId: string,
-  onUpdate: (principalId: string, body: ManagedUserPatch) => Promise<ManagedUserPatchResult>,
+  loginId: string,
+  onUpdate: (loginId: string, body: ManagedUserPatch) => Promise<ManagedUserPatchResult>,
   onError: (message: string | null) => void,
   failure: Readonly<{ preview: string; apply: string }>
 ) {
@@ -21,7 +21,7 @@ export function usePreviewedChange<T>(
     setBusy(true)
     onError(null)
     try {
-      const result = await onUpdate(principalId, { ...body, dryRun: true })
+      const result = await onUpdate(loginId, { ...body, dryRun: true })
       setPending({ value, body, statements: result.statements ?? [] })
     } catch (err) {
       onError(managedErrorMessage(err, failure.preview))
@@ -35,7 +35,7 @@ export function usePreviewedChange<T>(
     setBusy(true)
     onError(null)
     try {
-      await onUpdate(principalId, pending.body)
+      await onUpdate(loginId, pending.body)
     } catch (err) {
       onError(managedErrorMessage(err, failure.apply))
     } finally {

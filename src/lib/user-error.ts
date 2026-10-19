@@ -54,6 +54,8 @@ const API_ERROR_COPY: Readonly<Record<string, string>> = {
   environment_server_locked:
     'This environment has folders on its server, so it cannot move to another server. Remove its services and volumes first.',
   environment_name_in_use: 'Another environment in this project already has that name.',
+  invalid_environment_name:
+    'Use lowercase letters, digits, hyphens and underscores, up to 32, starting with a letter or digit. Words such as common, home and tmp are taken.',
   directory_names_locked:
     'Folder naming is locked because folders already exist. It cannot change.',
   directory_name_taken: 'Another service or volume already uses that folder name.',
@@ -71,7 +73,6 @@ const API_ERROR_COPY: Readonly<Record<string, string>> = {
   asset_not_common: 'Only items shared across environments can be used by other environments.',
   asset_in_this_environment: 'This item already belongs to this environment.',
   asset_has_no_owner: 'A shared item needs a site owner before other environments can use it.',
-  machine_key_in_use: 'That server is already registered.',
 }
 
 const LICENSE_TIER_FORBIDDEN = /HTTP 403:\s*Forbidden\b/

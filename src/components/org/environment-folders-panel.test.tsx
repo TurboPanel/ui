@@ -3,7 +3,12 @@ import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { EnvironmentFoldersPanel } from './environment-folders-panel'
 
-const state = vi.hoisted(() => ({ data: undefined as unknown }))
+const state = vi.hoisted(() => ({
+  data: undefined as unknown,
+  isLoading: false,
+  isError: false,
+  error: null as unknown,
+}))
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
 vi.mock('react-native-svg', async () => (await import('@/components/ui/v4/rn-stub')).svgStub)
@@ -15,10 +20,16 @@ vi.mock('@/components/ui/panel-styles', () => ({
   panelStyles: { muted: {}, error: {} },
 }))
 vi.mock('@/lib/queries/folders', () => ({
-  useEnvironmentFolders: () => ({ data: state.data }),
+  useEnvironmentFolders: () => ({
+    data: state.data,
+    isLoading: state.isLoading,
+    isError: state.isError,
+    error: state.error,
+  }),
 }))
 vi.mock('@/components/ui', () => ({
   Badge: ({ label }: { label: string }) => <span>{label}</span>,
+  LoadingState: ({ label }: { label?: string }) => <div>{label}</div>,
   SectionPanel: ({ title, children }: { title?: string; children?: unknown }) => (
     <section>
       <h2>{title}</h2>
@@ -29,12 +40,29 @@ vi.mock('@/components/ui', () => ({
 
 beforeEach(() => {
   state.data = undefined
+  state.isLoading = false
+  state.isError = false
+  state.error = null
 })
 afterEach(() => {
   cleanup()
 })
 
 describe('EnvironmentFoldersPanel', () => {
+  it('says it is checking while the folders load', () => {
+    state.isLoading = true
+    render(<EnvironmentFoldersPanel orgId="o" environmentId="e" />)
+    expect(screen.getByText('Checking for folders…')).toBeTruthy()
+  })
+
+  it('shows a failure and warns that locks may apply', () => {
+    state.isError = true
+    state.error = new Error('HTTP 500: boom')
+    render(<EnvironmentFoldersPanel orgId="o" environmentId="e" />)
+    expect(screen.getByText(/HTTP 500: boom/)).toBeTruthy()
+    expect(screen.getByText(/may be refused until they load/)).toBeTruthy()
+  })
+
   it('shows nothing when the environment has no folders', () => {
     state.data = { ok: true, total: 0, folders: [] }
     render(<EnvironmentFoldersPanel orgId="o" environmentId="e" />)

@@ -132,7 +132,7 @@ export function LoginModeEditor({
 }: Readonly<{
   user: ManagedUserRecord
   disabled: boolean
-  onUpdate: (principalId: string, body: ManagedUserPatch) => Promise<ManagedUserPatchResult>
+  onUpdate: (loginId: string, body: ManagedUserPatch) => Promise<ManagedUserPatchResult>
   onError: (message: string | null) => void
 }>) {
   const [pending, setPending] = useState<PendingSwitch | null>(null)

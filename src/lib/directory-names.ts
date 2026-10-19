@@ -9,7 +9,7 @@ import type {
 const FOLDER_NAME_RULE = /^[a-z0-9]([a-z0-9._-]{0,61}[a-z0-9])?$/
 
 export const FOLDER_NAME_RULE_TEXT =
-  'Lowercase letters, digits, dots, hyphens and underscores. Start and end with a letter or digit. Up to 63 characters.'
+  'Lowercase letters, digits, dots, hyphens and underscores. Start and end with a letter or digit, and no “..”. Up to 63 characters.'
 
 export const DIRECTORY_NAMES_LABELS: Record<DirectoryNamesMode, string> = {
   slug: 'Readable names',
@@ -49,7 +49,15 @@ export function suggestFolderName(name: string): string {
 export function folderNameProblem(value: string): string | null {
   const trimmed = value.trim()
   if (trimmed === '') return null
+  if (trimmed.includes('..')) return FOLDER_NAME_RULE_TEXT
   return FOLDER_NAME_RULE.test(trimmed) ? null : FOLDER_NAME_RULE_TEXT
+}
+
+const UUID_NAME = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+
+/** Which kind of name a saved folder name is: an id, or a readable name. */
+export function folderNameKindOf(slug: string | null | undefined): DirectoryNameKind {
+  return slug && UUID_NAME.test(slug) ? 'uuid' : 'slug'
 }
 
 export type FolderNameDraft = {
@@ -104,11 +112,9 @@ export function folderLockExplanation(total: number): string | null {
   return "This environment's name is part of the folder path on your servers, so it cannot change, move to another server or be deleted while these folders exist. Remove the services and volumes first, or put assets that should not depend on the name in the shared folder."
 }
 
-/** Where a folder lives on a server, for the path preview. */
-export function folderPathPreview(
-  scope: string,
-  kind: 'service' | 'volume',
-  slug: string
-): string {
-  return `/srv/users/<owner>/${scope}/${kind === 'service' ? 'services' : 'volumes'}/${slug}`
+/** Plain words for where a service's folder is: its name and which folder it sits in. */
+export function serviceFolderWhere(slug: string, common: boolean): string {
+  return common
+    ? `${slug}, in the site owner's shared folder`
+    : `${slug}, in the folder named after its environment`
 }

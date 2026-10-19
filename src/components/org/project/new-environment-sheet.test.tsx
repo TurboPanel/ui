@@ -100,21 +100,21 @@ describe.each(SCENARIOS)('New environment sheet ($name)', (scenario) => {
 
   it('creates from the Base without a compose of its own', async () => {
     const { onCreated } = renderSheet()
-    enterName('  Staging ')
+    enterName('  staging ')
     create()
     await waitFor(() => expect(onCreated).toHaveBeenCalledWith('new-env'))
-    expect(state.run).toHaveBeenCalledWith({ projectId: 'p', name: 'Staging' })
+    expect(state.run).toHaveBeenCalledWith({ projectId: 'p', name: 'staging' })
   })
 
   it('creates an environment that stands alone with services: !override {}', async () => {
     const { onCreated } = renderSheet()
-    enterName('Preview')
+    enterName('preview')
     fireEvent.click(screen.getByRole('radio', { name: /^Empty, stands alone/ }))
     create()
     await waitFor(() => expect(onCreated).toHaveBeenCalled())
     expect(state.run).toHaveBeenCalledWith({
       projectId: 'p',
-      name: 'Preview',
+      name: 'preview',
       options: {
         compose: expect.objectContaining({
           data: { services: { __turbopanelComposeTag: 'override', value: {} } },
@@ -126,11 +126,11 @@ describe.each(SCENARIOS)('New environment sheet ($name)', (scenario) => {
   it('pins the server that was chosen, and lists only online servers', async () => {
     renderSheet()
     expect(screen.queryByRole('radio', { name: /Offline box/ })).toBeNull()
-    enterName('Staging')
+    enterName('staging')
     fireEvent.click(screen.getByRole('radio', { name: /^Frankfurt 1/ }))
     create()
     await waitFor(() => expect(state.run).toHaveBeenCalled())
-    expect(state.run).toHaveBeenCalledWith({ projectId: 'p', name: 'Staging', serverId: 's1' })
+    expect(state.run).toHaveBeenCalledWith({ projectId: 'p', name: 'staging', serverId: 's1' })
   })
 
   it('says so when the project has no server yet', () => {
@@ -149,14 +149,14 @@ describe.each(SCENARIOS)('New environment sheet ($name)', (scenario) => {
   it('clears the message once the name is edited', () => {
     renderSheet()
     create()
-    enterName('Staging')
+    enterName('staging')
     expect(screen.queryByRole('alert')).toBeNull()
   })
 
   it('shows the reason when the server refuses', async () => {
     state.run.mockResolvedValue({ ok: false, error: 'An environment with that name already exists' })
     renderSheet()
-    enterName('Staging')
+    enterName('staging')
     create()
     expect((await screen.findByRole('alert')).textContent).toBe('An environment with that name already exists')
   })
@@ -164,7 +164,7 @@ describe.each(SCENARIOS)('New environment sheet ($name)', (scenario) => {
   it('falls back to a plain message when the server gives none', async () => {
     state.run.mockResolvedValue({ ok: false, error: null })
     renderSheet()
-    enterName('Staging')
+    enterName('staging')
     create()
     expect((await screen.findByRole('alert')).textContent).toBe('Could not create the environment.')
   })
@@ -172,7 +172,7 @@ describe.each(SCENARIOS)('New environment sheet ($name)', (scenario) => {
   it('reports a failed request that threw', async () => {
     state.run.mockRejectedValue(new Error('boom'))
     renderSheet()
-    enterName('Staging')
+    enterName('staging')
     create()
     expect((await screen.findByRole('alert')).textContent).toBe('Could not create the environment.')
   })
@@ -180,7 +180,7 @@ describe.each(SCENARIOS)('New environment sheet ($name)', (scenario) => {
   it('does not send twice while a create is running', () => {
     state.isPending = true
     renderSheet()
-    enterName('Staging')
+    enterName('staging')
     create()
     expect(state.run).not.toHaveBeenCalled()
   })

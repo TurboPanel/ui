@@ -5,7 +5,8 @@ import {
   folderLine,
   folderLockExplanation,
   folderNameProblem,
-  folderPathPreview,
+  folderNameKindOf,
+  serviceFolderWhere,
   folderStateLabel,
   isDirectoryNamesMode,
   suggestFolderName,
@@ -38,6 +39,7 @@ describe('folderNameProblem', () => {
     expect(folderNameProblem('-a')).not.toBeNull()
     expect(folderNameProblem('a.')).not.toBeNull()
     expect(folderNameProblem('a'.repeat(64))).not.toBeNull()
+    expect(folderNameProblem('a..b')).not.toBeNull()
   })
 })
 
@@ -84,9 +86,13 @@ describe('folder wording', () => {
     ).toBe('Uploads (volume on server Alpha)')
     expect(folderLockExplanation(0)).toBeNull()
     expect(folderLockExplanation(2)).toContain('shared folder')
-    expect(folderPathPreview('common', 'service', 'example.com')).toBe(
-      '/srv/users/<owner>/common/services/example.com'
+    expect(serviceFolderWhere('example.com', true)).toBe(
+      "example.com, in the site owner's shared folder"
     )
+    expect(serviceFolderWhere('example.com', false)).toContain('named after its environment')
+    expect(folderNameKindOf('3f2b8c1e-aaaa-4bbb-8ccc-0123456789ab')).toBe('uuid')
+    expect(folderNameKindOf('example.com')).toBe('slug')
+    expect(folderNameKindOf(null)).toBe('slug')
     expect(isDirectoryNamesMode('both')).toBe(true)
     expect(isDirectoryNamesMode('x')).toBe(false)
   })

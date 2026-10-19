@@ -1,10 +1,11 @@
 import { StyleSheet, Text, View } from 'react-native'
-import { Badge, SectionPanel, type BadgeTone } from '@/components/ui'
+import { Badge, LoadingState, SectionPanel, type BadgeTone } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { folderLine, folderLockExplanation, folderStateLabel } from '@/lib/directory-names'
 import type { EnvironmentFolderRecord, FolderState } from '@/lib/instance-api'
 import { useEnvironmentFolders } from '@/lib/queries/folders'
 import { colors, spacing } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 const STATE_TONES: Record<FolderState, BadgeTone> = {
   planned: 'pending',
@@ -40,6 +41,23 @@ export function EnvironmentFoldersPanel({
   const query = useEnvironmentFolders(orgId, environmentId)
   const total = query.data?.total ?? 0
   const folders = query.data?.folders ?? []
+  if (query.isLoading) {
+    return (
+      <SectionPanel title="Folders on your servers">
+        <LoadingState label="Checking for folders…" />
+      </SectionPanel>
+    )
+  }
+  if (query.isError) {
+    return (
+      <SectionPanel title="Folders on your servers">
+        <Text style={panelStyles.error}>
+          {userErrorMessage(query.error, 'Could not load the folders on your servers.')} Renaming,
+          moving or deleting this environment may be refused until they load.
+        </Text>
+      </SectionPanel>
+    )
+  }
   const explanation = folderLockExplanation(total)
   if (!explanation) return null
   return (
