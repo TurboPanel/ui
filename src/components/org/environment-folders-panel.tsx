@@ -1,0 +1,70 @@
+import { StyleSheet, Text, View } from 'react-native'
+import { Badge, SectionPanel, type BadgeTone } from '@/components/ui'
+import { panelStyles } from '@/components/ui/panel-styles'
+import { folderLine, folderLockExplanation, folderStateLabel } from '@/lib/directory-names'
+import type { EnvironmentFolderRecord, FolderState } from '@/lib/instance-api'
+import { useEnvironmentFolders } from '@/lib/queries/folders'
+import { colors, spacing } from '@/lib/theme'
+
+const STATE_TONES: Record<FolderState, BadgeTone> = {
+  planned: 'pending',
+  present: 'ok',
+  removing: 'pending',
+  orphan: 'danger',
+  missing: 'danger',
+}
+
+function FolderRow({ folder }: Readonly<{ folder: EnvironmentFolderRecord }>) {
+  return (
+    <View style={styles.row}>
+      <View style={styles.rowTop}>
+        <Text style={styles.line}>{folderLine(folder)}</Text>
+        <Badge label={folderStateLabel(folder.state)} tone={STATE_TONES[folder.state]} />
+      </View>
+      {folder.reason ? <Text style={panelStyles.muted}>{folder.reason}</Text> : null}
+    </View>
+  )
+}
+
+/**
+ * The folders that exist on servers under an environment's name. While any
+ * exists the environment cannot be renamed, moved to another server or
+ * deleted, so this list is the plain-words reason. A folder being removed says
+ * what it is waiting for (for example an offline server); a folder TurboPanel
+ * did not create is shown as not in TurboPanel until an admin clears it.
+ */
+export function EnvironmentFoldersPanel({
+  orgId,
+  environmentId,
+}: Readonly<{ orgId: string; environmentId: string }>) {
+  const query = useEnvironmentFolders(orgId, environmentId)
+  const total = query.data?.total ?? 0
+  const folders = query.data?.folders ?? []
+  const explanation = folderLockExplanation(total)
+  if (!explanation) return null
+  return (
+    <SectionPanel
+      title="Folders on your servers"
+      hint={total === 1 ? '1 folder' : `${total} folders`}
+    >
+      <Text style={panelStyles.muted}>{explanation}</Text>
+      {folders.map((folder) => (
+        <FolderRow key={folder.id} folder={folder} />
+      ))}
+      {total > folders.length ? (
+        <Text style={panelStyles.muted}>and {total - folders.length} more.</Text>
+      ) : null}
+    </SectionPanel>
+  )
+}
+
+const styles = StyleSheet.create({
+  row: { gap: spacing.xs },
+  rowTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  line: { color: colors.text, fontSize: 14, flexShrink: 1 },
+})

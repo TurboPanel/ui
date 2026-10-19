@@ -173,6 +173,7 @@ export const queryKeys = {
         /** Org default resource ceiling for compose services (`/organizations/:id/compose-resource-defaults`). */
         composeResourceDefaults: ['org', orgId, 'compose-resource-defaults'] as const,
         principalDefaults: ['org', orgId, 'principal-defaults'] as const,
+        directoryDefaults: ['org', orgId, 'directory-defaults'] as const,
         serverCapacity: ['org', orgId, 'server-capacity'] as const,
         fabric: ['org', orgId, 'fabric'] as const,
       },
@@ -224,6 +225,12 @@ export const queryKeys = {
         all: ['org', orgId, 'environments'] as const,
         list: (projectId?: string) => ['org', orgId, 'environments', projectId ?? 'all'] as const,
         detail: (environmentId: string) => ['org', orgId, 'environment', environmentId] as const,
+        /** Folders under the environment's name (locks rename, move and delete). */
+        folders: (environmentId: string) =>
+          ['org', orgId, 'environment', environmentId, 'folders'] as const,
+        /** Common services and volumes the environment uses. */
+        shares: (environmentId: string) =>
+          ['org', orgId, 'environment', environmentId, 'shares'] as const,
         deployPreview: (environmentId: string) =>
           ['org', orgId, 'environment', environmentId, 'deploy-preview'] as const,
         /** Effective configuration and changes from the Base (no interval; invalidated by every config save). */

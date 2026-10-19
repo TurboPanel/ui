@@ -47,6 +47,31 @@ const API_ERROR_COPY: Readonly<Record<string, string>> = {
   server_not_licensed:
     'This server does not have an active license yet. Add the server with a license before picking a tier.',
   invalid_body: 'Choose a tier from the list, or clear the pick to use automatic placement.',
+  environment_name_locked:
+    "This environment's name is part of the folder path on your servers, so it cannot change while services or volumes have folders in it.",
+  environment_has_folders:
+    'This environment still has folders on your servers. Remove its services and volumes first, then delete it.',
+  environment_server_locked:
+    'This environment has folders on its server, so it cannot move to another server. Remove its services and volumes first.',
+  environment_name_in_use: 'Another environment in this project already has that name.',
+  directory_names_locked:
+    'Folder naming is locked because folders already exist. It cannot change.',
+  directory_name_taken: 'Another service or volume already uses that folder name.',
+  directory_name_typed_in_uuid_mode:
+    'This organization names folders by id, so a folder name cannot be typed.',
+  directory_name_mode_forbidden:
+    'This organization does not allow choosing that kind of folder name.',
+  invalid_directory_name:
+    'Use lowercase letters, digits, dots, hyphens and underscores. Start and end with a letter or digit. Up to 63 characters.',
+  service_slug_locked: 'The folder name is locked because this service already has a folder.',
+  storage_slug_locked: 'The folder name is locked because this volume already has a folder.',
+  scope_locked: 'Whether this is shared across environments is locked once its folder exists.',
+  common_asset_in_use:
+    'Other environments are still using this shared item. Stop using it there first.',
+  asset_not_common: 'Only items shared across environments can be used by other environments.',
+  asset_in_this_environment: 'This item already belongs to this environment.',
+  asset_has_no_owner: 'A shared item needs a site owner before other environments can use it.',
+  machine_key_in_use: 'That server is already registered.',
 }
 
 const LICENSE_TIER_FORBIDDEN = /HTTP 403:\s*Forbidden\b/

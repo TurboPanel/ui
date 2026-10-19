@@ -1,3 +1,5 @@
+import { EnvironmentFoldersPanel } from '@/components/org/environment-folders-panel'
+import { EnvironmentSharesPanel } from '@/components/org/environment-shares-panel'
 import { useEffect, useRef, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { EnvironmentDetailBody } from '@/components/org/environment-detail-section'
@@ -448,6 +450,12 @@ export function ProjectEnvironmentsSection({
           failure={deleteFlow.failure}
           stopping={deleteFlow.stopping}
           onStop={() => void deleteFlow.stopActive()}
+        />
+        <EnvironmentFoldersPanel orgId={orgId} environmentId={activeEnvironment.id} />
+        <EnvironmentSharesPanel
+          orgId={orgId}
+          projectId={projectId}
+          environmentId={activeEnvironment.id}
         />
         {showCreate && canOwn ? (
           <EnvironmentCreateForm

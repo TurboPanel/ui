@@ -1791,6 +1791,100 @@ export async function saveOrgPrincipalDefaults(
   })
 }
 
+/** How a service or volume folder is named under a site owner: a readable name or the asset id. */
+export type DirectoryNameKind = 'slug' | 'uuid'
+
+/** What the organization allows: one kind for everything, or a choice per asset. */
+export type DirectoryNamesMode = DirectoryNameKind | 'both'
+
+export type OrgDirectoryDefaults = {
+  names: DirectoryNamesMode | null
+  effectiveNames: DirectoryNamesMode
+  /** Locked by hand or because any folder exists. */
+  locked: boolean
+  lockedByFolders: boolean
+}
+
+export type OrgDirectoryDefaultsUpdate = {
+  names?: DirectoryNamesMode | null
+  locked?: boolean
+}
+
+export async function fetchOrgDirectoryDefaults(orgId: string): Promise<OrgDirectoryDefaults> {
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/directory-defaults`)
+}
+
+export async function saveOrgDirectoryDefaults(
+  orgId: string,
+  update: OrgDirectoryDefaultsUpdate
+): Promise<OrgDirectoryDefaults & { ok: true }> {
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/directory-defaults`, {
+    method: 'PUT',
+    body: JSON.stringify(update),
+  })
+}
+
+export type FolderState = 'planned' | 'present' | 'removing' | 'orphan' | 'missing'
+
+export type EnvironmentFolderRecord = {
+  id: string
+  kind: 'service' | 'volume'
+  state: FolderState
+  scope: string
+  slug: string
+  serverId: string
+  serverName?: string | null
+  assetId?: string | null
+  assetName?: string | null
+  /** Plain words for a removing or orphan folder; null for any other state. */
+  reason?: string | null
+}
+
+/** The folders under an environment's name; `folders` is the first 20, `total` counts all. */
+export async function fetchEnvironmentFolders(
+  environmentId: string
+): Promise<{ ok: true; total: number; folders: EnvironmentFolderRecord[] }> {
+  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/folders`)
+}
+
+export type EnvironmentShareRecord = {
+  id: string
+  environmentId: string
+  environmentName?: string | null
+  projectId?: string
+  projectName?: string | null
+  kind: 'service' | 'volume'
+  assetId: string
+  assetName?: string | null
+}
+
+export async function fetchEnvironmentShares(
+  environmentId: string
+): Promise<{ ok: true; shares: EnvironmentShareRecord[] }> {
+  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/shares`)
+}
+
+/** Send exactly one of `serviceId` and `storageId`. */
+export async function addEnvironmentShare(
+  environmentId: string,
+  body: { serviceId: string } | { storageId: string }
+): Promise<{ ok: true; id: string }> {
+  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/shares`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function removeEnvironmentShare(
+  environmentId: string,
+  shareId: string
+): Promise<{ ok: true }> {
+  return await apiFetch(
+    `${CLIENT_API}/environments/${environmentId}/shares/${encodeURIComponent(shareId)}`,
+    { method: 'DELETE' }
+  )
+}
+
 export type OrgFabricRecord = {
   id: string
   cidr: string
@@ -3366,6 +3460,13 @@ export type ServiceRecord = {
   environmentId: string
   /** Derived from the compose document — read-only; never send this on create/update. */
   composeServiceName: string
+  /**
+   * Folder name under the site owner's tree (`<scope>/services/<slug>`). Null until
+   * a deploy plans the first folder; locked once the service has a folder.
+   */
+  slug?: string | null
+  /** True when the folder is in the shared (`common`) scope. Chosen before the first folder, then locked. */
+  common?: boolean
   metadata?: Record<string, unknown> | null
   /**
    * Application the daemon recognised in a site's document root at the last
@@ -3986,6 +4087,11 @@ export async function updateService(
     name?: string
     options?: ServiceOptions
     metadata?: Record<string, unknown> | null
+    /** Folder name. 409 `service_slug_locked` once a folder exists. */
+    slug?: string
+    directoryName?: DirectoryNameKind
+    /** Share across environments. 409 `scope_locked` once a folder exists. */
+    common?: boolean
   }
 ): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/services/${id}`, {
@@ -7072,7 +7178,6 @@ export type StorageCopyRecord = {
   state: string
   path: string | null
   endpoint: string | null
-  generation: number
   metadata: Record<string, unknown> | null
   options: Record<string, unknown> | null
   createdAt: string
@@ -7104,8 +7209,11 @@ export type StorageRecord = {
   name: string
   accessMode: StorageAccessMode
   retention: StorageRetention
-  generation: number
   principalId: string | null
+  /** Folder name under the site owner's tree (`<scope>/volumes/<slug>`); locked once a folder exists. */
+  slug?: string | null
+  /** True when the volume is in the shared (`common`) scope. Chosen at creation, never changes. */
+  common?: boolean
   metadata: Record<string, unknown> | null
   options: Record<string, unknown> | null
   createdAt: string
@@ -7124,6 +7232,12 @@ export type CreateStorageBody = {
   accessMode?: StorageAccessMode
   retention?: StorageRetention
   principalId?: string | null
+  /** Folder name; omitted means one made from `name`. 400 `invalid_directory_name`, 409 `directory_name_taken`. */
+  slug?: string
+  /** Only accepted when the organization allows both kinds of folder name. */
+  directoryName?: DirectoryNameKind
+  /** Place the volume in the shared scope. Decided here and locked. */
+  common?: boolean
   metadata?: Record<string, unknown>
   options?: Record<string, unknown>
   copy?: {
