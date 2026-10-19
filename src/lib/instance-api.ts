@@ -132,6 +132,7 @@ export const BINDING_OWNED_VARIABLE_ERROR = 'binding_owned_variable'
 export const CA_ROTATION_IN_PROGRESS_ERROR = 'ca_rotation_in_progress'
 export const NO_PENDING_ROTATION_ERROR = 'no_pending_rotation'
 export const CA_ROTATION_NOT_CONVERGED_ERROR = 'ca_rotation_not_converged'
+export const CA_LEAVES_OUTSTANDING_ERROR = 'ca_leaves_outstanding'
 export const DATABASE_NOT_FOUND_ERROR = 'database_not_found'
 export const REPOSITORY_REFERENCED_BY_COMPOSE_ERROR = 'source_referenced_by_compose'
 export const REPOSITORY_URL_CONFLICT_ERROR = 'source_url_conflict'
@@ -3650,6 +3651,8 @@ export type OrganizationCaRecord = {
 
 export type OrganizationCaLeafHealth = {
   dueCount: number
+  /** Certificates marked stale: nothing waits on them. */
+  staleCount: number
   caGeneration: number
   caNotAfter: string | null
 }
@@ -3670,6 +3673,47 @@ export type CaRotationStatus = {
   state: string
   results: CaRotationResult[]
   retiredCaStillRequired: boolean
+  /** When the previous generation is retired on its own; null before fan-out finishes. */
+  retireBy?: string | null
+}
+
+/** A certificate signed by the Organization CA that needs an owner's attention. */
+export type OrganizationCaLeaf = {
+  id: string
+  kind: 'ingress' | 'engine'
+  state: 'due' | 'stale'
+  /** Plain words: why it is listed. */
+  reason: string
+  serverId: string
+  serverName: string | null
+  managedId: string | null
+  managedName: string | null
+  environmentId: string | null
+  environmentName: string | null
+  projectName: string | null
+  caGeneration: number
+  notAfter: string
+  issuedAt: string
+  attempts: number
+  attemptedAt: string | null
+  lastError: string | null
+  staleAt: string | null
+  staleReason: string | null
+}
+
+export type OrganizationCaLeaves = {
+  leaves: OrganizationCaLeaf[]
+  dueCount: number
+  staleCount: number
+  caGeneration: number
+  /** More than the list shows. */
+  truncated: boolean
+}
+
+export type OrganizationCaLeafRenewal = {
+  ok: true
+  outcome: 'queued' | 'failed' | 'stale' | 'skipped'
+  reason: string | null
 }
 
 /**
@@ -9765,6 +9809,31 @@ export async function fetchOrganizationCaRotation(): Promise<CaRotationStatus | 
     if (isHttpStatusError(err, 404)) return null
     throw err
   }
+}
+
+/** Certificates signed by the Organization CA that are due for renewal or marked stale. */
+export async function fetchOrganizationCaLeaves(): Promise<OrganizationCaLeaves> {
+  return await apiFetch(`${CLIENT_API}/tls/ca/leaves`)
+}
+
+export async function renewOrganizationCaLeaf(leafId: string): Promise<OrganizationCaLeafRenewal> {
+  return await apiFetch(`${CLIENT_API}/tls/ca/leaves/${encodeURIComponent(leafId)}/renew`, {
+    method: 'POST',
+  })
+}
+
+/** Say nothing is waiting on this certificate: it is no longer counted or renewed. */
+export async function markOrganizationCaLeafStale(leafId: string): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/tls/ca/leaves/${encodeURIComponent(leafId)}/stale`, {
+    method: 'POST',
+  })
+}
+
+/** Forget the record of a certificate; the certificate on the server is untouched. */
+export async function deleteOrganizationCaLeaf(leafId: string): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/tls/ca/leaves/${encodeURIComponent(leafId)}`, {
+    method: 'DELETE',
+  })
 }
 
 export async function rotateOrganizationCa(): Promise<{
