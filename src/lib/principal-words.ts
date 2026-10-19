@@ -10,7 +10,7 @@ import type {
  * "principal" and, where the form matters, "system user" or "database login".
  */
 export const PRINCIPAL_DEFINITION =
-  'A principal is an account responsible for the contents within it. On a server it is a Hosting Account, the Linux account a site runs as. For a database it is a database login.'
+  'A principal is an account responsible for the contents within it. On a server it is a system user, a Hosting Account: the Linux account a site runs as. For a database it is a database login.'
 
 export const PRINCIPAL_SERVER_TAB_HINT =
   'Hosting Accounts placed on this server, each as a system user. The Principals tab of Manage organization lists all of them.'
