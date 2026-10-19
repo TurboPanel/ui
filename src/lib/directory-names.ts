@@ -35,14 +35,18 @@ export function isDirectoryNamesMode(value: unknown): value is DirectoryNamesMod
   return value === 'slug' || value === 'uuid' || value === 'both'
 }
 
+function isNameChar(char: string | undefined): boolean {
+  return char !== undefined && /[a-z0-9]/.test(char)
+}
+
 /** A readable folder name made from a display name; empty when nothing usable is left. */
 export function suggestFolderName(name: string): string {
-  const cleaned = name
-    .trim()
-    .toLowerCase()
-    .replaceAll(/[^a-z0-9._-]+/g, '-')
-    .replaceAll(/^[^a-z0-9]+|[^a-z0-9]+$/g, '')
-  return cleaned.slice(0, 63).replaceAll(/[^a-z0-9]+$/g, '')
+  const spaced = name.trim().toLowerCase().replaceAll(/[^a-z0-9._-]+/g, '-')
+  let start = 0
+  while (start < spaced.length && !isNameChar(spaced[start])) start += 1
+  let end = Math.min(spaced.length, start + 63)
+  while (end > start && !isNameChar(spaced[end - 1])) end -= 1
+  return spaced.slice(start, end)
 }
 
 /** What is wrong with a typed folder name, or null when it is fine (or empty: the panel picks one). */
