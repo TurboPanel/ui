@@ -250,7 +250,7 @@ export function binding(
 ): BindingRecord {
   return {
     id: `b-${serviceId}-${databaseName}`,
-    principalId: 'pr',
+    loginId: 'pr',
     serviceId,
     databaseName,
     keyPrefix: '',

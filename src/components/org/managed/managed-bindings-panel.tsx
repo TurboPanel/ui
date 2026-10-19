@@ -42,7 +42,7 @@ type ServiceMeta = { name: string; projectId: string }
 
 type ConnectBindingFields = {
   serviceId: string
-  principalId: string
+  loginId: string
   databaseName: string
   keyPrefix: string
   emitEngineDefaults: boolean
@@ -129,7 +129,7 @@ function BindingCard({
       </Text>
       <Text style={panelStyles.detailLine}>
         <Text style={panelStyles.detailLabel}>User: </Text>
-        {user ? managedUserPickerLabel(user) : binding.principalId}
+        {user ? managedUserPickerLabel(user) : binding.loginId}
       </Text>
       <Text style={panelStyles.detailLine}>
         <Text style={panelStyles.detailLabel}>Prefix: </Text>
@@ -203,7 +203,7 @@ function ServiceBindingGroup({
           key={binding.id}
           binding={binding}
           meta={meta}
-          user={userById.get(binding.principalId)}
+          user={userById.get(binding.loginId)}
           canManage={canManage}
           disabled={disabled}
           onOpenService={onOpenService}
@@ -237,7 +237,7 @@ function ConnectServiceForm({
 }>) {
   const [targetEnvironmentId, setTargetEnvironmentId] = useState('')
   const [serviceId, setServiceId] = useState('')
-  const [principalId, setPrincipalId] = useState('')
+  const [loginId, setLoginId] = useState('')
   const [databaseName, setDatabaseName] = useState('')
   const [keyPrefix, setKeyPrefix] = useState(DEFAULT_BINDING_KEY_PREFIX)
   const [emitEngineDefaults, setEmitEngineDefaults] = useState(true)
@@ -301,9 +301,9 @@ function ConnectServiceForm({
         items={users}
         getId={(user) => user.id}
         getLabel={(user) => managedUserPickerLabel(user)}
-        selectedId={principalId}
+        selectedId={loginId}
         accessibilityLabel="User"
-        onSelect={setPrincipalId}
+        onSelect={setLoginId}
       />
 
       <Text style={panelStyles.detailLabel}>Database</Text>
@@ -349,7 +349,7 @@ function ConnectServiceForm({
           onPress={() =>
             onSubmit({
               serviceId,
-              principalId,
+              loginId,
               databaseName,
               keyPrefix,
               emitEngineDefaults,
@@ -467,7 +467,7 @@ export function ManagedBindingsPanel({
   }, [bindings, serviceMetaById])
 
   const handleCreate = async (fields: ConnectBindingFields) => {
-    if (!fields.principalId || !fields.serviceId || !fields.databaseName.trim()) {
+    if (!fields.loginId || !fields.serviceId || !fields.databaseName.trim()) {
       setError('Choose a service, user, and database.')
       return
     }
@@ -481,7 +481,7 @@ export function ManagedBindingsPanel({
     setEndpointUnavailable(false)
     try {
       await createBinding.mutateAsync({
-        principalId: fields.principalId,
+        loginId: fields.loginId,
         serviceId: fields.serviceId,
         databaseName: fields.databaseName.trim(),
         keyPrefix: prefixValidation.prefix,

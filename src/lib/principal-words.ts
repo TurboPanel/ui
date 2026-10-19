@@ -67,7 +67,6 @@ export function principalDeleteBlockedReason(row: OrgPrincipalRecord): string | 
   if (row.projectId !== null) {
     return `Belongs to the project ${row.projectName ?? ''}`.trim() + '. Remove it from that project.'
   }
-  if (row.provider !== 'server') return 'Removed together with its database.'
   const lines = principalUsageLines(row.usedBy)
   return lines.length > 0 ? `In use: ${lines.join(', ')}.` : 'In use.'
 }
