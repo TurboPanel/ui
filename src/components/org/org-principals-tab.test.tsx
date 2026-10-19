@@ -22,6 +22,9 @@ vi.mock('@/components/ui/panel-styles', () => ({
 vi.mock('@/components/org/principal-defaults-settings-section', () => ({
   PrincipalDefaultsSettingsSection: () => <div>Principal names panel</div>,
 }))
+vi.mock('@/components/org/directory-defaults-settings-section', () => ({
+  DirectoryDefaultsSettingsSection: () => <div>Folder names panel</div>,
+}))
 vi.mock('@/lib/query-client', () => ({ useCan: () => state.canManage }))
 vi.mock('@/lib/queries/org-principals', () => ({
   useOrgPrincipals: () => state.query,

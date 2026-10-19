@@ -215,7 +215,6 @@ export function storageRecord(name: string, mountService: string | null): Storag
     name,
     accessMode: 'single_writer',
     retention: 'retain',
-    generation: 1,
     principalId: null,
     metadata: null,
     options: null,

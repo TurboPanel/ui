@@ -115,10 +115,10 @@ describe('EnvironmentSettingsBody', () => {
 
   it('renames, then goes back to the saved name', async () => {
     render(<EnvironmentSettingsBody showGitSource />)
-    await press(() => h.view.rename.onName(' Preview '))
+    await press(() => h.view.rename.onName(' preview '))
     expect(h.view.rename).toMatchObject({ dirty: true, canSave: true, error: null })
     await press(() => h.view.rename.onSave())
-    expect(h.run).toHaveBeenCalledWith({ name: 'Preview' })
+    expect(h.run).toHaveBeenCalledWith({ name: 'preview' })
     expect(h.view.rename.name).toBe('Staging')
   })
 
@@ -137,10 +137,10 @@ describe('EnvironmentSettingsBody', () => {
     h.run.mockResolvedValue({ ok: false })
     h.actionError = 'Could not save'
     render(<EnvironmentSettingsBody showGitSource />)
-    await press(() => h.view.rename.onName('Preview'))
+    await press(() => h.view.rename.onName('preview'))
     await press(() => h.view.rename.onSave())
     expect(h.setError).toHaveBeenLastCalledWith('Could not save')
-    expect(h.view.rename.name).toBe('Preview')
+    expect(h.view.rename.name).toBe('preview')
   })
 
   it('moves to another server, or hands the choice back to the project', async () => {

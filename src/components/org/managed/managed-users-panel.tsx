@@ -144,9 +144,9 @@ export function ManagedUsersPanel({
     maxConnections?: number
     nameScheme?: NameScheme
   }) => Promise<{ password: string; appliedUsername?: string } | null>
-  onDeleteUser: (principalId: string) => Promise<void>
-  onUpdateUser: (principalId: string, body: ManagedUserPatch) => Promise<ManagedUserPatchResult>
-  onRotateUserPassword: (principalId: string) => Promise<{
+  onDeleteUser: (loginId: string) => Promise<void>
+  onUpdateUser: (loginId: string, body: ManagedUserPatch) => Promise<ManagedUserPatchResult>
+  onRotateUserPassword: (loginId: string) => Promise<{
     password: string
     redeployRequired?: BindingRedeployRequired
   } | null>
@@ -314,11 +314,11 @@ export function ManagedUsersPanel({
     }
   }
 
-  const deleteUser = async (principalId: string) => {
+  const deleteUser = async (loginId: string) => {
     setWorking(true)
     setError(null)
     try {
-      await onDeleteUser(principalId)
+      await onDeleteUser(loginId)
       await onReload()
     } catch (err) {
       setError(managedErrorMessage(err, 'Failed to delete user'))
@@ -327,11 +327,11 @@ export function ManagedUsersPanel({
     }
   }
 
-  const rotateUser = async (principalId: string, uname: string) => {
+  const rotateUser = async (loginId: string, uname: string) => {
     setWorking(true)
     setError(null)
     try {
-      const result = await onRotateUserPassword(principalId)
+      const result = await onRotateUserPassword(loginId)
       if (result?.password) {
         setRevealedUsername(uname)
         setRevealedPassword(result.password)
@@ -511,7 +511,7 @@ export function ManagedUsersPanel({
                 <LoginPermissionsPanel
                   orgId={orgId}
                   environmentId={environmentId}
-                  principalId={user.id}
+                  loginId={user.id}
                   username={user.username}
                 />
               ) : null}
