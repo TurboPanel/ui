@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  folderActionFor,
   EMPTY_FOLDER_DRAFT,
   folderBodyFields,
   folderLine,
@@ -95,5 +96,15 @@ describe('folder wording', () => {
     expect(folderNameKindOf(null)).toBe('slug')
     expect(isDirectoryNamesMode('both')).toBe(true)
     expect(isDirectoryNamesMode('x')).toBe(false)
+  })
+})
+
+describe('folderActionFor', () => {
+  it('offers remove for an orphan, retry for a stuck removal, forget for a missing folder, and nothing otherwise', () => {
+    expect(folderActionFor('orphan')).toBe('remove')
+    expect(folderActionFor('removing')).toBe('retry')
+    expect(folderActionFor('missing')).toBe('forget')
+    expect(folderActionFor('planned')).toBeNull()
+    expect(folderActionFor('present')).toBeNull()
   })
 })
