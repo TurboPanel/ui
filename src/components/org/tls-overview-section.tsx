@@ -26,7 +26,7 @@ import {
   useTlsLibrary,
 } from '@/lib/queries/tls'
 import { useApiMutation, useCan, queryKeys } from '@/lib/query-client'
-import { tlsDateLines } from '@/lib/tls-managed-dates'
+import { tlsDateLines, tlsStoredCopyLines } from '@/lib/tls-managed-dates'
 import { colors, spacing } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
 
@@ -103,6 +103,11 @@ function TlsCertificateList({
           {line}
         </Text>
       ))}
+      {tlsStoredCopyLines(row).map((line) => (
+        <Text key={line} style={panelStyles.muted}>
+          {line}
+        </Text>
+      ))}
       {row.metadata.acme?.lastError ? (
         <Text style={panelStyles.error}>
           Issuance failing: {row.metadata.acme.lastError}
@@ -152,7 +157,7 @@ function TlsLetsEncryptPanel({
       ) : null}
       <SettingRow
         label="Allow Let's Encrypt certificates"
-        description="When off, no new Let's Encrypt / ACME certificate can be requested for this organization, and a deploy that still pins a Let's Encrypt certificate is refused until it is turned back on or the pin is changed. Certificates already issued are not revoked by turning this off."
+        description="When off, no new Let's Encrypt / ACME certificate can be requested for this organization, and a deploy that still pins a Let's Encrypt certificate is refused until it is turned back on or the pin is changed. Certificates already issued are not revoked by turning this off, but the encrypted copies of their keys that the panel stores are erased."
       >
         <Toggle
           value={acmeEnabled}
