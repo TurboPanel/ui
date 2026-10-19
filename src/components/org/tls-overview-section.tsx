@@ -26,6 +26,7 @@ import {
   useTlsLibrary,
 } from '@/lib/queries/tls'
 import { useApiMutation, useCan, queryKeys } from '@/lib/query-client'
+import { tlsDateLines } from '@/lib/tls-managed-dates'
 import { colors, spacing } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
 
@@ -63,10 +64,6 @@ function tlsStatusLabel(row: TlsRecord): string {
   return row.metadata.status
 }
 
-function showTlsExpiry(row: TlsRecord): boolean {
-  return row.metadata.status !== 'managed' && Boolean(row.metadata.notAfter)
-}
-
 const SOURCE_OPTIONS = [
   { value: 'upload', label: 'Uploaded' },
   { value: 'self_signed', label: 'Self-signed' },
@@ -101,11 +98,11 @@ function TlsCertificateList({
         {tlsSourceLabel(row.source)} · {tlsStatusLabel(row)}
       </Text>
       <Text style={styles.sans}>{formatSans(row)}</Text>
-      {showTlsExpiry(row) ? (
-        <Text style={panelStyles.muted}>
-          Expires {new Date(row.metadata.notAfter).toLocaleString()}
+      {tlsDateLines(row).map((line) => (
+        <Text key={line} style={panelStyles.muted}>
+          {line}
         </Text>
-      ) : null}
+      ))}
       {row.metadata.acme?.lastError ? (
         <Text style={panelStyles.error}>
           Issuance failing: {row.metadata.acme.lastError}
