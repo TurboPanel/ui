@@ -9,6 +9,7 @@ import {
   folderNameKindOf,
   serviceFolderWhere,
   folderStateLabel,
+  removedFromComposeServiceIds,
   isDirectoryNamesMode,
   suggestFolderName,
 } from '@/lib/directory-names'
@@ -106,5 +107,18 @@ describe('folderActionFor', () => {
     expect(folderActionFor('missing')).toBe('forget')
     expect(folderActionFor('planned')).toBeNull()
     expect(folderActionFor('present')).toBeNull()
+  })
+})
+
+describe('removedFromComposeServiceIds', () => {
+  const base = { scope: 'prod', slug: 'web', serverId: 's1' } as const
+  it('names only services whose folder is an orphan that still points at the service', () => {
+    const ids = removedFromComposeServiceIds([
+      { ...base, id: 'f1', kind: 'service', state: 'orphan', assetId: 'svc-1' },
+      { ...base, id: 'f2', kind: 'service', state: 'present', assetId: 'svc-2' },
+      { ...base, id: 'f3', kind: 'volume', state: 'orphan', assetId: 'vol-1' },
+      { ...base, id: 'f4', kind: 'service', state: 'orphan', assetId: null },
+    ])
+    expect([...ids]).toEqual(['svc-1'])
   })
 })

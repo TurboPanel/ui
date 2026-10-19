@@ -19,6 +19,7 @@ import {
 } from 'react-native'
 import { HeaderChevron } from '@/components/header-chevron'
 import {
+  Badge,
   Button,
   ButtonRow,
   Checkbox,
@@ -134,6 +135,8 @@ import { useCan } from '@/lib/query-client'
 import { useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/lib/query-keys'
 import { offersLetsEncrypt } from '@/lib/hosting-letsencrypt-choice'
+import { removedFromComposeServiceIds } from '@/lib/directory-names'
+import { useEnvironmentFolders } from '@/lib/queries/folders'
 import { useRequestLetsEncrypt } from '@/lib/queries/hosting-certificate'
 import { userErrorMessage } from '@/lib/user-error'
 
@@ -1946,15 +1949,19 @@ function EnvironmentServiceSettingsSectionPanel({
 
 function EnvironmentContainersSectionPanel({
   orgId,
+  environmentId,
   services,
   containersByService,
   allServers,
 }: Readonly<{
   orgId: string
+  environmentId: string
   services: ServiceRecord[]
   containersByService: Record<string, ContainerRecord[]>
   allServers: OrgServerRecord[]
 }>) {
+  const folders = useEnvironmentFolders(orgId, environmentId)
+  const removedIds = removedFromComposeServiceIds(folders.data?.folders ?? [])
   const hasContainers = services.some(
     (service) => (containersByService[service.id] ?? []).length > 0,
   )
@@ -1973,10 +1980,15 @@ function EnvironmentContainersSectionPanel({
             }
             return (
               <View key={service.id} style={panelStyles.detailCard}>
-                <Text style={panelStyles.detailTitle}>
-                  {service.name?.trim() ||
-                    String(service.composeServiceName ?? service.id)}
-                </Text>
+                <View style={styles.hostingTitleRow}>
+                  <Text style={panelStyles.detailTitle}>
+                    {service.name?.trim() ||
+                      String(service.composeServiceName ?? service.id)}
+                  </Text>
+                  {removedIds.has(service.id) ? (
+                    <Badge label="Removed from compose" tone="danger" />
+                  ) : null}
+                </View>
                 {containers.map((container) => (
                   <View
                     key={container.id}
@@ -2157,6 +2169,7 @@ function EnvironmentLoadedPanels({
       {showSection('containers') ? (
         <EnvironmentContainersSectionPanel
           orgId={orgId}
+          environmentId={environment.id}
           services={services}
           containersByService={containersByService}
           allServers={allServers}
