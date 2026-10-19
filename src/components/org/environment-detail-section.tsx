@@ -133,6 +133,7 @@ import { orEmptyArray } from '@/lib/or-empty-array'
 import { useCan } from '@/lib/query-client'
 import { useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/lib/query-keys'
+import { offersLetsEncrypt } from '@/lib/hosting-letsencrypt-choice'
 import { useRequestLetsEncrypt } from '@/lib/queries/hosting-certificate'
 import { userErrorMessage } from '@/lib/user-error'
 
@@ -939,7 +940,12 @@ function HostingTlsPicker({
         ))}
       </View>
       <HostingHintText hint={pinnedGap?.note ?? null} />
-      {composeOwned || editor.tlsId !== null || parseHostnameList(editor.hostnames).length === 0 ? null : (
+      {!offersLetsEncrypt({
+        composeOwned,
+        protocol: editor.protocol,
+        tlsId: editor.tlsId,
+        hostnameCount: parseHostnameList(editor.hostnames).length,
+      }) ? null : (
         <Checkbox
           label="Get a free Let’s Encrypt certificate when I save"
           checked={editor.getLetsEncrypt}
@@ -2774,9 +2780,12 @@ export function EnvironmentDetailBody({
       ('id' in result.value && typeof result.value.id === 'string' ? result.value.id : null)
     const wantsCertificate =
       editor.getLetsEncrypt &&
-      editor.protocol === 'http' &&
-      editor.tlsId === null &&
-      parseHostnameList(editor.hostnames).length > 0
+      offersLetsEncrypt({
+        composeOwned: false,
+        protocol: editor.protocol,
+        tlsId: editor.tlsId,
+        hostnameCount: parseHostnameList(editor.hostnames).length,
+      })
     if (wantsCertificate && savedHostingId) {
       // The hosting is already saved; a certificate that cannot start yet
       // (for example DNS not pointing here) is reported, never undone.

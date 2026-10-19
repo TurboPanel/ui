@@ -21,6 +21,8 @@ const state = vi.hoisted(() => ({
   ctx: {} as Record<string, unknown>,
   query: {} as Record<string, unknown>,
   hostingsByService: {} as Record<string, unknown[]>,
+  hostingsLoading: false,
+  hostingsError: false,
   push: vi.fn(),
   openURL: vi.fn(() => Promise.resolve()),
 }))
@@ -39,7 +41,11 @@ vi.mock('@/lib/queries/environments', () => ({
   useEnvironmentConfigView: () => state.query,
 }))
 vi.mock('@/lib/queries/services', () => ({
-  useHostingsByServices: () => ({ hostingsByService: state.hostingsByService }),
+  useHostingsByServices: () => ({
+    hostingsByService: state.hostingsByService,
+    isLoading: state.hostingsLoading,
+    hasError: state.hostingsError,
+  }),
 }))
 vi.mock('@/lib/queries/variables', () => ({
   useVariables: () => ({ data: { variables: [] } }),
@@ -205,6 +211,8 @@ describe('EnvironmentConfigurationScreen', () => {
     }
     state.query = { isPending: false, error: null, data: stagingView(), refetch: vi.fn() }
     state.hostingsByService = {}
+    state.hostingsLoading = false
+    state.hostingsError = false
   })
 
   it('shows a loading state, then the sections', () => {
@@ -269,6 +277,37 @@ describe('EnvironmentConfigurationScreen', () => {
     expect(screen.getByText('app.example.com')).toBeTruthy()
     expect(screen.getByText('1 hostname')).toBeTruthy()
     expect(screen.queryByText('No hostnames yet')).toBeNull()
+  })
+
+  function viewWithoutHostnames() {
+    const view = plainView()
+    view.effective.services = view.effective.services.map((service) => ({
+      ...service,
+      rows: service.rows.filter((row) => row.area !== 'domain'),
+    }))
+    return view
+  }
+
+  it('does not say there are no hostnames while the Hosting screen ones are still loading', () => {
+    state.query = { isPending: false, error: null, data: viewWithoutHostnames(), refetch: vi.fn() }
+    state.hostingsLoading = true
+    render(<EnvironmentConfigurationScreen />)
+    expect(screen.getByText('Checking hostnames…')).toBeTruthy()
+    expect(screen.queryByText('No hostnames yet')).toBeNull()
+  })
+
+  it('says so when the hostnames added on the Hosting screen could not be checked', () => {
+    state.query = { isPending: false, error: null, data: viewWithoutHostnames(), refetch: vi.fn() }
+    state.hostingsError = true
+    render(<EnvironmentConfigurationScreen />)
+    expect(screen.getByText(/Could not check the hostnames added on the Hosting screen/)).toBeTruthy()
+  })
+
+  it('keeps the compose hostnames visible while the others load', () => {
+    state.hostingsLoading = true
+    render(<EnvironmentConfigurationScreen />)
+    expect(screen.getByText('shop.example.com')).toBeTruthy()
+    expect(screen.queryByText('Checking hostnames…')).toBeNull()
   })
 
   it('opens the Base from a single-environment project and falls back to the selected environment', () => {
