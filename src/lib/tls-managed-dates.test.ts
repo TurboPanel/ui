@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { TlsRecord } from '@/lib/instance-api'
-import { tlsDateLines } from './tls-managed-dates'
+import { tlsDateLines, tlsStoredCopyLines } from './tls-managed-dates'
 
 function row(status: string, notAfter: string, acme?: Record<string, string>): TlsRecord {
   return {
@@ -44,5 +44,34 @@ describe('tlsDateLines', () => {
     expect(lines).toHaveLength(2)
     expect(lines[0]).toMatch(/^Expires .*2027/)
     expect(lines[1]).toMatch(/^Last issued .*2026/)
+  })
+})
+
+describe('tlsStoredCopyLines', () => {
+  it('says nothing for a certificate that is not from Let\'s Encrypt or is revoked', () => {
+    const upload = { ...row('ready', '2027-01-02T03:04:05.000Z'), source: 'upload' } as TlsRecord
+    expect(tlsStoredCopyLines(upload)).toEqual([])
+    expect(tlsStoredCopyLines({ ...row('revoked', ''), certificatePem: 'x' } as TlsRecord)).toEqual([])
+  })
+
+  it('says a copy is still to come while only the host has reported dates', () => {
+    const lines = tlsStoredCopyLines(
+      row('managed', '1970-01-01T00:00:00.000Z', { notAfter: '2027-01-02T03:04:05.000Z' })
+    )
+    expect(lines).toEqual(['No copy stored yet. The host sends one after its next check.'])
+    expect(tlsStoredCopyLines(row('managed', '1970-01-01T00:00:00.000Z'))).toEqual([])
+  })
+
+  it('shows the stored copy with its issuer and start date, and never a key', () => {
+    const stored = {
+      ...row('managed', '2027-01-02T03:04:05.000Z'),
+      certificatePem: '-----BEGIN CERTIFICATE-----',
+    } as TlsRecord
+    stored.metadata = { ...stored.metadata, issuer: 'R11', notBefore: '2026-10-19T10:00:00.000Z' }
+    const lines = tlsStoredCopyLines(stored, 'en-US')
+    expect(lines[0]).toBe('A copy of the certificate and its key is stored encrypted.')
+    expect(lines).toContain('Issued by R11')
+    expect(lines.some((l) => l.startsWith('Valid from '))).toBe(true)
+    expect(lines.join(' ').toLowerCase()).not.toContain('private key pem')
   })
 })
