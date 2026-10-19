@@ -394,7 +394,7 @@ describe('mini map', () => {
   it('says so when a column has nothing', () => {
     const columns = miniMapColumns(EMPTY_SIDE, [], statusOf)
     expect(columns.map((column) => [column.key, column.emptyText, column.items.length])).toEqual([
-      ['visitors', 'No domains yet', 0],
+      ['visitors', 'No hostnames yet', 0],
       ['apps', 'No apps yet', 0],
       ['data', 'None', 0],
     ])

@@ -3581,6 +3581,10 @@ export type TlsMetadata = {
     challengeType?: 'http-01' | 'dns-01'
     /** Daemon-observed issuance failure, cleared on the next successful probe. */
     lastError?: string
+    /** When a certificate was last seen newly in place on the host (ISO 8601). */
+    lastIssuedAt?: string
+    /** Expiry of the certificate Caddy is serving, as the daemon's probe read it (ISO 8601). */
+    notAfter?: string
     managedBy?: 'caddy'
   }
 }

@@ -5,7 +5,7 @@ import {
   AppsSection,
   ChangesSection,
   DataSection,
-  DomainsSection,
+  HostingSection,
   LinuxUsersSection,
   VariablesSection,
 } from '@/components/org/project/configuration/config-sections'
@@ -23,6 +23,7 @@ import {
 } from '@/lib/project-navigation'
 import { useSaveConfiguration } from '@/lib/queries/configuration'
 import { useEnvironmentConfigView } from '@/lib/queries/environments'
+import { useHostingsByServices } from '@/lib/queries/services'
 import { useVariables } from '@/lib/queries/variables'
 import { environmentDisplayName } from '@/lib/resource-labels'
 import { webPointer } from '@/lib/theme'
@@ -36,7 +37,11 @@ import {
   type SaveProblem,
   type StagedEdit,
 } from '@/lib/v4/config-edits'
-import { buildConfigViewModel, type ConfigViewModel } from '@/lib/v4/config-view-model'
+import {
+  buildConfigViewModel,
+  withHostingHostnames,
+  type ConfigViewModel,
+} from '@/lib/v4/config-view-model'
 
 const styles = themedStyles((p) => ({
   page: { gap: 24 },
@@ -102,7 +107,7 @@ export function EnvironmentConfigurationView({
   multiple,
   onOpenApp,
   onOpenUrl,
-  onManageDomains,
+  onManageHosting,
   onOpenBase,
   editing,
 }: Readonly<{
@@ -111,7 +116,7 @@ export function EnvironmentConfigurationView({
   multiple: boolean
   onOpenApp: (serviceId: string) => void
   onOpenUrl: (url: string) => void
-  onManageDomains: () => void
+  onManageHosting: () => void
   onOpenBase: () => void
   /** Present when the person can edit; absent means every row is read-only. */
   editing?: EditingApi
@@ -149,10 +154,10 @@ export function EnvironmentConfigurationView({
       ) : (
         <>
           <AppsSection apps={model.apps} onOpenApp={onOpenApp} />
-          <DomainsSection
+          <HostingSection
             domains={model.domains}
             onOpenUrl={onOpenUrl}
-            onManage={onManageDomains}
+            onManage={onManageHosting}
           />
           <VariablesSection
             variables={model.variables}
@@ -187,9 +192,19 @@ export function EnvironmentConfigurationScreen() {
   const save = useSaveConfiguration(orgId, projectId, environmentId)
   const environment = environments.find((item) => item.id === environmentId)
   const envName = environment ? environmentDisplayName(environment) : 'This environment'
-  const model = useMemo(
+  const baseModel = useMemo(
     () => (query.data ? buildConfigViewModel({ envName, view: query.data }) : null),
     [query.data, envName],
+  )
+  // The config view reads compose only; hostnames added on the Hosting screen live in the panel.
+  const serviceIds = useMemo(
+    () => (baseModel?.apps ?? []).flatMap((app) => (app.serviceId === null ? [] : [app.serviceId])),
+    [baseModel],
+  )
+  const hostings = useHostingsByServices(orgId, serviceIds, { enabled: baseModel !== null })
+  const model = useMemo(
+    () => (baseModel ? withHostingHostnames(baseModel, hostings.hostingsByService) : null),
+    [baseModel, hostings.hostingsByService],
   )
   const [staged, setStaged] = useState<readonly StagedEdit[]>([])
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -284,7 +299,7 @@ export function EnvironmentConfigurationScreen() {
             // A blocked link has nothing to recover; the domain stays listed.
           })
         }}
-        onManageDomains={() =>
+        onManageHosting={() =>
           router.push(projectEnvironmentHostingHref(orgId, projectId, environmentId) as Href)
         }
         onOpenBase={() => router.push(projectBaseHref(orgId, projectId) as Href)}

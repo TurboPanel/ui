@@ -133,6 +133,7 @@ import { orEmptyArray } from '@/lib/or-empty-array'
 import { useCan } from '@/lib/query-client'
 import { useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/lib/query-keys'
+import { useRequestLetsEncrypt } from '@/lib/queries/hosting-certificate'
 import { userErrorMessage } from '@/lib/user-error'
 
 type HostingBind = 'public' | 'datacenter' | 'local'
@@ -159,6 +160,12 @@ type HostingEditorState = {
   ports: string
   /** Multiline KEY=VALUE for options.web.env (HTTP hostings). */
   webEnvLines: string
+  /**
+   * Ask for a free Let's Encrypt certificate as part of this save. On for a
+   * hosting that does not exist yet, off for one that does (it has the
+   * Certificate section for that).
+   */
+  getLetsEncrypt: boolean
 }
 
 function formatWebEnvLines(web: unknown): string {
@@ -284,6 +291,7 @@ function readHostingEditor(hostings: HostingRecord[]): HostingEditorState {
     protocol: readHostingProtocol(optionsRecord),
     ports: formatHostingPorts(optionsRecord),
     ...readWebOptions(optionsRecord),
+    getLetsEncrypt: hostings.length === 0,
   }
 }
 
@@ -401,6 +409,8 @@ function readComposeHostingEditor(
     tlsId: entry.tls?.mode === 'certificate'
       ? entry.tls.certificateRef ?? null
       : null,
+    // Compose sets the certificate for a route it declares.
+    getLetsEncrypt: false,
   }
 }
 
@@ -907,7 +917,7 @@ function HostingTlsPicker({
       <Text style={styles.tlsHint}>
         {composeOwned
           ? 'Self-signed is tls.mode "internal"; picking a library certificate is tls.mode "certificate" with tls.certificateRef. Nothing is requested automatically — "automatic" is refused at deploy rather than served as self-signed.'
-          : 'Default is a basic self-signed cert. Pick a library certificate to use an upload, org self-signed, or Let\u2019s Encrypt cert — nothing is requested automatically.'}
+          : 'Until a real certificate is in place the site uses a basic self-signed one. Pick a library certificate to use an upload or an org self-signed one, or tick the box below to get a free Let\u2019s Encrypt certificate when you save.'}
       </Text>
       <View style={styles.tlsOptions}>
         <Pressable
@@ -929,6 +939,14 @@ function HostingTlsPicker({
         ))}
       </View>
       <HostingHintText hint={pinnedGap?.note ?? null} />
+      {composeOwned || editor.tlsId !== null || parseHostnameList(editor.hostnames).length === 0 ? null : (
+        <Checkbox
+          label="Get a free Let’s Encrypt certificate when I save"
+          checked={editor.getLetsEncrypt}
+          disabled={locked}
+          onPress={() => onChange({ getLetsEncrypt: !editor.getLetsEncrypt })}
+        />
+      )}
     </>
   )
 }
@@ -2411,6 +2429,7 @@ export function EnvironmentDetailBody({
   const updateEnvironmentMutation = useUpdateEnvironment(orgId, environmentId)
   const deployEnvironmentMutation = useDeployEnvironment(orgId, environmentId)
   const upsertHostingMutation = useUpsertHosting(orgId)
+  const letsEncryptMutation = useRequestLetsEncrypt(orgId)
 
   const [error, setError] = useState<string | null>(null)
   const [hostingEditors, setHostingEditors] = useState<
@@ -2749,6 +2768,24 @@ export function EnvironmentDetailBody({
         setError(upsertHostingMutation.actionError)
       }
       return
+    }
+    const savedHostingId =
+      row.hostingId ??
+      ('id' in result.value && typeof result.value.id === 'string' ? result.value.id : null)
+    const wantsCertificate =
+      editor.getLetsEncrypt &&
+      editor.protocol === 'http' &&
+      editor.tlsId === null &&
+      parseHostnameList(editor.hostnames).length > 0
+    if (wantsCertificate && savedHostingId) {
+      // The hosting is already saved; a certificate that cannot start yet
+      // (for example DNS not pointing here) is reported, never undone.
+      const requested = await letsEncryptMutation.run(savedHostingId)
+      if (!requested.ok) {
+        setError(
+          `Saved. Let’s Encrypt could not start yet: ${requested.error ?? 'try again from the Certificate section.'}`,
+        )
+      }
     }
     await Promise.all([
       servicesQuery.refetch(),

@@ -26,6 +26,7 @@ vi.mock('@/lib/theme-preference', async () => (await import('@/components/ui/v4/
 vi.mock('expo-router', () => ({ useRouter: () => ({ push: state.push }) }))
 vi.mock('@/components/org/project/project-context', () => ({ useProjectContext: () => state.ctx }))
 vi.mock('@/lib/queries/environments', () => ({ useEnvironmentConfigView: () => state.query }))
+vi.mock('@/lib/queries/services', () => ({ useHostingsByServices: () => ({ hostingsByService: {} }) }))
 vi.mock('@/lib/queries/variables', () => ({
   useVariables: (_org: string, filter: Record<string, string>) => ({
     data: { variables: 'environmentId' in filter ? state.envVars : state.projectVars },

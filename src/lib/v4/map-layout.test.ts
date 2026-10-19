@@ -110,7 +110,7 @@ describe('map layout geometry', () => {
 describe('map words', () => {
   it('describes the website production map', () => {
     const layout = layoutOf(website, 'production', 'env')
-    expect(layout.aria).toBe('Map of Production: 2 domains, 1 app, 1 data store')
+    expect(layout.aria).toBe('Map of Production: 2 hostnames, 1 app, 1 data store')
     const app = layout.nodes.find((node) => node.kind === 'app')
     expect(app?.aria).toBe(
       'web, Node.js app, running, runs as website, shows turbopanel.io, uses next-cache',
@@ -146,9 +146,9 @@ describe('map words', () => {
     expect(app?.changed).toBe(false)
   })
 
-  it('says domains are set per environment on the Base map', () => {
+  it('says hostnames are set per environment on the Base map', () => {
     const layout = layoutOf(portal, null, 'base')
-    expect(layout.bands[0]?.note).toBe('Domains are set per environment')
+    expect(layout.bands[0]?.note).toBe('Hostnames are set per environment')
     expect(layout.aria).toMatch(/the Base/)
     expect(layout.envName).toBe('Base')
     expect(layout.columns[0]?.emptyText).toBe('Set per environment')
@@ -195,12 +195,12 @@ describe('map words', () => {
       volumes: [],
       links: [],
     })
-    expect(empty.bands[0]?.note).toBe('No domains yet')
+    expect(empty.bands[0]?.note).toBe('No hostnames yet')
     expect(empty.bands[1]?.note).toBe('No apps yet')
     expect(empty.bands[2]?.note).toBe('')
-    expect(empty.columns.map((c) => c.emptyText)).toEqual(['No domains yet', 'No apps yet', 'None'])
+    expect(empty.columns.map((c) => c.emptyText)).toEqual(['No hostnames yet', 'No apps yet', 'None'])
     expect(empty.counts).toEqual({ domains: 0, apps: 0, data: 0 })
-    expect(empty.aria).toBe('Map of Production: 0 domains, 0 apps, 0 data stores')
+    expect(empty.aria).toBe('Map of Production: 0 hostnames, 0 apps, 0 data stores')
   })
 
   it('has a legend for the three kinds of line', () => {

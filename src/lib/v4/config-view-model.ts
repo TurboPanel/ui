@@ -18,7 +18,9 @@ import type {
   ConfigViewSource,
   ConfigViewVariable,
   EnvironmentConfigViewResponse,
+  HostingRecord,
 } from '@/lib/instance-api'
+import { describeCertificate, type CertificateTone } from '@/lib/hosting-certificate'
 import { onlyChangesLabel, relationText, sourceLabel, valueText } from './change-labels'
 import { accessText, RUNS_IN_CONTAINER, type RunsAs } from './linux-users'
 import { isDataStoreContainer, serviceKindLabel } from './service-roles'
@@ -77,8 +79,12 @@ export type DomainRowModel = Readonly<{
   host: string
   serviceName: string
   tag: SourceTagModel
-  /** Where the domain opens. */
+  /** Where the hostname opens. */
   url: string
+  /** The hosting row that carries this hostname, once the panel knows it. */
+  hostingId: string | null
+  /** The certificate word and tone for this hostname; null while unknown. */
+  certificate: Readonly<{ label: string; tone: CertificateTone }> | null
 }>
 
 export type VariableRowModel = Readonly<{
@@ -166,7 +172,7 @@ function toV4Service(service: ConfigViewService): V4Service {
 function changeWhere(change: ConfigViewChange): string {
   if (change.area === 'variable') return 'Variable'
   if (change.area === 'linuxUser') return 'Linux users'
-  if (change.area === 'domain') return `Domain on ${change.serviceName ?? 'an app'}`
+  if (change.area === 'domain') return `Hostname on ${change.serviceName ?? 'an app'}`
   return `App ${change.serviceName ?? ''}`.trim()
 }
 
@@ -321,10 +327,63 @@ function buildDomains(view: EnvironmentConfigViewResponse, envName: string): Dom
         serviceName: service.name,
         tag: tagFor(source, envName),
         url: `https://${row.value}`,
+        hostingId: null,
+        certificate: null,
       })
     }
   }
   return rows
+}
+
+function hostnamesOf(record: HostingRecord): string[] {
+  const raw = record.options?.hostnames
+  if (!Array.isArray(raw)) return []
+  return raw.filter((entry): entry is string => typeof entry === 'string' && entry.length > 0)
+}
+
+function certificateOf(record: HostingRecord): DomainRowModel['certificate'] {
+  if (!record.certificate) return null
+  const view = describeCertificate(record.certificate)
+  return { label: view.label, tone: view.tone }
+}
+
+/**
+ * Adds the hostnames the panel itself holds. The config view reads only the
+ * compose files, so a hostname added on the Hosting screen never appears in it;
+ * this joins those hosting rows back in, and puts each hostname's certificate
+ * word next to it. A hostname compose already lists is not shown twice.
+ */
+export function withHostingHostnames(
+  model: ConfigViewModel,
+  hostingsByService: Readonly<Record<string, readonly HostingRecord[]>>
+): ConfigViewModel {
+  const rows = new Map<string, DomainRowModel>()
+  for (const domain of model.domains) rows.set(domain.host.toLowerCase(), domain)
+  const tag = tagFor(model.followsBase ? 'env' : 'own', model.envName)
+  for (const app of model.apps) {
+    if (app.serviceId === null) continue
+    for (const record of hostingsByService[app.serviceId] ?? []) {
+      const certificate = certificateOf(record)
+      for (const host of hostnamesOf(record)) {
+        const existing = rows.get(host.toLowerCase())
+        rows.set(
+          host.toLowerCase(),
+          existing
+            ? { ...existing, hostingId: record.id, certificate }
+            : {
+                key: `hosting:${record.id}:${host}`,
+                host,
+                serviceName: app.name,
+                tag,
+                url: `https://${host}`,
+                hostingId: record.id,
+                certificate,
+              }
+        )
+      }
+    }
+  }
+  return { ...model, domains: [...rows.values()] }
 }
 
 export function usedFor(variable: ConfigViewVariable): string {

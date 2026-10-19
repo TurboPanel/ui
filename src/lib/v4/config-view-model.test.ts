@@ -7,7 +7,9 @@ import {
   SECTION_ROW_LIMIT,
   showAllLabel,
   firstRows,
+  withHostingHostnames,
 } from './config-view-model'
+import type { HostingRecord } from '@/lib/instance-api'
 import {
   domainRow,
   fieldRow,
@@ -65,7 +67,7 @@ describe('change rows', () => {
     expect(rows[0].envText).toBe('Removed')
     expect(rows[1]).toMatchObject({ baseText: HIDDEN_VALUE, envText: HIDDEN_VALUE, masked: true })
     expect(rows[2]).toMatchObject({ baseText: 'Empty', envText: 'Empty' })
-    expect(rows[3].where).toBe('Domain on an app')
+    expect(rows[3].where).toBe('Hostname on an app')
     expect(rows[4]).toMatchObject({ label: 'Kind', where: 'App' })
   })
 
@@ -181,6 +183,81 @@ describe('domains', () => {
       service('web', 'node', [domainRow('web', 'a.example.com', { value: null })]),
     ]
     expect(buildConfigViewModel({ envName: 'Staging', view }).domains).toEqual([])
+  })
+})
+
+function hosting(id: string, hostnames: string[], extra: Partial<HostingRecord> = {}): HostingRecord {
+  return {
+    id,
+    name: null,
+    description: null,
+    serviceId: 'id-web',
+    options: { hostnames },
+    createdAt: '2026-10-19T00:00:00Z',
+    updatedAt: '2026-10-19T00:00:00Z',
+    ...extra,
+  }
+}
+
+function viewWithoutHostnames() {
+  const view = plainView()
+  view.effective.services = [service('web', 'node', [fieldRow('web', 'command', 'npm start')])]
+  return view
+}
+
+describe('hostnames held by the panel', () => {
+  it('lists a hostname added on the Hosting screen even though no compose file names it', () => {
+    const model = buildConfigViewModel({ envName: 'Staging', view: viewWithoutHostnames() })
+    expect(model.domains).toEqual([])
+    const merged = withHostingHostnames(model, { 'id-web': [hosting('h1', ['app.example.com'])] })
+    expect(merged.domains).toHaveLength(1)
+    expect(merged.domains[0]).toMatchObject({
+      host: 'app.example.com',
+      hostingId: 'h1',
+      serviceName: 'web',
+      url: 'https://app.example.com',
+      certificate: null,
+    })
+  })
+
+  it('does not list a hostname twice when compose names it too, and adds its certificate word', () => {
+    const model = staging()
+    const merged = withHostingHostnames(model, {
+      'id-web': [
+        hosting('h1', ['SHOP.example.com', 'extra.example.com'], {
+          certificate: {
+            state: 'waiting_for_dns',
+            source: 'lets_encrypt',
+            expiresAt: null,
+            expiresInDays: null,
+            renewsAutomatically: true,
+            lastError: null,
+            lastIssuedAt: null,
+            uploadedExpiryWarning: 'none',
+            dns: null,
+            letsEncryptAvailable: true,
+            www: 'off',
+            needsDeploy: false,
+          },
+        }),
+      ],
+    })
+    expect(merged.domains.map((domain) => domain.host)).toEqual([
+      'shop.example.com',
+      'staging.example.com',
+      'extra.example.com',
+    ])
+    expect(merged.domains[0]).toMatchObject({ hostingId: 'h1' })
+    expect(merged.domains[0].certificate?.label).toBeTruthy()
+    expect(merged.domains[2].tag).toEqual({ source: 'env', label: 'Staging change' })
+  })
+
+  it('ignores a hosting without hostnames and an app the panel has no id for', () => {
+    const model = buildConfigViewModel({ envName: 'Staging', view: viewWithoutHostnames() })
+    const merged = withHostingHostnames(model, {
+      'id-web': [hosting('h2', []), hosting('h3', [], { options: null })],
+    })
+    expect(merged.domains).toEqual([])
   })
 })
 
