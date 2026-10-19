@@ -20,6 +20,7 @@ import { buildConfigViewModel } from '@/lib/v4/config-view-model'
 const state = vi.hoisted(() => ({
   ctx: {} as Record<string, unknown>,
   query: {} as Record<string, unknown>,
+  hostingsByService: {} as Record<string, unknown[]>,
   push: vi.fn(),
   openURL: vi.fn(() => Promise.resolve()),
 }))
@@ -37,6 +38,9 @@ vi.mock('@/components/org/project/project-context', () => ({
 vi.mock('@/lib/queries/environments', () => ({
   useEnvironmentConfigView: () => state.query,
 }))
+vi.mock('@/lib/queries/services', () => ({
+  useHostingsByServices: () => ({ hostingsByService: state.hostingsByService }),
+}))
 vi.mock('@/lib/queries/variables', () => ({
   useVariables: () => ({ data: { variables: [] } }),
 }))
@@ -53,7 +57,7 @@ function renderView(overrides: Partial<Parameters<typeof EnvironmentConfiguratio
   const handlers = {
     onOpenApp: vi.fn(),
     onOpenUrl: vi.fn(),
-    onManageDomains: vi.fn(),
+    onManageHosting: vi.fn(),
     onOpenBase: vi.fn(),
   }
   render(
@@ -73,7 +77,7 @@ describe.each(SCENARIOS)('EnvironmentConfigurationView ($name)', (scenario) => {
   it('lists the sections in order with a source tag on every row', () => {
     renderView()
     const headings = screen.getAllByRole('heading').map((node) => node.textContent)
-    expect(headings).toEqual(['Apps', 'Domains', 'Variables', 'Linux users', 'Data'])
+    expect(headings).toEqual(['Apps', 'Hosting', 'Variables', 'Linux users', 'Data'])
     expect(screen.getByText('Staging runs the Base plus its own changes.')).toBeTruthy()
     const web = screen.getByLabelText(/^web, Node.js app, Staging changes/)
     expect(within(web).getByText('Staging change')).toBeTruthy()
@@ -107,8 +111,8 @@ describe.each(SCENARIOS)('EnvironmentConfigurationView ($name)', (scenario) => {
     expect(handlers.onOpenApp).toHaveBeenCalledWith('id-web')
     fireEvent.click(screen.getByLabelText('Open shop.example.com in a new tab'))
     expect(handlers.onOpenUrl).toHaveBeenCalledWith('https://shop.example.com')
-    fireEvent.click(screen.getByLabelText('Add or change domains'))
-    expect(handlers.onManageDomains).toHaveBeenCalled()
+    fireEvent.click(screen.getByLabelText('Add or change hostnames'))
+    expect(handlers.onManageHosting).toHaveBeenCalled()
   })
 
   it('swaps to one row per change with the filter switch, and back', () => {
@@ -149,11 +153,11 @@ describe.each(SCENARIOS)('EnvironmentConfigurationView ($name)', (scenario) => {
     expect(screen.queryByLabelText('Show all 8')).toBeNull()
   })
 
-  it('has empty states for domains and variables', () => {
+  it('has empty states for hostnames and variables', () => {
     const view = plainView()
     view.effective = { ...view.effective, services: [], variables: [] }
     renderView({ model: buildConfigViewModel({ envName: 'Staging', view }) })
-    expect(screen.getByText('No domains yet')).toBeTruthy()
+    expect(screen.getByText('No hostnames yet')).toBeTruthy()
     expect(screen.getByText('No variables')).toBeTruthy()
     expect(screen.queryByText('Apps')).toBeNull()
     expect(screen.queryByText('Linux users')).toBeNull()
@@ -200,6 +204,7 @@ describe('EnvironmentConfigurationScreen', () => {
       pathEnvironmentId: 'e',
     }
     state.query = { isPending: false, error: null, data: stagingView(), refetch: vi.fn() }
+    state.hostingsByService = {}
   })
 
   it('shows a loading state, then the sections', () => {
@@ -232,12 +237,38 @@ describe('EnvironmentConfigurationScreen', () => {
     render(<EnvironmentConfigurationScreen />)
     fireEvent.click(screen.getByLabelText(/^web, Node.js app/))
     expect(state.push).toHaveBeenLastCalledWith('/o/projects/p/services/id-web')
-    fireEvent.click(screen.getByLabelText('Add or change domains'))
+    fireEvent.click(screen.getByLabelText('Add or change hostnames'))
     expect(state.push).toHaveBeenLastCalledWith(
       '/o/projects/p/environments/e/configuration/hosting',
     )
     fireEvent.click(screen.getByLabelText('Open shop.example.com in a new tab'))
     expect(state.openURL).toHaveBeenCalledWith('https://shop.example.com')
+  })
+
+  it('lists a hostname that was added on the Hosting screen and not in compose', () => {
+    const view = plainView()
+    view.effective.services = view.effective.services.map((service) => ({
+      ...service,
+      rows: service.rows.filter((row) => row.area !== 'domain'),
+    }))
+    state.query = { isPending: false, error: null, data: view, refetch: vi.fn() }
+    state.hostingsByService = {
+      'id-web': [
+        {
+          id: 'h1',
+          name: null,
+          description: null,
+          serviceId: 'id-web',
+          options: { hostnames: ['app.example.com'] },
+          createdAt: '2026-10-19T00:00:00Z',
+          updatedAt: '2026-10-19T00:00:00Z',
+        },
+      ],
+    }
+    render(<EnvironmentConfigurationScreen />)
+    expect(screen.getByText('app.example.com')).toBeTruthy()
+    expect(screen.getByText('1 hostname')).toBeTruthy()
+    expect(screen.queryByText('No hostnames yet')).toBeNull()
   })
 
   it('opens the Base from a single-environment project and falls back to the selected environment', () => {

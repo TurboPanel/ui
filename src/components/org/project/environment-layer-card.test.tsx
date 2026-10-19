@@ -20,7 +20,7 @@ const DATA: EnvironmentCardData = {
   running: { status: 'running' },
   lastDeploy: { status: 'deployed', sub: 'a41c9e2 · 4m ago' },
   columns: [
-    { key: 'visitors', label: 'Visitors', emptyText: 'No domains yet', items: [{ name: 'staging.example.com', status: null, changed: false }] },
+    { key: 'visitors', label: 'Visitors', emptyText: 'No hostnames yet', items: [{ name: 'staging.example.com', status: null, changed: false }] },
     { key: 'apps', label: 'Apps', emptyText: 'No apps yet', items: [{ name: 'web', status: 'running', changed: true }] },
     { key: 'data', label: 'Data', emptyText: 'None', items: [] },
   ],

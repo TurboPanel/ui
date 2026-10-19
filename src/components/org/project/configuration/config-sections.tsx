@@ -231,7 +231,7 @@ export function AppsSection({
   )
 }
 
-export function DomainsSection({
+export function HostingSection({
   domains,
   onOpenUrl,
   onManage,
@@ -241,16 +241,16 @@ export function DomainsSection({
   onManage: () => void
 }>) {
   const s = styles(usePalette())
-  const manage = <ActionButton label="Add or change domains" size="sm" onPress={onManage} />
+  const manage = <ActionButton label="Add or change hostnames" size="sm" onPress={onManage} />
   return (
     <View style={s.section}>
-      <SectionHeading title="Domains" note={plural(domains.length, 'domain')} action={manage} />
+      <SectionHeading title="Hosting" note={plural(domains.length, 'hostname')} action={manage} />
       <ListGroup
-        foot="Domains belong to this environment only. Let’s Encrypt renews certificates automatically once DNS checks out."
+        foot="Hostnames belong to this environment only. Let’s Encrypt renews certificates automatically once DNS checks out."
         empty={
           <EmptyPanel
             inline
-            title="No domains yet"
+            title="No hostnames yet"
             body="Until you add one, the site answers at its temporary address."
           />
         }
@@ -262,7 +262,11 @@ export function DomainsSection({
               <ListRow
                 key={domain.key}
                 title={domain.host}
-                sub={`Answered by ${domain.serviceName}`}
+                sub={
+                  domain.certificate
+                    ? `Answered by ${domain.serviceName} · Certificate: ${domain.certificate.label}`
+                    : `Answered by ${domain.serviceName}`
+                }
                 chips={<SourceTag source={domain.tag.source} label={domain.tag.label} />}
                 trailing={
                   <Pressable

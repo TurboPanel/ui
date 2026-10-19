@@ -381,7 +381,7 @@ export function miniMapColumns(
     {
       key: 'visitors',
       label: 'Visitors',
-      emptyText: 'No domains yet',
+      emptyText: 'No hostnames yet',
       items: [...new Set([...environmentDomains(side), ...extraDomains])].map((host) => ({
         name: host,
         status: null,

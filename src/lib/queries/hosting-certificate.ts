@@ -30,6 +30,18 @@ export function useUseLetsEncrypt(orgId: string, hostingId: string) {
   })
 }
 
+/** The same request for a hosting that was only just saved, so its id is known at call time. */
+export function useRequestLetsEncrypt(orgId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (hostingId: string) => requestLetsEncryptForHosting(hostingId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.org(orgId).hostings.all })
+    },
+    fallbackError: 'Could not start Let’s Encrypt.',
+  })
+}
+
 /** "Check DNS": read-only, never changes the hosting. */
 export function useHostingDnsCheck(hostingId: string) {
   return useApiMutation({ mutationFn: () => fetchHostingDnsCheck(hostingId) })
