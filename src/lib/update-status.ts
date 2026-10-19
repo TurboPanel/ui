@@ -317,7 +317,7 @@ export async function withStartTimeout<T>(
 export type UpdateBanner = Readonly<{
   /** Identifies every offered build, so a new build of any piece shows the banner again. */
   key: string
-  /** `Update available: control plane v0.1.5-canary.1, web app v0.1.5-canary.2` */
+  /** `TurboPanel update available: control plane v0.1.5-canary.1, web interface v0.1.5-canary.2` */
   title: string
   /** What Update does for exactly the pieces in the title. */
   body: string
@@ -345,11 +345,11 @@ export function updateOffered(input: UpdateOfferInput): boolean {
   )
 }
 
-/** How the banner body names each piece. */
+/** How the banner body explains each piece to someone new to TurboPanel. */
 const BODY_NAMES: Readonly<Record<UpdatePiece['name'], string>> = {
-  'control plane': 'the control plane',
-  'web app': 'the web app',
-  daemon: 'the daemon on every server',
+  'control plane': 'the control plane (the part that runs TurboPanel)',
+  'web app': 'the web interface (the pages you are using now)',
+  daemon: 'the daemon (the software on each of your servers)',
 }
 
 function pieceKey(piece: UpdatePiece): string {
@@ -379,8 +379,8 @@ export function updateBanner(
   const names = joinWithAnd(pieces.map((piece) => BODY_NAMES[piece.name]))
   return {
     key,
-    title: `Update available: ${labels}`,
-    body: `Updates ${names} together.`,
+    title: `TurboPanel update available: ${labels}`,
+    body: `This updates ${names}. Choose Update to review it first; nothing changes until you confirm.`,
   }
 }
 
