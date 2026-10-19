@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OrganizationCaLeaf } from '@/lib/instance-api'
 import {
   leafFactsLine,
+  MARK_STALE_PROMPT,
   leafOwnerLabel,
   OrganizationCaLeavesSection,
   renewalNotice,
@@ -45,12 +46,14 @@ vi.mock('@/components/ui', () => ({
     label,
     onConfirm,
     disabled,
+    prompt,
   }: {
     label: string
     onConfirm: () => void
     disabled?: boolean
+    prompt?: string
   }) => (
-    <button disabled={disabled} onClick={onConfirm}>
+    <button disabled={disabled} data-prompt={prompt} onClick={onConfirm}>
       {label}
     </button>
   ),
@@ -153,6 +156,12 @@ describe('leaf wording helpers', () => {
 })
 
 describe('OrganizationCaLeavesSection', () => {
+  it('warns that a server which still uses the certificate will lose trust', () => {
+    render(<OrganizationCaLeavesSection orgId="org-1" canManage />)
+    expect(MARK_STALE_PROMPT).toMatch(/stop being trusted once the previous Organization CA is retired/)
+    expect(screen.getByText('Mark stale').getAttribute('data-prompt')).toBe(MARK_STALE_PROMPT)
+  })
+
   it('lists each certificate with its owner, reason and last failure', () => {
     state.leaves = {
       data: listing([

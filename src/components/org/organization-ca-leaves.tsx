@@ -13,6 +13,10 @@ import {
 import { colors, spacing } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
 
+/** Shown before an owner marks a certificate stale. */
+export const MARK_STALE_PROMPT =
+  'Nothing uses this certificate any more? If this server still uses it, it will stop being trusted once the previous Organization CA is retired.'
+
 const DAY_FORMAT = { includeSeconds: false, includeDate: true, timeZoneName: null } as const
 
 /** What the certificate belongs to, in words an owner recognises. */
@@ -102,7 +106,7 @@ function LeafRow({
             <ConfirmButton
               label="Mark stale"
               confirmLabel="Mark stale"
-              prompt="Nothing uses this certificate any more?"
+              prompt={MARK_STALE_PROMPT}
               disabled={blocked}
               onConfirm={() => onStale(leaf)}
             />
