@@ -55,24 +55,24 @@ export function ServerPrincipalsSection({
 
   return (
     <View style={styles.stack}>
-      <SectionPanel title="Principals" hint={PRINCIPAL_SERVER_TAB_HINT}>
+      <SectionPanel title="Hosting Accounts" hint={PRINCIPAL_SERVER_TAB_HINT}>
         {canManage ? null : (
           <Text style={panelStyles.muted}>
             Only organization owners and managers can see the principals on a server.
           </Text>
         )}
-        {canManage && query.isLoading && !query.data ? <LoadingState label="Loading principals…" /> : null}
+        {canManage && query.isLoading && !query.data ? <LoadingState label="Loading Hosting Accounts…" /> : null}
         {query.error && !query.data ? (
           <InlineNotice
             tone="warning"
-            title="Could not load the principals on this server"
+            title="Could not load the Hosting Accounts on this server"
             body={userErrorMessage(query.error, 'Try again in a moment.')}
           />
         ) : null}
         {query.data ? (
           <DataTable columns={COLUMNS} minWidth={760} bordered>
             {rows.length === 0 ? (
-              <DataTableEmpty>No principals are placed on this server.</DataTableEmpty>
+              <DataTableEmpty>No Hosting Accounts are placed on this server.</DataTableEmpty>
             ) : null}
             {rows.map((row, index) => {
               const usage = principalUsageLines(row.usedBy)
@@ -81,7 +81,7 @@ export function ServerPrincipalsSection({
                   key={row.placementId}
                   alt={index % 2 === 1}
                   last={index === rows.length - 1}
-                  accessibilityLabel={`Principal ${row.username} on this server`}
+                  accessibilityLabel={`Hosting Account ${row.username} on this server`}
                 >
                   <DataTableCell column={C_NAME}>
                     <MonoText>{row.appliedUsername}</MonoText>

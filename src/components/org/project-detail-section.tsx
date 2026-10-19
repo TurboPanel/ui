@@ -287,7 +287,7 @@ export function ProjectPrincipalsSection({
       ) : null}
       {loading && principals.length === 0 ? <LoadingState /> : null}
       {!loading && principals.length === 0 ? (
-        <EmptyState title="No principals yet." />
+        <EmptyState title="No Hosting Accounts yet." />
       ) : null}
       <View style={styles.principalList}>
         {principals.map((row) => {
@@ -439,8 +439,8 @@ export function ProjectPrincipalsSection({
 
   return (
     <SectionPanel
-      title="Project principals"
-      hint="Linux system users for this project. Assign a service so deploy ensures the account on the host — sites use that principal for document-root ownership (and Apache php-fpm run-as); storage chown follows the same pin. Assign at most one principal per site service."
+      title="Project Hosting Accounts"
+      hint="Linux system users for this project. Assign a service so deploy ensures the account on the host — sites use that Hosting Account for document-root ownership (and Apache php-fpm run-as); storage chown follows the same pin. Assign at most one Hosting Account per site service."
     >
       {body}
     </SectionPanel>

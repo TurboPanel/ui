@@ -118,10 +118,10 @@ export function principalNamesLabel(username: string, appliedUsername?: string |
 
 /** Control plane 400: the site owner's Linux user collides with a host account. */
 export const USERNAME_RESERVED_COPY =
-  "That name is used by the server itself (for example ftp, git, root or a service account), so a site owner can't use it. Pick another name, such as your site's name."
+  "That name is used by the server itself (for example ftp, git, root or a service account), so a Hosting Account can't use it. Pick another name, such as your site's name."
 
 export const USERNAME_TOO_LONG_COPY =
-  "That site owner's Linux user name is too long. Use at most 28 characters (16 with the default name scheme)."
+  'That Hosting Account name is too long. Use at most 28 characters (16 with the default name scheme).'
 
 export const USERNAME_IN_USE_COPY = 'That name is already used on this server. Pick another name.'
 

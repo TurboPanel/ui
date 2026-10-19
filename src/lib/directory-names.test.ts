@@ -88,7 +88,7 @@ describe('folder wording', () => {
     expect(folderLockExplanation(0)).toBeNull()
     expect(folderLockExplanation(2)).toContain('shared folder')
     expect(serviceFolderWhere('example.com', true)).toBe(
-      "example.com, in the site owner's shared folder"
+      "example.com, in the Hosting Account's shared folder"
     )
     expect(serviceFolderWhere('example.com', false)).toContain('named after its environment')
     expect(folderNameKindOf('3f2b8c1e-aaaa-4bbb-8ccc-0123456789ab')).toBe('uuid')

@@ -55,7 +55,7 @@ export function ServerRemovalPrincipals({
     return (
       <InlineNotice
         tone="warning"
-        title="Could not load the principals on this server"
+        title="Could not load the Hosting Accounts on this server"
         body={userErrorMessage(error, 'They will all be kept, and only taken off this server.')}
       />
     )
@@ -63,7 +63,7 @@ export function ServerRemovalPrincipals({
   if (!plan || plan.length === 0) return null
   return (
     <View style={styles.root}>
-      <Text style={panelStyles.detailTitle}>Principals on this server</Text>
+      <Text style={panelStyles.detailTitle}>Hosting Accounts on this server</Text>
       <Text style={panelStyles.muted}>{SERVER_REMOVAL_PRINCIPALS_INTRO}</Text>
       {plan.map((entry) => {
         const lines = principalUsageLines(entry.usedBy)

@@ -74,7 +74,7 @@ const API_ERROR_COPY: Readonly<Record<string, string>> = {
     'Other environments are still using this shared item. Stop using it there first.',
   asset_not_common: 'Only items shared across environments can be used by other environments.',
   asset_in_this_environment: 'This item already belongs to this environment.',
-  asset_has_no_owner: 'A shared item needs a site owner before other environments can use it.',
+  asset_has_no_owner: 'A shared item needs a Hosting Account before other environments can use it.',
 }
 
 const LICENSE_TIER_FORBIDDEN = /HTTP 403:\s*Forbidden\b/

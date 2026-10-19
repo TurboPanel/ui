@@ -127,6 +127,6 @@ export function folderLockExplanation(total: number): string | null {
 /** Plain words for where a service's folder is: its name and which folder it sits in. */
 export function serviceFolderWhere(slug: string, common: boolean): string {
   return common
-    ? `${slug}, in the site owner's shared folder`
+    ? `${slug}, in the Hosting Account's shared folder`
     : `${slug}, in the folder named after its environment`
 }

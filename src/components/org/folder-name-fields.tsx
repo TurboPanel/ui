@@ -87,7 +87,7 @@ export function FolderNameFields({
       </FormField>
       <Text style={panelStyles.muted}>
         {draft.common
-          ? `This ${noun} goes in the site owner's shared folder, so it does not depend on an environment's name and other environments can use it. This cannot change later.`
+          ? `This ${noun} goes in the Hosting Account's shared folder, so it does not depend on an environment's name and other environments can use it. This cannot change later.`
           : `This ${noun} goes in a folder named after its environment. This cannot change later.`}
       </Text>
     </View>

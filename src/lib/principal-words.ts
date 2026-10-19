@@ -10,10 +10,10 @@ import type {
  * "principal" and, where the form matters, "system user" or "database login".
  */
 export const PRINCIPAL_DEFINITION =
-  'A principal is an account responsible for the contents within it. On a server it is a system user, the Linux account a site runs as. For a database it is a database login.'
+  'A principal is an account responsible for the contents within it. On a server it is a Hosting Account, the Linux account a site runs as. For a database it is a database login.'
 
 export const PRINCIPAL_SERVER_TAB_HINT =
-  'Principals placed on this server, each as a system user. The Principals tab of Manage organization lists all of them.'
+  'Hosting Accounts placed on this server, each as a system user. The Principals tab of Manage organization lists all of them.'
 
 export const PRINCIPAL_STATE_LABELS: Record<OrgPrincipalState, string> = {
   none: 'Not on a server',
@@ -72,9 +72,9 @@ export function principalDeleteBlockedReason(row: OrgPrincipalRecord): string | 
 }
 
 export const REMOVAL_ACTION_LABELS: Record<PrincipalRemovalAction, string> = {
-  keep: 'Keep the principal, remove it from this server only',
-  delete: 'Delete the principal outright',
+  keep: 'Keep the Hosting Account, remove it from this server only',
+  delete: 'Delete the Hosting Account outright',
 }
 
 export const SERVER_REMOVAL_PRINCIPALS_INTRO =
-  'These principals have a system user on this server. By default each one is kept in the organization and only taken off this server. Delete one outright only if nothing else uses it.'
+  'These Hosting Accounts are on this server. By default each one is kept in the organization and only taken off this server. Delete one outright only if nothing else uses it.'

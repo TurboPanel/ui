@@ -51,7 +51,7 @@ function FolderRow({
         <Badge label={folderStateLabel(folder.state)} tone={STATE_TONES[folder.state]} />
       </View>
       <Text style={panelStyles.muted}>
-        Site owner {folder.owner}, folder {folder.scope}/{folder.slug}
+        Hosting Account {folder.owner}, folder {folder.scope}/{folder.slug}
       </Text>
       {folder.reason ? <Text style={panelStyles.muted}>{folder.reason}</Text> : null}
       <FolderActionButton

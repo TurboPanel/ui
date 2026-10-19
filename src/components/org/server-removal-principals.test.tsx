@@ -95,7 +95,7 @@ describe('ServerRemovalPrincipals', () => {
     renderList([entry({})])
     const select = screen.getByLabelText('What to do with shop_abc') as HTMLSelectElement
     expect(select.value).toBe('keep')
-    expect(screen.getByText('Keep the principal, remove it from this server only')).toBeTruthy()
+    expect(screen.getByText('Keep the Hosting Account, remove it from this server only')).toBeTruthy()
   })
 
   it('offers outright deletion only when nothing else uses the principal', () => {
@@ -115,7 +115,7 @@ describe('ServerRemovalPrincipals', () => {
         },
       }),
     ])
-    expect(screen.getAllByText('Delete the principal outright')).toHaveLength(1)
+    expect(screen.getAllByText('Delete the Hosting Account outright')).toHaveLength(1)
     expect(
       screen.getByText('Cannot be deleted while in use: 2 services run as it, 1 other server has it.')
     ).toBeTruthy()
@@ -132,7 +132,7 @@ describe('ServerRemovalPrincipals', () => {
 
   it('says all are kept when the plan cannot be loaded, and renders nothing when empty', () => {
     const { unmount } = renderList(undefined, { error: new Error('boom') })
-    expect(screen.getByText('Could not load the principals on this server')).toBeTruthy()
+    expect(screen.getByText('Could not load the Hosting Accounts on this server')).toBeTruthy()
     unmount()
     const { container } = renderList([])
     expect(container.textContent).toBe('')
