@@ -286,6 +286,7 @@ export function ProjectEnvironmentsSection({
   embedDetail?: boolean
 }>) {
   const canOwn = useCan('organization', orgId, 'organization:own')
+  const canManage = useCan('organization', orgId, 'organization:manage')
   const {
     defaultEnvironmentName,
     isLoading: defaultNameLoading,
@@ -451,7 +452,11 @@ export function ProjectEnvironmentsSection({
           stopping={deleteFlow.stopping}
           onStop={() => void deleteFlow.stopActive()}
         />
-        <EnvironmentFoldersPanel orgId={orgId} environmentId={activeEnvironment.id} />
+        <EnvironmentFoldersPanel
+          orgId={orgId}
+          environmentId={activeEnvironment.id}
+          canManage={canManage}
+        />
         <EnvironmentSharesPanel
           orgId={orgId}
           projectId={projectId}
