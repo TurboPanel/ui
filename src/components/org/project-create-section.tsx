@@ -271,6 +271,7 @@ function seedForRepositoryLane(
       buildCommand: simple.buildCommand,
       startCommand: simple.startCommand,
       subdirectory: simple.buildRoot,
+      nodeVersion: simple.nodeVersion,
     },
   })
 }

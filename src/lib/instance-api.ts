@@ -6526,6 +6526,25 @@ export type RepositoryInspection = {
   via: 'provider' | 'daemon'
   files: RepositoryProbedFile[]
   entries: { path: string; kind: 'file' | 'dir'; bytes?: number }[]
+  /** The Node series a new app should start on, and what the repository asked for. */
+  nodeVersion?: RepositoryNodeVersion
+}
+
+export type RepositoryNodeVersionHint = {
+  source: 'package.json' | 'volta' | '.nvmrc' | '.node-version' | '.tool-versions'
+  /** The file's own value, such as `>=26.7.0`. */
+  requested: string
+  path: string
+  /** `matched` names `series`; the other two leave the wizard on its default. */
+  status: 'matched' | 'unsupported' | 'invalid'
+  series?: string
+}
+
+export type RepositoryNodeVersion = {
+  /** Newest concrete series the control plane offers. */
+  newest: string
+  offered: string[]
+  hint?: RepositoryNodeVersionHint
 }
 
 /**

@@ -17,6 +17,7 @@ import {
   usePersistProjectCompose,
 } from '@/components/org/compose-persistence'
 import {
+  FLOATING_NODE_VERSION,
   NEWEST_NODE_SERIES,
   SUPPORTED_NODE_SERIES,
   isNodeComposeService,
@@ -199,12 +200,23 @@ function extensionPatchFromDraft(
 function buildVersionOptions(
   nodeVersion: string,
 ): { value: string; label: string }[] {
-  const offered = SUPPORTED_NODE_SERIES.map((series) => ({
-    value: series,
-    label: `${series}.x`,
-  }))
+  const offered = [
+    ...SUPPORTED_NODE_SERIES.map((series) => ({
+      value: series,
+      label: `${series}.x`,
+    })),
+    // Following the server is a deliberate pick, never the default.
+    {
+      value: FLOATING_NODE_VERSION,
+      label: `Latest (follows the server, now ${NEWEST_NODE_SERIES}.x)`,
+    },
+  ]
   // A pinned value outside the offered series still has to display as itself.
-  if (nodeVersion && !SUPPORTED_NODE_SERIES.includes(nodeVersion)) {
+  if (
+    nodeVersion &&
+    nodeVersion !== FLOATING_NODE_VERSION &&
+    !SUPPORTED_NODE_SERIES.includes(nodeVersion)
+  ) {
     return [{ value: nodeVersion, label: nodeVersion }, ...offered]
   }
   return offered
@@ -520,13 +532,23 @@ function NodeSettingsFields({
 
       <SettingRow
         label="Node.js version"
-        description="Series the app runs and builds on."
+        description={
+          nodeVersion === FLOATING_NODE_VERSION
+            ? 'Latest follows the newest Node version this server offers, so the app moves to a new series on the first deploy after the server gets one. Pick a number to keep it where it is.'
+            : nodeVersion
+              ? 'The app stays on this series and only gets patch updates.'
+              : 'Not pinned: the app follows the newest Node version this server offers. Pick a number to keep it where it is.'
+        }
       >
         <Select
           value={nodeVersion || null}
           options={buildVersionOptions(nodeVersion)}
           placeholder="Select a version"
-          noneLabel={`Newest available (${NEWEST_NODE_SERIES}.x)`}
+          noneLabel={
+            nodeVersion
+              ? undefined
+              : `Not pinned (follows the server, now ${NEWEST_NODE_SERIES}.x)`
+          }
           mono
           disabled={fieldsDisabled}
           accessibilityLabel="Node.js version"

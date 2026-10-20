@@ -114,6 +114,8 @@ export function seedComposeForLane(params: {
     startCommand?: string
     /** Directory the build runs in, relative to the checkout root. */
     subdirectory?: string
+    /** `app` lane only: a pinned Node series, or `latest` when chosen on purpose. */
+    nodeVersion?: string
   }
   /**
    * Account the service runs as, when the operator already chose one.
@@ -143,6 +145,7 @@ export function seedComposeForLane(params: {
   const buildCommand = capped(simple?.buildCommand)
   const startCommand = lane === 'app' ? capped(simple?.startCommand) : undefined
   const subdirectory = capped(simple?.subdirectory)
+  const nodeVersion = lane === 'app' ? simple?.nodeVersion?.trim() || undefined : undefined
   const binding: ComposeServiceSourceExtension = {
     sourceId: source.id,
     ...(trimmedBranch ? { branch: trimmedBranch } : {}),
@@ -154,6 +157,7 @@ export function seedComposeForLane(params: {
   const extension = lane === 'app'
     ? {
       serviceKind: 'node' as const,
+      ...(nodeVersion ? { nodeVersion } : {}),
       ...(alias ? { principal: alias } : {}),
       source: binding,
     }
