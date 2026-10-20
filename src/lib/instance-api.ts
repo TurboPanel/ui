@@ -2839,8 +2839,6 @@ export async function deleteLicense(id: string): Promise<{ ok: true }> {
 // ---------------------------------------------------------------------------
 
 export const BILLING_NOT_CONFIGURED_ERROR = 'billing_not_configured'
-/** `409` on checkout while one is already open for the organization. */
-export const CHECKOUT_PENDING_ERROR = 'checkout_pending'
 /** `502` when the payment provider refused or failed. */
 export const STRIPE_ERROR = 'stripe_error'
 export const BILLING_MUTATION_IN_PROGRESS_ERROR = 'billing_mutation_in_progress'
@@ -3095,7 +3093,7 @@ export async function fetchBillingSubscription(): Promise<BillingSubscriptionSum
   return await apiFetch(`${CLIENT_API}/billing/subscription`)
 }
 
-/** First purchase → hosted Checkout URL. 409 `subscription_exists` once a live subscription is projected. */
+/** First purchase → hosted Checkout URL. An open checkout for another choice is replaced, never refused. 409 `subscription_exists` once a live subscription is projected or a checkout was just paid. */
 export async function createBillingCheckout(body: {
   tierId: string
   quantity?: number
