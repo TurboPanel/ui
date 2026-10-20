@@ -135,7 +135,8 @@ import { useCan } from '@/lib/query-client'
 import { useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/lib/query-keys'
 import { offersLetsEncrypt } from '@/lib/hosting-letsencrypt-choice'
-import { removedFromComposeServiceIds } from '@/lib/directory-names'
+import { RemovedServiceCard } from '@/components/org/removed-service-card'
+import { containerCardServices, removedFromComposeServiceIds } from '@/lib/directory-names'
 import { useEnvironmentFolders } from '@/lib/queries/folders'
 import { useRequestLetsEncrypt } from '@/lib/queries/hosting-certificate'
 import { userErrorMessage } from '@/lib/user-error'
@@ -1962,21 +1963,42 @@ function EnvironmentContainersSectionPanel({
 }>) {
   const folders = useEnvironmentFolders(orgId, environmentId)
   const removedIds = removedFromComposeServiceIds(folders.data?.folders ?? [])
-  const hasContainers = services.some(
-    (service) => (containersByService[service.id] ?? []).length > 0,
+  // The folders list holds only the first 20 rows, so removed sites past it can be missed.
+  const partial = (folders.data?.total ?? 0) > (folders.data?.folders.length ?? 0)
+  const listed = containerCardServices(
+    services,
+    Object.fromEntries(
+      services.map((service) => [service.id, (containersByService[service.id] ?? []).length]),
+    ),
+    removedIds,
   )
   return (
     <SectionPanel title="Containers" hint="Deployed containers and their status">
-      {!hasContainers ? (
+      {partial ? (
+        <Text style={panelStyles.muted}>
+          Only the first 20 folders were checked, so a site removed from compose may not be
+          marked here.
+        </Text>
+      ) : null}
+      {listed.length === 0 ? (
         <EmptyState title="No containers deployed yet." />
       ) : (
         <View style={styles.containerList}>
-          {services.map((service) => {
+          {listed.map((service) => {
             const containers = partitionContainersForDisplay(
               containersByService[service.id] ?? [],
             )
+            const title =
+              service.name?.trim() || String(service.composeServiceName ?? service.id)
             if (containers.length === 0) {
-              return null
+              // A removed site has no containers; show it so it does not look gone.
+              return removedIds.has(service.id) ? (
+                <RemovedServiceCard
+                  key={service.id}
+                  name={title}
+                  foldersWhere="above"
+                />
+              ) : null
             }
             return (
               <View key={service.id} style={panelStyles.detailCard}>
