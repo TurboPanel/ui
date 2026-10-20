@@ -13,8 +13,6 @@ function row(patch: Partial<OrgPrincipalRecord> = {}): OrgPrincipalRecord {
     id: 'p1',
     name: 'shop',
     appliedUsername: 'shop_abc',
-    kind: 'system',
-    provider: 'server',
     forms: ['system'],
     projectId: null,
     projectName: null,
@@ -63,8 +61,5 @@ describe('principal words', () => {
         row({ canDelete: false, usedBy: { tenancies: 2, bindings: 0, storages: 0, secrets: 0, logins: 0 } })
       )
     ).toBe('In use: 2 services run as it.')
-    expect(principalDeleteBlockedReason(row({ canDelete: false, provider: 'postgres' }))).toBe(
-      'Removed together with its database.'
-    )
   })
 })

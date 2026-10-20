@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { ServiceFolderSettings } from '@/components/org/service-folder-settings'
 import { ServiceBindingsPanel } from '@/components/org/service-bindings-panel'
 import { Checkbox } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
@@ -222,6 +223,9 @@ export function ServiceSettingsPanel({
           serviceId={service.id}
           canManage={canManage}
         />
+      ) : null}
+      {service?.id ? (
+        <ServiceFolderSettings orgId={orgId} service={service} canManage={canManage} />
       ) : null}
       <View style={panelStyles.detailCard}>
       <Text style={panelStyles.detailTitle}>{composeServiceName}</Text>

@@ -114,13 +114,13 @@ describe('bindings query hooks', () => {
     await expect(
       result.current.run({
         serviceId,
-        principalId: 'principal-1',
+        loginId: 'login-1',
         databaseName: 'app',
       }),
     ).resolves.toMatchObject({ ok: true, value: { ok: true, id: 'bind-2' } })
     expect(createBinding).toHaveBeenCalledWith({
       serviceId,
-      principalId: 'principal-1',
+      loginId: 'login-1',
       databaseName: 'app',
     })
   })
@@ -137,7 +137,7 @@ describe('bindings query hooks', () => {
     await expect(
       result.current.run({
         serviceId,
-        principalId: 'principal-1',
+        loginId: 'login-1',
         databaseName: 'app',
         managedEnvironmentId: environmentId,
       }),
@@ -145,7 +145,7 @@ describe('bindings query hooks', () => {
 
     expect(createBinding).toHaveBeenCalledWith({
       serviceId,
-      principalId: 'principal-1',
+      loginId: 'login-1',
       databaseName: 'app',
     })
     await waitFor(() => {

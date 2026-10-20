@@ -54,6 +54,14 @@ vi.mock('@/components/org/project/managed-focus-tab', () => ({
     <div data-testid="managed" data-focus={focus} />
   ),
 }))
+vi.mock('@/components/org/project/base-tab/base-edit-notice', () => ({
+  WithBaseNotice: ({ children }: Props) => (
+    <div>
+      <div data-testid="base-notice">Shared defaults for all environments</div>
+      {children}
+    </div>
+  ),
+}))
 vi.mock('@/components/org/project/base-tab/base-tab', () => ({
   ProjectBaseTab: () => <div data-testid="base-tab" />,
 }))
@@ -86,7 +94,6 @@ vi.mock('@/components/org/project/environment-deployment-history-panel', () => (
     />
   ),
 }))
-
 
 function project(metadata: ProjectRecord['metadata']): Partial<ProjectRecord> {
   return { id: 'p', metadata }
@@ -123,9 +130,7 @@ describe('LegacyProjectRedirect', () => {
   it('sends a retired environment route to Configuration and keeps the query', () => {
     state.params = { orgId: 'o', projectId: 'p', environmentId: 'e', hostingId: 'h1' }
     render(<LegacyProjectRedirect segment="hosting" />)
-    expect(redirectHref()).toBe(
-      '/o/projects/p/environments/e/configuration/hosting?hostingId=h1',
-    )
+    expect(redirectHref()).toBe('/o/projects/p/environments/e/configuration/hosting?hostingId=h1')
   })
 
   it('sends the retired map routes to the Environments tab and the Overview tab', () => {
@@ -188,11 +193,15 @@ describe('project tabs', () => {
   it('shows the Base tab on the web, and sends platform and managed projects home', () => {
     render(<ProjectBaseScreen />)
     expect(screen.getByTestId('base-tab')).toBeTruthy()
+    expect(screen.getByTestId('base-notice').textContent).toBe(
+      'Shared defaults for all environments'
+    )
     expect(screen.queryByTestId('compose-surface')).toBeNull()
     cleanup()
     setContext({ isSystemProject: true })
     render(<ProjectBaseScreen />)
     expect(redirectHref()).toBe('/o/projects/p/overview')
+    expect(screen.queryByTestId('base-notice')).toBeNull()
     cleanup()
     setContext({ project: project({ type: 'managed', code: 'postgres' }) })
     render(<ProjectBaseScreen />)
@@ -203,12 +212,14 @@ describe('project tabs', () => {
     state.os = 'ios'
     render(<ProjectBaseScreen />)
     expect(screen.getByTestId('compose-surface')).toBeTruthy()
+    expect(screen.getByTestId('base-notice')).toBeTruthy()
     expect(screen.queryByTestId('base-tab')).toBeNull()
   })
 
   it('keeps the compose surface on the Base lens routes, and sends platform and managed projects home', () => {
     render(<ProjectBaseLensScreen />)
     expect(screen.getByTestId('compose-surface')).toBeTruthy()
+    expect(screen.getByTestId('base-notice')).toBeTruthy()
     cleanup()
     setContext({ isSystemProject: true })
     render(<ProjectBaseLensScreen />)

@@ -171,7 +171,7 @@ export function LoginLimitsEditor({
   user: ManagedUserRecord
   servers: readonly LimitServerName[]
   disabled: boolean
-  onUpdate: (principalId: string, body: ManagedUserPatch) => Promise<ManagedUserPatchResult>
+  onUpdate: (loginId: string, body: ManagedUserPatch) => Promise<ManagedUserPatchResult>
   onError: (message: string | null) => void
 }>) {
   const [editing, setEditing] = useState(false)

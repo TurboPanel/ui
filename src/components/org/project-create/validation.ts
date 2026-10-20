@@ -1,4 +1,5 @@
 /** Field-level validation for the create wizard's details step. */
+import { environmentFolderNameProblem } from '@/lib/environment-validation'
 import {
   DISPLAY_NAME_MAX_LENGTH,
   displayNameCodePointLength,
@@ -12,7 +13,7 @@ import {
 
 /**
  * The environment name is optional (empty lets the server apply the org
- * default); when given it follows the display-name rules.
+ * default); when given it must be a valid folder name.
  */
 function validateEnvironmentNameField(name: string): string | null {
   if (!name.trim()) return null
@@ -22,7 +23,7 @@ function validateEnvironmentNameField(name: string): string | null {
   if (hasDisallowedDisplayNameChars(normalizeDisplayName(name))) {
     return 'Environment name cannot contain control characters.'
   }
-  return null
+  return environmentFolderNameProblem(name)
 }
 
 export type WorkspaceMode = 'existing' | 'new'

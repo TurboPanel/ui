@@ -289,7 +289,12 @@ export type ManagedConnectionRole = 'read-write' | 'read-only'
 export type ManagedGrantMode = 'preset' | 'recipe' | 'self'
 
 export type ManagedUserRecord = {
+  /** The login id. Every managed users route takes this id. */
   id: string
+  /** Same value as `id`. */
+  loginId: string
+  /** The site owner's Linux user this login shares its name with; `null` when there is none. */
+  principalId: string | null
   username: string
   /** Engine login actually created, per `nameScheme`. Connect with this name. */
   appliedUsername: string

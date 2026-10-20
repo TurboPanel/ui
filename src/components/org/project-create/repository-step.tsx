@@ -11,16 +11,21 @@ import {
   MonoText,
   SectionPanel,
   SegmentedControl,
+  Select,
   TextField,
 } from '@/components/ui'
 import {
+  FLOATING_NODE_VERSION,
+  NEWEST_NODE_SERIES,
   SOURCE_BRANCH_MAX_LENGTH,
   SOURCE_COMMAND_MAX_LENGTH,
+  SUPPORTED_NODE_SERIES,
   type NodePackageManager,
 } from '@/lib/compose/service-kind'
 import {
   detectPackageManager,
   isNodeApp,
+  suggestedNodeVersion,
   type SimpleAppConfig,
   type SimpleAppKind,
 } from '@/lib/project-create/simple-app'
@@ -320,6 +325,60 @@ function CheckSummary({
 }
 
 /**
+ * Node version of a new app. A concrete series is preselected (the one the
+ * repository asks for when the server offers it, else the newest), and
+ * `latest` is a deliberate choice that is explained where it is made.
+ */
+function nodeVersionHint(nodeVersion: string, notice: string | undefined): string {
+  const follows =
+    'Latest follows the newest Node version this server offers, so the app moves to a new Node series on the first deploy after the server gets one. Pick a number to keep it where it is; it still gets patch updates.'
+  const pinned = 'The app stays on this Node series and only gets patch updates.'
+  const base = nodeVersion === FLOATING_NODE_VERSION ? follows : pinned
+  return notice ? base + ' ' + notice : base
+}
+
+function NodeVersionField({
+  simple,
+  inspection,
+  disabled,
+  onSimpleChange,
+}: Readonly<{
+  simple: SimpleAppConfig
+  inspection: RepositoryInspection | undefined
+  disabled: boolean
+  onSimpleChange: (patch: Partial<SimpleAppConfig>) => void
+}>) {
+  const offered = inspection?.nodeVersion?.offered ?? [...SUPPORTED_NODE_SERIES]
+  const newest = inspection?.nodeVersion?.newest ?? NEWEST_NODE_SERIES
+  const suggestion = suggestedNodeVersion(inspection)
+  // The sentence explains the preselection, so it goes once something else is picked.
+  const notice = simple.nodeVersion === suggestion.nodeVersion ? suggestion.notice : undefined
+  const options = [
+    ...offered.map((series) => ({ value: series, label: `Node ${series}.x` })),
+    {
+      value: FLOATING_NODE_VERSION,
+      label: `Latest (follows the server, now ${newest}.x)`,
+    },
+  ]
+  return (
+    <FormField
+      label="Node version"
+      hint={nodeVersionHint(simple.nodeVersion, notice)}
+    >
+      <Select
+        value={simple.nodeVersion || null}
+        options={options}
+        placeholder="Select a version"
+        disabled={disabled}
+        mono
+        accessibilityLabel="Node version"
+        onChange={(value) => onSimpleChange({ nodeVersion: value ?? newest })}
+      />
+    </FormField>
+  )
+}
+
+/**
  * The Simple-application form: what it produces, where it builds, how it
  * builds, and how it runs — everything still on the repository screen.
  *
@@ -331,10 +390,13 @@ function CheckSummary({
 export function SimpleAppFields({
   simple,
   manager,
+  inspection,
   disabled,
   onSimpleChange,
 }: Readonly<{
   simple: SimpleAppConfig
+  /** What the repository read found, for the Node version hint. */
+  inspection?: RepositoryInspection | null
   /** Detected package manager — makes the ghost text honest, not just npm. */
   manager: NodePackageManager | undefined
   disabled: boolean
@@ -404,6 +466,12 @@ export function SimpleAppFields({
               placeholder="node server.js"
               accessibilityLabel="Start command"
               hint="Leave empty to use the detected default. A Next.js app is started for you — node server.js for a standalone build — and a package start script such as pnpm start does not work there."
+            />
+            <NodeVersionField
+              simple={simple}
+              inspection={inspection ?? undefined}
+              disabled={disabled}
+              onSimpleChange={onSimpleChange}
             />
             <FormField
               label="Port"

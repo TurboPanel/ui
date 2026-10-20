@@ -9,7 +9,10 @@
  * which is why the lockfile precedence below mirrors the daemon's.
  */
 
-import type { NodePackageManager } from '@/lib/compose/service-kind'
+import {
+  NEWEST_NODE_SERIES,
+  type NodePackageManager,
+} from '@/lib/compose/service-kind'
 import type { RepositoryInspection, RepositoryProbedFile } from '@/lib/instance-api'
 import { rootFromEntries } from '@/lib/compose/repository-lane'
 
@@ -33,6 +36,11 @@ export type SimpleAppConfig = {
   startCommand: string
   /** Static only: directory the build writes the site into. '' = auto. */
   outputDirectory: string
+  /**
+   * Web only: the Node series the app is pinned to. Always a concrete series
+   * unless the operator picked `latest` (follow the server's newest) on purpose.
+   */
+  nodeVersion: string
 }
 
 export type PackageManagerDetection = {
@@ -168,6 +176,49 @@ function daemonStartsItself(startScript: string): boolean {
   return NEXT_START_RE.test(startScript) || startScript.includes('.next/standalone/')
 }
 
+const HINT_FILE_LABELS: Record<string, string> = {
+  'package.json': 'engines.node in package.json',
+  volta: 'volta.node in package.json',
+  '.nvmrc': '.nvmrc',
+  '.node-version': '.node-version',
+  '.tool-versions': '.tool-versions',
+}
+
+/**
+ * The Node series a new app starts on, and a plain sentence about what the
+ * repository asked for when it asked for something.
+ *
+ * A version the repository names and the server offers is preselected (the
+ * highest offered series that satisfies a range). Otherwise the newest
+ * concrete series is: pinned, so a later release of Node never moves the app.
+ * `latest` is never a default.
+ */
+export function suggestedNodeVersion(
+  inspection: RepositoryInspection | undefined,
+): { nodeVersion: string; notice?: string } {
+  const info = inspection?.nodeVersion
+  const newest = info?.newest ?? NEWEST_NODE_SERIES
+  const hint = info?.hint
+  if (!hint) return { nodeVersion: newest }
+  const label = HINT_FILE_LABELS[hint.source] ?? hint.path
+  if (hint.status === 'matched' && hint.series) {
+    return {
+      nodeVersion: hint.series,
+      notice: `Your repository asks for Node ${hint.requested} (${label}), so Node ${hint.series} was preselected.`,
+    }
+  }
+  if (hint.status === 'unsupported') {
+    return {
+      nodeVersion: newest,
+      notice: `Your repository asks for Node ${hint.requested} (${label}), which this server does not offer. Node ${newest} was preselected instead.`,
+    }
+  }
+  return {
+    nodeVersion: newest,
+    notice: `${label} says "${hint.requested}", which is not a version Node can be chosen from. Node ${newest} was preselected instead.`,
+  }
+}
+
 /**
  * Suggested Simple-application config for what the inspection found.
  *
@@ -203,5 +254,6 @@ export function suggestedSimpleAppConfig(
     startCommand:
       scripts?.start && !daemonStartsItself(scripts.start) ? `${manager ?? 'npm'} start` : '',
     outputDirectory: staticRoot ?? '',
+    nodeVersion: suggestedNodeVersion(inspection).nodeVersion,
   }
 }

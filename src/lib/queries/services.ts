@@ -178,11 +178,13 @@ export function useHostingsByServices(
   const isLoading =
     enabled && serviceIds.length > 0 && queries.some((query) => query.isLoading)
 
+  const hasError = enabled && queries.some((query) => query.isError)
+
   const refetchAll = async () => {
     await Promise.all(queries.map((query) => query.refetch()))
   }
 
-  return { hostingsByService, isLoading, refetchAll }
+  return { hostingsByService, isLoading, hasError, refetchAll }
 }
 
 /** Per-environment service lists keyed by environment id. */

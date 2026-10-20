@@ -204,11 +204,11 @@ export function LoginPermissionsView({
 export function LoginPermissionsPanel({
   orgId,
   environmentId,
-  principalId,
+  loginId,
   username,
-}: Readonly<{ orgId: string; environmentId: string; principalId: string; username: string }>) {
+}: Readonly<{ orgId: string; environmentId: string; loginId: string; username: string }>) {
   const [open, setOpen] = useState(false)
-  const query = useManagedEffectivePermissions(orgId, environmentId, principalId, { enabled: open })
+  const query = useManagedEffectivePermissions(orgId, environmentId, loginId, { enabled: open })
   const catalogue = useManagedPrivilegeCatalogue(orgId, environmentId, { enabled: open })
   const loading = open && query.isFetching
   const showError = open && query.isError && !query.isFetching

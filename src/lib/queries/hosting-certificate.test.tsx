@@ -6,6 +6,7 @@ import { createAppQueryClient } from '@/lib/query-client'
 import {
   useHostingCertificate,
   useHostingDnsCheck,
+  useRequestLetsEncrypt,
   useUseLetsEncrypt,
 } from '@/lib/queries/hosting-certificate'
 
@@ -55,6 +56,20 @@ describe('hosting certificate queries', () => {
       await result.current.run()
     })
     expect(requestLetsEncryptForHosting).toHaveBeenCalledWith('h1')
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['org', 'org-1', 'hostings'] })
+  })
+
+  it('asks for a certificate for a hosting that was just saved, by the id given at call time', async () => {
+    requestLetsEncryptForHosting.mockResolvedValue({ needsDeploy: true })
+    const client = createAppQueryClient()
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
+    const { result } = renderHook(() => useRequestLetsEncrypt('org-1'), {
+      wrapper: createWrapper(client),
+    })
+    await act(async () => {
+      await result.current.run('new-hosting')
+    })
+    expect(requestLetsEncryptForHosting).toHaveBeenCalledWith('new-hosting')
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['org', 'org-1', 'hostings'] })
   })
 

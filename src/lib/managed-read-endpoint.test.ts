@@ -76,6 +76,8 @@ function user(
 ): ManagedUserRecord {
   return {
     id: `u-${username}`,
+    loginId: `u-${username}`,
+    principalId: null,
     username,
     appliedUsername: `${username}_ab12cd34ef5`,
     databases: ['app'],

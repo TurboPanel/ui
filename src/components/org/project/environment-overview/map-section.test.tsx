@@ -38,7 +38,7 @@ describe.each(SCENARIOS)('MapSection ($name)', (scenario) => {
     fireEvent.click(screen.getByRole('radio', { name: 'Base' }))
     expect(screen.getByRole('radio', { name: 'Base' }).getAttribute('aria-checked')).toBe('true')
     expect(screen.queryByText('shop.example.com')).toBeNull()
-    expect(screen.getByText('Domains are set per environment')).toBeTruthy()
+    expect(screen.getByText('Hostnames are set per environment')).toBeTruthy()
     expect(screen.queryByText('Running')).toBeNull()
   })
 

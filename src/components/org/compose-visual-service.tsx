@@ -51,6 +51,7 @@ import {
   patchServiceTurbopanelExtension,
   readServiceTurbopanelExtension,
   DEFAULT_DENO_SERIES,
+  FLOATING_NODE_VERSION,
   NEWEST_NODE_SERIES,
   SERVICE_DESCRIPTION_MAX_LENGTH,
   SOURCE_BRANCH_MAX_LENGTH,
@@ -1055,22 +1056,33 @@ function NodeRuntimeBlock({
         <OptionSelect
           value={nodeVersion ?? ''}
           options={[
-            { value: '', label: `Newest available (${NEWEST_NODE_SERIES}.x)` },
+            // Only an app that was never pinned shows this; it keeps following the server.
+            ...(nodeVersion
+              ? []
+              : [{ value: '', label: `Not pinned (follows the server, now ${NEWEST_NODE_SERIES}.x)` }]),
             // A pinned value outside the offered series still displays as itself.
-            ...(nodeVersion && !SUPPORTED_NODE_SERIES.includes(nodeVersion)
+            ...(nodeVersion &&
+            nodeVersion !== FLOATING_NODE_VERSION &&
+            !SUPPORTED_NODE_SERIES.includes(nodeVersion)
               ? [{ value: nodeVersion, label: nodeVersion }]
               : []),
             ...SUPPORTED_NODE_SERIES.map((series) => ({
               value: series,
               label: `${series}.x`,
             })),
+            {
+              value: FLOATING_NODE_VERSION,
+              label: `Latest (follows the server, now ${NEWEST_NODE_SERIES}.x)`,
+            },
           ]}
           disabled={disabled}
           onChange={onNodeVersionChange}
         />
         <Text style={styles.hint}>
-          Series the host runs this service under. Version, package manager, and
-          mode are also on the service&apos;s Node.js settings page.
+          Series the host runs this service under. A number keeps it there and
+          only gets patch updates; Latest follows the newest series the server
+          offers. Version, package manager, and mode are also on the
+          service&apos;s Node.js settings page.
         </Text>
       </View>
     </View>

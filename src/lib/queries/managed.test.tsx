@@ -882,10 +882,10 @@ describe('managed query hooks', () => {
       wrapper: createWrapper(client),
     })
     updateManagedUser.mockResolvedValueOnce({ ok: true, dryRun: true, statements: [] })
-    await result.current.mutateAsync({ principalId: 'p1', body: { grantMode: 'self', dryRun: true } })
+    await result.current.mutateAsync({ loginId: 'p1', body: { grantMode: 'self', dryRun: true } })
     expect(invalidate).not.toHaveBeenCalled()
     updateManagedUser.mockResolvedValueOnce({ ok: true, commandId: 'c1' })
-    await result.current.mutateAsync({ principalId: 'p1', body: { tool: true } })
+    await result.current.mutateAsync({ loginId: 'p1', body: { tool: true } })
     expect(updateManagedUser).toHaveBeenLastCalledWith(environmentId, 'p1', { tool: true })
     await waitFor(() => {
       expect(invalidate).toHaveBeenCalledWith({
