@@ -8,6 +8,7 @@ import {
   useDeleteEnvironment,
   useDeployEnvironment,
   useDeployPreview,
+  useMakeEnvironmentPrimary,
   useEnvironment,
   useEnvironmentConfigView,
   useEnvironments,
@@ -28,6 +29,7 @@ const {
   createEnvironment,
   updateEnvironment,
   deleteEnvironment,
+  makeEnvironmentPrimary,
   stopEnvironment,
   cancelDeployment,
 } = vi.hoisted(() => ({
@@ -40,6 +42,7 @@ const {
   createEnvironment: vi.fn(),
   updateEnvironment: vi.fn(),
   deleteEnvironment: vi.fn(),
+  makeEnvironmentPrimary: vi.fn(),
   stopEnvironment: vi.fn(),
   cancelDeployment: vi.fn(),
 }))
@@ -57,6 +60,7 @@ vi.mock('@/lib/instance-api', async (importOriginal) => {
     createEnvironment,
     updateEnvironment,
     deleteEnvironment,
+    makeEnvironmentPrimary,
     stopEnvironment,
     cancelDeployment,
   }
@@ -101,7 +105,7 @@ describe('environments query hooks', () => {
   })
 
   it('useEnvironmentConfigView loads the config view and waits for an environment id', async () => {
-    fetchEnvironmentConfigView.mockResolvedValueOnce({ ok: true, followsBase: true })
+    fetchEnvironmentConfigView.mockResolvedValueOnce({ ok: true, standsAlone: false })
 
     const { result } = renderHook(() => useEnvironmentConfigView(orgId, environmentId), {
       wrapper: createWrapper(),
@@ -267,6 +271,23 @@ describe('environments query hooks', () => {
       })
     ).resolves.toMatchObject({ ok: true })
 
+    await waitFor(() => {
+      expect(invalidate).toHaveBeenCalledWith({
+        queryKey: queryKeys.org(orgId).environments.all,
+      })
+    })
+  })
+
+  it('useMakeEnvironmentPrimary moves the marker and refreshes the environment lists', async () => {
+    makeEnvironmentPrimary.mockResolvedValueOnce({ ok: true, id: environmentId, projectId })
+    const client = createAppQueryClient()
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
+    const { result } = renderHook(() => useMakeEnvironmentPrimary(orgId), {
+      wrapper: createWrapper(client),
+    })
+
+    await expect(result.current.run(environmentId)).resolves.toMatchObject({ ok: true })
+    expect(makeEnvironmentPrimary).toHaveBeenCalledWith(environmentId)
     await waitFor(() => {
       expect(invalidate).toHaveBeenCalledWith({
         queryKey: queryKeys.org(orgId).environments.all,

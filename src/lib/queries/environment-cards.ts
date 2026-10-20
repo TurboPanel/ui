@@ -20,7 +20,7 @@ function newestGroup(page: DeploymentHistoryPage): DeploymentGroup | null {
 }
 
 /**
- * Each environment's config-view (Base, changes, follows the Base), one call
+ * Each environment's config-view (Base, changes, whether it stands alone), one call
  * per environment. A failed read (for example a saved compose the server
  * cannot read) leaves that environment out of the map; callers show nothing
  * for it rather than a guess.

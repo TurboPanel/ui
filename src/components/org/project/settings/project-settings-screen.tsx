@@ -99,6 +99,8 @@ export function ProjectSettingsScreen() {
       onKeepOriginalNames={(keep) => {
         void run('names', {
           options: buildProjectOptionsPatch(project, { containerNaming: keep ? 'custom' : 'uuid' }),
+          // The patch carries the Base compose along, so it names the Base.
+          target: 'base',
         })
       }}
       git={git}

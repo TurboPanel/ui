@@ -81,13 +81,11 @@ describe('banned words in the output', () => {
     const dir = path.dirname(fileURLToPath(import.meta.url))
     const sources = fs
       .readdirSync(dir)
-      // follows-base.ts, stand-alone-compose.ts and compose-syntax.ts hold compose key and tag names, which are syntax, not copy
+      // compose-syntax.ts holds compose key and tag names, which are syntax, not copy
       .filter(
         (file) =>
           file.endsWith('.ts') &&
           !/\.(test|fixtures)\.ts$/.test(file) &&
-          file !== 'follows-base.ts' &&
-          file !== 'stand-alone-compose.ts' &&
           file !== 'compose-syntax.ts'
       )
     expect(sources.length).toBeGreaterThanOrEqual(7)

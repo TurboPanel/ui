@@ -8,6 +8,7 @@ import {
   fetchEnvironmentConfigView,
   fetchVisibleEnvironments,
   isServerPlacementRequiredError,
+  makeEnvironmentPrimary,
   runEnvironmentLifecycle,
   stopEnvironment,
   cancelDeployment,
@@ -120,6 +121,17 @@ export function useUpdateEnvironment(orgId: string, environmentId: string) {
     mutationFn: (body: Parameters<typeof updateEnvironment>[1]) =>
       updateEnvironment(environmentId, body),
     onSuccess: async () => {
+      await invalidateEnvironmentSubtree(queryClient, orgId, environmentId)
+    },
+  })
+}
+
+/** Make an environment the project's primary one (the landing, the status, the copy source). */
+export function useMakeEnvironmentPrimary(orgId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (environmentId: string) => makeEnvironmentPrimary(environmentId),
+    onSuccess: async (_data, environmentId) => {
       await invalidateEnvironmentSubtree(queryClient, orgId, environmentId)
     },
   })

@@ -36,6 +36,28 @@ describe('apiErrorCopy', () => {
     expect(apiErrorCopy(new Error('HTTP 409: environment_running'))).toBe(ENVIRONMENT_RUNNING_COPY)
   })
 
+  it('maps a Make primary conflict to a retry message', () => {
+    expect(apiErrorCopy(new Error('HTTP 409: primary_environment_conflict'))).toContain('try again')
+  })
+
+  it('maps the primary environment and edit target codes to plain words', () => {
+    expect(apiErrorCopy(new Error('HTTP 409: primary_environment_cannot_be_deleted'))).toContain(
+      'Make another environment primary first'
+    )
+    for (const code of [
+      'edit_target_required',
+      'edit_target_invalid',
+      'edit_target_mixed',
+      'environment_start_invalid',
+      'environment_start_conflict',
+    ]) {
+      const copy = apiErrorCopy(new Error(`HTTP 400: ${code}`))
+      expect(copy).toBeTruthy()
+      expect(copy).not.toContain(code)
+      expect(copy).not.toMatch(/default environment|follows? the base/i)
+    }
+  })
+
   it('maps a bare or generic 429 to plain copy but keeps specific codes', () => {
     expect(apiErrorCopy(new Error('HTTP 429'))).toBe(TOO_MANY_ATTEMPTS_COPY)
     expect(apiErrorCopy(new Error('x failed: HTTP 429: rate_limited'))).toBe(TOO_MANY_ATTEMPTS_COPY)

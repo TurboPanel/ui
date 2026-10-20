@@ -28,7 +28,7 @@ import { ProjectEnvironmentsSection } from '@/components/org/project-environment
 import { panelStyles } from '@/components/ui/panel-styles'
 import { usePersistProjectCompose } from '@/components/org/compose-persistence'
 import { PrincipalAccessPanel } from '@/components/org/principal-access-panel'
-import { unownedManagedDirectorySites } from '@/lib/compose/managed-directory-sites'
+import { unownedSitesAcrossDocuments } from '@/lib/compose/managed-directory-sites'
 import {
   type ComposeDocument,
   type EnvironmentRecord,
@@ -146,8 +146,13 @@ export function ProjectPrincipalsSection({
    */
   const unownedSites = useMemo(
     () =>
-      unownedManagedDirectorySites({
-        document: projectQuery.data?.project?.options?.compose,
+      // The Base may be empty (the content lives in the primary environment), so
+      // every environment's own compose is read as well as the Base's.
+      unownedSitesAcrossDocuments({
+        documents: [
+          projectQuery.data?.project?.options?.compose,
+          ...environments.map((env) => env.options?.compose),
+        ],
         services: environments.flatMap((env) => servicesByEnvQuery.servicesByEnv[env.id] ?? []),
         principals,
       }),
@@ -770,7 +775,7 @@ export function ProjectDetailSection({
 
     setError(null)
     const options = buildProjectOptionsPatch(project, { containerNaming })
-    const result = await updateProjectMutation.run({ options })
+    const result = await updateProjectMutation.run({ options, target: 'base' })
     if (!result.ok && updateProjectMutation.actionError) {
       setError(updateProjectMutation.actionError)
     }

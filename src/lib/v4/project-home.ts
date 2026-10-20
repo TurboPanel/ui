@@ -2,7 +2,7 @@
  * What the Projects home and a project's Environments tab show for each
  * environment, worked out from data the app really has: the containers (what
  * runs now), the newest deploy, and the control plane's config-view answer
- * (Base, what the environment changes, whether it follows the Base).
+ * (Base, what the environment changes, whether it stands alone).
  *
  * Nothing here guesses. A part that has no data yet returns `null` (or
  * `undefined` for "still loading") and the screen leaves it out.
@@ -20,12 +20,14 @@ import type {
   ContainerRecord,
   createEnvironment,
   EnvironmentConfigViewResponse,
+  EnvironmentRecord,
+  EnvironmentStart,
 } from '@/lib/instance-api'
 import { serverDisplayName } from '@/lib/resource-labels'
 import { baseSummary, linuxUserKey, relationText } from './change-labels'
 import { defaultLinuxUser, linuxUserFromDeclared, resolveRunsAs, type RunsAs } from './linux-users'
 import { isAppService } from './service-roles'
-import { standAloneCompose } from './stand-alone-compose'
+import { environmentBadge, type EnvironmentBadge } from './primary-environment'
 import type { StatusKey } from './status-vocab'
 import { joinNames, plural } from './text'
 import type { ConfigSource, V4Service } from './types'
@@ -212,14 +214,14 @@ export function inProgressSub(group: DeploymentGroup, now: number): string {
 // --- Base and changes ----------------------------------------------------------
 
 type ConfigViewRelationInput = Readonly<{
-  followsBase: boolean
+  standsAlone: boolean
   changes: readonly unknown[]
 }>
 
 export type Relation = Readonly<{
   standsAlone: boolean
   changeCount: number
-  /** "Follows the Base", "Follows the Base · 2 changes" or "Stands alone". */
+  /** "Same as the Base", "2 changes from the Base" or "Stands alone". */
   text: string
   /** Tag style: dashed for stands alone, blue when it changes something. */
   source: ConfigSource
@@ -232,21 +234,21 @@ export type Relation = Readonly<{
  */
 export function environmentRelation(view: ConfigViewRelationInput | undefined): Relation | null {
   if (view === undefined) return null
-  if (!view.followsBase) {
+  if (view.standsAlone) {
     return { standsAlone: true, changeCount: 0, text: relationText(true, 0), source: 'own' }
   }
   const changeCount = view.changes.length
   return {
     standsAlone: false,
     changeCount,
-    text: changeCount === 0 ? 'Follows the Base' : relationText(false, changeCount),
+    text: relationText(false, changeCount),
     source: changeCount === 0 ? 'base' : 'env',
   }
 }
 
-/** "3 services · 2 Linux users", the line under the Base band. */
+/** "3 services · 2 Hosting Accounts", the line under the Base band. */
 export function baseCounts(base: ConfigViewSide): string {
-  return `${plural(base.services.length, 'service')} · ${plural(base.linuxUsers.length, 'Linux user')}`
+  return `${plural(base.services.length, 'service')} · ${plural(base.linuxUsers.length, 'Hosting Account')}`
 }
 
 /** "Base · 3 services · 2 Linux users", the Base line on a project card. */
@@ -255,19 +257,18 @@ export function baseLine(base: ConfigViewSide): string {
 }
 
 /**
- * "Production and Staging follow it · Preview stands alone". Environments
+ * "Production and Staging use it · Preview stands alone". Environments
  * whose answer is not known yet are left out.
  */
-export function followLine(
-  environments: readonly Readonly<{ name: string; followsBase: boolean | null }>[]
+export function reachNames(
+  environments: readonly Readonly<{ name: string; standsAlone: boolean | null }>[]
 ): string {
-  const names = (follows: boolean) =>
-    environments.filter((env) => env.followsBase === follows).map((env) => env.name)
-  const follow = names(true)
-  const alone = names(false)
+  const names = (alone: boolean) =>
+    environments.filter((env) => env.standsAlone === alone).map((env) => env.name)
+  const using = names(false)
+  const alone = names(true)
   const parts: string[] = []
-  if (follow.length > 0)
-    parts.push(`${joinNames(follow)} ${follow.length === 1 ? 'follows' : 'follow'} it`)
+  if (using.length > 0) parts.push(`${joinNames(using)} ${using.length === 1 ? 'uses' : 'use'} it`)
   if (alone.length > 0)
     parts.push(`${joinNames(alone)} ${alone.length === 1 ? 'stands' : 'stand'} alone`)
   return parts.join(' · ')
@@ -425,6 +426,8 @@ export const EMPTY_SIDE: ConfigViewSide = Object.freeze({
 
 export type EnvironmentCardData = Readonly<{
   name: string
+  /** "Primary" or "Pinned"; `null` for the others. */
+  badge: EnvironmentBadge | null
   /** `null` until the control plane has answered (or when it could not). */
   relation: Relation | null
   running: DeployPart
@@ -464,6 +467,7 @@ export function serverLine(
 export function environmentCardData(
   input: Readonly<{
     name: string
+    flags?: Pick<EnvironmentRecord, 'isPrimary' | 'pinned'>
     containers: readonly ContainerRecord[] | undefined
     view: EnvironmentConfigViewResponse | undefined
     latest: DeploymentGroup | null | undefined
@@ -493,6 +497,7 @@ export function environmentCardData(
     )
   return {
     name: input.name,
+    badge: input.flags ? environmentBadge(input.flags) : null,
     relation: environmentRelation(view),
     running:
       runningKey === undefined ? { status: 'unknown', label: 'Checking…' } : { status: runningKey },
@@ -510,17 +515,20 @@ export function environmentCardData(
 
 // --- New environment -----------------------------------------------------------
 
-export type NewEnvironmentStart = 'base' | 'empty'
+export type NewEnvironmentStart = EnvironmentStart
 
 export type CreateEnvironmentBody = Parameters<typeof createEnvironment>[0]
 
 /**
- * What "Create environment" sends.
+ * What "Create environment" sends. The start is always named:
  *
- * - from the Base: no compose of its own, so it runs what the Base runs
- * - empty, stands alone: `services: !override {}`
- * - a server is sent only when one was chosen; otherwise the environment uses
- *   the project's server
+ * - `copy` (the default): a copy of the primary environment's own changes. It
+ *   still inherits the Base like every environment.
+ * - `empty`: stands alone, with none of the Base's apps and nothing of its own.
+ *
+ * A server is sent only when one was chosen; otherwise the environment uses the
+ * project's server. The name is checked with the environment name rule before
+ * this is called, and the control plane checks it again.
  */
 export function newEnvironmentBody(
   input: Readonly<{
@@ -533,37 +541,40 @@ export function newEnvironmentBody(
   return {
     projectId: input.projectId,
     name: input.name.trim(),
+    start: input.start,
     ...(input.serverId ? { serverId: input.serverId } : {}),
-    ...(input.start === 'empty' ? { options: { compose: standAloneCompose() } } : {}),
   }
 }
 
 /**
- * What the sheet previews: the Base's own services when starting from the
- * Base (`null` until the Base has been read), nothing when standing alone.
+ * What the sheet previews: what the primary environment runs when copying it
+ * (`null` until it has been read), nothing when standing alone.
  */
 export function startPreview(
   start: NewEnvironmentStart,
-  base: ConfigViewSide | null
+  primary: ConfigViewSide | null
 ): MiniMapColumn[] | null {
   if (start === 'empty') return miniMapColumns(EMPTY_SIDE, [], () => null)
-  return base ? miniMapColumns(base, [], () => null) : null
+  return primary ? miniMapColumns(primary, [], () => null) : null
 }
 
-/** Words under each start choice. */
-export const START_CHOICES: readonly Readonly<{
+/** The two start choices, the copy of the primary environment first. */
+export function startChoices(primaryName: string | null): readonly Readonly<{
   key: NewEnvironmentStart
   title: string
   body: string
-}>[] = [
-  {
-    key: 'base',
-    title: 'Start from the Base (recommended)',
-    body: 'Runs what the Base runs. Add changes later.',
-  },
-  {
-    key: 'empty',
-    title: 'Empty, stands alone',
-    body: 'Ignores the Base. You write its compose yourself.',
-  },
-]
+}>[] {
+  const source = primaryName ?? 'the primary environment'
+  return [
+    {
+      key: 'copy',
+      title: primaryName ? `Copy of ${primaryName}` : 'Copy of the primary environment',
+      body: `Starts with the same changes as ${source}. It still uses the Base.`,
+    },
+    {
+      key: 'empty',
+      title: 'Empty, stands alone',
+      body: 'Ignores the Base. You write its compose yourself.',
+    },
+  ]
+}

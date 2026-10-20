@@ -66,6 +66,7 @@ const BASE: ConfigViewSide = {
       serviceId: null,
       kind: 'node',
       source: 'base',
+      inheritedFromBase: true,
       rows: [
         {
           key: 'svc:web:linuxUser',
@@ -75,6 +76,7 @@ const BASE: ConfigViewSide = {
           value: 'shop',
           masked: false,
           source: 'base',
+          inheritedFromBase: true,
         },
         {
           key: 'svc:web:domain:shop.example.com',
@@ -84,22 +86,31 @@ const BASE: ConfigViewSide = {
           value: 'shop.example.com',
           masked: false,
           source: 'base',
+          inheritedFromBase: true,
         },
       ],
     },
   ],
   variables: [],
   linuxUsers: [
-    { name: 'shop', access: 'sftp', description: null, source: 'base', usedBy: ['web'] },
+    {
+      name: 'shop',
+      access: 'sftp',
+      description: null,
+      source: 'base',
+      inheritedFromBase: true,
+      usedBy: ['web'],
+    },
   ],
 }
 
-function view(followsBase: boolean, changes = 0): EnvironmentConfigViewResponse {
+function view(usesBase: boolean, changes = 0): EnvironmentConfigViewResponse {
   return {
     ok: true,
     environmentId: 'e',
     projectId: 'p1',
-    followsBase,
+    standsAlone: !usesBase,
+    isPrimary: false,
     base: BASE,
     effective: BASE,
     changes: Array.from({ length: changes }, (_, index) => ({
@@ -150,14 +161,14 @@ describe('a project card', () => {
     expect(card.name).toBe('Shop')
     expect(card.description).toBe('The shop')
     expect(card.sub).toBe('2 environments')
-    expect(card.baseLine).toBe('Base · 1 service · 1 Linux user')
+    expect(card.baseLine).toBe('Base · 1 service · 1 Hosting Account')
     expect(card.runs.map((chip) => chip.label)).toEqual(['Runs as shop'])
     expect(card.environments).toEqual([
       {
         id: 'e1',
         name: 'Production',
         status: 'running',
-        relation: expect.objectContaining({ text: 'Follows the Base · 2 changes' }),
+        relation: expect.objectContaining({ text: '2 changes from the Base' }),
         host: 'shop.example.com',
       },
       {

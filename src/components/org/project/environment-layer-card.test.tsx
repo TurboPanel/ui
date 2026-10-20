@@ -19,12 +19,8 @@ vi.mock(
 
 const DATA: EnvironmentCardData = {
   name: 'Staging',
-  relation: {
-    standsAlone: false,
-    changeCount: 2,
-    text: 'Follows the Base · 2 changes',
-    source: 'env',
-  },
+  badge: null,
+  relation: { standsAlone: false, changeCount: 2, text: '2 changes from the Base', source: 'env' },
   running: { status: 'running' },
   lastDeploy: { status: 'deployed', sub: 'a41c9e2 · 4m ago' },
   columns: [
@@ -59,7 +55,7 @@ describe.each(SCENARIOS)('environment layer card ($name)', (scenario) => {
   it('shows the name, the relation to the Base and the status triplet', () => {
     render(<EnvironmentLayerCard data={DATA} onOpen={vi.fn()} />)
     expect(screen.getByRole('heading', { name: 'Staging' })).toBeTruthy()
-    expect(screen.getByLabelText('Follows the Base · 2 changes')).toBeTruthy()
+    expect(screen.getByLabelText('2 changes from the Base')).toBeTruthy()
     const status = screen.getByRole('group', { name: 'Status' })
     expect(status.textContent).toContain('Running')
     expect(status.textContent).toContain('Last deploy')
@@ -113,7 +109,7 @@ describe.each(SCENARIOS)('environment layer card ($name)', (scenario) => {
         onOpen={vi.fn()}
       />
     )
-    expect(screen.queryByLabelText(/Follows the Base/)).toBeNull()
+    expect(screen.queryByLabelText(/from the Base/)).toBeNull()
     expect(screen.queryByText('Last deploy')).toBeNull()
     expect(screen.queryByRole('group', { name: 'What Staging runs' })).toBeNull()
     expect(screen.queryByText('Branch')).toBeNull()
@@ -132,6 +128,19 @@ describe.each(SCENARIOS)('environment layer card ($name)', (scenario) => {
       />
     )
     expect(screen.getByLabelText('Stands alone')).toBeTruthy()
+  })
+
+  it('marks the primary environment and the pinned ones, and no other', () => {
+    const { rerender } = render(
+      <EnvironmentLayerCard data={{ ...DATA, badge: 'Primary' }} onOpen={vi.fn()} />
+    )
+    expect(screen.getByLabelText('Primary')).toBeTruthy()
+    rerender(<EnvironmentLayerCard data={{ ...DATA, badge: 'Pinned' }} onOpen={vi.fn()} />)
+    expect(screen.getByLabelText('Pinned')).toBeTruthy()
+    expect(screen.queryByLabelText('Primary')).toBeNull()
+    rerender(<EnvironmentLayerCard data={DATA} onOpen={vi.fn()} />)
+    expect(screen.queryByLabelText('Primary')).toBeNull()
+    expect(screen.queryByLabelText('Pinned')).toBeNull()
   })
 
   it('does not offer an address that is a wildcard', () => {

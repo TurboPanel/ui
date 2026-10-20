@@ -52,6 +52,7 @@ const view = configView({
         forBuild: false,
         forRuntime: true,
         source: 'project',
+        inheritedFromBase: true,
       },
       {
         key: 'var:TOKEN',
@@ -62,10 +63,18 @@ const view = configView({
         forBuild: false,
         forRuntime: true,
         source: 'project',
+        inheritedFromBase: true,
       },
     ],
     linuxUsers: [
-      { name: 'website', access: 'sftp', description: null, source: 'base', usedBy: ['web'] },
+      {
+        name: 'website',
+        access: 'sftp',
+        description: null,
+        source: 'base',
+        inheritedFromBase: true,
+        usedBy: ['web'],
+      },
     ],
   },
   effective: {
@@ -81,7 +90,7 @@ const environments: BaseEnvironment[] = [
   {
     id: 'e3',
     name: 'Preview',
-    view: configView({ environmentId: 'e3', followsBase: false, changes: [] }),
+    view: configView({ environmentId: 'e3', standsAlone: true, changes: [] }),
   },
 ]
 
@@ -129,7 +138,7 @@ describe.each(SCENARIOS)('Base tab ($name)', (scenario) => {
     expect(screen.getByText('Node.js app')).toBeTruthy()
     expect(screen.getByText('Data store · redis:8')).toBeTruthy()
     expect(screen.getByRole('heading', { name: 'Project variables' })).toBeTruthy()
-    expect(screen.getByRole('heading', { name: 'Linux users' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Hosting Accounts' })).toBeTruthy()
     expect(screen.getByRole('heading', { name: 'Environments built from this Base' })).toBeTruthy()
   })
 
@@ -153,8 +162,8 @@ describe('environments built from this Base', () => {
   it('says how each one relates to the Base and offers its changes', () => {
     model.current = ready()
     render(<ProjectBaseTab />)
-    expect(screen.getByText('Production and Staging follow it · Preview stands alone')).toBeTruthy()
-    expect(screen.getByText('Follows the Base · 4 changes')).toBeTruthy()
+    expect(screen.getByText('Production and Staging use it · Preview stands alone')).toBeTruthy()
+    expect(screen.getByText('4 changes from the Base')).toBeTruthy()
     expect(screen.getByText('Stands alone')).toBeTruthy()
     expect(screen.getAllByRole('link', { name: /^See / })).toHaveLength(1)
     expect(screen.getAllByRole('link', { name: /^Open / })).toHaveLength(3)
@@ -229,7 +238,7 @@ describe('empty Base sections', () => {
     )
     expect(screen.getByText('No services in the Base')).toBeTruthy()
     expect(screen.getByText('No project variables')).toBeTruthy()
-    expect(screen.getByText('No Linux users yet')).toBeTruthy()
+    expect(screen.getByText('No Hosting Accounts yet')).toBeTruthy()
   })
 })
 

@@ -773,13 +773,15 @@ export function ComposeServicesTab() {
       // A draft has no row to PATCH and shows no Save — the wizard's footer
       // Create button is the only commit path.
       if (draft) return
+      // This save always names the Base, so it is only ever reachable from the Base screens.
+      if (!baseSelected) return
       setError(null)
       const result = await persistProjectCompose.run(compose)
       if (!result.ok && persistProjectCompose.actionError) {
         setError(persistProjectCompose.actionError)
       }
     },
-    [draft, persistProjectCompose, setError]
+    [draft, baseSelected, persistProjectCompose, setError]
   )
 
   const handleSaveEnvironmentCompose = useCallback(

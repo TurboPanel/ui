@@ -8,7 +8,6 @@ import {
 import type { EditingApi } from '@/components/org/project/configuration/editing'
 import {
   ActionButton,
-  Notice,
   EmptyPanel,
   ListGroup,
   ListRow,
@@ -30,13 +29,7 @@ import {
   type LinuxUserRowModel,
   type VariableRowModel,
 } from '@/lib/v4/config-view-model'
-import {
-  goBackEdit,
-  makeBaseConfirmText,
-  makeBaseEdit,
-  stagedEditFor,
-  stagedNote,
-} from '@/lib/v4/config-edits'
+import { goBackEdit, stagedEditFor, stagedNote } from '@/lib/v4/config-edits'
 import type { EditTarget } from '@/lib/v4/config-edits'
 import { plural } from '@/lib/v4/text'
 
@@ -91,7 +84,6 @@ function ChangeRow({
   editing,
 }: Readonly<{ change: ChangeRowModel; editing?: EditingApi }>) {
   const s = styles(usePalette())
-  const [confirming, setConfirming] = useState(false)
   const actions = editing?.actionsFor(change)
   const staged = editing ? stagedEditFor(editing.staged, change.key) : undefined
   return (
@@ -124,51 +116,15 @@ function ChangeRow({
           />
         </View>
       ) : null}
-      {editing && !staged && actions && (actions.goBack || actions.makeBase) ? (
+      {editing && !staged && actions?.goBack ? (
         <View style={s.changeActions}>
-          {actions.goBack ? (
-            <ActionButton
-              label="Go back to Base"
-              size="sm"
-              accessibilityLabel={`Go back to Base: ${change.label}`}
-              onPress={() => editing.onStage(goBackEdit(change, actions.goBack as EditTarget))}
-            />
-          ) : null}
-          {actions.makeBase ? (
-            <ActionButton
-              label="Make this the Base"
-              size="sm"
-              accessibilityLabel={`Make this the Base: ${change.label}`}
-              onPress={() => setConfirming(true)}
-            />
-          ) : null}
+          <ActionButton
+            label="Go back to Base"
+            size="sm"
+            accessibilityLabel={`Go back to Base: ${change.label}`}
+            onPress={() => editing.onStage(goBackEdit(change, actions.goBack as EditTarget))}
+          />
         </View>
-      ) : null}
-      {editing && actions?.makeBase && confirming ? (
-        <Notice
-          tone="warn"
-          title="Make this the Base?"
-          body={makeBaseConfirmText(editing.envName, editing.others)}
-          actions={
-            <>
-              <ActionButton
-                label="Make this the Base"
-                size="sm"
-                accessibilityLabel={`Confirm: make ${change.label} the Base`}
-                onPress={() => {
-                  editing.onStage(makeBaseEdit(change, actions.makeBase as EditTarget))
-                  setConfirming(false)
-                }}
-              />
-              <ActionButton
-                label="Cancel"
-                variant="quiet"
-                size="sm"
-                onPress={() => setConfirming(false)}
-              />
-            </>
-          }
-        />
       ) : null}
     </View>
   )
@@ -463,7 +419,7 @@ function LinuxUserRow({
               staged={staged !== undefined}
               canEdit={canEdit}
               editLabel="Change"
-              editName={`Change the Linux user of ${user.serviceName}`}
+              editName={`Change the Hosting Account of ${user.serviceName}`}
               undoName={`Undo ${user.serviceName} runs as`}
               onUndo={() => editing?.onUnstage(key)}
               onEdit={() => setOpen((value) => !value)}
@@ -476,7 +432,6 @@ function LinuxUserRow({
         <LinuxUserEditor
           serviceName={user.serviceName}
           current={user.runsAs.user}
-          hasOwnChange={user.isChange}
           editing={editing}
           onClose={() => setOpen(false)}
         />
@@ -494,7 +449,7 @@ export function LinuxUsersSection({
   return (
     <View style={s.section}>
       <SectionHeading
-        title="Linux users"
+        title="Hosting Accounts"
         note="The Linux account that owns an app’s files and runs it"
       />
       <ListGroup>

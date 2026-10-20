@@ -1,18 +1,12 @@
 import { useState } from 'react'
 import { Text, View } from 'react-native'
-import { ScopeChoice } from '@/components/org/project/configuration/scope-choice'
 import type { EditingApi } from '@/components/org/project/configuration/editing'
 import { TextField } from '@/components/ui'
 import { ActionButton, ChoiceCard, ChoiceGroup } from '@/components/ui/v4'
 import { themedStyles, usePalette } from '@/components/ui/v4/use-palette'
 import { typeStyle } from '@/components/ui/v4/type-styles'
 import { isSecretVariableName } from '@/lib/v4/effective-config'
-import {
-  linuxUserEdit,
-  variableEdit,
-  type ConfigScope,
-  type VariableFacts,
-} from '@/lib/v4/config-edits'
+import { linuxUserEdit, variableEdit, type VariableFacts } from '@/lib/v4/config-edits'
 
 const styles = themedStyles((p) => ({
   editor: {
@@ -26,13 +20,6 @@ const styles = themedStyles((p) => ({
   label: { ...typeStyle('bodySemibold', 'subhead'), color: p.text2 },
   hint: { ...typeStyle('body', 'footnote'), color: p.text3 },
 }))
-
-/** The scope cards when the person has to choose, else nothing (the decision is already made). */
-function useScope(editing: EditingApi) {
-  const [chosen, setChosen] = useState<ConfigScope>('environment')
-  const scope = editing.scopeMode === 'choose' ? chosen : editing.scopeMode
-  return { scope, setScope: setChosen, asking: editing.scopeMode === 'choose' }
-}
 
 function EditorFoot({
   doneLabel,
@@ -71,7 +58,6 @@ export function VariableEditor({
 }>) {
   const s = styles(usePalette())
   const [draft, setDraft] = useState(facts.secret ? '' : facts.value)
-  const { scope, setScope, asking } = useScope(editing)
   const unchanged = facts.secret ? draft === '' : draft === facts.value
   return (
     <View style={s.editor}>
@@ -86,15 +72,6 @@ export function VariableEditor({
         placeholder={facts.secret ? 'Write-only: the current value is never shown' : undefined}
         accessibilityLabel={`New value for ${name}`}
       />
-      {asking ? (
-        <ScopeChoice
-          envName={editing.envName}
-          others={editing.others}
-          hasOwnChange={facts.hasOwn}
-          scope={scope}
-          onChange={setScope}
-        />
-      ) : null}
       <EditorFoot
         doneLabel="Done"
         doneDisabled={unchanged}
@@ -108,7 +85,6 @@ export function VariableEditor({
               forBuild: facts.forBuild,
               forRuntime: facts.forRuntime,
               was,
-              scope,
             })
           )
           onClose()
@@ -127,7 +103,6 @@ export function NewVariableEditor({
   const [name, setName] = useState('')
   const [value, setValue] = useState('')
   const [secret, setSecret] = useState<boolean | null>(null)
-  const { scope, setScope, asking } = useScope(editing)
   const trimmed = name.trim()
   const exists = editing.variableFacts(trimmed) !== null
   const isSecret = secret ?? isSecretVariableName(trimmed)
@@ -168,15 +143,6 @@ export function NewVariableEditor({
           onSelect={() => setSecret(false)}
         />
       </ChoiceGroup>
-      {asking ? (
-        <ScopeChoice
-          envName={editing.envName}
-          others={editing.others}
-          hasOwnChange={false}
-          scope={scope}
-          onChange={setScope}
-        />
-      ) : null}
       <Text style={s.hint}>Runs in the app. It is not used while building.</Text>
       <EditorFoot
         doneLabel="Add"
@@ -191,7 +157,6 @@ export function NewVariableEditor({
               forBuild: false,
               forRuntime: true,
               was: 'Not set',
-              scope,
             })
           )
           onClose()
@@ -205,19 +170,16 @@ export function NewVariableEditor({
 export function LinuxUserEditor({
   serviceName,
   current,
-  hasOwnChange,
   editing,
   onClose,
 }: Readonly<{
   serviceName: string
   current: string
-  hasOwnChange: boolean
   editing: EditingApi
   onClose: () => void
 }>) {
   const s = styles(usePalette())
   const [user, setUser] = useState(current)
-  const { scope, setScope, asking } = useScope(editing)
   return (
     <View style={s.editor}>
       <Text style={s.label}>{`Run ${serviceName} as`}</Text>
@@ -231,21 +193,12 @@ export function LinuxUserEditor({
           />
         ))}
       </ChoiceGroup>
-      {asking ? (
-        <ScopeChoice
-          envName={editing.envName}
-          others={editing.others}
-          hasOwnChange={hasOwnChange}
-          scope={scope}
-          onChange={setScope}
-        />
-      ) : null}
       <EditorFoot
         doneLabel="Done"
         doneDisabled={user === current || user === ''}
         onCancel={onClose}
         onDone={() => {
-          editing.onStage(linuxUserEdit({ serviceName, user, was: current, scope }))
+          editing.onStage(linuxUserEdit({ serviceName, user, was: current }))
           onClose()
         }}
       />

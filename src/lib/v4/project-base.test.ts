@@ -37,7 +37,7 @@ function record(
 
 const production = configView({ environmentId: 'e1', changes: [] })
 const staging = configView({ environmentId: 'e2' })
-const preview = configView({ environmentId: 'e3', followsBase: false, changes: [] })
+const preview = configView({ environmentId: 'e3', standsAlone: true, changes: [] })
 
 const ENVIRONMENTS: BaseEnvironment[] = [
   { id: 'e1', name: 'Production', view: production },
@@ -74,20 +74,20 @@ describe('baseEnvironmentRows', () => {
 
   it('says how each environment relates to the Base, with the words the rest of the app uses', () => {
     expect(rows[0]).toMatchObject({
-      followsBase: true,
-      relationText: 'Follows the Base',
+      standsAlone: false,
+      relationText: 'Same as the Base',
       changeCount: 0,
       seeChanges: null,
     })
     expect(rows[1]).toMatchObject({
-      followsBase: true,
+      standsAlone: false,
       changeCount: 4,
       seeChanges: "See Staging's changes",
       source: 'env',
     })
-    expect(rows[1]?.relationText).toBe('Follows the Base · 4 changes')
+    expect(rows[1]?.relationText).toBe('4 changes from the Base')
     expect(rows[2]).toMatchObject({
-      followsBase: false,
+      standsAlone: true,
       relationText: 'Stands alone',
       changeCount: 0,
       seeChanges: null,
@@ -96,7 +96,7 @@ describe('baseEnvironmentRows', () => {
   })
 
   it('leaves an environment out of the claims when its configuration is not known', () => {
-    expect(rows[3]).toMatchObject({ followsBase: null, relationText: '', seeChanges: null })
+    expect(rows[3]).toMatchObject({ standsAlone: null, relationText: '', seeChanges: null })
   })
 })
 
@@ -106,8 +106,8 @@ describe('the affected-environment list', () => {
     { id: 'e4', name: 'Testing', view: undefined },
   ])
 
-  it('names who follows and who stands alone, and skips the unknown one', () => {
-    expect(reachLine(rows)).toBe('Production and Staging follow it · Preview stands alone')
+  it('names who uses the Base and who stands alone, and skips the unknown one', () => {
+    expect(reachLine(rows)).toBe('Production and Staging use it · Preview stands alone')
     expect(reachLine([])).toBe('')
   })
 })
@@ -196,6 +196,7 @@ describe('baseVariableRows', () => {
         forBuild: true,
         forRuntime: true,
         source: 'project' as const,
+        inheritedFromBase: true,
       },
       {
         key: 'var:B',
@@ -206,6 +207,7 @@ describe('baseVariableRows', () => {
         forBuild: false,
         forRuntime: true,
         source: 'project' as const,
+        inheritedFromBase: true,
       },
       {
         key: 'var:C',
@@ -216,6 +218,7 @@ describe('baseVariableRows', () => {
         forBuild: true,
         forRuntime: false,
         source: 'project' as const,
+        inheritedFromBase: true,
       },
     ]
     const rows = baseVariableRows({ ...production.base, variables })
@@ -225,7 +228,7 @@ describe('baseVariableRows', () => {
       ['C', 'Empty', 'Build only'],
     ])
     expect(rows[1]?.isSecret).toBe(true)
-    expect(rows[0]?.tag).toBe('Project')
+    expect(rows[0]?.tag).toBe('Base')
   })
 })
 
@@ -238,6 +241,7 @@ describe('Linux users', () => {
         access: 'sftp' as const,
         description: null,
         source: 'base' as const,
+        inheritedFromBase: true,
         usedBy: ['web'],
       },
       {
@@ -245,6 +249,7 @@ describe('Linux users', () => {
         access: 'none' as const,
         description: null,
         source: 'base' as const,
+        inheritedFromBase: true,
         usedBy: [],
       },
     ],

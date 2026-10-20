@@ -335,7 +335,7 @@ describe('runsAsOf', () => {
     expect(runsAsOf(source, blog!, true)).toMatchObject({
       user: 'blogger',
       source: 'base',
-      sourceLabel: 'Base',
+      sourceLabel: 'From the Base',
       access: 'No sign-in',
       hasAccess: false,
     })
@@ -363,7 +363,7 @@ describe('runsAsOf', () => {
 
   it('reads the Base side for the Base map and says "own" for an environment that stands alone', () => {
     expect(runsAsOf(source, web!, false)).toMatchObject({ user: 'website', source: 'base' })
-    const alone = overviewSource({ view: configView({ followsBase: false }) })
+    const alone = overviewSource({ view: configView({ standsAlone: true }) })
     expect(runsAsOf(alone, web!, true)).toMatchObject({
       source: 'own',
       sourceLabel: 'Set in Staging',
@@ -452,7 +452,7 @@ describe('the lists under the map', () => {
     expect(rows[1]).toMatchObject({
       sub: 'Website',
       source: 'base',
-      sourceLabel: 'Base',
+      sourceLabel: 'From the Base',
       host: null,
     })
     expect(rows[2]).toMatchObject({ sub: 'Container · ghcr.io/acme/api:1', statusKey: 'never' })
@@ -476,7 +476,7 @@ describe('the lists under the map', () => {
   })
 
   it('calls every app "Set in" when the environment stands alone, and an added app a change', () => {
-    const alone = appRows(overviewSource({ view: configView({ followsBase: false }) }))
+    const alone = appRows(overviewSource({ view: configView({ standsAlone: true }) }))
     expect(alone.every((r) => r.source === 'own')).toBe(true)
     const view = configView({
       changes: [],
@@ -517,11 +517,11 @@ describe('the lists under the map', () => {
 
 describe('relationCard', () => {
   const view = configView()
-  it('counts the changes of an environment that follows the Base', () => {
+  it('counts the changes of an environment that inherits from the Base', () => {
     expect(relationCard(view, 'Staging', 2)).toEqual({
       kind: 'changes',
       title: 'Changes from Base (4)',
-      text: 'Follows the Base · 4 changes',
+      text: '4 changes from the Base',
       count: 4,
     })
   })
@@ -529,11 +529,11 @@ describe('relationCard', () => {
     expect(relationCard(configView({ changes: [] }), 'Staging', 2)).toEqual({ kind: 'none' })
   })
   it('says an environment stands alone when the project has several', () => {
-    expect(relationCard(configView({ followsBase: false }), 'Staging', 2)).toEqual({
+    expect(relationCard(configView({ standsAlone: true }), 'Staging', 2)).toEqual({
       kind: 'alone',
       title: 'Staging stands alone',
       text: 'Changes to the Base do not reach it.',
     })
-    expect(relationCard(configView({ followsBase: false }), 'Staging', 1)).toEqual({ kind: 'none' })
+    expect(relationCard(configView({ standsAlone: true }), 'Staging', 1)).toEqual({ kind: 'none' })
   })
 })

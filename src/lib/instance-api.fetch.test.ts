@@ -74,6 +74,7 @@ import {
   signUp,
   stopEnvironment,
   cancelDeployment,
+  makeEnvironmentPrimary,
   updateEnvironment,
   updateOrganization,
   updateProject,
@@ -327,6 +328,13 @@ describe('instance-api fetch wrappers', () => {
     await expect(updateProject('p1', { name: 'Renamed' })).resolves.toEqual({ ok: true })
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
+    await updateProject('p1', { options: {}, target: 'base' })
+    expect(JSON.parse(String(fetchMock.mock.lastCall?.[1]?.body))).toEqual({
+      options: {},
+      target: 'base',
+    })
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
     await expect(deleteProject('p1')).resolves.toEqual({ ok: true })
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ environments: [{ id: 'env-1' }] }))
@@ -355,8 +363,29 @@ describe('instance-api fetch wrappers', () => {
       id: 'env-2',
     })
 
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, id: 'env-3' }))
+    await createEnvironment({ projectId: 'p1', name: 'preview', start: 'empty' })
+    expect(JSON.parse(String(fetchMock.mock.lastCall?.[1]?.body))).toEqual({
+      projectId: 'p1',
+      name: 'preview',
+      start: 'empty',
+    })
+
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
     await expect(updateEnvironment('env-1', { serverId: 'srv-1' })).resolves.toEqual({ ok: true })
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
+    await updateEnvironment('env-1', { pinned: true })
+    expect(JSON.parse(String(fetchMock.mock.lastCall?.[1]?.body))).toEqual({ pinned: true })
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, id: 'env-1', projectId: 'p1' }))
+    await expect(makeEnvironmentPrimary('env-1')).resolves.toEqual({
+      ok: true,
+      id: 'env-1',
+      projectId: 'p1',
+    })
+    expect(String(fetchMock.mock.lastCall?.[0])).toContain('/environments/env-1/primary')
+    expect(fetchMock.mock.lastCall?.[1]).toMatchObject({ method: 'POST' })
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
     await expect(deleteEnvironment('env-1')).resolves.toEqual({ ok: true })
@@ -573,14 +602,15 @@ describe('instance-api fetch wrappers', () => {
         ok: true,
         environmentId: 'env-1',
         projectId: 'p1',
-        followsBase: true,
+        isPrimary: true,
+        standsAlone: false,
         base: side,
         effective: side,
         changes: [],
       })
     )
     await expect(fetchEnvironmentConfigView('env-1')).resolves.toMatchObject({
-      followsBase: true,
+      standsAlone: false,
       changes: [],
     })
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/environments/env-1/config-view')

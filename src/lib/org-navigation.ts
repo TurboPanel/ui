@@ -39,7 +39,7 @@ export const ORG_AREAS = [
         id: 'settings',
         label: 'Settings',
         pathSegment: 'settings',
-        hint: 'Project defaults such as the default environment name',
+        hint: 'Project defaults such as the primary environment name',
       },
     ],
   },

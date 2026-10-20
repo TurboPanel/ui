@@ -150,7 +150,8 @@ function ProjectWorkspaceFields({
 }
 
 /**
- * Name of the project's first environment. Empty means "let the server apply
+ * Name of the project's primary environment (the first one, where the wizard
+ * puts the content). Empty means "let the server apply
  * the organization default"; the pill shows only while the value is that default.
  */
 export function EnvironmentNameField({
@@ -170,13 +171,13 @@ export function EnvironmentNameField({
   const showPill = showsDefaultPill(value, defaultName)
   return (
     <TextField
-      label="Environment Name"
+      label="Primary environment name"
       value={value}
       onChangeText={onChange}
       autoCapitalize="none"
       autoCorrect={false}
       spellCheck={false}
-      accessibilityLabel="Environment name"
+      accessibilityLabel="Primary environment name"
       maxLength={DISPLAY_NAME_MAX_LENGTH}
       placeholder="Organization default"
       style={showPill ? { paddingRight: pillWidth + PILL_INSET } : undefined}
@@ -195,9 +196,11 @@ export function EnvironmentNameField({
           <Pressable
             style={StyleSheet.flatten([styles.hintLink, webPointer])}
             accessibilityRole="link"
-            accessibilityLabel="Set the default for this organization"
+            accessibilityLabel="Set the primary environment name for this organization"
           >
-            <Text style={styles.hintLinkText}>Set the default for this organization</Text>
+            <Text style={styles.hintLinkText}>
+              Set the primary environment name for this organization
+            </Text>
           </Pressable>
         </Link>
       }

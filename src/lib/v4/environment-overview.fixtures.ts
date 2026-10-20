@@ -29,6 +29,7 @@ export function row(
     value,
     masked: value === null,
     source: 'base',
+    inheritedFromBase: extra.source === undefined || extra.source !== 'environment',
     ...extra,
   }
 }
@@ -39,7 +40,15 @@ export function viewService(
   rows: ConfigViewFieldRow[] = [],
   extra: Partial<ConfigViewService> = {}
 ): ConfigViewService {
-  return { name, serviceId: `s-${name}`, kind, source: 'base', rows, ...extra }
+  return {
+    name,
+    serviceId: `s-${name}`,
+    kind,
+    source: 'base',
+    inheritedFromBase: extra.source !== 'environment',
+    rows,
+    ...extra,
+  }
 }
 
 const web = viewService('web', 'node', [
@@ -119,20 +128,42 @@ export function configView(overrides: Partial<EnvironmentConfigView> = {}): Envi
     ok: true,
     environmentId: 'env-1',
     projectId: 'p1',
-    followsBase: true,
+    isPrimary: false,
+    standsAlone: false,
     base: {
       services: [viewService('web', 'node', [row('web', 'linuxUser', 'website')]), old],
       variables: [],
       linuxUsers: [
-        { name: 'website', access: 'sftp', description: null, source: 'base', usedBy: ['web'] },
+        {
+          name: 'website',
+          access: 'sftp',
+          description: null,
+          source: 'base',
+          inheritedFromBase: true,
+          usedBy: ['web'],
+        },
       ],
     },
     effective: {
       services: [web, blog, api, redis],
       variables: [],
       linuxUsers: [
-        { name: 'website', access: 'sftp', description: null, source: 'base', usedBy: ['web'] },
-        { name: 'blogger', access: 'none', description: null, source: 'base', usedBy: [] },
+        {
+          name: 'website',
+          access: 'sftp',
+          description: null,
+          source: 'base',
+          inheritedFromBase: true,
+          usedBy: ['web'],
+        },
+        {
+          name: 'blogger',
+          access: 'none',
+          description: null,
+          source: 'base',
+          inheritedFromBase: true,
+          usedBy: [],
+        },
       ],
     },
     changes: CHANGES,

@@ -154,10 +154,12 @@ describe('ProjectSettingsScreen', () => {
     await press(() => h.view.onKeepOriginalNames(true))
     expect(h.run).toHaveBeenCalledWith({
       options: { containerNaming: 'custom', defaultServerId: 's1' },
+      target: 'base',
     })
     await press(() => h.view.onKeepOriginalNames(false))
     expect(h.run).toHaveBeenLastCalledWith({
       options: { containerNaming: 'uuid', defaultServerId: 's1' },
+      target: 'base',
     })
   })
 

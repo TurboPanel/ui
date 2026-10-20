@@ -36,6 +36,7 @@ import {
   type RepositoryInspection,
   type ServiceRecord,
 } from '@/lib/instance-api'
+import { composeForNodeSave, effectiveService } from '@/lib/compose/node-save-target'
 import { useEnvironment } from '@/lib/queries/environments'
 import { useProject } from '@/lib/queries/projects'
 import { useHostings } from '@/lib/queries/services'
@@ -103,26 +104,6 @@ function sourceWithSubdirectory(
 ): ComposeServiceSourceExtension {
   const { subdirectory: _replaced, ...rest } = source
   return subdirectory.length === 0 ? rest : { ...rest, subdirectory }
-}
-
-type ComposeLayer = Readonly<{
-  kind: 'environment' | 'project'
-  compose: ComposeDocument
-}>
-
-/** Compose layer that defines this service — environment overlay first. */
-function resolveComposeLayer(
-  environmentCompose: ComposeDocument | undefined,
-  projectCompose: ComposeDocument | undefined,
-  composeServiceName: string
-): ComposeLayer | null {
-  if (servicesOf(environmentCompose)?.[composeServiceName]) {
-    return { kind: 'environment', compose: environmentCompose! }
-  }
-  if (servicesOf(projectCompose)?.[composeServiceName]) {
-    return { kind: 'project', compose: projectCompose! }
-  }
-  return null
 }
 
 function extensionOf(rawService: unknown): ComposeServiceTurbopanelExtension | null {
@@ -258,9 +239,10 @@ function useRepositoryInspection(
 /**
  * Plesk-style "Node.js" settings for one `serviceKind: node` compose service.
  *
- * Reads and writes the service's `x-turbopanel` extension on whichever compose
- * layer defines it (environment overlay first, else the project document), so
- * everything here is the same state the Services form edits. Renders nothing
+ * Reads the service as it really is (the Base with this environment's changes
+ * over it) and writes its `x-turbopanel` extension into the environment, or into
+ * the Base from a view with no environment, so everything here is the same state
+ * the Services form edits. Renders nothing
  * for a service of any other kind — the mounting screen does not need to know.
  */
 export function NodeSettingsPanel({
@@ -284,17 +266,13 @@ export function NodeSettingsPanel({
   })
   const hostingsQuery = useHostings(orgId, service.id)
 
-  const layer = useMemo(
-    () =>
-      resolveComposeLayer(
-        environmentQuery.data?.environment.options?.compose,
-        projectQuery.data?.project.options?.compose,
-        composeServiceName
-      ),
-    [environmentQuery.data, projectQuery.data, composeServiceName]
+  const projectCompose = projectQuery.data?.project.options?.compose
+  const environmentCompose = environmentQuery.data?.environment.options?.compose
+  // The service as it really is (the Base with this environment's changes over it).
+  const rawService = useMemo(
+    () => effectiveService(projectCompose, environmentCompose, composeServiceName),
+    [projectCompose, environmentCompose, composeServiceName]
   )
-
-  const rawService = layer ? servicesOf(layer.compose)?.[composeServiceName] : undefined
   const extension = extensionOf(rawService)
 
   const persistProject = usePersistProjectCompose(orgId, projectId)
@@ -332,7 +310,7 @@ export function NodeSettingsPanel({
     appRoot.trim()
   )
 
-  if (!layer || !isPlainMapping(rawService) || !isNodeComposeService(rawService)) {
+  if (!isPlainMapping(rawService) || !isNodeComposeService(rawService)) {
     return null
   }
   const source = extension?.source
@@ -351,23 +329,23 @@ export function NodeSettingsPanel({
   }
   const dirty = isDraftDirty(JSON.parse(seed) as NodeSettingsDraft, draft)
 
-  const persist = layer.kind === 'environment' ? persistEnvironment : persistProject
-
   const save = async () => {
     if (!canManage || !source) return
     setSaving(true)
     setError(null)
     setSavedHint(false)
-    const services = { ...servicesOf(layer.compose) }
-    services[composeServiceName] = patchServiceTurbopanelExtension(
-      rawService,
-      extensionPatchFromDraft(draft, source)
+    const { target, compose } = composeForNodeSave({
+      environmentId,
+      projectCompose,
+      environmentCompose,
+      serviceName: composeServiceName,
+      effective: rawService,
+      patch: (current) =>
+        patchServiceTurbopanelExtension(current, extensionPatchFromDraft(draft, source)),
+    })
+    const result = await (target === 'environment' ? persistEnvironment : persistProject).run(
+      compose
     )
-    const compose: ComposeDocument = {
-      ...layer.compose,
-      data: { ...layer.compose.data, services },
-    }
-    const result = await persist.run(compose)
     setSaving(false)
     if (result.ok) {
       setSavedHint(true)

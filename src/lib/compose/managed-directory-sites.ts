@@ -93,3 +93,22 @@ export function unownedManagedDirectorySites(params: {
   }
   return declared.filter((name) => !aliasOwned.has(name) && !ownedNames.has(name))
 }
+
+/**
+ * The same check over several compose documents (the Base and every
+ * environment's own): a site counts once, however many documents declare it.
+ */
+export function unownedSitesAcrossDocuments(params: {
+  documents: readonly (ComposeDocument | null | undefined)[]
+  services: readonly { id: string; composeServiceName: string | null }[]
+  principals: readonly { serviceIds: readonly string[] }[]
+}): string[] {
+  const names = params.documents.flatMap((document) =>
+    unownedManagedDirectorySites({
+      document,
+      services: params.services,
+      principals: params.principals,
+    })
+  )
+  return [...new Set(names)]
+}

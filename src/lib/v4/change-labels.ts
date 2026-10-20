@@ -1,7 +1,8 @@
 /**
  * Plain-words labels for configuration keys and for what an environment
- * changes compared with the Base. Wording follows ia-v4 section 3.1: "Base",
- * "{env} change", "Follows the Base", "Stands alone".
+ * changes compared with the Base. Wording: "From the Base", "{env} change",
+ * "Stands alone". Every environment inherits from the Base, so nothing says
+ * an environment "follows" it; each value says where it comes from.
  */
 
 import { NOT_SET, plural } from './text'
@@ -50,7 +51,7 @@ const KIND_ROW_LABELS: Readonly<Record<string, Readonly<Record<string, string>>>
 
 /** Label for one setting row of one kind of app. */
 export function serviceRowLabel(kind: V4Service['kind'], row: string): string {
-  if (row === LINUX_USER_ROW) return 'Linux user'
+  if (row === LINUX_USER_ROW) return 'Hosting Account'
   return KIND_ROW_LABELS[kind]?.[row] ?? COMMON_ROW_LABELS[row] ?? row
 }
 
@@ -92,7 +93,7 @@ function serviceKeyInfo(parts: readonly string[], services: readonly V4Service[]
     return { area: 'services', label: serviceName, short: serviceName, serviceId, serviceName }
   }
   const label = serviceRowLabel(service?.kind ?? 'container', row)
-  const short = label.startsWith('Linux') ? label : lowerFirst(label)
+  const short = label.startsWith('Linux') || label.startsWith('Hosting') ? label : lowerFirst(label)
   const area = row === LINUX_USER_ROW ? 'users' : 'service'
   return { area, label, short, serviceId, serviceName }
 }
@@ -118,17 +119,21 @@ export function changeTag(envName: string): string {
   return `${envName} change`
 }
 
-/** Text of the source tag on a row. Variables are shared at "Project" level. */
-export function sourceLabel(source: ConfigSource, envName: string, isVariable = false): string {
+/** The plain indicator on a value that comes from the Base and is not overridden here. */
+export const FROM_THE_BASE = 'From the Base'
+
+/** Text of the source tag on a row. */
+export function sourceLabel(source: ConfigSource, envName: string): string {
   if (source === 'env') return changeTag(envName)
   if (source === 'own') return `Set in ${envName}`
-  return isVariable ? 'Project' : 'Base'
+  return FROM_THE_BASE
 }
 
-/** "Stands alone" or "Follows the Base · 2 changes". */
+/** "Stands alone", "Same as the Base" or "2 changes from the Base". */
 export function relationText(standsAlone: boolean, changeCount: number): string {
   if (standsAlone) return 'Stands alone'
-  return `Follows the Base · ${plural(changeCount, 'change')}`
+  if (changeCount === 0) return 'Same as the Base'
+  return `${plural(changeCount, 'change')} from the Base`
 }
 
 /** Label of the filter switch on the Configuration page. */
@@ -143,5 +148,5 @@ export function changedSummary(shorts: readonly string[]): string {
 
 /** "Base · 3 services · 2 Linux users" on the Base card. */
 export function baseSummary(serviceCount: number, userCount: number): string {
-  return `Base · ${plural(serviceCount, 'service')} · ${plural(userCount, 'Linux user')}`
+  return `Base · ${plural(serviceCount, 'service')} · ${plural(userCount, 'Hosting Account')}`
 }

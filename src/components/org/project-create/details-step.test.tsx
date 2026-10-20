@@ -82,7 +82,7 @@ describe('EnvironmentNameField', () => {
 
   it('shows an empty placeholder and no pill when the default cannot be read', () => {
     field('', null)
-    const input = screen.getByLabelText('Environment name') as HTMLInputElement
+    const input = screen.getByLabelText('Primary environment name') as HTMLInputElement
     expect(input.value).toBe('')
     expect(input.placeholder).toBe('Organization default')
     expect(screen.queryByText('Organization Default')).toBeNull()
@@ -91,7 +91,7 @@ describe('EnvironmentNameField', () => {
   it('reports what the user types', () => {
     const onChange = vi.fn()
     field('', null, onChange)
-    fireEvent.change(screen.getByLabelText('Environment name'), {
+    fireEvent.change(screen.getByLabelText('Primary environment name'), {
       target: { value: 'Edge' },
     })
     expect(onChange).toHaveBeenCalledWith('Edge')

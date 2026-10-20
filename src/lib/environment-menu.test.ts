@@ -3,6 +3,7 @@ import {
   BUSY_REASON,
   DESTROY_EXPLANATION,
   LAST_ENVIRONMENT_REASON,
+  PRIMARY_ENVIRONMENT_REASON,
   NO_LINUX_USER_REASON,
   NO_SERVER_REASON,
   environmentActionItems,
@@ -87,6 +88,19 @@ describe('environmentActionItems', () => {
   it('explains why delete is unavailable for the last environment', () => {
     const entries = environmentActionItems({ ...base, environmentCount: 1 })
     expect(entries.find((entry) => entry.id === 'delete')?.disabledReason).toBe(
+      LAST_ENVIRONMENT_REASON
+    )
+  })
+
+  it('explains why the primary environment cannot be deleted while others exist', () => {
+    const entries = environmentActionItems({ ...base, isPrimary: true })
+    expect(entries.find((entry) => entry.id === 'delete')?.disabledReason).toBe(
+      PRIMARY_ENVIRONMENT_REASON
+    )
+    const others = environmentActionItems({ ...base, isPrimary: false })
+    expect(others.find((entry) => entry.id === 'delete')?.disabledReason).toBeNull()
+    const only = environmentActionItems({ ...base, isPrimary: true, environmentCount: 1 })
+    expect(only.find((entry) => entry.id === 'delete')?.disabledReason).toBe(
       LAST_ENVIRONMENT_REASON
     )
   })

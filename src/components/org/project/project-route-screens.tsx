@@ -1,5 +1,6 @@
 import { Redirect, useLocalSearchParams, type Href } from 'expo-router'
 import { Platform } from 'react-native'
+import { WithBaseNotice } from '@/components/org/project/base-tab/base-edit-notice'
 import { ProjectBaseTab } from '@/components/org/project/base-tab/base-tab'
 import { EnvironmentOverviewTab } from '@/components/org/project/environment-overview/environment-overview-tab'
 import { EnvironmentConfigurationScreen } from '@/components/org/project/configuration/environment-configuration'
@@ -48,8 +49,11 @@ export function ProjectBaseScreen() {
   if (isSystemProject || (project && isManagedProject(project))) {
     return <Redirect href={projectOverviewHref(orgId, projectId) as Href} />
   }
-  if (Platform.OS === 'web') return <ProjectBaseTab />
-  return <ProjectOverviewTab />
+  return (
+    <WithBaseNotice>
+      {Platform.OS === 'web' ? <ProjectBaseTab /> : <ProjectOverviewTab />}
+    </WithBaseNotice>
+  )
 }
 
 /**
@@ -62,7 +66,11 @@ export function ProjectBaseLensScreen() {
   if (isSystemProject || (project && isManagedProject(project))) {
     return <Redirect href={projectOverviewHref(orgId, projectId) as Href} />
   }
-  return <ProjectOverviewTab />
+  return (
+    <WithBaseNotice>
+      <ProjectOverviewTab />
+    </WithBaseNotice>
+  )
 }
 
 /**

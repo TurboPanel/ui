@@ -37,7 +37,7 @@ export function DefaultEnvironmentSettingsSection({ orgId }: Readonly<{ orgId: s
       })
     },
     onError: (err) => {
-      setError(errorMessage(err, 'Failed to save default environment name'))
+      setError(errorMessage(err, 'Failed to save primary environment name'))
     },
   })
 
@@ -62,23 +62,24 @@ export function DefaultEnvironmentSettingsSection({ orgId }: Readonly<{ orgId: s
 
   return (
     <SectionPanel
-      title="Default environment name"
+      title="Primary environment name"
       hint="Manage-gated · applies to newly created projects"
     >
       {error ? <Text style={panelStyles.error}>{error}</Text> : null}
       {query.isError && !error ? (
         <Text style={panelStyles.error}>
-          {errorMessage(query.error, 'Failed to load default environment name')}
+          {errorMessage(query.error, 'Failed to load primary environment name')}
         </Text>
       ) : null}
 
       <Text style={panelStyles.muted}>
-        Every new project starts with one environment; this names it. Existing projects are
-        unchanged.
+        Every new project starts with one primary environment, where you land and where the
+        project&apos;s content goes; this names it. Existing projects keep their primary environment
+        as it is.
       </Text>
 
       <TextField
-        label="Environment name"
+        label="Primary environment name"
         value={draftValue}
         onChangeText={(text) => {
           setDraftText(text)

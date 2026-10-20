@@ -362,8 +362,8 @@ function runsAsSource(
   inEnvironment: boolean
 ): ConfigSource {
   if (!inEnvironment) return 'base'
-  if (!view.followsBase) return 'own'
-  return row?.source === 'environment' ? 'env' : 'base'
+  if (view.standsAlone) return 'own'
+  return row !== undefined && !row.inheritedFromBase ? 'env' : 'base'
 }
 
 function principalFor(
@@ -482,8 +482,8 @@ function serviceSource(
   service: ConfigViewService,
   touched: ReadonlySet<string>
 ): ConfigSource {
-  if (!source.view.followsBase) return 'own'
-  return service.source === 'environment' || touched.has(service.name) ? 'env' : 'base'
+  if (source.view.standsAlone) return 'own'
+  return !service.inheritedFromBase || touched.has(service.name) ? 'env' : 'base'
 }
 
 /** First hostname a service answers, for the "visit" link beside its row. */
@@ -564,15 +564,15 @@ export type EnvironmentRelation = Readonly<
 
 /**
  * The card under the services: "Changes from Base (2)" when the environment
- * follows the Base and changes something, "Staging stands alone" when it does
- * not follow it. Nothing otherwise; there is no card with a made-up 0.
+ * changes something on top of the Base, "Staging stands alone" when it drops
+ * the Base's apps. Nothing otherwise; there is no card with a made-up 0.
  */
 export function relationCard(
   view: EnvironmentConfigView,
   envName: string,
   environmentCount: number
 ): EnvironmentRelation {
-  if (!view.followsBase) {
+  if (view.standsAlone) {
     if (environmentCount < 2) return { kind: 'none' }
     return {
       kind: 'alone',

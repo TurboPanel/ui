@@ -5,6 +5,11 @@ import { ActionButton, ListGroup, ListRow, SectionHeading, Sheet } from '@/compo
 import { themedStyles, usePalette } from '@/components/ui/v4/use-palette'
 import { typeStyle } from '@/components/ui/v4/type-styles'
 import {
+  MAKE_PRIMARY_EXPLANATION,
+  PIN_EXPLANATION,
+  pinActionLabel,
+} from '@/lib/v4/primary-environment'
+import {
   serverMoveCopy,
   type EnvironmentServerFacts,
   type MoveChoice,
@@ -16,6 +21,7 @@ const styles = themedStyles((p) => ({
   form: { gap: 16, maxWidth: 560 },
   actions: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
   line: { ...typeStyle('body', 'subhead'), color: p.text2 },
+  error: { ...typeStyle('body', 'subhead'), color: p.bad },
 }))
 
 export type RenameFormProps = Readonly<{
@@ -30,9 +36,22 @@ export type RenameFormProps = Readonly<{
   onReset: () => void
 }>
 
+/** Where this environment sits in the project: primary, pinned or neither. */
+export type PlacementFacts = Readonly<{
+  isPrimary: boolean
+  pinned: boolean
+  /** The project has only this environment: nothing to pin or to hand the primary role to. */
+  alone: boolean
+  busy: boolean
+  /** Resolves with a plain message when it was refused, `null` when it worked. */
+  onMakePrimary: () => Promise<string | null>
+  onTogglePin: () => void
+}>
+
 export type EnvironmentSettingsViewProps = Readonly<{
   environmentName: string
   canEdit: boolean
+  placement: PlacementFacts
   rename: RenameFormProps
   server: EnvironmentServerFacts
   /** Where it can move to (empty when no other server is connected). */
@@ -43,6 +62,8 @@ export type EnvironmentSettingsViewProps = Readonly<{
   gitSource: ReactNode | null
   /** The delete control; absent for a viewer. */
   danger: ReactNode | null
+  /** Why delete is not offered (the primary environment); replaces the control. */
+  deleteNote: string | null
 }>
 
 function serverValue(server: EnvironmentServerFacts): string {
@@ -150,6 +171,123 @@ function ServerSection(props: Readonly<EnvironmentSettingsViewProps>) {
   )
 }
 
+function MakePrimarySheet({
+  environmentName,
+  busy,
+  error,
+  onConfirm,
+  onClose,
+}: Readonly<{
+  environmentName: string
+  busy: boolean
+  error: string | null
+  onConfirm: () => void
+  onClose: () => void
+}>) {
+  const s = styles(usePalette())
+  return (
+    <Sheet
+      visible
+      onClose={onClose}
+      title={`Make ${environmentName} the primary environment?`}
+      footer={
+        <>
+          <ActionButton label="Cancel" variant="quiet" onPress={onClose} disabled={busy} />
+          <ActionButton label="Make primary" busy={busy} onPress={onConfirm} />
+        </>
+      }
+    >
+      <Text style={s.line}>{MAKE_PRIMARY_EXPLANATION}</Text>
+      <Text style={s.line}>
+        {`The project will open on ${environmentName}, and the current primary environment keeps running as it is.`}
+      </Text>
+      {error ? (
+        <Text accessibilityRole="alert" style={s.error}>
+          {error}
+        </Text>
+      ) : null}
+    </Sheet>
+  )
+}
+
+/** Primary and pinned: where this environment is listed and what the project opens on. */
+function PlacementSection(props: Readonly<EnvironmentSettingsViewProps>) {
+  const [confirming, setConfirming] = useState(false)
+  const [sending, setSending] = useState(false)
+  const [problem, setProblem] = useState<string | null>(null)
+  const { placement, canEdit, environmentName } = props
+  const canChange = canEdit && !placement.alone
+  const confirm = async () => {
+    setSending(true)
+    setProblem(null)
+    try {
+      const message = await placement.onMakePrimary()
+      if (message === null) setConfirming(false)
+      else setProblem(message)
+    } finally {
+      setSending(false)
+    }
+  }
+  return (
+    <View>
+      <SectionHeading title="Primary environment" note="Where the project opens" />
+      <ListGroup>
+        {placement.isPrimary ? (
+          <ListRow
+            title="This is the primary environment"
+            sub={MAKE_PRIMARY_EXPLANATION}
+            value="Primary"
+          />
+        ) : (
+          <ListRow
+            title="Make this the primary environment"
+            sub={MAKE_PRIMARY_EXPLANATION}
+            trailing={
+              canChange ? (
+                <ActionButton
+                  label="Make primary"
+                  variant="secondary"
+                  size="sm"
+                  onPress={() => setConfirming(true)}
+                />
+              ) : undefined
+            }
+          />
+        )}
+        {placement.isPrimary ? null : (
+          <ListRow
+            title={placement.pinned ? 'Pinned' : 'Not pinned'}
+            sub={PIN_EXPLANATION}
+            trailing={
+              canChange ? (
+                <ActionButton
+                  label={pinActionLabel(placement.pinned)}
+                  variant="secondary"
+                  size="sm"
+                  busy={placement.busy}
+                  onPress={placement.onTogglePin}
+                />
+              ) : undefined
+            }
+          />
+        )}
+      </ListGroup>
+      {confirming ? (
+        <MakePrimarySheet
+          environmentName={environmentName}
+          busy={sending || placement.busy}
+          error={problem}
+          onClose={() => {
+            setConfirming(false)
+            setProblem(null)
+          }}
+          onConfirm={() => void confirm()}
+        />
+      ) : null}
+    </View>
+  )
+}
+
 function RenameSection({
   rename,
   canEdit,
@@ -190,7 +328,7 @@ function RenameSection({
 
 /**
  * Environment Settings: the branch and deploy-on-push, the server, the name
- * and the danger zone. There is no "Follows the Base" switch: an environment
+ * and the danger zone. There is no switch for how an environment relates to the Base: an environment
  * is always the Base plus its own changes, and what it changes is read and
  * edited on Configuration. Deploy order and timing are not served by the API.
  */
@@ -199,12 +337,13 @@ export function EnvironmentSettingsView(props: EnvironmentSettingsViewProps) {
   return (
     <View style={s.page}>
       {props.gitSource}
+      <PlacementSection {...props} />
       <ServerSection {...props} />
       <RenameSection rename={props.rename} canEdit={props.canEdit} />
-      {props.danger ? (
+      {props.danger || props.deleteNote ? (
         <View>
           <SectionHeading title="Danger zone" danger />
-          {props.danger}
+          {props.deleteNote ? <Text style={s.line}>{props.deleteNote}</Text> : props.danger}
         </View>
       ) : null}
     </View>

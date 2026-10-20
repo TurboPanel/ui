@@ -69,6 +69,7 @@ const BASE: ConfigViewSide = {
       serviceId: null,
       kind: 'node',
       source: 'base',
+      inheritedFromBase: true,
       rows: [
         {
           key: 'a',
@@ -78,6 +79,7 @@ const BASE: ConfigViewSide = {
           value: 'shop.example.com',
           masked: false,
           source: 'base',
+          inheritedFromBase: true,
         },
         {
           key: 'b',
@@ -87,22 +89,31 @@ const BASE: ConfigViewSide = {
           value: 'main',
           masked: false,
           source: 'base',
+          inheritedFromBase: true,
         },
       ],
     },
   ],
   variables: [],
   linuxUsers: [
-    { name: 'shop', access: 'sftp', description: null, source: 'base', usedBy: ['web'] },
+    {
+      name: 'shop',
+      access: 'sftp',
+      description: null,
+      source: 'base',
+      inheritedFromBase: true,
+      usedBy: ['web'],
+    },
   ],
 }
 
-function view(followsBase: boolean, changes: number): EnvironmentConfigViewResponse {
+function view(usesBase: boolean, changes: number): EnvironmentConfigViewResponse {
   return {
     ok: true,
     environmentId: 'e',
     projectId: 'p',
-    followsBase,
+    standsAlone: !usesBase,
+    isPrimary: false,
     base: BASE,
     effective: BASE,
     changes: Array.from({ length: changes }, (_, index) => ({
@@ -122,8 +133,13 @@ function view(followsBase: boolean, changes: number): EnvironmentConfigViewRespo
   }
 }
 
-function environment(id: string, name: string, serverId: string | null = null) {
-  return { id, name, projectId: 'p', serverId }
+function environment(
+  id: string,
+  name: string,
+  serverId: string | null = null,
+  flags: { isPrimary?: boolean; pinned?: boolean } = {}
+) {
+  return { id, name, projectId: 'p', serverId, ...flags }
 }
 
 afterEach(cleanup)
@@ -148,9 +164,9 @@ describe.each(SCENARIOS)('project Environments tab ($name)', (scenario) => {
       projectId: 'p',
       project: { id: 'p', options: { defaultServerId: 's1' } },
       environments: [
-        environment('e1', 'Production'),
-        environment('e2', 'Staging'),
-        environment('e3', 'Preview', 's1'),
+        environment('e1', 'production', null, { isPrimary: true }),
+        environment('e2', 'staging'),
+        environment('e3', 'preview', 's1'),
       ],
       loading: false,
       canManage: true,
@@ -159,16 +175,54 @@ describe.each(SCENARIOS)('project Environments tab ($name)', (scenario) => {
     }
   })
 
-  it('draws the Base band and a card per environment', () => {
+  it('draws the Base band, with when to use it, and a card per environment', () => {
     render(<ProjectEnvironmentsTab />)
-    const band = screen.getByRole('button', { name: /^Base, 1 service · 1 Linux user$/ })
-    expect(band.textContent).toContain('Production and Staging follow it · Preview stands alone')
-    expect(screen.getByRole('heading', { name: 'Production' })).toBeTruthy()
-    expect(screen.getByRole('heading', { name: 'Staging' })).toBeTruthy()
-    expect(screen.getByRole('heading', { name: 'Preview' })).toBeTruthy()
-    expect(screen.getByLabelText('Follows the Base')).toBeTruthy()
-    expect(screen.getByLabelText('Follows the Base · 2 changes')).toBeTruthy()
+    const band = screen.getByRole('button', { name: /^Base, 1 service · 1 Hosting Account$/ })
+    expect(band.textContent).toContain('production and staging use it · preview stands alone')
+    expect(screen.getByText(/Use the Base for settings every environment shares/)).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'production' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'staging' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'preview' })).toBeTruthy()
+    expect(screen.getByLabelText('Same as the Base')).toBeTruthy()
+    expect(screen.getByLabelText('2 changes from the Base')).toBeTruthy()
     expect(screen.getByLabelText('Stands alone')).toBeTruthy()
+    expect(screen.queryByText(/follows? (the base|it)/i)).toBeNull()
+  })
+
+  it('gives the Base a clear button in the header once there are two or more environments', () => {
+    render(<ProjectEnvironmentsTab />)
+    const buttons = screen.getAllByRole('button', { name: 'Open the Base' })
+    expect(buttons.length).toBeGreaterThan(0)
+    fireEvent.click(buttons[0] as HTMLElement)
+    expect(state.push).toHaveBeenLastCalledWith('/o/projects/p/base')
+  })
+
+  it('keeps the Base quiet with one environment: no band, no header button', () => {
+    state.ctx = {
+      ...state.ctx,
+      environments: [environment('e1', 'production', null, { isPrimary: true })],
+    }
+    render(<ProjectEnvironmentsTab />)
+    expect(screen.queryByRole('button', { name: /^Base, / })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Open the Base' })).toBeNull()
+    expect(screen.queryByText(/Use the Base for settings every environment shares/)).toBeNull()
+  })
+
+  it('lists the primary environment first, then the pinned ones, and marks them', () => {
+    state.ctx = {
+      ...state.ctx,
+      environments: [
+        environment('e2', 'staging'),
+        environment('e3', 'preview', null, { pinned: true }),
+        environment('e1', 'production', null, { isPrimary: true }),
+      ],
+    }
+    render(<ProjectEnvironmentsTab />)
+    const names = screen.getAllByRole('heading').map((heading) => heading.textContent)
+    expect(names.indexOf('production')).toBeLessThan(names.indexOf('preview'))
+    expect(names.indexOf('preview')).toBeLessThan(names.indexOf('staging'))
+    expect(screen.getByLabelText('Primary')).toBeTruthy()
+    expect(screen.getByLabelText('Pinned')).toBeTruthy()
   })
 
   it("shows each environment's running word from its containers", () => {
@@ -240,7 +294,7 @@ describe.each(SCENARIOS)('project Environments tab ($name)', (scenario) => {
   it('goes quiet about what the control plane has not answered', () => {
     state.views = {}
     render(<ProjectEnvironmentsTab />)
-    expect(screen.queryByLabelText(/Follows the Base/)).toBeNull()
+    expect(screen.queryByLabelText(/from the Base/)).toBeNull()
     expect(screen.queryByLabelText('Stands alone')).toBeNull()
     expect(screen.getByRole('button', { name: 'Base' })).toBeTruthy()
   })
@@ -249,7 +303,7 @@ describe.each(SCENARIOS)('project Environments tab ($name)', (scenario) => {
     render(<ProjectEnvironmentsTab />)
     fireEvent.click(screen.getByRole('button', { name: /^Base, / }))
     expect(state.push).toHaveBeenLastCalledWith('/o/projects/p/base')
-    fireEvent.click(screen.getByRole('button', { name: 'Open Staging' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Open staging' }))
     expect(state.push).toHaveBeenLastCalledWith('/o/projects/p/environments/e2')
   })
 
@@ -259,7 +313,8 @@ describe.each(SCENARIOS)('project Environments tab ($name)', (scenario) => {
     fireEvent.click(screen.getByRole('button', { name: 'New environment' }))
     expect(screen.getByRole('dialog', { name: 'New environment sheet' })).toBeTruthy()
     expect(state.sheet).toMatchObject({ orgId: 'o', projectId: 'p', hasProjectServer: true })
-    expect((state.sheet?.base as ConfigViewSide).services).toHaveLength(1)
+    expect(state.sheet).toMatchObject({ primaryName: 'production' })
+    expect((state.sheet?.primary as ConfigViewSide).services).toHaveLength(1)
     fireEvent.click(screen.getByRole('button', { name: 'finish' }))
     await waitFor(() =>
       expect(state.push).toHaveBeenCalledWith('/o/projects/p/environments/new-env')
@@ -282,14 +337,15 @@ describe.each(SCENARIOS)('project Environments tab ($name)', (scenario) => {
   })
 
   it('nudges a one-environment project towards a second', () => {
-    state.ctx = { ...state.ctx, environments: [environment('e1', 'Production')] }
+    state.ctx = { ...state.ctx, environments: [environment('e1', 'production')] }
     render(<ProjectEnvironmentsTab />)
     expect(screen.getByText('This project has one environment')).toBeTruthy()
+    expect(screen.getByText(/It starts as a copy of production\./)).toBeTruthy()
     expect(screen.getAllByRole('button', { name: 'New environment' })).toHaveLength(2)
   })
 
   it('does not nudge someone who cannot add one', () => {
-    state.ctx = { ...state.ctx, environments: [environment('e1', 'Production')], canManage: false }
+    state.ctx = { ...state.ctx, environments: [environment('e1', 'production')], canManage: false }
     render(<ProjectEnvironmentsTab />)
     expect(screen.queryByText('This project has one environment')).toBeNull()
   })
@@ -312,11 +368,11 @@ describe.each(SCENARIOS)('project Environments tab ($name)', (scenario) => {
     expect(state.sheet).toMatchObject({ hasProjectServer: false })
   })
 
-  it('has no Base figures before any environment has been read', () => {
+  it('has no figures to copy before the primary environment has been read', () => {
     state.views = {}
     state.ctx = { ...state.ctx, project: null }
     render(<ProjectEnvironmentsTab />)
     fireEvent.click(screen.getByRole('button', { name: 'New environment' }))
-    expect(state.sheet?.base).toBeNull()
+    expect(state.sheet?.primary).toBeNull()
   })
 })

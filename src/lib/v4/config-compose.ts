@@ -90,54 +90,11 @@ function withRoot(document: ComposeDocument, data: Mapping): ComposeDocument {
   return { ...document, data, presentation: { ...document.presentation, keyOrder } }
 }
 
-function containerOf(data: Mapping, target: EditScopeTarget): Mapping | 'tagged' | undefined {
-  if (target.serviceName === null) return data
-  const { services } = readServices({ data })
-  const body = services[target.serviceName]
-  if (body === undefined) return undefined
-  if (isComposeTaggedValue(body) || !isMapping(body)) return 'tagged'
-  return body
-}
-
-function getAt(root: unknown, path: ComposePath): unknown {
-  let current: unknown = root
-  for (const key of path) {
-    if (!isMapping(current)) return undefined
-    current = current[key]
-  }
-  return current
-}
-
 /** `environment: ["A=1", "B"]` is the list form of `environment: { A: "1", B: null }`. */
 function envListEntry(list: readonly unknown[], name: string): number {
   return list.findIndex(
     (item) => typeof item === 'string' && (item === name || item.startsWith(`${name}=`))
   )
-}
-
-function readEnvironmentEntry(container: Mapping, name: string): unknown {
-  const raw = container.environment
-  if (!Array.isArray(raw)) return isMapping(raw) ? raw[name] : undefined
-  const at = envListEntry(raw, name)
-  if (at < 0) return undefined
-  const item = raw[at] as string
-  const eq = item.indexOf('=')
-  return eq < 0 ? null : item.slice(eq + 1)
-}
-
-/** The value an environment really runs, read from the merge of the Base and its changes. */
-export function readMergedValue(
-  projectCompose: unknown,
-  environmentCompose: unknown,
-  target: EditScopeTarget,
-  path: ComposePath
-): unknown {
-  const merged = mergeComposeOverlay(projectCompose, environmentCompose)
-  const container = containerOf(merged.data, target)
-  if (container === undefined || container === 'tagged') return undefined
-  if (path[0] === 'environment' && path.length === 2)
-    return readEnvironmentEntry(container, path[1])
-  return getAt(container, path)
 }
 
 // --- low-level set / delete ------------------------------------------------
@@ -355,23 +312,6 @@ export function setEnvironmentValue(
   )
 }
 
-/** Save a value in the Base. The Base has to have the app already. */
-export function setBaseValue(
-  params: Readonly<{
-    projectCompose: unknown
-    target: EditScopeTarget
-    path: ComposePath
-    value: unknown
-  }>
-): EditResult {
-  const project = documentOf(params.projectCompose)
-  const { serviceName } = params.target
-  if (serviceName !== null && !(serviceName in readServices(project).services)) {
-    return { ok: false, reason: `The Base has no app named ${serviceName}.` }
-  }
-  return setInDocument(project, params.target, params.path, params.value, null)
-}
-
 /** Go back to Base: delete this environment's entry (never `!reset`). */
 export function removeEnvironmentValue(
   params: Readonly<{
@@ -403,54 +343,4 @@ export function restoreEnvironmentService(
   const services = { ...block.services }
   delete services[serviceName]
   return { ok: true, document: writeServices(document, { ...block, services }) }
-}
-
-export type MakeBaseResult =
-  | Readonly<{ ok: true; projectCompose: ComposeDocument; environmentCompose: ComposeDocument }>
-  | Readonly<{ ok: false; reason: string }>
-
-/**
- * Make this the Base: copy what the environment runs into the Base, then drop
- * the environment's own entry so both say the same.
- */
-export function makeValueTheBase(
-  params: Readonly<{
-    projectCompose: unknown
-    environmentCompose: unknown
-    target: EditScopeTarget
-    path: ComposePath
-  }>
-): MakeBaseResult {
-  const value = readMergedValue(
-    params.projectCompose,
-    params.environmentCompose,
-    params.target,
-    params.path
-  )
-  if (value === undefined) return { ok: false, reason: 'This environment has no value to move.' }
-  const base = setBaseValue({ ...params, value })
-  if (!base.ok) return base
-  const env = removeEnvironmentValue({ ...params, projectCompose: base.document })
-  if (!env.ok) return env
-  return { ok: true, projectCompose: base.document, environmentCompose: env.document }
-}
-
-/**
- * Save in the Base for a value this environment shows: set it in the Base and
- * drop this environment's own change, so the environment follows the Base.
- */
-export function setValueInBase(
-  params: Readonly<{
-    projectCompose: unknown
-    environmentCompose: unknown
-    target: EditScopeTarget
-    path: ComposePath
-    value: unknown
-  }>
-): MakeBaseResult {
-  const base = setBaseValue(params)
-  if (!base.ok) return base
-  const env = removeEnvironmentValue({ ...params, projectCompose: base.document })
-  if (!env.ok) return env
-  return { ok: true, projectCompose: base.document, environmentCompose: env.document }
 }

@@ -20,7 +20,8 @@ export function usePersistProjectCompose(orgId: string, projectId: string) {
         throw new Error('Project not loaded')
       }
       const options = buildProjectOptionsPatch(project, { compose })
-      await updateProject(projectId, { options })
+      // Saved from the Base screens, so it always names the Base.
+      await updateProject(projectId, { options, target: 'base' })
       return {
         project: {
           ...project,

@@ -49,7 +49,7 @@ const PROJECT: HomeProject = {
       id: 'e1',
       name: 'Production',
       status: 'running',
-      relation: { standsAlone: false, changeCount: 0, text: 'Follows the Base', source: 'base' },
+      relation: { standsAlone: false, changeCount: 0, text: 'Same as the Base', source: 'base' },
       host: 'shop.example.com',
     },
     {
@@ -59,7 +59,7 @@ const PROJECT: HomeProject = {
       relation: {
         standsAlone: false,
         changeCount: 2,
-        text: 'Follows the Base · 2 changes',
+        text: '2 changes from the Base',
         source: 'env',
       },
       host: null,
@@ -94,10 +94,10 @@ describe.each(SCENARIOS)('project card on the Projects home ($name)', (scenario)
     renderCard()
     const production = screen.getByRole('button', { name: 'Open Production in Shop' })
     expect(production.textContent).toContain('Running')
-    expect(production.textContent).toContain('Follows the Base · shop.example.com')
+    expect(production.textContent).toContain('Same as the Base · shop.example.com')
     const staging = screen.getByRole('button', { name: 'Open Staging in Shop' })
     expect(staging.textContent).toContain('Not deployed yet')
-    expect(staging.textContent).toContain('Follows the Base · 2 changes')
+    expect(staging.textContent).toContain('2 changes from the Base')
   })
 
   it('opens the project, its Base and an environment', () => {

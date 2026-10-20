@@ -16,7 +16,6 @@ import type {
   EnvironmentConfigViewResponse,
   ProjectPrincipalRecord,
 } from '@/lib/instance-api'
-import { sourceLabel } from './change-labels'
 import { usedFor, variableValueText } from './config-view-model'
 import { mapInputOf, runsAsOf, sideServices, type OverviewSource } from './environment-overview'
 import {
@@ -27,7 +26,7 @@ import {
   type RunsAs,
 } from './linux-users'
 import type { MapInput } from './map-layout'
-import { environmentRelation, followLine } from './project-home'
+import { environmentRelation, reachNames } from './project-home'
 import { isAppService, isDataStoreContainer, serviceKindLabel } from './service-roles'
 import { plural } from './text'
 import type { ConfigSource, V4Service } from './types'
@@ -53,12 +52,12 @@ export type BaseEnvironmentRow = Readonly<{
   id: string
   name: string
   /** `null` until the control plane has answered (or when it could not). */
-  followsBase: boolean | null
-  /** "Follows the Base · 2 changes", "Stands alone", or empty when not known. */
+  standsAlone: boolean | null
+  /** "2 changes from the Base", "Same as the Base", "Stands alone", or empty when not known. */
   relationText: string
   source: ConfigSource
   changeCount: number
-  /** "See Staging's changes": only for an environment that follows the Base and changes something. */
+  /** "See Staging's changes": only for an environment that uses the Base and changes something. */
   seeChanges: string | null
 }>
 
@@ -72,7 +71,7 @@ export function baseEnvironmentRows(
       return {
         id: environment.id,
         name: environment.name,
-        followsBase: null,
+        standsAlone: null,
         relationText: '',
         source: 'base',
         changeCount: 0,
@@ -82,7 +81,7 @@ export function baseEnvironmentRows(
     return {
       id: environment.id,
       name: environment.name,
-      followsBase: !relation.standsAlone,
+      standsAlone: relation.standsAlone,
       relationText: relation.text,
       source: relation.source,
       changeCount: relation.changeCount,
@@ -94,9 +93,9 @@ export function baseEnvironmentRows(
   })
 }
 
-/** "Production and Staging follow it · Preview stands alone". */
+/** "Production and Staging use it · Preview stands alone". */
 export function reachLine(rows: readonly BaseEnvironmentRow[]): string {
-  return followLine(rows.map((row) => ({ name: row.name, followsBase: row.followsBase })))
+  return reachNames(rows.map((row) => ({ name: row.name, standsAlone: row.standsAlone })))
 }
 
 // --- The Base map ------------------------------------------------------------------
@@ -214,7 +213,7 @@ export function baseVariableRows(base: ConfigViewSide): BaseVariableRow[] {
     valueText: variableValueText(variable),
     isSecret: variable.isSecret,
     usedFor: usedFor(variable),
-    tag: sourceLabel('base', 'Base', true),
+    tag: 'Base',
   }))
 }
 

@@ -134,18 +134,12 @@ afterEach(() => {
 const pick = (name: RegExp | string) => screen.getByRole('radio', { name })
 
 describe('editing a variable', () => {
-  it('asks where the change goes, stages it, and saves only when asked', async () => {
+  it('stages the edit for this environment and saves only when asked', async () => {
     render(<EnvironmentConfigurationScreen />)
     fireEvent.click(screen.getByLabelText('Edit MODE'))
     fireEvent.change(screen.getByLabelText('New value for MODE'), { target: { value: 'staging' } })
-    expect(
-      pick(/^Staging only\. Adds a Staging change\. Production keeps the Base value\./)
-    ).toBeTruthy()
-    fireEvent.click(
-      pick(
-        /^Base, for every environment that follows it\. Staging and Production get it on the next deploy\. Preview stands alone and won’t change\./
-      )
-    )
+    expect(screen.queryByRole('radio')).toBeNull()
+    expect(screen.queryByText('Where does this change go?')).toBeNull()
     fireEvent.click(screen.getByLabelText('Done'))
     expect(screen.getByText('1 unsaved change')).toBeTruthy()
     expect(screen.getByText(/Build and run · Not saved yet: staging/)).toBeTruthy()
@@ -154,15 +148,14 @@ describe('editing a variable', () => {
     fireEvent.click(screen.getByLabelText('Save changes'))
     await waitFor(() => expect(state.run).toHaveBeenCalledTimes(1))
     const sent = (state.run.mock.calls[0] as unknown[][])[0]
-    expect(sent).toMatchObject([
-      { kind: 'set-variable', name: 'MODE', value: 'staging', scope: 'base' },
-    ])
+    expect(sent).toMatchObject([{ kind: 'set-variable', name: 'MODE', value: 'staging' }])
+    expect((sent as Record<string, unknown>[])[0]).not.toHaveProperty('scope')
     expect(await screen.findByText('Saved')).toBeTruthy()
     expect(screen.getByText('The changes go live when you deploy Staging.')).toBeTruthy()
     expect(screen.queryByText('1 unsaved change')).toBeNull()
   })
 
-  it('defaults to this environment only, and reviews and undoes the edit', () => {
+  it('reviews and undoes the edit', () => {
     render(<EnvironmentConfigurationScreen />)
     fireEvent.click(screen.getByLabelText('Edit MODE'))
     fireEvent.change(screen.getByLabelText('New value for MODE'), { target: { value: 'x' } })
@@ -216,7 +209,6 @@ describe('adding a variable', () => {
     fireEvent.change(screen.getByLabelText('Variable name'), { target: { value: 'NEW_TOKEN' } })
     expect(done().disabled).toBe(false)
     fireEvent.click(screen.getByRole('radio', { name: /^Show it/ }))
-    fireEvent.click(screen.getByRole('radio', { name: /^Staging only/ }))
     fireEvent.click(done())
     expect(screen.getByText('1 unsaved change')).toBeTruthy()
     fireEvent.click(screen.getByLabelText('Review changes'))
@@ -240,15 +232,14 @@ describe('adding a variable', () => {
 describe('changing who an app runs as', () => {
   it('stages the choice for this environment', async () => {
     render(<EnvironmentConfigurationScreen />)
-    fireEvent.click(screen.getByLabelText('Change the Linux user of web'))
+    fireEvent.click(screen.getByLabelText('Change the Hosting Account of web'))
     fireEvent.click(pick('website'))
-    fireEvent.click(pick(/^Staging only/))
     fireEvent.click(screen.getByLabelText('Done'))
     expect(screen.getByText(/Not saved yet: website/)).toBeTruthy()
     fireEvent.click(screen.getByLabelText('Save changes'))
     await waitFor(() => expect(state.run).toHaveBeenCalled())
     expect((state.run.mock.calls[0] as unknown[][])[0]).toMatchObject([
-      { kind: 'set-linux-user', serviceName: 'web', user: 'website', scope: 'environment' },
+      { kind: 'set-linux-user', serviceName: 'web', user: 'website' },
     ])
   })
 
@@ -258,7 +249,7 @@ describe('changing who an app runs as', () => {
     view.effective.linuxUsers = []
     state.query = { isPending: false, error: null, data: view, refetch: vi.fn() }
     render(<EnvironmentConfigurationScreen />)
-    expect(screen.queryByLabelText('Change the Linux user of web')).toBeNull()
+    expect(screen.queryByLabelText('Change the Hosting Account of web')).toBeNull()
   })
 })
 
@@ -277,26 +268,17 @@ describe('changes from Base', () => {
     expect(screen.getByLabelText('Go back to Base: Start command')).toBeTruthy()
   })
 
-  it('confirms before making a change the Base, naming who follows', () => {
+  it('does not offer to move a value into the Base from here', () => {
     open()
-    fireEvent.click(screen.getByLabelText('Make this the Base: Start command'))
-    expect(screen.getByText('Make this the Base?')).toBeTruthy()
-    expect(
-      screen.getByText(/^Production follows the Base and would get this value on the next deploy\./)
-    ).toBeTruthy()
-    fireEvent.click(screen.getByLabelText('Cancel'))
-    expect(screen.queryByText('Make this the Base?')).toBeNull()
-    fireEvent.click(screen.getByLabelText('Make this the Base: Start command'))
-    fireEvent.click(screen.getByLabelText('Confirm: make Start command the Base'))
-    expect(screen.getByText('Not saved yet: moves into the Base')).toBeTruthy()
-    expect(screen.getByText('1 unsaved change')).toBeTruthy()
+    expect(screen.queryByLabelText('Make this the Base: Start command')).toBeNull()
+    expect(screen.queryByLabelText('Make this the Base: API_URL')).toBeNull()
+    expect(screen.getByLabelText('Go back to Base: Start command')).toBeTruthy()
   })
 
   it('has no buttons for a domain, a new app, or a secret that cannot move', () => {
     open()
     expect(screen.queryByLabelText('Go back to Base: worker')).toBeNull()
     expect(screen.getByLabelText('Go back to Base: API_URL')).toBeTruthy()
-    expect(screen.getByLabelText('Make this the Base: API_URL')).toBeTruthy()
   })
 
   it('goes back for a variable the environment sets', async () => {
@@ -315,7 +297,6 @@ describe('saving', () => {
     render(<EnvironmentConfigurationScreen />)
     fireEvent.click(screen.getByLabelText('Edit MODE'))
     fireEvent.change(screen.getByLabelText('New value for MODE'), { target: { value: 'x' } })
-    fireEvent.click(screen.getByRole('radio', { name: /^Staging only/ }))
     fireEvent.click(screen.getByLabelText('Done'))
   }
 
@@ -377,7 +358,7 @@ describe('who can edit and where edits go', () => {
     render(<EnvironmentConfigurationScreen />)
     expect(screen.queryByLabelText('Edit MODE')).toBeNull()
     expect(screen.queryByText('Add variable')).toBeNull()
-    expect(screen.queryByLabelText('Change the Linux user of web')).toBeNull()
+    expect(screen.queryByLabelText('Change the Hosting Account of web')).toBeNull()
   })
 
   it('is read-only until the variables are loaded', () => {
@@ -390,7 +371,7 @@ describe('who can edit and where edits go', () => {
     expect(screen.queryByLabelText('Edit MODE')).toBeNull()
   })
 
-  it('writes to the Base in a one-environment project, with no scope cards', async () => {
+  it('keeps edits in this environment in a one-environment project, with no scope cards', async () => {
     state.ctx = { ...state.ctx, environments: [threeEnvironments[0]] }
     render(<EnvironmentConfigurationScreen />)
     fireEvent.click(screen.getByLabelText('Edit MODE'))
@@ -399,7 +380,9 @@ describe('who can edit and where edits go', () => {
     fireEvent.click(screen.getByLabelText('Done'))
     fireEvent.click(screen.getByLabelText('Save changes'))
     await waitFor(() => expect(state.run).toHaveBeenCalled())
-    expect((state.run.mock.calls[0] as unknown[][])[0]).toMatchObject([{ scope: 'base' }])
+    expect((state.run.mock.calls[0] as unknown[][])[0]).toMatchObject([
+      { kind: 'set-variable', name: 'MODE', value: 'x' },
+    ])
   })
 
   it('keeps edits in a stand-alone environment, with no scope cards and no app buttons', async () => {

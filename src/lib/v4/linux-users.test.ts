@@ -118,9 +118,12 @@ describe('Runs as', () => {
     expect(runsAsFor(website, 'web', 'production')).toMatchObject({
       user: 'website',
       source: 'base',
-      sourceLabel: 'Base',
+      sourceLabel: 'From the Base',
     })
-    expect(runsAsFor(website, 'web', null)).toMatchObject({ user: 'website', sourceLabel: 'Base' })
+    expect(runsAsFor(website, 'web', null)).toMatchObject({
+      user: 'website',
+      sourceLabel: 'From the Base',
+    })
     expect(runsAsFor(portal, 'app', 'staging').user).toBe('portal-staging')
   })
 

@@ -21,6 +21,7 @@ import { ProjectScopePicker } from '@/components/org/project/project-scope-picke
 import { useProjectContext } from '@/components/org/project/project-context'
 import { StatusDot } from '@/components/ui'
 import { groupDeploymentsByGeneration, type DeploymentGroup } from '@/lib/deployment-history'
+import { environmentBadge, orderEnvironments } from '@/lib/v4/primary-environment'
 import { hasNativeApp, nativeDeployKey } from '@/lib/v4/project-home'
 import { useEnvironmentConfigViews } from '@/lib/queries/environment-cards'
 import {
@@ -130,10 +131,13 @@ function EnvironmentTitle() {
 
   const options = useMemo<ProjectScopeOption[]>(
     () =>
-      environments.map((env) => ({
+      orderEnvironments(environments).map((env) => ({
         environmentId: env.id,
         label: environmentDisplayName(env),
-        detail: env.id === selectedEnvironment?.id ? lifecycle.statusLabel : '',
+        detail:
+          env.id === selectedEnvironment?.id
+            ? lifecycle.statusLabel
+            : (environmentBadge(env) ?? ''),
       })),
     [environments, selectedEnvironment?.id, lifecycle.statusLabel]
   )
@@ -226,6 +230,13 @@ function EnvironmentHeader() {
       <View style={styles.titleRow}>
         <View style={styles.titleBlock}>
           <EnvironmentTitle />
+          {environmentBadge(selectedEnvironment) ? (
+            <Text style={styles.badgeLine}>
+              {selectedEnvironment.isPrimary === true
+                ? 'Primary environment'
+                : 'Pinned environment'}
+            </Text>
+          ) : null}
           <SiteLink hostname={hostname} />
         </View>
         <EnvironmentLifecycleActions />
@@ -358,6 +369,11 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '700',
     letterSpacing: -0.3,
+  },
+  badgeLine: {
+    color: colors.text3,
+    fontSize: 13,
+    fontWeight: '600',
   },
   siteLink: {
     color: colors.link,

@@ -4,6 +4,7 @@ import { Text, View } from 'react-native'
 import { EnvironmentLayerCard } from '@/components/org/project/environment-layer-card'
 import { NewEnvironmentSheet } from '@/components/org/project/new-environment-sheet'
 import { useProjectContext } from '@/components/org/project/project-context'
+import type { EnvironmentConfigViewResponse } from '@/lib/instance-api'
 import { useNow } from '@/components/org/project/use-now'
 import { ActionButton } from '@/components/ui/v4/action-button'
 import { EmptyPanel } from '@/components/ui/v4/empty-panel'
@@ -20,10 +21,16 @@ import { useOrgServers } from '@/lib/queries/servers'
 import { useHostingsByServices } from '@/lib/queries/services'
 import { environmentDisplayName } from '@/lib/resource-labels'
 import {
+  BASE_WHEN_TO_USE,
+  baseIsProminent,
+  orderEnvironments,
+  primaryEnvironmentOf,
+} from '@/lib/v4/primary-environment'
+import {
   baseCounts,
   deployProgressLabel,
   environmentCardData,
-  followLine,
+  reachNames,
   inFlightDeployEntries,
   serverLine,
   type EnvironmentCardData,
@@ -39,14 +46,112 @@ const styles = themedStyles((p) => ({
   cell: { flexGrow: 1, flexBasis: CARD_MIN_WIDTH, minWidth: 0 },
   muted: { ...typeStyle('body', 'subhead'), color: p.text3 },
   baseNote: { ...typeStyle('body', 'subhead'), color: p.text2, flexShrink: 1 },
+  baseWhen: { ...typeStyle('body', 'footnote'), color: p.text3 },
+  actions: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
   baseLink: { ...typeStyle('bodySemibold', 'subhead'), color: p.link, marginLeft: 'auto' },
 }))
 
+type HostingNames = Readonly<Record<string, readonly { name?: string | null }[]>>
+
+/** Hostnames of an environment's hosting rows (read separately from the config view). */
+function hostingDomainsOf(
+  view: EnvironmentConfigViewResponse | undefined,
+  hostingsByService: HostingNames
+): string[] {
+  const names: string[] = []
+  for (const service of view?.effective.services ?? []) {
+    const rows = service.serviceId ? (hostingsByService[service.serviceId] ?? []) : []
+    for (const row of rows) if (row.name) names.push(row.name)
+  }
+  return names
+}
+
+function NewEnvironmentButton({ onPress }: Readonly<{ onPress: () => void }>) {
+  return <ActionButton label="New environment" variant="primary" size="sm" onPress={onPress} />
+}
+
+type Card = Readonly<{ id: string; data: EnvironmentCardData }>
+
+/** Loading, empty, or the cards (with the Base band once there are several environments). */
+function EnvironmentsBody({
+  loading,
+  empty,
+  cards,
+  band,
+  canAdd,
+  onAdd,
+  onOpenCard,
+}: Readonly<{
+  loading: boolean
+  empty: boolean
+  cards: readonly Card[]
+  band: Readonly<{ summary: string | undefined; relationLine: string; onOpen: () => void }> | null
+  canAdd: boolean
+  onAdd: () => void
+  onOpenCard: (id: string) => void
+}>) {
+  const s = styles(usePalette())
+  if (loading && empty) return <Text style={s.muted}>Loading environments…</Text>
+  if (empty) {
+    return (
+      <EmptyPanel
+        title="No environments yet"
+        body="Add one to run this project."
+        action={canAdd ? <NewEnvironmentButton onPress={onAdd} /> : null}
+      />
+    )
+  }
+  const only = cards.length === 1 && canAdd ? (cards[0]?.data.name ?? 'it') : null
+  return (
+    <>
+      {band ? <BaseBand {...band} /> : null}
+      <View style={s.grid}>
+        {cards.map((card) => (
+          <View key={card.id} style={s.cell}>
+            <EnvironmentLayerCard data={card.data} onOpen={() => onOpenCard(card.id)} />
+          </View>
+        ))}
+      </View>
+      {only ? (
+        <Notice
+          title="This project has one environment"
+          body={`Add another, like Staging, to try changes on their own branch and server before they reach ${only}. It starts as a copy of ${only}.`}
+          actions={<ActionButton label="New environment" size="sm" onPress={onAdd} />}
+        />
+      ) : null}
+    </>
+  )
+}
+
+/** The Base as a band with what it holds, who uses it, and when to use it. */
+function BaseBand({
+  summary,
+  relationLine,
+  onOpen,
+}: Readonly<{ summary: string | undefined; relationLine: string; onOpen: () => void }>) {
+  const s = styles(usePalette())
+  return (
+    <>
+      <LayerBase
+        summary={summary}
+        onPress={onOpen}
+        trailing={
+          <>
+            {relationLine ? <Text style={s.baseNote}>{relationLine}</Text> : null}
+            <Text style={s.baseLink}>Open the Base</Text>
+          </>
+        }
+      />
+      <Text style={s.baseWhen}>{BASE_WHEN_TO_USE}</Text>
+    </>
+  )
+}
+
 /**
- * The project's Environments tab: the Base as a band, then each environment
- * as a card laid over the Base (status, mini map, what it changes). Every
- * number and word comes from data the app has read; a part with no answer yet
- * is left out.
+ * The project's Environments tab: each environment as a card (the primary one
+ * first, then the pinned ones), and, once there are two or more, the Base as a
+ * band with a clear button and a line on when to use it. Every number and word
+ * comes from data the app has read; a part with no answer yet is left out.
  */
 export function ProjectEnvironmentsTab() {
   const s = styles(usePalette())
@@ -55,13 +160,15 @@ export function ProjectEnvironmentsTab() {
     orgId,
     projectId,
     project,
-    environments,
+    environments: listed,
     loading,
     canManage,
     projectAllowsMutations,
     invalidateEnvironments,
   } = useProjectContext()
   const [adding, setAdding] = useState(false)
+  const environments = useMemo(() => orderEnvironments(listed), [listed])
+  const primary = primaryEnvironmentOf(environments)
   const now = useNow(CLOCK_MS)
   const environmentIds = useMemo(() => environments.map((env) => env.id), [environments])
   const containers = useContainersByProject(orgId, projectId, { environmentIds })
@@ -95,17 +202,14 @@ export function ProjectEnvironmentsTab() {
         id: env.id,
         data: environmentCardData({
           name: environmentDisplayName(env),
+          flags: env,
           containers: containers.isLoading ? undefined : containers.containersByEnv[env.id],
           view: views[env.id],
           latest: latest[env.id],
           progressLabel: deployProgressLabel(latest[env.id], progressRecords),
           serverLine: serverLine(env.serverId, defaultServerId, servers),
           now,
-          hostingDomains: (views[env.id]?.effective.services ?? []).flatMap((service) =>
-            (service.serviceId ? (hostingsByService[service.serviceId] ?? []) : []).flatMap(
-              (row) => (row.name ? [row.name] : [])
-            )
-          ),
+          hostingDomains: hostingDomainsOf(views[env.id], hostingsByService),
         }) satisfies EnvironmentCardData,
       })),
     [
@@ -124,12 +228,14 @@ export function ProjectEnvironmentsTab() {
 
   const base =
     environmentIds.map((id) => views[id]?.base).find((side) => side !== undefined) ?? null
-  const relationLine = followLine(
+  const relationLine = reachNames(
     environments.map((env) => {
       const view = views[env.id]
-      return { name: environmentDisplayName(env), followsBase: view ? view.followsBase : null }
+      return { name: environmentDisplayName(env), standsAlone: view ? view.standsAlone : null }
     })
   )
+  const primaryView = primary ? views[primary.id] : undefined
+  const prominentBase = baseIsProminent(environments.length)
 
   const openCreated = async (environmentId: string) => {
     await invalidateEnvironments()
@@ -137,71 +243,39 @@ export function ProjectEnvironmentsTab() {
     router.push(projectEnvironmentHref(orgId, projectId, environmentId) as Href)
   }
 
-  const newEnvironment = canAdd ? (
-    <ActionButton
-      label="New environment"
-      variant="primary"
-      size="sm"
-      onPress={() => setAdding(true)}
-    />
-  ) : null
+  const openBase = () => router.push(projectBaseHref(orgId, projectId) as Href)
+  const headerActions = (
+    <View style={s.actions}>
+      {prominentBase ? (
+        <ActionButton label="Open the Base" variant="secondary" size="sm" onPress={openBase} />
+      ) : null}
+      {canAdd ? <NewEnvironmentButton onPress={() => setAdding(true)} /> : null}
+    </View>
+  )
 
-  let body
-  if (loading && environments.length === 0) {
-    body = <Text style={s.muted}>Loading environments…</Text>
-  } else if (environments.length === 0) {
-    body = (
-      <EmptyPanel
-        title="No environments yet"
-        body="Add one to run this project."
-        action={newEnvironment}
-      />
-    )
-  } else {
-    body = (
-      <>
-        <LayerBase
-          summary={base ? baseCounts(base) : undefined}
-          onPress={() => router.push(projectBaseHref(orgId, projectId) as Href)}
-          trailing={
-            <>
-              {relationLine ? <Text style={s.baseNote}>{relationLine}</Text> : null}
-              <Text style={s.baseLink}>Open Base</Text>
-            </>
-          }
-        />
-        <View style={s.grid}>
-          {cards.map((card) => (
-            <View key={card.id} style={s.cell}>
-              <EnvironmentLayerCard
-                data={card.data}
-                onOpen={() =>
-                  router.push(projectEnvironmentHref(orgId, projectId, card.id) as Href)
-                }
-              />
-            </View>
-          ))}
-        </View>
-        {environments.length === 1 && canAdd ? (
-          <Notice
-            title="This project has one environment"
-            body={`Add another, like Staging, to try changes on their own branch and server before they reach ${cards[0]?.data.name ?? 'it'}. It starts from the Base.`}
-            actions={
-              <ActionButton label="New environment" size="sm" onPress={() => setAdding(true)} />
-            }
-          />
-        ) : null}
-      </>
-    )
-  }
+  const body = (
+    <EnvironmentsBody
+      loading={loading}
+      empty={environments.length === 0}
+      cards={cards}
+      band={
+        prominentBase
+          ? { summary: base ? baseCounts(base) : undefined, relationLine, onOpen: openBase }
+          : null
+      }
+      canAdd={canAdd}
+      onAdd={() => setAdding(true)}
+      onOpenCard={(id) => router.push(projectEnvironmentHref(orgId, projectId, id) as Href)}
+    />
+  )
 
   return (
     <View style={s.root}>
       <View style={s.section}>
         <SectionHeading
           title="Environments"
-          note="Each one is the Base plus its own changes"
-          action={environments.length > 0 ? newEnvironment : null}
+          note="The primary one comes first, then the pinned ones"
+          action={environments.length > 0 ? headerActions : null}
         />
         {body}
       </View>
@@ -210,7 +284,8 @@ export function ProjectEnvironmentsTab() {
           orgId={orgId}
           projectId={projectId}
           visible
-          base={base}
+          primaryName={primary ? environmentDisplayName(primary) : null}
+          primary={primaryView?.effective ?? null}
           hasProjectServer={defaultServerId !== null}
           onClose={() => setAdding(false)}
           onCreated={openCreated}

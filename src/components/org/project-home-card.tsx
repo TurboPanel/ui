@@ -18,7 +18,7 @@ const styles = themedStyles((p) => ({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
 }))
 
-/** "Follows the Base · 2 changes · shop.example.com": what is known, nothing else. */
+/** "2 changes from the Base · shop.example.com": what is known, nothing else. */
 function environmentSub(env: HomeEnvironment): string | undefined {
   const parts = [env.relation?.text, env.host].filter((part) => part !== undefined && part !== null)
   return parts.length > 0 ? parts.join(' · ') : undefined

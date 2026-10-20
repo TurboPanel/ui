@@ -55,7 +55,7 @@ export function ProjectServerHeaderControl() {
     const nextOptions = buildProjectOptionsPatch(project, {
       defaultServerId: serverId,
     })
-    const result = await updateProject.run({ options: nextOptions })
+    const result = await updateProject.run({ options: nextOptions, target: 'base' })
     if (!result.ok && updateProject.actionError) {
       setError(updateProject.actionError)
     }

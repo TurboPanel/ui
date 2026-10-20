@@ -9,6 +9,7 @@ import { themedStyles, usePalette } from '@/components/ui/v4/use-palette'
 import { siteUrlFromHostname } from '@/lib/environment-status'
 import type { EnvironmentCardData } from '@/lib/v4/project-home'
 import { webPointer } from '@/lib/theme'
+import { CHIP_HEIGHT, RADIUS } from '@/lib/v4/ui-scale'
 
 const styles = themedStyles((p) => ({
   facts: { gap: 2 },
@@ -18,6 +19,17 @@ const styles = themedStyles((p) => ({
   factMono: { ...typeStyle('monoMedium', 'footnote'), color: p.text2, flexShrink: 1 },
   visit: { ...typeStyle('bodyMedium', 'footnote'), color: p.link, flexShrink: 1 },
   spacer: { flexGrow: 1 },
+  badge: {
+    alignSelf: 'flex-start',
+    minHeight: CHIP_HEIGHT.md,
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+    borderRadius: RADIUS.pill,
+    backgroundColor: p.accent,
+  },
+  badgePinned: { backgroundColor: 'transparent', borderWidth: 1, borderColor: p.sepStrong },
+  badgeText: { ...typeStyle('bodySemibold', 'caption'), color: p.accentInk },
+  badgeTextPinned: { color: p.text2 },
 }))
 
 function Fact({
@@ -58,7 +70,7 @@ function VisitLink({ host }: Readonly<{ host: string }>) {
 
 /**
  * One environment as a layer card: a sheet laid over the Base. Its name, how it
- * relates to the Base ("Follows the Base · 2 changes", "Stands alone"), the
+ * relates to the Base ("2 changes from the Base", "Stands alone"), the
  * status triplet (running now, last deploy), a mini map, the branch and server,
  * and the way in. Every part with no data yet is left out, never filled in.
  */
@@ -72,7 +84,22 @@ export function EnvironmentLayerCard({
     <LayerCard
       title={data.name}
       alone={relation?.standsAlone === true}
-      head={relation ? <SourceTag source={relation.source} label={relation.text} /> : null}
+      head={
+        <>
+          {data.badge ? (
+            <View
+              accessible
+              accessibilityLabel={data.badge}
+              style={[s.badge, data.badge === 'Pinned' && s.badgePinned]}
+            >
+              <Text style={[s.badgeText, data.badge === 'Pinned' && s.badgeTextPinned]}>
+                {data.badge}
+              </Text>
+            </View>
+          ) : null}
+          {relation ? <SourceTag source={relation.source} label={relation.text} /> : null}
+        </>
+      }
       foot={
         <>
           {data.visitHost ? <VisitLink host={data.visitHost} /> : null}

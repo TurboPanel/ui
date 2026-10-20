@@ -90,6 +90,7 @@ const BASE: ConfigViewSide = {
       serviceId: null,
       kind: 'node',
       source: 'base',
+      inheritedFromBase: true,
       rows: [
         {
           key: 'u',
@@ -99,6 +100,7 @@ const BASE: ConfigViewSide = {
           value: 'shop',
           masked: false,
           source: 'base',
+          inheritedFromBase: true,
         },
         {
           key: 'd',
@@ -108,13 +110,21 @@ const BASE: ConfigViewSide = {
           value: 'shop.example.com',
           masked: false,
           source: 'base',
+          inheritedFromBase: true,
         },
       ],
     },
   ],
   variables: [],
   linuxUsers: [
-    { name: 'shop', access: 'sftp', description: null, source: 'base', usedBy: ['web'] },
+    {
+      name: 'shop',
+      access: 'sftp',
+      description: null,
+      source: 'base',
+      inheritedFromBase: true,
+      usedBy: ['web'],
+    },
   ],
 }
 
@@ -122,7 +132,8 @@ const VIEW: EnvironmentConfigViewResponse = {
   ok: true,
   environmentId: 'e1',
   projectId: 'p1',
-  followsBase: true,
+  isPrimary: false,
+  standsAlone: false,
   base: BASE,
   effective: BASE,
   changes: [],
@@ -213,10 +224,10 @@ describe.each(SCENARIOS)('Projects home ($name)', (scenario) => {
 
   it('gives the Compose project its Base line, who runs it and its relation to the Base', () => {
     render(<ProjectsHomeSection orgId="o" />)
-    expect(screen.getByText('Base · 1 service · 1 Linux user')).toBeTruthy()
+    expect(screen.getByText('Base · 1 service · 1 Hosting Account')).toBeTruthy()
     expect(screen.getByRole('group', { name: 'Who runs it' }).textContent).toContain('shop')
     const row = screen.getByRole('button', { name: 'Open Production in Shop' })
-    expect(row.textContent).toContain('Follows the Base · shop.example.com')
+    expect(row.textContent).toContain('Same as the Base · shop.example.com')
     expect(row.textContent).toContain('Running')
   })
 
@@ -269,7 +280,9 @@ describe.each(SCENARIOS)('Projects home ($name)', (scenario) => {
     render(<ProjectsHomeSection orgId="o" />)
     fireEvent.click(screen.getByRole('button', { name: 'Open Shop' }))
     expect(state.push).toHaveBeenLastCalledWith('/o/projects/p1')
-    fireEvent.click(screen.getByRole('link', { name: 'Shop: Base · 1 service · 1 Linux user' }))
+    fireEvent.click(
+      screen.getByRole('link', { name: 'Shop: Base · 1 service · 1 Hosting Account' })
+    )
     expect(state.push).toHaveBeenLastCalledWith('/o/projects/p1/base')
     fireEvent.click(screen.getByRole('button', { name: 'Open Production in Shop' }))
     expect(state.push).toHaveBeenLastCalledWith('/o/projects/p1/environments/e1')

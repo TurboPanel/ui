@@ -1,7 +1,15 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { ComposeDocument } from '@/lib/compose'
-import { linuxUserEdit, variableEdit, type SaveContext, type StagedEdit } from './config-edits'
+import {
+  linuxUserEdit,
+  goBackEdit,
+  variableEdit,
+  type SaveContext,
+  type StagedEdit,
+} from './config-edits'
 import { saveEdits, type SaveDeps } from './config-save'
+import { buildConfigViewModel } from './config-view-model'
+import { stagingView } from './config-view-model.fixtures'
 
 function doc(data: Record<string, unknown>): ComposeDocument {
   return { version: 1, data, presentation: { keyOrder: Object.keys(data), comments: {} } }
@@ -23,19 +31,13 @@ const context: SaveContext = {
 function deps(overrides: Partial<SaveDeps> = {}): SaveDeps {
   return {
     load: vi.fn(() => Promise.resolve(context)),
-    saveProjectCompose: vi.fn(() => Promise.resolve()),
     saveEnvironmentCompose: vi.fn(() => Promise.resolve()),
     runVariable: vi.fn(() => Promise.resolve()),
     ...overrides,
   }
 }
 
-const user = linuxUserEdit({
-  serviceName: 'web',
-  user: 'staging-web',
-  was: 'website',
-  scope: 'environment',
-})
+const user = linuxUserEdit({ serviceName: 'web', user: 'staging-web', was: 'website' })
 const variable = variableEdit({
   name: 'MODE',
   value: 'x',
@@ -43,7 +45,6 @@ const variable = variableEdit({
   forBuild: false,
   forRuntime: true,
   was: '',
-  scope: 'environment',
 })
 
 describe('saveEdits', () => {
@@ -71,38 +72,6 @@ describe('saveEdits', () => {
     )
   })
 
-  it('saves the Base before this environment', async () => {
-    const calls: string[] = []
-    const d = deps({
-      saveProjectCompose: vi.fn(() => {
-        calls.push('project')
-        return Promise.resolve()
-      }),
-      saveEnvironmentCompose: vi.fn(() => {
-        calls.push('environment')
-        return Promise.resolve()
-      }),
-      load: vi.fn(() =>
-        Promise.resolve({
-          ...context,
-          environmentCompose: doc({
-            services: {
-              web: { 'x-turbopanel': { serviceKind: 'node', principal: 'staging-web' } },
-            },
-          }),
-        })
-      ),
-    })
-    const base = linuxUserEdit({
-      serviceName: 'web',
-      user: 'shared',
-      was: 'staging-web',
-      scope: 'base',
-    })
-    await saveEdits([base], d)
-    expect(calls).toEqual(['project', 'environment'])
-  })
-
   it('keeps the edits of steps that did not run when one fails', async () => {
     const d = deps({ runVariable: vi.fn(() => Promise.reject(new Error('HTTP 400: nope'))) })
     const outcome = await saveEdits([user, variable], d)
@@ -125,17 +94,16 @@ describe('saveEdits', () => {
   })
 
   it('stops, saving nothing, when an edit no longer fits', async () => {
-    const stale: StagedEdit = linuxUserEdit({
-      serviceName: 'ghost',
-      user: 'x',
-      was: '',
-      scope: 'base',
-    })
+    const change = buildConfigViewModel({ envName: 'Staging', view: stagingView() }).changes.find(
+      (item) => item.key === 'var:API_URL'
+    )
+    if (change === undefined) throw new Error('fixture lost the variable change')
+    const stale: StagedEdit = goBackEdit(change, { type: 'variable', name: 'API_URL' })
     const d = deps()
     const outcome = await saveEdits([user, stale], d)
     expect(outcome.saved).toBe(0)
     expect(outcome.problems).toEqual([
-      { key: 'svc:ghost:linuxUser', reason: 'The Base has no app named ghost.' },
+      { key: 'var:API_URL', reason: 'API_URL is no longer set in this environment.' },
     ])
     expect(outcome.error).toBe('Some changes no longer fit what is saved. Undo them and try again.')
     expect(outcome.remaining).toEqual([user, stale])
@@ -143,13 +111,17 @@ describe('saveEdits', () => {
   })
 
   it('saves nothing for edits that change nothing', async () => {
-    const same = linuxUserEdit({
-      serviceName: 'web',
-      user: 'website',
-      was: 'website',
-      scope: 'base',
+    const same = linuxUserEdit({ serviceName: 'web', user: 'website', was: 'website' })
+    const d = deps({
+      load: vi.fn(() =>
+        Promise.resolve({
+          ...context,
+          environmentCompose: doc({
+            services: { web: { 'x-turbopanel': { serviceKind: 'node', principal: 'website' } } },
+          }),
+        })
+      ),
     })
-    const d = deps()
     expect(await saveEdits([same], d)).toEqual({
       remaining: [],
       problems: [],

@@ -1,6 +1,6 @@
 /**
  * A config-view answer shaped like the control plane's, for the Configuration
- * tab tests: a "Staging" environment that follows the Base and changes the
+ * tab tests: a "Staging" environment that uses the Base and changes the
  * web app's start command, its Linux user, one variable, and adds a worker.
  */
 
@@ -27,6 +27,7 @@ export function fieldRow(
     value,
     masked: false,
     source: 'base',
+    inheritedFromBase: extra.source !== 'environment',
     ...extra,
   }
 }
@@ -37,7 +38,15 @@ export function service(
   rows: ConfigViewFieldRow[],
   extra: Partial<ConfigViewService> = {}
 ): ConfigViewService {
-  return { name, serviceId: `id-${name}`, kind, source: 'base', rows, ...extra }
+  return {
+    name,
+    serviceId: `id-${name}`,
+    kind,
+    source: 'base',
+    inheritedFromBase: extra.source !== 'environment',
+    rows,
+    ...extra,
+  }
 }
 
 export function variable(
@@ -54,6 +63,7 @@ export function variable(
     forBuild: false,
     forRuntime: true,
     source: 'project',
+    inheritedFromBase: extra.source !== 'environment',
     ...extra,
   }
 }
@@ -71,6 +81,7 @@ export function domainRow(
     value: host,
     masked: false,
     source: 'base',
+    inheritedFromBase: extra.source !== 'environment',
     ...extra,
   }
 }
@@ -87,6 +98,7 @@ const baseUsers = [
     access: 'sftp' as const,
     description: null,
     source: 'base' as const,
+    inheritedFromBase: true,
     usedBy: ['web'],
   },
   {
@@ -94,6 +106,7 @@ const baseUsers = [
     access: 'none' as const,
     description: null,
     source: 'base' as const,
+    inheritedFromBase: true,
     usedBy: [],
   },
 ]
@@ -157,7 +170,7 @@ export const STAGING_CHANGES: ConfigViewChange[] = [
   },
 ]
 
-/** The Staging environment: follows the Base, four changes. */
+/** The Staging environment: uses the Base, four changes. */
 export function stagingView(): EnvironmentConfigViewResponse {
   const stagingWeb = service('web', 'node', [
     fieldRow('web', 'command', 'npm run staging', { source: 'environment' }),
@@ -180,7 +193,8 @@ export function stagingView(): EnvironmentConfigViewResponse {
     ok: true,
     environmentId: 'env-staging',
     projectId: 'project-1',
-    followsBase: true,
+    isPrimary: false,
+    standsAlone: false,
     base: {
       services: [baseWeb, cache],
       variables: [variable('API_URL', 'https://api.example.com'), variable('MODE', 'live')],
@@ -199,8 +213,22 @@ export function stagingView(): EnvironmentConfigViewResponse {
         variable('BUILD_ONLY', '1', { forBuild: true, forRuntime: false }),
       ],
       linuxUsers: [
-        { name: 'website', access: 'sftp', description: null, source: 'base', usedBy: [] },
-        { name: 'staging-web', access: 'none', description: null, source: 'base', usedBy: ['web'] },
+        {
+          name: 'website',
+          access: 'sftp',
+          description: null,
+          source: 'base',
+          inheritedFromBase: true,
+          usedBy: [],
+        },
+        {
+          name: 'staging-web',
+          access: 'none',
+          description: null,
+          source: 'base',
+          inheritedFromBase: true,
+          usedBy: ['web'],
+        },
       ],
     },
     changes: STAGING_CHANGES,
@@ -212,19 +240,25 @@ export function standaloneView(): EnvironmentConfigViewResponse {
   const view = stagingView()
   return {
     ...view,
-    followsBase: false,
+    isPrimary: false,
+    standsAlone: true,
     effective: {
       ...view.effective,
       services: view.effective.services.map((item) => ({
         ...item,
         source: 'environment' as const,
-        rows: item.rows.map((row) => ({ ...row, source: 'environment' as const })),
+        inheritedFromBase: false,
+        rows: item.rows.map((row) => ({
+          ...row,
+          source: 'environment' as const,
+          inheritedFromBase: false,
+        })),
       })),
     },
   }
 }
 
-/** Follows the Base and changes nothing. */
+/** Uses the Base and changes nothing. */
 export function plainView(): EnvironmentConfigViewResponse {
   const view = stagingView()
   return {

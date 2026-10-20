@@ -133,7 +133,7 @@ describe('map words', () => {
 
   it('names what changed in the Differences view', () => {
     const app = layoutOf(website, 'testing', 'diff').nodes.find((n) => n.kind === 'app')
-    expect(app?.tags).toEqual(['Changed: start command, Linux user'])
+    expect(app?.tags).toEqual(['Changed: start command, Hosting Account'])
   })
 
   it('tags an environment against the Base too, but draws the Base itself', () => {

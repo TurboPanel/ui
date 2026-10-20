@@ -251,6 +251,7 @@ function EnvironmentActionsMenu({ model }: Readonly<{ model: OverviewEnvironment
     canOwn,
     canMutate: model.canMutateLifecycle,
     environmentCount: environments.length,
+    isPrimary: selectedEnvironment?.isPrimary === true,
     hasServer: model.hasServer,
     needsPrincipal: model.needsPrincipal,
     hasContainers: model.hasContainers,

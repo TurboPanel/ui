@@ -65,7 +65,7 @@ import {
   environmentNamePayload,
 } from '@/components/org/project-create/environment-name'
 import { useOrgDefaultEnvironmentName } from '@/lib/org-default-environment'
-import { DRAFT_REPOSITORY_APP_TAB_IDS, projectOverviewHref } from '@/lib/project-navigation'
+import { DRAFT_REPOSITORY_APP_TAB_IDS, projectHref } from '@/lib/project-navigation'
 import type { RepositoryInspection, RepositoryRecord } from '@/lib/instance-api'
 import { userWorkspaces } from '@/lib/system-inventory'
 import { colors, spacing, webPointer } from '@/lib/theme'
@@ -753,7 +753,8 @@ function ProjectCreateWizard({
       return
     }
 
-    router.replace(projectOverviewHref(orgId, result.value.id) as Href)
+    // The project opens on its primary environment, where the wizard put the content.
+    router.replace(projectHref(orgId, result.value.id) as Href)
   }
 
   const surfaceError = apiError ?? loadError

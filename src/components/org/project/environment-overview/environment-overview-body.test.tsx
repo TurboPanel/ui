@@ -104,7 +104,7 @@ describe.each(SCENARIOS)('EnvironmentOverviewBody ($name)', (scenario) => {
     expect(within(web).getByLabelText('Running')).toBeTruthy()
     expect(within(web).getByText('Node.js app · shop.example.com')).toBeTruthy()
     const blog = screen.getByRole('button', { name: 'blog' })
-    expect(within(blog).getByLabelText('Base')).toBeTruthy()
+    expect(within(blog).getByLabelText('From the Base')).toBeTruthy()
     expect(within(blog).getByLabelText('Runs as blogger')).toBeTruthy()
     expect(within(blog).getByLabelText('Starting')).toBeTruthy()
     const api = screen.getByRole('button', { name: 'api' })
@@ -159,14 +159,14 @@ describe.each(SCENARIOS)('EnvironmentOverviewBody ($name)', (scenario) => {
   it('shows the changes card with its count, linking to Configuration', () => {
     renderBody()
     const card = screen.getByRole('link', {
-      name: 'Changes from Base (4). Follows the Base · 4 changes',
+      name: 'Changes from Base (4). 4 changes from the Base',
     })
     expect(card.closest('[data-href]')?.getAttribute('data-href')).toBe(`${BASE}/configuration`)
     expect(styleOf(card).backgroundColor).toBe(token(scenario, 'baseSoft'))
   })
 
-  it('shows the stands-alone card for an environment that does not follow the Base', () => {
-    renderBody({ source: overviewSource({ view: configView({ followsBase: false }) }) })
+  it('shows the stands-alone card for an environment that stands alone', () => {
+    renderBody({ source: overviewSource({ view: configView({ standsAlone: true }) }) })
     const card = screen.getByRole('link', {
       name: 'Staging stands alone. Changes to the Base do not reach it.',
     })

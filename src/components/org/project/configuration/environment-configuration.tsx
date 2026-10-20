@@ -30,8 +30,6 @@ import { environmentDisplayName } from '@/lib/resource-labels'
 import { webPointer } from '@/lib/theme'
 import {
   changeActions,
-  environmentDetachedFromBase,
-  scopeDecision,
   stageEdit,
   unstageEdit,
   variableFacts,
@@ -98,8 +96,10 @@ function OnlyChangesSwitch({
 }
 
 function lede(model: ConfigViewModel): string {
-  if (model.followsBase) return `${model.envName} runs the Base plus its own changes.`
-  return `${model.envName} stands alone: it keeps its own settings and does not follow the Base.`
+  if (model.standsAlone) {
+    return `${model.envName} stands alone: it keeps its own apps and does not use the Base's.`
+  }
+  return `${model.envName} uses the Base for anything it does not set itself. A value marked “From the Base” can be changed here for this environment only.`
 }
 
 /** The tab body once the config-view answer is in. Presentational: links go through the callbacks. */
@@ -130,24 +130,17 @@ export function EnvironmentConfigurationView({
   const filtering = multiple && only
   return (
     <View style={s.page}>
-      {multiple ? (
-        <>
-          <Text style={s.lede}>{lede(model)}</Text>
-          <View style={s.top}>
-            <OnlyChangesSwitch
-              label={model.onlyChangesLabel}
-              on={only}
-              onToggle={() => setOnly((value) => !value)}
-            />
-          </View>
-        </>
-      ) : (
-        <Notice
-          title="This project has one environment"
-          body="Changes here are saved in the Base. Add a second environment to give it changes of its own."
-          actions={<ActionButton label="Open the Base" size="sm" onPress={onOpenBase} />}
-        />
-      )}
+      <Text style={s.lede}>{lede(model)}</Text>
+      <View style={s.top}>
+        {multiple ? (
+          <OnlyChangesSwitch
+            label={model.onlyChangesLabel}
+            on={only}
+            onToggle={() => setOnly((value) => !value)}
+          />
+        ) : null}
+        <ActionButton label="Open the Base" variant="quiet" size="sm" onPress={onOpenBase} />
+      </View>
       {filtering ? (
         <ChangesSection
           changes={model.changes}
@@ -250,31 +243,13 @@ export function EnvironmentConfigurationScreen() {
     return {
       envName,
       staged,
-      scopeMode: scopeDecision(environments.length, model.followsBase),
-      others: environments
-        .filter((item) => item.id !== environmentId)
-        .map((item) => ({
-          name: environmentDisplayName(item),
-          standsAlone: environmentDetachedFromBase(item.options?.compose),
-        })),
       linuxUserNames: model.linuxUserNames,
       variableFacts: (name) => variableFacts(name, envVariableRecords, projectVariableRecords),
-      actionsFor: (change) => changeActions(change, envVariableRecords, model.followsBase),
+      actionsFor: (change) => changeActions(change, envVariableRecords, model.standsAlone),
       onStage: stage,
       onUnstage: unstage,
     }
-  }, [
-    editable,
-    model,
-    envVariableRecords,
-    projectVariableRecords,
-    envName,
-    staged,
-    environments,
-    environmentId,
-    stage,
-    unstage,
-  ])
+  }, [editable, model, envVariableRecords, projectVariableRecords, envName, staged, stage, unstage])
 
   if (query.isPending) return <LoadingState label="Loading configuration…" />
   if (query.error || !model) {

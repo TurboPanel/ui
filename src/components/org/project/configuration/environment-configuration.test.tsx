@@ -76,13 +76,24 @@ describe.each(SCENARIOS)('EnvironmentConfigurationView ($name)', (scenario) => {
   it('lists the sections in order with a source tag on every row', () => {
     renderView()
     const headings = screen.getAllByRole('heading').map((node) => node.textContent)
-    expect(headings).toEqual(['Apps', 'Hosting', 'Variables', 'Linux users', 'Data'])
-    expect(screen.getByText('Staging runs the Base plus its own changes.')).toBeTruthy()
+    expect(headings).toEqual(['Apps', 'Hosting', 'Variables', 'Hosting Accounts', 'Data'])
+    expect(
+      screen.getByText(/^Staging uses the Base for anything it does not set itself\./)
+    ).toBeTruthy()
     const web = screen.getByLabelText(/^web, Node.js app, Staging changes/)
     expect(within(web).getByText('Staging change')).toBeTruthy()
     const api = screen.getByLabelText(/^api, Container/)
-    expect(within(api).getByText('Base')).toBeTruthy()
-    expect(screen.getAllByText('Project').length).toBeGreaterThan(0)
+    expect(within(api).getByText('From the Base')).toBeTruthy()
+    expect(screen.queryByText('Project')).toBeNull()
+  })
+
+  it('marks inherited rows "From the Base" and leaves environment-set rows unmarked', () => {
+    renderView()
+    const api = screen.getByLabelText(/^api, Container/)
+    expect(within(api).getByText('From the Base')).toBeTruthy()
+    const web = screen.getByLabelText(/^web, Node.js app/)
+    expect(within(web).queryByText('From the Base')).toBeNull()
+    expect(screen.getAllByText('From the Base').length).toBeGreaterThan(0)
   })
 
   it('paints a change tag in the Base colour and says who runs each app', () => {
@@ -162,23 +173,25 @@ describe.each(SCENARIOS)('EnvironmentConfigurationView ($name)', (scenario) => {
     expect(screen.getByText('No hostnames yet')).toBeTruthy()
     expect(screen.getByText('No variables')).toBeTruthy()
     expect(screen.queryByText('Apps')).toBeNull()
-    expect(screen.queryByText('Linux users')).toBeNull()
+    expect(screen.queryByText('Hosting Accounts')).toBeNull()
     expect(screen.queryByText('Data')).toBeNull()
   })
 
   it('says a stand-alone environment keeps its own settings', () => {
-    const standalone = { ...model(), followsBase: false }
+    const standalone = { ...model(), standsAlone: true }
     renderView({ model: standalone })
     expect(
-      screen.getByText(
-        'Staging stands alone: it keeps its own settings and does not follow the Base.'
-      )
+      screen.getByText("Staging stands alone: it keeps its own apps and does not use the Base's.")
     ).toBeTruthy()
+    expect(screen.queryByText(/anything it does not set itself/)).toBeNull()
   })
 
-  it('explains a single-environment project and points at the Base, with no filter', () => {
+  it('keeps the lede and the Open the Base button in a single-environment project, with no filter', () => {
     const handlers = renderView({ multiple: false })
-    expect(screen.getByText('This project has one environment')).toBeTruthy()
+    expect(
+      screen.getByText(/^Staging uses the Base for anything it does not set itself\./)
+    ).toBeTruthy()
+    expect(screen.queryByText('This project has one environment')).toBeNull()
     expect(screen.queryByRole('switch')).toBeNull()
     fireEvent.click(screen.getByLabelText('Open the Base'))
     expect(handlers.onOpenBase).toHaveBeenCalled()

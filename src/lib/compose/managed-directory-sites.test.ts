@@ -3,6 +3,7 @@ import type { ComposeDocument } from '@/lib/compose'
 import {
   managedDirectorySiteNames,
   unownedManagedDirectorySites,
+  unownedSitesAcrossDocuments,
 } from '@/lib/compose/managed-directory-sites'
 import { patchServiceTurbopanelExtension } from '@/lib/compose/service-kind'
 
@@ -157,5 +158,19 @@ describe('declared aliases settle ownership without a query', () => {
         principals: [],
       })
     ).toEqual(['blog'])
+  })
+})
+
+describe('unownedSitesAcrossDocuments', () => {
+  it('finds an unowned site that only an environment declares, once, and skips owned ones', () => {
+    const base = documentWith({})
+    const primary = documentWith({ blog: uploadedSite, shop: uploadedSite })
+    const staging = documentWith({ blog: uploadedSite })
+    const sites = unownedSitesAcrossDocuments({
+      documents: [base, primary, staging, undefined, null],
+      services: [{ id: 's-shop', composeServiceName: 'shop' }],
+      principals: [{ serviceIds: ['s-shop'] }],
+    })
+    expect(sites).toEqual(['blog'])
   })
 })

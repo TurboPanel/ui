@@ -41,7 +41,7 @@ describe.each(SCENARIOS)('layer cards ($name)', (scenario) => {
 
   it('environment card: a sheet laid 6 px over a faint Base sheet', () => {
     render(
-      <LayerCard title="Staging" head={<span>Follows the Base</span>} foot={<span>Open</span>}>
+      <LayerCard title="Staging" head={<span>Same as the Base</span>} foot={<span>Open</span>}>
         <span>body</span>
       </LayerCard>
     )
@@ -55,7 +55,7 @@ describe.each(SCENARIOS)('layer cards ($name)', (scenario) => {
     expect(styleOf(ghost).backgroundColor).toBe(token(scenario, 'baseSoft'))
     expect(styleOf(ghost).borderColor).toBe(token(scenario, 'baseLine'))
     expect(styleOf(ghost).right).toBe(6)
-    expect(screen.getByText('Follows the Base')).toBeTruthy()
+    expect(screen.getByText('Same as the Base')).toBeTruthy()
     expect(screen.getByText('Open')).toBeTruthy()
     expect(screen.getByText('body')).toBeTruthy()
   })

@@ -132,13 +132,12 @@ export type EffectiveApp = Readonly<{
 
 export type EffectiveConfig = Readonly<{
   envName: string
-  followsBase: boolean
   standsAlone: boolean
   changes: readonly ConfigChangeRow[]
   changeCount: number
   changeText: string
   hasChanges: boolean
-  /** "Follows the Base · 2 changes" or "Stands alone". */
+  /** "2 changes from the Base", "Same as the Base" or "Stands alone". */
   relationText: string
   /** "Only changes from Base (2)". */
   onlyChangesLabel: string
@@ -173,7 +172,7 @@ function buildRow(
     value,
     baseValue,
     source,
-    sourceLabel: sourceLabel(source, input.envName, isVariableKey(key)),
+    sourceLabel: sourceLabel(source, input.envName),
     isChange: source === 'env',
     differs: value !== baseValue,
     sourceNote: source === 'env' ? `Base: ${baseValue} · ${input.envName}: ${value}` : '',
@@ -262,7 +261,6 @@ export function effectiveConfig(input: EffectiveConfigInput): EffectiveConfig {
     .map((key) => buildVariable(input, values, changed, key))
   return {
     envName: input.envName,
-    followsBase: !standsAlone,
     standsAlone,
     changes,
     changeCount: changes.length,
