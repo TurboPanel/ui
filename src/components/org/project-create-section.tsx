@@ -271,6 +271,7 @@ function seedForRepositoryLane(
       buildCommand: simple.buildCommand,
       startCommand: simple.startCommand,
       subdirectory: simple.buildRoot,
+      nodeVersion: simple.nodeVersion,
     },
   })
 }
@@ -486,6 +487,8 @@ function ProjectCreateWizard({
    * what the operator typed.
    */
   const [simpleConfigTouched, setSimpleConfigTouched] = useState(false)
+  // The Node version is applied from the read unless the operator changed that field.
+  const [nodeVersionTouched, setNodeVersionTouched] = useState(false)
   const typedBranch = repositoryBranch.trim()
   const [settledBranch, settleBranch] = useDebouncedValue(
     typedBranch,
@@ -653,6 +656,9 @@ function ProjectCreateWizard({
     if (!inspection.isSuccess || !inspection.data) return
     const suggested = suggestedSimpleAppConfig(inspection.data)
     if (!simpleConfigTouched) setSimpleConfig(suggested)
+    else if (!nodeVersionTouched) {
+      setSimpleConfig((current) => ({ ...current, nodeVersion: suggested.nodeVersion }))
+    }
     if (builder !== null) return
     const detected = recommendedLane(
       rankRepositoryLanes(inspection.data.files, inspection.data.entries),
@@ -667,6 +673,7 @@ function ProjectCreateWizard({
     step,
     builder,
     simpleConfigTouched,
+    nodeVersionTouched,
     inspection.isSuccess,
     inspection.data,
   ])
@@ -682,6 +689,7 @@ function ProjectCreateWizard({
 
   const changeSimpleConfig = (patch: Partial<SimpleAppConfig>) => {
     setSimpleConfigTouched(true)
+    if (patch.nodeVersion !== undefined) setNodeVersionTouched(true)
     setSimpleConfig((current) => ({ ...current, ...patch }))
   }
 
@@ -931,6 +939,7 @@ function ProjectCreateWizard({
               setBuilder(null)
               setSimpleConfig(suggestedSimpleAppConfig(undefined))
               setSimpleConfigTouched(false)
+              setNodeVersionTouched(false)
             }}
             onBranchChange={setRepositoryBranch}
             onBranchBlur={settleBranch}
