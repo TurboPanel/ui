@@ -13,7 +13,6 @@ import { CreateOrganizationModal } from '@/components/create-organization-modal'
 import { GlassSurface } from '@/components/glass/glass-surface'
 import { HeaderChevron } from '@/components/header-chevron'
 import {
-  HEADER_MENU_WIDTH,
   HEADER_TRIGGER_ICON_SIZE,
   headerMenuGroupStyles,
 } from '@/components/header-menu-group-styles'
@@ -23,7 +22,11 @@ import { BillingNavIcon, GearIcon, OrganizationIcon, PlusIcon } from '@/componen
 import { OrganizationSwitcherList } from '@/components/org/organization-switcher-list'
 import { dropdownLeft, headerLayoutFor } from '@/lib/header-layout'
 import { truncateDisplayName } from '@/lib/display-name'
-import { organizationLabel, shouldShowOrgSwitcherSearch } from '@/lib/organization-switcher'
+import {
+  organizationLabel,
+  shouldShowOrgSwitcherSearch,
+  shouldShowViewAllOrganizations,
+} from '@/lib/organization-switcher'
 import { setActiveOrganizationId } from '@/lib/org-context'
 import { useAuth } from '@/lib/auth-context'
 import {
@@ -34,10 +37,12 @@ import {
   replaceOrganization,
 } from '@/lib/org-navigation'
 import { useCreateOrganization, useOrganizationsQuery } from '@/lib/queries/auth'
-import { colors, spacing, webPointer } from '@/lib/theme'
+import { colors, webPointer } from '@/lib/theme'
 
 const isNative = Platform.OS !== 'web'
-const COMPACT_FOOTER_HEIGHT = 108
+/** Desktop dropdown width; phones use the full-width top panel instead. */
+export const ORG_MENU_WIDTH = 400
+const COMPACT_FOOTER_HEIGHT = 150
 const COMPACT_SEARCH_HEIGHT = 52
 const COMPACT_LIST_MIN = 132
 const COMPACT_PANEL_MAX = 420
@@ -48,7 +53,7 @@ function compactListMaxHeight(
   showSearch: boolean,
 ): number {
   if (!isCompact) {
-    return 280
+    return 8 * 40
   }
   const search = showSearch ? COMPACT_SEARCH_HEIGHT : 0
   // Keep the from-top panel in the upper half so the iOS keyboard does not
@@ -93,7 +98,7 @@ export function OrganizationSwitcherSegment({ orgId }: OrganizationSwitcherSegme
         left: dropdownLeft({
           x,
           triggerWidth: w,
-          menuWidth: HEADER_MENU_WIDTH,
+          menuWidth: Math.min(ORG_MENU_WIDTH, width - 24),
           windowWidth: width,
           align: 'start',
         }),
@@ -113,7 +118,8 @@ export function OrganizationSwitcherSegment({ orgId }: OrganizationSwitcherSegme
     label = 'Loading…'
   }
   const triggerLabel = isNative ? truncateDisplayName(label) : label
-  const showSearch = shouldShowOrgSwitcherSearch(organizations.length, false)
+  const showSearch = shouldShowOrgSwitcherSearch(organizations.length)
+  const showViewAll = shouldShowViewAllOrganizations(organizations.length)
   const listMaxHeight = compactListMaxHeight(height, isCompact, showSearch)
 
   const switchTo = (nextOrgId: string) => {
@@ -197,41 +203,34 @@ export function OrganizationSwitcherSegment({ orgId }: OrganizationSwitcherSegme
 
         <View style={headerMenuGroupStyles.menuDivider} />
 
-        <View style={styles.footerRow}>
-          <FooterAction
-            label="Settings"
-            accessibilityLabel="Organization settings"
-            onPress={openSettings}
-            icon={<GearIcon size={14} color={colors.textChip} />}
+        <MenuAction
+          label="New organization"
+          accessibilityLabel="Create organization"
+          onPress={openCreate}
+          strong
+          icon={<PlusIcon size={14} color={colors.link} />}
+        />
+        <MenuAction
+          label="Settings"
+          accessibilityLabel="Organization settings"
+          onPress={openSettings}
+          icon={<GearIcon size={14} color={colors.textDim} />}
+        />
+        {billingEnabled ? (
+          <MenuAction
+            label="Billing"
+            accessibilityLabel="Organization billing and licenses"
+            onPress={openBilling}
+            icon={<BillingNavIcon size={14} color={colors.textDim} />}
           />
-          {billingEnabled ? (
-            <FooterAction
-              label="Billing"
-              accessibilityLabel="Organization billing and licenses"
-              onPress={openBilling}
-              icon={<BillingNavIcon size={14} color={colors.textChip} />}
-            />
-          ) : null}
-          <FooterAction
-            label="New"
-            accessibilityLabel="Create organization"
-            onPress={openCreate}
-            icon={<PlusIcon size={14} color={colors.textChip} />}
+        ) : null}
+        {showViewAll ? (
+          <MenuAction
+            label="View all organizations"
+            accessibilityLabel="View all organizations"
+            onPress={openAllOrganizations}
           />
-        </View>
-
-        <Pressable
-          style={({ pressed }) => [
-            styles.viewAll,
-            pressed && headerMenuGroupStyles.itemPressed,
-            webPointer,
-          ]}
-          onPress={openAllOrganizations}
-          accessibilityRole="button"
-          accessibilityLabel="View all organizations"
-        >
-          <Text style={styles.viewAllLabel}>View all organizations</Text>
-        </Pressable>
+        ) : null}
       </GlassSurface>
     </KeyboardAvoidingView>
   )
@@ -273,6 +272,7 @@ export function OrganizationSwitcherSegment({ orgId }: OrganizationSwitcherSegme
         closeAccessibilityLabel="Close organization menu"
         presentation={isCompact ? 'fromTop' : 'dropdown'}
         dropdownPosition={menuPosition}
+        menuWidth={Math.min(ORG_MENU_WIDTH, width - 24)}
       >
         {menuBody}
       </HeaderMenuOverlay>
@@ -286,21 +286,24 @@ export function OrganizationSwitcherSegment({ orgId }: OrganizationSwitcherSegme
   )
 }
 
-function FooterAction({
+function MenuAction({
   label,
   accessibilityLabel,
   onPress,
   icon,
+  strong = false,
 }: Readonly<{
   label: string
   accessibilityLabel: string
   onPress: () => void
-  icon: ReactNode
+  icon?: ReactNode
+  strong?: boolean
 }>) {
   return (
     <Pressable
       style={({ pressed }) => [
-        styles.footerBtn,
+        headerMenuGroupStyles.menuItem,
+        styles.action,
         pressed && headerMenuGroupStyles.itemPressed,
         webPointer,
       ]}
@@ -308,8 +311,16 @@ function FooterAction({
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
     >
-      {icon}
-      <Text style={styles.footerBtnLabel}>{label}</Text>
+      <View style={headerMenuGroupStyles.menuItemMark}>{icon}</View>
+      <Text
+        style={[
+          headerMenuGroupStyles.menuItemLabel,
+          strong ? headerMenuGroupStyles.menuItemLabelActive : null,
+        ]}
+        numberOfLines={1}
+      >
+        {label}
+      </Text>
     </Pressable>
   )
 }
@@ -325,37 +336,8 @@ const styles = StyleSheet.create({
   topPanel: {
     maxHeight: '100%',
   },
-  footerRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  footerBtn: {
-    flex: 1,
-    minHeight: 44,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-    backgroundColor: colors.bgSecondary,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.sm,
-  },
-  footerBtnLabel: {
-    color: colors.textChip,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  viewAll: {
-    minHeight: 44,
-    borderRadius: 8,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.sm,
-  },
-  viewAllLabel: {
-    color: colors.link,
-    fontSize: 13,
-    fontWeight: '600',
+  action: {
+    paddingVertical: 0,
+    minHeight: 40,
   },
 })
