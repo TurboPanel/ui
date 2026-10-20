@@ -13,7 +13,10 @@ const model = vi.hoisted(() => ({ current: { state: 'loading' } as Record<string
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
 vi.mock('react-native-svg', async () => (await import('@/components/ui/v4/rn-stub')).svgStub)
-vi.mock('@/lib/theme-preference', async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub)
+vi.mock(
+  '@/lib/theme-preference',
+  async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub
+)
 vi.mock('expo-router', () => ({
   Link: ({ children }: Readonly<{ href: string; children: ReactNode }>) => <>{children}</>,
   useRouter: () => ({ push }),
@@ -21,7 +24,9 @@ vi.mock('expo-router', () => ({
 vi.mock('@/components/org/project/project-context', () => ({
   useProjectContext: () => ({ orgId: 'o', projectId: 'p' }),
 }))
-vi.mock('@/components/org/project/base-tab/use-base-tab', () => ({ useBaseTabModel: () => model.current }))
+vi.mock('@/components/org/project/base-tab/use-base-tab', () => ({
+  useBaseTabModel: () => model.current,
+}))
 vi.mock('@/components/org/project/project-overview-tab', () => ({
   ProjectOverviewTab: () => <div data-testid="old-screen" />,
 }))
@@ -38,10 +43,30 @@ const view = configView({
       viewService('redis', 'container', [row('redis', 'image', 'redis:8')]),
     ],
     variables: [
-      { key: 'var:API_URL', name: 'API_URL', variableId: 'v1', value: 'https://x', isSecret: false, forBuild: false, forRuntime: true, source: 'project' },
-      { key: 'var:TOKEN', name: 'TOKEN', variableId: 'v2', value: null, isSecret: true, forBuild: false, forRuntime: true, source: 'project' },
+      {
+        key: 'var:API_URL',
+        name: 'API_URL',
+        variableId: 'v1',
+        value: 'https://x',
+        isSecret: false,
+        forBuild: false,
+        forRuntime: true,
+        source: 'project',
+      },
+      {
+        key: 'var:TOKEN',
+        name: 'TOKEN',
+        variableId: 'v2',
+        value: null,
+        isSecret: true,
+        forBuild: false,
+        forRuntime: true,
+        source: 'project',
+      },
     ],
-    linuxUsers: [{ name: 'website', access: 'sftp', description: null, source: 'base', usedBy: ['web'] }],
+    linuxUsers: [
+      { name: 'website', access: 'sftp', description: null, source: 'base', usedBy: ['web'] },
+    ],
   },
   effective: {
     services: [viewService('web', 'node', [row('web', 'linuxUser', 'website')])],
@@ -53,7 +78,11 @@ const stagingView = configView({ environmentId: 'e2' })
 const environments: BaseEnvironment[] = [
   { id: 'e1', name: 'Production', view },
   { id: 'e2', name: 'Staging', view: stagingView },
-  { id: 'e3', name: 'Preview', view: configView({ environmentId: 'e3', followsBase: false, changes: [] }) },
+  {
+    id: 'e3',
+    name: 'Preview',
+    view: configView({ environmentId: 'e3', followsBase: false, changes: [] }),
+  },
 ]
 
 function ready(extra: Record<string, unknown> = {}) {
@@ -141,7 +170,10 @@ describe('environments built from this Base', () => {
   })
 
   it('names an environment whose configuration is not known without a claim', () => {
-    const list: BaseEnvironment[] = [...environments, { id: 'e4', name: 'Testing', view: undefined }]
+    const list: BaseEnvironment[] = [
+      ...environments,
+      { id: 'e4', name: 'Testing', view: undefined },
+    ]
     render(
       <BaseTabBody
         orgId="o"
@@ -151,7 +183,7 @@ describe('environments built from this Base', () => {
         environments={list}
         rows={baseEnvironmentRows(list)}
         principals={undefined}
-      />,
+      />
     )
     expect(screen.getByRole('link', { name: 'Open Testing' })).toBeTruthy()
     expect(screen.getByLabelText('Testing')).toBeTruthy()
@@ -170,7 +202,7 @@ describe('Linux users of an environment that could not be read', () => {
         environments={list}
         rows={baseEnvironmentRows(list)}
         principals={[]}
-      />,
+      />
     )
     expect(screen.queryByText(/No app runs as this user yet/)).toBeNull()
     expect(screen.getByText(/web in the Base/)).toBeTruthy()
@@ -179,7 +211,11 @@ describe('Linux users of an environment that could not be read', () => {
 
 describe('empty Base sections', () => {
   it('says so when the Base holds no services, variables or Linux users', () => {
-    const bare = configView({ base: { services: [], variables: [], linuxUsers: [] }, effective: { services: [], variables: [], linuxUsers: [] }, changes: [] })
+    const bare = configView({
+      base: { services: [], variables: [], linuxUsers: [] },
+      effective: { services: [], variables: [], linuxUsers: [] },
+      changes: [],
+    })
     render(
       <BaseTabBody
         orgId="o"
@@ -189,7 +225,7 @@ describe('empty Base sections', () => {
         environments={[{ id: 'e1', name: 'Production', view: bare }]}
         rows={baseEnvironmentRows([{ id: 'e1', name: 'Production', view: bare }])}
         principals={[]}
-      />,
+      />
     )
     expect(screen.getByText('No services in the Base')).toBeTruthy()
     expect(screen.getByText('No project variables')).toBeTruthy()

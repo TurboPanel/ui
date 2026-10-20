@@ -47,7 +47,7 @@ describe('environmentValues', () => {
           { key: 'var:B', value: null },
           { key: 'var:C', value: '3' },
         ],
-      },
+      }
     )
     expect(values).toEqual({ 'svc:a:x': '9', 'var:C': '3' })
   })
@@ -109,7 +109,12 @@ describe('environmentChanges', () => {
       source: { standsAlone: true, values: { 'var:NEW': '1' } },
     })
     expect(rows).toEqual([
-      expect.objectContaining({ key: 'var:NEW', added: true, removed: false, baseValue: 'Not set' }),
+      expect.objectContaining({
+        key: 'var:NEW',
+        added: true,
+        removed: false,
+        baseValue: 'Not set',
+      }),
     ])
   })
 
@@ -141,15 +146,18 @@ describe('environmentChanges', () => {
 })
 
 describe('effectiveConfig', () => {
-  it.each(SAMPLE_ENVIRONMENTS)('%s: every row says where its value comes from', (_name, project, env) => {
-    const effective = effectiveOf(project, env)
-    const rows = [...effective.apps.flatMap((app) => app.rows), ...effective.variables]
-    for (const row of rows) {
-      expect(row.sourceLabel).not.toBe('')
-      expect(['base', 'env', 'own']).toContain(row.source)
+  it.each(SAMPLE_ENVIRONMENTS)(
+    '%s: every row says where its value comes from',
+    (_name, project, env) => {
+      const effective = effectiveOf(project, env)
+      const rows = [...effective.apps.flatMap((app) => app.rows), ...effective.variables]
+      for (const row of rows) {
+        expect(row.sourceLabel).not.toBe('')
+        expect(['base', 'env', 'own']).toContain(row.source)
+      }
+      for (const app of effective.apps) expect(app.sourceLabel).not.toBe('')
     }
-    for (const app of effective.apps) expect(app.sourceLabel).not.toBe('')
-  })
+  )
 
   it('shows Testing as following the Base with 2 changes', () => {
     const effective = effectiveOf(website, sampleEnvironment(website, 'testing'))
@@ -180,7 +188,12 @@ describe('effectiveConfig', () => {
   it('shows unchanged rows as coming from the Base, variables from the Project', () => {
     const effective = effectiveOf(website, sampleEnvironment(website, 'testing'))
     const build = effective.apps[0]?.rows.find((row) => row.key === 'svc:web:build')
-    expect(build).toMatchObject({ sourceLabel: 'Base', isChange: false, differs: false, sourceNote: '' })
+    expect(build).toMatchObject({
+      sourceLabel: 'Base',
+      isChange: false,
+      differs: false,
+      sourceNote: '',
+    })
     expect(effective.variables.find((v) => v.name === 'NODE_ENV')?.sourceLabel).toBe('Project')
   })
 
@@ -276,6 +289,8 @@ describe('effectiveConfig', () => {
 
   it('sampleValues agrees with environmentValues', () => {
     const staging = sampleEnvironment(website, 'staging')
-    expect(sampleValues(website, staging)['var:NEXT_PUBLIC_SITE_URL']).toBe('https://staging.turbopanel.io')
+    expect(sampleValues(website, staging)['var:NEXT_PUBLIC_SITE_URL']).toBe(
+      'https://staging.turbopanel.io'
+    )
   })
 })

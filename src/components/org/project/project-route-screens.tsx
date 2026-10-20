@@ -143,14 +143,8 @@ export function EnvironmentSettingsScreen() {
 
 /** Environment Deployments: the deploy history, open. */
 export function EnvironmentDeploymentsScreen() {
-  const {
-    orgId,
-    projectId,
-    project,
-    isSystemProject,
-    pathEnvironmentId,
-    canManage,
-  } = useProjectContext()
+  const { orgId, projectId, project, isSystemProject, pathEnvironmentId, canManage } =
+    useProjectContext()
   if (isSystemProject) {
     return <Redirect href={projectOverviewHref(orgId, projectId) as Href} />
   }
@@ -174,9 +168,7 @@ export function EnvironmentDeploymentsScreen() {
  * visitor to where that screen lives now and carries the query along
  * (`?hostingId=` is a live deep link).
  */
-export function LegacyProjectRedirect({
-  segment,
-}: Readonly<{ segment: LegacyProjectSegment }>) {
+export function LegacyProjectRedirect({ segment }: Readonly<{ segment: LegacyProjectSegment }>) {
   const { orgId, projectId, project, isSystemProject } = useProjectContext()
   const params = useLocalSearchParams()
   const environmentId = firstParam(params.environmentId) || null
@@ -189,10 +181,6 @@ export function LegacyProjectRedirect({
   if (!target) {
     return <Redirect href={projectOverviewHref(orgId, projectId) as Href} />
   }
-  const href = withCarriedQuery(target, params, [
-    'orgId',
-    'projectId',
-    'environmentId',
-  ])
+  const href = withCarriedQuery(target, params, ['orgId', 'projectId', 'environmentId'])
   return <Redirect href={href as Href} />
 }

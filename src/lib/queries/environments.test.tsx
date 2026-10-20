@@ -93,10 +93,9 @@ describe('environments query hooks', () => {
   })
 
   it('useEnvironments stays idle when disabled', () => {
-    const { result } = renderHook(
-      () => useEnvironments(orgId, projectId, { enabled: false }),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useEnvironments(orgId, projectId, { enabled: false }), {
+      wrapper: createWrapper(),
+    })
     expect(result.current.fetchStatus).toBe('idle')
     expect(fetchVisibleEnvironments).not.toHaveBeenCalled()
   })
@@ -119,14 +118,11 @@ describe('environments query hooks', () => {
   })
 
   it('useDeployPreview does not retry placement-required errors', async () => {
-    fetchDeployPreview.mockRejectedValue(
-      new Error('HTTP 409: server_placement_required'),
-    )
+    fetchDeployPreview.mockRejectedValue(new Error('HTTP 409: server_placement_required'))
 
-    const { result } = renderHook(
-      () => useDeployPreview(orgId, environmentId),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useDeployPreview(orgId, environmentId), {
+      wrapper: createWrapper(),
+    })
 
     await waitFor(() => {
       expect(result.current.isError).toBe(true)
@@ -147,10 +143,8 @@ describe('environments query hooks', () => {
     await waitFor(() => {
       expect(
         client.getQueryCache().find({
-          queryKey: queryKeys
-            .org(orgId)
-            .environments.deployPreview(environmentId),
-        }),
+          queryKey: queryKeys.org(orgId).environments.deployPreview(environmentId),
+        })
       ).toBeTruthy()
     })
 
@@ -165,9 +159,7 @@ describe('environments query hooks', () => {
     expect(retry(0, new Error('HTTP 500: boom'))).toBe(true)
     expect(retry(1, new Error('HTTP 500: boom'))).toBe(true)
     expect(retry(2, new Error('HTTP 500: boom'))).toBe(false)
-    expect(
-      retry(0, new Error('path failed: HTTP 409: server_placement_required')),
-    ).toBe(false)
+    expect(retry(0, new Error('path failed: HTTP 409: server_placement_required'))).toBe(false)
   })
 
   it('useDeployPreview loads prepared compose', async () => {
@@ -175,10 +167,9 @@ describe('environments query hooks', () => {
       composeYaml: 'services:\n  web:\n    image: nginx',
     })
 
-    const { result } = renderHook(
-      () => useDeployPreview(orgId, environmentId),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useDeployPreview(orgId, environmentId), {
+      wrapper: createWrapper(),
+    })
 
     await waitFor(() => {
       expect(result.current.isSuccess).toBe(true)
@@ -197,7 +188,7 @@ describe('environments query hooks', () => {
   it('useDeployPreview stays idle when disabled', () => {
     const { result } = renderHook(
       () => useDeployPreview(orgId, environmentId, { enabled: false }),
-      { wrapper: createWrapper() },
+      { wrapper: createWrapper() }
     )
     expect(result.current.fetchStatus).toBe('idle')
     expect(fetchDeployPreview).not.toHaveBeenCalled()
@@ -208,10 +199,9 @@ describe('environments query hooks', () => {
       environment: { id: environmentId, name: 'Production' },
     })
 
-    const { result } = renderHook(
-      () => useEnvironment(orgId, environmentId),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useEnvironment(orgId, environmentId), {
+      wrapper: createWrapper(),
+    })
 
     await waitFor(() => {
       expect(result.current.isSuccess).toBe(true)
@@ -220,10 +210,9 @@ describe('environments query hooks', () => {
   })
 
   it('useEnvironment stays idle when disabled', () => {
-    const { result } = renderHook(
-      () => useEnvironment(orgId, environmentId, { enabled: false }),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useEnvironment(orgId, environmentId, { enabled: false }), {
+      wrapper: createWrapper(),
+    })
     expect(result.current.fetchStatus).toBe('idle')
     expect(fetchEnvironment).not.toHaveBeenCalled()
   })
@@ -235,14 +224,11 @@ describe('environments query hooks', () => {
       serverId: 'srv-1',
     })
 
-    const { result } = renderHook(
-      () => useDeployEnvironment(orgId, environmentId),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useDeployEnvironment(orgId, environmentId), {
+      wrapper: createWrapper(),
+    })
 
-    await expect(
-      result.current.run({ noCache: true }),
-    ).resolves.toMatchObject({ ok: true })
+    await expect(result.current.run({ noCache: true })).resolves.toMatchObject({ ok: true })
     expect(deployEnvironment).toHaveBeenCalledWith(environmentId, {
       noCache: true,
     })
@@ -255,10 +241,9 @@ describe('environments query hooks', () => {
       serverId: 'srv-1',
     })
 
-    const { result } = renderHook(
-      () => useRunEnvironmentLifecycle(orgId, environmentId),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useRunEnvironmentLifecycle(orgId, environmentId), {
+      wrapper: createWrapper(),
+    })
 
     await expect(result.current.run('restart')).resolves.toMatchObject({
       ok: true,
@@ -279,7 +264,7 @@ describe('environments query hooks', () => {
       result.current.run({
         projectId,
         name: 'Staging',
-      }),
+      })
     ).resolves.toMatchObject({ ok: true })
 
     await waitFor(() => {
@@ -294,14 +279,11 @@ describe('environments query hooks', () => {
     const client = createAppQueryClient()
     const invalidate = vi.spyOn(client, 'invalidateQueries')
 
-    const { result } = renderHook(
-      () => useUpdateEnvironment(orgId, environmentId),
-      { wrapper: createWrapper(client) },
-    )
+    const { result } = renderHook(() => useUpdateEnvironment(orgId, environmentId), {
+      wrapper: createWrapper(client),
+    })
 
-    await expect(
-      result.current.run({ name: 'Renamed' }),
-    ).resolves.toMatchObject({ ok: true })
+    await expect(result.current.run({ name: 'Renamed' })).resolves.toMatchObject({ ok: true })
 
     await waitFor(() => {
       expect(invalidate).toHaveBeenCalledWith({
@@ -339,10 +321,9 @@ describe('environments query hooks', () => {
     const client = createAppQueryClient()
     const invalidate = vi.spyOn(client, 'invalidateQueries')
 
-    const { result } = renderHook(
-      () => useStopEnvironment(orgId, environmentId),
-      { wrapper: createWrapper(client) },
-    )
+    const { result } = renderHook(() => useStopEnvironment(orgId, environmentId), {
+      wrapper: createWrapper(client),
+    })
 
     await expect(result.current.run()).resolves.toMatchObject({ ok: true })
     expect(stopEnvironment).toHaveBeenCalledWith(environmentId)
@@ -363,10 +344,9 @@ describe('environments query hooks', () => {
     const client = createAppQueryClient()
     const invalidate = vi.spyOn(client, 'invalidateQueries')
 
-    const { result } = renderHook(
-      () => useCancelDeployment(orgId, environmentId),
-      { wrapper: createWrapper(client) },
-    )
+    const { result } = renderHook(() => useCancelDeployment(orgId, environmentId), {
+      wrapper: createWrapper(client),
+    })
 
     await expect(result.current.run('dep-1')).resolves.toMatchObject({ ok: true })
     expect(cancelDeployment).toHaveBeenCalledWith(environmentId, 'dep-1')
@@ -387,10 +367,9 @@ describe('environments query hooks', () => {
       serverId: 'srv-1',
     })
 
-    const { result } = renderHook(
-      () => useStopEnvironmentMutation(orgId),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useStopEnvironmentMutation(orgId), {
+      wrapper: createWrapper(),
+    })
 
     await expect(result.current.run(environmentId)).resolves.toMatchObject({
       ok: true,

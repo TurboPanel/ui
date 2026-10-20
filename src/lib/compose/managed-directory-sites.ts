@@ -17,9 +17,7 @@ import { principalAliasesInComposeData } from '@/lib/compose/root-extension'
 import { readServiceTurbopanelExtension } from '@/lib/compose/service-kind'
 
 /** Compose service names declaring an uploaded-directory site. */
-export function managedDirectorySiteNames(
-  document: ComposeDocument | null | undefined,
-): string[] {
+export function managedDirectorySiteNames(document: ComposeDocument | null | undefined): string[] {
   const services = document?.data?.services
   if (typeof services !== 'object' || services === null) return []
 
@@ -27,16 +25,12 @@ export function managedDirectorySiteNames(
   for (const [name, raw] of Object.entries(services as Record<string, unknown>)) {
     if (typeof raw !== 'object' || raw === null) continue
     const extension = readServiceTurbopanelExtension(raw as Record<string, unknown>)
-    if (
-      extension?.serviceKind === 'site' &&
-      extension.sourceKind === 'managed-directory'
-    ) {
+    if (extension?.serviceKind === 'site' && extension.sourceKind === 'managed-directory') {
       names.push(name)
     }
   }
   return names.sort((a, b) => a.localeCompare(b))
 }
-
 
 /**
  * Compose service names whose declared `x-turbopanel.principal` resolves to an
@@ -46,9 +40,7 @@ export function managedDirectorySiteNames(
  * account that does not exist, which is the same standing as naming none. The
  * compose linter reports it separately, with the line number.
  */
-function aliasOwnedServiceNames(
-  document: ComposeDocument | null | undefined
-): Set<string> {
+function aliasOwnedServiceNames(document: ComposeDocument | null | undefined): Set<string> {
   const services = document?.data?.services
   if (typeof services !== 'object' || services === null) return new Set()
 
@@ -56,8 +48,7 @@ function aliasOwnedServiceNames(
   const owned = new Set<string>()
   for (const [name, raw] of Object.entries(services as Record<string, unknown>)) {
     if (typeof raw !== 'object' || raw === null) continue
-    const alias = readServiceTurbopanelExtension(raw as Record<string, unknown>)
-      ?.principal
+    const alias = readServiceTurbopanelExtension(raw as Record<string, unknown>)?.principal
     if (alias && declared.has(alias)) owned.add(name)
   }
   return owned
@@ -100,7 +91,5 @@ export function unownedManagedDirectorySites(params: {
       ownedNames.add(service.composeServiceName)
     }
   }
-  return declared.filter(
-    (name) => !aliasOwned.has(name) && !ownedNames.has(name),
-  )
+  return declared.filter((name) => !aliasOwned.has(name) && !ownedNames.has(name))
 }

@@ -84,10 +84,7 @@ function lowerFirst(text: string): string {
   return text.charAt(0).toLowerCase() + text.slice(1)
 }
 
-function serviceKeyInfo(
-  parts: readonly string[],
-  services: readonly V4Service[],
-): ConfigKeyInfo {
+function serviceKeyInfo(parts: readonly string[], services: readonly V4Service[]): ConfigKeyInfo {
   const [serviceId = '', row] = parts
   const service = services.find((item) => item.id === serviceId)
   const serviceName = service?.name ?? serviceId
@@ -101,10 +98,7 @@ function serviceKeyInfo(
 }
 
 /** What a configuration key is called on screen, and which area it belongs to. */
-export function describeConfigKey(
-  key: string,
-  services: readonly V4Service[],
-): ConfigKeyInfo {
+export function describeConfigKey(key: string, services: readonly V4Service[]): ConfigKeyInfo {
   const [kind, ...rest] = key.split(':')
   if (kind === 'var') {
     const name = rest.join(':')
@@ -125,11 +119,7 @@ export function changeTag(envName: string): string {
 }
 
 /** Text of the source tag on a row. Variables are shared at "Project" level. */
-export function sourceLabel(
-  source: ConfigSource,
-  envName: string,
-  isVariable = false,
-): string {
+export function sourceLabel(source: ConfigSource, envName: string, isVariable = false): string {
   if (source === 'env') return changeTag(envName)
   if (source === 'own') return `Set in ${envName}`
   return isVariable ? 'Project' : 'Base'

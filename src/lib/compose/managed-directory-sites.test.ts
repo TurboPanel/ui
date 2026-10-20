@@ -6,9 +6,7 @@ import {
 } from '@/lib/compose/managed-directory-sites'
 import { patchServiceTurbopanelExtension } from '@/lib/compose/service-kind'
 
-function documentWith(
-  services: Record<string, Record<string, unknown>>,
-): ComposeDocument {
+function documentWith(services: Record<string, Record<string, unknown>>): ComposeDocument {
   return {
     version: 1,
     data: { services },
@@ -18,11 +16,11 @@ function documentWith(
 
 const uploadedSite = patchServiceTurbopanelExtension(
   {},
-  { serviceKind: 'site', engine: 'caddy', root: 'public', sourceKind: 'managed-directory' },
+  { serviceKind: 'site', engine: 'caddy', root: 'public', sourceKind: 'managed-directory' }
 )
 const releaseSite = patchServiceTurbopanelExtension(
   {},
-  { serviceKind: 'site', engine: 'caddy', root: 'public' },
+  { serviceKind: 'site', engine: 'caddy', root: 'public' }
 )
 const container = { image: 'nginx' }
 
@@ -41,14 +39,14 @@ describe('managedDirectorySiteNames', () => {
         version: 1,
         data: { services: 'not-a-map' },
         presentation: { keyOrder: [], comments: {} },
-      }),
+      })
     ).toEqual([])
     expect(
       managedDirectorySiteNames({
         version: 1,
         data: { services: { broken: 'not-a-map', site: uploadedSite } },
         presentation: { keyOrder: [], comments: {} },
-      }),
+      })
     ).toEqual(['site'])
   })
 
@@ -68,7 +66,7 @@ describe('unownedManagedDirectorySites', () => {
         document: documentWith({ blog: uploadedSite }),
         services: [],
         principals: [],
-      }),
+      })
     ).toEqual(['blog'])
   })
 
@@ -78,7 +76,7 @@ describe('unownedManagedDirectorySites', () => {
         document: documentWith({ blog: uploadedSite }),
         services: [{ id: 'svc-1', composeServiceName: 'blog' }],
         principals: [{ serviceIds: ['svc-other'] }],
-      }),
+      })
     ).toEqual(['blog'])
   })
 
@@ -88,7 +86,7 @@ describe('unownedManagedDirectorySites', () => {
         document: documentWith({ blog: uploadedSite }),
         services: [{ id: 'svc-1', composeServiceName: 'blog' }],
         principals: [{ serviceIds: ['svc-1'] }],
-      }),
+      })
     ).toEqual([])
   })
 
@@ -100,7 +98,7 @@ describe('unownedManagedDirectorySites', () => {
         document: documentWith({ app: releaseSite }),
         services: [],
         principals: [],
-      }),
+      })
     ).toEqual([])
   })
 
@@ -113,7 +111,7 @@ describe('unownedManagedDirectorySites', () => {
           { id: 'svc-2', composeServiceName: 'shop' },
         ],
         principals: [{ serviceIds: ['svc-1'] }],
-      }),
+      })
     ).toEqual(['shop'])
   })
 })
@@ -127,12 +125,12 @@ describe('declared aliases settle ownership without a query', () => {
       root: 'public',
       sourceKind: 'managed-directory',
       principal: 'app',
-    },
+    }
   )
 
   function withPrincipals(
     services: Record<string, Record<string, unknown>>,
-    principals: Record<string, Record<string, unknown>>,
+    principals: Record<string, Record<string, unknown>>
   ): ComposeDocument {
     return {
       version: 1,
@@ -147,7 +145,7 @@ describe('declared aliases settle ownership without a query', () => {
         document: withPrincipals({ blog: aliasedSite }, { app: {} }),
         services: [],
         principals: [],
-      }),
+      })
     ).toEqual([])
   })
 
@@ -157,7 +155,7 @@ describe('declared aliases settle ownership without a query', () => {
         document: withPrincipals({ blog: aliasedSite }, { other: {} }),
         services: [],
         principals: [],
-      }),
+      })
     ).toEqual(['blog'])
   })
 })

@@ -79,7 +79,7 @@ function sideValue(value: string | null, masked: boolean, absent: boolean): stri
 /** The server's changes as rows the v4 cards and map understand. */
 export function changeRows(
   changes: readonly ConfigViewChange[],
-  envName: string,
+  envName: string
 ): ConfigChangeRow[] {
   return changes.map((change) => {
     const area = changeArea(change)
@@ -172,13 +172,13 @@ export function runStatusKey(
   recordId: string | undefined,
   containers: readonly ContainerRecord[] | undefined,
   services: readonly ServiceRecord[] = [],
-  native?: NativeRunFallback,
+  native?: NativeRunFallback
 ): string | null {
   const reported = services.find((service) => service.id === recordId)?.runState
   if (reported !== undefined && reported.state !== 'unknown') return runStateKey(reported.state)
   if (containers === undefined) return null
   const own = containers.filter(
-    (container) => container.serviceId === recordId && container.role === 'service',
+    (container) => container.serviceId === recordId && container.role === 'service'
   )
   if (own.length === 0) return native ? (nativeDeployKey(native.latest) ?? null) : 'never'
   const states = own.map((container) => container.status)
@@ -188,7 +188,10 @@ export function runStatusKey(
   return 'unknown'
 }
 
-function runStateOf(source: OverviewSource, recordId: string | undefined): ServiceRunStateRecord | null {
+function runStateOf(
+  source: OverviewSource,
+  recordId: string | undefined
+): ServiceRunStateRecord | null {
   return source.services.find((service) => service.id === recordId)?.runState ?? null
 }
 
@@ -209,7 +212,7 @@ function mapStatus(key: string | null): MapStatus | null {
  */
 export function certificateKey(
   tlsId: string | null | undefined,
-  tls: readonly TlsRecord[] | undefined,
+  tls: readonly TlsRecord[] | undefined
 ): string {
   if (!tlsId) return 'test'
   const record = tls?.find((row) => row.id === tlsId)
@@ -305,7 +308,7 @@ export function linksOf(
   source: OverviewSource,
   side: ConfigViewSide,
   services: readonly V4Service[],
-  includeDatabases: boolean,
+  includeDatabases: boolean
 ): MapLink[] {
   const links: MapLink[] = []
   const known = new Map(services.map((service) => [service.id, service]))
@@ -356,7 +359,7 @@ const UNSET_RUNS_AS: RunsAs = {
 function runsAsSource(
   view: EnvironmentConfigView,
   row: ConfigViewService['rows'][number] | undefined,
-  inEnvironment: boolean,
+  inEnvironment: boolean
 ): ConfigSource {
   if (!inEnvironment) return 'base'
   if (!view.followsBase) return 'own'
@@ -365,7 +368,7 @@ function runsAsSource(
 
 function principalFor(
   source: OverviewSource,
-  service: ConfigViewService,
+  service: ConfigViewService
 ): ProjectPrincipalRecord | undefined {
   if (service.serviceId === null) return undefined
   const id = service.serviceId
@@ -376,7 +379,7 @@ function principalFor(
 export function runsAsOf(
   source: OverviewSource,
   service: V4Service,
-  inEnvironment: boolean,
+  inEnvironment: boolean
 ): RunsAs {
   if (service.kind !== 'node' && service.kind !== 'site') return CONTAINER_RUNS_AS
   const view = source.view
@@ -430,8 +433,8 @@ export function mapInputOf(source: OverviewSource, mode: MapMode): MapInput {
               recordOf.get(service.id),
               source.containers,
               source.services,
-              nativeOf(source, service.kind),
-            ),
+              nativeOf(source, service.kind)
+            )
           ),
   }
 }
@@ -477,7 +480,7 @@ function changedServiceNames(changes: readonly ConfigViewChange[]): Set<string> 
 function serviceSource(
   source: OverviewSource,
   service: ConfigViewService,
-  touched: ReadonlySet<string>,
+  touched: ReadonlySet<string>
 ): ConfigSource {
   if (!source.view.followsBase) return 'own'
   return service.source === 'environment' || touched.has(service.name) ? 'env' : 'base'
@@ -507,7 +510,7 @@ export function appRows(source: OverviewSource): OverviewServiceRow[] {
           recordOf.get(service.name),
           source.containers,
           source.services,
-          nativeOf(source, v4.kind),
+          nativeOf(source, v4.kind)
         ),
         runState: runStateOf(source, recordOf.get(service.name)),
         source: origin,
@@ -567,7 +570,7 @@ export type EnvironmentRelation = Readonly<
 export function relationCard(
   view: EnvironmentConfigView,
   envName: string,
-  environmentCount: number,
+  environmentCount: number
 ): EnvironmentRelation {
   if (!view.followsBase) {
     if (environmentCount < 2) return { kind: 'none' }

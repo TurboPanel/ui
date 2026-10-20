@@ -19,7 +19,7 @@ import { useApiMutation, queryKeys } from '@/lib/query-client'
 export function useEnvironments(
   orgId: string,
   projectId?: string,
-  options?: Readonly<{ enabled?: boolean }>,
+  options?: Readonly<{ enabled?: boolean }>
 ) {
   return useQuery({
     queryKey: queryKeys.org(orgId).environments.list(projectId),
@@ -31,15 +31,12 @@ export function useEnvironments(
 export function useEnvironment(
   orgId: string,
   environmentId: string,
-  options?: Readonly<{ enabled?: boolean }>,
+  options?: Readonly<{ enabled?: boolean }>
 ) {
   return useQuery({
     queryKey: queryKeys.org(orgId).environments.detail(environmentId),
     queryFn: () => fetchEnvironment(environmentId),
-    enabled:
-      (options?.enabled ?? true) &&
-      orgId.length > 0 &&
-      environmentId.length > 0,
+    enabled: (options?.enabled ?? true) && orgId.length > 0 && environmentId.length > 0,
   })
 }
 
@@ -47,30 +44,24 @@ export function useEnvironment(
 export function useEnvironmentConfigView(
   orgId: string,
   environmentId: string,
-  options?: Readonly<{ enabled?: boolean }>,
+  options?: Readonly<{ enabled?: boolean }>
 ) {
   return useQuery({
     queryKey: queryKeys.org(orgId).environments.configView(environmentId),
     queryFn: () => fetchEnvironmentConfigView(environmentId),
-    enabled:
-      (options?.enabled ?? true) &&
-      orgId.length > 0 &&
-      environmentId.length > 0,
+    enabled: (options?.enabled ?? true) && orgId.length > 0 && environmentId.length > 0,
   })
 }
 
 export function useDeployPreview(
   orgId: string,
   environmentId: string,
-  options?: Readonly<{ enabled?: boolean }>,
+  options?: Readonly<{ enabled?: boolean }>
 ) {
   return useQuery({
     queryKey: queryKeys.org(orgId).environments.deployPreview(environmentId),
     queryFn: () => fetchDeployPreview(environmentId),
-    enabled:
-      (options?.enabled ?? true) &&
-      orgId.length > 0 &&
-      environmentId.length > 0,
+    enabled: (options?.enabled ?? true) && orgId.length > 0 && environmentId.length > 0,
     refetchInterval: false,
     staleTime: 0,
     retry: (failureCount, error) => {
@@ -83,7 +74,7 @@ export function useDeployPreview(
 async function invalidateEnvironmentSubtree(
   queryClient: ReturnType<typeof useQueryClient>,
   orgId: string,
-  environmentId?: string,
+  environmentId?: string
 ) {
   const tasks = [
     queryClient.invalidateQueries({
@@ -105,7 +96,7 @@ async function invalidateEnvironmentSubtree(
       // the enqueueing mutation invalidates this key.
       queryClient.invalidateQueries({
         queryKey: queryKeys.org(orgId).environments.deployments(environmentId),
-      }),
+      })
     )
   }
   await Promise.all(tasks)
@@ -147,10 +138,8 @@ export function useDeleteEnvironment(orgId: string) {
 export function useDeployEnvironment(orgId: string, environmentId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (body?: {
-      acknowledgeHealthCheckWarnings?: boolean
-      noCache?: boolean
-    }) => deployEnvironment(environmentId, body),
+    mutationFn: (body?: { acknowledgeHealthCheckWarnings?: boolean; noCache?: boolean }) =>
+      deployEnvironment(environmentId, body),
     onSuccess: async () => {
       await invalidateEnvironmentSubtree(queryClient, orgId, environmentId)
       await queryClient.invalidateQueries({
@@ -177,8 +166,7 @@ export function useStopEnvironment(orgId: string, environmentId: string) {
 export function useCancelDeployment(orgId: string, environmentId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (deploymentId: string) =>
-      cancelDeployment(environmentId, deploymentId),
+    mutationFn: (deploymentId: string) => cancelDeployment(environmentId, deploymentId),
     onSuccess: async () => {
       await invalidateEnvironmentSubtree(queryClient, orgId, environmentId)
       await queryClient.invalidateQueries({
@@ -202,10 +190,7 @@ export function useStopEnvironmentMutation(orgId: string) {
   })
 }
 
-export function useRunEnvironmentLifecycle(
-  orgId: string,
-  environmentId: string,
-) {
+export function useRunEnvironmentLifecycle(orgId: string, environmentId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
     mutationFn: (action: EnvironmentLifecycleAction) =>

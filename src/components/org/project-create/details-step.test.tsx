@@ -5,7 +5,10 @@ import { EnvironmentNameField } from './details-step'
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
 vi.mock('react-native-svg', async () => (await import('@/components/ui/v4/rn-stub')).svgStub)
-vi.mock('@/lib/theme-preference', async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub)
+vi.mock(
+  '@/lib/theme-preference',
+  async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub
+)
 vi.mock('expo-router', () => ({
   Link: ({ children }: { children?: unknown }) => <>{children as never}</>,
 }))
@@ -48,7 +51,7 @@ function field(value: string, defaultName: string | null, onChange = vi.fn()) {
       value={value}
       defaultName={defaultName}
       onChange={onChange}
-    />,
+    />
   )
 }
 
@@ -72,7 +75,7 @@ describe('EnvironmentNameField', () => {
         value="Staging"
         defaultName="Staging"
         onChange={vi.fn()}
-      />,
+      />
     )
     expect(screen.getByText('Organization Default')).toBeTruthy()
   })

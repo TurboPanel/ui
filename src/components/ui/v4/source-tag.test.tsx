@@ -6,7 +6,10 @@ import { SourceTag } from '@/components/ui/v4/source-tag'
 import { sourceLabel } from '@/lib/v4/change-labels'
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
-vi.mock('@/lib/theme-preference', async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub)
+vi.mock(
+  '@/lib/theme-preference',
+  async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub
+)
 
 afterEach(cleanup)
 

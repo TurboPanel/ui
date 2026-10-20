@@ -28,7 +28,7 @@ function newestGroup(page: DeploymentHistoryPage): DeploymentGroup | null {
 export function useEnvironmentConfigViews(
   orgId: string,
   environmentIds: readonly string[],
-  options?: Readonly<{ enabled?: boolean }>,
+  options?: Readonly<{ enabled?: boolean }>
 ) {
   const enabled = (options?.enabled ?? true) && orgId.length > 0
   const queries = useQueries({
@@ -61,14 +61,16 @@ export function useEnvironmentConfigViews(
 export function useLatestDeployments(
   orgId: string,
   environmentIds: readonly string[],
-  options?: Readonly<{ enabled?: boolean }>,
+  options?: Readonly<{ enabled?: boolean }>
 ) {
   const enabled = (options?.enabled ?? true) && orgId.length > 0
   const queries = useQueries({
     queries: environmentIds.map((environmentId) => ({
       queryKey: queryKeys.org(orgId).environments.latestDeployments(environmentId),
       queryFn: async () =>
-        newestGroup(await fetchEnvironmentDeployments(environmentId, { limit: LATEST_DEPLOY_ROWS })),
+        newestGroup(
+          await fetchEnvironmentDeployments(environmentId, { limit: LATEST_DEPLOY_ROWS })
+        ),
       enabled: enabled && environmentId.length > 0,
       retry: false,
       refetchInterval: (query: { state: { data?: DeploymentGroup | null } }) =>

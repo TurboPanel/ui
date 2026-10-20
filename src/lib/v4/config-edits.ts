@@ -75,10 +75,7 @@ export function unstageEdit(edits: readonly StagedEdit[], key: string): StagedEd
   return edits.filter((item) => item.key !== key)
 }
 
-export function stagedEditFor(
-  edits: readonly StagedEdit[],
-  key: string
-): StagedEdit | undefined {
+export function stagedEditFor(edits: readonly StagedEdit[], key: string): StagedEdit | undefined {
   return edits.find((item) => item.key === key)
 }
 
@@ -129,14 +126,19 @@ function verb(count: number, one: string, many: string): string {
 }
 
 /** The two radio cards, each naming the environments it reaches. */
-export function scopeChoices(input: Readonly<{
-  envName: string
-  others: readonly OtherEnvironment[]
-  /** This environment already has its own value for the row. */
-  hasOwnChange: boolean
-}>): ScopeChoice[] {
+export function scopeChoices(
+  input: Readonly<{
+    envName: string
+    others: readonly OtherEnvironment[]
+    /** This environment already has its own value for the row. */
+    hasOwnChange: boolean
+  }>
+): ScopeChoice[] {
   const { envName, others, hasOwnChange } = input
-  const followers = [envName, ...others.filter((item) => !item.standsAlone).map((item) => item.name)]
+  const followers = [
+    envName,
+    ...others.filter((item) => !item.standsAlone).map((item) => item.name),
+  ]
   const alone = others.filter((item) => item.standsAlone).map((item) => item.name)
   const keepers = others.filter((item) => !item.standsAlone).map((item) => item.name)
   let only = `Adds a ${envName} change.`
@@ -155,10 +157,7 @@ export function scopeChoices(input: Readonly<{
 }
 
 /** The confirm text for Make this the Base. */
-export function makeBaseConfirmText(
-  envName: string,
-  others: readonly OtherEnvironment[]
-): string {
+export function makeBaseConfirmText(envName: string, others: readonly OtherEnvironment[]): string {
   const reached = others.filter((item) => !item.standsAlone).map((item) => item.name)
   const tail = `${envName}’s own change is removed, so it keeps running the same value.`
   if (reached.length === 0) return `Moves this value into the Base. ${tail}`
@@ -188,7 +187,11 @@ function variableActions(
 
 function fieldTarget(change: ChangeRowModel): EditTarget | null {
   if (change.key.startsWith('user:')) {
-    return { type: 'field', serviceName: null, path: principalAccessPath(change.key.slice('user:'.length)) }
+    return {
+      type: 'field',
+      serviceName: null,
+      path: principalAccessPath(change.key.slice('user:'.length)),
+    }
   }
   const path = composePathFor(change.field)
   if (path === null || change.serviceName === null) return null
@@ -286,12 +289,14 @@ export function variableFacts(
 
 // --- staged edits for the row editors --------------------------------------
 
-export function linuxUserEdit(input: Readonly<{
-  serviceName: string
-  user: string
-  was: string
-  scope: ConfigScope
-}>): StagedEdit {
+export function linuxUserEdit(
+  input: Readonly<{
+    serviceName: string
+    user: string
+    was: string
+    scope: ConfigScope
+  }>
+): StagedEdit {
   return {
     kind: 'set-linux-user',
     key: `svc:${input.serviceName}:linuxUser`,
@@ -305,15 +310,17 @@ export function linuxUserEdit(input: Readonly<{
   }
 }
 
-export function variableEdit(input: Readonly<{
-  name: string
-  value: string
-  secret: boolean
-  forBuild: boolean
-  forRuntime: boolean
-  was: string
-  scope: ConfigScope
-}>): StagedEdit {
+export function variableEdit(
+  input: Readonly<{
+    name: string
+    value: string
+    secret: boolean
+    forBuild: boolean
+    forRuntime: boolean
+    was: string
+    scope: ConfigScope
+  }>
+): StagedEdit {
   return {
     kind: 'set-variable',
     key: `var:${input.name}`,
@@ -339,7 +346,11 @@ export type VariableOp =
 
 export type SaveStep =
   | Readonly<{ kind: 'project-compose'; document: ComposeDocument; editKeys: readonly string[] }>
-  | Readonly<{ kind: 'environment-compose'; document: ComposeDocument; editKeys: readonly string[] }>
+  | Readonly<{
+      kind: 'environment-compose'
+      document: ComposeDocument
+      editKeys: readonly string[]
+    }>
   | Readonly<{ kind: 'variable'; op: VariableOp; editKeys: readonly string[] }>
 
 export type SaveProblem = Readonly<{ key: string; reason: string }>
@@ -410,7 +421,11 @@ function applyGoBack(work: Working, edit: StagedEdit & { kind: 'go-back' }, ctx:
     takeEnvironment(work, edit.key, restoreEnvironmentService(work.environment, target.serviceName))
   } else {
     const own = findVariable(ctx.environmentVariables, target.name)
-    if (own === undefined) work.problems.push({ key: edit.key, reason: `${target.name} is no longer set in this environment.` })
+    if (own === undefined)
+      work.problems.push({
+        key: edit.key,
+        reason: `${target.name} is no longer set in this environment.`,
+      })
     else work.ops.push({ key: edit.key, op: { type: 'delete', id: own.id } })
   }
 }
@@ -447,20 +462,32 @@ function applyMakeBase(work: Working, edit: StagedEdit & { kind: 'make-base' }, 
     return
   }
   if (target.type === 'service') {
-    work.problems.push({ key: edit.key, reason: `${target.serviceName} cannot be moved into the Base from here.` })
+    work.problems.push({
+      key: edit.key,
+      reason: `${target.serviceName} cannot be moved into the Base from here.`,
+    })
     return
   }
   const own = findVariable(ctx.environmentVariables, target.name)
   if (own === undefined || own.isSecret || own.value === null) {
-    work.problems.push({ key: edit.key, reason: `${target.name} has no value that can move into the Base.` })
+    work.problems.push({
+      key: edit.key,
+      reason: `${target.name} has no value that can move into the Base.`,
+    })
     return
   }
   const shared = findVariable(ctx.projectVariables, target.name)
   if (shared === undefined) {
     const flags = { secret: false, forBuild: own.forBuild, forRuntime: own.forRuntime }
-    work.ops.push({ key: edit.key, op: { type: 'create', body: projectVariableBody(ctx, target.name, own.value, flags) } })
+    work.ops.push({
+      key: edit.key,
+      op: { type: 'create', body: projectVariableBody(ctx, target.name, own.value, flags) },
+    })
   } else {
-    work.ops.push({ key: edit.key, op: { type: 'update', id: shared.id, body: { value: own.value } } })
+    work.ops.push({
+      key: edit.key,
+      op: { type: 'update', id: shared.id, body: { value: own.value } },
+    })
   }
   work.ops.push({ key: edit.key, op: { type: 'delete', id: own.id } })
 }
@@ -494,7 +521,11 @@ function applyLinuxUser(work: Working, edit: StagedEdit & { kind: 'set-linux-use
   )
 }
 
-function applyVariable(work: Working, edit: StagedEdit & { kind: 'set-variable' }, ctx: SaveContext) {
+function applyVariable(
+  work: Working,
+  edit: StagedEdit & { kind: 'set-variable' },
+  ctx: SaveContext
+) {
   const own = findVariable(ctx.environmentVariables, edit.name)
   const shared = findVariable(ctx.projectVariables, edit.name)
   const flags = {
@@ -521,7 +552,8 @@ function applyVariable(work: Working, edit: StagedEdit & { kind: 'set-variable' 
     }
     return
   }
-  if (shared === undefined) push({ type: 'create', body: projectVariableBody(ctx, edit.name, edit.value, flags) })
+  if (shared === undefined)
+    push({ type: 'create', body: projectVariableBody(ctx, edit.name, edit.value, flags) })
   else push({ type: 'update', id: shared.id, body: { value: edit.value } })
   if (own !== undefined) push({ type: 'delete', id: own.id })
 }
@@ -553,10 +585,18 @@ export function planSave(edits: readonly StagedEdit[], ctx: SaveContext): SavePl
   if (work.problems.length > 0) return { steps: [], problems: work.problems }
   const steps: SaveStep[] = []
   if (!sameDocument(work.project, ctx.projectCompose)) {
-    steps.push({ kind: 'project-compose', document: normalizeCompose(work.project), editKeys: [...work.projectKeys] })
+    steps.push({
+      kind: 'project-compose',
+      document: normalizeCompose(work.project),
+      editKeys: [...work.projectKeys],
+    })
   }
   if (!sameDocument(work.environment, ctx.environmentCompose)) {
-    steps.push({ kind: 'environment-compose', document: normalizeCompose(work.environment), editKeys: [...work.environmentKeys] })
+    steps.push({
+      kind: 'environment-compose',
+      document: normalizeCompose(work.environment),
+      editKeys: [...work.environmentKeys],
+    })
   }
   const writes = work.ops.filter((item) => item.op.type !== 'delete')
   const deletes = work.ops.filter((item) => item.op.type === 'delete')

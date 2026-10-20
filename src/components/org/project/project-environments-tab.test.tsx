@@ -20,7 +20,10 @@ const state = vi.hoisted(() => ({
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
 vi.mock('react-native-svg', async () => (await import('@/components/ui/v4/rn-stub')).svgStub)
-vi.mock('@/lib/theme-preference', async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub)
+vi.mock(
+  '@/lib/theme-preference',
+  async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub
+)
 vi.mock('expo-router', () => ({ useRouter: () => ({ push: state.push }) }))
 vi.mock('@/components/org/project/project-context', () => ({ useProjectContext: () => state.ctx }))
 vi.mock('@/lib/queries/containers', () => ({
@@ -67,13 +70,31 @@ const BASE: ConfigViewSide = {
       kind: 'node',
       source: 'base',
       rows: [
-        { key: 'a', area: 'domain', field: 'domain:shop.example.com', label: 'Domain', value: 'shop.example.com', masked: false, source: 'base' },
-        { key: 'b', area: 'service', field: 'panel.source.branch', label: 'Branch', value: 'main', masked: false, source: 'base' },
+        {
+          key: 'a',
+          area: 'domain',
+          field: 'domain:shop.example.com',
+          label: 'Domain',
+          value: 'shop.example.com',
+          masked: false,
+          source: 'base',
+        },
+        {
+          key: 'b',
+          area: 'service',
+          field: 'panel.source.branch',
+          label: 'Branch',
+          value: 'main',
+          masked: false,
+          source: 'base',
+        },
       ],
     },
   ],
   variables: [],
-  linuxUsers: [{ name: 'shop', access: 'sftp', description: null, source: 'base', usedBy: ['web'] }],
+  linuxUsers: [
+    { name: 'shop', access: 'sftp', description: null, source: 'base', usedBy: ['web'] },
+  ],
 }
 
 function view(followsBase: boolean, changes: number): EnvironmentConfigViewResponse {
@@ -126,7 +147,11 @@ describe.each(SCENARIOS)('project Environments tab ($name)', (scenario) => {
       orgId: 'o',
       projectId: 'p',
       project: { id: 'p', options: { defaultServerId: 's1' } },
-      environments: [environment('e1', 'Production'), environment('e2', 'Staging'), environment('e3', 'Preview', 's1')],
+      environments: [
+        environment('e1', 'Production'),
+        environment('e2', 'Staging'),
+        environment('e3', 'Preview', 's1'),
+      ],
       loading: false,
       canManage: true,
       projectAllowsMutations: true,
@@ -155,7 +180,14 @@ describe.each(SCENARIOS)('project Environments tab ($name)', (scenario) => {
   })
 
   it('reads a native app with no containers from its newest deploy', () => {
-    state.latest = { e2: { status: 'succeeded', strategyOutcome: null, startedAt: '2026-10-05T11:56:00Z', trigger: null } }
+    state.latest = {
+      e2: {
+        status: 'succeeded',
+        strategyOutcome: null,
+        startedAt: '2026-10-05T11:56:00Z',
+        trigger: null,
+      },
+    }
     render(<ProjectEnvironmentsTab />)
     const statuses = screen.getAllByRole('group', { name: 'Status' })
     expect(statuses[1]?.textContent).toContain('Deployed')
@@ -229,7 +261,9 @@ describe.each(SCENARIOS)('project Environments tab ($name)', (scenario) => {
     expect(state.sheet).toMatchObject({ orgId: 'o', projectId: 'p', hasProjectServer: true })
     expect((state.sheet?.base as ConfigViewSide).services).toHaveLength(1)
     fireEvent.click(screen.getByRole('button', { name: 'finish' }))
-    await waitFor(() => expect(state.push).toHaveBeenCalledWith('/o/projects/p/environments/new-env'))
+    await waitFor(() =>
+      expect(state.push).toHaveBeenCalledWith('/o/projects/p/environments/new-env')
+    )
     expect(state.invalidate).toHaveBeenCalled()
     expect(screen.queryByRole('dialog')).toBeNull()
   })

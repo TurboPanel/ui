@@ -27,8 +27,16 @@ import {
  * failure through the shell's error line.
  */
 export function ProjectSettingsScreen() {
-  const { orgId, projectId, project, workspaces, canOwn, canManage, projectAllowsMutations, setError } =
-    useProjectContext()
+  const {
+    orgId,
+    projectId,
+    project,
+    workspaces,
+    canOwn,
+    canManage,
+    projectAllowsMutations,
+    setError,
+  } = useProjectContext()
   const router = useRouter()
   const update = useUpdateProject(orgId, projectId)
   const repositories = useRepositories(orgId, { enabled: Boolean(project?.repositoryId) })
@@ -38,7 +46,7 @@ export function ProjectSettingsScreen() {
 
   const git = useMemo(
     () => (project ? projectGitFacts(project, repositories.data?.repositories ?? []) : null),
-    [project, repositories.data],
+    [project, repositories.data]
   )
   if (!project) return <LoadingState />
 
@@ -97,16 +105,14 @@ export function ProjectSettingsScreen() {
       onOpenRepositories={() => router.push(projectRepositoriesHref(orgId) as Href)}
       onOpenBaseCompose={() => router.push(projectComposeHref(orgId, projectId) as Href)}
       danger={
-        canOwn && projectAllowsMutations
-          ? (
-              <ProjectDeletePanel
-                orgId={orgId}
-                project={project}
-                onCancel={() => setDangerOpen(false)}
-                onDeleted={() => router.replace(`/${orgId}/projects` as Href)}
-              />
-            )
-          : null
+        canOwn && projectAllowsMutations ? (
+          <ProjectDeletePanel
+            orgId={orgId}
+            project={project}
+            onCancel={() => setDangerOpen(false)}
+            onDeleted={() => router.replace(`/${orgId}/projects` as Href)}
+          />
+        ) : null
       }
       dangerOpen={dangerOpen}
       onToggleDanger={() => setDangerOpen((open) => !open)}

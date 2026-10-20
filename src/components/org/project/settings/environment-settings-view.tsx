@@ -150,7 +150,10 @@ function ServerSection(props: Readonly<EnvironmentSettingsViewProps>) {
   )
 }
 
-function RenameSection({ rename, canEdit }: Readonly<{ rename: RenameFormProps; canEdit: boolean }>) {
+function RenameSection({
+  rename,
+  canEdit,
+}: Readonly<{ rename: RenameFormProps; canEdit: boolean }>) {
   const s = styles(usePalette())
   return (
     <View style={s.section}>
@@ -166,8 +169,18 @@ function RenameSection({ rename, canEdit }: Readonly<{ rename: RenameFormProps; 
         />
         {rename.dirty && canEdit ? (
           <View style={s.actions}>
-            <ActionButton label="Save" onPress={rename.onSave} disabled={!rename.canSave} busy={rename.saving} />
-            <ActionButton label="Discard" variant="quiet" onPress={rename.onReset} disabled={rename.saving} />
+            <ActionButton
+              label="Save"
+              onPress={rename.onSave}
+              disabled={!rename.canSave}
+              busy={rename.saving}
+            />
+            <ActionButton
+              label="Discard"
+              variant="quiet"
+              onPress={rename.onReset}
+              disabled={rename.saving}
+            />
           </View>
         ) : null}
       </View>

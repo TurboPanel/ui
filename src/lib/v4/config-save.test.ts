@@ -11,7 +11,9 @@ const context: SaveContext = {
   projectId: 'p1',
   environmentId: 'e1',
   projectCompose: doc({
-    services: { web: { command: 'x', 'x-turbopanel': { serviceKind: 'node', principal: 'website' } } },
+    services: {
+      web: { command: 'x', 'x-turbopanel': { serviceKind: 'node', principal: 'website' } },
+    },
   }),
   environmentCompose: null,
   projectVariables: [],
@@ -28,8 +30,21 @@ function deps(overrides: Partial<SaveDeps> = {}): SaveDeps {
   }
 }
 
-const user = linuxUserEdit({ serviceName: 'web', user: 'staging-web', was: 'website', scope: 'environment' })
-const variable = variableEdit({ name: 'MODE', value: 'x', secret: false, forBuild: false, forRuntime: true, was: '', scope: 'environment' })
+const user = linuxUserEdit({
+  serviceName: 'web',
+  user: 'staging-web',
+  was: 'website',
+  scope: 'environment',
+})
+const variable = variableEdit({
+  name: 'MODE',
+  value: 'x',
+  secret: false,
+  forBuild: false,
+  forRuntime: true,
+  was: '',
+  scope: 'environment',
+})
 
 describe('saveEdits', () => {
   it('runs every step in order and leaves nothing staged', async () => {
@@ -49,7 +64,9 @@ describe('saveEdits', () => {
     expect(calls).toEqual(['environment', 'variable'])
     expect(d.saveEnvironmentCompose).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: { services: { web: { 'x-turbopanel': { serviceKind: 'node', principal: 'staging-web' } } } },
+        data: {
+          services: { web: { 'x-turbopanel': { serviceKind: 'node', principal: 'staging-web' } } },
+        },
       })
     )
   })
@@ -69,12 +86,19 @@ describe('saveEdits', () => {
         Promise.resolve({
           ...context,
           environmentCompose: doc({
-            services: { web: { 'x-turbopanel': { serviceKind: 'node', principal: 'staging-web' } } },
+            services: {
+              web: { 'x-turbopanel': { serviceKind: 'node', principal: 'staging-web' } },
+            },
           }),
         })
       ),
     })
-    const base = linuxUserEdit({ serviceName: 'web', user: 'shared', was: 'staging-web', scope: 'base' })
+    const base = linuxUserEdit({
+      serviceName: 'web',
+      user: 'shared',
+      was: 'staging-web',
+      scope: 'base',
+    })
     await saveEdits([base], d)
     expect(calls).toEqual(['project', 'environment'])
   })
@@ -101,19 +125,36 @@ describe('saveEdits', () => {
   })
 
   it('stops, saving nothing, when an edit no longer fits', async () => {
-    const stale: StagedEdit = linuxUserEdit({ serviceName: 'ghost', user: 'x', was: '', scope: 'base' })
+    const stale: StagedEdit = linuxUserEdit({
+      serviceName: 'ghost',
+      user: 'x',
+      was: '',
+      scope: 'base',
+    })
     const d = deps()
     const outcome = await saveEdits([user, stale], d)
     expect(outcome.saved).toBe(0)
-    expect(outcome.problems).toEqual([{ key: 'svc:ghost:linuxUser', reason: 'The Base has no app named ghost.' }])
+    expect(outcome.problems).toEqual([
+      { key: 'svc:ghost:linuxUser', reason: 'The Base has no app named ghost.' },
+    ])
     expect(outcome.error).toBe('Some changes no longer fit what is saved. Undo them and try again.')
     expect(outcome.remaining).toEqual([user, stale])
     expect(d.saveEnvironmentCompose).not.toHaveBeenCalled()
   })
 
   it('saves nothing for edits that change nothing', async () => {
-    const same = linuxUserEdit({ serviceName: 'web', user: 'website', was: 'website', scope: 'base' })
+    const same = linuxUserEdit({
+      serviceName: 'web',
+      user: 'website',
+      was: 'website',
+      scope: 'base',
+    })
     const d = deps()
-    expect(await saveEdits([same], d)).toEqual({ remaining: [], problems: [], error: null, saved: 0 })
+    expect(await saveEdits([same], d)).toEqual({
+      remaining: [],
+      problems: [],
+      error: null,
+      saved: 0,
+    })
   })
 })

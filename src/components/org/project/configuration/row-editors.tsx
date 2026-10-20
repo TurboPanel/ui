@@ -223,7 +223,12 @@ export function LinuxUserEditor({
       <Text style={s.label}>{`Run ${serviceName} as`}</Text>
       <ChoiceGroup label={`Run ${serviceName} as`}>
         {editing.linuxUserNames.map((name) => (
-          <ChoiceCard key={name} title={name} selected={user === name} onSelect={() => setUser(name)} />
+          <ChoiceCard
+            key={name}
+            title={name}
+            selected={user === name}
+            onSelect={() => setUser(name)}
+          />
         ))}
       </ChoiceGroup>
       {asking ? (

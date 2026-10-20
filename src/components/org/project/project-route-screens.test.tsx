@@ -87,7 +87,6 @@ vi.mock('@/components/org/project/environment-deployment-history-panel', () => (
   ),
 }))
 
-
 function project(metadata: ProjectRecord['metadata']): Partial<ProjectRecord> {
   return { id: 'p', metadata }
 }
@@ -123,9 +122,7 @@ describe('LegacyProjectRedirect', () => {
   it('sends a retired environment route to Configuration and keeps the query', () => {
     state.params = { orgId: 'o', projectId: 'p', environmentId: 'e', hostingId: 'h1' }
     render(<LegacyProjectRedirect segment="hosting" />)
-    expect(redirectHref()).toBe(
-      '/o/projects/p/environments/e/configuration/hosting?hostingId=h1',
-    )
+    expect(redirectHref()).toBe('/o/projects/p/environments/e/configuration/hosting?hostingId=h1')
   })
 
   it('sends the retired map routes to the Environments tab and the Overview tab', () => {

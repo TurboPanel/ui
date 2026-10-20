@@ -55,7 +55,11 @@ function container(partial: Partial<ContainerRecord>): ContainerRecord {
   }
 }
 
-function row(field: string, value: string | null, area: ConfigViewFieldRow['area'] = 'service'): ConfigViewFieldRow {
+function row(
+  field: string,
+  value: string | null,
+  area: ConfigViewFieldRow['area'] = 'service'
+): ConfigViewFieldRow {
   return {
     key: `svc:web:${field}`,
     area,
@@ -70,7 +74,7 @@ function row(field: string, value: string | null, area: ConfigViewFieldRow['area
 function service(
   name: string,
   kind: ConfigViewService['kind'],
-  rows: ConfigViewFieldRow[] = [],
+  rows: ConfigViewFieldRow[] = []
 ): ConfigViewService {
   return { name, serviceId: null, kind, source: 'base', rows }
 }
@@ -128,7 +132,7 @@ describe('running status', () => {
       runningStatusKey([
         container({ role: 'ingress', status: 'running' }),
         container({ status: 'exited' }),
-      ]),
+      ])
     ).toBe('stopped')
   })
 
@@ -170,7 +174,9 @@ describe('native apps (no container rows)', () => {
     expect(runningStatusKey([])).toBe('never')
   })
   it('lets real containers win over the deploy', () => {
-    expect(runningStatusKey([container({ status: 'running' })], { latest: group({ status: 'failed' }) })).toBe('running')
+    expect(
+      runningStatusKey([container({ status: 'running' })], { latest: group({ status: 'failed' }) })
+    ).toBe('running')
   })
   it('gives an app on the map the deploy state, or nothing before a deploy', () => {
     expect(serviceStatusKey([], { latest: group({ status: 'succeeded' }) })).toBe('deployed')
@@ -212,7 +218,9 @@ describe('last deploy', () => {
   })
 
   it('adds the short commit of a push', () => {
-    const pushed = group({ trigger: { kind: 'push', branch: 'main', commitSha: 'a41c9e2ffff', sourceId: null } })
+    const pushed = group({
+      trigger: { kind: 'push', branch: 'main', commitSha: 'a41c9e2ffff', sourceId: null },
+    })
     expect(lastDeployPart(pushed, NOW)?.sub).toBe('a41c9e2 · 4m ago')
   })
 
@@ -225,7 +233,9 @@ describe('last deploy', () => {
     expect(lastDeployPart(group({ status: 'cancelled' }), NOW)?.status).toBe('cancelled')
     expect(lastDeployPart(group({ status: 'running' }), NOW)?.status).toBe('deploying')
     expect(lastDeployPart(group({ status: 'queued' }), NOW)?.status).toBe('queued')
-    expect(lastDeployPart(group({ strategyOutcome: 'rolled_back' }), NOW)?.status).toBe('rolledback')
+    expect(lastDeployPart(group({ strategyOutcome: 'rolled_back' }), NOW)?.status).toBe(
+      'rolledback'
+    )
     expect(lastDeployPart(group({ strategyOutcome: 'needs_attention' }), NOW)).toMatchObject({
       status: 'failed',
       label: 'Needs attention',
@@ -251,8 +261,8 @@ describe('last deploy', () => {
     expect(
       inProgressSub(
         group({ trigger: { kind: 'push', branch: ' main ', commitSha: null, sourceId: null } }),
-        NOW,
-      ),
+        NOW
+      )
     ).toBe('Started 4m ago · push to main')
     expect(inProgressSub(group({ startedAt: null }), NOW)).toBe('Starting now')
   })
@@ -287,7 +297,7 @@ describe('relation to the Base', () => {
       source: 'env',
     })
     expect(environmentRelation({ followsBase: true, changes: [{}, {}] })?.text).toBe(
-      'Follows the Base · 2 changes',
+      'Follows the Base · 2 changes'
     )
   })
 
@@ -304,14 +314,14 @@ describe('relation to the Base', () => {
         { name: 'Staging', followsBase: true },
         { name: 'Preview', followsBase: false },
         { name: 'Unknown', followsBase: null },
-      ]),
+      ])
     ).toBe('Production and Staging follow it · Preview stands alone')
     expect(followLine([{ name: 'Production', followsBase: true }])).toBe('Production follows it')
     expect(
       followLine([
         { name: 'A', followsBase: false },
         { name: 'B', followsBase: false },
-      ]),
+      ])
     ).toBe('A and B stand alone')
     expect(followLine([])).toBe('')
   })
@@ -348,7 +358,9 @@ describe('services, users and domains', () => {
   })
 
   it('has no chips for a Base of data stores only', () => {
-    expect(baseRunsAs({ ...SIDE, services: [SIDE.services[2] as ConfigViewService] }, 'x')).toEqual([])
+    expect(baseRunsAs({ ...SIDE, services: [SIDE.services[2] as ConfigViewService] }, 'x')).toEqual(
+      []
+    )
   })
 
   it('lists each domain once, host only', () => {
@@ -380,7 +392,11 @@ describe('mini map', () => {
   const statusOf = (name: string) => (name === 'web' ? 'running' : null)
 
   it('draws visitors, apps and data from the real services', () => {
-    const [visitors, apps, data] = miniMapColumns(SIDE, [{ serviceName: 'web' }, { serviceName: null }], statusOf)
+    const [visitors, apps, data] = miniMapColumns(
+      SIDE,
+      [{ serviceName: 'web' }, { serviceName: null }],
+      statusOf
+    )
     expect(visitors?.items.map((item) => item.name)).toEqual(['example.com', '*.example.com'])
     expect(apps?.items).toEqual([
       { name: 'web', status: 'running', changed: true },
@@ -404,12 +420,17 @@ describe('mini map', () => {
 describe('new environment', () => {
   it('starting from the Base sends no compose of its own', () => {
     expect(
-      newEnvironmentBody({ projectId: 'p', name: '  Staging ', start: 'base', serverId: null }),
+      newEnvironmentBody({ projectId: 'p', name: '  Staging ', start: 'base', serverId: null })
     ).toEqual({ projectId: 'p', name: 'Staging' })
   })
 
   it('standing alone sends services: !override {}', () => {
-    const body = newEnvironmentBody({ projectId: 'p', name: 'Preview', start: 'empty', serverId: null })
+    const body = newEnvironmentBody({
+      projectId: 'p',
+      name: 'Preview',
+      start: 'empty',
+      serverId: null,
+    })
     expect(body).toEqual({
       projectId: 'p',
       name: 'Preview',
@@ -421,23 +442,24 @@ describe('new environment', () => {
         },
       },
     })
-    expect(standAloneCompose().data.services).toEqual({ __turbopanelComposeTag: 'override', value: {} })
+    expect(standAloneCompose().data.services).toEqual({
+      __turbopanelComposeTag: 'override',
+      value: {},
+    })
   })
 
   it('pins a server only when one was chosen', () => {
     expect(
-      newEnvironmentBody({ projectId: 'p', name: 'Staging', start: 'base', serverId: 'srv-1' }),
+      newEnvironmentBody({ projectId: 'p', name: 'Staging', start: 'base', serverId: 'srv-1' })
     ).toEqual({ projectId: 'p', name: 'Staging', serverId: 'srv-1' })
   })
 
   it('previews what the environment will run', () => {
     expect(startPreview('base', null)).toBeNull()
     const fromBase = startPreview('base', SIDE)
-    expect(fromBase?.find((column) => column.key === 'apps')?.items.map((item) => item.status)).toEqual([
-      null,
-      null,
-      null,
-    ])
+    expect(
+      fromBase?.find((column) => column.key === 'apps')?.items.map((item) => item.status)
+    ).toEqual([null, null, null])
     const alone = startPreview('empty', SIDE)
     expect(alone?.every((column) => column.items.length === 0)).toBe(true)
   })
@@ -537,7 +559,12 @@ describe('environment card data', () => {
 
 describe('deploy progress on a card', () => {
   const hostCommand = (id: string, status: DeploymentGroup['status']) =>
-    ({ id, commandId: id, serverId: `srv-${id}`, status }) as unknown as DeploymentGroup['commands'][number]
+    ({
+      id,
+      commandId: id,
+      serverId: `srv-${id}`,
+      status,
+    }) as unknown as DeploymentGroup['commands'][number]
   const progress = {
     version: 1 as const,
     current: 'build',
@@ -551,7 +578,10 @@ describe('deploy progress on a card', () => {
 
   it('polls only the commands of deploys still going', () => {
     const latest = {
-      a: group({ status: 'running', commands: [hostCommand('c1', 'running'), hostCommand('c2', 'succeeded')] }),
+      a: group({
+        status: 'running',
+        commands: [hostCommand('c1', 'running'), hostCommand('c2', 'succeeded')],
+      }),
       b: group({ status: 'succeeded', commands: [hostCommand('c3', 'succeeded')] }),
       c: null,
       d: undefined,
@@ -560,13 +590,19 @@ describe('deploy progress on a card', () => {
   })
 
   it('copes with a deploy row that has no host commands', () => {
-    const bare = group({ status: 'running', commands: undefined as unknown as DeploymentGroup['commands'] })
+    const bare = group({
+      status: 'running',
+      commands: undefined as unknown as DeploymentGroup['commands'],
+    })
     expect(inFlightDeployEntries({ a: bare })).toEqual([])
     expect(deployProgressLabel(bare, new Map())).toBeNull()
   })
 
   it('reads the step of the first host that reports one', () => {
-    const running = group({ status: 'running', commands: [hostCommand('c0', 'running'), hostCommand('c1', 'running')] })
+    const running = group({
+      status: 'running',
+      commands: [hostCommand('c0', 'running'), hostCommand('c1', 'running')],
+    })
     const records = new Map([
       ['c0', { progress: null }],
       ['c1', { progress }],
@@ -578,11 +614,17 @@ describe('deploy progress on a card', () => {
   })
 
   it('puts the step on the last-deploy part only while the deploy runs', () => {
-    expect(lastDeployPart(group({ status: 'running' }), NOW, 'Step 2 of 3 · Building')).toMatchObject({
+    expect(
+      lastDeployPart(group({ status: 'running' }), NOW, 'Step 2 of 3 · Building')
+    ).toMatchObject({
       status: 'deploying',
       label: 'Step 2 of 3 · Building',
     })
-    expect(lastDeployPart(group({ status: 'succeeded' }), NOW, 'Step 2 of 3 · Building')?.label).toBeUndefined()
-    expect(lastDeployPart(group({ status: 'running' }), NOW, null)).toMatchObject({ status: 'deploying' })
+    expect(
+      lastDeployPart(group({ status: 'succeeded' }), NOW, 'Step 2 of 3 · Building')?.label
+    ).toBeUndefined()
+    expect(lastDeployPart(group({ status: 'running' }), NOW, null)).toMatchObject({
+      status: 'deploying',
+    })
   })
 })

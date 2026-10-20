@@ -9,7 +9,10 @@ import {
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
 vi.mock('react-native-svg', async () => (await import('@/components/ui/v4/rn-stub')).svgStub)
-vi.mock('@/lib/theme-preference', async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub)
+vi.mock(
+  '@/lib/theme-preference',
+  async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub
+)
 vi.mock('@/components/ui', () => ({
   TextField: (props: Readonly<Record<string, unknown>>) => (
     <label>
@@ -42,7 +45,11 @@ function props(over: Partial<EnvironmentSettingsViewProps> = {}): EnvironmentSet
     server: { server: 'Frankfurt 1', source: 'pinned', offline: false, effectiveServerId: 's1' },
     moveChoices: [
       { serverId: 's2', label: 'Amsterdam' },
-      { serverId: null, label: "Use the project's server (Berlin)", sub: 'Stop giving this environment a server of its own.' },
+      {
+        serverId: null,
+        label: "Use the project's server (Berlin)",
+        sub: 'Stop giving this environment a server of its own.',
+      },
     ],
     moving: false,
     onMove: vi.fn(),
@@ -78,15 +85,19 @@ describe.each(SCENARIOS)('environment settings ($name)', (scenario) => {
   it('says where it runs when the server comes from the project, is offline, or is not set', () => {
     const { rerender } = render(
       <EnvironmentSettingsView
-        {...props({ server: { server: 'Berlin', source: 'project', offline: true, effectiveServerId: 's3' } })}
-      />,
+        {...props({
+          server: { server: 'Berlin', source: 'project', offline: true, effectiveServerId: 's3' },
+        })}
+      />
     )
     expect(screen.getByText('Berlin (offline)')).toBeTruthy()
     expect(screen.getByText("The project's server.")).toBeTruthy()
     rerender(
       <EnvironmentSettingsView
-        {...props({ server: { server: null, source: 'none', offline: false, effectiveServerId: null } })}
-      />,
+        {...props({
+          server: { server: null, source: 'none', offline: false, effectiveServerId: null },
+        })}
+      />
     )
     expect(screen.getByText('No server yet')).toBeTruthy()
     expect(screen.getByText(/Deploy needs a connected server/)).toBeTruthy()
@@ -114,7 +125,9 @@ describe.each(SCENARIOS)('environment settings ($name)', (scenario) => {
     render(<EnvironmentSettingsView {...base} />)
     fireEvent.click(screen.getByRole('button', { name: 'Move to another server' }))
     fireEvent.click(screen.getByRole('button', { name: /Use the project's server/ }))
-    expect(screen.getByRole('dialog').textContent).toContain("Move Staging to the project's server?")
+    expect(screen.getByRole('dialog').textContent).toContain(
+      "Move Staging to the project's server?"
+    )
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
     expect(base.onMove).not.toHaveBeenCalled()
     expect(screen.queryByRole('dialog')).toBeNull()
@@ -142,12 +155,23 @@ describe.each(SCENARIOS)('environment settings ($name)', (scenario) => {
     rerender(
       <EnvironmentSettingsView
         {...base}
-        rename={{ ...base.rename, name: 'Production', dirty: true, canSave: false, error: 'Another environment in this project already has that name.' }}
-      />,
+        rename={{
+          ...base.rename,
+          name: 'Production',
+          dirty: true,
+          canSave: false,
+          error: 'Another environment in this project already has that name.',
+        }}
+      />
     )
     expect((screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(true)
     expect(screen.getByRole('alert').textContent).toContain('already has that name')
-    rerender(<EnvironmentSettingsView {...base} rename={{ ...base.rename, name: 'Preview', dirty: true, canSave: true }} />)
+    rerender(
+      <EnvironmentSettingsView
+        {...base}
+        rename={{ ...base.rename, name: 'Preview', dirty: true, canSave: true }}
+      />
+    )
     fireEvent.change(screen.getByLabelText('Environment name'), { target: { value: 'Preview 2' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     fireEvent.click(screen.getByRole('button', { name: 'Discard' }))
@@ -159,7 +183,11 @@ describe.each(SCENARIOS)('environment settings ($name)', (scenario) => {
   it('makes the name read-only and hides Save for a viewer', () => {
     const base = props()
     render(
-      <EnvironmentSettingsView {...base} canEdit={false} rename={{ ...base.rename, dirty: true, canSave: true }} />,
+      <EnvironmentSettingsView
+        {...base}
+        canEdit={false}
+        rename={{ ...base.rename, dirty: true, canSave: true }}
+      />
     )
     expect((screen.getByLabelText('Environment name') as HTMLInputElement).readOnly).toBe(true)
     expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()

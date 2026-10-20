@@ -53,7 +53,7 @@ function item(
     hint?: string
     tone?: 'default' | 'danger'
     disabledReason?: string | null
-  }> = {},
+  }> = {}
 ): EnvironmentActionItem {
   return {
     id,
@@ -77,7 +77,7 @@ function deployBlockReason(input: EnvironmentActionInput): string | null {
  * delete need ownership.
  */
 export function environmentActionItems(
-  input: EnvironmentActionInput,
+  input: EnvironmentActionInput
 ): readonly EnvironmentActionItem[] {
   const busyReason = input.busy ? BUSY_REASON : null
   const items: EnvironmentActionItem[] = [
@@ -95,7 +95,7 @@ export function environmentActionItems(
       item('cacheless', 'Cacheless redeploy', {
         hint: 'Rebuilds images without the Docker build cache — slower',
         disabledReason: deployBlockReason(input),
-      }),
+      })
     )
   }
   if (input.canMutate && input.hasContainers && input.isRunning) {
@@ -111,16 +111,15 @@ export function environmentActionItems(
         hint: DESTROY_EXPLANATION,
         tone: 'danger',
         disabledReason: busyReason,
-      }),
+      })
     )
   }
   if (input.canOwn) {
     items.push(
       item('delete', 'Delete environment…', {
         tone: 'danger',
-        disabledReason:
-          input.environmentCount > 1 ? null : LAST_ENVIRONMENT_REASON,
-      }),
+        disabledReason: input.environmentCount > 1 ? null : LAST_ENVIRONMENT_REASON,
+      })
     )
   }
   return items

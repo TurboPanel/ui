@@ -67,13 +67,31 @@ const BASE: ConfigViewSide = {
       kind: 'node',
       source: 'base',
       rows: [
-        { key: 'svc:web:linuxUser', area: 'linuxUser', field: 'linuxUser', label: 'Linux user', value: 'shop', masked: false, source: 'base' },
-        { key: 'svc:web:domain:shop.example.com', area: 'domain', field: 'domain:shop.example.com', label: 'Domain', value: 'shop.example.com', masked: false, source: 'base' },
+        {
+          key: 'svc:web:linuxUser',
+          area: 'linuxUser',
+          field: 'linuxUser',
+          label: 'Linux user',
+          value: 'shop',
+          masked: false,
+          source: 'base',
+        },
+        {
+          key: 'svc:web:domain:shop.example.com',
+          area: 'domain',
+          field: 'domain:shop.example.com',
+          label: 'Domain',
+          value: 'shop.example.com',
+          masked: false,
+          source: 'base',
+        },
       ],
     },
   ],
   variables: [],
-  linuxUsers: [{ name: 'shop', access: 'sftp', description: null, source: 'base', usedBy: ['web'] }],
+  linuxUsers: [
+    { name: 'shop', access: 'sftp', description: null, source: 'base', usedBy: ['web'] },
+  ],
 }
 
 function view(followsBase: boolean, changes = 0): EnvironmentConfigViewResponse {
@@ -201,7 +219,10 @@ describe('a project card', () => {
     const card = homeProject({
       project: project({ metadata: { type: 'system' } }),
       environments: [env('e1', 'HTTP Ingress'), env('e2', 'HTTP Ingress')],
-      containersByEnvironment: { e1: [container('e1', 'running')], e2: [container('e2', 'exited')] },
+      containersByEnvironment: {
+        e1: [container('e1', 'running')],
+        e2: [container('e2', 'exited')],
+      },
       views: {},
     })
     expect(card.environments).toEqual([])
@@ -211,13 +232,22 @@ describe('a project card', () => {
   it('names the other kinds without a count', () => {
     const none = { containersByEnvironment: {}, views: {} }
     expect(
-      homeProject({ project: project({ metadata: { type: 'empty' } }), environments: [], ...none }).sub,
+      homeProject({ project: project({ metadata: { type: 'empty' } }), environments: [], ...none })
+        .sub
     ).toBe('Not set up yet')
     expect(
-      homeProject({ project: project({ metadata: { type: 'system' } }), environments: [production], ...none }).sub,
+      homeProject({
+        project: project({ metadata: { type: 'system' } }),
+        environments: [production],
+        ...none,
+      }).sub
     ).toBe('Platform')
     expect(
-      homeProject({ project: project({ metadata: { type: 'managed' } }), environments: [], ...none }).sub,
+      homeProject({
+        project: project({ metadata: { type: 'managed' } }),
+        environments: [],
+        ...none,
+      }).sub
     ).toBe('Managed database')
   })
 })
@@ -249,7 +279,10 @@ describe('deploys in progress', () => {
 
   it('lists only unfinished deploys, newest first, with project and environment', () => {
     const rows = deploysInProgress({
-      projects: [{ id: 'p1', name: 'Shop' }, { id: 'p2', name: null }],
+      projects: [
+        { id: 'p1', name: 'Shop' },
+        { id: 'p2', name: null },
+      ],
       environments: [
         env('e1', 'Production'),
         env('e2', 'Staging', 'p2'),

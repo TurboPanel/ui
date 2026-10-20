@@ -22,18 +22,27 @@ vi.mock('react-native', async () => {
   return { ...stub, Linking: { openURL: vi.fn(() => Promise.resolve()) } }
 })
 vi.mock('react-native-svg', async () => (await import('@/components/ui/v4/rn-stub')).svgStub)
-vi.mock('@/lib/theme-preference', async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub)
+vi.mock(
+  '@/lib/theme-preference',
+  async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub
+)
 vi.mock('expo-router', () => ({ useRouter: () => ({ push: state.push }) }))
 vi.mock('@/components/org/project/project-context', () => ({ useProjectContext: () => state.ctx }))
 vi.mock('@/lib/queries/environments', () => ({ useEnvironmentConfigView: () => state.query }))
-vi.mock('@/lib/queries/services', () => ({ useHostingsByServices: () => ({ hostingsByService: {} }) }))
+vi.mock('@/lib/queries/services', () => ({
+  useHostingsByServices: () => ({ hostingsByService: {} }),
+}))
 vi.mock('@/lib/queries/variables', () => ({
   useVariables: (_org: string, filter: Record<string, string>) => ({
     data: { variables: 'environmentId' in filter ? state.envVars : state.projectVars },
   }),
 }))
 vi.mock('@/lib/queries/configuration', () => ({
-  useSaveConfiguration: () => ({ run: state.run, isPending: state.saving, actionError: 'Server said no' }),
+  useSaveConfiguration: () => ({
+    run: state.run,
+    isPending: state.saving,
+    actionError: 'Server said no',
+  }),
 }))
 vi.mock('@/components/ui', () => ({
   LoadingState: ({ label }: Readonly<{ label: string }>) => <div role="progressbar">{label}</div>,
@@ -78,7 +87,17 @@ function record(key: string, extra: Partial<VariableRecord>): VariableRecord {
 const threeEnvironments = [
   { id: 'e', name: 'Staging', options: null },
   { id: 'e2', name: 'Production', options: null },
-  { id: 'e3', name: 'Preview', options: { compose: { version: 1, data: { services: makeComposeTag('override', {}) }, presentation: { keyOrder: [], comments: {} } } } },
+  {
+    id: 'e3',
+    name: 'Preview',
+    options: {
+      compose: {
+        version: 1,
+        data: { services: makeComposeTag('override', {}) },
+        presentation: { keyOrder: [], comments: {} },
+      },
+    },
+  },
 ]
 
 beforeEach(() => {
@@ -93,7 +112,9 @@ beforeEach(() => {
     projectAllowsMutations: true,
   }
   state.query = { isPending: false, error: null, data: stagingView(), refetch: vi.fn() }
-  state.envVars = [record('API_URL', { environmentId: 'e', value: 'https://api.staging.example.com' })]
+  state.envVars = [
+    record('API_URL', { environmentId: 'e', value: 'https://api.staging.example.com' }),
+  ]
   state.projectVars = [
     record('API_URL', { projectId: 'p', value: 'https://api.example.com' }),
     record('MODE', { projectId: 'p', value: 'live' }),
@@ -101,7 +122,9 @@ beforeEach(() => {
     record('BOUND', { projectId: 'p', bindingId: 'b1' }),
   ]
   state.saving = false
-  state.run = vi.fn(() => Promise.resolve({ ok: true, value: { remaining: [], problems: [], error: null, saved: 1 } }))
+  state.run = vi.fn(() =>
+    Promise.resolve({ ok: true, value: { remaining: [], problems: [], error: null, saved: 1 } })
+  )
 })
 afterEach(() => {
   cleanup()
@@ -115,8 +138,14 @@ describe('editing a variable', () => {
     render(<EnvironmentConfigurationScreen />)
     fireEvent.click(screen.getByLabelText('Edit MODE'))
     fireEvent.change(screen.getByLabelText('New value for MODE'), { target: { value: 'staging' } })
-    expect(pick(/^Staging only\. Adds a Staging change\. Production keeps the Base value\./)).toBeTruthy()
-    fireEvent.click(pick(/^Base, for every environment that follows it\. Staging and Production get it on the next deploy\. Preview stands alone and won’t change\./))
+    expect(
+      pick(/^Staging only\. Adds a Staging change\. Production keeps the Base value\./)
+    ).toBeTruthy()
+    fireEvent.click(
+      pick(
+        /^Base, for every environment that follows it\. Staging and Production get it on the next deploy\. Preview stands alone and won’t change\./
+      )
+    )
     fireEvent.click(screen.getByLabelText('Done'))
     expect(screen.getByText('1 unsaved change')).toBeTruthy()
     expect(screen.getByText(/Build and run · Not saved yet: staging/)).toBeTruthy()
@@ -125,7 +154,9 @@ describe('editing a variable', () => {
     fireEvent.click(screen.getByLabelText('Save changes'))
     await waitFor(() => expect(state.run).toHaveBeenCalledTimes(1))
     const sent = (state.run.mock.calls[0] as unknown[][])[0]
-    expect(sent).toMatchObject([{ kind: 'set-variable', name: 'MODE', value: 'staging', scope: 'base' }])
+    expect(sent).toMatchObject([
+      { kind: 'set-variable', name: 'MODE', value: 'staging', scope: 'base' },
+    ])
     expect(await screen.findByText('Saved')).toBeTruthy()
     expect(screen.getByText('The changes go live when you deploy Staging.')).toBeTruthy()
     expect(screen.queryByText('1 unsaved change')).toBeNull()
@@ -197,7 +228,9 @@ describe('adding a variable', () => {
     fireEvent.click(screen.getByText('Add variable'))
     fireEvent.change(screen.getByLabelText('Variable name'), { target: { value: 'API_KEY' } })
     fireEvent.change(screen.getByLabelText('Variable value'), { target: { value: 'abc' } })
-    expect(screen.getByRole('radio', { name: /^Keep it secret/ }).getAttribute('aria-checked')).toBe('true')
+    expect(
+      screen.getByRole('radio', { name: /^Keep it secret/ }).getAttribute('aria-checked')
+    ).toBe('true')
     fireEvent.click(screen.getByLabelText('Add'))
     fireEvent.click(screen.getByLabelText('Review changes'))
     expect(screen.getByText('Hidden')).toBeTruthy()
@@ -248,7 +281,9 @@ describe('changes from Base', () => {
     open()
     fireEvent.click(screen.getByLabelText('Make this the Base: Start command'))
     expect(screen.getByText('Make this the Base?')).toBeTruthy()
-    expect(screen.getByText(/^Production follows the Base and would get this value on the next deploy\./)).toBeTruthy()
+    expect(
+      screen.getByText(/^Production follows the Base and would get this value on the next deploy\./)
+    ).toBeTruthy()
     fireEvent.click(screen.getByLabelText('Cancel'))
     expect(screen.queryByText('Make this the Base?')).toBeNull()
     fireEvent.click(screen.getByLabelText('Make this the Base: Start command'))
@@ -289,7 +324,16 @@ describe('saving', () => {
       Promise.resolve({
         ok: true,
         value: {
-          remaining: [{ key: 'var:MODE', label: 'MODE', area: 'Variables', was: 'live', now: 'x', kind: 'set-variable' }],
+          remaining: [
+            {
+              key: 'var:MODE',
+              label: 'MODE',
+              area: 'Variables',
+              was: 'live',
+              now: 'x',
+              kind: 'set-variable',
+            },
+          ],
           problems: [{ key: 'var:MODE', reason: 'It changed.' }],
           error: 'Some changes no longer fit what is saved. Undo them and try again.',
           saved: 0,
@@ -317,7 +361,9 @@ describe('saving', () => {
   })
 
   it('shows no Saved note when a save did not change anything on the server', async () => {
-    state.run = vi.fn(() => Promise.resolve({ ok: true, value: { remaining: [], problems: [], error: null, saved: 0 } }))
+    state.run = vi.fn(() =>
+      Promise.resolve({ ok: true, value: { remaining: [], problems: [], error: null, saved: 0 } })
+    )
     stageOne()
     fireEvent.click(screen.getByLabelText('Save changes'))
     await waitFor(() => expect(state.run).toHaveBeenCalled())

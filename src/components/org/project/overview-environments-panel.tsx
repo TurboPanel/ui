@@ -9,14 +9,7 @@ import {
   type ReactNode,
   type SetStateAction,
 } from 'react'
-import {
-  Modal,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-  useWindowDimensions,
-} from 'react-native'
+import { Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
 import { useQueryClient } from '@tanstack/react-query'
 import { Link, useRouter, type Href } from 'expo-router'
 import { LogTranscriptView } from '@/components/org/logs/log-transcript-view'
@@ -33,10 +26,7 @@ import {
   type ComposePreviewMode,
   type PreviewDeploymentPurpose,
 } from '@/components/org/project/preview-deployment-modal'
-import {
-  environmentStatusTone,
-  hasHostDeployedContainers,
-} from '@/lib/container-status'
+import { environmentStatusTone, hasHostDeployedContainers } from '@/lib/container-status'
 import {
   DeployHealthCheckMissingError,
   DeployResourceLimitExceededError,
@@ -112,17 +102,13 @@ type PreviewOpenState = {
 
 function latestCommandForEnv(
   commands: Record<string, TrackedCommand>,
-  environmentId: string,
+  environmentId: string
 ): TrackedCommand | null {
-  const rows = Object.values(commands).filter(
-    (row) => row.environmentId === environmentId,
-  )
+  const rows = Object.values(commands).filter((row) => row.environmentId === environmentId)
   return rows.at(-1) ?? null
 }
 
-function quietButtonTextStyle(
-  tone: 'neutral' | 'primary' | 'danger',
-): {
+function quietButtonTextStyle(tone: 'neutral' | 'primary' | 'danger'): {
   color: string
   fontSize: number
   fontWeight: '600' | '700'
@@ -172,13 +158,8 @@ function QuietButton({
 /** Pending delete state for one environment: armed, failure text, stop offer. */
 function useOverviewEnvironmentDelete(onStop: () => void) {
   const router = useRouter()
-  const {
-    orgId,
-    projectId,
-    selectedEnvironment,
-    invalidateEnvironments,
-    setError,
-  } = useProjectContext()
+  const { orgId, projectId, selectedEnvironment, invalidateEnvironments, setError } =
+    useProjectContext()
   const deleteEnvironment = useDeleteEnvironment(orgId)
   const [armed, setArmed] = useState(false)
   const [failure, setFailure] = useState<EnvironmentDeleteFailure | null>(null)
@@ -227,7 +208,7 @@ function useOverviewEnvironmentDelete(onStop: () => void) {
 /** What each menu entry does; the rules for which entries exist are in `environment-menu.ts`. */
 function useEnvironmentActionHandlers(
   model: OverviewEnvironmentsPanelModel,
-  onArmDelete: () => void,
+  onArmDelete: () => void
 ): Readonly<Record<EnvironmentActionId, () => void>> {
   const router = useRouter()
   const { orgId, projectId, selectedEnvironment } = useProjectContext()
@@ -242,13 +223,11 @@ function useEnvironmentActionHandlers(
       ignorePromise(
         model.refetchAllContainers().catch((err) => {
           model.setContainerError(userErrorMessage(err, 'Failed to refresh'))
-        }),
+        })
       )
     },
     settings: () =>
-      router.push(
-        projectEnvironmentSettingsHref(orgId, projectId, environmentId) as Href,
-      ),
+      router.push(projectEnvironmentSettingsHref(orgId, projectId, environmentId) as Href),
     destroy: () => model.setDestroyArmed(true),
     delete: onArmDelete,
   }
@@ -259,18 +238,14 @@ function useEnvironmentActionHandlers(
  * Destroy and Delete. Delete reuses the Settings rules — same server refusal
  * ("Stop it first"), two presses.
  */
-function EnvironmentActionsMenu({
-  model,
-}: Readonly<{ model: OverviewEnvironmentsPanelModel }>) {
+function EnvironmentActionsMenu({ model }: Readonly<{ model: OverviewEnvironmentsPanelModel }>) {
   const { environments, selectedEnvironment, canOwn } = useProjectContext()
   const { width } = useWindowDimensions()
   const isCompact = width < layout.desktopBreakpoint
   const [menuOpen, setMenuOpen] = useState(false)
   const buttonRef = useRef<View>(null)
   const [menuPosition, setMenuPosition] = useState({ top: 56, left: 16 })
-  const remove = useOverviewEnvironmentDelete(() =>
-    ignorePromise(model.handleStop()),
-  )
+  const remove = useOverviewEnvironmentDelete(() => ignorePromise(model.handleStop()))
   const handlers = useEnvironmentActionHandlers(model, remove.arm)
   const items = environmentActionItems({
     canOwn,
@@ -315,9 +290,7 @@ function EnvironmentActionsMenu({
         animationType={isCompact ? 'slide' : 'fade'}
         onRequestClose={close}
       >
-        <View
-          style={[styles.menuBackdrop, isCompact && styles.menuBackdropCompact]}
-        >
+        <View style={[styles.menuBackdrop, isCompact && styles.menuBackdropCompact]}>
           <Pressable
             style={StyleSheet.absoluteFill}
             onPress={close}
@@ -355,18 +328,12 @@ function EnvironmentActionsMenu({
                 accessibilityLabel={item.label}
               >
                 <Text
-                  style={
-                    item.tone === 'danger'
-                      ? styles.quietBtnTextDanger
-                      : styles.menuItemTitle
-                  }
+                  style={item.tone === 'danger' ? styles.quietBtnTextDanger : styles.menuItemTitle}
                 >
                   {item.label}
                 </Text>
-                {item.disabledReason ?? item.hint ? (
-                  <Text style={styles.menuItemSub}>
-                    {item.disabledReason ?? item.hint}
-                  </Text>
+                {(item.disabledReason ?? item.hint) ? (
+                  <Text style={styles.menuItemSub}>{item.disabledReason ?? item.hint}</Text>
                 ) : null}
               </Pressable>
             ))}
@@ -376,9 +343,7 @@ function EnvironmentActionsMenu({
 
       {remove.armed ? (
         <View style={styles.deleteConfirm}>
-          <Text style={styles.hintInline}>
-            {environmentDeletePrompt(remove.name)}
-          </Text>
+          <Text style={styles.hintInline}>{environmentDeletePrompt(remove.name)}</Text>
           <View style={styles.inlineActions}>
             <QuietButton
               label={remove.pending ? 'Deleting…' : 'Delete environment'}
@@ -396,11 +361,7 @@ function EnvironmentActionsMenu({
         <View style={styles.deleteConfirm}>
           <Text style={panelStyles.error}>{remove.failure.text}</Text>
           {remove.failure.needsStop ? (
-            <QuietButton
-              label="Stop"
-              accessibilityLabel="Stop environment"
-              onPress={remove.stop}
-            />
+            <QuietButton label="Stop" accessibilityLabel="Stop environment" onPress={remove.stop} />
           ) : null}
         </View>
       ) : null}
@@ -409,9 +370,7 @@ function EnvironmentActionsMenu({
 }
 
 /** Deploy, Restart (or Start) and the "⋯" menu — the same three in every tab's header. */
-function LifecycleToolbar({
-  model,
-}: Readonly<{ model: OverviewEnvironmentsPanelModel }>) {
+function LifecycleToolbar({ model }: Readonly<{ model: OverviewEnvironmentsPanelModel }>) {
   const {
     canMutateLifecycle,
     hasServer,
@@ -431,9 +390,7 @@ function LifecycleToolbar({
       <View style={styles.actionsRow}>
         <QuietButton
           label={destroyBusy ? 'Destroying…' : 'Confirm destroy'}
-          accessibilityLabel={
-            destroyBusy ? 'Destroying environment' : 'Confirm destroy'
-          }
+          accessibilityLabel={destroyBusy ? 'Destroying environment' : 'Confirm destroy'}
           tooltip={DESTROY_EXPLANATION}
           tone="danger"
           disabled={destroyBusy}
@@ -456,9 +413,7 @@ function LifecycleToolbar({
           accessibilityLabel="Deploy environment"
           tone="primary"
           disabled={deployDisabled}
-          onPress={() =>
-            model.openDeployConfirm(hasContainers ? 'redeploy' : 'deploy')
-          }
+          onPress={() => model.openDeployConfirm(hasContainers ? 'redeploy' : 'deploy')}
         />
       ) : null}
       {canMutateLifecycle && hasContainers && isRunning ? (
@@ -487,17 +442,10 @@ function LifecycleToolbar({
  * server, Deploy stays disabled — this link in the same strip says why and
  * takes the operator there.
  */
-function MissingServerHostingLink({
-  environmentId,
-}: Readonly<{ environmentId: string }>) {
+function MissingServerHostingLink({ environmentId }: Readonly<{ environmentId: string }>) {
   const { orgId, projectId } = useProjectContext()
   return (
-    <Link
-      href={
-        projectEnvironmentHostingHref(orgId, projectId, environmentId) as Href
-      }
-      asChild
-    >
+    <Link href={projectEnvironmentHostingHref(orgId, projectId, environmentId) as Href} asChild>
       <Pressable
         accessibilityRole="link"
         accessibilityLabel="Set a server on the Hosting tab"
@@ -517,25 +465,17 @@ function MissingServerHostingLink({
  * source-backed service — this link in the same strip says why and takes the
  * operator to the Bindings tab.
  */
-function MissingPrincipalBindingsLink({
-  environmentId,
-}: Readonly<{ environmentId: string }>) {
+function MissingPrincipalBindingsLink({ environmentId }: Readonly<{ environmentId: string }>) {
   const { orgId, projectId } = useProjectContext()
   return (
-    <Link
-      href={
-        projectEnvironmentBindingsHref(orgId, projectId, environmentId) as Href
-      }
-      asChild
-    >
+    <Link href={projectEnvironmentBindingsHref(orgId, projectId, environmentId) as Href} asChild>
       <Pressable
         accessibilityRole="link"
         accessibilityLabel="Assign a system user on the Bindings tab"
         style={webPointer}
       >
         <Text style={styles.statusText}>
-          No system user —{' '}
-          <Text style={styles.hostingLink}>assign one in Bindings</Text>
+          No system user — <Text style={styles.hostingLink}>assign one in Bindings</Text>
         </Text>
       </Pressable>
     </Link>
@@ -557,9 +497,7 @@ function DeployOutcomeBanner({
   }
   return (
     <View style={panelStyles.calloutWarning}>
-      <Text style={panelStyles.calloutWarningText}>
-        {error ?? `Deploy ${status}`}
-      </Text>
+      <Text style={panelStyles.calloutWarningText}>{error ?? `Deploy ${status}`}</Text>
     </View>
   )
 }
@@ -611,17 +549,11 @@ function DeployLogSection({
         <View style={styles.barSpacer} />
         <QuietButton
           label={collapsed ? 'Show output' : 'Hide output'}
-          accessibilityLabel={
-            collapsed ? 'Show deploy output' : 'Hide deploy output'
-          }
+          accessibilityLabel={collapsed ? 'Show deploy output' : 'Hide deploy output'}
           onPress={onToggle}
         />
         {onDismiss ? (
-          <QuietButton
-            label="Close"
-            accessibilityLabel="Close deploy output"
-            onPress={onDismiss}
-          />
+          <QuietButton label="Close" accessibilityLabel="Close deploy output" onPress={onDismiss} />
         ) : null}
       </View>
       <DeployProgressRail progress={progress} />
@@ -638,11 +570,7 @@ function DeployLogSection({
 }
 
 /** Labels whose commands produce a deploy transcript worth auto-opening. */
-const DEPLOY_COMMAND_LABELS = new Set<string>([
-  'Deploy',
-  'Redeploy',
-  'Cacheless redeploy',
-])
+const DEPLOY_COMMAND_LABELS = new Set<string>(['Deploy', 'Redeploy', 'Cacheless redeploy'])
 
 function deployModeLabel(mode: DeployConfirmMode): string {
   if (mode === 'cacheless') return 'Cacheless redeploy'
@@ -663,7 +591,7 @@ function shouldInvalidateEnvironmentsForCommand(label: string): boolean {
 
 function deriveLifecycleContainerState(
   containers: Parameters<typeof hasHostDeployedContainers>[0],
-  toneLabel: string,
+  toneLabel: string
 ): { hasContainers: boolean; isRunning: boolean } {
   return {
     hasContainers: hasHostDeployedContainers(containers),
@@ -671,9 +599,7 @@ function deriveLifecycleContainerState(
   }
 }
 
-function resolveCommandError(
-  selectedCommand: TrackedCommand | null,
-): string | null {
+function resolveCommandError(selectedCommand: TrackedCommand | null): string | null {
   if (
     !selectedCommand ||
     !isTerminalCommandStatus(selectedCommand.status) ||
@@ -684,10 +610,7 @@ function resolveCommandError(
   return selectedCommand.error ?? `Command ${selectedCommand.status}`
 }
 
-function resolveLifecycleStatusLabel(
-  toneLabel: string,
-  inheritsBaseServer: boolean,
-): string {
+function resolveLifecycleStatusLabel(toneLabel: string, inheritsBaseServer: boolean): string {
   if (inheritsBaseServer) {
     return `${toneLabel} · via project server`
   }
@@ -697,7 +620,7 @@ function resolveLifecycleStatusLabel(
 function applySucceededCommandSideEffects(
   meta: TrackedCommand,
   refetchOne: (environmentId: string) => unknown,
-  invalidateEnvironments: () => unknown,
+  invalidateEnvironments: () => unknown
 ): void {
   refetchOne(meta.environmentId)
   if (shouldInvalidateEnvironmentsForCommand(meta.label)) {
@@ -722,7 +645,7 @@ function patchTrackedCommandMeta(
   current: Record<string, TrackedCommand>,
   commandId: string,
   nextStatus: CommandStatus,
-  nextError: string | null,
+  nextError: string | null
 ): Record<string, TrackedCommand> {
   const latest = current[commandId]
   if (!latest || isTerminalCommandStatus(latest.status)) return current
@@ -751,7 +674,7 @@ function applyTrackedCommandRecordUpdate(
   setCommandMeta: Dispatch<SetStateAction<Record<string, TrackedCommand>>>,
   setTrackedEntries: Dispatch<SetStateAction<readonly TrackedCommandEntry[]>>,
   refetchOne: (environmentId: string) => unknown,
-  invalidateEnvironments: () => unknown,
+  invalidateEnvironments: () => unknown
 ): void {
   const meta = metaById[entry.commandId]
   if (!meta || isTerminalCommandStatus(meta.status)) return
@@ -760,7 +683,7 @@ function applyTrackedCommandRecordUpdate(
   const nextError = record.errorMessage ?? null
   if (meta.status !== nextStatus || meta.error !== nextError) {
     setCommandMeta((current) =>
-      patchTrackedCommandMeta(current, entry.commandId, nextStatus, nextError),
+      patchTrackedCommandMeta(current, entry.commandId, nextStatus, nextError)
     )
   }
 
@@ -770,9 +693,7 @@ function applyTrackedCommandRecordUpdate(
     applySucceededCommandSideEffects(meta, refetchOne, invalidateEnvironments)
   }
 
-  setTrackedEntries((current) =>
-    current.filter((row) => row.commandId !== entry.commandId),
-  )
+  setTrackedEntries((current) => current.filter((row) => row.commandId !== entry.commandId))
 }
 
 /** Rows are joined by command id — unreadable ids drop out of the batch. */
@@ -783,7 +704,7 @@ function syncTrackedCommandBatch(
   setCommandMeta: Dispatch<SetStateAction<Record<string, TrackedCommand>>>,
   setTrackedEntries: Dispatch<SetStateAction<readonly TrackedCommandEntry[]>>,
   refetchOne: (environmentId: string) => unknown,
-  invalidateEnvironments: () => unknown,
+  invalidateEnvironments: () => unknown
 ): void {
   if (!records || trackedEntries.length === 0) return
 
@@ -798,7 +719,7 @@ function syncTrackedCommandBatch(
       setCommandMeta,
       setTrackedEntries,
       refetchOne,
-      invalidateEnvironments,
+      invalidateEnvironments
     )
   }
 }
@@ -876,23 +797,14 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
     projectAllowsMutations,
   } = useProjectContext()
 
-  const environmentIds = useMemo(
-    () => environments.map((env) => env.id),
-    [environments],
-  )
+  const environmentIds = useMemo(() => environments.map((env) => env.id), [environments])
 
-  const [trackedEntries, setTrackedEntries] = useState<
-    readonly TrackedCommandEntry[]
-  >([])
-  const [commandMeta, setCommandMeta] = useState<
-    Record<string, TrackedCommand>
-  >({})
+  const [trackedEntries, setTrackedEntries] = useState<readonly TrackedCommandEntry[]>([])
+  const [commandMeta, setCommandMeta] = useState<Record<string, TrackedCommand>>({})
   const [actionError, setActionError] = useState<string | null>(null)
   const [containerError, setContainerError] = useState<string | null>(null)
   const [destroyArmed, setDestroyArmed] = useState(false)
-  const [previewOpen, setPreviewOpen] = useState<PreviewOpenState | null>(
-    null,
-  )
+  const [previewOpen, setPreviewOpen] = useState<PreviewOpenState | null>(null)
   const [deployConfirmBusy, setDeployConfirmBusy] = useState(false)
   const [openDeployLog, setOpenDeployLog] = useState<OpenDeployLog | null>(null)
   const [deployLogCollapsed, setDeployLogCollapsed] = useState(false)
@@ -906,18 +818,9 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
   const loading = containersQuery.isLoading
   const canMutateLifecycle = canManage && projectAllowsMutations
 
-  const deployEnvironmentMutation = useDeployEnvironment(
-    orgId,
-    selectedEnvironment?.id ?? '',
-  )
-  const lifecycleMutation = useRunEnvironmentLifecycle(
-    orgId,
-    selectedEnvironment?.id ?? '',
-  )
-  const stopEnvironmentMutation = useStopEnvironment(
-    orgId,
-    selectedEnvironment?.id ?? '',
-  )
+  const deployEnvironmentMutation = useDeployEnvironment(orgId, selectedEnvironment?.id ?? '')
+  const lifecycleMutation = useRunEnvironmentLifecycle(orgId, selectedEnvironment?.id ?? '')
+  const stopEnvironmentMutation = useStopEnvironment(orgId, selectedEnvironment?.id ?? '')
   const commandsQuery = useCommandsBatch(orgId, trackedEntries)
   const commandMetaRef = useRef(commandMeta)
   const refetchOneRef = useRef(containersQuery.refetchOne)
@@ -935,14 +838,12 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
       setCommandMeta,
       setTrackedEntries,
       refetchOneRef.current,
-      invalidateEnvironments,
+      invalidateEnvironments
     )
   }, [commandsQuery.data, trackedEntries, invalidateEnvironments])
 
   const commands = commandMeta
-  const inFlight = Object.values(commands).some(
-    (row) => !isTerminalCommandStatus(row.status),
-  )
+  const inFlight = Object.values(commands).some((row) => !isTerminalCommandStatus(row.status))
 
   useEffect(() => {
     // The open transcript is keyed to the tracked command, not to the current
@@ -957,23 +858,15 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
 
   const projectDefaultServerId = project?.options?.defaultServerId ?? null
   const effectiveServerId = useMemo(
-    () =>
-      resolveEffectiveServerId(
-        selectedEnvironment?.serverId,
-        projectDefaultServerId,
-      ),
-    [selectedEnvironment?.serverId, projectDefaultServerId],
+    () => resolveEffectiveServerId(selectedEnvironment?.serverId, projectDefaultServerId),
+    [selectedEnvironment?.serverId, projectDefaultServerId]
   )
   const serversQuery = useOrgServers(orgId, {
     enabled: Boolean(effectiveServerId) && previewOpen != null,
   })
   const placementServerLabel = useMemo(
-    () =>
-      resolveServerLabel(
-        effectiveServerId,
-        serversQuery.data?.servers,
-      ),
-    [effectiveServerId, serversQuery.data?.servers],
+    () => resolveServerLabel(effectiveServerId, serversQuery.data?.servers),
+    [effectiveServerId, serversQuery.data?.servers]
   )
   const inheritsBaseServer =
     Boolean(selectedEnvironment) &&
@@ -985,10 +878,7 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
   // assigned" in the transcript) and the deploy "succeeds" unreleased.
   const principalsQuery = useProjectPrincipals(orgId, projectId)
   const selectedEnvId = selectedEnvironment?.id ?? null
-  const selectedEnvIds = useMemo(
-    () => (selectedEnvId ? [selectedEnvId] : []),
-    [selectedEnvId],
-  )
+  const selectedEnvIds = useMemo(() => (selectedEnvId ? [selectedEnvId] : []), [selectedEnvId])
   const envServicesQuery = useServicesByEnvironments(orgId, selectedEnvIds)
   const envComposeOverlay = selectedEnvironment?.options?.compose
   const projectCompose = project?.options?.compose
@@ -1018,7 +908,7 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
       environmentId: string
       serverId: string
       label: string
-    }>,
+    }>
   ) => {
     setCommandMeta((current) => ({
       ...current,
@@ -1030,17 +920,14 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
         error: null,
       },
     }))
-    setTrackedEntries((current) => [
-      ...current,
-      { serverId: input.serverId, commandId },
-    ])
+    setTrackedEntries((current) => [...current, { serverId: input.serverId, commandId }])
   }
 
   const trackEnqueue = (
     environmentId: string,
     fallbackServerId: string | null | undefined,
     response: { commandId: string; serverId?: string },
-    label: string,
+    label: string
   ) => {
     const serverId = fallbackServerId ?? response.serverId
     if (!serverId) {
@@ -1057,25 +944,20 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
     }
   }
 
-  const runLifecycleAction = async (
-    action: 'start' | 'restart',
-    label: string,
-  ) => {
+  const runLifecycleAction = async (action: 'start' | 'restart', label: string) => {
     if (!selectedEnvironment) return
     setActionError(null)
     try {
       const result = await lifecycleMutation.run(action)
       if (!result.ok) {
-        setActionError(
-          lifecycleMutation.actionError ?? `Failed to ${action}`,
-        )
+        setActionError(lifecycleMutation.actionError ?? `Failed to ${action}`)
         return
       }
       trackEnqueue(
         selectedEnvironment.id,
         effectiveServerId ?? selectedEnvironment.serverId,
         result.value,
-        label,
+        label
       )
     } catch (err) {
       setActionError(userErrorMessage(err, `Failed to ${action}`))
@@ -1101,12 +983,10 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
     setDeployConfirmBusy(true)
     try {
       const result = await deployEnvironmentMutation.run(
-        confirmMode === 'cacheless' ? { noCache: true } : undefined,
+        confirmMode === 'cacheless' ? { noCache: true } : undefined
       )
       if (!result.ok) {
-        setActionError(
-          deployEnvironmentMutation.actionError ?? 'Failed to deploy',
-        )
+        setActionError(deployEnvironmentMutation.actionError ?? 'Failed to deploy')
         return
       }
       setPreviewOpen(null)
@@ -1114,7 +994,7 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
         selectedEnvironment.id,
         effectiveServerId ?? selectedEnvironment.serverId,
         result.value,
-        deployModeLabel(confirmMode),
+        deployModeLabel(confirmMode)
       )
     } catch (err) {
       const previewMessage = deployPreviewFailureMessage(err)
@@ -1143,7 +1023,7 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
       selectedEnvironment.id,
       effectiveServerId ?? selectedEnvironment.serverId,
       result.value,
-      'Stop',
+      'Stop'
     )
   }
 
@@ -1159,24 +1039,18 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
     }
     trackEnqueue(
       selectedEnvironment.id,
-      effectiveServerId ??
-        selectedEnvironment.serverId ??
-        result.value.serverId,
+      effectiveServerId ?? selectedEnvironment.serverId ?? result.value.serverId,
       result.value,
-      'Destroy',
+      'Destroy'
     )
     setDestroyArmed(false)
   }
 
   const selectedCommand =
-    selectedEnvironment == null
-      ? null
-      : latestCommandForEnv(commands, selectedEnvironment.id)
+    selectedEnvironment == null ? null : latestCommandForEnv(commands, selectedEnvironment.id)
   const commandError = resolveCommandError(selectedCommand)
 
-  const deployLogMeta = openDeployLog
-    ? (commands[openDeployLog.commandId] ?? null)
-    : null
+  const deployLogMeta = openDeployLog ? (commands[openDeployLog.commandId] ?? null) : null
   const deployLogStatus: CommandStatus = deployLogMeta?.status ?? 'queued'
   const deployLogTerminal = isTerminalCommandStatus(deployLogStatus)
   // Progress is read from the poll's records, not the tracked meta: the meta
@@ -1186,14 +1060,12 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
     orgId,
     openDeployLog,
     statusRecords.get(openDeployLog?.commandId ?? '')?.progress ?? null,
-    deployLogTerminal,
+    deployLogTerminal
   )
   const selectedCommandId = Object.keys(commands).findLast(
-    (id) => commands[id]?.environmentId === selectedEnvironmentId,
+    (id) => commands[id]?.environmentId === selectedEnvironmentId
   )
-  const selectedCommandRecord = selectedCommandId
-    ? statusRecords.get(selectedCommandId)
-    : undefined
+  const selectedCommandRecord = selectedCommandId ? statusRecords.get(selectedCommandId) : undefined
   const deployProgressLabel =
     selectedCommandRecord && !isTerminalCommandStatus(selectedCommandRecord.status)
       ? progressChipLabel(selectedCommandRecord.progress)
@@ -1212,29 +1084,19 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
     if (!deployLogTerminal || !deployLogEnvironmentId) return
     ignorePromise(
       queryClient.invalidateQueries({
-        queryKey: queryKeys
-          .org(orgId)
-          .environments.deployments(deployLogEnvironmentId),
-      }),
+        queryKey: queryKeys.org(orgId).environments.deployments(deployLogEnvironmentId),
+      })
     )
   }, [deployLogTerminal, deployLogEnvironmentId, orgId, queryClient])
 
-  const containers = selectedEnvironment
-    ? (containersByEnv[selectedEnvironment.id] ?? [])
-    : []
+  const containers = selectedEnvironment ? (containersByEnv[selectedEnvironment.id] ?? []) : []
   const tone = environmentStatusTone(containers)
   const hasServer = Boolean(effectiveServerId)
-  const { hasContainers, isRunning } = deriveLifecycleContainerState(
-    containers,
-    tone.label,
-  )
+  const { hasContainers, isRunning } = deriveLifecycleContainerState(containers, tone.label)
   const destroyBusy = stopEnvironmentMutation.isPending
   const busy = inFlight || destroyBusy
 
-  const statusLabel = resolveLifecycleStatusLabel(
-    tone.label,
-    inheritsBaseServer,
-  )
+  const statusLabel = resolveLifecycleStatusLabel(tone.label, inheritsBaseServer)
 
   return {
     orgId,
@@ -1296,25 +1158,17 @@ function LifecycleErrorMessages({
   containerError,
   actionError,
   commandError,
-}: Pick<
-  OverviewEnvironmentsPanelModel,
-  'containerError' | 'actionError' | 'commandError'
->) {
+}: Pick<OverviewEnvironmentsPanelModel, 'containerError' | 'actionError' | 'commandError'>) {
   return (
     <>
-      {containerError ? (
-        <Text style={panelStyles.error}>{containerError}</Text>
-      ) : null}
+      {containerError ? <Text style={panelStyles.error}>{containerError}</Text> : null}
       {actionError ? <Text style={panelStyles.error}>{actionError}</Text> : null}
-      {commandError ? (
-        <Text style={panelStyles.error}>{commandError}</Text>
-      ) : null}
+      {commandError ? <Text style={panelStyles.error}>{commandError}</Text> : null}
     </>
   )
 }
 
-const EnvironmentLifecycleContext =
-  createContext<OverviewEnvironmentsPanelModel | null>(null)
+const EnvironmentLifecycleContext = createContext<OverviewEnvironmentsPanelModel | null>(null)
 
 /**
  * One lifecycle model per environment page. The header's buttons, the deploy
@@ -1322,9 +1176,7 @@ const EnvironmentLifecycleContext =
  * deploy started in the header shows its output on every tab and nothing polls
  * twice. Mount it where the environment's tabs are.
  */
-export function EnvironmentLifecycleProvider({
-  children,
-}: Readonly<{ children: ReactNode }>) {
+export function EnvironmentLifecycleProvider({ children }: Readonly<{ children: ReactNode }>) {
   const model = useOverviewEnvironmentsPanelModel()
   return (
     <EnvironmentLifecycleContext.Provider value={model}>
@@ -1336,9 +1188,7 @@ export function EnvironmentLifecycleProvider({
 export function useEnvironmentLifecycle(): OverviewEnvironmentsPanelModel {
   const model = useContext(EnvironmentLifecycleContext)
   if (!model) {
-    throw new TypeError(
-      'useEnvironmentLifecycle must be used within EnvironmentLifecycleProvider',
-    )
+    throw new TypeError('useEnvironmentLifecycle must be used within EnvironmentLifecycleProvider')
   }
   return model
 }
@@ -1346,16 +1196,13 @@ export function useEnvironmentLifecycle(): OverviewEnvironmentsPanelModel {
 /** Deploy, Restart and the "⋯" menu for the environment in view, with the reason a button is off. */
 export function EnvironmentLifecycleActions() {
   const model = useEnvironmentLifecycle()
-  const { selectedEnvironment, canMutateLifecycle, hasServer, needsPrincipal } =
-    model
+  const { selectedEnvironment, canMutateLifecycle, hasServer, needsPrincipal } = model
   if (!selectedEnvironment) return null
   let blocker = null
   if (canMutateLifecycle && !hasServer) {
     blocker = <MissingServerHostingLink environmentId={selectedEnvironment.id} />
   } else if (canMutateLifecycle && needsPrincipal) {
-    blocker = (
-      <MissingPrincipalBindingsLink environmentId={selectedEnvironment.id} />
-    )
+    blocker = <MissingPrincipalBindingsLink environmentId={selectedEnvironment.id} />
   }
   return (
     <View style={styles.actionsCluster}>
@@ -1387,9 +1234,7 @@ export function EnvironmentLifecycleNotices() {
   if (!selectedEnvironment) return null
   return (
     <View style={styles.root}>
-      {model.destroyArmed ? (
-        <Text style={styles.hintInline}>{DESTROY_ARMED_HINT}</Text>
-      ) : null}
+      {model.destroyArmed ? <Text style={styles.hintInline}>{DESTROY_ARMED_HINT}</Text> : null}
 
       <LifecycleErrorMessages
         containerError={model.containerError}
@@ -1447,8 +1292,7 @@ export function EnvironmentLifecycleNotices() {
 
 /** Branch and deploy-on-push for the environment in view (its Settings tab). */
 export function EnvironmentGitSourceSection() {
-  const { orgId, project, selectedEnvironment, canMutateLifecycle } =
-    useEnvironmentLifecycle()
+  const { orgId, project, selectedEnvironment, canMutateLifecycle } = useEnvironmentLifecycle()
   if (!selectedEnvironment) return null
   return (
     <EnvironmentGitSourcePanel
@@ -1489,7 +1333,7 @@ function SystemEnvironmentPanelBody() {
             ignorePromise(
               model.refetchAllContainers().catch((err) => {
                 model.setContainerError(userErrorMessage(err, 'Failed to refresh'))
-              }),
+              })
             )
           }}
         />

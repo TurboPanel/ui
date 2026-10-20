@@ -114,7 +114,7 @@ export function NewEnvironmentSheet({
     }
     setError(null)
     const result = await createEnvironment.run(
-      newEnvironmentBody({ projectId, name, start, serverId }),
+      newEnvironmentBody({ projectId, name, start, serverId })
     )
     if (!result.ok) {
       setError(result.error ?? 'Could not create the environment.')
@@ -187,7 +187,9 @@ export function NewEnvironmentSheet({
         {preview ? (
           <MiniMap columns={preview} accessibilityLabel="What the new environment will run" />
         ) : (
-          <Text style={s.hint}>The Base could not be read yet, so there is nothing to preview.</Text>
+          <Text style={s.hint}>
+            The Base could not be read yet, so there is nothing to preview.
+          </Text>
         )}
       </View>
     </Sheet>

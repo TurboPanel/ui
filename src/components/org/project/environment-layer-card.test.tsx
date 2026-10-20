@@ -12,16 +12,34 @@ vi.mock('react-native', async () => ({
   Linking: linking,
 }))
 vi.mock('react-native-svg', async () => (await import('@/components/ui/v4/rn-stub')).svgStub)
-vi.mock('@/lib/theme-preference', async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub)
+vi.mock(
+  '@/lib/theme-preference',
+  async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub
+)
 
 const DATA: EnvironmentCardData = {
   name: 'Staging',
-  relation: { standsAlone: false, changeCount: 2, text: 'Follows the Base · 2 changes', source: 'env' },
+  relation: {
+    standsAlone: false,
+    changeCount: 2,
+    text: 'Follows the Base · 2 changes',
+    source: 'env',
+  },
   running: { status: 'running' },
   lastDeploy: { status: 'deployed', sub: 'a41c9e2 · 4m ago' },
   columns: [
-    { key: 'visitors', label: 'Visitors', emptyText: 'No hostnames yet', items: [{ name: 'staging.example.com', status: null, changed: false }] },
-    { key: 'apps', label: 'Apps', emptyText: 'No apps yet', items: [{ name: 'web', status: 'running', changed: true }] },
+    {
+      key: 'visitors',
+      label: 'Visitors',
+      emptyText: 'No hostnames yet',
+      items: [{ name: 'staging.example.com', status: null, changed: false }],
+    },
+    {
+      key: 'apps',
+      label: 'Apps',
+      emptyText: 'No apps yet',
+      items: [{ name: 'web', status: 'running', changed: true }],
+    },
     { key: 'data', label: 'Data', emptyText: 'None', items: [] },
   ],
   branch: 'staging',
@@ -93,7 +111,7 @@ describe.each(SCENARIOS)('environment layer card ($name)', (scenario) => {
           running: { status: 'unknown', label: 'Checking…' },
         }}
         onOpen={vi.fn()}
-      />,
+      />
     )
     expect(screen.queryByLabelText(/Follows the Base/)).toBeNull()
     expect(screen.queryByText('Last deploy')).toBeNull()
@@ -106,9 +124,12 @@ describe.each(SCENARIOS)('environment layer card ($name)', (scenario) => {
   it('draws a stand-alone environment with its own tag', () => {
     render(
       <EnvironmentLayerCard
-        data={{ ...DATA, relation: { standsAlone: true, changeCount: 0, text: 'Stands alone', source: 'own' } }}
+        data={{
+          ...DATA,
+          relation: { standsAlone: true, changeCount: 0, text: 'Stands alone', source: 'own' },
+        }}
         onOpen={vi.fn()}
-      />,
+      />
     )
     expect(screen.getByLabelText('Stands alone')).toBeTruthy()
   })

@@ -20,7 +20,11 @@ const styles = themedStyles((p) => ({
   spacer: { flexGrow: 1 },
 }))
 
-function Fact({ label, value, mono = false }: Readonly<{ label: string; value: string; mono?: boolean }>) {
+function Fact({
+  label,
+  value,
+  mono = false,
+}: Readonly<{ label: string; value: string; mono?: boolean }>) {
   const s = styles(usePalette())
   return (
     <View style={s.fact}>
@@ -84,10 +88,7 @@ export function EnvironmentLayerCard({
     >
       <StatusTriplet stacked running={data.running} lastDeploy={data.lastDeploy} />
       {data.columns ? (
-        <MiniMap
-          columns={data.columns}
-          accessibilityLabel={`What ${data.name} runs`}
-        />
+        <MiniMap columns={data.columns} accessibilityLabel={`What ${data.name} runs`} />
       ) : null}
       <View style={s.facts}>
         {data.branch ? <Fact label="Branch" value={data.branch} mono /> : null}

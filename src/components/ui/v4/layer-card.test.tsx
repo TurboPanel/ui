@@ -5,7 +5,10 @@ import { applyScenario, SCENARIOS, styleOf, token } from '@/components/ui/v4/rn-
 import { LayerBase, LayerCard } from '@/components/ui/v4/layer-card'
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
-vi.mock('@/lib/theme-preference', async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub)
+vi.mock(
+  '@/lib/theme-preference',
+  async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub
+)
 
 afterEach(cleanup)
 
@@ -40,7 +43,7 @@ describe.each(SCENARIOS)('layer cards ($name)', (scenario) => {
     render(
       <LayerCard title="Staging" head={<span>Follows the Base</span>} foot={<span>Open</span>}>
         <span>body</span>
-      </LayerCard>,
+      </LayerCard>
     )
     const card = screen.getByRole('heading', { name: 'Staging' }).parentElement?.parentElement
     expect(styleOf(card).backgroundColor).toBe(token(scenario, 'surface'))
@@ -59,7 +62,8 @@ describe.each(SCENARIOS)('layer cards ($name)', (scenario) => {
 
   it('a stand-alone environment has an empty dashed sheet behind it', () => {
     render(<LayerCard title="Preview" alone />)
-    const ghost = screen.getByRole('heading', { name: 'Preview' }).parentElement?.parentElement?.previousElementSibling
+    const ghost = screen.getByRole('heading', { name: 'Preview' }).parentElement?.parentElement
+      ?.previousElementSibling
     expect(styleOf(ghost).borderStyle).toBe('dashed')
     expect(styleOf(ghost).backgroundColor).toBe('transparent')
     expect(styleOf(ghost).borderColor).toBe(token(scenario, 'sepStrong'))

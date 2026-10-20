@@ -19,7 +19,7 @@ export function row(
   service: string,
   field: string,
   value: string | null,
-  extra: Partial<ConfigViewFieldRow> = {},
+  extra: Partial<ConfigViewFieldRow> = {}
 ): ConfigViewFieldRow {
   return {
     key: `svc:${service}:${field}`,
@@ -37,7 +37,7 @@ export function viewService(
   name: string,
   kind: ConfigViewService['kind'],
   rows: ConfigViewFieldRow[] = [],
-  extra: Partial<ConfigViewService> = {},
+  extra: Partial<ConfigViewService> = {}
 ): ConfigViewService {
   return { name, serviceId: `s-${name}`, kind, source: 'base', rows, ...extra }
 }
@@ -123,7 +123,9 @@ export function configView(overrides: Partial<EnvironmentConfigView> = {}): Envi
     base: {
       services: [viewService('web', 'node', [row('web', 'linuxUser', 'website')]), old],
       variables: [],
-      linuxUsers: [{ name: 'website', access: 'sftp', description: null, source: 'base', usedBy: ['web'] }],
+      linuxUsers: [
+        { name: 'website', access: 'sftp', description: null, source: 'base', usedBy: ['web'] },
+      ],
     },
     effective: {
       services: [web, blog, api, redis],
@@ -150,7 +152,11 @@ export function serviceRecord(name: string): ServiceRecord {
   }
 }
 
-export function container(name: string, status: string, role: ContainerRecord['role'] = 'service'): ContainerRecord {
+export function container(
+  name: string,
+  status: string,
+  role: ContainerRecord['role'] = 'service'
+): ContainerRecord {
   return {
     id: `c-${name}-${status}-${role}`,
     serviceId: `s-${name}`,
@@ -181,7 +187,7 @@ export function hosting(name: string | null, tlsId: string | null = null): Hosti
 export function tlsRecord(
   id: string,
   source: TlsRecord['source'],
-  status: TlsRecord['metadata']['status'],
+  status: TlsRecord['metadata']['status']
 ): TlsRecord {
   return {
     id,
@@ -245,7 +251,7 @@ export function binding(
   serviceId: string,
   databaseName: string,
   managedId: string | null,
-  engine: BindingRecord['engine'],
+  engine: BindingRecord['engine']
 ): BindingRecord {
   return {
     id: `b-${serviceId}-${databaseName}`,
@@ -280,7 +286,9 @@ export function overviewSource(overrides: Partial<OverviewSource> = {}): Overvie
       container('blog', 'restarting'),
       container('redis', 'exited'),
     ],
-    hostings: { 's-web': [hosting('shop.example.com', 't1'), hosting('shop.example.com', 't1'), hosting(' ')] },
+    hostings: {
+      's-web': [hosting('shop.example.com', 't1'), hosting('shop.example.com', 't1'), hosting(' ')],
+    },
     tls: [tlsRecord('t1', 'lets_encrypt', 'ready')],
     storage: [storageRecord('uploads', 's-web'), storageRecord('empty', null)],
     bindings: [

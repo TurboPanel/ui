@@ -164,11 +164,7 @@ export function EnvironmentConfigurationView({
             onOpenUrl={onOpenUrl}
             onManage={onManageHosting}
           />
-          <VariablesSection
-            variables={model.variables}
-            envName={model.envName}
-            editing={editing}
-          />
+          <VariablesSection variables={model.variables} envName={model.envName} editing={editing} />
           <LinuxUsersSection users={model.linuxUsers} editing={editing} />
           <DataSection data={model.data} />
         </>
@@ -199,17 +195,17 @@ export function EnvironmentConfigurationScreen() {
   const envName = environment ? environmentDisplayName(environment) : 'This environment'
   const baseModel = useMemo(
     () => (query.data ? buildConfigViewModel({ envName, view: query.data }) : null),
-    [query.data, envName],
+    [query.data, envName]
   )
   // The config view reads compose only; hostnames added on the Hosting screen live in the panel.
   const serviceIds = useMemo(
     () => (baseModel?.apps ?? []).flatMap((app) => (app.serviceId === null ? [] : [app.serviceId])),
-    [baseModel],
+    [baseModel]
   )
   const hostings = useHostingsByServices(orgId, serviceIds, { enabled: baseModel !== null })
   const model = useMemo(
     () => (baseModel ? withHostingHostnames(baseModel, hostings.hostingsByService) : null),
-    [baseModel, hostings.hostingsByService],
+    [baseModel, hostings.hostingsByService]
   )
   let hostingsStatus: HostingsStatus = 'ready'
   if (hostings.hasError) hostingsStatus = 'error'
@@ -223,7 +219,10 @@ export function EnvironmentConfigurationScreen() {
     setStaged((current) => stageEdit(current, edit))
     setSavedCount(0)
   }, [])
-  const unstage = useCallback((key: string) => setStaged((current) => unstageEdit(current, key)), [])
+  const unstage = useCallback(
+    (key: string) => setStaged((current) => unstageEdit(current, key)),
+    []
+  )
   const discard = useCallback(() => {
     setStaged([])
     setSaveError(null)
@@ -291,18 +290,16 @@ export function EnvironmentConfigurationScreen() {
   return (
     <View style={s.stack}>
       {savedCount > 0 && staged.length === 0 ? (
-        <Notice
-          tone="ok"
-          title="Saved"
-          body={`The changes go live when you deploy ${envName}.`}
-        />
+        <Notice tone="ok" title="Saved" body={`The changes go live when you deploy ${envName}.`} />
       ) : null}
       <EnvironmentConfigurationView
         model={model}
         multiple={environments.length > 1}
         hostingsStatus={hostingsStatus}
         editing={editing}
-        onOpenApp={(serviceId) => router.push(projectServiceHref(orgId, projectId, serviceId) as Href)}
+        onOpenApp={(serviceId) =>
+          router.push(projectServiceHref(orgId, projectId, serviceId) as Href)
+        }
         onOpenUrl={(url) => {
           Linking.openURL(url).catch(() => {
             // A blocked link has nothing to recover; the domain stays listed.

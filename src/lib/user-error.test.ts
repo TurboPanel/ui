@@ -65,19 +65,19 @@ describe('userErrorMessage', () => {
 describe('cancel deploy errors', () => {
   it('maps the two refusals to plain sentences', () => {
     expect(userErrorMessage(new Error('HTTP 409: deploy_not_cancellable'), 'x')).toBe(
-      'This deploy has already finished.',
+      'This deploy has already finished.'
     )
     expect(userErrorMessage(new Error('HTTP 409: cancel_unsupported'), 'x')).toBe(
-      "This server's TurboPanel daemon is too old to cancel deploys. Update it first.",
+      "This server's TurboPanel daemon is too old to cancel deploys. Update it first."
     )
   })
 
   it('maps the too-late and unreachable-server refusals', () => {
     expect(userErrorMessage(new Error('HTTP 409: deploy_too_late'), 'x')).toBe(
-      'This deploy is already switching over, so it can no longer be stopped. It will finish.',
+      'This deploy is already switching over, so it can no longer be stopped. It will finish.'
     )
     expect(userErrorMessage(new Error('HTTP 503: daemon_unavailable'), 'x')).toBe(
-      'TurboPanel could not reach this server right now. Try again in a moment.',
+      'TurboPanel could not reach this server right now. Try again in a moment.'
     )
   })
 })
@@ -140,10 +140,10 @@ describe('licenseTierUserErrorMessage', () => {
 
   it('falls back when the mutation error string is unknown', () => {
     expect(licenseTierUserErrorMessage('HTTP 500: boom', 'Could not update license tier')).toBe(
-      'HTTP 500: boom',
+      'HTTP 500: boom'
     )
     expect(licenseTierUserErrorMessage('   ', 'Could not update license tier')).toBe(
-      'Could not update license tier',
+      'Could not update license tier'
     )
   })
 })

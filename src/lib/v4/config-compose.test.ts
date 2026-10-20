@@ -19,15 +19,27 @@ function doc(data: Record<string, unknown>): ComposeDocument {
   return { version: 1, data, presentation: { keyOrder: Object.keys(data), comments: {} } }
 }
 
-const web = { serviceKind: 'node', principal: 'website', source: { sourceId: 's1', buildKind: 'railpack', branch: 'main' } }
+const web = {
+  serviceKind: 'node',
+  principal: 'website',
+  source: { sourceId: 's1', buildKind: 'railpack', branch: 'main' },
+}
 
 function project(extra: Record<string, unknown> = {}): ComposeDocument {
   return doc({
     services: {
-      web: { command: 'npm start', ports: ['80:80'], environment: { A: '1' }, 'x-turbopanel': web, ...extra },
+      web: {
+        command: 'npm start',
+        ports: ['80:80'],
+        environment: { A: '1' },
+        'x-turbopanel': web,
+        ...extra,
+      },
       db: { image: 'postgres:17' },
     },
-    'x-turbopanel': { principals: { website: { access: 'sftp' }, 'staging-web': { access: 'none' } } },
+    'x-turbopanel': {
+      principals: { website: { access: 'sftp' }, 'staging-web': { access: 'none' } },
+    },
   })
 }
 
@@ -54,7 +66,12 @@ describe('composePathFor', () => {
   })
 
   it('names the sign-in access path of a Linux user', () => {
-    expect(principalAccessPath('website')).toEqual(['x-turbopanel', 'principals', 'website', 'access'])
+    expect(principalAccessPath('website')).toEqual([
+      'x-turbopanel',
+      'principals',
+      'website',
+      'access',
+    ])
   })
 })
 
@@ -83,7 +100,9 @@ describe('setEnvironmentValue', () => {
       services: { web: Record<string, unknown> }
     }
     expect(merged.services.web.command).toBe('npm start')
-    expect(readMergedValue(project(), result.document, web$, ['x-turbopanel', 'principal'])).toBe('staging-web')
+    expect(readMergedValue(project(), result.document, web$, ['x-turbopanel', 'principal'])).toBe(
+      'staging-web'
+    )
   })
 
   it('restates the repository too for a source setting, in the same shape', () => {
@@ -159,7 +178,11 @@ describe('setEnvironmentValue', () => {
   })
 
   it('edits inside a stand-alone environment and keeps its override tag', () => {
-    const env = doc({ services: makeComposeTag('override', { web: { image: 'x', 'x-turbopanel': { serviceKind: 'node', principal: 'a' } } }) })
+    const env = doc({
+      services: makeComposeTag('override', {
+        web: { image: 'x', 'x-turbopanel': { serviceKind: 'node', principal: 'a' } },
+      }),
+    })
     const result = setEnvironmentValue({
       projectCompose: project(),
       environmentCompose: env,
@@ -217,13 +240,25 @@ describe('removeEnvironmentValue (Go back to Base)', () => {
       path: ['x-turbopanel', 'principal'],
     })
     expect(data(back)).toEqual({})
-    expect(readMergedValue(project(), (back as { document: ComposeDocument }).document, web$, ['x-turbopanel', 'principal'])).toBe('website')
+    expect(
+      readMergedValue(project(), (back as { document: ComposeDocument }).document, web$, [
+        'x-turbopanel',
+        'principal',
+      ])
+    ).toBe('website')
   })
 
   it('keeps other changes of the same app and only strips the markers it added', () => {
     const env = doc({
       services: {
-        web: { command: 'x', 'x-turbopanel': { serviceKind: 'node', principal: 'a', source: { sourceId: 's1', buildKind: 'railpack' } } },
+        web: {
+          command: 'x',
+          'x-turbopanel': {
+            serviceKind: 'node',
+            principal: 'a',
+            source: { sourceId: 's1', buildKind: 'railpack' },
+          },
+        },
       },
     })
     const result = removeEnvironmentValue({
@@ -238,7 +273,13 @@ describe('removeEnvironmentValue (Go back to Base)', () => {
   it('keeps a source block that still holds a branch, and a different kind', () => {
     const env = doc({
       services: {
-        web: { 'x-turbopanel': { serviceKind: 'site', principal: 'a', source: { sourceId: 's1', branch: 'x' } } },
+        web: {
+          'x-turbopanel': {
+            serviceKind: 'site',
+            principal: 'a',
+            source: { sourceId: 's1', branch: 'x' },
+          },
+        },
       },
     })
     const result = removeEnvironmentValue({
@@ -248,13 +289,17 @@ describe('removeEnvironmentValue (Go back to Base)', () => {
       path: ['x-turbopanel', 'principal'],
     })
     expect(data(result)).toEqual({
-      services: { web: { 'x-turbopanel': { serviceKind: 'site', source: { sourceId: 's1', branch: 'x' } } } },
+      services: {
+        web: { 'x-turbopanel': { serviceKind: 'site', source: { sourceId: 's1', branch: 'x' } } },
+      },
     })
   })
 
   it('deleting is not the same as !reset: a reset removes the Base value', () => {
     const reset = doc({ services: { web: { command: makeComposeTag('reset', null) } } })
-    const merged = mergeComposeOverlay(project(), reset).data as { services: { web: Record<string, unknown> } }
+    const merged = mergeComposeOverlay(project(), reset).data as {
+      services: { web: Record<string, unknown> }
+    }
     expect('command' in merged.services.web).toBe(false)
     const back = removeEnvironmentValue({
       projectCompose: project(),
@@ -262,13 +307,19 @@ describe('removeEnvironmentValue (Go back to Base)', () => {
       target: web$,
       path: ['command'],
     })
-    expect(readMergedValue(project(), (back as { document: ComposeDocument }).document, web$, ['command'])).toBe('npm start')
+    expect(
+      readMergedValue(project(), (back as { document: ComposeDocument }).document, web$, [
+        'command',
+      ])
+    ).toBe('npm start')
   })
 
   it('removes an environment variable from a mapping, a list, and the last one', () => {
     const mapping = removeEnvironmentValue({
       projectCompose: project(),
-      environmentCompose: doc({ services: { web: { command: 'x', environment: { A: '9', B: '2' } } } }),
+      environmentCompose: doc({
+        services: { web: { command: 'x', environment: { A: '9', B: '2' } } },
+      }),
       target: web$,
       path: ['environment', 'A'],
     })
@@ -320,7 +371,11 @@ describe('removeEnvironmentValue (Go back to Base)', () => {
       data(
         removeEnvironmentValue({
           projectCompose: project(),
-          environmentCompose: doc({ services: { web: { deploy: makeComposeTag('override', { replicas: 2 }), command: 'x' } } }),
+          environmentCompose: doc({
+            services: {
+              web: { deploy: makeComposeTag('override', { replicas: 2 }), command: 'x' },
+            },
+          }),
           target: web$,
           path: ['deploy', 'replicas'],
         })
@@ -341,7 +396,9 @@ describe('removeEnvironmentValue (Go back to Base)', () => {
       path: ['x-turbopanel', 'principal'],
     })
     expect(data(result)).toEqual({
-      services: makeComposeTag('override', { web: { image: 'x', 'x-turbopanel': { serviceKind: 'node' } } }),
+      services: makeComposeTag('override', {
+        web: { image: 'x', 'x-turbopanel': { serviceKind: 'node' } },
+      }),
     })
   })
 
@@ -372,11 +429,15 @@ describe('removeEnvironmentValue (Go back to Base)', () => {
 describe('restoreEnvironmentService', () => {
   it('brings back an app the environment removed', () => {
     const env = doc({ services: { db: makeComposeTag('reset', null), worker: { image: 'x' } } })
-    expect(data(restoreEnvironmentService(env, 'db'))).toEqual({ services: { worker: { image: 'x' } } })
+    expect(data(restoreEnvironmentService(env, 'db'))).toEqual({
+      services: { worker: { image: 'x' } },
+    })
   })
 
   it('refuses an app that is not removed, and an empty result is a blank document', () => {
-    expect(restoreEnvironmentService(doc({ services: { db: { image: 'x' } } }), 'db')).toMatchObject({ ok: false })
+    expect(
+      restoreEnvironmentService(doc({ services: { db: { image: 'x' } } }), 'db')
+    ).toMatchObject({ ok: false })
     expect(restoreEnvironmentService(null, 'db')).toMatchObject({ ok: false })
     const only = doc({ services: { db: makeComposeTag('reset', null) } })
     expect(data(restoreEnvironmentService(only, 'db'))).toEqual({})
@@ -397,7 +458,12 @@ describe('setBaseValue and setValueInBase', () => {
 
   it('refuses an app the Base does not have', () => {
     expect(
-      setBaseValue({ projectCompose: project(), target: { serviceName: 'ghost' }, path: ['command'], value: 'x' })
+      setBaseValue({
+        projectCompose: project(),
+        target: { serviceName: 'ghost' },
+        path: ['command'],
+        value: 'x',
+      })
     ).toEqual({ ok: false, reason: 'The Base has no app named ghost.' })
   })
 
@@ -420,8 +486,12 @@ describe('setBaseValue and setValueInBase', () => {
       path: ['command'],
       value: 'node .',
     })
-    expect(result.ok && (result.projectCompose.data.services as { web: { command: string } }).web.command).toBe('node .')
-    expect(result.ok && result.environmentCompose.data).toEqual({ services: { web: { deploy: { replicas: 2 } } } })
+    expect(
+      result.ok && (result.projectCompose.data.services as { web: { command: string } }).web.command
+    ).toBe('node .')
+    expect(result.ok && result.environmentCompose.data).toEqual({
+      services: { web: { deploy: { replicas: 2 } } },
+    })
   })
 
   it('passes a refusal on', () => {
@@ -472,8 +542,12 @@ describe('makeValueTheBase', () => {
       path: ['ports'],
     })
     if (!result.ok) throw new Error(result.reason)
-    const merged = (mergeComposeOverlay(project(), env).data.services as { web: { ports: unknown } }).web.ports
-    expect((result.projectCompose.data.services as { web: { ports: unknown } }).web.ports).toEqual(merged)
+    const merged = (
+      mergeComposeOverlay(project(), env).data.services as { web: { ports: unknown } }
+    ).web.ports
+    expect((result.projectCompose.data.services as { web: { ports: unknown } }).web.ports).toEqual(
+      merged
+    )
   })
 
   it('says why it cannot', () => {
@@ -496,7 +570,9 @@ describe('makeValueTheBase', () => {
     expect(
       makeValueTheBase({
         projectCompose: project(),
-        environmentCompose: doc({ services: { web: makeComposeTag('override', { command: 'x' }) } }),
+        environmentCompose: doc({
+          services: { web: makeComposeTag('override', { command: 'x' }) },
+        }),
         target: web$,
         path: ['command'],
       })
@@ -525,7 +601,9 @@ describe('readMergedValue', () => {
     expect(readMergedValue(doc({}), list, web$, ['environment', 'C'])).toBeUndefined()
     expect(readMergedValue(project(), null, web$, ['environment', 'A'])).toBe('1')
     expect(readMergedValue(project(), null, web$, ['environment', 'Z'])).toBeUndefined()
-    expect(readMergedValue(doc({ services: { web: { image: 'x' } } }), null, web$, ['environment', 'A'])).toBeUndefined()
+    expect(
+      readMergedValue(doc({ services: { web: { image: 'x' } } }), null, web$, ['environment', 'A'])
+    ).toBeUndefined()
     expect(readMergedValue(project(), null, { serviceName: 'ghost' }, ['command'])).toBeUndefined()
     expect(readMergedValue(project(), null, web$, ['image', 'x'])).toBeUndefined()
   })

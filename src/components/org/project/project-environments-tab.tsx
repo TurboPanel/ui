@@ -1,9 +1,7 @@
 import { useRouter, type Href } from 'expo-router'
 import { useMemo, useState } from 'react'
 import { Text, View } from 'react-native'
-import {
-  EnvironmentLayerCard,
-} from '@/components/org/project/environment-layer-card'
+import { EnvironmentLayerCard } from '@/components/org/project/environment-layer-card'
 import { NewEnvironmentSheet } from '@/components/org/project/new-environment-sheet'
 import { useProjectContext } from '@/components/org/project/project-context'
 import { useNow } from '@/components/org/project/use-now'
@@ -17,10 +15,7 @@ import { themedStyles, usePalette } from '@/components/ui/v4/use-palette'
 import { projectBaseHref, projectEnvironmentHref } from '@/lib/project-navigation'
 import { commandStatusById, useCommandsBatch } from '@/lib/queries/commands'
 import { useContainersByProject } from '@/lib/queries/containers'
-import {
-  useEnvironmentConfigViews,
-  useLatestDeployments,
-} from '@/lib/queries/environment-cards'
+import { useEnvironmentConfigViews, useLatestDeployments } from '@/lib/queries/environment-cards'
 import { useOrgServers } from '@/lib/queries/servers'
 import { useHostingsByServices } from '@/lib/queries/services'
 import { environmentDisplayName } from '@/lib/resource-labels'
@@ -76,11 +71,13 @@ export function ProjectEnvironmentsTab() {
     () => [
       ...new Set(
         Object.values(views).flatMap((view) =>
-          (view?.effective.services ?? []).flatMap((service) => (service.serviceId ? [service.serviceId] : [])),
-        ),
+          (view?.effective.services ?? []).flatMap((service) =>
+            service.serviceId ? [service.serviceId] : []
+          )
+        )
       ),
     ],
-    [views],
+    [views]
   )
   const { hostingsByService } = useHostingsByServices(orgId, serviceIds)
   // The step a running deploy is on comes from the command status poll; it
@@ -105,21 +102,33 @@ export function ProjectEnvironmentsTab() {
           serverLine: serverLine(env.serverId, defaultServerId, servers),
           now,
           hostingDomains: (views[env.id]?.effective.services ?? []).flatMap((service) =>
-            (service.serviceId ? (hostingsByService[service.serviceId] ?? []) : []).flatMap((row) =>
-              row.name ? [row.name] : [],
-            ),
+            (service.serviceId ? (hostingsByService[service.serviceId] ?? []) : []).flatMap(
+              (row) => (row.name ? [row.name] : [])
+            )
           ),
         }) satisfies EnvironmentCardData,
       })),
-    [environments, containers.isLoading, containers.containersByEnv, views, latest, progressRecords, defaultServerId, servers, now, hostingsByService],
+    [
+      environments,
+      containers.isLoading,
+      containers.containersByEnv,
+      views,
+      latest,
+      progressRecords,
+      defaultServerId,
+      servers,
+      now,
+      hostingsByService,
+    ]
   )
 
-  const base = environmentIds.map((id) => views[id]?.base).find((side) => side !== undefined) ?? null
+  const base =
+    environmentIds.map((id) => views[id]?.base).find((side) => side !== undefined) ?? null
   const relationLine = followLine(
     environments.map((env) => {
       const view = views[env.id]
       return { name: environmentDisplayName(env), followsBase: view ? view.followsBase : null }
-    }),
+    })
   )
 
   const openCreated = async (environmentId: string) => {
@@ -129,14 +138,25 @@ export function ProjectEnvironmentsTab() {
   }
 
   const newEnvironment = canAdd ? (
-    <ActionButton label="New environment" variant="primary" size="sm" onPress={() => setAdding(true)} />
+    <ActionButton
+      label="New environment"
+      variant="primary"
+      size="sm"
+      onPress={() => setAdding(true)}
+    />
   ) : null
 
   let body
   if (loading && environments.length === 0) {
     body = <Text style={s.muted}>Loading environments…</Text>
   } else if (environments.length === 0) {
-    body = <EmptyPanel title="No environments yet" body="Add one to run this project." action={newEnvironment} />
+    body = (
+      <EmptyPanel
+        title="No environments yet"
+        body="Add one to run this project."
+        action={newEnvironment}
+      />
+    )
   } else {
     body = (
       <>
@@ -155,7 +175,9 @@ export function ProjectEnvironmentsTab() {
             <View key={card.id} style={s.cell}>
               <EnvironmentLayerCard
                 data={card.data}
-                onOpen={() => router.push(projectEnvironmentHref(orgId, projectId, card.id) as Href)}
+                onOpen={() =>
+                  router.push(projectEnvironmentHref(orgId, projectId, card.id) as Href)
+                }
               />
             </View>
           ))}
@@ -164,7 +186,9 @@ export function ProjectEnvironmentsTab() {
           <Notice
             title="This project has one environment"
             body={`Add another, like Staging, to try changes on their own branch and server before they reach ${cards[0]?.data.name ?? 'it'}. It starts from the Base.`}
-            actions={<ActionButton label="New environment" size="sm" onPress={() => setAdding(true)} />}
+            actions={
+              <ActionButton label="New environment" size="sm" onPress={() => setAdding(true)} />
+            }
           />
         ) : null}
       </>

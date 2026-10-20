@@ -82,8 +82,20 @@ const baseWeb = service('web', 'node', [
 ])
 
 const baseUsers = [
-  { name: 'website', access: 'sftp' as const, description: null, source: 'base' as const, usedBy: ['web'] },
-  { name: 'staging-web', access: 'none' as const, description: null, source: 'base' as const, usedBy: [] },
+  {
+    name: 'website',
+    access: 'sftp' as const,
+    description: null,
+    source: 'base' as const,
+    usedBy: ['web'],
+  },
+  {
+    name: 'staging-web',
+    access: 'none' as const,
+    description: null,
+    source: 'base' as const,
+    usedBy: [],
+  },
 ]
 
 export const STAGING_CHANGES: ConfigViewChange[] = [

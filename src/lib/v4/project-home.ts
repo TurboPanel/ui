@@ -23,12 +23,7 @@ import type {
 } from '@/lib/instance-api'
 import { serverDisplayName } from '@/lib/resource-labels'
 import { baseSummary, linuxUserKey, relationText } from './change-labels'
-import {
-  defaultLinuxUser,
-  linuxUserFromDeclared,
-  resolveRunsAs,
-  type RunsAs,
-} from './linux-users'
+import { defaultLinuxUser, linuxUserFromDeclared, resolveRunsAs, type RunsAs } from './linux-users'
 import { isAppService } from './service-roles'
 import { standAloneCompose } from './stand-alone-compose'
 import type { StatusKey } from './status-vocab'
@@ -60,7 +55,9 @@ function statusOfRows(rows: readonly ContainerRecord[]): StatusKey {
 export type NativeRunFallback = Readonly<{ latest: DeploymentGroup | null | undefined }>
 
 /** True when the effective config has an app that runs natively, not in a container. */
-export function hasNativeApp(services: readonly Pick<ConfigViewService, 'kind'>[] | undefined): boolean {
+export function hasNativeApp(
+  services: readonly Pick<ConfigViewService, 'kind'>[] | undefined
+): boolean {
   return (services ?? []).some((service) => service.kind === 'node' || service.kind === 'site')
 }
 
@@ -79,7 +76,7 @@ export function nativeDeployKey(latest: DeploymentGroup | null | undefined): Sta
  */
 export function runningStatusKey(
   containers: readonly ContainerRecord[] | undefined,
-  native?: NativeRunFallback,
+  native?: NativeRunFallback
 ): StatusKey | undefined {
   if (containers === undefined) return undefined
   if (containers.length === 0 || !hasHostDeployedContainers(containers)) {
@@ -91,7 +88,7 @@ export function runningStatusKey(
 /** The state of one app on the mini map; `null` until it has been deployed. */
 export function serviceStatusKey(
   containers: readonly ContainerRecord[],
-  native?: NativeRunFallback,
+  native?: NativeRunFallback
 ): StatusKey | null {
   if (containers.length === 0 || !hasHostDeployedContainers(containers)) {
     const key = native ? nativeDeployKey(native.latest) : undefined
@@ -105,7 +102,9 @@ export function serviceStatusKey(
 const IN_PROGRESS = new Set(['queued', 'dispatching', 'sent', 'acked', 'running'])
 
 /** True while any host of the deploy is still queued or running. */
-export function isDeployInProgress(group: Pick<DeploymentGroup, 'status'> | null | undefined): boolean {
+export function isDeployInProgress(
+  group: Pick<DeploymentGroup, 'status'> | null | undefined
+): boolean {
   return group != null && IN_PROGRESS.has(group.status)
 }
 
@@ -142,7 +141,7 @@ export function lastDeployPart(
   group: DeploymentGroup | null | undefined,
   now: number,
   /** "Step 3 of 7 · Installing Docker" from the command status poll; replaces the word while the deploy runs. */
-  progressLabel?: string | null,
+  progressLabel?: string | null
 ): DeployPart | undefined {
   if (group === undefined) return undefined
   if (group === null) return { status: 'never', label: 'No deploys yet' }
@@ -152,7 +151,11 @@ export function lastDeployPart(
       : deployWords(group)
   const sha = group.trigger?.commitSha?.slice(0, 7)
   const sub = [sha, formatAgo(group.startedAt, now)].filter(Boolean).join(' · ')
-  return { status: words.status, ...(words.label ? { label: words.label } : {}), ...(sub ? { sub } : {}) }
+  return {
+    status: words.status,
+    ...(words.label ? { label: words.label } : {}),
+    ...(sub ? { sub } : {}),
+  }
 }
 
 /** The per-host commands of a deploy; a row from an older control plane may lack them. */
@@ -169,7 +172,7 @@ const COMMAND_IN_FLIGHT = new Set(['queued', 'dispatching', 'sent', 'acked', 'ru
  * off between deploys.
  */
 export function inFlightDeployEntries(
-  latest: Readonly<Record<string, DeploymentGroup | null | undefined>>,
+  latest: Readonly<Record<string, DeploymentGroup | null | undefined>>
 ): { serverId: string; commandId: string }[] {
   const entries: { serverId: string; commandId: string }[] = []
   for (const group of Object.values(latest)) {
@@ -188,7 +191,7 @@ export function inFlightDeployEntries(
  */
 export function deployProgressLabel(
   group: DeploymentGroup | null | undefined,
-  records: ReadonlyMap<string, Readonly<{ progress?: CommandProgress | null }>>,
+  records: ReadonlyMap<string, Readonly<{ progress?: CommandProgress | null }>>
 ): string | null {
   if (!group || !isDeployInProgress(group)) return null
   for (const command of hostCommands(group)) {
@@ -256,15 +259,17 @@ export function baseLine(base: ConfigViewSide): string {
  * whose answer is not known yet are left out.
  */
 export function followLine(
-  environments: readonly Readonly<{ name: string; followsBase: boolean | null }>[],
+  environments: readonly Readonly<{ name: string; followsBase: boolean | null }>[]
 ): string {
   const names = (follows: boolean) =>
     environments.filter((env) => env.followsBase === follows).map((env) => env.name)
   const follow = names(true)
   const alone = names(false)
   const parts: string[] = []
-  if (follow.length > 0) parts.push(`${joinNames(follow)} ${follow.length === 1 ? 'follows' : 'follow'} it`)
-  if (alone.length > 0) parts.push(`${joinNames(alone)} ${alone.length === 1 ? 'stands' : 'stand'} alone`)
+  if (follow.length > 0)
+    parts.push(`${joinNames(follow)} ${follow.length === 1 ? 'follows' : 'follow'} it`)
+  if (alone.length > 0)
+    parts.push(`${joinNames(alone)} ${alone.length === 1 ? 'stands' : 'stand'} alone`)
   return parts.join(' · ')
 }
 
@@ -368,9 +373,11 @@ export function miniMapColumns(
   changes: readonly Pick<ConfigViewChange, 'serviceName'>[],
   statusOf: (serviceName: string) => string | null,
   /** Domains attached on the Hosting screen: they live in hosting rows, not in the compose. */
-  extraDomains: readonly string[] = [],
+  extraDomains: readonly string[] = []
 ): MiniMapColumn[] {
-  const changed = new Set(changes.map((change) => change.serviceName).filter((name) => name !== null))
+  const changed = new Set(
+    changes.map((change) => change.serviceName).filter((name) => name !== null)
+  )
   const services = side.services.map((service) => ({ service, v4: v4ServiceOf(service) }))
   const item = (name: string): MiniMapItem => ({
     name,
@@ -392,7 +399,9 @@ export function miniMapColumns(
       key: 'apps',
       label: 'Apps',
       emptyText: 'No apps yet',
-      items: services.filter((entry) => isAppService(entry.v4)).map((entry) => item(entry.service.name)),
+      items: services
+        .filter((entry) => isAppService(entry.v4))
+        .map((entry) => item(entry.service.name)),
     },
     {
       key: 'data',
@@ -437,7 +446,7 @@ type ServerNames = Readonly<{ id: string; name: string | null; hostname: string 
 export function serverLine(
   serverId: string | null,
   defaultServerId: string | null,
-  servers: readonly ServerNames[] | undefined,
+  servers: readonly ServerNames[] | undefined
 ): string {
   const named = (id: string) => {
     const found = servers?.find((server) => server.id === id)
@@ -464,32 +473,37 @@ export function environmentCardData(
     now: number
     /** Hostnames of the environment's hosting rows (read separately from the config view). */
     hostingDomains?: readonly string[]
-  }>,
+  }>
 ): EnvironmentCardData {
   const { view, containers } = input
   const hostingDomains = input.hostingDomains ?? []
   const nativeNames = new Set(
-    (view?.effective.services ?? []).filter((service) => hasNativeApp([service])).map((service) => service.name),
+    (view?.effective.services ?? [])
+      .filter((service) => hasNativeApp([service]))
+      .map((service) => service.name)
   )
   const runningKey = runningStatusKey(
     containers,
-    hasNativeApp(view?.effective.services) ? { latest: input.latest } : undefined,
+    hasNativeApp(view?.effective.services) ? { latest: input.latest } : undefined
   )
   const statusOf = (serviceName: string) =>
     serviceStatusKey(
       (containers ?? []).filter((row) => row.composeServiceName === serviceName),
-      nativeNames.has(serviceName) ? { latest: input.latest } : undefined,
+      nativeNames.has(serviceName) ? { latest: input.latest } : undefined
     )
   return {
     name: input.name,
     relation: environmentRelation(view),
-    running: runningKey === undefined ? { status: 'unknown', label: 'Checking…' } : { status: runningKey },
+    running:
+      runningKey === undefined ? { status: 'unknown', label: 'Checking…' } : { status: runningKey },
     lastDeploy: lastDeployPart(input.latest, input.now, input.progressLabel),
     columns: view ? miniMapColumns(view.effective, view.changes, statusOf, hostingDomains) : null,
     branch: view ? builtBranch(view.effective) : null,
     serverLine: input.serverLine,
     visitHost: view
-      ? (visitHost(view.effective) ?? hostingDomains.find((host) => siteUrlFromHostname(host) !== null) ?? null)
+      ? (visitHost(view.effective) ??
+        hostingDomains.find((host) => siteUrlFromHostname(host) !== null) ??
+        null)
       : null,
   }
 }
@@ -514,7 +528,7 @@ export function newEnvironmentBody(
     name: string
     start: NewEnvironmentStart
     serverId: string | null
-  }>,
+  }>
 ): CreateEnvironmentBody {
   return {
     projectId: input.projectId,
@@ -530,7 +544,7 @@ export function newEnvironmentBody(
  */
 export function startPreview(
   start: NewEnvironmentStart,
-  base: ConfigViewSide | null,
+  base: ConfigViewSide | null
 ): MiniMapColumn[] | null {
   if (start === 'empty') return miniMapColumns(EMPTY_SIDE, [], () => null)
   return base ? miniMapColumns(base, [], () => null) : null

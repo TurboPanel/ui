@@ -49,19 +49,41 @@ describe('change rows', () => {
       envText: 'npm run staging',
       tag: { source: 'env', label: 'Staging change' },
     })
-    expect(user).toMatchObject({ where: 'Linux users', baseText: 'website', envText: 'staging-web' })
+    expect(user).toMatchObject({
+      where: 'Linux users',
+      baseText: 'website',
+      envText: 'staging-web',
+    })
     expect(variableChange).toMatchObject({ label: 'API_URL', where: 'Variable' })
-    expect(added).toMatchObject({ label: 'worker', baseText: 'Not set', envText: 'node', kind: 'added' })
+    expect(added).toMatchObject({
+      label: 'worker',
+      baseText: 'Not set',
+      envText: 'node',
+      kind: 'added',
+    })
   })
 
   it('shows a removed value as Removed and a secret as Hidden', () => {
     const view = stagingView()
     view.changes = [
       { ...view.changes[0], kind: 'removed', envValue: null, envSource: null },
-      { ...view.changes[0], key: 'svc:web:environment.TOKEN', masked: true, baseValue: null, envValue: null },
+      {
+        ...view.changes[0],
+        key: 'svc:web:environment.TOKEN',
+        masked: true,
+        baseValue: null,
+        envValue: null,
+      },
       { ...view.changes[0], key: 'svc:web:image', baseValue: '', envValue: '' },
       { ...view.changes[0], key: 'dom', area: 'domain', label: 'Domain', serviceName: null },
-      { ...view.changes[0], key: 'x', area: 'service', field: null, serviceName: null, label: 'Kind' },
+      {
+        ...view.changes[0],
+        key: 'x',
+        area: 'service',
+        field: null,
+        serviceName: null,
+        label: 'Kind',
+      },
     ]
     const rows = buildConfigViewModel({ envName: 'Staging', view }).changes
     expect(rows[0].envText).toBe('Removed')
@@ -90,7 +112,11 @@ describe('apps', () => {
       changeText: 'Staging changes: start command, Linux user',
       tag: { source: 'env', label: 'Staging change' },
     })
-    expect(web.runsAs).toMatchObject({ user: 'staging-web', label: 'Runs as staging-web', source: 'env' })
+    expect(web.runsAs).toMatchObject({
+      user: 'staging-web',
+      label: 'Runs as staging-web',
+      source: 'env',
+    })
     expect(worker).toMatchObject({ changeText: 'Added in Staging', tag: { source: 'env' } })
     expect(api).toMatchObject({
       kindLine: 'Container · ghcr.io/example/api:1',
@@ -146,7 +172,12 @@ describe('data', () => {
   it('lists data store containers apart from apps', () => {
     const { data } = staging()
     expect(data).toEqual([
-      { name: 'cache', serviceId: 'id-cache', image: 'redis:7', tag: { source: 'base', label: 'Base' } },
+      {
+        name: 'cache',
+        serviceId: 'id-cache',
+        image: 'redis:7',
+        tag: { source: 'base', label: 'Base' },
+      },
     ])
   })
 
@@ -186,7 +217,11 @@ describe('domains', () => {
   })
 })
 
-function hosting(id: string, hostnames: string[], extra: Partial<HostingRecord> = {}): HostingRecord {
+function hosting(
+  id: string,
+  hostnames: string[],
+  extra: Partial<HostingRecord> = {}
+): HostingRecord {
   return {
     id,
     name: null,
@@ -277,7 +312,11 @@ describe('variables', () => {
       usedFor: 'Build and run',
       sourceNote: '',
     })
-    expect(byName.SECRET_KEY).toMatchObject({ valueText: SECRET_VALUE, isSecret: true, usedFor: 'Build only' })
+    expect(byName.SECRET_KEY).toMatchObject({
+      valueText: SECRET_VALUE,
+      isSecret: true,
+      usedFor: 'Build only',
+    })
     expect(byName.EMPTY).toMatchObject({ valueText: 'Empty', usedFor: 'Not used' })
     expect(byName.BUILD_ONLY.usedFor).toBe('Build only')
   })
@@ -330,7 +369,9 @@ describe('Linux users', () => {
       ...view.effective.linuxUsers,
       { name: 'only-here', access: 'none', description: null, source: 'environment', usedBy: [] },
     ]
-    expect(buildConfigViewModel({ envName: 'Staging', view }).linuxUserNames).not.toContain('only-here')
+    expect(buildConfigViewModel({ envName: 'Staging', view }).linuxUserNames).not.toContain(
+      'only-here'
+    )
   })
 
   it('tags a Base assignment as Base', () => {

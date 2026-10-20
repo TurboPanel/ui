@@ -104,7 +104,9 @@ describe('labels', () => {
 
   it('words the filter, the map tag and the Base card', () => {
     expect(onlyChangesLabel(4)).toBe('Only changes from Base (4)')
-    expect(changedSummary(['start command', 'Linux user'])).toBe('Changed: start command, Linux user')
+    expect(changedSummary(['start command', 'Linux user'])).toBe(
+      'Changed: start command, Linux user'
+    )
     expect(baseSummary(1, 2)).toBe('Base · 1 service · 2 Linux users')
     expect(baseSummary(3, 1)).toBe('Base · 3 services · 1 Linux user')
     expect(valueText(undefined)).toBe('Not set')

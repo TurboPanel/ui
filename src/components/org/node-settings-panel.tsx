@@ -49,9 +49,7 @@ const LOCKFILE_BY_MANAGER: readonly [string, NodePackageManager][] = [
   ['package-lock.json', 'npm'],
 ]
 
-function servicesOf(
-  compose: ComposeDocument | undefined,
-): Record<string, unknown> | null {
+function servicesOf(compose: ComposeDocument | undefined): Record<string, unknown> | null {
   const services = compose?.data?.services
   if (!services || typeof services !== 'object' || Array.isArray(services)) {
     return null
@@ -70,14 +68,10 @@ function basename(path: string): string {
 }
 
 /** Package manager the repository's lockfile implies, from a directory listing. */
-function detectPackageManager(
-  inspection: RepositoryInspection | null,
-): NodePackageManager | null {
+function detectPackageManager(inspection: RepositoryInspection | null): NodePackageManager | null {
   if (!inspection) return null
   const names = new Set(
-    inspection.entries
-      .filter((entry) => entry.kind === 'file')
-      .map((entry) => basename(entry.path)),
+    inspection.entries.filter((entry) => entry.kind === 'file').map((entry) => basename(entry.path))
   )
   for (const [lockfile, manager] of LOCKFILE_BY_MANAGER) {
     if (names.has(lockfile)) return manager
@@ -93,19 +87,19 @@ function detectPackageManager(
  */
 function startupFileExists(
   inspection: RepositoryInspection | null,
-  startupFileDraft: string,
+  startupFileDraft: string
 ): boolean | null {
   const startupFile = startupFileDraft.trim() || 'server.js'
   if (!inspection || startupFile.includes('/')) return null
   return inspection.entries.some(
-    (entry) => entry.kind === 'file' && basename(entry.path) === startupFile,
+    (entry) => entry.kind === 'file' && basename(entry.path) === startupFile
   )
 }
 
 /** `source` with the subdirectory replaced; empty clears the key. */
 function sourceWithSubdirectory(
   source: ComposeServiceSourceExtension,
-  subdirectory: string,
+  subdirectory: string
 ): ComposeServiceSourceExtension {
   const { subdirectory: _replaced, ...rest } = source
   return subdirectory.length === 0 ? rest : { ...rest, subdirectory }
@@ -120,7 +114,7 @@ type ComposeLayer = Readonly<{
 function resolveComposeLayer(
   environmentCompose: ComposeDocument | undefined,
   projectCompose: ComposeDocument | undefined,
-  composeServiceName: string,
+  composeServiceName: string
 ): ComposeLayer | null {
   if (servicesOf(environmentCompose)?.[composeServiceName]) {
     return { kind: 'environment', compose: environmentCompose! }
@@ -131,12 +125,8 @@ function resolveComposeLayer(
   return null
 }
 
-function extensionOf(
-  rawService: unknown,
-): ComposeServiceTurbopanelExtension | null {
-  return isPlainMapping(rawService)
-    ? readServiceTurbopanelExtension(rawService)
-    : null
+function extensionOf(rawService: unknown): ComposeServiceTurbopanelExtension | null {
+  return isPlainMapping(rawService) ? readServiceTurbopanelExtension(rawService) : null
 }
 
 /** The editable settings, as drafted in the form and as persisted. */
@@ -151,7 +141,7 @@ type NodeSettingsDraft = Readonly<{
 }>
 
 function draftFromExtension(
-  extension: ComposeServiceTurbopanelExtension | null,
+  extension: ComposeServiceTurbopanelExtension | null
 ): NodeSettingsDraft {
   return {
     enabled: extension?.enabled ?? true,
@@ -164,10 +154,7 @@ function draftFromExtension(
   }
 }
 
-function isDraftDirty(
-  persisted: NodeSettingsDraft,
-  draft: NodeSettingsDraft,
-): boolean {
+function isDraftDirty(persisted: NodeSettingsDraft, draft: NodeSettingsDraft): boolean {
   return (
     persisted.enabled !== draft.enabled ||
     persisted.nodeVersion !== draft.nodeVersion ||
@@ -182,14 +169,12 @@ function isDraftDirty(
 /** Extension patch for a draft. Explicit `undefined` clears a key back to its default. */
 function extensionPatchFromDraft(
   draft: NodeSettingsDraft,
-  source: ComposeServiceSourceExtension,
+  source: ComposeServiceSourceExtension
 ): ComposeServiceTurbopanelExtensionPatch {
   return {
     enabled: draft.enabled ? undefined : false,
     nodeVersion: draft.nodeVersion || undefined,
-    packageManager: (draft.packageManager || undefined) as
-      | NodePackageManager
-      | undefined,
+    packageManager: (draft.packageManager || undefined) as NodePackageManager | undefined,
     appMode: draft.appMode === 'production' ? undefined : draft.appMode,
     documentRoot: draft.documentRoot || undefined,
     startupFile: draft.startupFile || undefined,
@@ -205,9 +190,7 @@ function nodeVersionDescription(nodeVersion: string): string {
   return 'Not pinned: the app follows the newest Node version this server offers. Pick a number to keep it where it is.'
 }
 
-function buildVersionOptions(
-  nodeVersion: string,
-): { value: string; label: string }[] {
+function buildVersionOptions(nodeVersion: string): { value: string; label: string }[] {
   const offered = [
     ...SUPPORTED_NODE_SERIES.map((series) => ({
       value: series,
@@ -231,9 +214,7 @@ function buildVersionOptions(
 }
 
 /** First hostname bound to the service's hosting, if any. */
-function firstHostname(
-  hostings: readonly HostingRecord[] | undefined,
-): string | null {
+function firstHostname(hostings: readonly HostingRecord[] | undefined): string | null {
   const raw = hostings?.[0]?.options?.hostnames
   if (!Array.isArray(raw)) return null
   const first = raw.find((entry): entry is string => typeof entry === 'string')
@@ -248,11 +229,9 @@ function firstHostname(
 function useRepositoryInspection(
   sourceId: string | undefined,
   branch: string | undefined,
-  appRoot: string,
+  appRoot: string
 ): RepositoryInspection | null {
-  const [inspection, setInspection] = useState<RepositoryInspection | null>(
-    null,
-  )
+  const [inspection, setInspection] = useState<RepositoryInspection | null>(null)
   useEffect(() => {
     if (!sourceId) {
       setInspection(null)
@@ -310,14 +289,12 @@ export function NodeSettingsPanel({
       resolveComposeLayer(
         environmentQuery.data?.environment.options?.compose,
         projectQuery.data?.project.options?.compose,
-        composeServiceName,
+        composeServiceName
       ),
-    [environmentQuery.data, projectQuery.data, composeServiceName],
+    [environmentQuery.data, projectQuery.data, composeServiceName]
   )
 
-  const rawService = layer
-    ? servicesOf(layer.compose)?.[composeServiceName]
-    : undefined
+  const rawService = layer ? servicesOf(layer.compose)?.[composeServiceName] : undefined
   const extension = extensionOf(rawService)
 
   const persistProject = usePersistProjectCompose(orgId, projectId)
@@ -352,14 +329,10 @@ export function NodeSettingsPanel({
   const inspection = useRepositoryInspection(
     extension?.source?.sourceId,
     extension?.source?.branch,
-    appRoot.trim(),
+    appRoot.trim()
   )
 
-  if (
-    !layer ||
-    !isPlainMapping(rawService) ||
-    !isNodeComposeService(rawService)
-  ) {
+  if (!layer || !isPlainMapping(rawService) || !isNodeComposeService(rawService)) {
     return null
   }
   const source = extension?.source
@@ -378,8 +351,7 @@ export function NodeSettingsPanel({
   }
   const dirty = isDraftDirty(JSON.parse(seed) as NodeSettingsDraft, draft)
 
-  const persist =
-    layer.kind === 'environment' ? persistEnvironment : persistProject
+  const persist = layer.kind === 'environment' ? persistEnvironment : persistProject
 
   const save = async () => {
     if (!canManage || !source) return
@@ -389,7 +361,7 @@ export function NodeSettingsPanel({
     const services = { ...servicesOf(layer.compose) }
     services[composeServiceName] = patchServiceTurbopanelExtension(
       rawService,
-      extensionPatchFromDraft(draft, source),
+      extensionPatchFromDraft(draft, source)
     )
     const compose: ComposeDocument = {
       ...layer.compose,
@@ -538,18 +510,13 @@ function NodeSettingsFields({
         />
       </SettingRow>
 
-      <SettingRow
-        label="Node.js version"
-        description={nodeVersionDescription(nodeVersion)}
-      >
+      <SettingRow label="Node.js version" description={nodeVersionDescription(nodeVersion)}>
         <Select
           value={nodeVersion || null}
           options={buildVersionOptions(nodeVersion)}
           placeholder="Select a version"
           noneLabel={
-            nodeVersion
-              ? undefined
-              : `Not pinned (follows the server, now ${NEWEST_NODE_SERIES}.x)`
+            nodeVersion ? undefined : `Not pinned (follows the server, now ${NEWEST_NODE_SERIES}.x)`
           }
           mono
           disabled={fieldsDisabled}

@@ -61,7 +61,8 @@ function saveDeps(projectId: string, environmentId: string): SaveDeps {
 export function useSaveConfiguration(orgId: string, projectId: string, environmentId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (edits: readonly StagedEdit[]) => saveEdits(edits, saveDeps(projectId, environmentId)),
+    mutationFn: (edits: readonly StagedEdit[]) =>
+      saveEdits(edits, saveDeps(projectId, environmentId)),
     onSettled: async () => {
       const org = queryKeys.org(orgId)
       await Promise.all([

@@ -5,10 +5,7 @@ import {
   type ComposeDocument,
   type ProjectRecord,
 } from '@/lib/instance-api'
-import {
-  buildProjectOptionsPatch,
-  mergeProjectOptionsLocal,
-} from '@/lib/project-options'
+import { buildProjectOptionsPatch, mergeProjectOptionsLocal } from '@/lib/project-options'
 import { useApiMutation, queryKeys } from '@/lib/query-client'
 
 export function usePersistProjectCompose(orgId: string, projectId: string) {
@@ -16,7 +13,7 @@ export function usePersistProjectCompose(orgId: string, projectId: string) {
   return useApiMutation({
     mutationFn: async (compose: ComposeDocument) => {
       const cached = queryClient.getQueryData<{ project: ProjectRecord }>(
-        queryKeys.org(orgId).projects.detail(projectId),
+        queryKeys.org(orgId).projects.detail(projectId)
       )
       const project = cached?.project
       if (!project) {
@@ -32,10 +29,9 @@ export function usePersistProjectCompose(orgId: string, projectId: string) {
       }
     },
     onSuccess: async (data) => {
-      queryClient.setQueryData(
-        queryKeys.org(orgId).projects.detail(projectId),
-        { project: data.project },
-      )
+      queryClient.setQueryData(queryKeys.org(orgId).projects.detail(projectId), {
+        project: data.project,
+      })
       await queryClient.invalidateQueries({
         queryKey: queryKeys.org(orgId).projects.all,
       })
@@ -44,10 +40,7 @@ export function usePersistProjectCompose(orgId: string, projectId: string) {
   })
 }
 
-export function usePersistEnvironmentCompose(
-  orgId: string,
-  environmentId: string,
-) {
+export function usePersistEnvironmentCompose(orgId: string, environmentId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
     mutationFn: async (compose: ComposeDocument) => {
@@ -65,7 +58,7 @@ export function usePersistEnvironmentCompose(
                   options: { ...current.environment.options, compose },
                 },
               }
-            : current,
+            : current
       )
       await Promise.all([
         queryClient.invalidateQueries({

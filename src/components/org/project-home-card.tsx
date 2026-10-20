@@ -64,7 +64,14 @@ export function ProjectHomeCard({
           <Text style={s.sub}>{sub}</Text>
         </>
       }
-      foot={<ActionButton label="Open" size="sm" accessibilityLabel={`Open ${project.name}`} onPress={onOpen} />}
+      foot={
+        <ActionButton
+          label="Open"
+          size="sm"
+          accessibilityLabel={`Open ${project.name}`}
+          onPress={onOpen}
+        />
+      }
     >
       {project.description ? (
         <Text style={s.description} numberOfLines={2}>

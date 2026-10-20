@@ -18,12 +18,7 @@ import type {
 } from '@/lib/instance-api'
 import { sourceLabel } from './change-labels'
 import { usedFor, variableValueText } from './config-view-model'
-import {
-  mapInputOf,
-  runsAsOf,
-  sideServices,
-  type OverviewSource,
-} from './environment-overview'
+import { mapInputOf, runsAsOf, sideServices, type OverviewSource } from './environment-overview'
 import {
   linuxUserFromDeclared,
   linuxUserFromRecord,
@@ -47,7 +42,7 @@ export type BaseEnvironment = Readonly<{
 
 /** The first environment's configuration that could be read: it carries the Base. */
 export function baseViewOf(
-  environments: readonly BaseEnvironment[],
+  environments: readonly BaseEnvironment[]
 ): EnvironmentConfigViewResponse | null {
   return environments.find((environment) => environment.view !== undefined)?.view ?? null
 }
@@ -69,7 +64,7 @@ export type BaseEnvironmentRow = Readonly<{
 
 /** One row per environment: how it relates to the Base. */
 export function baseEnvironmentRows(
-  environments: readonly BaseEnvironment[],
+  environments: readonly BaseEnvironment[]
 ): BaseEnvironmentRow[] {
   return environments.map((environment) => {
     const relation = environmentRelation(environment.view)
@@ -109,7 +104,7 @@ export function reachLine(rows: readonly BaseEnvironmentRow[]): string {
 function sourceOf(
   view: EnvironmentConfigViewResponse,
   envName: string,
-  principals: readonly ProjectPrincipalRecord[],
+  principals: readonly ProjectPrincipalRecord[]
 ): OverviewSource {
   return {
     envName,
@@ -179,7 +174,7 @@ function serviceSub(service: V4Service): string {
 /** Every service the Base declares, with who runs it. */
 export function baseServiceRows(
   view: EnvironmentConfigViewResponse,
-  principals: readonly ProjectPrincipalRecord[],
+  principals: readonly ProjectPrincipalRecord[]
 ): BaseServiceRow[] {
   const source = sourceOf(view, 'Base', principals)
   return sideServices(source, view.base).map((service) => {
@@ -252,7 +247,7 @@ type UserWithRecord = Readonly<{ user: LinuxUser; recordId: string | null }>
  */
 export function baseLinuxUsers(
   base: ConfigViewSide,
-  principals: readonly ProjectPrincipalRecord[] | undefined,
+  principals: readonly ProjectPrincipalRecord[] | undefined
 ): UserWithRecord[] {
   const records = principals ?? []
   const fromRecords = records.map((record) => ({
@@ -279,7 +274,7 @@ export function baseLinuxUsers(
  */
 function linuxUserOf(
   service: ConfigViewService,
-  records: readonly ProjectPrincipalRecord[],
+  records: readonly ProjectPrincipalRecord[]
 ): string | null {
   const row = service.rows.find((item) => item.field === 'linuxUser')?.value
   if (row !== undefined && row !== null && row !== '') return row
@@ -293,7 +288,7 @@ type EnvUse = { service: string; environments: string[] }
 function usesOf(
   environments: readonly BaseEnvironment[],
   records: readonly ProjectPrincipalRecord[],
-  userName: string,
+  userName: string
 ): string[] {
   const byService = new Map<string, EnvUse>()
   for (const environment of environments) {
@@ -304,14 +299,16 @@ function usesOf(
       byService.set(service.name, entry)
     }
   }
-  return [...byService.values()].map((entry) => `${entry.service} in ${entry.environments.join(', ')}`)
+  return [...byService.values()].map(
+    (entry) => `${entry.service} in ${entry.environments.join(', ')}`
+  )
 }
 
 function differencesOf(
   environments: readonly BaseEnvironment[],
   records: readonly ProjectPrincipalRecord[],
   base: ConfigViewSide,
-  userName: string,
+  userName: string
 ): string[] {
   const lines: string[] = []
   for (const service of base.services) {
@@ -335,7 +332,7 @@ function differencesOf(
 function usesTextOf(
   uses: readonly string[],
   allRead: boolean,
-  declared: readonly string[],
+  declared: readonly string[]
 ): string {
   if (uses.length > 0) return uses.join(' · ')
   if (allRead) return 'No app runs as this user yet'
@@ -346,7 +343,7 @@ function usesTextOf(
 export function baseLinuxUserRows(
   base: ConfigViewSide,
   principals: readonly ProjectPrincipalRecord[] | undefined,
-  environments: readonly BaseEnvironment[],
+  environments: readonly BaseEnvironment[]
 ): BaseLinuxUserRow[] {
   const records = principals ?? []
   const allRead = environments.every((environment) => environment.view !== undefined)

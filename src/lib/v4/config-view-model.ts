@@ -181,11 +181,7 @@ function changeLabel(change: ConfigViewChange): string {
   return change.label
 }
 
-function changeValueText(
-  change: ConfigViewChange,
-  value: string | null,
-  absent: string
-): string {
+function changeValueText(change: ConfigViewChange, value: string | null, absent: string): string {
   if (change.masked) return HIDDEN_VALUE
   if (value === null) return absent
   return value === '' ? EMPTY_VALUE : value
@@ -217,7 +213,9 @@ function appChangeText(
 ): string {
   if (!followsBase) return `Set in ${envName}`
   if (service.source === 'environment') return `Added in ${envName}`
-  const shorts = mine.filter((change) => change.field !== null).map((change) => lowerFirst(change.label))
+  const shorts = mine
+    .filter((change) => change.field !== null)
+    .map((change) => lowerFirst(change.label))
   if (shorts.length > 0) return `${envName} changes: ${shorts.join(', ')}`
   return 'Same as the Base'
 }
@@ -451,10 +449,12 @@ function linuxUserNames(view: EnvironmentConfigViewResponse): string[] {
 }
 
 /** The whole Configuration tab, from one config-view answer. */
-export function buildConfigViewModel(input: Readonly<{
-  envName: string
-  view: EnvironmentConfigViewResponse
-}>): ConfigViewModel {
+export function buildConfigViewModel(
+  input: Readonly<{
+    envName: string
+    view: EnvironmentConfigViewResponse
+  }>
+): ConfigViewModel {
   const { envName, view } = input
   const changes = buildChanges(view, envName)
   const apps = buildApps(view, envName)

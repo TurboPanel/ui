@@ -1424,7 +1424,9 @@ export type ServerAddressEngine = 'postgres' | 'mysql'
 export type ServerAddressesCertificateReason = 'enqueue_failed' | 'prepare_failed'
 
 /** Router port overrides. Absent key: the server's own listen port. `null`: not reachable through this address. */
-export type ServerAddressPorts = Partial<Record<'postgres' | 'mysql' | 'http' | 'https', number | null>>
+export type ServerAddressPorts = Partial<
+  Record<'postgres' | 'mysql' | 'http' | 'https', number | null>
+>
 
 /** Where an effective address came from: entered here, the organization's address list, reported by the server, or the datacenter pin. */
 export type ClientAddressSource = 'entry' | 'ip' | 'reported' | 'pin'
@@ -2212,7 +2214,9 @@ export class ServerPrincipalChoiceRefusedError extends Error {
 export class ServerDeleteOnlineError extends Error {
   readonly code = 'server_online'
 
-  constructor(message = 'This host is connected. Forgetting records is only available while it is offline.') {
+  constructor(
+    message = 'This host is connected. Forgetting records is only available while it is offline.'
+  ) {
     super(message)
     this.name = 'ServerDeleteOnlineError'
   }
@@ -2362,7 +2366,11 @@ export async function getServerDeletePreview(
   serverId: string,
   organizationId?: string | null
 ): Promise<ServerDeletePreview> {
-  return await apiFetch(`${CLIENT_API}/servers/${serverId}/delete-preview`, undefined, organizationId)
+  return await apiFetch(
+    `${CLIENT_API}/servers/${serverId}/delete-preview`,
+    undefined,
+    organizationId
+  )
 }
 
 const PRINCIPAL_CHOICE_REFUSED_MESSAGE =

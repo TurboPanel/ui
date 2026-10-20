@@ -16,7 +16,10 @@ const state = vi.hoisted(() => ({
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
 vi.mock('react-native-svg', async () => (await import('@/components/ui/v4/rn-stub')).svgStub)
-vi.mock('@/lib/theme-preference', async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub)
+vi.mock(
+  '@/lib/theme-preference',
+  async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub
+)
 vi.mock('@/components/ui', () => ({
   TextField: (props: Props) => (
     <label>
@@ -41,7 +44,23 @@ vi.mock('@/lib/queries/servers', () => ({
 const BASE: ConfigViewSide = {
   services: [
     { name: 'web', serviceId: null, kind: 'node', source: 'base', rows: [] },
-    { name: 'db', serviceId: null, kind: 'container', source: 'base', rows: [{ key: 'k', area: 'service', field: 'image', label: 'Image', value: 'postgres:17', masked: false, source: 'base' }] },
+    {
+      name: 'db',
+      serviceId: null,
+      kind: 'container',
+      source: 'base',
+      rows: [
+        {
+          key: 'k',
+          area: 'service',
+          field: 'image',
+          label: 'Image',
+          value: 'postgres:17',
+          masked: false,
+          source: 'base',
+        },
+      ],
+    },
   ],
   variables: [],
   linuxUsers: [],
@@ -62,7 +81,7 @@ function renderSheet(partial: Partial<SheetProps> = {}) {
       onClose={onClose}
       onCreated={onCreated}
       {...partial}
-    />,
+    />
   )
   return { onClose, onCreated }
 }
@@ -92,8 +111,12 @@ describe.each(SCENARIOS)('New environment sheet ($name)', (scenario) => {
   it('offers only what the API can do: the Base or empty, no copy', () => {
     renderSheet()
     const choices = screen.getAllByRole('radio').map((radio) => radio.getAttribute('aria-label'))
-    expect(choices).toContain('Start from the Base (recommended). Runs what the Base runs. Add changes later.')
-    expect(choices).toContain('Empty, stands alone. Ignores the Base. You write its compose yourself.')
+    expect(choices).toContain(
+      'Start from the Base (recommended). Runs what the Base runs. Add changes later.'
+    )
+    expect(choices).toContain(
+      'Empty, stands alone. Ignores the Base. You write its compose yourself.'
+    )
     expect(screen.queryByText(/copy/i)).toBeNull()
     expect(screen.getByText('Nothing deploys until you press Deploy.')).toBeTruthy()
   })
@@ -154,11 +177,16 @@ describe.each(SCENARIOS)('New environment sheet ($name)', (scenario) => {
   })
 
   it('shows the reason when the server refuses', async () => {
-    state.run.mockResolvedValue({ ok: false, error: 'An environment with that name already exists' })
+    state.run.mockResolvedValue({
+      ok: false,
+      error: 'An environment with that name already exists',
+    })
     renderSheet()
     enterName('staging')
     create()
-    expect((await screen.findByRole('alert')).textContent).toBe('An environment with that name already exists')
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'An environment with that name already exists'
+    )
   })
 
   it('falls back to a plain message when the server gives none', async () => {
@@ -187,7 +215,9 @@ describe.each(SCENARIOS)('New environment sheet ($name)', (scenario) => {
 
   it('previews the Base apps, or nothing when standing alone', () => {
     renderSheet()
-    expect(screen.getByRole('group', { name: 'What the new environment will run' }).textContent).toContain('web')
+    expect(
+      screen.getByRole('group', { name: 'What the new environment will run' }).textContent
+    ).toContain('web')
     fireEvent.click(screen.getByRole('radio', { name: /^Empty, stands alone/ }))
     const preview = screen.getByRole('group', { name: 'What the new environment will run' })
     expect(preview.textContent).not.toContain('web')

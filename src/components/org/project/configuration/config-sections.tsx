@@ -160,7 +160,12 @@ function ChangeRow({
                   setConfirming(false)
                 }}
               />
-              <ActionButton label="Cancel" variant="quiet" size="sm" onPress={() => setConfirming(false)} />
+              <ActionButton
+                label="Cancel"
+                variant="quiet"
+                size="sm"
+                onPress={() => setConfirming(false)}
+              />
             </>
           }
         />
@@ -221,7 +226,9 @@ export function AppsSection({
               sub={`${app.kindLine} · ${app.changeText}`}
               chips={<SourceTag source={app.tag.source} label={app.tag.label} />}
               trailing={<RunsAsChip runsAs={app.runsAs} showSource={false} />}
-              onPress={app.serviceId === null ? undefined : () => onOpenApp(app.serviceId as string)}
+              onPress={
+                app.serviceId === null ? undefined : () => onOpenApp(app.serviceId as string)
+              }
               accessibilityLabel={`${app.name}, ${app.kindLine}, ${app.changeText}`}
               tall
             />
@@ -254,7 +261,8 @@ export function HostingSection({
       <SectionHeading title="Hosting" note={plural(domains.length, 'hostname')} action={manage} />
       {hostingsStatus === 'error' ? (
         <Text style={s.problem}>
-          Could not check the hostnames added on the Hosting screen, so this list may be missing some. Try again in a moment.
+          Could not check the hostnames added on the Hosting screen, so this list may be missing
+          some. Try again in a moment.
         </Text>
       ) : null}
       <ListGroup
@@ -295,8 +303,8 @@ export function HostingSection({
                   </Pressable>
                 }
               />
-          )}
-        />
+            )}
+          />
         )}
       </ListGroup>
     </View>
@@ -323,7 +331,13 @@ function RowAction({
 }>) {
   if (staged) {
     return (
-      <ActionButton label="Undo" variant="quiet" size="sm" accessibilityLabel={undoName} onPress={onUndo} />
+      <ActionButton
+        label="Undo"
+        variant="quiet"
+        size="sm"
+        accessibilityLabel={undoName}
+        onPress={onUndo}
+      />
     )
   }
   if (!canEdit) return null
@@ -432,7 +446,9 @@ function LinuxUserRow({
   const [open, setOpen] = useState(false)
   const key = `svc:${user.serviceName}:linuxUser`
   const staged = editing ? stagedEditFor(editing.staged, key) : undefined
-  const sub = [user.access, staged ? stagedNote(staged) : ''].filter((part) => part !== '').join(' · ')
+  const sub = [user.access, staged ? stagedNote(staged) : '']
+    .filter((part) => part !== '')
+    .join(' · ')
   const canEdit = editing !== undefined && editing.linuxUserNames.length > 0
   return (
     <View>

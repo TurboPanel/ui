@@ -73,10 +73,17 @@ describe('changeRows', () => {
   it('files Linux users and domains under their own areas', () => {
     const [user, domain] = changeRows(
       [
-        { ...CHANGES[0]!, key: 'user:deploy', area: 'linuxUser', label: 'Linux user', field: null, serviceName: null },
+        {
+          ...CHANGES[0]!,
+          key: 'user:deploy',
+          area: 'linuxUser',
+          label: 'Linux user',
+          field: null,
+          serviceName: null,
+        },
         { ...CHANGES[0]!, key: 'svc:web:domain', area: 'domain', label: 'Domain' },
       ],
-      'Staging',
+      'Staging'
     )
     expect(user).toMatchObject({ area: 'users', short: 'Linux user', serviceId: null })
     expect(domain).toMatchObject({ area: 'service', short: 'domain' })
@@ -117,9 +124,12 @@ describe('services', () => {
       overviewSource({
         services: [{ ...overviewSource().services[0]!, id: 'record-web' }],
         view: configView({
-          effective: { ...configView().effective, services: [viewService('api', 'container', [], { serviceId: 'x-api' })] },
+          effective: {
+            ...configView().effective,
+            services: [viewService('api', 'container', [], { serviceId: 'x-api' })],
+          },
         }),
-      }),
+      })
     )
     expect(ids.get('web')).toBe('record-web')
     expect(ids.get('api')).toBe('x-api')
@@ -129,9 +139,14 @@ describe('services', () => {
     const view = configView({
       effective: { ...configView().effective, services: [viewService('shop', 'site', [])] },
     })
-    const withHosting = overviewSource({ view, hostings: { 's-shop': [{ ...overviewSource().hostings['s-web']![0]!, serviceId: 's-shop' }] } })
+    const withHosting = overviewSource({
+      view,
+      hostings: { 's-shop': [{ ...overviewSource().hostings['s-web']![0]!, serviceId: 's-shop' }] },
+    })
     expect(sideServices(withHosting, view.effective)[0]).toMatchObject({ web: true })
-    expect(sideServices(overviewSource({ view, hostings: {} }), view.effective)[0]).not.toHaveProperty('web')
+    expect(
+      sideServices(overviewSource({ view, hostings: {} }), view.effective)[0]
+    ).not.toHaveProperty('web')
   })
 })
 
@@ -151,7 +166,16 @@ describe('runStatusKey', () => {
   })
   it('takes the daemon report over the stored container status', () => {
     const report = (state: ServiceRunStateName): ServiceRecord[] => [
-      { ...serviceRecord('web'), runState: { state, running: state === 'running', restartCount: 3, lastError: null, asOf: '2026-10-05T12:00:00Z' } },
+      {
+        ...serviceRecord('web'),
+        runState: {
+          state,
+          running: state === 'running',
+          restartCount: 3,
+          lastError: null,
+          asOf: '2026-10-05T12:00:00Z',
+        },
+      },
     ]
     expect(runStatusKey('s-web', containers, report('crashing'))).toBe('crashing')
     expect(runStatusKey('s-web', containers, report('stopped_after_crashes'))).toBe('crashstop')
@@ -167,7 +191,16 @@ describe('runStatusKey', () => {
   })
   it('falls back to the containers when the report is unknown or for another app', () => {
     const unknown: ServiceRecord[] = [
-      { ...serviceRecord('web'), runState: { state: 'unknown', running: false, restartCount: 0, lastError: null, asOf: '2026-10-05T12:00:00Z' } },
+      {
+        ...serviceRecord('web'),
+        runState: {
+          state: 'unknown',
+          running: false,
+          restartCount: 0,
+          lastError: null,
+          asOf: '2026-10-05T12:00:00Z',
+        },
+      },
     ]
     expect(runStatusKey('s-web', containers, unknown)).toBe('running')
     expect(runStatusKey('s-blog', containers, unknown)).toBe('busy')
@@ -206,13 +239,18 @@ describe('domains, volumes and databases', () => {
     ])
     const noTls = domainsOf(overviewSource({ tls: undefined }))
     expect(noTls[0]?.status).toEqual({ key: 'unknown', label: 'Unknown' })
-    const unpinned = domainsOf(overviewSource({ hostings: { 's-web': [{ ...source.hostings['s-web']![0]!, tlsId: null }] } }))
+    const unpinned = domainsOf(
+      overviewSource({ hostings: { 's-web': [{ ...source.hostings['s-web']![0]!, tlsId: null }] } })
+    )
     expect(unpinned[0]?.status).toEqual({ key: 'test', label: 'Test certificate (browsers warn)' })
   })
 
   it('skips a service that has no saved row yet', () => {
     const view = configView({
-      effective: { ...configView().effective, services: [viewService('new', 'node', [], { serviceId: null })] },
+      effective: {
+        ...configView().effective,
+        services: [viewService('new', 'node', [], { serviceId: null })],
+      },
     })
     expect(domainsOf(overviewSource({ view }))).toEqual([])
   })
@@ -238,7 +276,9 @@ describe('domains, volumes and databases', () => {
       { id: 'db:shopdb', name: 'shopdb', kind: 'database', engine: 'PostgreSQL' },
       { id: 'db:ghostdb', name: 'ghostdb', kind: 'database', engine: 'weird' },
     ])
-    expect(databasesOf(overviewSource({ bindings: [{ ...source.bindings[0]!, engine: null }] }))[0]).not.toHaveProperty('engine')
+    expect(
+      databasesOf(overviewSource({ bindings: [{ ...source.bindings[0]!, engine: null }] }))[0]
+    ).not.toHaveProperty('engine')
   })
 })
 
@@ -273,7 +313,10 @@ describe('runsAsOf', () => {
   const [web, blog, api] = sideServices(source, source.view.effective)
 
   it('lets a container run inside its container', () => {
-    expect(runsAsOf(source, api!, true)).toMatchObject({ runsInContainer: true, label: 'Runs inside its container' })
+    expect(runsAsOf(source, api!, true)).toMatchObject({
+      runsInContainer: true,
+      label: 'Runs inside its container',
+    })
   })
 
   it('reads the Linux user from the row, with where the choice comes from', () => {
@@ -309,7 +352,10 @@ describe('runsAsOf', () => {
 
   it('does not look for a user when the service has no saved row', () => {
     const view = configView({
-      effective: { ...configView().effective, services: [viewService('new', 'node', [], { serviceId: null })] },
+      effective: {
+        ...configView().effective,
+        services: [viewService('new', 'node', [], { serviceId: null })],
+      },
     })
     const fresh = overviewSource({ view })
     expect(runsAsOf(fresh, { id: 'new', name: 'new', kind: 'node' }, true).user).toBe('')
@@ -318,15 +364,23 @@ describe('runsAsOf', () => {
   it('reads the Base side for the Base map and says "own" for an environment that stands alone', () => {
     expect(runsAsOf(source, web!, false)).toMatchObject({ user: 'website', source: 'base' })
     const alone = overviewSource({ view: configView({ followsBase: false }) })
-    expect(runsAsOf(alone, web!, true)).toMatchObject({ source: 'own', sourceLabel: 'Set in Staging' })
+    expect(runsAsOf(alone, web!, true)).toMatchObject({
+      source: 'own',
+      sourceLabel: 'Set in Staging',
+    })
   })
 
   it('uses the Base row for an app only the Base has', () => {
     const view = configView({
       effective: { ...configView().effective, services: [] },
-      base: { ...configView().base, services: [viewService('web', 'node', [row('web', 'linuxUser', 'website')])] },
+      base: {
+        ...configView().base,
+        services: [viewService('web', 'node', [row('web', 'linuxUser', 'website')])],
+      },
     })
-    expect(runsAsOf(overviewSource({ view }), { id: 'web', name: 'web', kind: 'node' }, true).user).toBe('website')
+    expect(
+      runsAsOf(overviewSource({ view }), { id: 'web', name: 'web', kind: 'node' }, true).user
+    ).toBe('website')
   })
 })
 
@@ -335,7 +389,14 @@ describe('mapInputOf', () => {
 
   it('draws the environment: domains, volumes, databases and status', () => {
     const input = mapInputOf(source, 'env')
-    expect(input.services.map((s) => s.id)).toEqual(['web', 'blog', 'api', 'redis', 'db:shopdb', 'db:ghostdb'])
+    expect(input.services.map((s) => s.id)).toEqual([
+      'web',
+      'blog',
+      'api',
+      'redis',
+      'db:shopdb',
+      'db:ghostdb',
+    ])
     expect(input.domains).toHaveLength(1)
     expect(input.volumes).toHaveLength(2)
     expect(input.status(input.services[0]!)).toEqual({ key: 'running', label: 'Running' })
@@ -361,7 +422,10 @@ describe('mapInputOf', () => {
     expect(input.services.map((s) => s.id)).toContain('old')
     expect(input.status(input.services.find((s) => s.id === 'old')!)).toBeNull()
     const layout = mapLayout(input)
-    expect(layout.nodes.find((n) => n.name === 'old')).toMatchObject({ removed: true, tags: ['Removed in Staging'] })
+    expect(layout.nodes.find((n) => n.name === 'old')).toMatchObject({
+      removed: true,
+      tags: ['Removed in Staging'],
+    })
     expect(layout.nodes.find((n) => n.name === 'web')?.tags[0]).toBe('Changed: start command')
   })
 
@@ -385,15 +449,26 @@ describe('the lists under the map', () => {
       sourceLabel: 'Staging change',
       host: 'shop.example.com',
     })
-    expect(rows[1]).toMatchObject({ sub: 'Website', source: 'base', sourceLabel: 'Base', host: null })
+    expect(rows[1]).toMatchObject({
+      sub: 'Website',
+      source: 'base',
+      sourceLabel: 'Base',
+      host: null,
+    })
     expect(rows[2]).toMatchObject({ sub: 'Container · ghcr.io/acme/api:1', statusKey: 'never' })
     expect(rows[2]?.runsAs.runsInContainer).toBe(true)
   })
 
   it('carries the daemon report on an app row, and null until there is one', () => {
-    const runState = { state: 'crashing', running: false, restartCount: 4, lastError: 'boom', asOf: '2026-10-05T12:00:00Z' } as const
+    const runState = {
+      state: 'crashing',
+      running: false,
+      restartCount: 4,
+      lastError: 'boom',
+      asOf: '2026-10-05T12:00:00Z',
+    } as const
     const services = ['web', 'blog', 'api', 'redis'].map((name) =>
-      name === 'web' ? { ...serviceRecord(name), runState } : serviceRecord(name),
+      name === 'web' ? { ...serviceRecord(name), runState } : serviceRecord(name)
     )
     const rows = appRows(overviewSource({ services }))
     expect(rows[0]).toMatchObject({ statusKey: 'crashing', runState })
@@ -431,7 +506,10 @@ describe('the lists under the map', () => {
 
   it('names a data container by its kind when it has no image row', () => {
     const view = configView({
-      effective: { ...configView().effective, services: [viewService('redis', 'container', [row('redis', 'image', 'redis:8')])] },
+      effective: {
+        ...configView().effective,
+        services: [viewService('redis', 'container', [row('redis', 'image', 'redis:8')])],
+      },
     })
     expect(dataRows(overviewSource({ view }))[0]?.sub).toBe('redis:8')
   })
