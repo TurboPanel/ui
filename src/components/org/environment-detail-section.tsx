@@ -135,6 +135,8 @@ import { useCan } from '@/lib/query-client'
 import { useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/lib/query-keys'
 import { offersLetsEncrypt } from '@/lib/hosting-letsencrypt-choice'
+import { RemovedServiceCard } from '@/components/org/removed-service-card'
+import { projectHref } from '@/lib/project-navigation'
 import { removedFromComposeServiceIds } from '@/lib/directory-names'
 import { useEnvironmentFolders } from '@/lib/queries/folders'
 import { useRequestLetsEncrypt } from '@/lib/queries/hosting-certificate'
@@ -1949,12 +1951,14 @@ function EnvironmentServiceSettingsSectionPanel({
 
 function EnvironmentContainersSectionPanel({
   orgId,
+  projectId,
   environmentId,
   services,
   containersByService,
   allServers,
 }: Readonly<{
   orgId: string
+  projectId: string
   environmentId: string
   services: ServiceRecord[]
   containersByService: Record<string, ContainerRecord[]>
@@ -1963,7 +1967,8 @@ function EnvironmentContainersSectionPanel({
   const folders = useEnvironmentFolders(orgId, environmentId)
   const removedIds = removedFromComposeServiceIds(folders.data?.folders ?? [])
   const hasContainers = services.some(
-    (service) => (containersByService[service.id] ?? []).length > 0,
+    (service) =>
+      (containersByService[service.id] ?? []).length > 0 || removedIds.has(service.id),
   )
   return (
     <SectionPanel title="Containers" hint="Deployed containers and their status">
@@ -1975,8 +1980,17 @@ function EnvironmentContainersSectionPanel({
             const containers = partitionContainersForDisplay(
               containersByService[service.id] ?? [],
             )
+            const title =
+              service.name?.trim() || String(service.composeServiceName ?? service.id)
             if (containers.length === 0) {
-              return null
+              // A removed site has no containers; show it so it does not look gone.
+              return removedIds.has(service.id) ? (
+                <RemovedServiceCard
+                  key={service.id}
+                  name={title}
+                  foldersHref={`${projectHref(orgId, projectId)}/environments`}
+                />
+              ) : null
             }
             return (
               <View key={service.id} style={panelStyles.detailCard}>
@@ -2169,6 +2183,7 @@ function EnvironmentLoadedPanels({
       {showSection('containers') ? (
         <EnvironmentContainersSectionPanel
           orgId={orgId}
+          projectId={projectId}
           environmentId={environment.id}
           services={services}
           containersByService={containersByService}
