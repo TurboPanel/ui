@@ -130,6 +130,40 @@ describe('a save from an environment', () => {
     expect(ext.source).toMatchObject({ branch: 'staging', subdirectory: 'web' })
   })
 
+  it('keeps an environment pointed at its own repository when an unrelated setting changes', () => {
+    const other = '22222222-2222-4222-8222-222222222222'
+    const own = doc({
+      web: {
+        'x-turbopanel': { serviceKind: 'node', source: { sourceId: other, branch: 'staging' } },
+      },
+    })
+    const { ext } = shownAfter({ startupFile: 'server.js' }, own)
+    expect(ext.source).toMatchObject({ sourceId: other, branch: 'staging' })
+    expect(ext.startupFile).toBe('server.js')
+  })
+
+  it('drops a source id that only repeats the Base, keeping the branch the environment sets', () => {
+    const same = doc({
+      web: { 'x-turbopanel': { serviceKind: 'node', source: { sourceId: SID } } },
+    })
+    const dropped = saveIn({ startupFile: 'server.js' }, same)
+    const entry = (dropped.ok ? dropped.compose.data.services : {}) as Record<
+      string,
+      Record<string, Record<string, unknown>>
+    >
+    expect(entry.web['x-turbopanel']).not.toHaveProperty('source')
+    const withBranch = doc({
+      web: {
+        'x-turbopanel': {
+          serviceKind: 'node',
+          source: { sourceId: SID, branch: 'staging', deployOnPush: false },
+        },
+      },
+    })
+    const { ext } = shownAfter({ startupFile: 'server.js' }, withBranch)
+    expect(ext.source).toMatchObject({ sourceId: SID, branch: 'staging', deployOnPush: false })
+  })
+
   it('removes an override that goes back to the Base value', () => {
     const own = doc({ web: { 'x-turbopanel': { serviceKind: 'node', nodeVersion: '24' } } })
     const { ext } = shownAfter({ nodeVersion: '22' }, own)

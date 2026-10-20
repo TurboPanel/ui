@@ -36,6 +36,7 @@ import {
 import {
   composeForNodeSave,
   effectiveService,
+  nodeClearRefusal,
   nodeValuesThatCannotBeCleared,
 } from '@/lib/compose/node-save-target'
 import { useEnvironment } from '@/lib/queries/environments'
@@ -303,9 +304,7 @@ export function NodeSettingsPanel({
     ? nodeValuesThatCannotBeCleared(draft, projectCompose, composeServiceName)
     : []
   const saveBlocked = environmentId && !environmentReady
-  const blockReason = cannotClear.length
-    ? `${cannotClear.join(' and ')} comes from the Base, so an environment cannot leave it empty. Pick a value, or change it in the Base.`
-    : null
+  const blockReason = cannotClear.length ? nodeClearRefusal(cannotClear) : null
 
   const save = async () => {
     if (!canManage || !source) return

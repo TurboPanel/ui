@@ -79,6 +79,11 @@ const LABELS: Readonly<Record<FieldName | 'appRoot', string>> = {
   appRoot: 'The app folder',
 }
 
+/** The one sentence said when an environment would clear a Base setting. */
+export function nodeClearRefusal(labels: readonly string[]): string {
+  return `${labels.join(' and ')} comes from the Base, so an environment cannot leave it empty (or "Not pinned"). Pick a value, or change it in the Base.`
+}
+
 /**
  * Settings an environment cannot leave empty over a Base value. The control
  * plane accepts no way to clear these in an environment's own changes, so the
@@ -122,16 +127,27 @@ function applyChoice(ext: Mapping, field: 'appMode' | 'enabled', want: unknown, 
  * save; the branch and the rest keep coming from the Base (or from what the
  * environment already sets).
  */
-function applySource(ext: Mapping, want: string, base: string, sourceId: string | undefined) {
+function applySource(
+  ext: Mapping,
+  want: string,
+  base: string,
+  sourceId: string | undefined,
+  baseSourceId: string | undefined
+) {
   const ownSource = isMapping(ext.source) ? { ...(ext.source as Mapping) } : {}
   if (want === base) delete ownSource.subdirectory
   else ownSource.subdirectory = want
-  const keeps = Object.keys(ownSource).some((key) => key !== 'sourceId' && key !== 'buildKind')
+  // An environment pointing at its own repository keeps that id; one that
+  // names the Base's own repository does not need to say so.
+  const ownsRepository = ownSource.sourceId !== undefined && ownSource.sourceId !== baseSourceId
+  const keeps =
+    ownsRepository ||
+    Object.keys(ownSource).some((key) => key !== 'sourceId' && key !== 'buildKind')
   if (!keeps) {
     delete ext.source
     return
   }
-  if (sourceId !== undefined) ownSource.sourceId = sourceId
+  if (!ownsRepository && sourceId !== undefined) ownSource.sourceId = sourceId
   ext.source = ownSource
 }
 
@@ -159,7 +175,13 @@ function environmentEntry(
 
   applyChoice(ext, 'appMode', values.appMode, baseExt?.appMode ?? 'production')
   applyChoice(ext, 'enabled', values.enabled, baseExt?.enabled ?? true)
-  applySource(ext, values.appRoot, baseExt?.source?.subdirectory ?? '', merged?.source?.sourceId)
+  applySource(
+    ext,
+    values.appRoot,
+    baseExt?.source?.subdirectory ?? '',
+    merged?.source?.sourceId,
+    baseExt?.source?.sourceId
+  )
 
   const meaningful = Object.keys(ext).some((key) => key !== 'serviceKind')
   if (!meaningful) {
@@ -229,7 +251,7 @@ export function composeForNodeSave(
   if (blocked.length > 0) {
     return {
       ok: false,
-      reason: `${blocked.join(' and ')} comes from the Base, so an environment cannot leave it empty. Pick a value, or change it in the Base.`,
+      reason: nodeClearRefusal(blocked),
     }
   }
   const document = input.environmentCompose ?? emptyComposeDocument()
