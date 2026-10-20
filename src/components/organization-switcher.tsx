@@ -42,7 +42,9 @@ import { colors, webPointer } from '@/lib/theme'
 const isNative = Platform.OS !== 'web'
 /** Desktop dropdown width; phones use the full-width top panel instead. */
 export const ORG_MENU_WIDTH = 400
-const COMPACT_FOOTER_HEIGHT = 150
+/** Footer = divider and padding plus one 40px row per action. */
+const COMPACT_FOOTER_PADDING = 30
+const COMPACT_FOOTER_ROW = 40
 const COMPACT_SEARCH_HEIGHT = 52
 const COMPACT_LIST_MIN = 132
 const COMPACT_PANEL_MAX = 420
@@ -51,15 +53,17 @@ function compactListMaxHeight(
   windowHeight: number,
   isCompact: boolean,
   showSearch: boolean,
+  footerRows: number,
 ): number {
   if (!isCompact) {
     return 8 * 40
   }
   const search = showSearch ? COMPACT_SEARCH_HEIGHT : 0
+  const footer = COMPACT_FOOTER_PADDING + footerRows * COMPACT_FOOTER_ROW
   // Keep the from-top panel in the upper half so the iOS keyboard does not
   // cover Manage / New (those sit in a sticky footer under the list).
   const panelMax = Math.min(COMPACT_PANEL_MAX, Math.round(windowHeight * 0.5))
-  return Math.max(COMPACT_LIST_MIN, panelMax - search - COMPACT_FOOTER_HEIGHT)
+  return Math.max(COMPACT_LIST_MIN, panelMax - search - footer)
 }
 
 type OrganizationSwitcherSegmentProps = Readonly<{
@@ -120,7 +124,13 @@ export function OrganizationSwitcherSegment({ orgId }: OrganizationSwitcherSegme
   const triggerLabel = isNative ? truncateDisplayName(label) : label
   const showSearch = shouldShowOrgSwitcherSearch(organizations.length)
   const showViewAll = shouldShowViewAllOrganizations(organizations.length)
-  const listMaxHeight = compactListMaxHeight(height, isCompact, showSearch)
+  const listMaxHeight = compactListMaxHeight(
+    height,
+    isCompact,
+    showSearch,
+    // New organization and Settings always show; Billing and View all do not.
+    2 + (billingEnabled ? 1 : 0) + (showViewAll ? 1 : 0),
+  )
 
   const switchTo = (nextOrgId: string) => {
     if (nextOrgId === orgId) {
