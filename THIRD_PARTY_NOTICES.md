@@ -7,7 +7,7 @@ Third-party components remain under their own copyright and license terms and ar
 Third-party OS artwork under `assets/os/` is recorded separately in `assets/os/NOTICE.md` and is not licensed under this repository’s AGPL or the Apple App Store additional permission.
 
 <!-- lockfiles
-pnpm-lock.yaml sha256:30589c7180644e2f77305107812c1fae74e27033ad2eac0b4f2af56606ed7234
+pnpm-lock.yaml sha256:7fe7fa14abddb4bac0c4341849dd886ce22772d448fe7de2a6036df2e6f79eed
 -->
 
 ## Production dependencies
@@ -6001,7 +6001,7 @@ These packages are used for development, test, or build tooling and are not bund
 - Copyright: Gary Court
 - Homepage: https://github.com/garycourt/uri-js
 
-### vite@6.4.3
+### vite@6.4.4
 
 - License: MIT
 - Copyright: Evan You
