@@ -73,6 +73,7 @@ export function RepositoryLaneStep({
         <SimpleAppFields
           simple={simple}
           manager={inspection ? detectPackageManager(inspection.files)?.manager : undefined}
+          inspection={inspection}
           disabled={disabled}
           onSimpleChange={onSimpleChange}
         />
