@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { validateEnvironmentName } from './environment-validation'
+import {
+  ENVIRONMENT_NAME_RULE_TEXT,
+  environmentFolderNameProblem,
+  validateEnvironmentName,
+} from './environment-validation'
 
 describe('validateEnvironmentName', () => {
   it('accepts a normal environment name', () => {
@@ -23,5 +27,11 @@ describe('validateEnvironmentName', () => {
   it('refuses reserved words', () => {
     expect(validateEnvironmentName('common')).toContain('reserved')
     expect(validateEnvironmentName('tmp')).toContain('reserved')
+    expect(validateEnvironmentName('base')).toContain('reserved')
+    expect(environmentFolderNameProblem('base')).toBe('“base” is reserved. Pick another name.')
+    // Uppercase is refused by the letter rule before the reserved list is reached.
+    expect(validateEnvironmentName('Base')).not.toBeNull()
+    expect(environmentFolderNameProblem('Base')).toBe(ENVIRONMENT_NAME_RULE_TEXT)
+    expect(validateEnvironmentName('base-2')).toBeNull()
   })
 })
