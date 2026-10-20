@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import ProjectIndexScreen from './index'
+import ProjectIndexScreen from '@/app/[orgId]/projects/[projectId]/index'
 
 const state = vi.hoisted(() => ({
   ctx: {} as Record<string, unknown>,
