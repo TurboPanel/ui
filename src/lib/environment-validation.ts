@@ -5,7 +5,7 @@ const ENVIRONMENT_FOLDER_NAME = /^[a-z0-9][a-z0-9_-]{0,31}$/
 
 /** Names an environment may not take: the site owner's own folders and words kept free beside them. */
 const RESERVED_ENVIRONMENT_NAMES: ReadonlySet<string> = new Set(
-  'common home tmp services volumes data sites backup backups logs cache run var etc bin root public releases current shared lost-found tmp-staging'.split(
+  'common home tmp services volumes data sites backup backups logs cache run var etc bin root public releases current shared lost-found tmp-staging base'.split(
     ' '
   )
 )
