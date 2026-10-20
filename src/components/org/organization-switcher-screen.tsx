@@ -82,7 +82,7 @@ export function OrganizationSwitcherScreen() {
     return { ok: true }
   }
 
-  const showSearch = shouldShowOrgSwitcherSearch(organizations.length, true)
+  const showSearch = shouldShowOrgSwitcherSearch(organizations.length)
 
   let body
   if (orgsQuery.isLoading) {
