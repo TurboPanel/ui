@@ -350,7 +350,9 @@ function NodeVersionField({
 }>) {
   const offered = inspection?.nodeVersion?.offered ?? [...SUPPORTED_NODE_SERIES]
   const newest = inspection?.nodeVersion?.newest ?? NEWEST_NODE_SERIES
-  const notice = suggestedNodeVersion(inspection).notice
+  const suggestion = suggestedNodeVersion(inspection)
+  // The sentence explains the preselection, so it goes once something else is picked.
+  const notice = simple.nodeVersion === suggestion.nodeVersion ? suggestion.notice : undefined
   const options = [
     ...offered.map((series) => ({ value: series, label: `Node ${series}.x` })),
     {
