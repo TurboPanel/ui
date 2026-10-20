@@ -197,6 +197,14 @@ function extensionPatchFromDraft(
   }
 }
 
+function nodeVersionDescription(nodeVersion: string): string {
+  if (nodeVersion === FLOATING_NODE_VERSION) {
+    return 'Latest follows the newest Node version this server offers, so the app moves to a new series on the first deploy after the server gets one. Pick a number to keep it where it is.'
+  }
+  if (nodeVersion) return 'The app stays on this series and only gets patch updates.'
+  return 'Not pinned: the app follows the newest Node version this server offers. Pick a number to keep it where it is.'
+}
+
 function buildVersionOptions(
   nodeVersion: string,
 ): { value: string; label: string }[] {
@@ -532,13 +540,7 @@ function NodeSettingsFields({
 
       <SettingRow
         label="Node.js version"
-        description={
-          nodeVersion === FLOATING_NODE_VERSION
-            ? 'Latest follows the newest Node version this server offers, so the app moves to a new series on the first deploy after the server gets one. Pick a number to keep it where it is.'
-            : nodeVersion
-              ? 'The app stays on this series and only gets patch updates.'
-              : 'Not pinned: the app follows the newest Node version this server offers. Pick a number to keep it where it is.'
-        }
+        description={nodeVersionDescription(nodeVersion)}
       >
         <Select
           value={nodeVersion || null}

@@ -329,6 +329,14 @@ function CheckSummary({
  * repository asks for when the server offers it, else the newest), and
  * `latest` is a deliberate choice that is explained where it is made.
  */
+function nodeVersionHint(nodeVersion: string, notice: string | undefined): string {
+  const follows =
+    'Latest follows the newest Node version this server offers, so the app moves to a new Node series on the first deploy after the server gets one. Pick a number to keep it where it is; it still gets patch updates.'
+  const pinned = 'The app stays on this Node series and only gets patch updates.'
+  const base = nodeVersion === FLOATING_NODE_VERSION ? follows : pinned
+  return notice ? base + ' ' + notice : base
+}
+
 function NodeVersionField({
   simple,
   inspection,
@@ -353,11 +361,7 @@ function NodeVersionField({
   return (
     <FormField
       label="Node version"
-      hint={
-        simple.nodeVersion === FLOATING_NODE_VERSION
-          ? `Latest follows the newest Node version this server offers, so the app moves to a new Node series on the first deploy after the server gets one. Pick a number to keep it where it is; it still gets patch updates.${notice ? ` ${notice}` : ''}`
-          : `The app stays on this Node series and only gets patch updates.${notice ? ` ${notice}` : ''}`
-      }
+      hint={nodeVersionHint(simple.nodeVersion, notice)}
     >
       <Select
         value={simple.nodeVersion || null}

@@ -78,6 +78,10 @@ function seedableAlias(alias: string | undefined): string | undefined {
   return trimmed && isPrincipalAlias(trimmed) ? trimmed : undefined
 }
 
+function trimmedOrUndefined(value: string | undefined): string | undefined {
+  return value?.trim() || undefined
+}
+
 /**
  * Seed a compose draft for one repository lane.
  *
@@ -145,7 +149,7 @@ export function seedComposeForLane(params: {
   const buildCommand = capped(simple?.buildCommand)
   const startCommand = lane === 'app' ? capped(simple?.startCommand) : undefined
   const subdirectory = capped(simple?.subdirectory)
-  const nodeVersion = lane === 'app' ? simple?.nodeVersion?.trim() || undefined : undefined
+  const nodeVersion = lane === 'app' ? trimmedOrUndefined(simple?.nodeVersion) : undefined
   const binding: ComposeServiceSourceExtension = {
     sourceId: source.id,
     ...(trimmedBranch ? { branch: trimmedBranch } : {}),
