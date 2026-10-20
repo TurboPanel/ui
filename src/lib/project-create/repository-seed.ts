@@ -78,8 +78,13 @@ function seedableAlias(alias: string | undefined): string | undefined {
   return trimmed && isPrincipalAlias(trimmed) ? trimmed : undefined
 }
 
-function trimmedOrUndefined(value: string | undefined): string | undefined {
-  return value?.trim() || undefined
+function nodeVersionField(nodeVersion: string | undefined): { nodeVersion?: string } {
+  return nodeVersion ? { nodeVersion } : {}
+}
+
+/** Only an app has a Node series to pin. */
+function seedNodeVersion(lane: RepositoryLane, value: string | undefined): string | undefined {
+  return lane === 'app' ? value?.trim() || undefined : undefined
 }
 
 /**
@@ -149,7 +154,7 @@ export function seedComposeForLane(params: {
   const buildCommand = capped(simple?.buildCommand)
   const startCommand = lane === 'app' ? capped(simple?.startCommand) : undefined
   const subdirectory = capped(simple?.subdirectory)
-  const nodeVersion = lane === 'app' ? trimmedOrUndefined(simple?.nodeVersion) : undefined
+  const nodeVersion = seedNodeVersion(lane, simple?.nodeVersion)
   const binding: ComposeServiceSourceExtension = {
     sourceId: source.id,
     ...(trimmedBranch ? { branch: trimmedBranch } : {}),
@@ -161,7 +166,7 @@ export function seedComposeForLane(params: {
   const extension = lane === 'app'
     ? {
       serviceKind: 'node' as const,
-      ...(nodeVersion ? { nodeVersion } : {}),
+      ...nodeVersionField(nodeVersion),
       ...(alias ? { principal: alias } : {}),
       source: binding,
     }
