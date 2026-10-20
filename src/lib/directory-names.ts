@@ -106,7 +106,7 @@ export function folderStateLabel(state: FolderState): string {
  * Ids of services taken out of the compose file. A folder row names a service
  * (assetId) and the service row stays after removal, so removal is read from
  * the folders: an orphan service folder marks it, unless the same service also
- * has a folder that is not an orphan (for example a stale folder on a previous
+ * has a present or planned folder (a removing or missing one does not count as live) (for example a stale folder on a previous
  * server while it is live on the current one). The list only holds the first
  * 20 folders, so callers compare `total` with the length for a partial answer.
  */
@@ -117,8 +117,8 @@ export function removedFromComposeServiceIds(
   const live = new Set<string>()
   for (const folder of folders) {
     if (folder.kind !== 'service' || !folder.assetId) continue
-    const target = folder.state === 'orphan' ? orphans : live
-    target.add(folder.assetId)
+    if (folder.state === 'orphan') orphans.add(folder.assetId)
+    else if (folder.state === 'present' || folder.state === 'planned') live.add(folder.assetId)
   }
   for (const id of live) orphans.delete(id)
   return orphans

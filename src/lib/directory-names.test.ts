@@ -130,6 +130,15 @@ describe('removedFromComposeServiceIds', () => {
     ])
     expect(ids.size).toBe(0)
   })
+
+  it('still counts a service removed when its other folder is only being removed or missing', () => {
+    const ids = removedFromComposeServiceIds([
+      { ...base, id: 'f1', kind: 'service', state: 'orphan', assetId: 'svc-1' },
+      { ...base, id: 'f2', serverId: 's2', kind: 'service', state: 'removing', assetId: 'svc-1' },
+      { ...base, id: 'f3', serverId: 's3', kind: 'service', state: 'missing', assetId: 'svc-1' },
+    ])
+    expect([...ids]).toEqual(['svc-1'])
+  })
 })
 
 describe('containerCardServices', () => {

@@ -136,7 +136,6 @@ import { useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/lib/query-keys'
 import { offersLetsEncrypt } from '@/lib/hosting-letsencrypt-choice'
 import { RemovedServiceCard } from '@/components/org/removed-service-card'
-import { EnvironmentFoldersPanel } from '@/components/org/environment-folders-panel'
 import { containerCardServices, removedFromComposeServiceIds } from '@/lib/directory-names'
 import { useEnvironmentFolders } from '@/lib/queries/folders'
 import { useRequestLetsEncrypt } from '@/lib/queries/hosting-certificate'
@@ -1952,17 +1951,12 @@ function EnvironmentServiceSettingsSectionPanel({
 function EnvironmentContainersSectionPanel({
   orgId,
   environmentId,
-  canManage,
-  foldersPanelBelow,
   services,
   containersByService,
   allServers,
 }: Readonly<{
   orgId: string
   environmentId: string
-  canManage: boolean
-  /** True when nothing else on the screen lists the environment's folders, so this card does. */
-  foldersPanelBelow: boolean
   services: ServiceRecord[]
   containersByService: Record<string, ContainerRecord[]>
   allServers: OrgServerRecord[]
@@ -2002,7 +1996,7 @@ function EnvironmentContainersSectionPanel({
                 <RemovedServiceCard
                   key={service.id}
                   name={title}
-                  foldersWhere={foldersPanelBelow ? 'below' : 'above'}
+                  foldersWhere="above"
                 />
               ) : null
             }
@@ -2044,13 +2038,6 @@ function EnvironmentContainersSectionPanel({
           })}
         </View>
       )}
-      {foldersPanelBelow && removedIds.size > 0 ? (
-        <EnvironmentFoldersPanel
-          orgId={orgId}
-          environmentId={environmentId}
-          canManage={canManage}
-        />
-      ) : null}
     </SectionPanel>
   )
 }
@@ -2205,8 +2192,6 @@ function EnvironmentLoadedPanels({
         <EnvironmentContainersSectionPanel
           orgId={orgId}
           environmentId={environment.id}
-          canManage={canManage}
-          foldersPanelBelow={showEnvironmentPanel}
           services={services}
           containersByService={containersByService}
           allServers={allServers}
