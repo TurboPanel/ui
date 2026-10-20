@@ -21,22 +21,23 @@ import {
   NEWEST_NODE_SERIES,
   SUPPORTED_NODE_SERIES,
   isNodeComposeService,
-  patchServiceTurbopanelExtension,
   readServiceTurbopanelExtension,
   type ComposeServiceSourceExtension,
   type ComposeServiceTurbopanelExtension,
-  type ComposeServiceTurbopanelExtensionPatch,
   type NodeAppMode,
   type NodePackageManager,
 } from '@/lib/compose/service-kind'
 import {
   inspectRepository,
-  type ComposeDocument,
   type HostingRecord,
   type RepositoryInspection,
   type ServiceRecord,
 } from '@/lib/instance-api'
-import { composeForNodeSave, effectiveService } from '@/lib/compose/node-save-target'
+import {
+  composeForNodeSave,
+  effectiveService,
+  nodeValuesThatCannotBeCleared,
+} from '@/lib/compose/node-save-target'
 import { useEnvironment } from '@/lib/queries/environments'
 import { useProject } from '@/lib/queries/projects'
 import { useHostings } from '@/lib/queries/services'
@@ -49,14 +50,6 @@ const LOCKFILE_BY_MANAGER: readonly [string, NodePackageManager][] = [
   ['yarn.lock', 'yarn'],
   ['package-lock.json', 'npm'],
 ]
-
-function servicesOf(compose: ComposeDocument | undefined): Record<string, unknown> | null {
-  const services = compose?.data?.services
-  if (!services || typeof services !== 'object' || Array.isArray(services)) {
-    return null
-  }
-  return services as Record<string, unknown>
-}
 
 function isPlainMapping(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -95,15 +88,6 @@ function startupFileExists(
   return inspection.entries.some(
     (entry) => entry.kind === 'file' && basename(entry.path) === startupFile
   )
-}
-
-/** `source` with the subdirectory replaced; empty clears the key. */
-function sourceWithSubdirectory(
-  source: ComposeServiceSourceExtension,
-  subdirectory: string
-): ComposeServiceSourceExtension {
-  const { subdirectory: _replaced, ...rest } = source
-  return subdirectory.length === 0 ? rest : { ...rest, subdirectory }
 }
 
 function extensionOf(rawService: unknown): ComposeServiceTurbopanelExtension | null {
@@ -145,22 +129,6 @@ function isDraftDirty(persisted: NodeSettingsDraft, draft: NodeSettingsDraft): b
     persisted.appRoot !== draft.appRoot ||
     persisted.startupFile !== draft.startupFile
   )
-}
-
-/** Extension patch for a draft. Explicit `undefined` clears a key back to its default. */
-function extensionPatchFromDraft(
-  draft: NodeSettingsDraft,
-  source: ComposeServiceSourceExtension
-): ComposeServiceTurbopanelExtensionPatch {
-  return {
-    enabled: draft.enabled ? undefined : false,
-    nodeVersion: draft.nodeVersion || undefined,
-    packageManager: (draft.packageManager || undefined) as NodePackageManager | undefined,
-    appMode: draft.appMode === 'production' ? undefined : draft.appMode,
-    documentRoot: draft.documentRoot || undefined,
-    startupFile: draft.startupFile || undefined,
-    source: sourceWithSubdirectory(source, draft.appRoot),
-  }
 }
 
 function nodeVersionDescription(nodeVersion: string): string {
@@ -268,6 +236,7 @@ export function NodeSettingsPanel({
 
   const projectCompose = projectQuery.data?.project.options?.compose
   const environmentCompose = environmentQuery.data?.environment.options?.compose
+  const environmentReady = !environmentId || environmentQuery.data !== undefined
   // The service as it really is (the Base with this environment's changes over it).
   const rawService = useMemo(
     () => effectiveService(projectCompose, environmentCompose, composeServiceName),
@@ -328,24 +297,39 @@ export function NodeSettingsPanel({
     startupFile: startupFile.trim(),
   }
   const dirty = isDraftDirty(JSON.parse(seed) as NodeSettingsDraft, draft)
+  // From an environment, Save waits until its own changes have loaded, and a value the
+  // Base sets cannot be cleared there.
+  const cannotClear = environmentId
+    ? nodeValuesThatCannotBeCleared(draft, projectCompose, composeServiceName)
+    : []
+  const saveBlocked = environmentId && !environmentReady
+  const blockReason = cannotClear.length
+    ? `${cannotClear.join(' and ')} comes from the Base, so an environment cannot leave it empty. Pick a value, or change it in the Base.`
+    : null
 
   const save = async () => {
     if (!canManage || !source) return
     setSaving(true)
     setError(null)
     setSavedHint(false)
-    const { target, compose } = composeForNodeSave({
+    const planned = composeForNodeSave({
       environmentId,
       projectCompose,
       environmentCompose,
+      environmentReady,
       serviceName: composeServiceName,
       effective: rawService,
-      patch: (current) =>
-        patchServiceTurbopanelExtension(current, extensionPatchFromDraft(draft, source)),
+      values: draft,
+      source,
     })
-    const result = await (target === 'environment' ? persistEnvironment : persistProject).run(
-      compose
-    )
+    if (!planned.ok) {
+      setSaving(false)
+      setError(planned.reason)
+      return
+    }
+    const result = await (
+      planned.target === 'environment' ? persistEnvironment : persistProject
+    ).run(planned.compose)
     setSaving(false)
     if (result.ok) {
       setSavedHint(true)
@@ -400,6 +384,8 @@ export function NodeSettingsPanel({
             source={source}
             canManage={canManage}
             saving={saving}
+            saveDisabled={Boolean(saveBlocked) || blockReason !== null}
+            blockReason={blockReason}
             onSave={() => {
               void save()
             }}
@@ -434,6 +420,8 @@ function NodeSettingsFields({
   source,
   canManage,
   saving,
+  saveDisabled,
+  blockReason,
   onSave,
 }: Readonly<{
   error: string | null
@@ -458,6 +446,8 @@ function NodeSettingsFields({
   source: ComposeServiceSourceExtension | undefined
   canManage: boolean
   saving: boolean
+  saveDisabled: boolean
+  blockReason: string | null
   onSave: () => void
 }>) {
   const detected = detectPackageManager(inspection)
@@ -588,6 +578,10 @@ function NodeSettingsFields({
         />
       ) : null}
 
+      {blockReason ? (
+        <InlineNotice title="This setting comes from the Base" body={blockReason} />
+      ) : null}
+
       {canManage && dirty ? (
         <View style={styles.saveRow}>
           <Button
@@ -595,6 +589,7 @@ function NodeSettingsFields({
             busyLabel="Saving…"
             variant="primary"
             busy={saving}
+            disabled={saveDisabled}
             onPress={onSave}
           />
         </View>
