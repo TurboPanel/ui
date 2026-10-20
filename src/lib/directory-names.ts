@@ -102,17 +102,36 @@ export function folderStateLabel(state: FolderState): string {
   return FOLDER_STATE_LABELS[state]
 }
 
-/** Ids of services whose folder is an orphan: the service was taken out of the compose file but its files remain. */
+/**
+ * Ids of services taken out of the compose file. A folder row names a service
+ * (assetId) and the service row stays after removal, so removal is read from
+ * the folders: an orphan service folder marks it, unless the same service also
+ * has a folder that is not an orphan (for example a stale folder on a previous
+ * server while it is live on the current one). The list only holds the first
+ * 20 folders, so callers compare `total` with the length for a partial answer.
+ */
 export function removedFromComposeServiceIds(
   folders: readonly EnvironmentFolderRecord[]
 ): Set<string> {
-  const ids = new Set<string>()
+  const orphans = new Set<string>()
+  const live = new Set<string>()
   for (const folder of folders) {
-    if (folder.kind === 'service' && folder.state === 'orphan' && folder.assetId) {
-      ids.add(folder.assetId)
-    }
+    if (folder.kind !== 'service' || !folder.assetId) continue
+    ;(folder.state === 'orphan' ? orphans : live).add(folder.assetId)
   }
-  return ids
+  for (const id of live) orphans.delete(id)
+  return orphans
+}
+
+/** Services the Containers card lists: ones with containers, plus removed ones (a site has none). */
+export function containerCardServices<T extends { id: string }>(
+  services: readonly T[],
+  containerCounts: Readonly<Record<string, number>>,
+  removedIds: ReadonlySet<string>
+): T[] {
+  return services.filter(
+    (service) => (containerCounts[service.id] ?? 0) > 0 || removedIds.has(service.id)
+  )
 }
 
 /** What a person can do with a folder in this state: remove an orphan, ask a stuck removal again, forget a missing row. */

@@ -9,6 +9,7 @@ import {
   folderNameKindOf,
   serviceFolderWhere,
   folderStateLabel,
+  containerCardServices,
   removedFromComposeServiceIds,
   isDirectoryNamesMode,
   suggestFolderName,
@@ -120,5 +121,24 @@ describe('removedFromComposeServiceIds', () => {
       { ...base, id: 'f4', kind: 'service', state: 'orphan', assetId: null },
     ])
     expect([...ids]).toEqual(['svc-1'])
+  })
+
+  it('ignores a service that still has a folder that is not an orphan on another server', () => {
+    const ids = removedFromComposeServiceIds([
+      { ...base, id: 'f1', kind: 'service', state: 'orphan', assetId: 'svc-1' },
+      { ...base, id: 'f2', serverId: 's2', kind: 'service', state: 'present', assetId: 'svc-1' },
+    ])
+    expect(ids.size).toBe(0)
+  })
+})
+
+describe('containerCardServices', () => {
+  const services = [{ id: 'site' }, { id: 'live-empty' }, { id: 'api' }]
+  it('lists a removed service with no containers, keeps ones with containers, skips a live one without', () => {
+    const shown = containerCardServices(services, { api: 2 }, new Set(['site']))
+    expect(shown.map((s) => s.id)).toEqual(['site', 'api'])
+  })
+  it('is empty when nothing runs and nothing is removed', () => {
+    expect(containerCardServices(services, {}, new Set())).toEqual([])
   })
 })
