@@ -117,7 +117,8 @@ export function removedFromComposeServiceIds(
   const live = new Set<string>()
   for (const folder of folders) {
     if (folder.kind !== 'service' || !folder.assetId) continue
-    ;(folder.state === 'orphan' ? orphans : live).add(folder.assetId)
+    const target = folder.state === 'orphan' ? orphans : live
+    target.add(folder.assetId)
   }
   for (const id of live) orphans.delete(id)
   return orphans
