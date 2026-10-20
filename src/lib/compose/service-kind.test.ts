@@ -69,6 +69,11 @@ describe('serviceKind: node', () => {
     expect(parsed?.nodeVersion).toBe('24.17.0')
   })
 
+  it('keeps latest as the deliberate follow-the-server choice', () => {
+    const parsed = parseServiceTurbopanelExtension({ serviceKind: 'node', nodeVersion: 'latest' })
+    expect(parsed?.nodeVersion).toBe('latest')
+  })
+
   it('drops an unpinned node version and an unknown framework', () => {
     const parsed = parseServiceTurbopanelExtension({
       serviceKind: 'node',

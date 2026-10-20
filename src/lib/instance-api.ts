@@ -132,6 +132,7 @@ export const BINDING_OWNED_VARIABLE_ERROR = 'binding_owned_variable'
 export const CA_ROTATION_IN_PROGRESS_ERROR = 'ca_rotation_in_progress'
 export const NO_PENDING_ROTATION_ERROR = 'no_pending_rotation'
 export const CA_ROTATION_NOT_CONVERGED_ERROR = 'ca_rotation_not_converged'
+export const CA_LEAVES_OUTSTANDING_ERROR = 'ca_leaves_outstanding'
 export const DATABASE_NOT_FOUND_ERROR = 'database_not_found'
 export const REPOSITORY_REFERENCED_BY_COMPOSE_ERROR = 'source_referenced_by_compose'
 export const REPOSITORY_URL_CONFLICT_ERROR = 'source_url_conflict'
@@ -1423,7 +1424,9 @@ export type ServerAddressEngine = 'postgres' | 'mysql'
 export type ServerAddressesCertificateReason = 'enqueue_failed' | 'prepare_failed'
 
 /** Router port overrides. Absent key: the server's own listen port. `null`: not reachable through this address. */
-export type ServerAddressPorts = Partial<Record<'postgres' | 'mysql' | 'http' | 'https', number | null>>
+export type ServerAddressPorts = Partial<
+  Record<'postgres' | 'mysql' | 'http' | 'https', number | null>
+>
 
 /** Where an effective address came from: entered here, the organization's address list, reported by the server, or the datacenter pin. */
 export type ClientAddressSource = 'entry' | 'ip' | 'reported' | 'pin'
@@ -1791,6 +1794,130 @@ export async function saveOrgPrincipalDefaults(
   })
 }
 
+/** How a service or volume folder is named under a site owner: a readable name or the asset id. */
+export type DirectoryNameKind = 'slug' | 'uuid'
+
+/** What the organization allows: one kind for everything, or a choice per asset. */
+export type DirectoryNamesMode = DirectoryNameKind | 'both'
+
+export type OrgDirectoryDefaults = {
+  names: DirectoryNamesMode | null
+  effectiveNames: DirectoryNamesMode
+  /** Locked by hand or because any folder exists. */
+  locked: boolean
+  lockedByFolders: boolean
+}
+
+export type OrgDirectoryDefaultsUpdate = {
+  names?: DirectoryNamesMode | null
+  locked?: boolean
+}
+
+export async function fetchOrgDirectoryDefaults(orgId: string): Promise<OrgDirectoryDefaults> {
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/directory-defaults`)
+}
+
+export async function saveOrgDirectoryDefaults(
+  orgId: string,
+  update: OrgDirectoryDefaultsUpdate
+): Promise<OrgDirectoryDefaults & { ok: true }> {
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/directory-defaults`, {
+    method: 'PUT',
+    body: JSON.stringify(update),
+  })
+}
+
+export type FolderState = 'planned' | 'present' | 'removing' | 'orphan' | 'missing'
+
+export type EnvironmentFolderRecord = {
+  id: string
+  kind: 'service' | 'volume'
+  state: FolderState
+  scope: string
+  slug: string
+  serverId: string
+  serverName?: string | null
+  assetId?: string | null
+  assetName?: string | null
+  /** Plain words for a removing or orphan folder; null for any other state. */
+  reason?: string | null
+}
+
+/** The folders under an environment's name; `folders` is the first 20, `total` counts all. */
+export async function fetchEnvironmentFolders(
+  environmentId: string
+): Promise<{ ok: true; total: number; folders: EnvironmentFolderRecord[] }> {
+  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/folders`)
+}
+
+/** One folder in the organization-wide list of folders that need a person. */
+export type OrgFolderRecord = EnvironmentFolderRecord & {
+  /** The site owner's Linux user whose tree holds the folder. */
+  owner: string
+  hasAsset: boolean
+  /** What a click does: remove an orphan, ask a stuck removal again, forget a missing row; null while in use. */
+  action: 'remove' | 'retry' | 'forget' | null
+  updatedAt: string
+}
+
+/** Orphans, stuck removals and missing folders across the organization (managers only). */
+export async function fetchOrgFolders(
+  orgId: string,
+  query: Readonly<{ states?: readonly FolderState[]; limit?: number; offset?: number }> = {}
+): Promise<{ ok: true; total: number; folders: OrgFolderRecord[] }> {
+  const params = new URLSearchParams()
+  if (query.states && query.states.length > 0) params.set('state', query.states.join(','))
+  if (query.limit !== undefined) params.set('limit', String(query.limit))
+  if (query.offset !== undefined) params.set('offset', String(query.offset))
+  const suffix = params.size > 0 ? `?${params.toString()}` : ''
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/folders${suffix}`)
+}
+
+/** Remove an orphan from its server, ask a stuck removal again, or forget a missing row. */
+export async function removeFolder(
+  folderId: string
+): Promise<{ ok: true; outcome: 'removing' | 'forgotten' }> {
+  return await apiFetch(`${CLIENT_API}/folders/${folderId}/remove`, { method: 'POST' })
+}
+
+export type EnvironmentShareRecord = {
+  id: string
+  environmentId: string
+  environmentName?: string | null
+  projectId?: string
+  projectName?: string | null
+  kind: 'service' | 'volume'
+  assetId: string
+  assetName?: string | null
+}
+
+export async function fetchEnvironmentShares(
+  environmentId: string
+): Promise<{ ok: true; shares: EnvironmentShareRecord[] }> {
+  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/shares`)
+}
+
+/** Send exactly one of `serviceId` and `storageId`. */
+export async function addEnvironmentShare(
+  environmentId: string,
+  body: { serviceId: string } | { storageId: string }
+): Promise<{ ok: true; id: string }> {
+  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/shares`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function removeEnvironmentShare(
+  environmentId: string,
+  shareId: string
+): Promise<{ ok: true }> {
+  return await apiFetch(
+    `${CLIENT_API}/environments/${environmentId}/shares/${encodeURIComponent(shareId)}`,
+    { method: 'DELETE' }
+  )
+}
+
 export type OrgFabricRecord = {
   id: string
   cidr: string
@@ -2087,7 +2214,9 @@ export class ServerPrincipalChoiceRefusedError extends Error {
 export class ServerDeleteOnlineError extends Error {
   readonly code = 'server_online'
 
-  constructor(message = 'This host is connected. Forgetting records is only available while it is offline.') {
+  constructor(
+    message = 'This host is connected. Forgetting records is only available while it is offline.'
+  ) {
     super(message)
     this.name = 'ServerDeleteOnlineError'
   }
@@ -2148,8 +2277,6 @@ export type OrgPrincipalRecord = Readonly<{
   id: string
   name: string
   appliedUsername: string
-  kind: string
-  provider: string
   forms: readonly ('system' | 'database')[]
   projectId: string | null
   projectName: string | null
@@ -2239,11 +2366,15 @@ export async function getServerDeletePreview(
   serverId: string,
   organizationId?: string | null
 ): Promise<ServerDeletePreview> {
-  return await apiFetch(`${CLIENT_API}/servers/${serverId}/delete-preview`, undefined, organizationId)
+  return await apiFetch(
+    `${CLIENT_API}/servers/${serverId}/delete-preview`,
+    undefined,
+    organizationId
+  )
 }
 
 const PRINCIPAL_CHOICE_REFUSED_MESSAGE =
-  'Something changed while you were choosing: a principal is now used elsewhere or is no longer on this server. Check the list below and try again.'
+  'Something changed while you were choosing: a Hosting Account is now used elsewhere or is no longer on this server. Check the list below and try again.'
 
 function isPrincipalChoiceRefusal(code: string | undefined): boolean {
   return code === 'principal_delete_refused' || code === 'principal_not_on_server'
@@ -3143,6 +3274,13 @@ export type EnvironmentRecord = {
   metadata: Record<string, unknown> | null
   /** `options.compose` is a versioned ComposeDocument. */
   options: { compose?: ComposeDocument } | null
+  /**
+   * True for the project's one primary environment: the landing, the status and
+   * the source a new environment copies. Absent on an older control plane.
+   */
+  isPrimary?: boolean
+  /** Pinned environments are listed right after the primary one. */
+  pinned?: boolean
   createdAt: string
   updatedAt: string
 }
@@ -3240,7 +3378,7 @@ export type VariableRecord = {
  */
 export type BindingRecord = {
   id: string
-  principalId: string
+  loginId: string
   serviceId: string
   databaseName: string
   keyPrefix: string
@@ -3318,7 +3456,7 @@ export type CreateProjectBody = {
    */
   options?: { compose?: ComposeDocument }
   /**
-   * Pins the scaffolded default environment (org default name, else `production`)
+   * Pins the scaffolded primary environment (org primary name, else `production`)
    * when creating a managed project.
    */
   serverId?: string
@@ -3368,6 +3506,13 @@ export type ServiceRecord = {
   environmentId: string
   /** Derived from the compose document — read-only; never send this on create/update. */
   composeServiceName: string
+  /**
+   * Folder name under the site owner's tree (`<scope>/services/<slug>`). Null until
+   * a deploy plans the first folder; locked once the service has a folder.
+   */
+  slug?: string | null
+  /** True when the folder is in the shared (`common`) scope. Chosen before the first folder, then locked. */
+  common?: boolean
   metadata?: Record<string, unknown> | null
   /**
    * Application the daemon recognised in a site's document root at the last
@@ -3482,6 +3627,10 @@ export type TlsMetadata = {
     challengeType?: 'http-01' | 'dns-01'
     /** Daemon-observed issuance failure, cleared on the next successful probe. */
     lastError?: string
+    /** When a certificate was last seen newly in place on the host (ISO 8601). */
+    lastIssuedAt?: string
+    /** Expiry of the certificate Caddy is serving, as the daemon's probe read it (ISO 8601). */
+    notAfter?: string
     managedBy?: 'caddy'
   }
 }
@@ -3517,6 +3666,8 @@ export type OrganizationCaRecord = {
 
 export type OrganizationCaLeafHealth = {
   dueCount: number
+  /** Certificates marked stale: nothing waits on them. */
+  staleCount: number
   caGeneration: number
   caNotAfter: string | null
 }
@@ -3537,6 +3688,47 @@ export type CaRotationStatus = {
   state: string
   results: CaRotationResult[]
   retiredCaStillRequired: boolean
+  /** When the previous generation is retired on its own; null before fan-out finishes. */
+  retireBy?: string | null
+}
+
+/** A certificate signed by the Organization CA that needs an owner's attention. */
+export type OrganizationCaLeaf = {
+  id: string
+  kind: 'ingress' | 'engine'
+  state: 'due' | 'stale'
+  /** Plain words: why it is listed. */
+  reason: string
+  serverId: string
+  serverName: string | null
+  managedId: string | null
+  managedName: string | null
+  environmentId: string | null
+  environmentName: string | null
+  projectName: string | null
+  caGeneration: number
+  notAfter: string
+  issuedAt: string
+  attempts: number
+  attemptedAt: string | null
+  lastError: string | null
+  staleAt: string | null
+  staleReason: string | null
+}
+
+export type OrganizationCaLeaves = {
+  leaves: OrganizationCaLeaf[]
+  dueCount: number
+  staleCount: number
+  caGeneration: number
+  /** More than the list shows. */
+  truncated: boolean
+}
+
+export type OrganizationCaLeafRenewal = {
+  ok: true
+  outcome: 'queued' | 'failed' | 'stale' | 'skipped'
+  reason: string | null
 }
 
 /**
@@ -3841,6 +4033,13 @@ export async function updateProject(
       defaultServerId?: string | null
     }
     workspaceId?: string
+    /**
+     * Where an `options.compose` edit lands: `base` (inherited by every
+     * environment) or an environment id. Send it on every compose edit: with
+     * several environments and no target the control plane answers **400**
+     * `edit_target_required`.
+     */
+    target?: 'base' | (string & {})
   }
 ): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/projects/${id}`, {
@@ -3873,14 +4072,27 @@ export async function fetchEnvironment(id: string): Promise<{
   return { environment: body.environment, needsRedeploy: body.needsRedeploy ?? [] }
 }
 
+/** How a new environment starts: a copy of the primary one (default) or empty and standing alone. */
+export type EnvironmentStart = 'copy' | 'empty'
+
+/**
+ * `start` and `options` together are refused (**400** `environment_start_conflict`);
+ * the name follows the environment name rule (**400** `invalid_environment_name`).
+ */
 export async function createEnvironment(body: {
   projectId: string
   name?: string
   description?: string
   serverId?: string | null
   metadata?: Record<string, unknown>
+  start?: EnvironmentStart
   options?: { compose?: ComposeDocument }
-}): Promise<{ ok: true; id: string }> {
+}): Promise<{
+  ok: true
+  id: string
+  /** Plain-words list of what a `copy` start did not copy (hostnames, ports, variables ...). */
+  notCopied?: string[]
+}> {
   return await apiFetch(`${CLIENT_API}/environments`, {
     method: 'POST',
     body: JSON.stringify(body),
@@ -3895,6 +4107,8 @@ export async function updateEnvironment(
     /** Whole-server placement pin; `null` clears it. */
     serverId?: string | null
     metadata?: Record<string, unknown>
+    /** Pin or unpin: pinned environments are listed right after the primary one. */
+    pinned?: boolean
     options?: { compose?: ComposeDocument }
   }
 ): Promise<{ ok: true }> {
@@ -3902,6 +4116,13 @@ export async function updateEnvironment(
     method: 'PATCH',
     body: JSON.stringify(body),
   })
+}
+
+/** Move the project's primary marker to this environment. Idempotent. */
+export async function makeEnvironmentPrimary(
+  id: string
+): Promise<{ ok: true; id: string; projectId: string }> {
+  return await apiFetch(`${CLIENT_API}/environments/${id}/primary`, { method: 'POST' })
 }
 
 export async function deleteEnvironment(id: string): Promise<{ ok: true }> {
@@ -3988,6 +4209,11 @@ export async function updateService(
     name?: string
     options?: ServiceOptions
     metadata?: Record<string, unknown> | null
+    /** Folder name. 409 `service_slug_locked` once a folder exists. */
+    slug?: string
+    directoryName?: DirectoryNameKind
+    /** Share across environments. 409 `scope_locked` once a folder exists. */
+    common?: boolean
   }
 ): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/services/${id}`, {
@@ -6344,6 +6570,25 @@ export type RepositoryInspection = {
   via: 'provider' | 'daemon'
   files: RepositoryProbedFile[]
   entries: { path: string; kind: 'file' | 'dir'; bytes?: number }[]
+  /** The Node series a new app should start on, and what the repository asked for. */
+  nodeVersion?: RepositoryNodeVersion
+}
+
+export type RepositoryNodeVersionHint = {
+  source: 'package.json' | 'volta' | '.nvmrc' | '.node-version' | '.tool-versions'
+  /** The file's own value, such as `>=26.7.0`. */
+  requested: string
+  path: string
+  /** `matched` names `series`; the other two leave the wizard on its default. */
+  status: 'matched' | 'unsupported' | 'invalid'
+  series?: string
+}
+
+export type RepositoryNodeVersion = {
+  /** Newest concrete series the control plane offers. */
+  newest: string
+  offered: string[]
+  hint?: RepositoryNodeVersionHint
 }
 
 /**
@@ -6973,6 +7218,8 @@ export type ConfigViewFieldRow = {
   value: string | null
   masked: boolean
   source: ConfigViewSource
+  /** True when the value comes from the Base; false when this environment sets or overrides it. */
+  inheritedFromBase: boolean
 }
 
 export type ConfigViewService = {
@@ -6982,6 +7229,8 @@ export type ConfigViewService = {
   kind: ConfigViewServiceKind
   /** `environment` when added here, or when the environment stands alone. */
   source: ConfigViewSource
+  /** True when the service is defined in the Base. */
+  inheritedFromBase: boolean
   rows: ConfigViewFieldRow[]
 }
 
@@ -6990,6 +7239,8 @@ export type ConfigViewLinuxUser = {
   access: ConfigViewLinuxUserAccess
   description: string | null
   source: ConfigViewSource
+  /** True when the Linux user is defined in the Base. */
+  inheritedFromBase: boolean
   /** Service names that run as this user. */
   usedBy: string[]
 }
@@ -7005,6 +7256,8 @@ export type ConfigViewVariable = {
   forBuild: boolean
   forRuntime: boolean
   source: 'project' | 'environment'
+  /** True for a Base (project-level) variable this environment does not override. */
+  inheritedFromBase: boolean
 }
 
 export type ConfigViewChange = {
@@ -7037,8 +7290,14 @@ export type EnvironmentConfigViewResponse = {
   ok: true
   environmentId: string
   projectId: string
-  /** Derived from the saved compose, never stored: `false` for `services: !override` / `!reset`. */
-  followsBase: boolean
+  /** True when this is the project's primary environment. */
+  isPrimary: boolean
+  /**
+   * Derived from the saved compose, never stored: `true` for `services: !override` /
+   * `!reset`, which drops the Base's services. Every other environment inherits
+   * from the Base; each row says so with `inheritedFromBase`.
+   */
+  standsAlone: boolean
   base: ConfigViewSide
   effective: ConfigViewSide
   changes: ConfigViewChange[]
@@ -7074,7 +7333,6 @@ export type StorageCopyRecord = {
   state: string
   path: string | null
   endpoint: string | null
-  generation: number
   metadata: Record<string, unknown> | null
   options: Record<string, unknown> | null
   createdAt: string
@@ -7106,8 +7364,11 @@ export type StorageRecord = {
   name: string
   accessMode: StorageAccessMode
   retention: StorageRetention
-  generation: number
   principalId: string | null
+  /** Folder name under the site owner's tree (`<scope>/volumes/<slug>`); locked once a folder exists. */
+  slug?: string | null
+  /** True when the volume is in the shared (`common`) scope. Chosen at creation, never changes. */
+  common?: boolean
   metadata: Record<string, unknown> | null
   options: Record<string, unknown> | null
   createdAt: string
@@ -7126,6 +7387,12 @@ export type CreateStorageBody = {
   accessMode?: StorageAccessMode
   retention?: StorageRetention
   principalId?: string | null
+  /** Folder name; omitted means one made from `name`. 400 `invalid_directory_name`, 409 `directory_name_taken`. */
+  slug?: string
+  /** Only accepted when the organization allows both kinds of folder name. */
+  directoryName?: DirectoryNameKind
+  /** Place the volume in the shared scope. Decided here and locked. */
+  common?: boolean
   metadata?: Record<string, unknown>
   options?: Record<string, unknown>
   copy?: {
@@ -7422,8 +7689,6 @@ export async function deleteTask(id: string): Promise<{ ok: true }> {
 
 export type ProjectPrincipalRecord = {
   id: string
-  kind: string
-  provider: string
   /** Display name: what the operator typed. */
   username: string
   /**
@@ -9572,7 +9837,7 @@ export async function fetchBindings(
 }
 
 export async function createBinding(body: {
-  principalId: string
+  loginId: string
   serviceId: string
   databaseName: string
   keyPrefix?: string
@@ -9621,6 +9886,31 @@ export async function fetchOrganizationCaRotation(): Promise<CaRotationStatus | 
     if (isHttpStatusError(err, 404)) return null
     throw err
   }
+}
+
+/** Certificates signed by the Organization CA that are due for renewal or marked stale. */
+export async function fetchOrganizationCaLeaves(): Promise<OrganizationCaLeaves> {
+  return await apiFetch(`${CLIENT_API}/tls/ca/leaves`)
+}
+
+export async function renewOrganizationCaLeaf(leafId: string): Promise<OrganizationCaLeafRenewal> {
+  return await apiFetch(`${CLIENT_API}/tls/ca/leaves/${encodeURIComponent(leafId)}/renew`, {
+    method: 'POST',
+  })
+}
+
+/** Say nothing is waiting on this certificate: it is no longer counted or renewed. */
+export async function markOrganizationCaLeafStale(leafId: string): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/tls/ca/leaves/${encodeURIComponent(leafId)}/stale`, {
+    method: 'POST',
+  })
+}
+
+/** Forget the record of a certificate; the certificate on the server is untouched. */
+export async function deleteOrganizationCaLeaf(leafId: string): Promise<{ ok: true }> {
+  return await apiFetch(`${CLIENT_API}/tls/ca/leaves/${encodeURIComponent(leafId)}`, {
+    method: 'DELETE',
+  })
 }
 
 export async function rotateOrganizationCa(): Promise<{
@@ -9803,6 +10093,8 @@ export type NotificationEventInfo = {
   event: string
   severity: NotificationSeverity
   scope: 'organization' | 'instance'
+  /** The plain name a person picks the event by; absent from a control plane that predates it. */
+  label?: string
   example: string
 }
 

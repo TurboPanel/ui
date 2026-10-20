@@ -34,8 +34,8 @@ describe('useBaseTabModel', () => {
     expect(result.current.base).toBe(result.current.view.base)
     expect(result.current.environments.map((item) => item.name)).toEqual(['Production', 'Staging'])
     expect(result.current.rows.map((row) => row.relationText)).toEqual([
-      'Follows the Base',
-      'Follows the Base · 4 changes',
+      'Same as the Base',
+      '4 changes from the Base',
     ])
     expect(result.current.principals).toEqual([])
   })
@@ -73,6 +73,6 @@ describe('useBaseTabModel', () => {
     const { result } = renderHook(() => useBaseTabModel())
     expect(result.current.state).toBe('ready')
     if (result.current.state !== 'ready') throw new Error('not ready')
-    expect(result.current.rows[0]).toMatchObject({ followsBase: null, relationText: '' })
+    expect(result.current.rows[0]).toMatchObject({ standsAlone: null, relationText: '' })
   })
 })

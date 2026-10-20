@@ -48,6 +48,8 @@ afterEach(cleanup)
 
 const user = (over: Partial<ManagedUserRecord> = {}): ManagedUserRecord => ({
   id: 'u1',
+  loginId: 'u1',
+  principalId: null,
   username: 'app',
   appliedUsername: 'app',
   databases: ['d1'],

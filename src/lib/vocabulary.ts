@@ -139,7 +139,7 @@ export function formatVocabularyFailure(failure: VocabularyFailure): string {
 
 /**
  * Warn-mode phrases (not blocking). The terminology page on the website names
- * one word for each part: control plane, app / web app, daemon, server,
+ * one word for each part: control plane, web interface, daemon, server,
  * administrator. These retired words are reported as warnings so new customer
  * copy can be corrected before the list is promoted to FORBIDDEN_PHRASES.
  * Keep in sync with the sibling checks.

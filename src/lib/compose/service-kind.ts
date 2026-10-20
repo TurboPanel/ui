@@ -69,6 +69,12 @@ export const SOURCE_COMMAND_MAX_LENGTH = 1000
 const NODE_VERSION_RE = /^\d{1,3}(\.\d{1,3}){0,2}$/
 
 /**
+ * The deliberate "follow the server's newest Node series" value of
+ * `nodeVersion`. New apps are pinned to a concrete series instead.
+ */
+export const FLOATING_NODE_VERSION = 'latest'
+
+/**
  * Per-service Git source binding (`x-turbopanel.source`).
  *
  * Mirrors the instance type in `turbopanel/src/features/compose/service-kind.ts`.
@@ -381,7 +387,7 @@ const SERVICE_EXTENSION_FIELDS: Readonly<
   },
   nodeVersion: {
     kinds: NODE_KIND_ONLY,
-    typeMessage: 'nodeVersion must be a pinned version like "24" or "24.17.0"',
+    typeMessage: 'nodeVersion must be a pinned version like "24" or "24.17.0", or "latest"',
   },
   runtime: {
     kinds: NODE_KIND_ONLY,
@@ -713,6 +719,13 @@ function readNodeVersion(value: unknown): string | undefined {
   return NODE_VERSION_RE.test(trimmed) ? trimmed : undefined
 }
 
+/** A Node pin, or `latest` ({@link FLOATING_NODE_VERSION}). */
+function readNodeAppVersion(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() === FLOATING_NODE_VERSION
+    ? FLOATING_NODE_VERSION
+    : readNodeVersion(value)
+}
+
 function readNodePackageManager(value: unknown): NodePackageManager | undefined {
   if (typeof value !== 'string') return undefined
   const trimmed = value.trim()
@@ -816,7 +829,7 @@ export function parseServiceTurbopanelExtension(
     serviceKind: readServiceKind(value.serviceKind),
     engine: readSiteEngine(value.engine),
     framework: readNativeRuntimeFramework(value.framework),
-    nodeVersion: readNodeVersion(value.nodeVersion),
+    nodeVersion: readNodeAppVersion(value.nodeVersion),
     runtime: readNativeRuntime(value.runtime),
     // Same shape as a Node pin (`2`, `2.9`, `2.9.7`).
     denoVersion: readNodeVersion(value.denoVersion),

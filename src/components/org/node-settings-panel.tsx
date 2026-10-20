@@ -17,24 +17,28 @@ import {
   usePersistProjectCompose,
 } from '@/components/org/compose-persistence'
 import {
+  FLOATING_NODE_VERSION,
   NEWEST_NODE_SERIES,
   SUPPORTED_NODE_SERIES,
   isNodeComposeService,
-  patchServiceTurbopanelExtension,
   readServiceTurbopanelExtension,
   type ComposeServiceSourceExtension,
   type ComposeServiceTurbopanelExtension,
-  type ComposeServiceTurbopanelExtensionPatch,
   type NodeAppMode,
   type NodePackageManager,
 } from '@/lib/compose/service-kind'
 import {
   inspectRepository,
-  type ComposeDocument,
   type HostingRecord,
   type RepositoryInspection,
   type ServiceRecord,
 } from '@/lib/instance-api'
+import {
+  composeForNodeSave,
+  effectiveService,
+  nodeClearRefusal,
+  nodeValuesThatCannotBeCleared,
+} from '@/lib/compose/node-save-target'
 import { useEnvironment } from '@/lib/queries/environments'
 import { useProject } from '@/lib/queries/projects'
 import { useHostings } from '@/lib/queries/services'
@@ -48,16 +52,6 @@ const LOCKFILE_BY_MANAGER: readonly [string, NodePackageManager][] = [
   ['package-lock.json', 'npm'],
 ]
 
-function servicesOf(
-  compose: ComposeDocument | undefined,
-): Record<string, unknown> | null {
-  const services = compose?.data?.services
-  if (!services || typeof services !== 'object' || Array.isArray(services)) {
-    return null
-  }
-  return services as Record<string, unknown>
-}
-
 function isPlainMapping(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -69,14 +63,10 @@ function basename(path: string): string {
 }
 
 /** Package manager the repository's lockfile implies, from a directory listing. */
-function detectPackageManager(
-  inspection: RepositoryInspection | null,
-): NodePackageManager | null {
+function detectPackageManager(inspection: RepositoryInspection | null): NodePackageManager | null {
   if (!inspection) return null
   const names = new Set(
-    inspection.entries
-      .filter((entry) => entry.kind === 'file')
-      .map((entry) => basename(entry.path)),
+    inspection.entries.filter((entry) => entry.kind === 'file').map((entry) => basename(entry.path))
   )
   for (const [lockfile, manager] of LOCKFILE_BY_MANAGER) {
     if (names.has(lockfile)) return manager
@@ -92,50 +82,17 @@ function detectPackageManager(
  */
 function startupFileExists(
   inspection: RepositoryInspection | null,
-  startupFileDraft: string,
+  startupFileDraft: string
 ): boolean | null {
   const startupFile = startupFileDraft.trim() || 'server.js'
   if (!inspection || startupFile.includes('/')) return null
   return inspection.entries.some(
-    (entry) => entry.kind === 'file' && basename(entry.path) === startupFile,
+    (entry) => entry.kind === 'file' && basename(entry.path) === startupFile
   )
 }
 
-/** `source` with the subdirectory replaced; empty clears the key. */
-function sourceWithSubdirectory(
-  source: ComposeServiceSourceExtension,
-  subdirectory: string,
-): ComposeServiceSourceExtension {
-  const { subdirectory: _replaced, ...rest } = source
-  return subdirectory.length === 0 ? rest : { ...rest, subdirectory }
-}
-
-type ComposeLayer = Readonly<{
-  kind: 'environment' | 'project'
-  compose: ComposeDocument
-}>
-
-/** Compose layer that defines this service — environment overlay first. */
-function resolveComposeLayer(
-  environmentCompose: ComposeDocument | undefined,
-  projectCompose: ComposeDocument | undefined,
-  composeServiceName: string,
-): ComposeLayer | null {
-  if (servicesOf(environmentCompose)?.[composeServiceName]) {
-    return { kind: 'environment', compose: environmentCompose! }
-  }
-  if (servicesOf(projectCompose)?.[composeServiceName]) {
-    return { kind: 'project', compose: projectCompose! }
-  }
-  return null
-}
-
-function extensionOf(
-  rawService: unknown,
-): ComposeServiceTurbopanelExtension | null {
-  return isPlainMapping(rawService)
-    ? readServiceTurbopanelExtension(rawService)
-    : null
+function extensionOf(rawService: unknown): ComposeServiceTurbopanelExtension | null {
+  return isPlainMapping(rawService) ? readServiceTurbopanelExtension(rawService) : null
 }
 
 /** The editable settings, as drafted in the form and as persisted. */
@@ -150,7 +107,7 @@ type NodeSettingsDraft = Readonly<{
 }>
 
 function draftFromExtension(
-  extension: ComposeServiceTurbopanelExtension | null,
+  extension: ComposeServiceTurbopanelExtension | null
 ): NodeSettingsDraft {
   return {
     enabled: extension?.enabled ?? true,
@@ -163,10 +120,7 @@ function draftFromExtension(
   }
 }
 
-function isDraftDirty(
-  persisted: NodeSettingsDraft,
-  draft: NodeSettingsDraft,
-): boolean {
+function isDraftDirty(persisted: NodeSettingsDraft, draft: NodeSettingsDraft): boolean {
   return (
     persisted.enabled !== draft.enabled ||
     persisted.nodeVersion !== draft.nodeVersion ||
@@ -178,42 +132,39 @@ function isDraftDirty(
   )
 }
 
-/** Extension patch for a draft. Explicit `undefined` clears a key back to its default. */
-function extensionPatchFromDraft(
-  draft: NodeSettingsDraft,
-  source: ComposeServiceSourceExtension,
-): ComposeServiceTurbopanelExtensionPatch {
-  return {
-    enabled: draft.enabled ? undefined : false,
-    nodeVersion: draft.nodeVersion || undefined,
-    packageManager: (draft.packageManager || undefined) as
-      | NodePackageManager
-      | undefined,
-    appMode: draft.appMode === 'production' ? undefined : draft.appMode,
-    documentRoot: draft.documentRoot || undefined,
-    startupFile: draft.startupFile || undefined,
-    source: sourceWithSubdirectory(source, draft.appRoot),
+function nodeVersionDescription(nodeVersion: string): string {
+  if (nodeVersion === FLOATING_NODE_VERSION) {
+    return 'Latest follows the newest Node version this server offers, so the app moves to a new series on the first deploy after the server gets one. Pick a number to keep it where it is.'
   }
+  if (nodeVersion) return 'The app stays on this series and only gets patch updates.'
+  return 'Not pinned: the app follows the newest Node version this server offers. Pick a number to keep it where it is.'
 }
 
-function buildVersionOptions(
-  nodeVersion: string,
-): { value: string; label: string }[] {
-  const offered = SUPPORTED_NODE_SERIES.map((series) => ({
-    value: series,
-    label: `${series}.x`,
-  }))
+function buildVersionOptions(nodeVersion: string): { value: string; label: string }[] {
+  const offered = [
+    ...SUPPORTED_NODE_SERIES.map((series) => ({
+      value: series,
+      label: `${series}.x`,
+    })),
+    // Following the server is a deliberate pick, never the default.
+    {
+      value: FLOATING_NODE_VERSION,
+      label: `Latest (follows the server, now ${NEWEST_NODE_SERIES}.x)`,
+    },
+  ]
   // A pinned value outside the offered series still has to display as itself.
-  if (nodeVersion && !SUPPORTED_NODE_SERIES.includes(nodeVersion)) {
+  if (
+    nodeVersion &&
+    nodeVersion !== FLOATING_NODE_VERSION &&
+    !SUPPORTED_NODE_SERIES.includes(nodeVersion)
+  ) {
     return [{ value: nodeVersion, label: nodeVersion }, ...offered]
   }
   return offered
 }
 
 /** First hostname bound to the service's hosting, if any. */
-function firstHostname(
-  hostings: readonly HostingRecord[] | undefined,
-): string | null {
+function firstHostname(hostings: readonly HostingRecord[] | undefined): string | null {
   const raw = hostings?.[0]?.options?.hostnames
   if (!Array.isArray(raw)) return null
   const first = raw.find((entry): entry is string => typeof entry === 'string')
@@ -228,11 +179,9 @@ function firstHostname(
 function useRepositoryInspection(
   sourceId: string | undefined,
   branch: string | undefined,
-  appRoot: string,
+  appRoot: string
 ): RepositoryInspection | null {
-  const [inspection, setInspection] = useState<RepositoryInspection | null>(
-    null,
-  )
+  const [inspection, setInspection] = useState<RepositoryInspection | null>(null)
   useEffect(() => {
     if (!sourceId) {
       setInspection(null)
@@ -259,9 +208,10 @@ function useRepositoryInspection(
 /**
  * Plesk-style "Node.js" settings for one `serviceKind: node` compose service.
  *
- * Reads and writes the service's `x-turbopanel` extension on whichever compose
- * layer defines it (environment overlay first, else the project document), so
- * everything here is the same state the Services form edits. Renders nothing
+ * Reads the service as it really is (the Base with this environment's changes
+ * over it) and writes its `x-turbopanel` extension into the environment, or into
+ * the Base from a view with no environment, so everything here is the same state
+ * the Services form edits. Renders nothing
  * for a service of any other kind — the mounting screen does not need to know.
  */
 export function NodeSettingsPanel({
@@ -285,19 +235,14 @@ export function NodeSettingsPanel({
   })
   const hostingsQuery = useHostings(orgId, service.id)
 
-  const layer = useMemo(
-    () =>
-      resolveComposeLayer(
-        environmentQuery.data?.environment.options?.compose,
-        projectQuery.data?.project.options?.compose,
-        composeServiceName,
-      ),
-    [environmentQuery.data, projectQuery.data, composeServiceName],
+  const projectCompose = projectQuery.data?.project.options?.compose
+  const environmentCompose = environmentQuery.data?.environment.options?.compose
+  const environmentReady = !environmentId || environmentQuery.data !== undefined
+  // The service as it really is (the Base with this environment's changes over it).
+  const rawService = useMemo(
+    () => effectiveService(projectCompose, environmentCompose, composeServiceName),
+    [projectCompose, environmentCompose, composeServiceName]
   )
-
-  const rawService = layer
-    ? servicesOf(layer.compose)?.[composeServiceName]
-    : undefined
   const extension = extensionOf(rawService)
 
   const persistProject = usePersistProjectCompose(orgId, projectId)
@@ -332,14 +277,10 @@ export function NodeSettingsPanel({
   const inspection = useRepositoryInspection(
     extension?.source?.sourceId,
     extension?.source?.branch,
-    appRoot.trim(),
+    appRoot.trim()
   )
 
-  if (
-    !layer ||
-    !isPlainMapping(rawService) ||
-    !isNodeComposeService(rawService)
-  ) {
+  if (!isPlainMapping(rawService) || !isNodeComposeService(rawService)) {
     return null
   }
   const source = extension?.source
@@ -357,25 +298,37 @@ export function NodeSettingsPanel({
     startupFile: startupFile.trim(),
   }
   const dirty = isDraftDirty(JSON.parse(seed) as NodeSettingsDraft, draft)
-
-  const persist =
-    layer.kind === 'environment' ? persistEnvironment : persistProject
+  // From an environment, Save waits until its own changes have loaded, and a value the
+  // Base sets cannot be cleared there.
+  const cannotClear = environmentId
+    ? nodeValuesThatCannotBeCleared(draft, projectCompose, composeServiceName)
+    : []
+  const saveBlocked = environmentId && !environmentReady
+  const blockReason = cannotClear.length ? nodeClearRefusal(cannotClear) : null
 
   const save = async () => {
     if (!canManage || !source) return
     setSaving(true)
     setError(null)
     setSavedHint(false)
-    const services = { ...servicesOf(layer.compose) }
-    services[composeServiceName] = patchServiceTurbopanelExtension(
-      rawService,
-      extensionPatchFromDraft(draft, source),
-    )
-    const compose: ComposeDocument = {
-      ...layer.compose,
-      data: { ...layer.compose.data, services },
+    const planned = composeForNodeSave({
+      environmentId,
+      projectCompose,
+      environmentCompose,
+      environmentReady,
+      serviceName: composeServiceName,
+      effective: rawService,
+      values: draft,
+      source,
+    })
+    if (!planned.ok) {
+      setSaving(false)
+      setError(planned.reason)
+      return
     }
-    const result = await persist.run(compose)
+    const result = await (
+      planned.target === 'environment' ? persistEnvironment : persistProject
+    ).run(planned.compose)
     setSaving(false)
     if (result.ok) {
       setSavedHint(true)
@@ -430,6 +383,8 @@ export function NodeSettingsPanel({
             source={source}
             canManage={canManage}
             saving={saving}
+            saveDisabled={Boolean(saveBlocked) || blockReason !== null}
+            blockReason={blockReason}
             onSave={() => {
               void save()
             }}
@@ -464,6 +419,8 @@ function NodeSettingsFields({
   source,
   canManage,
   saving,
+  saveDisabled,
+  blockReason,
   onSave,
 }: Readonly<{
   error: string | null
@@ -488,6 +445,8 @@ function NodeSettingsFields({
   source: ComposeServiceSourceExtension | undefined
   canManage: boolean
   saving: boolean
+  saveDisabled: boolean
+  blockReason: string | null
   onSave: () => void
 }>) {
   const detected = detectPackageManager(inspection)
@@ -518,15 +477,14 @@ function NodeSettingsFields({
         />
       </SettingRow>
 
-      <SettingRow
-        label="Node.js version"
-        description="Series the app runs and builds on."
-      >
+      <SettingRow label="Node.js version" description={nodeVersionDescription(nodeVersion)}>
         <Select
           value={nodeVersion || null}
           options={buildVersionOptions(nodeVersion)}
           placeholder="Select a version"
-          noneLabel={`Newest available (${NEWEST_NODE_SERIES}.x)`}
+          noneLabel={
+            nodeVersion ? undefined : `Not pinned (follows the server, now ${NEWEST_NODE_SERIES}.x)`
+          }
           mono
           disabled={fieldsDisabled}
           accessibilityLabel="Node.js version"
@@ -619,6 +577,10 @@ function NodeSettingsFields({
         />
       ) : null}
 
+      {blockReason ? (
+        <InlineNotice title="This setting comes from the Base" body={blockReason} />
+      ) : null}
+
       {canManage && dirty ? (
         <View style={styles.saveRow}>
           <Button
@@ -626,6 +588,7 @@ function NodeSettingsFields({
             busyLabel="Saving…"
             variant="primary"
             busy={saving}
+            disabled={saveDisabled}
             onPress={onSave}
           />
         </View>

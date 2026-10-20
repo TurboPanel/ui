@@ -47,7 +47,7 @@ describe('environmentValues', () => {
           { key: 'var:B', value: null },
           { key: 'var:C', value: '3' },
         ],
-      },
+      }
     )
     expect(values).toEqual({ 'svc:a:x': '9', 'var:C': '3' })
   })
@@ -79,7 +79,11 @@ describe('environmentChanges', () => {
       removed: false,
       tag: 'Testing change',
     })
-    expect(rows[1]).toMatchObject({ envValue: 'testing-web', label: 'Linux user', area: 'users' })
+    expect(rows[1]).toMatchObject({
+      envValue: 'testing-web',
+      label: 'Hosting Account',
+      area: 'users',
+    })
   })
 
   it('counts the changes of each website environment', () => {
@@ -109,11 +113,16 @@ describe('environmentChanges', () => {
       source: { standsAlone: true, values: { 'var:NEW': '1' } },
     })
     expect(rows).toEqual([
-      expect.objectContaining({ key: 'var:NEW', added: true, removed: false, baseValue: 'Not set' }),
+      expect.objectContaining({
+        key: 'var:NEW',
+        added: true,
+        removed: false,
+        baseValue: 'Not set',
+      }),
     ])
   })
 
-  it('reports an added change on a following environment', () => {
+  it('reports an added change on an environment that inherits from the Base', () => {
     const rows = environmentChanges({
       envName: 'QA',
       services: [],
@@ -123,7 +132,7 @@ describe('environmentChanges', () => {
     expect(rows[0]).toMatchObject({ added: true, envValue: '1' })
   })
 
-  it('reports a removed key on a following environment', () => {
+  it('reports a removed key on an environment that inherits from the Base', () => {
     const rows = environmentChanges({
       envName: 'QA',
       services: [],
@@ -135,29 +144,31 @@ describe('environmentChanges', () => {
 
   it('lists changed keys by app', () => {
     const rows = changesOf(website, sampleEnvironment(website, 'testing'))
-    expect(changedShorts(rows, 'web')).toEqual(['start command', 'Linux user'])
+    expect(changedShorts(rows, 'web')).toEqual(['start command', 'Hosting Account'])
     expect(changedShorts(rows, 'other')).toEqual([])
   })
 })
 
 describe('effectiveConfig', () => {
-  it.each(SAMPLE_ENVIRONMENTS)('%s: every row says where its value comes from', (_name, project, env) => {
-    const effective = effectiveOf(project, env)
-    const rows = [...effective.apps.flatMap((app) => app.rows), ...effective.variables]
-    for (const row of rows) {
-      expect(row.sourceLabel).not.toBe('')
-      expect(['base', 'env', 'own']).toContain(row.source)
+  it.each(SAMPLE_ENVIRONMENTS)(
+    '%s: every row says where its value comes from',
+    (_name, project, env) => {
+      const effective = effectiveOf(project, env)
+      const rows = [...effective.apps.flatMap((app) => app.rows), ...effective.variables]
+      for (const row of rows) {
+        expect(row.sourceLabel).not.toBe('')
+        expect(['base', 'env', 'own']).toContain(row.source)
+      }
+      for (const app of effective.apps) expect(app.sourceLabel).not.toBe('')
     }
-    for (const app of effective.apps) expect(app.sourceLabel).not.toBe('')
-  })
+  )
 
-  it('shows Testing as following the Base with 2 changes', () => {
+  it('shows Testing with 2 changes from the Base', () => {
     const effective = effectiveOf(website, sampleEnvironment(website, 'testing'))
-    expect(effective.relationText).toBe('Follows the Base · 2 changes')
+    expect(effective.relationText).toBe('2 changes from the Base')
     expect(effective.onlyChangesLabel).toBe('Only changes from Base (2)')
     expect(effective.changeText).toBe('2 changes')
     expect(effective.hasChanges).toBe(true)
-    expect(effective.followsBase).toBe(true)
     expect(effective.standsAlone).toBe(false)
     const start = effective.apps[0]?.rows.find((row) => row.key === 'svc:web:start')
     expect(start).toMatchObject({
@@ -173,15 +184,22 @@ describe('effectiveConfig', () => {
       source: 'env',
       sourceLabel: 'Testing change',
       changeCount: 2,
-      changeText: 'Testing changes: start command, Linux user',
+      changeText: 'Testing changes: start command, Hosting Account',
     })
   })
 
-  it('shows unchanged rows as coming from the Base, variables from the Project', () => {
+  it('shows unchanged rows as coming from the Base, variables too', () => {
     const effective = effectiveOf(website, sampleEnvironment(website, 'testing'))
     const build = effective.apps[0]?.rows.find((row) => row.key === 'svc:web:build')
-    expect(build).toMatchObject({ sourceLabel: 'Base', isChange: false, differs: false, sourceNote: '' })
-    expect(effective.variables.find((v) => v.name === 'NODE_ENV')?.sourceLabel).toBe('Project')
+    expect(build).toMatchObject({
+      sourceLabel: 'From the Base',
+      isChange: false,
+      differs: false,
+      sourceNote: '',
+    })
+    expect(effective.variables.find((v) => v.name === 'NODE_ENV')?.sourceLabel).toBe(
+      'From the Base'
+    )
   })
 
   it('tags the Staging variable change', () => {
@@ -198,7 +216,7 @@ describe('effectiveConfig', () => {
     expect(effective.apps[0]).toMatchObject({
       changeText: 'Same as the Base',
       source: 'base',
-      sourceLabel: 'Base',
+      sourceLabel: 'From the Base',
       isChange: false,
     })
     expect(effective.hasChanges).toBe(false)
@@ -207,7 +225,6 @@ describe('effectiveConfig', () => {
   it('shows a stand-alone environment as set in itself', () => {
     const effective = effectiveOf(portal, sampleEnvironment(portal, 'preview'))
     expect(effective.relationText).toBe('Stands alone')
-    expect(effective.followsBase).toBe(false)
     expect(effective.standsAlone).toBe(true)
     expect(effective.apps[0]).toMatchObject({
       source: 'own',
@@ -276,6 +293,8 @@ describe('effectiveConfig', () => {
 
   it('sampleValues agrees with environmentValues', () => {
     const staging = sampleEnvironment(website, 'staging')
-    expect(sampleValues(website, staging)['var:NEXT_PUBLIC_SITE_URL']).toBe('https://staging.turbopanel.io')
+    expect(sampleValues(website, staging)['var:NEXT_PUBLIC_SITE_URL']).toBe(
+      'https://staging.turbopanel.io'
+    )
   })
 })

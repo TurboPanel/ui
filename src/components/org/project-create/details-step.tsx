@@ -3,21 +3,9 @@ import { useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { showsDefaultPill } from '@/components/org/project-create/environment-name'
 import { panelStyles } from '@/components/ui/panel-styles'
-import type {
-  FieldErrors,
-  WorkspaceMode,
-} from '@/components/org/project-create/validation'
-import {
-  EmptyState,
-  FormField,
-  LoadingState,
-  SegmentedControl,
-  TextField,
-} from '@/components/ui'
-import {
-  DESCRIPTION_MAX_LENGTH,
-  DISPLAY_NAME_MAX_LENGTH,
-} from '@/lib/display-name'
+import type { FieldErrors, WorkspaceMode } from '@/components/org/project-create/validation'
+import { EmptyState, FormField, LoadingState, SegmentedControl, TextField } from '@/components/ui'
+import { DESCRIPTION_MAX_LENGTH, DISPLAY_NAME_MAX_LENGTH } from '@/lib/display-name'
 import type { WorkspaceRecord } from '@/lib/instance-api'
 import { chrome, colors, spacing, webPointer } from '@/lib/theme'
 
@@ -66,19 +54,13 @@ function WorkspacePickerBody({
         return (
           <Pressable
             key={ws.id}
-            style={[
-              styles.workspaceOption,
-              selected && styles.workspaceOptionSelected,
-              webPointer,
-            ]}
+            style={[styles.workspaceOption, selected && styles.workspaceOptionSelected, webPointer]}
             onPress={() => onSelect(ws.id)}
             accessibilityRole="button"
             accessibilityState={{ selected }}
             accessibilityLabel={workspaceLabel(ws)}
           >
-            <Text style={styles.workspaceOptionText}>
-              {workspaceLabel(ws)}
-            </Text>
+            <Text style={styles.workspaceOptionText}>{workspaceLabel(ws)}</Text>
           </Pressable>
         )
       })}
@@ -101,9 +83,7 @@ function WorkspacePicker({
 }>) {
   return (
     <View style={styles.fieldBlock}>
-      {workspaces.length > 1 ? (
-        <Text style={styles.subLabel}>Choose workspace</Text>
-      ) : null}
+      {workspaces.length > 1 ? <Text style={styles.subLabel}>Choose workspace</Text> : null}
       <WorkspacePickerBody
         workspaces={workspaces}
         loading={loading}
@@ -170,7 +150,8 @@ function ProjectWorkspaceFields({
 }
 
 /**
- * Name of the project's first environment. Empty means "let the server apply
+ * Name of the project's primary environment (the first one, where the wizard
+ * puts the content). Empty means "let the server apply
  * the organization default"; the pill shows only while the value is that default.
  */
 export function EnvironmentNameField({
@@ -189,44 +170,42 @@ export function EnvironmentNameField({
   const [pillWidth, setPillWidth] = useState(0)
   const showPill = showsDefaultPill(value, defaultName)
   return (
-  <TextField
-    label="Environment Name"
-    value={value}
-    onChangeText={onChange}
-    autoCapitalize="none"
-    autoCorrect={false}
-    spellCheck={false}
-    accessibilityLabel="Environment name"
-    maxLength={DISPLAY_NAME_MAX_LENGTH}
-    placeholder="Organization default"
-    style={
-      showPill ? { paddingRight: pillWidth + PILL_INSET } : undefined
-    }
-    adornment={
-      showPill ? (
-        <Text
-          style={styles.defaultPill}
-          onLayout={(e) => setPillWidth(e.nativeEvent.layout.width)}
-        >
-          Organization Default
-        </Text>
-      ) : null
-    }
-    footer={
-      <Link href={`/${orgId}/projects/settings` as Href} asChild>
-        <Pressable
-          style={StyleSheet.flatten([styles.hintLink, webPointer])}
-          accessibilityRole="link"
-          accessibilityLabel="Set the default for this organization"
-        >
-          <Text style={styles.hintLinkText}>
-            Set the default for this organization
+    <TextField
+      label="Primary environment name"
+      value={value}
+      onChangeText={onChange}
+      autoCapitalize="none"
+      autoCorrect={false}
+      spellCheck={false}
+      accessibilityLabel="Primary environment name"
+      maxLength={DISPLAY_NAME_MAX_LENGTH}
+      placeholder="Organization default"
+      style={showPill ? { paddingRight: pillWidth + PILL_INSET } : undefined}
+      adornment={
+        showPill ? (
+          <Text
+            style={styles.defaultPill}
+            onLayout={(e) => setPillWidth(e.nativeEvent.layout.width)}
+          >
+            Organization Default
           </Text>
-        </Pressable>
-      </Link>
-    }
-    error={error}
-  />
+        ) : null
+      }
+      footer={
+        <Link href={`/${orgId}/projects/settings` as Href} asChild>
+          <Pressable
+            style={StyleSheet.flatten([styles.hintLink, webPointer])}
+            accessibilityRole="link"
+            accessibilityLabel="Set the primary environment name for this organization"
+          >
+            <Text style={styles.hintLinkText}>
+              Set the primary environment name for this organization
+            </Text>
+          </Pressable>
+        </Link>
+      }
+      error={error}
+    />
   )
 }
 

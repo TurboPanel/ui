@@ -11,9 +11,14 @@ const push = vi.hoisted(() => vi.fn())
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
 vi.mock('react-native-svg', async () => (await import('@/components/ui/v4/rn-stub')).svgStub)
-vi.mock('@/lib/theme-preference', async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub)
+vi.mock(
+  '@/lib/theme-preference',
+  async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub
+)
 vi.mock('expo-router', () => ({
-  Link: ({ href, children }: Readonly<{ href: string; children: ReactNode }>) => <div data-href={href}>{children}</div>,
+  Link: ({ href, children }: Readonly<{ href: string; children: ReactNode }>) => (
+    <div data-href={href}>{children}</div>
+  ),
   useRouter: () => ({ push }),
 }))
 
@@ -23,7 +28,11 @@ const NOW = Date.parse('2026-10-05T12:00:00Z')
 const ids = { orgId: 'o', projectId: 'p', environmentId: 'env-1' }
 const BASE = '/o/projects/p/environments/env-1'
 
-function deploy(id: string, generation: number, extra: Partial<DeploymentHistoryRecord> = {}): DeploymentHistoryRecord {
+function deploy(
+  id: string,
+  generation: number,
+  extra: Partial<DeploymentHistoryRecord> = {}
+): DeploymentHistoryRecord {
   return {
     id,
     commandId: id,
@@ -46,11 +55,16 @@ function deploy(id: string, generation: number, extra: Partial<DeploymentHistory
   }
 }
 
-const retry = { canRetry: true, busy: false, requested: false, error: null, onRetry: vi.fn(), reset: vi.fn() }
+const retry = {
+  canRetry: true,
+  busy: false,
+  requested: false,
+  error: null,
+  onRetry: vi.fn(),
+  reset: vi.fn(),
+}
 
-function renderBody(
-  overrides: Partial<Parameters<typeof EnvironmentOverviewBody>[0]> = {},
-) {
+function renderBody(overrides: Partial<Parameters<typeof EnvironmentOverviewBody>[0]> = {}) {
   return render(
     <EnvironmentOverviewBody
       ids={ids}
@@ -61,7 +75,7 @@ function renderBody(
       now={NOW}
       retry={retry}
       {...overrides}
-    />,
+    />
   )
 }
 
@@ -73,7 +87,11 @@ describe.each(SCENARIOS)('EnvironmentOverviewBody ($name)', (scenario) => {
 
   it('has the map, the services and the latest deployments, and never an Add service control', () => {
     renderBody()
-    expect(screen.getAllByRole('heading').map((h) => h.textContent)).toEqual(['Map', 'Services', 'Latest deployments'])
+    expect(screen.getAllByRole('heading').map((h) => h.textContent)).toEqual([
+      'Map',
+      'Services',
+      'Latest deployments',
+    ])
     expect(screen.queryByText(/add service/i)).toBeNull()
     expect(screen.queryByText(/planned/i)).toBeNull()
   })
@@ -86,7 +104,7 @@ describe.each(SCENARIOS)('EnvironmentOverviewBody ($name)', (scenario) => {
     expect(within(web).getByLabelText('Running')).toBeTruthy()
     expect(within(web).getByText('Node.js app · shop.example.com')).toBeTruthy()
     const blog = screen.getByRole('button', { name: 'blog' })
-    expect(within(blog).getByLabelText('Base')).toBeTruthy()
+    expect(within(blog).getByLabelText('From the Base')).toBeTruthy()
     expect(within(blog).getByLabelText('Runs as blogger')).toBeTruthy()
     expect(within(blog).getByLabelText('Starting')).toBeTruthy()
     const api = screen.getByRole('button', { name: 'api' })
@@ -108,7 +126,9 @@ describe.each(SCENARIOS)('EnvironmentOverviewBody ($name)', (scenario) => {
 
   it('lists the data stores, the databases and the storage', () => {
     renderBody()
-    expect(within(screen.getByRole('button', { name: 'redis' })).getByLabelText('Stopped')).toBeTruthy()
+    expect(
+      within(screen.getByRole('button', { name: 'redis' })).getByLabelText('Stopped')
+    ).toBeTruthy()
     expect(screen.getByRole('button', { name: 'shopdb' })).toBeTruthy()
     expect(screen.getByText('PostgreSQL')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'uploads' })).toBeTruthy()
@@ -128,7 +148,8 @@ describe.each(SCENARIOS)('EnvironmentOverviewBody ($name)', (scenario) => {
 
   it('opens map stations through links: services, domain, database and storage', () => {
     renderBody()
-    const href = (name: RegExp) => screen.getByRole('link', { name }).closest('[data-href]')?.getAttribute('data-href')
+    const href = (name: RegExp) =>
+      screen.getByRole('link', { name }).closest('[data-href]')?.getAttribute('data-href')
     expect(href(/^web, Node\.js app/)).toBe('/o/projects/p/services/s-web')
     expect(href(/^shop\.example\.com, domain/)).toBe(`${BASE}/configuration/hosting`)
     expect(href(/^shopdb, database/)).toBe(`${BASE}/configuration/bindings`)
@@ -137,14 +158,18 @@ describe.each(SCENARIOS)('EnvironmentOverviewBody ($name)', (scenario) => {
 
   it('shows the changes card with its count, linking to Configuration', () => {
     renderBody()
-    const card = screen.getByRole('link', { name: 'Changes from Base (4). Follows the Base · 4 changes' })
+    const card = screen.getByRole('link', {
+      name: 'Changes from Base (4). 4 changes from the Base',
+    })
     expect(card.closest('[data-href]')?.getAttribute('data-href')).toBe(`${BASE}/configuration`)
     expect(styleOf(card).backgroundColor).toBe(token(scenario, 'baseSoft'))
   })
 
-  it('shows the stands-alone card for an environment that does not follow the Base', () => {
-    renderBody({ source: overviewSource({ view: configView({ followsBase: false }) }) })
-    const card = screen.getByRole('link', { name: 'Staging stands alone. Changes to the Base do not reach it.' })
+  it('shows the stands-alone card for an environment that stands alone', () => {
+    renderBody({ source: overviewSource({ view: configView({ standsAlone: true }) }) })
+    const card = screen.getByRole('link', {
+      name: 'Staging stands alone. Changes to the Base do not reach it.',
+    })
     expect(card.closest('[data-href]')?.getAttribute('data-href')).toBe(`${BASE}/settings`)
     expect(styleOf(card).borderStyle).toBe('dashed')
     expect(screen.queryByText(/Changes from Base/)).toBeNull()
@@ -193,7 +218,9 @@ describe.each(SCENARIOS)('EnvironmentOverviewBody ($name)', (scenario) => {
     })
     const notice = screen.getByRole('alert')
     expect(within(notice).getByText('The last deploy (abcdef1) failed')).toBeTruthy()
-    expect(within(notice).getByText('It did not go live. The previous version is still serving.')).toBeTruthy()
+    expect(
+      within(notice).getByText('It did not go live. The previous version is still serving.')
+    ).toBeTruthy()
     expect(within(notice).getByText('Build stopped with an error')).toBeTruthy()
     fireEvent.click(within(notice).getByRole('button', { name: 'View deployments' }))
     expect(push).toHaveBeenLastCalledWith(`${BASE}/deployments`)
@@ -223,7 +250,7 @@ describe.each(SCENARIOS)('EnvironmentOverviewBody ($name)', (scenario) => {
                   ...extra,
                 },
               }
-            : serviceRecord(name),
+            : serviceRecord(name)
         ),
       })
 
@@ -231,8 +258,12 @@ describe.each(SCENARIOS)('EnvironmentOverviewBody ($name)', (scenario) => {
       renderBody({ source: crashing() })
       const notice = screen.getByRole('alert')
       expect(within(notice).getByText('web keeps crashing')).toBeTruthy()
-      expect(within(notice).getByText('It starts, fails and starts again. It has restarted 7 times.')).toBeTruthy()
-      expect(within(screen.getByRole('button', { name: 'web' })).getByLabelText('Keeps crashing')).toBeTruthy()
+      expect(
+        within(notice).getByText('It starts, fails and starts again. It has restarted 7 times.')
+      ).toBeTruthy()
+      expect(
+        within(screen.getByRole('button', { name: 'web' })).getByLabelText('Keeps crashing')
+      ).toBeTruthy()
     })
 
     it('opens the Crash sheet from the notice with the last line it printed', () => {

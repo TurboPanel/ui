@@ -139,7 +139,7 @@ function ComponentsPanel({
         step={controlPlaneStep}
       />
       <UpgradeBuildBlock
-        title="Web app"
+        title="Web interface"
         target={instance.uiTarget}
         installedLabel={installedBuildLabel(consoleBuild, instance.uiTarget, hideCommit)}
         updateAvailable={consoleUpdateAvailable(consoleBuild, instance.uiTarget)}
@@ -229,8 +229,8 @@ function UpgradeProgressPanel({
           phase="control_plane"
           status={controlPlaneStep?.status ?? null}
           errorCode={controlPlaneStep?.errorCode ?? null}
-          title="Web app step"
-          note="Installed together with the control plane."
+          title="Web interface step"
+          note="Installed in the same step as the control plane."
         />
       ) : null}
       {runError ? <Text style={panelStyles.error}>{runError}</Text> : null}

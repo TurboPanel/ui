@@ -827,20 +827,20 @@ function ManagedDataPanels({
             appliedUsername: result.value.user.appliedUsername,
           }
         }}
-        onDeleteUser={async (principalId) => {
-          const result = await deleteUserMutation.run(principalId)
+        onDeleteUser={async (loginId) => {
+          const result = await deleteUserMutation.run(loginId)
           if (!result.ok) {
             throw new Error(deleteUserMutation.actionError ?? 'Failed to delete user')
           }
           registerCommand(result.value.commandId, 'Delete user')
         }}
-        onUpdateUser={async (principalId, body) => {
-          const result = await updateUserMutation.mutateAsync({ principalId, body })
+        onUpdateUser={async (loginId, body) => {
+          const result = await updateUserMutation.mutateAsync({ loginId, body })
           if (result.commandId) registerCommand(result.commandId, 'Change user permissions')
           return result
         }}
-        onRotateUserPassword={async (principalId) => {
-          const result = await rotateUserPasswordMutation.mutateAsync(principalId)
+        onRotateUserPassword={async (loginId) => {
+          const result = await rotateUserPasswordMutation.mutateAsync(loginId)
           registerCommand(result.commandId, 'Rotate user password')
           return {
             password: result.password,

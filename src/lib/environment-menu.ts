@@ -7,6 +7,9 @@ export const DESTROY_ARMED_HINT = `${DESTROY_EXPLANATION} Cannot be undone.`
 
 export const LAST_ENVIRONMENT_REASON = 'A project needs at least one environment'
 
+export const PRIMARY_ENVIRONMENT_REASON =
+  'The primary environment cannot be deleted. Make another one primary first'
+
 export const BUSY_REASON = 'Wait for the current action to finish'
 
 export const NO_SERVER_REASON = 'Set a server in Configuration first'
@@ -39,6 +42,8 @@ export type EnvironmentActionInput = Readonly<{
   /** Managers: anything that changes what runs. */
   canMutate: boolean
   environmentCount: number
+  /** This is the project's primary environment. */
+  isPrimary?: boolean
   hasServer: boolean
   needsPrincipal: boolean
   hasContainers: boolean
@@ -53,7 +58,7 @@ function item(
     hint?: string
     tone?: 'default' | 'danger'
     disabledReason?: string | null
-  }> = {},
+  }> = {}
 ): EnvironmentActionItem {
   return {
     id,
@@ -62,6 +67,11 @@ function item(
     tone: options.tone ?? 'default',
     disabledReason: options.disabledReason ?? null,
   }
+}
+
+function deleteBlockReason(input: EnvironmentActionInput): string | null {
+  if (input.environmentCount <= 1) return LAST_ENVIRONMENT_REASON
+  return input.isPrimary === true ? PRIMARY_ENVIRONMENT_REASON : null
 }
 
 function deployBlockReason(input: EnvironmentActionInput): string | null {
@@ -77,7 +87,7 @@ function deployBlockReason(input: EnvironmentActionInput): string | null {
  * delete need ownership.
  */
 export function environmentActionItems(
-  input: EnvironmentActionInput,
+  input: EnvironmentActionInput
 ): readonly EnvironmentActionItem[] {
   const busyReason = input.busy ? BUSY_REASON : null
   const items: EnvironmentActionItem[] = [
@@ -95,7 +105,7 @@ export function environmentActionItems(
       item('cacheless', 'Cacheless redeploy', {
         hint: 'Rebuilds images without the Docker build cache — slower',
         disabledReason: deployBlockReason(input),
-      }),
+      })
     )
   }
   if (input.canMutate && input.hasContainers && input.isRunning) {
@@ -111,16 +121,15 @@ export function environmentActionItems(
         hint: DESTROY_EXPLANATION,
         tone: 'danger',
         disabledReason: busyReason,
-      }),
+      })
     )
   }
   if (input.canOwn) {
     items.push(
       item('delete', 'Delete environment…', {
         tone: 'danger',
-        disabledReason:
-          input.environmentCount > 1 ? null : LAST_ENVIRONMENT_REASON,
-      }),
+        disabledReason: deleteBlockReason(input),
+      })
     )
   }
   return items

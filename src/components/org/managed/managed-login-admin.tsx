@@ -73,7 +73,7 @@ export function LoginAdminEditor({
 }: Readonly<{
   user: ManagedUserRecord
   disabled: boolean
-  onUpdate: (principalId: string, body: ManagedUserPatch) => Promise<ManagedUserPatchResult>
+  onUpdate: (loginId: string, body: ManagedUserPatch) => Promise<ManagedUserPatchResult>
   onError: (message: string | null) => void
 }>) {
   const change = usePreviewedChange<boolean>(user.id, onUpdate, onError, {

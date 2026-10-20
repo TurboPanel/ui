@@ -92,7 +92,12 @@ describe('ProjectSettingsScreen', () => {
 
   it('starts from the saved values, with nothing to save', () => {
     render(<ProjectSettingsScreen />)
-    expect(h.view.general).toMatchObject({ name: 'Shop', description: 'The shop', dirty: false, canSave: false })
+    expect(h.view.general).toMatchObject({
+      name: 'Shop',
+      description: 'The shop',
+      dirty: false,
+      canSave: false,
+    })
     expect(h.view.canEdit).toBe(true)
     expect(h.view.keepOriginalNames).toBe(false)
     expect(h.view.git).toBeNull()
@@ -149,19 +154,30 @@ describe('ProjectSettingsScreen', () => {
     await press(() => h.view.onKeepOriginalNames(true))
     expect(h.run).toHaveBeenCalledWith({
       options: { containerNaming: 'custom', defaultServerId: 's1' },
+      target: 'base',
     })
     await press(() => h.view.onKeepOriginalNames(false))
     expect(h.run).toHaveBeenLastCalledWith({
       options: { containerNaming: 'uuid', defaultServerId: 's1' },
+      target: 'base',
     })
   })
 
   it('reads the repository for a repository project and opens the linked pages', async () => {
     setup({
-      project: { id: 'p', name: 'Shop', description: null, workspaceId: 'w1', repositoryId: 'r1', options: null },
+      project: {
+        id: 'p',
+        name: 'Shop',
+        description: null,
+        workspaceId: 'w1',
+        repositoryId: 'r1',
+        options: null,
+      },
     })
     h.repositories.data = {
-      repositories: [{ id: 'r1', repositoryUrl: 'https://github.com/acme/shop', autoDeploy: 'disabled' }],
+      repositories: [
+        { id: 'r1', repositoryUrl: 'https://github.com/acme/shop', autoDeploy: 'disabled' },
+      ],
     }
     render(<ProjectSettingsScreen />)
     expect(h.repositories.enabled).toBe(true)

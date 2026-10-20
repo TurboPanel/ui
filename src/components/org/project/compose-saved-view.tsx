@@ -7,6 +7,7 @@ import { ComposeGraphView } from '@/components/org/project/compose-graph-view'
 import { ComposeStackList } from '@/components/org/project/compose-stack-list'
 import { buildStackRows } from '@/lib/compose/stack-rows'
 import { EmptyState } from '@/components/ui'
+import { RemovedServicesSection } from '@/components/org/removed-services-section'
 import type { ComposeDocFacts } from '@/components/org/project/compose-document-view'
 import {
   ComposeInventoryStrip,
@@ -229,6 +230,12 @@ export function ComposeSavedView({
           </Text>
         ) : null}
         {overviewBody}
+        <RemovedServicesSection
+          orgId={orgId}
+          environmentId={selectedEnvironmentId}
+          services={services}
+          composeServiceNames={new Set(graph.nodes.map((node) => node.name))}
+        />
       </View>
     </ComposeEditorChrome>
   )

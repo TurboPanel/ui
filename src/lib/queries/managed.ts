@@ -147,17 +147,17 @@ export function useManagedUsers(
 export function useManagedEffectivePermissions(
   orgId: string,
   environmentId: string,
-  principalId: string,
+  loginId: string,
   options?: Readonly<{ enabled?: boolean }>
 ) {
   return useQuery({
-    queryKey: queryKeys.org(orgId).managed.effectivePermissions(environmentId, principalId),
-    queryFn: () => fetchManagedEffectivePermissions(environmentId, principalId),
+    queryKey: queryKeys.org(orgId).managed.effectivePermissions(environmentId, loginId),
+    queryFn: () => fetchManagedEffectivePermissions(environmentId, loginId),
     enabled:
       (options?.enabled ?? true) &&
       orgId.length > 0 &&
       environmentId.length > 0 &&
-      principalId.length > 0,
+      loginId.length > 0,
     staleTime: 0,
     retry: false,
   })
@@ -393,8 +393,8 @@ export function useCreateManagedUser(orgId: string, environmentId: string) {
 export function useUpdateManagedUser(orgId: string, environmentId: string) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (input: { principalId: string; body: Parameters<typeof updateManagedUser>[2] }) =>
-      updateManagedUser(environmentId, input.principalId, input.body),
+    mutationFn: (input: { loginId: string; body: Parameters<typeof updateManagedUser>[2] }) =>
+      updateManagedUser(environmentId, input.loginId, input.body),
     onSuccess: (result) =>
       result.dryRun
         ? undefined
@@ -412,7 +412,7 @@ export function useUpdateManagedUser(orgId: string, environmentId: string) {
 export function useDeleteManagedUser(orgId: string, environmentId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (principalId: string) => deleteManagedUser(environmentId, principalId),
+    mutationFn: (loginId: string) => deleteManagedUser(environmentId, loginId),
     onSuccess: () =>
       Promise.all([
         queryClient.invalidateQueries({
@@ -661,7 +661,7 @@ export function usePromoteManagedDisasterRecovery(orgId: string, environmentId: 
 export function useRotateManagedUserPassword(orgId: string, environmentId: string) {
   const queryClient = useQueryClient()
   const mutation = useMutation({
-    mutationFn: (principalId: string) => rotateManagedUserPassword(environmentId, principalId),
+    mutationFn: (loginId: string) => rotateManagedUserPassword(environmentId, loginId),
     onSuccess: () =>
       Promise.all([
         queryClient.invalidateQueries({

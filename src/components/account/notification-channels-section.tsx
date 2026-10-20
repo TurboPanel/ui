@@ -26,6 +26,7 @@ import {
   type NotificationEventInfo,
   type NotificationSeverity,
 } from '@/lib/instance-api'
+import { notificationEventChoiceLabel } from '@/lib/notification-event-choice'
 import {
   addressHint,
   addressFieldLabel,
@@ -104,7 +105,7 @@ function RulesEditor({
               key={info.event}
               checked={draft.events.has(info.event)}
               disabled={disabled}
-              label={`${info.example} · ${info.event}`}
+              label={notificationEventChoiceLabel(info)}
               onPress={() => {
                 const next = new Set(draft.events)
                 if (next.has(info.event)) next.delete(info.event)

@@ -76,7 +76,7 @@ export function LoginJobEditor({
 }: Readonly<{
   user: ManagedUserRecord
   disabled: boolean
-  onUpdate: (principalId: string, body: ManagedUserPatch) => Promise<ManagedUserPatchResult>
+  onUpdate: (loginId: string, body: ManagedUserPatch) => Promise<ManagedUserPatchResult>
   onError: (message: string | null) => void
 }>) {
   const change = usePreviewedChange<LoginJob>(user.id, onUpdate, onError, {

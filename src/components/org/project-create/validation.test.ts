@@ -18,7 +18,7 @@ describe('validateProjectCreateFields environment name', () => {
   it('accepts a normal environment name', () => {
     expect(validateProjectCreateFields(base)).toEqual({})
     expect(
-      validateProjectCreateFields({ ...base, environmentName: 'Staging' }),
+      validateProjectCreateFields({ ...base, environmentName: 'staging' }),
     ).toEqual({})
   })
 

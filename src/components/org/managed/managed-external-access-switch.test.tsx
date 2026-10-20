@@ -49,7 +49,7 @@ afterEach(cleanup)
 
 describe('external access switch copy', () => {
   it('names no scopes and says who can connect', () => {
-    expect(externalAccessHint(false)).toContain("site owner's Linux user")
+    expect(externalAccessHint(false)).toContain("Hosting Account")
     expect(externalAccessHint(true)).toContain('firewall')
     for (const text of [externalAccessHint(false), externalAccessHint(true)]) {
       expect(text).not.toMatch(/datacenter|public|local/i)

@@ -121,10 +121,17 @@ export function updatePieces(
   return pieces
 }
 
+/** What each piece is called on screen. "App" already means a customer's own app. */
+const PIECE_LABELS: Readonly<Record<UpdatePiece['name'], string>> = {
+  'control plane': 'control plane',
+  'web app': 'web interface',
+  daemon: 'daemon',
+}
+
 /** `control plane v0.1.5-canary.1`: the piece and the version it would move to. */
 export function updatePieceLabel(piece: UpdatePiece): string {
   const version = upgradeBuildVersionLabel(piece.target) ?? 'a new build'
-  return `${piece.name} ${version}`
+  return `${PIECE_LABELS[piece.name]} ${version}`
 }
 
 function presentIdentity(value: string | null | undefined): string | null {

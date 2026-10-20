@@ -762,7 +762,7 @@ describe('instance-api managed-engine fetch wrappers', () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, id: 'bind-1' }))
     await expect(
       createBinding({
-        principalId: 'principal-1',
+        loginId: 'login-1',
         serviceId: 'svc-1',
         databaseName: 'app',
         keyPrefix: 'APP_DB',
@@ -770,7 +770,7 @@ describe('instance-api managed-engine fetch wrappers', () => {
     ).resolves.toEqual({ ok: true, id: 'bind-1' })
     expect(lastFetch().init.method).toBe('POST')
     expect(lastJsonBody()).toEqual({
-      principalId: 'principal-1',
+      loginId: 'login-1',
       serviceId: 'svc-1',
       databaseName: 'app',
       keyPrefix: 'APP_DB',
@@ -792,7 +792,7 @@ describe('instance-api managed-engine fetch wrappers', () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ error: BINDING_KEY_PREFIX_IN_USE_ERROR }, 409))
     await expect(
       createBinding({
-        principalId: 'principal-1',
+        loginId: 'login-1',
         serviceId: 'svc-1',
         databaseName: 'app',
       })
