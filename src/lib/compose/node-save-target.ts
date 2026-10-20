@@ -111,6 +111,30 @@ function applyTextField(
   else ext[field] = makeComposeTag('reset', null)
 }
 
+/** A setting with a default: inherit when it matches the Base, else say it outright. */
+function applyChoice(ext: Mapping, field: 'appMode' | 'enabled', want: unknown, base: unknown) {
+  if (want === base) delete ext[field]
+  else ext[field] = want
+}
+
+/**
+ * Only the app folder is ever written into the source, plus the id that lets it
+ * save; the branch and the rest keep coming from the Base (or from what the
+ * environment already sets).
+ */
+function applySource(ext: Mapping, want: string, base: string, sourceId: string | undefined) {
+  const ownSource = isMapping(ext.source) ? { ...(ext.source as Mapping) } : {}
+  if (want === base) delete ownSource.subdirectory
+  else ownSource.subdirectory = want
+  const keeps = Object.keys(ownSource).some((key) => key !== 'sourceId' && key !== 'buildKind')
+  if (!keeps) {
+    delete ext.source
+    return
+  }
+  if (sourceId !== undefined) ownSource.sourceId = sourceId
+  ext.source = ownSource
+}
+
 function environmentEntry(
   own: Mapping,
   values: NodeSaveValues,
@@ -133,30 +157,9 @@ function environmentEntry(
   applyTextField(ext, 'documentRoot', values.documentRoot, baseExt?.documentRoot ?? '')
   applyTextField(ext, 'startupFile', values.startupFile, baseExt?.startupFile ?? '')
 
-  const baseMode = baseExt?.appMode ?? 'production'
-  if (values.appMode === baseMode) delete ext.appMode
-  else ext.appMode = values.appMode
-
-  const baseEnabled = baseExt?.enabled ?? true
-  if (values.enabled === baseEnabled) delete ext.enabled
-  else ext.enabled = values.enabled
-
-  // Only the app folder is ever written into the source, plus the id that lets
-  // it save; the branch and the rest keep coming from the Base.
-  const ownSource = isMapping(ext.source) ? { ...(ext.source as Mapping) } : {}
-  const baseFolder = baseExt?.source?.subdirectory ?? ''
-  if (values.appRoot === baseFolder) delete ownSource.subdirectory
-  else ownSource.subdirectory = values.appRoot
-  const keepsSource = Object.keys(ownSource).some(
-    (key) => key !== 'sourceId' && key !== 'buildKind'
-  )
-  if (keepsSource) {
-    const sourceId = merged?.source?.sourceId
-    if (sourceId !== undefined) ownSource.sourceId = sourceId
-    ext.source = ownSource
-  } else {
-    delete ext.source
-  }
+  applyChoice(ext, 'appMode', values.appMode, baseExt?.appMode ?? 'production')
+  applyChoice(ext, 'enabled', values.enabled, baseExt?.enabled ?? true)
+  applySource(ext, values.appRoot, baseExt?.source?.subdirectory ?? '', merged?.source?.sourceId)
 
   const meaningful = Object.keys(ext).some((key) => key !== 'serviceKind')
   if (!meaningful) {
