@@ -2,14 +2,14 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { applyScenario, SCENARIOS } from '@/components/ui/v4/rn-stub'
-import {
-  ProjectSettingsView,
-  type ProjectSettingsViewProps,
-} from './project-settings-view'
+import { ProjectSettingsView, type ProjectSettingsViewProps } from './project-settings-view'
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
 vi.mock('react-native-svg', async () => (await import('@/components/ui/v4/rn-stub')).svgStub)
-vi.mock('@/lib/theme-preference', async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub)
+vi.mock(
+  '@/lib/theme-preference',
+  async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub
+)
 vi.mock('@/components/ui', () => ({
   TextField: (props: Readonly<Record<string, unknown>>) => (
     <label>
@@ -80,7 +80,15 @@ describe.each(SCENARIOS)('project settings ($name)', (scenario) => {
 
   it('shows only the sections the API serves', () => {
     render(<ProjectSettingsView {...props()} />)
-    for (const heading of ['General', 'Workspace', 'Variables', 'Container names', 'Git', 'As Compose files', 'Danger zone']) {
+    for (const heading of [
+      'General',
+      'Workspace',
+      'Variables',
+      'Container names',
+      'Git',
+      'As Compose files',
+      'Danger zone',
+    ]) {
       expect(screen.getByRole('heading', { name: heading })).toBeTruthy()
     }
     expect(screen.queryByText(/deliveries/i)).toBeNull()
@@ -93,7 +101,9 @@ describe.each(SCENARIOS)('project settings ($name)', (scenario) => {
     const base = props()
     const { rerender } = render(<ProjectSettingsView {...base} />)
     expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
-    rerender(<ProjectSettingsView {...base} general={{ ...base.general, dirty: true, canSave: true }} />)
+    rerender(
+      <ProjectSettingsView {...base} general={{ ...base.general, dirty: true, canSave: true }} />
+    )
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     fireEvent.click(screen.getByRole('button', { name: 'Discard' }))
     expect(base.general.onSave).toHaveBeenCalledTimes(1)
@@ -105,8 +115,14 @@ describe.each(SCENARIOS)('project settings ($name)', (scenario) => {
     render(
       <ProjectSettingsView
         {...base}
-        general={{ ...base.general, name: '', nameError: 'Name is required.', dirty: true, canSave: false }}
-      />,
+        general={{
+          ...base.general,
+          name: '',
+          nameError: 'Name is required.',
+          dirty: true,
+          canSave: false,
+        }}
+      />
     )
     expect((screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(true)
     expect(screen.getByRole('alert').textContent).toBe('Name is required.')
@@ -129,11 +145,14 @@ describe.each(SCENARIOS)('project settings ($name)', (scenario) => {
         canEdit={false}
         canMove={false}
         general={{ ...base.general, dirty: true, canSave: true }}
-      />,
+      />
     )
     expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
     expect((screen.getByLabelText('Project name') as HTMLInputElement).readOnly).toBe(true)
-    expect((screen.getByRole('switch', { name: 'Keep original container names' }) as HTMLButtonElement).disabled).toBe(true)
+    expect(
+      (screen.getByRole('switch', { name: 'Keep original container names' }) as HTMLButtonElement)
+        .disabled
+    ).toBe(true)
     expect(screen.queryByRole('button', { name: 'Move to Team' })).toBeNull()
   })
 

@@ -1424,7 +1424,9 @@ export type ServerAddressEngine = 'postgres' | 'mysql'
 export type ServerAddressesCertificateReason = 'enqueue_failed' | 'prepare_failed'
 
 /** Router port overrides. Absent key: the server's own listen port. `null`: not reachable through this address. */
-export type ServerAddressPorts = Partial<Record<'postgres' | 'mysql' | 'http' | 'https', number | null>>
+export type ServerAddressPorts = Partial<
+  Record<'postgres' | 'mysql' | 'http' | 'https', number | null>
+>
 
 /** Where an effective address came from: entered here, the organization's address list, reported by the server, or the datacenter pin. */
 export type ClientAddressSource = 'entry' | 'ip' | 'reported' | 'pin'
@@ -2212,7 +2214,9 @@ export class ServerPrincipalChoiceRefusedError extends Error {
 export class ServerDeleteOnlineError extends Error {
   readonly code = 'server_online'
 
-  constructor(message = 'This host is connected. Forgetting records is only available while it is offline.') {
+  constructor(
+    message = 'This host is connected. Forgetting records is only available while it is offline.'
+  ) {
     super(message)
     this.name = 'ServerDeleteOnlineError'
   }
@@ -2362,7 +2366,11 @@ export async function getServerDeletePreview(
   serverId: string,
   organizationId?: string | null
 ): Promise<ServerDeletePreview> {
-  return await apiFetch(`${CLIENT_API}/servers/${serverId}/delete-preview`, undefined, organizationId)
+  return await apiFetch(
+    `${CLIENT_API}/servers/${serverId}/delete-preview`,
+    undefined,
+    organizationId
+  )
 }
 
 const PRINCIPAL_CHOICE_REFUSED_MESSAGE =
@@ -3266,6 +3274,13 @@ export type EnvironmentRecord = {
   metadata: Record<string, unknown> | null
   /** `options.compose` is a versioned ComposeDocument. */
   options: { compose?: ComposeDocument } | null
+  /**
+   * True for the project's one primary environment: the landing, the status and
+   * the source a new environment copies. Absent on an older control plane.
+   */
+  isPrimary?: boolean
+  /** Pinned environments are listed right after the primary one. */
+  pinned?: boolean
   createdAt: string
   updatedAt: string
 }
@@ -3441,7 +3456,7 @@ export type CreateProjectBody = {
    */
   options?: { compose?: ComposeDocument }
   /**
-   * Pins the scaffolded default environment (org default name, else `production`)
+   * Pins the scaffolded primary environment (org primary name, else `production`)
    * when creating a managed project.
    */
   serverId?: string
@@ -4018,6 +4033,13 @@ export async function updateProject(
       defaultServerId?: string | null
     }
     workspaceId?: string
+    /**
+     * Where an `options.compose` edit lands: `base` (inherited by every
+     * environment) or an environment id. Send it on every compose edit: with
+     * several environments and no target the control plane answers **400**
+     * `edit_target_required`.
+     */
+    target?: 'base' | (string & {})
   }
 ): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/projects/${id}`, {
@@ -4050,14 +4072,27 @@ export async function fetchEnvironment(id: string): Promise<{
   return { environment: body.environment, needsRedeploy: body.needsRedeploy ?? [] }
 }
 
+/** How a new environment starts: a copy of the primary one (default) or empty and standing alone. */
+export type EnvironmentStart = 'copy' | 'empty'
+
+/**
+ * `start` and `options` together are refused (**400** `environment_start_conflict`);
+ * the name follows the environment name rule (**400** `invalid_environment_name`).
+ */
 export async function createEnvironment(body: {
   projectId: string
   name?: string
   description?: string
   serverId?: string | null
   metadata?: Record<string, unknown>
+  start?: EnvironmentStart
   options?: { compose?: ComposeDocument }
-}): Promise<{ ok: true; id: string }> {
+}): Promise<{
+  ok: true
+  id: string
+  /** Plain-words list of what a `copy` start did not copy (hostnames, ports, variables ...). */
+  notCopied?: string[]
+}> {
   return await apiFetch(`${CLIENT_API}/environments`, {
     method: 'POST',
     body: JSON.stringify(body),
@@ -4072,6 +4107,8 @@ export async function updateEnvironment(
     /** Whole-server placement pin; `null` clears it. */
     serverId?: string | null
     metadata?: Record<string, unknown>
+    /** Pin or unpin: pinned environments are listed right after the primary one. */
+    pinned?: boolean
     options?: { compose?: ComposeDocument }
   }
 ): Promise<{ ok: true }> {
@@ -4079,6 +4116,13 @@ export async function updateEnvironment(
     method: 'PATCH',
     body: JSON.stringify(body),
   })
+}
+
+/** Move the project's primary marker to this environment. Idempotent. */
+export async function makeEnvironmentPrimary(
+  id: string
+): Promise<{ ok: true; id: string; projectId: string }> {
+  return await apiFetch(`${CLIENT_API}/environments/${id}/primary`, { method: 'POST' })
 }
 
 export async function deleteEnvironment(id: string): Promise<{ ok: true }> {
@@ -7174,6 +7218,8 @@ export type ConfigViewFieldRow = {
   value: string | null
   masked: boolean
   source: ConfigViewSource
+  /** True when the value comes from the Base; false when this environment sets or overrides it. */
+  inheritedFromBase: boolean
 }
 
 export type ConfigViewService = {
@@ -7183,6 +7229,8 @@ export type ConfigViewService = {
   kind: ConfigViewServiceKind
   /** `environment` when added here, or when the environment stands alone. */
   source: ConfigViewSource
+  /** True when the service is defined in the Base. */
+  inheritedFromBase: boolean
   rows: ConfigViewFieldRow[]
 }
 
@@ -7191,6 +7239,8 @@ export type ConfigViewLinuxUser = {
   access: ConfigViewLinuxUserAccess
   description: string | null
   source: ConfigViewSource
+  /** True when the Linux user is defined in the Base. */
+  inheritedFromBase: boolean
   /** Service names that run as this user. */
   usedBy: string[]
 }
@@ -7206,6 +7256,8 @@ export type ConfigViewVariable = {
   forBuild: boolean
   forRuntime: boolean
   source: 'project' | 'environment'
+  /** True for a Base (project-level) variable this environment does not override. */
+  inheritedFromBase: boolean
 }
 
 export type ConfigViewChange = {
@@ -7238,8 +7290,14 @@ export type EnvironmentConfigViewResponse = {
   ok: true
   environmentId: string
   projectId: string
-  /** Derived from the saved compose, never stored: `false` for `services: !override` / `!reset`. */
-  followsBase: boolean
+  /** True when this is the project's primary environment. */
+  isPrimary: boolean
+  /**
+   * Derived from the saved compose, never stored: `true` for `services: !override` /
+   * `!reset`, which drops the Base's services. Every other environment inherits
+   * from the Base; each row says so with `inheritedFromBase`.
+   */
+  standsAlone: boolean
   base: ConfigViewSide
   effective: ConfigViewSide
   changes: ConfigViewChange[]

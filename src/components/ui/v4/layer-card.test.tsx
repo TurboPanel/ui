@@ -5,7 +5,10 @@ import { applyScenario, SCENARIOS, styleOf, token } from '@/components/ui/v4/rn-
 import { LayerBase, LayerCard } from '@/components/ui/v4/layer-card'
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
-vi.mock('@/lib/theme-preference', async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub)
+vi.mock(
+  '@/lib/theme-preference',
+  async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub
+)
 
 afterEach(cleanup)
 
@@ -38,9 +41,9 @@ describe.each(SCENARIOS)('layer cards ($name)', (scenario) => {
 
   it('environment card: a sheet laid 6 px over a faint Base sheet', () => {
     render(
-      <LayerCard title="Staging" head={<span>Follows the Base</span>} foot={<span>Open</span>}>
+      <LayerCard title="Staging" head={<span>Same as the Base</span>} foot={<span>Open</span>}>
         <span>body</span>
-      </LayerCard>,
+      </LayerCard>
     )
     const card = screen.getByRole('heading', { name: 'Staging' }).parentElement?.parentElement
     expect(styleOf(card).backgroundColor).toBe(token(scenario, 'surface'))
@@ -52,14 +55,15 @@ describe.each(SCENARIOS)('layer cards ($name)', (scenario) => {
     expect(styleOf(ghost).backgroundColor).toBe(token(scenario, 'baseSoft'))
     expect(styleOf(ghost).borderColor).toBe(token(scenario, 'baseLine'))
     expect(styleOf(ghost).right).toBe(6)
-    expect(screen.getByText('Follows the Base')).toBeTruthy()
+    expect(screen.getByText('Same as the Base')).toBeTruthy()
     expect(screen.getByText('Open')).toBeTruthy()
     expect(screen.getByText('body')).toBeTruthy()
   })
 
   it('a stand-alone environment has an empty dashed sheet behind it', () => {
     render(<LayerCard title="Preview" alone />)
-    const ghost = screen.getByRole('heading', { name: 'Preview' }).parentElement?.parentElement?.previousElementSibling
+    const ghost = screen.getByRole('heading', { name: 'Preview' }).parentElement?.parentElement
+      ?.previousElementSibling
     expect(styleOf(ghost).borderStyle).toBe('dashed')
     expect(styleOf(ghost).backgroundColor).toBe('transparent')
     expect(styleOf(ghost).borderColor).toBe(token(scenario, 'sepStrong'))

@@ -7,7 +7,9 @@ import { EnvironmentGitSourceSection } from '@/components/org/project/overview-e
 import { EnvironmentSettingsView } from '@/components/org/project/settings/environment-settings-view'
 import { LoadingState } from '@/components/ui'
 import { projectSettingsHref } from '@/lib/project-navigation'
-import { useOrgServers, useUpdateEnvironment } from '@/lib/queries'
+import { userErrorMessage } from '@/lib/user-error'
+import { useMakeEnvironmentPrimary, useOrgServers, useUpdateEnvironment } from '@/lib/queries'
+import { PRIMARY_DELETE_EXPLANATION } from '@/lib/v4/primary-environment'
 import {
   buildEnvironmentRenamePatch,
   buildServerMovePatch,
@@ -18,7 +20,7 @@ import {
   type MoveChoice,
 } from '@/lib/v4/environment-settings'
 
-type Busy = 'rename' | 'move' | null
+type Busy = 'rename' | 'move' | 'placement' | null
 
 /**
  * The body of Environment Settings for one environment. The screen stays
@@ -57,6 +59,7 @@ function EnvironmentSettingsForm({
   } = useProjectContext()
   const router = useRouter()
   const update = useUpdateEnvironment(orgId, selectedEnvironment.id)
+  const makePrimary = useMakeEnvironmentPrimary(orgId)
   const serversQuery = useOrgServers(orgId)
   const serverList = serverListState(serversQuery.data, serversQuery.isError)
   const [typed, setTyped] = useState<string | null>(null)
@@ -80,6 +83,20 @@ function EnvironmentSettingsForm({
     <EnvironmentSettingsView
       environmentName={selectedEnvironment.name?.trim() || 'this environment'}
       canEdit={canEdit}
+      placement={{
+        isPrimary: selectedEnvironment.isPrimary === true,
+        pinned: selectedEnvironment.pinned === true,
+        alone: environments.length <= 1,
+        busy: busy === 'placement' || makePrimary.isPending,
+        onMakePrimary: async () => {
+          const result = await makePrimary.run(selectedEnvironment.id)
+          if (result.ok) return null
+          return userErrorMessage(result.cause, 'Could not make this the primary environment.')
+        },
+        onTogglePin: () => {
+          void run('placement', { pinned: selectedEnvironment.pinned !== true })
+        },
+      }}
       rename={{
         name,
         onName: setTyped,
@@ -103,6 +120,11 @@ function EnvironmentSettingsForm({
         void run('move', buildServerMovePatch(choice))
       }}
       gitSource={showGitSource ? <EnvironmentGitSourceSection /> : null}
+      deleteNote={
+        selectedEnvironment.isPrimary === true && environments.length > 1
+          ? PRIMARY_DELETE_EXPLANATION
+          : null
+      }
       danger={
         canOwn && projectAllowsMutations ? (
           <EnvironmentDeleteControl

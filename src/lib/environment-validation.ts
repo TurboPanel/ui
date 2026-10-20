@@ -10,6 +10,9 @@ const RESERVED_ENVIRONMENT_NAMES: ReadonlySet<string> = new Set(
   )
 )
 
+/** The longest an environment name can be (its folder name on the servers). */
+export const ENVIRONMENT_NAME_MAX_LENGTH = 32
+
 export const ENVIRONMENT_NAME_RULE_TEXT =
   'Use lowercase letters, digits, hyphens and underscores, up to 32 characters, starting with a letter or digit. The name becomes part of the folder path on your servers.'
 

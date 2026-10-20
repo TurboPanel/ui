@@ -6,7 +6,10 @@ import { SourceTag } from '@/components/ui/v4/source-tag'
 import { sourceLabel } from '@/lib/v4/change-labels'
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
-vi.mock('@/lib/theme-preference', async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub)
+vi.mock(
+  '@/lib/theme-preference',
+  async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub
+)
 
 afterEach(cleanup)
 
@@ -15,8 +18,8 @@ describe.each(SCENARIOS)('SourceTag ($name)', (scenario) => {
 
   it('Base: an outlined grey pill', () => {
     render(<SourceTag source="base" label={sourceLabel('base', 'Staging')} />)
-    const tag = screen.getByLabelText('Base')
-    expect(tag.textContent).toBe('Base')
+    const tag = screen.getByLabelText('From the Base')
+    expect(tag.textContent).toBe('From the Base')
     expect(styleOf(tag).borderColor).toBe(token(scenario, 'sepStrong'))
     expect(styleOf(tag).backgroundColor).toBe('transparent')
     expect(styleOf(tag).minHeight).toBe(22)
@@ -38,8 +41,8 @@ describe.each(SCENARIOS)('SourceTag ($name)', (scenario) => {
     expect(styleOf(screen.getByText('Set in Staging')).color).toBe(token(scenario, 'text3'))
   })
 
-  it('says "Project" for a shared variable', () => {
-    render(<SourceTag source="base" label={sourceLabel('base', 'Staging', true)} />)
-    expect(screen.getByLabelText('Project')).toBeTruthy()
+  it('says "From the Base" for a value the environment does not set', () => {
+    render(<SourceTag source="base" label={sourceLabel('base', 'Staging')} />)
+    expect(screen.getByLabelText('From the Base')).toBeTruthy()
   })
 })

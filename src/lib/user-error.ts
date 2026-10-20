@@ -28,13 +28,13 @@ const API_ERROR_COPY: Readonly<Record<string, string>> = {
   deploy_not_cancellable: 'This deploy has already finished.',
   deploy_too_late:
     'This deploy is already switching over, so it can no longer be stopped. It will finish.',
-  daemon_unavailable:
-    'TurboPanel could not reach this server right now. Try again in a moment.',
+  daemon_unavailable: 'TurboPanel could not reach this server right now. Try again in a moment.',
   cancel_unsupported:
     "This server's TurboPanel daemon is too old to cancel deploys. Update it first.",
   lets_encrypt_not_enabled:
     'Your organization has not turned on Let\u2019s Encrypt. An owner can allow it in the Let\u2019s Encrypt settings on the TLS certificates page.',
-  acme_requires_public_bind: 'Let\u2019s Encrypt needs this domain to be reachable from the internet.',
+  acme_requires_public_bind:
+    'Let\u2019s Encrypt needs this domain to be reachable from the internet.',
   hosting_not_http: 'Let\u2019s Encrypt only works for web domains, not raw ports.',
   hosting_has_no_hostnames: 'Add a domain name first.',
   letsencrypt_hostname_unsupported:
@@ -54,6 +54,19 @@ const API_ERROR_COPY: Readonly<Record<string, string>> = {
   environment_server_locked:
     'This environment has folders on its server, so it cannot move to another server. Remove its services and volumes first.',
   environment_name_in_use: 'Another environment in this project already has that name.',
+  primary_environment_conflict:
+    'Another change to this project was saved at the same moment. Reload the page and try again.',
+  primary_environment_cannot_be_deleted:
+    'This is the primary environment. Make another environment primary first, then delete this one.',
+  edit_target_required:
+    'This project has several environments, so the change needs to say where it goes. Reload the page and try again.',
+  edit_target_invalid:
+    'That environment is not part of this project. Reload the page and try again.',
+  edit_target_mixed:
+    'An environment change cannot carry project settings in the same save. Save them separately.',
+  environment_start_invalid: 'Pick whether the new environment starts as a copy or empty.',
+  environment_start_conflict:
+    'A new environment cannot start from a copy and also bring its own configuration.',
   invalid_environment_name:
     'Use lowercase letters, digits, hyphens and underscores, up to 32, starting with a letter or digit. Words such as common, home and tmp are taken.',
   directory_names_locked:

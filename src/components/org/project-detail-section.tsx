@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Platform, Pressable, StyleSheet, Text, TextInput, View, type TextStyle } from 'react-native'
+import {
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+  type TextStyle,
+} from 'react-native'
 import {
   Badge,
   Button,
@@ -20,7 +28,7 @@ import { ProjectEnvironmentsSection } from '@/components/org/project-environment
 import { panelStyles } from '@/components/ui/panel-styles'
 import { usePersistProjectCompose } from '@/components/org/compose-persistence'
 import { PrincipalAccessPanel } from '@/components/org/principal-access-panel'
-import { unownedManagedDirectorySites } from '@/lib/compose/managed-directory-sites'
+import { unownedSitesAcrossDocuments } from '@/lib/compose/managed-directory-sites'
 import {
   type ComposeDocument,
   type EnvironmentRecord,
@@ -50,10 +58,7 @@ import {
   PrincipalNameSchemeField,
   usePrincipalNameScheme,
 } from '@/components/org/principal-name-scheme-field'
-import {
-  principalNamesLabel,
-  principalSchemeErrorMessage,
-} from '@/lib/principal-name-scheme'
+import { principalNamesLabel, principalSchemeErrorMessage } from '@/lib/principal-name-scheme'
 import { chrome, colors, spacing, webPointer } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
 
@@ -62,13 +67,9 @@ type ProjectServiceOption = {
   label: string
 }
 
-function formatServiceOptionLabel(
-  environment: EnvironmentRecord,
-  service: ServiceRecord,
-): string {
+function formatServiceOptionLabel(environment: EnvironmentRecord, service: ServiceRecord): string {
   const envName = environment.name ?? 'Environment'
-  const serviceName =
-    service.name ?? service.composeServiceName ?? service.id.slice(0, 8)
+  const serviceName = service.name ?? service.composeServiceName ?? service.id.slice(0, 8)
   return `${envName} · ${serviceName}`
 }
 
@@ -88,10 +89,7 @@ export function ProjectPrincipalsSection({
   const projectQuery = useProject(orgId, projectId)
   const environmentsQuery = useEnvironments(orgId, projectId)
   const environments = orEmptyArray(environmentsQuery.data?.environments)
-  const environmentIds = useMemo(
-    () => environments.map((env) => env.id),
-    [environments],
-  )
+  const environmentIds = useMemo(() => environments.map((env) => env.id), [environments])
   const servicesByEnvQuery = useServicesByEnvironments(orgId, environmentIds)
   const createPrincipal = useCreateProjectPrincipal(orgId, projectId)
   const nameScheme = usePrincipalNameScheme(orgId)
@@ -102,10 +100,7 @@ export function ProjectPrincipalsSection({
 
   // Memoized because the `?? []` fallback is a fresh array on every render,
   // and `unownedSites` below depends on it.
-  const principals = useMemo(
-    () => principalsQuery.data?.principals ?? [],
-    [principalsQuery.data],
-  )
+  const principals = useMemo(() => principalsQuery.data?.principals ?? [], [principalsQuery.data])
   const serviceOptions = useMemo(() => {
     const flat: ProjectServiceOption[] = []
     for (const env of environments) {
@@ -124,9 +119,7 @@ export function ProjectPrincipalsSection({
   const [error, setError] = useState<string | null>(null)
   const [username, setUsername] = useState('')
   const [deleting, setDeleting] = useState<Set<string>>(() => new Set())
-  const [savingAssignments, setSavingAssignments] = useState<Set<string>>(
-    () => new Set(),
-  )
+  const [savingAssignments, setSavingAssignments] = useState<Set<string>>(() => new Set())
   // Collapsed by default: the list is for scanning; one row expands in place
   // when it is being worked on (MASTER: expand-in-place, not a page of forms).
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set())
@@ -153,25 +146,21 @@ export function ProjectPrincipalsSection({
    */
   const unownedSites = useMemo(
     () =>
-      unownedManagedDirectorySites({
-        document: projectQuery.data?.project?.options?.compose,
-        services: environments.flatMap(
-          (env) => servicesByEnvQuery.servicesByEnv[env.id] ?? [],
-        ),
+      // The Base may be empty (the content lives in the primary environment), so
+      // every environment's own compose is read as well as the Base's.
+      unownedSitesAcrossDocuments({
+        documents: [
+          projectQuery.data?.project?.options?.compose,
+          ...environments.map((env) => env.options?.compose),
+        ],
+        services: environments.flatMap((env) => servicesByEnvQuery.servicesByEnv[env.id] ?? []),
         principals,
       }),
-    [
-      projectQuery.data,
-      environments,
-      servicesByEnvQuery.servicesByEnv,
-      principals,
-    ],
+    [projectQuery.data, environments, servicesByEnvQuery.servicesByEnv, principals]
   )
 
   const loading =
-    principalsQuery.isLoading ||
-    environmentsQuery.isLoading ||
-    servicesByEnvQuery.isLoading
+    principalsQuery.isLoading || environmentsQuery.isLoading || servicesByEnvQuery.isLoading
 
   let queryError: string | null = null
   if (principalsQuery.error instanceof Error) {
@@ -184,10 +173,7 @@ export function ProjectPrincipalsSection({
     setError(queryError)
   }, [queryError])
 
-  const toggleServiceAssignment = async (
-    principalId: string,
-    serviceId: string,
-  ) => {
+  const toggleServiceAssignment = async (principalId: string, serviceId: string) => {
     const row = principals.find((p) => p.id === principalId)
     if (!row) return
     const next = row.serviceIds.includes(serviceId)
@@ -214,10 +200,7 @@ export function ProjectPrincipalsSection({
    * so including an empty steward list here would silently revoke something
    * the operator never touched.
    */
-  const changeAccess = async (
-    principalId: string,
-    access: PrincipalAccessLevel,
-  ) => {
+  const changeAccess = async (principalId: string, access: PrincipalAccessLevel) => {
     setSavingAccess((current) => new Set(current).add(principalId))
     setError(null)
     const result = await updatePrincipal.run({ principalId, access })
@@ -286,9 +269,7 @@ export function ProjectPrincipalsSection({
         />
       ) : null}
       {loading && principals.length === 0 ? <LoadingState /> : null}
-      {!loading && principals.length === 0 ? (
-        <EmptyState title="No Hosting Accounts yet." />
-      ) : null}
+      {!loading && principals.length === 0 ? <EmptyState title="No Hosting Accounts yet." /> : null}
       <View style={styles.principalList}>
         {principals.map((row) => {
           const expanded = expandedIds.has(row.id)
@@ -298,11 +279,7 @@ export function ProjectPrincipalsSection({
               onPress={() => toggleExpanded(row.id)}
               accessibilityRole="button"
               accessibilityState={{ expanded }}
-              accessibilityLabel={
-                expanded
-                  ? `Collapse ${row.username}`
-                  : `Expand ${row.username}`
-              }
+              accessibilityLabel={expanded ? `Collapse ${row.username}` : `Expand ${row.username}`}
             >
               <View style={styles.principalHeaderText}>
                 <Text style={panelStyles.detailTitle}>
@@ -325,80 +302,76 @@ export function ProjectPrincipalsSection({
           }
 
           return (
-          <View key={row.id} style={panelStyles.detailCard}>
-            {header}
-            <Text style={panelStyles.detailLine}>
-              <Text style={panelStyles.detailLabel}>UID/GID: </Text>
-              {row.metadata?.uid ?? '—'} / {row.metadata?.gid ?? '—'}
-            </Text>
-            {serviceOptions.length > 0 ? (
-              <View style={styles.serviceAssignRow}>
-                <Text style={panelStyles.detailLabel}>Services</Text>
-                <View style={styles.serviceChipRow}>
-                  {serviceOptions.map((option) => {
-                    const assigned = row.serviceIds.includes(option.id)
-                    const disabled =
-                      !canManage || savingAssignments.has(row.id)
-                    return (
-                      <Pressable
-                        key={option.id}
-                        disabled={disabled}
-                        style={[
-                          styles.serviceChip,
-                          assigned && styles.serviceChipOn,
-                          disabled && styles.buttonDisabled,
-                        ]}
-                        onPress={() => {
-                          void toggleServiceAssignment(row.id, option.id)
-                        }}
-                      >
-                        <Text
+            <View key={row.id} style={panelStyles.detailCard}>
+              {header}
+              <Text style={panelStyles.detailLine}>
+                <Text style={panelStyles.detailLabel}>UID/GID: </Text>
+                {row.metadata?.uid ?? '—'} / {row.metadata?.gid ?? '—'}
+              </Text>
+              {serviceOptions.length > 0 ? (
+                <View style={styles.serviceAssignRow}>
+                  <Text style={panelStyles.detailLabel}>Services</Text>
+                  <View style={styles.serviceChipRow}>
+                    {serviceOptions.map((option) => {
+                      const assigned = row.serviceIds.includes(option.id)
+                      const disabled = !canManage || savingAssignments.has(row.id)
+                      return (
+                        <Pressable
+                          key={option.id}
+                          disabled={disabled}
                           style={[
-                            styles.serviceChipText,
-                            assigned && styles.serviceChipTextOn,
+                            styles.serviceChip,
+                            assigned && styles.serviceChipOn,
+                            disabled && styles.buttonDisabled,
                           ]}
+                          onPress={() => {
+                            void toggleServiceAssignment(row.id, option.id)
+                          }}
                         >
-                          {option.label}
-                        </Text>
-                      </Pressable>
-                    )
-                  })}
+                          <Text
+                            style={[styles.serviceChipText, assigned && styles.serviceChipTextOn]}
+                          >
+                            {option.label}
+                          </Text>
+                        </Pressable>
+                      )
+                    })}
+                  </View>
+                  {savingAssignments.has(row.id) ? (
+                    <Text style={panelStyles.muted}>Saving assignments…</Text>
+                  ) : null}
                 </View>
-                {savingAssignments.has(row.id) ? (
-                  <Text style={panelStyles.muted}>Saving assignments…</Text>
-                ) : null}
-              </View>
-            ) : null}
-            <View style={styles.serviceAssignRow}>
-              <PrincipalAccessPanel
-                orgId={orgId}
-                projectId={projectId}
-                principalId={row.id}
-                username={row.appliedUsername}
-                access={row.access}
-                passwordAuth={row.passwordAuth}
-                canManage={canManage}
-                savingAccess={savingAccess.has(row.id)}
-                onChangeAccess={(next) => {
-                  void changeAccess(row.id, next)
-                }}
-              />
-            </View>
-            {canManage ? (
-              <View style={styles.principalDeleteRow}>
-                <ConfirmButton
-                  label="Delete"
-                  prompt={`Delete ${row.username}?`}
-                  confirmLabel="Delete"
-                  size="sm"
-                  busy={deleting.has(row.id)}
-                  onConfirm={() => {
-                    void handleDelete(row.id)
+              ) : null}
+              <View style={styles.serviceAssignRow}>
+                <PrincipalAccessPanel
+                  orgId={orgId}
+                  projectId={projectId}
+                  principalId={row.id}
+                  username={row.appliedUsername}
+                  access={row.access}
+                  passwordAuth={row.passwordAuth}
+                  canManage={canManage}
+                  savingAccess={savingAccess.has(row.id)}
+                  onChangeAccess={(next) => {
+                    void changeAccess(row.id, next)
                   }}
                 />
               </View>
-            ) : null}
-          </View>
+              {canManage ? (
+                <View style={styles.principalDeleteRow}>
+                  <ConfirmButton
+                    label="Delete"
+                    prompt={`Delete ${row.username}?`}
+                    confirmLabel="Delete"
+                    size="sm"
+                    busy={deleting.has(row.id)}
+                    onConfirm={() => {
+                      void handleDelete(row.id)
+                    }}
+                  />
+                </View>
+              ) : null}
+            </View>
           )
         })}
       </View>
@@ -469,11 +442,7 @@ function principalRowSummary(row: ProjectPrincipalRecord): string {
     parts.push('no credentials')
   }
   if (row.serviceIds.length > 0) {
-    parts.push(
-      row.serviceIds.length === 1
-        ? '1 service'
-        : `${row.serviceIds.length} services`,
-    )
+    parts.push(row.serviceIds.length === 1 ? '1 service' : `${row.serviceIds.length} services`)
   }
   return parts.join(' · ')
 }
@@ -524,10 +493,7 @@ function projectTitleField({
   }
   return (
     <TextInput
-      style={[
-        styles.titleInput,
-        Platform.OS === 'web' ? projectTitleInputWebStyle : null,
-      ]}
+      style={[styles.titleInput, Platform.OS === 'web' ? projectTitleInputWebStyle : null]}
       value={editDisplayName}
       onChangeText={onChangeDisplayName}
       onBlur={onSave}
@@ -659,18 +625,15 @@ function ContainerNamingPanel({
           {keepOriginal ? (
             <View style={panelStyles.calloutWarning}>
               <Text style={panelStyles.calloutWarningText}>
-                Keeping original names disables rolling updates. We rename
-                containers by default so multiple instances of this project can
-                run side by side.
+                Keeping original names disables rolling updates. We rename containers by default so
+                multiple instances of this project can run side by side.
               </Text>
             </View>
           ) : null}
         </View>
       ) : (
         <Text style={panelStyles.detailLine}>
-          {keepOriginal
-            ? 'Keep original container names'
-            : 'Rename containers (default)'}
+          {keepOriginal ? 'Keep original container names' : 'Rename containers (default)'}
         </Text>
       )}
       {saving ? <Text style={panelStyles.muted}>Saving…</Text> : null}
@@ -694,10 +657,7 @@ function WorkspaceMovePanel({
   onMove: (workspaceId: string) => void
 }>) {
   return (
-    <SectionPanel
-      title="Workspace"
-      hint="Move this project to another workspace"
-    >
+    <SectionPanel title="Workspace" hint="Move this project to another workspace">
       {canOwn ? (
         <View style={styles.serverList}>
           {workspaces.map((ws) => (
@@ -789,11 +749,8 @@ export function ProjectDetailSection({
   }, [projectQuery.error, workspacesQuery.error])
 
   const sortedWorkspaces = useMemo(
-    () =>
-      [...workspaces].sort((a, b) =>
-        (a.name ?? a.id).localeCompare(b.name ?? b.id),
-      ),
-    [workspaces],
+    () => [...workspaces].sort((a, b) => (a.name ?? a.id).localeCompare(b.name ?? b.id)),
+    [workspaces]
   )
 
   const currentWorkspaceLabel = useMemo(() => {
@@ -818,7 +775,7 @@ export function ProjectDetailSection({
 
     setError(null)
     const options = buildProjectOptionsPatch(project, { containerNaming })
-    const result = await updateProjectMutation.run({ options })
+    const result = await updateProjectMutation.run({ options, target: 'base' })
     if (!result.ok && updateProjectMutation.actionError) {
       setError(updateProjectMutation.actionError)
     }
@@ -886,9 +843,7 @@ export function ProjectDetailSection({
                 orgId={orgId}
                 projectId={projectId}
                 engineCode={project.metadata?.code ?? null}
-                projectName={
-                  project.name?.trim() || 'Unnamed project'
-                }
+                projectName={project.name?.trim() || 'Unnamed project'}
               />
               <WorkspaceMovePanel
                 canOwn={canOwn}

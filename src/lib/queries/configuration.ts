@@ -6,11 +6,8 @@ import {
   fetchProject,
   fetchVariables,
   updateEnvironment,
-  updateProject,
   updateVariable,
-  type ProjectRecord,
 } from '@/lib/instance-api'
-import { buildProjectOptionsPatch } from '@/lib/project-options'
 import { queryKeys, useApiMutation } from '@/lib/query-client'
 import type { StagedEdit, VariableOp } from '@/lib/v4/config-edits'
 import { saveEdits, type SaveDeps } from '@/lib/v4/config-save'
@@ -22,7 +19,6 @@ function variableRunner(op: VariableOp): Promise<unknown> {
 }
 
 function saveDeps(projectId: string, environmentId: string): SaveDeps {
-  let project: ProjectRecord | null = null
   return {
     load: async () => {
       const [fresh, env, projectVariables, environmentVariables] = await Promise.all([
@@ -31,7 +27,6 @@ function saveDeps(projectId: string, environmentId: string): SaveDeps {
         fetchVariables({ projectId }),
         fetchVariables({ environmentId }),
       ])
-      project = fresh.project
       return {
         projectId,
         environmentId,
@@ -40,11 +35,6 @@ function saveDeps(projectId: string, environmentId: string): SaveDeps {
         projectVariables: projectVariables.variables,
         environmentVariables: environmentVariables.variables,
       }
-    },
-    saveProjectCompose: (compose) => {
-      if (project === null) return Promise.reject(new Error('Project not loaded'))
-      const options = buildProjectOptionsPatch(project, { compose })
-      return updateProject(projectId, { options })
     },
     saveEnvironmentCompose: (compose) => updateEnvironment(environmentId, { options: { compose } }),
     runVariable: variableRunner,
@@ -61,7 +51,8 @@ function saveDeps(projectId: string, environmentId: string): SaveDeps {
 export function useSaveConfiguration(orgId: string, projectId: string, environmentId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (edits: readonly StagedEdit[]) => saveEdits(edits, saveDeps(projectId, environmentId)),
+    mutationFn: (edits: readonly StagedEdit[]) =>
+      saveEdits(edits, saveDeps(projectId, environmentId)),
     onSettled: async () => {
       const org = queryKeys.org(orgId)
       await Promise.all([

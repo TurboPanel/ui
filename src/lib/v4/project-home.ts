@@ -2,7 +2,7 @@
  * What the Projects home and a project's Environments tab show for each
  * environment, worked out from data the app really has: the containers (what
  * runs now), the newest deploy, and the control plane's config-view answer
- * (Base, what the environment changes, whether it follows the Base).
+ * (Base, what the environment changes, whether it stands alone).
  *
  * Nothing here guesses. A part that has no data yet returns `null` (or
  * `undefined` for "still loading") and the screen leaves it out.
@@ -20,17 +20,14 @@ import type {
   ContainerRecord,
   createEnvironment,
   EnvironmentConfigViewResponse,
+  EnvironmentRecord,
+  EnvironmentStart,
 } from '@/lib/instance-api'
 import { serverDisplayName } from '@/lib/resource-labels'
 import { baseSummary, linuxUserKey, relationText } from './change-labels'
-import {
-  defaultLinuxUser,
-  linuxUserFromDeclared,
-  resolveRunsAs,
-  type RunsAs,
-} from './linux-users'
+import { defaultLinuxUser, linuxUserFromDeclared, resolveRunsAs, type RunsAs } from './linux-users'
 import { isAppService } from './service-roles'
-import { standAloneCompose } from './stand-alone-compose'
+import { environmentBadge, type EnvironmentBadge } from './primary-environment'
 import type { StatusKey } from './status-vocab'
 import { joinNames, plural } from './text'
 import type { ConfigSource, V4Service } from './types'
@@ -60,7 +57,9 @@ function statusOfRows(rows: readonly ContainerRecord[]): StatusKey {
 export type NativeRunFallback = Readonly<{ latest: DeploymentGroup | null | undefined }>
 
 /** True when the effective config has an app that runs natively, not in a container. */
-export function hasNativeApp(services: readonly Pick<ConfigViewService, 'kind'>[] | undefined): boolean {
+export function hasNativeApp(
+  services: readonly Pick<ConfigViewService, 'kind'>[] | undefined
+): boolean {
   return (services ?? []).some((service) => service.kind === 'node' || service.kind === 'site')
 }
 
@@ -79,7 +78,7 @@ export function nativeDeployKey(latest: DeploymentGroup | null | undefined): Sta
  */
 export function runningStatusKey(
   containers: readonly ContainerRecord[] | undefined,
-  native?: NativeRunFallback,
+  native?: NativeRunFallback
 ): StatusKey | undefined {
   if (containers === undefined) return undefined
   if (containers.length === 0 || !hasHostDeployedContainers(containers)) {
@@ -91,7 +90,7 @@ export function runningStatusKey(
 /** The state of one app on the mini map; `null` until it has been deployed. */
 export function serviceStatusKey(
   containers: readonly ContainerRecord[],
-  native?: NativeRunFallback,
+  native?: NativeRunFallback
 ): StatusKey | null {
   if (containers.length === 0 || !hasHostDeployedContainers(containers)) {
     const key = native ? nativeDeployKey(native.latest) : undefined
@@ -105,7 +104,9 @@ export function serviceStatusKey(
 const IN_PROGRESS = new Set(['queued', 'dispatching', 'sent', 'acked', 'running'])
 
 /** True while any host of the deploy is still queued or running. */
-export function isDeployInProgress(group: Pick<DeploymentGroup, 'status'> | null | undefined): boolean {
+export function isDeployInProgress(
+  group: Pick<DeploymentGroup, 'status'> | null | undefined
+): boolean {
   return group != null && IN_PROGRESS.has(group.status)
 }
 
@@ -142,7 +143,7 @@ export function lastDeployPart(
   group: DeploymentGroup | null | undefined,
   now: number,
   /** "Step 3 of 7 · Installing Docker" from the command status poll; replaces the word while the deploy runs. */
-  progressLabel?: string | null,
+  progressLabel?: string | null
 ): DeployPart | undefined {
   if (group === undefined) return undefined
   if (group === null) return { status: 'never', label: 'No deploys yet' }
@@ -152,7 +153,11 @@ export function lastDeployPart(
       : deployWords(group)
   const sha = group.trigger?.commitSha?.slice(0, 7)
   const sub = [sha, formatAgo(group.startedAt, now)].filter(Boolean).join(' · ')
-  return { status: words.status, ...(words.label ? { label: words.label } : {}), ...(sub ? { sub } : {}) }
+  return {
+    status: words.status,
+    ...(words.label ? { label: words.label } : {}),
+    ...(sub ? { sub } : {}),
+  }
 }
 
 /** The per-host commands of a deploy; a row from an older control plane may lack them. */
@@ -169,7 +174,7 @@ const COMMAND_IN_FLIGHT = new Set(['queued', 'dispatching', 'sent', 'acked', 'ru
  * off between deploys.
  */
 export function inFlightDeployEntries(
-  latest: Readonly<Record<string, DeploymentGroup | null | undefined>>,
+  latest: Readonly<Record<string, DeploymentGroup | null | undefined>>
 ): { serverId: string; commandId: string }[] {
   const entries: { serverId: string; commandId: string }[] = []
   for (const group of Object.values(latest)) {
@@ -188,7 +193,7 @@ export function inFlightDeployEntries(
  */
 export function deployProgressLabel(
   group: DeploymentGroup | null | undefined,
-  records: ReadonlyMap<string, Readonly<{ progress?: CommandProgress | null }>>,
+  records: ReadonlyMap<string, Readonly<{ progress?: CommandProgress | null }>>
 ): string | null {
   if (!group || !isDeployInProgress(group)) return null
   for (const command of hostCommands(group)) {
@@ -209,14 +214,14 @@ export function inProgressSub(group: DeploymentGroup, now: number): string {
 // --- Base and changes ----------------------------------------------------------
 
 type ConfigViewRelationInput = Readonly<{
-  followsBase: boolean
+  standsAlone: boolean
   changes: readonly unknown[]
 }>
 
 export type Relation = Readonly<{
   standsAlone: boolean
   changeCount: number
-  /** "Follows the Base", "Follows the Base · 2 changes" or "Stands alone". */
+  /** "Same as the Base", "2 changes from the Base" or "Stands alone". */
   text: string
   /** Tag style: dashed for stands alone, blue when it changes something. */
   source: ConfigSource
@@ -229,21 +234,21 @@ export type Relation = Readonly<{
  */
 export function environmentRelation(view: ConfigViewRelationInput | undefined): Relation | null {
   if (view === undefined) return null
-  if (!view.followsBase) {
+  if (view.standsAlone) {
     return { standsAlone: true, changeCount: 0, text: relationText(true, 0), source: 'own' }
   }
   const changeCount = view.changes.length
   return {
     standsAlone: false,
     changeCount,
-    text: changeCount === 0 ? 'Follows the Base' : relationText(false, changeCount),
+    text: relationText(false, changeCount),
     source: changeCount === 0 ? 'base' : 'env',
   }
 }
 
-/** "3 services · 2 Linux users", the line under the Base band. */
+/** "3 services · 2 Hosting Accounts", the line under the Base band. */
 export function baseCounts(base: ConfigViewSide): string {
-  return `${plural(base.services.length, 'service')} · ${plural(base.linuxUsers.length, 'Linux user')}`
+  return `${plural(base.services.length, 'service')} · ${plural(base.linuxUsers.length, 'Hosting Account')}`
 }
 
 /** "Base · 3 services · 2 Linux users", the Base line on a project card. */
@@ -252,19 +257,20 @@ export function baseLine(base: ConfigViewSide): string {
 }
 
 /**
- * "Production and Staging follow it · Preview stands alone". Environments
+ * "Production and Staging use it · Preview stands alone". Environments
  * whose answer is not known yet are left out.
  */
-export function followLine(
-  environments: readonly Readonly<{ name: string; followsBase: boolean | null }>[],
+export function reachNames(
+  environments: readonly Readonly<{ name: string; standsAlone: boolean | null }>[]
 ): string {
-  const names = (follows: boolean) =>
-    environments.filter((env) => env.followsBase === follows).map((env) => env.name)
-  const follow = names(true)
-  const alone = names(false)
+  const names = (alone: boolean) =>
+    environments.filter((env) => env.standsAlone === alone).map((env) => env.name)
+  const using = names(false)
+  const alone = names(true)
   const parts: string[] = []
-  if (follow.length > 0) parts.push(`${joinNames(follow)} ${follow.length === 1 ? 'follows' : 'follow'} it`)
-  if (alone.length > 0) parts.push(`${joinNames(alone)} ${alone.length === 1 ? 'stands' : 'stand'} alone`)
+  if (using.length > 0) parts.push(`${joinNames(using)} ${using.length === 1 ? 'uses' : 'use'} it`)
+  if (alone.length > 0)
+    parts.push(`${joinNames(alone)} ${alone.length === 1 ? 'stands' : 'stand'} alone`)
   return parts.join(' · ')
 }
 
@@ -368,9 +374,11 @@ export function miniMapColumns(
   changes: readonly Pick<ConfigViewChange, 'serviceName'>[],
   statusOf: (serviceName: string) => string | null,
   /** Domains attached on the Hosting screen: they live in hosting rows, not in the compose. */
-  extraDomains: readonly string[] = [],
+  extraDomains: readonly string[] = []
 ): MiniMapColumn[] {
-  const changed = new Set(changes.map((change) => change.serviceName).filter((name) => name !== null))
+  const changed = new Set(
+    changes.map((change) => change.serviceName).filter((name) => name !== null)
+  )
   const services = side.services.map((service) => ({ service, v4: v4ServiceOf(service) }))
   const item = (name: string): MiniMapItem => ({
     name,
@@ -392,7 +400,9 @@ export function miniMapColumns(
       key: 'apps',
       label: 'Apps',
       emptyText: 'No apps yet',
-      items: services.filter((entry) => isAppService(entry.v4)).map((entry) => item(entry.service.name)),
+      items: services
+        .filter((entry) => isAppService(entry.v4))
+        .map((entry) => item(entry.service.name)),
     },
     {
       key: 'data',
@@ -416,6 +426,8 @@ export const EMPTY_SIDE: ConfigViewSide = Object.freeze({
 
 export type EnvironmentCardData = Readonly<{
   name: string
+  /** "Primary" or "Pinned"; `null` for the others. */
+  badge: EnvironmentBadge | null
   /** `null` until the control plane has answered (or when it could not). */
   relation: Relation | null
   running: DeployPart
@@ -437,7 +449,7 @@ type ServerNames = Readonly<{ id: string; name: string | null; hostname: string 
 export function serverLine(
   serverId: string | null,
   defaultServerId: string | null,
-  servers: readonly ServerNames[] | undefined,
+  servers: readonly ServerNames[] | undefined
 ): string {
   const named = (id: string) => {
     const found = servers?.find((server) => server.id === id)
@@ -455,6 +467,7 @@ export function serverLine(
 export function environmentCardData(
   input: Readonly<{
     name: string
+    flags?: Pick<EnvironmentRecord, 'isPrimary' | 'pinned'>
     containers: readonly ContainerRecord[] | undefined
     view: EnvironmentConfigViewResponse | undefined
     latest: DeploymentGroup | null | undefined
@@ -464,49 +477,58 @@ export function environmentCardData(
     now: number
     /** Hostnames of the environment's hosting rows (read separately from the config view). */
     hostingDomains?: readonly string[]
-  }>,
+  }>
 ): EnvironmentCardData {
   const { view, containers } = input
   const hostingDomains = input.hostingDomains ?? []
   const nativeNames = new Set(
-    (view?.effective.services ?? []).filter((service) => hasNativeApp([service])).map((service) => service.name),
+    (view?.effective.services ?? [])
+      .filter((service) => hasNativeApp([service]))
+      .map((service) => service.name)
   )
   const runningKey = runningStatusKey(
     containers,
-    hasNativeApp(view?.effective.services) ? { latest: input.latest } : undefined,
+    hasNativeApp(view?.effective.services) ? { latest: input.latest } : undefined
   )
   const statusOf = (serviceName: string) =>
     serviceStatusKey(
       (containers ?? []).filter((row) => row.composeServiceName === serviceName),
-      nativeNames.has(serviceName) ? { latest: input.latest } : undefined,
+      nativeNames.has(serviceName) ? { latest: input.latest } : undefined
     )
   return {
     name: input.name,
+    badge: input.flags ? environmentBadge(input.flags) : null,
     relation: environmentRelation(view),
-    running: runningKey === undefined ? { status: 'unknown', label: 'Checking…' } : { status: runningKey },
+    running:
+      runningKey === undefined ? { status: 'unknown', label: 'Checking…' } : { status: runningKey },
     lastDeploy: lastDeployPart(input.latest, input.now, input.progressLabel),
     columns: view ? miniMapColumns(view.effective, view.changes, statusOf, hostingDomains) : null,
     branch: view ? builtBranch(view.effective) : null,
     serverLine: input.serverLine,
     visitHost: view
-      ? (visitHost(view.effective) ?? hostingDomains.find((host) => siteUrlFromHostname(host) !== null) ?? null)
+      ? (visitHost(view.effective) ??
+        hostingDomains.find((host) => siteUrlFromHostname(host) !== null) ??
+        null)
       : null,
   }
 }
 
 // --- New environment -----------------------------------------------------------
 
-export type NewEnvironmentStart = 'base' | 'empty'
+export type NewEnvironmentStart = EnvironmentStart
 
 export type CreateEnvironmentBody = Parameters<typeof createEnvironment>[0]
 
 /**
- * What "Create environment" sends.
+ * What "Create environment" sends. The start is always named:
  *
- * - from the Base: no compose of its own, so it runs what the Base runs
- * - empty, stands alone: `services: !override {}`
- * - a server is sent only when one was chosen; otherwise the environment uses
- *   the project's server
+ * - `copy` (the default): a copy of the primary environment's own changes. It
+ *   still inherits the Base like every environment.
+ * - `empty`: stands alone, with none of the Base's apps and nothing of its own.
+ *
+ * A server is sent only when one was chosen; otherwise the environment uses the
+ * project's server. The name is checked with the environment name rule before
+ * this is called, and the control plane checks it again.
  */
 export function newEnvironmentBody(
   input: Readonly<{
@@ -514,42 +536,45 @@ export function newEnvironmentBody(
     name: string
     start: NewEnvironmentStart
     serverId: string | null
-  }>,
+  }>
 ): CreateEnvironmentBody {
   return {
     projectId: input.projectId,
     name: input.name.trim(),
+    start: input.start,
     ...(input.serverId ? { serverId: input.serverId } : {}),
-    ...(input.start === 'empty' ? { options: { compose: standAloneCompose() } } : {}),
   }
 }
 
 /**
- * What the sheet previews: the Base's own services when starting from the
- * Base (`null` until the Base has been read), nothing when standing alone.
+ * What the sheet previews: what the primary environment runs when copying it
+ * (`null` until it has been read), nothing when standing alone.
  */
 export function startPreview(
   start: NewEnvironmentStart,
-  base: ConfigViewSide | null,
+  primary: ConfigViewSide | null
 ): MiniMapColumn[] | null {
   if (start === 'empty') return miniMapColumns(EMPTY_SIDE, [], () => null)
-  return base ? miniMapColumns(base, [], () => null) : null
+  return primary ? miniMapColumns(primary, [], () => null) : null
 }
 
-/** Words under each start choice. */
-export const START_CHOICES: readonly Readonly<{
+/** The two start choices, the copy of the primary environment first. */
+export function startChoices(primaryName: string | null): readonly Readonly<{
   key: NewEnvironmentStart
   title: string
   body: string
-}>[] = [
-  {
-    key: 'base',
-    title: 'Start from the Base (recommended)',
-    body: 'Runs what the Base runs. Add changes later.',
-  },
-  {
-    key: 'empty',
-    title: 'Empty, stands alone',
-    body: 'Ignores the Base. You write its compose yourself.',
-  },
-]
+}>[] {
+  const source = primaryName ?? 'the primary environment'
+  return [
+    {
+      key: 'copy',
+      title: primaryName ? `Copy of ${primaryName}` : 'Copy of the primary environment',
+      body: `Starts with the same changes as ${source}. It still uses the Base.`,
+    },
+    {
+      key: 'empty',
+      title: 'Empty, stands alone',
+      body: 'Ignores the Base. You write its compose yourself.',
+    },
+  ]
+}

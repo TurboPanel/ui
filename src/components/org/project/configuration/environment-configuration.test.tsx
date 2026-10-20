@@ -1,16 +1,8 @@
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  applyScenario,
-  SCENARIOS,
-  styleOf,
-  token,
-} from '@/components/ui/v4/rn-stub'
-import {
-  plainView,
-  stagingView,
-} from '@/lib/v4/config-view-model.fixtures'
+import { applyScenario, SCENARIOS, styleOf, token } from '@/components/ui/v4/rn-stub'
+import { plainView, stagingView } from '@/lib/v4/config-view-model.fixtures'
 import {
   EnvironmentConfigurationScreen,
   EnvironmentConfigurationView,
@@ -32,7 +24,10 @@ vi.mock('react-native', async () => ({
   Linking: { openURL: state.openURL },
 }))
 vi.mock('react-native-svg', async () => (await import('@/components/ui/v4/rn-stub')).svgStub)
-vi.mock('@/lib/theme-preference', async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub)
+vi.mock(
+  '@/lib/theme-preference',
+  async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub
+)
 vi.mock('expo-router', () => ({ useRouter: () => ({ push: state.push }) }))
 vi.mock('@/components/org/project/project-context', () => ({
   useProjectContext: () => state.ctx,
@@ -66,9 +61,7 @@ function renderView(overrides: Partial<Parameters<typeof EnvironmentConfiguratio
     onManageHosting: vi.fn(),
     onOpenBase: vi.fn(),
   }
-  render(
-    <EnvironmentConfigurationView model={model()} multiple {...handlers} {...overrides} />,
-  )
+  render(<EnvironmentConfigurationView model={model()} multiple {...handlers} {...overrides} />)
   return handlers
 }
 
@@ -83,13 +76,24 @@ describe.each(SCENARIOS)('EnvironmentConfigurationView ($name)', (scenario) => {
   it('lists the sections in order with a source tag on every row', () => {
     renderView()
     const headings = screen.getAllByRole('heading').map((node) => node.textContent)
-    expect(headings).toEqual(['Apps', 'Hosting', 'Variables', 'Linux users', 'Data'])
-    expect(screen.getByText('Staging runs the Base plus its own changes.')).toBeTruthy()
+    expect(headings).toEqual(['Apps', 'Hosting', 'Variables', 'Hosting Accounts', 'Data'])
+    expect(
+      screen.getByText(/^Staging uses the Base for anything it does not set itself\./)
+    ).toBeTruthy()
     const web = screen.getByLabelText(/^web, Node.js app, Staging changes/)
     expect(within(web).getByText('Staging change')).toBeTruthy()
     const api = screen.getByLabelText(/^api, Container/)
-    expect(within(api).getByText('Base')).toBeTruthy()
-    expect(screen.getAllByText('Project').length).toBeGreaterThan(0)
+    expect(within(api).getByText('From the Base')).toBeTruthy()
+    expect(screen.queryByText('Project')).toBeNull()
+  })
+
+  it('marks inherited rows "From the Base" and leaves environment-set rows unmarked', () => {
+    renderView()
+    const api = screen.getByLabelText(/^api, Container/)
+    expect(within(api).getByText('From the Base')).toBeTruthy()
+    const web = screen.getByLabelText(/^web, Node.js app/)
+    expect(within(web).queryByText('From the Base')).toBeNull()
+    expect(screen.getAllByText('From the Base').length).toBeGreaterThan(0)
   })
 
   it('paints a change tag in the Base colour and says who runs each app', () => {
@@ -107,7 +111,10 @@ describe.each(SCENARIOS)('EnvironmentConfigurationView ($name)', (scenario) => {
     expect(within(secret).getByText('••••••••')).toBeTruthy()
     expect(screen.getByText('https://api.staging.example.com')).toBeTruthy()
     expect(
-      screen.getByText('Build and run · '.slice(0, 0) + 'Run only · Base: https://api.example.com · Staging: https://api.staging.example.com'),
+      screen.getByText(
+        'Build and run · '.slice(0, 0) +
+          'Run only · Base: https://api.example.com · Staging: https://api.staging.example.com'
+      )
     ).toBeTruthy()
   })
 
@@ -166,23 +173,25 @@ describe.each(SCENARIOS)('EnvironmentConfigurationView ($name)', (scenario) => {
     expect(screen.getByText('No hostnames yet')).toBeTruthy()
     expect(screen.getByText('No variables')).toBeTruthy()
     expect(screen.queryByText('Apps')).toBeNull()
-    expect(screen.queryByText('Linux users')).toBeNull()
+    expect(screen.queryByText('Hosting Accounts')).toBeNull()
     expect(screen.queryByText('Data')).toBeNull()
   })
 
   it('says a stand-alone environment keeps its own settings', () => {
-    const standalone = { ...model(), followsBase: false }
+    const standalone = { ...model(), standsAlone: true }
     renderView({ model: standalone })
     expect(
-      screen.getByText(
-        'Staging stands alone: it keeps its own settings and does not follow the Base.',
-      ),
+      screen.getByText("Staging stands alone: it keeps its own apps and does not use the Base's.")
     ).toBeTruthy()
+    expect(screen.queryByText(/anything it does not set itself/)).toBeNull()
   })
 
-  it('explains a single-environment project and points at the Base, with no filter', () => {
+  it('keeps the lede and the Open the Base button in a single-environment project, with no filter', () => {
     const handlers = renderView({ multiple: false })
-    expect(screen.getByText('This project has one environment')).toBeTruthy()
+    expect(
+      screen.getByText(/^Staging uses the Base for anything it does not set itself\./)
+    ).toBeTruthy()
+    expect(screen.queryByText('This project has one environment')).toBeNull()
     expect(screen.queryByRole('switch')).toBeNull()
     fireEvent.click(screen.getByLabelText('Open the Base'))
     expect(handlers.onOpenBase).toHaveBeenCalled()
@@ -247,7 +256,7 @@ describe('EnvironmentConfigurationScreen', () => {
     expect(state.push).toHaveBeenLastCalledWith('/o/projects/p/services/id-web')
     fireEvent.click(screen.getByLabelText('Add or change hostnames'))
     expect(state.push).toHaveBeenLastCalledWith(
-      '/o/projects/p/environments/e/configuration/hosting',
+      '/o/projects/p/environments/e/configuration/hosting'
     )
     fireEvent.click(screen.getByLabelText('Open shop.example.com in a new tab'))
     expect(state.openURL).toHaveBeenCalledWith('https://shop.example.com')
@@ -300,7 +309,9 @@ describe('EnvironmentConfigurationScreen', () => {
     state.query = { isPending: false, error: null, data: viewWithoutHostnames(), refetch: vi.fn() }
     state.hostingsError = true
     render(<EnvironmentConfigurationScreen />)
-    expect(screen.getByText(/Could not check the hostnames added on the Hosting screen/)).toBeTruthy()
+    expect(
+      screen.getByText(/Could not check the hostnames added on the Hosting screen/)
+    ).toBeTruthy()
   })
 
   it('keeps the compose hostnames visible while the others load', () => {

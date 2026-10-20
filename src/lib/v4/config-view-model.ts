@@ -15,7 +15,6 @@ import type {
   ConfigViewFieldRow,
   ConfigViewLinuxUser,
   ConfigViewService,
-  ConfigViewSource,
   ConfigViewVariable,
   EnvironmentConfigViewResponse,
   HostingRecord,
@@ -44,7 +43,7 @@ export type ChangeRowModel = Readonly<{
   /** The field inside the app (`command`, `linuxUser`); `null` for a whole app, user or variable. */
   field: string | null
   label: string
-  /** "App web", "Variable", "Linux users". */
+  /** "App web", "Variable", "Hosting Accounts". */
   where: string
   tag: SourceTagModel
   baseText: string
@@ -114,8 +113,11 @@ export type LinuxUserRowModel = Readonly<{
 
 export type ConfigViewModel = Readonly<{
   envName: string
-  followsBase: boolean
-  /** "Follows the Base · 2 changes" or "Stands alone". */
+  /** This is the project's primary environment. */
+  isPrimary: boolean
+  /** Its own apps replace the Base's (`services: !override` / `!reset`). */
+  standsAlone: boolean
+  /** "2 changes from the Base", "Same as the Base" or "Stands alone". */
   relationText: string
   changes: readonly ChangeRowModel[]
   changeCount: number
@@ -130,23 +132,30 @@ export type ConfigViewModel = Readonly<{
   linuxUserNames: readonly string[]
 }>
 
-function tagFor(source: ConfigSource, envName: string, isVariable = false): SourceTagModel {
-  return { source, label: sourceLabel(source, envName, isVariable) }
+function tagFor(source: ConfigSource, envName: string): SourceTagModel {
+  return { source, label: sourceLabel(source, envName) }
 }
 
-/** `environment` rows are changes when the environment follows the Base, its own values otherwise. */
-export function rowSource(source: ConfigViewSource, followsBase: boolean): ConfigSource {
-  if (!followsBase) return 'own'
-  return source === 'environment' ? 'env' : 'base'
+/**
+ * Where a value comes from: the Base when the control plane says it is
+ * inherited, otherwise this environment (a change on top of the Base, or its
+ * own value when it stands alone).
+ */
+export function rowSource(
+  row: Readonly<{ inheritedFromBase: boolean }>,
+  standsAlone: boolean
+): ConfigSource {
+  if (row.inheritedFromBase) return 'base'
+  return standsAlone ? 'own' : 'env'
 }
 
 function lowerFirst(text: string): string {
   const second = text.charAt(1)
-  // "Linux user", "PHP version" and variable names keep their capitals.
+  // "Hosting Account", "PHP version" and variable names keep their capitals.
   if (second !== '' && second === second.toUpperCase() && second !== second.toLowerCase()) {
     return text
   }
-  if (text.startsWith('Linux')) return text
+  if (text.startsWith('Linux') || text.startsWith('Hosting Account')) return text
   return text.charAt(0).toLowerCase() + text.slice(1)
 }
 
@@ -171,28 +180,25 @@ function toV4Service(service: ConfigViewService): V4Service {
 
 function changeWhere(change: ConfigViewChange): string {
   if (change.area === 'variable') return 'Variable'
-  if (change.area === 'linuxUser') return 'Linux users'
+  if (change.area === 'linuxUser') return 'Hosting Accounts'
   if (change.area === 'domain') return `Hostname on ${change.serviceName ?? 'an app'}`
   return `App ${change.serviceName ?? ''}`.trim()
 }
 
 function changeLabel(change: ConfigViewChange): string {
   if (change.area === 'service' && change.field === null) return change.serviceName ?? change.label
+  if (change.area === 'linuxUser' && change.label === 'Linux user') return 'Hosting Account'
   return change.label
 }
 
-function changeValueText(
-  change: ConfigViewChange,
-  value: string | null,
-  absent: string
-): string {
+function changeValueText(change: ConfigViewChange, value: string | null, absent: string): string {
   if (change.masked) return HIDDEN_VALUE
   if (value === null) return absent
   return value === '' ? EMPTY_VALUE : value
 }
 
 function buildChanges(view: EnvironmentConfigViewResponse, envName: string): ChangeRowModel[] {
-  const tag = tagFor(view.followsBase ? 'env' : 'own', envName)
+  const tag = tagFor(view.standsAlone ? 'own' : 'env', envName)
   return view.changes.map((change) => ({
     key: change.key,
     area: change.area,
@@ -212,12 +218,14 @@ function buildChanges(view: EnvironmentConfigViewResponse, envName: string): Cha
 function appChangeText(
   service: ConfigViewService,
   envName: string,
-  followsBase: boolean,
+  standsAlone: boolean,
   mine: readonly ConfigViewChange[]
 ): string {
-  if (!followsBase) return `Set in ${envName}`
-  if (service.source === 'environment') return `Added in ${envName}`
-  const shorts = mine.filter((change) => change.field !== null).map((change) => lowerFirst(change.label))
+  if (standsAlone) return `Set in ${envName}`
+  if (!service.inheritedFromBase) return `Added in ${envName}`
+  const shorts = mine
+    .filter((change) => change.field !== null)
+    .map((change) => lowerFirst(change.label))
   if (shorts.length > 0) return `${envName} changes: ${shorts.join(', ')}`
   return 'Same as the Base'
 }
@@ -241,7 +249,7 @@ function findUser(
 function runsAsFor(
   service: ConfigViewService,
   users: readonly ConfigViewLinuxUser[],
-  followsBase: boolean,
+  standsAlone: boolean,
   envName: string
 ): RunsAs {
   const containerOnly: RunsAs = {
@@ -257,14 +265,14 @@ function runsAsFor(
   if (service.kind === 'container') return containerOnly
   const row = findRow(service, 'linuxUser')
   const user = row?.value ?? ''
-  const source = row === undefined ? 'base' : rowSource(row.source, followsBase)
+  const source = row === undefined ? 'base' : rowSource(row, standsAlone)
   const found = findUser(users, user)
   const hasAccess = found !== undefined && found.access !== 'none'
   return {
     runsInContainer: false,
     user,
-    label: user === '' ? 'No Linux user yet' : `Runs as ${user}`,
-    short: user === '' ? 'no Linux user' : `as ${user}`,
+    label: user === '' ? 'No Hosting Account yet' : `Runs as ${user}`,
+    short: user === '' ? 'no Hosting Account' : `as ${user}`,
     source,
     sourceLabel: sourceLabel(source, envName),
     access: hasAccess ? accessText(found.access) : 'No sign-in',
@@ -275,11 +283,11 @@ function runsAsFor(
 function appTag(
   service: ConfigViewService,
   envName: string,
-  followsBase: boolean,
+  standsAlone: boolean,
   changeCount: number
 ): SourceTagModel {
-  if (!followsBase) return tagFor('own', envName)
-  if (service.source === 'environment' || changeCount > 0) return tagFor('env', envName)
+  if (standsAlone) return tagFor('own', envName)
+  if (!service.inheritedFromBase || changeCount > 0) return tagFor('env', envName)
   return tagFor('base', envName)
 }
 
@@ -288,7 +296,7 @@ function isData(service: ConfigViewService): boolean {
 }
 
 function buildApps(view: EnvironmentConfigViewResponse, envName: string): AppRowModel[] {
-  const { followsBase } = view
+  const { standsAlone } = view
   return view.effective.services
     .filter((service) => !isData(service))
     .map((service) => {
@@ -298,10 +306,10 @@ function buildApps(view: EnvironmentConfigViewResponse, envName: string): AppRow
         serviceId: service.serviceId,
         kind: service.kind,
         kindLine: kindLine(service),
-        tag: appTag(service, envName, followsBase, mine.length),
+        tag: appTag(service, envName, standsAlone, mine.length),
         changeCount: mine.length,
-        changeText: appChangeText(service, envName, followsBase, mine),
-        runsAs: runsAsFor(service, view.effective.linuxUsers, followsBase, envName),
+        changeText: appChangeText(service, envName, standsAlone, mine),
+        runsAs: runsAsFor(service, view.effective.linuxUsers, standsAlone, envName),
       }
     })
 }
@@ -311,7 +319,7 @@ function buildData(view: EnvironmentConfigViewResponse, envName: string): DataRo
     name: service.name,
     serviceId: service.serviceId,
     image: valueOf(findRow(service, 'image')) ?? '',
-    tag: appTag(service, envName, view.followsBase, 0),
+    tag: appTag(service, envName, view.standsAlone, 0),
   }))
 }
 
@@ -320,7 +328,7 @@ function buildDomains(view: EnvironmentConfigViewResponse, envName: string): Dom
   for (const service of view.effective.services) {
     for (const row of service.rows) {
       if (row.area !== 'domain' || row.value === null) continue
-      const source = rowSource(row.source, view.followsBase)
+      const source = rowSource(row, view.standsAlone)
       rows.push({
         key: row.key,
         host: row.value,
@@ -359,7 +367,7 @@ export function withHostingHostnames(
 ): ConfigViewModel {
   const rows = new Map<string, DomainRowModel>()
   for (const domain of model.domains) rows.set(domain.host.toLowerCase(), domain)
-  const tag = tagFor(model.followsBase ? 'env' : 'own', model.envName)
+  const tag = tagFor(model.standsAlone ? 'own' : 'env', model.envName)
   for (const app of model.apps) {
     if (app.serviceId === null) continue
     for (const record of hostingsByService[app.serviceId] ?? []) {
@@ -398,9 +406,8 @@ export function variableValueText(variable: ConfigViewVariable): string {
   return variable.value === '' ? EMPTY_VALUE : variable.value
 }
 
-function variableSource(variable: ConfigViewVariable, followsBase: boolean): ConfigSource {
-  if (variable.source === 'project') return 'base'
-  return followsBase ? 'env' : 'own'
+function variableSource(variable: ConfigViewVariable, standsAlone: boolean): ConfigSource {
+  return rowSource(variable, standsAlone)
 }
 
 function variableNote(
@@ -416,7 +423,7 @@ function variableNote(
 function buildVariables(view: EnvironmentConfigViewResponse, envName: string): VariableRowModel[] {
   const changes = new Map(view.changes.map((change) => [change.key, change]))
   return view.effective.variables.map((variable) => {
-    const source = variableSource(variable, view.followsBase)
+    const source = variableSource(variable, view.standsAlone)
     const isChange = source === 'env'
     return {
       key: variable.key,
@@ -425,7 +432,7 @@ function buildVariables(view: EnvironmentConfigViewResponse, envName: string): V
       valueText: variableValueText(variable),
       isSecret: variable.isSecret,
       usedFor: usedFor(variable),
-      tag: tagFor(source, envName, true),
+      tag: tagFor(source, envName),
       sourceNote: variableNote(changes.get(variable.key), envName, isChange),
       isChange,
     }
@@ -451,17 +458,20 @@ function linuxUserNames(view: EnvironmentConfigViewResponse): string[] {
 }
 
 /** The whole Configuration tab, from one config-view answer. */
-export function buildConfigViewModel(input: Readonly<{
-  envName: string
-  view: EnvironmentConfigViewResponse
-}>): ConfigViewModel {
+export function buildConfigViewModel(
+  input: Readonly<{
+    envName: string
+    view: EnvironmentConfigViewResponse
+  }>
+): ConfigViewModel {
   const { envName, view } = input
   const changes = buildChanges(view, envName)
   const apps = buildApps(view, envName)
   return {
     envName,
-    followsBase: view.followsBase,
-    relationText: relationText(!view.followsBase, changes.length),
+    isPrimary: view.isPrimary,
+    standsAlone: view.standsAlone,
+    relationText: relationText(view.standsAlone, changes.length),
     changes,
     changeCount: changes.length,
     onlyChangesLabel: onlyChangesLabel(changes.length),

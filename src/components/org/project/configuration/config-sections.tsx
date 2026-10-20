@@ -8,7 +8,6 @@ import {
 import type { EditingApi } from '@/components/org/project/configuration/editing'
 import {
   ActionButton,
-  Notice,
   EmptyPanel,
   ListGroup,
   ListRow,
@@ -30,13 +29,7 @@ import {
   type LinuxUserRowModel,
   type VariableRowModel,
 } from '@/lib/v4/config-view-model'
-import {
-  goBackEdit,
-  makeBaseConfirmText,
-  makeBaseEdit,
-  stagedEditFor,
-  stagedNote,
-} from '@/lib/v4/config-edits'
+import { goBackEdit, stagedEditFor, stagedNote } from '@/lib/v4/config-edits'
 import type { EditTarget } from '@/lib/v4/config-edits'
 import { plural } from '@/lib/v4/text'
 
@@ -91,7 +84,6 @@ function ChangeRow({
   editing,
 }: Readonly<{ change: ChangeRowModel; editing?: EditingApi }>) {
   const s = styles(usePalette())
-  const [confirming, setConfirming] = useState(false)
   const actions = editing?.actionsFor(change)
   const staged = editing ? stagedEditFor(editing.staged, change.key) : undefined
   return (
@@ -124,46 +116,15 @@ function ChangeRow({
           />
         </View>
       ) : null}
-      {editing && !staged && actions && (actions.goBack || actions.makeBase) ? (
+      {editing && !staged && actions?.goBack ? (
         <View style={s.changeActions}>
-          {actions.goBack ? (
-            <ActionButton
-              label="Go back to Base"
-              size="sm"
-              accessibilityLabel={`Go back to Base: ${change.label}`}
-              onPress={() => editing.onStage(goBackEdit(change, actions.goBack as EditTarget))}
-            />
-          ) : null}
-          {actions.makeBase ? (
-            <ActionButton
-              label="Make this the Base"
-              size="sm"
-              accessibilityLabel={`Make this the Base: ${change.label}`}
-              onPress={() => setConfirming(true)}
-            />
-          ) : null}
+          <ActionButton
+            label="Go back to Base"
+            size="sm"
+            accessibilityLabel={`Go back to Base: ${change.label}`}
+            onPress={() => editing.onStage(goBackEdit(change, actions.goBack as EditTarget))}
+          />
         </View>
-      ) : null}
-      {editing && actions?.makeBase && confirming ? (
-        <Notice
-          tone="warn"
-          title="Make this the Base?"
-          body={makeBaseConfirmText(editing.envName, editing.others)}
-          actions={
-            <>
-              <ActionButton
-                label="Make this the Base"
-                size="sm"
-                accessibilityLabel={`Confirm: make ${change.label} the Base`}
-                onPress={() => {
-                  editing.onStage(makeBaseEdit(change, actions.makeBase as EditTarget))
-                  setConfirming(false)
-                }}
-              />
-              <ActionButton label="Cancel" variant="quiet" size="sm" onPress={() => setConfirming(false)} />
-            </>
-          }
-        />
       ) : null}
     </View>
   )
@@ -221,7 +182,9 @@ export function AppsSection({
               sub={`${app.kindLine} · ${app.changeText}`}
               chips={<SourceTag source={app.tag.source} label={app.tag.label} />}
               trailing={<RunsAsChip runsAs={app.runsAs} showSource={false} />}
-              onPress={app.serviceId === null ? undefined : () => onOpenApp(app.serviceId as string)}
+              onPress={
+                app.serviceId === null ? undefined : () => onOpenApp(app.serviceId as string)
+              }
               accessibilityLabel={`${app.name}, ${app.kindLine}, ${app.changeText}`}
               tall
             />
@@ -254,7 +217,8 @@ export function HostingSection({
       <SectionHeading title="Hosting" note={plural(domains.length, 'hostname')} action={manage} />
       {hostingsStatus === 'error' ? (
         <Text style={s.problem}>
-          Could not check the hostnames added on the Hosting screen, so this list may be missing some. Try again in a moment.
+          Could not check the hostnames added on the Hosting screen, so this list may be missing
+          some. Try again in a moment.
         </Text>
       ) : null}
       <ListGroup
@@ -295,8 +259,8 @@ export function HostingSection({
                   </Pressable>
                 }
               />
-          )}
-        />
+            )}
+          />
         )}
       </ListGroup>
     </View>
@@ -323,7 +287,13 @@ function RowAction({
 }>) {
   if (staged) {
     return (
-      <ActionButton label="Undo" variant="quiet" size="sm" accessibilityLabel={undoName} onPress={onUndo} />
+      <ActionButton
+        label="Undo"
+        variant="quiet"
+        size="sm"
+        accessibilityLabel={undoName}
+        onPress={onUndo}
+      />
     )
   }
   if (!canEdit) return null
@@ -432,7 +402,9 @@ function LinuxUserRow({
   const [open, setOpen] = useState(false)
   const key = `svc:${user.serviceName}:linuxUser`
   const staged = editing ? stagedEditFor(editing.staged, key) : undefined
-  const sub = [user.access, staged ? stagedNote(staged) : ''].filter((part) => part !== '').join(' · ')
+  const sub = [user.access, staged ? stagedNote(staged) : '']
+    .filter((part) => part !== '')
+    .join(' · ')
   const canEdit = editing !== undefined && editing.linuxUserNames.length > 0
   return (
     <View>
@@ -447,7 +419,7 @@ function LinuxUserRow({
               staged={staged !== undefined}
               canEdit={canEdit}
               editLabel="Change"
-              editName={`Change the Linux user of ${user.serviceName}`}
+              editName={`Change the Hosting Account of ${user.serviceName}`}
               undoName={`Undo ${user.serviceName} runs as`}
               onUndo={() => editing?.onUnstage(key)}
               onEdit={() => setOpen((value) => !value)}
@@ -460,7 +432,6 @@ function LinuxUserRow({
         <LinuxUserEditor
           serviceName={user.serviceName}
           current={user.runsAs.user}
-          hasOwnChange={user.isChange}
           editing={editing}
           onClose={() => setOpen(false)}
         />
@@ -478,7 +449,7 @@ export function LinuxUsersSection({
   return (
     <View style={s.section}>
       <SectionHeading
-        title="Linux users"
+        title="Hosting Accounts"
         note="The Linux account that owns an app’s files and runs it"
       />
       <ListGroup>

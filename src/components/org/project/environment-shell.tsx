@@ -1,4 +1,11 @@
-import { Link, Redirect, useLocalSearchParams, usePathname, useRouter, type Href } from 'expo-router'
+import {
+  Link,
+  Redirect,
+  useLocalSearchParams,
+  usePathname,
+  useRouter,
+  type Href,
+} from 'expo-router'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native'
 import { BreadcrumbChevron } from '@/components/header-chevron'
@@ -14,6 +21,7 @@ import { ProjectScopePicker } from '@/components/org/project/project-scope-picke
 import { useProjectContext } from '@/components/org/project/project-context'
 import { StatusDot } from '@/components/ui'
 import { groupDeploymentsByGeneration, type DeploymentGroup } from '@/lib/deployment-history'
+import { environmentBadge, orderEnvironments } from '@/lib/v4/primary-environment'
 import { hasNativeApp, nativeDeployKey } from '@/lib/v4/project-home'
 import { useEnvironmentConfigViews } from '@/lib/queries/environment-cards'
 import {
@@ -74,9 +82,7 @@ function useNow(intervalMs: number): number {
   return now
 }
 
-function StatusFacts({
-  facts,
-}: Readonly<{ facts: readonly EnvironmentStatusFact[] }>) {
+function StatusFacts({ facts }: Readonly<{ facts: readonly EnvironmentStatusFact[] }>) {
   return (
     <View style={styles.facts} accessibilityLabel="Environment status">
       {facts.map((fact) => (
@@ -117,8 +123,7 @@ function SiteLink({ hostname }: Readonly<{ hostname: string | null }>) {
 
 function EnvironmentTitle() {
   const router = useRouter()
-  const { orgId, projectId, environments, selectedEnvironment } =
-    useProjectContext()
+  const { orgId, projectId, environments, selectedEnvironment } = useProjectContext()
   const pathname = usePathname()
   const activeTab = parseEnvironmentPageTab(pathname, projectId) ?? 'overview'
   const name = environmentDisplayName(selectedEnvironment ?? {})
@@ -126,12 +131,15 @@ function EnvironmentTitle() {
 
   const options = useMemo<ProjectScopeOption[]>(
     () =>
-      environments.map((env) => ({
+      orderEnvironments(environments).map((env) => ({
         environmentId: env.id,
         label: environmentDisplayName(env),
-        detail: env.id === selectedEnvironment?.id ? lifecycle.statusLabel : '',
+        detail:
+          env.id === selectedEnvironment?.id
+            ? lifecycle.statusLabel
+            : (environmentBadge(env) ?? ''),
       })),
-    [environments, selectedEnvironment?.id, lifecycle.statusLabel],
+    [environments, selectedEnvironment?.id, lifecycle.statusLabel]
   )
 
   if (environments.length > 1) {
@@ -140,18 +148,11 @@ function EnvironmentTitle() {
         options={options}
         activeEnvironmentId={selectedEnvironment?.id ?? null}
         statusColorFor={(option) =>
-          option.environmentId === selectedEnvironment?.id
-            ? lifecycle.toneColor
-            : undefined
+          option.environmentId === selectedEnvironment?.id ? lifecycle.toneColor : undefined
         }
         onSelect={(option) =>
           router.push(
-            environmentPageTabHref(
-              orgId,
-              projectId,
-              option.environmentId,
-              activeTab,
-            ) as Href,
+            environmentPageTabHref(orgId, projectId, option.environmentId, activeTab) as Href
           )
         }
       />
@@ -186,7 +187,7 @@ function EnvironmentHeader() {
   })
   const serviceIds = useMemo(
     () => (servicesQuery.data?.services ?? []).map((service) => service.id),
-    [servicesQuery.data?.services],
+    [servicesQuery.data?.services]
   )
   const hostingsQuery = useHostingsByServices(orgId, serviceIds, {
     enabled: serviceIds.length > 0,
@@ -196,7 +197,9 @@ function EnvironmentHeader() {
     enabled: environmentId.length > 0,
   })
   const deploymentRows = deploymentsQuery.data?.deployments
-  const { views } = useEnvironmentConfigViews(orgId, [environmentId], { enabled: environmentId.length > 0 })
+  const { views } = useEnvironmentConfigViews(orgId, [environmentId], {
+    enabled: environmentId.length > 0,
+  })
   const native = hasNativeApp(views[environmentId]?.effective.services)
   const now = useNow(60_000)
   const facts = useMemo(() => {
@@ -205,12 +208,21 @@ function EnvironmentHeader() {
       : (groupDeploymentsByGeneration(deploymentRows ?? [])[0] ?? null)
     return environmentStatusFacts({
       // A native app has no containers: its newest deploy says whether it runs.
-      runningLabel: native ? nativeRunningLabel(lifecycle.toneLabel, lastDeploy) : lifecycle.toneLabel,
+      runningLabel: native
+        ? nativeRunningLabel(lifecycle.toneLabel, lastDeploy)
+        : lifecycle.toneLabel,
       lastDeploy,
       progressLabel: lifecycle.deployProgressLabel,
       now,
     })
-  }, [deploymentsQuery.isLoading, deploymentRows, native, lifecycle.toneLabel, lifecycle.deployProgressLabel, now])
+  }, [
+    deploymentsQuery.isLoading,
+    deploymentRows,
+    native,
+    lifecycle.toneLabel,
+    lifecycle.deployProgressLabel,
+    now,
+  ])
 
   if (!selectedEnvironment) return null
   return (
@@ -218,6 +230,13 @@ function EnvironmentHeader() {
       <View style={styles.titleRow}>
         <View style={styles.titleBlock}>
           <EnvironmentTitle />
+          {environmentBadge(selectedEnvironment) ? (
+            <Text style={styles.badgeLine}>
+              {selectedEnvironment.isPrimary === true
+                ? 'Primary environment'
+                : 'Pinned environment'}
+            </Text>
+          ) : null}
           <SiteLink hostname={hostname} />
         </View>
         <EnvironmentLifecycleActions />
@@ -241,9 +260,7 @@ function EnvironmentCrumb() {
         </Pressable>
       </Link>
       <BreadcrumbChevron size={12} color={colors.text3} />
-      <Text style={styles.crumbCurrent}>
-        {environmentDisplayName(selectedEnvironment ?? {})}
-      </Text>
+      <Text style={styles.crumbCurrent}>{environmentDisplayName(selectedEnvironment ?? {})}</Text>
     </View>
   )
 }
@@ -254,9 +271,8 @@ function EnvironmentChrome({ children }: Readonly<{ children: ReactNode }>) {
   const { orgId, projectId, pathEnvironmentId } = useProjectContext()
   useHostingDeepLink(pathEnvironmentId)
   const tabs = useMemo<UnderlineTab[]>(
-    () =>
-      ENVIRONMENT_PAGE_TAB_IDS.map((key) => ({ key, label: ENVIRONMENT_PAGE_TAB_LABELS[key] })),
-    [],
+    () => ENVIRONMENT_PAGE_TAB_IDS.map((key) => ({ key, label: ENVIRONMENT_PAGE_TAB_LABELS[key] })),
+    []
   )
   return (
     <View style={styles.root}>
@@ -272,8 +288,8 @@ function EnvironmentChrome({ children }: Readonly<{ children: ReactNode }>) {
                 orgId,
                 projectId,
                 pathEnvironmentId,
-                key as EnvironmentPageTabId,
-              ) as Href,
+                key as EnvironmentPageTabId
+              ) as Href
             )
           }
           ariaLabel="Environment sections"
@@ -291,13 +307,7 @@ function EnvironmentChrome({ children }: Readonly<{ children: ReactNode }>) {
  */
 export function useEnvironmentChrome(): boolean {
   const { project, draft, needsSetup, isSystemProject } = useProjectContext()
-  return Boolean(
-    project &&
-      !draft &&
-      !needsSetup &&
-      !isSystemProject &&
-      !isManagedProject(project),
-  )
+  return Boolean(project && !draft && !needsSetup && !isSystemProject && !isManagedProject(project))
 }
 
 /**
@@ -306,15 +316,10 @@ export function useEnvironmentChrome(): boolean {
  * back to the project.
  */
 export function EnvironmentShell({ children }: Readonly<{ children: ReactNode }>) {
-  const { orgId, projectId, environments, loading, pathEnvironmentId } =
-    useProjectContext()
+  const { orgId, projectId, environments, loading, pathEnvironmentId } = useProjectContext()
   const withChrome = useEnvironmentChrome()
   if (!withChrome) return <>{children}</>
-  if (
-    !loading &&
-    pathEnvironmentId &&
-    !environments.some((env) => env.id === pathEnvironmentId)
-  ) {
+  if (!loading && pathEnvironmentId && !environments.some((env) => env.id === pathEnvironmentId)) {
     return <Redirect href={projectOverviewHref(orgId, projectId) as Href} />
   }
   return (
@@ -364,6 +369,11 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '700',
     letterSpacing: -0.3,
+  },
+  badgeLine: {
+    color: colors.text3,
+    fontSize: 13,
+    fontWeight: '600',
   },
   siteLink: {
     color: colors.link,

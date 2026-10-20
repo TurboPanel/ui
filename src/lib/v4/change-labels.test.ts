@@ -40,9 +40,9 @@ describe('describeConfigKey', () => {
     })
   })
 
-  it('calls the runs-as row "Linux user" and files it under users', () => {
+  it('calls the runs-as row "Hosting Account" and files it under users', () => {
     const info = describeConfigKey('svc:web:runsAs', website.services)
-    expect(info).toMatchObject({ area: 'users', label: 'Linux user', short: 'Linux user' })
+    expect(info).toMatchObject({ area: 'users', label: 'Hosting Account' })
   })
 
   it('names a variable by its name, which can contain colons', () => {
@@ -80,33 +80,33 @@ describe('describeConfigKey', () => {
     expect(serviceRowLabel('site', 'mode')).toBe('PHP mode')
     expect(serviceRowLabel('container', 'mode')).toBe('mode')
     expect(serviceRowLabel('container', 'cpu')).toBe('CPU limit')
-    expect(serviceRowLabel('container', 'runsAs')).toBe('Linux user')
+    expect(serviceRowLabel('container', 'runsAs')).toBe('Hosting Account')
     expect(describeConfigKey('svc:api:port', api.services).label).toBe('Port')
   })
 })
 
 describe('labels', () => {
   it('words the source tag', () => {
-    expect(sourceLabel('base', 'Staging')).toBe('Base')
-    expect(sourceLabel('base', 'Staging', true)).toBe('Project')
+    expect(sourceLabel('base', 'Staging')).toBe('From the Base')
     expect(sourceLabel('env', 'Staging')).toBe('Staging change')
-    expect(sourceLabel('env', 'Staging', true)).toBe('Staging change')
     expect(sourceLabel('own', 'Preview')).toBe('Set in Preview')
     expect(changeTag('Testing')).toBe('Testing change')
   })
 
   it('words the relation to the Base', () => {
-    expect(relationText(false, 2)).toBe('Follows the Base · 2 changes')
-    expect(relationText(false, 1)).toBe('Follows the Base · 1 change')
-    expect(relationText(false, 0)).toBe('Follows the Base · 0 changes')
+    expect(relationText(false, 2)).toBe('2 changes from the Base')
+    expect(relationText(false, 1)).toBe('1 change from the Base')
+    expect(relationText(false, 0)).toBe('Same as the Base')
     expect(relationText(true, 7)).toBe('Stands alone')
   })
 
   it('words the filter, the map tag and the Base card', () => {
     expect(onlyChangesLabel(4)).toBe('Only changes from Base (4)')
-    expect(changedSummary(['start command', 'Linux user'])).toBe('Changed: start command, Linux user')
-    expect(baseSummary(1, 2)).toBe('Base · 1 service · 2 Linux users')
-    expect(baseSummary(3, 1)).toBe('Base · 3 services · 1 Linux user')
+    expect(changedSummary(['start command', 'Hosting Account'])).toBe(
+      'Changed: start command, Hosting Account'
+    )
+    expect(baseSummary(1, 2)).toBe('Base · 1 service · 2 Hosting Accounts')
+    expect(baseSummary(3, 1)).toBe('Base · 3 services · 1 Hosting Account')
     expect(valueText(undefined)).toBe('Not set')
     expect(valueText(null)).toBe('Not set')
     expect(valueText('x')).toBe('x')
