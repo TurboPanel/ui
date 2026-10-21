@@ -188,6 +188,7 @@ export function upgradeStepOutcome(
   step: Readonly<{
     status: UpgradeStepStatus | null | undefined
     errorCode?: string | null
+    errorMessage?: string | null
   }>
 ): UpgradeStepOutcome {
   const detail = upgradeStepErrorLabel(step.errorCode)
@@ -199,7 +200,12 @@ export function upgradeStepOutcome(
       return { tone: 'ok', label: 'Done', detail: null }
     case 'skipped':
       if (step.errorCode === 'server_offline') {
-        return { tone: 'muted', label: 'Skipped: offline', detail: SKIPPED_OFFLINE_DETAIL }
+        const message = step.errorMessage?.trim()
+        return {
+          tone: 'muted',
+          label: 'Skipped: offline',
+          detail: message || SKIPPED_OFFLINE_DETAIL,
+        }
       }
       return { tone: 'muted', label: 'Skipped', detail }
     case 'failed':
@@ -306,6 +312,7 @@ type OfflineWaitStep = Readonly<{
   status: UpgradeStepStatus
   phase?: string
   connected?: boolean
+  attempts?: number
 }>
 
 /** Only fleet steps are skipped when offline; platform phases still fail the run. */
@@ -314,14 +321,15 @@ function isFleetOrUnknownPhase(phase: string | undefined): boolean {
 }
 
 /**
- * A step counts as waiting on an offline server only when the panel says so
- * (`connected === false`). A missing `connected` (older panel) is unknown, so it
- * never counts and the page does not claim the server is offline.
+ * A step counts as waiting on an offline server only when the panel would skip
+ * it: status `waiting`, no dispatch attempts yet (`attempts === 0`), and the
+ * host reported not connected (`connected === false`). A missing `connected` or
+ * `attempts` (older panel) is unknown, so it never counts and the page makes no
+ * offline claim. A `pending` step is not skippable yet.
  */
 function isOfflineWaitStep(step: OfflineWaitStep): boolean {
   if (!isFleetOrUnknownPhase(step.phase)) return false
-  if (step.connected !== false) return false
-  return step.status === 'waiting' || step.status === 'pending'
+  return step.status === 'waiting' && step.connected === false && step.attempts === 0
 }
 
 /**

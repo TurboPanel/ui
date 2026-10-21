@@ -190,8 +190,8 @@ describe('HighAvailabilityUpdates', () => {
           status: 'running',
           steps: [
             { status: 'done' },
-            { status: 'waiting', connected: false },
-            { status: 'pending', connected: false },
+            { status: 'waiting', connected: false, attempts: 0 },
+            { status: 'waiting', connected: false, attempts: 0 },
           ],
         },
       },
@@ -208,7 +208,7 @@ describe('HighAvailabilityUpdates', () => {
         run: {
           id: 'run-1',
           status: 'running',
-          steps: [{ status: 'done' }, { status: 'waiting', connected: false }],
+          steps: [{ status: 'done' }, { status: 'waiting', connected: false, attempts: 0 }],
         },
       },
       refetch: vi.fn(),

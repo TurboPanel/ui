@@ -196,6 +196,19 @@ describe('upgradeStepOutcome', () => {
     })
   })
 
+  it('shows the panel message for a skipped offline step, else the fixed text', () => {
+    const own =
+      'It stayed offline for 15 minutes during the update. It updates on its own when it reconnects.'
+    expect(
+      upgradeStepOutcome({ status: 'skipped', errorCode: 'server_offline', errorMessage: own })
+    ).toMatchObject({ label: 'Skipped: offline', detail: own })
+    expect(
+      upgradeStepOutcome({ status: 'skipped', errorCode: 'server_offline', errorMessage: ' ' })
+    ).toMatchObject({
+      detail: 'It was offline when the update started. It updates on its own when it reconnects.',
+    })
+  })
+
   it('words a failed update delivery in plain language, not as the raw code', () => {
     const outcome = upgradeStepOutcome({ status: 'needs_attention', errorCode: 'dispatch_failed' })
     expect(outcome.detail).toBe("Couldn't reach the server")
@@ -439,13 +452,13 @@ describe('offlineWaitingNotice', () => {
     expect(
       offlineWaitingNotice([
         { status: 'done', connected: true },
-        { status: 'waiting', connected: false },
-        { status: 'pending', connected: false },
+        { status: 'waiting', connected: false, attempts: 0 },
+        { status: 'waiting', connected: false, attempts: 0 },
       ])
     ).toBe(
       '2 servers are offline, so this update is waiting for them. They are skipped if they stay offline, and they update on their own when they reconnect.'
     )
-    expect(offlineWaitingNotice([{ status: 'waiting', connected: false }])).toBe(
+    expect(offlineWaitingNotice([{ status: 'waiting', connected: false, attempts: 0 }])).toBe(
       '1 server is offline, so this update is waiting for it. It is skipped if it stays offline, and it updates on its own when it reconnects.'
     )
   })
@@ -455,7 +468,7 @@ describe('offlineWaitingNotice', () => {
     expect(offlineWaitingNotice([{ status: 'waiting', phase: 'fleet' }])).toBeNull()
     expect(
       offlineWaitingNotice([
-        { status: 'waiting', connected: false },
+        { status: 'waiting', connected: false, attempts: 0 },
         { status: 'installing', connected: true },
       ])
     ).toBeNull()
@@ -470,8 +483,8 @@ describe('runWaitsOnlyOnOffline', () => {
       runWaitsOnlyOnOffline({
         steps: [
           { status: 'done', phase: 'fleet', connected: true },
-          { status: 'waiting', phase: 'fleet', connected: false },
-          { status: 'pending', phase: 'fleet', connected: false },
+          { status: 'waiting', phase: 'fleet', connected: false, attempts: 0 },
+          { status: 'waiting', phase: 'fleet', connected: false, attempts: 0 },
         ],
       })
     ).toBe(true)
@@ -481,7 +494,7 @@ describe('runWaitsOnlyOnOffline', () => {
     expect(
       runWaitsOnlyOnOffline({
         steps: [
-          { status: 'waiting', connected: false },
+          { status: 'waiting', connected: false, attempts: 0 },
           { status: 'installing', connected: true },
         ],
       })
@@ -489,18 +502,32 @@ describe('runWaitsOnlyOnOffline', () => {
     expect(runWaitsOnlyOnOffline({ steps: [{ status: 'pending', connected: true }] })).toBe(false)
     expect(
       runWaitsOnlyOnOffline({
-        steps: [{ status: 'waiting', phase: 'colocated_daemon', connected: false }],
+        steps: [{ status: 'waiting', phase: 'colocated_daemon', connected: false, attempts: 0 }],
       })
     ).toBe(false)
     expect(runWaitsOnlyOnOffline({ steps: [] })).toBe(false)
     expect(runWaitsOnlyOnOffline(null)).toBe(false)
   })
 
+  it('blocks a pending step, a step already tried, and a panel that omits attempts', () => {
+    expect(
+      runWaitsOnlyOnOffline({ steps: [{ status: 'pending', connected: false, attempts: 0 }] })
+    ).toBe(false)
+    expect(
+      runWaitsOnlyOnOffline({ steps: [{ status: 'waiting', connected: false, attempts: 1 }] })
+    ).toBe(false)
+    expect(runWaitsOnlyOnOffline({ steps: [{ status: 'waiting', connected: false }] })).toBe(false)
+    expect(offlineWaitingNotice([{ status: 'waiting', connected: false }])).toBeNull()
+    expect(offlineWaitingNotice([{ status: 'waiting', connected: false, attempts: 1 }])).toBeNull()
+  })
+
   it('treats an older panel that omits connected or phase as unknown and stays blocked', () => {
     expect(runWaitsOnlyOnOffline({ steps: [{ status: 'waiting' }] })).toBe(false)
     expect(runWaitsOnlyOnOffline({ steps: [{ status: 'pending' }] })).toBe(false)
     expect(runWaitsOnlyOnOffline({ steps: [{ status: 'waiting', phase: 'fleet' }] })).toBe(false)
-    expect(runWaitsOnlyOnOffline({ steps: [{ status: 'waiting', connected: false }] })).toBe(true)
+    expect(
+      runWaitsOnlyOnOffline({ steps: [{ status: 'waiting', connected: false, attempts: 0 }] })
+    ).toBe(true)
   })
 })
 
@@ -617,11 +644,13 @@ describe('runWaitsOnlyOnOffline platform phases', () => {
   it('does not treat a waiting platform-phase step as skippable', () => {
     expect(
       runWaitsOnlyOnOffline({
-        steps: [{ status: 'waiting', phase: 'colocated_daemon', connected: false }],
+        steps: [{ status: 'waiting', phase: 'colocated_daemon', connected: false, attempts: 0 }],
       })
     ).toBe(false)
     expect(
-      runWaitsOnlyOnOffline({ steps: [{ status: 'waiting', phase: 'fleet', connected: false }] })
+      runWaitsOnlyOnOffline({
+        steps: [{ status: 'waiting', phase: 'fleet', connected: false, attempts: 0 }],
+      })
     ).toBe(true)
   })
 })
