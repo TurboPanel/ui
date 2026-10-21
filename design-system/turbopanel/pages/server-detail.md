@@ -3,7 +3,7 @@
 > Overrides `design-system/turbopanel/MASTER.md` for `/[orgId]/servers/[serverId]`.
 
 **Route:** `src/app/[orgId]/servers/[serverId]/index.tsx` → `server-detail-section.tsx`  
-**Job:** Single-host control — identity, commands, time/NTP, network addresses, embedded metrics.
+**Job:** Single-host control — identity, what is attached, commands, time/NTP, network addresses, embedded metrics.
 
 ---
 
@@ -25,9 +25,10 @@
 | Tab | Content |
 |-----|---------|
 | Overview | Identity, OS, geo when reported, timezone (incl. datacenter source/enforce), license tier placement, SSH port (effective + override), machine class pin, hardware profile, labels editor |
-| Control | Ping, hostname, reboot; read-only **Server proxy** panel (platform hosting-ingress status + one allowlisted Restart); trunk update; delete (two-step) |
+| Services | Read-only inventory (`GET /servers/:id/services`, one query, 30 s refresh). Top card **Can this server be removed?** with a Yes/No `Badge` + `InlineNotice` and the plain-word blocker list (colocated: this is the machine running the control panel; offline `canForget`: Delete server → Host is gone). Then `SectionPanel`s: Apps, Databases, Apps connected to a database, Backups, Networks and addresses, Runtimes. Capped `{ items, more }` lists show “and N more”. Empty section = one quiet `EmptyState` line. Stacked wrapping rows (no `DataTable` minWidth scroll). Status via `Badge` + words. |
+| Control | Ping, hostname, reboot; read-only **Server proxy** panel (platform hosting-ingress status + one allowlisted Restart); trunk update; delete (two-step). Offline leftover records (`canForget`): a second two-step **Forget these and delete server** lists names from each capped `{ items, more }` list (“and N more”) and explains that forgetting removes records only. When `canForget` is false, show preview blocker sentences (known kinds plus a generic “N other item(s) still placed on this server — remove them first”) and never the forget path. A malformed preview falls back to the plain Delete button. |
 | Time | NTP status, timezone picker (org/datacenter enforce), NTP apply form (prefill from inherited `ntpDefaults` when host facts are empty) |
-| Network | Read-only: observe-not-configure notice, Interfaces (grouped by interface, pinned-into datacenter, Stale badges), datacenter memberships + pins, mesh membership, managed IPs |
+| Network | **Addresses clients use** card on top (manage-gated edit, hidden on 404/403), then read-only: observe-not-configure notice, Interfaces (grouped by interface, pinned-into datacenter, Stale badges), datacenter memberships + pins, mesh membership, managed IPs |
 | Firewall | Owners/managers: preview-only `InlineNotice` banner, mode `SegmentedControl` with a confirmation sentence per mode, last preview (status `Badge`, version / rule count, digest, kernel verdict, notes), rendered v4/v6 ruleset in collapsed `SectionPanel`s |
 | Metrics | Embedded `ServerMetricsSection` (no duplicate page title) |
 
@@ -48,8 +49,9 @@
 
 - `ServerTierPlacementPanel` reads `tierPlacement` off the detail record — no extra fetch, no polling; the panel is omitted when the record carries none.
 - Header `Badge` = bound license tier (`Unlicensed` when null); tone from `tierPlacementState` in `src/lib/tier-placement.ts` — `danger` below the required floor, `pending` below the recommendation, `info` two or more ranks above it, `ok` otherwise, `muted` when unranked. Ranks come from the billing catalogue when `billingEnabled`, else the `S<n>` label shape (`SX` on top). Never color-only: the label text is always present.
-- Three label/value rows: license tier, required (cores + RAM floor), recommended (discovered NIC / drive / GPU counts). When `tierPlacement.notice` is set (the control plane's daily entitlement-notice marker — hosted only), a fourth **Daily notice** row states what org owners are being emailed about (`exceeds` / `overprovisioned`) and when the last one went out (`formatRelativeLocalDateTime(lastNotifiedAt)`), and a **Daily notice** `Badge` (`pending` for `exceeds`, `info` for `overprovisioned`) sits beside the tier badge in the header. Presence on the wire *is* the state — the panel never infers it from ranks.
-- **Shortfall:** `InlineNotice` (warning) naming the situation, with a primary **Upgrade to Sn** action that deep-links to `/[orgId]/billing?tier=<recommended>&license=<licenseId>` (hosted only — the button is absent when billing is off). Under it, the specific unmonitored devices from `unwatched` (device ids on detail) in `MonoText`, grouped Drives / NICs / GPUs.
+- Rows: **On** (assigned tier), required (cores + RAM floor), recommended (discovered NIC / drive / GPU counts), optional **Picked** when the owner pinned a tier, optional `tierPickNotice` when a pick could not be fulfilled (e.g. none free). When `tierPlacement.notice` is set (the control plane's daily entitlement-notice marker — hosted only), a **Daily notice** row states what org owners are being emailed about (`exceeds` / `overprovisioned`) and when the last one went out (`formatRelativeLocalDateTime(lastNotifiedAt)`), and a **Daily notice** `Badge` (`pending` for `exceeds`, `info` for `overprovisioned`) sits beside the tier badge in the header. Presence on the wire *is* the state — the panel never infers it from ranks.
+- **Shortfall:** `InlineNotice` (warning) from `shortfallCopy` naming unlicensed / below-required / below-recommended situations, with a primary **Upgrade to Sn** action that deep-links to `/[orgId]/billing?tier=<required or recommended>` (hosted only — the button is absent when billing is off). Under it, the specific unmonitored devices from `unwatched` (device ids on detail) in `MonoText`, grouped Drives / NICs / GPUs.
+- **Owner pick (hosted, `billingEnabled`, `tiersFree` on detail):** `organization:own` display hint — non-owners see read-only copy. Lists only tiers **at or above** the hardware floor (when the required label cannot be ranked, picks start at the smallest catalogue tier and a warning explains the floor is unknown). **Use** / **Buy one** per row from `tiersFree`; **Use the smallest that fits** clears the pick. Every change, including clear, confirms in `ModalSheet` first. Picker renders from detail `tiersFree` even when the billing catalogue query is still loading.
 - **Over-provisioned** (license ≥ recommended + 2): muted `InlineNotice` (info) — informational, no action.
 - The servers table shows the same chip (`Tier` column, unwatched **counts** in a one-line note, plus the **Daily notice** chip and a `notified <age> ago` suffix when the marker is set) — same state rules, label-shape ranks only so the O(1) list adds no billing read.
 
@@ -70,9 +72,16 @@
 - **CPU TDP/Tjmax prefill:** when no manual override is set, the placeholder shows the resolved catalog value (`EffectiveCpuThermalLimits`, read from the summary endpoint) and the hint notes whether it's an exact catalog match or a family-regex estimate.
 - **Hosting storage path** is a `Select` over `capabilities.storageMounts.candidates`, never free text — the stored override is injected as an extra option when the daemon no longer discovers it, so it never silently disappears from the picker.
 
+## Services tab
+
+- One `useServerServices` query; never fan out per app, database, or network. Lists are bounded (`{ items, more }`).
+- Removal reasons reuse the DELETE blockers (plus colocated) — the tab and delete must never disagree. Show the server's `message` text as-is. The co-located notice must not say to clear items first.
+- Phone width: wrap chips and names; no horizontal scroll inside the tab body.
+
 ## Network tab
 
-- **Read-only contract:** TurboPanel observes host interfaces, it does not configure them. An `InlineNotice` (`info`) at the top says so — addresses are expected to change; membership pins follow the host automatically when exactly one unambiguous replacement is reported, otherwise they go stale rather than guess. Nothing on the tab may imply bringing an interface up, assigning an address, or writing a route.
+- **Addresses clients use** sits above everything: Public plus one row per datacenter, an edit dialog with plain questions, saved as one replace-all list. It only says what clients dial and never configures the host. Details: `network.md` → Server detail Network tab.
+- **Read-only contract** (everything below that card): TurboPanel observes host interfaces, it does not configure them. An `InlineNotice` (`info`) at the top says so — addresses are expected to change; membership pins follow the host automatically when exactly one unambiguous replacement is reported, otherwise they go stale rather than guess. Nothing on the tab may imply bringing an interface up, assigning an address, or writing a route.
 - **Interfaces** panel first: daemon-reported addresses grouped by `interface` (default-route interface first, fallback to public/private × v4/v6), reported CIDR in mono, family badge, scope, `default route` marker, and **Pinned into: <datacenter>** joined on address from the `scope: 'datacenter'` rows already fetched. **Stale** `Badge` (`pending`) + `staleSince` + plain `staleReason` on stale pins.
 - Then Datacenters (memberships link to datacenter detail; every pin listed), Mesh (manage-gated), Managed addresses. Details and copy rules: `network.md` → Server detail Network tab.
 
@@ -90,9 +99,10 @@
 ## Anti-patterns (page-specific)
 
 - ❌ `fetchServerCell` / Durable Object reads  
-- ❌ Per-server polling beyond the single detail refresh + one command timer  
+- ❌ Per-server polling beyond the single detail refresh + one command timer + the Services inventory 30 s refresh
+- ❌ Vendor names on the Services tab  
 - ❌ Modal-per-action for ping, timezone, or NTP  
 - ❌ Emoji icons for actions  
 - ❌ Raw hex outside `theme.ts` tokens
 - ❌ Implying SSH port save rewrites sshd
-- ❌ Any Network-tab affordance that reads as configuring an interface, address, or route
+- ❌ Any Network-tab affordance that reads as configuring an interface, address, or route (Addresses clients use records what clients dial, not host configuration)

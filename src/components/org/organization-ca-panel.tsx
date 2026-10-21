@@ -11,8 +11,10 @@ import {
   SectionPanel,
   TextField,
 } from '@/components/ui'
+import { OrganizationCaLeavesSection } from '@/components/org/organization-ca-leaves'
 import { downloadCaBundle, downloadSuccessMessage } from '@/lib/download-ca'
 import {
+  CA_LEAVES_OUTSTANDING_ERROR,
   CA_ROTATION_IN_PROGRESS_ERROR,
   CA_ROTATION_NOT_CONVERGED_ERROR,
   NO_PENDING_ROTATION_ERROR,
@@ -106,8 +108,8 @@ function caWarningMessages(input: Readonly<{
   }
   const dueCount = input.leafHealth?.dueCount ?? 0
   if (dueCount > 0) {
-    const noun = dueCount === 1 ? 'leaf certificate needs' : 'leaf certificates need'
-    messages.push(`${String(dueCount)} ${noun} renewal.`)
+    const noun = dueCount === 1 ? 'certificate needs' : 'certificates need'
+    messages.push(`${String(dueCount)} ${noun} renewing. They are listed below.`)
   }
   return messages
 }
@@ -152,6 +154,9 @@ function allResultsTerminalSuccess(
 function retireErrorCopy(message: string): string {
   if (message.includes(CA_ROTATION_NOT_CONVERGED_ERROR)) {
     return "Some servers haven't converged yet"
+  }
+  if (message.includes(CA_LEAVES_OUTSTANDING_ERROR)) {
+    return 'Some certificates are still signed by the previous Organization CA. Renew them, or mark them stale if nothing uses them any more.'
   }
   if (message.includes(NO_PENDING_ROTATION_ERROR)) {
     return 'No rotation pending'
@@ -418,6 +423,8 @@ function RotateConfirmSection({
 }
 
 function OrganizationCaReady({
+  orgId,
+  retireBy,
   tls,
   warnings,
   canManage,
@@ -443,6 +450,8 @@ function OrganizationCaReady({
   onCancelConfirm,
   onRetire,
 }: Readonly<{
+  orgId: string
+  retireBy: string | null
   tls: OrganizationCaRecord
   warnings: readonly string[]
   canManage: boolean
@@ -496,6 +505,7 @@ function OrganizationCaReady({
           commandsById={commandsById}
         />
       ) : null}
+      <OrganizationCaLeavesSection orgId={orgId} canManage={canManage} retireBy={retireBy} />
       {canManage && showRetire ? (
         <RetirePreviousCaButton
           enabled={retireEnabled}
@@ -604,7 +614,7 @@ export function OrganizationCaPanel({ orgId }: Readonly<{ orgId: string }>) {
     setCaBusy(true)
     setError(null)
     setCaMessage(null)
-    void downloadCaBundle()
+    void downloadCaBundle(orgId)
       .then(() => setCaMessage(downloadSuccessMessage()))
       .catch((err: unknown) => {
         setError(errorMessage(err, 'Failed to download Organization CA'))
@@ -641,6 +651,8 @@ export function OrganizationCaPanel({ orgId }: Readonly<{ orgId: string }>) {
       hint="Long-lived organization root. Managed databases and SQL clients trust this CA."
     >
       <OrganizationCaBody
+        orgId={orgId}
+        retireBy={showRetire ? (rotation?.retireBy ?? null) : null}
         loading={caQuery.isLoading}
         tls={tls}
         warnings={warnings}

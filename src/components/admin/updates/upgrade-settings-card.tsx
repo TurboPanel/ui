@@ -7,6 +7,7 @@ import {
   TextField,
   Toggle,
 } from '@/components/ui'
+import { ActionButton } from '@/components/ui/v4/action-button'
 import { panelStyles } from '@/components/ui/panel-styles'
 import type { UpgradeSettings } from '@/lib/instance-api'
 import { formatUpgradeBatchLabel, validateUpgradeBatchInput } from '@/lib/upgrade-batch'
@@ -37,6 +38,9 @@ export function UpgradeSettingsCard({
   hideAutoUpdate?: boolean
 }>) {
   const base = settings ?? DEFAULT_SETTINGS
+  // The built-in defaults only fill the form. Nothing saves until the real
+  // saved settings have loaded, so a failed fetch can never overwrite them.
+  const ready = settings !== null && !loading
   const [draft, setDraft] = useState(base)
   const [batchValue, setBatchValue] = useState(String(base.batch.value))
   const [batchError, setBatchError] = useState<string | null>(null)
@@ -47,6 +51,7 @@ export function UpgradeSettingsCard({
   }, [base.autoUpdate, base.batch.mode, base.batch.value, base.maintenanceWindow.enabled])
 
   const saveBatch = () => {
+    if (!ready) return
     const validated = validateUpgradeBatchInput({
       mode: draft.batch.mode,
       value: batchValue,
@@ -64,16 +69,22 @@ export function UpgradeSettingsCard({
 
   return (
     <SectionPanel title="Automatic updates">
+      {!ready && !loading ? (
+        <Text style={panelStyles.muted}>
+          Settings could not be loaded. Changes are off until they load.
+        </Text>
+      ) : null}
       {hideAutoUpdate ? null : (
         <SettingRow label={loading ? 'Loading…' : 'Auto-update servers'}>
           <Toggle
             value={draft.autoUpdate}
             onValueChange={(value) => {
+              if (!ready) return
               const next = { ...draft, autoUpdate: value }
               setDraft(next)
               onSave(next)
             }}
-            disabled={loading || saving}
+            disabled={!ready || saving}
           />
         </SettingRow>
       )}
@@ -101,7 +112,9 @@ export function UpgradeSettingsCard({
         <SettingRow label="Maintenance window">
           <Toggle
             value={draft.maintenanceWindow.enabled}
+            disabled={!ready || saving}
             onValueChange={(enabled) => {
+              if (!ready) return
               const next = {
                 ...draft,
                 maintenanceWindow: { ...draft.maintenanceWindow, enabled },
@@ -121,13 +134,15 @@ export function UpgradeSettingsCard({
           Default batch is 100% — every server in a wave upgrades together unless you lower it.
         </Text>
         <SettingRow label="Save batch size">
-          <Text
-            style={panelStyles.muted}
+          <ActionButton
+            label="Apply"
+            variant="quiet"
+            size="sm"
             onPress={saveBatch}
-            accessibilityRole="button"
-          >
-            {saving ? 'Saving…' : 'Apply'}
-          </Text>
+            busy={saving}
+            busyLabel="Saving…"
+            disabled={!ready}
+          />
         </SettingRow>
       </View>
     </SectionPanel>

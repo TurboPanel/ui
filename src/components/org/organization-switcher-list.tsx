@@ -70,6 +70,7 @@ function rowShellStyle(compactWeb: boolean, active: boolean) {
   if (compactWeb) {
     return [
       headerMenuGroupStyles.menuItem,
+      styles.compactRow,
       active ? headerMenuGroupStyles.menuItemActive : null,
     ]
   }
@@ -125,7 +126,6 @@ const OrganizationSwitcherRow = memo(function OrganizationSwitcherRow({
         >
           {name}
         </Text>
-        {active ? <Text style={styles.currentBadge}>Current</Text> : null}
       </Pressable>
       {onManage ? (
         <Pressable
@@ -253,13 +253,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    minHeight: 44,
+    minHeight: 40,
+  },
+  compactRow: {
+    paddingVertical: 0,
+    minHeight: 40,
   },
   pageRow: {
     borderRadius: 8,
     paddingLeft: spacing.sm,
     paddingRight: spacing.xs,
-    minHeight: 44,
+    minHeight: 40,
   },
   pageRowActive: {
     backgroundColor: chrome.bgActive,
@@ -274,14 +278,6 @@ const styles = StyleSheet.create({
   pageRowLabelActive: {
     color: colors.text,
     fontWeight: '600',
-  },
-  currentBadge: {
-    color: colors.link,
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
-    flexShrink: 0,
   },
   gearBtn: {
     width: 44,

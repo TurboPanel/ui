@@ -7,8 +7,8 @@
 #
 # workflow_run (not push) so the export never starts before lint, typecheck
 # and tests have passed on the commit. Only a Verify that tested the trunk
-# commit itself counts: a PUSH to trunk, or a manual run of trunk (turbopaneld's
-# "Start Next Version" re-runs trunk so a started minor gets its canary). The
+# commit itself counts: a PUSH to trunk, or a manual run of trunk (to get a
+# canary at once). The
 # trunk → staging Release Candidate PR's Verify also reports head_branch trunk,
 # but it tests trunk merged into staging, not the trunk commit, and must never
 # stand in for a failed or cancelled trunk run.

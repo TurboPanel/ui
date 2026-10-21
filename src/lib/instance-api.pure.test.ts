@@ -9,7 +9,12 @@ import {
   FABRIC_RECONCILE_PENDING_ERROR,
   completeInstall,
   createLicense,
+  deleteOrgPrincipal,
+  ServerPrincipalChoiceRefusedError,
   deleteServer,
+  fetchOrgPrincipals,
+  fetchServerPrincipalRemovalPlan,
+  fetchServerPrincipals,
   deployEnvironment,
   downloadOrganizationCaPem,
   fetchBindings,
@@ -29,6 +34,7 @@ import {
   fetchSession,
   formatEntityMetricId,
   formatServerDeleteBlockedError,
+  getServerDeletePreview,
   IP_IN_USE_ERROR,
   isForbiddenError,
   MetricsBackendUnavailableError,
@@ -41,6 +47,7 @@ import {
   formatShortDate,
   licenseAvailabilityFromBody,
   ServerDeleteBlockedError,
+  ServerDeleteOnlineError,
   signIn,
   startServerMetricsLive,
   stopServerMetricsLive,
@@ -250,6 +257,27 @@ describe('formatServerDeleteBlockedError', () => {
       )
     ).toBe(
       'Remove 3 networks on this server before deleting it. Remove 2 containers on this server before deleting it.'
+    )
+    expect(
+      formatServerDeleteBlockedError(
+        new ServerDeleteBlockedError('blocked', [{ kind: 'ip', count: 1 }])
+      )
+    ).toBe('Remove 1 address on this server before deleting it.')
+    expect(
+      formatServerDeleteBlockedError(
+        new ServerDeleteBlockedError('blocked', [
+          { kind: 'database_member', count: 1 },
+          { kind: 'app_environment', count: 3 },
+        ])
+      )
+    ).toBe(
+      '1 other item still placed on this server — remove them first 3 other items still placed on this server — remove them first'
+    )
+  })
+
+  it('formats a connected-host refuse of forget', () => {
+    expect(formatServerDeleteBlockedError(new ServerDeleteOnlineError())).toBe(
+      'This host is connected. Forgetting records is only available while it is offline.'
     )
   })
 
@@ -960,6 +988,51 @@ describe('fetch wrappers (mocked fetch)', () => {
     })
   })
 
+  it('deleteServer sends only the principals chosen for outright deletion', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, serverId: 'srv-1' }))
+    await deleteServer('srv-1', 'org-del', {
+      principals: [{ principalId: 'p1', action: 'delete' }],
+    })
+    const [, init] = fetchMock.mock.calls[0] ?? []
+    expect(JSON.parse(String((init as RequestInit).body))).toEqual({
+      principals: [{ principalId: 'p1', action: 'delete' }],
+    })
+  })
+
+  it('deleteServer explains a refused principal choice without the API path', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ error: 'x', code: 'principal_delete_refused', principals: [] }, 409)
+    )
+    await expect(deleteServer('srv-1', 'org-1')).rejects.toBeInstanceOf(
+      ServerPrincipalChoiceRefusedError
+    )
+  })
+
+  it('deleteServer sends no body when nothing was chosen', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, serverId: 'srv-1' }))
+    await deleteServer('srv-1', 'org-del', { principals: [] })
+    const [, init] = fetchMock.mock.calls[0] ?? []
+    expect((init as RequestInit).body).toBeUndefined()
+  })
+
+  it('reads and deletes principals through the organization and server routes', async () => {
+    fetchMock.mockImplementation(async () => jsonResponse({ principals: [], ok: true }))
+    await fetchOrgPrincipals('org-1')
+    await deleteOrgPrincipal('org-1', 'p-1')
+    await fetchServerPrincipals('srv-1', 'org-1')
+    await fetchServerPrincipalRemovalPlan('srv-1', 'org-1')
+    const calls = fetchMock.mock.calls.map(([url, init]) => [
+      String(url).replace(/^.*\/api\/client\/v1/, ''),
+      (init as RequestInit | undefined)?.method ?? 'GET',
+    ])
+    expect(calls).toEqual([
+      ['/organizations/org-1/principals', 'GET'],
+      ['/organizations/org-1/principals/p-1', 'DELETE'],
+      ['/servers/srv-1/principals', 'GET'],
+      ['/servers/srv-1/principal-removal-plan', 'GET'],
+    ])
+  })
+
   it('deleteServer keeps HTTP status when the error body is not JSON', async () => {
     fetchMock.mockResolvedValueOnce(textResponse('nope', 500))
     await expect(deleteServer('srv-1')).rejects.toThrow(
@@ -972,6 +1045,59 @@ describe('fetch wrappers (mocked fetch)', () => {
     await expect(deleteServer('srv-1')).rejects.toThrow(
       '/api/client/v1/servers/srv-1 failed: forbidden'
     )
+  })
+
+  it('getServerDeletePreview reads GET /servers/:id/delete-preview', async () => {
+    const body = {
+      online: false,
+      canForget: true,
+      colocated: false,
+      blockers: [{ kind: 'container', count: 1 }],
+      containers: { items: [{ id: 'c1', name: 'web', status: 'running' }], more: 1 },
+      networks: { items: [{ id: 'n1', name: 'net' }], more: 0 },
+      ips: { items: [{ id: 'i1', address: '10.0.0.5' }], more: 0 },
+    }
+    fetchMock.mockResolvedValueOnce(jsonResponse(body))
+    await expect(getServerDeletePreview('srv-1', 'org-del')).resolves.toEqual(body)
+    const [url, init] = fetchMock.mock.calls[0] ?? []
+    expect(url).toBe('/api/client/v1/servers/srv-1/delete-preview')
+    expect((init as RequestInit).headers).toMatchObject({
+      [ORG_ID_HEADER]: 'org-del',
+    })
+  })
+
+  it('deleteServer sends forgetResources in the JSON body', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, serverId: 'srv-1' }))
+    await expect(deleteServer('srv-1', 'org-del', { forgetResources: true })).resolves.toEqual({
+      ok: true,
+      serverId: 'srv-1',
+    })
+    const [, init] = fetchMock.mock.calls[0] ?? []
+    expect((init as RequestInit).method).toBe('DELETE')
+    expect((init as RequestInit).body).toBe(JSON.stringify({ forgetResources: true }))
+  })
+
+  it('deleteServer throws ServerDeleteOnlineError when forget is refused', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ code: 'server_online', error: 'Host is connected' }, 409)
+    )
+    await expect(deleteServer('srv-1', 'org-del', { forgetResources: true })).rejects.toBeInstanceOf(
+      ServerDeleteOnlineError
+    )
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ code: 'server_online' }, 409))
+    try {
+      await deleteServer('srv-1', 'org-del', { forgetResources: true })
+      throw new TypeError('expected deleteServer to throw')
+    } catch (err) {
+      expect(err).toBeInstanceOf(ServerDeleteOnlineError)
+      if (!(err instanceof ServerDeleteOnlineError)) {
+        throw new TypeError('expected ServerDeleteOnlineError')
+      }
+      expect(err.message).toBe(
+        'This host is connected. Forgetting records is only available while it is offline.'
+      )
+    }
   })
 
   it('deployEnvironment maps health_check_missing and resource_limit_exceeded', async () => {

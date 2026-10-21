@@ -5,7 +5,6 @@ import { GlassSurface } from '@/components/glass/glass-surface'
 import { SystemManagedNotice } from '@/components/org/system-managed-notice'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { CatalogStep } from '@/components/org/project-create/catalog-step'
-import { ChoiceTileGrid } from '@/components/org/project-create/choice-card'
 import { RepositoryLaneStep } from '@/components/org/project-create/repository-lane-step'
 import { StartOverBar } from '@/components/org/project-create/start-over-bar'
 import { ComposeStep } from '@/components/org/project-create/compose-step'
@@ -15,10 +14,7 @@ import {
   seedComposeForLane,
   seedHostingCompose,
 } from '@/lib/project-create/repository-seed'
-import {
-  builderForLane,
-  laneForBuilder,
-} from '@/lib/project-create/lane-builder'
+import { builderForLane, laneForBuilder } from '@/lib/project-create/lane-builder'
 import {
   detectedComposePath,
   rankRepositoryLanes,
@@ -33,9 +29,9 @@ import {
 } from '@/lib/project-create/simple-app'
 import { RepositoryStep } from '@/components/org/project-create/repository-step'
 import { resolveWizardSelectedSource } from '@/lib/project-create/selected-source'
+import { useDebouncedValue } from '@/lib/use-debounced-value'
 import { SetupTypeChoiceCard } from '@/components/org/project-create/setup-type-icons'
 import {
-  SETUP_TYPE_GROUPS,
   SETUP_TYPE_OPTIONS,
   setupOptionForChoice,
   type SetupChoice,
@@ -64,15 +60,13 @@ import {
   useRepositories,
   useWorkspaces,
 } from '@/lib/queries'
-import { useOrgDefaultEnvironmentName } from '@/lib/org-default-environment'
 import {
-  DRAFT_REPOSITORY_APP_TAB_IDS,
-  projectOverviewHref,
-} from '@/lib/project-navigation'
-import type {
-  RepositoryInspection,
-  RepositoryRecord,
-} from '@/lib/instance-api'
+  environmentFieldValue,
+  environmentNamePayload,
+} from '@/components/org/project-create/environment-name'
+import { useOrgDefaultEnvironmentName } from '@/lib/org-default-environment'
+import { DRAFT_REPOSITORY_APP_TAB_IDS, projectHref } from '@/lib/project-navigation'
+import type { RepositoryInspection, RepositoryRecord } from '@/lib/instance-api'
 import { userWorkspaces } from '@/lib/system-inventory'
 import { colors, spacing, webPointer } from '@/lib/theme'
 import { ALL_WORKSPACES_SCOPE } from '@/lib/workspace-scope'
@@ -80,6 +74,8 @@ import { useOptionalWorkspaceScope } from '@/lib/workspace-scope-context'
 import { userErrorMessage } from '@/lib/user-error'
 
 const FORM_MAX_WIDTH = 440
+/** The setup step is wider so the option descriptions have room. */
+const TYPE_STEP_MAX_WIDTH = 640
 
 /**
  * Wizard position. Nothing is persisted until the final step's Create button,
@@ -92,7 +88,7 @@ type Step = 'details' | 'type' | 'repository' | 'lane' | 'catalog' | 'compose'
 
 function resolveScopedWorkspaceId(
   paramWorkspaceId: string | string[] | undefined,
-  scopeId: string | undefined,
+  scopeId: string | undefined
 ): string | undefined {
   if (typeof paramWorkspaceId === 'string' && paramWorkspaceId) {
     return paramWorkspaceId
@@ -103,10 +99,7 @@ function resolveScopedWorkspaceId(
   return undefined
 }
 
-function resolveLoadError(
-  workspacesError: unknown,
-  projectsError: unknown,
-): string | null {
+function resolveLoadError(workspacesError: unknown, projectsError: unknown): string | null {
   if (workspacesError instanceof Error) return userErrorMessage(workspacesError, '')
   if (projectsError instanceof Error) return userErrorMessage(projectsError, '')
   return null
@@ -123,9 +116,7 @@ function resolveLoadError(
  * — resolving it by card order alone would let whichever compose card happens
  * to sit first quietly take over every existing link.
  */
-function parsePreselectedChoice(
-  value: string | string[] | undefined,
-): SetupChoice | null {
+function parsePreselectedChoice(value: string | string[] | undefined): SetupChoice | null {
   const byChoice = SETUP_TYPE_OPTIONS.find((option) => option.choice === value)
   if (byChoice) return byChoice.choice
   const byType = SETUP_TYPE_OPTIONS.find((option) => option.type === value)
@@ -149,12 +140,12 @@ function stepForOption(option: SetupTypeOption): Step {
 
 const STEP_COPY: Record<Step, { title: string; hint: string }> = {
   details: {
-    title: 'New project',
-    hint: 'Name it and pick where it lives. Nothing is created yet.',
+    title: 'New Project',
+    hint: '',
   },
   type: {
-    title: 'How should this run?',
-    hint: 'Pick how the project starts. You can add more services later.',
+    title: 'Project Setup',
+    hint: "Choose where your project's files come from.",
   },
   repository: {
     title: 'Link a repository',
@@ -170,29 +161,14 @@ const STEP_COPY: Record<Step, { title: string; hint: string }> = {
 
 function stepTitle(step: Step, option: SetupTypeOption | null): string {
   if (step === 'catalog') {
-    return option?.type === 'template'
-      ? 'Choose a template'
-      : 'Choose a database'
+    return option?.type === 'template' ? 'Choose a template' : 'Choose a database'
   }
   return STEP_COPY[step].title
 }
 
-function resolveSelectedOption(
-  choice: SetupChoice | null,
-): SetupTypeOption | null {
+function resolveSelectedOption(choice: SetupChoice | null): SetupTypeOption | null {
   if (!choice) return null
   return setupOptionForChoice(choice) ?? null
-}
-
-function wizardHint(
-  step: Step,
-  defaultEnvironmentName: string,
-  fallback: string,
-): string {
-  if (step === 'details') {
-    return `Creates a ${defaultEnvironmentName} environment when you finish. Nothing is created yet.`
-  }
-  return fallback
 }
 
 function asError(error: unknown): Error | null {
@@ -201,19 +177,27 @@ function asError(error: unknown): Error | null {
 
 function isCatalogStep(
   step: Step,
-  option: SetupTypeOption | null,
+  option: SetupTypeOption | null
 ): option is SetupTypeOption & {
   type: Exclude<SetupTypeOption['type'], 'docker-compose'>
 } {
   return step === 'catalog' && option != null && option.type !== 'docker-compose'
 }
 
+/**
+ * How long the production branch field must sit still before it is read.
+ * Every read is a provider round-trip or a clone on a connected server, and
+ * a half-typed name ("l" on the way to "live") only ever answers "no such
+ * branch". Leaving the field reads at once.
+ */
+const BRANCH_READ_DEBOUNCE_MS = 500
+
 function canContinueFromStep(
   step: Step,
   selectedOption: SetupTypeOption | null,
   builder: RepositoryBuilder | null,
   selectedSource: RepositoryRecord | null,
-  inspectionPending: boolean,
+  inspectionPending: boolean
 ): boolean {
   if (step === 'type') return selectedOption != null
   // The repository screen ends once the read has landed (or failed); the lane
@@ -245,13 +229,11 @@ function seedForRepositoryLane(
   branch: string,
   lane: RepositoryLane,
   inspection: RepositoryInspection | undefined,
-  simple: SimpleAppConfig,
+  simple: SimpleAppConfig
 ): ComposeDocument {
   const files = inspection?.files ?? []
   const composePath = detectedComposePath(files)
-  const composeFile = files.find(
-    (file) => file.path === composePath && file.found,
-  )
+  const composeFile = files.find((file) => file.path === composePath && file.found)
   const repositoryCompose = composeFile?.content
     ? parseRepositoryCompose(composeFile.content)
     : undefined
@@ -269,6 +251,7 @@ function seedForRepositoryLane(
       buildCommand: simple.buildCommand,
       startCommand: simple.startCommand,
       subdirectory: simple.buildRoot,
+      nodeVersion: simple.nodeVersion,
     },
   })
 }
@@ -291,14 +274,14 @@ function resolveBackStep(step: Step, selectedChoice: SetupChoice | null): Step {
 function isRepositorySimpleAppDraft(
   choice: SetupChoice | null,
   builder: RepositoryBuilder | null,
-  kind: SimpleAppConfig['kind'],
+  kind: SimpleAppConfig['kind']
 ): boolean {
   return choice === 'repository' && builder === 'simple' && kind === 'web'
 }
 
 function composeStepInitialSection(
   repositoryAppDraft: boolean,
-  option: SetupTypeOption | null,
+  option: SetupTypeOption | null
 ): SetupTypeOption['section'] {
   if (repositoryAppDraft) return 'overview'
   return option?.section ?? 'compose'
@@ -334,6 +317,57 @@ export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
   )
 }
 
+/** Keeps the workspace mode and pick in step with what loaded and the URL scope. */
+function useWorkspaceSelectionDefaults({
+  workspaces,
+  loadingWorkspaces,
+  scopedWorkspaceId,
+  allowedWorkspaceIds,
+  pickedWorkspaceId,
+  setWorkspaceMode,
+  setPickedWorkspaceId,
+}: Readonly<{
+  workspaces: readonly { id: string }[]
+  loadingWorkspaces: boolean
+  scopedWorkspaceId: string | undefined
+  allowedWorkspaceIds: string[]
+  pickedWorkspaceId: string
+  setWorkspaceMode: (mode: WorkspaceMode) => void
+  setPickedWorkspaceId: (id: string) => void
+}>) {
+  useEffect(() => {
+    if (workspaces.length === 0 && !loadingWorkspaces) {
+      setWorkspaceMode('new')
+    }
+  }, [workspaces.length, loadingWorkspaces, setWorkspaceMode])
+
+  useEffect(() => {
+    if (!scopedWorkspaceId || loadingWorkspaces) return
+    if (!allowedWorkspaceIds.includes(scopedWorkspaceId)) {
+      setPickedWorkspaceId('')
+      return
+    }
+    setWorkspaceMode('existing')
+    setPickedWorkspaceId(scopedWorkspaceId)
+  }, [
+    scopedWorkspaceId,
+    loadingWorkspaces,
+    allowedWorkspaceIds,
+    setWorkspaceMode,
+    setPickedWorkspaceId,
+  ])
+
+  useEffect(() => {
+    if (pickedWorkspaceId) return
+    if (scopedWorkspaceId && allowedWorkspaceIds.includes(scopedWorkspaceId)) {
+      return
+    }
+    if (workspaces.length === 1) {
+      setPickedWorkspaceId(workspaces[0]?.id ?? '')
+    }
+  }, [workspaces, pickedWorkspaceId, scopedWorkspaceId, allowedWorkspaceIds, setPickedWorkspaceId])
+}
+
 function ProjectCreateWizard({
   orgId,
   onStartOver,
@@ -341,7 +375,8 @@ function ProjectCreateWizard({
   const router = useRouter()
   const params = useLocalSearchParams<{ workspaceId?: string; type?: string }>()
   const workspaceScope = useOptionalWorkspaceScope()
-  const { defaultEnvironmentName } = useOrgDefaultEnvironmentName(orgId)
+  const { defaultEnvironmentName, customDefaultEnvironmentName } =
+    useOrgDefaultEnvironmentName(orgId)
 
   const workspacesQuery = useWorkspaces(orgId)
   const projectsQuery = useProjects(orgId)
@@ -349,15 +384,11 @@ function ProjectCreateWizard({
   const createProject = useCreateProject(orgId)
 
   const [step, setStep] = useState<Step>('details')
-  const [selectedChoice, setSelectedChoice] = useState<SetupChoice | null>(
-    null,
-  )
+  const [selectedChoice, setSelectedChoice] = useState<SetupChoice | null>(null)
   const [selectedCode, setSelectedCode] = useState('')
   /** Repository card: the picked source id and ref, until they seed the draft. */
   const [selectedSourceId, setSelectedSourceId] = useState('')
-  const [attachedSource, setAttachedSource] = useState<RepositoryRecord | null>(
-    null,
-  )
+  const [attachedSource, setAttachedSource] = useState<RepositoryRecord | null>(null)
   const [repositoryBranch, setRepositoryBranch] = useState('')
   /**
    * `sourceId@branch` the current draft was seeded from. Re-seeding on every
@@ -366,17 +397,17 @@ function ProjectCreateWizard({
    */
   const [seededRepositoryKey, setSeededRepositoryKey] = useState('')
   /** Seed document handed to the editor; edits come back via onDraftChange. */
-  const [composeDoc, setComposeDoc] = useState<ComposeDocument>(() =>
-    emptyComposeDocument(),
-  )
+  const [composeDoc, setComposeDoc] = useState<ComposeDocument>(() => emptyComposeDocument())
   /** Latest editor draft — `null` while the YAML does not parse. */
   const [displayName, setDisplayName] = useState('')
   const [description, setDescription] = useState('')
+  /** `null` until edited, so the field follows the org default as it loads. */
+  const [editedEnvironmentName, setEditedEnvironmentName] = useState<string | null>(null)
+  const environmentName = environmentFieldValue(editedEnvironmentName, customDefaultEnvironmentName)
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('existing')
   const [pickedWorkspaceId, setPickedWorkspaceId] = useState('')
   const [newWorkspaceName, setNewWorkspaceName] = useState('')
-  const [newWorkspaceNameOverridden, setNewWorkspaceNameOverridden] =
-    useState(false)
+  const [newWorkspaceNameOverridden, setNewWorkspaceNameOverridden] = useState(false)
   /**
    * Workspace already created by a Create press whose project insert then
    * failed — reused on retry so a second press does not collide with the
@@ -410,7 +441,7 @@ function ProjectCreateWizard({
   const [cloneUrlLaneOpen, setCloneUrlLaneOpen] = useState(false)
   const [builder, setBuilder] = useState<RepositoryBuilder | null>(null)
   const [simpleConfig, setSimpleConfig] = useState<SimpleAppConfig>(() =>
-    suggestedSimpleAppConfig(undefined),
+    suggestedSimpleAppConfig(undefined)
   )
   /**
    * True after any manual edit of the Simple form. Suggestions only ever fill
@@ -418,46 +449,47 @@ function ProjectCreateWizard({
    * what the operator typed.
    */
   const [simpleConfigTouched, setSimpleConfigTouched] = useState(false)
-  const inspection = useRepositoryInspection(
-    orgId,
-    selectedSourceId,
-    repositoryBranch.trim(),
-    {
-      enabled: sourceInspectionEnabled(step, selectedSourceId),
-    },
-  )
+  // The Node version is applied from the read unless the operator changed that field.
+  const [nodeVersionTouched, setNodeVersionTouched] = useState(false)
+  const typedBranch = repositoryBranch.trim()
+  const [settledBranch, settleBranch] = useDebouncedValue(typedBranch, BRANCH_READ_DEBOUNCE_MS)
+  /**
+   * The field is ahead of the last read: Continue waits for it, or the lane
+   * screen would be seeded from a read of a branch the operator has since
+   * changed.
+   */
+  const branchSettling = settledBranch !== typedBranch
+  const inspection = useRepositoryInspection(orgId, selectedSourceId, settledBranch, {
+    enabled: sourceInspectionEnabled(step, selectedSourceId),
+  })
   const selectedSource = useMemo(
     () =>
       resolveWizardSelectedSource(
         repositoriesQuery.data?.repositories,
         selectedSourceId,
-        attachedSource,
+        attachedSource
       ),
-    [repositoriesQuery.data?.repositories, selectedSourceId, attachedSource],
+    [repositoriesQuery.data?.repositories, selectedSourceId, attachedSource]
   )
 
   const workspaces = useMemo(
     () =>
       [...userWorkspaces(workspacesQuery.data?.workspaces ?? [])].sort((a, b) =>
-        (a.name ?? a.id).localeCompare(b.name ?? b.id),
+        (a.name ?? a.id).localeCompare(b.name ?? b.id)
       ),
-    [workspacesQuery.data?.workspaces],
+    [workspacesQuery.data?.workspaces]
   )
   const allowedWorkspaceIds = useMemo(
     () => workspaces.map((workspace) => workspace.id),
-    [workspaces],
+    [workspaces]
   )
   const projectNames = useMemo(
     () => (projectsQuery.data?.projects ?? []).map((row) => row.name),
-    [projectsQuery.data?.projects],
+    [projectsQuery.data?.projects]
   )
-  const loadingWorkspaces = [workspacesQuery.isLoading, projectsQuery.isLoading]
-    .some(Boolean)
+  const loadingWorkspaces = [workspacesQuery.isLoading, projectsQuery.isLoading].some(Boolean)
 
-  const scopedWorkspaceId = resolveScopedWorkspaceId(
-    params.workspaceId,
-    workspaceScope?.scopeId,
-  )
+  const scopedWorkspaceId = resolveScopedWorkspaceId(params.workspaceId, workspaceScope?.scopeId)
 
   /** True when URL/scope pointed at system (or unknown) workspace — not creatable. */
   const scopedWorkspaceBlocked = useMemo(() => {
@@ -467,38 +499,22 @@ function ProjectCreateWizard({
 
   const loadError = resolveLoadError(workspacesQuery.error, projectsQuery.error)
 
-  useEffect(() => {
-    if (workspaces.length === 0 && !loadingWorkspaces) {
-      setWorkspaceMode('new')
-    }
-  }, [workspaces.length, loadingWorkspaces])
-
-  useEffect(() => {
-    if (!scopedWorkspaceId || loadingWorkspaces) return
-    if (!allowedWorkspaceIds.includes(scopedWorkspaceId)) {
-      setPickedWorkspaceId('')
-      return
-    }
-    setWorkspaceMode('existing')
-    setPickedWorkspaceId(scopedWorkspaceId)
-  }, [scopedWorkspaceId, loadingWorkspaces, allowedWorkspaceIds])
-
-  useEffect(() => {
-    if (pickedWorkspaceId) return
-    if (scopedWorkspaceId && allowedWorkspaceIds.includes(scopedWorkspaceId)) {
-      return
-    }
-    if (workspaces.length === 1) {
-      setPickedWorkspaceId(workspaces[0]?.id ?? '')
-    }
-  }, [workspaces, pickedWorkspaceId, scopedWorkspaceId, allowedWorkspaceIds])
+  useWorkspaceSelectionDefaults({
+    workspaces,
+    loadingWorkspaces,
+    scopedWorkspaceId,
+    allowedWorkspaceIds,
+    pickedWorkspaceId,
+    setWorkspaceMode,
+    setPickedWorkspaceId,
+  })
 
   const submitting = createWorkspace.isPending || createProject.isPending
   const trimmedProjectName = displayName.trim()
   const mirroredWorkspaceName = resolveMirroredWorkspaceName(
     trimmedProjectName,
     newWorkspaceName,
-    newWorkspaceNameOverridden,
+    newWorkspaceNameOverridden
   )
 
   const handleNewWorkspaceNameChange = (text: string) => {
@@ -528,6 +544,7 @@ function ProjectCreateWizard({
     const errors = validateProjectCreateFields({
       name: trimmedProjectName,
       description,
+      environmentName,
       workspaceMode,
       pickedWorkspaceId,
       allowedWorkspaceIds,
@@ -540,9 +557,7 @@ function ProjectCreateWizard({
     if (Object.keys(errors).length > 0) return
 
     setApiError(null)
-    const preselected = preselectedChoice
-      ? setupOptionForChoice(preselectedChoice)
-      : undefined
+    const preselected = preselectedChoice ? setupOptionForChoice(preselectedChoice) : undefined
     if (preselected) {
       setSelectedChoice(preselected.choice)
       setStep(stepForOption(preselected))
@@ -589,9 +604,12 @@ function ProjectCreateWizard({
     if (!inspection.isSuccess || !inspection.data) return
     const suggested = suggestedSimpleAppConfig(inspection.data)
     if (!simpleConfigTouched) setSimpleConfig(suggested)
+    else if (!nodeVersionTouched) {
+      setSimpleConfig((current) => ({ ...current, nodeVersion: suggested.nodeVersion }))
+    }
     if (builder !== null) return
     const detected = recommendedLane(
-      rankRepositoryLanes(inspection.data.files, inspection.data.entries),
+      rankRepositoryLanes(inspection.data.files, inspection.data.entries)
     )
     if (detected === 'compose') setBuilder('compose')
     else if (detected === 'site-php') setBuilder('site-php')
@@ -603,21 +621,19 @@ function ProjectCreateWizard({
     step,
     builder,
     simpleConfigTouched,
+    nodeVersionTouched,
     inspection.isSuccess,
     inspection.data,
   ])
 
   const laneCandidates = useMemo(
-    () =>
-      rankRepositoryLanes(
-        inspection.data?.files ?? [],
-        inspection.data?.entries ?? [],
-      ),
-    [inspection.data],
+    () => rankRepositoryLanes(inspection.data?.files ?? [], inspection.data?.entries ?? []),
+    [inspection.data]
   )
 
   const changeSimpleConfig = (patch: Partial<SimpleAppConfig>) => {
     setSimpleConfigTouched(true)
+    if (patch.nodeVersion !== undefined) setNodeVersionTouched(true)
     setSimpleConfig((current) => ({ ...current, ...patch }))
   }
 
@@ -653,13 +669,7 @@ function ProjectCreateWizard({
     ].join('\u0000')
     if (seedKey !== seededRepositoryKey) {
       setComposeDoc(
-        seedForRepositoryLane(
-          selectedSource,
-          repositoryBranch,
-          lane,
-          inspection.data,
-          simpleConfig,
-        ),
+        seedForRepositoryLane(selectedSource, repositoryBranch, lane, inspection.data, simpleConfig)
       )
       setSeededRepositoryKey(seedKey)
     }
@@ -720,9 +730,7 @@ function ProjectCreateWizard({
       }
     } else if (!selectedCode) {
       setApiError(
-        selectedType === 'template'
-          ? 'Choose a template first.'
-          : 'Choose a database engine first.',
+        selectedType === 'template' ? 'Choose a template first.' : 'Choose a database engine first.'
       )
       return
     }
@@ -735,6 +743,7 @@ function ProjectCreateWizard({
       type: selectedType,
       workspaceId,
       name: trimmedProjectName,
+      ...environmentNamePayload(editedEnvironmentName),
       ...(trimmedDescription ? { description: trimmedDescription } : {}),
       ...(selectedCode ? { code: selectedCode } : {}),
       ...(compose ? { options: { compose } } : {}),
@@ -744,7 +753,8 @@ function ProjectCreateWizard({
       return
     }
 
-    router.replace(projectOverviewHref(orgId, result.value.id) as Href)
+    // The project opens on its primary environment, where the wizard put the content.
+    router.replace(projectHref(orgId, result.value.id) as Href)
   }
 
   const surfaceError = apiError ?? loadError
@@ -756,7 +766,7 @@ function ProjectCreateWizard({
     const repositoryAppDraft = isRepositorySimpleAppDraft(
       selectedChoice,
       builder,
-      simpleConfig.kind,
+      simpleConfig.kind
     )
     return (
       <ComposeStep
@@ -789,29 +799,18 @@ function ProjectCreateWizard({
 
   const copy = STEP_COPY[step]
   const title = stepTitle(step, selectedOption)
-  const hint = wizardHint(step, defaultEnvironmentName, copy.hint)
+  const hint = copy.hint
 
   return (
-    <View style={styles.column}>
-      <View style={styles.pageHeader}>
-        <Text style={[panelStyles.pageTitle, styles.centeredText]}>
-          {title}
-        </Text>
-        {hint ? (
-          <Text style={[panelStyles.pageCopy, styles.centeredText]}>
-            {hint}
-          </Text>
-        ) : null}
-      </View>
+    <View style={[styles.column, step === 'type' && styles.columnWide]}>
+      <WizardPageHeader title={title} hint={hint} />
 
-      {step === 'details' ? null : (
+      {showsStartOver(step) ? (
         <StartOverBar onStartOver={onStartOver} disabled={submitting} />
-      )}
+      ) : null}
 
       <PanelShell>
-        {surfaceError ? (
-          <Text style={panelStyles.error}>{surfaceError}</Text>
-        ) : null}
+        {surfaceError ? <Text style={panelStyles.error}>{surfaceError}</Text> : null}
 
         {scopedWorkspaceBlocked ? (
           <SystemManagedNotice
@@ -826,6 +825,10 @@ function ProjectCreateWizard({
 
         {step === 'details' ? (
           <DetailsStep
+            orgId={orgId}
+            environmentName={environmentName}
+            defaultEnvironmentName={customDefaultEnvironmentName}
+            onEnvironmentNameChange={setEditedEnvironmentName}
             displayName={displayName}
             description={description}
             workspaceMode={workspaceMode}
@@ -847,6 +850,7 @@ function ProjectCreateWizard({
             orgId={orgId}
             selectedSourceId={selectedSourceId}
             branch={repositoryBranch}
+            inspectedBranch={settledBranch}
             inspection={inspection.data}
             // `isPending`, not `isFetching`: true for the whole gap between a
             // fresh pick and the read landing (data or error), including the
@@ -870,8 +874,10 @@ function ProjectCreateWizard({
               setBuilder(null)
               setSimpleConfig(suggestedSimpleAppConfig(undefined))
               setSimpleConfigTouched(false)
+              setNodeVersionTouched(false)
             }}
             onBranchChange={setRepositoryBranch}
+            onBranchBlur={settleBranch}
             onCloneUrlLaneChange={setCloneUrlLaneOpen}
           />
         ) : null}
@@ -879,9 +885,7 @@ function ProjectCreateWizard({
         {step === 'lane' ? (
           <RepositoryLaneStep
             candidates={laneCandidates}
-            selectedLane={
-              builder ? laneForBuilder(builder, simpleConfig.kind) : null
-            }
+            selectedLane={builder ? laneForBuilder(builder, simpleConfig.kind) : null}
             inspection={inspection.data}
             simple={simpleConfig}
             disabled={submitting}
@@ -891,21 +895,14 @@ function ProjectCreateWizard({
         ) : null}
 
         {step === 'type' ? (
-          <View style={styles.typeGroups}>
-            {SETUP_TYPE_GROUPS.map((group) => (
-              <View key={group.title} style={styles.typeGroup}>
-                <Text style={styles.typeGroupLabel}>{group.title}</Text>
-                <ChoiceTileGrid>
-                  {group.options.map((option) => (
-                    <SetupTypeChoiceCard
-                      key={option.choice}
-                      option={option}
-                      selected={selectedChoice === option.choice}
-                      onPress={() => selectType(option)}
-                    />
-                  ))}
-                </ChoiceTileGrid>
-              </View>
+          <View style={styles.typeRows}>
+            {SETUP_TYPE_OPTIONS.map((option) => (
+              <SetupTypeChoiceCard
+                key={option.choice}
+                option={option}
+                selected={selectedChoice === option.choice}
+                onPress={() => selectType(option)}
+              />
             ))}
           </View>
         ) : null}
@@ -927,7 +924,7 @@ function ProjectCreateWizard({
           wizard's Back/Continue on top read as two Back buttons and a
           Continue that could never be pressed, since nothing is picked yet.
         */}
-        {step === 'repository' && cloneUrlLaneOpen ? null : (
+        {showsInlineActions(step, cloneUrlLaneOpen) ? (
           <StepActions
             step={step}
             submitting={submitting}
@@ -937,7 +934,7 @@ function ProjectCreateWizard({
               selectedOption,
               builder,
               selectedSource,
-              inspection.isPending,
+              inspection.isPending || branchSettling
             )}
             onBack={goBack}
             onNext={goToTypeStep}
@@ -946,20 +943,67 @@ function ProjectCreateWizard({
               void create()
             }}
           />
-        )}
+        ) : null}
       </PanelShell>
 
-      <Pressable
-        style={[styles.cancelLink, webPointer]}
-        onPress={() => {
-          router.replace(`/${orgId}/projects` as Href)
-        }}
-        accessibilityRole="button"
-        accessibilityLabel="Cancel"
-      >
-        <Text style={styles.cancelLinkText}>Cancel</Text>
-      </Pressable>
+      {step === 'type' ? (
+        <StepActions
+          step={step}
+          submitting={submitting}
+          canCreate={false}
+          canContinue={canContinueFromStep(step, selectedOption, builder, selectedSource, false)}
+          onBack={goBack}
+          onNext={goToTypeStep}
+          onContinue={continueHandler}
+          onCreate={() => {}}
+        />
+      ) : null}
+
+      <CancelLink orgId={orgId} visible={step !== 'type'} />
     </View>
+  )
+}
+
+/** The details and type steps are the start, so there is nothing to start over from. */
+function showsStartOver(step: Step): boolean {
+  return step !== 'details' && step !== 'type'
+}
+
+/**
+ * The type step has its own footer below the panel, and the clone-URL lane
+ * ends in its own Connect and Back.
+ */
+function showsInlineActions(step: Step, cloneUrlLaneOpen: boolean): boolean {
+  if (step === 'type') return false
+  return !(step === 'repository' && cloneUrlLaneOpen)
+}
+
+function WizardPageHeader({
+  title,
+  hint,
+}: Readonly<{ title: string; hint: string | null | undefined }>) {
+  return (
+    <View style={styles.pageHeader}>
+      <Text style={[panelStyles.pageTitle, styles.centeredText]}>{title}</Text>
+      {hint ? <Text style={[panelStyles.pageCopy, styles.centeredText]}>{hint}</Text> : null}
+    </View>
+  )
+}
+
+function CancelLink({ orgId, visible }: Readonly<{ orgId: string; visible: boolean }>) {
+  const router = useRouter()
+  if (!visible) return null
+  return (
+    <Pressable
+      style={[styles.cancelLink, webPointer]}
+      onPress={() => {
+        router.replace(`/${orgId}/projects` as Href)
+      }}
+      accessibilityRole="button"
+      accessibilityLabel="Cancel"
+    >
+      <Text style={styles.cancelLinkText}>Cancel</Text>
+    </Pressable>
   )
 }
 
@@ -970,6 +1014,10 @@ function PanelShell({ children }: Readonly<{ children: ReactNode }>) {
       <View style={styles.panelBody}>{children}</View>
     </GlassSurface>
   )
+}
+
+function SpreadRow({ children }: Readonly<{ children: ReactNode }>) {
+  return <View style={styles.spreadRow}>{children}</View>
 }
 
 /**
@@ -997,20 +1045,15 @@ function StepActions({
   onCreate: () => void
 }>) {
   if (step === 'details') {
-    return (
-      <Button
-        label="Next"
-        variant="primary"
-        onPress={onNext}
-        accessibilityLabel="Next"
-      />
-    )
+    return <Button label="Next" variant="primary" onPress={onNext} accessibilityLabel="Next" />
   }
 
   if (step === 'type' || step === 'repository' || step === 'lane') {
     const continueLabel = step === 'type' ? 'Next' : 'Continue'
+    // On the setup step the row sits below the panel, Back left, Next right.
+    const Row = step === 'type' ? SpreadRow : ButtonRow
     return (
-      <ButtonRow>
+      <Row>
         <Button
           label="Back"
           variant="secondary"
@@ -1025,7 +1068,7 @@ function StepActions({
           onPress={onContinue}
           accessibilityLabel={continueLabel}
         />
-      </ButtonRow>
+      </Row>
     )
   }
 
@@ -1062,6 +1105,9 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     gap: spacing.md,
   },
+  columnWide: {
+    maxWidth: TYPE_STEP_MAX_WIDTH,
+  },
   pageHeader: {
     gap: spacing.xs,
     alignItems: 'center',
@@ -1082,14 +1128,12 @@ const styles = StyleSheet.create({
   plainPanelBody: {
     gap: spacing.md,
   },
-  typeGroups: { gap: spacing.md },
-  typeGroup: { gap: spacing.xs },
-  typeGroupLabel: {
-    color: colors.textDim,
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
+  typeRows: { gap: spacing.sm },
+  spreadRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
   },
   cancelLink: {
     alignSelf: 'center',

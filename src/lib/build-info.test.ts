@@ -20,7 +20,7 @@ describe('showsBuildInfo', () => {
 })
 
 describe('buildInfoSections', () => {
-  it('lists the web app and control plane with linked commits', () => {
+  it('lists the web interface and control plane with linked commits', () => {
     const sections = buildInfoSections(
       {
         ok: true,
@@ -34,7 +34,7 @@ describe('buildInfoSections', () => {
     )
     expect(sections).toEqual([
       {
-        title: 'Web app',
+        title: 'Web interface',
         rows: [
           { label: 'Version', value: 'v0.1.1' },
           { label: 'Commit', value: 'aaaaaaa', url: `https://github.com/TurboPanel/ui/commit/${UI_SHA}` },

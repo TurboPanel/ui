@@ -318,10 +318,12 @@ describe('useApiMutation', () => {
       { wrapper: createWrapper(client) },
     )
 
-    // No `cause` either: a 403 is auth recovery, not something to explain.
+    // `error` stays null so actionError does not flash session copy; `cause` is
+    // still available for callers that map owner-only refusals (license tier pick).
     await expect(result.current.run()).resolves.toEqual({
       ok: false,
       error: null,
+      cause: expect.any(Error),
     })
     expect(result.current.actionError).toBeNull()
     await waitFor(() => {
@@ -412,6 +414,31 @@ describe('useCan', () => {
   it('is false when entityId is empty (disabled path)', () => {
     const { result } = renderHook(
       () => useCan('organization', '', 'organization:manage'),
+      { wrapper: createWrapper() },
+    )
+    expect(result.current).toBe(false)
+    expect(resolveResourceId).not.toHaveBeenCalled()
+    expect(checkPermission).not.toHaveBeenCalled()
+  })
+
+  it('checks a server by its own id, without the resource-id lookup', async () => {
+    checkPermission.mockResolvedValueOnce({ allowed: true })
+
+    const { result } = renderHook(
+      () => useCan('server', 'srv-1', 'organization:manage'),
+      { wrapper: createWrapper() },
+    )
+
+    await waitFor(() => {
+      expect(result.current).toBe(true)
+    })
+    expect(checkPermission).toHaveBeenCalledWith('srv-1', 'organization:manage')
+    expect(resolveResourceId).not.toHaveBeenCalled()
+  })
+
+  it('is false for a server not chosen yet, with no request', () => {
+    const { result } = renderHook(
+      () => useCan('server', '', 'organization:manage'),
       { wrapper: createWrapper() },
     )
     expect(result.current).toBe(false)

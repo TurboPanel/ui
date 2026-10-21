@@ -574,14 +574,14 @@ function bandNote(
   counts: MapLayout['counts'],
 ): string {
   if (key === 'visitors') {
-    if (!useEnv) return 'Domains are set per environment'
-    return counts.domains > 0 ? '' : 'No domains yet'
+    if (!useEnv) return 'Hostnames are set per environment'
+    return counts.domains > 0 ? '' : 'No hostnames yet'
   }
   return key === 'apps' && counts.apps === 0 ? 'No apps yet' : ''
 }
 
 function columnEmptyText(key: MapColumnKey, useEnv: boolean): string {
-  if (key === 'visitors') return useEnv ? 'No domains yet' : 'Set per environment'
+  if (key === 'visitors') return useEnv ? 'No hostnames yet' : 'Set per environment'
   return key === 'apps' ? 'No apps yet' : 'None'
 }
 
@@ -649,6 +649,6 @@ export function mapLayout(input: MapInput): MapLayout {
     ],
     counts,
     changeCount: input.changes.length,
-    aria: `Map of ${useEnv ? envName : 'the Base'}: ${plural(counts.domains, 'domain')}, ${plural(counts.apps, 'app')}, ${plural(counts.data, 'data store')}`,
+    aria: `Map of ${useEnv ? envName : 'the Base'}: ${plural(counts.domains, 'hostname')}, ${plural(counts.apps, 'app')}, ${plural(counts.data, 'data store')}`,
   }
 }

@@ -449,3 +449,32 @@ export function groupTranscriptByPhase(
   }
   return groups
 }
+
+/** Transcript phase ids to the header words people read above each group. */
+export const PHASE_LABELS: Readonly<Record<string, string>> = {
+  prepare: 'Prepare',
+  'install-docker': 'Installing Docker',
+  'install-gateway': 'Setting up the web gateway',
+  'install-runtime': 'Installing the runtime',
+  'install-web-server': 'Installing the web server',
+  'install-build-tool': 'Installing the build tool',
+  pull: 'Pull',
+  fetch: 'Fetch source',
+  build: 'Build',
+  'release-promote': 'Promote release',
+  'pre-deploy': 'Pre-deploy hooks',
+  'compose-up': 'Compose up',
+  health: 'Health check',
+  'post-deploy': 'Post-deploy hooks',
+  hooks: 'Hooks',
+  'managed-apply': 'Managed apply',
+  'lifecycle-start': 'Start',
+  'lifecycle-stop': 'Stop',
+  'lifecycle-restart': 'Restart',
+  stop: 'Stop',
+}
+
+/** The header for a phase; an unknown phase shows its id. */
+export function phaseLabel(phase: string): string {
+  return PHASE_LABELS[phase] ?? phase
+}

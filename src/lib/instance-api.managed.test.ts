@@ -31,12 +31,14 @@ import {
   fetchManagedStatus,
   fetchManagedUsers,
   fetchOrganizationManaged,
+  fetchServerManagedExternalAccess,
   importDockerRunCommand,
   promoteManagedDisasterRecovery,
   promoteManagedMember,
   removeManagedMember,
   resyncManagedMember,
   restoreManagedBackup,
+  saveServerManagedExternalAccess,
   rotateManagedRootPassword,
   rotateManagedUserPassword,
   runEnvironmentLifecycle,
@@ -44,6 +46,9 @@ import {
   updateBinding,
   updateEnvironmentManaged,
   updateManagedMember,
+  updateManagedUser,
+  fetchManagedEffectivePermissions,
+  fetchManagedPrivilegeCatalogue,
 } from './instance-api'
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -113,7 +118,7 @@ describe('instance-api managed-engine fetch wrappers', () => {
       jsonResponse({
         managed: null,
         connection: null,
-        settings: { ssl: {}, exposure: { enabled: false } },
+        settings: { ssl: {} },
         ssl: {
           configured: null,
           effective: 'require',
@@ -183,11 +188,22 @@ describe('instance-api managed-engine fetch wrappers', () => {
     ).rejects.toThrow('HTTP 422: managed_version_unsupported')
   })
 
+  it('reads and saves the per-server external access switch', async () => {
+    const answer = { enabled: false, pending: false, clusterCount: 2 }
+    fetchMock.mockResolvedValueOnce(jsonResponse(answer))
+    await expect(fetchServerManagedExternalAccess('srv-1')).resolves.toEqual(answer)
+    expect(String(lastFetch().url)).toContain('/servers/srv-1/managed-external-access')
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ...answer, enabled: true, pending: true }))
+    await expect(saveServerManagedExternalAccess('srv-1', true)).resolves.toMatchObject({
+      enabled: true,
+    })
+    expect(lastFetch().init.method).toBe('PUT')
+    expect(lastJsonBody()).toEqual({ enabled: true })
+  })
+
   it('updateEnvironmentManaged PATCHes settings and apply/lifecycle/delete enqueue commands', async () => {
-    const settings = {
-      ssl: {},
-      exposure: { enabled: true, scope: 'public' as const },
-    }
+    const settings = { ssl: {} }
     fetchMock.mockResolvedValueOnce(
       jsonResponse({
         ok: true,
@@ -360,6 +376,18 @@ describe('instance-api managed-engine fetch wrappers', () => {
     )
   })
 
+  it('sends straightThrough true, false and null on the wire', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, user: {}, password: 'p' }))
+    await createManagedUser('env-1', { username: 'a', databases: ['app'], straightThrough: true })
+    expect(lastJsonBody()).toMatchObject({ straightThrough: true })
+    for (const value of [false, null]) {
+      fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
+      await updateManagedUser('env-1', 'p1', { straightThrough: value })
+      expect(lastFetch().init.method).toBe('PATCH')
+      expect(lastJsonBody()).toEqual({ straightThrough: value })
+    }
+  })
+
   it('createManagedUser surfaces 422 managed_no_read_targets', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ error: MANAGED_NO_READ_TARGETS_ERROR }, 422))
     await expect(
@@ -369,6 +397,53 @@ describe('instance-api managed-engine fetch wrappers', () => {
         connectionRole: 'read-only',
       })
     ).rejects.toThrow(`HTTP 422: ${MANAGED_NO_READ_TARGETS_ERROR}`)
+  })
+
+  it('updateManagedUser PATCHes the encoded login and surfaces the reset confirmation', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, dryRun: true, statements: ['x'] }))
+    const preview = await updateManagedUser('env-1', 'p/1', { grantMode: 'self', dryRun: true })
+    expect(preview.statements).toEqual(['x'])
+    expect(lastFetch().init.method).toBe('PATCH')
+    expect(String(lastFetch().url)).toContain('/managed/users/p%2F1')
+    expect(JSON.parse(String(lastFetch().init.body))).toEqual({ grantMode: 'self', dryRun: true })
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'managed_grant_reset_needs_confirm' }, 409))
+    await expect(updateManagedUser('env-1', 'p1', { grantMode: 'recipe' })).rejects.toThrow(
+      'HTTP 409: managed_grant_reset_needs_confirm'
+    )
+  })
+
+  it('reads a login\'s effective permissions and the privilege catalogue', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ username: 'u1', grants: [] }))
+    const view = await fetchManagedEffectivePermissions('env-1', 'p/1')
+    expect(view.username).toBe('u1')
+    expect(String(lastFetch().url)).toContain('/environments/env-1/managed/users/p%2F1/effective-permissions')
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'daemon_update_required' }, 409))
+    await expect(fetchManagedEffectivePermissions('env-1', 'p1')).rejects.toThrow('HTTP 409: daemon_update_required')
+    fetchMock.mockResolvedValueOnce(jsonResponse({ engine: 'postgres', series: '18', levels: [] }))
+    expect((await fetchManagedPrivilegeCatalogue('env-1')).series).toBe('18')
+    expect(String(lastFetch().url)).toContain('/environments/env-1/managed/privilege-catalogue')
+  })
+
+  it('updateManagedUser sends privileges for a Database admin login', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
+    await updateManagedUser('env-1', 'p1', { privileges: ['admin'], connectionRole: 'read-write' })
+    expect(JSON.parse(String(lastFetch().init.body))).toEqual({ privileges: ['admin'], connectionRole: 'read-write' })
+  })
+
+  it('updateManagedUser sends places and the cap, and null clears them', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
+    await updateManagedUser('env-1', 'p1', { allowedSources: ['internal', 'address:10.1.%'], maxConnections: 5 })
+    expect(JSON.parse(String(lastFetch().init.body))).toEqual({
+      allowedSources: ['internal', 'address:10.1.%'],
+      maxConnections: 5,
+    })
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
+    await updateManagedUser('env-1', 'p1', { allowedSources: null, maxConnections: null })
+    expect(JSON.parse(String(lastFetch().init.body))).toEqual({ allowedSources: null, maxConnections: null })
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'managed_login_limits_need_daemon_update' }, 409))
+    await expect(updateManagedUser('env-1', 'p1', { maxConnections: 3 })).rejects.toThrow(
+      'HTTP 409: managed_login_limits_need_daemon_update'
+    )
   })
 
   it('deleteManagedUser surfaces 409 managed_user_has_bindings', async () => {
@@ -699,7 +774,7 @@ describe('instance-api managed-engine fetch wrappers', () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, id: 'bind-1' }))
     await expect(
       createBinding({
-        principalId: 'principal-1',
+        loginId: 'login-1',
         serviceId: 'svc-1',
         databaseName: 'app',
         keyPrefix: 'APP_DB',
@@ -707,7 +782,7 @@ describe('instance-api managed-engine fetch wrappers', () => {
     ).resolves.toEqual({ ok: true, id: 'bind-1' })
     expect(lastFetch().init.method).toBe('POST')
     expect(lastJsonBody()).toEqual({
-      principalId: 'principal-1',
+      loginId: 'login-1',
       serviceId: 'svc-1',
       databaseName: 'app',
       keyPrefix: 'APP_DB',
@@ -729,7 +804,7 @@ describe('instance-api managed-engine fetch wrappers', () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ error: BINDING_KEY_PREFIX_IN_USE_ERROR }, 409))
     await expect(
       createBinding({
-        principalId: 'principal-1',
+        loginId: 'login-1',
         serviceId: 'svc-1',
         databaseName: 'app',
       })
@@ -755,6 +830,17 @@ describe('instance-api managed-engine fetch wrappers', () => {
     await expect(downloadOrganizationCaPem()).rejects.toThrow(
       '/api/client/v1/tls/ca/download failed: HTTP 403: forbidden'
     )
+  })
+
+  it('downloadOrganizationCaPem asks for the named organization over the active one', async () => {
+    setActiveOrganizationId('org-99')
+    fetchMock.mockResolvedValueOnce(
+      new Response('-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n', {
+        status: 200,
+      })
+    )
+    await downloadOrganizationCaPem('org-42')
+    expect(lastFetch().init.headers).toMatchObject({ [ORG_ID_HEADER]: 'org-42' })
   })
 
   it('resyncManagedMember posts to the member resync endpoint', async () => {

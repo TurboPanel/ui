@@ -264,13 +264,14 @@ describe('sidebar areas', () => {
 })
 
 describe('organization settings tabs', () => {
-  it('has five tabs, each with a label and a link', () => {
+  it('has six tabs, each with a label and a link', () => {
     expect([...ORG_SETTINGS_TAB_IDS]).toEqual([
       'general',
       'members',
       'notifications',
       'domains',
       'git',
+      'principals',
     ])
     expect(ORG_SETTINGS_TAB_IDS.map((id) => ORG_SETTINGS_TAB_LABELS[id])).toEqual([
       'General',
@@ -278,6 +279,7 @@ describe('organization settings tabs', () => {
       'Notifications',
       'Domains & certificates',
       'Git connections',
+      'Principals',
     ])
     expect(ORG_SETTINGS_TAB_IDS.map((id) => orgSettingsTabHref('o', id))).toEqual([
       '/o/manage',
@@ -285,6 +287,7 @@ describe('organization settings tabs', () => {
       '/o/manage?tab=notifications',
       '/o/manage?tab=domains',
       '/o/manage?tab=git',
+      '/o/manage?tab=principals',
     ])
   })
 
@@ -373,11 +376,29 @@ describe('orgBillingHref', () => {
   })
 })
 
+describe('server detail principals tab', () => {
+  it('lists the principals tab and builds its link', () => {
+    expect(SERVER_DETAIL_TAB_IDS).toContain('principals')
+    expect(serverDetailTabHref('org-1', 'srv-9', 'principals')).toBe(
+      '/org-1/servers/srv-9?tab=principals'
+    )
+  })
+})
+
 describe('server detail firewall tab', () => {
   it('lists the firewall tab and builds its link', () => {
     expect(SERVER_DETAIL_TAB_IDS).toContain('firewall')
     expect(serverDetailTabHref('org-1', 'srv-9', 'firewall')).toBe(
       '/org-1/servers/srv-9?tab=firewall',
+    )
+  })
+})
+
+describe('server detail services tab', () => {
+  it('lists the services tab and builds its link', () => {
+    expect(SERVER_DETAIL_TAB_IDS).toContain('services')
+    expect(serverDetailTabHref('org-1', 'srv-9', 'services')).toBe(
+      '/org-1/servers/srv-9?tab=services',
     )
   })
 })

@@ -7,11 +7,7 @@ import { buildProjectOptionsPatch } from '@/lib/project-options'
 import { colors, webPointer } from '@/lib/theme'
 
 function serverLabel(server: OrgServerRecord): string {
-  return (
-    server.name?.trim() ||
-    server.hostname?.trim() ||
-    server.id.slice(0, 8)
-  )
+  return server.name?.trim() || server.hostname?.trim() || server.id.slice(0, 8)
 }
 
 function serverOptionLabel(server: OrgServerRecord): string {
@@ -45,14 +41,13 @@ export function ProjectServerHeaderControl() {
   const placementServerId = project.options?.defaultServerId ?? null
   const servers = serversQuery.data?.servers ?? []
   const sorted = [...servers].sort((a, b) =>
-    serverOptionLabel(a).localeCompare(serverOptionLabel(b)),
+    serverOptionLabel(a).localeCompare(serverOptionLabel(b))
   )
   const connected = sorted.filter((server) => server.connected)
   const selected = placementServerId
     ? sorted.find((server) => server.id === placementServerId)
     : undefined
-  const options =
-    selected && !selected.connected ? [selected, ...connected] : connected
+  const options = selected && !selected.connected ? [selected, ...connected] : connected
   const busy = updateProject.isPending
 
   const save = async (serverId: string | null) => {
@@ -60,7 +55,7 @@ export function ProjectServerHeaderControl() {
     const nextOptions = buildProjectOptionsPatch(project, {
       defaultServerId: serverId,
     })
-    const result = await updateProject.run({ options: nextOptions })
+    const result = await updateProject.run({ options: nextOptions, target: 'base' })
     if (!result.ok && updateProject.actionError) {
       setError(updateProject.actionError)
     }
@@ -110,16 +105,16 @@ export function ProjectServerHeaderControl() {
             createElement(
               'option',
               { key: '', value: '' },
-              placementServerId ? 'Clear…' : 'Select server…',
+              placementServerId ? 'Clear…' : 'Select server…'
             ),
             ...options.map((server) =>
               createElement(
                 'option',
                 { key: server.id, value: server.id },
-                serverOptionLabel(server),
-              ),
+                serverOptionLabel(server)
+              )
             ),
-          ],
+          ]
         )
       : null
 

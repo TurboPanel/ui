@@ -69,6 +69,12 @@ export const SOURCE_COMMAND_MAX_LENGTH = 1000
 const NODE_VERSION_RE = /^\d{1,3}(\.\d{1,3}){0,2}$/
 
 /**
+ * The deliberate "follow the server's newest Node series" value of
+ * `nodeVersion`. New apps are pinned to a concrete series instead.
+ */
+export const FLOATING_NODE_VERSION = 'latest'
+
+/**
  * Per-service Git source binding (`x-turbopanel.source`).
  *
  * Mirrors the instance type in `turbopanel/src/features/compose/service-kind.ts`.
@@ -193,11 +199,9 @@ export type ComposeServiceExtensionFields = {
    * Scheduled jobs for a `site` or `node` service.
    *
    * Rendered by the daemon as a systemd timer per entry, with `User=` set to
-   * the service's principal. That is what makes this the cleanest proof
-   * entitlement had to be an OS grant: `ExecStart` reaches `execve` **after**
-   * systemd has dropped privileges, so `/usr/bin/php8.4` succeeds or fails
-   * purely on the account's group membership. Nothing in the generated unit
-   * grants anything.
+   * the service's principal: `ExecStart` runs **after** systemd has dropped
+   * privileges, as the site owner's Linux user, which may run every PHP,
+   * Node or Deno version installed on the server.
    */
   cron?: ComposeServiceCronJob[]
   /**
@@ -383,7 +387,7 @@ const SERVICE_EXTENSION_FIELDS: Readonly<
   },
   nodeVersion: {
     kinds: NODE_KIND_ONLY,
-    typeMessage: 'nodeVersion must be a pinned version like "24" or "24.17.0"',
+    typeMessage: 'nodeVersion must be a pinned version like "24" or "24.17.0", or "latest"',
   },
   runtime: {
     kinds: NODE_KIND_ONLY,
@@ -715,6 +719,13 @@ function readNodeVersion(value: unknown): string | undefined {
   return NODE_VERSION_RE.test(trimmed) ? trimmed : undefined
 }
 
+/** A Node pin, or `latest` ({@link FLOATING_NODE_VERSION}). */
+function readNodeAppVersion(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() === FLOATING_NODE_VERSION
+    ? FLOATING_NODE_VERSION
+    : readNodeVersion(value)
+}
+
 function readNodePackageManager(value: unknown): NodePackageManager | undefined {
   if (typeof value !== 'string') return undefined
   const trimmed = value.trim()
@@ -818,7 +829,7 @@ export function parseServiceTurbopanelExtension(
     serviceKind: readServiceKind(value.serviceKind),
     engine: readSiteEngine(value.engine),
     framework: readNativeRuntimeFramework(value.framework),
-    nodeVersion: readNodeVersion(value.nodeVersion),
+    nodeVersion: readNodeAppVersion(value.nodeVersion),
     runtime: readNativeRuntime(value.runtime),
     // Same shape as a Node pin (`2`, `2.9`, `2.9.7`).
     denoVersion: readNodeVersion(value.denoVersion),
@@ -1062,9 +1073,12 @@ export const DEFAULT_SITE_ENGINE: SiteEngine = 'caddy'
  * environments can span servers, so "installed here" is not well defined in a
  * compose editor. Picking an unsupported series is a hard error at prepare;
  * picking a supported one the target host lacks is a warning, because the
- * deploy installs it.
+ * deploy installs it (on first use; nothing is installed in advance).
+ *
+ * The daemon offers the series LiteSpeed publishes for the server's operating
+ * system; this is the list for Debian 13, the only supported OS today.
  */
-export const SUPPORTED_PHP_SERIES: readonly string[] = ['8.3', '8.4']
+export const SUPPORTED_PHP_SERIES: readonly string[] = ['8.1', '8.2', '8.3', '8.4', '8.5']
 
 /** PHP modes, mirroring the instance's `contracts/commands/schemas.ts`. */
 export type PhpMode = 'fastcgi' | 'fpm' | 'lsphp-detached' | 'lsphp-attached'
@@ -1152,10 +1166,15 @@ export const DEFAULT_PHP_SERIES = '8.4'
  * on the instance, which mirrors the daemon's runtime registry. Advisory like
  * the PHP list: the deploy vendors what the operator picked.
  */
-export const SUPPORTED_NODE_SERIES: readonly string[] = ['22', '24']
+export const SUPPORTED_NODE_SERIES: readonly string[] = ['22', '24', '26']
 
-/** Series a node app gets when it pins none. Mirrors the instance default. */
-export const DEFAULT_NODE_SERIES = '24'
+/**
+ * Series a node app gets when it pins none: the newest one offered, compared as
+ * numbers. There is no separately chosen default version.
+ */
+export const NEWEST_NODE_SERIES: string = [...SUPPORTED_NODE_SERIES]
+  .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+  .at(-1) as string
 
 /**
  * Deno series TurboPanel offers in pickers: Deno ships one major, so a series

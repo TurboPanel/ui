@@ -91,7 +91,7 @@ export function LayerBase({
  * An environment card drawn as a sheet laid over a faint Base sheet: "this
  * environment is the Base plus its changes". `alone` draws an empty dashed
  * sheet behind it instead, for an environment that stands alone and no longer
- * follows the Base.
+ * uses the Base.
  */
 export function LayerCard({
   title,

@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import type { RepositoryInspection, RepositoryProbedFile } from '@/lib/instance-api'
+import type {
+  RepositoryInspection,
+  RepositoryNodeVersionHint,
+  RepositoryProbedFile,
+} from '@/lib/instance-api'
 import {
   detectPackageManager,
   isNodeApp,
   readPackageScripts,
+  suggestedNodeVersion,
   suggestedSimpleAppConfig,
 } from '@/lib/project-create/simple-app'
 
@@ -141,7 +146,7 @@ describe('suggestedSimpleAppConfig', () => {
       inspection([
         found(
           'package.json',
-          JSON.stringify({ scripts: { build: 'next build', start: 'next start' } }),
+          JSON.stringify({ scripts: { build: 'tsc', start: 'node dist/server.js' } }),
         ),
         found('pnpm-lock.yaml'),
       ]),
@@ -150,6 +155,38 @@ describe('suggestedSimpleAppConfig', () => {
     expect(config.buildCommand).toBe('pnpm run build')
     expect(config.startCommand).toBe('pnpm start')
   })
+
+  it.each([
+    'next start',
+    'next start -p 3000',
+    'NODE_ENV=production next start',
+    'npx next start',
+    'node_modules/.bin/next start',
+    'prisma migrate deploy && next start',
+    'node .next/standalone/server.js',
+  ])(
+    'leaves the start command empty for a Next.js start script (%s) — the daemon starts it',
+    (start) => {
+      const config = suggestedSimpleAppConfig(
+        inspection([
+          found('package.json', JSON.stringify({ scripts: { build: 'next build', start } })),
+          found('pnpm-lock.yaml'),
+        ]),
+      )
+      expect(config.buildCommand).toBe('pnpm run build')
+      expect(config.startCommand).toBe('')
+    },
+  )
+
+  it.each(['node next-server.js', 'nuxt start', 'next-start'])(
+    'still prefills a start script that only resembles next start (%s)',
+    (start) => {
+      const config = suggestedSimpleAppConfig(
+        inspection([found('package.json', JSON.stringify({ scripts: { start, build: 'tsc' } }))]),
+      )
+      expect(config.startCommand).toBe('npm start')
+    },
+  )
 
   it('suggests no command the package.json does not declare', () => {
     const config = suggestedSimpleAppConfig(
@@ -166,7 +203,7 @@ describe('suggestedSimpleAppConfig', () => {
           'package.json',
           JSON.stringify({
             packageManager: 'pnpm@12.3.4',
-            scripts: { build: 'next build', start: 'next start' },
+            scripts: { build: 'tsc', start: 'node .' },
           }),
         ),
         refused('pnpm-lock.yaml', 'too_large'),
@@ -213,6 +250,7 @@ describe('suggestedSimpleAppConfig', () => {
       buildCommand: '',
       startCommand: '',
       outputDirectory: '',
+      nodeVersion: '26',
     })
   })
 })
@@ -222,5 +260,53 @@ describe('isNodeApp', () => {
     expect(isNodeApp([found('package.json')])).toBe(true)
     expect(isNodeApp([missing('package.json')])).toBe(false)
     expect(isNodeApp([])).toBe(false)
+  })
+})
+
+describe('suggestedNodeVersion', () => {
+  const withHint = (hint?: RepositoryNodeVersionHint): RepositoryInspection => ({
+    ...inspection([]),
+    nodeVersion: { newest: '26', offered: ['22', '24', '26'], ...(hint ? { hint } : {}) },
+  })
+
+  it('pins the newest concrete series when the repository says nothing', () => {
+    expect(suggestedNodeVersion(withHint())).toEqual({ nodeVersion: '26' })
+    expect(suggestedNodeVersion(undefined)).toEqual({ nodeVersion: '26' })
+    expect(suggestedSimpleAppConfig(withHint()).nodeVersion).not.toBe('latest')
+  })
+
+  it.each([
+    ['package.json', '^22', 'engines.node in package.json'],
+    ['volta', '22.4.1', 'volta.node in package.json'],
+    ['.nvmrc', 'v22', '.nvmrc'],
+    ['.node-version', '22.1', '.node-version'],
+    ['.tool-versions', '22.9.0', '.tool-versions'],
+  ] as const)('preselects the series a %s hint names', (source, requested, label) => {
+    const result = suggestedNodeVersion(
+      withHint({ source, requested, path: 'x', status: 'matched', series: '22' }),
+    )
+    expect(result.nodeVersion).toBe('22')
+    expect(result.notice).toContain(label)
+    expect(result.notice).toContain(`Node ${requested}`)
+    expect(suggestedSimpleAppConfig(withHint({ source, requested, path: 'x', status: 'matched', series: '22' })).nodeVersion).toBe('22')
+  })
+
+  it('says plainly when the hinted version is not offered, and what was selected', () => {
+    const result = suggestedNodeVersion(
+      withHint({ source: '.nvmrc', requested: '16', path: '.nvmrc', status: 'unsupported' }),
+    )
+    expect(result.nodeVersion).toBe('26')
+    expect(result.notice).toBe(
+      'Your repository asks for Node 16 (.nvmrc), which this server does not offer. Node 26 was preselected instead.',
+    )
+  })
+
+  it('says plainly when the hint is not a version, and what was selected', () => {
+    const result = suggestedNodeVersion(
+      withHint({ source: 'package.json', requested: 'nope', path: 'package.json', status: 'invalid' }),
+    )
+    expect(result.nodeVersion).toBe('26')
+    expect(result.notice).toContain('"nope"')
+    expect(result.notice).toContain('Node 26 was preselected instead')
   })
 })

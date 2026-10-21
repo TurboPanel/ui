@@ -4,7 +4,7 @@
 
 **Route:** `/admin/updates` → `updates-section.tsx` (self-hosted: `self-hosted-updates.tsx`; High Availability: `ha-updates.tsx`).
 
-**Job:** One managed upgrade experience — status, readable build names, phased progress (co-located daemon → control plane → fleet), fleet table with retry, history, and automatic-update settings on self-hosted. High Availability is read-only for the control plane and hides local Upgrade / auto-update controls.
+**Job:** One managed upgrade experience — status, readable build names, phased progress (co-located daemon → control plane → fleet), fleet table with retry, history, and automatic-update settings. High Availability is read-only for the control plane; fleet rollout uses **Update fleet now** and the auto-update toggle.
 
 ---
 
@@ -27,7 +27,7 @@ Polling uses `refetchInterval` only while a run is `pending` / `running` (`useUp
 ## TurboPanel High Availability
 
 - Control plane: **Managed by TurboPanel** (read-only version).
-- Connected daemons `DataTable` with filter chips; rollout summary; history; batch settings **without** auto-update toggle or **Update TurboPanel** button.
+- Connected daemons `DataTable` with filter chips; **Update fleet now** (same preflight sheet as self-hosted); rollout summary; history; batch settings including the auto-update toggle.
 - Copy uses `HA_PRODUCT_NAME` from `src/lib/platform-copy.ts`.
 
 ## Org console

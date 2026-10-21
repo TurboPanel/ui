@@ -32,16 +32,19 @@ describe('map layout geometry', () => {
       expect(layout.bands).toHaveLength(3)
     })
 
-    it.each(MODES)('keeps every station inside the map and names who runs each app (%s)', (mode) => {
-      const layout = mapLayout(sampleMapInput(project, env, mode))
-      for (const node of layout.nodes) {
-        if (node.kind === 'app') expect(node.runs).toMatch(/^(as |Runs inside its container)/)
-        expect(node.x).toBeGreaterThanOrEqual(0)
-        expect(node.x + node.w).toBeLessThanOrEqual(1040)
-        expect(node.y).toBeGreaterThanOrEqual(0)
-        expect(node.y + node.h).toBeLessThanOrEqual(layout.h)
+    it.each(MODES)(
+      'keeps every station inside the map and names who runs each app (%s)',
+      (mode) => {
+        const layout = mapLayout(sampleMapInput(project, env, mode))
+        for (const node of layout.nodes) {
+          if (node.kind === 'app') expect(node.runs).toMatch(/^(as |Runs inside its container)/)
+          expect(node.x).toBeGreaterThanOrEqual(0)
+          expect(node.x + node.w).toBeLessThanOrEqual(1040)
+          expect(node.y).toBeGreaterThanOrEqual(0)
+          expect(node.y + node.h).toBeLessThanOrEqual(layout.h)
+        }
       }
-    })
+    )
 
     it.each(MODES)('only runs lines through the gutters (%s)', (mode) => {
       const layout = mapLayout(sampleMapInput(project, env, mode))
@@ -61,7 +64,7 @@ describe('map layout geometry', () => {
       for (const head of layout.heads) {
         const ends = layout.segments.some(
           (s) =>
-            s.orientation === 'h' && s.kind === head.kind && s.y === head.y && s.x + s.w === head.x,
+            s.orientation === 'h' && s.kind === head.kind && s.y === head.y && s.x + s.w === head.x
         )
         expect(ends).toBe(true)
       }
@@ -70,7 +73,7 @@ describe('map layout geometry', () => {
     it.each(MODES)('never repeats a line or an arrowhead (%s)', (mode) => {
       const layout = mapLayout(sampleMapInput(project, env, mode))
       const lines = layout.segments.map(
-        (s) => `${s.orientation}-${s.kind}-${s.x}-${s.y}-${s.w}-${s.h}`,
+        (s) => `${s.orientation}-${s.kind}-${s.x}-${s.y}-${s.w}-${s.h}`
       )
       const heads = layout.heads.map((h) => `${h.kind}-${h.x}-${h.y}`)
       expect(new Set(lines).size).toBe(lines.length)
@@ -110,10 +113,10 @@ describe('map layout geometry', () => {
 describe('map words', () => {
   it('describes the website production map', () => {
     const layout = layoutOf(website, 'production', 'env')
-    expect(layout.aria).toBe('Map of Production: 2 domains, 1 app, 1 data store')
+    expect(layout.aria).toBe('Map of Production: 2 hostnames, 1 app, 1 data store')
     const app = layout.nodes.find((node) => node.kind === 'app')
     expect(app?.aria).toBe(
-      'web, Node.js app, running, runs as website, shows turbopanel.io, uses next-cache',
+      'web, Node.js app, running, runs as website, shows turbopanel.io, uses next-cache'
     )
     expect(app?.runs).toBe('as website')
     expect(app?.jobsLabel).toBe('')
@@ -130,7 +133,7 @@ describe('map words', () => {
 
   it('names what changed in the Differences view', () => {
     const app = layoutOf(website, 'testing', 'diff').nodes.find((n) => n.kind === 'app')
-    expect(app?.tags).toEqual(['Changed: start command, Linux user'])
+    expect(app?.tags).toEqual(['Changed: start command, Hosting Account'])
   })
 
   it('tags an environment against the Base too, but draws the Base itself', () => {
@@ -146,9 +149,9 @@ describe('map words', () => {
     expect(app?.changed).toBe(false)
   })
 
-  it('says domains are set per environment on the Base map', () => {
+  it('says hostnames are set per environment on the Base map', () => {
     const layout = layoutOf(portal, null, 'base')
-    expect(layout.bands[0]?.note).toBe('Domains are set per environment')
+    expect(layout.bands[0]?.note).toBe('Hostnames are set per environment')
     expect(layout.aria).toMatch(/the Base/)
     expect(layout.envName).toBe('Base')
     expect(layout.columns[0]?.emptyText).toBe('Set per environment')
@@ -195,12 +198,16 @@ describe('map words', () => {
       volumes: [],
       links: [],
     })
-    expect(empty.bands[0]?.note).toBe('No domains yet')
+    expect(empty.bands[0]?.note).toBe('No hostnames yet')
     expect(empty.bands[1]?.note).toBe('No apps yet')
     expect(empty.bands[2]?.note).toBe('')
-    expect(empty.columns.map((c) => c.emptyText)).toEqual(['No domains yet', 'No apps yet', 'None'])
+    expect(empty.columns.map((c) => c.emptyText)).toEqual([
+      'No hostnames yet',
+      'No apps yet',
+      'None',
+    ])
     expect(empty.counts).toEqual({ domains: 0, apps: 0, data: 0 })
-    expect(empty.aria).toBe('Map of Production: 0 domains, 0 apps, 0 data stores')
+    expect(empty.aria).toBe('Map of Production: 0 hostnames, 0 apps, 0 data stores')
   })
 
   it('has a legend for the three kinds of line', () => {
@@ -286,7 +293,11 @@ describe('map details', () => {
       ...input,
       domains: [
         { host: 'one.example.com', status: { key: 'ok', label: 'Secure' }, serviceId: second?.id },
-        { host: 'two.example.com', status: { key: 'ok', label: 'Secure' }, serviceId: 'not-an-app' },
+        {
+          host: 'two.example.com',
+          status: { key: 'ok', label: 'Secure' },
+          serviceId: 'not-an-app',
+        },
         { host: 'three.example.com', status: { key: 'ok', label: 'Secure' } },
       ],
     })
@@ -309,7 +320,10 @@ describe('map details', () => {
     const node = (name: string) => layout.nodes.find((n) => n.name === name)
     expect(node('size-only')).toMatchObject({ sub: '3 MB', aria: 'size-only, storage, 3 MB' })
     expect(node('backup-only')?.sub).toBe('backed up today 04:00')
-    expect(node('mount-only')).toMatchObject({ sub: 'web:/uploads', aria: 'mount-only, storage, web:/uploads' })
+    expect(node('mount-only')).toMatchObject({
+      sub: 'web:/uploads',
+      aria: 'mount-only, storage, web:/uploads',
+    })
     expect(node('nothing')).toMatchObject({ sub: '', aria: 'nothing, storage' })
   })
 
@@ -363,7 +377,10 @@ describe('map details', () => {
         { id: 'app', name: 'app', kind: 'site', web: true },
         { id: 'db', name: 'db', kind: 'database' },
       ],
-      links: [{ from: 'app', to: 'ghost', kind: 'data' }, { from: 'gone', to: 'db', kind: 'data' }],
+      links: [
+        { from: 'app', to: 'ghost', kind: 'data' },
+        { from: 'gone', to: 'db', kind: 'data' },
+      ],
     })
     const db = layout.nodes.find((n) => n.name === 'db')
     expect(db?.sub).toBe('db')
@@ -376,7 +393,7 @@ describe('map details', () => {
     const input = sampleMapInput(website, sampleEnvironment(website, 'production'), 'env')
     const layout = mapLayout({ ...input, status: () => null })
     expect(layout.nodes.find((n) => n.kind === 'app')?.aria).toBe(
-      'web, Node.js app, runs as website, shows turbopanel.io, uses next-cache',
+      'web, Node.js app, runs as website, shows turbopanel.io, uses next-cache'
     )
   })
 
@@ -384,6 +401,8 @@ describe('map details', () => {
     const input = sampleMapInput(website, sampleEnvironment(website, 'production'), 'env')
     const layout = mapLayout({ ...input, services: [], volumes: [] })
     expect(layout.segments).toEqual([])
-    expect(layout.nodes.find((n) => n.kind === 'domain')?.aria).toBe('turbopanel.io, domain, secure')
+    expect(layout.nodes.find((n) => n.kind === 'domain')?.aria).toBe(
+      'turbopanel.io, domain, secure'
+    )
   })
 })

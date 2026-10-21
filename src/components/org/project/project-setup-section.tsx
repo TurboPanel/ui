@@ -4,7 +4,7 @@ import { useRouter, type Href } from 'expo-router'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { useProjectContext } from '@/components/org/project/project-context'
 import { CatalogStep } from '@/components/org/project-create/catalog-step'
-import { ChoiceTileGrid } from '@/components/org/project-create/choice-card'
+import { ChoiceGrid } from '@/components/org/project-create/choice-card'
 import { SetupTypeChoiceCard } from '@/components/org/project-create/setup-type-icons'
 import {
   SETUP_TYPE_OPTIONS,
@@ -135,7 +135,7 @@ export function ProjectSetupSection() {
           </Text>
         ) : null}
 
-        <ChoiceTileGrid>
+        <ChoiceGrid>
           {RESUMABLE_SETUP_OPTIONS.map((option) => (
             <SetupTypeChoiceCard
               key={option.choice}
@@ -148,7 +148,7 @@ export function ProjectSetupSection() {
               }}
             />
           ))}
-        </ChoiceTileGrid>
+        </ChoiceGrid>
 
         {needsCode && selectedOption && selectedOption.type !== 'docker-compose' ? (
           <CatalogStep

@@ -131,10 +131,27 @@ export const queryKeys = {
          */
         networkPanel: (serverId: string) =>
           ['org', orgId, 'server', serverId, 'network-panel'] as const,
+        /** What is attached to one server (`GET /servers/:id/services`). */
+        services: (serverId: string) => ['org', orgId, 'server', serverId, 'services'] as const,
         labels: (serverId: string) => ['org', orgId, 'server', serverId, 'labels'] as const,
+        /** Principals placed on one server (`GET /servers/:id/principals`). */
+        principals: (serverId: string) => ['org', orgId, 'server', serverId, 'principals'] as const,
+        /** Per-principal choices when removing the server (`/servers/:id/principal-removal-plan`). */
+        principalRemovalPlan: (serverId: string) =>
+          ['org', orgId, 'server', serverId, 'principal-removal-plan'] as const,
+        deletePreview: (serverId: string) =>
+          ['org', orgId, 'server', serverId, 'delete-preview'] as const,
         /** PHP mode policy one server offers (`/servers/:id/php-modes`). */
         phpModes: (serverId: string) => ['org', orgId, 'server', serverId, 'php-modes'] as const,
+        /** "Allow external access to the databases on this server" (`/servers/:id/managed-external-access`). */
+        managedExternalAccess: (serverId: string) =>
+          ['org', orgId, 'server', serverId, 'managed-external-access'] as const,
+        /** Addresses clients use (`/servers/:id/addresses`). */
+        addresses: (serverId: string) => ['org', orgId, 'server', serverId, 'addresses'] as const,
       },
+
+      /** Every principal in the organization (`GET /organizations/:id/principals`). */
+      principals: ['org', orgId, 'principals'] as const,
 
       settings: {
         all: ['org', orgId, 'settings'] as const,
@@ -158,6 +175,9 @@ export const queryKeys = {
         /** Org default resource ceiling for compose services (`/organizations/:id/compose-resource-defaults`). */
         composeResourceDefaults: ['org', orgId, 'compose-resource-defaults'] as const,
         principalDefaults: ['org', orgId, 'principal-defaults'] as const,
+        directoryDefaults: ['org', orgId, 'directory-defaults'] as const,
+        /** Folders across the organization that need a person (orphans, stuck removals, missing). */
+        folders: ['org', orgId, 'folders'] as const,
         serverCapacity: ['org', orgId, 'server-capacity'] as const,
         fabric: ['org', orgId, 'fabric'] as const,
       },
@@ -187,6 +207,7 @@ export const queryKeys = {
       /** Org CA sits under the tls prefix so one invalidation clears library + CA. */
       tlsCa: ['org', orgId, 'tls', 'ca'] as const,
       tlsCaRotation: ['org', orgId, 'tls', 'ca', 'rotation'] as const,
+      tlsCaLeaves: ['org', orgId, 'tls', 'ca', 'leaves'] as const,
 
       workspaces: {
         all: ['org', orgId, 'workspaces'] as const,
@@ -209,6 +230,12 @@ export const queryKeys = {
         all: ['org', orgId, 'environments'] as const,
         list: (projectId?: string) => ['org', orgId, 'environments', projectId ?? 'all'] as const,
         detail: (environmentId: string) => ['org', orgId, 'environment', environmentId] as const,
+        /** Folders under the environment's name (locks rename, move and delete). */
+        folders: (environmentId: string) =>
+          ['org', orgId, 'environment', environmentId, 'folders'] as const,
+        /** Common services and volumes the environment uses. */
+        shares: (environmentId: string) =>
+          ['org', orgId, 'environment', environmentId, 'shares'] as const,
         deployPreview: (environmentId: string) =>
           ['org', orgId, 'environment', environmentId, 'deploy-preview'] as const,
         /** Effective configuration and changes from the Base (no interval; invalidated by every config save). */
@@ -324,6 +351,10 @@ export const queryKeys = {
         /** Identity-only cache key — members ride environment + status queries. */
         members: (environmentId: string) =>
           ['org', orgId, 'managed', environmentId, 'members'] as const,
+        effectivePermissions: (environmentId: string, principalId: string) =>
+          ['org', orgId, 'managed', environmentId, 'users', principalId, 'effective-permissions'] as const,
+        privilegeCatalogue: (environmentId: string) =>
+          ['org', orgId, 'managed', environmentId, 'privilege-catalogue'] as const,
         users: (environmentId: string) =>
           ['org', orgId, 'managed', environmentId, 'users'] as const,
         databases: (environmentId: string) =>

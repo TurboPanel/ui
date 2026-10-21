@@ -29,6 +29,7 @@ export type GlyphKey =
   | 'lock'
   | 'unlock'
   | 'clock'
+  | 'check'
 
 export type StatusInfo = Readonly<{
   label: string
@@ -174,6 +175,7 @@ export const GLYPHS: Readonly<Record<GlyphKey, readonly GlyphShape[]>> = {
     { kind: 'circle', r: 8.5, paint: 'stroke', width: 2.6 },
     { kind: 'path', d: 'M12 7.5V12l3 2', paint: 'stroke', width: 2.6, round: true },
   ],
+  check: [{ kind: 'path', d: 'M5 12.5 10 17.5 19 7', paint: 'stroke', width: 3.2, round: true }],
 }
 
 /** Centre of every circle glyph in the 24 x 24 box. */

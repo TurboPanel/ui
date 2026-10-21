@@ -13,6 +13,7 @@ import {
   useEmailSettings,
   useCreateForge,
   useDeleteForge,
+  useForgeWebhookOrigins,
   useForges,
   usePublicUrls,
   usePublicUrlsOptional,
@@ -41,6 +42,7 @@ const {
   saveEmailSettings,
   applyReencryptSecrets,
   fetchForges,
+  fetchForgeWebhookOrigins,
   createForge,
   deleteForge,
   updateForge,
@@ -61,6 +63,7 @@ const {
   saveEmailSettings: vi.fn(),
   applyReencryptSecrets: vi.fn(),
   fetchForges: vi.fn(),
+  fetchForgeWebhookOrigins: vi.fn(),
   createForge: vi.fn(),
   deleteForge: vi.fn(),
   updateForge: vi.fn(),
@@ -86,6 +89,7 @@ vi.mock('../instance-api', async (importOriginal) => {
     saveEmailSettings,
     applyReencryptSecrets,
     fetchForges,
+    fetchForgeWebhookOrigins,
     createForge,
     deleteForge,
     updateForge,
@@ -269,6 +273,56 @@ describe('admin query hooks', () => {
       expect(result.current.isSuccess).toBe(true)
     })
     expect(fetchSignupSettings).toHaveBeenCalled()
+  })
+
+  it('public URL save and apply refresh every webhook-origins read', async () => {
+    // Those reads live under the forges keys, so without naming them the
+    // wizard keeps an empty list after "add a public URL, then come back".
+    const keys = [
+      [...queryKeys.admin.forges, 'webhook-origins'],
+      [...queryKeys.org('org-1').forges, 'webhook-origins'],
+    ]
+    const empty = { origins: [], platformManaged: false }
+
+    savePublicUrls.mockResolvedValueOnce({ ok: true })
+    const saveClient = createAppQueryClient()
+    for (const key of keys) saveClient.setQueryData(key, empty)
+    const save = renderHook(() => useSavePublicUrls(), { wrapper: createWrapper(saveClient) })
+    await expect(save.result.current.run(['https://panel.example.com'])).resolves.toMatchObject({
+      ok: true,
+    })
+    await waitFor(() => {
+      for (const key of keys) expect(saveClient.getQueryState(key)?.isInvalidated).toBe(true)
+    })
+
+    applyPublicUrls.mockResolvedValueOnce({ ok: true, applied: true })
+    const applyClient = createAppQueryClient()
+    for (const key of keys) applyClient.setQueryData(key, empty)
+    const apply = renderHook(() => useApplyPublicUrls(), { wrapper: createWrapper(applyClient) })
+    await expect(
+      apply.result.current.run({
+        hostnames: [{ host: 'https://panel.example.com', source: 'platform-ca', uploadedCertId: null }],
+      }),
+    ).resolves.toMatchObject({ ok: true })
+    await waitFor(() => {
+      for (const key of keys) expect(applyClient.getQueryState(key)?.isInvalidated).toBe(true)
+    })
+  })
+
+  it('useForgeWebhookOrigins rereads when a screen mounts again', async () => {
+    fetchForgeWebhookOrigins.mockResolvedValue({ origins: [], platformManaged: false })
+    const client = createAppQueryClient()
+    const first = renderHook(() => useForgeWebhookOrigins('admin'), {
+      wrapper: createWrapper(client),
+    })
+    await waitFor(() => {
+      expect(first.result.current.isSuccess).toBe(true)
+    })
+    first.unmount()
+    renderHook(() => useForgeWebhookOrigins('admin'), { wrapper: createWrapper(client) })
+    await waitFor(() => {
+      expect(fetchForgeWebhookOrigins).toHaveBeenCalledTimes(2)
+    })
   })
 
   it('useSavePublicUrls invalidates public URL cache', async () => {
@@ -801,6 +855,86 @@ describe('admin query hooks', () => {
     expect(queryKeys.org('org-1').forges).not.toEqual(
       queryKeys.org('org-2').forges,
     )
+  })
+
+  it('useForgeWebhookOrigins reads the scope route', async () => {
+    fetchForgeWebhookOrigins.mockResolvedValueOnce({
+      origins: ['https://panel.example.com'],
+      platformManaged: true,
+    })
+    const { result } = renderHook(() => useForgeWebhookOrigins('org'), {
+      wrapper: createWrapper(),
+    })
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+    expect(fetchForgeWebhookOrigins).toHaveBeenCalledWith('org')
+    expect(fetchPublicUrls).not.toHaveBeenCalled()
+    expect(result.current.data).toEqual({
+      origins: ['https://panel.example.com'],
+      platformManaged: true,
+    })
+  })
+
+  it('useForgeWebhookOrigins falls back to the public URL list on an older control plane', async () => {
+    fetchForgeWebhookOrigins.mockRejectedValueOnce(new Error('HTTP 404: Not found'))
+    fetchPublicUrls.mockResolvedValueOnce({ urls: ['panel.lan:8443'] })
+    const { result } = renderHook(() => useForgeWebhookOrigins('admin'), {
+      wrapper: createWrapper(),
+    })
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+    expect(result.current.data).toEqual({ origins: ['panel.lan:8443'], platformManaged: false })
+  })
+
+  it('useForgeWebhookOrigins answers an empty list for a 403 on either read', async () => {
+    fetchForgeWebhookOrigins.mockRejectedValueOnce(new Error('HTTP 403: Forbidden'))
+    const first = renderHook(() => useForgeWebhookOrigins('org'), {
+      wrapper: createWrapper(),
+    })
+    await waitFor(() => {
+      expect(first.result.current.isSuccess).toBe(true)
+    })
+    expect(first.result.current.data).toEqual({ origins: [], platformManaged: false })
+
+    fetchForgeWebhookOrigins.mockRejectedValueOnce(new Error('HTTP 404: Not found'))
+    fetchPublicUrls.mockRejectedValueOnce(new Error('HTTP 403: Forbidden'))
+    const second = renderHook(() => useForgeWebhookOrigins('admin'), {
+      wrapper: createWrapper(),
+    })
+    await waitFor(() => {
+      expect(second.result.current.isSuccess).toBe(true)
+    })
+    expect(second.result.current.data).toEqual({ origins: [], platformManaged: false })
+  })
+
+  it('useForgeWebhookOrigins surfaces other failures', async () => {
+    fetchForgeWebhookOrigins.mockRejectedValueOnce(new Error('HTTP 500: boom'))
+    const first = renderHook(() => useForgeWebhookOrigins('org'), {
+      wrapper: createWrapper(),
+    })
+    await waitFor(() => {
+      expect(first.result.current.isError).toBe(true)
+    })
+
+    fetchForgeWebhookOrigins.mockRejectedValueOnce(new Error('HTTP 404: Not found'))
+    fetchPublicUrls.mockRejectedValueOnce(new Error('HTTP 500: boom'))
+    const second = renderHook(() => useForgeWebhookOrigins('admin'), {
+      wrapper: createWrapper(),
+    })
+    await waitFor(() => {
+      expect(second.result.current.isError).toBe(true)
+    })
+  })
+
+  it('useForgeWebhookOrigins stays idle when enabled is false', () => {
+    const { result } = renderHook(
+      () => useForgeWebhookOrigins('org', { enabled: false }),
+      { wrapper: createWrapper() },
+    )
+    expect(result.current.fetchStatus).toBe('idle')
+    expect(fetchForgeWebhookOrigins).not.toHaveBeenCalled()
   })
 
   it('useCreateForge invalidates its scope', async () => {

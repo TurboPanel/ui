@@ -39,7 +39,7 @@ export const ORG_AREAS = [
         id: 'settings',
         label: 'Settings',
         pathSegment: 'settings',
-        hint: 'Project defaults such as the default environment name',
+        hint: 'Project defaults such as the primary environment name',
       },
     ],
   },
@@ -148,8 +148,7 @@ export const ORG_AREAS = [
 ] as const
 
 export type OrgAreaId = (typeof ORG_AREAS)[number]['id']
-export type OrgSubRouteId =
-  (typeof ORG_AREAS)[number]['subRoutes'][number]['id']
+export type OrgSubRouteId = (typeof ORG_AREAS)[number]['subRoutes'][number]['id']
 
 /** Native bottom-tab set. Other org areas stay reachable by deep link only on native. */
 export const ORG_TAB_AREA_IDS = [
@@ -180,14 +179,9 @@ export type OrgTabAreaId = (typeof ORG_TAB_AREA_IDS)[number]
 
 export type OrgTabSwipeDirection = 'next' | 'previous'
 
-export type OrgTabHref =
-  | `/${string}/${string}`
-  | `/${string}/projects?workspaceId=${string}`
+export type OrgTabHref = `/${string}/${string}` | `/${string}/projects?workspaceId=${string}`
 
-export function orgAreaHref(
-  orgId: string,
-  areaPathSegment: string,
-): `/${string}/${string}` {
+export function orgAreaHref(orgId: string, areaPathSegment: string): `/${string}/${string}` {
   return `/${orgId}/${areaPathSegment}`
 }
 
@@ -202,11 +196,7 @@ function orgPathWithoutQuery(pathname: string): string {
  * Strips a query string when present. Expo `usePathname()` already omits the
  * query, so `/org/projects?workspaceId=…` and `/org/projects` both match.
  */
-export function isOrgAreaActive(
-  pathname: string,
-  orgId: string,
-  areaPathSegment: string,
-): boolean {
+export function isOrgAreaActive(pathname: string, orgId: string, areaPathSegment: string): boolean {
   const path = orgPathWithoutQuery(pathname)
   const href = orgAreaHref(orgId, areaPathSegment)
   return path === href || path.startsWith(`${href}/`)
@@ -219,9 +209,7 @@ export function isOrgAreaActive(
  */
 export function isOrgTabOverviewPath(pathname: string, orgId: string): boolean {
   const path = orgPathWithoutQuery(pathname)
-  return ORG_TAB_AREA_IDS.some(
-    (areaId) => path === orgAreaHref(orgId, areaId),
-  )
+  return ORG_TAB_AREA_IDS.some((areaId) => path === orgAreaHref(orgId, areaId))
 }
 
 /**
@@ -230,9 +218,7 @@ export function isOrgTabOverviewPath(pathname: string, orgId: string): boolean {
  */
 export function orgTabIndexFromPathname(pathname: string, orgId: string): number {
   const path = orgPathWithoutQuery(pathname)
-  return ORG_TAB_AREA_IDS.findIndex(
-    (areaId) => path === orgAreaHref(orgId, areaId),
-  )
+  return ORG_TAB_AREA_IDS.findIndex((areaId) => path === orgAreaHref(orgId, areaId))
 }
 
 /**
@@ -241,9 +227,7 @@ export function orgTabIndexFromPathname(pathname: string, orgId: string): number
  * or server detail).
  */
 export function isOrgTabOverviewRouteName(routeName: string): boolean {
-  const normalized = routeName
-    .replace(/\/index$/, '')
-    .replace(/^\[orgId\]\//, '')
+  const normalized = routeName.replace(/\/index$/, '').replace(/^\[orgId\]\//, '')
   return (ORG_TAB_AREA_IDS as readonly string[]).includes(normalized)
 }
 
@@ -251,20 +235,14 @@ export function isOrgTabOverviewRouteName(routeName: string): boolean {
 export const ORG_CONSOLE_SINGULAR_ID = 'org-console'
 
 type OrganizationReplaceRouter = Readonly<{
-  replace: (
-    href: Href,
-    options?: { dangerouslySingular?: boolean | (() => string) },
-  ) => void
+  replace: (href: Href, options?: { dangerouslySingular?: boolean | (() => string) }) => void
 }>
 
 /**
  * Open an organization without stacking the previous org on the native back
  * stack (no slide, no swipe-back to the org you just left).
  */
-export function replaceOrganization(
-  router: OrganizationReplaceRouter,
-  href: Href,
-): void {
+export function replaceOrganization(router: OrganizationReplaceRouter, href: Href): void {
   router.replace(href, {
     dangerouslySingular: () => ORG_CONSOLE_SINGULAR_ID,
   })
@@ -273,7 +251,7 @@ export function replaceOrganization(
 export function orgTabHref(
   orgId: string,
   areaId: OrgTabAreaId,
-  projectsScopeId: string,
+  projectsScopeId: string
 ): OrgTabHref {
   if (areaId === 'projects') {
     return projectsHrefForScope(orgId, projectsScopeId)
@@ -285,12 +263,10 @@ export function adjacentOrgTabHref(
   pathname: string,
   orgId: string,
   direction: OrgTabSwipeDirection,
-  projectsScopeId: string,
+  projectsScopeId: string
 ): OrgTabHref | null {
   const path = orgPathWithoutQuery(pathname)
-  const index = ORG_TAB_AREA_IDS.findIndex(
-    (areaId) => path === orgAreaHref(orgId, areaId),
-  )
+  const index = ORG_TAB_AREA_IDS.findIndex((areaId) => path === orgAreaHref(orgId, areaId))
   if (index < 0) {
     return null
   }
@@ -305,7 +281,7 @@ export function adjacentOrgTabHref(
 export function orgRouteHref(
   orgId: string,
   areaPathSegment: string,
-  subRoutePathSegment: string,
+  subRoutePathSegment: string
 ): `/${string}/${string}/${string}` {
   return `/${orgId}/${areaPathSegment}/${subRoutePathSegment}`
 }
@@ -331,6 +307,7 @@ export const ORG_SETTINGS_TAB_IDS = [
   'notifications',
   'domains',
   'git',
+  'principals',
 ] as const
 
 export type OrgSettingsTabId = (typeof ORG_SETTINGS_TAB_IDS)[number]
@@ -341,20 +318,19 @@ export const ORG_SETTINGS_TAB_LABELS: Record<OrgSettingsTabId, string> = {
   notifications: 'Notifications',
   domains: 'Domains & certificates',
   git: 'Git connections',
+  principals: 'Principals',
 }
 
 /** The tab a `?tab=` value names; anything else opens General. */
 export function parseOrgSettingsTab(
-  value: string | readonly string[] | null | undefined,
+  value: string | readonly string[] | null | undefined
 ): OrgSettingsTabId {
   const first = typeof value === 'string' ? value : value?.[0]
   return ORG_SETTINGS_TAB_IDS.find((id) => id === first) ?? 'general'
 }
 
 export function orgSettingsTabHref(orgId: string, tab: OrgSettingsTabId): string {
-  return tab === 'general'
-    ? orgManageHref(orgId)
-    : `${orgManageHref(orgId)}?tab=${tab}`
+  return tab === 'general' ? orgManageHref(orgId) : `${orgManageHref(orgId)}?tab=${tab}`
 }
 
 /**
@@ -367,7 +343,7 @@ export const BILLING_TIER_QUERY_PARAM = 'tier'
 
 export function orgBillingHref(
   orgId: string,
-  preselect?: Readonly<{ tier?: string | null }>,
+  preselect?: Readonly<{ tier?: string | null }>
 ): string {
   const params = new URLSearchParams()
   if (preselect?.tier) params.set(BILLING_TIER_QUERY_PARAM, preselect.tier)
@@ -377,15 +353,12 @@ export function orgBillingHref(
 
 export function serverMetricsHref(
   orgId: string,
-  serverId: string,
+  serverId: string
 ): `/${string}/servers/${string}/metrics` {
   return `/${orgId}/servers/${serverId}/metrics`
 }
 
-export function serverDetailHref(
-  orgId: string,
-  serverId: string,
-): `/${string}/servers/${string}` {
+export function serverDetailHref(orgId: string, serverId: string): `/${string}/servers/${string}` {
   return `/${orgId}/servers/${serverId}`
 }
 
@@ -396,9 +369,7 @@ export function serverDetailHref(
  * stops at applications and their connected accounts; the repository rows those
  * connections attach live on {@link projectRepositoriesHref}.
  */
-export function projectGitSourcesHref(
-  orgId: string,
-): `/${string}/projects/git-sources` {
+export function projectGitSourcesHref(orgId: string): `/${string}/projects/git-sources` {
   return `/${orgId}/projects/git-sources`
 }
 
@@ -410,76 +381,59 @@ export function projectGitSourcesHref(
  * sees what accumulated, refreshes provider facts, and deletes rows nothing
  * references any more.
  */
-export function projectRepositoriesHref(
-  orgId: string,
-): `/${string}/projects/repositories` {
+export function projectRepositoriesHref(orgId: string): `/${string}/projects/repositories` {
   return `/${orgId}/projects/repositories`
 }
 
 /** Organization-owned GitHub Apps and GitLab applications. */
 
-
-export function serversDatacentersHref(
-  orgId: string,
-): `/${string}/servers/datacenters` {
+export function serversDatacentersHref(orgId: string): `/${string}/servers/datacenters` {
   return `/${orgId}/servers/datacenters`
 }
 
-export function serversPendingKeysHref(
-  orgId: string,
-): `/${string}/servers/keys` {
+export function serversPendingKeysHref(orgId: string): `/${string}/servers/keys` {
   return `/${orgId}/servers/keys`
 }
 
 export function datacenterHref(
   orgId: string,
-  datacenterId: string,
+  datacenterId: string
 ): `/${string}/servers/datacenters/${string}` {
   return `/${orgId}/servers/datacenters/${datacenterId}`
 }
 
-export function datacenterNewHref(
-  orgId: string,
-): `/${string}/servers/datacenters/new` {
+export function datacenterNewHref(orgId: string): `/${string}/servers/datacenters/new` {
   return `/${orgId}/servers/datacenters/new`
 }
 
-export function networkFabricHref(
-  orgId: string,
-): `/${string}/network/fabric` {
+export function networkFabricHref(orgId: string): `/${string}/network/fabric` {
   return `/${orgId}/network/fabric`
 }
 
-export function networkAddressesHref(
-  orgId: string,
-): `/${string}/network/addresses` {
+export function networkAddressesHref(orgId: string): `/${string}/network/addresses` {
   return `/${orgId}/network/addresses`
 }
 
-export function networkDockerHref(
-  orgId: string,
-): `/${string}/network/docker` {
+export function networkDockerHref(orgId: string): `/${string}/network/docker` {
   return `/${orgId}/network/docker`
 }
 
-export function networkFirewallHref(
-  orgId: string,
-): `/${string}/network/firewall` {
+export function networkFirewallHref(orgId: string): `/${string}/network/firewall` {
   return `/${orgId}/network/firewall`
 }
 
-export function networkReservedHref(
-  orgId: string,
-): `/${string}/network/reserved` {
+export function networkReservedHref(orgId: string): `/${string}/network/reserved` {
   return `/${orgId}/network/reserved`
 }
 
 export const SERVER_DETAIL_TAB_IDS = [
   'overview',
+  'services',
   'control',
   'time',
   'network',
   'firewall',
+  'principals',
   'metrics',
 ] as const
 
@@ -487,17 +441,19 @@ export type ServerDetailTabId = (typeof SERVER_DETAIL_TAB_IDS)[number]
 
 export const SERVER_DETAIL_TAB_LABELS: Record<ServerDetailTabId, string> = {
   overview: 'Overview',
+  services: 'Services',
   control: 'Control',
   time: 'Time',
   network: 'Network',
   firewall: 'Firewall',
+  principals: 'Principals',
   metrics: 'Metrics',
 }
 
 export function serverDetailTabHref(
   orgId: string,
   serverId: string,
-  tabId: ServerDetailTabId,
+  tabId: ServerDetailTabId
 ): string {
   return `${serverDetailHref(orgId, serverId)}?tab=${tabId}`
 }
@@ -555,9 +511,7 @@ export function orgAreaFromPathname(pathname: string) {
     if (extra) return { area, subRoute: extra }
     if (parts.length >= 3) {
       const maybeSub = parts[2]
-      const knownSub = area.subRoutes.some(
-        (entry) => entry.pathSegment === maybeSub,
-      )
+      const knownSub = area.subRoutes.some((entry) => entry.pathSegment === maybeSub)
       if (!knownSub && maybeSub !== 'metrics') {
         return { area, subRoute: SERVER_DETAIL_SUB_ROUTE }
       }
@@ -566,8 +520,7 @@ export function orgAreaFromPathname(pathname: string) {
 
   const subRouteSegment = parts[2]
   const subRoute = subRouteSegment
-    ? (area.subRoutes.find((entry) => entry.pathSegment === subRouteSegment) ??
-      null)
+    ? (area.subRoutes.find((entry) => entry.pathSegment === subRouteSegment) ?? null)
     : null
 
   return { area, subRoute }

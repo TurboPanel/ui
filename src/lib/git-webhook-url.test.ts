@@ -3,6 +3,9 @@ import {
   gitWebhookHint,
   LAN_WEBHOOK_NOTE,
   NO_URL_WEBHOOK_NOTE,
+  noWebhookOriginCopy,
+  PLATFORM_NO_URL_WEBHOOK_NOTE,
+  webhookOriginsState,
   webhookPathFor,
 } from '@/lib/git-webhook-url'
 
@@ -141,5 +144,40 @@ describe('webhookPathFor', () => {
   it('falls back to the bare path when the ref or origin is missing', () => {
     expect(webhookPathFor('github', null, 'https://github.acme.test')).toBe('/webhook/github')
     expect(webhookPathFor('github', 'ref-1')).toBe('/webhook/github')
+  })
+})
+
+describe('noWebhookOriginCopy', () => {
+  it('keeps the Networking advice for a self-hosted control plane', () => {
+    const copy = noWebhookOriginCopy(false)
+    expect(copy.title).toBe('No public URL configured')
+    expect(copy.wizardBody).toContain('under Networking')
+    expect(copy.registerError).toContain('under Networking')
+    expect(copy.detailBody).toContain('public URL')
+  })
+
+  it('never points the hosted control plane at Networking or a public URL setting', () => {
+    const copy = noWebhookOriginCopy(true)
+    for (const text of [copy.title, copy.wizardBody, copy.registerError, copy.detailBody]) {
+      expect(text).not.toContain('Networking')
+      expect(text).not.toMatch(/public URL/i)
+    }
+    expect(PLATFORM_NO_URL_WEBHOOK_NOTE).not.toContain('Networking')
+    expect(PLATFORM_NO_URL_WEBHOOK_NOTE).not.toMatch(/public URL/i)
+  })
+})
+
+describe('webhookOriginsState', () => {
+  it('is loading until data arrives, and an error only without data', () => {
+    expect(webhookOriginsState({ isError: false })).toEqual({ kind: 'loading' })
+    expect(webhookOriginsState({ isError: true })).toEqual({ kind: 'error' })
+  })
+
+  it('keeps data in hand over a later refetch error', () => {
+    const data = { origins: ['https://panel.example.com'], platformManaged: true }
+    expect(webhookOriginsState({ data, isError: true })).toEqual({ kind: 'ready', ...data })
+    expect(
+      webhookOriginsState({ data: { origins: [], platformManaged: false }, isError: false }),
+    ).toEqual({ kind: 'ready', origins: [], platformManaged: false })
   })
 })

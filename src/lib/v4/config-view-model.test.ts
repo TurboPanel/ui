@@ -7,7 +7,9 @@ import {
   SECTION_ROW_LIMIT,
   showAllLabel,
   firstRows,
+  withHostingHostnames,
 } from './config-view-model'
+import type { HostingRecord } from '@/lib/instance-api'
 import {
   domainRow,
   fieldRow,
@@ -21,12 +23,53 @@ import {
 const staging = () => buildConfigViewModel({ envName: 'Staging', view: stagingView() })
 
 describe('rowSource', () => {
-  it('maps the server source to a tag source', () => {
-    expect(rowSource('base', true)).toBe('base')
-    expect(rowSource('project', true)).toBe('base')
-    expect(rowSource('environment', true)).toBe('env')
-    expect(rowSource('base', false)).toBe('own')
-    expect(rowSource('environment', false)).toBe('own')
+  it('maps what the control plane says about the Base to a tag source', () => {
+    expect(rowSource({ inheritedFromBase: true }, false)).toBe('base')
+    expect(rowSource({ inheritedFromBase: true }, true)).toBe('base')
+    expect(rowSource({ inheritedFromBase: false }, false)).toBe('env')
+    expect(rowSource({ inheritedFromBase: false }, true)).toBe('own')
+  })
+})
+
+describe('where a value comes from', () => {
+  it('tags a row that is inherited from the Base as From the Base', () => {
+    const view = plainView()
+    view.effective.services = [
+      service('web', 'node', [
+        fieldRow('web', 'command', 'npm start', { inheritedFromBase: true }),
+      ]),
+    ]
+    const [app] = buildConfigViewModel({ envName: 'Staging', view }).apps
+    expect(app.tag).toEqual({ source: 'base', label: 'From the Base' })
+  })
+
+  it('tags a row the environment changed as an environment change', () => {
+    const [web] = staging().apps
+    expect(web.tag).toEqual({ source: 'env', label: 'Staging change' })
+    const api = staging().variables.find((row) => row.name === 'API_URL')
+    expect(api?.tag).toEqual({ source: 'env', label: 'Staging change' })
+  })
+
+  it('tags a row that is not inherited as Set in the environment when it stands alone', () => {
+    const model = buildConfigViewModel({ envName: 'Staging', view: standaloneView() })
+    expect(model.standsAlone).toBe(true)
+    expect(model.apps[0].tag).toEqual({ source: 'own', label: 'Set in Staging' })
+    expect(model.domains.every((domain) => domain.tag.label === 'Set in Staging')).toBe(true)
+  })
+
+  it('keeps variables that are still inherited marked From the Base in a stand-alone environment', () => {
+    const rows = buildConfigViewModel({ envName: 'Staging', view: standaloneView() }).variables
+    expect(rows.find((row) => row.name === 'MODE')?.tag).toEqual({
+      source: 'base',
+      label: 'From the Base',
+    })
+  })
+
+  it('says whether the environment is the primary one', () => {
+    expect(staging().isPrimary).toBe(false)
+    const view = stagingView()
+    view.isPrimary = true
+    expect(buildConfigViewModel({ envName: 'Production', view }).isPrimary).toBe(true)
   })
 })
 
@@ -35,7 +78,7 @@ describe('change rows', () => {
     const model = staging()
     expect(model.changeCount).toBe(4)
     expect(model.onlyChangesLabel).toBe('Only changes from Base (4)')
-    expect(model.relationText).toBe('Follows the Base · 4 changes')
+    expect(model.relationText).toBe('4 changes from the Base')
   })
 
   it('say what changed, where, and from what to what', () => {
@@ -47,25 +90,47 @@ describe('change rows', () => {
       envText: 'npm run staging',
       tag: { source: 'env', label: 'Staging change' },
     })
-    expect(user).toMatchObject({ where: 'Linux users', baseText: 'website', envText: 'staging-web' })
+    expect(user).toMatchObject({
+      where: 'Hosting Accounts',
+      baseText: 'website',
+      envText: 'staging-web',
+    })
     expect(variableChange).toMatchObject({ label: 'API_URL', where: 'Variable' })
-    expect(added).toMatchObject({ label: 'worker', baseText: 'Not set', envText: 'node', kind: 'added' })
+    expect(added).toMatchObject({
+      label: 'worker',
+      baseText: 'Not set',
+      envText: 'node',
+      kind: 'added',
+    })
   })
 
   it('shows a removed value as Removed and a secret as Hidden', () => {
     const view = stagingView()
     view.changes = [
       { ...view.changes[0], kind: 'removed', envValue: null, envSource: null },
-      { ...view.changes[0], key: 'svc:web:environment.TOKEN', masked: true, baseValue: null, envValue: null },
+      {
+        ...view.changes[0],
+        key: 'svc:web:environment.TOKEN',
+        masked: true,
+        baseValue: null,
+        envValue: null,
+      },
       { ...view.changes[0], key: 'svc:web:image', baseValue: '', envValue: '' },
       { ...view.changes[0], key: 'dom', area: 'domain', label: 'Domain', serviceName: null },
-      { ...view.changes[0], key: 'x', area: 'service', field: null, serviceName: null, label: 'Kind' },
+      {
+        ...view.changes[0],
+        key: 'x',
+        area: 'service',
+        field: null,
+        serviceName: null,
+        label: 'Kind',
+      },
     ]
     const rows = buildConfigViewModel({ envName: 'Staging', view }).changes
     expect(rows[0].envText).toBe('Removed')
     expect(rows[1]).toMatchObject({ baseText: HIDDEN_VALUE, envText: HIDDEN_VALUE, masked: true })
     expect(rows[2]).toMatchObject({ baseText: 'Empty', envText: 'Empty' })
-    expect(rows[3].where).toBe('Domain on an app')
+    expect(rows[3].where).toBe('Hostname on an app')
     expect(rows[4]).toMatchObject({ label: 'Kind', where: 'App' })
   })
 
@@ -88,12 +153,16 @@ describe('apps', () => {
       changeText: 'Staging changes: start command, Linux user',
       tag: { source: 'env', label: 'Staging change' },
     })
-    expect(web.runsAs).toMatchObject({ user: 'staging-web', label: 'Runs as staging-web', source: 'env' })
+    expect(web.runsAs).toMatchObject({
+      user: 'staging-web',
+      label: 'Runs as staging-web',
+      source: 'env',
+    })
     expect(worker).toMatchObject({ changeText: 'Added in Staging', tag: { source: 'env' } })
     expect(api).toMatchObject({
       kindLine: 'Container · ghcr.io/example/api:1',
       changeText: 'Same as the Base',
-      tag: { source: 'base', label: 'Base' },
+      tag: { source: 'base', label: 'From the Base' },
     })
     expect(api.runsAs.runsInContainer).toBe(true)
   })
@@ -124,8 +193,8 @@ describe('apps', () => {
     const [web, site] = buildConfigViewModel({ envName: 'Staging', view }).apps
     expect(web.runsAs).toMatchObject({ access: 'SFTP on', hasAccess: true, source: 'base' })
     expect(site.runsAs).toMatchObject({
-      label: 'No Linux user yet',
-      short: 'no Linux user',
+      label: 'No Hosting Account yet',
+      short: 'no Hosting Account',
       access: 'No sign-in',
       hasAccess: false,
     })
@@ -144,7 +213,12 @@ describe('data', () => {
   it('lists data store containers apart from apps', () => {
     const { data } = staging()
     expect(data).toEqual([
-      { name: 'cache', serviceId: 'id-cache', image: 'redis:7', tag: { source: 'base', label: 'Base' } },
+      {
+        name: 'cache',
+        serviceId: 'id-cache',
+        image: 'redis:7',
+        tag: { source: 'base', label: 'From the Base' },
+      },
     ])
   })
 
@@ -170,7 +244,7 @@ describe('domains', () => {
     expect(domains[0]).toMatchObject({
       serviceName: 'web',
       url: 'https://shop.example.com',
-      tag: { source: 'base', label: 'Base' },
+      tag: { source: 'base', label: 'From the Base' },
     })
     expect(domains[1].tag).toEqual({ source: 'env', label: 'Staging change' })
   })
@@ -184,8 +258,87 @@ describe('domains', () => {
   })
 })
 
+function hosting(
+  id: string,
+  hostnames: string[],
+  extra: Partial<HostingRecord> = {}
+): HostingRecord {
+  return {
+    id,
+    name: null,
+    description: null,
+    serviceId: 'id-web',
+    options: { hostnames },
+    createdAt: '2026-10-19T00:00:00Z',
+    updatedAt: '2026-10-19T00:00:00Z',
+    ...extra,
+  }
+}
+
+function viewWithoutHostnames() {
+  const view = plainView()
+  view.effective.services = [service('web', 'node', [fieldRow('web', 'command', 'npm start')])]
+  return view
+}
+
+describe('hostnames held by the panel', () => {
+  it('lists a hostname added on the Hosting screen even though no compose file names it', () => {
+    const model = buildConfigViewModel({ envName: 'Staging', view: viewWithoutHostnames() })
+    expect(model.domains).toEqual([])
+    const merged = withHostingHostnames(model, { 'id-web': [hosting('h1', ['app.example.com'])] })
+    expect(merged.domains).toHaveLength(1)
+    expect(merged.domains[0]).toMatchObject({
+      host: 'app.example.com',
+      hostingId: 'h1',
+      serviceName: 'web',
+      url: 'https://app.example.com',
+      certificate: null,
+    })
+  })
+
+  it('does not list a hostname twice when compose names it too, and adds its certificate word', () => {
+    const model = staging()
+    const merged = withHostingHostnames(model, {
+      'id-web': [
+        hosting('h1', ['SHOP.example.com', 'extra.example.com'], {
+          certificate: {
+            state: 'waiting_for_dns',
+            source: 'lets_encrypt',
+            expiresAt: null,
+            expiresInDays: null,
+            renewsAutomatically: true,
+            lastError: null,
+            lastIssuedAt: null,
+            uploadedExpiryWarning: 'none',
+            dns: null,
+            letsEncryptAvailable: true,
+            www: 'off',
+            needsDeploy: false,
+          },
+        }),
+      ],
+    })
+    expect(merged.domains.map((domain) => domain.host)).toEqual([
+      'shop.example.com',
+      'staging.example.com',
+      'extra.example.com',
+    ])
+    expect(merged.domains[0]).toMatchObject({ hostingId: 'h1' })
+    expect(merged.domains[0].certificate?.label).toBeTruthy()
+    expect(merged.domains[2].tag).toEqual({ source: 'env', label: 'Staging change' })
+  })
+
+  it('ignores a hosting without hostnames and an app the panel has no id for', () => {
+    const model = buildConfigViewModel({ envName: 'Staging', view: viewWithoutHostnames() })
+    const merged = withHostingHostnames(model, {
+      'id-web': [hosting('h2', []), hosting('h3', [], { options: null })],
+    })
+    expect(merged.domains).toEqual([])
+  })
+})
+
 describe('variables', () => {
-  it('tags project variables, changes, and masks secrets', () => {
+  it('tags Base variables, changes, and masks secrets', () => {
     const { variables } = staging()
     const byName = Object.fromEntries(variables.map((row) => [row.name, row]))
     expect(byName.API_URL).toMatchObject({
@@ -196,11 +349,15 @@ describe('variables', () => {
     })
     expect(byName.MODE).toMatchObject({
       isChange: false,
-      tag: { source: 'base', label: 'Project' },
+      tag: { source: 'base', label: 'From the Base' },
       usedFor: 'Build and run',
       sourceNote: '',
     })
-    expect(byName.SECRET_KEY).toMatchObject({ valueText: SECRET_VALUE, isSecret: true, usedFor: 'Build only' })
+    expect(byName.SECRET_KEY).toMatchObject({
+      valueText: SECRET_VALUE,
+      isSecret: true,
+      usedFor: 'Build only',
+    })
     expect(byName.EMPTY).toMatchObject({ valueText: 'Empty', usedFor: 'Not used' })
     expect(byName.BUILD_ONLY.usedFor).toBe('Build only')
   })
@@ -223,7 +380,7 @@ describe('variables', () => {
     const view = standaloneView()
     const rows = buildConfigViewModel({ envName: 'Staging', view }).variables
     expect(rows.find((row) => row.name === 'API_URL')?.tag.label).toBe('Set in Staging')
-    expect(rows.find((row) => row.name === 'MODE')?.tag.label).toBe('Project')
+    expect(rows.find((row) => row.name === 'MODE')?.tag.label).toBe('From the Base')
   })
 
   it('has a note-less changed variable when the change is missing', () => {
@@ -234,8 +391,8 @@ describe('variables', () => {
   })
 })
 
-describe('Linux users', () => {
-  it('lists the apps that run as a Linux user, not containers', () => {
+describe('Hosting Accounts', () => {
+  it('lists the apps that run as a Hosting Account, not containers', () => {
     const { linuxUsers } = staging()
     expect(linuxUsers.map((row) => row.serviceName)).toEqual(['web', 'worker'])
     expect(linuxUsers[0]).toMatchObject({
@@ -246,22 +403,31 @@ describe('Linux users', () => {
     expect(linuxUsers[1].runsAs.user).toBe('')
   })
 
-  it('offers only users the Base declares, sorted', () => {
+  it('offers only Hosting Accounts the Base declares, sorted', () => {
     expect(staging().linuxUserNames).toEqual(['staging-web', 'website'])
     const view = stagingView()
     view.effective.linuxUsers = [
       ...view.effective.linuxUsers,
-      { name: 'only-here', access: 'none', description: null, source: 'environment', usedBy: [] },
+      {
+        name: 'only-here',
+        access: 'none',
+        description: null,
+        source: 'environment',
+        inheritedFromBase: false,
+        usedBy: [],
+      },
     ]
-    expect(buildConfigViewModel({ envName: 'Staging', view }).linuxUserNames).not.toContain('only-here')
+    expect(buildConfigViewModel({ envName: 'Staging', view }).linuxUserNames).not.toContain(
+      'only-here'
+    )
   })
 
-  it('tags a Base assignment as Base', () => {
+  it('tags a Base assignment as From the Base', () => {
     const { linuxUsers } = buildConfigViewModel({ envName: 'Staging', view: plainView() })
     expect(linuxUsers[0]).toMatchObject({
       isChange: false,
       access: 'SFTP on',
-      tag: { source: 'base', label: 'Base' },
+      tag: { source: 'base', label: 'From the Base' },
     })
   })
 })
@@ -270,7 +436,7 @@ describe('a plain environment', () => {
   it('has no changes', () => {
     const model = buildConfigViewModel({ envName: 'Staging', view: plainView() })
     expect(model.changeCount).toBe(0)
-    expect(model.relationText).toBe('Follows the Base · 0 changes')
+    expect(model.relationText).toBe('Same as the Base')
     expect(model.apps[0].changeText).toBe('Same as the Base')
   })
 })

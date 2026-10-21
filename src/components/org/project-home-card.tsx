@@ -18,7 +18,7 @@ const styles = themedStyles((p) => ({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
 }))
 
-/** "Follows the Base · 2 changes · shop.example.com": what is known, nothing else. */
+/** "2 changes from the Base · shop.example.com": what is known, nothing else. */
 function environmentSub(env: HomeEnvironment): string | undefined {
   const parts = [env.relation?.text, env.host].filter((part) => part !== undefined && part !== null)
   return parts.length > 0 ? parts.join(' · ') : undefined
@@ -64,7 +64,14 @@ export function ProjectHomeCard({
           <Text style={s.sub}>{sub}</Text>
         </>
       }
-      foot={<ActionButton label="Open" size="sm" accessibilityLabel={`Open ${project.name}`} onPress={onOpen} />}
+      foot={
+        <ActionButton
+          label="Open"
+          size="sm"
+          accessibilityLabel={`Open ${project.name}`}
+          onPress={onOpen}
+        />
+      }
     >
       {project.description ? (
         <Text style={s.description} numberOfLines={2}>

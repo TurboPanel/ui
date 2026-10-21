@@ -76,6 +76,13 @@ the App with the webhook already set and hands back every credential in one hop.
 Step 2 exists because the webhook address is a decision, not a display: an
 instance with several public URLs has to say which one the provider can reach.
 
+The endpoint list comes from `GET …/forges/webhook-origins` on the same surface
+as the collection (`useForgeWebhookOrigins`), never from the admin-only public
+URL list: an organization manager can run the wizard too, and on the hosted
+control plane the address is the platform's, not a public URL anyone set. The
+empty-list notice follows `platformManaged` (`noWebhookOriginCopy`): self-hosted
+says to add a public URL under Networking; hosted never mentions Networking.
+
 ## Provider round-trips end in the console, never on JSON
 
 Registration and installation both come back through the control plane, which
