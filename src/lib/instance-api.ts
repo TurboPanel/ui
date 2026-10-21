@@ -9467,6 +9467,11 @@ export type BackupPolicyRecord = {
   preset: BackupSchedulePreset | null
   /** IANA zone; null means the host's local time. */
   timezone: string | null
+  /**
+   * The database each run dumps (managed engines). Null means the cluster's
+   * initial database. Absent on a control plane that predates the choice.
+   */
+  database?: string | null
   retentionKeep: number
   enabled: boolean
   /** True for the daily policy the instance creates with a new engine. */
@@ -9488,6 +9493,8 @@ export type CreateBackupPolicyBody = {
   name: string
   schedule: BackupScheduleInput
   timezone?: string | null
+  /** Managed engines only; null or left out means the cluster's initial database. */
+  database?: string | null
   retentionKeep: number
   enabled?: boolean
 }
@@ -9497,6 +9504,8 @@ export type UpdateBackupPolicyBody = Partial<{
   schedule: BackupScheduleInput
   /** null clears it (host local time). */
   timezone: string | null
+  /** null clears it (the cluster's initial database). */
+  database: string | null
   retentionKeep: number
   enabled: boolean
 }>
