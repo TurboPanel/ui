@@ -12,13 +12,9 @@ import {
 } from '@/components/ui'
 import {
   LoginStraightThroughEditor,
-  StraightThroughSwitch,
+  NewLoginStraightThroughField,
 } from '@/components/org/managed/managed-login-straight-through'
-import {
-  newLoginStraightThrough,
-  newLoginStraightThroughPayload,
-  supportsStraightThrough,
-} from '@/lib/managed-straight-through'
+import { newLoginStraightThroughPayload } from '@/lib/managed-straight-through'
 import {
   LoginLimitBadges,
   LoginLimitsEditor,
@@ -184,7 +180,6 @@ export function ManagedUsersPanel({
   const [limitsProblem, setLimitsProblem] = useState<string | null>(null)
   // null = the owner has not touched the switch, so the default for the chosen level shows.
   const [straightChoice, setStraightChoice] = useState<boolean | null>(null)
-  const postgres = supportsStraightThrough(engine)
   const [error, setError] = useState<string | null>(null)
   const [usernameHint, setUsernameHint] = useState<string | null>(null)
   const [working, setWorking] = useState(false)
@@ -293,9 +288,7 @@ export function ManagedUsersPanel({
         tool,
         ...(allowedSources ? { allowedSources } : {}),
         ...(maxConnections ? { maxConnections } : {}),
-        ...(postgres
-          ? newLoginStraightThroughPayload(straightChoice, allowedSources !== null)
-          : {}),
+        ...newLoginStraightThroughPayload(engine, straightChoice, allowedSources !== null),
         nameScheme: nameScheme.requestScheme,
       })
       if (result?.password) {
@@ -491,8 +484,9 @@ export function ManagedUsersPanel({
                   {describeWhere(user.allowedSources, servers)} {describeCap(user.maxConnections)}
                 </Text>
               )}
-              {canManage && postgres ? (
+              {canManage ? (
                 <LoginStraightThroughEditor
+                  engine={engine}
                   user={user}
                   disabled={disabled}
                   onUpdate={onUpdateUser}
@@ -633,19 +627,14 @@ export function ManagedUsersPanel({
             disabled={disabled}
           />
           {limitsProblem ? <Text style={panelStyles.error}>{limitsProblem}</Text> : null}
-          {postgres ? (
-            <StraightThroughSwitch
-              value={newLoginStraightThrough(
-                straightChoice,
-                [admin ? MANAGED_ADMIN_PRIVILEGE : job],
-                limits.limited
-              )}
-              isDefault={straightChoice === null}
-              limited={limits.limited}
-              disabled={disabled}
-              onChange={setStraightChoice}
-            />
-          ) : null}
+          <NewLoginStraightThroughField
+            engine={engine}
+            choice={straightChoice}
+            privileges={[admin ? MANAGED_ADMIN_PRIVILEGE : job]}
+            limited={limits.limited}
+            disabled={disabled}
+            onChange={setStraightChoice}
+          />
           <Button
             label="Create user"
             variant="primary"

@@ -10,6 +10,8 @@ import {
   STRAIGHT_THROUGH_HELP,
   STRAIGHT_THROUGH_LABEL,
   STRAIGHT_THROUGH_LIMITED_HINT,
+  newLoginStraightThrough,
+  supportsStraightThrough,
 } from '@/lib/managed-straight-through'
 import { spacing } from '@/lib/theme'
 
@@ -60,13 +62,49 @@ export function StraightThroughSwitch({
   )
 }
 
+function confirmTitle(value: boolean | null | undefined): string {
+  if (value === null) return 'Go back to the default?'
+  return `Turn ${value ? 'on' : 'off'} connecting straight through?`
+}
+
+/** Switch for the new-login form (PostgreSQL only): shows the default for the chosen level until the owner chooses. */
+export function NewLoginStraightThroughField({
+  engine,
+  choice,
+  privileges,
+  limited,
+  disabled,
+  onChange,
+}: Readonly<{
+  engine: string | null | undefined
+  /** `null` until the owner touches the switch. */
+  choice: boolean | null
+  privileges: readonly string[]
+  limited: boolean
+  disabled: boolean
+  onChange: (next: boolean) => void
+}>) {
+  if (!supportsStraightThrough(engine)) return null
+  return (
+    <StraightThroughSwitch
+      value={newLoginStraightThrough(choice, privileges, limited)}
+      isDefault={choice === null}
+      limited={limited}
+      disabled={disabled}
+      onChange={onChange}
+    />
+  )
+}
+
 /** Switch for an existing PostgreSQL login: preview, confirm, save. "Use default" sends `null`. */
 export function LoginStraightThroughEditor({
+  engine,
   user,
   disabled,
   onUpdate,
   onError,
 }: Readonly<{
+  engine: string | null | undefined
   user: ManagedUserRecord
   disabled: boolean
   onUpdate: (loginId: string, body: ManagedUserPatch) => Promise<ManagedUserPatchResult>
@@ -80,6 +118,7 @@ export function LoginStraightThroughEditor({
   const limited = isLimited(user.allowedSources)
   const isDefault = user.straightThroughDefault !== false
   const value = user.straightThrough === true
+  if (!supportsStraightThrough(engine)) return null
   return (
     <View style={styles.wrap}>
       <StraightThroughSwitch
@@ -107,11 +146,7 @@ export function LoginStraightThroughEditor({
       ) : null}
       <PreviewSheet
         visible={pending !== null}
-        title={
-          pending?.value === null
-            ? 'Go back to the default?'
-            : `Turn ${pending?.value ? 'on' : 'off'} connecting straight through?`
-        }
+        title={confirmTitle(pending?.value)}
         description={STRAIGHT_THROUGH_HELP}
         statements={pending?.statements ?? []}
         busy={busy}

@@ -39,13 +39,22 @@ describe('new login defaults', () => {
 
 describe('newLoginStraightThroughPayload', () => {
   it('sends only an explicit choice', () => {
-    expect(newLoginStraightThroughPayload(null, false)).toEqual({})
-    expect(newLoginStraightThroughPayload(true, false)).toEqual({ straightThrough: true })
-    expect(newLoginStraightThroughPayload(false, false)).toEqual({ straightThrough: false })
+    expect(newLoginStraightThroughPayload('postgres', null, false)).toEqual({})
+    expect(newLoginStraightThroughPayload('postgres', true, false)).toEqual({
+      straightThrough: true,
+    })
+    expect(newLoginStraightThroughPayload('postgres', false, false)).toEqual({
+      straightThrough: false,
+    })
   })
 
   it('sends nothing with a source limit, which the control plane would refuse', () => {
-    expect(newLoginStraightThroughPayload(true, true)).toEqual({})
+    expect(newLoginStraightThroughPayload('postgres', true, true)).toEqual({})
+  })
+
+  it('sends nothing for other engines', () => {
+    expect(newLoginStraightThroughPayload('mysql', true, false)).toEqual({})
+    expect(newLoginStraightThroughPayload(null, true, false)).toEqual({})
   })
 })
 

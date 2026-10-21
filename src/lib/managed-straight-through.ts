@@ -41,13 +41,16 @@ export function newLoginStraightThrough(
 
 /**
  * The create field to send: only an explicit choice, and never with a source
- * limit (the control plane refuses that pair). Absent = the default.
+ * limit (the control plane refuses that pair), and only for PostgreSQL. Absent = the default.
  */
 export function newLoginStraightThroughPayload(
+  engine: string | null | undefined,
   choice: boolean | null,
   limited: boolean
 ): { straightThrough?: boolean } {
-  return choice === null || limited ? {} : { straightThrough: choice }
+  return !supportsStraightThrough(engine) || choice === null || limited
+    ? {}
+    : { straightThrough: choice }
 }
 
 export const STRAIGHT_THROUGH_ERROR_COPY: Record<string, string> = {

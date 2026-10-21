@@ -83,7 +83,11 @@ vi.mock('@/components/ui', () => ({
 }))
 
 import type { ManagedUserRecord } from '@/lib/managed-services'
-import { LoginStraightThroughEditor, StraightThroughSwitch } from './managed-login-straight-through'
+import {
+  LoginStraightThroughEditor,
+  NewLoginStraightThroughField,
+  StraightThroughSwitch,
+} from './managed-login-straight-through'
 
 afterEach(cleanup)
 
@@ -165,6 +169,7 @@ describe('LoginStraightThroughEditor', () => {
     const onError = vi.fn()
     render(
       <LoginStraightThroughEditor
+        engine="postgres"
         user={user(over)}
         disabled={false}
         onUpdate={onUpdate}
@@ -223,6 +228,7 @@ describe('LoginStraightThroughEditor', () => {
     })
     render(
       <LoginStraightThroughEditor
+        engine="postgres"
         user={user()}
         disabled={false}
         onUpdate={onUpdate}
@@ -235,5 +241,42 @@ describe('LoginStraightThroughEditor', () => {
         'A login that connects straight through cannot be limited to certain addresses. Turn one off.'
       )
     )
+  })
+})
+
+describe('NewLoginStraightThroughField', () => {
+  const draw = (over: Partial<Parameters<typeof NewLoginStraightThroughField>[0]> = {}) =>
+    render(
+      <NewLoginStraightThroughField
+        engine="postgres"
+        choice={null}
+        privileges={['read-write']}
+        limited={false}
+        disabled={false}
+        onChange={vi.fn()}
+        {...over}
+      />
+    )
+
+  it('is hidden for other engines', () => {
+    draw({ engine: 'mysql' })
+    expect(screen.queryByText(LABEL)).toBeNull()
+  })
+
+  it('starts off for read/write and on for Migration, with the default hint', () => {
+    draw()
+    expect(screen.getByRole('switch').getAttribute('aria-checked')).toBe('false')
+    expect(screen.getByText('default')).toBeTruthy()
+    cleanup()
+    draw({ privileges: ['owner'] })
+    expect(screen.getByRole('switch').getAttribute('aria-checked')).toBe('true')
+  })
+
+  it('turns off and disables when a source limit is added', () => {
+    draw({ privileges: ['owner'], limited: true })
+    const toggle = screen.getByRole('switch') as HTMLButtonElement
+    expect(toggle.getAttribute('aria-checked')).toBe('false')
+    expect(toggle.disabled).toBe(true)
+    expect(screen.getByText(LIMITED)).toBeTruthy()
   })
 })
