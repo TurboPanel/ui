@@ -66,6 +66,12 @@ describe('labels', () => {
     expect(trafficStateTone('chosen')).toBe('ok')
     expect(trafficStateTone('link_down')).toBe('danger')
     expect(trafficStateTone('untrusted')).toBe('muted')
+    expect(trafficStateTone('standby')).toBe('info')
+    expect(trafficStateTone('no_common_address')).toBe('pending')
+    expect(trafficStateLabel('no_common_address')).toBe('No shared address type')
+    expect(trafficStateLabel('untrusted')).toBe('Not used')
+    expect(linkLabel('up')).toBe('Up')
+    expect(linkLabel('down')).toBe('Down')
     expect(linkLabel('unknown')).toBe('Not reported')
   })
 
