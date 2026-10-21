@@ -9,6 +9,7 @@ import {
   MANAGED_FAILOVER_UNSUPPORTED_REASON,
 } from '@/lib/managed-releases'
 import type { ManagedSslMode } from '@/lib/managed-ssl'
+import { STRAIGHT_THROUGH_ERROR_COPY } from '@/lib/managed-straight-through'
 import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
 import { MANAGED_HAS_BINDINGS_COPY } from '@/lib/user-error'
 
@@ -162,7 +163,7 @@ export type ManagedServiceCatalogEntry = {
  */
 export function managedStoredImage(
   entry: { defaultImage: string; legacyDefaultImage?: string } | undefined,
-  image: string | undefined,
+  image: string | undefined
 ): string {
   return image ?? entry?.legacyDefaultImage ?? entry?.defaultImage ?? ''
 }
@@ -310,6 +311,10 @@ export type ManagedUserRecord = {
   allowedSources?: string[]
   /** Most connections at once; `null`/absent = no cap. */
   maxConnections?: number | null
+  /** PostgreSQL only: connects straight through (no connection sharing). Always false with a source limit; absent on an older control plane. */
+  straightThrough?: boolean
+  /** True when the owner never chose, so `straightThrough` is the default. */
+  straightThroughDefault?: boolean
   createdAt: string
 }
 
@@ -574,20 +579,21 @@ const MANAGED_ERROR_COPY: Record<string, string> = {
     'This change resets permissions the panel does not manage. Confirm the reset to continue.',
   managed_grant_mode_invalid_transition:
     'An older login cannot be switched back to its original permissions. Choose one of the two modes shown.',
-  managed_login_not_editable:
-    'This login is kept by the panel and cannot be changed here.',
+  managed_login_not_editable: 'This login is kept by the panel and cannot be changed here.',
   managed_login_limits_need_daemon_update:
     'This server needs updating before it can limit where a login connects from or how many connections it holds. Update the server, then try again.',
-  managed_login_sources_empty:
-    'Choose at least one place, or choose Anywhere to remove the limit.',
+  managed_login_sources_empty: 'Choose at least one place, or choose Anywhere to remove the limit.',
   managed_login_source_range_not_exact:
     'That range can’t be matched exactly. List the addresses one by one, or use a prefix such as 203.0.113.%.',
   managed_login_source_invalid: 'One of the places is not a valid address, prefix or range.',
   managed_login_sources_invalid: 'The list of places is not valid.',
-  managed_login_sources_too_many: 'Too many places. Use an address prefix such as 203.0.113.% to cover more.',
+  managed_login_sources_too_many:
+    'Too many places. Use an address prefix such as 203.0.113.% to cover more.',
   managed_login_sources_any_alone: 'Anywhere can’t be combined with other places.',
   managed_login_source_server_unknown: 'One of the chosen servers is not in this organization.',
-  managed_login_max_connections_invalid: 'Most connections at once must be a whole number from 1 to 10000.',
+  managed_login_max_connections_invalid:
+    'Most connections at once must be a whole number from 1 to 10000.',
+  ...STRAIGHT_THROUGH_ERROR_COPY,
   managed_grant_mode_invalid: 'That permission mode is not valid.',
   managed_admin_needs_owner_role:
     'A Database admin login cannot be made on some of these databases. Choose different databases, or use a different kind of login.',
