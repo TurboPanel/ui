@@ -26,7 +26,11 @@ import {
   principalStateTone,
   principalUsageLines,
 } from '@/lib/principal-words'
-import { useDeleteOrgPrincipal, useOrgPrincipals } from '@/lib/queries/org-principals'
+import {
+  failedRetireServerIds,
+  useDeleteOrgPrincipal,
+  useOrgPrincipals,
+} from '@/lib/queries/org-principals'
 import { useCan } from '@/lib/query-client'
 import { spacing } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
@@ -104,14 +108,15 @@ function PrincipalRow({
           row.servers.map((server) => (
             <Text key={server.serverId} style={panelStyles.detailLine}>
               {server.serverName ?? 'Unnamed server'}
-              {server.state === 'present' ? '' : ` (${principalStateLabel(server.state).toLowerCase()})`}
+              {server.state === 'present'
+                ? ''
+                : ` (${principalStateLabel(server.state).toLowerCase()})`}
             </Text>
           ))
         )}
       </DataTableCell>
       <DataTableCell column={C_USED_BY}>
         {usedByLines(row).map((line, lineIndex) => (
-           
           <Text key={`${lineIndex}-${line}`} style={panelStyles.detailLine}>
             {line}
           </Text>
@@ -124,9 +129,7 @@ function PrincipalRow({
           <Badge label={principalStateLabel(row.state)} tone={principalStateTone(row.state)} />
         )}
       </DataTableCell>
-      <DataTableCell column={C_ACTION}>
-        {actionCell}
-      </DataTableCell>
+      <DataTableCell column={C_ACTION}>{actionCell}</DataTableCell>
     </DataTableRow>
   )
 }
@@ -142,6 +145,7 @@ export function OrgPrincipalsTab({ orgId }: Readonly<{ orgId: string }>) {
   const query = useOrgPrincipals(orgId, { enabled: canManage })
   const deleteMutation = useDeleteOrgPrincipal(orgId)
   const rows = query.data?.principals ?? []
+  const failedServers = failedRetireServerIds(deleteMutation.data)
 
   return (
     <View style={styles.tab}>
@@ -152,6 +156,13 @@ export function OrgPrincipalsTab({ orgId }: Readonly<{ orgId: string }>) {
         <Text style={panelStyles.muted}>{PRINCIPAL_DEFINITION}</Text>
         {deleteMutation.actionError ? (
           <Text style={panelStyles.error}>{deleteMutation.actionError}</Text>
+        ) : null}
+        {failedServers.length > 0 ? (
+          <InlineNotice
+            tone="warning"
+            title="Deleted, but not yet removed from every server"
+            body={`The Hosting Account is gone from the organization, but the removal could not be queued for ${failedServers.length === 1 ? '1 server' : `${failedServers.length} servers`}. Its Linux user may still exist there until that server catches up.`}
+          />
         ) : null}
         {canManage ? null : (
           <Text style={panelStyles.muted}>
