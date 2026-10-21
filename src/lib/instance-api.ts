@@ -9138,6 +9138,8 @@ export async function createManagedUser(
     allowedSources?: string[]
     /** Most connections at once, 1 to 10000; omit for no cap. */
     maxConnections?: number
+    /** PostgreSQL only. Omit for the default (on for a Migration login). 400 `straight_through_*` when it cannot apply. */
+    straightThrough?: boolean
   }
 ): Promise<{
   ok: true
@@ -9186,6 +9188,8 @@ export type ManagedUserPatch = {
   allowedSources?: string[] | null
   /** `null` removes the cap. */
   maxConnections?: number | null
+  /** PostgreSQL only; `null` goes back to the default. */
+  straightThrough?: boolean | null
   /** Preview only: nothing is written; the answer lists what would run, in plain words. */
   dryRun?: boolean
 }
