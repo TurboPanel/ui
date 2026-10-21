@@ -27,7 +27,6 @@ import {
 import { SecretReveal } from '@/components/org/managed/secret-reveal'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { type EnvironmentRecord } from '@/lib/instance-api'
-import { hasReadEligibleReplica } from '@/lib/managed-read-endpoint'
 import { managedReleaseSummary } from '@/lib/managed-releases'
 import {
     managedCatalogEntryForCode,
@@ -75,6 +74,7 @@ import {
     useSaveServerManagedExternalAccess,
     useServerManagedExternalAccess,
     useUpdateEnvironmentManaged,
+    useUpdateManagedUser,
 } from '@/lib/queries/managed'
 import { useOrgServers } from '@/lib/queries/servers'
 import { orEmptyArray } from '@/lib/or-empty-array'
@@ -261,7 +261,13 @@ export function ManagedSetupPanel({
         const saved = await saveExternalAccessMutation.run({ serverId, enabled: externalAccess })
         if (!saved.ok) {
           // `actionError` is render state and stale inside this running call.
-          setError(saved.error ?? 'Failed to save external access')
+          // Through `managedErrorMessage`, so a refusal that names databases
+          // (`external_access_weak_ssl`) shows its own sentence.
+          setError(
+            saved.error === null
+              ? 'Failed to save external access'
+              : managedErrorMessage(saved.cause, saved.error)
+          )
           return
         }
       }
@@ -585,6 +591,8 @@ function ManagedEnvironmentReadyPanels({
             managed={managed}
             connection={detail.connection}
             endpoints={detail.endpoints}
+            connections={detail.connections}
+            addressNeeded={detail.addressNeeded === true}
             server={detail.server}
             members={members}
             users={users}
@@ -605,12 +613,12 @@ function ManagedEnvironmentReadyPanels({
         <ManagedDataPanels
           orgId={orgId}
           environmentId={environmentId}
+          engine={managed.engine}
           rootUsername={detail.rootUsername}
           databases={databases}
           users={users}
           canManage={canManage}
           inFlight={inFlight}
-          hasReadTargets={hasReadEligibleReplica(members)}
           rotatePasswordMutation={rotatePasswordMutation}
           rotateUserPasswordMutation={rotateUserPasswordMutation}
           createDatabaseMutation={createDatabaseMutation}
@@ -733,12 +741,12 @@ function ManagedEnvironmentReadyPanels({
 function ManagedDataPanels({
   orgId,
   environmentId,
+  engine,
   rootUsername,
   databases,
   users,
   canManage,
   inFlight,
-  hasReadTargets,
   rotatePasswordMutation,
   rotateUserPasswordMutation,
   createDatabaseMutation,
@@ -751,12 +759,12 @@ function ManagedDataPanels({
 }: Readonly<{
   orgId: string
   environmentId: string
+  engine: string | null
   rootUsername: string | null
   databases: string[]
   users: ManagedUserRecord[]
   canManage: boolean
   inFlight: boolean
-  hasReadTargets: boolean
   rotatePasswordMutation: ReturnType<typeof useRotateManagedRootPassword>
   rotateUserPasswordMutation: ReturnType<typeof useRotateManagedUserPassword>
   createDatabaseMutation: ReturnType<typeof useCreateManagedDatabase>
@@ -767,6 +775,7 @@ function ManagedDataPanels({
   databasesQuery: ReturnType<typeof useManagedDatabases>
   registerCommand: (commandId: string, label: string, commandServerId?: string) => void
 }>) {
+  const updateUserMutation = useUpdateManagedUser(orgId, environmentId)
   return (
     <>
       <ManagedCredentialsPanel
@@ -791,11 +800,11 @@ function ManagedDataPanels({
       <ManagedUsersPanel
         orgId={orgId}
         environmentId={environmentId}
+        engine={engine}
         databases={databases}
         users={users}
         canManage={canManage}
         busy={inFlight}
-        hasReadTargets={hasReadTargets}
         onCreateDatabase={async (name) => {
           const result = await createDatabaseMutation.run({ name })
           if (!result.ok) {
@@ -813,7 +822,8 @@ function ManagedDataPanels({
         onCreateUser={async (input) => {
           const result = await createUserMutation.run(input)
           if (!result.ok) {
-            throw new Error(createUserMutation.actionError ?? 'Failed to create user')
+            // The run result carries the server's refusal; `actionError` is stale until the next render.
+            throw new Error(result.error ?? 'Failed to create user')
           }
           registerCommand(result.value.commandId, 'Create user')
           return {
@@ -821,15 +831,20 @@ function ManagedDataPanels({
             appliedUsername: result.value.user.appliedUsername,
           }
         }}
-        onDeleteUser={async (principalId) => {
-          const result = await deleteUserMutation.run(principalId)
+        onDeleteUser={async (loginId) => {
+          const result = await deleteUserMutation.run(loginId)
           if (!result.ok) {
             throw new Error(deleteUserMutation.actionError ?? 'Failed to delete user')
           }
           registerCommand(result.value.commandId, 'Delete user')
         }}
-        onRotateUserPassword={async (principalId) => {
-          const result = await rotateUserPasswordMutation.mutateAsync(principalId)
+        onUpdateUser={async (loginId, body) => {
+          const result = await updateUserMutation.mutateAsync({ loginId, body })
+          if (result.commandId) registerCommand(result.commandId, 'Change user permissions')
+          return result
+        }}
+        onRotateUserPassword={async (loginId) => {
+          const result = await rotateUserPasswordMutation.mutateAsync(loginId)
           registerCommand(result.commandId, 'Rotate user password')
           return {
             password: result.password,

@@ -28,7 +28,7 @@
 - **Hosting** tab (`/hosting`, `/environments/:id/hosting`): hostnames / ports / TLS for the active scope.
 - **Servers** tab (`/servers`, `/environments/:id/servers`): project default server and/or environment pin (not a settings-gear dropdown).
 - Lifecycle (**Deploy**, **Restart** / **Start**, **⋯** menu with previews, Stop, Refresh, Destroy) sits in the environment header; the server is chosen in Configuration › Hosting. After start, service status rows appear on Overview with green / yellow / red dots (mirrored on diagram service nodes).
-- Managed tabs: Overview · Connect · Data · Backups · Environments (shell strip — managed only)
+- Managed tabs: Overview · Connect · Data · Backups · Environments · Settings (shell strip — managed only)
 - Single environment: shell shows name (no chip strip) on managed non-Overview tabs; multi-env: chip selector on those tabs keeps selection in memory (compose scope uses path `/environments/:id`)
 - Service detail deep links remain under `/services/:id`; bare `/services` is the Services surface tab
 - Delete: compose — **Danger** rows in scope-chip settings panels (two-press environment delete when multiple exist; `ProjectDeletePanel` for project delete). Managed — header trash can. Project delete **destroys** each remaining `managed` cluster (`DELETE …/managed` → `managed.destroy`) and waits for the command before `DELETE /projects/:id`. Environment trash on a multi-env managed project does the same before `DELETE /environments/:id`. Never call tenant `environment.stop` for a managed cluster.

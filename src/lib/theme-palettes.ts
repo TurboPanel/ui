@@ -118,6 +118,10 @@ const SPEC = {
   glassBorderBright: ['rgba(168,181,204,.30)', 'rgba(15,23,42,.20)'],
   glassSpecular: ['rgba(255,255,255,.08)', 'rgba(255,255,255,.70)'],
   glassShadow: ['0 12px 40px rgba(3,7,15,.50)', '0 12px 32px rgba(15,23,42,.14)'],
+  /** Header dropdown menus: fully opaque, unlike the glass bar and sidebar. */
+  menuFill: ['#0e1526', '#ffffff'],
+  /** Sidebar only: faint in Paper, the glass shadow in Navy. */
+  sideShadow: ['0 12px 40px rgba(3,7,15,.50)', '0 0 10px rgba(15,23,42,.04)'],
 } as const satisfies Record<string, readonly [string, string]>
 
 type SpecTokens = { [K in keyof typeof SPEC]: string }

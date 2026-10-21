@@ -12,27 +12,28 @@ import {
   baseLine,
   baseRunsAs,
   builtBranch,
+  deployProgressLabel,
   EMPTY_SIDE,
   environmentCardData,
   environmentDomains,
   environmentRelation,
-  followLine,
   hasNativeApp,
+  inFlightDeployEntries,
   inProgressSub,
   isDeployInProgress,
   lastDeployPart,
   miniMapColumns,
   nativeDeployKey,
   newEnvironmentBody,
+  reachNames,
   runningStatusKey,
   serverLine,
   serviceStatusKey,
   startPreview,
-  START_CHOICES,
+  startChoices,
   v4ServiceOf,
   visitHost,
 } from './project-home'
-import { standAloneCompose } from './stand-alone-compose'
 
 const NOW = Date.parse('2026-10-05T12:00:00Z')
 
@@ -53,7 +54,11 @@ function container(partial: Partial<ContainerRecord>): ContainerRecord {
   }
 }
 
-function row(field: string, value: string | null, area: ConfigViewFieldRow['area'] = 'service'): ConfigViewFieldRow {
+function row(
+  field: string,
+  value: string | null,
+  area: ConfigViewFieldRow['area'] = 'service'
+): ConfigViewFieldRow {
   return {
     key: `svc:web:${field}`,
     area,
@@ -62,15 +67,16 @@ function row(field: string, value: string | null, area: ConfigViewFieldRow['area
     value,
     masked: value === null,
     source: 'base',
+    inheritedFromBase: true,
   }
 }
 
 function service(
   name: string,
   kind: ConfigViewService['kind'],
-  rows: ConfigViewFieldRow[] = [],
+  rows: ConfigViewFieldRow[] = []
 ): ConfigViewService {
-  return { name, serviceId: null, kind, source: 'base', rows }
+  return { name, serviceId: null, kind, source: 'base', inheritedFromBase: true, rows }
 }
 
 const SIDE: ConfigViewSide = {
@@ -88,8 +94,22 @@ const SIDE: ConfigViewSide = {
   ],
   variables: [],
   linuxUsers: [
-    { name: 'website', access: 'sftp', description: null, source: 'base', usedBy: ['web'] },
-    { name: 'jobs', access: 'none', description: null, source: 'base', usedBy: [] },
+    {
+      name: 'website',
+      access: 'sftp',
+      description: null,
+      source: 'base',
+      inheritedFromBase: true,
+      usedBy: ['web'],
+    },
+    {
+      name: 'jobs',
+      access: 'none',
+      description: null,
+      source: 'base',
+      inheritedFromBase: true,
+      usedBy: [],
+    },
   ],
 }
 
@@ -126,7 +146,7 @@ describe('running status', () => {
       runningStatusKey([
         container({ role: 'ingress', status: 'running' }),
         container({ status: 'exited' }),
-      ]),
+      ])
     ).toBe('stopped')
   })
 
@@ -168,7 +188,9 @@ describe('native apps (no container rows)', () => {
     expect(runningStatusKey([])).toBe('never')
   })
   it('lets real containers win over the deploy', () => {
-    expect(runningStatusKey([container({ status: 'running' })], { latest: group({ status: 'failed' }) })).toBe('running')
+    expect(
+      runningStatusKey([container({ status: 'running' })], { latest: group({ status: 'failed' }) })
+    ).toBe('running')
   })
   it('gives an app on the map the deploy state, or nothing before a deploy', () => {
     expect(serviceStatusKey([], { latest: group({ status: 'succeeded' }) })).toBe('deployed')
@@ -180,7 +202,8 @@ describe('native apps (no container rows)', () => {
       ok: true,
       environmentId: 'e',
       projectId: 'p',
-      followsBase: true,
+      isPrimary: false,
+      standsAlone: false,
       base: SIDE,
       effective: SIDE,
       changes: [],
@@ -210,7 +233,9 @@ describe('last deploy', () => {
   })
 
   it('adds the short commit of a push', () => {
-    const pushed = group({ trigger: { kind: 'push', branch: 'main', commitSha: 'a41c9e2ffff', sourceId: null } })
+    const pushed = group({
+      trigger: { kind: 'push', branch: 'main', commitSha: 'a41c9e2ffff', sourceId: null },
+    })
     expect(lastDeployPart(pushed, NOW)?.sub).toBe('a41c9e2 · 4m ago')
   })
 
@@ -223,7 +248,9 @@ describe('last deploy', () => {
     expect(lastDeployPart(group({ status: 'cancelled' }), NOW)?.status).toBe('cancelled')
     expect(lastDeployPart(group({ status: 'running' }), NOW)?.status).toBe('deploying')
     expect(lastDeployPart(group({ status: 'queued' }), NOW)?.status).toBe('queued')
-    expect(lastDeployPart(group({ strategyOutcome: 'rolled_back' }), NOW)?.status).toBe('rolledback')
+    expect(lastDeployPart(group({ strategyOutcome: 'rolled_back' }), NOW)?.status).toBe(
+      'rolledback'
+    )
     expect(lastDeployPart(group({ strategyOutcome: 'needs_attention' }), NOW)).toMatchObject({
       status: 'failed',
       label: 'Needs attention',
@@ -249,8 +276,8 @@ describe('last deploy', () => {
     expect(
       inProgressSub(
         group({ trigger: { kind: 'push', branch: ' main ', commitSha: null, sourceId: null } }),
-        NOW,
-      ),
+        NOW
+      )
     ).toBe('Started 4m ago · push to main')
     expect(inProgressSub(group({ startedAt: null }), NOW)).toBe('Starting now')
   })
@@ -262,7 +289,7 @@ describe('relation to the Base', () => {
   })
 
   it('stands alone', () => {
-    expect(environmentRelation({ followsBase: false, changes: [{}, {}] })).toEqual({
+    expect(environmentRelation({ standsAlone: true, changes: [{}, {}] })).toEqual({
       standsAlone: true,
       changeCount: 0,
       text: 'Stands alone',
@@ -270,48 +297,48 @@ describe('relation to the Base', () => {
     })
   })
 
-  it('follows the Base with no changes: plain words, no "0 changes"', () => {
-    expect(environmentRelation({ followsBase: true, changes: [] })).toEqual({
+  it('with no changes: plain words, no "0 changes"', () => {
+    expect(environmentRelation({ standsAlone: false, changes: [] })).toEqual({
       standsAlone: false,
       changeCount: 0,
-      text: 'Follows the Base',
+      text: 'Same as the Base',
       source: 'base',
     })
   })
 
   it('counts the changes', () => {
-    expect(environmentRelation({ followsBase: true, changes: [{}] })).toMatchObject({
-      text: 'Follows the Base · 1 change',
+    expect(environmentRelation({ standsAlone: false, changes: [{}] })).toMatchObject({
+      text: '1 change from the Base',
       source: 'env',
     })
-    expect(environmentRelation({ followsBase: true, changes: [{}, {}] })?.text).toBe(
-      'Follows the Base · 2 changes',
+    expect(environmentRelation({ standsAlone: false, changes: [{}, {}] })?.text).toBe(
+      '2 changes from the Base'
     )
   })
 
   it('summarises the Base', () => {
-    expect(baseCounts(SIDE)).toBe('4 services · 2 Linux users')
-    expect(baseCounts(EMPTY_SIDE)).toBe('0 services · 0 Linux users')
-    expect(baseLine(SIDE)).toBe('Base · 4 services · 2 Linux users')
+    expect(baseCounts(SIDE)).toBe('4 services · 2 Hosting Accounts')
+    expect(baseCounts(EMPTY_SIDE)).toBe('0 services · 0 Hosting Accounts')
+    expect(baseLine(SIDE)).toBe('Base · 4 services · 2 Hosting Accounts')
   })
 
-  it('says which environments follow it and which stand alone', () => {
+  it('says which environments use it and which stand alone', () => {
     expect(
-      followLine([
-        { name: 'Production', followsBase: true },
-        { name: 'Staging', followsBase: true },
-        { name: 'Preview', followsBase: false },
-        { name: 'Unknown', followsBase: null },
-      ]),
-    ).toBe('Production and Staging follow it · Preview stands alone')
-    expect(followLine([{ name: 'Production', followsBase: true }])).toBe('Production follows it')
+      reachNames([
+        { name: 'Production', standsAlone: false },
+        { name: 'Staging', standsAlone: false },
+        { name: 'Preview', standsAlone: true },
+        { name: 'Unknown', standsAlone: null },
+      ])
+    ).toBe('Production and Staging use it · Preview stands alone')
+    expect(reachNames([{ name: 'Production', standsAlone: false }])).toBe('Production uses it')
     expect(
-      followLine([
-        { name: 'A', followsBase: false },
-        { name: 'B', followsBase: false },
-      ]),
+      reachNames([
+        { name: 'A', standsAlone: true },
+        { name: 'B', standsAlone: true },
+      ])
     ).toBe('A and B stand alone')
-    expect(followLine([])).toBe('')
+    expect(reachNames([])).toBe('')
   })
 })
 
@@ -346,7 +373,9 @@ describe('services, users and domains', () => {
   })
 
   it('has no chips for a Base of data stores only', () => {
-    expect(baseRunsAs({ ...SIDE, services: [SIDE.services[2] as ConfigViewService] }, 'x')).toEqual([])
+    expect(baseRunsAs({ ...SIDE, services: [SIDE.services[2] as ConfigViewService] }, 'x')).toEqual(
+      []
+    )
   })
 
   it('lists each domain once, host only', () => {
@@ -378,7 +407,11 @@ describe('mini map', () => {
   const statusOf = (name: string) => (name === 'web' ? 'running' : null)
 
   it('draws visitors, apps and data from the real services', () => {
-    const [visitors, apps, data] = miniMapColumns(SIDE, [{ serviceName: 'web' }, { serviceName: null }], statusOf)
+    const [visitors, apps, data] = miniMapColumns(
+      SIDE,
+      [{ serviceName: 'web' }, { serviceName: null }],
+      statusOf
+    )
     expect(visitors?.items.map((item) => item.name)).toEqual(['example.com', '*.example.com'])
     expect(apps?.items).toEqual([
       { name: 'web', status: 'running', changed: true },
@@ -392,7 +425,7 @@ describe('mini map', () => {
   it('says so when a column has nothing', () => {
     const columns = miniMapColumns(EMPTY_SIDE, [], statusOf)
     expect(columns.map((column) => [column.key, column.emptyText, column.items.length])).toEqual([
-      ['visitors', 'No domains yet', 0],
+      ['visitors', 'No hostnames yet', 0],
       ['apps', 'No apps yet', 0],
       ['data', 'None', 0],
     ])
@@ -400,48 +433,43 @@ describe('mini map', () => {
 })
 
 describe('new environment', () => {
-  it('starting from the Base sends no compose of its own', () => {
+  it('always names how it starts', () => {
     expect(
-      newEnvironmentBody({ projectId: 'p', name: '  Staging ', start: 'base', serverId: null }),
-    ).toEqual({ projectId: 'p', name: 'Staging' })
-  })
-
-  it('standing alone sends services: !override {}', () => {
-    const body = newEnvironmentBody({ projectId: 'p', name: 'Preview', start: 'empty', serverId: null })
-    expect(body).toEqual({
-      projectId: 'p',
-      name: 'Preview',
-      options: {
-        compose: {
-          version: 1,
-          data: { services: { __turbopanelComposeTag: 'override', value: {} } },
-          presentation: { keyOrder: ['services'], comments: {} },
-        },
-      },
-    })
-    expect(standAloneCompose().data.services).toEqual({ __turbopanelComposeTag: 'override', value: {} })
+      newEnvironmentBody({ projectId: 'p', name: '  staging ', start: 'copy', serverId: null })
+    ).toEqual({ projectId: 'p', name: 'staging', start: 'copy' })
+    expect(
+      newEnvironmentBody({ projectId: 'p', name: 'preview', start: 'empty', serverId: null })
+    ).toEqual({ projectId: 'p', name: 'preview', start: 'empty' })
   })
 
   it('pins a server only when one was chosen', () => {
     expect(
-      newEnvironmentBody({ projectId: 'p', name: 'Staging', start: 'base', serverId: 'srv-1' }),
-    ).toEqual({ projectId: 'p', name: 'Staging', serverId: 'srv-1' })
+      newEnvironmentBody({ projectId: 'p', name: 'staging', start: 'copy', serverId: 'srv-1' })
+    ).toEqual({ projectId: 'p', name: 'staging', start: 'copy', serverId: 'srv-1' })
   })
 
   it('previews what the environment will run', () => {
-    expect(startPreview('base', null)).toBeNull()
-    const fromBase = startPreview('base', SIDE)
-    expect(fromBase?.find((column) => column.key === 'apps')?.items.map((item) => item.status)).toEqual([
-      null,
-      null,
-      null,
-    ])
+    expect(startPreview('copy', null)).toBeNull()
+    const copied = startPreview('copy', SIDE)
+    expect(
+      copied?.find((column) => column.key === 'apps')?.items.map((item) => item.status)
+    ).toEqual([null, null, null])
     const alone = startPreview('empty', SIDE)
     expect(alone?.every((column) => column.items.length === 0)).toBe(true)
   })
 
-  it('offers exactly the choices the API can honour', () => {
-    expect(START_CHOICES.map((choice) => choice.key)).toEqual(['base', 'empty'])
+  it('offers the copy of the primary environment first, then empty', () => {
+    const choices = startChoices('production')
+    expect(choices.map((choice) => choice.key)).toEqual(['copy', 'empty'])
+    expect(choices[0]?.title).toBe('Copy of production')
+    expect(choices[0]?.body).toContain('still uses the Base')
+    expect(choices[1]?.title).toBe('Empty, stands alone')
+    expect(startChoices(null)[0]?.title).toBe('Copy of the primary environment')
+  })
+
+  it('never uses the old wording', () => {
+    const text = JSON.stringify([startChoices('production'), startChoices(null)])
+    expect(text).not.toMatch(/start from the base|follows? the base/i)
   })
 })
 
@@ -473,7 +501,8 @@ describe('environment card data', () => {
     ok: true,
     environmentId: 'e',
     projectId: 'p',
-    followsBase: true,
+    isPrimary: false,
+    standsAlone: false,
     base: SIDE,
     effective: SIDE,
     changes: [
@@ -504,7 +533,8 @@ describe('environment card data', () => {
       now: NOW,
     })
     expect(data.name).toBe('Staging')
-    expect(data.relation?.text).toBe('Follows the Base · 1 change')
+    expect(data.badge).toBeNull()
+    expect(data.relation?.text).toBe('1 change from the Base')
     expect(data.running).toEqual({ status: 'running' })
     expect(data.lastDeploy).toEqual({ status: 'deployed', sub: '4m ago' })
     expect(data.branch).toBe('main')
@@ -513,6 +543,23 @@ describe('environment card data', () => {
     const apps = data.columns?.find((column) => column.key === 'apps')
     expect(apps?.items[0]).toEqual({ name: 'web', status: 'running', changed: true })
     expect(apps?.items[1]).toEqual({ name: 'worker', status: 'deployed', changed: false })
+  })
+
+  it('badges the primary and the pinned environment', () => {
+    const card = (flags: { isPrimary?: boolean; pinned?: boolean } | undefined) =>
+      environmentCardData({
+        name: 'Production',
+        containers: [],
+        view,
+        latest: group({}),
+        serverLine: '',
+        now: NOW,
+        flags,
+      }).badge
+    expect(card({ isPrimary: true })).toBe('Primary')
+    expect(card({ pinned: true })).toBe('Pinned')
+    expect(card({})).toBeNull()
+    expect(card(undefined)).toBeNull()
   })
 
   it('leaves out what is not known yet', () => {
@@ -530,5 +577,77 @@ describe('environment card data', () => {
     expect(data.columns).toBeNull()
     expect(data.branch).toBeNull()
     expect(data.visitHost).toBeNull()
+  })
+})
+
+describe('deploy progress on a card', () => {
+  const hostCommand = (id: string, status: DeploymentGroup['status']) =>
+    ({
+      id,
+      commandId: id,
+      serverId: `srv-${id}`,
+      status,
+    }) as unknown as DeploymentGroup['commands'][number]
+  const progress = {
+    version: 1 as const,
+    current: 'build',
+    updatedAt: '2026-10-05T12:00:00Z',
+    steps: [
+      { id: 'fetch', label: 'Fetch the code', state: 'done' as const },
+      { id: 'build', label: 'Build', state: 'running' as const },
+      { id: 'start', label: 'Start the app', state: 'pending' as const },
+    ],
+  }
+
+  it('polls only the commands of deploys still going', () => {
+    const latest = {
+      a: group({
+        status: 'running',
+        commands: [hostCommand('c1', 'running'), hostCommand('c2', 'succeeded')],
+      }),
+      b: group({ status: 'succeeded', commands: [hostCommand('c3', 'succeeded')] }),
+      c: null,
+      d: undefined,
+    }
+    expect(inFlightDeployEntries(latest)).toEqual([{ serverId: 'srv-c1', commandId: 'c1' }])
+  })
+
+  it('copes with a deploy row that has no host commands', () => {
+    const bare = group({
+      status: 'running',
+      commands: undefined as unknown as DeploymentGroup['commands'],
+    })
+    expect(inFlightDeployEntries({ a: bare })).toEqual([])
+    expect(deployProgressLabel(bare, new Map())).toBeNull()
+  })
+
+  it('reads the step of the first host that reports one', () => {
+    const running = group({
+      status: 'running',
+      commands: [hostCommand('c0', 'running'), hostCommand('c1', 'running')],
+    })
+    const records = new Map([
+      ['c0', { progress: null }],
+      ['c1', { progress }],
+    ])
+    expect(deployProgressLabel(running, records)).toBe('Step 2 of 3 · Building')
+    expect(deployProgressLabel(running, new Map())).toBeNull()
+    expect(deployProgressLabel(group({ status: 'succeeded' }), records)).toBeNull()
+    expect(deployProgressLabel(null, records)).toBeNull()
+  })
+
+  it('puts the step on the last-deploy part only while the deploy runs', () => {
+    expect(
+      lastDeployPart(group({ status: 'running' }), NOW, 'Step 2 of 3 · Building')
+    ).toMatchObject({
+      status: 'deploying',
+      label: 'Step 2 of 3 · Building',
+    })
+    expect(
+      lastDeployPart(group({ status: 'succeeded' }), NOW, 'Step 2 of 3 · Building')?.label
+    ).toBeUndefined()
+    expect(lastDeployPart(group({ status: 'running' }), NOW, null)).toMatchObject({
+      status: 'deploying',
+    })
   })
 })

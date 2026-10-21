@@ -5,7 +5,8 @@ import {
   AppsSection,
   ChangesSection,
   DataSection,
-  DomainsSection,
+  HostingSection,
+  type HostingsStatus,
   LinuxUsersSection,
   VariablesSection,
 } from '@/components/org/project/configuration/config-sections'
@@ -23,20 +24,23 @@ import {
 } from '@/lib/project-navigation'
 import { useSaveConfiguration } from '@/lib/queries/configuration'
 import { useEnvironmentConfigView } from '@/lib/queries/environments'
+import { useHostingsByServices } from '@/lib/queries/services'
 import { useVariables } from '@/lib/queries/variables'
 import { environmentDisplayName } from '@/lib/resource-labels'
 import { webPointer } from '@/lib/theme'
 import {
   changeActions,
-  environmentDetachedFromBase,
-  scopeDecision,
   stageEdit,
   unstageEdit,
   variableFacts,
   type SaveProblem,
   type StagedEdit,
 } from '@/lib/v4/config-edits'
-import { buildConfigViewModel, type ConfigViewModel } from '@/lib/v4/config-view-model'
+import {
+  buildConfigViewModel,
+  withHostingHostnames,
+  type ConfigViewModel,
+} from '@/lib/v4/config-view-model'
 
 const styles = themedStyles((p) => ({
   page: { gap: 24 },
@@ -92,26 +96,31 @@ function OnlyChangesSwitch({
 }
 
 function lede(model: ConfigViewModel): string {
-  if (model.followsBase) return `${model.envName} runs the Base plus its own changes.`
-  return `${model.envName} stands alone: it keeps its own settings and does not follow the Base.`
+  if (model.standsAlone) {
+    return `${model.envName} stands alone: it keeps its own apps and does not use the Base's.`
+  }
+  return `${model.envName} uses the Base for anything it does not set itself. A value marked “From the Base” can be changed here for this environment only.`
 }
 
 /** The tab body once the config-view answer is in. Presentational: links go through the callbacks. */
 export function EnvironmentConfigurationView({
   model,
+  hostingsStatus = 'ready',
   multiple,
   onOpenApp,
   onOpenUrl,
-  onManageDomains,
+  onManageHosting,
   onOpenBase,
   editing,
 }: Readonly<{
   model: ConfigViewModel
   /** The project has more than one environment (the Base can differ from this one). */
   multiple: boolean
+  /** Whether the hostnames added on the Hosting screen have loaded (the compose ones are in the model). */
+  hostingsStatus?: HostingsStatus
   onOpenApp: (serviceId: string) => void
   onOpenUrl: (url: string) => void
-  onManageDomains: () => void
+  onManageHosting: () => void
   onOpenBase: () => void
   /** Present when the person can edit; absent means every row is read-only. */
   editing?: EditingApi
@@ -121,24 +130,17 @@ export function EnvironmentConfigurationView({
   const filtering = multiple && only
   return (
     <View style={s.page}>
-      {multiple ? (
-        <>
-          <Text style={s.lede}>{lede(model)}</Text>
-          <View style={s.top}>
-            <OnlyChangesSwitch
-              label={model.onlyChangesLabel}
-              on={only}
-              onToggle={() => setOnly((value) => !value)}
-            />
-          </View>
-        </>
-      ) : (
-        <Notice
-          title="This project has one environment"
-          body="Changes here are saved in the Base. Add a second environment to give it changes of its own."
-          actions={<ActionButton label="Open the Base" size="sm" onPress={onOpenBase} />}
-        />
-      )}
+      <Text style={s.lede}>{lede(model)}</Text>
+      <View style={s.top}>
+        {multiple ? (
+          <OnlyChangesSwitch
+            label={model.onlyChangesLabel}
+            on={only}
+            onToggle={() => setOnly((value) => !value)}
+          />
+        ) : null}
+        <ActionButton label="Open the Base" variant="quiet" size="sm" onPress={onOpenBase} />
+      </View>
       {filtering ? (
         <ChangesSection
           changes={model.changes}
@@ -149,16 +151,13 @@ export function EnvironmentConfigurationView({
       ) : (
         <>
           <AppsSection apps={model.apps} onOpenApp={onOpenApp} />
-          <DomainsSection
+          <HostingSection
             domains={model.domains}
+            hostingsStatus={hostingsStatus}
             onOpenUrl={onOpenUrl}
-            onManage={onManageDomains}
+            onManage={onManageHosting}
           />
-          <VariablesSection
-            variables={model.variables}
-            envName={model.envName}
-            editing={editing}
-          />
+          <VariablesSection variables={model.variables} envName={model.envName} editing={editing} />
           <LinuxUsersSection users={model.linuxUsers} editing={editing} />
           <DataSection data={model.data} />
         </>
@@ -187,10 +186,23 @@ export function EnvironmentConfigurationScreen() {
   const save = useSaveConfiguration(orgId, projectId, environmentId)
   const environment = environments.find((item) => item.id === environmentId)
   const envName = environment ? environmentDisplayName(environment) : 'This environment'
-  const model = useMemo(
+  const baseModel = useMemo(
     () => (query.data ? buildConfigViewModel({ envName, view: query.data }) : null),
-    [query.data, envName],
+    [query.data, envName]
   )
+  // The config view reads compose only; hostnames added on the Hosting screen live in the panel.
+  const serviceIds = useMemo(
+    () => (baseModel?.apps ?? []).flatMap((app) => (app.serviceId === null ? [] : [app.serviceId])),
+    [baseModel]
+  )
+  const hostings = useHostingsByServices(orgId, serviceIds, { enabled: baseModel !== null })
+  const model = useMemo(
+    () => (baseModel ? withHostingHostnames(baseModel, hostings.hostingsByService) : null),
+    [baseModel, hostings.hostingsByService]
+  )
+  let hostingsStatus: HostingsStatus = 'ready'
+  if (hostings.hasError) hostingsStatus = 'error'
+  else if (hostings.isLoading) hostingsStatus = 'loading'
   const [staged, setStaged] = useState<readonly StagedEdit[]>([])
   const [saveError, setSaveError] = useState<string | null>(null)
   const [problems, setProblems] = useState<readonly SaveProblem[]>([])
@@ -200,7 +212,10 @@ export function EnvironmentConfigurationScreen() {
     setStaged((current) => stageEdit(current, edit))
     setSavedCount(0)
   }, [])
-  const unstage = useCallback((key: string) => setStaged((current) => unstageEdit(current, key)), [])
+  const unstage = useCallback(
+    (key: string) => setStaged((current) => unstageEdit(current, key)),
+    []
+  )
   const discard = useCallback(() => {
     setStaged([])
     setSaveError(null)
@@ -228,31 +243,13 @@ export function EnvironmentConfigurationScreen() {
     return {
       envName,
       staged,
-      scopeMode: scopeDecision(environments.length, model.followsBase),
-      others: environments
-        .filter((item) => item.id !== environmentId)
-        .map((item) => ({
-          name: environmentDisplayName(item),
-          standsAlone: environmentDetachedFromBase(item.options?.compose),
-        })),
       linuxUserNames: model.linuxUserNames,
       variableFacts: (name) => variableFacts(name, envVariableRecords, projectVariableRecords),
-      actionsFor: (change) => changeActions(change, envVariableRecords, model.followsBase),
+      actionsFor: (change) => changeActions(change, envVariableRecords, model.standsAlone),
       onStage: stage,
       onUnstage: unstage,
     }
-  }, [
-    editable,
-    model,
-    envVariableRecords,
-    projectVariableRecords,
-    envName,
-    staged,
-    environments,
-    environmentId,
-    stage,
-    unstage,
-  ])
+  }, [editable, model, envVariableRecords, projectVariableRecords, envName, staged, stage, unstage])
 
   if (query.isPending) return <LoadingState label="Loading configuration…" />
   if (query.error || !model) {
@@ -268,23 +265,22 @@ export function EnvironmentConfigurationScreen() {
   return (
     <View style={s.stack}>
       {savedCount > 0 && staged.length === 0 ? (
-        <Notice
-          tone="ok"
-          title="Saved"
-          body={`The changes go live when you deploy ${envName}.`}
-        />
+        <Notice tone="ok" title="Saved" body={`The changes go live when you deploy ${envName}.`} />
       ) : null}
       <EnvironmentConfigurationView
         model={model}
         multiple={environments.length > 1}
+        hostingsStatus={hostingsStatus}
         editing={editing}
-        onOpenApp={(serviceId) => router.push(projectServiceHref(orgId, projectId, serviceId) as Href)}
+        onOpenApp={(serviceId) =>
+          router.push(projectServiceHref(orgId, projectId, serviceId) as Href)
+        }
         onOpenUrl={(url) => {
           Linking.openURL(url).catch(() => {
             // A blocked link has nothing to recover; the domain stays listed.
           })
         }}
-        onManageDomains={() =>
+        onManageHosting={() =>
           router.push(projectEnvironmentHostingHref(orgId, projectId, environmentId) as Href)
         }
         onOpenBase={() => router.push(projectBaseHref(orgId, projectId) as Href)}

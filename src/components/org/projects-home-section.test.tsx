@@ -1,18 +1,29 @@
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { applyScenario, SCENARIOS } from '@/components/ui/v4/rn-stub'
+import { applyScenario, SCENARIOS, styleOf } from '@/components/ui/v4/rn-stub'
 import type { ConfigViewSide, EnvironmentConfigViewResponse } from '@/lib/instance-api'
 import { ProjectsHomeSection } from './projects-home-section'
+import { WELCOME_LINES } from './projects-welcome-card'
 
 const state = vi.hoisted(() => ({
   push: vi.fn(),
   canOwn: true,
   scope: null as null | Record<string, unknown>,
-  projects: { data: undefined, isLoading: false, error: null, refetch: vi.fn() } as Record<string, unknown>,
-  workspaces: { data: { workspaces: [{ id: 'w1', name: 'Acme' }] }, isLoading: false, error: null, refetch: vi.fn() } as Record<string, unknown>,
+  projects: { data: undefined, isLoading: false, error: null, refetch: vi.fn() } as Record<
+    string,
+    unknown
+  >,
+  workspaces: {
+    data: { workspaces: [{ id: 'w1', name: 'Acme' }] },
+    isLoading: false,
+    error: null,
+    refetch: vi.fn(),
+  } as Record<string, unknown>,
   environments: { data: undefined, refetch: vi.fn() } as Record<string, unknown>,
   containers: { data: undefined, refetch: vi.fn() } as Record<string, unknown>,
+  servers: { data: undefined } as Record<string, unknown>,
+  serversEnabled: undefined as boolean | undefined,
   views: {} as Record<string, unknown>,
   latest: {} as Record<string, unknown>,
   readIds: { views: [] as string[], latest: [] as string[] },
@@ -23,7 +34,10 @@ const state = vi.hoisted(() => ({
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
 vi.mock('react-native-svg', async () => (await import('@/components/ui/v4/rn-stub')).svgStub)
-vi.mock('@/lib/theme-preference', async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub)
+vi.mock(
+  '@/lib/theme-preference',
+  async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub
+)
 vi.mock('expo-router', () => ({ useRouter: () => ({ push: state.push }) }))
 vi.mock('@/components/org/workspace-switcher', () => ({
   WorkspaceSwitcher: () => <div data-testid="workspace-switcher" />,
@@ -36,6 +50,12 @@ vi.mock('@/lib/queries', () => ({
   useWorkspaces: () => state.workspaces,
 }))
 vi.mock('@/lib/queries/environments', () => ({ useEnvironments: () => state.environments }))
+vi.mock('@/lib/queries/servers', () => ({
+  useOrgServers: (_org: string, options?: { enabled?: boolean }) => {
+    state.serversEnabled = options?.enabled
+    return state.servers
+  },
+}))
 vi.mock('@/lib/queries/containers', () => ({ useContainers: () => state.containers }))
 vi.mock('@/lib/queries/environment-cards', () => ({
   useEnvironmentConfigViews: (_org: string, ids: string[]) => {
@@ -70,21 +90,50 @@ const BASE: ConfigViewSide = {
       serviceId: null,
       kind: 'node',
       source: 'base',
+      inheritedFromBase: true,
       rows: [
-        { key: 'u', area: 'linuxUser', field: 'linuxUser', label: 'Linux user', value: 'shop', masked: false, source: 'base' },
-        { key: 'd', area: 'domain', field: 'domain:shop.example.com', label: 'Domain', value: 'shop.example.com', masked: false, source: 'base' },
+        {
+          key: 'u',
+          area: 'linuxUser',
+          field: 'linuxUser',
+          label: 'Linux user',
+          value: 'shop',
+          masked: false,
+          source: 'base',
+          inheritedFromBase: true,
+        },
+        {
+          key: 'd',
+          area: 'domain',
+          field: 'domain:shop.example.com',
+          label: 'Domain',
+          value: 'shop.example.com',
+          masked: false,
+          source: 'base',
+          inheritedFromBase: true,
+        },
       ],
     },
   ],
   variables: [],
-  linuxUsers: [{ name: 'shop', access: 'sftp', description: null, source: 'base', usedBy: ['web'] }],
+  linuxUsers: [
+    {
+      name: 'shop',
+      access: 'sftp',
+      description: null,
+      source: 'base',
+      inheritedFromBase: true,
+      usedBy: ['web'],
+    },
+  ],
 }
 
 const VIEW: EnvironmentConfigViewResponse = {
   ok: true,
   environmentId: 'e1',
   projectId: 'p1',
-  followsBase: true,
+  isPrimary: false,
+  standsAlone: false,
   base: BASE,
   effective: BASE,
   changes: [],
@@ -100,11 +149,19 @@ function environment(id: string, name: string, projectId: string) {
 
 afterEach(cleanup)
 
+function expectWelcomeHeading() {
+  const titles = WELCOME_LINES.map(([title]) => title)
+  expect(screen.getAllByRole('heading').some((h) => titles.includes(h.textContent ?? ''))).toBe(
+    true
+  )
+}
+
 describe.each(SCENARIOS)('Projects home ($name)', (scenario) => {
   beforeEach(() => {
     applyScenario(scenario)
     state.push.mockReset()
     state.canOwn = true
+    state.servers = { data: undefined }
     state.scope = null
     state.recent = []
     state.platformIds = []
@@ -139,7 +196,17 @@ describe.each(SCENARIOS)('Projects home ($name)', (scenario) => {
       refetch: vi.fn().mockResolvedValue(undefined),
     }
     state.containers = {
-      data: { containers: [{ environmentId: 'e1', status: 'running', containerId: 'c', role: 'service', composeServiceName: 'web' }] },
+      data: {
+        containers: [
+          {
+            environmentId: 'e1',
+            status: 'running',
+            containerId: 'c',
+            role: 'service',
+            composeServiceName: 'web',
+          },
+        ],
+      },
       refetch: vi.fn().mockResolvedValue(undefined),
     }
   })
@@ -157,10 +224,10 @@ describe.each(SCENARIOS)('Projects home ($name)', (scenario) => {
 
   it('gives the Compose project its Base line, who runs it and its relation to the Base', () => {
     render(<ProjectsHomeSection orgId="o" />)
-    expect(screen.getByText('Base · 1 service · 1 Linux user')).toBeTruthy()
+    expect(screen.getByText('Base · 1 service · 1 Hosting Account')).toBeTruthy()
     expect(screen.getByRole('group', { name: 'Who runs it' }).textContent).toContain('shop')
     const row = screen.getByRole('button', { name: 'Open Production in Shop' })
-    expect(row.textContent).toContain('Follows the Base · shop.example.com')
+    expect(row.textContent).toContain('Same as the Base · shop.example.com')
     expect(row.textContent).toContain('Running')
   })
 
@@ -213,7 +280,9 @@ describe.each(SCENARIOS)('Projects home ($name)', (scenario) => {
     render(<ProjectsHomeSection orgId="o" />)
     fireEvent.click(screen.getByRole('button', { name: 'Open Shop' }))
     expect(state.push).toHaveBeenLastCalledWith('/o/projects/p1')
-    fireEvent.click(screen.getByRole('link', { name: 'Shop: Base · 1 service · 1 Linux user' }))
+    fireEvent.click(
+      screen.getByRole('link', { name: 'Shop: Base · 1 service · 1 Hosting Account' })
+    )
     expect(state.push).toHaveBeenLastCalledWith('/o/projects/p1/base')
     fireEvent.click(screen.getByRole('button', { name: 'Open Production in Shop' }))
     expect(state.push).toHaveBeenLastCalledWith('/o/projects/p1/environments/e1')
@@ -234,7 +303,10 @@ describe.each(SCENARIOS)('Projects home ($name)', (scenario) => {
     render(<ProjectsHomeSection orgId="o" />)
     const recent = screen.getByRole('group', { name: 'Recent projects' })
     const links = recent.querySelectorAll('button')
-    expect(Array.from(links).map((link) => link.getAttribute('aria-label'))).toEqual(['Orders DB', 'Shop'])
+    expect(Array.from(links).map((link) => link.getAttribute('aria-label'))).toEqual([
+      'Orders DB',
+      'Shop',
+    ])
     fireEvent.click(screen.getByRole('link', { name: 'Shop' }))
     expect(state.push).toHaveBeenLastCalledWith('/o/projects/p1/environments/e1')
     fireEvent.click(screen.getByRole('link', { name: 'Orders DB' }))
@@ -281,21 +353,116 @@ describe.each(SCENARIOS)('Projects home ($name)', (scenario) => {
     expect(screen.getByRole('progressbar')).toBeTruthy()
   })
 
-  it('has a friendly empty state with a way to start', () => {
+  it('welcomes an organization with no projects: Add Server leads while there are no servers', () => {
+    state.projects = { data: { projects: [] }, isLoading: false, error: null, refetch: vi.fn() }
+    state.servers = { data: { servers: [] } }
+    render(<ProjectsHomeSection orgId="o" />)
+    expectWelcomeHeading()
+    expect(screen.getByText(/No servers are connected yet\./)).toBeTruthy()
+    // The header carries no New project button; the card does.
+    expect(screen.queryByRole('button', { name: 'New project' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'New Project' }))
+    expect(state.push).toHaveBeenLastCalledWith(expect.stringContaining('/o/projects/new'))
+    fireEvent.click(screen.getByRole('button', { name: 'Add Server' }))
+    expect(state.push).toHaveBeenLastCalledWith('/o/servers')
+  })
+
+  it('welcome shows the real server count, plural-aware', () => {
+    state.projects = { data: { projects: [] }, isLoading: false, error: null, refetch: vi.fn() }
+    state.servers = { data: { servers: [{ id: 's1' }] } }
+    const { unmount } = render(<ProjectsHomeSection orgId="o" />)
+    expect(screen.getByText('1 server connected')).toBeTruthy()
+    unmount()
+    state.servers = { data: { servers: [{ id: 's1' }, { id: 's2' }] } }
+    render(<ProjectsHomeSection orgId="o" />)
+    expect(screen.getByText('2 servers connected')).toBeTruthy()
+  })
+
+  it('welcome offers no buttons to non-owners and does not read servers', () => {
+    state.canOwn = false
     state.projects = { data: { projects: [] }, isLoading: false, error: null, refetch: vi.fn() }
     render(<ProjectsHomeSection orgId="o" />)
-    expect(screen.getByRole('heading', { name: 'No projects yet' })).toBeTruthy()
-    expect(screen.getAllByRole('button', { name: 'New project' })).toHaveLength(2)
+    expectWelcomeHeading()
+    expect(screen.queryByRole('button', { name: 'New Project' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Add Server' })).toBeNull()
+    expect(state.serversEnabled).toBe(false)
+  })
+
+  const isPrimary = (name: string) =>
+    styleOf(screen.getByRole('button', { name })).borderColor === 'transparent'
+
+  it('welcome buttons are both secondary while the server count is unknown, then one leads', () => {
+    state.projects = { data: { projects: [] }, isLoading: false, error: null, refetch: vi.fn() }
+    state.servers = { data: undefined }
+    const view = render(<ProjectsHomeSection orgId="o" />)
+    expect(isPrimary('Add Server')).toBe(false)
+    expect(isPrimary('New Project')).toBe(false)
+    state.servers = { data: { servers: [] } }
+    view.rerender(<ProjectsHomeSection orgId="o" />)
+    expect(isPrimary('Add Server')).toBe(true)
+    expect(isPrimary('New Project')).toBe(false)
+    state.servers = { data: { servers: [{ id: 's1' }] } }
+    view.rerender(<ProjectsHomeSection orgId="o" />)
+    expect(isPrimary('Add Server')).toBe(false)
+    expect(isPrimary('New Project')).toBe(true)
+  })
+
+  it('welcome buttons stay both secondary when the servers query failed', () => {
+    state.projects = { data: { projects: [] }, isLoading: false, error: null, refetch: vi.fn() }
+    state.servers = { data: undefined, error: new Error('down') }
+    render(<ProjectsHomeSection orgId="o" />)
+    expect(isPrimary('Add Server')).toBe(false)
+    expect(isPrimary('New Project')).toBe(false)
+  })
+
+  it('welcome headline stays the same across re-renders', () => {
+    state.projects = { data: { projects: [] }, isLoading: false, error: null, refetch: vi.fn() }
+    state.servers = { data: undefined }
+    const view = render(<ProjectsHomeSection orgId="o" />)
+    const titles = WELCOME_LINES.map(([title]) => title)
+    const read = () =>
+      screen
+        .getAllByRole('heading')
+        .map((h) => h.textContent ?? '')
+        .find((x) => titles.includes(x))
+    const first = read()
+    expect(first).toBeTruthy()
+    state.servers = { data: { servers: [{ id: 's1' }] } }
+    view.rerender(<ProjectsHomeSection orgId="o" />)
+    view.rerender(<ProjectsHomeSection orgId="o" />)
+    expect(read()).toBe(first)
+  })
+
+  it('keeps the header New project button when the projects load failed', () => {
+    state.projects = {
+      data: undefined,
+      isLoading: false,
+      error: new Error('Network down'),
+      refetch: vi.fn(),
+    }
+    state.servers = { data: undefined }
+    render(<ProjectsHomeSection orgId="o" />)
+    expect(screen.getByRole('button', { name: 'New project' })).toBeTruthy()
   })
 
   it('shows the reason when projects cannot be loaded', () => {
-    state.projects = { data: undefined, isLoading: false, error: new Error('Network down'), refetch: vi.fn() }
+    state.projects = {
+      data: undefined,
+      isLoading: false,
+      error: new Error('Network down'),
+      refetch: vi.fn(),
+    }
     render(<ProjectsHomeSection orgId="o" />)
     expect(screen.getByText('Could not load projects')).toBeTruthy()
   })
 
   it('shows the reason when workspaces cannot be loaded', () => {
-    state.workspaces = { data: undefined, isLoading: false, error: new Error('No workspaces'), refetch: vi.fn() }
+    state.workspaces = {
+      data: undefined,
+      isLoading: false,
+      error: new Error('No workspaces'),
+      refetch: vi.fn(),
+    }
     render(<ProjectsHomeSection orgId="o" />)
     expect(screen.getByText('Could not load projects')).toBeTruthy()
   })
@@ -324,5 +491,19 @@ describe.each(SCENARIOS)('Projects home ($name)', (scenario) => {
     expect(screen.getByRole('heading', { name: 'Platform' })).toBeTruthy()
     expect(screen.queryByText(/· Acme$/)).toBeNull()
     expect(screen.queryByRole('button', { name: 'New project' })).toBeNull()
+  })
+
+  it('the platform workspace with no projects shows the welcome with no buttons', () => {
+    state.scope = {
+      scopeId: 'platform',
+      workspaces: [{ id: 'platform', name: 'TurboPanel' }],
+      scope: { label: 'TurboPanel', workspace: { id: 'platform', name: 'TurboPanel' } },
+      refreshWorkspaces: vi.fn(),
+    }
+    state.projects = { data: { projects: [] }, isLoading: false, error: null, refetch: vi.fn() }
+    render(<ProjectsHomeSection orgId="o" workspaceId="platform" />)
+    expectWelcomeHeading()
+    expect(screen.queryByRole('button')).toBeNull()
+    expect(state.serversEnabled).toBe(false)
   })
 })

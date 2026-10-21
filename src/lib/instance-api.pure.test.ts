@@ -9,7 +9,12 @@ import {
   FABRIC_RECONCILE_PENDING_ERROR,
   completeInstall,
   createLicense,
+  deleteOrgPrincipal,
+  ServerPrincipalChoiceRefusedError,
   deleteServer,
+  fetchOrgPrincipals,
+  fetchServerPrincipalRemovalPlan,
+  fetchServerPrincipals,
   deployEnvironment,
   downloadOrganizationCaPem,
   fetchBindings,
@@ -1134,6 +1139,51 @@ describe('fetch wrappers (mocked fetch)', () => {
     expect((init as RequestInit).headers).toMatchObject({
       [ORG_ID_HEADER]: 'org-del',
     })
+  })
+
+  it('deleteServer sends only the principals chosen for outright deletion', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, serverId: 'srv-1' }))
+    await deleteServer('srv-1', 'org-del', {
+      principals: [{ principalId: 'p1', action: 'delete' }],
+    })
+    const [, init] = fetchMock.mock.calls[0] ?? []
+    expect(JSON.parse(String((init as RequestInit).body))).toEqual({
+      principals: [{ principalId: 'p1', action: 'delete' }],
+    })
+  })
+
+  it('deleteServer explains a refused principal choice without the API path', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ error: 'x', code: 'principal_delete_refused', principals: [] }, 409)
+    )
+    await expect(deleteServer('srv-1', 'org-1')).rejects.toBeInstanceOf(
+      ServerPrincipalChoiceRefusedError
+    )
+  })
+
+  it('deleteServer sends no body when nothing was chosen', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, serverId: 'srv-1' }))
+    await deleteServer('srv-1', 'org-del', { principals: [] })
+    const [, init] = fetchMock.mock.calls[0] ?? []
+    expect((init as RequestInit).body).toBeUndefined()
+  })
+
+  it('reads and deletes principals through the organization and server routes', async () => {
+    fetchMock.mockImplementation(async () => jsonResponse({ principals: [], ok: true }))
+    await fetchOrgPrincipals('org-1')
+    await deleteOrgPrincipal('org-1', 'p-1')
+    await fetchServerPrincipals('srv-1', 'org-1')
+    await fetchServerPrincipalRemovalPlan('srv-1', 'org-1')
+    const calls = fetchMock.mock.calls.map(([url, init]) => [
+      String(url).replace(/^.*\/api\/client\/v1/, ''),
+      (init as RequestInit | undefined)?.method ?? 'GET',
+    ])
+    expect(calls).toEqual([
+      ['/organizations/org-1/principals', 'GET'],
+      ['/organizations/org-1/principals/p-1', 'DELETE'],
+      ['/servers/srv-1/principals', 'GET'],
+      ['/servers/srv-1/principal-removal-plan', 'GET'],
+    ])
   })
 
   it('deleteServer keeps HTTP status when the error body is not JSON', async () => {

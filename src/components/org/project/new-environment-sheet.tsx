@@ -7,15 +7,15 @@ import { ChoiceCard, ChoiceGroup } from '@/components/ui/v4/choice-card'
 import { Sheet } from '@/components/ui/v4/sheet'
 import { typeStyle } from '@/components/ui/v4/type-styles'
 import { themedStyles, usePalette } from '@/components/ui/v4/use-palette'
-import { DISPLAY_NAME_MAX_LENGTH } from '@/lib/display-name'
-import { validateEnvironmentName } from '@/lib/environment-validation'
+import { ENVIRONMENT_NAME_MAX_LENGTH, validateEnvironmentName } from '@/lib/environment-validation'
 import type { ConfigViewSide } from '@/lib/instance-api'
+import { NOT_COPIED_NOTE } from '@/lib/v4/primary-environment'
 import { useCreateEnvironment } from '@/lib/queries/environments'
 import { useOrgServers } from '@/lib/queries/servers'
 import { serverDisplayName } from '@/lib/resource-labels'
 import {
   newEnvironmentBody,
-  START_CHOICES,
+  startChoices,
   startPreview,
   type NewEnvironmentStart,
 } from '@/lib/v4/project-home'
@@ -73,17 +73,18 @@ function ServerChoices({
 /**
  * The New environment sheet: a name, what to start from, and a server.
  *
- * Start choices are the ones the API can honour today: "Start from the Base"
- * (no compose of its own) and "Empty, stands alone" (`services: !override {}`).
- * There is no "copy another environment" choice: the server has no copy call,
- * and sending a copied compose would duplicate domains and drop secret values.
- * Nothing deploys until Deploy is pressed.
+ * The start is always named in the request. "Copy of <primary environment>" is
+ * preselected (the copy is made by the control plane, so domains and secret
+ * values are never duplicated by the browser); "Empty, stands alone" is the
+ * other choice. Either way the environment inherits from the Base the way
+ * every environment does. Nothing deploys until Deploy is pressed.
  */
 export function NewEnvironmentSheet({
   orgId,
   projectId,
   visible,
-  base,
+  primaryName,
+  primary,
   hasProjectServer,
   onClose,
   onCreated,
@@ -91,8 +92,10 @@ export function NewEnvironmentSheet({
   orgId: string
   projectId: string
   visible: boolean
-  /** The Base as read from any environment's config-view; `null` until read. */
-  base: ConfigViewSide | null
+  /** The primary environment's name, for the "Copy of" choice; `null` until the list is read. */
+  primaryName: string | null
+  /** What the primary environment runs, as read from its config-view; `null` until read. */
+  primary: ConfigViewSide | null
   hasProjectServer: boolean
   onClose: () => void
   onCreated: (environmentId: string) => void | Promise<void>
@@ -100,10 +103,12 @@ export function NewEnvironmentSheet({
   const s = styles(usePalette())
   const createEnvironment = useCreateEnvironment(orgId)
   const [name, setName] = useState('')
-  const [start, setStart] = useState<NewEnvironmentStart>('base')
+  const [start, setStart] = useState<NewEnvironmentStart>('copy')
   const [serverId, setServerId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const preview = useMemo(() => startPreview(start, base), [start, base])
+  const [created, setCreated] = useState<{ id: string; notCopied: string[] } | null>(null)
+  const choices = useMemo(() => startChoices(primaryName), [primaryName])
+  const preview = useMemo(() => startPreview(start, primary), [start, primary])
 
   const submit = async () => {
     if (createEnvironment.isPending) return
@@ -114,13 +119,42 @@ export function NewEnvironmentSheet({
     }
     setError(null)
     const result = await createEnvironment.run(
-      newEnvironmentBody({ projectId, name, start, serverId }),
+      newEnvironmentBody({ projectId, name, start, serverId })
     )
     if (!result.ok) {
       setError(result.error ?? 'Could not create the environment.')
       return
     }
+    const notCopied = start === 'copy' ? (result.value.notCopied ?? []) : []
+    if (notCopied.length > 0) {
+      setCreated({ id: result.value.id, notCopied })
+      return
+    }
     await onCreated(result.value.id)
+  }
+
+  if (created) {
+    return (
+      <Sheet
+        visible={visible}
+        onClose={() => void onCreated(created.id)}
+        title="Environment created"
+        footer={
+          <ActionButton
+            label="Open it"
+            variant="primary"
+            onPress={() => void onCreated(created.id)}
+          />
+        }
+      >
+        <View style={s.section}>
+          <Text style={s.label}>These were not copied from the primary environment:</Text>
+          {created.notCopied.map((item) => (
+            <Text key={item} style={s.hint}>{`• ${item}`}</Text>
+          ))}
+        </View>
+      </Sheet>
+    )
   }
 
   return (
@@ -153,18 +187,18 @@ export function NewEnvironmentSheet({
           setName(value)
           setError(null)
         }}
-        placeholder="e.g. Staging"
+        placeholder="e.g. staging"
         autoCapitalize="none"
         autoCorrect={false}
         editable={!createEnvironment.isPending}
-        maxLength={DISPLAY_NAME_MAX_LENGTH}
+        maxLength={ENVIRONMENT_NAME_MAX_LENGTH}
         accessibilityLabel="New environment name"
         error={error}
       />
       <View style={s.section}>
         <Text style={s.label}>Start from</Text>
         <ChoiceGroup label="Start from">
-          {START_CHOICES.map((choice) => (
+          {choices.map((choice) => (
             <ChoiceCard
               key={choice.key}
               title={choice.title}
@@ -175,6 +209,7 @@ export function NewEnvironmentSheet({
             />
           ))}
         </ChoiceGroup>
+        {start === 'copy' ? <Text style={s.hint}>{NOT_COPIED_NOTE}</Text> : null}
       </View>
       <ServerChoices
         orgId={orgId}
@@ -187,7 +222,9 @@ export function NewEnvironmentSheet({
         {preview ? (
           <MiniMap columns={preview} accessibilityLabel="What the new environment will run" />
         ) : (
-          <Text style={s.hint}>The Base could not be read yet, so there is nothing to preview.</Text>
+          <Text style={s.hint}>
+            The primary environment could not be read yet, so there is nothing to preview.
+          </Text>
         )}
       </View>
     </Sheet>

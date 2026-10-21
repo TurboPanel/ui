@@ -31,10 +31,13 @@ import {
 } from '@/lib/instance-updates'
 import { fleetServersQuery, UPGRADE_FLEET_PAGE_SIZE } from '@/lib/upgrade-batch'
 import {
+  fleetProgressText,
   installedBuildLabel,
+  offlineWaitingNotice,
   platformUpgradeHeadlineCopy,
   type PieceStepView,
   resolvePlatformUpgradeHeadline,
+  runWaitsOnlyOnOffline,
   summarizeFleetSteps,
   updateAvailableSentence,
   upgradeRunErrorLabel,
@@ -139,7 +142,7 @@ function ComponentsPanel({
         step={controlPlaneStep}
       />
       <UpgradeBuildBlock
-        title="Web app"
+        title="Web interface"
         target={instance.uiTarget}
         installedLabel={installedBuildLabel(consoleBuild, instance.uiTarget, hideCommit)}
         updateAvailable={consoleUpdateAvailable(consoleBuild, instance.uiTarget)}
@@ -192,6 +195,7 @@ function UpgradeProgressPanel({
   const daemonStep = run?.steps.find((step) => step.phase === 'colocated_daemon')
   const controlPlaneStep = run?.steps.find((step) => step.phase === 'control_plane')
   const runError = upgradeRunErrorLabel(run?.error)
+  const waitingOffline = offlineWaitingNotice(run?.steps ?? [])
 
   return (
     <SectionPanel
@@ -200,8 +204,9 @@ function UpgradeProgressPanel({
         run && !finished ? (
           <ConfirmButton
             label="Cancel update"
-            confirmLabel="Cancel update"
-            prompt="Stop this update? Steps already applied stay applied; anything still pending is skipped. Start a fresh update afterward to pick up the current target build."
+            confirmLabel="Yes, cancel the update"
+            dismissLabel="No, keep it"
+            prompt="Stop this update? Finished steps stay, and steps that have not started are skipped. A server already installing is not stopped and finishes on its own. The next update starts against the current build."
             busy={cancelling}
             onConfirm={() => {
               onCancel(run.id)
@@ -229,16 +234,17 @@ function UpgradeProgressPanel({
           phase="control_plane"
           status={controlPlaneStep?.status ?? null}
           errorCode={controlPlaneStep?.errorCode ?? null}
-          title="Web app step"
-          note="Installed together with the control plane."
+          title="Web interface step"
+          note="Installed in the same step as the control plane."
         />
       ) : null}
       {runError ? <Text style={panelStyles.error}>{runError}</Text> : null}
       <Text style={panelStyles.pageCopy}>
         {fleetSummary.total > 0
-          ? `${fleetSummary.upToDate} of ${fleetSummary.total} servers up to date`
+          ? fleetProgressText(fleetSummary, 'servers')
           : 'Server updates: each server’s daemon updates after the control plane is on target.'}
       </Text>
+      {waitingOffline ? <InlineNotice tone="info" title={waitingOffline} /> : null}
       <UpgradeFleetTable
         servers={fleetServers}
         total={fleetTotal}
@@ -250,6 +256,14 @@ function UpgradeProgressPanel({
       />
     </SectionPanel>
   )
+}
+
+/** An update in progress blocks a new one, unless it is only waiting on offline servers. */
+function runBlocksNewUpdate(
+  headline: ReturnType<typeof resolvePlatformUpgradeHeadline>,
+  run: Parameters<typeof runWaitsOnlyOnOffline>[0]
+): boolean {
+  return headline === 'updating' && !runWaitsOnlyOnOffline(run)
 }
 
 export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>) {
@@ -297,7 +311,7 @@ export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>)
     data.managedUpgrade === true &&
     data.units.daemon.connected &&
     selfHostedUpdateAvailable(data.units, consoleBuild) &&
-    headline !== 'updating' &&
+    !runBlocksNewUpdate(headline, run) &&
     !flow.starting
 
   useAutoOpenPreflight(canStart, flow.openPreflight)

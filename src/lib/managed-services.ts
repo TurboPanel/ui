@@ -9,6 +9,7 @@ import {
   MANAGED_FAILOVER_UNSUPPORTED_REASON,
 } from '@/lib/managed-releases'
 import type { ManagedSslMode } from '@/lib/managed-ssl'
+import { STRAIGHT_THROUGH_ERROR_COPY } from '@/lib/managed-straight-through'
 import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
 import { MANAGED_HAS_BINDINGS_COPY } from '@/lib/user-error'
 
@@ -280,8 +281,21 @@ export type ManagedConnectionInfo = {
  */
 export type ManagedConnectionRole = 'read-write' | 'read-only'
 
+/**
+ * Who keeps a login's permissions right. `recipe` = the panel sets them and
+ * puts them back on every apply; `self` = the owner sets them in their own
+ * tools and the panel never resets them. `preset` is an old login made before
+ * this choice existed; it cannot be switched back to once left.
+ */
+export type ManagedGrantMode = 'preset' | 'recipe' | 'self'
+
 export type ManagedUserRecord = {
+  /** The login id. Every managed users route takes this id. */
   id: string
+  /** Same value as `id`. */
+  loginId: string
+  /** The site owner's Linux user this login shares its name with; `null` when there is none. */
+  principalId: string | null
   username: string
   /** Engine login actually created, per `nameScheme`. Connect with this name. */
   appliedUsername: string
@@ -289,7 +303,113 @@ export type ManagedUserRecord = {
   databases: string[]
   privileges: string[]
   connectionRole: ManagedConnectionRole
+  /** Absent on a control plane that predates permission modes. */
+  grantMode?: ManagedGrantMode
+  /** Used by a database tool: always the primary, never split between reader and writer. */
+  tool?: boolean
+  /** Places the login may connect from; `['any']` (or absent on an older control plane) = anywhere. */
+  allowedSources?: string[]
+  /** Most connections at once; `null`/absent = no cap. */
+  maxConnections?: number | null
+  /** PostgreSQL only: connects straight through (no connection sharing). Always false with a source limit; absent on an older control plane. */
+  straightThrough?: boolean
+  /** True when the owner never chose, so `straightThrough` is the default. */
+  straightThroughDefault?: boolean
   createdAt: string
+}
+
+/** Privilege name of the Database admin login (stored alone). */
+export const MANAGED_ADMIN_PRIVILEGE = 'admin'
+
+export type ManagedPrivilegeAllowance = 'yes' | 'needs-admin' | 'no'
+
+export type ManagedPrivilegeLevelInfo = { id: string; label: string; explanation: string }
+
+/** `GET …/managed/privilege-catalogue`; only the parts the login screens read. */
+export type ManagedPrivilegeCatalogue = {
+  engine: string
+  series: string
+  levels: ManagedPrivilegeLevelInfo[]
+}
+
+export type ManagedEffectivePrivilege = {
+  keyword: string
+  catalogueId: string | null
+  label: string
+  explanation: string
+  allowed: ManagedPrivilegeAllowance | 'unknown'
+  reason?: string
+  grantable: boolean
+}
+
+export type ManagedEffectiveGrant = {
+  level: string
+  database?: string
+  schema?: string
+  object?: string
+  columns?: string[]
+  host?: string
+  /** MySQL / MariaDB: the database name is a wildcard pattern. */
+  pattern?: boolean
+  via?: string
+  /** `everyone` for a Postgres PUBLIC grant. */
+  viaLabel?: string
+  grantor?: string
+  privileges: ManagedEffectivePrivilege[]
+  origin: 'observed'
+}
+
+export type ManagedEffectiveDefault = {
+  database: string
+  creator: string
+  schema?: string
+  appliesTo: string
+  objectType: string
+  via?: string
+  privileges: ManagedEffectivePrivilege[]
+  origin: 'observed'
+}
+
+export type ManagedEffectiveMembership = {
+  role: string
+  label?: string
+  explanation?: string
+  kind: 'predefined' | 'panel' | 'other'
+  allowed: ManagedPrivilegeAllowance | 'unknown'
+  reason?: string
+  host?: string
+  via?: string
+  origin: 'observed'
+}
+
+export type ManagedEffectiveAttribute = {
+  name: string
+  label: string
+  explanation: string
+  value: boolean | number
+  allowed: ManagedPrivilegeAllowance
+}
+
+/** `GET …/managed/users/:principalId/effective-permissions` (everything `observed` for now). */
+export type ManagedEffectivePermissions = {
+  username: string
+  exists: boolean
+  engine: string
+  series: string
+  observedAt: string
+  serverVersion?: string
+  attributes: ManagedEffectiveAttribute[]
+  accounts: { host: string; locked?: boolean }[]
+  memberships: ManagedEffectiveMembership[]
+  grants: ManagedEffectiveGrant[]
+  defaults: ManagedEffectiveDefault[]
+  truncated: boolean
+  outsidePolicyCount: number
+  databases?: string[]
+  databasesRead?: string[]
+  databasesFailed?: string[]
+  databasesNotAsked?: string[]
+  versionMatchesCatalogue?: boolean
 }
 
 export type ManagedServerSummary = {
@@ -333,6 +453,12 @@ export type ManagedSslView = {
   configured: ManagedSslMode | null
   effective: ManagedSslMode
   organizationDefault: ManagedSslMode | null
+  /**
+   * The resolved mode let clients skip SSL and `effective` was raised to
+   * `require` because a server serving the database allows external access.
+   * Absent from older control planes.
+   */
+  raisedForExternalAccess?: boolean
 }
 
 export type ManagedAccessEndpoint = {
@@ -340,6 +466,24 @@ export type ManagedAccessEndpoint = {
   reach: 'local' | 'external'
   host: string
   port: number
+  /** External only, newer control planes: `Public`, or the datacenter's name. */
+  label?: string | null
+  /** External only: which side of the server this address is on. */
+  scope?: 'public' | 'datacenter' | null
+  datacenterId?: string | null
+  /** External only: fills the main connection string. */
+  primary?: boolean
+}
+
+/**
+ * One connection string per address clients use (newer control planes),
+ * main one first; the main one also fills `connection`.
+ */
+export type ManagedConnectionEntry = ManagedConnectionInfo & {
+  label?: string | null
+  scope?: 'public' | 'datacenter' | null
+  datacenterId?: string | null
+  primary?: boolean
 }
 
 /**
@@ -362,6 +506,10 @@ export type ManagedDetailResponse = {
   managed: ManagedEnvironmentRecord | null
   connection: ManagedConnectionInfo | null
   endpoints?: ManagedAccessEndpoint[]
+  /** Absent on control planes that predate the addresses clients use. */
+  connections?: ManagedConnectionEntry[]
+  /** External access is on and no address gives clients a host: prompt to set one. */
+  addressNeeded?: boolean
   externalAccess?: ManagedExternalAccessView | null
   settings: ManagedSettings | null
   ssl: ManagedSslView | null
@@ -427,6 +575,32 @@ const MANAGED_ERROR_COPY: Record<string, string> = {
   managed_member_is_primary: 'Promote another member first — the primary cannot be removed.',
   managed_no_read_targets:
     'This cluster has no replica serving read traffic yet. Add a replica with reads enabled, then create the read-only login.',
+  managed_grant_reset_needs_confirm:
+    'This change resets permissions the panel does not manage. Confirm the reset to continue.',
+  managed_grant_mode_invalid_transition:
+    'An older login cannot be switched back to its original permissions. Choose one of the two modes shown.',
+  managed_login_not_editable:
+    'This login is kept by the panel and cannot be changed here.',
+  managed_login_limits_need_daemon_update:
+    'This server needs updating before it can limit where a login connects from or how many connections it holds. Update the server, then try again.',
+  managed_login_sources_empty:
+    'Choose at least one place, or choose Anywhere to remove the limit.',
+  managed_login_source_range_not_exact:
+    'That range can’t be matched exactly. List the addresses one by one, or use a prefix such as 203.0.113.%.',
+  managed_login_source_invalid: 'One of the places is not a valid address, prefix or range.',
+  managed_login_sources_invalid: 'The list of places is not valid.',
+  managed_login_sources_too_many: 'Too many places. Use an address prefix such as 203.0.113.% to cover more.',
+  managed_login_sources_any_alone: 'Anywhere can’t be combined with other places.',
+  managed_login_source_server_unknown: 'One of the chosen servers is not in this organization.',
+  managed_login_max_connections_invalid: 'Most connections at once must be a whole number from 1 to 10000.',
+  ...STRAIGHT_THROUGH_ERROR_COPY,
+  managed_grant_mode_invalid: 'That permission mode is not valid.',
+  managed_admin_needs_owner_role:
+    'A Database admin login cannot be made on some of these databases. Choose different databases, or use a different kind of login.',
+  managed_admin_login_not_read_only:
+    'A Database admin login changes things, so it cannot be read-only. Use Read/write.',
+  managed_self_login_has_no_privileges:
+    'A login you manage yourself has no permissions yet. Set them in your own tools first.',
   datacenter_required: 'That server is not assigned to a datacenter.',
   datacenter_cidr_required: 'That datacenter has no private network yet.',
   datacenter_ip_required: 'That server has no private address in its datacenter.',
@@ -473,6 +647,12 @@ const MANAGED_ERROR_COPY: Record<string, string> = {
   binding_owned_variable:
     'That variable is provided by a connected database and cannot be edited here.',
   database_not_found: 'That database was not found on this cluster.',
+  managed_ssl_external_access_minimum:
+    'External access is on for a server this database uses, so connections must use SSL. Choose Require or stronger, or turn external access off first.',
+  managed_ssl_default_external_access_minimum:
+    'External access is on for a server that runs databases following the organization default, so the default must use SSL. Choose Require or stronger.',
+  external_access_weak_ssl:
+    'A database on this server still accepts connections without SSL. Set it to Require or stronger before allowing external access.',
 }
 
 /**
@@ -484,18 +664,40 @@ const SERVER_NAMED_ERROR_CODES = new Set([
   'fabric_address_required',
   'daemon_key_unavailable',
   'ingress_reconcile_failed',
+  // These name the servers or databases to change.
+  'managed_ssl_external_access_minimum',
+  'managed_ssl_default_external_access_minimum',
+  'external_access_weak_ssl',
+  // The server's sentence says which place or number was wrong.
+  'managed_login_source_range_not_exact',
+  'managed_login_source_invalid',
+  'managed_login_source_server_unknown',
+  // The server's sentence lists the databases that stop it.
+  'managed_admin_needs_owner_role',
 ])
+
+function managedErrorCode(raw: string): string | undefined {
+  return /HTTP \d+:\s*([a-z0-9_]+)/i.exec(raw)?.[1]
+}
+
+/**
+ * The server's own sentence for refusals that name what they are about (a
+ * server, the databases to change); `null` for any other error.
+ */
+export function managedNamedErrorMessage(err: unknown): string | null {
+  const raw = err instanceof Error ? err.message : ''
+  const code = managedErrorCode(raw)
+  if (!code || !SERVER_NAMED_ERROR_CODES.has(code)) return null
+  return /\s—\s(.+)$/s.exec(raw)?.[1] ?? null
+}
 
 export function managedErrorMessage(err: unknown, fallback: string): string {
   const raw = err instanceof Error ? err.message : fallback
-  const match = /HTTP \d+:\s*([a-z0-9_]+)/i.exec(raw)
-  const code = match?.[1]
+  const code = managedErrorCode(raw)
   // These refusals say which server they are about; the general copy would
   // lose that.
-  if (code && SERVER_NAMED_ERROR_CODES.has(code)) {
-    const named = /\s—\s(.+)$/s.exec(raw)?.[1]
-    if (named) return named
-  }
+  const named = managedNamedErrorMessage(err)
+  if (named) return named
   if (code && MANAGED_ERROR_COPY[code]) {
     return MANAGED_ERROR_COPY[code]
   }

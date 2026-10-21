@@ -116,6 +116,9 @@ vi.mock('@/components/org/project/project-scope-picker', () => ({
 vi.mock('@/components/org/project/project-context', () => ({
   useProjectContext: () => state.ctx,
 }))
+vi.mock('@/lib/queries/environment-cards', () => ({
+  useEnvironmentConfigViews: () => ({ views: {}, isLoading: false }),
+}))
 vi.mock('@/lib/queries/services', () => ({
   useServices: () => ({ data: { services: state.services } }),
   useHostingsByServices: () => ({ hostingsByService: state.hostings }),

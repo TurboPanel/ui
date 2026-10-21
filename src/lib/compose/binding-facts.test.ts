@@ -5,7 +5,7 @@ import { bindingFactsByService, bindingTagLabel } from './binding-facts'
 function binding(over: Partial<BindingRecord>): BindingRecord {
   return {
     id: 'b1',
-    principalId: 'p1',
+    loginId: 'p1',
     serviceId: 's1',
     databaseName: 'app',
     keyPrefix: 'DB',

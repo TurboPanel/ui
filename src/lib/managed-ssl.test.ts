@@ -3,6 +3,8 @@ import {
   DEFAULT_MANAGED_SSL_MODE,
   describeManagedSslPolicy,
   isManagedSslMode,
+  isWeakManagedSslMode,
+  MANAGED_SSL_MINIMUM_WITH_EXTERNAL_ACCESS,
   managedSslDsnParam,
   managedSslInheritLabel,
   managedSslModeHint,
@@ -15,6 +17,16 @@ import {
 } from '@/lib/managed-ssl'
 
 describe('managed ssl modes', () => {
+  it('treats only the modes that skip SSL as weak; require is the external access minimum', () => {
+    expect(MANAGED_SSL_MODES.filter((mode) => isWeakManagedSslMode(mode))).toEqual([
+      'disable',
+      'allow',
+      'prefer',
+    ])
+    expect(MANAGED_SSL_MINIMUM_WITH_EXTERNAL_ACCESS).toBe('require')
+    expect(isWeakManagedSslMode(MANAGED_SSL_MINIMUM_WITH_EXTERNAL_ACCESS)).toBe(false)
+  })
+
   it('accepts only the six canonical modes', () => {
     for (const mode of MANAGED_SSL_MODES) {
       expect(isManagedSslMode(mode)).toBe(true)
@@ -103,6 +115,18 @@ describe('describeManagedSslPolicy', () => {
     configured,
     effective: resolveManagedSslMode(configured, organizationDefault),
     organizationDefault,
+  })
+
+  it('says when external access raised a mode without SSL to require', () => {
+    const raised = describeManagedSslPolicy('postgres', {
+      configured: 'disable',
+      effective: 'require',
+      organizationDefault: null,
+      raisedForExternalAccess: true,
+    })
+    expect(raised.source).toBe('raised to require because external access is on')
+    expect(raised.param).toBe('sslmode=require')
+    expect(raised.enforcement).toBe('plaintext refused')
   })
 
   it('attributes the mode to the layer that set it', () => {

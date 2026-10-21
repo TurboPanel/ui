@@ -14,6 +14,7 @@ import {
 } from '@/components/ui'
 import {
   DEFAULT_BINDING_KEY_PREFIX,
+  bindingPrefixedKeys,
   previewBindingKeys,
   validateBindingKeyPrefix,
 } from '@/lib/bindings'
@@ -42,7 +43,7 @@ type ServiceMeta = { name: string; projectId: string }
 
 type ConnectBindingFields = {
   serviceId: string
-  principalId: string
+  loginId: string
   databaseName: string
   keyPrefix: string
   emitEngineDefaults: boolean
@@ -56,6 +57,18 @@ function managedUserPickerLabel(user: ManagedUserRecord): string {
   return user.connectionRole === 'read-only'
     ? `${user.username} (read-only)`
     : user.username
+}
+
+/** Plain-words note on the two ways the organization CA is delivered. */
+function caNote(prefix: string): string {
+  const keys = bindingPrefixedKeys(prefix)
+  return (
+    `The database certificate arrives as text in ${keys.caCert}. ` +
+    `A site that runs on the server itself (such as a PHP site) gets ` +
+    `${keys.caFile} instead: the path of a file only the site owner's ` +
+    `Linux user can read, kept in the site's .turbopanel-hosting folder. ` +
+    `Paste that path into an app that asks for a CA file.`
+  )
 }
 
 function KeyChip({ label }: Readonly<{ label: string }>) {
@@ -129,7 +142,7 @@ function BindingCard({
       </Text>
       <Text style={panelStyles.detailLine}>
         <Text style={panelStyles.detailLabel}>User: </Text>
-        {user ? managedUserPickerLabel(user) : binding.principalId}
+        {user ? managedUserPickerLabel(user) : binding.loginId}
       </Text>
       <Text style={panelStyles.detailLine}>
         <Text style={panelStyles.detailLabel}>Prefix: </Text>
@@ -149,6 +162,7 @@ function BindingCard({
           "Points at this server's database ingress and does not move when the primary changes."
         }
       </Text>
+      <Text style={panelStyles.muted}>{caNote(binding.keyPrefix)}</Text>
       <View style={styles.keyRow}>
         {binding.keys.map((key) => (
           <KeyChip key={key} label={key} />
@@ -203,7 +217,7 @@ function ServiceBindingGroup({
           key={binding.id}
           binding={binding}
           meta={meta}
-          user={userById.get(binding.principalId)}
+          user={userById.get(binding.loginId)}
           canManage={canManage}
           disabled={disabled}
           onOpenService={onOpenService}
@@ -237,7 +251,7 @@ function ConnectServiceForm({
 }>) {
   const [targetEnvironmentId, setTargetEnvironmentId] = useState('')
   const [serviceId, setServiceId] = useState('')
-  const [principalId, setPrincipalId] = useState('')
+  const [loginId, setLoginId] = useState('')
   const [databaseName, setDatabaseName] = useState('')
   const [keyPrefix, setKeyPrefix] = useState(DEFAULT_BINDING_KEY_PREFIX)
   const [emitEngineDefaults, setEmitEngineDefaults] = useState(true)
@@ -301,9 +315,9 @@ function ConnectServiceForm({
         items={users}
         getId={(user) => user.id}
         getLabel={(user) => managedUserPickerLabel(user)}
-        selectedId={principalId}
+        selectedId={loginId}
         accessibilityLabel="User"
-        onSelect={setPrincipalId}
+        onSelect={setLoginId}
       />
 
       <Text style={panelStyles.detailLabel}>Database</Text>
@@ -334,6 +348,11 @@ function ConnectServiceForm({
       />
 
       {previewKeys.length > 0 ? (
+        <Text style={panelStyles.muted}>
+          {caNote(prefixValidation.ok ? prefixValidation.prefix : keyPrefix)}
+        </Text>
+      ) : null}
+      {previewKeys.length > 0 ? (
         <View style={styles.keyRow}>
           {previewKeys.map((key) => (
             <KeyChip key={key} label={key} />
@@ -349,7 +368,7 @@ function ConnectServiceForm({
           onPress={() =>
             onSubmit({
               serviceId,
-              principalId,
+              loginId,
               databaseName,
               keyPrefix,
               emitEngineDefaults,
@@ -467,7 +486,7 @@ export function ManagedBindingsPanel({
   }, [bindings, serviceMetaById])
 
   const handleCreate = async (fields: ConnectBindingFields) => {
-    if (!fields.principalId || !fields.serviceId || !fields.databaseName.trim()) {
+    if (!fields.loginId || !fields.serviceId || !fields.databaseName.trim()) {
       setError('Choose a service, user, and database.')
       return
     }
@@ -481,7 +500,7 @@ export function ManagedBindingsPanel({
     setEndpointUnavailable(false)
     try {
       await createBinding.mutateAsync({
-        principalId: fields.principalId,
+        loginId: fields.loginId,
         serviceId: fields.serviceId,
         databaseName: fields.databaseName.trim(),
         keyPrefix: prefixValidation.prefix,

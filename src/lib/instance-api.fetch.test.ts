@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { setActiveOrganizationId , ORG_ID_HEADER } from '@/lib/org-context'
+import { setActiveOrganizationId, ORG_ID_HEADER } from '@/lib/org-context'
 import {
   applyOrgFabric,
   bootstrapInstall,
@@ -28,6 +28,7 @@ import {
   fetchDeployPreview,
   fetchEnvironment,
   fetchEnvironmentConfigView,
+  fetchForgeWebhookOrigins,
   fetchForges,
   fetchLicenses,
   fetchOrgHostDefaults,
@@ -65,6 +66,7 @@ import {
   saveOrgFabric,
   saveOrgHostDefaults,
   setServerHostname,
+  setServerLicenseTier,
   setServerNtp,
   setServerTimezone,
   signIn,
@@ -72,6 +74,7 @@ import {
   signUp,
   stopEnvironment,
   cancelDeployment,
+  makeEnvironmentPrimary,
   updateEnvironment,
   updateOrganization,
   updateProject,
@@ -109,7 +112,7 @@ describe('instance-api fetch wrappers', () => {
         userId: 'u1',
         email: 'ops@example.com',
         role: 'admin',
-      }),
+      })
     )
     await expect(signIn('ops@example.com', 'secret')).resolves.toEqual({
       userId: 'u1',
@@ -141,9 +144,7 @@ describe('instance-api fetch wrappers', () => {
 
   it('bootstrapInstall and completeInstall normalize install responses', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
-    await expect(
-      bootstrapInstall('root', 'pw'),
-    ).resolves.toEqual({ ok: true })
+    await expect(bootstrapInstall('root', 'pw')).resolves.toEqual({ ok: true })
 
     fetchMock.mockResolvedValueOnce(
       jsonResponse({
@@ -152,7 +153,7 @@ describe('instance-api fetch wrappers', () => {
         email: 'admin@example.com',
         role: 'superadmin',
         organizationId: 'org-1',
-      }),
+      })
     )
     await expect(
       completeInstall({
@@ -160,7 +161,7 @@ describe('instance-api fetch wrappers', () => {
         password: 'pw',
         superadminEmail: 'admin@example.com',
         superadminPassword: 'admin-pw',
-      }),
+      })
     ).resolves.toEqual({
       userId: 'u1',
       email: 'admin@example.com',
@@ -174,7 +175,7 @@ describe('instance-api fetch wrappers', () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse({
         organizations: [{ id: 'org-1', name: 'Acme', createdAt: 't' }],
-      }),
+      })
     )
     await expect(fetchOrganizations()).resolves.toMatchObject({
       organizations: [{ id: 'org-1' }],
@@ -183,7 +184,7 @@ describe('instance-api fetch wrappers', () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse({
         organization: { id: 'org-1', name: 'Acme', createdAt: 't' },
-      }),
+      })
     )
     await expect(fetchOrganization('org-1')).resolves.toMatchObject({
       organization: { id: 'org-1' },
@@ -199,27 +200,23 @@ describe('instance-api fetch wrappers', () => {
       jsonResponse({
         ok: true,
         organization: { id: 'org-1', name: 'Renamed', createdAt: 't' },
-      }),
+      })
     )
-    await expect(
-      updateOrganization('org-1', { name: 'Renamed' }),
-    ).resolves.toMatchObject({
+    await expect(updateOrganization('org-1', { name: 'Renamed' })).resolves.toMatchObject({
       organization: { name: 'Renamed' },
     })
   })
 
   it('authz helpers resolve resource id and check permission', async () => {
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({ resourceId: 'res-org-1' }),
-    )
-    await expect(
-      resolveResourceId('organization', 'org-1'),
-    ).resolves.toEqual({ resourceId: 'res-org-1' })
+    fetchMock.mockResolvedValueOnce(jsonResponse({ resourceId: 'res-org-1' }))
+    await expect(resolveResourceId('organization', 'org-1')).resolves.toEqual({
+      resourceId: 'res-org-1',
+    })
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ allowed: true }))
-    await expect(
-      checkPermission('res-org-1', 'organization:manage'),
-    ).resolves.toEqual({ allowed: true })
+    await expect(checkPermission('res-org-1', 'organization:manage')).resolves.toEqual({
+      allowed: true,
+    })
 
     fetchMock.mockResolvedValueOnce(
       jsonResponse({
@@ -233,7 +230,7 @@ describe('instance-api fetch wrappers', () => {
             permissionKey: 'organization:manage',
           },
         ],
-      }),
+      })
     )
     await expect(fetchAccessGrants('res-org-1')).resolves.toMatchObject({
       access: [{ id: 'grant-1' }],
@@ -242,7 +239,7 @@ describe('instance-api fetch wrappers', () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse({
         permissions: [{ key: 'organization:own', name: 'Own' }],
-      }),
+      })
     )
     await expect(fetchPermissions()).resolves.toMatchObject({
       permissions: [{ key: 'organization:own' }],
@@ -263,7 +260,7 @@ describe('instance-api fetch wrappers', () => {
             updatedAt: 't',
           },
         ],
-      }),
+      })
     )
     await expect(fetchVisibleWorkspaces()).resolves.toMatchObject({
       workspaces: [{ id: 'ws-1' }],
@@ -280,7 +277,7 @@ describe('instance-api fetch wrappers', () => {
           createdAt: 't',
           updatedAt: 't',
         },
-      }),
+      })
     )
     await expect(fetchWorkspace('ws-1')).resolves.toMatchObject({
       workspace: { id: 'ws-1' },
@@ -293,18 +290,14 @@ describe('instance-api fetch wrappers', () => {
     })
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
-    await expect(
-      updateWorkspace('ws-1', { name: 'Renamed' }),
-    ).resolves.toEqual({ ok: true })
+    await expect(updateWorkspace('ws-1', { name: 'Renamed' })).resolves.toEqual({ ok: true })
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
     await expect(deleteWorkspace('ws-1')).resolves.toEqual({ ok: true })
   })
 
   it('project and environment wrappers build query strings and bodies', async () => {
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({ projects: [{ id: 'p1', name: 'Demo' }] }),
-    )
+    fetchMock.mockResolvedValueOnce(jsonResponse({ projects: [{ id: 'p1', name: 'Demo' }] }))
     await expect(fetchVisibleProjects('ws-1')).resolves.toMatchObject({
       projects: [{ id: 'p1' }],
     })
@@ -317,9 +310,7 @@ describe('instance-api fetch wrappers', () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ catalog: [] }))
     await expect(fetchProjectCatalog()).resolves.toEqual({ catalog: [] })
 
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({ project: { id: 'p1', name: 'Demo' } }),
-    )
+    fetchMock.mockResolvedValueOnce(jsonResponse({ project: { id: 'p1', name: 'Demo' } }))
     await expect(fetchProject('p1')).resolves.toMatchObject({
       project: { id: 'p1' },
     })
@@ -330,20 +321,23 @@ describe('instance-api fetch wrappers', () => {
         type: 'empty',
         name: 'New',
         workspaceId: 'ws-1',
-      }),
+      })
     ).resolves.toEqual({ ok: true, id: 'p2' })
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
-    await expect(
-      updateProject('p1', { name: 'Renamed' }),
-    ).resolves.toEqual({ ok: true })
+    await expect(updateProject('p1', { name: 'Renamed' })).resolves.toEqual({ ok: true })
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
+    await updateProject('p1', { options: {}, target: 'base' })
+    expect(JSON.parse(String(fetchMock.mock.lastCall?.[1]?.body))).toEqual({
+      options: {},
+      target: 'base',
+    })
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
     await expect(deleteProject('p1')).resolves.toEqual({ ok: true })
 
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({ environments: [{ id: 'env-1' }] }),
-    )
+    fetchMock.mockResolvedValueOnce(jsonResponse({ environments: [{ id: 'env-1' }] }))
     await expect(fetchVisibleEnvironments('p1')).resolves.toMatchObject({
       environments: [{ id: 'env-1' }],
     })
@@ -352,26 +346,46 @@ describe('instance-api fetch wrappers', () => {
     await expect(fetchVisibleEnvironments()).resolves.toEqual({ environments: [] })
     expect(String(fetchMock.mock.calls.at(-1)?.[0])).toMatch(/\/environments$/)
     const environmentsCall = fetchMock.mock.calls.find(([url]) =>
-      String(url).includes('/environments'),
+      String(url).includes('/environments')
     )
     expect(String(environmentsCall?.[0])).toContain('projectId=p1')
 
     fetchMock.mockResolvedValueOnce(
-      jsonResponse({ environment: { id: 'env-1', name: 'Production' } }),
+      jsonResponse({ environment: { id: 'env-1', name: 'Production' } })
     )
     await expect(fetchEnvironment('env-1')).resolves.toMatchObject({
       environment: { id: 'env-1' },
     })
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, id: 'env-2' }))
-    await expect(
-      createEnvironment({ projectId: 'p1', name: 'Staging' }),
-    ).resolves.toEqual({ ok: true, id: 'env-2' })
+    await expect(createEnvironment({ projectId: 'p1', name: 'Staging' })).resolves.toEqual({
+      ok: true,
+      id: 'env-2',
+    })
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, id: 'env-3' }))
+    await createEnvironment({ projectId: 'p1', name: 'preview', start: 'empty' })
+    expect(JSON.parse(String(fetchMock.mock.lastCall?.[1]?.body))).toEqual({
+      projectId: 'p1',
+      name: 'preview',
+      start: 'empty',
+    })
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
-    await expect(
-      updateEnvironment('env-1', { serverId: 'srv-1' }),
-    ).resolves.toEqual({ ok: true })
+    await expect(updateEnvironment('env-1', { serverId: 'srv-1' })).resolves.toEqual({ ok: true })
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
+    await updateEnvironment('env-1', { pinned: true })
+    expect(JSON.parse(String(fetchMock.mock.lastCall?.[1]?.body))).toEqual({ pinned: true })
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, id: 'env-1', projectId: 'p1' }))
+    await expect(makeEnvironmentPrimary('env-1')).resolves.toEqual({
+      ok: true,
+      id: 'env-1',
+      projectId: 'p1',
+    })
+    expect(String(fetchMock.mock.lastCall?.[0])).toContain('/environments/env-1/primary')
+    expect(fetchMock.mock.lastCall?.[1]).toMatchObject({ method: 'POST' })
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
     await expect(deleteEnvironment('env-1')).resolves.toEqual({ ok: true })
@@ -379,27 +393,24 @@ describe('instance-api fetch wrappers', () => {
 
   it('variable CRUD wrappers encode parent filters', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ variables: [] }))
-    await expect(
-      fetchVariables({ projectId: 'p1' }),
-    ).resolves.toEqual({ variables: [] })
+    await expect(fetchVariables({ projectId: 'p1' })).resolves.toEqual({ variables: [] })
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain('projectId=p1')
 
     fetchMock.mockResolvedValueOnce(
-      jsonResponse({ variable: { id: 'var-1', key: 'PORT', value: '5432' } }),
+      jsonResponse({ variable: { id: 'var-1', key: 'PORT', value: '5432' } })
     )
     await expect(fetchVariable('var-1')).resolves.toMatchObject({
       variable: { id: 'var-1' },
     })
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, id: 'var-2' }))
-    await expect(
-      createVariable({ projectId: 'p1', key: 'PORT', value: '5432' }),
-    ).resolves.toEqual({ ok: true, id: 'var-2' })
+    await expect(createVariable({ projectId: 'p1', key: 'PORT', value: '5432' })).resolves.toEqual({
+      ok: true,
+      id: 'var-2',
+    })
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
-    await expect(
-      updateVariable('var-1', { value: '8080' }),
-    ).resolves.toEqual({ ok: true })
+    await expect(updateVariable('var-1', { value: '8080' })).resolves.toEqual({ ok: true })
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
     await expect(deleteVariable('var-1')).resolves.toEqual({ ok: true })
@@ -407,9 +418,9 @@ describe('instance-api fetch wrappers', () => {
 
   it('container and license list wrappers proxy filters', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ containers: [] }))
-    await expect(
-      fetchContainers({ environmentId: 'env-1', serviceId: 'svc-1' }),
-    ).resolves.toEqual({ containers: [] })
+    await expect(fetchContainers({ environmentId: 'env-1', serviceId: 'svc-1' })).resolves.toEqual({
+      containers: [],
+    })
     const containerUrl = String(fetchMock.mock.calls[0]?.[0])
     expect(containerUrl).toContain('environmentId=env-1')
     expect(containerUrl).toContain('serviceId=svc-1')
@@ -437,21 +448,42 @@ describe('instance-api fetch wrappers', () => {
 
   it('server command wrappers enqueue and poll', async () => {
     fetchMock.mockResolvedValueOnce(
-      jsonResponse({ ok: true, commandId: 'cmd-1', status: 'queued' }),
+      jsonResponse({ ok: true, commandId: 'cmd-1', status: 'queued' })
     )
     await expect(pingDaemon('srv-1')).resolves.toMatchObject({
       commandId: 'cmd-1',
     })
 
     fetchMock.mockResolvedValueOnce(
-      jsonResponse({ ok: true, commandId: 'cmd-2', status: 'queued' }),
+      jsonResponse({ ok: true, commandId: 'cmd-2', status: 'queued' })
     )
     await expect(setServerHostname('srv-1', 'huey')).resolves.toMatchObject({
       commandId: 'cmd-2',
     })
 
     fetchMock.mockResolvedValueOnce(
-      jsonResponse({ ok: true, commandId: 'cmd-3', status: 'queued' }),
+      jsonResponse({
+        ok: true,
+        assignedTier: 'S2',
+        pickedTier: 'S2',
+        tierPickNotice: null,
+        tiersFree: [],
+      })
+    )
+    await expect(setServerLicenseTier('srv-1', 'tier-s2')).resolves.toMatchObject({
+      ok: true,
+      assignedTier: 'S2',
+    })
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      '/api/client/v1/servers/srv-1/license-tier',
+      expect.objectContaining({
+        method: 'PUT',
+        body: JSON.stringify({ tierId: 'tier-s2' }),
+      })
+    )
+
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ ok: true, commandId: 'cmd-3', status: 'queued' })
     )
     await expect(rebootServer('srv-1')).resolves.toMatchObject({
       commandId: 'cmd-3',
@@ -478,7 +510,7 @@ describe('instance-api fetch wrappers', () => {
         startedAt: null,
         finishedAt: null,
         expiresAt: null,
-      }),
+      })
     )
     await expect(fetchCommand('srv-1', 'cmd-1')).resolves.toMatchObject({
       id: 'cmd-1',
@@ -487,33 +519,29 @@ describe('instance-api fetch wrappers', () => {
   })
 
   it('host defaults and timezone wrappers proxy org routes', async () => {
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({ sshPort: 2222, ntp: { enabled: true } }),
-    )
+    fetchMock.mockResolvedValueOnce(jsonResponse({ sshPort: 2222, ntp: { enabled: true } }))
     await expect(fetchOrgHostDefaults('org-1')).resolves.toMatchObject({
       sshPort: 2222,
     })
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
-    await expect(
-      saveOrgHostDefaults('org-1', { sshPort: 2222 }),
-    ).resolves.toEqual({ ok: true })
+    await expect(saveOrgHostDefaults('org-1', { sshPort: 2222 })).resolves.toEqual({ ok: true })
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ timezones: ['UTC'] }))
     await expect(fetchTimezones()).resolves.toEqual({ timezones: ['UTC'] })
 
     fetchMock.mockResolvedValueOnce(
-      jsonResponse({ ok: true, commandId: 'cmd-tz', status: 'queued' }),
+      jsonResponse({ ok: true, commandId: 'cmd-tz', status: 'queued' })
     )
     await expect(setServerTimezone('srv-1', 'UTC')).resolves.toMatchObject({
       commandId: 'cmd-tz',
     })
 
     fetchMock.mockResolvedValueOnce(
-      jsonResponse({ ok: true, commandId: 'cmd-ntp', status: 'queued' }),
+      jsonResponse({ ok: true, commandId: 'cmd-ntp', status: 'queued' })
     )
     await expect(
-      setServerNtp('srv-1', { enabled: true, servers: ['pool.ntp.org'] }),
+      setServerNtp('srv-1', { enabled: true, servers: ['pool.ntp.org'] })
     ).resolves.toMatchObject({ commandId: 'cmd-ntp' })
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
@@ -528,11 +556,12 @@ describe('instance-api fetch wrappers', () => {
         enabled: true,
         fabric: { id: 'fab-1', cidr: '10.192.0.0/16', allowRelay: false },
         relays: [],
-      }),
+      })
     )
-    await expect(
-      saveOrgFabric('org-1', true, { allowRelay: false }),
-    ).resolves.toMatchObject({ enabled: true, relays: [] })
+    await expect(saveOrgFabric('org-1', true, { allowRelay: false })).resolves.toMatchObject({
+      enabled: true,
+      relays: [],
+    })
 
     fetchMock.mockResolvedValueOnce(
       jsonResponse({
@@ -546,11 +575,11 @@ describe('instance-api fetch wrappers', () => {
           publicKey: null,
           prefix: '10.192.0.0/16',
         },
-      }),
+      })
     )
-    await expect(
-      patchOrgFabricRelay('org-1', 'srv-1', { role: 'gateway' }),
-    ).resolves.toMatchObject({ ok: true, relay: { serverId: 'srv-1' } })
+    await expect(patchOrgFabricRelay('org-1', 'srv-1', { role: 'gateway' })).resolves.toMatchObject(
+      { ok: true, relay: { serverId: 'srv-1' } }
+    )
 
     fetchMock.mockResolvedValueOnce(
       jsonResponse({
@@ -558,7 +587,7 @@ describe('instance-api fetch wrappers', () => {
         fabricId: 'fab-1',
         interfaceName: 'tp0',
         results: [{ serverId: 'srv-1', status: 'queued', commandId: 'cmd-f' }],
-      }),
+      })
     )
     await expect(applyOrgFabric('org-1')).resolves.toMatchObject({
       fabricId: 'fab-1',
@@ -573,14 +602,15 @@ describe('instance-api fetch wrappers', () => {
         ok: true,
         environmentId: 'env-1',
         projectId: 'p1',
-        followsBase: true,
+        isPrimary: true,
+        standsAlone: false,
         base: side,
         effective: side,
         changes: [],
-      }),
+      })
     )
     await expect(fetchEnvironmentConfigView('env-1')).resolves.toMatchObject({
-      followsBase: true,
+      standsAlone: false,
       changes: [],
     })
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/environments/env-1/config-view')
@@ -590,29 +620,31 @@ describe('instance-api fetch wrappers', () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse({
         ok: true,
-        composeFiles: [{
-          filename: 'compose.yaml',
-          role: 'runtime',
-          content: 'services: {}',
-        }],
+        composeFiles: [
+          {
+            filename: 'compose.yaml',
+            role: 'runtime',
+            content: 'services: {}',
+          },
+        ],
         projectName: 'p1',
         containers: [],
         volumes: [],
         warnings: [],
-      }),
+      })
     )
     await expect(fetchDeployPreview('env-1')).resolves.toMatchObject({
       ok: true,
-      composeFiles: [{
-        filename: 'compose.yaml',
-        role: 'runtime',
-        content: 'services: {}',
-      }],
+      composeFiles: [
+        {
+          filename: 'compose.yaml',
+          role: 'runtime',
+          content: 'services: {}',
+        },
+      ],
     })
 
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({ commandId: 'cmd-stop', serverId: 'srv-1' }),
-    )
+    fetchMock.mockResolvedValueOnce(jsonResponse({ commandId: 'cmd-stop', serverId: 'srv-1' }))
     await expect(stopEnvironment('env-1')).resolves.toMatchObject({
       commandId: 'cmd-stop',
     })
@@ -623,23 +655,21 @@ describe('instance-api fetch wrappers', () => {
         state: 'cancelling',
         environmentId: 'env-1',
         deploymentId: 'dep-1',
-      }),
+      })
     )
     await expect(cancelDeployment('env-1', 'dep-1')).resolves.toMatchObject({
       state: 'cancelling',
     })
     const [cancelUrl, cancelInit] = fetchMock.mock.calls.at(-1) ?? []
-    expect(String(cancelUrl)).toContain(
-      '/environments/env-1/deployments/dep-1/cancel',
-    )
+    expect(String(cancelUrl)).toContain('/environments/env-1/deployments/dep-1/cancel')
     expect(cancelInit).toMatchObject({ method: 'POST' })
 
     fetchMock.mockResolvedValueOnce(
-      jsonResponse({ ok: true, commandId: 'cmd-start', status: 'queued' }),
+      jsonResponse({ ok: true, commandId: 'cmd-start', status: 'queued' })
     )
-    await expect(
-      runEnvironmentLifecycle('env-1', 'start'),
-    ).resolves.toMatchObject({ commandId: 'cmd-start' })
+    await expect(runEnvironmentLifecycle('env-1', 'start')).resolves.toMatchObject({
+      commandId: 'cmd-start',
+    })
   })
 
   it('datacenter and IP helpers build query strings and remap ip_in_use', async () => {
@@ -648,7 +678,7 @@ describe('instance-api fetch wrappers', () => {
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ suggestions: [] }))
     await expect(
-      fetchDatacenterNameSuggestions({ unassignedOnly: false, limit: 5 }),
+      fetchDatacenterNameSuggestions({ unassignedOnly: false, limit: 5 })
     ).resolves.toEqual({ suggestions: [] })
     const suggestionUrl = String(fetchMock.mock.calls[1]?.[0])
     expect(suggestionUrl).toContain('unassignedOnly=0')
@@ -660,11 +690,9 @@ describe('instance-api fetch wrappers', () => {
     })
     expect(String(fetchMock.mock.calls[2]?.[0])).toMatch(/\/name-suggestions$/)
 
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({ error: IP_IN_USE_ERROR }, 409),
-    )
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: IP_IN_USE_ERROR }, 409))
     await expect(deleteIp('ip-1')).rejects.toThrow(
-      'This address is pinned to a hosting — unassign it first.',
+      'This address is pinned to a hosting — unassign it first.'
     )
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'forbidden' }, 403))
@@ -678,13 +706,13 @@ describe('instance-api fetch wrappers', () => {
         from: '2026-01-01T00:00:00.000Z',
         to: '2026-01-01T01:00:00.000Z',
         samples: [],
-      }),
+      })
     )
     await expect(
       fetchServerMetricsSummary('srv-1', {
         fromIso: '2026-01-01T00:00:00.000Z',
         toIso: '2026-01-01T01:00:00.000Z',
-      }),
+      })
     ).resolves.toMatchObject({ ok: true })
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/metrics/summary')
   })
@@ -701,28 +729,26 @@ describe('instance-api fetch wrappers', () => {
 
   it('surfaces project_has_running_services in deleteProject failures', async () => {
     fetchMock.mockResolvedValueOnce(
-      jsonResponse({ error: PROJECT_HAS_RUNNING_SERVICES_ERROR }, 409),
+      jsonResponse({ error: PROJECT_HAS_RUNNING_SERVICES_ERROR }, 409)
     )
-    await expect(deleteProject('p1')).rejects.toThrow(
-      PROJECT_HAS_RUNNING_SERVICES_ERROR,
-    )
+    await expect(deleteProject('p1')).rejects.toThrow(PROJECT_HAS_RUNNING_SERVICES_ERROR)
   })
 
   it('keeps the site name and adds friendly text for site_engine_feature_missing', async () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse(
         { error: 'site_engine_feature_missing', message: 'Site "blog" needs a newer daemon.' },
-        422,
-      ),
+        422
+      )
     )
     await expect(deleteProject('p1')).rejects.toThrow(
-      /HTTP 422: site_engine_feature_missing — Site "blog" needs a newer daemon\. — This server's daemon is too old/,
+      /HTTP 422: site_engine_feature_missing — Site "blog" needs a newer daemon\. — This server's daemon is too old/
     )
   })
 
   it('replaces the server text for container_not_owned and stays out of 403 recovery', async () => {
     fetchMock.mockResolvedValueOnce(
-      jsonResponse({ error: 'container_not_owned', message: 'forbidden for this user' }, 403),
+      jsonResponse({ error: 'container_not_owned', message: 'forbidden for this user' }, 403)
     )
     const error = await deleteProject('p1').catch((err: unknown) => err)
     expect(String(error)).toContain("isn't managed by TurboPanel")
@@ -736,11 +762,11 @@ describe('instance-api fetch wrappers', () => {
         licenseId: 'lic-1',
         licenseToken: 'tok',
         installCommand: 'curl | sh',
-      }),
+      })
     )
-    await expect(
-      createLicense('Huey', ' https://panel.example/ '),
-    ).resolves.toMatchObject({ licenseId: 'lic-1' })
+    await expect(createLicense('Huey', ' https://panel.example/ ')).resolves.toMatchObject({
+      licenseId: 'lic-1',
+    })
     const [, init] = fetchMock.mock.calls[0] ?? []
     expect((init as RequestInit).method).toBe('POST')
     expect(JSON.parse(String((init as RequestInit).body))).toEqual({
@@ -759,11 +785,11 @@ describe('instance-api fetch wrappers', () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, id: 'bind-1' }))
     await expect(
       createBinding({
-        principalId: 'principal-1',
+        loginId: 'login-1',
         serviceId: 'svc-1',
         databaseName: 'app',
         keyPrefix: 'APP_DB',
-      }),
+      })
     ).resolves.toEqual({ ok: true, id: 'bind-1' })
   })
 
@@ -778,7 +804,7 @@ describe('instance-api fetch wrappers', () => {
         },
         trustBundlePem: '-----BEGIN CERTIFICATE-----\n',
         leafHealth: { dueCount: 0, caGeneration: 1, caNotAfter: null },
-      }),
+      })
     )
     await expect(fetchOrganizationCa()).resolves.toMatchObject({
       tls: { id: 'tls-1' },
@@ -796,7 +822,7 @@ describe('instance-api fetch wrappers', () => {
         state: 'awaiting_retire',
         results: [],
         retiredCaStillRequired: true,
-      }),
+      })
     )
     await expect(fetchOrganizationCaRotation()).resolves.toMatchObject({
       rotationId: 'rot-1',
@@ -809,7 +835,7 @@ describe('instance-api fetch wrappers', () => {
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'forbidden' }, 403))
     await expect(fetchOrganizationCaRotation()).rejects.toThrow(
-      '/tls/ca/rotation failed: HTTP 403: forbidden',
+      '/tls/ca/rotation failed: HTTP 403: forbidden'
     )
   })
 
@@ -822,7 +848,7 @@ describe('instance-api fetch wrappers', () => {
         generation: 2,
         results: [],
         needsRedeploy: [],
-      }),
+      })
     )
     await expect(rotateOrganizationCa()).resolves.toMatchObject({
       ok: true,
@@ -832,9 +858,7 @@ describe('instance-api fetch wrappers', () => {
     expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ method: 'POST' })
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/tls/ca/rotate')
 
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({ ok: true, rotationId: 'rot-1' }),
-    )
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, rotationId: 'rot-1' }))
     await expect(retireOrganizationCa()).resolves.toEqual({
       ok: true,
       rotationId: 'rot-1',
@@ -874,6 +898,31 @@ describe('instance-api fetch wrappers', () => {
     expect(String(fetchMock.mock.calls[1]?.[0])).toContain('/api/client/v1/forges')
   })
 
+  it('reads webhook origins from the scope-appropriate collection', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ origins: ['https://panel.example.com'], platformManaged: true })
+    )
+    await expect(fetchForgeWebhookOrigins('org')).resolves.toEqual({
+      origins: ['https://panel.example.com'],
+      platformManaged: true,
+    })
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/api/client/v1/forges/webhook-origins')
+
+    // A malformed answer still reads as "nothing published, self-hosted".
+    fetchMock.mockResolvedValueOnce(jsonResponse({ origins: [42, 'https://a.example.com'] }))
+    await expect(fetchForgeWebhookOrigins('admin')).resolves.toEqual({
+      origins: ['https://a.example.com'],
+      platformManaged: false,
+    })
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain('/api/admin/v1/forges/webhook-origins')
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({}))
+    await expect(fetchForgeWebhookOrigins('org')).resolves.toEqual({
+      origins: [],
+      platformManaged: false,
+    })
+  })
+
   it('POSTs a create and PATCHes only the supplied patch keys', async () => {
     const app = { id: 'app-1', name: 'TurboPanel' }
 
@@ -883,15 +932,15 @@ describe('instance-api fetch wrappers', () => {
         provider: 'github',
         name: 'TurboPanel',
         externalAppId: '123456',
-      }),
+      })
     ).resolves.toEqual(app)
     const [, created] = fetchMock.mock.calls[0] ?? []
     expect((created as RequestInit).method).toBe('POST')
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ app }))
-    await expect(
-      updateForge('org', 'app-1', { name: 'Renamed', clientId: null }),
-    ).resolves.toEqual(app)
+    await expect(updateForge('org', 'app-1', { name: 'Renamed', clientId: null })).resolves.toEqual(
+      app
+    )
     const [url, init] = fetchMock.mock.calls[1] ?? []
     expect(String(url)).toContain('/api/client/v1/forges/app-1')
     expect((init as RequestInit).method).toBe('PATCH')
@@ -920,7 +969,7 @@ describe('instance-api fetch wrappers', () => {
         name: 'TurboPanel',
         organizationLogin: 'acme',
         pullRequestAccess: 'read',
-      }),
+      })
     ).resolves.toEqual(manifest)
     const [manifestUrl, manifestInit] = fetchMock.mock.calls[1] ?? []
     expect(String(manifestUrl)).toContain('/forges/github/manifest')
@@ -943,16 +992,14 @@ describe('instance-api fetch wrappers', () => {
   })
 
   it('attaches and refreshes repositories', async () => {
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({ ok: true, id: 'repo-1', reused: false }),
-    )
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, id: 'repo-1', reused: false }))
     await expect(
       attachRepository({
         connectionId: 'conn-1',
         repositoryExternalId: '42',
         repositoryUrl: 'https://github.com/acme/app',
         defaultBranch: 'trunk',
-      }),
+      })
     ).resolves.toEqual({ ok: true, id: 'repo-1', reused: false })
     const [attachUrl, attachInit] = fetchMock.mock.calls[0] ?? []
     expect(String(attachUrl)).toContain('/repositories/attach')
@@ -968,7 +1015,7 @@ describe('instance-api fetch wrappers', () => {
       jsonResponse({
         ok: true,
         repository: { id: 'repo-1', defaultBranch: 'trunk' },
-      }),
+      })
     )
     await expect(refreshRepository('repo-1')).resolves.toMatchObject({
       ok: true,

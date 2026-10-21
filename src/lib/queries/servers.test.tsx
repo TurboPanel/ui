@@ -8,6 +8,7 @@ import {
 } from '@/lib/instance-api'
 import { createAppQueryClient } from '@/lib/query-client'
 import { queryKeys } from '@/lib/query-keys'
+import { licenseTierUserErrorMessage } from '@/lib/user-error'
 import {
   SERVERS_REFRESH_MS,
   UPDATE_PROGRESS_POLL_MS,
@@ -26,8 +27,11 @@ import {
   useResetServerUpdateStatus,
   useRevokeServerDaemonKey,
   useServerDeletePreview,
+  useServerPrincipals,
+  useServerPrincipalRemovalPlan,
   useSaveOrgTemperatureUnit,
   useSaveServerLabels,
+  useSetServerLicenseTier,
   useSaveServerHardwareProfile,
   useServerDetail,
   useServerLabels,
@@ -63,6 +67,8 @@ const {
   fetchServer,
   fetchServerLabels,
   fetchServerServices,
+  fetchServerPrincipals,
+  fetchServerPrincipalRemovalPlan,
   fetchTimezones,
   deleteServer,
   getServerDeletePreview,
@@ -78,6 +84,7 @@ const {
   setServerTimezone,
   updateServer,
   saveServerLabels,
+  setServerLicenseTier,
   createLicense,
   deleteLicense,
   fetchServerMetricsCapabilities,
@@ -98,6 +105,8 @@ const {
   fetchServer: vi.fn(),
   fetchServerLabels: vi.fn(),
   fetchServerServices: vi.fn(),
+  fetchServerPrincipals: vi.fn(),
+  fetchServerPrincipalRemovalPlan: vi.fn(),
   fetchTimezones: vi.fn(),
   deleteServer: vi.fn(),
   getServerDeletePreview: vi.fn(),
@@ -113,6 +122,7 @@ const {
   setServerTimezone: vi.fn(),
   updateServer: vi.fn(),
   saveServerLabels: vi.fn(),
+  setServerLicenseTier: vi.fn(),
   createLicense: vi.fn(),
   deleteLicense: vi.fn(),
   fetchServerMetricsCapabilities: vi.fn(),
@@ -138,6 +148,8 @@ vi.mock('@/lib/instance-api', async (importOriginal) => {
     fetchServer,
     fetchServerLabels,
     fetchServerServices,
+    fetchServerPrincipals,
+    fetchServerPrincipalRemovalPlan,
     fetchTimezones,
     deleteServer,
     getServerDeletePreview,
@@ -153,6 +165,7 @@ vi.mock('@/lib/instance-api', async (importOriginal) => {
     setServerTimezone,
     updateServer,
     saveServerLabels,
+    setServerLicenseTier,
     createLicense,
     deleteLicense,
     fetchServerMetricsCapabilities,
@@ -1104,6 +1117,71 @@ describe('servers query hooks', () => {
     })
   })
 
+  it('useSetServerLicenseTier sets the pick and refreshes server and billing views', async () => {
+    setServerLicenseTier.mockResolvedValueOnce({
+      ok: true,
+      assignedTier: 'S2',
+      pickedTier: 'S2',
+      tierPickNotice: null,
+      tiersFree: [],
+    })
+    const client = createAppQueryClient()
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
+
+    const { result } = renderHook(() => useSetServerLicenseTier(orgId, serverId), {
+      wrapper: createWrapper(client),
+    })
+
+    await result.current.run('tier-s2')
+    expect(setServerLicenseTier).toHaveBeenCalledWith(serverId, 'tier-s2')
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.org(orgId).servers.detail(serverId),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.org(orgId).servers.list,
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.org(orgId).billing.subscription,
+    })
+  })
+
+  it('useSetServerLicenseTier clears the pick with null', async () => {
+    setServerLicenseTier.mockResolvedValueOnce({
+      ok: true,
+      assignedTier: 'S1',
+      pickedTier: null,
+      tierPickNotice: null,
+      tiersFree: [],
+    })
+
+    const { result } = renderHook(() => useSetServerLicenseTier(orgId, serverId), {
+      wrapper: createWrapper(createAppQueryClient()),
+    })
+
+    await result.current.run(null)
+    expect(setServerLicenseTier).toHaveBeenCalledWith(serverId, null)
+  })
+
+  it('useSetServerLicenseTier forwards forbidden cause for owner-only tier pick copy', async () => {
+    const forbidden = new Error('HTTP 403: Forbidden')
+    setServerLicenseTier.mockRejectedValueOnce(forbidden)
+
+    const { result } = renderHook(() => useSetServerLicenseTier(orgId, serverId), {
+      wrapper: createWrapper(createAppQueryClient()),
+    })
+
+    const outcome = await result.current.run('tier-s2')
+    expect(outcome).toEqual({ ok: false, error: null, cause: forbidden })
+    if (!outcome.ok) {
+      expect(
+        licenseTierUserErrorMessage(
+          outcome.cause ?? outcome.error,
+          'Could not update license tier',
+        ),
+      ).toContain('organization owners')
+    }
+  })
+
   it('usePatchServer updates a server and invalidates topology', async () => {
     updateServer.mockResolvedValueOnce({ ok: true })
     const client = createAppQueryClient()
@@ -1357,6 +1435,28 @@ describe('servers query hooks', () => {
     await result.current.run({ serverId, forgetResources: true })
     expect(deleteServer).toHaveBeenCalledWith(serverId, orgId, { forgetResources: true })
     expect(invalidateSpy).toHaveBeenCalled()
+
+    deleteServer.mockResolvedValueOnce({ ok: true })
+    const choices = [{ principalId: 'p1', action: 'delete' as const }]
+    await result.current.run({ serverId, principals: choices })
+    expect(deleteServer).toHaveBeenLastCalledWith(serverId, orgId, { principals: choices })
+  })
+
+  it('useServerPrincipals and useServerPrincipalRemovalPlan load the server principals', async () => {
+    fetchServerPrincipals.mockResolvedValueOnce({ serverId, principals: [] })
+    fetchServerPrincipalRemovalPlan.mockResolvedValueOnce({ serverId, principals: [] })
+    const list = renderHook(() => useServerPrincipals(orgId, serverId), {
+      wrapper: createWrapper(),
+    })
+    const plan = renderHook(() => useServerPrincipalRemovalPlan(orgId, serverId), {
+      wrapper: createWrapper(),
+    })
+    await waitFor(() => {
+      expect(list.result.current.isSuccess).toBe(true)
+      expect(plan.result.current.isSuccess).toBe(true)
+    })
+    expect(fetchServerPrincipals).toHaveBeenCalledWith(serverId, orgId)
+    expect(fetchServerPrincipalRemovalPlan).toHaveBeenCalledWith(serverId, orgId)
   })
 
   it('useServerDeletePreview loads the forget list', async () => {

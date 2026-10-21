@@ -93,7 +93,12 @@ function GeneralSection({
               disabled={!form.canSave}
               busy={form.saving}
             />
-            <ActionButton label="Discard" variant="quiet" onPress={form.onReset} disabled={form.saving} />
+            <ActionButton
+              label="Discard"
+              variant="quiet"
+              onPress={form.onReset}
+              disabled={form.saving}
+            />
           </View>
         ) : null}
         <ListGroup>
@@ -126,9 +131,7 @@ function WorkspaceSection({
       <ListGroup>
         {choices.map((choice) => {
           if (choice.current) {
-            return (
-              <ListRow key={choice.id} title={choice.label} value="Current" />
-            )
+            return <ListRow key={choice.id} title={choice.label} value="Current" />
           }
           return (
             <ListRow
@@ -177,7 +180,8 @@ function ContainerNamesSection({
       </ListGroup>
       {keepOriginal ? (
         <Text style={s.warn}>
-          Keeping original names turns off rolling updates, because two copies can no longer run side by side.
+          Keeping original names turns off rolling updates, because two copies can no longer run
+          side by side.
         </Text>
       ) : null}
     </View>
@@ -238,7 +242,11 @@ export function ProjectSettingsView(props: ProjectSettingsViewProps) {
         <View>
           <SectionHeading title="Git" />
           <ListGroup>
-            <ListRow title="Repository" value={props.git.repository} onPress={props.onOpenRepositories} />
+            <ListRow
+              title="Repository"
+              value={props.git.repository}
+              onPress={props.onOpenRepositories}
+            />
             <ListRow title="Deploys on push" value={props.git.pushTiming} />
           </ListGroup>
         </View>
@@ -254,7 +262,11 @@ export function ProjectSettingsView(props: ProjectSettingsViewProps) {
         </ListGroup>
       </View>
       {props.danger ? (
-        <DangerSection panel={props.danger} open={props.dangerOpen} onToggle={props.onToggleDanger} />
+        <DangerSection
+          panel={props.danger}
+          open={props.dangerOpen}
+          onToggle={props.onToggleDanger}
+        />
       ) : null}
     </View>
   )

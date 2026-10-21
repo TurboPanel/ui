@@ -1,6 +1,6 @@
 import { LinearGradient } from 'expo-linear-gradient'
 import { useState } from 'react'
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native'
+import { Linking, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native'
 import { BuildInfoSheet } from '@/components/brand/build-info-sheet'
 import { useAuth } from '@/lib/auth-context'
 import { showsBuildInfo } from '@/lib/build-info'
@@ -40,13 +40,17 @@ import { useColors, useColorScheme } from '@/lib/theme-preference'
  * T, carrying the exact installed build label (`v0.1.1-canary.…`,
  * `v0.1.1-rc.1`) when the control plane reports one.
  *
+ * `style` is applied to whatever the wordmark renders (its root), so a caller
+ * can nudge it without a wrapper that would stay behind when it renders nothing.
+ *
  * `showVersion={false}` (the sign-in and sign-up screens) is the full pill
  * alone: no version line, no `/api/health` read, nothing on self-hosted.
  */
 export function HighAvailabilityWordmark({
   compact = false,
   showVersion = true,
-}: Readonly<{ compact?: boolean; showVersion?: boolean }>) {
+  style,
+}: Readonly<{ compact?: boolean; showVersion?: boolean; style?: StyleProp<ViewStyle> }>) {
   const { controlPlaneRuntime } = useAuth()
   // The gradient needs real colour values, not theme variables.
   const palette = useColors()
@@ -57,7 +61,7 @@ export function HighAvailabilityWordmark({
   const health = useControlPlaneHealth({ enabled: (shown || selfHosted) && withVersion })
   if (selfHosted && withVersion) {
     return (
-      <View style={[styles.stack, styles.stackSelfHosted]}>
+      <View style={[styles.stack, styles.stackSelfHosted, style]}>
         <VersionLine health={health.data} runtime="deno" />
       </View>
     )
@@ -70,7 +74,7 @@ export function HighAvailabilityWordmark({
       colors={[palette.brand, palette.link]}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
-      style={[styles.border, withVersion && styles.borderInStack]}
+      style={[styles.border, withVersion && styles.borderInStack, !withVersion && style]}
       accessible
       accessibilityRole="text"
       accessibilityLabel={HA_PRODUCT_NAME}
@@ -91,7 +95,7 @@ export function HighAvailabilityWordmark({
   if (!withVersion) return pill
 
   return (
-    <View style={styles.stack}>
+    <View style={[styles.stack, style]}>
       {pill}
       <VersionLine health={health.data} runtime="workers" />
     </View>

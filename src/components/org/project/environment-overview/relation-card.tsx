@@ -26,7 +26,7 @@ const styles = themedStyles((p) => ({
 }))
 
 /**
- * "Changes from Base (2)" for an environment that follows the Base and changes
+ * "Changes from Base (2)" for an environment that changes
  * something, or "Staging stands alone". Shows nothing when there is nothing to
  * say, so it never reads "(0)".
  */

@@ -1,7 +1,14 @@
 import { useState } from 'react'
 import { Button, ConfirmButton, InlineNotice, MonoText } from '@/components/ui'
+import {
+  deleteChoices,
+  ServerRemovalPrincipals,
+  type PrincipalRemovalChoices,
+} from '@/components/org/server-removal-principals'
 import { panelStyles } from '@/components/ui/panel-styles'
-import { useServerDeletePreview } from '@/lib/queries/servers'
+import { isForbiddenError } from '@/lib/fetch-error-detail'
+import type { PrincipalRemovalChoice } from '@/lib/instance-api'
+import { useServerDeletePreview, useServerPrincipalRemovalPlan } from '@/lib/queries/servers'
 import {
   blockedDatabaseMessages,
   blockedEnvironmentMessages,
@@ -77,9 +84,11 @@ export function ServerDeletePanel({
   deleting: boolean
   deleteError: string | null
   deleteBlocked: boolean
-  onConfirm: (forgetResources: boolean) => void
+  onConfirm: (forgetResources: boolean, principals: PrincipalRemovalChoice[]) => void
 }>) {
   const previewQuery = useServerDeletePreview(orgId, serverId)
+  const planQuery = useServerPrincipalRemovalPlan(orgId, serverId)
+  const [choices, setChoices] = useState<PrincipalRemovalChoices>({})
   const preview = previewQuery.data
   const showForget = shouldShowServerForgetPath(preview, { serverConnected })
   const blockedDatabaseLines = blockedDatabaseMessages(preview)
@@ -121,6 +130,16 @@ export function ServerDeletePanel({
           {line}
         </Text>
       ))}
+      <ServerRemovalPrincipals
+        plan={planQuery.data?.principals}
+        loading={planQuery.isLoading}
+        error={isForbiddenError(planQuery.error) ? null : planQuery.error}
+        choices={choices}
+        disabled={busy}
+        onChange={(principalId, action) =>
+          setChoices((current) => ({ ...current, [principalId]: action }))
+        }
+      />
       {showForget && forgetArmed ? <ForgetWarningBody preview={preview} /> : null}
       <ConfirmButton
         label={busy ? 'Deleting…' : 'Delete server'}
@@ -128,7 +147,7 @@ export function ServerDeletePanel({
         prompt="Permanently remove this server from the organization?"
         busy={busy}
         disabled={busy}
-        onConfirm={() => onConfirm(false)}
+        onConfirm={() => onConfirm(false, deleteChoices(choices, planQuery.data?.principals))}
       />
       {showForget && !forgetArmed ? (
         <Button
@@ -146,7 +165,7 @@ export function ServerDeletePanel({
           size="sm"
           busy={busy}
           disabled={busy || forgetBlocked}
-          onPress={() => onConfirm(true)}
+          onPress={() => onConfirm(true, deleteChoices(choices, planQuery.data?.principals))}
         />
       ) : null}
     </View>

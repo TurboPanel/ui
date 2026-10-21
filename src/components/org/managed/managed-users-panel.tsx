@@ -8,16 +8,56 @@ import {
   ConfirmButton,
   EmptyState,
   SectionPanel,
-  SegmentedControl,
   TextField,
 } from '@/components/ui'
-import type { BindingRedeployRequired } from '@/lib/instance-api'
+import {
+  LoginStraightThroughEditor,
+  NewLoginStraightThroughField,
+} from '@/components/org/managed/managed-login-straight-through'
+import { newLoginStraightThroughPayload } from '@/lib/managed-straight-through'
+import {
+  LoginLimitBadges,
+  LoginLimitsEditor,
+  LoginLimitsFields,
+} from '@/components/org/managed/managed-login-limits'
+import {
+  LoginAdminBadge,
+  LoginAdminEditor,
+  NewLoginAdminField,
+} from '@/components/org/managed/managed-login-admin'
+import {
+  jobConnectionRole,
+  LoginJobEditor,
+  NewLoginJobField,
+  type LoginJob,
+} from '@/components/org/managed/managed-login-job'
+import { LoginPermissionsPanel } from '@/components/org/managed/managed-login-permissions'
+import {
+  LoginModeBadges,
+  LoginModeEditor,
+  NewLoginModeFields,
+  type LoginMode,
+} from '@/components/org/managed/managed-login-mode'
+import type {
+  BindingRedeployRequired,
+  ManagedUserPatch,
+  ManagedUserPatchResult,
+} from '@/lib/instance-api'
 import {
   managedErrorMessage,
+  MANAGED_ADMIN_PRIVILEGE,
   type ManagedConnectionRole,
   type ManagedUserRecord,
 } from '@/lib/managed-services'
 import { useManagedEnvironmentBindings } from '@/lib/queries/bindings'
+import { useOrgServers } from '@/lib/queries/servers'
+import {
+  EMPTY_LIMITS_DRAFT,
+  describeCap,
+  describeWhere,
+  limitsFromDraft,
+  type LoginLimitsDraft,
+} from '@/lib/managed-login-limits'
 import { orEmptyArray } from '@/lib/or-empty-array'
 import { PrincipalNameSchemeField, usePrincipalNameScheme } from '@/components/org/principal-name-scheme-field'
 import { principalNamesLabel, principalSchemeErrorMessage, type NameScheme } from '@/lib/principal-name-scheme'
@@ -31,67 +71,6 @@ function Chip({ label }: Readonly<{ label: string }>) {
     <View style={styles.chip}>
       <Text style={styles.chipText}>{label}</Text>
     </View>
-  )
-}
-
-const CONNECTION_ROLE_OPTIONS: readonly {
-  value: ManagedConnectionRole
-  label: string
-  hint: string
-}[] = [
-  {
-    value: 'read-write',
-    label: 'Read/write',
-    hint: 'Routed to the current primary — reads and writes both follow failover.',
-  },
-  {
-    value: 'read-only',
-    label: 'Read-only',
-    hint: 'Routed to replicas that serve read traffic. The engine refuses writes on this login.',
-  },
-]
-
-/**
- * The role decides the login's proxy hostgroup. It is a per-credential choice
- * on purpose: TurboPanel never moves an existing login's `SELECT`s to a replica
- * behind an application's back.
- */
-function ConnectionRolePicker({
-  value,
-  onChange,
-  disabled,
-  readOnlyAvailable,
-}: Readonly<{
-  value: ManagedConnectionRole
-  onChange: (role: ManagedConnectionRole) => void
-  disabled: boolean
-  readOnlyAvailable: boolean
-}>) {
-  const active = CONNECTION_ROLE_OPTIONS.find((row) => row.value === value)
-  return (
-    <>
-      <Text style={panelStyles.detailLabel}>Connection role</Text>
-      <SegmentedControl
-        options={CONNECTION_ROLE_OPTIONS.map((option) => ({
-          value: option.value,
-          label: option.label,
-          // With no read-eligible replica only the Read-only option locks;
-          // Read/write stays selectable.
-          disabled: option.value === 'read-only' && !readOnlyAvailable,
-        }))}
-        value={value}
-        onChange={onChange}
-        disabled={disabled}
-        accessibilityLabel="Connection role"
-      />
-      {active ? <Text style={panelStyles.muted}>{active.hint}</Text> : null}
-      {readOnlyAvailable ? null : (
-        <Text style={panelStyles.muted}>
-          Read-only needs a replica with read traffic enabled — add one on
-          Overview first.
-        </Text>
-      )}
-    </>
   )
 }
 
@@ -138,37 +117,45 @@ function RedeployServicesPanel({
 export function ManagedUsersPanel({
   orgId,
   environmentId,
+  engine,
   databases,
   users,
   canManage,
   busy,
-  hasReadTargets = false,
   onCreateDatabase,
   onDeleteDatabase,
   onCreateUser,
   onDeleteUser,
+  onUpdateUser,
   onRotateUserPassword,
   onRedeployService,
   onReload,
 }: Readonly<{
   orgId: string
   environmentId: string
+  /** Engine code of the cluster; the straight-through switch is PostgreSQL only. */
+  engine?: string | null
   databases: string[]
   users: ManagedUserRecord[]
   canManage: boolean
   busy: boolean
-  /** A replica serves read traffic, so a `read-only` login has somewhere to go. */
-  hasReadTargets?: boolean
   onCreateDatabase: (name: string) => Promise<void>
   onDeleteDatabase: (name: string) => Promise<void>
   onCreateUser: (input: {
     username: string
     databases: string[]
+    privileges?: string[]
     connectionRole: ManagedConnectionRole
+    grantMode: LoginMode
+    tool: boolean
+    allowedSources?: string[]
+    maxConnections?: number
+    straightThrough?: boolean
     nameScheme?: NameScheme
   }) => Promise<{ password: string; appliedUsername?: string } | null>
-  onDeleteUser: (principalId: string) => Promise<void>
-  onRotateUserPassword: (principalId: string) => Promise<{
+  onDeleteUser: (loginId: string) => Promise<void>
+  onUpdateUser: (loginId: string, body: ManagedUserPatch) => Promise<ManagedUserPatchResult>
+  onRotateUserPassword: (loginId: string) => Promise<{
     password: string
     redeployRequired?: BindingRedeployRequired
   } | null>
@@ -177,11 +164,20 @@ export function ManagedUsersPanel({
 }>) {
   const bindingsQuery = useManagedEnvironmentBindings(orgId, environmentId)
   const nameScheme = usePrincipalNameScheme(orgId)
+  const serversQuery = useOrgServers(orgId)
+  const servers = orEmptyArray(serversQuery.data?.servers)
   const [dbName, setDbName] = useState('')
   const [username, setUsername] = useState('')
   const [selectedDbs, setSelectedDbs] = useState<string[]>([])
-  const [connectionRole, setConnectionRole] =
-    useState<ManagedConnectionRole>('read-write')
+  const [job, setJob] = useState<LoginJob>('read-write')
+  const [grantMode, setGrantMode] = useState<LoginMode>('recipe')
+  const [tool, setTool] = useState(false)
+  const [admin, setAdmin] = useState(false)
+  const [toolBeforeAdmin, setToolBeforeAdmin] = useState(false)
+  const [limits, setLimits] = useState<LoginLimitsDraft>(EMPTY_LIMITS_DRAFT)
+  const [limitsProblem, setLimitsProblem] = useState<string | null>(null)
+  // null = the owner has not touched the switch, so the default for the chosen level shows.
+  const [straightChoice, setStraightChoice] = useState<boolean | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [usernameHint, setUsernameHint] = useState<string | null>(null)
   const [working, setWorking] = useState(false)
@@ -194,7 +190,7 @@ export function ManagedUsersPanel({
   const bindingCountByPrincipal = useMemo(() => {
     const map = new Map<string, number>()
     for (const binding of bindings) {
-      map.set(binding.principalId, (map.get(binding.principalId) ?? 0) + 1)
+      map.set(binding.loginId, (map.get(binding.loginId) ?? 0) + 1)
     }
     return map
   }, [bindings])
@@ -221,12 +217,6 @@ export function ManagedUsersPanel({
       return filtered
     })
   }, [databases])
-
-  useEffect(() => {
-    if (!hasReadTargets) {
-      setConnectionRole('read-write')
-    }
-  }, [hasReadTargets])
 
   const toggleDb = (name: string) => {
     setSelectedDbs((current) => {
@@ -279,6 +269,14 @@ export function ManagedUsersPanel({
       setError('Select at least one database.')
       return
     }
+    const parsedLimits = limitsFromDraft(limits)
+    if (!parsedLimits.ok) {
+      // Next to the fields, where the owner is looking.
+      setLimitsProblem(parsedLimits.error)
+      return
+    }
+    setLimitsProblem(null)
+    const { allowedSources, maxConnections } = parsedLimits.payload
     setWorking(true)
     setError(null)
     setUsernameHint(null)
@@ -286,7 +284,13 @@ export function ManagedUsersPanel({
       const result = await onCreateUser({
         username: trimmed,
         databases: selectedDbs,
-        connectionRole,
+        privileges: [admin ? MANAGED_ADMIN_PRIVILEGE : job],
+        connectionRole: admin ? 'read-write' : jobConnectionRole(job),
+        grantMode,
+        tool,
+        ...(allowedSources ? { allowedSources } : {}),
+        ...(maxConnections ? { maxConnections } : {}),
+        ...newLoginStraightThroughPayload(engine, straightChoice, allowedSources !== null),
         nameScheme: nameScheme.requestScheme,
       })
       if (result?.password) {
@@ -295,7 +299,12 @@ export function ManagedUsersPanel({
         setRevealedPassword(result.password)
       }
       setUsername('')
-      setConnectionRole('read-write')
+      setJob('read-write')
+      setGrantMode('recipe')
+      setTool(false)
+      setAdmin(false)
+      setLimits(EMPTY_LIMITS_DRAFT)
+      setStraightChoice(null)
       nameScheme.reset()
       await onReload()
     } catch (err) {
@@ -318,11 +327,11 @@ export function ManagedUsersPanel({
     }
   }
 
-  const deleteUser = async (principalId: string) => {
+  const deleteUser = async (loginId: string) => {
     setWorking(true)
     setError(null)
     try {
-      await onDeleteUser(principalId)
+      await onDeleteUser(loginId)
       await onReload()
     } catch (err) {
       setError(managedErrorMessage(err, 'Failed to delete user'))
@@ -331,11 +340,11 @@ export function ManagedUsersPanel({
     }
   }
 
-  const rotateUser = async (principalId: string, uname: string) => {
+  const rotateUser = async (loginId: string, uname: string) => {
     setWorking(true)
     setError(null)
     try {
-      const result = await onRotateUserPassword(principalId)
+      const result = await onRotateUserPassword(loginId)
       if (result?.password) {
         setRevealedUsername(uname)
         setRevealedPassword(result.password)
@@ -455,9 +464,12 @@ export function ManagedUsersPanel({
                   <Chip key={db} label={db} />
                 ))}
               </View>
+              <LoginModeBadges user={user} />
+              <LoginAdminBadge user={user} />
+              <LoginLimitBadges user={user} />
               <Text style={panelStyles.muted}>
                 {user.connectionRole === 'read-only'
-                  ? 'Read-only login — routed to replicas serving reads'
+                  ? 'Read-only login — the database refuses writes; reads go to replicas when some serve reads'
                   : 'Read/write login — routed to the current primary'}
               </Text>
               {bindingCount > 0 ? (
@@ -470,6 +482,60 @@ export function ManagedUsersPanel({
                 <Text style={panelStyles.muted}>
                   {user.privileges.join(', ')}
                 </Text>
+              ) : null}
+              {canManage ? (
+                <LoginLimitsEditor
+                  user={user}
+                  servers={servers}
+                  disabled={disabled}
+                  onUpdate={onUpdateUser}
+                  onError={setError}
+                />
+              ) : (
+                <Text style={panelStyles.muted}>
+                  {describeWhere(user.allowedSources, servers)} {describeCap(user.maxConnections)}
+                </Text>
+              )}
+              {canManage ? (
+                <LoginStraightThroughEditor
+                  engine={engine}
+                  user={user}
+                  disabled={disabled}
+                  onUpdate={onUpdateUser}
+                  onError={setError}
+                />
+              ) : null}
+              {canManage ? (
+                <LoginModeEditor
+                  user={user}
+                  disabled={disabled}
+                  onUpdate={onUpdateUser}
+                  onError={setError}
+                />
+              ) : null}
+              {canManage ? (
+                <LoginJobEditor
+                  user={user}
+                  disabled={disabled}
+                  onUpdate={onUpdateUser}
+                  onError={setError}
+                />
+              ) : null}
+              {canManage ? (
+                <LoginAdminEditor
+                  user={user}
+                  disabled={disabled}
+                  onUpdate={onUpdateUser}
+                  onError={setError}
+                />
+              ) : null}
+              {canManage ? (
+                <LoginPermissionsPanel
+                  orgId={orgId}
+                  environmentId={environmentId}
+                  loginId={user.id}
+                  username={user.username}
+                />
               ) : null}
               {canManage ? (
                 <ButtonRow>
@@ -545,11 +611,51 @@ export function ManagedUsersPanel({
               )
             })}
           </View>
-          <ConnectionRolePicker
-            value={connectionRole}
-            onChange={setConnectionRole}
+          {admin ? (
+            <Text style={panelStyles.muted}>
+              A Database admin login always reads and writes.
+            </Text>
+          ) : (
+            <NewLoginJobField job={job} onJobChange={setJob} disabled={disabled} />
+          )}
+          <NewLoginAdminField
+            admin={admin}
+            onAdminChange={(next) => {
+              setAdmin(next)
+              if (next) {
+                setJob('read-write')
+                setToolBeforeAdmin(tool)
+                setTool(true)
+              } else {
+                setTool(toolBeforeAdmin)
+              }
+            }}
             disabled={disabled}
-            readOnlyAvailable={hasReadTargets}
+          />
+          <NewLoginModeFields
+            mode={grantMode}
+            onModeChange={setGrantMode}
+            tool={tool}
+            onToolChange={setTool}
+            disabled={disabled}
+          />
+          <LoginLimitsFields
+            draft={limits}
+            onChange={(next) => {
+              setLimits(next)
+              setLimitsProblem(null)
+            }}
+            servers={servers}
+            disabled={disabled}
+          />
+          {limitsProblem ? <Text style={panelStyles.error}>{limitsProblem}</Text> : null}
+          <NewLoginStraightThroughField
+            engine={engine}
+            choice={straightChoice}
+            privileges={[admin ? MANAGED_ADMIN_PRIVILEGE : job]}
+            limited={limits.limited}
+            disabled={disabled}
+            onChange={setStraightChoice}
           />
           <Button
             label="Create user"

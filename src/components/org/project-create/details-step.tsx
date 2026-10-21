@@ -1,20 +1,11 @@
+import { Link, type Href } from 'expo-router'
+import { useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { showsDefaultPill } from '@/components/org/project-create/environment-name'
 import { panelStyles } from '@/components/ui/panel-styles'
-import type {
-  FieldErrors,
-  WorkspaceMode,
-} from '@/components/org/project-create/validation'
-import {
-  EmptyState,
-  FormField,
-  LoadingState,
-  SegmentedControl,
-  TextField,
-} from '@/components/ui'
-import {
-  DESCRIPTION_MAX_LENGTH,
-  DISPLAY_NAME_MAX_LENGTH,
-} from '@/lib/display-name'
+import type { FieldErrors, WorkspaceMode } from '@/components/org/project-create/validation'
+import { EmptyState, FormField, LoadingState, SegmentedControl, TextField } from '@/components/ui'
+import { DESCRIPTION_MAX_LENGTH, DISPLAY_NAME_MAX_LENGTH } from '@/lib/display-name'
 import type { WorkspaceRecord } from '@/lib/instance-api'
 import { chrome, colors, spacing, webPointer } from '@/lib/theme'
 
@@ -63,19 +54,13 @@ function WorkspacePickerBody({
         return (
           <Pressable
             key={ws.id}
-            style={[
-              styles.workspaceOption,
-              selected && styles.workspaceOptionSelected,
-              webPointer,
-            ]}
+            style={[styles.workspaceOption, selected && styles.workspaceOptionSelected, webPointer]}
             onPress={() => onSelect(ws.id)}
             accessibilityRole="button"
             accessibilityState={{ selected }}
             accessibilityLabel={workspaceLabel(ws)}
           >
-            <Text style={styles.workspaceOptionText}>
-              {workspaceLabel(ws)}
-            </Text>
+            <Text style={styles.workspaceOptionText}>{workspaceLabel(ws)}</Text>
           </Pressable>
         )
       })}
@@ -98,9 +83,7 @@ function WorkspacePicker({
 }>) {
   return (
     <View style={styles.fieldBlock}>
-      {workspaces.length > 1 ? (
-        <Text style={styles.subLabel}>Choose workspace</Text>
-      ) : null}
+      {workspaces.length > 1 ? <Text style={styles.subLabel}>Choose workspace</Text> : null}
       <WorkspacePickerBody
         workspaces={workspaces}
         loading={loading}
@@ -166,10 +149,73 @@ function ProjectWorkspaceFields({
   )
 }
 
+/**
+ * Name of the project's primary environment (the first one, where the wizard
+ * puts the content). Empty means "let the server apply
+ * the organization default"; the pill shows only while the value is that default.
+ */
+export function EnvironmentNameField({
+  orgId,
+  value,
+  defaultName,
+  onChange,
+  error,
+}: Readonly<{
+  orgId: string
+  value: string
+  defaultName: string | null
+  onChange: (value: string) => void
+  error?: string
+}>) {
+  const [pillWidth, setPillWidth] = useState(0)
+  const showPill = showsDefaultPill(value, defaultName)
+  return (
+    <TextField
+      label="Primary environment name"
+      value={value}
+      onChangeText={onChange}
+      autoCapitalize="none"
+      autoCorrect={false}
+      spellCheck={false}
+      accessibilityLabel="Primary environment name"
+      maxLength={DISPLAY_NAME_MAX_LENGTH}
+      placeholder="Organization default"
+      style={showPill ? { paddingRight: pillWidth + PILL_INSET } : undefined}
+      adornment={
+        showPill ? (
+          <Text
+            style={styles.defaultPill}
+            onLayout={(e) => setPillWidth(e.nativeEvent.layout.width)}
+          >
+            Organization Default
+          </Text>
+        ) : null
+      }
+      footer={
+        <Link href={`/${orgId}/projects/settings` as Href} asChild>
+          <Pressable
+            style={StyleSheet.flatten([styles.hintLink, webPointer])}
+            accessibilityRole="link"
+            accessibilityLabel="Set the primary environment name for this organization"
+          >
+            <Text style={styles.hintLinkText}>
+              Set the primary environment name for this organization
+            </Text>
+          </Pressable>
+        </Link>
+      }
+      error={error}
+    />
+  )
+}
+
 /** Wizard step 1: name, description, and the workspace the project lands in. */
 export function DetailsStep({
+  orgId,
   displayName,
   description,
+  environmentName,
+  defaultEnvironmentName,
   workspaceMode,
   workspaces,
   loadingWorkspaces,
@@ -178,12 +224,17 @@ export function DetailsStep({
   fieldErrors,
   onDisplayNameChange,
   onDescriptionChange,
+  onEnvironmentNameChange,
   onWorkspaceModeChange,
   onPickedWorkspaceIdChange,
   onNewWorkspaceNameChange,
 }: Readonly<{
+  orgId: string
   displayName: string
   description: string
+  environmentName: string
+  /** The org's real default, or null while unknown (loading, unreadable, none). */
+  defaultEnvironmentName: string | null
   workspaceMode: WorkspaceMode
   workspaces: WorkspaceRecord[]
   loadingWorkspaces: boolean
@@ -192,6 +243,7 @@ export function DetailsStep({
   fieldErrors: FieldErrors
   onDisplayNameChange: (value: string) => void
   onDescriptionChange: (value: string) => void
+  onEnvironmentNameChange: (value: string) => void
   onWorkspaceModeChange: (mode: WorkspaceMode) => void
   onPickedWorkspaceIdChange: (id: string) => void
   onNewWorkspaceNameChange: (name: string) => void
@@ -224,6 +276,14 @@ export function DetailsStep({
         error={fieldErrors.description}
       />
 
+      <EnvironmentNameField
+        orgId={orgId}
+        value={environmentName}
+        defaultName={defaultEnvironmentName}
+        onChange={onEnvironmentNameChange}
+        error={fieldErrors.environmentName}
+      />
+
       <ProjectWorkspaceFields
         workspaceMode={workspaceMode}
         workspaces={workspaces}
@@ -239,7 +299,31 @@ export function DetailsStep({
   )
 }
 
+/** Gap between the pill and the input's right edge, plus room before the text. */
+const PILL_INSET = 20
+
 const styles = StyleSheet.create({
+  defaultPill: {
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 999,
+    overflow: 'hidden',
+    backgroundColor: colors.accentSoft,
+    color: colors.link,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  hintLink: {
+    alignSelf: 'flex-start',
+  },
+  hintLinkText: {
+    color: colors.link,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '600',
+  },
   fieldBlock: {
     gap: spacing.xs,
   },

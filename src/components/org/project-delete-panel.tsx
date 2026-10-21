@@ -143,6 +143,12 @@ function projectDeleteFailureCopy(
       kind: 'compose',
     }
   }
+  if (message.includes('project_stop_failed')) {
+    return {
+      text: 'The site could not be stopped on every server, so nothing was deleted. Try again.',
+      kind: 'compose',
+    }
+  }
   return { text: message, kind: 'other' }
 }
 

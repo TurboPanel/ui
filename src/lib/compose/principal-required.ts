@@ -2,7 +2,7 @@
  * Which compose services cannot deploy without a project principal.
  *
  * A native (non-Railpack) release publishes a filesystem tree into
- * `<principalHome>/sites/<serviceId>/releases/`, so with no Unix account there
+ * `/srv/users/<owner>/<environment>/services/<service>/releases/`, so with no Unix account there
  * is no home to publish into. The daemon answers that by *silently skipping*
  * the release ("release skipped for <name>: no project principal assigned" in
  * the transcript), which is far too late and far too quiet — the deploy

@@ -193,7 +193,7 @@ export function SecretsReencryptSection() {
 
       <SectionPanel
         title="At-rest encryption"
-        hint="Re-encrypt secret variables, TLS private keys, and principal passwords"
+        hint="Re-encrypt secret variables, TLS private keys, and Hosting Account passwords"
       >
         {displayError ? <Text style={panelStyles.error}>{displayError}</Text> : null}
 

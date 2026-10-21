@@ -11,16 +11,21 @@ import {
   MonoText,
   SectionPanel,
   SegmentedControl,
+  Select,
   TextField,
 } from '@/components/ui'
 import {
+  FLOATING_NODE_VERSION,
+  NEWEST_NODE_SERIES,
   SOURCE_BRANCH_MAX_LENGTH,
   SOURCE_COMMAND_MAX_LENGTH,
+  SUPPORTED_NODE_SERIES,
   type NodePackageManager,
 } from '@/lib/compose/service-kind'
 import {
   detectPackageManager,
   isNodeApp,
+  suggestedNodeVersion,
   type SimpleAppConfig,
   type SimpleAppKind,
 } from '@/lib/project-create/simple-app'
@@ -33,7 +38,7 @@ import {
   repositoryProviderLabel,
 } from '@/lib/repository-label'
 import { colors, spacing } from '@/lib/theme'
-import { userErrorMessage } from '@/lib/user-error'
+import { repositoryReadNotice } from '@/lib/project-create/repository-read-notice'
 
 const SIMPLE_KIND_OPTIONS: readonly {
   value: SimpleAppKind
@@ -61,6 +66,7 @@ export function RepositoryStep({
   orgId,
   selectedSourceId,
   branch,
+  inspectedBranch,
   inspection,
   inspectionLoading,
   inspectionError,
@@ -68,11 +74,18 @@ export function RepositoryStep({
   disabled = false,
   onSelectSourceId,
   onBranchChange,
+  onBranchBlur,
   onCloneUrlLaneChange,
 }: Readonly<{
   orgId: string
   selectedSourceId: string
+  /** The field as typed. */
   branch: string
+  /**
+   * The branch the read was asked for: the field once it stopped changing,
+   * trimmed. Notices name this one, not whatever is mid-typing.
+   */
+  inspectedBranch: string
   inspection: RepositoryInspection | undefined
   inspectionLoading: boolean
   inspectionError: Error | null
@@ -81,6 +94,8 @@ export function RepositoryStep({
   disabled?: boolean
   onSelectSourceId: (sourceId: string, record?: RepositoryRecord) => void
   onBranchChange: (branch: string) => void
+  /** Leaving the field reads it at once rather than after the typing pause. */
+  onBranchBlur?: () => void
   /** Forwarded to the picker — see its own doc for why the wizard needs this. */
   onCloneUrlLaneChange?: (open: boolean) => void
 }>) {
@@ -173,7 +188,10 @@ export function RepositoryStep({
         inspectionError={inspectionError}
         inspection={inspection}
         branch={branch}
+        inspectedBranch={inspectedBranch}
+        repositoryName={pickedLabel || (record ? repositoryLabel(record) : 'this repository')}
         onBranchChange={onBranchChange}
+        onBranchBlur={onBranchBlur}
         disabled={disabled}
         record={record}
         defaultEnvironmentName={defaultEnvironmentName}
@@ -196,69 +214,54 @@ type CheckedRepositoryDetailsProps = Readonly<{
   inspectionError: Error | null
   inspection: RepositoryInspection | undefined
   branch: string
+  inspectedBranch: string
+  repositoryName: string
   onBranchChange: (branch: string) => void
+  onBranchBlur?: () => void
   disabled: boolean
   record: RepositoryRecord | null
   defaultEnvironmentName: string
 }>
 
 /**
- * Everything below the picked-repository card: the read's loading state, then
- * — once it lands, one way or the other — the branch, builder, and Simple
- * fields. `inspectionLoading` is the query's `isPending` (has neither data
- * nor an error yet), not `isFetching` — it is true for the whole gap between
- * a fresh pick and the read landing, including the tick before the fetch
- * itself has actually started, so the form never flashes ahead of it.
+ * Everything below the picked-repository card: what the read found (or is
+ * still finding), then the production branch field.
+ *
+ * `inspectionLoading` is the query's `isPending` (has neither data nor an
+ * error yet), not `isFetching` — it is true for the whole gap between a fresh
+ * pick and the read landing, so no stale result shows for a new branch. The
+ * loading state replaces only the result, never the field: each branch edit
+ * starts a new read, and swapping the field out would drop focus mid-typing.
  */
 function CheckedRepositoryDetails({
   inspectionLoading,
   inspectionError,
   inspection,
-  disabled,
-  ...form
-}: CheckedRepositoryDetailsProps) {
-  if (inspectionLoading) {
-    return <LoadingState label="Reading the repository…" />
-  }
-  return (
-    <CheckedRepositoryForm
-      disabled={disabled}
-      inspection={inspection}
-      inspectionError={inspectionError}
-      {...form}
-    />
-  )
-}
-
-function CheckedRepositoryForm({
-  inspectionError,
-  inspection,
   branch,
+  inspectedBranch,
+  repositoryName,
   onBranchChange,
+  onBranchBlur,
   disabled,
   record,
   defaultEnvironmentName,
-}: Omit<CheckedRepositoryDetailsProps, 'inspectionLoading'>) {
-  const readable = inspectionError === null && inspection !== undefined
-
+}: CheckedRepositoryDetailsProps) {
   return (
     <>
-      {inspectionError
-        ? (
-          <InlineNotice
-            tone="warning"
-            title="Could not read the repository"
-            body={`${userErrorMessage(inspectionError, '')} You can still configure it below.`}
-          />
-        )
-        : null}
-
-      {readable ? <CheckSummary inspection={inspection} /> : null}
+      <ReadResult
+        loading={inspectionLoading}
+        error={inspectionError}
+        inspection={inspection}
+        inspectedBranch={inspectedBranch}
+        repositoryName={repositoryName}
+        defaultBranch={record?.defaultBranch}
+      />
 
       <TextField
         label="Production branch"
         value={branch}
         onChangeText={onBranchChange}
+        onBlur={onBranchBlur}
         editable={!disabled}
         maxLength={SOURCE_BRANCH_MAX_LENGTH}
         autoCapitalize="none"
@@ -269,6 +272,39 @@ function CheckedRepositoryForm({
       />
     </>
   )
+}
+
+/**
+ * The read's state above the branch field: loading, a plain notice when it
+ * failed, or what it found.
+ *
+ * A failed read keeps Continue enabled: the branch may simply not be pushed
+ * yet, and the project can be created ahead of it. The notice says what that
+ * means instead of blocking.
+ */
+function ReadResult({
+  loading,
+  error,
+  inspection,
+  inspectedBranch,
+  repositoryName,
+  defaultBranch,
+}: Readonly<{
+  loading: boolean
+  error: Error | null
+  inspection: RepositoryInspection | undefined
+  inspectedBranch: string
+  repositoryName: string
+  defaultBranch: string | null | undefined
+}>) {
+  if (loading) return <LoadingState label="Reading the repository…" />
+  const notice = repositoryReadNotice(error, {
+    ref: inspectedBranch,
+    repositoryName,
+    defaultBranch,
+  })
+  if (notice) return <InlineNotice tone="warning" title={notice.title} body={notice.body} />
+  return inspection ? <CheckSummary inspection={inspection} /> : null
 }
 
 /** "Checked · commit ab12345" plus what the read learned about the app. */
@@ -289,6 +325,60 @@ function CheckSummary({
 }
 
 /**
+ * Node version of a new app. A concrete series is preselected (the one the
+ * repository asks for when the server offers it, else the newest), and
+ * `latest` is a deliberate choice that is explained where it is made.
+ */
+function nodeVersionHint(nodeVersion: string, notice: string | undefined): string {
+  const follows =
+    'Latest follows the newest Node version this server offers, so the app moves to a new Node series on the first deploy after the server gets one. Pick a number to keep it where it is; it still gets patch updates.'
+  const pinned = 'The app stays on this Node series and only gets patch updates.'
+  const base = nodeVersion === FLOATING_NODE_VERSION ? follows : pinned
+  return notice ? base + ' ' + notice : base
+}
+
+function NodeVersionField({
+  simple,
+  inspection,
+  disabled,
+  onSimpleChange,
+}: Readonly<{
+  simple: SimpleAppConfig
+  inspection: RepositoryInspection | undefined
+  disabled: boolean
+  onSimpleChange: (patch: Partial<SimpleAppConfig>) => void
+}>) {
+  const offered = inspection?.nodeVersion?.offered ?? [...SUPPORTED_NODE_SERIES]
+  const newest = inspection?.nodeVersion?.newest ?? NEWEST_NODE_SERIES
+  const suggestion = suggestedNodeVersion(inspection)
+  // The sentence explains the preselection, so it goes once something else is picked.
+  const notice = simple.nodeVersion === suggestion.nodeVersion ? suggestion.notice : undefined
+  const options = [
+    ...offered.map((series) => ({ value: series, label: `Node ${series}.x` })),
+    {
+      value: FLOATING_NODE_VERSION,
+      label: `Latest (follows the server, now ${newest}.x)`,
+    },
+  ]
+  return (
+    <FormField
+      label="Node version"
+      hint={nodeVersionHint(simple.nodeVersion, notice)}
+    >
+      <Select
+        value={simple.nodeVersion || null}
+        options={options}
+        placeholder="Select a version"
+        disabled={disabled}
+        mono
+        accessibilityLabel="Node version"
+        onChange={(value) => onSimpleChange({ nodeVersion: value ?? newest })}
+      />
+    </FormField>
+  )
+}
+
+/**
  * The Simple-application form: what it produces, where it builds, how it
  * builds, and how it runs — everything still on the repository screen.
  *
@@ -300,10 +390,13 @@ function CheckSummary({
 export function SimpleAppFields({
   simple,
   manager,
+  inspection,
   disabled,
   onSimpleChange,
 }: Readonly<{
   simple: SimpleAppConfig
+  /** What the repository read found, for the Node version hint. */
+  inspection?: RepositoryInspection | null
   /** Detected package manager — makes the ghost text honest, not just npm. */
   manager: NodePackageManager | undefined
   disabled: boolean
@@ -370,9 +463,15 @@ export function SimpleAppFields({
               maxLength={SOURCE_COMMAND_MAX_LENGTH}
               autoCapitalize="none"
               autoCorrect={false}
-              placeholder={`${manager ?? 'npm'} start`}
+              placeholder="node server.js"
               accessibilityLabel="Start command"
-              hint="Leave empty to run server.js with the vendored Node."
+              hint="Leave empty to use the detected default. A Next.js app is started for you — node server.js for a standalone build — and a package start script such as pnpm start does not work there."
+            />
+            <NodeVersionField
+              simple={simple}
+              inspection={inspection ?? undefined}
+              disabled={disabled}
+              onSimpleChange={onSimpleChange}
             />
             <FormField
               label="Port"
