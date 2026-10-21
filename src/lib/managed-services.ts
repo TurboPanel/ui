@@ -550,6 +550,10 @@ const MANAGED_ERROR_COPY: Record<string, string> = {
   server_placement_required: 'Select a server before creating this managed service.',
   server_offline: 'The selected server is offline. Choose a connected server.',
   managed_busy: 'Another managed operation is still in progress. Wait and try again.',
+  reserved_username: 'That login name is kept for the database engine or TurboPanel. Pick a different name.',
+  reserved_database_name: 'That database name is kept for the database engine. Pick a different name.',
+  managed_login_defines_objects:
+    'This login still defines views, triggers, routines or events. Drop them or recreate them under another login, then delete the login again.',
   managed_settings_invalid: 'Managed settings are invalid. Check the form and try again.',
   managed_user_exists: 'A user with that name already exists.',
   database_exists: 'A database with that name already exists.',
@@ -674,6 +678,10 @@ const SERVER_NAMED_ERROR_CODES = new Set([
   'managed_login_source_server_unknown',
   // The server's sentence lists the databases that stop it.
   'managed_admin_needs_owner_role',
+  // The server's sentence names the reserved name, or the views and routines in the way.
+  'reserved_username',
+  'reserved_database_name',
+  'managed_login_defines_objects',
 ])
 
 function managedErrorCode(raw: string): string | undefined {
