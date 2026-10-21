@@ -4685,6 +4685,64 @@ export async function updateDatacenter(
   })
 }
 
+export type ServerTrafficLink = 'up' | 'down' | 'unknown'
+
+export type ServerTrafficNetworkState =
+  'chosen' | 'standby' | 'no_common_address' | 'link_down' | 'untrusted'
+
+/** One network two servers share (`GET /servers/:id/traffic-map`, `peers[].sharedNetworks[]`). */
+export type ServerTrafficMapNetwork = {
+  datacenterId: string
+  name: string | null
+  priority: number
+  trusted: boolean
+  state: ServerTrafficNetworkState
+  localAddress: string | null
+  peerAddress: string | null
+  localInterface: string | null
+  peerInterface: string | null
+  localLink: ServerTrafficLink
+  peerLink: ServerTrafficLink
+}
+
+export type ServerTrafficMapPeer = {
+  serverId: string
+  name: string | null
+  chosenDatacenterId: string | null
+  sharedNetworks: ServerTrafficMapNetwork[]
+}
+
+/** A network card on this server. Byte counters are not in this payload (see `metrics`). */
+export type ServerTrafficMapNic = {
+  name: string
+  link: ServerTrafficLink
+  defaultRoute: boolean
+  addresses: { address: string; datacenterId: string | null }[]
+}
+
+export type ServerTrafficMap = {
+  ok: true
+  generatedAt: string
+  serverId: string
+  nics: ServerTrafficMapNic[]
+  peers: ServerTrafficMapPeer[]
+  truncated: boolean
+}
+
+export async function fetchServerTrafficMap(serverId: string): Promise<ServerTrafficMap> {
+  return await apiFetch(`${CLIENT_API}/servers/${serverId}/traffic-map`)
+}
+
+/** Give this trusted network the lowest priority number; others move up. 409 when untrusted. */
+export async function chooseServerTrafficNetwork(
+  datacenterId: string
+): Promise<{ ok: true; changes: { datacenterId: string; before: number; after: number }[] }> {
+  return await apiFetch(`${CLIENT_API}/datacenters/${datacenterId}/server-traffic`, {
+    method: 'POST',
+    body: JSON.stringify({ preferred: true }),
+  })
+}
+
 export async function deleteDatacenter(id: string): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/datacenters/${id}`, {
     method: 'DELETE',

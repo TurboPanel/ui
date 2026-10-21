@@ -148,6 +148,9 @@ export const queryKeys = {
           ['org', orgId, 'server', serverId, 'managed-external-access'] as const,
         /** Addresses clients use (`/servers/:id/addresses`). */
         addresses: (serverId: string) => ['org', orgId, 'server', serverId, 'addresses'] as const,
+        /** Who talks to whom and over which network (`/servers/:id/traffic-map`). */
+        trafficMap: (serverId: string) =>
+          ['org', orgId, 'server', serverId, 'traffic-map'] as const,
       },
 
       /** Every principal in the organization (`GET /organizations/:id/principals`). */
@@ -352,7 +355,15 @@ export const queryKeys = {
         members: (environmentId: string) =>
           ['org', orgId, 'managed', environmentId, 'members'] as const,
         effectivePermissions: (environmentId: string, principalId: string) =>
-          ['org', orgId, 'managed', environmentId, 'users', principalId, 'effective-permissions'] as const,
+          [
+            'org',
+            orgId,
+            'managed',
+            environmentId,
+            'users',
+            principalId,
+            'effective-permissions',
+          ] as const,
         privilegeCatalogue: (environmentId: string) =>
           ['org', orgId, 'managed', environmentId, 'privilege-catalogue'] as const,
         users: (environmentId: string) =>
