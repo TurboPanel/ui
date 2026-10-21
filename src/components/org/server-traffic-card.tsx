@@ -140,6 +140,7 @@ function PriorityEditor({
 function UseToggle({ orgId, dc }: Readonly<{ orgId: string; dc: DatacenterRecord }>) {
   const update = useUpdateDatacenter(orgId, dc.id)
   const name = dc.name ?? 'Unnamed network'
+  const verb = dc.trusted ? 'Stop using' : 'Start using'
   const toggle = () => {
     if (update.isPending) return
     void update.run({ options: { ...dc.options, trusted: !dc.trusted } })
@@ -149,7 +150,7 @@ function UseToggle({ orgId, dc }: Readonly<{ orgId: string; dc: DatacenterRecord
       <ConfirmButton
         key={String(dc.trusted)}
         label={dc.trusted ? 'Stop using this network' : 'Use this network'}
-        prompt={`${dc.trusted ? `Stop using ${name}` : `Start using ${name}`} for server traffic? ${EVERY_SERVER}`}
+        prompt={`${verb} ${name} for server traffic? ${EVERY_SERVER}`}
         confirmLabel={dc.trusted ? 'Stop using it' : 'Use it'}
         onConfirm={toggle}
         busy={update.isPending}
