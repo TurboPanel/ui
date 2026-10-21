@@ -244,9 +244,15 @@ export function useDeleteDatacenter(orgId: string) {
   return useApiMutation({
     mutationFn: deleteDatacenter,
     onSuccess: () =>
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.org(orgId).topology.all,
-      }),
+      Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.org(orgId).topology.all,
+        }),
+        // Member servers lose that datacenter's row under Addresses clients use.
+        queryClient.invalidateQueries({
+          queryKey: ['org', orgId, 'server'],
+        }),
+      ]),
   })
 }
 
@@ -255,8 +261,13 @@ export function useAddDatacenterMembers(orgId: string, datacenterId: string) {
   return useApiMutation({
     mutationFn: (members: { serverId: string; address: string }[]) =>
       addDatacenterMembers(datacenterId, members),
-    onSuccess: () =>
+    onSuccess: (_data, members) =>
       Promise.all([
+        ...members.map((member) =>
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.org(orgId).servers.addresses(member.serverId),
+          }),
+        ),
         queryClient.invalidateQueries({
           queryKey: queryKeys.org(orgId).topology.datacenter(datacenterId),
         }),
@@ -278,8 +289,11 @@ export function useRemoveDatacenterMember(orgId: string, datacenterId: string) {
   return useApiMutation({
     mutationFn: (serverId: string) =>
       removeDatacenterMember(datacenterId, serverId),
-    onSuccess: () =>
+    onSuccess: (_data, serverId) =>
       Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.org(orgId).servers.addresses(serverId),
+        }),
         queryClient.invalidateQueries({
           queryKey: queryKeys.org(orgId).topology.datacenter(datacenterId),
         }),

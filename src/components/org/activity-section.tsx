@@ -16,6 +16,7 @@ import {
   activityStateTone,
   activityTargetLabel,
 } from '@/lib/activity'
+import { activityStepText } from '@/lib/deploy-progress'
 import { formatLocalDateTime } from '@/lib/format-datetime'
 import { formatDurationSeconds } from '@/lib/format-metrics'
 import type { OrganizationActivityFilter, OrganizationActivityItem } from '@/lib/instance-api'
@@ -39,6 +40,14 @@ const COLUMNS = [
   { key: 'duration', header: 'Duration', flex: 0.8, minWidth: 80 },
   { key: 'detail', header: 'Detail', flex: 2, minWidth: 180 },
 ] as const satisfies readonly DataTableColumn[]
+
+/** What the row says in its last column: the step a running deploy is on, else why it failed. */
+function activityDetailText(item: OrganizationActivityItem): string {
+  if (item.state === 'deploying') {
+    return activityStepText(item) ?? plainStepFailureMessage(item.errorMessage) ?? '—'
+  }
+  return plainStepFailureMessage(item.errorMessage) ?? '—'
+}
 
 function ActivityRow({
   item,
@@ -68,7 +77,7 @@ function ActivityRow({
       </DataTableCell>
       <DataTableCell column={detail}>
         <Text style={styles.mutedText} numberOfLines={2}>
-          {plainStepFailureMessage(item.errorMessage) ?? '—'}
+          {activityDetailText(item)}
         </Text>
       </DataTableCell>
     </DataTableRow>

@@ -32,7 +32,7 @@ export type ConfigChange = Readonly<{ key: string; value: string | null }>
 /**
  * Where an environment's configuration comes from.
  *
- * - follows the Base: the Base plus a list of changes
+ * - uses the Base: the Base plus a list of changes
  * - stands alone: its own complete set of values; Base edits do not reach it
  */
 export type EnvConfigSource =

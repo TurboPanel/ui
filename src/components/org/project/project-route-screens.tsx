@@ -1,5 +1,6 @@
 import { Redirect, useLocalSearchParams, type Href } from 'expo-router'
 import { Platform } from 'react-native'
+import { WithBaseNotice } from '@/components/org/project/base-tab/base-edit-notice'
 import { ProjectBaseTab } from '@/components/org/project/base-tab/base-tab'
 import { EnvironmentOverviewTab } from '@/components/org/project/environment-overview/environment-overview-tab'
 import { EnvironmentConfigurationScreen } from '@/components/org/project/configuration/environment-configuration'
@@ -48,8 +49,11 @@ export function ProjectBaseScreen() {
   if (isSystemProject || (project && isManagedProject(project))) {
     return <Redirect href={projectOverviewHref(orgId, projectId) as Href} />
   }
-  if (Platform.OS === 'web') return <ProjectBaseTab />
-  return <ProjectOverviewTab />
+  return (
+    <WithBaseNotice>
+      {Platform.OS === 'web' ? <ProjectBaseTab /> : <ProjectOverviewTab />}
+    </WithBaseNotice>
+  )
 }
 
 /**
@@ -62,14 +66,25 @@ export function ProjectBaseLensScreen() {
   if (isSystemProject || (project && isManagedProject(project))) {
     return <Redirect href={projectOverviewHref(orgId, projectId) as Href} />
   }
-  return <ProjectOverviewTab />
+  return (
+    <WithBaseNotice>
+      <ProjectOverviewTab />
+    </WithBaseNotice>
+  )
 }
 
-/** `/projects/:id/settings` — Project Settings. Platform and managed projects have none. */
+/**
+ * `/projects/:id/settings` — Project Settings. Managed projects get their
+ * Settings panel (image, resources, client TLS, external access); platform
+ * projects have none.
+ */
 export function ProjectSettingsRouteScreen() {
   const { orgId, projectId, project, isSystemProject } = useProjectContext()
-  if (isSystemProject || (project && isManagedProject(project))) {
+  if (isSystemProject) {
     return <Redirect href={projectOverviewHref(orgId, projectId) as Href} />
+  }
+  if (project && isManagedProject(project)) {
+    return <ManagedFocusTab focus="settings" />
   }
   return <ProjectSettingsScreen />
 }
@@ -119,7 +134,8 @@ export function EnvironmentConfigurationTabScreen() {
 
 /**
  * Environment Settings: branch and deploy on push, server, name and the
- * danger zone. Platform and managed projects keep the screens they had.
+ * danger zone. Platform projects keep the screen they had; managed projects
+ * show their Settings panel for the environment in the path.
  */
 export function EnvironmentSettingsScreen() {
   const { orgId, projectId, project, isSystemProject } = useProjectContext()
@@ -128,21 +144,15 @@ export function EnvironmentSettingsScreen() {
     return <Redirect href={projectOverviewHref(orgId, projectId) as Href} />
   }
   if (project && isManagedProject(project)) {
-    return <ManagedFocusTab focus="overview" />
+    return <ManagedFocusTab focus="settings" />
   }
   return <EnvironmentSettingsBody showGitSource={withChrome} />
 }
 
 /** Environment Deployments: the deploy history, open. */
 export function EnvironmentDeploymentsScreen() {
-  const {
-    orgId,
-    projectId,
-    project,
-    isSystemProject,
-    pathEnvironmentId,
-    canManage,
-  } = useProjectContext()
+  const { orgId, projectId, project, isSystemProject, pathEnvironmentId, canManage } =
+    useProjectContext()
   if (isSystemProject) {
     return <Redirect href={projectOverviewHref(orgId, projectId) as Href} />
   }
@@ -166,9 +176,7 @@ export function EnvironmentDeploymentsScreen() {
  * visitor to where that screen lives now and carries the query along
  * (`?hostingId=` is a live deep link).
  */
-export function LegacyProjectRedirect({
-  segment,
-}: Readonly<{ segment: LegacyProjectSegment }>) {
+export function LegacyProjectRedirect({ segment }: Readonly<{ segment: LegacyProjectSegment }>) {
   const { orgId, projectId, project, isSystemProject } = useProjectContext()
   const params = useLocalSearchParams()
   const environmentId = firstParam(params.environmentId) || null
@@ -181,10 +189,6 @@ export function LegacyProjectRedirect({
   if (!target) {
     return <Redirect href={projectOverviewHref(orgId, projectId) as Href} />
   }
-  const href = withCarriedQuery(target, params, [
-    'orgId',
-    'projectId',
-    'environmentId',
-  ])
+  const href = withCarriedQuery(target, params, ['orgId', 'projectId', 'environmentId'])
   return <Redirect href={href as Href} />
 }

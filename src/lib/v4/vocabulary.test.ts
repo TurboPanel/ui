@@ -39,8 +39,8 @@ describe('banned words in the output', () => {
             services: project.services,
             base: project.base,
             source: env.source,
-          }),
-        ),
+          })
+        )
       )
       for (const mode of ['env', 'base', 'diff'] as readonly MapMode[]) {
         strings.push(...collectStrings(mapLayout(sampleMapInput(project, env, mode))))
@@ -53,8 +53,8 @@ describe('banned words in the output', () => {
             base: project.base,
             environments: project.environments.map(sampleView),
             defaultUser: sampleDefaultUser(project),
-          }),
-        ),
+          })
+        )
       )
       for (const service of project.services) {
         strings.push(
@@ -65,8 +65,8 @@ describe('banned words in the output', () => {
               env: sampleView(env),
               users: project.users,
               defaultUser: sampleDefaultUser(project),
-            }),
-          ),
+            })
+          )
         )
       }
     }
@@ -81,14 +81,12 @@ describe('banned words in the output', () => {
     const dir = path.dirname(fileURLToPath(import.meta.url))
     const sources = fs
       .readdirSync(dir)
-      // follows-base.ts, stand-alone-compose.ts and compose-syntax.ts hold compose key and tag names, which are syntax, not copy
+      // compose-syntax.ts holds compose key and tag names, which are syntax, not copy
       .filter(
         (file) =>
           file.endsWith('.ts') &&
           !/\.(test|fixtures)\.ts$/.test(file) &&
-          file !== 'follows-base.ts' &&
-          file !== 'stand-alone-compose.ts' &&
-          file !== 'compose-syntax.ts',
+          file !== 'compose-syntax.ts'
       )
     expect(sources.length).toBeGreaterThanOrEqual(7)
     const bad: string[] = []

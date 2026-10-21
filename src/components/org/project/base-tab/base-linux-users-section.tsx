@@ -25,13 +25,16 @@ function usesLine(row: BaseLinuxUserRow): string {
 export function BaseLinuxUsersSection({ rows }: Readonly<{ rows: readonly BaseLinuxUserRow[] }>) {
   return (
     <View>
-      <SectionHeading
-        title="Linux users"
-        note={baseLinuxUsersNote(rows)}
-      />
+      <SectionHeading title="Hosting Accounts" note={baseLinuxUsersNote(rows)} />
       <ListGroup
         foot="The Linux account that owns an app's files and runs it."
-        empty={<EmptyPanel inline title="No Linux users yet" body="Node.js apps and websites run as a Linux user." />}
+        empty={
+          <EmptyPanel
+            inline
+            title="No Hosting Accounts yet"
+            body="Node.js apps and websites run as a Linux user."
+          />
+        }
       >
         {rows.map((row) => (
           <ListRow

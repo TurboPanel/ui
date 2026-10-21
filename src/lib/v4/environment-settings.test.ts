@@ -22,8 +22,8 @@ function ready(servers: readonly OrgServerRecord[]) {
   return { status: 'ready', servers } as const
 }
 
-const STAGING = env('e1', 'Staging')
-const SIBLINGS = [STAGING, env('e2', 'Production')]
+const STAGING = env('e1', 'staging')
+const SIBLINGS = [STAGING, env('e2', 'production')]
 
 describe('environment rename', () => {
   it('names an empty name and a name another environment already has', () => {
@@ -31,17 +31,17 @@ describe('environment rename', () => {
     expect(environmentRenameProblem('production', STAGING, SIBLINGS)).toBe(
       'Another environment in this project already has that name.'
     )
-    expect(environmentRenameProblem('Preview', STAGING, SIBLINGS)).toBeNull()
+    expect(environmentRenameProblem('preview', STAGING, SIBLINGS)).toBeNull()
   })
 
-  it('lets an environment keep its own name with different capitals', () => {
-    expect(environmentRenameProblem('STAGING', STAGING, SIBLINGS)).toBeNull()
+  it('lets an environment keep its own name', () => {
+    expect(environmentRenameProblem('staging', STAGING, SIBLINGS)).toBeNull()
   })
 
   it('sends the trimmed name only when it changed and is valid', () => {
-    expect(buildEnvironmentRenamePatch(' Preview ', STAGING, SIBLINGS)).toEqual({ name: 'Preview' })
-    expect(buildEnvironmentRenamePatch(' Staging ', STAGING, SIBLINGS)).toBeNull()
-    expect(buildEnvironmentRenamePatch('Production', STAGING, SIBLINGS)).toBeNull()
+    expect(buildEnvironmentRenamePatch(' preview ', STAGING, SIBLINGS)).toEqual({ name: 'preview' })
+    expect(buildEnvironmentRenamePatch(' staging ', STAGING, SIBLINGS)).toBeNull()
+    expect(buildEnvironmentRenamePatch('production', STAGING, SIBLINGS)).toBeNull()
     expect(buildEnvironmentRenamePatch('', STAGING, SIBLINGS)).toBeNull()
     expect(buildEnvironmentRenamePatch('x', env('e3', null), [])).toEqual({ name: 'x' })
   })

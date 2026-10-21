@@ -13,6 +13,8 @@ const h = vi.hoisted(() => ({
   actionError: null as string | null,
   servers: undefined as unknown,
   serversError: false,
+  makePrimary: vi.fn(),
+  makePrimaryError: null as string | null,
 }))
 
 vi.mock('expo-router', () => ({ useRouter: () => ({ push: h.push }) }))
@@ -41,11 +43,18 @@ vi.mock('@/lib/queries', () => ({
       return h.actionError
     },
   }),
+  useMakeEnvironmentPrimary: () => ({
+    run: h.makePrimary,
+    isPending: false,
+    get actionError() {
+      return h.makePrimaryError
+    },
+  }),
   useOrgServers: () => ({ data: h.servers, isError: h.serversError }),
 }))
 
 const STAGING = { id: 'e1', name: 'Staging', serverId: 's1' }
-const PRODUCTION = { id: 'e2', name: 'Production', serverId: null }
+const PRODUCTION = { id: 'e2', name: 'Production', serverId: null, isPrimary: true }
 
 function setup(over: Record<string, unknown> = {}) {
   h.ctx = {
@@ -74,6 +83,9 @@ beforeEach(() => {
   h.push.mockReset()
   h.setError.mockReset()
   h.actionError = null
+  h.makePrimary.mockReset()
+  h.makePrimary.mockResolvedValue({ ok: true })
+  h.makePrimaryError = null
   h.serversError = false
   h.servers = {
     servers: [
@@ -115,10 +127,10 @@ describe('EnvironmentSettingsBody', () => {
 
   it('renames, then goes back to the saved name', async () => {
     render(<EnvironmentSettingsBody showGitSource />)
-    await press(() => h.view.rename.onName(' Preview '))
+    await press(() => h.view.rename.onName(' preview '))
     expect(h.view.rename).toMatchObject({ dirty: true, canSave: true, error: null })
     await press(() => h.view.rename.onSave())
-    expect(h.run).toHaveBeenCalledWith({ name: 'Preview' })
+    expect(h.run).toHaveBeenCalledWith({ name: 'preview' })
     expect(h.view.rename.name).toBe('Staging')
   })
 
@@ -137,10 +149,10 @@ describe('EnvironmentSettingsBody', () => {
     h.run.mockResolvedValue({ ok: false })
     h.actionError = 'Could not save'
     render(<EnvironmentSettingsBody showGitSource />)
-    await press(() => h.view.rename.onName('Preview'))
+    await press(() => h.view.rename.onName('preview'))
     await press(() => h.view.rename.onSave())
     expect(h.setError).toHaveBeenLastCalledWith('Could not save')
-    expect(h.view.rename.name).toBe('Preview')
+    expect(h.view.rename.name).toBe('preview')
   })
 
   it('moves to another server, or hands the choice back to the project', async () => {
@@ -206,5 +218,63 @@ describe('EnvironmentSettingsBody', () => {
     const control = h.view.danger as { props: { onOpenProjectSettings: () => void } }
     control.props.onOpenProjectSettings()
     expect(h.push).toHaveBeenCalledWith('/o/projects/p/settings')
+  })
+
+  it('says where it sits: not primary, not pinned, with a project of several environments', () => {
+    render(<EnvironmentSettingsBody showGitSource />)
+    expect(h.view.placement).toMatchObject({
+      isPrimary: false,
+      pinned: false,
+      alone: false,
+      busy: false,
+    })
+    expect(h.view.deleteNote).toBeNull()
+  })
+
+  it('pins and unpins through the environment record', async () => {
+    const { rerender } = render(<EnvironmentSettingsBody showGitSource />)
+    await press(() => h.view.placement.onTogglePin())
+    expect(h.run).toHaveBeenLastCalledWith({ pinned: true })
+    setup({ selectedEnvironment: { ...STAGING, pinned: true } })
+    rerender(<EnvironmentSettingsBody showGitSource />)
+    await press(() => h.view.placement.onTogglePin())
+    expect(h.run).toHaveBeenLastCalledWith({ pinned: false })
+  })
+
+  it('makes the environment primary and answers null, or the refusal in plain words', async () => {
+    render(<EnvironmentSettingsBody showGitSource />)
+    let answer: string | null = 'x'
+    await act(async () => {
+      answer = await h.view.placement.onMakePrimary()
+    })
+    expect(h.makePrimary).toHaveBeenCalledWith('e1')
+    expect(answer).toBeNull()
+    h.makePrimary.mockResolvedValue({
+      ok: false,
+      cause: new Error('HTTP 409: primary_environment_conflict'),
+    })
+    await act(async () => {
+      answer = await h.view.placement.onMakePrimary()
+    })
+    expect(answer).toContain('try again')
+    h.makePrimary.mockResolvedValue({ ok: false, cause: new Error('') })
+    await act(async () => {
+      answer = await h.view.placement.onMakePrimary()
+    })
+    expect(answer).toBe('Could not make this the primary environment.')
+  })
+
+  it('explains instead of offering delete on the primary environment of a project with several', () => {
+    setup({ selectedEnvironment: PRODUCTION })
+    render(<EnvironmentSettingsBody showGitSource />)
+    expect(h.view.placement).toMatchObject({ isPrimary: true })
+    expect(h.view.deleteNote).toContain('cannot be deleted')
+  })
+
+  it('keeps the usual delete control for an only environment', () => {
+    setup({ selectedEnvironment: PRODUCTION, environments: [PRODUCTION] })
+    render(<EnvironmentSettingsBody showGitSource />)
+    expect(h.view.deleteNote).toBeNull()
+    expect(h.view.placement.alone).toBe(true)
   })
 })

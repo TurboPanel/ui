@@ -9,7 +9,10 @@
  * which is why the lockfile precedence below mirrors the daemon's.
  */
 
-import type { NodePackageManager } from '@/lib/compose/service-kind'
+import {
+  NEWEST_NODE_SERIES,
+  type NodePackageManager,
+} from '@/lib/compose/service-kind'
 import type { RepositoryInspection, RepositoryProbedFile } from '@/lib/instance-api'
 import { rootFromEntries } from '@/lib/compose/repository-lane'
 
@@ -33,6 +36,11 @@ export type SimpleAppConfig = {
   startCommand: string
   /** Static only: directory the build writes the site into. '' = auto. */
   outputDirectory: string
+  /**
+   * Web only: the Node series the app is pinned to. Always a concrete series
+   * unless the operator picked `latest` (follow the server's newest) on purpose.
+   */
+  nodeVersion: string
 }
 
 export type PackageManagerDetection = {
@@ -153,6 +161,64 @@ function runScript(manager: NodePackageManager | undefined, script: string): str
   return `${manager ?? 'npm'} run ${script}`
 }
 
+/** Any `next start` invocation, however the script reaches it. */
+const NEXT_START_RE = /(?:^|\s|\/)next\s+start(?:\s|$)/
+
+/**
+ * True when suggesting the package start script would be wrong because the
+ * daemon starts this app itself. A Next.js app is one: for a standalone build
+ * the daemon publishes the standalone tree as the release and runs
+ * `node server.js` (that tree has no `next` command, so `pnpm start` cannot
+ * run there and fails the build, and a script path under `.next/standalone/`
+ * does not exist there); without standalone output it runs the script itself.
+ */
+function daemonStartsItself(startScript: string): boolean {
+  return NEXT_START_RE.test(startScript) || startScript.includes('.next/standalone/')
+}
+
+const HINT_FILE_LABELS: Record<string, string> = {
+  'package.json': 'engines.node in package.json',
+  volta: 'volta.node in package.json',
+  '.nvmrc': '.nvmrc',
+  '.node-version': '.node-version',
+  '.tool-versions': '.tool-versions',
+}
+
+/**
+ * The Node series a new app starts on, and a plain sentence about what the
+ * repository asked for when it asked for something.
+ *
+ * A version the repository names and the server offers is preselected (the
+ * highest offered series that satisfies a range). Otherwise the newest
+ * concrete series is: pinned, so a later release of Node never moves the app.
+ * `latest` is never a default.
+ */
+export function suggestedNodeVersion(
+  inspection: RepositoryInspection | undefined,
+): { nodeVersion: string; notice?: string } {
+  const info = inspection?.nodeVersion
+  const newest = info?.newest ?? NEWEST_NODE_SERIES
+  const hint = info?.hint
+  if (!hint) return { nodeVersion: newest }
+  const label = HINT_FILE_LABELS[hint.source] ?? hint.path
+  if (hint.status === 'matched' && hint.series) {
+    return {
+      nodeVersion: hint.series,
+      notice: `Your repository asks for Node ${hint.requested} (${label}), so Node ${hint.series} was preselected.`,
+    }
+  }
+  if (hint.status === 'unsupported') {
+    return {
+      nodeVersion: newest,
+      notice: `Your repository asks for Node ${hint.requested} (${label}), which this server does not offer. Node ${newest} was preselected instead.`,
+    }
+  }
+  return {
+    nodeVersion: newest,
+    notice: `${label} says "${hint.requested}", which is not a version Node can be chosen from. Node ${newest} was preselected instead.`,
+  }
+}
+
 /**
  * Suggested Simple-application config for what the inspection found.
  *
@@ -160,7 +226,9 @@ function runScript(manager: NodePackageManager | undefined, script: string): str
  * own `package.json` declares the script, because a suggested command that
  * fails on the first deploy is worse than an empty field with a good hint. The
  * daemon derives the install command itself, so suggestions never include
- * `npm install` — the build command is the build alone.
+ * `npm install` — the build command is the build alone. A start script the
+ * daemon starts on its own ({@link daemonStartsItself}) is left empty for the
+ * same reason.
  */
 export function suggestedSimpleAppConfig(
   inspection: RepositoryInspection | undefined,
@@ -183,7 +251,9 @@ export function suggestedSimpleAppConfig(
     kind,
     buildRoot: '',
     buildCommand: scripts?.build ? runScript(manager, 'build') : '',
-    startCommand: scripts?.start ? `${manager ?? 'npm'} start` : '',
+    startCommand:
+      scripts?.start && !daemonStartsItself(scripts.start) ? `${manager ?? 'npm'} start` : '',
     outputDirectory: staticRoot ?? '',
+    nodeVersion: suggestedNodeVersion(inspection).nodeVersion,
   }
 }

@@ -1,10 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-  type ReactNode,
-} from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { usePathname, useRouter, type Href } from 'expo-router'
 import { panelStyles } from '@/components/ui/panel-styles'
@@ -103,17 +97,11 @@ import {
   useOrgServers,
   useServices,
 } from '@/lib/queries'
-import {
-  serverDisplayName,
-  type ServerNameSource,
-} from '@/lib/resource-labels'
+import { serverDisplayName, type ServerNameSource } from '@/lib/resource-labels'
 import { useEnvironmentBindings } from '@/lib/queries/bindings'
 import { useStorage } from '@/lib/queries/storage'
 import { isActiveContainerStatus, serviceStatusTone } from '@/lib/container-status'
-import {
-  countDistinctProjectServers,
-  resolveEffectiveServerId,
-} from '@/lib/project-options'
+import { countDistinctProjectServers, resolveEffectiveServerId } from '@/lib/project-options'
 import { spacing } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
 
@@ -121,9 +109,7 @@ import { userErrorMessage } from '@/lib/user-error'
 const EMPTY_STORAGE: readonly StorageRecord[] = []
 
 /** Draft section tab → the editor view the compose surface renders. */
-function draftSectionView(
-  section: ProjectDraft['section'],
-): ComposeEditorView | null {
+function draftSectionView(section: ProjectDraft['section']): ComposeEditorView | null {
   if (section === 'compose') return 'editor'
   // Services lens — the compose services as a list.
   if (section === 'services') return 'visual'
@@ -134,7 +120,7 @@ function draftSectionView(
 function resolveComposeActiveTab(
   draft: ProjectDraft | null,
   pathname: string,
-  projectId: string,
+  projectId: string
 ): ComposeProjectTabId {
   if (draft) return draft.section
   return parseComposeProjectTab(pathname, projectId)
@@ -148,7 +134,7 @@ function resolveComposeActiveTab(
 function resolveComposeSectionView(
   draft: ProjectDraft | null,
   pathname: string,
-  projectId: string,
+  projectId: string
 ): ComposeEditorView | null {
   if (draft) return draftSectionView(draft.section)
   const tab = parseComposeProjectTab(pathname, projectId)
@@ -162,21 +148,16 @@ function isComposeServicesQueryEnabled(
   draft: ProjectDraft | null,
   selectedEnvironmentId: string | null,
   baseSelected: boolean,
-  projectAllowsMutations: boolean,
+  projectAllowsMutations: boolean
 ): boolean {
-  return (
-    !draft &&
-    Boolean(selectedEnvironmentId) &&
-    !baseSelected &&
-    projectAllowsMutations
-  )
+  return !draft && Boolean(selectedEnvironmentId) && !baseSelected && projectAllowsMutations
 }
 
 function isComposeServicesLoading(
   queryEnabled: boolean,
   servicesLoading: boolean,
   serviceCount: number,
-  containersLoading: boolean,
+  containersLoading: boolean
 ): boolean {
   if (!queryEnabled) return false
   if (servicesLoading) return true
@@ -188,10 +169,7 @@ function isComposeServicesLoading(
  * everything else is Overview · Compose · Services. Hosting carries server
  * placement; Bindings carries system users and bound databases.
  */
-function composeSurfaceBody(
-  activeTab: ComposeProjectTabId,
-  overviewBody: ReactNode,
-): ReactNode {
+function composeSurfaceBody(activeTab: ComposeProjectTabId, overviewBody: ReactNode): ReactNode {
   if (activeTab === 'hosting') return <ComposeHostingTab />
   if (activeTab === 'bindings') return <ComposeBindingsTab />
   if (activeTab === 'storage') return <ComposeStorageTab />
@@ -204,18 +182,16 @@ function inventoryItem(
   icon: InventoryStripItem['icon'],
   value: number,
   noun: string,
-  pluralNoun?: string,
+  pluralNoun?: string
 ): InventoryStripItem {
-  return pluralNoun
-    ? { key, icon, value, noun, pluralNoun }
-    : { key, icon, value, noun }
+  return pluralNoun ? { key, icon, value, noun, pluralNoun } : { key, icon, value, noun }
 }
 
 /** Project scope counts project-wide storage; environment scope narrows to it. */
 function resolveStorageFilter(
   baseSelected: boolean,
   projectId: string,
-  selectedEnvironmentId: string | null,
+  selectedEnvironmentId: string | null
 ): { projectId: string } | { environmentId: string } | null {
   if (baseSelected) return { projectId }
   if (selectedEnvironmentId) return { environmentId: selectedEnvironmentId }
@@ -227,7 +203,7 @@ function overviewComposeDocument(
   isDirty: boolean,
   source: OverviewComposeSource,
   snapshot: ReturnType<typeof resolveComposeDraftSnapshot>,
-  saved: unknown,
+  saved: unknown
 ): unknown {
   if (!isDirty || source !== 'proposed') return saved
   return reconcileComposeDraft(snapshot) ?? snapshot.draft
@@ -238,7 +214,7 @@ function overviewSaveTrailing(
   saving: boolean,
   onSave: () => void,
   onDiscard: () => void,
-  draft?: ProjectDraft | null,
+  draft?: ProjectDraft | null
 ): ReactNode {
   // The create wizard commits from its own footer button, so the draft surface
   // shows no Save / Discard in the toolbar at all.
@@ -342,38 +318,12 @@ function ProjectOverviewCompose({
 }>) {
   const projectSummary = summarizeComposeDocument(proposedDoc)
   const inventory: InventoryStripItem[] = [
-    inventoryItem(
-      'environments',
-      EnvironmentResourceIcon,
-      environmentsCount,
-      'environment',
-    ),
+    inventoryItem('environments', EnvironmentResourceIcon, environmentsCount, 'environment'),
     inventoryItem('servers', ComposeServersIcon, projectServerCount, 'server'),
-    inventoryItem(
-      'services',
-      ComposeVisualIcon,
-      projectSummary.services,
-      'service',
-    ),
-    inventoryItem(
-      'networks',
-      NetworkResourceIcon,
-      projectSummary.networks,
-      'network',
-    ),
-    inventoryItem(
-      'volumes',
-      VolumeResourceIcon,
-      projectSummary.volumes,
-      'volume',
-    ),
-    inventoryItem(
-      'storage',
-      ComposeStorageIcon,
-      storageCount,
-      'storage volume',
-      'storage volumes',
-    ),
+    inventoryItem('services', ComposeVisualIcon, projectSummary.services, 'service'),
+    inventoryItem('networks', NetworkResourceIcon, projectSummary.networks, 'network'),
+    inventoryItem('volumes', VolumeResourceIcon, projectSummary.volumes, 'volume'),
+    inventoryItem('storage', ComposeStorageIcon, storageCount, 'storage volume', 'storage volumes'),
   ]
   return (
     <ComposeSavedView
@@ -387,13 +337,7 @@ function ProjectOverviewCompose({
       documentFacts={documentFacts}
       draftSource={isDirty ? overviewSource : undefined}
       onDraftSourceChange={isDirty ? onOverviewSourceChange : undefined}
-      toolbarTrailing={overviewSaveTrailing(
-        isDirty,
-        saving,
-        onSave,
-        onDiscard,
-        draft,
-      )}
+      toolbarTrailing={overviewSaveTrailing(isDirty, saving, onSave, onDiscard, draft)}
     />
   )
 }
@@ -435,19 +379,17 @@ function EnvironmentOverviewCompose({
   onDiscard: () => void
   documentFacts: ComposeDocFacts
 }>) {
-  const overlayState = resolveComposeOverlayState(
-    selectedEnvironment.options?.compose,
-  )
+  const overlayState = resolveComposeOverlayState(selectedEnvironment.options?.compose)
   const proposedOverlay = overviewComposeDocument(
     isDirty,
     overviewSource,
     liveSnapshot,
-    selectedEnvironment.options?.compose,
+    selectedEnvironment.options?.compose
   )
   const merged = mergeComposeOverlay(project.options?.compose, proposedOverlay)
   const effectiveServerId = resolveEffectiveServerId(
     selectedEnvironment.serverId,
-    project.options?.defaultServerId,
+    project.options?.defaultServerId
   )
   const showSavedOrClean = overviewSource === 'saved' || !isDirty
   const inheriting = showSavedOrClean
@@ -455,27 +397,11 @@ function EnvironmentOverviewCompose({
     : isBlankComposeData(normalizeCompose(proposedOverlay).data)
   const envSummary = summarizeComposeDocument(merged)
   const inventory: InventoryStripItem[] = [
-    inventoryItem(
-      'servers',
-      ComposeServersIcon,
-      effectiveServerId ? 1 : 0,
-      'server',
-    ),
+    inventoryItem('servers', ComposeServersIcon, effectiveServerId ? 1 : 0, 'server'),
     inventoryItem('services', ComposeVisualIcon, envSummary.services, 'service'),
-    inventoryItem(
-      'networks',
-      NetworkResourceIcon,
-      envSummary.networks,
-      'network',
-    ),
+    inventoryItem('networks', NetworkResourceIcon, envSummary.networks, 'network'),
     inventoryItem('volumes', VolumeResourceIcon, envSummary.volumes, 'volume'),
-    inventoryItem(
-      'storage',
-      ComposeStorageIcon,
-      storageCount,
-      'storage volume',
-      'storage volumes',
-    ),
+    inventoryItem('storage', ComposeStorageIcon, storageCount, 'storage volume', 'storage volumes'),
     inventoryItem('bindings', BindingResourceIcon, bindingsCount, 'binding'),
   ]
   return (
@@ -551,24 +477,17 @@ function ServicesPanelBody({
   const editView = sectionView ?? 'editor'
   const scopeKey = composeDraftScopeKey(
     projectId,
-    baseSelected ? null : selectedEnvironment?.id ?? null,
+    baseSelected ? null : (selectedEnvironment?.id ?? null)
   )
   const savedDocument = baseSelected
     ? project.options?.compose
     : selectedEnvironment?.options?.compose
-  const liveSnapshot = resolveComposeDraftSnapshot(
-    draftStore,
-    scopeKey,
-    savedDocument,
-  )
+  const liveSnapshot = resolveComposeDraftSnapshot(draftStore, scopeKey, savedDocument)
   const isDirty = isComposeDraftDirty(liveSnapshot)
-  const [overviewSource, setOverviewSource] =
-    useState<OverviewComposeSource>('proposed')
+  const [overviewSource, setOverviewSource] = useState<OverviewComposeSource>('proposed')
   // Scope key the user chose to start an override in — a blank overlay has
   // nothing to seed the draft store with, so the intent is tracked here.
-  const [overrideStartedKey, setOverrideStartedKey] = useState<string | null>(
-    null,
-  )
+  const [overrideStartedKey, setOverrideStartedKey] = useState<string | null>(null)
 
   useEffect(() => {
     if (isDirty) {
@@ -579,18 +498,11 @@ function ServicesPanelBody({
   // Plain handlers (not useCallback): React Compiler could not preserve manual
   // memoization of this save path (`preserve-manual-memoization` on scopeKey).
   async function saveOverviewDraft(): Promise<void> {
-    const snapshot = resolveComposeDraftSnapshot(
-      draftStore,
-      scopeKey,
-      savedDocument,
-    )
+    const snapshot = resolveComposeDraftSnapshot(draftStore, scopeKey, savedDocument)
     const reconciled = reconcileComposeDraft(snapshot)
     if (reconciled == null) return
-    const viewForSave: ComposeEditorView =
-      editView === 'visual' ? 'visual' : 'editor'
-    const next = stripComposePlacement(
-      setComposeEditorView(reconciled, viewForSave),
-    )
+    const viewForSave: ComposeEditorView = editView === 'visual' ? 'visual' : 'editor'
+    const next = stripComposePlacement(setComposeEditorView(reconciled, viewForSave))
     const blocking = blockingComposeLintIssues(
       lintComposeYaml(composeDocumentToYaml(next), {
         // Overview's own save path — the same rules the editor and the instance
@@ -598,12 +510,10 @@ function ServicesPanelBody({
         // can slip in through this surface.
         ...(projectRepositoryId === undefined ? {} : { projectRepositoryId }),
         knownPrincipalAliases: new Set([
-          ...(baseSelected
-            ? []
-            : composePrincipalAliases(project.options?.compose)),
+          ...(baseSelected ? [] : composePrincipalAliases(project.options?.compose)),
           ...composePrincipalAliases(next),
         ]),
-      }),
+      })
     )
     if (blocking.length > 0) return
     if (baseSelected) {
@@ -624,10 +534,7 @@ function ServicesPanelBody({
   }
 
   function discardOverviewDraft(): void {
-    draftStore.setSnapshot(
-      scopeKey,
-      seedComposeDraftFromDocument(savedDocument),
-    )
+    draftStore.setSnapshot(scopeKey, seedComposeDraftFromDocument(savedDocument))
   }
 
   if (baseSelected) {
@@ -643,9 +550,7 @@ function ServicesPanelBody({
           extraPrincipalAliases={[]}
           documentFacts={documentFacts}
           onOpenScopeConfig={onOpenScopeConfig}
-          {...(draft
-            ? { hideSave: true, onDraftChange: draft.onDraftChange }
-            : {})}
+          {...(draft ? { hideSave: true, onDraftChange: draft.onDraftChange } : {})}
         />
       )
     }
@@ -666,7 +571,7 @@ function ServicesPanelBody({
           isDirty,
           overviewSource,
           liveSnapshot,
-          project.options?.compose,
+          project.options?.compose
         )}
         saving={saving}
         onSave={runOverviewSave}
@@ -694,9 +599,9 @@ function ServicesPanelBody({
 
   if (editing) {
     const inheriting =
-      resolveComposeOverlayState(selectedEnvironment.options?.compose).blank
-      && !isDirty
-      && overrideStartedKey !== scopeKey
+      resolveComposeOverlayState(selectedEnvironment.options?.compose).blank &&
+      !isDirty &&
+      overrideStartedKey !== scopeKey
     if (inheriting) {
       return (
         <ComposeInheritedPanel
@@ -710,8 +615,7 @@ function ServicesPanelBody({
             draftStore.setSnapshot(scopeKey, {
               draft: seeded.draft,
               yaml: seeded.yaml,
-              baselineYaml:
-                seedComposeDraftFromDocument(savedDocument).baselineYaml,
+              baselineYaml: seedComposeDraftFromDocument(savedDocument).baselineYaml,
             })
             setOverrideStartedKey(scopeKey)
           }}
@@ -798,29 +702,18 @@ export function ComposeServicesTab() {
     projectAllowsMutations,
     draft,
   } = useProjectContext()
-  const projectServerCount = project
-    ? countDistinctProjectServers(project, environments)
-    : 0
-  const storageFilter = resolveStorageFilter(
-    baseSelected,
-    projectId,
-    selectedEnvironmentId,
-  )
+  const projectServerCount = project ? countDistinctProjectServers(project, environments) : 0
+  const storageFilter = resolveStorageFilter(baseSelected, projectId, selectedEnvironmentId)
   const storageQuery = useStorage(orgId, storageFilter ?? { projectId }, {
     enabled: !draft && storageFilter != null,
   })
   const storageCount = storageQuery.data?.storage.length ?? 0
-  const bindingsQuery = useEnvironmentBindings(
-    orgId,
-    selectedEnvironmentId ?? '',
-    { enabled: !draft && !baseSelected && Boolean(selectedEnvironmentId) },
-  )
+  const bindingsQuery = useEnvironmentBindings(orgId, selectedEnvironmentId ?? '', {
+    enabled: !draft && !baseSelected && Boolean(selectedEnvironmentId),
+  })
   const bindingsCount = bindingsQuery.data?.bindings.length ?? 0
   const persistProjectCompose = usePersistProjectCompose(orgId, projectId)
-  const persistEnvironmentCompose = usePersistEnvironmentCompose(
-    orgId,
-    selectedEnvironmentId ?? '',
-  )
+  const persistEnvironmentCompose = usePersistEnvironmentCompose(orgId, selectedEnvironmentId ?? '')
   // A draft owns its section in local state — there is no URL to read it from.
   const activeTab = resolveComposeActiveTab(draft, pathname, projectId)
   const sectionView = resolveComposeSectionView(draft, pathname, projectId)
@@ -829,16 +722,13 @@ export function ComposeServicesTab() {
     draft,
     selectedEnvironmentId,
     baseSelected,
-    projectAllowsMutations,
+    projectAllowsMutations
   )
   const servicesQuery = useServices(orgId, selectedEnvironmentId ?? undefined, {
     enabled: servicesEnabled,
   })
   const services = orEmptyArray(servicesQuery.data?.services)
-  const serviceIds = useMemo(
-    () => services.map((service) => service.id),
-    [services],
-  )
+  const serviceIds = useMemo(() => services.map((service) => service.id), [services])
   const containersQuery = useContainersByServices(orgId, serviceIds, {
     enabled: servicesEnabled && serviceIds.length > 0,
   })
@@ -850,10 +740,9 @@ export function ComposeServicesTab() {
     servicesEnabled,
     servicesQuery.isLoading,
     serviceIds.length,
-    containersQuery.isLoading,
+    containersQuery.isLoading
   )
-  const composeSaving =
-    persistProjectCompose.isPending || persistEnvironmentCompose.isPending
+  const composeSaving = persistProjectCompose.isPending || persistEnvironmentCompose.isPending
 
   const documentFacts = useComposeDocumentFacts({
     orgId,
@@ -874,8 +763,8 @@ export function ComposeServicesTab() {
         orgId,
         projectId,
         'settings',
-        baseSelected ? null : selectedEnvironmentId,
-      ) as Href,
+        baseSelected ? null : selectedEnvironmentId
+      ) as Href
     )
   }, [router, orgId, projectId, baseSelected, selectedEnvironmentId])
 
@@ -884,13 +773,15 @@ export function ComposeServicesTab() {
       // A draft has no row to PATCH and shows no Save — the wizard's footer
       // Create button is the only commit path.
       if (draft) return
+      // This save always names the Base, so it is only ever reachable from the Base screens.
+      if (!baseSelected) return
       setError(null)
       const result = await persistProjectCompose.run(compose)
       if (!result.ok && persistProjectCompose.actionError) {
         setError(persistProjectCompose.actionError)
       }
     },
-    [draft, persistProjectCompose, setError],
+    [draft, baseSelected, persistProjectCompose, setError]
   )
 
   const handleSaveEnvironmentCompose = useCallback(
@@ -903,10 +794,7 @@ export function ComposeServicesTab() {
         return
       }
       await invalidateEnvironments()
-      await Promise.all([
-        servicesQuery.refetch(),
-        containersQuery.refetchAll(),
-      ])
+      await Promise.all([servicesQuery.refetch(), containersQuery.refetchAll()])
     },
     [
       selectedEnvironmentId,
@@ -915,7 +803,7 @@ export function ComposeServicesTab() {
       invalidateEnvironments,
       servicesQuery,
       containersQuery,
-    ],
+    ]
   )
 
   useEffect(() => {
@@ -936,8 +824,7 @@ export function ComposeServicesTab() {
 
   const allContainers = Object.values(containersByService).flat()
   const isStarted =
-    !baseSelected &&
-    allContainers.some((container) => isActiveContainerStatus(container.status))
+    !baseSelected && allContainers.some((container) => isActiveContainerStatus(container.status))
 
   return (
     <View style={styles.root}>
@@ -971,7 +858,7 @@ export function ComposeServicesTab() {
             onOpenScopeConfig={openScopeConfig}
             onSaveProjectCompose={handleSaveProjectCompose}
             onSaveEnvironmentCompose={handleSaveEnvironmentCompose}
-          />,
+          />
         )}
         {draft ? <DraftEnvironmentNotice /> : null}
       </View>
@@ -985,9 +872,7 @@ const styles = StyleSheet.create({
 })
 
 /** Short live commit per compose service, from the one unscoped releases read. */
-function liveCommitsByService(
-  releases: readonly ReleaseRecord[] | undefined,
-): Map<string, string> {
+function liveCommitsByService(releases: readonly ReleaseRecord[] | undefined): Map<string, string> {
   const byService = new Map<string, string>()
   for (const release of releases ?? []) {
     if (!release.isLive) continue
@@ -1005,7 +890,7 @@ function serviceFactsByName(
     liveCommitByService: ReadonlyMap<string, string>
     appFacts: Readonly<Record<string, ServiceAppFacts>>
     showStatus: boolean
-  }>,
+  }>
 ): Record<string, ComposeDocServiceFacts> {
   const byService: Record<string, ComposeDocServiceFacts> = {}
   for (const service of params.services) {
@@ -1017,14 +902,10 @@ function serviceFactsByName(
     byService[name] = {
       serviceId: service.id,
       ...(app ? { appLabel: app.label } : {}),
-      ...(app?.warning
-        ? { appWarning: { title: app.warning.title, body: app.warning.body } }
-        : {}),
+      ...(app?.warning ? { appWarning: { title: app.warning.title, body: app.warning.body } } : {}),
       hostname: params.hostingsByService[service.id]?.[0]?.name ?? null,
       ...(liveCommit ? { releaseLabel: `${liveCommit} live` } : {}),
-      ...(params.showStatus
-        ? { statusColor: tone.color, statusLabel: tone.label }
-        : {}),
+      ...(params.showStatus ? { statusColor: tone.color, statusLabel: tone.label } : {}),
     }
   }
   return byService
@@ -1033,7 +914,7 @@ function serviceFactsByName(
 /** Where each volume lives: its location server's label, else the provider name. */
 function storageLabelsByVolume(
   storage: readonly StorageRecord[],
-  servers: readonly ServerNameSource[] | undefined,
+  servers: readonly ServerNameSource[] | undefined
 ): Record<string, string> {
   const byVolume: Record<string, string> = {}
   for (const row of storage) {
@@ -1042,9 +923,7 @@ function storageLabelsByVolume(
       ? servers?.find((server) => server.id === location.serverId)
       : undefined
     const where =
-      (locationServer ? serverDisplayName(locationServer) : null) ??
-      location?.provider ??
-      null
+      (locationServer ? serverDisplayName(locationServer) : null) ?? location?.provider ?? null
     if (where) byVolume[row.name] = where
   }
   return byVolume
@@ -1084,28 +963,23 @@ function useComposeDocumentFacts({
   // One unscoped read for the whole environment rather than one per service:
   // the releases endpoint already returns every Git-backed service, and the
   // gutter only needs the live row of each.
-  const releasesQuery = useServiceReleases(
-    orgId,
-    selectedEnvironment?.id ?? '',
-    undefined,
-    { enabled: Boolean(selectedEnvironment) },
-  )
+  const releasesQuery = useServiceReleases(orgId, selectedEnvironment?.id ?? '', undefined, {
+    enabled: Boolean(selectedEnvironment),
+  })
   const releases = releasesQuery.data?.releases
   // Bindings are what decide whether a recognised application (WordPress) has a
   // database it can use; the same read the Overview diagram makes.
-  const bindingsQuery = useEnvironmentBindings(
-    orgId,
-    selectedEnvironment?.id ?? '',
-    { enabled: Boolean(selectedEnvironment) },
-  )
+  const bindingsQuery = useEnvironmentBindings(orgId, selectedEnvironment?.id ?? '', {
+    enabled: Boolean(selectedEnvironment),
+  })
   const bindings = bindingsQuery.data?.bindings
 
   return useMemo(() => {
     const effectiveServerId = baseSelected
-      ? project?.options?.defaultServerId ?? null
+      ? (project?.options?.defaultServerId ?? null)
       : resolveEffectiveServerId(
           selectedEnvironment?.serverId ?? null,
-          project?.options?.defaultServerId,
+          project?.options?.defaultServerId
         )
     const placementServer = effectiveServerId
       ? servers?.find((row) => row.id === effectiveServerId)
@@ -1120,9 +994,7 @@ function useComposeDocumentFacts({
         appFacts: appFactsByService(services, bindings),
         showStatus,
       }),
-      placementLabel: placementServer
-        ? serverDisplayName(placementServer)
-        : null,
+      placementLabel: placementServer ? serverDisplayName(placementServer) : null,
       storageByVolume: storageLabelsByVolume(storage, servers),
     }
   }, [

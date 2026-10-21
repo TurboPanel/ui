@@ -2,11 +2,11 @@ import { useRouter, type Href } from 'expo-router'
 import { useMemo } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { ProjectHomeCard } from '@/components/org/project-home-card'
+import { ProjectsWelcomeCard } from '@/components/org/projects-welcome-card'
 import { useNow } from '@/components/org/project/use-now'
 import { WorkspaceSwitcher } from '@/components/org/workspace-switcher'
 import { LoadingState } from '@/components/ui'
 import { ActionButton } from '@/components/ui/v4/action-button'
-import { EmptyPanel } from '@/components/ui/v4/empty-panel'
 import { ListGroup } from '@/components/ui/v4/list-group'
 import { ListRow } from '@/components/ui/v4/list-row'
 import { Notice } from '@/components/ui/v4/notice'
@@ -23,6 +23,7 @@ import {
   projectEnvironmentHref,
   projectHref,
 } from '@/lib/project-navigation'
+import { orgAreaHref } from '@/lib/org-navigation'
 import { usePullToRefresh } from '@/lib/pull-to-refresh'
 import { useCan } from '@/lib/query-client'
 import { useProjects, useWorkspaces } from '@/lib/queries'
@@ -32,6 +33,7 @@ import {
   useLatestDeployments,
 } from '@/lib/queries/environment-cards'
 import { useEnvironments } from '@/lib/queries/environments'
+import { useOrgServers } from '@/lib/queries/servers'
 import { resolveRecentProjects, useRecentProjectIds } from '@/lib/recent-projects'
 import {
   isTurbopanelProject,
@@ -42,6 +44,7 @@ import { webPointer } from '@/lib/theme'
 import {
   deploysInProgress,
   homeProject,
+  type InProgressRow,
   summaryLine,
   wantsConfigView,
   type HomeProject,
@@ -134,27 +137,10 @@ function RecentProjects({
   )
 }
 
-/**
- * The Projects home: every project as a layer card (its Base, who runs it,
- * each environment's status and relation to the Base), the projects you opened
- * last, and the deploys running now. Only data the app has read is shown.
- */
-export function ProjectsHomeSection({
-  orgId,
-  workspaceId,
-}: Readonly<{ orgId: string; workspaceId?: string }>) {
-  const s = styles(usePalette())
-  const router = useRouter()
+/** Projects in scope (platform infrastructure hidden under all workspaces) and the workspaces to name them. */
+function useScopedProjects(orgId: string, scopeId: string, showWorkspaceLabels: boolean) {
   const workspaceScope = useOptionalWorkspaceScope()
-  const canOwn = useCan('organization', orgId, 'organization:own')
-  const now = useNow(CLOCK_MS)
-
-  const scopeId = workspaceId ?? workspaceScope?.scopeId ?? ALL_WORKSPACES_SCOPE
   const scopedWorkspaceId = scopeId === ALL_WORKSPACES_SCOPE ? undefined : scopeId
-  const showWorkspaceLabels = !scopedWorkspaceId
-  const scopeWorkspace = workspaceScope?.scope.workspace
-  const isSystemScope = scopeWorkspace != null && isTurbopanelWorkspace(scopeWorkspace)
-
   const projectsQuery = useProjects(orgId, scopedWorkspaceId)
   const workspacesQuery = useWorkspaces(orgId, { enabled: showWorkspaceLabels })
   const scopeWorkspaces = workspaceScope?.workspaces
@@ -174,9 +160,27 @@ export function ProjectsHomeSection({
         : rawProjects,
     [rawProjects, scopeId, allWorkspaces],
   )
+  return { projectsQuery, workspacesQuery, allWorkspaces, projects }
+}
+
+function groupByEnvironment(containers: readonly ContainerRecord[]): Record<string, ContainerRecord[]> {
+  const map: Record<string, ContainerRecord[]> = {}
+  for (const row of containers) {
+    const bucket = map[row.environmentId] ?? []
+    bucket.push(row)
+    map[row.environmentId] = bucket
+  }
+  return map
+}
+
+/** Environments, containers and deploy state for the projects, folded into home cards. */
+function useHomeCards(
+  orgId: string,
+  projects: ReturnType<typeof useScopedProjects>['projects'],
+  now: number,
+) {
   const environmentsQuery = useEnvironments(orgId, undefined, { enabled: projects.length > 0 })
   const containersQuery = useContainers(orgId, undefined, { enabled: projects.length > 0 })
-
   const environments = useMemo(() => {
     const ids = new Set(projects.map((project) => project.id))
     return orEmptyArray(environmentsQuery.data?.environments).filter((env) => ids.has(env.projectId))
@@ -190,28 +194,10 @@ export function ProjectsHomeSection({
   }, [projects, environments])
   const { views } = useEnvironmentConfigViews(orgId, composeEnvironmentIds)
   const { latest } = useLatestDeployments(orgId, composeEnvironmentIds)
-
-  usePullToRefresh(async () => {
-    await Promise.all([
-      projectsQuery.refetch(),
-      environmentsQuery.refetch(),
-      containersQuery.refetch(),
-      ...(showWorkspaceLabels ? [workspacesQuery.refetch()] : []),
-    ])
-    await workspaceScope?.refreshWorkspaces()
-  })
-
-  const containersByEnvironment = useMemo(() => {
-    if (!containersQuery.data) return undefined
-    const map: Record<string, ContainerRecord[]> = {}
-    for (const row of containersQuery.data.containers) {
-      const bucket = map[row.environmentId] ?? []
-      bucket.push(row)
-      map[row.environmentId] = bucket
-    }
-    return map
-  }, [containersQuery.data])
-
+  const containersByEnvironment = useMemo(
+    () => (containersQuery.data ? groupByEnvironment(containersQuery.data.containers) : undefined),
+    [containersQuery.data],
+  )
   const cards = useMemo(
     () =>
       projects.map((project) =>
@@ -220,108 +206,191 @@ export function ProjectsHomeSection({
           environments: environments.filter((env) => env.projectId === project.id),
           containersByEnvironment,
           views,
+          latest,
         }),
       ),
-    [projects, environments, containersByEnvironment, views],
+    [projects, environments, containersByEnvironment, views, latest],
   )
   const inProgress = useMemo(
     () => deploysInProgress({ projects, environments, latest, now }),
     [projects, environments, latest, now],
   )
-
-  const workspaceNameById = useMemo(
-    () => new Map(allWorkspaces.map((workspace) => [workspace.id, workspaceName(workspace)])),
-    [allWorkspaces],
-  )
-  const projectById = useMemo(() => new Map(projects.map((project) => [project.id, project])), [projects])
-
   const runningCount = containersByEnvironment
     ? cards.reduce((sum, card) => sum + card.environments.filter((env) => env.status === 'running').length, 0)
     : null
-  const loading = projectsQuery.isLoading && projects.length === 0
-  const error = queryErrorMessage(projectsQuery.error, workspacesQuery.error)
-  const newProjectHref = newProjectHrefForScope(orgId, scopeId) as Href
+  return { environmentsQuery, containersQuery, environments, cards, inProgress, runningCount }
+}
 
-  let list
-  if (loading) {
-    list = <LoadingState />
-  } else if (cards.length === 0) {
-    list = (
-      <EmptyPanel
-        hero
-        title="No projects yet"
-        body="Deploy your first app, site or stack. It takes about a minute."
-        action={
-          canOwn && !isSystemScope ? (
-            <ActionButton label="New project" onPress={() => router.push(newProjectHref)} />
-          ) : null
-        }
+function ProjectGrid({
+  orgId,
+  cards,
+  projects,
+  workspaces,
+  showWorkspaceLabels,
+}: Readonly<{
+  orgId: string
+  cards: readonly HomeProject[]
+  projects: ReturnType<typeof useScopedProjects>['projects']
+  workspaces: ReturnType<typeof useScopedProjects>['allWorkspaces']
+  showWorkspaceLabels: boolean
+}>) {
+  const workspaceNameById = useMemo(
+    () => new Map(workspaces.map((workspace) => [workspace.id, workspaceName(workspace)])),
+    [workspaces],
+  )
+  const s = styles(usePalette())
+  const router = useRouter()
+  const projectById = useMemo(() => new Map(projects.map((project) => [project.id, project])), [projects])
+  return (
+    <View style={s.grid}>
+      {cards.map((card) => (
+        <View key={card.id} style={s.cell}>
+          <ProjectHomeCard
+            project={card}
+            workspace={
+              showWorkspaceLabels
+                ? workspaceNameById.get(projectById.get(card.id)?.workspaceId ?? '')
+                : undefined
+            }
+            onOpen={() => router.push(projectHref(orgId, card.id) as Href)}
+            onOpenBase={() => router.push(projectBaseHref(orgId, card.id) as Href)}
+            onOpenEnvironment={(environmentId) =>
+              router.push(projectEnvironmentHref(orgId, card.id, environmentId) as Href)
+            }
+          />
+        </View>
+      ))}
+    </View>
+  )
+}
+
+function DeploysInProgress({ orgId, rows }: Readonly<{ orgId: string; rows: readonly InProgressRow[] }>) {
+  const s = styles(usePalette())
+  const router = useRouter()
+  if (rows.length === 0) return null
+  return (
+    <View style={s.section}>
+      <SectionHeading title="Deploys in progress" />
+      <ListGroup>
+        {rows.map((row) => (
+          <ListRow
+            key={row.environmentId}
+            title={row.title}
+            sub={row.sub}
+            chips={<StatusChip status={row.status} size="sm" />}
+            onPress={() =>
+              router.push(environmentPageTabHref(orgId, row.projectId, row.environmentId, 'deployments') as Href)
+            }
+          />
+        ))}
+      </ListGroup>
+    </View>
+  )
+}
+
+type HomeData = ReturnType<typeof useScopedProjects> & ReturnType<typeof useHomeCards>
+
+/** Pull to refresh re-reads everything the page shows. */
+function useRefreshHome(data: HomeData, showWorkspaceLabels: boolean) {
+  const workspaceScope = useOptionalWorkspaceScope()
+  usePullToRefresh(async () => {
+    await Promise.all([
+      data.projectsQuery.refetch(),
+      data.environmentsQuery.refetch(),
+      data.containersQuery.refetch(),
+      ...(showWorkspaceLabels ? [data.workspacesQuery.refetch()] : []),
+    ])
+    await workspaceScope?.refreshWorkspaces()
+  })
+}
+
+/** The project list body: loading, the first-run welcome, or the project grid. */
+function ProjectsList({
+  orgId,
+  scopeId,
+  data,
+  loading,
+  canCreate,
+}: Readonly<{ orgId: string; scopeId: string; data: HomeData; loading: boolean; canCreate: boolean }>) {
+  const router = useRouter()
+  const showWelcome = !loading && data.cards.length === 0
+  const serversQuery = useOrgServers(orgId, { enabled: showWelcome && canCreate })
+  if (loading) return <LoadingState />
+  if (showWelcome) {
+    const newProjectHref = newProjectHrefForScope(orgId, scopeId) as Href
+    const serverCount = serversQuery.data ? serversQuery.data.servers.length : null
+    return (
+      <ProjectsWelcomeCard
+        serverCount={serverCount}
+        onAddServer={canCreate ? () => router.push(orgAreaHref(orgId, 'servers') as Href) : undefined}
+        onNewProject={canCreate ? () => router.push(newProjectHref) : undefined}
       />
     )
-  } else {
-    list = (
-      <View style={s.grid}>
-        {cards.map((card) => (
-          <View key={card.id} style={s.cell}>
-            <ProjectHomeCard
-              project={card}
-              workspace={
-                showWorkspaceLabels
-                  ? workspaceNameById.get(projectById.get(card.id)?.workspaceId ?? '')
-                  : undefined
-              }
-              onOpen={() => router.push(projectHref(orgId, card.id) as Href)}
-              onOpenBase={() => router.push(projectBaseHref(orgId, card.id) as Href)}
-              onOpenEnvironment={(environmentId) =>
-                router.push(projectEnvironmentHref(orgId, card.id, environmentId) as Href)
-              }
-            />
-          </View>
-        ))}
-      </View>
-    )
   }
+  return (
+    <ProjectGrid
+      orgId={orgId}
+      cards={data.cards}
+      projects={data.projects}
+      workspaces={data.allWorkspaces}
+      showWorkspaceLabels={scopeId === ALL_WORKSPACES_SCOPE}
+    />
+  )
+}
+
+/**
+ * The Projects home: every project as a layer card (its Base, who runs it,
+ * each environment's status and relation to the Base), the projects you opened
+ * last, and the deploys running now. Only data the app has read is shown.
+ */
+export function ProjectsHomeSection({
+  orgId,
+  workspaceId,
+}: Readonly<{ orgId: string; workspaceId?: string }>) {
+  const s = styles(usePalette())
+  const router = useRouter()
+  const workspaceScope = useOptionalWorkspaceScope()
+  const canOwn = useCan('organization', orgId, 'organization:own')
+  const now = useNow(CLOCK_MS)
+
+  const scopeId = workspaceId ?? workspaceScope?.scopeId ?? ALL_WORKSPACES_SCOPE
+  const showWorkspaceLabels = scopeId === ALL_WORKSPACES_SCOPE
+  const scopeWorkspace = workspaceScope?.scope.workspace
+  const isSystemScope = scopeWorkspace != null && isTurbopanelWorkspace(scopeWorkspace)
+
+  const scoped = useScopedProjects(orgId, scopeId, showWorkspaceLabels)
+  const data = { ...scoped, ...useHomeCards(orgId, scoped.projects, now) }
+  useRefreshHome(data, showWorkspaceLabels)
+
+  const loading = data.projectsQuery.isLoading && data.projects.length === 0
+  const error = queryErrorMessage(data.projectsQuery.error, data.workspacesQuery.error)
+  const canCreate = canOwn && !isSystemScope
+  // While the first-run welcome shows, it carries the New Project button.
+  const welcomeShown = !loading && data.cards.length === 0 && !error
+  const newProjectHref = newProjectHrefForScope(orgId, scopeId) as Href
 
   return (
     <View style={s.root}>
       <PageTitle
         title="Projects"
-        sub={cards.length > 0 ? summaryLine(cards.length, environments.length, runningCount) : undefined}
+        sub={
+          data.cards.length > 0
+            ? summaryLine(data.cards.length, data.environments.length, data.runningCount)
+            : undefined
+        }
         actions={
-          canOwn && !isSystemScope ? (
+          canCreate && !welcomeShown ? (
             <ActionButton label="New project" variant="primary" onPress={() => router.push(newProjectHref)} />
           ) : null
         }
       />
       <WorkspaceSwitcher orgId={orgId} />
       {error ? <Notice tone="bad" title="Could not load projects" body={error} /> : null}
-      <RecentProjects orgId={orgId} projects={cards} environments={environments} />
-      {inProgress.length > 0 ? (
-        <View style={s.section}>
-          <SectionHeading title="Deploys in progress" />
-          <ListGroup>
-            {inProgress.map((row) => {
-              const projectId = row.projectId
-              return (
-                <ListRow
-                  key={row.environmentId}
-                  title={row.title}
-                  sub={row.sub}
-                  chips={<StatusChip status={row.status} size="sm" />}
-                  onPress={() =>
-                    router.push(
-                      environmentPageTabHref(orgId, projectId, row.environmentId, 'deployments') as Href,
-                    )
-                  }
-                />
-              )
-            })}
-          </ListGroup>
-        </View>
-      ) : null}
+      <RecentProjects orgId={orgId} projects={data.cards} environments={data.environments} />
+      <DeploysInProgress orgId={orgId} rows={data.inProgress} />
       <View style={s.section}>
         <SectionHeading title="All projects" />
-        {list}
+        <ProjectsList orgId={orgId} scopeId={scopeId} data={data} loading={loading} canCreate={canCreate} />
       </View>
     </View>
   )

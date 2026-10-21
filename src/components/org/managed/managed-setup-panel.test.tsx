@@ -129,6 +129,23 @@ describe('managed setup panel external access', () => {
     expect(mocks.createRun).not.toHaveBeenCalled()
   })
 
+  it('shows the SSL refusal sentence that names the databases, not the raw status line', async () => {
+    const raw =
+      '/servers/srv-1/managed-external-access failed: HTTP 409: external_access_weak_ssl — These databases on this server still accept connections without SSL: Orders. Set them to Require or stronger before allowing external access.'
+    mocks.saveRun.mockImplementation(async () => ({ ok: false, error: raw, cause: new Error(raw) }))
+    renderPanel()
+    fireEvent.click(screen.getByRole('switch'))
+    fireEvent.click(screen.getByText('Create service'))
+    await waitFor(() =>
+      expect(
+        screen.getByText(
+          'These databases on this server still accept connections without SSL: Orders. Set them to Require or stronger before allowing external access.',
+        ),
+      ).toBeTruthy(),
+    )
+    expect(mocks.createRun).not.toHaveBeenCalled()
+  })
+
   it('falls back to a plain message when the save has no error text', async () => {
     mocks.saveRun.mockImplementation(async () => ({ ok: false, error: null, cause: null }))
     renderPanel()

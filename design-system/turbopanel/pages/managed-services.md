@@ -86,11 +86,14 @@ Topology rows ordered primary first then `ordinal`:
 
 ### Connection (Connect)
 
-- **Write endpoint** = shared ProxySQL `host:port` (protocol port 5432 / 3306 stated plainly)
+- **Write endpoint** = shared ProxySQL `host:port` on the org ingress listener (defaults `127.0.0.1:15432` / `127.0.0.1:13306`, configurable under Managed settings)
 - **Login** = routing username (“the username is how the proxy routes you to this cluster”)
 - **Read endpoint** only when any member is `readEligible` — same host/port
 - TLS: `sslmode=verify-full` required + **Download CA certificate** (never private key)
 - Masked DSN + Copy; pointer to **Connect to a service**
+- When the detail carries `connections[]`: one copyable string per address clients use, labelled `Public: <host>` / `Datacenter <name>: <host>`, main first and marked **(main)** from its `primary` flag, each copy button named by its address; otherwise the single DSN
+- `addressNeeded`: warning line + **Set the address clients use** link to the server's Network tab
+- External access switch Yes hint keeps the safety fact (ports open on all of the server's addresses; the firewall decides who reaches them); while Yes it links to the Addresses clients use card, only where that card can show; it never lists addresses itself
 
 ### Bindings (Connect · Connected services)
 

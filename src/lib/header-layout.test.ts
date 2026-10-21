@@ -10,9 +10,6 @@ describe('headerLayoutFor', () => {
     const result = headerLayoutFor(width, false)
     expect(result.showLogo).toBe(true)
     expect(result.iconOnlyAccount).toBe(true)
-    expect(result.showPageWidthToggle).toBe(false)
-    expect(result.showThemeSwitch).toBe(false)
-    expect(result.themeSwitchInMenu).toBe(true)
     expect(result.showBell).toBe(false)
     expect(result.showOrgGlyph).toBe(false)
   })
@@ -27,26 +24,14 @@ describe('headerLayoutFor', () => {
     const result = headerLayoutFor(768, false)
     expect(result.showLogo).toBe(false)
     expect(result.iconOnlyAccount).toBe(false)
-    expect(result.showPageWidthToggle).toBe(true)
-    expect(result.showThemeSwitch).toBe(true)
-    expect(result.themeSwitchInMenu).toBe(false)
     expect(result.showBell).toBe(true)
     expect(result.showOrgGlyph).toBe(true)
   })
 
   it('keeps the native avatar and header logo on a wide tablet', () => {
     const result = headerLayoutFor(1024, true)
-    expect(result.showPageWidthToggle).toBe(true)
     expect(result.showLogo).toBe(true)
     expect(result.iconOnlyAccount).toBe(true)
-  })
-
-  it('keeps the theme switch off the phone app at every width', () => {
-    for (const width of [390, 1024]) {
-      const result = headerLayoutFor(width, true)
-      expect(result.showThemeSwitch).toBe(false)
-      expect(result.themeSwitchInMenu).toBe(false)
-    }
   })
 })
 

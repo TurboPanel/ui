@@ -15,9 +15,9 @@ describe.each(SCENARIOS)('EmptyPanel ($name)', (scenario) => {
 
   it('is a card with a quiet 36 px mark, a title, a line of why and one action', () => {
     const { container } = render(
-      <EmptyPanel title="No domains yet" body="Until you add one, the site answers at its temporary address." action={<button type="button">Add domain</button>} />,
+      <EmptyPanel title="No hostnames yet" body="Until you add one, the site answers at its temporary address." action={<button type="button">Add domain</button>} />,
     )
-    const title = screen.getByRole('heading', { name: 'No domains yet' })
+    const title = screen.getByRole('heading', { name: 'No hostnames yet' })
     expect(styleOf(title).fontSize).toBe(17)
     expect(screen.getByText(/temporary address/)).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Add domain' })).toBeTruthy()

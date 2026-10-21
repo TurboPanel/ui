@@ -151,6 +151,18 @@ describe('seedComposeForLane', () => {
     })
   })
 
+  it('pins the chosen Node series on an app, and writes latest only when it was chosen', () => {
+    const seed = (nodeVersion: string, lane: 'app' | 'static') =>
+      readServiceTurbopanelExtension(
+        seededService(
+          seedComposeForLane({ source: source(), branch: '', lane, simple: { nodeVersion } }),
+        ).service,
+      )
+    expect(seed('26', 'app')?.nodeVersion).toBe('26')
+    expect(seed('latest', 'app')?.nodeVersion).toBe('latest')
+    expect(seed('26', 'static')?.nodeVersion).toBeUndefined()
+  })
+
   it('writes nothing for empty Simple fields — empty means platform default', () => {
     const { service } = seededService(
       seedComposeForLane({

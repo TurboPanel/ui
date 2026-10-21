@@ -527,7 +527,6 @@ describe('describeBillingRefusal', () => {
 
   it('words checkout, provider and not-configured refusals without showing the code', () => {
     for (const [code, status] of [
-      ['checkout_pending', 409],
       ['stripe_error', 502],
       ['billing_not_configured', 503],
     ] as const) {
@@ -535,6 +534,10 @@ describe('describeBillingRefusal', () => {
       expect(text).toBeTruthy()
       expect(text).not.toContain('_')
     }
+  })
+
+  it('has no dead-end wording for the retired checkout_pending code', () => {
+    expect(describeBillingRefusal(refusal({ error: 'checkout_pending' }, 409))).toBeNull()
   })
 
   it('answers null for anything it does not recognise', () => {

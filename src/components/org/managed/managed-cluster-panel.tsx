@@ -45,6 +45,7 @@ import {
   type ReplicaIneligibleReason,
   type ReplicaServerEligibility,
 } from '@/lib/managed-replica-eligibility'
+import { managedSeriesFailoverSupport } from '@/lib/managed-releases'
 import { formatServerDatacenterNames } from '@/lib/datacenter-list'
 import { buildDatacenterPolicyMap, describeDatacenterTransport } from '@/lib/datacenter-routing'
 import { orEmptyArray } from '@/lib/or-empty-array'
@@ -119,6 +120,8 @@ export function ManagedClusterPanel({
   members,
   recovery,
   managedDisplayName,
+  engine,
+  imageOrSeries,
   canManage,
   busy,
   lastError,
@@ -129,6 +132,8 @@ export function ManagedClusterPanel({
   members: readonly ManagedMemberRecord[]
   recovery?: ManagedRecoveryRecord | null
   managedDisplayName: string
+  engine: string | null
+  imageOrSeries: string | null
   canManage: boolean
   busy: boolean
   lastError?: string | null
@@ -158,6 +163,9 @@ export function ManagedClusterPanel({
   const [forceEscalate, setForceEscalate] = useState(false)
   const [forceGateMessage, setForceGateMessage] = useState<string | null>(null)
   const [working, setWorking] = useState(false)
+  const failoverSupport = managedSeriesFailoverSupport(engine, imageOrSeries)
+  const failoverUnsupportedReason =
+    failoverSupport === 'supported' ? null : failoverSupport
 
   const servers = orEmptyArray(serversQuery.data?.servers)
   const datacenters = orEmptyArray(datacentersQuery.data?.datacenters)
@@ -256,6 +264,10 @@ export function ManagedClusterPanel({
   }
 
   const handleAddReplica = async () => {
+    if (failoverUnsupportedReason) {
+      setError(failoverUnsupportedReason)
+      return
+    }
     if (!selectedServerId) {
       setError('Select a server for the replica.')
       return
@@ -298,6 +310,10 @@ export function ManagedClusterPanel({
   }
 
   const handleConvertToFailover = async (memberId: string) => {
+    if (failoverUnsupportedReason) {
+      setError(failoverUnsupportedReason)
+      return
+    }
     setWorking(true)
     setError(null)
     try {
@@ -459,6 +475,7 @@ export function ManagedClusterPanel({
             onConfirmResync={() => {
               void handleResync(member.id)
             }}
+            failoverUnsupportedReason={failoverUnsupportedReason}
             onConfirmConvert={() => {
               void handleConvertToFailover(member.id)
             }}
@@ -526,6 +543,7 @@ export function ManagedClusterPanel({
           <AddReplicaBlock
             showAdd={showAdd}
             disabled={disabled}
+            failoverUnsupportedReason={failoverUnsupportedReason}
             servers={servers}
             primaryServerId={primary?.serverId ?? null}
             eligibilityById={eligibilityById}
@@ -572,6 +590,7 @@ function ClusterMemberRow({
   onToggleReads,
   onConfirmRemove,
   onConfirmResync,
+  failoverUnsupportedReason,
   onConfirmConvert,
   onStartPromote,
   onStartDisasterRecovery,
@@ -592,6 +611,7 @@ function ClusterMemberRow({
   onToggleReads: () => void
   onConfirmRemove: () => void
   onConfirmResync: () => void
+  failoverUnsupportedReason: string | null
   onConfirmConvert: () => void
   onStartPromote: () => void
   onStartDisasterRecovery: () => void
@@ -642,6 +662,10 @@ function ClusterMemberRow({
       </View>
 
       {canManage && member.role === 'replica' ? (
+        <>
+        {isReadReplica && failoverUnsupportedReason ? (
+          <Text style={panelStyles.muted}>{failoverUnsupportedReason}</Text>
+        ) : null}
         <ButtonRow>
           <Button
             label={member.readEligible ? 'Stop serving reads' : 'Serve read traffic'}
@@ -669,7 +693,7 @@ function ClusterMemberRow({
                 label="Convert to failover"
                 confirmLabel="Confirm convert"
                 prompt="Converts this replica to failover. It must share the primary's datacenter LAN."
-                disabled={disabled}
+                disabled={disabled || failoverUnsupportedReason !== null}
                 onConfirm={onConfirmConvert}
               />
               <Button
@@ -683,6 +707,7 @@ function ClusterMemberRow({
             <Button label="Promote" size="sm" disabled={disabled} onPress={onStartPromote} />
           )}
         </ButtonRow>
+        </>
       ) : null}
     </View>
   )
@@ -964,6 +989,7 @@ function AddReplicaForm({
 function AddReplicaBlock({
   showAdd,
   disabled,
+  failoverUnsupportedReason,
   servers,
   primaryServerId,
   eligibilityById,
@@ -981,6 +1007,7 @@ function AddReplicaBlock({
 }: Readonly<{
   showAdd: boolean
   disabled: boolean
+  failoverUnsupportedReason: string | null
   servers: readonly OrgServerRecord[]
   primaryServerId: string | null
   eligibilityById: ReadonlyMap<string, ReplicaServerEligibility>
@@ -1020,7 +1047,18 @@ function AddReplicaBlock({
     )
   }
 
-  return <Button label="Add replica" disabled={disabled} onPress={onShowAdd} />
+  return (
+    <View style={styles.addClosed}>
+      {failoverUnsupportedReason ? (
+        <Text style={panelStyles.muted}>{failoverUnsupportedReason}</Text>
+      ) : null}
+      <Button
+        label="Add replica"
+        disabled={disabled || failoverUnsupportedReason !== null}
+        onPress={onShowAdd}
+      />
+    </View>
+  )
 }
 
 const styles = StyleSheet.create({
@@ -1119,6 +1157,9 @@ const styles = StyleSheet.create({
   promoteCard: {
     gap: spacing.sm,
     marginTop: spacing.sm,
+  },
+  addClosed: {
+    gap: spacing.xs,
   },
   addBlock: {
     marginTop: spacing.md,

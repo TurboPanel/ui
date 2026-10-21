@@ -65,6 +65,40 @@ describe('useOrgDefaultEnvironmentName', () => {
     )
   })
 
+  it.each([
+    ['loading', undefined, true, false],
+    ['forbidden (null name)', { defaultEnvironmentName: null }, false, false],
+    ['error', undefined, false, true],
+    ['blank name', { defaultEnvironmentName: '  ' }, false, false],
+  ] as const)(
+    'customDefaultEnvironmentName is null while %s',
+    async (_label, data, isLoading, isError) => {
+      useQueryMock.mockReturnValue({
+        data,
+        isLoading,
+        isError,
+      } as UseQueryResult)
+      const useOrgDefaultEnvironmentName = await loadHook()
+      const result = useOrgDefaultEnvironmentName('org-1')
+      expect(result.customDefaultEnvironmentName).toBeNull()
+      expect(result.defaultEnvironmentName).toBe(
+        PLATFORM_DEFAULT_ENVIRONMENT_NAME,
+      )
+    },
+  )
+
+  it('customDefaultEnvironmentName is the trimmed custom name once resolved', async () => {
+    useQueryMock.mockReturnValue({
+      data: { defaultEnvironmentName: ' Staging ' },
+      isLoading: false,
+      isError: false,
+    } as UseQueryResult)
+    const useOrgDefaultEnvironmentName = await loadHook()
+    expect(
+      useOrgDefaultEnvironmentName('org-1').customDefaultEnvironmentName,
+    ).toBe('Staging')
+  })
+
   it('enables the query when orgId is set unless overridden', async () => {
     useQueryMock.mockReturnValue({
       data: undefined,

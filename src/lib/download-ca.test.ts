@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { downloadOrganizationCaPem } from '@/lib/instance-api'
 import * as Clipboard from 'expo-clipboard'
-import { downloadCaBundle, downloadSuccessMessage } from './download-ca'
+import { downloadCaBundle, downloadSuccessMessage, organizationCaFileName } from './download-ca'
 
 vi.mock('@/lib/instance-api', () => ({
   downloadOrganizationCaPem: vi.fn(),
@@ -10,6 +10,8 @@ vi.mock('@/lib/instance-api', () => ({
 vi.mock('expo-clipboard', () => ({
   setStringAsync: vi.fn(),
 }))
+
+const ORG_ID = '019a2b3c-4d5e-7f60-8a7b-9c0d1e2f3a4b'
 
 const SAMPLE_PEM = String.raw`-----BEGIN CERTIFICATE-----
 MIIBTEST
@@ -38,9 +40,9 @@ describe('download-ca', () => {
       vi.stubGlobal('document', { createElement })
       vi.stubGlobal('URL', { createObjectURL, revokeObjectURL })
 
-      await downloadCaBundle()
+      await downloadCaBundle(ORG_ID)
 
-      expect(downloadOrganizationCaPem).toHaveBeenCalledOnce()
+      expect(downloadOrganizationCaPem).toHaveBeenCalledExactlyOnceWith(ORG_ID)
       expect(Clipboard.setStringAsync).toHaveBeenCalledWith(SAMPLE_PEM)
       expect(createElement).toHaveBeenCalledWith('a')
       expect(createObjectURL).toHaveBeenCalledOnce()
@@ -50,7 +52,7 @@ describe('download-ca', () => {
       }
       expect(blobArg.type).toBe('application/x-pem-file')
       expect(anchor.href).toBe('blob:org-ca')
-      expect(anchor.download).toBe('turbopanel-org-ca.pem')
+      expect(anchor.download).toBe(`turbopanel-org-ca-${ORG_ID}.pem`)
       expect(click).toHaveBeenCalledOnce()
       expect(revokeObjectURL).toHaveBeenCalledWith('blob:org-ca')
     })
@@ -61,11 +63,17 @@ describe('download-ca', () => {
       const createObjectURL = vi.fn()
       vi.stubGlobal('URL', { createObjectURL, revokeObjectURL: vi.fn() })
 
-      await downloadCaBundle()
+      await downloadCaBundle(ORG_ID)
 
-      expect(downloadOrganizationCaPem).toHaveBeenCalledOnce()
+      expect(downloadOrganizationCaPem).toHaveBeenCalledExactlyOnceWith(ORG_ID)
       expect(Clipboard.setStringAsync).toHaveBeenCalledWith(SAMPLE_PEM)
       expect(createObjectURL).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('organizationCaFileName', () => {
+    it('names the file after the organization id and keeps the .pem extension', () => {
+      expect(organizationCaFileName(ORG_ID)).toBe(`turbopanel-org-ca-${ORG_ID}.pem`)
     })
   })
 

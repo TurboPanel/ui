@@ -1,32 +1,43 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  contentAlignFor,
   contentMaxWidthFor,
   getPageWidth,
   parsePageWidth,
   setPageWidth,
-  togglePageWidth,
 } from './page-width'
 
 describe('page width', () => {
-  it('reads anything but "wide" as contained', () => {
+  it('keeps left, center and wide, and reads anything else as left', () => {
     expect(parsePageWidth('wide')).toBe('wide')
-    expect(parsePageWidth('contained')).toBe('contained')
-    expect(parsePageWidth(null)).toBe('contained')
-    expect(parsePageWidth('nonsense')).toBe('contained')
+    expect(parsePageWidth('center')).toBe('center')
+    expect(parsePageWidth('left')).toBe('left')
+    expect(parsePageWidth('contained')).toBe('left')
+    expect(parsePageWidth(null)).toBe('left')
+    expect(parsePageWidth('nonsense')).toBe('left')
   })
 
   it('caps contained content and lets wide content fill the room', () => {
-    expect(contentMaxWidthFor('contained', 2400, 1400)).toBe(1400)
-    expect(contentMaxWidthFor('contained', 900, 1400)).toBe(900)
+    expect(contentMaxWidthFor('left', 2400, 1400)).toBe(1400)
+    expect(contentMaxWidthFor('center', 2400, 1400)).toBe(1400)
+    expect(contentMaxWidthFor('left', 900, 1400)).toBe(900)
+    expect(contentMaxWidthFor('center', 900, 1400)).toBe(900)
     expect(contentMaxWidthFor('wide', 2400, 1400)).toBe(2400)
   })
 
-  it('toggles and survives storage that is missing', () => {
-    setPageWidth('contained')
-    togglePageWidth()
+  it('pins left and wide columns to the start and centres only center', () => {
+    expect(contentAlignFor('left')).toBe('flex-start')
+    expect(contentAlignFor('wide')).toBe('flex-start')
+    expect(contentAlignFor('center')).toBe('center')
+  })
+
+  it('switches between the three layouts', () => {
+    setPageWidth('center')
+    expect(getPageWidth()).toBe('center')
+    setPageWidth('wide')
     expect(getPageWidth()).toBe('wide')
-    togglePageWidth()
-    expect(getPageWidth()).toBe('contained')
+    setPageWidth('left')
+    expect(getPageWidth()).toBe('left')
   })
 })
 
@@ -59,8 +70,14 @@ describe('page width storage', () => {
     vi.stubGlobal('localStorage', storage)
     const mod = await freshModule()
     expect(mod.getPageWidth()).toBe('wide')
-    mod.setPageWidth('contained')
-    expect(storage.data.get(KEY)).toBe('contained')
+    mod.setPageWidth('center')
+    expect(storage.data.get(KEY)).toBe('center')
+  })
+
+  it('reads a stored "contained" as left', async () => {
+    vi.stubGlobal('localStorage', memoryStorage('contained'))
+    const mod = await freshModule()
+    expect(mod.getPageWidth()).toBe('left')
   })
 
   it('keeps working when storage throws', async () => {
@@ -73,16 +90,16 @@ describe('page width storage', () => {
       },
     })
     const mod = await freshModule()
-    expect(mod.getPageWidth()).toBe('contained')
-    mod.togglePageWidth()
+    expect(mod.getPageWidth()).toBe('left')
+    mod.setPageWidth('wide')
     expect(mod.getPageWidth()).toBe('wide')
   })
 
   it('keeps working when there is no storage at all', async () => {
     vi.stubGlobal('localStorage', undefined)
     const mod = await freshModule()
-    expect(mod.getPageWidth()).toBe('contained')
-    mod.togglePageWidth()
+    expect(mod.getPageWidth()).toBe('left')
+    mod.setPageWidth('wide')
     expect(mod.getPageWidth()).toBe('wide')
   })
 
@@ -97,7 +114,7 @@ describe('page width storage', () => {
     mod.setPageWidth('wide')
     expect(calls).toBe(1)
     stop()
-    mod.setPageWidth('contained')
+    mod.setPageWidth('left')
     expect(calls).toBe(1)
   })
 })

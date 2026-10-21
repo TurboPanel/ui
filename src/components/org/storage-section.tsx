@@ -26,6 +26,9 @@ import {
   useStorage,
   useUpdateStorageMount,
 } from '@/lib/queries/storage'
+import { FolderNameFields } from '@/components/org/folder-name-fields'
+import { EMPTY_FOLDER_DRAFT, folderBodyFields, folderNameProblem, type FolderNameDraft } from '@/lib/directory-names'
+import { useDirectoryNamesMode } from '@/lib/queries/folders'
 import { BackupSchedulesPanel } from '@/components/org/managed/managed-backup-schedules-panel'
 import { StorageBackupsPanel } from '@/components/org/storage-backups-panel'
 import { backupCopyFor, canBackUpCopy } from '@/lib/storage-backups'
@@ -90,6 +93,9 @@ function useStorageSection({
   const [sourcePath, setSourcePath] = useState('')
   const [destinationPath, setDestinationPath] = useState('')
   const [mountServiceId, setMountServiceId] = useState('')
+  const [folder, setFolder] = useState<FolderNameDraft>(EMPTY_FOLDER_DRAFT)
+  const canManageOrg = useCan('organization', orgId, 'organization:manage')
+  const namesMode = useDirectoryNamesMode(orgId, canManageOrg)
 
   useEffect(() => {
     if (defaultServerId) {
@@ -128,6 +134,11 @@ function useStorageSection({
       setError('Select a service to mount into.')
       return
     }
+    const folderProblem = kind === 'volume' ? folderNameProblem(folder.name) : null
+    if (folderProblem) {
+      setError(folderProblem)
+      return
+    }
     setError(null)
     const provider = locationProviderForKind(kind)
     createMutation.mutate(
@@ -135,6 +146,7 @@ function useStorageSection({
         environmentId,
         kind,
         name: trimmedName,
+        ...(kind === 'volume' ? folderBodyFields(folder, namesMode) : {}),
         copy: {
           provider,
           serverId,
@@ -150,6 +162,7 @@ function useStorageSection({
           setSourcePath('')
           setDestinationPath('')
           setMountServiceId('')
+          setFolder(EMPTY_FOLDER_DRAFT)
           setShowAdd(false)
         },
         onError: () => {
@@ -210,6 +223,8 @@ function useStorageSection({
     setDestinationPath,
     mountServiceId,
     setMountServiceId,
+    folder,
+    setFolder,
     adding: createMutation.isPending,
     handleAdd,
     handleDelete,
@@ -228,6 +243,9 @@ function StorageListStatus({ loading, isEmpty }: Readonly<{ loading: boolean; is
 }
 
 function StorageAddForm({
+  orgId,
+  folder,
+  onFolderChange,
   adding,
   name,
   kind,
@@ -245,6 +263,9 @@ function StorageAddForm({
   onMountServiceIdChange,
   onSubmit,
 }: Readonly<{
+  orgId: string
+  folder: FolderNameDraft
+  onFolderChange: (next: FolderNameDraft) => void
   adding: boolean
   name: string
   kind: StorageKind
@@ -272,6 +293,16 @@ function StorageAddForm({
         placeholder="data"
         editable={!adding}
       />
+      {kind === 'volume' ? (
+        <FolderNameFields
+          orgId={orgId}
+          noun="volume"
+          nameHint={name}
+          draft={folder}
+          onChange={onFolderChange}
+          disabled={adding}
+        />
+      ) : null}
       <FormField label="Kind">
         <SegmentedControl
           options={KIND_OPTIONS}
@@ -498,6 +529,12 @@ function StorageRow({
         <Text style={panelStyles.detailTitle}>{row.name}</Text>
         <Text style={styles.kindBadge}>{KIND_LABELS[row.kind]}</Text>
       </View>
+      {row.kind === 'volume' && row.slug ? (
+        <Text style={panelStyles.muted}>
+          Folder: {row.common ? 'shared' : 'environment'}/volumes/{row.slug}
+          {row.common ? ' · shared across environments' : ''}
+        </Text>
+      ) : null}
       <LocationSummary location={location} servers={servers} />
       {row.mounts.length === 0 ? (
         <Text style={panelStyles.muted}>No service mounts</Text>
@@ -574,6 +611,9 @@ export function StorageSection({
 
       {storage.showAdd && canManage ? (
         <StorageAddForm
+          orgId={orgId}
+          folder={storage.folder}
+          onFolderChange={storage.setFolder}
           adding={storage.adding}
           name={storage.name}
           kind={storage.kind}

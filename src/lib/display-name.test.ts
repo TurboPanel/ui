@@ -127,7 +127,9 @@ describe('normalizeDisplayName / validateDescription / conflict copy', () => {
 })
 
 describe('validateEnvironmentName', () => {
-  it('shares the display-name rule including apostrophes', () => {
-    expect(validateEnvironmentName("O'Reilly")).toBeNull()
+  it('keeps the display-name rules and adds the folder-name rule', () => {
+    expect(validateEnvironmentName('')).toBe('Name is required.')
+    expect(validateEnvironmentName('production')).toBeNull()
+    expect(validateEnvironmentName("O'Reilly")).not.toBeNull()
   })
 })

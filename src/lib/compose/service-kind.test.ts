@@ -3,7 +3,7 @@ import {
   ALLOWED_PHP_EXTENSIONS,
   BASELINE_PHP_EXTENSIONS,
   DEFAULT_DENO_SERIES,
-  DEFAULT_NODE_SERIES,
+  NEWEST_NODE_SERIES,
   DEFAULT_PHP_SERIES,
   ENGINE_PHP_MODES,
   PHP_MODES,
@@ -67,6 +67,11 @@ describe('serviceKind: node', () => {
     expect(parsed?.serviceKind).toBe('node')
     expect(parsed?.framework).toBe('next')
     expect(parsed?.nodeVersion).toBe('24.17.0')
+  })
+
+  it('keeps latest as the deliberate follow-the-server choice', () => {
+    const parsed = parseServiceTurbopanelExtension({ serviceKind: 'node', nodeVersion: 'latest' })
+    expect(parsed?.nodeVersion).toBe('latest')
   })
 
   it('drops an unpinned node version and an unknown framework', () => {
@@ -143,7 +148,8 @@ describe('serviceKind: node', () => {
   })
 
   it('offers only node series the instance supports', () => {
-    expect(SUPPORTED_NODE_SERIES).toContain(DEFAULT_NODE_SERIES)
+    expect(SUPPORTED_NODE_SERIES).toContain(NEWEST_NODE_SERIES)
+    expect(NEWEST_NODE_SERIES).toBe('26')
   })
 
   it('recognizes node as a host-native kind that needs no image or build', () => {

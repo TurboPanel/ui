@@ -5,8 +5,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createAppQueryClient } from '@/lib/query-client'
 import {
   useCreateTlsCertificate,
+  useDeleteOrganizationCaLeaf,
   useDeleteTlsCertificate,
+  useMarkOrganizationCaLeafStale,
+  useOrganizationCaLeaves,
   useOrganizationCaRotation,
+  useRenewOrganizationCaLeaf,
   useRetireOrganizationCa,
   useRotateOrganizationCa,
   useTlsLibrary,
@@ -19,6 +23,10 @@ const {
   fetchOrganizationCaRotation,
   rotateOrganizationCa,
   retireOrganizationCa,
+  fetchOrganizationCaLeaves,
+  renewOrganizationCaLeaf,
+  markOrganizationCaLeafStale,
+  deleteOrganizationCaLeaf,
 } = vi.hoisted(() => ({
   fetchTlsLibrary: vi.fn(),
   createTlsCertificate: vi.fn(),
@@ -26,6 +34,10 @@ const {
   fetchOrganizationCaRotation: vi.fn(),
   rotateOrganizationCa: vi.fn(),
   retireOrganizationCa: vi.fn(),
+  fetchOrganizationCaLeaves: vi.fn(),
+  renewOrganizationCaLeaf: vi.fn(),
+  markOrganizationCaLeafStale: vi.fn(),
+  deleteOrganizationCaLeaf: vi.fn(),
 }))
 
 vi.mock('@/lib/instance-api', async (importOriginal) => {
@@ -38,6 +50,10 @@ vi.mock('@/lib/instance-api', async (importOriginal) => {
     fetchOrganizationCaRotation,
     rotateOrganizationCa,
     retireOrganizationCa,
+    fetchOrganizationCaLeaves,
+    renewOrganizationCaLeaf,
+    markOrganizationCaLeafStale,
+    deleteOrganizationCaLeaf,
   }
 })
 
@@ -193,5 +209,55 @@ describe('tls query hooks', () => {
       error: 'still converging',
       cause: expect.anything(),
     })
+  })
+  it('useOrganizationCaLeaves loads the certificates that need attention, and stays idle when disabled', async () => {
+    fetchOrganizationCaLeaves.mockResolvedValueOnce({
+      leaves: [],
+      dueCount: 0,
+      staleCount: 0,
+      caGeneration: 2,
+      truncated: false,
+    })
+    const { result } = renderHook(() => useOrganizationCaLeaves(orgId), {
+      wrapper: createWrapper(),
+    })
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+    expect(result.current.data?.caGeneration).toBe(2)
+
+    const idle = renderHook(() => useOrganizationCaLeaves(orgId, { enabled: false }), {
+      wrapper: createWrapper(),
+    })
+    expect(idle.result.current.fetchStatus).toBe('idle')
+  })
+
+  it('renew, mark stale and delete call the API and refresh the CA queries', async () => {
+    renewOrganizationCaLeaf.mockResolvedValueOnce({ ok: true, outcome: 'queued', reason: null })
+    markOrganizationCaLeafStale.mockResolvedValueOnce({ ok: true })
+    deleteOrganizationCaLeaf.mockResolvedValueOnce({ ok: true })
+    const client = createAppQueryClient()
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
+
+    const renew = renderHook(() => useRenewOrganizationCaLeaf(orgId), {
+      wrapper: createWrapper(client),
+    })
+    await expect(renew.result.current.run('leaf-1')).resolves.toMatchObject({
+      ok: true,
+      value: { outcome: 'queued' },
+    })
+    const stale = renderHook(() => useMarkOrganizationCaLeafStale(orgId), {
+      wrapper: createWrapper(client),
+    })
+    await expect(stale.result.current.run('leaf-1')).resolves.toMatchObject({ ok: true })
+    const del = renderHook(() => useDeleteOrganizationCaLeaf(orgId), {
+      wrapper: createWrapper(client),
+    })
+    await expect(del.result.current.run('leaf-1')).resolves.toMatchObject({ ok: true })
+
+    expect(renewOrganizationCaLeaf.mock.calls[0]?.[0]).toBe('leaf-1')
+    expect(markOrganizationCaLeafStale.mock.calls[0]?.[0]).toBe('leaf-1')
+    expect(deleteOrganizationCaLeaf.mock.calls[0]?.[0]).toBe('leaf-1')
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['org', orgId, 'tls', 'ca', 'leaves'] })
   })
 })

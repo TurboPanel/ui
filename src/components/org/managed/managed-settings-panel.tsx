@@ -18,7 +18,9 @@ import { panelStyles } from '@/components/ui/panel-styles'
 import { ManagedSslModePicker } from '@/components/org/managed/managed-ssl-mode-picker'
 import { ManagedExternalAccessSwitch } from '@/components/org/managed/managed-external-access-switch'
 import {
+  MANAGED_SSL_EXTERNAL_ACCESS_REASON,
   managedSslInheritLabel,
+  resolveManagedSslMode,
   type ManagedSslMode,
 } from '@/lib/managed-ssl'
 import {
@@ -31,6 +33,7 @@ import {
   managedErrorMessage,
   type ManagedExternalAccessView,
   type ManagedSettings,
+  managedStoredImage,
 } from '@/lib/managed-services'
 import { useCan } from '@/lib/query-client'
 import { useSaveServerManagedExternalAccess } from '@/lib/queries/managed'
@@ -77,7 +80,8 @@ type SettingsForm = {
   backupRetentionKeep: string
 }
 
-function settingsToForm(settings: ManagedSettings, defaultImage: string): SettingsForm {
+/** Exported for tests. */
+export function settingsToForm(settings: ManagedSettings, storedImage: string): SettingsForm {
   const labels = Object.entries(settings.dockerOptions?.labels ?? {}).map(
     ([key, value]) => createKvRow(key, value),
   )
@@ -85,7 +89,7 @@ function settingsToForm(settings: ManagedSettings, defaultImage: string): Settin
     ([key, value]) => createKvRow(key, value),
   )
   return {
-    image: settings.image ?? defaultImage,
+    image: storedImage,
     sslMode: settings.ssl.mode ?? null,
     engineConfig: settings.engineConfig ?? '',
     restart: settings.dockerOptions?.restart ?? 'unless-stopped',
@@ -137,8 +141,9 @@ type BuildSettingsResult =
   | { ok: false; error: string }
 
 /** Pure validation + payload construction, pulled out of the component so
- * `apply()` stays a flat couple of statements instead of nested branches. */
-function buildManagedSettingsPayload(form: SettingsForm): BuildSettingsResult {
+ * `apply()` stays a flat couple of statements instead of nested branches.
+ * Exported for tests. */
+export function buildManagedSettingsPayload(form: SettingsForm): BuildSettingsResult {
   if (form.engineConfig.length > ENGINE_CONFIG_MAX) {
     return {
       ok: false,
@@ -348,7 +353,9 @@ function ExternalAccessRow({
   const save = useSaveServerManagedExternalAccess(orgId)
   return (
     <>
-      {save.actionError ? <Text style={panelStyles.error}>{save.actionError}</Text> : null}
+      {save.actionError ? (
+        <Text style={panelStyles.error}>{managedErrorMessage(save.error, save.actionError)}</Text>
+      ) : null}
       <ManagedExternalAccessSwitch
         serverName={showName ? server.name : undefined}
         value={server.enabled}
@@ -356,6 +363,7 @@ function ExternalAccessRow({
         pending={server.pending}
         disabled={disabled || !canEdit}
         busy={save.isPending}
+        addresses={{ orgId, serverId: server.id }}
         onChange={(enabled) => {
           void save.run({ serverId: server.id, enabled })
         }}
@@ -399,6 +407,7 @@ function SettingsFormBody({
   imageOptions,
   versionLabel,
   organizationSslMode,
+  externalAccessOn,
   onApply,
 }: Readonly<{
   form: SettingsForm
@@ -412,6 +421,8 @@ function SettingsFormBody({
   versionLabel: string | null
   /** Org default the inherit row resolves to; `null` falls back to the platform mode. */
   organizationSslMode: ManagedSslMode | null
+  /** A server serving this database allows external access: SSL is required. */
+  externalAccessOn: boolean
   onApply: () => void
 }>) {
   return (
@@ -439,6 +450,8 @@ function SettingsFormBody({
       <ManagedSslModePicker
         value={form.sslMode}
         inheritLabel={managedSslInheritLabel(organizationSslMode)}
+        inheritMode={resolveManagedSslMode(null, organizationSslMode)}
+        weakModesDisabledReason={externalAccessOn ? MANAGED_SSL_EXTERNAL_ACCESS_REASON : null}
         disabled={disabled}
         onSelect={(sslMode) => setForm((current) => ({ ...current, sslMode }))}
       />
@@ -558,23 +571,20 @@ export function ManagedSettingsPanel({
   onApply: (next: ManagedSettings) => Promise<void>
 }>) {
   const catalog = engineCode ? managedCatalogEntryForCode(engineCode) : undefined
-  const defaultImage = catalog?.defaultImage ?? ''
+  // An imageless stored service runs the legacy default, never the new one.
+  const storedImage = managedStoredImage(catalog, settings.image)
   // Series changes are refused by the control plane (`managed_series_immutable`),
   // so only offer other base-OS variants of the version already running.
-  const imageOptions = managedVariantImagesForImage(
-    engineCode,
-    settings.image ?? defaultImage,
-  )
-  const versionLabel =
-    describeManagedImage(settings.image ?? defaultImage)?.series ?? null
+  const imageOptions = managedVariantImagesForImage(engineCode, storedImage)
+  const versionLabel = describeManagedImage(storedImage)?.series ?? null
   const [expanded, setExpanded] = useState(false)
-  const [form, setForm] = useState(() => settingsToForm(settings, defaultImage))
+  const [form, setForm] = useState(() => settingsToForm(settings, storedImage))
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    setForm(settingsToForm(settings, defaultImage))
-  }, [settings, defaultImage])
+    setForm(settingsToForm(settings, storedImage))
+  }, [settings, storedImage])
 
   const apply = async () => {
     const result = buildManagedSettingsPayload(form)
@@ -628,6 +638,7 @@ export function ManagedSettingsPanel({
           imageOptions={imageOptions}
           versionLabel={versionLabel}
           organizationSslMode={organizationSslMode}
+          externalAccessOn={(externalAccess?.servers ?? []).some((server) => server.enabled)}
           onApply={() => {
             void apply()
           }}

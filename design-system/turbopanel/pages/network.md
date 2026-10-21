@@ -83,12 +83,14 @@ Product name from `TURBOFABRIC_PRODUCT_NAME` — never “tp0 fabric” or “th
 
 ## Server detail Network tab
 
-Display-only. One `InlineNotice` (`info`) at the top: **TurboPanel observes host interfaces, it does not configure them** — addresses are expected to change; pins follow the host automatically when exactly one unambiguous replacement is reported, otherwise they go stale rather than guess. No affordance on this tab may imply TurboPanel can bring an interface up, assign an address, or write a route.
+**Addresses clients use** comes first (`ServerAddressesCard`): the one editable card on the tab, and it only records what clients are told to dial (a DNS name, a router address, router ports, which row fills the main connection string). Its hint says it does not change the server's own network settings. One row for Public and one per datacenter; editing is gated by `useCan('server', serverId, 'organization:manage')`; the card hides itself when the read answers 404 (older control plane) or 403. Copy rules: card title exactly "Addresses clients use"; plain questions in the dialog; no per-address database checkbox (the "Allow external access" switch is the only on/off control).
+
+Everything below it is display-only. One `InlineNotice` (`info`) at the top: **TurboPanel observes host interfaces, it does not configure them** — addresses are expected to change; pins follow the host automatically when exactly one unambiguous replacement is reported, otherwise they go stale rather than guess. No affordance on this tab may imply TurboPanel can bring an interface up, assign an address, or write a route.
 
 - **Interfaces** is the centre: `groupReportedAddresses` groups the daemon's `ips[]` by `interface` (default-route interface first; fallback to public/private × v4/v6 when no interface name is reported); each address shows its reported CIDR, family badge, scope, the `default route` marker, and **Pinned into: <datacenter>** lines joined on address from the already-fetched `scope: 'datacenter'` rows (`indexPinsByAddress`). No per-interface fetch.
 - **Stale** `Badge` (`pending`) on any pin whose `IpRecord.stale` is true, with `staleSince` and `stalePinReasonLabel(staleReason)` (`address_gone_no_candidate` → “no replacement address was reported”; `address_gone_ambiguous` → “more than one candidate address, so nothing was guessed”). Never colour-only.
 - Datacenters panel: each membership links to datacenter detail; list **every** `scope: 'datacenter'` pin for this host (IPv4/IPv6 badge + datacenter label + stale note — dual-stack / multi-subnet hosts are not truncated to one address). Mesh membership via `networkFabricHref` (**manage-gated** `useOrgFabric` — permission copy when the viewer cannot manage). No duplicate assignment UI.
-- Queries stay `datacenterIpsQuery` + `serverManagedIpsQuery` — nothing new.
+- Queries stay `datacenterIpsQuery` + `serverManagedIpsQuery`, plus the card's single `useServerAddresses` read.
 
 ## Anti-patterns
 
@@ -98,7 +100,7 @@ Display-only. One `InlineNotice` (`info`) at the top: **TurboPanel observes host
 - ❌ Rendering `presharedKey` on relays
 - ❌ DO polling for Apply status — use `useCommandsBatch`
 - ❌ Duplicate datacenter-assignment controls on the server Network tab
-- ❌ Any control on the server Network tab that implies configuring an interface, address, or route
+- ❌ Any control on the server Network tab that implies configuring an interface, address, or route (the Addresses clients use card says what clients dial; it never assigns an address to the host)
 - ❌ Sending top-level `cidr` **and** `options.subnet` on a Docker registration
 - ❌ Rendering blank pool fields as if Docker had no defaults
 - ❌ A second copy of a collision sentence outside `network-error-copy.ts`

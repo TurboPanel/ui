@@ -36,6 +36,8 @@ type HeaderMenuOverlayProps = Readonly<{
   presentation: HeaderMenuPresentation
   /** Absolute position for desktop dropdown menus. */
   dropdownPosition?: Readonly<{ top: number; left: number }>
+  /** Panel width; compact panels shrink to the window minus a 12px gap each side. */
+  menuWidth?: number
   children: ReactNode
 }>
 
@@ -76,6 +78,7 @@ export function HeaderMenuOverlay({
   closeAccessibilityLabel,
   presentation,
   dropdownPosition,
+  menuWidth,
   children,
 }: HeaderMenuOverlayProps) {
   const insets = useSafeAreaInsets()
@@ -108,7 +111,10 @@ export function HeaderMenuOverlay({
   }
 
   const compact = presentation !== 'dropdown'
-  const rightPanelWidth = Math.min(320, Math.max(280, windowWidth * 0.86))
+  const rightPanelWidth =
+    menuWidth == null
+      ? Math.min(320, Math.max(280, windowWidth * 0.86))
+      : Math.min(menuWidth, windowWidth - 24)
 
   let panelWrapStyle
   if (presentation === 'fromTop') {
@@ -137,7 +143,7 @@ export function HeaderMenuOverlay({
       {
         top: dropdownPosition?.top ?? 56,
         left: dropdownPosition?.left ?? 16,
-        width: HEADER_MENU_WIDTH,
+        width: menuWidth ?? HEADER_MENU_WIDTH,
       },
     ]
   }

@@ -19,13 +19,7 @@ import {
 } from './change-labels'
 import { isAppService } from './service-roles'
 import { plural } from './text'
-import type {
-  ConfigChangeRow,
-  ConfigSource,
-  EnvConfigSource,
-  FlatConfig,
-  V4Service,
-} from './types'
+import type { ConfigChangeRow, ConfigSource, EnvConfigSource, FlatConfig, V4Service } from './types'
 
 /** Variables with these words in the name are shown masked by default. */
 const SECRET_NAME_RE = /KEY|SECRET|TOKEN|PASSWORD/
@@ -35,10 +29,7 @@ export function isSecretVariableName(name: string): boolean {
 }
 
 /** The values an environment runs with. */
-export function environmentValues(
-  base: FlatConfig,
-  source: EnvConfigSource,
-): FlatConfig {
+export function environmentValues(base: FlatConfig, source: EnvConfigSource): FlatConfig {
   if (source.standsAlone) return source.values
   const values: Record<string, string> = { ...base }
   for (const change of source.changes) {
@@ -68,7 +59,7 @@ function changeRow(
   input: EnvironmentChangesInput,
   key: string,
   baseValue: string | undefined,
-  envValue: string | undefined,
+  envValue: string | undefined
 ): ConfigChangeRow {
   const info = describeConfigKey(key, input.services)
   return {
@@ -91,13 +82,11 @@ function changeRow(
  * What this environment does differently from the Base, one row per key.
  * A stand-alone environment is compared value by value.
  */
-export function environmentChanges(
-  input: EnvironmentChangesInput,
-): ConfigChangeRow[] {
+export function environmentChanges(input: EnvironmentChangesInput): ConfigChangeRow[] {
   const { base, source } = input
   if (!source.standsAlone) {
     return source.changes.map((change) =>
-      changeRow(input, change.key, base[change.key], change.value ?? undefined),
+      changeRow(input, change.key, base[change.key], change.value ?? undefined)
     )
   }
   return allKeys(base, source.values)
@@ -143,13 +132,12 @@ export type EffectiveApp = Readonly<{
 
 export type EffectiveConfig = Readonly<{
   envName: string
-  followsBase: boolean
   standsAlone: boolean
   changes: readonly ConfigChangeRow[]
   changeCount: number
   changeText: string
   hasChanges: boolean
-  /** "Follows the Base · 2 changes" or "Stands alone". */
+  /** "2 changes from the Base", "Same as the Base" or "Stands alone". */
   relationText: string
   /** "Only changes from Base (2)". */
   onlyChangesLabel: string
@@ -163,11 +151,7 @@ export type EffectiveConfigInput = EnvironmentChangesInput &
     variableScopes?: Readonly<Record<string, string>>
   }>
 
-function rowSource(
-  standsAlone: boolean,
-  changed: ReadonlySet<string>,
-  key: string,
-): ConfigSource {
+function rowSource(standsAlone: boolean, changed: ReadonlySet<string>, key: string): ConfigSource {
   if (standsAlone) return 'own'
   return changed.has(key) ? 'env' : 'base'
 }
@@ -177,7 +161,7 @@ function buildRow(
   values: FlatConfig,
   changed: ReadonlySet<string>,
   key: string,
-  label: string,
+  label: string
 ): ConfigRow {
   const source = rowSource(input.source.standsAlone, changed, key)
   const value = valueText(values[key])
@@ -188,20 +172,17 @@ function buildRow(
     value,
     baseValue,
     source,
-    sourceLabel: sourceLabel(source, input.envName, isVariableKey(key)),
+    sourceLabel: sourceLabel(source, input.envName),
     isChange: source === 'env',
     differs: value !== baseValue,
-    sourceNote:
-      source === 'env'
-        ? `Base: ${baseValue} · ${input.envName}: ${value}`
-        : '',
+    sourceNote: source === 'env' ? `Base: ${baseValue} · ${input.envName}: ${value}` : '',
   }
 }
 
 function appChangeText(
   envName: string,
   standsAlone: boolean,
-  mine: readonly ConfigChangeRow[],
+  mine: readonly ConfigChangeRow[]
 ): string {
   if (mine.length > 0) {
     return `${envName} changes: ${mine.map((change) => change.short).join(', ')}`
@@ -214,14 +195,14 @@ function buildApp(
   values: FlatConfig,
   changed: ReadonlySet<string>,
   changes: readonly ConfigChangeRow[],
-  service: V4Service,
+  service: V4Service
 ): EffectiveApp {
   const prefix = serviceConfigKey(service.id, '')
   const { standsAlone } = input.source
   const rows = allKeys(input.base, values)
     .filter((key) => key.startsWith(prefix) && key in values)
     .map((key) =>
-      buildRow(input, values, changed, key, describeConfigKey(key, input.services).label),
+      buildRow(input, values, changed, key, describeConfigKey(key, input.services).label)
     )
   const mine = changes.filter((change) => change.serviceId === service.id)
   const isChange = mine.length > 0 && !standsAlone
@@ -245,7 +226,7 @@ function buildVariable(
   input: EffectiveConfigInput,
   values: FlatConfig,
   changed: ReadonlySet<string>,
-  key: string,
+  key: string
 ): EffectiveVariable {
   const name = key.slice('var:'.length)
   const row = buildRow(input, values, changed, key, name)
@@ -280,7 +261,6 @@ export function effectiveConfig(input: EffectiveConfigInput): EffectiveConfig {
     .map((key) => buildVariable(input, values, changed, key))
   return {
     envName: input.envName,
-    followsBase: !standsAlone,
     standsAlone,
     changes,
     changeCount: changes.length,
@@ -294,11 +274,6 @@ export function effectiveConfig(input: EffectiveConfigInput): EffectiveConfig {
 }
 
 /** Short names of the settings an app changes, for map tags. */
-export function changedShorts(
-  changes: readonly ConfigChangeRow[],
-  serviceId: string,
-): string[] {
-  return changes
-    .filter((change) => change.serviceId === serviceId)
-    .map((change) => change.short)
+export function changedShorts(changes: readonly ConfigChangeRow[], serviceId: string): string[] {
+  return changes.filter((change) => change.serviceId === serviceId).map((change) => change.short)
 }

@@ -4,15 +4,19 @@
 # first merge, which brings this file into live, already works).
 #
 #   1. resolve  the merged PR and the newest rc that has not shipped (from the
-#               tags, never a version file) — that rc's bytes become the release
+#               tags) — that rc's bytes become the release
 #   2. prepare / publish / finalize   the shared promote workflows
 #               (TurboPanel/dev). prepare still waits on the `release`
 #               environment approval: keep it until this path has run once end
 #               to end, then drop it (`approval-environment: ""`).
-#
-# Nothing opens a "Start <next>" PR afterwards: once v<version> exists, the
-# next canary is <version>'s next patch by itself (versions come from tags;
-# minors and majors are started with turbopaneld's Start Next Version).
+#   3. start-version-pr   once v<version> exists, the next version from the
+#               tags is its next patch: the Release App opens the PR
+#               "chore: start <next>" (TurboPanel/dev's Start Version PR) that
+#               moves package.json and the other committed version numbers on.
+#               It merges itself once its checks pass (auto-merge); until
+#               then canaries are refused (scripts/set-version.mjs --check). Minors and majors are
+#               started with turbopaneld's Start Next Version, which opens the
+#               same PR.
 #
 # A push to live that is not a merged staging PR (a break-glass promotion, the
 # finalize fast-forward) does nothing. workflow_dispatch re-runs the release
@@ -148,3 +152,62 @@ jobs:
       manifest-filename: ${{ needs.prepare.outputs.manifest-filename }}
     # The environment signing secret only reaches the called workflow when the caller passes secrets down.
     secrets: inherit
+
+  start-version-pr:
+    # Right after the release: open the "chore: start <next patch>" PR that
+    # moves the committed version numbers on. It merges itself once its checks
+    # pass; until then canaries are refused. The PR and its commit are made with the Release App
+    # token (GitHub signs the commit), never the GITHUB_TOKEN. This job's two
+    # dev actions are pinned on their own, apart from the promote chain above.
+    needs: [prepare, finalize]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read # the tags
+    steps:
+      - name: Mint a Release App token
+        id: app
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          repositories: ${{ github.event.repository.name }}
+
+      # v<released> exists now, so the base is its next patch.
+      - name: Work out the next version from the tags
+        id: next
+        uses: TurboPanel/dev/.github/actions/version@fbb7c467f5d403a577e62864c6c1a6b30be661cd # dev#69
+        with:
+          mode: base
+
+      - name: Require the tags to show the release just made
+        env:
+          RELEASED: ${{ needs.prepare.outputs.version }}
+          NEWEST: ${{ steps.next.outputs.release }}
+          NEXT: ${{ steps.next.outputs.base }}
+        run: |
+          set -eu
+          if [ "$NEWEST" != "$RELEASED" ]; then
+            echo "::error::the tags say the newest release is '$NEWEST', not v$RELEASED that was just released; open the chore: start PR by hand (node scripts/set-version.mjs <next> in a PR)"
+            exit 1
+          fi
+          case "$NEXT" in
+            [0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "::error::could not work out the next version from the tags (got '$NEXT')"; exit 1 ;;
+          esac
+          echo "v$RELEASED released; the next version is $NEXT"
+
+      - name: Open the start PR for the next version
+        id: pr
+        uses: TurboPanel/dev/.github/actions/start-version-pr@fbb7c467f5d403a577e62864c6c1a6b30be661cd # dev#69
+        with:
+          version: ${{ steps.next.outputs.base }}
+          github-token: ${{ steps.app.outputs.token }}
+          reason: It was opened after v${{ needs.prepare.outputs.version }} was released.
+          # Merges itself once its checks pass; canaries wait until then.
+          auto-merge: "true"
+
+      - name: Report the start PR
+        env:
+          PR_URL: ${{ steps.pr.outputs.pr-url }}
+        run: |
+          echo "start PR: ${PR_URL:-none (already at the next version)}"

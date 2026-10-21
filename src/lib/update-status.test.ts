@@ -347,8 +347,8 @@ const OLD_CONSOLE = { version: '0.1.4', commit: 'ui00000' }
 describe('updateBanner', () => {
   it('offers an available self-hosted update, naming the piece and its version', () => {
     const banner = updateBanner({ updates: updates(), activeRun: false, dismissedKey: null })
-    expect(banner?.title).toBe('Update available: control plane v0.1.2')
-    expect(banner?.body).toBe('Updates the control plane together.')
+    expect(banner?.title).toBe('TurboPanel update available: control plane v0.1.2')
+    expect(banner?.body).toBe('This updates the control plane (the part that runs TurboPanel). Choose Update to review it first; nothing changes until you confirm. This page may briefly show “TurboPanel is updating” while it restarts.')
     expect(banner?.key).toBe('control plane|canary|0.1.2|abc1234def|20260927-180000-abc1234')
   })
 
@@ -360,10 +360,10 @@ describe('updateBanner', () => {
       consoleBuild: OLD_CONSOLE,
     })
     expect(banner?.title).toBe(
-      'Update available: control plane v0.1.5-canary.1, web app v0.1.5-canary.2, daemon v0.1.6-canary.3'
+      'TurboPanel update available: control plane v0.1.5-canary.1, web interface v0.1.5-canary.2, daemon v0.1.6-canary.3'
     )
     expect(banner?.body).toBe(
-      'Updates the control plane, the web app and the daemon on every server together.'
+      'This updates the control plane (the part that runs TurboPanel), the web interface (the pages you are using now) and the daemon (the software on each of your servers). Choose Update to review it first; nothing changes until you confirm. This page may briefly show “TurboPanel is updating” while it restarts.'
     )
   })
 
@@ -371,19 +371,19 @@ describe('updateBanner', () => {
     const data = allThree()
     data.units.instance.updateAvailable = false
     const banner = updateBanner({ updates: data, activeRun: false, dismissedKey: null })
-    expect(banner?.title).toBe('Update available: daemon v0.1.6-canary.3')
-    expect(banner?.body).toBe('Updates the daemon on every server together.')
+    expect(banner?.title).toBe('TurboPanel update available: daemon v0.1.6-canary.3')
+    expect(banner?.body).toBe('This updates the daemon (the software on each of your servers). Choose Update to review it first; nothing changes until you confirm.')
   })
 
-  it('lists the web app only when this app differs from the one the channel serves', () => {
+  it('lists the web interface only when this app differs from the one the channel serves', () => {
     const data = allThree()
     const current = { version: '0.1.5', commit: 'ui22222' }
     expect(
       updateBanner({ updates: data, activeRun: false, dismissedKey: null, consoleBuild: current })
         ?.title
-    ).toBe('Update available: control plane v0.1.5-canary.1, daemon v0.1.6-canary.3')
+    ).toBe('TurboPanel update available: control plane v0.1.5-canary.1, daemon v0.1.6-canary.3')
     expect(updateBanner({ updates: data, activeRun: false, dismissedKey: null })?.title).toBe(
-      'Update available: control plane v0.1.5-canary.1, daemon v0.1.6-canary.3'
+      'TurboPanel update available: control plane v0.1.5-canary.1, daemon v0.1.6-canary.3'
     )
   })
 
@@ -391,7 +391,7 @@ describe('updateBanner', () => {
     const data = allThree()
     data.units.daemon.connected = false
     expect(updateBanner({ updates: data, activeRun: false, dismissedKey: null })?.title).toBe(
-      'Update available: control plane v0.1.5-canary.1'
+      'TurboPanel update available: control plane v0.1.5-canary.1'
     )
   })
 
@@ -434,7 +434,7 @@ describe('updateBanner', () => {
     const newerDaemon = allThree()
     newerDaemon.units.daemon.target = build('0.1.6-canary.4', 'dm44444')
     expect(updateBanner({ ...input, updates: newerDaemon, dismissedKey: dismissed })?.title).toBe(
-      'Update available: control plane v0.1.5-canary.1, web app v0.1.5-canary.2, daemon v0.1.6-canary.4'
+      'TurboPanel update available: control plane v0.1.5-canary.1, web interface v0.1.5-canary.2, daemon v0.1.6-canary.4'
     )
     const newerUi = allThree()
     newerUi.units.instance.uiTarget = build('0.1.5-canary.3', 'ui33333')
