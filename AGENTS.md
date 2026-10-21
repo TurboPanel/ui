@@ -345,7 +345,7 @@ Two palettes (v4 "Navy & Tee"): **Navy** (dark) and **Paper** (light), defined o
 
 ### Console surfaces and shared patterns (web)
 
-Plans and roadmaps live outside the repo. The console overhaul roadmap is the [TurboPanel UI Roadmap](https://claude.ai/artifact/7w9zHNNQeNXaFUJa9YDxH4) artifact.
+Plans and roadmaps live outside the repo, in the Master Sheet.
 
 **Compose parity (docker-compose projects):** service settings panel, variable deploy flags (`isLiteral` / build / runtime), hosting proxy toggles, optional health-check policy (`disabled` default — compose/`image` HEALTHCHECK is enough when present; `warn`/`required` are opt-in gates), storage registry UI, project principals, org/server resource limits API — see `design-system/turbopanel/pages/service-settings.md`.
 
