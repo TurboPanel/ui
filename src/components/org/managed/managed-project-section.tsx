@@ -613,6 +613,7 @@ function ManagedEnvironmentReadyPanels({
         <ManagedDataPanels
           orgId={orgId}
           environmentId={environmentId}
+          engine={managed.engine}
           rootUsername={detail.rootUsername}
           databases={databases}
           users={users}
@@ -740,6 +741,7 @@ function ManagedEnvironmentReadyPanels({
 function ManagedDataPanels({
   orgId,
   environmentId,
+  engine,
   rootUsername,
   databases,
   users,
@@ -757,6 +759,7 @@ function ManagedDataPanels({
 }: Readonly<{
   orgId: string
   environmentId: string
+  engine: string | null
   rootUsername: string | null
   databases: string[]
   users: ManagedUserRecord[]
@@ -797,6 +800,7 @@ function ManagedDataPanels({
       <ManagedUsersPanel
         orgId={orgId}
         environmentId={environmentId}
+        engine={engine}
         databases={databases}
         users={users}
         canManage={canManage}

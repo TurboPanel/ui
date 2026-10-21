@@ -376,6 +376,18 @@ describe('instance-api managed-engine fetch wrappers', () => {
     )
   })
 
+  it('sends straightThrough true, false and null on the wire', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, user: {}, password: 'p' }))
+    await createManagedUser('env-1', { username: 'a', databases: ['app'], straightThrough: true })
+    expect(lastJsonBody()).toMatchObject({ straightThrough: true })
+    for (const value of [false, null]) {
+      fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
+      await updateManagedUser('env-1', 'p1', { straightThrough: value })
+      expect(lastFetch().init.method).toBe('PATCH')
+      expect(lastJsonBody()).toEqual({ straightThrough: value })
+    }
+  })
+
   it('createManagedUser surfaces 422 managed_no_read_targets', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ error: MANAGED_NO_READ_TARGETS_ERROR }, 422))
     await expect(

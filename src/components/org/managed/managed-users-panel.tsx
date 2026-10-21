@@ -11,6 +11,11 @@ import {
   TextField,
 } from '@/components/ui'
 import {
+  LoginStraightThroughEditor,
+  NewLoginStraightThroughField,
+} from '@/components/org/managed/managed-login-straight-through'
+import { newLoginStraightThroughPayload } from '@/lib/managed-straight-through'
+import {
   LoginLimitBadges,
   LoginLimitsEditor,
   LoginLimitsFields,
@@ -112,6 +117,7 @@ function RedeployServicesPanel({
 export function ManagedUsersPanel({
   orgId,
   environmentId,
+  engine,
   databases,
   users,
   canManage,
@@ -127,6 +133,8 @@ export function ManagedUsersPanel({
 }: Readonly<{
   orgId: string
   environmentId: string
+  /** Engine code of the cluster; the straight-through switch is PostgreSQL only. */
+  engine?: string | null
   databases: string[]
   users: ManagedUserRecord[]
   canManage: boolean
@@ -142,6 +150,7 @@ export function ManagedUsersPanel({
     tool: boolean
     allowedSources?: string[]
     maxConnections?: number
+    straightThrough?: boolean
     nameScheme?: NameScheme
   }) => Promise<{ password: string; appliedUsername?: string } | null>
   onDeleteUser: (loginId: string) => Promise<void>
@@ -167,6 +176,8 @@ export function ManagedUsersPanel({
   const [toolBeforeAdmin, setToolBeforeAdmin] = useState(false)
   const [limits, setLimits] = useState<LoginLimitsDraft>(EMPTY_LIMITS_DRAFT)
   const [limitsProblem, setLimitsProblem] = useState<string | null>(null)
+  // null = the owner has not touched the switch, so the default for the chosen level shows.
+  const [straightChoice, setStraightChoice] = useState<boolean | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [usernameHint, setUsernameHint] = useState<string | null>(null)
   const [working, setWorking] = useState(false)
@@ -279,6 +290,7 @@ export function ManagedUsersPanel({
         tool,
         ...(allowedSources ? { allowedSources } : {}),
         ...(maxConnections ? { maxConnections } : {}),
+        ...newLoginStraightThroughPayload(engine, straightChoice, allowedSources !== null),
         nameScheme: nameScheme.requestScheme,
       })
       if (result?.password) {
@@ -292,6 +304,7 @@ export function ManagedUsersPanel({
       setTool(false)
       setAdmin(false)
       setLimits(EMPTY_LIMITS_DRAFT)
+      setStraightChoice(null)
       nameScheme.reset()
       await onReload()
     } catch (err) {
@@ -484,6 +497,15 @@ export function ManagedUsersPanel({
                 </Text>
               )}
               {canManage ? (
+                <LoginStraightThroughEditor
+                  engine={engine}
+                  user={user}
+                  disabled={disabled}
+                  onUpdate={onUpdateUser}
+                  onError={setError}
+                />
+              ) : null}
+              {canManage ? (
                 <LoginModeEditor
                   user={user}
                   disabled={disabled}
@@ -627,6 +649,14 @@ export function ManagedUsersPanel({
             disabled={disabled}
           />
           {limitsProblem ? <Text style={panelStyles.error}>{limitsProblem}</Text> : null}
+          <NewLoginStraightThroughField
+            engine={engine}
+            choice={straightChoice}
+            privileges={[admin ? MANAGED_ADMIN_PRIVILEGE : job]}
+            limited={limits.limited}
+            disabled={disabled}
+            onChange={setStraightChoice}
+          />
           <Button
             label="Create user"
             variant="primary"
