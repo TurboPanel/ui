@@ -17,6 +17,7 @@ import { panelStyles } from '@/components/ui/panel-styles'
 import type { InstanceUpdates } from '@/lib/instance-api'
 import { HA_PRODUCT_NAME } from '@/lib/platform-copy'
 import {
+  fleetProgressText,
   offlineWaitingNotice,
   runWaitsOnlyOnOffline,
   summarizeFleetSteps,
@@ -80,7 +81,7 @@ export function HighAvailabilityUpdates({ data }: Readonly<{ data: InstanceUpdat
               label="Cancel update"
               confirmLabel="Yes, cancel the update"
               dismissLabel="No, keep it"
-              prompt="Stop this update? Updated daemons stay; pending ones are skipped."
+              prompt="Stop this update? Servers that already updated stay updated, and ones that have not started are skipped. A server already installing is not stopped and finishes on its own. The next update starts against the current build."
               busy={cancelRun.isPending}
               onConfirm={() => {
                 setNotice(null)
@@ -101,7 +102,7 @@ export function HighAvailabilityUpdates({ data }: Readonly<{ data: InstanceUpdat
         >
           <Text style={panelStyles.pageCopy}>
             {fleetSummary.total > 0
-              ? `${fleetSummary.upToDate} of ${fleetSummary.total} connected daemons up to date`
+              ? fleetProgressText(fleetSummary, 'connected daemons')
               : 'Waiting for servers to start updating.'}
           </Text>
           {waitingOffline ? <InlineNotice tone="info" title={waitingOffline} /> : null}

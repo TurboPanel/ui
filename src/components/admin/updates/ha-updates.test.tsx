@@ -190,7 +190,7 @@ describe('HighAvailabilityUpdates', () => {
           status: 'running',
           steps: [
             { status: 'done' },
-            { status: 'waiting' },
+            { status: 'waiting', connected: false },
             { status: 'pending', connected: false },
           ],
         },
@@ -208,7 +208,7 @@ describe('HighAvailabilityUpdates', () => {
         run: {
           id: 'run-1',
           status: 'running',
-          steps: [{ status: 'done' }, { status: 'waiting' }],
+          steps: [{ status: 'done' }, { status: 'waiting', connected: false }],
         },
       },
       refetch: vi.fn(),
@@ -216,11 +216,24 @@ describe('HighAvailabilityUpdates', () => {
     render(<HighAvailabilityUpdates data={DATA} />)
     expect(
       screen.getByText(
-        /1 server is offline, so this update is waiting for them. They are skipped after 15 minutes/
+        /1 server is offline, so this update is waiting for it. It is skipped if it stays offline/
       )
     ).toBeTruthy()
     expect(screen.getByText('Yes, cancel the update')).toBeTruthy()
     expect(screen.getByText('No, keep it')).toBeTruthy()
+  })
+
+  it('keeps Update fleet now blocked and claims nothing when the panel omits connected', () => {
+    useUpgradeActiveRun.mockReturnValue({
+      data: {
+        run: { id: 'run-1', status: 'running', steps: [{ status: 'done' }, { status: 'waiting' }] },
+      },
+      refetch: vi.fn(),
+    })
+    render(<HighAvailabilityUpdates data={DATA} />)
+    const button = screen.getByRole('button', { name: 'Update fleet now' })
+    expect((button as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.queryByText(/is offline|are offline/)).toBeNull()
   })
 
   it('starts preflight when Update fleet now is pressed', async () => {

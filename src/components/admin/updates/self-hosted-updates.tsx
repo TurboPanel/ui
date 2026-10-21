@@ -31,6 +31,7 @@ import {
 } from '@/lib/instance-updates'
 import { fleetServersQuery, UPGRADE_FLEET_PAGE_SIZE } from '@/lib/upgrade-batch'
 import {
+  fleetProgressText,
   installedBuildLabel,
   offlineWaitingNotice,
   platformUpgradeHeadlineCopy,
@@ -205,7 +206,7 @@ function UpgradeProgressPanel({
             label="Cancel update"
             confirmLabel="Yes, cancel the update"
             dismissLabel="No, keep it"
-            prompt="Stop this update? Finished steps stay; pending ones are skipped."
+            prompt="Stop this update? Finished steps stay, and steps that have not started are skipped. A server already installing is not stopped and finishes on its own. The next update starts against the current build."
             busy={cancelling}
             onConfirm={() => {
               onCancel(run.id)
@@ -240,7 +241,7 @@ function UpgradeProgressPanel({
       {runError ? <Text style={panelStyles.error}>{runError}</Text> : null}
       <Text style={panelStyles.pageCopy}>
         {fleetSummary.total > 0
-          ? `${fleetSummary.upToDate} of ${fleetSummary.total} servers up to date`
+          ? fleetProgressText(fleetSummary, 'servers')
           : 'Server updates: each server’s daemon updates after the control plane is on target.'}
       </Text>
       {waitingOffline ? <InlineNotice tone="info" title={waitingOffline} /> : null}
