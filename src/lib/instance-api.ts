@@ -2270,6 +2270,7 @@ export type PrincipalUsage = Readonly<{
   storages: number
   secrets: number
   logins: number
+  folders: number
   otherPlacements: number
 }>
 
@@ -2336,7 +2337,7 @@ export async function fetchOrgPrincipals(
 export async function deleteOrgPrincipal(
   orgId: string,
   principalId: string
-): Promise<{ ok: true }> {
+): Promise<{ ok: true; reconciled?: PrincipalsReconcileOutcome }> {
   return await apiFetch(
     `${CLIENT_API}/organizations/${orgId}/principals/${principalId}`,
     { method: 'DELETE' },
