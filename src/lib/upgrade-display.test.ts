@@ -418,11 +418,7 @@ describe('fleetStatusBadge', () => {
 describe('offlineWaitingNotice', () => {
   it('names how many unfinished steps are waiting on offline servers', () => {
     expect(
-      offlineWaitingNotice([
-        { status: 'done' },
-        { status: 'waiting' },
-        { status: 'waiting' },
-      ])
+      offlineWaitingNotice([{ status: 'done' }, { status: 'waiting' }, { status: 'waiting' }])
     ).toBe(
       '2 servers are offline, so this update is waiting for them. They are skipped after 15 minutes, and they update on the first run after they reconnect.'
     )
@@ -442,11 +438,7 @@ describe('runWaitsOnlyOnOffline', () => {
   it('is true when leftover steps are waiting or pending on offline servers', () => {
     expect(
       runWaitsOnlyOnOffline({
-        steps: [
-          { status: 'done' },
-          { status: 'waiting' },
-          { status: 'pending', connected: false },
-        ],
+        steps: [{ status: 'done' }, { status: 'waiting' }, { status: 'pending', connected: false }],
       })
     ).toBe(true)
   })
