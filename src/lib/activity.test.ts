@@ -11,7 +11,9 @@ describe('activity labels', () => {
   it('names actions and states in plain words', () => {
     expect(activityActionLabel('deploy')).toBe('Deploy')
     expect(activityActionLabel('restart')).toBe('Restart')
-    expect(activityStateLabel('deploying')).toBe('In progress')
+    expect(activityStateLabel('deploying')).toBe('Deploying')
+    expect(activityStateLabel('queued')).toBe('Queued')
+    expect(activityStateTone('queued')).toBe('muted')
     expect(activityStateLabel('failed')).toBe('Failed')
     expect(activityStateTone('failed')).toBe('danger')
     expect(activityStateTone('deploying')).toBe('pending')

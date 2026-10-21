@@ -10298,7 +10298,8 @@ export type OrganizationActivityItem = {
   environmentName: string | null
   serverId: string
   action: 'deploy' | 'start' | 'restart' | 'stop'
-  state: 'deploying' | 'failed'
+  /** `queued` is waiting to start; `deploying` is being worked on by the server. */
+  state: 'queued' | 'deploying' | 'failed'
   startedAt: string
   /** Steps done so far (plus the running one) and steps planned; null before the daemon reports a plan. */
   step: number | null

@@ -13,11 +13,13 @@ export function activityActionLabel(action: OrganizationActivityItem['action']):
 }
 
 export function activityStateLabel(state: OrganizationActivityItem['state']): string {
-  return state === 'failed' ? 'Failed' : 'In progress'
+  if (state === 'failed') return 'Failed'
+  return state === 'queued' ? 'Queued' : 'Deploying'
 }
 
 export function activityStateTone(state: OrganizationActivityItem['state']): BadgeTone {
-  return state === 'failed' ? 'danger' : 'pending'
+  if (state === 'failed') return 'danger'
+  return state === 'queued' ? 'muted' : 'pending'
 }
 
 /** "Project / Environment", degrading to whichever half is known, or a dash. */

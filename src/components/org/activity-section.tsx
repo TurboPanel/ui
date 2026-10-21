@@ -43,6 +43,7 @@ const COLUMNS = [
 
 /** What the row says in its last column: the step a running deploy is on, else why it failed. */
 function activityDetailText(item: OrganizationActivityItem): string {
+  if (item.state === 'queued') return 'Waiting for the server to start it'
   if (item.state === 'deploying') {
     return activityStepText(item) ?? plainStepFailureMessage(item.errorMessage) ?? '—'
   }
@@ -101,7 +102,9 @@ function FilterButton({
       ]}
       onPress={onPress}
     >
-      <Text style={active ? panelStyles.toolbarBtnTextPrimary : panelStyles.toolbarBtnTextSecondary}>
+      <Text
+        style={active ? panelStyles.toolbarBtnTextPrimary : panelStyles.toolbarBtnTextSecondary}
+      >
         {label}
       </Text>
     </Pressable>
@@ -156,7 +159,9 @@ export function ActivitySection({ orgId }: Readonly<{ orgId: string }>) {
   const items = activity.data?.items ?? []
   const total = activity.data?.total ?? 0
   const loading = activity.isLoading
-  const error = activity.isError ? userErrorMessage(activity.error, 'Failed to load activity') : null
+  const error = activity.isError
+    ? userErrorMessage(activity.error, 'Failed to load activity')
+    : null
 
   const chooseFilter = (next: OrganizationActivityFilter) => {
     setFilter(next)
@@ -184,7 +189,10 @@ export function ActivitySection({ orgId }: Readonly<{ orgId: string }>) {
         ))}
       </View>
 
-      <SectionPanel title="Activity" hint={loading ? 'Loading…' : activityRangeLabel(offset, items.length, total)}>
+      <SectionPanel
+        title="Activity"
+        hint={loading ? 'Loading…' : activityRangeLabel(offset, items.length, total)}
+      >
         {loading ? (
           <View style={styles.loadingRow}>
             <ActivityIndicator size="small" color={colors.accent} />
