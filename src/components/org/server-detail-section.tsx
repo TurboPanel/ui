@@ -33,6 +33,7 @@ import { ServerMachineClassPanel } from '@/components/org/server-machine-class-p
 import { ServerTierPlacementPanel } from '@/components/org/server-tier-placement-panel'
 import { ServerMetricsSensorsPanel } from '@/components/org/server-metrics-sensors-panel'
 import { ServerSshPortPanel } from '@/components/org/server-ssh-port-panel'
+import { ServerWebServerPanel } from '@/components/org/server-web-server-panel'
 import { LocationEditorPanel } from '@/components/org/location-editor-panel'
 import { ServerSystemComponentPanel } from '@/components/org/server-system-component-panel'
 import { ServerTimeSection } from '@/components/org/server-time-section'
@@ -1069,6 +1070,8 @@ function ServerOverviewTab({
       <ServerTierPlacementPanel orgId={orgId} server={server} />
 
       <ServerSshPortPanel orgId={orgId} server={server} canManage={canManage} />
+
+      <ServerWebServerPanel orgId={orgId} server={server} canManage={canManage} />
 
       <ServerMachineClassPanel orgId={orgId} server={server} canManage={canManage} />
 

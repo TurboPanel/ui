@@ -2,6 +2,7 @@ import { StyleSheet, View } from 'react-native'
 import { useLocalSearchParams } from 'expo-router'
 import { ServerCapacitySettingsSection } from '@/components/org/server-capacity-settings-section'
 import { ServerHostDefaultsSettingsSection } from '@/components/org/server-host-defaults-settings-section'
+import { ServerWebServerSettingsSection } from '@/components/org/server-web-server-settings-section'
 import { ServerTemperatureUnitSettingsSection } from '@/components/org/server-temperature-unit-settings-section'
 import { ServerTimezoneSettingsSection } from '@/components/org/server-timezone-settings-section'
 import { spacing } from '@/lib/theme'
@@ -15,6 +16,7 @@ export default function ServerSettingsScreen() {
       <ServerTimezoneSettingsSection orgId={id} />
       <ServerTemperatureUnitSettingsSection orgId={id} />
       <ServerHostDefaultsSettingsSection orgId={id} />
+      <ServerWebServerSettingsSection orgId={id} />
       <ServerCapacitySettingsSection orgId={id} />
     </View>
   )

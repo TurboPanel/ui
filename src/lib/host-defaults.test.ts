@@ -3,6 +3,7 @@ import {
   DEFAULT_SSH_PORT,
   configuredSourceLabel,
   formatNtpHostList,
+  hideWebServerNamesSourceLabel,
   isEmptyNtpDraft,
   ntpDefaultsFromDrafts,
   parseNtpHostList,
@@ -18,6 +19,12 @@ describe('host-defaults helpers', () => {
     expect(configuredSourceLabel(null)).toBe('Not set')
     expect(sshPortSourceLabel(null)).toBe(`Platform default (${String(DEFAULT_SSH_PORT)})`)
     expect(sshPortSourceLabel('datacenter')).toBe('Datacenter default')
+  })
+
+  it('labels where web server name hiding comes from', () => {
+    expect(hideWebServerNamesSourceLabel(null)).toBe('Platform default (on)')
+    expect(hideWebServerNamesSourceLabel('organization')).toBe('Organization default')
+    expect(hideWebServerNamesSourceLabel('server')).toBe('Server override')
   })
 
   it('parses SSH port drafts', () => {
