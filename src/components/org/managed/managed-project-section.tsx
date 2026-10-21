@@ -20,61 +20,61 @@ import { ManagedSettingsPanel } from '@/components/org/managed/managed-settings-
 import { ManagedStatusPanel } from '@/components/org/managed/managed-status-panel'
 import { ManagedUsersPanel } from '@/components/org/managed/managed-users-panel'
 import {
-  defaultManagedVersionSelection,
-  ManagedVersionPicker,
-  type ManagedVersionSelection,
+    defaultManagedVersionSelection,
+    ManagedVersionPicker,
+    type ManagedVersionSelection,
 } from '@/components/org/managed/managed-version-picker'
 import { SecretReveal } from '@/components/org/managed/secret-reveal'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { type EnvironmentRecord } from '@/lib/instance-api'
 import { managedReleaseSummary } from '@/lib/managed-releases'
 import {
-  managedCatalogEntryForCode,
-  managedEngineSupportsBackup,
-  managedErrorMessage,
-  type ManagedDetailResponse,
-  type ManagedSettings,
-  type ManagedUserRecord,
+    managedCatalogEntryForCode,
+    managedEngineSupportsBackup,
+    managedErrorMessage,
+    type ManagedDetailResponse,
+    type ManagedSettings,
+    type ManagedUserRecord,
 } from '@/lib/managed-services'
 import { useOrgDefaultEnvironmentName } from '@/lib/org-default-environment'
 import {
-  commandStatusById,
-  isTerminalCommandStatus,
-  useCommandsBatch,
-  type TrackedCommandEntry,
+    commandStatusById,
+    isTerminalCommandStatus,
+    useCommandsBatch,
+    type TrackedCommandEntry,
 } from '@/lib/queries/commands'
 import {
-  useCreateEnvironment,
-  useDeleteEnvironment,
-  useEnvironment,
-  useEnvironments,
-  useUpdateEnvironment,
+    useCreateEnvironment,
+    useDeleteEnvironment,
+    useEnvironment,
+    useEnvironments,
+    useUpdateEnvironment,
 } from '@/lib/queries/environments'
 import {
-  alignMemberStatusesWithCluster,
-  mergeManagedMembers,
-  useApplyEnvironmentManaged,
-  useCreateEnvironmentManaged,
-  useCreateManagedBackup,
-  useCreateManagedDatabase,
-  useCreateManagedUser,
-  useDeleteEnvironmentManaged,
-  useDeleteManagedBackup,
-  useDeleteManagedDatabase,
-  useDeleteManagedUser,
-  useEnvironmentManaged,
-  useManagedBackups,
-  useManagedDatabases,
-  useManagedStatus,
-  useManagedUsers,
-  useRestoreManagedBackup,
-  useRotateManagedRootPassword,
-  useRotateManagedUserPassword,
-  useRunManagedLifecycle,
-  useSaveServerManagedExternalAccess,
-  useServerManagedExternalAccess,
-  useUpdateEnvironmentManaged,
-  useUpdateManagedUser,
+    alignMemberStatusesWithCluster,
+    mergeManagedMembers,
+    useApplyEnvironmentManaged,
+    useCreateEnvironmentManaged,
+    useCreateManagedBackup,
+    useCreateManagedDatabase,
+    useCreateManagedUser,
+    useDeleteEnvironmentManaged,
+    useDeleteManagedBackup,
+    useDeleteManagedDatabase,
+    useDeleteManagedUser,
+    useEnvironmentManaged,
+    useManagedBackups,
+    useManagedDatabases,
+    useManagedStatus,
+    useManagedUsers,
+    useRestoreManagedBackup,
+    useRotateManagedRootPassword,
+    useRotateManagedUserPassword,
+    useRunManagedLifecycle,
+    useSaveServerManagedExternalAccess,
+    useServerManagedExternalAccess,
+    useUpdateEnvironmentManaged,
+    useUpdateManagedUser,
 } from '@/lib/queries/managed'
 import { useOrgServers } from '@/lib/queries/servers'
 import { orEmptyArray } from '@/lib/or-empty-array'
@@ -96,7 +96,7 @@ function ignorePromise(promise: Promise<unknown>): void {
 function resolveManagedLastError(
   clusterStatus: string,
   statusError: string | null | undefined,
-  metadata: Record<string, unknown>
+  metadata: Record<string, unknown>,
 ): string | null {
   if (clusterStatus !== 'failed') return null
   const fromStatus = typeof statusError === 'string' ? statusError.trim() : ''
@@ -106,7 +106,13 @@ function resolveManagedLastError(
 }
 
 type ManagedBodyFocus =
-  'all' | 'overview' | 'connect' | 'data' | 'backups' | 'settings' | 'environments'
+  | 'all'
+  | 'overview'
+  | 'connect'
+  | 'data'
+  | 'backups'
+  | 'settings'
+  | 'environments'
 
 function managedFocusVisibility(focus: ManagedBodyFocus): {
   showOverview: boolean
@@ -482,7 +488,9 @@ function ManagedEnvironmentReadyPanels({
    * entries (which are pruned on terminal) so the Apply transcript stays
    * readable after the command finishes.
    */
-  const [applyCommand, setApplyCommand] = useState<TrackedCommandEntry | null>(null)
+  const [applyCommand, setApplyCommand] = useState<TrackedCommandEntry | null>(
+    null,
+  )
   const { showOverview, showConnect, showData, showBackups, showSettings, showLifecycle } =
     managedFocusVisibility(focus)
 
@@ -512,7 +520,11 @@ function ManagedEnvironmentReadyPanels({
 
   const status = statusQuery.data ?? null
   const clusterStatus = status?.status ?? managed.status
-  const lastError = resolveManagedLastError(clusterStatus, status?.error, managed.metadata ?? {})
+  const lastError = resolveManagedLastError(
+    clusterStatus,
+    status?.error,
+    managed.metadata ?? {},
+  )
   const users = usersQuery.data?.users ?? []
   const databases = databasesQuery.data?.databases ?? []
   const backups = backupsQuery.data?.backups ?? []
@@ -553,6 +565,7 @@ function ManagedEnvironmentReadyPanels({
   const inFlight =
     trackedEntries.length > 0 &&
     (commandsQuery.data?.some((record) => !isTerminalCommandStatus(record.status)) ?? true)
+
 
   return (
     <View style={styles.panels}>
@@ -1162,7 +1175,9 @@ export function ManagedProjectSection({
 
   useEffect(() => {
     if (environmentsQuery.error) {
-      setError(userErrorMessage(environmentsQuery.error, 'Failed to load environments'))
+      setError(
+        userErrorMessage(environmentsQuery.error, 'Failed to load environments')
+      )
     }
   }, [environmentsQuery.error])
 

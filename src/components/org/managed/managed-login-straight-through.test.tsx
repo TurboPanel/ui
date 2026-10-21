@@ -185,6 +185,11 @@ describe('LoginStraightThroughEditor', () => {
     expect(screen.queryByText('Use default')).toBeNull()
   })
 
+  it('shows no default hint when an older control plane omits the field', () => {
+    setup({ straightThrough: undefined, straightThroughDefault: undefined })
+    expect(screen.queryByText('default')).toBeNull()
+  })
+
   it('previews true with a dry run, shows the statements, then saves', async () => {
     const { onUpdate } = setup()
     fireEvent.click(screen.getByRole('switch'))

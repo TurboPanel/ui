@@ -116,7 +116,7 @@ export function LoginStraightThroughEditor({
   })
   const { pending, busy } = change
   const limited = isLimited(user.allowedSources)
-  const isDefault = user.straightThroughDefault !== false
+  const isDefault = user.straightThroughDefault === true
   const value = user.straightThrough === true
   if (!supportsStraightThrough(engine)) return null
   return (
@@ -131,7 +131,7 @@ export function LoginStraightThroughEditor({
           void change.preview(next, { straightThrough: next })
         }}
       />
-      {!isDefault && !limited ? (
+      {user.straightThroughDefault === false && !limited ? (
         <ButtonRow>
           <Button
             label="Use default"
