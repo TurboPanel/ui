@@ -166,6 +166,28 @@ describe('managedErrorMessage', () => {
     }
   })
 
+  it('shows the server sentence for reserved names and logins that still define objects', () => {
+    expect(
+      managedErrorMessage(
+        new Error(
+          '/x failed: HTTP 422: reserved_username — \'postgres\' is a name the database engine or TurboPanel keeps for itself. Pick a different login name.',
+        ),
+        'fallback',
+      ),
+    ).toBe("'postgres' is a name the database engine or TurboPanel keeps for itself. Pick a different login name.")
+    expect(
+      managedErrorMessage(
+        new Error(
+          "/x failed: HTTP 409: managed_login_defines_objects — The login 'app' is still the definer of view shop.v.",
+        ),
+        'fallback',
+      ),
+    ).toBe("The login 'app' is still the definer of view shop.v.")
+    // An older server sends no sentence: the plain copy still reads well.
+    expect(managedErrorMessage(new Error('HTTP 422: reserved_database_name'), 'fallback')).toMatch(/database name/)
+    expect(managedErrorMessage(new Error('HTTP 422: reserved_username'), 'fallback')).toMatch(/login name/)
+  })
+
   it('maps known HTTP error codes to operator copy', () => {
     expect(managedErrorMessage(new Error('HTTP 422: server_placement_required'), 'fallback')).toBe(
       'Select a server before creating this managed service.'

@@ -11,6 +11,7 @@ import {
   backupScheduleFromForm,
   backupWeekdayLabel,
   formatBackupSchedule,
+  formatBackupDatabase,
   validateBackupPolicyForm,
   type BackupPolicyForm,
 } from '@/lib/backup-policies'
@@ -46,9 +47,9 @@ function httpError(path: string, status: number, code: string): Error {
 
 describe('formatBackupSchedule', () => {
   it('describes each preset in plain words', () => {
-    expect(formatBackupSchedule(policy({ preset: { preset: 'hourly' }, schedule: '0 * * * *' }))).toBe(
-      'Every hour'
-    )
+    expect(
+      formatBackupSchedule(policy({ preset: { preset: 'hourly' }, schedule: '0 * * * *' }))
+    ).toBe('Every hour')
     expect(formatBackupSchedule(policy())).toBe('Daily at 03:12')
     expect(
       formatBackupSchedule(
@@ -78,9 +79,9 @@ describe('formatBackupSchedule', () => {
     expect(
       formatBackupSchedule(policy({ preset: null, schedule: '0 1 * * *', timezone: 'UTC' }))
     ).toBe('Custom: 0 1 * * * (UTC)')
-    expect(
-      formatBackupSchedule(policy({ preset: { preset: 'hourly' }, timezone: 'UTC' }))
-    ).toBe('Every hour')
+    expect(formatBackupSchedule(policy({ preset: { preset: 'hourly' }, timezone: 'UTC' }))).toBe(
+      'Every hour'
+    )
   })
 })
 
@@ -122,7 +123,12 @@ describe('backupPolicyFormFromRecord', () => {
       backupPolicyFormFromRecord(
         policy({ preset: null, schedule: '5 4 1 * *', timezone: 'Asia/Tokyo', retentionKeep: 12 })
       )
-    ).toMatchObject({ mode: 'cron', cron: '5 4 1 * *', timezone: 'Asia/Tokyo', retentionKeep: '12' })
+    ).toMatchObject({
+      mode: 'cron',
+      cron: '5 4 1 * *',
+      timezone: 'Asia/Tokyo',
+      retentionKeep: '12',
+    })
   })
 })
 
@@ -225,9 +231,9 @@ describe('validateBackupPolicyForm', () => {
         errors: { retentionKeep: `Keep between 1 and ${BACKUP_POLICY_MAX_KEEP} backups.` },
       })
     }
-    expect(validateBackupPolicyForm(form({ retentionKeep: String(BACKUP_POLICY_MAX_KEEP) })).ok).toBe(
-      true
-    )
+    expect(
+      validateBackupPolicyForm(form({ retentionKeep: String(BACKUP_POLICY_MAX_KEEP) })).ok
+    ).toBe(true)
   })
 
   it('reports every bad field at once', () => {
@@ -264,18 +270,20 @@ describe('backupPolicyErrorMessage', () => {
       field: 'timezone',
       message: "That timezone isn't recognized. Pick one from the list, or use server time.",
     })
-    expect(backupPolicyErrorMessage(httpError(path, 400, 'backup_policy_invalid'), 'x').message).toBe(
+    expect(
+      backupPolicyErrorMessage(httpError(path, 400, 'backup_policy_invalid'), 'x').message
+    ).toBe(
       `Check the name (up to 64 characters) and how many backups to keep (1 to ${BACKUP_POLICY_MAX_KEEP}).`
     )
     expect(
       backupPolicyErrorMessage(httpError(path, 400, 'backup_target_unsupported'), 'x').field
     ).toBeNull()
-    expect(backupPolicyErrorMessage(httpError(path, 400, 'managed_backup_unsupported'), 'x').message).toBe(
-      'This database engine does not support backups yet.'
-    )
-    expect(backupPolicyErrorMessage(httpError(path, 404, 'backup_policy_not_found'), 'x').message).toBe(
-      'That schedule no longer exists; it may have just been deleted.'
-    )
+    expect(
+      backupPolicyErrorMessage(httpError(path, 400, 'managed_backup_unsupported'), 'x').message
+    ).toBe('This database engine does not support backups yet.')
+    expect(
+      backupPolicyErrorMessage(httpError(path, 404, 'backup_policy_not_found'), 'x').message
+    ).toBe('That schedule no longer exists; it may have just been deleted.')
     expect(backupPolicyErrorMessage(httpError(path, 409, 'backup_policy_limit'), 'x').message).toBe(
       `A database can have at most ${BACKUP_POLICY_LIMIT} schedules. Delete one first.`
     )
@@ -308,5 +316,36 @@ describe('backupRunBadge', () => {
   it('labels the run status', () => {
     expect(backupRunBadge({ status: 'succeeded' })).toEqual({ tone: 'ok', label: 'Succeeded' })
     expect(backupRunBadge({ status: 'failed' })).toEqual({ tone: 'danger', label: 'Failed' })
+  })
+})
+
+describe('backup database choice', () => {
+  it('sends the database only when one is chosen', () => {
+    expect(validateBackupPolicyForm(form())).toMatchObject({ ok: true })
+    const plain = validateBackupPolicyForm(form())
+    expect(plain.ok && 'database' in plain.body).toBe(false)
+    const chosen = validateBackupPolicyForm(form({ database: 'appdb' }))
+    expect(chosen.ok && chosen.body.database).toBe('appdb')
+  })
+
+  it('prefills from a record and tolerates an older control plane', () => {
+    expect(backupPolicyFormFromRecord(policy({ database: 'appdb' })).database).toBe('appdb')
+    expect(backupPolicyFormFromRecord(policy()).database).toBeNull()
+  })
+
+  it('describes the database in plain words', () => {
+    expect(formatBackupDatabase(policy({ database: 'appdb' }))).toBe('appdb')
+    expect(formatBackupDatabase(policy({ database: null }))).toBe('The main database (default)')
+    expect(formatBackupDatabase(policy())).toBeNull()
+    expect(formatBackupDatabase(policy({ targetKind: 'copy', database: null }))).toBeNull()
+  })
+
+  it('maps the refusal onto the database field', () => {
+    const error = backupPolicyErrorMessage(
+      httpError('/x', 422, 'backup_database_invalid'),
+      'Failed'
+    )
+    expect(error.field).toBe('database')
+    expect(error.message).toMatch(/isn't on this server/)
   })
 })
