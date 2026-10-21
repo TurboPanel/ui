@@ -161,7 +161,7 @@ export function OrgPrincipalsTab({ orgId }: Readonly<{ orgId: string }>) {
           <InlineNotice
             tone="warning"
             title="Deleted, but not yet removed from every server"
-            body={`The Hosting Account is gone from the organization, but the removal could not be queued for ${failedServers.length === 1 ? '1 server' : `${failedServers.length} servers`}. Its Linux user may still exist there until that server catches up.`}
+            body={`The Hosting Account is gone from the organization, but the removal could not be queued for ${failedServers.length} ${failedServers.length === 1 ? 'server' : 'servers'}. Its Linux user may still exist there until that server catches up.`}
           />
         ) : null}
         {canManage ? null : (
