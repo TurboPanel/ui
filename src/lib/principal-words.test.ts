@@ -18,7 +18,7 @@ function row(patch: Partial<OrgPrincipalRecord> = {}): OrgPrincipalRecord {
     projectName: null,
     servers: [],
     logins: [],
-    usedBy: { tenancies: 0, bindings: 0, storages: 0, secrets: 0, logins: 0 },
+    usedBy: { tenancies: 0, bindings: 0, storages: 0, secrets: 0, logins: 0, folders: 0 },
     state: 'none',
     orphaned: true,
     canDelete: true,
@@ -42,11 +42,12 @@ describe('principal words', () => {
   it('turns usage counts into short lines and skips zeros', () => {
     expect(principalUsageLines({})).toEqual([])
     expect(
-      principalUsageLines({ tenancies: 1, bindings: 2, otherPlacements: 3, logins: 1 })
+      principalUsageLines({ tenancies: 1, bindings: 2, otherPlacements: 3, logins: 1, folders: 2 })
     ).toEqual([
       '1 service runs as it',
       '2 apps are connected to it',
       '1 database login',
+      '2 folders are owned by it',
       '3 other servers have it',
     ])
   })
@@ -58,7 +59,7 @@ describe('principal words', () => {
     ).toBe('Belongs to the project Shop. Remove it from that project.')
     expect(
       principalDeleteBlockedReason(
-        row({ canDelete: false, usedBy: { tenancies: 2, bindings: 0, storages: 0, secrets: 0, logins: 0 } })
+        row({ canDelete: false, usedBy: { tenancies: 2, bindings: 0, storages: 0, secrets: 0, logins: 0, folders: 0 } })
       )
     ).toBe('In use: 2 services run as it.')
   })

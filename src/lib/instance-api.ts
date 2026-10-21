@@ -2270,6 +2270,7 @@ export type PrincipalUsage = Readonly<{
   storages: number
   secrets: number
   logins: number
+  folders: number
   otherPlacements: number
 }>
 

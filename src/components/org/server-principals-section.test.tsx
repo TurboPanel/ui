@@ -59,7 +59,7 @@ describe('ServerPrincipalsSection', () => {
           gid: 15002,
           home: '/srv/users/shop_abc',
           source: 'compose',
-          usedBy: { tenancies: 1, bindings: 0, storages: 0, secrets: 0, logins: 0, otherPlacements: 0 },
+          usedBy: { tenancies: 1, bindings: 0, storages: 0, secrets: 0, logins: 0, folders: 0, otherPlacements: 0 },
         },
         {
           placementId: 'pl2',
@@ -72,7 +72,7 @@ describe('ServerPrincipalsSection', () => {
           gid: null,
           home: '/srv/users/solo',
           source: 'manual',
-          usedBy: { tenancies: 0, bindings: 0, storages: 0, secrets: 0, logins: 0, otherPlacements: 0 },
+          usedBy: { tenancies: 0, bindings: 0, storages: 0, secrets: 0, logins: 0, folders: 0, otherPlacements: 0 },
         },
       ],
     }

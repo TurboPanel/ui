@@ -6,6 +6,7 @@ import {
   type PrincipalRemovalChoices,
 } from '@/components/org/server-removal-principals'
 import { panelStyles } from '@/components/ui/panel-styles'
+import { isForbiddenError } from '@/lib/fetch-error-detail'
 import type { PrincipalRemovalChoice } from '@/lib/instance-api'
 import { useServerDeletePreview, useServerPrincipalRemovalPlan } from '@/lib/queries/servers'
 import {
@@ -80,7 +81,7 @@ export function ServerDeletePanel({
       <ServerRemovalPrincipals
         plan={planQuery.data?.principals}
         loading={planQuery.isLoading}
-        error={planQuery.error}
+        error={isForbiddenError(planQuery.error) ? null : planQuery.error}
         choices={choices}
         disabled={busy}
         onChange={(principalId, action) =>

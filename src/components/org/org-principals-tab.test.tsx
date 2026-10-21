@@ -82,7 +82,7 @@ function row(patch: Partial<OrgPrincipalRecord>): OrgPrincipalRecord {
     projectName: null,
     servers: [{ serverId: 's1', serverName: 'Alpha', state: 'present', uid: 15001, gid: 15001 }],
     logins: [],
-    usedBy: { tenancies: 0, bindings: 0, storages: 0, secrets: 0, logins: 0 },
+    usedBy: { tenancies: 0, bindings: 0, storages: 0, secrets: 0, logins: 0, folders: 0 },
     state: 'present',
     orphaned: true,
     canDelete: true,

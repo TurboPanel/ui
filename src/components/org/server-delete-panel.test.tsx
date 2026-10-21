@@ -31,12 +31,15 @@ vi.mock('@/components/org/server-removal-principals', async (importOriginal) => 
   ...(await importOriginal<typeof import('./server-removal-principals')>()),
   ServerRemovalPrincipals: ({
     plan,
+    error,
     onChange,
   }: {
+    error?: unknown
     plan?: { principalId: string; appliedUsername: string }[]
     onChange: (principalId: string, action: 'keep' | 'delete') => void
   }) => (
     <div>
+      {error ? <span>plan error</span> : null}
       {(plan ?? []).map((entry) => (
         <button key={entry.principalId} onClick={() => onChange(entry.principalId, 'delete')}>
           {`delete ${entry.appliedUsername}`}
@@ -233,6 +236,23 @@ describe('ServerDeletePanel', () => {
     renderPanel({ onConfirm }, preview({ canForget: false }))
     fireEvent.click(screen.getByText('Delete server'))
     expect(onConfirm).toHaveBeenCalledWith(false, [])
+  })
+
+  it('hides the removal plan instead of erroring when the person may not see it', () => {
+    useServerPrincipalRemovalPlan.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      error: new Error('GET /servers/s1/principal-removal-plan failed: HTTP 403'),
+    })
+    renderPanel({}, preview({ canForget: false }))
+    expect(screen.queryByText('plan error')).toBeNull()
+    useServerPrincipalRemovalPlan.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      error: new Error('boom'),
+    })
+    renderPanel({}, preview({ canForget: false }))
+    expect(screen.getByText('plan error')).toBeTruthy()
   })
 
   it('sends the principals chosen for outright deletion', () => {
