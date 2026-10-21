@@ -49,7 +49,7 @@ export function orderedNetworks(datacenters: readonly DatacenterRecord[]): {
   }
 }
 
-/** Ids of trusted networks that share the lowest number with another trusted network. */
+/** Ids of trusted networks that share their priority number with another trusted network. */
 export function tiedNetworkIds(used: readonly DatacenterRecord[]): Set<string> {
   const counts = new Map<number, number>()
   for (const dc of used) counts.set(dc.priority, (counts.get(dc.priority) ?? 0) + 1)
@@ -73,4 +73,38 @@ export function networkDownNote(net: ServerTrafficMapNetwork): string | null {
   if (net.localLink === 'down') return 'The network card is down on this server.'
   if (net.peerLink === 'down') return 'The network card is down on the other server.'
   return null
+}
+
+const ORDINALS = ['First', 'Second', 'Third', 'Fourth', 'Fifth', 'Sixth', 'Seventh', 'Eighth']
+
+/** "Second", "Third", ... for a 1-based place in the order. */
+export function placeLabel(position: number): string {
+  return ORDINALS[position - 1] ?? `Number ${position}`
+}
+
+/** The one badge a network row shows beside its name; null when it is unused. */
+export function networkBadge(
+  position: number | null,
+  tied: boolean
+): { label: string; tone: TrafficTone } | null {
+  if (position === null) return { label: 'Not used', tone: 'muted' }
+  if (tied) {
+    return {
+      label: position === 1 ? 'Tied for first' : 'Same priority as another',
+      tone: 'pending',
+    }
+  }
+  if (position === 1) return { label: 'Used first', tone: 'ok' }
+  return { label: placeLabel(position), tone: 'muted' }
+}
+
+/** What "Use this one first" changed, in plain words (one line per renumbered network). */
+export function renumberedLines(
+  changes: readonly { datacenterId: string; before: number; after: number }[],
+  names: ReadonlyMap<string, string>
+): string[] {
+  return changes.map(
+    (change) =>
+      `${names.get(change.datacenterId) ?? 'A network'}: priority ${change.before} is now ${change.after}`
+  )
 }

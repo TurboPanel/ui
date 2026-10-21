@@ -40,18 +40,13 @@ function toFetchIpFilters(filters?: IpListFilters): FetchIpFilters | undefined {
   return rest as FetchIpFilters
 }
 
-function toFetchNetworkFilters(
-  filters?: NetworkListFilters,
-): FetchNetworkFilters | undefined {
+function toFetchNetworkFilters(filters?: NetworkListFilters): FetchNetworkFilters | undefined {
   if (!filters) return undefined
   const { organizationId: _organizationId, ...rest } = filters
   return rest as FetchNetworkFilters
 }
 
-export function useDatacenters(
-  orgId: string,
-  options?: Readonly<{ enabled?: boolean }>,
-) {
+export function useDatacenters(orgId: string, options?: Readonly<{ enabled?: boolean }>) {
   return useQuery({
     queryKey: queryKeys.org(orgId).topology.datacenters,
     queryFn: fetchDatacenters,
@@ -62,29 +57,23 @@ export function useDatacenters(
 export function useDatacenter(
   orgId: string,
   datacenterId: string,
-  options?: Readonly<{ enabled?: boolean }>,
+  options?: Readonly<{ enabled?: boolean }>
 ) {
   return useQuery({
     queryKey: queryKeys.org(orgId).topology.datacenter(datacenterId),
     queryFn: () => fetchDatacenter(datacenterId),
-    enabled:
-      (options?.enabled ?? true) &&
-      orgId.length > 0 &&
-      datacenterId.length > 0,
+    enabled: (options?.enabled ?? true) && orgId.length > 0 && datacenterId.length > 0,
   })
 }
 
 export function useDatacenterNameSuggestions(
   orgId: string,
-  options?: Readonly<{ enabled?: boolean; limit?: number }>,
+  options?: Readonly<{ enabled?: boolean; limit?: number }>
 ) {
   const limit = options?.limit
   return useQuery({
     queryKey: queryKeys.org(orgId).topology.nameSuggestions,
-    queryFn: () =>
-      fetchDatacenterNameSuggestions(
-        limit === undefined ? undefined : { limit },
-      ),
+    queryFn: () => fetchDatacenterNameSuggestions(limit === undefined ? undefined : { limit }),
     enabled: (options?.enabled ?? true) && orgId.length > 0,
   })
 }
@@ -96,7 +85,7 @@ export function useDatacenterNameSuggestions(
 export function useIps(
   orgId: string,
   filters?: IpListFilters,
-  options?: Readonly<{ enabled?: boolean; keepPreviousData?: boolean }>,
+  options?: Readonly<{ enabled?: boolean; keepPreviousData?: boolean }>
 ) {
   const useKeepPrevious =
     options?.keepPreviousData ?? Boolean(filters && Object.keys(filters).length > 0)
@@ -109,16 +98,11 @@ export function useIps(
   })
 }
 
-export function useIp(
-  orgId: string,
-  ipId: string,
-  options?: Readonly<{ enabled?: boolean }>,
-) {
+export function useIp(orgId: string, ipId: string, options?: Readonly<{ enabled?: boolean }>) {
   return useQuery({
     queryKey: queryKeys.org(orgId).topology.ip(ipId),
     queryFn: () => fetchIp(ipId),
-    enabled:
-      (options?.enabled ?? true) && orgId.length > 0 && ipId.length > 0,
+    enabled: (options?.enabled ?? true) && orgId.length > 0 && ipId.length > 0,
   })
 }
 
@@ -129,7 +113,7 @@ export function useIp(
 export function useNetworks(
   orgId: string,
   filters?: NetworkListFilters,
-  options?: Readonly<{ enabled?: boolean; keepPreviousData?: boolean }>,
+  options?: Readonly<{ enabled?: boolean; keepPreviousData?: boolean }>
 ) {
   const useKeepPrevious =
     options?.keepPreviousData ?? Boolean(filters && Object.keys(filters).length > 0)
@@ -156,10 +140,7 @@ const DOCKER_NETWORKING_DEFAULTS: OrganizationDockerNetworking = {
  * the panel renders it and keeps the form read-only, because the `PUT` is
  * replace-all and a save over a config that never loaded would wipe it.
  */
-export function useOrgDockerNetworking(
-  orgId: string,
-  options?: Readonly<{ enabled?: boolean }>,
-) {
+export function useOrgDockerNetworking(orgId: string, options?: Readonly<{ enabled?: boolean }>) {
   return useQuery({
     queryKey: queryKeys.org(orgId).settings.dockerNetworking,
     queryFn: async () => {
@@ -189,7 +170,7 @@ export function useSaveOrgDockerNetworking(orgId: string) {
     onSuccess: async (data) => {
       queryClient.setQueryData<OrganizationDockerNetworking>(
         queryKeys.org(orgId).settings.dockerNetworking,
-        { addressPools: data.addressPools, defaultBridgeCidr: data.defaultBridgeCidr },
+        { addressPools: data.addressPools, defaultBridgeCidr: data.defaultBridgeCidr }
       )
       await queryClient.invalidateQueries({
         queryKey: queryKeys.org(orgId).topology.networksAll,
@@ -268,7 +249,7 @@ export function useAddDatacenterMembers(orgId: string, datacenterId: string) {
         ...members.map((member) =>
           queryClient.invalidateQueries({
             queryKey: queryKeys.org(orgId).servers.addresses(member.serverId),
-          }),
+          })
         ),
         queryClient.invalidateQueries({
           queryKey: queryKeys.org(orgId).topology.datacenter(datacenterId),
@@ -289,8 +270,7 @@ export function useAddDatacenterMembers(orgId: string, datacenterId: string) {
 export function useRemoveDatacenterMember(orgId: string, datacenterId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (serverId: string) =>
-      removeDatacenterMember(datacenterId, serverId),
+    mutationFn: (serverId: string) => removeDatacenterMember(datacenterId, serverId),
     onSuccess: (_data, serverId) =>
       Promise.all([
         queryClient.invalidateQueries({
@@ -315,7 +295,7 @@ export function useRemoveDatacenterMember(orgId: string, datacenterId: string) {
 function invalidateDatacenterSubnetQueries(
   queryClient: ReturnType<typeof useQueryClient>,
   orgId: string,
-  datacenterId: string,
+  datacenterId: string
 ) {
   return Promise.all([
     queryClient.invalidateQueries({
@@ -335,8 +315,7 @@ export function useCreateDatacenterSubnet(orgId: string, datacenterId: string) {
   return useApiMutation({
     mutationFn: (body: Parameters<typeof createDatacenterSubnet>[1]) =>
       createDatacenterSubnet(datacenterId, body),
-    onSuccess: () =>
-      invalidateDatacenterSubnetQueries(queryClient, orgId, datacenterId),
+    onSuccess: () => invalidateDatacenterSubnetQueries(queryClient, orgId, datacenterId),
   })
 }
 
@@ -350,18 +329,15 @@ export function useUpdateDatacenterSubnet(orgId: string, datacenterId: string) {
       networkId: string
       body: Parameters<typeof updateDatacenterSubnet>[2]
     }) => updateDatacenterSubnet(datacenterId, networkId, body),
-    onSuccess: () =>
-      invalidateDatacenterSubnetQueries(queryClient, orgId, datacenterId),
+    onSuccess: () => invalidateDatacenterSubnetQueries(queryClient, orgId, datacenterId),
   })
 }
 
 export function useDeleteDatacenterSubnet(orgId: string, datacenterId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (networkId: string) =>
-      deleteDatacenterSubnet(datacenterId, networkId),
-    onSuccess: () =>
-      invalidateDatacenterSubnetQueries(queryClient, orgId, datacenterId),
+    mutationFn: (networkId: string) => deleteDatacenterSubnet(datacenterId, networkId),
+    onSuccess: () => invalidateDatacenterSubnetQueries(queryClient, orgId, datacenterId),
   })
 }
 
@@ -379,13 +355,8 @@ export function useCreateIp(orgId: string) {
 export function useUpdateIp(orgId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: ({
-      ipId,
-      body,
-    }: {
-      ipId: string
-      body: Parameters<typeof updateIp>[1]
-    }) => updateIp(ipId, body),
+    mutationFn: ({ ipId, body }: { ipId: string; body: Parameters<typeof updateIp>[1] }) =>
+      updateIp(ipId, body),
     onSuccess: () =>
       queryClient.invalidateQueries({
         queryKey: queryKeys.org(orgId).topology.all,
@@ -448,13 +419,12 @@ export type { IpListFilters, NetworkListFilters }
 export function useServerTrafficMap(
   orgId: string,
   serverId: string,
-  options?: Readonly<{ enabled?: boolean }>,
+  options?: Readonly<{ enabled?: boolean }>
 ) {
   return useQuery({
     queryKey: queryKeys.org(orgId).servers.trafficMap(serverId),
     queryFn: () => fetchServerTrafficMap(serverId),
-    enabled:
-      (options?.enabled ?? true) && orgId.length > 0 && serverId.length > 0,
+    enabled: (options?.enabled ?? true) && orgId.length > 0 && serverId.length > 0,
     refetchInterval: 30_000,
   })
 }

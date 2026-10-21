@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest'
 import type { DatacenterRecord, ServerTrafficMapNetwork } from '@/lib/instance-api'
 import {
   linkLabel,
+  networkBadge,
+  placeLabel,
+  renumberedLines,
   networkDownNote,
   orderedNetworks,
   peerSummary,
@@ -76,5 +79,22 @@ describe('labels', () => {
     expect(networkDownNote(net({ localLink: 'down' }))).toContain('this server')
     expect(networkDownNote(net({ peerLink: 'down' }))).toContain('other server')
     expect(networkDownNote(net({ localLink: 'down', peerLink: 'down' }))).toContain('both')
+  })
+})
+
+describe('networkBadge and placeLabel', () => {
+  it('shows one clear badge per row', () => {
+    expect(networkBadge(1, false)).toEqual({ label: 'Used first', tone: 'ok' })
+    expect(networkBadge(1, true)?.label).toBe('Tied for first')
+    expect(networkBadge(2, true)?.label).toBe('Same priority as another')
+    expect(networkBadge(3, false)?.label).toBe('Third')
+    expect(networkBadge(null, false)?.label).toBe('Not used')
+    expect(placeLabel(12)).toBe('Number 12')
+  })
+
+  it('lists renumbered networks by name', () => {
+    expect(
+      renumberedLines([{ datacenterId: 'a', before: 100, after: 110 }], new Map([['a', 'LAN']]))
+    ).toEqual(['LAN: priority 100 is now 110'])
   })
 })

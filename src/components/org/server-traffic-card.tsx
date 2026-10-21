@@ -1,6 +1,14 @@
 import { useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
-import { Badge, Button, Checkbox, InlineNotice, SectionPanel, TextField } from '@/components/ui'
+import {
+  Badge,
+  Button,
+  ConfirmButton,
+  InlineNotice,
+  LoadingState,
+  SectionPanel,
+  TextField,
+} from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { parseDatacenterPriorityDraft } from '@/lib/datacenter-routing'
 import type {
@@ -18,9 +26,11 @@ import {
 } from '@/lib/queries/topology'
 import {
   linkLabel,
+  networkBadge,
   networkDownNote,
   orderedNetworks,
   peerSummary,
+  renumberedLines,
   tiedNetworkIds,
   trafficStateLabel,
   trafficStateTone,
@@ -42,19 +52,29 @@ function carryingLine(count: number): string | null {
   return `Carrying traffic to ${count} ${count === 1 ? 'server' : 'servers'} from here`
 }
 
+const EVERY_SERVER = 'This applies to every server in the organization.'
+
 function PriorityEditor({
   orgId,
   dc,
   first,
-}: Readonly<{ orgId: string; dc: DatacenterRecord; first: boolean }>) {
+  names,
+}: Readonly<{
+  orgId: string
+  dc: DatacenterRecord
+  first: boolean
+  names: ReadonlyMap<string, string>
+}>) {
   const update = useUpdateDatacenter(orgId, dc.id)
   const choose = useChooseServerTrafficNetwork(orgId)
   const [draft, setDraft] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [moved, setMoved] = useState<string[]>([])
   const name = dc.name ?? 'Unnamed network'
   const busy = update.isPending || choose.isPending
 
   const savePriority = async () => {
+    if (busy) return
     const parsed = parseDatacenterPriorityDraft(draft ?? String(dc.priority))
     if (!parsed.ok) {
       setError(parsed.reason)
@@ -64,36 +84,78 @@ function PriorityEditor({
     const result = await update.run({ options: { ...dc.options, priority: parsed.priority } })
     if (result.ok) setDraft(null)
   }
+  const makeFirst = async () => {
+    if (busy) return
+    const result = await choose.run(dc.id)
+    if (result.ok) setMoved(renumberedLines(result.value.changes, names))
+  }
 
   return (
-    <View style={styles.priorityRow}>
-      <View style={styles.priorityField}>
-        <TextField
-          label="Priority (lowest number is used first)"
-          value={draft ?? String(dc.priority)}
-          onChangeText={setDraft}
-          keyboardType="number-pad"
-          error={error ?? update.actionError ?? choose.actionError}
-          accessibilityLabel={`Priority for ${name}`}
-        />
-      </View>
-      <Button
-        label="Save priority"
-        accessibilityLabel={`Save priority for ${name}`}
-        size="sm"
-        variant="secondary"
-        onPress={() => void savePriority()}
-        disabled={busy || draft === null}
-      />
-      {first ? null : (
+    <View style={styles.controls}>
+      <View style={styles.priorityRow}>
+        <View style={styles.priorityField}>
+          <TextField
+            label="Priority (lowest number is used first)"
+            value={draft ?? String(dc.priority)}
+            onChangeText={setDraft}
+            keyboardType="number-pad"
+            error={error ?? update.actionError ?? choose.actionError}
+            accessibilityLabel={`Priority for ${name}`}
+          />
+        </View>
         <Button
-          label="Use this one first"
-          accessibilityLabel={`Use ${name} first`}
+          label="Save priority"
+          accessibilityLabel={`Save priority for ${name}`}
           size="sm"
-          onPress={() => void choose.run(dc.id)}
-          disabled={busy}
+          variant="secondary"
+          onPress={() => void savePriority()}
+          disabled={busy || draft === null}
         />
-      )}
+        {first ? null : (
+          <ConfirmButton
+            label="Use this one first"
+            prompt={`Make ${name} the first choice? Other networks may get new priority numbers. ${EVERY_SERVER}`}
+            confirmLabel="Use it first"
+            onConfirm={() => void makeFirst()}
+            busy={busy}
+            disabled={busy}
+          />
+        )}
+      </View>
+      <Text style={panelStyles.muted}>{EVERY_SERVER}</Text>
+      {moved.length > 0 ? (
+        <View accessibilityLiveRegion="polite">
+          <Text style={panelStyles.detailTitle}>Priority numbers that changed</Text>
+          {moved.map((line) => (
+            <Text key={line} style={panelStyles.muted}>
+              {line}
+            </Text>
+          ))}
+        </View>
+      ) : null}
+    </View>
+  )
+}
+
+function UseToggle({ orgId, dc }: Readonly<{ orgId: string; dc: DatacenterRecord }>) {
+  const update = useUpdateDatacenter(orgId, dc.id)
+  const name = dc.name ?? 'Unnamed network'
+  const toggle = () => {
+    if (update.isPending) return
+    void update.run({ options: { ...dc.options, trusted: !dc.trusted } })
+  }
+  return (
+    <View style={styles.controls}>
+      <ConfirmButton
+        key={String(dc.trusted)}
+        label={dc.trusted ? 'Stop using this network' : 'Use this network'}
+        prompt={`${dc.trusted ? `Stop using ${name}` : `Start using ${name}`} for server traffic? ${EVERY_SERVER}`}
+        confirmLabel={dc.trusted ? 'Stop using it' : 'Use it'}
+        onConfirm={toggle}
+        busy={update.isPending}
+        disabled={update.isPending}
+      />
+      {update.actionError ? <Text style={panelStyles.muted}>{update.actionError}</Text> : null}
     </View>
   )
 }
@@ -102,20 +164,17 @@ function NetworkControls({
   orgId,
   dc,
   first,
-}: Readonly<{ orgId: string; dc: DatacenterRecord; first: boolean }>) {
-  const update = useUpdateDatacenter(orgId, dc.id)
-  const name = dc.name ?? 'Unnamed network'
+  names,
+}: Readonly<{
+  orgId: string
+  dc: DatacenterRecord
+  first: boolean
+  names: ReadonlyMap<string, string>
+}>) {
   return (
     <View style={styles.controls}>
-      <Checkbox
-        checked={dc.trusted}
-        onPress={() => void update.run({ options: { ...dc.options, trusted: !dc.trusted } })}
-        disabled={update.isPending}
-        label="Use this network for server traffic"
-        accessibilityLabel={`Use ${name} for server traffic`}
-      />
-      {dc.trusted ? <PriorityEditor orgId={orgId} dc={dc} first={first} /> : null}
-      {update.actionError ? <Text style={panelStyles.muted}>{update.actionError}</Text> : null}
+      <UseToggle orgId={orgId} dc={dc} />
+      {dc.trusted ? <PriorityEditor orgId={orgId} dc={dc} first={first} names={names} /> : null}
     </View>
   )
 }
@@ -127,6 +186,7 @@ function NetworkRow({
   tied,
   carrying,
   canManage,
+  names,
 }: Readonly<{
   orgId: string
   dc: DatacenterRecord
@@ -134,23 +194,19 @@ function NetworkRow({
   tied: boolean
   carrying: number
   canManage: boolean
+  names: ReadonlyMap<string, string>
 }>) {
   const line = carryingLine(carrying)
-  const first = position === 1 && !tied
+  const badge = networkBadge(position, tied)
   return (
     <View style={styles.row}>
       <View style={styles.rowHead}>
         <Text style={panelStyles.detailTitle}>{dc.name ?? 'Unnamed network'}</Text>
-        {position === 1 ? <Badge label="Used first" tone="ok" /> : null}
-        {position !== null && position > 1 ? (
-          <Badge label={`Number ${position}`} tone="muted" />
-        ) : null}
-        {tied ? <Badge label="Same priority as another" tone="pending" /> : null}
-        {dc.trusted ? null : <Badge label="Not used" tone="muted" />}
+        {badge ? <Badge label={badge.label} tone={badge.tone} /> : null}
       </View>
       {line ? <Text style={panelStyles.muted}>{line}</Text> : null}
       {canManage ? (
-        <NetworkControls orgId={orgId} dc={dc} first={first} />
+        <NetworkControls orgId={orgId} dc={dc} first={position === 1 && !tied} names={names} />
       ) : (
         <Text style={panelStyles.muted}>{dc.trusted ? `Priority ${dc.priority}` : 'Not used'}</Text>
       )}
@@ -209,6 +265,7 @@ function NetworksList({
 }>) {
   const { used, unused } = orderedNetworks(datacenters)
   const tied = tiedNetworkIds(used)
+  const names = new Map(datacenters.map((dc) => [dc.id, dc.name ?? 'Unnamed network']))
   const rows = [
     ...used.map((dc, index) => ({ dc, position: index + 1 })),
     ...unused.map((dc) => ({ dc, position: null })),
@@ -224,6 +281,7 @@ function NetworksList({
           tied={tied.has(dc.id)}
           carrying={countCarrying(peers, dc.id)}
           canManage={canManage}
+          names={names}
         />
       ))}
     </View>
@@ -246,14 +304,21 @@ export function ServerTrafficCard({
   const peers = map.data?.peers ?? []
   const nics = map.data?.nics ?? []
 
-  if (datacenters.isError && map.isError) {
+  if (datacenters.isError || map.isError) {
     return (
       <SectionPanel title="Server traffic">
         <InlineNotice
           tone="warning"
           title="Could not load the networks."
-          body="Try again in a moment."
+          body="Some of this page could not be read. Try again in a moment."
         />
+      </SectionPanel>
+    )
+  }
+  if (datacenters.isPending || map.isPending) {
+    return (
+      <SectionPanel title="Server traffic">
+        <LoadingState label="Loading networks…" />
       </SectionPanel>
     )
   }

@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { useState } from 'react'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ServerTrafficMap } from '@/lib/instance-api'
@@ -51,17 +52,19 @@ vi.mock('@/components/ui', () => ({
       {label as string}
     </button>
   ),
-  Checkbox: ({ label, accessibilityLabel, checked, onPress }: Props) => (
-    <button
-      type="button"
-      role="checkbox"
-      aria-label={(accessibilityLabel ?? label) as string}
-      aria-checked={checked as boolean}
-      onClick={onPress as () => void}
-    >
-      {label as string}
-    </button>
-  ),
+  ConfirmButton: ({ label, confirmLabel, onConfirm, disabled }: Props) => {
+    const [armed, setArmed] = useState(false)
+    return armed ? (
+      <button type="button" disabled={disabled as boolean} onClick={onConfirm as () => void}>
+        {confirmLabel as string}
+      </button>
+    ) : (
+      <button type="button" disabled={disabled as boolean} onClick={() => setArmed(true)}>
+        {label as string}
+      </button>
+    )
+  },
+  LoadingState: ({ label }: Props) => <div role="progressbar">{label as string}</div>,
   InlineNotice: ({ title }: Props) => <div role="alert">{title as string}</div>,
   SectionPanel: ({ title, hint, children }: Props) => (
     <section>
@@ -203,17 +206,96 @@ describe('ServerTrafficCard', () => {
     expect(screen.getByText(/between 0 and 1000/)).toBeTruthy()
   })
 
-  it('uses a network first and stops using one', () => {
+  it('asks before making a network first, then lists the renumbered networks', async () => {
+    choose.mockResolvedValue({
+      ok: true,
+      value: { ok: true, changes: [{ datacenterId: 'back', before: 10, after: 20 }] },
+    })
     show()
-    fireEvent.click(screen.getByLabelText('Use Office LAN first'))
+    fireEvent.click(screen.getByText('Use this one first'))
+    expect(choose).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByText('Use it first'))
     expect(choose).toHaveBeenCalledWith('lan')
-    fireEvent.click(screen.getByLabelText('Use Office LAN for server traffic'))
+    expect(await screen.findByText('Backhaul: priority 10 is now 20')).toBeTruthy()
+  })
+
+  it('asks before a network stops being used', () => {
+    show()
+    fireEvent.click(screen.getAllByText('Stop using this network')[1])
+    expect(update).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByText('Stop using it'))
     expect(update).toHaveBeenCalledWith({ options: { trusted: false } })
+  })
+
+  it('says every change applies to every server', () => {
+    show()
+    expect(
+      screen.getAllByText('This applies to every server in the organization.').length
+    ).toBeGreaterThan(0)
+  })
+
+  it('blocks a second press while a change is saving', () => {
+    useUpdateDatacenter.mockReturnValue({ run: update, isPending: true, actionError: null })
+    show()
+    for (const button of screen.getAllByText('Stop using this network')) {
+      expect((button as HTMLButtonElement).disabled).toBe(true)
+    }
+    expect(
+      (screen.getByLabelText('Save priority for Office LAN') as HTMLButtonElement).disabled
+    ).toBe(true)
+    fireEvent.click(screen.getByLabelText('Save priority for Office LAN'))
+    expect(update).not.toHaveBeenCalled()
+  })
+
+  it('shows one message when two networks share the first place', () => {
+    useCan.mockReturnValue(true)
+    useDatacenters.mockReturnValue({
+      data: {
+        datacenters: [
+          { id: 'a', name: 'Alpha', priority: 10, trusted: true, options: null },
+          { id: 'b', name: 'Beta', priority: 10, trusted: true, options: null },
+        ],
+      },
+      isError: false,
+    })
+    useServerTrafficMap.mockReturnValue({ data: { ...map, peers: [] }, isError: false })
+    render(<ServerTrafficCard orgId="org-1" serverId="srv-1" />)
+    expect(screen.getAllByText('Tied for first')).toHaveLength(1)
+    expect(screen.getAllByText('Same priority as another')).toHaveLength(1)
+    expect(screen.queryByText('Used first')).toBeNull()
+  })
+
+  it('names later places in words', () => {
+    show()
+    expect(screen.getByText('Second')).toBeTruthy()
+  })
+
+  it('shows an error when either request fails', () => {
+    useCan.mockReturnValue(true)
+    useDatacenters.mockReturnValue({ data: { datacenters }, isError: false })
+    useServerTrafficMap.mockReturnValue({ data: undefined, isError: true })
+    render(<ServerTrafficCard orgId="org-1" serverId="srv-1" />)
+    expect(screen.getByRole('alert').textContent).toContain('Could not load the networks.')
+    expect(screen.queryByText(/shares no network/)).toBeNull()
+  })
+
+  it('shows a loading line, not an empty message, while loading', () => {
+    useCan.mockReturnValue(true)
+    useDatacenters.mockReturnValue({ data: undefined, isError: false, isPending: true })
+    useServerTrafficMap.mockReturnValue({ data: undefined, isError: false, isPending: true })
+    render(<ServerTrafficCard orgId="org-1" serverId="srv-1" />)
+    expect(screen.getByRole('progressbar')).toBeTruthy()
+    expect(screen.queryByText(/No networks are set up yet/)).toBeNull()
+  })
+
+  it('says when only the first servers are shown', () => {
+    show(true, { ...map, truncated: true })
+    expect(screen.getByText('Only the first 100 servers are shown.')).toBeTruthy()
   })
 
   it('shows read-only numbers without manage rights', () => {
     show(false)
-    expect(screen.queryByLabelText('Use Office LAN first')).toBeNull()
+    expect(screen.queryByText('Use this one first')).toBeNull()
     expect(screen.getByText('Priority 100')).toBeTruthy()
   })
 

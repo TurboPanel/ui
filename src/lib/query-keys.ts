@@ -353,7 +353,15 @@ export const queryKeys = {
         members: (environmentId: string) =>
           ['org', orgId, 'managed', environmentId, 'members'] as const,
         effectivePermissions: (environmentId: string, principalId: string) =>
-          ['org', orgId, 'managed', environmentId, 'users', principalId, 'effective-permissions'] as const,
+          [
+            'org',
+            orgId,
+            'managed',
+            environmentId,
+            'users',
+            principalId,
+            'effective-permissions',
+          ] as const,
         privilegeCatalogue: (environmentId: string) =>
           ['org', orgId, 'managed', environmentId, 'privilege-catalogue'] as const,
         users: (environmentId: string) =>
