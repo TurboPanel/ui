@@ -71,4 +71,11 @@ describe('ActivitySection states', () => {
     expect(screen.queryByText('Queued')).toBeNull()
     expect(screen.getByText(/2 of 5/)).toBeTruthy()
   })
+
+  it('calls a restart that is being worked on Restarting, not Deploying', () => {
+    state.items = [item({ action: 'restart', state: 'deploying' })]
+    render(<ActivitySection orgId="o1" />)
+    expect(screen.getByText('Restarting')).toBeTruthy()
+    expect(screen.queryByText('Deploying')).toBeNull()
+  })
 })

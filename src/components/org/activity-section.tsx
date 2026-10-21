@@ -66,7 +66,7 @@ function ActivityRow({
         <Text style={styles.mutedText}>{activityActionLabel(item.action)}</Text>
       </DataTableCell>
       <DataTableCell column={state}>
-        <Badge label={activityStateLabel(item.state)} tone={activityStateTone(item.state)} />
+        <Badge label={activityStateLabel(item.state, item.action)} tone={activityStateTone(item.state)} />
       </DataTableCell>
       <DataTableCell column={started}>
         <Text style={styles.mutedText} numberOfLines={1}>
@@ -102,9 +102,7 @@ function FilterButton({
       ]}
       onPress={onPress}
     >
-      <Text
-        style={active ? panelStyles.toolbarBtnTextPrimary : panelStyles.toolbarBtnTextSecondary}
-      >
+      <Text style={active ? panelStyles.toolbarBtnTextPrimary : panelStyles.toolbarBtnTextSecondary}>
         {label}
       </Text>
     </Pressable>
@@ -159,9 +157,7 @@ export function ActivitySection({ orgId }: Readonly<{ orgId: string }>) {
   const items = activity.data?.items ?? []
   const total = activity.data?.total ?? 0
   const loading = activity.isLoading
-  const error = activity.isError
-    ? userErrorMessage(activity.error, 'Failed to load activity')
-    : null
+  const error = activity.isError ? userErrorMessage(activity.error, 'Failed to load activity') : null
 
   const chooseFilter = (next: OrganizationActivityFilter) => {
     setFilter(next)
@@ -189,10 +185,7 @@ export function ActivitySection({ orgId }: Readonly<{ orgId: string }>) {
         ))}
       </View>
 
-      <SectionPanel
-        title="Activity"
-        hint={loading ? 'Loading…' : activityRangeLabel(offset, items.length, total)}
-      >
+      <SectionPanel title="Activity" hint={loading ? 'Loading…' : activityRangeLabel(offset, items.length, total)}>
         {loading ? (
           <View style={styles.loadingRow}>
             <ActivityIndicator size="small" color={colors.accent} />
