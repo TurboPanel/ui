@@ -1,7 +1,7 @@
 import type { OrganizationRecord } from '@/lib/instance-api'
 
-/** Show the header-menu search field once the operator has this many orgs. */
-export const ORG_SWITCHER_HEADER_SEARCH_MIN = 2
+/** Up to this many organizations fit in the menu without scrolling. */
+export const ORG_SWITCHER_LONG_LIST_MIN = 8
 
 export function organizationLabel(
   org: Pick<OrganizationRecord, 'id' | 'name'>,
@@ -57,12 +57,17 @@ export function visibleOrganizations<
   )
 }
 
-export function shouldShowOrgSwitcherSearch(
-  organizationCount: number,
-  force: boolean,
-): boolean {
-  if (force) {
-    return organizationCount > 0
-  }
-  return organizationCount >= ORG_SWITCHER_HEADER_SEARCH_MIN
+/** The list counts as long once it has more organizations than this. */
+export function isLongOrgList(organizationCount: number): boolean {
+  return organizationCount > ORG_SWITCHER_LONG_LIST_MIN
+}
+
+/** Filter field: only for a long list. */
+export function shouldShowOrgSwitcherSearch(organizationCount: number): boolean {
+  return isLongOrgList(organizationCount)
+}
+
+/** "View all organizations": only when the menu list scrolls past what fits. */
+export function shouldShowViewAllOrganizations(organizationCount: number): boolean {
+  return isLongOrgList(organizationCount)
 }

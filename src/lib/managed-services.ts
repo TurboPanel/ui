@@ -9,6 +9,7 @@ import {
   MANAGED_FAILOVER_UNSUPPORTED_REASON,
 } from '@/lib/managed-releases'
 import type { ManagedSslMode } from '@/lib/managed-ssl'
+import { STRAIGHT_THROUGH_ERROR_COPY } from '@/lib/managed-straight-through'
 import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
 import { MANAGED_HAS_BINDINGS_COPY } from '@/lib/user-error'
 
@@ -310,6 +311,10 @@ export type ManagedUserRecord = {
   allowedSources?: string[]
   /** Most connections at once; `null`/absent = no cap. */
   maxConnections?: number | null
+  /** PostgreSQL only: connects straight through (no connection sharing). Always false with a source limit; absent on an older control plane. */
+  straightThrough?: boolean
+  /** True when the owner never chose, so `straightThrough` is the default. */
+  straightThroughDefault?: boolean
   createdAt: string
 }
 
@@ -588,6 +593,7 @@ const MANAGED_ERROR_COPY: Record<string, string> = {
   managed_login_sources_any_alone: 'Anywhere can’t be combined with other places.',
   managed_login_source_server_unknown: 'One of the chosen servers is not in this organization.',
   managed_login_max_connections_invalid: 'Most connections at once must be a whole number from 1 to 10000.',
+  ...STRAIGHT_THROUGH_ERROR_COPY,
   managed_grant_mode_invalid: 'That permission mode is not valid.',
   managed_admin_needs_owner_role:
     'A Database admin login cannot be made on some of these databases. Choose different databases, or use a different kind of login.',

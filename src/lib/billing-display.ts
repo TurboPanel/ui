@@ -2,7 +2,6 @@ import {
   BillingRefusalError,
   BILLING_MUTATION_IN_PROGRESS_ERROR,
   BILLING_NOT_CONFIGURED_ERROR,
-  CHECKOUT_PENDING_ERROR,
   DELINQUENT_SUBSCRIPTION_STATUSES,
   formatShortDate,
   LICENSES_ENDING_ERROR,
@@ -422,8 +421,6 @@ export function describeBillingRefusal(err: unknown, context: RefusalContext = {
       return describeLicensesEnding(err, context)
     case NO_LICENSES_ENDING_ERROR:
       return 'Nothing is ending at that tier any more. Refresh the page.'
-    case CHECKOUT_PENDING_ERROR:
-      return 'A checkout is already open for this organization. Finish it, or wait for it to expire, then try again.'
     case STRIPE_ERROR:
       return 'The payment provider could not complete that. Nothing was changed; try again in a moment.'
     case BILLING_NOT_CONFIGURED_ERROR:
