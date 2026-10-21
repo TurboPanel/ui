@@ -45,11 +45,6 @@ type MetricLineChartProps = Readonly<{
   xTickFormat?: (ms: number) => string
   /** Dashed horizontal reference line (e.g. Tjmax/TDP limit) at a fixed Y value. */
   referenceLine?: Readonly<{ valueY: number; label: string; color?: string }>
-  /**
-   * Vertical dividers marking hardware-profile generation boundaries —
-   * distinct from gap bands (missing samples vs. a sensor-identity change).
-   */
-  breakLines?: readonly number[]
 }>
 
 const Y_AXIS_WIDTH = 52
@@ -267,20 +262,6 @@ function referenceLineTop(valueY: number, yAxis: YAxisConfig, chartHeight: numbe
   const clamped = Math.max(domainMin, Math.min(domainMax, valueY))
   const fraction = (clamped - domainMin) / yAxis.maxValue
   return chartHeight * (1 - fraction)
-}
-
-/** Same X-position math as {@link gapBandLayout}, for a single timestamp. */
-function breakLineLeft(
-  tMs: number,
-  xDomainMs: readonly [number, number],
-  plotWidth: number,
-): number | null {
-  const [startMs, endMs] = xDomainMs
-  const domain = endMs - startMs
-  if (domain <= 0 || plotWidth <= 0) return null
-  const raw = ((tMs - startMs) / domain) * plotWidth
-  if (raw < 0 || raw > plotWidth) return null
-  return raw
 }
 
 const pointerStyles = StyleSheet.create({
@@ -655,40 +636,6 @@ function GapBandsLayer({
   )
 }
 
-function BreakLinesLayer({
-  breakLines,
-  xDomainMs,
-  chartWidth,
-  chartHeight,
-}: Readonly<{
-  breakLines: readonly number[] | undefined
-  xDomainMs: readonly [number, number]
-  chartWidth: number
-  chartHeight: number
-}>) {
-  if (!breakLines || breakLines.length === 0) return null
-  return (
-    <View
-      style={[
-        styles.gapLayer,
-        { left: Y_AXIS_WIDTH, width: chartWidth, height: chartHeight },
-      ]}
-    >
-      {breakLines.map((tMs) => {
-        const left = breakLineLeft(tMs, xDomainMs, chartWidth)
-        if (left === null) return null
-        return (
-          <View key={tMs} style={[styles.breakLine, { left }]}>
-            <Text style={styles.breakLineLabel} numberOfLines={1}>
-              Hardware change
-            </Text>
-          </View>
-        )
-      })}
-    </View>
-  )
-}
-
 function ReferenceLineOverlay({
   referenceLine,
   topPx,
@@ -757,7 +704,6 @@ export function MetricLineChart({
   gapBands,
   xTickFormat,
   referenceLine,
-  breakLines,
 }: MetricLineChartProps) {
   const [measuredWidth, setMeasuredWidth] = useState(0)
 
@@ -804,12 +750,6 @@ export function MetricLineChart({
         <View style={styles.chartFrame}>
           <GapBandsLayer
             gapBands={gapBands}
-            xDomainMs={xDomainMs}
-            chartWidth={chartWidth}
-            chartHeight={chartHeight}
-          />
-          <BreakLinesLayer
-            breakLines={breakLines}
             xDomainMs={xDomainMs}
             chartWidth={chartWidth}
             chartHeight={chartHeight}
@@ -899,23 +839,6 @@ const styles = StyleSheet.create({
     borderLeftWidth: 1,
     borderRightWidth: 1,
     borderColor: 'rgba(224, 179, 65, 0.28)',
-  },
-  breakLine: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    width: 1,
-    backgroundColor: colors.borderMuted,
-  },
-  breakLineLabel: {
-    position: 'absolute',
-    top: -12,
-    left: 3,
-    fontSize: 9,
-    fontWeight: '700',
-    color: colors.textDim,
-    fontFamily: 'monospace',
-    letterSpacing: -0.2,
   },
   referenceLineLayer: {
     position: 'absolute',

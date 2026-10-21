@@ -109,6 +109,8 @@ export const queryKeys = {
           ['org', orgId, 'server', serverId, 'metrics', 'summary', rangeId] as const,
         metricsEvents: (serverId: string, rangeId: string) =>
           ['org', orgId, 'server', serverId, 'metrics', 'events', rangeId] as const,
+        metricsFacts: (serverId: string) =>
+          ['org', orgId, 'server', serverId, 'metrics', 'facts'] as const,
         metricsConnection: (serverId: string, rangeId: string) =>
           ['org', orgId, 'server', serverId, 'metrics', 'connection', rangeId] as const,
         /**

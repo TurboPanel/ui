@@ -27,6 +27,7 @@ import {
   fetchServer,
   fetchServerMetricsCapabilities,
   fetchServerMetricsConnection,
+  fetchServerMetricsFacts,
   fetchServerMetricsEvents,
   fetchServerMetricsLiveSettings,
   fetchServerMetricsSeries,
@@ -39,6 +40,7 @@ import {
   IP_IN_USE_ERROR,
   isForbiddenError,
   MetricsBackendUnavailableError,
+  MetricsRouteMissingError,
   PROJECT_HAS_RUNNING_SERVICES_ERROR,
   saveServerMetricsLiveSettings,
   saveServerHardwareProfile,
@@ -1411,6 +1413,25 @@ describe('fetch wrappers (mocked fetch)', () => {
       samples: [],
     })
     expect(String(fetchMock.mock.calls[1]?.[0])).toContain('/metrics/connection')
+  })
+
+  it('fetchServerMetricsFacts hits the facts path with the organization header', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ ok: true, available: true, facts: { text: {}, blockDevices: [], gpus: [] } })
+    )
+    await expect(fetchServerMetricsFacts('srv-1', 'org-metrics')).resolves.toMatchObject({
+      available: true,
+    })
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/servers/srv-1/metrics/facts')
+    const [, init] = fetchMock.mock.calls[0] ?? []
+    expect((init as RequestInit).headers).toMatchObject({ [ORG_ID_HEADER]: 'org-metrics' })
+  })
+
+  it('fetchServerMetricsFacts throws MetricsRouteMissingError on 404 (an older panel)', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'not_found' }, 404))
+    await expect(fetchServerMetricsFacts('srv-1', 'org-metrics')).rejects.toBeInstanceOf(
+      MetricsRouteMissingError
+    )
   })
 
   it('fetchServerMetricsSeries throws MetricsBackendUnavailableError on 503', async () => {
