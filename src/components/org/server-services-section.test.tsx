@@ -17,6 +17,40 @@ const state = vi.hoisted(() => ({
   },
 }))
 
+vi.mock('@/components/org/server-blocker-items', () => ({
+  ServerBlockerItemsFromRow: ({
+    orgId,
+    row,
+  }: {
+    orgId: string
+    row: { items?: unknown; more?: number }
+  }) => {
+    const items = Array.isArray(row.items) ? row.items : []
+    return (
+      <>
+        {items.map(
+          (item: {
+            id: string
+            name: string
+            projectId?: string
+            projectName?: string
+          }) => (
+            <a
+              key={item.id}
+              href={
+                item.projectId
+                  ? `/${orgId}/projects/${item.projectId}/environments/${item.id}`
+                  : '#'
+              }
+            >
+              {item.projectName ? `${item.projectName} / ${item.name}` : item.name}
+            </a>
+          )
+        )}
+      </>
+    )
+  },
+}))
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
 vi.mock('react-native-svg', async () => (await import('@/components/ui/v4/rn-stub')).svgStub)
 vi.mock(
@@ -169,6 +203,70 @@ describe('ServerServicesSection', () => {
       ).length
     ).toBeGreaterThan(0)
     expect(screen.queryByText(/Clear the items below first/)).toBeNull()
+  })
+
+  it('links named environments from removal reason items', () => {
+    state.result = {
+      isLoading: false,
+      error: null,
+      data: emptyRecord({
+        removal: {
+          canRemove: false,
+          online: true,
+          canForget: false,
+          reasons: [
+            {
+              kind: 'environment',
+              count: 1,
+              message: 'App environment "Shop / staging" is still placed on this server.',
+              items: [
+                {
+                  id: 'env-1',
+                  name: 'staging',
+                  projectId: 'proj-1',
+                  projectName: 'Shop',
+                  hasDatabase: false,
+                },
+              ],
+              more: 0,
+            },
+          ],
+        },
+      }),
+    }
+    render(<ServerServicesSection orgId="org-1" serverId="srv-1" />)
+    const link = screen.getByRole('link', { name: 'Shop / staging' })
+    expect(link.getAttribute('href')).toBe('/org-1/projects/proj-1/environments/env-1')
+  })
+
+  it('shows blocked-database refusal copy from the services removal reasons', () => {
+    state.result = {
+      isLoading: false,
+      error: null,
+      data: emptyRecord({
+        removal: {
+          canRemove: false,
+          online: false,
+          canForget: false,
+          reasons: [
+            {
+              kind: 'managed',
+              count: 1,
+              message:
+                'Database "orders" has its only copy on this server. Delete the database first.',
+            },
+          ],
+        },
+      }),
+    }
+    render(<ServerServicesSection orgId="org-1" serverId="srv-1" />)
+    expect(
+      screen.getByText(
+        'Database "orders" has its only copy on this server. Delete the database first.'
+      )
+    ).toBeTruthy()
+    expect(screen.getByText(/Clear the items below first/)).toBeTruthy()
+    expect(screen.queryByText(/Host is gone/)).toBeNull()
   })
 
   it('points an offline forgettable host at Delete server → Host is gone', () => {
