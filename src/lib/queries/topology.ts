@@ -1,6 +1,7 @@
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   addDatacenterMembers,
+  chooseServerTrafficNetwork,
   createDatacenter,
   createDatacenterSubnet,
   createIp,
@@ -16,6 +17,7 @@ import {
   fetchIps,
   fetchNetworks,
   fetchOrganizationDockerNetworking,
+  fetchServerTrafficMap,
   isForbiddenError,
   removeDatacenterMember,
   updateDatacenter,
@@ -442,3 +444,33 @@ export function useDeleteNetwork(orgId: string) {
 }
 
 export type { IpListFilters, NetworkListFilters }
+
+export function useServerTrafficMap(
+  orgId: string,
+  serverId: string,
+  options?: Readonly<{ enabled?: boolean }>,
+) {
+  return useQuery({
+    queryKey: queryKeys.org(orgId).servers.trafficMap(serverId),
+    queryFn: () => fetchServerTrafficMap(serverId),
+    enabled:
+      (options?.enabled ?? true) && orgId.length > 0 && serverId.length > 0,
+    refetchInterval: 30_000,
+  })
+}
+
+/** "Use this network first": the instance renumbers priorities, then every map and list re-reads. */
+export function useChooseServerTrafficNetwork(orgId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: chooseServerTrafficNetwork,
+    fallbackError: 'Could not change which network is used first.',
+    onSettled: () =>
+      Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.org(orgId).topology.datacenters,
+        }),
+        queryClient.invalidateQueries({ queryKey: ['org', orgId, 'server'] }),
+      ]),
+  })
+}
