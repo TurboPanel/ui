@@ -803,6 +803,8 @@ export type NtpDefaults = {
 export type OrgHostDefaults = {
   sshPort: number | null
   ntp: NtpDefaults | null
+  /** Hide web server names and versions; on unless set to false. */
+  hideWebServerNames: boolean
   defaultFabricEnabled: boolean
 }
 
@@ -957,6 +959,9 @@ export type OrgServerRecord = {
   /** Effective desired NTP settings (not the observed timeSync facts). */
   ntpDefaults: NtpDefaults | null
   ntpDefaultsSource: HostDefaultsSource | null
+  /** Effective web server name hiding (server → org → on). */
+  hideWebServerNames: boolean
+  hideWebServerNamesSource: HostDefaultsSource | null
   /** Datacenter memberships (IP pins); a server may belong to many. */
   datacenters: ServerDatacenterRef[]
 }
@@ -1000,6 +1005,8 @@ function normalizeOrgServer<T extends OrgServerRecord>(server: T): T {
     sshPortSource: server.sshPortSource ?? null,
     ntpDefaults: server.ntpDefaults ?? null,
     ntpDefaultsSource: server.ntpDefaultsSource ?? null,
+    hideWebServerNames: server.hideWebServerNames ?? true,
+    hideWebServerNamesSource: server.hideWebServerNamesSource ?? null,
   }
 }
 
@@ -1163,6 +1170,8 @@ export async function updateServer(
     options?: {
       sshPort?: number | null
       ntp?: NtpDefaults | null
+      /** `null` follows the organization setting. */
+      hideWebServerNames?: boolean | null
       hosting?: { enabled: boolean }
     }
     /** Location override; `null` resets every field to the detected value. */
