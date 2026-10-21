@@ -8531,6 +8531,16 @@ export type ConnectionHistoryChartResponse = {
   events: ConnectionStatusEvent[]
 }
 
+/** The panel has no such metrics route (an older panel): callers show "not available" for that card. */
+export class MetricsRouteMissingError extends Error {
+  readonly code = 'metrics_route_missing'
+
+  constructor(message: string) {
+    super(message)
+    this.name = 'MetricsRouteMissingError'
+  }
+}
+
 export class MetricsBackendUnavailableError extends Error {
   readonly code = 'metrics_backend_unavailable'
   readonly backend: MetricsBackendKind
@@ -8595,6 +8605,7 @@ async function fetchServerMetricsJson<T>(
       // Non-JSON error body.
     }
     const detail = formatFetchFailureDetail(response.status, bodyError)
+    if (response.status === 404) throw new MetricsRouteMissingError(`${path} failed: ${detail}`)
     throw new Error(`${path} failed: ${detail}`)
   }
 

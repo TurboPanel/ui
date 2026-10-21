@@ -4,6 +4,7 @@ import { renderHook, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   MetricsBackendUnavailableError,
+  MetricsRouteMissingError,
   type FetchServerMetricsSeriesOptions,
 } from '@/lib/instance-api'
 import { createAppQueryClient } from '@/lib/query-client'
@@ -478,6 +479,20 @@ describe('servers query hooks', () => {
       expect(result.current.isSuccess).toBe(true)
     })
     expect(result.current.data).toBeNull()
+  })
+
+  it('useServerMetricsFacts returns null when an older panel has no facts route', async () => {
+    fetchServerMetricsFacts.mockRejectedValueOnce(new MetricsRouteMissingError('HTTP 404'))
+
+    const { result } = renderHook(() => useServerMetricsFacts(orgId, serverId), {
+      wrapper: createWrapper(),
+    })
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+    expect(result.current.data).toBeNull()
+    expect(fetchServerMetricsFacts).toHaveBeenCalledTimes(1)
   })
 
   it('useServerMetricsFacts propagates non-backend errors', async () => {

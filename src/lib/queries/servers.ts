@@ -28,6 +28,7 @@ import {
   isForbiddenError,
   isHttpStatusError,
   MetricsBackendUnavailableError,
+  MetricsRouteMissingError,
   pingDaemon,
   rebootServer,
   resetServerUpdateStatus,
@@ -575,7 +576,13 @@ export function useServerMetricsFacts(
       try {
         return await fetchServerMetricsFacts(serverId, orgId)
       } catch (error) {
-        if (error instanceof MetricsBackendUnavailableError) return null
+        // An older panel has no facts route (404): the card is simply not shown, with no retries.
+        if (
+          error instanceof MetricsBackendUnavailableError ||
+          error instanceof MetricsRouteMissingError
+        ) {
+          return null
+        }
         throw error
       }
     },

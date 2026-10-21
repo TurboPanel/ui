@@ -9,7 +9,7 @@ import type { HostFacts } from '@/lib/instance-api'
 export const HOST_FACT_LABELS: readonly (readonly [string, string])[] = [
   ['os', 'Operating system'],
   ['kernel', 'Kernel'],
-  ['virt', 'Virtualisation'],
+  ['virt', 'Virtualization'],
   ['cloudProvider', 'Cloud provider'],
   ['cpuModel', 'CPU'],
   ['agentVersion', 'TurboPanel version'],
