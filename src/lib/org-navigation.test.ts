@@ -21,6 +21,10 @@ import {
   orgRouteHref,
   orgTabHref,
   datacenterHref,
+  isAddServerRequest,
+  isOrgSearchPath,
+  orgSearchHref,
+  serversAddHref,
   datacenterNewHref,
   networkAddressesHref,
   networkDockerHref,
@@ -379,5 +383,26 @@ describe('server detail services tab', () => {
 describe('serversRemovedHref', () => {
   it('returns to the Servers list with the removed name', () => {
     expect(serversRemovedHref('org-1', 'web 1')).toBe('/org-1/servers?removed=web%201')
+  })
+})
+
+describe('add server link', () => {
+  it('builds the link and reads the query value', () => {
+    expect(serversAddHref('o1')).toBe('/o1/servers?add=1')
+    expect(isAddServerRequest('1')).toBe(true)
+    expect(isAddServerRequest(['1', '0'])).toBe(true)
+    expect(isAddServerRequest('0')).toBe(false)
+    expect(isAddServerRequest(undefined)).toBe(false)
+    expect(isAddServerRequest(null)).toBe(false)
+  })
+})
+
+describe('search tab link', () => {
+  it('builds the link and recognises the page', () => {
+    expect(orgSearchHref('o1')).toBe('/o1/search')
+    expect(isOrgSearchPath('/o1/search', 'o1')).toBe(true)
+    expect(isOrgSearchPath('/o1/search?x=1', 'o1')).toBe(true)
+    expect(isOrgSearchPath('/o1/servers', 'o1')).toBe(false)
+    expect(isOrgSearchPath('/o2/search', 'o1')).toBe(false)
   })
 })

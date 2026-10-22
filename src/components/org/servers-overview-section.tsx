@@ -40,6 +40,7 @@ import {
 } from '@/lib/instance-api'
 import { isServerUpdateActionHidden } from '@/lib/daemon-update-labels'
 import { serverDetailHref, serversPendingKeysHref } from '@/lib/org-navigation'
+import { useAddServerLink } from '@/lib/use-add-server-link'
 import {
   provisioningKeys,
   provisioningServersLabel,
@@ -58,6 +59,7 @@ import {
 } from '@/lib/queries/servers'
 import { orEmptyArray } from '@/lib/or-empty-array'
 import { queryKeys, useCan } from '@/lib/query-client'
+import { useAuth } from '@/lib/auth-context'
 import { resolveServerAddEligibility } from '@/lib/server-add-eligibility'
 import {
   resolveServerConnectionStatus,
@@ -499,9 +501,12 @@ function tierChipTone(state: TierPlacementState): BadgeTone {
  * is reserved for the detail panel so this O(1) list adds no billing read.
  */
 function ServerTierLine({ server }: Readonly<{ server: OrgServerRecord }>) {
+  const { billingEnabled } = useAuth()
   const placement = server.tierPlacement
-  // No bound tier is *untiered* (self-hosted, or a hosted key minted before
-  // billing) — not a shortfall, so no "Unlicensed" chip on the fleet list.
+  // Self-hosted servers are all equal: no tier is shown anywhere.
+  if (!billingEnabled) return null
+  // No bound tier is *untiered* (a hosted key minted before billing) — not a
+  // shortfall, so no "Unlicensed" chip on the fleet list.
   if (!placement?.licenseTier) {
     return <Text style={styles.locationMuted}>—</Text>
   }
@@ -545,6 +550,8 @@ function ServerTierLine({ server }: Readonly<{ server: OrgServerRecord }>) {
 }
 
 function ServerTierCell({ server }: Readonly<{ server: OrgServerRecord }>) {
+  const { billingEnabled } = useAuth()
+  if (!billingEnabled) return null
   return (
     <DataTableCell column={SV_TIER}>
       <ServerTierLine server={server} />
@@ -768,9 +775,13 @@ function ServersFleetTable({
   onToggleSelectAll,
   onToggleSelected,
 }: ServersFleetViewProps) {
+  const { billingEnabled } = useAuth()
+  const columns = billingEnabled
+    ? SERVER_COLUMNS
+    : SERVER_COLUMNS.filter((column) => column.key !== 'tier')
   return (
     <DataTable
-      columns={SERVER_COLUMNS}
+      columns={columns}
       minWidth={1000}
       renderHeaderCell={(column) =>
         column.key === 'check' ? (
@@ -1024,6 +1035,7 @@ export function ServersOverviewSection({
   })
 
   const [showAddServerWizard, setShowAddServerWizard] = useState(false)
+  useAddServerLink(() => setShowAddServerWizard(true))
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [serversLayout, setServersLayout] = useState<ServersLayout>(() => getStoredServersLayout())
 

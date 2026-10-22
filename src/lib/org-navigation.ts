@@ -400,6 +400,26 @@ export function serversPendingKeysHref(orgId: string): `/${string}/servers/keys`
   return `/${orgId}/servers/keys`
 }
 
+/** The phone's Search tab (the header search is an icon on narrow widths). */
+export function orgSearchHref(orgId: string): `/${string}/search` {
+  return `/${orgId}/search`
+}
+
+/** True on the Search tab's page. */
+export function isOrgSearchPath(pathname: string, orgId: string): boolean {
+  return orgPathWithoutQuery(pathname) === orgSearchHref(orgId)
+}
+
+/** The Servers list with the Add server steps already open (the search's "Add server"). */
+export function serversAddHref(orgId: string): `/${string}/servers?add=1` {
+  return `/${orgId}/servers?add=1`
+}
+
+/** True when the `add` query value asks for the Add server steps. */
+export function isAddServerRequest(value: string | readonly string[] | null | undefined): boolean {
+  return (typeof value === 'string' ? value : value?.[0]) === '1'
+}
+
 export function datacenterHref(
   orgId: string,
   datacenterId: string

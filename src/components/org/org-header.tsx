@@ -10,6 +10,8 @@ import { TurboPanelLogo } from '@/components/brand/turbopanel-logo'
 import { GlassSurface } from '@/components/glass/glass-surface'
 import { HeaderAccountControls } from '@/components/header-account-controls'
 import { HeaderMenuButton } from '@/components/header-menu-button'
+import { HeaderBreadcrumb } from '@/components/org/header-breadcrumb'
+import { useHeaderBreadcrumb } from '@/components/org/use-header-breadcrumb'
 import { OrganizationSwitcherSegment } from '@/components/organization-switcher'
 import {
   HeaderSearch,
@@ -17,6 +19,7 @@ import {
   useHeaderSearchShortcut,
 } from '@/components/header-search'
 import { useAuth } from '@/lib/auth-context'
+import { showsBreadcrumb } from '@/lib/header-breadcrumb'
 import { headerLayoutFor } from '@/lib/header-layout'
 import { HEADER_SEARCH_COLLAPSE_WIDTH } from '@/lib/header-search'
 import { spacing } from '@/lib/theme'
@@ -36,6 +39,8 @@ export function OrgHeader({
   const header = headerLayoutFor(width, false)
   const searchCollapsed = width < HEADER_SEARCH_COLLAPSE_WIDTH
   const [searchOpen, setSearchOpen] = useState(false)
+  const crumb = useHeaderBreadcrumb(orgId)
+  const showCrumb = crumb !== null && showsBreadcrumb(width)
   useHeaderSearchShortcut(() => setSearchOpen(true), searchCollapsed)
 
   return (
@@ -50,7 +55,12 @@ export function OrgHeader({
         <View style={styles.orgSlot}>
           <OrganizationSwitcherSegment orgId={orgId} />
         </View>
-        {searchCollapsed ? null : <HeaderSearch orgId={orgId} />}
+        {showCrumb ? (
+          <View style={styles.crumbSlot}>
+            <HeaderBreadcrumb crumb={crumb} />
+          </View>
+        ) : null}
+        {searchCollapsed ? null : <HeaderSearch orgId={orgId} keepWidth={showCrumb} />}
       </View>
 
       <View style={styles.headerActions}>
@@ -104,6 +114,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   orgSlot: {
+    flexShrink: 1,
+    minWidth: 0,
+  },
+  // Takes what the search leaves and shrinks (with an ellipsis) before the search does.
+  crumbSlot: {
     flexShrink: 1,
     minWidth: 0,
   },
