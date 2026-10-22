@@ -480,7 +480,8 @@ export function ServerTierPlacementPanel({
 
   const rankOf = useMemo(() => tierRankResolver(catalogQuery.data?.tiers), [catalogQuery.data])
   const placement = server.tierPlacement
-  if (!placement || (!billingEnabled && !placement.licenseTier)) return null
+  // Self-hosted servers are all equal: no tier panel.
+  if (!placement || !billingEnabled) return null
 
   const state = tierPlacementState(placement, rankOf)
   const notice = placement.notice ?? null
