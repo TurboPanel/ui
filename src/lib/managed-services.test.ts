@@ -650,6 +650,47 @@ describe('stale replica health', () => {
   })
 })
 
+describe('managedRecoveryBanner after a finished failover', () => {
+  const done = recoveryRecord({
+    id: 'r1',
+    kind: 'automatic-failover',
+    state: 'completed',
+    sourcePrimaryMemberId: 'p1',
+    targetMemberId: 't1',
+    sourceServerId: 's1',
+    targetServerId: 's2',
+    completedAt: '2026-08-19T00:01:00.000Z',
+  })
+  const names = (id: string) => ({ s1: 'adrastea', s2: 'kore' })[id] ?? null
+
+  it('says in plain words what happened for a day', () => {
+    const banner = managedRecoveryBanner(done, {
+      nowMs: Date.parse('2026-08-19T00:13:00.000Z'),
+      serverName: names,
+    })
+    expect(banner?.kind).toBe('completed')
+    expect(banner?.text).toContain('failed over automatically')
+    expect(banner?.text).toContain('12 minutes ago')
+    expect(banner?.text).toContain('kore is now the primary')
+    expect(banner?.text).toContain('adrastea is stopped')
+  })
+
+  it('goes away after a day and never shows for a planned switchover', () => {
+    expect(managedRecoveryBanner(done, { nowMs: Date.parse('2026-08-21T00:00:00.000Z') })).toBeNull()
+    expect(
+      managedRecoveryBanner(
+        { ...done, kind: 'switchover' },
+        { nowMs: Date.parse('2026-08-19T00:02:00.000Z') }
+      )
+    ).toBeNull()
+  })
+
+  it('does not call a stopped member a read server', () => {
+    expect(memberReadTrafficLabel('replica', true, 'needs_resync')).toBe('Not serving reads')
+    expect(memberReadTrafficLabel('replica', true, 'ready')).toBe('Serves reads')
+  })
+})
+
 describe('managedRecoveryBanner', () => {
   it('hides completed recoveries and surfaces blocked copy', () => {
     expect(

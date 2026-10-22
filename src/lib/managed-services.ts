@@ -745,8 +745,13 @@ export function memberReplicaClassPickerLabel(replicaClass: ManagedReplicaClass)
   return replicaClass === 'failover' ? 'Failover replica' : 'Remote/read replica'
 }
 
-export function memberReadTrafficLabel(role: ManagedMemberRole, readEligible: boolean): string {
+export function memberReadTrafficLabel(
+  role: ManagedMemberRole,
+  readEligible: boolean,
+  status?: string | null
+): string {
   if (role === 'primary') return 'Read/write'
+  if (status === 'needs_resync' || status === 'stopped') return 'Not serving reads'
   return readEligible ? 'Serves reads' : 'Standby only'
 }
 
@@ -794,10 +799,40 @@ export function managedRecoveryStateLabel(state: ManagedRecoveryState): string {
   }
 }
 
+/** How long a finished failover stays on the cluster page. */
+export const COMPLETED_FAILOVER_BANNER_MS = 24 * 60 * 60 * 1000
+
+function agoText(thenMs: number, nowMs: number): string {
+  const minutes = Math.max(0, Math.round((nowMs - thenMs) / 60_000))
+  if (minutes < 2) return 'just now'
+  if (minutes < 90) return `${minutes} minutes ago`
+  return `${Math.round(minutes / 60)} hours ago`
+}
+
 export function managedRecoveryBanner(
-  recovery: ManagedRecoveryRecord | null | undefined
-): { kind: 'blocked' | 'failed' | 'in-flight'; text: string } | null {
-  if (!recovery || recovery.state === 'completed') return null
+  recovery: ManagedRecoveryRecord | null | undefined,
+  options: { nowMs?: number; serverName?: (serverId: string) => string | null } = {}
+): { kind: 'blocked' | 'failed' | 'in-flight' | 'completed'; text: string } | null {
+  if (!recovery) return null
+  if (recovery.state === 'completed') {
+    if (recovery.kind === 'switchover' || !recovery.completedAt) return null
+    const doneMs = Date.parse(recovery.completedAt)
+    const nowMs = options.nowMs ?? Date.now()
+    if (!Number.isFinite(doneMs) || nowMs - doneMs > COMPLETED_FAILOVER_BANNER_MS) return null
+    const from = recovery.sourceServerId ? options.serverName?.(recovery.sourceServerId) : null
+    const to = recovery.targetServerId ? options.serverName?.(recovery.targetServerId) : null
+    const lead =
+      recovery.kind === 'automatic-failover'
+        ? from
+          ? `The primary on ${from} stopped answering, so the database failed over automatically`
+          : 'The primary stopped answering, so the database failed over automatically'
+        : 'The database was promoted for disaster recovery'
+    const resync = from ? ` ${from} is stopped; use Resync to bring it back as a replica.` : ''
+    return {
+      kind: 'completed',
+      text: `${lead} (${agoText(doneMs, nowMs)}). ${to ? `${to} is now` : 'A replica is now'} the primary.${resync}`,
+    }
+  }
   if (recovery.state === 'blocked') {
     return {
       kind: 'blocked',

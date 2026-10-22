@@ -104,6 +104,7 @@ function resolveHealthLine(
   if (member.role !== 'replica') {
     return [memberStatusLabel(member.status), slotNotice].filter(Boolean).join(' · ')
   }
+  if (member.status === 'needs_resync') return 'Stopped · needs a Resync'
   if (cutOff) return REPLICA_CUT_OFF_LABEL
   const lag = formatReplicationLag(member.replication)
   const age = formatReplicationAge(member.replication)
@@ -213,7 +214,9 @@ export function ManagedClusterPanel({
     return map
   }, [eligibility.servers])
 
-  const recoveryBanner = managedRecoveryBanner(recovery)
+  const recoveryBanner = managedRecoveryBanner(recovery, {
+    serverName: (serverId) => members.find((m) => m.serverId === serverId)?.serverName ?? null,
+  })
   const disasterMember = disasterMemberId
     ? (members.find((member) => member.id === disasterMemberId) ?? null)
     : null
@@ -625,7 +628,9 @@ function ClusterMemberRow({
   const classLabel = memberReplicaClassLabel(member.replicaClass)
   const promoteAction = managedReplicaPromoteAction(member.replicaClass)
   const isReadReplica = promoteAction === 'disaster-recovery'
-  const liveReads = member.role === 'primary' || member.readEligible
+  const liveReads =
+    member.role === 'primary' ||
+    (member.readEligible && member.status !== 'needs_resync' && member.status !== 'stopped')
 
   return (
     <View style={styles.row}>
@@ -648,7 +653,7 @@ function ClusterMemberRow({
           <View style={styles.chipRow}>
             <View style={liveReads ? styles.readsChip : styles.standbyChip}>
               <Text style={liveReads ? styles.readsChipText : styles.standbyChipText}>
-                {memberReadTrafficLabel(member.role, member.readEligible)}
+                {memberReadTrafficLabel(member.role, member.readEligible, member.status)}
               </Text>
             </View>
             {isReadReplica ? (
