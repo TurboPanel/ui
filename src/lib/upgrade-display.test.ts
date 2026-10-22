@@ -21,7 +21,9 @@ import {
   upgradeChannelTitle,
   upgradePhaseLabel,
   upgradeRunErrorLabel,
+  upgradeServerLabel,
   upgradeStepLabel,
+  upgradeStepNote,
   upgradeStepErrorLabel,
   upgradeStepOutcome,
 } from '@/lib/upgrade-display'
@@ -652,5 +654,40 @@ describe('runWaitsOnlyOnOffline platform phases', () => {
         steps: [{ status: 'waiting', phase: 'fleet', connected: false, attempts: 0 }],
       })
     ).toBe(true)
+  })
+})
+
+describe('upgradeServerLabel', () => {
+  const serverId = '01a163c1-aaaa-7bbb-8ccc-0123456789ab'
+
+  it('puts the name first and keeps the short id as secondary text', () => {
+    expect(upgradeServerLabel({ serverId, serverName: ' w ', hostname: 'w.lan' })).toEqual({
+      primary: 'w',
+      shortId: '01a163c1',
+    })
+  })
+
+  it('falls back to the hostname when the server has no name', () => {
+    expect(upgradeServerLabel({ serverId, serverName: null, hostname: 'w.lan' })).toEqual({
+      primary: 'w.lan',
+      shortId: '01a163c1',
+    })
+  })
+
+  it('shows only the id fragment, once, when nothing names the server', () => {
+    expect(upgradeServerLabel({ serverId })).toEqual({ primary: '01a163c1', shortId: null })
+    expect(upgradeServerLabel({ serverId, serverName: '  ', hostname: '' })).toEqual({
+      primary: '01a163c1',
+      shortId: null,
+    })
+  })
+})
+
+describe('upgradeStepNote', () => {
+  it('returns the saved restart note and nothing otherwise', () => {
+    expect(upgradeStepNote({ detail: { restartNote: ' came back ' } })).toBe('came back')
+    expect(upgradeStepNote({ detail: {} })).toBeNull()
+    expect(upgradeStepNote({ detail: null })).toBeNull()
+    expect(upgradeStepNote({})).toBeNull()
   })
 })
