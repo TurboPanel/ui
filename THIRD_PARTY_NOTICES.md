@@ -7,7 +7,7 @@ Third-party components remain under their own copyright and license terms and ar
 Third-party OS artwork under `assets/os/` is recorded separately in `assets/os/NOTICE.md` and is not licensed under this repository’s AGPL or the Apple App Store additional permission.
 
 <!-- lockfiles
-pnpm-lock.yaml sha256:af1ebb427b219f794d4de73d82e0dba1da351bc59cb94fcb186a7bd9005ccb5e
+pnpm-lock.yaml sha256:4bf2a3c5ae564037c6f742956cc1642b3d393dc6d9a51645f3adbcc4187d73fd
 -->
 
 ## Production dependencies
@@ -4434,12 +4434,12 @@ These packages are used for development, test, or build tooling and are not bund
 - Copyright: wrangler@cloudflare.com
 - Homepage: https://github.com/cloudflare/workers-sdk#readme
 
-### @cloudflare/unenv-preset@2.16.1
+### @cloudflare/unenv-preset@2.16.2
 
 - License: MIT OR Apache-2.0
 - Homepage: https://github.com/cloudflare/workers-sdk#readme
 
-### @cloudflare/workerd-linux-64@1.20260815.1
+### @cloudflare/workerd-linux-64@1.20261019.1
 
 - License: Apache-2.0
 - Homepage: https://github.com/cloudflare/workerd#readme
@@ -5584,7 +5584,7 @@ These packages are used for development, test, or build tooling and are not bund
 - Copyright: Jordan Harband
 - Homepage: https://github.com/es-shims/math-intrinsics#readme
 
-### miniflare@5.20260815.0-alpha
+### miniflare@5.20261019.1-beta
 
 - License: MIT
 - Copyright: MrBBot
@@ -6055,12 +6055,12 @@ These packages are used for development, test, or build tooling and are not bund
 - Copyright: Jon Schlinkert
 - Homepage: https://github.com/jonschlinkert/word-wrap
 
-### workerd@1.20260815.1
+### workerd@1.20261019.1
 
 - License: Apache-2.0
 - Homepage: https://github.com/cloudflare/workerd#readme
 
-### wrangler@4.124.0
+### wrangler@4.151.3
 
 - License: MIT OR Apache-2.0
 - Copyright: wrangler@cloudflare.com
