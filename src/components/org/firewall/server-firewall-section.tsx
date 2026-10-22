@@ -175,7 +175,8 @@ function RenderedRuleset({
 function PreviewDetails({ preview }: Readonly<{ preview: FirewallPreview }>) {
   const facts = firewallPreviewFacts(preview)
   const badge = firewallPreviewBadge(preview.status)
-  const previewed = preview.status === 'previewed' || preview.status === 'refused'
+  const previewed =
+    preview.status === 'previewed' || preview.status === 'refused' || preview.status === 'applied'
   return (
     <View style={styles.block}>
       <View style={styles.inline}>
