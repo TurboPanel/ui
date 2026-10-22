@@ -291,4 +291,25 @@ describe('ServerTierPlacementPanel', () => {
     expect(screen.queryByText('Put this server on')).toBeNull()
     expect(screen.getByText(/Only organization owners/)).toBeTruthy()
   })
+
+  it('renders nothing on self-hosted, even when the record carries a tier', () => {
+    useAuth.mockReturnValue({ billingEnabled: false })
+    useCan.mockReturnValue(true)
+    useBillingCatalog.mockReturnValue({ data: undefined })
+    useSetServerLicenseTier.mockReturnValue({ run: vi.fn(), isPending: false })
+
+    const detail = server({
+      licenseTier: 'S2',
+      requiredTier: 'S2',
+      recommendedTier: 'S2',
+      unwatched: { nics: [], drives: [], gpus: [] },
+      pickedTier: null,
+      tierPickNotice: null,
+      tiersFree: [],
+    })
+
+    const { container } = render(<ServerTierPlacementPanel orgId="org-1" server={detail} />)
+
+    expect(container.textContent).toBe('')
+  })
 })
