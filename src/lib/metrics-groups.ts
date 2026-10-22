@@ -57,7 +57,7 @@ export const GROUP_SUMMARY_SPECS: Readonly<Record<string, GroupSummarySpec>> = {
 const HOST_HEALTH_HINT = 'Processes killed for memory, process limit, root disk queue, failed services and RAID'
 const HOST_HEALTH_CHART_IDS = ['health-oom-kills', 'health-pid-limit', 'health-root-disk-queue', 'health-root-disk-ops', 'health-systemd-failed', 'health-raid'] as const
 
-/** v8 container health and totals, shown first in the Docker group. */
+/** Metrics v12 container health and totals, shown first in the Docker group. */
 const DOCKER_HEALTH_CHART_IDS = [
   'docker-containers-health',
   'docker-container-events',
@@ -154,7 +154,7 @@ export const HOST_CHART_GROUPS: readonly HostChartGroup[] = [
       'router-tls-expiry',
     ],
   },
-  // v8 counts and limits (`extended.host`); a v6 daemon sends none, so the section hides itself.
+  // Metrics v12 counts and limits (`extended.host`); a v6 daemon sends none, so the section hides itself.
   { id: 'host-health', label: 'Host health', hint: HOST_HEALTH_HINT, chartIds: HOST_HEALTH_CHART_IDS },
   {
     // `managed.storage` — where the host's bytes actually went. Distinct
@@ -173,7 +173,7 @@ export const HOST_CHART_GROUPS: readonly HostChartGroup[] = [
     ],
   },
   {
-    // `managed.docker` — Docker's own `/system/df` breakdown plus (v8)
+    // `managed.docker` — Docker's own `/system/df` breakdown plus (Metrics v12)
     // container health and totals. On every plan: Docker metrics are no
     // longer a tier feature.
     id: 'managed-docker',
