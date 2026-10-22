@@ -38,7 +38,7 @@ import {
   type ServerUpdateStatus,
 } from '@/lib/instance-api'
 import { isServerUpdateActionHidden } from '@/lib/daemon-update-labels'
-import { serverDetailHref, serversPendingKeysHref } from '@/lib/org-navigation'
+import { isAddServerRequest, serverDetailHref, serversPendingKeysHref } from '@/lib/org-navigation'
 import {
   provisioningKeys,
   provisioningServersLabel,
@@ -75,7 +75,7 @@ import {
 import { chrome, colors, spacing, webPointer } from '@/lib/theme'
 import { usePullToRefresh } from '@/lib/pull-to-refresh'
 import { useQueryClient } from '@tanstack/react-query'
-import { useRouter } from 'expo-router'
+import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useEffect, useMemo, useState, type ReactElement } from 'react'
 import {
   ActivityIndicator,
@@ -1010,7 +1010,10 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
     ])
   })
 
-  const [showAddServerWizard, setShowAddServerWizard] = useState(false)
+  const { add: addParam } = useLocalSearchParams<{ add?: string | string[] }>()
+  const [showAddServerWizard, setShowAddServerWizard] = useState(() =>
+    isAddServerRequest(addParam)
+  )
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [serversLayout, setServersLayout] = useState<ServersLayout>(() => getStoredServersLayout())
 

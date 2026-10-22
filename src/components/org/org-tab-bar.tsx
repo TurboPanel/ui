@@ -1,11 +1,13 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { usePathname, useRouter, type Href } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { OrgAreaIcon } from '@/components/icons/nav-icons'
+import { OrgAreaIcon, SearchIcon } from '@/components/icons/nav-icons'
 import {
   ORG_AREAS,
   ORG_TAB_AREA_IDS,
   isOrgAreaActive,
+  isOrgSearchPath,
+  orgSearchHref,
   orgTabHref,
 } from '@/lib/org-navigation'
 import { glass } from '@/lib/glass'
@@ -72,8 +74,30 @@ export function OrgTabBar({ orgId }: Readonly<{ orgId: string }>) {
             </Pressable>
           )
         })}
+        <SearchTab orgId={orgId} selected={isOrgSearchPath(pathname, orgId)} />
       </View>
     </View>
+  )
+}
+
+/** The fourth tab: opens the full-screen search (servers, projects, pages and actions). */
+function SearchTab({ orgId, selected }: Readonly<{ orgId: string; selected: boolean }>) {
+  const router = useRouter()
+  const iconColor = selected ? chrome.accent : colors.textMuted
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.tab, pressed && styles.tabPressed]}
+      onPress={() => router.replace(orgSearchHref(orgId) as Href)}
+      accessibilityRole="tab"
+      accessibilityState={{ selected }}
+      accessibilityLabel="Search"
+    >
+      {selected ? <View style={styles.tabActiveBar} /> : null}
+      <SearchIcon size={22} color={iconColor} />
+      <Text style={[styles.label, selected && styles.labelActive]} numberOfLines={1}>
+        Search
+      </Text>
+    </Pressable>
   )
 }
 

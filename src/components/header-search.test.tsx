@@ -11,17 +11,22 @@ const push = vi.hoisted(() => vi.fn())
 vi.mock('react-native', () => ({
   Platform: { OS: 'web', select: (o: Record<string, unknown>) => o.web ?? o.default },
   StyleSheet: { create: (s: unknown) => s, absoluteFill: {}, flatten: (s: unknown) => s },
-  View: ({ children, role, id, accessibilityRole, ref, onMouseDown }: Props) => (
+  View: ({ children, role, id, accessibilityRole, ref, onMouseDown, ...rest }: Props) => (
     <div
       ref={ref}
       id={id as string}
+      aria-label={rest['aria-label'] as string}
       role={(role ?? accessibilityRole) as string}
       onMouseDown={onMouseDown as () => void}
     >
       {children}
     </div>
   ),
-  Text: ({ children, id }: Props) => <span id={id as string}>{children}</span>,
+  Text: ({ children, id, role }: Props) => (
+    <span id={id as string} role={role as string}>
+      {children}
+    </span>
+  ),
   Pressable: ({
     children,
     onPress,
@@ -72,8 +77,43 @@ vi.mock('react-native-svg', () => ({
   Rect: () => null,
 }))
 vi.mock('expo-router', () => ({ useRouter: () => ({ push }) }))
-vi.mock('@/lib/auth-context', () => ({ useAuth: () => ({ billingEnabled: false }) }))
-vi.mock('@/lib/workspace-scope-context', () => ({ useOptionalWorkspaceScope: () => null }))
+vi.mock('@/components/ui/v4/status-chip', () => ({
+  StatusChip: ({ status, label }: Props) => (
+    <span data-testid="chip">{(label as string) ?? (status as string)}</span>
+  ),
+}))
+vi.mock('@/components/use-search-items', async () => {
+  const { buildSearchItems } = await import('@/lib/search-index')
+  const items = buildSearchItems('o1', {
+    billingEnabled: false,
+    projectsScopeId: 'all',
+    canManage: true,
+    canOwn: true,
+    isPlatformAdmin: false,
+    servers: [
+      {
+        id: 's1',
+        name: 'derp',
+        hostname: null,
+        address: null,
+        connected: true,
+        statusChangedAt: 'x',
+      },
+      {
+        id: 's2',
+        name: 'zed',
+        hostname: null,
+        address: null,
+        connected: false,
+        statusChangedAt: 'x',
+      },
+    ],
+    projects: [{ id: 'p1', name: 'Blog', type: null }],
+    databases: [],
+    datacenters: [],
+  })
+  return { useSearchItems: () => items }
+})
 
 afterEach(() => {
   cleanup()
@@ -95,33 +135,101 @@ describe('HeaderSearch', () => {
     expect(screen.getByText('Jump to')).toBeTruthy()
     expect(screen.getAllByRole('option').length).toBeGreaterThan(5)
     expect(screen.queryByText('Billing')).toBeNull()
+    expect(screen.queryByText('derp')).toBeNull()
   })
 
   it('filters, retitles to Results and highlights the match', async () => {
     const input = await mount()
     fireEvent.change(input, { target: { value: 'serv' } })
     expect(screen.getByText('Results')).toBeTruthy()
-    expect(screen.getAllByRole('option')).toHaveLength(1)
-    expect(screen.getByText('Serv').tagName).toBe('SPAN')
+    expect(screen.getAllByRole('option').some((o) => o.textContent?.startsWith('Servers'))).toBe(
+      true
+    )
+    expect(screen.getAllByText('Serv')[0]?.tagName).toBe('SPAN')
+  })
+
+  it('finds a server by name with its status chip, under a group heading', async () => {
+    const input = await mount()
+    fireEvent.change(input, { target: { value: 'derp' } })
+    const options = screen.getAllByRole('option')
+    expect(options[0]?.textContent).toContain('derp')
+    expect(options[0]?.textContent).toContain('online')
+    expect(screen.getByText('Servers')).toBeTruthy()
+    expect(screen.getByText('Actions')).toBeTruthy()
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(push).toHaveBeenCalledWith('/o1/servers/s1')
+  })
+
+  it('lists general actions first on an empty query and runs one on Enter', async () => {
+    const input = await mount()
+    expect(screen.getAllByRole('option')[0]?.textContent).toContain('Add server')
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(push).toHaveBeenCalledWith('/o1/servers?add=1')
   })
 
   it('shows the empty state', async () => {
     const input = await mount()
     fireEvent.change(input, { target: { value: 'zzz' } })
-    expect(screen.getByText('No matches for “zzz”.')).toBeTruthy()
+    expect(screen.getByText(/Nothing matches “zzz”/)).toBeTruthy()
     expect(screen.queryAllByRole('option')).toHaveLength(0)
+  })
+
+  it('announces how many results there are', async () => {
+    const input = await mount()
+    fireEvent.change(input, { target: { value: 'derp' } })
+    expect(screen.getByRole('status').textContent).toMatch(/^\d+ results$/)
+  })
+
+  it('asks before a dangerous action opens, and Escape backs out of the question', async () => {
+    const input = await mount()
+    fireEvent.change(input, { target: { value: 'remove zed' } })
+    expect(screen.getAllByRole('option')[0]?.textContent).toContain('Asks first')
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(push).not.toHaveBeenCalled()
+    expect(screen.getByRole('alertdialog').textContent).toContain('Remove server zed?')
+    fireEvent.keyDown(input, { key: 'ArrowDown' })
+    fireEvent.keyDown(input, { key: 'Escape' })
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+    expect(screen.getAllByRole('option').length).toBeGreaterThan(0)
+    expect(push).not.toHaveBeenCalled()
+  })
+
+  it('opens the page only after the question is confirmed with Enter or the button', async () => {
+    const input = await mount()
+    fireEvent.change(input, { target: { value: 'remove zed' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(push).toHaveBeenCalledWith('/o1/servers/s2?tab=control')
+
+    push.mockReset()
+    fireEvent.focus(input)
+    fireEvent.change(input, { target: { value: 'reboot derp' } })
+    fireEvent.click(screen.getAllByRole('option')[0]!)
+    fireEvent.click(screen.getByRole('button', { name: 'Open' }))
+    expect(push).toHaveBeenCalledWith('/o1/servers/s1?tab=control')
+  })
+
+  it('cancels the question with the Cancel button', async () => {
+    const input = await mount()
+    fireEvent.change(input, { target: { value: 'remove zed' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+    expect(push).not.toHaveBeenCalled()
   })
 
   it('moves with arrows and opens the selected route on Enter', async () => {
     const input = await mount()
     fireEvent.keyDown(input, { key: 'ArrowDown' })
     fireEvent.keyDown(input, { key: 'Enter' })
-    expect(push).toHaveBeenCalledWith('/o1/projects/git-sources')
+    expect(push).toHaveBeenCalledWith('/o1/projects/new')
   })
 
   it('opens a clicked row and closes', async () => {
     await mount()
-    fireEvent.click(screen.getByRole('option', { name: /Activity/ }))
+    fireEvent.click(
+      screen.getAllByRole('option').find((o) => o.textContent?.startsWith('Activity'))!
+    )
     expect(push).toHaveBeenCalledWith('/o1/activity')
     expect(screen.queryByRole('listbox')).toBeNull()
   })
