@@ -14,6 +14,7 @@ import {
   fleetComponentLabel,
   fleetStatusBadge,
   installedBuildLabel,
+  upgradeServerLabel,
   upgradeStepOutcome,
 } from '@/lib/upgrade-display'
 import { plainStepFailureMessage } from '@/lib/user-error'
@@ -86,7 +87,7 @@ export function UpgradeFleetTable({
             <DataTableCell column={col('server')}>
               <Text style={styles.cell}>
                 {narrow ? `${fleetComponentLabel(row)}: ` : ''}
-                {row.serverName?.trim() || row.hostname?.trim() || row.serverId.slice(0, 8)}
+                {upgradeServerLabel(row).primary}
               </Text>
             </DataTableCell>
             {narrow ? null : (

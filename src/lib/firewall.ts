@@ -54,7 +54,7 @@ export function firewallModeChoiceText(mode: FirewallMode): string {
     observe:
       'Observe shows the firewall this server would get and applies nothing. Rule changes and reconnects refresh the preview.',
     managed:
-      'Managed means you want this server to enforce its firewall. It is saved, but until enforcement is switched on at the control plane it behaves exactly like Observe: only a preview is sent.',
+      'Managed means you want this server to enforce its firewall. It is saved. On a server where enforcement is not switched on at the control plane it behaves exactly like Observe: only a preview is sent. Where it is switched on, the firewall is applied.',
     off: 'Off leaves this server’s firewall alone. The control plane sends it nothing.',
   }
   return text[mode]
@@ -391,19 +391,24 @@ export function parseSshSources(raw: string): SshSourcesResult {
 // ---------------------------------------------------------------------------
 
 export function firewallPreviewBadge(status: FirewallPreviewStatus): {
-  tone: 'ok' | 'pending' | 'danger'
+  tone: 'ok' | 'pending' | 'danger' | 'muted'
   label: string
 } {
   const badges: Record<
     FirewallPreviewStatus,
-    { tone: 'ok' | 'pending' | 'danger'; label: string }
+    { tone: 'ok' | 'pending' | 'danger' | 'muted'; label: string }
   > = {
     queued: { tone: 'pending', label: 'Waiting for the server' },
     previewed: { tone: 'ok', label: 'Previewed' },
+    applied: { tone: 'ok', label: 'Applied' },
+    removed: { tone: 'muted', label: 'Removed' },
     refused: { tone: 'danger', label: 'Would be refused' },
     failed: { tone: 'danger', label: 'Failed' },
   }
-  return badges[status]
+  // A state this screen does not know yet must never blank the page.
+  return Object.hasOwn(badges, status)
+    ? badges[status]
+    : { tone: 'muted', label: typeof status === 'string' && status ? status : 'Unknown' }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -466,7 +471,10 @@ export function firewallModeNote(
   if (facts.hostMode === 'observe') {
     return 'Managed is saved, but enforcement is not switched on at the control plane, so this server was only sent a preview.'
   }
-  return 'Managed is saved. Until enforcement is switched on at the control plane it behaves like Observe: only a preview is sent.'
+  if (facts.hostMode === 'managed') {
+    return 'Managed is saved and this server enforces its firewall: the ruleset is applied to it.'
+  }
+  return 'Managed is saved. Unless enforcement is switched on for this server at the control plane it behaves like Observe: only a preview is sent.'
 }
 
 /** A line about applied or pending rulesets when there is one; null for a never-applied server. */

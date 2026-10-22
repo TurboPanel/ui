@@ -1141,10 +1141,11 @@ export async function fetchServerServices(serverId: string): Promise<ServerServi
 }
 
 /**
- * Owner-only (`organization:own`). Sets or clears `server.preferred_tier_id`
- * (`tierId` `null` clears the pick). The control plane recomputes the assigned
- * tier from spare licenses; **422** `tier_below_required` when the pick is under
- * the hardware floor; **404** `tier_not_found` / `server_not_licensed`.
+ * Owner-only (`organization:own`). Assigns this server a license at `tierId`
+ * from a free one there, or gives its license back (`null`). Nothing else moves:
+ * the control plane never assigns or moves a license on its own. **409**
+ * `no_free_seat` when no license is free at that tier; **404** `tier_not_found` /
+ * `server_not_licensed`.
  */
 export async function setServerLicenseTier(
   serverId: string,
@@ -2309,7 +2310,9 @@ export function formatBlockedEnvironmentReason(
 ): string {
   if (reason !== 'present_elsewhere') return ''
   const label =
-    projectName.trim().length > 0 ? `${projectName.trim()} / ${environmentName.trim()}` : environmentName.trim()
+    projectName.trim().length > 0
+      ? `${projectName.trim()} / ${environmentName.trim()}`
+      : environmentName.trim()
   const hosts = joinQuotedNames(serverNames.map((name) => `"${name}"`))
   return `App "${label}" also runs on ${hosts}. Move or delete it first.`
 }
@@ -3138,6 +3141,10 @@ export type BillingMutationResponse = {
   deferred?: boolean
   intentId?: string
   scheduleId?: string | null
+  /** Upgrade with a named server: that server, once it moved (`null` while `pending`). */
+  movedServerId?: string | null
+  /** Downgrade with a named server: the server that moves when the change lands. */
+  serverId?: string | null
 }
 
 /**
@@ -3303,6 +3310,8 @@ export async function upgradeBillingTier(body: {
   fromTierId: string
   toTierId: string
   prorationDate?: number
+  /** The one server that moves to `toTierId`; no other server moves. */
+  serverId?: string
 }): Promise<BillingMutationResponse> {
   return await billingPost(`${CLIENT_API}/billing/upgrade`, body)
 }
@@ -3311,6 +3320,8 @@ export async function upgradeBillingTier(body: {
 export async function downgradeBillingTier(body: {
   fromTierId: string
   toTierId: string
+  /** The one server that moves to `toTierId` at the period end; no other server moves. */
+  serverId?: string
 }): Promise<BillingMutationResponse> {
   return await billingPost(`${CLIENT_API}/billing/downgrade`, body)
 }
@@ -5346,6 +5357,13 @@ export type UpgradeStepRow = {
   errorMessage?: string | null
   /** When the step last reported a stage (drives the "still waiting" hint). */
   lastStageAt?: string | null
+  /** Facts the control plane saves on a step; only the parts the screen reads. */
+  detail?: UpgradeStepDetail | null
+}
+
+/** Saved on a step whose host reported a restart error but came back on the new build. */
+export type UpgradeStepDetail = {
+  restartNote?: string
 }
 
 export type UpgradeRunRecord = {
@@ -5698,10 +5716,29 @@ export async function fetchAdminTiers(): Promise<{
  * Surfaced so the operator can see why such a price verifies.
  */
 export type AdminTierTaxDefaults = {
-  /** `inclusive`, `exclusive`, `inferred_by_currency` (Automatic), or null when unreadable or none set. */
+  /**
+   * How the lookup ended: `set`, `unset` (the provider answered with no
+   * default), `not_asked` (no price needed it), `permission_missing` (the
+   * key may not read tax settings) or `provider_error`. Absent from an
+   * older panel, which only sends `taxBehavior`.
+   */
+  outcome?: AdminTierTaxDefaultsOutcome
+  /** `inclusive`, `exclusive`, `inferred_by_currency` (Automatic), or null when not `set`. */
   taxBehavior: string | null
   /** `active` once the provider can calculate tax; `pending` while incomplete. */
   status: string | null
+  /** Why the provider refused, when it did: its status, type, code and any permission it names. */
+  error?: AdminTierTaxDefaultsError | null
+}
+
+export type AdminTierTaxDefaultsOutcome =
+  'set' | 'unset' | 'not_asked' | 'permission_missing' | 'provider_error'
+
+export type AdminTierTaxDefaultsError = {
+  status: number
+  type: string
+  code: string | null
+  permission: string | null
 }
 
 /** The provider's products with their default price and verification. **502** `product_lookup_failed`. */
@@ -6399,6 +6436,13 @@ export type CommandProgress = {
   /** Id of the running step, or null when none is running. */
   current: string | null
   updatedAt: string
+  /**
+   * Set by the control plane (never the server) when it has not heard from the
+   * server for several minutes while the deploy was running. It is checking
+   * with the server rather than calling the deploy failed; the field clears
+   * when the server is heard from again and is absent once the deploy ends.
+   */
+  contactLostAt?: string | null
 }
 
 /**
@@ -9880,7 +9924,8 @@ export type FirewallServerState = {
   confirmedAt: string | null
 }
 
-export type FirewallPreviewStatus = 'queued' | 'previewed' | 'refused' | 'failed'
+export type FirewallPreviewStatus =
+  'queued' | 'previewed' | 'applied' | 'removed' | 'refused' | 'failed'
 
 /**
  * What the host was last sent as a PREVIEW: rendered and checked by the kernel
