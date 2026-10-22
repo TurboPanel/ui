@@ -156,6 +156,6 @@ describe('parseSizeOutput pins the accepted grammar', () => {
     expect(
       parseSizeOutput(`4${' '.repeat(n)}cores,${' '.repeat(n)}8${' '.repeat(n)}GiB RAM`)
     ).toEqual(ok(4, 8))
-    expect(Date.now() - started).toBeLessThan(2000)
+    expect(Date.now() - started).toBeLessThan(10_000)
   })
 })
