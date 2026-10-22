@@ -28,6 +28,7 @@ import {
   type SearchDestination,
   type SearchIconId,
 } from '@/lib/header-search'
+import { SEARCH_MIN_WIDTH_WITH_BREADCRUMB } from '@/lib/header-breadcrumb'
 import { colors, spacing, webPointer } from '@/lib/theme'
 import { useOptionalWorkspaceScope } from '@/lib/workspace-scope-context'
 import { ALL_WORKSPACES_SCOPE } from '@/lib/workspace-scope'
@@ -296,9 +297,12 @@ function SearchPopover({
 export function HeaderSearch({
   orgId,
   collapsed = false,
+  keepWidth = false,
   onClose,
 }: Readonly<{
   orgId: string
+  /** A breadcrumb shares the header: the field keeps a sensible minimum width. */
+  keepWidth?: boolean
   /** Fills the header (narrow widths) with a close button and no shortcut badge. */
   collapsed?: boolean
   onClose?: () => void
@@ -367,7 +371,13 @@ export function HeaderSearch({
   }
 
   return (
-    <View accessibilityRole="search" style={collapsed ? styles.wrapCollapsed : styles.wrap}>
+    <View
+      accessibilityRole="search"
+      style={[
+        collapsed ? styles.wrapCollapsed : styles.wrap,
+        keepWidth && { minWidth: SEARCH_MIN_WIDTH_WITH_BREADCRUMB },
+      ]}
+    >
       <Pressable
         style={[styles.field, focused && styles.fieldFocused]}
         onPress={() => inputRef.current?.focus()}
