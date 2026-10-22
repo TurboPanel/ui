@@ -39,6 +39,7 @@ import {
 } from '@/lib/instance-api'
 import { isServerUpdateActionHidden } from '@/lib/daemon-update-labels'
 import { serverDetailHref, serversPendingKeysHref } from '@/lib/org-navigation'
+import { useAddServerLink } from '@/lib/use-add-server-link'
 import {
   provisioningKeys,
   provisioningServersLabel,
@@ -1021,6 +1022,7 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
   })
 
   const [showAddServerWizard, setShowAddServerWizard] = useState(false)
+  useAddServerLink(() => setShowAddServerWizard(true))
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [serversLayout, setServersLayout] = useState<ServersLayout>(() => getStoredServersLayout())
 

@@ -16,22 +16,20 @@ import {
   GitNavIcon,
   ManagedNavIcon,
   OrgAreaIcon,
+  PlusIcon,
   SearchIcon,
 } from '@/components/icons/nav-icons'
-import { useAuth } from '@/lib/auth-context'
+import { StatusChip } from '@/components/ui/v4/status-chip'
+import { useSearchItems } from '@/components/use-search-items'
+import { isSearchShortcut, moveSearchIndex, splitHighlight } from '@/lib/header-search'
 import {
-  filterSearchDestinations,
-  isSearchShortcut,
-  moveSearchIndex,
-  searchDestinations,
-  splitHighlight,
-  type SearchDestination,
-  type SearchIconId,
-} from '@/lib/header-search'
+  rankSearchItems,
+  searchStatusChip,
+  type SearchItem,
+  type SearchItemIcon,
+} from '@/lib/search-index'
 import { SEARCH_MIN_WIDTH_WITH_BREADCRUMB } from '@/lib/header-breadcrumb'
 import { colors, spacing, webPointer } from '@/lib/theme'
-import { useOptionalWorkspaceScope } from '@/lib/workspace-scope-context'
-import { ALL_WORKSPACES_SCOPE } from '@/lib/workspace-scope'
 
 const isWeb = Platform.OS === 'web'
 const LIST_ID = 'header-search-list'
@@ -96,8 +94,16 @@ export function useHeaderSearchShortcut(onTrigger: () => void, enabled = true) {
   }, [enabled])
 }
 
-function DestinationIcon({ icon, color }: Readonly<{ icon: SearchIconId; color: string }>) {
+function DestinationIcon({ icon, color }: Readonly<{ icon: SearchItemIcon; color: string }>) {
   switch (icon) {
+    case 'server':
+      return <OrgAreaIcon areaId="servers" size={14} color={color} />
+    case 'database':
+      return <OrgAreaIcon areaId="managed" size={14} color={color} />
+    case 'action-add':
+      return <PlusIcon size={14} color={color} />
+    case 'action':
+      return <Text style={{ color, fontSize: 14, fontWeight: '700' }}>{'›'}</Text>
     case 'git-sources':
       return <GitNavIcon size={14} color={color} />
     case 'repositories':
@@ -119,13 +125,14 @@ function SearchRow({
   onHover,
   onPick,
 }: Readonly<{
-  item: SearchDestination
+  item: SearchItem
   query: string
   selected: boolean
   onHover: () => void
   onPick: () => void
 }>) {
   const { before, match, after } = splitHighlight(item.name, query)
+  const chip = searchStatusChip(item)
   return (
     <Pressable
       id={optionId(item.id)}
@@ -144,8 +151,92 @@ function SearchRow({
         {match ? <Text style={styles.rowMatch}>{match}</Text> : null}
         {after}
       </Text>
-      <Text style={styles.rowType}>{item.type}</Text>
+      {chip ? <StatusChip status={chip.key} label={chip.label} size="sm" /> : null}
+      <Text style={styles.rowType}>{item.danger ? 'Asks first' : item.type}</Text>
     </Pressable>
+  )
+}
+
+const groupHeadingId = (group: string) => `header-search-group-${group}`
+
+/** The rows split into their consecutive groups, keeping each row's position in the whole list. */
+function groupRows(shown: readonly SearchItem[]) {
+  const groups: { group: string; rows: { item: SearchItem; position: number }[] }[] = []
+  shown.forEach((item, position) => {
+    const last = groups.at(-1)
+    if (last?.group === item.group) last.rows.push({ item, position })
+    else groups.push({ group: item.group, rows: [{ item, position }] })
+  })
+  return groups
+}
+
+/** The grouped result rows, shared by the header popover and the phone Search screen. */
+export function SearchResultList({
+  shown,
+  activeId,
+  query,
+  onHover,
+  onPick,
+  labelledBy,
+}: Readonly<{
+  shown: readonly SearchItem[]
+  activeId: string | undefined
+  query: string
+  onHover: (position: number) => void
+  onPick: (item: SearchItem) => void
+  labelledBy: string
+}>) {
+  return (
+    <View id={LIST_ID} {...LISTBOX_ROLE} aria-labelledby={labelledBy} style={styles.list}>
+      {groupRows(shown).map(({ group, rows }) => (
+        <View key={group} role="group" aria-labelledby={groupHeadingId(group)}>
+          <Text id={groupHeadingId(group)} style={styles.groupHeading}>
+            {group}
+          </Text>
+          {rows.map(({ item, position }) => (
+            <SearchRow
+              key={item.id}
+              item={item}
+              query={query}
+              selected={item.id === activeId}
+              onHover={() => onHover(position)}
+              onPick={() => onPick(item)}
+            />
+          ))}
+        </View>
+      ))}
+    </View>
+  )
+}
+
+/** The question a dangerous row asks before it opens anything. */
+export function SearchConfirm({
+  item,
+  onConfirm,
+  onCancel,
+}: Readonly<{ item: SearchItem; onConfirm: () => void; onCancel: () => void }>) {
+  return (
+    <View role="alertdialog" aria-label="Confirm" style={styles.confirm}>
+      <Text style={styles.confirmText}>{item.confirm}</Text>
+      <View style={styles.confirmButtons}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Cancel"
+          style={[styles.confirmButton, webPointer]}
+          onPress={onCancel}
+        >
+          <Text style={styles.confirmButtonText}>Cancel</Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Open"
+          style={[styles.confirmButton, styles.confirmButtonPrimary, webPointer]}
+          onPress={onConfirm}
+        >
+          <Text style={styles.confirmButtonText}>Open</Text>
+        </Pressable>
+      </View>
+    </View>
   )
 }
 
@@ -178,7 +269,7 @@ function useScrollActiveIntoView(popoverOpen: boolean, activeId: string | undefi
 const detectMac = () => isWeb && /mac|iphone|ipad/i.test(globalThis.navigator?.platform ?? '')
 
 type SearchKeyEvent = {
-  nativeEvent: { key: string }
+  nativeEvent: { key: string; repeat?: boolean }
   preventDefault: () => void
   stopPropagation?: () => void
 }
@@ -196,7 +287,8 @@ function handleSearchKey(event: SearchKeyEvent, actions: SearchKeyActions) {
     actions.move(key === 'ArrowDown' ? 'down' : 'up')
   } else if (key === 'Enter') {
     event.preventDefault()
-    actions.pickActive()
+    // A held Enter must not select a row and confirm its question in one go.
+    if (!event.nativeEvent.repeat) actions.pickActive()
   } else if (key === 'Escape') {
     event.stopPropagation?.()
     actions.close()
@@ -248,51 +340,66 @@ function SearchFoot() {
 
 function SearchPopover({
   shown,
-  active,
+  activeId,
   query,
   collapsed,
+  pending,
   onHover,
   onPick,
+  onConfirm,
+  onCancel,
 }: Readonly<{
-  shown: SearchDestination[]
-  active: SearchDestination | undefined
+  shown: readonly SearchItem[]
+  activeId: string | undefined
   query: string
   collapsed: boolean
+  pending: SearchItem | null
   onHover: (position: number) => void
-  onPick: (item: SearchDestination) => void
+  onPick: (item: SearchItem) => void
+  onConfirm: () => void
+  onCancel: () => void
 }>) {
   const trimmed = query.trim()
   return (
     <View style={styles.popover} {...KEEP_FOCUS}>
-      <Text id={HEADING_ID} style={styles.heading}>
-        {trimmed ? 'Results' : 'Jump to'}
-      </Text>
-      {shown.length > 0 ? (
-        <>
-          <View id={LIST_ID} {...LISTBOX_ROLE} aria-labelledby={HEADING_ID} style={styles.list}>
-            {shown.map((item, position) => (
-              <SearchRow
-                key={item.id}
-                item={item}
-                query={query}
-                selected={item.id === active?.id}
-                onHover={() => onHover(position)}
-                onPick={() => onPick(item)}
-              />
-            ))}
-          </View>
-          {collapsed ? null : <SearchFoot />}
-        </>
+      {pending ? (
+        <SearchConfirm item={pending} onConfirm={onConfirm} onCancel={onCancel} />
       ) : (
-        <Text style={styles.none}>{`No matches for “${trimmed}”.`}</Text>
+        <>
+          <Text id={HEADING_ID} style={styles.heading}>
+            {trimmed ? 'Results' : 'Jump to'}
+          </Text>
+          {shown.length > 0 ? (
+            <>
+              <SearchResultList
+                shown={shown}
+                activeId={activeId}
+                query={query}
+                onHover={onHover}
+                onPick={onPick}
+                labelledBy={HEADING_ID}
+              />
+              {collapsed ? null : <SearchFoot />}
+            </>
+          ) : (
+            <Text style={styles.none}>
+              {`Nothing matches “${trimmed}”. Try a server name, or an action like “Add server”.`}
+            </Text>
+          )}
+          <Text role="status" style={styles.srOnly}>
+            {`${shown.length} results`}
+          </Text>
+        </>
       )}
     </View>
   )
 }
 
 /**
- * Header search: jumps to the organization's own pages. Nothing here calls the
- * API; the destinations come from the navigation registry.
+ * Header search: finds servers, projects, databases, datacenters and pages,
+ * and offers actions. Rows only ever open a page; a dangerous action asks
+ * first. The lists come from queries the pages already use (read once the
+ * field is focused).
  */
 export function HeaderSearch({
   orgId,
@@ -308,22 +415,15 @@ export function HeaderSearch({
   onClose?: () => void
 }>) {
   const router = useRouter()
-  const { billingEnabled } = useAuth()
-  const scopeId = useOptionalWorkspaceScope()?.scopeId ?? ALL_WORKSPACES_SCOPE
   const inputRef = useRef<TextInputHandle>(null)
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
   const [focused, setFocused] = useState(false)
   const [index, setIndex] = useState(0)
+  const [pending, setPending] = useState<SearchItem | null>(null)
 
-  const shown = useMemo(
-    () =>
-      filterSearchDestinations(
-        searchDestinations(orgId, { billingEnabled, projectsScopeId: scopeId }),
-        query
-      ),
-    [orgId, billingEnabled, scopeId, query]
-  )
+  const items = useSearchItems(orgId, open && focused)
+  const shown = useMemo(() => rankSearchItems(items, query), [items, query])
   const active = shown[Math.min(index, shown.length - 1)]
   const popoverOpen = open && focused
   const activeId = active?.id
@@ -339,27 +439,33 @@ export function HeaderSearch({
 
   if (!isWeb) return null
 
-  const close = () => {
+  const close = (keepFocus = false) => {
     setQuery('')
     setIndex(0)
+    setPending(null)
     setOpen(false)
-    inputRef.current?.blur()
+    if (!keepFocus) inputRef.current?.blur()
     onClose?.()
   }
-  const pick = (item: SearchDestination | undefined) => {
-    if (!item) return
+  const go = (item: SearchItem) => {
     close()
     router.push(item.href as Href)
+  }
+  const pick = (item: SearchItem | undefined) => {
+    if (!item) return
+    if (item.danger) setPending(item)
+    else go(item)
   }
 
   const onKeyPress = (event: SearchKeyEvent) =>
     handleSearchKey(event, {
       move: (direction) => {
+        if (pending) return
         setOpen(true)
         setIndex(moveSearchIndex(index, shown.length, direction))
       },
-      pickActive: () => pick(active),
-      close,
+      pickActive: () => (pending ? go(pending) : pick(active)),
+      close: () => (pending ? setPending(null) : close(true)),
     })
 
   // Pointer presses inside the popover never move focus (see KEEP_FOCUS), so a
@@ -367,6 +473,7 @@ export function HeaderSearch({
   const onBlur = () => {
     setFocused(false)
     setOpen(false)
+    setPending(null)
     if (collapsed) onClose?.()
   }
 
@@ -389,14 +496,16 @@ export function HeaderSearch({
         <TextInput
           ref={inputRef}
           value={query}
-          placeholder="Search projects, servers and settings"
+          placeholder="Search or run an action"
           placeholderTextColor={colors.textDim}
           accessibilityLabel="Search"
           role="combobox"
           aria-expanded={popoverOpen}
           aria-controls={popoverOpen && shown.length > 0 ? LIST_ID : undefined}
           aria-autocomplete="list"
-          aria-activedescendant={popoverOpen && active ? optionId(active.id) : undefined}
+          aria-activedescendant={
+            popoverOpen && active && !pending ? optionId(active.id) : undefined
+          }
           autoComplete="off"
           autoCorrect={false}
           spellCheck={false}
@@ -404,6 +513,7 @@ export function HeaderSearch({
           onChangeText={(text) => {
             setQuery(text)
             setIndex(0)
+            setPending(null)
             setOpen(true)
           }}
           onFocus={() => {
@@ -419,11 +529,14 @@ export function HeaderSearch({
       {popoverOpen ? (
         <SearchPopover
           shown={shown}
-          active={active}
+          activeId={activeId}
           query={query}
           collapsed={collapsed}
+          pending={pending}
           onHover={setIndex}
           onPick={pick}
+          onConfirm={() => pending && go(pending)}
+          onCancel={() => setPending(null)}
         />
       ) : null}
     </View>
@@ -521,15 +634,41 @@ const styles = StyleSheet.create({
     paddingTop: spacing.xs,
     paddingBottom: 6,
   },
-  list: { gap: 2, maxHeight: 320, overflowY: 'auto' } as ViewStyle,
+  // Only the web popover scrolls its own list; the phone screen scrolls the page.
+  list: (isWeb ? { gap: 2, maxHeight: 320, overflowY: 'auto' } : { gap: 2 }) as ViewStyle,
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    minHeight: 38,
+    minHeight: isWeb ? 38 : 48,
     paddingHorizontal: spacing.sm,
     borderRadius: 8,
   },
+  groupHeading: {
+    color: colors.textDim,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    paddingHorizontal: spacing.sm,
+    paddingTop: spacing.sm,
+    paddingBottom: 4,
+  },
+  confirm: { gap: spacing.sm, padding: spacing.sm },
+  confirmText: { color: colors.text, fontSize: 13, lineHeight: 19 },
+  confirmButtons: { flexDirection: 'row', justifyContent: 'flex-end', gap: spacing.sm },
+  confirmButton: {
+    minHeight: 36,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.sepStrong,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmButtonPrimary: { borderColor: colors.accent },
+  confirmButtonText: { color: colors.text, fontSize: 13, fontWeight: '600' },
+  srOnly: { position: 'absolute', width: 1, height: 1, overflow: 'hidden', opacity: 0 },
   rowSelected: { backgroundColor: colors.surface3 },
   rowIcon: {
     width: 28,
