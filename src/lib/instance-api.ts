@@ -6399,6 +6399,13 @@ export type CommandProgress = {
   /** Id of the running step, or null when none is running. */
   current: string | null
   updatedAt: string
+  /**
+   * Set by the control plane (never the server) when it has not heard from the
+   * server for several minutes while the deploy was running. It is checking
+   * with the server rather than calling the deploy failed; the field clears
+   * when the server is heard from again and is absent once the deploy ends.
+   */
+  contactLostAt?: string | null
 }
 
 /**

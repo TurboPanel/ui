@@ -197,6 +197,24 @@ export function activityStepText(
   return stepCountText(item.step, item.totalSteps, item.stepLabel ? gerundLabel(item.stepLabel) : null)
 }
 
+export const CHECKING_WITH_SERVER_LABEL = 'Checking with the server'
+
+export const CHECKING_WITH_SERVER_TEXT =
+  'Lost contact with the server during the deploy. TurboPanel is checking whether it finished and will update this page. The deploy has not failed.'
+
+/**
+ * True while the control plane has lost contact with the server mid-deploy and
+ * is checking instead of calling it failed. Only a deploy that is still going
+ * (waiting or running) can be in this state; a finished one never is.
+ */
+export function isCheckingWithServer(
+  progress: (ProgressLike & Readonly<{ contactLostAt?: string | null }>) | null | undefined,
+): boolean {
+  if (!progress?.contactLostAt) return false
+  const phase = progressSummary(progress)?.phase
+  return phase === 'running' || phase === 'waiting'
+}
+
 const FIRST_TIME_SETUP_CAPTION =
   'First-time setup on this server. Installing what the app needs; this can take a few minutes.'
 
