@@ -4,11 +4,20 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ServerDetailRecord } from '@/lib/instance-api'
 import { ServerTierPlacementPanel } from './server-tier-placement-panel'
 
-const { useAuth, useBillingCatalog, useSetServerLicenseTier, useCan } = vi.hoisted(() => ({
+const {
+  useAuth,
+  useBillingCatalog,
+  useSetServerLicenseTier,
+  useCan,
+  useUpgradeBillingTier,
+  useDowngradeBillingTier,
+} = vi.hoisted(() => ({
   useAuth: vi.fn(),
   useBillingCatalog: vi.fn(),
   useSetServerLicenseTier: vi.fn(),
   useCan: vi.fn(),
+  useUpgradeBillingTier: vi.fn(() => ({ run: vi.fn(), isPending: false })),
+  useDowngradeBillingTier: vi.fn(() => ({ run: vi.fn(), isPending: false })),
 }))
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
@@ -16,7 +25,11 @@ vi.mock('react-native-svg', async () => (await import('@/components/ui/v4/rn-stu
 vi.mock('@/lib/theme-preference', async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub)
 
 vi.mock('@/lib/auth-context', () => ({ useAuth }))
-vi.mock('@/lib/queries/billing', () => ({ useBillingCatalog }))
+vi.mock('@/lib/queries/billing', () => ({
+  useBillingCatalog,
+  useUpgradeBillingTier,
+  useDowngradeBillingTier,
+}))
 vi.mock('@/lib/queries/servers', () => ({ useSetServerLicenseTier }))
 vi.mock('@/lib/query-client', () => ({ useCan }))
 
@@ -202,7 +215,7 @@ describe('ServerTierPlacementPanel', () => {
 
     await waitFor(() => {
       expect(screen.queryByTestId('modal')).toBeNull()
-      expect(screen.getByText(/below what this server needs/)).toBeTruthy()
+      expect(screen.getByText(/fewer CPU cores or less RAM/)).toBeTruthy()
     })
   })
 
@@ -290,5 +303,108 @@ describe('ServerTierPlacementPanel', () => {
 
     expect(screen.queryByText('Put this server on')).toBeNull()
     expect(screen.getByText(/Only organization owners/)).toBeTruthy()
+  })
+  it('changes only this server to a size with no free license, as an upgrade naming it', async () => {
+    useAuth.mockReturnValue({ billingEnabled: true })
+    useCan.mockReturnValue(true)
+    const tiers = [
+      {
+        id: 'id-s1',
+        label: 'S1',
+        rank: 1,
+        priceCents: 1000,
+        currency: 'usd',
+        isCustom: false,
+        entitlements: null,
+      },
+      {
+        id: 'id-s3',
+        label: 'S3',
+        rank: 3,
+        priceCents: 3000,
+        currency: 'usd',
+        isCustom: false,
+        entitlements: null,
+      },
+    ]
+    useBillingCatalog.mockReturnValue({ data: { tiers } })
+    useSetServerLicenseTier.mockReturnValue({ run: vi.fn(), isPending: false })
+    const upgradeRun = vi.fn().mockResolvedValue({ ok: true })
+    useUpgradeBillingTier.mockReturnValue({ run: upgradeRun, isPending: false })
+
+    const detail = server({
+      licenseTier: 'S1',
+      requiredTier: 'S1',
+      recommendedTier: 'S3',
+      unwatched: { nics: [], drives: [], gpus: [] },
+      pickedTier: 'S1',
+      tierPickNotice: null,
+      tiersFree: [],
+    })
+
+    render(<ServerTierPlacementPanel orgId="org-1" server={detail} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Change this license' }))
+    expect(screen.getByTestId('modal').textContent).toContain('Only this server changes')
+    fireEvent.click(screen.getByRole('button', { name: 'Change license' }))
+    await waitFor(() => {
+      expect(upgradeRun).toHaveBeenCalledWith({
+        fromTierId: 'id-s1',
+        toTierId: 'id-s3',
+        serverId: detail.id,
+      })
+    })
+  })
+
+  it('shows sizes below the server CPU or RAM as unavailable, with the reason', () => {
+    useAuth.mockReturnValue({ billingEnabled: true })
+    useCan.mockReturnValue(true)
+    const tiers = [
+      {
+        id: 'id-s1',
+        label: 'S1',
+        rank: 1,
+        priceCents: 1000,
+        currency: 'usd',
+        isCustom: false,
+        entitlements: {
+          maxCores: 4,
+          maxMemoryBytes: 16 * 1024 ** 3,
+          nicSlots: 2,
+          driveSlots: 3,
+          gpuSlots: 0,
+          filesystemSlots: 9,
+        },
+      },
+      {
+        id: 'id-s3',
+        label: 'S3',
+        rank: 3,
+        priceCents: 3000,
+        currency: 'usd',
+        isCustom: false,
+        entitlements: null,
+      },
+    ]
+    useBillingCatalog.mockReturnValue({ data: { tiers } })
+    useSetServerLicenseTier.mockReturnValue({ run: vi.fn(), isPending: false })
+
+    const detail = server({
+      licenseTier: null,
+      requiredTier: 'S3',
+      recommendedTier: 'S3',
+      unwatched: { nics: [], drives: [], gpus: [] },
+      pickedTier: null,
+      tierPickNotice: null,
+      tiersFree: [{ tierId: 'id-s3', label: 'S3', free: 1 }],
+    })
+
+    render(<ServerTierPlacementPanel orgId="org-1" server={detail} />)
+
+    expect(
+      screen.getByText(
+        'S1 allows up to 4 CPU cores and 16 GiB of RAM. This server has more, so it cannot use S1.'
+      )
+    ).toBeTruthy()
   })
 })

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { confirmClearLicenseTierPick, confirmLicenseTierMove } from './server-license-tier-copy'
+import {
+  confirmClearLicenseTierPick,
+  confirmLicenseTierChange,
+  confirmLicenseTierMove,
+  licenseTierTooSmallCopy,
+} from './server-license-tier-copy'
 
 describe('confirmLicenseTierMove', () => {
   it('names the from tier and free count in plain words', () => {
@@ -20,5 +25,30 @@ describe('confirmClearLicenseTierPick', () => {
     expect(confirmClearLicenseTierPick('S4')).toContain("this server's S4 license")
     expect(confirmClearLicenseTierPick('S4')).toContain('no license until you assign one')
     expect(confirmClearLicenseTierPick()).toContain("Give back this server's license.")
+  })
+})
+
+describe('licenseTierTooSmallCopy', () => {
+  it('names the CPU and RAM limits in plain words', () => {
+    expect(
+      licenseTierTooSmallCopy({
+        label: 'S2',
+        entitlements: { maxCores: 10, maxMemoryBytes: 32 * 1024 ** 3 },
+      })
+    ).toBe('S2 allows up to 10 CPU cores and 32 GiB of RAM. This server has more, so it cannot use S2.')
+    expect(licenseTierTooSmallCopy({ label: 'S9', entitlements: null })).toBe(
+      'This server has more CPU cores or RAM than S9 allows.'
+    )
+  })
+})
+
+describe('confirmLicenseTierChange', () => {
+  it('says an upgrade is billed now and a downgrade waits for the period end', () => {
+    expect(confirmLicenseTierChange({ fromLabel: 'S1', toLabel: 'S3', upgrade: true })).toContain(
+      'billed now'
+    )
+    expect(confirmLicenseTierChange({ fromLabel: 'S3', toLabel: 'S1', upgrade: false })).toContain(
+      'at the end of this billing period'
+    )
   })
 })

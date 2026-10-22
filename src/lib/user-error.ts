@@ -42,7 +42,9 @@ const API_ERROR_COPY: Readonly<Record<string, string>> = {
   www_redirect_conflict:
     'This site lists both a name and its www version as separate domains, so its www choice cannot cover them. Remove one of the two names, or set www to \u201cOnly\u201d this name.',
   tier_below_required:
-    'That tier is below what this server needs. Pick a tier at or above the required floor.',
+    'That size allows fewer CPU cores or less RAM than this server has. Pick a bigger size.',
+  server_not_on_tier: 'This server is not on that size any more. Refresh and try again.',
+  server_move_pending: 'This server already has a size change waiting for the end of the period.',
   tier_not_found: 'That tier is no longer available. Refresh and pick again.',
   server_not_licensed:
     'This server does not have an active license yet. Add the server with a license before picking a tier.',

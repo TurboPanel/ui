@@ -3141,6 +3141,10 @@ export type BillingMutationResponse = {
   deferred?: boolean
   intentId?: string
   scheduleId?: string | null
+  /** Upgrade with a named server: that server, once it moved (`null` while `pending`). */
+  movedServerId?: string | null
+  /** Downgrade with a named server: the server that moves when the change lands. */
+  serverId?: string | null
 }
 
 /**
@@ -3306,6 +3310,8 @@ export async function upgradeBillingTier(body: {
   fromTierId: string
   toTierId: string
   prorationDate?: number
+  /** The one server that moves to `toTierId`; no other server moves. */
+  serverId?: string
 }): Promise<BillingMutationResponse> {
   return await billingPost(`${CLIENT_API}/billing/upgrade`, body)
 }
@@ -3314,6 +3320,8 @@ export async function upgradeBillingTier(body: {
 export async function downgradeBillingTier(body: {
   fromTierId: string
   toTierId: string
+  /** The one server that moves to `toTierId` at the period end; no other server moves. */
+  serverId?: string
 }): Promise<BillingMutationResponse> {
   return await billingPost(`${CLIENT_API}/billing/downgrade`, body)
 }

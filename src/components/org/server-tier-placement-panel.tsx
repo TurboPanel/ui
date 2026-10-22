@@ -17,12 +17,18 @@ import { formatRelativeLocalDateTime } from '@/lib/format-datetime'
 import type { BillingTier, ServerDetailRecord, TierNoticeState } from '@/lib/instance-api'
 import { orgBillingHref } from '@/lib/org-navigation'
 import { useCan } from '@/lib/query-client'
-import { useBillingCatalog } from '@/lib/queries/billing'
+import {
+  useBillingCatalog,
+  useDowngradeBillingTier,
+  useUpgradeBillingTier,
+} from '@/lib/queries/billing'
 import { useSetServerLicenseTier } from '@/lib/queries/servers'
 import {
   confirmClearLicenseTierPick,
+  confirmLicenseTierChange,
   confirmLicenseTierMove,
   LICENSE_TIER_UNKNOWN_FLOOR_COPY,
+  licenseTierTooSmallCopy,
 } from '@/lib/server-license-tier-copy'
 import {
   eligibleTiersForPick,
@@ -77,7 +83,12 @@ function freeAtTier(
   return row?.free ?? 0
 }
 
-type PendingPick = Readonly<{ tier: BillingTier; free: number }>
+/**
+ * A pick onto a free license, or — when none is free at that size — a change
+ * of this server's own license (`changeFrom`: the size it holds now), billed
+ * as an upgrade or a period-end downgrade. Either way only this server moves.
+ */
+type PendingPick = Readonly<{ tier: BillingTier; free: number; changeFrom?: BillingTier }>
 type PendingLicenseTierAction = PendingPick | Readonly<{ kind: 'clear' }>
 
 function ShortfallNotice({
@@ -115,6 +126,7 @@ function LicenseTierPickRow({
   tier,
   free,
   pickedLabel,
+  currentTier,
   busy,
   onPick,
 }: Readonly<{
@@ -122,11 +134,14 @@ function LicenseTierPickRow({
   tier: BillingTier
   free: number
   pickedLabel: string | null
+  /** The size this server holds now, when it holds one. */
+  currentTier: BillingTier | null
   busy: boolean
   onPick: (pick: PendingPick) => void
 }>) {
   const router = useRouter()
-  const isCurrent = pickedLabel === tier.label
+  const isCurrent = pickedLabel === tier.label || currentTier?.id === tier.id
+  const canChange = free === 0 && currentTier != null && currentTier.id !== tier.id
   return (
     <View style={styles.pickRow}>
       <Text style={styles.pickLabel}>{tier.label}</Text>
@@ -139,6 +154,16 @@ function LicenseTierPickRow({
           disabled={isCurrent || busy}
           onPress={() => onPick({ tier, free })}
         />
+      ) : canChange ? (
+        <Button
+          label="Change this license"
+          variant="secondary"
+          size="sm"
+          disabled={busy}
+          onPress={() => onPick({ tier, free, changeFrom: currentTier })}
+        />
+      ) : isCurrent ? (
+        <Button label="Current pick" variant="secondary" size="sm" disabled onPress={() => {}} />
       ) : (
         <Button
           label="Buy one"
@@ -151,10 +176,21 @@ function LicenseTierPickRow({
   )
 }
 
+function LicenseTierTooSmallRow({ tier }: Readonly<{ tier: BillingTier }>) {
+  return (
+    <View style={styles.pickRow}>
+      <Text style={styles.pickLabel}>{tier.label}</Text>
+      <Text style={panelStyles.muted}>{licenseTierTooSmallCopy(tier)}</Text>
+    </View>
+  )
+}
+
 function LicenseTierPickList({
   orgId,
   placement,
   choices,
+  tooSmall,
+  currentTier,
   busy,
   onPick,
   onClear,
@@ -164,6 +200,8 @@ function LicenseTierPickList({
   orgId: string
   placement: NonNullable<ServerDetailRecord['tierPlacement']>
   choices: readonly BillingTier[]
+  tooSmall: readonly BillingTier[]
+  currentTier: BillingTier | null
   busy: boolean
   onPick: (pick: PendingPick) => void
   onClear: () => void
@@ -183,9 +221,13 @@ function LicenseTierPickList({
           tier={tier}
           free={freeAtTier(placement, tier.id)}
           pickedLabel={placement.pickedTier}
+          currentTier={currentTier}
           busy={busy}
           onPick={onPick}
         />
+      ))}
+      {tooSmall.map((tier) => (
+        <LicenseTierTooSmallRow key={tier.id} tier={tier} />
       ))}
       <Button
         label="Give back this license"
@@ -207,6 +249,13 @@ function confirmSheetCopy(
     return confirmClearLicenseTierPick(licenseTier ?? pickedTier ?? undefined)
   }
   const pick = pending as PendingPick
+  if (pick.changeFrom) {
+    return confirmLicenseTierChange({
+      fromLabel: pick.changeFrom.label,
+      toLabel: pick.tier.label,
+      upgrade: pick.tier.rank > pick.changeFrom.rank,
+    })
+  }
   return confirmLicenseTierMove({
     fromLabel: licenseTier,
     toLabel: pick.tier.label,
@@ -228,7 +277,7 @@ function LicenseTierConfirmSheet({
   pickedTier: string | null
   busy: boolean
   onDismiss: () => void
-  onApplyPick: (tierId: string) => void
+  onApplyPick: (pick: PendingPick) => void
   onApplyClear: () => void
 }>) {
   const isClear = pending != null && 'kind' in pending && pending.kind === 'clear'
@@ -237,7 +286,9 @@ function LicenseTierConfirmSheet({
   return (
     <ModalSheet
       visible={pending != null}
-      title={isClear ? 'Give back license' : 'Confirm license tier'}
+      title={
+        isClear ? 'Give back license' : pick?.changeFrom ? 'Change license' : 'Confirm license tier'
+      }
       onRequestClose={onDismiss}
     >
       {pending ? (
@@ -248,12 +299,12 @@ function LicenseTierConfirmSheet({
           <ButtonRow>
             <Button label="Cancel" variant="secondary" onPress={onDismiss} />
             <Button
-              label={isClear ? 'Give back' : 'Apply'}
+              label={isClear ? 'Give back' : pick?.changeFrom ? 'Change license' : 'Apply'}
               variant="primary"
               disabled={busy}
               onPress={() => {
                 if (isClear) onApplyClear()
-                else if (pick) onApplyPick(pick.tier.id)
+                else if (pick) onApplyPick(pick)
               }}
             />
           </ButtonRow>
@@ -276,6 +327,8 @@ function LicenseTierPanelBody({
   canOwn,
   showPicker,
   choices,
+  tooSmall,
+  currentTier,
   requiredRankUnknown,
   error,
   busy,
@@ -294,6 +347,8 @@ function LicenseTierPanelBody({
   canOwn: boolean
   showPicker: boolean
   choices: readonly BillingTier[]
+  tooSmall: readonly BillingTier[]
+  currentTier: BillingTier | null
   requiredRankUnknown: boolean
   error: string | null
   busy: boolean
@@ -355,6 +410,8 @@ function LicenseTierPanelBody({
           orgId={orgId}
           placement={placement}
           choices={choices}
+          tooSmall={tooSmall}
+          currentTier={currentTier}
           busy={busy}
           hasPick={placement.licenseTier != null || placement.pickedTier != null}
           requiredRankUnknown={requiredRankUnknown}
@@ -403,6 +460,8 @@ export function ServerTierPlacementPanel({
   const canOwn = useCan('organization', orgId, 'organization:own')
   const catalogQuery = useBillingCatalog(orgId, { enabled: billingEnabled })
   const setTier = useSetServerLicenseTier(orgId, server.id)
+  const upgrade = useUpgradeBillingTier(orgId)
+  const downgrade = useDowngradeBillingTier(orgId)
   const [pending, setPending] = useState<PendingLicenseTierAction | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -424,16 +483,26 @@ export function ServerTierPlacementPanel({
   const billingHref = billingEnabled ? orgBillingHref(orgId, { tier: targetTier }) : null
 
   const catalogTiers = pickerCatalogTiers(catalogQuery.data?.tiers ?? [], placement.tiersFree, rankOf)
-  const { choices, requiredRankUnknown } = eligibleTiersForPick(
+  const { choices, tooSmall, requiredRankUnknown } = eligibleTiersForPick(
     catalogTiers,
     placement.requiredTier,
     rankOf
   )
   const showPicker = hasLicenseTierPickerData(placement.tiersFree)
+  const currentTier = catalogTiers.find((tier) => tier.label === placement.licenseTier) ?? null
+  const busy = setTier.isPending || upgrade.isPending || downgrade.isPending
 
-  const applyPick = async (tierId: string | null) => {
+  const applyPick = async (pick: PendingPick | null) => {
     setError(null)
-    const outcome = await setTier.run(tierId)
+    const outcome = !pick
+      ? await setTier.run(null)
+      : pick.changeFrom
+        ? await (pick.tier.rank > pick.changeFrom.rank ? upgrade : downgrade).run({
+            fromTierId: pick.changeFrom.id,
+            toTierId: pick.tier.id,
+            serverId: server.id,
+          })
+        : await setTier.run(pick.tier.id)
     if (!outcome.ok) {
       setPending(null)
       setError(
@@ -462,9 +531,11 @@ export function ServerTierPlacementPanel({
         canOwn={canOwn}
         showPicker={showPicker}
         choices={choices}
+        tooSmall={tooSmall}
+        currentTier={currentTier}
         requiredRankUnknown={requiredRankUnknown}
         error={error}
-        busy={setTier.isPending}
+        busy={busy}
         onPick={setPending}
         onClear={() => setPending({ kind: 'clear' })}
       />
@@ -472,9 +543,9 @@ export function ServerTierPlacementPanel({
         pending={pending}
         licenseTier={placement.licenseTier}
         pickedTier={placement.pickedTier}
-        busy={setTier.isPending}
+        busy={busy}
         onDismiss={() => setPending(null)}
-        onApplyPick={(tierId) => void applyPick(tierId)}
+        onApplyPick={(pick) => void applyPick(pick)}
         onApplyClear={() => void applyPick(null)}
       />
     </>
