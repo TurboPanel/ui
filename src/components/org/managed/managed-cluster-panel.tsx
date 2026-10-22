@@ -31,6 +31,7 @@ import {
   memberReplicaClassLabel,
   memberReplicaClassPickerLabel,
   memberRoleLabel,
+  memberServesReads,
   memberStatusLabel,
   memberTransportLabel,
   REPLICA_CUT_OFF_LABEL,
@@ -96,6 +97,16 @@ function isHealthyMemberStatus(status: string | null): boolean {
   return status === 'ready' || status === 'running'
 }
 
+function replicaHealthLine(member: ManagedMemberRecord): string {
+  const lag = formatReplicationLag(member.replication)
+  const age = formatReplicationAge(member.replication)
+  return (
+    [replicationStateLabel(member.replication?.state ?? null), age ?? lag]
+      .filter(Boolean)
+      .join(' · ') || '—'
+  )
+}
+
 function resolveHealthLine(
   member: ManagedMemberRecord,
   cutOff: boolean,
@@ -104,14 +115,8 @@ function resolveHealthLine(
   if (member.role !== 'replica') {
     return [memberStatusLabel(member.status), slotNotice].filter(Boolean).join(' · ')
   }
-  if (cutOff) return REPLICA_CUT_OFF_LABEL
-  const lag = formatReplicationLag(member.replication)
-  const age = formatReplicationAge(member.replication)
-  return (
-    [replicationStateLabel(member.replication?.state ?? null), age ?? lag]
-      .filter(Boolean)
-      .join(' · ') || '—'
-  )
+  if (member.status === 'needs_resync') return 'Stopped · needs a Resync'
+  return cutOff ? REPLICA_CUT_OFF_LABEL : replicaHealthLine(member)
 }
 
 export function ManagedClusterPanel({
@@ -213,7 +218,9 @@ export function ManagedClusterPanel({
     return map
   }, [eligibility.servers])
 
-  const recoveryBanner = managedRecoveryBanner(recovery)
+  const recoveryBanner = managedRecoveryBanner(recovery, {
+    serverName: (serverId) => members.find((m) => m.serverId === serverId)?.serverName ?? null,
+  })
   const disasterMember = disasterMemberId
     ? (members.find((member) => member.id === disasterMemberId) ?? null)
     : null
@@ -625,7 +632,7 @@ function ClusterMemberRow({
   const classLabel = memberReplicaClassLabel(member.replicaClass)
   const promoteAction = managedReplicaPromoteAction(member.replicaClass)
   const isReadReplica = promoteAction === 'disaster-recovery'
-  const liveReads = member.role === 'primary' || member.readEligible
+  const liveReads = memberServesReads(member.role, member.readEligible, member.status)
 
   return (
     <View style={styles.row}>
@@ -648,7 +655,7 @@ function ClusterMemberRow({
           <View style={styles.chipRow}>
             <View style={liveReads ? styles.readsChip : styles.standbyChip}>
               <Text style={liveReads ? styles.readsChipText : styles.standbyChipText}>
-                {memberReadTrafficLabel(member.role, member.readEligible)}
+                {memberReadTrafficLabel(member.role, member.readEligible, member.status)}
               </Text>
             </View>
             {isReadReplica ? (
