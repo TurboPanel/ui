@@ -28,6 +28,7 @@ import {
   type SearchItem,
   type SearchItemIcon,
 } from '@/lib/search-index'
+import { SEARCH_MIN_WIDTH_WITH_BREADCRUMB } from '@/lib/header-breadcrumb'
 import { colors, spacing, webPointer } from '@/lib/theme'
 
 const isWeb = Platform.OS === 'web'
@@ -162,7 +163,7 @@ const groupHeadingId = (group: string) => `header-search-group-${group}`
 function groupRows(shown: readonly SearchItem[]) {
   const groups: { group: string; rows: { item: SearchItem; position: number }[] }[] = []
   shown.forEach((item, position) => {
-    const last = groups[groups.length - 1]
+    const last = groups.at(-1)
     if (last?.group === item.group) last.rows.push({ item, position })
     else groups.push({ group: item.group, rows: [{ item, position }] })
   })
@@ -403,9 +404,12 @@ function SearchPopover({
 export function HeaderSearch({
   orgId,
   collapsed = false,
+  keepWidth = false,
   onClose,
 }: Readonly<{
   orgId: string
+  /** A breadcrumb shares the header: the field keeps a sensible minimum width. */
+  keepWidth?: boolean
   /** Fills the header (narrow widths) with a close button and no shortcut badge. */
   collapsed?: boolean
   onClose?: () => void
@@ -474,7 +478,13 @@ export function HeaderSearch({
   }
 
   return (
-    <View accessibilityRole="search" style={collapsed ? styles.wrapCollapsed : styles.wrap}>
+    <View
+      accessibilityRole="search"
+      style={[
+        collapsed ? styles.wrapCollapsed : styles.wrap,
+        keepWidth && { minWidth: SEARCH_MIN_WIDTH_WITH_BREADCRUMB },
+      ]}
+    >
       <Pressable
         style={[styles.field, focused && styles.fieldFocused]}
         onPress={() => inputRef.current?.focus()}

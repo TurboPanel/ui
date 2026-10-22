@@ -9924,7 +9924,8 @@ export type FirewallServerState = {
   confirmedAt: string | null
 }
 
-export type FirewallPreviewStatus = 'queued' | 'previewed' | 'refused' | 'failed'
+export type FirewallPreviewStatus =
+  'queued' | 'previewed' | 'applied' | 'removed' | 'refused' | 'failed'
 
 /**
  * What the host was last sent as a PREVIEW: rendered and checked by the kernel

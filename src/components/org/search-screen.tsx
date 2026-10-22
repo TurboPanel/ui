@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
+import { ScrollView, StyleSheet, Text, TextInput } from 'react-native'
 import { useRouter, type Href } from 'expo-router'
 import { SearchConfirm, SearchResultList } from '@/components/header-search'
 import { useSearchItems } from '@/components/use-search-items'
