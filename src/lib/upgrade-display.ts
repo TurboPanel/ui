@@ -201,7 +201,7 @@ export function upgradeStepNote(
   step: Readonly<{ detail?: { restartNote?: string } | null }>
 ): string | null {
   const note = step.detail?.restartNote?.trim()
-  return note ? note : null
+  return note || null
 }
 
 /**
