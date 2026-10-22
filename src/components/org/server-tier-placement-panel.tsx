@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactElement } from 'react'
 import { useRouter } from 'expo-router'
 import { StyleSheet, Text, View } from 'react-native'
 import { panelStyles } from '@/components/ui/panel-styles'
@@ -17,12 +17,18 @@ import { formatRelativeLocalDateTime } from '@/lib/format-datetime'
 import type { BillingTier, ServerDetailRecord, TierNoticeState } from '@/lib/instance-api'
 import { orgBillingHref } from '@/lib/org-navigation'
 import { useCan } from '@/lib/query-client'
-import { useBillingCatalog } from '@/lib/queries/billing'
+import {
+  useBillingCatalog,
+  useDowngradeBillingTier,
+  useUpgradeBillingTier,
+} from '@/lib/queries/billing'
 import { useSetServerLicenseTier } from '@/lib/queries/servers'
 import {
   confirmClearLicenseTierPick,
+  confirmLicenseTierChange,
   confirmLicenseTierMove,
   LICENSE_TIER_UNKNOWN_FLOOR_COPY,
+  licenseTierTooSmallCopy,
 } from '@/lib/server-license-tier-copy'
 import {
   eligibleTiersForPick,
@@ -77,7 +83,12 @@ function freeAtTier(
   return row?.free ?? 0
 }
 
-type PendingPick = Readonly<{ tier: BillingTier; free: number }>
+/**
+ * A pick onto a free license, or — when none is free at that size — a change
+ * of this server's own license (`changeFrom`: the size it holds now), billed
+ * as an upgrade or a period-end downgrade. Either way only this server moves.
+ */
+type PendingPick = Readonly<{ tier: BillingTier; free: number; changeFrom?: BillingTier }>
 type PendingLicenseTierAction = PendingPick | Readonly<{ kind: 'clear' }>
 
 function ShortfallNotice({
@@ -115,6 +126,7 @@ function LicenseTierPickRow({
   tier,
   free,
   pickedLabel,
+  currentTier,
   busy,
   onPick,
 }: Readonly<{
@@ -122,31 +134,63 @@ function LicenseTierPickRow({
   tier: BillingTier
   free: number
   pickedLabel: string | null
+  /** The size this server holds now, when it holds one. */
+  currentTier: BillingTier | null
   busy: boolean
   onPick: (pick: PendingPick) => void
 }>) {
   const router = useRouter()
-  const isCurrent = pickedLabel === tier.label
+  const isCurrent = pickedLabel === tier.label || currentTier?.id === tier.id
+  const canChange = free === 0 && currentTier != null && currentTier.id !== tier.id
+  let action: ReactElement
+  if (free > 0) {
+    action = (
+      <Button
+        label={isCurrent ? 'Current pick' : 'Use'}
+        variant={isCurrent ? 'secondary' : 'primary'}
+        size="sm"
+        disabled={isCurrent || busy}
+        onPress={() => onPick({ tier, free })}
+      />
+    )
+  } else if (canChange) {
+    action = (
+      <Button
+        label="Change this license"
+        variant="secondary"
+        size="sm"
+        disabled={busy}
+        onPress={() => onPick({ tier, free, changeFrom: currentTier })}
+      />
+    )
+  } else if (isCurrent) {
+    action = (
+      <Button label="Current pick" variant="secondary" size="sm" disabled onPress={() => {}} />
+    )
+  } else {
+    action = (
+      <Button
+        label="Buy one"
+        variant="secondary"
+        size="sm"
+        onPress={() => router.push(orgBillingHref(orgId, { tier: tier.label }))}
+      />
+    )
+  }
   return (
     <View style={styles.pickRow}>
       <Text style={styles.pickLabel}>{tier.label}</Text>
       <Text style={panelStyles.muted}>{free > 0 ? `${free} free` : 'None free'}</Text>
-      {free > 0 ? (
-        <Button
-          label={isCurrent ? 'Current pick' : 'Use'}
-          variant={isCurrent ? 'secondary' : 'primary'}
-          size="sm"
-          disabled={isCurrent || busy}
-          onPress={() => onPick({ tier, free })}
-        />
-      ) : (
-        <Button
-          label="Buy one"
-          variant="secondary"
-          size="sm"
-          onPress={() => router.push(orgBillingHref(orgId, { tier: tier.label }))}
-        />
-      )}
+      {action}
+    </View>
+  )
+}
+
+function LicenseTierTooSmallRow({ tier }: Readonly<{ tier: BillingTier }>) {
+  return (
+    <View style={styles.pickRow}>
+      <Text style={styles.pickLabel}>{tier.label}</Text>
+      <Text style={panelStyles.muted}>{licenseTierTooSmallCopy(tier)}</Text>
     </View>
   )
 }
@@ -155,6 +199,8 @@ function LicenseTierPickList({
   orgId,
   placement,
   choices,
+  tooSmall,
+  currentTier,
   busy,
   onPick,
   onClear,
@@ -164,6 +210,8 @@ function LicenseTierPickList({
   orgId: string
   placement: NonNullable<ServerDetailRecord['tierPlacement']>
   choices: readonly BillingTier[]
+  tooSmall: readonly BillingTier[]
+  currentTier: BillingTier | null
   busy: boolean
   onPick: (pick: PendingPick) => void
   onClear: () => void
@@ -183,12 +231,16 @@ function LicenseTierPickList({
           tier={tier}
           free={freeAtTier(placement, tier.id)}
           pickedLabel={placement.pickedTier}
+          currentTier={currentTier}
           busy={busy}
           onPick={onPick}
         />
       ))}
+      {tooSmall.map((tier) => (
+        <LicenseTierTooSmallRow key={tier.id} tier={tier} />
+      ))}
       <Button
-        label="Use the smallest that fits"
+        label="Give back this license"
         variant="ghost"
         size="sm"
         disabled={!hasPick || busy}
@@ -204,9 +256,16 @@ function confirmSheetCopy(
   pickedTier: string | null
 ): string {
   if ('kind' in pending && pending.kind === 'clear') {
-    return confirmClearLicenseTierPick(pickedTier ?? undefined)
+    return confirmClearLicenseTierPick(licenseTier ?? pickedTier ?? undefined)
   }
   const pick = pending as PendingPick
+  if (pick.changeFrom) {
+    return confirmLicenseTierChange({
+      fromLabel: pick.changeFrom.label,
+      toLabel: pick.tier.label,
+      upgrade: pick.tier.rank > pick.changeFrom.rank,
+    })
+  }
   return confirmLicenseTierMove({
     fromLabel: licenseTier,
     toLabel: pick.tier.label,
@@ -228,18 +287,23 @@ function LicenseTierConfirmSheet({
   pickedTier: string | null
   busy: boolean
   onDismiss: () => void
-  onApplyPick: (tierId: string) => void
+  onApplyPick: (pick: PendingPick) => void
   onApplyClear: () => void
 }>) {
   const isClear = pending != null && 'kind' in pending && pending.kind === 'clear'
   const pick: PendingPick | null =
     pending != null && !('kind' in pending) ? (pending as PendingPick) : null
+  let sheetTitle = 'Confirm license tier'
+  let sheetButton = 'Apply'
+  if (isClear) {
+    sheetTitle = 'Give back license'
+    sheetButton = 'Give back'
+  } else if (pick?.changeFrom) {
+    sheetTitle = 'Change license'
+    sheetButton = 'Change license'
+  }
   return (
-    <ModalSheet
-      visible={pending != null}
-      title={isClear ? 'Clear license tier pick' : 'Confirm license tier'}
-      onRequestClose={onDismiss}
-    >
+    <ModalSheet visible={pending != null} title={sheetTitle} onRequestClose={onDismiss}>
       {pending ? (
         <View style={styles.confirmBody}>
           <Text style={panelStyles.detailLine}>
@@ -248,12 +312,12 @@ function LicenseTierConfirmSheet({
           <ButtonRow>
             <Button label="Cancel" variant="secondary" onPress={onDismiss} />
             <Button
-              label={isClear ? 'Clear pick' : 'Apply'}
+              label={sheetButton}
               variant="primary"
               disabled={busy}
               onPress={() => {
                 if (isClear) onApplyClear()
-                else if (pick) onApplyPick(pick.tier.id)
+                else if (pick) onApplyPick(pick)
               }}
             />
           </ButtonRow>
@@ -276,6 +340,8 @@ function LicenseTierPanelBody({
   canOwn,
   showPicker,
   choices,
+  tooSmall,
+  currentTier,
   requiredRankUnknown,
   error,
   busy,
@@ -294,6 +360,8 @@ function LicenseTierPanelBody({
   canOwn: boolean
   showPicker: boolean
   choices: readonly BillingTier[]
+  tooSmall: readonly BillingTier[]
+  currentTier: BillingTier | null
   requiredRankUnknown: boolean
   error: string | null
   busy: boolean
@@ -355,8 +423,10 @@ function LicenseTierPanelBody({
           orgId={orgId}
           placement={placement}
           choices={choices}
+          tooSmall={tooSmall}
+          currentTier={currentTier}
           busy={busy}
-          hasPick={placement.pickedTier != null}
+          hasPick={placement.licenseTier != null || placement.pickedTier != null}
           requiredRankUnknown={requiredRankUnknown}
           onPick={onPick}
           onClear={onClear}
@@ -403,6 +473,8 @@ export function ServerTierPlacementPanel({
   const canOwn = useCan('organization', orgId, 'organization:own')
   const catalogQuery = useBillingCatalog(orgId, { enabled: billingEnabled })
   const setTier = useSetServerLicenseTier(orgId, server.id)
+  const upgrade = useUpgradeBillingTier(orgId)
+  const downgrade = useDowngradeBillingTier(orgId)
   const [pending, setPending] = useState<PendingLicenseTierAction | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -424,16 +496,29 @@ export function ServerTierPlacementPanel({
   const billingHref = billingEnabled ? orgBillingHref(orgId, { tier: targetTier }) : null
 
   const catalogTiers = pickerCatalogTiers(catalogQuery.data?.tiers ?? [], placement.tiersFree, rankOf)
-  const { choices, requiredRankUnknown } = eligibleTiersForPick(
+  const { choices, tooSmall, requiredRankUnknown } = eligibleTiersForPick(
     catalogTiers,
     placement.requiredTier,
     rankOf
   )
   const showPicker = hasLicenseTierPickerData(placement.tiersFree)
+  const currentTier = catalogTiers.find((tier) => tier.label === placement.licenseTier) ?? null
+  const busy = setTier.isPending || upgrade.isPending || downgrade.isPending
 
-  const applyPick = async (tierId: string | null) => {
+  const runPick = async (pick: PendingPick | null) => {
+    if (!pick) return await setTier.run(null)
+    if (!pick.changeFrom) return await setTier.run(pick.tier.id)
+    const move = pick.tier.rank > pick.changeFrom.rank ? upgrade : downgrade
+    return await move.run({
+      fromTierId: pick.changeFrom.id,
+      toTierId: pick.tier.id,
+      serverId: server.id,
+    })
+  }
+
+  const applyPick = async (pick: PendingPick | null) => {
     setError(null)
-    const outcome = await setTier.run(tierId)
+    const outcome = await runPick(pick)
     if (!outcome.ok) {
       setPending(null)
       setError(
@@ -462,9 +547,11 @@ export function ServerTierPlacementPanel({
         canOwn={canOwn}
         showPicker={showPicker}
         choices={choices}
+        tooSmall={tooSmall}
+        currentTier={currentTier}
         requiredRankUnknown={requiredRankUnknown}
         error={error}
-        busy={setTier.isPending}
+        busy={busy}
         onPick={setPending}
         onClear={() => setPending({ kind: 'clear' })}
       />
@@ -472,9 +559,9 @@ export function ServerTierPlacementPanel({
         pending={pending}
         licenseTier={placement.licenseTier}
         pickedTier={placement.pickedTier}
-        busy={setTier.isPending}
+        busy={busy}
         onDismiss={() => setPending(null)}
-        onApplyPick={(tierId) => void applyPick(tierId)}
+        onApplyPick={(pick) => void applyPick(pick)}
         onApplyClear={() => void applyPick(null)}
       />
     </>

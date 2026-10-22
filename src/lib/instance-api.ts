@@ -1141,10 +1141,11 @@ export async function fetchServerServices(serverId: string): Promise<ServerServi
 }
 
 /**
- * Owner-only (`organization:own`). Sets or clears `server.preferred_tier_id`
- * (`tierId` `null` clears the pick). The control plane recomputes the assigned
- * tier from spare licenses; **422** `tier_below_required` when the pick is under
- * the hardware floor; **404** `tier_not_found` / `server_not_licensed`.
+ * Owner-only (`organization:own`). Assigns this server a license at `tierId`
+ * from a free one there, or gives its license back (`null`). Nothing else moves:
+ * the control plane never assigns or moves a license on its own. **409**
+ * `no_free_seat` when no license is free at that tier; **404** `tier_not_found` /
+ * `server_not_licensed`.
  */
 export async function setServerLicenseTier(
   serverId: string,
@@ -3140,6 +3141,10 @@ export type BillingMutationResponse = {
   deferred?: boolean
   intentId?: string
   scheduleId?: string | null
+  /** Upgrade with a named server: that server, once it moved (`null` while `pending`). */
+  movedServerId?: string | null
+  /** Downgrade with a named server: the server that moves when the change lands. */
+  serverId?: string | null
 }
 
 /**
@@ -3305,6 +3310,8 @@ export async function upgradeBillingTier(body: {
   fromTierId: string
   toTierId: string
   prorationDate?: number
+  /** The one server that moves to `toTierId`; no other server moves. */
+  serverId?: string
 }): Promise<BillingMutationResponse> {
   return await billingPost(`${CLIENT_API}/billing/upgrade`, body)
 }
@@ -3313,6 +3320,8 @@ export async function upgradeBillingTier(body: {
 export async function downgradeBillingTier(body: {
   fromTierId: string
   toTierId: string
+  /** The one server that moves to `toTierId` at the period end; no other server moves. */
+  serverId?: string
 }): Promise<BillingMutationResponse> {
   return await billingPost(`${CLIENT_API}/billing/downgrade`, body)
 }
