@@ -45,12 +45,12 @@ const API_ERROR_COPY: Readonly<Record<string, string>> = {
     'That size allows fewer CPU cores or less RAM than this server has. Pick a bigger size.',
   server_not_on_tier: 'This server is not on that size any more. Refresh and try again.',
   server_move_pending: 'This server already has a size change waiting for the end of the period.',
-  tier_not_found: 'That tier is no longer available. Refresh and pick again.',
+  tier_not_found: 'That size is no longer available. Refresh and pick again.',
   server_not_licensed:
-    'This server does not have an active license yet. Add the server with a license before picking a tier.',
-  invalid_body: 'Choose a tier from the list, or give back the license.',
+    'This server does not have an active license yet. Add the server with a license before picking a size.',
+  invalid_body: 'Choose a size from the list, or give back the license.',
   no_free_seat:
-    'No free license at that tier. Buy one first, or give one back from another server.',
+    'No free license at that size. Buy one first, or give one back from another server.',
   environment_name_locked:
     "This environment's name is part of the folder path on your servers, so it cannot change while services or volumes have folders in it.",
   environment_has_folders:
