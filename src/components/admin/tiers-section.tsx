@@ -438,7 +438,7 @@ function ProductsUnavailableNotice({
  */
 function TaxDefaultNotice({ taxDefaults }: Readonly<{ taxDefaults: AdminTierTaxDefaults | null }>) {
   if (!taxDefaults) return null
-  const { tone, title, body } = taxDefaultNoticeContent(taxDefaults.taxBehavior)
+  const { tone, title, body } = taxDefaultNoticeContent(taxDefaults)
   return <InlineNotice tone={tone} title={title} body={body} />
 }
 
