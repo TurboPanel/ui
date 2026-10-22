@@ -8483,6 +8483,8 @@ export type MetricsSeriesResponse = {
   temperatureUnit: 'celsius' | 'fahrenheit'
   /** How many network interfaces this server may monitor (its effective NIC-slot count). */
   nicSlotLimit: number
+  /** Metrics layout number the panel serves; absent from older panels. */
+  layoutVersion?: number
 }
 
 export type MetricsSummaryResponse = {

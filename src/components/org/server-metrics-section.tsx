@@ -8,6 +8,7 @@ import {
   View,
 } from 'react-native'
 import { HeaderChevron } from '@/components/header-chevron'
+import { ServerMetricsVersion } from '@/components/org/server-metrics-version'
 import { Button, InlineNotice, SectionPanel, StatTiles } from '@/components/ui'
 import { hostFactRows } from '@/lib/host-facts'
 import {
@@ -3797,6 +3798,8 @@ export function ServerMetricsSection({
           events={eventsQuery.data?.events ?? []}
         />
       ) : null}
+
+      <ServerMetricsVersion version={data?.layoutVersion} />
     </View>
   )
 }
