@@ -5707,10 +5707,29 @@ export async function fetchAdminTiers(): Promise<{
  * Surfaced so the operator can see why such a price verifies.
  */
 export type AdminTierTaxDefaults = {
-  /** `inclusive`, `exclusive`, `inferred_by_currency` (Automatic), or null when unreadable or none set. */
+  /**
+   * How the lookup ended: `set`, `unset` (the provider answered with no
+   * default), `not_asked` (no price needed it), `permission_missing` (the
+   * key may not read tax settings) or `provider_error`. Absent from an
+   * older panel, which only sends `taxBehavior`.
+   */
+  outcome?: AdminTierTaxDefaultsOutcome
+  /** `inclusive`, `exclusive`, `inferred_by_currency` (Automatic), or null when not `set`. */
   taxBehavior: string | null
   /** `active` once the provider can calculate tax; `pending` while incomplete. */
   status: string | null
+  /** Why the provider refused, when it did: its status, type, code and any permission it names. */
+  error?: AdminTierTaxDefaultsError | null
+}
+
+export type AdminTierTaxDefaultsOutcome =
+  'set' | 'unset' | 'not_asked' | 'permission_missing' | 'provider_error'
+
+export type AdminTierTaxDefaultsError = {
+  status: number
+  type: string
+  code: string | null
+  permission: string | null
 }
 
 /** The provider's products with their default price and verification. **502** `product_lookup_failed`. */
