@@ -31,7 +31,7 @@ import {
   memberReplicaClassLabel,
   memberReplicaClassPickerLabel,
   memberRoleLabel,
-  memberIsDown,
+  memberServesReads,
   memberStatusLabel,
   memberTransportLabel,
   REPLICA_CUT_OFF_LABEL,
@@ -632,8 +632,7 @@ function ClusterMemberRow({
   const classLabel = memberReplicaClassLabel(member.replicaClass)
   const promoteAction = managedReplicaPromoteAction(member.replicaClass)
   const isReadReplica = promoteAction === 'disaster-recovery'
-  const liveReads =
-    member.role === 'primary' || (member.readEligible && !memberIsDown(member.status))
+  const liveReads = memberServesReads(member.role, member.readEligible, member.status)
 
   return (
     <View style={styles.row}>

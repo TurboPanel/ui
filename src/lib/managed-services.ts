@@ -755,6 +755,15 @@ export function memberReadTrafficLabel(
   return readEligible ? 'Serves reads' : 'Standby only'
 }
 
+/** True when reads can reach this member right now. */
+export function memberServesReads(
+  role: ManagedMemberRole,
+  readEligible: boolean,
+  status: string | null | undefined
+): boolean {
+  return role === 'primary' || (readEligible && !memberIsDown(status))
+}
+
 /** A member whose engine is stopped (for example a demoted primary waiting for a Resync). */
 export function memberIsDown(status: string | null | undefined): boolean {
   return status === 'needs_resync' || status === 'stopped'
