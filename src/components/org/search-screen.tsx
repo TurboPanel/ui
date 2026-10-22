@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { StyleSheet, Text, TextInput, View } from 'react-native'
+import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import { useRouter, type Href } from 'expo-router'
 import { SearchConfirm, SearchResultList } from '@/components/header-search'
 import { useSearchItems } from '@/components/use-search-items'
@@ -23,7 +23,11 @@ export function SearchScreen({ orgId }: Readonly<{ orgId: string }>) {
   const trimmed = query.trim()
 
   return (
-    <View style={styles.screen}>
+    <ScrollView
+      style={styles.scroll}
+      contentContainerStyle={styles.screen}
+      keyboardShouldPersistTaps="handled"
+    >
       <TextInput
         value={query}
         onChangeText={(text) => {
@@ -65,11 +69,12 @@ export function SearchScreen({ orgId }: Readonly<{ orgId: string }>) {
           )}
         </>
       )}
-    </View>
+    </ScrollView>
   )
 }
 
 const styles = StyleSheet.create({
+  scroll: { flex: 1 },
   screen: { gap: spacing.sm, padding: spacing.md },
   input: {
     height: 44,

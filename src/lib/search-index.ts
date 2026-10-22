@@ -359,15 +359,33 @@ function tokenMatches(token: string, nameWords: readonly string[], keywords: rea
   )
 }
 
+const wordCache = new WeakMap<
+  SearchItem,
+  { nameWords: string[]; keywordParts: string[]; keywordWords: string[] }
+>()
+
+/** The item's words, split once instead of on every keystroke. */
+function wordsOf(item: SearchItem) {
+  let cached = wordCache.get(item)
+  if (!cached) {
+    const keywordParts = item.keywords.toLowerCase().split(/\s+/).filter(Boolean)
+    cached = {
+      nameWords: words(item.name),
+      keywordParts,
+      keywordWords: keywordParts.flatMap(words),
+    }
+    wordCache.set(item, cached)
+  }
+  return cached
+}
+
 /** 0 exact name, 1 name starts with the query, 2 every word starts a name word, 3 matched through keywords; null for no match. */
 function matchScore(item: SearchItem, query: string, tokens: readonly string[]): number | null {
   const name = item.name.toLowerCase()
   if (name === query) return 0
   if (name.startsWith(query)) return 1
-  const nameWords = words(item.name)
+  const { nameWords, keywordParts, keywordWords } = wordsOf(item)
   if (tokens.every((token) => nameWords.some((word) => word.startsWith(token)))) return 2
-  const keywordParts = item.keywords.toLowerCase().split(/\s+/).filter(Boolean)
-  const keywordWords = keywordParts.flatMap(words)
   return tokens.every((token) => tokenMatches(token, [...nameWords, ...keywordWords], keywordParts))
     ? 3
     : null

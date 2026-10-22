@@ -16,6 +16,7 @@ vi.mock('react-native', () => ({
       ref={ref}
       id={id as string}
       aria-label={rest['aria-label'] as string}
+      aria-labelledby={rest['aria-labelledby'] as string}
       role={(role ?? accessibilityRole) as string}
       onMouseDown={onMouseDown as () => void}
     >
@@ -62,7 +63,7 @@ vi.mock('react-native', () => ({
       onBlur={props.onBlur as () => void}
       onKeyDown={(e) =>
         (props.onKeyPress as (e: unknown) => void)({
-          nativeEvent: { key: e.key },
+          nativeEvent: { key: e.key, repeat: e.repeat },
           preventDefault: () => e.preventDefault(),
           stopPropagation: () => e.stopPropagation(),
         })
@@ -207,6 +208,32 @@ describe('HeaderSearch', () => {
     fireEvent.click(screen.getAllByRole('option')[0]!)
     fireEvent.click(screen.getByRole('button', { name: 'Open' }))
     expect(push).toHaveBeenCalledWith('/o1/servers/s1?tab=control')
+  })
+
+  it('ignores a held Enter so it cannot pick a row and confirm it at once', async () => {
+    const input = await mount()
+    fireEvent.change(input, { target: { value: 'remove zed' } })
+    fireEvent.keyDown(input, { key: 'Enter', repeat: true })
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+    expect(push).not.toHaveBeenCalled()
+  })
+
+  it('keeps the groups readable to screen readers', async () => {
+    const input = await mount()
+    fireEvent.change(input, { target: { value: 'derp' } })
+    const group = screen.getAllByRole('group').find((g) => g.textContent?.startsWith('Servers'))!
+    const heading = document.getElementById(group.getAttribute('aria-labelledby')!)
+    expect(heading?.textContent).toBe('Servers')
+    expect(heading?.getAttribute('aria-hidden')).toBeNull()
+    expect(group.querySelectorAll('[role="option"]').length).toBeGreaterThan(0)
+  })
+
+  it('keeps focus in the field when Escape closes the list', async () => {
+    const input = await mount()
+    input.focus()
+    fireEvent.keyDown(input, { key: 'Escape' })
+    expect(screen.queryByText('Jump to')).toBeNull()
+    expect(document.activeElement).toBe(input)
   })
 
   it('cancels the question with the Cancel button', async () => {

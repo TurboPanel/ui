@@ -156,6 +156,19 @@ function SearchRow({
   )
 }
 
+const groupHeadingId = (group: string) => `header-search-group-${group}`
+
+/** The rows split into their consecutive groups, keeping each row's position in the whole list. */
+function groupRows(shown: readonly SearchItem[]) {
+  const groups: { group: string; rows: { item: SearchItem; position: number }[] }[] = []
+  shown.forEach((item, position) => {
+    const last = groups[groups.length - 1]
+    if (last?.group === item.group) last.rows.push({ item, position })
+    else groups.push({ group: item.group, rows: [{ item, position }] })
+  })
+  return groups
+}
+
 /** The grouped result rows, shared by the header popover and the phone Search screen. */
 export function SearchResultList({
   shown,
@@ -174,20 +187,21 @@ export function SearchResultList({
 }>) {
   return (
     <View id={LIST_ID} {...LISTBOX_ROLE} aria-labelledby={labelledBy} style={styles.list}>
-      {shown.map((item, position) => (
-        <View key={item.id}>
-          {position === 0 || shown[position - 1]?.group !== item.group ? (
-            <Text style={styles.groupHeading} aria-hidden>
-              {item.group}
-            </Text>
-          ) : null}
-          <SearchRow
-            item={item}
-            query={query}
-            selected={item.id === activeId}
-            onHover={() => onHover(position)}
-            onPick={() => onPick(item)}
-          />
+      {groupRows(shown).map(({ group, rows }) => (
+        <View key={group} role="group" aria-labelledby={groupHeadingId(group)}>
+          <Text id={groupHeadingId(group)} style={styles.groupHeading}>
+            {group}
+          </Text>
+          {rows.map(({ item, position }) => (
+            <SearchRow
+              key={item.id}
+              item={item}
+              query={query}
+              selected={item.id === activeId}
+              onHover={() => onHover(position)}
+              onPick={() => onPick(item)}
+            />
+          ))}
         </View>
       ))}
     </View>
@@ -254,7 +268,7 @@ function useScrollActiveIntoView(popoverOpen: boolean, activeId: string | undefi
 const detectMac = () => isWeb && /mac|iphone|ipad/i.test(globalThis.navigator?.platform ?? '')
 
 type SearchKeyEvent = {
-  nativeEvent: { key: string }
+  nativeEvent: { key: string; repeat?: boolean }
   preventDefault: () => void
   stopPropagation?: () => void
 }
@@ -272,7 +286,8 @@ function handleSearchKey(event: SearchKeyEvent, actions: SearchKeyActions) {
     actions.move(key === 'ArrowDown' ? 'down' : 'up')
   } else if (key === 'Enter') {
     event.preventDefault()
-    actions.pickActive()
+    // A held Enter must not select a row and confirm its question in one go.
+    if (!event.nativeEvent.repeat) actions.pickActive()
   } else if (key === 'Escape') {
     event.stopPropagation?.()
     actions.close()
@@ -420,12 +435,12 @@ export function HeaderSearch({
 
   if (!isWeb) return null
 
-  const close = () => {
+  const close = (keepFocus = false) => {
     setQuery('')
     setIndex(0)
     setPending(null)
     setOpen(false)
-    inputRef.current?.blur()
+    if (!keepFocus) inputRef.current?.blur()
     onClose?.()
   }
   const go = (item: SearchItem) => {
@@ -446,7 +461,7 @@ export function HeaderSearch({
         setIndex(moveSearchIndex(index, shown.length, direction))
       },
       pickActive: () => (pending ? go(pending) : pick(active)),
-      close: () => (pending ? setPending(null) : close()),
+      close: () => (pending ? setPending(null) : close(true)),
     })
 
   // Pointer presses inside the popover never move focus (see KEEP_FOCUS), so a
@@ -609,7 +624,8 @@ const styles = StyleSheet.create({
     paddingTop: spacing.xs,
     paddingBottom: 6,
   },
-  list: { gap: 2, maxHeight: 320, overflowY: 'auto' } as ViewStyle,
+  // Only the web popover scrolls its own list; the phone screen scrolls the page.
+  list: (isWeb ? { gap: 2, maxHeight: 320, overflowY: 'auto' } : { gap: 2 }) as ViewStyle,
   row: {
     flexDirection: 'row',
     alignItems: 'center',

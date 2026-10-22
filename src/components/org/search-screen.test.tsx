@@ -15,6 +15,7 @@ vi.mock('react-native', () => ({
     </div>
   ),
   Text: ({ children }: Props) => <span>{children}</span>,
+  ScrollView: ({ children }: Props) => <div data-testid="scroll">{children}</div>,
   Pressable: ({ children, onPress, role, accessibilityLabel }: Props) => (
     <div
       role={role as string}
@@ -82,6 +83,12 @@ describe('SearchScreen', () => {
     expect(screen.getByText('Jump to')).toBeTruthy()
     fireEvent.click(screen.getAllByRole('option')[0]!)
     expect(push).toHaveBeenCalledWith('/o1/servers?add=1')
+  })
+
+  it('scrolls the whole result list instead of capping it', async () => {
+    await mount()
+    const scroll = screen.getByTestId('scroll')
+    expect(scroll.querySelector('[role="listbox"]')).not.toBeNull()
   })
 
   it('shows the empty state', async () => {
