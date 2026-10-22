@@ -90,6 +90,18 @@ describe('taxDefaultNoticeContent', () => {
     expect(c.body).toContain('Reload this page')
   })
 
+  it('names an unrecognised default rather than calling it unreadable', () => {
+    const c = taxDefaultNoticeContent(defaults({ taxBehavior: 'something_new' }))
+    expect(c.tone).toBe('info')
+    expect(c.title).toBe("The account's tax default is something_new")
+  })
+
+  it('reports a provider failure that carries no detail', () => {
+    const c = taxDefaultNoticeContent(defaults({ outcome: 'provider_error', error: null }))
+    expect(c.title).toBe('Stripe did not answer the tax settings request')
+    expect(c.body).toContain('Stripe returned an error, so')
+  })
+
   it('explains, without warning, that nobody asked when no price needed the default', () => {
     const c = taxDefaultNoticeContent(defaults({ outcome: 'not_asked', status: null }))
     expect(c.tone).toBe('info')
