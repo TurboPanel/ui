@@ -31,6 +31,7 @@ import {
   memberReplicaClassLabel,
   memberReplicaClassPickerLabel,
   memberRoleLabel,
+  memberIsDown,
   memberStatusLabel,
   memberTransportLabel,
   REPLICA_CUT_OFF_LABEL,
@@ -96,6 +97,16 @@ function isHealthyMemberStatus(status: string | null): boolean {
   return status === 'ready' || status === 'running'
 }
 
+function replicaHealthLine(member: ManagedMemberRecord): string {
+  const lag = formatReplicationLag(member.replication)
+  const age = formatReplicationAge(member.replication)
+  return (
+    [replicationStateLabel(member.replication?.state ?? null), age ?? lag]
+      .filter(Boolean)
+      .join(' · ') || '—'
+  )
+}
+
 function resolveHealthLine(
   member: ManagedMemberRecord,
   cutOff: boolean,
@@ -105,14 +116,7 @@ function resolveHealthLine(
     return [memberStatusLabel(member.status), slotNotice].filter(Boolean).join(' · ')
   }
   if (member.status === 'needs_resync') return 'Stopped · needs a Resync'
-  if (cutOff) return REPLICA_CUT_OFF_LABEL
-  const lag = formatReplicationLag(member.replication)
-  const age = formatReplicationAge(member.replication)
-  return (
-    [replicationStateLabel(member.replication?.state ?? null), age ?? lag]
-      .filter(Boolean)
-      .join(' · ') || '—'
-  )
+  return cutOff ? REPLICA_CUT_OFF_LABEL : replicaHealthLine(member)
 }
 
 export function ManagedClusterPanel({
@@ -629,8 +633,7 @@ function ClusterMemberRow({
   const promoteAction = managedReplicaPromoteAction(member.replicaClass)
   const isReadReplica = promoteAction === 'disaster-recovery'
   const liveReads =
-    member.role === 'primary' ||
-    (member.readEligible && member.status !== 'needs_resync' && member.status !== 'stopped')
+    member.role === 'primary' || (member.readEligible && !memberIsDown(member.status))
 
   return (
     <View style={styles.row}>

@@ -751,8 +751,13 @@ export function memberReadTrafficLabel(
   status?: string | null
 ): string {
   if (role === 'primary') return 'Read/write'
-  if (status === 'needs_resync' || status === 'stopped') return 'Not serving reads'
+  if (memberIsDown(status)) return 'Not serving reads'
   return readEligible ? 'Serves reads' : 'Standby only'
+}
+
+/** A member whose engine is stopped (for example a demoted primary waiting for a Resync). */
+export function memberIsDown(status: string | null | undefined): boolean {
+  return status === 'needs_resync' || status === 'stopped'
 }
 
 export const MEMBER_MANUAL_DR_CANDIDATE_LABEL = 'Manual DR candidate'
@@ -809,29 +814,35 @@ function agoText(thenMs: number, nowMs: number): string {
   return `${Math.round(minutes / 60)} hours ago`
 }
 
+function completedFailoverText(
+  recovery: ManagedRecoveryRecord,
+  nowMs: number,
+  serverName: ((serverId: string) => string | null) | undefined
+): string | null {
+  if (recovery.kind === 'switchover' || !recovery.completedAt) return null
+  const doneMs = Date.parse(recovery.completedAt)
+  if (!Number.isFinite(doneMs) || nowMs - doneMs > COMPLETED_FAILOVER_BANNER_MS) return null
+  const from = recovery.sourceServerId ? serverName?.(recovery.sourceServerId) : null
+  const to = recovery.targetServerId ? serverName?.(recovery.targetServerId) : null
+  const when = agoText(doneMs, nowMs)
+  let lead = 'The database was promoted for disaster recovery'
+  if (recovery.kind === 'automatic-failover') {
+    const where = from ? `on ${from} ` : ''
+    lead = `The primary ${where}stopped answering, so the database failed over automatically`
+  }
+  const newPrimary = to ? `${to} is now the primary.` : 'A replica is now the primary.'
+  const resync = from ? ` ${from} is stopped; use Resync to bring it back as a replica.` : ''
+  return `${lead} (${when}). ${newPrimary}${resync}`
+}
+
 export function managedRecoveryBanner(
   recovery: ManagedRecoveryRecord | null | undefined,
   options: { nowMs?: number; serverName?: (serverId: string) => string | null } = {}
 ): { kind: 'blocked' | 'failed' | 'in-flight' | 'completed'; text: string } | null {
   if (!recovery) return null
   if (recovery.state === 'completed') {
-    if (recovery.kind === 'switchover' || !recovery.completedAt) return null
-    const doneMs = Date.parse(recovery.completedAt)
-    const nowMs = options.nowMs ?? Date.now()
-    if (!Number.isFinite(doneMs) || nowMs - doneMs > COMPLETED_FAILOVER_BANNER_MS) return null
-    const from = recovery.sourceServerId ? options.serverName?.(recovery.sourceServerId) : null
-    const to = recovery.targetServerId ? options.serverName?.(recovery.targetServerId) : null
-    const lead =
-      recovery.kind === 'automatic-failover'
-        ? from
-          ? `The primary on ${from} stopped answering, so the database failed over automatically`
-          : 'The primary stopped answering, so the database failed over automatically'
-        : 'The database was promoted for disaster recovery'
-    const resync = from ? ` ${from} is stopped; use Resync to bring it back as a replica.` : ''
-    return {
-      kind: 'completed',
-      text: `${lead} (${agoText(doneMs, nowMs)}). ${to ? `${to} is now` : 'A replica is now'} the primary.${resync}`,
-    }
+    const text = completedFailoverText(recovery, options.nowMs ?? Date.now(), options.serverName)
+    return text ? { kind: 'completed', text } : null
   }
   if (recovery.state === 'blocked') {
     return {
