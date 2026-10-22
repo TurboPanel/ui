@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Button, ConfirmButton, InlineNotice, MonoText } from '@/components/ui'
+import { ConfirmButton, InlineNotice, MonoText } from '@/components/ui'
 import {
   deleteChoices,
   ServerRemovalPrincipals,
@@ -14,12 +14,10 @@ import {
   blockedEnvironmentMessages,
   environmentForgetCopy,
   forgottenResourceGroups,
-  hasBlockedForget,
   membersForgetCopy,
   moreLabel,
-  SERVER_DELETE_FORGET_CONFIRM_LABEL,
   SERVER_DELETE_FORGET_COPY,
-  SERVER_DELETE_FORGET_REVEAL_LABEL,
+  SERVER_REMOVE_OFFLINE_LABEL,
   serverDeleteBlockerMessages,
   shouldShowServerForgetPath,
   type ForgottenResourceGroup,
@@ -29,9 +27,7 @@ import { StyleSheet, Text, View } from 'react-native'
 import { ServerBlockerItemsFromRow } from '@/components/org/server-blocker-items'
 import { formatServerDeleteBlocker } from '@/lib/server-delete-blockers'
 
-function ForgetResourceGroups({
-  groups,
-}: Readonly<{ groups: ForgottenResourceGroup[] }>) {
+function ForgetResourceGroups({ groups }: Readonly<{ groups: ForgottenResourceGroup[] }>) {
   return (
     <>
       {groups.map((group) => (
@@ -40,24 +36,24 @@ function ForgetResourceGroups({
           {group.names.map((name) => (
             <MonoText key={name}>{name}</MonoText>
           ))}
-          {group.more > 0 ? (
-            <Text style={panelStyles.muted}>{moreLabel(group.more)}</Text>
-          ) : null}
+          {group.more > 0 ? <Text style={panelStyles.muted}>{moreLabel(group.more)}</Text> : null}
         </View>
       ))}
     </>
   )
 }
 
-function ForgetWarningBody({
-  preview,
-}: Readonly<{ preview: unknown }>) {
+function ForgetWarningBody({ preview }: Readonly<{ preview: unknown }>) {
   const environmentCopy = environmentForgetCopy(preview)
   const membersCopy = membersForgetCopy(preview)
   const groups = forgottenResourceGroups(preview)
   return (
     <View style={styles.group}>
-      <InlineNotice title="Host is gone" body={SERVER_DELETE_FORGET_COPY} tone="warning" />
+      <InlineNotice
+        title="This server is offline"
+        body={SERVER_DELETE_FORGET_COPY}
+        tone="warning"
+      />
       {environmentCopy ? (
         <Text style={[panelStyles.pageCopy, styles.wrapText]}>{environmentCopy}</Text>
       ) : null}
@@ -94,8 +90,6 @@ export function ServerDeletePanel({
   const blockedDatabaseLines = blockedDatabaseMessages(preview)
   const blockedEnvironmentLines = blockedEnvironmentMessages(preview)
   const blockerLines = serverDeleteBlockerMessages(preview)
-  const forgetBlocked = hasBlockedForget(preview) || !showForget
-  const [forgetArmed, setForgetArmed] = useState(false)
   const busy = deleting
   const showError =
     Boolean(deleteError) &&
@@ -140,34 +134,26 @@ export function ServerDeletePanel({
           setChoices((current) => ({ ...current, [principalId]: action }))
         }
       />
-      {showForget && forgetArmed ? <ForgetWarningBody preview={preview} /> : null}
-      <ConfirmButton
-        label={busy ? 'Deleting…' : 'Delete server'}
-        confirmLabel="Confirm delete"
-        prompt="Permanently remove this server from the organization?"
-        busy={busy}
-        disabled={busy}
-        onConfirm={() => onConfirm(false, deleteChoices(choices, planQuery.data?.principals))}
-      />
-      {showForget && !forgetArmed ? (
-        <Button
-          label={SERVER_DELETE_FORGET_REVEAL_LABEL}
-          variant="danger"
-          size="sm"
-          disabled={busy || forgetBlocked}
-          onPress={() => setForgetArmed(true)}
-        />
-      ) : null}
-      {showForget && forgetArmed ? (
-        <Button
-          label={busy ? 'Deleting…' : SERVER_DELETE_FORGET_CONFIRM_LABEL}
-          variant="danger"
-          size="sm"
+      {showForget ? <ForgetWarningBody preview={preview} /> : null}
+      {showForget ? (
+        <ConfirmButton
+          label={busy ? 'Removing…' : SERVER_REMOVE_OFFLINE_LABEL}
+          confirmLabel="Confirm remove"
+          prompt="Remove this server from the organization? The machine itself is not touched."
           busy={busy}
-          disabled={busy || forgetBlocked}
-          onPress={() => onConfirm(true, deleteChoices(choices, planQuery.data?.principals))}
+          disabled={busy}
+          onConfirm={() => onConfirm(true, deleteChoices(choices, planQuery.data?.principals))}
         />
-      ) : null}
+      ) : (
+        <ConfirmButton
+          label={busy ? 'Deleting…' : 'Delete server'}
+          confirmLabel="Confirm delete"
+          prompt="Permanently remove this server from the organization?"
+          busy={busy}
+          disabled={busy}
+          onConfirm={() => onConfirm(false, deleteChoices(choices, planQuery.data?.principals))}
+        />
+      )}
     </View>
   )
 }

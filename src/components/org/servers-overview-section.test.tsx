@@ -23,7 +23,10 @@ vi.mock('@/lib/query-client', () => ({
   queryKeys: { org: () => ({ servers: { list: ['servers'] } }) },
 }))
 vi.mock('@tanstack/react-query', () => ({ useQueryClient: () => ({ invalidateQueries: vi.fn() }) }))
-vi.mock('expo-router', () => ({ useRouter: () => ({ push: vi.fn() }) }))
+vi.mock('expo-router', () => ({
+  useRouter: () => ({ push: vi.fn(), setParams: vi.fn() }),
+  useLocalSearchParams: () => ({}),
+}))
 
 const idle = { data: undefined, isLoading: false, isError: false, refetch: vi.fn() }
 vi.mock('@/lib/queries/fabric', () => ({ useOrgFabric: () => idle }))

@@ -9,6 +9,7 @@ import {
   Badge,
   type BadgeTone,
   Checkbox,
+  InlineNotice,
   DataTable,
   DataTableCell,
   type DataTableColumn,
@@ -111,9 +112,7 @@ function isColocatedServer(
   server: OrgServerRecord,
   updateData?: ServerUpdateStatus | null
 ): boolean {
-  return (
-    server.colocatedWithInstance === true || updateData?.colocatedWithInstance === true
-  )
+  return server.colocatedWithInstance === true || updateData?.colocatedWithInstance === true
 }
 
 function isServerUpdatable(
@@ -282,7 +281,11 @@ function UnusedKeysHint({
       <Pressable
         accessibilityRole="link"
         accessibilityLabel={`${label}. Open pending keys.`}
-        style={({ pressed }) => [styles.unusedKeysLink, pressed && styles.buttonPressed, webPointer]}
+        style={({ pressed }) => [
+          styles.unusedKeysLink,
+          pressed && styles.buttonPressed,
+          webPointer,
+        ]}
         onPress={() => router.push(serversPendingKeysHref(orgId))}
       >
         <Text style={styles.unusedKeysLinkText}>{label} — view and delete</Text>
@@ -511,7 +514,8 @@ function ServerTierLine({ server }: Readonly<{ server: OrgServerRecord }>) {
   const unwatched = formatUnwatchedCounts(summarizeUnwatched(placement.unwatched))
   const placementNote = (() => {
     if (state === 'below-required') return `needs ${placement.requiredTier}`
-    if (state === 'below-recommended') return unwatched ? `${unwatched} unmonitored` : `${placement.recommendedTier} recommended`
+    if (state === 'below-recommended')
+      return unwatched ? `${unwatched} unmonitored` : `${placement.recommendedTier} recommended`
     if (state === 'above-hardware') return `${placement.recommendedTier} would do`
     return null
   })()
@@ -519,13 +523,19 @@ function ServerTierLine({ server }: Readonly<{ server: OrgServerRecord }>) {
   // are being emailed about this host; it is shown whenever the wire carries
   // it, never inferred from the rank comparison above.
   const notice = placement.notice ?? null
-  const noticeNote = notice ? `notified ${formatElapsedSince(notice.lastNotifiedAt, { fallback: '—' })} ago` : null
-  const note = [placementNote, noticeNote].filter((part): part is string => part != null).join(' · ')
+  const noticeNote = notice
+    ? `notified ${formatElapsedSince(notice.lastNotifiedAt, { fallback: '—' })} ago`
+    : null
+  const note = [placementNote, noticeNote]
+    .filter((part): part is string => part != null)
+    .join(' · ')
   return (
     <View style={styles.tierLine}>
       <View style={styles.tierChips}>
         <Badge label={placement.licenseTier ?? 'Unlicensed'} tone={tierChipTone(state)} />
-        {notice ? <Badge label="Daily notice" tone={notice.kind === 'exceeds' ? 'pending' : 'info'} /> : null}
+        {notice ? (
+          <Badge label="Daily notice" tone={notice.kind === 'exceeds' ? 'pending' : 'info'} />
+        ) : null}
       </View>
       {note ? (
         <Text
@@ -987,7 +997,10 @@ function toggleIdInSet(prev: Set<string>, serverId: string): Set<string> {
   return next
 }
 
-export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
+export function ServersOverviewSection({
+  orgId,
+  removedServerName,
+}: Readonly<{ orgId: string; removedServerName?: string }>) {
   const queryClient = useQueryClient()
   const canManage = useCan('organization', orgId, 'organization:manage')
   const canOwn = useCan('organization', orgId, 'organization:own')
@@ -1156,6 +1169,12 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
           compactChrome={compactChrome}
         />
       </View>
+      {removedServerName ? (
+        <InlineNotice
+          title="Server removed"
+          body={`${removedServerName} was removed from this organization.`}
+        />
+      ) : null}
       {canOwn && addServerEligibility.reason ? (
         <Text style={styles.capacityHint}>{addServerEligibility.reason}</Text>
       ) : null}

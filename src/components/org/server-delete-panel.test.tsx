@@ -4,9 +4,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { CappedPreviewList, ServerDeletePreview } from '@/lib/instance-api'
 import {
   SERVER_DELETE_ENVIRONMENTS_LEAD,
-  SERVER_DELETE_FORGET_CONFIRM_LABEL,
   SERVER_DELETE_FORGET_COPY,
-  SERVER_DELETE_FORGET_REVEAL_LABEL,
+  SERVER_REMOVE_OFFLINE_LABEL,
   SERVER_DELETE_MEMBERS_LEAD,
 } from '@/lib/server-delete-preview'
 import { ServerDeletePanel } from './server-delete-panel'
@@ -34,12 +33,7 @@ vi.mock('@/components/org/server-blocker-items', () => ({
     return (
       <>
         {items.map(
-          (item: {
-            id: string
-            name: string
-            projectId?: string
-            projectName?: string
-          }) => (
+          (item: { id: string; name: string; projectId?: string; projectName?: string }) => (
             <a
               key={item.id}
               href={
@@ -58,7 +52,10 @@ vi.mock('@/components/org/server-blocker-items', () => ({
 }))
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
 vi.mock('react-native-svg', async () => (await import('@/components/ui/v4/rn-stub')).svgStub)
-vi.mock('@/lib/theme-preference', async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub)
+vi.mock(
+  '@/lib/theme-preference',
+  async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub
+)
 
 vi.mock('@/lib/queries/servers', () => ({
   useServerDeletePreview,
@@ -214,11 +211,10 @@ describe('ServerDeletePanel', () => {
         environments: emptyList,
         members: emptyList,
         blockedDatabases: emptyList,
-    blockedEnvironments: emptyList,
+        blockedEnvironments: emptyList,
       }
     )
-    expect(screen.queryByText(SERVER_DELETE_FORGET_REVEAL_LABEL)).toBeNull()
-    expect(screen.queryByText(SERVER_DELETE_FORGET_CONFIRM_LABEL)).toBeNull()
+    expect(screen.queryByText(SERVER_REMOVE_OFFLINE_LABEL)).toBeNull()
     expect(screen.getByText('Delete server')).toBeTruthy()
   })
 
@@ -238,12 +234,18 @@ describe('ServerDeletePanel', () => {
     expect(
       screen.getByText('1 other item still placed on this server — remove them first')
     ).toBeTruthy()
-    expect(screen.queryByText(SERVER_DELETE_FORGET_REVEAL_LABEL)).toBeNull()
-    expect(screen.queryByText(SERVER_DELETE_FORGET_CONFIRM_LABEL)).toBeNull()
+    expect(screen.queryByText(SERVER_REMOVE_OFFLINE_LABEL)).toBeNull()
     expect(screen.getByText('Delete server')).toBeTruthy()
   })
 
-  it('lists environments after the first confirm step', () => {
+  it('offers removal first for an offline server, with a plain explanation', () => {
+    renderPanel({}, preview())
+    expect(screen.getByText(SERVER_REMOVE_OFFLINE_LABEL)).toBeTruthy()
+    expect(screen.getByText(SERVER_DELETE_FORGET_COPY)).toBeTruthy()
+    expect(screen.queryByText('Delete server')).toBeNull()
+  })
+
+  it('lists what is forgotten before the confirm and removes in one step', () => {
     const onConfirm = vi.fn()
     renderPanel(
       { onConfirm },
@@ -258,31 +260,16 @@ describe('ServerDeletePanel', () => {
         members: capped([{ id: 'rep-1', databaseName: 'catalog' }]),
       })
     )
-    expect(screen.queryByText(new RegExp(SERVER_DELETE_ENVIRONMENTS_LEAD))).toBeNull()
-    fireEvent.click(screen.getByText(SERVER_DELETE_FORGET_REVEAL_LABEL))
     expect(
       screen.getByText(
         `${SERVER_DELETE_ENVIRONMENTS_LEAD} staging in Shop, prod in Blog, and 1 more`
       )
     ).toBeTruthy()
     expect(screen.getByText(`${SERVER_DELETE_MEMBERS_LEAD} catalog`)).toBeTruthy()
-    expect(onConfirm).not.toHaveBeenCalled()
-  })
-
-  it('performs forget only on the second confirm step', () => {
-    const onConfirm = vi.fn()
-    renderPanel({ onConfirm, deleteBlocked: true }, preview())
-    expect(screen.queryByText(SERVER_DELETE_FORGET_COPY)).toBeNull()
-    expect(screen.queryByText(SERVER_DELETE_FORGET_CONFIRM_LABEL)).toBeNull()
-    fireEvent.click(screen.getByText(SERVER_DELETE_FORGET_REVEAL_LABEL))
-    expect(screen.getByText(SERVER_DELETE_FORGET_COPY)).toBeTruthy()
     expect(screen.getByText('web (running) · shop')).toBeTruthy()
-    expect(screen.getByText('api (exited)')).toBeTruthy()
-    expect(screen.getByText('and 2 more')).toBeTruthy()
-    expect(screen.getByText('project_default')).toBeTruthy()
     expect(screen.getByText('10.0.0.5')).toBeTruthy()
     expect(onConfirm).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByText(SERVER_DELETE_FORGET_CONFIRM_LABEL))
+    fireEvent.click(screen.getByText(SERVER_REMOVE_OFFLINE_LABEL))
     expect(onConfirm).toHaveBeenCalledWith(true, [])
   })
 
@@ -338,8 +325,7 @@ describe('ServerDeletePanel', () => {
         'Database "analytics" has its primary copy on this server. Promote another member or delete the database first.'
       )
     ).toBeTruthy()
-    expect(screen.queryByText(SERVER_DELETE_FORGET_REVEAL_LABEL)).toBeNull()
-    expect(screen.queryByText(SERVER_DELETE_FORGET_CONFIRM_LABEL)).toBeNull()
+    expect(screen.queryByText(SERVER_REMOVE_OFFLINE_LABEL)).toBeNull()
     expect(screen.getByText('Delete server')).toBeTruthy()
     expect(onConfirm).not.toHaveBeenCalled()
   })
@@ -360,8 +346,7 @@ describe('ServerDeletePanel', () => {
         }
       )
     ).not.toThrow()
-    expect(screen.queryByText(SERVER_DELETE_FORGET_REVEAL_LABEL)).toBeNull()
-    expect(screen.queryByText(SERVER_DELETE_FORGET_CONFIRM_LABEL)).toBeNull()
+    expect(screen.queryByText(SERVER_REMOVE_OFFLINE_LABEL)).toBeNull()
     expect(screen.getByText('Delete server')).toBeTruthy()
   })
 
@@ -376,7 +361,9 @@ describe('ServerDeletePanel', () => {
   it('sends no principal choices by default, so every principal is kept', () => {
     const onConfirm = vi.fn()
     useServerPrincipalRemovalPlan.mockReturnValue({
-      data: { principals: [{ principalId: 'p1', appliedUsername: 'alice_x', canDeleteOutright: true }] },
+      data: {
+        principals: [{ principalId: 'p1', appliedUsername: 'alice_x', canDeleteOutright: true }],
+      },
       isLoading: false,
       error: null,
     })
@@ -405,7 +392,9 @@ describe('ServerDeletePanel', () => {
   it('sends the principals chosen for outright deletion', () => {
     const onConfirm = vi.fn()
     useServerPrincipalRemovalPlan.mockReturnValue({
-      data: { principals: [{ principalId: 'p1', appliedUsername: 'alice_x', canDeleteOutright: true }] },
+      data: {
+        principals: [{ principalId: 'p1', appliedUsername: 'alice_x', canDeleteOutright: true }],
+      },
       isLoading: false,
       error: null,
     })

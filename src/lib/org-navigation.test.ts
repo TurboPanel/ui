@@ -37,6 +37,7 @@ import {
   SERVER_DETAIL_TAB_IDS,
   serverMetricsHref,
   serversDatacentersHref,
+  serversRemovedHref,
   serversPendingKeysHref,
   orgAreaHref,
   projectGitSourcesHref,
@@ -90,7 +91,7 @@ describe('orgAreaFromPathname', () => {
       expect(resolved?.area.id).toBe(areaId)
       expect(resolved?.subRoute?.id).toBe(subRouteId)
       expect(resolved?.subRoute?.pathSegment).toBe(pathSegment)
-    },
+    }
   )
 
   it('does not treat Manage Organization as a sidebar area', () => {
@@ -134,9 +135,7 @@ describe('isOrgTabOverviewRouteName', () => {
   })
 
   it('does not match project Overview or other nested routes', () => {
-    expect(isOrgTabOverviewRouteName('projects/[projectId]/overview')).toBe(
-      false,
-    )
+    expect(isOrgTabOverviewRouteName('projects/[projectId]/overview')).toBe(false)
     expect(isOrgTabOverviewRouteName('servers/[serverId]')).toBe(false)
     expect(isOrgTabOverviewRouteName('servers/datacenters')).toBe(false)
     expect(isOrgTabOverviewRouteName('projects/new')).toBe(false)
@@ -149,9 +148,7 @@ describe('isOrgTabOverviewPath', () => {
   it('matches each native tab overview, including a projects query', () => {
     expect(isOrgTabOverviewPath('/org/activity', 'org')).toBe(true)
     expect(isOrgTabOverviewPath('/org/projects', 'org')).toBe(true)
-    expect(
-      isOrgTabOverviewPath('/org/projects?workspaceId=ws-1', 'org'),
-    ).toBe(true)
+    expect(isOrgTabOverviewPath('/org/projects?workspaceId=ws-1', 'org')).toBe(true)
     expect(isOrgTabOverviewPath('/org/servers', 'org')).toBe(true)
   })
 
@@ -174,45 +171,31 @@ describe('orgTabHref', () => {
 
   it('keeps the projects workspace filter', () => {
     expect(orgTabHref('org-1', 'projects', 'all')).toBe('/org-1/projects')
-    expect(orgTabHref('org-1', 'projects', 'ws-1')).toBe(
-      '/org-1/projects?workspaceId=ws-1',
-    )
+    expect(orgTabHref('org-1', 'projects', 'ws-1')).toBe('/org-1/projects?workspaceId=ws-1')
   })
 })
 
 describe('adjacentOrgTabHref', () => {
   it('moves Projects → Activity → Servers and does not wrap', () => {
-    expect(adjacentOrgTabHref('/org/projects', 'org', 'next', 'all')).toBe(
-      '/org/activity',
-    )
-    expect(adjacentOrgTabHref('/org/activity', 'org', 'next', 'all')).toBe(
-      '/org/servers',
-    )
+    expect(adjacentOrgTabHref('/org/projects', 'org', 'next', 'all')).toBe('/org/activity')
+    expect(adjacentOrgTabHref('/org/activity', 'org', 'next', 'all')).toBe('/org/servers')
     expect(adjacentOrgTabHref('/org/servers', 'org', 'next', 'all')).toBeNull()
-    expect(
-      adjacentOrgTabHref('/org/projects', 'org', 'previous', 'all'),
-    ).toBeNull()
-    expect(adjacentOrgTabHref('/org/servers', 'org', 'previous', 'all')).toBe(
-      '/org/activity',
+    expect(adjacentOrgTabHref('/org/projects', 'org', 'previous', 'all')).toBeNull()
+    expect(adjacentOrgTabHref('/org/servers', 'org', 'previous', 'all')).toBe('/org/activity')
+    expect(adjacentOrgTabHref('/org/projects?workspaceId=ws-1', 'org', 'next', 'all')).toBe(
+      '/org/activity'
     )
-    expect(
-      adjacentOrgTabHref('/org/projects?workspaceId=ws-1', 'org', 'next', 'all'),
-    ).toBe('/org/activity')
   })
 
   it('preserves the projects workspace filter when swiping onto Projects', () => {
-    expect(
-      adjacentOrgTabHref('/org/activity', 'org', 'previous', 'ws-9'),
-    ).toBe('/org/projects?workspaceId=ws-9')
+    expect(adjacentOrgTabHref('/org/activity', 'org', 'previous', 'ws-9')).toBe(
+      '/org/projects?workspaceId=ws-9'
+    )
   })
 
   it('returns null on nested routes even inside a tab area', () => {
-    expect(
-      adjacentOrgTabHref('/org/servers/srv-1', 'org', 'previous', 'all'),
-    ).toBeNull()
-    expect(
-      adjacentOrgTabHref('/org/projects/p-1', 'org', 'next', 'all'),
-    ).toBeNull()
+    expect(adjacentOrgTabHref('/org/servers/srv-1', 'org', 'previous', 'all')).toBeNull()
+    expect(adjacentOrgTabHref('/org/projects/p-1', 'org', 'next', 'all')).toBeNull()
   })
 })
 
@@ -234,9 +217,7 @@ describe('isOrgAreaActive', () => {
 
   it('matches projects base paths that carry a workspace query', () => {
     // Helper strips `?…`; Expo `usePathname()` already omits the query.
-    expect(
-      isOrgAreaActive('/org/projects?workspaceId=ws-1', 'org', 'projects'),
-    ).toBe(true)
+    expect(isOrgAreaActive('/org/projects?workspaceId=ws-1', 'org', 'projects')).toBe(true)
   })
 })
 
@@ -314,9 +295,7 @@ describe('organizationsHref', () => {
 describe('serversDatacentersHref', () => {
   it('builds the Servers Datacenters href', () => {
     expect(serversDatacentersHref('org-1')).toBe('/org-1/servers/datacenters')
-    expect(datacenterHref('org-1', 'dc-9')).toBe(
-      '/org-1/servers/datacenters/dc-9',
-    )
+    expect(datacenterHref('org-1', 'dc-9')).toBe('/org-1/servers/datacenters/dc-9')
     expect(datacenterNewHref('org-1')).toBe('/org-1/servers/datacenters/new')
     expect(networkAddressesHref('org-1')).toBe('/org-1/network/addresses')
     expect(networkDockerHref('org-1')).toBe('/org-1/network/docker')
@@ -329,21 +308,15 @@ describe('serversDatacentersHref', () => {
 describe('remaining org href builders', () => {
   it('builds server, sources, fabric, and nested area paths', () => {
     expect(serverDetailHref('org-1', 'srv-9')).toBe('/org-1/servers/srv-9')
-    expect(serverMetricsHref('org-1', 'srv-9')).toBe(
-      '/org-1/servers/srv-9/metrics',
-    )
+    expect(serverMetricsHref('org-1', 'srv-9')).toBe('/org-1/servers/srv-9/metrics')
     expect(serverDetailTabHref('org-1', 'srv-9', 'control')).toBe(
-      '/org-1/servers/srv-9?tab=control',
+      '/org-1/servers/srv-9?tab=control'
     )
     expect(projectGitSourcesHref('org-1')).toBe('/org-1/projects/git-sources')
-    expect(projectRepositoriesHref('org-1')).toBe(
-      '/org-1/projects/repositories',
-    )
+    expect(projectRepositoriesHref('org-1')).toBe('/org-1/projects/repositories')
     expect(orgAreaHref('org-1', 'network')).toBe('/org-1/network')
     expect(networkFabricHref('org-1')).toBe('/org-1/network/fabric')
-    expect(orgRouteHref('org-1', 'network', 'addresses')).toBe(
-      '/org-1/network/addresses',
-    )
+    expect(orgRouteHref('org-1', 'network', 'addresses')).toBe('/org-1/network/addresses')
   })
 
   it('replaceOrganization uses the singular org-console identity', () => {
@@ -393,7 +366,7 @@ describe('server detail firewall tab', () => {
   it('lists the firewall tab and builds its link', () => {
     expect(SERVER_DETAIL_TAB_IDS).toContain('firewall')
     expect(serverDetailTabHref('org-1', 'srv-9', 'firewall')).toBe(
-      '/org-1/servers/srv-9?tab=firewall',
+      '/org-1/servers/srv-9?tab=firewall'
     )
   })
 })
@@ -402,8 +375,14 @@ describe('server detail services tab', () => {
   it('lists the services tab and builds its link', () => {
     expect(SERVER_DETAIL_TAB_IDS).toContain('services')
     expect(serverDetailTabHref('org-1', 'srv-9', 'services')).toBe(
-      '/org-1/servers/srv-9?tab=services',
+      '/org-1/servers/srv-9?tab=services'
     )
+  })
+})
+
+describe('serversRemovedHref', () => {
+  it('returns to the Servers list with the removed name', () => {
+    expect(serversRemovedHref('org-1', 'web 1')).toBe('/org-1/servers?removed=web%201')
   })
 })
 
