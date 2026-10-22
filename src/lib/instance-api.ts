@@ -1141,10 +1141,11 @@ export async function fetchServerServices(serverId: string): Promise<ServerServi
 }
 
 /**
- * Owner-only (`organization:own`). Sets or clears `server.preferred_tier_id`
- * (`tierId` `null` clears the pick). The control plane recomputes the assigned
- * tier from spare licenses; **422** `tier_below_required` when the pick is under
- * the hardware floor; **404** `tier_not_found` / `server_not_licensed`.
+ * Owner-only (`organization:own`). Assigns this server a license at `tierId`
+ * from a free one there, or gives its license back (`null`). Nothing else moves:
+ * the control plane never assigns or moves a license on its own. **409**
+ * `no_free_seat` when no license is free at that tier; **404** `tier_not_found` /
+ * `server_not_licensed`.
  */
 export async function setServerLicenseTier(
   serverId: string,

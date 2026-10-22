@@ -8,18 +8,17 @@ describe('confirmLicenseTierMove', () => {
     ).toBe('Move this server from S1 to S2. Uses 1 of your 6 free S2 licenses. No charge.')
   })
 
-  it('uses the derive phrase when no tier is assigned yet', () => {
-    expect(
-      confirmLicenseTierMove({ fromLabel: null, toLabel: 'S3', free: 1 })
-    ).toBe(
-      'Move this server from the smallest that fits to S3. Uses 1 of your 1 free S3 licenses. No charge.'
+  it('says no license when no tier is assigned yet', () => {
+    expect(confirmLicenseTierMove({ fromLabel: null, toLabel: 'S3', free: 1 })).toBe(
+      'Move this server from no license to S3. Uses 1 of your 1 free S3 licenses. No charge.'
     )
   })
 })
 
 describe('confirmClearLicenseTierPick', () => {
-  it('names the pinned tier when clearing a pick', () => {
-    expect(confirmClearLicenseTierPick('S4')).toContain('S4')
-    expect(confirmClearLicenseTierPick()).toContain('your current pick')
+  it('names the tier given back and says nothing replaces it', () => {
+    expect(confirmClearLicenseTierPick('S4')).toContain("this server's S4 license")
+    expect(confirmClearLicenseTierPick('S4')).toContain('no license until you assign one')
+    expect(confirmClearLicenseTierPick()).toContain("Give back this server's license.")
   })
 })

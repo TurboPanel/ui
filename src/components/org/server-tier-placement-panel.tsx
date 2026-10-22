@@ -188,7 +188,7 @@ function LicenseTierPickList({
         />
       ))}
       <Button
-        label="Use the smallest that fits"
+        label="Give back this license"
         variant="ghost"
         size="sm"
         disabled={!hasPick || busy}
@@ -204,7 +204,7 @@ function confirmSheetCopy(
   pickedTier: string | null
 ): string {
   if ('kind' in pending && pending.kind === 'clear') {
-    return confirmClearLicenseTierPick(pickedTier ?? undefined)
+    return confirmClearLicenseTierPick(licenseTier ?? pickedTier ?? undefined)
   }
   const pick = pending as PendingPick
   return confirmLicenseTierMove({
@@ -237,7 +237,7 @@ function LicenseTierConfirmSheet({
   return (
     <ModalSheet
       visible={pending != null}
-      title={isClear ? 'Clear license tier pick' : 'Confirm license tier'}
+      title={isClear ? 'Give back license' : 'Confirm license tier'}
       onRequestClose={onDismiss}
     >
       {pending ? (
@@ -248,7 +248,7 @@ function LicenseTierConfirmSheet({
           <ButtonRow>
             <Button label="Cancel" variant="secondary" onPress={onDismiss} />
             <Button
-              label={isClear ? 'Clear pick' : 'Apply'}
+              label={isClear ? 'Give back' : 'Apply'}
               variant="primary"
               disabled={busy}
               onPress={() => {
@@ -356,7 +356,7 @@ function LicenseTierPanelBody({
           placement={placement}
           choices={choices}
           busy={busy}
-          hasPick={placement.pickedTier != null}
+          hasPick={placement.licenseTier != null || placement.pickedTier != null}
           requiredRankUnknown={requiredRankUnknown}
           onPick={onPick}
           onClear={onClear}

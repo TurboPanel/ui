@@ -263,10 +263,10 @@ describe('ServerTierPlacementPanel', () => {
 
     render(<ServerTierPlacementPanel orgId="org-1" server={detail} />)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Use the smallest that fits' }))
-    expect(screen.getByTestId('modal').textContent).toContain('Clear license tier pick')
+    fireEvent.click(screen.getByRole('button', { name: 'Give back this license' }))
+    expect(screen.getByTestId('modal').textContent).toContain('Give back license')
 
-    fireEvent.click(screen.getByRole('button', { name: 'Clear pick' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Give back' }))
     expect(run).toHaveBeenCalledWith(null)
   })
 

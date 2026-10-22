@@ -46,7 +46,9 @@ const API_ERROR_COPY: Readonly<Record<string, string>> = {
   tier_not_found: 'That tier is no longer available. Refresh and pick again.',
   server_not_licensed:
     'This server does not have an active license yet. Add the server with a license before picking a tier.',
-  invalid_body: 'Choose a tier from the list, or clear the pick to use automatic placement.',
+  invalid_body: 'Choose a tier from the list, or give back the license.',
+  no_free_seat:
+    'No free license at that tier. Buy one first, or give one back from another server.',
   environment_name_locked:
     "This environment's name is part of the folder path on your servers, so it cannot change while services or volumes have folders in it.",
   environment_has_folders:
