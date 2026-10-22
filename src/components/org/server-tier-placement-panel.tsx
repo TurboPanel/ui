@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactElement } from 'react'
 import { useRouter } from 'expo-router'
 import { StyleSheet, Text, View } from 'react-native'
 import { panelStyles } from '@/components/ui/panel-styles'
@@ -142,36 +142,46 @@ function LicenseTierPickRow({
   const router = useRouter()
   const isCurrent = pickedLabel === tier.label || currentTier?.id === tier.id
   const canChange = free === 0 && currentTier != null && currentTier.id !== tier.id
+  let action: ReactElement
+  if (free > 0) {
+    action = (
+      <Button
+        label={isCurrent ? 'Current pick' : 'Use'}
+        variant={isCurrent ? 'secondary' : 'primary'}
+        size="sm"
+        disabled={isCurrent || busy}
+        onPress={() => onPick({ tier, free })}
+      />
+    )
+  } else if (canChange) {
+    action = (
+      <Button
+        label="Change this license"
+        variant="secondary"
+        size="sm"
+        disabled={busy}
+        onPress={() => onPick({ tier, free, changeFrom: currentTier })}
+      />
+    )
+  } else if (isCurrent) {
+    action = (
+      <Button label="Current pick" variant="secondary" size="sm" disabled onPress={() => {}} />
+    )
+  } else {
+    action = (
+      <Button
+        label="Buy one"
+        variant="secondary"
+        size="sm"
+        onPress={() => router.push(orgBillingHref(orgId, { tier: tier.label }))}
+      />
+    )
+  }
   return (
     <View style={styles.pickRow}>
       <Text style={styles.pickLabel}>{tier.label}</Text>
       <Text style={panelStyles.muted}>{free > 0 ? `${free} free` : 'None free'}</Text>
-      {free > 0 ? (
-        <Button
-          label={isCurrent ? 'Current pick' : 'Use'}
-          variant={isCurrent ? 'secondary' : 'primary'}
-          size="sm"
-          disabled={isCurrent || busy}
-          onPress={() => onPick({ tier, free })}
-        />
-      ) : canChange ? (
-        <Button
-          label="Change this license"
-          variant="secondary"
-          size="sm"
-          disabled={busy}
-          onPress={() => onPick({ tier, free, changeFrom: currentTier })}
-        />
-      ) : isCurrent ? (
-        <Button label="Current pick" variant="secondary" size="sm" disabled onPress={() => {}} />
-      ) : (
-        <Button
-          label="Buy one"
-          variant="secondary"
-          size="sm"
-          onPress={() => router.push(orgBillingHref(orgId, { tier: tier.label }))}
-        />
-      )}
+      {action}
     </View>
   )
 }
@@ -283,14 +293,17 @@ function LicenseTierConfirmSheet({
   const isClear = pending != null && 'kind' in pending && pending.kind === 'clear'
   const pick: PendingPick | null =
     pending != null && !('kind' in pending) ? (pending as PendingPick) : null
+  let sheetTitle = 'Confirm license tier'
+  let sheetButton = 'Apply'
+  if (isClear) {
+    sheetTitle = 'Give back license'
+    sheetButton = 'Give back'
+  } else if (pick?.changeFrom) {
+    sheetTitle = 'Change license'
+    sheetButton = 'Change license'
+  }
   return (
-    <ModalSheet
-      visible={pending != null}
-      title={
-        isClear ? 'Give back license' : pick?.changeFrom ? 'Change license' : 'Confirm license tier'
-      }
-      onRequestClose={onDismiss}
-    >
+    <ModalSheet visible={pending != null} title={sheetTitle} onRequestClose={onDismiss}>
       {pending ? (
         <View style={styles.confirmBody}>
           <Text style={panelStyles.detailLine}>
@@ -299,7 +312,7 @@ function LicenseTierConfirmSheet({
           <ButtonRow>
             <Button label="Cancel" variant="secondary" onPress={onDismiss} />
             <Button
-              label={isClear ? 'Give back' : pick?.changeFrom ? 'Change license' : 'Apply'}
+              label={sheetButton}
               variant="primary"
               disabled={busy}
               onPress={() => {
@@ -492,17 +505,20 @@ export function ServerTierPlacementPanel({
   const currentTier = catalogTiers.find((tier) => tier.label === placement.licenseTier) ?? null
   const busy = setTier.isPending || upgrade.isPending || downgrade.isPending
 
+  const runPick = async (pick: PendingPick | null) => {
+    if (!pick) return await setTier.run(null)
+    if (!pick.changeFrom) return await setTier.run(pick.tier.id)
+    const move = pick.tier.rank > pick.changeFrom.rank ? upgrade : downgrade
+    return await move.run({
+      fromTierId: pick.changeFrom.id,
+      toTierId: pick.tier.id,
+      serverId: server.id,
+    })
+  }
+
   const applyPick = async (pick: PendingPick | null) => {
     setError(null)
-    const outcome = !pick
-      ? await setTier.run(null)
-      : pick.changeFrom
-        ? await (pick.tier.rank > pick.changeFrom.rank ? upgrade : downgrade).run({
-            fromTierId: pick.changeFrom.id,
-            toTierId: pick.tier.id,
-            serverId: server.id,
-          })
-        : await setTier.run(pick.tier.id)
+    const outcome = await runPick(pick)
     if (!outcome.ok) {
       setPending(null)
       setError(
