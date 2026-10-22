@@ -387,6 +387,11 @@ export function projectRepositoriesHref(orgId: string): `/${string}/projects/rep
 
 /** Organization-owned GitHub Apps and GitLab applications. */
 
+/** Servers list shown after a server is removed, carrying its name for the notice. */
+export function serversRemovedHref(orgId: string, serverName: string): string {
+  return `/${orgId}/servers?removed=${encodeURIComponent(serverName)}`
+}
+
 export function serversDatacentersHref(orgId: string): `/${string}/servers/datacenters` {
   return `/${orgId}/servers/datacenters`
 }

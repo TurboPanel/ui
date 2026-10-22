@@ -4,10 +4,10 @@ import { useOrgTabPagerOwnership } from '@/components/org/org-tab-pager-ownershi
 
 export default function ServersOverviewScreen() {
   const ownedByPager = useOrgTabPagerOwnership()
-  const { orgId } = useLocalSearchParams<{ orgId: string }>()
+  const { orgId, removed } = useLocalSearchParams<{ orgId: string; removed?: string }>()
   if (ownedByPager) {
     return null
   }
 
-  return <ServersOverviewSection orgId={orgId ?? ''} />
+  return <ServersOverviewSection orgId={orgId ?? ''} removedServerName={removed} />
 }

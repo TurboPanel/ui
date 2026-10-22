@@ -8,11 +8,9 @@ import {
 import { formatServerDeleteBlocker } from '@/lib/server-delete-blockers'
 
 export const SERVER_DELETE_FORGET_COPY =
-  'This host is offline. These records stay in the panel because the host can no longer remove them. Forgetting them only removes the records; it does not touch the machine.'
+  'The panel can no longer reach this server. Removing it deletes its records here; it does not touch the machine.'
 
-export const SERVER_DELETE_FORGET_REVEAL_LABEL = 'Host is gone'
-
-export const SERVER_DELETE_FORGET_CONFIRM_LABEL = 'Forget these and delete server'
+export const SERVER_REMOVE_OFFLINE_LABEL = 'Remove this server (host is gone)'
 
 export const SERVER_DELETE_ENVIRONMENTS_LEAD =
   'These apps lived only on this server and will be removed from TurboPanel:'
@@ -84,11 +82,7 @@ function containerLabel(container: unknown): string {
   return label
 }
 
-function group(
-  heading: string,
-  names: string[],
-  more: number
-): ForgottenResourceGroup | null {
+function group(heading: string, names: string[], more: number): ForgottenResourceGroup | null {
   if (names.length === 0 && more <= 0) return null
   return { heading, names, more }
 }
@@ -172,11 +166,7 @@ export function environmentForgetCopy(preview: unknown): string | null {
 
 export function membersForgetCopy(preview: unknown): string | null {
   if (!isServerDeletePreview(preview)) return null
-  return sentenceForList(
-    SERVER_DELETE_MEMBERS_LEAD,
-    cappedOrEmpty(preview.members),
-    memberLabel
-  )
+  return sentenceForList(SERVER_DELETE_MEMBERS_LEAD, cappedOrEmpty(preview.members), memberLabel)
 }
 
 export function blockedDatabaseMessages(preview: unknown): string[] {
