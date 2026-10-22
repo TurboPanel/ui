@@ -180,6 +180,30 @@ export type UpgradeStepOutcome = Readonly<{
   detail: string | null
 }>
 
+/** Characters of the server id shown as the short id. */
+const SERVER_SHORT_ID_LENGTH = 8
+
+/**
+ * How a step names its server: the name, else the hostname, else the short id.
+ * `shortId` is set only when a name stands in front of it, so the id is never
+ * printed twice.
+ */
+export function upgradeServerLabel(
+  step: Readonly<{ serverId: string; serverName?: string | null; hostname?: string | null }>
+): { primary: string; shortId: string | null } {
+  const shortId = step.serverId.slice(0, SERVER_SHORT_ID_LENGTH)
+  const named = step.serverName?.trim() || step.hostname?.trim() || null
+  return named ? { primary: named, shortId } : { primary: shortId, shortId: null }
+}
+
+/** The plain note a step carries after a reported restart error that turned out fine, or null. */
+export function upgradeStepNote(
+  step: Readonly<{ detail?: { restartNote?: string } | null }>
+): string | null {
+  const note = step.detail?.restartNote?.trim()
+  return note ? note : null
+}
+
 /**
  * What a step's row says. A failed, rolled-back, or stuck step reads as that —
  * never as the pipeline stage it stopped on.

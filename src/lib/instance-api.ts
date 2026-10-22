@@ -2309,7 +2309,9 @@ export function formatBlockedEnvironmentReason(
 ): string {
   if (reason !== 'present_elsewhere') return ''
   const label =
-    projectName.trim().length > 0 ? `${projectName.trim()} / ${environmentName.trim()}` : environmentName.trim()
+    projectName.trim().length > 0
+      ? `${projectName.trim()} / ${environmentName.trim()}`
+      : environmentName.trim()
   const hosts = joinQuotedNames(serverNames.map((name) => `"${name}"`))
   return `App "${label}" also runs on ${hosts}. Move or delete it first.`
 }
@@ -5346,6 +5348,13 @@ export type UpgradeStepRow = {
   errorMessage?: string | null
   /** When the step last reported a stage (drives the "still waiting" hint). */
   lastStageAt?: string | null
+  /** Facts the control plane saves on a step; only the parts the screen reads. */
+  detail?: UpgradeStepDetail | null
+}
+
+/** Saved on a step whose host reported a restart error but came back on the new build. */
+export type UpgradeStepDetail = {
+  restartNote?: string
 }
 
 export type UpgradeRunRecord = {
