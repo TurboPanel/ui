@@ -106,9 +106,9 @@ function ReloadPrompt({ onDismiss }: Readonly<{ onDismiss: () => void }>) {
   return (
     <View style={styles.scrim} accessibilityViewIsModal>
       <View style={styles.card}>
-        <Text style={styles.title}>A newer control plane build is live</Text>
+        <Text style={styles.title}>A newer TurboPanel version is live</Text>
         <Text style={styles.copy}>
-          Reload this page so the web app matches the control plane version.
+          Reload this page so it matches the new TurboPanel version.
         </Text>
         <View style={styles.actions}>
           {Platform.OS === 'web' ? (

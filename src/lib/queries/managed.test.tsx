@@ -21,6 +21,8 @@ import {
   useManagedLogs,
   useManagedStatus,
   useManagedUsers,
+  useManagedEffectivePermissions,
+  useManagedPrivilegeCatalogue,
   useOrganizationCa,
   useOrganizationManaged,
   usePromoteManagedDisasterRecovery,
@@ -32,9 +34,12 @@ import {
   useRotateManagedRootPassword,
   useRotateManagedUserPassword,
   useRunManagedLifecycle,
+  useSaveServerManagedExternalAccess,
+  useServerManagedExternalAccess,
   useUpdateEnvironmentManaged,
   useUpdateManagedMemberReadEligible,
   useUpdateManagedMemberReplicaClass,
+  useUpdateManagedUser,
 } from '@/lib/queries/managed'
 
 const {
@@ -43,6 +48,8 @@ const {
   fetchManagedStatus,
   fetchManagedLogs,
   fetchManagedUsers,
+  fetchManagedEffectivePermissions,
+  fetchManagedPrivilegeCatalogue,
   fetchManagedDatabases,
   fetchManagedBackups,
   fetchOrganizationCa,
@@ -55,6 +62,7 @@ const {
   rotateManagedUserPassword,
   createManagedUser,
   deleteManagedUser,
+  updateManagedUser,
   createManagedDatabase,
   deleteManagedDatabase,
   createManagedBackup,
@@ -66,12 +74,16 @@ const {
   resyncManagedMember,
   promoteManagedMember,
   promoteManagedDisasterRecovery,
+  fetchServerManagedExternalAccess,
+  saveServerManagedExternalAccess,
 } = vi.hoisted(() => ({
   fetchOrganizationManaged: vi.fn(),
   fetchEnvironmentManaged: vi.fn(),
   fetchManagedStatus: vi.fn(),
   fetchManagedLogs: vi.fn(),
   fetchManagedUsers: vi.fn(),
+  fetchManagedEffectivePermissions: vi.fn(),
+  fetchManagedPrivilegeCatalogue: vi.fn(),
   fetchManagedDatabases: vi.fn(),
   fetchManagedBackups: vi.fn(),
   fetchOrganizationCa: vi.fn(),
@@ -84,6 +96,7 @@ const {
   rotateManagedUserPassword: vi.fn(),
   createManagedUser: vi.fn(),
   deleteManagedUser: vi.fn(),
+  updateManagedUser: vi.fn(),
   createManagedDatabase: vi.fn(),
   deleteManagedDatabase: vi.fn(),
   createManagedBackup: vi.fn(),
@@ -95,6 +108,8 @@ const {
   resyncManagedMember: vi.fn(),
   promoteManagedMember: vi.fn(),
   promoteManagedDisasterRecovery: vi.fn(),
+  fetchServerManagedExternalAccess: vi.fn(),
+  saveServerManagedExternalAccess: vi.fn(),
 }))
 
 vi.mock('@/lib/instance-api', async (importOriginal) => {
@@ -106,6 +121,8 @@ vi.mock('@/lib/instance-api', async (importOriginal) => {
     fetchManagedStatus,
     fetchManagedLogs,
     fetchManagedUsers,
+    fetchManagedEffectivePermissions,
+    fetchManagedPrivilegeCatalogue,
     fetchManagedDatabases,
     fetchManagedBackups,
     fetchOrganizationCa,
@@ -118,6 +135,7 @@ vi.mock('@/lib/instance-api', async (importOriginal) => {
     rotateManagedUserPassword,
     createManagedUser,
     deleteManagedUser,
+    updateManagedUser,
     createManagedDatabase,
     deleteManagedDatabase,
     createManagedBackup,
@@ -129,6 +147,8 @@ vi.mock('@/lib/instance-api', async (importOriginal) => {
     resyncManagedMember,
     promoteManagedMember,
     promoteManagedDisasterRecovery,
+    fetchServerManagedExternalAccess,
+    saveServerManagedExternalAccess,
   }
 })
 
@@ -341,6 +361,22 @@ describe('managed query hooks', () => {
     })
     expect(emptyOrg.result.current.fetchStatus).toBe('idle')
     expect(fetchManagedStatus).not.toHaveBeenCalled()
+  })
+
+  it('useManagedEffectivePermissions and useManagedPrivilegeCatalogue read on demand', async () => {
+    fetchManagedEffectivePermissions.mockResolvedValueOnce({ username: 'u1', grants: [] })
+    fetchManagedPrivilegeCatalogue.mockResolvedValueOnce({ engine: 'postgres', series: '18', levels: [] })
+    const off = renderHook(() => useManagedEffectivePermissions(orgId, environmentId, 'p1', { enabled: false }), {
+      wrapper: createWrapper(),
+    })
+    expect(off.result.current.fetchStatus).toBe('idle')
+    expect(fetchManagedEffectivePermissions).not.toHaveBeenCalled()
+    const on = renderHook(() => useManagedEffectivePermissions(orgId, environmentId, 'p1'), { wrapper: createWrapper() })
+    await waitFor(() => expect(on.result.current.isSuccess).toBe(true))
+    expect(fetchManagedEffectivePermissions).toHaveBeenCalledWith(environmentId, 'p1')
+    const cat = renderHook(() => useManagedPrivilegeCatalogue(orgId, environmentId), { wrapper: createWrapper() })
+    await waitFor(() => expect(cat.result.current.isSuccess).toBe(true))
+    expect(fetchManagedPrivilegeCatalogue).toHaveBeenCalledWith(environmentId)
   })
 
   it('useManagedUsers loads users', async () => {
@@ -571,11 +607,11 @@ describe('managed query hooks', () => {
 
     await expect(
       result.current.run({
-        settings: { ssl: { mode: 'require' }, exposure: { enabled: true } },
+        settings: { ssl: { mode: 'require' } },
       })
     ).resolves.toMatchObject({ ok: true })
     expect(updateEnvironmentManaged).toHaveBeenCalledWith(environmentId, {
-      settings: { ssl: { mode: 'require' }, exposure: { enabled: true } },
+      settings: { ssl: { mode: 'require' } },
     })
     await waitFor(() => {
       expect(invalidate).toHaveBeenCalledWith({
@@ -832,6 +868,25 @@ describe('managed query hooks', () => {
       ok: true,
     })
     expect(deleteManagedUser).toHaveBeenCalledWith(environmentId, 'principal-1')
+    await waitFor(() => {
+      expect(invalidate).toHaveBeenCalledWith({
+        queryKey: queryKeys.org(orgId).managed.users(environmentId),
+      })
+    })
+  })
+
+  it('useUpdateManagedUser refreshes users only after a real change, not a dry run', async () => {
+    const client = createAppQueryClient()
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
+    const { result } = renderHook(() => useUpdateManagedUser(orgId, environmentId), {
+      wrapper: createWrapper(client),
+    })
+    updateManagedUser.mockResolvedValueOnce({ ok: true, dryRun: true, statements: [] })
+    await result.current.mutateAsync({ loginId: 'p1', body: { grantMode: 'self', dryRun: true } })
+    expect(invalidate).not.toHaveBeenCalled()
+    updateManagedUser.mockResolvedValueOnce({ ok: true, commandId: 'c1' })
+    await result.current.mutateAsync({ loginId: 'p1', body: { tool: true } })
+    expect(updateManagedUser).toHaveBeenLastCalledWith(environmentId, 'p1', { tool: true })
     await waitFor(() => {
       expect(invalidate).toHaveBeenCalledWith({
         queryKey: queryKeys.org(orgId).managed.users(environmentId),
@@ -1097,6 +1152,48 @@ describe('managed query hooks', () => {
       expect(invalidate).toHaveBeenCalledWith({
         queryKey: queryKeys.org(orgId).managed.members(environmentId),
       })
+    })
+  })
+
+  it('reads the per-server external access setting only once a server is picked', async () => {
+    const answer = { enabled: true, pending: false, clusterCount: 1 }
+    fetchServerManagedExternalAccess.mockResolvedValue(answer)
+    const idle = renderHook(() => useServerManagedExternalAccess(orgId, null), {
+      wrapper: createWrapper(),
+    })
+    expect(idle.result.current.fetchStatus).toBe('idle')
+    expect(fetchServerManagedExternalAccess).not.toHaveBeenCalled()
+
+    const { result } = renderHook(() => useServerManagedExternalAccess(orgId, 'srv-1'), {
+      wrapper: createWrapper(),
+    })
+    await waitFor(() => expect(result.current.data).toEqual(answer))
+    expect(fetchServerManagedExternalAccess).toHaveBeenCalledWith('srv-1')
+  })
+
+  it('saves the setting and refreshes that server and the managed views', async () => {
+    saveServerManagedExternalAccess.mockResolvedValue({
+      enabled: true,
+      pending: true,
+      clusterCount: 2,
+    })
+    const client = createAppQueryClient()
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
+    const { result } = renderHook(() => useSaveServerManagedExternalAccess(orgId), {
+      wrapper: createWrapper(client),
+    })
+    await expect(result.current.run({ serverId: 'srv-1', enabled: true })).resolves.toMatchObject({
+      ok: true,
+    })
+    expect(saveServerManagedExternalAccess).toHaveBeenCalledWith('srv-1', true)
+    await waitFor(() => {
+      expect(invalidate).toHaveBeenCalledWith({
+        queryKey: queryKeys.org(orgId).servers.managedExternalAccess('srv-1'),
+      })
+      expect(invalidate).toHaveBeenCalledWith({
+        queryKey: queryKeys.org(orgId).servers.addresses('srv-1'),
+      })
+      expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.org(orgId).managed.all })
     })
   })
 })

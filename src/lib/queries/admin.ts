@@ -42,13 +42,16 @@ import {
   fetchAdminTiers,
   fetchAuthProviderSettings,
   fetchEmailSettings,
+  fetchForgeWebhookOrigins,
   fetchForges,
   fetchPublicUrls,
   fetchServerMetricsLiveSettings,
   fetchSignupSettings,
   type ForgeCreate,
+  type ForgeWebhookOrigins,
   type ForgeUpdate,
   isForbiddenError,
+  isHttpStatusError,
   patchAdminTier,
   saveAuthProviderSettings,
   saveEmailSettings,
@@ -121,14 +124,32 @@ export function usePublicUrlsOptional(options?: Readonly<{ enabled?: boolean }>)
   })
 }
 
+/** Last segment of every webhook-origins key, whatever the scope or organization. */
+const WEBHOOK_ORIGINS_SEGMENT = 'webhook-origins'
+
+/**
+ * Refetch every webhook-origins read. Those keys sit under the forges keys
+ * (per scope, per organization), not under the public URL key, so the
+ * public URL and hostname writes have to name them or the wizard keeps an
+ * empty list after "add a public URL, then come back".
+ */
+function invalidateForgeWebhookOrigins(queryClient: ReturnType<typeof useQueryClient>) {
+  return queryClient.invalidateQueries({
+    predicate: (query) => query.queryKey.at(-1) === WEBHOOK_ORIGINS_SEGMENT,
+  })
+}
+
 export function useSavePublicUrls() {
   const queryClient = useQueryClient()
   return useApiMutation({
     mutationFn: savePublicUrls,
     onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: queryKeys.admin.publicUrls,
-      })
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.admin.publicUrls,
+        }),
+        invalidateForgeWebhookOrigins(queryClient),
+      ])
     },
   })
 }
@@ -283,6 +304,7 @@ export function useApplyPublicUrls() {
       await queryClient.invalidateQueries({
         queryKey: queryKeys.admin.instanceHostnames,
       })
+      await invalidateForgeWebhookOrigins(queryClient)
     },
   })
 }
@@ -324,6 +346,7 @@ function invalidateHostnameProjection(queryClient: ReturnType<typeof useQueryCli
   return Promise.all([
     queryClient.invalidateQueries({ queryKey: queryKeys.admin.instanceHostnames }),
     queryClient.invalidateQueries({ queryKey: queryKeys.admin.publicUrls }),
+    invalidateForgeWebhookOrigins(queryClient),
   ])
 }
 
@@ -820,6 +843,43 @@ export function useForges(
     queryKey: forgesKey(scope),
     queryFn: () => fetchForges(scope),
     enabled: options?.enabled ?? true,
+  })
+}
+
+/**
+ * Where a new app may deliver webhooks, for the GitHub App wizard and the
+ * app detail page.
+ *
+ * Reads `GET …/forges/webhook-origins` on the same surface as the collection,
+ * so an organization manager does not need the admin-only public URL list. A
+ * control plane that predates that route answers 404; the admin public URL
+ * list (403 → empty) stands in, as it did before. A 403 is answered with an
+ * empty list rather than signing the person out, like `usePublicUrlsOptional`.
+ */
+export function useForgeWebhookOrigins(
+  scope: 'admin' | 'org',
+  options?: Readonly<{ enabled?: boolean }>
+) {
+  return useQuery({
+    queryKey: [...forgesKey(scope), WEBHOOK_ORIGINS_SEGMENT] as const,
+    queryFn: async (): Promise<ForgeWebhookOrigins> => {
+      try {
+        return await fetchForgeWebhookOrigins(scope)
+      } catch (err) {
+        if (isForbiddenError(err)) return { origins: [], platformManaged: false }
+        if (!isHttpStatusError(err, 404)) throw err
+      }
+      try {
+        return { origins: (await fetchPublicUrls()).urls, platformManaged: false }
+      } catch (err) {
+        if (isForbiddenError(err)) return { origins: [], platformManaged: false }
+        throw err
+      }
+    },
+    enabled: options?.enabled ?? true,
+    retry: false,
+    // Networking may be in another tab: opening the wizard again rereads.
+    refetchOnMount: 'always',
   })
 }
 

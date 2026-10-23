@@ -4,11 +4,13 @@ import {
   defaultManagedImage,
   defaultManagedRelease,
   describeManagedImage,
+  MANAGED_FAILOVER_UNSUPPORTED_REASON,
   managedAllowedImagesForEngine,
   managedCreatableReleasesForEngine,
   managedImageVariantLabel,
   managedReleaseSummary,
   managedReleasesForEngine,
+  managedSeriesFailoverSupport,
   managedSeriesLabel,
   managedVariantImagesForImage,
   resolveManagedImage,
@@ -35,16 +37,17 @@ describe('MANAGED_ENGINE_RELEASES', () => {
     ])
   })
 
-  it('only three verified series are creatable', () => {
+  it('only the verified series are creatable', () => {
     expect(
       managedCreatableReleasesForEngine('postgres').map((row) => row.series),
     ).toEqual(['18'])
     expect(managedCreatableReleasesForEngine('mysql').map((row) => row.series)).toEqual([
       '9.7',
+      '8.4',
     ])
     expect(
       managedCreatableReleasesForEngine('mariadb').map((row) => row.series),
-    ).toEqual(['12.3'])
+    ).toEqual(['12.3', '11.8'])
     // The untested series stay catalogued so an existing image can be named.
     expect(managedCreatableReleasesForEngine('postgres', { includeUntested: true })).toEqual(
       managedReleasesForEngine('postgres'),
@@ -59,10 +62,14 @@ describe('MANAGED_ENGINE_RELEASES', () => {
     expect(managedAllowedImagesForEngine('mysql')).toEqual([
       'docker.io/library/mysql:9.7',
       'docker.io/library/mysql:9.7-oraclelinux9',
+      'docker.io/library/mysql:8.4',
+      'docker.io/library/mysql:8.4-oraclelinux9',
     ])
     expect(managedAllowedImagesForEngine('mariadb')).toEqual([
       'docker.io/library/mariadb:12.3',
       'docker.io/library/mariadb:12.3-ubi',
+      'docker.io/library/mariadb:11.8',
+      'docker.io/library/mariadb:11.8-ubi',
     ])
   })
 
@@ -95,11 +102,19 @@ describe('MANAGED_ENGINE_RELEASES', () => {
     expect(new Set(images).size).toBe(images.length)
   })
 
-  it('defaults to the newest series and its first variant', () => {
+  it('defaults to the recommended series and its first variant', () => {
     expect(defaultManagedRelease('postgres')?.series).toBe('18')
     expect(defaultManagedImage('postgres')).toBe('docker.io/library/postgres:18-alpine')
     expect(defaultManagedImage('mysql')).toBe('docker.io/library/mysql:9.7')
-    expect(defaultManagedImage('mariadb')).toBe('docker.io/library/mariadb:12.3')
+    expect(defaultManagedRelease('mariadb')?.series).toBe('11.8')
+    expect(defaultManagedImage('mariadb')).toBe('docker.io/library/mariadb:11.8')
+  })
+
+  it('marks only MariaDB 12.3 as not failover-capable', () => {
+    for (const release of MANAGED_ENGINE_RELEASES) {
+      const capable = !(release.engine === 'mariadb' && release.series === '12.3')
+      expect(release.failoverCapable).toBe(capable)
+    }
   })
 
   it('has no catalog for engines that are not managed SQL yet', () => {
@@ -136,6 +151,13 @@ describe('resolveManagedImage', () => {
     )
   })
 
+  it('resolves the 8.4 and 11.8 series', () => {
+    expect(resolveManagedImage('mysql', '8.4')).toBe('docker.io/library/mysql:8.4')
+    expect(resolveManagedImage('mariadb', '11.8', 'ubi')).toBe(
+      'docker.io/library/mariadb:11.8-ubi',
+    )
+  })
+
   it('falls back to the series default variant when none is given', () => {
     expect(resolveManagedImage('postgres', '18')).toBe(
       'docker.io/library/postgres:18-alpine',
@@ -150,8 +172,7 @@ describe('resolveManagedImage', () => {
 
   it('refuses an untested series unless the gate is opened', () => {
     expect(resolveManagedImage('postgres', '17')).toBeUndefined()
-    expect(resolveManagedImage('mysql', '8.4')).toBeUndefined()
-    expect(resolveManagedImage('mariadb', '11.8')).toBeUndefined()
+    expect(resolveManagedImage('mariadb', '11.4')).toBeUndefined()
     expect(resolveManagedImage('postgres', '17', undefined, { includeUntested: true })).toBe(
       'docker.io/library/postgres:17-alpine',
     )
@@ -241,6 +262,7 @@ describe('display helpers', () => {
         lifecycle: 'legacy',
         isDefault: false,
         tested: true,
+        failoverCapable: true,
         variants: [],
       }),
     ).toBe('14 (legacy)')
@@ -257,5 +279,28 @@ describe('display helpers', () => {
     expect(
       managedReleaseSummary('PostgreSQL', { series: '18', variantId: 'unknown' }),
     ).toBe('PostgreSQL 18')
+  })
+})
+
+describe('managedSeriesFailoverSupport', () => {
+  it('supports 11.8 by series or image and refuses 12.3 with the shared sentence', () => {
+    expect(managedSeriesFailoverSupport('mariadb', '11.8')).toBe('supported')
+    expect(managedSeriesFailoverSupport('mariadb', 'docker.io/library/mariadb:11.8')).toBe(
+      'supported',
+    )
+    expect(managedSeriesFailoverSupport('mariadb', '12.3')).toBe(
+      MANAGED_FAILOVER_UNSUPPORTED_REASON,
+    )
+    expect(managedSeriesFailoverSupport('mariadb', 'docker.io/library/mariadb:12.3-ubi')).toBe(
+      MANAGED_FAILOVER_UNSUPPORTED_REASON,
+    )
+  })
+
+  it('treats other engines and unknown combinations as supported', () => {
+    expect(managedSeriesFailoverSupport('postgres', '18')).toBe('supported')
+    expect(managedSeriesFailoverSupport('mysql', '9.7')).toBe('supported')
+    expect(managedSeriesFailoverSupport('postgres', '12.3')).toBe('supported')
+    expect(managedSeriesFailoverSupport('mariadb', null)).toBe('supported')
+    expect(managedSeriesFailoverSupport(null, '12.3')).toBe('supported')
   })
 })

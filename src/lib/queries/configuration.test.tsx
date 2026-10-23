@@ -4,7 +4,9 @@ import { renderHook, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createAppQueryClient, queryKeys } from '@/lib/query-client'
 import { useSaveConfiguration } from '@/lib/queries/configuration'
-import { linuxUserEdit, variableEdit } from '@/lib/v4/config-edits'
+import { goBackEdit, linuxUserEdit, variableEdit } from '@/lib/v4/config-edits'
+import { buildConfigViewModel } from '@/lib/v4/config-view-model'
+import { stagingView } from '@/lib/v4/config-view-model.fixtures'
 
 const api = vi.hoisted(() => ({
   fetchProject: vi.fn(),
@@ -42,14 +44,22 @@ function serverState() {
         containerNaming: 'custom',
         defaultServerId: 's1',
         compose: compose({
-          services: { web: { command: 'x', 'x-turbopanel': { serviceKind: 'node', principal: 'website' } } },
+          services: {
+            web: { command: 'x', 'x-turbopanel': { serviceKind: 'node', principal: 'website' } },
+          },
         }),
       },
     },
   })
   api.fetchEnvironment.mockResolvedValue({ environment: { id: 'e1', options: null } })
   api.fetchVariables.mockResolvedValue({ variables: [] })
-  for (const name of ['updateProject', 'updateEnvironment', 'createVariable', 'updateVariable', 'deleteVariable']) {
+  for (const name of [
+    'updateProject',
+    'updateEnvironment',
+    'createVariable',
+    'updateVariable',
+    'deleteVariable',
+  ]) {
     api[name as keyof typeof api].mockResolvedValue({ ok: true })
   }
 }
@@ -63,14 +73,32 @@ describe('useSaveConfiguration', () => {
     serverState()
     const client = createAppQueryClient()
     const invalidate = vi.spyOn(client, 'invalidateQueries')
-    const { result } = renderHook(() => useSaveConfiguration('o1', 'p1', 'e1'), { wrapper: wrapper(client) })
-    const base = linuxUserEdit({ serviceName: 'web', user: 'shared', was: 'website', scope: 'base' })
-    const own = variableEdit({ name: 'MODE', value: 'x', secret: false, forBuild: false, forRuntime: true, was: '', scope: 'environment' })
-    const run = await result.current.run([base, own])
-    expect(run).toMatchObject({ ok: true, value: { error: null, saved: 2, remaining: [] } })
-    expect(api.updateProject).toHaveBeenCalledWith('p1', {
-      options: expect.objectContaining({ containerNaming: 'custom', defaultServerId: 's1' }),
+    const { result } = renderHook(() => useSaveConfiguration('o1', 'p1', 'e1'), {
+      wrapper: wrapper(client),
     })
+    api.fetchEnvironment.mockResolvedValue({
+      environment: {
+        id: 'e1',
+        options: { compose: compose({ services: { web: { command: 'npm run staging' } } }) },
+      },
+    })
+    const change = buildConfigViewModel({ envName: 'Staging', view: stagingView() }).changes.find(
+      (item) => item.key === 'svc:web:command'
+    )
+    if (change === undefined) throw new Error('fixture lost the command change')
+    const back = goBackEdit(change, { type: 'field', serviceName: 'web', path: ['command'] })
+    const own = variableEdit({
+      name: 'MODE',
+      value: 'x',
+      secret: false,
+      forBuild: false,
+      forRuntime: true,
+      was: '',
+    })
+    const run = await result.current.run([back, own])
+    expect(run).toMatchObject({ ok: true, value: { error: null, saved: 2, remaining: [] } })
+    expect(api.updateEnvironment).toHaveBeenCalled()
+    expect(api.updateProject).not.toHaveBeenCalled()
     expect(api.createVariable).toHaveBeenCalledWith(
       expect.objectContaining({ environmentId: 'e1', key: 'MODE', value: 'x' })
     )
@@ -81,31 +109,69 @@ describe('useSaveConfiguration', () => {
     expect(predicate?.({ queryKey: org.environments.detail('other') } as never)).toBe(false)
   })
 
-  it('saves the environment’s own change and the other variable calls', async () => {
+  it('saves the environment’s own change and sets its own variable without touching the Base', async () => {
     serverState()
     api.fetchVariables.mockImplementation((filter: Record<string, string>) =>
       Promise.resolve({
         variables:
           'environmentId' in filter
-            ? [{ id: 'v-env', key: 'A', value: '2', isSecret: false, forBuild: false, forRuntime: true, bindingId: null }]
-            : [{ id: 'v-proj', key: 'A', value: '1', isSecret: false, forBuild: false, forRuntime: true, bindingId: null }],
+            ? [
+                {
+                  id: 'v-env',
+                  key: 'A',
+                  value: '2',
+                  isSecret: false,
+                  forBuild: false,
+                  forRuntime: true,
+                  bindingId: null,
+                },
+              ]
+            : [
+                {
+                  id: 'v-proj',
+                  key: 'A',
+                  value: '1',
+                  isSecret: false,
+                  forBuild: false,
+                  forRuntime: true,
+                  bindingId: null,
+                },
+              ],
       })
     )
-    const { result } = renderHook(() => useSaveConfiguration('o1', 'p1', 'e1'), { wrapper: wrapper() })
-    const user = linuxUserEdit({ serviceName: 'web', user: 'staging-web', was: 'website', scope: 'environment' })
-    const edit = variableEdit({ name: 'A', value: '3', secret: false, forBuild: false, forRuntime: true, was: '2', scope: 'base' })
+    const { result } = renderHook(() => useSaveConfiguration('o1', 'p1', 'e1'), {
+      wrapper: wrapper(),
+    })
+    const user = linuxUserEdit({ serviceName: 'web', user: 'staging-web', was: 'website' })
+    const edit = variableEdit({
+      name: 'A',
+      value: '3',
+      secret: false,
+      forBuild: false,
+      forRuntime: true,
+      was: '2',
+    })
     await result.current.run([user, edit])
-    expect(api.updateEnvironment).toHaveBeenCalledWith('e1', { options: { compose: expect.anything() } })
-    expect(api.updateVariable).toHaveBeenCalledWith('v-proj', { value: '3' })
-    expect(api.deleteVariable).toHaveBeenCalledWith('v-env')
+    expect(api.updateEnvironment).toHaveBeenCalledWith('e1', {
+      options: { compose: expect.anything() },
+    })
+    expect(api.updateProject).not.toHaveBeenCalled()
+    expect(api.updateVariable).toHaveBeenCalledWith('v-env', { value: '3' })
+    expect(api.updateVariable).not.toHaveBeenCalledWith('v-proj', expect.anything())
+    expect(api.deleteVariable).not.toHaveBeenCalled()
   })
 
   it('reports a load failure as unsaved, not as a thrown error', async () => {
     serverState()
     api.fetchProject.mockRejectedValue(new Error('offline'))
-    const { result } = renderHook(() => useSaveConfiguration('o1', 'p1', 'e1'), { wrapper: wrapper() })
-    const user = linuxUserEdit({ serviceName: 'web', user: 'x', was: '', scope: 'environment' })
+    const { result } = renderHook(() => useSaveConfiguration('o1', 'p1', 'e1'), {
+      wrapper: wrapper(),
+    })
+    const user = linuxUserEdit({ serviceName: 'web', user: 'x', was: '' })
     const run = await result.current.run([user])
-    expect(run).toMatchObject({ ok: true, value: { error: 'offline', saved: 0, remaining: [user] } })
+    expect(run).toMatchObject({
+      ok: true,
+      value: { error: 'offline', saved: 0, remaining: [user] },
+    })
   })
 })

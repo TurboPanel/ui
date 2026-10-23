@@ -28,7 +28,7 @@ const api = sampleProject('api')
 function runsAsFor(
   project: ReturnType<typeof sampleProject>,
   serviceId: string,
-  envId: string | null,
+  envId: string | null
 ) {
   const service = project.services.find((item) => item.id === serviceId)
   if (service === undefined) throw new Error('no service')
@@ -60,7 +60,7 @@ describe('access words', () => {
         access: 'shell',
         sshKeyCount: 2,
         passwordAuth: true,
-      }),
+      })
     ).toEqual({
       name: 'shop',
       systemName: 'shop_x7k2m9qpz1a',
@@ -84,7 +84,9 @@ describe('access words', () => {
   })
 
   it('falls back to the first user, then to the project name', () => {
-    expect(defaultLinuxUser([linuxUserFromDeclared('a'), linuxUserFromDeclared('b')], 'Shop')).toBe('a')
+    expect(defaultLinuxUser([linuxUserFromDeclared('a'), linuxUserFromDeclared('b')], 'Shop')).toBe(
+      'a'
+    )
     expect(defaultLinuxUser([], 'My Shop')).toBe('my-shop')
   })
 })
@@ -116,9 +118,12 @@ describe('Runs as', () => {
     expect(runsAsFor(website, 'web', 'production')).toMatchObject({
       user: 'website',
       source: 'base',
-      sourceLabel: 'Base',
+      sourceLabel: 'From the Base',
     })
-    expect(runsAsFor(website, 'web', null)).toMatchObject({ user: 'website', sourceLabel: 'Base' })
+    expect(runsAsFor(website, 'web', null)).toMatchObject({
+      user: 'website',
+      sourceLabel: 'From the Base',
+    })
     expect(runsAsFor(portal, 'app', 'staging').user).toBe('portal-staging')
   })
 
@@ -131,8 +136,14 @@ describe('Runs as', () => {
   })
 
   it('says what sign-in the user has', () => {
-    expect(runsAsFor(website, 'web', 'production')).toMatchObject({ access: 'SFTP on', hasAccess: true })
-    expect(runsAsFor(website, 'web', 'testing')).toMatchObject({ access: 'No sign-in', hasAccess: false })
+    expect(runsAsFor(website, 'web', 'production')).toMatchObject({
+      access: 'SFTP on',
+      hasAccess: true,
+    })
+    expect(runsAsFor(website, 'web', 'testing')).toMatchObject({
+      access: 'No sign-in',
+      hasAccess: false,
+    })
     expect(runsAsFor(sampleProject('blog'), 'site', null).access).toBe('SFTP + SSH on')
   })
 
@@ -179,7 +190,12 @@ describe('Linux users table', () => {
     const rows = rowsFor(website)
     expect(rows[0]?.usesText).toBe('web in Production, Staging')
     expect(rows[0]?.otherText).toBe('web in Testing runs as testing-web')
-    expect(rows[0]).toMatchObject({ hasOther: true, inUse: true, accessText: 'SFTP on', accessLabel: 'SFTP' })
+    expect(rows[0]).toMatchObject({
+      hasOther: true,
+      inUse: true,
+      accessText: 'SFTP on',
+      accessLabel: 'SFTP',
+    })
     expect(rows[1]).toMatchObject({
       name: 'testing-web',
       usesText: 'web in Testing',
@@ -248,7 +264,7 @@ describe('Linux user name rule', () => {
         ok: false,
         msg: 'Lowercase letters, numbers, - and _ only, starting with a letter',
       })
-    },
+    }
   )
 
   it('keeps the shorter limit when the system name adds 12 characters', () => {
@@ -265,7 +281,31 @@ describe('Linux user name rule', () => {
   })
 
   it('refuses names the system keeps', () => {
-    for (const name of ['root', 'www-data', 'postgres', 'tp', 'tpdata', 'tpanything', 'systemd-x']) {
+    for (const name of [
+      'root',
+      'www-data',
+      'postgres',
+      'tp',
+      'tpdata',
+      'tpanything',
+      'systemd-x',
+      // The user's own group carries its name; these groups grant power.
+      'sudo',
+      'admin',
+      'wheel',
+      'adm',
+      'staff',
+      'lxd',
+      'containers',
+      'wireshark',
+      'bob-grp',
+      'ftp',
+      'git',
+      'nginx',
+      'ubuntu',
+      'vagrant',
+      'ec2-user',
+    ]) {
       expect(checkLinuxUserName(name)).toEqual({ ok: false, msg: 'The system keeps that name' })
     }
     expect(isSystemUserName(' Root ')).toBe(true)

@@ -27,7 +27,7 @@ describe.each(SCENARIOS)('EnvironmentMap ($name)', (scenario) => {
     render(<EnvironmentMap layout={layout} hrefFor={hrefFor} />)
     const group = screen.getByRole('group', { name: layout.aria })
     expect(group).toBeTruthy()
-    expect(layout.aria).toBe('Map of Staging: 1 domain, 3 apps, 5 data stores')
+    expect(layout.aria).toBe('Map of Staging: 1 hostname, 3 apps, 5 data stores')
   })
 
   it('draws the three bands with their words', () => {
@@ -109,7 +109,7 @@ describe.each(SCENARIOS)('EnvironmentMap, narrow ($name)', (scenario) => {
   it('says when a lane is empty and draws a station without a page as text', () => {
     const empty = mapLayout({ ...mapInputOf(overviewSource({ hostings: {} }), 'env'), volumes: [] })
     render(<EnvironmentMap layout={empty} hrefFor={() => null} />)
-    expect(screen.getByText('No domains yet')).toBeTruthy()
+    expect(screen.getByText('No hostnames yet')).toBeTruthy()
     expect(screen.queryAllByRole('link')).toHaveLength(0)
     expect(screen.getByLabelText(/^web, Node\.js app/)).toBeTruthy()
   })

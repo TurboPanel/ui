@@ -404,6 +404,7 @@ describe('topology query hooks', () => {
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: queryKeys.org(orgId).topology.all,
     })
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['org', orgId, 'server'] })
   })
 
   it('useAddDatacenterMembers adds pins', async () => {
@@ -425,6 +426,9 @@ describe('topology query hooks', () => {
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: queryKeys.org(orgId).topology.all,
     })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.org(orgId).servers.addresses('srv-1'),
+    })
   })
 
   it('useRemoveDatacenterMember removes a pin', async () => {
@@ -444,6 +448,9 @@ describe('topology query hooks', () => {
     )
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: queryKeys.org(orgId).servers.list,
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.org(orgId).servers.addresses('srv-1'),
     })
   })
 

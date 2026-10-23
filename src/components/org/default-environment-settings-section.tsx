@@ -5,10 +5,7 @@ import { panelStyles } from '@/components/ui/panel-styles'
 import { Button, SectionPanel, TextField } from '@/components/ui'
 import { validateEnvironmentName } from '@/lib/environment-validation'
 import { DISPLAY_NAME_MAX_LENGTH } from '@/lib/display-name'
-import {
-  fetchOrgDefaultEnvironment,
-  saveOrgDefaultEnvironment,
-} from '@/lib/instance-api'
+import { fetchOrgDefaultEnvironment, saveOrgDefaultEnvironment } from '@/lib/instance-api'
 import { PLATFORM_DEFAULT_ENVIRONMENT_NAME } from '@/lib/org-default-environment'
 import { useApiMutation, useCan, queryKeys } from '@/lib/query-client'
 import { userErrorMessage } from '@/lib/user-error'
@@ -17,9 +14,7 @@ function errorMessage(err: unknown, fallback: string): string {
   return userErrorMessage(err, fallback)
 }
 
-export function DefaultEnvironmentSettingsSection({
-  orgId,
-}: Readonly<{ orgId: string }>) {
+export function DefaultEnvironmentSettingsSection({ orgId }: Readonly<{ orgId: string }>) {
   const queryClient = useQueryClient()
   const canManage = useCan('organization', orgId, 'organization:manage')
   const [error, setError] = useState<string | null>(null)
@@ -42,12 +37,11 @@ export function DefaultEnvironmentSettingsSection({
       })
     },
     onError: (err) => {
-      setError(errorMessage(err, 'Failed to save default environment name'))
+      setError(errorMessage(err, 'Failed to save primary environment name'))
     },
   })
 
-  const draftValue =
-    draftText ?? query.data?.defaultEnvironmentName ?? ''
+  const draftValue = draftText ?? query.data?.defaultEnvironmentName ?? ''
   const pending = mutation.isPending || query.isLoading
 
   const saveSettings = () => {
@@ -68,23 +62,24 @@ export function DefaultEnvironmentSettingsSection({
 
   return (
     <SectionPanel
-      title="Default environment name"
+      title="Primary environment name"
       hint="Manage-gated · applies to newly created projects"
     >
       {error ? <Text style={panelStyles.error}>{error}</Text> : null}
       {query.isError && !error ? (
         <Text style={panelStyles.error}>
-          {errorMessage(query.error, 'Failed to load default environment name')}
+          {errorMessage(query.error, 'Failed to load primary environment name')}
         </Text>
       ) : null}
 
       <Text style={panelStyles.muted}>
-        Every new project starts with one environment; this names it. Existing
-        projects are unchanged.
+        Every new project starts with one primary environment, where you land and where the
+        project&apos;s content goes; this names it. Existing projects keep their primary environment
+        as it is.
       </Text>
 
       <TextField
-        label="Environment name"
+        label="Primary environment name"
         value={draftValue}
         onChangeText={(text) => {
           setDraftText(text)
@@ -98,12 +93,7 @@ export function DefaultEnvironmentSettingsSection({
         hint={`Leave empty to restore the platform default (${PLATFORM_DEFAULT_ENVIRONMENT_NAME}).`}
       />
 
-      <Button
-        label="Save settings"
-        variant="primary"
-        disabled={pending}
-        onPress={saveSettings}
-      />
+      <Button label="Save settings" variant="primary" disabled={pending} onPress={saveSettings} />
     </SectionPanel>
   )
 }

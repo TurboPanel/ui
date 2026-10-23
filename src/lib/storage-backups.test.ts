@@ -19,7 +19,6 @@ function copy(over: Partial<StorageCopyRecord>): StorageCopyRecord {
     state: 'ready',
     path: null,
     endpoint: null,
-    generation: 1,
     metadata: null,
     options: null,
     createdAt: '',

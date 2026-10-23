@@ -137,7 +137,7 @@ describe('principal ssh key hooks', () => {
 
   it('an access edit sends only `access`', async () => {
     // The API reads an absent field as "leave it alone". Sending an empty
-    // steward or entitlement list alongside would silently revoke something
+    // steward list alongside would silently revoke something
     // the operator never touched.
     updateProjectPrincipal.mockResolvedValueOnce({ ok: true })
 

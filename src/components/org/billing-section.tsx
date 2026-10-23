@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useLocalSearchParams } from 'expo-router'
+import { useLocalSearchParams, useRouter, type Href } from 'expo-router'
 import { StyleSheet, Text, View } from 'react-native'
 import { openHostedPage } from '@/lib/open-hosted-page'
 import { AccessNavIcon, BillingNavIcon, ServersNavIcon } from '@/components/icons/nav-icons'
@@ -83,7 +83,7 @@ import {
   type LicenseDialogTier,
 } from '@/components/org/billing-license-dialog'
 import { useOrgServers } from '@/lib/queries/servers'
-import { spacing } from '@/lib/theme'
+import { colors, spacing } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
 
 /**
@@ -1090,6 +1090,7 @@ function MoveLicensePanel({
   context: RefusalContext
   preselectedTierId: string | null
 }>) {
+  const router = useRouter()
   const tierMove = useTierMove(orgId, context)
   const purchasable = useMemo(() => purchasableTiers(tiers), [tiers])
   const fromOptions = useMemo(() => fromTierOptions(summary.tiers, tiers), [summary.tiers, tiers])
@@ -1110,9 +1111,17 @@ function MoveLicensePanel({
 
   return (
     <SectionPanel
-      title="Move a license"
-      hint="Up the ladder is invoiced now and applies once paid; down the ladder applies at the end of the period with no credit"
+      title="Change how many licenses you hold at each tier"
+      hint="This is billed. To put one server on a higher tier, open that server and use License tier."
     >
+      <Button
+        label="Servers"
+        variant="ghost"
+        size="sm"
+        icon={<ServersNavIcon size={14} color={colors.text} />}
+        accessibilityLabel="Open servers list"
+        onPress={() => router.push(`/${orgId}/servers` as Href)}
+      />
       <MovePickers
         fromTierId={fromTierId}
         toTierId={toTierId}

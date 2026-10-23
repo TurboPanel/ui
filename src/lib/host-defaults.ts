@@ -26,6 +26,14 @@ export function sshPortSourceLabel(
   return configuredSourceLabel(source)
 }
 
+/** Where a server's web server name hiding comes from; unset everywhere means on. */
+export function hideWebServerNamesSourceLabel(
+  source: HostDefaultsSource | null | undefined,
+): string {
+  if (source == null) return 'Platform default (on)'
+  return configuredSourceLabel(source)
+}
+
 export function parseSshPortDraft(raw: string): number | null {
   const trimmed = raw.trim()
   if (trimmed.length === 0) return null

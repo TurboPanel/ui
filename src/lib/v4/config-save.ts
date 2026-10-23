@@ -17,7 +17,6 @@ import {
 export type SaveDeps = Readonly<{
   /** Fresh project, environment and variable data (never cached copies). */
   load: () => Promise<SaveContext>
-  saveProjectCompose: (document: ComposeDocument) => Promise<unknown>
   saveEnvironmentCompose: (document: ComposeDocument) => Promise<unknown>
   runVariable: (op: VariableOp) => Promise<unknown>
 }>
@@ -61,8 +60,7 @@ export async function saveEdits(
   let saved = 0
   for (const step of plan.steps) {
     try {
-      if (step.kind === 'project-compose') await deps.saveProjectCompose(step.document)
-      else if (step.kind === 'environment-compose') await deps.saveEnvironmentCompose(step.document)
+      if (step.kind === 'environment-compose') await deps.saveEnvironmentCompose(step.document)
       else await deps.runVariable(step.op)
     } catch (error) {
       return {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { MANAGED_SERIES_IMMUTABLE_ERROR, MANAGED_VARIANT_SWAP_UNSAFE_ERROR } from './instance-api'
+import { MANAGED_FAILOVER_UNSUPPORTED_ERROR, MANAGED_SERIES_IMMUTABLE_ERROR, MANAGED_VARIANT_SWAP_UNSAFE_ERROR } from './instance-api'
+import { MANAGED_FAILOVER_UNSUPPORTED_REASON } from './managed-releases'
 import { TURBOFABRIC_PRODUCT_NAME } from './platform-copy'
 import { MANAGED_HAS_BINDINGS_COPY } from './user-error'
 import {
@@ -14,6 +15,7 @@ import {
   managedCatalogEntryForCode,
   managedEngineSupportsBackup,
   managedErrorMessage,
+  managedNamedErrorMessage,
   managedHealthRefreshNotice,
   managedIngressPortForEngine,
   managedRecoveryBanner,
@@ -61,12 +63,11 @@ describe('MANAGED_SERVICE_CATALOG image allowlists', () => {
     expect(managedCatalogEntryForCode('postgres')?.defaultImage).toBe(
       'docker.io/library/postgres:18-alpine'
     )
-    // MySQL/MariaDB defaults must stay on the approved LTS majors — never an
-    // old major like `mysql:8` / `mariadb:11` (mirrors the instance
-    // allowlists in `turbopanel/src/features/managed/settings.ts`).
+    // MySQL/MariaDB defaults must stay on the approved LTS series (mirrors the
+    // instance allowlists in `turbopanel/src/features/managed/settings.ts`).
     expect(managedCatalogEntryForCode('mysql')?.defaultImage).toBe('docker.io/library/mysql:9.7')
     expect(managedCatalogEntryForCode('mariadb')?.defaultImage).toBe(
-      'docker.io/library/mariadb:12.3'
+      'docker.io/library/mariadb:11.8'
     )
   })
 
@@ -139,6 +140,54 @@ describe('managedErrorMessage', () => {
     ).toBe('Saved, but db-1 could not be told yet.')
   })
 
+  it('keeps the names in SSL minimum refusals, with plain copy when the message is missing', () => {
+    expect(
+      managedErrorMessage(
+        new Error(
+          '/x failed: HTTP 409: external_access_weak_ssl — These databases on this server still accept connections without SSL: Orders. Set them to Require or stronger before allowing external access.',
+        ),
+        'fallback',
+      ),
+    ).toBe(
+      'These databases on this server still accept connections without SSL: Orders. Set them to Require or stronger before allowing external access.',
+    )
+    expect(
+      managedNamedErrorMessage(
+        new Error('/x failed: HTTP 409: managed_ssl_external_access_minimum — External access is on for db-1.'),
+      ),
+    ).toBe('External access is on for db-1.')
+    expect(managedNamedErrorMessage(new Error('HTTP 409: managed_busy'))).toBeNull()
+    for (const code of [
+      'managed_ssl_external_access_minimum',
+      'managed_ssl_default_external_access_minimum',
+      'external_access_weak_ssl',
+    ]) {
+      expect(managedErrorMessage(new Error(`HTTP 409: ${code}`), 'fallback')).toMatch(/SSL/)
+    }
+  })
+
+  it('shows the server sentence for reserved names and logins that still define objects', () => {
+    expect(
+      managedErrorMessage(
+        new Error(
+          '/x failed: HTTP 422: reserved_username — \'postgres\' is a name the database engine or TurboPanel keeps for itself. Pick a different login name.',
+        ),
+        'fallback',
+      ),
+    ).toBe("'postgres' is a name the database engine or TurboPanel keeps for itself. Pick a different login name.")
+    expect(
+      managedErrorMessage(
+        new Error(
+          "/x failed: HTTP 409: managed_login_defines_objects — The login 'app' is still the definer of view shop.v.",
+        ),
+        'fallback',
+      ),
+    ).toBe("The login 'app' is still the definer of view shop.v.")
+    // An older server sends no sentence: the plain copy still reads well.
+    expect(managedErrorMessage(new Error('HTTP 422: reserved_database_name'), 'fallback')).toMatch(/database name/)
+    expect(managedErrorMessage(new Error('HTTP 422: reserved_username'), 'fallback')).toMatch(/login name/)
+  })
+
   it('maps known HTTP error codes to operator copy', () => {
     expect(managedErrorMessage(new Error('HTTP 422: server_placement_required'), 'fallback')).toBe(
       'Select a server before creating this managed service.'
@@ -155,6 +204,9 @@ describe('managedErrorMessage', () => {
     expect(
       managedErrorMessage(new Error('HTTP 409: managed_automatic_failover_blocked'), 'fallback')
     ).toBe('Automatic failover blocked: unable to verify previous primary is fenced')
+    expect(
+      managedErrorMessage(new Error(`HTTP 422: ${MANAGED_FAILOVER_UNSUPPORTED_ERROR}`), 'fallback')
+    ).toBe(MANAGED_FAILOVER_UNSUPPORTED_REASON)
   })
 
   it('returns the raw message or fallback when the code is unknown', () => {
@@ -595,6 +647,47 @@ describe('stale replica health', () => {
     expect(isReplicationHealthy({ state: 'catching_up', observedAt: at })).toBe(true)
     expect(isReplicationHealthy({ state: 'unknown', observedAt: at, stale: true })).toBe(false)
     expect(isReplicationHealthy({ state: 'not_streaming', observedAt: at })).toBe(false)
+  })
+})
+
+describe('managedRecoveryBanner after a finished failover', () => {
+  const done = recoveryRecord({
+    id: 'r1',
+    kind: 'automatic-failover',
+    state: 'completed',
+    sourcePrimaryMemberId: 'p1',
+    targetMemberId: 't1',
+    sourceServerId: 's1',
+    targetServerId: 's2',
+    completedAt: '2026-08-19T00:01:00.000Z',
+  })
+  const names = (id: string) => ({ s1: 'adrastea', s2: 'kore' })[id] ?? null
+
+  it('says in plain words what happened for a day', () => {
+    const banner = managedRecoveryBanner(done, {
+      nowMs: Date.parse('2026-08-19T00:13:00.000Z'),
+      serverName: names,
+    })
+    expect(banner?.kind).toBe('completed')
+    expect(banner?.text).toContain('failed over automatically')
+    expect(banner?.text).toContain('12 minutes ago')
+    expect(banner?.text).toContain('kore is now the primary')
+    expect(banner?.text).toContain('adrastea is stopped')
+  })
+
+  it('goes away after a day and never shows for a planned switchover', () => {
+    expect(managedRecoveryBanner(done, { nowMs: Date.parse('2026-08-21T00:00:00.000Z') })).toBeNull()
+    expect(
+      managedRecoveryBanner(
+        { ...done, kind: 'switchover' },
+        { nowMs: Date.parse('2026-08-19T00:02:00.000Z') }
+      )
+    ).toBeNull()
+  })
+
+  it('does not call a stopped member a read server', () => {
+    expect(memberReadTrafficLabel('replica', true, 'needs_resync')).toBe('Not serving reads')
+    expect(memberReadTrafficLabel('replica', true, 'ready')).toBe('Serves reads')
   })
 })
 

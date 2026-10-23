@@ -3,11 +3,12 @@ import { getInstanceRevision, getInstanceVersion } from '@/lib/instance-version'
 import { useEffect, useMemo, useRef, useState, type ComponentProps } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { readConsoleBuild } from '@/components/admin/updates/console-build'
+import { useStartUpgradeFlow } from '@/components/admin/updates/use-start-upgrade-flow'
 import { UpgradeBuildBlock } from '@/components/admin/updates/upgrade-build-block'
 import { UpgradeFailureNotice } from '@/components/admin/updates/upgrade-failure-notice'
 import { UpgradeFleetTable } from '@/components/admin/updates/upgrade-fleet-table'
 import { UpgradeHistoryPanel } from '@/components/admin/updates/upgrade-history-panel'
-import { UpgradePreflightSheet } from '@/components/admin/updates/upgrade-preflight-sheet'
+import { StartUpgradeSheet } from '@/components/admin/updates/start-upgrade-sheet'
 import { UpgradeSettingsCard } from '@/components/admin/updates/upgrade-settings-card'
 import { UpgradeStepTracker } from '@/components/admin/updates/upgrade-step-tracker'
 import {
@@ -19,7 +20,7 @@ import {
   StatusDot,
 } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
-import type { InstanceUpdates, UpgradePreflightResult } from '@/lib/instance-api'
+import type { InstanceUpdates } from '@/lib/instance-api'
 import {
   consoleUpdateAvailable,
   selfHostedUpdateAvailable,
@@ -30,10 +31,13 @@ import {
 } from '@/lib/instance-updates'
 import { fleetServersQuery, UPGRADE_FLEET_PAGE_SIZE } from '@/lib/upgrade-batch'
 import {
+  fleetProgressText,
   installedBuildLabel,
+  offlineWaitingNotice,
   platformUpgradeHeadlineCopy,
   type PieceStepView,
   resolvePlatformUpgradeHeadline,
+  runWaitsOnlyOnOffline,
   summarizeFleetSteps,
   updateAvailableSentence,
   upgradeRunErrorLabel,
@@ -41,23 +45,15 @@ import {
 import {
   useCancelUpgradeRun,
   useRetryUpgradeStep,
-  useRunUpgradePreflight,
   useSaveUpgradeSettings,
-  useStartPlatformUpgrade,
   useUpgradeActiveRun,
   useUpgradeHistory,
   useUpgradeServersPage,
   useUpgradeSettings,
 } from '@/lib/queries/admin'
-import {
-  runFailure,
-  runToShow,
-  stallHint,
-  UpgradeStartTimeoutError,
-  withStartTimeout,
-} from '@/lib/update-status'
+import { runFailure, runToShow, stallHint } from '@/lib/update-status'
 import { colors, spacing } from '@/lib/theme'
-import { UPDATE_ALREADY_ACTIVE_COPY, apiErrorCopy, userErrorMessage } from '@/lib/user-error'
+import { userErrorMessage } from '@/lib/user-error'
 
 type ShownRun = NonNullable<ReturnType<typeof runToShow>['run']>
 type FleetServers = ComponentProps<typeof UpgradeFleetTable>['servers']
@@ -74,68 +70,6 @@ function useStallClock(run: ShownRun | null, finished: boolean): number {
     return () => clearInterval(timer)
   }, [run, finished])
   return nowMs
-}
-
-/** The preflight sheet, starting an update, and the notice line they report through. */
-function useStartUpgradeFlow(refetchActiveRun: () => unknown, consoleCommit?: string) {
-  const preflightMutation = useRunUpgradePreflight()
-  const startUpgrade = useStartPlatformUpgrade(consoleCommit)
-  const [preflightOpen, setPreflightOpen] = useState(false)
-  const [preflight, setPreflight] = useState<UpgradePreflightResult | null>(null)
-  const [notice, setNotice] = useState<string | null>(null)
-  const [starting, setStarting] = useState(false)
-
-  const openPreflight = async () => {
-    setNotice(null)
-    try {
-      const result = await preflightMutation.mutateAsync()
-      setPreflight(result)
-      setPreflightOpen(true)
-    } catch (err) {
-      setNotice(userErrorMessage(err, 'Preflight failed'))
-    }
-  }
-
-  const confirmUpgrade = async () => {
-    setStarting(true)
-    try {
-      const outcome = await withStartTimeout(startUpgrade.mutateAsync(preflight?.runId))
-      setPreflightOpen(false)
-      setNotice(
-        `Update started (${outcome.runId.slice(0, 8)}). Progress shows below as each step reports.`
-      )
-    } catch (err) {
-      if (err instanceof UpgradeStartTimeoutError) {
-        // Never spin forever: close the sheet and let the status below say
-        // whether a run started.
-        setPreflightOpen(false)
-        setNotice(
-          'Still waiting for the control plane to confirm the update started. The progress below refreshes on its own; if nothing appears, check the daemon log on the server.'
-        )
-        void refetchActiveRun()
-      } else if (apiErrorCopy(err) === UPDATE_ALREADY_ACTIVE_COPY) {
-        setPreflightOpen(false)
-        setNotice(UPDATE_ALREADY_ACTIVE_COPY)
-        void refetchActiveRun()
-      } else {
-        setNotice(userErrorMessage(err, 'Update failed to start'))
-      }
-    } finally {
-      setStarting(false)
-    }
-  }
-
-  return {
-    preflightPending: preflightMutation.isPending,
-    preflightOpen,
-    setPreflightOpen,
-    preflight,
-    notice,
-    setNotice,
-    starting,
-    openPreflight,
-    confirmUpgrade,
-  }
 }
 
 /** The update banner links here with ?update=1: open the confirmation once. */
@@ -208,7 +142,7 @@ function ComponentsPanel({
         step={controlPlaneStep}
       />
       <UpgradeBuildBlock
-        title="Web app"
+        title="Web interface"
         target={instance.uiTarget}
         installedLabel={installedBuildLabel(consoleBuild, instance.uiTarget, hideCommit)}
         updateAvailable={consoleUpdateAvailable(consoleBuild, instance.uiTarget)}
@@ -261,6 +195,7 @@ function UpgradeProgressPanel({
   const daemonStep = run?.steps.find((step) => step.phase === 'colocated_daemon')
   const controlPlaneStep = run?.steps.find((step) => step.phase === 'control_plane')
   const runError = upgradeRunErrorLabel(run?.error)
+  const waitingOffline = offlineWaitingNotice(run?.steps ?? [])
 
   return (
     <SectionPanel
@@ -269,8 +204,9 @@ function UpgradeProgressPanel({
         run && !finished ? (
           <ConfirmButton
             label="Cancel update"
-            confirmLabel="Cancel update"
-            prompt="Stop this update? Steps already applied stay applied; anything still pending is skipped. Start a fresh update afterward to pick up the current target build."
+            confirmLabel="Yes, cancel the update"
+            dismissLabel="No, keep it"
+            prompt="Stop this update? Finished steps stay, and steps that have not started are skipped. A server already installing is not stopped and finishes on its own. The next update starts against the current build."
             busy={cancelling}
             onConfirm={() => {
               onCancel(run.id)
@@ -298,16 +234,17 @@ function UpgradeProgressPanel({
           phase="control_plane"
           status={controlPlaneStep?.status ?? null}
           errorCode={controlPlaneStep?.errorCode ?? null}
-          title="Web app step"
-          note="Installed together with the control plane."
+          title="Web interface step"
+          note="Installed in the same step as the control plane."
         />
       ) : null}
       {runError ? <Text style={panelStyles.error}>{runError}</Text> : null}
       <Text style={panelStyles.pageCopy}>
         {fleetSummary.total > 0
-          ? `${fleetSummary.upToDate} of ${fleetSummary.total} servers up to date`
+          ? fleetProgressText(fleetSummary, 'servers')
           : 'Server updates: each server’s daemon updates after the control plane is on target.'}
       </Text>
+      {waitingOffline ? <InlineNotice tone="info" title={waitingOffline} /> : null}
       <UpgradeFleetTable
         servers={fleetServers}
         total={fleetTotal}
@@ -319,6 +256,14 @@ function UpgradeProgressPanel({
       />
     </SectionPanel>
   )
+}
+
+/** An update in progress blocks a new one, unless it is only waiting on offline servers. */
+function runBlocksNewUpdate(
+  headline: ReturnType<typeof resolvePlatformUpgradeHeadline>,
+  run: Parameters<typeof runWaitsOnlyOnOffline>[0]
+): boolean {
+  return headline === 'updating' && !runWaitsOnlyOnOffline(run)
 }
 
 export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>) {
@@ -366,7 +311,7 @@ export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>)
     data.managedUpgrade === true &&
     data.units.daemon.connected &&
     selfHostedUpdateAvailable(data.units, consoleBuild) &&
-    headline !== 'updating' &&
+    !runBlocksNewUpdate(headline, run) &&
     !flow.starting
 
   useAutoOpenPreflight(canStart, flow.openPreflight)
@@ -449,17 +394,7 @@ export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>)
         }}
       />
 
-      <UpgradePreflightSheet
-        visible={flow.preflightOpen}
-        preflight={flow.preflight}
-        busy={flow.starting}
-        onClose={() => {
-          flow.setPreflightOpen(false)
-        }}
-        onConfirm={() => {
-          void flow.confirmUpgrade()
-        }}
-      />
+      <StartUpgradeSheet flow={flow} />
     </View>
   )
 }

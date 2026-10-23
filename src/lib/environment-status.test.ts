@@ -156,3 +156,39 @@ describe('environmentStatusFacts', () => {
     ).toBe('3 changes')
   })
 })
+
+describe('environmentStatusFacts while a deploy runs', () => {
+  const running = {
+    status: 'running',
+    strategyOutcome: null,
+    startedAt: '2026-10-05T11:56:00Z',
+    cancelRequestedAt: null,
+  } as unknown as DeploymentGroup
+
+  it('puts the step the server is on in the deploy fact', () => {
+    const facts = environmentStatusFacts({
+      runningLabel: 'Running',
+      lastDeploy: running,
+      progressLabel: 'Step 3 of 7 · Installing Docker',
+      now: NOW,
+    })
+    expect(facts[1]).toEqual({
+      key: 'lastDeploy',
+      caption: 'Deploying',
+      value: 'Step 3 of 7 · Installing Docker',
+      tone: 'busy',
+    })
+  })
+
+  it('keeps the usual verdict once the deploy is over, whatever the step text says', () => {
+    const done = { ...running, status: 'succeeded' } as unknown as DeploymentGroup
+    const facts = environmentStatusFacts({
+      runningLabel: 'Running',
+      lastDeploy: done,
+      progressLabel: 'Step 7 of 7 · Checking it answers',
+      now: NOW,
+    })
+    expect(facts[1]?.caption).toBe('Last deploy')
+    expect(facts[1]?.value).toMatch(/^Succeeded/)
+  })
+})

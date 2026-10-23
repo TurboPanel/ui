@@ -22,8 +22,9 @@ minimumReleaseAgeExclude:
   - expo-router@57.0.13
   - expo-server@57.0.3
   - expo@57.0.13
-  - miniflare@5.20260815.0-alpha
-  - wrangler@4.124.0
+  - miniflare@5.20261019.1-beta
+  - wrangler@4.151.3
+  - vite@6.4.4
   - expo-dev-client@57.0.12
   - expo-dev-launcher@57.0.12
   - expo-dev-menu@57.0.12
@@ -50,3 +51,5 @@ overrides:
   source-map-js: 1.2.2
   # GHSA-vc2v-76pw-4v95: compression 1.8.1; @expo/cli pins it exactly.
   compression: 1.8.2
+  # GHSA-587h-7wmj-h5pm and two related advisories: vite <= 6.4.3 bundles a vulnerable dev-server editor opener (Windows only); force the fixed release.
+  vite: 6.4.4

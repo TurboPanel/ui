@@ -19,7 +19,7 @@ export function row(
   service: string,
   field: string,
   value: string | null,
-  extra: Partial<ConfigViewFieldRow> = {},
+  extra: Partial<ConfigViewFieldRow> = {}
 ): ConfigViewFieldRow {
   return {
     key: `svc:${service}:${field}`,
@@ -29,6 +29,7 @@ export function row(
     value,
     masked: value === null,
     source: 'base',
+    inheritedFromBase: extra.source === undefined || extra.source !== 'environment',
     ...extra,
   }
 }
@@ -37,9 +38,17 @@ export function viewService(
   name: string,
   kind: ConfigViewService['kind'],
   rows: ConfigViewFieldRow[] = [],
-  extra: Partial<ConfigViewService> = {},
+  extra: Partial<ConfigViewService> = {}
 ): ConfigViewService {
-  return { name, serviceId: `s-${name}`, kind, source: 'base', rows, ...extra }
+  return {
+    name,
+    serviceId: `s-${name}`,
+    kind,
+    source: 'base',
+    inheritedFromBase: extra.source !== 'environment',
+    rows,
+    ...extra,
+  }
 }
 
 const web = viewService('web', 'node', [
@@ -119,18 +128,42 @@ export function configView(overrides: Partial<EnvironmentConfigView> = {}): Envi
     ok: true,
     environmentId: 'env-1',
     projectId: 'p1',
-    followsBase: true,
+    isPrimary: false,
+    standsAlone: false,
     base: {
       services: [viewService('web', 'node', [row('web', 'linuxUser', 'website')]), old],
       variables: [],
-      linuxUsers: [{ name: 'website', access: 'sftp', description: null, source: 'base', usedBy: ['web'] }],
+      linuxUsers: [
+        {
+          name: 'website',
+          access: 'sftp',
+          description: null,
+          source: 'base',
+          inheritedFromBase: true,
+          usedBy: ['web'],
+        },
+      ],
     },
     effective: {
       services: [web, blog, api, redis],
       variables: [],
       linuxUsers: [
-        { name: 'website', access: 'sftp', description: null, source: 'base', usedBy: ['web'] },
-        { name: 'blogger', access: 'none', description: null, source: 'base', usedBy: [] },
+        {
+          name: 'website',
+          access: 'sftp',
+          description: null,
+          source: 'base',
+          inheritedFromBase: true,
+          usedBy: ['web'],
+        },
+        {
+          name: 'blogger',
+          access: 'none',
+          description: null,
+          source: 'base',
+          inheritedFromBase: true,
+          usedBy: [],
+        },
       ],
     },
     changes: CHANGES,
@@ -150,7 +183,11 @@ export function serviceRecord(name: string): ServiceRecord {
   }
 }
 
-export function container(name: string, status: string, role: ContainerRecord['role'] = 'service'): ContainerRecord {
+export function container(
+  name: string,
+  status: string,
+  role: ContainerRecord['role'] = 'service'
+): ContainerRecord {
   return {
     id: `c-${name}-${status}-${role}`,
     serviceId: `s-${name}`,
@@ -181,7 +218,7 @@ export function hosting(name: string | null, tlsId: string | null = null): Hosti
 export function tlsRecord(
   id: string,
   source: TlsRecord['source'],
-  status: TlsRecord['metadata']['status'],
+  status: TlsRecord['metadata']['status']
 ): TlsRecord {
   return {
     id,
@@ -215,7 +252,6 @@ export function storageRecord(name: string, mountService: string | null): Storag
     name,
     accessMode: 'single_writer',
     retention: 'retain',
-    generation: 1,
     principalId: null,
     metadata: null,
     options: null,
@@ -246,11 +282,11 @@ export function binding(
   serviceId: string,
   databaseName: string,
   managedId: string | null,
-  engine: BindingRecord['engine'],
+  engine: BindingRecord['engine']
 ): BindingRecord {
   return {
     id: `b-${serviceId}-${databaseName}`,
-    principalId: 'pr',
+    loginId: 'pr',
     serviceId,
     databaseName,
     keyPrefix: '',
@@ -281,7 +317,9 @@ export function overviewSource(overrides: Partial<OverviewSource> = {}): Overvie
       container('blog', 'restarting'),
       container('redis', 'exited'),
     ],
-    hostings: { 's-web': [hosting('shop.example.com', 't1'), hosting('shop.example.com', 't1'), hosting(' ')] },
+    hostings: {
+      's-web': [hosting('shop.example.com', 't1'), hosting('shop.example.com', 't1'), hosting(' ')],
+    },
     tls: [tlsRecord('t1', 'lets_encrypt', 'ready')],
     storage: [storageRecord('uploads', 's-web'), storageRecord('empty', null)],
     bindings: [

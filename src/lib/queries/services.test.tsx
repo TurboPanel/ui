@@ -32,6 +32,8 @@ const {
 }))
 
 vi.mock('@/lib/instance-api', () => ({
+  // A failing query reaches the shared error handler, which asks this.
+  isForbiddenError: () => false,
   fetchVisibleServices,
   fetchVisibleHostings,
   createService,
@@ -254,6 +256,25 @@ describe('services query hooks', () => {
     })
     expect(result.current.hostingsByService[serviceId]).toHaveLength(1)
     expect(fetchVisibleHostings).toHaveBeenCalledWith(serviceId)
+  })
+
+  it('useHostingsByServices says so when a service query fails, and not when disabled', async () => {
+    fetchVisibleHostings.mockRejectedValue(new Error('boom'))
+    const client = createAppQueryClient()
+    client.setDefaultOptions({ queries: { retry: false } })
+    const { result } = renderHook(
+      () => useHostingsByServices(orgId, [serviceId]),
+      { wrapper: createWrapper(client) },
+    )
+    await waitFor(() => {
+      expect(result.current.hasError).toBe(true)
+    })
+    const off = renderHook(
+      () => useHostingsByServices(orgId, [serviceId], { enabled: false }),
+      { wrapper: createWrapper() },
+    )
+    expect(off.result.current.hasError).toBe(false)
+    fetchVisibleHostings.mockReset()
   })
 
   it('useHostingsByServices refetchAll reloads every service query', async () => {

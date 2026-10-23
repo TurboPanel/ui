@@ -32,6 +32,11 @@ export type ManagedEngineRelease = {
    * them and the control plane refuses them (`managed_version_unsupported`).
    */
   tested: boolean
+  /**
+   * Whether this series can join a replica / automatic-failover topology.
+   * False only for MariaDB 12.3 until failover tooling supports it.
+   */
+  failoverCapable: boolean
   /** Display order; the first entry is this series' default variant. */
   variants: readonly ManagedImageVariant[]
 }
@@ -61,6 +66,7 @@ function postgresRelease(
     lifecycle: 'supported',
     isDefault,
     tested,
+    failoverCapable: true,
     variants: [
       { id: 'alpine', label: 'Alpine', image: `docker.io/library/postgres:${series}-alpine` },
       { id: 'debian', label: DEBIAN, image: `docker.io/library/postgres:${series}` },
@@ -80,6 +86,7 @@ function mysqlRelease(
     lifecycle: 'lts',
     isDefault,
     tested,
+    failoverCapable: true,
     variants: [
       { id: 'debian', label: DEBIAN, image: `docker.io/library/mysql:${series}` },
       {
@@ -96,6 +103,7 @@ function mariadbRelease(
   series: string,
   isDefault = false,
   tested = false,
+  failoverCapable = true,
 ): ManagedEngineRelease {
   return {
     engine: 'mariadb',
@@ -103,6 +111,7 @@ function mariadbRelease(
     lifecycle: 'lts',
     isDefault,
     tested,
+    failoverCapable,
     variants: [
       { id: 'debian', label: DEBIAN, image: `docker.io/library/mariadb:${series}` },
       { id: 'ubi', label: 'UBI', image: `docker.io/library/mariadb:${series}-ubi` },
@@ -115,9 +124,10 @@ function mariadbRelease(
  * bound the replication test matrix; MySQL 8.0 is absent because it reached EOL
  * in April 2026.
  *
- * Only PostgreSQL 18, MySQL 9.7 and MariaDB 12.3 are `tested` — the rest are
+ * Only PostgreSQL 18, MySQL 9.7 and 8.4, and MariaDB 12.3 and 11.8 are `tested` — the rest are
  * kept so {@link describeManagedImage} can still name an already-persisted
- * image, and are hidden from the create picker.
+ * image, and are hidden from the create picker. MariaDB 11.8 is the default
+ * for new databases; 12.3 stays creatable but is not failover-capable.
  */
 export const MANAGED_ENGINE_RELEASES: readonly ManagedEngineRelease[] = [
   postgresRelease('18', true, true),
@@ -125,12 +135,47 @@ export const MANAGED_ENGINE_RELEASES: readonly ManagedEngineRelease[] = [
   postgresRelease('16'),
   postgresRelease('15'),
   mysqlRelease('9.7', true, true),
-  mysqlRelease('8.4'),
-  mariadbRelease('12.3', true, true),
-  mariadbRelease('11.8'),
+  mysqlRelease('8.4', false, true),
+  mariadbRelease('12.3', false, true, false),
+  mariadbRelease('11.8', true, true),
   mariadbRelease('11.4'),
   mariadbRelease('10.11'),
 ]
+
+/** Instance **422** `managed_failover_unsupported` — same sentence in the picker. */
+export const MANAGED_FAILOVER_UNSUPPORTED_REASON =
+  'MariaDB 12.3 can run on one server; automatic failover needs MariaDB 11.8 for now.'
+
+export type ManagedFailoverSupport = 'supported' | typeof MANAGED_FAILOVER_UNSUPPORTED_REASON
+
+function releaseForFailoverLookup(
+  engine: string | null | undefined,
+  imageOrSeries: string | null | undefined,
+): ManagedEngineRelease | undefined {
+  if (!imageOrSeries) return undefined
+  const described = describeManagedImage(imageOrSeries)
+  if (described) {
+    return MANAGED_ENGINE_RELEASES.find(
+      (row) => row.engine === described.engine && row.series === described.series,
+    )
+  }
+  if (!engine) return undefined
+  return managedReleasesForEngine(engine).find((row) => row.series === imageOrSeries)
+}
+
+/**
+ * Whether `engine` + a catalog image or series can take a replica / failover
+ * member. Unknown combinations stay supported so an uncatalogued cluster is
+ * not blocked in the UI; the control plane still refuses the write.
+ */
+export function managedSeriesFailoverSupport(
+  engine: string | null | undefined,
+  imageOrSeries: string | null | undefined,
+): ManagedFailoverSupport {
+  const release = releaseForFailoverLookup(engine, imageOrSeries)
+  if (!release || release.failoverCapable) return 'supported'
+  return MANAGED_FAILOVER_UNSUPPORTED_REASON
+}
 
 /**
  * Every catalogued release for `engine` in display order, **including untested

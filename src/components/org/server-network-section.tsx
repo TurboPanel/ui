@@ -3,6 +3,8 @@ import { useQuery } from '@tanstack/react-query'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { AddressFamilyBadge } from '@/components/org/address-family-badge'
 import { IpListRow } from '@/components/org/network/network-rows'
+import { ServerAddressesCard } from '@/components/org/server-addresses-card'
+import { ServerTrafficCard } from '@/components/org/server-traffic-card'
 import { Badge, InlineNotice, MonoText, SectionPanel } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
 import {
@@ -294,6 +296,10 @@ export function ServerNetworkSection({
 
   return (
     <View style={styles.root}>
+      <ServerTrafficCard orgId={orgId} serverId={server.id} />
+
+      <ServerAddressesCard orgId={orgId} serverId={server.id} />
+
       <InlineNotice
         title="TurboPanel observes host interfaces, it does not configure them."
         body="Addresses are expected to change. Membership pins follow the host automatically when exactly one unambiguous replacement is reported; otherwise the pin goes stale rather than guessing."

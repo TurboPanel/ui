@@ -3,6 +3,7 @@ import {
   BUSY_REASON,
   DESTROY_EXPLANATION,
   LAST_ENVIRONMENT_REASON,
+  PRIMARY_ENVIRONMENT_REASON,
   NO_LINUX_USER_REASON,
   NO_SERVER_REASON,
   environmentActionItems,
@@ -35,9 +36,7 @@ describe('environmentActionItems', () => {
       'destroy',
       'delete',
     ])
-    expect(
-      environmentActionItems(base).every((entry) => entry.disabledReason === null),
-    ).toBe(true)
+    expect(environmentActionItems(base).every((entry) => entry.disabledReason === null)).toBe(true)
   })
 
   it('gives people who cannot manage only the previews and Refresh', () => {
@@ -60,12 +59,8 @@ describe('environmentActionItems', () => {
   })
 
   it('leaves redeploy and stop out until something has been deployed', () => {
-    expect(ids({ ...base, hasContainers: false, isRunning: false })).not.toContain(
-      'cacheless',
-    )
-    expect(ids({ ...base, hasContainers: false, isRunning: false })).not.toContain(
-      'stop',
-    )
+    expect(ids({ ...base, hasContainers: false, isRunning: false })).not.toContain('cacheless')
+    expect(ids({ ...base, hasContainers: false, isRunning: false })).not.toContain('stop')
   })
 
   it('leaves Stop out of a stopped environment', () => {
@@ -76,8 +71,7 @@ describe('environmentActionItems', () => {
 
   it('says why a redeploy cannot start', () => {
     const reason = (input: EnvironmentActionInput) =>
-      environmentActionItems(input).find((entry) => entry.id === 'cacheless')
-        ?.disabledReason
+      environmentActionItems(input).find((entry) => entry.id === 'cacheless')?.disabledReason
     expect(reason({ ...base, busy: true })).toBe(BUSY_REASON)
     expect(reason({ ...base, hasServer: false })).toBe(NO_SERVER_REASON)
     expect(reason({ ...base, needsPrincipal: true })).toBe(NO_LINUX_USER_REASON)
@@ -94,7 +88,20 @@ describe('environmentActionItems', () => {
   it('explains why delete is unavailable for the last environment', () => {
     const entries = environmentActionItems({ ...base, environmentCount: 1 })
     expect(entries.find((entry) => entry.id === 'delete')?.disabledReason).toBe(
-      LAST_ENVIRONMENT_REASON,
+      LAST_ENVIRONMENT_REASON
+    )
+  })
+
+  it('explains why the primary environment cannot be deleted while others exist', () => {
+    const entries = environmentActionItems({ ...base, isPrimary: true })
+    expect(entries.find((entry) => entry.id === 'delete')?.disabledReason).toBe(
+      PRIMARY_ENVIRONMENT_REASON
+    )
+    const others = environmentActionItems({ ...base, isPrimary: false })
+    expect(others.find((entry) => entry.id === 'delete')?.disabledReason).toBeNull()
+    const only = environmentActionItems({ ...base, isPrimary: true, environmentCount: 1 })
+    expect(only.find((entry) => entry.id === 'delete')?.disabledReason).toBe(
+      LAST_ENVIRONMENT_REASON
     )
   })
 

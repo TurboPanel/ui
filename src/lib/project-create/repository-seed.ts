@@ -78,6 +78,15 @@ function seedableAlias(alias: string | undefined): string | undefined {
   return trimmed && isPrincipalAlias(trimmed) ? trimmed : undefined
 }
 
+function nodeVersionField(nodeVersion: string | undefined): { nodeVersion?: string } {
+  return nodeVersion ? { nodeVersion } : {}
+}
+
+/** Only an app has a Node series to pin. */
+function seedNodeVersion(lane: RepositoryLane, value: string | undefined): string | undefined {
+  return lane === 'app' ? value?.trim() || undefined : undefined
+}
+
 /**
  * Seed a compose draft for one repository lane.
  *
@@ -114,6 +123,8 @@ export function seedComposeForLane(params: {
     startCommand?: string
     /** Directory the build runs in, relative to the checkout root. */
     subdirectory?: string
+    /** `app` lane only: a pinned Node series, or `latest` when chosen on purpose. */
+    nodeVersion?: string
   }
   /**
    * Account the service runs as, when the operator already chose one.
@@ -143,6 +154,7 @@ export function seedComposeForLane(params: {
   const buildCommand = capped(simple?.buildCommand)
   const startCommand = lane === 'app' ? capped(simple?.startCommand) : undefined
   const subdirectory = capped(simple?.subdirectory)
+  const nodeVersion = seedNodeVersion(lane, simple?.nodeVersion)
   const binding: ComposeServiceSourceExtension = {
     sourceId: source.id,
     ...(trimmedBranch ? { branch: trimmedBranch } : {}),
@@ -154,6 +166,7 @@ export function seedComposeForLane(params: {
   const extension = lane === 'app'
     ? {
       serviceKind: 'node' as const,
+      ...nodeVersionField(nodeVersion),
       ...(alias ? { principal: alias } : {}),
       source: binding,
     }

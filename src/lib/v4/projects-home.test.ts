@@ -66,22 +66,51 @@ const BASE: ConfigViewSide = {
       serviceId: null,
       kind: 'node',
       source: 'base',
+      inheritedFromBase: true,
       rows: [
-        { key: 'svc:web:linuxUser', area: 'linuxUser', field: 'linuxUser', label: 'Linux user', value: 'shop', masked: false, source: 'base' },
-        { key: 'svc:web:domain:shop.example.com', area: 'domain', field: 'domain:shop.example.com', label: 'Domain', value: 'shop.example.com', masked: false, source: 'base' },
+        {
+          key: 'svc:web:linuxUser',
+          area: 'linuxUser',
+          field: 'linuxUser',
+          label: 'Linux user',
+          value: 'shop',
+          masked: false,
+          source: 'base',
+          inheritedFromBase: true,
+        },
+        {
+          key: 'svc:web:domain:shop.example.com',
+          area: 'domain',
+          field: 'domain:shop.example.com',
+          label: 'Domain',
+          value: 'shop.example.com',
+          masked: false,
+          source: 'base',
+          inheritedFromBase: true,
+        },
       ],
     },
   ],
   variables: [],
-  linuxUsers: [{ name: 'shop', access: 'sftp', description: null, source: 'base', usedBy: ['web'] }],
+  linuxUsers: [
+    {
+      name: 'shop',
+      access: 'sftp',
+      description: null,
+      source: 'base',
+      inheritedFromBase: true,
+      usedBy: ['web'],
+    },
+  ],
 }
 
-function view(followsBase: boolean, changes = 0): EnvironmentConfigViewResponse {
+function view(usesBase: boolean, changes = 0): EnvironmentConfigViewResponse {
   return {
     ok: true,
     environmentId: 'e',
     projectId: 'p1',
-    followsBase,
+    standsAlone: !usesBase,
+    isPrimary: false,
     base: BASE,
     effective: BASE,
     changes: Array.from({ length: changes }, (_, index) => ({
@@ -127,18 +156,19 @@ describe('a project card', () => {
       environments: [production, staging],
       containersByEnvironment: { e1: [container('e1', 'running')], e2: [] },
       views: { e1: view(true, 2), e2: view(false) },
+      latest: { e2: null },
     })
     expect(card.name).toBe('Shop')
     expect(card.description).toBe('The shop')
     expect(card.sub).toBe('2 environments')
-    expect(card.baseLine).toBe('Base · 1 service · 1 Linux user')
+    expect(card.baseLine).toBe('Base · 1 service · 1 Hosting Account')
     expect(card.runs.map((chip) => chip.label)).toEqual(['Runs as shop'])
     expect(card.environments).toEqual([
       {
         id: 'e1',
         name: 'Production',
         status: 'running',
-        relation: expect.objectContaining({ text: 'Follows the Base · 2 changes' }),
+        relation: expect.objectContaining({ text: '2 changes from the Base' }),
         host: 'shop.example.com',
       },
       {
@@ -200,7 +230,10 @@ describe('a project card', () => {
     const card = homeProject({
       project: project({ metadata: { type: 'system' } }),
       environments: [env('e1', 'HTTP Ingress'), env('e2', 'HTTP Ingress')],
-      containersByEnvironment: { e1: [container('e1', 'running')], e2: [container('e2', 'exited')] },
+      containersByEnvironment: {
+        e1: [container('e1', 'running')],
+        e2: [container('e2', 'exited')],
+      },
       views: {},
     })
     expect(card.environments).toEqual([])
@@ -210,13 +243,22 @@ describe('a project card', () => {
   it('names the other kinds without a count', () => {
     const none = { containersByEnvironment: {}, views: {} }
     expect(
-      homeProject({ project: project({ metadata: { type: 'empty' } }), environments: [], ...none }).sub,
+      homeProject({ project: project({ metadata: { type: 'empty' } }), environments: [], ...none })
+        .sub
     ).toBe('Not set up yet')
     expect(
-      homeProject({ project: project({ metadata: { type: 'system' } }), environments: [production], ...none }).sub,
+      homeProject({
+        project: project({ metadata: { type: 'system' } }),
+        environments: [production],
+        ...none,
+      }).sub
     ).toBe('Platform')
     expect(
-      homeProject({ project: project({ metadata: { type: 'managed' } }), environments: [], ...none }).sub,
+      homeProject({
+        project: project({ metadata: { type: 'managed' } }),
+        environments: [],
+        ...none,
+      }).sub
     ).toBe('Managed database')
   })
 })
@@ -248,7 +290,10 @@ describe('deploys in progress', () => {
 
   it('lists only unfinished deploys, newest first, with project and environment', () => {
     const rows = deploysInProgress({
-      projects: [{ id: 'p1', name: 'Shop' }, { id: 'p2', name: null }],
+      projects: [
+        { id: 'p1', name: 'Shop' },
+        { id: 'p2', name: null },
+      ],
       environments: [
         env('e1', 'Production'),
         env('e2', 'Staging', 'p2'),

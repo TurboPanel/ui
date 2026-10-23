@@ -7,7 +7,10 @@ import { ProjectHomeCard } from './project-home-card'
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
 vi.mock('react-native-svg', async () => (await import('@/components/ui/v4/rn-stub')).svgStub)
-vi.mock('@/lib/theme-preference', async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub)
+vi.mock(
+  '@/lib/theme-preference',
+  async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub
+)
 vi.mock('@/components/org/platform-badge', () => ({
   PlatformBadge: () => <span data-testid="platform-badge" />,
 }))
@@ -20,12 +23,47 @@ const PROJECT: HomeProject = {
   sub: '2 environments',
   baseLine: 'Base · 3 services · 2 Linux users',
   runs: [
-    { runsInContainer: false, user: 'website', label: 'Runs as website', short: 'as website', source: 'base', sourceLabel: 'Base', access: 'SFTP on', hasAccess: true },
-    { runsInContainer: true, user: '', label: 'Runs inside its container', short: 'Runs inside its container', source: 'image', sourceLabel: '', access: '', hasAccess: false },
+    {
+      runsInContainer: false,
+      user: 'website',
+      label: 'Runs as website',
+      short: 'as website',
+      source: 'base',
+      sourceLabel: 'Base',
+      access: 'SFTP on',
+      hasAccess: true,
+    },
+    {
+      runsInContainer: true,
+      user: '',
+      label: 'Runs inside its container',
+      short: 'Runs inside its container',
+      source: 'image',
+      sourceLabel: '',
+      access: '',
+      hasAccess: false,
+    },
   ],
   environments: [
-    { id: 'e1', name: 'Production', status: 'running', relation: { standsAlone: false, changeCount: 0, text: 'Follows the Base', source: 'base' }, host: 'shop.example.com' },
-    { id: 'e2', name: 'Staging', status: 'never', relation: { standsAlone: false, changeCount: 2, text: 'Follows the Base · 2 changes', source: 'env' }, host: null },
+    {
+      id: 'e1',
+      name: 'Production',
+      status: 'running',
+      relation: { standsAlone: false, changeCount: 0, text: 'Same as the Base', source: 'base' },
+      host: 'shop.example.com',
+    },
+    {
+      id: 'e2',
+      name: 'Staging',
+      status: 'never',
+      relation: {
+        standsAlone: false,
+        changeCount: 2,
+        text: '2 changes from the Base',
+        source: 'env',
+      },
+      host: null,
+    },
   ],
   status: 'never',
 }
@@ -56,10 +94,10 @@ describe.each(SCENARIOS)('project card on the Projects home ($name)', (scenario)
     renderCard()
     const production = screen.getByRole('button', { name: 'Open Production in Shop' })
     expect(production.textContent).toContain('Running')
-    expect(production.textContent).toContain('Follows the Base · shop.example.com')
+    expect(production.textContent).toContain('Same as the Base · shop.example.com')
     const staging = screen.getByRole('button', { name: 'Open Staging in Shop' })
     expect(staging.textContent).toContain('Not deployed yet')
-    expect(staging.textContent).toContain('Follows the Base · 2 changes')
+    expect(staging.textContent).toContain('2 changes from the Base')
   })
 
   it('opens the project, its Base and an environment', () => {
@@ -90,7 +128,14 @@ describe.each(SCENARIOS)('project card on the Projects home ($name)', (scenario)
   })
 
   it('a project with no environments shows only its header', () => {
-    renderCard({ ...PROJECT, kind: 'setup', sub: 'Not set up yet', baseLine: null, runs: [], environments: [] })
+    renderCard({
+      ...PROJECT,
+      kind: 'setup',
+      sub: 'Not set up yet',
+      baseLine: null,
+      runs: [],
+      environments: [],
+    })
     expect(screen.getByText('Not set up yet')).toBeTruthy()
     expect(screen.queryByRole('button', { name: /^Open .* in Shop$/ })).toBeNull()
   })
@@ -103,8 +148,18 @@ describe.each(SCENARIOS)('project card on the Projects home ($name)', (scenario)
   it('draws the sheet behind an all-stand-alone project as empty', () => {
     renderCard({
       ...PROJECT,
-      environments: [{ id: 'e1', name: 'Solo', status: 'running', relation: { standsAlone: true, changeCount: 0, text: 'Stands alone', source: 'own' }, host: null }],
+      environments: [
+        {
+          id: 'e1',
+          name: 'Solo',
+          status: 'running',
+          relation: { standsAlone: true, changeCount: 0, text: 'Stands alone', source: 'own' },
+          host: null,
+        },
+      ],
     })
-    expect(screen.getByRole('button', { name: 'Open Solo in Shop' }).textContent).toContain('Stands alone')
+    expect(screen.getByRole('button', { name: 'Open Solo in Shop' }).textContent).toContain(
+      'Stands alone'
+    )
   })
 })

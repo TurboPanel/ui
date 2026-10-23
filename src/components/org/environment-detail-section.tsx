@@ -19,6 +19,7 @@ import {
 } from 'react-native'
 import { HeaderChevron } from '@/components/header-chevron'
 import {
+  Badge,
   Button,
   ButtonRow,
   Checkbox,
@@ -133,6 +134,11 @@ import { orEmptyArray } from '@/lib/or-empty-array'
 import { useCan } from '@/lib/query-client'
 import { useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/lib/query-keys'
+import { offersLetsEncrypt } from '@/lib/hosting-letsencrypt-choice'
+import { RemovedServiceCard } from '@/components/org/removed-service-card'
+import { containerCardServices, removedFromComposeServiceIds } from '@/lib/directory-names'
+import { useEnvironmentFolders } from '@/lib/queries/folders'
+import { useRequestLetsEncrypt } from '@/lib/queries/hosting-certificate'
 import { userErrorMessage } from '@/lib/user-error'
 
 type HostingBind = 'public' | 'datacenter' | 'local'
@@ -159,6 +165,12 @@ type HostingEditorState = {
   ports: string
   /** Multiline KEY=VALUE for options.web.env (HTTP hostings). */
   webEnvLines: string
+  /**
+   * Ask for a free Let's Encrypt certificate as part of this save. On for a
+   * hosting that does not exist yet, off for one that does (it has the
+   * Certificate section for that).
+   */
+  getLetsEncrypt: boolean
 }
 
 function formatWebEnvLines(web: unknown): string {
@@ -284,6 +296,7 @@ function readHostingEditor(hostings: HostingRecord[]): HostingEditorState {
     protocol: readHostingProtocol(optionsRecord),
     ports: formatHostingPorts(optionsRecord),
     ...readWebOptions(optionsRecord),
+    getLetsEncrypt: hostings.length === 0,
   }
 }
 
@@ -401,6 +414,8 @@ function readComposeHostingEditor(
     tlsId: entry.tls?.mode === 'certificate'
       ? entry.tls.certificateRef ?? null
       : null,
+    // Compose sets the certificate for a route it declares.
+    getLetsEncrypt: false,
   }
 }
 
@@ -907,7 +922,7 @@ function HostingTlsPicker({
       <Text style={styles.tlsHint}>
         {composeOwned
           ? 'Self-signed is tls.mode "internal"; picking a library certificate is tls.mode "certificate" with tls.certificateRef. Nothing is requested automatically — "automatic" is refused at deploy rather than served as self-signed.'
-          : 'Default is a basic self-signed cert. Pick a library certificate to use an upload, org self-signed, or Let\u2019s Encrypt cert — nothing is requested automatically.'}
+          : 'Until a real certificate is in place the site uses a basic self-signed one. Pick a library certificate to use an upload or an org self-signed one, or tick the box below to get a free Let\u2019s Encrypt certificate when you save.'}
       </Text>
       <View style={styles.tlsOptions}>
         <Pressable
@@ -929,6 +944,19 @@ function HostingTlsPicker({
         ))}
       </View>
       <HostingHintText hint={pinnedGap?.note ?? null} />
+      {!offersLetsEncrypt({
+        composeOwned,
+        protocol: editor.protocol,
+        tlsId: editor.tlsId,
+        hostnameCount: parseHostnameList(editor.hostnames).length,
+      }) ? null : (
+        <Checkbox
+          label="Get a free Let’s Encrypt certificate when I save"
+          checked={editor.getLetsEncrypt}
+          disabled={locked}
+          onPress={() => onChange({ getLetsEncrypt: !editor.getLetsEncrypt })}
+        />
+      )}
     </>
   )
 }
@@ -1922,37 +1950,67 @@ function EnvironmentServiceSettingsSectionPanel({
 
 function EnvironmentContainersSectionPanel({
   orgId,
+  environmentId,
   services,
   containersByService,
   allServers,
 }: Readonly<{
   orgId: string
+  environmentId: string
   services: ServiceRecord[]
   containersByService: Record<string, ContainerRecord[]>
   allServers: OrgServerRecord[]
 }>) {
-  const hasContainers = services.some(
-    (service) => (containersByService[service.id] ?? []).length > 0,
+  const folders = useEnvironmentFolders(orgId, environmentId)
+  const removedIds = removedFromComposeServiceIds(folders.data?.folders ?? [])
+  // The folders list holds only the first 20 rows, so removed sites past it can be missed.
+  const partial = (folders.data?.total ?? 0) > (folders.data?.folders.length ?? 0)
+  const listed = containerCardServices(
+    services,
+    Object.fromEntries(
+      services.map((service) => [service.id, (containersByService[service.id] ?? []).length]),
+    ),
+    removedIds,
   )
   return (
     <SectionPanel title="Containers" hint="Deployed containers and their status">
-      {!hasContainers ? (
+      {partial ? (
+        <Text style={panelStyles.muted}>
+          Only the first 20 folders were checked, so a site removed from compose may not be
+          marked here.
+        </Text>
+      ) : null}
+      {listed.length === 0 ? (
         <EmptyState title="No containers deployed yet." />
       ) : (
         <View style={styles.containerList}>
-          {services.map((service) => {
+          {listed.map((service) => {
             const containers = partitionContainersForDisplay(
               containersByService[service.id] ?? [],
             )
+            const title =
+              service.name?.trim() || String(service.composeServiceName ?? service.id)
             if (containers.length === 0) {
-              return null
+              // A removed site has no containers; show it so it does not look gone.
+              return removedIds.has(service.id) ? (
+                <RemovedServiceCard
+                  key={service.id}
+                  name={title}
+                  foldersWhere="above"
+                />
+              ) : null
             }
             return (
               <View key={service.id} style={panelStyles.detailCard}>
-                <Text style={panelStyles.detailTitle}>
-                  {service.name?.trim() ||
-                    String(service.composeServiceName ?? service.id)}
-                </Text>
+                <View style={styles.hostingTitleRow}>
+                  <Text style={panelStyles.detailTitle}>
+                    {service.name?.trim() ||
+                      String(service.composeServiceName ?? service.id)}
+                  </Text>
+                  {removedIds.has(service.id) ? (
+                    <Badge label="Removed from compose" tone="danger" />
+                  ) : null}
+                </View>
                 {containers.map((container) => (
                   <View
                     key={container.id}
@@ -2133,6 +2191,7 @@ function EnvironmentLoadedPanels({
       {showSection('containers') ? (
         <EnvironmentContainersSectionPanel
           orgId={orgId}
+          environmentId={environment.id}
           services={services}
           containersByService={containersByService}
           allServers={allServers}
@@ -2411,6 +2470,7 @@ export function EnvironmentDetailBody({
   const updateEnvironmentMutation = useUpdateEnvironment(orgId, environmentId)
   const deployEnvironmentMutation = useDeployEnvironment(orgId, environmentId)
   const upsertHostingMutation = useUpsertHosting(orgId)
+  const letsEncryptMutation = useRequestLetsEncrypt(orgId)
 
   const [error, setError] = useState<string | null>(null)
   const [hostingEditors, setHostingEditors] = useState<
@@ -2749,6 +2809,27 @@ export function EnvironmentDetailBody({
         setError(upsertHostingMutation.actionError)
       }
       return
+    }
+    const savedHostingId =
+      row.hostingId ??
+      ('id' in result.value && typeof result.value.id === 'string' ? result.value.id : null)
+    const wantsCertificate =
+      editor.getLetsEncrypt &&
+      offersLetsEncrypt({
+        composeOwned: false,
+        protocol: editor.protocol,
+        tlsId: editor.tlsId,
+        hostnameCount: parseHostnameList(editor.hostnames).length,
+      })
+    if (wantsCertificate && savedHostingId) {
+      // The hosting is already saved; a certificate that cannot start yet
+      // (for example DNS not pointing here) is reported, never undone.
+      const requested = await letsEncryptMutation.run(savedHostingId)
+      if (!requested.ok) {
+        setError(
+          `Saved. Let’s Encrypt could not start yet: ${requested.error ?? 'try again from the Certificate section.'}`,
+        )
+      }
     }
     await Promise.all([
       servicesQuery.refetch(),

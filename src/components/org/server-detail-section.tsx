@@ -22,8 +22,10 @@ import {
   type ActiveCommand,
   type ServerCommandState,
 } from '@/components/org/server-commands-panel'
+import { ServerPrincipalsSection } from '@/components/org/server-principals-section'
 import { ServerFirewallSection } from '@/components/org/firewall/server-firewall-section'
 import { ServerMetricsSection } from '@/components/org/server-metrics-section'
+import { ServerServicesSection } from '@/components/org/server-services-section'
 import { ServerNetworkSection } from '@/components/org/server-network-section'
 import { ServerHardwareProfileEditor } from '@/components/org/server-hardware-profile-editor'
 import { ServerLabelsEditor } from '@/components/org/server-labels-editor'
@@ -31,6 +33,7 @@ import { ServerMachineClassPanel } from '@/components/org/server-machine-class-p
 import { ServerTierPlacementPanel } from '@/components/org/server-tier-placement-panel'
 import { ServerMetricsSensorsPanel } from '@/components/org/server-metrics-sensors-panel'
 import { ServerSshPortPanel } from '@/components/org/server-ssh-port-panel'
+import { ServerWebServerPanel } from '@/components/org/server-web-server-panel'
 import { LocationEditorPanel } from '@/components/org/location-editor-panel'
 import { ServerSystemComponentPanel } from '@/components/org/server-system-component-panel'
 import { ServerTimeSection } from '@/components/org/server-time-section'
@@ -55,21 +58,28 @@ import {
 } from '@/lib/daemon-update-labels'
 import { formatLocalDateTime } from '@/lib/format-datetime'
 import { configuredSourceLabel } from '@/lib/host-defaults'
+import { formatMemoryPageSize, memoryPageSizeHint } from '@/lib/memory-page-size'
 import {
   defaultOrgDashboardHref,
+  serversRemovedHref,
   SERVER_DETAIL_TAB_IDS,
   SERVER_DETAIL_TAB_LABELS,
   type ServerDetailTabId,
 } from '@/lib/org-navigation'
+import { ServerDangerZone } from '@/components/org/server-danger-zone'
+import { ServerDeletePanel } from '@/components/org/server-delete-panel'
 import {
   formatServerDeleteBlockedError,
   isForbiddenError,
+  ServerDeleteBlockedError,
   type CommandEnqueueResponse,
   type CommandRecord,
   type OrgServerRecord,
   type ServerDaemonKeyRevokeResult,
   type ServerDetailRecord,
   type ServerUpdateStatus,
+  type PrincipalRemovalChoice,
+  ServerPrincipalChoiceRefusedError,
 } from '@/lib/instance-api'
 import { commandErrorLine } from '@/lib/command-error'
 import { useCommandRecordsBatch } from '@/lib/queries/commands'
@@ -130,9 +140,7 @@ function isColocatedServer(
   server: ServerDetailRecord,
   updateData?: ServerUpdateStatus | null
 ): boolean {
-  return (
-    server.colocatedWithInstance === true || updateData?.colocatedWithInstance === true
-  )
+  return server.colocatedWithInstance === true || updateData?.colocatedWithInstance === true
 }
 
 function resolveUpdateBadgeVariant(input: {
@@ -158,7 +166,7 @@ function resolveUpdateBadgeVariant(input: {
 function updateBadgeLabel(
   variant: UpdateBadgeVariant,
   runningVersionUnknown: boolean,
-  blockedLabel: string | null,
+  blockedLabel: string | null
 ): string {
   switch (variant) {
     case 'updating':
@@ -245,8 +253,6 @@ function DetailTabBody({
   onEnqueueCommand,
   systemRestartInFlight,
   systemRestartPollError,
-  revokeKeyPanel,
-  deletePanel,
 }: Readonly<{
   tab: ServerDetailTabId
   orgId: string
@@ -272,8 +278,6 @@ function DetailTabBody({
   ) => void
   systemRestartInFlight: boolean
   systemRestartPollError: string | null
-  revokeKeyPanel: ReactNode
-  deletePanel: ReactNode
 }>): ReactNode {
   switch (tab) {
     case 'overview':
@@ -297,8 +301,6 @@ function DetailTabBody({
           onEnqueueRestart={(response, environmentId) => {
             onEnqueueCommand(response, 'systemRestart', { environmentId })
           }}
-          revokeKeyPanel={revokeKeyPanel}
-          deletePanel={deletePanel}
         />
       )
     case 'time':
@@ -314,8 +316,12 @@ function DetailTabBody({
           onEnqueueCommand={onEnqueueCommand}
         />
       )
+    case 'services':
+      return <ServerServicesSection orgId={orgId} serverId={serverId} />
     case 'network':
       return <ServerNetworkSection orgId={orgId} server={server} />
+    case 'principals':
+      return <ServerPrincipalsSection orgId={orgId} serverId={serverId} canManage={canManage} />
     case 'firewall':
       return <ServerFirewallSection orgId={orgId} serverId={serverId} canManage={canManage} />
     case 'metrics':
@@ -406,7 +412,9 @@ function applyTerminalPollSuccess(
       handlers.invalidateSystemContainers(entry.environmentId)
       return
     }
-    handlers.setSystemRestartPollError(commandErrorLine(record) ?? `System restart ${record.status}`)
+    handlers.setSystemRestartPollError(
+      commandErrorLine(record) ?? `System restart ${record.status}`
+    )
     return
   }
 
@@ -438,15 +446,11 @@ function applyPollFailure(
     return
   }
   if (entry.kind === 'timezone') {
-    handlers.setTimezonePollError(
-      userErrorMessage(err, 'Failed to poll timezone command')
-    )
+    handlers.setTimezonePollError(userErrorMessage(err, 'Failed to poll timezone command'))
     return
   }
   if (entry.kind === 'systemRestart') {
-    handlers.setSystemRestartPollError(
-      userErrorMessage(err, 'Failed to poll system restart')
-    )
+    handlers.setSystemRestartPollError(userErrorMessage(err, 'Failed to poll system restart'))
     return
   }
   handlers.setNtpPollError(userErrorMessage(err, 'Failed to poll NTP command'))
@@ -485,7 +489,11 @@ function renderServerRevokeKeyPanel(
     )
   }
   return (
-    <ServerRevokeKeyPanel revoking={input.revoking} state={input.state} onConfirm={input.onConfirm} />
+    <ServerRevokeKeyPanel
+      revoking={input.revoking}
+      state={input.state}
+      onConfirm={input.onConfirm}
+    />
   )
 }
 
@@ -493,9 +501,13 @@ function renderServerDeletePanel(
   input: Readonly<{
     canManage: boolean
     colocated: boolean
+    orgId: string
+    serverId: string
+    serverConnected: boolean
     deleting: boolean
     deleteError: string | null
-    onConfirm: () => void
+    deleteBlocked: boolean
+    onConfirm: (forgetResources: boolean, principals: PrincipalRemovalChoice[]) => void
   }>
 ): ReactNode {
   if (!input.canManage) return null
@@ -506,8 +518,12 @@ function renderServerDeletePanel(
   }
   return (
     <ServerDeletePanel
+      orgId={input.orgId}
+      serverId={input.serverId}
+      serverConnected={input.serverConnected}
       deleting={input.deleting}
       deleteError={input.deleteError}
+      deleteBlocked={input.deleteBlocked}
       onConfirm={input.onConfirm}
     />
   )
@@ -547,6 +563,7 @@ export function ServerDetailSection({
   const [ntpPollError, setNtpPollError] = useState<string | null>(null)
   const [systemRestartPollError, setSystemRestartPollError] = useState<string | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [deleteBlocked, setDeleteBlocked] = useState(false)
   const [revokeKeyState, setRevokeKeyState] = useState<RevokeKeyPanelState>({
     error: null,
     result: null,
@@ -679,8 +696,7 @@ export function ServerDetailSection({
   }
 
   if (serverQuery.isError || !server) {
-    const message =
-      userErrorMessage(serverQuery.error, 'Failed to load server')
+    const message = userErrorMessage(serverQuery.error, 'Failed to load server')
     return <ServerDetailError message={message} />
   }
 
@@ -785,19 +801,39 @@ export function ServerDetailSection({
   const deletePanel = renderServerDeletePanel({
     canManage,
     colocated: updateVm.colocated,
+    orgId,
+    serverId,
+    serverConnected: server?.connected === true,
     deleting: deleteMutation.isPending,
     deleteError,
-    onConfirm: () => {
+    deleteBlocked,
+    onConfirm: (forgetResources, principals) => {
       setDeleteError(null)
-      deleteMutation.mutate(serverId, {
-        onSuccess: () => {
-          router.replace(defaultOrgDashboardHref(orgId))
-        },
-        onError: (err) => {
-          if (isForbiddenError(err)) return
-          setDeleteError(formatServerDeleteBlockedError(err))
-        },
-      })
+      setDeleteBlocked(false)
+      deleteMutation.mutate(
+        { serverId, forgetResources, principals },
+        {
+          onSuccess: () => {
+            router.replace(serversRemovedHref(orgId, title))
+          },
+          onError: (err) => {
+            if (isForbiddenError(err)) return
+            const blocked = err instanceof ServerDeleteBlockedError
+            setDeleteBlocked(blocked)
+            setDeleteError(formatServerDeleteBlockedError(err))
+            if (blocked) {
+              queryClient.invalidateQueries({
+                queryKey: queryKeys.org(orgId).servers.deletePreview(serverId),
+              })
+            }
+            if (err instanceof ServerPrincipalChoiceRefusedError) {
+              queryClient.invalidateQueries({
+                queryKey: queryKeys.org(orgId).servers.principalRemovalPlan(serverId),
+              })
+            }
+          },
+        }
+      )
     },
   })
 
@@ -884,8 +920,12 @@ export function ServerDetailSection({
         }}
         systemRestartInFlight={systemRestartInFlight}
         systemRestartPollError={systemRestartPollError}
+      />
+
+      <ServerDangerZone
+        offline={!server.connected}
         revokeKeyPanel={revokeKeyPanel}
-          deletePanel={deletePanel}
+        deletePanel={deletePanel}
       />
     </View>
   )
@@ -930,6 +970,8 @@ function ServerOverviewTab({
   const twoColumn = width >= layout.desktopBreakpoint
   const updateServerMutation = useUpdateServer(orgId, server.id)
   const timezoneSource = configuredSourceLabel(server.timezoneSource)
+  const pageSizeBytes = server.resources?.memory?.pageSizeBytes
+  const pageSizeHint = memoryPageSizeHint(pageSizeBytes)
   const groupStyle = [styles.detailGroup, twoColumn && styles.detailGroupHalf]
 
   return (
@@ -988,6 +1030,15 @@ function ServerOverviewTab({
           </View>
 
           <View style={groupStyle}>
+            <Text style={panelStyles.detailTitle}>Memory</Text>
+            <Text style={panelStyles.detailLine}>
+              <Text style={panelStyles.detailLabel}>Memory page size: </Text>
+              {formatMemoryPageSize(pageSizeBytes)}
+            </Text>
+            {pageSizeHint ? <Text style={panelStyles.muted}>{pageSizeHint}</Text> : null}
+          </View>
+
+          <View style={groupStyle}>
             <Text style={panelStyles.detailTitle}>Timezone</Text>
             <Text style={panelStyles.detailLine}>
               <Text style={panelStyles.detailLabel}>Effective: </Text>
@@ -1020,6 +1071,8 @@ function ServerOverviewTab({
 
       <ServerSshPortPanel orgId={orgId} server={server} canManage={canManage} />
 
+      <ServerWebServerPanel orgId={orgId} server={server} canManage={canManage} />
+
       <ServerMachineClassPanel orgId={orgId} server={server} canManage={canManage} />
 
       <ServerMetricsSensorsPanel orgId={orgId} server={server} />
@@ -1051,8 +1104,6 @@ function ServerControlTab({
   systemRestartInFlight,
   systemRestartPollError,
   onEnqueueRestart,
-  revokeKeyPanel,
-  deletePanel,
 }: Readonly<{
   orgId: string
   server: ServerDetailRecord
@@ -1068,8 +1119,6 @@ function ServerControlTab({
   systemRestartInFlight: boolean
   systemRestartPollError: string | null
   onEnqueueRestart: (response: CommandEnqueueResponse, environmentId: string | undefined) => void
-  revokeKeyPanel: ReactNode
-  deletePanel: ReactNode
 }>) {
   return (
     <View style={styles.tabBody}>
@@ -1126,7 +1175,7 @@ function ServerControlTab({
           label={updateBadgeLabel(
             viewModel.badgeVariant,
             viewModel.runningVersionUnknown,
-            viewModel.blockedLabel,
+            viewModel.blockedLabel
           )}
         />
         {viewModel.blockedLabel ? (
@@ -1158,14 +1207,6 @@ function ServerControlTab({
           </ButtonRow>
         ) : null}
         {updateState.error ? <Text style={panelStyles.error}>{updateState.error}</Text> : null}
-      </SectionPanel>
-
-      <SectionPanel title="Revoke daemon key" hint="Compromised-host cutoff">
-        {revokeKeyPanel}
-      </SectionPanel>
-
-      <SectionPanel title="Delete server" hint="Two-step confirm">
-        {deletePanel}
       </SectionPanel>
     </View>
   )
@@ -1207,9 +1248,9 @@ function ServerRevokeKeyPanel({
   return (
     <>
       <Text style={panelStyles.muted}>
-        Use this when the host is known to be compromised. The daemon&apos;s identity key is
-        revoked immediately and its connection is closed; the license token still on the host
-        cannot re-enroll it.
+        Use this when the host is known to be compromised. The daemon&apos;s identity key is revoked
+        immediately and its connection is closed; the license token still on the host cannot
+        re-enroll it.
       </Text>
       {state.error ? <Text style={panelStyles.error}>{state.error}</Text> : null}
       {state.result ? (
@@ -1220,29 +1261,6 @@ function ServerRevokeKeyPanel({
         confirmLabel="Confirm revoke"
         prompt="Cut this host off from the control plane now? Recovery is deleting the server and enrolling a rebuilt host."
         busy={revoking}
-        onConfirm={onConfirm}
-      />
-    </>
-  )
-}
-
-function ServerDeletePanel({
-  deleting,
-  deleteError,
-  onConfirm,
-}: Readonly<{
-  deleting: boolean
-  deleteError: string | null
-  onConfirm: () => void
-}>) {
-  return (
-    <>
-      {deleteError ? <Text style={panelStyles.error}>{deleteError}</Text> : null}
-      <ConfirmButton
-        label={deleting ? 'Deleting…' : 'Delete server'}
-        confirmLabel="Confirm delete"
-        prompt="Permanently remove this server from the organization?"
-        busy={deleting}
         onConfirm={onConfirm}
       />
     </>

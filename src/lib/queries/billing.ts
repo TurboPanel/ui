@@ -112,8 +112,12 @@ export function useChangeBillingSeats(orgId: string) {
 export function useUpgradeBillingTier(orgId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (body: { fromTierId: string; toTierId: string; prorationDate?: number }) =>
-      upgradeBillingTier(body),
+    mutationFn: (body: {
+      fromTierId: string
+      toTierId: string
+      prorationDate?: number
+      serverId?: string
+    }) => upgradeBillingTier(body),
     onSuccess: async () => {
       await invalidateBillingAndServers(queryClient, orgId)
     },
@@ -125,7 +129,8 @@ export function useUpgradeBillingTier(orgId: string) {
 export function useDowngradeBillingTier(orgId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (body: { fromTierId: string; toTierId: string }) => downgradeBillingTier(body),
+    mutationFn: (body: { fromTierId: string; toTierId: string; serverId?: string }) =>
+      downgradeBillingTier(body),
     onSuccess: async () => {
       await invalidateBillingAndServers(queryClient, orgId)
     },

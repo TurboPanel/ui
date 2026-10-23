@@ -3,16 +3,22 @@ import {
   createLicense,
   deleteLicense,
   deleteServer,
+  getServerDeletePreview,
   fetchFleetMetricsLatest,
   fetchLicenses,
   fetchOrgServerCapacity,
   fetchOrgServers,
   fetchServer,
+  fetchServerAddresses,
   fetchServerLabels,
+  fetchServerPrincipals,
+  fetchServerPrincipalRemovalPlan,
+  fetchServerServices,
   fetchOrgTemperatureUnit,
   fetchServerMetricsCapabilities,
   fetchServerMetricsConnection,
   fetchServerMetricsEvents,
+  fetchServerMetricsFacts,
   fetchServerMetricsSeries,
   fetchServerMetricsSummary,
   fetchServersUpdateStatus,
@@ -20,7 +26,9 @@ import {
   fetchTimezones,
   formatEntityMetricId,
   isForbiddenError,
+  isHttpStatusError,
   MetricsBackendUnavailableError,
+  MetricsRouteMissingError,
   pingDaemon,
   rebootServer,
   resetServerUpdateStatus,
@@ -28,7 +36,9 @@ import {
   saveOrgTemperatureUnit,
   startServerMetricsLive,
   stopServerMetricsLive,
+  saveServerAddresses,
   saveServerLabels,
+  setServerLicenseTier,
   saveServerHardwareProfile,
   setServerHostname,
   setServerNtp,
@@ -40,6 +50,7 @@ import {
   type FetchServerMetricsSeriesOptions,
   type FleetMetricsLatestResponse,
   type LicenseRecord,
+  type HostFactsResponse,
   type MetricEventsResponse,
   type MetricsCapabilitiesOutcome,
   type MetricsLiveStartOutcome,
@@ -49,6 +60,8 @@ import {
   type ServerMachineClass,
   type OrgServerRecord,
   type ServerDetailRecord,
+  type PrincipalRemovalChoice,
+  type ServerAddressInput,
 } from '@/lib/instance-api'
 import { unboundPendingKeys } from '@/lib/pending-keys'
 import { useApiMutation, queryKeys } from '@/lib/query-client'
@@ -126,6 +139,100 @@ export function useServerLabels(
     queryKey: queryKeys.org(orgId).servers.labels(serverId),
     queryFn: () => fetchServerLabels(serverId),
     enabled: (options?.enabled ?? true) && orgId.length > 0 && serverId.length > 0,
+  })
+}
+
+/**
+ * Addresses clients use. `null` hides the card: a control plane without the
+ * route answers 404 (the ui can ship first), and a viewer without manage gets
+ * 403, which must not reach the global sign-out handler.
+ */
+export function useServerAddresses(
+  orgId: string,
+  serverId: string,
+  options?: Readonly<{ enabled?: boolean }>
+) {
+  return useQuery({
+    queryKey: queryKeys.org(orgId).servers.addresses(serverId),
+    queryFn: async () => {
+      try {
+        return await fetchServerAddresses(serverId)
+      } catch (err) {
+        if (isHttpStatusError(err, 404) || isForbiddenError(err)) return null
+        throw err
+      }
+    },
+    enabled: (options?.enabled ?? true) && orgId.length > 0 && serverId.length > 0,
+  })
+}
+
+/**
+ * Replace the saved addresses. Settles either way (a 502 saved the entries),
+ * so the card and every managed Connect panel refresh.
+ */
+export function useSaveServerAddresses(orgId: string, serverId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (addresses: readonly ServerAddressInput[]) =>
+      saveServerAddresses(serverId, addresses),
+    fallbackError: 'Could not save the addresses clients use.',
+    onSettled: () =>
+      Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.org(orgId).servers.addresses(serverId),
+        }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.org(orgId).managed.all }),
+      ]),
+  })
+}
+
+export function useServerServices(
+  orgId: string,
+  serverId: string,
+  options?: Readonly<{ enabled?: boolean }>
+) {
+  return useQuery({
+    queryKey: queryKeys.org(orgId).servers.services(serverId),
+    queryFn: () => fetchServerServices(serverId),
+    enabled: (options?.enabled ?? true) && orgId.length > 0 && serverId.length > 0,
+    refetchInterval: SERVERS_REFRESH_MS,
+  })
+}
+
+export function useServerPrincipals(
+  orgId: string,
+  serverId: string,
+  options?: Readonly<{ enabled?: boolean }>
+) {
+  return useQuery({
+    queryKey: queryKeys.org(orgId).servers.principals(serverId),
+    queryFn: () => fetchServerPrincipals(serverId, orgId),
+    enabled: (options?.enabled ?? true) && orgId.length > 0 && serverId.length > 0,
+    refetchInterval: SERVERS_REFRESH_MS,
+  })
+}
+
+/** What removing the server would do to each principal on it; fresh on every open. */
+export function useServerPrincipalRemovalPlan(orgId: string, serverId: string) {
+  return useQuery({
+    queryKey: queryKeys.org(orgId).servers.principalRemovalPlan(serverId),
+    queryFn: () => fetchServerPrincipalRemovalPlan(serverId, orgId),
+    enabled: orgId.length > 0 && serverId.length > 0,
+    refetchInterval: false,
+    staleTime: 0,
+  })
+}
+
+export function useServerDeletePreview(
+  orgId: string,
+  serverId: string,
+  options?: Readonly<{ enabled?: boolean }>
+) {
+  return useQuery({
+    queryKey: queryKeys.org(orgId).servers.deletePreview(serverId),
+    queryFn: () => getServerDeletePreview(serverId, orgId),
+    enabled: (options?.enabled ?? true) && orgId.length > 0 && serverId.length > 0,
+    refetchInterval: false,
   })
 }
 
@@ -457,6 +564,33 @@ export function useServerMetricsEvents(
   })
 }
 
+/** The newest host facts (kernel, OS, versions, drive and GPU text); not tied to the chart range. */
+export function useServerMetricsFacts(
+  orgId: string,
+  serverId: string,
+  options?: Readonly<{ enabled?: boolean; refetchInterval?: number | false }>
+) {
+  return useQuery({
+    queryKey: queryKeys.org(orgId).servers.metricsFacts(serverId),
+    queryFn: async (): Promise<HostFactsResponse | null> => {
+      try {
+        return await fetchServerMetricsFacts(serverId, orgId)
+      } catch (error) {
+        // An older panel has no facts route (404): the card is simply not shown, with no retries.
+        if (
+          error instanceof MetricsBackendUnavailableError ||
+          error instanceof MetricsRouteMissingError
+        ) {
+          return null
+        }
+        throw error
+      }
+    },
+    enabled: (options?.enabled ?? true) && orgId.length > 0 && serverId.length > 0,
+    refetchInterval: options?.refetchInterval ?? 5 * 60_000,
+  })
+}
+
 /** Connection history + uptime totals for the currently viewed range. */
 export function useServerMetricsConnection(
   orgId: string,
@@ -540,14 +674,37 @@ export function useResetServerUpdateStatus(orgId: string, serverId: string) {
   })
 }
 
+function deleteServerOptions(
+  input: Readonly<{
+    forgetResources?: boolean
+    principals?: readonly PrincipalRemovalChoice[]
+  }>
+) {
+  const principals = input.principals ?? []
+  if (!input.forgetResources && principals.length === 0) return undefined
+  return {
+    ...(input.forgetResources ? { forgetResources: true } : {}),
+    ...(principals.length > 0 ? { principals } : {}),
+  }
+}
+
 export function useDeleteServer(orgId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (serverId: string) => deleteServer(serverId, orgId),
+    mutationFn: (
+      input: Readonly<{
+        serverId: string
+        forgetResources?: boolean
+        principals?: readonly PrincipalRemovalChoice[]
+      }>
+    ) =>
+      deleteServer(input.serverId, orgId, deleteServerOptions(input)),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: queryKeys.org(orgId).servers.list,
-      })
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.org(orgId).servers.list }),
+        // Placements went with the server; some principals may have been deleted.
+        queryClient.invalidateQueries({ queryKey: queryKeys.org(orgId).principals }),
+      ])
     },
   })
 }
@@ -683,6 +840,21 @@ export function useSaveServerLabels(orgId: string, serverId: string) {
       ])
     },
     fallbackError: 'Failed to save server labels',
+  })
+}
+
+export function useSetServerLicenseTier(orgId: string, serverId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (tierId: string | null) => setServerLicenseTier(serverId, tierId),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.org(orgId).servers.detail(serverId) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.org(orgId).servers.list }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.org(orgId).billing.subscription }),
+      ])
+    },
+    fallbackError: 'Failed to set license tier',
   })
 }
 

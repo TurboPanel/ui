@@ -19,7 +19,10 @@ import {
 const BANNED =
   /\b(overlays?|overrid(?:e|es|den|ing)|layers?|lanes?|tenants?|principals?|aliases|alias|inherit(?:s|ed|ance)?|forks?|templates?|delta)\b/i
 
-function record(username: string, extra: Partial<ProjectPrincipalRecord> = {}): ProjectPrincipalRecord {
+function record(
+  username: string,
+  extra: Partial<ProjectPrincipalRecord> = {}
+): ProjectPrincipalRecord {
   return {
     id: `pr-${username}`,
     username,
@@ -34,7 +37,7 @@ function record(username: string, extra: Partial<ProjectPrincipalRecord> = {}): 
 
 const production = configView({ environmentId: 'e1', changes: [] })
 const staging = configView({ environmentId: 'e2' })
-const preview = configView({ environmentId: 'e3', followsBase: false, changes: [] })
+const preview = configView({ environmentId: 'e3', standsAlone: true, changes: [] })
 
 const ENVIRONMENTS: BaseEnvironment[] = [
   { id: 'e1', name: 'Production', view: production },
@@ -64,25 +67,47 @@ describe('baseViewOf', () => {
 })
 
 describe('baseEnvironmentRows', () => {
-  const rows = baseEnvironmentRows([...ENVIRONMENTS, { id: 'e4', name: 'Testing', view: undefined }])
+  const rows = baseEnvironmentRows([
+    ...ENVIRONMENTS,
+    { id: 'e4', name: 'Testing', view: undefined },
+  ])
 
   it('says how each environment relates to the Base, with the words the rest of the app uses', () => {
-    expect(rows[0]).toMatchObject({ followsBase: true, relationText: 'Follows the Base', changeCount: 0, seeChanges: null })
-    expect(rows[1]).toMatchObject({ followsBase: true, changeCount: 4, seeChanges: "See Staging's changes", source: 'env' })
-    expect(rows[1]?.relationText).toBe('Follows the Base · 4 changes')
-    expect(rows[2]).toMatchObject({ followsBase: false, relationText: 'Stands alone', changeCount: 0, seeChanges: null, source: 'own' })
+    expect(rows[0]).toMatchObject({
+      standsAlone: false,
+      relationText: 'Same as the Base',
+      changeCount: 0,
+      seeChanges: null,
+    })
+    expect(rows[1]).toMatchObject({
+      standsAlone: false,
+      changeCount: 4,
+      seeChanges: "See Staging's changes",
+      source: 'env',
+    })
+    expect(rows[1]?.relationText).toBe('4 changes from the Base')
+    expect(rows[2]).toMatchObject({
+      standsAlone: true,
+      relationText: 'Stands alone',
+      changeCount: 0,
+      seeChanges: null,
+      source: 'own',
+    })
   })
 
   it('leaves an environment out of the claims when its configuration is not known', () => {
-    expect(rows[3]).toMatchObject({ followsBase: null, relationText: '', seeChanges: null })
+    expect(rows[3]).toMatchObject({ standsAlone: null, relationText: '', seeChanges: null })
   })
 })
 
 describe('the affected-environment list', () => {
-  const rows = baseEnvironmentRows([...ENVIRONMENTS, { id: 'e4', name: 'Testing', view: undefined }])
+  const rows = baseEnvironmentRows([
+    ...ENVIRONMENTS,
+    { id: 'e4', name: 'Testing', view: undefined },
+  ])
 
-  it('names who follows and who stands alone, and skips the unknown one', () => {
-    expect(reachLine(rows)).toBe('Production and Staging follow it · Preview stands alone')
+  it('names who uses the Base and who stands alone, and skips the unknown one', () => {
+    expect(reachLine(rows)).toBe('Production and Staging use it · Preview stands alone')
     expect(reachLine([])).toBe('')
   })
 })
@@ -128,7 +153,7 @@ describe('baseServiceRows', () => {
         ],
       },
     },
-    [],
+    []
   )
 
   it('lists apps with who runs them and containers with their image', () => {
@@ -153,7 +178,7 @@ describe('baseServiceRows', () => {
   it('shows a container without an image by its kind', () => {
     const bare = baseServiceRows(
       { ...production, base: { ...production.base, services: [viewService('x', 'container')] } },
-      [],
+      []
     )
     expect(bare[0]?.sub).toBe('Container')
   })
@@ -162,9 +187,39 @@ describe('baseServiceRows', () => {
 describe('baseVariableRows', () => {
   it('hides a secret and says what each variable is used for', () => {
     const variables = [
-      { key: 'var:A', name: 'A', variableId: 'v1', value: 'x', isSecret: false, forBuild: true, forRuntime: true, source: 'project' as const },
-      { key: 'var:B', name: 'B', variableId: 'v2', value: null, isSecret: true, forBuild: false, forRuntime: true, source: 'project' as const },
-      { key: 'var:C', name: 'C', variableId: 'v3', value: '', isSecret: false, forBuild: true, forRuntime: false, source: 'project' as const },
+      {
+        key: 'var:A',
+        name: 'A',
+        variableId: 'v1',
+        value: 'x',
+        isSecret: false,
+        forBuild: true,
+        forRuntime: true,
+        source: 'project' as const,
+        inheritedFromBase: true,
+      },
+      {
+        key: 'var:B',
+        name: 'B',
+        variableId: 'v2',
+        value: null,
+        isSecret: true,
+        forBuild: false,
+        forRuntime: true,
+        source: 'project' as const,
+        inheritedFromBase: true,
+      },
+      {
+        key: 'var:C',
+        name: 'C',
+        variableId: 'v3',
+        value: '',
+        isSecret: false,
+        forBuild: true,
+        forRuntime: false,
+        source: 'project' as const,
+        inheritedFromBase: true,
+      },
     ]
     const rows = baseVariableRows({ ...production.base, variables })
     expect(rows.map((item) => [item.name, item.valueText, item.usedFor])).toEqual([
@@ -173,7 +228,7 @@ describe('baseVariableRows', () => {
       ['C', 'Empty', 'Build only'],
     ])
     expect(rows[1]?.isSecret).toBe(true)
-    expect(rows[0]?.tag).toBe('Project')
+    expect(rows[0]?.tag).toBe('Base')
   })
 })
 
@@ -181,8 +236,22 @@ describe('Linux users', () => {
   const base = {
     ...production.base,
     linuxUsers: [
-      { name: 'website', access: 'sftp' as const, description: null, source: 'base' as const, usedBy: ['web'] },
-      { name: 'testing-web', access: 'none' as const, description: null, source: 'base' as const, usedBy: [] },
+      {
+        name: 'website',
+        access: 'sftp' as const,
+        description: null,
+        source: 'base' as const,
+        inheritedFromBase: true,
+        usedBy: ['web'],
+      },
+      {
+        name: 'testing-web',
+        access: 'none' as const,
+        description: null,
+        source: 'base' as const,
+        inheritedFromBase: true,
+        usedBy: [],
+      },
     ],
     services: [viewService('web', 'node', [row('web', 'linuxUser', 'website')])],
   }
@@ -195,17 +264,43 @@ describe('Linux users', () => {
     },
   })
   const environments: BaseEnvironment[] = [
-    { id: 'e1', name: 'Production', view: configView({ effective: { services: [viewService('web', 'node', [row('web', 'linuxUser', 'website')])], variables: [], linuxUsers: [] } }) },
-    { id: 'e2', name: 'Staging', view: configView({ effective: { services: [viewService('web', 'node', [row('web', 'linuxUser', 'website')])], variables: [], linuxUsers: [] } }) },
+    {
+      id: 'e1',
+      name: 'Production',
+      view: configView({
+        effective: {
+          services: [viewService('web', 'node', [row('web', 'linuxUser', 'website')])],
+          variables: [],
+          linuxUsers: [],
+        },
+      }),
+    },
+    {
+      id: 'e2',
+      name: 'Staging',
+      view: configView({
+        effective: {
+          services: [viewService('web', 'node', [row('web', 'linuxUser', 'website')])],
+          variables: [],
+          linuxUsers: [],
+        },
+      }),
+    },
     { id: 'e3', name: 'Testing', view: testing },
     { id: 'e4', name: 'Broken', view: undefined },
   ]
 
   it('lists the users the control plane holds, then the ones only the Base declares', () => {
-    const users = baseLinuxUsers(base, [record('website', { access: 'shell', sshKeyCount: 2, passwordAuth: true })])
+    const users = baseLinuxUsers(base, [
+      record('website', { access: 'shell', sshKeyCount: 2, passwordAuth: true }),
+    ])
     expect(users.map((item) => item.user.name)).toEqual(['website', 'testing-web'])
     expect(users[0]).toMatchObject({ recordId: 'pr-website' })
-    expect(users[0]?.user).toMatchObject({ access: 'ssh', sshKeyCount: 2, createdOnFirstDeploy: false })
+    expect(users[0]?.user).toMatchObject({
+      access: 'ssh',
+      sshKeyCount: 2,
+      createdOnFirstDeploy: false,
+    })
     expect(users[1]).toMatchObject({ recordId: null })
     expect(users[1]?.user.createdOnFirstDeploy).toBe(true)
   })
@@ -247,7 +342,11 @@ describe('Linux users', () => {
   it('uses the same fallback as the Services list: the user whose record lists the app', () => {
     const noRow = viewService('web', 'node', [])
     const env: BaseEnvironment[] = [
-      { id: 'e1', name: 'Production', view: configView({ effective: { services: [noRow], variables: [], linuxUsers: [] } }) },
+      {
+        id: 'e1',
+        name: 'Production',
+        view: configView({ effective: { services: [noRow], variables: [], linuxUsers: [] } }),
+      },
     ]
     const rows = baseLinuxUserRows(base, [record('website', { serviceIds: ['s-web'] })], env)
     expect(rows[0]).toMatchObject({ usesText: 'web in Production', inUse: true })
@@ -256,9 +355,15 @@ describe('Linux users', () => {
   it('does not say nobody runs as a user when an environment could not be read', () => {
     const none: BaseEnvironment[] = [{ id: 'e1', name: 'Production', view: undefined }]
     const rows = baseLinuxUserRows(
-      { ...base, linuxUsers: [{ ...base.linuxUsers[0]!, usedBy: ['web'] }, { ...base.linuxUsers[1]!, usedBy: [] }] },
+      {
+        ...base,
+        linuxUsers: [
+          { ...base.linuxUsers[0]!, usedBy: ['web'] },
+          { ...base.linuxUsers[1]!, usedBy: [] },
+        ],
+      },
       [],
-      none,
+      none
     )
     expect(rows[0]).toMatchObject({ usesText: 'web in the Base', inUse: true })
     expect(rows[1]).toMatchObject({ usesText: '', inUse: false })
@@ -266,12 +371,20 @@ describe('Linux users', () => {
 
   it('says so when no app runs as a user', () => {
     const rows = baseLinuxUserRows(base, [], [])
-    expect(rows[0]).toMatchObject({ usesText: 'No app runs as this user yet', inUse: false, uses: [] })
+    expect(rows[0]).toMatchObject({
+      usesText: 'No app runs as this user yet',
+      inUse: false,
+      uses: [],
+    })
   })
 
   it('ignores an environment that dropped the app', () => {
     const dropped: BaseEnvironment[] = [
-      { id: 'e1', name: 'Production', view: configView({ effective: { services: [], variables: [], linuxUsers: [] } }) },
+      {
+        id: 'e1',
+        name: 'Production',
+        view: configView({ effective: { services: [], variables: [], linuxUsers: [] } }),
+      },
     ]
     const rows = baseLinuxUserRows(base, [], dropped)
     expect(rows[0]?.hasOther).toBe(false)
@@ -290,7 +403,15 @@ describe('banned words', () => {
       ...collect(baseEnvironmentRows(ENVIRONMENTS)),
       ...collect(reachLine(baseEnvironmentRows(ENVIRONMENTS))),
       ...collect(mapLayout(baseMapInput({ view: production, principals: [], compare: null }))),
-      ...collect(mapLayout(baseMapInput({ view: production, principals: [], compare: { name: 'Staging', view: staging } }))),
+      ...collect(
+        mapLayout(
+          baseMapInput({
+            view: production,
+            principals: [],
+            compare: { name: 'Staging', view: staging },
+          })
+        )
+      ),
       ...collect(baseServiceRows(production, [])),
       ...collect(baseLinuxUserRows(production.base, [record('website')], ENVIRONMENTS)),
     ]

@@ -313,6 +313,19 @@ describe('preview', () => {
     expect(firewallPreviewBadge('previewed').tone).toBe('ok')
     expect(firewallPreviewBadge('refused').tone).toBe('danger')
     expect(firewallPreviewBadge('failed').tone).toBe('danger')
+    expect(firewallPreviewBadge('applied')).toEqual({ tone: 'ok', label: 'Applied' })
+    expect(firewallPreviewBadge('removed')).toEqual({ tone: 'muted', label: 'Removed' })
+  })
+
+  it('never throws for a status it does not know', () => {
+    const statuses = ['queued', 'previewed', 'applied', 'removed', 'refused', 'failed', 'later']
+    for (const status of statuses) {
+      const badge = firewallPreviewBadge(status as never)
+      expect(badge.tone).toBeTruthy()
+      expect(badge.label).toBeTruthy()
+    }
+    expect(firewallPreviewBadge('later' as never)).toEqual({ tone: 'muted', label: 'later' })
+    expect(firewallPreviewBadge(undefined as never).tone).toBe('muted')
   })
 
   it('reads the host answer it was given', () => {
@@ -363,6 +376,7 @@ describe('preview', () => {
     expect(firewallModeNote('observe', { hostMode: 'observe' })).toContain('applies nothing')
     expect(firewallModeNote('managed', { hostMode: 'observe' })).toContain('only sent a preview')
     expect(firewallModeNote('managed', { hostMode: null })).toContain('behaves like Observe')
+    expect(firewallModeNote('managed', { hostMode: 'managed' })).toContain('enforces')
   })
 })
 

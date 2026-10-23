@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  ORG_SWITCHER_HEADER_SEARCH_MIN,
+  ORG_SWITCHER_LONG_LIST_MIN,
+  shouldShowViewAllOrganizations,
   filterOrganizations,
   organizationLabel,
   organizationMatchesQuery,
@@ -70,16 +71,15 @@ describe('visibleOrganizations', () => {
   })
 })
 
-describe('shouldShowOrgSwitcherSearch', () => {
-  it('shows search in the header from the minimum count', () => {
-    expect(shouldShowOrgSwitcherSearch(ORG_SWITCHER_HEADER_SEARCH_MIN, false)).toBe(
-      true,
-    )
-    expect(shouldShowOrgSwitcherSearch(1, false)).toBe(false)
+describe('long list helpers', () => {
+  it('hides the filter and View all up to the threshold', () => {
+    expect(shouldShowOrgSwitcherSearch(ORG_SWITCHER_LONG_LIST_MIN)).toBe(false)
+    expect(shouldShowViewAllOrganizations(ORG_SWITCHER_LONG_LIST_MIN)).toBe(false)
+    expect(shouldShowOrgSwitcherSearch(1)).toBe(false)
   })
 
-  it('always shows search on the full switcher when any org exists', () => {
-    expect(shouldShowOrgSwitcherSearch(1, true)).toBe(true)
-    expect(shouldShowOrgSwitcherSearch(0, true)).toBe(false)
+  it('shows the filter and View all above the threshold', () => {
+    expect(shouldShowOrgSwitcherSearch(ORG_SWITCHER_LONG_LIST_MIN + 1)).toBe(true)
+    expect(shouldShowViewAllOrganizations(ORG_SWITCHER_LONG_LIST_MIN + 1)).toBe(true)
   })
 })

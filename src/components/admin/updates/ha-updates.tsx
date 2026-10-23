@@ -2,12 +2,26 @@ import { useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { UpgradeFleetTable } from '@/components/admin/updates/upgrade-fleet-table'
 import { UpgradeHistoryPanel } from '@/components/admin/updates/upgrade-history-panel'
+import { StartUpgradeSheet } from '@/components/admin/updates/start-upgrade-sheet'
 import { UpgradeSettingsCard } from '@/components/admin/updates/upgrade-settings-card'
-import { Badge, ConfirmButton, InlineNotice, SectionPanel, SegmentedControl } from '@/components/ui'
+import { useStartUpgradeFlow } from '@/components/admin/updates/use-start-upgrade-flow'
+import {
+  Badge,
+  Button,
+  ConfirmButton,
+  InlineNotice,
+  SectionPanel,
+  SegmentedControl,
+} from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
 import type { InstanceUpdates } from '@/lib/instance-api'
 import { HA_PRODUCT_NAME } from '@/lib/platform-copy'
-import { summarizeFleetSteps } from '@/lib/upgrade-display'
+import {
+  fleetProgressText,
+  offlineWaitingNotice,
+  runWaitsOnlyOnOffline,
+  summarizeFleetSteps,
+} from '@/lib/upgrade-display'
 import {
   useCancelUpgradeRun,
   useRetryUpgradeStep,
@@ -18,6 +32,7 @@ import {
   useUpgradeSettings,
 } from '@/lib/queries/admin'
 import { fleetServersQuery, UPGRADE_FLEET_PAGE_SIZE } from '@/lib/upgrade-batch'
+import { isUpgradeRunActive } from '@/lib/upgrade-run-poll'
 import { spacing } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
 
@@ -31,20 +46,25 @@ export function HighAvailabilityUpdates({ data }: Readonly<{ data: InstanceUpdat
   const saveSettings = useSaveUpgradeSettings()
   const retryStep = useRetryUpgradeStep()
   const cancelRun = useCancelUpgradeRun()
+  const flow = useStartUpgradeFlow(() => activeRun.refetch())
   const [retryingStepId, setRetryingStepId] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
 
   const run = activeRun.data?.run
+  const runActive = Boolean(run && isUpgradeRunActive(run.status))
+  const fleetBlocked = runActive && !runWaitsOnlyOnOffline(run)
   const fleetSummary = summarizeFleetSteps(run?.steps ?? [])
+  const waitingOffline = offlineWaitingNotice(run?.steps ?? [])
+  const displayNotice = flow.notice ?? notice
 
   return (
     <View style={styles.root}>
       <InlineNotice
         tone="info"
         title={`${HA_PRODUCT_NAME} manages the control plane`}
-        body="Connected daemons follow the update below. Per-server Update actions stay off while updates are platform-managed."
+        body="Connected daemons follow the update below. Per-server Update actions stay off while updates are platform-managed. Use Update fleet now to roll out the newest build to every connected daemon."
       />
-      {notice ? <InlineNotice tone="info" title={notice} /> : null}
+      {displayNotice ? <InlineNotice tone="info" title={displayNotice} /> : null}
 
       <SectionPanel title="Control plane">
         <Text style={panelStyles.pageCopy}>Managed by TurboPanel</Text>
@@ -56,17 +76,21 @@ export function HighAvailabilityUpdates({ data }: Readonly<{ data: InstanceUpdat
           title="Server updates"
           headerRight={
             // A run keeps the target it was created with. Cancelling a stale one
-            // lets the next maintenance tick start fresh against the current build.
+            // lets Update fleet now, or the next automatic check, start fresh.
             <ConfirmButton
               label="Cancel update"
-              confirmLabel="Cancel update"
-              prompt="Stop this update? Daemons already updated stay updated; anything still pending is skipped. The next update starts against the current build."
+              confirmLabel="Yes, cancel the update"
+              dismissLabel="No, keep it"
+              prompt="Stop this update? Servers that already updated stay updated, and ones that have not started are skipped. A server already installing is not stopped and finishes on its own. The next update starts against the current build."
               busy={cancelRun.isPending}
               onConfirm={() => {
                 setNotice(null)
+                flow.setNotice(null)
                 cancelRun.mutate(run.id, {
                   onSuccess: () => {
-                    setNotice('Update cancelled. A fresh one starts on the next maintenance tick.')
+                    setNotice(
+                      'Update cancelled. Use Update fleet now, or turn on automatic updates and a fresh one starts on the next check.'
+                    )
                   },
                   onError: (err) => {
                     setNotice(userErrorMessage(err, 'Failed to cancel the update'))
@@ -78,13 +102,28 @@ export function HighAvailabilityUpdates({ data }: Readonly<{ data: InstanceUpdat
         >
           <Text style={panelStyles.pageCopy}>
             {fleetSummary.total > 0
-              ? `${fleetSummary.upToDate} of ${fleetSummary.total} connected daemons up to date`
+              ? fleetProgressText(fleetSummary, 'connected daemons')
               : 'Waiting for servers to start updating.'}
           </Text>
+          {waitingOffline ? <InlineNotice tone="info" title={waitingOffline} /> : null}
         </SectionPanel>
       ) : null}
 
-      <SectionPanel title="Connected daemons">
+      <SectionPanel
+        title="Connected daemons"
+        headerRight={
+          <Button
+            label="Update fleet now"
+            variant="primary"
+            busy={flow.starting || flow.preflightPending}
+            disabled={fleetBlocked || flow.starting}
+            onPress={() => {
+              setNotice(null)
+              void flow.openPreflight()
+            }}
+          />
+        }
+      >
         <SegmentedControl
           value={statusFilter}
           onChange={(value) => {
@@ -122,11 +161,12 @@ export function HighAvailabilityUpdates({ data }: Readonly<{ data: InstanceUpdat
         settings={settingsQuery.data?.settings ?? null}
         loading={settingsQuery.isLoading}
         saving={saveSettings.isPending}
-        hideAutoUpdate
         onSave={(next) => {
           saveSettings.mutate(next)
         }}
       />
+
+      <StartUpgradeSheet flow={flow} />
     </View>
   )
 }

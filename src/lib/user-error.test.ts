@@ -7,6 +7,7 @@ import {
   UPDATE_ALREADY_ACTIVE_COPY,
   apiErrorCopy,
   isNetworkFetchError,
+  licenseTierUserErrorMessage,
   plainStepFailureMessage,
   userErrorMessage,
 } from '@/lib/user-error'
@@ -33,6 +34,28 @@ describe('apiErrorCopy', () => {
       UPDATE_ALREADY_ACTIVE_COPY
     )
     expect(apiErrorCopy(new Error('HTTP 409: environment_running'))).toBe(ENVIRONMENT_RUNNING_COPY)
+  })
+
+  it('maps a Make primary conflict to a retry message', () => {
+    expect(apiErrorCopy(new Error('HTTP 409: primary_environment_conflict'))).toContain('try again')
+  })
+
+  it('maps the primary environment and edit target codes to plain words', () => {
+    expect(apiErrorCopy(new Error('HTTP 409: primary_environment_cannot_be_deleted'))).toContain(
+      'Make another environment primary first'
+    )
+    for (const code of [
+      'edit_target_required',
+      'edit_target_invalid',
+      'edit_target_mixed',
+      'environment_start_invalid',
+      'environment_start_conflict',
+    ]) {
+      const copy = apiErrorCopy(new Error(`HTTP 400: ${code}`))
+      expect(copy).toBeTruthy()
+      expect(copy).not.toContain(code)
+      expect(copy).not.toMatch(/default environment|follows? the base/i)
+    }
   })
 
   it('maps a bare or generic 429 to plain copy but keeps specific codes', () => {
@@ -64,19 +87,19 @@ describe('userErrorMessage', () => {
 describe('cancel deploy errors', () => {
   it('maps the two refusals to plain sentences', () => {
     expect(userErrorMessage(new Error('HTTP 409: deploy_not_cancellable'), 'x')).toBe(
-      'This deploy has already finished.',
+      'This deploy has already finished.'
     )
     expect(userErrorMessage(new Error('HTTP 409: cancel_unsupported'), 'x')).toBe(
-      "This server's TurboPanel daemon is too old to cancel deploys. Update it first.",
+      "This server's TurboPanel daemon is too old to cancel deploys. Update it first."
     )
   })
 
   it('maps the too-late and unreachable-server refusals', () => {
     expect(userErrorMessage(new Error('HTTP 409: deploy_too_late'), 'x')).toBe(
-      'This deploy is already switching over, so it can no longer be stopped. It will finish.',
+      'This deploy is already switching over, so it can no longer be stopped. It will finish.'
     )
     expect(userErrorMessage(new Error('HTTP 503: daemon_unavailable'), 'x')).toBe(
-      'TurboPanel could not reach this server right now. Try again in a moment.',
+      'TurboPanel could not reach this server right now. Try again in a moment.'
     )
   })
 })
@@ -116,5 +139,33 @@ describe('plainStepFailureMessage', () => {
   it('is null when there is nothing to say', () => {
     expect(plainStepFailureMessage(null)).toBeNull()
     expect(plainStepFailureMessage('   ')).toBeNull()
+  })
+})
+
+describe('licenseTierUserErrorMessage', () => {
+  it('maps tier pick refusals and owner-only 403', () => {
+    const cases = [
+      new Error('HTTP 422: tier_below_required'),
+      'HTTP 422: tier_below_required',
+      new Error('HTTP 403: Forbidden'),
+      'HTTP 403: Forbidden',
+      new Error('HTTP 404: server_not_licensed'),
+      'HTTP 404: server_not_licensed',
+    ] as const
+    expect(licenseTierUserErrorMessage(cases[0], 'x')).toContain('fewer CPU cores or less RAM')
+    expect(licenseTierUserErrorMessage(cases[1], 'x')).toContain('fewer CPU cores or less RAM')
+    expect(licenseTierUserErrorMessage(cases[2], 'x')).toContain('organization owners')
+    expect(licenseTierUserErrorMessage(cases[3], 'x')).toContain('organization owners')
+    expect(licenseTierUserErrorMessage(cases[4], 'x')).toContain('active license')
+    expect(licenseTierUserErrorMessage(cases[5], 'x')).toContain('active license')
+  })
+
+  it('falls back when the mutation error string is unknown', () => {
+    expect(licenseTierUserErrorMessage('HTTP 500: boom', 'Could not update license tier')).toBe(
+      'HTTP 500: boom'
+    )
+    expect(licenseTierUserErrorMessage('   ', 'Could not update license tier')).toBe(
+      'Could not update license tier'
+    )
   })
 })

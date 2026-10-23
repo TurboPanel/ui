@@ -28,6 +28,7 @@ import {
   resolveDisplayedInstallCommand,
 } from '@/lib/install-command'
 import { installTlsHint } from '@/lib/install-tls'
+import { WAITING_POLL_MS, waitingHostNote } from '@/lib/add-server-waiting'
 import { orEmptyArray } from '@/lib/or-empty-array'
 import { orgBillingHref } from '@/lib/org-navigation'
 import { usePublicUrlsOptional } from '@/lib/queries/admin'
@@ -36,7 +37,6 @@ import { chrome, colors, spacing } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
 
 const POLL_FAILURE_THRESHOLD = 3
-const WAITING_POLL_MS = 3000
 
 function isAuthorizationError(err: unknown): boolean {
   return (
@@ -356,6 +356,7 @@ function WaitingStep({
         <LoadingState
           label={`Waiting for this host to connect (${elapsedSeconds}s)`}
         />
+        <Text style={panelStyles.muted}>{waitingHostNote(elapsedSeconds)}</Text>
         <Text style={panelStyles.muted}>
           This key stays under Pending keys until a host enrolls. You can add
           another server now.

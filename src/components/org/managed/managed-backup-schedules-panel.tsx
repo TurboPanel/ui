@@ -20,6 +20,7 @@ import {
 } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
 import {
+  BACKUP_MAIN_DATABASE_LABEL,
   BACKUP_POLICY_MAX_KEEP,
   BACKUP_WEEKDAY_ORDER,
   EMPTY_BACKUP_POLICY_FORM,
@@ -28,6 +29,7 @@ import {
   backupReconcileNotice,
   backupRunBadge,
   backupWeekdayLabel,
+  formatBackupDatabase,
   formatBackupSchedule,
   validateBackupPolicyForm,
   type BackupPolicyError,
@@ -50,6 +52,7 @@ import {
   useDeleteBackupPolicy,
   useUpdateBackupPolicy,
 } from '@/lib/queries/backup-policies'
+import { useManagedDatabases } from '@/lib/queries/managed'
 import { useTimezones } from '@/lib/queries/servers'
 import { colors, spacing } from '@/lib/theme'
 
@@ -170,6 +173,41 @@ function TimezoneField({
   )
 }
 
+function DatabaseField({
+  value,
+  databases,
+  error,
+  disabled,
+  onChange,
+}: Readonly<{
+  value: string | null
+  databases: readonly string[]
+  error?: string
+  disabled: boolean
+  onChange: (database: string | null) => void
+}>) {
+  // A saved choice that is no longer listed stays visible so it can be changed.
+  const names = value && !databases.includes(value) ? [value, ...databases] : databases
+  return (
+    <FormField
+      label="Database to back up"
+      hint="Each run saves this one database. The main database is the one created with the server."
+      error={error}
+    >
+      <Select
+        value={value}
+        options={names.map((name) => ({ value: name, label: name }))}
+        placeholder={BACKUP_MAIN_DATABASE_LABEL}
+        noneLabel={BACKUP_MAIN_DATABASE_LABEL}
+        mono
+        disabled={disabled}
+        accessibilityLabel="Database to back up"
+        onChange={onChange}
+      />
+    </FormField>
+  )
+}
+
 function mergeFieldErrors(
   local: BackupPolicyFormErrors,
   server: BackupPolicyError | null
@@ -180,12 +218,15 @@ function mergeFieldErrors(
 
 function BackupPolicyFormView({
   initial,
+  databases,
   submitLabel,
   busy,
   onSubmit,
   onCancel,
 }: Readonly<{
   initial: BackupPolicyForm
+  /** The cluster's databases; null hides the choice (storage copies have none). */
+  databases: readonly string[] | null
   submitLabel: string
   busy: boolean
   onSubmit: SubmitPolicy
@@ -206,7 +247,9 @@ function BackupPolicyFormView({
       return
     }
     setErrors({})
-    const refusal = await onSubmit(result.body)
+    // Clearing a saved choice has to be sent as an explicit null.
+    const clearing = form.database === null && initial.database !== null
+    const refusal = await onSubmit(clearing ? { ...result.body, database: null } : result.body)
     setServerError(refusal)
   }
 
@@ -231,6 +274,15 @@ function BackupPolicyFormView({
         disabled={busy}
         onChange={(timezone) => update({ timezone })}
       />
+      {databases ? (
+        <DatabaseField
+          value={form.database}
+          databases={databases}
+          error={fieldErrors.database}
+          disabled={busy}
+          onChange={(database) => update({ database })}
+        />
+      ) : null}
       <TextField
         label="Backups to keep"
         value={form.retentionKeep}
@@ -340,6 +392,7 @@ function PolicyRow({
   onToggleHistory: () => void
   history: ReactNode
 }>) {
+  const databaseLine = formatBackupDatabase(policy)
   return (
     <View style={styles.row}>
       <View style={styles.rowHead}>
@@ -357,6 +410,7 @@ function PolicyRow({
         />
       </View>
       <Text style={styles.schedule}>{formatBackupSchedule(policy)}</Text>
+      {databaseLine ? <Text style={panelStyles.muted}>Database: {databaseLine}</Text> : null}
       <Text style={panelStyles.muted}>
         Keeps {policy.retentionKeep} · Next run: {nextRunText(policy)}
       </Text>
@@ -518,10 +572,12 @@ function modeOf(body: CreateBackupPolicyBody): BackupScheduleMode {
 
 function EditorView({
   editing,
+  databases,
   actions,
   onDone,
 }: Readonly<{
   editing: NonNullable<Editing>
+  databases: readonly string[] | null
   actions: ReturnType<typeof useScheduleActions>
   onDone: () => void
 }>) {
@@ -539,6 +595,7 @@ function EditorView({
   return (
     <BackupPolicyFormView
       initial={initial}
+      databases={databases}
       submitLabel={editing.kind === 'edit' ? 'Save schedule' : 'Add schedule'}
       busy={actions.creating || actions.updating}
       onSubmit={submit}
@@ -566,6 +623,12 @@ export function BackupSchedulesPanel({
 }>) {
   const policiesQuery = useBackupPolicies(orgId, target, { enabled })
   const actions = useScheduleActions(orgId, target)
+  // Only a managed engine's schedule dumps a chosen database.
+  const managedId = typeof target === 'string' ? target : null
+  const databasesQuery = useManagedDatabases(orgId, managedId ?? '', {
+    enabled: enabled && managedId !== null,
+  })
+  const databases = managedId === null ? null : (databasesQuery.data?.databases ?? [])
   const [editing, setEditing] = useState<Editing>(null)
 
   if (!enabled) return null
@@ -586,6 +649,7 @@ export function BackupSchedulesPanel({
         <EditorView
           key={editing.kind === 'edit' ? editing.policy.id : 'create'}
           editing={editing}
+          databases={databases}
           actions={actions}
           onDone={() => setEditing(null)}
         />

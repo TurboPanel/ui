@@ -1,21 +1,25 @@
 import { useSyncExternalStore } from 'react'
 
 /**
- * Page width, one preference for every screen. `contained` keeps content in a
- * left-aligned column capped at `layout.contentMaxWidth`; `wide` removes the
- * cap so content fills the page. Stored per browser (localStorage); where
+ * Page layout, one preference for every screen. `left` keeps content in a
+ * column capped at `layout.contentMaxWidth` and pinned left; `center` uses the
+ * same cap with the column centred in the space beside the nav; `wide` removes
+ * the cap so content fills the page. Stored per browser (localStorage); where
  * storage is missing or throws, the choice lasts for the session.
  */
-export type PageWidthMode = 'contained' | 'wide'
+export type PageWidthMode = 'left' | 'center' | 'wide'
+
+export const PAGE_WIDTH_MODES: readonly PageWidthMode[] = ['left', 'center', 'wide']
 
 const STORAGE_KEY = 'turbopanel.pageWidth'
 
 export function parsePageWidth(value: string | null | undefined): PageWidthMode {
-  return value === 'wide' ? 'wide' : 'contained'
+  // The old `contained` (and anything unknown) reads as `left`.
+  return value === 'wide' || value === 'center' ? value : 'left'
 }
 
 /**
- * Width the content column may take. `cap` is the contained-mode maximum
+ * Width the content column may take. `cap` is the capped-mode maximum
  * (`layout.contentMaxWidth`); `availableWidth` is the room beside the chrome.
  */
 export function contentMaxWidthFor(
@@ -26,12 +30,17 @@ export function contentMaxWidthFor(
   return mode === 'wide' ? availableWidth : Math.min(cap, availableWidth)
 }
 
+/** Where the content column sits in the space beside the nav. */
+export function contentAlignFor(mode: PageWidthMode): 'flex-start' | 'center' {
+  return mode === 'center' ? 'center' : 'flex-start'
+}
+
 function readStored(): PageWidthMode {
   try {
-    if (typeof localStorage === 'undefined') return 'contained'
+    if (typeof localStorage === 'undefined') return 'left'
     return parsePageWidth(localStorage.getItem(STORAGE_KEY))
   } catch {
-    return 'contained'
+    return 'left'
   }
 }
 
@@ -69,10 +78,6 @@ export function setPageWidth(mode: PageWidthMode): void {
   emit()
 }
 
-export function togglePageWidth(): void {
-  setPageWidth(current === 'wide' ? 'contained' : 'wide')
-}
-
 export function usePageWidth(): PageWidthMode {
-  return useSyncExternalStore(subscribePageWidth, getPageWidth, () => 'contained')
+  return useSyncExternalStore(subscribePageWidth, getPageWidth, () => 'left')
 }
