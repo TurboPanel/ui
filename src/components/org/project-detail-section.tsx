@@ -52,6 +52,7 @@ import { useServicesByEnvironments } from '@/lib/queries/services'
 import { useWorkspaces } from '@/lib/queries/workspaces'
 import { orEmptyArray } from '@/lib/or-empty-array'
 import { buildProjectOptionsPatch } from '@/lib/project-options'
+import { isManagedProject, isTemplateProject, projectDisplayType } from '@/lib/project-navigation'
 import { DISPLAY_NAME_MAX_LENGTH, DESCRIPTION_MAX_LENGTH } from '@/lib/display-name'
 import { useCan } from '@/lib/query-client'
 import {
@@ -448,7 +449,7 @@ function principalRowSummary(row: ProjectPrincipalRecord): string {
 }
 
 function projectTypeBadge(project: ProjectRecord) {
-  const type = project.metadata?.type
+  const type = projectDisplayType(project)
   if (type === 'managed') {
     return <Badge label="managed" tone="ok" />
   }
@@ -458,20 +459,16 @@ function projectTypeBadge(project: ProjectRecord) {
   return null
 }
 
+/** Platform type (`system`) and templates are deliberately excluded. */
+function isComposeProject(project: ProjectRecord): boolean {
+  return project.kind == null || (project.kind === 'compose' && !isTemplateProject(project))
+}
+
 function workspaceLabel(ws: WorkspaceRecord): string {
   return ws.name?.trim() || ws.id
 }
 
 /** Platform type (`system`) is deliberately excluded. */
-function isComposeProject(project: ProjectRecord): boolean {
-  const type = project.metadata?.type
-  return type === 'docker-compose' || type == null
-}
-
-function isManagedProject(project: ProjectRecord): boolean {
-  return project.metadata?.type === 'managed'
-}
-
 function projectTitleField({
   canOwn,
   project,

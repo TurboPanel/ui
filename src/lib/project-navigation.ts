@@ -1,46 +1,57 @@
 import type { ProjectRecord } from '@/lib/instance-api'
 import {
-  SYSTEM_PROJECT_METADATA_TYPE,
+  SYSTEM_PROJECT_KIND,
   TURBOPANEL_WORKSPACE_BADGE_LABEL,
 } from '@/lib/system-inventory'
 
 /** True when the project has not yet chosen compose / template / managed. */
 export function projectNeedsSetup(project: ProjectRecord): boolean {
-  const type = project.metadata?.type
-  return type == null || type === 'empty'
+  return project.kind == null
 }
 
 export function isManagedProject(project: ProjectRecord): boolean {
-  return project.metadata?.type === 'managed'
+  return project.kind === 'managed'
 }
 
 export function isComposeOrTemplateProject(project: ProjectRecord): boolean {
-  const type = project.metadata?.type
-  return type === 'docker-compose' || type === 'template' || type == null
+  return project.kind === 'compose' || project.kind == null
 }
 
 export function isComposeProject(project: ProjectRecord): boolean {
-  const type = project.metadata?.type
-  return type === 'docker-compose' || type === 'template'
+  return project.kind === 'compose'
+}
+
+/** A template is a compose project that carries a catalog code. */
+export function isTemplateProject(project: ProjectRecord): boolean {
+  return project.kind === 'compose' && !!project.metadata?.code
 }
 
 /**
- * Display classifier only — true when `metadata.type` is the platform `system`
- * stamp. `isTurbopanelProject` / `workspaceKind` remain the authoritative
- * read-only gate.
+ * Display classifier only — true when `kind` is the platform `system` value.
+ * `isTurbopanelProject` / `workspaceKind` remain the authoritative read-only
+ * gate.
  */
 export function isSystemProject(project: ProjectRecord): boolean {
-  return project.metadata?.type === SYSTEM_PROJECT_METADATA_TYPE
+  return project.kind === SYSTEM_PROJECT_KIND
+}
+
+/** What the project shows as: the stored kind with a template split out of compose. */
+export type ProjectDisplayType = 'system' | 'managed' | 'template' | 'compose' | 'setup'
+
+export function projectDisplayType(project: ProjectRecord): ProjectDisplayType {
+  if (isSystemProject(project)) return 'system'
+  if (isManagedProject(project)) return 'managed'
+  if (isTemplateProject(project)) return 'template'
+  if (isComposeProject(project)) return 'compose'
+  return 'setup'
 }
 
 export function projectTypeLabel(project: ProjectRecord): string {
-  const type = project.metadata?.type
-  if (type === SYSTEM_PROJECT_METADATA_TYPE) {
-    return TURBOPANEL_WORKSPACE_BADGE_LABEL
-  }
+  const type = projectDisplayType(project)
+  if (type === 'system') return TURBOPANEL_WORKSPACE_BADGE_LABEL
   if (type === 'managed') return 'Managed'
   if (type === 'template') return 'Template'
-  if (type === 'docker-compose') return 'Compose'
+  if (type === 'compose') return 'Compose'
   return 'Setup'
 }
 

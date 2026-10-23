@@ -39,7 +39,7 @@ export function useSearchItems(orgId: string, enabled: boolean): SearchItem[] {
         projects: (projectRows ?? []).map((project) => ({
           id: project.id,
           name: project.name,
-          type: project.metadata?.type,
+          type: project.kind,
         })),
         databases: (managedRows ?? []).map((row) => ({
           id: row.id,

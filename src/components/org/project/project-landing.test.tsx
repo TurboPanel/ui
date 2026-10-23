@@ -19,7 +19,7 @@ vi.mock('expo-router', () => ({
 vi.mock('@/components/ui/panel-styles', () => ({ panelStyles: { muted: {} } }))
 vi.mock('@/components/org/project/project-context', () => ({ useProjectContext: () => state.ctx }))
 
-const composeProject = { id: 'p', type: 'docker-compose', metadata: { type: 'docker-compose' } }
+const composeProject = { id: 'p', type: 'docker-compose', kind: 'compose' }
 
 beforeEach(() => {
   state.ctx = {
@@ -63,7 +63,7 @@ describe('project landing', () => {
   })
 
   it('keeps managed and platform projects on their own overview', () => {
-    state.ctx = { ...state.ctx, project: { id: 'p', metadata: { type: 'managed' } } }
+    state.ctx = { ...state.ctx, project: { id: 'p', kind: 'managed' } }
     render(<ProjectIndexScreen />)
     expect(target()).toBe('/o/projects/p/overview')
     cleanup()

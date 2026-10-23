@@ -17,7 +17,7 @@ function project(over: Partial<ProjectRecord> = {}): ProjectRecord {
     description: 'The shop',
     workspaceId: 'w2',
     repositoryId: null,
-    metadata: { type: 'docker-compose' },
+    kind: 'compose',
     options: null,
     createdAt: '',
     updatedAt: '',
