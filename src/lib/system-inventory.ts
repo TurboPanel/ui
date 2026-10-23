@@ -23,8 +23,8 @@ export const SYSTEM_OPERATE_COMPONENTS = [
   SYSTEM_MANAGED_INGRESS_COMPONENT,
 ] as const
 
-/** Read-side `metadata.type` stamp for platform-owned projects (presentation only). */
-export const SYSTEM_PROJECT_METADATA_TYPE = 'system'
+/** Read-side `kind` of platform-owned projects (presentation only). */
+export const SYSTEM_PROJECT_KIND = 'system'
 
 export type SystemOperateComponent = (typeof SYSTEM_OPERATE_COMPONENTS)[number]
 

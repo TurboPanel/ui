@@ -273,4 +273,45 @@ describe.each(SCENARIOS)('DeployProgressRail ($name)', (scenario) => {
     expect(styleOf(nodeOf(failed)).borderColor).toBe(token(scenario, 'bad'))
     expect(styleOf(animated(failed).fills[0]).backgroundColor).toBe(token(scenario, 'bad'))
   })
+  describe('checking with the server', () => {
+    const LOST = '2026-10-12T10:05:00.000Z'
+    const withLost = (steps: CommandProgressStep[], contactLostAt?: string | null): CommandProgress => ({
+      ...progress(steps, 'build'),
+      ...(contactLostAt === undefined ? {} : { contactLostAt }),
+    })
+    const running = [step('fetch', 'Fetch the code', 'done'), step('build', 'Build', 'running')]
+
+    it('shows the label, the plain explanation and the last known step while contact is lost', () => {
+      render(<DeployProgressRail progress={withLost(running, LOST)} />)
+      expect(screen.getByText('Checking with the server')).toBeTruthy()
+      expect(screen.getByText(/The deploy has not failed\./)).toBeTruthy()
+      expect(screen.getByText(/Lost contact with the server during the deploy\./)).toBeTruthy()
+      expect(screen.getByText('Building')).toBeTruthy()
+      expect(screen.getByLabelText('Step 2 of 2, Build, in progress')).toBeTruthy()
+    })
+
+    it('shows nothing extra when the field is absent or null', () => {
+      render(<DeployProgressRail progress={withLost(running)} />)
+      expect(screen.queryByText('Checking with the server')).toBeNull()
+      cleanup()
+      render(<DeployProgressRail progress={withLost(running, null)} />)
+      expect(screen.queryByText('Checking with the server')).toBeNull()
+    })
+
+    it('shows nothing once the deploy has ended, even if the field is left over', () => {
+      render(
+        <DeployProgressRail
+          progress={withLost([step('fetch', 'Fetch the code', 'done'), step('build', 'Build', 'done')], LOST)}
+        />,
+      )
+      expect(screen.queryByText('Checking with the server')).toBeNull()
+      cleanup()
+      render(
+        <DeployProgressRail
+          progress={withLost([step('fetch', 'Fetch the code', 'done'), step('build', 'Build', 'failed')], LOST)}
+        />,
+      )
+      expect(screen.queryByText('Checking with the server')).toBeNull()
+    })
+  })
 })

@@ -7,7 +7,7 @@ Third-party components remain under their own copyright and license terms and ar
 Third-party OS artwork under `assets/os/` is recorded separately in `assets/os/NOTICE.md` and is not licensed under this repository’s AGPL or the Apple App Store additional permission.
 
 <!-- lockfiles
-pnpm-lock.yaml sha256:7fe7fa14abddb4bac0c4341849dd886ce22772d448fe7de2a6036df2e6f79eed
+pnpm-lock.yaml sha256:e65d8cd60870e57278d3a9f90ae98c90f8e07c6ec5bfe4551821bd09bca4bf73
 -->
 
 ## Production dependencies
@@ -4434,12 +4434,12 @@ These packages are used for development, test, or build tooling and are not bund
 - Copyright: wrangler@cloudflare.com
 - Homepage: https://github.com/cloudflare/workers-sdk#readme
 
-### @cloudflare/unenv-preset@2.16.1
+### @cloudflare/unenv-preset@2.16.2
 
 - License: MIT OR Apache-2.0
 - Homepage: https://github.com/cloudflare/workers-sdk#readme
 
-### @cloudflare/workerd-linux-64@1.20260815.1
+### @cloudflare/workerd-linux-64@1.20261019.1
 
 - License: Apache-2.0
 - Homepage: https://github.com/cloudflare/workerd#readme
@@ -5252,7 +5252,7 @@ These packages are used for development, test, or build tooling and are not bund
 - Copyright: Jordan Harband
 - Homepage: https://github.com/ljharb/gopd#readme
 
-### happy-dom@20.11.2
+### happy-dom@21.0.4
 
 - License: MIT
 - Copyright: David Ortner
@@ -5584,7 +5584,7 @@ These packages are used for development, test, or build tooling and are not bund
 - Copyright: Jordan Harband
 - Homepage: https://github.com/es-shims/math-intrinsics#readme
 
-### miniflare@5.20260815.0-alpha
+### miniflare@5.20261019.1-beta
 
 - License: MIT
 - Copyright: MrBBot
@@ -5980,7 +5980,7 @@ These packages are used for development, test, or build tooling and are not bund
 - Copyright: Jordan Harband
 - Homepage: https://github.com/ljharb/unbox-primitive#readme
 
-### undici@7.29.1
+### undici@7.30.1
 
 - License: MIT
 - Homepage: https://undici.nodejs.org
@@ -6055,12 +6055,12 @@ These packages are used for development, test, or build tooling and are not bund
 - Copyright: Jon Schlinkert
 - Homepage: https://github.com/jonschlinkert/word-wrap
 
-### workerd@1.20260815.1
+### workerd@1.20261019.1
 
 - License: Apache-2.0
 - Homepage: https://github.com/cloudflare/workerd#readme
 
-### wrangler@4.124.0
+### wrangler@4.151.3
 
 - License: MIT OR Apache-2.0
 - Copyright: wrangler@cloudflare.com

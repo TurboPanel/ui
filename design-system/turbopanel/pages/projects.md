@@ -36,7 +36,7 @@
 ## Creation / setup
 
 1. **Create** (`/projects/new`) — name + workspace → `POST type=empty` (Production once) → `/setup`
-2. **Setup** — choose Compose / template / managed (+ catalog); resumable when `metadata.type` is unset
+2. **Setup** — choose Compose / template / managed (+ catalog); resumable when `project.kind` is null
 3. Configured stopped projects are complete — do not show as incomplete
 
 ## Density
@@ -46,7 +46,7 @@
 
 ## System / platform projects
 
-- Detection is by `workspace.kind === 'turbopanel'` (and optional `project.metadata.component`) — **never** by display name. `project.metadata.type === 'system'` is a **display classifier only** — glyph/badge/label selection — and must never be used as the read-only or authorization gate.
+- Detection is by `workspace.kind === 'turbopanel'` (and optional `project.metadata.component`) — **never** by display name. `project.kind === 'system'` is a **display classifier only** — glyph/badge/label selection — and must never be used as the read-only or authorization gate.
 - Platform workspace display name is **TurboPanel**; badge label is **Platform**. Type badge text comes from `projectTypeLabel` → `TURBOPANEL_WORKSPACE_BADGE_LABEL`, not a new literal.
 - `ProjectTitleIcon` (`src/components/org/project/project-title-icon.tsx`) renders `PlatformShieldIcon` from `src/components/org/platform-badge.tsx` for `system`-typed projects instead of the compose cube, with accessible label **Platform project**; colors from `chrome.*` in `src/lib/theme.ts` — no one-off hex, no emoji.
 - System projects are **compose-shaped but read-only**: no compose editor, no lifecycle Start/Stop/Destroy, no delete, no workspace move, no Hosting/Servers tabs or Storage chips.
@@ -85,7 +85,7 @@
 - ❌ Showing an environment editor with no inheritance / scope statement above it (banner-less editing)  
 - ❌ Stack of empty Settings sections for every resource type (use Add chips inside the gear panel; reveal sections when opened or when data exists)  
 - ❌ Treating a user workspace named “System” as platform-managed  
-- ❌ Gating read-only chrome on `metadata.type` instead of `workspace.kind`
+- ❌ Gating read-only chrome on `project.kind` instead of `workspace.kind`
 - ❌ Inventing a parallel platform badge/glyph or label literal instead of reusing `PlatformShieldIcon` / `TURBOPANEL_WORKSPACE_BADGE_LABEL` / `systemComponentLabel()`
 - ❌ Compose editor / lifecycle / delete chrome on system projects  
 - ❌ Reintroducing the under-compose settings strip (settings belong on the Settings surface tab)  

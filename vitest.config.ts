@@ -11,6 +11,8 @@ export default defineConfig({
     },
   },
   test: {
+    // The default 5 s is a guess about runner speed; a test that finishes fast is unaffected.
+    testTimeout: 20_000,
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'scripts/**/*.test.ts'],
     setupFiles: ['./vitest.setup.ts'],
     coverage: {

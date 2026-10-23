@@ -95,15 +95,18 @@ vi.mock('@/components/org/project/environment-deployment-history-panel', () => (
   ),
 }))
 
-function project(metadata: ProjectRecord['metadata']): Partial<ProjectRecord> {
-  return { id: 'p', metadata }
+function project(
+  kind: ProjectRecord['kind'],
+  metadata: ProjectRecord['metadata'] = null,
+): Partial<ProjectRecord> {
+  return { id: 'p', kind, metadata }
 }
 
 function setContext(overrides: Record<string, unknown> = {}) {
   state.ctx = {
     orgId: 'o',
     projectId: 'p',
-    project: project({ type: 'docker-compose' }),
+    project: project('compose'),
     isSystemProject: false,
     pathEnvironmentId: 'e',
     ...overrides,
@@ -159,7 +162,7 @@ describe('LegacyProjectRedirect', () => {
   })
 
   it('opens a managed project at its overview, and keeps its environment page', () => {
-    setContext({ project: project({ type: 'managed', code: 'postgres' }) })
+    setContext({ project: project('managed', { code: 'postgres' }) })
     render(<LegacyProjectRedirect segment="storage" />)
     expect(redirectHref()).toBe('/o/projects/p/overview')
     cleanup()
@@ -185,7 +188,7 @@ describe('project tabs', () => {
     render(<ProjectEnvironmentsScreen />)
     expect(screen.getByTestId('compose-surface')).toBeTruthy()
     cleanup()
-    setContext({ project: project({ type: 'managed', code: 'postgres' }) })
+    setContext({ project: project('managed', { code: 'postgres' }) })
     render(<ProjectEnvironmentsScreen />)
     expect(screen.getByTestId('managed')).toBeTruthy()
   })
@@ -203,7 +206,7 @@ describe('project tabs', () => {
     expect(redirectHref()).toBe('/o/projects/p/overview')
     expect(screen.queryByTestId('base-notice')).toBeNull()
     cleanup()
-    setContext({ project: project({ type: 'managed', code: 'postgres' }) })
+    setContext({ project: project('managed', { code: 'postgres' }) })
     render(<ProjectBaseScreen />)
     expect(redirectHref()).toBe('/o/projects/p/overview')
   })
@@ -225,7 +228,7 @@ describe('project tabs', () => {
     render(<ProjectBaseLensScreen />)
     expect(redirectHref()).toBe('/o/projects/p/overview')
     cleanup()
-    setContext({ project: project({ type: 'managed', code: 'postgres' }) })
+    setContext({ project: project('managed', { code: 'postgres' }) })
     render(<ProjectBaseLensScreen />)
     expect(redirectHref()).toBe('/o/projects/p/overview')
   })
@@ -240,7 +243,7 @@ describe('project settings tab', () => {
     render(<ProjectSettingsRouteScreen />)
     expect(redirectHref()).toBe('/o/projects/p/overview')
     cleanup()
-    setContext({ project: project({ type: 'managed', code: 'postgres' }) })
+    setContext({ project: project('managed', { code: 'postgres' }) })
     render(<ProjectSettingsRouteScreen />)
     expect(screen.getByTestId('managed').getAttribute('data-focus')).toBe('settings')
   })
@@ -266,7 +269,7 @@ describe('environment tabs', () => {
   })
 
   it('renders managed focus for a managed project', () => {
-    setContext({ project: project({ type: 'managed', code: 'postgres' }) })
+    setContext({ project: project('managed', { code: 'postgres' }) })
     render(<EnvironmentOverviewScreen />)
     expect(screen.getByTestId('managed')).toBeTruthy()
   })
@@ -279,7 +282,7 @@ describe('environment tabs', () => {
     render(<EnvironmentComposeScreen />)
     expect(redirectHref()).toBe('/o/projects/p/overview')
     cleanup()
-    setContext({ project: project({ type: 'managed', code: 'postgres' }) })
+    setContext({ project: project('managed', { code: 'postgres' }) })
     render(<EnvironmentComposeScreen />)
     expect(screen.getByTestId('managed')).toBeTruthy()
   })
@@ -292,7 +295,7 @@ describe('environment tabs', () => {
     render(<EnvironmentConfigurationTabScreen />)
     expect(redirectHref()).toBe('/o/projects/p/overview')
     cleanup()
-    setContext({ project: project({ type: 'managed', code: 'postgres' }) })
+    setContext({ project: project('managed', { code: 'postgres' }) })
     render(<EnvironmentConfigurationTabScreen />)
     expect(screen.getByTestId('managed')).toBeTruthy()
   })
@@ -311,7 +314,7 @@ describe('environment tabs', () => {
     render(<EnvironmentSettingsScreen />)
     expect(redirectHref()).toBe('/o/projects/p/overview')
     cleanup()
-    setContext({ project: project({ type: 'managed', code: 'postgres' }) })
+    setContext({ project: project('managed', { code: 'postgres' }) })
     render(<EnvironmentSettingsScreen />)
     expect(screen.getByTestId('managed').getAttribute('data-focus')).toBe('settings')
     expect(screen.queryByTestId('env-settings')).toBeNull()
@@ -333,7 +336,7 @@ describe('environment tabs', () => {
     render(<EnvironmentDeploymentsScreen />)
     expect(redirectHref()).toBe('/o/projects/p/overview')
     cleanup()
-    setContext({ project: project({ type: 'managed', code: 'postgres' }) })
+    setContext({ project: project('managed', { code: 'postgres' }) })
     render(<EnvironmentDeploymentsScreen />)
     expect(screen.getByTestId('managed')).toBeTruthy()
   })

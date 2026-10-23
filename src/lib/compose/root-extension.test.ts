@@ -94,7 +94,7 @@ describe('collectRootExtensionValidationIssues', () => {
       'x-turbopanel.uid: uid is not authored in compose; operator id overrides live on principal.options',
       'x-turbopanel.gid: gid is not authored in compose; operator id overrides live on principal.options',
       "x-turbopanel.home: home is not authored in compose; the daemon derives a principal's home directory (turbopaneld ensure-principal.ts)",
-      'x-turbopanel.shell: shell is not authored in compose; the access level is encoded by principal.options.shell',
+      'x-turbopanel.shell: shell is not authored in compose; the access level lives in principal.access',
       'x-turbopanel.password: password is not authored in compose; principal credentials live on the ssh table',
       'x-turbopanel.authorized_keys: authorized_keys is not authored in compose; principal keys live on the ssh table',
       `x-turbopanel.server_id: ${PLACEMENT_NOT_STORED_MESSAGE}`,

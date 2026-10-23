@@ -33,6 +33,7 @@ import { ServerMachineClassPanel } from '@/components/org/server-machine-class-p
 import { ServerTierPlacementPanel } from '@/components/org/server-tier-placement-panel'
 import { ServerMetricsSensorsPanel } from '@/components/org/server-metrics-sensors-panel'
 import { ServerSshPortPanel } from '@/components/org/server-ssh-port-panel'
+import { ServerWebServerPanel } from '@/components/org/server-web-server-panel'
 import { LocationEditorPanel } from '@/components/org/location-editor-panel'
 import { ServerSystemComponentPanel } from '@/components/org/server-system-component-panel'
 import { ServerTimeSection } from '@/components/org/server-time-section'
@@ -60,10 +61,12 @@ import { configuredSourceLabel } from '@/lib/host-defaults'
 import { formatMemoryPageSize, memoryPageSizeHint } from '@/lib/memory-page-size'
 import {
   defaultOrgDashboardHref,
+  serversRemovedHref,
   SERVER_DETAIL_TAB_IDS,
   SERVER_DETAIL_TAB_LABELS,
   type ServerDetailTabId,
 } from '@/lib/org-navigation'
+import { ServerDangerZone } from '@/components/org/server-danger-zone'
 import { ServerDeletePanel } from '@/components/org/server-delete-panel'
 import {
   formatServerDeleteBlockedError,
@@ -250,8 +253,6 @@ function DetailTabBody({
   onEnqueueCommand,
   systemRestartInFlight,
   systemRestartPollError,
-  revokeKeyPanel,
-  deletePanel,
 }: Readonly<{
   tab: ServerDetailTabId
   orgId: string
@@ -277,8 +278,6 @@ function DetailTabBody({
   ) => void
   systemRestartInFlight: boolean
   systemRestartPollError: string | null
-  revokeKeyPanel: ReactNode
-  deletePanel: ReactNode
 }>): ReactNode {
   switch (tab) {
     case 'overview':
@@ -302,8 +301,6 @@ function DetailTabBody({
           onEnqueueRestart={(response, environmentId) => {
             onEnqueueCommand(response, 'systemRestart', { environmentId })
           }}
-          revokeKeyPanel={revokeKeyPanel}
-          deletePanel={deletePanel}
         />
       )
     case 'time':
@@ -817,7 +814,7 @@ export function ServerDetailSection({
         { serverId, forgetResources, principals },
         {
           onSuccess: () => {
-            router.replace(defaultOrgDashboardHref(orgId))
+            router.replace(serversRemovedHref(orgId, title))
           },
           onError: (err) => {
             if (isForbiddenError(err)) return
@@ -923,6 +920,10 @@ export function ServerDetailSection({
         }}
         systemRestartInFlight={systemRestartInFlight}
         systemRestartPollError={systemRestartPollError}
+      />
+
+      <ServerDangerZone
+        offline={!server.connected}
         revokeKeyPanel={revokeKeyPanel}
         deletePanel={deletePanel}
       />
@@ -1070,6 +1071,8 @@ function ServerOverviewTab({
 
       <ServerSshPortPanel orgId={orgId} server={server} canManage={canManage} />
 
+      <ServerWebServerPanel orgId={orgId} server={server} canManage={canManage} />
+
       <ServerMachineClassPanel orgId={orgId} server={server} canManage={canManage} />
 
       <ServerMetricsSensorsPanel orgId={orgId} server={server} />
@@ -1101,8 +1104,6 @@ function ServerControlTab({
   systemRestartInFlight,
   systemRestartPollError,
   onEnqueueRestart,
-  revokeKeyPanel,
-  deletePanel,
 }: Readonly<{
   orgId: string
   server: ServerDetailRecord
@@ -1118,8 +1119,6 @@ function ServerControlTab({
   systemRestartInFlight: boolean
   systemRestartPollError: string | null
   onEnqueueRestart: (response: CommandEnqueueResponse, environmentId: string | undefined) => void
-  revokeKeyPanel: ReactNode
-  deletePanel: ReactNode
 }>) {
   return (
     <View style={styles.tabBody}>
@@ -1208,14 +1207,6 @@ function ServerControlTab({
           </ButtonRow>
         ) : null}
         {updateState.error ? <Text style={panelStyles.error}>{updateState.error}</Text> : null}
-      </SectionPanel>
-
-      <SectionPanel title="Revoke daemon key" hint="Compromised-host cutoff">
-        {revokeKeyPanel}
-      </SectionPanel>
-
-      <SectionPanel title="Delete server" hint="Two-step confirm">
-        {deletePanel}
       </SectionPanel>
     </View>
   )

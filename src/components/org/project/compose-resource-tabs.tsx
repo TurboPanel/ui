@@ -21,6 +21,7 @@ import type { EnvironmentRecord, OrgServerRecord } from '@/lib/instance-api'
 import { projectComposeSectionHref } from '@/lib/project-navigation'
 import { serverDisplayName } from '@/lib/resource-labels'
 import { useOrgServers, useUpdateEnvironment } from '@/lib/queries'
+import { useCan } from '@/lib/query-client'
 import { spacing } from '@/lib/theme'
 
 function resolveInheritServerLabel(
@@ -182,6 +183,8 @@ function SystemUsersPanel() {
   const { orgId, projectId, canManage, projectAllowsMutations } =
     useProjectContext()
   const router = useRouter()
+  // The organization list is owner/manager only, so others get no link to it.
+  const orgManager = useCan('organization', orgId, 'organization:manage')
   return (
     <SectionPanel
       title="System users"
@@ -193,13 +196,15 @@ function SystemUsersPanel() {
         canManage={canManage && projectAllowsMutations}
         embedded
       />
-      <ButtonRow>
-        <Button
-          label="All principals in the organization"
-          size="sm"
-          onPress={() => router.push(orgSettingsTabHref(orgId, 'principals') as Href)}
-        />
-      </ButtonRow>
+      {orgManager ? (
+        <ButtonRow>
+          <Button
+            label="All principals in the organization"
+            size="sm"
+            onPress={() => router.push(orgSettingsTabHref(orgId, 'principals') as Href)}
+          />
+        </ButtonRow>
+      ) : null}
     </SectionPanel>
   )
 }

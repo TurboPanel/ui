@@ -18,6 +18,8 @@ import {
   isComposeProjectLens,
   isProjectOverviewBasePath,
   isSystemProject,
+  isTemplateProject,
+  projectDisplayType,
   environmentPageTabHref,
   legacyProjectRedirectHref,
   parseComposeEditView,
@@ -61,14 +63,19 @@ import {
 import type { ProjectRecord } from './instance-api'
 import { TURBOPANEL_WORKSPACE_BADGE_LABEL } from './system-inventory'
 
-function project(type?: ProjectRecord['metadata']): ProjectRecord {
+function project(
+  kind: ProjectRecord['kind'] = null,
+  metadata: ProjectRecord['metadata'] = null,
+): ProjectRecord {
   return {
     id: 'p1',
     name: 'Demo',
     description: null,
     workspaceId: 'w1',
     repositoryId: null,
-    metadata: type ?? null,
+    kind,
+    icon: null,
+    metadata,
     options: null,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
@@ -76,15 +83,14 @@ function project(type?: ProjectRecord['metadata']): ProjectRecord {
 }
 
 describe('projectNeedsSetup', () => {
-  it('is true when type is unset or empty', () => {
+  it('is true while the kind is not chosen', () => {
     expect(projectNeedsSetup(project(null))).toBe(true)
-    expect(projectNeedsSetup(project({ type: 'empty' }))).toBe(true)
   })
 
   it('is false once configured', () => {
-    expect(projectNeedsSetup(project({ type: 'docker-compose' }))).toBe(false)
+    expect(projectNeedsSetup(project('compose'))).toBe(false)
     expect(
-      projectNeedsSetup(project({ type: 'managed', code: 'postgres' })),
+      projectNeedsSetup(project('managed', { code: 'postgres' })),
     ).toBe(false)
   })
 })
@@ -95,12 +101,9 @@ describe('system project predicates', () => {
   })
 
   it('classifies type system as a platform project, not compose or setup', () => {
-    const system = project({
-      type: 'system',
-      component: 'hosting-ingress',
-    })
+    const system = project('system', { component: 'hosting-ingress' })
     expect(isSystemProject(system)).toBe(true)
-    expect(isSystemProject(project({ type: 'docker-compose' }))).toBe(false)
+    expect(isSystemProject(project('compose'))).toBe(false)
     expect(isComposeProject(system)).toBe(false)
     expect(isComposeOrTemplateProject(system)).toBe(false)
     expect(isManagedProject(system)).toBe(false)
@@ -110,13 +113,12 @@ describe('system project predicates', () => {
   })
 
   it('labels managed, template, compose, and setup types', () => {
-    expect(projectTypeLabel(project({ type: 'managed', code: 'postgres' }))).toBe(
+    expect(projectTypeLabel(project('managed', { code: 'postgres' }))).toBe(
       'Managed',
     )
-    expect(projectTypeLabel(project({ type: 'template' }))).toBe('Template')
-    expect(projectTypeLabel(project({ type: 'docker-compose' }))).toBe('Compose')
+    expect(projectTypeLabel(project('compose', { code: 'wordpress' }))).toBe('Template')
+    expect(projectTypeLabel(project('compose'))).toBe('Compose')
     expect(projectTypeLabel(project(null))).toBe('Setup')
-    expect(projectTypeLabel(project({ type: 'empty' }))).toBe('Setup')
   })
 })
 
@@ -698,7 +700,7 @@ describe('retired route redirects', () => {
 })
 
 describe('recentProjectHref', () => {
-  const compose = project({ type: 'docker-compose' })
+  const compose = project('compose')
   it('opens the only environment of a Compose project', () => {
     expect(recentProjectHref('o', compose, [{ id: 'e1' }])).toBe(
       '/o/projects/p1/environments/e1',
@@ -715,9 +717,20 @@ describe('recentProjectHref', () => {
 
   it('opens a managed project, whatever its environments', () => {
     expect(
-      recentProjectHref('o', project({ type: 'managed', code: 'postgres' }), [
+      recentProjectHref('o', project('managed', { code: 'postgres' }), [
         { id: 'e1' },
       ]),
     ).toBe('/o/projects/p1')
+  })
+})
+
+describe('projectDisplayType', () => {
+  it('splits a template out of compose by its catalog code and names the rest', () => {
+    expect(projectDisplayType(project('compose'))).toBe('compose')
+    expect(projectDisplayType(project('compose', { code: 'wordpress' }))).toBe('template')
+    expect(isTemplateProject(project('managed', { code: 'postgres' }))).toBe(false)
+    expect(projectDisplayType(project('managed', { code: 'postgres' }))).toBe('managed')
+    expect(projectDisplayType(project('system'))).toBe('system')
+    expect(projectDisplayType(project(null))).toBe('setup')
   })
 })

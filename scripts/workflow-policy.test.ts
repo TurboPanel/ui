@@ -263,7 +263,7 @@ describe('versions from tags', () => {
     const job = release.split(START_JOB)[1] ?? ''
     expect(job).toMatch(/^ {4}needs: \[prepare, finalize\]$/m)
     expect(job).toMatch(/^ {6}contents: read/m)
-    expect(job).toContain('uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0')
+    expect(job).toContain('uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0')
     expect(job).toContain('repositories: ${{ github.event.repository.name }}')
     expect(job).toMatch(
       /uses: TurboPanel\/dev\/\.github\/actions\/version@[0-9a-f]{40} # dev#\d+\n {8}with:\n {10}mode: base\n/

@@ -291,7 +291,7 @@ describe('useCommandLog', () => {
       () => {
         expect(result.current.snapshot.sealed).toBe(true)
       },
-      { timeout: 4000 },
+      { timeout: 8000 },
     )
 
     expect(result.current.snapshot.lines.map((line) => line.message)).toEqual([

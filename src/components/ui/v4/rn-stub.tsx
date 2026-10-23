@@ -119,6 +119,19 @@ export const reactNativeStub = {
           children,
         )
       : null,
+  Animated: {
+    Value: class {
+      constructor(public value: number) {}
+    },
+    View: dom('div'),
+    timing: () => ({ start() {}, stop() {} }),
+    sequence: () => ({ start() {}, stop() {} }),
+    loop: () => ({ start() {}, stop() {} }),
+  },
+  AccessibilityInfo: {
+    isReduceMotionEnabled: () => Promise.resolve(false),
+    addEventListener: () => ({ remove() {} }),
+  },
   useWindowDimensions: () => ({ width: env.width, height: 800 }),
 }
 

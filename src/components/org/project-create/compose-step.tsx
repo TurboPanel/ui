@@ -84,7 +84,9 @@ export function ComposeStep({
       description: description.trim() || null,
       workspaceId,
       repositoryId,
-      metadata: { type: 'docker-compose' },
+      kind: 'compose',
+      icon: null,
+      metadata: null,
       options: { compose },
       // Timestamps are display-only here and nothing in the surface reads them
       // for a draft; the real values are assigned when the row is inserted.

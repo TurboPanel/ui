@@ -550,6 +550,10 @@ const MANAGED_ERROR_COPY: Record<string, string> = {
   server_placement_required: 'Select a server before creating this managed service.',
   server_offline: 'The selected server is offline. Choose a connected server.',
   managed_busy: 'Another managed operation is still in progress. Wait and try again.',
+  reserved_username: 'That login name is kept for the database engine or TurboPanel. Pick a different name.',
+  reserved_database_name: 'That database name is kept for the database engine. Pick a different name.',
+  managed_login_defines_objects:
+    'This login still defines views, triggers, routines or events. Drop them or recreate them under another login, then delete the login again.',
   managed_settings_invalid: 'Managed settings are invalid. Check the form and try again.',
   managed_user_exists: 'A user with that name already exists.',
   database_exists: 'A database with that name already exists.',
@@ -674,6 +678,10 @@ const SERVER_NAMED_ERROR_CODES = new Set([
   'managed_login_source_server_unknown',
   // The server's sentence lists the databases that stop it.
   'managed_admin_needs_owner_role',
+  // The server's sentence names the reserved name, or the views and routines in the way.
+  'reserved_username',
+  'reserved_database_name',
+  'managed_login_defines_objects',
 ])
 
 function managedErrorCode(raw: string): string | undefined {
@@ -737,9 +745,28 @@ export function memberReplicaClassPickerLabel(replicaClass: ManagedReplicaClass)
   return replicaClass === 'failover' ? 'Failover replica' : 'Remote/read replica'
 }
 
-export function memberReadTrafficLabel(role: ManagedMemberRole, readEligible: boolean): string {
+export function memberReadTrafficLabel(
+  role: ManagedMemberRole,
+  readEligible: boolean,
+  status?: string | null
+): string {
   if (role === 'primary') return 'Read/write'
+  if (memberIsDown(status)) return 'Not serving reads'
   return readEligible ? 'Serves reads' : 'Standby only'
+}
+
+/** True when reads can reach this member right now. */
+export function memberServesReads(
+  role: ManagedMemberRole,
+  readEligible: boolean,
+  status: string | null | undefined
+): boolean {
+  return role === 'primary' || (readEligible && !memberIsDown(status))
+}
+
+/** A member whose engine is stopped (for example a demoted primary waiting for a Resync). */
+export function memberIsDown(status: string | null | undefined): boolean {
+  return status === 'needs_resync' || status === 'stopped'
 }
 
 export const MEMBER_MANUAL_DR_CANDIDATE_LABEL = 'Manual DR candidate'
@@ -786,10 +813,46 @@ export function managedRecoveryStateLabel(state: ManagedRecoveryState): string {
   }
 }
 
+/** How long a finished failover stays on the cluster page. */
+export const COMPLETED_FAILOVER_BANNER_MS = 24 * 60 * 60 * 1000
+
+function agoText(thenMs: number, nowMs: number): string {
+  const minutes = Math.max(0, Math.round((nowMs - thenMs) / 60_000))
+  if (minutes < 2) return 'just now'
+  if (minutes < 90) return `${minutes} minutes ago`
+  return `${Math.round(minutes / 60)} hours ago`
+}
+
+function completedFailoverText(
+  recovery: ManagedRecoveryRecord,
+  nowMs: number,
+  serverName: ((serverId: string) => string | null) | undefined
+): string | null {
+  if (recovery.kind === 'switchover' || !recovery.completedAt) return null
+  const doneMs = Date.parse(recovery.completedAt)
+  if (!Number.isFinite(doneMs) || nowMs - doneMs > COMPLETED_FAILOVER_BANNER_MS) return null
+  const from = recovery.sourceServerId ? serverName?.(recovery.sourceServerId) : null
+  const to = recovery.targetServerId ? serverName?.(recovery.targetServerId) : null
+  const when = agoText(doneMs, nowMs)
+  let lead = 'The database was promoted for disaster recovery'
+  if (recovery.kind === 'automatic-failover') {
+    const where = from ? `on ${from} ` : ''
+    lead = `The primary ${where}stopped answering, so the database failed over automatically`
+  }
+  const newPrimary = to ? `${to} is now the primary.` : 'A replica is now the primary.'
+  const resync = from ? ` ${from} is stopped; use Resync to bring it back as a replica.` : ''
+  return `${lead} (${when}). ${newPrimary}${resync}`
+}
+
 export function managedRecoveryBanner(
-  recovery: ManagedRecoveryRecord | null | undefined
-): { kind: 'blocked' | 'failed' | 'in-flight'; text: string } | null {
-  if (!recovery || recovery.state === 'completed') return null
+  recovery: ManagedRecoveryRecord | null | undefined,
+  options: { nowMs?: number; serverName?: (serverId: string) => string | null } = {}
+): { kind: 'blocked' | 'failed' | 'in-flight' | 'completed'; text: string } | null {
+  if (!recovery) return null
+  if (recovery.state === 'completed') {
+    const text = completedFailoverText(recovery, options.nowMs ?? Date.now(), options.serverName)
+    return text ? { kind: 'completed', text } : null
+  }
   if (recovery.state === 'blocked') {
     return {
       kind: 'blocked',
