@@ -1,0 +1,187 @@
+// @vitest-environment happy-dom
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { applyScenario, SCENARIOS, styleOf } from '@/components/ui/v4/rn-stub'
+import type { HomeEnvironment, HomeProject } from '@/lib/v4/projects-home'
+import { pillLabel, ProjectTile, tileSub } from './project-tile'
+
+vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
+vi.mock('react-native-svg', async () => (await import('@/components/ui/v4/rn-stub')).svgStub)
+vi.mock(
+  '@/lib/theme-preference',
+  async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub
+)
+vi.mock('@/components/org/platform-badge', () => ({
+  PlatformBadge: () => <span>Platform</span>,
+}))
+
+const MOOD = /All good|Deploying|is paused|Ready for a first deploy|Not set up yet\./
+
+function env(id: string, name: string, status: string, flags: Partial<HomeEnvironment> = {}) {
+  return { id, name, status, isPrimary: false, pinned: false, ...flags }
+}
+
+function project(partial: Partial<HomeProject>): HomeProject {
+  return {
+    id: 'p1',
+    name: 'Shop',
+    kind: 'compose',
+    workspaceId: 'w1',
+    environments: [],
+    status: 'running',
+    ...partial,
+  }
+}
+
+afterEach(cleanup)
+
+describe.each(SCENARIOS)('Project tile ($name)', (scenario) => {
+  beforeEach(() => {
+    applyScenario(scenario)
+  })
+
+  it('shows the name, the workspace and the primary and pinned environments only', () => {
+    const onOpen = vi.fn()
+    render(
+      <ProjectTile
+        project={project({
+          environments: [
+            env('e1', 'Production', 'running', { isPrimary: true }),
+            env('e2', 'Staging', 'failed', { pinned: true }),
+            env('e3', 'Preview', 'stopped'),
+            env('e4', 'Review', 'stopped'),
+          ],
+        })}
+        workspace="Acme"
+        layout="grid"
+        onOpen={onOpen}
+      />
+    )
+    const tile = screen.getByRole('button', { name: 'Open Shop' })
+    expect(tile.textContent).toContain('Shop')
+    expect(tile.textContent).toContain('Acme')
+    expect(tile.textContent).toContain('Production')
+    expect(tile.textContent).toContain('Staging')
+    expect(tile.textContent).not.toContain('Preview')
+    expect(tile.textContent).toContain('+2')
+    expect(tile.textContent).not.toMatch(MOOD)
+    fireEvent.click(tile)
+    expect(onOpen).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the status word in each pill name, never colour alone', () => {
+    render(
+      <ProjectTile
+        project={project({
+          environments: [
+            env('e1', 'Production', 'running', { isPrimary: true }),
+            env('e2', 'Staging', 'failed', { pinned: true }),
+          ],
+        })}
+        layout="grid"
+        onOpen={vi.fn()}
+      />
+    )
+    expect(screen.getByLabelText('Production (primary): Running')).toBeTruthy()
+    expect(screen.getByLabelText('Staging (pinned): Deploy failed')).toBeTruthy()
+  })
+
+  it('makes the primary pill bolder and marks pinned ones with a pin', () => {
+    render(
+      <ProjectTile
+        project={project({
+          environments: [
+            env('e1', 'Production', 'running', { isPrimary: true }),
+            env('e2', 'Staging', 'running', { pinned: true }),
+          ],
+        })}
+        layout="grid"
+        onOpen={vi.fn()}
+      />
+    )
+    const primary = screen.getByLabelText('Production (primary): Running')
+    const pinned = screen.getByLabelText('Staging (pinned): Running')
+    expect(primary.querySelector('svg')).toBeNull()
+    expect(pinned.querySelector('svg')).not.toBeNull()
+    const weight = (el: Element) => styleOf(el.querySelector('span'))
+    expect(weight(primary)).not.toEqual(weight(pinned))
+  })
+
+  it('folds the rest into a dashed plus-N pill named for screen readers', () => {
+    render(
+      <ProjectTile
+        project={project({
+          environments: [
+            env('e1', 'Production', 'running', { isPrimary: true }),
+            env('e2', 'A', 'x'),
+          ],
+        })}
+        layout="grid"
+        onOpen={vi.fn()}
+      />
+    )
+    const more = screen.getByLabelText('1 more environment')
+    expect(more.textContent).toBe('+1')
+    expect(styleOf(more).borderStyle).toBe('dashed')
+  })
+
+  it('shows one quiet pill for a project that is not set up yet', () => {
+    render(
+      <ProjectTile
+        project={project({ kind: 'setup', name: 'Blog', environments: [] })}
+        layout="grid"
+        onOpen={vi.fn()}
+      />
+    )
+    const pill = screen.getByLabelText('Not set up yet')
+    expect(pill.textContent).toBe('Not set up yet')
+    expect(styleOf(pill).borderStyle).toBe('dashed')
+  })
+
+  it('names a managed database in the sub line and a platform project by its badge', () => {
+    const { unmount } = render(
+      <ProjectTile
+        project={project({
+          kind: 'managed',
+          name: 'Orders DB',
+          environments: [env('e1', 'Production', 'running', { isPrimary: true })],
+        })}
+        workspace="Acme"
+        layout="grid"
+        onOpen={vi.fn()}
+      />
+    )
+    expect(screen.getByText('Managed database · Acme')).toBeTruthy()
+    unmount()
+    render(
+      <ProjectTile
+        project={project({ kind: 'platform', name: 'Infra' })}
+        layout="grid"
+        onOpen={vi.fn()}
+      />
+    )
+    expect(screen.getByText('Platform')).toBeTruthy()
+  })
+
+  it('shows a chevron only on a wide list row', () => {
+    const view = (layout: 'list' | 'listStacked') => (
+      <ProjectTile project={project({})} layout={layout} onOpen={vi.fn()} />
+    )
+    const { unmount } = render(view('list'))
+    expect(screen.queryByText('›')).not.toBeNull()
+    unmount()
+    render(view('listStacked'))
+    expect(screen.queryByText('›')).toBeNull()
+  })
+})
+
+describe('tile words', () => {
+  it('builds the sub line and the pill name', () => {
+    expect(tileSub('compose', 'Acme')).toBe('Acme')
+    expect(tileSub('compose', undefined)).toBe('')
+    expect(tileSub('managed', undefined)).toBe('Managed database')
+    expect(pillLabel(env('e', 'Prod', 'busy', { isPrimary: true }))).toBe(
+      'Prod (primary): Starting'
+    )
+  })
+})

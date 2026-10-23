@@ -1,40 +1,24 @@
 /**
- * The Projects home: one card per project with its Base line, who runs it,
- * and each environment's status and relation to the Base; plus the deploys
- * that are running now.
+ * The Projects home: one tile per project with the status of its primary and
+ * pinned environments; plus the deploys that are running now.
  *
- * Built from data the app has read. A project that is not a Compose project
- * (a managed database, a platform project, one not set up yet) gets a plain
- * card: no Base line and no environment details, because none apply.
+ * Built from data the app has read. A platform project shows no environments
+ * (it has one per server, all named alike) and a project not set up yet has
+ * none to show.
  */
 
 import type { DeploymentGroup } from '@/lib/deployment-history'
 import type {
-  ConfigViewSide,
   ContainerRecord,
   EnvironmentConfigViewResponse,
   EnvironmentRecord,
   ProjectRecord,
 } from '@/lib/instance-api'
-import {
-  isManagedProject,
-  isSystemProject,
-  projectNeedsSetup,
-} from '@/lib/project-navigation'
+import { isManagedProject, isSystemProject, projectNeedsSetup } from '@/lib/project-navigation'
 import { environmentDisplayName } from '@/lib/resource-labels'
-import {
-  baseLine,
-  baseRunsAs,
-  environmentRelation,
-  inProgressSub,
-  hasNativeApp,
-  isDeployInProgress,
-  runningStatusKey,
-  visitHost,
-  type Relation,
-} from './project-home'
-import type { RunsAs } from './linux-users'
-import { worstStatus } from './status-vocab'
+import { hasNativeApp, inProgressSub, isDeployInProgress, runningStatusKey } from './project-home'
+import { orderEnvironments, primaryEnvironmentOf } from './primary-environment'
+import { statusInfo, worstStatus, type StatusTone } from './status-vocab'
 import { plural } from './text'
 
 export type HomeKind = 'compose' | 'managed' | 'platform' | 'setup'
@@ -46,7 +30,7 @@ export function homeKind(project: ProjectRecord): HomeKind {
   return 'compose'
 }
 
-/** Compose projects are the ones whose Base and changes are worth reading. */
+/** Compose projects are the ones whose newest deploy is read to tell a native app's state. */
 export function wantsConfigView(project: ProjectRecord): boolean {
   return homeKind(project) === 'compose'
 }
@@ -56,49 +40,58 @@ export type HomeEnvironment = Readonly<{
   name: string
   /** A status key; `unknown` while containers load. */
   status: string
-  relation: Relation | null
-  host: string | null
+  isPrimary: boolean
+  pinned: boolean
 }>
 
 export type HomeProject = Readonly<{
   id: string
   name: string
   kind: HomeKind
-  description: string | null
-  /** "3 environments", "Managed database", "Not set up yet", "Platform". */
-  sub: string
-  /** "Base · 3 services · 2 Linux users", or null when it has not been read. */
-  baseLine: string | null
-  runs: readonly RunsAs[]
+  workspaceId: string | null
+  /** Every environment, the primary first, then the pinned ones, then the rest. */
   environments: readonly HomeEnvironment[]
   /** The worst status across the environments, for one dot. */
   status: string
 }>
 
-const KIND_SUB: Readonly<Record<Exclude<HomeKind, 'compose'>, string>> = {
-  managed: 'Managed database',
-  setup: 'Not set up yet',
-  platform: 'Platform',
+/** Oldest first, so pinned environments keep the order they were created in. */
+function byCreated(a: EnvironmentRecord, b: EnvironmentRecord): number {
+  return (a.createdAt ?? '').localeCompare(b.createdAt ?? '')
 }
 
-function projectSub(kind: HomeKind, environmentCount: number): string {
-  if (kind === 'compose') return plural(environmentCount, 'environment')
-  const label = KIND_SUB[kind]
-  return environmentCount > 0 && kind === 'managed'
-    ? `${label} · ${plural(environmentCount, 'environment')}`
-    : label
+type Latest = Readonly<Record<string, DeploymentGroup | null | undefined>>
+type Views = Readonly<Record<string, EnvironmentConfigViewResponse | undefined>>
+
+/**
+ * With no containers, a deployed native app is told by its newest deploy. When
+ * config views were read, only an environment that has a native app uses it;
+ * without them, any environment with a deploy record does.
+ */
+function nativeFallback(envId: string, latest: Latest | undefined, views: Views | undefined) {
+  if (!latest) return undefined
+  if (views && !hasNativeApp(views[envId]?.effective.services)) return undefined
+  return { latest: latest[envId] }
 }
 
-/** The first environment's Base: every environment of a project shares one. */
-function firstBase(
+function homeEnvironments(
   environments: readonly EnvironmentRecord[],
-  views: Readonly<Record<string, EnvironmentConfigViewResponse | undefined>>,
-): ConfigViewSide | null {
-  for (const env of environments) {
-    const base = views[env.id]?.base
-    if (base) return base
-  }
-  return null
+  containersOf: (environmentId: string) => readonly ContainerRecord[] | undefined,
+  latest: Latest | undefined,
+  views: Views | undefined
+): HomeEnvironment[] {
+  const sorted = [...environments].sort(byCreated)
+  const primary = primaryEnvironmentOf(sorted)
+  return orderEnvironments(
+    sorted.map((env) => ({ ...env, isPrimary: env.id === primary?.id }))
+  ).map((env) => ({
+    id: env.id,
+    name: environmentDisplayName(env),
+    status:
+      runningStatusKey(containersOf(env.id), nativeFallback(env.id, latest, views)) ?? 'unknown',
+    isPrimary: env.isPrimary === true,
+    pinned: env.isPrimary !== true && env.pinned === true,
+  }))
 }
 
 export function homeProject(
@@ -107,52 +100,66 @@ export function homeProject(
     environments: readonly EnvironmentRecord[]
     /** `undefined` while the organization's containers load. */
     containersByEnvironment: Readonly<Record<string, readonly ContainerRecord[]>> | undefined
-    views: Readonly<Record<string, EnvironmentConfigViewResponse | undefined>>
     /** Each environment's newest deploy: what a native app's status comes from. */
-    latest?: Readonly<Record<string, DeploymentGroup | null | undefined>>
-  }>,
+    latest?: Latest
+    /** Config views, when the caller read them: they say which environments run a native app. */
+    views?: Views
+  }>
 ): HomeProject {
-  const { project, environments, views, latest } = input
+  const { project, environments, latest, views } = input
   const kind = homeKind(project)
-  const name = project.name?.trim() || 'Unnamed project'
-  const compose = kind === 'compose'
   const containersOf = (environmentId: string) =>
     input.containersByEnvironment ? (input.containersByEnvironment[environmentId] ?? []) : undefined
-  const rows: HomeEnvironment[] = environments.map((env) => {
-    const view = compose ? views[env.id] : undefined
-    return {
-      id: env.id,
-      name: environmentDisplayName(env),
-      status:
-        runningStatusKey(
-          containersOf(env.id),
-          hasNativeApp(view?.effective.services) ? { latest: latest?.[env.id] } : undefined,
-        ) ?? 'unknown',
-      relation: environmentRelation(view),
-      host: view ? visitHost(view.effective) : null,
-    }
-  })
-  const base = compose ? firstBase(environments, views) : null
+  const rows = homeEnvironments(
+    environments,
+    containersOf,
+    kind === 'compose' ? latest : undefined,
+    kind === 'compose' ? views : undefined
+  )
   return {
     id: project.id,
-    name,
+    name: project.name?.trim() || 'Unnamed project',
     kind,
-    description: project.description?.trim() || null,
-    sub: projectSub(kind, environments.length),
-    baseLine: base ? baseLine(base) : null,
-    runs: base ? baseRunsAs(base, name) : [],
+    workspaceId: project.workspaceId ?? null,
     // A platform project has one environment per server, all named alike: its
-    // card stays plain and only the dot carries their status.
+    // tile stays plain and only the dot carries their status.
     environments: kind === 'platform' ? [] : rows,
     status: worstStatus(rows.map((row) => row.status)),
   }
 }
 
+/** Dot colours on a tile: a failed or unhealthy state uses the warning colour, never red. */
+export type PillTone = 'ok' | 'busy' | 'warn' | 'idle'
+
+const PILL_TONE: Readonly<Record<StatusTone, PillTone>> = {
+  ok: 'ok',
+  busy: 'busy',
+  warn: 'warn',
+  bad: 'warn',
+  idle: 'idle',
+}
+
+export function pillTone(status: string): PillTone {
+  return PILL_TONE[statusInfo(status).tone]
+}
+
+/** The environments a tile names (primary, then pinned) and how many fold into "+N". */
+export function tilePills(project: Pick<HomeProject, 'environments'>): {
+  shown: HomeEnvironment[]
+  more: number
+} {
+  const shown = project.environments.filter((env) => env.isPrimary || env.pinned)
+  return { shown, more: project.environments.length - shown.length }
+}
+
+/** Deploys in progress show this many rows; the rest are reached from Activity. */
+export const IN_PROGRESS_LIMIT = 3
+
 /** "4 projects · 9 environments · 7 running" (the running part waits for containers). */
 export function summaryLine(
   projectCount: number,
   environmentCount: number,
-  runningCount: number | null,
+  runningCount: number | null
 ): string {
   const parts = [plural(projectCount, 'project'), plural(environmentCount, 'environment')]
   if (runningCount !== null) parts.push(`${runningCount} running`)
@@ -175,9 +182,11 @@ export function deploysInProgress(
     environments: readonly EnvironmentRecord[]
     latest: Readonly<Record<string, DeploymentGroup | null | undefined>>
     now: number
-  }>,
+  }>
 ): InProgressRow[] {
-  const names = new Map(input.projects.map((project) => [project.id, project.name?.trim() || 'Unnamed project']))
+  const names = new Map(
+    input.projects.map((project) => [project.id, project.name?.trim() || 'Unnamed project'])
+  )
   const rows: InProgressRow[] = []
   for (const env of input.environments) {
     const group = input.latest[env.id]
