@@ -34,11 +34,10 @@ vi.mock('@/lib/queries/environment-cards', () => ({
   useLatestDeployments: () => ({ latest: {} }),
 }))
 vi.mock('@/lib/v4/projects-home', () => ({
-  wantsConfigView: (project: { metadata?: { type?: string } }) =>
-    project.metadata?.type !== 'managed',
-  homeProject: ({ project }: { project: { name: string; metadata?: { type?: string } } }) => ({
+  wantsConfigView: (project: { kind?: string | null }) => project.kind !== 'managed',
+  homeProject: ({ project }: { project: { name: string; kind?: string | null } }) => ({
     name: project.name,
-    kind: project.metadata?.type === 'managed' ? 'managed' : 'compose',
+    kind: project.kind === 'managed' ? 'managed' : 'compose',
     status: 'running',
   }),
 }))
@@ -76,7 +75,7 @@ describe('useHeaderBreadcrumb', () => {
 
   it('builds the database crumb for a managed project', async () => {
     state.pathname = '/o1/projects/p1'
-    state.project = { id: 'p1', name: 'Orders db', metadata: { type: 'managed' } }
+    state.project = { id: 'p1', name: 'Orders db', kind: 'managed' }
     expect(await run()).toMatchObject({
       trail: [{ label: 'Managed', href: '/o1/managed' }],
       current: { label: 'Orders db' },

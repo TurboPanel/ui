@@ -26,7 +26,7 @@ function project(partial: Partial<ProjectRecord>): ProjectRecord {
     description: null,
     workspaceId: 'w',
     repositoryId: null,
-    metadata: { type: 'docker-compose' },
+    kind: 'compose',
     ...partial,
   } as ProjectRecord
 }
@@ -134,17 +134,16 @@ function view(usesBase: boolean, changes = 0): EnvironmentConfigViewResponse {
 
 describe('what kind of project it is', () => {
   it('tells the four apart', () => {
-    expect(homeKind(project({ metadata: { type: 'system' } }))).toBe('platform')
-    expect(homeKind(project({ metadata: { type: 'managed' } }))).toBe('managed')
-    expect(homeKind(project({ metadata: { type: 'empty' } }))).toBe('setup')
-    expect(homeKind(project({ metadata: null }))).toBe('setup')
-    expect(homeKind(project({ metadata: { type: 'docker-compose' } }))).toBe('compose')
-    expect(homeKind(project({ metadata: { type: 'template' } }))).toBe('compose')
+    expect(homeKind(project({ kind: 'system' }))).toBe('platform')
+    expect(homeKind(project({ kind: 'managed' }))).toBe('managed')
+    expect(homeKind(project({ kind: null }))).toBe('setup')
+    expect(homeKind(project({ kind: 'compose' }))).toBe('compose')
+    expect(homeKind(project({ kind: 'compose', metadata: { code: 'wordpress' } }))).toBe('compose')
   })
 
   it('reads the newest deploy of Compose projects only', () => {
     expect(wantsConfigView(project({}))).toBe(true)
-    expect(wantsConfigView(project({ metadata: { type: 'managed' } }))).toBe(false)
+    expect(wantsConfigView(project({ kind: 'managed' }))).toBe(false)
   })
 })
 
@@ -231,7 +230,7 @@ describe('a project tile', () => {
 
   it('does not read deploys for a managed project', () => {
     const card = homeProject({
-      project: project({ metadata: { type: 'managed' } }),
+      project: project({ kind: 'managed' }),
       environments: [production],
       containersByEnvironment: {},
       latest: { e1: { status: 'succeeded' } as DeploymentGroup },
@@ -242,7 +241,7 @@ describe('a project tile', () => {
 
   it('gives a platform project no environments, only its status', () => {
     const card = homeProject({
-      project: project({ metadata: { type: 'system' } }),
+      project: project({ kind: 'system' }),
       environments: [env('e1', 'HTTP Ingress'), env('e2', 'HTTP Ingress')],
       containersByEnvironment: {
         e1: [container('e1', 'running')],

@@ -36,6 +36,8 @@ function project(
     name: 'Project',
     description: null,
     repositoryId: null,
+    kind: null,
+    icon: null,
     metadata: null,
     options: null,
     createdAt: '2026-01-01T00:00:00.000Z',
@@ -82,7 +84,7 @@ describe('system-inventory', () => {
       id: 'p2',
       workspaceId: 'ws-tp',
       repositoryId: null,
-      metadata: { type: 'docker-compose', component: 'hosting-ingress' },
+      kind: 'compose', metadata: { component: 'hosting-ingress' },
     })
     expect(isTurbopanelProject(userProject, workspaces)).toBe(false)
     expect(isTurbopanelProject(platformProject, workspaces)).toBe(true)

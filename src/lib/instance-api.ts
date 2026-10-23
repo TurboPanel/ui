@@ -3440,6 +3440,26 @@ export type EnvironmentRecord = {
   updatedAt: string
 }
 
+export type ProjectKind = 'compose' | 'managed' | 'system'
+
+/** The fixed list of project icon keys the instance accepts. */
+export const PROJECT_ICON_KEYS = [
+  'cube',
+  'globe',
+  'cart',
+  'bolt',
+  'chat',
+  'chart',
+  'code',
+  'book',
+  'layers',
+  'mail',
+  'rocket',
+  'image',
+] as const
+
+export type ProjectIconKey = (typeof PROJECT_ICON_KEYS)[number]
+
 export type ProjectRecord = {
   id: string
   name: string | null
@@ -3458,13 +3478,20 @@ export type ProjectRecord = {
    * names, so the create wizard does not have to send this field.
    */
   repositoryId: string | null
+  /**
+   * What the project is. `compose` also covers a template project (which
+   * carries `metadata.code`); `system` is platform-owned and read-only — this
+   * client never sends it on create or configure. `null` while the project is
+   * a draft that has not chosen yet.
+   */
+  kind: ProjectKind | null
+  /**
+   * Icon key from the fixed `PROJECT_ICON_KEYS` list, or `null` for the
+   * default. A managed project ignores it and always shows the managed icon.
+   */
+  icon: ProjectIconKey | null
   metadata: {
-    /**
-     * Read-side type stamp. `system` is platform-owned and read-only — this
-     * client never sends it on create or configure.
-     */
-    type?: 'docker-compose' | 'managed' | 'template' | 'empty' | 'system' | null
-    /** Managed engine catalog code (`postgres`, …). */
+    /** Catalog code of a template or managed engine project (`postgres`, …). */
     code?: string
     /**
      * Internal system-component idempotency key (e.g. `hosting-ingress`).

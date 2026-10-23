@@ -131,7 +131,7 @@ vi.mock('@/lib/queries/execution-logs', () => ({
 }))
 
 
-const COMPOSE = { id: 'p', name: 'Shop', metadata: { type: 'docker-compose' } }
+const COMPOSE = { id: 'p', name: 'Shop', kind: 'compose' }
 const ENVS = [
   { id: 'e', name: 'Production' },
   { id: 'e2', name: 'Staging' },
@@ -184,7 +184,7 @@ describe('EnvironmentShell gating', () => {
   })
 
   it.each([
-    ['a managed project', { project: { id: 'p', metadata: { type: 'managed', code: 'postgres' } } }],
+    ['a managed project', { project: { id: 'p', kind: 'managed', metadata: { code: 'postgres' } } }],
     ['a platform project', { isSystemProject: true }],
     ['a project still being set up', { needsSetup: true }],
     ['a create-wizard draft', { draft: {} }],

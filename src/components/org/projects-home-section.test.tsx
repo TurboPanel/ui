@@ -78,8 +78,8 @@ vi.mock('@/lib/system-inventory', async (importOriginal) => ({
   isTurbopanelWorkspace: (workspace: { id: string }) => workspace.id === 'platform',
 }))
 
-function project(id: string, name: string, type: string, workspaceId = 'w1') {
-  return { id, name, description: null, workspaceId, metadata: { type } }
+function project(id: string, name: string, kind: string, workspaceId = 'w1') {
+  return { id, name, description: null, workspaceId, kind, metadata: null }
 }
 
 function environment(
@@ -114,7 +114,7 @@ describe.each(SCENARIOS)('Projects home ($name)', (scenario) => {
     state.projects = {
       data: {
         projects: [
-          project('p1', 'Shop', 'docker-compose'),
+          project('p1', 'Shop', 'compose'),
           project('p2', 'Orders DB', 'managed'),
           project('p3', 'Platform', 'system', 'platform'),
         ],
@@ -197,7 +197,7 @@ describe.each(SCENARIOS)('Projects home ($name)', (scenario) => {
       ...state.projects,
       data: {
         projects: [
-          project('p1', 'Shop', 'docker-compose'),
+          project('p1', 'Shop', 'compose'),
           project('p2', 'Orders DB', 'managed'),
           project('p3', 'Platform', 'system'),
         ],
