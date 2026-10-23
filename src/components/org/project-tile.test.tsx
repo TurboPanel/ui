@@ -15,8 +15,6 @@ vi.mock('@/components/org/platform-badge', () => ({
   PlatformBadge: () => <span>Platform</span>,
 }))
 
-const MOOD = /All good|Deploying|is paused|Ready for a first deploy|Not set up yet\./
-
 function env(id: string, name: string, status: string, flags: Partial<HomeEnvironment> = {}) {
   return { id, name, status, isPrimary: false, pinned: false, ...flags }
 }
@@ -57,33 +55,33 @@ describe.each(SCENARIOS)('Project tile ($name)', (scenario) => {
         onOpen={onOpen}
       />
     )
-    const tile = screen.getByRole('button', { name: 'Open Shop' })
-    expect(tile.textContent).toContain('Shop')
-    expect(tile.textContent).toContain('Acme')
-    expect(tile.textContent).toContain('Production')
-    expect(tile.textContent).toContain('Staging')
-    expect(tile.textContent).not.toContain('Preview')
-    expect(tile.textContent).toContain('+2')
-    expect(tile.textContent).not.toMatch(MOOD)
+    const tile = screen.getByRole('button', { name: /^Open Shop/ })
+    expect(tile.textContent).toBe('ShopAcmeProductionStaging+2')
     fireEvent.click(tile)
     expect(onOpen).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps the status word in each pill name, never colour alone', () => {
+  it('speaks the whole tile in its own label, with each status word', () => {
     render(
       <ProjectTile
         project={project({
           environments: [
             env('e1', 'Production', 'running', { isPrimary: true }),
             env('e2', 'Staging', 'failed', { pinned: true }),
+            env('e3', 'Preview', 'stopped'),
+            env('e4', 'Review', 'stopped'),
           ],
         })}
         layout="grid"
         onOpen={vi.fn()}
       />
     )
-    expect(screen.getByLabelText('Production (primary): Running')).toBeTruthy()
-    expect(screen.getByLabelText('Staging (pinned): Deploy failed')).toBeTruthy()
+    expect(
+      screen.getByRole('button', {
+        name: 'Open Shop. Production (primary): Running. Staging (pinned): Deploy failed. 2 more environments',
+      })
+    ).toBeTruthy()
+    expect(document.querySelectorAll('[aria-label]')).toHaveLength(1)
   })
 
   it('makes the primary pill bolder and marks pinned ones with a pin', () => {
@@ -99,8 +97,8 @@ describe.each(SCENARIOS)('Project tile ($name)', (scenario) => {
         onOpen={vi.fn()}
       />
     )
-    const primary = screen.getByLabelText('Production (primary): Running')
-    const pinned = screen.getByLabelText('Staging (pinned): Running')
+    const primary = screen.getByText('Production').parentElement as Element
+    const pinned = screen.getByText('Staging').parentElement as Element
     expect(primary.querySelector('svg')).toBeNull()
     expect(pinned.querySelector('svg')).not.toBeNull()
     const weight = (el: Element) => styleOf(el.querySelector('span'))
@@ -120,7 +118,7 @@ describe.each(SCENARIOS)('Project tile ($name)', (scenario) => {
         onOpen={vi.fn()}
       />
     )
-    const more = screen.getByLabelText('1 more environment')
+    const more = screen.getByText('+1').parentElement as Element
     expect(more.textContent).toBe('+1')
     expect(styleOf(more).borderStyle).toBe('dashed')
   })
@@ -133,8 +131,8 @@ describe.each(SCENARIOS)('Project tile ($name)', (scenario) => {
         onOpen={vi.fn()}
       />
     )
-    const pill = screen.getByLabelText('Not set up yet')
-    expect(pill.textContent).toBe('Not set up yet')
+    const pill = screen.getByText('Not set up yet').parentElement as Element
+    expect(screen.getByRole('button').getAttribute('aria-label')).toBe('Open Blog. Not set up yet')
     expect(styleOf(pill).borderStyle).toBe('dashed')
   })
 

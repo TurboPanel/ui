@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { applyScenario, SCENARIOS } from '@/components/ui/v4/rn-stub'
-import { ProjectsViewToggle } from './projects-view-toggle'
+import { nextView, ProjectsViewToggle } from './projects-view-toggle'
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
 vi.mock('react-native-svg', async () => (await import('@/components/ui/v4/rn-stub')).svgStub)
@@ -28,5 +28,15 @@ describe.each(SCENARIOS)('Projects view toggle ($name)', (scenario) => {
     render(<ProjectsViewToggle value="grid" onChange={onChange} />)
     fireEvent.click(screen.getByRole('radio', { name: 'List' }))
     expect(onChange).toHaveBeenCalledWith('list')
+  })
+})
+
+describe('arrow keys', () => {
+  it('step through the views and wrap, ignoring other keys', () => {
+    expect(nextView('grid', 'ArrowRight')).toBe('list')
+    expect(nextView('list', 'ArrowRight')).toBe('grid')
+    expect(nextView('grid', 'ArrowLeft')).toBe('list')
+    expect(nextView('list', 'ArrowLeft')).toBe('grid')
+    expect(nextView('grid', 'Enter')).toBeNull()
   })
 })

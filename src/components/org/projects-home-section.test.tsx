@@ -160,8 +160,8 @@ describe.each(SCENARIOS)('Projects home ($name)', (scenario) => {
     render(<ProjectsHomeSection orgId="o" />)
     expect(screen.getByRole('heading', { name: 'Projects' })).toBeTruthy()
     expect(screen.getByText('2 projects · 2 environments · 1 running')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Open Shop' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Open Orders DB' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /^Open Shop/ })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /^Open Orders DB/ })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Open Platform' })).toBeNull()
     expect(screen.getByTestId('workspace-switcher')).toBeTruthy()
   })
@@ -175,16 +175,15 @@ describe.each(SCENARIOS)('Projects home ($name)', (scenario) => {
 
   it('gives each tile the status of its primary environment and no mood line', () => {
     render(<ProjectsHomeSection orgId="o" />)
-    const shop = screen.getByRole('button', { name: 'Open Shop' })
-    expect(screen.getByLabelText('Production (primary): Running')).toBeTruthy()
-    expect(shop.textContent).not.toMatch(/All good|Ready for a first deploy|is paused/)
-    expect(shop.textContent).not.toContain('Base')
-    expect(shop.textContent).not.toContain('Runs as')
+    const shop = screen.getByRole('button', {
+      name: 'Open Shop. Production (primary): Running',
+    })
+    expect(shop.textContent).toBe('ShopAcmeProduction')
   })
 
   it('gives a managed project the database sub line', () => {
     render(<ProjectsHomeSection orgId="o" />)
-    const tile = screen.getByRole('button', { name: 'Open Orders DB' })
+    const tile = screen.getByRole('button', { name: /^Open Orders DB/ })
     expect(tile.textContent).toContain('Managed database · Acme')
   })
 
@@ -227,7 +226,7 @@ describe.each(SCENARIOS)('Projects home ($name)', (scenario) => {
 
   it('opens a project from its tile', () => {
     render(<ProjectsHomeSection orgId="o" />)
-    fireEvent.click(screen.getByRole('button', { name: 'Open Shop' }))
+    fireEvent.click(screen.getByRole('button', { name: /^Open Shop/ }))
     expect(state.push).toHaveBeenLastCalledWith('/o/projects/p1')
   })
 
@@ -243,12 +242,20 @@ describe.each(SCENARIOS)('Projects home ($name)', (scenario) => {
     expect(getProjectsView()).toBe('grid')
   })
 
+  it('puts the filter after the view switch on a phone', () => {
+    env.width = 400
+    render(<ProjectsHomeSection orgId="o" />)
+    const filter = screen.getByTestId('workspace-switcher')
+    const toggle = screen.getByRole('radiogroup', { name: 'View' })
+    expect(toggle.compareDocumentPosition(filter) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
   it('hides the list header on a phone', () => {
     env.width = 400
     setProjectsView('list')
     render(<ProjectsHomeSection orgId="o" />)
     expect(screen.queryByText('Environments')).toBeNull()
-    expect(screen.getByRole('button', { name: 'Open Shop' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /^Open Shop/ })).toBeTruthy()
   })
 
   it('offers New project to organization owners only', () => {

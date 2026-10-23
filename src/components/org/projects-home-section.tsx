@@ -72,6 +72,7 @@ const styles = themedStyles((p) => ({
   tools: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 12 },
   toolsTitle: { flexGrow: 1, flexBasis: 0, minWidth: 160 },
   filter: { flexShrink: 1 },
+  filterOwnRow: { flexBasis: '100%' },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -423,15 +424,21 @@ function AllProjectsTools({
   view,
 }: Readonly<{ orgId: string; count: number; view: ProjectsView }>) {
   const s = styles(usePalette())
+  const phone = useWindowDimensions().width <= PHONE_MAX_WIDTH
+  const filter = (
+    <View style={phone ? s.filterOwnRow : s.filter}>
+      <WorkspaceSwitcher orgId={orgId} />
+    </View>
+  )
+  // On a phone the filter takes its own full-width row after the title and the switch.
   return (
     <View style={s.tools}>
       <View style={s.toolsTitle}>
         <SectionHeading title="All projects" note={count > 0 ? String(count) : undefined} />
       </View>
-      <View style={s.filter}>
-        <WorkspaceSwitcher orgId={orgId} />
-      </View>
+      {phone ? null : filter}
       <ProjectsViewToggle value={view} onChange={setProjectsView} />
+      {phone ? filter : null}
     </View>
   )
 }

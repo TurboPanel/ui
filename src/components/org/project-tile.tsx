@@ -169,7 +169,7 @@ function EnvironmentPill({ env }: Readonly<{ env: HomeEnvironment }>) {
   const s = styles(usePalette())
   const label = pillLabel(env)
   return (
-    <View accessible accessibilityLabel={label} ref={titleRef(label)} style={s.pill}>
+    <View ref={titleRef(label)} style={s.pill}>
       <PillDot tone={pillTone(env.status)} />
       <Text style={env.isPrimary ? s.pillPrimary : s.pillText} numberOfLines={1}>
         {env.name}
@@ -182,7 +182,7 @@ function EnvironmentPill({ env }: Readonly<{ env: HomeEnvironment }>) {
 function QuietPill({ text, title }: Readonly<{ text: string; title: string }>) {
   const s = styles(usePalette())
   return (
-    <View accessible accessibilityLabel={title} ref={titleRef(title)} style={[s.pill, s.pillMore]}>
+    <View ref={titleRef(title)} style={[s.pill, s.pillMore]}>
       <Text style={s.pillMoreText}>{text}</Text>
     </View>
   )
@@ -197,12 +197,7 @@ function ProjectPills({ project }: Readonly<{ project: HomeProject }>) {
       {shown.map((env) => (
         <EnvironmentPill key={env.id} env={env} />
       ))}
-      {more > 0 ? (
-        <QuietPill
-          text={`+${more}`}
-          title={`${more} more ${more === 1 ? 'environment' : 'environments'}`}
-        />
-      ) : null}
+      {more > 0 ? <QuietPill text={`+${more}`} title={moreLabel(more)} /> : null}
     </>
   )
 }
@@ -236,6 +231,25 @@ function ProjectIcon({ kind, small }: Readonly<{ kind: HomeProject['kind']; smal
       </Svg>
     </View>
   )
+}
+
+function moreLabel(more: number): string {
+  return `${more} more ${more === 1 ? 'environment' : 'environments'}`
+}
+
+/**
+ * The tile's whole spoken name: the project, then each shown environment with
+ * its status word, so the pills are not separate stops for a screen reader.
+ */
+export function tileLabel(project: HomeProject): string {
+  const { shown, more } = tilePills(project)
+  const parts = [`Open ${project.name}`]
+  if (project.kind === 'setup') parts.push('Not set up yet')
+  if (project.kind !== 'platform' && project.kind !== 'setup') {
+    parts.push(...shown.map(pillLabel))
+    if (more > 0) parts.push(moreLabel(more))
+  }
+  return parts.join('. ')
 }
 
 /** "Acme", "Managed database · Acme". */
@@ -272,7 +286,7 @@ export function ProjectTile({
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`Open ${project.name}`}
+      accessibilityLabel={tileLabel(project)}
       onPress={onOpen}
       style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [
         s.tile,
