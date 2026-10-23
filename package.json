@@ -64,7 +64,7 @@
     "babel-preset-expo": "~57.0.7",
     "eslint": "^9.39.4",
     "eslint-config-expo": "~57.0.1",
-    "happy-dom": "^20.11.2",
+    "happy-dom": "^21.0.4",
     "typescript": "~6.0.3",
     "vitest": "^4.1.11",
     "wrangler": "^4.151.3"

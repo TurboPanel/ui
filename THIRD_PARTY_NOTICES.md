@@ -7,7 +7,7 @@ Third-party components remain under their own copyright and license terms and ar
 Third-party OS artwork under `assets/os/` is recorded separately in `assets/os/NOTICE.md` and is not licensed under this repository’s AGPL or the Apple App Store additional permission.
 
 <!-- lockfiles
-pnpm-lock.yaml sha256:4bf2a3c5ae564037c6f742956cc1642b3d393dc6d9a51645f3adbcc4187d73fd
+pnpm-lock.yaml sha256:e65d8cd60870e57278d3a9f90ae98c90f8e07c6ec5bfe4551821bd09bca4bf73
 -->
 
 ## Production dependencies
@@ -5252,7 +5252,7 @@ These packages are used for development, test, or build tooling and are not bund
 - Copyright: Jordan Harband
 - Homepage: https://github.com/ljharb/gopd#readme
 
-### happy-dom@20.11.2
+### happy-dom@21.0.4
 
 - License: MIT
 - Copyright: David Ortner
@@ -5980,7 +5980,7 @@ These packages are used for development, test, or build tooling and are not bund
 - Copyright: Jordan Harband
 - Homepage: https://github.com/ljharb/unbox-primitive#readme
 
-### undici@7.29.1
+### undici@7.30.1
 
 - License: MIT
 - Homepage: https://undici.nodejs.org
