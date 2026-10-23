@@ -45,7 +45,7 @@ function uncoveredNames(
 }
 
 function isUsable(row: PickerCertificate): boolean {
-  return row.metadata.status === 'ready' || row.metadata.status === 'managed'
+  return row.metadata.status === 'ready' || row.metadata.status === 'automatic'
 }
 
 /**
