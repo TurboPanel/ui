@@ -168,7 +168,7 @@ describe.each(SCENARIOS)('Project tile ($name)', (scenario) => {
       <ProjectTile project={project({})} layout={layout} onOpen={vi.fn()} />
     )
     const { unmount } = render(view('list'))
-    expect(screen.queryByText('›')).not.toBeNull()
+    expect(screen.getByText('›')).toBeTruthy()
     unmount()
     render(view('listStacked'))
     expect(screen.queryByText('›')).toBeNull()
