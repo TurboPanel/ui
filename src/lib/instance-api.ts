@@ -7366,7 +7366,8 @@ export type DeployPreviewSource = {
   /** Secret-free by contract on both wire parsers. */
   cloneUrl: string
   ref: string
-  commitSha: string
+  /** Omitted when the ref is a branch or tag name rather than a commit. */
+  commitSha?: string
   releaseId: string
   subdirectory?: string
 }

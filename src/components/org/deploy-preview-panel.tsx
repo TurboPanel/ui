@@ -37,8 +37,8 @@ function formatWarningLine(warning: DeployPreviewResponse['warnings'][number]): 
 
 export function PreviewWarnings({
   warnings,
-}: Readonly<{ warnings: DeployPreviewResponse['warnings'] }>) {
-  if (warnings.length === 0) return null
+}: Readonly<{ warnings: DeployPreviewResponse['warnings'] | undefined }>) {
+  if (!warnings || warnings.length === 0) return null
   return (
     <View style={panelStyles.calloutWarning}>
       {warnings.map((warning) => (
@@ -61,9 +61,9 @@ function composeFileRoleLabel(role: ComposeFileRole): string {
 }
 
 function runtimeComposeFileFromFiles(
-  files: readonly DeployPreviewComposeFile[],
+  files: readonly DeployPreviewComposeFile[] | undefined,
 ): DeployPreviewComposeFile | undefined {
-  return files.find((file) => file.role === 'runtime')
+  return files?.find((file) => file.role === 'runtime')
 }
 
 function runtimeComposeFile(
@@ -91,9 +91,9 @@ function ComposeLayerSection({
 function ServerComposeSection({
   server,
 }: Readonly<{ server: DeployPreviewServer }>) {
-  const services = [...server.services].sort((a, b) => a.localeCompare(b))
+  const services = [...(server.services ?? [])].sort((a, b) => a.localeCompare(b))
   const serviceLine = services.join(', ')
-  const title = server.name.trim() || server.serverId
+  const title = server.name?.trim() || server.serverId
   const runtimeFile = runtimeComposeFileFromFiles(server.composeFiles)
 
   return (
@@ -133,10 +133,11 @@ function secretPlanLine(entry: DeployPreviewSecretPlanEntry): string {
  */
 function previewSourceLine(entry: DeployPreviewSource): string {
   const repo = entry.cloneUrl.replace(/\.git$/, '')
-  const commit =
-    entry.commitSha.length > 7 ? entry.commitSha.slice(0, 7) : entry.commitSha
+  // The answer leaves commitSha out when the ref is a branch or tag name.
+  const commit = entry.commitSha?.slice(0, 7) ?? ''
+  const commitNote = commit ? ` (${commit})` : ''
   const where = entry.subdirectory ? ` [${entry.subdirectory}]` : ''
-  return `${entry.composeServiceName} ← ${repo}@${entry.ref}${where} (${commit}) → release ${entry.releaseId}`
+  return `${entry.composeServiceName} ← ${repo}@${entry.ref}${where}${commitNote} → release ${entry.releaseId}`
 }
 
 function PreparedComposeSnapshot({
@@ -148,7 +149,7 @@ function PreparedComposeSnapshot({
   const secretPlan = preview.secretPlan ?? []
   const sources = preview.sources ?? []
   const nativeApps = (preview.nativeAppVariables ?? []).filter(
-    (app) => app.variables.length > 0,
+    (app) => (app.variables?.length ?? 0) > 0,
   )
 
   return (
@@ -197,7 +198,7 @@ function PreparedComposeSnapshot({
               <Text style={styles.roleBadgeText}>Node app variables</Text>
             </View>
           </View>
-          {app.variables.map((entry) => (
+          {(app.variables ?? []).map((entry) => (
             <Text
               key={`${entry.name}:${entry.source}`}
               style={panelStyles.muted}
