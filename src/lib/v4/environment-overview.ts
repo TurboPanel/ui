@@ -219,7 +219,7 @@ export function certificateKey(
   if (record === undefined) return 'unknown'
   if (record.source === 'self_signed') return 'test'
   const status = record.metadata.status
-  if (status === 'ready' || status === 'managed') return 'ok'
+  if (status === 'ready' || status === 'automatic') return 'ok'
   if (status === 'pending') return 'issuing'
   return 'renewal_failed'
 }
