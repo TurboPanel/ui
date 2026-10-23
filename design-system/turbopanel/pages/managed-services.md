@@ -5,7 +5,7 @@
 **Routes:**
 - `/[orgId]/managed` — org-wide managed services overview (`managed-overview-section.tsx`)
 - `/[orgId]/projects/new` — empty project create (then setup → managed catalog)
-- `/[orgId]/projects/[projectId]/{overview,connect,data,backups,environments}` — managed tab shell when `metadata.type === 'managed'`
+- `/[orgId]/projects/[projectId]/{overview,connect,data,backups,environments}` — managed tab shell when `project.kind === 'managed'`
 
 **Job:** Operate managed database clusters (primary + replicas), connect services via bindings, manage users/databases and backups — without per-row polling or DO reads.
 
