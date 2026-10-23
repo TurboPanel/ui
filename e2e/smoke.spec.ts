@@ -14,7 +14,10 @@ test('sign in, Projects, theme switch, project and environment tabs', async ({
   // Sign in.
   await page.goto('/sign-in')
   await page.getByLabel(/email/i).first().fill('owner@example.test')
-  await page.getByLabel(/password/i).first().fill('not-a-real-password')
+  await page
+    .getByLabel(/password/i)
+    .first()
+    .fill('not-a-real-password')
   await page.getByRole('button', { name: 'Sign In', exact: true }).click()
 
   // Projects.
@@ -22,29 +25,20 @@ test('sign in, Projects, theme switch, project and environment tabs', async ({
   await expect(page.getByText('1 project · 1 environment')).toBeVisible()
   await expect(page.getByText('Smoke Project')).toBeVisible()
 
-  // Theme switch: the page background follows the choice.
+  // Theme switch in the account menu: the page background follows the choice.
   const html = page.locator('html')
-  await page.getByRole('radio', { name: 'Dark' }).click()
+  await page.getByRole('button', { name: /^Account menu for owner@example\.test/ }).click()
+  await page.getByRole('button', { name: 'UI settings' }).click()
+  const theme = page.getByRole('radiogroup', { name: 'Theme' })
+  await theme.getByRole('radio', { name: 'Dark' }).click()
   await expect(html).toHaveClass(/t_dark/)
-  await page.getByRole('radio', { name: 'Light' }).click()
+  await theme.getByRole('radio', { name: 'Light' }).click()
   await expect(html).toHaveClass(/t_light/)
+  await page.keyboard.press('Escape')
+  await expect(theme).toBeHidden()
 
-  // Project tabs (the Environments tab is `overview`). A Compose project's
-  // tab bar entries answer to the tab role.
-  await page.getByText('Open', { exact: true }).first().click()
-  await expect(page).toHaveURL(`${PROJECT_URL}/overview`)
-  const projectTabs = page.getByRole('tablist', { name: 'Project sections' })
-  for (const [label, path] of [
-    ['Base', 'base'],
-    ['Settings', 'settings'],
-    ['Environments', 'overview'],
-  ] as const) {
-    await projectTabs.getByRole('tab', { name: label }).click()
-    await expect(page).toHaveURL(`${PROJECT_URL}/${path}`)
-  }
-
-  // Environment tabs.
-  await page.getByRole('button', { name: 'Open production' }).click()
+  // A Compose project opens on its primary environment. Environment tabs.
+  await page.getByRole('button', { name: 'Open Smoke Project', exact: true }).click()
   await expect(page).toHaveURL(ENVIRONMENT_URL)
   const environmentTabs = page.getByRole('tablist', {
     name: 'Environment sections',
@@ -57,6 +51,21 @@ test('sign in, Projects, theme switch, project and environment tabs', async ({
   ] as const) {
     await environmentTabs.getByRole('tab', { name: label }).click()
     await expect(page).toHaveURL(`${ENVIRONMENT_URL}${path}`)
+  }
+
+  // Project tabs, reached through the environment's breadcrumb (the
+  // Environments tab is `overview`). A Compose project's tab bar entries
+  // answer to the tab role.
+  await page.getByRole('link', { name: 'All environments' }).click()
+  await expect(page).toHaveURL(`${PROJECT_URL}/overview`)
+  const projectTabs = page.getByRole('tablist', { name: 'Project sections' })
+  for (const [label, path] of [
+    ['Base', 'base'],
+    ['Settings', 'settings'],
+    ['Environments', 'overview'],
+  ] as const) {
+    await projectTabs.getByRole('tab', { name: label }).click()
+    await expect(page).toHaveURL(`${PROJECT_URL}/${path}`)
   }
 
   // A screen that throws is a failure; an unanswered API call is only noted,
