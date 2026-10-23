@@ -1,8 +1,8 @@
 /**
  * Hosting-panel context derived from merged compose services.
  * Surfaces site engine rules the deploy path already enforces
- * (PHP on all three engines, by different mechanisms; Apache-only SetEnv;
- * Docker bridge env injection).
+ * (PHP on all three engines, by different mechanisms; SetEnv on Apache,
+ * rewrite rules on OpenLiteSpeed; Docker bridge env injection).
  */
 
 import {
@@ -302,7 +302,7 @@ export function hostingWebEnvSectionCopy(context: HostingServiceContext): {
     return {
       title: 'Web environment',
       hint:
-        "Static KEY=VALUE pairs for this hostname. Deploy writes .turbopanel/hosting.env and hands entries to PHP through the site's own rewrite rules, which OpenLiteSpeed passes to PHP as environment variables. Hosting variables marked for runtime merge first; static lines here win on collision. Values OpenLiteSpeed cannot carry are left out and named in the deploy result.",
+        "Static KEY=VALUE pairs for this hostname. Deploy writes .turbopanel/hosting.env and hands entries to PHP through the site's own rewrite rules, which OpenLiteSpeed passes to PHP as environment variables. Hosting variables marked for runtime merge first; static lines here win on collision. A value that contains a space, comma, quote, backslash, $, % or a bracket is dropped with a warning. If a required database setting is missing, the deploy stops.",
       showFields: true,
     }
   }

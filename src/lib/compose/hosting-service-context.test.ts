@@ -100,6 +100,7 @@ describe('resolveHostingServiceContext', () => {
     expect(hostingWebEnvSectionCopy(ols).showFields).toBe(true)
     expect(hostingWebEnvSectionCopy(ols).hint).not.toContain('does not inject')
     expect(hostingWebEnvSectionCopy(ols).hint).toContain('rewrite rules')
+    expect(hostingWebEnvSectionCopy(ols).hint).toContain('the deploy stops')
   })
 
   it('surfaces docker bridge env hint for containers next to site', () => {
