@@ -7979,9 +7979,9 @@ export type ProjectPrincipalRecord = {
   /**
    * How this account may log in, as the operator set it.
    *
-   * Derived server-side from `options.shell` rather than stored separately —
-   * the shell *is* the access level, and two independent fields could disagree
-   * in a way nobody would notice until someone could not log in.
+   * Stored in the `principal.access` column. The host shell is derived from it
+   * server-side, never stored beside it, so the two cannot disagree in a way
+   * nobody would notice until someone could not log in.
    *
    * What actually happens also depends on {@link sshKeyCount}: with no keys
    * there is nothing to authenticate with, because password authentication is
