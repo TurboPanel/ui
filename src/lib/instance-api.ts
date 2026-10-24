@@ -7973,7 +7973,7 @@ export type ProjectPrincipalRecord = {
   /** Scheme the system name was generated with. */
   nameScheme?: NameScheme
   projectId: string | null
-  metadata: { uid?: number; gid?: number; home?: string } | null
+  metadata: { uid?: number; gid?: number; home?: string; composeAlias?: string } | null
   options: Record<string, unknown> | null
   serviceIds: string[]
   /**

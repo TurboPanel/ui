@@ -10,10 +10,11 @@ import {
 import { useQueryClient } from '@tanstack/react-query'
 import { usePathname, useRouter, type Href } from 'expo-router'
 import { useEnvironments } from '@/lib/queries/environments'
-import { useProject } from '@/lib/queries/projects'
+import { useProject, useProjectPrincipals } from '@/lib/queries/projects'
 import { useWorkspaces } from '@/lib/queries/workspaces'
 import { orEmptyArray } from '@/lib/or-empty-array'
 import type { ComposeDocument } from '@/lib/compose'
+import { knownAccountNames } from '@/lib/compose/principal-required'
 import {
   type EnvironmentRecord,
   type ProjectRecord,
@@ -401,4 +402,26 @@ export function useOptionalProjectId(): string | undefined {
   const ctx = useContext(ProjectContext)
   if (ctx?.project == null) return undefined
   return ctx.projectId
+}
+
+/**
+ * Every account the saved project has (declared in the Base or an environment,
+ * or made by hand on Bindings), by lowercase name. Empty outside a project, so
+ * the create wizard judges "the only account" on its own draft.
+ */
+export function useProjectWideAccounts(): ReadonlySet<string> {
+  const ctx = useContext(ProjectContext)
+  const principals = useProjectPrincipals(ctx?.orgId ?? '', ctx?.project ? ctx.projectId : '')
+  const rows = principals.data?.principals
+  return useMemo(
+    () =>
+      knownAccountNames(
+        [
+          ctx?.project?.options?.compose,
+          ...(ctx?.environments ?? []).map((env) => env.options?.compose),
+        ],
+        rows ?? []
+      ),
+    [ctx?.project, ctx?.environments, rows]
+  )
 }
