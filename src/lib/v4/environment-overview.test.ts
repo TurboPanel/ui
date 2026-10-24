@@ -1,6 +1,11 @@
 import type { DeploymentGroup } from '@/lib/deployment-history'
 import { describe, expect, it } from 'vitest'
-import type { ServiceRecord, ServiceRunStateName } from '@/lib/instance-api'
+import type {
+  HostingRecord,
+  IpRecord,
+  ServiceRecord,
+  ServiceRunStateName,
+} from '@/lib/instance-api'
 import {
   appRows,
   certificateKey,
@@ -15,6 +20,7 @@ import {
   relationCard,
   runsAsOf,
   runStatusKey,
+  servedFromOf,
   shortLabel,
   sideServices,
   volumesOf,
@@ -23,6 +29,7 @@ import {
   CHANGES,
   configView,
   container,
+  hosting,
   overviewSource,
   principal,
   row,
@@ -242,10 +249,55 @@ describe('domains, volumes and databases', () => {
     const unpinned = domainsOf(
       overviewSource({ hostings: { 's-web': [{ ...source.hostings['s-web']![0]!, tlsId: null }] } })
     )
-    expect(unpinned[0]?.status).toEqual({
-      key: 'test',
-      label: 'Self-signed certificate (browsers warn)',
+    // The map box has room for the short word only.
+    expect(unpinned[0]?.status).toEqual({ key: 'test', label: 'Self-signed (browsers warn)' })
+  })
+
+  it('says where a hostname is served from, only from what is known', () => {
+    const ip = (id: string, address: string, serverId: string | null) =>
+      ({ id, address, serverId }) as unknown as IpRecord
+    const publicIps = [ip('ip-1', '203.0.113.24', 'srv-1'), ip('ip-2', '198.51.100.7', 'srv-2')]
+    const at = (patch: Partial<HostingRecord>) => ({ ...hosting('a.example.com'), ...patch })
+    const known = { publicIps, serverId: 'srv-1' }
+    // A pinned public address is that address; one that is not listed is not guessed.
+    expect(servedFromOf(at({ ipId: 'ip-2' }), known)).toBe('Served from 198.51.100.7')
+    expect(servedFromOf(at({ ipId: 'ip-9' }), known)).toBeNull()
+    expect(servedFromOf(at({ ipId: 'ip-2' }), {})).toBeNull()
+    // Any interface: the addresses the DNS check expects, else the server's own.
+    const certificate = { dns: { expectedAddresses: ['192.0.2.1', '192.0.2.2', '192.0.2.1'] } }
+    expect(servedFromOf(at({ certificate } as unknown as Partial<HostingRecord>), known)).toBe(
+      'Served from 192.0.2.1 +1'
+    )
+    expect(servedFromOf(at({ options: { bind: 'public' } }), known)).toBe(
+      'Served from 203.0.113.24'
+    )
+    expect(servedFromOf(at({}), { publicIps, serverId: null })).toBeNull()
+    expect(servedFromOf(at({}), { serverId: 'srv-1' })).toBeNull()
+    // Datacenter and Local say so.
+    expect(servedFromOf(at({ options: { bind: 'datacenter' } }), known)).toBe(
+      'Served on the datacenter network'
+    )
+    expect(servedFromOf(at({ options: { bind: 'local' } }), known)).toBe(
+      'Served on this server only'
+    )
+    // An unknown bind reads as the default, public.
+    expect(servedFromOf(at({ options: { bind: 'elsewhere' } }), known)).toBe(
+      'Served from 203.0.113.24'
+    )
+  })
+
+  it('carries the served line and the primary hostname into the map', () => {
+    const withIps = overviewSource({
+      publicIps: [
+        { id: 'ip-1', address: '203.0.113.24', serverId: 'srv-1' } as unknown as IpRecord,
+      ],
+      serverId: 'srv-1',
+      primaryHostname: 'shop.example.com',
     })
+    expect(domainsOf(withIps)[0]?.servedFrom).toBe('Served from 203.0.113.24')
+    expect(mapInputOf(withIps, 'env').primaryHost).toBe('shop.example.com')
+    expect(mapInputOf(source, 'env').primaryHost).toBeNull()
+    expect(domainsOf(source)[0]).not.toHaveProperty('servedFrom')
   })
 
   it('skips a service that has no saved row yet', () => {

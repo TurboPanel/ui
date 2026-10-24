@@ -11,6 +11,7 @@ import { useProjectPrincipals } from '@/lib/queries/projects'
 import { useHostingsByServices, useServices } from '@/lib/queries/services'
 import { useStorage } from '@/lib/queries/storage'
 import { useTlsLibrary } from '@/lib/queries/tls'
+import { useIps } from '@/lib/queries/topology'
 import { environmentDisplayName } from '@/lib/resource-labels'
 import type { OverviewSource } from '@/lib/v4/environment-overview'
 
@@ -40,7 +41,13 @@ export type OverviewModel =
  * left out.
  */
 export function useEnvironmentOverviewModel(): OverviewModel {
-  const { orgId, projectId, selectedEnvironment, loading: projectLoading } = useProjectContext()
+  const {
+    orgId,
+    projectId,
+    project,
+    selectedEnvironment,
+    loading: projectLoading,
+  } = useProjectContext()
   const environmentId = selectedEnvironment?.id ?? ''
   const view = useEnvironmentConfigView(orgId, environmentId)
   const services = useServices(orgId, environmentId, { enabled: environmentId !== '' })
@@ -53,6 +60,9 @@ export function useEnvironmentOverviewModel(): OverviewModel {
   const bindings = useEnvironmentBindings(orgId, environmentId)
   const principals = useProjectPrincipals(orgId, projectId)
   const history = useEnvironmentDeployments(orgId, environmentId, { enabled: environmentId !== '' })
+  const ips = useIps(orgId, { scope: 'public' })
+  const serverId = selectedEnvironment?.serverId ?? project?.options?.defaultServerId ?? null
+  const primaryHostname = selectedEnvironment?.options?.primaryHostname ?? null
 
   const envName = environmentDisplayName(selectedEnvironment ?? {})
   const loaded = view.data !== undefined && services.isSuccess && !hostings.isLoading
@@ -69,6 +79,9 @@ export function useEnvironmentOverviewModel(): OverviewModel {
       storage: storage.data?.storage ?? NONE,
       bindings: bindings.data?.bindings ?? NONE,
       principals: principals.data?.principals ?? NONE,
+      publicIps: ips.data?.ips,
+      serverId,
+      primaryHostname,
     }
   }, [
     view.data,
@@ -81,6 +94,9 @@ export function useEnvironmentOverviewModel(): OverviewModel {
     storage.data,
     bindings.data,
     principals.data,
+    ips.data,
+    serverId,
+    primaryHostname,
   ])
 
   if (environmentId === '') return { state: projectLoading ? 'loading' : 'unavailable' }

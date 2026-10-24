@@ -84,6 +84,34 @@ describe.each(SCENARIOS)('EnvironmentMap ($name)', (scenario) => {
     expect(plain.backgroundColor).toBe(token(scenario, 'surface'))
   })
 
+  it('lists a Visitors box line by line, with the certificate badge on a line of its own', () => {
+    const many = mapLayout({
+      ...mapInputOf(overviewSource(), 'env'),
+      domains: [
+        {
+          host: 'shop.example.com',
+          status: { key: 'test', label: 'Self-signed (browsers warn)' },
+          servedFrom: 'Served from 203.0.113.24',
+        },
+        { host: 'www.shop.example.com', status: { key: 'ok', label: 'Secure' } },
+      ],
+    })
+    render(<EnvironmentMap layout={many} hrefFor={hrefFor} />)
+    const box = screen.getByRole('link', {
+      name: /^shop\.example\.com, www\.shop\.example\.com, domains/,
+    })
+    const node = many.nodes.find((n) => n.kind === 'domain')!
+    expect(styleOf(box)).toMatchObject({ height: node.h, overflow: 'hidden' })
+    const lines = ['shop.example.com', 'www.shop.example.com', 'Served from 203.0.113.24']
+    for (const line of lines) expect(within(box).getByText(line).dataset.lines).toBe('1')
+    const badge = within(box).getByLabelText('Self-signed (browsers warn)')
+    // The badge sits in its own row, after the lines, not beside the name.
+    expect(badge.parentElement?.parentElement).toBe(box)
+    expect(within(box).getByText('Served from 203.0.113.24').compareDocumentPosition(badge)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    )
+  })
+
   it('shows the legend it is given', () => {
     render(<EnvironmentMap layout={layout} hrefFor={hrefFor} legend={<span>legend here</span>} />)
     expect(screen.getByText('legend here')).toBeTruthy()
@@ -104,6 +132,13 @@ describe.each(SCENARIOS)('EnvironmentMap, narrow ($name)', (scenario) => {
     expect(within(web).getByText('<- shop.example.com')).toBeTruthy()
     expect(styleOf(web).position).not.toBe('absolute')
     expect(screen.queryByText('Set per environment')).toBeNull()
+  })
+
+  it('stacks a Visitors box as a column so its badge has a line of its own', () => {
+    render(<EnvironmentMap layout={layout} hrefFor={hrefFor} />)
+    const box = screen.getByRole('link', { name: /^shop\.example\.com, domain/ })
+    expect(styleOf(box).flexDirection).toBe('column')
+    expect(within(box).getByText('-> web')).toBeTruthy()
   })
 
   it('says when a lane is empty and draws a station without a page as text', () => {
