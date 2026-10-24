@@ -1,6 +1,6 @@
 import { Redirect, useLocalSearchParams, usePathname, useRouter, type Href } from 'expo-router'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, View } from 'react-native'
 import { UnderlineTabs, type UnderlineTab } from '@/components/ui/v4'
 import { readHostingIdParam } from '@/components/org/project-settings-area'
 import {
@@ -9,12 +9,19 @@ import {
   EnvironmentLifecycleProvider,
   useEnvironmentLifecycle,
 } from '@/components/org/project/overview-environments-panel'
-import { ProjectScopePicker } from '@/components/org/project/project-scope-picker'
+import {
+  EnvironmentBadge,
+  EnvironmentHeaderFrame,
+  EnvironmentTitle,
+} from '@/components/org/project/environment-header-parts'
+import {
+  ManagedEnvironmentHeader,
+  ManagedEnvironmentProvider,
+} from '@/components/org/managed/managed-environment-shell'
 import { useProjectContext } from '@/components/org/project/project-context'
 import { VisitSiteButton } from '@/components/org/project/visit-site-button'
-import { StatusDot } from '@/components/ui'
 import { groupDeploymentsByGeneration, type DeploymentGroup } from '@/lib/deployment-history'
-import { environmentBadge, orderEnvironments } from '@/lib/v4/primary-environment'
+import { managedEnvironmentTabs } from '@/lib/managed-navigation'
 import { hasNativeApp, nativeDeployKey } from '@/lib/v4/project-home'
 import { useEnvironmentConfigViews } from '@/lib/queries/environment-cards'
 import {
@@ -22,8 +29,6 @@ import {
   environmentStatusFacts,
   primarySiteHostname,
   readPrimaryHostnameOption,
-  type EnvironmentStatusFact,
-  type StatusFactTone,
 } from '@/lib/environment-status'
 import {
   ENVIRONMENT_PAGE_TAB_IDS,
@@ -35,18 +40,9 @@ import {
   projectOverviewHref,
   type EnvironmentPageTabId,
 } from '@/lib/project-navigation'
-import type { ProjectScopeOption } from '@/lib/project-scope'
 import { useEnvironmentDeployments } from '@/lib/queries/execution-logs'
 import { useHostingsByServices, useServices } from '@/lib/queries/services'
-import { environmentDisplayName } from '@/lib/resource-labels'
-import { colors, spacing } from '@/lib/theme'
-
-const FACT_COLORS: Readonly<Record<StatusFactTone, string>> = {
-  ok: colors.ok,
-  busy: colors.busy,
-  bad: colors.bad,
-  idle: colors.idle,
-}
+import { spacing } from '@/lib/theme'
 
 /** Deep link: `?hostingId=` on an environment path opens the Hosting lens. */
 function useHostingDeepLink(environmentId: string | null): void {
@@ -74,91 +70,6 @@ function useNow(intervalMs: number): number {
     return () => clearInterval(id)
   }, [intervalMs])
   return now
-}
-
-function StatusFacts({ facts }: Readonly<{ facts: readonly EnvironmentStatusFact[] }>) {
-  return (
-    <View style={styles.facts} accessibilityLabel="Environment status">
-      {facts.map((fact) => (
-        <View
-          key={fact.key}
-          style={styles.fact}
-          accessibilityLabel={`${fact.caption}: ${fact.value}`}
-        >
-          <StatusDot size="sm" color={FACT_COLORS[fact.tone]} />
-          <Text style={styles.factCaption}>{fact.caption}</Text>
-          <Text style={styles.factValue}>{fact.value}</Text>
-        </View>
-      ))}
-    </View>
-  )
-}
-
-function EnvironmentTitle() {
-  const router = useRouter()
-  const { orgId, projectId, environments, selectedEnvironment } = useProjectContext()
-  const pathname = usePathname()
-  const activeTab = parseEnvironmentPageTab(pathname, projectId) ?? 'overview'
-  const name = environmentDisplayName(selectedEnvironment ?? {})
-  const lifecycle = useEnvironmentLifecycle()
-
-  const options = useMemo<ProjectScopeOption[]>(
-    () =>
-      orderEnvironments(environments).map((env) => ({
-        environmentId: env.id,
-        label: environmentDisplayName(env),
-        detail:
-          env.id === selectedEnvironment?.id
-            ? lifecycle.statusLabel
-            : (environmentBadge(env) ?? ''),
-      })),
-    [environments, selectedEnvironment?.id, lifecycle.statusLabel]
-  )
-
-  // The picker also leads back to every environment of the project, which
-  // replaced the "All environments ›" crumb above the header.
-  if (options.length > 0) {
-    return (
-      <ProjectScopePicker
-        variant="title"
-        options={options}
-        activeEnvironmentId={selectedEnvironment?.id ?? null}
-        statusColorFor={(option) =>
-          option.environmentId === selectedEnvironment?.id ? lifecycle.toneColor : undefined
-        }
-        allLink={{
-          label: 'All environments',
-          onPress: () => router.push(projectOverviewHref(orgId, projectId) as Href),
-        }}
-        onSelect={(option) =>
-          router.push(
-            environmentPageTabHref(orgId, projectId, option.environmentId, activeTab) as Href
-          )
-        }
-      />
-    )
-  }
-  return (
-    <Text style={styles.title} numberOfLines={1} accessibilityRole="header">
-      {name}
-    </Text>
-  )
-}
-
-/** The Primary or Pinned badge beside the environment name. */
-function EnvironmentBadge({
-  environment,
-}: Readonly<{ environment: Readonly<{ isPrimary?: boolean; pinned?: boolean }> }>) {
-  if (!environmentBadge(environment)) return null
-  const primary = environment.isPrimary === true
-  return (
-    <View
-      style={styles.badge}
-      accessibilityLabel={primary ? 'Primary environment' : 'Pinned environment'}
-    >
-      <Text style={styles.badgeText}>{primary ? 'Primary' : 'Pinned'}</Text>
-    </View>
-  )
 }
 
 /** `Not started yet` is a container answer; a native app's comes from its newest deploy. */
@@ -230,34 +141,49 @@ function EnvironmentHeader() {
 
   if (!selectedEnvironment) return null
   return (
-    <View style={styles.header}>
-      <View style={styles.titleRow}>
-        <View style={styles.titleBlock}>
-          <EnvironmentTitle />
+    <EnvironmentHeaderFrame
+      title={
+        <>
+          <EnvironmentTitle statusLabel={lifecycle.statusLabel} toneColor={lifecycle.toneColor} />
           <EnvironmentBadge environment={selectedEnvironment} />
-        </View>
-        <View style={styles.actions}>
+        </>
+      }
+      actions={
+        <>
           <VisitSiteButton hostnames={hostnames} primary={primaryHostname} />
           <EnvironmentLifecycleActions />
-        </View>
-      </View>
-      <StatusFacts facts={facts} />
-    </View>
+        </>
+      }
+      facts={facts}
+    />
   )
 }
 
-function EnvironmentChrome({ children }: Readonly<{ children: ReactNode }>) {
+/**
+ * The header, the one tab bar and the notices around an environment route.
+ * A managed database brings its own header and greys the tabs TurboPanel
+ * keeps for it; a website project draws the defaults.
+ */
+function EnvironmentChrome({
+  children,
+  header = <EnvironmentHeader />,
+  notices = <EnvironmentLifecycleNotices />,
+  managed = false,
+}: Readonly<{ children: ReactNode; header?: ReactNode; notices?: ReactNode; managed?: boolean }>) {
   const pathname = usePathname()
   const router = useRouter()
   const { orgId, projectId, pathEnvironmentId } = useProjectContext()
   useHostingDeepLink(pathEnvironmentId)
   const tabs = useMemo<UnderlineTab[]>(
-    () => ENVIRONMENT_PAGE_TAB_IDS.map((key) => ({ key, label: ENVIRONMENT_PAGE_TAB_LABELS[key] })),
-    []
+    () =>
+      managed
+        ? managedEnvironmentTabs()
+        : ENVIRONMENT_PAGE_TAB_IDS.map((key) => ({ key, label: ENVIRONMENT_PAGE_TAB_LABELS[key] })),
+    [managed]
   )
   return (
     <View style={styles.root}>
-      <EnvironmentHeader />
+      {header}
       {pathEnvironmentId ? (
         <UnderlineTabs
           tabs={tabs}
@@ -275,7 +201,7 @@ function EnvironmentChrome({ children }: Readonly<{ children: ReactNode }>) {
           ariaLabel="Environment sections"
         />
       ) : null}
-      <EnvironmentLifecycleNotices />
+      {notices}
       <View style={styles.body}>{children}</View>
     </View>
   )
@@ -283,11 +209,11 @@ function EnvironmentChrome({ children }: Readonly<{ children: ReactNode }>) {
 
 /**
  * True when an environment route gets the header and its tab bar: Compose
- * projects only. Managed and platform projects keep their own pages.
+ * projects and managed databases. Platform projects keep their own pages.
  */
 export function useEnvironmentChrome(): boolean {
   const { project, draft, needsSetup, isSystemProject } = useProjectContext()
-  return Boolean(project && !draft && !needsSetup && !isSystemProject && !isManagedProject(project))
+  return Boolean(project && !draft && !needsSetup && !isSystemProject)
 }
 
 /**
@@ -297,11 +223,21 @@ export function useEnvironmentChrome(): boolean {
  * back to the project.
  */
 export function EnvironmentShell({ children }: Readonly<{ children: ReactNode }>) {
-  const { orgId, projectId, environments, loading, pathEnvironmentId } = useProjectContext()
+  const { orgId, projectId, project, environments, loading, pathEnvironmentId } =
+    useProjectContext()
   const withChrome = useEnvironmentChrome()
   if (!withChrome) return <>{children}</>
   if (!loading && pathEnvironmentId && !environments.some((env) => env.id === pathEnvironmentId)) {
     return <Redirect href={projectOverviewHref(orgId, projectId) as Href} />
+  }
+  if (project && isManagedProject(project)) {
+    return (
+      <ManagedEnvironmentProvider>
+        <EnvironmentChrome header={<ManagedEnvironmentHeader />} notices={null} managed>
+          {children}
+        </EnvironmentChrome>
+      </ManagedEnvironmentProvider>
+    )
   }
   return (
     <EnvironmentLifecycleProvider>
@@ -314,71 +250,6 @@ const styles = StyleSheet.create({
   root: {
     width: '100%',
     gap: spacing.md,
-  },
-  header: {
-    gap: spacing.sm,
-  },
-  titleRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-  },
-  titleBlock: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    flexShrink: 1,
-    minWidth: 160,
-    gap: spacing.md,
-  },
-  actions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    marginLeft: 'auto',
-    gap: spacing.sm,
-  },
-  title: {
-    color: colors.text,
-    fontSize: 24,
-    fontWeight: '700',
-    letterSpacing: -0.3,
-  },
-  badge: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-  },
-  badgeText: {
-    color: colors.textMuted,
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  facts: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    rowGap: spacing.sm,
-    columnGap: 24,
-  },
-  fact: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  factCaption: {
-    color: colors.text3,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  factValue: {
-    color: colors.text,
-    fontSize: 12,
-    fontWeight: '600',
   },
   body: {
     width: '100%',
