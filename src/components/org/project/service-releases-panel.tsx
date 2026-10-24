@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native'
 import { LogTranscriptView } from '@/components/org/logs/log-transcript-view'
 import { nestedScrollDomProps, webNestedScrollStyle } from '@/components/org/logs/nested-scroll'
 import { panelStyles } from '@/components/ui/panel-styles'
@@ -25,9 +25,13 @@ import {
 import { colors, spacing, webPointer } from '@/lib/theme'
 import { useQueryClient } from '@tanstack/react-query'
 import { userErrorMessage } from '@/lib/user-error'
+import { COMPACT_BREAKPOINT } from '@/lib/v4/ui-scale'
 
 /** Cap the list so a long release history scrolls inside the panel. */
 const RELEASE_LIST_MAX_HEIGHT = 480
+
+/** Wide enough for the Roll back button, so rows with and without one line up. */
+const RELEASE_ACTION_WIDTH = 112
 
 /** Release ids are ULID/UUID-shaped; the head is enough to tell rows apart. */
 function shortReleaseId(releaseId: string): string {
@@ -126,95 +130,194 @@ function ReleaseTranscript({
   )
 }
 
+function StatusCell({ release }: Readonly<{ release: ReleaseRecord }>) {
+  const tone = deploymentStatusTone(release.status)
+  return (
+    <View style={styles.statusCell}>
+      <StatusDot size="sm" tone={statusDotTone(tone.tone)} />
+      <Text style={styles.statusText}>{tone.label}</Text>
+    </View>
+  )
+}
+
+function ReleaseIdCell({ release }: Readonly<{ release: ReleaseRecord }>) {
+  return (
+    <>
+      <Text style={styles.cellMono} numberOfLines={1}>
+        {shortReleaseId(release.releaseId)}
+      </Text>
+      {release.imageTag ? (
+        <Text style={styles.cellMuted} numberOfLines={1}>
+          {shortImageTag(release.imageTag)}
+        </Text>
+      ) : null}
+    </>
+  )
+}
+
+function ChangeCell({ release }: Readonly<{ release: ReleaseRecord }>) {
+  return (
+    <>
+      <Text style={styles.cellText} numberOfLines={1}>
+        {release.commitMessage ?? '—'}
+      </Text>
+      {release.commitAuthor ? (
+        <Text style={styles.cellMuted} numberOfLines={1}>
+          {release.commitAuthor}
+        </Text>
+      ) : null}
+    </>
+  )
+}
+
+function StateCell({ release }: Readonly<{ release: ReleaseRecord }>) {
+  return (
+    <>
+      {release.isLive ? <Badge label="Live" tone="ok" /> : null}
+      {release.rollbackToReleaseId ? <Text style={styles.cellMuted}>rollback</Text> : null}
+    </>
+  )
+}
+
+function releaseWhen(release: ReleaseRecord): string {
+  return formatDeployTimestamp(release.finishedAt ?? release.queuedAt)
+}
+
+/**
+ * Roll back is confirmed but safe (the previous release is still published), so
+ * it is a quiet button, not a danger one. The live release has none.
+ */
+function RollbackAction({
+  release,
+  canRollback,
+  rollingBack,
+  onRollback,
+}: Readonly<{
+  release: ReleaseRecord
+  canRollback: boolean
+  rollingBack: boolean
+  onRollback: () => void
+}>) {
+  if (release.isLive || !canRollback) return null
+  return (
+    <ConfirmButton
+      // Remounting on the row id disarms every other row's confirm when
+      // the operator moves to a different release.
+      key={release.releaseId}
+      label="Roll back"
+      confirmLabel="Roll back"
+      prompt={rollbackPrompt(release)}
+      variant="secondary"
+      disabled={release.status !== 'succeeded'}
+      busy={rollingBack}
+      onConfirm={onRollback}
+    />
+  )
+}
+
+type ReleaseRowProps = Readonly<{
+  orgId: string
+  release: ReleaseRecord
+  index: number
+  expanded: boolean
+  compact: boolean
+  canRollback: boolean
+  rollingBack: boolean
+  onToggle: () => void
+  onRollback: () => void
+}>
+
+/** The wide row: one cell per header column, then the action column, always drawn. */
+function WideRowMain({ release }: Readonly<{ release: ReleaseRecord }>) {
+  return (
+    <>
+      <View style={[styles.cell, styles.colStatus]}>
+        <StatusCell release={release} />
+      </View>
+      <View style={[styles.cell, styles.colRelease]}>
+        <ReleaseIdCell release={release} />
+      </View>
+      <View style={[styles.cell, styles.colCommit]}>
+        <Text style={styles.cellMono} numberOfLines={1}>
+          {shortCommitSha(release.commitSha)}
+        </Text>
+      </View>
+      <View style={[styles.cell, styles.colMessage]}>
+        <ChangeCell release={release} />
+      </View>
+      <View style={[styles.cell, styles.colWhen]}>
+        <Text style={styles.cellText}>{releaseWhen(release)}</Text>
+      </View>
+      <View style={[styles.cell, styles.colLive]}>
+        <StateCell release={release} />
+      </View>
+    </>
+  )
+}
+
+/**
+ * The phone row, stacked so nothing overlaps: status, release and state; then
+ * the change; then the commit and time with Roll back at the end.
+ */
+function StackedRowMain({ release }: Readonly<{ release: ReleaseRecord }>) {
+  return (
+    <>
+      <View style={styles.stackLine}>
+        <StatusCell release={release} />
+        <ReleaseIdCell release={release} />
+        <StateCell release={release} />
+      </View>
+      <View style={styles.cell}>
+        <ChangeCell release={release} />
+      </View>
+      <Text style={styles.cellMuted} numberOfLines={1}>
+        {`${shortCommitSha(release.commitSha)} · ${releaseWhen(release)}`}
+      </Text>
+    </>
+  )
+}
+
 function ReleaseRow({
   orgId,
   release,
   index,
   expanded,
+  compact,
   canRollback,
   rollingBack,
   onToggle,
   onRollback,
-}: Readonly<{
-  orgId: string
-  release: ReleaseRecord
-  index: number
-  expanded: boolean
-  canRollback: boolean
-  rollingBack: boolean
-  onToggle: () => void
-  onRollback: () => void
-}>) {
+}: ReleaseRowProps) {
   const tone = deploymentStatusTone(release.status)
   const succeeded = release.status === 'succeeded'
 
   return (
     <View>
       <View
-        style={[styles.row, index % 2 === 1 && styles.rowZebra, expanded && styles.rowExpanded]}
+        style={[
+          styles.row,
+          compact && styles.rowStacked,
+          index % 2 === 1 && styles.rowZebra,
+          expanded && styles.rowExpanded,
+        ]}
       >
         <Pressable
-          style={[styles.rowMain, webPointer]}
+          style={[compact ? styles.rowMainStacked : styles.rowMain, webPointer]}
           onPress={onToggle}
           accessibilityRole="button"
           accessibilityState={{ expanded }}
+          aria-expanded={expanded}
           accessibilityLabel={`Release ${shortReleaseId(release.releaseId)} — ${tone.label}`}
         >
-          <View style={[styles.cell, styles.colStatus]}>
-            <View style={styles.statusCell}>
-              <StatusDot size="sm" tone={statusDotTone(tone.tone)} />
-              <Text style={styles.statusText}>{tone.label}</Text>
-            </View>
-          </View>
-          <View style={[styles.cell, styles.colRelease]}>
-            <Text style={styles.cellMono} numberOfLines={1}>
-              {shortReleaseId(release.releaseId)}
-            </Text>
-            {release.imageTag ? (
-              <Text style={styles.cellMuted} numberOfLines={1}>
-                {shortImageTag(release.imageTag)}
-              </Text>
-            ) : null}
-          </View>
-          <View style={[styles.cell, styles.colCommit]}>
-            <Text style={styles.cellMono} numberOfLines={1}>
-              {shortCommitSha(release.commitSha)}
-            </Text>
-          </View>
-          <View style={[styles.cell, styles.colMessage]}>
-            <Text style={styles.cellText} numberOfLines={1}>
-              {release.commitMessage ?? '—'}
-            </Text>
-            {release.commitAuthor ? (
-              <Text style={styles.cellMuted} numberOfLines={1}>
-                {release.commitAuthor}
-              </Text>
-            ) : null}
-          </View>
-          <View style={[styles.cell, styles.colWhen]}>
-            <Text style={styles.cellText}>
-              {formatDeployTimestamp(release.finishedAt ?? release.queuedAt)}
-            </Text>
-          </View>
-          <View style={[styles.cell, styles.colLive]}>
-            {release.isLive ? <Badge label="Live" tone="ok" /> : null}
-            {release.rollbackToReleaseId ? <Text style={styles.cellMuted}>rollback</Text> : null}
-          </View>
+          {compact ? <StackedRowMain release={release} /> : <WideRowMain release={release} />}
         </Pressable>
-        <View style={styles.rowAction}>
-          {release.isLive || !canRollback ? null : (
-            <ConfirmButton
-              // Remounting on the row id disarms every other row's confirm when
-              // the operator moves to a different release.
-              key={release.releaseId}
-              label="Rollback"
-              confirmLabel="Roll back"
-              prompt={rollbackPrompt(release)}
-              disabled={!succeeded}
-              busy={rollingBack}
-              onConfirm={onRollback}
-            />
-          )}
+        <View style={compact ? styles.rowActionStacked : styles.colAction}>
+          <RollbackAction
+            release={release}
+            canRollback={canRollback}
+            rollingBack={rollingBack}
+            onRollback={onRollback}
+          />
         </View>
       </View>
       {expanded ? (
@@ -239,6 +342,7 @@ function ReleaseRow({
   )
 }
 
+/** Column titles for the wide form; the phone form has none. */
 function ReleasesHeader() {
   return (
     <View style={styles.headerRow}>
@@ -260,6 +364,7 @@ function ReleasesHeader() {
       <View style={[styles.cell, styles.colLive]}>
         <Text style={styles.headerText}>State</Text>
       </View>
+      <View style={styles.colAction} />
     </View>
   )
 }
@@ -294,6 +399,7 @@ export function ServiceReleasesPanel({
   collapsible?: boolean
 }>) {
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const compact = useWindowDimensions().width < COMPACT_BREAKPOINT
   const [trackedCommandId, setTrackedCommandId] = useState<string | null>(null)
   const [trackedServerId, setTrackedServerId] = useState<string | null>(null)
 
@@ -367,7 +473,7 @@ export function ServiceReleasesPanel({
       ) : null}
       {releases.length > 0 ? (
         <View style={styles.table}>
-          <ReleasesHeader />
+          {compact ? null : <ReleasesHeader />}
           <ScrollView
             style={[styles.tableBody, webNestedScrollStyle]}
             nestedScrollEnabled
@@ -383,6 +489,7 @@ export function ServiceReleasesPanel({
                 release={release}
                 index={index}
                 expanded={expandedId === release.releaseId}
+                compact={compact}
                 canRollback={canManage}
                 rollingBack={rollingBack}
                 onToggle={() =>
@@ -443,8 +550,34 @@ const styles = StyleSheet.create({
     minWidth: 0,
     paddingVertical: spacing.xs,
   },
-  rowAction: {
+  rowStacked: {
+    alignItems: 'flex-end',
+    paddingVertical: spacing.sm,
+  },
+  rowMainStacked: {
+    flex: 1,
+    gap: 4,
+    minWidth: 0,
+  },
+  stackLine: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    columnGap: spacing.sm,
+    rowGap: 4,
+  },
+  /** Always drawn (empty on the live row) so every row keeps the same columns. */
+  colAction: {
+    minWidth: RELEASE_ACTION_WIDTH,
+    flexShrink: 0,
+    alignItems: 'flex-end',
     justifyContent: 'center',
+  },
+  /** May shrink: the armed confirm (prompt and two buttons) wraps instead of covering the text. */
+  rowActionStacked: {
+    flexShrink: 1,
+    maxWidth: '50%',
+    alignItems: 'flex-end',
   },
   rowZebra: {
     backgroundColor: colors.bgInset,

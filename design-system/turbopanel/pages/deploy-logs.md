@@ -131,6 +131,25 @@ at the end as empty headers.
   scrolls to the row.
 - Matches are marked with a `warnSoft` background; the field and each step
   header also say the count in words.
+- The search runs 150 ms after the last keystroke, so typing in a long log
+  stays smooth. Matching is case-insensitive one character at a time and never
+  shifts the marked text (a character whose lower case is longer is compared as
+  it is).
+
+## Phone controls
+
+On a phone (narrower than `layout.desktopBreakpoint`) the search field sits
+above the log and the other controls move to a bar under it (sticky at the
+bottom of the screen on the web) with 48 pt buttons:
+
+- **Live** (only while the log is being written; shows On or Paused/Off),
+  **Jump to error** (only when there is one), **Filter** and **More**.
+- **Filter** opens a panel with Errors and warnings and, while a search is
+  typed, Highlight / Only matching. The Filter button is marked while either
+  narrows the log.
+- **More** opens a panel with Wrap, Timestamps, Open / Close all steps, Copy
+  and Download (web only).
+- On/off controls use the shared `Toggle` switch everywhere.
 
 ## Wrap and timestamps
 
@@ -188,13 +207,22 @@ colours on a log surface and break the contrast floor. Do not add an
 - **Download** is web-only (`Blob` + object URL). On native the control is not
   rendered at all — never a disabled control with no explanation.
 - `LogViewer` labels them **Copy** and **Download**; both take the whole log,
-  whatever is open or filtered.
+  whatever is open or filtered, with repeated progress ticks collapsed exactly
+  as the view shows them. The text is built once per change of the log, not
+  on every render.
 
 ## Polling
 
 - One `useCommandLog(serverId, commandId)` query per open transcript, cursor-based
   on `nextSeq`, `refetchInterval` **1 s while `sealed === false`, `false` after**.
   Never a `setInterval`.
+- The log endpoint returns at most 512 KiB per call and reports `sealed` for
+  the whole log, not for the part returned. So one read takes pages back to
+  back while the cursor moves and the log is sealed (or polling is off), up to
+  `COMMAND_LOG_MAX_PAGES_PER_READ`; a live log that is not sealed yet takes one
+  page per poll. A read cut short (page cap, or a later page failing) sets
+  `moreToRead`, and polling carries on until the cursor stops, even for a
+  sealed log. A long finished deploy is never shown cut off.
 - A `403` (or any durable client error) on a transcript read becomes the
   viewer's own `forbidden` / `unavailable` state and **stops the interval**. It
   is never rethrown — the app-wide QueryClient routes every query `403` through

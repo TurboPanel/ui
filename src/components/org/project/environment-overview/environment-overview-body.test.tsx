@@ -137,20 +137,20 @@ describe.each(SCENARIOS)('EnvironmentOverviewBody ($name)', (scenario) => {
   it('opens each row where it belongs', () => {
     renderBody()
     fireEvent.click(screen.getByRole('button', { name: 'web' }))
-    expect(push).toHaveBeenLastCalledWith('/o/projects/p/services/s-web')
+    expect(push).toHaveBeenLastCalledWith(`${BASE}/services/s-web`)
     fireEvent.click(screen.getByRole('button', { name: 'shopdb' }))
     expect(push).toHaveBeenLastCalledWith(`${BASE}/configuration/bindings`)
     fireEvent.click(screen.getByRole('button', { name: 'uploads' }))
     expect(push).toHaveBeenLastCalledWith(`${BASE}/configuration/storage`)
     fireEvent.click(screen.getByRole('button', { name: 'redis' }))
-    expect(push).toHaveBeenLastCalledWith('/o/projects/p/services/s-redis')
+    expect(push).toHaveBeenLastCalledWith(`${BASE}/services/s-redis`)
   })
 
   it('opens map stations through links: services, domain, database and storage', () => {
     renderBody()
     const href = (name: RegExp) =>
       screen.getByRole('link', { name }).closest('[data-href]')?.getAttribute('data-href')
-    expect(href(/^web, Node\.js app/)).toBe('/o/projects/p/services/s-web')
+    expect(href(/^web, Node\.js app/)).toBe(`${BASE}/services/s-web`)
     expect(href(/^shop\.example\.com, domain/)).toBe(`${BASE}/configuration/hosting`)
     expect(href(/^shopdb, database/)).toBe(`${BASE}/configuration/bindings`)
     expect(href(/^uploads, storage/)).toBe(`${BASE}/configuration/storage`)
@@ -281,7 +281,7 @@ describe.each(SCENARIOS)('EnvironmentOverviewBody ($name)', (scenario) => {
       fireEvent.click(screen.getByRole('button', { name: 'web' }))
       expect(push).not.toHaveBeenCalled()
       fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Open web' }))
-      expect(push).toHaveBeenLastCalledWith('/o/projects/p/services/s-web')
+      expect(push).toHaveBeenLastCalledWith(`${BASE}/services/s-web`)
       expect(screen.queryByRole('dialog')).toBeNull()
     })
 
@@ -314,7 +314,7 @@ describe.each(SCENARIOS)('EnvironmentOverviewBody ($name)', (scenario) => {
       renderBody({ source: crashing({ state: 'stopped' }) })
       expect(screen.queryByText('See why')).toBeNull()
       fireEvent.click(screen.getByRole('button', { name: 'web' }))
-      expect(push).toHaveBeenLastCalledWith('/o/projects/p/services/s-web')
+      expect(push).toHaveBeenLastCalledWith(`${BASE}/services/s-web`)
     })
   })
 })

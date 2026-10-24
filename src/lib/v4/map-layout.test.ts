@@ -303,7 +303,87 @@ describe('map details', () => {
     })
     const aria = (host: string) => layout.nodes.find((n) => n.name === host)?.aria
     expect(aria('one.example.com')).toContain(`shows ${second?.name}`)
-    expect(aria('two.example.com')).toBe(aria('three.example.com')?.replace('three', 'two'))
+    // Both fall back to the first web app, so they share its box.
+    const web = layout.nodes.find((n) => n.name === 'two.example.com')
+    expect(web?.lines).toEqual(['three.example.com'])
+    expect(web?.aria).toMatch(/^two\.example\.com, three\.example\.com, domains, secure, shows /)
+    expect(layout.nodes.some((n) => n.name === 'three.example.com')).toBe(false)
+  })
+
+  it('puts every hostname of an app in one Visitors box, the primary first', () => {
+    const input = sampleMapInput(api, sampleEnvironment(api, 'production'), 'env')
+    const status = { key: 'ok', label: 'Secure' }
+    const hosts = ['a.example.com', 'b.example.com', 'c.example.com', 'd.example.com']
+    const layout = mapLayout({
+      ...input,
+      primaryHost: 'C.example.com',
+      domains: [
+        ...hosts.map((host) => ({ host, status })),
+        {
+          host: 'www.a.example.com',
+          status: { key: 'test', label: 'Self-signed (browsers warn)' },
+          redirectTo: 'a.example.com',
+          servedFrom: 'Served from 203.0.113.24',
+        },
+      ],
+    })
+    const boxes = layout.nodes.filter((n) => n.kind === 'domain')
+    expect(boxes).toHaveLength(1)
+    const box = boxes[0]!
+    expect(box.name).toBe('c.example.com')
+    // Two host lines at most (the second says how many more), then where it is served from.
+    expect(box.lines).toEqual(['a.example.com', '+3 more', 'Served from 203.0.113.24'])
+    // The worst certificate of its hostnames shows.
+    expect(box.status).toEqual({ key: 'test', label: 'Self-signed (browsers warn)' })
+    expect(box.h).toBe(MAP.h.domain + 3 * MAP.domainLine)
+    expect(box.aria).toContain('served from 203.0.113.24')
+    expect(layout.counts.domains).toBe(5)
+  })
+
+  it('lists a redirect with its target and leaves the served line out when unknown', () => {
+    const input = sampleMapInput(api, sampleEnvironment(api, 'production'), 'env')
+    const status = { key: 'ok', label: 'Secure' }
+    const layout = mapLayout({
+      ...input,
+      domains: [
+        { host: 'example.com', status },
+        { host: 'www.example.com', status, redirectTo: 'example.com' },
+      ],
+    })
+    const box = layout.nodes.find((n) => n.kind === 'domain')
+    expect(box?.lines).toEqual(['www.example.com → example.com'])
+  })
+
+  it('gives a tall Visitors box two rows and keeps its line to the app straight', () => {
+    const input = sampleMapInput(api, sampleEnvironment(api, 'production'), 'env')
+    const status = { key: 'ok', label: 'Secure' }
+    const apps = input.services.filter((s) => s.kind !== 'database')
+    const layout = mapLayout({
+      ...input,
+      domains: [
+        {
+          host: 'one.example.com',
+          status,
+          serviceId: apps[0]?.id,
+          servedFrom: 'Served from 1.2.3.4',
+        },
+        { host: 'two.example.com', status, serviceId: apps[0]?.id },
+        { host: 'three.example.com', status, serviceId: apps[1]?.id },
+      ],
+    })
+    const tall = layout.nodes.find((n) => n.name === 'one.example.com')!
+    const next = layout.nodes.find((n) => n.name === 'three.example.com')!
+    expect(tall.h).toBeGreaterThan(MAP.slot)
+    expect(tall.y).toBe(MAP.top)
+    // The next box starts below the tall one.
+    expect(next.y).toBeGreaterThanOrEqual(tall.y + tall.h)
+    const app = layout.nodes.find((n) => n.id === `a:${apps[0]?.id}`)!
+    const appMiddle = Math.round(app.y + app.h / 2)
+    expect(
+      layout.segments.some(
+        (seg) => seg.orientation === 'h' && seg.y === appMiddle && seg.x === tall.x + tall.w
+      )
+    ).toBe(true)
   })
 
   it('says only what is known about a volume', () => {
@@ -402,7 +482,7 @@ describe('map details', () => {
     const layout = mapLayout({ ...input, services: [], volumes: [] })
     expect(layout.segments).toEqual([])
     expect(layout.nodes.find((n) => n.kind === 'domain')?.aria).toBe(
-      'turbopanel.io, domain, secure'
+      'turbopanel.io, www.turbopanel.io, domains, secure'
     )
   })
 })
