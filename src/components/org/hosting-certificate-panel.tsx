@@ -9,6 +9,7 @@ import {
   dnsSummaryLines,
   letsEncryptRefusal,
   type CertificateTone,
+  type CertificateView,
   type LetsEncryptRefusal,
 } from '@/lib/hosting-certificate'
 import type { HostingDnsReport } from '@/lib/instance-api'
@@ -131,6 +132,69 @@ function DnsResult({ dns }: Readonly<{ dns: HostingDnsReport }>) {
   )
 }
 
+/** The actions the server offers for this certificate, plus Deploy now when one is due. */
+function CertificateButtons({
+  view,
+  composeOwned,
+  disabled,
+  deploy,
+  requesting,
+  onRequest,
+  checkingDns,
+  onCheckDns,
+}: Readonly<{
+  view: CertificateView
+  composeOwned: boolean
+  disabled: boolean
+  deploy: DeployShortcut | null
+  requesting: boolean
+  onRequest: () => void
+  checkingDns: boolean
+  onCheckDns: () => void
+}>) {
+  const canRequest = view.actions.includes('use_lets_encrypt') && !composeOwned
+  return (
+    <ButtonRow>
+      {view.actions.includes('deploy') && deploy ? (
+        <DeployNowButton deploy={deploy} disabled={disabled} />
+      ) : null}
+      {canRequest ? (
+        <Button
+          label="Use Let’s Encrypt"
+          busyLabel="Checking DNS…"
+          size="sm"
+          variant="primary"
+          busy={requesting}
+          disabled={disabled}
+          onPress={onRequest}
+        />
+      ) : null}
+      {view.actions.includes('check_dns') ? (
+        <Button
+          label="Check DNS"
+          busyLabel="Checking…"
+          size="sm"
+          variant="secondary"
+          busy={checkingDns}
+          disabled={disabled}
+          onPress={onCheckDns}
+        />
+      ) : null}
+      {view.actions.includes('try_again') && !composeOwned ? (
+        <Button
+          label="Try again"
+          busyLabel="Trying…"
+          size="sm"
+          variant="secondary"
+          busy={requesting}
+          disabled={disabled}
+          onPress={onRequest}
+        />
+      ) : null}
+    </ButtonRow>
+  )
+}
+
 /**
  * The certificate state of one domain, and the one-click "Use Let's Encrypt".
  * Every state word and the choice of actions come from the server's derived
@@ -157,13 +221,10 @@ export function HostingCertificatePanel({
   }
 
   const view = describeCertificate(certificate)
-  const busy = letsEncrypt.isPending
   const dnsError = dnsCheck.error
     ? userErrorMessage(dnsCheck.error, 'Could not check DNS.')
     : null
   const dns = dnsCheck.data?.dns ?? null
-  const canRequest = view.actions.includes('use_lets_encrypt') && !composeOwned
-
   const request = () => {
     void letsEncrypt.run()
   }
@@ -186,44 +247,16 @@ export function HostingCertificatePanel({
       {refusal ? <RefusalNote orgId={orgId} refusal={refusal} /> : null}
       {dnsError ? <Text style={styles.reason}>{dnsError}</Text> : null}
 
-      <ButtonRow>
-        {view.actions.includes('deploy') && deploy ? (
-          <DeployNowButton deploy={deploy} disabled={disabled} />
-        ) : null}
-        {canRequest ? (
-          <Button
-            label="Use Let’s Encrypt"
-            busyLabel="Checking DNS…"
-            size="sm"
-            variant="primary"
-            busy={busy}
-            disabled={disabled}
-            onPress={request}
-          />
-        ) : null}
-        {view.actions.includes('check_dns') ? (
-          <Button
-            label="Check DNS"
-            busyLabel="Checking…"
-            size="sm"
-            variant="secondary"
-            busy={dnsCheck.isPending}
-            disabled={disabled}
-            onPress={() => void dnsCheck.run()}
-          />
-        ) : null}
-        {view.actions.includes('try_again') && !composeOwned ? (
-          <Button
-            label="Try again"
-            busyLabel="Trying…"
-            size="sm"
-            variant="secondary"
-            busy={busy}
-            disabled={disabled}
-            onPress={request}
-          />
-        ) : null}
-      </ButtonRow>
+      <CertificateButtons
+        view={view}
+        composeOwned={composeOwned}
+        disabled={disabled}
+        deploy={deploy}
+        requesting={letsEncrypt.isPending}
+        onRequest={request}
+        checkingDns={dnsCheck.isPending}
+        onCheckDns={() => void dnsCheck.run()}
+      />
     </View>
   )
 }
