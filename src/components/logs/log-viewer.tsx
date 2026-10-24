@@ -345,6 +345,142 @@ function onScrollToIndexFailed(
   })
 }
 
+/** One row of the list: a step header, a line, a gap, the setup fold or the empty note. */
+function LogViewerRow({
+  item,
+  compact,
+  query,
+  wrap,
+  timestamps,
+  onToggleStep,
+  onShowNoise,
+}: Readonly<{
+  item: LogViewerItem
+  compact: boolean
+  query: string
+  wrap: boolean
+  timestamps: boolean
+  onToggleStep: (id: string) => void
+  onShowNoise: (stepId: string) => void
+}>) {
+  switch (item.kind) {
+    case 'step':
+      return (
+        <StepHeaderRow
+          step={item.step}
+          open={item.open}
+          hits={item.hits}
+          compact={compact}
+          onToggle={onToggleStep}
+        />
+      )
+    case 'line':
+      return (
+        <LogLineRow
+          line={item.line}
+          level={item.level}
+          context={item.context}
+          query={query}
+          wrap={wrap}
+          timestamps={timestamps}
+        />
+      )
+    case 'noise':
+      return (
+        <Pressable
+          onPress={() => onShowNoise(item.stepId)}
+          accessibilityRole="button"
+          style={[styles.noise, webPointer]}
+        >
+          <Text style={styles.noiseText}>
+            {`Show ${item.count} setup line${item.count === 1 ? '' : 's'}`}
+          </Text>
+        </Pressable>
+      )
+    case 'gap':
+      return <Text style={styles.gap}>…</Text>
+    default:
+      return <Text style={styles.empty}>{item.text}</Text>
+  }
+}
+
+/** The search field, its match count and the filter style. */
+function LogSearchBar({
+  filter,
+  setFilter,
+  total,
+  grouped,
+  compact,
+}: Readonly<{
+  filter: LogFilter
+  setFilter: (update: (current: LogFilter) => LogFilter) => void
+  total: number
+  grouped: boolean
+  compact: boolean
+}>) {
+  const count = matchCountText(filter, total)
+  return (
+    <View style={styles.tools}>
+      <View style={compact ? styles.searchCompact : styles.search}>
+        <TextField
+          label="Search"
+          value={filter.query}
+          onChangeText={(query) => setFilter((current) => ({ ...current, query }))}
+          placeholder={grouped ? 'Search all steps' : 'Search the log'}
+          accessibilityLabel="Search the log"
+          autoCapitalize="none"
+          autoCorrect={false}
+          adornment={count ? <Text style={styles.count}>{count}</Text> : undefined}
+        />
+      </View>
+      {filter.query.trim().length > 0 ? (
+        <SegmentedControl
+          options={FILTER_MODES}
+          value={filter.mode}
+          onChange={(mode: LogFilterMode) => setFilter((current) => ({ ...current, mode }))}
+          accessibilityLabel="How search filters the log"
+        />
+      ) : null}
+    </View>
+  )
+}
+
+/** Jump to first error, Open / Close all steps, Copy and (web only) Download. */
+function LogActions({
+  compact,
+  plainText,
+  downloadFileName,
+  onJumpToError,
+  stepToggle,
+}: Readonly<{
+  compact: boolean
+  plainText: string
+  downloadFileName: string
+  onJumpToError: (() => void) | null
+  stepToggle: Readonly<{ label: string; onPress: () => void }> | null
+}>) {
+  const size = compact ? 'md' : 'sm'
+  return (
+    <View style={styles.tools}>
+      {onJumpToError ? (
+        <Button label="Jump to first error" size={size} onPress={onJumpToError} />
+      ) : null}
+      {stepToggle ? (
+        <Button label={stepToggle.label} size={size} onPress={stepToggle.onPress} />
+      ) : null}
+      <CopyButton value={plainText} label="Copy" size={size} accessibilityLabel="Copy the log" />
+      {WEB ? (
+        <Button
+          label="Download"
+          size={size}
+          onPress={() => downloadTranscript(downloadFileName, plainText)}
+          accessibilityLabel="Download the log"
+        />
+      ) : null}
+    </View>
+  )
+}
+
 export type LogViewerProps = Readonly<{
   lines: readonly LogTranscriptLine[]
   state: CommandLogState
@@ -416,8 +552,10 @@ export function LogViewer({
   )
   const scrollTo = useScrollToItem(listRef, model.items)
   const errorStep = firstErrorStepId(steps)
-  const filtering = isFiltering(filter)
   const allOpen = steps.every((step) => step.lines.length === 0 || openSteps.openIds.has(step.id))
+  const stepToggle = allOpen
+    ? { label: 'Close all steps', onPress: openSteps.closeAll }
+    : { label: 'Open all steps', onPress: openSteps.openAll }
 
   const jumpToStep = useCallback(
     (id: string) => {
@@ -448,49 +586,23 @@ export function LogViewer({
     [live, onScrolledAway]
   )
 
+  const showNoise = useCallback(
+    (stepId: string) => setNoiseShownIds((current) => new Set([...current, stepId])),
+    []
+  )
   const renderItem = useCallback(
-    ({ item }: ListRenderItemInfo<LogViewerItem>) => {
-      switch (item.kind) {
-        case 'step':
-          return (
-            <StepHeaderRow
-              step={item.step}
-              open={item.open}
-              hits={item.hits}
-              compact={compact}
-              onToggle={openSteps.toggle}
-            />
-          )
-        case 'line':
-          return (
-            <LogLineRow
-              line={item.line}
-              level={item.level}
-              context={item.context}
-              query={filter.query}
-              wrap={wrap}
-              timestamps={timestamps}
-            />
-          )
-        case 'noise':
-          return (
-            <Pressable
-              onPress={() => setNoiseShownIds((current) => new Set([...current, item.stepId]))}
-              accessibilityRole="button"
-              style={[styles.noise, webPointer]}
-            >
-              <Text
-                style={styles.noiseText}
-              >{`Show ${item.count} setup line${item.count === 1 ? '' : 's'}`}</Text>
-            </Pressable>
-          )
-        case 'gap':
-          return <Text style={styles.gap}>…</Text>
-        default:
-          return <Text style={styles.empty}>{item.text}</Text>
-      }
-    },
-    [compact, filter.query, openSteps.toggle, timestamps, wrap]
+    ({ item }: ListRenderItemInfo<LogViewerItem>) => (
+      <LogViewerRow
+        item={item}
+        compact={compact}
+        query={filter.query}
+        wrap={wrap}
+        timestamps={timestamps}
+        onToggleStep={openSteps.toggle}
+        onShowNoise={showNoise}
+      />
+    ),
+    [compact, filter.query, openSteps.toggle, showNoise, timestamps, wrap]
   )
 
   if (lines.length === 0) {
@@ -502,7 +614,6 @@ export function LogViewer({
     )
   }
 
-  const plainText = transcriptPlainText(lines)
   const viewportHeight = height ?? (compact ? 420 : 520)
 
   return (
@@ -516,32 +627,13 @@ export function LogViewer({
           </Text>
         </View>
       ) : null}
-      <View style={styles.tools}>
-        <View style={compact ? styles.searchCompact : styles.search}>
-          <TextField
-            label="Search"
-            value={filter.query}
-            onChangeText={(query) => setFilter((current) => ({ ...current, query }))}
-            placeholder={grouped ? 'Search all steps' : 'Search the log'}
-            accessibilityLabel="Search the log"
-            autoCapitalize="none"
-            autoCorrect={false}
-            adornment={
-              filtering ? (
-                <Text style={styles.count}>{matchCountText(filter, model.total)}</Text>
-              ) : undefined
-            }
-          />
-        </View>
-        {filter.query.trim().length > 0 ? (
-          <SegmentedControl
-            options={FILTER_MODES}
-            value={filter.mode}
-            onChange={(mode: LogFilterMode) => setFilter((current) => ({ ...current, mode }))}
-            accessibilityLabel="How search filters the log"
-          />
-        ) : null}
-      </View>
+      <LogSearchBar
+        filter={filter}
+        setFilter={setFilter}
+        total={model.total}
+        grouped={grouped}
+        compact={compact}
+      />
       <View style={styles.tools}>
         <ToolToggle
           label="Errors and warnings"
@@ -559,32 +651,13 @@ export function LogViewer({
         <ToolToggle label="Wrap" value={wrap} onChange={setWrapChoice} />
         <ToolToggle label="Timestamps" value={timestamps} onChange={setTimesChoice} />
       </View>
-      <View style={styles.tools}>
-        {errorStep ? (
-          <Button label="Jump to first error" size={compact ? 'md' : 'sm'} onPress={jumpToError} />
-        ) : null}
-        {grouped && !filtering ? (
-          <Button
-            label={allOpen ? 'Close all steps' : 'Open all steps'}
-            size={compact ? 'md' : 'sm'}
-            onPress={allOpen ? openSteps.closeAll : openSteps.openAll}
-          />
-        ) : null}
-        <CopyButton
-          value={plainText}
-          label="Copy"
-          size={compact ? 'md' : 'sm'}
-          accessibilityLabel="Copy the log"
-        />
-        {WEB ? (
-          <Button
-            label="Download"
-            size={compact ? 'md' : 'sm'}
-            onPress={() => downloadTranscript(downloadFileName, plainText)}
-            accessibilityLabel="Download the log"
-          />
-        ) : null}
-      </View>
+      <LogActions
+        compact={compact}
+        plainText={transcriptPlainText(lines)}
+        downloadFileName={downloadFileName}
+        onJumpToError={errorStep ? jumpToError : null}
+        stepToggle={grouped && !isFiltering(filter) ? stepToggle : null}
+      />
       <View
         style={[panelStyles.commandCodeBlock, styles.viewport, { height: viewportHeight }]}
         {...nestedScrollDomProps}
