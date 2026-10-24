@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Modal,
   Pressable,
@@ -13,6 +13,7 @@ import { BreadcrumbChevron, HeaderChevron } from '@/components/header-chevron'
 import { SearchIcon } from '@/components/icons/nav-icons'
 import { EmptyState, StatusDot } from '@/components/ui'
 import { typeStyle } from '@/components/ui/v4/type-styles'
+import { popoverBackdrop, usePopoverAnchor } from '@/components/org/project/use-popover-anchor'
 import {
   filterProjectScopeOptions,
   resolveScopeTriggerOption,
@@ -223,7 +224,7 @@ function ScopePickerPanel({
       animationType={isCompact ? 'slide' : 'fade'}
       onRequestClose={onClose}
     >
-      <View style={[styles.backdrop, isCompact && styles.backdropCompact]}>
+      <View style={[popoverBackdrop.backdrop, isCompact && popoverBackdrop.compact]}>
         <Pressable
           style={StyleSheet.absoluteFill}
           onPress={onClose}
@@ -308,8 +309,7 @@ export function ProjectScopePicker({
   const isCompact = width < layout.desktopBreakpoint
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
-  const [anchor, setAnchor] = useState({ top: 56, left: 16 })
-  const triggerRef = useRef<View | null>(null)
+  const { ref: triggerRef, anchor } = usePopoverAnchor(open, isCompact, PICKER_WIDTH)
 
   const shown = resolveScopeTriggerOption(options, activeEnvironmentId)
   const selected = activeEnvironmentId != null
@@ -319,19 +319,6 @@ export function ProjectScopePicker({
   useEffect(() => {
     if (!open) setQuery('')
   }, [open])
-
-  useEffect(() => {
-    if (!open || isCompact) return
-    triggerRef.current?.measureInWindow((x, y, w, h) => {
-      setAnchor({
-        top: y + h + 6,
-        left: Math.min(
-          Math.max(12, x + w - PICKER_WIDTH),
-          Math.max(12, width - PICKER_WIDTH - 12),
-        ),
-      })
-    })
-  }, [open, isCompact, width])
 
   if (!shown) return null
 
@@ -424,13 +411,6 @@ const styles = StyleSheet.create({
   triggerLabelSelected: {
     color: colors.link,
     fontWeight: '700',
-  },
-  backdrop: {
-    flex: 1,
-    backgroundColor: colors.overlay,
-  },
-  backdropCompact: {
-    justifyContent: 'flex-end',
   },
   card: {
     borderRadius: 10,

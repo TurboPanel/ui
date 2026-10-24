@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import {
   Linking,
   Modal,
@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native'
 import { HeaderChevron } from '@/components/header-chevron'
+import { popoverBackdrop, usePopoverAnchor } from '@/components/org/project/use-popover-anchor'
 import { useTouch } from '@/components/ui/v4/use-palette'
 import { siteUrlFromHostname } from '@/lib/environment-status'
 import { chrome, colors, layout, spacing, webPointer } from '@/lib/theme'
@@ -38,7 +39,7 @@ function HostnameMenu({
 }>) {
   return (
     <Modal visible transparent animationType={compact ? 'slide' : 'fade'} onRequestClose={onClose}>
-      <View style={[styles.backdrop, compact && styles.backdropCompact]}>
+      <View style={[popoverBackdrop.backdrop, compact && popoverBackdrop.compact]}>
         <Pressable
           style={StyleSheet.absoluteFill}
           onPress={onClose}
@@ -93,18 +94,7 @@ export function VisitSiteButton({
   const compact = width < layout.desktopBreakpoint
   const touch = useTouch()
   const [open, setOpen] = useState(false)
-  const [anchor, setAnchor] = useState({ top: 56, left: 16 })
-  const wrapRef = useRef<View | null>(null)
-
-  useEffect(() => {
-    if (!open || compact) return
-    wrapRef.current?.measureInWindow((x, y, w, h) => {
-      setAnchor({
-        top: y + h + 6,
-        left: Math.min(Math.max(12, x + w - MENU_WIDTH), Math.max(12, width - MENU_WIDTH - 12)),
-      })
-    })
-  }, [open, compact, width])
+  const { ref: wrapRef, anchor } = usePopoverAnchor(open, compact, MENU_WIDTH)
 
   if (!primary) return null
   const several = hostnames.length > 1
@@ -173,8 +163,6 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   text: { color: colors.textChip, fontSize: 12, fontWeight: '600' },
-  backdrop: { flex: 1, backgroundColor: colors.overlay },
-  backdropCompact: { justifyContent: 'flex-end' },
   menu: {
     borderRadius: 10,
     borderWidth: 1,
