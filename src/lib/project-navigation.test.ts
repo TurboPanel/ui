@@ -567,8 +567,8 @@ describe('project and environment tabs', () => {
     expect(tab('/base/compose')).toBe('compose')
     expect(tab('/base/bindings')).toBe('bindings')
     expect(tab('/base/hosting')).toBe('hosting')
-    // The Base's Services lens and Storage light Base.
-    expect(tab('/base/services')).toBe('base')
+    // The Services view lights Compose (the editor's toggle); Storage lights Base.
+    expect(tab('/base/services')).toBe('compose')
     expect(tab('/base/storage')).toBe('base')
     expect(tab('/base/nothing')).toBe('base')
     // Retired paths and service detail light the tab they moved to.

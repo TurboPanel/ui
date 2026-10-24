@@ -115,7 +115,7 @@ describe('project tab bar', () => {
     for (const [pathname, active] of [
       ['/o/projects/p/overview', 'Environments'],
       ['/o/projects/p/base', 'Base'],
-      ['/o/projects/p/base/services', 'Base'],
+      ['/o/projects/p/base/services', 'Compose'],
       ['/o/projects/p/base/storage', 'Base'],
       ['/o/projects/p/base/compose', 'Compose'],
       ['/o/projects/p/base/bindings', 'Bindings'],

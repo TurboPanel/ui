@@ -646,8 +646,9 @@ function sectionPageTab(lens: ComposeProjectTabId | undefined): SectionPageTabId
 
 /**
  * Tabs on a compose project page, in bar order. The one bar on every project
- * screen: Environments, the Base (its map; the Services lens and Storage light
- * it too), the Base's Compose file, Bindings and Hosting, then Settings.
+ * screen: Environments, the Base (its map; Storage lights it too), the Base's
+ * Compose file (its Services view lights it too), Bindings and Hosting, then
+ * Settings.
  */
 export const PROJECT_PAGE_TAB_IDS = [
   'overview',
@@ -735,6 +736,9 @@ export function parseProjectPageTab(
   }
   if (first === 'settings') return 'settings'
   if (first === 'base') {
+    // The Services view is the Compose editor's other half (its toggle), so
+    // the bar stays on Compose while that toggle switches.
+    if (parts.segments[1] === 'services') return 'compose'
     return sectionPageTab(LENS_SUBROUTES.get(parts.segments[1] ?? '')) ?? 'base'
   }
   if (LEGACY_SECTION_LENS.has(first)) {
