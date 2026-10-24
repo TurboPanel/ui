@@ -11,6 +11,7 @@ import { PreviewDeploymentModal } from '@/components/org/project/preview-deploym
 import { LoadingState } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
 import type { EnvironmentRecord } from '@/lib/instance-api'
+import { deployRefusalMessage } from '@/lib/deploy-error-message'
 import { useOrgDefaultEnvironmentName } from '@/lib/org-default-environment'
 import { setupEnvironmentPatch, setupVariableBodies } from '@/lib/project-create/environment-setup'
 import { projectEnvironmentHref } from '@/lib/project-navigation'
@@ -185,7 +186,11 @@ function EnvironmentSetupScreen({
     const started = await deploy.run(undefined)
     if (!started.ok) {
       setConfirm(null)
-      setError(refusal(started, 'Could not start the deploy.'))
+      setError(
+        started.cause
+          ? deployRefusalMessage(started.cause)
+          : (started.error ?? 'Could not start the deploy.')
+      )
       return
     }
     // The environment's Overview shows the deploy as it runs.

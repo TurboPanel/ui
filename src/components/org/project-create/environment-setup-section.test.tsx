@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { DeployHealthCheckMissingError } from '@/lib/instance-api'
 import { ProjectEnvironmentSetupSection } from './environment-setup-section'
 
 const mocks = vi.hoisted(() => ({
@@ -133,6 +134,19 @@ describe('ProjectEnvironmentSetupSection', () => {
     await press('Confirm deploy')
     expect(mocks.deployRun).toHaveBeenCalledTimes(1)
     expect(mocks.replace).toHaveBeenCalledWith('/o/projects/p/environments/e1')
+  })
+
+  it('words a refused deploy in plain words, not its code', async () => {
+    mocks.deployRun.mockResolvedValue({
+      ok: false,
+      error: 'health_check_missing',
+      cause: new DeployHealthCheckMissingError(true, ['web']),
+    })
+    render(<ProjectEnvironmentSetupSection />)
+    await press('Deploy')
+    await press('Confirm deploy')
+    expect(screen.getByRole('alert').textContent).toMatch(/requires a compose healthcheck/)
+    expect(mocks.replace).not.toHaveBeenCalled()
   })
 
   it('stays with the error when a save is refused, and does not add a variable twice', async () => {
