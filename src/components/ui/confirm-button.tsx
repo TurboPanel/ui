@@ -6,7 +6,9 @@ import { colors, spacing } from '@/lib/theme'
 /**
  * Two-step destructive action (MASTER: destructive always confirms).
  * First press arms; the armed row shows Confirm / Cancel and auto-disarms
- * after 6s of inactivity. While `busy` is true the armed row is shown only
+ * after 6s of inactivity. `variant="secondary"` is for an action that is
+ * confirmed but safe to undo (a rollback): a quiet button that confirms with
+ * the primary one. While `busy` is true the armed row is shown only
  * for the instance that fired `onConfirm` — other instances sharing the
  * same busy flag render the base button, disabled.
  */
@@ -20,6 +22,7 @@ export function ConfirmButton({
   busy = false,
   disabled = false,
   size = 'sm',
+  variant = 'danger',
 }: Readonly<{
   label: string
   confirmLabel?: string
@@ -37,6 +40,7 @@ export function ConfirmButton({
   busy?: boolean
   disabled?: boolean
   size?: ButtonSize
+  variant?: 'danger' | 'secondary'
 }>) {
   const [armed, setArmed] = useState(false)
   const [confirmed, setConfirmed] = useState(false)
@@ -73,7 +77,7 @@ export function ConfirmButton({
     return (
       <Button
         label={label}
-        variant="danger"
+        variant={variant}
         size={size}
         disabled={disabled}
         busy={busy}
@@ -87,7 +91,7 @@ export function ConfirmButton({
       <Text style={styles.prompt}>{prompt}</Text>
       <Button
         label={confirmLabel}
-        variant="danger"
+        variant={variant === 'danger' ? 'danger' : 'primary'}
         size={size}
         busy={confirmed && busy}
         disabled={disabled || busy}

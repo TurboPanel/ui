@@ -253,7 +253,7 @@ describe('EnvironmentConfigurationScreen', () => {
   it('opens the service page, the domain manager and external domains', () => {
     render(<EnvironmentConfigurationScreen />)
     fireEvent.click(screen.getByLabelText(/^web, Node.js app/))
-    expect(state.push).toHaveBeenLastCalledWith('/o/projects/p/services/id-web')
+    expect(state.push).toHaveBeenLastCalledWith('/o/projects/p/environments/e/services/id-web')
     fireEvent.click(screen.getByLabelText('Add or change hostnames'))
     expect(state.push).toHaveBeenLastCalledWith(
       '/o/projects/p/environments/e/configuration/hosting'

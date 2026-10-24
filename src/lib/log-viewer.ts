@@ -244,7 +244,7 @@ export function isFiltering(filter: LogFilter): boolean {
 }
 
 function matchesQuery(message: string, query: string): boolean {
-  return query.length === 0 || message.toLowerCase().includes(query.toLowerCase())
+  return query.length === 0 || foldCase(message).includes(foldCase(query))
 }
 
 function isHit(line: LogTranscriptLine, filter: LogFilter, query: string): boolean {
@@ -434,11 +434,27 @@ export function firstErrorItemIndex(items: readonly LogViewerItem[]): number {
 /** A piece of a line for highlighting: matched text or not. */
 export type MatchSegment = Readonly<{ text: string; match: boolean }>
 
+/**
+ * Lower-case a string one UTF-16 unit at a time, leaving any unit whose lower
+ * case has a different length (`İ` lower-cases to two units) as it is. The
+ * result is exactly as long as the input, so an offset found in it is an
+ * offset in the original text.
+ */
+export function foldCase(text: string): string {
+  let folded = ''
+  for (let index = 0; index < text.length; index++) {
+    const unit = text.charAt(index)
+    const lower = unit.toLowerCase()
+    folded += lower.length === unit.length ? lower : unit
+  }
+  return folded
+}
+
 /** Split a line around every case-insensitive occurrence of `query`. */
 export function matchSegments(text: string, query: string): MatchSegment[] {
-  const needle = query.trim().toLowerCase()
+  const needle = foldCase(query.trim())
   if (needle.length === 0) return [{ text, match: false }]
-  const haystack = text.toLowerCase()
+  const haystack = foldCase(text)
   const segments: MatchSegment[] = []
   let from = 0
   let at = haystack.indexOf(needle, from)

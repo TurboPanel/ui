@@ -12,6 +12,7 @@ import {
   projectComposeEditHref,
   projectComposeSectionHref,
   projectEnvironmentDeploymentHref,
+  projectEnvironmentServiceHref,
   projectEnvironmentStorageHref,
   projectHref,
   projectPageTabHref,
@@ -90,6 +91,9 @@ describe('route files behind the links', () => {
 
   it('keeps service detail and the environment index where links expect them', () => {
     expect(existsSync(path.join(APP_ROOT, 'services/[serviceId].tsx'))).toBe(true)
+    expect(
+      existsSync(path.join(APP_ROOT, 'environments/[environmentId]/services/[serviceId].tsx'))
+    ).toBe(true)
     expect(existsSync(path.join(APP_ROOT, 'environments/index.tsx'))).toBe(true)
     expect(
       existsSync(path.join(APP_ROOT, 'environments/[environmentId]/_layout.tsx')),
@@ -128,7 +132,11 @@ const OFF_BAR_ROUTES: readonly (readonly [href: string, reachedBy: string])[] = 
   [projectSetupHref('o', 'p'), 'the project index sends a project that needs setup here'],
   [
     projectServiceHref('o', 'p', 'svc'),
-    'service rows on the Services tab and the environment overview',
+    "a database's connected services and older links; redirects to the service in its environment",
+  ],
+  [
+    projectEnvironmentServiceHref('o', 'p', 'e', 'svc'),
+    'service rows on the Services tab, the environment overview and its map (lights Services)',
   ],
   [
     projectComposeEditHref('o', 'p', { view: 'visual' }),

@@ -20,7 +20,7 @@ import { typeStyle } from '@/components/ui/v4/type-styles'
 import {
   projectBaseHref,
   projectEnvironmentHostingHref,
-  projectServiceHref,
+  projectEnvironmentServiceHref,
 } from '@/lib/project-navigation'
 import { useSaveConfiguration } from '@/lib/queries/configuration'
 import { useEnvironmentConfigView } from '@/lib/queries/environments'
@@ -273,7 +273,9 @@ export function EnvironmentConfigurationScreen() {
         hostingsStatus={hostingsStatus}
         editing={editing}
         onOpenApp={(serviceId) =>
-          router.push(projectServiceHref(orgId, projectId, serviceId) as Href)
+          router.push(
+            projectEnvironmentServiceHref(orgId, projectId, environmentId, serviceId) as Href
+          )
         }
         onOpenUrl={(url) => {
           Linking.openURL(url).catch(() => {

@@ -71,6 +71,12 @@ const styles = themedStyles((p) => ({
   name: { ...typeStyle('bodySemibold', 'subhead'), color: p.text, flexShrink: 1 },
   bottom: { flexDirection: 'row', flexWrap: 'nowrap', alignItems: 'center', gap: 8, overflow: 'hidden' },
   sub: { ...typeStyle('mono', 'caption'), color: p.text3, flexShrink: 1 },
+  // A Visitors box: fixed line heights, so the height the layout gives fits.
+  nodeDomain: { overflow: 'hidden' },
+  domainName: { lineHeight: 18 },
+  domainLine: { ...typeStyle('body', 'caption'), color: p.text3, lineHeight: 15 },
+  domainBadge: { flexDirection: 'row', minWidth: 0 },
+  rowDomain: { flexDirection: 'column', alignItems: 'stretch', gap: 4 },
   runs: { ...typeStyle('body', 'caption'), color: p.text3, flexShrink: 1 },
   tag: { ...typeStyle('bodySemibold', 'caption'), color: p.base },
   tagRemoved: { color: p.text3 },
@@ -149,8 +155,39 @@ function Tags({ node }: Readonly<{ node: MapNode }>) {
   )
 }
 
+/**
+ * A Visitors box, one item per line: the hostname, its other hostnames and
+ * where it is served from, then the certificate badge on a line of its own.
+ * Every line ends in an ellipsis rather than leave the box.
+ */
+function DomainBody({ node, after }: Readonly<{ node: MapNode; after?: ReactNode }>) {
+  const s = styles(usePalette())
+  return (
+    <>
+      <View style={s.top}>
+        <KindIcon kind={node.kind} />
+        <Text numberOfLines={1} style={[s.name, s.domainName]}>
+          {node.name}
+        </Text>
+      </View>
+      {(node.lines ?? []).map((line) => (
+        <Text key={line} numberOfLines={1} style={s.domainLine}>
+          {line}
+        </Text>
+      ))}
+      {node.status ? (
+        <View style={s.domainBadge}>
+          <StatusChip status={node.status.key} label={node.status.label} size="sm" />
+        </View>
+      ) : null}
+      {after}
+    </>
+  )
+}
+
 function StationBody({ node }: Readonly<{ node: MapNode }>) {
   const s = styles(usePalette())
+  if (node.kind === 'domain') return <DomainBody node={node} />
   return (
     <>
       <View style={s.top}>
@@ -182,6 +219,7 @@ function Station({ node, href }: Readonly<{ node: MapNode; href: string | null }
   const s = styles(usePalette())
   const style: StyleProp<ViewStyle> = [
     s.node,
+    node.kind === 'domain' && s.nodeDomain,
     node.changed && s.nodeChanged,
     node.removed && s.nodeRemoved,
     { left: node.x, top: node.y, width: node.w, height: node.h },
@@ -237,7 +275,15 @@ function WideMap({ layout, hrefFor }: Readonly<{ layout: MapLayout; hrefFor: Sta
 
 function StationRow({ node, href }: Readonly<{ node: MapNode; href: string | null }>) {
   const s = styles(usePalette())
-  const body = (
+  const domain = node.kind === 'domain'
+  const connections = node.connections.map((connection) => (
+    <Text key={connection} style={s.chip}>
+      {connection}
+    </Text>
+  ))
+  const body = domain ? (
+    <DomainBody node={node} after={connections} />
+  ) : (
     <>
       <KindIcon kind={node.kind} />
       <Text numberOfLines={1} style={s.name}>
@@ -246,22 +292,23 @@ function StationRow({ node, href }: Readonly<{ node: MapNode; href: string | nul
       {node.status ? <StatusChip status={node.status.key} label={node.status.label} size="sm" /> : null}
       {node.runs === '' ? null : <Text style={s.runs}>{node.runs}</Text>}
       <Tags node={node} />
-      {node.connections.map((connection) => (
-        <Text key={connection} style={s.chip}>
-          {connection}
-        </Text>
-      ))}
+      {connections}
     </>
   )
   if (href === null) {
     return (
-      <View accessible accessibilityLabel={node.aria} style={[s.rowStation, node.removed && s.nodeRemoved]}>
+      <View
+        accessible
+        accessibilityLabel={node.aria}
+        style={[s.rowStation, domain && s.rowDomain, node.removed && s.nodeRemoved]}
+      >
         {body}
       </View>
     )
   }
   const linkStyle = StyleSheet.flatten([
     s.rowStation,
+    domain && s.rowDomain,
     node.changed && s.nodeChanged,
     node.removed && s.nodeRemoved,
     webPointer,
