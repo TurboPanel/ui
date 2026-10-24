@@ -63,8 +63,12 @@ export function EnvironmentServiceScreen() {
       <TextLink
         label={`‹ ${envName}`}
         accessibilityLabel={`Back to the services in ${envName}`}
+        // Navigate, not push: on a phone this returns to the Services screen
+        // already in the stack, so the system back gesture does not loop.
         onPress={() =>
-          router.push(projectEnvironmentConfigurationHref(orgId, projectId, environmentId) as Href)
+          router.navigate(
+            projectEnvironmentConfigurationHref(orgId, projectId, environmentId) as Href
+          )
         }
       />
       <View style={styles.scopeLine}>

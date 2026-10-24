@@ -12,6 +12,7 @@ const state = vi.hoisted(() => ({
   services: { isLoading: false, data: undefined as unknown },
   byEnv: { servicesByEnv: {} as Record<string, { id: string }[]>, isLoading: false },
   push: vi.fn(),
+  navigate: vi.fn(),
 }))
 
 vi.mock('react-native', () => ({
@@ -25,7 +26,7 @@ vi.mock('expo-router', () => ({
     <div data-testid="redirect" data-href={href} />
   ),
   useLocalSearchParams: () => state.params,
-  useRouter: () => ({ push: state.push }),
+  useRouter: () => ({ push: state.push, navigate: state.navigate }),
 }))
 vi.mock('@/components/ui', () => ({
   LoadingState: ({ label }: Readonly<{ label: string }>) => <span>{label}</span>,
@@ -86,6 +87,7 @@ beforeEach(() => {
   state.services = { isLoading: false, data: { services: [web] } }
   state.byEnv = { servicesByEnv: {}, isLoading: false }
   state.push.mockReset()
+  state.navigate.mockReset()
 })
 
 afterEach(cleanup)
@@ -99,7 +101,10 @@ describe('EnvironmentServiceScreen', () => {
     expect(screen.getByText('Changes here apply to production only.')).toBeTruthy()
 
     fireEvent.click(screen.getByText('‹ production'))
-    expect(state.push).toHaveBeenLastCalledWith('/o/projects/p/environments/env-1/configuration')
+    expect(state.navigate).toHaveBeenLastCalledWith(
+      '/o/projects/p/environments/env-1/configuration'
+    )
+    expect(state.push).not.toHaveBeenCalled()
     fireEvent.click(screen.getByText('Edit the Base'))
     expect(state.push).toHaveBeenLastCalledWith('/o/projects/p/base/services')
   })
