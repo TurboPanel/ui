@@ -209,6 +209,21 @@ export function linuxUserEdit(
   }
 }
 
+/** Where a variable is available: while the app runs, while it builds, or both. */
+export type VariableUse = 'run' | 'build' | 'both'
+
+/**
+ * Names the framework bakes into the built bundle (`NEXT_PUBLIC_*`) are read at
+ * build time, so they default to both; everything else defaults to run only.
+ */
+export function defaultVariableUse(name: string): VariableUse {
+  return name.trim().startsWith('NEXT_PUBLIC_') ? 'both' : 'run'
+}
+
+export function variableUseFlags(use: VariableUse): { forBuild: boolean; forRuntime: boolean } {
+  return { forBuild: use !== 'run', forRuntime: use !== 'build' }
+}
+
 export function variableEdit(
   input: Readonly<{
     name: string
