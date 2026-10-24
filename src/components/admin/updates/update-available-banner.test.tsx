@@ -93,12 +93,12 @@ describe('update banner on a wide window', () => {
     env.width = 1200
   })
 
-  it('shows the title and one line of detail, never more than two lines', () => {
+  it('shows one line of title and at most two of detail, so the detail is not cut short', () => {
     render(<UpdateAvailableBanner />)
     const title = screen.getByText('TurboPanel update available: control plane v0.1.20')
     const body = screen.getByText(/nothing changes until you confirm/)
     expect(title.getAttribute('data-lines')).toBe('1')
-    expect(body.getAttribute('data-lines')).toBe('1')
+    expect(body.getAttribute('data-lines')).toBe('2')
   })
 
   it('Update opens the review screen', () => {

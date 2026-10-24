@@ -1,8 +1,9 @@
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
+import { BUTTON_HEIGHT } from '@/components/ui/button'
 import { webFocusRing, type WebPressableState } from '@/components/ui/focus-ring'
 import { themedStyles, usePalette, useTouch } from '@/components/ui/v4/use-palette'
 import { webPointer } from '@/lib/theme'
-import { controlHeight } from '@/lib/v4/ui-scale'
+import { CONTROL_HEIGHT } from '@/lib/v4/ui-scale'
 
 /** Track and knob sizes: compact with a mouse, the iOS size on touch. */
 export const SWITCH_SIZE = {
@@ -65,7 +66,7 @@ export function Toggle({
       aria-busy={busy}
       style={(state: WebPressableState) => [
         s.base,
-        { minHeight: controlHeight('md', touch) },
+        { minHeight: touch ? CONTROL_HEIGHT.touch : BUTTON_HEIGHT.md },
         webPointer,
         state.pressed && !blocked && s.pressed,
         blocked && s.disabled,

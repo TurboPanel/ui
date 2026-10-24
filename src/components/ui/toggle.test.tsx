@@ -2,6 +2,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { applyScenario, env, SCENARIOS, styleOf, token } from '@/components/ui/v4/rn-stub'
+import { Button } from '@/components/ui/button'
 import { SWITCH_SIZE, Toggle } from '@/components/ui/toggle'
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
@@ -99,9 +100,9 @@ describe('Toggle sizes', () => {
     coarsePointer(false)
   })
 
-  it('is a compact 40 x 24 track in a 36 px row with a mouse', () => {
+  it('is a compact 40 x 24 track in a row as tall as a Button with a mouse', () => {
     render(<Toggle value onValueChange={vi.fn()} />)
-    expect(styleOf(screen.getByRole('switch')).minHeight).toBe(36)
+    expect(styleOf(screen.getByRole('switch')).minHeight).toBe(40)
     expect(styleOf(track())).toMatchObject({ width: 40, height: 24 })
   })
 
@@ -116,6 +117,21 @@ describe('Toggle sizes', () => {
     env.os = 'ios'
     render(<Toggle value onValueChange={vi.fn()} />)
     expect(styleOf(screen.getByRole('switch')).minHeight).toBe(44)
+  })
+
+  it('lines up with a Button beside it, with a mouse and on touch', () => {
+    for (const coarse of [false, true]) {
+      coarsePointer(coarse)
+      const { unmount } = render(
+        <>
+          <Toggle value onValueChange={vi.fn()} />
+          <Button label="Save" onPress={vi.fn()} />
+        </>
+      )
+      const button = screen.getByRole('button', { name: 'Save' })
+      expect(styleOf(screen.getByRole('switch')).minHeight).toBe(styleOf(button).minHeight)
+      unmount()
+    }
   })
 
   it('fits the knob inside the track at both sizes', () => {
