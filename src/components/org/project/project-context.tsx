@@ -416,9 +416,12 @@ export function useProjectWideAccounts(): ReadonlySet<string> {
   return useMemo(
     () =>
       knownAccountNames(
-        [ctx?.project?.options?.compose, ...(ctx?.environments ?? []).map((env) => env.options?.compose)],
-        rows ?? [],
+        [
+          ctx?.project?.options?.compose,
+          ...(ctx?.environments ?? []).map((env) => env.options?.compose),
+        ],
+        rows ?? []
       ),
-    [ctx?.project, ctx?.environments, rows],
+    [ctx?.project, ctx?.environments, rows]
   )
 }

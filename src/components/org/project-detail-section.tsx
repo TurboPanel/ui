@@ -131,11 +131,11 @@ function usernamePlaceholder(waiting: boolean, suggested: string): string {
 function suggestedAccountName(
   project: ProjectRecord | undefined,
   environments: readonly EnvironmentRecord[],
-  principals: readonly ProjectPrincipalRecord[],
+  principals: readonly ProjectPrincipalRecord[]
 ): string {
   const known = knownAccountNames(
     [project?.options?.compose, ...environments.map((env) => env.options?.compose)],
-    principals,
+    principals
   )
   const only = known.size === 1 ? [...known][0] : undefined
   return only ?? nextPrincipalAlias([], project?.name ?? '')

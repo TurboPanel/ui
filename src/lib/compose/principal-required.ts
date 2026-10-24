@@ -184,7 +184,7 @@ export type AccountRow = {
  */
 export function knownAccountNames(
   documents: readonly (ComposeDocument | null | undefined)[],
-  rows: readonly AccountRow[],
+  rows: readonly AccountRow[]
 ): Set<string> {
   const names = new Set<string>()
   for (const document of documents) {
@@ -249,7 +249,7 @@ export function planAccountDeclaration(params: {
   // so it does not count twice.
   const known = knownAccountNames(
     [params.base, ...params.environments.map((env) => env.document)],
-    params.principals,
+    params.principals
   )
   known.add(alias.toLowerCase())
   const sole = known.size === 1
@@ -272,7 +272,7 @@ export function attachSoleAccountToNewApps(
   before: ComposeDocument | null | undefined,
   after: ComposeDocument,
   /** Names of the project's other accounts (see `knownAccountNames`). */
-  projectAccounts: ReadonlySet<string> = new Set(),
+  projectAccounts: ReadonlySet<string> = new Set()
 ): ComposeDocument {
   const aliases = Object.keys(readComposePrincipals(after))
   if (aliases.length !== 1) return after

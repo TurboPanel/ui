@@ -305,7 +305,7 @@ describe('accounts made by hand on Bindings', () => {
     const base = writeComposePrincipals(documentWith({}), { shop: {} })
     const names = knownAccountNames(
       [base],
-      [manual('Site'), { username: 'shop_x1', metadata: { composeAlias: 'shop' } }],
+      [manual('Site'), { username: 'shop_x1', metadata: { composeAlias: 'shop' } }]
     )
     expect([...names].sort()).toEqual(['shop', 'site'])
   })
