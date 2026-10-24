@@ -11,6 +11,7 @@ import { ComposeStep } from '@/components/org/project-create/compose-step'
 import { DetailsStep } from '@/components/org/project-create/details-step'
 import {
   parseRepositoryCompose,
+  projectAccountAlias,
   seedComposeForLane,
   seedHostingCompose,
 } from '@/lib/project-create/repository-seed'
@@ -229,7 +230,8 @@ function seedForRepositoryLane(
   branch: string,
   lane: RepositoryLane,
   inspection: RepositoryInspection | undefined,
-  simple: SimpleAppConfig
+  simple: SimpleAppConfig,
+  projectName: string
 ): ComposeDocument {
   const files = inspection?.files ?? []
   const composePath = detectedComposePath(files)
@@ -245,6 +247,7 @@ function seedForRepositoryLane(
     source,
     branch,
     lane: lane === 'compose' && !repositoryCompose ? 'static' : lane,
+    principalAlias: projectAccountAlias(projectName),
     ...(repositoryCompose ? { repositoryCompose } : {}),
     ...(root ? { root } : {}),
     simple: {
@@ -669,7 +672,14 @@ function ProjectCreateWizard({
     ].join('\u0000')
     if (seedKey !== seededRepositoryKey) {
       setComposeDoc(
-        seedForRepositoryLane(selectedSource, repositoryBranch, lane, inspection.data, simpleConfig)
+        seedForRepositoryLane(
+          selectedSource,
+          repositoryBranch,
+          lane,
+          inspection.data,
+          simpleConfig,
+          trimmedProjectName
+        )
       )
       setSeededRepositoryKey(seedKey)
     }

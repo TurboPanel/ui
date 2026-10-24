@@ -1,10 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import type { ComposeDocument } from '@/lib/compose'
 import {
+  attachSoleAccountToNewApps,
+  declareAccountAndAttach,
+  knownAccountNames,
+  planAccountDeclaration,
   principalRequiredServiceNames,
   unownedPrincipalRequiredServices,
 } from '@/lib/compose/principal-required'
-import { patchServiceTurbopanelExtension } from '@/lib/compose/service-kind'
+import { readComposePrincipals, writeComposePrincipals } from '@/lib/compose/principals-document'
+import {
+  patchServiceTurbopanelExtension,
+  readServiceTurbopanelExtension,
+} from '@/lib/compose/service-kind'
 
 function documentWith(
   services: Record<string, Record<string, unknown>>,
@@ -195,5 +203,150 @@ describe('declared aliases settle ownership without a query', () => {
         principals: [{ serviceIds: ['svc-1'] }],
       }),
     ).toEqual([])
+  })
+})
+
+function servicesOf(document: ComposeDocument): Record<string, Record<string, unknown>> {
+  return document.data.services as Record<string, Record<string, unknown>>
+}
+
+describe('declareAccountAndAttach', () => {
+  it('declares the account and attaches waiting apps when it is the only one', () => {
+    const next = declareAccountAndAttach(documentWith({ app: nodeApp }), 'shop', ['app'], true)
+    expect(Object.keys(readComposePrincipals(next))).toEqual(['shop'])
+    expect(readServiceTurbopanelExtension(servicesOf(next).app)?.principal).toBe('shop')
+    expect(
+      unownedPrincipalRequiredServices({ document: next, services: [], principals: [] })
+    ).toEqual([])
+  })
+
+  it('declares without attaching when the choice is ambiguous', () => {
+    const next = declareAccountAndAttach(documentWith({ app: nodeApp }), 'shop', ['app'], false)
+    expect(Object.keys(readComposePrincipals(next))).toEqual(['shop'])
+    expect(readServiceTurbopanelExtension(servicesOf(next).app)?.principal).toBeUndefined()
+  })
+
+  it('keeps an app that already names an account', () => {
+    const owned = patchServiceTurbopanelExtension(nodeApp, { principal: 'other' })
+    const next = declareAccountAndAttach(documentWith({ app: owned }), 'shop', ['app'], true)
+    expect(readServiceTurbopanelExtension(servicesOf(next).app)?.principal).toBe('other')
+  })
+})
+
+describe('planAccountDeclaration', () => {
+  const empty = documentWith({})
+  it('writes the account into the environment that holds the waiting app', () => {
+    const plan = planAccountDeclaration({
+      username: 'My Shop',
+      base: empty,
+      environments: [{ id: 'env1', document: documentWith({ app: nodeApp }), services: [] }],
+      principals: [],
+    })
+    expect(plan?.alias).toBe('myshop')
+    expect(plan?.writes).toHaveLength(1)
+    expect(plan?.writes[0].target).toEqual({ kind: 'environment', environmentId: 'env1' })
+    expect(
+      readServiceTurbopanelExtension(servicesOf(plan!.writes[0].document).app)?.principal
+    ).toBe('myshop')
+  })
+
+  it('returns null when no app is waiting', () => {
+    expect(
+      planAccountDeclaration({
+        username: 'x',
+        base: documentWith({ web: plainContainer }),
+        environments: [],
+        principals: [],
+      })
+    ).toBeNull()
+  })
+
+  it('does not attach when another account is already declared', () => {
+    const base = writeComposePrincipals(empty, { first: {} })
+    const plan = planAccountDeclaration({
+      username: 'second',
+      base,
+      environments: [{ id: 'env1', document: documentWith({ app: nodeApp }), services: [] }],
+      principals: [],
+    })
+    expect(
+      readServiceTurbopanelExtension(servicesOf(plan!.writes[0].document).app)?.principal
+    ).toBeUndefined()
+  })
+})
+
+describe('attachSoleAccountToNewApps', () => {
+  const one = writeComposePrincipals(documentWith({ web: plainContainer }), { shop: {} })
+  it('gives the only account to an app the edit just made native', () => {
+    const after = { ...one, data: { ...one.data, services: { web: plainContainer, app: nodeApp } } }
+    const next = attachSoleAccountToNewApps(one, after)
+    expect(readServiceTurbopanelExtension(servicesOf(next).app)?.principal).toBe('shop')
+  })
+
+  it('leaves apps that were already waiting alone', () => {
+    const before = { ...one, data: { ...one.data, services: { app: nodeApp } } }
+    expect(attachSoleAccountToNewApps(before, before)).toBe(before)
+  })
+
+  it('does nothing with two accounts', () => {
+    const two = writeComposePrincipals(one, { shop: {}, blog: {} })
+    const after = { ...two, data: { ...two.data, services: { app: nodeApp } } }
+    expect(attachSoleAccountToNewApps(two, after)).toBe(after)
+  })
+})
+
+describe('accounts made by hand on Bindings', () => {
+  const manual = (username: string) => ({ username, serviceIds: [] as string[], metadata: {} })
+  const waiting = [{ id: 'env1', document: documentWith({ app: nodeApp }), services: [] }]
+  const appOf = (plan: ReturnType<typeof planAccountDeclaration>) =>
+    readServiceTurbopanelExtension(servicesOf(plan!.writes[0].document).app)?.principal
+
+  it('counts a hand-made row, and a row that came from an alias, once', () => {
+    const base = writeComposePrincipals(documentWith({}), { shop: {} })
+    const names = knownAccountNames(
+      [base],
+      [manual('Site'), { username: 'shop_x1', metadata: { composeAlias: 'shop' } }]
+    )
+    expect([...names].sort()).toEqual(['shop', 'site'])
+  })
+
+  it('does not call a new account the only one when a hand-made account exists', () => {
+    const plan = planAccountDeclaration({
+      username: 'second',
+      base: documentWith({}),
+      environments: waiting,
+      principals: [manual('site')],
+    })
+    expect(Object.keys(readComposePrincipals(plan!.writes[0].document))).toEqual(['second'])
+    expect(appOf(plan)).toBeUndefined()
+  })
+
+  it('adopts the single hand-made account: same name, declared and attached', () => {
+    const plan = planAccountDeclaration({
+      username: 'site',
+      base: documentWith({}),
+      environments: waiting,
+      principals: [manual('site')],
+    })
+    expect(plan?.alias).toBe('site')
+    expect(appOf(plan)).toBe('site')
+  })
+
+  it('does not attach a typed name that matches one of several accounts', () => {
+    const plan = planAccountDeclaration({
+      username: 'site',
+      base: documentWith({}),
+      environments: waiting,
+      principals: [manual('site'), manual('other')],
+    })
+    expect(plan?.alias).toBe('site')
+    expect(appOf(plan)).toBeUndefined()
+  })
+
+  it('attaches nothing to a new app when another document or row holds a second account', () => {
+    const one = writeComposePrincipals(documentWith({ web: plainContainer }), { shop: {} })
+    const after = { ...one, data: { ...one.data, services: { web: plainContainer, app: nodeApp } } }
+    expect(attachSoleAccountToNewApps(one, after, new Set(['shop', 'site']))).toBe(after)
+    expect(attachSoleAccountToNewApps(one, after, new Set(['shop']))).not.toBe(after)
   })
 })
