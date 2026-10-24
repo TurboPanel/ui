@@ -138,7 +138,6 @@ describe('editing a variable', () => {
     render(<EnvironmentConfigurationScreen />)
     fireEvent.click(screen.getByLabelText('Edit MODE'))
     fireEvent.change(screen.getByLabelText('New value for MODE'), { target: { value: 'staging' } })
-    expect(screen.queryByRole('radio')).toBeNull()
     expect(screen.queryByText('Where does this change go?')).toBeNull()
     fireEvent.click(screen.getByLabelText('Done'))
     expect(screen.getByText('1 unsaved change')).toBeTruthy()
@@ -211,8 +210,9 @@ describe('adding a variable', () => {
     fireEvent.click(screen.getByRole('radio', { name: /^Show it/ }))
     fireEvent.click(done())
     expect(screen.getByText('1 unsaved change')).toBeTruthy()
+    expect(screen.getByLabelText('NEW_TOKEN, 1, unsaved')).toBeTruthy()
     fireEvent.click(screen.getByLabelText('Review changes'))
-    expect(screen.getByText('NEW_TOKEN')).toBeTruthy()
+    expect(screen.getAllByText('NEW_TOKEN').length).toBeGreaterThan(1)
   })
 
   it('keeps a value secret by default for a name like a key', () => {
@@ -225,7 +225,7 @@ describe('adding a variable', () => {
     ).toBe('true')
     fireEvent.click(screen.getByLabelText('Add'))
     fireEvent.click(screen.getByLabelText('Review changes'))
-    expect(screen.getByText('Hidden')).toBeTruthy()
+    expect(screen.getAllByText('Hidden').length).toBeGreaterThan(1)
   })
 })
 
@@ -259,6 +259,114 @@ describe('where a new variable is used', () => {
     fireEvent.click(screen.getByLabelText('Save changes'))
     await waitFor(() => expect(state.run).toHaveBeenCalled())
     expect(JSON.stringify(state.run.mock.calls[0])).toMatch(/"forBuild":true,"forRuntime":false/)
+  })
+})
+
+describe('where an existing variable is used, and removing it', () => {
+  const checked = (name: RegExp) =>
+    screen.getByRole('radio', { name }).getAttribute('aria-checked') === 'true'
+
+  it('starts from the saved choice and stages only the new place', async () => {
+    render(<EnvironmentConfigurationScreen />)
+    fireEvent.click(screen.getByLabelText('Edit API_URL'))
+    expect(checked(/^Run/)).toBe(true)
+    expect((screen.getByLabelText('Done') as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.click(screen.getByRole('radio', { name: /^Build and run/ }))
+    fireEvent.click(screen.getByLabelText('Done'))
+    expect(screen.getByText(/Not saved yet: Build and run/)).toBeTruthy()
+    expect(within(screen.getByLabelText(/^API_URL, /)).getByText('Unsaved')).toBeTruthy()
+    fireEvent.click(screen.getByLabelText('Save changes'))
+    await waitFor(() => expect(state.run).toHaveBeenCalledTimes(1))
+    expect((state.run.mock.calls[0] as unknown[][])[0]).toMatchObject([
+      { kind: 'set-variable', name: 'API_URL', value: null, forBuild: true, forRuntime: true },
+    ])
+  })
+
+  it('removes a variable only this environment sets, after a confirm', async () => {
+    const view = stagingView()
+    state.query = {
+      ...state.query,
+      data: {
+        ...view,
+        effective: {
+          ...view.effective,
+          variables: [
+            {
+              key: 'var:LOCAL',
+              name: 'LOCAL',
+              variableId: 'var-LOCAL',
+              value: 'here',
+              isSecret: false,
+              forBuild: false,
+              forRuntime: true,
+              source: 'environment',
+              inheritedFromBase: false,
+            },
+            ...view.effective.variables,
+          ],
+        },
+      },
+    }
+    state.envVars = [...state.envVars, record('LOCAL', { environmentId: 'e', value: 'here' })]
+    render(<EnvironmentConfigurationScreen />)
+    fireEvent.click(screen.getByLabelText('Edit LOCAL'))
+    fireEvent.click(screen.getByLabelText('Remove: LOCAL'))
+    expect(screen.getByText(/Remove LOCAL from Staging\?/)).toBeTruthy()
+    fireEvent.click(screen.getByLabelText('Keep it'))
+    expect(screen.getByLabelText('New value for LOCAL')).toBeTruthy()
+    fireEvent.click(screen.getByLabelText('Remove: LOCAL'))
+    fireEvent.click(screen.getByLabelText('Remove LOCAL'))
+    expect(screen.getByText(/Not saved yet: removed/)).toBeTruthy()
+    fireEvent.click(screen.getByLabelText('Save changes'))
+    await waitFor(() => expect(state.run).toHaveBeenCalledTimes(1))
+    expect((state.run.mock.calls[0] as unknown[][])[0]).toMatchObject([
+      { kind: 'remove-variable', name: 'LOCAL' },
+    ])
+  })
+
+  it('goes back to the Base value when the Base sets it too', () => {
+    render(<EnvironmentConfigurationScreen />)
+    fireEvent.click(screen.getByLabelText('Edit API_URL'))
+    fireEvent.click(screen.getByLabelText('Use the Base value: API_URL'))
+    expect(screen.getByText(/The Base value applies again/)).toBeTruthy()
+    fireEvent.click(screen.getByLabelText('Use the Base value'))
+    expect(screen.getByText('1 unsaved change')).toBeTruthy()
+  })
+
+  it('offers no Remove for a value that comes only from the Base', () => {
+    render(<EnvironmentConfigurationScreen />)
+    fireEvent.click(screen.getByLabelText('Edit MODE'))
+    expect(screen.queryByLabelText(/^Remove/)).toBeNull()
+    expect(screen.queryByLabelText(/^Use the Base value/)).toBeNull()
+  })
+
+  it('needs a value to give a Base-only secret its own place', () => {
+    render(<EnvironmentConfigurationScreen />)
+    fireEvent.click(screen.getByLabelText('Edit SECRET_KEY'))
+    fireEvent.click(screen.getByRole('radio', { name: /^Build and run/ }))
+    expect((screen.getByLabelText('Done') as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.getByText('Enter a value to set SECRET_KEY for Staging.')).toBeTruthy()
+  })
+})
+
+describe('a variable added and not saved yet', () => {
+  it('is listed straight away with an Unsaved mark, and Undo takes it out', () => {
+    state.query = {
+      ...state.query,
+      data: { ...stagingView(), effective: { ...stagingView().effective, variables: [] } },
+    }
+    render(<EnvironmentConfigurationScreen />)
+    expect(screen.getByText('No variables')).toBeTruthy()
+    fireEvent.click(screen.getByText('Add variable'))
+    fireEvent.change(screen.getByLabelText('Variable name'), { target: { value: 'PORT' } })
+    fireEvent.change(screen.getByLabelText('Variable value'), { target: { value: '3000' } })
+    fireEvent.click(screen.getByLabelText('Add'))
+    expect(screen.queryByText('No variables')).toBeNull()
+    const row = screen.getByLabelText('PORT, 3000, unsaved')
+    expect(within(row).getByText('Unsaved')).toBeTruthy()
+    expect(screen.getByText('1 variable')).toBeTruthy()
+    fireEvent.click(within(row).getByLabelText('Undo PORT'))
+    expect(screen.getByText('No variables')).toBeTruthy()
   })
 })
 
@@ -409,7 +517,7 @@ describe('who can edit and where edits go', () => {
     render(<EnvironmentConfigurationScreen />)
     fireEvent.click(screen.getByLabelText('Edit MODE'))
     fireEvent.change(screen.getByLabelText('New value for MODE'), { target: { value: 'x' } })
-    expect(screen.queryByRole('radio')).toBeNull()
+    expect(screen.queryByText('Where does this change go?')).toBeNull()
     fireEvent.click(screen.getByLabelText('Done'))
     fireEvent.click(screen.getByLabelText('Save changes'))
     await waitFor(() => expect(state.run).toHaveBeenCalled())
@@ -422,7 +530,7 @@ describe('who can edit and where edits go', () => {
     state.query = { isPending: false, error: null, data: standaloneView(), refetch: vi.fn() }
     render(<EnvironmentConfigurationScreen />)
     fireEvent.click(screen.getByLabelText('Edit MODE'))
-    expect(screen.queryByRole('radio')).toBeNull()
+    expect(screen.queryByText('Where does this change go?')).toBeNull()
     fireEvent.click(screen.getByLabelText('Cancel'))
     fireEvent.click(screen.getByRole('switch'))
     expect(screen.queryByLabelText('Go back to Base: Start command')).toBeNull()
