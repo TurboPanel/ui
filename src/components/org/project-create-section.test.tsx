@@ -224,6 +224,13 @@ describe('ProjectCreateSection', () => {
     expect(mocks.replace).toHaveBeenCalledWith('/o/projects/p1/setup/environment')
   })
 
+  it('picks the managed database card from the Projects list link', () => {
+    mocks.params.current = { type: 'managed' }
+    render(<ProjectCreateSection orgId="o" />)
+    expect(screen.getByRole('heading', { name: 'Choose a database' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Create project' })).toBeTruthy()
+  })
+
   it('picks the card a ?type= link names, opening More ways to start for it', () => {
     mocks.params.current = { type: 'hosting' }
     render(<ProjectCreateSection orgId="o" />)
