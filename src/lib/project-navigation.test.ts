@@ -7,7 +7,6 @@ import {
   PROJECT_PAGE_TAB_LABELS,
   COMPOSE_PROJECT_CONFIG_TAB_IDS,
   COMPOSE_PROJECT_LENS_IDS,
-  COMPOSE_PROJECT_SURFACE_TAB_IDS,
   COMPOSE_PROJECT_TAB_IDS,
   DRAFT_COMPOSE_PROJECT_TAB_IDS,
   MANAGED_PROJECT_TAB_IDS,
@@ -416,29 +415,12 @@ describe('path-based environment selection', () => {
   })
 
   it('splits lenses from scope configuration', () => {
-    // The surface nav is the three lenses plus Hosting (server placement +
-    // exposure); Storage and Settings stay off the bar.
-    expect([...COMPOSE_PROJECT_LENS_IDS]).toEqual([
-      'overview',
-      'compose',
-      'services',
-    ])
-    expect([...COMPOSE_PROJECT_SURFACE_TAB_IDS]).toEqual([
-      'overview',
-      'compose',
-      'services',
-      'bindings',
-      'hosting',
-    ])
-    expect([...COMPOSE_PROJECT_CONFIG_TAB_IDS]).toEqual([
-      'storage',
-      'settings',
-    ])
+    // Three lenses on one document; Storage and Settings are scope
+    // configuration reached from a service row or the scope-strip gear.
+    expect([...COMPOSE_PROJECT_LENS_IDS]).toEqual(['overview', 'compose', 'services'])
+    expect([...COMPOSE_PROJECT_CONFIG_TAB_IDS]).toEqual(['storage', 'settings'])
     for (const tabId of COMPOSE_PROJECT_LENS_IDS) {
       expect(isComposeProjectLens(tabId)).toBe(true)
-      expect(COMPOSE_PROJECT_TAB_IDS).toContain(tabId)
-    }
-    for (const tabId of COMPOSE_PROJECT_SURFACE_TAB_IDS) {
       expect(COMPOSE_PROJECT_TAB_IDS).toContain(tabId)
     }
     for (const tabId of COMPOSE_PROJECT_CONFIG_TAB_IDS) {
@@ -509,23 +491,40 @@ describe('resolveEnvironmentScopeActive', () => {
 })
 
 describe('project and environment tabs', () => {
-  it('lists three project tabs and four environment tabs', () => {
-    expect([...PROJECT_PAGE_TAB_IDS]).toEqual(['overview', 'base', 'settings'])
+  it('lists one bar of project tabs and one of environment tabs', () => {
+    expect([...PROJECT_PAGE_TAB_IDS]).toEqual([
+      'overview',
+      'base',
+      'compose',
+      'bindings',
+      'hosting',
+      'settings',
+    ])
     expect(PROJECT_PAGE_TAB_LABELS).toEqual({
       overview: 'Environments',
       base: 'Base',
+      compose: 'Compose',
+      bindings: 'Bindings',
+      hosting: 'Hosting',
       settings: 'Settings',
     })
     expect([...ENVIRONMENT_PAGE_TAB_IDS]).toEqual([
       'overview',
       'deployments',
       'configuration',
+      'compose',
+      'bindings',
+      'hosting',
       'settings',
     ])
+    // `configuration` keeps its id and route and reads Services.
     expect(ENVIRONMENT_PAGE_TAB_LABELS).toEqual({
       overview: 'Overview',
       deployments: 'Deployments',
-      configuration: 'Configuration',
+      configuration: 'Services',
+      compose: 'Compose',
+      bindings: 'Bindings',
+      hosting: 'Hosting',
       settings: 'Settings',
     })
   })
@@ -534,16 +533,22 @@ describe('project and environment tabs', () => {
     expect(PROJECT_PAGE_TAB_IDS.map((id) => projectPageTabHref('o', 'p', id))).toEqual([
       '/o/projects/p/overview',
       '/o/projects/p/base',
+      '/o/projects/p/base/compose',
+      '/o/projects/p/base/bindings',
+      '/o/projects/p/base/hosting',
       '/o/projects/p/settings',
     ])
-    expect(
-      ENVIRONMENT_PAGE_TAB_IDS.map((id) => environmentPageTabHref('o', 'p', 'e', id)),
-    ).toEqual([
-      '/o/projects/p/environments/e',
-      '/o/projects/p/environments/e/deployments',
-      '/o/projects/p/environments/e/configuration',
-      '/o/projects/p/environments/e/settings',
-    ])
+    expect(ENVIRONMENT_PAGE_TAB_IDS.map((id) => environmentPageTabHref('o', 'p', 'e', id))).toEqual(
+      [
+        '/o/projects/p/environments/e',
+        '/o/projects/p/environments/e/deployments',
+        '/o/projects/p/environments/e/configuration',
+        '/o/projects/p/environments/e/configuration/compose',
+        '/o/projects/p/environments/e/configuration/bindings',
+        '/o/projects/p/environments/e/configuration/hosting',
+        '/o/projects/p/environments/e/settings',
+      ]
+    )
     expect(projectBaseHref('o', 'p')).toBe('/o/projects/p/base')
     expect(projectEnvironmentDeploymentsHref('o', 'p', 'e')).toBe(
       '/o/projects/p/environments/e/deployments',
@@ -559,10 +564,19 @@ describe('project and environment tabs', () => {
     expect(tab('/overview')).toBe('overview')
     expect(tab('/map')).toBe('overview')
     expect(tab('/base')).toBe('base')
-    expect(tab('/base/compose')).toBe('base')
-    expect(tab('/base/hosting')).toBe('base')
+    expect(tab('/base/compose')).toBe('compose')
+    expect(tab('/base/bindings')).toBe('bindings')
+    expect(tab('/base/hosting')).toBe('hosting')
+    // The Base's Services lens and Storage light Base.
+    expect(tab('/base/services')).toBe('base')
+    expect(tab('/base/storage')).toBe('base')
+    expect(tab('/base/nothing')).toBe('base')
     // Retired paths and service detail light the tab they moved to.
-    expect(tab('/compose')).toBe('base')
+    expect(tab('/compose')).toBe('compose')
+    expect(tab('/servers')).toBe('hosting')
+    expect(tab('/bindings')).toBe('bindings')
+    expect(tab('/storage')).toBe('base')
+    expect(tab('/services')).toBe('base')
     expect(tab('/services/svc1')).toBe('base')
     expect(tab('/settings')).toBe('settings')
     // Not project tabs.
@@ -581,9 +595,18 @@ describe('project and environment tabs', () => {
     expect(tab('/map')).toBe('overview')
     expect(tab('/deployments')).toBe('deployments')
     expect(tab('/configuration')).toBe('configuration')
-    expect(tab('/configuration/compose')).toBe('configuration')
-    expect(tab('/compose')).toBe('configuration')
-    expect(tab('/servers')).toBe('configuration')
+    expect(tab('/configuration/compose')).toBe('compose')
+    expect(tab('/configuration/bindings')).toBe('bindings')
+    expect(tab('/configuration/hosting')).toBe('hosting')
+    // Storage and the Services lens path light Services.
+    expect(tab('/configuration/storage')).toBe('configuration')
+    expect(tab('/configuration/services')).toBe('configuration')
+    // Retired lens paths light the tab they redirect to.
+    expect(tab('/compose')).toBe('compose')
+    expect(tab('/servers')).toBe('hosting')
+    expect(tab('/hosting')).toBe('hosting')
+    expect(tab('/storage')).toBe('configuration')
+    expect(tab('/services')).toBe('configuration')
     expect(tab('/settings')).toBe('settings')
     expect(tab('/unknown')).toBeNull()
     expect(parseEnvironmentPageTab('/o/projects/p/base', 'p')).toBeNull()

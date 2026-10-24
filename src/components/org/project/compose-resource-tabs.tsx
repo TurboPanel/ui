@@ -2,7 +2,6 @@ import { type ReactNode } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { useLocalSearchParams, useRouter, type Href } from 'expo-router'
 import { ComposeEditorChrome } from '@/components/org/compose-editor-section'
-import { ComposeSurfaceNav } from '@/components/org/project/compose-surface-nav'
 import { EnvironmentBindingsPanel } from '@/components/org/environment-bindings-panel'
 import { EnvironmentDetailBody } from '@/components/org/environment-detail-section'
 import { ProjectPrincipalsSection } from '@/components/org/project-detail-section'
@@ -41,7 +40,7 @@ function ResourceTabChrome({
   children,
 }: Readonly<{ children: ReactNode }>) {
   return (
-    <ComposeEditorChrome nav={<ComposeSurfaceNav />}>
+    <ComposeEditorChrome>
       <View style={styles.body}>{children}</View>
     </ComposeEditorChrome>
   )

@@ -1,7 +1,6 @@
 import { useMemo, type ReactNode } from 'react'
 import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
 import { ComposeEditorChrome } from '@/components/org/compose-editor-section'
-import { ComposeSurfaceNav } from '@/components/org/project/compose-surface-nav'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { ComposeGraphView } from '@/components/org/project/compose-graph-view'
 import { ComposeStackList } from '@/components/org/project/compose-stack-list'
@@ -169,7 +168,6 @@ export function ComposeSavedView({
 
   return (
     <ComposeEditorChrome
-      nav={<ComposeSurfaceNav />}
       trailing={
         showSourceToggle || toolbarTrailing ? (
           <View style={styles.headerTrailing}>

@@ -333,10 +333,9 @@ export function ComposeDraftActionButtons({
 }
 
 /**
- * Compose / Services mode toggle for embedded editors (environment detail,
- * etc.) that are not URL-tabbed. Always a row — a two-entry rail would read as
- * a sidebar next to a panel it does not own. The routed project surface uses
- * {@link import('./project/compose-surface-nav').ComposeSurfaceNav} instead.
+ * Compose / Services mode toggle for editors whose page tab bar does not own
+ * that choice (environment detail, the Base's Compose file). Always a row — a
+ * two-entry rail would read as a sidebar next to a panel it does not own.
  *
  * Internal view id remains `visual` (form cards); leave the word "Visual"
  * free for a future canvas/topology tab.
@@ -387,9 +386,9 @@ function SurfaceToolbarEnd({
 /**
  * Shared editor chrome: the bordered compose surface.
  *
- * `nav` is the lens bar (Overview · Compose · Services) and `tabs` the embedded
- * Compose/Services toggle; both sit in the header strip beside the toolbar
- * actions. There is deliberately **no** side rail — the project editor has no
+ * `tabs` is the embedded Compose/Services toggle; it sits in the header strip
+ * beside the toolbar actions. The page's own tab bar carries every other
+ * section. There is deliberately **no** side rail — the project editor has no
  * section nav to hold, and a rail of destinations is the thing this layout
  * exists to avoid.
  */
@@ -397,17 +396,14 @@ export function ComposeEditorChrome({
   leading,
   trailing,
   tabs,
-  nav,
   children,
 }: Readonly<{
   leading?: ReactNode
   trailing?: ReactNode
   tabs?: ReactNode
-  /** Lens bar for the routed compose surface. */
-  nav?: ReactNode
   children: ReactNode
 }>) {
-  const headerNav = nav ?? tabs
+  const headerNav = tabs
   const hasEnd = Boolean(trailing || leading)
 
   if (!headerNav && !hasEnd) {
@@ -619,7 +615,6 @@ export function ComposeEditorSection({
   hideHeader = false,
   hideViewTabs = false,
   hideSave = false,
-  surfaceTabs,
   toolbarLeading,
   toolbarTrailing,
   visualMode = 'cards',
@@ -666,8 +661,8 @@ export function ComposeEditorSection({
    */
   hideHeader?: boolean
   /**
-   * Hide the embedded Compose/Services toggle (when {@link surfaceTabs} owns
-   * Overview / Compose / Services / Hosting / Servers navigation).
+   * Hide the embedded Compose/Services toggle (when the page's tab bar owns
+   * that choice).
    */
   hideViewTabs?: boolean
   /**
@@ -675,8 +670,6 @@ export function ComposeEditorSection({
    * create wizard's Create project button), where there is nothing to save yet.
    */
   hideSave?: boolean
-  /** Surface header tabs (e.g. Overview · Compose · Services · Hosting · Servers). */
-  surfaceTabs?: ReactNode
   /** Surface header: Project / environment buttons (right-aligned). */
   toolbarLeading?: ReactNode
   /** Surface header: extra actions left of Discard / Save. */
@@ -1361,11 +1354,8 @@ export function ComposeEditorSection({
           onSave: () => void handleSave(),
           onDiscard: handleDiscard,
         })}
-        nav={surfaceTabs}
         tabs={
-          surfaceTabs || hideViewTabs ? undefined : (
-            <ComposeEditorViewTabs value={tab} onChange={requestView} />
-          )
+          hideViewTabs ? undefined : <ComposeEditorViewTabs value={tab} onChange={requestView} />
         }
       >
         {editorBody}

@@ -22,6 +22,8 @@ import {
 import { ProjectTitleIcon } from '@/components/org/project/project-title-icon'
 import { TrashIcon } from '@/components/org/project/trash-icon'
 import {
+  COMPOSE_PROJECT_TAB_LABELS,
+  DRAFT_COMPOSE_PROJECT_TAB_IDS,
   PROJECT_PAGE_TAB_IDS,
   PROJECT_PAGE_TAB_LABELS,
   isManagedProject,
@@ -29,6 +31,7 @@ import {
   parseProjectPageTab,
   projectOverviewHref,
   projectPageTabHref,
+  type ComposeProjectTabId,
   type ProjectPageTabId,
 } from '@/lib/project-navigation'
 import {
@@ -401,7 +404,10 @@ function ProjectHeader({
   )
 }
 
-/** Environments · Base · Settings, under the header of a Compose project's own pages. */
+/**
+ * Environments · Base · Compose · Bindings · Hosting · Settings, under the
+ * header of a Compose project's own pages. The only tab bar those pages show.
+ */
 function ProjectPageTabs() {
   const pathname = usePathname()
   const router = useRouter()
@@ -422,16 +428,41 @@ function ProjectPageTabs() {
   )
 }
 
+/**
+ * The create wizard's lens tabs (Overview · Compose · Services). A draft has no
+ * route to navigate, so the tabs switch the draft's own section. A draft that
+ * offers a single lens (a repository app) shows no tabs.
+ */
+function DraftLensTabs() {
+  const { draft } = useProjectContext()
+  const sections = draft?.sections ?? DRAFT_COMPOSE_PROJECT_TAB_IDS
+  const tabs = useMemo<UnderlineTab[]>(
+    () => sections.map((key) => ({ key, label: COMPOSE_PROJECT_TAB_LABELS[key] })),
+    [sections]
+  )
+  if (!draft || tabs.length < 2) return null
+  return (
+    <UnderlineTabs
+      tabs={tabs}
+      value={draft.section}
+      onChange={(key) => draft.setSection(key as ComposeProjectTabId)}
+      ariaLabel="Project sections"
+    />
+  )
+}
+
 function ProjectShellChrome({
   hideEnvSelector,
   showManagedSectionTabs,
   showPageTabs,
+  showDraftTabs,
   needsSetup,
   activeTab,
 }: Readonly<{
   hideEnvSelector: boolean
   showManagedSectionTabs: boolean
   showPageTabs: boolean
+  showDraftTabs: boolean
   needsSetup: boolean
   activeTab: ReturnType<typeof activeProjectTabFromPathname>
 }>) {
@@ -440,6 +471,7 @@ function ProjectShellChrome({
     <>
       {hideEnvSelector ? null : <EnvironmentSelector />}
       {showPageTabs ? <ProjectPageTabs /> : null}
+      {showDraftTabs ? <DraftLensTabs /> : null}
       {showManagedSectionTabs ? (
         <View style={styles.sectionTabsRow}>
           <ProjectSectionTabs />
@@ -474,9 +506,10 @@ export function ProjectShell({ children }: Readonly<{ children: ReactNode }>) {
   const hideEnvSelector = managed
     ? activeTab === 'environments' || activeTab === 'overview'
     : true
-  // A Compose project's own pages (Environments, Base, Settings) carry tabs.
-  // Drafts, managed and platform projects keep their own chrome, and an
-  // environment page brings its own header and tabs.
+  // A Compose project's own pages (Environments, Base and its sections,
+  // Settings) carry tabs. A create-wizard draft gets its lens tabs instead;
+  // managed and platform projects keep their own chrome, and an environment
+  // page brings its own header and tabs.
   const showPageTabs =
     Boolean(project) &&
     !managed &&
@@ -520,6 +553,7 @@ export function ProjectShell({ children }: Readonly<{ children: ReactNode }>) {
             hideEnvSelector={hideEnvSelector}
             showManagedSectionTabs={managed}
             showPageTabs={showPageTabs}
+            showDraftTabs={Boolean(draft)}
             needsSetup={needsSetup}
             activeTab={activeTab}
           />

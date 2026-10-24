@@ -20,7 +20,7 @@ export function ProblemNoticeCard({
         <>
           <ActionButton label="View deployments" onPress={() => router.push(deploymentsHref as Href)} />
           <ActionButton
-            label="Open Configuration"
+            label="Open Services"
             variant="quiet"
             onPress={() => router.push(configurationHref as Href)}
           />

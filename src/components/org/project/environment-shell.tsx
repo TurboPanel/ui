@@ -302,7 +302,7 @@ function EnvironmentChrome({ children }: Readonly<{ children: ReactNode }>) {
 }
 
 /**
- * True when an environment route gets the header and four tabs: Compose
+ * True when an environment route gets the header and its tab bar: Compose
  * projects only. Managed and platform projects keep their own pages.
  */
 export function useEnvironmentChrome(): boolean {
@@ -311,8 +311,9 @@ export function useEnvironmentChrome(): boolean {
 }
 
 /**
- * The environment header and its four tabs around every environment route of a
- * Compose project. A path that names an environment that does not exist goes
+ * The environment header and its one tab bar (Overview · Deployments ·
+ * Services · Compose · Bindings · Hosting · Settings) around every environment
+ * route of a Compose project. A path that names an environment that does not exist goes
  * back to the project.
  */
 export function EnvironmentShell({ children }: Readonly<{ children: ReactNode }>) {

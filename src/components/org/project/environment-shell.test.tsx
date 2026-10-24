@@ -245,11 +245,15 @@ describe('EnvironmentShell gating', () => {
 })
 
 describe('environment header', () => {
-  it('shows the same four tabs on every tab, lighting the one in view', () => {
+  it('shows the same one tab bar on every tab, lighting the one in view', () => {
     for (const [pathname, active] of [
       ['/o/projects/p/environments/e', 'Overview'],
       ['/o/projects/p/environments/e/deployments', 'Deployments'],
-      ['/o/projects/p/environments/e/configuration/hosting', 'Configuration'],
+      ['/o/projects/p/environments/e/configuration', 'Services'],
+      ['/o/projects/p/environments/e/configuration/storage', 'Services'],
+      ['/o/projects/p/environments/e/configuration/compose', 'Compose'],
+      ['/o/projects/p/environments/e/configuration/bindings', 'Bindings'],
+      ['/o/projects/p/environments/e/configuration/hosting', 'Hosting'],
       ['/o/projects/p/environments/e/settings', 'Settings'],
     ] as const) {
       state.pathname = pathname
@@ -262,7 +266,10 @@ describe('environment header', () => {
       expect(tabs.map((tab) => tab.textContent)).toEqual([
         'Overview',
         'Deployments',
-        'Configuration',
+        'Services',
+        'Compose',
+        'Bindings',
+        'Hosting',
         'Settings',
       ])
       expect(
@@ -273,6 +280,10 @@ describe('environment header', () => {
       fireEvent.click(tabs[1] as HTMLElement)
       expect(state.push).toHaveBeenLastCalledWith(
         '/o/projects/p/environments/e/deployments',
+      )
+      fireEvent.click(tabs[5] as HTMLElement)
+      expect(state.push).toHaveBeenLastCalledWith(
+        '/o/projects/p/environments/e/configuration/hosting'
       )
       cleanup()
     }

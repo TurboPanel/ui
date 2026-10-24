@@ -224,7 +224,7 @@ describe.each(SCENARIOS)('EnvironmentOverviewBody ($name)', (scenario) => {
     expect(within(notice).getByText('Build stopped with an error')).toBeTruthy()
     fireEvent.click(within(notice).getByRole('button', { name: 'View deployments' }))
     expect(push).toHaveBeenLastCalledWith(`${BASE}/deployments`)
-    fireEvent.click(within(notice).getByRole('button', { name: 'Open Configuration' }))
+    fireEvent.click(within(notice).getByRole('button', { name: 'Open Services' }))
     expect(push).toHaveBeenLastCalledWith(`${BASE}/configuration`)
   })
 
