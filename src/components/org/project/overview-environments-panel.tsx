@@ -27,9 +27,8 @@ import {
   type PreviewDeploymentPurpose,
 } from '@/components/org/project/preview-deployment-modal'
 import { environmentStatusTone, hasHostDeployedContainers } from '@/lib/container-status'
+import { deployPreviewFailureMessage } from '@/lib/deploy-error-message'
 import {
-  DeployHealthCheckMissingError,
-  DeployResourceLimitExceededError,
   type CommandProgress,
   type CommandStatus,
   type CommandStatusRecord,
@@ -645,19 +644,6 @@ function applySucceededCommandSideEffects(
   if (shouldInvalidateEnvironmentsForCommand(meta.label)) {
     invalidateEnvironments()
   }
-}
-
-function deployPreviewFailureMessage(err: unknown): string | null {
-  if (err instanceof DeployHealthCheckMissingError) {
-    if (err.required) {
-      return 'A service requires a compose healthcheck before the first start. Add healthcheck: in Compose, or set Health check policy to Disabled in service settings.'
-    }
-    return 'Health-check warnings are enabled for a service. Confirm the deploy from this environment, or set Health check policy to Disabled.'
-  }
-  if (err instanceof DeployResourceLimitExceededError) {
-    return 'This start would exceed a resource limit. Review the capacity of this environment and try again.'
-  }
-  return null
 }
 
 function patchTrackedCommandMeta(

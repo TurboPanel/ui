@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { deployErrorMessage } from '@/lib/deploy-error-message'
+import { deployErrorMessage, deployRefusalMessage } from '@/lib/deploy-error-message'
+import { DeployHealthCheckMissingError, DeployResourceLimitExceededError } from '@/lib/instance-api'
 
 const wrapped = (code: string, sentence: string) =>
   new Error(`/api/client/v1/environments/e1/deploy failed: 403 ${code} — ${sentence}`)
@@ -38,6 +39,27 @@ describe('deployErrorMessage', () => {
     expect(deployErrorMessage(wrapped('tls_pin_mismatch', sentence))).toBe(sentence)
     expect(deployErrorMessage(new Error('deploy failed: 400 tls_pin_mismatch'))).toContain(
       'does not cover every name',
+    )
+  })
+})
+
+describe('deployRefusalMessage', () => {
+  it('words a missing or required health check with the next step', () => {
+    expect(deployRefusalMessage(new DeployHealthCheckMissingError(true, ['web']))).toMatch(
+      /requires a compose healthcheck/
+    )
+    expect(deployRefusalMessage(new DeployHealthCheckMissingError(false, ['web']))).toMatch(
+      /Confirm the deploy from this environment/
+    )
+  })
+
+  it('words a resource limit', () => {
+    expect(deployRefusalMessage(new DeployResourceLimitExceededError([]))).toMatch(/resource limit/)
+  })
+
+  it('falls back to the coded refusals', () => {
+    expect(deployRefusalMessage(new Error('409 — server_placement_mismatch'))).toBe(
+      "Deploy target does not match the project's pinned server placement."
     )
   })
 })

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  MAIN_SETUP_CHOICES,
+  MORE_SETUP_CHOICES,
   SETUP_TYPE_OPTIONS,
   filterSetupCatalog,
   isCatalogEntrySelectable,
@@ -26,13 +28,20 @@ const CATALOG: CatalogSummary[] = [
 describe('SETUP_TYPE_OPTIONS', () => {
   it('lists the four compose lenses before the two catalog cards', () => {
     expect(SETUP_TYPE_OPTIONS.map((option) => option.label)).toEqual([
-      'Docker Compose',
-      'Services',
-      'Git Repository',
-      'Hosting',
+      'Compose',
+      'Service forms',
+      'From a Git repository',
+      'Hosting upload',
       'Template',
-      'Managed',
+      'Managed database',
     ])
+  })
+
+  it('shows three main cards and keeps the other three one press away', () => {
+    expect(MAIN_SETUP_CHOICES).toEqual(['repository', 'compose', 'managed'])
+    expect(MORE_SETUP_CHOICES).toEqual(['hosting', 'template', 'services'])
+    const shown = [...MAIN_SETUP_CHOICES, ...MORE_SETUP_CHOICES].toSorted()
+    expect(shown).toEqual(SETUP_TYPE_OPTIONS.map((option) => option.choice).toSorted())
   })
 
   /**
@@ -96,16 +105,13 @@ describe('SETUP_TYPE_OPTIONS', () => {
     expect(services?.description).toContain('YAML')
   })
 
-  /**
-   * Managed happens to be databases today, but the catalog is meant to grow
-   * past them — the card must not promise a database.
-   */
-  it('keeps engine names and the word database off the Managed card', () => {
+  /** The card says what it is today, a managed database, without naming engines. */
+  it('names a managed database and keeps engine names off the card', () => {
     const managed = setupOptionForChoice('managed')
+    expect(managed?.label).toBe('Managed database')
     expect(managed?.description).not.toContain('Redis')
     expect(managed?.description).not.toContain('ClickHouse')
     expect(managed?.description).not.toContain('PostgreSQL')
-    expect(managed?.description.toLowerCase()).not.toContain('database')
   })
 
   /**
@@ -164,10 +170,8 @@ describe('the Hosting card', () => {
   })
 
   it('does not sit ahead of Compose', () => {
-    const labels = SETUP_TYPE_OPTIONS.map((option) => option.label)
-    expect(labels.indexOf('Hosting')).toBeGreaterThan(
-      labels.indexOf('Docker Compose'),
-    )
+    const choices = SETUP_TYPE_OPTIONS.map((option) => option.choice)
+    expect(choices.indexOf('hosting')).toBeGreaterThan(choices.indexOf('compose'))
   })
 
   it('describes the capability without disparaging it', () => {
