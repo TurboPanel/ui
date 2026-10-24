@@ -340,10 +340,7 @@ function EnvironmentServersPanel({
   )
 
   return (
-    <Section
-      title="Server"
-      note="This environment only — deploys to one server"
-    >
+    <Section title="Server" note="This environment only — deploys to one server">
       <EnvironmentServerPinBody
         selectedEnvironment={selectedEnvironment}
         canEdit={canEdit}

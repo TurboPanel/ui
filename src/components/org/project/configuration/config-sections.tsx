@@ -5,6 +5,7 @@ import {
   NewVariableEditor,
   VariableEditor,
 } from '@/components/org/project/configuration/row-editors'
+import { TextLink } from '@/components/ui/text-link'
 import type { EditingApi } from '@/components/org/project/configuration/editing'
 import {
   ActionButton,
@@ -51,7 +52,6 @@ const styles = themedStyles((p) => ({
   diff: { ...typeStyle('mono', 'mono'), color: p.text2 },
   was: { color: p.text3, textDecorationLine: 'line-through' },
   now: { color: p.text },
-  link: { ...typeStyle('bodyMedium', 'subhead'), color: p.link },
   problem: { ...typeStyle('body', 'footnote'), color: p.bad },
 }))
 
@@ -249,14 +249,11 @@ export function HostingSection({
                 }
                 chips={<SourceTag source={domain.tag.source} label={domain.tag.label} />}
                 trailing={
-                  <Pressable
-                    accessibilityRole="link"
+                  <TextLink
+                    label="Open"
                     accessibilityLabel={`Open ${domain.host} in a new tab`}
                     onPress={() => onOpenUrl(domain.url)}
-                    style={webPointer}
-                  >
-                    <Text style={s.link}>Open</Text>
-                  </Pressable>
+                  />
                 }
               />
             )}

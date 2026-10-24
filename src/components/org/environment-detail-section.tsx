@@ -725,6 +725,9 @@ function HostingWebEnvFields({
   )
 }
 
+/** The "Self-signed" / "Any interface" option of a picker whose saved value is null. */
+const NO_CHOICE = ''
+
 const HOSTING_BIND_LABELS: Record<HostingBind, string> = {
   public: 'Public',
   datacenter: 'Datacenter',
@@ -791,31 +794,20 @@ function HostingProtocolPicker({
     <>
       <Text style={styles.tlsLabel}>Protocol</Text>
       <Text style={styles.tlsHint}>
-        Http routes hostnames through Traefik + Caddy with TLS. Tcp/Udp
-        publish raw port(s) straight through Traefik — no hostname or TLS
-        routing (databases, game servers, relays).
+        HTTP: TurboPanel&apos;s proxy serves this hostname with a certificate. TCP/UDP: opens a raw
+        port, with no hostname (databases, game servers, relays).
       </Text>
-      <View style={styles.tlsOptions}>
-        {(
-          [
-            { id: 'http' as const, label: 'Http' },
-            { id: 'tcp' as const, label: 'Tcp' },
-            { id: 'udp' as const, label: 'Udp' },
-          ] as const
-        ).map((option) => (
-          <Pressable
-            key={option.id}
-            style={[
-              styles.tlsChip,
-              editor.protocol === option.id && styles.tlsChipActive,
-            ]}
-            disabled={disabled}
-            onPress={() => onChange({ protocol: option.id })}
-          >
-            <Text style={styles.tlsChipText}>{option.label}</Text>
-          </Pressable>
-        ))}
-      </View>
+      <SegmentedControl
+        accessibilityLabel="Protocol"
+        options={[
+          { value: 'http', label: 'HTTP' },
+          { value: 'tcp', label: 'TCP' },
+          { value: 'udp', label: 'UDP' },
+        ]}
+        value={editor.protocol}
+        disabled={disabled}
+        onChange={(protocol) => onChange({ protocol })}
+      />
     </>
   )
 }
@@ -933,25 +925,16 @@ function HostingTlsPicker({
           ? 'Self-signed is tls.mode "internal"; picking a library certificate is tls.mode "certificate" with tls.certificateRef. Nothing is requested automatically — "automatic" is refused at deploy rather than served as self-signed.'
           : 'Until a real certificate is in place the site uses a basic self-signed one. Pick a library certificate to use an upload or an org self-signed one, or tick the box below to get a free Let\u2019s Encrypt certificate when you save.'}
       </Text>
-      <View style={styles.tlsOptions}>
-        <Pressable
-          style={[styles.tlsChip, editor.tlsId === null && styles.tlsChipActive]}
-          disabled={locked}
-          onPress={() => onChange({ tlsId: null })}
-        >
-          <Text style={styles.tlsChipText}>Self-signed</Text>
-        </Pressable>
-        {chips.map((row) => (
-          <Pressable
-            key={row.id}
-            style={[styles.tlsChip, editor.tlsId === row.id && styles.tlsChipActive]}
-            disabled={locked}
-            onPress={() => onChange({ tlsId: row.id })}
-          >
-            <Text style={styles.tlsChipText}>{tlsLabel(row)}</Text>
-          </Pressable>
-        ))}
-      </View>
+      <SegmentedControl
+        accessibilityLabel="TLS certificate"
+        options={[
+          { value: NO_CHOICE, label: 'Self-signed' },
+          ...chips.map((row) => ({ value: row.id, label: tlsLabel(row) })),
+        ]}
+        value={editor.tlsId ?? NO_CHOICE}
+        disabled={locked}
+        onChange={(id) => onChange({ tlsId: id === NO_CHOICE ? null : id })}
+      />
       <HostingHintText hint={pinnedGap?.note ?? null} />
       {!offersLetsEncrypt({
         composeOwned,
@@ -986,32 +969,17 @@ function HostingBindPicker({
         Public — reachable on the internet. Datacenter — private network only.
         Local — this server only (127.x).
       </Text>
-      <View style={styles.tlsOptions}>
-        {(
-          [
-            { id: 'public' as const, label: 'Public' },
-            { id: 'datacenter' as const, label: 'Datacenter' },
-            { id: 'local' as const, label: 'Local' },
-          ] as const
-        ).map((option) => (
-          <Pressable
-            key={option.id}
-            style={[
-              styles.tlsChip,
-              editor.bind === option.id && styles.tlsChipActive,
-            ]}
-            disabled={locked}
-            onPress={() =>
-              onChange({
-                bind: option.id,
-                ...(option.id !== 'public' ? { ipId: null } : {}),
-              })
-            }
-          >
-            <Text style={styles.tlsChipText}>{option.label}</Text>
-          </Pressable>
-        ))}
-      </View>
+      <SegmentedControl
+        accessibilityLabel="Bind"
+        options={[
+          { value: 'public', label: 'Public' },
+          { value: 'datacenter', label: 'Datacenter' },
+          { value: 'local', label: 'Local' },
+        ]}
+        value={editor.bind}
+        disabled={locked}
+        onChange={(bind) => onChange({ bind, ...(bind === 'public' ? {} : { ipId: null }) })}
+      />
     </>
   )
 }
@@ -1035,30 +1003,16 @@ function HostingPublicIpPicker({
         Pin a managed public address, or leave Any interface for the server
         to choose.
       </Text>
-      <View style={styles.tlsOptions}>
-        <Pressable
-          style={[styles.tlsChip, editor.ipId === null && styles.tlsChipActive]}
-          disabled={locked}
-          onPress={() => onChange({ ipId: null })}
-        >
-          <Text style={styles.tlsChipText}>Any interface</Text>
-        </Pressable>
-        {publicIps.map((ip) => (
-          <Pressable
-            key={ip.id}
-            style={[
-              styles.tlsChip,
-              editor.ipId === ip.id && styles.tlsChipActive,
-            ]}
-            disabled={locked}
-            onPress={() => onChange({ ipId: ip.id })}
-          >
-            <Text style={styles.tlsChipText}>
-              {ip.address}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
+      <SegmentedControl
+        accessibilityLabel="Public IP"
+        options={[
+          { value: NO_CHOICE, label: 'Any interface' },
+          ...publicIps.map((ip) => ({ value: ip.id, label: ip.address })),
+        ]}
+        value={editor.ipId ?? NO_CHOICE}
+        disabled={locked}
+        onChange={(id) => onChange({ ipId: id === NO_CHOICE ? null : id })}
+      />
     </>
   )
 }
@@ -1850,10 +1804,7 @@ function EnvironmentHostingSectionPanel({
     }),
   }))
   return (
-    <Section
-      title="Hosting"
-      note="Map compose services to hostnames (http) or raw ports (tcp/udp)"
-    >
+    <Section title="Hosting" note="Map compose services to hostnames (http) or raw ports (tcp/udp)">
       {hostingRows.length === 0 ? (
         <EmptyState title="Add services to Compose before configuring hostnames." />
       ) : (
@@ -3154,28 +3105,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
     marginTop: spacing.xs,
-  },
-  tlsOptions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-    marginBottom: spacing.sm,
-  },
-  tlsChip: {
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-    borderRadius: 6,
-    backgroundColor: colors.bgSecondary,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-  },
-  tlsChipActive: {
-    borderColor: chrome.accent,
-    backgroundColor: chrome.bgActive,
-  },
-  tlsChipText: {
-    color: colors.textChip,
-    fontSize: 12,
   },
   buttonDisabled: { opacity: 0.6 },
   containerList: { gap: spacing.sm },

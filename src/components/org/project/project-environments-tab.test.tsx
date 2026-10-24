@@ -189,11 +189,11 @@ describe.each(SCENARIOS)('project Environments tab ($name)', (scenario) => {
     expect(screen.queryByText(/follows? (the base|it)/i)).toBeNull()
   })
 
-  it('gives the Base a clear button in the header once there are two or more environments', () => {
+  it('opens the Base from its band once there are two or more environments, with no second button', () => {
     render(<ProjectEnvironmentsTab />)
-    const buttons = screen.getAllByRole('button', { name: 'Open the Base' })
-    expect(buttons.length).toBeGreaterThan(0)
-    fireEvent.click(buttons[0] as HTMLElement)
+    expect(screen.queryByRole('button', { name: 'Open the Base' })).toBeNull()
+    expect(screen.getByText('Open the Base')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /^Base, / }))
     expect(state.push).toHaveBeenLastCalledWith('/o/projects/p/base')
   })
 

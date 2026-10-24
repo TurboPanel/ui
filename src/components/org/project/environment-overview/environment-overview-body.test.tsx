@@ -190,7 +190,7 @@ describe.each(SCENARIOS)('EnvironmentOverviewBody ($name)', (scenario) => {
     expect(within(row).getByText('1h ago')).toBeTruthy()
     fireEvent.click(row)
     expect(push).toHaveBeenLastCalledWith(`${BASE}/deployments`)
-    fireEvent.click(screen.getByRole('button', { name: 'All deployments' }))
+    fireEvent.click(screen.getByRole('link', { name: 'All deployments' }))
     expect(push).toHaveBeenLastCalledWith(`${BASE}/deployments`)
   })
 

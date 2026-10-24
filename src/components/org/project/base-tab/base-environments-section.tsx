@@ -1,27 +1,16 @@
 import { useRouter, type Href } from 'expo-router'
-import { Pressable, Text, View } from 'react-native'
+import { View } from 'react-native'
+import { TextLink } from '@/components/ui/text-link'
 import { EmptyPanel } from '@/components/ui/v4/empty-panel'
 import { ListGroup } from '@/components/ui/v4/list-group'
 import { ListRow } from '@/components/ui/v4/list-row'
 import { SectionHeading } from '@/components/ui/v4/section-heading'
 import { SourceTag } from '@/components/ui/v4/source-tag'
-import { typeStyle } from '@/components/ui/v4/type-styles'
-import { themedStyles, usePalette } from '@/components/ui/v4/use-palette'
 import { projectEnvironmentConfigurationHref, projectEnvironmentHref } from '@/lib/project-navigation'
-import { webPointer } from '@/lib/theme'
 import { reachLine, type BaseEnvironmentRow } from '@/lib/v4/project-base'
 
-const styles = themedStyles((p) => ({
-  link: { ...typeStyle('bodySemibold', 'subhead'), color: p.link },
-}))
-
 function RowLink({ label, name, onPress }: Readonly<{ label: string; name: string; onPress: () => void }>) {
-  const s = styles(usePalette())
-  return (
-    <Pressable accessibilityRole="link" accessibilityLabel={name} onPress={onPress} style={webPointer}>
-      <Text style={s.link}>{label}</Text>
-    </Pressable>
-  )
+  return <TextLink label={label} accessibilityLabel={name} onPress={onPress} />
 }
 
 function EnvironmentRow({

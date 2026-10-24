@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { ServiceFolderSettings } from '@/components/org/service-folder-settings'
 import { ServiceBindingsPanel } from '@/components/org/service-bindings-panel'
-import { Checkbox } from '@/components/ui'
+import { Checkbox, SegmentedControl, type SegmentedOption } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
 import {
   type HealthCheckPolicy,
@@ -55,27 +55,11 @@ function ToggleRow({
   )
 }
 
-function HealthPolicyChip({
-  policy,
-  selected,
-  disabled,
-  onSelect,
-}: Readonly<{
-  policy: HealthCheckPolicy
-  selected: boolean
-  disabled: boolean
-  onSelect: () => void
-}>) {
-  return (
-    <Pressable
-      style={[styles.policyChip, selected && styles.policyChipActive]}
-      disabled={disabled}
-      onPress={onSelect}
-    >
-      <Text style={styles.policyChipText}>{policy}</Text>
-    </Pressable>
-  )
-}
+const HEALTH_POLICY_OPTIONS: readonly SegmentedOption<HealthCheckPolicy>[] = [
+  { value: 'disabled', label: 'Disabled' },
+  { value: 'warn', label: 'Warn' },
+  { value: 'required', label: 'Required' },
+]
 
 function fieldInputStyle(multiline = false) {
   return [
@@ -300,17 +284,13 @@ export function ServiceSettingsPanel({
 
       <View style={styles.field}>
         <Text style={styles.label}>Health check policy</Text>
-        <View style={styles.policyRow}>
-          {(['disabled', 'warn', 'required'] as const).map((policy) => (
-            <HealthPolicyChip
-              key={policy}
-              policy={policy}
-              selected={healthPolicy === policy}
-              disabled={!canManage || saving}
-              onSelect={() => setHealthPolicy(policy)}
-            />
-          ))}
-        </View>
+        <SegmentedControl
+          accessibilityLabel="Health check policy"
+          options={HEALTH_POLICY_OPTIONS}
+          value={healthPolicy}
+          disabled={!canManage || saving}
+          onChange={setHealthPolicy}
+        />
       </View>
 
       <View style={styles.fieldRow}>
@@ -416,29 +396,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
     marginTop: spacing.sm,
-  },
-  policyRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-  },
-  policyChip: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-    backgroundColor: colors.bgSecondary,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  policyChipActive: {
-    borderColor: chrome.accent,
-    backgroundColor: chrome.bgActive,
-  },
-  policyChipText: {
-    color: colors.text,
-    fontSize: 12,
-    fontWeight: '600',
-    textTransform: 'capitalize',
   },
   saveButton: {
     alignSelf: 'flex-start',

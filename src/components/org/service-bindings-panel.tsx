@@ -3,11 +3,7 @@ import { useRouter, type Href } from 'expo-router'
 import { StyleSheet, Text, View } from 'react-native'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { Section } from '@/components/ui/v4/section'
-import {
-  Button,
-  ConfirmButton,
-  LoadingState,
-} from '@/components/ui'
+import { Button, ConfirmButton, LoadingState } from '@/components/ui'
 import type { BindingRecord } from '@/lib/instance-api'
 import {
   managedCatalogEntryForCode,
