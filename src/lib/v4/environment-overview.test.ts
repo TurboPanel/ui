@@ -217,13 +217,13 @@ describe('domains, volumes and databases', () => {
   it('reads a certificate word only from a pinned certificate row', () => {
     const tls = [
       tlsRecord('ok', 'upload', 'ready'),
-      tlsRecord('managed', 'lets_encrypt', 'managed'),
+      tlsRecord('automatic', 'lets_encrypt', 'automatic'),
       tlsRecord('wait', 'lets_encrypt', 'pending'),
       tlsRecord('self', 'self_signed', 'ready'),
       tlsRecord('old', 'upload', 'expired'),
     ]
     expect(certificateKey('ok', tls)).toBe('ok')
-    expect(certificateKey('managed', tls)).toBe('ok')
+    expect(certificateKey('automatic', tls)).toBe('ok')
     expect(certificateKey('wait', tls)).toBe('issuing')
     expect(certificateKey('self', tls)).toBe('test')
     expect(certificateKey('old', tls)).toBe('renewal_failed')

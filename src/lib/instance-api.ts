@@ -3792,7 +3792,7 @@ export type UseLetsEncryptResult = {
 
 export type TlsSource = 'upload' | 'lets_encrypt' | 'self_signed' | 'organization_ca'
 
-export type TlsStatus = 'ready' | 'pending' | 'expired' | 'failed' | 'revoked' | 'managed'
+export type TlsStatus = 'ready' | 'pending' | 'expired' | 'failed' | 'revoked' | 'automatic'
 
 export type TlsMetadata = {
   dnsNames: string[]
