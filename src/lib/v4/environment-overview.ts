@@ -207,7 +207,7 @@ function mapStatus(key: string | null): MapStatus | null {
 
 /**
  * The certificate word for a domain. No pinned certificate means the edge's own
- * self-signed one (a test certificate); a pinned one is read from its row, and
+ * self-signed one; a pinned one is read from its row, and
  * is unknown while that row is not at hand.
  */
 export function certificateKey(

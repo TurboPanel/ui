@@ -242,7 +242,10 @@ describe('domains, volumes and databases', () => {
     const unpinned = domainsOf(
       overviewSource({ hostings: { 's-web': [{ ...source.hostings['s-web']![0]!, tlsId: null }] } })
     )
-    expect(unpinned[0]?.status).toEqual({ key: 'test', label: 'Test certificate (browsers warn)' })
+    expect(unpinned[0]?.status).toEqual({
+      key: 'test',
+      label: 'Self-signed certificate (browsers warn)',
+    })
   })
 
   it('skips a service that has no saved row yet', () => {

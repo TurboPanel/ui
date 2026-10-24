@@ -68,7 +68,7 @@ export const STATUS = {
   ok: { label: 'Secure', glyph: 'lock', tone: 'ok' },
   expiring: { label: 'Expires soon', glyph: 'clock', tone: 'warn' },
   renewal_failed: { label: 'Renewal failed', glyph: 'diamond', tone: 'bad' },
-  test: { label: 'Test certificate (browsers warn)', glyph: 'unlock', tone: 'warn' },
+  test: { label: 'Self-signed certificate (browsers warn)', glyph: 'unlock', tone: 'warn' },
   // Servers and databases
   online: { label: 'Online', glyph: 'dot', tone: 'ok' },
   offline: { label: 'Offline', glyph: 'diamond', tone: 'bad' },
