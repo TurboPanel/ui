@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { createElement, type ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { env } from '@/components/ui/v4/rn-stub'
@@ -34,7 +34,8 @@ vi.mock('react-native', async () => {
       }),
   }
 })
-vi.mock('expo-clipboard', () => ({ setStringAsync: vi.fn(async () => true) }))
+const clipboard = vi.hoisted(() => ({ setStringAsync: vi.fn(async () => true) }))
+vi.mock('expo-clipboard', () => clipboard)
 vi.mock('@/components/org/logs/log-transcript-view', () => ({
   downloadTranscript: vi.fn(),
   TranscriptPlaceholder: ({ state }: Readonly<{ state: string }>) =>
@@ -96,12 +97,16 @@ describe('LogViewer', () => {
     expect(shownText()).toContain('Start the app')
   })
 
-  it('search reaches into a closed step and Only matching hides context', () => {
+  it('search reaches into a closed step and Only matching hides context', async () => {
     renderViewer()
     act(() => {
       fireEvent.change(screen.getByLabelText('Search the log'), { target: { value: 'check' } })
     })
-    expect(shownText()).toContain('Checked out 1a2b3c4')
+    // The search settles a moment after the last keystroke.
+    expect(shownText()).not.toContain('Checked out 1a2b3c4')
+    await waitFor(() => {
+      expect(shownText()).toContain('Checked out 1a2b3c4')
+    })
     expect(shownText()).toContain('Compiling 84 files')
     expect(screen.getByText('2 found')).toBeTruthy()
     act(() => {
@@ -144,5 +149,46 @@ describe('LogViewer', () => {
     renderViewer({ grouped: false, plan: null })
     expect(screen.queryByText('Open all steps')).toBeNull()
     expect(shownText()).toContain('Checked out 1a2b3c4')
+  })
+  it('copies what the view shows, with repeated progress ticks collapsed', async () => {
+    const tick = (message: string): LogTranscriptLine => line(message, 'pull', 'stderr')
+    renderViewer({
+      lines: [tick('Image nginx Extracting'), tick('Image nginx Extracting')],
+      plan: null,
+    })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Copy the log' }))
+    })
+    expect(clipboard.setStringAsync).toHaveBeenCalledWith('Image nginx Extracting')
+  })
+})
+
+describe('LogViewer on a phone', () => {
+  it('puts Live, Jump to error, Filter and More in a bottom bar', () => {
+    env.width = 390
+    const onLiveToggle = vi.fn()
+    renderViewer({ live: 'paused', onLiveToggle })
+    expect(screen.queryByRole('switch', { name: 'Wrap' })).toBeNull()
+    act(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'Live, Paused' }))
+    })
+    expect(onLiveToggle).toHaveBeenCalledTimes(1)
+    act(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'Filter' }))
+    })
+    expect(screen.getByRole('switch', { name: 'Errors and warnings' })).toBeTruthy()
+    act(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'More' }))
+    })
+    expect(screen.getByRole('switch', { name: 'Wrap' })).toBeTruthy()
+    expect(screen.queryByRole('switch', { name: 'Errors and warnings' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Jump to error' })).toBeTruthy()
+  })
+
+  it('leaves Live out of the bar once the deploy has finished', () => {
+    env.width = 390
+    renderViewer()
+    expect(screen.queryByRole('button', { name: /^Live/ })).toBeNull()
+    expect(screen.getByRole('button', { name: 'More' })).toBeTruthy()
   })
 })

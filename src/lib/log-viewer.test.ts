@@ -7,6 +7,7 @@ import {
   defaultOpenStepIds,
   EMPTY_LOG_FILTER,
   filterStepLines,
+  foldCase,
   firstErrorItemIndex,
   firstErrorStepId,
   isFiltering,
@@ -419,6 +420,18 @@ describe('matchSegments', () => {
       { text: 'b', match: true },
       { text: ' a', match: false },
     ])
+  })
+
+  it('keeps offsets right when lower case would lengthen a character', () => {
+    // 'İ' lower-cases to two UTF-16 units; slicing at offsets from a
+    // toLowerCase() copy would cut the match one character early.
+    expect('İ'.toLowerCase()).toHaveLength(2)
+    expect(matchSegments('İstanbul ERROR here', 'error')).toEqual([
+      { text: 'İstanbul ', match: false },
+      { text: 'ERROR', match: true },
+      { text: ' here', match: false },
+    ])
+    expect(foldCase('İA')).toBe('İa')
   })
 
   it('returns the whole line when there is no query', () => {
