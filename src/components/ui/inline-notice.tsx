@@ -18,9 +18,15 @@ export function InlineNotice({
   body,
   actions,
   tone = 'info',
+  titleLines,
+  bodyLines,
 }: Readonly<{
   title: string
   body?: string
+  /** Cut the title to this many lines (the full text stays the accessible name). */
+  titleLines?: number
+  /** Cut the body to this many lines (the full text stays the accessible name). */
+  bodyLines?: number
   actions?: ReactNode
   tone?: InlineNoticeTone
 }>) {
@@ -32,10 +38,14 @@ export function InlineNotice({
       accessibilityLabel={body ? `${title}. ${body}` : title}
     >
       <View style={styles.copy}>
-        <Text style={[styles.title, warning && styles.titleWarning]}>
+        <Text style={[styles.title, warning && styles.titleWarning]} numberOfLines={titleLines}>
           {title}
         </Text>
-        {body ? <Text style={styles.body}>{body}</Text> : null}
+        {body ? (
+          <Text style={styles.body} numberOfLines={bodyLines}>
+            {body}
+          </Text>
+        ) : null}
       </View>
       {actions ? <View style={styles.actions}>{actions}</View> : null}
     </View>

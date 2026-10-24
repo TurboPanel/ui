@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
-import { ModalSheet } from '@/components/ui'
+import { ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native'
+import { ModalSheet, SegmentedControl, TextLink } from '@/components/ui'
+import { ActionButton } from '@/components/ui/v4'
 import {
   DeployPreviewBody,
   usePreparedComposePreview,
@@ -8,7 +9,7 @@ import {
 import { ReadOnlyYamlBlock } from '@/components/org/readonly-yaml-block'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { composePreviewMergedYaml } from '@/lib/compose'
-import { colors, spacing, webPointer } from '@/lib/theme'
+import { colors, layout, spacing } from '@/lib/theme'
 
 export type ComposePreviewMode = 'merged' | 'prepared'
 
@@ -23,24 +24,37 @@ const MODE_OPTIONS: readonly {
   {
     id: 'merged',
     label: 'Merged',
-    hint: 'Project base and environment overrides together, including TurboPanel service metadata and the environment server pin.',
+    hint: "The project's compose with this environment's changes applied, and the server it runs on.",
   },
   {
     id: 'prepared',
     label: 'Prepared',
-    hint: 'Deploy-ready document after variables, naming, placement, and site split — what the host receives.',
+    hint: 'Exactly what the server receives: the compose file, its .env and the sources, after variables and names are filled in.',
   },
 ]
 
+/** "Deploy production?" — the question the confirm dialog asks. */
+export function confirmTitle(confirmLabel: string, environmentLabel?: string): string {
+  return `${confirmLabel} ${environmentLabel ?? 'this environment'}?`
+}
+
+/** One plain sentence: what pressing Deploy does, and where. */
+export function confirmSubtitle(
+  environmentLabel: string | undefined,
+  targetServer: string | null
+): string {
+  const name = environmentLabel ?? 'this environment'
+  return targetServer
+    ? `This builds ${name} and runs it on ${targetServer}.`
+    : `Choose a server for ${name} before deploying.`
+}
+
 function resolvePreviewSubtitle(
   isConfirm: boolean,
-  environmentLabel?: string,
+  environmentLabel: string | undefined,
+  targetServer: string | null
 ): string {
-  if (isConfirm) {
-    return environmentLabel
-      ? `Review the compose for ${environmentLabel}, then confirm to enqueue.`
-      : 'Review the compose, then confirm to enqueue.'
-  }
+  if (isConfirm) return confirmSubtitle(environmentLabel, targetServer)
   return environmentLabel
     ? `Inspect the compose that applies to ${environmentLabel}.`
     : 'Inspect merged and deploy-ready compose for this environment.'
@@ -62,7 +76,7 @@ function TargetServerLine({
   }
   return (
     <Text style={styles.targetServer}>
-      Target server · not set — pin a server before prepare or deploy
+      Target server · not chosen yet. Choose a server before deploying.
     </Text>
   )
 }
@@ -75,36 +89,12 @@ function ModePicker({
   onSelect: (mode: ComposePreviewMode) => void
 }>) {
   return (
-    <View style={panelStyles.segmentGroup}>
-      {MODE_OPTIONS.map((option) => {
-        const active = mode === option.id
-        return (
-          <Pressable
-            key={option.id}
-            style={[
-              panelStyles.segmentChip,
-              active && panelStyles.segmentChipActive,
-              webPointer,
-            ]}
-            onPress={() => {
-              onSelect(option.id)
-            }}
-            accessibilityRole="button"
-            accessibilityState={{ selected: active }}
-            accessibilityLabel={option.label}
-          >
-            <Text
-              style={[
-                panelStyles.segmentChipText,
-                active && panelStyles.segmentChipTextActive,
-              ]}
-            >
-              {option.label}
-            </Text>
-          </Pressable>
-        )
-      })}
-    </View>
+    <SegmentedControl
+      options={MODE_OPTIONS.map((option) => ({ value: option.id, label: option.label }))}
+      value={mode}
+      onChange={onSelect}
+      accessibilityLabel="Compose view"
+    />
   )
 }
 
@@ -144,43 +134,49 @@ function ModalFooterActions({
   onCancel: () => void
   onConfirm?: () => void
 }>) {
+  const { width } = useWindowDimensions()
+  const compact = width < layout.desktopBreakpoint
+  const cancel = (
+    <ActionButton
+      key="cancel"
+      label={isConfirm ? 'Cancel' : 'Close'}
+      variant="secondary"
+      fill={compact}
+      disabled={deploying}
+      accessibilityLabel={isConfirm ? 'Cancel deployment' : 'Close preview'}
+      onPress={onCancel}
+    />
+  )
+  const confirm =
+    isConfirm && onConfirm ? (
+      <ActionButton
+        key="confirm"
+        label={confirmLabel}
+        variant="primary"
+        fill={compact}
+        busy={deploying}
+        busyLabel="Deploying…"
+        disabled={!placementServerId}
+        onPress={onConfirm}
+      />
+    ) : null
+  // A phone stacks the buttons full width with the main action on top; a
+  // desktop dialog puts it last, on the right.
   return (
-    <View style={styles.actions}>
-      <Pressable
-        style={({ pressed }) => [
-          panelStyles.toolbarBtnSecondary,
-          pressed && styles.itemPressed,
-          webPointer,
-          deploying && styles.disabled,
-        ]}
-        onPress={onCancel}
-        disabled={deploying}
-        accessibilityRole="button"
-        accessibilityLabel={isConfirm ? 'Cancel deployment' : 'Close preview'}
-      >
-        <Text style={panelStyles.toolbarBtnTextSecondary}>
-          {isConfirm ? 'Cancel' : 'Close'}
-        </Text>
-      </Pressable>
-      {isConfirm && onConfirm ? (
-        <Pressable
-          style={({ pressed }) => [
-            panelStyles.toolbarBtnPrimary,
-            pressed && styles.itemPressed,
-            (deploying || !placementServerId) && styles.disabled,
-            webPointer,
-          ]}
-          onPress={onConfirm}
-          disabled={deploying || !placementServerId}
-          accessibilityRole="button"
-          accessibilityLabel={confirmLabel}
-        >
-          <Text style={panelStyles.toolbarBtnTextPrimary}>
-            {deploying ? 'Deploying…' : confirmLabel}
-          </Text>
-        </Pressable>
-      ) : null}
+    <View style={[styles.actions, compact && styles.actionsCompact]}>
+      {compact ? [confirm, cancel] : [cancel, confirm]}
     </View>
+  )
+}
+
+/** "Show what will run": the compose, .env and sources behind one disclosure. */
+function WhatWillRunToggle({ open, onToggle }: Readonly<{ open: boolean; onToggle: () => void }>) {
+  return (
+    <TextLink
+      label={open ? 'Hide what will run' : 'Show what will run'}
+      expanded={open}
+      onPress={onToggle}
+    />
   )
 }
 
@@ -223,10 +219,19 @@ export function PreviewDeploymentModal({
   onCancel: () => void
   onConfirm?: () => void
 }>) {
+  const isConfirm = purpose === 'confirm'
   const [mode, setMode] = useState<ComposePreviewMode>(initialMode)
+  // Confirm opens on the plain sentence with the detail folded away; the
+  // inspect view is the preview itself. Folded again on close, so the next
+  // open never fetches the prepared preview before it is asked for.
+  const [detailOpened, setDetailOpened] = useState(false)
+  const showDetail = !isConfirm || detailOpened
 
   useEffect(() => {
-    if (!visible) return
+    if (!visible) {
+      setDetailOpened(false)
+      return
+    }
     setMode(initialMode)
   }, [visible, initialMode])
 
@@ -234,7 +239,7 @@ export function PreviewDeploymentModal({
     orgId,
     environmentId,
     canManage,
-    visible && mode === 'prepared',
+    visible && showDetail && mode === 'prepared'
   )
 
   const mergedYaml = composePreviewMergedYaml(
@@ -248,11 +253,13 @@ export function PreviewDeploymentModal({
     onCancel()
   }
 
-  const isConfirm = purpose === 'confirm'
-  const title = isConfirm ? 'Confirm Deployment' : 'Compose Preview'
-  const subtitle = resolvePreviewSubtitle(isConfirm, environmentLabel)
-  const targetServerDisplay =
-    placementServerLabel?.trim() || placementServerId
+  const targetServerDisplay = placementServerLabel?.trim() || placementServerId
+  const title = isConfirm ? confirmTitle(confirmLabel, environmentLabel) : 'Compose Preview'
+  const subtitle = resolvePreviewSubtitle(
+    isConfirm,
+    environmentLabel,
+    placementServerId ? targetServerDisplay : null
+  )
   const activeHint =
     MODE_OPTIONS.find((option) => option.id === mode)?.hint ?? ''
 
@@ -263,7 +270,7 @@ export function PreviewDeploymentModal({
       title={title}
       description={subtitle}
       maxWidth={720}
-      dismissLabel="Close compose preview"
+      dismissLabel={isConfirm ? 'Cancel deployment' : 'Close compose preview'}
       footer={
         <ModalFooterActions
           isConfirm={isConfirm}
@@ -275,26 +282,32 @@ export function PreviewDeploymentModal({
         />
       }
     >
-      <TargetServerLine
-        placementServerId={placementServerId}
-        targetServerDisplay={targetServerDisplay}
-      />
-
-      <ModePicker mode={mode} onSelect={setMode} />
-
-      <Text style={panelStyles.muted}>{activeHint}</Text>
-
-      <ScrollView
-        style={styles.previewScroll}
-        contentContainerStyle={styles.previewScrollContent}
-        nestedScrollEnabled
-      >
-        <ComposePreviewBody
-          mode={mode}
-          mergedYaml={mergedYaml}
-          prepared={prepared}
+      {isConfirm ? null : (
+        <TargetServerLine
+          placementServerId={placementServerId}
+          targetServerDisplay={targetServerDisplay}
         />
-      </ScrollView>
+      )}
+
+      {isConfirm ? (
+        <WhatWillRunToggle open={showDetail} onToggle={() => setDetailOpened((open) => !open)} />
+      ) : null}
+
+      {showDetail ? (
+        <>
+          <ModePicker mode={mode} onSelect={setMode} />
+
+          <Text style={panelStyles.muted}>{activeHint}</Text>
+
+          <ScrollView
+            style={styles.previewScroll}
+            contentContainerStyle={styles.previewScrollContent}
+            nestedScrollEnabled
+          >
+            <ComposePreviewBody mode={mode} mergedYaml={mergedYaml} prepared={prepared} />
+          </ScrollView>
+        </>
+      ) : null}
     </ModalSheet>
   )
 }
@@ -320,10 +333,8 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginTop: spacing.xs,
   },
-  itemPressed: {
-    opacity: 0.85,
-  },
-  disabled: {
-    opacity: 0.55,
+  actionsCompact: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
   },
 })

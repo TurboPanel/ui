@@ -34,6 +34,7 @@ export {
   SegmentedControl,
   type SegmentedOption,
 } from '@/components/ui/segmented-control'
+export { TextLink, type TextLinkSize } from '@/components/ui/text-link'
 export { Toggle } from '@/components/ui/toggle'
 export { StatusDot, type StatusTone } from '@/components/ui/status-dot'
 export {
