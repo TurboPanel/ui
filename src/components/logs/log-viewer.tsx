@@ -351,6 +351,30 @@ function onScrollToIndexFailed(
   })
 }
 
+/**
+ * Live follows the end of the log: new content scrolls to the bottom while
+ * Live is on, and scrolling up away from the end pauses it.
+ */
+function useFollowTail(
+  listRef: React.RefObject<FlatList<LogViewerItem> | null>,
+  live: LiveState,
+  onScrolledAway: (() => void) | undefined
+) {
+  const onContentSizeChange = useCallback(() => {
+    if (live === 'on') listRef.current?.scrollToEnd({ animated: false })
+  }, [listRef, live])
+  const onScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      if (live !== 'on') return
+      const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent
+      const fromBottom = contentSize.height - (contentOffset.y + layoutMeasurement.height)
+      if (fromBottom > FOLLOW_THRESHOLD_PX) onScrolledAway?.()
+    },
+    [live, onScrolledAway]
+  )
+  return { onContentSizeChange, onScroll }
+}
+
 /** One row of the list: a step header, a line, a gap, the setup fold or the empty note. */
 function LogViewerRow({
   item,
@@ -610,6 +634,135 @@ function PhoneLogBar({
   )
 }
 
+/** Everything the controls need, gathered once by the viewer. */
+type LogControlsModel = Readonly<{
+  compact: boolean
+  grouped: boolean
+  /** The search text as typed. */
+  query: string
+  setQuery: (query: string) => void
+  /** "3 found", or empty. */
+  count: string
+  mode: LogFilterMode
+  setMode: (mode: LogFilterMode) => void
+  errorsOnly: boolean
+  setErrorsOnly: (on: boolean) => void
+  wrap: boolean
+  setWrap: (on: boolean) => void
+  timestamps: boolean
+  setTimestamps: (on: boolean) => void
+  live: LiveControl | null
+  onJumpToError: (() => void) | null
+  stepToggle: Readonly<{ label: string; onPress: () => void }> | null
+  plainText: string
+  downloadFileName: string
+}>
+
+function liveControlFor(
+  live: LiveState,
+  offLabel: string,
+  onToggle: (() => void) | undefined
+): LiveControl | null {
+  if (live === 'off') return null
+  return { on: live === 'on', offLabel, onToggle }
+}
+
+function defaultViewportHeight(compact: boolean): number {
+  return compact ? 420 : 520
+}
+
+function TruncatedNotice() {
+  return (
+    <View style={panelStyles.calloutWarning}>
+      <Text style={panelStyles.calloutWarningText}>
+        Output went over the size TurboPanel keeps. The first part was kept and the rest was
+        dropped.
+      </Text>
+    </View>
+  )
+}
+
+function SearchFieldFor({ c }: Readonly<{ c: LogControlsModel }>) {
+  return (
+    <LogSearchField
+      value={c.query}
+      onChange={c.setQuery}
+      count={c.count}
+      grouped={c.grouped}
+      compact={c.compact}
+    />
+  )
+}
+
+function ModeControlFor({ c }: Readonly<{ c: LogControlsModel }>) {
+  if (c.query.trim().length === 0) return null
+  return <FilterModeControl mode={c.mode} onChange={c.setMode} />
+}
+
+function ActionsFor({ c }: Readonly<{ c: LogControlsModel }>) {
+  return (
+    <LogActions
+      compact={c.compact}
+      plainText={c.plainText}
+      downloadFileName={c.downloadFileName}
+      // On a phone Jump to error lives in the bottom bar.
+      onJumpToError={c.compact ? null : c.onJumpToError}
+      stepToggle={c.stepToggle}
+    />
+  )
+}
+
+function ViewTogglesFor({ c }: Readonly<{ c: LogControlsModel }>) {
+  return (
+    <>
+      <ToolToggle label="Wrap" value={c.wrap} onChange={c.setWrap} />
+      <ToolToggle label="Timestamps" value={c.timestamps} onChange={c.setTimestamps} />
+    </>
+  )
+}
+
+/** Controls above the log: everything on a wide screen, the search field on a phone. */
+function LogControlsTop({ c }: Readonly<{ c: LogControlsModel }>) {
+  if (c.compact) return <SearchFieldFor c={c} />
+  return (
+    <>
+      <View style={styles.tools}>
+        <SearchFieldFor c={c} />
+        <ModeControlFor c={c} />
+      </View>
+      <View style={styles.tools}>
+        <ToolToggle label="Errors and warnings" value={c.errorsOnly} onChange={c.setErrorsOnly} />
+        {c.live ? <LiveToggle control={c.live} /> : null}
+        <ViewTogglesFor c={c} />
+      </View>
+      <ActionsFor c={c} />
+    </>
+  )
+}
+
+/** The phone bar under the log, with the Filter and More panels. */
+function LogControlsPhoneBar({ c }: Readonly<{ c: LogControlsModel }>) {
+  return (
+    <PhoneLogBar
+      live={c.live}
+      onJumpToError={c.onJumpToError}
+      filterActive={c.errorsOnly || c.mode === 'only'}
+      filterPanel={
+        <>
+          <ToolToggle label="Errors and warnings" value={c.errorsOnly} onChange={c.setErrorsOnly} />
+          <ModeControlFor c={c} />
+        </>
+      }
+      morePanel={
+        <>
+          <ViewTogglesFor c={c} />
+          <ActionsFor c={c} />
+        </>
+      }
+    />
+  )
+}
+
 export type LogViewerProps = Readonly<{
   lines: readonly LogTranscriptLine[]
   state: CommandLogState
@@ -714,19 +867,7 @@ export function LogViewer({
     scrollTo({ firstError: true })
   }, [errorStep, openSteps, resetSearch, scrollTo])
 
-  const handleContentSizeChange = useCallback(() => {
-    if (live === 'on') listRef.current?.scrollToEnd({ animated: false })
-  }, [live])
-
-  const handleScroll = useCallback(
-    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-      if (live !== 'on') return
-      const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent
-      const fromBottom = contentSize.height - (contentOffset.y + layoutMeasurement.height)
-      if (fromBottom > FOLLOW_THRESHOLD_PX) onScrolledAway?.()
-    },
-    [live, onScrolledAway]
-  )
+  const follow = useFollowTail(listRef, live, onScrolledAway)
 
   const showNoise = useCallback(
     (stepId: string) => setNoiseShownIds((current) => new Set([...current, stepId])),
@@ -747,80 +888,48 @@ export function LogViewer({
     [compact, filter.query, openSteps.toggle, showNoise, timestamps, wrap]
   )
 
+  const strip = grouped && !compact ? <StepStrip steps={steps} onJump={jumpToStep} /> : null
   if (lines.length === 0) {
     return (
       <View style={styles.root}>
-        {grouped && !compact ? <StepStrip steps={steps} onJump={jumpToStep} /> : null}
+        {strip}
         <TranscriptPlaceholder state={state} />
       </View>
     )
   }
 
-  const viewportHeight = height ?? (compact ? 420 : 520)
-  const liveControl: LiveControl | null =
-    live === 'off' ? null : { on: live === 'on', offLabel: liveOffLabel, onToggle: onLiveToggle }
-  const searchField = (
-    <LogSearchField
-      value={search.input}
-      onChange={search.setInput}
-      count={matchCountText(filter, model.total)}
-      grouped={grouped}
-      compact={compact}
-    />
-  )
-  const actions = (
-    <LogActions
-      compact={compact}
-      plainText={plainText}
-      downloadFileName={downloadFileName}
-      onJumpToError={!compact && errorStep ? jumpToError : null}
-      stepToggle={grouped && !isFiltering(filter) ? stepToggle : null}
-    />
-  )
-  const filterControls = (
-    <>
-      <ToolToggle label="Errors and warnings" value={errorsOnly} onChange={setErrorsOnly} />
-      {search.input.trim().length > 0 ? <FilterModeControl mode={mode} onChange={setMode} /> : null}
-    </>
-  )
-  const viewControls = (
-    <>
-      <ToolToggle label="Wrap" value={wrap} onChange={setWrapChoice} />
-      <ToolToggle label="Timestamps" value={timestamps} onChange={setTimesChoice} />
-    </>
-  )
+  const controls: LogControlsModel = {
+    compact,
+    grouped,
+    query: search.input,
+    setQuery: search.setInput,
+    count: matchCountText(filter, model.total),
+    mode,
+    setMode,
+    errorsOnly,
+    setErrorsOnly,
+    wrap,
+    setWrap: setWrapChoice,
+    timestamps,
+    setTimestamps: setTimesChoice,
+    live: liveControlFor(live, liveOffLabel, onLiveToggle),
+    onJumpToError: errorStep ? jumpToError : null,
+    stepToggle: grouped && !isFiltering(filter) ? stepToggle : null,
+    plainText,
+    downloadFileName,
+  }
 
   return (
     <View style={styles.root}>
-      {grouped && !compact ? <StepStrip steps={steps} onJump={jumpToStep} /> : null}
-      {state === 'truncated' ? (
-        <View style={panelStyles.calloutWarning}>
-          <Text style={panelStyles.calloutWarningText}>
-            Output went over the size TurboPanel keeps. The first part was kept and the rest was
-            dropped.
-          </Text>
-        </View>
-      ) : null}
-      {compact ? (
-        searchField
-      ) : (
-        <>
-          <View style={styles.tools}>
-            {searchField}
-            {search.input.trim().length > 0 ? (
-              <FilterModeControl mode={mode} onChange={setMode} />
-            ) : null}
-          </View>
-          <View style={styles.tools}>
-            <ToolToggle label="Errors and warnings" value={errorsOnly} onChange={setErrorsOnly} />
-            {liveControl ? <LiveToggle control={liveControl} /> : null}
-            {viewControls}
-          </View>
-          {actions}
-        </>
-      )}
+      {strip}
+      {state === 'truncated' ? <TruncatedNotice /> : null}
+      <LogControlsTop c={controls} />
       <View
-        style={[panelStyles.commandCodeBlock, styles.viewport, { height: viewportHeight }]}
+        style={[
+          panelStyles.commandCodeBlock,
+          styles.viewport,
+          { height: height ?? defaultViewportHeight(compact) },
+        ]}
         {...nestedScrollDomProps}
       >
         <FlatList
@@ -831,8 +940,8 @@ export function LogViewer({
           extraData={model}
           style={[styles.list, webNestedScrollStyle, !wrap && WEB && webScrollX]}
           contentContainerStyle={styles.listContent}
-          onContentSizeChange={handleContentSizeChange}
-          onScroll={handleScroll}
+          onContentSizeChange={follow.onContentSizeChange}
+          onScroll={follow.onScroll}
           onScrollToIndexFailed={(info) => onScrollToIndexFailed(listRef, info)}
           scrollEventThrottle={64}
           nestedScrollEnabled
@@ -847,20 +956,7 @@ export function LogViewer({
         />
       </View>
       {hint ? <Text style={panelStyles.muted}>{hint}</Text> : null}
-      {compact ? (
-        <PhoneLogBar
-          live={liveControl}
-          onJumpToError={errorStep ? jumpToError : null}
-          filterActive={errorsOnly || mode === 'only'}
-          filterPanel={filterControls}
-          morePanel={
-            <>
-              {viewControls}
-              {actions}
-            </>
-          }
-        />
-      ) : null}
+      {compact ? <LogControlsPhoneBar c={controls} /> : null}
     </View>
   )
 }
