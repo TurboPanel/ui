@@ -229,6 +229,39 @@ describe('adding a variable', () => {
   })
 })
 
+describe('where a new variable is used', () => {
+  const checked = (name: RegExp) =>
+    screen.getByRole('radio', { name }).getAttribute('aria-checked') === 'true'
+
+  it('defaults to run only, and to build and run for a NEXT_PUBLIC_ name', () => {
+    render(<EnvironmentConfigurationScreen />)
+    fireEvent.click(screen.getByText('Add variable'))
+    fireEvent.change(screen.getByLabelText('Variable name'), { target: { value: 'API_URL2' } })
+    expect(checked(/^Run/)).toBe(true)
+    fireEvent.change(screen.getByLabelText('Variable name'), {
+      target: { value: 'NEXT_PUBLIC_SITE_URL' },
+    })
+    expect(checked(/^Build and run/)).toBe(true)
+  })
+
+  it('stages the build flag and keeps an explicit choice', async () => {
+    render(<EnvironmentConfigurationScreen />)
+    fireEvent.click(screen.getByText('Add variable'))
+    fireEvent.change(screen.getByLabelText('Variable name'), {
+      target: { value: 'NEXT_PUBLIC_SITE_URL' },
+    })
+    fireEvent.change(screen.getByLabelText('Variable value'), {
+      target: { value: 'https://x.dev' },
+    })
+    fireEvent.click(screen.getByRole('radio', { name: /^Build only|^Build\b(?! and)/ }))
+    expect(checked(/^Build and run/)).toBe(false)
+    fireEvent.click(screen.getByLabelText('Add'))
+    fireEvent.click(screen.getByLabelText('Save changes'))
+    await waitFor(() => expect(state.run).toHaveBeenCalled())
+    expect(JSON.stringify(state.run.mock.calls[0])).toMatch(/"forBuild":true,"forRuntime":false/)
+  })
+})
+
 describe('changing who an app runs as', () => {
   it('stages the choice for this environment', async () => {
     render(<EnvironmentConfigurationScreen />)

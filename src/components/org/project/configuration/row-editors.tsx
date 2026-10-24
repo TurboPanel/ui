@@ -6,7 +6,14 @@ import { ActionButton, ChoiceCard, ChoiceGroup } from '@/components/ui/v4'
 import { themedStyles, usePalette } from '@/components/ui/v4/use-palette'
 import { typeStyle } from '@/components/ui/v4/type-styles'
 import { isSecretVariableName } from '@/lib/v4/effective-config'
-import { linuxUserEdit, variableEdit, type VariableFacts } from '@/lib/v4/config-edits'
+import {
+  defaultVariableUse,
+  linuxUserEdit,
+  variableEdit,
+  variableUseFlags,
+  type VariableFacts,
+  type VariableUse,
+} from '@/lib/v4/config-edits'
 
 const styles = themedStyles((p) => ({
   editor: {
@@ -103,7 +110,9 @@ export function NewVariableEditor({
   const [name, setName] = useState('')
   const [value, setValue] = useState('')
   const [secret, setSecret] = useState<boolean | null>(null)
+  const [chosenUse, setUse] = useState<VariableUse | null>(null)
   const trimmed = name.trim()
+  const use = chosenUse ?? defaultVariableUse(trimmed)
   const exists = editing.variableFacts(trimmed) !== null
   const isSecret = secret ?? isSecretVariableName(trimmed)
   return (
@@ -143,7 +152,26 @@ export function NewVariableEditor({
           onSelect={() => setSecret(false)}
         />
       </ChoiceGroup>
-      <Text style={s.hint}>Runs in the app. It is not used while building.</Text>
+      <ChoiceGroup label="Where is it used?">
+        <ChoiceCard
+          title="Run"
+          body="Available while the app runs. Not used while building."
+          selected={use === 'run'}
+          onSelect={() => setUse('run')}
+        />
+        <ChoiceCard
+          title="Build and run"
+          body="Also available while the app builds. Names starting NEXT_PUBLIC_ start here."
+          selected={use === 'both'}
+          onSelect={() => setUse('both')}
+        />
+        <ChoiceCard
+          title="Build"
+          body="Only while building. The running app does not get it."
+          selected={use === 'build'}
+          onSelect={() => setUse('build')}
+        />
+      </ChoiceGroup>
       <EditorFoot
         doneLabel="Add"
         doneDisabled={trimmed === '' || value === '' || exists}
@@ -154,8 +182,7 @@ export function NewVariableEditor({
               name: trimmed,
               value,
               secret: isSecret,
-              forBuild: false,
-              forRuntime: true,
+              ...variableUseFlags(use),
               was: 'Not set',
             })
           )
