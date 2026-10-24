@@ -2,7 +2,6 @@ import { type ReactNode } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { ComposeEditorSection } from '@/components/org/compose-editor-section'
 import type { ComposeDocFacts } from '@/components/org/project/compose-document-view'
-import { ComposeSurfaceNav } from '@/components/org/project/compose-surface-nav'
 import type { ComposeDocument, ComposeEditorView } from '@/lib/compose'
 import { spacing } from '@/lib/theme'
 
@@ -17,7 +16,6 @@ export function ComposeBasePanel({
   sessionKey,
   hideHeader = false,
   hideViewTabs = false,
-  showSectionTabs = false,
   hideSave = false,
   toolbarLeading,
   toolbarTrailing,
@@ -38,10 +36,8 @@ export function ComposeBasePanel({
   /** Survives Overview/Compose/Services remounts when a draft store is present. */
   sessionKey?: string
   hideHeader?: boolean
-  /** When section tabs own Compose/Services, hide the in-editor Compose/Services strip. */
+  /** When the page's tab bar owns Compose/Services, hide the in-editor Compose/Services strip. */
   hideViewTabs?: boolean
-  /** Overview · Compose · Services · Hosting · Servers inside the editor chrome. */
-  showSectionTabs?: boolean
   /** Hide the Save action for surfaces that commit elsewhere (create wizard). */
   hideSave?: boolean
   toolbarLeading?: ReactNode
@@ -73,9 +69,8 @@ export function ComposeBasePanel({
         onDraftChange={onDraftChange}
         sessionKey={sessionKey}
         hideHeader={hideHeader}
-        hideViewTabs={hideViewTabs || showSectionTabs}
+        hideViewTabs={hideViewTabs}
         hideSave={hideSave}
-        surfaceTabs={showSectionTabs ? <ComposeSurfaceNav /> : undefined}
         toolbarLeading={toolbarLeading}
         toolbarTrailing={toolbarTrailing}
         {...(visualMode ? { visualMode } : {})}

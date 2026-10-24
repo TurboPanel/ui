@@ -53,7 +53,6 @@ import {
   ComposeDraftActionButtons,
   ComposeEditorChrome,
 } from '@/components/org/compose-editor-section'
-import { ComposeSurfaceNav } from '@/components/org/project/compose-surface-nav'
 import {
   usePersistEnvironmentCompose,
   usePersistProjectCompose,
@@ -87,6 +86,7 @@ import {
 import {
   parseComposeEditView,
   parseComposeProjectTab,
+  projectComposeEditHref,
   projectComposeSectionHref,
   type ComposeProjectTabId,
 } from '@/lib/project-navigation'
@@ -165,8 +165,8 @@ function isComposeServicesLoading(
 }
 
 /**
- * Hosting / Bindings / Storage / Settings are dedicated surface tabs;
- * everything else is Overview · Compose · Services. Hosting carries server
+ * Hosting / Bindings / Storage / Settings are dedicated pages; everything else
+ * is one of the Overview · Compose · Services lenses. Hosting carries server
  * placement; Bindings carries system users and bound databases.
  */
 function composeSurfaceBody(activeTab: ComposeProjectTabId, overviewBody: ReactNode): ReactNode {
@@ -243,6 +243,7 @@ function ComposeEditorPanel({
   renderHostingEditor,
   renderReleasesPanel,
   extraPrincipalAliases,
+  onViewChange,
 }: Readonly<{
   document: unknown
   onSave: (compose: ComposeDocument) => Promise<void>
@@ -257,6 +258,11 @@ function ComposeEditorPanel({
   renderReleasesPanel?: (composeServiceName: string) => ReactNode
   /** Aliases from the layer above; `[]` on the base, the base's on an overlay. */
   extraPrincipalAliases?: readonly string[]
+  /**
+   * Shows the in-editor Compose / Services toggle and opens the chosen view's
+   * route. Omitted when the page's tab bar already owns that choice.
+   */
+  onViewChange?: (view: ComposeEditorView) => void
 }>) {
   return (
     <ComposeBasePanel
@@ -267,7 +273,8 @@ function ComposeEditorPanel({
       view={editView}
       sessionKey={sessionKey}
       hideHeader
-      showSectionTabs
+      hideViewTabs={!onViewChange}
+      {...(onViewChange ? { onViewChange } : {})}
       {...(onDraftChange ? { onDraftChange } : {})}
       hideSave={hideSave}
       // `visual` is the Services lens on the project surface.
@@ -471,6 +478,7 @@ function ServicesPanelBody({
   onSaveProjectCompose: (compose: ComposeDocument) => Promise<void>
   onSaveEnvironmentCompose: (compose: ComposeDocument) => Promise<void>
 }>): ReactNode {
+  const router = useRouter()
   const draftStore = useComposeDraftStore()
   const projectRepositoryId = useProjectRepositoryId()
   const editing = sectionView != null
@@ -550,7 +558,15 @@ function ServicesPanelBody({
           extraPrincipalAliases={[]}
           documentFacts={documentFacts}
           onOpenScopeConfig={onOpenScopeConfig}
-          {...(draft ? { hideSave: true, onDraftChange: draft.onDraftChange } : {})}
+          // The project tab bar has Compose but no Services tab, so the Base
+          // editor keeps its own Compose / Services toggle. A draft switches
+          // lenses from the wizard's tabs instead.
+          {...(draft
+            ? { hideSave: true, onDraftChange: draft.onDraftChange }
+            : {
+                onViewChange: (view: ComposeEditorView) =>
+                  router.push(projectComposeEditHref(orgId, projectId, { view }) as Href),
+              })}
         />
       )
     }
@@ -583,7 +599,7 @@ function ServicesPanelBody({
 
   if (!selectedEnvironment) {
     return (
-      <ComposeEditorChrome nav={<ComposeSurfaceNav />}>
+      <ComposeEditorChrome>
         <Text style={panelStyles.muted}>Select an environment.</Text>
       </ComposeEditorChrome>
     )
@@ -591,7 +607,7 @@ function ServicesPanelBody({
 
   if (loading) {
     return (
-      <ComposeEditorChrome nav={<ComposeSurfaceNav />}>
+      <ComposeEditorChrome>
         <Text style={panelStyles.muted}>Loading…</Text>
       </ComposeEditorChrome>
     )

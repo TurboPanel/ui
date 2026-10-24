@@ -1,15 +1,22 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   COMPOSE_PROJECT_TAB_IDS,
   ENVIRONMENT_PAGE_TAB_IDS,
   LEGACY_PROJECT_SEGMENTS,
+  MANAGED_PROJECT_TAB_IDS,
   PROJECT_PAGE_TAB_IDS,
   environmentPageTabHref,
   legacyProjectRedirectHref,
+  projectComposeEditHref,
   projectComposeSectionHref,
+  projectEnvironmentStorageHref,
+  projectHref,
   projectPageTabHref,
+  projectServiceHref,
+  projectSetupHref,
+  projectTabHref,
 } from './project-navigation'
 
 /**
@@ -86,5 +93,83 @@ describe('route files behind the links', () => {
     expect(
       existsSync(path.join(APP_ROOT, 'environments/[environmentId]/_layout.tsx')),
     ).toBe(true)
+  })
+})
+
+/** `/o/projects/p/environments/e/configuration` → `environments/[environmentId]/configuration`. */
+function routeKey(href: string): string {
+  return href
+    .replace('/o/projects/p', '')
+    .replace('/environments/e', '/environments/[environmentId]')
+    .replace('/services/svc', '/services/[serviceId]')
+    .replace(/^\//, '')
+}
+
+/** Every screen route under a project, as a route key (`_layout` files excluded). */
+function routeKeys(dir = APP_ROOT, prefix = ''): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const name = entry.name
+    if (entry.isDirectory()) return routeKeys(path.join(dir, name), `${prefix}${name}/`)
+    if (!name.endsWith('.tsx') || name === '_layout.tsx') return []
+    const key = `${prefix}${name.slice(0, -'.tsx'.length)}`
+    return [key === 'index' ? '' : key.replace(/\/index$/, '')]
+  })
+}
+
+/**
+ * Routes no tab bar links to, each with the link that reaches it. Kept next
+ * to the bars so removing a link (or a route) fails here instead of leaving a
+ * screen nobody can open.
+ */
+const OFF_BAR_ROUTES: readonly (readonly [href: string, reachedBy: string])[] = [
+  [projectHref('o', 'p'), 'project lists and the breadcrumb; redirects to a tab'],
+  [projectSetupHref('o', 'p'), 'the project index sends a project that needs setup here'],
+  [
+    projectServiceHref('o', 'p', 'svc'),
+    'service rows on the Services tab and the environment overview',
+  ],
+  [
+    projectComposeEditHref('o', 'p', { view: 'visual' }),
+    "the Base Compose editor's Compose / Services toggle",
+  ],
+  [
+    projectEnvironmentStorageHref('o', 'p', 'e'),
+    'volume rows on the environment overview (lights Services)',
+  ],
+  [
+    projectComposeSectionHref('o', 'p', 'storage'),
+    'no in-page link before or after the one-bar change; the retired /storage path redirects here',
+  ],
+]
+
+describe('every project route is reachable', () => {
+  const reachable = new Map<string, string>()
+  for (const id of PROJECT_PAGE_TAB_IDS) {
+    reachable.set(routeKey(projectPageTabHref('o', 'p', id)), `project tab ${id}`)
+  }
+  for (const id of ENVIRONMENT_PAGE_TAB_IDS) {
+    reachable.set(routeKey(environmentPageTabHref('o', 'p', 'e', id)), `environment tab ${id}`)
+  }
+  for (const id of MANAGED_PROJECT_TAB_IDS) {
+    reachable.set(routeKey(projectTabHref('o', 'p', id)), `managed project tab ${id}`)
+  }
+  for (const segment of LEGACY_PROJECT_SEGMENTS) {
+    reachable.set(routeKey(`/o/projects/p/${segment}`), `retired path, redirects`)
+    reachable.set(routeKey(`/o/projects/p/environments/e/${segment}`), `retired path, redirects`)
+  }
+  for (const [href, reachedBy] of OFF_BAR_ROUTES) {
+    reachable.set(routeKey(href), reachedBy)
+  }
+
+  it('links every route file from a tab, a redirect or a named in-page link', () => {
+    const unreached = routeKeys().filter((key) => !reachable.has(key))
+    expect(unreached).toEqual([])
+  })
+
+  it('names only routes that exist', () => {
+    const keys = routeKeys()
+    for (const [href] of OFF_BAR_ROUTES) {
+      expect(keys, href).toContain(routeKey(href))
+    }
   })
 })

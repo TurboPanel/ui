@@ -56,15 +56,16 @@ export function projectTypeLabel(project: ProjectRecord): string {
 }
 
 /**
- * Compose project section tabs inside the editor chrome. Project · environment
- * scope chips stay in the header; switching scope keeps the active tab.
- * `overview` (topology diagram), `compose` (YAML), and `services` (service
- * cards) are **lenses** on one artifact; the surface nav bar shows them plus
- * `bindings` (system users and bound databases) and `hosting` (server
- * placement and exposure). Storage / Settings are configuration routes reached from a
- * service row or the scope-strip gear. `servers` is retired — placement lives
- * on the Hosting tab and `/servers` paths redirect there. `/map` is the
- * retired Overview path and redirects to `/overview`.
+ * Compose sections of one scope (the Base or an environment). `overview`
+ * (topology diagram), `compose` (YAML), and `services` (service cards) are
+ * **lenses** on one compose document; `bindings` (system users and bound
+ * databases) and `hosting` (server placement and exposure) are their own
+ * pages. The project and environment tab bars link to them (see
+ * `PROJECT_PAGE_TAB_IDS` / `ENVIRONMENT_PAGE_TAB_IDS`). Storage / Settings are
+ * configuration routes reached from a service row or the scope-strip gear.
+ * `servers` is retired — placement lives on the Hosting tab and `/servers`
+ * paths redirect there. `/map` is the retired Overview path and redirects to
+ * `/overview`.
  */
 export const COMPOSE_PROJECT_TAB_IDS = [
   'overview',
@@ -88,8 +89,8 @@ export const DRAFT_COMPOSE_PROJECT_TAB_IDS = [
 /**
  * Repository **app** drafts synthesize their whole compose document from the
  * repository binding — there is no YAML or service card worth editing before
- * create, so the topology diagram is the only lens the draft *enables*. The
- * surface nav still renders the full tab bar with the rest dimmed.
+ * create, so the topology diagram is the only lens the draft offers and the
+ * draft shows no lens tabs at all.
  */
 export const DRAFT_REPOSITORY_APP_TAB_IDS = ['overview'] as const
 
@@ -115,22 +116,7 @@ export const COMPOSE_PROJECT_LENS_IDS = [
   'services',
 ] as const
 
-/**
- * Tabs on the surface nav bar, in order: the three lenses plus Bindings
- * (system users and bound databases — what a service deploys *as* and
- * connects *to*) and Hosting (server placement and hostnames / proxying).
- */
-export const COMPOSE_PROJECT_SURFACE_TAB_IDS = [
-  'overview',
-  'compose',
-  'services',
-  'bindings',
-  'hosting',
-] as const
-
-export function isComposeProjectLens(
-  tabId: ComposeProjectTabId,
-): boolean {
+export function isComposeProjectLens(tabId: ComposeProjectTabId): boolean {
   return (COMPOSE_PROJECT_LENS_IDS as readonly string[]).includes(tabId)
 }
 
@@ -277,7 +263,7 @@ export function projectEnvironmentDeploymentsHref(
 }
 
 /**
- * Environment Configuration tab. Its default lens is the Services list.
+ * Environment Services tab (route id `configuration`): what the environment runs.
  * Path: `/projects/:projectId/environments/:environmentId/configuration`
  */
 export function projectEnvironmentConfigurationHref(
@@ -640,8 +626,38 @@ export function recentProjectHref(
   return projectHref(orgId, project.id)
 }
 
-/** Tabs on a compose project page, in bar order. */
-export const PROJECT_PAGE_TAB_IDS = ['overview', 'base', 'settings'] as const
+/**
+ * Compose sections that are tabs of their own on both bars: the Compose file,
+ * Bindings and Hosting. They live under `base/…` at project scope and under
+ * `configuration/…` in an environment.
+ */
+const SECTION_PAGE_TAB_IDS = ['compose', 'bindings', 'hosting'] as const
+
+type SectionPageTabId = (typeof SECTION_PAGE_TAB_IDS)[number]
+
+function isSectionPageTab(tabId: string): tabId is SectionPageTabId {
+  return (SECTION_PAGE_TAB_IDS as readonly string[]).includes(tabId)
+}
+
+/** The section tab a lens lights, or null when it lights the scope's main tab. */
+function sectionPageTab(lens: ComposeProjectTabId | undefined): SectionPageTabId | null {
+  return lens && isSectionPageTab(lens) ? lens : null
+}
+
+/**
+ * Tabs on a compose project page, in bar order. The one bar on every project
+ * screen: Environments, the Base (its map; Storage lights it too), the Base's
+ * Compose file (its Services view lights it too), Bindings and Hosting, then
+ * Settings.
+ */
+export const PROJECT_PAGE_TAB_IDS = [
+  'overview',
+  'base',
+  'compose',
+  'bindings',
+  'hosting',
+  'settings',
+] as const
 
 export type ProjectPageTabId = (typeof PROJECT_PAGE_TAB_IDS)[number]
 
@@ -649,14 +665,24 @@ export type ProjectPageTabId = (typeof PROJECT_PAGE_TAB_IDS)[number]
 export const PROJECT_PAGE_TAB_LABELS: Record<ProjectPageTabId, string> = {
   overview: 'Environments',
   base: 'Base',
+  compose: 'Compose',
+  bindings: 'Bindings',
+  hosting: 'Hosting',
   settings: 'Settings',
 }
 
-/** Tabs on an environment page, in bar order. */
+/**
+ * Tabs on an environment page, in bar order. The one bar on every environment
+ * screen. `configuration` keeps its id and route but reads **Services**: it
+ * lists what the environment runs (Storage lights it too).
+ */
 export const ENVIRONMENT_PAGE_TAB_IDS = [
   'overview',
   'deployments',
   'configuration',
+  'compose',
+  'bindings',
+  'hosting',
   'settings',
 ] as const
 
@@ -665,7 +691,10 @@ export type EnvironmentPageTabId = (typeof ENVIRONMENT_PAGE_TAB_IDS)[number]
 export const ENVIRONMENT_PAGE_TAB_LABELS: Record<EnvironmentPageTabId, string> = {
   overview: 'Overview',
   deployments: 'Deployments',
-  configuration: 'Configuration',
+  configuration: 'Services',
+  compose: 'Compose',
+  bindings: 'Bindings',
+  hosting: 'Hosting',
   settings: 'Settings',
 }
 
@@ -674,6 +703,7 @@ export function projectPageTabHref(
   projectId: string,
   tabId: ProjectPageTabId,
 ): string {
+  if (isSectionPageTab(tabId)) return `${projectBaseHref(orgId, projectId)}/${tabId}`
   return `${projectHref(orgId, projectId)}/${tabId}`
 }
 
@@ -684,13 +714,16 @@ export function environmentPageTabHref(
   tabId: EnvironmentPageTabId,
 ): string {
   const root = projectEnvironmentHref(orgId, projectId, environmentId)
-  return tabId === 'overview' ? root : `${root}/${tabId}`
+  if (tabId === 'overview') return root
+  if (isSectionPageTab(tabId)) return `${root}/configuration/${tabId}`
+  return `${root}/${tabId}`
 }
 
 /**
  * Which project tab a path belongs to. Null outside project scope (an
- * environment page, managed tabs, setup). Retired section paths belong to the
- * tab they redirect to.
+ * environment page, managed tabs, setup). The Base's Services view lights
+ * Compose (the editor's toggle) and Storage lights Base; retired section paths
+ * belong to the tab they redirect to.
  */
 export function parseProjectPageTab(
   pathname: string,
@@ -703,13 +736,24 @@ export function parseProjectPageTab(
     return 'overview'
   }
   if (first === 'settings') return 'settings'
-  if (first === 'base' || LEGACY_SECTION_LENS.has(first)) return 'base'
+  if (first === 'base') {
+    // The Services view is the Compose editor's other half (its toggle), so
+    // the bar stays on Compose while that toggle switches.
+    if (parts.segments[1] === 'services') return 'compose'
+    return sectionPageTab(LENS_SUBROUTES.get(parts.segments[1] ?? '')) ?? 'base'
+  }
+  if (LEGACY_SECTION_LENS.has(first)) {
+    // Bare /services redirects to /base/services, which lights Compose.
+    if (first === 'services' && parts.segments.length === 1) return 'compose'
+    return sectionPageTab(LEGACY_SECTION_LENS.get(first)) ?? 'base'
+  }
   return null
 }
 
 /**
  * Which environment tab a path belongs to. Null outside an environment.
- * Retired lens paths belong to Configuration, where they now live.
+ * Storage and the retired Services path light Services (`configuration`);
+ * other retired lens paths light the tab they redirect to.
  */
 export function parseEnvironmentPageTab(
   pathname: string,
@@ -720,8 +764,11 @@ export function parseEnvironmentPageTab(
   const first = parts.segments[0]
   if (first === undefined || first === 'map') return 'overview'
   if (first === 'deployments' || first === 'settings') return first
-  if (first === 'configuration' || LEGACY_SECTION_LENS.has(first)) {
-    return 'configuration'
+  if (first === 'configuration') {
+    return sectionPageTab(LENS_SUBROUTES.get(parts.segments[1] ?? '')) ?? 'configuration'
+  }
+  if (LEGACY_SECTION_LENS.has(first)) {
+    return sectionPageTab(LEGACY_SECTION_LENS.get(first)) ?? 'configuration'
   }
   return null
 }
