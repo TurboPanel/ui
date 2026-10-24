@@ -13,6 +13,7 @@
  * record id (needed to open a service page) is kept in `recordIds`.
  */
 
+import { DEFAULT_HOSTING_BIND_SCOPE, isHostingBindScope } from '@/lib/compose/hosting-extension'
 import type { DeploymentGroup } from '@/lib/deployment-history'
 import type {
   BindingRecord,
@@ -22,6 +23,7 @@ import type {
   ContainerRecord,
   EnvironmentConfigViewResponse as EnvironmentConfigView,
   HostingRecord,
+  IpRecord,
   ProjectPrincipalRecord,
   ServiceRecord,
   ServiceRunStateRecord,
@@ -51,6 +53,12 @@ export type OverviewSource = Readonly<{
   storage: readonly StorageRecord[]
   bindings: readonly BindingRecord[]
   principals: readonly ProjectPrincipalRecord[]
+  /** The organization's public addresses; `undefined` until read. */
+  publicIps?: readonly IpRecord[]
+  /** The server the environment runs on (its own pin, else the project's default). */
+  serverId?: string | null
+  /** The hostname Visit opens; it leads its box on the map. */
+  primaryHostname?: string | null
 }>
 
 const HIDDEN = 'Hidden'
@@ -224,6 +232,51 @@ export function certificateKey(
   return 'renewal_failed'
 }
 
+/** Shorter certificate words where the full one would not fit a map box. */
+const CERTIFICATE_BADGE_WORDS: Readonly<Record<string, string>> = {
+  test: 'Self-signed (browsers warn)',
+}
+
+/** "203.0.113.24", or "203.0.113.24 +1" when the server answers on more. */
+function addressText(addresses: readonly string[]): string | null {
+  const unique = [...new Set(addresses.filter((address) => address.trim() !== ''))]
+  const [first] = unique
+  if (first === undefined) return null
+  return unique.length > 1 ? `${first} +${unique.length - 1}` : first
+}
+
+/**
+ * Where visitors reach a hostname, from what the app already knows. A pinned
+ * public address is that address; "Any interface" is the addresses the
+ * certificate's DNS check expects, else the public addresses of the
+ * environment's server. Datacenter and Local say so. Null when nothing is known:
+ * the line is left out, never guessed.
+ */
+export function servedFromOf(
+  hosting: HostingRecord,
+  source: Pick<OverviewSource, 'publicIps' | 'serverId'>
+): string | null {
+  const bind = hosting.options?.bind
+  const scope = isHostingBindScope(bind) ? bind : DEFAULT_HOSTING_BIND_SCOPE
+  if (scope === 'datacenter') return 'Served on the datacenter network'
+  if (scope === 'local') return 'Served on this server only'
+  let addresses: readonly string[]
+  if (hosting.ipId) {
+    const pinned = source.publicIps?.find((ip) => ip.id === hosting.ipId)
+    addresses = pinned ? [pinned.address] : []
+  } else {
+    const expected = hosting.certificate?.dns?.expectedAddresses ?? []
+    addresses =
+      expected.length > 0
+        ? expected
+        : (source.publicIps ?? [])
+            .filter((ip) => source.serverId && ip.serverId === source.serverId)
+            .map((ip) => ip.address)
+  }
+  const text = addressText(addresses)
+  return text === null ? null : `Served from ${text}`
+}
+
 export function domainsOf(source: OverviewSource): MapDomain[] {
   const seen = new Set<string>()
   const domains: MapDomain[] = []
@@ -234,7 +287,14 @@ export function domainsOf(source: OverviewSource): MapDomain[] {
       if (host === '' || seen.has(host)) continue
       seen.add(host)
       const key = certificateKey(hosting.tlsId, source.tls)
-      domains.push({ host, status: { key, label: statusInfo(key).label }, serviceId: service.name })
+      const label = CERTIFICATE_BADGE_WORDS[key] ?? statusInfo(key).label
+      const servedFrom = servedFromOf(hosting, source)
+      domains.push({
+        host,
+        status: { key, label },
+        serviceId: service.name,
+        ...(servedFrom === null ? {} : { servedFrom }),
+      })
     }
   }
   return domains
@@ -421,6 +481,7 @@ export function mapInputOf(source: OverviewSource, mode: MapMode): MapInput {
     envName: source.envName,
     services,
     domains: inBase ? [] : domainsOf(source),
+    primaryHost: source.primaryHostname ?? null,
     volumes: inBase ? [] : volumesOf(source),
     links: linksOf(source, side, services, !inBase),
     changes: changeRows(source.view.changes, source.envName),
