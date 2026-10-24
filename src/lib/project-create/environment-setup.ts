@@ -8,7 +8,7 @@
  * network, no React.
  */
 
-import { composePrincipalAliases } from '@/lib/compose/principals-document'
+import { composePrincipalAliases, renameComposePrincipal } from '@/lib/compose/principals-document'
 import {
   readHostingHostname,
   wwwSiblingHostname,
@@ -21,6 +21,7 @@ import {
 } from '@/lib/compose/hosting-service-context'
 import { isPrincipalAlias, readServiceTurbopanelExtension } from '@/lib/compose/service-kind'
 import type { ComposeDocument, CreateVariableBody, OrgServerRecord } from '@/lib/instance-api'
+import { validateEnvironmentName } from '@/lib/environment-validation'
 import { variableUseFlags, type VariableUse } from '@/lib/v4/config-edits'
 
 // --- server -------------------------------------------------------------------
@@ -210,4 +211,59 @@ export function setupEnvironmentPatch(
     }
   }
   return Object.keys(patch).length > 0 ? patch : null
+}
+
+// --- the form as a whole ------------------------------------------------------
+
+/**
+ * Field errors before Save, keyed `name`, `hostname` and `account:<alias>`.
+ * Empty when everything can be saved.
+ */
+export function setupFormProblems(
+  input: Readonly<{
+    name: string
+    hostname: string
+    accounts: readonly SetupAccount[]
+    accountNames: Readonly<Record<string, string>>
+  }>
+): Record<string, string> {
+  const found: Record<string, string> = {}
+  const nameError = validateEnvironmentName(input.name)
+  if (nameError) found.name = nameError
+  const hostError = hostnameProblem(input.hostname)
+  if (hostError) found.hostname = hostError
+  const finalNames = input.accounts.map(
+    (account) => input.accountNames[account.alias] ?? account.alias
+  )
+  input.accounts.forEach((account, index) => {
+    const others = finalNames.filter((_, other) => other !== index)
+    const problem = accountNameProblem(finalNames[index] ?? '', others)
+    if (problem) found[`account:${account.alias}`] = problem
+  })
+  return found
+}
+
+/** The environment compose with the renamed accounts and the first hostname applied. */
+export function setupCompose(
+  compose: ComposeDocument | null,
+  input: Readonly<{
+    accounts: readonly SetupAccount[]
+    accountNames: Readonly<Record<string, string>>
+    serviceName: string | null
+    hostname: string
+    alsoWww: boolean
+  }>
+): ComposeDocument | null {
+  if (!compose) return null
+  let next = compose
+  for (const account of input.accounts) {
+    const renamed = (input.accountNames[account.alias] ?? account.alias).trim()
+    next = renameComposePrincipal(next, account.alias, renamed)
+  }
+  if (!input.serviceName) return next
+  return composeWithHostname(next, {
+    serviceName: input.serviceName,
+    hostname: input.hostname,
+    alsoWww: input.alsoWww,
+  })
 }

@@ -16,19 +16,17 @@ import {
 } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { ListGroup, ListRow, PageTitle, SectionHeading } from '@/components/ui/v4'
-import { renameComposePrincipal } from '@/lib/compose/principals-document'
-import { validateEnvironmentName } from '@/lib/environment-validation'
 import type { ComposeDocument, OrgServerRecord } from '@/lib/instance-api'
 import {
-  accountNameProblem,
-  composeWithHostname,
   declaredHostname,
-  hostnameProblem,
   hostnameServiceNames,
   initialSetupServerId,
   setupAccounts,
+  setupCompose,
+  setupFormProblems,
   variableKeyProblem,
   wwwChoiceFor,
+  type SetupAccount,
   type SetupVariable,
 } from '@/lib/project-create/environment-setup'
 import { HIDDEN_VALUE } from '@/lib/v4/config-view-model'
@@ -95,40 +93,17 @@ export function EnvironmentSetupForm({
   const [hostname, setHostname] = useState(declared?.hostname ?? '')
   const [alsoWww, setAlsoWww] = useState(declared?.www ? declared.www !== 'off' : true)
   const accounts = useMemo(() => setupAccounts(compose), [compose])
-  const [accountNames, setAccountNames] = useState<Record<string, string>>({})
-  const [editingAccount, setEditingAccount] = useState<string | null>(null)
+  const [accountNames, setAccountNames] = useState<Readonly<Record<string, string>>>({})
   const [variables, setVariables] = useState<SetupVariable[]>([])
-  const [adding, setAdding] = useState(false)
   const [errors, setErrors] = useState<Readonly<Record<string, string>>>({})
 
-  const www = wwwChoiceFor(hostname)
   const shownName = name.trim() || environmentName
 
   const submit = (intent: EnvironmentSetupIntent) => {
-    const found: Record<string, string> = {}
-    const nameError = validateEnvironmentName(name)
-    if (nameError) found.name = nameError
-    const hostError = hostnameProblem(hostname)
-    if (hostError) found.hostname = hostError
-    const finalNames = accounts.map((account) => accountNames[account.alias] ?? account.alias)
-    accounts.forEach((account, index) => {
-      const others = finalNames.filter((_, other) => other !== index)
-      const problem = accountNameProblem(finalNames[index] ?? '', others)
-      if (problem) found[`account:${account.alias}`] = problem
-    })
+    const found = setupFormProblems({ name, hostname, accounts, accountNames })
     setErrors(found)
     if (Object.keys(found).length > 0) return
-
-    let next = compose
-    if (next) {
-      for (const account of accounts) {
-        const renamed = (accountNames[account.alias] ?? account.alias).trim()
-        next = renameComposePrincipal(next, account.alias, renamed)
-      }
-      if (serviceName) {
-        next = composeWithHostname(next, { serviceName, hostname, alsoWww })
-      }
-    }
+    const next = setupCompose(compose, { accounts, accountNames, serviceName, hostname, alsoWww })
     onSubmit({ name: name.trim(), serverId, compose: next, variables }, intent)
   }
 
@@ -160,161 +135,27 @@ export function EnvironmentSetupForm({
         />
       </View>
 
-      <View style={styles.section}>
-        <SectionHeading title="Hostname" />
-        {serviceName ? (
-          <>
-            {serviceNames.length > 1 ? (
-              <FormField label="Answered by">
-                <Select
-                  value={serviceName}
-                  options={serviceNames.map((value) => ({ value, label: value }))}
-                  placeholder="Choose a service"
-                  mono
-                  accessibilityLabel="Answered by"
-                  onChange={(value) => {
-                    if (value) setServiceName(value)
-                  }}
-                />
-              </FormField>
-            ) : null}
-            <TextField
-              label="Visitors reach it at"
-              value={hostname}
-              onChangeText={setHostname}
-              placeholder="example.com"
-              autoCapitalize="none"
-              autoCorrect={false}
-              mono
-              accessibilityLabel="Visitors reach it at"
-              hint="Optional. Point the name's DNS at the server. Later changes go in the Hosting tab."
-              error={errors.hostname}
-            />
-            {www ? (
-              <SettingRow
-                label={`Also answer ${www}`}
-                description={`${www} goes to ${hostname.trim().toLowerCase()}`}
-              >
-                <Toggle
-                  value={alsoWww}
-                  onValueChange={setAlsoWww}
-                  accessibilityLabel={`Also answer ${www}`}
-                />
-              </SettingRow>
-            ) : null}
-          </>
-        ) : (
-          <Text style={panelStyles.muted}>
-            This project has no services yet. Add one in the Compose editor, then add a hostname in
-            the Hosting tab.
-          </Text>
-        )}
-      </View>
+      <HostnameSection
+        serviceNames={serviceNames}
+        serviceName={serviceName}
+        hostname={hostname}
+        alsoWww={alsoWww}
+        error={errors.hostname}
+        onServiceNameChange={setServiceName}
+        onHostnameChange={setHostname}
+        onAlsoWwwChange={setAlsoWww}
+      />
 
-      {accounts.length > 0 ? (
-        <View style={styles.section}>
-          <SectionHeading title="Hosting Account" />
-          <ListGroup foot="The Linux account the app runs as. It is made on the first deploy.">
-            {accounts.map((account) =>
-              editingAccount === account.alias ? (
-                <View key={account.alias} style={styles.inlineEditor}>
-                  <TextField
-                    label="Hosting Account name"
-                    value={accountNames[account.alias] ?? account.alias}
-                    onChangeText={(text) => {
-                      setAccountNames((current) => ({ ...current, [account.alias]: text }))
-                    }}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    mono
-                    accessibilityLabel="Hosting Account name"
-                    error={errors[`account:${account.alias}`]}
-                  />
-                  <TextLink
-                    label="Done"
-                    onPress={() => {
-                      setEditingAccount(null)
-                    }}
-                  />
-                </View>
-              ) : (
-                <ListRow
-                  key={account.alias}
-                  title={accountNames[account.alias]?.trim() || account.alias}
-                  sub={accountSub(account.services)}
-                  trailing={
-                    <TextLink
-                      label="Change"
-                      accessibilityLabel={`Change the Hosting Account ${account.alias}`}
-                      onPress={() => {
-                        setEditingAccount(account.alias)
-                      }}
-                    />
-                  }
-                />
-              )
-            )}
-          </ListGroup>
-          {accounts.some((account) => errors[`account:${account.alias}`]) &&
-          editingAccount === null ? (
-            <Text style={panelStyles.error}>Check the Hosting Account name.</Text>
-          ) : null}
-        </View>
-      ) : null}
+      <AccountsSection
+        accounts={accounts}
+        names={accountNames}
+        errors={errors}
+        onNameChange={(alias, text) => {
+          setAccountNames((current) => ({ ...current, [alias]: text }))
+        }}
+      />
 
-      <View style={styles.section}>
-        <SectionHeading
-          title="Variables"
-          note={variables.length > 0 ? String(variables.length) : undefined}
-          action={
-            adding ? null : (
-              <TextLink
-                label="Add variable"
-                onPress={() => {
-                  setAdding(true)
-                }}
-              />
-            )
-          }
-        />
-        {variables.length > 0 ? (
-          <ListGroup>
-            {variables.map((variable) => (
-              <ListRow
-                key={variable.key}
-                title={variable.key}
-                sub={`${variable.secret ? HIDDEN_VALUE : variable.value || 'Empty'} · ${USE_WORDS[variable.use]}`}
-                trailing={
-                  <TextLink
-                    label="Remove"
-                    accessibilityLabel={`Remove ${variable.key}`}
-                    onPress={() => {
-                      setVariables((current) => current.filter((item) => item.key !== variable.key))
-                    }}
-                  />
-                }
-              />
-            ))}
-          </ListGroup>
-        ) : null}
-        {adding ? (
-          <NewVariable
-            taken={variables.map((variable) => variable.key)}
-            onAdd={(variable) => {
-              setVariables((current) => [...current, variable])
-              setAdding(false)
-            }}
-            onCancel={() => {
-              setAdding(false)
-            }}
-          />
-        ) : null}
-        {variables.length === 0 && !adding ? (
-          <Text style={panelStyles.muted}>
-            None yet. You can skip this and add variables later.
-          </Text>
-        ) : null}
-      </View>
+      <VariablesSection variables={variables} onChange={setVariables} />
 
       <View style={styles.footer}>
         <Button
@@ -340,6 +181,208 @@ export function EnvironmentSetupForm({
           accessibilityLabel={`Deploy ${shownName}`}
         />
       </View>
+    </View>
+  )
+}
+
+function HostnameSection({
+  serviceNames,
+  serviceName,
+  hostname,
+  alsoWww,
+  error,
+  onServiceNameChange,
+  onHostnameChange,
+  onAlsoWwwChange,
+}: Readonly<{
+  serviceNames: readonly string[]
+  serviceName: string | null
+  hostname: string
+  alsoWww: boolean
+  error?: string
+  onServiceNameChange: (name: string) => void
+  onHostnameChange: (hostname: string) => void
+  onAlsoWwwChange: (on: boolean) => void
+}>) {
+  const www = wwwChoiceFor(hostname)
+  return (
+    <View style={styles.section}>
+      <SectionHeading title="Hostname" />
+      {serviceName ? (
+        <>
+          {serviceNames.length > 1 ? (
+            <FormField label="Answered by">
+              <Select
+                value={serviceName}
+                options={serviceNames.map((value) => ({ value, label: value }))}
+                placeholder="Choose a service"
+                mono
+                accessibilityLabel="Answered by"
+                onChange={(value) => {
+                  if (value) onServiceNameChange(value)
+                }}
+              />
+            </FormField>
+          ) : null}
+          <TextField
+            label="Visitors reach it at"
+            value={hostname}
+            onChangeText={onHostnameChange}
+            placeholder="example.com"
+            autoCapitalize="none"
+            autoCorrect={false}
+            mono
+            accessibilityLabel="Visitors reach it at"
+            hint="Optional. Point the name's DNS at the server. Later changes go in the Hosting tab."
+            error={error}
+          />
+          {www ? (
+            <SettingRow
+              label={`Also answer ${www}`}
+              description={`${www} goes to ${hostname.trim().toLowerCase()}`}
+            >
+              <Toggle
+                value={alsoWww}
+                onValueChange={onAlsoWwwChange}
+                accessibilityLabel={`Also answer ${www}`}
+              />
+            </SettingRow>
+          ) : null}
+        </>
+      ) : (
+        <Text style={panelStyles.muted}>
+          This project has no services yet. Add one in the Compose editor, then add a hostname in
+          the Hosting tab.
+        </Text>
+      )}
+    </View>
+  )
+}
+
+/** Each Hosting Account is a fact with Change, which renames it before its first deploy. */
+function AccountsSection({
+  accounts,
+  names,
+  errors,
+  onNameChange,
+}: Readonly<{
+  accounts: readonly SetupAccount[]
+  names: Readonly<Record<string, string>>
+  errors: Readonly<Record<string, string>>
+  onNameChange: (alias: string, name: string) => void
+}>) {
+  const [editing, setEditing] = useState<string | null>(null)
+  if (accounts.length === 0) return null
+  const hiddenError = editing === null && accounts.some((a) => errors[`account:${a.alias}`])
+  return (
+    <View style={styles.section}>
+      <SectionHeading title="Hosting Account" />
+      <ListGroup foot="The Linux account the app runs as. It is made on the first deploy.">
+        {accounts.map((account) =>
+          editing === account.alias ? (
+            <View key={account.alias} style={styles.inlineEditor}>
+              <TextField
+                label="Hosting Account name"
+                value={names[account.alias] ?? account.alias}
+                onChangeText={(text) => {
+                  onNameChange(account.alias, text)
+                }}
+                autoCapitalize="none"
+                autoCorrect={false}
+                mono
+                accessibilityLabel="Hosting Account name"
+                error={errors[`account:${account.alias}`]}
+              />
+              <TextLink
+                label="Done"
+                onPress={() => {
+                  setEditing(null)
+                }}
+              />
+            </View>
+          ) : (
+            <ListRow
+              key={account.alias}
+              title={names[account.alias]?.trim() || account.alias}
+              sub={accountSub(account.services)}
+              trailing={
+                <TextLink
+                  label="Change"
+                  accessibilityLabel={`Change the Hosting Account ${account.alias}`}
+                  onPress={() => {
+                    setEditing(account.alias)
+                  }}
+                />
+              }
+            />
+          )
+        )}
+      </ListGroup>
+      {hiddenError ? <Text style={panelStyles.error}>Check the Hosting Account name.</Text> : null}
+    </View>
+  )
+}
+
+/** Variables added here are created on the environment when the screen saves. */
+function VariablesSection({
+  variables,
+  onChange,
+}: Readonly<{
+  variables: readonly SetupVariable[]
+  onChange: (variables: SetupVariable[]) => void
+}>) {
+  const [adding, setAdding] = useState(false)
+  return (
+    <View style={styles.section}>
+      <SectionHeading
+        title="Variables"
+        note={variables.length > 0 ? String(variables.length) : undefined}
+        action={
+          adding ? null : (
+            <TextLink
+              label="Add variable"
+              onPress={() => {
+                setAdding(true)
+              }}
+            />
+          )
+        }
+      />
+      {variables.length > 0 ? (
+        <ListGroup>
+          {variables.map((variable) => (
+            <ListRow
+              key={variable.key}
+              title={variable.key}
+              sub={`${variable.secret ? HIDDEN_VALUE : variable.value || 'Empty'} · ${USE_WORDS[variable.use]}`}
+              trailing={
+                <TextLink
+                  label="Remove"
+                  accessibilityLabel={`Remove ${variable.key}`}
+                  onPress={() => {
+                    onChange(variables.filter((item) => item.key !== variable.key))
+                  }}
+                />
+              }
+            />
+          ))}
+        </ListGroup>
+      ) : null}
+      {adding ? (
+        <NewVariable
+          taken={variables.map((variable) => variable.key)}
+          onAdd={(variable) => {
+            onChange([...variables, variable])
+            setAdding(false)
+          }}
+          onCancel={() => {
+            setAdding(false)
+          }}
+        />
+      ) : null}
+      {variables.length === 0 && !adding ? (
+        <Text style={panelStyles.muted}>None yet. You can skip this and add variables later.</Text>
+      ) : null}
     </View>
   )
 }

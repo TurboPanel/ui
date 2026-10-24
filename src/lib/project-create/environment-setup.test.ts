@@ -9,6 +9,8 @@ import {
   hostnameServiceNames,
   initialSetupServerId,
   setupAccounts,
+  setupCompose,
+  setupFormProblems,
   setupEnvironmentPatch,
   setupVariableBodies,
   variableKeyProblem,
@@ -170,5 +172,51 @@ describe('setupEnvironmentPatch', () => {
       serverId: 's1',
       options: { compose, primaryHostname: 'example.com' },
     })
+  })
+})
+
+describe('setupFormProblems', () => {
+  const accounts = setupAccounts(APP)
+
+  it('passes a filled-in form', () => {
+    expect(
+      setupFormProblems({ name: 'production', hostname: '', accounts, accountNames: {} })
+    ).toEqual({})
+  })
+
+  it('names each field that is wrong', () => {
+    const found = setupFormProblems({
+      name: 'Bad Name',
+      hostname: 'https://x',
+      accounts,
+      accountNames: { website: '9bad' },
+    })
+    expect(Object.keys(found).toSorted()).toEqual(['account:website', 'hostname', 'name'])
+  })
+})
+
+describe('setupCompose', () => {
+  it('renames the account and sets the hostname', () => {
+    const next = setupCompose(APP, {
+      accounts: setupAccounts(APP),
+      accountNames: { website: 'site' },
+      serviceName: 'web',
+      hostname: 'example.com',
+      alsoWww: false,
+    })
+    expect(setupAccounts(next)).toEqual([{ alias: 'site', services: ['web'] }])
+    expect(declaredHostname(next, 'web')?.hostname).toBe('example.com')
+  })
+
+  it('has nothing to write without a compose', () => {
+    expect(
+      setupCompose(null, {
+        accounts: [],
+        accountNames: {},
+        serviceName: null,
+        hostname: 'example.com',
+        alsoWww: true,
+      })
+    ).toBeNull()
   })
 })
