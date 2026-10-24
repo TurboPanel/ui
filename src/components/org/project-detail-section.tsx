@@ -114,6 +114,15 @@ function useAccountPlan({
   }
 }
 
+/** A blank username means the suggested one only while an app is waiting. */
+function blankUsernameFallback(waiting: boolean, suggested: string): string {
+  return waiting ? suggested : ''
+}
+
+function usernamePlaceholder(waiting: boolean, suggested: string): string {
+  return waiting ? suggested : 'Username (e.g. appuser)'
+}
+
 function WaitingForAccountNotice({ suggested }: Readonly<{ suggested: string }>) {
   return (
     <InlineNotice
@@ -281,7 +290,7 @@ export function ProjectPrincipalsSection({
   }
 
   const handleAdd = async () => {
-    const trimmed = username.trim() || (waitingForAccount ? suggestedUsername : '')
+    const trimmed = username.trim() || blankUsernameFallback(waitingForAccount, suggestedUsername)
     if (!trimmed) {
       setError('Username is required.')
       return
@@ -458,7 +467,7 @@ export function ProjectPrincipalsSection({
               value={username}
               onChangeText={setUsername}
               onBlur={() => setUsername((current) => current.trim())}
-              placeholder={waitingForAccount ? suggestedUsername : 'Username (e.g. appuser)'}
+              placeholder={usernamePlaceholder(waitingForAccount, suggestedUsername)}
               autoCapitalize="none"
               autoCorrect={false}
               editable={!adding}
