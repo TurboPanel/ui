@@ -39,6 +39,7 @@ vi.mock('@/lib/v4/projects-home', () => ({
     name: project.name,
     kind: project.kind === 'managed' ? 'managed' : 'compose',
     status: 'running',
+    environments: [{ id: 'e1', name: 'prod', status: 'deploying', isPrimary: true, pinned: false }],
   }),
 }))
 
@@ -71,6 +72,33 @@ describe('useHeaderBreadcrumb', () => {
       trail: [{ label: 'Projects', href: '/o1/projects' }],
       current: { label: 'Blog', chip: { key: 'running' } },
     })
+  })
+
+  it('goes down to the environment, with the environment status', async () => {
+    state.pathname = '/o1/projects/p1/environments/e1/deployments'
+    state.project = { id: 'p1', name: 'Blog', metadata: null }
+    expect(await run()).toEqual({
+      trail: [
+        { label: 'Projects', href: '/o1/projects' },
+        { label: 'Blog', href: '/o1/projects/p1/overview' },
+      ],
+      current: { label: 'prod', chip: { key: 'deploying' } },
+    })
+  })
+
+  it('adds the page name on a page deeper than a tab', async () => {
+    state.pathname = '/o1/projects/p1/environments/e1/configuration/storage'
+    state.project = { id: 'p1', name: 'Blog', metadata: null }
+    const crumb = await run()
+    expect(crumb?.trail.map((entry) => entry.label)).toEqual(['Projects', 'Blog', 'prod'])
+    expect(crumb?.trail[2]?.href).toBe('/o1/projects/p1/environments/e1')
+    expect(crumb?.current.label).toBe('Storage')
+  })
+
+  it('stops at the project when the path names an unknown environment', async () => {
+    state.pathname = '/o1/projects/p1/environments/gone'
+    state.project = { id: 'p1', name: 'Blog', metadata: null }
+    expect(await run()).toMatchObject({ current: { label: 'Blog' } })
   })
 
   it('builds the database crumb for a managed project', async () => {

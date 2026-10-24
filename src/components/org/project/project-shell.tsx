@@ -6,6 +6,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
   type TextStyle,
 } from 'react-native'
@@ -14,6 +15,7 @@ import { panelStyles } from '@/components/ui/panel-styles'
 import { UnderlineTabs, type UnderlineTab } from '@/components/ui/v4'
 import { PlatformBadge } from '@/components/org/platform-badge'
 import { ProjectDeletePanel } from '@/components/org/project-delete-panel'
+import { useEnvironmentChrome } from '@/components/org/project/environment-shell'
 import { useProjectContext } from '@/components/org/project/project-context'
 import {
   ProjectSectionTabs,
@@ -43,6 +45,7 @@ import {
   useUpdateProject,
   type TrackedCommandEntry,
 } from '@/lib/queries'
+import { showsBreadcrumb } from '@/lib/header-breadcrumb'
 import { MANAGED_RUNTIME_PRESENT_ERROR } from '@/lib/instance-api'
 import { chrome, colors, spacing, webPointer } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
@@ -286,6 +289,47 @@ function ManagedProjectTrashButton({
   )
 }
 
+/**
+ * What leads the project name: "Projects ›" on the project's own pages. An
+ * environment page on a wide web screen has the full trail in the top bar,
+ * so it shows none; everywhere else (a phone, the iPhone and iPad app) it gets
+ * a back arrow to the project's environments.
+ */
+function ProjectHeaderLead() {
+  const { orgId, projectId, pathEnvironmentId } = useProjectContext()
+  const { width } = useWindowDimensions()
+  const onEnvironmentPage = useEnvironmentChrome() && pathEnvironmentId != null
+  if (!onEnvironmentPage) {
+    return (
+      <>
+        <Link href={`/${orgId}/projects` as Href} asChild>
+          <Pressable
+            style={StyleSheet.flatten([styles.crumbLink, webPointer])}
+            accessibilityRole="link"
+            accessibilityLabel="Projects"
+          >
+            <Text style={styles.crumbLinkText}>Projects</Text>
+          </Pressable>
+        </Link>
+        <BreadcrumbChevron size={12} color={colors.textMuted} />
+      </>
+    )
+  }
+  // Only the web top bar carries the trail; the native header has none.
+  if (Platform.OS === 'web' && showsBreadcrumb(width)) return null
+  return (
+    <Link href={projectOverviewHref(orgId, projectId) as Href} asChild>
+      <Pressable
+        style={StyleSheet.flatten([styles.backLink, webPointer])}
+        accessibilityRole="link"
+        accessibilityLabel="All environments"
+      >
+        <Text style={styles.backLinkText}>‹</Text>
+      </Pressable>
+    </Link>
+  )
+}
+
 function ProjectHeader({
   showManagedTrash,
   deletingProject,
@@ -335,8 +379,6 @@ function ProjectHeader({
 
   const saving = !draft && updateProject.isPending
   const showMutableChrome = canOwn && projectAllowsMutations
-  const projectsHref = `/${orgId}/projects` as Href
-  const crumbLinkStyle = StyleSheet.flatten([styles.crumbLink, webPointer])
 
   return (
     <View style={styles.header}>
@@ -349,16 +391,7 @@ function ProjectHeader({
           style={styles.breadcrumb}
           accessibilityLabel="Breadcrumb"
         >
-          <Link href={projectsHref} asChild>
-            <Pressable
-              style={crumbLinkStyle}
-              accessibilityRole="link"
-              accessibilityLabel="Projects"
-            >
-              <Text style={styles.crumbLinkText}>Projects</Text>
-            </Pressable>
-          </Link>
-          <BreadcrumbChevron size={12} color={colors.textMuted} />
+          <ProjectHeaderLead />
           <View style={styles.currentCrumb}>
             <ProjectTitleIcon project={project} compact />
             {showMutableChrome ? (
@@ -605,6 +638,18 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 15,
     fontWeight: '600',
+  },
+  backLink: {
+    minWidth: 44,
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+  },
+  backLinkText: {
+    color: colors.link,
+    fontSize: 28,
+    fontWeight: '400',
+    lineHeight: 30,
   },
   currentCrumb: {
     flex: 1,

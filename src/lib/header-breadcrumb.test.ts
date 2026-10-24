@@ -3,6 +3,8 @@ import {
   BREADCRUMB_MIN_WIDTH,
   breadcrumbRoute,
   databaseBreadcrumb,
+  environmentBreadcrumb,
+  environmentDeeperPage,
   projectBreadcrumb,
   serverBreadcrumb,
   showsBreadcrumb,
@@ -101,5 +103,57 @@ describe('showsBreadcrumb', () => {
   it('keeps phones as they are', () => {
     expect(showsBreadcrumb(BREADCRUMB_MIN_WIDTH - 1)).toBe(false)
     expect(showsBreadcrumb(BREADCRUMB_MIN_WIDTH)).toBe(true)
+  })
+})
+
+describe('environmentBreadcrumb', () => {
+  const base = {
+    orgId: 'o1',
+    projectId: 'p1',
+    projectName: 'website',
+    environmentId: 'e1',
+    environmentName: 'production',
+    status: 'running',
+  }
+
+  it('reads Projects › project › environment on a tab', () => {
+    expect(environmentBreadcrumb({ ...base, page: null })).toEqual({
+      trail: [
+        { label: 'Projects', href: '/o1/projects' },
+        { label: 'website', href: '/o1/projects/p1/overview' },
+      ],
+      current: { label: 'production', chip: { key: 'running' } },
+    })
+  })
+
+  it('links the environment and names the page when deeper', () => {
+    const crumb = environmentBreadcrumb({ ...base, page: 'Storage', status: 'unknown' })
+    expect(crumb.trail.map((entry) => entry.label)).toEqual(['Projects', 'website', 'production'])
+    expect(crumb.trail[2]?.href).toBe('/o1/projects/p1/environments/e1')
+    expect(crumb.current).toEqual({ label: 'Storage', chip: null })
+  })
+
+  it('names an unnamed project', () => {
+    expect(environmentBreadcrumb({ ...base, projectName: ' ', page: null }).trail[1]?.label).toBe(
+      'Unnamed project'
+    )
+  })
+})
+
+describe('environmentDeeperPage', () => {
+  it('names pages below a tab and nothing on the tabs themselves', () => {
+    const root = '/o1/projects/p1/environments/e1'
+    expect(environmentDeeperPage(`${root}/configuration/storage`, 'e1')).toBe('Storage')
+    expect(environmentDeeperPage(`${root}/storage/?x=1`, 'e1')).toBe('Storage')
+    for (const tab of [
+      '',
+      '/deployments',
+      '/configuration',
+      '/configuration/hosting',
+      '/settings',
+    ]) {
+      expect(environmentDeeperPage(`${root}${tab}`, 'e1')).toBeNull()
+    }
+    expect(environmentDeeperPage('/o1/projects/p1/storage', 'e1')).toBeNull()
   })
 })

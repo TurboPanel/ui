@@ -7,6 +7,7 @@ import { EnvironmentDetailBody } from '@/components/org/environment-detail-secti
 import { ProjectPrincipalsSection } from '@/components/org/project-detail-section'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { useProjectContext } from '@/components/org/project/project-context'
+import { PrimaryHostnamePanel } from '@/components/org/project/primary-hostname-panel'
 import { ProjectServerHeaderControl } from '@/components/org/project/project-server-pin'
 import { ProjectSettingsScreen } from '@/components/org/project/settings/project-settings-screen'
 import { ServerPinSelect } from '@/components/org/project/server-pin-select'
@@ -145,6 +146,7 @@ export function ComposeHostingTab() {
                 environmentId={environment.id}
                 focusHostingId={focusHostingId}
               />
+              <PrimaryHostnamePanel environment={environment} />
             </View>
           ))
         )}
@@ -169,6 +171,7 @@ export function ComposeHostingTab() {
         environmentId={selectedEnvironment.id}
         focusHostingId={focusHostingId}
       />
+      <PrimaryHostnamePanel environment={selectedEnvironment} />
     </ResourceTabChrome>
   )
 }

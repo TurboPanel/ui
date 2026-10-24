@@ -1,14 +1,6 @@
-import {
-  Link,
-  Redirect,
-  useLocalSearchParams,
-  usePathname,
-  useRouter,
-  type Href,
-} from 'expo-router'
+import { Redirect, useLocalSearchParams, usePathname, useRouter, type Href } from 'expo-router'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native'
-import { BreadcrumbChevron } from '@/components/header-chevron'
+import { StyleSheet, Text, View } from 'react-native'
 import { UnderlineTabs, type UnderlineTab } from '@/components/ui/v4'
 import { readHostingIdParam } from '@/components/org/project-settings-area'
 import {
@@ -19,15 +11,17 @@ import {
 } from '@/components/org/project/overview-environments-panel'
 import { ProjectScopePicker } from '@/components/org/project/project-scope-picker'
 import { useProjectContext } from '@/components/org/project/project-context'
+import { VisitSiteButton } from '@/components/org/project/visit-site-button'
 import { StatusDot } from '@/components/ui'
 import { groupDeploymentsByGeneration, type DeploymentGroup } from '@/lib/deployment-history'
 import { environmentBadge, orderEnvironments } from '@/lib/v4/primary-environment'
 import { hasNativeApp, nativeDeployKey } from '@/lib/v4/project-home'
 import { useEnvironmentConfigViews } from '@/lib/queries/environment-cards'
 import {
+  environmentSiteHostnames,
   environmentStatusFacts,
-  firstSiteHostname,
-  siteUrlFromHostname,
+  primarySiteHostname,
+  readPrimaryHostnameOption,
   type EnvironmentStatusFact,
   type StatusFactTone,
 } from '@/lib/environment-status'
@@ -45,7 +39,7 @@ import type { ProjectScopeOption } from '@/lib/project-scope'
 import { useEnvironmentDeployments } from '@/lib/queries/execution-logs'
 import { useHostingsByServices, useServices } from '@/lib/queries/services'
 import { environmentDisplayName } from '@/lib/resource-labels'
-import { colors, spacing, webPointer } from '@/lib/theme'
+import { colors, spacing } from '@/lib/theme'
 
 const FACT_COLORS: Readonly<Record<StatusFactTone, string>> = {
   ok: colors.ok,
@@ -100,27 +94,6 @@ function StatusFacts({ facts }: Readonly<{ facts: readonly EnvironmentStatusFact
   )
 }
 
-function SiteLink({ hostname }: Readonly<{ hostname: string | null }>) {
-  const url = siteUrlFromHostname(hostname)
-  if (!hostname || !url) return null
-  return (
-    <Pressable
-      accessibilityRole="link"
-      accessibilityLabel={`Open ${hostname}`}
-      onPress={() => {
-        Linking.openURL(url).catch(() => {
-          // A blocked or unsupported link has nothing to recover; the name stays visible.
-        })
-      }}
-      style={webPointer}
-    >
-      <Text style={styles.siteLink} numberOfLines={1}>
-        {hostname}
-      </Text>
-    </Pressable>
-  )
-}
-
 function EnvironmentTitle() {
   const router = useRouter()
   const { orgId, projectId, environments, selectedEnvironment } = useProjectContext()
@@ -142,14 +115,21 @@ function EnvironmentTitle() {
     [environments, selectedEnvironment?.id, lifecycle.statusLabel]
   )
 
-  if (environments.length > 1) {
+  // The picker also leads back to every environment of the project, which
+  // replaced the "All environments ›" crumb above the header.
+  if (options.length > 0) {
     return (
       <ProjectScopePicker
+        variant="title"
         options={options}
         activeEnvironmentId={selectedEnvironment?.id ?? null}
         statusColorFor={(option) =>
           option.environmentId === selectedEnvironment?.id ? lifecycle.toneColor : undefined
         }
+        allLink={{
+          label: 'All environments',
+          onPress: () => router.push(projectOverviewHref(orgId, projectId) as Href),
+        }}
         onSelect={(option) =>
           router.push(
             environmentPageTabHref(orgId, projectId, option.environmentId, activeTab) as Href
@@ -165,6 +145,22 @@ function EnvironmentTitle() {
   )
 }
 
+/** The Primary or Pinned badge beside the environment name. */
+function EnvironmentBadge({
+  environment,
+}: Readonly<{ environment: Readonly<{ isPrimary?: boolean; pinned?: boolean }> }>) {
+  if (!environmentBadge(environment)) return null
+  const primary = environment.isPrimary === true
+  return (
+    <View
+      style={styles.badge}
+      accessibilityLabel={primary ? 'Primary environment' : 'Pinned environment'}
+    >
+      <Text style={styles.badgeText}>{primary ? 'Primary' : 'Pinned'}</Text>
+    </View>
+  )
+}
+
 /** `Not started yet` is a container answer; a native app's comes from its newest deploy. */
 function nativeRunningLabel(label: string, lastDeploy: DeploymentGroup | null | undefined): string {
   if (label !== 'Not started yet' || !lastDeploy) return label
@@ -175,8 +171,9 @@ function nativeRunningLabel(label: string, lastDeploy: DeploymentGroup | null | 
 }
 
 /**
- * Name, site link, status, Deploy, Restart and the menu — the same header on
- * every tab of an environment.
+ * The same header on every tab of an environment. Line 1: the name (the
+ * environment picker) and its badge, then Visit, Deploy, Restart or Start and
+ * the menu. Line 2: the status facts.
  */
 function EnvironmentHeader() {
   const lifecycle = useEnvironmentLifecycle()
@@ -192,7 +189,14 @@ function EnvironmentHeader() {
   const hostingsQuery = useHostingsByServices(orgId, serviceIds, {
     enabled: serviceIds.length > 0,
   })
-  const hostname = firstSiteHostname(hostingsQuery.hostingsByService, serviceIds)
+  const hostnames = useMemo(
+    () => environmentSiteHostnames(hostingsQuery.hostingsByService, serviceIds),
+    [hostingsQuery.hostingsByService, serviceIds]
+  )
+  const primaryHostname = primarySiteHostname(
+    hostnames,
+    readPrimaryHostnameOption(selectedEnvironment?.options)
+  )
   const deploymentsQuery = useEnvironmentDeployments(orgId, environmentId, {
     enabled: environmentId.length > 0,
   })
@@ -230,37 +234,14 @@ function EnvironmentHeader() {
       <View style={styles.titleRow}>
         <View style={styles.titleBlock}>
           <EnvironmentTitle />
-          {environmentBadge(selectedEnvironment) ? (
-            <Text style={styles.badgeLine}>
-              {selectedEnvironment.isPrimary === true
-                ? 'Primary environment'
-                : 'Pinned environment'}
-            </Text>
-          ) : null}
-          <SiteLink hostname={hostname} />
+          <EnvironmentBadge environment={selectedEnvironment} />
         </View>
-        <EnvironmentLifecycleActions />
+        <View style={styles.actions}>
+          <VisitSiteButton hostnames={hostnames} primary={primaryHostname} />
+          <EnvironmentLifecycleActions />
+        </View>
       </View>
       <StatusFacts facts={facts} />
-    </View>
-  )
-}
-
-function EnvironmentCrumb() {
-  const { orgId, projectId, selectedEnvironment } = useProjectContext()
-  return (
-    <View style={styles.crumb} accessibilityLabel="Breadcrumb">
-      <Link href={projectOverviewHref(orgId, projectId) as Href} asChild>
-        <Pressable
-          accessibilityRole="link"
-          accessibilityLabel="All environments"
-          style={webPointer}
-        >
-          <Text style={styles.crumbText}>All environments</Text>
-        </Pressable>
-      </Link>
-      <BreadcrumbChevron size={12} color={colors.text3} />
-      <Text style={styles.crumbCurrent}>{environmentDisplayName(selectedEnvironment ?? {})}</Text>
     </View>
   )
 }
@@ -276,7 +257,6 @@ function EnvironmentChrome({ children }: Readonly<{ children: ReactNode }>) {
   )
   return (
     <View style={styles.root}>
-      <EnvironmentCrumb />
       <EnvironmentHeader />
       {pathEnvironmentId ? (
         <UnderlineTabs
@@ -335,21 +315,6 @@ const styles = StyleSheet.create({
     width: '100%',
     gap: spacing.md,
   },
-  crumb: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  crumbText: {
-    color: colors.text3,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  crumbCurrent: {
-    color: colors.text2,
-    fontSize: 13,
-    fontWeight: '600',
-  },
   header: {
     gap: spacing.sm,
   },
@@ -361,9 +326,19 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   titleBlock: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
     flexShrink: 1,
     minWidth: 160,
-    gap: 2,
+    gap: spacing.md,
+  },
+  actions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    marginLeft: 'auto',
+    gap: spacing.sm,
   },
   title: {
     color: colors.text,
@@ -371,21 +346,24 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: -0.3,
   },
-  badgeLine: {
-    color: colors.text3,
-    fontSize: 13,
-    fontWeight: '600',
+  badge: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.borderChip,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
   },
-  siteLink: {
-    color: colors.link,
-    fontSize: 14,
-    fontWeight: '600',
+  badgeText: {
+    color: colors.textMuted,
+    fontSize: 11,
+    fontWeight: '700',
   },
   facts: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
-    gap: spacing.md,
+    rowGap: spacing.sm,
+    columnGap: 24,
   },
   fact: {
     flexDirection: 'row',
