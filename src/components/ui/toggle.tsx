@@ -1,5 +1,5 @@
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
-import { isFocused, webFocusRing } from '@/components/ui/focus-ring'
+import { webFocusRing, type WebPressableState } from '@/components/ui/focus-ring'
 import { themedStyles, usePalette, useTouch } from '@/components/ui/v4/use-palette'
 import { webPointer } from '@/lib/theme'
 import { controlHeight } from '@/lib/v4/ui-scale'
@@ -63,13 +63,13 @@ export function Toggle({
       aria-checked={value}
       aria-disabled={blocked}
       aria-busy={busy}
-      style={(state) => [
+      style={(state: WebPressableState) => [
         s.base,
         { minHeight: controlHeight('md', touch) },
         webPointer,
         state.pressed && !blocked && s.pressed,
         blocked && s.disabled,
-        isFocused(state) && webFocusRing,
+        state.focused && webFocusRing,
       ]}
     >
       <View

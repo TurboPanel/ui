@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, Text } from 'react-native'
-import { isFocused, webFocusRing } from '@/components/ui/focus-ring'
+import { webFocusRing, type WebPressableState } from '@/components/ui/focus-ring'
 import { useTouch } from '@/components/ui/v4/use-palette'
 import { colors, webPointer } from '@/lib/theme'
 import { CONTROL_HEIGHT } from '@/lib/v4/ui-scale'
@@ -47,13 +47,13 @@ export function TextLink({
       accessibilityState={{ disabled, expanded }}
       aria-disabled={disabled}
       aria-expanded={expanded}
-      style={(state) => [
+      style={(state: WebPressableState) => [
         styles.base,
         touch && styles.touch,
         webPointer,
         state.pressed && !disabled && styles.pressed,
         disabled && styles.disabled,
-        isFocused(state) && webFocusRing,
+        state.focused && webFocusRing,
       ]}
     >
       <Text style={[styles.text, size === 'sm' && styles.textSm]} numberOfLines={numberOfLines}>

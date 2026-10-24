@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { applyScenario, env, SCENARIOS, styleOf } from '@/components/ui/v4/rn-stub'
-import { Button, buttonMinHeight } from '@/components/ui/button'
+import { Button } from '@/components/ui/button'
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
 vi.mock(
@@ -18,15 +18,6 @@ afterEach(() => {
 function coarsePointer(coarse: boolean) {
   vi.stubGlobal('matchMedia', () => ({ matches: coarse }))
 }
-
-describe('buttonMinHeight', () => {
-  it('keeps the mouse sizes and raises both to 44 on touch', () => {
-    expect(buttonMinHeight('md', false)).toBe(40)
-    expect(buttonMinHeight('sm', false)).toBe(32)
-    expect(buttonMinHeight('md', true)).toBe(44)
-    expect(buttonMinHeight('sm', true)).toBe(44)
-  })
-})
 
 describe('Button sizes', () => {
   beforeEach(() => {

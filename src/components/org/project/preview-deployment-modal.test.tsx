@@ -17,6 +17,7 @@ vi.mock(
 )
 vi.mock('@/components/ui', async () => ({
   TextLink: (await import('@/components/ui/text-link')).TextLink,
+  SegmentedControl: (await import('@/components/ui/segmented-control')).SegmentedControl,
   ModalSheet: ({
     visible,
     title,
@@ -194,6 +195,16 @@ describe('deploy confirm dialog', () => {
     render(<PreviewDeploymentModal {...base} onCancel={vi.fn()} onConfirm={vi.fn()} />)
     const buttons = screen.getAllByRole('button').filter((b) => b.closest('footer'))
     expect(buttons.map((b) => b.textContent)).toEqual(['Cancel', 'Deploy'])
+  })
+
+  it('switches between the merged and prepared views', () => {
+    render(
+      <PreviewDeploymentModal {...base} purpose="inspect" initialMode="merged" onCancel={vi.fn()} />
+    )
+    expect(screen.getByRole('tab', { name: 'Merged' }).getAttribute('aria-selected')).toBe('true')
+    fireEvent.click(screen.getByRole('tab', { name: 'Prepared' }))
+    expect(screen.getByRole('tab', { name: 'Prepared' }).getAttribute('aria-selected')).toBe('true')
+    expect(screen.getByText('prepared compose')).toBeTruthy()
   })
 
   it('keeps the inspect view open with no disclosure and a Close button', () => {

@@ -10,11 +10,6 @@ export type ButtonSize = 'md' | 'sm'
 /** Height with a mouse; a phone or a coarse pointer raises both sizes to 44 pt. */
 const POINTER_HEIGHT: Record<ButtonSize, number> = { md: 40, sm: 32 }
 
-/** Min height of a {@link Button}: the pointer size, or the 44 pt touch minimum. */
-export function buttonMinHeight(size: ButtonSize, touch: boolean): number {
-  return touch ? Math.max(POINTER_HEIGHT[size], CONTROL_HEIGHT.touch) : POINTER_HEIGHT[size]
-}
-
 /**
  * Standard console button (MASTER: radius 8, weight 600, min height 40 with a
  * mouse, 44 on touch at every size, 150ms press feedback, never color-only
@@ -61,7 +56,7 @@ export function Button({
         styles.base,
         variantStyles[variant],
         size === 'sm' && styles.sm,
-        { minHeight: buttonMinHeight(size, touch) },
+        { minHeight: touch ? CONTROL_HEIGHT.touch : POINTER_HEIGHT[size] },
         webPointer,
         pressed && !blocked && styles.pressed,
         blocked && styles.disabled,

@@ -2,7 +2,6 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { applyScenario, env, SCENARIOS, styleOf } from '@/components/ui/v4/rn-stub'
-import { isFocused } from '@/components/ui/focus-ring'
 import { TextLink } from '@/components/ui/text-link'
 import { colors } from '@/lib/theme'
 
@@ -85,12 +84,5 @@ describe('TextLink', () => {
     expect(
       screen.getByRole('button', { name: 'Hide what will run' }).getAttribute('aria-expanded')
     ).toBe('true')
-  })
-})
-
-describe('isFocused', () => {
-  it('reads the focused flag React Native Web passes to a style callback', () => {
-    expect(isFocused({ pressed: false })).toBe(false)
-    expect(isFocused({ pressed: false, focused: true } as never)).toBe(true)
   })
 })

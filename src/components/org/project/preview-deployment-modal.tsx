@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native'
-import { ModalSheet, TextLink } from '@/components/ui'
+import { ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native'
+import { ModalSheet, SegmentedControl, TextLink } from '@/components/ui'
 import { ActionButton } from '@/components/ui/v4'
 import {
   DeployPreviewBody,
@@ -9,7 +9,7 @@ import {
 import { ReadOnlyYamlBlock } from '@/components/org/readonly-yaml-block'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { composePreviewMergedYaml } from '@/lib/compose'
-import { colors, layout, spacing, webPointer } from '@/lib/theme'
+import { colors, layout, spacing } from '@/lib/theme'
 
 export type ComposePreviewMode = 'merged' | 'prepared'
 
@@ -89,36 +89,12 @@ function ModePicker({
   onSelect: (mode: ComposePreviewMode) => void
 }>) {
   return (
-    <View style={panelStyles.segmentGroup}>
-      {MODE_OPTIONS.map((option) => {
-        const active = mode === option.id
-        return (
-          <Pressable
-            key={option.id}
-            style={[
-              panelStyles.segmentChip,
-              active && panelStyles.segmentChipActive,
-              webPointer,
-            ]}
-            onPress={() => {
-              onSelect(option.id)
-            }}
-            accessibilityRole="button"
-            accessibilityState={{ selected: active }}
-            accessibilityLabel={option.label}
-          >
-            <Text
-              style={[
-                panelStyles.segmentChipText,
-                active && panelStyles.segmentChipTextActive,
-              ]}
-            >
-              {option.label}
-            </Text>
-          </Pressable>
-        )
-      })}
-    </View>
+    <SegmentedControl
+      options={MODE_OPTIONS.map((option) => ({ value: option.id, label: option.label }))}
+      value={mode}
+      onChange={onSelect}
+      accessibilityLabel="Compose view"
+    />
   )
 }
 
@@ -294,7 +270,7 @@ export function PreviewDeploymentModal({
       title={title}
       description={subtitle}
       maxWidth={720}
-      dismissLabel="Close compose preview"
+      dismissLabel={isConfirm ? 'Cancel deployment' : 'Close compose preview'}
       footer={
         <ModalFooterActions
           isConfirm={isConfirm}

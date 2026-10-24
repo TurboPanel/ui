@@ -4,7 +4,8 @@ import { chrome } from '@/lib/theme'
 /**
  * The keyboard focus ring for a pressable primitive: a 2 px accent outline,
  * web only (a phone has no keyboard focus to show). React Native Web passes
- * `focused` to a Pressable's style callback; native never sets it.
+ * `focused` to a Pressable's style callback ({@link WebPressableState});
+ * native never sets it.
  */
 export const webFocusRing: ViewStyle =
   Platform.OS === 'web'
@@ -16,7 +17,5 @@ export const webFocusRing: ViewStyle =
       } as unknown as ViewStyle)
     : {}
 
-/** Whether a Pressable style callback is painting the focused state. */
-export function isFocused(state: PressableStateCallbackType): boolean {
-  return Boolean((state as PressableStateCallbackType & { focused?: boolean }).focused)
-}
+/** What a Pressable style callback receives on the web: `focused` is set while it has keyboard focus. */
+export type WebPressableState = PressableStateCallbackType & Readonly<{ focused?: boolean }>
