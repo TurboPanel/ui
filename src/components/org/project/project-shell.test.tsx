@@ -12,10 +12,16 @@ const state = vi.hoisted(() => ({
   push: vi.fn(),
   width: 1200,
   envChrome: false,
+  os: 'web',
 }))
 
 vi.mock('react-native', () => ({
-  Platform: { OS: 'web', select: (o: Record<string, unknown>) => o.web ?? o.default },
+  Platform: {
+    get OS() {
+      return state.os
+    },
+    select: (o: Record<string, unknown>) => o.web ?? o.default,
+  },
   StyleSheet: { create: (styles: unknown) => styles, flatten: (style: unknown) => style },
   View: ({ children }: Props) => <div>{children}</div>,
   ScrollView: ({ children }: Props) => <div>{children}</div>,
@@ -118,6 +124,7 @@ beforeEach(() => {
   state.pathname = '/o/projects/p/base'
   state.width = 1200
   state.envChrome = false
+  state.os = 'web'
   state.push.mockReset()
   setContext()
 })
@@ -209,6 +216,14 @@ describe('project header on an environment page', () => {
     render(<ProjectShell>body</ProjectShell>)
     expect(screen.queryByRole('link', { name: 'Projects' })).toBeNull()
     expect(screen.getByRole('link', { name: 'All environments' }).textContent).toBe('‹')
+  })
+
+  it('keeps the back arrow in the wide native app, whose header has no trail', () => {
+    state.os = 'ios'
+    state.width = 1024
+    render(<ProjectShell>body</ProjectShell>)
+    expect(screen.queryByRole('link', { name: 'Projects' })).toBeNull()
+    expect(screen.getByRole('link', { name: 'All environments' })).toBeTruthy()
   })
 
   it('keeps the Projects link where there is no environment header', () => {

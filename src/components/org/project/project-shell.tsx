@@ -291,8 +291,9 @@ function ManagedProjectTrashButton({
 
 /**
  * What leads the project name: "Projects ›" on the project's own pages. An
- * environment page has the full trail in the top bar, so it shows none; a
- * phone (no top-bar trail) gets a back arrow to the project's environments.
+ * environment page on a wide web screen has the full trail in the top bar,
+ * so it shows none; everywhere else (a phone, the iPhone and iPad app) it gets
+ * a back arrow to the project's environments.
  */
 function ProjectHeaderLead() {
   const { orgId, projectId, pathEnvironmentId } = useProjectContext()
@@ -314,7 +315,8 @@ function ProjectHeaderLead() {
       </>
     )
   }
-  if (showsBreadcrumb(width)) return null
+  // Only the web top bar carries the trail; the native header has none.
+  if (Platform.OS === 'web' && showsBreadcrumb(width)) return null
   return (
     <Link href={projectOverviewHref(orgId, projectId) as Href} asChild>
       <Pressable

@@ -79,7 +79,9 @@ export function PrimaryHostnamePanel({
   const makePrimary = async (hostname: string) => {
     setSaving(hostname)
     // `options` is replaced on save: send what is stored, with the new primary.
-    await update.run({ options: { ...environment.options, primaryHostname: hostname } })
+    await update.run({
+      options: { ...environment.options, primaryHostname: hostname.toLowerCase() },
+    })
     setSaving(null)
   }
 
