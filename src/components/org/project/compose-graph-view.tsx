@@ -15,7 +15,7 @@ import {
 import type { ContainerRecord, ServiceRecord } from '@/lib/instance-api'
 import { appTagLabel } from '@/lib/compose/app-facts'
 import { bindingTagLabel, type ServiceBindingFacts } from '@/lib/compose/binding-facts'
-import { projectServiceHref } from '@/lib/project-navigation'
+import { projectEnvironmentServiceHref } from '@/lib/project-navigation'
 import { colors, spacing, webPointer } from '@/lib/theme'
 
 const SERVICE_W = 176
@@ -324,7 +324,9 @@ function ServiceNodeOverlay({
 
   return (
     <Link
-      href={projectServiceHref(orgId, projectId, service.id) as Href}
+      href={
+        projectEnvironmentServiceHref(orgId, projectId, service.environmentId, service.id) as Href
+      }
       asChild
     >
       <Pressable

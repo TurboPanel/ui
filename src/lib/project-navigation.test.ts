@@ -49,6 +49,8 @@ import {
   projectNeedsSetup,
   projectOverviewHref,
   projectServiceHref,
+  projectEnvironmentServiceHref,
+  serviceEnvironmentHref,
   projectServicesEditHref,
   projectSetupHref,
   projectSettingsHref,
@@ -560,6 +562,23 @@ describe('project and environment tabs', () => {
     expect(projectEnvironmentConfigurationHref('o', 'p', 'e')).toBe(
       '/o/projects/p/environments/e/configuration',
     )
+    expect(projectEnvironmentServiceHref('o', 'p', 'e', 'svc 1')).toBe(
+      '/o/projects/p/environments/e/services/svc%201'
+    )
+  })
+
+  it('sends the project-scope service path to the environment that runs it', () => {
+    const lists = { e1: [{ id: 'a' }], e2: [{ id: 'b' }, { id: 'c' }] }
+    expect(serviceEnvironmentHref('o', 'p', 'c', lists, 'e1')).toBe(
+      '/o/projects/p/environments/e2/services/c'
+    )
+    // Not in any list: the fallback environment says it was not found.
+    expect(serviceEnvironmentHref('o', 'p', 'zz', lists, 'e1')).toBe(
+      '/o/projects/p/environments/e1/services/zz'
+    )
+    expect(serviceEnvironmentHref('o', 'p', 'zz', {}, null)).toBeNull()
+    // The path never treats the service as open in the Base.
+    expect(parseComposeEditView('/o/projects/p/environments/e/services/c', 'p')).toBeNull()
   })
 
   it('names the project tab a path belongs to', () => {
@@ -611,6 +630,8 @@ describe('project and environment tabs', () => {
     expect(tab('/hosting')).toBe('hosting')
     expect(tab('/storage')).toBe('configuration')
     expect(tab('/services')).toBe('configuration')
+    // A service opened inside the environment keeps Services lit.
+    expect(tab('/services/svc1')).toBe('configuration')
     expect(tab('/settings')).toBe('settings')
     expect(tab('/unknown')).toBeNull()
     expect(parseEnvironmentPageTab('/o/projects/p/base', 'p')).toBeNull()
