@@ -252,7 +252,7 @@ these instead of a local `StyleSheet`:
 | Need | Use |
 | --- | --- |
 | On/off setting | `Toggle` + `SettingRow` — the one switch: track and knob plus the state word ("On" / "Off", or the caller's), 44 pt tall on touch. Never React Native `Switch` (it renders as three unrelated controls across the platforms) |
-| Panel / card | `SectionPanel` (`collapsible`, `accent`, `headerRight`) |
+| Panel / card | `Section` from `ui/v4` (`note`, `action`, `collapsible`): the section heading over one card. Project screens use it; the older `SectionPanel` (glass header, accent stripe) remains on server, org and admin screens until they move |
 | Dense table | `DataTable` + `DataTableRow` / `DataTableCell` / `DataTableEmpty` — owns horizontal scroll, the web-only sticky header, hover, zebra, selection |
 | Blocking dialog | `ModalSheet` — centred dialog on desktop, bottom sheet on compact, backdrop dismiss, Android back |
 | Status indicator | `StatusDot` (`online` / `pending` / `offline` / `failed` / `neutral`); `ConnectionStatusDot` when a server's live pulse is wanted |
