@@ -6,6 +6,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
   type TextStyle,
 } from 'react-native'
@@ -14,6 +15,7 @@ import { panelStyles } from '@/components/ui/panel-styles'
 import { UnderlineTabs, type UnderlineTab } from '@/components/ui/v4'
 import { PlatformBadge } from '@/components/org/platform-badge'
 import { ProjectDeletePanel } from '@/components/org/project-delete-panel'
+import { useEnvironmentChrome } from '@/components/org/project/environment-shell'
 import { useProjectContext } from '@/components/org/project/project-context'
 import {
   ProjectSectionTabs,
@@ -43,6 +45,7 @@ import {
   useUpdateProject,
   type TrackedCommandEntry,
 } from '@/lib/queries'
+import { showsBreadcrumb } from '@/lib/header-breadcrumb'
 import { MANAGED_RUNTIME_PRESENT_ERROR } from '@/lib/instance-api'
 import { chrome, colors, spacing, webPointer } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
@@ -304,9 +307,16 @@ function ProjectHeader({
     projectAllowsMutations,
     draft,
     setError,
+    pathEnvironmentId,
   } = useProjectContext()
   const updateProject = useUpdateProject(orgId, projectId)
   const [editName, setEditName] = useState('')
+  const { width } = useWindowDimensions()
+  // An environment page has the full trail in the top bar, so the page keeps
+  // only the project name; a phone (no top-bar trail) gets a back arrow to the
+  // project's environments instead.
+  const onEnvironmentPage = useEnvironmentChrome() && pathEnvironmentId != null
+  const phone = !showsBreadcrumb(width)
 
   useEffect(() => {
     setEditName(project?.name?.trim() ?? '')
@@ -337,6 +347,7 @@ function ProjectHeader({
   const showMutableChrome = canOwn && projectAllowsMutations
   const projectsHref = `/${orgId}/projects` as Href
   const crumbLinkStyle = StyleSheet.flatten([styles.crumbLink, webPointer])
+  const backLinkStyle = StyleSheet.flatten([styles.backLink, webPointer])
 
   return (
     <View style={styles.header}>
@@ -349,16 +360,31 @@ function ProjectHeader({
           style={styles.breadcrumb}
           accessibilityLabel="Breadcrumb"
         >
-          <Link href={projectsHref} asChild>
-            <Pressable
-              style={crumbLinkStyle}
-              accessibilityRole="link"
-              accessibilityLabel="Projects"
-            >
-              <Text style={styles.crumbLinkText}>Projects</Text>
-            </Pressable>
-          </Link>
-          <BreadcrumbChevron size={12} color={colors.textMuted} />
+          {onEnvironmentPage ? null : (
+            <>
+              <Link href={projectsHref} asChild>
+                <Pressable
+                  style={crumbLinkStyle}
+                  accessibilityRole="link"
+                  accessibilityLabel="Projects"
+                >
+                  <Text style={styles.crumbLinkText}>Projects</Text>
+                </Pressable>
+              </Link>
+              <BreadcrumbChevron size={12} color={colors.textMuted} />
+            </>
+          )}
+          {onEnvironmentPage && phone ? (
+            <Link href={projectOverviewHref(orgId, projectId) as Href} asChild>
+              <Pressable
+                style={backLinkStyle}
+                accessibilityRole="link"
+                accessibilityLabel="All environments"
+              >
+                <Text style={styles.backLinkText}>‹</Text>
+              </Pressable>
+            </Link>
+          ) : null}
           <View style={styles.currentCrumb}>
             <ProjectTitleIcon project={project} compact />
             {showMutableChrome ? (
@@ -605,6 +631,18 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 15,
     fontWeight: '600',
+  },
+  backLink: {
+    minWidth: 44,
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+  },
+  backLinkText: {
+    color: colors.link,
+    fontSize: 28,
+    fontWeight: '400',
+    lineHeight: 30,
   },
   currentCrumb: {
     flex: 1,

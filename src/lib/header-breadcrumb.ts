@@ -1,4 +1,5 @@
 import { orgAreaHref } from '@/lib/org-navigation'
+import { projectEnvironmentHref, projectOverviewHref } from '@/lib/project-navigation'
 import { resolveServerConnectionStatus } from '@/lib/server-connection-status'
 
 /** Phones (narrower than this) keep the header as it is: no breadcrumb. */
@@ -69,5 +70,62 @@ export function databaseBreadcrumb(orgId: string, name: string | null, status: s
   return {
     trail: [{ label: 'Managed', href: orgAreaHref(orgId, 'managed') }],
     current: { label: name?.trim() || 'Managed database', chip: projectChip(status) },
+  }
+}
+
+/**
+ * Pages below an environment tab that name themselves in the breadcrumb. A tab
+ * itself (Deployments, Hosting ...) is lit in the tab bar, so it adds nothing.
+ */
+const ENVIRONMENT_DEEPER_PAGES: ReadonlyMap<string, string> = new Map([
+  ['configuration/storage', 'Storage'],
+  ['storage', 'Storage'],
+])
+
+/** The name of a page deeper than an environment tab, or null on a tab itself. */
+export function environmentDeeperPage(pathname: string, environmentId: string): string | null {
+  const path = pathname.split(/[?#]/)[0] ?? ''
+  const marker = `/environments/${encodeURIComponent(environmentId)}/`
+  const idx = path.indexOf(marker)
+  if (idx < 0) return null
+  const rest = path.slice(idx + marker.length).replace(/\/+$/, '')
+  return ENVIRONMENT_DEEPER_PAGES.get(rest) ?? null
+}
+
+/**
+ * Projects › project › environment, plus the page when it is deeper than a
+ * tab. `status` is the environment's own status key, not the project's worst.
+ */
+export function environmentBreadcrumb(
+  input: Readonly<{
+    orgId: string
+    projectId: string
+    projectName: string | null
+    environmentId: string
+    environmentName: string
+    status: string
+    page: string | null
+  }>
+): Breadcrumb {
+  const projectTrail = [
+    { label: 'Projects', href: orgAreaHref(input.orgId, 'projects') },
+    {
+      label: input.projectName?.trim() || 'Unnamed project',
+      href: projectOverviewHref(input.orgId, input.projectId),
+    },
+  ]
+  const chip = projectChip(input.status)
+  if (!input.page) {
+    return { trail: projectTrail, current: { label: input.environmentName, chip } }
+  }
+  return {
+    trail: [
+      ...projectTrail,
+      {
+        label: input.environmentName,
+        href: projectEnvironmentHref(input.orgId, input.projectId, input.environmentId),
+      },
+    ],
+    current: { label: input.page, chip },
   }
 }

@@ -9,9 +9,10 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native'
-import { BreadcrumbChevron } from '@/components/header-chevron'
+import { BreadcrumbChevron, HeaderChevron } from '@/components/header-chevron'
 import { SearchIcon } from '@/components/icons/nav-icons'
 import { EmptyState, StatusDot } from '@/components/ui'
+import { typeStyle } from '@/components/ui/v4/type-styles'
 import {
   filterProjectScopeOptions,
   resolveScopeTriggerOption,
@@ -22,6 +23,38 @@ import { chrome, colors, layout, spacing, webPointer } from '@/lib/theme'
 
 const PICKER_WIDTH = 320
 const PICKER_MAX_LIST_HEIGHT = 320
+
+/** A row above the environments that leaves for the project's list of them. */
+export type ScopeAllLink = Readonly<{ label: string; onPress: () => void }>
+
+/**
+ * `chip`: the small trigger. `title`: the environment name as the page
+ * heading (the environment header's line 1), with a down chevron.
+ */
+export type ScopeTriggerVariant = 'chip' | 'title'
+
+function AllEnvironmentsRow({
+  link,
+  onClose,
+}: Readonly<{ link: ScopeAllLink; onClose: () => void }>) {
+  return (
+    <Pressable
+      accessibilityRole="link"
+      accessibilityLabel={link.label}
+      style={[styles.row, styles.allRow, webPointer]}
+      onPress={() => {
+        onClose()
+        link.onPress()
+      }}
+    >
+      <View style={styles.statusSpacer} />
+      <Text style={styles.allLabel} numberOfLines={1}>
+        {link.label}
+      </Text>
+      <BreadcrumbChevron size={12} color={colors.textMuted} />
+    </Pressable>
+  )
+}
 
 function ScopeSearchField({
   value,
@@ -96,6 +129,7 @@ function ScopeTrigger({
   selected,
   open,
   statusColor,
+  variant,
   onPress,
 }: Readonly<{
   option: ProjectScopeOption
@@ -103,8 +137,25 @@ function ScopeTrigger({
   selected: boolean
   open: boolean
   statusColor?: string
+  variant: ScopeTriggerVariant
   onPress: () => void
 }>) {
+  if (variant === 'title') {
+    return (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        accessibilityLabel={`Environment: ${option.label}. Change environment`}
+        style={[styles.titleTrigger, webPointer]}
+        onPress={onPress}
+      >
+        <Text style={styles.titleLabel} numberOfLines={1}>
+          {option.label}
+        </Text>
+        <HeaderChevron size={18} color={colors.textMuted} open={open} />
+      </Pressable>
+    )
+  }
   return (
     <Pressable
       accessibilityRole="button"
@@ -149,6 +200,7 @@ function ScopePickerPanel({
   visible,
   activeEnvironmentId,
   statusColorFor,
+  allLink,
   onSelect,
   onClose,
 }: Readonly<{
@@ -160,6 +212,7 @@ function ScopePickerPanel({
   visible: readonly ProjectScopeOption[]
   activeEnvironmentId: string | null
   statusColorFor?: (option: ProjectScopeOption) => string | undefined
+  allLink?: ScopeAllLink
   onSelect: (option: ProjectScopeOption) => void
   onClose: () => void
 }>) {
@@ -190,6 +243,7 @@ function ScopePickerPanel({
                 },
           ]}
         >
+          {allLink ? <AllEnvironmentsRow link={allLink} onClose={onClose} /> : null}
           {showSearch ? (
             <ScopeSearchField value={query} onChange={onQueryChange} />
           ) : null}
@@ -238,12 +292,17 @@ export function ProjectScopePicker({
   activeEnvironmentId,
   statusColorFor,
   onSelect,
+  variant = 'chip',
+  allLink,
 }: Readonly<{
   options: readonly ProjectScopeOption[]
   /** null while the Project scope is selected. */
   activeEnvironmentId: string | null
   statusColorFor?: (option: ProjectScopeOption) => string | undefined
   onSelect: (option: ProjectScopeOption) => void
+  variant?: ScopeTriggerVariant
+  /** Shown first in the list: back to all of the project's environments. */
+  allLink?: ScopeAllLink
 }>) {
   const { width } = useWindowDimensions()
   const isCompact = width < layout.desktopBreakpoint
@@ -285,6 +344,7 @@ export function ProjectScopePicker({
           selected={selected}
           open={open}
           statusColor={statusColorFor?.(shown)}
+          variant={variant}
           onPress={() => setOpen((current) => !current)}
         />
       </View>
@@ -299,6 +359,7 @@ export function ProjectScopePicker({
           visible={visible}
           activeEnvironmentId={activeEnvironmentId}
           statusColorFor={statusColorFor}
+          allLink={allLink}
           onSelect={onSelect}
           onClose={() => setOpen(false)}
         />
@@ -316,6 +377,34 @@ const styles = StyleSheet.create({
     maxWidth: 240,
     paddingHorizontal: 10,
     borderRadius: 6,
+  },
+  titleTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    minHeight: 44,
+    maxWidth: '100%',
+    paddingRight: 4,
+    borderRadius: 8,
+  },
+  titleLabel: {
+    ...typeStyle('displayItalic', 'large'),
+    flexShrink: 1,
+    color: colors.text,
+    letterSpacing: -0.5,
+    lineHeight: 32,
+  },
+  allRow: {
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    borderRadius: 0,
+    marginBottom: 2,
+  },
+  allLabel: {
+    flex: 1,
+    color: colors.link,
+    fontSize: 14,
+    fontWeight: '600',
   },
   triggerSelected: {
     backgroundColor: chrome.bgActive,

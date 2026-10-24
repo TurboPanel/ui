@@ -81,3 +81,39 @@ describe('UnderlineTabs touch size', () => {
     expect(styleOf(screen.getAllByRole('tab')[0]).minHeight).toBe(44)
   })
 })
+
+describe('UnderlineTabs on a phone', () => {
+  beforeEach(() => {
+    applyScenario(SCENARIOS[0])
+    vi.stubGlobal('matchMedia', () => ({ matches: false }))
+    env.width = 390
+  })
+
+  it('keeps one row that never wraps, every tab 44 px tall', () => {
+    render(
+      <UnderlineTabs
+        tabs={TABS}
+        value="settings"
+        onChange={vi.fn()}
+        ariaLabel="Environment sections"
+      />
+    )
+    const bar = screen.getByRole('tablist', { name: 'Environment sections' })
+    expect(styleOf(bar).flexWrap).toBeUndefined()
+    for (const tab of screen.getAllByRole('tab')) expect(styleOf(tab).minHeight).toBe(44)
+    expect(screen.getByRole('tab', { name: 'Settings' }).getAttribute('aria-selected')).toBe('true')
+  })
+
+  it('still switches tabs', () => {
+    const onChange = vi.fn()
+    render(<UnderlineTabs tabs={TABS} value="overview" onChange={onChange} ariaLabel="s" />)
+    fireEvent.click(screen.getByRole('tab', { name: 'Settings' }))
+    expect(onChange).toHaveBeenCalledWith('settings')
+  })
+
+  it('wraps as before on a wide screen', () => {
+    env.width = 1200
+    render(<UnderlineTabs tabs={TABS} value="overview" onChange={vi.fn()} ariaLabel="s" />)
+    expect(styleOf(screen.getByRole('tablist')).flexWrap).toBe('wrap')
+  })
+})

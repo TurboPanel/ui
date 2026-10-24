@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest'
 import type { DeploymentGroup } from './deployment-history'
 import {
   environmentStatusFacts,
-  firstSiteHostname,
+  environmentSiteHostnames,
   formatAgo,
+  primarySiteHostname,
+  readPrimaryHostnameOption,
   siteUrlFromHostname,
 } from './environment-status'
 
@@ -43,17 +45,62 @@ describe('siteUrlFromHostname', () => {
   })
 })
 
-describe('firstSiteHostname', () => {
-  it('returns the first usable hostname in service order', () => {
+const hosting = (createdAt: string, hostnames: unknown, bind?: string) => ({
+  createdAt,
+  options: { hostnames, ...(bind ? { bind } : {}) },
+})
+
+describe('environmentSiteHostnames', () => {
+  it('lists every public hostname, oldest hosting row first, each once', () => {
     const rows = {
-      a: [{ name: '*.wild.test' }, { name: null }],
-      b: [{ name: ' shop.test ' }],
-      c: [{ name: 'other.test' }],
+      a: [hosting('2026-10-03T00:00:00Z', ['new.test', '*.wild.test'])],
+      b: [
+        hosting('2026-10-01T00:00:00Z', [' shop.test ', 'www.shop.test']),
+        hosting('2026-10-02T00:00:00Z', ['SHOP.test', 'inside.test'], 'local'),
+        hosting('2026-10-02T00:00:00Z', ['tcp-only.test'], 'datacenter'),
+      ],
+      c: [{ createdAt: '2026-10-01T00:00:00Z', options: null }],
     }
-    expect(firstSiteHostname(rows, ['a', 'b', 'c'])).toBe('shop.test')
-    expect(firstSiteHostname(rows, ['c', 'b'])).toBe('other.test')
-    expect(firstSiteHostname(rows, ['a', 'missing'])).toBeNull()
-    expect(firstSiteHostname({}, [])).toBeNull()
+    expect(environmentSiteHostnames(rows, ['a', 'b', 'c'])).toEqual([
+      'shop.test',
+      'www.shop.test',
+      'new.test',
+    ])
+    expect(environmentSiteHostnames(rows, ['a'])).toEqual(['new.test'])
+  })
+
+  it('is empty with no rows, no services or no hostnames', () => {
+    expect(environmentSiteHostnames({}, [])).toEqual([])
+    expect(environmentSiteHostnames({ a: [] }, ['a', 'missing'])).toEqual([])
+    expect(environmentSiteHostnames({ a: [hosting('', 'x.test')] }, ['a'])).toEqual([])
+  })
+})
+
+describe('primarySiteHostname', () => {
+  const names = ['shop.test', 'www.shop.test', 'new.test']
+
+  it('uses the stored primary while it is still one of the hostnames', () => {
+    expect(primarySiteHostname(names, 'new.test')).toBe('new.test')
+    expect(primarySiteHostname(names, 'NEW.test')).toBe('new.test')
+  })
+
+  it('falls back to the oldest hostname when none is stored or it is gone', () => {
+    expect(primarySiteHostname(names, null)).toBe('shop.test')
+    expect(primarySiteHostname(names, 'removed.test')).toBe('shop.test')
+  })
+
+  it('is null without hostnames', () => {
+    expect(primarySiteHostname([], 'shop.test')).toBeNull()
+  })
+})
+
+describe('readPrimaryHostnameOption', () => {
+  it('reads a non-empty string and ignores anything else', () => {
+    expect(readPrimaryHostnameOption({ primaryHostname: 'shop.test' })).toBe('shop.test')
+    expect(readPrimaryHostnameOption({ primaryHostname: ' ' })).toBeNull()
+    expect(readPrimaryHostnameOption({ primaryHostname: 3 })).toBeNull()
+    expect(readPrimaryHostnameOption(null)).toBeNull()
+    expect(readPrimaryHostnameOption([])).toBeNull()
   })
 })
 

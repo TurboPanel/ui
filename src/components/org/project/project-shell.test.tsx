@@ -10,6 +10,8 @@ const state = vi.hoisted(() => ({
   ctx: {} as Record<string, unknown>,
   pathname: '/o/projects/p/base',
   push: vi.fn(),
+  width: 1200,
+  envChrome: false,
 }))
 
 vi.mock('react-native', () => ({
@@ -19,11 +21,20 @@ vi.mock('react-native', () => ({
   ScrollView: ({ children }: Props) => <div>{children}</div>,
   Text: ({ children }: Props) => <span>{children}</span>,
   TextInput: () => <input />,
-  Pressable: ({ children, onPress }: Props) => (
-    <button type="button" onClick={onPress as () => void}>
+  Pressable: ({ children, onPress, accessibilityLabel, accessibilityRole }: Props) => (
+    <button
+      type="button"
+      role={accessibilityRole === 'link' ? 'link' : undefined}
+      aria-label={accessibilityLabel as string | undefined}
+      onClick={onPress as () => void}
+    >
       {children}
     </button>
   ),
+  useWindowDimensions: () => ({ width: state.width, height: 800 }),
+}))
+vi.mock('@/components/org/project/environment-shell', () => ({
+  useEnvironmentChrome: () => state.envChrome,
 }))
 
 vi.mock('expo-router', () => ({
@@ -105,6 +116,8 @@ const selected = () =>
 
 beforeEach(() => {
   state.pathname = '/o/projects/p/base'
+  state.width = 1200
+  state.envChrome = false
   state.push.mockReset()
   setContext()
 })
@@ -167,5 +180,40 @@ describe('create-wizard draft tabs', () => {
     state.pathname = '/o/projects/new'
     render(<ProjectShell>body</ProjectShell>)
     expect(screen.queryByRole('tablist')).toBeNull()
+  })
+})
+
+describe('project header on an environment page', () => {
+  beforeEach(() => {
+    state.pathname = '/o/projects/p/environments/e'
+    state.envChrome = true
+    setContext({ pathEnvironmentId: 'e' })
+  })
+
+  it('keeps the Projects link on the project pages', () => {
+    state.pathname = '/o/projects/p/overview'
+    setContext()
+    render(<ProjectShell>body</ProjectShell>)
+    expect(screen.getByRole('link', { name: 'Projects' })).toBeTruthy()
+  })
+
+  it('drops the Projects link on a wide screen, where the top bar has the trail', () => {
+    render(<ProjectShell>body</ProjectShell>)
+    expect(screen.queryByRole('link', { name: 'Projects' })).toBeNull()
+    expect(screen.queryByRole('link', { name: 'All environments' })).toBeNull()
+    expect(screen.getByText('Shop')).toBeTruthy()
+  })
+
+  it('gives a phone a back arrow to all environments', () => {
+    state.width = 390
+    render(<ProjectShell>body</ProjectShell>)
+    expect(screen.queryByRole('link', { name: 'Projects' })).toBeNull()
+    expect(screen.getByRole('link', { name: 'All environments' }).textContent).toBe('‹')
+  })
+
+  it('keeps the Projects link where there is no environment header', () => {
+    state.envChrome = false
+    render(<ProjectShell>body</ProjectShell>)
+    expect(screen.getByRole('link', { name: 'Projects' })).toBeTruthy()
   })
 })

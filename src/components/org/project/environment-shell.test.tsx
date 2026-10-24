@@ -10,7 +10,11 @@ const state = vi.hoisted(() => ({
   ctx: {} as Record<string, unknown>,
   pathname: '/o/projects/p/environments/e',
   params: {} as Record<string, string | string[] | undefined>,
-  hostings: {} as Record<string, readonly { name: string | null }[]>,
+  hostings: {} as Record<
+    string,
+    readonly { createdAt: string; options: { hostnames: string[]; bind?: string } }[]
+  >,
+  width: 1200,
   services: [] as { id: string }[],
   deployments: undefined as undefined | readonly Record<string, unknown>[],
   deploymentsLoading: false,
@@ -38,6 +42,8 @@ vi.mock('react-native', () => ({
       {children}
     </button>
   ),
+  Modal: ({ visible, children }: Props) => (visible ? <div role="dialog">{children}</div> : null),
+  useWindowDimensions: () => ({ width: state.width, height: 800 }),
   Linking: { openURL: state.openURL },
 }))
 
@@ -51,7 +57,11 @@ vi.mock('expo-router', () => ({
   useRouter: () => ({ replace: state.replace, push: state.push }),
 }))
 
-vi.mock('@/components/header-chevron', () => ({ BreadcrumbChevron: () => null }))
+vi.mock('@/components/header-chevron', () => ({
+  BreadcrumbChevron: () => null,
+  HeaderChevron: () => null,
+}))
+vi.mock('@/components/ui/v4/use-palette', () => ({ useTouch: () => false }))
 vi.mock('@/components/ui', () => ({
   StatusDot: ({ color }: Readonly<{ color: string }>) => <i data-color={color} />,
 }))
@@ -100,11 +110,18 @@ vi.mock('@/components/org/project/project-scope-picker', () => ({
   ProjectScopePicker: ({
     options,
     onSelect,
+    allLink,
   }: Readonly<{
     options: readonly { environmentId: string; label: string }[]
     onSelect: (option: { environmentId: string; label: string }) => void
+    allLink?: { label: string; onPress: () => void }
   }>) => (
     <div data-testid="picker">
+      {allLink ? (
+        <a href="#all" onClick={allLink.onPress}>
+          {allLink.label}
+        </a>
+      ) : null}
       {options.map((option) => (
         <button key={option.environmentId} type="button" onClick={() => onSelect(option)}>
           {`Switch to ${option.label}`}
@@ -164,6 +181,7 @@ beforeEach(() => {
   state.services = []
   state.deployments = undefined
   state.deploymentsLoading = false
+  state.width = 1200
   state.replace.mockClear()
   state.push.mockClear()
   state.openURL.mockClear()
@@ -289,14 +307,17 @@ describe('environment header', () => {
     }
   })
 
-  it('names the environment, links back to all environments, and shows what is running', () => {
+  it('names the environment in the picker, which leads back to all environments, and shows what is running', () => {
     render(
       <EnvironmentShell>
         <p>body</p>
       </EnvironmentShell>,
     )
-    expect(screen.getByRole('heading').textContent).toBe('Production')
-    expect(screen.getByRole('link', { name: 'All environments' })).toBeTruthy()
+    expect(screen.getByText('Switch to Production')).toBeTruthy()
+    // The old "All environments ›" crumb above the header is now in the picker.
+    expect(screen.queryByLabelText('Breadcrumb')).toBeNull()
+    fireEvent.click(screen.getByRole('link', { name: 'All environments' }))
+    expect(state.push).toHaveBeenCalledWith('/o/projects/p/overview')
     expect(screen.getByLabelText('Running now: Running')).toBeTruthy()
     // No history yet loaded as rows: the last deploy reads Never.
     state.deployments = []
@@ -319,28 +340,101 @@ describe('environment header', () => {
     expect(screen.queryByLabelText(/^Last deploy/)).toBeNull()
   })
 
-  it('shows the site link and opens it', () => {
-    state.services = [{ id: 's1' }]
-    state.hostings = { s1: [{ name: 'shop.example.com' }] }
+  const host = (createdAt: string, hostnames: string[], bind?: string) => ({
+    createdAt,
+    options: { hostnames, ...(bind ? { bind } : {}) },
+  })
+
+  function renderWithHostnames(primaryHostname?: string | null) {
+    state.services = [{ id: 's1' }, { id: 's2' }]
+    state.hostings = {
+      s1: [host('2026-10-02T00:00:00Z', ['new.example.com'])],
+      s2: [
+        host('2026-10-01T00:00:00Z', ['shop.example.com', '*.shop.example.com']),
+        host('2026-09-01T00:00:00Z', ['inside.example.com'], 'local'),
+      ],
+    }
+    const env = { ...ENVS[0], options: primaryHostname === undefined ? null : { primaryHostname } }
+    setContext({ environments: [env], selectedEnvironment: env })
     render(
       <EnvironmentShell>
         <p>body</p>
       </EnvironmentShell>,
     )
-    fireEvent.click(screen.getByRole('link', { name: 'Open shop.example.com' }))
+  }
+
+  it('visits the oldest public hostname when no primary is set', () => {
+    renderWithHostnames()
+    const visit = screen.getByRole('link', { name: 'Visit shop.example.com' })
+    expect(visit.textContent).toBe('Visit shop.example.com ↗')
+    fireEvent.click(visit)
     expect(state.openURL).toHaveBeenCalledWith('https://shop.example.com')
   })
 
-  it('shows no site link when no hostname is set', () => {
+  it('visits the primary hostname when one is set', () => {
+    renderWithHostnames('new.example.com')
+    expect(screen.getByRole('link', { name: 'Visit new.example.com' })).toBeTruthy()
+  })
+
+  it('falls back to the oldest hostname when the stored primary is gone', () => {
+    renderWithHostnames('removed.example.com')
+    expect(screen.getByRole('link', { name: 'Visit shop.example.com' })).toBeTruthy()
+  })
+
+  it('lists every public hostname behind the arrow when there are several', () => {
+    renderWithHostnames('new.example.com')
+    expect(screen.queryByRole('dialog')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Other hostnames' }))
+    const menu = screen.getByRole('dialog')
+    const rows = Array.from(menu.querySelectorAll('[role="link"]')).map((row) =>
+      row.getAttribute('aria-label')
+    )
+    expect(rows).toEqual(['Visit shop.example.com', 'Visit new.example.com, primary hostname'])
+    fireEvent.click(screen.getByRole('link', { name: 'Visit shop.example.com' }))
+    expect(state.openURL).toHaveBeenCalledWith('https://shop.example.com')
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('has no arrow with one hostname', () => {
+    state.services = [{ id: 's1' }]
+    state.hostings = { s1: [host('2026-10-01T00:00:00Z', ['shop.example.com'])] }
+    render(
+      <EnvironmentShell>
+        <p>body</p>
+      </EnvironmentShell>
+    )
+    expect(screen.getByRole('link', { name: 'Visit shop.example.com' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Other hostnames' })).toBeNull()
+  })
+
+  it('shortens the label on a phone and keeps the hostname for screen readers', () => {
+    state.width = 390
+    renderWithHostnames()
+    const visit = screen.getByRole('link', { name: 'Visit shop.example.com' })
+    expect(visit.textContent).toBe('Visit ↗')
+  })
+
+  it('shows no Visit button without a hostname', () => {
+    render(
+      <EnvironmentShell>
+        <p>body</p>
+      </EnvironmentShell>
+    )
+    expect(screen.queryByRole('link', { name: /^Visit / })).toBeNull()
+  })
+
+  it('badges the primary environment beside its name', () => {
+    const env = { ...ENVS[0], isPrimary: true }
+    setContext({ environments: [env], selectedEnvironment: env })
     render(
       <EnvironmentShell>
         <p>body</p>
       </EnvironmentShell>,
     )
-    expect(screen.queryByRole('link', { name: /^Open / })).toBeNull()
+    expect(screen.getByLabelText('Primary environment').textContent).toBe('Primary')
   })
 
-  it('swaps the heading for a picker with several environments and keeps the tab on switch', () => {
+  it('switches environments from the picker and keeps the tab', () => {
     setContext({ environments: ENVS })
     state.pathname = '/o/projects/p/environments/e/deployments'
     render(
@@ -348,7 +442,6 @@ describe('environment header', () => {
         <p>body</p>
       </EnvironmentShell>,
     )
-    expect(screen.queryByRole('heading')).toBeNull()
     fireEvent.click(screen.getByText('Switch to Staging'))
     expect(state.push).toHaveBeenCalledWith(
       '/o/projects/p/environments/e2/deployments',
