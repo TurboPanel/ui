@@ -252,16 +252,14 @@ export function tileLabel(project: HomeProject): string {
   return parts.join('. ')
 }
 
-/** "Acme", "Managed database · Acme". */
-export function tileSub(kind: HomeProject['kind'], workspace: string | undefined): string {
-  return [kind === 'managed' ? 'Managed database' : undefined, workspace]
-    .filter(Boolean)
-    .join(' · ')
+/** "Compose · Acme", "Managed database · PostgreSQL 18 · Acme": what it is, then the workspace. */
+export function tileSub(detail: string | null, workspace: string | undefined): string {
+  return [detail, workspace].filter(Boolean).join(' · ')
 }
 
 /**
- * One project on the Projects page: an icon tile, its name, the workspace, and
- * the status of its primary and pinned environments. As a grid tile it is a
+ * One project on the Projects page: an icon tile, its name, what it is and the
+ * workspace, and the status of its primary and pinned environments. As a grid tile it is a
  * card; as a list row it is one line, or two on a phone.
  */
 export function ProjectTile({
@@ -282,7 +280,7 @@ export function ProjectTile({
   const s = styles(usePalette())
   const list = layout !== 'grid'
   const stacked = layout === 'listStacked'
-  const sub = tileSub(project.kind, workspace)
+  const sub = tileSub(project.detail, workspace)
   return (
     <Pressable
       accessibilityRole="button"

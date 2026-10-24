@@ -105,7 +105,7 @@ describe('useHeaderBreadcrumb', () => {
     state.pathname = '/o1/projects/p1'
     state.project = { id: 'p1', name: 'Orders db', kind: 'managed' }
     expect(await run()).toMatchObject({
-      trail: [{ label: 'Managed', href: '/o1/managed' }],
+      trail: [{ label: 'Projects', href: '/o1/projects?type=managed' }],
       current: { label: 'Orders db' },
     })
   })

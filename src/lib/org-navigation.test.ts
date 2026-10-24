@@ -1,3 +1,5 @@
+import { existsSync, readFileSync } from 'node:fs'
+import path from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import {
   ORG_AREAS,
@@ -15,6 +17,8 @@ import {
   orgTabIndexFromPathname,
   orgAreaFromPathname,
   defaultOrgDashboardHref,
+  managedListRedirectHref,
+  managedSettingsHref,
   orgManageHref,
   orgBillingHref,
   organizationsHref,
@@ -173,6 +177,15 @@ describe('orgTabHref', () => {
     expect(orgTabHref('org-1', 'projects', 'all')).toBe('/org-1/projects')
     expect(orgTabHref('org-1', 'projects', 'ws-1')).toBe('/org-1/projects?workspaceId=ws-1')
   })
+
+  it('keeps the Projects type filter, with or without a workspace', () => {
+    expect(orgTabHref('org-1', 'projects', 'all', 'managed')).toBe('/org-1/projects?type=managed')
+    expect(orgTabHref('org-1', 'projects', 'ws-1', 'apps')).toBe(
+      '/org-1/projects?workspaceId=ws-1&type=apps'
+    )
+    expect(orgTabHref('org-1', 'projects', 'all', 'all')).toBe('/org-1/projects')
+    expect(orgTabHref('org-1', 'activity', 'all', 'managed')).toBe('/org-1/activity')
+  })
 })
 
 describe('adjacentOrgTabHref', () => {
@@ -227,6 +240,32 @@ describe('orgManageHref', () => {
   })
 })
 
+describe('managedListRedirectHref', () => {
+  it('opens Projects with the Managed databases filter', () => {
+    expect(managedListRedirectHref('o1', { orgId: 'o1' })).toBe('/o1/projects?type=managed')
+  })
+
+  it('keeps the rest of the query and replaces any type', () => {
+    expect(managedListRedirectHref('o1', { orgId: 'o1', workspaceId: 'w 1', type: 'apps' })).toBe(
+      '/o1/projects?workspaceId=w+1&type=managed'
+    )
+    expect(managedListRedirectHref('o1', { orgId: 'o1', tag: ['a', 'b'], gone: undefined })).toBe(
+      '/o1/projects?tag=a&tag=b&type=managed'
+    )
+  })
+})
+
+describe('the retired /managed list', () => {
+  const routes = path.resolve(__dirname, '../app/[orgId]/managed')
+
+  it('keeps a route that redirects to Projects, and the settings route the filter links to', () => {
+    const index = readFileSync(path.join(routes, 'index.tsx'), 'utf8')
+    expect(index).toContain('<Redirect')
+    expect(index).toContain('managedListRedirectHref')
+    expect(existsSync(path.join(routes, 'settings.tsx'))).toBe(true)
+  })
+})
+
 describe('defaultOrgDashboardHref', () => {
   it('opens the organization Projects', () => {
     expect(defaultOrgDashboardHref('org-1')).toBe('/org-1/projects')
@@ -236,11 +275,17 @@ describe('defaultOrgDashboardHref', () => {
 describe('sidebar areas', () => {
   it('lists Projects, Activity, Servers, with the unchanged areas below', () => {
     expect([...ORG_SIDEBAR_AREA_IDS]).toEqual(['projects', 'activity', 'servers'])
-    expect([...ORG_SIDEBAR_MORE_AREA_IDS]).toEqual(['managed', 'network', 'access'])
+    expect([...ORG_SIDEBAR_MORE_AREA_IDS]).toEqual(['network', 'access'])
     const known = ORG_AREAS.map((area) => area.id) as string[]
     for (const id of [...ORG_SIDEBAR_AREA_IDS, ...ORG_SIDEBAR_MORE_AREA_IDS]) {
       expect(known).toContain(id)
     }
+  })
+
+  it('no longer lists Managed: managed databases are a filter on Projects', () => {
+    const listed: readonly string[] = [...ORG_SIDEBAR_AREA_IDS, ...ORG_SIDEBAR_MORE_AREA_IDS]
+    expect(listed).not.toContain('managed')
+    expect(managedSettingsHref('org-1')).toBe('/org-1/managed/settings')
   })
 
   it('keeps the native tab set to the same three areas', () => {

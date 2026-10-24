@@ -7,7 +7,10 @@ import { ProjectsWelcomeCard } from '@/components/org/projects-welcome-card'
 import { useNow } from '@/components/org/project/use-now'
 import { WorkspaceSwitcher } from '@/components/org/workspace-switcher'
 import { LoadingState } from '@/components/ui'
+import { SegmentedControl } from '@/components/ui/segmented-control'
+import { TextLink } from '@/components/ui/text-link'
 import { ActionButton } from '@/components/ui/v4/action-button'
+import { EmptyPanel } from '@/components/ui/v4/empty-panel'
 import { ListGroup } from '@/components/ui/v4/list-group'
 import { ListRow } from '@/components/ui/v4/list-row'
 import { Notice } from '@/components/ui/v4/notice'
@@ -16,36 +19,58 @@ import { SectionHeading } from '@/components/ui/v4/section-heading'
 import { StatusChip } from '@/components/ui/v4/status-chip'
 import { typeStyle } from '@/components/ui/v4/type-styles'
 import { themedStyles, usePalette } from '@/components/ui/v4/use-palette'
-import type { ContainerRecord, EnvironmentRecord } from '@/lib/instance-api'
+import type {
+  ContainerRecord,
+  EnvironmentRecord,
+  ManagedListRecord,
+  ProjectRecord,
+} from '@/lib/instance-api'
 import { orEmptyArray } from '@/lib/or-empty-array'
 import {
   environmentPageTabHref,
+  isManagedProject,
   projectEnvironmentHref,
   projectHref,
 } from '@/lib/project-navigation'
-import { orgAreaHref } from '@/lib/org-navigation'
+import { managedSettingsHref, orgAreaHref } from '@/lib/org-navigation'
 import { usePullToRefresh } from '@/lib/pull-to-refresh'
 import { useCan } from '@/lib/query-client'
 import { useProjects, useWorkspaces } from '@/lib/queries'
 import { useContainers } from '@/lib/queries/containers'
 import { useLatestDeployments } from '@/lib/queries/environment-cards'
 import { useEnvironments } from '@/lib/queries/environments'
+import { useOrganizationManaged } from '@/lib/queries/managed'
+import { useRepositories } from '@/lib/queries/releases'
 import { useOrgServers } from '@/lib/queries/servers'
 import { setProjectsView, useProjectsView, type ProjectsView } from '@/lib/projects-view'
 import { resolveRecentProjects, useRecentProjectIds } from '@/lib/recent-projects'
+import { repositoryLabel } from '@/lib/repository-label'
 import { isTurbopanelProject, isTurbopanelWorkspace } from '@/lib/system-inventory'
 import { userErrorMessage } from '@/lib/user-error'
 import { webPointer } from '@/lib/theme'
 import {
   deploysInProgress,
+  emptyTypeMessage,
+  filterProjectsByType,
   homeProject,
   IN_PROGRESS_LIMIT,
   type InProgressRow,
+  parseProjectTypeFilter,
+  type ProjectFacts,
+  type ProjectTypeFilter,
+  projectTypeCounts,
+  projectTypeOptions,
   summaryLine,
   wantsConfigView,
   type HomeProject,
 } from '@/lib/v4/projects-home'
-import { ALL_WORKSPACES_SCOPE, newProjectHrefForScope, workspaceName } from '@/lib/workspace-scope'
+import {
+  ALL_WORKSPACES_SCOPE,
+  newProjectHrefForScope,
+  projectsListHref,
+  withQueryParam,
+  workspaceName,
+} from '@/lib/workspace-scope'
 import { useOptionalWorkspaceScope } from '@/lib/workspace-scope-context'
 
 const TILE_MIN_WIDTH = 250
@@ -70,9 +95,11 @@ const styles = themedStyles((p) => ({
   },
   chipText: { ...typeStyle('bodyMedium', 'subhead'), color: p.text },
   tools: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 12 },
-  toolsTitle: { flexGrow: 1, flexBasis: 0, minWidth: 160 },
+  typeFilter: { flexGrow: 1 },
+  typeOwnRow: { flexBasis: '100%' },
   filter: { flexShrink: 1 },
-  filterOwnRow: { flexBasis: '100%' },
+  filterGrow: { flexGrow: 1, flexShrink: 1, flexBasis: 0, minWidth: 0 },
+  links: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 12 },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -207,6 +234,41 @@ function groupByEnvironment(
   return map
 }
 
+function groupByProject(rows: readonly ManagedListRecord[]): Map<string, ManagedListRecord[]> {
+  const map = new Map<string, ManagedListRecord[]>()
+  for (const row of rows) map.set(row.projectId, [...(map.get(row.projectId) ?? []), row])
+  return map
+}
+
+/**
+ * What the repository and managed lists say about each project, for its second
+ * line. Each list is read only when a project needs it; the managed list is
+ * manager-only, so others see the engine from the project's catalog code.
+ */
+function useProjectFacts(orgId: string, projects: readonly ProjectRecord[]) {
+  const canManage = useCan('organization', orgId, 'organization:manage')
+  const repositoriesEnabled = projects.some((project) => project.repositoryId)
+  const managedEnabled = canManage && projects.some(isManagedProject)
+  const repositoriesQuery = useRepositories(orgId, { enabled: repositoriesEnabled })
+  const managedQuery = useOrganizationManaged(orgId, { enabled: managedEnabled })
+  const repositories = repositoriesQuery.data?.repositories
+  const managed = managedQuery.data?.managed
+  const factsOf = useMemo(() => {
+    const labels = new Map(orEmptyArray(repositories).map((row) => [row.id, repositoryLabel(row)]))
+    const rowsByProject = groupByProject(orEmptyArray(managed))
+    return (project: ProjectRecord): ProjectFacts => ({
+      repositoryLabel: project.repositoryId ? (labels.get(project.repositoryId) ?? null) : null,
+      managedRows: rowsByProject.get(project.id),
+    })
+  }, [repositories, managed])
+  const refetch = () =>
+    Promise.all([
+      ...(repositoriesEnabled ? [repositoriesQuery.refetch()] : []),
+      ...(managedEnabled ? [managedQuery.refetch()] : []),
+    ])
+  return { factsOf, refetch }
+}
+
 /** Environments, containers and deploy state for the projects, folded into home cards. */
 function useHomeCards(
   orgId: string,
@@ -229,6 +291,8 @@ function useHomeCards(
     return environments.filter((env) => compose.has(env.projectId)).map((env) => env.id)
   }, [projects, environments])
   const { latest } = useLatestDeployments(orgId, composeEnvironmentIds)
+  const facts = useProjectFacts(orgId, projects)
+  const { factsOf } = facts
   const containersByEnvironment = useMemo(
     () => (containersQuery.data ? groupByEnvironment(containersQuery.data.containers) : undefined),
     [containersQuery.data]
@@ -241,9 +305,10 @@ function useHomeCards(
           environments: environments.filter((env) => env.projectId === project.id),
           containersByEnvironment,
           latest,
+          facts: factsOf(project),
         })
       ),
-    [projects, environments, containersByEnvironment, latest]
+    [projects, environments, containersByEnvironment, latest, factsOf]
   )
   const inProgress = useMemo(
     () => deploysInProgress({ projects, environments, latest, now }),
@@ -255,7 +320,15 @@ function useHomeCards(
         0
       )
     : null
-  return { environmentsQuery, containersQuery, environments, cards, inProgress, runningCount }
+  return {
+    environmentsQuery,
+    containersQuery,
+    refetchFacts: facts.refetch,
+    environments,
+    cards,
+    inProgress,
+    runningCount,
+  }
 }
 
 function listLayout(phone: boolean): TileLayout {
@@ -367,17 +440,22 @@ function useRefreshHome(data: HomeData, showWorkspaceLabels: boolean) {
       data.projectsQuery.refetch(),
       data.environmentsQuery.refetch(),
       data.containersQuery.refetch(),
+      data.refetchFacts(),
       ...(showWorkspaceLabels ? [data.workspacesQuery.refetch()] : []),
     ])
     await workspaceScope?.refreshWorkspaces()
   })
 }
 
-/** The project list body: loading, the first-run welcome, or the project grid. */
+/**
+ * The project list body: loading, the first-run welcome, a line when the type
+ * filter leaves nothing, or the project grid.
+ */
 function ProjectsList({
   orgId,
   scopeId,
   data,
+  filter,
   loading,
   canCreate,
   view,
@@ -385,6 +463,7 @@ function ProjectsList({
   orgId: string
   scopeId: string
   data: HomeData
+  filter: ProjectTypeFilter
   loading: boolean
   canCreate: boolean
   view: ProjectsView
@@ -392,6 +471,7 @@ function ProjectsList({
   const router = useRouter()
   const showWelcome = !loading && data.cards.length === 0
   const serversQuery = useOrgServers(orgId, { enabled: showWelcome && canCreate })
+  const cards = useMemo(() => filterProjectsByType(data.cards, filter), [data.cards, filter])
   if (loading) return <LoadingState />
   if (showWelcome) {
     const newProjectHref = newProjectHrefForScope(orgId, scopeId) as Href
@@ -406,10 +486,13 @@ function ProjectsList({
       />
     )
   }
+  if (filter !== 'all' && cards.length === 0) {
+    return <EmptyPanel inline title={emptyTypeMessage(filter)} />
+  }
   return (
     <ProjectGrid
       orgId={orgId}
-      cards={data.cards}
+      cards={cards}
       workspaces={data.allWorkspaces}
       showWorkspaceLabels={scopeId === ALL_WORKSPACES_SCOPE}
       view={view}
@@ -417,47 +500,81 @@ function ProjectsList({
   )
 }
 
-/** "All projects" with its count, the workspace filter and the grid or list switch on one row. */
+/**
+ * The type filter (All, Apps, Managed databases, each with its count), the
+ * workspace filter and the grid or list switch. The type rides in `?type=` so
+ * the view is linkable and keeps the workspace. On a phone the type filter
+ * takes its own row.
+ */
 function AllProjectsTools({
   orgId,
-  count,
+  scopeId,
+  cards,
+  filter,
   view,
-}: Readonly<{ orgId: string; count: number; view: ProjectsView }>) {
+}: Readonly<{
+  orgId: string
+  scopeId: string
+  cards: readonly HomeProject[]
+  filter: ProjectTypeFilter
+  view: ProjectsView
+}>) {
   const s = styles(usePalette())
+  const router = useRouter()
   const phone = useWindowDimensions().width <= PHONE_MAX_WIDTH
-  const filter = (
-    <View style={phone ? s.filterOwnRow : s.filter}>
-      <WorkspaceSwitcher orgId={orgId} />
-    </View>
-  )
-  // On a phone the filter takes its own full-width row after the title and the switch.
+  const options = useMemo(() => projectTypeOptions(projectTypeCounts(cards)), [cards])
   return (
     <View style={s.tools}>
-      <View style={s.toolsTitle}>
-        <SectionHeading title="All projects" note={count > 0 ? String(count) : undefined} />
+      <View style={phone ? s.typeOwnRow : s.typeFilter}>
+        <SegmentedControl
+          accessibilityLabel="Project type"
+          options={options}
+          value={filter}
+          onChange={(next) => router.replace(projectsListHref(orgId, scopeId, next) as Href)}
+        />
       </View>
-      {phone ? null : filter}
+      <View style={phone ? s.filterGrow : s.filter}>
+        <WorkspaceSwitcher orgId={orgId} />
+      </View>
       <ProjectsViewToggle value={view} onChange={setProjectsView} />
-      {phone ? filter : null}
+    </View>
+  )
+}
+
+/** With the Managed databases filter on: the organization defaults those databases inherit. */
+function ManagedSettingsLink({ orgId }: Readonly<{ orgId: string }>) {
+  const s = styles(usePalette())
+  const router = useRouter()
+  return (
+    <View style={s.links}>
+      <TextLink
+        label="Managed database settings"
+        size="sm"
+        onPress={() => router.push(managedSettingsHref(orgId) as Href)}
+      />
     </View>
   )
 }
 
 /**
- * The Projects home: every project as a compact tile or row with the status of
- * its primary and pinned environments, the projects you opened last, and the
- * deploys running now. Only data the app has read is shown.
+ * The Projects home: every project (managed databases included) as a compact
+ * tile or row with what it is and the status of its primary and pinned
+ * environments, filtered by type (`?type=apps|managed`) and workspace; the
+ * projects you opened last, and the deploys running now. Only data the app has
+ * read is shown.
  */
 export function ProjectsHomeSection({
   orgId,
   workspaceId,
-}: Readonly<{ orgId: string; workspaceId?: string }>) {
+  type,
+}: Readonly<{ orgId: string; workspaceId?: string; type?: string }>) {
   const s = styles(usePalette())
   const router = useRouter()
   const workspaceScope = useOptionalWorkspaceScope()
   const canOwn = useCan('organization', orgId, 'organization:own')
   const now = useNow(CLOCK_MS)
   const view = useProjectsView()
+  const filter = parseProjectTypeFilter(type)
 
   const scopeId = workspaceId ?? workspaceScope?.scopeId ?? ALL_WORKSPACES_SCOPE
   const showWorkspaceLabels = scopeId === ALL_WORKSPACES_SCOPE
@@ -473,7 +590,12 @@ export function ProjectsHomeSection({
   const canCreate = canOwn && !isSystemScope
   // While the first-run welcome shows, it carries the New Project button.
   const welcomeShown = !loading && data.cards.length === 0 && !error
-  const newProjectHref = newProjectHrefForScope(orgId, scopeId) as Href
+  // With the Managed databases filter on, New project opens on the managed type.
+  const newProjectHref = withQueryParam(
+    newProjectHrefForScope(orgId, scopeId),
+    'type',
+    filter === 'managed' ? 'managed' : null
+  ) as Href
 
   return (
     <View style={s.root}>
@@ -498,11 +620,19 @@ export function ProjectsHomeSection({
       <RecentProjects orgId={orgId} projects={data.cards} environments={data.environments} />
       <DeploysInProgress orgId={orgId} rows={data.inProgress} />
       <View style={s.section}>
-        <AllProjectsTools orgId={orgId} count={data.cards.length} view={view} />
+        <AllProjectsTools
+          orgId={orgId}
+          scopeId={scopeId}
+          cards={data.cards}
+          filter={filter}
+          view={view}
+        />
+        {filter === 'managed' ? <ManagedSettingsLink orgId={orgId} /> : null}
         <ProjectsList
           orgId={orgId}
           scopeId={scopeId}
           data={data}
+          filter={filter}
           loading={loading}
           canCreate={canCreate}
           view={view}

@@ -3,7 +3,8 @@
 > Overrides `design-system/turbopanel/MASTER.md` for managed engine projects.
 
 **Routes:**
-- `/[orgId]/managed` — org-wide managed services overview (`managed-overview-section.tsx`)
+- `/[orgId]/projects?type=managed` — managed databases on the Projects list (the **Managed databases** filter); the retired `/[orgId]/managed` redirects here
+- `/[orgId]/managed/settings` — organization defaults (client TLS mode, listener ports)
 - `/[orgId]/projects/new` — empty project create (then setup → managed catalog)
 - `/[orgId]/projects/[projectId]/{overview,connect,data,backups,environments}` — managed tab shell when `project.kind === 'managed'`
 
@@ -11,26 +12,9 @@
 
 ---
 
-## Org overview (`/[orgId]/managed`)
+## On the Projects list (`/[orgId]/projects?type=managed`)
 
-Dense ops table backed by a **single** `GET /organizations/:id/managed` call (`fetchOrganizationManaged`). No per-row status polling and no Durable Object reads.
-
-| Column | Notes |
-|--------|--------|
-| Engine | Catalog badge (`PostgreSQL`, …) |
-| Name | Managed display name (fallback project / engine) |
-| Project | `project / environment` |
-| Server | Host display name (primary pin) |
-| Status | Pill via `managedStatusLabel` + status dot |
-| Topology | `Primary` / `Primary + N replica(s)` + warning dot when any member status is unhealthy |
-| Shared listener | ProxySQL `host:port`, or **Not exposed** |
-
-- **Row press** → `/[orgId]/projects/[projectId]`
-- **Filters** (client-side): engine, status, server
-- **+ Managed service** → create flow
-- **Refresh:** one restrained interval on the org list only
-
-Visual: reuse `orgPanelStyles` + servers overview table / zebra / status-dot patterns.
+There is no separate managed list and no sidebar entry: a managed database is a project, listed with every other one (including one that is not set up yet), and the Projects type filter **All · Apps · Managed databases** narrows to them (`pages/projects.md`). The tile's second line reads **Managed database · {engine} {version}**; the engine comes from the organization's managed list (`GET /organizations/:id/managed`, one call, managers only) or the project's catalog code, and the version only when the stored image names it — nothing is guessed. With the filter on, the list shows a **Managed database settings** link and **New project** opens the managed create flow (`/projects/new?type=managed`). Per-database status, topology and listener stay on the project's own tabs.
 
 ---
 

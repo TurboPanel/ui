@@ -11,6 +11,7 @@ import {
   orgTabHref,
 } from '@/lib/org-navigation'
 import { glass } from '@/lib/glass'
+import { useRememberedProjectsType } from '@/lib/remembered-projects-type'
 import { chrome, colors, layout, spacing } from '@/lib/theme'
 import { useWorkspaceScope } from '@/lib/workspace-scope-context'
 
@@ -38,6 +39,7 @@ export function OrgTabBar({ orgId }: Readonly<{ orgId: string }>) {
   const pathname = usePathname()
   const router = useRouter()
   const { scopeId } = useWorkspaceScope()
+  const projectsType = useRememberedProjectsType(orgId)
   const insets = useSafeAreaInsets()
 
   return (
@@ -45,7 +47,7 @@ export function OrgTabBar({ orgId }: Readonly<{ orgId: string }>) {
       <View style={styles.hairline} />
       <View style={styles.row}>
         {TAB_AREAS.map(({ area, id }) => {
-          const href = orgTabHref(orgId, id, scopeId)
+          const href = orgTabHref(orgId, id, scopeId, projectsType)
           const selected = isOrgAreaActive(pathname, orgId, area.pathSegment)
           const iconColor = selected ? chrome.accent : colors.textMuted
 

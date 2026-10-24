@@ -91,9 +91,9 @@ describe('breadcrumb builders', () => {
     expect(projectBreadcrumb('o1', 'Blog', 'unknown').current.chip).toBeNull()
   })
 
-  it('builds the database trail', () => {
+  it('builds the database trail back to Projects with the Managed databases filter', () => {
     expect(databaseBreadcrumb('o1', 'Orders db', 'running')).toEqual({
-      trail: [{ label: 'Managed', href: '/o1/managed' }],
+      trail: [{ label: 'Projects', href: '/o1/projects?type=managed' }],
       current: { label: 'Orders db', chip: { key: 'running' } },
     })
   })

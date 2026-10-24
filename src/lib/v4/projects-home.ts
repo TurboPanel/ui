@@ -14,11 +14,17 @@ import type {
   EnvironmentRecord,
   ProjectRecord,
 } from '@/lib/instance-api'
+import { describeManagedImage } from '@/lib/managed-releases'
+import {
+  managedCatalogEntryForCode,
+  type ManagedListRecord,
+  type ManagedStatus,
+} from '@/lib/managed-services'
 import { isManagedProject, isSystemProject, projectNeedsSetup } from '@/lib/project-navigation'
 import { environmentDisplayName } from '@/lib/resource-labels'
 import { hasNativeApp, inProgressSub, isDeployInProgress, runningStatusKey } from './project-home'
 import { orderEnvironments, primaryEnvironmentOf } from './primary-environment'
-import { statusInfo, worstStatus, type StatusTone } from './status-vocab'
+import { statusInfo, worstStatus, type StatusKey, type StatusTone } from './status-vocab'
 import { plural } from './text'
 
 export type HomeKind = 'compose' | 'managed' | 'platform' | 'setup'
@@ -49,6 +55,12 @@ export type HomeProject = Readonly<{
   name: string
   kind: HomeKind
   workspaceId: string | null
+  /**
+   * What the project is, for the tile's second line ("Managed database ·
+   * PostgreSQL 18", "Git repository · owner/repo", "Compose"); `null` when
+   * the tile says it another way (platform, not set up yet).
+   */
+  detail: string | null
   /** Every environment, the primary first, then the pinned ones, then the rest. */
   environments: readonly HomeEnvironment[]
   /** The worst status across the environments, for one dot. */
@@ -78,7 +90,8 @@ function homeEnvironments(
   environments: readonly EnvironmentRecord[],
   containersOf: (environmentId: string) => readonly ContainerRecord[] | undefined,
   latest: Latest | undefined,
-  views: Views | undefined
+  views: Views | undefined,
+  managedStatus: Readonly<Record<string, StatusKey>> = {}
 ): HomeEnvironment[] {
   const sorted = [...environments].sort(byCreated)
   const primary = primaryEnvironmentOf(sorted)
@@ -88,10 +101,94 @@ function homeEnvironments(
     id: env.id,
     name: environmentDisplayName(env),
     status:
-      runningStatusKey(containersOf(env.id), nativeFallback(env.id, latest, views)) ?? 'unknown',
+      managedStatus[env.id] ??
+      runningStatusKey(containersOf(env.id), nativeFallback(env.id, latest, views)) ??
+      'unknown',
     isPrimary: env.isPrimary === true,
     pinned: env.isPrimary !== true && env.pinned === true,
   }))
+}
+
+/** The version series a managed list row runs, from its stored `settings.image`; `null` when not stored. */
+function managedRowSeries(row: Pick<ManagedListRecord, 'options'>): string | null {
+  const settings = row.options?.settings
+  const image =
+    settings && typeof settings === 'object' ? (settings as { image?: unknown }).image : undefined
+  return typeof image === 'string' ? (describeManagedImage(image)?.series ?? null) : null
+}
+
+/**
+ * "PostgreSQL 18": the engine (from the managed list, else the project's
+ * catalog code) and the version only when every cluster states the same one.
+ * `null` when nothing names the engine.
+ */
+export function managedEngineText(
+  project: Pick<ProjectRecord, 'metadata'>,
+  rows: readonly Pick<ManagedListRecord, 'engineDisplayName' | 'options'>[]
+): string | null {
+  const code = project.metadata?.code
+  const engine =
+    rows.map((row) => row.engineDisplayName?.trim()).find(Boolean) ??
+    (code ? managedCatalogEntryForCode(code)?.label : undefined)
+  if (!engine) return null
+  const series = new Set(rows.map(managedRowSeries))
+  const only = series.size === 1 ? [...series][0] : null
+  return only ? `${engine} ${only}` : engine
+}
+
+/** Facts read beside the project list that say what a project is. */
+export type ProjectFacts = Readonly<{
+  /** `owner/repo` of the project's repository, when the repository list was read. */
+  repositoryLabel?: string | null
+  /** The project's rows from the organization's managed list, when it was read. */
+  managedRows?: readonly ManagedFactRow[]
+}>
+
+/** What a managed list row tells the tile: the engine and version, and the database's own status. */
+export type ManagedFactRow = Pick<ManagedListRecord, 'engineDisplayName' | 'options'> &
+  Partial<Pick<ManagedListRecord, 'environmentId' | 'status'>>
+
+const MANAGED_STATUS_KEY: Record<ManagedStatus, StatusKey> = {
+  ready: 'ready',
+  stopped: 'stopped',
+  provisioning: 'provisioning',
+  applying: 'applying',
+  failed: 'dbfailed',
+}
+
+/**
+ * A managed database's own status (from the managed list) for each of its
+ * environments. It wins over containers: a database that is still being set
+ * up has no container yet and would otherwise read as nothing running.
+ */
+export function managedStatusByEnvironment(
+  rows: readonly ManagedFactRow[] | undefined
+): Readonly<Record<string, StatusKey>> {
+  const out: Record<string, StatusKey> = {}
+  for (const row of rows ?? []) {
+    if (!row.environmentId || !row.status) continue
+    const key = MANAGED_STATUS_KEY[row.status]
+    const seen = out[row.environmentId]
+    out[row.environmentId] = seen ? (worstStatus([seen, key]) as StatusKey) : key
+  }
+  return out
+}
+
+/** The tile's second line. Only what the API says: a part it does not answer is left out. */
+export function projectDetail(
+  project: ProjectRecord,
+  kind: HomeKind,
+  facts: ProjectFacts = {}
+): string | null {
+  if (kind === 'managed') {
+    const engine = managedEngineText(project, facts.managedRows ?? [])
+    return engine ? `Managed database · ${engine}` : 'Managed database'
+  }
+  if (kind !== 'compose') return null
+  if (project.repositoryId) {
+    return facts.repositoryLabel ? `Git repository · ${facts.repositoryLabel}` : 'Git repository'
+  }
+  return 'Compose'
 }
 
 export function homeProject(
@@ -104,6 +201,8 @@ export function homeProject(
     latest?: Latest
     /** Config views, when the caller read them: they say which environments run a native app. */
     views?: Views
+    /** What the repository and managed lists say about the project. */
+    facts?: ProjectFacts
   }>
 ): HomeProject {
   const { project, environments, latest, views } = input
@@ -114,18 +213,80 @@ export function homeProject(
     environments,
     containersOf,
     kind === 'compose' ? latest : undefined,
-    kind === 'compose' ? views : undefined
+    kind === 'compose' ? views : undefined,
+    kind === 'managed' ? managedStatusByEnvironment(input.facts?.managedRows) : undefined
   )
   return {
     id: project.id,
     name: project.name?.trim() || 'Unnamed project',
     kind,
     workspaceId: project.workspaceId ?? null,
+    detail: projectDetail(project, kind, input.facts),
     // A platform project has one environment per server, all named alike: its
     // tile stays plain and only the dot carries their status.
     environments: kind === 'platform' ? [] : rows,
     status: worstStatus(rows.map((row) => row.status)),
   }
+}
+
+/**
+ * The Projects list's type filter (`?type=`): every project, the apps (Compose,
+ * repository, template, not set up yet, platform) or the managed databases.
+ */
+export const PROJECT_TYPE_FILTERS = ['all', 'apps', 'managed'] as const
+
+export type ProjectTypeFilter = (typeof PROJECT_TYPE_FILTERS)[number]
+
+const PROJECT_TYPE_LABELS: Readonly<Record<ProjectTypeFilter, string>> = {
+  all: 'All',
+  apps: 'Apps',
+  managed: 'Managed databases',
+}
+
+/** The filter a `?type=` value names; anything else is All. */
+export function parseProjectTypeFilter(
+  value: string | readonly string[] | null | undefined
+): ProjectTypeFilter {
+  const first = typeof value === 'string' ? value : value?.[0]
+  return PROJECT_TYPE_FILTERS.find((id) => id !== 'all' && id === first) ?? 'all'
+}
+
+/** Which side of the filter a project is on. */
+export function projectTypeOf(kind: HomeKind): Exclude<ProjectTypeFilter, 'all'> {
+  return kind === 'managed' ? 'managed' : 'apps'
+}
+
+export function projectTypeCounts(
+  cards: readonly Pick<HomeProject, 'kind'>[]
+): Readonly<Record<ProjectTypeFilter, number>> {
+  const managed = cards.filter((card) => projectTypeOf(card.kind) === 'managed').length
+  return { all: cards.length, apps: cards.length - managed, managed }
+}
+
+export function filterProjectsByType<T extends Pick<HomeProject, 'kind'>>(
+  cards: readonly T[],
+  filter: ProjectTypeFilter
+): T[] {
+  if (filter === 'all') return [...cards]
+  return cards.filter((card) => projectTypeOf(card.kind) === filter)
+}
+
+/** "All 3", "Apps 2", "Managed databases 1", each read out as "Apps, 2 projects". */
+export function projectTypeOptions(counts: Readonly<Record<ProjectTypeFilter, number>>): {
+  value: ProjectTypeFilter
+  label: string
+  accessibilityLabel: string
+}[] {
+  return PROJECT_TYPE_FILTERS.map((value) => ({
+    value,
+    label: `${PROJECT_TYPE_LABELS[value]} ${counts[value]}`,
+    accessibilityLabel: `${PROJECT_TYPE_LABELS[value]}, ${plural(counts[value], 'project')}`,
+  }))
+}
+
+/** What the list says when a filter leaves nothing to show. */
+export function emptyTypeMessage(filter: Exclude<ProjectTypeFilter, 'all'>): string {
+  return filter === 'managed' ? 'No managed databases here yet.' : 'No apps here yet.'
 }
 
 /** Dot colours on a tile: a failed or unhealthy state uses the warning colour, never red. */

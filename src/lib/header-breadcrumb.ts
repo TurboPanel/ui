@@ -1,6 +1,7 @@
 import { orgAreaHref } from '@/lib/org-navigation'
 import { projectEnvironmentHref, projectOverviewHref } from '@/lib/project-navigation'
 import { resolveServerConnectionStatus } from '@/lib/server-connection-status'
+import { ALL_WORKSPACES_SCOPE, projectsListHref } from '@/lib/workspace-scope'
 
 /** Phones (narrower than this) keep the header as it is: no breadcrumb. */
 export const BREADCRUMB_MIN_WIDTH = 640
@@ -66,9 +67,10 @@ export function projectBreadcrumb(orgId: string, name: string | null, status: st
   }
 }
 
+/** A managed database is a project: `Projects ›` opens the list with the Managed databases filter on. */
 export function databaseBreadcrumb(orgId: string, name: string | null, status: string): Breadcrumb {
   return {
-    trail: [{ label: 'Managed', href: orgAreaHref(orgId, 'managed') }],
+    trail: [{ label: 'Projects', href: projectsListHref(orgId, ALL_WORKSPACES_SCOPE, 'managed') }],
     current: { label: name?.trim() || 'Managed database', chip: projectChip(status) },
   }
 }

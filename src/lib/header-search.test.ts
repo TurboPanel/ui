@@ -19,7 +19,7 @@ describe('searchDestinations', () => {
       ['Project settings', '/o1/projects/settings'],
       ['Activity', '/o1/activity'],
       ['Servers', '/o1/servers'],
-      ['Managed databases', '/o1/managed'],
+      ['Managed databases', '/o1/projects?type=managed'],
       ['Network', '/o1/network'],
       ['Access', '/o1/access'],
       ['Organization settings', '/o1/manage'],
@@ -35,6 +35,9 @@ describe('searchDestinations', () => {
   it('opens Projects on the current workspace scope', () => {
     const items = searchDestinations('o1', { ...opts, projectsScopeId: 'w1' })
     expect(items[0]?.href).toContain('w1')
+    expect(items.find((i) => i.id === 'managed')?.href).toBe(
+      '/o1/projects?workspaceId=w1&type=managed'
+    )
   })
 })
 
