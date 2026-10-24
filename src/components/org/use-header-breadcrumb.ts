@@ -3,21 +3,25 @@ import { usePathname } from 'expo-router'
 import {
   breadcrumbRoute,
   databaseBreadcrumb,
+  environmentBreadcrumb,
+  environmentDeeperPage,
   projectBreadcrumb,
   serverBreadcrumb,
   type Breadcrumb,
 } from '@/lib/header-breadcrumb'
 import { orEmptyArray } from '@/lib/or-empty-array'
+import { parseProjectEnvironmentId } from '@/lib/project-navigation'
 import { useContainersByProject } from '@/lib/queries/containers'
 import { useEnvironmentConfigViews, useLatestDeployments } from '@/lib/queries/environment-cards'
 import { useEnvironments } from '@/lib/queries/environments'
 import { useProject } from '@/lib/queries/projects'
 import { useServerDetail } from '@/lib/queries/servers'
+import { environmentDisplayName } from '@/lib/resource-labels'
 import { homeProject, wantsConfigView } from '@/lib/v4/projects-home'
 
 /**
- * The breadcrumb for the page the person is on: a server, project or managed
- * database. Everything is read through the queries the page itself runs, so the
+ * The breadcrumb for the page the person is on: a server, project (down to the
+ * environment and a deeper page) or managed database. Everything is read through the queries the page itself runs, so the
  * header adds no extra requests once the page has loaded. Null elsewhere, and
  * until the object's name is known.
  */
@@ -27,6 +31,7 @@ export function useHeaderBreadcrumb(orgId: string): Breadcrumb | null {
   const serverId = route?.kind === 'server' ? route.id : ''
   const projectId = route?.kind === 'project' ? route.id : ''
   const onProject = projectId !== ''
+  const environmentId = onProject ? parseProjectEnvironmentId(pathname, projectId) : null
 
   const server = useServerDetail(orgId, serverId, { enabled: serverId !== '' })
   const projectQuery = useProject(orgId, projectId, { enabled: onProject })
@@ -52,13 +57,27 @@ export function useHeaderBreadcrumb(orgId: string): Breadcrumb | null {
     }
     if (route?.kind === 'project' && project) {
       const card = homeProject({ project, environments, containersByEnvironment, views, latest })
-      return card.kind === 'managed'
-        ? databaseBreadcrumb(orgId, card.name, card.status)
-        : projectBreadcrumb(orgId, card.name, card.status)
+      if (card.kind === 'managed') return databaseBreadcrumb(orgId, card.name, card.status)
+      const environment = environments.find((env) => env.id === environmentId)
+      if (card.kind === 'compose' && environment) {
+        return environmentBreadcrumb({
+          orgId,
+          projectId,
+          projectName: card.name,
+          environmentId: environment.id,
+          environmentName: environmentDisplayName(environment),
+          status: card.environments.find((row) => row.id === environment.id)?.status ?? 'unknown',
+          page: environmentDeeperPage(pathname, environment.id),
+        })
+      }
+      return projectBreadcrumb(orgId, card.name, card.status)
     }
     return null
   }, [
     orgId,
+    pathname,
+    projectId,
+    environmentId,
     route?.kind,
     server.data,
     project,

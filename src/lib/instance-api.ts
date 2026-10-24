@@ -3427,8 +3427,12 @@ export type EnvironmentRecord = {
   /** Whole-server placement pin — single source of truth (not compose). */
   serverId: string | null
   metadata: Record<string, unknown> | null
-  /** `options.compose` is a versioned ComposeDocument. */
-  options: { compose?: ComposeDocument } | null
+  /**
+   * `options.compose` is a versioned ComposeDocument. `primaryHostname` is the
+   * hostname the header's Visit button opens (ignored once it is not one of
+   * the environment's hostnames).
+   */
+  options: { compose?: ComposeDocument; primaryHostname?: string | null } | null
   /**
    * True for the project's one primary environment: the landing, the status and
    * the source a new environment copies. Absent on an older control plane.
@@ -4291,7 +4295,8 @@ export async function updateEnvironment(
     metadata?: Record<string, unknown>
     /** Pin or unpin: pinned environments are listed right after the primary one. */
     pinned?: boolean
-    options?: { compose?: ComposeDocument }
+    /** Replaces the stored options: send every key to keep (the server keeps only its deploy settings). */
+    options?: { compose?: ComposeDocument; primaryHostname?: string | null }
   }
 ): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/environments/${id}`, {
