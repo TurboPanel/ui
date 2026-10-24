@@ -16,6 +16,7 @@ import {
   projectEnvironmentStorageHref,
   projectHref,
   projectPageTabHref,
+  projectEnvironmentSetupHref,
   projectServiceHref,
   projectSetupHref,
   projectTabHref,
@@ -130,6 +131,10 @@ function routeKeys(dir = APP_ROOT, prefix = ''): string[] {
 const OFF_BAR_ROUTES: readonly (readonly [href: string, reachedBy: string])[] = [
   [projectHref('o', 'p'), 'project lists and the breadcrumb; redirects to a tab'],
   [projectSetupHref('o', 'p'), 'the project index sends a project that needs setup here'],
+  [
+    projectEnvironmentSetupHref('o', 'p'),
+    'the new-project screen opens it right after it creates a Compose project',
+  ],
   [
     projectServiceHref('o', 'p', 'svc'),
     "a database's connected services and older links; redirects to the service in its environment",

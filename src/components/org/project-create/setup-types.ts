@@ -41,15 +41,15 @@ export const SETUP_TYPE_OPTIONS: readonly SetupTypeOption[] = [
   {
     choice: 'compose',
     type: 'docker-compose',
-    label: 'Docker Compose',
-    description: 'A blank slate. You write the whole setup in YAML.',
+    label: 'Compose',
+    description: 'A blank slate. Write or paste YAML and run any containers.',
     section: 'compose',
   },
   {
     choice: 'services',
     type: 'docker-compose',
-    label: 'Services',
-    description: 'The same setup, built with service cards instead of YAML.',
+    label: 'Service forms',
+    description: 'The same setup, built with service forms instead of YAML.',
     section: 'services',
   },
   {
@@ -60,9 +60,8 @@ export const SETUP_TYPE_OPTIONS: readonly SetupTypeOption[] = [
     // card offering that type, and that has always meant the blank YAML slate.
     choice: 'repository',
     type: 'docker-compose',
-    label: 'Git Repository',
-    description:
-      "Read a repository you've connected: its compose file, a site, or an app. Pick the repo and branch.",
+    label: 'From a Git repository',
+    description: "Build and run code from a repository you've connected.",
     section: 'services',
   },
   {
@@ -76,7 +75,7 @@ export const SETUP_TYPE_OPTIONS: readonly SetupTypeOption[] = [
     // that has always meant the blank YAML slate.
     choice: 'hosting',
     type: 'docker-compose',
-    label: 'Hosting',
+    label: 'Hosting upload',
     // No mention of "traditional", "legacy", or "classic". This describes a
     // capability, and it is one a very large share of the web actually uses.
     description:
@@ -93,11 +92,26 @@ export const SETUP_TYPE_OPTIONS: readonly SetupTypeOption[] = [
   {
     choice: 'managed',
     type: 'managed',
-    label: 'Managed',
-    description:
-      'Fully configured on your own servers: provisioning, backups, and connections included.',
+    label: 'Managed database',
+    description: 'Set up on your own servers, with backups and connection details.',
     section: 'overview',
   },
+]
+
+/**
+ * The new-project screen shows three cards up front and keeps the other three
+ * one press away under "More ways to start". Display order only: the list
+ * above keeps Compose first for `?type=docker-compose`.
+ */
+export const MAIN_SETUP_CHOICES: readonly SetupChoice[] = [
+  'repository',
+  'compose',
+  'managed',
+]
+export const MORE_SETUP_CHOICES: readonly SetupChoice[] = [
+  'hosting',
+  'template',
+  'services',
 ]
 
 export function setupOptionForChoice(
