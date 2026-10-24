@@ -1,6 +1,7 @@
 import { Redirect, type Href, useLocalSearchParams } from 'expo-router'
 import { Text, View } from 'react-native'
 import { SectionPanel } from '@/components/ui'
+import { ServiceRuntimeLogPanel } from '@/components/logs/service-runtime-log'
 import { NodeSettingsPanel } from '@/components/org/node-settings-panel'
 import { ServiceSettingsPanel } from '@/components/org/service-settings-panel'
 import { ServiceReleasesPanel } from '@/components/org/project/service-releases-panel'
@@ -70,6 +71,11 @@ export default function ProjectServiceDetailScreen() {
           canManage={canManage && projectAllowsMutations}
         />
       </SectionPanel>
+      <ServiceRuntimeLogPanel
+        orgId={orgId}
+        serviceId={service.id}
+        serviceName={service.name?.trim() || composeName}
+      />
       {selectedEnvironmentId ? (
         // Only Git-backed services have releases, and the panel knows that
         // better than this screen does: it hides itself when the service has

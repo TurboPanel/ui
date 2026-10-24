@@ -1,6 +1,6 @@
+import { useRouter, type Href } from 'expo-router'
 import { useMemo, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
-import { LogTranscriptView } from '@/components/org/logs/log-transcript-view'
 import {
   nestedScrollDomProps,
   webNestedScrollStyle,
@@ -12,18 +12,15 @@ import {
   InlineNotice,
   LoadingState,
   SectionPanel,
-  SegmentedControl,
   StatusDot,
   type StatusTone,
 } from '@/components/ui'
+import { useProjectContext } from '@/components/org/project/project-context'
 import {
   canCancelDeployment,
-  cancelTooLateNote,
-  cancelledDeploymentNote,
   findInFlightDeployment,
   isDeploymentCancelling,
   deploymentServerLabel,
-  deploymentStrategyLabel,
   deploymentStatusTone,
   formatDeployActor,
   formatDeployTrigger,
@@ -31,15 +28,9 @@ import {
   formatDeployTimestamp,
   groupDeploymentsByGeneration,
   type DeploymentGroup,
-  stalledDeploymentHint,
 } from '@/lib/deployment-history'
-import { commandErrorDetail, commandErrorLine } from '@/lib/command-error'
-import type { DeploymentHistoryRecord } from '@/lib/instance-api'
-import { isTerminalCommandStatus } from '@/lib/queries/commands'
-import {
-  useCommandLog,
-  useEnvironmentDeployments,
-} from '@/lib/queries/execution-logs'
+import { projectEnvironmentDeploymentHref } from '@/lib/project-navigation'
+import { useEnvironmentDeployments } from '@/lib/queries/execution-logs'
 import { useCancelDeployment } from '@/lib/queries/environments'
 import { colors, spacing, webPointer } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
@@ -67,119 +58,6 @@ function StatusCell({ group }: Readonly<{ group: DeploymentGroup }>) {
   )
 }
 
-/** Transcript for one host of a deploy fan-out. */
-function DeploymentTranscript({
-  orgId,
-  row,
-}: Readonly<{ orgId: string; row: DeploymentHistoryRecord }>) {
-  const terminal = isTerminalCommandStatus(row.status)
-  const log = useCommandLog(orgId, row.serverId, row.commandId, {
-    // A terminal attempt's transcript is already sealed — read it once.
-    poll: !terminal,
-  })
-
-  if (!row.hasLog && terminal) {
-    return (
-      <EmptyState
-        panel
-        title="No transcript retained"
-        hint="This attempt ran before execution logs were captured, or its transcript has passed the retention window."
-      />
-    )
-  }
-
-  return (
-    <LogTranscriptView
-      lines={log.snapshot.lines}
-      state={log.state}
-      title={deploymentServerLabel(row)}
-      downloadFileName={`deploy-${row.commandId}.log`}
-    />
-  )
-}
-
-/** The one line that says why this host's deploy failed, or null. */
-function failureLine(row: DeploymentHistoryRecord | undefined): string | null {
-  if (!row) return null
-  return row.strategyOutcomeReason ?? commandErrorLine(row)
-}
-
-function DeploymentDetail({
-  orgId,
-  group,
-}: Readonly<{ orgId: string; group: DeploymentGroup }>) {
-  const [serverId, setServerId] = useState<string>(
-    group.commands[0]?.serverId ?? '',
-  )
-  const active =
-    group.commands.find((row) => row.serverId === serverId) ??
-    group.commands[0]
-  const cancelledNote = cancelledDeploymentNote(group)
-  // A cancelled deploy is not an error: say what happened in plain words
-  // instead of echoing the host's `cancelled: …` text.
-  const failure = cancelledNote ? null : failureLine(active)
-  const failureDetail =
-    !cancelledNote && active && !active.strategyOutcomeReason
-      ? commandErrorDetail(active)
-      : null
-  const tooLate = cancelTooLateNote(group)
-  const strategy = deploymentStrategyLabel(active?.strategy)
-  const stalledHint = stalledDeploymentHint(active?.errorCode ?? null)
-
-  return (
-    <View style={styles.detail}>
-      {group.commands.length > 1 ? (
-        <SegmentedControl
-          options={group.commands.map((row) => ({
-            value: row.serverId,
-            label: deploymentServerLabel(row),
-          }))}
-          value={active?.serverId ?? ''}
-          onChange={setServerId}
-          accessibilityLabel="Deploy target host"
-        />
-      ) : null}
-      {failure ? (
-        <Text style={panelStyles.error} accessibilityRole="alert">
-          {failure}
-        </Text>
-      ) : null}
-      {failureDetail ? <FailureDetail text={failureDetail} /> : null}
-      {cancelledNote ? (
-        <Text style={panelStyles.muted}>{cancelledNote}</Text>
-      ) : null}
-      {tooLate ? <Text style={panelStyles.muted}>{tooLate}</Text> : null}
-      {stalledHint ? <Text style={panelStyles.muted}>{stalledHint}</Text> : null}
-      {strategy ? (
-        <Text style={panelStyles.muted}>{`${strategy} deploy`}</Text>
-      ) : null}
-      {active ? <DeploymentTranscript orgId={orgId} row={active} /> : null}
-    </View>
-  )
-}
-
-/** The whole failure text behind the one-line cause, collapsed until asked for. */
-function FailureDetail({ text }: Readonly<{ text: string }>) {
-  const [open, setOpen] = useState(false)
-  return (
-    <View style={styles.failureDetail}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityState={{ expanded: open }}
-        onPress={() => setOpen((value) => !value)}
-        style={webPointer}
-      >
-        <Text style={panelStyles.muted}>{open ? 'Hide full error' : 'Show full error'}</Text>
-      </Pressable>
-      {open ? (
-        <Text selectable style={[panelStyles.muted, styles.failureText]}>
-          {text}
-        </Text>
-      ) : null}
-    </View>
-  )
-}
-
 /** Who or what started a deploy: a person, the system, or a git push (branch and commit). */
 function ActorCell({ group }: Readonly<{ group: DeploymentGroup }>) {
   const trigger = formatDeployTrigger(group.trigger)
@@ -200,18 +78,15 @@ function ActorCell({ group }: Readonly<{ group: DeploymentGroup }>) {
   )
 }
 
+/** One deploy; pressing it opens the deploy's log page. */
 function DeploymentRow({
-  orgId,
   group,
   index,
-  expanded,
-  onToggle,
+  onOpen,
 }: Readonly<{
-  orgId: string
   group: DeploymentGroup
   index: number
-  expanded: boolean
-  onToggle: () => void
+  onOpen: () => void
 }>) {
   const firstCommand = group.commands[0]
   let hostLabel = '—'
@@ -222,47 +97,40 @@ function DeploymentRow({
   }
 
   return (
-    <View>
-      <Pressable
-        style={[
-          styles.row,
-          index % 2 === 1 && styles.rowZebra,
-          expanded && styles.rowExpanded,
-          webPointer,
-        ]}
-        onPress={onToggle}
-        accessibilityRole="button"
-        accessibilityState={{ expanded }}
-        accessibilityLabel={`Deploy ${formatDeployTimestamp(group.startedAt)} — ${
-          deploymentStatusTone(
-            group.status,
-            group.strategyOutcome,
-            isDeploymentCancelling(group),
-          ).label
-        }`}
-      >
-        <View style={[styles.cell, styles.colStatus]}>
-          <StatusCell group={group} />
-        </View>
-        <View style={[styles.cell, styles.colWhen]}>
-          <Text style={styles.cellText}>
-            {formatDeployTimestamp(group.startedAt)}
-          </Text>
-        </View>
-        <View style={[styles.cell, styles.colActor]}>
-          <ActorCell group={group} />
-        </View>
-        <View style={[styles.cell, styles.colDuration]}>
-          <Text style={styles.cellMono}>
-            {formatDeployDuration(group.durationMs)}
-          </Text>
-        </View>
-        <View style={[styles.cell, styles.colServer]}>
-          <Text style={styles.cellMono}>{hostLabel}</Text>
-        </View>
-      </Pressable>
-      {expanded ? <DeploymentDetail orgId={orgId} group={group} /> : null}
-    </View>
+    <Pressable
+      style={[styles.row, index % 2 === 1 && styles.rowZebra, webPointer]}
+      onPress={onOpen}
+      accessibilityRole="link"
+      accessibilityHint="Opens the deploy log"
+      accessibilityLabel={`Deploy ${formatDeployTimestamp(group.startedAt)} — ${
+        deploymentStatusTone(
+          group.status,
+          group.strategyOutcome,
+          isDeploymentCancelling(group),
+        ).label
+      }`}
+    >
+      <View style={[styles.cell, styles.colStatus]}>
+        <StatusCell group={group} />
+      </View>
+      <View style={[styles.cell, styles.colWhen]}>
+        <Text style={styles.cellText}>
+          {formatDeployTimestamp(group.startedAt)}
+        </Text>
+      </View>
+      <View style={[styles.cell, styles.colActor]}>
+        <ActorCell group={group} />
+      </View>
+      <View style={[styles.cell, styles.colDuration]}>
+        <Text style={styles.cellMono}>
+          {formatDeployDuration(group.durationMs)}
+        </Text>
+      </View>
+      <View style={[styles.cell, styles.colServer]}>
+        <Text style={styles.cellMono}>{hostLabel}</Text>
+      </View>
+      <Text style={styles.chevron}>›</Text>
+    </Pressable>
   )
 }
 
@@ -284,6 +152,7 @@ function HistoryHeader() {
       <View style={[styles.cell, styles.colServer]}>
         <Text style={styles.headerText}>Target</Text>
       </View>
+      <View style={styles.chevron} />
     </View>
   )
 }
@@ -292,7 +161,7 @@ function HistoryHeader() {
  * The deploy that is running now, with the Cancel control. Cancelling is
  * reversible (deploy again), so it asks once and says nothing changes.
  */
-function RunningDeployNotice({
+export function RunningDeployNotice({
   orgId,
   environmentId,
   group,
@@ -351,9 +220,10 @@ function RunningDeployNotice({
 }
 
 /**
- * Past deploy attempts for one environment, with the transcript of the expanded
- * row. Multi-host deploys arrive as several rows sharing a generation and are
- * grouped into one deploy with a per-host switcher — no per-row detail fetch.
+ * Past deploy attempts for one environment. A row opens that deploy's log page
+ * (`deployment-log-screen.tsx`). Multi-host deploys arrive as several rows
+ * sharing a generation and are grouped into one deploy (the log page has the
+ * per-host switcher) — no per-row detail fetch.
  * The list never polls: it is invalidated by the deploy mutation and when a
  * tracked command reaches a terminal status.
  */
@@ -370,7 +240,8 @@ export function EnvironmentDeploymentHistoryPanel({
   /** The Deployments tab shows the list open; elsewhere it folds away. */
   alwaysOpen?: boolean
 }>) {
-  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const router = useRouter()
+  const { projectId } = useProjectContext()
   const deploymentsQuery = useEnvironmentDeployments(orgId, environmentId)
   const groups = useMemo(
     () => groupDeploymentsByGeneration(deploymentsQuery.data?.deployments ?? []),
@@ -391,7 +262,7 @@ export function EnvironmentDeploymentHistoryPanel({
       ) : null}
       <SectionPanel
         title="Deployment history"
-        hint="Past deploy attempts and their output"
+        hint="Past deploy attempts. Open one to read its log."
         collapsible={!alwaysOpen}
         defaultCollapsed={!alwaysOpen}
       >
@@ -420,13 +291,16 @@ export function EnvironmentDeploymentHistoryPanel({
               {groups.map((group, index) => (
                 <DeploymentRow
                   key={group.id}
-                  orgId={orgId}
                   group={group}
                   index={index}
-                  expanded={expandedId === group.id}
-                  onToggle={() =>
-                    setExpandedId((current) =>
-                      current === group.id ? null : group.id,
+                  onOpen={() =>
+                    router.push(
+                      projectEnvironmentDeploymentHref(
+                        orgId,
+                        projectId,
+                        environmentId,
+                        group.id,
+                      ) as Href,
                     )
                   }
                 />
@@ -478,9 +352,6 @@ const styles = StyleSheet.create({
   rowZebra: {
     backgroundColor: colors.bgInset,
   },
-  rowExpanded: {
-    backgroundColor: colors.bgActive,
-  },
   cell: {
     justifyContent: 'center',
     minWidth: 0,
@@ -528,20 +399,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
   },
-  failureDetail: {
-    gap: spacing.xs,
-  },
-  failureText: {
-    fontFamily: 'monospace',
-  },
-  detail: {
-    gap: spacing.sm,
-    paddingHorizontal: spacing.sm,
-    paddingBottom: spacing.md,
-    paddingTop: spacing.xs,
-    borderTopWidth: 1,
-    borderTopColor: colors.borderArea,
-    backgroundColor: colors.bgArea,
+  chevron: {
+    width: 12,
+    color: colors.textFaint,
+    fontSize: 16,
   },
 })
 

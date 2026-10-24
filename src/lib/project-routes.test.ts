@@ -11,6 +11,7 @@ import {
   legacyProjectRedirectHref,
   projectComposeEditHref,
   projectComposeSectionHref,
+  projectEnvironmentDeploymentHref,
   projectEnvironmentStorageHref,
   projectHref,
   projectPageTabHref,
@@ -102,6 +103,7 @@ function routeKey(href: string): string {
     .replace('/o/projects/p', '')
     .replace('/environments/e', '/environments/[environmentId]')
     .replace('/services/svc', '/services/[serviceId]')
+    .replace('/deployments/d', '/deployments/[deploymentId]')
     .replace(/^\//, '')
 }
 
@@ -131,6 +133,10 @@ const OFF_BAR_ROUTES: readonly (readonly [href: string, reachedBy: string])[] = 
   [
     projectComposeEditHref('o', 'p', { view: 'visual' }),
     "the Base Compose editor's Compose / Services toggle",
+  ],
+  [
+    projectEnvironmentDeploymentHref('o', 'p', 'e', 'd'),
+    "Deployments rows and the Overview progress card's Open full log",
   ],
   [
     projectEnvironmentStorageHref('o', 'p', 'e'),

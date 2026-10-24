@@ -501,12 +501,21 @@ and "no transcript retained" stay distinguishable.
   `LogTranscriptLine[]`; plain-text lines (the store's truncation marker, legacy
   output) degrade to `stdout` rows instead of being dropped. ANSI is **stripped**,
   never interpreted.
-- Rendering is one shared component,
-  `src/components/org/logs/log-transcript-view.tsx` — used by the Overview deploy
-  transcript, the deployment-history rows, the managed **Apply transcript**, the
-  managed **Engine logs** tail, and the per-container live tail on the
-  environment containers panel. Do not fork it per surface; see
-  `design-system/turbopanel/pages/deploy-logs.md`. The viewer is a fixed-height
+- A deploy's log lives on its own page under Deployments
+  (`deployments/[deploymentId].tsx` → `src/components/logs/deployment-log-screen.tsx`),
+  rendered by `LogViewer` (`src/components/logs/log-viewer.tsx`): steps from
+  each line's `phase`, step states from the plan (`CommandProgress`), closed by
+  default with the failed (or first) step open, search across steps, Live.
+  Its model is pure in `src/lib/log-viewer.ts`. History rows and the Overview
+  progress card's **Open full log** link there.
+  A service page (Services › service) has a **Runtime log** section with the
+  same viewer, ungrouped, over `useContainerLogTail` (last 200 lines, never
+  stored, Live off until switched on, off when the app goes to the background).
+- The older flat viewer, `src/components/org/logs/log-transcript-view.tsx`, still
+  renders the Overview progress card's output, the managed **Apply
+  transcript**, the managed **Engine logs** tail, and the per-container live
+  tail on the environment containers panel. Do not fork either per surface; see
+  `design-system/turbopanel/pages/deploy-logs.md`. Both are a fixed-height
   nested scroll with a visible scrollbar; **Deployment history** caps its row
   list the same way (`environment-deployment-history-panel.tsx`).
 

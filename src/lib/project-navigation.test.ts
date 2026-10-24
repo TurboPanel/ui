@@ -27,6 +27,7 @@ import {
   projectBaseHref,
   recentProjectHref,
   projectEnvironmentConfigurationHref,
+  projectEnvironmentDeploymentHref,
   projectEnvironmentDeploymentsHref,
   projectPageTabHref,
   withCarriedQuery,
@@ -552,6 +553,9 @@ describe('project and environment tabs', () => {
     expect(projectBaseHref('o', 'p')).toBe('/o/projects/p/base')
     expect(projectEnvironmentDeploymentsHref('o', 'p', 'e')).toBe(
       '/o/projects/p/environments/e/deployments',
+    )
+    expect(projectEnvironmentDeploymentHref('o', 'p', 'e', 'cmd 1')).toBe(
+      '/o/projects/p/environments/e/deployments/cmd%201',
     )
     expect(projectEnvironmentConfigurationHref('o', 'p', 'e')).toBe(
       '/o/projects/p/environments/e/configuration',
