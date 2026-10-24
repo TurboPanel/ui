@@ -86,14 +86,6 @@ export const DRAFT_COMPOSE_PROJECT_TAB_IDS = [
   'services',
 ] as const
 
-/**
- * Repository **app** drafts synthesize their whole compose document from the
- * repository binding — there is no YAML or service card worth editing before
- * create, so the topology diagram is the only lens the draft offers and the
- * draft shows no lens tabs at all.
- */
-export const DRAFT_REPOSITORY_APP_TAB_IDS = ['overview'] as const
-
 /** Platform projects never accept mutations from the UI. */
 export function systemProjectAllowsMutations(): boolean {
   return false
@@ -163,6 +155,18 @@ export function projectSetupHref(
   projectId: string,
 ): string {
   return `${projectHref(orgId, projectId)}/setup`
+}
+
+/**
+ * "Set up production": the screen a new Compose project opens on, which fills
+ * in its first environment (server, hostname, Hosting Account, variables)
+ * and deploys it.
+ */
+export function projectEnvironmentSetupHref(
+  orgId: string,
+  projectId: string,
+): string {
+  return `${projectSetupHref(orgId, projectId)}/environment`
 }
 
 export function projectTabHref(

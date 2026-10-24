@@ -58,7 +58,7 @@ function EditorFoot({
 }
 
 /** "Where is it used?": run, build and run, or build. Shared by Add and Edit. */
-function VariableUseChoice({
+export function VariableUseChoice({
   use,
   onChange,
 }: Readonly<{ use: VariableUse; onChange: (use: VariableUse) => void }>) {
