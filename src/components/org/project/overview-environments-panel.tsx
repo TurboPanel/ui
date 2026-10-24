@@ -1204,6 +1204,11 @@ export function EnvironmentLifecycleProvider({ children }: Readonly<{ children: 
   )
 }
 
+/** The page's lifecycle model, or null outside an environment page. */
+export function useOptionalEnvironmentLifecycle(): OverviewEnvironmentsPanelModel | null {
+  return useContext(EnvironmentLifecycleContext)
+}
+
 export function useEnvironmentLifecycle(): OverviewEnvironmentsPanelModel {
   const model = useContext(EnvironmentLifecycleContext)
   if (!model) {

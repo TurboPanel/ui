@@ -1,10 +1,16 @@
+import { useRouter, type Href } from 'expo-router'
+import { createContext, useContext } from 'react'
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
+import { useOptionalEnvironmentLifecycle } from '@/components/org/project/overview-environments-panel'
 import { Button, ButtonRow } from '@/components/ui'
 import {
   describeCertificate,
   dnsResultHeadline,
   dnsSummaryLines,
+  letsEncryptRefusal,
   type CertificateTone,
+  type CertificateView,
+  type LetsEncryptRefusal,
 } from '@/lib/hosting-certificate'
 import type { HostingDnsReport } from '@/lib/instance-api'
 import {
@@ -12,6 +18,7 @@ import {
   useHostingDnsCheck,
   useUseLetsEncrypt,
 } from '@/lib/queries/hosting-certificate'
+import { orgSettingsTabHref } from '@/lib/org-navigation'
 import { colors, spacing } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
 
@@ -26,6 +33,107 @@ const TONE_COLOR: Record<CertificateTone, string> = {
 const COMPOSE_OWNED_COPY =
   'Compose declares this domain, so its certificate is set there too. Let’s Encrypt cannot be switched on from this screen.'
 
+/** What the screen around the certificate panels can do for them. */
+export type HostingCertificateActions = Readonly<{
+  /** Opens the deploy confirm for this environment; absent where deploying is not offered. */
+  onDeploy?: () => void
+  deployDisabled?: boolean
+  /** Why the latest Let's Encrypt request was refused (from a save or this panel), by hosting id. */
+  refusals?: Readonly<Record<string, LetsEncryptRefusal>>
+  /** Records how the panel's own request ended, so the newest answer replaces the last one. */
+  onRefusal?: (hostingId: string, refusal: LetsEncryptRefusal | null) => void
+}>
+
+export const HostingCertificateActionsContext = createContext<HostingCertificateActions>({})
+
+/**
+ * The environment header's Deploy, for the certificate that starts on the next
+ * deploy. Null outside an environment page or when the person cannot deploy.
+ */
+export function environmentDeployShortcut(
+  model: ReturnType<typeof useOptionalEnvironmentLifecycle>
+): DeployShortcut | null {
+  if (!model?.canMutateLifecycle) return null
+  return {
+    onDeploy: () => model.openDeployConfirm(model.hasContainers ? 'redeploy' : 'deploy'),
+    disabled: !model.hasServer || model.busy || model.needsPrincipal,
+  }
+}
+
+const SETTINGS_LINK_LABEL = 'Organization settings \u203a Domains & certificates'
+
+/** A refused Let's Encrypt request in plain words, with the way to fix it when there is one. */
+function RefusalNote({ orgId, refusal }: Readonly<{ orgId: string; refusal: LetsEncryptRefusal }>) {
+  const router = useRouter()
+  return (
+    <View style={styles.block}>
+      <Text style={styles.reason}>{refusal.message}</Text>
+      {refusal.openSettings ? (
+        <ButtonRow>
+          <Button
+            label={SETTINGS_LINK_LABEL}
+            size="sm"
+            variant="secondary"
+            accessibilityLabel={`Open ${SETTINGS_LINK_LABEL}`}
+            onPress={() => router.push(orgSettingsTabHref(orgId, 'domains') as Href)}
+          />
+        </ButtonRow>
+      ) : null}
+    </View>
+  )
+}
+
+type DeployShortcut = Readonly<{ onDeploy: () => void; disabled: boolean }>
+
+/**
+ * What the screen adds to one panel: a Deploy now (the environment page's own
+ * Deploy when there is one, else the screen's) and the refusal to show. A
+ * screen that keeps refusals holds the newest answer (a save or this panel's
+ * own request); without one, the panel's own request error is shown.
+ */
+function useScreenCertificateActions(
+  hostingId: string,
+  requestError: unknown
+): {
+  deploy: DeployShortcut | null
+  refusal: LetsEncryptRefusal | null
+  onRefusal: HostingCertificateActions['onRefusal']
+} {
+  const actions = useContext(HostingCertificateActionsContext)
+  const pageDeploy = environmentDeployShortcut(useOptionalEnvironmentLifecycle())
+  const screenDeploy = actions.onDeploy
+    ? { onDeploy: actions.onDeploy, disabled: actions.deployDisabled === true }
+    : null
+  const ownRefusal = requestError ? letsEncryptRefusal(requestError) : null
+  const refusal = actions.refusals ? (actions.refusals[hostingId] ?? null) : ownRefusal
+  return { deploy: pageDeploy ?? screenDeploy, refusal, onRefusal: actions.onRefusal }
+}
+
+/** Hand the panel's own request result to the screen, so it replaces an older refusal. */
+function reportRequest(
+  result: Readonly<{ ok: boolean; cause?: unknown }>,
+  hostingId: string,
+  onRefusal: HostingCertificateActions['onRefusal']
+) {
+  onRefusal?.(hostingId, result.ok ? null : letsEncryptRefusal(result.cause))
+}
+
+function DeployNowButton({
+  deploy,
+  disabled,
+}: Readonly<{ deploy: DeployShortcut; disabled: boolean }>) {
+  return (
+    <Button
+      label="Deploy now"
+      size="sm"
+      variant="primary"
+      disabled={disabled || deploy.disabled}
+      accessibilityLabel="Deploy this environment to get the certificate"
+      onPress={deploy.onDeploy}
+    />
+  )
+}
+
 function DnsResult({ dns }: Readonly<{ dns: HostingDnsReport }>) {
   return (
     <View style={styles.block}>
@@ -36,6 +144,69 @@ function DnsResult({ dns }: Readonly<{ dns: HostingDnsReport }>) {
         </Text>
       ))}
     </View>
+  )
+}
+
+/** The actions the server offers for this certificate, plus Deploy now when one is due. */
+function CertificateButtons({
+  view,
+  composeOwned,
+  disabled,
+  deploy,
+  requesting,
+  onRequest,
+  checkingDns,
+  onCheckDns,
+}: Readonly<{
+  view: CertificateView
+  composeOwned: boolean
+  disabled: boolean
+  deploy: DeployShortcut | null
+  requesting: boolean
+  onRequest: () => void
+  checkingDns: boolean
+  onCheckDns: () => void
+}>) {
+  const canRequest = view.actions.includes('use_lets_encrypt') && !composeOwned
+  return (
+    <ButtonRow>
+      {view.actions.includes('deploy') && deploy ? (
+        <DeployNowButton deploy={deploy} disabled={disabled} />
+      ) : null}
+      {canRequest ? (
+        <Button
+          label="Use Let’s Encrypt"
+          busyLabel="Checking DNS…"
+          size="sm"
+          variant="primary"
+          busy={requesting}
+          disabled={disabled}
+          onPress={onRequest}
+        />
+      ) : null}
+      {view.actions.includes('check_dns') ? (
+        <Button
+          label="Check DNS"
+          busyLabel="Checking…"
+          size="sm"
+          variant="secondary"
+          busy={checkingDns}
+          disabled={disabled}
+          onPress={onCheckDns}
+        />
+      ) : null}
+      {view.actions.includes('try_again') && !composeOwned ? (
+        <Button
+          label="Try again"
+          busyLabel="Trying…"
+          size="sm"
+          variant="secondary"
+          busy={requesting}
+          disabled={disabled}
+          onPress={onRequest}
+        />
+      ) : null}
+    </ButtonRow>
   )
 }
 
@@ -58,23 +229,19 @@ export function HostingCertificatePanel({
   const query = useHostingCertificate(orgId, hostingId)
   const letsEncrypt = useUseLetsEncrypt(orgId, hostingId)
   const dnsCheck = useHostingDnsCheck(hostingId)
-
+  const { deploy, refusal, onRefusal } = useScreenCertificateActions(hostingId, letsEncrypt.error)
   const certificate = query.data?.hosting.certificate ?? null
-  if (!certificate) return null
+  if (!certificate) {
+    return refusal ? <RefusalNote orgId={orgId} refusal={refusal} /> : null
+  }
 
   const view = describeCertificate(certificate)
-  const busy = letsEncrypt.isPending
-  const requestError = letsEncrypt.error
-    ? userErrorMessage(letsEncrypt.error, 'Could not start Let’s Encrypt.')
-    : null
   const dnsError = dnsCheck.error
     ? userErrorMessage(dnsCheck.error, 'Could not check DNS.')
     : null
   const dns = dnsCheck.data?.dns ?? null
-  const canRequest = view.actions.includes('use_lets_encrypt') && !composeOwned
-
   const request = () => {
-    void letsEncrypt.run()
+    void letsEncrypt.run().then((result) => reportRequest(result, hostingId, onRefusal))
   }
 
   return (
@@ -92,44 +259,19 @@ export function HostingCertificatePanel({
       {view.reason ? <Text style={styles.reason}>{view.reason}</Text> : null}
       {composeOwned ? <Text style={styles.hint}>{COMPOSE_OWNED_COPY}</Text> : null}
       {dns ? <DnsResult dns={dns} /> : null}
-      {requestError ? <Text style={styles.reason}>{requestError}</Text> : null}
+      {refusal ? <RefusalNote orgId={orgId} refusal={refusal} /> : null}
       {dnsError ? <Text style={styles.reason}>{dnsError}</Text> : null}
 
-      <ButtonRow>
-        {canRequest ? (
-          <Button
-            label="Use Let’s Encrypt"
-            busyLabel="Checking DNS…"
-            size="sm"
-            variant="primary"
-            busy={busy}
-            disabled={disabled}
-            onPress={request}
-          />
-        ) : null}
-        {view.actions.includes('check_dns') ? (
-          <Button
-            label="Check DNS"
-            busyLabel="Checking…"
-            size="sm"
-            variant="secondary"
-            busy={dnsCheck.isPending}
-            disabled={disabled}
-            onPress={() => void dnsCheck.run()}
-          />
-        ) : null}
-        {view.actions.includes('try_again') && !composeOwned ? (
-          <Button
-            label="Try again"
-            busyLabel="Trying…"
-            size="sm"
-            variant="secondary"
-            busy={busy}
-            disabled={disabled}
-            onPress={request}
-          />
-        ) : null}
-      </ButtonRow>
+      <CertificateButtons
+        view={view}
+        composeOwned={composeOwned}
+        disabled={disabled}
+        deploy={deploy}
+        requesting={letsEncrypt.isPending}
+        onRequest={request}
+        checkingDns={dnsCheck.isPending}
+        onCheckDns={() => void dnsCheck.run()}
+      />
     </View>
   )
 }

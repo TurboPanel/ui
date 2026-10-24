@@ -14,10 +14,11 @@ export function isHttpStatusError(err: unknown, status: number): err is Error {
 
 /**
  * Codes the API answers with 403 that are not about the person's permissions
- * (the container belongs to someone else's host user). They must not look like
- * a lost session, so {@link isForbiddenError} skips them.
+ * (the container belongs to someone else's host user, or the organization has
+ * Let's Encrypt turned off). They must not look like a lost session, so
+ * {@link isForbiddenError} skips them.
  */
-const NON_PERMISSION_403_CODES = ['container_not_owned']
+const NON_PERMISSION_403_CODES = ['container_not_owned', 'lets_encrypt_not_enabled']
 
 export function isForbiddenError(err: unknown): boolean {
   if (!isHttpStatusError(err, 403)) return false
