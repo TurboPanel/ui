@@ -169,6 +169,35 @@ export type AccountWrite = {
   document: ComposeDocument
 }
 
+/** An account row as the panel lists it for the project. */
+export type AccountRow = {
+  username: string
+  metadata?: { composeAlias?: string } | null
+}
+
+/**
+ * Every account the project has, by lowercase name: the aliases any document
+ * declares, plus the accounts made by hand on Bindings (rows with no alias,
+ * counted by their typed name; rows that came from an alias count under it).
+ * "The project has exactly one account" must be judged on this set, not on one
+ * document, or a second account hides in another document or in a hand-made row.
+ */
+export function knownAccountNames(
+  documents: readonly (ComposeDocument | null | undefined)[],
+  rows: readonly AccountRow[],
+): Set<string> {
+  const names = new Set<string>()
+  for (const document of documents) {
+    for (const alias of Object.keys(readComposePrincipals(document))) {
+      names.add(alias.toLowerCase())
+    }
+  }
+  for (const row of rows) {
+    names.add((row.metadata?.composeAlias ?? row.username).toLowerCase())
+  }
+  return names
+}
+
 /**
  * What "Add system user" has to write while apps are waiting for an account.
  *
@@ -187,7 +216,7 @@ export function planAccountDeclaration(params: {
     document: ComposeDocument | null | undefined
     services: readonly { id: string; composeServiceName: string | null }[]
   }[]
-  principals: readonly { serviceIds: readonly string[] }[]
+  principals: readonly ({ serviceIds: readonly string[] } & AccountRow)[]
 }): { alias: string; writes: AccountWrite[] } | null {
   const allServices = params.environments.flatMap((env) => env.services)
   const targets: {
@@ -215,10 +244,14 @@ export function planAccountDeclaration(params: {
   if (targets.length === 0) return null
 
   const alias = nextPrincipalAlias([], params.username)
-  const known = new Set<string>([alias])
-  for (const document of [params.base, ...params.environments.map((env) => env.document)]) {
-    for (const name of Object.keys(readComposePrincipals(document))) known.add(name)
-  }
+  // A typed name equal to an existing account is that account (the panel binds
+  // the alias to the hand-made row of the same name instead of making a second),
+  // so it does not count twice.
+  const known = knownAccountNames(
+    [params.base, ...params.environments.map((env) => env.document)],
+    params.principals,
+  )
+  known.add(alias.toLowerCase())
   const sole = known.size === 1
   return {
     alias,
@@ -237,10 +270,14 @@ export function planAccountDeclaration(params: {
  */
 export function attachSoleAccountToNewApps(
   before: ComposeDocument | null | undefined,
-  after: ComposeDocument
+  after: ComposeDocument,
+  /** Names of the project's other accounts (see `knownAccountNames`). */
+  projectAccounts: ReadonlySet<string> = new Set(),
 ): ComposeDocument {
   const aliases = Object.keys(readComposePrincipals(after))
   if (aliases.length !== 1) return after
+  const all = new Set([...projectAccounts, aliases[0].toLowerCase()])
+  if (all.size !== 1) return after
   const existing = new Set(principalRequiredServiceNames(before))
   const added = principalRequiredServiceNames(after).filter((name) => !existing.has(name))
   return added.length === 0 ? after : attachAlias(after, aliases[0], added)

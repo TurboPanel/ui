@@ -452,7 +452,6 @@ function buildLinuxUsers(envName: string, apps: readonly AppRowModel[]): LinuxUs
     }))
 }
 
-/** Only users the Base declares: the Base is where they live, and a Base save refuses any other. */
 /**
  * The accounts an app can be told to run as: every account the Base declares
  * plus every account this environment declares itself. A project created from

@@ -32,7 +32,7 @@ import {
 } from '@/components/org/compose-persistence'
 import { PrincipalAccessPanel } from '@/components/org/principal-access-panel'
 import { nextPrincipalAlias } from '@/lib/compose/principals-document'
-import { planAccountDeclaration } from '@/lib/compose/principal-required'
+import { knownAccountNames, planAccountDeclaration } from '@/lib/compose/principal-required'
 import { unownedSitesAcrossDocuments } from '@/lib/compose/managed-directory-sites'
 import {
   type ComposeDocument,
@@ -110,7 +110,7 @@ function useAccountPlan({
   return {
     planFor,
     waitingForAccount: !loading && planFor('') !== null,
-    suggestedUsername: nextPrincipalAlias([], project?.name ?? ''),
+    suggestedUsername: suggestedAccountName(project, environments, principals),
   }
 }
 
@@ -121,6 +121,24 @@ function blankUsernameFallback(waiting: boolean, suggested: string): string {
 
 function usernamePlaceholder(waiting: boolean, suggested: string): string {
   return waiting ? suggested : 'Username (e.g. appuser)'
+}
+
+/**
+ * The name offered for a waiting app: the project's only existing account when
+ * it has exactly one (adding it again attaches it, and the panel reuses the
+ * same account), otherwise the project's name.
+ */
+function suggestedAccountName(
+  project: ProjectRecord | undefined,
+  environments: readonly EnvironmentRecord[],
+  principals: readonly ProjectPrincipalRecord[],
+): string {
+  const known = knownAccountNames(
+    [project?.options?.compose, ...environments.map((env) => env.options?.compose)],
+    principals,
+  )
+  const only = known.size === 1 ? [...known][0] : undefined
+  return only ?? nextPrincipalAlias([], project?.name ?? '')
 }
 
 function WaitingForAccountNotice({ suggested }: Readonly<{ suggested: string }>) {

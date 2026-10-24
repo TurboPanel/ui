@@ -14,6 +14,7 @@ import { DockerRunImportModal } from '@/components/org/docker-run-import-modal'
 import {
   useOptionalProjectId,
   useProjectRepositoryId,
+  useProjectWideAccounts,
 } from '@/components/org/project/project-context'
 import {
   ComposeDocumentView,
@@ -859,9 +860,11 @@ export function ComposeEditorSection({
     }
   }
 
+  const projectAccounts = useProjectWideAccounts()
+
   const updateDraft = (edited: ComposeDocument) => {
     // A project with one account gives it to an app this edit just made native.
-    const next = attachSoleAccountToNewApps(draft, edited)
+    const next = attachSoleAccountToNewApps(draft, edited, projectAccounts)
     // Keep full next document; Services-tab extension edits stay out of YAML text.
     const nextYaml = visibleYaml(next)
     setDraft(next)

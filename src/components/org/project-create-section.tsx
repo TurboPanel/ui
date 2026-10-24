@@ -669,7 +669,6 @@ function ProjectCreateWizard({
       simpleConfig.buildCommand,
       simpleConfig.startCommand,
       simpleConfig.outputDirectory,
-      trimmedProjectName,
     ].join('\u0000')
     if (seedKey !== seededRepositoryKey) {
       setComposeDoc(
