@@ -129,7 +129,7 @@ function StepHeaderRow({
       disabled={empty}
       accessibilityRole="button"
       accessibilityState={{ expanded: open, disabled: empty }}
-      accessibilityLabel={`${step.label}, ${STEP_WORDS[step.status]}${note ? `, ${note}` : ''}`}
+      accessibilityLabel={[step.label, STEP_WORDS[step.status], note].filter(Boolean).join(', ')}
       style={[styles.stepHeader, compact && styles.stepHeaderCompact, !empty && webPointer]}
     >
       <Text style={[styles.chevron, empty && styles.dim]}>{open ? '▾' : '▸'}</Text>

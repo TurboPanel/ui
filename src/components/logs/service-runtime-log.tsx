@@ -52,9 +52,11 @@ function RuntimeTail({
     [tail.data?.logs]
   )
   const at = readAt(tail.dataUpdatedAt)
-  const hint = `Last ${RUNTIME_TAIL_LINES} lines from ${serviceName}${at ? `, read at ${at}` : ''}. Not stored. ${
-    live ? 'Live: new lines appear as they arrive.' : 'Live is off.'
-  }`
+  const source = at
+    ? `Last ${RUNTIME_TAIL_LINES} lines from ${serviceName}, read at ${at}.`
+    : `Last ${RUNTIME_TAIL_LINES} lines from ${serviceName}.`
+  const liveWords = live ? 'Live: new lines appear as they arrive.' : 'Live is off.'
+  const hint = `${source} Not stored. ${liveWords}`
 
   return (
     <View style={styles.tail}>
