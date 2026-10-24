@@ -256,8 +256,7 @@ export function ProjectProvider({
       }
       setSelectedEnvironmentId(id)
       // Overview Base and `/environments/:id` keep selection in the path.
-      // Managed Data / Backups only update local state — compose env chips
-      // navigate via `projectComposeSectionHref` in ProjectSectionTabs.
+      // Elsewhere only local state changes.
       if (baseSelected || pathEnvironmentId != null) {
         router.push(projectEnvironmentHref(orgId, projectId, id) as Href)
       }

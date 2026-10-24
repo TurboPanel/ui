@@ -1,14 +1,36 @@
 // @vitest-environment happy-dom
-import { describe, expect, it, vi } from 'vitest'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { describeManagedImage } from '@/lib/managed-releases'
 import { managedCatalogEntryForCode } from '@/lib/managed-services'
-import { buildManagedSettingsPayload, settingsToForm } from './managed-settings-panel'
+import {
+  buildManagedSettingsPayload,
+  ManagedSettingsPanel,
+  settingsToForm,
+} from './managed-settings-panel'
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
 vi.mock('react-native-svg', async () => (await import('@/components/ui/v4/rn-stub')).svgStub)
 vi.mock('@/lib/theme-preference', async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub)
 vi.mock('@/components/ui/panel-styles', () => ({ panelStyles: {} }))
-vi.mock('@/components/ui', () => ({}))
+vi.mock('@/components/ui', () => ({
+  Button: ({ label, onPress }: { label: string; onPress?: () => void }) => (
+    <button onClick={onPress}>{label}</button>
+  ),
+  SegmentedControl: () => null,
+  TextField: () => null,
+}))
+vi.mock('@/components/header-chevron', () => ({ HeaderChevron: () => null }))
+vi.mock('@/components/org/managed/managed-external-access-switch', () => ({
+  ManagedExternalAccessSwitch: () => null,
+}))
+vi.mock('@/components/org/managed/managed-ssl-mode-picker', () => ({
+  ManagedSslModePicker: ({ onSelect }: { onSelect: (mode: string) => void }) => (
+    <button onClick={() => onSelect('verify-full')}>pick verify-full</button>
+  ),
+}))
+
+afterEach(cleanup)
 vi.mock('expo-router', () => ({ Link: () => null }))
 vi.mock('@/lib/query-client', () => ({ useCan: () => true }))
 vi.mock('@/lib/queries/managed', () => ({ useSaveServerManagedExternalAccess: () => ({}) }))
@@ -39,5 +61,33 @@ describe('settings form for an imageless MariaDB service', () => {
     )
     const postgres = managedCatalogEntryForCode('postgres')
     expect(managedStoredImage(postgres, undefined)).toBe(postgres?.defaultImage)
+  })
+})
+
+describe('Hosting part of the settings', () => {
+  const renderHosting = () =>
+    render(
+      <ManagedSettingsPanel
+        section="hosting"
+        settings={{ ssl: {} } as never}
+        engineCode="postgres"
+        organizationSslMode={null}
+        orgId="o"
+        externalAccess={{ servers: [] } as never}
+        canManage
+        busy={false}
+        onApply={vi.fn()}
+      />
+    )
+
+  it('keeps a waiting client TLS change and its Apply in view with Advanced closed', () => {
+    renderHosting()
+    expect(screen.queryByText('Save and apply')).toBeNull()
+    fireEvent.click(screen.getByLabelText('Show advanced settings'))
+    expect(screen.queryByText('Save and apply')).toBeNull()
+    fireEvent.click(screen.getByText('pick verify-full'))
+    fireEvent.click(screen.getByLabelText('Hide advanced settings'))
+    expect(screen.queryByText('pick verify-full')).toBeNull()
+    expect(screen.getByText('Save and apply')).toBeTruthy()
   })
 })
