@@ -289,6 +289,45 @@ function ManagedProjectTrashButton({
   )
 }
 
+/**
+ * What leads the project name: "Projects ›" on the project's own pages. An
+ * environment page has the full trail in the top bar, so it shows none; a
+ * phone (no top-bar trail) gets a back arrow to the project's environments.
+ */
+function ProjectHeaderLead() {
+  const { orgId, projectId, pathEnvironmentId } = useProjectContext()
+  const { width } = useWindowDimensions()
+  const onEnvironmentPage = useEnvironmentChrome() && pathEnvironmentId != null
+  if (!onEnvironmentPage) {
+    return (
+      <>
+        <Link href={`/${orgId}/projects` as Href} asChild>
+          <Pressable
+            style={StyleSheet.flatten([styles.crumbLink, webPointer])}
+            accessibilityRole="link"
+            accessibilityLabel="Projects"
+          >
+            <Text style={styles.crumbLinkText}>Projects</Text>
+          </Pressable>
+        </Link>
+        <BreadcrumbChevron size={12} color={colors.textMuted} />
+      </>
+    )
+  }
+  if (showsBreadcrumb(width)) return null
+  return (
+    <Link href={projectOverviewHref(orgId, projectId) as Href} asChild>
+      <Pressable
+        style={StyleSheet.flatten([styles.backLink, webPointer])}
+        accessibilityRole="link"
+        accessibilityLabel="All environments"
+      >
+        <Text style={styles.backLinkText}>‹</Text>
+      </Pressable>
+    </Link>
+  )
+}
+
 function ProjectHeader({
   showManagedTrash,
   deletingProject,
@@ -307,16 +346,9 @@ function ProjectHeader({
     projectAllowsMutations,
     draft,
     setError,
-    pathEnvironmentId,
   } = useProjectContext()
   const updateProject = useUpdateProject(orgId, projectId)
   const [editName, setEditName] = useState('')
-  const { width } = useWindowDimensions()
-  // An environment page has the full trail in the top bar, so the page keeps
-  // only the project name; a phone (no top-bar trail) gets a back arrow to the
-  // project's environments instead.
-  const onEnvironmentPage = useEnvironmentChrome() && pathEnvironmentId != null
-  const phone = !showsBreadcrumb(width)
 
   useEffect(() => {
     setEditName(project?.name?.trim() ?? '')
@@ -345,9 +377,6 @@ function ProjectHeader({
 
   const saving = !draft && updateProject.isPending
   const showMutableChrome = canOwn && projectAllowsMutations
-  const projectsHref = `/${orgId}/projects` as Href
-  const crumbLinkStyle = StyleSheet.flatten([styles.crumbLink, webPointer])
-  const backLinkStyle = StyleSheet.flatten([styles.backLink, webPointer])
 
   return (
     <View style={styles.header}>
@@ -360,31 +389,7 @@ function ProjectHeader({
           style={styles.breadcrumb}
           accessibilityLabel="Breadcrumb"
         >
-          {onEnvironmentPage ? null : (
-            <>
-              <Link href={projectsHref} asChild>
-                <Pressable
-                  style={crumbLinkStyle}
-                  accessibilityRole="link"
-                  accessibilityLabel="Projects"
-                >
-                  <Text style={styles.crumbLinkText}>Projects</Text>
-                </Pressable>
-              </Link>
-              <BreadcrumbChevron size={12} color={colors.textMuted} />
-            </>
-          )}
-          {onEnvironmentPage && phone ? (
-            <Link href={projectOverviewHref(orgId, projectId) as Href} asChild>
-              <Pressable
-                style={backLinkStyle}
-                accessibilityRole="link"
-                accessibilityLabel="All environments"
-              >
-                <Text style={styles.backLinkText}>‹</Text>
-              </Pressable>
-            </Link>
-          ) : null}
+          <ProjectHeaderLead />
           <View style={styles.currentCrumb}>
             <ProjectTitleIcon project={project} compact />
             {showMutableChrome ? (

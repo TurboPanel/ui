@@ -88,7 +88,11 @@ export function environmentDeeperPage(pathname: string, environmentId: string): 
   const marker = `/environments/${encodeURIComponent(environmentId)}/`
   const idx = path.indexOf(marker)
   if (idx < 0) return null
-  const rest = path.slice(idx + marker.length).replace(/\/+$/, '')
+  const rest = path
+    .slice(idx + marker.length)
+    .split('/')
+    .filter((segment) => segment !== '')
+    .join('/')
   return ENVIRONMENT_DEEPER_PAGES.get(rest) ?? null
 }
 

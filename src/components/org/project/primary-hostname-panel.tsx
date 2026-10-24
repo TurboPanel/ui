@@ -13,6 +13,41 @@ import { useUpdateEnvironment } from '@/lib/queries/environments'
 import { useHostingsByServices, useServices } from '@/lib/queries/services'
 import { colors, spacing } from '@/lib/theme'
 
+/** The Primary badge on the primary hostname, "Make primary" on the others for a manager. */
+function HostnameAction({
+  hostname,
+  primary,
+  editable,
+  saving,
+  onMakePrimary,
+}: Readonly<{
+  hostname: string
+  primary: boolean
+  editable: boolean
+  saving: string | null
+  onMakePrimary: () => void
+}>) {
+  if (primary) {
+    return (
+      <View style={styles.badge}>
+        <Text style={styles.badgeText}>Primary hostname</Text>
+      </View>
+    )
+  }
+  if (!editable) return null
+  return (
+    <Button
+      label="Make primary"
+      accessibilityLabel={`Make ${hostname} the primary hostname`}
+      size="sm"
+      busy={saving === hostname}
+      busyLabel="Saving…"
+      disabled={saving !== null}
+      onPress={onMakePrimary}
+    />
+  )
+}
+
 /**
  * Every public hostname of one environment, with the primary one badged and a
  * "Make primary" button on the others. The primary is what the header's Visit
@@ -56,23 +91,15 @@ export function PrimaryHostnamePanel({
             <Text style={styles.hostname} numberOfLines={1}>
               {hostname}
             </Text>
-            {hostname === primary ? (
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>Primary hostname</Text>
-              </View>
-            ) : editable ? (
-              <Button
-                label="Make primary"
-                accessibilityLabel={`Make ${hostname} the primary hostname`}
-                size="sm"
-                busy={saving === hostname}
-                busyLabel="Saving…"
-                disabled={saving !== null}
-                onPress={() => {
-                  void makePrimary(hostname)
-                }}
-              />
-            ) : null}
+            <HostnameAction
+              hostname={hostname}
+              primary={hostname === primary}
+              editable={editable}
+              saving={saving}
+              onMakePrimary={() => {
+                void makePrimary(hostname)
+              }}
+            />
           </View>
         ))}
       </View>
