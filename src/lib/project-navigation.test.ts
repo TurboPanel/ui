@@ -576,7 +576,7 @@ describe('project and environment tabs', () => {
     expect(tab('/servers')).toBe('hosting')
     expect(tab('/bindings')).toBe('bindings')
     expect(tab('/storage')).toBe('base')
-    expect(tab('/services')).toBe('base')
+    expect(tab('/services')).toBe('compose')
     expect(tab('/services/svc1')).toBe('base')
     expect(tab('/settings')).toBe('settings')
     // Not project tabs.

@@ -721,8 +721,9 @@ export function environmentPageTabHref(
 
 /**
  * Which project tab a path belongs to. Null outside project scope (an
- * environment page, managed tabs, setup). The Base's Services lens and Storage
- * light Base; retired section paths belong to the tab they redirect to.
+ * environment page, managed tabs, setup). The Base's Services view lights
+ * Compose (the editor's toggle) and Storage lights Base; retired section paths
+ * belong to the tab they redirect to.
  */
 export function parseProjectPageTab(
   pathname: string,
@@ -742,6 +743,8 @@ export function parseProjectPageTab(
     return sectionPageTab(LENS_SUBROUTES.get(parts.segments[1] ?? '')) ?? 'base'
   }
   if (LEGACY_SECTION_LENS.has(first)) {
+    // Bare /services redirects to /base/services, which lights Compose.
+    if (first === 'services' && parts.segments.length === 1) return 'compose'
     return sectionPageTab(LEGACY_SECTION_LENS.get(first)) ?? 'base'
   }
   return null
