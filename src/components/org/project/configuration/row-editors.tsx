@@ -110,7 +110,7 @@ export function NewVariableEditor({
   const [name, setName] = useState('')
   const [value, setValue] = useState('')
   const [secret, setSecret] = useState<boolean | null>(null)
-  const [chosenUse, setUse] = useState<VariableUse | null>(null)
+  const [chosenUse, setChosenUse] = useState<VariableUse | null>(null)
   const trimmed = name.trim()
   const use = chosenUse ?? defaultVariableUse(trimmed)
   const exists = editing.variableFacts(trimmed) !== null
@@ -157,19 +157,19 @@ export function NewVariableEditor({
           title="Run"
           body="Available while the app runs. Not used while building."
           selected={use === 'run'}
-          onSelect={() => setUse('run')}
+          onSelect={() => setChosenUse('run')}
         />
         <ChoiceCard
           title="Build and run"
           body="Also available while the app builds. Names starting NEXT_PUBLIC_ start here."
           selected={use === 'both'}
-          onSelect={() => setUse('both')}
+          onSelect={() => setChosenUse('both')}
         />
         <ChoiceCard
           title="Build"
           body="Only while building. The running app does not get it."
           selected={use === 'build'}
-          onSelect={() => setUse('build')}
+          onSelect={() => setChosenUse('build')}
         />
       </ChoiceGroup>
       <EditorFoot
