@@ -28,6 +28,23 @@ import {
 } from '@/lib/v4/project-settings'
 import { primaryEnvironmentOf } from '@/lib/v4/primary-environment'
 
+/** Turn on for the project's repository auto-deploy; `run` is null without a repository. */
+function useTurnOnAutoDeploy(
+  orgId: string,
+  repositoryId: string | null,
+  setError: (error: string | null) => void
+): { run: (() => void) | null; pending: boolean } {
+  const update = useUpdateRepository(orgId)
+  if (!repositoryId) return { run: null, pending: false }
+  const run = () => {
+    setError(null)
+    void update.run({ repositoryId, patch: { autoDeploy: 'immediate' } }).then((result) => {
+      if (!result.ok) setError(result.error ?? 'Failed to turn on auto-deploy')
+    })
+  }
+  return { run, pending: update.isPending }
+}
+
 /**
  * Project Settings tab for a Compose project, and for a managed database
  * (name, workspace and delete; its engine settings are per environment). Everything saves through the
@@ -52,7 +69,7 @@ export function ProjectSettingsScreen() {
   const [edit, setEdit] = useState<{ name: string; description: string } | null>(null)
   const [busy, setBusy] = useState<'general' | 'move' | 'names' | null>(null)
   const [dangerOpen, setDangerOpen] = useState(false)
-  const updateRepository = useUpdateRepository(orgId)
+  const turnOnAutoDeploy = useTurnOnAutoDeploy(orgId, project?.repositoryId ?? null, setError)
 
   const git = useMemo(
     () => (project ? projectGitFacts(project, repositories.data?.repositories ?? []) : null),
@@ -126,20 +143,8 @@ export function ProjectSettingsScreen() {
       }}
       git={git}
       pushDeploy={pushDeploy}
-      onTurnOnAutoDeploy={
-        canEdit && project.repositoryId
-          ? () => {
-              const repositoryId = project.repositoryId as string
-              setError(null)
-              void updateRepository
-                .run({ repositoryId, patch: { autoDeploy: 'immediate' } })
-                .then((result) => {
-                  if (!result.ok) setError(result.error ?? 'Failed to turn on auto-deploy')
-                })
-            }
-          : null
-      }
-      turningOnAutoDeploy={updateRepository.isPending}
+      onTurnOnAutoDeploy={canEdit ? turnOnAutoDeploy.run : null}
+      turningOnAutoDeploy={turnOnAutoDeploy.pending}
       onOpenEnvironmentSettings={(environmentId) =>
         router.push(projectEnvironmentSettingsHref(orgId, projectId, environmentId) as Href)
       }
