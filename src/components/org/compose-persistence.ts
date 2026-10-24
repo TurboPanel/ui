@@ -5,6 +5,7 @@ import {
   type ComposeDocument,
   type ProjectRecord,
 } from '@/lib/instance-api'
+import type { AccountWrite } from '@/lib/compose/principal-required'
 import { buildProjectOptionsPatch, mergeProjectOptionsLocal } from '@/lib/project-options'
 import { useApiMutation, queryKeys } from '@/lib/query-client'
 
@@ -77,5 +78,40 @@ export function usePersistEnvironmentCompose(orgId: string, environmentId: strin
       ])
     },
     fallbackError: 'Failed to save compose overlay',
+  })
+}
+
+/**
+ * Save the compose documents an account change touched: the Base and/or the
+ * environments whose app was waiting for an account. One mutation so the
+ * screen refreshes once, after every document is saved.
+ */
+export function usePersistAccountWrites(orgId: string, projectId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: async (writes: readonly AccountWrite[]) => {
+      for (const write of writes) {
+        if (write.target.kind === 'base') {
+          const cached = queryClient.getQueryData<{ project: ProjectRecord }>(
+            queryKeys.org(orgId).projects.detail(projectId)
+          )
+          if (!cached?.project) throw new Error('Project not loaded')
+          const options = buildProjectOptionsPatch(cached.project, { compose: write.document })
+          await updateProject(projectId, { options, target: 'base' })
+        } else {
+          await updateEnvironment(write.target.environmentId, {
+            options: { compose: write.document },
+          })
+        }
+      }
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.org(orgId).projects.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.org(orgId).environments.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.org(orgId).services.all }),
+      ])
+    },
+    fallbackError: 'Failed to save the account',
   })
 }

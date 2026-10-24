@@ -9,7 +9,9 @@ type Props = Readonly<Record<string, unknown> & { children?: ReactNode }>
 
 const state = vi.hoisted(() => ({
   run: vi.fn(),
+  persist: vi.fn(),
   actionError: null as string | null,
+  environments: [] as unknown[],
 }))
 
 vi.mock('react-native', async () => {
@@ -35,7 +37,7 @@ vi.mock('@/components/ui', () => ({
   ),
   ConfirmButton: () => null,
   EmptyState: ({ title }: { title?: string }) => <div>{title}</div>,
-  InlineNotice: () => null,
+  InlineNotice: ({ title }: Props) => <div>{title as string}</div>,
   LoadingState: () => null,
   SectionPanel: ({ children }: Props) => <div>{children}</div>,
   SettingRow: () => null,
@@ -65,6 +67,7 @@ vi.mock('@/components/org/project-environments-section', () => ({
 }))
 vi.mock('@/components/org/compose-persistence', () => ({
   usePersistProjectCompose: () => ({ run: vi.fn(), actionError: null }),
+  usePersistAccountWrites: () => ({ run: state.persist, isPending: false, actionError: null }),
 }))
 vi.mock('@/components/org/principal-access-panel', () => ({ PrincipalAccessPanel: () => null }))
 vi.mock('@/components/org/principal-name-scheme-field', () => ({
@@ -102,7 +105,11 @@ vi.mock('@/lib/queries/projects', () => ({
   useUpdateProject: () => ({ run: vi.fn(), isPending: false, actionError: null }),
 }))
 vi.mock('@/lib/queries/environments', () => ({
-  useEnvironments: () => ({ isLoading: false, data: { environments: [] }, error: null }),
+  useEnvironments: () => ({
+    isLoading: false,
+    data: { environments: state.environments },
+    error: null,
+  }),
 }))
 vi.mock('@/lib/queries/services', () => ({
   useServicesByEnvironments: () => ({ isLoading: false, servicesByEnv: {} }),
@@ -114,7 +121,45 @@ afterEach(cleanup)
 describe('ProjectPrincipalsSection add system user', () => {
   beforeEach(() => {
     state.run.mockReset()
+    state.persist.mockReset()
     state.actionError = null
+    state.environments = []
+  })
+
+  it('declares the account where the waiting app lives instead of adding a loose row', async () => {
+    state.persist.mockResolvedValue({ ok: true })
+    state.environments = [
+      {
+        id: 'env-1',
+        name: 'production',
+        options: {
+          compose: {
+            version: 1,
+            data: {
+              services: {
+                web: {
+                  'x-turbopanel': {
+                    serviceKind: 'node',
+                    source: { sourceId: '11111111-1111-4111-8111-111111111111' },
+                  },
+                },
+              },
+            },
+            presentation: { keyOrder: ['services'], comments: {} },
+          },
+        },
+      },
+    ]
+    render(<ProjectPrincipalsSection orgId="org-1" projectId="proj-1" canManage />)
+    expect(screen.getByText('An app is waiting for a system user')).toBeTruthy()
+    // Left blank, the account is named after the project (no name here: "app").
+    fireEvent.click(screen.getByRole('button', { name: 'Add system user' }))
+    await waitFor(() => expect(state.persist).toHaveBeenCalledTimes(1))
+    expect(state.run).not.toHaveBeenCalled()
+    const writes = state.persist.mock.calls[0][0]
+    expect(writes).toHaveLength(1)
+    expect(writes[0].target).toEqual({ kind: 'environment', environmentId: 'env-1' })
+    expect(JSON.stringify(writes[0].document)).toContain('"principal":"app"')
   })
 
   it('shows plain words when the control plane refuses a reserved name', async () => {

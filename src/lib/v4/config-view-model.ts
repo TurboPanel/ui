@@ -453,8 +453,17 @@ function buildLinuxUsers(envName: string, apps: readonly AppRowModel[]): LinuxUs
 }
 
 /** Only users the Base declares: the Base is where they live, and a Base save refuses any other. */
+/**
+ * The accounts an app can be told to run as: every account the Base declares
+ * plus every account this environment declares itself. A project created from
+ * a repository keeps its first account in the environment's own compose, and
+ * leaving that out meant the Run as chooser had nothing to offer.
+ */
 function linuxUserNames(view: EnvironmentConfigViewResponse): string[] {
-  return view.base.linuxUsers.map((user) => user.name).sort((a, b) => a.localeCompare(b))
+  const names = new Set(
+    [...view.base.linuxUsers, ...view.effective.linuxUsers].map((user) => user.name)
+  )
+  return [...names].sort((a, b) => a.localeCompare(b))
 }
 
 /** The whole Configuration tab, from one config-view answer. */

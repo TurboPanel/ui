@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  projectAccountAlias,
   repositoryServiceName,
   parseRepositoryCompose,
   seedComposeForLane,
@@ -411,5 +412,29 @@ describe('seedHostingCompose', () => {
         (chosen.data.services as Record<string, Record<string, unknown>>).site!,
       )?.principal,
     ).toBe('blog')
+  })
+})
+
+describe('projectAccountAlias', () => {
+  it('names the account after the project', () => {
+    expect(projectAccountAlias('My Shop')).toBe('myshop')
+    expect(projectAccountAlias('web-site')).toBe('web-site')
+  })
+
+  it('falls back to app when nothing usable is left', () => {
+    expect(projectAccountAlias('  ')).toBe('app')
+    expect(projectAccountAlias('123')).toBe('app')
+  })
+
+  it('seeds an app that names a declared account, ready to deploy', () => {
+    const document = seedComposeForLane({
+      source: source(),
+      branch: 'main',
+      lane: 'app',
+      principalAlias: projectAccountAlias('Storefront'),
+    })
+    expect(Object.keys(readComposePrincipals(document))).toEqual(['storefront'])
+    const services = document.data.services as Record<string, Record<string, unknown>>
+    expect(readServiceTurbopanelExtension(services['storefront-api'])?.principal).toBe('storefront')
   })
 })

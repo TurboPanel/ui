@@ -403,7 +403,7 @@ describe('Hosting Accounts', () => {
     expect(linuxUsers[1].runsAs.user).toBe('')
   })
 
-  it('offers only Hosting Accounts the Base declares, sorted', () => {
+  it('offers the Hosting Accounts the Base and the environment declare, sorted', () => {
     expect(staging().linuxUserNames).toEqual(['staging-web', 'website'])
     const view = stagingView()
     view.effective.linuxUsers = [
@@ -417,9 +417,11 @@ describe('Hosting Accounts', () => {
         usedBy: [],
       },
     ]
-    expect(buildConfigViewModel({ envName: 'Staging', view }).linuxUserNames).not.toContain(
-      'only-here'
-    )
+    expect(buildConfigViewModel({ envName: 'Staging', view }).linuxUserNames).toEqual([
+      'only-here',
+      'staging-web',
+      'website',
+    ])
   })
 
   it('tags a Base assignment as From the Base', () => {

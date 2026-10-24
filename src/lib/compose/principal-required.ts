@@ -18,7 +18,15 @@
 
 import type { ComposeDocument } from '@/lib/compose'
 import { principalAliasesInComposeData } from '@/lib/compose/root-extension'
-import { readServiceTurbopanelExtension } from '@/lib/compose/service-kind'
+import {
+  patchServiceTurbopanelExtension,
+  readServiceTurbopanelExtension,
+} from '@/lib/compose/service-kind'
+import {
+  nextPrincipalAlias,
+  readComposePrincipals,
+  writeComposePrincipals,
+} from '@/lib/compose/principals-document'
 
 /**
  * Compose service names that need a principal to release: a Git source built
@@ -113,4 +121,127 @@ export function unownedPrincipalRequiredServices(params: {
   return declared.filter(
     (name) => !aliasOwned.has(name) && !ownedNames.has(name),
   )
+}
+
+/** Point the named services at `alias`, leaving any that already name one. */
+function attachAlias(
+  document: ComposeDocument,
+  alias: string,
+  names: readonly string[]
+): ComposeDocument {
+  const services = document.data?.services
+  if (typeof services !== 'object' || services === null) return document
+  const next: Record<string, unknown> = { ...(services as Record<string, unknown>) }
+  let changed = false
+  for (const name of names) {
+    const raw = next[name]
+    if (typeof raw !== 'object' || raw === null) continue
+    const service = raw as Record<string, unknown>
+    if (readServiceTurbopanelExtension(service)?.principal) continue
+    next[name] = patchServiceTurbopanelExtension(service, { principal: alias })
+    changed = true
+  }
+  return changed ? { ...document, data: { ...document.data, services: next } } : document
+}
+
+/**
+ * Declare an account in a document and, when it is the only account the whole
+ * project has (`sole`), attach the apps that have nobody to run as to it.
+ *
+ * With more than one account the choice is ambiguous, so nothing is attached
+ * and the Run as chooser decides.
+ */
+export function declareAccountAndAttach(
+  document: ComposeDocument,
+  alias: string,
+  unownedNames: readonly string[],
+  sole: boolean
+): ComposeDocument {
+  const declared = readComposePrincipals(document)
+  const withAlias =
+    alias in declared ? document : writeComposePrincipals(document, { ...declared, [alias]: {} })
+  return sole ? attachAlias(withAlias, alias, unownedNames) : withAlias
+}
+
+/** One compose document the account change has to be saved into. */
+export type AccountWrite = {
+  target: { kind: 'base' } | { kind: 'environment'; environmentId: string }
+  document: ComposeDocument
+}
+
+/**
+ * What "Add system user" has to write while apps are waiting for an account.
+ *
+ * Apps wait in whichever document declares them: the Base, or an
+ * environment's own compose (a project created from a repository keeps its
+ * app in the first environment). Each such document gets the account declared,
+ * and the account is attached when it is the project's only one. Returns
+ * `null` when no app is waiting, so the caller falls back to adding a plain
+ * account row.
+ */
+export function planAccountDeclaration(params: {
+  username: string
+  base: ComposeDocument | null | undefined
+  environments: readonly {
+    id: string
+    document: ComposeDocument | null | undefined
+    services: readonly { id: string; composeServiceName: string | null }[]
+  }[]
+  principals: readonly { serviceIds: readonly string[] }[]
+}): { alias: string; writes: AccountWrite[] } | null {
+  const allServices = params.environments.flatMap((env) => env.services)
+  const targets: {
+    target: AccountWrite['target']
+    document: ComposeDocument
+    unowned: string[]
+  }[] = []
+  const consider = (
+    target: AccountWrite['target'],
+    document: ComposeDocument | null | undefined,
+    services: readonly { id: string; composeServiceName: string | null }[]
+  ) => {
+    if (!document) return
+    const unowned = unownedPrincipalRequiredServices({
+      document,
+      services,
+      principals: params.principals,
+    })
+    if (unowned.length > 0) targets.push({ target, document, unowned })
+  }
+  consider({ kind: 'base' }, params.base, allServices)
+  for (const env of params.environments) {
+    consider({ kind: 'environment', environmentId: env.id }, env.document, env.services)
+  }
+  if (targets.length === 0) return null
+
+  const alias = nextPrincipalAlias([], params.username)
+  const known = new Set<string>([alias])
+  for (const document of [params.base, ...params.environments.map((env) => env.document)]) {
+    for (const name of Object.keys(readComposePrincipals(document))) known.add(name)
+  }
+  const sole = known.size === 1
+  return {
+    alias,
+    writes: targets.map(({ target, document, unowned }) => ({
+      target,
+      document: declareAccountAndAttach(document, alias, unowned, sole),
+    })),
+  }
+}
+
+/**
+ * After an edit: a project with exactly one account gives it to every app that
+ * this edit just turned into one needing an account, so a new app is deployable
+ * without visiting the chooser. Apps that already name an account, and every
+ * app that was already waiting before the edit, are left alone.
+ */
+export function attachSoleAccountToNewApps(
+  before: ComposeDocument | null | undefined,
+  after: ComposeDocument
+): ComposeDocument {
+  const aliases = Object.keys(readComposePrincipals(after))
+  if (aliases.length !== 1) return after
+  const existing = new Set(principalRequiredServiceNames(before))
+  const added = principalRequiredServiceNames(after).filter((name) => !existing.has(name))
+  return added.length === 0 ? after : attachAlias(after, aliases[0], added)
 }

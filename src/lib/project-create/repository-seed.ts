@@ -16,7 +16,7 @@ import {
   SOURCE_COMMAND_MAX_LENGTH,
   type ComposeServiceSourceExtension,
 } from '@/lib/compose/service-kind'
-import { writeComposePrincipals } from '@/lib/compose/principals-document'
+import { nextPrincipalAlias, writeComposePrincipals } from '@/lib/compose/principals-document'
 import type { RepositoryLane } from '@/lib/compose/repository-lane'
 import type { RepositoryRecord } from '@/lib/instance-api'
 
@@ -65,13 +65,24 @@ export function repositoryServiceName(source: RepositoryRecord): string {
 }
 
 /**
+ * The account a new project's app runs as, named after the project.
+ *
+ * Only the document-local alias is chosen here; the real Linux user name is
+ * decided by the organisation's name scheme when the account is created, so
+ * the operator is not asked for one. A project name that folds to nothing
+ * usable falls back to `app`.
+ */
+export function projectAccountAlias(projectName: string): string {
+  return nextPrincipalAlias([], projectName)
+}
+
+/**
  * The alias to seed, or `undefined` for "declare none".
  *
- * The account name is the operator's decision, never the seed's: an invented
- * default would name a Linux user nobody chose. A blank field is a real answer
- * — "I will decide during setup" — and the draft stays valid without one
- * because the principal requirement is enforced pre-deploy (the lifecycle bar
- * and `principal-required.ts`), not at create.
+ * A blank alias is still valid: the draft stays valid without one because the
+ * principal requirement is enforced pre-deploy (the lifecycle bar and
+ * `principal-required.ts`), not at create. The repository wizard passes the
+ * project's name (`projectAccountAlias`) so the first Deploy is enabled.
  */
 function seedableAlias(alias: string | undefined): string | undefined {
   const trimmed = alias?.trim()

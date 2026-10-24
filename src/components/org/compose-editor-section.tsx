@@ -65,6 +65,7 @@ import {
   renameComposePrincipal,
   writeComposePrincipals,
 } from '@/lib/compose/principals-document'
+import { attachSoleAccountToNewApps } from '@/lib/compose/principal-required'
 import type { PrincipalSpec } from '@/lib/compose/root-extension'
 import type { VisualFieldDef } from '@/lib/compose/visual-fields'
 import {
@@ -858,7 +859,9 @@ export function ComposeEditorSection({
     }
   }
 
-  const updateDraft = (next: ComposeDocument) => {
+  const updateDraft = (edited: ComposeDocument) => {
+    // A project with one account gives it to an app this edit just made native.
+    const next = attachSoleAccountToNewApps(draft, edited)
     // Keep full next document; Services-tab extension edits stay out of YAML text.
     const nextYaml = visibleYaml(next)
     setDraft(next)

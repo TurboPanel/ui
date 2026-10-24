@@ -27,7 +27,10 @@ import { ProjectVariablesSection } from '@/components/org/project-variables-sect
 import { ProjectEnvironmentsSection } from '@/components/org/project-environments-section'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { usePersistProjectCompose } from '@/components/org/compose-persistence'
+import { usePersistAccountWrites } from '@/components/org/compose-persistence'
 import { PrincipalAccessPanel } from '@/components/org/principal-access-panel'
+import { nextPrincipalAlias } from '@/lib/compose/principals-document'
+import { planAccountDeclaration } from '@/lib/compose/principal-required'
 import { unownedSitesAcrossDocuments } from '@/lib/compose/managed-directory-sites'
 import {
   type ComposeDocument,
@@ -93,6 +96,7 @@ export function ProjectPrincipalsSection({
   const environmentIds = useMemo(() => environments.map((env) => env.id), [environments])
   const servicesByEnvQuery = useServicesByEnvironments(orgId, environmentIds)
   const createPrincipal = useCreateProjectPrincipal(orgId, projectId)
+  const persistAccount = usePersistAccountWrites(orgId, projectId)
   const nameScheme = usePrincipalNameScheme(orgId)
   const deletePrincipal = useDeleteProjectPrincipal(orgId, projectId)
   const updateAssignments = useUpdateProjectPrincipalAssignments(orgId, projectId)
@@ -215,13 +219,42 @@ export function ProjectPrincipalsSection({
     })
   }
 
+  const planFor = (name: string) =>
+    planAccountDeclaration({
+      username: name,
+      base: projectQuery.data?.project?.options?.compose,
+      environments: environments.map((env) => ({
+        id: env.id,
+        document: env.options?.compose,
+        services: servicesByEnvQuery.servicesByEnv[env.id] ?? [],
+      })),
+      principals,
+    })
+  // Apps with nobody to run as: the form below is the control that fixes it,
+  // so it offers the project's name and says what adding does.
+  const waitingForAccount = !loading && planFor('') !== null
+  const suggestedUsername = nextPrincipalAlias([], projectQuery.data?.project?.name ?? '')
+
   const handleAdd = async () => {
-    const trimmed = username.trim()
+    const trimmed = username.trim() || (waitingForAccount ? suggestedUsername : '')
     if (!trimmed) {
       setError('Username is required.')
       return
     }
     setError(null)
+    // An app is waiting for an account: declare the account where the app is
+    // declared (and attach it when it is the only one) instead of adding a
+    // loose account row nothing is attached to.
+    const plan = planFor(trimmed)
+    if (plan) {
+      const saved = await persistAccount.run(plan.writes)
+      if (!saved.ok) {
+        setError(persistAccount.actionError ?? 'Could not add the system user.')
+        return
+      }
+      setUsername('')
+      return
+    }
     const result = await createPrincipal.run({
       username: trimmed,
       nameScheme: nameScheme.requestScheme,
@@ -251,7 +284,7 @@ export function ProjectPrincipalsSection({
     })
   }
 
-  const adding = createPrincipal.isPending
+  const adding = createPrincipal.isPending || persistAccount.isPending
 
   const body = (
     <>
@@ -267,6 +300,13 @@ export function ProjectPrincipalsSection({
           body={`An uploaded-directory site is a directory and an account — the webroot belongs to the account, and without one there is nobody to upload as. Add a system user below and assign it to ${
             unownedSites.length === 1 ? 'that service' : 'those services'
           }.`}
+        />
+      ) : null}
+      {waitingForAccount ? (
+        <InlineNotice
+          tone="warning"
+          title="An app is waiting for a system user"
+          body={`Add one below (${suggestedUsername} if you leave it blank) and the app runs as it, so Deploy is ready. With more than one system user, pick which one each app runs as in Configuration.`}
         />
       ) : null}
       {loading && principals.length === 0 ? <LoadingState /> : null}
@@ -384,7 +424,7 @@ export function ProjectPrincipalsSection({
               value={username}
               onChangeText={setUsername}
               onBlur={() => setUsername((current) => current.trim())}
-              placeholder="Username (e.g. appuser)"
+              placeholder={waitingForAccount ? suggestedUsername : 'Username (e.g. appuser)'}
               autoCapitalize="none"
               autoCorrect={false}
               editable={!adding}
