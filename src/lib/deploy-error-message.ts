@@ -1,3 +1,4 @@
+import { DeployHealthCheckMissingError, DeployResourceLimitExceededError } from '@/lib/instance-api'
 import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
 
 /**
@@ -49,4 +50,26 @@ export function deployErrorMessage(err: unknown): string {
     return "A hosting pinned to a Let's Encrypt certificate is bound to a local or datacenter-only address — ACME issuance needs a public bind scope."
   }
   return message
+}
+
+/**
+ * The deploy refusals that come back as typed errors (a missing health check,
+ * a resource limit), in plain words with the next step; `null` for any other.
+ */
+export function deployPreviewFailureMessage(err: unknown): string | null {
+  if (err instanceof DeployHealthCheckMissingError) {
+    if (err.required) {
+      return 'A service requires a compose healthcheck before the first start. Add healthcheck: in Compose, or set Health check policy to Disabled in service settings.'
+    }
+    return 'Health-check warnings are enabled for a service. Confirm the deploy from this environment, or set Health check policy to Disabled.'
+  }
+  if (err instanceof DeployResourceLimitExceededError) {
+    return 'This start would exceed a resource limit. Review the capacity of this environment and try again.'
+  }
+  return null
+}
+
+/** Any refused deploy in plain words: the typed refusals first, then the coded ones. */
+export function deployRefusalMessage(err: unknown): string {
+  return deployPreviewFailureMessage(err) ?? deployErrorMessage(err)
 }
