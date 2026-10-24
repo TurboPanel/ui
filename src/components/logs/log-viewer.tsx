@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   FlatList,
   Platform,
@@ -26,13 +26,16 @@ import { StatusDot, type StatusTone } from '@/components/ui/status-dot'
 import { Toggle } from '@/components/ui/toggle'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { formatDeployDuration } from '@/lib/deployment-history'
-import { transcriptPlainText, type LogTranscriptLine } from '@/lib/execution-log-lines'
+import {
+  collapseRepeatedProgressLines,
+  transcriptPlainText,
+  type LogTranscriptLine,
+} from '@/lib/execution-log-lines'
 import type { CommandProgressStep, CommandStatus } from '@/lib/instance-api'
 import {
   buildLogSteps,
   buildLogViewerModel,
   defaultOpenStepIds,
-  EMPTY_LOG_FILTER,
   firstErrorItemIndex,
   firstErrorStepId,
   isFiltering,
@@ -60,6 +63,9 @@ const FOLLOW_THRESHOLD_PX = 24
 
 /** Rows mounted ahead of the viewport. Transcripts can run to many thousands. */
 const INITIAL_ROWS = 60
+
+/** Wait after the last keystroke before searching a long log again. */
+const SEARCH_DEBOUNCE_MS = 150
 
 const FILTER_MODES = [
   { value: 'highlight', label: 'Highlight matches (keep context)' },
@@ -404,45 +410,69 @@ function LogViewerRow({
   }
 }
 
-/** The search field, its match count and the filter style. */
-function LogSearchBar({
-  filter,
-  setFilter,
-  total,
+/** The search field and its match count. */
+function LogSearchField({
+  value,
+  onChange,
+  count,
   grouped,
   compact,
 }: Readonly<{
-  filter: LogFilter
-  setFilter: (update: (current: LogFilter) => LogFilter) => void
-  total: number
+  value: string
+  onChange: (query: string) => void
+  /** "3 found", or empty when nothing filters. */
+  count: string
   grouped: boolean
   compact: boolean
 }>) {
-  const count = matchCountText(filter, total)
   return (
-    <View style={styles.tools}>
-      <View style={compact ? styles.searchCompact : styles.search}>
-        <TextField
-          label="Search"
-          value={filter.query}
-          onChangeText={(query) => setFilter((current) => ({ ...current, query }))}
-          placeholder={grouped ? 'Search all steps' : 'Search the log'}
-          accessibilityLabel="Search the log"
-          autoCapitalize="none"
-          autoCorrect={false}
-          adornment={count ? <Text style={styles.count}>{count}</Text> : undefined}
-        />
-      </View>
-      {filter.query.trim().length > 0 ? (
-        <SegmentedControl
-          options={FILTER_MODES}
-          value={filter.mode}
-          onChange={(mode: LogFilterMode) => setFilter((current) => ({ ...current, mode }))}
-          accessibilityLabel="How search filters the log"
-        />
-      ) : null}
+    <View style={compact ? styles.searchCompact : styles.search}>
+      <TextField
+        label="Search"
+        value={value}
+        onChangeText={onChange}
+        placeholder={grouped ? 'Search all steps' : 'Search the log'}
+        accessibilityLabel="Search the log"
+        autoCapitalize="none"
+        autoCorrect={false}
+        adornment={count ? <Text style={styles.count}>{count}</Text> : undefined}
+      />
     </View>
   )
+}
+
+function FilterModeControl({
+  mode,
+  onChange,
+}: Readonly<{ mode: LogFilterMode; onChange: (mode: LogFilterMode) => void }>) {
+  return (
+    <SegmentedControl
+      options={FILTER_MODES}
+      value={mode}
+      onChange={onChange}
+      accessibilityLabel="How search filters the log"
+    />
+  )
+}
+
+/**
+ * The search text as typed, and the text the log is searched with: it settles
+ * {@link SEARCH_DEBOUNCE_MS} after the last keystroke. `reset` clears both at
+ * once (Jump to first error must not wait for the timer).
+ */
+function useDebouncedQuery() {
+  const [input, setInput] = useState('')
+  const [settled, setSettled] = useState('')
+  useEffect(() => {
+    if (input === settled) return
+    const timer = setTimeout(() => setSettled(input), SEARCH_DEBOUNCE_MS)
+    return () => clearTimeout(timer)
+  }, [input, settled])
+  const reset = useCallback(() => {
+    setInput('')
+    setSettled('')
+  }, [])
+  return { input, setInput, settled, reset }
 }
 
 /** Jump to first error, Open / Close all steps, Copy and (web only) Download. */
@@ -477,6 +507,105 @@ function LogActions({
           accessibilityLabel="Download the log"
         />
       ) : null}
+    </View>
+  )
+}
+
+type LiveControl = Readonly<{ on: boolean; offLabel: string; onToggle?: () => void }>
+
+function LiveToggle({ control }: Readonly<{ control: LiveControl }>) {
+  return (
+    <ToolToggle
+      label="Live"
+      value={control.on}
+      onChange={() => control.onToggle?.()}
+      offLabel={control.offLabel}
+    />
+  )
+}
+
+type PhonePanel = 'filter' | 'more' | null
+
+function BarButton({
+  label,
+  detail,
+  pressed,
+  expanded,
+  onPress,
+  accessibilityLabel,
+}: Readonly<{
+  label: string
+  /** A second short line under the label ("On", "Paused"). */
+  detail?: string
+  pressed?: boolean
+  expanded?: boolean
+  onPress: () => void
+  accessibilityLabel?: string
+}>) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? label}
+      accessibilityState={{ selected: pressed, expanded }}
+      style={({ pressed: down }) => [
+        styles.barButton,
+        pressed && styles.barButtonOn,
+        down && styles.barButtonDown,
+        webPointer,
+      ]}
+    >
+      <Text style={[styles.barLabel, pressed && styles.barLabelOn]}>{label}</Text>
+      {detail ? <Text style={styles.barDetail}>{detail}</Text> : null}
+    </Pressable>
+  )
+}
+
+/**
+ * Phone controls: a bottom bar of 48 pt buttons (Live while the log is being
+ * written, Jump to error when there is one, Filter, More). Filter and More
+ * open a panel above the bar with the rest of the controls.
+ */
+function PhoneLogBar({
+  live,
+  onJumpToError,
+  filterActive,
+  filterPanel,
+  morePanel,
+}: Readonly<{
+  live: LiveControl | null
+  onJumpToError: (() => void) | null
+  filterActive: boolean
+  filterPanel: ReactNode
+  morePanel: ReactNode
+}>) {
+  const [panel, setPanel] = useState<PhonePanel>(null)
+  const toggle = (next: Exclude<PhonePanel, null>) =>
+    setPanel((current) => (current === next ? null : next))
+  return (
+    <View style={styles.phoneBarWrap}>
+      {panel ? (
+        <View style={styles.phonePanel}>{panel === 'filter' ? filterPanel : morePanel}</View>
+      ) : null}
+      <View style={styles.phoneBar}>
+        {live ? (
+          <BarButton
+            label="Live"
+            detail={live.on ? 'On' : live.offLabel}
+            pressed={live.on}
+            onPress={() => live.onToggle?.()}
+            accessibilityLabel={live.on ? 'Live, on' : `Live, ${live.offLabel}`}
+          />
+        ) : null}
+        {onJumpToError ? <BarButton label="Jump to error" onPress={onJumpToError} /> : null}
+        <BarButton
+          label="Filter"
+          pressed={filterActive}
+          expanded={panel === 'filter'}
+          onPress={() => toggle('filter')}
+        />
+        <BarButton label="More" expanded={panel === 'more'} onPress={() => toggle('more')} />
+      </View>
     </View>
   )
 }
@@ -527,13 +656,24 @@ export function LogViewer({
   const { width } = useWindowDimensions()
   const compact = width < layout.desktopBreakpoint
   const listRef = useRef<FlatList<LogViewerItem> | null>(null)
-  const [filter, setFilter] = useState<LogFilter>(EMPTY_LOG_FILTER)
+  const search = useDebouncedQuery()
+  const [mode, setMode] = useState<LogFilterMode>('highlight')
+  const [errorsOnly, setErrorsOnly] = useState(false)
+  const filter = useMemo<LogFilter>(
+    () => ({ query: search.settled, mode, errorsOnly }),
+    [search.settled, mode, errorsOnly]
+  )
   const [wrapChoice, setWrapChoice] = useState<boolean | null>(null)
   const [timesChoice, setTimesChoice] = useState<boolean | null>(null)
   const [noiseShownIds, setNoiseShownIds] = useState<ReadonlySet<string>>(new Set())
   // Phone: wrap on and timestamps off unless the person says otherwise.
   const wrap = wrapChoice ?? (compact || !WEB)
   const timestamps = timesChoice ?? !compact
+  // Copy and Download take what the view shows: repeated progress ticks collapsed.
+  const plainText = useMemo(
+    () => transcriptPlainText(collapseRepeatedProgressLines(lines)),
+    [lines]
+  )
 
   const steps = useMemo(
     () => buildLogSteps(lines, plan, commandStatus),
@@ -557,20 +697,22 @@ export function LogViewer({
     ? { label: 'Close all steps', onPress: openSteps.closeAll }
     : { label: 'Open all steps', onPress: openSteps.openAll }
 
+  const { reset: resetSearch } = search
   const jumpToStep = useCallback(
     (id: string) => {
-      setFilter(EMPTY_LOG_FILTER)
+      resetSearch()
+      setErrorsOnly(false)
       openSteps.open(id)
       scrollTo({ key: `step:${id}` })
     },
-    [openSteps, scrollTo]
+    [openSteps, resetSearch, scrollTo]
   )
   const jumpToError = useCallback(() => {
     if (!errorStep) return
-    setFilter((current) => ({ ...current, query: '' }))
+    resetSearch()
     openSteps.open(errorStep)
     scrollTo({ firstError: true })
-  }, [errorStep, openSteps, scrollTo])
+  }, [errorStep, openSteps, resetSearch, scrollTo])
 
   const handleContentSizeChange = useCallback(() => {
     if (live === 'on') listRef.current?.scrollToEnd({ animated: false })
@@ -615,6 +757,38 @@ export function LogViewer({
   }
 
   const viewportHeight = height ?? (compact ? 420 : 520)
+  const liveControl: LiveControl | null =
+    live === 'off' ? null : { on: live === 'on', offLabel: liveOffLabel, onToggle: onLiveToggle }
+  const searchField = (
+    <LogSearchField
+      value={search.input}
+      onChange={search.setInput}
+      count={matchCountText(filter, model.total)}
+      grouped={grouped}
+      compact={compact}
+    />
+  )
+  const actions = (
+    <LogActions
+      compact={compact}
+      plainText={plainText}
+      downloadFileName={downloadFileName}
+      onJumpToError={!compact && errorStep ? jumpToError : null}
+      stepToggle={grouped && !isFiltering(filter) ? stepToggle : null}
+    />
+  )
+  const filterControls = (
+    <>
+      <ToolToggle label="Errors and warnings" value={errorsOnly} onChange={setErrorsOnly} />
+      {search.input.trim().length > 0 ? <FilterModeControl mode={mode} onChange={setMode} /> : null}
+    </>
+  )
+  const viewControls = (
+    <>
+      <ToolToggle label="Wrap" value={wrap} onChange={setWrapChoice} />
+      <ToolToggle label="Timestamps" value={timestamps} onChange={setTimesChoice} />
+    </>
+  )
 
   return (
     <View style={styles.root}>
@@ -627,37 +801,24 @@ export function LogViewer({
           </Text>
         </View>
       ) : null}
-      <LogSearchBar
-        filter={filter}
-        setFilter={setFilter}
-        total={model.total}
-        grouped={grouped}
-        compact={compact}
-      />
-      <View style={styles.tools}>
-        <ToolToggle
-          label="Errors and warnings"
-          value={filter.errorsOnly}
-          onChange={(errorsOnly) => setFilter((current) => ({ ...current, errorsOnly }))}
-        />
-        {live === 'off' ? null : (
-          <ToolToggle
-            label="Live"
-            value={live === 'on'}
-            onChange={() => onLiveToggle?.()}
-            offLabel={liveOffLabel}
-          />
-        )}
-        <ToolToggle label="Wrap" value={wrap} onChange={setWrapChoice} />
-        <ToolToggle label="Timestamps" value={timestamps} onChange={setTimesChoice} />
-      </View>
-      <LogActions
-        compact={compact}
-        plainText={transcriptPlainText(lines)}
-        downloadFileName={downloadFileName}
-        onJumpToError={errorStep ? jumpToError : null}
-        stepToggle={grouped && !isFiltering(filter) ? stepToggle : null}
-      />
+      {compact ? (
+        searchField
+      ) : (
+        <>
+          <View style={styles.tools}>
+            {searchField}
+            {search.input.trim().length > 0 ? (
+              <FilterModeControl mode={mode} onChange={setMode} />
+            ) : null}
+          </View>
+          <View style={styles.tools}>
+            <ToolToggle label="Errors and warnings" value={errorsOnly} onChange={setErrorsOnly} />
+            {liveControl ? <LiveToggle control={liveControl} /> : null}
+            {viewControls}
+          </View>
+          {actions}
+        </>
+      )}
       <View
         style={[panelStyles.commandCodeBlock, styles.viewport, { height: viewportHeight }]}
         {...nestedScrollDomProps}
@@ -686,6 +847,20 @@ export function LogViewer({
         />
       </View>
       {hint ? <Text style={panelStyles.muted}>{hint}</Text> : null}
+      {compact ? (
+        <PhoneLogBar
+          live={liveControl}
+          onJumpToError={errorStep ? jumpToError : null}
+          filterActive={errorsOnly || mode === 'only'}
+          filterPanel={filterControls}
+          morePanel={
+            <>
+              {viewControls}
+              {actions}
+            </>
+          }
+        />
+      ) : null}
     </View>
   )
 }
@@ -715,6 +890,59 @@ const styles = StyleSheet.create({
     color: colors.textFaint,
     fontFamily: BODY,
     fontSize: 12,
+  },
+  phoneBarWrap: {
+    gap: spacing.xs,
+    // Web: the bar stays at the bottom of the screen while the page scrolls.
+    ...({ position: 'sticky', bottom: 0, zIndex: 2 } as unknown as ViewStyle),
+  },
+  phonePanel: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.borderArea,
+    backgroundColor: colors.bgPanel,
+  },
+  phoneBar: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+    padding: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.borderArea,
+    backgroundColor: colors.bgPanel,
+  },
+  barButton: {
+    flex: 1,
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 10,
+    paddingHorizontal: 4,
+  },
+  barButtonOn: {
+    backgroundColor: colors.accentSoft,
+  },
+  barButtonDown: {
+    opacity: 0.7,
+  },
+  barLabel: {
+    color: colors.textBody,
+    fontFamily: BODY_SEMIBOLD,
+    fontSize: 12,
+    textAlign: 'center',
+  },
+  barLabelOn: {
+    color: colors.link,
+  },
+  barDetail: {
+    color: colors.textFaint,
+    fontFamily: BODY,
+    fontSize: 11,
   },
   toolToggle: {
     flexDirection: 'row',

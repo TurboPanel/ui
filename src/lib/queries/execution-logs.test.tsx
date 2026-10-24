@@ -10,9 +10,13 @@ import { createAppQueryClient } from '@/lib/query-client'
 import {
   accumulateCommandLog,
   classifyCommandLogFailure,
+  COMMAND_LOG_MAX_PAGES_PER_READ,
+  COMMAND_LOG_POLL_MS,
+  commandLogRefetchInterval,
   EMPTY_COMMAND_LOG_SNAPSHOT,
   orderDeploymentsNewestFirst,
   resolveCommandLogState,
+  shouldReadNextPage,
   useCommandLog,
   useEnvironmentDeployments,
   type CommandLogSnapshot,
@@ -278,6 +282,8 @@ describe('useCommandLog', () => {
       .mockResolvedValueOnce(
         response({ text: logEvent(2, 'second'), nextSeq: 2, sealed: true }),
       )
+      // Sealed and the cursor moved: one more read confirms nothing is left.
+      .mockResolvedValueOnce(response({ nextSeq: 2, sealed: true }))
 
     const { result } = renderHook(
       () => useCommandLog('org-1', 'srv-a', 'cmd-1'),
@@ -366,7 +372,7 @@ describe('useCommandLog', () => {
     expect(fetchCommandLog).not.toHaveBeenCalled()
   })
 
-  it('reads a terminal transcript once when polling is disabled', async () => {
+  it('reads a terminal transcript to the end once when polling is disabled', async () => {
     fetchCommandLog.mockResolvedValue(
       response({ text: logEvent(1, 'done'), nextSeq: 1, sealed: true }),
     )
@@ -377,7 +383,10 @@ describe('useCommandLog', () => {
     await waitFor(() => {
       expect(result.current.state).toBe('sealed')
     })
-    expect(fetchCommandLog).toHaveBeenCalledTimes(1)
+    // The second read (from 1) returns the same cursor, so reading stops there.
+    expect(fetchCommandLog).toHaveBeenCalledTimes(2)
+    expect(fetchCommandLog).toHaveBeenLastCalledWith('srv-a', 'cmd-1', { from: 1 })
+    expect(result.current.snapshot.lines).toHaveLength(1)
   })
 
   it('resets the accumulator when the viewer is disabled', async () => {
@@ -414,6 +423,130 @@ describe('useCommandLog', () => {
       expect(result.current.error).not.toBeNull()
     })
     expect(result.current.state).toBe('unavailable')
+  })
+})
+
+/**
+ * A fake log endpoint that, like the real one, returns one chunk per call from
+ * `from` and reports `sealed` for the whole log, not for the slice returned.
+ */
+function pagedEndpoint(messages: readonly string[], sealed = true) {
+  return async (_server: string, _command: string, options?: { from?: number }) => {
+    const from = options?.from ?? 0
+    if (from >= messages.length) return response({ nextSeq: from, sealed })
+    return response({
+      text: logEvent(from + 1, messages[from] ?? ''),
+      nextSeq: from + 1,
+      sealed,
+    })
+  }
+}
+
+describe('paged transcript reads', () => {
+  it('reads every page of a finished log, not just the first', async () => {
+    fetchCommandLog.mockImplementation(pagedEndpoint(['one', 'two', 'three']))
+    const { result } = renderHook(
+      () => useCommandLog('org-1', 'srv-a', 'cmd-1', { poll: false }),
+      { wrapper: createWrapper() },
+    )
+    await waitFor(() => {
+      expect(result.current.snapshot.lines.map((line) => line.message)).toEqual([
+        'one',
+        'two',
+        'three',
+      ])
+    })
+    // Three pages plus the read that found the cursor had stopped.
+    expect(fetchCommandLog).toHaveBeenCalledTimes(4)
+    expect(result.current.snapshot.moreToRead).toBe(false)
+    const calls = fetchCommandLog.mock.calls.length
+    await new Promise((resolve) => setTimeout(resolve, 1300))
+    expect(fetchCommandLog.mock.calls).toHaveLength(calls)
+  })
+
+  it('a live log takes one page per poll and drains the rest once sealed', async () => {
+    fetchCommandLog.mockImplementation(pagedEndpoint(['a', 'b', 'c'], false))
+    const { result } = renderHook(() => useCommandLog('org-1', 'srv-a', 'cmd-1'), {
+      wrapper: createWrapper(),
+    })
+    await waitFor(() => {
+      expect(result.current.snapshot.lines).toHaveLength(1)
+    })
+    expect(fetchCommandLog).toHaveBeenCalledTimes(1)
+    // The deploy ends: the next poll sees `sealed` and reads to the end at once.
+    fetchCommandLog.mockImplementation(pagedEndpoint(['a', 'b', 'c'], true))
+    await waitFor(
+      () => {
+        expect(result.current.snapshot.lines).toHaveLength(3)
+      },
+      { timeout: 4000 },
+    )
+    expect(result.current.snapshot.sealed).toBe(true)
+  })
+
+  it('keeps reading on the next poll when the page cap cuts a read short', async () => {
+    const messages = Array.from(
+      { length: COMMAND_LOG_MAX_PAGES_PER_READ + 2 },
+      (_, index) => `line ${index + 1}`,
+    )
+    fetchCommandLog.mockImplementation(pagedEndpoint(messages))
+    const { result } = renderHook(
+      () => useCommandLog('org-1', 'srv-a', 'cmd-1', { poll: false }),
+      { wrapper: createWrapper() },
+    )
+    await waitFor(
+      () => {
+        expect(result.current.snapshot.lines).toHaveLength(messages.length)
+      },
+      { timeout: 4000 },
+    )
+    expect(result.current.snapshot.moreToRead).toBe(false)
+  })
+
+  it('keeps what it read when a later page fails, and carries on', async () => {
+    const endpoint = pagedEndpoint(['one', 'two'])
+    fetchCommandLog
+      .mockImplementationOnce(endpoint)
+      .mockRejectedValueOnce(new Error('HTTP 503: busy'))
+      .mockImplementation(endpoint)
+    const { result } = renderHook(
+      () => useCommandLog('org-1', 'srv-a', 'cmd-1', { poll: false }),
+      { wrapper: createWrapper() },
+    )
+    await waitFor(() => {
+      expect(result.current.snapshot.lines).toHaveLength(1)
+    })
+    await waitFor(
+      () => {
+        expect(result.current.snapshot.lines).toHaveLength(2)
+      },
+      { timeout: 4000 },
+    )
+    expect(result.current.error).toBeNull()
+  })
+})
+
+describe('shouldReadNextPage', () => {
+  it('reads on only when the cursor moved and the log is sealed or not polled', () => {
+    expect(shouldReadNextPage(0, { nextSeq: 1, sealed: true }, true)).toBe(true)
+    expect(shouldReadNextPage(0, { nextSeq: 1, sealed: false }, false)).toBe(true)
+    expect(shouldReadNextPage(0, { nextSeq: 1, sealed: false }, true)).toBe(false)
+    expect(shouldReadNextPage(1, { nextSeq: 1, sealed: true }, false)).toBe(false)
+  })
+})
+
+describe('commandLogRefetchInterval', () => {
+  const sealed: CommandLogSnapshot = { ...EMPTY_COMMAND_LOG_SNAPSHOT, sealed: true }
+  it('stops a sealed or unpolled log unless there is more to read', () => {
+    expect(commandLogRefetchInterval(undefined, true)).toBe(COMMAND_LOG_POLL_MS)
+    expect(commandLogRefetchInterval(sealed, true)).toBe(false)
+    expect(commandLogRefetchInterval(undefined, false)).toBe(false)
+    expect(commandLogRefetchInterval({ ...sealed, moreToRead: true }, false)).toBe(
+      COMMAND_LOG_POLL_MS,
+    )
+    expect(
+      commandLogRefetchInterval({ ...sealed, moreToRead: true, access: 'forbidden' }, true),
+    ).toBe(false)
   })
 })
 

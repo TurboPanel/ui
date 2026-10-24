@@ -17,6 +17,13 @@ import { queryKeys } from '@/lib/query-keys'
 /** Transcript poll cadence while a command is live. Sealed transcripts stop. */
 export const COMMAND_LOG_POLL_MS = 1000
 
+/**
+ * Most pages one read takes back to back. The log endpoint returns a bounded
+ * slice per call (512 KiB), so a long log needs several calls; the cap keeps
+ * one read from running on, and the next poll carries on from the cursor.
+ */
+export const COMMAND_LOG_MAX_PAGES_PER_READ = 32
+
 /** Render state of a transcript — see `pages/deploy-logs.md` (state matrix). */
 export type CommandLogState =
   | 'idle'
@@ -49,6 +56,12 @@ export type CommandLogSnapshot = Readonly<{
   exists: boolean
   /** Result of the latest read — see {@link CommandLogAccess}. */
   access: CommandLogAccess
+  /**
+   * The last read stopped while the cursor was still moving (page cap or a
+   * failed later page): there may be more to read even though the log is
+   * sealed, so polling goes on until it is caught up.
+   */
+  moreToRead: boolean
 }>
 
 export const EMPTY_COMMAND_LOG_SNAPSHOT: CommandLogSnapshot = {
@@ -58,6 +71,7 @@ export const EMPTY_COMMAND_LOG_SNAPSHOT: CommandLogSnapshot = {
   truncated: false,
   exists: false,
   access: 'ok',
+  moreToRead: false,
 }
 
 /**
@@ -87,6 +101,7 @@ export function accumulateCommandLog(
     exists: current.exists || response.exists,
     // A successful read clears any earlier forbidden/unavailable verdict.
     access: 'ok',
+    moreToRead: current.moreToRead,
   }
 }
 
@@ -135,6 +150,37 @@ export function resolveCommandLogState(
   return 'streaming'
 }
 
+/**
+ * Whether to read the next page straight away. The endpoint reports `sealed`
+ * for the whole log, not for the slice it returned, so a sealed read whose
+ * cursor moved may still have more behind it. A live log that is not sealed
+ * yet carries on at the next poll instead (unless polling is off).
+ */
+export function shouldReadNextPage(
+  from: number,
+  response: Readonly<Pick<CommandLogResponse, 'nextSeq' | 'sealed'>>,
+  poll: boolean,
+): boolean {
+  if (response.nextSeq <= from) return false
+  return response.sealed || !poll
+}
+
+/**
+ * Next read for a transcript, or false to stop. A forbidden or durably
+ * unavailable transcript stops; one with more left to read carries on even
+ * when sealed or when polling is off; otherwise a live transcript polls until
+ * it is sealed.
+ */
+export function commandLogRefetchInterval(
+  data: CommandLogSnapshot | undefined,
+  poll: boolean,
+): number | false {
+  if (data && data.access !== 'ok') return false
+  if (data?.moreToRead) return COMMAND_LOG_POLL_MS
+  if (!poll || data?.sealed) return false
+  return COMMAND_LOG_POLL_MS
+}
+
 export type UseCommandLogResult = Readonly<{
   snapshot: CommandLogSnapshot
   state: CommandLogState
@@ -178,6 +224,10 @@ export function useCommandLog(
 
   const queryFn = useCallback(async (): Promise<CommandLogSnapshot> => {
     if (!serverId || !commandId) return EMPTY_COMMAND_LOG_SNAPSHOT
+    const keep = (snapshot: CommandLogSnapshot): CommandLogSnapshot => {
+      accumulatorRef.current = { identity, snapshot }
+      return snapshot
+    }
     const accumulator = accumulatorRef.current
     // A different command reuses this hook instance: start from scratch rather
     // than resuming another transcript's cursor.
@@ -185,24 +235,29 @@ export function useCommandLog(
       accumulator.identity === identity
         ? accumulator.snapshot
         : EMPTY_COMMAND_LOG_SNAPSHOT
-    let response: CommandLogResponse
-    try {
-      response = await fetchCommandLog(serverId, commandId, {
-        from: current.nextSeq,
-      })
-    } catch (err) {
-      const access = classifyCommandLogFailure(err)
-      // Rethrow only what the query should genuinely retry/surface as an error;
-      // a command-level 403 never reaches the global forbidden handler.
-      if (!access) throw err
-      const next: CommandLogSnapshot = { ...current, access }
-      accumulatorRef.current = { identity, snapshot: next }
-      return next
+    let next = current
+    for (let page = 0; page < COMMAND_LOG_MAX_PAGES_PER_READ; page++) {
+      const from = next.nextSeq
+      let response: CommandLogResponse
+      try {
+        response = await fetchCommandLog(serverId, commandId, { from })
+      } catch (err) {
+        // A later page failed: keep what was read, carry on at the next poll.
+        if (page > 0) return keep({ ...next, moreToRead: true })
+        const access = classifyCommandLogFailure(err)
+        // Rethrow only what the query should genuinely retry/surface as an error;
+        // a command-level 403 never reaches the global forbidden handler.
+        if (!access) throw err
+        return keep({ ...next, access })
+      }
+      next = accumulateCommandLog(next, response)
+      if (!shouldReadNextPage(from, response, poll)) {
+        return keep({ ...next, moreToRead: false })
+      }
     }
-    const next = accumulateCommandLog(current, response)
-    accumulatorRef.current = { identity, snapshot: next }
-    return next
-  }, [serverId, commandId, identity])
+    // Page cap reached while the cursor was still moving.
+    return keep({ ...next, moreToRead: true })
+  }, [serverId, commandId, identity, poll])
 
   const query = useQuery({
     queryKey: queryKeys.org(orgId).commands.log(serverId ?? '', commandId ?? ''),
@@ -212,15 +267,8 @@ export function useCommandLog(
     // starting point, so keep reads cheap but always resume from the cursor.
     staleTime: 0,
     gcTime: 0,
-    refetchInterval: (query) => {
-      if (!poll) return false
-      const data = query.state.data
-      if (data?.sealed) return false
-      // A forbidden/durably-unavailable transcript will not become readable by
-      // asking again every second.
-      if (data && data.access !== 'ok') return false
-      return COMMAND_LOG_POLL_MS
-    },
+    refetchInterval: (query) =>
+      commandLogRefetchInterval(query.state.data, poll),
   })
 
   useEffect(() => {
