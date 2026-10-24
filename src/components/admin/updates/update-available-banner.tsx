@@ -1,8 +1,8 @@
 import { useRouter, type Href } from 'expo-router'
 import { useMemo, useState } from 'react'
-import { StyleSheet, View } from 'react-native'
+import { StyleSheet, Text, useWindowDimensions, View } from 'react-native'
 import { readConsoleBuild } from '@/components/admin/updates/console-build'
-import { Button, InlineNotice } from '@/components/ui'
+import { Button, InlineNotice, TextLink } from '@/components/ui'
 import { isSuperadminSession, useAuth } from '@/lib/auth-context'
 import { useInstallStatusQuery } from '@/lib/queries/auth'
 import { useInstanceUpdates, useUpgradeActiveRun } from '@/lib/queries/admin'
@@ -14,7 +14,7 @@ import {
   writeDismissedUpdateBanner,
   type UpdateBanner,
 } from '@/lib/update-status'
-import { spacing } from '@/lib/theme'
+import { colors, layout, spacing } from '@/lib/theme'
 
 function webStorage(): Storage | undefined {
   try {
@@ -52,32 +52,61 @@ export function useUpdateAvailable(): Readonly<{
   }
 }
 
-/** "Update available: control plane v0.1.5-canary.1 — Update" across the top of the app. */
+/**
+ * "Update available: control plane v0.1.5-canary.1 — Update" across the top of
+ * the app. On a phone-width window it is one line, "Update available · Review",
+ * so it never takes a third of the screen; what the update holds is on the
+ * review screen it opens. On a wide window one line of title and at most two
+ * of detail.
+ */
 export function UpdateAvailableBanner() {
   const router = useRouter()
+  const { width } = useWindowDimensions()
   const { banner, dismiss } = useUpdateAvailable()
   if (!banner) return null
+  const review = () => {
+    router.push(UPDATE_NOW_HREF as Href)
+  }
+  const dismissButton = (
+    <Button
+      label="Dismiss"
+      variant="ghost"
+      size={width < layout.desktopBreakpoint ? 'sm' : 'md'}
+      accessibilityLabel="Dismiss the update notice"
+      onPress={() => {
+        dismiss(banner.key)
+      }}
+    />
+  )
+  if (width < layout.desktopBreakpoint) {
+    return (
+      <View style={styles.root}>
+        <View style={styles.compact}>
+          <Text style={styles.compactTitle} numberOfLines={1}>
+            Update available ·
+          </Text>
+          <TextLink
+            label="Review"
+            accessibilityLabel={`Review the update. ${banner.title}`}
+            onPress={review}
+          />
+          <View style={styles.compactFill} />
+          {dismissButton}
+        </View>
+      </View>
+    )
+  }
   return (
     <View style={styles.root}>
       <InlineNotice
         title={banner.title}
         body={banner.body}
+        titleLines={1}
+        bodyLines={2}
         actions={
           <>
-            <Button
-              label="Update"
-              variant="primary"
-              onPress={() => {
-                router.push(UPDATE_NOW_HREF as Href)
-              }}
-            />
-            <Button
-              label="Dismiss"
-              variant="ghost"
-              onPress={() => {
-                dismiss(banner.key)
-              }}
-            />
+            <Button label="Update" variant="primary" onPress={review} />
+            {dismissButton}
           </>
         }
       />
@@ -89,5 +118,27 @@ const styles = StyleSheet.create({
   root: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
+  },
+  compact: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.command,
+    backgroundColor: colors.bgSecondary,
+    paddingLeft: spacing.md,
+    paddingRight: spacing.xs,
+  },
+  compactTitle: {
+    flexShrink: 1,
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  compactFill: {
+    flex: 1,
   },
 })

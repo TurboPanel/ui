@@ -1,6 +1,8 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { panelStyles } from '@/components/ui/panel-styles'
+import { useTouch } from '@/components/ui/v4/use-palette'
 import { webPointer } from '@/lib/theme'
+import { CONTROL_HEIGHT } from '@/lib/v4/ui-scale'
 
 export type SegmentedOption<T extends string> = Readonly<{
   value: T
@@ -13,7 +15,8 @@ export type SegmentedOption<T extends string> = Readonly<{
 
 /**
  * Standard segmented filter / view switcher using the shared
- * `panelStyles.segment*` shapes (never hand-roll chip rows).
+ * `panelStyles.segment*` shapes (never hand-roll chip rows). Each option is
+ * 44 pt tall on a phone or a coarse pointer.
  */
 export function SegmentedControl<T extends string>({
   options,
@@ -29,6 +32,7 @@ export function SegmentedControl<T extends string>({
   disabled?: boolean
   accessibilityLabel?: string
 }>) {
+  const touch = useTouch()
   return (
     <View
       style={panelStyles.segmentGroup}
@@ -46,8 +50,11 @@ export function SegmentedControl<T extends string>({
             accessibilityRole="tab"
             accessibilityLabel={option.accessibilityLabel ?? option.label}
             accessibilityState={{ selected: active, disabled: optionDisabled }}
+            aria-selected={active}
+            aria-disabled={optionDisabled}
             style={[
               panelStyles.segmentChip,
+              touch && styles.touch,
               webPointer,
               active && panelStyles.segmentChipActive,
               optionDisabled && styles.disabled,
@@ -69,6 +76,10 @@ export function SegmentedControl<T extends string>({
 }
 
 const styles = StyleSheet.create({
+  touch: {
+    minHeight: CONTROL_HEIGHT.touch,
+    justifyContent: 'center',
+  },
   disabled: {
     opacity: 0.5,
   },

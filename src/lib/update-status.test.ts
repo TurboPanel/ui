@@ -348,7 +348,9 @@ describe('updateBanner', () => {
   it('offers an available self-hosted update, naming the piece and its version', () => {
     const banner = updateBanner({ updates: updates(), activeRun: false, dismissedKey: null })
     expect(banner?.title).toBe('TurboPanel update available: control plane v0.1.2')
-    expect(banner?.body).toBe('This updates the control plane (the part that runs TurboPanel). Choose Update to review it first; nothing changes until you confirm. This page may briefly show “TurboPanel is updating” while it restarts.')
+    expect(banner?.body).toBe(
+      'This updates the control plane (the part that runs TurboPanel). Choose Update to review it first; nothing changes until you confirm.'
+    )
     expect(banner?.key).toBe('control plane|canary|0.1.2|abc1234def|20260927-180000-abc1234')
   })
 
@@ -363,7 +365,7 @@ describe('updateBanner', () => {
       'TurboPanel update available: control plane v0.1.5-canary.1, web interface v0.1.5-canary.2, daemon v0.1.6-canary.3'
     )
     expect(banner?.body).toBe(
-      'This updates the control plane (the part that runs TurboPanel), the web interface (the pages you are using now) and the daemon (the software on each of your servers). Choose Update to review it first; nothing changes until you confirm. This page may briefly show “TurboPanel is updating” while it restarts.'
+      'This updates the control plane (the part that runs TurboPanel), the web interface (the pages you are using now) and the daemon (the software on each of your servers). Choose Update to review it first; nothing changes until you confirm.'
     )
   })
 
