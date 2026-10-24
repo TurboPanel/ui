@@ -106,7 +106,7 @@ describe('cancel deploy errors', () => {
 
 describe('Let’s Encrypt refusals', () => {
   it.each([
-    ['lets_encrypt_not_enabled', 'has not turned on'],
+    ['lets_encrypt_not_enabled', 'turned off for this organization'],
     ['acme_requires_public_bind', 'reachable from the internet'],
     ['hosting_not_http', 'web domains'],
     ['hosting_has_no_hostnames', 'Add a domain name'],

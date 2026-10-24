@@ -39,6 +39,14 @@ describe('isForbiddenError and container_not_owned', () => {
     const error = new Error('/containers/x/logs failed: HTTP 403: container_not_owned — msg')
     expect(isForbiddenError(error)).toBe(false)
   })
+
+  it('does not treat Let’s Encrypt turned off for the organization as a permission 403', () => {
+    const error = new Error(
+      '/hostings/h/use-letsencrypt failed: HTTP 403: lets_encrypt_not_enabled'
+    )
+    expect(isForbiddenError(error)).toBe(false)
+    expect(isForbiddenError(new Error('/hostings/h failed: HTTP 403: Forbidden'))).toBe(true)
+  })
 })
 
 describe('isHttpStatusError', () => {
