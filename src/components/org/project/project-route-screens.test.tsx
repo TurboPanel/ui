@@ -50,9 +50,7 @@ vi.mock('@/components/org/project/environment-shell', () => ({
   useEnvironmentChrome: () => state.chrome,
 }))
 vi.mock('@/components/org/project/managed-focus-tab', () => ({
-  ManagedFocusTab: ({ focus }: Readonly<{ focus: string }>) => (
-    <div data-testid="managed" data-focus={focus} />
-  ),
+  ManagedFocusTab: () => <div data-testid="managed" />,
 }))
 vi.mock('@/components/org/project/base-tab/base-edit-notice', () => ({
   WithBaseNotice: ({ children }: Props) => (
@@ -161,14 +159,14 @@ describe('LegacyProjectRedirect', () => {
     expect(redirectHref()).toBe('/o/projects/p/overview')
   })
 
-  it('opens a managed project at its overview, and keeps its environment page', () => {
+  it('sends a managed project where a website project goes, at either scope', () => {
     setContext({ project: project('managed', { code: 'postgres' }) })
     render(<LegacyProjectRedirect segment="storage" />)
-    expect(redirectHref()).toBe('/o/projects/p/overview')
+    expect(redirectHref()).toBe('/o/projects/p/base/storage')
     cleanup()
     state.params = { orgId: 'o', projectId: 'p', environmentId: 'e' }
     render(<LegacyProjectRedirect segment="storage" />)
-    expect(screen.getByTestId('managed').getAttribute('data-focus')).toBe('overview')
+    expect(redirectHref()).toBe('/o/projects/p/environments/e/configuration/storage')
   })
 
   it('falls back to the project for a segment that was never retired', () => {
@@ -193,7 +191,7 @@ describe('project tabs', () => {
     expect(screen.getByTestId('managed')).toBeTruthy()
   })
 
-  it('shows the Base tab on the web, and sends platform and managed projects home', () => {
+  it('shows the Base tab on the web, sends platform projects home and greys it for managed ones', () => {
     render(<ProjectBaseScreen />)
     expect(screen.getByTestId('base-tab')).toBeTruthy()
     expect(screen.getByTestId('base-notice').textContent).toBe(
@@ -208,7 +206,8 @@ describe('project tabs', () => {
     cleanup()
     setContext({ project: project('managed', { code: 'postgres' }) })
     render(<ProjectBaseScreen />)
-    expect(redirectHref()).toBe('/o/projects/p/overview')
+    expect(screen.getByTestId('managed')).toBeTruthy()
+    expect(screen.queryByTestId('redirect')).toBeNull()
   })
 
   it('keeps the compose surface for Base on the phone app', () => {
@@ -219,7 +218,7 @@ describe('project tabs', () => {
     expect(screen.queryByTestId('base-tab')).toBeNull()
   })
 
-  it('keeps the compose surface on the Base lens routes, and sends platform and managed projects home', () => {
+  it('keeps the compose surface on the Base lens routes, sends platform projects home and greys them for managed ones', () => {
     render(<ProjectBaseLensScreen />)
     expect(screen.getByTestId('compose-surface')).toBeTruthy()
     expect(screen.getByTestId('base-notice')).toBeTruthy()
@@ -230,12 +229,12 @@ describe('project tabs', () => {
     cleanup()
     setContext({ project: project('managed', { code: 'postgres' }) })
     render(<ProjectBaseLensScreen />)
-    expect(redirectHref()).toBe('/o/projects/p/overview')
+    expect(screen.getByTestId('managed')).toBeTruthy()
   })
 })
 
 describe('project settings tab', () => {
-  it('shows Project Settings, sends platform projects home, and shows managed settings', () => {
+  it('shows Project Settings for Compose and managed projects, and sends platform projects home', () => {
     render(<ProjectSettingsRouteScreen />)
     expect(screen.getByTestId('project-settings')).toBeTruthy()
     cleanup()
@@ -245,7 +244,7 @@ describe('project settings tab', () => {
     cleanup()
     setContext({ project: project('managed', { code: 'postgres' }) })
     render(<ProjectSettingsRouteScreen />)
-    expect(screen.getByTestId('managed').getAttribute('data-focus')).toBe('settings')
+    expect(screen.getByTestId('project-settings')).toBeTruthy()
   })
 })
 
@@ -316,7 +315,7 @@ describe('environment tabs', () => {
     cleanup()
     setContext({ project: project('managed', { code: 'postgres' }) })
     render(<EnvironmentSettingsScreen />)
-    expect(screen.getByTestId('managed').getAttribute('data-focus')).toBe('settings')
+    expect(screen.getByTestId('managed')).toBeTruthy()
     expect(screen.queryByTestId('env-settings')).toBeNull()
   })
 

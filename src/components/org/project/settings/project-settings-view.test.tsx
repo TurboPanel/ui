@@ -110,6 +110,20 @@ describe.each(SCENARIOS)('project settings ($name)', (scenario) => {
     expect(screen.getByTestId('variables')).toBeTruthy()
   })
 
+  it('gives a managed database name, workspace, a way to its settings and delete', () => {
+    const onOpenDatabaseSettings = vi.fn()
+    render(<ProjectSettingsView {...props({ managed: { onOpenDatabaseSettings } })} />)
+    for (const heading of ['General', 'Workspace', 'Database', 'Danger zone']) {
+      expect(screen.getByRole('heading', { name: heading })).toBeTruthy()
+    }
+    for (const heading of ['Variables', 'Container names', 'Git', 'As Compose files']) {
+      expect(screen.queryByRole('heading', { name: heading })).toBeNull()
+    }
+    expect(screen.getByText(/Managed by TurboPanel/)).toBeTruthy()
+    fireEvent.click(screen.getByText('Engine, resources and backups'))
+    expect(onOpenDatabaseSettings).toHaveBeenCalledTimes(1)
+  })
+
   it('shows Save and Discard only when the form changed, and sends the press', () => {
     const base = props()
     const { rerender } = render(<ProjectSettingsView {...base} />)

@@ -72,7 +72,7 @@ vi.mock('@/components/ui/v4', () => ({
     onChange,
     ariaLabel,
   }: Readonly<{
-    tabs: readonly { key: string; label: string }[]
+    tabs: readonly { key: string; label: string; muted?: boolean; mutedLabel?: string }[]
     value: string
     onChange: (key: string) => void
     ariaLabel: string
@@ -84,6 +84,7 @@ vi.mock('@/components/ui/v4', () => ({
           type="button"
           role="tab"
           aria-selected={tab.key === value}
+          data-muted={tab.muted ? tab.mutedLabel : undefined}
           onClick={() => onChange(tab.key)}
         >
           {tab.label}
@@ -129,6 +130,10 @@ vi.mock('@/components/org/project/project-scope-picker', () => ({
       ))}
     </div>
   ),
+}))
+vi.mock('@/components/org/managed/managed-environment-shell', () => ({
+  ManagedEnvironmentProvider: ({ children }: Props) => <>{children}</>,
+  ManagedEnvironmentHeader: () => <div data-testid="managed-header" />,
 }))
 vi.mock('@/components/org/project/project-context', () => ({
   useProjectContext: () => state.ctx,
@@ -202,7 +207,6 @@ describe('EnvironmentShell gating', () => {
   })
 
   it.each([
-    ['a managed project', { project: { id: 'p', kind: 'managed', metadata: { code: 'postgres' } } }],
     ['a platform project', { isSystemProject: true }],
     ['a project still being set up', { needsSetup: true }],
     ['a create-wizard draft', { draft: {} }],
@@ -217,6 +221,35 @@ describe('EnvironmentShell gating', () => {
     expect(screen.getByText('page body')).toBeTruthy()
     expect(screen.queryByRole('tablist')).toBeNull()
     expect(screen.queryByTestId('actions')).toBeNull()
+  })
+
+  it('gives a managed database the same tab bar, its own header and Compose greyed', () => {
+    setContext({ project: { id: 'p', kind: 'managed', metadata: { code: 'postgres' } } })
+    render(
+      <EnvironmentShell>
+        <p>page body</p>
+      </EnvironmentShell>
+    )
+    expect(screen.getByTestId('managed-header')).toBeTruthy()
+    expect(screen.queryByTestId('actions')).toBeNull()
+    expect(screen.queryByTestId('notices')).toBeNull()
+    const tabs = screen.getAllByRole('tab')
+    expect(tabs.map((tab) => tab.textContent)).toEqual([
+      'Overview',
+      'Deployments',
+      'Services',
+      'Compose',
+      'Bindings',
+      'Hosting',
+      'Settings',
+    ])
+    const compose = screen.getByRole('tab', { name: 'Compose' })
+    expect(compose.getAttribute('data-muted')).toBe('Managed by TurboPanel')
+    expect(tabs.filter((tab) => tab.getAttribute('data-muted'))).toHaveLength(1)
+    // A greyed tab still opens: never a dead link.
+    fireEvent.click(compose)
+    expect(state.push).toHaveBeenCalledWith('/o/projects/p/environments/e/configuration/compose')
+    expect(screen.getByText('page body')).toBeTruthy()
   })
 
   it('reports whether a route gets the header', () => {

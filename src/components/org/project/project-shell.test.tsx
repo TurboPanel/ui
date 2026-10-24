@@ -53,11 +53,6 @@ vi.mock('@/components/header-chevron', () => ({ BreadcrumbChevron: () => null })
 vi.mock('@/components/org/platform-badge', () => ({ PlatformBadge: () => null }))
 vi.mock('@/components/org/project-delete-panel', () => ({ ProjectDeletePanel: () => null }))
 vi.mock('@/components/org/project/project-title-icon', () => ({ ProjectTitleIcon: () => null }))
-vi.mock('@/components/org/project/trash-icon', () => ({ TrashIcon: () => null }))
-vi.mock('@/components/org/project/project-section-tabs', () => ({
-  ProjectSectionTabs: () => null,
-  activeProjectTabFromPathname: () => null,
-}))
 vi.mock('@/components/org/project/project-context', () => ({
   useProjectContext: () => state.ctx,
 }))
@@ -75,7 +70,7 @@ vi.mock('@/components/ui/v4', () => ({
     value,
     onChange,
   }: Readonly<{
-    tabs: readonly { key: string; label: string }[]
+    tabs: readonly { key: string; label: string; muted?: boolean; mutedLabel?: string }[]
     value: string
     onChange: (key: string) => void
   }>) => (
@@ -86,6 +81,7 @@ vi.mock('@/components/ui/v4', () => ({
           type="button"
           role="tab"
           aria-selected={tab.key === value}
+          data-muted={tab.muted ? tab.mutedLabel : undefined}
           onClick={() => onChange(tab.key)}
         >
           {tab.label}
@@ -155,6 +151,34 @@ describe('project tab bar', () => {
       expect(selected()).toEqual([active])
       cleanup()
     }
+  })
+
+  it('gives a managed database the same bar, Base and Compose greyed but still open', () => {
+    setContext({
+      project: { id: 'p', kind: 'managed', name: 'app-db', metadata: { code: 'postgres' } },
+      projectAllowsMutations: true,
+      canOwn: true,
+    })
+    state.pathname = '/o/projects/p/overview'
+    render(<ProjectShell>body</ProjectShell>)
+    expect(tabLabels()).toEqual([
+      'Environments',
+      'Base',
+      'Compose',
+      'Bindings',
+      'Hosting',
+      'Settings',
+    ])
+    expect(selected()).toEqual(['Environments'])
+    const muted = screen
+      .getAllByRole('tab')
+      .filter((tab) => tab.getAttribute('data-muted') === 'Managed by TurboPanel')
+      .map((tab) => tab.textContent)
+    expect(muted).toEqual(['Base', 'Compose'])
+    fireEvent.click(screen.getByRole('tab', { name: 'Compose' }))
+    expect(state.push).toHaveBeenCalledWith('/o/projects/p/base/compose')
+    // Delete lives in Settings now: no trash control in the header.
+    expect(screen.queryByRole('button', { name: /Delete this/ })).toBeNull()
   })
 
   it('opens the Base sections under /base', () => {

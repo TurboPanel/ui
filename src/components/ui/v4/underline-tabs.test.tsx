@@ -57,6 +57,20 @@ describe.each(SCENARIOS)('UnderlineTabs ($name)', (scenario) => {
     expect(screen.getByRole('tab', { name: 'Overview' }).querySelector('div')).toBeNull()
   })
 
+  it('greys a muted tab, says why, and still opens it', () => {
+    const onChange = vi.fn()
+    const tabs = [
+      { key: 'overview', label: 'Overview' },
+      { key: 'compose', label: 'Compose', muted: true, mutedLabel: 'Managed by TurboPanel' },
+    ]
+    render(<UnderlineTabs tabs={tabs} value="overview" onChange={onChange} ariaLabel="Sections" />)
+    const tab = screen.getByRole('tab', { name: 'Compose, Managed by TurboPanel' })
+    expect(styleOf(screen.getByText('Compose')).opacity).toBe(0.5)
+    expect(styleOf(screen.getByText('Overview')).opacity).toBeUndefined()
+    fireEvent.click(tab)
+    expect(onChange).toHaveBeenCalledWith('compose')
+  })
+
   it('names a dotted tab by its label alone when no dot label is given', () => {
     render(
       <UnderlineTabs

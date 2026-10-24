@@ -7,7 +7,12 @@ import { VariablesSection } from '@/components/org/variables-section'
 import { LoadingState } from '@/components/ui'
 import { projectRepositoriesHref } from '@/lib/org-navigation'
 import { buildProjectOptionsPatch } from '@/lib/project-options'
-import { projectComposeHref, projectEnvironmentSettingsHref } from '@/lib/project-navigation'
+import {
+  environmentPageTabHref,
+  isManagedProject,
+  projectComposeHref,
+  projectEnvironmentSettingsHref,
+} from '@/lib/project-navigation'
 import { useUpdateProject } from '@/lib/queries'
 import { useRepositories, useUpdateRepository } from '@/lib/queries/releases'
 import { userWorkspaces } from '@/lib/system-inventory'
@@ -21,9 +26,11 @@ import {
   projectPushDeployRows,
   workspaceMoveChoices,
 } from '@/lib/v4/project-settings'
+import { primaryEnvironmentOf } from '@/lib/v4/primary-environment'
 
 /**
- * Project Settings tab for a Compose project. Everything saves through the
+ * Project Settings tab for a Compose project, and for a managed database
+ * (name, workspace and delete; its engine settings are per environment). Everything saves through the
  * one project record (`PATCH /projects/:id`), so each control reports its own
  * failure through the shell's error line.
  */
@@ -61,6 +68,10 @@ export function ProjectSettingsScreen() {
   if (!project) return <LoadingState />
 
   const draft = edit ?? projectGeneralFromRecord(project)
+  const primary = primaryEnvironmentOf(environments)
+  const databaseSettings = primary
+    ? environmentPageTabHref(orgId, projectId, primary.id, 'settings')
+    : null
   const canEdit = canManage && projectAllowsMutations
   const patch = buildProjectGeneralPatch(project, draft)
 
@@ -134,6 +145,15 @@ export function ProjectSettingsScreen() {
       }
       onOpenRepositories={() => router.push(projectRepositoriesHref(orgId) as Href)}
       onOpenBaseCompose={() => router.push(projectComposeHref(orgId, projectId) as Href)}
+      managed={
+        isManagedProject(project)
+          ? {
+              onOpenDatabaseSettings: databaseSettings
+                ? () => router.push(databaseSettings as Href)
+                : null,
+            }
+          : undefined
+      }
       danger={
         canOwn && projectAllowsMutations ? (
           <ProjectDeletePanel
