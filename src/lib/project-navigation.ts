@@ -262,6 +262,16 @@ export function projectEnvironmentDeploymentsHref(
   return `${projectEnvironmentHref(orgId, projectId, environmentId)}/deployments`
 }
 
+/** One deploy's log page, under the environment's Deployments tab. */
+export function projectEnvironmentDeploymentHref(
+  orgId: string,
+  projectId: string,
+  environmentId: string,
+  deploymentId: string,
+): string {
+  return `${projectEnvironmentDeploymentsHref(orgId, projectId, environmentId)}/${encodeURIComponent(deploymentId)}`
+}
+
 /**
  * Environment Services tab (route id `configuration`): what the environment runs.
  * Path: `/projects/:projectId/environments/:environmentId/configuration`

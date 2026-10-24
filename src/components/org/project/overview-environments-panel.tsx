@@ -66,6 +66,7 @@ import {
 } from '@/lib/environment-menu'
 import {
   projectEnvironmentBindingsHref,
+  projectEnvironmentDeploymentHref,
   projectEnvironmentHostingHref,
   projectEnvironmentSettingsHref,
   projectOverviewHref,
@@ -538,6 +539,17 @@ function DeployLogSection({
   const log = useCommandLog(orgId, openLog.serverId, openLog.commandId, {
     enabled: !collapsed,
   })
+  const { projectId } = useProjectContext()
+  const router = useRouter()
+  const openFullLog = () =>
+    router.push(
+      projectEnvironmentDeploymentHref(
+        orgId,
+        projectId,
+        openLog.environmentId,
+        openLog.commandId
+      ) as Href
+    )
 
   return (
     <View style={styles.logSection}>
@@ -548,6 +560,12 @@ function DeployLogSection({
             : `${openLog.label} output`}
         </Text>
         <View style={styles.barSpacer} />
+        <QuietButton
+          label="Open full log"
+          accessibilityLabel="Open the full deploy log"
+          tone="primary"
+          onPress={openFullLog}
+        />
         <QuietButton
           label={collapsed ? 'Show output' : 'Hide output'}
           accessibilityLabel={collapsed ? 'Show deploy output' : 'Hide deploy output'}
