@@ -47,9 +47,9 @@ describe('formatDaysLeft', () => {
 })
 
 describe('describeCertificate', () => {
-  it('test certificate warns, and offers Let’s Encrypt only when available', () => {
+  it('self-signed certificate warns, and offers Let’s Encrypt only when available', () => {
     const off = describeCertificate(cert({}))
-    expect(off.label).toBe('Test certificate')
+    expect(off.label).toBe('Self-signed certificate')
     expect(off.lines).toEqual(['Browsers will warn visitors.'])
     expect(off.actions).toEqual([])
     expect(describeCertificate(cert({ letsEncryptAvailable: true })).actions).toEqual([

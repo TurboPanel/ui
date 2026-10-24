@@ -40,7 +40,7 @@ function letsEncryptAction(cert: HostingCertificate): CertificateAction[] {
 
 function testView(cert: HostingCertificate): CertificateView {
   return {
-    label: 'Test certificate',
+    label: 'Self-signed certificate',
     tone: 'neutral',
     lines: ['Browsers will warn visitors.'],
     reason: null,
