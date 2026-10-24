@@ -5,7 +5,7 @@ import { serviceStatusTone } from '@/lib/container-status'
 import { appTagLabel } from '@/lib/compose/app-facts'
 import type { StackRow } from '@/lib/compose/stack-rows'
 import type { ContainerRecord, ServiceRecord } from '@/lib/instance-api'
-import { projectServiceHref } from '@/lib/project-navigation'
+import { projectEnvironmentServiceHref } from '@/lib/project-navigation'
 import { chrome, colors, spacing, webPointer } from '@/lib/theme'
 
 /**
@@ -67,7 +67,14 @@ export function ComposeStackList({
         return (
           <Link
             key={row.name}
-            href={projectServiceHref(orgId, projectId, service.id) as Href}
+            href={
+              projectEnvironmentServiceHref(
+                orgId,
+                projectId,
+                service.environmentId,
+                service.id
+              ) as Href
+            }
             asChild
           >
             <Pressable

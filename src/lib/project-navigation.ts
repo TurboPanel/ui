@@ -338,12 +338,52 @@ export function projectEnvironmentSettingsHref(
   return `${projectEnvironmentHref(orgId, projectId, environmentId)}/settings`
 }
 
+/**
+ * Project-scope service path. It only redirects now: the service opens inside
+ * the environment that runs it ({@link projectEnvironmentServiceHref}). Kept for
+ * links that cannot know the environment (a database's connected services).
+ */
 export function projectServiceHref(
   orgId: string,
   projectId: string,
   serviceId: string,
 ): string {
   return `${projectHref(orgId, projectId)}/services/${serviceId}`
+}
+
+/**
+ * A service inside its environment, under the Services tab: the environment
+ * header, Deploy and the tab bar stay, and Services stays lit.
+ * Path: `/projects/:projectId/environments/:environmentId/services/:serviceId`
+ */
+export function projectEnvironmentServiceHref(
+  orgId: string,
+  projectId: string,
+  environmentId: string,
+  serviceId: string
+): string {
+  return `${projectEnvironmentHref(orgId, projectId, environmentId)}/services/${encodeURIComponent(serviceId)}`
+}
+
+/**
+ * Where the project-scope service path sends a service: the environment whose
+ * service list holds it, else `fallbackEnvironmentId` (the page then says the
+ * service was not found, with a way back). Null with neither.
+ */
+export function serviceEnvironmentHref(
+  orgId: string,
+  projectId: string,
+  serviceId: string,
+  servicesByEnvironment: Readonly<Record<string, readonly Readonly<{ id: string }>[]>>,
+  fallbackEnvironmentId: string | null
+): string | null {
+  const environmentId =
+    Object.keys(servicesByEnvironment).find((id) =>
+      servicesByEnvironment[id]?.some((service) => service.id === serviceId)
+    ) ?? fallbackEnvironmentId
+  return environmentId
+    ? projectEnvironmentServiceHref(orgId, projectId, environmentId, serviceId)
+    : null
 }
 
 /** Editor view encoded in the path (`compose` = YAML, `services` = visual forms). */
