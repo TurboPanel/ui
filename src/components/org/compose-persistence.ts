@@ -90,20 +90,21 @@ export function usePersistAccountWrites(orgId: string, projectId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
     mutationFn: async (writes: readonly AccountWrite[]) => {
-      for (const write of writes) {
-        if (write.target.kind === 'base') {
-          const cached = queryClient.getQueryData<{ project: ProjectRecord }>(
-            queryKeys.org(orgId).projects.detail(projectId)
-          )
-          if (!cached?.project) throw new Error('Project not loaded')
-          const options = buildProjectOptionsPatch(cached.project, { compose: write.document })
-          await updateProject(projectId, { options, target: 'base' })
-        } else {
-          await updateEnvironment(write.target.environmentId, {
+      await Promise.all(
+        writes.map((write) => {
+          if (write.target.kind === 'base') {
+            const cached = queryClient.getQueryData<{ project: ProjectRecord }>(
+              queryKeys.org(orgId).projects.detail(projectId)
+            )
+            if (!cached?.project) throw new Error('Project not loaded')
+            const options = buildProjectOptionsPatch(cached.project, { compose: write.document })
+            return updateProject(projectId, { options, target: 'base' })
+          }
+          return updateEnvironment(write.target.environmentId, {
             options: { compose: write.document },
           })
-        }
-      }
+        })
+      )
     },
     onSuccess: async () => {
       await Promise.all([

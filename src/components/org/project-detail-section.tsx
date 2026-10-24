@@ -26,8 +26,10 @@ import { ManagedProjectSection } from '@/components/org/managed/managed-project-
 import { ProjectVariablesSection } from '@/components/org/project-variables-section'
 import { ProjectEnvironmentsSection } from '@/components/org/project-environments-section'
 import { panelStyles } from '@/components/ui/panel-styles'
-import { usePersistProjectCompose } from '@/components/org/compose-persistence'
-import { usePersistAccountWrites } from '@/components/org/compose-persistence'
+import {
+  usePersistAccountWrites,
+  usePersistProjectCompose,
+} from '@/components/org/compose-persistence'
 import { PrincipalAccessPanel } from '@/components/org/principal-access-panel'
 import { nextPrincipalAlias } from '@/lib/compose/principals-document'
 import { planAccountDeclaration } from '@/lib/compose/principal-required'
@@ -75,6 +77,51 @@ function formatServiceOptionLabel(environment: EnvironmentRecord, service: Servi
   const envName = environment.name ?? 'Environment'
   const serviceName = service.name ?? service.composeServiceName ?? service.id.slice(0, 8)
   return `${envName} · ${serviceName}`
+}
+
+/**
+ * What "Add system user" would do while apps wait for an account: the plan for
+ * a given name, whether any app is waiting, and the name suggested for it.
+ */
+function useAccountPlan({
+  project,
+  environments,
+  servicesByEnv,
+  principals,
+  loading,
+}: Readonly<{
+  project: ProjectRecord | undefined
+  environments: readonly EnvironmentRecord[]
+  servicesByEnv: Readonly<Record<string, readonly ServiceRecord[] | undefined>>
+  principals: readonly ProjectPrincipalRecord[]
+  loading: boolean
+}>) {
+  const planFor = (name: string) =>
+    planAccountDeclaration({
+      username: name,
+      base: project?.options?.compose,
+      environments: environments.map((env) => ({
+        id: env.id,
+        document: env.options?.compose,
+        services: servicesByEnv[env.id] ?? [],
+      })),
+      principals,
+    })
+  return {
+    planFor,
+    waitingForAccount: !loading && planFor('') !== null,
+    suggestedUsername: nextPrincipalAlias([], project?.name ?? ''),
+  }
+}
+
+function WaitingForAccountNotice({ suggested }: Readonly<{ suggested: string }>) {
+  return (
+    <InlineNotice
+      tone="warning"
+      title="An app is waiting for a system user"
+      body={`Add one below (${suggested} if you leave it blank) and the app runs as it, so Deploy is ready. With more than one system user, pick which one each app runs as in Configuration.`}
+    />
+  )
 }
 
 export function ProjectPrincipalsSection({
@@ -219,21 +266,19 @@ export function ProjectPrincipalsSection({
     })
   }
 
-  const planFor = (name: string) =>
-    planAccountDeclaration({
-      username: name,
-      base: projectQuery.data?.project?.options?.compose,
-      environments: environments.map((env) => ({
-        id: env.id,
-        document: env.options?.compose,
-        services: servicesByEnvQuery.servicesByEnv[env.id] ?? [],
-      })),
-      principals,
-    })
-  // Apps with nobody to run as: the form below is the control that fixes it,
-  // so it offers the project's name and says what adding does.
-  const waitingForAccount = !loading && planFor('') !== null
-  const suggestedUsername = nextPrincipalAlias([], projectQuery.data?.project?.name ?? '')
+  const { planFor, waitingForAccount, suggestedUsername } = useAccountPlan({
+    project: projectQuery.data?.project,
+    environments,
+    servicesByEnv: servicesByEnvQuery.servicesByEnv,
+    principals,
+    loading,
+  })
+
+  const saveDeclaredAccount = async (writes: Parameters<typeof persistAccount.run>[0]) => {
+    const saved = await persistAccount.run(writes)
+    if (saved.ok) setUsername('')
+    else setError(persistAccount.actionError ?? 'Could not add the system user.')
+  }
 
   const handleAdd = async () => {
     const trimmed = username.trim() || (waitingForAccount ? suggestedUsername : '')
@@ -247,12 +292,7 @@ export function ProjectPrincipalsSection({
     // loose account row nothing is attached to.
     const plan = planFor(trimmed)
     if (plan) {
-      const saved = await persistAccount.run(plan.writes)
-      if (!saved.ok) {
-        setError(persistAccount.actionError ?? 'Could not add the system user.')
-        return
-      }
-      setUsername('')
+      await saveDeclaredAccount(plan.writes)
       return
     }
     const result = await createPrincipal.run({
@@ -302,13 +342,7 @@ export function ProjectPrincipalsSection({
           }.`}
         />
       ) : null}
-      {waitingForAccount ? (
-        <InlineNotice
-          tone="warning"
-          title="An app is waiting for a system user"
-          body={`Add one below (${suggestedUsername} if you leave it blank) and the app runs as it, so Deploy is ready. With more than one system user, pick which one each app runs as in Configuration.`}
-        />
-      ) : null}
+      {waitingForAccount ? <WaitingForAccountNotice suggested={suggestedUsername} /> : null}
       {loading && principals.length === 0 ? <LoadingState /> : null}
       {!loading && principals.length === 0 ? <EmptyState title="No Hosting Accounts yet." /> : null}
       <View style={styles.principalList}>
