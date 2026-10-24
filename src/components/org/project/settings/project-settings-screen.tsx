@@ -7,9 +7,9 @@ import { VariablesSection } from '@/components/org/variables-section'
 import { LoadingState } from '@/components/ui'
 import { projectRepositoriesHref } from '@/lib/org-navigation'
 import { buildProjectOptionsPatch } from '@/lib/project-options'
-import { projectComposeHref } from '@/lib/project-navigation'
+import { projectComposeHref, projectEnvironmentSettingsHref } from '@/lib/project-navigation'
 import { useUpdateProject } from '@/lib/queries'
-import { useRepositories } from '@/lib/queries/releases'
+import { useRepositories, useUpdateRepository } from '@/lib/queries/releases'
 import { userWorkspaces } from '@/lib/system-inventory'
 import {
   buildProjectGeneralPatch,
@@ -18,6 +18,7 @@ import {
   projectGeneralFromRecord,
   projectGitFacts,
   projectNameProblem,
+  projectPushDeployRows,
   workspaceMoveChoices,
 } from '@/lib/v4/project-settings'
 
@@ -31,6 +32,7 @@ export function ProjectSettingsScreen() {
     orgId,
     projectId,
     project,
+    environments,
     workspaces,
     canOwn,
     canManage,
@@ -43,10 +45,18 @@ export function ProjectSettingsScreen() {
   const [edit, setEdit] = useState<{ name: string; description: string } | null>(null)
   const [busy, setBusy] = useState<'general' | 'move' | 'names' | null>(null)
   const [dangerOpen, setDangerOpen] = useState(false)
+  const updateRepository = useUpdateRepository(orgId)
 
   const git = useMemo(
     () => (project ? projectGitFacts(project, repositories.data?.repositories ?? []) : null),
     [project, repositories.data]
+  )
+  const pushDeploy = useMemo(
+    () =>
+      project
+        ? projectPushDeployRows(project, environments, repositories.data?.repositories ?? [])
+        : [],
+    [project, environments, repositories.data]
   )
   if (!project) return <LoadingState />
 
@@ -104,6 +114,24 @@ export function ProjectSettingsScreen() {
         })
       }}
       git={git}
+      pushDeploy={pushDeploy}
+      onTurnOnAutoDeploy={
+        canEdit && project.repositoryId
+          ? () => {
+              const repositoryId = project.repositoryId as string
+              setError(null)
+              void updateRepository
+                .run({ repositoryId, patch: { autoDeploy: 'immediate' } })
+                .then((result) => {
+                  if (!result.ok) setError(result.error ?? 'Failed to turn on auto-deploy')
+                })
+            }
+          : null
+      }
+      turningOnAutoDeploy={updateRepository.isPending}
+      onOpenEnvironmentSettings={(environmentId) =>
+        router.push(projectEnvironmentSettingsHref(orgId, projectId, environmentId) as Href)
+      }
       onOpenRepositories={() => router.push(projectRepositoriesHref(orgId) as Href)}
       onOpenBaseCompose={() => router.push(projectComposeHref(orgId, projectId) as Href)}
       danger={

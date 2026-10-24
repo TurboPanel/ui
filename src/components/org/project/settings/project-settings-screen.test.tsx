@@ -8,6 +8,7 @@ const h = vi.hoisted(() => ({
   view: null as unknown as ProjectSettingsViewProps,
   ctx: {} as Record<string, unknown>,
   run: vi.fn(),
+  updateRepository: vi.fn(),
   push: vi.fn(),
   replace: vi.fn(),
   setError: vi.fn(),
@@ -35,6 +36,7 @@ vi.mock('@/lib/queries', () => ({
   }),
 }))
 vi.mock('@/lib/queries/releases', () => ({
+  useUpdateRepository: () => ({ run: h.updateRepository, isPending: false }),
   useRepositories: (_org: string, options: { enabled: boolean }) => {
     h.repositories.enabled = options.enabled
     return { data: h.repositories.data }
@@ -53,6 +55,7 @@ function setup(over: Record<string, unknown> = {}) {
       repositoryId: null,
       options: { containerNaming: 'uuid', defaultServerId: 's1' },
     },
+    environments: [],
     workspaces: [
       { id: 'w1', name: 'Mine', kind: 'user' },
       { id: 'w2', name: 'Team', kind: 'user' },
@@ -186,6 +189,41 @@ describe('ProjectSettingsScreen', () => {
     h.view.onOpenBaseCompose()
     expect(h.push).toHaveBeenNthCalledWith(1, '/o/projects/repositories')
     expect(h.push).toHaveBeenNthCalledWith(2, '/o/projects/p/base/compose')
+  })
+
+  it('turns on the repository auto-deploy and opens an environment for its own switch', async () => {
+    const id = '11111111-2222-4333-8444-555555555555'
+    const compose = {
+      version: 1,
+      data: {
+        services: {
+          web: {
+            'x-turbopanel': { serviceKind: 'node', source: { sourceId: id, branch: 'live' } },
+          },
+        },
+      },
+      presentation: { keyOrder: ['services'], comments: {} },
+    }
+    setup({
+      project: { id: 'p', name: 'Shop', workspaceId: 'w1', repositoryId: id, options: { compose } },
+      environments: [{ id: 'e1', name: 'production', options: null }],
+    })
+    h.repositories.data = {
+      repositories: [{ id, repositoryUrl: 'https://x/a/b', autoDeploy: 'disabled' }],
+    }
+    h.updateRepository.mockResolvedValue({ ok: false, error: 'No permission' })
+    render(<ProjectSettingsScreen />)
+    expect(h.view.pushDeploy.map((row) => row.line.text)).toEqual([
+      'Pushes to live deploy production: off (repository auto-deploy is off)',
+    ])
+    await press(() => h.view.onTurnOnAutoDeploy?.())
+    expect(h.updateRepository).toHaveBeenCalledWith({
+      repositoryId: id,
+      patch: { autoDeploy: 'immediate' },
+    })
+    expect(h.setError).toHaveBeenLastCalledWith('No permission')
+    h.view.onOpenEnvironmentSettings('e1')
+    expect(h.push).toHaveBeenCalledWith('/o/projects/p/environments/e1/settings')
   })
 
   it('makes everything read-only for a viewer, and leaves Danger to the owner', () => {

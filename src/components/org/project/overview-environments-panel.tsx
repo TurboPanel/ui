@@ -1322,6 +1322,7 @@ export function EnvironmentGitSourceSection() {
     <EnvironmentGitSourcePanel
       orgId={orgId}
       environmentId={selectedEnvironment.id}
+      environmentName={selectedEnvironment.name?.trim() || 'this environment'}
       projectCompose={project?.options?.compose}
       environmentCompose={selectedEnvironment.options?.compose}
       canEdit={canMutateLifecycle}
