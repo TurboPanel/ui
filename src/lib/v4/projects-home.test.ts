@@ -9,9 +9,17 @@ import type {
 } from '@/lib/instance-api'
 import {
   deploysInProgress,
+  emptyTypeMessage,
+  filterProjectsByType,
   homeKind,
   homeProject,
+  managedEngineText,
+  parseProjectTypeFilter,
   pillTone,
+  projectDetail,
+  projectTypeCounts,
+  projectTypeOf,
+  projectTypeOptions,
   summaryLine,
   tilePills,
   wantsConfigView,
@@ -366,5 +374,121 @@ describe('deploys in progress', () => {
 
   it('is empty when nothing is running', () => {
     expect(deploysInProgress({ projects: [], environments: [], latest: {}, now: NOW })).toEqual([])
+  })
+})
+
+describe('what the second line says a project is', () => {
+  const pg18 = {
+    engineDisplayName: 'PostgreSQL',
+    options: { settings: { image: 'docker.io/library/postgres:18-alpine' } },
+  }
+
+  it('names a managed database with its engine and the version its clusters run', () => {
+    const p = project({ kind: 'managed', metadata: { code: 'postgres' } })
+    expect(projectDetail(p, 'managed', { managedRows: [pg18] })).toBe(
+      'Managed database · PostgreSQL 18'
+    )
+    expect(
+      homeProject({
+        project: p,
+        environments: [],
+        containersByEnvironment: {},
+        facts: { managedRows: [pg18] },
+      }).detail
+    ).toBe('Managed database · PostgreSQL 18')
+  })
+
+  it('leaves the version out when it is not stored or the clusters differ', () => {
+    const p = project({ kind: 'managed', metadata: { code: 'postgres' } })
+    const unstated = { engineDisplayName: 'PostgreSQL', options: null }
+    const pg17 = {
+      engineDisplayName: 'PostgreSQL',
+      options: { settings: { image: 'docker.io/library/postgres:17' } },
+    }
+    expect(managedEngineText(p, [unstated])).toBe('PostgreSQL')
+    expect(managedEngineText(p, [pg18, pg17])).toBe('PostgreSQL')
+    expect(managedEngineText(p, [pg18, unstated])).toBe('PostgreSQL')
+    expect(
+      managedEngineText(p, [
+        { engineDisplayName: null, options: { settings: { image: 'not/in-catalog:1' } } },
+      ])
+    ).toBe('PostgreSQL')
+  })
+
+  it('names the engine from the catalog code for a database not set up yet, and nothing when unknown', () => {
+    expect(
+      projectDetail(project({ kind: 'managed', metadata: { code: 'mariadb' } }), 'managed')
+    ).toBe('Managed database · MariaDB')
+    expect(projectDetail(project({ kind: 'managed', metadata: null }), 'managed')).toBe(
+      'Managed database'
+    )
+    expect(projectDetail(project({ kind: 'managed', metadata: { code: 'nope' } }), 'managed')).toBe(
+      'Managed database'
+    )
+  })
+
+  it('says Git repository with owner/repo when the repository list names it', () => {
+    const p = project({ repositoryId: 'r1' })
+    expect(projectDetail(p, 'compose', { repositoryLabel: 'TurboPanel/website' })).toBe(
+      'Git repository · TurboPanel/website'
+    )
+    expect(projectDetail(p, 'compose')).toBe('Git repository')
+  })
+
+  it('says Compose (a project made from the catalog too), and nothing for platform or not set up', () => {
+    expect(projectDetail(project({}), 'compose')).toBe('Compose')
+    expect(projectDetail(project({ metadata: { code: 'wordpress' } }), 'compose')).toBe('Compose')
+    expect(projectDetail(project({ kind: 'system' }), 'platform')).toBeNull()
+    expect(projectDetail(project({ kind: null }), 'setup')).toBeNull()
+  })
+})
+
+describe('the type filter', () => {
+  const cards = [
+    { id: 'a', kind: 'compose' as const },
+    { id: 'b', kind: 'managed' as const },
+    { id: 'c', kind: 'setup' as const },
+    { id: 'd', kind: 'platform' as const },
+    { id: 'e', kind: 'managed' as const },
+  ]
+
+  it('reads ?type= and treats anything else as All', () => {
+    expect(parseProjectTypeFilter('managed')).toBe('managed')
+    expect(parseProjectTypeFilter(['apps', 'managed'])).toBe('apps')
+    expect(parseProjectTypeFilter('all')).toBe('all')
+    expect(parseProjectTypeFilter('compose')).toBe('all')
+    expect(parseProjectTypeFilter(undefined)).toBe('all')
+  })
+
+  it('puts managed databases on one side and every other project on the other', () => {
+    expect(projectTypeOf('managed')).toBe('managed')
+    expect(projectTypeOf('compose')).toBe('apps')
+    expect(projectTypeOf('setup')).toBe('apps')
+    expect(projectTypeOf('platform')).toBe('apps')
+  })
+
+  it('counts each side and filters to it', () => {
+    expect(projectTypeCounts(cards)).toEqual({ all: 5, apps: 3, managed: 2 })
+    expect(projectTypeCounts([])).toEqual({ all: 0, apps: 0, managed: 0 })
+    expect(filterProjectsByType(cards, 'all').map((c) => c.id)).toEqual(['a', 'b', 'c', 'd', 'e'])
+    expect(filterProjectsByType(cards, 'apps').map((c) => c.id)).toEqual(['a', 'c', 'd'])
+    expect(filterProjectsByType(cards, 'managed').map((c) => c.id)).toEqual(['b', 'e'])
+  })
+
+  it('labels each choice with its count', () => {
+    expect(projectTypeOptions({ all: 3, apps: 2, managed: 1 })).toEqual([
+      { value: 'all', label: 'All 3', accessibilityLabel: 'All, 3 projects' },
+      { value: 'apps', label: 'Apps 2', accessibilityLabel: 'Apps, 2 projects' },
+      {
+        value: 'managed',
+        label: 'Managed databases 1',
+        accessibilityLabel: 'Managed databases, 1 project',
+      },
+    ])
+  })
+
+  it('says what is missing when a filter leaves nothing', () => {
+    expect(emptyTypeMessage('managed')).toBe('No managed databases here yet.')
+    expect(emptyTypeMessage('apps')).toBe('No apps here yet.')
   })
 })

@@ -8,7 +8,11 @@ import { WELCOME_LINES } from './projects-welcome-card'
 
 const state = vi.hoisted(() => ({
   push: vi.fn(),
+  replace: vi.fn(),
   canOwn: true,
+  repositories: { data: undefined, refetch: vi.fn() } as Record<string, unknown>,
+  managed: { data: undefined, refetch: vi.fn() } as Record<string, unknown>,
+  enabled: { repositories: undefined, managed: undefined } as Record<string, boolean | undefined>,
   scope: null as null | Record<string, unknown>,
   projects: { data: undefined, isLoading: false, error: null, refetch: vi.fn() } as Record<
     string,
@@ -37,7 +41,9 @@ vi.mock(
   '@/lib/theme-preference',
   async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub
 )
-vi.mock('expo-router', () => ({ useRouter: () => ({ push: state.push }) }))
+vi.mock('expo-router', () => ({
+  useRouter: () => ({ push: state.push, replace: state.replace }),
+}))
 vi.mock('@/components/org/workspace-switcher', () => ({
   WorkspaceSwitcher: () => <div data-testid="workspace-switcher" />,
 }))
@@ -56,6 +62,18 @@ vi.mock('@/lib/queries/servers', () => ({
   },
 }))
 vi.mock('@/lib/queries/containers', () => ({ useContainers: () => state.containers }))
+vi.mock('@/lib/queries/releases', () => ({
+  useRepositories: (_org: string, options?: { enabled?: boolean }) => {
+    state.enabled.repositories = options?.enabled
+    return state.repositories
+  },
+}))
+vi.mock('@/lib/queries/managed', () => ({
+  useOrganizationManaged: (_org: string, options?: { enabled?: boolean }) => {
+    state.enabled.managed = options?.enabled
+    return state.managed
+  },
+}))
 vi.mock('@/lib/queries/environment-cards', () => ({
   useLatestDeployments: (_org: string, ids: string[]) => {
     state.readIds.latest = ids
@@ -78,8 +96,23 @@ vi.mock('@/lib/system-inventory', async (importOriginal) => ({
   isTurbopanelWorkspace: (workspace: { id: string }) => workspace.id === 'platform',
 }))
 
-function project(id: string, name: string, kind: string, workspaceId = 'w1') {
-  return { id, name, description: null, workspaceId, kind, metadata: null }
+function project(
+  id: string,
+  name: string,
+  kind: string | null,
+  workspaceId = 'w1',
+  extra: Record<string, unknown> = {}
+) {
+  return {
+    id,
+    name,
+    description: null,
+    workspaceId,
+    kind,
+    metadata: null,
+    repositoryId: null,
+    ...extra,
+  }
 }
 
 function environment(
@@ -104,7 +137,11 @@ describe.each(SCENARIOS)('Projects home ($name)', (scenario) => {
   beforeEach(() => {
     applyScenario(scenario)
     state.push.mockReset()
+    state.replace.mockReset()
     state.canOwn = true
+    state.repositories = { data: undefined, refetch: vi.fn().mockResolvedValue(undefined) }
+    state.managed = { data: undefined, refetch: vi.fn().mockResolvedValue(undefined) }
+    state.enabled = { repositories: undefined, managed: undefined }
     state.servers = { data: undefined }
     state.scope = null
     state.recent = []
@@ -166,11 +203,118 @@ describe.each(SCENARIOS)('Projects home ($name)', (scenario) => {
     expect(screen.getByTestId('workspace-switcher')).toBeTruthy()
   })
 
-  it('shows the count next to All projects, with the filter and the view switch', () => {
+  it('shows the type filter with its counts, the workspace filter and the view switch', () => {
     render(<ProjectsHomeSection orgId="o" />)
-    const heading = screen.getByRole('heading', { name: 'All projects' })
-    expect(heading.parentElement?.textContent).toContain('3')
+    const types = screen.getByRole('tablist', { name: 'Project type' })
+    expect(Array.from(types.querySelectorAll('[role="tab"]')).map((t) => t.textContent)).toEqual([
+      'All 3',
+      'Apps 2',
+      'Managed databases 1',
+    ])
+    expect(screen.getByRole('tab', { name: 'All, 3 projects' }).getAttribute('aria-selected')).toBe(
+      'true'
+    )
     expect(screen.getByRole('radiogroup', { name: 'View' })).toBeTruthy()
+    expect(screen.queryByRole('link', { name: 'Managed database settings' })).toBeNull()
+  })
+
+  it('lists only managed databases with ?type=managed, with the settings link', () => {
+    state.projects = {
+      ...state.projects,
+      data: {
+        projects: [
+          project('p1', 'Shop', 'compose'),
+          project('p2', 'Orders DB', 'managed'),
+          project('p4', 'New DB', 'managed', 'w1', { metadata: { code: 'postgres' } }),
+        ],
+      },
+    }
+    render(<ProjectsHomeSection orgId="o" type="managed" />)
+    expect(screen.queryByRole('button', { name: /^Open Shop/ })).toBeNull()
+    expect(screen.getByRole('button', { name: /^Open Orders DB/ })).toBeTruthy()
+    // A database with no environment yet is still listed.
+    expect(screen.getByRole('button', { name: /^Open New DB/ }).textContent).toContain(
+      'Managed database · PostgreSQL · Acme'
+    )
+    expect(
+      screen
+        .getByRole('tab', { name: 'Managed databases, 2 projects' })
+        .getAttribute('aria-selected')
+    ).toBe('true')
+    fireEvent.click(screen.getByRole('link', { name: 'Managed database settings' }))
+    expect(state.push).toHaveBeenLastCalledWith('/o/managed/settings')
+    fireEvent.click(screen.getByRole('button', { name: 'New project' }))
+    expect(state.push).toHaveBeenLastCalledWith('/o/projects/new?type=managed')
+  })
+
+  it('lists every other project with ?type=apps', () => {
+    render(<ProjectsHomeSection orgId="o" type="apps" />)
+    expect(screen.getByRole('button', { name: /^Open Shop/ })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /^Open Orders DB/ })).toBeNull()
+    expect(screen.queryByRole('link', { name: 'Managed database settings' })).toBeNull()
+  })
+
+  it('changes the type in the address and keeps the workspace', () => {
+    render(<ProjectsHomeSection orgId="o" workspaceId="w1" />)
+    fireEvent.click(screen.getByRole('tab', { name: /^Managed databases/ }))
+    expect(state.replace).toHaveBeenLastCalledWith('/o/projects?workspaceId=w1&type=managed')
+    fireEvent.click(screen.getByRole('tab', { name: /^All/ }))
+    expect(state.replace).toHaveBeenLastCalledWith('/o/projects?workspaceId=w1')
+  })
+
+  it('says so when a type filter leaves nothing', () => {
+    state.projects = { ...state.projects, data: { projects: [project('p1', 'Shop', 'compose')] } }
+    render(<ProjectsHomeSection orgId="o" type="managed" />)
+    expect(screen.getByText('No managed databases here yet.')).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Managed database settings' })).toBeTruthy()
+  })
+
+  it('says what each project is: repository, Compose, and the managed engine and version', () => {
+    state.projects = {
+      ...state.projects,
+      data: {
+        projects: [
+          project('p1', 'Shop', 'compose', 'w1', { repositoryId: 'r1' }),
+          project('p5', 'Docs', 'compose'),
+          project('p2', 'Orders DB', 'managed'),
+        ],
+      },
+    }
+    state.repositories = {
+      ...state.repositories,
+      data: {
+        repositories: [{ id: 'r1', repositoryUrl: 'https://github.com/TurboPanel/website.git' }],
+      },
+    }
+    state.managed = {
+      ...state.managed,
+      data: {
+        managed: [
+          {
+            projectId: 'p2',
+            engineDisplayName: 'PostgreSQL',
+            options: { settings: { image: 'docker.io/library/postgres:18-alpine' } },
+          },
+        ],
+      },
+    }
+    render(<ProjectsHomeSection orgId="o" />)
+    expect(screen.getByRole('button', { name: /^Open Shop/ }).textContent).toContain(
+      'Git repository · TurboPanel/website · Acme'
+    )
+    expect(screen.getByRole('button', { name: /^Open Docs/ }).textContent).toContain(
+      'Compose · Acme'
+    )
+    expect(screen.getByRole('button', { name: /^Open Orders DB/ }).textContent).toContain(
+      'Managed database · PostgreSQL 18 · Acme'
+    )
+    expect(state.enabled).toEqual({ repositories: true, managed: true })
+  })
+
+  it('reads the managed list only for managers and only when a database is listed', () => {
+    state.canOwn = false
+    render(<ProjectsHomeSection orgId="o" />)
+    expect(state.enabled).toEqual({ repositories: false, managed: false })
   })
 
   it('gives each tile the status of its primary environment and no mood line', () => {
@@ -178,13 +322,16 @@ describe.each(SCENARIOS)('Projects home ($name)', (scenario) => {
     const shop = screen.getByRole('button', {
       name: 'Open Shop. Production (primary): Running',
     })
-    expect(shop.textContent).toBe('ShopAcmeProduction')
+    expect(shop.textContent).toBe('ShopCompose · AcmeProduction')
   })
 
   it('gives a managed project the database sub line', () => {
     render(<ProjectsHomeSection orgId="o" />)
     const tile = screen.getByRole('button', { name: /^Open Orders DB/ })
     expect(tile.textContent).toContain('Managed database · Acme')
+    expect(screen.getByRole('button', { name: /^Open Shop/ }).textContent).toContain(
+      'Compose · Acme'
+    )
   })
 
   it('shows the workspace of each project when every workspace is listed', () => {
@@ -242,12 +389,13 @@ describe.each(SCENARIOS)('Projects home ($name)', (scenario) => {
     expect(getProjectsView()).toBe('grid')
   })
 
-  it('puts the filter after the view switch on a phone', () => {
-    env.width = 400
+  it('gives the type filter its own row on a phone, above the workspace filter', () => {
+    env.width = 390
     render(<ProjectsHomeSection orgId="o" />)
+    const types = screen.getByRole('tablist', { name: 'Project type' })
     const filter = screen.getByTestId('workspace-switcher')
-    const toggle = screen.getByRole('radiogroup', { name: 'View' })
-    expect(toggle.compareDocumentPosition(filter) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(types.compareDocumentPosition(filter) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(styleOf(types.parentElement as HTMLElement).flexBasis).toBe('100%')
   })
 
   it('hides the list header on a phone', () => {

@@ -9,10 +9,12 @@ import {
   newWorkspaceHref,
   parseWorkspaceIdParam,
   projectsHrefForScope,
+  projectsListHref,
   resolveWorkspaceScope,
   setStoredWorkspaceScopeId,
   workspaceName,
   workspaceScopeStorageKey,
+  withQueryParam,
 } from './workspace-scope'
 import type { WorkspaceRecord } from './instance-api'
 
@@ -131,6 +133,17 @@ describe('workspace scope href helpers', () => {
     expect(projectsHrefForScope('org-1', 'ws-a')).toBe(
       '/org-1/projects?workspaceId=ws-a',
     )
+  })
+
+  it('adds the type filter to the projects URL and combines it with the workspace', () => {
+    expect(projectsListHref('org-1', ALL_WORKSPACES_SCOPE, 'managed')).toBe(
+      '/org-1/projects?type=managed'
+    )
+    expect(projectsListHref('org-1', 'ws-a', 'apps')).toBe('/org-1/projects?workspaceId=ws-a&type=apps')
+    expect(projectsListHref('org-1', 'ws-a', 'all')).toBe('/org-1/projects?workspaceId=ws-a')
+    expect(projectsListHref('org-1', ALL_WORKSPACES_SCOPE)).toBe('/org-1/projects')
+    expect(withQueryParam('/a', 'k', null)).toBe('/a')
+    expect(withQueryParam('/a?x=1', 'k', 'v w')).toBe('/a?x=1&k=v%20w')
   })
 
   it('builds new-project URLs and manage href', () => {

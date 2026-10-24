@@ -25,6 +25,7 @@ function project(partial: Partial<HomeProject>): HomeProject {
     name: 'Shop',
     kind: 'compose',
     workspaceId: 'w1',
+    detail: null,
     environments: [],
     status: 'running',
     ...partial,
@@ -141,6 +142,7 @@ describe.each(SCENARIOS)('Project tile ($name)', (scenario) => {
       <ProjectTile
         project={project({
           kind: 'managed',
+          detail: 'Managed database · PostgreSQL 18',
           name: 'Orders DB',
           environments: [env('e1', 'Production', 'running', { isPrimary: true })],
         })}
@@ -149,7 +151,7 @@ describe.each(SCENARIOS)('Project tile ($name)', (scenario) => {
         onOpen={vi.fn()}
       />
     )
-    expect(screen.getByText('Managed database · Acme')).toBeTruthy()
+    expect(screen.getByText('Managed database · PostgreSQL 18 · Acme')).toBeTruthy()
     unmount()
     render(
       <ProjectTile
@@ -175,9 +177,10 @@ describe.each(SCENARIOS)('Project tile ($name)', (scenario) => {
 
 describe('tile words', () => {
   it('builds the sub line and the pill name', () => {
-    expect(tileSub('compose', 'Acme')).toBe('Acme')
-    expect(tileSub('compose', undefined)).toBe('')
-    expect(tileSub('managed', undefined)).toBe('Managed database')
+    expect(tileSub(null, 'Acme')).toBe('Acme')
+    expect(tileSub(null, undefined)).toBe('')
+    expect(tileSub('Compose', 'Acme')).toBe('Compose · Acme')
+    expect(tileSub('Managed database', undefined)).toBe('Managed database')
     expect(pillLabel(env('e', 'Prod', 'busy', { isPrimary: true }))).toBe(
       'Prod (primary): Starting'
     )

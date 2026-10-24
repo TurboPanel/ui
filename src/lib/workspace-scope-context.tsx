@@ -20,7 +20,7 @@ import {
   ALL_WORKSPACES_SCOPE,
   getStoredWorkspaceScopeId,
   parseWorkspaceIdParam,
-  projectsHrefForScope,
+  projectsListHref,
   resolveWorkspaceScope,
   setStoredWorkspaceScopeId,
   type WorkspaceScope,
@@ -65,8 +65,13 @@ export function WorkspaceScopeProvider({
   const router = useRouter()
   const pathname = usePathname()
   const queryClient = useQueryClient()
-  const params = useLocalSearchParams<{ workspaceId?: string | string[] }>()
+  const params = useLocalSearchParams<{
+    workspaceId?: string | string[]
+    type?: string | string[]
+  }>()
   const urlWorkspaceId = parseWorkspaceIdParam(params.workspaceId)
+  // The Projects type filter rides along when the workspace changes.
+  const urlType = typeof params.type === 'string' ? params.type : null
 
   const [scopeId, setScopeId] = useState(initialScopeId(orgId, urlWorkspaceId))
   const [urlSyncKey, setUrlSyncKey] = useState(
@@ -114,9 +119,9 @@ export function WorkspaceScopeProvider({
       const resolved = resolveWorkspaceScope(workspaces, next)
       setScopeId(resolved.id)
       setStoredWorkspaceScopeId(orgId, resolved.id)
-      router.push(projectsHrefForScope(orgId, resolved.id) as Href)
+      router.push(projectsListHref(orgId, resolved.id, urlType) as Href)
     },
-    [orgId, router, workspaces],
+    [orgId, router, workspaces, urlType],
   )
 
   const refreshWorkspaces = useCallback(async () => {
