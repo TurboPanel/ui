@@ -15,7 +15,6 @@ import { UnderlineTabs, type UnderlineTab } from '@/components/ui/v4'
 import { PlatformBadge } from '@/components/org/platform-badge'
 import { useEnvironmentChrome } from '@/components/org/project/environment-shell'
 import { useProjectContext } from '@/components/org/project/project-context'
-import { activeProjectTabFromPathname } from '@/components/org/project/project-section-tabs'
 import { ProjectTitleIcon } from '@/components/org/project/project-title-icon'
 import {
   COMPOSE_PROJECT_TAB_LABELS,
@@ -220,20 +219,29 @@ function DraftLensTabs() {
   )
 }
 
+/** The project's setup page (`/projects/:id/setup`), which draws no tabs. */
+function isSetupPath(pathname: string, projectId: string): boolean {
+  const marker = `/projects/${projectId}/setup`
+  const idx = pathname.indexOf(marker)
+  if (idx < 0) return false
+  const next = pathname.charAt(idx + marker.length)
+  return next === '' || next === '/' || next === '?' || next === '#'
+}
+
 function ProjectShellChrome({
   managed,
   showPageTabs,
   showDraftTabs,
   needsSetup,
-  activeTab,
+  onSetup,
 }: Readonly<{
   managed: boolean
   showPageTabs: boolean
   showDraftTabs: boolean
   needsSetup: boolean
-  activeTab: ReturnType<typeof activeProjectTabFromPathname>
+  onSetup: boolean
 }>) {
-  if (needsSetup || activeTab === 'setup') return null
+  if (needsSetup || onSetup) return null
   return (
     <>
       {showPageTabs ? <ProjectPageTabs managed={managed} /> : null}
@@ -255,7 +263,7 @@ export function ProjectShell({ children }: Readonly<{ children: ReactNode }>) {
     draft,
   } = useProjectContext()
 
-  const activeTab = activeProjectTabFromPathname(pathname, projectId)
+  const onSetup = isSetupPath(pathname, projectId)
   const managed = project ? isManagedProject(project) : false
   // A project's own pages (Environments, Base and its sections, Settings)
   // carry tabs, for a managed database too. A create-wizard draft gets its
@@ -289,7 +297,7 @@ export function ProjectShell({ children }: Readonly<{ children: ReactNode }>) {
         showPageTabs={showPageTabs}
         showDraftTabs={Boolean(draft)}
         needsSetup={needsSetup}
-        activeTab={activeTab}
+        onSetup={onSetup}
       />
       <View style={styles.body}>{children}</View>
     </View>

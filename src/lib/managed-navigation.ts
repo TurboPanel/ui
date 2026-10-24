@@ -7,6 +7,7 @@ import {
   projectOverviewHref,
   type EnvironmentPageTabId,
   type ProjectPageTabId,
+  type RetiredManagedTabId,
 } from '@/lib/project-navigation'
 
 /**
@@ -65,13 +66,13 @@ export function managedProjectTabs(): ManagedTab[] {
  * environment tab each one lives on now. `environments` went to the project's
  * Environments tab, so it has no entry here.
  */
-const RETIRED_MANAGED_TABS = {
+const RETIRED_MANAGED_TABS: Readonly<Record<RetiredManagedTabId, EnvironmentPageTabId>> = {
   connect: 'bindings',
   data: 'configuration',
   backups: 'deployments',
-} as const satisfies Readonly<Record<string, EnvironmentPageTabId>>
+}
 
-export type RetiredManagedTab = keyof typeof RETIRED_MANAGED_TABS
+export type RetiredManagedTab = RetiredManagedTabId
 
 /**
  * Where an old managed tab (`/connect`, `/data`, `/backups`) opens now: that

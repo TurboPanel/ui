@@ -313,7 +313,7 @@ function ApplyButton({
   }
   return (
     <Button
-      label="Apply"
+      label="Save and apply"
       busyLabel="Applying…"
       variant="primary"
       busy={saving}
@@ -604,6 +604,7 @@ export function ManagedSettingsPanel({
   const disabled = busy || saving || !canManage
   const showHosting = section !== 'settings'
   const showEngine = section !== 'hosting'
+  const tlsPending = form.sslMode !== (settings.ssl?.mode ?? null)
   const applyButton = (
     <ApplyButton
       canManage={canManage}
@@ -640,8 +641,9 @@ export function ManagedSettingsPanel({
               organizationSslMode={organizationSslMode}
               externalAccessOn={(externalAccess?.servers ?? []).some((server) => server.enabled)}
             />
-            {showEngine ? null : applyButton}
           </ManagedAdvancedDisclosure>
+          {/* Shown while a client TLS change waits, even with Advanced closed. */}
+          {!showEngine && tlsPending ? applyButton : null}
         </View>
       ) : null}
       {showEngine ? (

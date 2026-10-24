@@ -34,10 +34,11 @@ describe('managed lifecycle panel destroy refusal', () => {
         canManage
         busy={false}
         onLifecycle={vi.fn()}
-        onApply={vi.fn()}
         onDelete={onDelete}
       />,
     )
+    // Apply changes lives in the environment header, once.
+    expect(screen.queryByText('Apply changes')).toBeNull()
     fireEvent.click(screen.getByText('Destroy database'))
     fireEvent.change(screen.getByPlaceholderText('shop'), { target: { value: 'shop' } })
     fireEvent.click(screen.getByText('Confirm delete'))

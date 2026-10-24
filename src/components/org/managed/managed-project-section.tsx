@@ -689,10 +689,6 @@ function ManagedEnvironmentReadyPanels({
             }
             registerCommand(result.value.commandId, action)
           }}
-          onApply={async () => {
-            const result = await applyManagedMutation.mutateAsync()
-            registerCommand(result.commandId, 'Apply')
-          }}
           onDelete={async () => {
             const result = await deleteManagedMutation.mutateAsync()
             if (result.deleted) {

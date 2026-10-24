@@ -129,27 +129,16 @@ export const COMPOSE_PROJECT_CONFIG_TAB_IDS: readonly ComposeProjectTabId[] = [
   'settings',
 ]
 
-export const MANAGED_PROJECT_TAB_IDS = [
-  'overview',
-  'connect',
-  'data',
-  'backups',
-  'environments',
-  'settings',
-] as const
+/**
+ * The tabs a managed database had before it shared the website shell. Each
+ * route redirects to the environment tab that holds it now
+ * (`retiredManagedTabHref` in `managed-navigation.ts`).
+ */
+export const RETIRED_MANAGED_TAB_IDS = ['connect', 'data', 'backups'] as const
 
-export type ManagedProjectTabId = (typeof MANAGED_PROJECT_TAB_IDS)[number]
+export type RetiredManagedTabId = (typeof RETIRED_MANAGED_TAB_IDS)[number]
 
-export const MANAGED_PROJECT_TAB_LABELS: Record<ManagedProjectTabId, string> = {
-  overview: 'Overview',
-  connect: 'Connect',
-  environments: 'Environments',
-  data: 'Data',
-  backups: 'Backups',
-  settings: 'Settings',
-}
-
-export type ProjectTabId = ComposeProjectTabId | ManagedProjectTabId
+export type ProjectTabId = ComposeProjectTabId | RetiredManagedTabId
 
 export function projectHref(
   orgId: string,

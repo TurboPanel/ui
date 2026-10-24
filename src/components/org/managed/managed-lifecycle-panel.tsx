@@ -13,7 +13,6 @@ export function ManagedLifecyclePanel({
   canManage,
   busy,
   onLifecycle,
-  onApply,
   onDelete,
 }: Readonly<{
   status: ManagedStatus
@@ -21,7 +20,6 @@ export function ManagedLifecyclePanel({
   canManage: boolean
   busy: boolean
   onLifecycle: (action: 'start' | 'stop' | 'restart') => Promise<void>
-  onApply: () => Promise<void>
   onDelete: () => Promise<void>
 }>) {
   const [confirmText, setConfirmText] = useState('')
@@ -84,14 +82,6 @@ export function ManagedLifecyclePanel({
           disabled={applying}
           onPress={() => {
             void run(() => onLifecycle('restart'))
-          }}
-        />
-        <Button
-          label="Apply changes"
-          variant="primary"
-          disabled={applying}
-          onPress={() => {
-            void run(onApply)
           }}
         />
         <Button

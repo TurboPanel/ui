@@ -53,11 +53,6 @@ vi.mock('@/components/header-chevron', () => ({ BreadcrumbChevron: () => null })
 vi.mock('@/components/org/platform-badge', () => ({ PlatformBadge: () => null }))
 vi.mock('@/components/org/project-delete-panel', () => ({ ProjectDeletePanel: () => null }))
 vi.mock('@/components/org/project/project-title-icon', () => ({ ProjectTitleIcon: () => null }))
-vi.mock('@/components/org/project/trash-icon', () => ({ TrashIcon: () => null }))
-vi.mock('@/components/org/project/project-section-tabs', () => ({
-  ProjectSectionTabs: () => null,
-  activeProjectTabFromPathname: () => null,
-}))
 vi.mock('@/components/org/project/project-context', () => ({
   useProjectContext: () => state.ctx,
 }))
