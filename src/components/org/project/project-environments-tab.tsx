@@ -246,9 +246,6 @@ export function ProjectEnvironmentsTab() {
   const openBase = () => router.push(projectBaseHref(orgId, projectId) as Href)
   const headerActions = (
     <View style={s.actions}>
-      {prominentBase ? (
-        <ActionButton label="Open the Base" variant="secondary" size="sm" onPress={openBase} />
-      ) : null}
       {canAdd ? <NewEnvironmentButton onPress={() => setAdding(true)} /> : null}
     </View>
   )

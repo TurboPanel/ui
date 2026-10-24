@@ -1,5 +1,6 @@
-import { Linking, Pressable, Text, View } from 'react-native'
+import { Linking, Text, View } from 'react-native'
 import { MiniMap } from '@/components/org/project/mini-map'
+import { TextLink } from '@/components/ui/text-link'
 import { ActionButton } from '@/components/ui/v4/action-button'
 import { LayerCard } from '@/components/ui/v4/layer-card'
 import { SourceTag } from '@/components/ui/v4/source-tag'
@@ -8,7 +9,6 @@ import { typeStyle } from '@/components/ui/v4/type-styles'
 import { themedStyles, usePalette } from '@/components/ui/v4/use-palette'
 import { siteUrlFromHostname } from '@/lib/environment-status'
 import type { EnvironmentCardData } from '@/lib/v4/project-home'
-import { webPointer } from '@/lib/theme'
 import { CHIP_HEIGHT, RADIUS } from '@/lib/v4/ui-scale'
 
 const styles = themedStyles((p) => ({
@@ -17,7 +17,6 @@ const styles = themedStyles((p) => ({
   factKey: { ...typeStyle('body', 'footnote'), color: p.text3, minWidth: 52 },
   factValue: { ...typeStyle('body', 'footnote'), color: p.text2, flexShrink: 1 },
   factMono: { ...typeStyle('monoMedium', 'footnote'), color: p.text2, flexShrink: 1 },
-  visit: { ...typeStyle('bodyMedium', 'footnote'), color: p.link, flexShrink: 1 },
   spacer: { flexGrow: 1 },
   badge: {
     alignSelf: 'flex-start',
@@ -47,24 +46,19 @@ function Fact({
 }
 
 function VisitLink({ host }: Readonly<{ host: string }>) {
-  const s = styles(usePalette())
   const url = siteUrlFromHostname(host)
   if (!url) return null
   return (
-    <Pressable
-      accessibilityRole="link"
+    <TextLink
+      label={host}
+      size="sm"
       accessibilityLabel={`Open ${host} in a new tab`}
       onPress={() => {
         Linking.openURL(url).catch(() => {
           // A blocked or unsupported link has nothing to recover; the name stays visible.
         })
       }}
-      style={webPointer}
-    >
-      <Text style={s.visit} numberOfLines={1}>
-        {host}
-      </Text>
-    </Pressable>
+    />
   )
 }
 

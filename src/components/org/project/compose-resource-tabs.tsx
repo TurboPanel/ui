@@ -6,6 +6,7 @@ import { EnvironmentBindingsPanel } from '@/components/org/environment-bindings-
 import { EnvironmentDetailBody } from '@/components/org/environment-detail-section'
 import { ProjectPrincipalsSection } from '@/components/org/project-detail-section'
 import { panelStyles } from '@/components/ui/panel-styles'
+import { Section } from '@/components/ui/v4/section'
 import { useProjectContext } from '@/components/org/project/project-context'
 import { PrimaryHostnamePanel } from '@/components/org/project/primary-hostname-panel'
 import { ProjectServerHeaderControl } from '@/components/org/project/project-server-pin'
@@ -15,7 +16,7 @@ import {
   EnvironmentSettingsPanel,
   readHostingIdParam,
 } from '@/components/org/project-settings-area'
-import { Button, ButtonRow, EmptyState, SectionPanel } from '@/components/ui'
+import { Button, ButtonRow, EmptyState } from '@/components/ui'
 import { orgSettingsTabHref } from '@/lib/org-navigation'
 import type { EnvironmentRecord, OrgServerRecord } from '@/lib/instance-api'
 import { projectComposeSectionHref } from '@/lib/project-navigation'
@@ -83,16 +84,16 @@ function ProjectDefaultServerPanel() {
   const { project, canManage, projectAllowsMutations } = useProjectContext()
   const canEdit = canManage && projectAllowsMutations
   return (
-    <SectionPanel
+    <Section
       title="Default project server"
-      hint="Applies to every environment that does not pin its own server"
+      note="Applies to every environment that does not pin its own server"
     >
       {canEdit && project ? (
         <ProjectServerHeaderControl />
       ) : (
         <Text style={panelStyles.muted}>View only</Text>
       )}
-    </SectionPanel>
+    </Section>
   )
 }
 
@@ -188,9 +189,9 @@ function SystemUsersPanel() {
   // The organization list is owner/manager only, so others get no link to it.
   const orgManager = useCan('organization', orgId, 'organization:manage')
   return (
-    <SectionPanel
+    <Section
       title="System users"
-      hint="Project-wide — native releases deploy into a system user's home"
+      note="Project-wide — native releases deploy into a system user's home"
     >
       <ProjectPrincipalsSection
         orgId={orgId}
@@ -207,7 +208,7 @@ function SystemUsersPanel() {
           />
         </ButtonRow>
       ) : null}
-    </SectionPanel>
+    </Section>
   )
 }
 
@@ -339,10 +340,7 @@ function EnvironmentServersPanel({
   )
 
   return (
-    <SectionPanel
-      title="Server"
-      hint="This environment only — deploys to one server"
-    >
+    <Section title="Server" note="This environment only — deploys to one server">
       <EnvironmentServerPinBody
         selectedEnvironment={selectedEnvironment}
         canEdit={canEdit}
@@ -368,7 +366,7 @@ function EnvironmentServersPanel({
           })()
         }}
       />
-    </SectionPanel>
+    </Section>
   )
 }
 

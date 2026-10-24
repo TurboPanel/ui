@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { panelStyles } from '@/components/ui/panel-styles'
-import { LoadingState, SectionPanel } from '@/components/ui'
+import { Section } from '@/components/ui/v4/section'
+import { LoadingState } from '@/components/ui'
 import {
   BindingCard,
   useManagedClustersByEnvironment,
@@ -54,9 +55,9 @@ export function EnvironmentBindingsPanel({
 
   if (bindingsQuery.isLoading) {
     return (
-      <SectionPanel title="Bound databases" hint={hint}>
+      <Section title="Bound databases" note={hint}>
         <LoadingState />
-      </SectionPanel>
+      </Section>
     )
   }
 
@@ -78,7 +79,7 @@ export function EnvironmentBindingsPanel({
   }
 
   return (
-    <SectionPanel title="Bound databases" hint={hint}>
+    <Section title="Bound databases" note={hint}>
       {error ? <Text style={panelStyles.error}>{error}</Text> : null}
       {bindings.length === 0 ? (
         <Text style={panelStyles.muted}>
@@ -110,7 +111,7 @@ export function EnvironmentBindingsPanel({
           ))}
         </View>
       )}
-    </SectionPanel>
+    </Section>
   )
 }
 

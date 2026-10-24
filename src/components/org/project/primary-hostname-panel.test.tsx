@@ -23,9 +23,6 @@ vi.mock('react-native', () => ({
   Text: ({ children }: Props) => <span>{children}</span>,
 }))
 vi.mock('@/components/ui', () => ({
-  SectionPanel: ({ title, children }: Props) => (
-    <section aria-label={title as string}>{children}</section>
-  ),
   Button: ({ label, accessibilityLabel, onPress, disabled }: Props) => (
     <button
       type="button"
@@ -35,6 +32,11 @@ vi.mock('@/components/ui', () => ({
     >
       {label as string}
     </button>
+  ),
+}))
+vi.mock('@/components/ui/v4/section', () => ({
+  Section: ({ title, children }: Props) => (
+    <section aria-label={title as string}>{children}</section>
   ),
 }))
 vi.mock('@/components/ui/panel-styles', () => ({ panelStyles: { error: {} } }))

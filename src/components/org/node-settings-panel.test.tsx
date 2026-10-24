@@ -44,7 +44,6 @@ vi.mock('@/components/ui', () => ({
       {title as string} {body as string}
     </div>
   ),
-  SectionPanel: ({ children }: Props) => <section>{children}</section>,
   SegmentedControl: () => null,
   Select: ({ value, options, accessibilityLabel, onChange, noneLabel }: Props) => (
     <select
@@ -70,6 +69,9 @@ vi.mock('@/components/ui', () => ({
     />
   ),
   Toggle: () => null,
+}))
+vi.mock('@/components/ui/v4/section', () => ({
+  Section: ({ children }: Props) => <section>{children}</section>,
 }))
 vi.mock('@/components/org/compose-persistence', () => ({
   usePersistEnvironmentCompose: () => ({ run: h.persistEnvironment }),

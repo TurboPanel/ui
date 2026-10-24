@@ -1,6 +1,6 @@
 import { useRouter, type Href } from 'expo-router'
 import { Text, View } from 'react-native'
-import { ActionButton } from '@/components/ui/v4/action-button'
+import { TextLink } from '@/components/ui/text-link'
 import { EmptyPanel } from '@/components/ui/v4/empty-panel'
 import { ListGroup } from '@/components/ui/v4/list-group'
 import { ListRow } from '@/components/ui/v4/list-row'
@@ -41,12 +41,7 @@ export function DeploymentsSection({
       <SectionHeading
         title="Latest deployments"
         action={
-          <ActionButton
-            label="All deployments"
-            variant="quiet"
-            size="sm"
-            onPress={() => router.push(deploymentsHref as Href)}
-          />
+          <TextLink label="All deployments" onPress={() => router.push(deploymentsHref as Href)} />
         }
       />
       <ListGroup

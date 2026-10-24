@@ -6,12 +6,12 @@ import {
   webNestedScrollStyle,
 } from '@/components/org/logs/nested-scroll'
 import { panelStyles } from '@/components/ui/panel-styles'
+import { Section } from '@/components/ui/v4/section'
 import {
   ConfirmButton,
   EmptyState,
   InlineNotice,
   LoadingState,
-  SectionPanel,
   StatusDot,
   type StatusTone,
 } from '@/components/ui'
@@ -260,9 +260,9 @@ export function EnvironmentDeploymentHistoryPanel({
           canManage={canManage}
         />
       ) : null}
-      <SectionPanel
+      <Section
         title="Deployment history"
-        hint="Past deploy attempts. Open one to read its log."
+        note="Past deploy attempts. Open one to read its log."
         collapsible={!alwaysOpen}
         defaultCollapsed={!alwaysOpen}
       >
@@ -308,7 +308,7 @@ export function EnvironmentDeploymentHistoryPanel({
             </ScrollView>
           </View>
         ) : null}
-      </SectionPanel>
+      </Section>
     </>
   )
 }

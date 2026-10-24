@@ -1,12 +1,13 @@
 import { Redirect, useLocalSearchParams, useRouter, type Href } from 'expo-router'
 import { useMemo } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
-import { LoadingState, SectionPanel, TextLink } from '@/components/ui'
+import { LoadingState, TextLink } from '@/components/ui'
 import { ServiceRuntimeLogPanel } from '@/components/logs/service-runtime-log'
 import { NodeSettingsPanel } from '@/components/org/node-settings-panel'
 import { ServiceSettingsPanel } from '@/components/org/service-settings-panel'
 import { ServiceReleasesPanel } from '@/components/org/project/service-releases-panel'
 import { panelStyles } from '@/components/ui/panel-styles'
+import { Section } from '@/components/ui/v4/section'
 import { useProjectContext } from '@/components/org/project/project-context'
 import {
   projectComposeEditHref,
@@ -115,14 +116,14 @@ export function EnvironmentServiceScreen() {
         service={service}
         canManage={manage}
       />
-      <SectionPanel title={name} hint="Per-service operational settings" accent>
+      <Section title={name} note="Per-service operational settings">
         <ServiceSettingsPanel
           orgId={orgId}
           composeServiceName={composeName}
           service={service}
           canManage={manage}
         />
-      </SectionPanel>
+      </Section>
       <ServiceRuntimeLogPanel orgId={orgId} serviceId={service.id} serviceName={name} />
       {/* Only Git-backed services have releases; the panel hides itself for the rest. */}
       <ServiceReleasesPanel

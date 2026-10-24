@@ -1,6 +1,6 @@
 import { useRouter, type Href } from 'expo-router'
 import { useCallback, useMemo, useState } from 'react'
-import { Linking, Pressable, Text, View } from 'react-native'
+import { Linking, Text, View } from 'react-native'
 import {
   AppsSection,
   ChangesSection,
@@ -14,6 +14,7 @@ import type { EditingApi } from '@/components/org/project/configuration/editing'
 import { SaveBar } from '@/components/org/project/configuration/save-bar'
 import { useProjectContext } from '@/components/org/project/project-context'
 import { LoadingState } from '@/components/ui'
+import { Toggle } from '@/components/ui/toggle'
 import { ActionButton, Notice } from '@/components/ui/v4'
 import { themedStyles, usePalette } from '@/components/ui/v4/use-palette'
 import { typeStyle } from '@/components/ui/v4/type-styles'
@@ -27,7 +28,6 @@ import { useEnvironmentConfigView } from '@/lib/queries/environments'
 import { useHostingsByServices } from '@/lib/queries/services'
 import { useVariables } from '@/lib/queries/variables'
 import { environmentDisplayName } from '@/lib/resource-labels'
-import { webPointer } from '@/lib/theme'
 import {
   changeActions,
   stageEdit,
@@ -47,51 +47,22 @@ const styles = themedStyles((p) => ({
   stack: { gap: 16 },
   lede: { ...typeStyle('body', 'subhead'), color: p.text3 },
   top: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 12 },
-  filter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    minHeight: 32,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: p.sepStrong,
-    backgroundColor: p.surface,
-  },
-  filterText: { ...typeStyle('bodyMedium', 'subhead'), color: p.text },
-  track: {
-    width: 28,
-    height: 16,
-    borderRadius: 8,
-    padding: 2,
-    backgroundColor: p.surface3,
-    justifyContent: 'center',
-  },
-  trackOn: { backgroundColor: p.accent },
-  knob: { width: 12, height: 12, borderRadius: 6, backgroundColor: p.knob },
-  knobOn: { alignSelf: 'flex-end' },
 }))
 
-/** The "Only changes from Base (N)" switch. */
+/** The "Only changes from Base (N)" switch: the shared switch, its label as the word beside it. */
 function OnlyChangesSwitch({
   label,
   on,
   onToggle,
 }: Readonly<{ label: string; on: boolean; onToggle: () => void }>) {
-  const s = styles(usePalette())
   return (
-    <Pressable
-      accessibilityRole="switch"
+    <Toggle
+      value={on}
+      onValueChange={onToggle}
+      onLabel={label}
+      offLabel={label}
       accessibilityLabel={label}
-      accessibilityState={{ checked: on }}
-      onPress={onToggle}
-      style={[s.filter, webPointer]}
-    >
-      <View style={[s.track, on && s.trackOn]}>
-        <View style={[s.knob, on && s.knobOn]} />
-      </View>
-      <Text style={s.filterText}>{label}</Text>
-    </Pressable>
+    />
   )
 }
 
