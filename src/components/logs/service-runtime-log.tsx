@@ -3,7 +3,7 @@ import { AppState, StyleSheet, Text, View } from 'react-native'
 import { LogViewer } from '@/components/logs/log-viewer'
 import { Button } from '@/components/ui/button'
 import { panelStyles } from '@/components/ui/panel-styles'
-import { SectionPanel } from '@/components/ui/section-panel'
+import { Section } from '@/components/ui/v4/section'
 import { SegmentedControl } from '@/components/ui/segmented-control'
 import { dockerTimestampTranscriptLines } from '@/lib/execution-log-lines'
 import type { ContainerRecord } from '@/lib/instance-api'
@@ -142,15 +142,15 @@ export function ServiceRuntimeLogPanel({
   }
 
   return (
-    <SectionPanel
+    <Section
       title="Runtime log"
-      hint="What the running app prints. Read from the server when you open it, never stored."
+      note="What the running app prints. Read from the server when you open it, never stored."
       collapsible
       defaultCollapsed
       onToggle={setOpen}
     >
       {open ? <View style={styles.body}>{body}</View> : null}
-    </SectionPanel>
+    </Section>
   )
 }
 

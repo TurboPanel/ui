@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { useProjectContext } from '@/components/org/project/project-context'
-import { Button, SectionPanel } from '@/components/ui'
+import { Button } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
+import { Section } from '@/components/ui/v4/section'
 import {
   environmentSiteHostnames,
   primarySiteHostname,
@@ -86,7 +87,7 @@ export function PrimaryHostnamePanel({
   }
 
   return (
-    <SectionPanel title="Primary hostname" hint="Visit and status use the primary">
+    <Section title="Primary hostname" note="Visit and status use the primary">
       <View style={styles.rows}>
         {hostnames.map((hostname) => (
           <View key={hostname} style={styles.row} accessibilityLabel={hostname}>
@@ -106,7 +107,7 @@ export function PrimaryHostnamePanel({
         ))}
       </View>
       {update.actionError ? <Text style={panelStyles.error}>{update.actionError}</Text> : null}
-    </SectionPanel>
+    </Section>
   )
 }
 

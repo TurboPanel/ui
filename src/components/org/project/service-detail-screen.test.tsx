@@ -30,9 +30,6 @@ vi.mock('expo-router', () => ({
 }))
 vi.mock('@/components/ui', () => ({
   LoadingState: ({ label }: Readonly<{ label: string }>) => <span>{label}</span>,
-  SectionPanel: ({ title, children }: Readonly<{ title: string; children: ReactNode }>) => (
-    <section aria-label={title}>{children}</section>
-  ),
   TextLink: ({
     label,
     onPress,
@@ -41,6 +38,11 @@ vi.mock('@/components/ui', () => ({
     <button type="button" aria-label={accessibilityLabel ?? label} onClick={onPress}>
       {label}
     </button>
+  ),
+}))
+vi.mock('@/components/ui/v4/section', () => ({
+  Section: ({ title, children }: Readonly<{ title: string; children: ReactNode }>) => (
+    <section aria-label={title}>{children}</section>
   ),
 }))
 vi.mock('@/components/ui/panel-styles', () => ({ panelStyles: { muted: {} } }))

@@ -2,11 +2,11 @@ import { useMemo, useState } from 'react'
 import { useRouter, type Href } from 'expo-router'
 import { StyleSheet, Text, View } from 'react-native'
 import { panelStyles } from '@/components/ui/panel-styles'
+import { Section } from '@/components/ui/v4/section'
 import {
   Button,
   ConfirmButton,
   LoadingState,
-  SectionPanel,
 } from '@/components/ui'
 import type { BindingRecord } from '@/lib/instance-api'
 import {
@@ -155,9 +155,9 @@ export function ServiceBindingsPanel({
   const bindings = bindingsQuery.data?.bindings ?? []
   if (bindingsQuery.isLoading) {
     return (
-      <SectionPanel title="Bound databases" hint="Connected managed clusters">
+      <Section title="Bound databases" note="Connected managed clusters">
         <LoadingState />
-      </SectionPanel>
+      </Section>
     )
   }
   if (bindings.length === 0) {
@@ -181,7 +181,7 @@ export function ServiceBindingsPanel({
   }
 
   return (
-    <SectionPanel title="Bound databases" hint="Connected managed clusters">
+    <Section title="Bound databases" note="Connected managed clusters">
       {error ? <Text style={panelStyles.error}>{error}</Text> : null}
       <View style={styles.list}>
         {bindings.map((binding) => (
@@ -205,7 +205,7 @@ export function ServiceBindingsPanel({
           />
         ))}
       </View>
-    </SectionPanel>
+    </Section>
   )
 }
 

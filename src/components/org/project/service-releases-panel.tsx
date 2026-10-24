@@ -3,13 +3,13 @@ import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } fr
 import { LogTranscriptView } from '@/components/org/logs/log-transcript-view'
 import { nestedScrollDomProps, webNestedScrollStyle } from '@/components/org/logs/nested-scroll'
 import { panelStyles } from '@/components/ui/panel-styles'
+import { Section } from '@/components/ui/v4/section'
 import {
   Badge,
   ConfirmButton,
   EmptyState,
   InlineNotice,
   LoadingState,
-  SectionPanel,
   StatusDot,
   type StatusTone,
 } from '@/components/ui'
@@ -448,9 +448,9 @@ export function ServiceReleasesPanel({
   }
 
   return (
-    <SectionPanel
+    <Section
       title="Releases"
-      hint="Published builds of this service, newest first"
+      note="Published builds of this service, newest first"
       collapsible={collapsible}
       defaultCollapsed={false}
     >
@@ -505,7 +505,7 @@ export function ServiceReleasesPanel({
           </ScrollView>
         </View>
       ) : null}
-    </SectionPanel>
+    </Section>
   )
 }
 

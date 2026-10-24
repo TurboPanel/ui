@@ -26,7 +26,6 @@ import {
   Checkbox,
   EmptyState,
   LoadingState,
-  SectionPanel,
   SegmentedControl,
   TextField,
 } from '@/components/ui'
@@ -49,6 +48,7 @@ import {
 import { ServiceSettingsPanel } from '@/components/org/service-settings-panel'
 import { StorageSection } from '@/components/org/storage-section'
 import { panelStyles } from '@/components/ui/panel-styles'
+import { Section } from '@/components/ui/v4/section'
 import { VariablesSection } from '@/components/org/variables-section'
 import {
   DeployHealthCheckMissingError,
@@ -1485,9 +1485,9 @@ function EnvironmentPlacementPanel({
   }
 
   return (
-    <SectionPanel
+    <Section
       title="Server"
-      hint={
+      note={
         inheritsProjectDefault
           ? 'Inherited from Project — pick a server to override for this environment'
           : 'Required — this environment deploys to one server'
@@ -1507,7 +1507,7 @@ function EnvironmentPlacementPanel({
       {savingPlacement ? (
         <Text style={panelStyles.muted}>Saving…</Text>
       ) : null}
-    </SectionPanel>
+    </Section>
   )
 }
 
@@ -1581,7 +1581,7 @@ function EnvironmentInfoPanel({
   projectId: string
 }>) {
   return (
-    <SectionPanel title="Environment" hint="Environment details">
+    <Section title="Environment" note="Environment details">
       <Text style={panelStyles.detailTitle}>
         {environment.name?.trim() || 'Unnamed environment'}
       </Text>
@@ -1594,7 +1594,7 @@ function EnvironmentInfoPanel({
         <Text style={panelStyles.detailLabel}>Project: </Text>
         {projectId}
       </Text>
-    </SectionPanel>
+    </Section>
   )
 }
 
@@ -1608,9 +1608,9 @@ function EnvironmentComposeOverlayPanel({
   savingCompose: boolean
 }>) {
   return (
-    <SectionPanel
+    <Section
       title="Compose overlay"
-      hint="Overrides the project compose"
+      note="Overrides the project compose"
       collapsible
       defaultCollapsed
     >
@@ -1620,7 +1620,7 @@ function EnvironmentComposeOverlayPanel({
         saving={savingCompose}
         title="Environment compose overlay"
       />
-    </SectionPanel>
+    </Section>
   )
 }
 
@@ -1678,9 +1678,9 @@ function EnvironmentDeployChromePanels({
         onSavePlacement={onSavePlacement}
       />
 
-      <SectionPanel
+      <Section
         title="Deploy"
-        hint="Preview compose, then deploy this environment to its selected server"
+        note="Preview compose, then deploy this environment to its selected server"
       >
         <View style={styles.deployActions}>
           <View ref={previewBtnRef} collapsable={false} style={styles.splitGroup}>
@@ -1727,7 +1727,7 @@ function EnvironmentDeployChromePanels({
         {deployStatus ? (
           <Text style={panelStyles.detailLine}>{deployStatus}</Text>
         ) : null}
-      </SectionPanel>
+      </Section>
 
       <Modal
         visible={previewMenuOpen}
@@ -1850,9 +1850,9 @@ function EnvironmentHostingSectionPanel({
     }),
   }))
   return (
-    <SectionPanel
+    <Section
       title="Hosting"
-      hint="Map compose services to hostnames (http) or raw ports (tcp/udp)"
+      note="Map compose services to hostnames (http) or raw ports (tcp/udp)"
     >
       {hostingRows.length === 0 ? (
         <EmptyState title="Add services to Compose before configuring hostnames." />
@@ -1908,7 +1908,7 @@ function EnvironmentHostingSectionPanel({
           })}
         </View>
       )}
-    </SectionPanel>
+    </Section>
   )
 }
 
@@ -1926,9 +1926,9 @@ function EnvironmentServiceSettingsSectionPanel({
   onServiceChange: (nextService: ServiceRecord) => void
 }>) {
   return (
-    <SectionPanel
+    <Section
       title="Service settings"
-      hint="Per-service deploy options"
+      note="Per-service deploy options"
       collapsible
       defaultCollapsed
     >
@@ -1953,7 +1953,7 @@ function EnvironmentServiceSettingsSectionPanel({
           })}
         </View>
       )}
-    </SectionPanel>
+    </Section>
   )
 }
 
@@ -1982,7 +1982,7 @@ function EnvironmentContainersSectionPanel({
     removedIds,
   )
   return (
-    <SectionPanel title="Containers" hint="Deployed containers and their status">
+    <Section title="Containers" note="Deployed containers and their status">
       {partial ? (
         <Text style={panelStyles.muted}>
           Only the first 20 folders were checked, so a site removed from compose may not be
@@ -2047,7 +2047,7 @@ function EnvironmentContainersSectionPanel({
           })}
         </View>
       )}
-    </SectionPanel>
+    </Section>
   )
 }
 
