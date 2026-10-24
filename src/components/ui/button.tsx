@@ -1,21 +1,24 @@
 import { type ReactNode } from 'react'
-import {
-  ActivityIndicator,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native'
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
+import { useTouch } from '@/components/ui/v4/use-palette'
 import { chrome, colors, webPointer } from '@/lib/theme'
+import { CONTROL_HEIGHT } from '@/lib/v4/ui-scale'
 
 export type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost'
 export type ButtonSize = 'md' | 'sm'
 
+/** Height with a mouse; a phone or a coarse pointer raises both sizes to 44 pt. */
+const POINTER_HEIGHT: Record<ButtonSize, number> = { md: 40, sm: 32 }
+
+/** Min height of a {@link Button}: the pointer size, or the 44 pt touch minimum. */
+export function buttonMinHeight(size: ButtonSize, touch: boolean): number {
+  return touch ? Math.max(POINTER_HEIGHT[size], CONTROL_HEIGHT.touch) : POINTER_HEIGHT[size]
+}
+
 /**
- * Standard console button (MASTER: radius 8, weight 600, min height 40 web /
- * 44 native, 150ms press feedback, never color-only affordance).
- * `busy` disables the press and shows a spinner beside the label.
+ * Standard console button (MASTER: radius 8, weight 600, min height 40 with a
+ * mouse, 44 on touch at every size, 150ms press feedback, never color-only
+ * affordance). `busy` disables the press and shows a spinner beside the label.
  */
 export function Button({
   label,
@@ -40,6 +43,7 @@ export function Button({
   icon?: ReactNode
   accessibilityLabel?: string
 }>) {
+  const touch = useTouch()
   const blocked = disabled || busy
   const shownLabel = busy && busyLabel ? busyLabel : label
   const spinnerColor =
@@ -51,11 +55,13 @@ export function Button({
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}
       accessibilityState={{ disabled: blocked, busy }}
-      hitSlop={size === 'sm' ? 6 : undefined}
+      aria-disabled={blocked}
+      aria-busy={busy}
       style={({ pressed }) => [
         styles.base,
         variantStyles[variant],
         size === 'sm' && styles.sm,
+        { minHeight: buttonMinHeight(size, touch) },
         webPointer,
         pressed && !blocked && styles.pressed,
         blocked && styles.disabled,
@@ -92,8 +98,6 @@ export function ButtonRow({
   )
 }
 
-const minHeight = Platform.OS === 'web' ? 40 : 44
-
 const styles = StyleSheet.create({
   base: {
     flexDirection: 'row',
@@ -101,13 +105,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
     alignSelf: 'flex-start',
-    minHeight,
     borderRadius: 8,
     paddingHorizontal: 14,
     paddingVertical: 8,
   },
   sm: {
-    minHeight: 32,
     paddingHorizontal: 10,
     paddingVertical: 5,
   },

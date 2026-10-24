@@ -65,10 +65,12 @@ function aria(props: Props) {
     // RN's `role` prop is already an ARIA role; `accessibilityRole` is translated.
     role: (props.role as string | undefined) ?? (role ? (ROLE[role] ?? role) : undefined),
     'aria-label': props.accessibilityLabel as string | undefined,
-    'aria-selected': state.selected,
-    'aria-checked': state.checked,
-    'aria-disabled': state.disabled,
-    'aria-busy': state.busy,
+    // An explicit `aria-*` prop wins, as it does in React Native and React Native Web.
+    'aria-selected': (props['aria-selected'] as boolean | undefined) ?? state.selected,
+    'aria-checked': (props['aria-checked'] as boolean | undefined) ?? state.checked,
+    'aria-disabled': (props['aria-disabled'] as boolean | undefined) ?? state.disabled,
+    'aria-busy': (props['aria-busy'] as boolean | undefined) ?? state.busy,
+    'aria-expanded': (props['aria-expanded'] as boolean | undefined) ?? state.expanded,
     'aria-live': props.accessibilityLiveRegion as string | undefined,
     'aria-hidden': props.accessibilityElementsHidden ? true : undefined,
     'data-style': JSON.stringify(flatten(props.style)),

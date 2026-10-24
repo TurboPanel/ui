@@ -251,14 +251,17 @@ these instead of a local `StyleSheet`:
 
 | Need | Use |
 | --- | --- |
-| On/off setting | `Toggle` + `SettingRow` — never React Native `Switch` (it renders as three unrelated controls across the platforms) |
+| On/off setting | `Toggle` + `SettingRow` — the one switch: track and knob plus the state word ("On" / "Off", or the caller's), 44 pt tall on touch. Never React Native `Switch` (it renders as three unrelated controls across the platforms) |
 | Panel / card | `SectionPanel` (`collapsible`, `accent`, `headerRight`) |
 | Dense table | `DataTable` + `DataTableRow` / `DataTableCell` / `DataTableEmpty` — owns horizontal scroll, the web-only sticky header, hover, zebra, selection |
 | Blocking dialog | `ModalSheet` — centred dialog on desktop, bottom sheet on compact, backdrop dismiss, Android back |
 | Status indicator | `StatusDot` (`online` / `pending` / `offline` / `failed` / `neutral`); `ConnectionStatusDot` when a server's live pulse is wanted |
-| Buttons | `Button`, `ButtonRow`, `ConfirmButton`, `CopyButton` |
+| Buttons | `Button` (40 / 32 with a mouse, 44 at every size on a phone or coarse pointer), `ButtonRow`, `ConfirmButton`, `CopyButton` |
+| Text link | `TextLink` — link-blue words, as tall as the text with a mouse and a 44 x 44 pt tap area on touch, keyboard focus ring; `expanded` turns it into a show / hide disclosure. Never a bare `Pressable` + `Text` |
 | Inputs | `TextField`, `FormField`, `Checkbox`, `Select`, `SegmentedControl` |
 | States | `EmptyState`, `LoadingState`, `InlineNotice`, `Badge`, `StatTiles`, `WizardSteps` |
+
+**State on the web needs `aria-*`.** React Native Web 0.21 ignores `accessibilityState`, so a switch, checkbox or disclosure that only sets it reaches a browser screen reader with no checked or expanded state. Pass the `aria-checked` / `aria-expanded` / `aria-disabled` form too (React Native maps it on the phone). The `rn-stub.tsx` stand-ins translate `accessibilityState` for you, so they cannot catch this: `switch-state.web.test.tsx` renders through the real React Native Web.
 
 **Adding a widget:** if a second screen needs it, it belongs in
 `src/components/ui/` and the barrel — not copied. If only one screen will ever
