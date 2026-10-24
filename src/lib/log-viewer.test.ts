@@ -141,6 +141,7 @@ describe('buildLogSteps', () => {
     expect(steps[3]?.errorCount).toBe(2)
     expect(steps[0]?.durationMs).toBe(2000)
     expect(steps[1]?.durationMs).toBeNull()
+    expect(steps[2]?.durationMs).toBeNull()
   })
 
   it('marks only the last group of a repeated failed phase', () => {

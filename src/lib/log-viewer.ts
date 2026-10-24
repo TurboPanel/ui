@@ -33,7 +33,7 @@ export type LogStep = Readonly<{
   lines: readonly LogTranscriptLine[]
   /** Error rows (warnings not counted). */
   errorCount: number
-  /** Milliseconds from the first to the last line; null without timestamps. */
+  /** Milliseconds from the first to the last line; null without timestamps or with one line. */
   durationMs: number | null
 }>
 
@@ -112,6 +112,8 @@ function outcomeStatus(status: CommandStatus | null): LogStepStatus {
 }
 
 function durationOf(lines: readonly LogTranscriptLine[]): number | null {
+  // One line has no length of time worth showing.
+  if (lines.length < 2) return null
   const first = Date.parse(lines[0]?.timestamp ?? '')
   const last = Date.parse(lines.at(-1)?.timestamp ?? '')
   if (Number.isNaN(first) || Number.isNaN(last)) return null
