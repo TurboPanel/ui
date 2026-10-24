@@ -13,6 +13,9 @@ export const UPDATE_ALREADY_ACTIVE_COPY = 'Another update is already in progress
 
 export const ENVIRONMENT_RUNNING_COPY = 'This environment is still running. Stop it first.'
 
+export const LETS_ENCRYPT_OFF_COPY =
+  'Let\u2019s Encrypt is turned off for this organization. An owner can turn it on in Organization settings \u203a Domains & certificates.'
+
 export const MANAGED_HAS_BINDINGS_COPY =
   'One or more services are still connected to this cluster. Remove those connections first, then destroy it.'
 
@@ -31,8 +34,7 @@ const API_ERROR_COPY: Readonly<Record<string, string>> = {
   daemon_unavailable: 'TurboPanel could not reach this server right now. Try again in a moment.',
   cancel_unsupported:
     "This server's TurboPanel daemon is too old to cancel deploys. Update it first.",
-  lets_encrypt_not_enabled:
-    'Your organization has not turned on Let\u2019s Encrypt. An owner can allow it in the Let\u2019s Encrypt settings on the TLS certificates page.',
+  lets_encrypt_not_enabled: LETS_ENCRYPT_OFF_COPY,
   acme_requires_public_bind:
     'Let\u2019s Encrypt needs this domain to be reachable from the internet.',
   hosting_not_http: 'Let\u2019s Encrypt only works for web domains, not raw ports.',
