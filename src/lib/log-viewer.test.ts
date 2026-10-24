@@ -16,6 +16,7 @@ import {
   matchCountText,
   matchSegments,
   nextLivePaused,
+  runtimeLogState,
   shouldPollLog,
   type LogFilter,
   type LogStep,
@@ -445,5 +446,14 @@ describe('Live switch', () => {
     expect(shouldPollLog({ running: true, paused: true, openedFinished: false })).toBe(false)
     expect(shouldPollLog({ running: false, paused: true, openedFinished: false })).toBe(true)
     expect(shouldPollLog({ running: false, paused: false, openedFinished: true })).toBe(false)
+  })
+})
+
+describe('runtimeLogState', () => {
+  it('waits for the first read, then is a snapshot or live', () => {
+    expect(runtimeLogState({ hasData: false, failed: false, live: false })).toBe('waiting')
+    expect(runtimeLogState({ hasData: true, failed: false, live: false })).toBe('sealed')
+    expect(runtimeLogState({ hasData: true, failed: false, live: true })).toBe('streaming')
+    expect(runtimeLogState({ hasData: true, failed: true, live: true })).toBe('unavailable')
   })
 })

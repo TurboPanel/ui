@@ -17,6 +17,7 @@ import {
   type LogTranscriptLine,
 } from '@/lib/execution-log-lines'
 import type { CommandProgressStep, CommandStatus } from '@/lib/instance-api'
+import type { CommandLogState } from '@/lib/queries/execution-logs'
 
 /** How a step ended, or where it is. */
 export type LogStepStatus = 'ok' | 'failed' | 'running' | 'skipped' | 'pending'
@@ -483,4 +484,17 @@ export function shouldPollLog(
 ): boolean {
   if (input.openedFinished) return false
   return !input.running || !input.paused
+}
+
+/**
+ * Viewer state for a runtime log read on demand from the server (never
+ * stored): waiting for the first read, unavailable when the read failed,
+ * streaming while Live re-reads it, else a finished snapshot.
+ */
+export function runtimeLogState(
+  input: Readonly<{ hasData: boolean; failed: boolean; live: boolean }>
+): CommandLogState {
+  if (input.failed) return 'unavailable'
+  if (!input.hasData) return 'waiting'
+  return input.live ? 'streaming' : 'sealed'
 }

@@ -12,6 +12,9 @@
 - Project → environment **Overview** — the deploy-progress card for the deploy
   that was just enqueued (`overview-environments-panel.tsx`): step rail, the
   last output and **Open full log**, which goes to the log page above.
+- Project → **Services** → a service → **Runtime log** — the same viewer,
+  ungrouped, reading the running app's output on demand (rules in
+  `container-logs.md`).
 - Managed project **Overview / Settings** — **Apply transcript** beside the
   existing **Engine logs** tail (`managed-status-panel.tsx`)
 
@@ -26,7 +29,8 @@ Two components, one language:
 
 - **`src/components/logs/log-viewer.tsx` (`LogViewer`)** — the log viewer with
   steps, search, filters and Live. Its model is pure and tested in
-  `src/lib/log-viewer.ts`. Used by the deployment log page; new log surfaces
+  `src/lib/log-viewer.ts`. Used by the deployment log page and a service's
+  Runtime log; new log surfaces
   use it, and the older surfaces move to it one at a time.
 - `src/components/org/logs/log-transcript-view.tsx` (`LogTranscriptView`) — the
   older flat viewer, still used by the progress card, managed apply, engine logs

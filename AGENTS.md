@@ -505,6 +505,9 @@ and "no transcript retained" stay distinguishable.
   default with the failed (or first) step open, search across steps, Live.
   Its model is pure in `src/lib/log-viewer.ts`. History rows and the Overview
   progress card's **Open full log** link there.
+  A service page (Services › service) has a **Runtime log** section with the
+  same viewer, ungrouped, over `useContainerLogTail` (last 200 lines, never
+  stored, Live off until switched on, off when the app goes to the background).
 - The older flat viewer, `src/components/org/logs/log-transcript-view.tsx`, still
   renders the Overview progress card's output, the managed **Apply
   transcript**, the managed **Engine logs** tail, and the per-container live

@@ -356,6 +356,8 @@ export type LogViewerProps = Readonly<{
   grouped?: boolean
   /** The Live switch; `off` hides it. */
   live: LiveState
+  /** The Live switch's word when it is not on ("Paused" for a deploy, "Off" for a runtime log). */
+  liveOffLabel?: string
   onLiveToggle?: () => void
   /** Called when the person scrolls up away from the end while Live is on. */
   onScrolledAway?: () => void
@@ -379,6 +381,7 @@ export function LogViewer({
   commandStatus = null,
   grouped = true,
   live,
+  liveOffLabel = 'Paused',
   onLiveToggle,
   onScrolledAway,
   hint,
@@ -550,7 +553,7 @@ export function LogViewer({
             label="Live"
             value={live === 'on'}
             onChange={() => onLiveToggle?.()}
-            offLabel="Paused"
+            offLabel={liveOffLabel}
           />
         )}
         <ToolToggle label="Wrap" value={wrap} onChange={setWrapChoice} />
