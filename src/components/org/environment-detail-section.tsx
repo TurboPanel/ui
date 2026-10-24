@@ -1,5 +1,6 @@
 import {
   createElement,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -2757,10 +2758,10 @@ export function EnvironmentDetailBody({
     setPreviewOpen({ purpose: 'inspect', mode })
   }
 
-  const openDeployConfirm = () => {
+  const openDeployConfirm = useCallback(() => {
     setError(null)
     setPreviewOpen({ purpose: 'confirm', mode: 'prepared' })
-  }
+  }, [])
 
   /**
    * Persist one edited compose route by rewriting the environment overlay.
@@ -2885,16 +2886,19 @@ export function EnvironmentDetailBody({
     )
   }
 
+  const certificateActions = useMemo(
+    () => ({
+      // The deploy confirm only renders with the environment chrome.
+      ...(showEnvironmentChrome
+        ? { onDeploy: openDeployConfirm, deployDisabled: deployBlocked || deploying }
+        : {}),
+      refusals: certificateRefusals,
+    }),
+    [showEnvironmentChrome, openDeployConfirm, deployBlocked, deploying, certificateRefusals]
+  )
+
   if (loading && !environment) {
     return <LoadingState />
-  }
-
-  const certificateActions = {
-    // The deploy confirm only renders with the environment chrome.
-    ...(showEnvironmentChrome
-      ? { onDeploy: openDeployConfirm, deployDisabled: deployBlocked || deploying }
-      : {}),
-    refusals: certificateRefusals,
   }
 
   const body = (

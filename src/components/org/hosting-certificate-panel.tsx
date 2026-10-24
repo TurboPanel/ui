@@ -49,7 +49,7 @@ export const HostingCertificateActionsContext = createContext<HostingCertificate
  */
 export function environmentDeployShortcut(
   model: ReturnType<typeof useOptionalEnvironmentLifecycle>
-): { onDeploy: () => void; disabled: boolean } | null {
+): DeployShortcut | null {
   if (!model?.canMutateLifecycle) return null
   return {
     onDeploy: () => model.openDeployConfirm(model.hasContainers ? 'redeploy' : 'deploy'),
@@ -77,6 +77,44 @@ function RefusalNote({ orgId, refusal }: Readonly<{ orgId: string; refusal: Lets
         </ButtonRow>
       ) : null}
     </View>
+  )
+}
+
+type DeployShortcut = Readonly<{ onDeploy: () => void; disabled: boolean }>
+
+/**
+ * What the screen adds to one panel: a Deploy now (the environment page's own
+ * Deploy when there is one, else the screen's) and the refusal to show (the
+ * panel's own request is newer than one from the last save).
+ */
+function useScreenCertificateActions(
+  hostingId: string,
+  requestError: unknown
+): { deploy: DeployShortcut | null; refusal: LetsEncryptRefusal | null } {
+  const actions = useContext(HostingCertificateActionsContext)
+  const pageDeploy = environmentDeployShortcut(useOptionalEnvironmentLifecycle())
+  const screenDeploy = actions.onDeploy
+    ? { onDeploy: actions.onDeploy, disabled: actions.deployDisabled === true }
+    : null
+  const refusal = requestError
+    ? letsEncryptRefusal(requestError)
+    : (actions.refusals?.[hostingId] ?? null)
+  return { deploy: pageDeploy ?? screenDeploy, refusal }
+}
+
+function DeployNowButton({
+  deploy,
+  disabled,
+}: Readonly<{ deploy: DeployShortcut; disabled: boolean }>) {
+  return (
+    <Button
+      label="Deploy now"
+      size="sm"
+      variant="primary"
+      disabled={disabled || deploy.disabled}
+      accessibilityLabel="Deploy this environment to get the certificate"
+      onPress={deploy.onDeploy}
+    />
   )
 }
 
@@ -112,19 +150,7 @@ export function HostingCertificatePanel({
   const query = useHostingCertificate(orgId, hostingId)
   const letsEncrypt = useUseLetsEncrypt(orgId, hostingId)
   const dnsCheck = useHostingDnsCheck(hostingId)
-  const actions = useContext(HostingCertificateActionsContext)
-  // The environment page's own Deploy (the header's) when there is one, else the screen's.
-  const pageDeploy = environmentDeployShortcut(useOptionalEnvironmentLifecycle())
-  const deploy =
-    pageDeploy ??
-    (actions.onDeploy
-      ? { onDeploy: actions.onDeploy, disabled: actions.deployDisabled === true }
-      : null)
-
-  // The panel's own request is newer than a refusal from the last save.
-  const refusal = letsEncrypt.error
-    ? letsEncryptRefusal(letsEncrypt.error)
-    : (actions.refusals?.[hostingId] ?? null)
+  const { deploy, refusal } = useScreenCertificateActions(hostingId, letsEncrypt.error)
   const certificate = query.data?.hosting.certificate ?? null
   if (!certificate) {
     return refusal ? <RefusalNote orgId={orgId} refusal={refusal} /> : null
@@ -162,14 +188,7 @@ export function HostingCertificatePanel({
 
       <ButtonRow>
         {view.actions.includes('deploy') && deploy ? (
-          <Button
-            label="Deploy now"
-            size="sm"
-            variant="primary"
-            disabled={disabled || deploy.disabled}
-            accessibilityLabel="Deploy this environment to get the certificate"
-            onPress={deploy.onDeploy}
-          />
+          <DeployNowButton deploy={deploy} disabled={disabled} />
         ) : null}
         {canRequest ? (
           <Button
