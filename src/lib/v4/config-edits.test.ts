@@ -327,11 +327,19 @@ describe('planSave', () => {
     })
     const own = record('MODE', { environmentId: 'e1' })
     expect(planSave([edit], context({ environmentVariables: [own] })).steps[0]).toMatchObject({
-      op: {
-        type: 'update',
-        id: own.id,
-        body: { value: 'staging', forBuild: true, forRuntime: false },
-      },
+      op: { type: 'update', id: own.id, body: { value: 'staging' } },
+    })
+    const moved = variableEdit({
+      name: 'MODE',
+      value: 'staging',
+      secret: false,
+      forBuild: true,
+      forRuntime: false,
+      was: 'live',
+      useChanged: true,
+    })
+    expect(planSave([moved], context({ environmentVariables: [own] })).steps[0]).toMatchObject({
+      op: { body: { value: 'staging', forBuild: true, forRuntime: false } },
     })
     const shared = record('MODE', {
       projectId: 'p1',

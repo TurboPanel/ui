@@ -54,6 +54,8 @@ export type StagedEdit = Shown &
         secret: boolean
         forBuild: boolean
         forRuntime: boolean
+        /** Where it is used was changed; otherwise an update sends the value alone. */
+        useChanged: boolean
       }>
     | Readonly<{ kind: 'remove-variable'; name: string }>
     | Readonly<{ kind: 'go-back'; target: EditTarget }>
@@ -282,6 +284,7 @@ export function variableEdit(
     secret: input.secret,
     forBuild: input.forBuild,
     forRuntime: input.forRuntime,
+    useChanged: input.useChanged === true || input.value === null,
   }
 }
 
@@ -307,7 +310,7 @@ export type VariableOp =
   | Readonly<{
       type: 'update'
       id: string
-      body: { value?: string; forBuild: boolean; forRuntime: boolean }
+      body: { value?: string; forBuild?: boolean; forRuntime?: boolean }
     }>
   | Readonly<{ type: 'delete'; id: string }>
 
@@ -399,6 +402,16 @@ function applyLinuxUser(work: Working, edit: StagedEdit & { kind: 'set-linux-use
   )
 }
 
+/** A value-only edit sends the value alone, so it never rewrites where the variable is used. */
+function updateBody(
+  value: string | null,
+  useChanged: boolean,
+  scope: { forBuild: boolean; forRuntime: boolean }
+): { value?: string; forBuild?: boolean; forRuntime?: boolean } {
+  if (value === null) return scope
+  return useChanged ? { value, ...scope } : { value }
+}
+
 function applyVariable(
   work: Working,
   edit: StagedEdit & { kind: 'set-variable' },
@@ -436,7 +449,7 @@ function applyVariable(
       op: {
         type: 'update',
         id: own.id,
-        body: edit.value === null ? scope : { value: edit.value, ...scope },
+        body: updateBody(edit.value, edit.useChanged, scope),
       },
     })
   }

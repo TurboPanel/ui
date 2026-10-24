@@ -156,11 +156,7 @@ describe('useSaveConfiguration', () => {
       options: { compose: expect.anything() },
     })
     expect(api.updateProject).not.toHaveBeenCalled()
-    expect(api.updateVariable).toHaveBeenCalledWith('v-env', {
-      value: '3',
-      forBuild: false,
-      forRuntime: true,
-    })
+    expect(api.updateVariable).toHaveBeenCalledWith('v-env', { value: '3' })
     expect(api.updateVariable).not.toHaveBeenCalledWith('v-proj', expect.anything())
     expect(api.deleteVariable).not.toHaveBeenCalled()
   })
