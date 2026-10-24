@@ -7,8 +7,11 @@ import { CONTROL_HEIGHT } from '@/lib/v4/ui-scale'
 export type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost'
 export type ButtonSize = 'md' | 'sm'
 
-/** Height with a mouse; a phone or a coarse pointer raises both sizes to 44 pt. */
-const POINTER_HEIGHT: Record<ButtonSize, number> = { md: 40, sm: 32 }
+/**
+ * Height with a mouse; a phone or a coarse pointer raises both sizes to 44 pt.
+ * Controls that sit beside a button (the Toggle switch) share the `md` height.
+ */
+export const BUTTON_HEIGHT: Readonly<Record<ButtonSize, number>> = { md: 40, sm: 32 }
 
 /**
  * Standard console button (MASTER: radius 8, weight 600, min height 40 with a
@@ -56,7 +59,7 @@ export function Button({
         styles.base,
         variantStyles[variant],
         size === 'sm' && styles.sm,
-        { minHeight: touch ? CONTROL_HEIGHT.touch : POINTER_HEIGHT[size] },
+        { minHeight: touch ? CONTROL_HEIGHT.touch : BUTTON_HEIGHT[size] },
         webPointer,
         pressed && !blocked && styles.pressed,
         blocked && styles.disabled,

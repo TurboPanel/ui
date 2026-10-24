@@ -56,8 +56,8 @@ export function useUpdateAvailable(): Readonly<{
  * "Update available: control plane v0.1.5-canary.1 — Update" across the top of
  * the app. On a phone-width window it is one line, "Update available · Review",
  * so it never takes a third of the screen; what the update holds is on the
- * review screen it opens. On a wide window the title and at most one line of
- * detail.
+ * review screen it opens. On a wide window one line of title and at most two
+ * of detail.
  */
 export function UpdateAvailableBanner() {
   const router = useRouter()
@@ -102,7 +102,7 @@ export function UpdateAvailableBanner() {
         title={banner.title}
         body={banner.body}
         titleLines={1}
-        bodyLines={1}
+        bodyLines={2}
         actions={
           <>
             <Button label="Update" variant="primary" onPress={review} />
