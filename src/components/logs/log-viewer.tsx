@@ -884,7 +884,9 @@ const styles = StyleSheet.create({
     maxWidth: '100%',
   },
   searchCompact: {
-    flexBasis: '100%',
+    // Full width in a column (the phone layout) and in a wrapping row alike;
+    // flexBasis would turn into a height in a column.
+    width: '100%',
   },
   count: {
     color: colors.textFaint,
