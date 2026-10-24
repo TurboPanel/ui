@@ -52,6 +52,12 @@ export type ProjectSettingsViewProps = Readonly<{
   git: ProjectGitFacts | null
   onOpenRepositories: () => void
   onOpenBaseCompose: () => void
+  /**
+   * A managed database: TurboPanel keeps its Compose files, names and
+   * variables, so those sections give way to one row that opens the
+   * database's own settings (on its environment's Settings tab).
+   */
+  managed?: Readonly<{ onOpenDatabaseSettings: (() => void) | null }>
   /** The delete panel; present only for the organization owner. */
   danger: ReactNode | null
   dangerOpen: boolean
@@ -228,6 +234,36 @@ export function ProjectSettingsView(props: ProjectSettingsViewProps) {
         moving={props.moving}
         onMove={props.onMove}
       />
+      {props.managed ? (
+        <View>
+          <SectionHeading title="Database" />
+          <ListGroup foot="Managed by TurboPanel: its Compose file, container names and variables.">
+            <ListRow
+              title="Engine, resources and backups"
+              sub="Set on the environment's Settings tab."
+              onPress={props.managed.onOpenDatabaseSettings ?? undefined}
+            />
+          </ListGroup>
+        </View>
+      ) : (
+        <WebsiteProjectSections {...props} />
+      )}
+      {props.danger ? (
+        <DangerSection
+          panel={props.danger}
+          open={props.dangerOpen}
+          onToggle={props.onToggleDanger}
+        />
+      ) : null}
+    </View>
+  )
+}
+
+/** Variables, container names, Git and the Compose files: a website project's own. */
+function WebsiteProjectSections(props: ProjectSettingsViewProps) {
+  const s = styles(usePalette())
+  return (
+    <>
       <View style={s.section}>
         <SectionHeading title="Variables" note="Apply to every environment" />
         {props.variables}
@@ -261,13 +297,6 @@ export function ProjectSettingsView(props: ProjectSettingsViewProps) {
           />
         </ListGroup>
       </View>
-      {props.danger ? (
-        <DangerSection
-          panel={props.danger}
-          open={props.dangerOpen}
-          onToggle={props.onToggleDanger}
-        />
-      ) : null}
-    </View>
+    </>
   )
 }

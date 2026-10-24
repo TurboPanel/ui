@@ -5,7 +5,7 @@ import {
   COMPOSE_PROJECT_TAB_IDS,
   ENVIRONMENT_PAGE_TAB_IDS,
   LEGACY_PROJECT_SEGMENTS,
-  MANAGED_PROJECT_TAB_IDS,
+  RETIRED_MANAGED_TAB_IDS,
   PROJECT_PAGE_TAB_IDS,
   environmentPageTabHref,
   legacyProjectRedirectHref,
@@ -164,9 +164,10 @@ describe('every project route is reachable', () => {
   for (const id of ENVIRONMENT_PAGE_TAB_IDS) {
     reachable.set(routeKey(environmentPageTabHref('o', 'p', 'e', id)), `environment tab ${id}`)
   }
-  for (const id of MANAGED_PROJECT_TAB_IDS) {
-    reachable.set(routeKey(projectTabHref('o', 'p', id)), `managed project tab ${id}`)
+  for (const id of RETIRED_MANAGED_TAB_IDS) {
+    reachable.set(routeKey(projectTabHref('o', 'p', id)), `retired managed tab ${id}, redirects`)
   }
+  reachable.set(routeKey('/o/projects/p/environments'), 'retired path, redirects to Environments')
   for (const segment of LEGACY_PROJECT_SEGMENTS) {
     reachable.set(routeKey(`/o/projects/p/${segment}`), `retired path, redirects`)
     reachable.set(routeKey(`/o/projects/p/environments/e/${segment}`), `retired path, redirects`)

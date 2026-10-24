@@ -4,7 +4,6 @@ import {
   ConfirmButton,
   EmptyState,
   LoadingState,
-  SectionPanel,
   SegmentedControl,
   TextField,
 } from '@/components/ui'
@@ -16,7 +15,10 @@ import { ManagedConnectionPanel } from '@/components/org/managed/managed-connect
 import { ManagedCredentialsPanel } from '@/components/org/managed/managed-credentials-panel'
 import { ManagedExternalAccessSwitch } from '@/components/org/managed/managed-external-access-switch'
 import { ManagedLifecyclePanel } from '@/components/org/managed/managed-lifecycle-panel'
-import { ManagedSettingsPanel } from '@/components/org/managed/managed-settings-panel'
+import {
+  ManagedSettingsPanel,
+  type ManagedSettingsSection,
+} from '@/components/org/managed/managed-settings-panel'
 import { ManagedStatusPanel } from '@/components/org/managed/managed-status-panel'
 import { ManagedUsersPanel } from '@/components/org/managed/managed-users-panel'
 import {
@@ -24,7 +26,14 @@ import {
     ManagedVersionPicker,
     type ManagedVersionSelection,
 } from '@/components/org/managed/managed-version-picker'
+import {
+  invalidateEnvironmentManagedQueries,
+  ManagedCommandsProvider,
+  useManagedEnvironment,
+  useOptionalManagedEnvironment,
+} from '@/components/org/managed/managed-environment-context'
 import { SecretReveal } from '@/components/org/managed/secret-reveal'
+import { SectionHeading } from '@/components/ui/v4'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { type EnvironmentRecord } from '@/lib/instance-api'
 import { managedReleaseSummary } from '@/lib/managed-releases'
@@ -37,12 +46,6 @@ import {
     type ManagedUserRecord,
 } from '@/lib/managed-services'
 import { useOrgDefaultEnvironmentName } from '@/lib/org-default-environment'
-import {
-    commandStatusById,
-    isTerminalCommandStatus,
-    useCommandsBatch,
-    type TrackedCommandEntry,
-} from '@/lib/queries/commands'
 import {
     useCreateEnvironment,
     useDeleteEnvironment,
@@ -79,10 +82,9 @@ import {
 import { useOrgServers } from '@/lib/queries/servers'
 import { orEmptyArray } from '@/lib/or-empty-array'
 import { useCan } from '@/lib/query-client'
-import { queryKeys } from '@/lib/query-keys'
 import { chrome, colors, spacing, webPointer } from '@/lib/theme'
-import { useQueryClient, type QueryClient } from '@tanstack/react-query'
-import { useEffect, useCallback, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { useEffect, useCallback, useRef, useState, type ReactNode } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { userErrorMessage } from '@/lib/user-error'
 
@@ -105,58 +107,45 @@ function resolveManagedLastError(
   return fromMeta || null
 }
 
-type ManagedBodyFocus =
-  | 'all'
-  | 'overview'
-  | 'connect'
-  | 'data'
-  | 'backups'
-  | 'settings'
-  | 'environments'
+/**
+ * Which environment tab the managed panels are drawn for, named after the
+ * website tabs they sit in. `all` is every panel on one page.
+ */
+export type ManagedBodyFocus =
+  'all' | 'overview' | 'deployments' | 'services' | 'bindings' | 'hosting' | 'settings'
 
+/**
+ * Overview: the members and the status. Deployments: backups and the apply
+ * log. Services: the databases and logins. Bindings: how to connect and the
+ * apps bound. Hosting: external access and client TLS. Settings: the engine,
+ * resources and the danger zone.
+ */
 function managedFocusVisibility(focus: ManagedBodyFocus): {
   showOverview: boolean
   showConnect: boolean
   showData: boolean
   showBackups: boolean
+  showStatus: boolean
+  showHosting: boolean
   showSettings: boolean
-  showLifecycle: boolean
 } {
+  const all = focus === 'all'
   return {
-    showOverview: focus === 'all' || focus === 'overview',
-    showConnect: focus === 'all' || focus === 'connect',
-    showData: focus === 'all' || focus === 'data',
-    showBackups: focus === 'all' || focus === 'backups',
-    showSettings: focus === 'all' || focus === 'settings',
-    showLifecycle: focus === 'all' || focus === 'environments' || focus === 'settings',
+    showOverview: all || focus === 'overview',
+    showConnect: all || focus === 'bindings',
+    showData: all || focus === 'services',
+    showBackups: all || focus === 'deployments',
+    showStatus: all || focus === 'overview' || focus === 'deployments',
+    showHosting: all || focus === 'hosting',
+    showSettings: all || focus === 'settings',
   }
 }
 
-function invalidateEnvironmentManagedQueries(
-  queryClient: QueryClient,
-  orgId: string,
-  environmentId: string
-): void {
-  const managed = queryKeys.org(orgId).managed
-  ignorePromise(
-    Promise.all([
-      queryClient.invalidateQueries({
-        queryKey: managed.environment(environmentId),
-      }),
-      queryClient.invalidateQueries({
-        queryKey: managed.status(environmentId),
-      }),
-      queryClient.invalidateQueries({
-        queryKey: managed.users(environmentId),
-      }),
-      queryClient.invalidateQueries({
-        queryKey: managed.databases(environmentId),
-      }),
-      queryClient.invalidateQueries({
-        queryKey: managed.backups(environmentId),
-      }),
-    ])
-  )
+/** Which part of the settings a tab shows: Hosting has client TLS, Settings the rest. */
+function settingsSectionFor(focus: ManagedBodyFocus): ManagedSettingsSection {
+  if (focus === 'hosting') return 'hosting'
+  if (focus === 'settings') return 'settings'
+  return 'all'
 }
 
 function environmentLabel(env: EnvironmentRecord): string {
@@ -287,7 +276,8 @@ export function ManagedSetupPanel({
   }
 
   return (
-    <SectionPanel title="Set up" hint="Pin a server and create the managed service" accent>
+    <View style={styles.setup}>
+      <SectionHeading title="Create the database" note="Pick the server it runs on" />
       {loading ? <LoadingState label="Loading servers…" /> : null}
       {error ? <Text style={panelStyles.error}>{error}</Text> : null}
       <View style={styles.serverList}>
@@ -336,7 +326,7 @@ export function ManagedSetupPanel({
 
       {canManage ? (
         <Button
-          label="Create service"
+          label="Create database"
           busyLabel="Creating…"
           variant="primary"
           busy={submitting}
@@ -346,9 +336,9 @@ export function ManagedSetupPanel({
           }}
         />
       ) : (
-        <Text style={panelStyles.muted}>You need manage permission to create this service.</Text>
+        <Text style={panelStyles.muted}>You need manage permission to create this database.</Text>
       )}
-    </SectionPanel>
+    </View>
   )
 }
 
@@ -356,20 +346,45 @@ function isServerPlacementRequiredError(err: unknown): boolean {
   return err instanceof Error && err.message.includes('server_placement_required')
 }
 
-export function ManagedEnvironmentBody({
+type ManagedEnvironmentBodyProps = Readonly<{
+  orgId: string
+  environmentId: string
+  engineCode: string | null
+  projectName: string
+  /** When set, only render panels for that environment tab. */
+  focus?: ManagedBodyFocus
+  /**
+   * What a tab other than Overview shows before the database exists. The Set
+   * up panel is drawn once, on Overview (and on the all-panels page).
+   */
+  notCreated?: ReactNode
+}>
+
+/**
+ * The managed panels of one environment. Inside the shared environment shell
+ * they use the shell's managed environment (the header's commands and these
+ * are one list); anywhere else they bring their own.
+ */
+export function ManagedEnvironmentBody(props: ManagedEnvironmentBodyProps) {
+  const outer = useOptionalManagedEnvironment()
+  if (outer?.environmentId === props.environmentId) {
+    return <ManagedEnvironmentBodyContent {...props} />
+  }
+  return (
+    <ManagedCommandsProvider orgId={props.orgId} environmentId={props.environmentId}>
+      <ManagedEnvironmentBodyContent {...props} />
+    </ManagedCommandsProvider>
+  )
+}
+
+function ManagedEnvironmentBodyContent({
   orgId,
   environmentId,
   engineCode,
   projectName,
   focus = 'all',
-}: Readonly<{
-  orgId: string
-  environmentId: string
-  engineCode: string | null
-  projectName: string
-  /** When set, only render panels for that project shell tab. */
-  focus?: ManagedBodyFocus
-}>) {
+  notCreated = null,
+}: ManagedEnvironmentBodyProps) {
   const queryClient = useQueryClient()
   const canManage = useCan('organization', orgId, 'organization:manage')
   const [error, setError] = useState<string | null>(null)
@@ -399,13 +414,13 @@ export function ManagedEnvironmentBody({
       setError(null)
       return
     }
-    setError(managedErrorMessage(queryError, 'Failed to load managed service'))
+    setError(managedErrorMessage(queryError, 'Failed to load the database'))
   }, [queryError])
 
   const loading = environmentQuery.isLoading || (hasServerPin && managedQuery.isLoading && !detail)
 
   if (loading && !detail && !revealPassword) {
-    return <LoadingState label="Loading managed service…" />
+    return <LoadingState label="Loading the database…" />
   }
 
   if (error) {
@@ -414,7 +429,8 @@ export function ManagedEnvironmentBody({
 
   if (revealPassword) {
     return (
-      <SectionPanel title="Root password" hint="Shown once" accent>
+      <View style={styles.setup}>
+        <SectionHeading title="Root password" note="Shown once" />
         <SecretReveal
           username={revealUsername ?? detail?.rootUsername ?? undefined}
           password={revealPassword}
@@ -424,12 +440,13 @@ export function ManagedEnvironmentBody({
           }}
           continueLabel="Continue"
         />
-      </SectionPanel>
+      </View>
     )
   }
 
   const managed = detail?.managed ?? null
   if (!hasServerPin || !detail || !managed) {
+    if (focus !== 'all' && focus !== 'overview') return <>{notCreated}</>
     return (
       <ManagedSetupPanel
         orgId={orgId}
@@ -482,17 +499,18 @@ function ManagedEnvironmentReadyPanels({
   }
 }>) {
   const queryClient = useQueryClient()
-  const [trackedEntries, setTrackedEntries] = useState<readonly TrackedCommandEntry[]>([])
-  /**
-   * Latest `managed.apply` enqueued in this session. Kept beside the tracked
-   * entries (which are pruned on terminal) so the Apply transcript stays
-   * readable after the command finishes.
-   */
-  const [applyCommand, setApplyCommand] = useState<TrackedCommandEntry | null>(
-    null,
-  )
-  const { showOverview, showConnect, showData, showBackups, showSettings, showLifecycle } =
-    managedFocusVisibility(focus)
+  // The commands queued here and from the header, and the newest Apply (kept
+  // after it finishes so its log stays readable), are the shell's.
+  const { registerCommand, applyCommand, inFlight } = useManagedEnvironment()
+  const {
+    showOverview,
+    showConnect,
+    showData,
+    showBackups,
+    showStatus,
+    showHosting,
+    showSettings,
+  } = managedFocusVisibility(focus)
 
   const managed = detail.managed
   const settings = detail.settings
@@ -532,40 +550,9 @@ function ManagedEnvironmentReadyPanels({
     mergeManagedMembers(detail.members ?? [], status?.members ?? []),
     status?.status ?? managed.status
   )
-  const serverId = managed.serverId ?? detail.server?.id ?? null
-  const commandsQuery = useCommandsBatch(orgId, trackedEntries)
-
   const invalidateManagedData = useCallback(() => {
     invalidateEnvironmentManagedQueries(queryClient, orgId, environmentId)
   }, [queryClient, orgId, environmentId])
-
-  const registerCommand = (commandId: string, label: string, commandServerId?: string) => {
-    const resolvedServerId = commandServerId ?? serverId
-    if (!resolvedServerId) return
-    setTrackedEntries((current) => [...current, { serverId: resolvedServerId, commandId }])
-    if (label === 'Apply' || label === 'Apply settings') {
-      setApplyCommand({ serverId: resolvedServerId, commandId })
-    }
-  }
-
-  useEffect(() => {
-    if (!commandsQuery.data) return
-    // Join on command id: unreadable ids are dropped from the batched response.
-    const recordsById = commandStatusById(commandsQuery.data)
-    for (const entry of trackedEntries) {
-      const record = recordsById.get(entry.commandId)
-      if (!record || !isTerminalCommandStatus(record.status)) continue
-      if (record.status === 'succeeded') {
-        invalidateManagedData()
-      }
-      setTrackedEntries((current) => current.filter((row) => row.commandId !== entry.commandId))
-    }
-  }, [commandsQuery.data, trackedEntries, invalidateManagedData])
-
-  const inFlight =
-    trackedEntries.length > 0 &&
-    (commandsQuery.data?.some((record) => !isTerminalCommandStatus(record.status)) ?? true)
-
 
   return (
     <View style={styles.panels}>
@@ -665,38 +652,9 @@ function ManagedEnvironmentReadyPanels({
           supported={supportsBackup}
         />
       ) : null}
-      {showLifecycle ? (
-        <ManagedLifecyclePanel
-          status={managed.status}
-          projectName={projectName}
-          canManage={canManage}
-          busy={inFlight}
-          onLifecycle={async (action) => {
-            const result = await lifecycleMutation.run(action)
-            if (!result.ok) {
-              throw new Error(lifecycleMutation.actionError ?? 'Lifecycle action failed')
-            }
-            registerCommand(result.value.commandId, action)
-          }}
-          onApply={async () => {
-            const result = await applyManagedMutation.mutateAsync()
-            registerCommand(result.commandId, 'Apply')
-          }}
-          onDelete={async () => {
-            const result = await deleteManagedMutation.mutateAsync()
-            if (result.deleted) {
-              invalidateManagedData()
-              ignorePromise(managedQuery.refetch())
-              return
-            }
-            if (result.commandId && result.serverId) {
-              registerCommand(result.commandId, 'Delete', result.serverId)
-            }
-          }}
-        />
-      ) : null}
-      {showSettings && settings ? (
+      {(showSettings || showHosting) && settings ? (
         <ManagedSettingsPanel
+          section={settingsSectionFor(focus)}
           settings={settings}
           engineCode={managed.engine}
           organizationSslMode={detail.ssl?.organizationDefault ?? null}
@@ -718,7 +676,33 @@ function ManagedEnvironmentReadyPanels({
           }}
         />
       ) : null}
-      {showOverview || showSettings ? (
+      {showSettings ? (
+        <ManagedLifecyclePanel
+          status={managed.status}
+          projectName={projectName}
+          canManage={canManage}
+          busy={inFlight}
+          onLifecycle={async (action) => {
+            const result = await lifecycleMutation.run(action)
+            if (!result.ok) {
+              throw new Error(lifecycleMutation.actionError ?? 'Lifecycle action failed')
+            }
+            registerCommand(result.value.commandId, action)
+          }}
+          onDelete={async () => {
+            const result = await deleteManagedMutation.mutateAsync()
+            if (result.deleted) {
+              invalidateManagedData()
+              ignorePromise(managedQuery.refetch())
+              return
+            }
+            if (result.commandId && result.serverId) {
+              registerCommand(result.commandId, 'Delete', result.serverId)
+            }
+          }}
+        />
+      ) : null}
+      {showStatus ? (
         <ManagedStatusPanel
           orgId={orgId}
           environmentId={environmentId}
@@ -1229,6 +1213,9 @@ const styles = StyleSheet.create({
   },
   panels: {
     gap: spacing.lg,
+  },
+  setup: {
+    gap: spacing.md,
   },
   toolbar: {
     flexDirection: 'row',

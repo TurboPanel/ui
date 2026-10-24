@@ -9,8 +9,7 @@ import {
   COMPOSE_PROJECT_LENS_IDS,
   COMPOSE_PROJECT_TAB_IDS,
   DRAFT_COMPOSE_PROJECT_TAB_IDS,
-  MANAGED_PROJECT_TAB_IDS,
-  MANAGED_PROJECT_TAB_LABELS,
+  RETIRED_MANAGED_TAB_IDS,
   isComposeOrTemplateProject,
   isComposeProject,
   isManagedProject,
@@ -211,9 +210,6 @@ describe('path-based environment selection', () => {
     expect(projectEnvironmentHref('org', 'proj', 'env1')).toBe(
       '/org/projects/proj/environments/env1',
     )
-    expect(projectTabHref('org', 'proj', 'environments')).toBe(
-      '/org/projects/proj/environments',
-    )
   })
 
   it('builds compose edit hrefs for project and environment scope', () => {
@@ -386,17 +382,9 @@ describe('path-based environment selection', () => {
     ).toBe('env1')
   })
 
-  it('gives managed projects a Settings tab, last', () => {
-    // Settings holds the image, resources, client TLS and external access switch.
-    expect([...MANAGED_PROJECT_TAB_IDS]).toEqual([
-      'overview',
-      'connect',
-      'data',
-      'backups',
-      'environments',
-      'settings',
-    ])
-    expect(MANAGED_PROJECT_TAB_LABELS.settings).toBe('Settings')
+  it('keeps the retired managed tabs as routes that redirect', () => {
+    expect([...RETIRED_MANAGED_TAB_IDS]).toEqual(['connect', 'data', 'backups'])
+    expect(projectTabHref('o', 'p', 'connect')).toBe('/o/projects/p/connect')
   })
 
   it('offers every lens on the create-wizard draft', () => {
