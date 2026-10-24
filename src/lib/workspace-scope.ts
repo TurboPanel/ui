@@ -64,7 +64,11 @@ export function projectsHrefForScope(
 }
 
 /** `href` with `key=value` added to its query; an empty value leaves it alone. */
-export function withQueryParam(href: string, key: string, value: string | null | undefined): string {
+export function withQueryParam(
+  href: string,
+  key: string,
+  value: string | null | undefined
+): string {
   if (!value) return href
   return `${href}${href.includes('?') ? '&' : '?'}${key}=${encodeURIComponent(value)}`
 }

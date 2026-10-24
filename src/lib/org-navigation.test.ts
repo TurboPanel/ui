@@ -177,6 +177,15 @@ describe('orgTabHref', () => {
     expect(orgTabHref('org-1', 'projects', 'all')).toBe('/org-1/projects')
     expect(orgTabHref('org-1', 'projects', 'ws-1')).toBe('/org-1/projects?workspaceId=ws-1')
   })
+
+  it('keeps the Projects type filter, with or without a workspace', () => {
+    expect(orgTabHref('org-1', 'projects', 'all', 'managed')).toBe('/org-1/projects?type=managed')
+    expect(orgTabHref('org-1', 'projects', 'ws-1', 'apps')).toBe(
+      '/org-1/projects?workspaceId=ws-1&type=apps'
+    )
+    expect(orgTabHref('org-1', 'projects', 'all', 'all')).toBe('/org-1/projects')
+    expect(orgTabHref('org-1', 'activity', 'all', 'managed')).toBe('/org-1/activity')
+  })
 })
 
 describe('adjacentOrgTabHref', () => {

@@ -73,6 +73,9 @@ export const STATUS = {
   online: { label: 'Online', glyph: 'dot', tone: 'ok' },
   offline: { label: 'Offline', glyph: 'diamond', tone: 'bad' },
   ready: { label: 'Ready', glyph: 'dot', tone: 'ok' },
+  provisioning: { label: 'Provisioning', glyph: 'spinner', tone: 'busy' },
+  applying: { label: 'Applying', glyph: 'spinner', tone: 'busy' },
+  dbfailed: { label: 'Failed', glyph: 'diamond', tone: 'bad' },
 } as const satisfies Record<string, StatusInfo>
 
 export type StatusKey = keyof typeof STATUS

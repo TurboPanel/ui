@@ -14,6 +14,7 @@ import {
   homeKind,
   homeProject,
   managedEngineText,
+  managedStatusByEnvironment,
   parseProjectTypeFilter,
   pillTone,
   projectDetail,
@@ -490,5 +491,55 @@ describe('the type filter', () => {
   it('says what is missing when a filter leaves nothing', () => {
     expect(emptyTypeMessage('managed')).toBe('No managed databases here yet.')
     expect(emptyTypeMessage('apps')).toBe('No apps here yet.')
+  })
+})
+
+describe("a managed database's own status", () => {
+  const row = (environmentId: string | null, status: 'provisioning' | 'ready' | 'failed') => ({
+    engineDisplayName: 'PostgreSQL',
+    options: null,
+    environmentId,
+    status,
+  })
+
+  it('shows a database still being set up, not an idle tile', () => {
+    const p = project({ kind: 'managed', metadata: { code: 'postgres' } })
+    const tile = homeProject({
+      project: p,
+      environments: [env('e1', 'production')],
+      containersByEnvironment: {},
+      facts: { managedRows: [row('e1', 'provisioning')] },
+    })
+    expect(tile.environments[0]?.status).toBe('provisioning')
+    expect(tile.status).toBe('provisioning')
+  })
+
+  it('reads a failed database as failed, with the plain word', () => {
+    const p = project({ kind: 'managed', metadata: { code: 'postgres' } })
+    const tile = homeProject({
+      project: p,
+      environments: [env('e1', 'production')],
+      containersByEnvironment: { e1: [container('e1', 'running')] },
+      facts: { managedRows: [row('e1', 'failed')] },
+    })
+    expect(tile.status).toBe('dbfailed')
+    expect(pillTone(tile.status)).toBe(pillTone('failed'))
+  })
+
+  it('falls back to containers when the managed list says nothing', () => {
+    const p = project({ kind: 'managed', metadata: { code: 'postgres' } })
+    const tile = homeProject({
+      project: p,
+      environments: [env('e1', 'production')],
+      containersByEnvironment: { e1: [container('e1', 'running')] },
+    })
+    expect(tile.status).toBe('running')
+  })
+
+  it('keeps the worst status when one environment has several clusters', () => {
+    expect(
+      managedStatusByEnvironment([row('e1', 'ready'), row('e1', 'failed'), row(null, 'failed')])
+    ).toEqual({ e1: 'dbfailed' })
+    expect(managedStatusByEnvironment(undefined)).toEqual({})
   })
 })

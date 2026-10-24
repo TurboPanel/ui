@@ -1,6 +1,6 @@
 import type { Href } from 'expo-router'
 import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
-import { projectsHrefForScope } from '@/lib/workspace-scope'
+import { projectsListHref } from '@/lib/workspace-scope'
 
 export const ORG_AREAS = [
   {
@@ -250,13 +250,19 @@ export function replaceOrganization(router: OrganizationReplaceRouter, href: Hre
   })
 }
 
+/**
+ * Where a bottom tab (or a swipe) goes. Projects keeps the workspace scope
+ * and the type filter (`?type=`) it was last left on, so going back to it
+ * from Activity or Servers shows the same list.
+ */
 export function orgTabHref(
   orgId: string,
   areaId: OrgTabAreaId,
-  projectsScopeId: string
+  projectsScopeId: string,
+  projectsType?: string | null
 ): OrgTabHref {
   if (areaId === 'projects') {
-    return projectsHrefForScope(orgId, projectsScopeId)
+    return projectsListHref(orgId, projectsScopeId, projectsType) as OrgTabHref
   }
   return orgAreaHref(orgId, areaId)
 }
@@ -265,7 +271,8 @@ export function adjacentOrgTabHref(
   pathname: string,
   orgId: string,
   direction: OrgTabSwipeDirection,
-  projectsScopeId: string
+  projectsScopeId: string,
+  projectsType?: string | null
 ): OrgTabHref | null {
   const path = orgPathWithoutQuery(pathname)
   const index = ORG_TAB_AREA_IDS.findIndex((areaId) => path === orgAreaHref(orgId, areaId))
@@ -277,7 +284,7 @@ export function adjacentOrgTabHref(
   if (!areaId) {
     return null
   }
-  return orgTabHref(orgId, areaId, projectsScopeId)
+  return orgTabHref(orgId, areaId, projectsScopeId, projectsType)
 }
 
 export function orgRouteHref(

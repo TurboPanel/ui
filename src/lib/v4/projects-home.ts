@@ -15,12 +15,16 @@ import type {
   ProjectRecord,
 } from '@/lib/instance-api'
 import { describeManagedImage } from '@/lib/managed-releases'
-import { managedCatalogEntryForCode, type ManagedListRecord } from '@/lib/managed-services'
+import {
+  managedCatalogEntryForCode,
+  type ManagedListRecord,
+  type ManagedStatus,
+} from '@/lib/managed-services'
 import { isManagedProject, isSystemProject, projectNeedsSetup } from '@/lib/project-navigation'
 import { environmentDisplayName } from '@/lib/resource-labels'
 import { hasNativeApp, inProgressSub, isDeployInProgress, runningStatusKey } from './project-home'
 import { orderEnvironments, primaryEnvironmentOf } from './primary-environment'
-import { statusInfo, worstStatus, type StatusTone } from './status-vocab'
+import { statusInfo, worstStatus, type StatusKey, type StatusTone } from './status-vocab'
 import { plural } from './text'
 
 export type HomeKind = 'compose' | 'managed' | 'platform' | 'setup'
@@ -86,7 +90,8 @@ function homeEnvironments(
   environments: readonly EnvironmentRecord[],
   containersOf: (environmentId: string) => readonly ContainerRecord[] | undefined,
   latest: Latest | undefined,
-  views: Views | undefined
+  views: Views | undefined,
+  managedStatus: Readonly<Record<string, StatusKey>> = {}
 ): HomeEnvironment[] {
   const sorted = [...environments].sort(byCreated)
   const primary = primaryEnvironmentOf(sorted)
@@ -96,7 +101,9 @@ function homeEnvironments(
     id: env.id,
     name: environmentDisplayName(env),
     status:
-      runningStatusKey(containersOf(env.id), nativeFallback(env.id, latest, views)) ?? 'unknown',
+      managedStatus[env.id] ??
+      runningStatusKey(containersOf(env.id), nativeFallback(env.id, latest, views)) ??
+      'unknown',
     isPrimary: env.isPrimary === true,
     pinned: env.isPrimary !== true && env.pinned === true,
   }))
@@ -134,8 +141,38 @@ export type ProjectFacts = Readonly<{
   /** `owner/repo` of the project's repository, when the repository list was read. */
   repositoryLabel?: string | null
   /** The project's rows from the organization's managed list, when it was read. */
-  managedRows?: readonly Pick<ManagedListRecord, 'engineDisplayName' | 'options'>[]
+  managedRows?: readonly ManagedFactRow[]
 }>
+
+/** What a managed list row tells the tile: the engine and version, and the database's own status. */
+export type ManagedFactRow = Pick<ManagedListRecord, 'engineDisplayName' | 'options'> &
+  Partial<Pick<ManagedListRecord, 'environmentId' | 'status'>>
+
+const MANAGED_STATUS_KEY: Record<ManagedStatus, StatusKey> = {
+  ready: 'ready',
+  stopped: 'stopped',
+  provisioning: 'provisioning',
+  applying: 'applying',
+  failed: 'dbfailed',
+}
+
+/**
+ * A managed database's own status (from the managed list) for each of its
+ * environments. It wins over containers: a database that is still being set
+ * up has no container yet and would otherwise read as nothing running.
+ */
+export function managedStatusByEnvironment(
+  rows: readonly ManagedFactRow[] | undefined
+): Readonly<Record<string, StatusKey>> {
+  const out: Record<string, StatusKey> = {}
+  for (const row of rows ?? []) {
+    if (!row.environmentId || !row.status) continue
+    const key = MANAGED_STATUS_KEY[row.status]
+    const seen = out[row.environmentId]
+    out[row.environmentId] = seen ? (worstStatus([seen, key]) as StatusKey) : key
+  }
+  return out
+}
 
 /** The tile's second line. Only what the API says: a part it does not answer is left out. */
 export function projectDetail(
@@ -176,7 +213,8 @@ export function homeProject(
     environments,
     containersOf,
     kind === 'compose' ? latest : undefined,
-    kind === 'compose' ? views : undefined
+    kind === 'compose' ? views : undefined,
+    kind === 'managed' ? managedStatusByEnvironment(input.facts?.managedRows) : undefined
   )
   return {
     id: project.id,
