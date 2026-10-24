@@ -7,7 +7,7 @@
  * steps (see {@link planSave}), the order the control plane needs:
  *
  * 1. this environment's own compose,
- * 2. variables: creates and updates, then deletes.
+ * 2. variables: creates and updates (value and where it is used), then deletes.
  *
  * The Base is never written from here; it is edited from the Base tab.
  * Real endpoints only: `PATCH /environments/:id` and the variable routes. Pure: no network, no React.
@@ -49,11 +49,15 @@ export type StagedEdit = Shown &
     | Readonly<{
         kind: 'set-variable'
         name: string
-        value: string
+        /** `null` keeps the saved value (only where it is used changed). */
+        value: string | null
         secret: boolean
         forBuild: boolean
         forRuntime: boolean
+        /** Where it is used was changed; otherwise an update sends the value alone. */
+        useChanged: boolean
       }>
+    | Readonly<{ kind: 'remove-variable'; name: string }>
     | Readonly<{ kind: 'go-back'; target: EditTarget }>
   )
 
@@ -73,6 +77,7 @@ export function stagedEditFor(edits: readonly StagedEdit[], key: string): Staged
 /** The grey line under a row that has an unsaved edit. */
 export function stagedNote(edit: StagedEdit): string {
   if (edit.kind === 'go-back') return 'Not saved yet: goes back to the Base value'
+  if (edit.kind === 'remove-variable') return 'Not saved yet: removed'
   return `Not saved yet: ${edit.now}`
 }
 
@@ -164,6 +169,8 @@ export type VariableFacts = Readonly<{
   forRuntime: boolean
   /** The environment has its own value (not only the project's). */
   hasOwn: boolean
+  /** The project (the Base) also sets it, so removing the environment's value goes back to that. */
+  inBase: boolean
   /** A service binding owns it, so it is not edited here. */
   editable: boolean
 }>
@@ -184,6 +191,7 @@ export function variableFacts(
     forBuild: record.forBuild,
     forRuntime: record.forRuntime,
     hasOwn: own !== undefined,
+    inBase: shared !== undefined,
     editable: !bound,
   }
 }
@@ -224,14 +232,40 @@ export function variableUseFlags(use: VariableUse): { forBuild: boolean; forRunt
   return { forBuild: use !== 'run', forRuntime: use !== 'build' }
 }
 
+/** The choice that matches saved flags; a variable with neither flag reads as run only. */
+export function variableUseOf(
+  flags: Readonly<{ forBuild: boolean; forRuntime: boolean }>
+): VariableUse {
+  if (flags.forBuild && flags.forRuntime) return 'both'
+  return flags.forBuild ? 'build' : 'run'
+}
+
+const USE_LABELS: Record<VariableUse, string> = {
+  run: 'Run only',
+  both: 'Build and run',
+  build: 'Build only',
+}
+
+function variableNow(
+  input: Readonly<{ value: string | null; secret: boolean; use: VariableUse | null }>
+): string {
+  const parts: string[] = []
+  if (input.value !== null) parts.push(input.secret ? HIDDEN_VALUE : input.value)
+  if (input.use !== null) parts.push(USE_LABELS[input.use])
+  return parts.join(' · ')
+}
+
 export function variableEdit(
   input: Readonly<{
     name: string
-    value: string
+    /** `null` keeps the saved value. */
+    value: string | null
     secret: boolean
     forBuild: boolean
     forRuntime: boolean
     was: string
+    /** Where it is used changed, so the pending line says the new place. */
+    useChanged?: boolean
   }>
 ): StagedEdit {
   return {
@@ -240,12 +274,32 @@ export function variableEdit(
     area: 'Variables',
     label: input.name,
     was: input.was,
-    now: input.secret ? HIDDEN_VALUE : input.value,
+    now: variableNow({
+      value: input.value,
+      secret: input.secret,
+      use: input.useChanged === true || input.value === null ? variableUseOf(input) : null,
+    }),
     name: input.name,
     value: input.value,
     secret: input.secret,
     forBuild: input.forBuild,
     forRuntime: input.forRuntime,
+    useChanged: input.useChanged === true || input.value === null,
+  }
+}
+
+/** Remove this environment's own value; where the Base sets it too, the Base value applies again. */
+export function removeVariableEdit(
+  input: Readonly<{ name: string; was: string; inBase: boolean }>
+): StagedEdit {
+  return {
+    kind: 'remove-variable',
+    key: `var:${input.name}`,
+    area: 'Variables',
+    label: input.name,
+    was: input.was,
+    now: input.inBase ? 'Base value' : 'Removed',
+    name: input.name,
   }
 }
 
@@ -253,7 +307,11 @@ export function variableEdit(
 
 export type VariableOp =
   | Readonly<{ type: 'create'; body: CreateVariableBody }>
-  | Readonly<{ type: 'update'; id: string; body: { value: string } }>
+  | Readonly<{
+      type: 'update'
+      id: string
+      body: { value?: string; forBuild?: boolean; forRuntime?: boolean }
+    }>
   | Readonly<{ type: 'delete'; id: string }>
 
 export type SaveStep =
@@ -319,14 +377,15 @@ function applyGoBack(work: Working, edit: StagedEdit & { kind: 'go-back' }, ctx:
   } else if (target.type === 'service') {
     takeEnvironment(work, edit.key, restoreEnvironmentService(work.environment, target.serviceName))
   } else {
-    const own = findVariable(ctx.environmentVariables, target.name)
-    if (own === undefined)
-      work.problems.push({
-        key: edit.key,
-        reason: `${target.name} is no longer set in this environment.`,
-      })
-    else work.ops.push({ key: edit.key, op: { type: 'delete', id: own.id } })
+    deleteOwnVariable(work, edit.key, target.name, ctx)
   }
+}
+
+function deleteOwnVariable(work: Working, key: string, name: string, ctx: SaveContext) {
+  const own = findVariable(ctx.environmentVariables, name)
+  if (own === undefined)
+    work.problems.push({ key, reason: `${name} is no longer set in this environment.` })
+  else work.ops.push({ key, op: { type: 'delete', id: own.id } })
 }
 
 function applyLinuxUser(work: Working, edit: StagedEdit & { kind: 'set-linux-user' }) {
@@ -343,6 +402,16 @@ function applyLinuxUser(work: Working, edit: StagedEdit & { kind: 'set-linux-use
   )
 }
 
+/** A value-only edit sends the value alone, so it never rewrites where the variable is used. */
+function updateBody(
+  value: string | null,
+  useChanged: boolean,
+  scope: { forBuild: boolean; forRuntime: boolean }
+): { value?: string; forBuild?: boolean; forRuntime?: boolean } {
+  if (value === null) return scope
+  return useChanged ? { value, ...scope } : { value }
+}
+
 function applyVariable(
   work: Working,
   edit: StagedEdit & { kind: 'set-variable' },
@@ -350,12 +419,17 @@ function applyVariable(
 ) {
   const own = findVariable(ctx.environmentVariables, edit.name)
   const shared = findVariable(ctx.projectVariables, edit.name)
-  const flags = {
-    secret: shared?.isSecret ?? own?.isSecret ?? edit.secret,
-    forBuild: shared?.forBuild ?? edit.forBuild,
-    forRuntime: shared?.forRuntime ?? edit.forRuntime,
-  }
+  // A secret stays a secret; where it is used is the person's choice (the editor starts from the saved one).
+  const secret = shared?.isSecret ?? own?.isSecret ?? edit.secret
+  const scope = { forBuild: edit.forBuild, forRuntime: edit.forRuntime }
   if (own === undefined) {
+    if (edit.value === null) {
+      work.problems.push({
+        key: edit.key,
+        reason: `Enter a value for ${edit.name} to set it for this environment.`,
+      })
+      return
+    }
     work.ops.push({
       key: edit.key,
       op: {
@@ -364,16 +438,19 @@ function applyVariable(
           environmentId: ctx.environmentId,
           key: edit.name,
           value: edit.value,
-          isSecret: flags.secret,
-          forBuild: flags.forBuild,
-          forRuntime: flags.forRuntime,
+          isSecret: secret,
+          ...scope,
         },
       },
     })
   } else {
     work.ops.push({
       key: edit.key,
-      op: { type: 'update', id: own.id, body: { value: edit.value } },
+      op: {
+        type: 'update',
+        id: own.id,
+        body: updateBody(edit.value, edit.useChanged, scope),
+      },
     })
   }
 }
@@ -398,6 +475,7 @@ export function planSave(edits: readonly StagedEdit[], ctx: SaveContext): SavePl
   for (const edit of edits) {
     if (edit.kind === 'go-back') applyGoBack(work, edit, ctx)
     else if (edit.kind === 'set-linux-user') applyLinuxUser(work, edit)
+    else if (edit.kind === 'remove-variable') deleteOwnVariable(work, edit.key, edit.name, ctx)
     else applyVariable(work, edit, ctx)
   }
   if (work.problems.length > 0) return { steps: [], problems: work.problems }
