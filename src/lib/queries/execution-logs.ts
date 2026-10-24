@@ -159,7 +159,7 @@ export function resolveCommandLogState(
 export function shouldReadNextPage(
   from: number,
   response: Readonly<Pick<CommandLogResponse, 'nextSeq' | 'sealed'>>,
-  poll: boolean,
+  poll: boolean
 ): boolean {
   if (response.nextSeq <= from) return false
   return response.sealed || !poll
@@ -173,7 +173,7 @@ export function shouldReadNextPage(
  */
 export function commandLogRefetchInterval(
   data: CommandLogSnapshot | undefined,
-  poll: boolean,
+  poll: boolean
 ): number | false {
   if (data && data.access !== 'ok') return false
   if (data?.moreToRead) return COMMAND_LOG_POLL_MS
@@ -267,8 +267,7 @@ export function useCommandLog(
     // starting point, so keep reads cheap but always resume from the cursor.
     staleTime: 0,
     gcTime: 0,
-    refetchInterval: (query) =>
-      commandLogRefetchInterval(query.state.data, poll),
+    refetchInterval: (query) => commandLogRefetchInterval(query.state.data, poll),
   })
 
   useEffect(() => {

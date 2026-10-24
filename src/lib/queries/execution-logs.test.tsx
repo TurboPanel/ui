@@ -445,10 +445,9 @@ function pagedEndpoint(messages: readonly string[], sealed = true) {
 describe('paged transcript reads', () => {
   it('reads every page of a finished log, not just the first', async () => {
     fetchCommandLog.mockImplementation(pagedEndpoint(['one', 'two', 'three']))
-    const { result } = renderHook(
-      () => useCommandLog('org-1', 'srv-a', 'cmd-1', { poll: false }),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useCommandLog('org-1', 'srv-a', 'cmd-1', { poll: false }), {
+      wrapper: createWrapper(),
+    })
     await waitFor(() => {
       expect(result.current.snapshot.lines.map((line) => line.message)).toEqual([
         'one',
@@ -479,7 +478,7 @@ describe('paged transcript reads', () => {
       () => {
         expect(result.current.snapshot.lines).toHaveLength(3)
       },
-      { timeout: 4000 },
+      { timeout: 4000 }
     )
     expect(result.current.snapshot.sealed).toBe(true)
   })
@@ -487,18 +486,17 @@ describe('paged transcript reads', () => {
   it('keeps reading on the next poll when the page cap cuts a read short', async () => {
     const messages = Array.from(
       { length: COMMAND_LOG_MAX_PAGES_PER_READ + 2 },
-      (_, index) => `line ${index + 1}`,
+      (_, index) => `line ${index + 1}`
     )
     fetchCommandLog.mockImplementation(pagedEndpoint(messages))
-    const { result } = renderHook(
-      () => useCommandLog('org-1', 'srv-a', 'cmd-1', { poll: false }),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useCommandLog('org-1', 'srv-a', 'cmd-1', { poll: false }), {
+      wrapper: createWrapper(),
+    })
     await waitFor(
       () => {
         expect(result.current.snapshot.lines).toHaveLength(messages.length)
       },
-      { timeout: 4000 },
+      { timeout: 4000 }
     )
     expect(result.current.snapshot.moreToRead).toBe(false)
   })
@@ -509,10 +507,9 @@ describe('paged transcript reads', () => {
       .mockImplementationOnce(endpoint)
       .mockRejectedValueOnce(new Error('HTTP 503: busy'))
       .mockImplementation(endpoint)
-    const { result } = renderHook(
-      () => useCommandLog('org-1', 'srv-a', 'cmd-1', { poll: false }),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useCommandLog('org-1', 'srv-a', 'cmd-1', { poll: false }), {
+      wrapper: createWrapper(),
+    })
     await waitFor(() => {
       expect(result.current.snapshot.lines).toHaveLength(1)
     })
@@ -520,7 +517,7 @@ describe('paged transcript reads', () => {
       () => {
         expect(result.current.snapshot.lines).toHaveLength(2)
       },
-      { timeout: 4000 },
+      { timeout: 4000 }
     )
     expect(result.current.error).toBeNull()
   })
@@ -542,10 +539,10 @@ describe('commandLogRefetchInterval', () => {
     expect(commandLogRefetchInterval(sealed, true)).toBe(false)
     expect(commandLogRefetchInterval(undefined, false)).toBe(false)
     expect(commandLogRefetchInterval({ ...sealed, moreToRead: true }, false)).toBe(
-      COMMAND_LOG_POLL_MS,
+      COMMAND_LOG_POLL_MS
     )
     expect(
-      commandLogRefetchInterval({ ...sealed, moreToRead: true, access: 'forbidden' }, true),
+      commandLogRefetchInterval({ ...sealed, moreToRead: true, access: 'forbidden' }, true)
     ).toBe(false)
   })
 })
