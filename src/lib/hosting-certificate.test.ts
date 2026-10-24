@@ -4,6 +4,8 @@ import {
   dnsResultHeadline,
   dnsSummaryLines,
   formatDaysLeft,
+  letsEncryptRefusal,
+  withCertificateRefusal,
 } from './hosting-certificate'
 import type { HostingCertificate, HostingDnsReport } from './instance-api'
 
@@ -103,7 +105,11 @@ describe('describeCertificate', () => {
     expect(working.spinner).toBe(true)
     const deploy = describeCertificate(cert({ state: 'issuing', needsDeploy: true }))
     expect(deploy.spinner).toBe(false)
-    expect(deploy.lines).toEqual(['Redeploy this environment to start it.'])
+    expect(deploy.lines).toEqual([
+      'Deploy this environment to start it. The certificate is requested during the deploy.',
+    ])
+    expect(deploy.actions).toEqual(['deploy'])
+    expect(working.actions).toEqual([])
   })
 
   it('renewal failed is loud, shows the reason and both actions', () => {
@@ -131,5 +137,54 @@ describe('dns wording', () => {
     expect(dnsSummaryLines(ready)).toEqual([])
     const oneWrong = { ...DNS_NOT_READY, hostnames: [DNS_NOT_READY.hostnames[0]!] }
     expect(dnsSummaryLines(oneWrong).at(-1)).toBe('Point it at 203.0.113.7.')
+  })
+})
+
+describe('letsEncryptRefusal', () => {
+  const refused = (status: number, code: string, message?: string) =>
+    new Error(
+      `/hostings/h/use-letsencrypt failed: HTTP ${status}: ${code}${message ? ` \u2014 ${message}` : ''}`
+    )
+
+  it('says Let’s Encrypt is off for the organization and offers its settings', () => {
+    expect(letsEncryptRefusal(refused(403, 'lets_encrypt_not_enabled'))).toEqual({
+      message:
+        'Let’s Encrypt is turned off for this organization. An owner can turn it on in Organization settings › Domains & certificates.',
+      openSettings: true,
+    })
+  })
+
+  it.each([
+    ['hosting_not_http', 'web domains'],
+    ['hosting_has_no_hostnames', 'Add a domain name'],
+    ['acme_requires_public_bind', 'reachable from the internet'],
+    ['letsencrypt_hostname_unsupported', 'wildcard'],
+  ])('puts %s in plain words, with no settings link', (code, fragment) => {
+    const refusal = letsEncryptRefusal(refused(400, code))
+    expect(refusal.message).toContain(fragment)
+    expect(refusal.message).not.toContain(code)
+    expect(refusal.openSettings).toBe(false)
+  })
+
+  it('keeps the server’s sentence for a www clash, which names the hosts', () => {
+    const message = 'www.shop.example.com is already a domain in this environment.'
+    expect(letsEncryptRefusal(refused(400, 'www_redirect_conflict', message)).message).toBe(message)
+    expect(letsEncryptRefusal(refused(400, 'www_redirect_conflict')).message).toContain(
+      'www version'
+    )
+  })
+
+  it('falls back to a plain sentence for anything else', () => {
+    expect(letsEncryptRefusal(undefined).message).toBe('Could not start Let’s Encrypt.')
+  })
+})
+
+describe('withCertificateRefusal', () => {
+  it('replaces a hosting’s refusal and clears it after a success', () => {
+    const refusal = { message: 'Off', openSettings: true }
+    const one = withCertificateRefusal({}, 'h1', refusal)
+    expect(one).toEqual({ h1: refusal })
+    expect(withCertificateRefusal(one, 'h2', refusal)).toEqual({ h1: refusal, h2: refusal })
+    expect(withCertificateRefusal(one, 'h1', null)).toEqual({})
   })
 })
