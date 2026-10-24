@@ -3,6 +3,7 @@
  * turns it into plain sentences, a tone and the actions to offer.
  */
 import type { HostingCertificate, HostingDnsReport } from '@/lib/instance-api'
+import { isForbiddenError } from '@/lib/fetch-error-detail'
 import { userErrorMessage } from '@/lib/user-error'
 
 export type CertificateTone = 'neutral' | 'good' | 'warning' | 'bad' | 'pending'
@@ -157,10 +158,31 @@ function serverExplanation(err: unknown, code: string): string | null {
  */
 export function letsEncryptRefusal(err: unknown): LetsEncryptRefusal {
   const www = serverExplanation(err, 'www_redirect_conflict')
+  // A plain permission 403 carries only "HTTP 403: Forbidden": say it in words instead.
+  const fallback = 'Could not start Let\u2019s Encrypt.'
   return {
-    message: www ?? userErrorMessage(err, 'Could not start Let\u2019s Encrypt.'),
+    message: www ?? (isForbiddenError(err) ? fallback : userErrorMessage(err, fallback)),
     openSettings: err instanceof Error && err.message.includes('lets_encrypt_not_enabled'),
   }
+}
+
+/**
+ * After a hosting saved: ask for the certificate when the box was ticked. Any
+ * successful save replaces what an earlier answer said, so a save without the
+ * box clears an old refusal. Null when the hosting has no id yet.
+ */
+export async function certificateAfterSave(
+  input: Readonly<{
+    hostingId: string | null
+    wantsCertificate: boolean
+    request: (hostingId: string) => Promise<{ ok: true } | { ok: false; cause?: unknown }>
+  }>
+): Promise<{ hostingId: string; refusal: LetsEncryptRefusal | null } | null> {
+  const { hostingId } = input
+  if (hostingId === null) return null
+  if (!input.wantsCertificate) return { hostingId, refusal: null }
+  const requested = await input.request(hostingId)
+  return { hostingId, refusal: requested.ok ? null : letsEncryptRefusal(requested.cause) }
 }
 
 /** The refusals by hosting id after one save: a new refusal replaces the old, a success clears it. */

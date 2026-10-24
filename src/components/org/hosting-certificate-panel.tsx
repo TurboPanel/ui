@@ -38,8 +38,10 @@ export type HostingCertificateActions = Readonly<{
   /** Opens the deploy confirm for this environment; absent where deploying is not offered. */
   onDeploy?: () => void
   deployDisabled?: boolean
-  /** Why Let's Encrypt was refused when a save asked for it, by hosting id. */
+  /** Why the latest Let's Encrypt request was refused (from a save or this panel), by hosting id. */
   refusals?: Readonly<Record<string, LetsEncryptRefusal>>
+  /** Records how the panel's own request ended, so the newest answer replaces the last one. */
+  onRefusal?: (hostingId: string, refusal: LetsEncryptRefusal | null) => void
 }>
 
 export const HostingCertificateActionsContext = createContext<HostingCertificateActions>({})
@@ -85,22 +87,35 @@ type DeployShortcut = Readonly<{ onDeploy: () => void; disabled: boolean }>
 
 /**
  * What the screen adds to one panel: a Deploy now (the environment page's own
- * Deploy when there is one, else the screen's) and the refusal to show (the
- * panel's own request is newer than one from the last save).
+ * Deploy when there is one, else the screen's) and the refusal to show. A
+ * screen that keeps refusals holds the newest answer (a save or this panel's
+ * own request); without one, the panel's own request error is shown.
  */
 function useScreenCertificateActions(
   hostingId: string,
   requestError: unknown
-): { deploy: DeployShortcut | null; refusal: LetsEncryptRefusal | null } {
+): {
+  deploy: DeployShortcut | null
+  refusal: LetsEncryptRefusal | null
+  onRefusal: HostingCertificateActions['onRefusal']
+} {
   const actions = useContext(HostingCertificateActionsContext)
   const pageDeploy = environmentDeployShortcut(useOptionalEnvironmentLifecycle())
   const screenDeploy = actions.onDeploy
     ? { onDeploy: actions.onDeploy, disabled: actions.deployDisabled === true }
     : null
-  const refusal = requestError
-    ? letsEncryptRefusal(requestError)
-    : (actions.refusals?.[hostingId] ?? null)
-  return { deploy: pageDeploy ?? screenDeploy, refusal }
+  const ownRefusal = requestError ? letsEncryptRefusal(requestError) : null
+  const refusal = actions.refusals ? (actions.refusals[hostingId] ?? null) : ownRefusal
+  return { deploy: pageDeploy ?? screenDeploy, refusal, onRefusal: actions.onRefusal }
+}
+
+/** Hand the panel's own request result to the screen, so it replaces an older refusal. */
+function reportRequest(
+  result: Readonly<{ ok: boolean; cause?: unknown }>,
+  hostingId: string,
+  onRefusal: HostingCertificateActions['onRefusal']
+) {
+  onRefusal?.(hostingId, result.ok ? null : letsEncryptRefusal(result.cause))
 }
 
 function DeployNowButton({
@@ -214,7 +229,7 @@ export function HostingCertificatePanel({
   const query = useHostingCertificate(orgId, hostingId)
   const letsEncrypt = useUseLetsEncrypt(orgId, hostingId)
   const dnsCheck = useHostingDnsCheck(hostingId)
-  const { deploy, refusal } = useScreenCertificateActions(hostingId, letsEncrypt.error)
+  const { deploy, refusal, onRefusal } = useScreenCertificateActions(hostingId, letsEncrypt.error)
   const certificate = query.data?.hosting.certificate ?? null
   if (!certificate) {
     return refusal ? <RefusalNote orgId={orgId} refusal={refusal} /> : null
@@ -226,7 +241,7 @@ export function HostingCertificatePanel({
     : null
   const dns = dnsCheck.data?.dns ?? null
   const request = () => {
-    void letsEncrypt.run()
+    void letsEncrypt.run().then((result) => reportRequest(result, hostingId, onRefusal))
   }
 
   return (

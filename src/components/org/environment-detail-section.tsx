@@ -140,7 +140,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/lib/query-keys'
 import { offersLetsEncrypt } from '@/lib/hosting-letsencrypt-choice'
 import {
-  letsEncryptRefusal,
+  certificateAfterSave,
   withCertificateRefusal,
   type LetsEncryptRefusal,
 } from '@/lib/hosting-certificate'
@@ -2834,16 +2834,16 @@ export function EnvironmentDetailBody({
         tlsId: editor.tlsId,
         hostnameCount: parseHostnameList(editor.hostnames).length,
       })
-    if (wantsCertificate && savedHostingId) {
-      // The hosting is already saved; a refused certificate is said next to
-      // its Certificate section (with the fix when there is one), never undone.
-      const requested = await letsEncryptMutation.run(savedHostingId)
+    // The hosting is already saved; a refused certificate is said next to its
+    // Certificate section (with the fix when there is one), never undone.
+    const certificateStep = await certificateAfterSave({
+      hostingId: savedHostingId,
+      wantsCertificate,
+      request: letsEncryptMutation.run,
+    })
+    if (certificateStep) {
       setCertificateRefusals((current) =>
-        withCertificateRefusal(
-          current,
-          savedHostingId,
-          requested.ok ? null : letsEncryptRefusal(requested.cause)
-        )
+        withCertificateRefusal(current, certificateStep.hostingId, certificateStep.refusal)
       )
     }
     await Promise.all([
@@ -2893,6 +2893,8 @@ export function EnvironmentDetailBody({
         ? { onDeploy: openDeployConfirm, deployDisabled: deployBlocked || deploying }
         : {}),
       refusals: certificateRefusals,
+      onRefusal: (hostingId: string, refusal: LetsEncryptRefusal | null) =>
+        setCertificateRefusals((current) => withCertificateRefusal(current, hostingId, refusal)),
     }),
     [showEnvironmentChrome, openDeployConfirm, deployBlocked, deploying, certificateRefusals]
   )

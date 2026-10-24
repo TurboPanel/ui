@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { HostingCertificate } from '@/lib/instance-api'
@@ -123,6 +123,34 @@ describe('a refused Let’s Encrypt request after saving', () => {
     expect(
       screen.getByLabelText('Open Organization settings › Domains & certificates')
     ).toBeTruthy()
+  })
+})
+
+describe('the panel’s own Use Let’s Encrypt on a screen that keeps refusals', () => {
+  it('clears the refusal from the last save once its own request goes through', async () => {
+    state.run.mockResolvedValue({ ok: true, value: {} })
+    const onRefusal = vi.fn()
+    renderPanel({ refusals: { h1: OFF }, onRefusal })
+    expect(screen.getByText(OFF.message)).toBeTruthy()
+    fireEvent.click(screen.getByLabelText('Use Let’s Encrypt'))
+    await waitFor(() => expect(onRefusal).toHaveBeenCalledWith('h1', null))
+  })
+
+  it('records its own refusal as the newest one', async () => {
+    const off = new Error('/hostings/h1/use-letsencrypt failed: HTTP 403: lets_encrypt_not_enabled')
+    state.run.mockResolvedValue({ ok: false, error: off.message, cause: off })
+    const onRefusal = vi.fn()
+    renderPanel({ refusals: {}, onRefusal })
+    fireEvent.click(screen.getByLabelText('Use Let’s Encrypt'))
+    await waitFor(() => expect(onRefusal).toHaveBeenCalledWith('h1', OFF))
+  })
+
+  it('shows what the screen holds, not a stale error of its own', () => {
+    state.requestError = new Error(
+      '/hostings/h1/use-letsencrypt failed: HTTP 400: hosting_not_http'
+    )
+    renderPanel({ refusals: {}, onRefusal: vi.fn() })
+    expect(screen.queryByText(/web domains/)).toBeNull()
   })
 })
 

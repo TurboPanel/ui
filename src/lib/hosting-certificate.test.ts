@@ -1,9 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   describeCertificate,
   dnsResultHeadline,
   dnsSummaryLines,
   formatDaysLeft,
+  certificateAfterSave,
   letsEncryptRefusal,
   withCertificateRefusal,
 } from './hosting-certificate'
@@ -174,6 +175,12 @@ describe('letsEncryptRefusal', () => {
     )
   })
 
+  it('says a plain permission refusal in words, not the raw request line', () => {
+    expect(
+      letsEncryptRefusal(new Error('/hostings/h/use-letsencrypt failed: HTTP 403: Forbidden'))
+    ).toEqual({ message: 'Could not start Let’s Encrypt.', openSettings: false })
+  })
+
   it('falls back to a plain sentence for anything else', () => {
     expect(letsEncryptRefusal(undefined).message).toBe('Could not start Let’s Encrypt.')
   })
@@ -186,5 +193,36 @@ describe('withCertificateRefusal', () => {
     expect(one).toEqual({ h1: refusal })
     expect(withCertificateRefusal(one, 'h2', refusal)).toEqual({ h1: refusal, h2: refusal })
     expect(withCertificateRefusal(one, 'h1', null)).toEqual({})
+  })
+})
+
+describe('certificateAfterSave', () => {
+  const off = new Error('/hostings/h1/use-letsencrypt failed: HTTP 403: lets_encrypt_not_enabled')
+
+  it('asks for the certificate when the box was ticked and keeps the refusal', async () => {
+    const request = vi.fn(() => Promise.resolve({ ok: false as const, cause: off }))
+    const step = await certificateAfterSave({ hostingId: 'h1', wantsCertificate: true, request })
+    expect(request).toHaveBeenCalledWith('h1')
+    expect(step?.hostingId).toBe('h1')
+    expect(step?.refusal?.openSettings).toBe(true)
+  })
+
+  it('clears an old refusal on a save without the box, without asking again', async () => {
+    const request = vi.fn()
+    const step = await certificateAfterSave({ hostingId: 'h1', wantsCertificate: false, request })
+    expect(request).not.toHaveBeenCalled()
+    expect(step).toEqual({ hostingId: 'h1', refusal: null })
+    const before = withCertificateRefusal({}, 'h1', letsEncryptRefusal(off))
+    expect(withCertificateRefusal(before, 'h1', step?.refusal ?? null)).toEqual({})
+  })
+
+  it('clears it after a request that went through, and skips a hosting with no id', async () => {
+    const ok = vi.fn(() => Promise.resolve({ ok: true as const }))
+    expect(
+      await certificateAfterSave({ hostingId: 'h1', wantsCertificate: true, request: ok })
+    ).toEqual({ hostingId: 'h1', refusal: null })
+    expect(
+      await certificateAfterSave({ hostingId: null, wantsCertificate: true, request: ok })
+    ).toBeNull()
   })
 })
