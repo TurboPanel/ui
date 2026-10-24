@@ -1,5 +1,6 @@
 import {
   createElement,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -29,7 +30,10 @@ import {
   SegmentedControl,
   TextField,
 } from '@/components/ui'
-import { HostingCertificatePanel } from '@/components/org/hosting-certificate-panel'
+import {
+  HostingCertificateActionsContext,
+  HostingCertificatePanel,
+} from '@/components/org/hosting-certificate-panel'
 import { ComposeEditorSection } from '@/components/org/compose-editor-section'
 import { usePersistEnvironmentCompose } from '@/components/org/compose-persistence'
 import {
@@ -135,6 +139,11 @@ import { useCan } from '@/lib/query-client'
 import { useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/lib/query-keys'
 import { offersLetsEncrypt } from '@/lib/hosting-letsencrypt-choice'
+import {
+  certificateAfterSave,
+  withCertificateRefusal,
+  type LetsEncryptRefusal,
+} from '@/lib/hosting-certificate'
 import { RemovedServiceCard } from '@/components/org/removed-service-card'
 import { containerCardServices, removedFromComposeServiceIds } from '@/lib/directory-names'
 import { useEnvironmentFolders } from '@/lib/queries/folders'
@@ -2477,6 +2486,10 @@ export function EnvironmentDetailBody({
     Record<string, HostingEditorState>
   >({})
   const [savingHosting, setSavingHosting] = useState<string | null>(null)
+  // Why Let's Encrypt was refused on the last save that asked for it, by hosting id.
+  const [certificateRefusals, setCertificateRefusals] = useState<
+    Record<string, LetsEncryptRefusal>
+  >({})
   const [healthCheckPrompt, setHealthCheckPrompt] = useState<{
     services: string[]
     required: boolean
@@ -2745,10 +2758,10 @@ export function EnvironmentDetailBody({
     setPreviewOpen({ purpose: 'inspect', mode })
   }
 
-  const openDeployConfirm = () => {
+  const openDeployConfirm = useCallback(() => {
     setError(null)
     setPreviewOpen({ purpose: 'confirm', mode: 'prepared' })
-  }
+  }, [])
 
   /**
    * Persist one edited compose route by rewriting the environment overlay.
@@ -2821,15 +2834,17 @@ export function EnvironmentDetailBody({
         tlsId: editor.tlsId,
         hostnameCount: parseHostnameList(editor.hostnames).length,
       })
-    if (wantsCertificate && savedHostingId) {
-      // The hosting is already saved; a certificate that cannot start yet
-      // (for example DNS not pointing here) is reported, never undone.
-      const requested = await letsEncryptMutation.run(savedHostingId)
-      if (!requested.ok) {
-        setError(
-          `Saved. Let’s Encrypt could not start yet: ${requested.error ?? 'try again from the Certificate section.'}`,
-        )
-      }
+    // The hosting is already saved; a refused certificate is said next to its
+    // Certificate section (with the fix when there is one), never undone.
+    const certificateStep = await certificateAfterSave({
+      hostingId: savedHostingId,
+      wantsCertificate,
+      request: letsEncryptMutation.run,
+    })
+    if (certificateStep) {
+      setCertificateRefusals((current) =>
+        withCertificateRefusal(current, certificateStep.hostingId, certificateStep.refusal)
+      )
     }
     await Promise.all([
       servicesQuery.refetch(),
@@ -2871,11 +2886,24 @@ export function EnvironmentDetailBody({
     )
   }
 
+  const certificateActions = useMemo(
+    () => ({
+      // The deploy confirm only renders with the environment chrome.
+      ...(showEnvironmentChrome
+        ? { onDeploy: openDeployConfirm, deployDisabled: deployBlocked || deploying }
+        : {}),
+      refusals: certificateRefusals,
+      onRefusal: (hostingId: string, refusal: LetsEncryptRefusal | null) =>
+        setCertificateRefusals((current) => withCertificateRefusal(current, hostingId, refusal)),
+    }),
+    [showEnvironmentChrome, openDeployConfirm, deployBlocked, deploying, certificateRefusals]
+  )
+
   if (loading && !environment) {
     return <LoadingState />
   }
 
-  return (
+  const body = (
     <View style={styles.body}>
       {error ? <Text style={panelStyles.error}>{error}</Text> : null}
 
@@ -2949,6 +2977,12 @@ export function EnvironmentDetailBody({
         />
       ) : null}
     </View>
+  )
+
+  return (
+    <HostingCertificateActionsContext.Provider value={certificateActions}>
+      {body}
+    </HostingCertificateActionsContext.Provider>
   )
 }
 
