@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ManagedSetupPanel } from './managed-project-section'
+import { ManagedEnvironmentBody, ManagedSetupPanel } from './managed-project-section'
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
 vi.mock('react-native-svg', async () => (await import('@/components/ui/v4/rn-stub')).svgStub)
@@ -66,8 +66,16 @@ vi.mock('@/lib/queries/servers', () => ({
 }))
 vi.mock('@/lib/queries/environments', () => ({
   useUpdateEnvironment: () => ({ isPending: false, actionError: null, run: mocks.pinRun }),
+  // No server pinned: the database is not created yet.
+  useEnvironment: () => ({ isLoading: false, data: { environment: { id: 'env-1' } } }),
+}))
+vi.mock('@tanstack/react-query', () => ({ useQueryClient: () => ({}) }))
+vi.mock('@/components/org/managed/managed-environment-context', () => ({
+  useOptionalManagedEnvironment: () => ({ environmentId: 'env-1' }),
+  ManagedCommandsProvider: () => null,
 }))
 vi.mock('@/lib/queries/managed', () => ({
+  useEnvironmentManaged: () => ({ isLoading: false, data: undefined, error: null }),
   useCreateEnvironmentManaged: () => ({ isPending: false, actionError: null, run: mocks.createRun }),
   useServerManagedExternalAccess: () => ({
     isLoading: false,
@@ -159,5 +167,34 @@ describe('managed setup panel external access', () => {
     mocks.canEditServer = false
     renderPanel()
     expect((screen.getByRole('switch') as HTMLButtonElement).disabled).toBe(true)
+  })
+})
+
+describe('managed environment before the database exists', () => {
+  const renderBody = (focus: 'overview' | 'services' | 'settings') =>
+    render(
+      <ManagedEnvironmentBody
+        orgId="org-1"
+        environmentId="env-1"
+        engineCode="postgres"
+        projectName="app-db"
+        focus={focus}
+        notCreated={<p>Available once the database is created</p>}
+      />
+    )
+
+  it('shows the Set up panel once, on Overview', () => {
+    renderBody('overview')
+    expect(screen.getByText('Create database')).toBeTruthy()
+    expect(screen.queryByText('Available once the database is created')).toBeNull()
+  })
+
+  it('gives the other tabs their empty state instead of the same Set up panel', () => {
+    for (const focus of ['services', 'settings'] as const) {
+      renderBody(focus)
+      expect(screen.getByText('Available once the database is created')).toBeTruthy()
+      expect(screen.queryByText('Create database')).toBeNull()
+      cleanup()
+    }
   })
 })
