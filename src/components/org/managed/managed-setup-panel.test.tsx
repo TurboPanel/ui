@@ -107,7 +107,7 @@ describe('managed setup panel external access', () => {
   it('saves the changed switch before it creates the service', async () => {
     renderPanel()
     fireEvent.click(screen.getByRole('switch'))
-    fireEvent.click(screen.getByText('Create service'))
+    fireEvent.click(screen.getByText('Create database'))
     await waitFor(() => expect(mocks.createRun).toHaveBeenCalled())
     expect(mocks.calls).toEqual(['save', 'create'])
     expect(mocks.saveRun).toHaveBeenCalledWith({ serverId: 'srv-1', enabled: true })
@@ -115,7 +115,7 @@ describe('managed setup panel external access', () => {
 
   it('does not save an untouched switch', async () => {
     renderPanel()
-    fireEvent.click(screen.getByText('Create service'))
+    fireEvent.click(screen.getByText('Create database'))
     await waitFor(() => expect(mocks.createRun).toHaveBeenCalled())
     expect(mocks.saveRun).not.toHaveBeenCalled()
   })
@@ -124,7 +124,7 @@ describe('managed setup panel external access', () => {
     mocks.saveRun.mockImplementation(async () => ({ ok: false, error: 'HTTP 502: not delivered', cause: null }))
     renderPanel()
     fireEvent.click(screen.getByRole('switch'))
-    fireEvent.click(screen.getByText('Create service'))
+    fireEvent.click(screen.getByText('Create database'))
     await waitFor(() => expect(screen.getByText('HTTP 502: not delivered')).toBeTruthy())
     expect(mocks.createRun).not.toHaveBeenCalled()
   })
@@ -135,7 +135,7 @@ describe('managed setup panel external access', () => {
     mocks.saveRun.mockImplementation(async () => ({ ok: false, error: raw, cause: new Error(raw) }))
     renderPanel()
     fireEvent.click(screen.getByRole('switch'))
-    fireEvent.click(screen.getByText('Create service'))
+    fireEvent.click(screen.getByText('Create database'))
     await waitFor(() =>
       expect(
         screen.getByText(
@@ -150,7 +150,7 @@ describe('managed setup panel external access', () => {
     mocks.saveRun.mockImplementation(async () => ({ ok: false, error: null, cause: null }))
     renderPanel()
     fireEvent.click(screen.getByRole('switch'))
-    fireEvent.click(screen.getByText('Create service'))
+    fireEvent.click(screen.getByText('Create database'))
     await waitFor(() => expect(screen.getByText('Failed to save external access')).toBeTruthy())
     expect(mocks.createRun).not.toHaveBeenCalled()
   })

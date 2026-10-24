@@ -38,7 +38,7 @@ describe('managed lifecycle panel destroy refusal', () => {
         onDelete={onDelete}
       />,
     )
-    fireEvent.click(screen.getByText('Delete'))
+    fireEvent.click(screen.getByText('Destroy database'))
     fireEvent.change(screen.getByPlaceholderText('shop'), { target: { value: 'shop' } })
     fireEvent.click(screen.getByText('Confirm delete'))
     await waitFor(() => expect(screen.getByText(MANAGED_HAS_BINDINGS_COPY)).toBeTruthy())

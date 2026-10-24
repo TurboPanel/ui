@@ -1,20 +1,9 @@
 import { useEffect, useState } from 'react'
-import {
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native'
-import {
-  Button,
-  SectionPanel,
-  SegmentedControl,
-  TextField,
-} from '@/components/ui'
-import { HeaderChevron } from '@/components/header-chevron'
+import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { Button, SegmentedControl, TextField } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
+import { SectionHeading } from '@/components/ui/v4'
+import { ManagedAdvancedDisclosure } from '@/components/org/managed/managed-advanced-disclosure'
 import { ManagedSslModePicker } from '@/components/org/managed/managed-ssl-mode-picker'
 import { ManagedExternalAccessSwitch } from '@/components/org/managed/managed-external-access-switch'
 import {
@@ -35,6 +24,7 @@ import {
   type ManagedSettings,
   managedStoredImage,
 } from '@/lib/managed-services'
+import { changedEngineSettings, changedHostingSettings } from '@/lib/managed-advanced-settings'
 import { useCan } from '@/lib/query-client'
 import { useSaveServerManagedExternalAccess } from '@/lib/queries/managed'
 import { chrome, colors, spacing, webPointer } from '@/lib/theme'
@@ -397,38 +387,27 @@ function ExternalAccessSection({
   )
 }
 
-function SettingsFormBody({
-  form,
-  setForm,
-  disabled,
-  canManage,
-  saving,
-  error,
-  imageOptions,
-  versionLabel,
-  organizationSslMode,
-  externalAccessOn,
-  onApply,
-}: Readonly<{
+type FormProps = Readonly<{
   form: SettingsForm
   setForm: (updater: (current: SettingsForm) => SettingsForm) => void
   disabled: boolean
-  canManage: boolean
-  saving: boolean
-  error: string | null
-  imageOptions: readonly string[]
-  /** Engine series the cluster runs (`18`, `9.7`, …); `null` outside the catalog. */
-  versionLabel: string | null
-  /** Org default the inherit row resolves to; `null` falls back to the platform mode. */
-  organizationSslMode: ManagedSslMode | null
-  /** A server serving this database allows external access: SSL is required. */
-  externalAccessOn: boolean
-  onApply: () => void
-}>) {
-  return (
-    <View style={styles.body}>
-      {error ? <Text style={panelStyles.error}>{error}</Text> : null}
+}>
 
+/** The base image: only base-OS variants of the running version can be swapped. */
+function ImageField({
+  form,
+  setForm,
+  disabled,
+  imageOptions,
+  versionLabel,
+}: FormProps &
+  Readonly<{
+    imageOptions: readonly string[]
+    /** Engine series the cluster runs (`18`, `9.7`, …); `null` outside the catalog. */
+    versionLabel: string | null
+  }>) {
+  return (
+    <>
       <Text style={panelStyles.detailLabel}>Base image</Text>
       <Text style={panelStyles.muted}>
         {versionLabel
@@ -441,7 +420,26 @@ function SettingsFormBody({
         disabled={disabled}
         onSelect={(image) => setForm((current) => ({ ...current, image }))}
       />
+    </>
+  )
+}
 
+/** Client TLS at the shared listener: the policy clients must meet. */
+function ClientTlsField({
+  form,
+  setForm,
+  disabled,
+  organizationSslMode,
+  externalAccessOn,
+}: FormProps &
+  Readonly<{
+    /** Org default the inherit row resolves to; `null` falls back to the platform mode. */
+    organizationSslMode: ManagedSslMode | null
+    /** A server serving this database allows external access: SSL is required. */
+    externalAccessOn: boolean
+  }>) {
+  return (
+    <>
       <Text style={panelStyles.detailLabel}>Client TLS</Text>
       <Text style={panelStyles.muted}>
         Applies to clients dialing the shared managed listener. The listener ↔
@@ -455,7 +453,14 @@ function SettingsFormBody({
         disabled={disabled}
         onSelect={(sslMode) => setForm((current) => ({ ...current, sslMode }))}
       />
+    </>
+  )
+}
 
+/** Engine settings, resource limits and Docker options: the Advanced part of Settings. */
+function EngineFields({ form, setForm, disabled }: FormProps) {
+  return (
+    <>
       <TextField
         label="Engine config"
         value={form.engineConfig}
@@ -527,28 +532,21 @@ function SettingsFormBody({
         disabled={disabled}
         onChange={(extraEnv) => setForm((current) => ({ ...current, extraEnv }))}
       />
-
-      <LabeledNumber
-        label="Manual backups to keep"
-        hint="Applies to backups made with Back up now. Each schedule keeps its own count."
-        value={form.backupRetentionKeep}
-        disabled={disabled}
-        onChange={(backupRetentionKeep) =>
-          setForm((current) => ({ ...current, backupRetentionKeep }))
-        }
-      />
-
-      <ApplyButton
-        canManage={canManage}
-        disabled={disabled}
-        saving={saving}
-        onPress={onApply}
-      />
-    </View>
+    </>
   )
 }
 
+/**
+ * Which part of the settings a tab draws. `hosting`: external access, with
+ * client TLS under Advanced. `settings`: the base image and manual backups,
+ * with engine settings, resource limits and Docker options under Advanced.
+ * `all`: both. Each part saves the whole settings record it was read from,
+ * so applying one tab never clears what the other holds.
+ */
+export type ManagedSettingsSection = 'all' | 'settings' | 'hosting'
+
 export function ManagedSettingsPanel({
+  section = 'all',
   settings,
   engineCode,
   orgId,
@@ -558,6 +556,7 @@ export function ManagedSettingsPanel({
   busy,
   onApply,
 }: Readonly<{
+  section?: ManagedSettingsSection
   settings: ManagedSettings
   /** Selects the release catalog used for the base-image picker (see `managedVariantImagesForImage`). */
   engineCode: string | null
@@ -577,7 +576,6 @@ export function ManagedSettingsPanel({
   // so only offer other base-OS variants of the version already running.
   const imageOptions = managedVariantImagesForImage(engineCode, storedImage)
   const versionLabel = describeManagedImage(storedImage)?.series ?? null
-  const [expanded, setExpanded] = useState(false)
   const [form, setForm] = useState(() => settingsToForm(settings, storedImage))
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -604,64 +602,86 @@ export function ManagedSettingsPanel({
   }
 
   const disabled = busy || saving || !canManage
+  const showHosting = section !== 'settings'
+  const showEngine = section !== 'hosting'
+  const applyButton = (
+    <ApplyButton
+      canManage={canManage}
+      disabled={disabled}
+      saving={saving}
+      onPress={() => {
+        void apply()
+      }}
+    />
+  )
 
   return (
-    <SectionPanel
-      title="Settings"
-      hint="Image, resources, external access, and Docker options"
-      collapsible
-      defaultCollapsed
-    >
-      <ExternalAccessSection
-        orgId={orgId}
-        externalAccess={externalAccess ?? null}
-        disabled={busy || saving || !canManage}
-      />
-      <Pressable
-        style={[panelStyles.expandedSection, webPointer]}
-        onPress={() => setExpanded((current) => !current)}
-      >
-        <View style={styles.disclosureRow}>
-          <HeaderChevron size={12} color={colors.textBody} open={expanded} />
-          <Text style={styles.disclosure}>Advanced settings</Text>
+    <View style={styles.page}>
+      {error ? <Text style={panelStyles.error}>{error}</Text> : null}
+      {showHosting ? (
+        <View style={styles.body}>
+          <SectionHeading
+            title="External access"
+            note="Who can reach the databases on this server"
+          />
+          <ExternalAccessSection
+            orgId={orgId}
+            externalAccess={externalAccess ?? null}
+            disabled={disabled}
+          />
+          <ManagedAdvancedDisclosure
+            note="client certificate and TLS"
+            changed={changedHostingSettings(settings)}
+          >
+            <ClientTlsField
+              form={form}
+              setForm={setForm}
+              disabled={disabled}
+              organizationSslMode={organizationSslMode}
+              externalAccessOn={(externalAccess?.servers ?? []).some((server) => server.enabled)}
+            />
+            {showEngine ? null : applyButton}
+          </ManagedAdvancedDisclosure>
         </View>
-      </Pressable>
-
-      {expanded ? (
-        <SettingsFormBody
-          form={form}
-          setForm={setForm}
-          disabled={disabled}
-          canManage={canManage}
-          saving={saving}
-          error={error}
-          imageOptions={imageOptions}
-          versionLabel={versionLabel}
-          organizationSslMode={organizationSslMode}
-          externalAccessOn={(externalAccess?.servers ?? []).some((server) => server.enabled)}
-          onApply={() => {
-            void apply()
-          }}
-        />
       ) : null}
-    </SectionPanel>
+      {showEngine ? (
+        <View style={styles.body}>
+          <SectionHeading title="Database" note="Base image and backups" />
+          <ImageField
+            form={form}
+            setForm={setForm}
+            disabled={disabled}
+            imageOptions={imageOptions}
+            versionLabel={versionLabel}
+          />
+          <LabeledNumber
+            label="Manual backups to keep"
+            hint="Applies to backups made with Back up now. Each schedule keeps its own count."
+            value={form.backupRetentionKeep}
+            disabled={disabled}
+            onChange={(backupRetentionKeep) =>
+              setForm((current) => ({ ...current, backupRetentionKeep }))
+            }
+          />
+          <ManagedAdvancedDisclosure
+            note="engine settings, resource limits and Docker options"
+            changed={changedEngineSettings(settings)}
+          >
+            <EngineFields form={form} setForm={setForm} disabled={disabled} />
+          </ManagedAdvancedDisclosure>
+          {applyButton}
+        </View>
+      ) : null}
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
-  disclosureRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: spacing.xs,
-  },
-  disclosure: {
-    color: colors.textBody,
-    fontSize: 13,
-    fontWeight: '600',
+  page: {
+    gap: spacing.lg,
   },
   body: {
     gap: spacing.sm,
-    marginTop: spacing.sm,
   },
   imageList: {
     gap: spacing.xs,

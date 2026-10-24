@@ -1,16 +1,6 @@
-import { ManagedFocusTab } from '@/components/org/project/managed-focus-tab'
-import { useProjectContext } from '@/components/org/project/project-context'
-import { isManagedProject, projectTabHref } from '@/lib/project-navigation'
-import { Redirect, type Href } from 'expo-router'
+import { RetiredManagedTabRedirect } from '@/components/org/project/managed-focus-tab'
 
+/** Old managed `/backups` tab: now a tab of the primary environment. */
 export default function ProjectBackupsScreen() {
-  const { orgId, projectId, project } = useProjectContext()
-  if (!project || !isManagedProject(project)) {
-    return (
-      <Redirect
-        href={projectTabHref(orgId, projectId, 'overview') as Href}
-      />
-    )
-  }
-  return <ManagedFocusTab focus="backups" />
+  return <RetiredManagedTabRedirect tab="backups" />
 }

@@ -25,6 +25,13 @@ export type UnderlineTab = Readonly<{
   dot?: boolean
   /** What the dot means, read aloud after the label ("not deployed changes"). */
   dotLabel?: string
+  /**
+   * Greyed: the tab still opens (never a dead link), but what it holds is not
+   * the viewer's to change, such as the Compose file of a managed database.
+   */
+  muted?: boolean
+  /** Why the tab is greyed, read aloud after the label ("Managed by TurboPanel"). */
+  mutedLabel?: string
 }>
 
 /** How wide the fade is on an edge that has more tabs past it. */
@@ -62,6 +69,7 @@ const styles = themedStyles((p) => ({
   on: { borderBottomColor: p.accent },
   text: { ...typeStyle('bodyMedium', 'subhead'), color: p.text3 },
   textOn: { ...typeStyle('bodySemibold', 'subhead'), color: p.text },
+  textMuted: { opacity: 0.5 },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: p.warn },
   fade: { position: 'absolute', top: 0, bottom: 0, width: FADE_WIDTH },
   fadeStart: { left: 0 },
@@ -200,7 +208,8 @@ export function UnderlineTabs({
 
   const items = tabs.map((tab) => {
     const selected = tab.key === value
-    const name = tab.dot && tab.dotLabel ? `${tab.label}, ${tab.dotLabel}` : tab.label
+    const notes = [tab.dot ? tab.dotLabel : undefined, tab.muted ? tab.mutedLabel : undefined]
+    const name = [tab.label, ...notes.filter(Boolean)].join(', ')
     return (
       <Pressable
         key={tab.key}
@@ -218,7 +227,7 @@ export function UnderlineTabs({
         }
         style={[s.tab, (touch || compact) && s.touch, selected && s.on, webPointer]}
       >
-        <Text style={selected ? s.textOn : s.text}>{tab.label}</Text>
+        <Text style={[selected ? s.textOn : s.text, tab.muted && s.textMuted]}>{tab.label}</Text>
         {tab.dot ? <View style={s.dot} /> : null}
       </Pressable>
     )

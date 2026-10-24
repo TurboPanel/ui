@@ -53,6 +53,7 @@ function setup(over: Record<string, unknown> = {}) {
       repositoryId: null,
       options: { containerNaming: 'uuid', defaultServerId: 's1' },
     },
+    environments: [],
     workspaces: [
       { id: 'w1', name: 'Mine', kind: 'user' },
       { id: 'w2', name: 'Team', kind: 'user' },
@@ -212,5 +213,22 @@ describe('ProjectSettingsScreen', () => {
     expect(h.view.dangerOpen).toBe(true)
     act(() => (h.view.danger as { props: { onCancel: () => void } }).props.onCancel())
     expect(h.view.dangerOpen).toBe(false)
+  })
+
+  it('gives a managed database name, workspace and delete, and a way to its settings', () => {
+    setup({
+      project: { id: 'p', name: 'app-db', kind: 'managed', workspaceId: 'w1', metadata: {} },
+      environments: [{ id: 'e1', name: 'production', isPrimary: true }],
+    })
+    render(<ProjectSettingsScreen />)
+    expect(h.view.danger).not.toBeNull()
+    expect(h.view.managed?.onOpenDatabaseSettings).toBeTypeOf('function')
+    h.view.managed?.onOpenDatabaseSettings?.()
+    expect(h.push).toHaveBeenCalledWith('/o/projects/p/environments/e1/settings')
+  })
+
+  it('draws a website project without the managed row', () => {
+    render(<ProjectSettingsScreen />)
+    expect(h.view.managed).toBeUndefined()
   })
 })

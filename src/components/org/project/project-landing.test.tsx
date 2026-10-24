@@ -62,11 +62,13 @@ describe('project landing', () => {
     expect(target()).toBe('/o/projects/p/overview')
   })
 
-  it('keeps managed and platform projects on their own overview', () => {
+  it('opens a managed database on its primary environment, like a website project', () => {
     state.ctx = { ...state.ctx, project: { id: 'p', kind: 'managed' } }
     render(<ProjectIndexScreen />)
-    expect(target()).toBe('/o/projects/p/overview')
-    cleanup()
+    expect(target()).toBe('/o/projects/p/environments/e1')
+  })
+
+  it('keeps platform projects on their own overview', () => {
     state.ctx = { ...state.ctx, project: composeProject, isSystemProject: true }
     render(<ProjectIndexScreen />)
     expect(target()).toBe('/o/projects/p/overview')
