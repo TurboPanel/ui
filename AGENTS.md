@@ -85,7 +85,7 @@ How changes ship: squash-merge into `trunk`, then two bot-opened pull requests (
 
 ## Agent skills
 
-Canonical skill footprint is **only** under `.agents/skills/` (pinned in `skills-lock.json`). Do not add packs under `.cursor/skills/`.
+Canonical skill footprint is **only** under `.agents/skills/` (pinned in `skills-lock.json`).
 
 | Skill | Why retained |
 | --- | --- |
@@ -216,7 +216,6 @@ Skip the skill for pure non-visual work (API wiring with no UI change, types-onl
 | --- | --- |
 | Skill (read first) | [`.agents/skills/ui-ux-pro-max/SKILL.md`](.agents/skills/ui-ux-pro-max/SKILL.md) |
 | Search CLI | `.agents/skills/ui-ux-pro-max/scripts/search.py` |
-| Cursor rule | [`.cursor/rules/ui-ux-pro-max.mdc`](.cursor/rules/ui-ux-pro-max.mdc) |
 | Master (global SoT) | [`design-system/turbopanel/MASTER.md`](design-system/turbopanel/MASTER.md) |
 | Page overrides | `design-system/turbopanel/pages/<page>.md` (page **wins** over Master) |
 | Runtime tokens | `src/lib/theme.ts` over `src/lib/theme-palettes.ts` — no one-off hex in components |
