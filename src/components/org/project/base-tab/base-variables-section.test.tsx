@@ -11,6 +11,9 @@ const state = vi.hoisted(() => ({
   records: undefined as unknown[] | undefined,
   filter: null as Record<string, string> | null,
   run: vi.fn(),
+  loadError: null as Error | null,
+  refresh: vi.fn(),
+  table: null as Record<string, unknown> | null,
 }))
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
@@ -23,11 +26,22 @@ vi.mock('@/components/org/project/project-context', () => ({ useProjectContext: 
 vi.mock('@/lib/queries/variables', () => ({
   useVariables: (_org: string, filter: Record<string, string>) => {
     state.filter = filter
-    return { data: state.records === undefined ? undefined : { variables: state.records } }
+    return {
+      data: state.records === undefined ? undefined : { variables: state.records },
+      isError: state.loadError !== null,
+      error: state.loadError,
+    }
   },
 }))
 vi.mock('@/lib/queries/configuration', () => ({
   useSaveBaseVariables: () => ({ run: state.run, isPending: false, actionError: null }),
+  useRefreshBaseConfiguration: () => state.refresh,
+}))
+vi.mock('@/components/org/variables-section', () => ({
+  VariablesSection: (props: Record<string, unknown>) => {
+    state.table = props
+    return <div data-testid="variables-table" />
+  },
 }))
 vi.mock('@/components/ui', () => ({
   TextField: (props: Record<string, unknown>) => (
@@ -85,6 +99,8 @@ beforeEach(() => {
   applyScenario(SCENARIOS[0])
   state.ctx = { orgId: 'o', projectId: 'p', canOwn: true, projectAllowsMutations: true }
   state.records = [record('MODE')]
+  state.loadError = null
+  state.table = null
   state.run = vi.fn(() =>
     Promise.resolve({ ok: true, value: { remaining: [], problems: [], error: null, saved: 1 } })
   )
@@ -157,6 +173,29 @@ describe('Base project variables', () => {
     expect(screen.getByLabelText('TOKEN, secret, Base')).toBeTruthy()
     fireEvent.click(screen.getByLabelText('Edit MODE'))
     expect(screen.getByLabelText('New value for MODE')).toBeTruthy()
+  })
+
+  it('keeps the full table under a closed Advanced, and refreshes the views after its saves', () => {
+    render(<BaseVariablesSection rows={rows} />)
+    expect(screen.getByRole('heading', { name: 'Advanced' })).toBeTruthy()
+    expect(screen.queryByTestId('variables-table')).toBeNull()
+    fireEvent.click(screen.getByLabelText('Expand Advanced'))
+    expect(screen.getByTestId('variables-table')).toBeTruthy()
+    expect(state.table).toMatchObject({
+      orgId: 'o',
+      parentField: { projectId: 'p' },
+      embedded: true,
+      showPresets: true,
+      onChanged: state.refresh,
+    })
+  })
+
+  it('says the variables could not be loaded instead of none, when there is no map', () => {
+    state.records = undefined
+    state.loadError = new Error('Network down')
+    render(<BaseVariablesSection />)
+    expect(screen.getByText('Could not load the project variables')).toBeTruthy()
+    expect(screen.queryByText('No project variables')).toBeNull()
   })
 
   it('is read-only for someone who cannot edit, and until the variables load', () => {

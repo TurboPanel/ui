@@ -31,7 +31,9 @@ vi.mock('@/components/ui', () => ({ TextField: () => null }))
 vi.mock('@/lib/queries/variables', () => ({ useVariables: () => ({ data: undefined }) }))
 vi.mock('@/lib/queries/configuration', () => ({
   useSaveBaseVariables: () => ({ run: vi.fn(), isPending: false, actionError: null }),
+  useRefreshBaseConfiguration: () => vi.fn(),
 }))
+vi.mock('@/components/org/variables-section', () => ({ VariablesSection: () => null }))
 vi.mock('@/components/org/project/project-overview-tab', () => ({
   ProjectOverviewTab: () => <div data-testid="old-screen" />,
 }))

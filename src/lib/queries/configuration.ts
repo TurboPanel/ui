@@ -1,4 +1,5 @@
 import { useQueryClient, type QueryClient } from '@tanstack/react-query'
+import { useCallback } from 'react'
 import {
   createVariable,
   deleteVariable,
@@ -108,6 +109,15 @@ export function useSaveConfiguration(orgId: string, projectId: string, environme
     onSettled: () => refreshConfiguration(queryClient, orgId, projectId, environmentId),
     fallbackError: 'Could not save these changes.',
   })
+}
+
+/** Refresh what is built on the project's variables (every config view) after a change saved elsewhere. */
+export function useRefreshBaseConfiguration(orgId: string, projectId: string) {
+  const queryClient = useQueryClient()
+  return useCallback(
+    () => refreshConfiguration(queryClient, orgId, projectId, null),
+    [queryClient, orgId, projectId]
+  )
 }
 
 /** Save the staged variable edits of the Base tab: the project's own variables, read fresh first. */
