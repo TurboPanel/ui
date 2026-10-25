@@ -114,6 +114,22 @@ function RedeployServicesPanel({
   )
 }
 
+/** A failure said where it happened; nothing when there is none. */
+function InlineError({ message }: Readonly<{ message: string | null }>) {
+  return message ? <Text style={panelStyles.error}>{message}</Text> : null
+}
+
+/** Why editing waits while the last change is still applying on the server. */
+function ApplyingNote({ shown }: Readonly<{ shown: boolean }>) {
+  if (!shown) return null
+  return (
+    <Text style={panelStyles.muted}>
+      The last change is still being applied on the server. Editing or deleting waits until it
+      finishes.
+    </Text>
+  )
+}
+
 export function ManagedUsersPanel({
   orgId,
   environmentId,
@@ -398,13 +414,8 @@ export function ManagedUsersPanel({
 
   return (
     <SectionPanel title="Users & databases" hint="Engine users and databases">
-      {error ? <Text style={panelStyles.error}>{error}</Text> : null}
-      {busy && canManage ? (
-        <Text style={panelStyles.muted}>
-          The last change is still being applied on the server. Editing or deleting waits until it
-          finishes.
-        </Text>
-      ) : null}
+      <InlineError message={error} />
+      <ApplyingNote shown={busy && canManage} />
 
       <Text style={styles.subheading}>Databases</Text>
       <View style={styles.list}>
@@ -462,7 +473,7 @@ export function ManagedUsersPanel({
               void createDatabase()
             }}
           />
-          {databaseError ? <Text style={panelStyles.error}>{databaseError}</Text> : null}
+          <InlineError message={databaseError} />
         </View>
       ) : null}
 
@@ -669,7 +680,7 @@ export function ManagedUsersPanel({
             servers={servers}
             disabled={addDisabled}
           />
-          {limitsProblem ? <Text style={panelStyles.error}>{limitsProblem}</Text> : null}
+          <InlineError message={limitsProblem} />
           <NewLoginStraightThroughField
             engine={engine}
             choice={straightChoice}
@@ -678,7 +689,7 @@ export function ManagedUsersPanel({
             disabled={addDisabled}
             onChange={setStraightChoice}
           />
-          {newLoginError ? <Text style={panelStyles.error}>{newLoginError}</Text> : null}
+          <InlineError message={newLoginError} />
           <Button
             label="Create user"
             busyLabel="Creating…"

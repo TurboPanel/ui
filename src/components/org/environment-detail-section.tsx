@@ -1171,6 +1171,55 @@ function HostingVariablesBlock({
   )
 }
 
+/** The message of a note that belongs under the Hostname field, else null. */
+function hostnameNoteText(note: HostingRowNote | null): string | null {
+  return note?.field === 'hostnames' ? note.message : null
+}
+
+/** A row's save button, and what its last save said right after it. */
+function HostingSaveControls({
+  composeOwned,
+  asksLetsEncrypt,
+  saving,
+  disabled,
+  note,
+  onSave,
+}: Readonly<{
+  composeOwned: boolean
+  /** The save also asks Let's Encrypt for a certificate. */
+  asksLetsEncrypt: boolean
+  saving: boolean
+  disabled: boolean
+  note: HostingRowNote | null
+  onSave: () => void
+}>) {
+  // Said while saving, so leaving early is not mistaken for done.
+  const busyLabel = asksLetsEncrypt ? 'Saving and asking Let’s Encrypt…' : 'Saving…'
+  const saveNote = note?.field === undefined ? note : null
+  const failed = saveNote?.tone === 'error'
+  return (
+    <>
+      <Button
+        label={composeOwned ? 'Save route to compose' : 'Save hosting'}
+        busyLabel={busyLabel}
+        size="sm"
+        variant="secondary"
+        busy={saving}
+        disabled={disabled}
+        onPress={onSave}
+      />
+      {saveNote ? (
+        <Text
+          accessibilityRole={failed ? 'alert' : undefined}
+          style={failed ? panelStyles.error : styles.savedNote}
+        >
+          {saveNote.message}
+        </Text>
+      ) : null}
+    </>
+  )
+}
+
 /** Exported for its tests. */
 export function HostingPanelRow({
   orgId,
@@ -1247,14 +1296,6 @@ export function HostingPanelRow({
   const isHttp = composeOwned || editor.protocol === 'http'
   const kindLabel = hostingServiceKindLabel(serviceContext)
   const dockerBridgeHint = hostingDockerBridgeHint(serviceContext)
-  const saveLabel = composeOwned ? 'Save route to compose' : 'Save hosting'
-  // Said while saving, so leaving early is not mistaken for done.
-  const busyLabel =
-    !composeOwned && isHttp && editor.getLetsEncrypt
-      ? 'Saving and asking Let’s Encrypt…'
-      : 'Saving…'
-  const fieldNote = note?.field === 'hostnames' ? note.message : null
-  const saveNote = note && note.field === undefined ? note : null
   const cardStyle = [
     panelStyles.detailCard,
     focused && styles.hostingRowFocused,
@@ -1315,7 +1356,7 @@ export function HostingPanelRow({
         composeOwned={composeOwned}
         editor={editor}
         locked={locked}
-        error={fieldNote}
+        error={hostnameNoteText(note)}
         onChange={onChange}
       />
 
@@ -1367,23 +1408,14 @@ export function HostingPanelRow({
       />
 
       {composeEditable ? (
-        <Button
-          label={saveLabel}
-          busyLabel={busyLabel}
-          size="sm"
-          variant="secondary"
-          busy={saving}
+        <HostingSaveControls
+          composeOwned={composeOwned}
+          asksLetsEncrypt={!composeOwned && isHttp && editor.getLetsEncrypt}
+          saving={saving}
           disabled={disabled}
-          onPress={onSave}
+          note={note}
+          onSave={onSave}
         />
-      ) : null}
-      {saveNote ? (
-        <Text
-          accessibilityRole={saveNote.tone === 'error' ? 'alert' : undefined}
-          style={saveNote.tone === 'error' ? panelStyles.error : styles.savedNote}
-        >
-          {saveNote.message}
-        </Text>
       ) : null}
 
       <Text style={styles.tlsLabel}>Hosting variables</Text>
