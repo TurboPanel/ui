@@ -79,7 +79,7 @@ describe('ComposeVisualServiceCard scheduled jobs', () => {
     ['node', nodeService],
   ])('shows scheduled jobs for a %s service by default', (_kind, service) => {
     card(service)
-    expect(screen.queryByText('Scheduled jobs')).not.toBeNull()
+    expect(screen.getByText('Scheduled jobs')).toBeTruthy()
   })
 
   it.each([

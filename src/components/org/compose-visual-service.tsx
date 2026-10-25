@@ -1,4 +1,10 @@
-import { createElement, useEffect, useState, type CSSProperties } from 'react'
+import {
+  createElement,
+  useEffect,
+  useState,
+  type ComponentProps,
+  type CSSProperties,
+} from 'react'
 import {
   Platform,
   Pressable,
@@ -197,6 +203,14 @@ const PHP_MODE_LABELS: Readonly<Record<PhpMode, string>> = {
  * validates then *drops* — so a refused value shows up as a lint issue in the
  * editor rather than being silently escaped into a config file.
  */
+/** Scheduled-jobs fields, left out while a project is first being set up. */
+function ScheduledJobsFields({
+  hidden,
+  ...fields
+}: Readonly<{ hidden: boolean } & ComponentProps<typeof CronFields>>) {
+  return hidden ? null : <CronFields {...fields} />
+}
+
 function PhpFields({
   php,
   engine,
@@ -1943,10 +1957,11 @@ export function ComposeVisualServiceCard({
         onDisconnect={() => applyExtension({ source: null })}
       />
 
-      {extension.serviceKind === 'node' && !hideScheduledJobs ? (
+      {extension.serviceKind === 'node' ? (
         // Schema allows cron on both host-native kinds; the site lane mounts
         // its copy below alongside the document root.
-        <CronFields
+        <ScheduledJobsFields
+          hidden={hideScheduledJobs}
           jobs={extension.cron}
           disabled={saving}
           onChange={(cron) =>
@@ -1996,19 +2011,18 @@ export function ComposeVisualServiceCard({
                 php,
               })}
           />
-          {hideScheduledJobs ? null : (
-            <CronFields
-              jobs={extension.cron}
-              disabled={saving}
-              onChange={(cron) =>
-                applyExtension({
-                  serviceKind: 'site',
-                  engine: extension.engine ?? DEFAULT_SITE_ENGINE,
-                  root: extension.root ?? 'public',
-                  cron,
-                })}
-            />
-          )}
+          <ScheduledJobsFields
+            hidden={hideScheduledJobs}
+            jobs={extension.cron}
+            disabled={saving}
+            onChange={(cron) =>
+              applyExtension({
+                serviceKind: 'site',
+                engine: extension.engine ?? DEFAULT_SITE_ENGINE,
+                root: extension.root ?? 'public',
+                cron,
+              })}
+          />
         </>
       ) : null}
 
