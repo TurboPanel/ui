@@ -670,6 +670,7 @@ export function ComposeEditorSection({
   /**
    * Hide the Save action. For surfaces that commit the draft elsewhere (the
    * create wizard's Create project button), where there is nothing to save yet.
+   * The service forms then also leave out scheduled jobs.
    */
   hideSave?: boolean
   /** Surface header: Project / environment buttons (right-aligned). */
@@ -1266,6 +1267,9 @@ export function ComposeEditorSection({
         {...(hideSave
           ? {}
           : { onDeclarePrincipalAlias: () => declarePrincipalAlias(name) })}
+        // Only the create wizard hides Save; scheduled jobs wait until the
+        // project exists.
+        hideScheduledJobs={hideSave}
         onNameDraftChange={(value) =>
           setServiceNameDrafts((current) => ({ ...current, [name]: value }))
         }

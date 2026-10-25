@@ -1,4 +1,10 @@
-import { createElement, useEffect, useState, type CSSProperties } from 'react'
+import {
+  createElement,
+  useEffect,
+  useState,
+  type ComponentProps,
+  type CSSProperties,
+} from 'react'
 import {
   Platform,
   Pressable,
@@ -184,6 +190,14 @@ const PHP_MODE_LABELS: Readonly<Record<PhpMode, string>> = {
   fpm: 'php-fpm',
   'lsphp-detached': 'lsphp, detached',
   'lsphp-attached': 'lsphp, attached to OpenLiteSpeed',
+}
+
+/** Scheduled-jobs fields, left out while a project is first being set up. */
+function ScheduledJobsFields({
+  hidden,
+  ...fields
+}: Readonly<{ hidden: boolean } & ComponentProps<typeof CronFields>>) {
+  return hidden ? null : <CronFields {...fields} />
 }
 
 /**
@@ -1611,6 +1625,7 @@ export function ComposeVisualServiceCard({
   saving,
   principalAliases = [],
   onDeclarePrincipalAlias,
+  hideScheduledJobs = false,
   onNameDraftChange,
   onRename,
   onRemoveService,
@@ -1633,6 +1648,12 @@ export function ComposeVisualServiceCard({
    * what is already declared.
    */
   onDeclarePrincipalAlias?: () => string
+  /**
+   * Leave the scheduled-jobs fields out. The create wizard sets it: jobs are
+   * added once the project exists, and any already in the compose file are
+   * kept as they are, just not edited here.
+   */
+  hideScheduledJobs?: boolean
   onNameDraftChange: (value: string) => void
   onRename: (nextName: string) => void
   onRemoveService: () => void
@@ -1939,7 +1960,8 @@ export function ComposeVisualServiceCard({
       {extension.serviceKind === 'node' ? (
         // Schema allows cron on both host-native kinds; the site lane mounts
         // its copy below alongside the document root.
-        <CronFields
+        <ScheduledJobsFields
+          hidden={hideScheduledJobs}
           jobs={extension.cron}
           disabled={saving}
           onChange={(cron) =>
@@ -1989,7 +2011,8 @@ export function ComposeVisualServiceCard({
                 php,
               })}
           />
-          <CronFields
+          <ScheduledJobsFields
+            hidden={hideScheduledJobs}
             jobs={extension.cron}
             disabled={saving}
             onChange={(cron) =>
