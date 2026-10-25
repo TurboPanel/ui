@@ -176,6 +176,7 @@ describe('ManagedUsersPanel app logins', () => {
         appLogin('shop_migrate', 'p-migrate'),
         appLogin('shop_rw', 'p-rw'),
         appLogin('shop_ro', 'p-ro'),
+        { user: null, password: 'p-lost' },
       ],
       notes: [
         'These databases have no owner role yet. Move a database onto an owner role (POST …/managed/databases/{name}/owner-role with confirm: true).',
@@ -196,6 +197,7 @@ describe('ManagedUsersPanel app logins', () => {
     expect(onReload).toHaveBeenCalled()
     expect(screen.getByText('p-rw')).toBeTruthy()
     expect(screen.getByText('p-ro')).toBeTruthy()
+    expect(screen.queryByText('p-lost')).toBeNull()
     expect(screen.getByText(/^This database has no owner role yet/)).toBeTruthy()
     expect(screen.queryByText(/owner-role with confirm/)).toBeNull()
     expect(screen.getByLabelText('Copy the password of shop_rw').getAttribute('data-copy')).toBe(

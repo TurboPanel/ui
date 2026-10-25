@@ -163,13 +163,18 @@ type CreateAppLogins = (databaseName: string, body: AppLoginsBody) => Promise<Ap
 
 /**
  * State of the "Add app logins" action on a screen: which database has its
- * form open, and the result waiting to be shown. `create` absent = no action.
+ * form open, and the result waiting to be shown. No action when `create` is
+ * absent or the viewer may not manage logins (`allowed` false).
  */
-export function useAppLogins(create: CreateAppLogins | undefined, onReload: () => Promise<void>) {
+export function useAppLogins(
+  create: CreateAppLogins | undefined,
+  onReload: () => Promise<void>,
+  allowed = true
+) {
   const [openFor, setOpenFor] = useState<string | null>(null)
   const [result, setResult] = useState<AppLoginsResult | null>(null)
   return {
-    enabled: create !== undefined,
+    enabled: allowed && create !== undefined,
     openFor,
     open: (databaseName: string) => setOpenFor(databaseName),
     close: () => setOpenFor(null),
@@ -248,12 +253,14 @@ export function AppLoginsPasswords({
   result,
   onDone,
 }: Readonly<{ result: AppLoginsResult; onDone: () => void }>) {
+  // Defensive: a login the server could not read back is left out rather than breaking the list.
+  const logins = result.logins.filter((entry) => entry.user != null)
   return (
     <View style={styles.form}>
       <View style={panelStyles.calloutWarning}>
         <Text style={panelStyles.calloutWarningText}>{SHOW_ONCE_WARNING}</Text>
       </View>
-      {result.logins.map(({ user, password }) => (
+      {logins.map(({ user, password }) => (
         <View key={user.id} style={styles.secretRow}>
           <Text style={panelStyles.detailLabel}>{user.appliedUsername}</Text>
           <View style={panelStyles.commandCodeBlock}>
@@ -274,7 +281,7 @@ export function AppLoginsPasswords({
         </Text>
       ))}
       <ButtonRow>
-        <CopyButton value={appLoginsCopyAllText(result.logins)} label="Copy all" size="md" />
+        <CopyButton value={appLoginsCopyAllText(logins)} label="Copy all" size="md" />
         <Button label="Done" variant="primary" onPress={onDone} />
       </ButtonRow>
     </View>

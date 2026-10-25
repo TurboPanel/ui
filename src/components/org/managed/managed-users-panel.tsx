@@ -158,6 +158,49 @@ function RedeployServicesPanel({
   )
 }
 
+/** The show-once passwords: the app logins list, or one login's new password. */
+function PasswordsPanel({
+  appLoginsResult,
+  onAppLoginsDone,
+  username,
+  password,
+  onPasswordDone,
+  redeployRequired,
+  onRedeploy,
+  onDismissRedeploy,
+}: Readonly<{
+  appLoginsResult: AppLoginsResult | null
+  onAppLoginsDone: () => void
+  username: string | null
+  password: string | null
+  onPasswordDone: () => void
+  redeployRequired: BindingRedeployRequired | null
+  onRedeploy: (environmentId: string) => Promise<void>
+  onDismissRedeploy: () => void
+}>) {
+  return (
+    <SectionPanel title="Users & databases" hint="Engine users and databases">
+      {appLoginsResult ? (
+        <AppLoginsPasswords result={appLoginsResult} onDone={onAppLoginsDone} />
+      ) : (
+        <SecretReveal
+          username={username}
+          password={password ?? ''}
+          onContinue={onPasswordDone}
+          continueLabel="Done"
+        />
+      )}
+      {!appLoginsResult && redeployRequired ? (
+        <RedeployServicesPanel
+          redeployRequired={redeployRequired}
+          onRedeploy={onRedeploy}
+          onDismiss={onDismissRedeploy}
+        />
+      ) : null}
+    </SectionPanel>
+  )
+}
+
 export function ManagedUsersPanel({
   orgId,
   environmentId,
@@ -226,7 +269,7 @@ export function ManagedUsersPanel({
   const [limits, setLimits] = useState<LoginLimitsDraft>(initial.limits)
   const [limitsProblem, setLimitsProblem] = useState<string | null>(null)
   const [straightChoice, setStraightChoice] = useState<boolean | null>(initial.straightChoice)
-  const appLogins = useAppLogins(canManage ? onCreateAppLogins : undefined, onReload)
+  const appLogins = useAppLogins(onCreateAppLogins, onReload, canManage)
   const [error, setError] = useState<string | null>(null)
   const [usernameHint, setUsernameHint] = useState<string | null>(null)
   const [working, setWorking] = useState(false)
@@ -412,34 +455,21 @@ export function ManagedUsersPanel({
     }
   }
 
-  if (appLogins.result) {
+  if (appLogins.result || revealedPassword) {
     return (
-      <SectionPanel title="Users & databases" hint="Engine users and databases">
-        <AppLoginsPasswords result={appLogins.result} onDone={appLogins.dismiss} />
-      </SectionPanel>
-    )
-  }
-
-  if (revealedPassword) {
-    return (
-      <SectionPanel title="Users & databases" hint="Engine users and databases">
-        <SecretReveal
-          username={revealedUsername}
-          password={revealedPassword}
-          onContinue={() => {
-            setRevealedPassword(null)
-            setRevealedUsername(null)
-          }}
-          continueLabel="Done"
-        />
-        {redeployRequired ? (
-          <RedeployServicesPanel
-            redeployRequired={redeployRequired}
-            onRedeploy={onRedeployService}
-            onDismiss={() => setRedeployRequired(null)}
-          />
-        ) : null}
-      </SectionPanel>
+      <PasswordsPanel
+        appLoginsResult={appLogins.result}
+        onAppLoginsDone={appLogins.dismiss}
+        username={revealedUsername}
+        password={revealedPassword}
+        onPasswordDone={() => {
+          setRevealedPassword(null)
+          setRevealedUsername(null)
+        }}
+        redeployRequired={redeployRequired}
+        onRedeploy={onRedeployService}
+        onDismissRedeploy={() => setRedeployRequired(null)}
+      />
     )
   }
 
