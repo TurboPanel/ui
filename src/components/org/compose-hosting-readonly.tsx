@@ -18,7 +18,7 @@ export function composeHostingBlockId(composeServiceName: string): string {
 }
 
 function focusedServiceFromUrl(): string | null {
-  if (Platform.OS !== 'web' || typeof globalThis.location === 'undefined') return null
+  if (Platform.OS !== 'web' || globalThis.location === undefined) return null
   return new URLSearchParams(globalThis.location.search).get(COMPOSE_HOSTING_FOCUS_PARAM)
 }
 
@@ -37,7 +37,7 @@ export function ComposeHostingReadOnly({ document }: Readonly<{ document: Compos
   const [showConfiguration, setShowConfiguration] = useState(focused !== null)
 
   useEffect(() => {
-    if (!focused || typeof globalThis.document === 'undefined') return
+    if (!focused || globalThis.document === undefined) return
     globalThis.document.getElementById(composeHostingBlockId(focused))?.scrollIntoView?.({
       block: 'center',
     })
