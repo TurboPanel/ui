@@ -1,6 +1,6 @@
 import type { Href } from 'expo-router'
 import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
-import { projectsHrefForScope } from '@/lib/workspace-scope'
+import { projectsListHref } from '@/lib/workspace-scope'
 
 export const ORG_AREAS = [
   {
@@ -44,10 +44,13 @@ export const ORG_AREAS = [
     ],
   },
   {
+    // Not in the sidebar: managed databases are listed on Projects (the
+    // Managed databases filter, which links to these settings). `/managed`
+    // redirects there; the area stays so `/managed/settings` resolves.
     id: 'managed',
     label: 'Managed',
     pathSegment: 'managed',
-    hint: 'Managed database and engine services across the organization',
+    hint: 'Managed databases, listed on Projects',
     subRoutes: [
       {
         id: 'settings',
@@ -165,12 +168,11 @@ export const ORG_SIDEBAR_AREA_IDS = [
 ] as const satisfies readonly OrgAreaId[]
 
 /**
- * Areas the redesign leaves as they are (managed databases, network, access).
- * They stay one click away in a quiet group under Recent projects so none of
- * their routes becomes a deep link only.
+ * Areas the redesign leaves as they are (network, access). They stay one click
+ * away in a quiet group under Recent projects so none of their routes becomes
+ * a deep link only. Managed databases are a filter on Projects instead.
  */
 export const ORG_SIDEBAR_MORE_AREA_IDS = [
-  'managed',
   'network',
   'access',
 ] as const satisfies readonly OrgAreaId[]
@@ -248,13 +250,19 @@ export function replaceOrganization(router: OrganizationReplaceRouter, href: Hre
   })
 }
 
+/**
+ * Where a bottom tab (or a swipe) goes. Projects keeps the workspace scope
+ * and the type filter (`?type=`) it was last left on, so going back to it
+ * from Activity or Servers shows the same list.
+ */
 export function orgTabHref(
   orgId: string,
   areaId: OrgTabAreaId,
-  projectsScopeId: string
+  projectsScopeId: string,
+  projectsType?: string | null
 ): OrgTabHref {
   if (areaId === 'projects') {
-    return projectsHrefForScope(orgId, projectsScopeId)
+    return projectsListHref(orgId, projectsScopeId, projectsType) as OrgTabHref
   }
   return orgAreaHref(orgId, areaId)
 }
@@ -263,7 +271,8 @@ export function adjacentOrgTabHref(
   pathname: string,
   orgId: string,
   direction: OrgTabSwipeDirection,
-  projectsScopeId: string
+  projectsScopeId: string,
+  projectsType?: string | null
 ): OrgTabHref | null {
   const path = orgPathWithoutQuery(pathname)
   const index = ORG_TAB_AREA_IDS.findIndex((areaId) => path === orgAreaHref(orgId, areaId))
@@ -275,7 +284,7 @@ export function adjacentOrgTabHref(
   if (!areaId) {
     return null
   }
-  return orgTabHref(orgId, areaId, projectsScopeId)
+  return orgTabHref(orgId, areaId, projectsScopeId, projectsType)
 }
 
 export function orgRouteHref(
@@ -289,6 +298,29 @@ export function orgRouteHref(
 /** Where an organization opens: its Projects. The old Overview route redirects here. */
 export function defaultOrgDashboardHref(orgId: string): `/${string}/projects` {
   return `/${orgId}/projects`
+}
+
+/** Organization defaults for managed databases (client TLS mode, listener ports). */
+export function managedSettingsHref(orgId: string): `/${string}/managed/settings` {
+  return `/${orgId}/managed/settings`
+}
+
+/**
+ * Where the retired `/managed` list goes: Projects with the Managed databases
+ * filter on, keeping the rest of the query (`?workspaceId=`). `params` is what
+ * `useLocalSearchParams` returns, so the `orgId` path param is dropped.
+ */
+export function managedListRedirectHref(
+  orgId: string,
+  params: Readonly<Record<string, string | readonly string[] | undefined>>
+): string {
+  const query = new URLSearchParams()
+  for (const [key, value] of Object.entries(params)) {
+    if (key === 'orgId' || key === 'type' || value === undefined) continue
+    for (const entry of typeof value === 'string' ? [value] : value) query.append(key, entry)
+  }
+  query.append('type', 'managed')
+  return `/${orgId}/projects?${query.toString()}`
 }
 
 /** Signed-in organization picker — searchable list, create, manage. */
@@ -387,12 +419,37 @@ export function projectRepositoriesHref(orgId: string): `/${string}/projects/rep
 
 /** Organization-owned GitHub Apps and GitLab applications. */
 
+/** Servers list shown after a server is removed, carrying its name for the notice. */
+export function serversRemovedHref(orgId: string, serverName: string): string {
+  return `/${orgId}/servers?removed=${encodeURIComponent(serverName)}`
+}
+
 export function serversDatacentersHref(orgId: string): `/${string}/servers/datacenters` {
   return `/${orgId}/servers/datacenters`
 }
 
 export function serversPendingKeysHref(orgId: string): `/${string}/servers/keys` {
   return `/${orgId}/servers/keys`
+}
+
+/** The phone's Search tab (the header search is an icon on narrow widths). */
+export function orgSearchHref(orgId: string): `/${string}/search` {
+  return `/${orgId}/search`
+}
+
+/** True on the Search tab's page. */
+export function isOrgSearchPath(pathname: string, orgId: string): boolean {
+  return orgPathWithoutQuery(pathname) === orgSearchHref(orgId)
+}
+
+/** The Servers list with the Add server steps already open (the search's "Add server"). */
+export function serversAddHref(orgId: string): `/${string}/servers?add=1` {
+  return `/${orgId}/servers?add=1`
+}
+
+/** True when the `add` query value asks for the Add server steps. */
+export function isAddServerRequest(value: string | readonly string[] | null | undefined): boolean {
+  return (typeof value === 'string' ? value : value?.[0]) === '1'
 }
 
 export function datacenterHref(

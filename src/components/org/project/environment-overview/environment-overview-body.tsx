@@ -20,7 +20,7 @@ import {
   projectEnvironmentHostingHref,
   projectEnvironmentSettingsHref,
   projectEnvironmentStorageHref,
-  projectServiceHref,
+  projectEnvironmentServiceHref,
 } from '@/lib/project-navigation'
 import {
   appRows,
@@ -42,7 +42,9 @@ function stationHref(ids: OverviewIds, source: OverviewSource): StationHref {
     if (target.kind === 'volume') return projectEnvironmentStorageHref(orgId, projectId, environmentId)
     if (target.id.startsWith('db:')) return projectEnvironmentBindingsHref(orgId, projectId, environmentId)
     const recordId = records.get(target.id)
-    return recordId === undefined ? null : projectServiceHref(orgId, projectId, recordId)
+    return recordId === undefined
+      ? null
+      : projectEnvironmentServiceHref(orgId, projectId, environmentId, recordId)
   }
 }
 
@@ -50,11 +52,15 @@ function rowHrefs(ids: OverviewIds): RowHrefs {
   const { orgId, projectId, environmentId } = ids
   return {
     service: (recordId) =>
-      recordId === undefined ? null : projectServiceHref(orgId, projectId, recordId),
+      recordId === undefined
+        ? null
+        : projectEnvironmentServiceHref(orgId, projectId, environmentId, recordId),
     data: (row) => {
       if (row.kind === 'volume') return projectEnvironmentStorageHref(orgId, projectId, environmentId)
       if (row.kind === 'database') return projectEnvironmentBindingsHref(orgId, projectId, environmentId)
-      return row.recordId === undefined ? null : projectServiceHref(orgId, projectId, row.recordId)
+      return row.recordId === undefined
+        ? null
+        : projectEnvironmentServiceHref(orgId, projectId, environmentId, row.recordId)
     },
   }
 }

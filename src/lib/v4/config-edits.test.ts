@@ -9,6 +9,7 @@ import {
   linuxUserEdit,
   planSave,
   remainingEdits,
+  removeVariableEdit,
   stageEdit,
   stagedEditFor,
   stagedNote,
@@ -16,6 +17,7 @@ import {
   unstageEdit,
   variableFacts,
   variableEdit,
+  variableUseOf,
   type SaveContext,
   type StagedEdit,
 } from './config-edits'
@@ -314,24 +316,36 @@ describe('planSave', () => {
     expect(planSave([goBackEdit(byKey('var:API_URL'), target)], context()).problems).toHaveLength(1)
   })
 
-  it('sets a variable for this environment: updates its own, or creates one like the project’s', () => {
+  it('sets a variable for this environment: updates its own, or creates one that stays secret like the project’s', () => {
     const edit = variableEdit({
       name: 'MODE',
       value: 'staging',
       secret: false,
-      forBuild: false,
-      forRuntime: true,
+      forBuild: true,
+      forRuntime: false,
       was: 'live',
     })
     const own = record('MODE', { environmentId: 'e1' })
     expect(planSave([edit], context({ environmentVariables: [own] })).steps[0]).toMatchObject({
       op: { type: 'update', id: own.id, body: { value: 'staging' } },
     })
+    const moved = variableEdit({
+      name: 'MODE',
+      value: 'staging',
+      secret: false,
+      forBuild: true,
+      forRuntime: false,
+      was: 'live',
+      useChanged: true,
+    })
+    expect(planSave([moved], context({ environmentVariables: [own] })).steps[0]).toMatchObject({
+      op: { body: { value: 'staging', forBuild: true, forRuntime: false } },
+    })
     const shared = record('MODE', {
       projectId: 'p1',
       isSecret: true,
-      forBuild: true,
-      forRuntime: false,
+      forBuild: false,
+      forRuntime: true,
     })
     expect(planSave([edit], context({ projectVariables: [shared] })).steps[0]).toMatchObject({
       op: {
@@ -347,8 +361,58 @@ describe('planSave', () => {
       },
     })
     expect(planSave([edit], context()).steps[0]).toMatchObject({
-      op: { type: 'create', body: { isSecret: false, forBuild: false, forRuntime: true } },
+      op: { type: 'create', body: { isSecret: false, forBuild: true, forRuntime: false } },
     })
+  })
+
+  it('changes only where a variable is used, keeping its saved value', () => {
+    const edit = variableEdit({
+      name: 'MODE',
+      value: null,
+      secret: true,
+      forBuild: true,
+      forRuntime: true,
+      was: 'Hidden',
+    })
+    expect(edit.now).toBe('Build and run')
+    const own = record('MODE', { environmentId: 'e1', isSecret: true })
+    const step = planSave([edit], context({ environmentVariables: [own] })).steps[0]
+    expect(step).toMatchObject({
+      op: { type: 'update', id: own.id, body: { forBuild: true, forRuntime: true } },
+    })
+    expect(step.kind === 'variable' && step.op.type === 'update' && 'value' in step.op.body).toBe(
+      false
+    )
+    const plan = planSave(
+      [edit],
+      context({ projectVariables: [record('MODE', { projectId: 'p1' })] })
+    )
+    expect(plan.steps).toEqual([])
+    expect(plan.problems).toEqual([
+      { key: 'var:MODE', reason: 'Enter a value for MODE to set it for this environment.' },
+    ])
+  })
+
+  it('says the new place next to a new value', () => {
+    const base = { name: 'A', secret: false, forBuild: true, forRuntime: false, was: '1' }
+    expect(variableEdit({ ...base, value: '2', useChanged: true }).now).toBe('2 · Build only')
+    expect(variableEdit({ ...base, value: '2' }).now).toBe('2')
+    expect(variableUseOf({ forBuild: false, forRuntime: false })).toBe('run')
+    expect(variableUseOf({ forBuild: true, forRuntime: true })).toBe('both')
+  })
+
+  it('removes this environment’s own variable, or says it is gone', () => {
+    const edit = removeVariableEdit({ name: 'MODE', was: 'x', inBase: false })
+    expect(edit).toMatchObject({ key: 'var:MODE', now: 'Removed' })
+    expect(stagedNote(edit)).toBe('Not saved yet: removed')
+    expect(removeVariableEdit({ name: 'MODE', was: 'x', inBase: true }).now).toBe('Base value')
+    const own = record('MODE', { environmentId: 'e1' })
+    expect(planSave([edit], context({ environmentVariables: [own] })).steps).toEqual([
+      { kind: 'variable', op: { type: 'delete', id: own.id }, editKeys: ['var:MODE'] },
+    ])
+    expect(planSave([edit], context()).problems).toEqual([
+      { key: 'var:MODE', reason: 'MODE is no longer set in this environment.' },
+    ])
   })
 
   it('sets a variable for this environment only and leaves the Base value alone', () => {
@@ -393,6 +457,66 @@ describe('planSave', () => {
   })
 })
 
+describe('planSave on the Base', () => {
+  const base = (extra: Partial<SaveContext> = {}) =>
+    context({ base: true, environmentCompose: doc({ services: { web: {} } }), ...extra })
+
+  it('creates a project variable, never an environment one', () => {
+    const edit = variableEdit({
+      name: 'API_URL',
+      value: 'https://api',
+      secret: false,
+      forBuild: true,
+      forRuntime: true,
+      was: 'Not set',
+    })
+    const own = record('API_URL', { environmentId: 'e1' })
+    expect(planSave([edit], base({ environmentVariables: [own] })).steps).toEqual([
+      {
+        kind: 'variable',
+        op: {
+          type: 'create',
+          body: {
+            projectId: 'p1',
+            key: 'API_URL',
+            value: 'https://api',
+            isSecret: false,
+            forBuild: true,
+            forRuntime: true,
+          },
+        },
+        editKeys: ['var:API_URL'],
+      },
+    ])
+  })
+
+  it('updates and removes the project’s own variable', () => {
+    const shared = record('MODE', { projectId: 'p1' })
+    const update = variableEdit({
+      name: 'MODE',
+      value: null,
+      secret: false,
+      forBuild: true,
+      forRuntime: false,
+      was: 'v',
+    })
+    expect(planSave([update], base({ projectVariables: [shared] })).steps[0]).toMatchObject({
+      op: { type: 'update', id: shared.id, body: { forBuild: true, forRuntime: false } },
+    })
+    const remove = removeVariableEdit({ name: 'MODE', was: 'v', inBase: false })
+    expect(planSave([remove], base({ projectVariables: [shared] })).steps).toEqual([
+      { kind: 'variable', op: { type: 'delete', id: shared.id }, editKeys: ['var:MODE'] },
+    ])
+  })
+
+  it('says the Base when the variable is gone', () => {
+    const remove = removeVariableEdit({ name: 'MODE', was: 'v', inBase: false })
+    expect(planSave([remove], base()).problems).toEqual([
+      { key: 'var:MODE', reason: 'MODE is no longer set on the Base.' },
+    ])
+  })
+})
+
 describe('remainingEdits', () => {
   it('keeps the edits whose steps have not run', () => {
     const a = linuxUserEdit({ serviceName: 'web', user: 'staging-web', was: 'website' })
@@ -423,13 +547,16 @@ describe('variableFacts', () => {
       forBuild: false,
       forRuntime: true,
       hasOwn: true,
+      inBase: true,
       editable: true,
     })
     expect(variableFacts('A', [], [shared])).toMatchObject({
       value: '1',
       forBuild: true,
       hasOwn: false,
+      inBase: true,
     })
+    expect(variableFacts('A', [own], [])).toMatchObject({ hasOwn: true, inBase: false })
     expect(variableFacts('B', [own], [shared])).toBeNull()
   })
 

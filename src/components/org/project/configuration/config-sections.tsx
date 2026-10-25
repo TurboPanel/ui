@@ -5,6 +5,7 @@ import {
   NewVariableEditor,
   VariableEditor,
 } from '@/components/org/project/configuration/row-editors'
+import { TextLink } from '@/components/ui/text-link'
 import type { EditingApi } from '@/components/org/project/configuration/editing'
 import {
   ActionButton,
@@ -30,7 +31,7 @@ import {
   type VariableRowModel,
 } from '@/lib/v4/config-view-model'
 import { goBackEdit, stagedEditFor, stagedNote } from '@/lib/v4/config-edits'
-import type { EditTarget } from '@/lib/v4/config-edits'
+import type { EditTarget, StagedEdit } from '@/lib/v4/config-edits'
 import { plural } from '@/lib/v4/text'
 
 const styles = themedStyles((p) => ({
@@ -51,7 +52,6 @@ const styles = themedStyles((p) => ({
   diff: { ...typeStyle('mono', 'mono'), color: p.text2 },
   was: { color: p.text3, textDecorationLine: 'line-through' },
   now: { color: p.text },
-  link: { ...typeStyle('bodyMedium', 'subhead'), color: p.link },
   problem: { ...typeStyle('body', 'footnote'), color: p.bad },
 }))
 
@@ -171,7 +171,7 @@ export function AppsSection({
   if (apps.length === 0) return null
   return (
     <View style={s.section}>
-      <SectionHeading title="Apps" note={plural(apps.length, 'app')} />
+      <SectionHeading title="Services" note={plural(apps.length, 'service')} />
       <ListGroup>
         <Rows
           rows={apps}
@@ -249,14 +249,11 @@ export function HostingSection({
                 }
                 chips={<SourceTag source={domain.tag.source} label={domain.tag.label} />}
                 trailing={
-                  <Pressable
-                    accessibilityRole="link"
+                  <TextLink
+                    label="Open"
                     accessibilityLabel={`Open ${domain.host} in a new tab`}
                     onPress={() => onOpenUrl(domain.url)}
-                    style={webPointer}
-                  >
-                    <Text style={s.link}>Open</Text>
-                  </Pressable>
+                  />
                 }
               />
             )}
@@ -325,7 +322,12 @@ function VariableRow({
         title={variable.name}
         sub={sub}
         value={variable.valueText}
-        chips={<SourceTag source={variable.tag.source} label={variable.tag.label} />}
+        chips={
+          <>
+            <SourceTag source={variable.tag.source} label={variable.tag.label} />
+            {staged ? <UnsavedTag /> : null}
+          </>
+        }
         trailing={
           <RowAction
             staged={staged !== undefined}
@@ -352,30 +354,87 @@ function VariableRow({
   )
 }
 
+/** Marks a row whose change is staged but not saved yet. */
+function UnsavedTag() {
+  return <SourceTag source="env" label="Unsaved" />
+}
+
+/** A variable added here and not saved yet: listed straight away, with Undo. */
+function PendingVariableRow({
+  edit,
+  editing,
+}: Readonly<{ edit: StagedEdit; editing: EditingApi }>) {
+  return (
+    <ListRow
+      title={edit.label}
+      sub={stagedNote(edit)}
+      value={edit.now}
+      chips={<UnsavedTag />}
+      trailing={
+        <RowAction
+          staged
+          canEdit={false}
+          editLabel="Edit"
+          editName={`Edit ${edit.label}`}
+          undoName={`Undo ${edit.label}`}
+          onUndo={() => editing.onUnstage(edit.key)}
+          onEdit={() => undefined}
+        />
+      }
+      accessibilityLabel={`${edit.label}, ${edit.now}, unsaved`}
+    />
+  )
+}
+
+/** Staged variable additions that have no row yet. */
+function pendingVariables(
+  variables: readonly VariableRowModel[],
+  editing: EditingApi | undefined
+): StagedEdit[] {
+  if (!editing) return []
+  const listed = new Set(variables.map((variable) => variable.key))
+  return editing.staged.filter((edit) => edit.kind === 'set-variable' && !listed.has(edit.key))
+}
+
+/** The variables list with its editors; the Base passes its own heading and words. */
 export function VariablesSection({
   variables,
   envName,
   editing,
+  title = 'Variables',
+  foot,
+  empty,
 }: Readonly<{
   variables: readonly VariableRowModel[]
   envName: string
   editing?: EditingApi
+  title?: string
+  foot?: string
+  empty?: Readonly<{ title: string; body: string }>
 }>) {
   const s = styles(usePalette())
   const [adding, setAdding] = useState(false)
+  const pending = pendingVariables(variables, editing)
   const add = editing ? (
     <ActionButton label="Add variable" size="sm" onPress={() => setAdding((value) => !value)} />
   ) : undefined
   return (
     <View style={s.section}>
-      <SectionHeading title="Variables" note={plural(variables.length, 'variable')} action={add} />
+      <SectionHeading
+        title={title}
+        note={plural(variables.length + pending.length, 'variable')}
+        action={add}
+      />
       <ListGroup
-        foot={`Variables set on the project reach every environment. A ${envName} change replaces the project value here only. Secret values are never shown.`}
+        foot={
+          foot ??
+          `Variables set on the project reach every environment. A ${envName} change replaces the project value here only. Secret values are never shown.`
+        }
         empty={
           <EmptyPanel
             inline
-            title="No variables"
-            body={`Nothing is set for ${envName} or for the project yet.`}
+            title={empty?.title ?? 'No variables'}
+            body={empty?.body ?? `Nothing is set for ${envName} or for the project yet.`}
           />
         }
       >
@@ -387,6 +446,11 @@ export function VariablesSection({
             )}
           />
         )}
+        {editing
+          ? pending.map((edit) => (
+              <PendingVariableRow key={edit.key} edit={edit} editing={editing} />
+            ))
+          : null}
         {adding && editing ? (
           <NewVariableEditor editing={editing} onClose={() => setAdding(false)} />
         ) : null}

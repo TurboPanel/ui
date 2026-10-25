@@ -1,5 +1,7 @@
 import { validateDescription, validateDisplayName } from '@/lib/display-name'
+import { readEnvironmentSourceBindings } from '@/lib/compose/environment-source-branch'
 import type {
+  EnvironmentRecord,
   ProjectRecord,
   RepositoryAutoDeploy,
   RepositoryRecord,
@@ -7,6 +9,7 @@ import type {
 } from '@/lib/instance-api'
 import { REPOSITORY_AUTO_DEPLOY_OPTIONS } from '@/lib/instance-api'
 import { repositoryLabel } from '@/lib/repository-label'
+import { pushDeployLine, type PushDeployLine } from '@/lib/v4/push-deploy'
 
 /** What the person typed in the General section. */
 export type ProjectGeneralDraft = Readonly<{ name: string; description: string }>
@@ -76,6 +79,46 @@ export function projectGitFacts(
   const row = repositories.find((repository) => repository.id === project.repositoryId)
   if (!row) return null
   return { repository: repositoryLabel(row), pushTiming: pushTimingLabel(row.autoDeploy) }
+}
+
+/** One environment's push-to-deploy sentence on Project Settings. */
+export type ProjectPushDeployRow = Readonly<{ environmentId: string; line: PushDeployLine }>
+
+/**
+ * Whether a push deploys each environment of a repository-backed project, in
+ * the same words Environment Settings uses. Only services built from the
+ * project's repository count; identical sentences in one environment are said
+ * once. Empty when the project has no repository or nothing builds from it.
+ */
+export function projectPushDeployRows(
+  project: ProjectRecord,
+  environments: readonly EnvironmentRecord[],
+  repositories: readonly RepositoryRecord[]
+): readonly ProjectPushDeployRow[] {
+  if (!project.repositoryId) return []
+  const repository = repositories.find((row) => row.id === project.repositoryId)
+  const rows: ProjectPushDeployRow[] = []
+  for (const environment of environments) {
+    const bindings = readEnvironmentSourceBindings({
+      projectCompose: project.options?.compose,
+      environmentCompose: environment.options?.compose,
+      repositoryDefaultBranch: (sourceId) =>
+        repositories.find((row) => row.id === sourceId)?.defaultBranch ?? null,
+    }).filter((binding) => binding.sourceId === project.repositoryId)
+    const seen = new Set<string>()
+    for (const binding of bindings) {
+      const line = pushDeployLine({
+        environment: environment.name?.trim() || 'this environment',
+        branch: binding.branch,
+        deployOnPush: binding.deployOnPush,
+        autoDeploy: repository?.autoDeploy ?? null,
+      })
+      if (seen.has(line.text)) continue
+      seen.add(line.text)
+      rows.push({ environmentId: environment.id, line })
+    }
+  }
+  return rows
 }
 
 /** Workspaces a project can move to, by name, the current one first. */

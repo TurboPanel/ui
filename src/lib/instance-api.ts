@@ -803,6 +803,8 @@ export type NtpDefaults = {
 export type OrgHostDefaults = {
   sshPort: number | null
   ntp: NtpDefaults | null
+  /** Hide web server names and versions; on unless set to false. */
+  hideWebServerNames: boolean
   defaultFabricEnabled: boolean
 }
 
@@ -957,6 +959,9 @@ export type OrgServerRecord = {
   /** Effective desired NTP settings (not the observed timeSync facts). */
   ntpDefaults: NtpDefaults | null
   ntpDefaultsSource: HostDefaultsSource | null
+  /** Effective web server name hiding (server → org → on). */
+  hideWebServerNames: boolean
+  hideWebServerNamesSource: HostDefaultsSource | null
   /** Datacenter memberships (IP pins); a server may belong to many. */
   datacenters: ServerDatacenterRef[]
 }
@@ -1000,6 +1005,8 @@ function normalizeOrgServer<T extends OrgServerRecord>(server: T): T {
     sshPortSource: server.sshPortSource ?? null,
     ntpDefaults: server.ntpDefaults ?? null,
     ntpDefaultsSource: server.ntpDefaultsSource ?? null,
+    hideWebServerNames: server.hideWebServerNames ?? true,
+    hideWebServerNamesSource: server.hideWebServerNamesSource ?? null,
   }
 }
 
@@ -1036,11 +1043,23 @@ export type ServerRemovalReasonKind =
   | 'slot'
   | 'copy'
   | 'colocated'
+  | 'present_elsewhere'
+
+import type { ServerBlockerItem, ServerDeleteBlocker } from '@/lib/server-delete-blockers'
+import { formatServerDeleteBlocker } from '@/lib/server-delete-blockers'
+
+export type {
+  ServerBlockerDatabaseItem,
+  ServerBlockerEnvironmentItem,
+  ServerBlockerItem,
+} from '@/lib/server-delete-blockers'
 
 export type ServerRemovalReason = {
   kind: ServerRemovalReasonKind
   count: number
   message: string
+  items?: ServerBlockerItem[]
+  more?: number
 }
 
 export type CappedPreviewList<T> = {
@@ -1122,10 +1141,11 @@ export async function fetchServerServices(serverId: string): Promise<ServerServi
 }
 
 /**
- * Owner-only (`organization:own`). Sets or clears `server.preferred_tier_id`
- * (`tierId` `null` clears the pick). The control plane recomputes the assigned
- * tier from spare licenses; **422** `tier_below_required` when the pick is under
- * the hardware floor; **404** `tier_not_found` / `server_not_licensed`.
+ * Owner-only (`organization:own`). Assigns this server a license at `tierId`
+ * from a free one there, or gives its license back (`null`). Nothing else moves:
+ * the control plane never assigns or moves a license on its own. **409**
+ * `no_free_seat` when no license is free at that tier; **404** `tier_not_found` /
+ * `server_not_licensed`.
  */
 export async function setServerLicenseTier(
   serverId: string,
@@ -1163,6 +1183,8 @@ export async function updateServer(
     options?: {
       sshPort?: number | null
       ntp?: NtpDefaults | null
+      /** `null` follows the organization setting. */
+      hideWebServerNames?: boolean | null
       hosting?: { enabled: boolean }
     }
     /** Location override; `null` resets every field to the detected value. */
@@ -2155,10 +2177,7 @@ export async function applyOrgFabric(orgId: string): Promise<FabricApplyResponse
 
 export type ServerDeleteBlockerKind = 'network' | 'container' | 'ip'
 
-export type ServerDeleteBlocker = {
-  kind: string
-  count: number
-}
+export type { ServerDeleteBlocker } from '@/lib/server-delete-blockers'
 
 export const SERVER_HAS_BLOCKERS_CODE = 'server_has_blockers'
 export const SERVER_ONLINE_CODE = 'server_online'
@@ -2180,6 +2199,36 @@ export type ServerDeletePreviewIp = {
   address: string
 }
 
+export type ServerDeletePreviewEnvironment = {
+  id: string
+  name: string
+  projectName: string
+}
+
+export type ServerDeletePreviewMember = {
+  id: string
+  databaseName: string
+}
+
+export type ServerDeleteBlockedDatabaseReason = 'only_member' | 'primary_here'
+
+export type ServerDeleteBlockedDatabase = {
+  id: string
+  name: string
+  reason: ServerDeleteBlockedDatabaseReason
+}
+
+export type ServerDeleteBlockedEnvironmentReason = 'present_elsewhere'
+
+export type ServerDeleteBlockedEnvironment = {
+  id: string
+  name: string
+  projectId: string
+  projectName: string
+  reason: ServerDeleteBlockedEnvironmentReason
+  serverNames: string[]
+}
+
 export type ServerDeletePreview = {
   online: boolean
   canForget: boolean
@@ -2188,16 +2237,29 @@ export type ServerDeletePreview = {
   containers: CappedPreviewList<ServerDeletePreviewContainer>
   networks: CappedPreviewList<ServerDeletePreviewNetwork>
   ips: CappedPreviewList<ServerDeletePreviewIp>
+  environments: CappedPreviewList<ServerDeletePreviewEnvironment>
+  members: CappedPreviewList<ServerDeletePreviewMember>
+  blockedDatabases: CappedPreviewList<ServerDeleteBlockedDatabase>
+  blockedEnvironments: CappedPreviewList<ServerDeleteBlockedEnvironment>
 }
 
 export class ServerDeleteBlockedError extends Error {
   readonly code = 'server_has_blockers'
   readonly blockers: ServerDeleteBlocker[]
+  readonly blockedDatabases: ServerDeleteBlockedDatabase[]
+  readonly blockedEnvironments: ServerDeleteBlockedEnvironment[]
 
-  constructor(message: string, blockers: ServerDeleteBlocker[]) {
+  constructor(
+    message: string,
+    blockers: ServerDeleteBlocker[],
+    blockedDatabases: ServerDeleteBlockedDatabase[] = [],
+    blockedEnvironments: ServerDeleteBlockedEnvironment[] = []
+  ) {
     super(message)
     this.name = 'ServerDeleteBlockedError'
     this.blockers = blockers
+    this.blockedDatabases = blockedDatabases
+    this.blockedEnvironments = blockedEnvironments
   }
 }
 
@@ -2223,20 +2285,73 @@ export class ServerDeleteOnlineError extends Error {
 }
 
 export function formatServerDeleteBlockerLine(kind: string, count: number): string {
-  if (kind === 'network') {
-    const label = count === 1 ? 'network' : 'networks'
-    return `Remove ${count} ${label} on this server before deleting it.`
+  return formatServerDeleteBlocker({ kind, count })
+}
+
+export { formatServerDeleteBlocker, serverBlockerItemName } from '@/lib/server-delete-blockers'
+
+export function formatBlockedDatabaseReason(name: string, reason: string): string {
+  if (reason === 'primary_here') {
+    return `Database "${name}" has its primary copy on this server. Promote another member or delete the database first.`
   }
-  if (kind === 'container') {
-    const label = count === 1 ? 'container' : 'containers'
-    return `Remove ${count} ${label} on this server before deleting it.`
+  return `Database "${name}" has its only copy on this server. Delete the database first.`
+}
+
+function joinQuotedNames(parts: readonly string[]): string {
+  if (parts.length <= 1) return parts[0] ?? ''
+  return `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}`
+}
+
+export function formatBlockedEnvironmentReason(
+  projectName: string,
+  environmentName: string,
+  serverNames: readonly string[],
+  reason: string
+): string {
+  if (reason !== 'present_elsewhere') return ''
+  const label =
+    projectName.trim().length > 0
+      ? `${projectName.trim()} / ${environmentName.trim()}`
+      : environmentName.trim()
+  const hosts = joinQuotedNames(serverNames.map((name) => `"${name}"`))
+  return `App "${label}" also runs on ${hosts}. Move or delete it first.`
+}
+
+function parseBlockedDatabases(value: unknown): ServerDeleteBlockedDatabase[] {
+  if (!Array.isArray(value)) return []
+  const rows: ServerDeleteBlockedDatabase[] = []
+  for (const item of value) {
+    if (typeof item !== 'object' || item === null) continue
+    const rec = item as Record<string, unknown>
+    if (typeof rec.id !== 'string' || typeof rec.name !== 'string') continue
+    if (rec.reason !== 'only_member' && rec.reason !== 'primary_here') continue
+    rows.push({ id: rec.id, name: rec.name, reason: rec.reason })
   }
-  if (kind === 'ip') {
-    const label = count === 1 ? 'address' : 'addresses'
-    return `Remove ${count} ${label} on this server before deleting it.`
+  return rows
+}
+
+function parseBlockedEnvironments(value: unknown): ServerDeleteBlockedEnvironment[] {
+  if (!Array.isArray(value)) return []
+  const rows: ServerDeleteBlockedEnvironment[] = []
+  for (const item of value) {
+    if (typeof item !== 'object' || item === null) continue
+    const rec = item as Record<string, unknown>
+    if (typeof rec.id !== 'string' || typeof rec.name !== 'string') continue
+    if (typeof rec.projectId !== 'string' || typeof rec.projectName !== 'string') continue
+    if (rec.reason !== 'present_elsewhere') continue
+    if (!Array.isArray(rec.serverNames)) continue
+    const serverNames = rec.serverNames.filter((name): name is string => typeof name === 'string')
+    if (serverNames.length === 0) continue
+    rows.push({
+      id: rec.id,
+      name: rec.name,
+      projectId: rec.projectId,
+      projectName: rec.projectName,
+      reason: 'present_elsewhere',
+      serverNames,
+    })
   }
-  const noun = count === 1 ? 'item' : 'items'
-  return `${count} other ${noun} still placed on this server — remove them first`
+  return rows
 }
 
 export function formatServerDeleteBlockedError(err: unknown): string {
@@ -2245,11 +2360,17 @@ export function formatServerDeleteBlockedError(err: unknown): string {
   }
   if (err instanceof ServerDeleteBlockedError) {
     const parts: string[] = []
+    for (const row of err.blockedDatabases) {
+      parts.push(formatBlockedDatabaseReason(row.name, row.reason))
+    }
+    for (const row of err.blockedEnvironments) {
+      parts.push(
+        formatBlockedEnvironmentReason(row.projectName, row.name, row.serverNames, row.reason)
+      )
+    }
     for (const blocker of err.blockers) {
-      if (typeof blocker.kind !== 'string' || typeof blocker.count !== 'number') {
-        continue
-      }
-      parts.push(formatServerDeleteBlockerLine(blocker.kind, blocker.count))
+      const line = formatServerDeleteBlocker(blocker)
+      if (line.length > 0) parts.push(line)
     }
     if (parts.length > 0) {
       return parts.join(' ')
@@ -2257,6 +2378,39 @@ export function formatServerDeleteBlockedError(err: unknown): string {
     return err.message
   }
   return err instanceof Error ? err.message : 'Failed to delete server'
+}
+
+function serverDeleteConflictError(
+  status: number,
+  body: Readonly<{
+    error?: string
+    code?: string
+    blockers?: ServerDeleteBlocker[]
+    blockedDatabases?: unknown
+    blockedEnvironments?: unknown
+  }>
+): Error | null {
+  if (status !== 409) return null
+  if (body.code === SERVER_ONLINE_CODE) {
+    return body.error ? new ServerDeleteOnlineError(body.error) : new ServerDeleteOnlineError()
+  }
+  if (body.code !== SERVER_HAS_BLOCKERS_CODE) return null
+  const blockers = Array.isArray(body.blockers) ? body.blockers : []
+  const blockedDatabases = parseBlockedDatabases(body.blockedDatabases)
+  const blockedEnvironments = parseBlockedEnvironments(body.blockedEnvironments)
+  if (
+    !Array.isArray(body.blockers) &&
+    blockedDatabases.length === 0 &&
+    blockedEnvironments.length === 0
+  ) {
+    return null
+  }
+  return new ServerDeleteBlockedError(
+    body.error ?? 'Cannot delete this server while dependent resources still exist',
+    blockers,
+    blockedDatabases,
+    blockedEnvironments
+  )
 }
 
 // --- Principals (organization list, server list, server removal) -------------
@@ -2270,6 +2424,7 @@ export type PrincipalUsage = Readonly<{
   storages: number
   secrets: number
   logins: number
+  folders: number
   otherPlacements: number
 }>
 
@@ -2336,7 +2491,7 @@ export async function fetchOrgPrincipals(
 export async function deleteOrgPrincipal(
   orgId: string,
   principalId: string
-): Promise<{ ok: true }> {
+): Promise<{ ok: true; reconciled?: PrincipalsReconcileOutcome }> {
   return await apiFetch(
     `${CLIENT_API}/organizations/${orgId}/principals/${principalId}`,
     { method: 'DELETE' },
@@ -2395,6 +2550,8 @@ async function serverDeleteError(response: Response, path: string): Promise<Erro
     error?: string
     code?: string
     blockers?: ServerDeleteBlocker[]
+    blockedDatabases?: unknown
+    blockedEnvironments?: unknown
   } = {}
   try {
     body = (await response.json()) as typeof body
@@ -2402,20 +2559,12 @@ async function serverDeleteError(response: Response, path: string): Promise<Erro
     // Non-JSON error body.
   }
 
-  if (response.status === 409 && body.code === SERVER_ONLINE_CODE) {
-    return body.error ? new ServerDeleteOnlineError(body.error) : new ServerDeleteOnlineError()
-  }
-
   if (isPrincipalChoiceRefusal(body.code)) {
     return new ServerPrincipalChoiceRefusedError(PRINCIPAL_CHOICE_REFUSED_MESSAGE)
   }
 
-  if (response.status === 409 && body.code === SERVER_HAS_BLOCKERS_CODE && body.blockers) {
-    return new ServerDeleteBlockedError(
-      body.error ?? 'Cannot delete this server while dependent resources still exist',
-      body.blockers
-    )
-  }
+  const conflict = serverDeleteConflictError(response.status, body)
+  if (conflict) return conflict
 
   const detail = body.error ?? `HTTP ${response.status}`
   return new Error(`${path} failed: ${detail}`)
@@ -2992,6 +3141,10 @@ export type BillingMutationResponse = {
   deferred?: boolean
   intentId?: string
   scheduleId?: string | null
+  /** Upgrade with a named server: that server, once it moved (`null` while `pending`). */
+  movedServerId?: string | null
+  /** Downgrade with a named server: the server that moves when the change lands. */
+  serverId?: string | null
 }
 
 /**
@@ -3157,6 +3310,8 @@ export async function upgradeBillingTier(body: {
   fromTierId: string
   toTierId: string
   prorationDate?: number
+  /** The one server that moves to `toTierId`; no other server moves. */
+  serverId?: string
 }): Promise<BillingMutationResponse> {
   return await billingPost(`${CLIENT_API}/billing/upgrade`, body)
 }
@@ -3165,6 +3320,8 @@ export async function upgradeBillingTier(body: {
 export async function downgradeBillingTier(body: {
   fromTierId: string
   toTierId: string
+  /** The one server that moves to `toTierId` at the period end; no other server moves. */
+  serverId?: string
 }): Promise<BillingMutationResponse> {
   return await billingPost(`${CLIENT_API}/billing/downgrade`, body)
 }
@@ -3270,8 +3427,12 @@ export type EnvironmentRecord = {
   /** Whole-server placement pin — single source of truth (not compose). */
   serverId: string | null
   metadata: Record<string, unknown> | null
-  /** `options.compose` is a versioned ComposeDocument. */
-  options: { compose?: ComposeDocument } | null
+  /**
+   * `options.compose` is a versioned ComposeDocument. `primaryHostname` is the
+   * hostname the header's Visit button opens (ignored once it is not one of
+   * the environment's hostnames).
+   */
+  options: { compose?: ComposeDocument; primaryHostname?: string | null } | null
   /**
    * True for the project's one primary environment: the landing, the status and
    * the source a new environment copies. Absent on an older control plane.
@@ -3282,6 +3443,26 @@ export type EnvironmentRecord = {
   createdAt: string
   updatedAt: string
 }
+
+export type ProjectKind = 'compose' | 'managed' | 'system'
+
+/** The fixed list of project icon keys the instance accepts. */
+export const PROJECT_ICON_KEYS = [
+  'cube',
+  'globe',
+  'cart',
+  'bolt',
+  'chat',
+  'chart',
+  'code',
+  'book',
+  'layers',
+  'mail',
+  'rocket',
+  'image',
+] as const
+
+export type ProjectIconKey = (typeof PROJECT_ICON_KEYS)[number]
 
 export type ProjectRecord = {
   id: string
@@ -3301,13 +3482,20 @@ export type ProjectRecord = {
    * names, so the create wizard does not have to send this field.
    */
   repositoryId: string | null
+  /**
+   * What the project is. `compose` also covers a template project (which
+   * carries `metadata.code`); `system` is platform-owned and read-only — this
+   * client never sends it on create or configure. `null` while the project is
+   * a draft that has not chosen yet.
+   */
+  kind: ProjectKind | null
+  /**
+   * Icon key from the fixed `PROJECT_ICON_KEYS` list, or `null` for the
+   * default. A managed project ignores it and always shows the managed icon.
+   */
+  icon: ProjectIconKey | null
   metadata: {
-    /**
-     * Read-side type stamp. `system` is platform-owned and read-only — this
-     * client never sends it on create or configure.
-     */
-    type?: 'docker-compose' | 'managed' | 'template' | 'empty' | 'system' | null
-    /** Managed engine catalog code (`postgres`, …). */
+    /** Catalog code of a template or managed engine project (`postgres`, …). */
     code?: string
     /**
      * Internal system-component idempotency key (e.g. `hosting-ingress`).
@@ -3608,7 +3796,7 @@ export type UseLetsEncryptResult = {
 
 export type TlsSource = 'upload' | 'lets_encrypt' | 'self_signed' | 'organization_ca'
 
-export type TlsStatus = 'ready' | 'pending' | 'expired' | 'failed' | 'revoked' | 'managed'
+export type TlsStatus = 'ready' | 'pending' | 'expired' | 'failed' | 'revoked' | 'automatic'
 
 export type TlsMetadata = {
   dnsNames: string[]
@@ -4107,7 +4295,8 @@ export async function updateEnvironment(
     metadata?: Record<string, unknown>
     /** Pin or unpin: pinned environments are listed right after the primary one. */
     pinned?: boolean
-    options?: { compose?: ComposeDocument }
+    /** Replaces the stored options: send every key to keep (the server keeps only its deploy settings). */
+    options?: { compose?: ComposeDocument; primaryHostname?: string | null }
   }
 ): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/environments/${id}`, {
@@ -4536,6 +4725,64 @@ export async function updateDatacenter(
   return await apiFetch(`${CLIENT_API}/datacenters/${id}`, {
     method: 'PATCH',
     body: JSON.stringify(body),
+  })
+}
+
+export type ServerTrafficLink = 'up' | 'down' | 'unknown'
+
+export type ServerTrafficNetworkState =
+  'chosen' | 'standby' | 'no_common_address' | 'link_down' | 'untrusted'
+
+/** One network two servers share (`GET /servers/:id/traffic-map`, `peers[].sharedNetworks[]`). */
+export type ServerTrafficMapNetwork = {
+  datacenterId: string
+  name: string | null
+  priority: number
+  trusted: boolean
+  state: ServerTrafficNetworkState
+  localAddress: string | null
+  peerAddress: string | null
+  localInterface: string | null
+  peerInterface: string | null
+  localLink: ServerTrafficLink
+  peerLink: ServerTrafficLink
+}
+
+export type ServerTrafficMapPeer = {
+  serverId: string
+  name: string | null
+  chosenDatacenterId: string | null
+  sharedNetworks: ServerTrafficMapNetwork[]
+}
+
+/** A network card on this server. Byte counters are not in this payload (see `metrics`). */
+export type ServerTrafficMapNic = {
+  name: string
+  link: ServerTrafficLink
+  defaultRoute: boolean
+  addresses: { address: string; datacenterId: string | null }[]
+}
+
+export type ServerTrafficMap = {
+  ok: true
+  generatedAt: string
+  serverId: string
+  nics: ServerTrafficMapNic[]
+  peers: ServerTrafficMapPeer[]
+  truncated: boolean
+}
+
+export async function fetchServerTrafficMap(serverId: string): Promise<ServerTrafficMap> {
+  return await apiFetch(`${CLIENT_API}/servers/${serverId}/traffic-map`)
+}
+
+/** Give this trusted network the lowest priority number; others move up. 409 when untrusted. */
+export async function chooseServerTrafficNetwork(
+  datacenterId: string
+): Promise<{ ok: true; changes: { datacenterId: string; before: number; after: number }[] }> {
+  return await apiFetch(`${CLIENT_API}/datacenters/${datacenterId}/server-traffic`, {
+    method: 'POST',
+    body: JSON.stringify({ preferred: true }),
   })
 }
 
@@ -5142,6 +5389,13 @@ export type UpgradeStepRow = {
   errorMessage?: string | null
   /** When the step last reported a stage (drives the "still waiting" hint). */
   lastStageAt?: string | null
+  /** Facts the control plane saves on a step; only the parts the screen reads. */
+  detail?: UpgradeStepDetail | null
+}
+
+/** Saved on a step whose host reported a restart error but came back on the new build. */
+export type UpgradeStepDetail = {
+  restartNote?: string
 }
 
 export type UpgradeRunRecord = {
@@ -5494,10 +5748,29 @@ export async function fetchAdminTiers(): Promise<{
  * Surfaced so the operator can see why such a price verifies.
  */
 export type AdminTierTaxDefaults = {
-  /** `inclusive`, `exclusive`, `inferred_by_currency` (Automatic), or null when unreadable or none set. */
+  /**
+   * How the lookup ended: `set`, `unset` (the provider answered with no
+   * default), `not_asked` (no price needed it), `permission_missing` (the
+   * key may not read tax settings) or `provider_error`. Absent from an
+   * older panel, which only sends `taxBehavior`.
+   */
+  outcome?: AdminTierTaxDefaultsOutcome
+  /** `inclusive`, `exclusive`, `inferred_by_currency` (Automatic), or null when not `set`. */
   taxBehavior: string | null
   /** `active` once the provider can calculate tax; `pending` while incomplete. */
   status: string | null
+  /** Why the provider refused, when it did: its status, type, code and any permission it names. */
+  error?: AdminTierTaxDefaultsError | null
+}
+
+export type AdminTierTaxDefaultsOutcome =
+  'set' | 'unset' | 'not_asked' | 'permission_missing' | 'provider_error'
+
+export type AdminTierTaxDefaultsError = {
+  status: number
+  type: string
+  code: string | null
+  permission: string | null
 }
 
 /** The provider's products with their default price and verification. **502** `product_lookup_failed`. */
@@ -6195,6 +6468,13 @@ export type CommandProgress = {
   /** Id of the running step, or null when none is running. */
   current: string | null
   updatedAt: string
+  /**
+   * Set by the control plane (never the server) when it has not heard from the
+   * server for several minutes while the deploy was running. It is checking
+   * with the server rather than calling the deploy failed; the field clears
+   * when the server is heard from again and is absent once the deploy ends.
+   */
+  contactLostAt?: string | null
 }
 
 /**
@@ -7118,7 +7398,8 @@ export type DeployPreviewSource = {
   /** Secret-free by contract on both wire parsers. */
   cloneUrl: string
   ref: string
-  commitSha: string
+  /** Omitted when the ref is a branch or tag name rather than a commit. */
+  commitSha?: string
   releaseId: string
   subdirectory?: string
 }
@@ -7697,15 +7978,15 @@ export type ProjectPrincipalRecord = {
   /** Scheme the system name was generated with. */
   nameScheme?: NameScheme
   projectId: string | null
-  metadata: { uid?: number; gid?: number; home?: string } | null
+  metadata: { uid?: number; gid?: number; home?: string; composeAlias?: string } | null
   options: Record<string, unknown> | null
   serviceIds: string[]
   /**
    * How this account may log in, as the operator set it.
    *
-   * Derived server-side from `options.shell` rather than stored separately —
-   * the shell *is* the access level, and two independent fields could disagree
-   * in a way nobody would notice until someone could not log in.
+   * Stored in the `principal.access` column. The host shell is derived from it
+   * server-side, never stored beside it, so the two cannot disagree in a way
+   * nobody would notice until someone could not log in.
    *
    * What actually happens also depends on {@link sshKeyCount}: with no keys
    * there is nothing to authenticate with, because password authentication is
@@ -7990,6 +8271,10 @@ export type EntityMetricScope =
   | 'router'
   | 'storage'
   | 'dockerUsage'
+  | 'extended.host'
+  | 'extended.docker'
+  | 'extended.ingress'
+  | 'extended.sizes'
   | 'network'
   | 'filesystem'
   | 'block'
@@ -8008,6 +8293,10 @@ const HOST_SINGLETON_ENTITY_SCOPES: ReadonlySet<EntityMetricScope> = new Set([
   'router',
   'storage',
   'dockerUsage',
+  'extended.host',
+  'extended.docker',
+  'extended.ingress',
+  'extended.sizes',
 ])
 
 /** Per-entity scope -> wire alias. Only `hardwareSignal` differs from its scope name. */
@@ -8181,8 +8470,6 @@ export type HostSeriesChartPoint = {
   expectedSampleCount?: number
   /** Seconds between stored samples in this bucket (collection interval × store sampling weight). */
   sampleSpacingSeconds?: number
-  /** `null`/absent means unknown or a mixed-generation bucket. */
-  topologyGeneration?: number | null
 }
 
 /** Resolved CPU thermal/power limits for headroom display. Mirrors `EffectiveCpuThermalLimits`. */
@@ -8210,14 +8497,6 @@ export type HostSeriesChartResponse = {
    */
   gapBuckets?: string[]
   points: HostSeriesChartPoint[]
-  /**
-   * Point indices where `topologyGeneration` differs from the previous known
-   * generation — a boundary marker for segmenting chart continuity without
-   * inferring it from raw generation numbers. Replaces v3's `generationBreaks`.
-   */
-  topologyGenerationBreaks: number[]
-  /** Distinct topology generations observed anywhere in the queried range. */
-  topologyGenerations?: number[]
 }
 
 /**
@@ -8277,11 +8556,12 @@ export type MetricsSeriesResponse = {
   /** One entry per requested per-entity family. */
   entities: EntitySeriesResult[]
   inventory: TopologyInventory | null
-  topologyGeneration: number | null
   cpuLimits: EffectiveCpuThermalLimits
   temperatureUnit: 'celsius' | 'fahrenheit'
   /** How many network interfaces this server may monitor (its effective NIC-slot count). */
   nicSlotLimit: number
+  /** Metrics layout number the panel serves; absent from older panels. */
+  layoutVersion?: number
 }
 
 export type MetricsSummaryResponse = {
@@ -8305,7 +8585,6 @@ export type FleetServerUsageRecord = {
   sampleCount: number
   /** Keyed by canonical name — see `FLEET_HOST_METRICS` for the requested set. */
   values: Partial<Record<string, number | null>>
-  topologyGeneration?: number | null
   derived: DerivedHostValues
 }
 
@@ -8389,6 +8668,16 @@ export type ConnectionHistoryChartResponse = {
   events: ConnectionStatusEvent[]
 }
 
+/** The panel has no such metrics route (an older panel): callers show "not available" for that card. */
+export class MetricsRouteMissingError extends Error {
+  readonly code = 'metrics_route_missing'
+
+  constructor(message: string) {
+    super(message)
+    this.name = 'MetricsRouteMissingError'
+  }
+}
+
 export class MetricsBackendUnavailableError extends Error {
   readonly code = 'metrics_backend_unavailable'
   readonly backend: MetricsBackendKind
@@ -8453,6 +8742,7 @@ async function fetchServerMetricsJson<T>(
       // Non-JSON error body.
     }
     const detail = formatFetchFailureDetail(response.status, bodyError)
+    if (response.status === 404) throw new MetricsRouteMissingError(`${path} failed: ${detail}`)
     throw new Error(`${path} failed: ${detail}`)
   }
 
@@ -8520,6 +8810,37 @@ export async function fetchServerMetricsEvents(
     serverId,
     'events',
     query,
+    organizationId
+  )
+}
+
+/** What a host last told us about itself: short text, never numbers (kernel, OS, versions, drive and GPU details). */
+export type HostFacts = {
+  /** Host-wide short text by name; only fields the host reported. */
+  text: Partial<Record<string, string>>
+  blockDevices: { deviceId: string; model?: string; smart?: string }[]
+  gpus: { gpuId: string; driver?: string; model?: string }[]
+}
+
+export type HostFactsResponse = {
+  ok: true
+  serverId: string
+  backend: MetricsBackendKind
+  available: boolean
+  /** When the sample the facts came from was taken; `null` when none is in the last day. */
+  sampledAt: string | null
+  facts: HostFacts
+}
+
+/** The newest host facts (kernel, OS, versions, drive and GPU text) for a server. */
+export async function fetchServerMetricsFacts(
+  serverId: string,
+  organizationId?: string | null
+): Promise<HostFactsResponse> {
+  return await fetchServerMetricsJson<HostFactsResponse>(
+    serverId,
+    'facts',
+    new URLSearchParams(),
     organizationId
   )
 }
@@ -9457,6 +9778,11 @@ export type BackupPolicyRecord = {
   preset: BackupSchedulePreset | null
   /** IANA zone; null means the host's local time. */
   timezone: string | null
+  /**
+   * The database each run dumps (managed engines). Null means the cluster's
+   * initial database. Absent on a control plane that predates the choice.
+   */
+  database?: string | null
   retentionKeep: number
   enabled: boolean
   /** True for the daily policy the instance creates with a new engine. */
@@ -9478,6 +9804,8 @@ export type CreateBackupPolicyBody = {
   name: string
   schedule: BackupScheduleInput
   timezone?: string | null
+  /** Managed engines only; null or left out means the cluster's initial database. */
+  database?: string | null
   retentionKeep: number
   enabled?: boolean
 }
@@ -9487,6 +9815,8 @@ export type UpdateBackupPolicyBody = Partial<{
   schedule: BackupScheduleInput
   /** null clears it (host local time). */
   timezone: string | null
+  /** null clears it (the cluster's initial database). */
+  database: string | null
   retentionKeep: number
   enabled: boolean
 }>
@@ -9627,7 +9957,8 @@ export type FirewallServerState = {
   confirmedAt: string | null
 }
 
-export type FirewallPreviewStatus = 'queued' | 'previewed' | 'refused' | 'failed'
+export type FirewallPreviewStatus =
+  'queued' | 'previewed' | 'applied' | 'removed' | 'refused' | 'failed'
 
 /**
  * What the host was last sent as a PREVIEW: rendered and checked by the kernel
@@ -10288,7 +10619,8 @@ export type OrganizationActivityItem = {
   environmentName: string | null
   serverId: string
   action: 'deploy' | 'start' | 'restart' | 'stop'
-  state: 'deploying' | 'failed'
+  /** `queued` is waiting to start; `deploying` is being worked on by the server. */
+  state: 'queued' | 'deploying' | 'failed'
   startedAt: string
   /** Steps done so far (plus the running one) and steps planned; null before the daemon reports a plan. */
   step: number | null

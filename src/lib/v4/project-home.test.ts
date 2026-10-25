@@ -24,6 +24,7 @@ import {
   lastDeployPart,
   miniMapColumns,
   nativeDeployKey,
+  nativeRunningKey,
   newEnvironmentBody,
   reachNames,
   runningStatusKey,
@@ -180,8 +181,18 @@ describe('native apps (no container rows)', () => {
     expect(nativeDeployKey(group({ status: 'failed' }))).toBe('failed')
     expect(nativeDeployKey(group({ status: 'running' }))).toBe('deploying')
   })
-  it('shows a succeeded deploy as deployed, not never deployed', () => {
-    expect(runningStatusKey([], { latest: group({ status: 'succeeded' }) })).toBe('deployed')
+
+  it('says what runs now in the header words: running, starting, or the deploy word', () => {
+    expect(nativeRunningKey(undefined)).toBeUndefined()
+    expect(nativeRunningKey(null)).toBe('never')
+    expect(nativeRunningKey(group({ status: 'succeeded' }))).toBe('running')
+    expect(nativeRunningKey(group({ status: 'running' }))).toBe('busy')
+    expect(nativeRunningKey(group({ status: 'queued' }))).toBe('busy')
+    expect(nativeRunningKey(group({ status: 'failed' }))).toBe('failed')
+  })
+  it('shows a succeeded deploy as running, in the header word, not never deployed', () => {
+    expect(runningStatusKey([], { latest: group({ status: 'succeeded' }) })).toBe('running')
+    expect(runningStatusKey([], { latest: group({ status: 'running' }) })).toBe('busy')
     expect(runningStatusKey([], { latest: group({ status: 'failed' }) })).toBe('failed')
     expect(runningStatusKey([], { latest: null })).toBe('never')
     expect(runningStatusKey([], { latest: undefined })).toBeUndefined()
@@ -197,7 +208,7 @@ describe('native apps (no container rows)', () => {
     expect(serviceStatusKey([], { latest: null })).toBeNull()
     expect(serviceStatusKey([], { latest: undefined })).toBeNull()
   })
-  it('puts it on the card: native apps deployed, container apps untouched', () => {
+  it('puts it on the card: native apps running, container apps untouched', () => {
     const native: EnvironmentConfigViewResponse = {
       ok: true,
       environmentId: 'e',
@@ -216,7 +227,7 @@ describe('native apps (no container rows)', () => {
       serverLine: 'x',
       now: NOW,
     })
-    expect(data.running).toEqual({ status: 'deployed' })
+    expect(data.running).toEqual({ status: 'running' })
     const apps = data.columns?.find((column) => column.key === 'apps')
     expect(apps?.items[0]?.status).toBe('deployed')
   })
@@ -543,6 +554,23 @@ describe('environment card data', () => {
     const apps = data.columns?.find((column) => column.key === 'apps')
     expect(apps?.items[0]).toEqual({ name: 'web', status: 'running', changed: true })
     expect(apps?.items[1]).toEqual({ name: 'worker', status: 'deployed', changed: false })
+  })
+
+  it('visits the primary hostname the header opens before the config domain', () => {
+    const card = (primaryHostname: string | null | undefined) =>
+      environmentCardData({
+        name: 'Production',
+        containers: [],
+        view,
+        latest: group({}),
+        serverLine: '',
+        now: NOW,
+        hostingDomains: ['website'],
+        primaryHostname,
+      }).visitHost
+    expect(card('turbopanel.io')).toBe('turbopanel.io')
+    expect(card(null)).toBe('example.com')
+    expect(card(undefined)).toBe('example.com')
   })
 
   it('badges the primary and the pinned environment', () => {

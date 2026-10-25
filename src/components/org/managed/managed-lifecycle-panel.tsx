@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { panelStyles } from '@/components/ui/panel-styles'
-import { Button, ButtonRow, SectionPanel, TextField } from '@/components/ui'
+import { Button, ButtonRow, TextField } from '@/components/ui'
+import { SectionHeading } from '@/components/ui/v4'
 import type { ManagedStatus } from '@/lib/managed-services'
 import { colors, spacing } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
@@ -12,7 +13,6 @@ export function ManagedLifecyclePanel({
   canManage,
   busy,
   onLifecycle,
-  onApply,
   onDelete,
 }: Readonly<{
   status: ManagedStatus
@@ -20,7 +20,6 @@ export function ManagedLifecyclePanel({
   canManage: boolean
   busy: boolean
   onLifecycle: (action: 'start' | 'stop' | 'restart') => Promise<void>
-  onApply: () => Promise<void>
   onDelete: () => Promise<void>
 }>) {
   const [confirmText, setConfirmText] = useState('')
@@ -44,18 +43,24 @@ export function ManagedLifecyclePanel({
     }
   }
 
+  const heading = (
+    <SectionHeading title="Danger zone" note="Start, stop or destroy the database" danger />
+  )
+
   if (!canManage) {
     return (
-      <SectionPanel title="Lifecycle" hint="Start, stop, apply, or delete">
+      <View style={styles.root}>
+        {heading}
         <Text style={panelStyles.muted}>
-          You need manage permission to change lifecycle.
+          You need manage permission to start, stop or destroy the database.
         </Text>
-      </SectionPanel>
+      </View>
     )
   }
 
   return (
-    <SectionPanel title="Lifecycle" hint="Start, stop, apply, or delete">
+    <View style={styles.root}>
+      {heading}
       {error ? <Text style={panelStyles.error}>{error}</Text> : null}
       <ButtonRow>
         <Button
@@ -80,15 +85,7 @@ export function ManagedLifecyclePanel({
           }}
         />
         <Button
-          label="Apply changes"
-          variant="primary"
-          disabled={applying}
-          onPress={() => {
-            void run(onApply)
-          }}
-        />
-        <Button
-          label="Delete"
+          label="Destroy database"
           variant="danger"
           disabled={applying}
           onPress={() => setShowDelete((current) => !current)}
@@ -98,8 +95,8 @@ export function ManagedLifecyclePanel({
       {showDelete ? (
         <View style={styles.deleteBox}>
           <Text style={styles.deleteCopy}>
-            Type <Text style={styles.confirmName}>{projectName}</Text> to
-            permanently delete this managed service.
+            Type <Text style={styles.confirmName}>{projectName}</Text> to destroy this database and
+            its data for good. The environment stays.
           </Text>
           <TextField
             label="Confirmation"
@@ -135,11 +132,14 @@ export function ManagedLifecyclePanel({
           </ButtonRow>
         </View>
       ) : null}
-    </SectionPanel>
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
+  root: {
+    gap: spacing.sm,
+  },
   deleteBox: {
     marginTop: spacing.md,
     gap: spacing.sm,

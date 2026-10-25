@@ -24,7 +24,7 @@ type HtmlSelect = {
 
 /**
  * Project-level default server pin for the compose Overview editor toolbar.
- * Empty state is a muted "+ Set Default Project Server (Optional)" button that
+ * Empty state is a muted "+ Set a default server (optional)" button that
  * opens the native server picker (no custom dropdown / chevron). Writes
  * `project.options.defaultServerId`.
  */
@@ -155,11 +155,11 @@ export function ProjectServerHeaderControl() {
           hitSlop={{ top: 4, bottom: 4 }}
           onPress={openPicker}
           accessibilityRole="button"
-          accessibilityLabel="Set default project server (optional)"
+          accessibilityLabel="Set a default server (optional)"
         >
           <Text style={styles.addPlus}>+</Text>
           <Text style={styles.addLabel} numberOfLines={1}>
-            Set Default Project Server (Optional)
+            Set a default server (optional)
           </Text>
         </Pressable>
       )}

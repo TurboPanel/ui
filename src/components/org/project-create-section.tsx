@@ -1,16 +1,15 @@
 import { useLocalSearchParams, useRouter, type Href } from 'expo-router'
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { GlassSurface } from '@/components/glass/glass-surface'
+import { useEffect, useMemo, useState } from 'react'
+import { StyleSheet, View } from 'react-native'
 import { SystemManagedNotice } from '@/components/org/system-managed-notice'
-import { panelStyles } from '@/components/ui/panel-styles'
 import { CatalogStep } from '@/components/org/project-create/catalog-step'
 import { RepositoryLaneStep } from '@/components/org/project-create/repository-lane-step'
-import { StartOverBar } from '@/components/org/project-create/start-over-bar'
 import { ComposeStep } from '@/components/org/project-create/compose-step'
 import { DetailsStep } from '@/components/org/project-create/details-step'
+import { NewProjectScreen } from '@/components/org/project-create/new-project-screen'
 import {
   parseRepositoryCompose,
+  projectAccountAlias,
   seedComposeForLane,
   seedHostingCompose,
 } from '@/lib/project-create/repository-seed'
@@ -29,8 +28,12 @@ import {
 } from '@/lib/project-create/simple-app'
 import { RepositoryStep } from '@/components/org/project-create/repository-step'
 import { resolveWizardSelectedSource } from '@/lib/project-create/selected-source'
+import {
+  afterCreateHref,
+  moreWaysOpenFor,
+  primaryActionForChoice,
+} from '@/lib/project-create/new-project-flow'
 import { useDebouncedValue } from '@/lib/use-debounced-value'
-import { SetupTypeChoiceCard } from '@/components/org/project-create/setup-type-icons'
 import {
   SETUP_TYPE_OPTIONS,
   setupOptionForChoice,
@@ -44,7 +47,7 @@ import {
   type FieldErrors,
   type WorkspaceMode,
 } from '@/components/org/project-create/validation'
-import { Button, ButtonRow } from '@/components/ui'
+import { SectionHeading } from '@/components/ui/v4'
 import {
   emptyComposeDocument,
   isBlankComposeData,
@@ -60,31 +63,21 @@ import {
   useRepositories,
   useWorkspaces,
 } from '@/lib/queries'
-import {
-  environmentFieldValue,
-  environmentNamePayload,
-} from '@/components/org/project-create/environment-name'
 import { useOrgDefaultEnvironmentName } from '@/lib/org-default-environment'
-import { DRAFT_REPOSITORY_APP_TAB_IDS, projectHref } from '@/lib/project-navigation'
 import type { RepositoryInspection, RepositoryRecord } from '@/lib/instance-api'
 import { userWorkspaces } from '@/lib/system-inventory'
-import { colors, spacing, webPointer } from '@/lib/theme'
+import { spacing } from '@/lib/theme'
 import { ALL_WORKSPACES_SCOPE } from '@/lib/workspace-scope'
 import { useOptionalWorkspaceScope } from '@/lib/workspace-scope-context'
 import { userErrorMessage } from '@/lib/user-error'
 
-const FORM_MAX_WIDTH = 440
-/** The setup step is wider so the option descriptions have room. */
-const TYPE_STEP_MAX_WIDTH = 640
-
 /**
- * Wizard position. Nothing is persisted until the final step's Create button,
- * so every step is freely reversible. The repository step owns everything
- * about the picked repository — pick it, name the branch, read it. The lane
- * step ("What is this?") then asks what the read found, with the evidence for
- * each answer, and carries the Simple-application settings.
+ * Wizard position. `setup` is the one new-project screen (name, workspace,
+ * where it comes from, and the repository, lane or catalog pick inline).
+ * `compose` is the Compose editor that Compose, Service forms and Hosting
+ * upload open before Create. Nothing is written until Create.
  */
-type Step = 'details' | 'type' | 'repository' | 'lane' | 'catalog' | 'compose'
+type Step = 'setup' | 'compose'
 
 function resolveScopedWorkspaceId(
   paramWorkspaceId: string | string[] | undefined,
@@ -106,14 +99,13 @@ function resolveLoadError(workspacesError: unknown, projectsError: unknown): str
 }
 
 /**
- * `?type=managed` from the managed overview CTA jumps past the type cards.
- * Accepts either a card id (`services`, `repository`) or a project type
- * (`docker-compose`); a bare project type resolves to the first card offering
- * it.
+ * `?type=managed` from the managed CTAs picks a card up front. Accepts either
+ * a card id (`services`, `repository`) or a project type (`docker-compose`); a
+ * bare project type resolves to the first card offering it.
  *
- * Card ids are matched first and separately. Three cards are `docker-compose`
- * now, and a bare `?type=docker-compose` has always meant the blank YAML slate
- * — resolving it by card order alone would let whichever compose card happens
+ * Card ids are matched first and separately. Four cards are `docker-compose`,
+ * and a bare `?type=docker-compose` has always meant the blank YAML slate —
+ * resolving it by card order alone would let whichever compose card happens
  * to sit first quietly take over every existing link.
  */
 function parsePreselectedChoice(value: string | string[] | undefined): SetupChoice | null {
@@ -131,57 +123,14 @@ function createErrorMessage(error: string | null | undefined): string | null {
   return conflictOrRawError(error)
 }
 
-function stepForOption(option: SetupTypeOption): Step {
-  // Routed off `choice`, never `type`: three cards are `docker-compose`, and
-  // the repository one needs its picker before the compose surface opens.
-  if (option.choice === 'repository') return 'repository'
-  return option.type === 'docker-compose' ? 'compose' : 'catalog'
-}
-
-const STEP_COPY: Record<Step, { title: string; hint: string }> = {
-  details: {
-    title: 'New Project',
-    hint: '',
-  },
-  type: {
-    title: 'Project Setup',
-    hint: "Choose where your project's files come from.",
-  },
-  repository: {
-    title: 'Link a repository',
-    hint: 'Pick it and the branch to deploy. Nothing is created yet.',
-  },
-  lane: {
-    title: 'What is this?',
-    hint: "Here is what TurboPanel found in the repository. Pick the one that's right.",
-  },
-  catalog: { title: 'Choose a service', hint: '' },
-  compose: { title: '', hint: '' },
-}
-
-function stepTitle(step: Step, option: SetupTypeOption | null): string {
-  if (step === 'catalog') {
-    return option?.type === 'template' ? 'Choose a template' : 'Choose a database'
-  }
-  return STEP_COPY[step].title
-}
-
-function resolveSelectedOption(choice: SetupChoice | null): SetupTypeOption | null {
-  if (!choice) return null
-  return setupOptionForChoice(choice) ?? null
-}
-
 function asError(error: unknown): Error | null {
   return error instanceof Error ? error : null
 }
 
-function isCatalogStep(
-  step: Step,
-  option: SetupTypeOption | null
-): option is SetupTypeOption & {
+function isCatalogOption(option: SetupTypeOption | null): option is SetupTypeOption & {
   type: Exclude<SetupTypeOption['type'], 'docker-compose'>
 } {
-  return step === 'catalog' && option != null && option.type !== 'docker-compose'
+  return option != null && option.type !== 'docker-compose'
 }
 
 /**
@@ -191,31 +140,6 @@ function isCatalogStep(
  * branch". Leaving the field reads at once.
  */
 const BRANCH_READ_DEBOUNCE_MS = 500
-
-function canContinueFromStep(
-  step: Step,
-  selectedOption: SetupTypeOption | null,
-  builder: RepositoryBuilder | null,
-  selectedSource: RepositoryRecord | null,
-  inspectionPending: boolean
-): boolean {
-  if (step === 'type') return selectedOption != null
-  // The repository screen ends once the read has landed (or failed); the lane
-  // screen ends once an answer is chosen — everything the seed needs is there.
-  if (step === 'repository') return selectedSource != null && !inspectionPending
-  return selectedSource != null && builder != null
-}
-
-/**
- * The read fires the moment a repository is picked — it costs a provider
- * round-trip or a clone on a connected server, but making the operator press
- * a second button to start it, right after the pick that already committed
- * them to this repository, was pure friction. Keyed by branch, so editing
- * the production branch afterwards re-reads at the new ref.
- */
-function sourceInspectionEnabled(step: Step, sourceId: string): boolean {
-  return (step === 'repository' || step === 'lane') && sourceId.length > 0
-}
 
 /**
  * Compose seed for the chosen lane, built from what the repository read found.
@@ -229,7 +153,8 @@ function seedForRepositoryLane(
   branch: string,
   lane: RepositoryLane,
   inspection: RepositoryInspection | undefined,
-  simple: SimpleAppConfig
+  simple: SimpleAppConfig,
+  projectName: string
 ): ComposeDocument {
   const files = inspection?.files ?? []
   const composePath = detectedComposePath(files)
@@ -245,6 +170,7 @@ function seedForRepositoryLane(
     source,
     branch,
     lane: lane === 'compose' && !repositoryCompose ? 'static' : lane,
+    principalAlias: projectAccountAlias(projectName),
     ...(repositoryCompose ? { repositoryCompose } : {}),
     ...(root ? { root } : {}),
     simple: {
@@ -256,65 +182,19 @@ function seedForRepositoryLane(
   })
 }
 
-/**
- * Back's destination. A seeded draft steps back to the screen it came from, so
- * the repository, branch, and builder settings are still there to change
- * rather than being re-chosen blind. `?type=` only skips the type cards on
- * the way forward — Back always walks through them, so a pinned type is
- * still switchable.
- */
-function resolveBackStep(step: Step, selectedChoice: SetupChoice | null): Step {
-  if (step === 'type') return 'details'
-  if (step === 'compose' && selectedChoice === 'repository') return 'lane'
-  if (step === 'lane') return 'repository'
-  return 'type'
-}
-
-/** Simple-application repository drafts skip YAML and open on the overview. */
-function isRepositorySimpleAppDraft(
-  choice: SetupChoice | null,
-  builder: RepositoryBuilder | null,
-  kind: SimpleAppConfig['kind']
-): boolean {
-  return choice === 'repository' && builder === 'simple' && kind === 'web'
-}
-
-function composeStepInitialSection(
-  repositoryAppDraft: boolean,
-  option: SetupTypeOption | null
-): SetupTypeOption['section'] {
-  if (repositoryAppDraft) return 'overview'
+/** The Compose editor opens on the tab the card promised. */
+function composeStepInitialSection(option: SetupTypeOption | null): SetupTypeOption['section'] {
   return option?.section ?? 'compose'
 }
 
-function composeDraftRepositoryId(sourceId: string): string | null {
-  return sourceId.length > 0 ? sourceId : null
-}
-
-function composeStepSections(repositoryAppDraft: boolean) {
-  if (!repositoryAppDraft) return undefined
-  return DRAFT_REPOSITORY_APP_TAB_IDS
-}
-
 /**
- * Create-project wizard: details → type → (compose draft | catalog pick) →
- * Create. The project, its workspace, and its environment are only written on
- * the final Create press, so backing out of a mis-clicked type leaves no
+ * Create-project screen, then (for Compose, Service forms and Hosting upload)
+ * the Compose editor. The project, its workspace and its environment are
+ * only written on Create, so backing out of a mis-clicked card leaves no
  * half-made project to clean up.
  */
 export function ProjectCreateSection({ orgId }: Readonly<{ orgId: string }>) {
-  // Start over remounts the wizard, which drops every field, pick and draft in
-  // one step instead of resetting twenty pieces of state by hand.
-  const [run, setRun] = useState(0)
-  return (
-    <ProjectCreateWizard
-      key={run}
-      orgId={orgId}
-      onStartOver={() => {
-        setRun((value) => value + 1)
-      }}
-    />
-  )
+  return <ProjectCreateWizard orgId={orgId} />
 }
 
 /** Keeps the workspace mode and pick in step with what loaded and the URL scope. */
@@ -368,42 +248,37 @@ function useWorkspaceSelectionDefaults({
   }, [workspaces, pickedWorkspaceId, scopedWorkspaceId, allowedWorkspaceIds, setPickedWorkspaceId])
 }
 
-function ProjectCreateWizard({
-  orgId,
-  onStartOver,
-}: Readonly<{ orgId: string; onStartOver: () => void }>) {
+function ProjectCreateWizard({ orgId }: Readonly<{ orgId: string }>) {
   const router = useRouter()
   const params = useLocalSearchParams<{ workspaceId?: string; type?: string }>()
   const workspaceScope = useOptionalWorkspaceScope()
-  const { defaultEnvironmentName, customDefaultEnvironmentName } =
-    useOrgDefaultEnvironmentName(orgId)
+  const { defaultEnvironmentName } = useOrgDefaultEnvironmentName(orgId)
 
   const workspacesQuery = useWorkspaces(orgId)
   const projectsQuery = useProjects(orgId)
   const createWorkspace = useCreateWorkspace(orgId)
   const createProject = useCreateProject(orgId)
 
-  const [step, setStep] = useState<Step>('details')
-  const [selectedChoice, setSelectedChoice] = useState<SetupChoice | null>(null)
+  const [step, setStep] = useState<Step>('setup')
+  /** A `?type=` link picks its card up front; every card stays switchable. */
+  const [selectedChoice, setSelectedChoice] = useState<SetupChoice | null>(() =>
+    parsePreselectedChoice(params.type)
+  )
+  const [moreOpen, setMoreOpen] = useState(() => moreWaysOpenFor(selectedChoice))
   const [selectedCode, setSelectedCode] = useState('')
   /** Repository card: the picked source id and ref, until they seed the draft. */
   const [selectedSourceId, setSelectedSourceId] = useState('')
   const [attachedSource, setAttachedSource] = useState<RepositoryRecord | null>(null)
   const [repositoryBranch, setRepositoryBranch] = useState('')
   /**
-   * `sourceId@branch` the current draft was seeded from. Re-seeding on every
-   * Continue would discard whatever the operator did on the compose surface
-   * after a Back that changed neither.
+   * The card the Compose editor's draft was seeded for. Coming back to this
+   * screen and continuing with the same card keeps whatever was edited there.
    */
-  const [seededRepositoryKey, setSeededRepositoryKey] = useState('')
+  const [seededChoice, setSeededChoice] = useState<SetupChoice | null>(null)
   /** Seed document handed to the editor; edits come back via onDraftChange. */
   const [composeDoc, setComposeDoc] = useState<ComposeDocument>(() => emptyComposeDocument())
-  /** Latest editor draft — `null` while the YAML does not parse. */
   const [displayName, setDisplayName] = useState('')
   const [description, setDescription] = useState('')
-  /** `null` until edited, so the field follows the org default as it loads. */
-  const [editedEnvironmentName, setEditedEnvironmentName] = useState<string | null>(null)
-  const environmentName = environmentFieldValue(editedEnvironmentName, customDefaultEnvironmentName)
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('existing')
   const [pickedWorkspaceId, setPickedWorkspaceId] = useState('')
   const [newWorkspaceName, setNewWorkspaceName] = useState('')
@@ -417,26 +292,26 @@ function ProjectCreateWizard({
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [apiError, setApiError] = useState<string | null>(null)
 
-  const preselectedChoice = parsePreselectedChoice(params.type)
-  const selectedOption = resolveSelectedOption(selectedChoice)
+  const selectedOption = selectedChoice ? (setupOptionForChoice(selectedChoice) ?? null) : null
+  const repositoryPicked = selectedChoice === 'repository'
 
   const catalogQuery = useProjectCatalog(orgId, {
-    enabled: step === 'catalog',
+    enabled: isCatalogOption(selectedOption),
   })
 
   /**
-   * Same query the repository step renders from — one key, one cache entry, so
-   * holding it here costs no extra fetch. Only the id lives in wizard state and
-   * the record is resolved from *this* list, so a repository disconnected while
-   * the wizard was open disables Continue instead of seeding a draft bound to a
-   * source the org no longer has.
+   * Same query the repository section renders from — one key, one cache
+   * entry, so holding it here costs no extra fetch. Only the id lives in
+   * wizard state and the record is resolved from *this* list, so a repository
+   * disconnected while the screen was open disables Continue instead of
+   * seeding a project bound to a source the org no longer has.
    */
-  const repositoriesQuery = useRepositories(orgId, { enabled: step === 'repository' })
+  const repositoriesQuery = useRepositories(orgId, { enabled: repositoryPicked })
   /**
    * True while the repository picker's clone-URL lane owns the screen. That
-   * lane ends in its own Connect and Back, so the wizard's own footer is
-   * hidden rather than stacking a second Back and a Continue that can never
-   * be pressed (nothing is picked yet) on top of it.
+   * lane ends in its own Connect and Back, so the screen's own footer is
+   * hidden rather than stacking a Cancel and a Continue that can never be
+   * pressed (nothing is picked yet) under it.
    */
   const [cloneUrlLaneOpen, setCloneUrlLaneOpen] = useState(false)
   const [builder, setBuilder] = useState<RepositoryBuilder | null>(null)
@@ -444,9 +319,9 @@ function ProjectCreateWizard({
     suggestedSimpleAppConfig(undefined)
   )
   /**
-   * True after any manual edit of the Simple form. Suggestions only ever fill
-   * a pristine form: a re-read (branch change, refetch) must not overwrite
-   * what the operator typed.
+   * True after any manual edit of the build settings. Suggestions only ever
+   * fill a pristine form: a re-read (branch change, refetch) must not
+   * overwrite what the operator typed.
    */
   const [simpleConfigTouched, setSimpleConfigTouched] = useState(false)
   // The Node version is applied from the read unless the operator changed that field.
@@ -454,13 +329,14 @@ function ProjectCreateWizard({
   const typedBranch = repositoryBranch.trim()
   const [settledBranch, settleBranch] = useDebouncedValue(typedBranch, BRANCH_READ_DEBOUNCE_MS)
   /**
-   * The field is ahead of the last read: Continue waits for it, or the lane
-   * screen would be seeded from a read of a branch the operator has since
-   * changed.
+   * The field is ahead of the last read: Continue waits for it, or the project
+   * would be seeded from a read of a branch the operator has since changed.
    */
   const branchSettling = settledBranch !== typedBranch
+  // The read fires the moment a repository is picked, keyed by branch, so
+  // editing the branch afterwards re-reads at the new ref.
   const inspection = useRepositoryInspection(orgId, selectedSourceId, settledBranch, {
-    enabled: sourceInspectionEnabled(step, selectedSourceId),
+    enabled: repositoryPicked && selectedSourceId.length > 0,
   })
   const selectedSource = useMemo(
     () =>
@@ -540,11 +416,12 @@ function ProjectCreateWizard({
     setWorkspaceMode(mode)
   }
 
-  const goToTypeStep = () => {
+  /** Checks the name, description and workspace; false (with field errors) when one is wrong. */
+  const validateBasics = (): boolean => {
     const errors = validateProjectCreateFields({
       name: trimmedProjectName,
       description,
-      environmentName,
+      environmentName: '',
       workspaceMode,
       pickedWorkspaceId,
       allowedWorkspaceIds,
@@ -554,53 +431,23 @@ function ProjectCreateWizard({
       workspaceNames: workspaces.map((workspace) => workspace.name),
     })
     setFieldErrors(errors)
-    if (Object.keys(errors).length > 0) return
-
-    setApiError(null)
-    const preselected = preselectedChoice ? setupOptionForChoice(preselectedChoice) : undefined
-    if (preselected) {
-      setSelectedChoice(preselected.choice)
-      setStep(stepForOption(preselected))
-      return
-    }
-    setStep('type')
+    return Object.keys(errors).length === 0
   }
 
-  /** Highlights a card; nothing moves until Next commits the choice. */
-  const selectType = (option: SetupTypeOption) => {
-    setSelectedChoice(option.choice)
-    setSelectedCode('')
+  /** Picks a card; a different card drops the catalog pick that belonged to the last one. */
+  const selectChoice = (choice: SetupChoice) => {
+    if (choice !== selectedChoice) setSelectedCode('')
+    setSelectedChoice(choice)
     setApiError(null)
-  }
-
-  /**
-   * The seed/clear effects live here, not in `selectType`: they run once per
-   * committed choice, so flipping between cards before pressing Next cannot
-   * leave `composeDoc` seeded for a card that was only browsed.
-   */
-  const continueFromType = () => {
-    if (!selectedOption) return
-    setApiError(null)
-    // Leaving the repository card drops the draft it seeded: Compose promises a
-    // blank slate, and a service still bound to a repository is not one.
-    if (selectedOption.choice !== 'repository' && seededRepositoryKey) {
-      setComposeDoc(emptyComposeDocument())
-      setSeededRepositoryKey('')
-    }
-    // Hosting opens on a draft rather than a blank slate: the whole card is
-    // "one site, already declared", and making the operator write four lines of
-    // `x-turbopanel` by hand would be the opposite of what it offers.
-    if (selectedOption.choice === 'hosting') setComposeDoc(seedHostingCompose({}))
-    setStep(stepForOption(selectedOption))
   }
 
   // Preselect what the repository points at, once the read lands. Detection
-  // that does not move the selection is decoration; the cards still show every
+  // that does not move the selection is decoration; the lanes still show every
   // alternative with its evidence, so this is a default, not a decision. The
-  // Simple form is prefilled in the same pass, but only while pristine — a
+  // build settings are prefilled in the same pass, but only while pristine — a
   // re-read must not overwrite what the operator typed.
   useEffect(() => {
-    if (step !== 'repository') return
+    if (!repositoryPicked) return
     if (!inspection.isSuccess || !inspection.data) return
     const suggested = suggestedSimpleAppConfig(inspection.data)
     if (!simpleConfigTouched) setSimpleConfig(suggested)
@@ -618,7 +465,7 @@ function ProjectCreateWizard({
     // reflects what the read found.
     else setBuilder('simple')
   }, [
-    step,
+    repositoryPicked,
     builder,
     simpleConfigTouched,
     nodeVersionTouched,
@@ -637,7 +484,7 @@ function ProjectCreateWizard({
     setSimpleConfig((current) => ({ ...current, ...patch }))
   }
 
-  /** "What is this?" answered: set the builder, and Simple's kind if it applies. */
+  /** "Run it as" answered: set the builder, and Simple's kind if it applies. */
   const selectLane = (lane: RepositoryLane) => {
     const next = builderForLane(lane)
     setBuilder(next.builder)
@@ -647,53 +494,12 @@ function ProjectCreateWizard({
     }
   }
 
-  /** The repository is read — ask what it is. */
-  const continueToLane = () => {
-    setApiError(null)
-    setStep('lane')
-  }
-
-  /** Everything chosen on the lane screen — seed the draft and move on. */
-  const continueFromLane = () => {
-    if (!selectedSource || !builder) return
-    setApiError(null)
-    const lane = laneForBuilder(builder, simpleConfig.kind)
-    const seedKey = [
-      selectedSource.id,
-      repositoryBranch.trim(),
-      lane,
-      simpleConfig.buildRoot,
-      simpleConfig.buildCommand,
-      simpleConfig.startCommand,
-      simpleConfig.outputDirectory,
-    ].join('\u0000')
-    if (seedKey !== seededRepositoryKey) {
-      setComposeDoc(
-        seedForRepositoryLane(selectedSource, repositoryBranch, lane, inspection.data, simpleConfig)
-      )
-      setSeededRepositoryKey(seedKey)
-    }
-    setStep('compose')
-  }
-
-  const continueHandlers: Partial<Record<Step, () => void>> = {
-    type: continueFromType,
-    repository: continueToLane,
-    lane: continueFromLane,
-  }
-  const continueHandler = continueHandlers[step] ?? continueFromLane
-
-  const goBack = () => {
-    setApiError(null)
-    setStep(resolveBackStep(step, selectedChoice))
-  }
-
   /** Resolves the workspace, creating it first when the operator asked for a new one. */
   const resolveWorkspaceId = async (): Promise<string | null> => {
     if (workspaceMode !== 'new') {
       if (!allowedWorkspaceIds.includes(pickedWorkspaceId)) {
         setFieldErrors({ workspaceId: 'Select a user workspace.' })
-        setStep('details')
+        setStep('setup')
         return null
       }
       return pickedWorkspaceId
@@ -712,8 +518,9 @@ function ProjectCreateWizard({
   }
 
   /**
-   * Commits the wizard. `drafted` arrives from the compose surface's Save slot;
-   * catalog types pass nothing and create straight from the selection.
+   * Commits the project. `drafted` is the compose to create with (the
+   * editor's draft, or the repository seed); catalog types pass nothing and
+   * create straight from the pick.
    */
   const create = async (drafted?: ComposeDocument) => {
     if (!selectedOption) return
@@ -743,7 +550,6 @@ function ProjectCreateWizard({
       type: selectedType,
       workspaceId,
       name: trimmedProjectName,
-      ...environmentNamePayload(editedEnvironmentName),
       ...(trimmedDescription ? { description: trimmedDescription } : {}),
       ...(selectedCode ? { code: selectedCode } : {}),
       ...(compose ? { options: { compose } } : {}),
@@ -753,34 +559,67 @@ function ProjectCreateWizard({
       return
     }
 
-    // The project opens on its primary environment, where the wizard put the content.
-    router.replace(projectHref(orgId, result.value.id) as Href)
+    router.replace(afterCreateHref(orgId, result.value.id, selectedType) as Href)
+  }
+
+  /** Compose, Service forms and Hosting upload: seed the editor once per card, then open it. */
+  const openComposeEditor = () => {
+    if (!selectedChoice) return
+    if (seededChoice !== selectedChoice) {
+      // Hosting opens on a draft rather than a blank slate: the whole card is
+      // "one site, already declared", and making the operator write four
+      // lines of `x-turbopanel` by hand would be the opposite of what it offers.
+      setComposeDoc(selectedChoice === 'hosting' ? seedHostingCompose({}) : emptyComposeDocument())
+      setSeededChoice(selectedChoice)
+    }
+    setStep('compose')
+  }
+
+  /** Everything the repository needs is on this screen: seed the project and create it. */
+  const createFromRepository = () => {
+    if (!selectedSource || !builder) return
+    const lane = laneForBuilder(builder, simpleConfig.kind)
+    void create(
+      seedForRepositoryLane(
+        selectedSource,
+        repositoryBranch,
+        lane,
+        inspection.data,
+        simpleConfig,
+        trimmedProjectName
+      )
+    )
+  }
+
+  const primary = primaryActionForChoice(selectedChoice)
+  const repositoryReady =
+    selectedSource != null && builder != null && !inspection.isPending && !branchSettling
+  const primaryReady: Record<NonNullable<typeof primary.kind>, boolean> = {
+    'create-from-repository': repositoryReady,
+    'open-compose': true,
+    'create-from-catalog': selectedCode.length > 0,
+  }
+
+  const pressPrimary = () => {
+    setApiError(null)
+    if (!validateBasics()) return
+    if (primary.kind === 'create-from-repository') createFromRepository()
+    else if (primary.kind === 'open-compose') openComposeEditor()
+    else if (primary.kind === 'create-from-catalog') void create()
   }
 
   const surfaceError = apiError ?? loadError
 
   if (step === 'compose') {
-    // The App lane's document is synthesized wholesale from the repository
-    // binding — nothing in it is worth hand-editing before create, so the
-    // draft surface shows the topology diagram alone.
-    const repositoryAppDraft = isRepositorySimpleAppDraft(
-      selectedChoice,
-      builder,
-      simpleConfig.kind
-    )
     return (
       <ComposeStep
         orgId={orgId}
         name={displayName}
         description={description}
         workspaceId={pickedWorkspaceId}
-        // The Repository card's pick, so the compose surface narrows its Source
-        // controls to it before the project exists — the row adopts the same id
-        // on create. Empty for every other card, which stays unbound.
-        repositoryId={composeDraftRepositoryId(selectedSourceId)}
+        repositoryId={null}
         compose={composeDoc}
-        initialSection={composeStepInitialSection(repositoryAppDraft, selectedOption)}
-        sections={composeStepSections(repositoryAppDraft)}
+        initialSection={composeStepInitialSection(selectedOption)}
         creating={submitting}
         error={surfaceError}
         onNameChange={setDisplayName}
@@ -792,97 +631,50 @@ function ProjectCreateWizard({
         onCreate={() => {
           void create()
         }}
-        onBack={goBack}
+        onBack={() => {
+          setApiError(null)
+          setStep('setup')
+        }}
       />
     )
   }
 
-  const copy = STEP_COPY[step]
-  const title = stepTitle(step, selectedOption)
-  const hint = copy.hint
-
-  return (
-    <View style={[styles.column, step === 'type' && styles.columnWide]}>
-      <WizardPageHeader title={title} hint={hint} />
-
-      {showsStartOver(step) ? (
-        <StartOverBar onStartOver={onStartOver} disabled={submitting} />
-      ) : null}
-
-      <PanelShell>
-        {surfaceError ? <Text style={panelStyles.error}>{surfaceError}</Text> : null}
-
-        {scopedWorkspaceBlocked ? (
-          <SystemManagedNotice
-            title="Platform workspace"
-            description="Projects cannot be created in the System workspace. Choose a user workspace below."
-            onBack={() => {
-              router.replace(`/${orgId}/projects` as Href)
-            }}
-            backLabel="Back to projects"
-          />
-        ) : null}
-
-        {step === 'details' ? (
-          <DetailsStep
-            orgId={orgId}
-            environmentName={environmentName}
-            defaultEnvironmentName={customDefaultEnvironmentName}
-            onEnvironmentNameChange={setEditedEnvironmentName}
-            displayName={displayName}
-            description={description}
-            workspaceMode={workspaceMode}
-            workspaces={workspaces}
-            loadingWorkspaces={loadingWorkspaces}
-            pickedWorkspaceId={pickedWorkspaceId}
-            newWorkspaceNameValue={mirroredWorkspaceName}
-            fieldErrors={fieldErrors}
-            onDisplayNameChange={handleDisplayNameChange}
-            onDescriptionChange={setDescription}
-            onWorkspaceModeChange={handleWorkspaceModeChange}
-            onPickedWorkspaceIdChange={setPickedWorkspaceId}
-            onNewWorkspaceNameChange={handleNewWorkspaceNameChange}
-          />
-        ) : null}
-
-        {step === 'repository' ? (
-          <RepositoryStep
-            orgId={orgId}
-            selectedSourceId={selectedSourceId}
-            branch={repositoryBranch}
-            inspectedBranch={settledBranch}
-            inspection={inspection.data}
-            // `isPending`, not `isFetching`: true for the whole gap between a
-            // fresh pick and the read landing (data or error), including the
-            // one tick before TanStack Query's fetch has actually started —
-            // `isFetching` alone would let the form flash ahead of it.
-            inspectionLoading={inspection.isPending}
-            inspectionError={asError(inspection.error)}
-            defaultEnvironmentName={defaultEnvironmentName}
-            disabled={submitting}
-            onSelectSourceId={(sourceId, record) => {
-              setSelectedSourceId(sourceId)
-              setAttachedSource(record ?? null)
-              // A pick — from any lane — unmounts the picker without its own
-              // clone-URL-lane effect getting a last word, so the wizard's
-              // footer is restored explicitly rather than staying hidden.
-              setCloneUrlLaneOpen(false)
-              // A different repository is a different read: the detected
-              // builder and the prefilled commands all belonged to the
-              // previous pick. The read itself starts as soon as this state
-              // update makes `sourceInspectionEnabled` true.
-              setBuilder(null)
-              setSimpleConfig(suggestedSimpleAppConfig(undefined))
-              setSimpleConfigTouched(false)
-              setNodeVersionTouched(false)
-            }}
-            onBranchChange={setRepositoryBranch}
-            onBranchBlur={settleBranch}
-            onCloneUrlLaneChange={setCloneUrlLaneOpen}
-          />
-        ) : null}
-
-        {step === 'lane' ? (
+  const repositoryDetail = repositoryPicked ? (
+    <>
+      <RepositoryStep
+        orgId={orgId}
+        selectedSourceId={selectedSourceId}
+        branch={repositoryBranch}
+        inspectedBranch={settledBranch}
+        inspection={inspection.data}
+        // `isPending`, not `isFetching`: true for the whole gap between a
+        // fresh pick and the read landing (data or error), including the one
+        // tick before TanStack Query's fetch has actually started.
+        inspectionLoading={inspection.isPending}
+        inspectionError={asError(inspection.error)}
+        defaultEnvironmentName={defaultEnvironmentName}
+        disabled={submitting}
+        onSelectSourceId={(sourceId, record) => {
+          setSelectedSourceId(sourceId)
+          setAttachedSource(record ?? null)
+          // A pick — from any lane — unmounts the picker without its own
+          // clone-URL-lane effect getting a last word, so the footer is
+          // restored explicitly rather than staying hidden.
+          setCloneUrlLaneOpen(false)
+          // A different repository is a different read: the detected lane
+          // and the prefilled commands all belonged to the previous pick.
+          setBuilder(null)
+          setSimpleConfig(suggestedSimpleAppConfig(undefined))
+          setSimpleConfigTouched(false)
+          setNodeVersionTouched(false)
+        }}
+        onBranchChange={setRepositoryBranch}
+        onBranchBlur={settleBranch}
+        onCloneUrlLaneChange={setCloneUrlLaneOpen}
+      />
+      {selectedSourceId && !inspection.isPending ? (
+        <View style={styles.lane}>
+          <SectionHeading title="Run it as" />
           <RepositoryLaneStep
             candidates={laneCandidates}
             selectedLane={builder ? laneForBuilder(builder, simpleConfig.kind) : null}
@@ -892,258 +684,79 @@ function ProjectCreateWizard({
             onSelectLane={selectLane}
             onSimpleChange={changeSimpleConfig}
           />
-        ) : null}
-
-        {step === 'type' ? (
-          <View style={styles.typeRows}>
-            {SETUP_TYPE_OPTIONS.map((option) => (
-              <SetupTypeChoiceCard
-                key={option.choice}
-                option={option}
-                selected={selectedChoice === option.choice}
-                onPress={() => selectType(option)}
-              />
-            ))}
-          </View>
-        ) : null}
-
-        {isCatalogStep(step, selectedOption) ? (
-          <CatalogStep
-            type={selectedOption.type}
-            catalog={catalogQuery.data?.catalog ?? []}
-            loading={catalogQuery.isLoading}
-            error={asError(catalogQuery.error)?.message ?? null}
-            selectedCode={selectedCode}
-            disabled={submitting}
-            onSelect={setSelectedCode}
-          />
-        ) : null}
-
-        {/*
-          The clone-URL lane ends in its own Connect and Back — stacking the
-          wizard's Back/Continue on top read as two Back buttons and a
-          Continue that could never be pressed, since nothing is picked yet.
-        */}
-        {showsInlineActions(step, cloneUrlLaneOpen) ? (
-          <StepActions
-            step={step}
-            submitting={submitting}
-            canCreate={selectedCode.length > 0}
-            canContinue={canContinueFromStep(
-              step,
-              selectedOption,
-              builder,
-              selectedSource,
-              inspection.isPending || branchSettling
-            )}
-            onBack={goBack}
-            onNext={goToTypeStep}
-            onContinue={continueHandler}
-            onCreate={() => {
-              void create()
-            }}
-          />
-        ) : null}
-      </PanelShell>
-
-      {step === 'type' ? (
-        <StepActions
-          step={step}
-          submitting={submitting}
-          canCreate={false}
-          canContinue={canContinueFromStep(step, selectedOption, builder, selectedSource, false)}
-          onBack={goBack}
-          onNext={goToTypeStep}
-          onContinue={continueHandler}
-          onCreate={() => {}}
-        />
+        </View>
       ) : null}
+    </>
+  ) : null
 
-      <CancelLink orgId={orgId} visible={step !== 'type'} />
+  const catalogDetail = isCatalogOption(selectedOption) ? (
+    <View style={styles.lane}>
+      <SectionHeading
+        title={selectedOption.type === 'template' ? 'Choose a template' : 'Choose a database'}
+      />
+      <CatalogStep
+        type={selectedOption.type}
+        catalog={catalogQuery.data?.catalog ?? []}
+        loading={catalogQuery.isLoading}
+        error={asError(catalogQuery.error)?.message ?? null}
+        selectedCode={selectedCode}
+        disabled={submitting}
+        onSelect={setSelectedCode}
+      />
     </View>
-  )
-}
+  ) : null
 
-/** The details and type steps are the start, so there is nothing to start over from. */
-function showsStartOver(step: Step): boolean {
-  return step !== 'details' && step !== 'type'
-}
-
-/**
- * The type step has its own footer below the panel, and the clone-URL lane
- * ends in its own Connect and Back.
- */
-function showsInlineActions(step: Step, cloneUrlLaneOpen: boolean): boolean {
-  if (step === 'type') return false
-  return !(step === 'repository' && cloneUrlLaneOpen)
-}
-
-function WizardPageHeader({
-  title,
-  hint,
-}: Readonly<{ title: string; hint: string | null | undefined }>) {
   return (
-    <View style={styles.pageHeader}>
-      <Text style={[panelStyles.pageTitle, styles.centeredText]}>{title}</Text>
-      {hint ? <Text style={[panelStyles.pageCopy, styles.centeredText]}>{hint}</Text> : null}
-    </View>
-  )
-}
-
-function CancelLink({ orgId, visible }: Readonly<{ orgId: string; visible: boolean }>) {
-  const router = useRouter()
-  if (!visible) return null
-  return (
-    <Pressable
-      style={[styles.cancelLink, webPointer]}
-      onPress={() => {
+    <NewProjectScreen
+      notice={
+        scopedWorkspaceBlocked ? (
+          <SystemManagedNotice
+            title="Platform workspace"
+            description="Projects cannot be created in the System workspace. Choose a user workspace below."
+            onBack={() => {
+              router.replace(`/${orgId}/projects` as Href)
+            }}
+            backLabel="Back to projects"
+          />
+        ) : null
+      }
+      error={surfaceError}
+      basics={
+        <DetailsStep
+          displayName={displayName}
+          description={description}
+          workspaceMode={workspaceMode}
+          workspaces={workspaces}
+          loadingWorkspaces={loadingWorkspaces}
+          pickedWorkspaceId={pickedWorkspaceId}
+          newWorkspaceNameValue={mirroredWorkspaceName}
+          fieldErrors={fieldErrors}
+          onDisplayNameChange={handleDisplayNameChange}
+          onDescriptionChange={setDescription}
+          onWorkspaceModeChange={handleWorkspaceModeChange}
+          onPickedWorkspaceIdChange={setPickedWorkspaceId}
+          onNewWorkspaceNameChange={handleNewWorkspaceNameChange}
+        />
+      }
+      selectedChoice={selectedChoice}
+      moreOpen={moreOpen}
+      onToggleMore={() => {
+        setMoreOpen((open) => !open)
+      }}
+      onSelectChoice={selectChoice}
+      detail={repositoryDetail ?? catalogDetail}
+      footerHidden={repositoryPicked && cloneUrlLaneOpen}
+      primaryLabel={primary.label}
+      primaryDisabled={primary.kind === null || !primaryReady[primary.kind]}
+      busy={submitting}
+      onPrimary={pressPrimary}
+      onCancel={() => {
         router.replace(`/${orgId}/projects` as Href)
       }}
-      accessibilityRole="button"
-      accessibilityLabel="Cancel"
-    >
-      <Text style={styles.cancelLinkText}>Cancel</Text>
-    </Pressable>
-  )
-}
-
-/** Wizard body container for the form-shaped steps. */
-function PanelShell({ children }: Readonly<{ children: ReactNode }>) {
-  return (
-    <GlassSurface style={styles.panel} intensity="regular">
-      <View style={styles.panelBody}>{children}</View>
-    </GlassSurface>
-  )
-}
-
-function SpreadRow({ children }: Readonly<{ children: ReactNode }>) {
-  return <View style={styles.spreadRow}>{children}</View>
-}
-
-/**
- * Footer buttons: Next on details and on the type cards, Back everywhere
- * after, Create on the last step. The repository step ends in Continue
- * instead — the compose surface it opens owns the single Create.
- */
-function StepActions({
-  step,
-  submitting,
-  canCreate,
-  canContinue,
-  onBack,
-  onNext,
-  onContinue,
-  onCreate,
-}: Readonly<{
-  step: Step
-  submitting: boolean
-  canCreate: boolean
-  canContinue: boolean
-  onBack: () => void
-  onNext: () => void
-  onContinue: () => void
-  onCreate: () => void
-}>) {
-  if (step === 'details') {
-    return <Button label="Next" variant="primary" onPress={onNext} accessibilityLabel="Next" />
-  }
-
-  if (step === 'type' || step === 'repository' || step === 'lane') {
-    const continueLabel = step === 'type' ? 'Next' : 'Continue'
-    // On the setup step the row sits below the panel, Back left, Next right.
-    const Row = step === 'type' ? SpreadRow : ButtonRow
-    return (
-      <Row>
-        <Button
-          label="Back"
-          variant="secondary"
-          disabled={submitting}
-          onPress={onBack}
-          accessibilityLabel="Back"
-        />
-        <Button
-          label={continueLabel}
-          variant="primary"
-          disabled={!canContinue}
-          onPress={onContinue}
-          accessibilityLabel={continueLabel}
-        />
-      </Row>
-    )
-  }
-
-  return (
-    <ButtonRow>
-      <Button
-        label="Back"
-        variant="secondary"
-        disabled={submitting}
-        onPress={onBack}
-        accessibilityLabel="Back"
-      />
-      <Button
-        label="Create project"
-        busyLabel="Creating…"
-        variant="primary"
-        busy={submitting}
-        disabled={!canCreate}
-        onPress={onCreate}
-        accessibilityLabel="Create project"
-      />
-    </ButtonRow>
+    />
   )
 }
 
 const styles = StyleSheet.create({
-  // No ScrollView here: `OrgScreenScroll` (the org Stack screen layout) already
-  // scrolls and already applies the page's vertical/horizontal insets. Nesting a
-  // second vertical ScrollView leaves the inner one unbounded on native, which
-  // is what padded the wizard with dead space above and below on iOS.
-  column: {
-    width: '100%',
-    maxWidth: FORM_MAX_WIDTH,
-    alignSelf: 'flex-start',
-    gap: spacing.md,
-  },
-  columnWide: {
-    maxWidth: TYPE_STEP_MAX_WIDTH,
-  },
-  pageHeader: {
-    gap: spacing.xs,
-    alignItems: 'center',
-  },
-  centeredText: {
-    textAlign: 'center',
-  },
-  panel: {
-    borderRadius: 12,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: colors.borderMuted,
-  },
-  panelBody: {
-    padding: spacing.lg,
-    gap: spacing.md,
-  },
-  plainPanelBody: {
-    gap: spacing.md,
-  },
-  typeRows: { gap: spacing.sm },
-  spreadRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-  },
-  cancelLink: {
-    alignSelf: 'center',
-    minHeight: 44,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.md,
-  },
-  cancelLinkText: {
-    color: colors.textMuted,
-    fontSize: 14,
-    fontWeight: '500',
-  },
+  lane: { gap: spacing.sm },
 })

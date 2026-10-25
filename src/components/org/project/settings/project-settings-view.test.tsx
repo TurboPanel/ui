@@ -11,6 +11,15 @@ vi.mock(
   async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub
 )
 vi.mock('@/components/ui', () => ({
+  TextLink: (props: Readonly<Record<string, unknown>>) => (
+    <a
+      href="#link"
+      aria-label={props.accessibilityLabel as string}
+      onClick={props.onPress as () => void}
+    >
+      {props.label as string}
+    </a>
+  ),
   TextField: (props: Readonly<Record<string, unknown>>) => (
     <label>
       {props.label as string}
@@ -59,11 +68,15 @@ function props(over: Partial<ProjectSettingsViewProps> = {}): ProjectSettingsVie
     canMove: true,
     moving: false,
     onMove: vi.fn(),
-    variables: <div data-testid="variables" />,
+    onOpenBase: vi.fn(),
     keepOriginalNames: false,
     savingNames: false,
     onKeepOriginalNames: vi.fn(),
     git: { repository: 'acme/shop', pushTiming: 'Only after CI passes' },
+    pushDeploy: [],
+    onTurnOnAutoDeploy: vi.fn(),
+    turningOnAutoDeploy: false,
+    onOpenEnvironmentSettings: vi.fn(),
     onOpenRepositories: vi.fn(),
     onOpenBaseCompose: vi.fn(),
     danger: <div>delete panel</div>,
@@ -94,7 +107,27 @@ describe.each(SCENARIOS)('project settings ($name)', (scenario) => {
     expect(screen.queryByText(/deliveries/i)).toBeNull()
     expect(screen.queryByText(/alerts/i)).toBeNull()
     expect(screen.getByText('proj-1')).toBeTruthy()
-    expect(screen.getByTestId('variables')).toBeTruthy()
+  })
+
+  it('sends project variables to the Base, where they are edited', () => {
+    const onOpenBase = vi.fn()
+    render(<ProjectSettingsView {...props({ onOpenBase })} />)
+    fireEvent.click(screen.getByLabelText('Project variables: open the Base tab'))
+    expect(onOpenBase).toHaveBeenCalledTimes(1)
+  })
+
+  it('gives a managed database name, workspace, a way to its settings and delete', () => {
+    const onOpenDatabaseSettings = vi.fn()
+    render(<ProjectSettingsView {...props({ managed: { onOpenDatabaseSettings } })} />)
+    for (const heading of ['General', 'Workspace', 'Database', 'Danger zone']) {
+      expect(screen.getByRole('heading', { name: heading })).toBeTruthy()
+    }
+    for (const heading of ['Variables', 'Container names', 'Git', 'As Compose files']) {
+      expect(screen.queryByRole('heading', { name: heading })).toBeNull()
+    }
+    expect(screen.getByText(/Managed by TurboPanel/)).toBeTruthy()
+    fireEvent.click(screen.getByText('Engine, resources and backups'))
+    expect(onOpenDatabaseSettings).toHaveBeenCalledTimes(1)
   })
 
   it('shows Save and Discard only when the form changed, and sends the press', () => {
@@ -189,6 +222,38 @@ describe.each(SCENARIOS)('project settings ($name)', (scenario) => {
     fireEvent.click(screen.getByRole('button', { name: /Base compose file/ }))
     expect(base.onOpenRepositories).toHaveBeenCalledTimes(1)
     expect(base.onOpenBaseCompose).toHaveBeenCalledTimes(1)
+  })
+
+  it('says per environment whether a push deploys it, with Turn on or a link to change it', () => {
+    const base = props({
+      pushDeploy: [
+        {
+          environmentId: 'e1',
+          line: {
+            text: 'Pushes to live deploy production: off (repository auto-deploy is off)',
+            on: false,
+            turnOn: 'repository',
+          },
+        },
+        {
+          environmentId: 'e2',
+          line: {
+            text: 'Pushes to staging deploy staging: off (repository auto-deploy is on)',
+            on: false,
+            turnOn: 'environment',
+          },
+        },
+      ],
+    })
+    render(<ProjectSettingsView {...base} />)
+    expect(screen.queryByText('Only after CI passes')).toBeNull()
+    expect(
+      screen.getByText('Pushes to live deploy production: off (repository auto-deploy is off)')
+    ).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: "Turn on the repository's auto-deploy" }))
+    expect(base.onTurnOnAutoDeploy).toHaveBeenCalledTimes(1)
+    fireEvent.click(screen.getByRole('link', { name: "Change it in the environment's settings" }))
+    expect(base.onOpenEnvironmentSettings).toHaveBeenCalledWith('e2')
   })
 
   it('leaves Git out when the project is not a repository, and Danger out for a non-owner', () => {

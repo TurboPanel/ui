@@ -43,6 +43,7 @@ const COLUMNS = [
 
 /** What the row says in its last column: the step a running deploy is on, else why it failed. */
 function activityDetailText(item: OrganizationActivityItem): string {
+  if (item.state === 'queued') return 'Waiting for the server to start it'
   if (item.state === 'deploying') {
     return activityStepText(item) ?? plainStepFailureMessage(item.errorMessage) ?? '—'
   }
@@ -65,7 +66,7 @@ function ActivityRow({
         <Text style={styles.mutedText}>{activityActionLabel(item.action)}</Text>
       </DataTableCell>
       <DataTableCell column={state}>
-        <Badge label={activityStateLabel(item.state)} tone={activityStateTone(item.state)} />
+        <Badge label={activityStateLabel(item.state, item.action)} tone={activityStateTone(item.state)} />
       </DataTableCell>
       <DataTableCell column={started}>
         <Text style={styles.mutedText} numberOfLines={1}>

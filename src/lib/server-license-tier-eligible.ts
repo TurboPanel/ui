@@ -3,6 +3,8 @@ import { ENTRY_TIER_RANK, tierRankFromLabel, type TierRankResolver } from '@/lib
 
 export type EligibleTierPick = Readonly<{
   choices: BillingTier[]
+  /** Tiers whose CPU or RAM limit is below this server's: shown, never pickable. */
+  tooSmall: BillingTier[]
   /** Required tier label could not be ranked — picks still start at the smallest catalogue tier. */
   requiredRankUnknown: boolean
 }>
@@ -27,15 +29,21 @@ export function licenseTierPickFloorRank(
   }
 }
 
-/** Tiers at or above the hardware floor, in rank order. Never lists ranks below the floor. */
+/**
+ * Tiers at or above the hardware floor, in rank order, and the ones below it.
+ * The floor is the required tier, which reads only CPU cores and RAM — the
+ * hard limits. Monitoring slots (NICs, drives, GPUs) never lower a choice.
+ */
 export function eligibleTiersForPick(
   tiers: readonly BillingTier[],
   requiredLabel: string,
   rankOf: TierRankResolver
 ): EligibleTierPick {
   const { floor, requiredRankUnknown } = licenseTierPickFloorRank(requiredLabel, rankOf, tiers)
-  const choices = tiers.filter((tier) => tier.rank >= floor).sort((a, b) => a.rank - b.rank)
-  return { choices, requiredRankUnknown }
+  const sorted = [...tiers].sort((a, b) => a.rank - b.rank)
+  const choices = sorted.filter((tier) => tier.rank >= floor)
+  const tooSmall = requiredRankUnknown ? [] : sorted.filter((tier) => tier.rank < floor)
+  return { choices, tooSmall, requiredRankUnknown }
 }
 
 /** Catalogue rows when loaded; otherwise synthesise from detail `tiersFree` so picks render before billing loads. */

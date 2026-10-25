@@ -21,6 +21,8 @@ const styles = themedStyles(() => ({
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-start',
+    // Never wider than its box: a long word ends in an ellipsis instead.
+    maxWidth: '100%',
     gap: 6,
     borderWidth: 1,
     borderRadius: RADIUS.pill,
@@ -67,7 +69,7 @@ export function StatusChip({
     >
       {glyph}
       <Text
-        style={[typeStyle('bodySemibold', FONT_SIZE[size]), { color }]}
+        style={[typeStyle('bodySemibold', FONT_SIZE[size]), { color, flexShrink: 1 }]}
         numberOfLines={1}
       >
         {word}

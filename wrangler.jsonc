@@ -5,7 +5,7 @@
   // Top-level = local `wrangler dev` only. Every real environment is an `env.*`
   // entry with its own name, so a deploy without `--env` can never hit production.
   "name": "dev-ui",
-  "compatibility_date": "2026-06-01",
+  "compatibility_date": "2026-10-01",
   "observability": {
     "logs": {
       "enabled": true

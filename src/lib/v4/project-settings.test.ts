@@ -1,11 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import type { ProjectRecord, RepositoryRecord, WorkspaceRecord } from '@/lib/instance-api'
+import type {
+  EnvironmentRecord,
+  ProjectRecord,
+  RepositoryRecord,
+  WorkspaceRecord,
+} from '@/lib/instance-api'
 import {
   buildProjectGeneralPatch,
   projectDescriptionProblem,
   projectGeneralDirty,
   projectGeneralFromRecord,
   projectGitFacts,
+  projectPushDeployRows,
   projectNameProblem,
   workspaceMoveChoices,
 } from './project-settings'
@@ -17,7 +23,7 @@ function project(over: Partial<ProjectRecord> = {}): ProjectRecord {
     description: 'The shop',
     workspaceId: 'w2',
     repositoryId: null,
-    metadata: { type: 'docker-compose' },
+    kind: 'compose',
     options: null,
     createdAt: '',
     updatedAt: '',
@@ -116,5 +122,58 @@ describe('workspace move choices', () => {
     ])
     expect(choices.map((choice) => choice.label)).toEqual(['Mine', 'Alpha', 'Workspace', 'Zed'])
     expect(choices.map((choice) => choice.current)).toEqual([true, false, false, false])
+  })
+})
+
+describe('project push-to-deploy rows', () => {
+  const REPO = '11111111-2222-4333-8444-555555555555'
+  const app = (source: Record<string, unknown>) => ({
+    'x-turbopanel': { serviceKind: 'node', source: { sourceId: REPO, ...source } },
+  })
+  const compose = (services: Record<string, unknown>) => ({
+    version: 1,
+    data: { services },
+    presentation: { keyOrder: ['services'], comments: {} },
+  })
+  const bound = project({
+    repositoryId: REPO,
+    options: { compose: compose({ web: app({ branch: 'live' }), api: app({ branch: 'live' }) }) },
+  } as Partial<ProjectRecord>)
+  const environments = [
+    { id: 'e1', name: 'production', options: null },
+    {
+      id: 'e2',
+      name: 'staging',
+      options: { compose: compose({ web: app({ branch: 'staging', deployOnPush: false }) }) },
+    },
+  ] as unknown as EnvironmentRecord[]
+
+  it('says one sentence per environment, in the words Environment Settings uses', () => {
+    const rows = projectPushDeployRows(bound, environments, [
+      repo({ id: REPO, autoDeploy: 'disabled' }),
+    ])
+    expect(rows.map((row) => [row.environmentId, row.line.text, row.line.turnOn])).toEqual([
+      ['e1', 'Pushes to live deploy production: off (repository auto-deploy is off)', 'repository'],
+      ['e2', 'Pushes to live deploy staging: off (repository auto-deploy is off)', 'repository'],
+      ['e2', 'Pushes to staging deploy staging: off (repository auto-deploy is off)', 'repository'],
+    ])
+  })
+
+  it('is empty without a repository, and skips services built from another one', () => {
+    expect(projectPushDeployRows(project(), environments, [repo({ id: REPO })])).toEqual([])
+    const other = project({
+      repositoryId: REPO,
+      options: {
+        compose: compose({
+          web: {
+            'x-turbopanel': {
+              serviceKind: 'node',
+              source: { sourceId: '99999999-2222-4333-8444-555555555555' },
+            },
+          },
+        }),
+      },
+    } as Partial<ProjectRecord>)
+    expect(projectPushDeployRows(other, environments.slice(0, 1), [repo({ id: REPO })])).toEqual([])
   })
 })

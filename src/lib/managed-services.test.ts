@@ -166,6 +166,28 @@ describe('managedErrorMessage', () => {
     }
   })
 
+  it('shows the server sentence for reserved names and logins that still define objects', () => {
+    expect(
+      managedErrorMessage(
+        new Error(
+          '/x failed: HTTP 422: reserved_username — \'postgres\' is a name the database engine or TurboPanel keeps for itself. Pick a different login name.',
+        ),
+        'fallback',
+      ),
+    ).toBe("'postgres' is a name the database engine or TurboPanel keeps for itself. Pick a different login name.")
+    expect(
+      managedErrorMessage(
+        new Error(
+          "/x failed: HTTP 409: managed_login_defines_objects — The login 'app' is still the definer of view shop.v.",
+        ),
+        'fallback',
+      ),
+    ).toBe("The login 'app' is still the definer of view shop.v.")
+    // An older server sends no sentence: the plain copy still reads well.
+    expect(managedErrorMessage(new Error('HTTP 422: reserved_database_name'), 'fallback')).toMatch(/database name/)
+    expect(managedErrorMessage(new Error('HTTP 422: reserved_username'), 'fallback')).toMatch(/login name/)
+  })
+
   it('maps known HTTP error codes to operator copy', () => {
     expect(managedErrorMessage(new Error('HTTP 422: server_placement_required'), 'fallback')).toBe(
       'Select a server before creating this managed service.'
@@ -625,6 +647,47 @@ describe('stale replica health', () => {
     expect(isReplicationHealthy({ state: 'catching_up', observedAt: at })).toBe(true)
     expect(isReplicationHealthy({ state: 'unknown', observedAt: at, stale: true })).toBe(false)
     expect(isReplicationHealthy({ state: 'not_streaming', observedAt: at })).toBe(false)
+  })
+})
+
+describe('managedRecoveryBanner after a finished failover', () => {
+  const done = recoveryRecord({
+    id: 'r1',
+    kind: 'automatic-failover',
+    state: 'completed',
+    sourcePrimaryMemberId: 'p1',
+    targetMemberId: 't1',
+    sourceServerId: 's1',
+    targetServerId: 's2',
+    completedAt: '2026-08-19T00:01:00.000Z',
+  })
+  const names = (id: string) => ({ s1: 'adrastea', s2: 'kore' })[id] ?? null
+
+  it('says in plain words what happened for a day', () => {
+    const banner = managedRecoveryBanner(done, {
+      nowMs: Date.parse('2026-08-19T00:13:00.000Z'),
+      serverName: names,
+    })
+    expect(banner?.kind).toBe('completed')
+    expect(banner?.text).toContain('failed over automatically')
+    expect(banner?.text).toContain('12 minutes ago')
+    expect(banner?.text).toContain('kore is now the primary')
+    expect(banner?.text).toContain('adrastea is stopped')
+  })
+
+  it('goes away after a day and never shows for a planned switchover', () => {
+    expect(managedRecoveryBanner(done, { nowMs: Date.parse('2026-08-21T00:00:00.000Z') })).toBeNull()
+    expect(
+      managedRecoveryBanner(
+        { ...done, kind: 'switchover' },
+        { nowMs: Date.parse('2026-08-19T00:02:00.000Z') }
+      )
+    ).toBeNull()
+  })
+
+  it('does not call a stopped member a read server', () => {
+    expect(memberReadTrafficLabel('replica', true, 'needs_resync')).toBe('Not serving reads')
+    expect(memberReadTrafficLabel('replica', true, 'ready')).toBe('Serves reads')
   })
 })
 

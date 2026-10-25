@@ -1,7 +1,6 @@
 import { type ReactNode } from 'react'
 import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import { ComposeEditorChrome } from '@/components/org/compose-editor-section'
-import { ComposeSurfaceNav } from '@/components/org/project/compose-surface-nav'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { Button, InlineNotice } from '@/components/ui'
 import {
@@ -156,7 +155,7 @@ export function ComposeInheritedPanel({
   }
 
   return (
-    <ComposeEditorChrome nav={<ComposeSurfaceNav />}>
+    <ComposeEditorChrome>
       <View style={styles.body}>
         <InlineNotice
           title="Using project compose"

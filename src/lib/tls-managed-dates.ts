@@ -7,7 +7,7 @@ import type { TlsRecord } from '@/lib/instance-api'
  */
 export function tlsDateLines(row: TlsRecord, locale?: string): string[] {
   const { metadata } = row
-  if (metadata.status !== 'managed') {
+  if (metadata.status !== 'automatic') {
     return metadata.notAfter ? [`Expires ${new Date(metadata.notAfter).toLocaleString(locale)}`] : []
   }
   const lines: string[] = []

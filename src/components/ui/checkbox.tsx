@@ -55,6 +55,9 @@ export function Checkbox({
         disabled: inert,
         busy,
       }}
+      // React Native Web ignores accessibilityState, so the web needs the aria form too.
+      aria-checked={indeterminate ? 'mixed' : checked}
+      aria-disabled={inert}
       accessibilityLabel={accessibilityLabel ?? label ?? 'Toggle'}
       hitSlop={8}
       style={[styles.row, webPointer, disabled && styles.disabled]}

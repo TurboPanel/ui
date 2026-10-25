@@ -23,7 +23,7 @@ function ServiceRow({ row }: Readonly<{ row: BaseServiceRow }>) {
 
 /**
  * Every service the Base declares and who runs it. An app's settings are
- * changed on the Configuration tab of an environment (choose the Base there);
+ * changed on the Services tab of an environment (choose the Base there);
  * this list only reads.
  */
 export function BaseServicesSection({ rows }: Readonly<{ rows: readonly BaseServiceRow[] }>) {

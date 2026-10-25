@@ -1,8 +1,8 @@
 /**
  * Hosting-panel context derived from merged compose services.
  * Surfaces site engine rules the deploy path already enforces
- * (PHP on all three engines, by different mechanisms; Apache-only SetEnv;
- * Docker bridge env injection).
+ * (PHP on all three engines, by different mechanisms; SetEnv on Apache,
+ * rewrite rules on OpenLiteSpeed; Docker bridge env injection).
  */
 
 import {
@@ -26,7 +26,7 @@ export type HostingWebEnvMode =
   | 'caddy_env'
   | 'apache_setenv'
   | 'file_only'
-  | 'ignored'
+  | 'openlitespeed_rewrite'
   | 'container_variables'
   | 'node_unit_environment'
 
@@ -142,7 +142,7 @@ function webEnvModeFor(
   // PHP process — the same guarantee Apache's SetEnv gives, which nginx cannot.
   if (engine === 'caddy') return 'caddy_env'
   if (engine === 'apache') return 'apache_setenv'
-  if (engine === 'openlitespeed') return 'ignored'
+  if (engine === 'openlitespeed') return 'openlitespeed_rewrite'
   return 'file_only'
 }
 
@@ -298,12 +298,12 @@ export function hostingWebEnvSectionCopy(context: HostingServiceContext): {
       showFields: false,
     }
   }
-  if (context.webEnvMode === 'ignored') {
+  if (context.webEnvMode === 'openlitespeed_rewrite') {
     return {
-      title: 'Web environment (not applied)',
+      title: 'Web environment',
       hint:
-        'OpenLiteSpeed does not inject web env into the serving process — these hints are not applied. Prefer hosting-scoped variables, or use Apache site for SetEnv. (PHP hints above do apply.)',
-      showFields: false,
+        "Static KEY=VALUE pairs for this hostname. Deploy writes .turbopanel/hosting.env and hands entries to PHP through the site's own rewrite rules, which OpenLiteSpeed passes to PHP as environment variables. Hosting variables marked for runtime merge first; static lines here win on collision. A value that contains a space, comma, quote, backslash, $, % or a bracket is dropped with a warning. If a required database setting is missing, the deploy stops.",
+      showFields: true,
     }
   }
   return {

@@ -17,6 +17,8 @@ export const MAX_BINDING_KEY_PREFIX_LENGTH = 64
 export type BindingPrefixedKeys = {
   url: string
   caCert: string
+  /** Sites run on the server itself only: path of the CA file kept for the site. */
+  caFile: string
   readSplit: string
   host: string
   port: string
@@ -33,6 +35,7 @@ export function bindingPrefixedKeys(prefix: string): BindingPrefixedKeys {
   return {
     url: `${prefix}_URL`,
     caCert: `${prefix}_CA_CERT`,
+    caFile: `${prefix}_CA_FILE`,
     readSplit: `${prefix}_READ_SPLIT`,
     host: `${prefix}_HOST`,
     port: `${prefix}_PORT`,

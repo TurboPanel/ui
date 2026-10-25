@@ -9,7 +9,7 @@ export default function ManagedSettingsScreen() {
 
   return (
     <View style={styles.root}>
-      <Text style={styles.heading}>Managed settings</Text>
+      <Text style={styles.heading}>Managed database settings</Text>
       <Text style={styles.copy}>
         Organization-wide settings for managed databases. TLS is an inherited
         default, so a service that set its own mode keeps it. Listener ports have

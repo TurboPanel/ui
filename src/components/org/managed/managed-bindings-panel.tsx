@@ -14,6 +14,7 @@ import {
 } from '@/components/ui'
 import {
   DEFAULT_BINDING_KEY_PREFIX,
+  bindingPrefixedKeys,
   previewBindingKeys,
   validateBindingKeyPrefix,
 } from '@/lib/bindings'
@@ -56,6 +57,18 @@ function managedUserPickerLabel(user: ManagedUserRecord): string {
   return user.connectionRole === 'read-only'
     ? `${user.username} (read-only)`
     : user.username
+}
+
+/** Plain-words note on the two ways the organization CA is delivered. */
+function caNote(prefix: string): string {
+  const keys = bindingPrefixedKeys(prefix)
+  return (
+    `The database certificate arrives as text in ${keys.caCert}. ` +
+    `A site that runs on the server itself (such as a PHP site) gets ` +
+    `${keys.caFile} instead: the path of a file only the site owner's ` +
+    `Linux user can read, kept in the site's .turbopanel-hosting folder. ` +
+    `Paste that path into an app that asks for a CA file.`
+  )
 }
 
 function KeyChip({ label }: Readonly<{ label: string }>) {
@@ -149,6 +162,7 @@ function BindingCard({
           "Points at this server's database ingress and does not move when the primary changes."
         }
       </Text>
+      <Text style={panelStyles.muted}>{caNote(binding.keyPrefix)}</Text>
       <View style={styles.keyRow}>
         {binding.keys.map((key) => (
           <KeyChip key={key} label={key} />
@@ -333,6 +347,11 @@ function ConnectServiceForm({
         onPress={() => setEmitEngineDefaults((v) => !v)}
       />
 
+      {previewKeys.length > 0 ? (
+        <Text style={panelStyles.muted}>
+          {caNote(prefixValidation.ok ? prefixValidation.prefix : keyPrefix)}
+        </Text>
+      ) : null}
       {previewKeys.length > 0 ? (
         <View style={styles.keyRow}>
           {previewKeys.map((key) => (

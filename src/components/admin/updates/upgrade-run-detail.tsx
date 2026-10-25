@@ -8,16 +8,23 @@ import {
   fleetStatusBadge,
   upgradePhaseLabel,
   upgradeRunErrorLabel,
+  upgradeServerLabel,
+  upgradeStepNote,
   upgradeStepOutcome,
 } from '@/lib/upgrade-display'
 import { plainStepFailureMessage } from '@/lib/user-error'
 
-/** What a step ran on: its phase for the platform pieces, the server for a fleet step. */
-function stepTitle(step: UpgradeStepRow): string {
-  if (step.phase === 'fleet') {
-    return step.serverName?.trim() || step.hostname?.trim() || step.serverId.slice(0, 8)
-  }
-  return upgradePhaseLabel(step.phase)
+/** What a step ran on: its phase for the platform pieces, the server (name, then short id) for a fleet step. */
+function StepTitle({ step }: Readonly<{ step: UpgradeStepRow }>) {
+  if (step.phase !== 'fleet')
+    return <Text style={styles.stepTitle}>{upgradePhaseLabel(step.phase)}</Text>
+  const label = upgradeServerLabel(step)
+  return (
+    <View style={styles.stepName}>
+      <Text style={styles.stepTitle}>{label.primary}</Text>
+      {label.shortId ? <Text style={styles.shortId}>{label.shortId}</Text> : null}
+    </View>
+  )
 }
 
 function moved(step: UpgradeStepRow): string | null {
@@ -28,18 +35,20 @@ function moved(step: UpgradeStepRow): string | null {
 }
 
 function StepLine({ step }: Readonly<{ step: UpgradeStepRow }>) {
-  const badge = fleetStatusBadge(step.status)
+  const badge = fleetStatusBadge(step.status, step.errorCode)
   const outcome = upgradeStepOutcome(step)
   const reason = plainStepFailureMessage(step.errorMessage) ?? outcome.detail
   const when = step.lastStageAt ? new Date(step.lastStageAt).toLocaleString() : null
   const change = moved(step)
+  const note = upgradeStepNote(step)
   return (
     <View style={styles.step}>
       <View style={styles.stepHead}>
-        <Text style={styles.stepTitle}>{stepTitle(step)}</Text>
+        <StepTitle step={step} />
         <Badge {...badge} />
       </View>
       {change ? <Text style={panelStyles.muted}>{change}</Text> : null}
+      {note ? <Text style={panelStyles.muted}>{note}</Text> : null}
       {reason ? <Text style={panelStyles.error}>{reason}</Text> : null}
       {when ? <Text style={panelStyles.muted}>Last activity {when}</Text> : null}
     </View>
@@ -91,8 +100,21 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: spacing.sm,
   },
+  stepName: {
+    flex: 1,
+    flexShrink: 1,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'baseline',
+    columnGap: spacing.sm,
+  },
   stepTitle: {
     color: colors.text,
     fontWeight: '600',
+  },
+  shortId: {
+    color: colors.textMuted,
+    fontFamily: 'monospace',
+    fontSize: 12,
   },
 })

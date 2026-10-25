@@ -3,7 +3,6 @@ import { Text } from 'react-native'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { useProjectContext } from '@/components/org/project/project-context'
 import {
-  isManagedProject,
   projectEnvironmentHref,
   projectOverviewHref,
   projectSetupHref,
@@ -25,11 +24,8 @@ export default function ProjectIndexScreen() {
     return <Redirect href={projectSetupHref(orgId ?? '', projectId ?? '') as Href} />
   }
 
-  // A Compose project opens on its primary environment, not on the Base.
-  const primary =
-    project && !isSystemProject && !isManagedProject(project)
-      ? primaryEnvironmentOf(environments)
-      : null
+  // A project, a managed database too, opens on its primary environment.
+  const primary = project && !isSystemProject ? primaryEnvironmentOf(environments) : null
   if (primary) {
     return (
       <Redirect href={projectEnvironmentHref(orgId ?? '', projectId ?? '', primary.id) as Href} />

@@ -9,7 +9,7 @@
 
 ## Layout
 
-- Overview (Projects home): page title with the summary line and **New project**, the compact workspace **filter** (defaults to **All workspaces**), a **Recent projects** chip row, **Deploys in progress**, then **All projects** as layer cards (the Base line, "Runs as" chips, one row per environment with its status and "Follows the Base · N changes" or "Stands alone"). Managed, platform and not-yet-set-up projects get a plain card (no Base line). Workspace label shows when viewing all.
+- Overview (Projects home): page title with the summary line and **New project**, a **Recent projects** chip row, **Deploys in progress**, then the tools row — the type filter **All · Apps · Managed databases** with a count on each (`SegmentedControl`, 44 pt on touch, one row at 390 pt where it takes its own row; `?type=apps|managed`, linkable, combines with the workspace filter), the compact workspace **filter** (defaults to **All workspaces**) and the grid/list switch — then the projects as layer cards (the Base line, "Runs as" chips, one row per environment with its status and "Follows the Base · N changes" or "Stands alone"). Managed databases are listed here with every other project (the sidebar has no Managed entry); with the Managed databases filter on, a **Managed database settings** link sits under the tools and New project opens the managed type. Each card's second line says what the project is from data read ("Managed database · PostgreSQL 18", "Git repository · owner/repo", "Compose"), then the workspace when viewing all; a part the API does not answer is left out. Managed, platform and not-yet-set-up projects get a plain card (no Base line). A managed database's environment shows the database's own status from the managed list (Provisioning, Applying, Ready, Stopped, Failed), not its containers, so one still being set up does not read as idle; where the list is not read (no manage access) the card falls back to containers. The old list's engine, status and server filters are not carried over. A filter with nothing to show says so in one quiet line.
 - Detail: **Project shell** — breadcrumb title **Projects ›** type glyph (`ProjectTitleIcon`) + project name + and, for Compose projects, the tabs **Environments · Base · Settings** (an environment has its own header and tabs: Overview · Deployments · Configuration · Settings). Managed projects keep a header trash for delete; compose projects have **no** header trash — all compose delete (project and environment) lives on the **Settings** surface tab (`ProjectSettingsPanel` / `EnvironmentSettingsPanel` → Danger). Section nav, tab body
 - **The compose file is the surface — there is no section nav.** Overview / Compose / Services are three representations of one artifact; Hosting and Storage are properties of a *service*; Servers and Settings are properties of a *scope*. Flattening those into a nav list (rail or tab strip) is the competitor layout and it is banned here: it makes the operator leave the service they are looking at to configure it somewhere else.
 - **Lens bar**: a three-item segmented control — **Overview · Compose · Services** — in the surface header. Three items forever, however large the project. A configuration route keeps Services lit.
@@ -36,7 +36,7 @@
 ## Creation / setup
 
 1. **Create** (`/projects/new`) — name + workspace → `POST type=empty` (Production once) → `/setup`
-2. **Setup** — choose Compose / template / managed (+ catalog); resumable when `metadata.type` is unset
+2. **Setup** — choose Compose / template / managed (+ catalog); resumable when `project.kind` is null
 3. Configured stopped projects are complete — do not show as incomplete
 
 ## Density
@@ -46,7 +46,7 @@
 
 ## System / platform projects
 
-- Detection is by `workspace.kind === 'turbopanel'` (and optional `project.metadata.component`) — **never** by display name. `project.metadata.type === 'system'` is a **display classifier only** — glyph/badge/label selection — and must never be used as the read-only or authorization gate.
+- Detection is by `workspace.kind === 'turbopanel'` (and optional `project.metadata.component`) — **never** by display name. `project.kind === 'system'` is a **display classifier only** — glyph/badge/label selection — and must never be used as the read-only or authorization gate.
 - Platform workspace display name is **TurboPanel**; badge label is **Platform**. Type badge text comes from `projectTypeLabel` → `TURBOPANEL_WORKSPACE_BADGE_LABEL`, not a new literal.
 - `ProjectTitleIcon` (`src/components/org/project/project-title-icon.tsx`) renders `PlatformShieldIcon` from `src/components/org/platform-badge.tsx` for `system`-typed projects instead of the compose cube, with accessible label **Platform project**; colors from `chrome.*` in `src/lib/theme.ts` — no one-off hex, no emoji.
 - System projects are **compose-shaped but read-only**: no compose editor, no lifecycle Start/Stop/Destroy, no delete, no workspace move, no Hosting/Servers tabs or Storage chips.
@@ -85,7 +85,7 @@
 - ❌ Showing an environment editor with no inheritance / scope statement above it (banner-less editing)  
 - ❌ Stack of empty Settings sections for every resource type (use Add chips inside the gear panel; reveal sections when opened or when data exists)  
 - ❌ Treating a user workspace named “System” as platform-managed  
-- ❌ Gating read-only chrome on `metadata.type` instead of `workspace.kind`
+- ❌ Gating read-only chrome on `project.kind` instead of `workspace.kind`
 - ❌ Inventing a parallel platform badge/glyph or label literal instead of reusing `PlatformShieldIcon` / `TURBOPANEL_WORKSPACE_BADGE_LABEL` / `systemComponentLabel()`
 - ❌ Compose editor / lifecycle / delete chrome on system projects  
 - ❌ Reintroducing the under-compose settings strip (settings belong on the Settings surface tab)  

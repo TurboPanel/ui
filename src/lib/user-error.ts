@@ -13,6 +13,9 @@ export const UPDATE_ALREADY_ACTIVE_COPY = 'Another update is already in progress
 
 export const ENVIRONMENT_RUNNING_COPY = 'This environment is still running. Stop it first.'
 
+export const LETS_ENCRYPT_OFF_COPY =
+  'Let\u2019s Encrypt is turned off for this organization. An owner can turn it on in Organization settings \u203a Domains & certificates.'
+
 export const MANAGED_HAS_BINDINGS_COPY =
   'One or more services are still connected to this cluster. Remove those connections first, then destroy it.'
 
@@ -31,8 +34,7 @@ const API_ERROR_COPY: Readonly<Record<string, string>> = {
   daemon_unavailable: 'TurboPanel could not reach this server right now. Try again in a moment.',
   cancel_unsupported:
     "This server's TurboPanel daemon is too old to cancel deploys. Update it first.",
-  lets_encrypt_not_enabled:
-    'Your organization has not turned on Let\u2019s Encrypt. An owner can allow it in the Let\u2019s Encrypt settings on the TLS certificates page.',
+  lets_encrypt_not_enabled: LETS_ENCRYPT_OFF_COPY,
   acme_requires_public_bind:
     'Let\u2019s Encrypt needs this domain to be reachable from the internet.',
   hosting_not_http: 'Let\u2019s Encrypt only works for web domains, not raw ports.',
@@ -42,11 +44,15 @@ const API_ERROR_COPY: Readonly<Record<string, string>> = {
   www_redirect_conflict:
     'This site lists both a name and its www version as separate domains, so its www choice cannot cover them. Remove one of the two names, or set www to \u201cOnly\u201d this name.',
   tier_below_required:
-    'That tier is below what this server needs. Pick a tier at or above the required floor.',
-  tier_not_found: 'That tier is no longer available. Refresh and pick again.',
+    'That size allows fewer CPU cores or less RAM than this server has. Pick a bigger size.',
+  server_not_on_tier: 'This server is not on that size any more. Refresh and try again.',
+  server_move_pending: 'This server already has a size change waiting for the end of the period.',
+  tier_not_found: 'That size is no longer available. Refresh and pick again.',
   server_not_licensed:
-    'This server does not have an active license yet. Add the server with a license before picking a tier.',
-  invalid_body: 'Choose a tier from the list, or clear the pick to use automatic placement.',
+    'This server does not have an active license yet. Add the server with a license before picking a size.',
+  invalid_body: 'Choose a size from the list, or give back the license.',
+  no_free_seat:
+    'No free license at that size. Buy one first, or give one back from another server.',
   environment_name_locked:
     "This environment's name is part of the folder path on your servers, so it cannot change while services or volumes have folders in it.",
   environment_has_folders:

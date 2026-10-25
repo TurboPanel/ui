@@ -5,6 +5,9 @@
 > that file owns the shared viewer.
 
 **Surfaces:**
+- Project → **Services** → a service → **Runtime log** — the app's own
+  output in the shared `LogViewer` (`src/components/logs/service-runtime-log.tsx`),
+  ungrouped, with search, filters, Wrap, Timestamps and a Live switch
 - Project → environment **Overview** — containers panel row opens a live tail
 
 **Job:** show what one running container is printing right now. Output is
@@ -25,11 +28,14 @@ never stored in TurboPanel; the control plane asks the daemon for a
 Do not fork the viewer. Shared chrome, tokens, virtualization, and copy/download
 rules live in `deploy-logs.md`.
 
-## Follow
+## Live (Follow)
 
-An optional **Follow** toggle may refetch on a fixed cadence.
+An optional **Live** switch (**Follow** on the older containers-panel tail)
+re-reads the tail on a fixed cadence.
 
-- **Off by default** — opening a tail is a one-shot read
+- **Off by default** — opening a tail is a one-shot read; **Read again** reads
+  it once more
+- Scrolling up away from the end turns Live off
 - Stops when the app backgrounds — do not keep polling a hidden screen
 - Do not resume automatically when the app returns to the foreground
 

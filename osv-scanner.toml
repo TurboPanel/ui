@@ -2,3 +2,8 @@
 # why the finding is not exploitable in this codebase, verified by reading
 # both the advisory and the actual dependency chain before adding it here.
 # Revisit whenever a fix becomes available upstream.
+
+[[IgnoredVulns]]
+id = "GHSA-mrhx-c7xc-m3w5"
+ignoreUntil = 2027-01-23
+reason = "Zod can run out of memory when it validates a very large array. The fix is only in zod 4.6.6 and later, and zod 3.25.76 is flagged because it ships the v4 code. Zod is not a direct dependency: the Expo command line tool uses the old zod 3 API (a forced upgrade to 4 would break it) and runs only on developer and build machines, and the lint plugin for React hooks uses it only to check its own lint settings. Neither handles input from an outside user, so nothing at runtime in the app can be reached. Drop this entry once Expo moves to zod 4."

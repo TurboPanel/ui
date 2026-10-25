@@ -72,6 +72,17 @@ export function formatBackupSchedule(
   return withTimezone(`Custom: ${policy.schedule}`, policy.timezone)
 }
 
+/** Wording for the choice that leaves the database to the server. */
+export const BACKUP_MAIN_DATABASE_LABEL = 'The main database (default)'
+
+/** What a schedule backs up, in plain words; null when the control plane does not say. */
+export function formatBackupDatabase(
+  policy: Readonly<Pick<BackupPolicyRecord, 'database' | 'targetKind'>>
+): string | null {
+  if (policy.targetKind !== 'managed' || policy.database === undefined) return null
+  return policy.database ?? BACKUP_MAIN_DATABASE_LABEL
+}
+
 /** How the form's schedule is chosen. */
 export type BackupScheduleMode = 'hourly' | 'daily' | 'weekly' | 'cron'
 
@@ -85,11 +96,14 @@ export type BackupPolicyForm = {
   cron: string
   /** IANA zone, or null for the server's local time. */
   timezone: string | null
+  /** The database to dump, or null for the cluster's main database. */
+  database: string | null
   retentionKeep: string
   enabled: boolean
 }
 
-export type BackupPolicyFormField = 'name' | 'time' | 'cron' | 'timezone' | 'retentionKeep'
+export type BackupPolicyFormField =
+  'name' | 'time' | 'cron' | 'timezone' | 'database' | 'retentionKeep'
 
 export type BackupPolicyFormErrors = Partial<Record<BackupPolicyFormField, string>>
 
@@ -100,6 +114,7 @@ export const EMPTY_BACKUP_POLICY_FORM: Readonly<BackupPolicyForm> = {
   day: 'sun',
   cron: '',
   timezone: null,
+  database: null,
   retentionKeep: '7',
   enabled: true,
 }
@@ -110,6 +125,7 @@ export function backupPolicyFormFromRecord(policy: Readonly<BackupPolicyRecord>)
     ...EMPTY_BACKUP_POLICY_FORM,
     name: policy.name,
     timezone: policy.timezone,
+    database: policy.database ?? null,
     retentionKeep: String(policy.retentionKeep),
     enabled: policy.enabled,
   }
@@ -188,8 +204,7 @@ export function backupScheduleFromForm(form: Readonly<BackupPolicyForm>): Backup
 }
 
 export type BackupPolicyFormResult =
-  | { ok: true; body: CreateBackupPolicyBody }
-  | { ok: false; errors: BackupPolicyFormErrors }
+  { ok: true; body: CreateBackupPolicyBody } | { ok: false; errors: BackupPolicyFormErrors }
 
 /**
  * Check the form the way the instance will, so the common mistakes show on
@@ -209,6 +224,7 @@ export function validateBackupPolicyForm(form: Readonly<BackupPolicyForm>): Back
       name: form.name.trim(),
       schedule: backupScheduleFromForm(form),
       timezone: form.timezone,
+      ...(form.database === null ? {} : { database: form.database }),
       retentionKeep: Number(form.retentionKeep.trim()),
       enabled: form.enabled,
     },
@@ -227,6 +243,11 @@ const ERROR_COPY: Record<string, BackupPolicyError> = {
   backup_timezone_invalid: {
     field: 'timezone',
     message: "That timezone isn't recognized. Pick one from the list, or use server time.",
+  },
+  backup_database_invalid: {
+    field: 'database',
+    message:
+      "That database isn't on this server, or it is one the server keeps for itself. Pick one from the list, or use the main database.",
   },
   backup_policy_invalid: {
     field: null,

@@ -18,6 +18,7 @@ import {
   fetchServerMetricsCapabilities,
   fetchServerMetricsConnection,
   fetchServerMetricsEvents,
+  fetchServerMetricsFacts,
   fetchServerMetricsSeries,
   fetchServerMetricsSummary,
   fetchServersUpdateStatus,
@@ -27,6 +28,7 @@ import {
   isForbiddenError,
   isHttpStatusError,
   MetricsBackendUnavailableError,
+  MetricsRouteMissingError,
   pingDaemon,
   rebootServer,
   resetServerUpdateStatus,
@@ -48,6 +50,7 @@ import {
   type FetchServerMetricsSeriesOptions,
   type FleetMetricsLatestResponse,
   type LicenseRecord,
+  type HostFactsResponse,
   type MetricEventsResponse,
   type MetricsCapabilitiesOutcome,
   type MetricsLiveStartOutcome,
@@ -558,6 +561,33 @@ export function useServerMetricsEvents(
     },
     enabled: (options?.enabled ?? true) && orgId.length > 0 && serverId.length > 0,
     refetchInterval: options?.refetchInterval,
+  })
+}
+
+/** The newest host facts (kernel, OS, versions, drive and GPU text); not tied to the chart range. */
+export function useServerMetricsFacts(
+  orgId: string,
+  serverId: string,
+  options?: Readonly<{ enabled?: boolean; refetchInterval?: number | false }>
+) {
+  return useQuery({
+    queryKey: queryKeys.org(orgId).servers.metricsFacts(serverId),
+    queryFn: async (): Promise<HostFactsResponse | null> => {
+      try {
+        return await fetchServerMetricsFacts(serverId, orgId)
+      } catch (error) {
+        // An older panel has no facts route (404): the card is simply not shown, with no retries.
+        if (
+          error instanceof MetricsBackendUnavailableError ||
+          error instanceof MetricsRouteMissingError
+        ) {
+          return null
+        }
+        throw error
+      }
+    },
+    enabled: (options?.enabled ?? true) && orgId.length > 0 && serverId.length > 0,
+    refetchInterval: options?.refetchInterval ?? 5 * 60_000,
   })
 }
 

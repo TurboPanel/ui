@@ -13,7 +13,9 @@
  * record id (needed to open a service page) is kept in `recordIds`.
  */
 
+import { DEFAULT_HOSTING_BIND_SCOPE, isHostingBindScope } from '@/lib/compose/hosting-extension'
 import type { DeploymentGroup } from '@/lib/deployment-history'
+import { hostingHostnames, oldestHostingsFirst } from '@/lib/environment-status'
 import type {
   BindingRecord,
   ConfigViewChange,
@@ -22,6 +24,8 @@ import type {
   ContainerRecord,
   EnvironmentConfigViewResponse as EnvironmentConfigView,
   HostingRecord,
+  IpRecord,
+  OrgServerRecord,
   ProjectPrincipalRecord,
   ServiceRecord,
   ServiceRunStateRecord,
@@ -51,6 +55,14 @@ export type OverviewSource = Readonly<{
   storage: readonly StorageRecord[]
   bindings: readonly BindingRecord[]
   principals: readonly ProjectPrincipalRecord[]
+  /** The organization's public addresses; `undefined` until read. */
+  publicIps?: readonly IpRecord[]
+  /** The server the environment runs on (its own pin, else the project's default). */
+  serverId?: string | null
+  /** Public addresses that server reports itself (preferred first); `undefined` until read. */
+  serverAddresses?: readonly string[]
+  /** The hostname Visit opens; it leads its box on the map. */
+  primaryHostname?: string | null
 }>
 
 const HIDDEN = 'Hidden'
@@ -207,7 +219,7 @@ function mapStatus(key: string | null): MapStatus | null {
 
 /**
  * The certificate word for a domain. No pinned certificate means the edge's own
- * self-signed one (a test certificate); a pinned one is read from its row, and
+ * self-signed one; a pinned one is read from its row, and
  * is unknown while that row is not at hand.
  */
 export function certificateKey(
@@ -219,22 +231,120 @@ export function certificateKey(
   if (record === undefined) return 'unknown'
   if (record.source === 'self_signed') return 'test'
   const status = record.metadata.status
-  if (status === 'ready' || status === 'managed') return 'ok'
+  if (status === 'ready' || status === 'automatic') return 'ok'
   if (status === 'pending') return 'issuing'
   return 'renewal_failed'
 }
 
+/** Shorter certificate words where the full one would not fit a map box. */
+const CERTIFICATE_BADGE_WORDS: Readonly<Record<string, string>> = {
+  test: 'Self-signed (browsers warn)',
+}
+
+/** "203.0.113.24", or "203.0.113.24 +1" when the server answers on more. */
+function addressText(addresses: readonly string[]): string | null {
+  const unique = [...new Set(addresses.filter((address) => address.trim() !== ''))]
+  const [first] = unique
+  if (first === undefined) return null
+  return unique.length > 1 ? `${first} +${unique.length - 1}` : first
+}
+
+/**
+ * The public addresses a server reports itself: its public interface
+ * addresses (the default-route one first), else its best-known address when
+ * that is public. Empty when it has reported none.
+ */
+export function serverPublicAddresses(
+  server: Pick<OrgServerRecord, 'ips' | 'address' | 'addressScope'> | null | undefined
+): string[] {
+  if (!server) return []
+  const reported = (server.ips ?? [])
+    .filter((ip) => ip.scope === 'public')
+    .sort((a, b) => Number(b.preferred === true) - Number(a.preferred === true))
+    .map((ip) => ip.address)
+  if (reported.length > 0) return reported
+  return server.address && server.addressScope === 'public' ? [server.address] : []
+}
+
+/**
+ * Where visitors reach a hostname, from what the app already knows. A pinned
+ * public address is that address; "Any interface" is the addresses the
+ * certificate's DNS check expects (only kept while it waits for DNS), else the
+ * organization's public addresses on the environment's server, else the public
+ * addresses that server reports itself (a single self-hosted server often has
+ * no address rows). Datacenter and Local say so. Null when nothing is known:
+ * the line is left out, never guessed.
+ */
+type ServedFromSource = Pick<OverviewSource, 'publicIps' | 'serverId' | 'serverAddresses'>
+
+/** The addresses an "Any interface" hosting answers on, first known source wins. */
+function anyInterfaceAddresses(
+  hosting: HostingRecord,
+  source: ServedFromSource
+): readonly string[] {
+  const expected = hosting.certificate?.dns?.expectedAddresses ?? []
+  if (expected.length > 0) return expected
+  if (!source.serverId) return []
+  const listed = (source.publicIps ?? [])
+    .filter((ip) => ip.serverId === source.serverId)
+    .map((ip) => ip.address)
+  return listed.length > 0 ? listed : (source.serverAddresses ?? [])
+}
+
+export function servedFromOf(hosting: HostingRecord, source: ServedFromSource): string | null {
+  const bind = hosting.options?.bind
+  const scope = isHostingBindScope(bind) ? bind : DEFAULT_HOSTING_BIND_SCOPE
+  if (scope === 'datacenter') return 'Served on the datacenter network'
+  if (scope === 'local') return 'Served on this server only'
+  const pinned = hosting.ipId ? source.publicIps?.find((ip) => ip.id === hosting.ipId) : undefined
+  let addresses: readonly string[]
+  if (hosting.ipId) addresses = pinned ? [pinned.address] : []
+  else addresses = anyInterfaceAddresses(hosting, source)
+  const text = addressText(addresses)
+  return text === null ? null : `Served from ${text}`
+}
+
+/**
+ * The hosts a hosting row answers on: its hostnames (as the header reads them),
+ * else its name when it has none yet.
+ */
+function hostsOf(hosting: HostingRecord): string[] {
+  const hostnames = hostingHostnames(hosting)
+  if (hostnames.length > 0) return hostnames
+  const name = hosting.name?.trim() ?? ''
+  return name === '' ? [] : [name]
+}
+
+/** The map domains of one hosting row: one per host, all with its certificate and served line. */
+function hostingDomains(
+  hosting: HostingRecord,
+  serviceName: string,
+  source: OverviewSource
+): MapDomain[] {
+  const key = certificateKey(hosting.tlsId, source.tls)
+  const label = CERTIFICATE_BADGE_WORDS[key] ?? statusInfo(key).label
+  const servedFrom = servedFromOf(hosting, source)
+  return hostsOf(hosting).map((host) => ({
+    host,
+    status: { key, label },
+    serviceId: serviceName,
+    ...(servedFrom === null ? {} : { servedFrom }),
+  }))
+}
+
+/** One map domain per hostname, oldest hosting first, each hostname once. */
 export function domainsOf(source: OverviewSource): MapDomain[] {
   const seen = new Set<string>()
   const domains: MapDomain[] = []
   for (const service of source.view.effective.services) {
     const rows = service.serviceId === null ? [] : (source.hostings[service.serviceId] ?? [])
-    for (const hosting of rows) {
-      const host = hosting.name?.trim() ?? ''
-      if (host === '' || seen.has(host)) continue
-      seen.add(host)
-      const key = certificateKey(hosting.tlsId, source.tls)
-      domains.push({ host, status: { key, label: statusInfo(key).label }, serviceId: service.name })
+    for (const hosting of oldestHostingsFirst(rows)) {
+      for (const domain of hostingDomains(hosting, service.name, source)) {
+        const key = domain.host.toLowerCase()
+        if (seen.has(key)) continue
+        seen.add(key)
+        domains.push(domain)
+      }
     }
   }
   return domains
@@ -421,6 +531,7 @@ export function mapInputOf(source: OverviewSource, mode: MapMode): MapInput {
     envName: source.envName,
     services,
     domains: inBase ? [] : domainsOf(source),
+    primaryHost: source.primaryHostname ?? null,
     volumes: inBase ? [] : volumesOf(source),
     links: linksOf(source, side, services, !inBase),
     changes: changeRows(source.view.changes, source.envName),
@@ -562,10 +673,23 @@ export type EnvironmentRelation = Readonly<
   | { kind: 'none' }
 >
 
+/** How many changes the card names before it says "and N more". */
+const CHANGE_NAMES_SHOWN = 2
+
+/** "Start command, API_URL and 2 more": the first changes by name, each once. */
+export function changeNames(changes: readonly Pick<ConfigViewChange, 'label'>[]): string {
+  const names = [...new Set(changes.map((change) => change.label.trim()).filter(Boolean))]
+  if (names.length === 0) return relationText(false, changes.length)
+  const shown = names.slice(0, CHANGE_NAMES_SHOWN).join(', ')
+  const rest = names.length - CHANGE_NAMES_SHOWN
+  return rest > 0 ? `${shown} and ${rest} more` : shown
+}
+
 /**
- * The card under the services: "Changes from Base (2)" when the environment
- * changes something on top of the Base, "Staging stands alone" when it drops
- * the Base's apps. Nothing otherwise; there is no card with a made-up 0.
+ * The card under the services: "Changes from the Base" naming the first
+ * changes (the count sits by the chevron) when the environment changes
+ * something on top of the Base, "Staging stands alone" when it drops the
+ * Base's apps. Nothing otherwise; there is no card with a made-up 0.
  */
 export function relationCard(
   view: EnvironmentConfigView,
@@ -584,8 +708,8 @@ export function relationCard(
   if (count === 0) return { kind: 'none' }
   return {
     kind: 'changes',
-    title: `Changes from Base (${count})`,
-    text: relationText(false, count),
+    title: 'Changes from the Base',
+    text: changeNames(view.changes),
     count,
   }
 }

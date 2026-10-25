@@ -15,7 +15,7 @@ function cert(
   return { id, source, metadata: { status, dnsNames } }
 }
 
-const letsEncrypt = cert('le', 'lets_encrypt', ['turbopanel.io'], 'managed')
+const letsEncrypt = cert('le', 'lets_encrypt', ['turbopanel.io'], 'automatic')
 const uploadBare = cert('up-bare', 'upload', ['turbopanel.io'])
 const uploadBoth = cert('up-both', 'upload', ['turbopanel.io', 'www.turbopanel.io'])
 const wildcard = cert('wild', 'organization_ca', ['*.turbopanel.io', 'turbopanel.io'])

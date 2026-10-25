@@ -29,13 +29,13 @@ describe('tlsDateLines', () => {
   })
 
   it('never shows the placeholder expiry of a managed certificate', () => {
-    const lines = tlsDateLines(row('managed', '1970-01-01T00:00:00.000Z'), 'en-US')
+    const lines = tlsDateLines(row('automatic', '1970-01-01T00:00:00.000Z'), 'en-US')
     expect(lines).toEqual(['Waiting for the first certificate from the host.'])
   })
 
   it('shows the dates the host reported for a managed certificate', () => {
     const lines = tlsDateLines(
-      row('managed', '1970-01-01T00:00:00.000Z', {
+      row('automatic', '1970-01-01T00:00:00.000Z', {
         notAfter: '2027-01-02T03:04:05.000Z',
         lastIssuedAt: '2026-10-19T10:00:00.000Z',
       }),
@@ -56,15 +56,15 @@ describe('tlsStoredCopyLines', () => {
 
   it('says a copy is still to come while only the host has reported dates', () => {
     const lines = tlsStoredCopyLines(
-      row('managed', '1970-01-01T00:00:00.000Z', { notAfter: '2027-01-02T03:04:05.000Z' })
+      row('automatic', '1970-01-01T00:00:00.000Z', { notAfter: '2027-01-02T03:04:05.000Z' })
     )
     expect(lines).toEqual(['No copy stored yet. The host sends one after its next check.'])
-    expect(tlsStoredCopyLines(row('managed', '1970-01-01T00:00:00.000Z'))).toEqual([])
+    expect(tlsStoredCopyLines(row('automatic', '1970-01-01T00:00:00.000Z'))).toEqual([])
   })
 
   it('shows the stored copy with its issuer and start date, and never a key', () => {
     const stored = {
-      ...row('managed', '2027-01-02T03:04:05.000Z'),
+      ...row('automatic', '2027-01-02T03:04:05.000Z'),
       certificatePem: '-----BEGIN CERTIFICATE-----',
     } as TlsRecord
     stored.metadata = { ...stored.metadata, issuer: 'R11', notBefore: '2026-10-19T10:00:00.000Z' }

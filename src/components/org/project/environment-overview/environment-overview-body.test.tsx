@@ -137,20 +137,20 @@ describe.each(SCENARIOS)('EnvironmentOverviewBody ($name)', (scenario) => {
   it('opens each row where it belongs', () => {
     renderBody()
     fireEvent.click(screen.getByRole('button', { name: 'web' }))
-    expect(push).toHaveBeenLastCalledWith('/o/projects/p/services/s-web')
+    expect(push).toHaveBeenLastCalledWith(`${BASE}/services/s-web`)
     fireEvent.click(screen.getByRole('button', { name: 'shopdb' }))
     expect(push).toHaveBeenLastCalledWith(`${BASE}/configuration/bindings`)
     fireEvent.click(screen.getByRole('button', { name: 'uploads' }))
     expect(push).toHaveBeenLastCalledWith(`${BASE}/configuration/storage`)
     fireEvent.click(screen.getByRole('button', { name: 'redis' }))
-    expect(push).toHaveBeenLastCalledWith('/o/projects/p/services/s-redis')
+    expect(push).toHaveBeenLastCalledWith(`${BASE}/services/s-redis`)
   })
 
   it('opens map stations through links: services, domain, database and storage', () => {
     renderBody()
     const href = (name: RegExp) =>
       screen.getByRole('link', { name }).closest('[data-href]')?.getAttribute('data-href')
-    expect(href(/^web, Node\.js app/)).toBe('/o/projects/p/services/s-web')
+    expect(href(/^web, Node\.js app/)).toBe(`${BASE}/services/s-web`)
     expect(href(/^shop\.example\.com, domain/)).toBe(`${BASE}/configuration/hosting`)
     expect(href(/^shopdb, database/)).toBe(`${BASE}/configuration/bindings`)
     expect(href(/^uploads, storage/)).toBe(`${BASE}/configuration/storage`)
@@ -159,7 +159,7 @@ describe.each(SCENARIOS)('EnvironmentOverviewBody ($name)', (scenario) => {
   it('shows the changes card with its count, linking to Configuration', () => {
     renderBody()
     const card = screen.getByRole('link', {
-      name: 'Changes from Base (4). 4 changes from the Base',
+      name: 'Changes from the Base, 4 changes. Start command, old and 2 more',
     })
     expect(card.closest('[data-href]')?.getAttribute('data-href')).toBe(`${BASE}/configuration`)
     expect(styleOf(card).backgroundColor).toBe(token(scenario, 'baseSoft'))
@@ -172,12 +172,12 @@ describe.each(SCENARIOS)('EnvironmentOverviewBody ($name)', (scenario) => {
     })
     expect(card.closest('[data-href]')?.getAttribute('data-href')).toBe(`${BASE}/settings`)
     expect(styleOf(card).borderStyle).toBe('dashed')
-    expect(screen.queryByText(/Changes from Base/)).toBeNull()
+    expect(screen.queryByText(/Changes from the Base/)).toBeNull()
   })
 
   it('shows no card when there is nothing to say, never "(0)"', () => {
     renderBody({ source: overviewSource({ view: configView({ changes: [] }) }) })
-    expect(screen.queryByText(/Changes from Base/)).toBeNull()
+    expect(screen.queryByText(/Changes from the Base/)).toBeNull()
     expect(screen.queryByText(/stands alone/)).toBeNull()
   })
 
@@ -185,12 +185,12 @@ describe.each(SCENARIOS)('EnvironmentOverviewBody ($name)', (scenario) => {
     renderBody()
     const [row] = screen.getAllByRole('button', { name: 'Started in the console' })
     if (!row) throw new Error('no deploy row')
-    expect(within(row).getByLabelText('Deployed')).toBeTruthy()
+    expect(within(row).getByLabelText('Succeeded')).toBeTruthy()
     expect(within(row).getByText('Live')).toBeTruthy()
     expect(within(row).getByText('1h ago')).toBeTruthy()
     fireEvent.click(row)
     expect(push).toHaveBeenLastCalledWith(`${BASE}/deployments`)
-    fireEvent.click(screen.getByRole('button', { name: 'All deployments' }))
+    fireEvent.click(screen.getByRole('link', { name: 'All deployments' }))
     expect(push).toHaveBeenLastCalledWith(`${BASE}/deployments`)
   })
 
@@ -224,7 +224,7 @@ describe.each(SCENARIOS)('EnvironmentOverviewBody ($name)', (scenario) => {
     expect(within(notice).getByText('Build stopped with an error')).toBeTruthy()
     fireEvent.click(within(notice).getByRole('button', { name: 'View deployments' }))
     expect(push).toHaveBeenLastCalledWith(`${BASE}/deployments`)
-    fireEvent.click(within(notice).getByRole('button', { name: 'Open Configuration' }))
+    fireEvent.click(within(notice).getByRole('button', { name: 'Open Services' }))
     expect(push).toHaveBeenLastCalledWith(`${BASE}/configuration`)
   })
 
@@ -281,7 +281,7 @@ describe.each(SCENARIOS)('EnvironmentOverviewBody ($name)', (scenario) => {
       fireEvent.click(screen.getByRole('button', { name: 'web' }))
       expect(push).not.toHaveBeenCalled()
       fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Open web' }))
-      expect(push).toHaveBeenLastCalledWith('/o/projects/p/services/s-web')
+      expect(push).toHaveBeenLastCalledWith(`${BASE}/services/s-web`)
       expect(screen.queryByRole('dialog')).toBeNull()
     })
 
@@ -314,7 +314,7 @@ describe.each(SCENARIOS)('EnvironmentOverviewBody ($name)', (scenario) => {
       renderBody({ source: crashing({ state: 'stopped' }) })
       expect(screen.queryByText('See why')).toBeNull()
       fireEvent.click(screen.getByRole('button', { name: 'web' }))
-      expect(push).toHaveBeenLastCalledWith('/o/projects/p/services/s-web')
+      expect(push).toHaveBeenLastCalledWith(`${BASE}/services/s-web`)
     })
   })
 })

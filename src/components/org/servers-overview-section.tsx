@@ -9,6 +9,7 @@ import {
   Badge,
   type BadgeTone,
   Checkbox,
+  InlineNotice,
   DataTable,
   DataTableCell,
   type DataTableColumn,
@@ -39,6 +40,7 @@ import {
 } from '@/lib/instance-api'
 import { isServerUpdateActionHidden } from '@/lib/daemon-update-labels'
 import { serverDetailHref, serversPendingKeysHref } from '@/lib/org-navigation'
+import { useAddServerLink } from '@/lib/use-add-server-link'
 import {
   provisioningKeys,
   provisioningServersLabel,
@@ -57,6 +59,7 @@ import {
 } from '@/lib/queries/servers'
 import { orEmptyArray } from '@/lib/or-empty-array'
 import { queryKeys, useCan } from '@/lib/query-client'
+import { useAuth } from '@/lib/auth-context'
 import { resolveServerAddEligibility } from '@/lib/server-add-eligibility'
 import {
   resolveServerConnectionStatus,
@@ -109,9 +112,7 @@ function isColocatedServer(
   server: OrgServerRecord,
   updateData?: ServerUpdateStatus | null
 ): boolean {
-  return (
-    server.colocatedWithInstance === true || updateData?.colocatedWithInstance === true
-  )
+  return server.colocatedWithInstance === true || updateData?.colocatedWithInstance === true
 }
 
 function isServerUpdatable(
@@ -280,7 +281,11 @@ function UnusedKeysHint({
       <Pressable
         accessibilityRole="link"
         accessibilityLabel={`${label}. Open pending keys.`}
-        style={({ pressed }) => [styles.unusedKeysLink, pressed && styles.buttonPressed, webPointer]}
+        style={({ pressed }) => [
+          styles.unusedKeysLink,
+          pressed && styles.buttonPressed,
+          webPointer,
+        ]}
         onPress={() => router.push(serversPendingKeysHref(orgId))}
       >
         <Text style={styles.unusedKeysLinkText}>{label} — view and delete</Text>
@@ -496,9 +501,12 @@ function tierChipTone(state: TierPlacementState): BadgeTone {
  * is reserved for the detail panel so this O(1) list adds no billing read.
  */
 function ServerTierLine({ server }: Readonly<{ server: OrgServerRecord }>) {
+  const { billingEnabled } = useAuth()
   const placement = server.tierPlacement
-  // No bound tier is *untiered* (self-hosted, or a hosted key minted before
-  // billing) — not a shortfall, so no "Unlicensed" chip on the fleet list.
+  // Self-hosted servers are all equal: no tier is shown anywhere.
+  if (!billingEnabled) return null
+  // No bound tier is *untiered* (a hosted key minted before billing) — not a
+  // shortfall, so no "Unlicensed" chip on the fleet list.
   if (!placement?.licenseTier) {
     return <Text style={styles.locationMuted}>—</Text>
   }
@@ -506,7 +514,8 @@ function ServerTierLine({ server }: Readonly<{ server: OrgServerRecord }>) {
   const unwatched = formatUnwatchedCounts(summarizeUnwatched(placement.unwatched))
   const placementNote = (() => {
     if (state === 'below-required') return `needs ${placement.requiredTier}`
-    if (state === 'below-recommended') return unwatched ? `${unwatched} unmonitored` : `${placement.recommendedTier} recommended`
+    if (state === 'below-recommended')
+      return unwatched ? `${unwatched} unmonitored` : `${placement.recommendedTier} recommended`
     if (state === 'above-hardware') return `${placement.recommendedTier} would do`
     return null
   })()
@@ -514,13 +523,19 @@ function ServerTierLine({ server }: Readonly<{ server: OrgServerRecord }>) {
   // are being emailed about this host; it is shown whenever the wire carries
   // it, never inferred from the rank comparison above.
   const notice = placement.notice ?? null
-  const noticeNote = notice ? `notified ${formatElapsedSince(notice.lastNotifiedAt, { fallback: '—' })} ago` : null
-  const note = [placementNote, noticeNote].filter((part): part is string => part != null).join(' · ')
+  const noticeNote = notice
+    ? `notified ${formatElapsedSince(notice.lastNotifiedAt, { fallback: '—' })} ago`
+    : null
+  const note = [placementNote, noticeNote]
+    .filter((part): part is string => part != null)
+    .join(' · ')
   return (
     <View style={styles.tierLine}>
       <View style={styles.tierChips}>
         <Badge label={placement.licenseTier ?? 'Unlicensed'} tone={tierChipTone(state)} />
-        {notice ? <Badge label="Daily notice" tone={notice.kind === 'exceeds' ? 'pending' : 'info'} /> : null}
+        {notice ? (
+          <Badge label="Daily notice" tone={notice.kind === 'exceeds' ? 'pending' : 'info'} />
+        ) : null}
       </View>
       {note ? (
         <Text
@@ -535,6 +550,8 @@ function ServerTierLine({ server }: Readonly<{ server: OrgServerRecord }>) {
 }
 
 function ServerTierCell({ server }: Readonly<{ server: OrgServerRecord }>) {
+  const { billingEnabled } = useAuth()
+  if (!billingEnabled) return null
   return (
     <DataTableCell column={SV_TIER}>
       <ServerTierLine server={server} />
@@ -758,9 +775,13 @@ function ServersFleetTable({
   onToggleSelectAll,
   onToggleSelected,
 }: ServersFleetViewProps) {
+  const { billingEnabled } = useAuth()
+  const columns = billingEnabled
+    ? SERVER_COLUMNS
+    : SERVER_COLUMNS.filter((column) => column.key !== 'tier')
   return (
     <DataTable
-      columns={SERVER_COLUMNS}
+      columns={columns}
       minWidth={1000}
       renderHeaderCell={(column) =>
         column.key === 'check' ? (
@@ -976,7 +997,10 @@ function toggleIdInSet(prev: Set<string>, serverId: string): Set<string> {
   return next
 }
 
-export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
+export function ServersOverviewSection({
+  orgId,
+  removedServerName,
+}: Readonly<{ orgId: string; removedServerName?: string }>) {
   const queryClient = useQueryClient()
   const canManage = useCan('organization', orgId, 'organization:manage')
   const canOwn = useCan('organization', orgId, 'organization:own')
@@ -1011,6 +1035,7 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
   })
 
   const [showAddServerWizard, setShowAddServerWizard] = useState(false)
+  useAddServerLink(() => setShowAddServerWizard(true))
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [serversLayout, setServersLayout] = useState<ServersLayout>(() => getStoredServersLayout())
 
@@ -1144,6 +1169,12 @@ export function ServersOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
           compactChrome={compactChrome}
         />
       </View>
+      {removedServerName ? (
+        <InlineNotice
+          title="Server removed"
+          body={`${removedServerName} was removed from this organization.`}
+        />
+      ) : null}
       {canOwn && addServerEligibility.reason ? (
         <Text style={styles.capacityHint}>{addServerEligibility.reason}</Text>
       ) : null}

@@ -180,6 +180,30 @@ export type UpgradeStepOutcome = Readonly<{
   detail: string | null
 }>
 
+/** Characters of the server id shown as the short id. */
+const SERVER_SHORT_ID_LENGTH = 8
+
+/**
+ * How a step names its server: the name, else the hostname, else the short id.
+ * `shortId` is set only when a name stands in front of it, so the id is never
+ * printed twice.
+ */
+export function upgradeServerLabel(
+  step: Readonly<{ serverId: string; serverName?: string | null; hostname?: string | null }>
+): { primary: string; shortId: string | null } {
+  const shortId = step.serverId.slice(0, SERVER_SHORT_ID_LENGTH)
+  const named = step.serverName?.trim() || step.hostname?.trim() || null
+  return named ? { primary: named, shortId } : { primary: shortId, shortId: null }
+}
+
+/** The plain note a step carries after a reported restart error that turned out fine, or null. */
+export function upgradeStepNote(
+  step: Readonly<{ detail?: { restartNote?: string } | null }>
+): string | null {
+  const note = step.detail?.restartNote?.trim()
+  return note || null
+}
+
 /**
  * What a step's row says. A failed, rolled-back, or stuck step reads as that —
  * never as the pipeline stage it stopped on.
@@ -188,6 +212,7 @@ export function upgradeStepOutcome(
   step: Readonly<{
     status: UpgradeStepStatus | null | undefined
     errorCode?: string | null
+    errorMessage?: string | null
   }>
 ): UpgradeStepOutcome {
   const detail = upgradeStepErrorLabel(step.errorCode)
@@ -198,6 +223,14 @@ export function upgradeStepOutcome(
     case 'done':
       return { tone: 'ok', label: 'Done', detail: null }
     case 'skipped':
+      if (step.errorCode === 'server_offline') {
+        const message = step.errorMessage?.trim()
+        return {
+          tone: 'muted',
+          label: 'Skipped: offline',
+          detail: message || SKIPPED_OFFLINE_DETAIL,
+        }
+      }
       return { tone: 'muted', label: 'Skipped', detail }
     case 'failed':
       return { tone: 'danger', label: 'Failed', detail }
@@ -227,8 +260,15 @@ export function stepHasStarted(status: UpgradeStepStatus | null | undefined): bo
   return status != null && status !== 'pending' && status !== 'waiting'
 }
 
+/** Shown for a server the update left out because it was offline. */
+export const SKIPPED_OFFLINE_DETAIL =
+  'It was offline when the update started. It updates on its own when it reconnects.'
+
 /** The fleet table's Status column: what the update is doing with this server, in plain words. */
-export function fleetStatusBadge(status: UpgradeStepStatus): {
+export function fleetStatusBadge(
+  status: UpgradeStepStatus,
+  errorCode?: string | null
+): {
   tone: 'ok' | 'muted' | 'danger' | 'pending' | 'info'
   label: string
 } {
@@ -236,6 +276,9 @@ export function fleetStatusBadge(status: UpgradeStepStatus): {
     case 'done':
       return { tone: 'ok', label: 'Updated' }
     case 'skipped':
+      if (errorCode === 'server_offline') {
+        return { tone: 'muted', label: 'Skipped: offline' }
+      }
       return { tone: 'muted', label: 'Skipped' }
     case 'failed':
       return { tone: 'danger', label: 'Failed' }
@@ -281,6 +324,63 @@ const STEP_TERMINAL = new Set<UpgradeStepStatus>([
 /** A run is still working on this piece: it has a step that has not ended. */
 export function stepInFlight(status: UpgradeStepStatus | null | undefined): boolean {
   return status != null && !STEP_TERMINAL.has(status)
+}
+
+function remainingSteps<T extends Readonly<{ status: UpgradeStepStatus }>>(
+  steps: readonly T[]
+): T[] {
+  return steps.filter((step) => !STEP_TERMINAL.has(step.status))
+}
+
+type OfflineWaitStep = Readonly<{
+  status: UpgradeStepStatus
+  phase?: string
+  connected?: boolean
+  attempts?: number
+}>
+
+/** Only fleet steps are skipped when offline; platform phases still fail the run. */
+function isFleetOrUnknownPhase(phase: string | undefined): boolean {
+  return phase === undefined || phase === 'fleet'
+}
+
+/**
+ * A step counts as waiting on an offline server only when the panel would skip
+ * it: status `waiting`, no dispatch attempts yet (`attempts === 0`), and the
+ * host reported not connected (`connected === false`). A missing `connected` or
+ * `attempts` (older panel) is unknown, so it never counts and the page makes no
+ * offline claim. A `pending` step is not skippable yet.
+ */
+function isOfflineWaitStep(step: OfflineWaitStep): boolean {
+  if (!isFleetOrUnknownPhase(step.phase)) return false
+  return step.status === 'waiting' && step.connected === false && step.attempts === 0
+}
+
+/**
+ * Copy when every unfinished step is waiting on a server the panel reports as
+ * offline; null otherwise (including when the panel does not say).
+ */
+export function offlineWaitingNotice(steps: readonly OfflineWaitStep[]): string | null {
+  const remaining = remainingSteps(steps)
+  if (remaining.length === 0 || !remaining.every(isOfflineWaitStep)) return null
+  const n = remaining.length
+  return n === 1
+    ? '1 server is offline, so this update is waiting for it. It is skipped if it stays offline, and it updates on its own when it reconnects.'
+    : `${n} servers are offline, so this update is waiting for them. They are skipped if they stay offline, and they update on their own when they reconnect.`
+}
+
+/**
+ * True when unfinished steps are only waiting or pending for servers the panel
+ * reports as offline (none in flight, none queued on a connected or unknown
+ * host). Starting a new update settles that run on the control plane.
+ */
+export function runWaitsOnlyOnOffline(
+  run: Readonly<{ steps: readonly OfflineWaitStep[] }> | null | undefined
+): boolean {
+  if (!run) return false
+  const remaining = remainingSteps(run.steps)
+  if (remaining.length === 0) return false
+  return remaining.every(isOfflineWaitStep)
 }
 
 /** The step has written the new files to disk (installing is over). */
@@ -408,20 +508,40 @@ export type FleetProgressSummary = {
   total: number
   needsAttention: number
   inProgress: number
+  /** Servers the update left out because they were offline (never counted as up to date). */
+  skippedOffline: number
+  /** Servers left out for another reason (for example a cancelled run); not up to date either. */
+  skippedOther: number
 }
 
-const TERMINAL_OK = new Set<UpgradeStepStatus>(['done', 'skipped'])
+/** The fleet progress line, e.g. `2 of 3 servers up to date, 1 skipped (offline)`. */
+export function fleetProgressText(summary: FleetProgressSummary, noun: string): string {
+  const base = `${summary.upToDate} of ${summary.total} ${noun} up to date`
+  const parts = [base]
+  if (summary.skippedOffline > 0) parts.push(`${summary.skippedOffline} skipped (offline)`)
+  if (summary.skippedOther > 0) parts.push(`${summary.skippedOther} skipped`)
+  return parts.join(', ')
+}
 const TERMINAL_BAD = new Set<UpgradeStepStatus>(['failed', 'rolled_back', 'needs_attention'])
 
 export function summarizeFleetSteps(
-  steps: readonly { status: UpgradeStepStatus; phase: UpgradePhase }[]
+  steps: readonly {
+    status: UpgradeStepStatus
+    phase: UpgradePhase
+    errorCode?: string | null
+  }[]
 ): FleetProgressSummary {
   const fleet = steps.filter((step) => step.phase === 'fleet')
   let upToDate = 0
   let needsAttention = 0
   let inProgress = 0
+  let skippedOffline = 0
+  let skippedOther = 0
   for (const step of fleet) {
-    if (TERMINAL_OK.has(step.status)) upToDate += 1
+    if (step.status === 'skipped') {
+      if (step.errorCode === 'server_offline') skippedOffline += 1
+      else skippedOther += 1
+    } else if (step.status === 'done') upToDate += 1
     else if (TERMINAL_BAD.has(step.status)) needsAttention += 1
     else inProgress += 1
   }
@@ -430,6 +550,8 @@ export function summarizeFleetSteps(
     total: fleet.length,
     needsAttention,
     inProgress,
+    skippedOffline,
+    skippedOther,
   }
 }
 

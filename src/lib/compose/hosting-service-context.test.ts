@@ -95,9 +95,12 @@ describe('resolveHostingServiceContext', () => {
     expect(hostingPhpSectionCopy(ols).title).toBe('PHP settings (OpenLiteSpeed LSAPI)')
     expect(hostingPhpSectionCopy(ols).hint).toContain('suEXEC')
 
-    // web.env stays Apache-only — PHP parity did not change SetEnv support.
-    expect(ols.webEnvMode).toBe('ignored')
-    expect(hostingWebEnvSectionCopy(ols).showFields).toBe(false)
+    // OpenLiteSpeed passes web.env to PHP through per-site rewrite rules.
+    expect(ols.webEnvMode).toBe('openlitespeed_rewrite')
+    expect(hostingWebEnvSectionCopy(ols).showFields).toBe(true)
+    expect(hostingWebEnvSectionCopy(ols).hint).not.toContain('does not inject')
+    expect(hostingWebEnvSectionCopy(ols).hint).toContain('rewrite rules')
+    expect(hostingWebEnvSectionCopy(ols).hint).toContain('the deploy stops')
   })
 
   it('surfaces docker bridge env hint for containers next to site', () => {

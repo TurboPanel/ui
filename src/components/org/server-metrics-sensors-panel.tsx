@@ -158,7 +158,6 @@ export function ServerMetricsSensorsPanel({
   )
   const inventory = hostQuery.data?.inventory ?? null
   const temperatureUnit: TemperatureUnit = hostQuery.data?.temperatureUnit ?? 'celsius'
-  const topologyGeneration = hostQuery.data?.topologyGeneration ?? null
 
   const entityMetricIds = useMemo(() => {
     if (!inventory) return []
@@ -184,7 +183,7 @@ export function ServerMetricsSensorsPanel({
     () => ({ ...computeSensorsPanelRange(), metrics: entityMetricIds }),
     {
       enabled: entityMetricIds.length > 0,
-      rangeKey: `sensors-panel-entities:${topologyGeneration ?? 'none'}`,
+      rangeKey: 'sensors-panel-entities',
       staleTime: 30_000,
       refetchInterval: 60_000,
     }
