@@ -122,12 +122,14 @@ describe('ProjectBaseTab states', () => {
     model.current = { state: 'unavailable' }
     render(<ProjectBaseTab />)
     expect(screen.getByTestId('old-screen')).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Project variables' })).toBeTruthy()
   })
 
   it('says a project with no environment has no Base to show yet', () => {
     model.current = { state: 'empty' }
     render(<ProjectBaseTab />)
     expect(screen.getByText('No environments yet')).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Project variables' })).toBeTruthy()
   })
 })
 

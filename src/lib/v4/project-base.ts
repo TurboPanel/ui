@@ -15,6 +15,7 @@ import type {
   ConfigViewSide,
   EnvironmentConfigViewResponse,
   ProjectPrincipalRecord,
+  VariableRecord,
 } from '@/lib/instance-api'
 import { usedFor, variableValueText, type VariableRowModel } from './config-view-model'
 import { mapInputOf, runsAsOf, sideServices, type OverviewSource } from './environment-overview'
@@ -199,7 +200,7 @@ export function baseServicesNote(rows: readonly BaseServiceRow[]): string {
 export type BaseVariableRow = VariableRowModel
 
 /** The variables set on the project, shared by every environment. */
-export function baseVariableRows(base: ConfigViewSide): BaseVariableRow[] {
+export function baseVariableRows(base: Pick<ConfigViewSide, 'variables'>): BaseVariableRow[] {
   return base.variables.map((variable) => ({
     key: variable.key,
     name: variable.name,
@@ -211,6 +212,26 @@ export function baseVariableRows(base: ConfigViewSide): BaseVariableRow[] {
     sourceNote: '',
     isChange: false,
   }))
+}
+
+/**
+ * The same rows straight from the project's variable records, for when no
+ * environment's configuration can be read. A secret's value is never shown.
+ */
+export function projectVariableRows(records: readonly VariableRecord[]): BaseVariableRow[] {
+  return baseVariableRows({
+    variables: records.map((record) => ({
+      key: `var:${record.key}`,
+      name: record.key,
+      variableId: record.id,
+      value: record.isSecret ? null : record.value,
+      isSecret: record.isSecret,
+      forBuild: record.forBuild,
+      forRuntime: record.forRuntime,
+      source: 'project' as const,
+      inheritedFromBase: true,
+    })),
+  })
 }
 
 // --- Linux users -------------------------------------------------------------------

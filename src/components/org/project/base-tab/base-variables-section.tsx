@@ -9,7 +9,7 @@ import { Notice } from '@/components/ui/v4'
 import { useSaveBaseVariables } from '@/lib/queries/configuration'
 import { useVariables } from '@/lib/queries/variables'
 import { variableFacts } from '@/lib/v4/config-edits'
-import type { BaseVariableRow } from '@/lib/v4/project-base'
+import { projectVariableRows, type BaseVariableRow } from '@/lib/v4/project-base'
 
 const BASE_NAME = 'the Base'
 
@@ -22,13 +22,19 @@ const styles = StyleSheet.create({ stack: { gap: 16 } })
  * as an environment's Configuration tab (add, edit the value and where it is
  * used, remove), staged until Save changes. Secret values are never shown.
  */
-export function BaseVariablesSection({ rows }: Readonly<{ rows: readonly BaseVariableRow[] }>) {
+export function BaseVariablesSection({
+  rows,
+}: Readonly<{
+  /** The Base's rows from a config view; without them the rows come from the project's records. */
+  rows?: readonly BaseVariableRow[]
+}>) {
   const { orgId, projectId, canOwn, projectAllowsMutations } = useProjectContext()
   const projectVariables = useVariables(orgId, { projectId })
   const save = useSaveBaseVariables(orgId, projectId)
   const { staged, stage, unstage, discard, saveAll, saveError, problems, savedCount } =
     useStagedEdits(save)
   const records = projectVariables.data?.variables
+  const shown = useMemo(() => rows ?? projectVariableRows(records ?? []), [rows, records])
   const editable = canOwn && projectAllowsMutations
   const editing = useMemo<EditingApi | undefined>(() => {
     if (!editable || !records) return undefined
@@ -53,7 +59,7 @@ export function BaseVariablesSection({ rows }: Readonly<{ rows: readonly BaseVar
         />
       ) : null}
       <VariablesSection
-        variables={rows}
+        variables={shown}
         envName={BASE_NAME}
         editing={editing}
         title="Project variables"

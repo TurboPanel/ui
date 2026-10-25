@@ -87,7 +87,14 @@ export function ProjectBaseTab() {
   const s = styles(usePalette())
   const { orgId, projectId } = useProjectContext()
   const model = useBaseTabModel()
-  if (model.state === 'unavailable') return <ProjectOverviewTab />
+  if (model.state === 'unavailable') {
+    return (
+      <View style={s.page}>
+        <ProjectOverviewTab />
+        <BaseVariablesSection />
+      </View>
+    )
+  }
   if (model.state === 'loading') {
     return (
       <View style={s.loading}>
@@ -97,10 +104,13 @@ export function ProjectBaseTab() {
   }
   if (model.state === 'empty') {
     return (
-      <EmptyPanel
-        title="No environments yet"
-        body="The Base shows once the project has an environment. Add one on the Environments tab."
-      />
+      <View style={s.page}>
+        <EmptyPanel
+          title="No environments yet"
+          body="The Base shows once the project has an environment. Add one on the Environments tab."
+        />
+        <BaseVariablesSection />
+      </View>
     )
   }
   return (

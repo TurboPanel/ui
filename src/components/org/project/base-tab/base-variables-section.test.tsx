@@ -150,6 +150,15 @@ describe('Base project variables', () => {
     expect(screen.getByText('No project variables')).toBeTruthy()
   })
 
+  it('lists the project’s records when no configuration can be read, a secret hidden', () => {
+    state.records = [record('MODE'), record('TOKEN', { isSecret: true, value: null })]
+    render(<BaseVariablesSection />)
+    expect(screen.getByLabelText('MODE, live, Base')).toBeTruthy()
+    expect(screen.getByLabelText('TOKEN, secret, Base')).toBeTruthy()
+    fireEvent.click(screen.getByLabelText('Edit MODE'))
+    expect(screen.getByLabelText('New value for MODE')).toBeTruthy()
+  })
+
   it('is read-only for someone who cannot edit, and until the variables load', () => {
     state.ctx = { ...state.ctx, canOwn: false }
     const { unmount } = render(<BaseVariablesSection rows={rows} />)
