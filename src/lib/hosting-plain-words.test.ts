@@ -12,6 +12,10 @@ import {
   COMPOSE_AUTOMATIC_CERTIFICATE_NOTE,
   COMPOSE_CERTIFICATE_HINT,
   COMPOSE_OWNED_CERTIFICATE_NOTE,
+  DEPLOY_RUNNING_MESSAGE,
+  HOSTING_ACTION_FAILED_MESSAGE,
+  hostingActionErrorMessage,
+  HOSTNAME_IN_USE_MESSAGE,
   COMPOSE_HOSTNAME_HINT,
   COMPOSE_PROXY_NOTE,
   EMPTY_COMPOSE_HOSTNAME_MESSAGE,
@@ -44,8 +48,15 @@ const library = [
 
 const STATES: ConfiguredHostingState[] = ['not-deployed', 'deployed', 'adopted', 'held-by-panel']
 
+const RAW_REFUSALS = [
+  '/api/client/v1/hostings/abc/release-from-compose failed: HTTP 409: environment_deploy_running — A deploy is running.',
+  '/api/client/v1/hostings failed: HTTP 409: hostname_in_use',
+  '/api/client/v1/environments/abc failed: HTTP 500: Internal Server Error',
+]
+
 /** Every sentence the screen shows: no raw configuration word may reach a person. */
-const RAW_WORDS = /tls\.mode|certificateRef|x-turbopanel|"internal"|"certificate"|"automatic"/
+const RAW_WORDS =
+  /\/api\/|HTTP \d{3}|_in_use|_running|tls\.mode|certificateRef|x-turbopanel|"internal"|"certificate"|"automatic"/
 
 describe('plain hosting words', () => {
   it('never shows a raw configuration word in a sentence', () => {
@@ -63,6 +74,10 @@ describe('plain hosting words', () => {
       COMPOSE_AUTOMATIC_CERTIFICATE_NOTE,
       SERVICE_NOT_SAVED_MESSAGE,
       missingCertificateMessage('Shop wildcard'),
+      DEPLOY_RUNNING_MESSAGE,
+      HOSTNAME_IN_USE_MESSAGE,
+      HOSTING_ACTION_FAILED_MESSAGE,
+      ...RAW_REFUSALS.map((refusal) => hostingActionErrorMessage(refusal)),
       ...STATES.flatMap((state) => [
         removeHostnamePrompt('example.test', state),
         manageHereInsteadPrompt('example.test', state),
@@ -176,6 +191,16 @@ describe('plain hosting words', () => {
     expect(manageHereInsteadPrompt('example.test', 'deployed')).toContain('not carried over')
     expect(manageHereInsteadPrompt('example.test', 'not-deployed')).toContain('certificate choice')
     expect(manageHereInsteadPrompt('example.test', 'held-by-panel')).toContain('Finish moving')
+  })
+
+  it('words a refused hosting action without paths or codes', () => {
+    expect(hostingActionErrorMessage(RAW_REFUSALS[0])).toBe(DEPLOY_RUNNING_MESSAGE)
+    expect(hostingActionErrorMessage(RAW_REFUSALS[1])).toBe(HOSTNAME_IN_USE_MESSAGE)
+    expect(hostingActionErrorMessage(RAW_REFUSALS[2])).toBe(HOSTING_ACTION_FAILED_MESSAGE)
+    expect(hostingActionErrorMessage('')).toBe(HOSTING_ACTION_FAILED_MESSAGE)
+    expect(hostingActionErrorMessage(null)).toBe(HOSTING_ACTION_FAILED_MESSAGE)
+    // A plain sentence of our own passes through unchanged.
+    expect(hostingActionErrorMessage(SERVICE_NOT_SAVED_MESSAGE)).toBe(SERVICE_NOT_SAVED_MESSAGE)
   })
 
   it('names the real place certificates are added', () => {

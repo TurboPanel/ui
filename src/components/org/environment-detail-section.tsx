@@ -139,6 +139,7 @@ import {
   COMPOSE_PROXY_NOTE,
   type ConfiguredHostingState,
   EMPTY_COMPOSE_HOSTNAME_MESSAGE,
+  hostingActionErrorMessage,
   missingCertificateMessage,
   resolveCertificateRef,
   SERVICE_NOT_SAVED_MESSAGE,
@@ -532,6 +533,85 @@ function composeServiceKindOf(
   return serviceContext.kind
 }
 
+/** What every row of one service shares while its descriptors are built. */
+type ServiceRowContext = {
+  serviceKey: string
+  composeServiceName: string
+  serviceContext: HostingServiceContext
+  serviceRows: readonly HostingRecord[]
+}
+
+/** A panel-authored row, keyed by `editorKey`. */
+function panelRowDescriptor(
+  ctx: ServiceRowContext,
+  editorKey: string,
+  row: HostingRecord | undefined,
+): HostingPanelRowDescriptor {
+  return {
+    editorKey,
+    composeServiceName: ctx.composeServiceName,
+    serviceContext: ctx.serviceContext,
+    source: { kind: 'panel' },
+    hostingId: row?.id ?? null,
+    seed: readHostingEditor(row ? [row] : []),
+  }
+}
+
+/**
+ * One configured entry. With no row made from the file, a panel row on the
+ * same route is the one the next deploy would adopt (a move that could not
+ * drop the entry), so the entry uses it.
+ */
+function composeEntryDescriptor(
+  ctx: ServiceRowContext,
+  entry: ComposeHostingExtensionEntry,
+  overlayEntries: readonly ComposeHostingExtensionEntry[],
+): HostingPanelRowDescriptor {
+  const route = hostingEntryKey(entry)
+  const overlayIndex = findComposeHostingEntryIndex(overlayEntries, route)
+  const composeOwnedRow = findComposeOwnedRow(ctx.serviceRows, route)
+  const panelRow = composeOwnedRow ? undefined : findPanelRowForRoute(ctx.serviceRows, route)
+  const row = composeOwnedRow ?? panelRow
+  return {
+    editorKey: `${ctx.serviceKey}::${route}`,
+    composeServiceName: ctx.composeServiceName,
+    serviceContext: ctx.serviceContext,
+    source: {
+      kind: 'compose',
+      route,
+      overlayIndex: overlayIndex === -1 ? null : overlayIndex,
+      entry,
+      state: configuredHostingState(composeOwnedRow, panelRow),
+    },
+    hostingId: row?.id ?? null,
+    seed: readComposeHostingEditor(entry, row),
+  }
+}
+
+/** Every row one service renders. */
+function serviceRowDescriptors(
+  ctx: ServiceRowContext,
+  overlayCompose: ComposeDocument,
+): HostingPanelRowDescriptor[] {
+  const entries = ctx.serviceContext.composeHostingEntries
+  if (entries.length === 0) {
+    // No declaration: the historical single-row panel form, still saved
+    // straight to /hostings. Compose-owned rows can only exist alongside a
+    // declaration, so anything here is the operator's own.
+    const panelRow =
+      ctx.serviceRows.find((row) => !isComposeOwnedHosting(row.metadata)) ?? ctx.serviceRows[0]
+    return [panelRowDescriptor(ctx, ctx.serviceKey, panelRow)]
+  }
+  const overlayEntries = readComposeHostingEntries(overlayCompose, ctx.composeServiceName)
+  return [
+    ...entries.map((entry) => composeEntryDescriptor(ctx, entry, overlayEntries)),
+    // A hostname moved out of the file sits next to the entries still in it.
+    ...panelRowsBesideDeclarations(ctx.serviceRows, entries).map((row) =>
+      panelRowDescriptor(ctx, `${ctx.serviceKey}::panel::${row.id}`, row),
+    ),
+  ]
+}
+
 /**
  * One descriptor per rendered row: every declared compose route on a service,
  * or the single panel row when compose declares none.
@@ -543,79 +623,20 @@ function buildHostingPanelRows(params: {
   overlayCompose: ComposeDocument
   hostingsByService: Record<string, HostingRecord[]>
 }): HostingPanelRowDescriptor[] {
-  const rows: HostingPanelRowDescriptor[] = []
-  for (const composeServiceName of params.serviceNames) {
+  return params.serviceNames.flatMap((composeServiceName) => {
     const service = params.services.find(
       (item) => item.composeServiceName === composeServiceName,
     )
-    const serviceKey = service?.id ?? composeServiceName
-    const serviceRows = service ? params.hostingsByService[service.id] ?? [] : []
-    const serviceContext = resolveHostingServiceContext(
-      params.mergedCompose,
-      composeServiceName,
-    )
-
-    if (serviceContext.composeHostingEntries.length === 0) {
-      // No declaration: the historical single-row panel form, still saved
-      // straight to /hostings. Compose-owned rows can only exist alongside a
-      // declaration, so anything here is the operator's own.
-      const panelRow = serviceRows.find(
-        (row) => !isComposeOwnedHosting(row.metadata),
-      ) ?? serviceRows[0]
-      rows.push({
-        editorKey: serviceKey,
+    return serviceRowDescriptors(
+      {
+        serviceKey: service?.id ?? composeServiceName,
         composeServiceName,
-        serviceContext,
-        source: { kind: 'panel' },
-        hostingId: panelRow?.id ?? null,
-        seed: readHostingEditor(panelRow ? [panelRow] : []),
-      })
-      continue
-    }
-
-    const overlayEntries = readComposeHostingEntries(
+        serviceContext: resolveHostingServiceContext(params.mergedCompose, composeServiceName),
+        serviceRows: service ? params.hostingsByService[service.id] ?? [] : [],
+      },
       params.overlayCompose,
-      composeServiceName,
     )
-    for (const entry of serviceContext.composeHostingEntries) {
-      const route = hostingEntryKey(entry)
-      const overlayIndex = findComposeHostingEntryIndex(overlayEntries, route)
-      const composeOwnedRow = findComposeOwnedRow(serviceRows, route)
-      // No row made from the file: a panel row on the same route is the one
-      // the next deploy would adopt (a move that could not drop the entry).
-      const panelRow = composeOwnedRow ? undefined : findPanelRowForRoute(serviceRows, route)
-      const row = composeOwnedRow ?? panelRow
-      rows.push({
-        editorKey: `${serviceKey}::${route}`,
-        composeServiceName,
-        serviceContext,
-        source: {
-          kind: 'compose',
-          route,
-          overlayIndex: overlayIndex === -1 ? null : overlayIndex,
-          entry,
-          state: configuredHostingState(composeOwnedRow, panelRow),
-        },
-        hostingId: row?.id ?? null,
-        seed: readComposeHostingEditor(entry, row),
-      })
-    }
-    // A hostname moved out of the file sits next to the entries still in it.
-    for (const panelRow of panelRowsBesideDeclarations(
-      serviceRows,
-      serviceContext.composeHostingEntries,
-    )) {
-      rows.push({
-        editorKey: `${serviceKey}::panel::${panelRow.id}`,
-        composeServiceName,
-        serviceContext,
-        source: { kind: 'panel' },
-        hostingId: panelRow.id,
-        seed: readHostingEditor([panelRow]),
-      })
-    }
-  }
-  return rows
+  })
 }
 
 function composeServiceNames(document: ComposeDocument): string[] {
@@ -2789,10 +2810,15 @@ export function EnvironmentDetailBody({
     return true
   }
 
+  /** Every row problem is shown in plain words: no request paths or codes. */
   const setRowError = (editorKey: string, rowError: HostingRowError | null) => {
     setHostingRowErrors((current) => {
       const { [editorKey]: _previous, ...rest } = current
-      return rowError ? { ...rest, [editorKey]: rowError } : rest
+      if (!rowError) return rest
+      return {
+        ...rest,
+        [editorKey]: { ...rowError, message: hostingActionErrorMessage(rowError.message) },
+      }
     })
   }
 
@@ -3032,7 +3058,7 @@ export function EnvironmentDetailBody({
       await moveComposeHostnameToPanel({ hostingId: row.hostingId, next }, {
         release: async (hostingId) => {
           const released = await releaseHostingMutation.run({ hostingId, serviceId })
-          if (!released.ok) onError(released.error ?? 'Could not move the hostname to this screen.')
+          if (!released.ok) onError(released.error ?? '')
           return released.ok
         },
         saveFile: (document) => saveCompose(document, onError),

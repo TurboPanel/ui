@@ -11,6 +11,7 @@ import { stringify } from 'yaml'
 import type { ComposeHostingExtensionEntry } from '@/lib/compose/hosting-extension'
 import { wwwResultLines } from '@/lib/hosting-www'
 import type { TlsRecord } from '@/lib/instance-api'
+import { apiErrorCopy } from '@/lib/user-error'
 
 /** The Let's Encrypt choice, as every picker and summary names it. */
 export const LETS_ENCRYPT_CHOICE_TEXT = 'Let’s Encrypt (free, renews automatically)'
@@ -190,4 +191,39 @@ export function manageHereInsteadPrompt(hostname: string, state: ConfiguredHosti
     return `Manage ${hostname} here instead of in the configuration file? It keeps what is on this screen, including its certificate choice.`
   }
   return `Manage ${hostname} here instead of in the configuration file? It keeps its settings and certificate as last deployed; changes not deployed yet, or not saved here, are not carried over.`
+}
+
+/** A move refused because a deploy of the environment is running. */
+export const DEPLOY_RUNNING_MESSAGE =
+  'A deploy of this environment is running. Try again when it has finished.'
+
+/** A hostname another hosting already serves. */
+export const HOSTNAME_IN_USE_MESSAGE =
+  'Another hosting already uses this hostname. Remove it there first, or pick another name.'
+
+/** Any other refusal whose text is not fit to show. */
+export const HOSTING_ACTION_FAILED_MESSAGE = 'This change could not be saved. Try again.'
+
+const HOSTING_ERROR_COPY: readonly (readonly [string, string])[] = [
+  ['environment_deploy_running', DEPLOY_RUNNING_MESSAGE],
+  ['hostname_in_use', HOSTNAME_IN_USE_MESSAGE],
+]
+
+/** Request paths and status lines: what a person should never read. */
+const RAW_ERROR_TEXT = /\/api\/|HTTP \d{3}/
+
+/**
+ * A refused hosting action as one plain sentence: the hosting codes and every
+ * code the app already words are mapped, and any other text that still
+ * carries a request path or status line becomes a plain fallback.
+ */
+export function hostingActionErrorMessage(error: string | null | undefined): string {
+  const text = error?.trim() ?? ''
+  for (const [code, copy] of HOSTING_ERROR_COPY) {
+    if (text.includes(code)) return copy
+  }
+  const mapped = apiErrorCopy(text)
+  if (mapped) return mapped
+  if (text === '' || RAW_ERROR_TEXT.test(text)) return HOSTING_ACTION_FAILED_MESSAGE
+  return text
 }
