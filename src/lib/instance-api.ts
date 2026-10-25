@@ -9529,6 +9529,42 @@ export async function createManagedUser(
   })
 }
 
+/** One new login of an app-logins request, with its show-once password. */
+export type ManagedAppLogin = { user: ManagedUserRecord; password: string }
+
+/**
+ * The three logins an app usually needs on one database, in one step:
+ * `<prefix>_migrate` (owner of the database), `<prefix>_rw` (rows only) and
+ * `<prefix>_ro` (read only), names exactly as written, same limits for all
+ * three. All or nothing: 409 `username_in_use` / `managed_user_exists` (with
+ * `username`) adds none; 400 `managed_app_login_prefix_invalid` /
+ * `managed_app_login_prefix_too_long`; 409 `principal_scheme_locked` when the
+ * organization locks another name scheme.
+ */
+export async function createManagedAppLogins(
+  environmentId: string,
+  databaseName: string,
+  body: {
+    /** Omit (or empty) for the database name. */
+    prefix?: string
+    allowedSources?: string[]
+    maxConnections?: number
+    /** PostgreSQL only; applies to all three. */
+    straightThrough?: boolean
+  }
+): Promise<{
+  ok: true
+  logins: ManagedAppLogin[]
+  notes?: string[]
+  commandId: string
+  serverId: string
+}> {
+  return await apiFetch(
+    `${CLIENT_API}/environments/${environmentId}/managed/databases/${encodeURIComponent(databaseName)}/app-logins`,
+    { method: 'POST', body: JSON.stringify(body) }
+  )
+}
+
 /**
  * What the engine says a login can do right now (read from the server, joined
  * to the privilege catalogue; everything is `observed`). Errors: 409

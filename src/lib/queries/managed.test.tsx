@@ -9,6 +9,7 @@ import {
   useCreateEnvironmentManaged,
   useCreateManagedBackup,
   useCreateManagedDatabase,
+  useCreateManagedAppLogins,
   useCreateManagedUser,
   useDeleteEnvironmentManaged,
   useDeleteEnvironmentManagedMutation,
@@ -60,6 +61,7 @@ const {
   deleteEnvironmentManaged,
   rotateManagedRootPassword,
   rotateManagedUserPassword,
+  createManagedAppLogins,
   createManagedUser,
   deleteManagedUser,
   updateManagedUser,
@@ -94,6 +96,7 @@ const {
   deleteEnvironmentManaged: vi.fn(),
   rotateManagedRootPassword: vi.fn(),
   rotateManagedUserPassword: vi.fn(),
+  createManagedAppLogins: vi.fn(),
   createManagedUser: vi.fn(),
   deleteManagedUser: vi.fn(),
   updateManagedUser: vi.fn(),
@@ -133,6 +136,7 @@ vi.mock('@/lib/instance-api', async (importOriginal) => {
     deleteEnvironmentManaged,
     rotateManagedRootPassword,
     rotateManagedUserPassword,
+    createManagedAppLogins,
     createManagedUser,
     deleteManagedUser,
     updateManagedUser,
@@ -847,6 +851,31 @@ describe('managed query hooks', () => {
       ok: true,
       value: expect.objectContaining({ password: 'user-show-once' }),
     })
+    expect(result.current.data).toBeUndefined()
+    await waitFor(() => {
+      expect(invalidate).toHaveBeenCalledWith({
+        queryKey: queryKeys.org(orgId).managed.users(environmentId),
+      })
+    })
+  })
+
+  it('useCreateManagedAppLogins keeps no passwords and refreshes the users', async () => {
+    createManagedAppLogins.mockResolvedValueOnce({
+      ok: true,
+      logins: [{ user: { id: 'u-1', appliedUsername: 'app_migrate' }, password: 'once' }],
+      commandId: 'cmd-1',
+      serverId: 'srv-1',
+    })
+    const client = createAppQueryClient()
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
+    const { result } = renderHook(() => useCreateManagedAppLogins(orgId, environmentId), {
+      wrapper: createWrapper(client),
+    })
+
+    await expect(
+      result.current.run({ databaseName: 'app', body: { prefix: 'shop' } })
+    ).resolves.toMatchObject({ ok: true })
+    expect(createManagedAppLogins).toHaveBeenCalledWith(environmentId, 'app', { prefix: 'shop' })
     expect(result.current.data).toBeUndefined()
     await waitFor(() => {
       expect(invalidate).toHaveBeenCalledWith({
