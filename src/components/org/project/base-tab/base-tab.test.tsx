@@ -155,7 +155,7 @@ describe.each(SCENARIOS)('Base tab ($name)', (scenario) => {
     expect(screen.getByText('https://x')).toBeTruthy()
     expect(screen.getByText('••••••••')).toBeTruthy()
     expect(screen.getByLabelText('TOKEN, secret, Base')).toBeTruthy()
-    expect(screen.getAllByText('Run only').length).toBe(2)
+    expect(screen.getAllByText('Run only')).toHaveLength(2)
   })
 
   it('says which apps run as each Linux user', () => {
