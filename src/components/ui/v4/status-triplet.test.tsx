@@ -32,7 +32,7 @@ describe.each(SCENARIOS)('StatusTriplet ($name)', (scenario) => {
   it('shows only the time of a deploy that went fine, and a chip for one that did not', () => {
     const running = { status: 'running' }
     const { rerender } = render(
-      <StatusTriplet running={running} lastDeploy={{ status: 'deployed', sub: '3m ago' }} />,
+      <StatusTriplet running={running} lastDeploy={{ status: 'deployed', sub: '3m ago' }} />
     )
     expect(screen.queryByLabelText('Deployed')).toBeNull()
     expect(screen.getByText('3m ago')).toBeTruthy()

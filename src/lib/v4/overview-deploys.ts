@@ -34,6 +34,8 @@ const SHA_LENGTH = 7
 
 export function groupStatusKey(group: DeploymentGroup): string {
   if (group.strategyOutcome === 'rolled_back') return 'rolledback'
+  // Stopped on purpose mid-deploy: the same red as a failure, as on the cards.
+  if (group.strategyOutcome === 'needs_attention') return 'failed'
   switch (group.status) {
     case 'succeeded':
       return 'deployed'

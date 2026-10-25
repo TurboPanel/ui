@@ -41,6 +41,7 @@ describe('groupStatusKey', () => {
     [{ status: 'running' as const }, 'deploying'],
     [{ status: 'queued' as const }, 'queued'],
     [{ status: 'failed' as const, strategyOutcome: 'rolled_back' as const }, 'rolledback'],
+    [{ status: 'succeeded' as const, strategyOutcome: 'needs_attention' as const }, 'failed'],
   ])('%j -> %s', (extra, expected) => {
     expect(key(extra)).toBe(expected)
   })

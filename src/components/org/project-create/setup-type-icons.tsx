@@ -1,9 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import Svg, { Circle, Path, Rect } from 'react-native-svg'
-import {
-  ComposeHostingIcon,
-  ComposeVisualIcon,
-} from '@/components/org/compose-view-icons'
+import { ComposeHostingIcon, ComposeVisualIcon } from '@/components/org/compose-view-icons'
 import type {
   SetupChoice,
   SetupTypeOption,

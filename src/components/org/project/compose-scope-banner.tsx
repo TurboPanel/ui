@@ -22,8 +22,8 @@ function EnvironmentOverridingBanner({
     <View style={[panelStyles.expandedSection, styles.banner]}>
       <Text style={panelStyles.detailTitle}>Environment compose</Text>
       <Text style={panelStyles.muted}>
-        {envName} sets its own compose on top of the Base. Reset to the Base
-        removes it, and the next deploy runs what the Base says.
+        {envName} sets its own compose on top of the Base. Reset to the Base removes it, and the
+        next deploy runs what the Base says.
       </Text>
       {canMutate ? (
         <ConfirmButton
