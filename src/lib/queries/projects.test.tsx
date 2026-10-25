@@ -13,6 +13,7 @@ import {
   useDisablePrincipalPassword,
   useProject,
   useProjectCatalog,
+  useProjectDeletePreview,
   useProjectPrincipals,
   useProjects,
   useSetPrincipalPassword,
@@ -28,6 +29,7 @@ const {
   deleteProject,
   configureProject,
   fetchProjectCatalog,
+  fetchProjectDeletePreview,
   fetchProjectPrincipals,
   createProjectPrincipal,
   updateProjectPrincipal,
@@ -42,6 +44,7 @@ const {
   deleteProject: vi.fn(),
   configureProject: vi.fn(),
   fetchProjectCatalog: vi.fn(),
+  fetchProjectDeletePreview: vi.fn(),
   fetchProjectPrincipals: vi.fn(),
   createProjectPrincipal: vi.fn(),
   updateProjectPrincipal: vi.fn(),
@@ -58,6 +61,7 @@ vi.mock('@/lib/instance-api', () => ({
   deleteProject,
   configureProject,
   fetchProjectCatalog,
+  fetchProjectDeletePreview,
   fetchProjectPrincipals,
   createProjectPrincipal,
   updateProjectPrincipal,
@@ -389,5 +393,21 @@ describe('projects query hooks', () => {
         queryKey: queryKeys.org(orgId).projects.principals(projectId),
       })
     })
+  })
+})
+
+describe('useProjectDeletePreview', () => {
+  it('reads what deleting the project removes, and waits for an id', async () => {
+    fetchProjectDeletePreview.mockResolvedValueOnce({ blockers: [] })
+    const { result } = renderHook(() => useProjectDeletePreview('org-1', 'proj-1'), {
+      wrapper: createWrapper(),
+    })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(fetchProjectDeletePreview).toHaveBeenCalledWith('proj-1')
+
+    const idle = renderHook(() => useProjectDeletePreview('org-1', ''), {
+      wrapper: createWrapper(),
+    })
+    expect(idle.result.current.fetchStatus).toBe('idle')
   })
 })

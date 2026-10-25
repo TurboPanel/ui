@@ -23,7 +23,7 @@ import {
   principalDeleteBlockedReason,
   principalFormLabels,
   principalStateLabel,
-  principalStateTone,
+  principalStatusBadge,
   principalUsageLines,
 } from '@/lib/principal-words'
 import {
@@ -123,11 +123,7 @@ function PrincipalRow({
         ))}
       </DataTableCell>
       <DataTableCell column={C_STATE}>
-        {row.orphaned ? (
-          <Badge label="Left behind" tone="pending" />
-        ) : (
-          <Badge label={principalStateLabel(row.state)} tone={principalStateTone(row.state)} />
-        )}
+        <Badge {...principalStatusBadge(row)} />
       </DataTableCell>
       <DataTableCell column={C_ACTION}>{actionCell}</DataTableCell>
     </DataTableRow>

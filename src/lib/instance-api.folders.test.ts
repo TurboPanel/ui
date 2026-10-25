@@ -2,7 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setActiveOrganizationId } from '@/lib/org-context'
 import {
   addEnvironmentShare,
+  fetchEnvironmentDeletePreview,
   fetchEnvironmentFolders,
+  fetchProjectDeletePreview,
   fetchEnvironmentShares,
   fetchOrgDirectoryDefaults,
   fetchOrgFolders,
@@ -104,5 +106,18 @@ describe('instance-api folder wrappers', () => {
 
   it('explains a folder that is in use in plain words', () => {
     expect(apiErrorCopy(new Error('HTTP 409: folder_in_use'))).toMatch(/Delete that service or volume/)
+  })
+
+  it('reads what deleting a project or an environment would remove', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, blockers: [] }))
+    await fetchProjectDeletePreview('proj-1')
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe(
+      '/api/client/v1/projects/proj-1/delete-preview'
+    )
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, blockers: [] }))
+    await fetchEnvironmentDeletePreview('env-1')
+    expect(String(fetchMock.mock.calls[1]?.[0])).toBe(
+      '/api/client/v1/environments/env-1/delete-preview'
+    )
   })
 })

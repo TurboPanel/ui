@@ -11,6 +11,7 @@ import {
   fetchPrincipalSshKeys,
   fetchProject,
   fetchProjectCatalog,
+  fetchProjectDeletePreview,
   fetchProjectPrincipals,
   fetchVisibleProjects,
   setPrincipalPassword,
@@ -48,6 +49,23 @@ export function useProject(
       (options?.enabled ?? true) &&
       orgId.length > 0 &&
       projectId.length > 0,
+  })
+}
+
+/** What deleting the project removes and keeps; read fresh each time the delete panel opens. */
+export function useProjectDeletePreview(
+  orgId: string,
+  projectId: string,
+  options?: Readonly<{ enabled?: boolean }>,
+) {
+  return useQuery({
+    queryKey: queryKeys.org(orgId).projects.deletePreview(projectId),
+    queryFn: () => fetchProjectDeletePreview(projectId),
+    enabled:
+      (options?.enabled ?? true) &&
+      orgId.length > 0 &&
+      projectId.length > 0,
+    staleTime: 0,
   })
 }
 

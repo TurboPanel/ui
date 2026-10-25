@@ -55,6 +55,11 @@ const API_ERROR_COPY: Readonly<Record<string, string>> = {
     'No free license at that size. Buy one first, or give one back from another server.',
   environment_name_locked:
     "This environment's name is part of the folder path on your servers, so it cannot change while services or volumes have folders in it.",
+  managed_runtime_present:
+    'This includes a managed database. Delete the database first (it asks for its own confirmation), then try again.',
+  project_stop_failed:
+    'The servers did not accept the stop in time, so nothing was deleted. Check that they are online and try again.',
+  project_has_running_services: 'Services are still running. Stop them first, then delete.',
   environment_has_folders:
     'This environment still has folders on your servers. Remove its services and volumes first, then delete it.',
   environment_server_locked:
