@@ -24,7 +24,6 @@ vi.mock('@/components/org/project/settings/project-settings-view', () => ({
     return <div data-testid="view" />
   },
 }))
-vi.mock('@/components/org/variables-section', () => ({ VariablesSection: () => null }))
 vi.mock('@/components/org/project-delete-panel', () => ({ ProjectDeletePanel: () => null }))
 vi.mock('@/components/ui', () => ({ LoadingState: () => <div data-testid="loading" /> }))
 vi.mock('@/lib/queries', () => ({
@@ -187,8 +186,10 @@ describe('ProjectSettingsScreen', () => {
     expect(h.view.git).toEqual({ repository: 'acme/shop', pushTiming: 'Disabled' })
     h.view.onOpenRepositories()
     h.view.onOpenBaseCompose()
+    h.view.onOpenBase()
     expect(h.push).toHaveBeenNthCalledWith(1, '/o/projects/repositories')
     expect(h.push).toHaveBeenNthCalledWith(2, '/o/projects/p/base/compose')
+    expect(h.push).toHaveBeenNthCalledWith(3, '/o/projects/p/base')
   })
 
   it('turns on the repository auto-deploy and opens an environment for its own switch', async () => {

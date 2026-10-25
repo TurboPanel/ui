@@ -87,7 +87,14 @@ export function VariableUseChoice({
 }
 
 /** The words for removing a variable: it goes away, or the Base value applies again. */
-function removeCopy(name: string, envName: string, inBase: boolean) {
+function removeCopy(name: string, envName: string, inBase: boolean, base: boolean) {
+  if (base) {
+    return {
+      button: 'Remove',
+      question: `Remove ${name} from the Base? Environments that do not set their own value stop getting it after you save and deploy.`,
+      confirm: `Remove ${name}`,
+    }
+  }
   if (inBase) {
     return {
       button: 'Use the Base value',
@@ -119,7 +126,7 @@ function RemoveConfirm({
   onClose: () => void
 }>) {
   const s = styles(usePalette())
-  const copy = removeCopy(name, editing.envName, facts.inBase)
+  const copy = removeCopy(name, editing.envName, facts.inBase, editing.base === true)
   return (
     <View style={s.editor}>
       <Text style={s.label}>{copy.question}</Text>
@@ -173,7 +180,7 @@ export function VariableEditor({
       />
     )
   }
-  const removeLabel = removeCopy(name, editing.envName, facts.inBase).button
+  const removeLabel = removeCopy(name, editing.envName, facts.inBase, editing.base === true).button
   return (
     <View style={s.editor}>
       <TextField

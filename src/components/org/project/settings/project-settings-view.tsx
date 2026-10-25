@@ -43,8 +43,8 @@ export type ProjectSettingsViewProps = Readonly<{
   canMove: boolean
   moving: boolean
   onMove: (workspaceId: string) => void
-  /** Project variables (they apply to every environment). Rendered by the caller. */
-  variables: ReactNode
+  /** Opens the Base tab, where the project variables are edited. */
+  onOpenBase: () => void
   keepOriginalNames: boolean
   savingNames: boolean
   onKeepOriginalNames: (next: boolean) => void
@@ -251,8 +251,8 @@ function pushDeployAction(row: ProjectPushDeployRow, props: ProjectSettingsViewP
 }
 
 /**
- * Project Settings, drawn from what the API serves: General, project
- * variables, Git, the Base as a Compose file, and the danger zone.
+ * Project Settings, drawn from what the API serves: General, a link to the
+ * project variables on the Base, Git, the Base as a Compose file, and the danger zone.
  * Webhook deliveries, project alerts, members and deploy timing are not
  * served, so they are not drawn.
  */
@@ -294,12 +294,18 @@ export function ProjectSettingsView(props: ProjectSettingsViewProps) {
 
 /** Variables, container names, Git and the Compose files: a website project's own. */
 function WebsiteProjectSections(props: ProjectSettingsViewProps) {
-  const s = styles(usePalette())
   return (
     <>
-      <View style={s.section}>
+      <View>
         <SectionHeading title="Variables" note="Apply to every environment" />
-        {props.variables}
+        <ListGroup>
+          <ListRow
+            title="Project variables"
+            sub="Added and changed on the Base tab."
+            onPress={props.onOpenBase}
+            accessibilityLabel="Project variables: open the Base tab"
+          />
+        </ListGroup>
       </View>
       <ContainerNamesSection
         keepOriginal={props.keepOriginalNames}

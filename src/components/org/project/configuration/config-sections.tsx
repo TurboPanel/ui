@@ -396,14 +396,21 @@ function pendingVariables(
   return editing.staged.filter((edit) => edit.kind === 'set-variable' && !listed.has(edit.key))
 }
 
+/** The variables list with its editors; the Base passes its own heading and words. */
 export function VariablesSection({
   variables,
   envName,
   editing,
+  title = 'Variables',
+  foot,
+  empty,
 }: Readonly<{
   variables: readonly VariableRowModel[]
   envName: string
   editing?: EditingApi
+  title?: string
+  foot?: string
+  empty?: Readonly<{ title: string; body: string }>
 }>) {
   const s = styles(usePalette())
   const [adding, setAdding] = useState(false)
@@ -414,17 +421,20 @@ export function VariablesSection({
   return (
     <View style={s.section}>
       <SectionHeading
-        title="Variables"
+        title={title}
         note={plural(variables.length + pending.length, 'variable')}
         action={add}
       />
       <ListGroup
-        foot={`Variables set on the project reach every environment. A ${envName} change replaces the project value here only. Secret values are never shown.`}
+        foot={
+          foot ??
+          `Variables set on the project reach every environment. A ${envName} change replaces the project value here only. Secret values are never shown.`
+        }
         empty={
           <EmptyPanel
             inline
-            title="No variables"
-            body={`Nothing is set for ${envName} or for the project yet.`}
+            title={empty?.title ?? 'No variables'}
+            body={empty?.body ?? `Nothing is set for ${envName} or for the project yet.`}
           />
         }
       >

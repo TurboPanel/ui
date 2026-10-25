@@ -1015,6 +1015,7 @@ export function VariablesSection({
   embedded = false,
   showPresets = true,
   initialShowAdd = false,
+  onChanged,
 }: Readonly<{
   orgId: string
   parentField: VariableParentFilter
@@ -1031,12 +1032,14 @@ export function VariablesSection({
   showPresets?: boolean
   /** Open the add row on mount (e.g. Settings → Add Variable). */
   initialShowAdd?: boolean
+  /** After each saved change, once the list is refreshed (the Base refreshes its config views). */
+  onChanged?: () => Promise<unknown> | void
 }>) {
   const canOwn = useCan('organization', orgId, 'organization:own')
   const variablesQuery = useVariables(orgId, parentField)
-  const createMutation = useCreateVariable(orgId, parentField)
-  const updateMutation = useUpdateVariable(orgId, parentField)
-  const deleteMutation = useDeleteVariable(orgId, parentField)
+  const createMutation = useCreateVariable(orgId, parentField, onChanged)
+  const updateMutation = useUpdateVariable(orgId, parentField, onChanged)
+  const deleteMutation = useDeleteVariable(orgId, parentField, onChanged)
 
   const variables = variablesQuery.data?.variables ?? []
   const bindingVariables = variables.filter(isBindingOwnedVariable)

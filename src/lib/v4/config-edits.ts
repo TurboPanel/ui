@@ -9,7 +9,8 @@
  * 1. this environment's own compose,
  * 2. variables: creates and updates (value and where it is used), then deletes.
  *
- * The Base is never written from here; it is edited from the Base tab.
+ * The Base is never written from here; it is edited from the Base tab, which
+ * stages its variables the same way and saves them with `base: true`.
  * Real endpoints only: `PATCH /environments/:id` and the variable routes. Pure: no network, no React.
  */
 
@@ -334,6 +335,8 @@ export type SaveContext = Readonly<{
   environmentCompose: unknown
   projectVariables: readonly VariableRecord[]
   environmentVariables: readonly VariableRecord[]
+  /** The edits are the Base's: variables are the project's own and no compose is written. */
+  base?: boolean
 }>
 
 type Working = {
@@ -346,6 +349,24 @@ type Working = {
 
 function findVariable(list: readonly VariableRecord[], name: string): VariableRecord | undefined {
   return list.find((item) => item.key === name && item.bindingId === null)
+}
+
+/** The variables the edits write: the environment's own, or the project's on the Base. */
+function ownVariables(ctx: SaveContext): readonly VariableRecord[] {
+  return ctx.base === true ? ctx.projectVariables : ctx.environmentVariables
+}
+
+/** The variables the edited ones fall back to; the Base has none above it here. */
+function sharedVariables(ctx: SaveContext): readonly VariableRecord[] {
+  return ctx.base === true ? [] : ctx.projectVariables
+}
+
+function createParent(ctx: SaveContext): { projectId: string } | { environmentId: string } {
+  return ctx.base === true ? { projectId: ctx.projectId } : { environmentId: ctx.environmentId }
+}
+
+function scopeWords(ctx: SaveContext): string {
+  return ctx.base === true ? 'on the Base' : 'in this environment'
 }
 
 function takeEnvironment(work: Working, key: string, result: EditResult) {
@@ -382,9 +403,9 @@ function applyGoBack(work: Working, edit: StagedEdit & { kind: 'go-back' }, ctx:
 }
 
 function deleteOwnVariable(work: Working, key: string, name: string, ctx: SaveContext) {
-  const own = findVariable(ctx.environmentVariables, name)
+  const own = findVariable(ownVariables(ctx), name)
   if (own === undefined)
-    work.problems.push({ key, reason: `${name} is no longer set in this environment.` })
+    work.problems.push({ key, reason: `${name} is no longer set ${scopeWords(ctx)}.` })
   else work.ops.push({ key, op: { type: 'delete', id: own.id } })
 }
 
@@ -417,8 +438,8 @@ function applyVariable(
   edit: StagedEdit & { kind: 'set-variable' },
   ctx: SaveContext
 ) {
-  const own = findVariable(ctx.environmentVariables, edit.name)
-  const shared = findVariable(ctx.projectVariables, edit.name)
+  const own = findVariable(ownVariables(ctx), edit.name)
+  const shared = findVariable(sharedVariables(ctx), edit.name)
   // A secret stays a secret; where it is used is the person's choice (the editor starts from the saved one).
   const secret = shared?.isSecret ?? own?.isSecret ?? edit.secret
   const scope = { forBuild: edit.forBuild, forRuntime: edit.forRuntime }
@@ -426,7 +447,7 @@ function applyVariable(
     if (edit.value === null) {
       work.problems.push({
         key: edit.key,
-        reason: `Enter a value for ${edit.name} to set it for this environment.`,
+        reason: `Enter a value for ${edit.name} to set it ${ctx.base === true ? 'on the Base' : 'for this environment'}.`,
       })
       return
     }
@@ -435,7 +456,7 @@ function applyVariable(
       op: {
         type: 'create',
         body: {
-          environmentId: ctx.environmentId,
+          ...createParent(ctx),
           key: edit.name,
           value: edit.value,
           isSecret: secret,
@@ -480,7 +501,7 @@ export function planSave(edits: readonly StagedEdit[], ctx: SaveContext): SavePl
   }
   if (work.problems.length > 0) return { steps: [], problems: work.problems }
   const steps: SaveStep[] = []
-  if (!sameDocument(work.environment, ctx.environmentCompose)) {
+  if (ctx.base !== true && !sameDocument(work.environment, ctx.environmentCompose)) {
     steps.push({
       kind: 'environment-compose',
       document: normalizeCompose(work.environment),

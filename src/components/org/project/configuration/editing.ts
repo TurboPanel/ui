@@ -10,4 +10,6 @@ export type EditingApi = Readonly<{
   actionsFor: (change: ChangeRowModel) => ChangeActions
   onStage: (edit: StagedEdit) => void
   onUnstage: (key: string) => void
+  /** The rows are the Base's own variables (the Base tab), not an environment's. */
+  base?: boolean
 }>

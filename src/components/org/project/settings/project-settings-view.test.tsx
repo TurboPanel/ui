@@ -68,7 +68,7 @@ function props(over: Partial<ProjectSettingsViewProps> = {}): ProjectSettingsVie
     canMove: true,
     moving: false,
     onMove: vi.fn(),
-    variables: <div data-testid="variables" />,
+    onOpenBase: vi.fn(),
     keepOriginalNames: false,
     savingNames: false,
     onKeepOriginalNames: vi.fn(),
@@ -107,7 +107,13 @@ describe.each(SCENARIOS)('project settings ($name)', (scenario) => {
     expect(screen.queryByText(/deliveries/i)).toBeNull()
     expect(screen.queryByText(/alerts/i)).toBeNull()
     expect(screen.getByText('proj-1')).toBeTruthy()
-    expect(screen.getByTestId('variables')).toBeTruthy()
+  })
+
+  it('sends project variables to the Base, where they are edited', () => {
+    const onOpenBase = vi.fn()
+    render(<ProjectSettingsView {...props({ onOpenBase })} />)
+    fireEvent.click(screen.getByLabelText('Project variables: open the Base tab'))
+    expect(onOpenBase).toHaveBeenCalledTimes(1)
   })
 
   it('gives a managed database name, workspace, a way to its settings and delete', () => {

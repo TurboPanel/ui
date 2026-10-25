@@ -2,6 +2,7 @@ import { Redirect, useLocalSearchParams, type Href } from 'expo-router'
 import { Platform } from 'react-native'
 import { WithBaseNotice } from '@/components/org/project/base-tab/base-edit-notice'
 import { ProjectBaseTab } from '@/components/org/project/base-tab/base-tab'
+import { BaseVariablesSection } from '@/components/org/project/base-tab/base-variables-section'
 import { EnvironmentOverviewTab } from '@/components/org/project/environment-overview/environment-overview-tab'
 import { EnvironmentConfigurationScreen } from '@/components/org/project/configuration/environment-configuration'
 import { useEnvironmentChrome } from '@/components/org/project/environment-shell'
@@ -52,7 +53,15 @@ export function ProjectBaseScreen() {
   if (project && isManagedProject(project)) return <ManagedFocusTab />
   return (
     <WithBaseNotice>
-      {Platform.OS === 'web' ? <ProjectBaseTab /> : <ProjectOverviewTab />}
+      {Platform.OS === 'web' ? (
+        <ProjectBaseTab />
+      ) : (
+        <>
+          <ProjectOverviewTab />
+          {/* The phone keeps the old screen, plus the project variables Settings links here for. */}
+          <BaseVariablesSection />
+        </>
+      )}
     </WithBaseNotice>
   )
 }

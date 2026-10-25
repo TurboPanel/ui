@@ -63,6 +63,9 @@ vi.mock('@/components/org/project/base-tab/base-edit-notice', () => ({
 vi.mock('@/components/org/project/base-tab/base-tab', () => ({
   ProjectBaseTab: () => <div data-testid="base-tab" />,
 }))
+vi.mock('@/components/org/project/base-tab/base-variables-section', () => ({
+  BaseVariablesSection: () => <div data-testid="base-variables" />,
+}))
 vi.mock('@/components/org/project/environment-overview/environment-overview-tab', () => ({
   EnvironmentOverviewTab: () => <div data-testid="env-overview" />,
 }))
@@ -210,10 +213,11 @@ describe('project tabs', () => {
     expect(screen.queryByTestId('redirect')).toBeNull()
   })
 
-  it('keeps the compose surface for Base on the phone app', () => {
+  it('keeps the compose surface for Base on the phone app, with the project variables under it', () => {
     state.os = 'ios'
     render(<ProjectBaseScreen />)
     expect(screen.getByTestId('compose-surface')).toBeTruthy()
+    expect(screen.getByTestId('base-variables')).toBeTruthy()
     expect(screen.getByTestId('base-notice')).toBeTruthy()
     expect(screen.queryByTestId('base-tab')).toBeNull()
   })
