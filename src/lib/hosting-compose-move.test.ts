@@ -5,7 +5,9 @@ import { readComposeHostingEntries } from '@/lib/compose/hosting-service-context
 import { hostingEntryKey } from '@/lib/compose/hosting-extension'
 import type { TlsRecord } from '@/lib/instance-api'
 import {
+  configuredHostingState,
   declaredHostingByService,
+  findPanelRowForRoute,
   moveComposeHostnameToPanel,
   panelCertificateForMovedRoute,
   panelRowsBesideDeclarations,
@@ -67,6 +69,7 @@ describe('panelCertificateForMovedRoute', () => {
     expect(panelCertificateForMovedRoute({ tls: { mode: 'automatic' } }, library)).toEqual({
       tlsId: null,
       getLetsEncrypt: true,
+      missingRef: null,
     })
   })
 
@@ -76,24 +79,35 @@ describe('panelCertificateForMovedRoute', () => {
         { tls: { mode: 'certificate', certificateRef: 'Shop wildcard' } },
         library
       )
-    ).toEqual({ tlsId: 'cert-1', getLetsEncrypt: false })
+    ).toEqual({ tlsId: 'cert-1', getLetsEncrypt: false, missingRef: null })
     expect(
       panelCertificateForMovedRoute(
         { tls: { mode: 'certificate', certificateRef: 'cert-1' } },
         library
       )
-    ).toEqual({ tlsId: 'cert-1', getLetsEncrypt: false })
+    ).toEqual({ tlsId: 'cert-1', getLetsEncrypt: false, missingRef: null })
   })
 
   it('keeps self-signed as no certificate and no request', () => {
     expect(panelCertificateForMovedRoute({ tls: { mode: 'internal' } }, library)).toEqual({
       tlsId: null,
       getLetsEncrypt: false,
+      missingRef: null,
     })
     expect(panelCertificateForMovedRoute({}, library)).toEqual({
       tlsId: null,
       getLetsEncrypt: false,
+      missingRef: null,
     })
+  })
+
+  it('names a certificate the library does not have instead of falling back to self-signed', () => {
+    expect(
+      panelCertificateForMovedRoute(
+        { tls: { mode: 'certificate', certificateRef: 'gone' } },
+        library
+      )
+    ).toEqual({ tlsId: null, getLetsEncrypt: false, missingRef: 'gone' })
   })
 })
 
@@ -135,7 +149,7 @@ describe('declaredHostingByService', () => {
 })
 
 describe('moveComposeHostnameToPanel', () => {
-  function steps(results: { release?: boolean; saveFile?: boolean } = {}) {
+  function steps(results: { release?: boolean; saveFile?: boolean; create?: boolean } = {}) {
     const calls: string[] = []
     return {
       calls,
@@ -150,6 +164,7 @@ describe('moveComposeHostnameToPanel', () => {
         }),
         createPanelHosting: vi.fn(async () => {
           calls.push('create panel hosting')
+          return results.create ?? true
         }),
       },
     }
@@ -175,15 +190,44 @@ describe('moveComposeHostnameToPanel', () => {
     expect(run.calls).toEqual(['release h1', 'save file'])
   })
 
-  it('creates the panel hosting after the file save when nothing was deployed yet', async () => {
+  it('creates the panel hosting before dropping the entry when nothing was deployed yet', async () => {
     const run = steps()
     expect(await moveComposeHostnameToPanel({ hostingId: null, next }, run.steps)).toBe('created')
-    expect(run.calls).toEqual(['save file', 'create panel hosting'])
+    expect(run.calls).toEqual(['create panel hosting', 'save file'])
   })
 
-  it('creates nothing when the file save fails before any deploy', async () => {
+  it('leaves the file alone when the panel hosting cannot be created', async () => {
+    const run = steps({ create: false })
+    expect(await moveComposeHostnameToPanel({ hostingId: null, next }, run.steps)).toBe('stopped')
+    expect(run.calls).toEqual(['create panel hosting'])
+  })
+
+  it('reports a failed drop after the create (the next deploy adopts the panel row)', async () => {
     const run = steps({ saveFile: false })
     expect(await moveComposeHostnameToPanel({ hostingId: null, next }, run.steps)).toBe('stopped')
-    expect(run.calls).toEqual(['save file'])
+    expect(run.calls).toEqual(['create panel hosting', 'save file'])
+  })
+})
+
+describe('findPanelRowForRoute and configuredHostingState', () => {
+  const owned = {
+    id: 'owned',
+    metadata: { composeOwned: true, composeRoute: 'example.test /' },
+    options: { hostnames: ['example.test'] },
+  }
+  const adopted = { ...owned, metadata: { ...owned.metadata, composeAdopted: true } }
+  const held = { id: 'held', metadata: {}, options: { hostnames: ['Example.test'] } }
+
+  it('finds the panel row the next deploy would adopt, never a compose-made one', () => {
+    expect(findPanelRowForRoute([owned, held], 'example.test /')).toBe(held)
+    expect(findPanelRowForRoute([owned], 'example.test /')).toBeUndefined()
+    expect(findPanelRowForRoute([held], 'example.test /api')).toBeUndefined()
+  })
+
+  it('says where the hosting stands', () => {
+    expect(configuredHostingState(owned, undefined)).toBe('deployed')
+    expect(configuredHostingState(adopted, undefined)).toBe('adopted')
+    expect(configuredHostingState(undefined, held)).toBe('held-by-panel')
+    expect(configuredHostingState(undefined, undefined)).toBe('not-deployed')
   })
 })

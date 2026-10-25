@@ -8,8 +8,8 @@
  * - **Manage on this screen instead** moves it to an ordinary panel hosting.
  *   A hosting the last deploy already made is released to the panel first
  *   (`POST /hostings/:id/release-from-compose`), then the entry is dropped;
- *   one never deployed is dropped and created in the panel with the same
- *   certificate choice ({@link panelCertificateForMovedRoute}).
+ *   one never deployed is created in the panel with the same certificate
+ *   choice ({@link panelCertificateForMovedRoute}), then the entry is dropped.
  */
 import {
   findComposeHostingEntryIndex,
@@ -18,8 +18,8 @@ import {
 } from '@/lib/compose/hosting-service-context'
 import { hostingEntryKey, type ComposeHostingExtensionEntry } from '@/lib/compose/hosting-extension'
 import type { ComposeDocument } from '@/lib/compose/types'
-import { isComposeOwnedHosting } from '@/lib/hosting-compose-owner'
-import { resolveCertificateRef } from '@/lib/hosting-plain-words'
+import { isAdoptedComposeHosting, isComposeOwnedHosting } from '@/lib/hosting-compose-owner'
+import { resolveCertificateRef, type ConfiguredHostingState } from '@/lib/hosting-plain-words'
 import type { TlsRecord } from '@/lib/instance-api'
 
 /**
@@ -42,6 +42,16 @@ export function withoutComposeHostingRoute(
   )
 }
 
+export type MovedRouteCertificate = Readonly<{
+  tlsId: string | null
+  getLetsEncrypt: boolean
+  /**
+   * The certificate the file names when the library does not have it. The move
+   * stops and says so rather than quietly falling back to self-signed.
+   */
+  missingRef: string | null
+}>
+
 /**
  * The certificate a hostname keeps when it moves to the panel before any
  * deploy made its hosting: the same library certificate (named by id or name
@@ -50,16 +60,15 @@ export function withoutComposeHostingRoute(
 export function panelCertificateForMovedRoute(
   entry: Pick<ComposeHostingExtensionEntry, 'tls'>,
   library: readonly TlsRecord[]
-): { tlsId: string | null; getLetsEncrypt: boolean } {
+): MovedRouteCertificate {
   const mode = entry.tls?.mode
-  if (mode === 'automatic') return { tlsId: null, getLetsEncrypt: true }
+  if (mode === 'automatic') return { tlsId: null, getLetsEncrypt: true, missingRef: null }
   if (mode === 'certificate') {
-    return {
-      tlsId: resolveCertificateRef(entry.tls?.certificateRef, library)?.id ?? null,
-      getLetsEncrypt: false,
-    }
+    const ref = entry.tls?.certificateRef ?? ''
+    const row = resolveCertificateRef(ref, library)
+    return { tlsId: row?.id ?? null, getLetsEncrypt: false, missingRef: row ? null : ref }
   }
-  return { tlsId: null, getLetsEncrypt: false }
+  return { tlsId: null, getLetsEncrypt: false, missingRef: null }
 }
 
 /** The steps a move to the panel runs; each says why itself when it fails. */
@@ -68,8 +77,8 @@ export type MoveToPanelSteps = Readonly<{
   release: (hostingId: string) => Promise<boolean>
   /** Save the environment's file without the entry. Answers whether it worked. */
   saveFile: (next: ComposeDocument) => Promise<boolean>
-  /** Create the panel hosting for a hostname no deploy has made yet. */
-  createPanelHosting: () => Promise<void>
+  /** Create the panel hosting for a hostname no deploy has made yet. Answers whether it worked. */
+  createPanelHosting: () => Promise<boolean>
 }>
 
 /**
@@ -79,9 +88,10 @@ export type MoveToPanelSteps = Readonly<{
  * entry: if the file save then fails, the row is a panel row the file still
  * names, which the next deploy adopts again. The other order would leave a
  * compose-made row with no entry, which the next deploy deletes along with its
- * certificate pin. With nothing deployed yet there is no row to keep, so the
- * entry goes first and the panel hosting is created after it (creating it
- * first would claim the same name twice).
+ * certificate pin. With nothing deployed yet the panel hosting is created
+ * first (no row holds the name, so it cannot clash) and the entry dropped
+ * after: a failed create leaves the file as it was, and a failed drop leaves a
+ * panel row the next deploy adopts. Either way nothing typed is lost.
  */
 export async function moveComposeHostnameToPanel(
   input: Readonly<{ hostingId: string | null; next: ComposeDocument }>,
@@ -91,9 +101,8 @@ export async function moveComposeHostnameToPanel(
     if (!(await steps.release(input.hostingId))) return 'stopped'
     return (await steps.saveFile(input.next)) ? 'released' : 'stopped'
   }
-  if (!(await steps.saveFile(input.next))) return 'stopped'
-  await steps.createPanelHosting()
-  return 'created'
+  if (!(await steps.createPanelHosting())) return 'stopped'
+  return (await steps.saveFile(input.next)) ? 'created' : 'stopped'
 }
 
 type HostingRowShape = Readonly<{ metadata?: unknown; options?: unknown }>
@@ -125,6 +134,35 @@ export function panelRowsBesideDeclarations<T extends HostingRowShape>(
       !isComposeOwnedHosting(row.metadata) &&
       !rowRouteKeys(row.options).some((key) => declared.has(key))
   )
+}
+
+/**
+ * The panel hosting that already serves a configured route, the one the next
+ * deploy would adopt: a move that released the row (or created it) but could
+ * not drop the entry leaves it like this.
+ */
+export function findPanelRowForRoute<T extends HostingRowShape>(
+  rows: readonly T[],
+  route: string
+): T | undefined {
+  return rows.find(
+    (row) => !isComposeOwnedHosting(row.metadata) && rowRouteKeys(row.options).includes(route)
+  )
+}
+
+/**
+ * Where a configured route's hosting stands: the row the last deploy made
+ * from the file (taken over from the panel or not), a panel row already
+ * serving the route, or none yet.
+ */
+export function configuredHostingState(
+  composeOwnedRow: HostingRowShape | undefined,
+  panelRow: HostingRowShape | undefined
+): ConfiguredHostingState {
+  if (composeOwnedRow) {
+    return isAdoptedComposeHosting(composeOwnedRow.metadata) ? 'adopted' : 'deployed'
+  }
+  return panelRow ? 'held-by-panel' : 'not-deployed'
 }
 
 export type DeclaredServiceHosting = Readonly<{

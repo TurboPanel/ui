@@ -109,7 +109,7 @@ export function composeRouteSourceText(editable: boolean): string {
 
 /** The certificate picker's explanation for a hostname set in the configuration file. */
 export const COMPOSE_CERTIFICATE_HINT =
-  'Let’s Encrypt gets a free certificate on the next deploy and renews it by itself. Self-signed works straight away, but browsers warn visitors. A certificate from your library uses one you added under Servers › TLS.'
+  'Let’s Encrypt gets a free certificate on the next deploy and renews it by itself. Self-signed works straight away, but browsers warn visitors. A certificate from your library uses one you added under Organization settings › Domains & certificates.'
 
 /** Under the hostname field of a configured hostname. */
 export const COMPOSE_HOSTNAME_HINT =
@@ -122,6 +122,23 @@ export const COMPOSE_PROXY_NOTE =
 /** Shown next to the hostname field when a configured hostname is saved empty. */
 export const EMPTY_COMPOSE_HOSTNAME_MESSAGE =
   'Enter a hostname. To stop serving this one, use Remove hostname above.'
+
+/** The certificate panel's note when the file sets the hostname but not Let's Encrypt. */
+export const COMPOSE_OWNED_CERTIFICATE_NOTE =
+  'This hostname is set in the configuration file, so its certificate is chosen in the Certificate setting above. Pick Let’s Encrypt there to get a free certificate on the next deploy.'
+
+/** The certificate panel's note when the file asks Let's Encrypt for the certificate. */
+export const COMPOSE_AUTOMATIC_CERTIFICATE_NOTE =
+  'The configuration file asks Let’s Encrypt for this hostname’s certificate, which renews by itself.'
+
+/** Saving a hostname for a service the environment does not have yet. */
+export const SERVICE_NOT_SAVED_MESSAGE =
+  'This service is not saved yet. Save the Compose file first, then add its hostname.'
+
+/** A move refused because the file names a certificate the library does not have. */
+export function missingCertificateMessage(ref: string): string {
+  return `The configuration file names a certificate “${ref}” that is not in your library. Pick a certificate for this hostname and save, or add it under Organization settings › Domains & certificates, then move it.`
+}
 
 /** The refusal when someone saves a hostname the project's shared file sets. */
 export const SHARED_FILE_HOSTNAME_MESSAGE =
@@ -141,17 +158,36 @@ export function composeEntryConfigSnippet(
 }
 
 /**
- * The confirmation for Remove hostname. A row the panel made first and the
- * file later took over goes back to the panel instead of being deleted, and
- * the prompt says so.
+ * Where a configured hostname's hosting stands, which decides what the two
+ * actions do and therefore what they say:
+ * - `not-deployed`: no deploy has made a hosting for it yet.
+ * - `deployed`: the last deploy made its hosting from the file.
+ * - `adopted`: the panel made the hosting first and the file took it over.
+ * - `held-by-panel`: the panel already manages its hosting (a move that
+ *   released the row but could not save the file); the next deploy would take
+ *   it over again.
  */
-export function removeHostnamePrompt(hostname: string, adopted: boolean): string {
-  return adopted
-    ? `Remove ${hostname} from the configuration file? After the next deploy it is managed on this screen again.`
-    : `Remove ${hostname}? It stops being served after the next deploy.`
+export type ConfiguredHostingState = 'not-deployed' | 'deployed' | 'adopted' | 'held-by-panel'
+
+/** The confirmation for Remove hostname, true to what the next deploy does. */
+export function removeHostnamePrompt(hostname: string, state: ConfiguredHostingState): string {
+  if (state === 'adopted') {
+    return `Remove ${hostname} from the configuration file? After the next deploy it is managed on this screen again.`
+  }
+  if (state === 'held-by-panel') {
+    return `Remove ${hostname} from the configuration file? It is already managed on this screen, so it keeps being served.`
+  }
+  if (state === 'not-deployed') return `Remove ${hostname}? It is not served yet and will not be.`
+  return `Remove ${hostname}? It stops being served after the next deploy.`
 }
 
 /** The confirmation for Manage on this screen instead. */
-export function manageHereInsteadPrompt(hostname: string): string {
-  return `Manage ${hostname} here instead of in the configuration file? It keeps its certificate choice.`
+export function manageHereInsteadPrompt(hostname: string, state: ConfiguredHostingState): string {
+  if (state === 'held-by-panel') {
+    return `Finish moving ${hostname} here? It is already managed on this screen; this removes it from the configuration file.`
+  }
+  if (state === 'not-deployed') {
+    return `Manage ${hostname} here instead of in the configuration file? It keeps what is on this screen, including its certificate choice.`
+  }
+  return `Manage ${hostname} here instead of in the configuration file? It keeps its settings and certificate as last deployed; changes not deployed yet, or not saved here, are not carried over.`
 }

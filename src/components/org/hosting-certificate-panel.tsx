@@ -1,4 +1,8 @@
 import { useRouter, type Href } from 'expo-router'
+import {
+  COMPOSE_AUTOMATIC_CERTIFICATE_NOTE,
+  COMPOSE_OWNED_CERTIFICATE_NOTE,
+} from '@/lib/hosting-plain-words'
 import { createContext, useContext } from 'react'
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
 import { useOptionalEnvironmentLifecycle } from '@/components/org/project/overview-environments-panel'
@@ -31,16 +35,10 @@ const TONE_COLOR: Record<CertificateTone, string> = {
   pending: colors.command,
 }
 
-const COMPOSE_OWNED_COPY =
-  'This hostname is set in the configuration file, so its certificate is chosen in the Certificate setting above. Pick Let’s Encrypt there to get a free certificate on the next deploy.'
-
-const COMPOSE_AUTOMATIC_COPY =
-  'The configuration file asks Let’s Encrypt for this hostname’s certificate, which renews by itself.'
-
 /** The note under a compose-owned domain's certificate state; none for a panel domain. */
 function composeNote(composeOwned: boolean, composeAutomatic: boolean): string | null {
   if (!composeOwned) return null
-  return composeAutomatic ? COMPOSE_AUTOMATIC_COPY : COMPOSE_OWNED_COPY
+  return composeAutomatic ? COMPOSE_AUTOMATIC_CERTIFICATE_NOTE : COMPOSE_OWNED_CERTIFICATE_NOTE
 }
 
 /** What the screen around the certificate panels can do for them. */

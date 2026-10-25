@@ -10,6 +10,7 @@ import { panelStyles } from '@/components/ui/panel-styles'
 import { TextLink } from '@/components/ui/text-link'
 import type { ComposeHostingExtensionEntry } from '@/lib/compose/hosting-extension'
 import {
+  type ConfiguredHostingState,
   composeEntryConfigSnippet,
   composeRouteSourceText,
   manageHereInsteadPrompt,
@@ -29,7 +30,7 @@ export function ComposeHostnameActions({
   composeServiceName,
   entry,
   editable,
-  adopted,
+  state,
   configurationHref,
   busy,
   disabled,
@@ -40,8 +41,8 @@ export function ComposeHostnameActions({
   composeServiceName: string
   entry: ComposeHostingExtensionEntry
   editable: boolean
-  /** The panel made the row before the file took it over; removing hands it back. */
-  adopted: boolean
+  /** Where the hostname's hosting stands; both prompts say what will really happen. */
+  state: ConfiguredHostingState
   /** The Compose editor that holds this entry, or null when there is none to open. */
   configurationHref: string | null
   busy: boolean
@@ -78,7 +79,7 @@ export function ComposeHostnameActions({
           <ConfirmButton
             label="Manage on this screen instead"
             confirmLabel="Move it here"
-            prompt={manageHereInsteadPrompt(entry.hostname)}
+            prompt={manageHereInsteadPrompt(entry.hostname, state)}
             variant="secondary"
             busy={busy}
             disabled={disabled}
@@ -87,7 +88,7 @@ export function ComposeHostnameActions({
           <ConfirmButton
             label="Remove hostname"
             confirmLabel="Remove"
-            prompt={removeHostnamePrompt(entry.hostname, adopted)}
+            prompt={removeHostnamePrompt(entry.hostname, state)}
             busy={busy}
             disabled={disabled}
             onConfirm={onRemove}

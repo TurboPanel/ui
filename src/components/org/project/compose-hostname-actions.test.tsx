@@ -34,7 +34,7 @@ function renderActions(overrides: Partial<Parameters<typeof ComposeHostnameActio
       composeServiceName="website"
       entry={{ hostname: 'example.test', tls: { mode: 'automatic' } }}
       editable
-      adopted={false}
+      state="deployed"
       configurationHref="/compose?hosting=website"
       busy={false}
       disabled={false}
@@ -80,15 +80,21 @@ describe('ComposeHostnameActions', () => {
   it('moves the hostname to this screen only after confirming', () => {
     const { onManageHere } = renderActions()
     fireEvent.click(screen.getByText('Manage on this screen instead'))
-    expect(screen.getByText(/keeps its certificate choice/)).toBeTruthy()
+    expect(screen.getByText(/as last deployed/)).toBeTruthy()
     fireEvent.click(screen.getByText('Move it here'))
     expect(onManageHere).toHaveBeenCalledTimes(1)
   })
 
   it('says a taken-over hostname goes back to this screen when removed', () => {
-    renderActions({ adopted: true })
+    renderActions({ state: 'adopted' })
     fireEvent.click(screen.getByText('Remove hostname'))
     expect(screen.getByText(/managed on this screen again/)).toBeTruthy()
+  })
+
+  it('says a hostname the panel already holds keeps being served when removed', () => {
+    renderActions({ state: 'held-by-panel' })
+    fireEvent.click(screen.getByText('Remove hostname'))
+    expect(screen.getByText(/keeps being served/)).toBeTruthy()
   })
 
   it('offers no actions for a hostname the shared file sets, only where to change it', () => {

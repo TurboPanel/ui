@@ -144,15 +144,18 @@ export function useUpsertHosting(orgId: string) {
   })
 }
 
-/** Release a compose-made hosting to the panel; refreshes that service's hostings. */
+/** Release a compose-made hosting to the panel; refreshes that service's hostings (or all). */
 export function useReleaseHostingFromCompose(orgId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: ({ hostingId }: { hostingId: string; serviceId: string }) =>
+    mutationFn: ({ hostingId }: { hostingId: string; serviceId?: string }) =>
       releaseHostingFromCompose(hostingId),
+    // Every hosting list when the service is not known, so the moved row still shows.
     onSuccess: async (_data, variables) => {
       await queryClient.invalidateQueries({
-        queryKey: queryKeys.org(orgId).hostings.list(variables.serviceId),
+        queryKey: variables.serviceId
+          ? queryKeys.org(orgId).hostings.list(variables.serviceId)
+          : queryKeys.org(orgId).hostings.all,
       })
     },
     fallbackError: 'Failed to move the hostname to this screen',

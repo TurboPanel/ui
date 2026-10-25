@@ -128,7 +128,6 @@ import {
   type HostingServiceContext,
 } from '@/lib/compose'
 import {
-  isAdoptedComposeHosting,
   isComposeOwnedHosting,
   readHostingComposeRoute,
 } from '@/lib/hosting-compose-owner'
@@ -138,11 +137,16 @@ import {
   COMPOSE_CERTIFICATE_HINT,
   COMPOSE_HOSTNAME_HINT,
   COMPOSE_PROXY_NOTE,
+  type ConfiguredHostingState,
   EMPTY_COMPOSE_HOSTNAME_MESSAGE,
+  missingCertificateMessage,
   resolveCertificateRef,
+  SERVICE_NOT_SAVED_MESSAGE,
   SHARED_FILE_HOSTNAME_MESSAGE,
 } from '@/lib/hosting-plain-words'
 import {
+  configuredHostingState,
+  findPanelRowForRoute,
   moveComposeHostnameToPanel,
   panelCertificateForMovedRoute,
   panelRowsBesideDeclarations,
@@ -395,8 +399,8 @@ type HostingRowSource =
     overlayIndex: number | null
     /** The entry itself, for the readable summary and the exact configuration. */
     entry: ComposeHostingExtensionEntry
-    /** The panel made the row before the file took it over (removing hands it back). */
-    adopted: boolean
+    /** Where its hosting stands, which decides what the two actions do and say. */
+    state: ConfiguredHostingState
   }
 
 type HostingPanelRowDescriptor = {
@@ -577,6 +581,10 @@ function buildHostingPanelRows(params: {
       const route = hostingEntryKey(entry)
       const overlayIndex = findComposeHostingEntryIndex(overlayEntries, route)
       const composeOwnedRow = findComposeOwnedRow(serviceRows, route)
+      // No row made from the file: a panel row on the same route is the one
+      // the next deploy would adopt (a move that could not drop the entry).
+      const panelRow = composeOwnedRow ? undefined : findPanelRowForRoute(serviceRows, route)
+      const row = composeOwnedRow ?? panelRow
       rows.push({
         editorKey: `${serviceKey}::${route}`,
         composeServiceName,
@@ -586,10 +594,10 @@ function buildHostingPanelRows(params: {
           route,
           overlayIndex: overlayIndex === -1 ? null : overlayIndex,
           entry,
-          adopted: isAdoptedComposeHosting(composeOwnedRow?.metadata),
+          state: configuredHostingState(composeOwnedRow, panelRow),
         },
-        hostingId: composeOwnedRow?.id ?? null,
-        seed: readComposeHostingEditor(entry, composeOwnedRow),
+        hostingId: row?.id ?? null,
+        seed: readComposeHostingEditor(entry, row),
       })
     }
     // A hostname moved out of the file sits next to the entries still in it.
@@ -1230,7 +1238,7 @@ function HostingPanelRow({
   hostingId,
   composeRoute = null,
   composeEntry = null,
-  composeAdopted = false,
+  composeState = 'not-deployed',
   configurationHref = null,
   rowError,
   onRemoveHostname,
@@ -1261,7 +1269,7 @@ function HostingPanelRow({
   composeRoute?: string | null
   /** The configured entry this row renders, for its readable words and actions. */
   composeEntry?: ComposeHostingExtensionEntry | null
-  composeAdopted?: boolean
+  composeState?: ConfiguredHostingState
   /** The Compose editor that holds the entry. */
   configurationHref?: string | null
   rowError?: HostingRowError
@@ -1358,7 +1366,7 @@ function HostingPanelRow({
           composeServiceName={composeServiceName}
           entry={composeEntry}
           editable={composeEditable}
-          adopted={composeAdopted}
+          state={composeState}
           configurationHref={configurationHref}
           busy={saving}
           disabled={disabled}
@@ -1954,7 +1962,7 @@ function EnvironmentHostingSectionPanel({
                   ? row.source.route
                   : null}
                 composeEntry={row.source.kind === 'compose' ? row.source.entry : null}
-                composeAdopted={row.source.kind === 'compose' && row.source.adopted}
+                composeState={row.source.kind === 'compose' ? row.source.state : undefined}
                 configurationHref={composeEditorHrefFor(row, hostingRowActions)}
                 rowError={hostingRowActions.rowErrors[row.editorKey]}
                 onRemoveHostname={() => hostingRowActions.onRemoveHostname(row)}
@@ -2900,13 +2908,13 @@ export function EnvironmentDetailBody({
     editor: HostingEditorState = hostingEditors[row.editorKey] ?? row.seed,
     onError: (message: string) => void = (message) =>
       setRowError(row.editorKey, { field: 'save', message }),
-  ): Promise<void> => {
+  ): Promise<boolean> => {
     const service = resolvedServices.find(
       (item) => item.composeServiceName === row.composeServiceName,
     )
     if (!service) {
-      onError('Save the compose document first.')
-      return
+      onError(SERVICE_NOT_SAVED_MESSAGE)
+      return false
     }
     const result = await upsertHostingMutation.run({
       serviceId: service.id,
@@ -2922,7 +2930,7 @@ export function EnvironmentDetailBody({
     if (!result.ok) {
       const message = result.error ?? upsertHostingMutation.actionError
       if (message) onError(message)
-      return
+      return false
     }
     const savedHostingId =
       row.hostingId ??
@@ -2953,6 +2961,7 @@ export function EnvironmentDetailBody({
       containersQuery.refetchAll(),
     ])
     await resetHostingEditorsFromQueries()
+    return true
   }
 
   /** Run one row's action with the row marked busy and its last problem cleared. */
@@ -3010,11 +3019,16 @@ export function EnvironmentDetailBody({
       if (row.source.kind !== 'compose') return
       const next = overlayWithoutRow(row)
       if (!next) return
-      const entry = row.source.entry
       const onError = actionsErrorSink(row)
+      const editor = hostingEditors[row.editorKey] ?? row.seed
+      const certificate = panelCertificateForMovedRoute(row.source.entry, tlsLibrary)
+      if (!row.hostingId && certificate.missingRef !== null) {
+        onError(missingCertificateMessage(certificate.missingRef))
+        return
+      }
       const serviceId = resolvedServices.find(
         (item) => item.composeServiceName === row.composeServiceName,
-      )?.id ?? ''
+      )?.id
       await moveComposeHostnameToPanel({ hostingId: row.hostingId, next }, {
         release: async (hostingId) => {
           const released = await releaseHostingMutation.run({ hostingId, serviceId })
@@ -3022,16 +3036,18 @@ export function EnvironmentDetailBody({
           return released.ok
         },
         saveFile: (document) => saveCompose(document, onError),
-        // The row is gone from the file now, so a refusal here shows at the top.
-        createPanelHosting: () => {
-          const editor = hostingEditors[row.editorKey] ?? row.seed
-          const certificate = panelCertificateForMovedRoute(entry, tlsLibrary)
-          return savePanelHostingRow(
+        createPanelHosting: () =>
+          savePanelHostingRow(
             { ...row, source: { kind: 'panel' }, hostingId: null },
-            { ...editor, ...certificate, tlsAutomatic: false, protocol: 'http' },
-            setError,
-          )
-        },
+            {
+              ...editor,
+              tlsId: certificate.tlsId,
+              getLetsEncrypt: certificate.getLetsEncrypt,
+              tlsAutomatic: false,
+              protocol: 'http',
+            },
+            onError,
+          ),
       })
     })
 

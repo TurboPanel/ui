@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { TlsRecord } from '@/lib/instance-api'
 import {
+  type ConfiguredHostingState,
   certificateChoiceText,
   certificateLabel,
   composeEntryCertificateText,
@@ -8,15 +9,19 @@ import {
   composeEntrySummaryLines,
   composeEntryWwwText,
   composeRouteSourceText,
+  COMPOSE_AUTOMATIC_CERTIFICATE_NOTE,
   COMPOSE_CERTIFICATE_HINT,
+  COMPOSE_OWNED_CERTIFICATE_NOTE,
   COMPOSE_HOSTNAME_HINT,
   COMPOSE_PROXY_NOTE,
   EMPTY_COMPOSE_HOSTNAME_MESSAGE,
   LETS_ENCRYPT_CHOICE_TEXT,
   manageHereInsteadPrompt,
+  missingCertificateMessage,
   removeHostnamePrompt,
   resolveCertificateRef,
   SELF_SIGNED_CHOICE_TEXT,
+  SERVICE_NOT_SAVED_MESSAGE,
   SHARED_FILE_HOSTNAME_MESSAGE,
 } from './hosting-plain-words'
 
@@ -37,22 +42,31 @@ const library = [
   certificate('22222222-bbbb', null, ['example.test']),
 ]
 
+const STATES: ConfiguredHostingState[] = ['not-deployed', 'deployed', 'adopted', 'held-by-panel']
+
 /** Every sentence the screen shows: no raw configuration word may reach a person. */
 const RAW_WORDS = /tls\.mode|certificateRef|x-turbopanel|"internal"|"certificate"|"automatic"/
 
 describe('plain hosting words', () => {
   it('never shows a raw configuration word in a sentence', () => {
     const sentences = [
+      COMPOSE_AUTOMATIC_CERTIFICATE_NOTE,
       COMPOSE_CERTIFICATE_HINT,
+      COMPOSE_OWNED_CERTIFICATE_NOTE,
       COMPOSE_HOSTNAME_HINT,
       COMPOSE_PROXY_NOTE,
       EMPTY_COMPOSE_HOSTNAME_MESSAGE,
       SHARED_FILE_HOSTNAME_MESSAGE,
       composeRouteSourceText(true),
       composeRouteSourceText(false),
-      removeHostnamePrompt('example.test', false),
-      removeHostnamePrompt('example.test', true),
-      manageHereInsteadPrompt('example.test'),
+      COMPOSE_OWNED_CERTIFICATE_NOTE,
+      COMPOSE_AUTOMATIC_CERTIFICATE_NOTE,
+      SERVICE_NOT_SAVED_MESSAGE,
+      missingCertificateMessage('Shop wildcard'),
+      ...STATES.flatMap((state) => [
+        removeHostnamePrompt('example.test', state),
+        manageHereInsteadPrompt('example.test', state),
+      ]),
       ...composeEntrySummaryLines(
         { hostname: 'example.test', www: 'www-to-root', tls: { mode: 'automatic' } },
         library
@@ -143,11 +157,29 @@ describe('plain hosting words', () => {
     )
   })
 
-  it('says where a hostname lives and that a taken-over row goes back to the panel', () => {
+  it('says where a hostname lives', () => {
     expect(composeRouteSourceText(true)).toContain('this environment’s configuration file')
     expect(composeRouteSourceText(false)).toContain('Base tab')
-    expect(removeHostnamePrompt('example.test', false)).toContain('stops being served')
-    expect(removeHostnamePrompt('example.test', true)).toContain('managed on this screen again')
-    expect(manageHereInsteadPrompt('example.test')).toContain('keeps its certificate choice')
+  })
+
+  it('says what Remove hostname really does in each state', () => {
+    expect(removeHostnamePrompt('example.test', 'deployed')).toContain('stops being served')
+    expect(removeHostnamePrompt('example.test', 'adopted')).toContain(
+      'managed on this screen again'
+    )
+    expect(removeHostnamePrompt('example.test', 'held-by-panel')).toContain('keeps being served')
+    expect(removeHostnamePrompt('example.test', 'not-deployed')).toContain('not served yet')
+  })
+
+  it('says what a move keeps, and that undeployed changes stay behind for a deployed hostname', () => {
+    expect(manageHereInsteadPrompt('example.test', 'deployed')).toContain('as last deployed')
+    expect(manageHereInsteadPrompt('example.test', 'deployed')).toContain('not carried over')
+    expect(manageHereInsteadPrompt('example.test', 'not-deployed')).toContain('certificate choice')
+    expect(manageHereInsteadPrompt('example.test', 'held-by-panel')).toContain('Finish moving')
+  })
+
+  it('names the real place certificates are added', () => {
+    expect(COMPOSE_CERTIFICATE_HINT).toContain('Organization settings › Domains & certificates')
+    expect(missingCertificateMessage('Shop wildcard')).toContain('“Shop wildcard”')
   })
 })
