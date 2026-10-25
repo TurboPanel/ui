@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   fetchCommandLog,
   fetchEnvironmentDeployments,
@@ -13,6 +13,7 @@ import {
   type LogTranscriptLine,
 } from '@/lib/execution-log-lines'
 import { queryKeys } from '@/lib/query-keys'
+import { isNewestDeploymentInFlight, newestDeploymentFinished } from '@/lib/deployment-history'
 
 /** Transcript poll cadence while a command is live. Sealed transcripts stop. */
 export const COMMAND_LOG_POLL_MS = 1000
@@ -297,22 +298,40 @@ export function useCommandLog(
  * invalidated by the deploy mutation and whenever a tracked command reaches a
  * terminal status, mirroring the containers-on-Project-Overview rule.
  */
+/** History poll cadence while the newest deploy is still going. */
+export const DEPLOYMENT_POLL_MS = 5000
+
+/**
+ * The environment's deploy history. Polls only while the newest deploy is
+ * still going, so the status and the pages under it follow the deploy without
+ * a reload; when it finishes, the hostings (and their certificates, which a
+ * deploy can change) are fetched again.
+ */
 export function useEnvironmentDeployments(
   orgId: string,
   environmentId: string,
   options?: Readonly<{ enabled?: boolean; limit?: number }>,
 ) {
+  const queryClient = useQueryClient()
+  const queryKey = queryKeys.org(orgId).environments.deployments(environmentId)
   return useQuery({
-    queryKey: queryKeys.org(orgId).environments.deployments(environmentId),
-    queryFn: () =>
-      fetchEnvironmentDeployments(environmentId, {
+    queryKey,
+    queryFn: async () => {
+      const before = queryClient.getQueryData<{ deployments: DeploymentHistoryRecord[] }>(queryKey)
+      const page = await fetchEnvironmentDeployments(environmentId, {
         ...(options?.limit ? { limit: options.limit } : {}),
-      }),
+      })
+      if (newestDeploymentFinished(before?.deployments, page.deployments)) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.org(orgId).hostings.all })
+      }
+      return page
+    },
     enabled:
       (options?.enabled ?? true) &&
       orgId.length > 0 &&
       environmentId.length > 0,
-    refetchInterval: false,
+    refetchInterval: (query) =>
+      isNewestDeploymentInFlight(query.state.data?.deployments) ? DEPLOYMENT_POLL_MS : false,
   })
 }
 

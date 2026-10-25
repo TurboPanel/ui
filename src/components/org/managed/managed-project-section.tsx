@@ -86,7 +86,7 @@ import { chrome, colors, spacing, webPointer } from '@/lib/theme'
 import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useCallback, useRef, useState, type ReactNode } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { userErrorMessage } from '@/lib/user-error'
+import { failedRunMessage, userErrorMessage } from '@/lib/user-error'
 
 /** Fire-and-forget without the `void` operator (typescript:S3735). */
 function ignorePromise(promise: Promise<unknown>): void {
@@ -239,9 +239,7 @@ export function ManagedSetupPanel({
     try {
       const pinResult = await updateEnvironmentMutation.run({ serverId })
       if (!pinResult.ok) {
-        if (updateEnvironmentMutation.actionError) {
-          setError(updateEnvironmentMutation.actionError)
-        }
+        setError(failedRunMessage(pinResult, 'Failed to pick the server'))
         return
       }
       // Saved before the service exists, and only when it changed, so the
@@ -264,9 +262,7 @@ export function ManagedSetupPanel({
         version ? { engineSeries: version.series, imageVariant: version.variantId } : {}
       )
       if (!result.ok) {
-        if (createManagedMutation.actionError) {
-          setError(createManagedMutation.actionError)
-        }
+        setError(failedRunMessage(result, 'Failed to create the database'))
         return
       }
       onCreated(result.value.rootPassword, result.value.rootUsername)
@@ -319,7 +315,10 @@ export function ManagedSetupPanel({
         <ManagedExternalAccessSwitch
           value={externalAccess}
           otherClusters={externalAccessQuery.data?.clusterCount ?? 0}
-          disabled={submitting || externalAccessQuery.isLoading || !canManage || !canEditServer}
+          disabled={submitting || !canManage || !canEditServer}
+          // A spinner while the server's value loads, so the switch never looks
+          // pressable while it ignores presses.
+          busy={externalAccessQuery.isLoading}
           onChange={setExternalAccessChoice}
         />
       ) : null}
@@ -631,14 +630,14 @@ function ManagedEnvironmentReadyPanels({
           onDelete={async (backupId) => {
             const result = await deleteBackupMutation.run(backupId)
             if (!result.ok) {
-              throw new Error(deleteBackupMutation.actionError ?? 'Failed to delete backup')
+              throw new Error(result.error ?? 'Failed to delete backup')
             }
             registerCommand(result.value.commandId, 'Delete backup')
           }}
           onRestore={async (backupId) => {
             const result = await restoreBackupMutation.run(backupId)
             if (!result.ok) {
-              throw new Error(restoreBackupMutation.actionError ?? 'Failed to restore backup')
+              throw new Error(result.error ?? 'Failed to restore backup')
             }
             registerCommand(result.value.commandId, 'Restore backup')
           }}
@@ -668,7 +667,7 @@ function ManagedEnvironmentReadyPanels({
             })
             if (!updateResult.ok) {
               invalidateManagedData()
-              throw new Error(updateManagedMutation.actionError ?? 'Failed to save settings')
+              throw new Error(updateResult.error ?? 'Failed to save settings')
             }
             const applyResult = await applyManagedMutation.mutateAsync()
             registerCommand(applyResult.commandId, 'Apply settings')
@@ -685,7 +684,7 @@ function ManagedEnvironmentReadyPanels({
           onLifecycle={async (action) => {
             const result = await lifecycleMutation.run(action)
             if (!result.ok) {
-              throw new Error(lifecycleMutation.actionError ?? 'Lifecycle action failed')
+              throw new Error(result.error ?? 'Lifecycle action failed')
             }
             registerCommand(result.value.commandId, action)
           }}
@@ -792,14 +791,14 @@ function ManagedDataPanels({
         onCreateDatabase={async (name) => {
           const result = await createDatabaseMutation.run({ name })
           if (!result.ok) {
-            throw new Error(createDatabaseMutation.actionError ?? 'Failed to create database')
+            throw new Error(result.error ?? 'Failed to create database')
           }
           registerCommand(result.value.commandId, 'Create database')
         }}
         onDeleteDatabase={async (name) => {
           const result = await deleteDatabaseMutation.run(name)
           if (!result.ok) {
-            throw new Error(deleteDatabaseMutation.actionError ?? 'Failed to delete database')
+            throw new Error(result.error ?? 'Failed to delete database')
           }
           registerCommand(result.value.commandId, 'Delete database')
         }}
@@ -818,7 +817,7 @@ function ManagedDataPanels({
         onDeleteUser={async (loginId) => {
           const result = await deleteUserMutation.run(loginId)
           if (!result.ok) {
-            throw new Error(deleteUserMutation.actionError ?? 'Failed to delete user')
+            throw new Error(result.error ?? 'Failed to delete user')
           }
           registerCommand(result.value.commandId, 'Delete user')
         }}
@@ -989,9 +988,7 @@ function ActiveEnvironmentPanel({
     onError(null)
     const result = await updateEnvironmentMutation.run({ name: trimmed })
     if (!result.ok) {
-      if (updateEnvironmentMutation.actionError) {
-        onError(updateEnvironmentMutation.actionError)
-      }
+      onError(failedRunMessage(result, 'Failed to rename the environment'))
       return
     }
     setRenaming(false)
@@ -1009,9 +1006,7 @@ function ActiveEnvironmentPanel({
       name: trimmed,
     })
     if (!result.ok) {
-      if (createEnvironmentMutation.actionError) {
-        onError(createEnvironmentMutation.actionError)
-      }
+      onError(failedRunMessage(result, 'Failed to create the environment'))
       return
     }
     onSelect(result.value.id)
@@ -1023,9 +1018,7 @@ function ActiveEnvironmentPanel({
     onError(null)
     const result = await deleteEnvironmentMutation.run(activeEnvironment.id)
     if (!result.ok) {
-      if (deleteEnvironmentMutation.actionError) {
-        onError(deleteEnvironmentMutation.actionError)
-      }
+      onError(failedRunMessage(result, 'Failed to delete the environment'))
     }
   }
 
@@ -1137,8 +1130,8 @@ export function ManagedProjectSection({
         createEnvironmentMutation
           .run({ projectId, name: defaultEnvironmentName })
           .then((result) => {
-            if (!result.ok && createEnvironmentMutation.actionError) {
-              setError(createEnvironmentMutation.actionError)
+            if (!result.ok) {
+              setError(failedRunMessage(result, 'Failed to create the environment'))
             }
           })
       )

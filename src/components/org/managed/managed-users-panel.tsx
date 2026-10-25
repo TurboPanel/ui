@@ -179,8 +179,12 @@ export function ManagedUsersPanel({
   // null = the owner has not touched the switch, so the default for the chosen level shows.
   const [straightChoice, setStraightChoice] = useState<boolean | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // Said next to the button that failed, not at the top of the panel.
+  const [databaseError, setDatabaseError] = useState<string | null>(null)
+  const [newLoginError, setNewLoginError] = useState<string | null>(null)
   const [usernameHint, setUsernameHint] = useState<string | null>(null)
   const [working, setWorking] = useState(false)
+  const [adding, setAdding] = useState<'database' | 'login' | null>(null)
   const [revealedPassword, setRevealedPassword] = useState<string | null>(null)
   const [revealedUsername, setRevealedUsername] = useState<string | null>(null)
   const [redeployRequired, setRedeployRequired] =
@@ -230,19 +234,21 @@ export function ManagedUsersPanel({
   const createDatabase = async () => {
     const trimmed = dbName.trim()
     if (!DATABASE_PATTERN.test(trimmed)) {
-      setError('Database name must start with a letter or underscore.')
+      setDatabaseError('Database name must start with a letter or underscore.')
       return
     }
     setWorking(true)
-    setError(null)
+    setAdding('database')
+    setDatabaseError(null)
     try {
       await onCreateDatabase(trimmed)
       setDbName('')
       await onReload()
     } catch (err) {
-      setError(managedErrorMessage(err, 'Failed to create database'))
+      setDatabaseError(managedErrorMessage(err, 'Failed to create database'))
     } finally {
       setWorking(false)
+      setAdding(null)
     }
   }
 
@@ -262,11 +268,11 @@ export function ManagedUsersPanel({
   const createUser = async () => {
     const trimmed = username.trim()
     if (!USERNAME_PATTERN.test(trimmed)) {
-      setError('Username must start with a letter or underscore.')
+      setNewLoginError('Username must start with a letter or underscore.')
       return
     }
     if (selectedDbs.length === 0) {
-      setError('Select at least one database.')
+      setNewLoginError('Select at least one database.')
       return
     }
     const parsedLimits = limitsFromDraft(limits)
@@ -278,7 +284,8 @@ export function ManagedUsersPanel({
     setLimitsProblem(null)
     const { allowedSources, maxConnections } = parsedLimits.payload
     setWorking(true)
-    setError(null)
+    setAdding('login')
+    setNewLoginError(null)
     setUsernameHint(null)
     try {
       const result = await onCreateUser({
@@ -318,12 +325,13 @@ export function ManagedUsersPanel({
       if (code === 'username_in_use') {
         const suffix = crypto.randomUUID().replaceAll('-', '').slice(0, 3)
         setUsernameHint(`${message} Try ${trimmed}_${suffix}.`)
-        setError(null)
+        setNewLoginError(null)
       } else {
-        setError(message)
+        setNewLoginError(message)
       }
     } finally {
       setWorking(false)
+      setAdding(null)
     }
   }
 
@@ -382,11 +390,21 @@ export function ManagedUsersPanel({
     )
   }
 
-  const disabled = busy || working || !canManage
+  // A change still applying on the server (`busy`) holds back edits to what
+  // exists; adding a database or a login is queued behind it by the server,
+  // so the add forms stay usable instead of silently ignoring presses.
+  const addDisabled = working || !canManage
+  const disabled = busy || addDisabled
 
   return (
     <SectionPanel title="Users & databases" hint="Engine users and databases">
       {error ? <Text style={panelStyles.error}>{error}</Text> : null}
+      {busy && canManage ? (
+        <Text style={panelStyles.muted}>
+          The last change is still being applied on the server. Editing or deleting waits until it
+          finishes.
+        </Text>
+      ) : null}
 
       <Text style={styles.subheading}>Databases</Text>
       <View style={styles.list}>
@@ -432,16 +450,19 @@ export function ManagedUsersPanel({
             placeholder="database_name"
             autoCapitalize="none"
             autoCorrect={false}
-            editable={!disabled}
+            editable={!addDisabled}
           />
           <Button
             label="Add database"
+            busyLabel="Adding…"
             variant="primary"
-            disabled={disabled}
+            busy={adding === 'database'}
+            disabled={addDisabled}
             onPress={() => {
               void createDatabase()
             }}
           />
+          {databaseError ? <Text style={panelStyles.error}>{databaseError}</Text> : null}
         </View>
       ) : null}
 
@@ -584,12 +605,12 @@ export function ManagedUsersPanel({
             placeholder="username"
             autoCapitalize="none"
             autoCorrect={false}
-            editable={!disabled}
+            editable={!addDisabled}
           />
           {usernameHint ? (
             <Text style={panelStyles.calloutWarning}>{usernameHint}</Text>
           ) : null}
-          <PrincipalNameSchemeField scheme={nameScheme} disabled={disabled} />
+          <PrincipalNameSchemeField scheme={nameScheme} disabled={addDisabled} />
           <Text style={panelStyles.detailLabel}>Databases</Text>
           <View style={styles.chipRow}>
             {databases.map((name) => {
@@ -599,9 +620,9 @@ export function ManagedUsersPanel({
                   key={name}
                   style={[styles.chip, selected && styles.chipSelected, webPointer]}
                   onPress={() => toggleDb(name)}
-                  disabled={disabled}
+                  disabled={addDisabled}
                   accessibilityRole="checkbox"
-                  accessibilityState={{ checked: selected, disabled }}
+                  accessibilityState={{ checked: selected, disabled: addDisabled }}
                   accessibilityLabel={name}
                 >
                   <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
@@ -616,7 +637,7 @@ export function ManagedUsersPanel({
               A Database admin login always reads and writes.
             </Text>
           ) : (
-            <NewLoginJobField job={job} onJobChange={setJob} disabled={disabled} />
+            <NewLoginJobField job={job} onJobChange={setJob} disabled={addDisabled} />
           )}
           <NewLoginAdminField
             admin={admin}
@@ -630,14 +651,14 @@ export function ManagedUsersPanel({
                 setTool(toolBeforeAdmin)
               }
             }}
-            disabled={disabled}
+            disabled={addDisabled}
           />
           <NewLoginModeFields
             mode={grantMode}
             onModeChange={setGrantMode}
             tool={tool}
             onToolChange={setTool}
-            disabled={disabled}
+            disabled={addDisabled}
           />
           <LoginLimitsFields
             draft={limits}
@@ -646,7 +667,7 @@ export function ManagedUsersPanel({
               setLimitsProblem(null)
             }}
             servers={servers}
-            disabled={disabled}
+            disabled={addDisabled}
           />
           {limitsProblem ? <Text style={panelStyles.error}>{limitsProblem}</Text> : null}
           <NewLoginStraightThroughField
@@ -654,13 +675,16 @@ export function ManagedUsersPanel({
             choice={straightChoice}
             privileges={[admin ? MANAGED_ADMIN_PRIVILEGE : job]}
             limited={limits.limited}
-            disabled={disabled}
+            disabled={addDisabled}
             onChange={setStraightChoice}
           />
+          {newLoginError ? <Text style={panelStyles.error}>{newLoginError}</Text> : null}
           <Button
             label="Create user"
+            busyLabel="Creating…"
             variant="primary"
-            disabled={disabled}
+            busy={adding === 'login'}
+            disabled={addDisabled}
             onPress={() => {
               void createUser()
             }}

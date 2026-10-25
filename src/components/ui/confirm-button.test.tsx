@@ -43,3 +43,23 @@ describe('ConfirmButton', () => {
     expect(onConfirm).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('ConfirmButton placement', () => {
+  it('puts the confirm button first, where the armed button was, and the question after', () => {
+    const onConfirm = vi.fn()
+    const { container } = render(
+      <ConfirmButton
+        label="Delete"
+        confirmLabel="Delete certificate"
+        prompt="Remove this certificate?"
+        onConfirm={onConfirm}
+      />
+    )
+    fireEvent.click(screen.getByText('Delete'))
+    const text = container.textContent ?? ''
+    expect(text.indexOf('Delete certificate')).toBe(0)
+    expect(text.indexOf('Remove this certificate?')).toBeGreaterThan(text.indexOf('Cancel'))
+    fireEvent.click(screen.getByText('Delete certificate'))
+    expect(onConfirm).toHaveBeenCalledTimes(1)
+  })
+})

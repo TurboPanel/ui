@@ -173,3 +173,16 @@ export function plainStepFailureMessage(message: string | null | undefined): str
   if (trimmed === '') return null
   return RAW_NETWORK_TEXT.test(trimmed) ? STEP_NETWORK_FAILURE_COPY : trimmed
 }
+
+/**
+ * The sentence for a failed `useApiMutation().run`: the mapped error code,
+ * else the server's words, else the fallback. Read from the run result, never
+ * from `actionError`, which is render state and still empty inside the call
+ * that just failed (so a first failure would show nothing).
+ */
+export function failedRunMessage(
+  result: Readonly<{ error: string | null; cause?: unknown }>,
+  fallback: string
+): string {
+  return result.cause ? userErrorMessage(result.cause, fallback) : (result.error ?? fallback)
+}

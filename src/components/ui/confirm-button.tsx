@@ -6,7 +6,9 @@ import { colors, spacing } from '@/lib/theme'
 /**
  * Two-step destructive action (MASTER: destructive always confirms).
  * First press arms; the armed row shows Confirm / Cancel and auto-disarms
- * after 6s of inactivity. `variant="secondary"` is for an action that is
+ * after 6s of inactivity. The confirm button takes the armed button's place
+ * and the question follows the buttons, so a second press on the same spot
+ * confirms instead of landing on the question text. `variant="secondary"` is for an action that is
  * confirmed but safe to undo (a rollback): a quiet button that confirms with
  * the primary one. While `busy` is true the armed row is shown only
  * for the instance that fired `onConfirm` — other instances sharing the
@@ -88,7 +90,6 @@ export function ConfirmButton({
 
   return (
     <View style={styles.armedRow}>
-      <Text style={styles.prompt}>{prompt}</Text>
       <Button
         label={confirmLabel}
         variant={variant === 'danger' ? 'danger' : 'primary'}
@@ -108,6 +109,7 @@ export function ConfirmButton({
         disabled={busy}
         onPress={disarm}
       />
+      <Text style={styles.prompt}>{prompt}</Text>
     </View>
   )
 }

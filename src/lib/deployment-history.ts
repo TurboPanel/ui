@@ -325,3 +325,19 @@ export function stalledDeploymentHint(errorCode: string | null): string | null {
   }
   return null
 }
+
+/** True while the newest deploy is still going (rows newest first, as the API sends them). */
+export function isNewestDeploymentInFlight(
+  rows: readonly DeploymentHistoryRecord[] | undefined,
+): boolean {
+  const newest = groupDeploymentsByGeneration(rows ?? [])[0]
+  return newest ? isDeploymentInFlight(newest.commands) : false
+}
+
+/** The newest deploy was going in `before` and has finished in `after`. */
+export function newestDeploymentFinished(
+  before: readonly DeploymentHistoryRecord[] | undefined,
+  after: readonly DeploymentHistoryRecord[] | undefined,
+): boolean {
+  return isNewestDeploymentInFlight(before) && !isNewestDeploymentInFlight(after)
+}

@@ -71,7 +71,9 @@ vi.mock('@/components/org/managed/managed-login-limits', () => ({
 vi.mock('@/components/org/managed/managed-login-admin', () => ({
   LoginAdminBadge: () => null,
   LoginAdminEditor: () => null,
-  NewLoginAdminField: () => null,
+  NewLoginAdminField: ({ disabled }: { disabled: boolean }) => (
+    <span data-testid="admin-field" data-disabled={String(disabled)} />
+  ),
 }))
 vi.mock('@/components/org/managed/managed-login-job', () => ({
   jobConnectionRole: () => 'read-write',
@@ -99,7 +101,10 @@ import { ManagedUsersPanel } from './managed-users-panel'
 
 afterEach(cleanup)
 
-const draw = (engine: string) => {
+const draw = (
+  engine: string,
+  options: { busy?: boolean; onCreateDatabase?: (name: string) => Promise<void> } = {}
+) => {
   const onCreateUser = vi.fn(async (_input: Record<string, unknown>) => null)
   render(
     <ManagedUsersPanel
@@ -109,8 +114,8 @@ const draw = (engine: string) => {
       databases={['app']}
       users={[]}
       canManage
-      busy={false}
-      onCreateDatabase={vi.fn()}
+      busy={options.busy ?? false}
+      onCreateDatabase={options.onCreateDatabase ?? vi.fn(async () => {})}
       onDeleteDatabase={vi.fn()}
       onCreateUser={onCreateUser}
       onDeleteUser={vi.fn()}
@@ -151,5 +156,53 @@ describe('ManagedUsersPanel straight through', () => {
     await create('plain')
     await waitFor(() => expect(onCreateUser).toHaveBeenCalledTimes(1))
     expect(onCreateUser.mock.calls[0]?.[0]).not.toHaveProperty('straightThrough')
+  })
+})
+
+describe('ManagedUsersPanel while the last change is still applying', () => {
+  it('still adds a database, and says that editing waits', async () => {
+    const onCreateDatabase = vi.fn(async (_name: string) => {})
+    draw('postgres', { busy: true, onCreateDatabase })
+    expect(screen.getByText(/still being applied on the server/)).toBeTruthy()
+    fireEvent.change(screen.getByLabelText('Database name'), { target: { value: 'testing' } })
+    fireEvent.click(screen.getByText('Add database'))
+    await waitFor(() => expect(onCreateDatabase).toHaveBeenCalledWith('testing'))
+  })
+
+  it('keeps the new login form usable, its switches included', async () => {
+    const onCreateUser = draw('postgres', { busy: true })
+    expect(screen.getByTestId('admin-field').dataset.disabled).toBe('false')
+    await create('staging_migrate')
+    await waitFor(() => expect(onCreateUser).toHaveBeenCalledTimes(1))
+  })
+})
+
+describe('ManagedUsersPanel errors next to their button', () => {
+  it('says why a database was not added, and keeps the name', async () => {
+    const onCreateDatabase = vi.fn(async () => {
+      throw new Error('HTTP 409: database_exists')
+    })
+    draw('postgres', { onCreateDatabase })
+    fireEvent.change(screen.getByLabelText('Database name'), { target: { value: 'testing' } })
+    fireEvent.click(screen.getByText('Add database'))
+    const message = await screen.findByText(/database_exists|already/i)
+    expect(message.previousElementSibling?.textContent).toBe('Add database')
+    expect((screen.getByLabelText('Database name') as HTMLInputElement).value).toBe('testing')
+  })
+
+  it('says a bad database name under the button, not at the top', () => {
+    draw('postgres')
+    fireEvent.change(screen.getByLabelText('Database name'), { target: { value: '9x' } })
+    fireEvent.click(screen.getByText('Add database'))
+    const message = screen.getByText('Database name must start with a letter or underscore.')
+    expect(message.previousElementSibling?.textContent).toBe('Add database')
+  })
+
+  it('says a bad username just above Create user', () => {
+    draw('postgres')
+    fireEvent.change(screen.getByLabelText('Username'), { target: { value: '9x' } })
+    fireEvent.click(screen.getByText('Create user'))
+    const message = screen.getByText('Username must start with a letter or underscore.')
+    expect(message.nextElementSibling?.textContent).toBe('Create user')
   })
 })

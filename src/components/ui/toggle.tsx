@@ -24,7 +24,10 @@ const KNOB_INSET = 2
  * `role="switch"` and its checked state to each platform's accessibility layer
  * (`aria-checked` as well, because React Native Web ignores
  * `accessibilityState`). The whole row is the tap target: at least 44 pt tall
- * on a phone or a coarse pointer.
+ * on a phone or a coarse pointer. The track and knob take no pointer events of
+ * their own and the row cannot start a text selection, so a press on the knob
+ * always lands on the switch itself (React Native Web drops a click whose
+ * press turned into a text selection).
  *
  * Pair with {@link SettingRow} for the labelled "setting + control" layout.
  */
@@ -110,8 +113,10 @@ const styles = themedStyles((p) => ({
     alignSelf: 'flex-start',
     gap: 8,
     borderRadius: 8,
+    userSelect: 'none',
   },
   track: {
+    pointerEvents: 'none',
     borderWidth: 1,
     padding: KNOB_INSET,
     justifyContent: 'center',
