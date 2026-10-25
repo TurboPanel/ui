@@ -86,6 +86,16 @@ describe('deployRows', () => {
     expect(row).toMatchObject({ title: 'Started in the console', when: '' })
   })
 
+  it('uses the Deployments tab word for a finished deploy and none while one runs', () => {
+    const labels = deployRows(rows, NOW, true).map((r) => r.statusLabel)
+    expect(labels).toEqual(['Failed', 'Succeeded', undefined])
+    const label = (extra: Parameters<typeof deploy>[2]) =>
+      deployRows([deploy('d1', 1, extra)], NOW, false)[0]?.statusLabel
+    expect(label({ status: 'cancelled' })).toBe('Cancelled')
+    expect(label({ status: 'failed', strategyOutcome: 'rolled_back' })).toBe('Rolled back')
+    expect(label({ status: 'queued' })).toBeUndefined()
+  })
+
   it('has no rows without history', () => {
     expect(deployRows([], NOW, true)).toEqual([])
   })

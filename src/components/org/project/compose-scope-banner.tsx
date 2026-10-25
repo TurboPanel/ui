@@ -5,33 +5,32 @@ import { useProjectContext } from '@/components/org/project/project-context'
 import { usePersistEnvironmentCompose } from '@/components/org/compose-persistence'
 import { ConfirmButton } from '@/components/ui'
 import { emptyComposeDocument, resolveComposeOverlayState } from '@/lib/compose'
+import { environmentDisplayName } from '@/lib/resource-labels'
 
 function EnvironmentOverridingBanner({
-  overriddenKeys,
+  envName,
   canMutate,
   saving,
   onConfirmClear,
 }: Readonly<{
-  overriddenKeys: string[]
+  envName: string
   canMutate: boolean
   saving: boolean
   onConfirmClear: () => void
 }>) {
-  const keyCount = overriddenKeys.length
-  const keyLabel = keyCount === 1 ? '1 compose key' : `${keyCount} compose keys`
-  const keyList = overriddenKeys.join(', ')
-
   return (
     <View style={[panelStyles.expandedSection, styles.banner]}>
       <Text style={panelStyles.detailTitle}>Environment compose</Text>
       <Text style={panelStyles.muted}>
-        Overriding {keyLabel} of the project compose ({keyList}).
+        {envName} sets its own compose on top of the Base. Reset to the Base
+        removes it, and the next deploy runs what the Base says.
       </Text>
       {canMutate ? (
         <ConfirmButton
-          label="Clear overrides"
-          confirmLabel="Confirm"
-          prompt="Clear overrides?"
+          label="Reset to the Base"
+          confirmLabel="Reset"
+          prompt="Reset to the Base?"
+          variant="secondary"
           busy={saving}
           onConfirm={onConfirmClear}
         />
@@ -41,7 +40,7 @@ function EnvironmentOverridingBanner({
 }
 
 /**
- * Shown only when an environment has non-blank compose overrides (Clear path).
+ * Shown only when an environment has non-blank compose overrides (Reset path).
  * Inheriting environments start a blank overlay from the Compose tab — no banner.
  */
 export function ComposeScopeBanner() {
@@ -91,7 +90,7 @@ export function ComposeScopeBanner() {
 
   return (
     <EnvironmentOverridingBanner
-      overriddenKeys={overlayState.overriddenKeys}
+      envName={environmentDisplayName(selectedEnvironment)}
       canMutate={canMutate}
       saving={saving}
       onConfirmClear={() => {

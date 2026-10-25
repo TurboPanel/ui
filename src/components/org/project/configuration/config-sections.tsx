@@ -171,7 +171,7 @@ export function AppsSection({
   if (apps.length === 0) return null
   return (
     <View style={s.section}>
-      <SectionHeading title="Apps" note={plural(apps.length, 'app')} />
+      <SectionHeading title="Services" note={plural(apps.length, 'service')} />
       <ListGroup>
         <Rows
           rows={apps}

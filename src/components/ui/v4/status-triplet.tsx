@@ -81,7 +81,10 @@ export function StatusTriplet({
       {lastDeploy ? (
         <View style={[s.part, divided && s.divided]}>
           <Text style={s.key}>Last deploy</Text>
-          <StatusChip status={lastDeploy.status} label={lastDeploy.label} size="sm" />
+          {/* A deploy that went fine is only its time; the chip is for one that needs a look. */}
+          {lastDeploy.status === 'deployed' ? null : (
+            <StatusChip status={lastDeploy.status} label={lastDeploy.label} size="sm" />
+          )}
           {lastDeploy.sub ? <Text style={s.sub}>{lastDeploy.sub}</Text> : null}
         </View>
       ) : null}

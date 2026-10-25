@@ -119,33 +119,39 @@ export function servingPathLine(
   kind: 'container' | 'site' | 'node',
   engine: SiteEngine | undefined,
 ): string {
-  if (kind === 'container') return 'Docker → Traefik → Caddy → :443'
-  if (kind === 'node') return 'Node → Caddy → :443'
+  if (kind === 'container') return "Docker → TurboPanel's proxy → :443"
+  if (kind === 'node') return "Node → TurboPanel's proxy → :443"
   const resolved = engine ?? DEFAULT_SITE_ENGINE
-  // A Caddy site is served by the site Caddy, still behind the edge one.
-  if (resolved === 'caddy') return 'Caddy → Caddy → :443'
-  if (resolved === 'apache') return 'Apache → Caddy → :443'
-  if (resolved === 'nginx+apache') return 'nginx → Apache → Caddy → :443'
-  if (resolved === 'openlitespeed') return 'OpenLiteSpeed → Caddy → :443'
-  return 'nginx → Caddy → :443'
+  // A Caddy site is served by its own Caddy, still behind TurboPanel's proxy.
+  if (resolved === 'caddy') return "Caddy → TurboPanel's proxy → :443"
+  if (resolved === 'apache') return "Apache → TurboPanel's proxy → :443"
+  if (resolved === 'nginx+apache') return "nginx → Apache → TurboPanel's proxy → :443"
+  if (resolved === 'openlitespeed') return "OpenLiteSpeed → TurboPanel's proxy → :443"
+  return "nginx → TurboPanel's proxy → :443"
 }
+
+/** Where the site's variables go: Apache and Caddy hand them to PHP, the others do not. */
+const VARIABLES_REACH_PHP = "The site's variables reach PHP."
+const VARIABLES_STAY_OUT =
+  "The site's variables do not reach PHP; pick Apache if the app needs them."
+const PROXY_HTTPS = "TurboPanel's proxy handles HTTPS."
 
 function siteEngineHint(
   engine: SiteEngine | undefined,
 ): string {
   if (engine === 'caddy') {
-    return 'Files are served from the host document root by the per-site Caddy; PHP runs in a per-site php-fpm pool over php_fastcgi, and web.env is injected into it. The edge Caddy terminates TLS.'
+    return `Caddy serves the files from the site folder and runs PHP in the site's own PHP process. ${VARIABLES_REACH_PHP} ${PROXY_HTTPS}`
   }
   if (engine === 'openlitespeed') {
-    return 'Files are served from the host document root via OpenLiteSpeed; PHP runs as a per-vhost LSAPI process under suEXEC. web.env is not injected into the process — use Apache when you need SetEnv. Hosting Caddy terminates TLS.'
+    return `OpenLiteSpeed serves the files from the site folder and runs PHP as the site's Hosting Account. ${VARIABLES_STAY_OUT} ${PROXY_HTTPS}`
   }
   if (engine === 'nginx+apache') {
-    return 'nginx in front of one shared Apache, for sites that need .htaccess or Apache modules. nginx serves common static files itself and passes the rest to Apache; PHP runs in a per-site php-fpm pool. Hosting Caddy terminates TLS.'
+    return `nginx in front of one shared Apache, for sites that need .htaccess or Apache modules. nginx serves common static files itself and passes the rest to Apache; PHP runs in the site's own PHP process. ${PROXY_HTTPS}`
   }
   if (engine === 'apache') {
-    return 'Files are served from the host document root via Apache; PHP runs in a per-site php-fpm pool over mod_proxy_fcgi (never mod_php), and web.env is applied as SetEnv. Hosting Caddy terminates TLS.'
+    return `Apache serves the files from the site folder and runs PHP in the site's own PHP process. ${VARIABLES_REACH_PHP} ${PROXY_HTTPS}`
   }
-  return 'Files are served from the host document root via nginx; PHP runs in a per-site php-fpm pool over fastcgi_pass. web.env is written to hosting.env but not injected into the process — use Apache when you need SetEnv. Hosting Caddy terminates TLS.'
+  return `nginx serves the files from the site folder and runs PHP in the site's own PHP process. ${VARIABLES_STAY_OUT} ${PROXY_HTTPS}`
 }
 
 /** Settings the form surfaces directly; the rest stay reachable in YAML. */

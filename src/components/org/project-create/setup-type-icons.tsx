@@ -1,6 +1,9 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import Svg, { Circle, Path, Rect } from 'react-native-svg'
-import { ComposeVisualIcon } from '@/components/org/compose-view-icons'
+import {
+  ComposeHostingIcon,
+  ComposeVisualIcon,
+} from '@/components/org/compose-view-icons'
 import type {
   SetupChoice,
   SetupTypeOption,
@@ -150,6 +153,10 @@ function SetupTypeGlyph({
   // and the tab it lands on read as the same thing.
   if (choice === 'services') {
     return <ComposeVisualIcon size={size} color={color} />
+  }
+  // Hosting upload reuses the Hosting tab glyph, for the same reason.
+  if (choice === 'hosting') {
+    return <ComposeHostingIcon size={size} color={color} />
   }
   return <ComposeFeatherGlyph size={size} color={color} />
 }

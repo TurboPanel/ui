@@ -190,8 +190,8 @@ function SystemUsersPanel() {
   const orgManager = useCan('organization', orgId, 'organization:manage')
   return (
     <Section
-      title="System users"
-      note="Project-wide — native releases deploy into a system user's home"
+      title="Hosting Accounts"
+      note="Project-wide — sites and apps deploy into a Hosting Account's home"
     >
       <ProjectPrincipalsSection
         orgId={orgId}
@@ -202,7 +202,7 @@ function SystemUsersPanel() {
       {orgManager ? (
         <ButtonRow>
           <Button
-            label="All principals in the organization"
+            label="All Hosting Accounts in the organization"
             size="sm"
             onPress={() => router.push(orgSettingsTabHref(orgId, 'principals') as Href)}
           />

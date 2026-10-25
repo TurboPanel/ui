@@ -182,7 +182,7 @@ type StopStepCopy = Readonly<{
 }>
 
 const COMPOSE_STOP_COPY: StopStepCopy = {
-  stepLabel: 'Step 1 — Stop running services',
+  stepLabel: 'Stop running services',
   stepCopy:
     'Stop every environment that still has active containers before the project can be deleted.',
   countLabel: (count) =>
@@ -192,7 +192,7 @@ const COMPOSE_STOP_COPY: StopStepCopy = {
 }
 
 const MANAGED_DESTROY_COPY: StopStepCopy = {
-  stepLabel: 'Step 1 — Destroy databases',
+  stepLabel: 'Destroy databases',
   stepCopy:
     'Destroy every managed database before the project can be deleted. This stops the containers and removes their data volumes.',
   countLabel: () => 'Still running on the server',
@@ -271,7 +271,7 @@ function ConfirmStepSection({
 }>) {
   return (
     <View style={styles.section}>
-      <Text style={styles.stepLabel}>Step 2 — Confirm deletion</Text>
+      <Text style={styles.stepLabel}>Confirm deletion</Text>
       <Text style={styles.stepCopy}>
         Type <Text style={styles.confirmName}>{confirmName}</Text> to
         permanently delete this project.

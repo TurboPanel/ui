@@ -623,10 +623,23 @@ export type EnvironmentRelation = Readonly<
   | { kind: 'none' }
 >
 
+/** How many changes the card names before it says "and N more". */
+const CHANGE_NAMES_SHOWN = 2
+
+/** "Start command, API_URL and 2 more": the first changes by name, each once. */
+export function changeNames(changes: readonly Pick<ConfigViewChange, 'label'>[]): string {
+  const names = [...new Set(changes.map((change) => change.label.trim()).filter(Boolean))]
+  if (names.length === 0) return relationText(false, changes.length)
+  const shown = names.slice(0, CHANGE_NAMES_SHOWN).join(', ')
+  const rest = names.length - CHANGE_NAMES_SHOWN
+  return rest > 0 ? `${shown} and ${rest} more` : shown
+}
+
 /**
- * The card under the services: "Changes from Base (2)" when the environment
- * changes something on top of the Base, "Staging stands alone" when it drops
- * the Base's apps. Nothing otherwise; there is no card with a made-up 0.
+ * The card under the services: "Changes from the Base" naming the first
+ * changes (the count sits by the chevron) when the environment changes
+ * something on top of the Base, "Staging stands alone" when it drops the
+ * Base's apps. Nothing otherwise; there is no card with a made-up 0.
  */
 export function relationCard(
   view: EnvironmentConfigView,
@@ -645,8 +658,8 @@ export function relationCard(
   if (count === 0) return { kind: 'none' }
   return {
     kind: 'changes',
-    title: `Changes from Base (${count})`,
-    text: relationText(false, count),
+    title: 'Changes from the Base',
+    text: changeNames(view.changes),
     count,
   }
 }

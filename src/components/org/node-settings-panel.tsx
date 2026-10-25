@@ -464,7 +464,7 @@ function NodeSettingsFields({
         label="Enable Node.js"
         description={
           enabled
-            ? 'The app process runs under a hardened systemd unit.'
+            ? 'The app runs as a background service that restarts if it stops.'
             : 'Stopped and disabled on deploy — the site answers 502 until re-enabled. Releases keep building.'
         }
       >

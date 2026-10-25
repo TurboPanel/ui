@@ -9,6 +9,7 @@
 
 import { formatAgo } from '@/lib/environment-status'
 import {
+  deploymentStatusTone,
   formatDeployDuration,
   groupDeploymentsByGeneration,
   type DeploymentGroup,
@@ -19,6 +20,8 @@ export type DeployRow = Readonly<{
   id: string
   /** A key of the status vocabulary. */
   statusKey: string
+  /** The Deployments tab's word for a finished deploy ("Succeeded"); absent while it runs. */
+  statusLabel?: string
   title: string
   /** Short commit id, or null when the deploy was not a push. */
   sha: string | null
@@ -57,6 +60,19 @@ function groupTitle(group: DeploymentGroup): string {
   return group.actorEntityType === 'user' ? 'Started in the console' : 'Started by the system'
 }
 
+const FINISHED_STATUSES: ReadonlySet<string> = new Set([
+  'succeeded',
+  'failed',
+  'timed_out',
+  'cancelled',
+])
+
+/** A finished deploy reads the same word as on the Deployments tab: Succeeded, Failed, Cancelled. */
+function groupStatusLabel(group: DeploymentGroup): string | undefined {
+  if (!FINISHED_STATUSES.has(group.status)) return undefined
+  return deploymentStatusTone(group.status, group.strategyOutcome).label
+}
+
 /** Not started yet: the status chip reads these as queued too (see `groupStatusKey`). */
 const WAITING_STATUSES: ReadonlySet<string> = new Set(['queued', 'dispatching', 'sent', 'acked'])
 
@@ -82,15 +98,19 @@ export function deployRows(
 ): DeployRow[] {
   const groups = groupDeploymentsByGeneration(rows)
   const liveId = running ? groups.find((group) => groupStatusKey(group) === 'deployed')?.id : undefined
-  return groups.slice(0, limit).map((group) => ({
-    id: group.id,
-    statusKey: groupStatusKey(group),
-    title: groupTitle(group),
-    sha: groupSha(group),
-    sub: groupSub(group),
-    when: formatAgo(group.startedAt, now) ?? '',
-    live: group.id === liveId,
-  }))
+  return groups.slice(0, limit).map((group) => {
+    const statusLabel = groupStatusLabel(group)
+    return {
+      id: group.id,
+      statusKey: groupStatusKey(group),
+      ...(statusLabel === undefined ? {} : { statusLabel }),
+      title: groupTitle(group),
+      sha: groupSha(group),
+      sub: groupSub(group),
+      when: formatAgo(group.startedAt, now) ?? '',
+      live: group.id === liveId,
+    }
+  })
 }
 
 export type ProblemNotice = Readonly<{

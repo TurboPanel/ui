@@ -742,7 +742,7 @@ function hostingRowSummary(
   const bindLabel = HOSTING_BIND_LABELS[editor.bind]
   if (editor.protocol !== 'http') {
     return [
-      editor.protocol === 'tcp' ? 'Tcp' : 'Udp',
+      editor.protocol === 'tcp' ? 'TCP' : 'UDP',
       editor.ports.trim() || 'no ports',
       bindLabel,
     ].join(' · ')

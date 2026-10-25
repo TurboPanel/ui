@@ -9,6 +9,7 @@ import type {
 import {
   appRows,
   certificateKey,
+  changeNames,
   changeRows,
   databasesOf,
   dataRows,
@@ -575,10 +576,18 @@ describe('relationCard', () => {
   it('counts the changes of an environment that inherits from the Base', () => {
     expect(relationCard(view, 'Staging', 2)).toEqual({
       kind: 'changes',
-      title: 'Changes from Base (4)',
-      text: '4 changes from the Base',
+      title: 'Changes from the Base',
+      text: 'Start command, old and 2 more',
       count: 4,
     })
+  })
+  it('names the first changes once each, and falls back to the count without names', () => {
+    expect(changeNames([{ label: 'Domain' }, { label: 'Branch' }])).toBe('Domain, Branch')
+    expect(changeNames([{ label: 'Domain' }, { label: 'Domain' }, { label: 'Branch' }])).toBe(
+      'Domain, Branch'
+    )
+    expect(changeNames([{ label: 'A' }, { label: 'B' }, { label: 'C' }])).toBe('A, B and 1 more')
+    expect(changeNames([{ label: ' ' }, { label: '' }])).toBe('2 changes from the Base')
   })
   it('has no card, and never a 0, when there is nothing to say', () => {
     expect(relationCard(configView({ changes: [] }), 'Staging', 2)).toEqual({ kind: 'none' })

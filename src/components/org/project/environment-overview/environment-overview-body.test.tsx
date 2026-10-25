@@ -159,7 +159,7 @@ describe.each(SCENARIOS)('EnvironmentOverviewBody ($name)', (scenario) => {
   it('shows the changes card with its count, linking to Configuration', () => {
     renderBody()
     const card = screen.getByRole('link', {
-      name: 'Changes from Base (4). 4 changes from the Base',
+      name: 'Changes from the Base, 4 changes. Start command, old and 2 more',
     })
     expect(card.closest('[data-href]')?.getAttribute('data-href')).toBe(`${BASE}/configuration`)
     expect(styleOf(card).backgroundColor).toBe(token(scenario, 'baseSoft'))
@@ -172,12 +172,12 @@ describe.each(SCENARIOS)('EnvironmentOverviewBody ($name)', (scenario) => {
     })
     expect(card.closest('[data-href]')?.getAttribute('data-href')).toBe(`${BASE}/settings`)
     expect(styleOf(card).borderStyle).toBe('dashed')
-    expect(screen.queryByText(/Changes from Base/)).toBeNull()
+    expect(screen.queryByText(/Changes from the Base/)).toBeNull()
   })
 
   it('shows no card when there is nothing to say, never "(0)"', () => {
     renderBody({ source: overviewSource({ view: configView({ changes: [] }) }) })
-    expect(screen.queryByText(/Changes from Base/)).toBeNull()
+    expect(screen.queryByText(/Changes from the Base/)).toBeNull()
     expect(screen.queryByText(/stands alone/)).toBeNull()
   })
 
@@ -185,7 +185,7 @@ describe.each(SCENARIOS)('EnvironmentOverviewBody ($name)', (scenario) => {
     renderBody()
     const [row] = screen.getAllByRole('button', { name: 'Started in the console' })
     if (!row) throw new Error('no deploy row')
-    expect(within(row).getByLabelText('Deployed')).toBeTruthy()
+    expect(within(row).getByLabelText('Succeeded')).toBeTruthy()
     expect(within(row).getByText('Live')).toBeTruthy()
     expect(within(row).getByText('1h ago')).toBeTruthy()
     fireEvent.click(row)

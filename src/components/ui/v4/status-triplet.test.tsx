@@ -25,8 +25,19 @@ describe.each(SCENARIOS)('StatusTriplet ($name)', (scenario) => {
     expect(group.textContent).toContain('Running')
     expect(group.textContent).toContain('as of 12 s ago')
     expect(group.textContent).toContain('Last deploy')
-    expect(group.textContent).toContain('Deployed')
+    expect(group.textContent).toContain('a41c9e2 · 2 days ago')
     expect(screen.getByLabelText('2 changes not deployed')).toBeTruthy()
+  })
+
+  it('shows only the time of a deploy that went fine, and a chip for one that did not', () => {
+    const running = { status: 'running' }
+    const { rerender } = render(
+      <StatusTriplet running={running} lastDeploy={{ status: 'deployed', sub: '3m ago' }} />,
+    )
+    expect(screen.queryByLabelText('Deployed')).toBeNull()
+    expect(screen.getByText('3m ago')).toBeTruthy()
+    rerender(<StatusTriplet running={running} lastDeploy={{ status: 'failed', sub: '3m ago' }} />)
+    expect(screen.getByLabelText('Deploy failed')).toBeTruthy()
   })
 
   it('divides the parts with a hairline in the row form, not when stacked', () => {
