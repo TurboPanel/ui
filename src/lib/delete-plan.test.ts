@@ -153,6 +153,16 @@ describe('deleteFailureMessage', () => {
     )
   })
 
+  it('ignores a dash that does not follow a code, or that has nothing after it', () => {
+    expect(deleteFailureMessage(new Error('HTTP 409: Not a code — words'), 'Try again.')).toBe(
+      'Try again.'
+    )
+    expect(deleteFailureMessage(new Error('HTTP 409: some_code — '), 'Try again.')).toBe(
+      'Try again.'
+    )
+    expect(deleteFailureMessage(new Error('HTTP 409 — words'), 'Try again.')).toBe('Try again.')
+  })
+
   it('maps a bare code to its fixed copy', () => {
     expect(
       deleteFailureMessage('/api/x failed: HTTP 409: project_stop_failed', 'fallback')

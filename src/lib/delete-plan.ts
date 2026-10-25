@@ -81,11 +81,14 @@ export function deletePlanSummary(plan: DeletePlan, subject: string): string {
     .filter((group) => group.remove.length > 0)
     .map((group) => group.serverName)
   const where = servers.length > 0 ? ` on ${servers.join(', ')}` : ''
-  const keep =
-    kept.length > 0
-      ? ` ${kept.length === 1 ? '1 volume is set to keep its data and stays' : `${kept.length} volumes are set to keep their data and stay`}.`
-      : ''
-  return `Delete ${subject}? This removes ${parts.join(', ')}${where}.${keep}`
+  return `Delete ${subject}? This removes ${parts.join(', ')}${where}.${keptVolumesSentence(kept.length)}`
+}
+
+/** The sentence about volumes that keep their data, with a leading space; empty for none. */
+function keptVolumesSentence(count: number): string {
+  if (count === 0) return ''
+  if (count === 1) return ' 1 volume is set to keep its data and stays.'
+  return ` ${count} volumes are set to keep their data and stay.`
 }
 
 /** The plan's reasons the delete cannot run yet, one sentence each. */
@@ -95,7 +98,29 @@ export function deletePlanBlockerLines(plan: DeletePlan | undefined): string[] {
   )
 }
 
-const SERVER_EXPLANATION = /HTTP \d+:\s*[a-z0-9_]+\s+—\s+([\s\S]+)$/
+const CODE_CHARS = /^[a-z0-9_]+$/
+
+/**
+ * The panel's own words after `HTTP <status>: <code> — `, or null. Read with
+ * plain string steps: the status line, then the code, then the dash.
+ */
+function serverExplanation(message: string): string | null {
+  const status = message.indexOf('HTTP ')
+  if (status < 0) return null
+  const colon = message.indexOf(':', status)
+  const dash = message.indexOf(' — ', colon)
+  if (colon < 0 || dash < 0) return null
+  const code = message.slice(colon + 1, dash).trim()
+  if (!CODE_CHARS.test(code)) return null
+  const text = message.slice(dash + 3).trim()
+  return text === '' ? null : text
+}
+
+function messageOf(err: unknown): string {
+  if (err instanceof Error) return err.message
+  if (typeof err === 'string') return err
+  return ''
+}
 
 /**
  * A failed delete as one sentence a person can act on. The panel's own words
@@ -104,11 +129,11 @@ const SERVER_EXPLANATION = /HTTP \d+:\s*[a-z0-9_]+\s+—\s+([\s\S]+)$/
  */
 export function deleteFailureMessage(err: unknown, fallback: string): string {
   if (isNetworkFetchError(err)) return CONTROL_PLANE_UNREACHABLE_COPY
-  const message = err instanceof Error ? err.message : typeof err === 'string' ? err : ''
-  const explained = SERVER_EXPLANATION.exec(message)?.[1]?.trim()
+  const message = messageOf(err)
+  const explained = serverExplanation(message)
   if (explained) return explained
   const mapped = apiErrorCopy(message)
   if (mapped) return mapped
-  if (message.trim() === '' || /HTTP \d+/.test(message)) return fallback
+  if (message.trim() === '' || message.includes('HTTP ')) return fallback
   return message.trim()
 }
