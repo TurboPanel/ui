@@ -275,27 +275,31 @@ export function serverPublicAddresses(
  * no address rows). Datacenter and Local say so. Null when nothing is known:
  * the line is left out, never guessed.
  */
-export function servedFromOf(
+type ServedFromSource = Pick<OverviewSource, 'publicIps' | 'serverId' | 'serverAddresses'>
+
+/** The addresses an "Any interface" hosting answers on, first known source wins. */
+function anyInterfaceAddresses(
   hosting: HostingRecord,
-  source: Pick<OverviewSource, 'publicIps' | 'serverId' | 'serverAddresses'>
-): string | null {
+  source: ServedFromSource
+): readonly string[] {
+  const expected = hosting.certificate?.dns?.expectedAddresses ?? []
+  if (expected.length > 0) return expected
+  if (!source.serverId) return []
+  const listed = (source.publicIps ?? [])
+    .filter((ip) => ip.serverId === source.serverId)
+    .map((ip) => ip.address)
+  return listed.length > 0 ? listed : (source.serverAddresses ?? [])
+}
+
+export function servedFromOf(hosting: HostingRecord, source: ServedFromSource): string | null {
   const bind = hosting.options?.bind
   const scope = isHostingBindScope(bind) ? bind : DEFAULT_HOSTING_BIND_SCOPE
   if (scope === 'datacenter') return 'Served on the datacenter network'
   if (scope === 'local') return 'Served on this server only'
+  const pinned = hosting.ipId ? source.publicIps?.find((ip) => ip.id === hosting.ipId) : undefined
   let addresses: readonly string[]
-  if (hosting.ipId) {
-    const pinned = source.publicIps?.find((ip) => ip.id === hosting.ipId)
-    addresses = pinned ? [pinned.address] : []
-  } else {
-    const expected = hosting.certificate?.dns?.expectedAddresses ?? []
-    const listed = (source.publicIps ?? [])
-      .filter((ip) => source.serverId && ip.serverId === source.serverId)
-      .map((ip) => ip.address)
-    if (expected.length > 0) addresses = expected
-    else if (listed.length > 0) addresses = listed
-    else addresses = source.serverId ? (source.serverAddresses ?? []) : []
-  }
+  if (hosting.ipId) addresses = pinned ? [pinned.address] : []
+  else addresses = anyInterfaceAddresses(hosting, source)
   const text = addressText(addresses)
   return text === null ? null : `Served from ${text}`
 }
