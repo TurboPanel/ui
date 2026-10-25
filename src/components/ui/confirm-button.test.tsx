@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CONFIRM_GUARD_MS, ConfirmButton } from '@/components/ui/confirm-button'
 import { styleOf } from '@/components/ui/v4/rn-stub'
 
@@ -17,15 +17,19 @@ vi.mock('@/components/ui/button', () => ({
   ),
 }))
 
+// A fake clock that only moves when a test moves it, so the press guard never
+// depends on how fast the runner is.
+beforeEach(() => {
+  vi.useFakeTimers({ now: new Date('2026-01-01T00:00:00Z') })
+})
 afterEach(() => {
   cleanup()
-  vi.restoreAllMocks()
+  vi.useRealTimers()
 })
 
-/** The clock moves on past the guard, as it does between two deliberate presses. */
+/** The clock moves on by `ms`, as it does between two deliberate presses. */
 function later(ms = CONFIRM_GUARD_MS) {
-  const now = Date.now() + ms
-  vi.spyOn(Date, 'now').mockReturnValue(now)
+  vi.setSystemTime(Date.now() + ms)
 }
 
 describe('ConfirmButton', () => {
