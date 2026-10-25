@@ -44,6 +44,7 @@ import { setActiveOrganizationId } from '@/lib/org-context'
 import { loginWithPasskey } from '@/lib/passkey-client'
 import { PASSKEY_WEB_ONLY_NOTE } from '@/lib/passkey-client-types'
 import { useApiMutation, queryKeys } from '@/lib/query-client'
+import { forgetSessionChoices } from '@/lib/session-choices'
 
 export function useSessionQuery(options?: Readonly<{ enabled?: boolean }>) {
   return useQuery({
@@ -226,6 +227,7 @@ export function useSignOut() {
       setActiveOrganizationId(next?.lastOrgId ?? null)
       // Drop every cached row so a second sign-in never renders another account.
       queryClient.clear()
+      forgetSessionChoices()
     },
   })
 }

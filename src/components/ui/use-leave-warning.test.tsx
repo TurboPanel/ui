@@ -21,12 +21,12 @@ describe('useLeaveWarning', () => {
       initialProps: { active: true },
     })
     expect(leave()).toBe(true)
-    // Older browsers ask only when `returnValue` is set to a string.
+    // Older browsers ask only when `returnValue` is set to a non-empty string.
     const setProperty = vi.spyOn(Reflect, 'set')
     const event = new Event('beforeunload', { cancelable: true })
     window.dispatchEvent(event)
     expect(event.defaultPrevented).toBe(true)
-    expect(setProperty).toHaveBeenCalledWith(event, 'returnValue', '')
+    expect(setProperty).toHaveBeenCalledWith(event, 'returnValue', 'leave')
     setProperty.mockRestore()
     rerender({ active: false })
     expect(leave()).toBe(false)

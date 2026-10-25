@@ -21,11 +21,11 @@ import {
  * Name-scheme choice for creating a principal. Defaults to the org default
  * (manage-gated read; creators are managers/owners). `requestScheme` is what to
  * send as `nameScheme` — undefined when the org locks the scheme or the
- * creator kept the default.
+ * creator kept the default. `initialChoice` starts from an earlier choice.
  */
-export function usePrincipalNameScheme(orgId: string) {
+export function usePrincipalNameScheme(orgId: string, initialChoice?: NameScheme) {
   const canManage = useCan('organization', orgId, 'organization:manage')
-  const [choice, setChoice] = useState<NameScheme | null>(null)
+  const [choice, setChoice] = useState<NameScheme | null>(initialChoice ?? null)
   const query = useQuery({
     queryKey: queryKeys.org(orgId).settings.principalDefaults,
     queryFn: () => fetchOrgPrincipalDefaults(orgId),

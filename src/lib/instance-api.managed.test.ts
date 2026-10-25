@@ -15,6 +15,7 @@ import {
   createEnvironmentManaged,
   createManagedBackup,
   createManagedDatabase,
+  createManagedAppLogins,
   createManagedUser,
   deleteBinding,
   deleteEnvironmentManaged,
@@ -374,6 +375,23 @@ describe('instance-api managed-engine fetch wrappers', () => {
     expect(String(lastFetch().url)).toContain(
       `/managed/users/${encodeURIComponent('principal/a b')}`
     )
+  })
+
+  it('createManagedAppLogins posts the shared options for one database', async () => {
+    const logins = [{ user: { id: 'u-1', appliedUsername: 'shop_migrate' }, password: 'p1' }]
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ ok: true, logins, commandId: 'cmd-1', serverId: 'srv-1' })
+    )
+    const created = await createManagedAppLogins('env-1', 'my db', {
+      prefix: 'shop',
+      straightThrough: true,
+    })
+    expect(created.logins).toEqual(logins)
+    expect(lastFetch().init.method).toBe('POST')
+    expect(String(lastFetch().url)).toContain(
+      `/environments/env-1/managed/databases/${encodeURIComponent('my db')}/app-logins`
+    )
+    expect(lastJsonBody()).toEqual({ prefix: 'shop', straightThrough: true })
   })
 
   it('sends straightThrough true, false and null on the wire', async () => {

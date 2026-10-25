@@ -12,8 +12,8 @@ export function useLeaveWarning(active: boolean): void {
     if (!active || Platform.OS !== 'web' || typeof window === 'undefined') return
     const warn = (event: BeforeUnloadEvent) => {
       event.preventDefault()
-      // Older browsers ask only when `returnValue` is set.
-      Reflect.set(event, 'returnValue', '')
+      // Older browsers ask only when `returnValue` is a non-empty string.
+      Reflect.set(event, 'returnValue', 'leave')
     }
     window.addEventListener('beforeunload', warn)
     return () => window.removeEventListener('beforeunload', warn)
