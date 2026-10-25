@@ -58,6 +58,7 @@ import {
     mergeManagedMembers,
     useApplyEnvironmentManaged,
     useCreateEnvironmentManaged,
+    useCreateManagedAppLogins,
     useCreateManagedBackup,
     useCreateManagedDatabase,
     useCreateManagedUser,
@@ -760,6 +761,7 @@ function ManagedDataPanels({
   registerCommand: (commandId: string, label: string, commandServerId?: string) => void
 }>) {
   const updateUserMutation = useUpdateManagedUser(orgId, environmentId)
+  const appLoginsMutation = useCreateManagedAppLogins(orgId, environmentId)
   return (
     <>
       <ManagedCredentialsPanel
@@ -842,6 +844,12 @@ function ManagedDataPanels({
         }}
         onReload={async () => {
           await Promise.all([usersQuery.refetch(), databasesQuery.refetch()])
+        }}
+        onCreateAppLogins={async (databaseName, body) => {
+          const result = await appLoginsMutation.run({ databaseName, body })
+          if (!result.ok) throw new Error(result.error ?? 'Failed to add the app logins')
+          registerCommand(result.value.commandId, 'Add app logins')
+          return { logins: result.value.logins, notes: result.value.notes }
         }}
       />
     </>

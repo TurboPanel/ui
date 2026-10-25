@@ -600,9 +600,9 @@ const MANAGED_ERROR_COPY: Record<string, string> = {
   ...STRAIGHT_THROUGH_ERROR_COPY,
   managed_grant_mode_invalid: 'That permission mode is not valid.',
   managed_admin_needs_owner_role:
-    'A Database admin login cannot be made on some of these databases. Choose different databases, or use a different kind of login.',
+    'A login cannot own some of these databases. Choose different databases, or use a different kind of login.',
   managed_admin_login_not_read_only:
-    'A Database admin login changes things, so it cannot be read-only. Use Read/write.',
+    'The owner of a database changes things, so it cannot be read-only. Use Read/write.',
   managed_self_login_has_no_privileges:
     'A login you manage yourself has no permissions yet. Set them in your own tools first.',
   datacenter_required: 'That server is not assigned to a datacenter.',

@@ -1,6 +1,12 @@
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { SecretReveal } from '@/components/org/managed/secret-reveal'
+import {
+  AppLoginsForm,
+  AppLoginsPasswords,
+  type AppLoginsBody,
+  type AppLoginsResult,
+} from '@/components/org/managed/managed-app-logins'
 import { panelStyles } from '@/components/ui/panel-styles'
 import {
   Button,
@@ -59,12 +65,28 @@ import {
   type LoginLimitsDraft,
 } from '@/lib/managed-login-limits'
 import { orEmptyArray } from '@/lib/or-empty-array'
+import { appLoginsSchemeProblem } from '@/lib/managed-app-logins'
+import { recallSessionChoices, rememberSessionChoices } from '@/lib/session-choices'
 import { PrincipalNameSchemeField, usePrincipalNameScheme } from '@/components/org/principal-name-scheme-field'
 import { principalNamesLabel, principalSchemeErrorMessage, type NameScheme } from '@/lib/principal-name-scheme'
 import { chrome, colors, spacing, webPointer } from '@/lib/theme'
 
 const USERNAME_PATTERN = /^[a-zA-Z_]\w{0,62}$/
 const DATABASE_PATTERN = /^[a-zA-Z_]\w{0,62}$/
+
+/** What the single-login form keeps between logins for the rest of the session. */
+type LoginFormChoices = {
+  job: LoginJob
+  grantMode: LoginMode
+  tool: boolean
+  admin: boolean
+  toolBeforeAdmin: boolean
+  limits: LoginLimitsDraft
+  straightChoice: boolean | null
+  nameScheme?: NameScheme
+}
+
+const loginFormKey = (orgId: string) => `managed-login-form:${orgId}`
 
 function Chip({ label }: Readonly<{ label: string }>) {
   return (
@@ -130,6 +152,7 @@ export function ManagedUsersPanel({
   onRotateUserPassword,
   onRedeployService,
   onReload,
+  onCreateAppLogins,
 }: Readonly<{
   orgId: string
   environmentId: string
@@ -161,23 +184,31 @@ export function ManagedUsersPanel({
   } | null>
   onRedeployService: (environmentId: string) => Promise<void>
   onReload: () => Promise<void>
+  /** The three app logins for one database in one step; no action when absent. */
+  onCreateAppLogins?: (databaseName: string, body: AppLoginsBody) => Promise<AppLoginsResult>
 }>) {
   const bindingsQuery = useManagedEnvironmentBindings(orgId, environmentId)
-  const nameScheme = usePrincipalNameScheme(orgId)
+  // The form starts from the last login's choices in this session.
+  const [remembered] = useState(() => recallSessionChoices<LoginFormChoices>(loginFormKey(orgId)))
+  const nameScheme = usePrincipalNameScheme(orgId, remembered?.nameScheme)
   const serversQuery = useOrgServers(orgId)
   const servers = orEmptyArray(serversQuery.data?.servers)
   const [dbName, setDbName] = useState('')
   const [username, setUsername] = useState('')
   const [selectedDbs, setSelectedDbs] = useState<string[]>([])
-  const [job, setJob] = useState<LoginJob>('read-write')
-  const [grantMode, setGrantMode] = useState<LoginMode>('recipe')
-  const [tool, setTool] = useState(false)
-  const [admin, setAdmin] = useState(false)
-  const [toolBeforeAdmin, setToolBeforeAdmin] = useState(false)
-  const [limits, setLimits] = useState<LoginLimitsDraft>(EMPTY_LIMITS_DRAFT)
+  const [job, setJob] = useState<LoginJob>(remembered?.job ?? 'read-write')
+  const [grantMode, setGrantMode] = useState<LoginMode>(remembered?.grantMode ?? 'recipe')
+  const [tool, setTool] = useState(remembered?.tool ?? false)
+  const [admin, setAdmin] = useState(remembered?.admin ?? false)
+  const [toolBeforeAdmin, setToolBeforeAdmin] = useState(remembered?.toolBeforeAdmin ?? false)
+  const [limits, setLimits] = useState<LoginLimitsDraft>(remembered?.limits ?? EMPTY_LIMITS_DRAFT)
   const [limitsProblem, setLimitsProblem] = useState<string | null>(null)
   // null = the owner has not touched the switch, so the default for the chosen level shows.
-  const [straightChoice, setStraightChoice] = useState<boolean | null>(null)
+  const [straightChoice, setStraightChoice] = useState<boolean | null>(
+    remembered?.straightChoice ?? null
+  )
+  const [appLoginsFor, setAppLoginsFor] = useState<string | null>(null)
+  const [appLoginsResult, setAppLoginsResult] = useState<AppLoginsResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [usernameHint, setUsernameHint] = useState<string | null>(null)
   const [working, setWorking] = useState(false)
@@ -298,14 +329,18 @@ export function ManagedUsersPanel({
         setRevealedUsername(result.appliedUsername ?? trimmed)
         setRevealedPassword(result.password)
       }
+      // Only the name is cleared: the next login usually wants the same choices.
       setUsername('')
-      setJob('read-write')
-      setGrantMode('recipe')
-      setTool(false)
-      setAdmin(false)
-      setLimits(EMPTY_LIMITS_DRAFT)
-      setStraightChoice(null)
-      nameScheme.reset()
+      rememberSessionChoices<LoginFormChoices>(loginFormKey(orgId), {
+        job,
+        grantMode,
+        tool,
+        admin,
+        toolBeforeAdmin,
+        limits,
+        straightChoice,
+        nameScheme: nameScheme.requestScheme,
+      })
       await onReload()
     } catch (err) {
       const message = principalSchemeErrorMessage(
@@ -359,6 +394,22 @@ export function ManagedUsersPanel({
     }
   }
 
+  const createAppLogins = async (databaseName: string, body: AppLoginsBody) => {
+    if (!onCreateAppLogins) return
+    const result = await onCreateAppLogins(databaseName, body)
+    setAppLoginsFor(null)
+    setAppLoginsResult(result)
+    await onReload()
+  }
+
+  if (appLoginsResult) {
+    return (
+      <SectionPanel title="Users & databases" hint="Engine users and databases">
+        <AppLoginsPasswords result={appLoginsResult} onDone={() => setAppLoginsResult(null)} />
+      </SectionPanel>
+    )
+  }
+
   if (revealedPassword) {
     return (
       <SectionPanel title="Users & databases" hint="Engine users and databases">
@@ -383,6 +434,7 @@ export function ManagedUsersPanel({
   }
 
   const disabled = busy || working || !canManage
+  const appLoginsProblem = appLoginsSchemeProblem(nameScheme)
 
   return (
     <SectionPanel title="Users & databases" hint="Engine users and databases">
@@ -394,33 +446,57 @@ export function ManagedUsersPanel({
           const bindingCount = bindingCountByDatabase.get(name) ?? 0
           const deleteBlocked = bindingCount > 0
           return (
-            <View key={name} style={styles.row}>
-              <Text style={styles.rowLabel}>{name}</Text>
-              {bindingCount > 0 ? (
-                <Text style={styles.connectedChip}>
-                  Connected to {bindingCount} service
-                  {bindingCount === 1 ? '' : 's'} — remove on Connect tab
-                </Text>
-              ) : null}
-              {canManage && deleteBlocked ? (
-                <Text style={panelStyles.muted}>
-                  Remove connections first ({bindingCount})
-                </Text>
-              ) : null}
-              {canManage && !deleteBlocked ? (
-                <ConfirmButton
-                  label="Delete"
-                  confirmLabel="Confirm delete"
-                  prompt="Delete this database?"
+            <Fragment key={name}>
+              <View style={styles.row}>
+                <Text style={styles.rowLabel}>{name}</Text>
+                {bindingCount > 0 ? (
+                  <Text style={styles.connectedChip}>
+                    Connected to {bindingCount} service
+                    {bindingCount === 1 ? '' : 's'} — remove on Connect tab
+                  </Text>
+                ) : null}
+                {canManage && deleteBlocked ? (
+                  <Text style={panelStyles.muted}>
+                    Remove connections first ({bindingCount})
+                  </Text>
+                ) : null}
+                {canManage && !deleteBlocked ? (
+                  <ConfirmButton
+                    label="Delete"
+                    confirmLabel="Confirm delete"
+                    prompt="Delete this database?"
+                    disabled={disabled}
+                    onConfirm={() => {
+                      void deleteDatabase(name)
+                    }}
+                  />
+                ) : null}
+                {canManage && onCreateAppLogins ? (
+                  <Button
+                    label="Add app logins"
+                    size="sm"
+                    disabled={disabled || appLoginsProblem !== null || appLoginsFor === name}
+                    onPress={() => setAppLoginsFor(name)}
+                  />
+                ) : null}
+              </View>
+              {canManage && onCreateAppLogins && appLoginsFor === name ? (
+                <AppLoginsForm
+                  orgId={orgId}
+                  engine={engine}
+                  databaseName={name}
+                  servers={servers}
                   disabled={disabled}
-                  onConfirm={() => {
-                    void deleteDatabase(name)
-                  }}
+                  onSubmit={createAppLogins}
+                  onCancel={() => setAppLoginsFor(null)}
                 />
               ) : null}
-            </View>
+            </Fragment>
           )
         })}
+        {canManage && onCreateAppLogins && appLoginsProblem ? (
+          <Text style={panelStyles.muted}>{appLoginsProblem}</Text>
+        ) : null}
       </View>
 
       {canManage ? (
@@ -523,6 +599,7 @@ export function ManagedUsersPanel({
               ) : null}
               {canManage ? (
                 <LoginAdminEditor
+                  engine={engine}
                   user={user}
                   disabled={disabled}
                   onUpdate={onUpdateUser}
@@ -612,13 +689,12 @@ export function ManagedUsersPanel({
             })}
           </View>
           {admin ? (
-            <Text style={panelStyles.muted}>
-              A Database admin login always reads and writes.
-            </Text>
+            <Text style={panelStyles.muted}>The owner of a database always reads and writes.</Text>
           ) : (
             <NewLoginJobField job={job} onJobChange={setJob} disabled={disabled} />
           )}
           <NewLoginAdminField
+            engine={engine}
             admin={admin}
             onAdminChange={(next) => {
               setAdmin(next)
