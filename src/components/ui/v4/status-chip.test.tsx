@@ -31,6 +31,15 @@ describe.each(SCENARIOS)('StatusChip ($name)', (scenario) => {
     expect(style.borderRadius).toBe(999)
   })
 
+  it('never grows wider than its box: the word shrinks to an ellipsis', () => {
+    render(<StatusChip status="test" />)
+    const chip = screen.getByLabelText('Self-signed certificate (browsers warn)')
+    expect(styleOf(chip).maxWidth).toBe('100%')
+    const text = screen.getByText('Self-signed certificate (browsers warn)')
+    expect(styleOf(text).flexShrink).toBe(1)
+    expect(text.dataset.lines).toBe('1')
+  })
+
   it('colours the word like the border and sets it in Geist semibold', () => {
     render(<StatusChip status="failed" />)
     const text = screen.getByText('Deploy failed')

@@ -7,17 +7,17 @@ import {
   PROJECT_PAGE_TAB_LABELS,
   COMPOSE_PROJECT_CONFIG_TAB_IDS,
   COMPOSE_PROJECT_LENS_IDS,
-  COMPOSE_PROJECT_SURFACE_TAB_IDS,
   COMPOSE_PROJECT_TAB_IDS,
   DRAFT_COMPOSE_PROJECT_TAB_IDS,
-  MANAGED_PROJECT_TAB_IDS,
-  MANAGED_PROJECT_TAB_LABELS,
+  RETIRED_MANAGED_TAB_IDS,
   isComposeOrTemplateProject,
   isComposeProject,
   isManagedProject,
   isComposeProjectLens,
   isProjectOverviewBasePath,
   isSystemProject,
+  isTemplateProject,
+  projectDisplayType,
   environmentPageTabHref,
   legacyProjectRedirectHref,
   parseComposeEditView,
@@ -26,6 +26,7 @@ import {
   projectBaseHref,
   recentProjectHref,
   projectEnvironmentConfigurationHref,
+  projectEnvironmentDeploymentHref,
   projectEnvironmentDeploymentsHref,
   projectPageTabHref,
   withCarriedQuery,
@@ -47,6 +48,8 @@ import {
   projectNeedsSetup,
   projectOverviewHref,
   projectServiceHref,
+  projectEnvironmentServiceHref,
+  serviceEnvironmentHref,
   projectServicesEditHref,
   projectSetupHref,
   projectSettingsHref,
@@ -61,14 +64,19 @@ import {
 import type { ProjectRecord } from './instance-api'
 import { TURBOPANEL_WORKSPACE_BADGE_LABEL } from './system-inventory'
 
-function project(type?: ProjectRecord['metadata']): ProjectRecord {
+function project(
+  kind: ProjectRecord['kind'] = null,
+  metadata: ProjectRecord['metadata'] = null,
+): ProjectRecord {
   return {
     id: 'p1',
     name: 'Demo',
     description: null,
     workspaceId: 'w1',
     repositoryId: null,
-    metadata: type ?? null,
+    kind,
+    icon: null,
+    metadata,
     options: null,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
@@ -76,15 +84,14 @@ function project(type?: ProjectRecord['metadata']): ProjectRecord {
 }
 
 describe('projectNeedsSetup', () => {
-  it('is true when type is unset or empty', () => {
+  it('is true while the kind is not chosen', () => {
     expect(projectNeedsSetup(project(null))).toBe(true)
-    expect(projectNeedsSetup(project({ type: 'empty' }))).toBe(true)
   })
 
   it('is false once configured', () => {
-    expect(projectNeedsSetup(project({ type: 'docker-compose' }))).toBe(false)
+    expect(projectNeedsSetup(project('compose'))).toBe(false)
     expect(
-      projectNeedsSetup(project({ type: 'managed', code: 'postgres' })),
+      projectNeedsSetup(project('managed', { code: 'postgres' })),
     ).toBe(false)
   })
 })
@@ -95,12 +102,9 @@ describe('system project predicates', () => {
   })
 
   it('classifies type system as a platform project, not compose or setup', () => {
-    const system = project({
-      type: 'system',
-      component: 'hosting-ingress',
-    })
+    const system = project('system', { component: 'hosting-ingress' })
     expect(isSystemProject(system)).toBe(true)
-    expect(isSystemProject(project({ type: 'docker-compose' }))).toBe(false)
+    expect(isSystemProject(project('compose'))).toBe(false)
     expect(isComposeProject(system)).toBe(false)
     expect(isComposeOrTemplateProject(system)).toBe(false)
     expect(isManagedProject(system)).toBe(false)
@@ -110,13 +114,12 @@ describe('system project predicates', () => {
   })
 
   it('labels managed, template, compose, and setup types', () => {
-    expect(projectTypeLabel(project({ type: 'managed', code: 'postgres' }))).toBe(
+    expect(projectTypeLabel(project('managed', { code: 'postgres' }))).toBe(
       'Managed',
     )
-    expect(projectTypeLabel(project({ type: 'template' }))).toBe('Template')
-    expect(projectTypeLabel(project({ type: 'docker-compose' }))).toBe('Compose')
+    expect(projectTypeLabel(project('compose', { code: 'wordpress' }))).toBe('Template')
+    expect(projectTypeLabel(project('compose'))).toBe('Compose')
     expect(projectTypeLabel(project(null))).toBe('Setup')
-    expect(projectTypeLabel(project({ type: 'empty' }))).toBe('Setup')
   })
 })
 
@@ -206,9 +209,6 @@ describe('path-based environment selection', () => {
     )
     expect(projectEnvironmentHref('org', 'proj', 'env1')).toBe(
       '/org/projects/proj/environments/env1',
-    )
-    expect(projectTabHref('org', 'proj', 'environments')).toBe(
-      '/org/projects/proj/environments',
     )
   })
 
@@ -382,17 +382,9 @@ describe('path-based environment selection', () => {
     ).toBe('env1')
   })
 
-  it('gives managed projects a Settings tab, last', () => {
-    // Settings holds the image, resources, client TLS and external access switch.
-    expect([...MANAGED_PROJECT_TAB_IDS]).toEqual([
-      'overview',
-      'connect',
-      'data',
-      'backups',
-      'environments',
-      'settings',
-    ])
-    expect(MANAGED_PROJECT_TAB_LABELS.settings).toBe('Settings')
+  it('keeps the retired managed tabs as routes that redirect', () => {
+    expect([...RETIRED_MANAGED_TAB_IDS]).toEqual(['connect', 'data', 'backups'])
+    expect(projectTabHref('o', 'p', 'connect')).toBe('/o/projects/p/connect')
   })
 
   it('offers every lens on the create-wizard draft', () => {
@@ -414,29 +406,12 @@ describe('path-based environment selection', () => {
   })
 
   it('splits lenses from scope configuration', () => {
-    // The surface nav is the three lenses plus Hosting (server placement +
-    // exposure); Storage and Settings stay off the bar.
-    expect([...COMPOSE_PROJECT_LENS_IDS]).toEqual([
-      'overview',
-      'compose',
-      'services',
-    ])
-    expect([...COMPOSE_PROJECT_SURFACE_TAB_IDS]).toEqual([
-      'overview',
-      'compose',
-      'services',
-      'bindings',
-      'hosting',
-    ])
-    expect([...COMPOSE_PROJECT_CONFIG_TAB_IDS]).toEqual([
-      'storage',
-      'settings',
-    ])
+    // Three lenses on one document; Storage and Settings are scope
+    // configuration reached from a service row or the scope-strip gear.
+    expect([...COMPOSE_PROJECT_LENS_IDS]).toEqual(['overview', 'compose', 'services'])
+    expect([...COMPOSE_PROJECT_CONFIG_TAB_IDS]).toEqual(['storage', 'settings'])
     for (const tabId of COMPOSE_PROJECT_LENS_IDS) {
       expect(isComposeProjectLens(tabId)).toBe(true)
-      expect(COMPOSE_PROJECT_TAB_IDS).toContain(tabId)
-    }
-    for (const tabId of COMPOSE_PROJECT_SURFACE_TAB_IDS) {
       expect(COMPOSE_PROJECT_TAB_IDS).toContain(tabId)
     }
     for (const tabId of COMPOSE_PROJECT_CONFIG_TAB_IDS) {
@@ -507,23 +482,40 @@ describe('resolveEnvironmentScopeActive', () => {
 })
 
 describe('project and environment tabs', () => {
-  it('lists three project tabs and four environment tabs', () => {
-    expect([...PROJECT_PAGE_TAB_IDS]).toEqual(['overview', 'base', 'settings'])
+  it('lists one bar of project tabs and one of environment tabs', () => {
+    expect([...PROJECT_PAGE_TAB_IDS]).toEqual([
+      'overview',
+      'base',
+      'compose',
+      'bindings',
+      'hosting',
+      'settings',
+    ])
     expect(PROJECT_PAGE_TAB_LABELS).toEqual({
       overview: 'Environments',
       base: 'Base',
+      compose: 'Compose',
+      bindings: 'Bindings',
+      hosting: 'Hosting',
       settings: 'Settings',
     })
     expect([...ENVIRONMENT_PAGE_TAB_IDS]).toEqual([
       'overview',
       'deployments',
       'configuration',
+      'compose',
+      'bindings',
+      'hosting',
       'settings',
     ])
+    // `configuration` keeps its id and route and reads Services.
     expect(ENVIRONMENT_PAGE_TAB_LABELS).toEqual({
       overview: 'Overview',
       deployments: 'Deployments',
-      configuration: 'Configuration',
+      configuration: 'Services',
+      compose: 'Compose',
+      bindings: 'Bindings',
+      hosting: 'Hosting',
       settings: 'Settings',
     })
   })
@@ -532,23 +524,49 @@ describe('project and environment tabs', () => {
     expect(PROJECT_PAGE_TAB_IDS.map((id) => projectPageTabHref('o', 'p', id))).toEqual([
       '/o/projects/p/overview',
       '/o/projects/p/base',
+      '/o/projects/p/base/compose',
+      '/o/projects/p/base/bindings',
+      '/o/projects/p/base/hosting',
       '/o/projects/p/settings',
     ])
-    expect(
-      ENVIRONMENT_PAGE_TAB_IDS.map((id) => environmentPageTabHref('o', 'p', 'e', id)),
-    ).toEqual([
-      '/o/projects/p/environments/e',
-      '/o/projects/p/environments/e/deployments',
-      '/o/projects/p/environments/e/configuration',
-      '/o/projects/p/environments/e/settings',
-    ])
+    expect(ENVIRONMENT_PAGE_TAB_IDS.map((id) => environmentPageTabHref('o', 'p', 'e', id))).toEqual(
+      [
+        '/o/projects/p/environments/e',
+        '/o/projects/p/environments/e/deployments',
+        '/o/projects/p/environments/e/configuration',
+        '/o/projects/p/environments/e/configuration/compose',
+        '/o/projects/p/environments/e/configuration/bindings',
+        '/o/projects/p/environments/e/configuration/hosting',
+        '/o/projects/p/environments/e/settings',
+      ]
+    )
     expect(projectBaseHref('o', 'p')).toBe('/o/projects/p/base')
     expect(projectEnvironmentDeploymentsHref('o', 'p', 'e')).toBe(
       '/o/projects/p/environments/e/deployments',
     )
+    expect(projectEnvironmentDeploymentHref('o', 'p', 'e', 'cmd 1')).toBe(
+      '/o/projects/p/environments/e/deployments/cmd%201',
+    )
     expect(projectEnvironmentConfigurationHref('o', 'p', 'e')).toBe(
       '/o/projects/p/environments/e/configuration',
     )
+    expect(projectEnvironmentServiceHref('o', 'p', 'e', 'svc 1')).toBe(
+      '/o/projects/p/environments/e/services/svc%201'
+    )
+  })
+
+  it('sends the project-scope service path to the environment that runs it', () => {
+    const lists = { e1: [{ id: 'a' }], e2: [{ id: 'b' }, { id: 'c' }] }
+    expect(serviceEnvironmentHref('o', 'p', 'c', lists, 'e1')).toBe(
+      '/o/projects/p/environments/e2/services/c'
+    )
+    // Not in any list: the fallback environment says it was not found.
+    expect(serviceEnvironmentHref('o', 'p', 'zz', lists, 'e1')).toBe(
+      '/o/projects/p/environments/e1/services/zz'
+    )
+    expect(serviceEnvironmentHref('o', 'p', 'zz', {}, null)).toBeNull()
+    // The path never treats the service as open in the Base.
+    expect(parseComposeEditView('/o/projects/p/environments/e/services/c', 'p')).toBeNull()
   })
 
   it('names the project tab a path belongs to', () => {
@@ -557,10 +575,19 @@ describe('project and environment tabs', () => {
     expect(tab('/overview')).toBe('overview')
     expect(tab('/map')).toBe('overview')
     expect(tab('/base')).toBe('base')
-    expect(tab('/base/compose')).toBe('base')
-    expect(tab('/base/hosting')).toBe('base')
+    expect(tab('/base/compose')).toBe('compose')
+    expect(tab('/base/bindings')).toBe('bindings')
+    expect(tab('/base/hosting')).toBe('hosting')
+    // The Services view lights Compose (the editor's toggle); Storage lights Base.
+    expect(tab('/base/services')).toBe('compose')
+    expect(tab('/base/storage')).toBe('base')
+    expect(tab('/base/nothing')).toBe('base')
     // Retired paths and service detail light the tab they moved to.
-    expect(tab('/compose')).toBe('base')
+    expect(tab('/compose')).toBe('compose')
+    expect(tab('/servers')).toBe('hosting')
+    expect(tab('/bindings')).toBe('bindings')
+    expect(tab('/storage')).toBe('base')
+    expect(tab('/services')).toBe('compose')
     expect(tab('/services/svc1')).toBe('base')
     expect(tab('/settings')).toBe('settings')
     // Not project tabs.
@@ -579,9 +606,20 @@ describe('project and environment tabs', () => {
     expect(tab('/map')).toBe('overview')
     expect(tab('/deployments')).toBe('deployments')
     expect(tab('/configuration')).toBe('configuration')
-    expect(tab('/configuration/compose')).toBe('configuration')
-    expect(tab('/compose')).toBe('configuration')
-    expect(tab('/servers')).toBe('configuration')
+    expect(tab('/configuration/compose')).toBe('compose')
+    expect(tab('/configuration/bindings')).toBe('bindings')
+    expect(tab('/configuration/hosting')).toBe('hosting')
+    // Storage and the Services lens path light Services.
+    expect(tab('/configuration/storage')).toBe('configuration')
+    expect(tab('/configuration/services')).toBe('configuration')
+    // Retired lens paths light the tab they redirect to.
+    expect(tab('/compose')).toBe('compose')
+    expect(tab('/servers')).toBe('hosting')
+    expect(tab('/hosting')).toBe('hosting')
+    expect(tab('/storage')).toBe('configuration')
+    expect(tab('/services')).toBe('configuration')
+    // A service opened inside the environment keeps Services lit.
+    expect(tab('/services/svc1')).toBe('configuration')
     expect(tab('/settings')).toBe('settings')
     expect(tab('/unknown')).toBeNull()
     expect(parseEnvironmentPageTab('/o/projects/p/base', 'p')).toBeNull()
@@ -698,7 +736,7 @@ describe('retired route redirects', () => {
 })
 
 describe('recentProjectHref', () => {
-  const compose = project({ type: 'docker-compose' })
+  const compose = project('compose')
   it('opens the only environment of a Compose project', () => {
     expect(recentProjectHref('o', compose, [{ id: 'e1' }])).toBe(
       '/o/projects/p1/environments/e1',
@@ -715,9 +753,20 @@ describe('recentProjectHref', () => {
 
   it('opens a managed project, whatever its environments', () => {
     expect(
-      recentProjectHref('o', project({ type: 'managed', code: 'postgres' }), [
+      recentProjectHref('o', project('managed', { code: 'postgres' }), [
         { id: 'e1' },
       ]),
     ).toBe('/o/projects/p1')
+  })
+})
+
+describe('projectDisplayType', () => {
+  it('splits a template out of compose by its catalog code and names the rest', () => {
+    expect(projectDisplayType(project('compose'))).toBe('compose')
+    expect(projectDisplayType(project('compose', { code: 'wordpress' }))).toBe('template')
+    expect(isTemplateProject(project('managed', { code: 'postgres' }))).toBe(false)
+    expect(projectDisplayType(project('managed', { code: 'postgres' }))).toBe('managed')
+    expect(projectDisplayType(project('system'))).toBe('system')
+    expect(projectDisplayType(project(null))).toBe('setup')
   })
 })

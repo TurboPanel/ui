@@ -17,7 +17,10 @@ import { themedStyles, usePalette } from '@/components/ui/v4/use-palette'
 import {
   counterDigits,
   elapsedSeconds,
+  CHECKING_WITH_SERVER_LABEL,
+  CHECKING_WITH_SERVER_TEXT,
   firstTimeSetupCaption,
+  isCheckingWithServer,
   formatElapsed,
   progressSummary,
   stepAccessibilityLabel,
@@ -99,6 +102,17 @@ const styles = themedStyles((p) => ({
   checkGlyph: { width: 10, alignItems: 'center' },
   checkWord: { ...typeStyle('body', 'caption'), color: p.text3, marginLeft: 'auto' },
   caption: { ...typeStyle('body', 'footnote'), color: p.text3 },
+  checking: {
+    gap: 4,
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: p.busyLine,
+    backgroundColor: p.busySoft,
+  },
+  checkingHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  checkingTitle: { ...typeStyle('bodyMedium', 'subhead'), color: p.text },
+  checkingText: { ...typeStyle('body', 'footnote'), color: p.text2 },
 }))
 
 type Sheet = ReturnType<typeof styles>
@@ -306,6 +320,21 @@ function Checklist({ steps }: Readonly<{ steps: readonly CommandProgressStep[] }
   )
 }
 
+/** Shown while the control plane is checking with the server: the deploy has not failed. */
+function CheckingNotice() {
+  const p = usePalette()
+  const s = styles(p)
+  return (
+    <View style={s.checking} accessibilityRole="alert" accessibilityLiveRegion="polite">
+      <View style={s.checkingHead}>
+        <StatusGlyph glyph="spinner" color={p.busy} size={GLYPH} />
+        <Text style={s.checkingTitle}>{CHECKING_WITH_SERVER_LABEL}</Text>
+      </View>
+      <Text style={s.checkingText}>{CHECKING_WITH_SERVER_TEXT}</Text>
+    </View>
+  )
+}
+
 /** A block caret after the live task line; blinks unless motion is reduced. */
 function Caret({ reduceMotion }: Readonly<{ reduceMotion: boolean }>) {
   const s = styles(usePalette())
@@ -397,6 +426,7 @@ export function DeployProgressRail({
 
   return (
     <View style={s.root} accessibilityRole="summary" accessibilityLabel="Deploy progress">
+      {isCheckingWithServer(progress) ? <CheckingNotice /> : null}
       <View style={s.head}>
         <View style={s.headRow}>
           <Text style={counterStyle(s, summary.phase)} accessibilityLabel={counterSpoken(summary)}>

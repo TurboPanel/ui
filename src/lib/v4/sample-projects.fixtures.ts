@@ -198,7 +198,10 @@ const portal: SampleProject = {
         ],
       },
       domains: [
-        { host: 'portal-staging.acme.com', status: { key: 'test', label: 'Test certificate' } },
+        {
+          host: 'portal-staging.acme.com',
+          status: { key: 'test', label: 'Self-signed certificate' },
+        },
       ],
       volumes: [],
     },

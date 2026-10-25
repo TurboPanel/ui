@@ -3,13 +3,18 @@ import { useMemo, useState } from 'react'
 import { ProjectDeletePanel } from '@/components/org/project-delete-panel'
 import { useProjectContext } from '@/components/org/project/project-context'
 import { ProjectSettingsView } from '@/components/org/project/settings/project-settings-view'
-import { VariablesSection } from '@/components/org/variables-section'
 import { LoadingState } from '@/components/ui'
 import { projectRepositoriesHref } from '@/lib/org-navigation'
 import { buildProjectOptionsPatch } from '@/lib/project-options'
-import { projectComposeHref } from '@/lib/project-navigation'
+import {
+  environmentPageTabHref,
+  isManagedProject,
+  projectBaseHref,
+  projectComposeHref,
+  projectEnvironmentSettingsHref,
+} from '@/lib/project-navigation'
 import { useUpdateProject } from '@/lib/queries'
-import { useRepositories } from '@/lib/queries/releases'
+import { useRepositories, useUpdateRepository } from '@/lib/queries/releases'
 import { userWorkspaces } from '@/lib/system-inventory'
 import {
   buildProjectGeneralPatch,
@@ -18,11 +23,31 @@ import {
   projectGeneralFromRecord,
   projectGitFacts,
   projectNameProblem,
+  projectPushDeployRows,
   workspaceMoveChoices,
 } from '@/lib/v4/project-settings'
+import { primaryEnvironmentOf } from '@/lib/v4/primary-environment'
+
+/** Turn on for the project's repository auto-deploy; `run` is null without a repository. */
+function useTurnOnAutoDeploy(
+  orgId: string,
+  repositoryId: string | null,
+  setError: (error: string | null) => void
+): { run: (() => void) | null; pending: boolean } {
+  const update = useUpdateRepository(orgId)
+  if (!repositoryId) return { run: null, pending: false }
+  const run = () => {
+    setError(null)
+    void update.run({ repositoryId, patch: { autoDeploy: 'immediate' } }).then((result) => {
+      if (!result.ok) setError(result.error ?? 'Failed to turn on auto-deploy')
+    })
+  }
+  return { run, pending: update.isPending }
+}
 
 /**
- * Project Settings tab for a Compose project. Everything saves through the
+ * Project Settings tab for a Compose project, and for a managed database
+ * (name, workspace and delete; its engine settings are per environment). Everything saves through the
  * one project record (`PATCH /projects/:id`), so each control reports its own
  * failure through the shell's error line.
  */
@@ -31,6 +56,7 @@ export function ProjectSettingsScreen() {
     orgId,
     projectId,
     project,
+    environments,
     workspaces,
     canOwn,
     canManage,
@@ -43,14 +69,26 @@ export function ProjectSettingsScreen() {
   const [edit, setEdit] = useState<{ name: string; description: string } | null>(null)
   const [busy, setBusy] = useState<'general' | 'move' | 'names' | null>(null)
   const [dangerOpen, setDangerOpen] = useState(false)
+  const turnOnAutoDeploy = useTurnOnAutoDeploy(orgId, project?.repositoryId ?? null, setError)
 
   const git = useMemo(
     () => (project ? projectGitFacts(project, repositories.data?.repositories ?? []) : null),
     [project, repositories.data]
   )
+  const pushDeploy = useMemo(
+    () =>
+      project
+        ? projectPushDeployRows(project, environments, repositories.data?.repositories ?? [])
+        : [],
+    [project, environments, repositories.data]
+  )
   if (!project) return <LoadingState />
 
   const draft = edit ?? projectGeneralFromRecord(project)
+  const primary = primaryEnvironmentOf(environments)
+  const databaseSettings = primary
+    ? environmentPageTabHref(orgId, projectId, primary.id, 'settings')
+    : null
   const canEdit = canManage && projectAllowsMutations
   const patch = buildProjectGeneralPatch(project, draft)
 
@@ -91,9 +129,7 @@ export function ProjectSettingsScreen() {
       onMove={(workspaceId) => {
         void run('move', { workspaceId })
       }}
-      variables={
-        <VariablesSection orgId={orgId} parentField={{ projectId }} embedded showPresets />
-      }
+      onOpenBase={() => router.push(projectBaseHref(orgId, projectId) as Href)}
       keepOriginalNames={(project.options?.containerNaming ?? 'uuid') === 'custom'}
       savingNames={busy === 'names'}
       onKeepOriginalNames={(keep) => {
@@ -104,8 +140,23 @@ export function ProjectSettingsScreen() {
         })
       }}
       git={git}
+      pushDeploy={pushDeploy}
+      onTurnOnAutoDeploy={canEdit ? turnOnAutoDeploy.run : null}
+      turningOnAutoDeploy={turnOnAutoDeploy.pending}
+      onOpenEnvironmentSettings={(environmentId) =>
+        router.push(projectEnvironmentSettingsHref(orgId, projectId, environmentId) as Href)
+      }
       onOpenRepositories={() => router.push(projectRepositoriesHref(orgId) as Href)}
       onOpenBaseCompose={() => router.push(projectComposeHref(orgId, projectId) as Href)}
+      managed={
+        isManagedProject(project)
+          ? {
+              onOpenDatabaseSettings: databaseSettings
+                ? () => router.push(databaseSettings as Href)
+                : null,
+            }
+          : undefined
+      }
       danger={
         canOwn && projectAllowsMutations ? (
           <ProjectDeletePanel

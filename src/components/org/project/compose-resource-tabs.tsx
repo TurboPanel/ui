@@ -2,12 +2,13 @@ import { type ReactNode } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { useLocalSearchParams, useRouter, type Href } from 'expo-router'
 import { ComposeEditorChrome } from '@/components/org/compose-editor-section'
-import { ComposeSurfaceNav } from '@/components/org/project/compose-surface-nav'
 import { EnvironmentBindingsPanel } from '@/components/org/environment-bindings-panel'
 import { EnvironmentDetailBody } from '@/components/org/environment-detail-section'
 import { ProjectPrincipalsSection } from '@/components/org/project-detail-section'
 import { panelStyles } from '@/components/ui/panel-styles'
+import { Section } from '@/components/ui/v4/section'
 import { useProjectContext } from '@/components/org/project/project-context'
+import { PrimaryHostnamePanel } from '@/components/org/project/primary-hostname-panel'
 import { ProjectServerHeaderControl } from '@/components/org/project/project-server-pin'
 import { ProjectSettingsScreen } from '@/components/org/project/settings/project-settings-screen'
 import { ServerPinSelect } from '@/components/org/project/server-pin-select'
@@ -15,12 +16,13 @@ import {
   EnvironmentSettingsPanel,
   readHostingIdParam,
 } from '@/components/org/project-settings-area'
-import { Button, ButtonRow, EmptyState, SectionPanel } from '@/components/ui'
+import { Button, ButtonRow, EmptyState } from '@/components/ui'
 import { orgSettingsTabHref } from '@/lib/org-navigation'
 import type { EnvironmentRecord, OrgServerRecord } from '@/lib/instance-api'
 import { projectComposeSectionHref } from '@/lib/project-navigation'
 import { serverDisplayName } from '@/lib/resource-labels'
 import { useOrgServers, useUpdateEnvironment } from '@/lib/queries'
+import { useCan } from '@/lib/query-client'
 import { spacing } from '@/lib/theme'
 
 function resolveInheritServerLabel(
@@ -40,7 +42,7 @@ function ResourceTabChrome({
   children,
 }: Readonly<{ children: ReactNode }>) {
   return (
-    <ComposeEditorChrome nav={<ComposeSurfaceNav />}>
+    <ComposeEditorChrome>
       <View style={styles.body}>{children}</View>
     </ComposeEditorChrome>
   )
@@ -82,16 +84,16 @@ function ProjectDefaultServerPanel() {
   const { project, canManage, projectAllowsMutations } = useProjectContext()
   const canEdit = canManage && projectAllowsMutations
   return (
-    <SectionPanel
+    <Section
       title="Default project server"
-      hint="Applies to every environment that does not pin its own server"
+      note="Applies to every environment that does not pin its own server"
     >
       {canEdit && project ? (
         <ProjectServerHeaderControl />
       ) : (
         <Text style={panelStyles.muted}>View only</Text>
       )}
-    </SectionPanel>
+    </Section>
   )
 }
 
@@ -145,6 +147,7 @@ export function ComposeHostingTab() {
                 environmentId={environment.id}
                 focusHostingId={focusHostingId}
               />
+              <PrimaryHostnamePanel environment={environment} />
             </View>
           ))
         )}
@@ -169,6 +172,7 @@ export function ComposeHostingTab() {
         environmentId={selectedEnvironment.id}
         focusHostingId={focusHostingId}
       />
+      <PrimaryHostnamePanel environment={selectedEnvironment} />
     </ResourceTabChrome>
   )
 }
@@ -182,10 +186,12 @@ function SystemUsersPanel() {
   const { orgId, projectId, canManage, projectAllowsMutations } =
     useProjectContext()
   const router = useRouter()
+  // The organization list is owner/manager only, so others get no link to it.
+  const orgManager = useCan('organization', orgId, 'organization:manage')
   return (
-    <SectionPanel
-      title="System users"
-      hint="Project-wide — native releases deploy into a system user's home"
+    <Section
+      title="Hosting Accounts"
+      note="Project-wide — sites and apps deploy into a Hosting Account's home"
     >
       <ProjectPrincipalsSection
         orgId={orgId}
@@ -193,14 +199,16 @@ function SystemUsersPanel() {
         canManage={canManage && projectAllowsMutations}
         embedded
       />
-      <ButtonRow>
-        <Button
-          label="All principals in the organization"
-          size="sm"
-          onPress={() => router.push(orgSettingsTabHref(orgId, 'principals') as Href)}
-        />
-      </ButtonRow>
-    </SectionPanel>
+      {orgManager ? (
+        <ButtonRow>
+          <Button
+            label="All Hosting Accounts in the organization"
+            size="sm"
+            onPress={() => router.push(orgSettingsTabHref(orgId, 'principals') as Href)}
+          />
+        </ButtonRow>
+      ) : null}
+    </Section>
   )
 }
 
@@ -332,10 +340,7 @@ function EnvironmentServersPanel({
   )
 
   return (
-    <SectionPanel
-      title="Server"
-      hint="This environment only — deploys to one server"
-    >
+    <Section title="Server" note="This environment only — deploys to one server">
       <EnvironmentServerPinBody
         selectedEnvironment={selectedEnvironment}
         canEdit={canEdit}
@@ -361,7 +366,7 @@ function EnvironmentServersPanel({
           })()
         }}
       />
-    </SectionPanel>
+    </Section>
   )
 }
 

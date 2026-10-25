@@ -21,7 +21,14 @@ export function useVariables(
   })
 }
 
-export function useCreateVariable(orgId: string, filter: VariableParentFilter) {
+/** Runs after a saved change has refreshed the list, e.g. to refresh the views built on it. */
+type OnVariablesChanged = () => Promise<unknown> | void
+
+export function useCreateVariable(
+  orgId: string,
+  filter: VariableParentFilter,
+  onChanged?: OnVariablesChanged
+) {
   const queryClient = useQueryClient()
   return useApiMutation({
     mutationFn: (body: Omit<CreateVariableBody, keyof VariableParentFilter>) =>
@@ -30,11 +37,16 @@ export function useCreateVariable(orgId: string, filter: VariableParentFilter) {
       await queryClient.invalidateQueries({
         queryKey: queryKeys.org(orgId).variables.list(filter),
       })
+      await onChanged?.()
     },
   })
 }
 
-export function useUpdateVariable(orgId: string, filter: VariableParentFilter) {
+export function useUpdateVariable(
+  orgId: string,
+  filter: VariableParentFilter,
+  onChanged?: OnVariablesChanged
+) {
   const queryClient = useQueryClient()
   return useApiMutation({
     mutationFn: ({
@@ -48,11 +60,16 @@ export function useUpdateVariable(orgId: string, filter: VariableParentFilter) {
       await queryClient.invalidateQueries({
         queryKey: queryKeys.org(orgId).variables.list(filter),
       })
+      await onChanged?.()
     },
   })
 }
 
-export function useDeleteVariable(orgId: string, filter: VariableParentFilter) {
+export function useDeleteVariable(
+  orgId: string,
+  filter: VariableParentFilter,
+  onChanged?: OnVariablesChanged
+) {
   const queryClient = useQueryClient()
   return useApiMutation({
     mutationFn: deleteVariable,
@@ -60,6 +77,7 @@ export function useDeleteVariable(orgId: string, filter: VariableParentFilter) {
       await queryClient.invalidateQueries({
         queryKey: queryKeys.org(orgId).variables.list(filter),
       })
+      await onChanged?.()
     },
   })
 }

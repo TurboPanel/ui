@@ -27,6 +27,13 @@ vi.mock('@/components/org/project/project-context', () => ({
 vi.mock('@/components/org/project/base-tab/use-base-tab', () => ({
   useBaseTabModel: () => model.current,
 }))
+vi.mock('@/components/ui', () => ({ TextField: () => null }))
+vi.mock('@/lib/queries/variables', () => ({ useVariables: () => ({ data: undefined }) }))
+vi.mock('@/lib/queries/configuration', () => ({
+  useSaveBaseVariables: () => ({ run: vi.fn(), isPending: false, actionError: null }),
+  useRefreshBaseConfiguration: () => vi.fn(),
+}))
+vi.mock('@/components/org/variables-section', () => ({ VariablesSection: () => null }))
 vi.mock('@/components/org/project/project-overview-tab', () => ({
   ProjectOverviewTab: () => <div data-testid="old-screen" />,
 }))
@@ -117,12 +124,14 @@ describe('ProjectBaseTab states', () => {
     model.current = { state: 'unavailable' }
     render(<ProjectBaseTab />)
     expect(screen.getByTestId('old-screen')).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Project variables' })).toBeTruthy()
   })
 
   it('says a project with no environment has no Base to show yet', () => {
     model.current = { state: 'empty' }
     render(<ProjectBaseTab />)
     expect(screen.getByText('No environments yet')).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Project variables' })).toBeTruthy()
   })
 })
 
@@ -147,7 +156,8 @@ describe.each(SCENARIOS)('Base tab ($name)', (scenario) => {
     render(<ProjectBaseTab />)
     expect(screen.getByText('https://x')).toBeTruthy()
     expect(screen.getByText('••••••••')).toBeTruthy()
-    expect(screen.getByLabelText('TOKEN, secret, Run only')).toBeTruthy()
+    expect(screen.getByLabelText('TOKEN, secret, Base')).toBeTruthy()
+    expect(screen.getAllByText('Run only')).toHaveLength(2)
   })
 
   it('says which apps run as each Linux user', () => {

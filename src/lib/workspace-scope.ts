@@ -63,6 +63,24 @@ export function projectsHrefForScope(
   return `/${orgId}/projects?workspaceId=${encodeURIComponent(scopeId)}`
 }
 
+/** `href` with `key=value` added to its query; an empty value leaves it alone. */
+export function withQueryParam(
+  href: string,
+  key: string,
+  value: string | null | undefined
+): string {
+  if (!value) return href
+  return `${href}${href.includes('?') ? '&' : '?'}${key}=${encodeURIComponent(value)}`
+}
+
+/**
+ * The Projects list for a workspace scope and a type filter (`?type=apps` /
+ * `?type=managed`). The `all` type is the bare list, so it has no query.
+ */
+export function projectsListHref(orgId: string, scopeId: string, type?: string | null): string {
+  return withQueryParam(projectsHrefForScope(orgId, scopeId), 'type', type === 'all' ? null : type)
+}
+
 export function newProjectHrefForScope(
   orgId: string,
   scopeId: string,

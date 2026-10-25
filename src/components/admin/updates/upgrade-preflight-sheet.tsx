@@ -43,7 +43,8 @@ export function UpgradePreflightSheet({
       <View style={styles.body}>
         <Text style={panelStyles.pageCopy}>
           TurboPanel backs up the control plane database before installing. Keep this recovery
-          command somewhere safe before you continue.
+          command somewhere safe before you continue. When the control plane is part of the update,
+          this page may briefly show “TurboPanel is updating” while it restarts.
         </Text>
         {preflight?.checks.map((check) => (
           <View key={check.id} style={styles.checkRow}>

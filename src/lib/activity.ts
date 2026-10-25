@@ -12,12 +12,25 @@ export function activityActionLabel(action: OrganizationActivityItem['action']):
   return ACTION_LABELS[action]
 }
 
-export function activityStateLabel(state: OrganizationActivityItem['state']): string {
-  return state === 'failed' ? 'Failed' : 'In progress'
+/** What an item that is being worked on is called: only a deploy is "Deploying". */
+const WORKING_LABELS: Record<OrganizationActivityItem['action'], string> = {
+  deploy: 'Deploying',
+  start: 'Starting',
+  restart: 'Restarting',
+  stop: 'Stopping',
+}
+
+export function activityStateLabel(
+  state: OrganizationActivityItem['state'],
+  action: OrganizationActivityItem['action']
+): string {
+  if (state === 'failed') return 'Failed'
+  return state === 'queued' ? 'Queued' : WORKING_LABELS[action]
 }
 
 export function activityStateTone(state: OrganizationActivityItem['state']): BadgeTone {
-  return state === 'failed' ? 'danger' : 'pending'
+  if (state === 'failed') return 'danger'
+  return state === 'queued' ? 'muted' : 'pending'
 }
 
 /** "Project / Environment", degrading to whichever half is known, or a dash. */

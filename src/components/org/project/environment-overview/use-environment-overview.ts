@@ -8,11 +8,13 @@ import { useContainers } from '@/lib/queries/containers'
 import { useEnvironmentBindings } from '@/lib/queries/bindings'
 import { useEnvironmentDeployments } from '@/lib/queries/execution-logs'
 import { useProjectPrincipals } from '@/lib/queries/projects'
+import { useOrgServers } from '@/lib/queries/servers'
 import { useHostingsByServices, useServices } from '@/lib/queries/services'
 import { useStorage } from '@/lib/queries/storage'
 import { useTlsLibrary } from '@/lib/queries/tls'
+import { useIps } from '@/lib/queries/topology'
 import { environmentDisplayName } from '@/lib/resource-labels'
-import type { OverviewSource } from '@/lib/v4/environment-overview'
+import { serverPublicAddresses, type OverviewSource } from '@/lib/v4/environment-overview'
 
 const NONE: never[] = []
 
@@ -40,7 +42,13 @@ export type OverviewModel =
  * left out.
  */
 export function useEnvironmentOverviewModel(): OverviewModel {
-  const { orgId, projectId, selectedEnvironment, loading: projectLoading } = useProjectContext()
+  const {
+    orgId,
+    projectId,
+    project,
+    selectedEnvironment,
+    loading: projectLoading,
+  } = useProjectContext()
   const environmentId = selectedEnvironment?.id ?? ''
   const view = useEnvironmentConfigView(orgId, environmentId)
   const services = useServices(orgId, environmentId, { enabled: environmentId !== '' })
@@ -53,6 +61,15 @@ export function useEnvironmentOverviewModel(): OverviewModel {
   const bindings = useEnvironmentBindings(orgId, environmentId)
   const principals = useProjectPrincipals(orgId, projectId)
   const history = useEnvironmentDeployments(orgId, environmentId, { enabled: environmentId !== '' })
+  const ips = useIps(orgId, { scope: 'public' })
+  const serverId = selectedEnvironment?.serverId ?? project?.options?.defaultServerId ?? null
+  const primaryHostname = selectedEnvironment?.options?.primaryHostname ?? null
+  const servers = useOrgServers(orgId, { enabled: serverId !== null })
+  const serverAddresses = useMemo(() => {
+    const list = servers.data?.servers
+    if (serverId === null || list === undefined) return undefined
+    return serverPublicAddresses(list.find((server) => server.id === serverId))
+  }, [servers.data, serverId])
 
   const envName = environmentDisplayName(selectedEnvironment ?? {})
   const loaded = view.data !== undefined && services.isSuccess && !hostings.isLoading
@@ -69,6 +86,10 @@ export function useEnvironmentOverviewModel(): OverviewModel {
       storage: storage.data?.storage ?? NONE,
       bindings: bindings.data?.bindings ?? NONE,
       principals: principals.data?.principals ?? NONE,
+      publicIps: ips.data?.ips,
+      serverId,
+      serverAddresses,
+      primaryHostname,
     }
   }, [
     view.data,
@@ -81,6 +102,10 @@ export function useEnvironmentOverviewModel(): OverviewModel {
     storage.data,
     bindings.data,
     principals.data,
+    ips.data,
+    serverId,
+    serverAddresses,
+    primaryHostname,
   ])
 
   if (environmentId === '') return { state: projectLoading ? 'loading' : 'unavailable' }

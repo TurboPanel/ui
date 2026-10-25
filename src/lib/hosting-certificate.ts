@@ -3,10 +3,12 @@
  * turns it into plain sentences, a tone and the actions to offer.
  */
 import type { HostingCertificate, HostingDnsReport } from '@/lib/instance-api'
+import { isForbiddenError } from '@/lib/fetch-error-detail'
+import { userErrorMessage } from '@/lib/user-error'
 
 export type CertificateTone = 'neutral' | 'good' | 'warning' | 'bad' | 'pending'
 
-export type CertificateAction = 'use_lets_encrypt' | 'check_dns' | 'try_again'
+export type CertificateAction = 'use_lets_encrypt' | 'check_dns' | 'try_again' | 'deploy'
 
 export type CertificateView = {
   label: string
@@ -40,7 +42,7 @@ function letsEncryptAction(cert: HostingCertificate): CertificateAction[] {
 
 function testView(cert: HostingCertificate): CertificateView {
   return {
-    label: 'Test certificate',
+    label: 'Self-signed certificate',
     tone: 'neutral',
     lines: ['Browsers will warn visitors.'],
     reason: null,
@@ -89,14 +91,14 @@ function waitingView(cert: HostingCertificate): CertificateView {
 
 function issuingView(cert: HostingCertificate): CertificateView {
   const lines = cert.needsDeploy
-    ? ['Redeploy this environment to start it.']
+    ? ['Deploy this environment to start it. The certificate is requested during the deploy.']
     : ['This usually takes a minute or two.']
   return {
     label: 'Getting a certificate',
     tone: 'pending',
     lines,
     reason: null,
-    actions: [],
+    actions: cert.needsDeploy ? ['deploy'] : [],
     spinner: !cert.needsDeploy,
   }
 }
@@ -127,6 +129,72 @@ const BUILDERS: Record<HostingCertificate['state'], (cert: HostingCertificate) =
 
 export function describeCertificate(cert: HostingCertificate): CertificateView {
   return BUILDERS[cert.state](cert)
+}
+
+/** Why Let's Encrypt was refused, in plain words, and whether Organization settings can fix it. */
+export type LetsEncryptRefusal = Readonly<{
+  message: string
+  /** The organization has Let's Encrypt turned off: link to Domains & certificates. */
+  openSettings: boolean
+}>
+
+/**
+ * The server's own sentence after the code (`HTTP 400: code — sentence`), for
+ * refusals whose message names the clashing hostnames.
+ */
+function serverExplanation(err: unknown, code: string): string | null {
+  if (!(err instanceof Error)) return null
+  const at = err.message.indexOf(`${code} \u2014 `)
+  if (at === -1) return null
+  const text = err.message.slice(at + code.length + 3).trim()
+  return text === '' ? null : text
+}
+
+/**
+ * A refused `PUT /hostings/:id/use-letsencrypt` as one plain sentence. The
+ * documented codes (Let's Encrypt off, not a web domain, no names, not
+ * reachable from the internet, a name it cannot issue for, a www clash) map to
+ * fixed copy; a www clash keeps the server's sentence, which names the hosts.
+ */
+export function letsEncryptRefusal(err: unknown): LetsEncryptRefusal {
+  const www = serverExplanation(err, 'www_redirect_conflict')
+  // A plain permission 403 carries only "HTTP 403: Forbidden": say it in words instead.
+  const fallback = 'Could not start Let\u2019s Encrypt.'
+  return {
+    message: www ?? (isForbiddenError(err) ? fallback : userErrorMessage(err, fallback)),
+    openSettings: err instanceof Error && err.message.includes('lets_encrypt_not_enabled'),
+  }
+}
+
+/**
+ * After a hosting saved: ask for the certificate when the box was ticked. Any
+ * successful save replaces what an earlier answer said, so a save without the
+ * box clears an old refusal. Null when the hosting has no id yet.
+ */
+export async function certificateAfterSave(
+  input: Readonly<{
+    hostingId: string | null
+    wantsCertificate: boolean
+    request: (hostingId: string) => Promise<{ ok: true } | { ok: false; cause?: unknown }>
+  }>
+): Promise<{ hostingId: string; refusal: LetsEncryptRefusal | null } | null> {
+  const { hostingId } = input
+  if (hostingId === null) return null
+  if (!input.wantsCertificate) return { hostingId, refusal: null }
+  const requested = await input.request(hostingId)
+  return { hostingId, refusal: requested.ok ? null : letsEncryptRefusal(requested.cause) }
+}
+
+/** The refusals by hosting id after one save: a new refusal replaces the old, a success clears it. */
+export function withCertificateRefusal(
+  current: Readonly<Record<string, LetsEncryptRefusal>>,
+  hostingId: string,
+  refusal: LetsEncryptRefusal | null
+): Record<string, LetsEncryptRefusal> {
+  const next = { ...current }
+  if (refusal === null) delete next[hostingId]
+  else next[hostingId] = refusal
+  return next
 }
 
 /**

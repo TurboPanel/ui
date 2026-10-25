@@ -89,7 +89,7 @@ export function isNodeApp(files: readonly RepositoryProbedFile[]): boolean {
 }
 
 /**
- * Manager pinned by `packageManager` in package.json ("pnpm@12.3.4" — the
+ * Manager pinned by `packageManager` in package.json ("pnpm@12.14.0" — the
  * corepack pin). A fallback only: the daemon detects from the lockfile on disk
  * at build time, so when both exist the lockfile is what the build obeys.
  */

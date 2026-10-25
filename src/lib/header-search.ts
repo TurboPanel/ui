@@ -6,7 +6,7 @@ import {
   orgManageHref,
   orgRouteHref,
 } from '@/lib/org-navigation'
-import { projectsHrefForScope } from '@/lib/workspace-scope'
+import { projectsHrefForScope, projectsListHref } from '@/lib/workspace-scope'
 
 /** Widths under this collapse the header search to an icon button. */
 export const HEADER_SEARCH_COLLAPSE_WIDTH = 1024
@@ -37,6 +37,12 @@ export function searchDestinations(
   options: Readonly<{ billingEnabled: boolean; projectsScopeId: string }>,
 ): SearchDestination[] {
   const area = (id: OrgAreaId) => ORG_AREAS.find((entry) => entry.id === id)
+  const pageHref = (id: OrgAreaId, pathSegment: string): string => {
+    if (id === 'projects') return projectsHrefForScope(orgId, options.projectsScopeId)
+    // Managed databases are the Projects list with its Managed databases filter.
+    if (id === 'managed') return projectsListHref(orgId, options.projectsScopeId, 'managed')
+    return orgAreaHref(orgId, pathSegment)
+  }
   const page = (id: OrgAreaId, label?: string): SearchDestination[] => {
     const entry = area(id)
     if (!entry) return []
@@ -45,10 +51,7 @@ export function searchDestinations(
         id: entry.id,
         name: label ?? entry.label,
         type: 'Page',
-        href:
-          id === 'projects'
-            ? projectsHrefForScope(orgId, options.projectsScopeId)
-            : orgAreaHref(orgId, entry.pathSegment),
+        href: pageHref(id, entry.pathSegment),
         icon: id,
       },
     ]

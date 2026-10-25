@@ -1,6 +1,6 @@
 import { useRouter, type Href } from 'expo-router'
-import { useCallback, useMemo, useState } from 'react'
-import { Linking, Pressable, Text, View } from 'react-native'
+import { useMemo, useState } from 'react'
+import { Linking, Text, View } from 'react-native'
 import {
   AppsSection,
   ChangesSection,
@@ -12,30 +12,24 @@ import {
 } from '@/components/org/project/configuration/config-sections'
 import type { EditingApi } from '@/components/org/project/configuration/editing'
 import { SaveBar } from '@/components/org/project/configuration/save-bar'
+import { useStagedEdits } from '@/components/org/project/configuration/use-staged-edits'
 import { useProjectContext } from '@/components/org/project/project-context'
 import { LoadingState } from '@/components/ui'
+import { Toggle } from '@/components/ui/toggle'
 import { ActionButton, Notice } from '@/components/ui/v4'
 import { themedStyles, usePalette } from '@/components/ui/v4/use-palette'
 import { typeStyle } from '@/components/ui/v4/type-styles'
 import {
   projectBaseHref,
   projectEnvironmentHostingHref,
-  projectServiceHref,
+  projectEnvironmentServiceHref,
 } from '@/lib/project-navigation'
 import { useSaveConfiguration } from '@/lib/queries/configuration'
 import { useEnvironmentConfigView } from '@/lib/queries/environments'
 import { useHostingsByServices } from '@/lib/queries/services'
 import { useVariables } from '@/lib/queries/variables'
 import { environmentDisplayName } from '@/lib/resource-labels'
-import { webPointer } from '@/lib/theme'
-import {
-  changeActions,
-  stageEdit,
-  unstageEdit,
-  variableFacts,
-  type SaveProblem,
-  type StagedEdit,
-} from '@/lib/v4/config-edits'
+import { changeActions, variableFacts } from '@/lib/v4/config-edits'
 import {
   buildConfigViewModel,
   withHostingHostnames,
@@ -47,51 +41,22 @@ const styles = themedStyles((p) => ({
   stack: { gap: 16 },
   lede: { ...typeStyle('body', 'subhead'), color: p.text3 },
   top: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 12 },
-  filter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    minHeight: 32,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: p.sepStrong,
-    backgroundColor: p.surface,
-  },
-  filterText: { ...typeStyle('bodyMedium', 'subhead'), color: p.text },
-  track: {
-    width: 28,
-    height: 16,
-    borderRadius: 8,
-    padding: 2,
-    backgroundColor: p.surface3,
-    justifyContent: 'center',
-  },
-  trackOn: { backgroundColor: p.accent },
-  knob: { width: 12, height: 12, borderRadius: 6, backgroundColor: p.knob },
-  knobOn: { alignSelf: 'flex-end' },
 }))
 
-/** The "Only changes from Base (N)" switch. */
+/** The "Only changes from Base (N)" switch: the shared switch, its label as the word beside it. */
 function OnlyChangesSwitch({
   label,
   on,
   onToggle,
 }: Readonly<{ label: string; on: boolean; onToggle: () => void }>) {
-  const s = styles(usePalette())
   return (
-    <Pressable
-      accessibilityRole="switch"
+    <Toggle
+      value={on}
+      onValueChange={onToggle}
+      onLabel={label}
+      offLabel={label}
       accessibilityLabel={label}
-      accessibilityState={{ checked: on }}
-      onPress={onToggle}
-      style={[s.filter, webPointer]}
-    >
-      <View style={[s.track, on && s.trackOn]}>
-        <View style={[s.knob, on && s.knobOn]} />
-      </View>
-      <Text style={s.filterText}>{label}</Text>
-    </Pressable>
+    />
   )
 }
 
@@ -203,37 +168,8 @@ export function EnvironmentConfigurationScreen() {
   let hostingsStatus: HostingsStatus = 'ready'
   if (hostings.hasError) hostingsStatus = 'error'
   else if (hostings.isLoading) hostingsStatus = 'loading'
-  const [staged, setStaged] = useState<readonly StagedEdit[]>([])
-  const [saveError, setSaveError] = useState<string | null>(null)
-  const [problems, setProblems] = useState<readonly SaveProblem[]>([])
-  const [savedCount, setSavedCount] = useState(0)
-
-  const stage = useCallback((edit: StagedEdit) => {
-    setStaged((current) => stageEdit(current, edit))
-    setSavedCount(0)
-  }, [])
-  const unstage = useCallback(
-    (key: string) => setStaged((current) => unstageEdit(current, key)),
-    []
-  )
-  const discard = useCallback(() => {
-    setStaged([])
-    setSaveError(null)
-    setProblems([])
-  }, [])
-  const saveAll = useCallback(async () => {
-    setSaveError(null)
-    setProblems([])
-    const result = await save.run(staged)
-    if (!result.ok) {
-      setSaveError(save.actionError ?? 'Could not save these changes.')
-      return
-    }
-    setStaged(result.value.remaining)
-    setProblems(result.value.problems)
-    setSaveError(result.value.error)
-    setSavedCount(result.value.error === null ? result.value.saved : 0)
-  }, [save, staged])
+  const { staged, stage, unstage, discard, saveAll, saveError, problems, savedCount } =
+    useStagedEdits(save)
 
   const editable = canOwn && projectAllowsMutations
   const envVariableRecords = environmentVariables.data?.variables
@@ -273,7 +209,9 @@ export function EnvironmentConfigurationScreen() {
         hostingsStatus={hostingsStatus}
         editing={editing}
         onOpenApp={(serviceId) =>
-          router.push(projectServiceHref(orgId, projectId, serviceId) as Href)
+          router.push(
+            projectEnvironmentServiceHref(orgId, projectId, environmentId, serviceId) as Href
+          )
         }
         onOpenUrl={(url) => {
           Linking.openURL(url).catch(() => {

@@ -1,9 +1,15 @@
 import type { DeploymentGroup } from '@/lib/deployment-history'
 import { describe, expect, it } from 'vitest'
-import type { ServiceRecord, ServiceRunStateName } from '@/lib/instance-api'
+import type {
+  HostingRecord,
+  IpRecord,
+  ServiceRecord,
+  ServiceRunStateName,
+} from '@/lib/instance-api'
 import {
   appRows,
   certificateKey,
+  changeNames,
   changeRows,
   databasesOf,
   dataRows,
@@ -15,6 +21,8 @@ import {
   relationCard,
   runsAsOf,
   runStatusKey,
+  servedFromOf,
+  serverPublicAddresses,
   shortLabel,
   sideServices,
   volumesOf,
@@ -23,6 +31,7 @@ import {
   CHANGES,
   configView,
   container,
+  hosting,
   overviewSource,
   principal,
   row,
@@ -217,13 +226,13 @@ describe('domains, volumes and databases', () => {
   it('reads a certificate word only from a pinned certificate row', () => {
     const tls = [
       tlsRecord('ok', 'upload', 'ready'),
-      tlsRecord('managed', 'lets_encrypt', 'managed'),
+      tlsRecord('automatic', 'lets_encrypt', 'automatic'),
       tlsRecord('wait', 'lets_encrypt', 'pending'),
       tlsRecord('self', 'self_signed', 'ready'),
       tlsRecord('old', 'upload', 'expired'),
     ]
     expect(certificateKey('ok', tls)).toBe('ok')
-    expect(certificateKey('managed', tls)).toBe('ok')
+    expect(certificateKey('automatic', tls)).toBe('ok')
     expect(certificateKey('wait', tls)).toBe('issuing')
     expect(certificateKey('self', tls)).toBe('test')
     expect(certificateKey('old', tls)).toBe('renewal_failed')
@@ -242,7 +251,148 @@ describe('domains, volumes and databases', () => {
     const unpinned = domainsOf(
       overviewSource({ hostings: { 's-web': [{ ...source.hostings['s-web']![0]!, tlsId: null }] } })
     )
-    expect(unpinned[0]?.status).toEqual({ key: 'test', label: 'Test certificate (browsers warn)' })
+    // The map box has room for the short word only.
+    expect(unpinned[0]?.status).toEqual({ key: 'test', label: 'Self-signed (browsers warn)' })
+  })
+
+  it('lists the hostnames a hosting answers on, not its name, oldest hosting first', () => {
+    const named = overviewSource({
+      hostings: {
+        's-web': [
+          hosting('blog', null, {
+            options: { hostnames: ['blog.turbopanel.io'] },
+            createdAt: '2026-10-05T00:00:00Z',
+          }),
+          hosting('website', 't1', {
+            options: { hostnames: [' turbopanel.io ', 'www.turbopanel.io', 'TURBOPANEL.IO', ''] },
+          }),
+          hosting('legacy', 't1', { options: { hostnames: [] } }),
+        ],
+      },
+    })
+    expect(domainsOf(named)).toEqual([
+      { host: 'turbopanel.io', status: { key: 'ok', label: 'Secure' }, serviceId: 'web' },
+      { host: 'www.turbopanel.io', status: { key: 'ok', label: 'Secure' }, serviceId: 'web' },
+      // No hostnames yet: the hosting's name stands in.
+      { host: 'legacy', status: { key: 'ok', label: 'Secure' }, serviceId: 'web' },
+      {
+        host: 'blog.turbopanel.io',
+        status: { key: 'test', label: 'Self-signed (browsers warn)' },
+        serviceId: 'web',
+      },
+    ])
+    expect(domainsOf(named).map((domain) => domain.host)).not.toContain('website')
+  })
+
+  it('reads the public addresses a server reports itself', () => {
+    const reported = (address: string, scope: 'public' | 'private', preferred?: boolean) => ({
+      address,
+      version: 4 as const,
+      scope,
+      ...(preferred === undefined ? {} : { preferred }),
+    })
+    expect(
+      serverPublicAddresses({
+        ips: [
+          reported('10.0.0.5', 'private', true),
+          reported('198.51.100.9', 'public'),
+          reported('45.32.200.170', 'public', true),
+        ],
+        address: '10.0.0.5',
+        addressScope: 'private',
+      })
+    ).toEqual(['45.32.200.170', '198.51.100.9'])
+    expect(
+      serverPublicAddresses({ ips: null, address: '45.32.200.170', addressScope: 'public' })
+    ).toEqual(['45.32.200.170'])
+    expect(
+      serverPublicAddresses({
+        ips: [reported('10.0.0.5', 'private')],
+        address: '10.0.0.5',
+        addressScope: 'private',
+      })
+    ).toEqual([])
+    expect(serverPublicAddresses(undefined)).toEqual([])
+  })
+
+  it('says where a hostname is served from, only from what is known', () => {
+    const ip = (id: string, address: string, serverId: string | null) =>
+      ({ id, address, serverId }) as unknown as IpRecord
+    const publicIps = [ip('ip-1', '203.0.113.24', 'srv-1'), ip('ip-2', '198.51.100.7', 'srv-2')]
+    const at = (patch: Partial<HostingRecord>) => ({ ...hosting('a.example.com'), ...patch })
+    const known = { publicIps, serverId: 'srv-1' }
+    // A pinned public address is that address; one that is not listed is not guessed.
+    expect(servedFromOf(at({ ipId: 'ip-2' }), known)).toBe('Served from 198.51.100.7')
+    expect(servedFromOf(at({ ipId: 'ip-9' }), known)).toBeNull()
+    expect(servedFromOf(at({ ipId: 'ip-2' }), {})).toBeNull()
+    // Any interface: the addresses the DNS check expects, else the server's own.
+    const certificate = { dns: { expectedAddresses: ['192.0.2.1', '192.0.2.2', '192.0.2.1'] } }
+    expect(servedFromOf(at({ certificate } as unknown as Partial<HostingRecord>), known)).toBe(
+      'Served from 192.0.2.1 +1'
+    )
+    expect(servedFromOf(at({ options: { bind: 'public' } }), known)).toBe(
+      'Served from 203.0.113.24'
+    )
+    expect(servedFromOf(at({}), { publicIps, serverId: null })).toBeNull()
+    expect(servedFromOf(at({}), { serverId: 'srv-1' })).toBeNull()
+    // Once the certificate is issued the DNS report is gone; with no address rows for
+    // the server (a single self-hosted one), the addresses it reports itself answer.
+    const issued = at({
+      certificate: { state: 'secure', dns: null },
+    } as unknown as Partial<HostingRecord>)
+    const reportedOnly = { publicIps: [], serverId: 'srv-1', serverAddresses: ['45.32.200.170'] }
+    expect(servedFromOf(issued, reportedOnly)).toBe('Served from 45.32.200.170')
+    expect(servedFromOf(issued, { ...known, serverAddresses: ['45.32.200.170'] })).toBe(
+      'Served from 203.0.113.24'
+    )
+    expect(servedFromOf(issued, { ...reportedOnly, serverId: null })).toBeNull()
+    expect(servedFromOf(issued, { ...reportedOnly, serverAddresses: [] })).toBeNull()
+    // Datacenter and Local say so.
+    expect(servedFromOf(at({ options: { bind: 'datacenter' } }), known)).toBe(
+      'Served on the datacenter network'
+    )
+    expect(servedFromOf(at({ options: { bind: 'local' } }), known)).toBe(
+      'Served on this server only'
+    )
+    // An unknown bind reads as the default, public.
+    expect(servedFromOf(at({ options: { bind: 'elsewhere' } }), known)).toBe(
+      'Served from 203.0.113.24'
+    )
+  })
+
+  it('carries the served line and the primary hostname into the map', () => {
+    const withIps = overviewSource({
+      publicIps: [
+        { id: 'ip-1', address: '203.0.113.24', serverId: 'srv-1' } as unknown as IpRecord,
+      ],
+      serverId: 'srv-1',
+      primaryHostname: 'shop.example.com',
+    })
+    expect(domainsOf(withIps)[0]?.servedFrom).toBe('Served from 203.0.113.24')
+    expect(mapInputOf(withIps, 'env').primaryHost).toBe('shop.example.com')
+    expect(mapInputOf(source, 'env').primaryHost).toBeNull()
+    expect(domainsOf(source)[0]).not.toHaveProperty('servedFrom')
+    // A hosting named after the site: the map carries its hostnames and the
+    // server's own address once the certificate is issued.
+    const live = overviewSource({
+      hostings: {
+        's-web': [
+          hosting('website', 't1', {
+            options: { hostnames: ['www.turbopanel.io', 'turbopanel.io'] },
+          }),
+        ],
+      },
+      publicIps: [],
+      serverId: 'srv-1',
+      serverAddresses: ['45.32.200.170'],
+      primaryHostname: 'turbopanel.io',
+    })
+    const input = mapInputOf(live, 'env')
+    expect(input.primaryHost).toBe('turbopanel.io')
+    expect(input.domains.map((domain) => [domain.host, domain.servedFrom])).toEqual([
+      ['www.turbopanel.io', 'Served from 45.32.200.170'],
+      ['turbopanel.io', 'Served from 45.32.200.170'],
+    ])
   })
 
   it('skips a service that has no saved row yet', () => {
@@ -520,10 +670,18 @@ describe('relationCard', () => {
   it('counts the changes of an environment that inherits from the Base', () => {
     expect(relationCard(view, 'Staging', 2)).toEqual({
       kind: 'changes',
-      title: 'Changes from Base (4)',
-      text: '4 changes from the Base',
+      title: 'Changes from the Base',
+      text: 'Start command, old and 2 more',
       count: 4,
     })
+  })
+  it('names the first changes once each, and falls back to the count without names', () => {
+    expect(changeNames([{ label: 'Domain' }, { label: 'Branch' }])).toBe('Domain, Branch')
+    expect(changeNames([{ label: 'Domain' }, { label: 'Domain' }, { label: 'Branch' }])).toBe(
+      'Domain, Branch'
+    )
+    expect(changeNames([{ label: 'A' }, { label: 'B' }, { label: 'C' }])).toBe('A, B and 1 more')
+    expect(changeNames([{ label: ' ' }, { label: '' }])).toBe('2 changes from the Base')
   })
   it('has no card, and never a 0, when there is nothing to say', () => {
     expect(relationCard(configView({ changes: [] }), 'Staging', 2)).toEqual({ kind: 'none' })

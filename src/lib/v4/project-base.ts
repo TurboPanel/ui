@@ -15,8 +15,9 @@ import type {
   ConfigViewSide,
   EnvironmentConfigViewResponse,
   ProjectPrincipalRecord,
+  VariableRecord,
 } from '@/lib/instance-api'
-import { usedFor, variableValueText } from './config-view-model'
+import { usedFor, variableValueText, type VariableRowModel } from './config-view-model'
 import { mapInputOf, runsAsOf, sideServices, type OverviewSource } from './environment-overview'
 import {
   linuxUserFromDeclared,
@@ -195,26 +196,42 @@ export function baseServicesNote(rows: readonly BaseServiceRow[]): string {
 
 // --- Project variables -------------------------------------------------------------
 
-export type BaseVariableRow = Readonly<{
-  name: string
-  variableId: string
-  valueText: string
-  isSecret: boolean
-  /** "Build and run", "Run only" or "Build only". */
-  usedFor: string
-  tag: string
-}>
+/** A Base variable row: the same row the Configuration tab lists, so the same editor opens on it. */
+export type BaseVariableRow = VariableRowModel
 
 /** The variables set on the project, shared by every environment. */
-export function baseVariableRows(base: ConfigViewSide): BaseVariableRow[] {
+export function baseVariableRows(base: Pick<ConfigViewSide, 'variables'>): BaseVariableRow[] {
   return base.variables.map((variable) => ({
+    key: variable.key,
     name: variable.name,
     variableId: variable.variableId,
     valueText: variableValueText(variable),
     isSecret: variable.isSecret,
     usedFor: usedFor(variable),
-    tag: 'Base',
+    tag: { source: 'base', label: 'Base' },
+    sourceNote: '',
+    isChange: false,
   }))
+}
+
+/**
+ * The same rows straight from the project's variable records, for when no
+ * environment's configuration can be read. A secret's value is never shown.
+ */
+export function projectVariableRows(records: readonly VariableRecord[]): BaseVariableRow[] {
+  return baseVariableRows({
+    variables: records.map((record) => ({
+      key: `var:${record.key}`,
+      name: record.key,
+      variableId: record.id,
+      value: record.isSecret ? null : record.value,
+      isSecret: record.isSecret,
+      forBuild: record.forBuild,
+      forRuntime: record.forRuntime,
+      source: 'project' as const,
+      inheritedFromBase: true,
+    })),
+  })
 }
 
 // --- Linux users -------------------------------------------------------------------
@@ -365,7 +382,7 @@ export function baseLinuxUserRows(
   })
 }
 
-/** "2 Linux users" for the section note. */
+/** "2 Hosting Accounts" for the section note. */
 export function baseLinuxUsersNote(rows: readonly BaseLinuxUserRow[]): string {
-  return plural(rows.length, 'Linux user')
+  return plural(rows.length, 'Hosting Account')
 }

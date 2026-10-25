@@ -2,6 +2,7 @@ import { Redirect, useLocalSearchParams, type Href } from 'expo-router'
 import { Platform } from 'react-native'
 import { WithBaseNotice } from '@/components/org/project/base-tab/base-edit-notice'
 import { ProjectBaseTab } from '@/components/org/project/base-tab/base-tab'
+import { BaseVariablesSection } from '@/components/org/project/base-tab/base-variables-section'
 import { EnvironmentOverviewTab } from '@/components/org/project/environment-overview/environment-overview-tab'
 import { EnvironmentConfigurationScreen } from '@/components/org/project/configuration/environment-configuration'
 import { useEnvironmentChrome } from '@/components/org/project/environment-shell'
@@ -21,7 +22,8 @@ import {
 } from '@/lib/project-navigation'
 
 // Route files stay a few lines: each names a screen from here. The checks
-// (platform and managed projects keep their own pages) live in one place.
+// (platform projects keep their own pages, a managed database shows its
+// panels in the same tabs) live in one place.
 
 function firstParam(value: string | string[] | undefined): string {
   if (Array.isArray(value)) return value[0] ?? ''
@@ -31,9 +33,7 @@ function firstParam(value: string | string[] | undefined): string {
 /** `/projects/:id/overview` — the Environments tab. */
 export function ProjectEnvironmentsScreen() {
   const { project, isSystemProject } = useProjectContext()
-  if (project && isManagedProject(project)) {
-    return <ManagedFocusTab focus="overview" />
-  }
+  if (project && isManagedProject(project)) return <ManagedFocusTab />
   // Platform projects render their own panel through the shared compose tab.
   if (isSystemProject) return <ProjectOverviewTab />
   return <ProjectEnvironmentsTab />
@@ -42,16 +42,26 @@ export function ProjectEnvironmentsScreen() {
 /**
  * The Base tab. Compose projects on the web get the Base map and what the
  * Base holds; the phone app keeps the screen it had until the Base has its own
- * native layout. Platform and managed projects have no Base: they go home.
+ * native layout. Platform projects have no Base: they go home. A managed
+ * database greys it ("Managed by TurboPanel").
  */
 export function ProjectBaseScreen() {
   const { orgId, projectId, project, isSystemProject } = useProjectContext()
-  if (isSystemProject || (project && isManagedProject(project))) {
+  if (isSystemProject) {
     return <Redirect href={projectOverviewHref(orgId, projectId) as Href} />
   }
+  if (project && isManagedProject(project)) return <ManagedFocusTab />
   return (
     <WithBaseNotice>
-      {Platform.OS === 'web' ? <ProjectBaseTab /> : <ProjectOverviewTab />}
+      {Platform.OS === 'web' ? (
+        <ProjectBaseTab />
+      ) : (
+        <>
+          <ProjectOverviewTab />
+          {/* The phone keeps the old screen, plus the project variables Settings links here for. */}
+          <BaseVariablesSection />
+        </>
+      )}
     </WithBaseNotice>
   )
 }
@@ -63,9 +73,10 @@ export function ProjectBaseScreen() {
  */
 export function ProjectBaseLensScreen() {
   const { orgId, projectId, project, isSystemProject } = useProjectContext()
-  if (isSystemProject || (project && isManagedProject(project))) {
+  if (isSystemProject) {
     return <Redirect href={projectOverviewHref(orgId, projectId) as Href} />
   }
+  if (project && isManagedProject(project)) return <ManagedFocusTab />
   return (
     <WithBaseNotice>
       <ProjectOverviewTab />
@@ -74,17 +85,14 @@ export function ProjectBaseLensScreen() {
 }
 
 /**
- * `/projects/:id/settings` — Project Settings. Managed projects get their
- * Settings panel (image, resources, client TLS, external access); platform
- * projects have none.
+ * `/projects/:id/settings` — Project Settings, for a managed database too
+ * (name, workspace and delete; the database's own settings are on each
+ * environment's Settings tab). Platform projects have none.
  */
 export function ProjectSettingsRouteScreen() {
-  const { orgId, projectId, project, isSystemProject } = useProjectContext()
+  const { orgId, projectId, isSystemProject } = useProjectContext()
   if (isSystemProject) {
     return <Redirect href={projectOverviewHref(orgId, projectId) as Href} />
-  }
-  if (project && isManagedProject(project)) {
-    return <ManagedFocusTab focus="settings" />
   }
   return <ProjectSettingsScreen />
 }
@@ -98,9 +106,7 @@ export function ProjectSettingsRouteScreen() {
 export function EnvironmentOverviewScreen() {
   const { project } = useProjectContext()
   const withChrome = useEnvironmentChrome()
-  if (project && isManagedProject(project)) {
-    return <ManagedFocusTab focus="overview" />
-  }
+  if (project && isManagedProject(project)) return <ManagedFocusTab />
   if (withChrome && Platform.OS === 'web') return <EnvironmentOverviewTab />
   return <ProjectOverviewTab />
 }
@@ -111,9 +117,7 @@ export function EnvironmentComposeScreen() {
   if (isSystemProject) {
     return <Redirect href={projectOverviewHref(orgId, projectId) as Href} />
   }
-  if (project && isManagedProject(project)) {
-    return <ManagedFocusTab focus="overview" />
-  }
+  if (project && isManagedProject(project)) return <ManagedFocusTab />
   return <ProjectOverviewTab />
 }
 
@@ -126,9 +130,7 @@ export function EnvironmentConfigurationTabScreen() {
   if (isSystemProject) {
     return <Redirect href={projectOverviewHref(orgId, projectId) as Href} />
   }
-  if (project && isManagedProject(project)) {
-    return <ManagedFocusTab focus="overview" />
-  }
+  if (project && isManagedProject(project)) return <ManagedFocusTab />
   return <EnvironmentConfigurationScreen />
 }
 
@@ -143,9 +145,7 @@ export function EnvironmentSettingsScreen() {
   if (isSystemProject) {
     return <Redirect href={projectOverviewHref(orgId, projectId) as Href} />
   }
-  if (project && isManagedProject(project)) {
-    return <ManagedFocusTab focus="settings" />
-  }
+  if (project && isManagedProject(project)) return <ManagedFocusTab />
   return <EnvironmentSettingsBody showGitSource={withChrome} />
 }
 
@@ -156,9 +156,7 @@ export function EnvironmentDeploymentsScreen() {
   if (isSystemProject) {
     return <Redirect href={projectOverviewHref(orgId, projectId) as Href} />
   }
-  if (project && isManagedProject(project)) {
-    return <ManagedFocusTab focus="overview" />
-  }
+  if (project && isManagedProject(project)) return <ManagedFocusTab />
   if (!pathEnvironmentId) return null
   return (
     <EnvironmentDeploymentHistoryPanel
@@ -177,14 +175,12 @@ export function EnvironmentDeploymentsScreen() {
  * (`?hostingId=` is a live deep link).
  */
 export function LegacyProjectRedirect({ segment }: Readonly<{ segment: LegacyProjectSegment }>) {
-  const { orgId, projectId, project, isSystemProject } = useProjectContext()
+  const { orgId, projectId, isSystemProject } = useProjectContext()
   const params = useLocalSearchParams()
   const environmentId = firstParam(params.environmentId) || null
-  const managed = project != null && isManagedProject(project)
-  if (isSystemProject || (managed && !environmentId)) {
+  if (isSystemProject) {
     return <Redirect href={projectOverviewHref(orgId, projectId) as Href} />
   }
-  if (managed) return <ManagedFocusTab focus="overview" />
   const target = legacyProjectRedirectHref(orgId, projectId, segment, environmentId)
   if (!target) {
     return <Redirect href={projectOverviewHref(orgId, projectId) as Href} />

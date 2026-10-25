@@ -8,6 +8,7 @@ const state = vi.hoisted(() => ({
   query: { isLoading: false, error: null as Error | null, data: undefined as unknown },
   mutate: vi.fn(),
   canManage: true,
+  deleteData: undefined as unknown,
 }))
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
@@ -30,12 +31,15 @@ vi.mock('@/components/org/org-folders-section', () => ({
 }))
 vi.mock('@/lib/query-client', () => ({ useCan: () => state.canManage }))
 vi.mock('@/lib/queries/org-principals', () => ({
+  failedRetireServerIds: (r?: { reconciled?: { failedServerIds: string[] } }) =>
+    r?.reconciled?.failedServerIds ?? [],
   useOrgPrincipals: () => state.query,
   useDeleteOrgPrincipal: () => ({
     mutate: state.mutate,
     isPending: false,
     variables: undefined,
     actionError: null,
+    data: state.deleteData,
   }),
 }))
 vi.mock('@/components/ui', () => {
@@ -76,11 +80,9 @@ function row(patch: Partial<OrgPrincipalRecord>): OrgPrincipalRecord {
     forms: ['system'],
     projectId: null,
     projectName: null,
-    servers: [
-      { serverId: 's1', serverName: 'Alpha', state: 'present', uid: 15001, gid: 15001 },
-    ],
+    servers: [{ serverId: 's1', serverName: 'Alpha', state: 'present', uid: 15001, gid: 15001 }],
     logins: [],
-    usedBy: { tenancies: 0, bindings: 0, storages: 0, secrets: 0, logins: 0 },
+    usedBy: { tenancies: 0, bindings: 0, storages: 0, secrets: 0, logins: 0, folders: 0 },
     state: 'present',
     orphaned: true,
     canDelete: true,
@@ -116,9 +118,19 @@ describe('OrgPrincipalsTab', () => {
     render(<OrgPrincipalsTab orgId="org-1" />)
     expect(screen.getByText('Left behind')).toBeTruthy()
     expect(screen.getByText('Project Shop site')).toBeTruthy()
-    expect(screen.getByText('Belongs to the project Shop site. Remove it from that project.')).toBeTruthy()
+    expect(
+      screen.getByText('Belongs to the project Shop site. Remove it from that project.')
+    ).toBeTruthy()
     fireEvent.click(screen.getByText('Delete'))
     expect(state.mutate).toHaveBeenCalledWith('p1')
+  })
+
+  it('warns when the removal could not be queued for a server', () => {
+    state.query.data = { principals: [] }
+    state.deleteData = { ok: true, reconciled: { queuedServerIds: [], failedServerIds: ['s1'] } }
+    render(<OrgPrincipalsTab orgId="org-1" />)
+    expect(screen.getByText('Deleted, but not yet removed from every server')).toBeTruthy()
+    state.deleteData = undefined
   })
 
   it('shows a load error without the table', () => {

@@ -1,4 +1,10 @@
+import { configure } from '@testing-library/react'
 import { afterEach } from 'vitest'
+
+// `waitFor` / `findBy*` give up after 1 s by default, which a busy CI runner can
+// exceed. They return the moment the condition holds, so a long ceiling costs
+// nothing on a healthy run.
+configure({ asyncUtilTimeout: 5000 })
 
 /**
  * A test that reaches the network through the real `fetch` is testing

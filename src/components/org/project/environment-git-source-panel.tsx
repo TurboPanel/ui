@@ -2,15 +2,8 @@ import { useMemo, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { usePersistEnvironmentCompose } from '@/components/org/compose-persistence'
 import { panelStyles } from '@/components/ui/panel-styles'
-import {
-  Button,
-  ButtonRow,
-  InlineNotice,
-  SectionPanel,
-  SettingRow,
-  TextField,
-  Toggle,
-} from '@/components/ui'
+import { Button, ButtonRow, SettingRow, TextField, Toggle } from '@/components/ui'
+import { Section } from '@/components/ui/v4/section'
 import {
   patchEnvironmentSourceBinding,
   readEnvironmentSourceBindings,
@@ -21,6 +14,7 @@ import type { RepositoryRecord } from '@/lib/instance-api'
 import { useRepositories, useUpdateRepository } from '@/lib/queries/releases'
 import { repositoryLabel } from '@/lib/repository-label'
 import { colors, spacing } from '@/lib/theme'
+import { pushDeployLine } from '@/lib/v4/push-deploy'
 
 /** Plain-language origin of the branch an environment builds. */
 function branchOriginLabel(binding: EnvironmentSourceBinding): string {
@@ -34,23 +28,26 @@ function branchSummary(binding: EnvironmentSourceBinding): string {
   if (binding.branch === null) {
     return 'No branch is set, so a push cannot deploy this service. Name one below.'
   }
-  const pushes = binding.deployOnPush
-    ? 'A push to it deploys this environment.'
-    : 'Pushes do not deploy this environment; deploy it by hand.'
-  return `Builds ${binding.branch} (${branchOriginLabel(binding)}). ${pushes}`
+  return `Builds ${binding.branch} (${branchOriginLabel(binding)}).`
 }
 
 function BindingRow({
   binding,
+  environmentName,
   repository,
   canEdit,
   saving,
+  turningOn,
+  onTurnOnRepository,
   onPatch,
 }: Readonly<{
   binding: EnvironmentSourceBinding
+  environmentName: string
   repository: RepositoryRecord | undefined
   canEdit: boolean
   saving: boolean
+  turningOn: boolean
+  onTurnOnRepository: (repositoryId: string) => void
   onPatch: (patch: EnvironmentSourcePatch) => void
 }>) {
   const [draft, setDraft] = useState(
@@ -59,6 +56,15 @@ function BindingRow({
   const editable = canEdit && binding.editable
   const dirty =
     draft.trim() !== (binding.branchFrom === 'environment' ? (binding.branch ?? '') : '')
+  const push = pushDeployLine({
+    environment: environmentName,
+    branch: binding.branch,
+    deployOnPush: binding.deployOnPush,
+    autoDeploy: repository?.autoDeploy ?? null,
+  })
+  const canTurnOn =
+    (push.turnOn === 'repository' && canEdit && repository !== undefined) ||
+    (push.turnOn === 'environment' && editable)
 
   return (
     <View style={styles.binding}>
@@ -69,6 +75,25 @@ function BindingRow({
         ) : null}
       </Text>
       <Text style={panelStyles.muted}>{branchSummary(binding)}</Text>
+      <View style={styles.pushLine}>
+        <Text style={[panelStyles.muted, styles.pushText]}>{push.text}</Text>
+        {canTurnOn ? (
+          <Button
+            label="Turn on"
+            size="sm"
+            variant="secondary"
+            busy={push.turnOn === 'repository' ? turningOn : saving}
+            busyLabel="Turning on…"
+            accessibilityLabel={
+              push.turnOn === 'repository' ? "Turn on the repository's auto-deploy" : undefined
+            }
+            onPress={() => {
+              if (push.turnOn === 'repository' && repository) onTurnOnRepository(repository.id)
+              else onPatch({ deployOnPush: true })
+            }}
+          />
+        ) : null}
+      </View>
       {binding.blockedReason ? (
         <Text style={panelStyles.muted}>{binding.blockedReason}</Text>
       ) : null}
@@ -124,44 +149,6 @@ function BindingRow({
   )
 }
 
-/** Repositories whose own auto-deploy switch is off: no push deploys any environment. */
-function DisarmedRepositoryNotice({
-  repositories,
-  canEdit,
-  turnOn,
-  busy,
-}: Readonly<{
-  repositories: readonly RepositoryRecord[]
-  canEdit: boolean
-  turnOn: (repositoryId: string) => void
-  busy: boolean
-}>) {
-  if (repositories.length === 0) return null
-  return (
-    <>
-      {repositories.map((repository) => (
-        <InlineNotice
-          key={repository.id}
-          tone="warning"
-          title={`Auto-deploy is off for ${repositoryLabel(repository)}`}
-          body="Until it is on, a push deploys none of this repository's environments, whatever branch they build."
-          actions={
-            canEdit ? (
-              <Button
-                label="Turn on"
-                size="sm"
-                busy={busy}
-                busyLabel="Turning on…"
-                onPress={() => turnOn(repository.id)}
-              />
-            ) : undefined
-          }
-        />
-      ))}
-    </>
-  )
-}
-
 /**
  * Which branch of each connected repository this environment builds, and
  * whether a push to it deploys.
@@ -169,18 +156,21 @@ function DisarmedRepositoryNotice({
  * The branch is the environment's own — saved as a small override in its
  * compose document on top of the project's — so one project can build `main` in
  * production and `staging` in staging. The repository's auto-deploy switch is
- * still the one that arms the webhook for every environment, so it is surfaced
- * here when it is off rather than left for the operator to discover.
+ * still the one that arms the webhook for every environment, so each service's
+ * push sentence names it and offers Turn on when it is off.
  */
 export function EnvironmentGitSourcePanel({
   orgId,
   environmentId,
+  environmentName,
   projectCompose,
   environmentCompose,
   canEdit,
 }: Readonly<{
   orgId: string
   environmentId: string
+  /** Names the environment in the push sentence. */
+  environmentName: string
   projectCompose: unknown
   environmentCompose: unknown
   canEdit: boolean
@@ -207,10 +197,6 @@ export function EnvironmentGitSourcePanel({
   )
   if (bindings.length === 0) return null
 
-  const disarmed = repositories.filter(
-    (row) => row.autoDeploy === 'disabled' && bindings.some((b) => b.sourceId === row.id)
-  )
-
   const save = async (serviceName: string, patch: EnvironmentSourcePatch) => {
     setError(null)
     setSavingService(serviceName)
@@ -226,18 +212,7 @@ export function EnvironmentGitSourcePanel({
   }
 
   return (
-    <SectionPanel
-      title="Git branch"
-      hint="The branch of each connected repository this environment builds, and whether a push to it deploys."
-    >
-      <DisarmedRepositoryNotice
-        repositories={disarmed}
-        canEdit={canEdit}
-        busy={updateRepository.isPending}
-        turnOn={(repositoryId) => {
-          void updateRepository.run({ repositoryId, patch: { autoDeploy: 'immediate' } })
-        }}
-      />
+    <Section title="Git branch" note="What this environment builds, and whether a push deploys it">
       {updateRepository.actionError ? (
         <Text style={panelStyles.error}>{updateRepository.actionError}</Text>
       ) : null}
@@ -245,16 +220,21 @@ export function EnvironmentGitSourcePanel({
         <BindingRow
           key={binding.serviceName}
           binding={binding}
+          environmentName={environmentName}
           repository={repositories.find((row) => row.id === binding.sourceId)}
           canEdit={canEdit}
           saving={savingService === binding.serviceName}
+          turningOn={updateRepository.isPending}
+          onTurnOnRepository={(repositoryId) => {
+            void updateRepository.run({ repositoryId, patch: { autoDeploy: 'immediate' } })
+          }}
           onPatch={(patch) => {
             void save(binding.serviceName, patch)
           }}
         />
       ))}
       {error ? <Text style={panelStyles.error}>{error}</Text> : null}
-    </SectionPanel>
+    </Section>
   )
 }
 
@@ -262,6 +242,15 @@ const styles = StyleSheet.create({
   binding: {
     gap: spacing.sm,
     paddingVertical: spacing.sm,
+  },
+  pushLine: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  pushText: {
+    flexShrink: 1,
   },
   serviceName: {
     color: colors.text,

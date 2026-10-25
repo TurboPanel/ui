@@ -2,10 +2,8 @@ import { StyleSheet, View } from 'react-native'
 import Svg, { Path } from 'react-native-svg'
 import { PlatformShieldIcon } from '@/components/org/platform-badge'
 import type { ProjectRecord } from '@/lib/instance-api'
-import { SYSTEM_PROJECT_METADATA_TYPE } from '@/lib/system-inventory'
+import { projectDisplayType, type ProjectDisplayType } from '@/lib/project-navigation'
 import { colors } from '@/lib/theme'
-
-type ProjectType = NonNullable<ProjectRecord['metadata']>['type']
 
 type IconProps = Readonly<{
   size?: number
@@ -67,11 +65,11 @@ function SetupProjectGlyph({ size = 18, color }: IconProps) {
   )
 }
 
-function accessibilityLabelForType(type: ProjectType | undefined): string {
+function accessibilityLabelForType(type: ProjectDisplayType): string {
   if (type === 'managed') return 'Managed project'
   if (type === 'template') return 'Template project'
-  if (type === 'docker-compose') return 'Compose project'
-  if (type === SYSTEM_PROJECT_METADATA_TYPE) return 'Platform project'
+  if (type === 'compose') return 'Compose project'
+  if (type === 'system') return 'Platform project'
   return 'Project setup'
 }
 
@@ -80,17 +78,17 @@ function ProjectTypeGlyph({
   size,
   color,
 }: Readonly<{
-  type: ProjectType | undefined
+  type: ProjectDisplayType
   size: number
   color: string
 }>) {
   if (type === 'managed') {
     return <ManagedProjectGlyph size={size} color={color} />
   }
-  if (type === 'docker-compose' || type === 'template') {
+  if (type === 'compose' || type === 'template') {
     return <ComposeProjectGlyph size={size} color={color} />
   }
-  if (type === SYSTEM_PROJECT_METADATA_TYPE) {
+  if (type === 'system') {
     return <PlatformShieldIcon size={size} color={color} />
   }
   return <SetupProjectGlyph size={size} color={color} />
@@ -109,7 +107,7 @@ export function ProjectTitleIcon({
   /** Slightly smaller glyph for breadcrumb title rows. */
   compact?: boolean
 }>) {
-  const type = project.metadata?.type
+  const type = projectDisplayType(project)
   const label = accessibilityLabelForType(type)
   const glyphSize = compact ? 18 : 22
 

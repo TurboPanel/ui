@@ -106,7 +106,7 @@ describe('cancel deploy errors', () => {
 
 describe('Let’s Encrypt refusals', () => {
   it.each([
-    ['lets_encrypt_not_enabled', 'has not turned on'],
+    ['lets_encrypt_not_enabled', 'turned off for this organization'],
     ['acme_requires_public_bind', 'reachable from the internet'],
     ['hosting_not_http', 'web domains'],
     ['hosting_has_no_hostnames', 'Add a domain name'],
@@ -152,8 +152,8 @@ describe('licenseTierUserErrorMessage', () => {
       new Error('HTTP 404: server_not_licensed'),
       'HTTP 404: server_not_licensed',
     ] as const
-    expect(licenseTierUserErrorMessage(cases[0], 'x')).toContain('below what this server needs')
-    expect(licenseTierUserErrorMessage(cases[1], 'x')).toContain('below what this server needs')
+    expect(licenseTierUserErrorMessage(cases[0], 'x')).toContain('fewer CPU cores or less RAM')
+    expect(licenseTierUserErrorMessage(cases[1], 'x')).toContain('fewer CPU cores or less RAM')
     expect(licenseTierUserErrorMessage(cases[2], 'x')).toContain('organization owners')
     expect(licenseTierUserErrorMessage(cases[3], 'x')).toContain('organization owners')
     expect(licenseTierUserErrorMessage(cases[4], 'x')).toContain('active license')

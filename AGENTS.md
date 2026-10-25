@@ -85,7 +85,7 @@ How changes ship: squash-merge into `trunk`, then two bot-opened pull requests (
 
 ## Agent skills
 
-Canonical skill footprint is **only** under `.agents/skills/` (pinned in `skills-lock.json`). Do not add packs under `.cursor/skills/`.
+Canonical skill footprint is **only** under `.agents/skills/` (pinned in `skills-lock.json`).
 
 | Skill | Why retained |
 | --- | --- |
@@ -134,6 +134,8 @@ vagrant ssh -c 'export PATH="/opt/turbopanel/vendor/node/current/bin:$PATH"; cd 
 # CI-parity (vocabulary + notices + typecheck + LCOV; skips `pnpm lint` because it autofixes):
 vagrant ssh -c 'export PATH="/opt/turbopanel/vendor/node/current/bin:$PATH"; cd ~/ui && pnpm verify:ci'
 ```
+
+**No flaky tests:** a test must give the same result on every run. Do not use unseeded randomness (`crypto.randomUUID`, `Math.random`, random bytes) as input where an assertion or a fake keys on the content, prefix, order or collision of the value (a random hex string can contain any short letter run, and a base64 one can contain `+` or `/`); use a fixed value, or a seeded one. Do not rely on tight real-time margins (a `setTimeout` of a few ms, an elapsed-time `>=`): wait for the condition with a polling helper and a generous ceiling, or inject a clock. Do not make wall-clock expectations without a fixed clock (`Date.now()`, `new Date()`, midnight, month and DST edges). Do not depend on test order or on state shared between tests.
 
 **CI:** `.github/workflows/verify.yml` runs lint, `check:vocabulary`, `notices:check`, typecheck, `pnpm test:coverage`,
 then a SonarCloud scan with `sonar.qualitygate.wait=true` (`SONAR_TOKEN` required).
@@ -214,7 +216,6 @@ Skip the skill for pure non-visual work (API wiring with no UI change, types-onl
 | --- | --- |
 | Skill (read first) | [`.agents/skills/ui-ux-pro-max/SKILL.md`](.agents/skills/ui-ux-pro-max/SKILL.md) |
 | Search CLI | `.agents/skills/ui-ux-pro-max/scripts/search.py` |
-| Cursor rule | [`.cursor/rules/ui-ux-pro-max.mdc`](.cursor/rules/ui-ux-pro-max.mdc) |
 | Master (global SoT) | [`design-system/turbopanel/MASTER.md`](design-system/turbopanel/MASTER.md) |
 | Page overrides | `design-system/turbopanel/pages/<page>.md` (page **wins** over Master) |
 | Runtime tokens | `src/lib/theme.ts` over `src/lib/theme-palettes.ts` — no one-off hex in components |
@@ -250,14 +251,17 @@ these instead of a local `StyleSheet`:
 
 | Need | Use |
 | --- | --- |
-| On/off setting | `Toggle` + `SettingRow` — never React Native `Switch` (it renders as three unrelated controls across the platforms) |
-| Panel / card | `SectionPanel` (`collapsible`, `accent`, `headerRight`) |
+| On/off setting | `Toggle` + `SettingRow` — the one switch: track and knob plus the state word ("On" / "Off", or the caller's), 44 pt tall on touch. Never React Native `Switch` (it renders as three unrelated controls across the platforms) |
+| Panel / card | `Section` from `ui/v4` (`note`, `action`, `collapsible`): the section heading over one card. Project screens use it; the older `SectionPanel` (glass header, accent stripe) remains on server, org and admin screens until they move |
 | Dense table | `DataTable` + `DataTableRow` / `DataTableCell` / `DataTableEmpty` — owns horizontal scroll, the web-only sticky header, hover, zebra, selection |
 | Blocking dialog | `ModalSheet` — centred dialog on desktop, bottom sheet on compact, backdrop dismiss, Android back |
 | Status indicator | `StatusDot` (`online` / `pending` / `offline` / `failed` / `neutral`); `ConnectionStatusDot` when a server's live pulse is wanted |
-| Buttons | `Button`, `ButtonRow`, `ConfirmButton`, `CopyButton` |
+| Buttons | `Button` (40 / 32 with a mouse, 44 at every size on a phone or coarse pointer), `ButtonRow`, `ConfirmButton`, `CopyButton` |
+| Text link | `TextLink` — link-blue words, as tall as the text with a mouse and a 44 x 44 pt tap area on touch, keyboard focus ring; `expanded` turns it into a show / hide disclosure. Never a bare `Pressable` + `Text` |
 | Inputs | `TextField`, `FormField`, `Checkbox`, `Select`, `SegmentedControl` |
 | States | `EmptyState`, `LoadingState`, `InlineNotice`, `Badge`, `StatTiles`, `WizardSteps` |
+
+**State on the web needs `aria-*`.** React Native Web 0.21 ignores `accessibilityState`, so a switch, checkbox or disclosure that only sets it reaches a browser screen reader with no checked or expanded state. Pass the `aria-checked` / `aria-expanded` / `aria-disabled` form too (React Native maps it on the phone). The `rn-stub.tsx` stand-ins translate `accessibilityState` for you, so they cannot catch this: `switch-state.web.test.tsx` renders through the real React Native Web.
 
 **Adding a widget:** if a second screen needs it, it belongs in
 `src/components/ui/` and the barrel — not copied. If only one screen will ever
@@ -345,7 +349,7 @@ Two palettes (v4 "Navy & Tee"): **Navy** (dark) and **Paper** (light), defined o
 
 ### Console surfaces and shared patterns (web)
 
-Plans and roadmaps live outside the repo. The console overhaul roadmap is the [TurboPanel UI Roadmap](https://claude.ai/artifact/7w9zHNNQeNXaFUJa9YDxH4) artifact.
+Plans and roadmaps live outside the repo, in the Master Sheet.
 
 **Compose parity (docker-compose projects):** service settings panel, variable deploy flags (`isLiteral` / build / runtime), hosting proxy toggles, optional health-check policy (`disabled` default — compose/`image` HEALTHCHECK is enough when present; `warn`/`required` are opt-in gates), storage registry UI, project principals, org/server resource limits API — see `design-system/turbopanel/pages/service-settings.md`.
 
@@ -497,12 +501,21 @@ and "no transcript retained" stay distinguishable.
   `LogTranscriptLine[]`; plain-text lines (the store's truncation marker, legacy
   output) degrade to `stdout` rows instead of being dropped. ANSI is **stripped**,
   never interpreted.
-- Rendering is one shared component,
-  `src/components/org/logs/log-transcript-view.tsx` — used by the Overview deploy
-  transcript, the deployment-history rows, the managed **Apply transcript**, the
-  managed **Engine logs** tail, and the per-container live tail on the
-  environment containers panel. Do not fork it per surface; see
-  `design-system/turbopanel/pages/deploy-logs.md`. The viewer is a fixed-height
+- A deploy's log lives on its own page under Deployments
+  (`deployments/[deploymentId].tsx` → `src/components/logs/deployment-log-screen.tsx`),
+  rendered by `LogViewer` (`src/components/logs/log-viewer.tsx`): steps from
+  each line's `phase`, step states from the plan (`CommandProgress`), closed by
+  default with the failed (or first) step open, search across steps, Live.
+  Its model is pure in `src/lib/log-viewer.ts`. History rows and the Overview
+  progress card's **Open full log** link there.
+  A service page (Services › service) has a **Runtime log** section with the
+  same viewer, ungrouped, over `useContainerLogTail` (last 200 lines, never
+  stored, Live off until switched on, off when the app goes to the background).
+- The older flat viewer, `src/components/org/logs/log-transcript-view.tsx`, still
+  renders the Overview progress card's output, the managed **Apply
+  transcript**, the managed **Engine logs** tail, and the per-container live
+  tail on the environment containers panel. Do not fork either per surface; see
+  `design-system/turbopanel/pages/deploy-logs.md`. Both are a fixed-height
   nested scroll with a visible scrollbar; **Deployment history** caps its row
   list the same way (`environment-deployment-history-panel.tsx`).
 

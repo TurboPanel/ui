@@ -76,7 +76,7 @@ describe.each(SCENARIOS)('EnvironmentConfigurationView ($name)', (scenario) => {
   it('lists the sections in order with a source tag on every row', () => {
     renderView()
     const headings = screen.getAllByRole('heading').map((node) => node.textContent)
-    expect(headings).toEqual(['Apps', 'Hosting', 'Variables', 'Hosting Accounts', 'Data'])
+    expect(headings).toEqual(['Services', 'Hosting', 'Variables', 'Hosting Accounts', 'Data'])
     expect(
       screen.getByText(/^Staging uses the Base for anything it does not set itself\./)
     ).toBeTruthy()
@@ -134,13 +134,13 @@ describe.each(SCENARIOS)('EnvironmentConfigurationView ($name)', (scenario) => {
     expect(filter.getAttribute('aria-checked')).toBe('false')
     fireEvent.click(filter)
     expect(screen.getByRole('switch').getAttribute('aria-checked')).toBe('true')
-    expect(screen.queryByText('Apps')).toBeNull()
+    expect(screen.queryByText('Services')).toBeNull()
     const row = screen.getByLabelText('Start command: npm start to npm run staging')
     expect(within(row).getByText('Staging change')).toBeTruthy()
     expect(within(row).getByText('App web')).toBeTruthy()
     expect(screen.getByLabelText('worker: Not set to node')).toBeTruthy()
     fireEvent.click(screen.getByRole('switch'))
-    expect(screen.getByText('Apps')).toBeTruthy()
+    expect(screen.getByText('Services')).toBeTruthy()
   })
 
   it('says there are no changes and offers Show everything', () => {
@@ -149,7 +149,7 @@ describe.each(SCENARIOS)('EnvironmentConfigurationView ($name)', (scenario) => {
     expect(screen.getByText('No changes from the Base')).toBeTruthy()
     expect(screen.getByText('Staging runs exactly what the Base says.')).toBeTruthy()
     fireEvent.click(screen.getByLabelText('Show everything'))
-    expect(screen.getByText('Apps')).toBeTruthy()
+    expect(screen.getByText('Services')).toBeTruthy()
   })
 
   it('shows the first five rows and then all of them', () => {
@@ -172,7 +172,7 @@ describe.each(SCENARIOS)('EnvironmentConfigurationView ($name)', (scenario) => {
     renderView({ model: buildConfigViewModel({ envName: 'Staging', view }) })
     expect(screen.getByText('No hostnames yet')).toBeTruthy()
     expect(screen.getByText('No variables')).toBeTruthy()
-    expect(screen.queryByText('Apps')).toBeNull()
+    expect(screen.queryByText('Services')).toBeNull()
     expect(screen.queryByText('Hosting Accounts')).toBeNull()
     expect(screen.queryByText('Data')).toBeNull()
   })
@@ -231,7 +231,7 @@ describe('EnvironmentConfigurationScreen', () => {
     cleanup()
     state.query = { isPending: false, error: null, data: stagingView(), refetch: vi.fn() }
     render(<EnvironmentConfigurationScreen />)
-    expect(screen.getByText('Apps')).toBeTruthy()
+    expect(screen.getByText('Services')).toBeTruthy()
   })
 
   it('says it could not load and offers Try again', () => {
@@ -253,7 +253,7 @@ describe('EnvironmentConfigurationScreen', () => {
   it('opens the service page, the domain manager and external domains', () => {
     render(<EnvironmentConfigurationScreen />)
     fireEvent.click(screen.getByLabelText(/^web, Node.js app/))
-    expect(state.push).toHaveBeenLastCalledWith('/o/projects/p/services/id-web')
+    expect(state.push).toHaveBeenLastCalledWith('/o/projects/p/environments/e/services/id-web')
     fireEvent.click(screen.getByLabelText('Add or change hostnames'))
     expect(state.push).toHaveBeenLastCalledWith(
       '/o/projects/p/environments/e/configuration/hosting'
@@ -339,6 +339,6 @@ describe('EnvironmentConfigurationScreen', () => {
     render(<EnvironmentConfigurationScreen />)
     fireEvent.click(screen.getByLabelText('Open shop.example.com in a new tab'))
     await Promise.resolve()
-    expect(screen.getByText('Apps')).toBeTruthy()
+    expect(screen.getByText('Services')).toBeTruthy()
   })
 })

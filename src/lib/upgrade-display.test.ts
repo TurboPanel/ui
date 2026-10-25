@@ -2,13 +2,16 @@ import { describe, expect, it } from 'vitest'
 import {
   fleetComponentLabel,
   fleetStatusBadge,
+  fleetProgressText,
   formatUpgradeBuildDisplayName,
   installedBuildLabel,
   mapStepStatusToPipeline,
+  offlineWaitingNotice,
   pieceIdentityLines,
   stepInFlight,
   platformUpgradeHeadlineCopy,
   resolvePlatformUpgradeHeadline,
+  runWaitsOnlyOnOffline,
   stepHasStarted,
   summarizeFleetSteps,
   updateAvailabilityBadge,
@@ -18,7 +21,9 @@ import {
   upgradeChannelTitle,
   upgradePhaseLabel,
   upgradeRunErrorLabel,
+  upgradeServerLabel,
   upgradeStepLabel,
+  upgradeStepNote,
   upgradeStepErrorLabel,
   upgradeStepOutcome,
 } from '@/lib/upgrade-display'
@@ -72,7 +77,25 @@ describe('summarizeFleetSteps', () => {
       total: 3,
       needsAttention: 1,
       inProgress: 0,
+      skippedOffline: 0,
+      skippedOther: 0,
     })
+  })
+
+  it('counts skipped servers separately, never as up to date', () => {
+    const summary = summarizeFleetSteps([
+      { phase: 'fleet', status: 'done' },
+      { phase: 'fleet', status: 'done' },
+      { phase: 'fleet', status: 'skipped', errorCode: 'server_offline' },
+      { phase: 'fleet', status: 'skipped' },
+    ])
+    expect(summary).toMatchObject({ upToDate: 2, total: 4, skippedOffline: 1, skippedOther: 1 })
+    expect(fleetProgressText(summary, 'servers')).toBe(
+      '2 of 4 servers up to date, 1 skipped (offline), 1 skipped'
+    )
+    expect(fleetProgressText({ ...summary, skippedOffline: 0, skippedOther: 0 }, 'servers')).toBe(
+      '2 of 4 servers up to date'
+    )
   })
 })
 
@@ -167,6 +190,24 @@ describe('upgradeStepOutcome', () => {
       tone: 'pending',
       label: 'Needs attention',
       detail: 'Server offline for over an hour',
+    })
+    expect(upgradeStepOutcome({ status: 'skipped', errorCode: 'server_offline' })).toEqual({
+      tone: 'muted',
+      label: 'Skipped: offline',
+      detail: 'It was offline when the update started. It updates on its own when it reconnects.',
+    })
+  })
+
+  it('shows the panel message for a skipped offline step, else the fixed text', () => {
+    const own =
+      'It stayed offline for 15 minutes during the update. It updates on its own when it reconnects.'
+    expect(
+      upgradeStepOutcome({ status: 'skipped', errorCode: 'server_offline', errorMessage: own })
+    ).toMatchObject({ label: 'Skipped: offline', detail: own })
+    expect(
+      upgradeStepOutcome({ status: 'skipped', errorCode: 'server_offline', errorMessage: ' ' })
+    ).toMatchObject({
+      detail: 'It was offline when the update started. It updates on its own when it reconnects.',
     })
   })
 
@@ -400,6 +441,95 @@ describe('fleetStatusBadge', () => {
       tone: 'pending',
       label: 'Needs attention',
     })
+    expect(fleetStatusBadge('skipped')).toEqual({ tone: 'muted', label: 'Skipped' })
+    expect(fleetStatusBadge('skipped', 'server_offline')).toEqual({
+      tone: 'muted',
+      label: 'Skipped: offline',
+    })
+  })
+})
+
+describe('offlineWaitingNotice', () => {
+  it('says offline only for steps the panel reports as not connected', () => {
+    expect(
+      offlineWaitingNotice([
+        { status: 'done', connected: true },
+        { status: 'waiting', connected: false, attempts: 0 },
+        { status: 'waiting', connected: false, attempts: 0 },
+      ])
+    ).toBe(
+      '2 servers are offline, so this update is waiting for them. They are skipped if they stay offline, and they update on their own when they reconnect.'
+    )
+    expect(offlineWaitingNotice([{ status: 'waiting', connected: false, attempts: 0 }])).toBe(
+      '1 server is offline, so this update is waiting for it. It is skipped if it stays offline, and it updates on its own when it reconnects.'
+    )
+  })
+
+  it('makes no offline claim when connected is missing, in flight, or nothing waits', () => {
+    expect(offlineWaitingNotice([{ status: 'done' }, { status: 'waiting' }])).toBeNull()
+    expect(offlineWaitingNotice([{ status: 'waiting', phase: 'fleet' }])).toBeNull()
+    expect(
+      offlineWaitingNotice([
+        { status: 'waiting', connected: false, attempts: 0 },
+        { status: 'installing', connected: true },
+      ])
+    ).toBeNull()
+    expect(offlineWaitingNotice([{ status: 'done' }])).toBeNull()
+    expect(offlineWaitingNotice([])).toBeNull()
+  })
+})
+
+describe('runWaitsOnlyOnOffline', () => {
+  it('is true when leftover fleet steps are on servers reported not connected', () => {
+    expect(
+      runWaitsOnlyOnOffline({
+        steps: [
+          { status: 'done', phase: 'fleet', connected: true },
+          { status: 'waiting', phase: 'fleet', connected: false, attempts: 0 },
+          { status: 'waiting', phase: 'fleet', connected: false, attempts: 0 },
+        ],
+      })
+    ).toBe(true)
+  })
+
+  it('stays blocked for in-flight, connected, platform-phase or unknown steps', () => {
+    expect(
+      runWaitsOnlyOnOffline({
+        steps: [
+          { status: 'waiting', connected: false, attempts: 0 },
+          { status: 'installing', connected: true },
+        ],
+      })
+    ).toBe(false)
+    expect(runWaitsOnlyOnOffline({ steps: [{ status: 'pending', connected: true }] })).toBe(false)
+    expect(
+      runWaitsOnlyOnOffline({
+        steps: [{ status: 'waiting', phase: 'colocated_daemon', connected: false, attempts: 0 }],
+      })
+    ).toBe(false)
+    expect(runWaitsOnlyOnOffline({ steps: [] })).toBe(false)
+    expect(runWaitsOnlyOnOffline(null)).toBe(false)
+  })
+
+  it('blocks a pending step, a step already tried, and a panel that omits attempts', () => {
+    expect(
+      runWaitsOnlyOnOffline({ steps: [{ status: 'pending', connected: false, attempts: 0 }] })
+    ).toBe(false)
+    expect(
+      runWaitsOnlyOnOffline({ steps: [{ status: 'waiting', connected: false, attempts: 1 }] })
+    ).toBe(false)
+    expect(runWaitsOnlyOnOffline({ steps: [{ status: 'waiting', connected: false }] })).toBe(false)
+    expect(offlineWaitingNotice([{ status: 'waiting', connected: false }])).toBeNull()
+    expect(offlineWaitingNotice([{ status: 'waiting', connected: false, attempts: 1 }])).toBeNull()
+  })
+
+  it('treats an older panel that omits connected or phase as unknown and stays blocked', () => {
+    expect(runWaitsOnlyOnOffline({ steps: [{ status: 'waiting' }] })).toBe(false)
+    expect(runWaitsOnlyOnOffline({ steps: [{ status: 'pending' }] })).toBe(false)
+    expect(runWaitsOnlyOnOffline({ steps: [{ status: 'waiting', phase: 'fleet' }] })).toBe(false)
+    expect(
+      runWaitsOnlyOnOffline({ steps: [{ status: 'waiting', connected: false, attempts: 0 }] })
+    ).toBe(true)
   })
 })
 
@@ -509,5 +639,55 @@ describe('fleetComponentLabel', () => {
   })
   it('names the control plane for an instance row', () => {
     expect(fleetComponentLabel({ unit: 'instance' })).toBe('Control plane')
+  })
+})
+
+describe('runWaitsOnlyOnOffline platform phases', () => {
+  it('does not treat a waiting platform-phase step as skippable', () => {
+    expect(
+      runWaitsOnlyOnOffline({
+        steps: [{ status: 'waiting', phase: 'colocated_daemon', connected: false, attempts: 0 }],
+      })
+    ).toBe(false)
+    expect(
+      runWaitsOnlyOnOffline({
+        steps: [{ status: 'waiting', phase: 'fleet', connected: false, attempts: 0 }],
+      })
+    ).toBe(true)
+  })
+})
+
+describe('upgradeServerLabel', () => {
+  const serverId = '01a163c1-aaaa-7bbb-8ccc-0123456789ab'
+
+  it('puts the name first and keeps the short id as secondary text', () => {
+    expect(upgradeServerLabel({ serverId, serverName: ' w ', hostname: 'w.lan' })).toEqual({
+      primary: 'w',
+      shortId: '01a163c1',
+    })
+  })
+
+  it('falls back to the hostname when the server has no name', () => {
+    expect(upgradeServerLabel({ serverId, serverName: null, hostname: 'w.lan' })).toEqual({
+      primary: 'w.lan',
+      shortId: '01a163c1',
+    })
+  })
+
+  it('shows only the id fragment, once, when nothing names the server', () => {
+    expect(upgradeServerLabel({ serverId })).toEqual({ primary: '01a163c1', shortId: null })
+    expect(upgradeServerLabel({ serverId, serverName: '  ', hostname: '' })).toEqual({
+      primary: '01a163c1',
+      shortId: null,
+    })
+  })
+})
+
+describe('upgradeStepNote', () => {
+  it('returns the saved restart note and nothing otherwise', () => {
+    expect(upgradeStepNote({ detail: { restartNote: ' came back ' } })).toBe('came back')
+    expect(upgradeStepNote({ detail: {} })).toBeNull()
+    expect(upgradeStepNote({ detail: null })).toBeNull()
+    expect(upgradeStepNote({})).toBeNull()
   })
 })

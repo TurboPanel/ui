@@ -69,6 +69,6 @@ describe('primary environment helpers', () => {
     ].join(' ')
     expect(text).not.toMatch(/default environment|follows? (the )?base/i)
     expect(PRIMARY_DELETE_EXPLANATION).toContain('primary environment')
-    expect(BASE_EDIT_WARNING).toContain('shared defaults for all environments')
+    expect(BASE_EDIT_WARNING).toContain('reaches every environment')
   })
 })

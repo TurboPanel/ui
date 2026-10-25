@@ -9,7 +9,7 @@ import { BASE_EDIT_WARNING } from '@/lib/v4/primary-environment'
  */
 export function BaseEditNotice() {
   return (
-    <Notice tone="warn" title="Shared defaults for all environments" body={BASE_EDIT_WARNING} />
+    <Notice tone="info" title="Shared defaults for all environments" body={BASE_EDIT_WARNING} />
   )
 }
 

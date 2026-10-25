@@ -58,8 +58,8 @@ function formatSans(row: TlsRecord): string {
 }
 
 function tlsStatusLabel(row: TlsRecord): string {
-  if (row.metadata.status === 'managed') {
-    return 'Managed by Caddy on the serving host'
+  if (row.metadata.status === 'automatic') {
+    return 'Issued and renewed by the serving host'
   }
   return row.metadata.status
 }

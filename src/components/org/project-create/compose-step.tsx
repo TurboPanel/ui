@@ -21,11 +21,11 @@ const DRAFT_PROJECT_ID = 'draft'
 
 /**
  * Compose drafting step — the project's **own** screen, not a wizard-shaped
- * copy of it. Same shell, breadcrumb, width, and the full surface tab bar an
- * existing compose project shows; tabs the draft cannot open yet (Bindings /
- * Hosting need the project row and its environments) render dimmed rather
- * than dropped. The surface's Save is suppressed because there is no row to
- * patch; the footer's Create project button is the single commit.
+ * copy of it. Same shell, breadcrumb and width, with Overview, Compose and
+ * Services as tabs (Bindings and Hosting need the project row and its
+ * environments, so they appear once it exists). The surface's Save is
+ * suppressed because there is no row to patch; the footer's Create project
+ * button is the single commit.
  */
 export function ComposeStep({
   orgId,
@@ -84,7 +84,9 @@ export function ComposeStep({
       description: description.trim() || null,
       workspaceId,
       repositoryId,
-      metadata: { type: 'docker-compose' },
+      kind: 'compose',
+      icon: null,
+      metadata: null,
       options: { compose },
       // Timestamps are display-only here and nothing in the surface reads them
       // for a draft; the real values are assigned when the row is inserted.

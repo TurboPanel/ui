@@ -27,9 +27,8 @@ import {
   type PreviewDeploymentPurpose,
 } from '@/components/org/project/preview-deployment-modal'
 import { environmentStatusTone, hasHostDeployedContainers } from '@/lib/container-status'
+import { deployPreviewFailureMessage } from '@/lib/deploy-error-message'
 import {
-  DeployHealthCheckMissingError,
-  DeployResourceLimitExceededError,
   type CommandProgress,
   type CommandStatus,
   type CommandStatusRecord,
@@ -66,6 +65,7 @@ import {
 } from '@/lib/environment-menu'
 import {
   projectEnvironmentBindingsHref,
+  projectEnvironmentDeploymentHref,
   projectEnvironmentHostingHref,
   projectEnvironmentSettingsHref,
   projectOverviewHref,
@@ -538,6 +538,17 @@ function DeployLogSection({
   const log = useCommandLog(orgId, openLog.serverId, openLog.commandId, {
     enabled: !collapsed,
   })
+  const { projectId } = useProjectContext()
+  const router = useRouter()
+  const openFullLog = () =>
+    router.push(
+      projectEnvironmentDeploymentHref(
+        orgId,
+        projectId,
+        openLog.environmentId,
+        openLog.commandId
+      ) as Href
+    )
 
   return (
     <View style={styles.logSection}>
@@ -548,6 +559,12 @@ function DeployLogSection({
             : `${openLog.label} output`}
         </Text>
         <View style={styles.barSpacer} />
+        <QuietButton
+          label="Open full log"
+          accessibilityLabel="Open the full deploy log"
+          tone="primary"
+          onPress={openFullLog}
+        />
         <QuietButton
           label={collapsed ? 'Show output' : 'Hide output'}
           accessibilityLabel={collapsed ? 'Show deploy output' : 'Hide deploy output'}
@@ -627,19 +644,6 @@ function applySucceededCommandSideEffects(
   if (shouldInvalidateEnvironmentsForCommand(meta.label)) {
     invalidateEnvironments()
   }
-}
-
-function deployPreviewFailureMessage(err: unknown): string | null {
-  if (err instanceof DeployHealthCheckMissingError) {
-    if (err.required) {
-      return 'A service requires a compose healthcheck before the first start. Add healthcheck: in Compose, or set Health check policy to Disabled in service settings.'
-    }
-    return 'Health-check warnings are enabled for a service. Confirm the deploy from this environment, or set Health check policy to Disabled.'
-  }
-  if (err instanceof DeployResourceLimitExceededError) {
-    return 'This start would exceed a resource limit. Review the capacity of this environment and try again.'
-  }
-  return null
 }
 
 function patchTrackedCommandMeta(
@@ -1186,6 +1190,11 @@ export function EnvironmentLifecycleProvider({ children }: Readonly<{ children: 
   )
 }
 
+/** The page's lifecycle model, or null outside an environment page. */
+export function useOptionalEnvironmentLifecycle(): OverviewEnvironmentsPanelModel | null {
+  return useContext(EnvironmentLifecycleContext)
+}
+
 export function useEnvironmentLifecycle(): OverviewEnvironmentsPanelModel {
   const model = useContext(EnvironmentLifecycleContext)
   if (!model) {
@@ -1299,6 +1308,7 @@ export function EnvironmentGitSourceSection() {
     <EnvironmentGitSourcePanel
       orgId={orgId}
       environmentId={selectedEnvironment.id}
+      environmentName={selectedEnvironment.name?.trim() || 'this environment'}
       projectCompose={project?.options?.compose}
       environmentCompose={selectedEnvironment.options?.compose}
       canEdit={canMutateLifecycle}

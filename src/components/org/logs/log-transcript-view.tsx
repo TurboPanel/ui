@@ -115,7 +115,7 @@ function flattenTranscript(
  * Web-only save of the transcript. Native has no user-visible filesystem here,
  * so the control is not rendered at all rather than shown disabled.
  */
-function downloadTranscript(fileName: string, contents: string): void {
+export function downloadTranscript(fileName: string, contents: string): void {
   if (Platform.OS !== 'web') return
   const globalDocument = (
     globalThis as unknown as { document?: Document }
@@ -132,7 +132,7 @@ function downloadTranscript(fileName: string, contents: string): void {
   URL.revokeObjectURL(url)
 }
 
-function TranscriptPlaceholder({
+export function TranscriptPlaceholder({
   state,
 }: Readonly<{ state: CommandLogState }>) {
   if (state === 'waiting') {

@@ -1,10 +1,10 @@
 import type { ReactNode } from 'react'
 import { Text, View } from 'react-native'
-import { TextField, Toggle } from '@/components/ui'
+import { TextField, TextLink, Toggle } from '@/components/ui'
 import { ActionButton, ListGroup, ListRow, SectionHeading } from '@/components/ui/v4'
 import { themedStyles, usePalette } from '@/components/ui/v4/use-palette'
 import { typeStyle } from '@/components/ui/v4/type-styles'
-import type { ProjectGitFacts } from '@/lib/v4/project-settings'
+import type { ProjectGitFacts, ProjectPushDeployRow } from '@/lib/v4/project-settings'
 
 const styles = themedStyles((p) => ({
   page: { gap: 32, width: '100%' },
@@ -43,15 +43,27 @@ export type ProjectSettingsViewProps = Readonly<{
   canMove: boolean
   moving: boolean
   onMove: (workspaceId: string) => void
-  /** Project variables (they apply to every environment). Rendered by the caller. */
-  variables: ReactNode
+  /** Opens the Base tab, where the project variables are edited. */
+  onOpenBase: () => void
   keepOriginalNames: boolean
   savingNames: boolean
   onKeepOriginalNames: (next: boolean) => void
   /** Present only when the project is a Git repository. */
   git: ProjectGitFacts | null
+  /** Whether a push deploys each environment; empty falls back to the repository's own setting. */
+  pushDeploy: readonly ProjectPushDeployRow[]
+  /** Turns the repository's auto-deploy on; null when the person may not. */
+  onTurnOnAutoDeploy: (() => void) | null
+  turningOnAutoDeploy: boolean
+  onOpenEnvironmentSettings: (environmentId: string) => void
   onOpenRepositories: () => void
   onOpenBaseCompose: () => void
+  /**
+   * A managed database: TurboPanel keeps its Compose files, names and
+   * variables, so those sections give way to one row that opens the
+   * database's own settings (on its environment's Settings tab).
+   */
+  managed?: Readonly<{ onOpenDatabaseSettings: (() => void) | null }>
   /** The delete panel; present only for the organization owner. */
   danger: ReactNode | null
   dangerOpen: boolean
@@ -211,9 +223,36 @@ function DangerSection({
   )
 }
 
+/** Turn on for the repository's switch; a link to the environment's Settings for its own. */
+function pushDeployAction(row: ProjectPushDeployRow, props: ProjectSettingsViewProps): ReactNode {
+  if (row.line.turnOn === 'repository' && props.onTurnOnAutoDeploy) {
+    return (
+      <ActionButton
+        label="Turn on"
+        variant="secondary"
+        size="sm"
+        busy={props.turningOnAutoDeploy}
+        onPress={props.onTurnOnAutoDeploy}
+        accessibilityLabel="Turn on the repository's auto-deploy"
+      />
+    )
+  }
+  if (row.line.turnOn === 'environment') {
+    return (
+      <TextLink
+        label="Change"
+        size="sm"
+        onPress={() => props.onOpenEnvironmentSettings(row.environmentId)}
+        accessibilityLabel="Change it in the environment's settings"
+      />
+    )
+  }
+  return null
+}
+
 /**
- * Project Settings, drawn from what the API serves: General, project
- * variables, Git, the Base as a Compose file, and the danger zone.
+ * Project Settings, drawn from what the API serves: General, a link to the
+ * project variables on the Base, Git, the Base as a Compose file, and the danger zone.
  * Webhook deliveries, project alerts, members and deploy timing are not
  * served, so they are not drawn.
  */
@@ -228,9 +267,45 @@ export function ProjectSettingsView(props: ProjectSettingsViewProps) {
         moving={props.moving}
         onMove={props.onMove}
       />
-      <View style={s.section}>
+      {props.managed ? (
+        <View>
+          <SectionHeading title="Database" />
+          <ListGroup foot="Managed by TurboPanel: its Compose file, container names and variables.">
+            <ListRow
+              title="Engine, resources and backups"
+              sub="Set on the environment's Settings tab."
+              onPress={props.managed.onOpenDatabaseSettings ?? undefined}
+            />
+          </ListGroup>
+        </View>
+      ) : (
+        <WebsiteProjectSections {...props} />
+      )}
+      {props.danger ? (
+        <DangerSection
+          panel={props.danger}
+          open={props.dangerOpen}
+          onToggle={props.onToggleDanger}
+        />
+      ) : null}
+    </View>
+  )
+}
+
+/** Variables, container names, Git and the Compose files: a website project's own. */
+function WebsiteProjectSections(props: ProjectSettingsViewProps) {
+  return (
+    <>
+      <View>
         <SectionHeading title="Variables" note="Apply to every environment" />
-        {props.variables}
+        <ListGroup>
+          <ListRow
+            title="Project variables"
+            sub="Added and changed on the Base tab."
+            onPress={props.onOpenBase}
+            accessibilityLabel="Project variables: open the Base tab"
+          />
+        </ListGroup>
       </View>
       <ContainerNamesSection
         keepOriginal={props.keepOriginalNames}
@@ -247,7 +322,17 @@ export function ProjectSettingsView(props: ProjectSettingsViewProps) {
               value={props.git.repository}
               onPress={props.onOpenRepositories}
             />
-            <ListRow title="Deploys on push" value={props.git.pushTiming} />
+            {props.pushDeploy.length > 0 ? (
+              props.pushDeploy.map((row) => (
+                <ListRow
+                  key={`${row.environmentId}:${row.line.text}`}
+                  title={row.line.text}
+                  trailing={pushDeployAction(row, props)}
+                />
+              ))
+            ) : (
+              <ListRow title="Deploys on push" value={props.git.pushTiming} />
+            )}
           </ListGroup>
         </View>
       ) : null}
@@ -261,13 +346,6 @@ export function ProjectSettingsView(props: ProjectSettingsViewProps) {
           />
         </ListGroup>
       </View>
-      {props.danger ? (
-        <DangerSection
-          panel={props.danger}
-          open={props.dangerOpen}
-          onToggle={props.onToggleDanger}
-        />
-      ) : null}
-    </View>
+    </>
   )
 }

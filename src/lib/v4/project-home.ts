@@ -71,6 +71,20 @@ export function nativeDeployKey(latest: DeploymentGroup | null | undefined): Sta
 }
 
 /**
+ * A native app's "running now" from its newest deploy, in the environment
+ * header's words: a finished deploy is running, one still going is starting,
+ * anything else keeps the deploy's own word. `undefined` while the history loads.
+ */
+export function nativeRunningKey(
+  latest: DeploymentGroup | null | undefined
+): StatusKey | undefined {
+  const key = nativeDeployKey(latest)
+  if (key === 'deployed' || key === 'live' || key === 'settling') return 'running'
+  if (key === 'deploying' || key === 'building' || key === 'queued') return 'busy'
+  return key
+}
+
+/**
  * What an environment is running now, in the words of the status vocabulary.
  * Same buckets as the environment header (`environmentStatusTone`), so a card
  * and the page it opens never disagree. `undefined` while containers load.
@@ -82,7 +96,7 @@ export function runningStatusKey(
 ): StatusKey | undefined {
   if (containers === undefined) return undefined
   if (containers.length === 0 || !hasHostDeployedContainers(containers)) {
-    return native ? nativeDeployKey(native.latest) : 'never'
+    return native ? nativeRunningKey(native.latest) : 'never'
   }
   return statusOfRows(serviceContainers(containers))
 }
@@ -477,6 +491,8 @@ export function environmentCardData(
     now: number
     /** Hostnames of the environment's hosting rows (read separately from the config view). */
     hostingDomains?: readonly string[]
+    /** The hostname the environment header's Visit opens (`primarySiteHostname`); first choice for the card's. */
+    primaryHostname?: string | null
   }>
 ): EnvironmentCardData {
   const { view, containers } = input
@@ -506,7 +522,8 @@ export function environmentCardData(
     branch: view ? builtBranch(view.effective) : null,
     serverLine: input.serverLine,
     visitHost: view
-      ? (visitHost(view.effective) ??
+      ? (input.primaryHostname ??
+        visitHost(view.effective) ??
         hostingDomains.find((host) => siteUrlFromHostname(host) !== null) ??
         null)
       : null,

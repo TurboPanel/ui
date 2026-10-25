@@ -4,7 +4,14 @@ import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { showsDefaultPill } from '@/components/org/project-create/environment-name'
 import { panelStyles } from '@/components/ui/panel-styles'
 import type { FieldErrors, WorkspaceMode } from '@/components/org/project-create/validation'
-import { EmptyState, FormField, LoadingState, SegmentedControl, TextField } from '@/components/ui'
+import {
+  EmptyState,
+  FormField,
+  LoadingState,
+  SegmentedControl,
+  TextField,
+  TextLink,
+} from '@/components/ui'
 import { DESCRIPTION_MAX_LENGTH, DISPLAY_NAME_MAX_LENGTH } from '@/lib/display-name'
 import type { WorkspaceRecord } from '@/lib/instance-api'
 import { chrome, colors, spacing, webPointer } from '@/lib/theme'
@@ -209,13 +216,14 @@ export function EnvironmentNameField({
   )
 }
 
-/** Wizard step 1: name, description, and the workspace the project lands in. */
+/**
+ * Top of the new-project screen: the name, the workspace it lands in
+ * (prefilled when there is one to pick), and an optional description behind
+ * a link. The first environment is named later, on "Set up production".
+ */
 export function DetailsStep({
-  orgId,
   displayName,
   description,
-  environmentName,
-  defaultEnvironmentName,
   workspaceMode,
   workspaces,
   loadingWorkspaces,
@@ -224,17 +232,12 @@ export function DetailsStep({
   fieldErrors,
   onDisplayNameChange,
   onDescriptionChange,
-  onEnvironmentNameChange,
   onWorkspaceModeChange,
   onPickedWorkspaceIdChange,
   onNewWorkspaceNameChange,
 }: Readonly<{
-  orgId: string
   displayName: string
   description: string
-  environmentName: string
-  /** The org's real default, or null while unknown (loading, unreadable, none). */
-  defaultEnvironmentName: string | null
   workspaceMode: WorkspaceMode
   workspaces: WorkspaceRecord[]
   loadingWorkspaces: boolean
@@ -243,15 +246,19 @@ export function DetailsStep({
   fieldErrors: FieldErrors
   onDisplayNameChange: (value: string) => void
   onDescriptionChange: (value: string) => void
-  onEnvironmentNameChange: (value: string) => void
   onWorkspaceModeChange: (mode: WorkspaceMode) => void
   onPickedWorkspaceIdChange: (id: string) => void
   onNewWorkspaceNameChange: (name: string) => void
 }>) {
+  // Open from the start when there is something to show (an error, or text kept from before).
+  const [descriptionOpen, setDescriptionOpen] = useState(
+    () => description.length > 0 || fieldErrors.description !== undefined
+  )
+  const showDescription = descriptionOpen || fieldErrors.description !== undefined
   return (
     <>
       <TextField
-        label="Name"
+        label="Project name"
         value={displayName}
         onChangeText={onDisplayNameChange}
         placeholder="My project"
@@ -262,27 +269,29 @@ export function DetailsStep({
         error={fieldErrors.name}
       />
 
-      <TextField
-        label="Description"
-        value={description}
-        onChangeText={onDescriptionChange}
-        placeholder="Optional"
-        accessibilityLabel="Project description"
-        maxLength={DESCRIPTION_MAX_LENGTH}
-        multiline
-        numberOfLines={2}
-        textAlignVertical="top"
-        style={styles.descriptionInput}
-        error={fieldErrors.description}
-      />
-
-      <EnvironmentNameField
-        orgId={orgId}
-        value={environmentName}
-        defaultName={defaultEnvironmentName}
-        onChange={onEnvironmentNameChange}
-        error={fieldErrors.environmentName}
-      />
+      {showDescription ? (
+        <TextField
+          label="Description"
+          value={description}
+          onChangeText={onDescriptionChange}
+          placeholder="Optional"
+          accessibilityLabel="Project description"
+          maxLength={DESCRIPTION_MAX_LENGTH}
+          multiline
+          numberOfLines={2}
+          textAlignVertical="top"
+          style={styles.descriptionInput}
+          error={fieldErrors.description}
+        />
+      ) : (
+        <TextLink
+          label="Add a description"
+          size="sm"
+          onPress={() => {
+            setDescriptionOpen(true)
+          }}
+        />
+      )}
 
       <ProjectWorkspaceFields
         workspaceMode={workspaceMode}

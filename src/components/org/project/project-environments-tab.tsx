@@ -4,7 +4,16 @@ import { Text, View } from 'react-native'
 import { EnvironmentLayerCard } from '@/components/org/project/environment-layer-card'
 import { NewEnvironmentSheet } from '@/components/org/project/new-environment-sheet'
 import { useProjectContext } from '@/components/org/project/project-context'
-import type { EnvironmentConfigViewResponse } from '@/lib/instance-api'
+import {
+  environmentSiteHostnames,
+  primarySiteHostname,
+  readPrimaryHostnameOption,
+} from '@/lib/environment-status'
+import type {
+  EnvironmentConfigViewResponse,
+  EnvironmentRecord,
+  HostingRecord,
+} from '@/lib/instance-api'
 import { useNow } from '@/components/org/project/use-now'
 import { ActionButton } from '@/components/ui/v4/action-button'
 import { EmptyPanel } from '@/components/ui/v4/empty-panel'
@@ -64,6 +73,21 @@ function hostingDomainsOf(
     for (const row of rows) if (row.name) names.push(row.name)
   }
   return names
+}
+
+/** The hostname Visit opens in the environment header, so the card and the header agree. */
+function primaryHostnameOf(
+  env: Pick<EnvironmentRecord, 'options'>,
+  view: EnvironmentConfigViewResponse | undefined,
+  hostingsByService: Readonly<Record<string, readonly HostingRecord[]>>
+): string | null {
+  const serviceIds = (view?.effective.services ?? []).flatMap((service) =>
+    service.serviceId ? [service.serviceId] : []
+  )
+  return primarySiteHostname(
+    environmentSiteHostnames(hostingsByService, serviceIds),
+    readPrimaryHostnameOption(env.options)
+  )
 }
 
 function NewEnvironmentButton({ onPress }: Readonly<{ onPress: () => void }>) {
@@ -210,6 +234,7 @@ export function ProjectEnvironmentsTab() {
           serverLine: serverLine(env.serverId, defaultServerId, servers),
           now,
           hostingDomains: hostingDomainsOf(views[env.id], hostingsByService),
+          primaryHostname: primaryHostnameOf(env, views[env.id], hostingsByService),
         }) satisfies EnvironmentCardData,
       })),
     [
@@ -246,9 +271,6 @@ export function ProjectEnvironmentsTab() {
   const openBase = () => router.push(projectBaseHref(orgId, projectId) as Href)
   const headerActions = (
     <View style={s.actions}>
-      {prominentBase ? (
-        <ActionButton label="Open the Base" variant="secondary" size="sm" onPress={openBase} />
-      ) : null}
       {canAdd ? <NewEnvironmentButton onPress={() => setAdding(true)} /> : null}
     </View>
   )

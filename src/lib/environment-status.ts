@@ -34,19 +34,83 @@ export function siteUrlFromHostname(
   return `https://${trimmed}`
 }
 
-/** The first hostname any of these hosting rows names, in service order. */
-export function firstSiteHostname(
-  rowsByService: Readonly<
-    Record<string, readonly Readonly<{ name: string | null }>[]>
-  >,
+type SiteHostingRow = Readonly<{
+  createdAt?: string | null
+  options?: Readonly<Record<string, unknown>> | null
+}>
+
+/** A hosting row that answers on the public address (the default bind). */
+function isPublicHosting(row: SiteHostingRow): boolean {
+  const bind = row.options?.bind
+  return bind === undefined || bind === null || bind === 'public'
+}
+
+/** The hostnames one hosting row answers on (`options.hostnames`), trimmed, blanks left out. */
+export function hostingHostnames(row: SiteHostingRow): string[] {
+  const raw = row.options?.hostnames
+  if (!Array.isArray(raw)) return []
+  return raw
+    .filter((entry): entry is string => typeof entry === 'string')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry !== '')
+}
+
+/** Hosting rows oldest first (by `createdAt`); rows without a usable time keep their order, last. */
+export function oldestHostingsFirst<T extends SiteHostingRow>(rows: readonly T[]): T[] {
+  return rows
+    .map((row, index) => ({ row, index, at: Date.parse(row.createdAt ?? '') }))
+    .sort((a, b) => {
+      const byTime = (Number.isNaN(a.at) ? Infinity : a.at) - (Number.isNaN(b.at) ? Infinity : b.at)
+      return byTime === 0 || Number.isNaN(byTime) ? a.index - b.index : byTime
+    })
+    .map(({ row }) => row)
+}
+
+/**
+ * Every public hostname an environment can be visited at: the
+ * `options.hostnames` of its hosting rows, oldest row first, each name once.
+ * Wildcards and anything that is not a usable host are left out.
+ */
+export function environmentSiteHostnames(
+  rowsByService: Readonly<Record<string, readonly SiteHostingRow[]>>,
   serviceIds: readonly string[],
-): string | null {
-  for (const serviceId of serviceIds) {
-    for (const row of rowsByService[serviceId] ?? []) {
-      if (siteUrlFromHostname(row.name)) return row.name?.trim() ?? null
+): string[] {
+  const rows = oldestHostingsFirst(
+    serviceIds.flatMap((serviceId) => rowsByService[serviceId] ?? []).filter(isPublicHosting)
+  )
+  const seen = new Set<string>()
+  const names: string[] = []
+  for (const row of rows) {
+    for (const name of hostingHostnames(row)) {
+      const key = name.toLowerCase()
+      if (!siteUrlFromHostname(name) || seen.has(key)) continue
+      seen.add(key)
+      names.push(name)
     }
   }
-  return null
+  return names
+}
+
+/** `environment.options.primaryHostname` when it is a non-empty string. */
+export function readPrimaryHostnameOption(options: unknown): string | null {
+  if (!options || typeof options !== 'object' || Array.isArray(options)) return null
+  const value = (options as Record<string, unknown>).primaryHostname
+  return typeof value === 'string' && value.trim() !== '' ? value.trim() : null
+}
+
+/**
+ * The hostname Visit opens: the one picked as primary while it is still one of
+ * the environment's hostnames, else the oldest. Null when there is none.
+ */
+export function primarySiteHostname(
+  hostnames: readonly string[],
+  stored: string | null
+): string | null {
+  if (stored) {
+    const match = hostnames.find((name) => name.toLowerCase() === stored.toLowerCase())
+    if (match) return match
+  }
+  return hostnames[0] ?? null
 }
 
 /** "2h ago" from an ISO stamp; null when there is none to read. */

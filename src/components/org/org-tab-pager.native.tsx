@@ -29,6 +29,7 @@ import {
   orgTabSwipeActiveOffsetX,
 } from '@/lib/org-tab-swipe'
 import { PullToRefreshProvider } from '@/lib/pull-to-refresh'
+import { useRememberedProjectsType } from '@/lib/remembered-projects-type'
 import { ALL_WORKSPACES_SCOPE } from '@/lib/workspace-scope'
 import { useWorkspaceScope } from '@/lib/workspace-scope-context'
 import { colors } from '@/lib/theme'
@@ -51,6 +52,8 @@ export function OrgTabPager({ orgId }: Readonly<{ orgId: string }>) {
   const pathname = usePathname()
   const router = useRouter()
   const { scopeId } = useWorkspaceScope()
+  // The pager owns the Projects route here, so it reads `?type=` for the list.
+  const projectsType = useRememberedProjectsType(orgId)
   const { width: windowWidth } = useWindowDimensions()
   const reduceMotion = useReducedMotion() === true
   const [width, setWidth] = useState(windowWidth)
@@ -95,9 +98,9 @@ export function OrgTabPager({ orgId }: Readonly<{ orgId: string }>) {
       if (!areaId) {
         return
       }
-      router.replace(orgTabHref(orgId, areaId, scopeId) as Href)
+      router.replace(orgTabHref(orgId, areaId, scopeId, projectsType) as Href)
     },
-    [activeIndex, orgId, router, scopeId],
+    [activeIndex, orgId, router, scopeId, projectsType],
   )
 
   const finishSwipe = useCallback(
@@ -180,6 +183,7 @@ export function OrgTabPager({ orgId }: Readonly<{ orgId: string }>) {
             <ProjectsHomeSection
               orgId={orgId}
               workspaceId={projectsWorkspaceId}
+              type={projectsType}
             />
           </PagerPage>
           <PagerPage width={width}>

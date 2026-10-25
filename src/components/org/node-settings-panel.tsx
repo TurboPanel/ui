@@ -3,7 +3,6 @@ import { Linking, Pressable, StyleSheet, Text, View } from 'react-native'
 import {
   Button,
   InlineNotice,
-  SectionPanel,
   SegmentedControl,
   Select,
   SettingRow,
@@ -12,6 +11,7 @@ import {
   Toggle,
 } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
+import { Section } from '@/components/ui/v4/section'
 import {
   usePersistEnvironmentCompose,
   usePersistProjectCompose,
@@ -338,10 +338,9 @@ export function NodeSettingsPanel({
   }
 
   return (
-    <SectionPanel
+    <Section
       title={hostname ? `Node.js on ${hostname}` : 'Node.js'}
-      hint="Runtime settings for this app — applied on the next deploy"
-      accent
+      note="Runtime settings for this app — applied on the next deploy"
     >
       <View style={styles.body}>
         <SegmentedControl
@@ -391,7 +390,7 @@ export function NodeSettingsPanel({
           />
         )}
       </View>
-    </SectionPanel>
+    </Section>
   )
 }
 
@@ -465,7 +464,7 @@ function NodeSettingsFields({
         label="Enable Node.js"
         description={
           enabled
-            ? 'The app process runs under a hardened systemd unit.'
+            ? 'The app runs as a background service that restarts if it stops.'
             : 'Stopped and disabled on deploy — the site answers 502 until re-enabled. Releases keep building.'
         }
       >

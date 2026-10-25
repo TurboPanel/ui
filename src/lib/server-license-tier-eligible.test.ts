@@ -23,8 +23,14 @@ describe('eligibleTiersForPick', () => {
   const catalog = [tier('S1', 1), tier('S2', 2), tier('S3', 3)]
 
   it('drops tiers below the ranked required floor', () => {
-    const { choices, requiredRankUnknown } = eligibleTiersForPick(catalog, 'S2', tierRankFromLabel)
+    const { choices, tooSmall, requiredRankUnknown } = eligibleTiersForPick(
+      catalog,
+      'S2',
+      tierRankFromLabel
+    )
     expect(choices.map((row) => row.label)).toEqual(['S2', 'S3'])
+    // Below the CPU and RAM floor: listed as unavailable, never as a choice.
+    expect(tooSmall.map((row) => row.label)).toEqual(['S1'])
     expect(requiredRankUnknown).toBe(false)
   })
 
