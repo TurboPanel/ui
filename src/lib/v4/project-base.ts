@@ -365,7 +365,7 @@ export function baseLinuxUserRows(
   })
 }
 
-/** "2 Linux users" for the section note. */
+/** "2 Hosting Accounts" for the section note. */
 export function baseLinuxUsersNote(rows: readonly BaseLinuxUserRow[]): string {
-  return plural(rows.length, 'Linux user')
+  return plural(rows.length, 'Hosting Account')
 }

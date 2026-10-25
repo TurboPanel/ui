@@ -244,7 +244,7 @@ describe.each(SCENARIOS)('project Environments tab ($name)', (scenario) => {
     }
     render(<ProjectEnvironmentsTab />)
     const statuses = screen.getAllByRole('group', { name: 'Status' })
-    expect(statuses[1]?.textContent).toContain('Deployed')
+    expect(statuses[1]?.textContent).toContain('Running')
     expect(statuses[1]?.textContent).not.toContain('Not deployed yet')
   })
 

@@ -392,8 +392,8 @@ describe('Linux users', () => {
 
   it('counts the users', () => {
     const rows = baseLinuxUserRows(base, [], [])
-    expect(baseLinuxUsersNote(rows)).toBe('2 Linux users')
-    expect(baseLinuxUsersNote(rows.slice(0, 1))).toBe('1 Linux user')
+    expect(baseLinuxUsersNote(rows)).toBe('2 Hosting Accounts')
+    expect(baseLinuxUsersNote(rows.slice(0, 1))).toBe('1 Hosting Account')
   })
 })
 

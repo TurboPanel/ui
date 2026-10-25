@@ -22,7 +22,7 @@ function Row({ row, href }: Readonly<{ row: DeployRow; href: string }>) {
       title={row.title}
       sub={row.sha === null ? row.sub : `${row.sha} · ${row.sub}`}
       value={row.when}
-      leading={<StatusChip status={row.statusKey} size="sm" />}
+      leading={<StatusChip status={row.statusKey} label={row.statusLabel} size="sm" />}
       chips={row.live ? <Text style={s.live}>Live</Text> : undefined}
       onPress={() => router.push(href as Href)}
     />

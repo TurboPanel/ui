@@ -4,6 +4,7 @@ import { typeStyle } from '@/components/ui/v4/type-styles'
 import { themedStyles, usePalette } from '@/components/ui/v4/use-palette'
 import { webPointer } from '@/lib/theme'
 import type { EnvironmentRelation } from '@/lib/v4/environment-overview'
+import { plural } from '@/lib/v4/text'
 import { RADIUS } from '@/lib/v4/ui-scale'
 
 const styles = themedStyles((p) => ({
@@ -22,13 +23,14 @@ const styles = themedStyles((p) => ({
   main: { flex: 1, minWidth: 0, gap: 2 },
   title: { ...typeStyle('display', 'headline'), color: p.text },
   text: { ...typeStyle('body', 'subhead'), color: p.text2 },
+  count: { ...typeStyle('bodyMedium', 'subhead'), color: p.text2 },
   chevron: { ...typeStyle('body', 'headline'), color: p.text3 },
 }))
 
 /**
- * "Changes from Base (2)" for an environment that changes
- * something, or "Staging stands alone". Shows nothing when there is nothing to
- * say, so it never reads "(0)".
+ * "Changes from the Base" (what changed, the count by the chevron) for an
+ * environment that changes something, or "Staging stands alone". Shows nothing
+ * when there is nothing to say, so it never reads "0".
  */
 export function RelationCard({
   relation,
@@ -40,17 +42,20 @@ export function RelationCard({
   const href = relation.kind === 'changes' ? changesHref : settingsHref
   // The child of `Link asChild` takes one style object on web, never an array.
   const style = StyleSheet.flatten([s.card, relation.kind === 'alone' && s.alone, webPointer])
+  const count = relation.kind === 'changes' ? relation.count : null
+  const label = count === null ? relation.title : `${relation.title}, ${plural(count, 'change')}`
   return (
     <Link href={href as Href} asChild>
       <Pressable
         accessibilityRole="link"
-        accessibilityLabel={`${relation.title}. ${relation.text}`}
+        accessibilityLabel={`${label}. ${relation.text}`}
         style={style}
       >
         <View style={s.main}>
           <Text style={s.title}>{relation.title}</Text>
           <Text style={s.text}>{relation.text}</Text>
         </View>
+        {count === null ? null : <Text style={s.count}>{count}</Text>}
         <Text style={s.chevron}>›</Text>
       </Pressable>
     </Link>

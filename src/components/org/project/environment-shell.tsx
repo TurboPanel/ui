@@ -22,7 +22,7 @@ import { useProjectContext } from '@/components/org/project/project-context'
 import { VisitSiteButton } from '@/components/org/project/visit-site-button'
 import { groupDeploymentsByGeneration, type DeploymentGroup } from '@/lib/deployment-history'
 import { managedEnvironmentTabs } from '@/lib/managed-navigation'
-import { hasNativeApp, nativeDeployKey } from '@/lib/v4/project-home'
+import { hasNativeApp, nativeRunningKey } from '@/lib/v4/project-home'
 import { useEnvironmentConfigViews } from '@/lib/queries/environment-cards'
 import {
   environmentSiteHostnames,
@@ -75,9 +75,9 @@ function useNow(intervalMs: number): number {
 /** `Not started yet` is a container answer; a native app's comes from its newest deploy. */
 function nativeRunningLabel(label: string, lastDeploy: DeploymentGroup | null | undefined): string {
   if (label !== 'Not started yet' || !lastDeploy) return label
-  const key = nativeDeployKey(lastDeploy)
-  if (key === 'deployed' || key === 'live' || key === 'settling') return 'Running'
-  if (key === 'deploying' || key === 'building' || key === 'queued') return 'Starting…'
+  const key = nativeRunningKey(lastDeploy)
+  if (key === 'running') return 'Running'
+  if (key === 'busy') return 'Starting…'
   return label
 }
 

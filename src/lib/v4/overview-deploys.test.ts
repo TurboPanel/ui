@@ -41,6 +41,7 @@ describe('groupStatusKey', () => {
     [{ status: 'running' as const }, 'deploying'],
     [{ status: 'queued' as const }, 'queued'],
     [{ status: 'failed' as const, strategyOutcome: 'rolled_back' as const }, 'rolledback'],
+    [{ status: 'succeeded' as const, strategyOutcome: 'needs_attention' as const }, 'failed'],
   ])('%j -> %s', (extra, expected) => {
     expect(key(extra)).toBe(expected)
   })
@@ -84,6 +85,16 @@ describe('deployRows', () => {
   it('says a console deploy was started in the console, and has no time when none is recorded', () => {
     const [row] = deployRows([deploy('d1', null, { startedAt: null, queuedAt: null })], NOW, false)
     expect(row).toMatchObject({ title: 'Started in the console', when: '' })
+  })
+
+  it('uses the Deployments tab word for a finished deploy and none while one runs', () => {
+    const labels = deployRows(rows, NOW, true).map((r) => r.statusLabel)
+    expect(labels).toEqual(['Failed', 'Succeeded', undefined])
+    const label = (extra: Parameters<typeof deploy>[2]) =>
+      deployRows([deploy('d1', 1, extra)], NOW, false)[0]?.statusLabel
+    expect(label({ status: 'cancelled' })).toBe('Cancelled')
+    expect(label({ status: 'failed', strategyOutcome: 'rolled_back' })).toBe('Rolled back')
+    expect(label({ status: 'queued' })).toBeUndefined()
   })
 
   it('has no rows without history', () => {

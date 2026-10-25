@@ -47,7 +47,7 @@ export const BASE_WHEN_TO_USE =
   'Use the Base for settings every environment shares, such as a common service, Hosting Account or variable. A change there reaches all environments on their next deploy. To change one environment only, open it instead.'
 
 export const BASE_EDIT_WARNING =
-  'These are shared defaults for all environments. A change here reaches every environment that does not set its own value.'
+  "A change here reaches every environment that doesn't set its own value, on its next deploy."
 
 export const PRIMARY_DELETE_EXPLANATION =
   'This is the primary environment, so it cannot be deleted. Make another environment primary first.'

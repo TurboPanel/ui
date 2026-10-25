@@ -59,8 +59,9 @@ describe.each(SCENARIOS)('environment layer card ($name)', (scenario) => {
     const status = screen.getByRole('group', { name: 'Status' })
     expect(status.textContent).toContain('Running')
     expect(status.textContent).toContain('Last deploy')
-    expect(status.textContent).toContain('Deployed')
     expect(status.textContent).toContain('a41c9e2 · 4m ago')
+    // A deploy that went fine shows only its time, no second "Deployed" word.
+    expect(status.textContent).not.toContain('Deployed')
   })
 
   it('draws the mini map with the real apps, and the branch and server', () => {

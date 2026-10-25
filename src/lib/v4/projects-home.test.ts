@@ -226,13 +226,13 @@ describe('a project tile', () => {
       containersByEnvironment: {},
       latest: { e1: deployed },
     }
-    expect(homeProject(input).environments[0]?.status).toBe('deployed')
+    expect(homeProject(input).environments[0]?.status).toBe('running')
     expect(homeProject({ ...input, latest: { e1: undefined } }).environments[0]?.status).toBe(
       'unknown'
     )
     // Config views, when a caller read them, say which environments run a native app.
     expect(homeProject({ ...input, views: { e1: view(true) } }).environments[0]?.status).toBe(
-      'deployed'
+      'running'
     )
     expect(homeProject({ ...input, views: {} }).environments[0]?.status).toBe('never')
   })
