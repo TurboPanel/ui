@@ -54,6 +54,18 @@ describe('composeHostingEntryFromEditorFields', () => {
     })
   })
 
+  it('writes tls.mode automatic for Let\u2019s Encrypt, whatever library row was picked before', () => {
+    expect(
+      composeHostingEntryFromEditorFields(
+        editor({ tlsAutomatic: true, tlsId: 'cert-1', bind: 'public' }),
+        'container',
+      )?.tls,
+    ).toEqual({ mode: 'automatic' })
+    expect(
+      composeHostingEntryFromEditorFields(editor({ tlsAutomatic: false }), 'container')?.tls,
+    ).toEqual({ mode: 'internal' })
+  })
+
   it('writes the panel-authored TLS, bind, and forceHttps choices', () => {
     // `forceHttps` is only written when it is false: omitting it means `true`,
     // so writing the default out would turn every save into a diff.
