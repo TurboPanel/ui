@@ -209,13 +209,37 @@ const HOSTING_ERROR_COPY: readonly (readonly [string, string])[] = [
   ['hostname_in_use', HOSTNAME_IN_USE_MESSAGE],
 ]
 
+const REQUEST_FAILED = ' failed: '
+const EXPLANATION_SEPARATOR = ' — '
+/** A bare code such as `compose_invalid`: nothing a person can read. */
+const BARE_CODE = /^[a-z0-9_.-]+$/
 /** Request paths and status lines: what a person should never read. */
 const RAW_ERROR_TEXT = /\/api\/|HTTP \d{3}/
 
 /**
- * A refused hosting action as one plain sentence: the hosting codes and every
- * code the app already words are mapped, and any other text that still
- * carries a request path or status line becomes a plain fallback.
+ * The readable part of a request failure. The app's requests fail as
+ * `<path> failed: <detail>`, where the detail is either the issue list of a
+ * refused compose file, or `HTTP <status>[: <code>][ — <explanation>]`. The
+ * path, the status and the code are dropped; the issues or the explanation
+ * are kept. Empty when nothing readable is left.
+ */
+function readableErrorText(text: string): string {
+  let rest = text
+  const failed = rest.indexOf(REQUEST_FAILED)
+  if (rest.startsWith('/') && failed > 0) rest = rest.slice(failed + REQUEST_FAILED.length)
+  if (rest.startsWith('HTTP ')) {
+    const explanation = rest.indexOf(EXPLANATION_SEPARATOR)
+    rest = explanation === -1 ? '' : rest.slice(explanation + EXPLANATION_SEPARATOR.length)
+  }
+  rest = rest.trim()
+  return BARE_CODE.test(rest) || RAW_ERROR_TEXT.test(rest) ? '' : rest
+}
+
+/**
+ * A refused hosting action as plain words: the hosting codes and every code
+ * the app already words are mapped; anything else keeps its explanation (or a
+ * refused compose file its issues) without the request path, status or code,
+ * and only an answer with nothing readable left gets the plain fallback.
  */
 export function hostingActionErrorMessage(error: string | null | undefined): string {
   const text = error?.trim() ?? ''
@@ -224,6 +248,5 @@ export function hostingActionErrorMessage(error: string | null | undefined): str
   }
   const mapped = apiErrorCopy(text)
   if (mapped) return mapped
-  if (text === '' || RAW_ERROR_TEXT.test(text)) return HOSTING_ACTION_FAILED_MESSAGE
-  return text
+  return readableErrorText(text) || HOSTING_ACTION_FAILED_MESSAGE
 }

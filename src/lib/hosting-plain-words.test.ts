@@ -197,10 +197,31 @@ describe('plain hosting words', () => {
     expect(hostingActionErrorMessage(RAW_REFUSALS[0])).toBe(DEPLOY_RUNNING_MESSAGE)
     expect(hostingActionErrorMessage(RAW_REFUSALS[1])).toBe(HOSTNAME_IN_USE_MESSAGE)
     expect(hostingActionErrorMessage(RAW_REFUSALS[2])).toBe(HOSTING_ACTION_FAILED_MESSAGE)
+    expect(
+      hostingActionErrorMessage('/api/client/v1/hostings failed: HTTP 400: compose_invalid')
+    ).toBe(HOSTING_ACTION_FAILED_MESSAGE)
     expect(hostingActionErrorMessage('')).toBe(HOSTING_ACTION_FAILED_MESSAGE)
     expect(hostingActionErrorMessage(null)).toBe(HOSTING_ACTION_FAILED_MESSAGE)
     // A plain sentence of our own passes through unchanged.
     expect(hostingActionErrorMessage(SERVICE_NOT_SAVED_MESSAGE)).toBe(SERVICE_NOT_SAVED_MESSAGE)
+  })
+
+  it('keeps the issues of a refused compose file', () => {
+    expect(
+      hostingActionErrorMessage(
+        "/api/client/v1/environments/abc failed: services.web.x-turbopanel.hosting[0].hostname must be a hostname; unknown key 'hostnme'"
+      )
+    ).toBe(
+      "services.web.x-turbopanel.hosting[0].hostname must be a hostname; unknown key 'hostnme'"
+    )
+  })
+
+  it('keeps the explanation of a refused hosting save', () => {
+    expect(
+      hostingActionErrorMessage(
+        '/api/client/v1/hostings/abc failed: HTTP 400: invalid_hostname — Hostnames use letters, digits, dots and hyphens.'
+      )
+    ).toBe('Hostnames use letters, digits, dots and hyphens.')
   })
 
   it('names the real place certificates are added', () => {
