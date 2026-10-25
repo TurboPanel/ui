@@ -17,6 +17,7 @@ const q = vi.hoisted(() => ({
   principals: {} as Query,
   history: {} as Query,
   ips: {} as Query,
+  servers: {} as Query,
   project: null as Record<string, unknown> | null,
   selected: { id: 'env-1', name: 'Staging' } as Record<string, unknown> | null,
   projectLoading: false,
@@ -44,6 +45,7 @@ vi.mock('@/lib/queries/bindings', () => ({ useEnvironmentBindings: () => q.bindi
 vi.mock('@/lib/queries/projects', () => ({ useProjectPrincipals: () => q.principals }))
 vi.mock('@/lib/queries/execution-logs', () => ({ useEnvironmentDeployments: () => q.history }))
 vi.mock('@/lib/queries/topology', () => ({ useIps: () => q.ips }))
+vi.mock('@/lib/queries/servers', () => ({ useOrgServers: () => q.servers }))
 
 beforeEach(() => {
   q.selected = { id: 'env-1', name: 'Staging' }
@@ -58,6 +60,7 @@ beforeEach(() => {
   q.principals = { data: { principals: [] } }
   q.history = { data: { deployments: [] } }
   q.ips = { data: { ips: [] } }
+  q.servers = { data: { servers: [] } }
   q.project = null
 })
 
@@ -92,6 +95,26 @@ describe('useEnvironmentOverviewModel', () => {
       serverId: 'srv-env',
       primaryHostname: 'shop.example.com',
     })
+  })
+
+  it("reads the server's own public addresses for the served line", () => {
+    expect(renderHook(() => useEnvironmentOverviewModel()).result.current).toMatchObject({
+      source: { serverAddresses: undefined },
+    })
+    q.selected = { id: 'env-1', name: 'Staging', serverId: 'srv-env' }
+    q.servers = {
+      data: {
+        servers: [
+          { id: 'srv-other', ips: [{ address: '198.51.100.9', version: 4, scope: 'public' }] },
+          { id: 'srv-env', ips: [{ address: '45.32.200.170', version: 4, scope: 'public' }] },
+        ],
+      },
+    }
+    let { result } = renderHook(() => useEnvironmentOverviewModel())
+    expect(result.current).toMatchObject({ source: { serverAddresses: ['45.32.200.170'] } })
+    q.servers = { data: undefined }
+    ;({ result } = renderHook(() => useEnvironmentOverviewModel()))
+    expect(result.current).toMatchObject({ source: { serverAddresses: undefined } })
   })
 
   it('waits for the config view, the services and the domains', () => {

@@ -45,10 +45,25 @@ function isPublicHosting(row: SiteHostingRow): boolean {
   return bind === undefined || bind === null || bind === 'public'
 }
 
-function hostnamesOf(row: SiteHostingRow): string[] {
+/** The hostnames one hosting row answers on (`options.hostnames`), trimmed, blanks left out. */
+export function hostingHostnames(row: SiteHostingRow): string[] {
   const raw = row.options?.hostnames
   if (!Array.isArray(raw)) return []
-  return raw.filter((entry): entry is string => typeof entry === 'string')
+  return raw
+    .filter((entry): entry is string => typeof entry === 'string')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry !== '')
+}
+
+/** Hosting rows oldest first (by `createdAt`); rows without a usable time keep their order, last. */
+export function oldestHostingsFirst<T extends SiteHostingRow>(rows: readonly T[]): T[] {
+  return rows
+    .map((row, index) => ({ row, index, at: Date.parse(row.createdAt ?? '') }))
+    .sort((a, b) => {
+      const byTime = (Number.isNaN(a.at) ? Infinity : a.at) - (Number.isNaN(b.at) ? Infinity : b.at)
+      return byTime === 0 || Number.isNaN(byTime) ? a.index - b.index : byTime
+    })
+    .map(({ row }) => row)
 }
 
 /**
@@ -60,19 +75,13 @@ export function environmentSiteHostnames(
   rowsByService: Readonly<Record<string, readonly SiteHostingRow[]>>,
   serviceIds: readonly string[],
 ): string[] {
-  const rows = serviceIds
-    .flatMap((serviceId) => rowsByService[serviceId] ?? [])
-    .filter(isPublicHosting)
-    .map((row, index) => ({ row, index, at: Date.parse(row.createdAt ?? '') }))
-    .sort((a, b) => {
-      const byTime = (Number.isNaN(a.at) ? Infinity : a.at) - (Number.isNaN(b.at) ? Infinity : b.at)
-      return byTime === 0 || Number.isNaN(byTime) ? a.index - b.index : byTime
-    })
+  const rows = oldestHostingsFirst(
+    serviceIds.flatMap((serviceId) => rowsByService[serviceId] ?? []).filter(isPublicHosting)
+  )
   const seen = new Set<string>()
   const names: string[] = []
-  for (const { row } of rows) {
-    for (const raw of hostnamesOf(row)) {
-      const name = raw.trim()
+  for (const row of rows) {
+    for (const name of hostingHostnames(row)) {
       const key = name.toLowerCase()
       if (!siteUrlFromHostname(name) || seen.has(key)) continue
       seen.add(key)

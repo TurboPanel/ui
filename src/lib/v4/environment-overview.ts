@@ -15,6 +15,7 @@
 
 import { DEFAULT_HOSTING_BIND_SCOPE, isHostingBindScope } from '@/lib/compose/hosting-extension'
 import type { DeploymentGroup } from '@/lib/deployment-history'
+import { hostingHostnames, oldestHostingsFirst } from '@/lib/environment-status'
 import type {
   BindingRecord,
   ConfigViewChange,
@@ -24,6 +25,7 @@ import type {
   EnvironmentConfigViewResponse as EnvironmentConfigView,
   HostingRecord,
   IpRecord,
+  OrgServerRecord,
   ProjectPrincipalRecord,
   ServiceRecord,
   ServiceRunStateRecord,
@@ -57,6 +59,8 @@ export type OverviewSource = Readonly<{
   publicIps?: readonly IpRecord[]
   /** The server the environment runs on (its own pin, else the project's default). */
   serverId?: string | null
+  /** Public addresses that server reports itself (preferred first); `undefined` until read. */
+  serverAddresses?: readonly string[]
   /** The hostname Visit opens; it leads its box on the map. */
   primaryHostname?: string | null
 }>
@@ -246,15 +250,34 @@ function addressText(addresses: readonly string[]): string | null {
 }
 
 /**
+ * The public addresses a server reports itself: its public interface
+ * addresses (the default-route one first), else its best-known address when
+ * that is public. Empty when it has reported none.
+ */
+export function serverPublicAddresses(
+  server: Pick<OrgServerRecord, 'ips' | 'address' | 'addressScope'> | null | undefined
+): string[] {
+  if (!server) return []
+  const reported = (server.ips ?? [])
+    .filter((ip) => ip.scope === 'public')
+    .sort((a, b) => Number(b.preferred === true) - Number(a.preferred === true))
+    .map((ip) => ip.address)
+  if (reported.length > 0) return reported
+  return server.address && server.addressScope === 'public' ? [server.address] : []
+}
+
+/**
  * Where visitors reach a hostname, from what the app already knows. A pinned
  * public address is that address; "Any interface" is the addresses the
- * certificate's DNS check expects, else the public addresses of the
- * environment's server. Datacenter and Local say so. Null when nothing is known:
+ * certificate's DNS check expects (only kept while it waits for DNS), else the
+ * organization's public addresses on the environment's server, else the public
+ * addresses that server reports itself (a single self-hosted server often has
+ * no address rows). Datacenter and Local say so. Null when nothing is known:
  * the line is left out, never guessed.
  */
 export function servedFromOf(
   hosting: HostingRecord,
-  source: Pick<OverviewSource, 'publicIps' | 'serverId'>
+  source: Pick<OverviewSource, 'publicIps' | 'serverId' | 'serverAddresses'>
 ): string | null {
   const bind = hosting.options?.bind
   const scope = isHostingBindScope(bind) ? bind : DEFAULT_HOSTING_BIND_SCOPE
@@ -266,35 +289,48 @@ export function servedFromOf(
     addresses = pinned ? [pinned.address] : []
   } else {
     const expected = hosting.certificate?.dns?.expectedAddresses ?? []
-    addresses =
-      expected.length > 0
-        ? expected
-        : (source.publicIps ?? [])
-            .filter((ip) => source.serverId && ip.serverId === source.serverId)
-            .map((ip) => ip.address)
+    const listed = (source.publicIps ?? [])
+      .filter((ip) => source.serverId && ip.serverId === source.serverId)
+      .map((ip) => ip.address)
+    if (expected.length > 0) addresses = expected
+    else if (listed.length > 0) addresses = listed
+    else addresses = source.serverId ? (source.serverAddresses ?? []) : []
   }
   const text = addressText(addresses)
   return text === null ? null : `Served from ${text}`
 }
 
+/**
+ * The hosts a hosting row answers on: its hostnames (as the header reads them),
+ * else its name when it has none yet.
+ */
+function hostsOf(hosting: HostingRecord): string[] {
+  const hostnames = hostingHostnames(hosting)
+  if (hostnames.length > 0) return hostnames
+  const name = hosting.name?.trim() ?? ''
+  return name === '' ? [] : [name]
+}
+
+/** One map domain per hostname, oldest hosting first, each hostname once. */
 export function domainsOf(source: OverviewSource): MapDomain[] {
   const seen = new Set<string>()
   const domains: MapDomain[] = []
   for (const service of source.view.effective.services) {
     const rows = service.serviceId === null ? [] : (source.hostings[service.serviceId] ?? [])
-    for (const hosting of rows) {
-      const host = hosting.name?.trim() ?? ''
-      if (host === '' || seen.has(host)) continue
-      seen.add(host)
+    for (const hosting of oldestHostingsFirst(rows)) {
       const key = certificateKey(hosting.tlsId, source.tls)
       const label = CERTIFICATE_BADGE_WORDS[key] ?? statusInfo(key).label
       const servedFrom = servedFromOf(hosting, source)
-      domains.push({
-        host,
-        status: { key, label },
-        serviceId: service.name,
-        ...(servedFrom === null ? {} : { servedFrom }),
-      })
+      for (const host of hostsOf(hosting)) {
+        if (seen.has(host.toLowerCase())) continue
+        seen.add(host.toLowerCase())
+        domains.push({
+          host,
+          status: { key, label },
+          serviceId: service.name,
+          ...(servedFrom === null ? {} : { servedFrom }),
+        })
+      }
     }
   }
   return domains
