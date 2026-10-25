@@ -33,6 +33,18 @@ describe('deployErrorMessage', () => {
     expect(deployErrorMessage('not an error')).toBe('Failed to deploy environment')
   })
 
+  it('shows the server sentence when compose asks for Let\u2019s Encrypt while it is off', () => {
+    const sentence =
+      '"web" asks for a Let\'s Encrypt certificate for app.example.com (tls.mode "automatic"), but this organization does not allow Let\'s Encrypt certificates.'
+    expect(deployErrorMessage(wrapped('acme_requires_org_opt_in', sentence))).toBe(sentence)
+    const bare = deployErrorMessage(new Error('deploy failed: 400 acme_requires_org_opt_in'))
+    expect(bare).toContain('Allow Let\'s Encrypt certificates')
+    expect(bare).toContain('organization owner or manager')
+    expect(
+      deployErrorMessage(new Error('deploy failed: 422 letsencrypt_hostname_unsupported')),
+    ).toContain('wildcard')
+  })
+
   it('shows the plain sentence when a certificate misses a www name', () => {
     const sentence =
       'The certificate on this hosting must also cover www.example.com because of its www setting.'

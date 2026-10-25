@@ -1,3 +1,4 @@
+import { useRouter, type Href } from 'expo-router'
 import { useMemo, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { EnvironmentNameField } from '@/components/org/project-create/details-step'
@@ -17,16 +18,20 @@ import {
 import { panelStyles } from '@/components/ui/panel-styles'
 import { ListGroup, ListRow, PageTitle, SectionHeading } from '@/components/ui/v4'
 import type { ComposeDocument, OrgServerRecord } from '@/lib/instance-api'
+import { orgSettingsTabHref } from '@/lib/org-navigation'
+import { useOrgAllowsLetsEncrypt } from '@/lib/queries/org-tls-settings'
 import {
   declaredHostname,
   hostnameServiceNames,
   initialSetupServerId,
   setupAccounts,
+  setupCertificateNote,
   setupCompose,
   setupFormProblems,
   variableKeyProblem,
   wwwChoiceFor,
   type SetupAccount,
+  type SetupCertificateNote,
   type SetupVariable,
 } from '@/lib/project-create/environment-setup'
 import { HIDDEN_VALUE } from '@/lib/v4/config-view-model'
@@ -96,6 +101,14 @@ export function EnvironmentSetupForm({
   const [accountNames, setAccountNames] = useState<Readonly<Record<string, string>>>({})
   const [variables, setVariables] = useState<SetupVariable[]>([])
   const [errors, setErrors] = useState<Readonly<Record<string, string>>>({})
+  // "Allow Let's Encrypt certificates": on writes tls.mode automatic with the
+  // hostname. Unknown (still loading, or not readable) writes nothing.
+  const acmeEnabled = useOrgAllowsLetsEncrypt(orgId)
+  const certificateNote = setupCertificateNote({
+    hostname,
+    acmeEnabled,
+    tlsChosen: declared?.tls !== undefined,
+  })
 
   const shownName = name.trim() || environmentName
 
@@ -103,7 +116,14 @@ export function EnvironmentSetupForm({
     const found = setupFormProblems({ name, hostname, accounts, accountNames })
     setErrors(found)
     if (Object.keys(found).length > 0) return
-    const next = setupCompose(compose, { accounts, accountNames, serviceName, hostname, alsoWww })
+    const next = setupCompose(compose, {
+      accounts,
+      accountNames,
+      serviceName,
+      hostname,
+      alsoWww,
+      letsEncrypt: acmeEnabled === true,
+    })
     onSubmit({ name: name.trim(), serverId, compose: next, variables }, intent)
   }
 
@@ -141,6 +161,8 @@ export function EnvironmentSetupForm({
         hostname={hostname}
         alsoWww={alsoWww}
         error={errors.hostname}
+        certificateNote={certificateNote}
+        settingsHref={orgSettingsTabHref(orgId, 'domains')}
         onServiceNameChange={setServiceName}
         onHostnameChange={setHostname}
         onAlsoWwwChange={setAlsoWww}
@@ -191,6 +213,8 @@ function HostnameSection({
   hostname,
   alsoWww,
   error,
+  certificateNote,
+  settingsHref,
   onServiceNameChange,
   onHostnameChange,
   onAlsoWwwChange,
@@ -200,6 +224,8 @@ function HostnameSection({
   hostname: string
   alsoWww: boolean
   error?: string
+  certificateNote: SetupCertificateNote | null
+  settingsHref: string
   onServiceNameChange: (name: string) => void
   onHostnameChange: (hostname: string) => void
   onAlsoWwwChange: (on: boolean) => void
@@ -248,6 +274,9 @@ function HostnameSection({
               />
             </SettingRow>
           ) : null}
+          {certificateNote ? (
+            <CertificateNote note={certificateNote} settingsHref={settingsHref} />
+          ) : null}
         </>
       ) : (
         <Text style={panelStyles.muted}>
@@ -255,6 +284,26 @@ function HostnameSection({
           the Hosting tab.
         </Text>
       )}
+    </View>
+  )
+}
+
+/** The first hostname's certificate, with a link to the setting when Let’s Encrypt is off. */
+function CertificateNote({
+  note,
+  settingsHref,
+}: Readonly<{ note: SetupCertificateNote; settingsHref: string }>) {
+  const router = useRouter()
+  return (
+    <View style={styles.note}>
+      <Text style={panelStyles.muted}>{note.text}</Text>
+      {note.openSettings ? (
+        <TextLink
+          label="Open Domains & certificates"
+          accessibilityLabel="Open Organization settings, Domains & certificates"
+          onPress={() => router.push(settingsHref as Href)}
+        />
+      ) : null}
     </View>
   )
 }
@@ -467,6 +516,7 @@ const styles = StyleSheet.create({
     gap: spacing.lg,
   },
   section: { gap: spacing.sm },
+  note: { gap: spacing.xs, alignItems: 'flex-start' },
   inlineEditor: { gap: spacing.sm, padding: spacing.md },
   editorFoot: {
     flexDirection: 'row',

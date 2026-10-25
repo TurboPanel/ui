@@ -147,7 +147,7 @@ function TlsLetsEncryptPanel({
   return (
     <SectionPanel
       title="Let's Encrypt"
-      hint="Off by default — opt in before any Let's Encrypt certificate can be requested"
+      hint="On for new organizations — turn it off to stop any Let's Encrypt certificate being requested"
     >
       {acmeError ? <Text style={panelStyles.error}>{acmeError}</Text> : null}
       {settingsError && !acmeError ? (
@@ -157,7 +157,7 @@ function TlsLetsEncryptPanel({
       ) : null}
       <SettingRow
         label="Allow Let's Encrypt certificates"
-        description="When off, no new Let's Encrypt / ACME certificate can be requested for this organization, and a deploy that still pins a Let's Encrypt certificate is refused until it is turned back on or the pin is changed. Certificates already issued are not revoked by turning this off, but the encrypted copies of their keys that the panel stores are erased."
+        description="When off, no new Let's Encrypt / ACME certificate can be requested for this organization, and a deploy that still pins a Let's Encrypt certificate (or whose compose asks for tls.mode automatic) is refused until it is turned back on or the choice is changed. Certificates already issued are not revoked by turning this off, but the encrypted copies of their keys that the panel stores are erased."
       >
         <Toggle
           value={acmeEnabled}

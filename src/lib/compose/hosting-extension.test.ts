@@ -12,7 +12,6 @@ import {
   HOSTING_TARGET_PORT_NOT_FOR_NODE_MESSAGE,
   HOSTING_TARGET_PORT_NOT_FOR_SITE_MESSAGE,
   HOSTING_TARGET_PORT_RANGE_MESSAGE,
-  HOSTING_TLS_MODE_AUTOMATIC_UNSUPPORTED_MESSAGE,
   HOSTING_WWW_MODE_MESSAGE,
   hostingTargetPortAuthorable,
   hostingTlsModeOf,
@@ -42,12 +41,9 @@ describe('hosting extension rules mirrored from the instance', () => {
     expect(hostingTlsModeOf({ hostname: 'app.example.com' })).toBe('internal')
   })
 
-  it('refuses tls.mode automatic rather than blessing a self-signed deploy', () => {
+  it('accepts tls.mode automatic (a Let\u2019s Encrypt certificate)', () => {
     expect(issuesFor({ hostname: 'app.example.com', tls: { mode: 'automatic' } }))
-      .toEqual([{
-        path: `${BASE}.hosting[0].tls.mode`,
-        message: HOSTING_TLS_MODE_AUTOMATIC_UNSUPPORTED_MESSAGE,
-      }])
+      .toEqual([])
   })
 
   it('accepts internal and certificate', () => {

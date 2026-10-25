@@ -7,7 +7,16 @@ import { composePrincipalAliases } from '@/lib/compose/principals-document'
 import type { ComposeDocument, OrgServerRecord } from '@/lib/instance-api'
 import { EnvironmentSetupForm } from './environment-setup-form'
 
+const state = vi.hoisted(() => ({
+  acmeEnabled: null as boolean | null,
+  push: vi.fn(),
+}))
+
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
+vi.mock('expo-router', () => ({ useRouter: () => ({ push: state.push }) }))
+vi.mock('@/lib/queries/org-tls-settings', () => ({
+  useOrgAllowsLetsEncrypt: () => state.acmeEnabled,
+}))
 vi.mock('react-native-svg', async () => (await import('@/components/ui/v4/rn-stub')).svgStub)
 vi.mock(
   '@/lib/theme-preference',
@@ -164,7 +173,11 @@ vi.mock('@/components/ui/v4', () => ({
   ),
 }))
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  state.acmeEnabled = null
+  state.push.mockReset()
+})
 
 const COMPOSE = {
   version: 1,
@@ -241,6 +254,38 @@ describe('EnvironmentSetupForm', () => {
     expect(intent).toBe('deploy')
     expect(result.serverId).toBe('s1')
     expect(result.name).toBe('production')
+    expect(readComposeHostingEntries(result.compose as ComposeDocument, 'web')).toEqual([
+      { hostname: 'example.com', www: 'www-to-root' },
+    ])
+  })
+
+  it('asks for a Let\u2019s Encrypt certificate when the organization allows it', () => {
+    state.acmeEnabled = true
+    const props = renderForm()
+    fireEvent.change(screen.getByLabelText('Visitors reach it at'), {
+      target: { value: 'example.com' },
+    })
+    expect(screen.getByText(/Gets a free Let\u2019s Encrypt certificate/)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Deploy production' }))
+    const [result] = lastResult(props)
+    expect(readComposeHostingEntries(result.compose as ComposeDocument, 'web')).toEqual([
+      { hostname: 'example.com', www: 'www-to-root', tls: { mode: 'automatic' } },
+    ])
+  })
+
+  it('says Let\u2019s Encrypt is off and links the setting', () => {
+    state.acmeEnabled = false
+    const props = renderForm()
+    fireEvent.change(screen.getByLabelText('Visitors reach it at'), {
+      target: { value: 'example.com' },
+    })
+    expect(screen.getByText(/Let\u2019s Encrypt certificates are off/)).toBeTruthy()
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Open Organization settings, Domains & certificates' })
+    )
+    expect(state.push).toHaveBeenCalledWith('/o/manage?tab=domains')
+    fireEvent.click(screen.getByRole('button', { name: 'Deploy production' }))
+    const [result] = lastResult(props)
     expect(readComposeHostingEntries(result.compose as ComposeDocument, 'web')).toEqual([
       { hostname: 'example.com', www: 'www-to-root' },
     ])

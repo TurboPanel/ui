@@ -156,6 +156,8 @@ type HostingProtocol = 'http' | 'tcp' | 'udp'
 type HostingEditorState = {
   hostnames: string
   tlsId: string | null
+  /** A compose route's Let’s Encrypt choice (`tls.mode: automatic`); always false on a panel hosting. */
+  tlsAutomatic: boolean
   ipId: string | null
   bind: HostingBind
   forceHttps: boolean
@@ -306,6 +308,7 @@ function readHostingEditor(hostings: HostingRecord[]): HostingEditorState {
     ports: formatHostingPorts(optionsRecord),
     ...readWebOptions(optionsRecord),
     getLetsEncrypt: hostings.length === 0,
+    tlsAutomatic: false,
   }
 }
 
@@ -423,6 +426,7 @@ function readComposeHostingEditor(
     tlsId: entry.tls?.mode === 'certificate'
       ? entry.tls.certificateRef ?? null
       : null,
+    tlsAutomatic: entry.tls?.mode === 'automatic',
     // Compose sets the certificate for a route it declares.
     getLetsEncrypt: false,
   }
@@ -727,6 +731,27 @@ function HostingWebEnvFields({
 
 /** The "Self-signed" / "Any interface" option of a picker whose saved value is null. */
 const NO_CHOICE = ''
+/** The compose picker's Let’s Encrypt chip; never a certificate id. */
+const AUTOMATIC_CHOICE = '__automatic__'
+
+function hostingTlsSummary(
+  editor: Pick<HostingEditorState, 'tlsAutomatic'>,
+  tlsRow: TlsRecord | undefined,
+): string {
+  if (editor.tlsAutomatic) return 'Let’s Encrypt'
+  return tlsRow ? tlsLabel(tlsRow) : 'Self-signed'
+}
+
+/** The picker value for the editor's choice, and the editor patch for a picked value. */
+function tlsPickerValue(editor: Pick<HostingEditorState, 'tlsId' | 'tlsAutomatic'>): string {
+  if (editor.tlsAutomatic) return AUTOMATIC_CHOICE
+  return editor.tlsId ?? NO_CHOICE
+}
+
+function tlsPickerPatch(value: string): Pick<HostingEditorState, 'tlsId' | 'tlsAutomatic'> {
+  if (value === AUTOMATIC_CHOICE) return { tlsId: null, tlsAutomatic: true }
+  return { tlsId: value === NO_CHOICE ? null : value, tlsAutomatic: false }
+}
 
 const HOSTING_BIND_LABELS: Record<HostingBind, string> = {
   public: 'Public',
@@ -753,7 +778,7 @@ function hostingRowSummary(
   const parts = [
     editor.hostnames.trim() || 'no hostnames',
     editor.targetPort.trim() ? `port ${editor.targetPort.trim()}` : null,
-    tlsRow ? tlsLabel(tlsRow) : 'Self-signed',
+    hostingTlsSummary(editor, tlsRow),
     bindLabel,
   ]
   return parts.filter(Boolean).join(' · ')
@@ -922,18 +947,21 @@ function HostingTlsPicker({
       <Text style={styles.tlsLabel}>TLS certificate</Text>
       <Text style={styles.tlsHint}>
         {composeOwned
-          ? 'Self-signed is tls.mode "internal"; picking a library certificate is tls.mode "certificate" with tls.certificateRef. Nothing is requested automatically — "automatic" is refused at deploy rather than served as self-signed.'
+          ? 'Let\u2019s Encrypt (automatic) is tls.mode "automatic": the deploy asks for a free certificate, which renews by itself. Self-signed is tls.mode "internal"; a library certificate is tls.mode "certificate" with tls.certificateRef.'
           : 'Until a real certificate is in place the site uses a basic self-signed one. Pick a library certificate to use an upload or an org self-signed one, or tick the box below to get a free Let\u2019s Encrypt certificate when you save.'}
       </Text>
       <SegmentedControl
         accessibilityLabel="TLS certificate"
         options={[
+          ...(composeOwned
+            ? [{ value: AUTOMATIC_CHOICE, label: 'Let\u2019s Encrypt (automatic)' }]
+            : []),
           { value: NO_CHOICE, label: 'Self-signed' },
           ...chips.map((row) => ({ value: row.id, label: tlsLabel(row) })),
         ]}
-        value={editor.tlsId ?? NO_CHOICE}
+        value={tlsPickerValue(editor)}
         disabled={locked}
-        onChange={(id) => onChange({ tlsId: id === NO_CHOICE ? null : id })}
+        onChange={(value) => onChange(tlsPickerPatch(value))}
       />
       <HostingHintText hint={pinnedGap?.note ?? null} />
       {!offersLetsEncrypt({

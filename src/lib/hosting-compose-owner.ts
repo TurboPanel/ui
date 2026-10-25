@@ -19,6 +19,9 @@ export const HOSTING_COMPOSE_SERVICE_METADATA_KEY = 'composeServiceName'
 /** The `"<hostname> <pathPrefix>"` identity the row was upserted on. */
 export const HOSTING_COMPOSE_ROUTE_METADATA_KEY = 'composeRoute'
 
+/** The authored `tls.mode` of the declaring entry. */
+export const HOSTING_COMPOSE_TLS_MODE_METADATA_KEY = 'composeTlsMode'
+
 function isPlainMapping(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -47,4 +50,14 @@ export function readHostingComposeServiceName(metadata: unknown): string | null 
   if (!isComposeOwnedHosting(metadata) || !isPlainMapping(metadata)) return null
   const name = metadata[HOSTING_COMPOSE_SERVICE_METADATA_KEY]
   return typeof name === 'string' ? name : null
+}
+
+/**
+ * True when compose owns this row and asks for a Let’s Encrypt certificate
+ * (`tls.mode: automatic`). Such a row may use Try again on its Certificate
+ * panel: the request re-pins the row compose already chose.
+ */
+export function isComposeAutomaticTlsHosting(metadata: unknown): boolean {
+  if (!isComposeOwnedHosting(metadata) || !isPlainMapping(metadata)) return false
+  return metadata[HOSTING_COMPOSE_TLS_MODE_METADATA_KEY] === 'automatic'
 }

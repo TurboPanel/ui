@@ -36,8 +36,20 @@ export type ComposeHostingEditorFields = {
   /** The www choice; omitted or `off` writes no `www` key (the default). */
   www?: HostingWwwMode | null
   tlsId: string | null
+  /** Let's Encrypt (`tls.mode: automatic`); wins over `tlsId`. */
+  tlsAutomatic?: boolean
   ipId: string | null
   bind: 'public' | 'datacenter' | 'local'
+}
+
+/** The `tls` block for the editor's certificate choice. */
+function composeTlsFromEditor(
+  editor: Pick<ComposeHostingEditorFields, 'tlsId' | 'tlsAutomatic'>,
+): NonNullable<ComposeHostingExtensionEntry['tls']> {
+  if (editor.tlsAutomatic) return { mode: 'automatic' }
+  return editor.tlsId
+    ? { mode: 'certificate', certificateRef: editor.tlsId }
+    : { mode: 'internal' }
 }
 
 /**
@@ -77,9 +89,7 @@ export function composeHostingEntryFromEditorFields(
   if (!editor.forceHttps) entry.forceHttps = false
   if (editor.www && editor.www !== 'off') entry.www = editor.www
 
-  entry.tls = editor.tlsId
-    ? { mode: 'certificate', certificateRef: editor.tlsId }
-    : { mode: 'internal' }
+  entry.tls = composeTlsFromEditor(editor)
 
   entry.bind = {
     scope: editor.bind,
