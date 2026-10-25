@@ -3,13 +3,13 @@ import { useMemo, useState } from 'react'
 import { ProjectDeletePanel } from '@/components/org/project-delete-panel'
 import { useProjectContext } from '@/components/org/project/project-context'
 import { ProjectSettingsView } from '@/components/org/project/settings/project-settings-view'
-import { VariablesSection } from '@/components/org/variables-section'
 import { LoadingState } from '@/components/ui'
 import { projectRepositoriesHref } from '@/lib/org-navigation'
 import { buildProjectOptionsPatch } from '@/lib/project-options'
 import {
   environmentPageTabHref,
   isManagedProject,
+  projectBaseHref,
   projectComposeHref,
   projectEnvironmentSettingsHref,
 } from '@/lib/project-navigation'
@@ -129,9 +129,7 @@ export function ProjectSettingsScreen() {
       onMove={(workspaceId) => {
         void run('move', { workspaceId })
       }}
-      variables={
-        <VariablesSection orgId={orgId} parentField={{ projectId }} embedded showPresets />
-      }
+      onOpenBase={() => router.push(projectBaseHref(orgId, projectId) as Href)}
       keepOriginalNames={(project.options?.containerNaming ?? 'uuid') === 'custom'}
       savingNames={busy === 'names'}
       onKeepOriginalNames={(keep) => {

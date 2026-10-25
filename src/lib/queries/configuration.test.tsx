@@ -3,8 +3,8 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { renderHook, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createAppQueryClient, queryKeys } from '@/lib/query-client'
-import { useSaveConfiguration } from '@/lib/queries/configuration'
-import { goBackEdit, linuxUserEdit, variableEdit } from '@/lib/v4/config-edits'
+import { useSaveBaseVariables, useSaveConfiguration } from '@/lib/queries/configuration'
+import { goBackEdit, linuxUserEdit, removeVariableEdit, variableEdit } from '@/lib/v4/config-edits'
 import { buildConfigViewModel } from '@/lib/v4/config-view-model'
 import { stagingView } from '@/lib/v4/config-view-model.fixtures'
 
@@ -173,5 +173,54 @@ describe('useSaveConfiguration', () => {
       ok: true,
       value: { error: 'offline', saved: 0, remaining: [user] },
     })
+  })
+})
+
+describe('useSaveBaseVariables', () => {
+  it('writes the project’s variables only and never reads or writes a compose', async () => {
+    serverState()
+    api.fetchVariables.mockResolvedValue({
+      variables: [
+        {
+          id: 'v-old',
+          key: 'OLD',
+          value: '1',
+          isSecret: false,
+          forBuild: false,
+          forRuntime: true,
+          bindingId: null,
+        },
+      ],
+    })
+    const client = createAppQueryClient()
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
+    const { result } = renderHook(() => useSaveBaseVariables('o1', 'p1'), {
+      wrapper: wrapper(client),
+    })
+    const add = variableEdit({
+      name: 'NEW',
+      value: 'x',
+      secret: false,
+      forBuild: true,
+      forRuntime: true,
+      was: 'Not set',
+    })
+    const remove = removeVariableEdit({ name: 'OLD', was: '1', inBase: false })
+    const run = await result.current.run([add, remove])
+    expect(run).toMatchObject({ ok: true, value: { error: null, saved: 2, remaining: [] } })
+    expect(api.fetchVariables).toHaveBeenCalledWith({ projectId: 'p1' })
+    expect(api.createVariable).toHaveBeenCalledWith({
+      projectId: 'p1',
+      key: 'NEW',
+      value: 'x',
+      isSecret: false,
+      forBuild: true,
+      forRuntime: true,
+    })
+    expect(api.deleteVariable).toHaveBeenCalledWith('v-old')
+    expect(api.fetchProject).not.toHaveBeenCalled()
+    expect(api.fetchEnvironment).not.toHaveBeenCalled()
+    expect(api.updateEnvironment).not.toHaveBeenCalled()
+    await waitFor(() => expect(invalidate).toHaveBeenCalledTimes(4))
   })
 })

@@ -27,6 +27,11 @@ vi.mock('@/components/org/project/project-context', () => ({
 vi.mock('@/components/org/project/base-tab/use-base-tab', () => ({
   useBaseTabModel: () => model.current,
 }))
+vi.mock('@/components/ui', () => ({ TextField: () => null }))
+vi.mock('@/lib/queries/variables', () => ({ useVariables: () => ({ data: undefined }) }))
+vi.mock('@/lib/queries/configuration', () => ({
+  useSaveBaseVariables: () => ({ run: vi.fn(), isPending: false, actionError: null }),
+}))
 vi.mock('@/components/org/project/project-overview-tab', () => ({
   ProjectOverviewTab: () => <div data-testid="old-screen" />,
 }))
@@ -147,7 +152,8 @@ describe.each(SCENARIOS)('Base tab ($name)', (scenario) => {
     render(<ProjectBaseTab />)
     expect(screen.getByText('https://x')).toBeTruthy()
     expect(screen.getByText('••••••••')).toBeTruthy()
-    expect(screen.getByLabelText('TOKEN, secret, Run only')).toBeTruthy()
+    expect(screen.getByLabelText('TOKEN, secret, Base')).toBeTruthy()
+    expect(screen.getAllByText('Run only').length).toBe(2)
   })
 
   it('says which apps run as each Linux user', () => {

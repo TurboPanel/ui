@@ -228,7 +228,8 @@ describe('baseVariableRows', () => {
       ['C', 'Empty', 'Build only'],
     ])
     expect(rows[1]?.isSecret).toBe(true)
-    expect(rows[0]?.tag).toBe('Base')
+    expect(rows[0]?.tag).toEqual({ source: 'base', label: 'Base' })
+    expect(rows.map((item) => item.key)).toEqual(['var:A', 'var:B', 'var:C'])
   })
 })
 

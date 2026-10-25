@@ -1,5 +1,5 @@
 import { useRouter, type Href } from 'expo-router'
-import { useCallback, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Linking, Text, View } from 'react-native'
 import {
   AppsSection,
@@ -12,6 +12,7 @@ import {
 } from '@/components/org/project/configuration/config-sections'
 import type { EditingApi } from '@/components/org/project/configuration/editing'
 import { SaveBar } from '@/components/org/project/configuration/save-bar'
+import { useStagedEdits } from '@/components/org/project/configuration/use-staged-edits'
 import { useProjectContext } from '@/components/org/project/project-context'
 import { LoadingState } from '@/components/ui'
 import { Toggle } from '@/components/ui/toggle'
@@ -28,14 +29,7 @@ import { useEnvironmentConfigView } from '@/lib/queries/environments'
 import { useHostingsByServices } from '@/lib/queries/services'
 import { useVariables } from '@/lib/queries/variables'
 import { environmentDisplayName } from '@/lib/resource-labels'
-import {
-  changeActions,
-  stageEdit,
-  unstageEdit,
-  variableFacts,
-  type SaveProblem,
-  type StagedEdit,
-} from '@/lib/v4/config-edits'
+import { changeActions, variableFacts } from '@/lib/v4/config-edits'
 import {
   buildConfigViewModel,
   withHostingHostnames,
@@ -174,37 +168,8 @@ export function EnvironmentConfigurationScreen() {
   let hostingsStatus: HostingsStatus = 'ready'
   if (hostings.hasError) hostingsStatus = 'error'
   else if (hostings.isLoading) hostingsStatus = 'loading'
-  const [staged, setStaged] = useState<readonly StagedEdit[]>([])
-  const [saveError, setSaveError] = useState<string | null>(null)
-  const [problems, setProblems] = useState<readonly SaveProblem[]>([])
-  const [savedCount, setSavedCount] = useState(0)
-
-  const stage = useCallback((edit: StagedEdit) => {
-    setStaged((current) => stageEdit(current, edit))
-    setSavedCount(0)
-  }, [])
-  const unstage = useCallback(
-    (key: string) => setStaged((current) => unstageEdit(current, key)),
-    []
-  )
-  const discard = useCallback(() => {
-    setStaged([])
-    setSaveError(null)
-    setProblems([])
-  }, [])
-  const saveAll = useCallback(async () => {
-    setSaveError(null)
-    setProblems([])
-    const result = await save.run(staged)
-    if (!result.ok) {
-      setSaveError(save.actionError ?? 'Could not save these changes.')
-      return
-    }
-    setStaged(result.value.remaining)
-    setProblems(result.value.problems)
-    setSaveError(result.value.error)
-    setSavedCount(result.value.error === null ? result.value.saved : 0)
-  }, [save, staged])
+  const { staged, stage, unstage, discard, saveAll, saveError, problems, savedCount } =
+    useStagedEdits(save)
 
   const editable = canOwn && projectAllowsMutations
   const envVariableRecords = environmentVariables.data?.variables

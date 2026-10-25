@@ -457,6 +457,66 @@ describe('planSave', () => {
   })
 })
 
+describe('planSave on the Base', () => {
+  const base = (extra: Partial<SaveContext> = {}) =>
+    context({ base: true, environmentCompose: doc({ services: { web: {} } }), ...extra })
+
+  it('creates a project variable, never an environment one', () => {
+    const edit = variableEdit({
+      name: 'API_URL',
+      value: 'https://api',
+      secret: false,
+      forBuild: true,
+      forRuntime: true,
+      was: 'Not set',
+    })
+    const own = record('API_URL', { environmentId: 'e1' })
+    expect(planSave([edit], base({ environmentVariables: [own] })).steps).toEqual([
+      {
+        kind: 'variable',
+        op: {
+          type: 'create',
+          body: {
+            projectId: 'p1',
+            key: 'API_URL',
+            value: 'https://api',
+            isSecret: false,
+            forBuild: true,
+            forRuntime: true,
+          },
+        },
+        editKeys: ['var:API_URL'],
+      },
+    ])
+  })
+
+  it('updates and removes the project’s own variable', () => {
+    const shared = record('MODE', { projectId: 'p1' })
+    const update = variableEdit({
+      name: 'MODE',
+      value: null,
+      secret: false,
+      forBuild: true,
+      forRuntime: false,
+      was: 'v',
+    })
+    expect(planSave([update], base({ projectVariables: [shared] })).steps[0]).toMatchObject({
+      op: { type: 'update', id: shared.id, body: { forBuild: true, forRuntime: false } },
+    })
+    const remove = removeVariableEdit({ name: 'MODE', was: 'v', inBase: false })
+    expect(planSave([remove], base({ projectVariables: [shared] })).steps).toEqual([
+      { kind: 'variable', op: { type: 'delete', id: shared.id }, editKeys: ['var:MODE'] },
+    ])
+  })
+
+  it('says the Base when the variable is gone', () => {
+    const remove = removeVariableEdit({ name: 'MODE', was: 'v', inBase: false })
+    expect(planSave([remove], base()).problems).toEqual([
+      { key: 'var:MODE', reason: 'MODE is no longer set on the Base.' },
+    ])
+  })
+})
+
 describe('remainingEdits', () => {
   it('keeps the edits whose steps have not run', () => {
     const a = linuxUserEdit({ serviceName: 'web', user: 'staging-web', was: 'website' })
