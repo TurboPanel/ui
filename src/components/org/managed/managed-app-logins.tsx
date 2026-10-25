@@ -14,6 +14,7 @@ import {
   appLoginsErrorMessage,
   appLoginsOwnerNote,
   appLoginsRequestBody,
+  plainAppLoginNotes,
 } from '@/lib/managed-app-logins'
 import {
   EMPTY_LIMITS_DRAFT,
@@ -158,6 +159,88 @@ export function AppLoginsForm({
   )
 }
 
+type CreateAppLogins = (databaseName: string, body: AppLoginsBody) => Promise<AppLoginsResult>
+
+/**
+ * State of the "Add app logins" action on a screen: which database has its
+ * form open, and the result waiting to be shown. `create` absent = no action.
+ */
+export function useAppLogins(create: CreateAppLogins | undefined, onReload: () => Promise<void>) {
+  const [openFor, setOpenFor] = useState<string | null>(null)
+  const [result, setResult] = useState<AppLoginsResult | null>(null)
+  return {
+    enabled: create !== undefined,
+    openFor,
+    open: (databaseName: string) => setOpenFor(databaseName),
+    close: () => setOpenFor(null),
+    result,
+    dismiss: () => setResult(null),
+    submit: async (databaseName: string, body: AppLoginsBody) => {
+      if (!create) return
+      const made = await create(databaseName, body)
+      setOpenFor(null)
+      setResult(made)
+      await onReload()
+    },
+  }
+}
+
+export type AppLoginsState = ReturnType<typeof useAppLogins>
+
+/** The per-database button; nothing when the action is not offered. */
+export function AppLoginsButton({
+  appLogins,
+  databaseName,
+  disabled,
+  problem,
+}: Readonly<{
+  appLogins: AppLoginsState
+  databaseName: string
+  disabled: boolean
+  problem: string | null
+}>) {
+  if (!appLogins.enabled) return null
+  return (
+    <Button
+      label="Add app logins"
+      size="sm"
+      disabled={disabled || problem !== null || appLogins.openFor === databaseName}
+      onPress={() => appLogins.open(databaseName)}
+    />
+  )
+}
+
+/** The form under a database row, while it is open for that database. */
+export function AppLoginsRowForm({
+  appLogins,
+  databaseName,
+  ...form
+}: Readonly<
+  { appLogins: AppLoginsState; databaseName: string } & Omit<
+    Parameters<typeof AppLoginsForm>[0],
+    'databaseName' | 'onSubmit' | 'onCancel'
+  >
+>) {
+  if (!appLogins.enabled || appLogins.openFor !== databaseName) return null
+  return (
+    <AppLoginsForm
+      {...form}
+      databaseName={databaseName}
+      onSubmit={appLogins.submit}
+      onCancel={appLogins.close}
+    />
+  )
+}
+
+/** Why the action is unavailable (a locked name scheme), when it is. */
+export function AppLoginsSchemeNote({
+  appLogins,
+  problem,
+}: Readonly<{ appLogins: AppLoginsState; problem: string | null }>) {
+  if (!appLogins.enabled || !problem) return null
+  return <Text style={panelStyles.muted}>{problem}</Text>
+}
+
 const SHOW_ONCE_WARNING = 'These passwords are shown once. You will not be able to see them again.'
 
 /** One list of the new logins and their show-once passwords, instead of one reveal per login. */
@@ -185,7 +268,7 @@ export function AppLoginsPasswords({
           />
         </View>
       ))}
-      {(result.notes ?? []).map((note) => (
+      {plainAppLoginNotes(result.notes).map((note) => (
         <Text key={note} style={panelStyles.muted}>
           {note}
         </Text>

@@ -2,8 +2,11 @@ import { Fragment, useEffect, useMemo, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { SecretReveal } from '@/components/org/managed/secret-reveal'
 import {
-  AppLoginsForm,
+  AppLoginsButton,
   AppLoginsPasswords,
+  AppLoginsRowForm,
+  AppLoginsSchemeNote,
+  useAppLogins,
   type AppLoginsBody,
   type AppLoginsResult,
 } from '@/components/org/managed/managed-app-logins'
@@ -87,6 +90,25 @@ type LoginFormChoices = {
 }
 
 const loginFormKey = (orgId: string) => `managed-login-form:${orgId}`
+
+const DEFAULT_LOGIN_FORM: LoginFormChoices = {
+  job: 'read-write',
+  grantMode: 'recipe',
+  tool: false,
+  admin: false,
+  toolBeforeAdmin: false,
+  limits: EMPTY_LIMITS_DRAFT,
+  // null = the owner has not touched the switch, so the default for the chosen level shows.
+  straightChoice: null,
+}
+
+/** The last login's choices in this session, or the defaults. */
+function initialLoginForm(orgId: string): LoginFormChoices {
+  return {
+    ...DEFAULT_LOGIN_FORM,
+    ...recallSessionChoices<LoginFormChoices>(loginFormKey(orgId)),
+  }
+}
 
 function Chip({ label }: Readonly<{ label: string }>) {
   return (
@@ -189,26 +211,22 @@ export function ManagedUsersPanel({
 }>) {
   const bindingsQuery = useManagedEnvironmentBindings(orgId, environmentId)
   // The form starts from the last login's choices in this session.
-  const [remembered] = useState(() => recallSessionChoices<LoginFormChoices>(loginFormKey(orgId)))
-  const nameScheme = usePrincipalNameScheme(orgId, remembered?.nameScheme)
+  const [initial] = useState(() => initialLoginForm(orgId))
+  const nameScheme = usePrincipalNameScheme(orgId, initial.nameScheme)
   const serversQuery = useOrgServers(orgId)
   const servers = orEmptyArray(serversQuery.data?.servers)
   const [dbName, setDbName] = useState('')
   const [username, setUsername] = useState('')
   const [selectedDbs, setSelectedDbs] = useState<string[]>([])
-  const [job, setJob] = useState<LoginJob>(remembered?.job ?? 'read-write')
-  const [grantMode, setGrantMode] = useState<LoginMode>(remembered?.grantMode ?? 'recipe')
-  const [tool, setTool] = useState(remembered?.tool ?? false)
-  const [admin, setAdmin] = useState(remembered?.admin ?? false)
-  const [toolBeforeAdmin, setToolBeforeAdmin] = useState(remembered?.toolBeforeAdmin ?? false)
-  const [limits, setLimits] = useState<LoginLimitsDraft>(remembered?.limits ?? EMPTY_LIMITS_DRAFT)
+  const [job, setJob] = useState<LoginJob>(initial.job)
+  const [grantMode, setGrantMode] = useState<LoginMode>(initial.grantMode)
+  const [tool, setTool] = useState(initial.tool)
+  const [admin, setAdmin] = useState(initial.admin)
+  const [toolBeforeAdmin, setToolBeforeAdmin] = useState(initial.toolBeforeAdmin)
+  const [limits, setLimits] = useState<LoginLimitsDraft>(initial.limits)
   const [limitsProblem, setLimitsProblem] = useState<string | null>(null)
-  // null = the owner has not touched the switch, so the default for the chosen level shows.
-  const [straightChoice, setStraightChoice] = useState<boolean | null>(
-    remembered?.straightChoice ?? null
-  )
-  const [appLoginsFor, setAppLoginsFor] = useState<string | null>(null)
-  const [appLoginsResult, setAppLoginsResult] = useState<AppLoginsResult | null>(null)
+  const [straightChoice, setStraightChoice] = useState<boolean | null>(initial.straightChoice)
+  const appLogins = useAppLogins(canManage ? onCreateAppLogins : undefined, onReload)
   const [error, setError] = useState<string | null>(null)
   const [usernameHint, setUsernameHint] = useState<string | null>(null)
   const [working, setWorking] = useState(false)
@@ -394,18 +412,10 @@ export function ManagedUsersPanel({
     }
   }
 
-  const createAppLogins = async (databaseName: string, body: AppLoginsBody) => {
-    if (!onCreateAppLogins) return
-    const result = await onCreateAppLogins(databaseName, body)
-    setAppLoginsFor(null)
-    setAppLoginsResult(result)
-    await onReload()
-  }
-
-  if (appLoginsResult) {
+  if (appLogins.result) {
     return (
       <SectionPanel title="Users & databases" hint="Engine users and databases">
-        <AppLoginsPasswords result={appLoginsResult} onDone={() => setAppLoginsResult(null)} />
+        <AppLoginsPasswords result={appLogins.result} onDone={appLogins.dismiss} />
       </SectionPanel>
     )
   }
@@ -456,9 +466,7 @@ export function ManagedUsersPanel({
                   </Text>
                 ) : null}
                 {canManage && deleteBlocked ? (
-                  <Text style={panelStyles.muted}>
-                    Remove connections first ({bindingCount})
-                  </Text>
+                  <Text style={panelStyles.muted}>Remove connections first ({bindingCount})</Text>
                 ) : null}
                 {canManage && !deleteBlocked ? (
                   <ConfirmButton
@@ -471,32 +479,25 @@ export function ManagedUsersPanel({
                     }}
                   />
                 ) : null}
-                {canManage && onCreateAppLogins ? (
-                  <Button
-                    label="Add app logins"
-                    size="sm"
-                    disabled={disabled || appLoginsProblem !== null || appLoginsFor === name}
-                    onPress={() => setAppLoginsFor(name)}
-                  />
-                ) : null}
-              </View>
-              {canManage && onCreateAppLogins && appLoginsFor === name ? (
-                <AppLoginsForm
-                  orgId={orgId}
-                  engine={engine}
+                <AppLoginsButton
+                  appLogins={appLogins}
                   databaseName={name}
-                  servers={servers}
                   disabled={disabled}
-                  onSubmit={createAppLogins}
-                  onCancel={() => setAppLoginsFor(null)}
+                  problem={appLoginsProblem}
                 />
-              ) : null}
+              </View>
+              <AppLoginsRowForm
+                appLogins={appLogins}
+                orgId={orgId}
+                engine={engine}
+                databaseName={name}
+                servers={servers}
+                disabled={disabled}
+              />
             </Fragment>
           )
         })}
-        {canManage && onCreateAppLogins && appLoginsProblem ? (
-          <Text style={panelStyles.muted}>{appLoginsProblem}</Text>
-        ) : null}
+        <AppLoginsSchemeNote appLogins={appLogins} problem={appLoginsProblem} />
       </View>
 
       {canManage ? (

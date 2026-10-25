@@ -177,7 +177,9 @@ describe('ManagedUsersPanel app logins', () => {
         appLogin('shop_rw', 'p-rw'),
         appLogin('shop_ro', 'p-ro'),
       ],
-      notes: ['A note from the server.'],
+      notes: [
+        'These databases have no owner role yet. Move a database onto an owner role (POST …/managed/databases/{name}/owner-role with confirm: true).',
+      ],
     }))
     const { onReload } = draw('postgres', onCreateAppLogins)
 
@@ -194,7 +196,8 @@ describe('ManagedUsersPanel app logins', () => {
     expect(onReload).toHaveBeenCalled()
     expect(screen.getByText('p-rw')).toBeTruthy()
     expect(screen.getByText('p-ro')).toBeTruthy()
-    expect(screen.getByText('A note from the server.')).toBeTruthy()
+    expect(screen.getByText(/^This database has no owner role yet/)).toBeTruthy()
+    expect(screen.queryByText(/owner-role with confirm/)).toBeNull()
     expect(screen.getByLabelText('Copy the password of shop_rw').getAttribute('data-copy')).toBe(
       'p-rw'
     )

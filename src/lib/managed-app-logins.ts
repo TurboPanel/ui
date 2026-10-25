@@ -101,3 +101,20 @@ export function appLoginsErrorMessage(err: unknown): string {
   if (code && sentence && NAMED_REFUSALS.has(code)) return sentence
   return principalSchemeErrorMessage(managedErrorMessage(err, 'Failed to add the app logins'))
 }
+
+const NO_OWNER_ROLE_NOTE =
+  'This database has no owner role yet, so the _migrate login got read and write access only: it does not own the database and cannot give other logins access.'
+const OLDER_SERVER_NOTE =
+  'This server runs an older TurboPanel version, so the _migrate login got read and write access only. Update the server, then apply again to give it full ownership.'
+const OTHER_NOTE =
+  'The _migrate login did not get full ownership of this database. Its card in the list shows what it can do.'
+
+/** The server notes about the owner login, in plain words (never API wording). */
+export function plainAppLoginNotes(notes: readonly string[] | undefined): string[] {
+  const plain = (notes ?? []).map((note) => {
+    if (/no owner role yet/i.test(note)) return NO_OWNER_ROLE_NOTE
+    if (/is older than/i.test(note)) return OLDER_SERVER_NOTE
+    return /POST |…\/|\/managed\/|\{name\}|connectionRole/.test(note) ? OTHER_NOTE : note
+  })
+  return [...new Set(plain)]
+}
