@@ -42,6 +42,7 @@ import { useUnreadNotificationCount } from '@/lib/notifications'
 import { setActiveOrganizationId } from '@/lib/org-context'
 import { HA_PRODUCT_NAME } from '@/lib/platform-copy'
 import { colors, layout, webPointer } from '@/lib/theme'
+import { forgetSessionChoices } from '@/lib/session-choices'
 
 const isNative = Platform.OS !== 'web'
 
@@ -321,6 +322,7 @@ export function UserAccountMenuSegment({ email, onSignOut }: UserAccountMenuSegm
     if (!switchControlPlaneAccount(account.origin)) return
     setActiveOrganizationId(account.lastOrgId)
     queryClient.clear()
+    forgetSessionChoices()
   }
 
   const handleAddControlPlane = () => {

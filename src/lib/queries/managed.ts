@@ -4,6 +4,7 @@ import {
   createEnvironmentManaged,
   createManagedBackup,
   createManagedDatabase,
+  createManagedAppLogins,
   createManagedUser,
   deleteEnvironmentManaged,
   deleteManagedBackup,
@@ -372,22 +373,43 @@ export function useRotateManagedRootPassword(orgId: string, environmentId: strin
   return useShowOnceSecretMutation(mutation, 'Failed to rotate root password')
 }
 
+/** New logins: the users list and the queued apply change. */
+function invalidateAfterLoginCreate(
+  queryClient: ReturnType<typeof useQueryClient>,
+  orgId: string,
+  environmentId: string
+) {
+  return Promise.all([
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.org(orgId).managed.users(environmentId),
+    }),
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.org(orgId).commands.all,
+    }),
+  ])
+}
+
 export function useCreateManagedUser(orgId: string, environmentId: string) {
   const queryClient = useQueryClient()
   const mutation = useMutation({
     mutationFn: (body: Parameters<typeof createManagedUser>[1]) =>
       createManagedUser(environmentId, body),
-    onSuccess: () =>
-      Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.org(orgId).managed.users(environmentId),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.org(orgId).commands.all,
-        }),
-      ]),
+    onSuccess: () => invalidateAfterLoginCreate(queryClient, orgId, environmentId),
   })
   return useShowOnceSecretMutation(mutation, 'Failed to create managed user')
+}
+
+/** The three app logins for one database; the passwords are never kept in the cache. */
+export function useCreateManagedAppLogins(orgId: string, environmentId: string) {
+  const queryClient = useQueryClient()
+  const mutation = useMutation({
+    mutationFn: (input: {
+      databaseName: string
+      body: Parameters<typeof createManagedAppLogins>[2]
+    }) => createManagedAppLogins(environmentId, input.databaseName, input.body),
+    onSuccess: () => invalidateAfterLoginCreate(queryClient, orgId, environmentId),
+  })
+  return useShowOnceSecretMutation(mutation, 'Failed to add the app logins')
 }
 
 export function useUpdateManagedUser(orgId: string, environmentId: string) {

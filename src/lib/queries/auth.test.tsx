@@ -29,6 +29,7 @@ import {
   useVerifyEmail,
   useVerifyTotp,
 } from '@/lib/queries/auth'
+import { recallSessionChoices, rememberSessionChoices } from '@/lib/session-choices'
 
 const {
   fetchSession,
@@ -452,9 +453,12 @@ describe('auth query hooks', () => {
       wrapper: createWrapper(client),
     })
 
+    rememberSessionChoices('managed-login-form:o1', { job: 'owner' })
     await expect(result.current.run()).resolves.toMatchObject({ ok: true })
     expect(client.getQueryData(['auth', 'session'])).toBeUndefined()
     expect(setActiveOrganizationId).toHaveBeenCalledWith(null)
+    // Remembered form choices go with the account.
+    expect(recallSessionChoices('managed-login-form:o1')).toBeUndefined()
   })
 
   it('useSignOut removes remote account and restores last org', async () => {
