@@ -192,6 +192,14 @@ const PHP_MODE_LABELS: Readonly<Record<PhpMode, string>> = {
   'lsphp-attached': 'lsphp, attached to OpenLiteSpeed',
 }
 
+/** Scheduled-jobs fields, left out while a project is first being set up. */
+function ScheduledJobsFields({
+  hidden,
+  ...fields
+}: Readonly<{ hidden: boolean } & ComponentProps<typeof CronFields>>) {
+  return hidden ? null : <CronFields {...fields} />
+}
+
 /**
  * PHP configuration for a site, edited where it lives.
  *
@@ -203,14 +211,6 @@ const PHP_MODE_LABELS: Readonly<Record<PhpMode, string>> = {
  * validates then *drops* — so a refused value shows up as a lint issue in the
  * editor rather than being silently escaped into a config file.
  */
-/** Scheduled-jobs fields, left out while a project is first being set up. */
-function ScheduledJobsFields({
-  hidden,
-  ...fields
-}: Readonly<{ hidden: boolean } & ComponentProps<typeof CronFields>>) {
-  return hidden ? null : <CronFields {...fields} />
-}
-
 function PhpFields({
   php,
   engine,
