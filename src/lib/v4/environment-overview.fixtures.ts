@@ -203,7 +203,11 @@ export function container(
   }
 }
 
-export function hosting(name: string | null, tlsId: string | null = null): HostingRecord {
+export function hosting(
+  name: string | null,
+  tlsId: string | null = null,
+  patch: Partial<HostingRecord> = {}
+): HostingRecord {
   return {
     id: `h-${name}`,
     name,
@@ -212,6 +216,7 @@ export function hosting(name: string | null, tlsId: string | null = null): Hosti
     tlsId,
     createdAt: '2026-10-01T00:00:00Z',
     updatedAt: '2026-10-01T00:00:00Z',
+    ...patch,
   }
 }
 
