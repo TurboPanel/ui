@@ -315,6 +315,23 @@ function hostsOf(hosting: HostingRecord): string[] {
   return name === '' ? [] : [name]
 }
 
+/** The map domains of one hosting row: one per host, all with its certificate and served line. */
+function hostingDomains(
+  hosting: HostingRecord,
+  serviceName: string,
+  source: OverviewSource
+): MapDomain[] {
+  const key = certificateKey(hosting.tlsId, source.tls)
+  const label = CERTIFICATE_BADGE_WORDS[key] ?? statusInfo(key).label
+  const servedFrom = servedFromOf(hosting, source)
+  return hostsOf(hosting).map((host) => ({
+    host,
+    status: { key, label },
+    serviceId: serviceName,
+    ...(servedFrom === null ? {} : { servedFrom }),
+  }))
+}
+
 /** One map domain per hostname, oldest hosting first, each hostname once. */
 export function domainsOf(source: OverviewSource): MapDomain[] {
   const seen = new Set<string>()
@@ -322,18 +339,11 @@ export function domainsOf(source: OverviewSource): MapDomain[] {
   for (const service of source.view.effective.services) {
     const rows = service.serviceId === null ? [] : (source.hostings[service.serviceId] ?? [])
     for (const hosting of oldestHostingsFirst(rows)) {
-      const key = certificateKey(hosting.tlsId, source.tls)
-      const label = CERTIFICATE_BADGE_WORDS[key] ?? statusInfo(key).label
-      const servedFrom = servedFromOf(hosting, source)
-      for (const host of hostsOf(hosting)) {
-        if (seen.has(host.toLowerCase())) continue
-        seen.add(host.toLowerCase())
-        domains.push({
-          host,
-          status: { key, label },
-          serviceId: service.name,
-          ...(servedFrom === null ? {} : { servedFrom }),
-        })
+      for (const domain of hostingDomains(hosting, service.name, source)) {
+        const key = domain.host.toLowerCase()
+        if (seen.has(key)) continue
+        seen.add(key)
+        domains.push(domain)
       }
     }
   }
