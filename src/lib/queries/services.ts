@@ -5,6 +5,7 @@ import {
   createService,
   fetchVisibleHostings,
   fetchVisibleServices,
+  releaseHostingFromCompose,
   updateHosting,
   updateService,
   type HostingRecord,
@@ -140,6 +141,21 @@ export function useUpsertHosting(orgId: string) {
       ])
     },
     fallbackError: 'Failed to save hosting',
+  })
+}
+
+/** Release a compose-made hosting to the panel; refreshes that service's hostings. */
+export function useReleaseHostingFromCompose(orgId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: ({ hostingId }: { hostingId: string; serviceId: string }) =>
+      releaseHostingFromCompose(hostingId),
+    onSuccess: async (_data, variables) => {
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.org(orgId).hostings.list(variables.serviceId),
+      })
+    },
+    fallbackError: 'Failed to move the hostname to this screen',
   })
 }
 

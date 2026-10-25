@@ -32,10 +32,10 @@ const TONE_COLOR: Record<CertificateTone, string> = {
 }
 
 const COMPOSE_OWNED_COPY =
-  'Compose declares this domain, so its certificate is chosen in the route’s TLS certificate setting above. Pick Let’s Encrypt (automatic) there to get a free certificate on the next deploy.'
+  'This hostname is set in the configuration file, so its certificate is chosen in the Certificate setting above. Pick Let’s Encrypt there to get a free certificate on the next deploy.'
 
 const COMPOSE_AUTOMATIC_COPY =
-  'Compose asks Let’s Encrypt for this domain’s certificate (tls.mode "automatic").'
+  'The configuration file asks Let’s Encrypt for this hostname’s certificate, which renews by itself.'
 
 /** The note under a compose-owned domain's certificate state; none for a panel domain. */
 function composeNote(composeOwned: boolean, composeAutomatic: boolean): string | null {

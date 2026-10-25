@@ -22,6 +22,9 @@ export const HOSTING_COMPOSE_ROUTE_METADATA_KEY = 'composeRoute'
 /** The authored `tls.mode` of the declaring entry. */
 export const HOSTING_COMPOSE_TLS_MODE_METADATA_KEY = 'composeTlsMode'
 
+/** Set when compose took over a row the panel had already made. */
+export const HOSTING_COMPOSE_ADOPTED_METADATA_KEY = 'composeAdopted'
+
 function isPlainMapping(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -60,4 +63,14 @@ export function readHostingComposeServiceName(metadata: unknown): string | null 
 export function isComposeAutomaticTlsHosting(metadata: unknown): boolean {
   if (!isComposeOwnedHosting(metadata) || !isPlainMapping(metadata)) return false
   return metadata[HOSTING_COMPOSE_TLS_MODE_METADATA_KEY] === 'automatic'
+}
+
+/**
+ * True when the row existed in the panel before compose named it and was taken
+ * over. When its declaration goes away the deploy hands such a row back to the
+ * panel instead of deleting it, which the Remove hostname prompt says.
+ */
+export function isAdoptedComposeHosting(metadata: unknown): boolean {
+  if (!isComposeOwnedHosting(metadata) || !isPlainMapping(metadata)) return false
+  return metadata[HOSTING_COMPOSE_ADOPTED_METADATA_KEY] === true
 }
