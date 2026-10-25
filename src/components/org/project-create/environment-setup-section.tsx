@@ -23,7 +23,7 @@ import {
   useUpdateEnvironment,
 } from '@/lib/queries'
 import { serverDisplayName } from '@/lib/resource-labels'
-import { userErrorMessage } from '@/lib/user-error'
+import { failedRunMessage, userErrorMessage } from '@/lib/user-error'
 import { primaryEnvironmentOf } from '@/lib/v4/primary-environment'
 
 /**
@@ -50,11 +50,6 @@ export function ProjectEnvironmentSetupSection() {
       canManage={canManage}
     />
   )
-}
-
-/** The plain sentence for a refused call: the mapped error code, else the server's words. */
-function refusal(result: Readonly<{ error: string | null; cause?: unknown }>, fallback: string) {
-  return result.cause ? userErrorMessage(result.cause, fallback) : (result.error ?? fallback)
 }
 
 function EnvironmentSetupLoader({
@@ -150,7 +145,7 @@ function EnvironmentSetupScreen({
     if (patch) {
       const saved = await updateEnvironment.run(patch)
       if (!saved.ok) {
-        setError(refusal(saved, 'Could not save this environment.'))
+        setError(failedRunMessage(saved, 'Could not save this environment.'))
         return false
       }
     }
@@ -160,7 +155,7 @@ function EnvironmentSetupScreen({
       const saved = await createVariable.run(body)
       if (!saved.ok) {
         setSavedKeys(created)
-        setError(refusal(saved, `Could not save the variable ${body.key}.`))
+        setError(failedRunMessage(saved, `Could not save the variable ${body.key}.`))
         return false
       }
       created.push(body.key)
