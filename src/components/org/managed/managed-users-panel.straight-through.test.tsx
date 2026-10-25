@@ -160,20 +160,21 @@ describe('ManagedUsersPanel straight through', () => {
 })
 
 describe('ManagedUsersPanel while the last change is still applying', () => {
-  it('still adds a database, and says that editing waits', async () => {
+  it('locks the add forms and says so next to them, with a spinner', () => {
     const onCreateDatabase = vi.fn(async (_name: string) => {})
     draw('postgres', { busy: true, onCreateDatabase })
-    expect(screen.getByText(/still being applied on the server/)).toBeTruthy()
-    fireEvent.change(screen.getByLabelText('Database name'), { target: { value: 'testing' } })
-    fireEvent.click(screen.getByText('Add database'))
-    await waitFor(() => expect(onCreateDatabase).toHaveBeenCalledWith('testing'))
+    expect(screen.getAllByText(/this form unlocks by itself/)).toHaveLength(2)
+    expect(screen.getByText(/Editing and deleting unlock by themselves/)).toBeTruthy()
+    expect(screen.getAllByRole('progressbar').length).toBeGreaterThan(0)
+    expect((screen.getByText('Add database') as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByText('Create user') as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.getByTestId('admin-field').dataset.disabled).toBe('true')
   })
 
-  it('keeps the new login form usable, its switches included', async () => {
-    const onCreateUser = draw('postgres', { busy: true })
-    expect(screen.getByTestId('admin-field').dataset.disabled).toBe('false')
-    await create('staging_migrate')
-    await waitFor(() => expect(onCreateUser).toHaveBeenCalledTimes(1))
+  it('shows no waiting note when nothing is applying', () => {
+    draw('postgres')
+    expect(screen.queryByText(/this form unlocks by itself/)).toBeNull()
+    expect(screen.queryByRole('progressbar')).toBeNull()
   })
 })
 

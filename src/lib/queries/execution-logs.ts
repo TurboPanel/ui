@@ -294,11 +294,9 @@ export function useCommandLog(
 }
 
 /**
- * Deploy history for one environment. No `refetchInterval` — the list is
- * invalidated by the deploy mutation and whenever a tracked command reaches a
- * terminal status, mirroring the containers-on-Project-Overview rule.
+ * History poll cadence while the newest deploy is still going. The deploy
+ * mutation invalidates the history, which starts the poll.
  */
-/** History poll cadence while the newest deploy is still going. */
 export const DEPLOYMENT_POLL_MS = 5000
 
 /**

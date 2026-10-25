@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import { SecretReveal } from '@/components/org/managed/secret-reveal'
 import { panelStyles } from '@/components/ui/panel-styles'
 import {
@@ -119,14 +119,23 @@ function InlineError({ message }: Readonly<{ message: string | null }>) {
   return message ? <Text style={panelStyles.error}>{message}</Text> : null
 }
 
-/** Why editing waits while the last change is still applying on the server. */
-function ApplyingNote({ shown }: Readonly<{ shown: boolean }>) {
+/** What the last add form, edit or delete is waiting for while a change applies. */
+const FORM_WAITS = 'Wait until the current change finishes; this form unlocks by itself.'
+const EDITS_WAIT =
+  'The current change is still being applied on the server. Editing and deleting unlock by themselves when it finishes.'
+
+/**
+ * Why controls are locked while a change applies on the server: it refuses
+ * another change to this database until then (`managed_busy`), so the
+ * controls wait visibly instead of ignoring presses.
+ */
+function ApplyingNote({ shown, text }: Readonly<{ shown: boolean; text: string }>) {
   if (!shown) return null
   return (
-    <Text style={panelStyles.muted}>
-      The last change is still being applied on the server. Editing or deleting waits until it
-      finishes.
-    </Text>
+    <View style={styles.applying}>
+      <ActivityIndicator size="small" color={colors.textMuted} />
+      <Text style={panelStyles.muted}>{text}</Text>
+    </View>
   )
 }
 
@@ -406,16 +415,14 @@ export function ManagedUsersPanel({
     )
   }
 
-  // A change still applying on the server (`busy`) holds back edits to what
-  // exists; adding a database or a login is queued behind it by the server,
-  // so the add forms stay usable instead of silently ignoring presses.
-  const addDisabled = working || !canManage
-  const disabled = busy || addDisabled
+  // While a change applies (`busy`) the server refuses another one, so every
+  // control waits, with an ApplyingNote saying so next to it.
+  const disabled = busy || working || !canManage
 
   return (
     <SectionPanel title="Users & databases" hint="Engine users and databases">
       <InlineError message={error} />
-      <ApplyingNote shown={busy && canManage} />
+      <ApplyingNote shown={busy && canManage} text={EDITS_WAIT} />
 
       <Text style={styles.subheading}>Databases</Text>
       <View style={styles.list}>
@@ -461,14 +468,15 @@ export function ManagedUsersPanel({
             placeholder="database_name"
             autoCapitalize="none"
             autoCorrect={false}
-            editable={!addDisabled}
+            editable={!disabled}
           />
+          <ApplyingNote shown={busy} text={FORM_WAITS} />
           <Button
             label="Add database"
             busyLabel="Adding…"
             variant="primary"
             busy={adding === 'database'}
-            disabled={addDisabled}
+            disabled={disabled}
             onPress={() => {
               void createDatabase()
             }}
@@ -616,12 +624,12 @@ export function ManagedUsersPanel({
             placeholder="username"
             autoCapitalize="none"
             autoCorrect={false}
-            editable={!addDisabled}
+            editable={!disabled}
           />
           {usernameHint ? (
             <Text style={panelStyles.calloutWarning}>{usernameHint}</Text>
           ) : null}
-          <PrincipalNameSchemeField scheme={nameScheme} disabled={addDisabled} />
+          <PrincipalNameSchemeField scheme={nameScheme} disabled={disabled} />
           <Text style={panelStyles.detailLabel}>Databases</Text>
           <View style={styles.chipRow}>
             {databases.map((name) => {
@@ -631,9 +639,9 @@ export function ManagedUsersPanel({
                   key={name}
                   style={[styles.chip, selected && styles.chipSelected, webPointer]}
                   onPress={() => toggleDb(name)}
-                  disabled={addDisabled}
+                  disabled={disabled}
                   accessibilityRole="checkbox"
-                  accessibilityState={{ checked: selected, disabled: addDisabled }}
+                  accessibilityState={{ checked: selected, disabled }}
                   accessibilityLabel={name}
                 >
                   <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
@@ -648,7 +656,7 @@ export function ManagedUsersPanel({
               A Database admin login always reads and writes.
             </Text>
           ) : (
-            <NewLoginJobField job={job} onJobChange={setJob} disabled={addDisabled} />
+            <NewLoginJobField job={job} onJobChange={setJob} disabled={disabled} />
           )}
           <NewLoginAdminField
             admin={admin}
@@ -662,14 +670,14 @@ export function ManagedUsersPanel({
                 setTool(toolBeforeAdmin)
               }
             }}
-            disabled={addDisabled}
+            disabled={disabled}
           />
           <NewLoginModeFields
             mode={grantMode}
             onModeChange={setGrantMode}
             tool={tool}
             onToolChange={setTool}
-            disabled={addDisabled}
+            disabled={disabled}
           />
           <LoginLimitsFields
             draft={limits}
@@ -678,7 +686,7 @@ export function ManagedUsersPanel({
               setLimitsProblem(null)
             }}
             servers={servers}
-            disabled={addDisabled}
+            disabled={disabled}
           />
           <InlineError message={limitsProblem} />
           <NewLoginStraightThroughField
@@ -686,16 +694,17 @@ export function ManagedUsersPanel({
             choice={straightChoice}
             privileges={[admin ? MANAGED_ADMIN_PRIVILEGE : job]}
             limited={limits.limited}
-            disabled={addDisabled}
+            disabled={disabled}
             onChange={setStraightChoice}
           />
           <InlineError message={newLoginError} />
+          <ApplyingNote shown={busy} text={FORM_WAITS} />
           <Button
             label="Create user"
             busyLabel="Creating…"
             variant="primary"
             busy={adding === 'login'}
-            disabled={addDisabled}
+            disabled={disabled}
             onPress={() => {
               void createUser()
             }}
@@ -729,6 +738,11 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
   },
   formCol: {
+    gap: spacing.sm,
+  },
+  applying: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: spacing.sm,
   },
   userCard: {

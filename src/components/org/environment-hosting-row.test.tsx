@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { resolveHostingServiceContext } from '@/lib/compose/hosting-service-context'
 import { normalizeCompose } from '@/lib/compose'
@@ -33,18 +33,42 @@ vi.mock('@/components/ui', () => ({
   EmptyState: () => null,
   LoadingState: () => null,
   SegmentedControl: () => null,
-  Button: ({ label, busy, busyLabel }: { label: string; busy?: boolean; busyLabel?: string }) => (
-    <button>{busy && busyLabel ? busyLabel : label}</button>
-  ),
-  TextField: ({ label, error }: { label: string; error?: string | null }) => (
+  Button: ({
+    label,
+    busy,
+    busyLabel,
+    onPress,
+  }: {
+    label: string
+    busy?: boolean
+    busyLabel?: string
+    onPress?: () => void
+  }) => <button onClick={onPress}>{busy && busyLabel ? busyLabel : label}</button>,
+  TextField: ({
+    label,
+    value,
+    onChangeText,
+    error,
+  }: {
+    label: string
+    value?: string
+    onChangeText?: (text: string) => void
+    error?: string | null
+  }) => (
     <label>
       {label}
+      <input
+        aria-label={label}
+        value={value ?? ''}
+        onChange={(event) => onChangeText?.(event.target.value)}
+      />
       {error ? <span role="alert">{error}</span> : null}
     </label>
   ),
 }))
 
 import { HostingPanelRow, readHostingEditor } from './environment-detail-section'
+import { useSyncedEditors } from './use-synced-editors'
 
 afterEach(cleanup)
 
@@ -92,13 +116,73 @@ describe('HostingPanelRow save feedback', () => {
   })
 
   it('says the certificate is part of the save while it runs', () => {
-    drawRow({ saving: true, editor: { ...readHostingEditor([]), getLetsEncrypt: true } })
+    drawRow({
+      saving: true,
+      editor: { ...readHostingEditor([]), hostnames: 'testing.example', getLetsEncrypt: true },
+    })
     expect(screen.getByText('Saving and asking Let’s Encrypt…')).toBeTruthy()
   })
 
-  it('shows the saved hostname in the header, not "no hostnames"', () => {
-    drawRow()
-    expect(screen.getAllByText(/testing\.example/).length).toBeGreaterThan(0)
+  it('does not claim a certificate the save will not ask for (no hostname yet)', () => {
+    drawRow({ saving: true, editor: { ...readHostingEditor([]), getLetsEncrypt: true } })
+    expect(screen.getByText('Saving…')).toBeTruthy()
+  })
+})
+
+describe('the hosting form around a save', () => {
+  type Seed = ReturnType<typeof readHostingEditor>
+  const KEY = 'svc-1'
+  const rowsWith = (seed: Partial<Seed>) => [
+    { editorKey: KEY, seed: { ...readHostingEditor([]), ...seed } },
+  ]
+  let markSavedAtClick: ((keys: readonly string[]) => void) | null = null
+
+  function Form({ rows }: Readonly<{ rows: ReturnType<typeof rowsWith> }>) {
+    const { editors, setEditors, markSaved } = useSyncedEditors(rows, false)
+    const editor = editors[KEY] ?? rows[0].seed
+    return (
+      <HostingPanelRow
+        orgId="o1"
+        composeServiceName="web"
+        serviceContext={serviceContext}
+        hostingId={null}
+        expanded
+        onToggleExpanded={vi.fn()}
+        editor={editor}
+        tlsOptions={[]}
+        publicIps={[]}
+        saving={false}
+        disabled={false}
+        onChange={(patch) =>
+          setEditors((current) => ({ ...current, [KEY]: { ...editor, ...patch } }))
+        }
+        // The save handler keeps what it captured at click time, as the real one does.
+        onSave={() => {
+          markSavedAtClick = markSaved
+        }}
+      />
+    )
+  }
+
+  const hostnameField = () => screen.getByLabelText('Hostnames') as HTMLInputElement
+
+  it('shows the saved hostname from the answer after a save, not an empty form', () => {
+    const before = rowsWith({})
+    const { rerender } = render(<Form rows={before} />)
+    fireEvent.change(hostnameField(), { target: { value: 'testing.example' } })
+    fireEvent.click(screen.getByText('Save hosting'))
+    // The refetch lands with the saved hosting (the server filled in the port).
+    rerender(<Form rows={rowsWith({ hostnames: 'testing.example', targetPort: '3000' })} />)
+    act(() => markSavedAtClick?.([KEY]))
+    expect(hostnameField().value).toBe('testing.example')
+    expect(screen.getAllByText(/testing\.example · port 3000/).length).toBeGreaterThan(0)
     expect(screen.queryByText(/no hostnames/)).toBeNull()
+  })
+
+  it('keeps unsaved typing when a newer answer arrives', () => {
+    const { rerender } = render(<Form rows={rowsWith({})} />)
+    fireEvent.change(hostnameField(), { target: { value: 'typing.example' } })
+    rerender(<Form rows={rowsWith({ targetPort: '3000' })} />)
+    expect(hostnameField().value).toBe('typing.example')
   })
 })

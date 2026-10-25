@@ -21,6 +21,9 @@ describe('useLeaveWarning', () => {
       initialProps: { active: true },
     })
     expect(leave()).toBe(true)
+    const event = new Event('beforeunload', { cancelable: true })
+    window.dispatchEvent(event)
+    expect(Reflect.get(event, 'returnValue')).toBe('')
     rerender({ active: false })
     expect(leave()).toBe(false)
     rerender({ active: true })

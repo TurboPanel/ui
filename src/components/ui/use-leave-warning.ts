@@ -10,8 +10,10 @@ import { Platform } from 'react-native'
 export function useLeaveWarning(active: boolean): void {
   useEffect(() => {
     if (!active || Platform.OS !== 'web' || typeof window === 'undefined') return
-    const warn = (event: Event) => {
+    const warn = (event: BeforeUnloadEvent) => {
       event.preventDefault()
+      // Older browsers ask only when `returnValue` is set.
+      Reflect.set(event, 'returnValue', '')
     }
     window.addEventListener('beforeunload', warn)
     return () => window.removeEventListener('beforeunload', warn)

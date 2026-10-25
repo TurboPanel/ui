@@ -334,10 +334,19 @@ export function isNewestDeploymentInFlight(
   return newest ? isDeploymentInFlight(newest.commands) : false
 }
 
-/** The newest deploy was going in `before` and has finished in `after`. */
+/**
+ * Between two answers, a deploy finished that can have changed the hostings:
+ * the newest deploy was going and has finished, or a different deploy is now
+ * the newest and has finished (one that started and ended between two polls).
+ */
 export function newestDeploymentFinished(
   before: readonly DeploymentHistoryRecord[] | undefined,
   after: readonly DeploymentHistoryRecord[] | undefined,
 ): boolean {
-  return isNewestDeploymentInFlight(before) && !isNewestDeploymentInFlight(after)
+  if (before === undefined || isNewestDeploymentInFlight(after)) return false
+  if (isNewestDeploymentInFlight(before)) return true
+  const newestId = (rows: readonly DeploymentHistoryRecord[]) =>
+    groupDeploymentsByGeneration(rows)[0]?.id ?? null
+  const afterId = newestId(after ?? [])
+  return afterId !== null && afterId !== newestId(before)
 }

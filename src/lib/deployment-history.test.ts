@@ -572,4 +572,13 @@ describe('newest deploy in flight', () => {
     expect(newestDeploymentFinished(done, done)).toBe(false)
     expect(newestDeploymentFinished(undefined, done)).toBe(false)
   })
+
+  it('notices a newer deploy that started and finished between two answers', () => {
+    const newer = [row({ id: 'c', generation: 9, status: 'succeeded' }), ...done]
+    expect(newestDeploymentFinished(done, newer)).toBe(true)
+    expect(newestDeploymentFinished(newer, newer)).toBe(false)
+    expect(newestDeploymentFinished(done, [])).toBe(false)
+    const newerRunning = [row({ id: 'c', generation: 9, status: 'running' })]
+    expect(newestDeploymentFinished(done, newerRunning)).toBe(false)
+  })
 })

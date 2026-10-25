@@ -151,8 +151,8 @@ import { containerCardServices, removedFromComposeServiceIds } from '@/lib/direc
 import { useEnvironmentFolders } from '@/lib/queries/folders'
 import { useRequestLetsEncrypt } from '@/lib/queries/hosting-certificate'
 import { failedRunMessage, userErrorMessage } from '@/lib/user-error'
-import { sameEditorValue, syncEditors } from '@/lib/hosting-editor-sync'
 import { useLeaveWarning } from '@/components/ui/use-leave-warning'
+import { useSyncedEditors } from '@/components/org/use-synced-editors'
 
 type HostingBind = 'public' | 'datacenter' | 'local'
 type HostingProtocol = 'http' | 'tcp' | 'udp'
@@ -1171,6 +1171,35 @@ function HostingVariablesBlock({
   )
 }
 
+/** What a row's save said, and the row it belongs to now. */
+type SavedRowNote = Readonly<{ key: string; note: HostingRowNote }>
+
+/**
+ * The editor key a compose route has after a save: the key ends in the
+ * route's hostname and path, so a new hostname gives the row a new key.
+ */
+function composeRowKeyAfterSave(
+  row: HostingPanelRowDescriptor,
+  entry: Pick<ComposeHostingExtensionEntry, 'hostname' | 'pathPrefix'>,
+): string {
+  if (row.source.kind !== 'compose') return row.editorKey
+  const prefix = row.editorKey.slice(0, row.editorKey.length - row.source.route.length)
+  return `${prefix}${hostingEntryKey(entry)}`
+}
+
+/** A panel hosting save also asks Let's Encrypt for a certificate. */
+function wantsLetsEncrypt(editor: HostingEditorState): boolean {
+  return (
+    editor.getLetsEncrypt &&
+    offersLetsEncrypt({
+      composeOwned: false,
+      protocol: editor.protocol,
+      tlsId: editor.tlsId,
+      hostnameCount: parseHostnameList(editor.hostnames).length,
+    })
+  )
+}
+
 /** The message of a note that belongs under the Hostname field, else null. */
 function hostnameNoteText(note: HostingRowNote | null): string | null {
   return note?.field === 'hostnames' ? note.message : null
@@ -1410,7 +1439,7 @@ export function HostingPanelRow({
       {composeEditable ? (
         <HostingSaveControls
           composeOwned={composeOwned}
-          asksLetsEncrypt={!composeOwned && isHttp && editor.getLetsEncrypt}
+          asksLetsEncrypt={!composeOwned && wantsLetsEncrypt(editor)}
           saving={saving}
           disabled={disabled}
           note={note}
@@ -2512,15 +2541,8 @@ export function EnvironmentDetailBody({
   const letsEncryptMutation = useRequestLetsEncrypt(orgId)
 
   const [error, setError] = useState<string | null>(null)
-  const [hostingEditors, setHostingEditors] = useState<
-    Record<string, HostingEditorState>
-  >({})
   const [savingHosting, setSavingHosting] = useState<string | null>(null)
   const [hostingNotes, setHostingNotes] = useState<Record<string, HostingRowNote>>({})
-  // The seed each editor was last filled from (see `syncEditors`), and a tick
-  // that re-runs the sync once a save's refetch has landed.
-  const editorBaseline = useRef<Record<string, HostingEditorState>>({})
-  const [editorSyncTick, setEditorSyncTick] = useState(0)
   // Why Let's Encrypt was refused on the last save that asked for it, by hosting id.
   const [certificateRefusals, setCertificateRefusals] = useState<
     Record<string, LetsEncryptRefusal>
@@ -2671,15 +2693,12 @@ export function EnvironmentDetailBody({
     ],
   )
 
-  // Fill each editor from its row, and refill the ones without unsaved edits
-  // whenever the server answers anew (a save, a deploy). Returns the same
-  // state object when nothing changed so a new hostingRows identity cannot loop.
-  useEffect(() => {
-    if (loading) return
-    const next = syncEditors(hostingEditors, editorBaseline.current, hostingRows, sameEditorValue)
-    editorBaseline.current = next.baseline
-    if (next.editors !== hostingEditors) setHostingEditors(next.editors)
-  }, [loading, hostingRows, hostingEditors, editorSyncTick])
+  // Each editor follows its row while it has no unsaved edits (a save, a deploy).
+  const {
+    editors: hostingEditors,
+    setEditors: setHostingEditors,
+    markSaved: markEditorsSaved,
+  } = useSyncedEditors(hostingRows, loading)
   useLeaveWarning(savingHosting !== null)
   const pinnedServer = useMemo(
     () => allServers.find((server) => server.id === placementServerId) ?? null,
@@ -2716,23 +2735,16 @@ export function EnvironmentDetailBody({
   }
 
   /**
-   * After a save: refetch, then refill the saved editors from the answer.
-   * Marking what was saved as their baseline lets the sync replace it with the
-   * server's rows; the editors are never reset from rows captured before the
-   * save, which showed an empty form after a successful save.
+   * After a save: refetch, then refill the saved rows' editors from the
+   * answer. Other rows refill only when they have no unsaved edits.
    */
-  const refreshEditorsAfterSave = async (savedKeys: readonly string[] | 'all') => {
+  const refreshEditorsAfterSave = async (savedKeys: readonly string[]) => {
     await Promise.all([
       servicesQuery.refetch(),
       containersQuery.refetchAll(),
       hostingsQuery.refetchAll(),
     ])
-    const keys = savedKeys === 'all' ? Object.keys(hostingEditors) : savedKeys
-    for (const key of keys) {
-      const saved = hostingEditors[key]
-      if (saved) editorBaseline.current[key] = saved
-    }
-    setEditorSyncTick((tick) => tick + 1)
+    markEditorsSaved(savedKeys)
   }
 
   /** Writes the environment compose; resolves to why it failed, or null. */
@@ -2748,7 +2760,8 @@ export function EnvironmentDetailBody({
       setError(problem)
       return
     }
-    await refreshEditorsAfterSave('all')
+    // A compose file save: no row was saved as such, so unsaved row edits stay.
+    await refreshEditorsAfterSave([])
   }
 
   const savePlacement = async (serverIdToPin: string) => {
@@ -2836,11 +2849,14 @@ export function EnvironmentDetailBody({
   const saveComposeHostingRow = async (
     row: HostingPanelRowDescriptor,
     overlayIndex: number,
-  ): Promise<HostingRowNote> => {
+  ): Promise<SavedRowNote> => {
     const editor = hostingEditors[row.editorKey] ?? row.seed
     const entry = composeHostingEntryFromEditor(editor, row.serviceContext)
     if (!entry) {
-      return { tone: 'error', field: 'hostnames', message: 'Enter a hostname for this route.' }
+      return {
+        key: row.editorKey,
+        note: { tone: 'error', field: 'hostnames', message: 'Enter a hostname for this route.' },
+      }
     }
     const entries = [
       ...readComposeHostingEntries(overlayCompose, row.composeServiceName),
@@ -2853,9 +2869,13 @@ export function EnvironmentDetailBody({
         entries,
       ),
     )
-    if (problem !== null) return { tone: 'error', message: problem }
+    if (problem !== null) return { key: row.editorKey, note: { tone: 'error', message: problem } }
     await refreshEditorsAfterSave([row.editorKey])
-    return { tone: 'ok', message: 'Saved to compose. It goes live on the next deploy.' }
+    // A new hostname renames the route, and with it the row the note goes on.
+    return {
+      key: composeRowKeyAfterSave(row, entry),
+      note: { tone: 'ok', message: 'Saved to compose. It goes live on the next deploy.' },
+    }
   }
 
   /** Persist one panel-authored row straight to `/hostings`, as before. */
@@ -2886,14 +2906,7 @@ export function EnvironmentDetailBody({
     const savedHostingId =
       row.hostingId ??
       ('id' in result.value && typeof result.value.id === 'string' ? result.value.id : null)
-    const wantsCertificate =
-      editor.getLetsEncrypt &&
-      offersLetsEncrypt({
-        composeOwned: false,
-        protocol: editor.protocol,
-        tlsId: editor.tlsId,
-        hostnameCount: parseHostnameList(editor.hostnames).length,
-      })
+    const wantsCertificate = wantsLetsEncrypt(editor)
     // The hosting is already saved; a refused certificate is said next to its
     // Certificate section (with the fix when there is one), never undone.
     const certificateStep = await certificateAfterSave({
@@ -2910,14 +2923,19 @@ export function EnvironmentDetailBody({
     return hostingSaveNote(wantsCertificate, certificateStep?.refusal ?? null)
   }
 
-  const saveHostingRow = (row: HostingPanelRowDescriptor): Promise<HostingRowNote> => {
-    if (row.source.kind === 'panel') return savePanelHostingRow(row)
+  const saveHostingRow = async (row: HostingPanelRowDescriptor): Promise<SavedRowNote> => {
+    if (row.source.kind === 'panel') {
+      return { key: row.editorKey, note: await savePanelHostingRow(row) }
+    }
     if (row.source.overlayIndex === null) {
-      return Promise.resolve({
-        tone: 'error',
-        message:
-          'This route is declared by the project compose. Edit it there — saving here would append a second declaration.',
-      })
+      return {
+        key: row.editorKey,
+        note: {
+          tone: 'error',
+          message:
+            'This route is declared by the project compose. Edit it there — saving here would append a second declaration.',
+        },
+      }
     }
     return saveComposeHostingRow(row, row.source.overlayIndex)
   }
@@ -2932,7 +2950,8 @@ export function EnvironmentDetailBody({
     setSavingHosting(row.editorKey)
     setHostingNote(row.editorKey, null)
     try {
-      setHostingNote(row.editorKey, await saveHostingRow(row))
+      const saved = await saveHostingRow(row)
+      setHostingNote(saved.key, saved.note)
     } finally {
       setSavingHosting(null)
     }

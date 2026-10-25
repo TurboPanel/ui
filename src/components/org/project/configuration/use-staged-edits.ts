@@ -3,6 +3,7 @@ import type { ApiMutationResult } from '@/lib/query-client'
 import { stageEdit, unstageEdit, type SaveProblem, type StagedEdit } from '@/lib/v4/config-edits'
 import type { SaveOutcome } from '@/lib/v4/config-save'
 import { useLeaveWarning } from '@/components/ui/use-leave-warning'
+import { failedRunMessage } from '@/lib/user-error'
 
 const NOT_SAVED = 'Could not save these changes.'
 
@@ -14,7 +15,7 @@ type Saver = Readonly<{
 
 /** Why one edit saved on its own did not go through, or null when it did. */
 function saveNowProblem(result: ApiMutationResult<SaveOutcome>): string | null {
-  if (!result.ok) return result.error ?? NOT_SAVED
+  if (!result.ok) return failedRunMessage(result, NOT_SAVED)
   const { error, problems, remaining } = result.value
   if (error !== null) return error
   if (problems.length > 0) return problems.map((problem) => problem.reason).join(' ')
@@ -25,7 +26,7 @@ function saveNowProblem(result: ApiMutationResult<SaveOutcome>): string | null {
  * The unsaved edits of one screen (an environment's Configuration tab or the
  * Base): stage, undo, discard, and Save changes, keeping whatever did not save.
  * A new variable is saved on its own straight away (`saveNow`), like every
- * other Add in the console. While edits are unsaved or a save is running, the
+ * other Add in the panel. While edits are unsaved or a save is running, the
  * browser asks before the page is left.
  */
 export function useStagedEdits(save: Saver) {
@@ -52,7 +53,7 @@ export function useStagedEdits(save: Saver) {
     setProblems([])
     const result = await save.run(staged)
     if (!result.ok) {
-      setSaveError(result.error ?? NOT_SAVED)
+      setSaveError(failedRunMessage(result, NOT_SAVED))
       return
     }
     setStaged(result.value.remaining)
