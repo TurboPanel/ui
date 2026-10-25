@@ -1611,6 +1611,7 @@ export function ComposeVisualServiceCard({
   saving,
   principalAliases = [],
   onDeclarePrincipalAlias,
+  hideScheduledJobs = false,
   onNameDraftChange,
   onRename,
   onRemoveService,
@@ -1633,6 +1634,12 @@ export function ComposeVisualServiceCard({
    * what is already declared.
    */
   onDeclarePrincipalAlias?: () => string
+  /**
+   * Leave the scheduled-jobs fields out. The create wizard sets it: jobs are
+   * added once the project exists, and any already in the compose file are
+   * kept as they are, just not edited here.
+   */
+  hideScheduledJobs?: boolean
   onNameDraftChange: (value: string) => void
   onRename: (nextName: string) => void
   onRemoveService: () => void
@@ -1936,7 +1943,7 @@ export function ComposeVisualServiceCard({
         onDisconnect={() => applyExtension({ source: null })}
       />
 
-      {extension.serviceKind === 'node' ? (
+      {extension.serviceKind === 'node' && !hideScheduledJobs ? (
         // Schema allows cron on both host-native kinds; the site lane mounts
         // its copy below alongside the document root.
         <CronFields
@@ -1989,17 +1996,19 @@ export function ComposeVisualServiceCard({
                 php,
               })}
           />
-          <CronFields
-            jobs={extension.cron}
-            disabled={saving}
-            onChange={(cron) =>
-              applyExtension({
-                serviceKind: 'site',
-                engine: extension.engine ?? DEFAULT_SITE_ENGINE,
-                root: extension.root ?? 'public',
-                cron,
-              })}
-          />
+          {hideScheduledJobs ? null : (
+            <CronFields
+              jobs={extension.cron}
+              disabled={saving}
+              onChange={(cron) =>
+                applyExtension({
+                  serviceKind: 'site',
+                  engine: extension.engine ?? DEFAULT_SITE_ENGINE,
+                  root: extension.root ?? 'public',
+                  cron,
+                })}
+            />
+          )}
         </>
       ) : null}
 
