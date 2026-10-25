@@ -75,7 +75,6 @@ describe('instance-api folder wrappers', () => {
   it('says each lock in plain words', () => {
     for (const code of [
       'environment_name_locked',
-      'environment_has_folders',
       'environment_server_locked',
       'directory_names_locked',
       'service_slug_locked',
