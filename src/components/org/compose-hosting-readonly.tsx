@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react'
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native'
-import { MonoText } from '@/components/ui/mono-text'
+import { Platform, StyleSheet, Text, View } from 'react-native'
+import {
+  ConfigurationSnippet,
+  ShowConfigurationToggle,
+} from '@/components/org/configuration-detail'
 import type { ComposeDocument } from '@/lib/compose/types'
 import { declaredHostingByService } from '@/lib/hosting-compose-move'
 import { composeEntryConfigSnippet, composeEntrySummaryLines } from '@/lib/hosting-plain-words'
-import { chrome, colors, spacing, webPointer } from '@/lib/theme'
+import { chrome, colors, spacing } from '@/lib/theme'
 
 /** The Hosting screen's "Open in the Compose editor" link names a service here. */
 export const COMPOSE_HOSTING_FOCUS_PARAM = 'hosting'
@@ -41,7 +44,6 @@ export function ComposeHostingReadOnly({ document }: Readonly<{ document: Compos
   }, [focused])
 
   if (services.length === 0) return null
-  const toggleLabel = showConfiguration ? 'Hide configuration' : 'Show in configuration'
   return (
     <View style={styles.root}>
       <Text style={styles.title}>Hostnames in this file</Text>
@@ -67,20 +69,16 @@ export function ComposeHostingReadOnly({ document }: Readonly<{ document: Compos
             </View>
           ))}
           {showConfiguration ? (
-            <MonoText style={styles.snippet} selectable>
-              {composeEntryConfigSnippet(service.composeServiceName, service.entries)}
-            </MonoText>
+            <ConfigurationSnippet
+              text={composeEntryConfigSnippet(service.composeServiceName, service.entries)}
+            />
           ) : null}
         </View>
       ))}
-      <Pressable
-        style={webPointer}
-        onPress={() => setShowConfiguration((open) => !open)}
-        accessibilityRole="button"
-        accessibilityState={{ expanded: showConfiguration }}
-      >
-        <Text style={styles.toggle}>{toggleLabel}</Text>
-      </Pressable>
+      <ShowConfigurationToggle
+        open={showConfiguration}
+        onToggle={() => setShowConfiguration((open) => !open)}
+      />
     </View>
   )
 }
@@ -102,6 +100,4 @@ const styles = StyleSheet.create({
   entry: { gap: 2 },
   line: { color: colors.textBody, fontSize: 12, lineHeight: 18 },
   lineLabel: { color: colors.textMuted },
-  snippet: { color: colors.textBody, fontSize: 12, lineHeight: 18 },
-  toggle: { color: colors.textMuted, fontSize: 12, textDecorationLine: 'underline' },
 })

@@ -1,8 +1,11 @@
 import { useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, Text, View } from 'react-native'
 import { useRouter, type Href } from 'expo-router'
 import { ConfirmButton } from '@/components/ui/confirm-button'
-import { MonoText } from '@/components/ui/mono-text'
+import {
+  ConfigurationSnippet,
+  ShowConfigurationToggle,
+} from '@/components/org/configuration-detail'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { TextLink } from '@/components/ui/text-link'
 import type { ComposeHostingExtensionEntry } from '@/lib/compose/hosting-extension'
@@ -12,7 +15,7 @@ import {
   manageHereInsteadPrompt,
   removeHostnamePrompt,
 } from '@/lib/hosting-plain-words'
-import { colors, spacing, webPointer } from '@/lib/theme'
+import { colors, spacing } from '@/lib/theme'
 
 /**
  * The part of a Hosting row that is only there for a hostname set in the
@@ -50,25 +53,18 @@ export function ComposeHostnameActions({
 }>) {
   const router = useRouter()
   const [showConfiguration, setShowConfiguration] = useState(false)
-  const toggleLabel = showConfiguration ? 'Hide configuration' : 'Show in configuration'
   return (
     <View style={styles.root}>
       <Text style={styles.label}>Where this hostname is set</Text>
       <Text style={styles.hint}>{composeRouteSourceText(editable)}</Text>
-      <Pressable
-        style={webPointer}
-        onPress={() => setShowConfiguration((open) => !open)}
-        accessibilityRole="button"
-        accessibilityState={{ expanded: showConfiguration }}
-        accessibilityLabel={`${toggleLabel} for ${entry.hostname}`}
-      >
-        <Text style={styles.toggle}>{toggleLabel}</Text>
-      </Pressable>
+      <ShowConfigurationToggle
+        open={showConfiguration}
+        onToggle={() => setShowConfiguration((open) => !open)}
+        subject={entry.hostname}
+      />
       {showConfiguration ? (
         <View style={styles.configuration}>
-          <MonoText style={styles.snippet} selectable>
-            {composeEntryConfigSnippet(composeServiceName, [entry])}
-          </MonoText>
+          <ConfigurationSnippet text={composeEntryConfigSnippet(composeServiceName, [entry])} />
           {configurationHref ? (
             <TextLink
               label="Open in the Compose editor"
@@ -107,8 +103,6 @@ const styles = StyleSheet.create({
   root: { gap: spacing.xs },
   label: { color: colors.textMuted, fontSize: 12, marginTop: spacing.sm },
   hint: { color: colors.textDim, fontSize: 11, lineHeight: 16 },
-  toggle: { color: colors.textMuted, fontSize: 12, textDecorationLine: 'underline' },
   configuration: { gap: spacing.xs },
-  snippet: { color: colors.textBody, fontSize: 12, lineHeight: 18 },
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.xs },
 })

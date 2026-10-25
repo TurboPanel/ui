@@ -121,7 +121,7 @@ export const COMPOSE_PROXY_NOTE =
 
 /** Shown next to the hostname field when a configured hostname is saved empty. */
 export const EMPTY_COMPOSE_HOSTNAME_MESSAGE =
-  'Enter a hostname. To stop serving this one, use Remove hostname below.'
+  'Enter a hostname. To stop serving this one, use Remove hostname above.'
 
 /** The refusal when someone saves a hostname the project's shared file sets. */
 export const SHARED_FILE_HOSTNAME_MESSAGE =
