@@ -248,7 +248,7 @@ function groupByProject(rows: readonly ManagedListRecord[]): Map<string, Managed
 function useProjectFacts(orgId: string, projects: readonly ProjectRecord[]) {
   const canManage = useCan('organization', orgId, 'organization:manage')
   const repositoriesEnabled = projects.some((project) => project.repositoryId)
-  const managedEnabled = canManage && projects.some(isManagedProject)
+  const managedEnabled = canManage && projects.some((project) => isManagedProject(project))
   const repositoriesQuery = useRepositories(orgId, { enabled: repositoriesEnabled })
   const managedQuery = useOrganizationManaged(orgId, { enabled: managedEnabled })
   const repositories = repositoriesQuery.data?.repositories
