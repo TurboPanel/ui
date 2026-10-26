@@ -18,14 +18,14 @@ export const TURBOPANEL_MARK_ASPECT =
 /** Crossbar band = 120/370; wordmark sits in the remaining 250/370. */
 export const TURBOPANEL_UNDER_BAR_RATIO = 250 / TURBOPANEL_MARK_INK.height
 
-/** Figtree Black Italic cap height ≈ fontSize × this (0.70 em). */
+/** Figtree ExtraBold Italic cap height ≈ fontSize × this (0.70 em). */
 export const TURBOPANEL_WORDMARK_ASCENDER_RATIO = 0.7
 
 export const TURBOPANEL_WORDMARK_STYLE = {
   /** Added to Figtree's own 9.5° italic: ~23.5°, a touch past the T stem's 21.8°. */
   skew: '-14deg',
   letterSpacingEm: -0.01,
-  /** “urboPanel” at weight 900 is 4.84 em wide, plus the skew overhang. */
+  /** “urboPanel” at weight 800 is 4.77 em wide, plus the skew overhang. */
   emWidth: 5,
 } as const
 
@@ -34,6 +34,13 @@ export const TURBOPANEL_WORDMARK_STYLE = {
  * box: hhea ascent 0.95 em and descent 0.25 em leave 0.15 em under the baseline.
  */
 export const TURBOPANEL_WORDMARK_BASELINE_EM = 0.15
+
+/**
+ * How far the lowest letter of “urboPanel” (the e) dips below Figtree's
+ * baseline at weight 800: 12.74/1000 em (u, b, o, a dip 12). The word is
+ * placed by that lowest ink, so nothing crosses the base of the T.
+ */
+export const TURBOPANEL_WORDMARK_OVERSHOOT_EM = 0.0127
 
 /** Shared lockup tuning — px / percent tokens, not opaque multipliers in components. */
 export const TURBOPANEL_WORDMARK_LOCKUP_TUNING = {
@@ -120,10 +127,11 @@ function wordSizeFromUnderBarBand(
   )
 }
 
-/** Extra drop (px) that puts the baseline on the mark's base, or 0 when off. */
+/** Extra drop (px) that puts the word's lowest ink on the mark's base, or 0 when off. */
 export function wordBaselineDropPx(wordSizePx: number): number {
   return TURBOPANEL_WORDMARK_LOCKUP_TUNING.wordBaselineOnMarkBase
-    ? wordSizePx * TURBOPANEL_WORDMARK_BASELINE_EM
+    ? wordSizePx *
+        (TURBOPANEL_WORDMARK_BASELINE_EM - TURBOPANEL_WORDMARK_OVERSHOOT_EM)
     : 0
 }
 

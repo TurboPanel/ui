@@ -59,7 +59,7 @@ function extensionPatchFromValues(
     enabled: values.enabled ? undefined : false,
     nodeVersion: values.nodeVersion || undefined,
     packageManager: (values.packageManager || undefined) as NodePackageManager | undefined,
-    appMode: values.appMode === 'production' ? undefined : (values.appMode as 'development'),
+    appMode: values.appMode === 'production' ? undefined : values.appMode,
     documentRoot: values.documentRoot || undefined,
     startupFile: values.startupFile || undefined,
     source: values.appRoot.length === 0 ? rest : { ...rest, subdirectory: values.appRoot },
