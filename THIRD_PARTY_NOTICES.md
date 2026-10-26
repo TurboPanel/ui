@@ -7,7 +7,7 @@ Third-party components remain under their own copyright and license terms and ar
 Third-party OS artwork under `assets/os/` is recorded separately in `assets/os/NOTICE.md` and is not licensed under this repository’s AGPL or the Apple App Store additional permission.
 
 <!-- lockfiles
-pnpm-lock.yaml sha256:e65d8cd60870e57278d3a9f90ae98c90f8e07c6ec5bfe4551821bd09bca4bf73
+pnpm-lock.yaml sha256:d0adcd10dea953cea706f56efee1f572568880879f6fa4d60d9dfbe38865cb78
 -->
 
 ## Production dependencies
@@ -5719,6 +5719,12 @@ These packages are used for development, test, or build tooling and are not bund
 - License: MIT
 - Copyright: George Zahariev
 - Homepage: http://preludels.com
+
+### prettier@3.9.9
+
+- License: MIT
+- Copyright: James Long
+- Homepage: https://prettier.io
 
 ### prop-types@15.8.1
 
