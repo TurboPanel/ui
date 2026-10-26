@@ -61,7 +61,10 @@ const PHASE_PLAN_STEP: Readonly<Record<string, string>> = {
   'pre-deploy': 'start',
   'compose-up': 'start',
   'post-deploy': 'start',
+  'start-release': 'start',
   health: 'health',
+  'switch-traffic': 'switch',
+  'stop-old-release': 'stop-old',
 }
 
 /** Error, warning or neither. Only rows `isErrorLine` flags can be either. */

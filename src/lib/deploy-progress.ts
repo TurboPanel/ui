@@ -69,6 +69,7 @@ const GERUNDS: Readonly<Record<string, string>> = {
   Pull: 'Pulling',
   Run: 'Running',
   Stop: 'Stopping',
+  Switch: 'Switching',
   Restart: 'Restarting',
 }
 

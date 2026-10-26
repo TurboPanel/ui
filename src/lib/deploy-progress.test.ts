@@ -49,6 +49,9 @@ describe('gerundLabel', () => {
     ['Check it answers', 'Checking it answers'],
     ['Set up certificates', 'Setting up certificates'],
     ['Install PHP 8.3', 'Installing PHP 8.3'],
+    ['Start the new release', 'Starting the new release'],
+    ['Switch traffic', 'Switching traffic'],
+    ['Stop the old release', 'Stopping the old release'],
   ])('turns %s into %s', (label, expected) => {
     expect(gerundLabel(label)).toBe(expected)
   })

@@ -749,6 +749,12 @@ describe('phaseLabel', () => {
     expect(phaseLabel('install-build-tool')).toBe('Installing the build tool')
   })
 
+  it('names a Node app deploy in the order it runs', () => {
+    expect(
+      ['release-promote', 'start-release', 'health', 'switch-traffic', 'stop-old-release'].map(phaseLabel)
+    ).toEqual(['Publish the release', 'Start the new release', 'Check it answers', 'Switch traffic', 'Stop the old release'])
+  })
+
   it('keeps the existing phases and shows an unknown phase by its id', () => {
     expect(phaseLabel('build')).toBe('Build')
     expect(phaseLabel('compose-up')).toBe('Compose up')
