@@ -26,6 +26,12 @@ vi.mock('@/components/org/variables-section', () => ({ VariablesSection: () => n
 vi.mock('@/components/org/removed-service-card', () => ({ RemovedServiceCard: () => null }))
 vi.mock('@/components/org/project/hosting-host-picker', () => ({ HostingHostPicker: () => null }))
 vi.mock('@/components/ui/panel-styles', () => ({ panelStyles: {} }))
+vi.mock('@/components/org/project/compose-hostname-actions', () => ({
+  ComposeHostnameActions: () => null,
+}))
+vi.mock('@/components/org/compose-hosting-readonly', () => ({
+  COMPOSE_HOSTING_FOCUS_PARAM: 'hosting',
+}))
 vi.mock('@/components/ui', () => ({
   Badge: () => null,
   ButtonRow: ({ children }: { children?: unknown }) => <div>{children as never}</div>,
@@ -93,6 +99,8 @@ function drawRow(props: Partial<Parameters<typeof HostingPanelRow>[0]> = {}) {
       disabled={false}
       onChange={vi.fn()}
       onSave={vi.fn()}
+      onRemoveHostname={vi.fn()}
+      onManageHere={vi.fn()}
       {...props}
     />
   )
@@ -102,7 +110,7 @@ describe('HostingPanelRow save feedback', () => {
   it('says a missing hostname under the Hostname field', () => {
     drawRow({
       composeRoute: 'route-1',
-      note: { tone: 'error', field: 'hostnames', message: 'Enter a hostname for this route.' },
+      rowError: { field: 'hostname', message: 'Enter a hostname for this route.' },
     })
     const message = screen.getByRole('alert')
     expect(message.textContent).toBe('Enter a hostname for this route.')
@@ -110,9 +118,22 @@ describe('HostingPanelRow save feedback', () => {
   })
 
   it('says the outcome right after the save button', () => {
-    drawRow({ note: { tone: 'ok', message: 'Saved. Let’s Encrypt was asked for a certificate.' } })
+    drawRow({
+      savedNote: { tone: 'ok', message: 'Saved. Let’s Encrypt was asked for a certificate.' },
+    })
     const message = screen.getByText('Saved. Let’s Encrypt was asked for a certificate.')
     expect(message.previousElementSibling?.textContent).toBe('Save hosting')
+  })
+
+  it('says a failed save right after the save button, in place of an older note', () => {
+    drawRow({
+      rowError: { field: 'save', message: 'The server is offline.' },
+      savedNote: { tone: 'ok', message: 'Saved.' },
+    })
+    const message = screen.getByRole('alert')
+    expect(message.textContent).toBe('The server is offline.')
+    expect(message.previousElementSibling?.textContent).toBe('Save hosting')
+    expect(screen.queryByText('Saved.')).toBeNull()
   })
 
   it('says the certificate is part of the save while it runs', () => {
@@ -160,6 +181,8 @@ describe('the hosting form around a save', () => {
         onSave={() => {
           markSavedAtClick = markSaved
         }}
+        onRemoveHostname={vi.fn()}
+        onManageHere={vi.fn()}
       />
     )
   }

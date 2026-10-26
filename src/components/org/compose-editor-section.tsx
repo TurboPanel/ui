@@ -25,6 +25,7 @@ import {
   ComposeVisualIcon,
 } from '@/components/org/compose-view-icons'
 import { panelStyles } from '@/components/ui/panel-styles'
+import { ComposeHostingReadOnly } from '@/components/org/compose-hosting-readonly'
 import {
   composeFullYaml,
   composeVisibleYaml,
@@ -1382,6 +1383,8 @@ export function ComposeEditorSection({
           }
         }}
       />
+
+      {tab === 'editor' ? <ComposeHostingReadOnly document={draft} /> : null}
 
       {error ? <Text style={panelStyles.error}>{error}</Text> : null}
 
