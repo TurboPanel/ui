@@ -4433,6 +4433,20 @@ export async function requestLetsEncryptForHosting(
   })
 }
 
+/**
+ * Hand a hosting the last deploy made from the environment's compose file back
+ * to the panel (it keeps its id, names, certificate and variables). The Hosting
+ * screen calls this, then removes the entry from the compose file.
+ */
+export async function releaseHostingFromCompose(
+  hostingId: string
+): Promise<{ ok: true; released: boolean }> {
+  return await apiFetch(`${CLIENT_API}/hostings/${hostingId}/release-from-compose`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  })
+}
+
 export async function fetchHostingDnsCheck(hostingId: string): Promise<{ dns: HostingDnsReport }> {
   return await apiFetch(`${CLIENT_API}/hostings/${hostingId}/dns-check`)
 }

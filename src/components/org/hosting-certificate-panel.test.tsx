@@ -224,18 +224,18 @@ describe('a domain compose declares', () => {
     state.certificate = failed
     state.metadata = { ...owned, composeTlsMode: 'automatic' }
     renderComposePanel()
-    expect(screen.getByText(/Compose asks Let\u2019s Encrypt/)).toBeTruthy()
+    expect(screen.getByText(/The configuration file asks Let\u2019s Encrypt/)).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Check DNS' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
     expect(state.run).toHaveBeenCalled()
     expect(screen.queryByRole('button', { name: 'Use Let\u2019s Encrypt' })).toBeNull()
   })
 
-  it('points at the route\u2019s certificate setting otherwise, without Try again', () => {
+  it('points at the hostname\u2019s certificate setting otherwise, without Try again', () => {
     state.certificate = failed
     state.metadata = { ...owned, composeTlsMode: 'certificate' }
     renderComposePanel()
-    expect(screen.getByText(/Pick Let\u2019s Encrypt \(automatic\) there/)).toBeTruthy()
+    expect(screen.getByText(/Pick Let\u2019s Encrypt there/)).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull()
     expect(screen.getByRole('button', { name: 'Check DNS' })).toBeTruthy()
   })
