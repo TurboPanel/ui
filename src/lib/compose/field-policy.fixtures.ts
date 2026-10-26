@@ -91,8 +91,7 @@ services:
     ],
   },
   {
-    description:
-      'deploy.update_config is unsupported: advice while editing, refusal at deploy',
+    description: 'deploy.update_config is unsupported: advice while editing, refusal at deploy',
     compose: `services:
   web:
     image: nginx:alpine
@@ -138,8 +137,7 @@ services:
     ],
   },
   {
-    description:
-      'deploy.mode: replicated-job is refused by value, not by stripping the key',
+    description: 'deploy.mode: replicated-job is refused by value, not by stripping the key',
     compose: `services:
   worker:
     image: nginx:alpine
@@ -185,8 +183,7 @@ services:
     expectedIssues: [],
   },
   {
-    description:
-      'deploy.resources.reservations is unsupported even though resources is not',
+    description: 'deploy.resources.reservations is unsupported even though resources is not',
     compose: `services:
   web:
     image: nginx:alpine
@@ -209,8 +206,7 @@ services:
     ],
   },
   {
-    description:
-      'a bridge network keeps every attribute — the registry has no opinion',
+    description: 'a bridge network keeps every attribute — the registry has no opinion',
     compose: `services:
   web:
     image: nginx:alpine
@@ -230,8 +226,7 @@ networks:
     expectedIssues: [],
   },
   {
-    description:
-      'driver: overlay is the authored spanning signal and carries a note',
+    description: 'driver: overlay is the authored spanning signal and carries a note',
     compose: `services:
   web:
     image: nginx:alpine
@@ -253,8 +248,7 @@ networks:
     ],
   },
   {
-    description:
-      'the five overlay-only attributes TurboFabric cannot honour are named',
+    description: 'the five overlay-only attributes TurboFabric cannot honour are named',
     compose: `services:
   web:
     image: nginx:alpine

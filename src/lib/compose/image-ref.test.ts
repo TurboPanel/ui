@@ -53,25 +53,23 @@ describe('parseComposeImageRef', () => {
   it('preserves digests', () => {
     expect(
       parseComposeImageRef(
-        'nginx@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-      ),
+        'nginx@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+      )
     ).toEqual({
       registry: '',
       image: 'nginx',
       tag: '',
-      digest:
-        'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      digest: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     })
     expect(
       parseComposeImageRef(
-        'ghcr.io/org/app:1@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
-      ),
+        'ghcr.io/org/app:1@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+      )
     ).toEqual({
       registry: 'ghcr.io',
       image: 'org/app',
       tag: '1',
-      digest:
-        'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+      digest: 'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
     })
   })
 
@@ -108,7 +106,7 @@ describe('formatComposeImageRef', () => {
         image: 'nginx',
         tag: '',
         digest: '',
-      }),
+      })
     ).toBe('nginx')
     expect(
       formatComposeImageRef({
@@ -116,7 +114,7 @@ describe('formatComposeImageRef', () => {
         image: ' nginx ',
         tag: ' alpine ',
         digest: '',
-      }),
+      })
     ).toBe('nginx:alpine')
   })
 })
@@ -158,13 +156,14 @@ describe('parseComposeImageRef edge cases', () => {
       digest: '',
     })
     expect(
-      parseComposeImageRef('@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc'),
+      parseComposeImageRef(
+        '@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc'
+      )
     ).toEqual({
       registry: '',
       image: '',
       tag: '',
-      digest:
-        'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
+      digest: 'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
     })
   })
 
@@ -207,7 +206,7 @@ describe('formatComposeImageRef edge cases', () => {
         image: '  ',
         tag: 'latest',
         digest: 'sha256:abc',
-      }),
+      })
     ).toBe('')
   })
 
@@ -218,10 +217,8 @@ describe('formatComposeImageRef edge cases', () => {
         image: 'nginx',
         tag: '',
         digest: 'sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
-      }),
-    ).toBe(
-      'nginx@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
-    )
+      })
+    ).toBe('nginx@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd')
   })
 })
 

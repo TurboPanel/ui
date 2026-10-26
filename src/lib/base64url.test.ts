@@ -49,9 +49,7 @@ describe('base64urlToBytes', () => {
   })
 
   it('accepts standard base64 characters', () => {
-    expect([...base64urlToBytes('-_-_')]).toEqual(
-      [...base64urlToBytes('+/+/')],
-    )
+    expect([...base64urlToBytes('-_-_')]).toEqual([...base64urlToBytes('+/+/')])
   })
 
   it('rejects a character outside the alphabet', () => {

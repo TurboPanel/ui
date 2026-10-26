@@ -163,7 +163,10 @@ export function landsAtLabel(landsAt: string | null | undefined): string {
 }
 
 /** Sentence for a pending-change row. Tier ids are resolved to labels via the catalogue. */
-export function describePendingChange(change: BillingPendingChange, tiers: TierLabelSource): string {
+export function describePendingChange(
+  change: BillingPendingChange,
+  tiers: TierLabelSource
+): string {
   const from = tierLabelOf(tiers, change.fromTierId)
   const when = landsAtLabel(change.landsAt)
   switch (change.kind) {

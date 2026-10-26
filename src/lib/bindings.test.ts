@@ -27,9 +27,7 @@ describe('validateBindingKeyPrefix', () => {
     expect(validateBindingKeyPrefix('').ok).toBe(false)
     expect(validateBindingKeyPrefix('9bad').ok).toBe(false)
     expect(validateBindingKeyPrefix('bad-name').ok).toBe(false)
-    expect(
-      validateBindingKeyPrefix('A'.repeat(MAX_BINDING_KEY_PREFIX_LENGTH + 1)).ok,
-    ).toBe(false)
+    expect(validateBindingKeyPrefix('A'.repeat(MAX_BINDING_KEY_PREFIX_LENGTH + 1)).ok).toBe(false)
   })
 })
 
@@ -69,9 +67,7 @@ describe('BINDING_ENGINE_DEFAULT_KEYS', () => {
       'MYSQL_USER',
       'MYSQL_PASSWORD',
     ])
-    expect(BINDING_ENGINE_DEFAULT_KEYS.mariadb).toEqual(
-      BINDING_ENGINE_DEFAULT_KEYS.mysql,
-    )
+    expect(BINDING_ENGINE_DEFAULT_KEYS.mariadb).toEqual(BINDING_ENGINE_DEFAULT_KEYS.mysql)
   })
 })
 

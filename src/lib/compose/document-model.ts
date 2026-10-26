@@ -18,13 +18,7 @@ import { readServiceSourceExtension } from './service-kind'
 import { normalizeCompose } from './types'
 
 /** Keys promoted to their own lines, in the order they render. */
-const PROMOTED_SERVICE_KEYS = [
-  'image',
-  'build',
-  'ports',
-  'volumes',
-  'depends_on',
-] as const
+const PROMOTED_SERVICE_KEYS = ['image', 'build', 'ports', 'volumes', 'depends_on'] as const
 
 export type ComposeDocLine = Readonly<{
   /** `image`, or the item text for a list entry. */
@@ -97,10 +91,7 @@ function isMap(value: unknown): value is Record<string, unknown> {
 
 function mapEntries(value: unknown): [string, Record<string, unknown>][] {
   if (!isMap(value)) return []
-  return Object.entries(value).map(([key, entry]) => [
-    key,
-    isMap(entry) ? entry : {},
-  ])
+  return Object.entries(value).map(([key, entry]) => [key, isMap(entry) ? entry : {}])
 }
 
 /** Compose scalars arrive as strings or numbers; anything else is not a value. */
@@ -144,10 +135,7 @@ function portStrings(value: unknown): string[] {
   return out
 }
 
-function parseMount(
-  entry: unknown,
-  namedVolumes: ReadonlySet<string>,
-): ComposeDocMount | null {
+function parseMount(entry: unknown, namedVolumes: ReadonlySet<string>): ComposeDocMount | null {
   if (typeof entry === 'string') {
     // `source:target[:mode]` — a bare `target` is an anonymous volume.
     const parts = entry.split(':')
@@ -171,7 +159,7 @@ function parseMount(
 
 function serviceMounts(
   service: Record<string, unknown>,
-  namedVolumes: ReadonlySet<string>,
+  namedVolumes: ReadonlySet<string>
 ): ComposeDocMount[] {
   if (!Array.isArray(service.volumes)) return []
   const out: ComposeDocMount[] = []
@@ -200,7 +188,7 @@ function mountLineText(mount: ComposeDocMount): string {
 
 function buildServiceLines(
   service: Record<string, unknown>,
-  block: Omit<ComposeDocServiceBlock, 'lines'>,
+  block: Omit<ComposeDocServiceBlock, 'lines'>
 ): ComposeDocLine[] {
   const lines: ComposeDocLine[] = []
 
@@ -239,14 +227,11 @@ function countOtherKeys(service: Record<string, unknown>): number {
   const promoted = new Set<string>(PROMOTED_SERVICE_KEYS)
   return Object.keys(service).filter(
     // `x-turbopanel` is our own bookkeeping, never the operator's compose.
-    (key) => !promoted.has(key) && !key.startsWith('x-'),
+    (key) => !promoted.has(key) && !key.startsWith('x-')
   ).length
 }
 
-function resourceDetail(
-  entry: Record<string, unknown>,
-  kind: 'network' | 'volume',
-): string | null {
+function resourceDetail(entry: Record<string, unknown>, kind: 'network' | 'volume'): string | null {
   if (entry.external === true) return 'external'
   if (typeof entry.name === 'string' && entry.name) return entry.name
   if (typeof entry.driver !== 'string' || !entry.driver) return null
@@ -276,13 +261,10 @@ export function buildComposeDocModel(document: unknown): ComposeDocModel {
 
     for (const mount of mounts) {
       if (!mount.named) continue
-      volumeUsers.set(mount.source, [
-        ...(volumeUsers.get(mount.source) ?? []),
-        name,
-      ])
+      volumeUsers.set(mount.source, [...(volumeUsers.get(mount.source) ?? []), name])
     }
     for (const network of stringList(service.networks).concat(
-      isMap(service.networks) ? Object.keys(service.networks) : [],
+      isMap(service.networks) ? Object.keys(service.networks) : []
     )) {
       networkUsers.set(network, [...(networkUsers.get(network) ?? []), name])
     }
@@ -302,25 +284,20 @@ export function buildComposeDocModel(document: unknown): ComposeDocModel {
   const toResource = (
     [name, entry]: [string, Record<string, unknown>],
     users: Map<string, string[]>,
-    kind: 'network' | 'volume',
+    kind: 'network' | 'volume'
   ): ComposeDocResourceBlock => ({
     name,
     usedBy: users.get(name) ?? [],
     detail: resourceDetail(entry, kind),
   })
 
-  const volumes = volumeEntries.map((entry) =>
-    toResource(entry, volumeUsers, 'volume'),
-  )
-  const networks = networkEntries.map((entry) =>
-    toResource(entry, networkUsers, 'network'),
-  )
+  const volumes = volumeEntries.map((entry) => toResource(entry, volumeUsers, 'volume'))
+  const networks = networkEntries.map((entry) => toResource(entry, networkUsers, 'network'))
 
   return {
     services,
     volumes,
     networks,
-    isEmpty:
-      services.length === 0 && volumes.length === 0 && networks.length === 0,
+    isEmpty: services.length === 0 && volumes.length === 0 && networks.length === 0,
   }
 }

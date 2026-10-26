@@ -5,10 +5,7 @@
  * rewrite rules on OpenLiteSpeed; Docker bridge env injection).
  */
 
-import {
-  hostingEntryKey,
-  type ComposeHostingExtensionEntry,
-} from './hosting-extension'
+import { hostingEntryKey, type ComposeHostingExtensionEntry } from './hosting-extension'
 import {
   DEFAULT_SITE_ENGINE,
   isNodeComposeService,
@@ -70,20 +67,16 @@ export type HostingServiceContext = {
  * edit the document rather than the row. Derived rather than stored: an entry
  * list that is non-empty *is* the ownership claim.
  */
-export function hasComposeAuthoredHosting(
-  context: HostingServiceContext,
-): boolean {
+export function hasComposeAuthoredHosting(context: HostingServiceContext): boolean {
   return context.composeHostingEntries.length > 0
 }
 
-function isPlainServiceMap(
-  value: unknown,
-): value is Record<string, unknown> {
+function isPlainServiceMap(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 export function readComposeServiceMap(
-  document: ComposeDocument,
+  document: ComposeDocument
 ): Record<string, Record<string, unknown>> {
   const services = document.data.services
   if (!isPlainServiceMap(services)) return {}
@@ -108,9 +101,7 @@ export function siteEnvKeyForService(composeServiceName: string): string {
  * php-fpm pool for nginx/Apache, per-vhost LSAPI process for OpenLiteSpeed), and
  * that is a deploy-path detail, not a reason to hide the fields.
  */
-function phpApplicabilityFor(
-  kind: HostingServiceContext['kind'],
-): HostingPhpApplicability {
+function phpApplicabilityFor(kind: HostingServiceContext['kind']): HostingPhpApplicability {
   return kind === 'site' ? 'applicable' : 'not_applicable'
 }
 
@@ -126,7 +117,7 @@ function serviceKindLabel(kind: HostingServiceContext['kind']): string {
 
 function webEnvModeFor(
   kind: HostingServiceContext['kind'],
-  engine: SiteEngine | undefined,
+  engine: SiteEngine | undefined
 ): HostingWebEnvMode {
   // A native app is not a container: there is no compose service left to
   // inject variables into, so the container advice would send an operator to a
@@ -143,16 +134,12 @@ function webEnvModeFor(
 
 export function resolveHostingServiceContext(
   document: ComposeDocument,
-  composeServiceName: string,
+  composeServiceName: string
 ): HostingServiceContext {
   const services = readComposeServiceMap(document)
   const service = services[composeServiceName]
   const siteSiblingNames = Object.keys(services)
-    .filter(
-      (name) =>
-        name !== composeServiceName &&
-        isSiteComposeService(services[name] ?? {}),
-    )
+    .filter((name) => name !== composeServiceName && isSiteComposeService(services[name] ?? {}))
     .sort((a, b) => a.localeCompare(b))
 
   if (!service) {
@@ -169,10 +156,8 @@ export function resolveHostingServiceContext(
 
   const isSite = isSiteComposeService(service)
   const extension = readServiceTurbopanelExtension(service) ?? {}
-  const engine = isSite ? extension.engine ?? DEFAULT_SITE_ENGINE : undefined
-  const nonSiteKind: ComposeServiceKind = isNodeComposeService(service)
-    ? 'node'
-    : 'container'
+  const engine = isSite ? (extension.engine ?? DEFAULT_SITE_ENGINE) : undefined
+  const nonSiteKind: ComposeServiceKind = isNodeComposeService(service) ? 'node' : 'container'
   const kind: ComposeServiceKind = isSite ? 'site' : nonSiteKind
 
   return {
@@ -198,9 +183,7 @@ export function hostingServiceKindLabel(context: HostingServiceContext): string 
  * and naming it is the difference between "the field is missing" and "the
  * daemon already decided this". A container keeps the field, so it has no hint.
  */
-export function hostingTargetPortHint(
-  context: HostingServiceContext,
-): string | null {
+export function hostingTargetPortHint(context: HostingServiceContext): string | null {
   if (context.kind === 'site') {
     return 'TurboPanel picks the port: the deploy sets this site up on its web server on a private port and sends the hostname there.'
   }
@@ -301,22 +284,18 @@ export function hostingPathPrefixHint(context: HostingServiceContext): string {
   return 'Optional. Same hostname on another hosting can use a different prefix (e.g. / for the marketing site, /app for the application).'
 }
 
-export function hostingDockerBridgeHint(
-  context: HostingServiceContext,
-): string | null {
+export function hostingDockerBridgeHint(context: HostingServiceContext): string | null {
   if (context.kind !== 'container' || context.siteSiblingNames.length === 0) {
     return null
   }
-  const exampleKey = siteEnvKeyForService(
-    context.siteSiblingNames[0] ?? 'site',
-  )
+  const exampleKey = siteEnvKeyForService(context.siteSiblingNames[0] ?? 'site')
   return `This environment also has site services. On deploy, the containers get ${exampleKey} (and TURBOPANEL_SITE_ENDPOINTS, which lists them all) with the address of each site, so apps can call the sites on this server.`
 }
 
 /** When PHP/env fields are hidden, still reveal them if the editor already has values so operators can clear stale data. */
 export function shouldRevealOptionalHostingFields(
   showByDefault: boolean,
-  hasStoredValues: boolean,
+  hasStoredValues: boolean
 ): boolean {
   return showByDefault || hasStoredValues
 }
@@ -331,7 +310,7 @@ export function shouldRevealOptionalHostingFields(
  */
 export function readComposeHostingEntries(
   document: ComposeDocument,
-  composeServiceName: string,
+  composeServiceName: string
 ): ComposeHostingExtensionEntry[] {
   const service = readComposeServiceMap(document)[composeServiceName]
   if (!service) return []
@@ -347,14 +326,12 @@ export function readComposeHostingEntries(
  */
 export function findComposeHostingEntryIndex(
   entries: readonly ComposeHostingExtensionEntry[],
-  route: string,
+  route: string
 ): number {
   return entries.findIndex((entry) => hostingEntryKey(entry) === route)
 }
 
-function cloneComposeData(
-  data: Record<string, unknown>,
-): Record<string, unknown> {
+function cloneComposeData(data: Record<string, unknown>): Record<string, unknown> {
   return structuredClone(data)
 }
 
@@ -371,12 +348,10 @@ function cloneComposeData(
 export function writeComposeHostingEntries(
   document: ComposeDocument,
   composeServiceName: string,
-  entries: readonly ComposeHostingExtensionEntry[],
+  entries: readonly ComposeHostingExtensionEntry[]
 ): ComposeDocument {
   const data = cloneComposeData(document.data)
-  const services = isPlainServiceMap(data.services)
-    ? { ...data.services }
-    : {}
+  const services = isPlainServiceMap(data.services) ? { ...data.services } : {}
   const service = isPlainServiceMap(services[composeServiceName])
     ? { ...(services[composeServiceName] as Record<string, unknown>) }
     : {}

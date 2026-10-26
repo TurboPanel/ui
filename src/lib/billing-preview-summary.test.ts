@@ -24,8 +24,16 @@ function quote(overrides: Partial<BillingPreview> = {}): BillingPreview {
     total: 63,
     amountDue: 63,
     lines: [
-      { description: 'Unused time on 6 × TurboPanel S1 after 27 Sep 2026', amount: -384, proration: true },
-      { description: 'Remaining time on 7 × TurboPanel S1 from 27 Sep 2026', amount: 447, proration: true },
+      {
+        description: 'Unused time on 6 × TurboPanel S1 after 27 Sep 2026',
+        amount: -384,
+        proration: true,
+      },
+      {
+        description: 'Remaining time on 7 × TurboPanel S1 from 27 Sep 2026',
+        amount: 447,
+        proration: true,
+      },
     ],
     ...overrides,
   }
@@ -69,13 +77,26 @@ describe('summarizePurchasePreview', () => {
 
   it('omits the monthly line when the price or the current quantity is unknown', () => {
     const base = { preview: quote(), count: 2, label: 'S2', periodEnd: PERIOD_END, now: NOW }
-    expect(summarizePurchasePreview({ ...base, unitCents: null, purchasedBefore: 3 }).followUp).toBeNull()
-    expect(summarizePurchasePreview({ ...base, unitCents: 750, purchasedBefore: null }).followUp).toBeNull()
-    expect(summarizePurchasePreview({ ...base, periodEnd: null, unitCents: 750, purchasedBefore: 3 }).followUp).toBeNull()
+    expect(
+      summarizePurchasePreview({ ...base, unitCents: null, purchasedBefore: 3 }).followUp
+    ).toBeNull()
+    expect(
+      summarizePurchasePreview({ ...base, unitCents: 750, purchasedBefore: null }).followUp
+    ).toBeNull()
+    expect(
+      summarizePurchasePreview({ ...base, periodEnd: null, unitCents: 750, purchasedBefore: 3 })
+        .followUp
+    ).toBeNull()
   })
 
   it('drops the date range when the period end is unknown', () => {
-    const summary = summarizePurchasePreview({ preview: quote(), count: 1, label: 'S1', periodEnd: null, now: NOW })
+    const summary = summarizePurchasePreview({
+      preview: quote(),
+      count: 1,
+      label: 'S1',
+      periodEnd: null,
+      now: NOW,
+    })
     expect(summary.headline).toBe(`1 × S1 for the rest of this period: ${usd(63)} due now`)
     expect(previewSummaryBody(summary)).toBeUndefined()
   })
@@ -88,7 +109,9 @@ describe('summarizePurchasePreview', () => {
       periodEnd: NOW.toISOString(),
       now: NOW,
     })
-    expect(summary.headline).toBe(`1 × S1 for the rest of this period (until ${START}): ${usd(63)} due now`)
+    expect(summary.headline).toBe(
+      `1 × S1 for the rest of this period (until ${START}): ${usd(63)} due now`
+    )
   })
 
   it('reads a zero or missing amount plainly', () => {
@@ -125,7 +148,12 @@ describe('summarizePurchasePreview', () => {
   })
 
   it('defaults the clock to now', () => {
-    const summary = summarizePurchasePreview({ preview: quote(), count: 1, label: 'S1', periodEnd: null })
+    const summary = summarizePurchasePreview({
+      preview: quote(),
+      count: 1,
+      label: 'S1',
+      periodEnd: null,
+    })
     expect(summary.headline).toContain('due now')
   })
 })
@@ -148,8 +176,15 @@ describe('summarizeMovePreview', () => {
   })
 
   it('defaults the clock to now', () => {
-    const summary = summarizeMovePreview({ preview: quote(), fromLabel: 'S1', toLabel: 'S2', periodEnd: null })
-    expect(summary.headline).toBe(`1 license from S1 to S2 for the rest of this period: ${usd(63)} due now`)
+    const summary = summarizeMovePreview({
+      preview: quote(),
+      fromLabel: 'S1',
+      toLabel: 'S2',
+      periodEnd: null,
+    })
+    expect(summary.headline).toBe(
+      `1 license from S1 to S2 for the rest of this period: ${usd(63)} due now`
+    )
   })
 })
 

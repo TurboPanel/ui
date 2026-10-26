@@ -32,7 +32,7 @@ function lineOffsetRanges(text: string): { start: number; end: number }[] {
  */
 export function composeLintIssuesToDiagnostics(
   text: string,
-  issues: readonly ComposeLintIssue[],
+  issues: readonly ComposeLintIssue[]
 ): ComposeLintDiagnostic[] {
   const lineRanges = lineOffsetRanges(text)
   const diagnostics: ComposeLintDiagnostic[] = []
