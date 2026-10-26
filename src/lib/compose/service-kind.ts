@@ -29,9 +29,41 @@ export type NodePackageManager = 'npm' | 'yarn' | 'pnpm'
 
 /**
  * `NODE_ENV` for a `serviceKind: node` service (build + unit). Mirrors the
- * instance type. Omitted means `production`.
+ * instance type. Omitted means `production`. Usually `production` or
+ * `development`; any other value matching {@link NODE_APP_MODE_RE}
+ * (`staging`, `test`, ...) is allowed.
  */
-export type NodeAppMode = 'production' | 'development'
+export type NodeAppMode = string
+
+/** The two application modes offered as main choices. */
+export const MAIN_NODE_APP_MODES: readonly NodeAppMode[] = ['production', 'development']
+
+/** Longest application mode the instance and the daemon accept. */
+export const NODE_APP_MODE_MAX_LENGTH = 64
+
+/**
+ * Application mode shape: 1-64 letters, digits, `.`, `_` or `-`, starting
+ * with a letter or digit. Mirrors the instance and the daemon, which writes
+ * the value unquoted into the unit's `Environment=NODE_ENV=` line.
+ */
+export const NODE_APP_MODE_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/
+
+/**
+ * Plain-words reason a typed application mode cannot be saved, or `null` when
+ * it can. The value is checked trimmed, as it is saved.
+ */
+export function nodeAppModeProblem(value: string): string | null {
+  const trimmed = value.trim()
+  if (trimmed === '') return 'Enter a value.'
+  if (trimmed.length > NODE_APP_MODE_MAX_LENGTH) {
+    return `Use at most ${NODE_APP_MODE_MAX_LENGTH} characters.`
+  }
+  if (!/^[A-Za-z0-9]/.test(trimmed)) return 'Start with a letter or a digit.'
+  if (!NODE_APP_MODE_RE.test(trimmed)) {
+    return 'Use only letters, digits, dots (.), dashes (-), and underscores (_), with no spaces.'
+  }
+  return null
+}
 
 /**
  * Build backend for a `x-turbopanel.source` binding. Mirrors the instance type.
@@ -403,7 +435,8 @@ const SERVICE_EXTENSION_FIELDS: Readonly<
   },
   appMode: {
     kinds: NODE_KIND_ONLY,
-    typeMessage: 'appMode must be "production" or "development"',
+    typeMessage:
+      'appMode must be "production", "development", or a custom value of 1 to 64 letters, digits, ".", "_", or "-" that starts with a letter or digit',
   },
   enabled: {
     kinds: NODE_KIND_ONLY,
@@ -633,7 +666,6 @@ const SITE_ENGINES = new Set<SiteEngine>([
 ])
 const SOURCE_BUILD_KINDS = new Set<ComposeSourceBuildKind>(['native', 'railpack'])
 const NODE_PACKAGE_MANAGERS = new Set<NodePackageManager>(['npm', 'yarn', 'pnpm'])
-const NODE_APP_MODES = new Set<NodeAppMode>(['production', 'development'])
 
 /** Where a site's content comes from. Omitted means `release`. */
 export type SiteSourceKind = 'release' | 'managed-directory'
@@ -736,8 +768,7 @@ function readNodePackageManager(value: unknown): NodePackageManager | undefined 
 function readNodeAppMode(value: unknown): NodeAppMode | undefined {
   if (typeof value !== 'string') return undefined
   const trimmed = value.trim()
-  if (!NODE_APP_MODES.has(trimmed as NodeAppMode)) return undefined
-  return trimmed as NodeAppMode
+  return NODE_APP_MODE_RE.test(trimmed) ? trimmed : undefined
 }
 
 const SOURCE_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i

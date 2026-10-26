@@ -16,6 +16,7 @@ import {
   usePersistEnvironmentCompose,
   usePersistProjectCompose,
 } from '@/components/org/compose-persistence'
+import { NodeAppModeField } from '@/components/org/node-app-mode-field'
 import {
   FLOATING_NODE_VERSION,
   NEWEST_NODE_SERIES,
@@ -518,16 +519,7 @@ function NodeSettingsFields({
         label="Application mode"
         description="Sets NODE_ENV for the build and the running process."
       >
-        <SegmentedControl
-          options={[
-            { value: 'production', label: 'production' },
-            { value: 'development', label: 'development' },
-          ]}
-          value={appMode}
-          onChange={setAppMode}
-          disabled={fieldsDisabled}
-          accessibilityLabel="Application mode"
-        />
+        <NodeAppModeField value={appMode} onChange={setAppMode} disabled={fieldsDisabled} />
       </SettingRow>
 
       <ApplicationUrlRow url={applicationUrl} />

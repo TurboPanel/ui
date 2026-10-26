@@ -44,7 +44,28 @@ vi.mock('@/components/ui', () => ({
       {title as string} {body as string}
     </div>
   ),
-  SegmentedControl: () => null,
+  ButtonRow: ({ children }: Props) => <div>{children}</div>,
+  ModalSheet: ({ visible, children, footer }: Props) =>
+    visible ? (
+      <div role="dialog">
+        {children}
+        {footer as ReactNode}
+      </div>
+    ) : null,
+  SegmentedControl: ({ options, onChange, accessibilityLabel }: Props) =>
+    accessibilityLabel === 'Application mode' ? (
+      <div>
+        {(options as { value: string; label: string }[]).map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            onClick={() => (onChange as (v: string) => void)(option.value)}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+    ) : null,
   Select: ({ value, options, accessibilityLabel, onChange, noneLabel }: Props) => (
     <select
       aria-label={accessibilityLabel as string}
@@ -189,6 +210,41 @@ describe('NodeSettingsPanel with no environment', () => {
     const entry = (compose.data.services as Record<string, Record<string, unknown>>).web
     expect(entry.command).toBe('npm start')
     expect((entry['x-turbopanel'] as Record<string, unknown>).nodeVersion).toBe('24')
+  })
+
+  it('saves a custom application mode and shows it as the selected option', async () => {
+    render(panel(null))
+    fireEvent.click(screen.getByRole('button', { name: 'Custom…' }))
+    fireEvent.change(screen.getByLabelText('NODE_ENV value'), { target: { value: 'staging' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(screen.getByRole('button', { name: 'staging' })).not.toBeNull()
+    await act(async () => {
+      fireEvent.click(save())
+    })
+    const [compose] = h.persistProject.mock.calls[0] as [ComposeDocument]
+    const entry = (compose.data.services as Record<string, Record<string, unknown>>).web
+    expect((entry['x-turbopanel'] as Record<string, unknown>).appMode).toBe('staging')
+  })
+
+  it('reads a saved custom application mode back as the selected option', () => {
+    h.project = {
+      project: {
+        options: {
+          compose: doc({
+            web: {
+              'x-turbopanel': {
+                serviceKind: 'node',
+                appMode: 'test',
+                source: { sourceId: SID, branch: 'main' },
+              },
+            },
+          }),
+        },
+      },
+    }
+    render(panel(null))
+    expect(screen.getByRole('button', { name: 'test' })).not.toBeNull()
+    expect(screen.queryByRole('button', { name: 'Custom…' })).toBeNull()
   })
 
   it('renders nothing for a service that is not a Node app', () => {
