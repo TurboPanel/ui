@@ -25,7 +25,7 @@ function step(
   id: string,
   label: string,
   state: CommandProgressStepState,
-  extra?: Partial<CommandProgressStep>,
+  extra?: Partial<CommandProgressStep>
 ): CommandProgressStep {
   return { id, label, state, ...extra }
 }
@@ -68,11 +68,11 @@ describe('reading the payload', () => {
     expect(stepsOf(undefined)).toEqual([])
     expect(stepsOf({})).toEqual([])
     expect(stepsOf({ steps: 'nope' })).toEqual([])
-    expect(stepsOf({ steps: [null, 4, { label: 'no id' }, step('build', 'Build', 'pending')] })).toEqual([
-      step('build', 'Build', 'pending'),
-    ])
+    expect(
+      stepsOf({ steps: [null, 4, { label: 'no id' }, step('build', 'Build', 'pending')] })
+    ).toEqual([step('build', 'Build', 'pending')])
     expect(countedSteps(undefined)).toEqual([])
-    expect(runningStep({ steps: 7 as unknown as [] , current: 'x' })).toBeNull()
+    expect(runningStep({ steps: 7 as unknown as [], current: 'x' })).toBeNull()
     expect(failedStep(null)).toBeNull()
     expect(firstTimeSetupCaption(undefined)).toBeNull()
     expect(progressSummary({ steps: {} })).toBeNull()
@@ -85,9 +85,13 @@ describe('reading the payload', () => {
   })
 
   it('finds the running step by `current` only when that step is running, then by state', () => {
-    expect(runningStep({ steps: FRESH_HOST, current: 'install-runtime:node-22' })?.id).toBe('install-runtime:node-22')
+    expect(runningStep({ steps: FRESH_HOST, current: 'install-runtime:node-22' })?.id).toBe(
+      'install-runtime:node-22'
+    )
     expect(runningStep({ steps: FRESH_HOST, current: 'fetch' })?.id).toBe('install-runtime:node-22')
-    expect(runningStep({ steps: FRESH_HOST, current: 'not-a-step' })?.id).toBe('install-runtime:node-22')
+    expect(runningStep({ steps: FRESH_HOST, current: 'not-a-step' })?.id).toBe(
+      'install-runtime:node-22'
+    )
     expect(runningStep({ steps: FRESH_HOST, current: null })?.id).toBe('install-runtime:node-22')
     expect(runningStep({ steps: [step('build', 'Build', 'pending')], current: 'build' })).toBeNull()
   })
@@ -106,7 +110,9 @@ describe('reading the payload', () => {
 
 describe('progressSummary', () => {
   it('says where the deploy is and what it is doing now', () => {
-    expect(progressSummary({ steps: FRESH_HOST, current: 'install-runtime:node-22' })).toMatchObject({
+    expect(
+      progressSummary({ steps: FRESH_HOST, current: 'install-runtime:node-22' })
+    ).toMatchObject({
       phase: 'running',
       step: 2,
       total: 6,
@@ -114,7 +120,7 @@ describe('progressSummary', () => {
       focus: FRESH_HOST[2],
     })
     expect(progressHeadline({ steps: FRESH_HOST, current: 'install-runtime:node-22' })).toBe(
-      'Step 2 of 6 · Installing Node 22',
+      'Step 2 of 6 · Installing Node 22'
     )
   })
 
@@ -135,8 +141,14 @@ describe('progressSummary', () => {
 
   it('reads done with the time it took, stopped, and getting ready', () => {
     const done = [
-      step('build', 'Build', 'done', { startedAt: '2026-10-12T10:00:00Z', finishedAt: '2026-10-12T10:01:00Z' }),
-      step('start', 'Start the app', 'done', { startedAt: '2026-10-12T10:01:00Z', finishedAt: '2026-10-12T10:03:12Z' }),
+      step('build', 'Build', 'done', {
+        startedAt: '2026-10-12T10:00:00Z',
+        finishedAt: '2026-10-12T10:01:00Z',
+      }),
+      step('start', 'Start the app', 'done', {
+        startedAt: '2026-10-12T10:01:00Z',
+        finishedAt: '2026-10-12T10:03:12Z',
+      }),
     ]
     expect(progressSummary({ steps: done, current: null })).toMatchObject({
       phase: 'done',
@@ -145,18 +157,26 @@ describe('progressSummary', () => {
       title: 'All 2 steps done · 03:12',
     })
     expect(
-      progressSummary({ steps: [step('build', 'Build', 'done'), step('start', 'Start the app', 'done')] })?.title,
+      progressSummary({
+        steps: [step('build', 'Build', 'done'), step('start', 'Start the app', 'done')],
+      })?.title
     ).toBe('All 2 steps done')
     expect(
-      progressSummary({ steps: [step('build', 'Build', 'done'), step('start', 'Start the app', 'skipped')] }),
+      progressSummary({
+        steps: [step('build', 'Build', 'done'), step('start', 'Start the app', 'skipped')],
+      })
     ).toMatchObject({ phase: 'stopped', step: 1, total: 2, title: 'Stopped after step 1 of 2' })
     expect(
-      progressSummary({ steps: [step('build', 'Build', 'pending'), step('start', 'Start the app', 'pending')] }),
+      progressSummary({
+        steps: [step('build', 'Build', 'pending'), step('start', 'Start the app', 'pending')],
+      })
     ).toMatchObject({ phase: 'waiting', step: 0, total: 2, title: 'Getting ready' })
   })
 
   it('has nothing to say when every step was already there', () => {
-    expect(progressSummary({ steps: [step('install-docker', 'Install Docker', 'ready')], current: null })).toBeNull()
+    expect(
+      progressSummary({ steps: [step('install-docker', 'Install Docker', 'ready')], current: null })
+    ).toBeNull()
     expect(progressHeadline({ steps: [], current: null })).toBeNull()
     expect(progressHeadline(null)).toBeNull()
   })
@@ -165,7 +185,7 @@ describe('progressSummary', () => {
 describe('progressChipLabel', () => {
   it('shows the running step only', () => {
     expect(progressChipLabel({ steps: FRESH_HOST, current: 'install-runtime:node-22' })).toBe(
-      'Step 2 of 6 · Installing Node 22',
+      'Step 2 of 6 · Installing Node 22'
     )
     expect(progressChipLabel({ steps: [step('build', 'Build', 'done')], current: null })).toBeNull()
     expect(progressChipLabel(null)).toBeNull()
@@ -176,7 +196,7 @@ describe('progressChipLabel', () => {
 describe('activityStepText', () => {
   it('uses the control plane counts and the running label', () => {
     expect(activityStepText({ step: 3, totalSteps: 7, stepLabel: 'Install Docker' })).toBe(
-      'Step 3 of 7 · Installing Docker',
+      'Step 3 of 7 · Installing Docker'
     )
     expect(activityStepText({ step: 3, totalSteps: 7, stepLabel: null })).toBe('Step 3 of 7')
     expect(activityStepText({ step: 3, totalSteps: 7 })).toBe('Step 3 of 7')
@@ -194,17 +214,35 @@ describe('activityStepText', () => {
 })
 
 describe('firstTimeSetupCaption', () => {
-  const caption = 'First-time setup on this server. Installing what the app needs; this can take a few minutes.'
+  const caption =
+    'First-time setup on this server. Installing what the app needs; this can take a few minutes.'
 
   it('shows while an install step is still to run or running', () => {
     expect(firstTimeSetupCaption(FRESH_HOST)).toBe(caption)
-    expect(firstTimeSetupCaption([step('install-php:8.3', 'Install PHP 8.3', 'pending')])).toBe(caption)
+    expect(firstTimeSetupCaption([step('install-php:8.3', 'Install PHP 8.3', 'pending')])).toBe(
+      caption
+    )
   })
 
   it('stays quiet when everything was already there, the installs are over, or nothing installs', () => {
-    expect(firstTimeSetupCaption([step('install-docker', 'Install Docker', 'ready'), step('build', 'Build', 'running')])).toBeNull()
-    expect(firstTimeSetupCaption([step('install-docker', 'Install Docker', 'done'), step('build', 'Build', 'running')])).toBeNull()
-    expect(firstTimeSetupCaption([step('install-docker', 'Install Docker', 'failed'), step('build', 'Build', 'skipped')])).toBeNull()
+    expect(
+      firstTimeSetupCaption([
+        step('install-docker', 'Install Docker', 'ready'),
+        step('build', 'Build', 'running'),
+      ])
+    ).toBeNull()
+    expect(
+      firstTimeSetupCaption([
+        step('install-docker', 'Install Docker', 'done'),
+        step('build', 'Build', 'running'),
+      ])
+    ).toBeNull()
+    expect(
+      firstTimeSetupCaption([
+        step('install-docker', 'Install Docker', 'failed'),
+        step('build', 'Build', 'skipped'),
+      ])
+    ).toBeNull()
     expect(firstTimeSetupCaption([step('fetch', 'Fetch the code', 'pending')])).toBeNull()
   })
 })
@@ -235,12 +273,22 @@ describe('elapsed time', () => {
   it('measures the whole plan from the first start to the last finish', () => {
     expect(
       planElapsedSeconds([
-        step('a', 'A', 'done', { startedAt: '2026-10-12T10:00:00Z', finishedAt: '2026-10-12T10:00:30Z' }),
-        step('b', 'B', 'done', { startedAt: '2026-10-12T10:00:30Z', finishedAt: '2026-10-12T10:02:00Z' }),
+        step('a', 'A', 'done', {
+          startedAt: '2026-10-12T10:00:00Z',
+          finishedAt: '2026-10-12T10:00:30Z',
+        }),
+        step('b', 'B', 'done', {
+          startedAt: '2026-10-12T10:00:30Z',
+          finishedAt: '2026-10-12T10:02:00Z',
+        }),
         step('c', 'C', 'ready'),
-      ]),
+      ])
     ).toBe(120)
-    expect(planElapsedSeconds([step('a', 'A', 'done', { startedAt: 'bad', finishedAt: '2026-10-12T10:02:00Z' })])).toBeNull()
+    expect(
+      planElapsedSeconds([
+        step('a', 'A', 'done', { startedAt: 'bad', finishedAt: '2026-10-12T10:02:00Z' }),
+      ])
+    ).toBeNull()
     expect(planElapsedSeconds([step('a', 'A', 'done')])).toBeNull()
     expect(planElapsedSeconds(null)).toBeNull()
   })
@@ -254,12 +302,28 @@ describe('elapsed time', () => {
 
 describe('step nodes', () => {
   it('pairs every state with a word, a glyph and a tone', () => {
-    expect(stepNodeInfo('ready')).toMatchObject({ word: 'already on this server', glyph: 'check', tone: 'ok' })
+    expect(stepNodeInfo('ready')).toMatchObject({
+      word: 'already on this server',
+      glyph: 'check',
+      tone: 'ok',
+    })
     expect(stepNodeInfo('done')).toMatchObject({ word: 'done', glyph: 'check', tone: 'ok' })
-    expect(stepNodeInfo('running')).toMatchObject({ word: 'in progress', glyph: 'spinner', tone: 'busy' })
-    expect(stepNodeInfo('pending')).toMatchObject({ word: 'not started', glyph: null, tone: 'idle' })
+    expect(stepNodeInfo('running')).toMatchObject({
+      word: 'in progress',
+      glyph: 'spinner',
+      tone: 'busy',
+    })
+    expect(stepNodeInfo('pending')).toMatchObject({
+      word: 'not started',
+      glyph: null,
+      tone: 'idle',
+    })
     expect(stepNodeInfo('failed')).toMatchObject({ word: 'failed', glyph: 'diamond', tone: 'bad' })
-    expect(stepNodeInfo('skipped')).toMatchObject({ word: 'skipped', glyph: 'dashed', tone: 'idle' })
+    expect(stepNodeInfo('skipped')).toMatchObject({
+      word: 'skipped',
+      glyph: 'dashed',
+      tone: 'idle',
+    })
   })
 
   it('reads an unknown state as not started', () => {
@@ -267,7 +331,11 @@ describe('step nodes', () => {
   })
 
   it('tells a screen reader the position, the step and its state', () => {
-    expect(stepAccessibilityLabel(FRESH_HOST, FRESH_HOST[2]!)).toBe('Step 2 of 6, Install Node 22, in progress')
-    expect(stepAccessibilityLabel(FRESH_HOST, FRESH_HOST[1]!)).toBe('Set up the web gateway, already on this server')
+    expect(stepAccessibilityLabel(FRESH_HOST, FRESH_HOST[2]!)).toBe(
+      'Step 2 of 6, Install Node 22, in progress'
+    )
+    expect(stepAccessibilityLabel(FRESH_HOST, FRESH_HOST[1]!)).toBe(
+      'Set up the web gateway, already on this server'
+    )
   })
 })

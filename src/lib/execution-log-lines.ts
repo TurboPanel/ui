@@ -34,8 +34,7 @@ export type LogTranscriptLine = Readonly<{
  * CSI / OSC escape sequences. Stripped rather than interpreted — see
  * `design-system/turbopanel/pages/deploy-logs.md` (ANSI).
  */
-const ANSI_PATTERN =
-  /[\u001B\u009B][[\]()#;?]*(?:\d{1,4}(?:;\d{0,4})*)?[0-9A-PR-TZcf-ntqry=><]/g // NOSONAR typescript:S6324 — \u001B / \u009B are the ANSI introducers being matched
+const ANSI_PATTERN = /[\u001B\u009B][[\]()#;?]*(?:\d{1,4}(?:;\d{0,4})*)?[0-9A-PR-TZcf-ntqry=><]/g // NOSONAR typescript:S6324 — \u001B / \u009B are the ANSI introducers being matched
 
 /** Remove ANSI escape sequences and stray carriage returns from one line. */
 export function stripAnsi(value: string): string {
@@ -93,7 +92,7 @@ const DOCKER_PROGRESS_STATUS_SET = new Set(DOCKER_PROGRESS_STATUSES)
 
 /** Longest status phrase, in words — `Pulling fs layer`. */
 const DOCKER_PROGRESS_STATUS_WORDS = Math.max(
-  ...DOCKER_PROGRESS_STATUSES.map((status) => status.split(' ').length),
+  ...DOCKER_PROGRESS_STATUSES.map((status) => status.split(' ').length)
 )
 
 /**
@@ -198,9 +197,7 @@ const NODE_TOOLCHAIN_STDERR_SNIPPETS = [
 function isNodeToolchainStderrLine(message: string): boolean {
   const trimmed = message.trimStart()
   return (
-    NODE_TOOLCHAIN_STDERR_PREFIXES.some((prefix) =>
-      trimmed.startsWith(prefix),
-    ) ||
+    NODE_TOOLCHAIN_STDERR_PREFIXES.some((prefix) => trimmed.startsWith(prefix)) ||
     NODE_TOOLCHAIN_STDERR_SNIPPETS.some((snippet) => trimmed.includes(snippet))
   )
 }
@@ -208,9 +205,7 @@ function isNodeToolchainStderrLine(message: string): boolean {
 /** stderr that is informational progress, not a deploy failure. */
 export function isBenignStderrLine(message: string): boolean {
   return (
-    isDockerProgressLine(message) ||
-    isGitStderrLine(message) ||
-    isNodeToolchainStderrLine(message)
+    isDockerProgressLine(message) || isGitStderrLine(message) || isNodeToolchainStderrLine(message)
   )
 }
 
@@ -237,7 +232,7 @@ export function normalizeTranscriptMessage(message: string): string {
  * real output and stays.
  */
 export function collapseRepeatedProgressLines(
-  lines: readonly LogTranscriptLine[],
+  lines: readonly LogTranscriptLine[]
 ): LogTranscriptLine[] {
   const rows: LogTranscriptLine[] = []
   for (const line of lines) {
@@ -301,10 +296,7 @@ function parseEventLine(raw: string): LogTranscriptLine | null {
  * reader re-reads that chunk from its start on the next poll when a byte budget
  * split it, and {@link mergeTranscriptLines} dedupes the replay.
  */
-export function parseCommandLogChunk(
-  text: string,
-  fallbackSeq = 0,
-): LogTranscriptLine[] {
+export function parseCommandLogChunk(text: string, fallbackSeq = 0): LogTranscriptLine[] {
   if (text.length === 0) return []
   const rows: LogTranscriptLine[] = []
   const rawLines = text.split('\n')
@@ -346,7 +338,7 @@ export function parseCommandLogChunk(
  */
 export function mergeTranscriptLines(
   current: readonly LogTranscriptLine[],
-  incoming: readonly LogTranscriptLine[],
+  incoming: readonly LogTranscriptLine[]
 ): LogTranscriptLine[] {
   if (incoming.length === 0) return [...current]
   const byKey = new Map<string, LogTranscriptLine>()
@@ -395,9 +387,7 @@ const DOCKER_TIMESTAMP_RE =
  * Adapt a `docker container logs --timestamps` snapshot to transcript rows.
  * Lines without a leading RFC3339 stamp degrade like {@link plainTextTranscriptLines}.
  */
-export function dockerTimestampTranscriptLines(
-  text: string,
-): LogTranscriptLine[] {
+export function dockerTimestampTranscriptLines(text: string): LogTranscriptLine[] {
   const rows: LogTranscriptLine[] = []
   let seq = 0
   for (const raw of text.split('\n')) {
@@ -417,9 +407,7 @@ export function dockerTimestampTranscriptLines(
 }
 
 /** Plain text for Copy / Download — what the viewer shows, minus the chrome. */
-export function transcriptPlainText(
-  lines: readonly LogTranscriptLine[],
-): string {
+export function transcriptPlainText(lines: readonly LogTranscriptLine[]): string {
   return lines
     .map((line) => {
       const prefix = isErrorLine(line) ? 'stderr ' : ''
@@ -435,9 +423,7 @@ export type LogTranscriptGroup = Readonly<{
 }>
 
 /** Group consecutive lines by phase without reordering them. */
-export function groupTranscriptByPhase(
-  lines: readonly LogTranscriptLine[],
-): LogTranscriptGroup[] {
+export function groupTranscriptByPhase(lines: readonly LogTranscriptLine[]): LogTranscriptGroup[] {
   const groups: { phase: string | null; lines: LogTranscriptLine[] }[] = []
   for (const line of lines) {
     const last = groups.at(-1)

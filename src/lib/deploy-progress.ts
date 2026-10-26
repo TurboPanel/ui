@@ -23,12 +23,16 @@ export function stepsOf(progress: ProgressLike | null | undefined): CommandProgr
   if (!Array.isArray(steps)) return []
   return steps.filter(
     (step): step is CommandProgressStep =>
-      typeof step === 'object' && step !== null && typeof (step as CommandProgressStep).id === 'string',
+      typeof step === 'object' &&
+      step !== null &&
+      typeof (step as CommandProgressStep).id === 'string'
   )
 }
 
 /** Steps that count towards "Step N of M": everything the server has to do. */
-export function countedSteps(steps: readonly CommandProgressStep[] | null | undefined): CommandProgressStep[] {
+export function countedSteps(
+  steps: readonly CommandProgressStep[] | null | undefined
+): CommandProgressStep[] {
   return stepsOf({ steps }).filter((step) => step.state !== 'ready')
 }
 
@@ -47,14 +51,16 @@ export function runningStep(progress: ProgressLike | null | undefined): CommandP
 }
 
 /** The step the deploy failed on, or null. */
-export function failedStep(steps: readonly CommandProgressStep[] | null | undefined): CommandProgressStep | null {
+export function failedStep(
+  steps: readonly CommandProgressStep[] | null | undefined
+): CommandProgressStep | null {
   return stepsOf({ steps }).find((step) => step.state === 'failed') ?? null
 }
 
 /** One-based position of a step among the counted ones; 0 when it is `ready`. */
 export function stepPosition(
   steps: readonly CommandProgressStep[] | null | undefined,
-  step: CommandProgressStep,
+  step: CommandProgressStep
 ): number {
   return countedSteps(steps).indexOf(step) + 1
 }
@@ -113,7 +119,9 @@ export function elapsedSeconds(startedAt: string | null | undefined, now: number
  * How long the whole plan took, from the first step that started to the last
  * that finished; null until both times are known.
  */
-export function planElapsedSeconds(steps: readonly CommandProgressStep[] | null | undefined): number | null {
+export function planElapsedSeconds(
+  steps: readonly CommandProgressStep[] | null | undefined
+): number | null {
   let first = Number.POSITIVE_INFINITY
   let last = Number.NEGATIVE_INFINITY
   for (const step of stepsOf({ steps })) {
@@ -152,20 +160,44 @@ export function progressSummary(progress: ProgressLike | null | undefined): Prog
   const done = counted.filter((step) => step.state === 'done').length
   const running = runningStep(progress)
   if (running) {
-    return { phase: 'running', step: stepPosition(steps, running), total, title: gerundLabel(running.label), focus: running }
+    return {
+      phase: 'running',
+      step: stepPosition(steps, running),
+      total,
+      title: gerundLabel(running.label),
+      focus: running,
+    }
   }
   const failed = failedStep(steps)
   if (failed) {
     const at = stepPosition(steps, failed)
-    return { phase: 'failed', step: at, total, title: `Failed at step ${at} of ${total} · ${failed.label}`, focus: failed }
+    return {
+      phase: 'failed',
+      step: at,
+      total,
+      title: `Failed at step ${at} of ${total} · ${failed.label}`,
+      focus: failed,
+    }
   }
   if (done === total) {
     const took = planElapsedSeconds(steps)
     const time = took == null ? '' : ` · ${formatElapsed(took)}`
-    return { phase: 'done', step: total, total, title: `All ${total} steps done${time}`, focus: null }
+    return {
+      phase: 'done',
+      step: total,
+      total,
+      title: `All ${total} steps done${time}`,
+      focus: null,
+    }
   }
   if (counted.some((step) => step.state === 'skipped')) {
-    return { phase: 'stopped', step: done, total, title: `Stopped after step ${done} of ${total}`, focus: null }
+    return {
+      phase: 'stopped',
+      step: done,
+      total,
+      title: `Stopped after step ${done} of ${total}`,
+      focus: null,
+    }
   }
   return { phase: 'waiting', step: 0, total, title: 'Getting ready', focus: counted[0] ?? null }
 }
@@ -191,11 +223,15 @@ export function progressChipLabel(progress: ProgressLike | null | undefined): st
  * step runs, never "Step 0 of 7".
  */
 export function activityStepText(
-  item: Readonly<{ step: number | null; totalSteps: number | null; stepLabel?: string | null }>,
+  item: Readonly<{ step: number | null; totalSteps: number | null; stepLabel?: string | null }>
 ): string | null {
   if (item.step == null || item.totalSteps == null || item.totalSteps <= 0) return null
   if (item.step <= 0) return `Starting · ${item.totalSteps} steps`
-  return stepCountText(item.step, item.totalSteps, item.stepLabel ? gerundLabel(item.stepLabel) : null)
+  return stepCountText(
+    item.step,
+    item.totalSteps,
+    item.stepLabel ? gerundLabel(item.stepLabel) : null
+  )
 }
 
 export const CHECKING_WITH_SERVER_LABEL = 'Checking with the server'
@@ -209,7 +245,7 @@ export const CHECKING_WITH_SERVER_TEXT =
  * (waiting or running) can be in this state; a finished one never is.
  */
 export function isCheckingWithServer(
-  progress: (ProgressLike & Readonly<{ contactLostAt?: string | null }>) | null | undefined,
+  progress: (ProgressLike & Readonly<{ contactLostAt?: string | null }>) | null | undefined
 ): boolean {
   if (!progress?.contactLostAt) return false
   const phase = progressSummary(progress)?.phase
@@ -224,9 +260,12 @@ const FIRST_TIME_SETUP_CAPTION =
  * step is still to run or running. Once the installs are over (or failed) the
  * line goes away.
  */
-export function firstTimeSetupCaption(steps: readonly CommandProgressStep[] | null | undefined): string | null {
+export function firstTimeSetupCaption(
+  steps: readonly CommandProgressStep[] | null | undefined
+): string | null {
   const installing = stepsOf({ steps }).some(
-    (step) => step.id.startsWith('install-') && (step.state === 'pending' || step.state === 'running'),
+    (step) =>
+      step.id.startsWith('install-') && (step.state === 'pending' || step.state === 'running')
   )
   return installing ? FIRST_TIME_SETUP_CAPTION : null
 }
@@ -249,7 +288,9 @@ const STEP_NODES: Readonly<Record<CommandProgressStepState, StepNodeInfo>> = {
 
 /** Word, glyph and tone for a step state; an unknown state reads as not started. */
 export function stepNodeInfo(state: string): StepNodeInfo {
-  return Object.hasOwn(STEP_NODES, state) ? STEP_NODES[state as CommandProgressStepState] : STEP_NODES.pending
+  return Object.hasOwn(STEP_NODES, state)
+    ? STEP_NODES[state as CommandProgressStepState]
+    : STEP_NODES.pending
 }
 
 /**
@@ -258,7 +299,7 @@ export function stepNodeInfo(state: string): StepNodeInfo {
  */
 export function stepAccessibilityLabel(
   steps: readonly CommandProgressStep[] | null | undefined,
-  step: CommandProgressStep,
+  step: CommandProgressStep
 ): string {
   const info = stepNodeInfo(step.state)
   const position = stepPosition(steps, step)
