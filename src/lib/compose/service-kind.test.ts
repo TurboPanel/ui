@@ -15,6 +15,7 @@ import {
   isHostNativeServiceKind,
   isNodeComposeService,
   isSiteComposeService,
+  nodeAppModeProblem,
   parseServiceSourceExtension,
   parseServiceTurbopanelExtension,
   SITE_ENGINE_OPTIONS,
@@ -112,14 +113,41 @@ describe('serviceKind: node', () => {
     expect(parseServiceTurbopanelExtension({ enabled: 1 })?.enabled).toBeUndefined()
   })
 
-  it('drops an unknown package manager and app mode', () => {
+  it('drops an unknown package manager and a malformed app mode', () => {
     const parsed = parseServiceTurbopanelExtension({
       serviceKind: 'node',
       packageManager: 'bun',
-      appMode: 'staging',
+      appMode: 'my mode',
     })
     expect(parsed?.packageManager).toBeUndefined()
     expect(parsed?.appMode).toBeUndefined()
+    for (const appMode of ['', '-staging', 'stage$1', 'a'.repeat(65), 7]) {
+      expect(
+        parseServiceTurbopanelExtension({ serviceKind: 'node', appMode })?.appMode
+      ).toBeUndefined()
+    }
+  })
+
+  it('keeps a custom app mode, trimmed', () => {
+    for (const appMode of ['staging', 'test', 'qa_2', 'pre-prod.eu', 'a'.repeat(64)]) {
+      expect(parseServiceTurbopanelExtension({ serviceKind: 'node', appMode })?.appMode).toBe(
+        appMode
+      )
+    }
+    expect(
+      parseServiceTurbopanelExtension({ serviceKind: 'node', appMode: ' staging ' })?.appMode
+    ).toBe('staging')
+  })
+
+  it('explains in plain words why an app mode cannot be saved', () => {
+    expect(nodeAppModeProblem('staging')).toBeNull()
+    expect(nodeAppModeProblem('  test  ')).toBeNull()
+    expect(nodeAppModeProblem('a'.repeat(64))).toBeNull()
+    expect(nodeAppModeProblem('   ')).toBe('Enter a value.')
+    expect(nodeAppModeProblem('a'.repeat(65))).toBe('Use at most 64 characters.')
+    expect(nodeAppModeProblem('.hidden')).toBe('Start with a letter or a digit.')
+    expect(nodeAppModeProblem('my mode')).toMatch(/^Use only letters, digits/)
+    expect(nodeAppModeProblem('stage$1')).toMatch(/^Use only letters, digits/)
   })
 
   it('clears node-only fields when the kind changes away from node', () => {

@@ -70,11 +70,24 @@ describe('deployRows', () => {
     expect(sub({ durationMs: null, status: 'running' })).toBe('In progress')
     expect(sub({ durationMs: null, status: 'queued' })).toBe('Waiting to start')
     for (const status of ['dispatching', 'sent', 'acked'] as const) {
-      expect(sub({ durationMs: null, status })).toBe('Waiting to start')
+      expect(sub({ durationMs: null, status, startedAt: null })).toBe('Waiting to start')
     }
     expect(sub({ durationMs: null, status: 'cancelled' })).toBe('—')
     expect(sub({ durationMs: null, status: 'failed' })).toBe('—')
     expect(sub({ durationMs: null, status: 'succeeded' })).toBe('—')
+  })
+
+  it('reads In progress for a delivered deploy the server has started', () => {
+    const row = (extra: Parameters<typeof deploy>[2]) =>
+      deployRows([deploy('d1', null, extra)], NOW, false)[0]
+    const startedAt = '2026-10-26T18:18:30.000Z'
+    for (const status of ['sent', 'acked'] as const) {
+      const started = row({ durationMs: null, status, startedAt })
+      expect([started?.statusKey, started?.sub]).toEqual(['deploying', 'In progress'])
+      const waiting = row({ durationMs: null, status, startedAt: null })
+      expect([waiting?.statusKey, waiting?.sub]).toEqual(['queued', 'Waiting to start'])
+    }
+    expect(row({ durationMs: null, status: 'queued', startedAt })?.sub).toBe('Waiting to start')
   })
 
   it('marks the newest good deploy live only while the environment runs', () => {

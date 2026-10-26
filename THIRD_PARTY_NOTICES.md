@@ -7,7 +7,7 @@ Third-party components remain under their own copyright and license terms and ar
 Third-party OS artwork under `assets/os/` is recorded separately in `assets/os/NOTICE.md` and is not licensed under this repository’s AGPL or the Apple App Store additional permission.
 
 <!-- lockfiles
-pnpm-lock.yaml sha256:d0adcd10dea953cea706f56efee1f572568880879f6fa4d60d9dfbe38865cb78
+pnpm-lock.yaml sha256:0e79880f4012d1109ae8deadaac5c220bb38857b68ef38efe0908fbce68a911d
 -->
 
 ## Production dependencies
@@ -2553,7 +2553,7 @@ pnpm-lock.yaml sha256:d0adcd10dea953cea706f56efee1f572568880879f6fa4d60d9dfbe388
 - Copyright: Denis Malinochkin
 - Homepage: https://github.com/mrmlnc/fast-glob#readme
 
-### fast-uri@3.1.8
+### fast-uri@3.1.9
 
 - License: BSD-3-Clause
 - Copyright: Vincent Le Goff
@@ -4730,43 +4730,43 @@ These packages are used for development, test, or build tooling and are not bund
 - License: MIT
 - Homepage: https://github.com/unrs/unrs-resolver
 
-### @vitest/coverage-v8@4.1.11
+### @vitest/coverage-v8@4.1.12
 
 - License: MIT
 - Copyright: Anthony Fu
 - Homepage: https://vitest.dev/guide/coverage
 
-### @vitest/expect@4.1.11
+### @vitest/expect@4.1.12
 
 - License: MIT
 - Homepage: https://vitest.dev/api/expect
 
-### @vitest/mocker@4.1.11
+### @vitest/mocker@4.1.12
 
 - License: MIT
 - Homepage: https://github.com/vitest-dev/vitest/tree/main/packages/mocker
 
-### @vitest/pretty-format@4.1.11
+### @vitest/pretty-format@4.1.12
 
 - License: MIT
 - Homepage: https://github.com/vitest-dev/vitest/tree/main/packages/pretty-format
 
-### @vitest/runner@4.1.11
+### @vitest/runner@4.1.12
 
 - License: MIT
 - Homepage: https://vitest.dev/api/advanced/runner
 
-### @vitest/snapshot@4.1.11
+### @vitest/snapshot@4.1.12
 
 - License: MIT
 - Homepage: https://vitest.dev/guide/snapshot
 
-### @vitest/spy@4.1.11
+### @vitest/spy@4.1.12
 
 - License: MIT
 - Homepage: https://vitest.dev/api/mock
 
-### @vitest/utils@4.1.11
+### @vitest/utils@4.1.12
 
 - License: MIT
 - Homepage: https://github.com/vitest-dev/vitest/tree/main/packages/utils
@@ -6013,7 +6013,7 @@ These packages are used for development, test, or build tooling and are not bund
 - Copyright: Evan You
 - Homepage: https://vite.dev
 
-### vitest@4.1.11
+### vitest@4.1.12
 
 - License: MIT
 - Copyright: Anthony Fu

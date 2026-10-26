@@ -27,7 +27,7 @@ vi.mock('react-native', async () => {
 vi.mock('react-native-svg', async () => (await import('@/components/ui/v4/rn-stub')).svgStub)
 vi.mock(
   '@/lib/theme-preference',
-  async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub,
+  async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub
 )
 vi.mock('expo-router', () => ({
   usePathname: () => '/org-1/projects',
@@ -108,5 +108,17 @@ describe('OrganizationSwitcherSegment menu', () => {
     state.billingEnabled = true
     openMenu(2)
     expect(screen.getByLabelText('Organization billing and licenses')).toBeTruthy()
+  })
+
+  it('opens the same menu from the breadcrumb version of the button', () => {
+    state.orgs = makeOrgs(2)
+    render(<OrganizationSwitcherSegment orgId="org-1" variant="crumb" />)
+    const button = screen.getByLabelText('Organization: Org 1')
+    expect(button.getAttribute('aria-expanded')).not.toBe('true')
+    expect(screen.queryByRole('menu')).toBeNull()
+    fireEvent.click(button)
+    expect(screen.getByRole('menu')).toBeTruthy()
+    expect(screen.getByLabelText('Organization: Org 1').getAttribute('aria-expanded')).toBe('true')
+    expect(screen.getByLabelText('Organization settings')).toBeTruthy()
   })
 })

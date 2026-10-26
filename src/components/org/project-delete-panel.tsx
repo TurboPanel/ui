@@ -116,18 +116,23 @@ type StopStepCopy = Readonly<{
   countLabel: (count: number) => string
   actionLabel: string
   actionBusyLabel: string
+  /** The second press: the action destroys data, so it always confirms. */
+  confirmLabel: string
+  confirmPrompt: string
 }>
 
-const MANAGED_DESTROY_COPY: StopStepCopy = {
+export const MANAGED_DESTROY_COPY: StopStepCopy = {
   stepLabel: 'Destroy databases',
   stepCopy:
     'Destroy every managed database before the project can be deleted. This stops the containers and removes their data volumes.',
   countLabel: () => 'Still running on the server',
   actionLabel: 'Destroy database',
   actionBusyLabel: 'Destroying…',
+  confirmLabel: 'Destroy it',
+  confirmPrompt: 'Destroy the databases in this environment and their data?',
 }
 
-function StopStepSection({
+export function StopStepSection({
   envRows,
   onStop,
   onForceDestroy,
@@ -160,12 +165,12 @@ function StopStepSection({
               ) : null}
             </View>
             <View style={styles.envActions}>
-              <Button
+              <ConfirmButton
                 label={row.stopping ? copy.actionBusyLabel : copy.actionLabel}
-                variant="danger"
-                size="sm"
+                confirmLabel={copy.confirmLabel}
+                prompt={copy.confirmPrompt}
                 busy={row.stopping}
-                onPress={() => onStop(row.environment.id)}
+                onConfirm={() => onStop(row.environment.id)}
               />
               {row.error && onForceDestroy ? (
                 <ConfirmButton
