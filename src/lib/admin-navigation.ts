@@ -1,94 +1,63 @@
+type AdminSubRoute = Readonly<{
+  id: string
+  label: string
+  pathSegment: string
+}>
+
+const NO_SUB_ROUTES = [] as const
+
+/** A sub-route whose path segment is its id. */
+function adminSubRoute<const Id extends string>(id: Id, label: string) {
+  return { id, label, pathSegment: id }
+}
+
+/** An admin area whose path segment is its id. */
+function adminArea<
+  const Id extends string,
+  const SubRoutes extends readonly AdminSubRoute[] = typeof NO_SUB_ROUTES,
+>(id: Id, label: string, hint: string, subRoutes?: SubRoutes) {
+  return {
+    id,
+    label,
+    pathSegment: id,
+    hint,
+    subRoutes: subRoutes ?? NO_SUB_ROUTES,
+  }
+}
+
 export const ADMIN_AREAS = [
-  {
-    id: 'access',
-    label: 'Access',
-    pathSegment: 'access',
-    hint: 'Hostnames, certificates, and how people and machines reach this control plane',
-    subRoutes: [
-      {
-        id: 'certificates',
-        label: 'Certificates',
-        pathSegment: 'certificates',
-      },
-      {
-        id: 'trusted-proxies',
-        label: 'Trusted proxies',
-        pathSegment: 'trusted-proxies',
-      },
-      {
-        id: 'tunnel',
-        label: 'Tunnel',
-        pathSegment: 'tunnel',
-      },
-      {
-        id: 'platform-ca',
-        label: 'Platform CA',
-        pathSegment: 'platform-ca',
-      },
-    ],
-  },
-  {
-    id: 'updates',
-    label: 'Updates',
-    pathSegment: 'updates',
-    hint: 'Control plane and co-located daemon versions',
-    subRoutes: [],
-  },
-  {
-    id: 'email',
-    label: 'Email',
-    pathSegment: 'email',
-    hint: 'Email provider and SMTP/Mailgun configuration',
-    subRoutes: [],
-  },
-  {
-    id: 'auth-providers',
-    label: 'Sign-in providers',
-    pathSegment: 'auth-providers',
-    hint: 'GitHub and Google OAuth client credentials',
-    subRoutes: [],
-  },
-  {
-    id: 'git',
-    label: 'Git providers',
-    pathSegment: 'git',
-    hint: 'GitHub Apps and GitLab OAuth applications shared with every organization',
-    subRoutes: [],
-  },
-  {
-    id: 'signup',
-    label: 'Sign-up',
-    pathSegment: 'signup',
-    hint: 'Public account creation toggle',
-    subRoutes: [],
-  },
-  {
-    id: 'tiers',
-    label: 'Tiers',
-    pathSegment: 'tiers',
-    hint: 'Billing tier catalogue, entered by hand and verified against Stripe',
-    subRoutes: [],
-  },
-  {
-    id: 'secrets',
-    label: 'Secrets',
-    pathSegment: 'secrets',
-    hint: 'Rotate at-rest secret encryption',
-    subRoutes: [],
-  },
-  {
-    id: 'metrics',
-    label: 'Server metrics',
-    pathSegment: 'metrics',
-    hint: 'Live-session sampling limits',
-    subRoutes: [],
-  },
+  adminArea(
+    'access',
+    'Access',
+    'Hostnames, certificates, and how people and machines reach this control plane',
+    [
+      adminSubRoute('certificates', 'Certificates'),
+      adminSubRoute('trusted-proxies', 'Trusted Proxies'),
+      adminSubRoute('tunnel', 'Tunnel'),
+      adminSubRoute('platform-ca', 'Platform CA'),
+    ]
+  ),
+  adminArea('updates', 'Updates', 'Control plane and co-located daemon versions'),
+  adminArea('email', 'Email', 'Email provider and SMTP/Mailgun configuration'),
+  adminArea('auth-providers', 'Sign-In Providers', 'GitHub and Google OAuth client credentials'),
+  adminArea(
+    'git',
+    'Git Providers',
+    'GitHub Apps and GitLab OAuth applications shared with every organization'
+  ),
+  adminArea('signup', 'Sign-Up', 'Public account creation toggle'),
+  adminArea(
+    'tiers',
+    'Tiers',
+    'Billing tier catalogue, entered by hand and verified against Stripe'
+  ),
+  adminArea('secrets', 'Secrets', 'Rotate at-rest secret encryption'),
+  adminArea('metrics', 'Server Metrics', 'Live-session sampling limits'),
 ] as const
 
 export type AdminAreaId = (typeof ADMIN_AREAS)[number]['id']
 
-export type AdminSubRouteId =
-  (typeof ADMIN_AREAS)[number]['subRoutes'][number]['id']
+export type AdminSubRouteId = (typeof ADMIN_AREAS)[number]['subRoutes'][number]['id']
 
 export function adminAreaHref(areaPathSegment: string): `/admin/${string}` {
   return `/admin/${areaPathSegment}`
@@ -96,7 +65,7 @@ export function adminAreaHref(areaPathSegment: string): `/admin/${string}` {
 
 export function adminRouteHref(
   areaPathSegment: string,
-  subRoutePathSegment: string,
+  subRoutePathSegment: string
 ): `/admin/${string}/${string}` {
   return `/admin/${areaPathSegment}/${subRoutePathSegment}`
 }
@@ -115,8 +84,7 @@ export function adminAreaFromPathname(pathname: string) {
 
   const subRouteSegment = parts[2]
   const subRoute = subRouteSegment
-    ? (area.subRoutes.find((entry) => entry.pathSegment === subRouteSegment) ??
-      null)
+    ? (area.subRoutes.find((entry) => entry.pathSegment === subRouteSegment) ?? null)
     : null
 
   return { area, subRoute }

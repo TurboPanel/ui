@@ -25,7 +25,7 @@ export const ORG_AREAS = [
     subRoutes: [
       {
         id: 'git-sources',
-        label: 'Git sources',
+        label: 'Git Sources',
         pathSegment: 'git-sources',
         hint: 'GitHub Apps and GitLab applications this organization connects through',
       },
@@ -74,7 +74,7 @@ export const ORG_AREAS = [
       },
       {
         id: 'keys',
-        label: 'Pending keys',
+        label: 'Pending Keys',
         pathSegment: 'keys',
         hint: 'Servers that are still waiting to connect',
       },
@@ -112,13 +112,13 @@ export const ORG_AREAS = [
       },
       {
         id: 'docker',
-        label: 'Docker networks',
+        label: 'Docker Networks',
         pathSegment: 'docker',
         hint: 'Compose external Docker network registry and host address pools',
       },
       {
         id: 'reserved',
-        label: 'Reserved ranges',
+        label: 'Reserved Ranges',
         pathSegment: 'reserved',
         hint: 'Ranges TurboPanel must never assign because something else routes them',
       },
@@ -538,7 +538,7 @@ const DATACENTER_DETAIL_SUB_ROUTE = {
 
 const DATACENTER_NEW_SUB_ROUTE = {
   id: 'datacenter-new',
-  label: 'New datacenter',
+  label: 'New Datacenter',
   pathSegment: 'datacenters',
   hint: 'Create a datacenter from a server IP',
 } as const

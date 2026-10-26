@@ -133,7 +133,7 @@ describe('buildSearchItems', () => {
       list.filter((i) => i.group === 'Pages').map((i) => [i.name, i.href])
     )
     expect(hrefs['Datacenters']).toBe('/o1/servers/datacenters')
-    expect(hrefs['Pending keys']).toBe('/o1/servers/keys')
+    expect(hrefs['Pending Keys']).toBe('/o1/servers/keys')
     expect(hrefs['Server certificates']).toBe('/o1/servers/tls')
     expect(hrefs['Server settings']).toBe('/o1/servers/settings')
     expect(hrefs['Firewall']).toBe('/o1/network/firewall')
