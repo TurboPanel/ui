@@ -19,12 +19,8 @@ import type { ComposeDocument } from './types'
 
 describe('siteEnvKeyForService', () => {
   it('sanitizes compose service names like the daemon', () => {
-    expect(siteEnvKeyForService('my-app')).toBe(
-      'TURBOPANEL_SITE_MY_APP_URL',
-    )
-    expect(siteEnvKeyForService('2web')).toBe(
-      'TURBOPANEL_SITE__2WEB_URL',
-    )
+    expect(siteEnvKeyForService('my-app')).toBe('TURBOPANEL_SITE_MY_APP_URL')
+    expect(siteEnvKeyForService('2web')).toBe('TURBOPANEL_SITE__2WEB_URL')
   })
 })
 
@@ -162,8 +158,7 @@ describe('node services are their own kind', () => {
       'on its web server'
     )
     // A container keeps the field, so it has nothing to say in its place.
-    expect(hostingTargetPortHint(resolveHostingServiceContext(document, 'api')))
-      .toBeNull()
+    expect(hostingTargetPortHint(resolveHostingServiceContext(document, 'api'))).toBeNull()
   })
 
   it('offers neither PHP nor container-variable advice for a node service', () => {
@@ -254,7 +249,7 @@ describe('hosting copy helpers', () => {
       serviceKind: site
       engine: nginx
 `),
-      'api',
+      'api'
     )
     expect(hostingPathPrefixHint(withSiblings)).toContain('static')
     expect(hostingPathPrefixHint(withSiblings)).not.toContain('static nginx')
@@ -266,7 +261,7 @@ describe('hosting copy helpers', () => {
       serviceKind: site
       engine: apache
 `),
-      'api',
+      'api'
     )
     expect(hostingPathPrefixHint(alone)).not.toContain('Other site')
   })
@@ -277,7 +272,7 @@ describe('hosting copy helpers', () => {
   app:
     image: node:22
 `),
-      'app',
+      'app'
     )
     expect(hostingPhpSectionCopy(container).title).toBe('PHP settings')
     expect(hostingPhpSectionCopy(container).hint).toContain('uses the PHP its image brings')
@@ -294,7 +289,7 @@ describe('hosting copy helpers', () => {
         phpApplicability: 'applicable',
         webEnvMode: 'file_only',
         composeHostingEntries: [],
-      }),
+      })
     ).toBe('Site')
   })
 })
@@ -337,9 +332,10 @@ describe('compose-authored hosting entries', () => {
 `)
 
   it('reads every entry a service declares, in document order', () => {
-    expect(
-      readComposeHostingEntries(overlay, 'web').map((e) => e.hostname),
-    ).toEqual(['app.example.com', 'docs.example.com'])
+    expect(readComposeHostingEntries(overlay, 'web').map((e) => e.hostname)).toEqual([
+      'app.example.com',
+      'docs.example.com',
+    ])
     expect(readComposeHostingEntries(overlay, 'missing')).toEqual([])
   })
 
@@ -362,21 +358,15 @@ describe('compose-authored hosting entries', () => {
   })
 
   it('declares a route on a service the overlay did not mention', () => {
-    const next = writeComposeHostingEntries(overlay, 'api', [
-      { hostname: 'api.example.com' },
-    ])
-    expect(readComposeHostingEntries(next, 'api')).toEqual([
-      { hostname: 'api.example.com' },
-    ])
+    const next = writeComposeHostingEntries(overlay, 'api', [{ hostname: 'api.example.com' }])
+    expect(readComposeHostingEntries(next, 'api')).toEqual([{ hostname: 'api.example.com' }])
     expect(readComposeHostingEntries(next, 'web')).toHaveLength(2)
   })
 
   it('drops the hosting key when the last entry goes away', () => {
     const next = writeComposeHostingEntries(overlay, 'web', [])
     expect(readComposeHostingEntries(next, 'web')).toEqual([])
-    expect(
-      resolveHostingServiceContext(next, 'web').composeHostingEntries,
-    ).toEqual([])
+    expect(resolveHostingServiceContext(next, 'web').composeHostingEntries).toEqual([])
   })
 })
 
