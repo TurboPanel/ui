@@ -18,19 +18,22 @@ export const TURBOPANEL_MARK_ASPECT =
 /** Crossbar band = 120/370; wordmark sits in the remaining 250/370. */
 export const TURBOPANEL_UNDER_BAR_RATIO = 250 / TURBOPANEL_MARK_INK.height
 
-/**
- * Band-fit ratio for Exo 2 Black Italic. Its cap height is 0.69 em; 0.72 keeps
- * the word a touch under a full crossbar-band fill.
- */
-export const TURBOPANEL_WORDMARK_ASCENDER_RATIO = 0.72
+/** Figtree Black Italic cap height ≈ fontSize × this (0.70 em). */
+export const TURBOPANEL_WORDMARK_ASCENDER_RATIO = 0.7
 
 export const TURBOPANEL_WORDMARK_STYLE = {
-  /** Added to Exo 2's own 8° italic: ~22°, the lean of the T stem (21.8°). */
+  /** Added to Figtree's own 9.5° italic: ~23.5°, a touch past the T stem's 21.8°. */
   skew: '-14deg',
-  letterSpacingEm: 0,
-  /** “urboPanel” at weight 900 is 5.12 em wide, plus the skew overhang. */
-  emWidth: 5.3,
+  letterSpacingEm: -0.01,
+  /** “urboPanel” at weight 900 is 4.84 em wide, plus the skew overhang. */
+  emWidth: 5,
 } as const
+
+/**
+ * Where Figtree's baseline sits above the bottom of a `line-height: 1` text
+ * box: hhea ascent 0.95 em and descent 0.25 em leave 0.15 em under the baseline.
+ */
+export const TURBOPANEL_WORDMARK_BASELINE_EM = 0.15
 
 /** Shared lockup tuning — px / percent tokens, not opaque multipliers in components. */
 export const TURBOPANEL_WORDMARK_LOCKUP_TUNING = {
@@ -42,18 +45,20 @@ export const TURBOPANEL_WORDMARK_LOCKUP_TUNING = {
   wordStartXRatio: 0.55,
   /** Space between T stem and first letter (0: the word hugs the stem). */
   gapPx: 0,
+  /** Drop the word so its baseline sits on the base of the T (the stem tip). */
+  wordBaselineOnMarkBase: true,
   /** Subtracted before band-target sizing. */
   sizeTrimPx: 1,
   /**
    * Final word size as % of under-bar band fit (+ profile boost).
-   * 90 = intentionally 10% smaller than a full band fill.
+   * 104 = the caps rise a little into the crossbar band (the chosen look).
    */
-  wordBandTargetPercent: 90,
+  wordBandTargetPercent: 104,
 } as const
 
 /** Platform-specific optical offsets (website header vs console chrome). */
 export const TURBOPANEL_WORDMARK_PROFILE = {
-  website: { wordBoostPx: 2, wordDownPx: 1 },
+  website: { wordBoostPx: 2, wordDownPx: 0 },
   console: { wordBoostPx: 4, wordDownPx: 2 },
 } as const
 
@@ -115,6 +120,13 @@ function wordSizeFromUnderBarBand(
   )
 }
 
+/** Extra drop (px) that puts the baseline on the mark's base, or 0 when off. */
+export function wordBaselineDropPx(wordSizePx: number): number {
+  return TURBOPANEL_WORDMARK_LOCKUP_TUNING.wordBaselineOnMarkBase
+    ? wordSizePx * TURBOPANEL_WORDMARK_BASELINE_EM
+    : 0
+}
+
 /** Compute absolute lockup box + wordmark placement for any host surface. */
 export function computeTurboPanelWordmarkLockup(
   options: ComputeTurboPanelWordmarkLockupOptions,
@@ -140,7 +152,7 @@ export function computeTurboPanelWordmarkLockup(
     markRenderHeight,
     wordLeft,
     wordSize,
-    wordBottomOffset: -wordDownPx,
+    wordBottomOffset: -(wordDownPx + wordBaselineDropPx(wordSize)),
     skew: style.skew,
     letterSpacingEm: style.letterSpacingEm,
     text: TURBOPANEL_WORDMARK_TEXT,
