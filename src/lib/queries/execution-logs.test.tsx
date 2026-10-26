@@ -612,7 +612,7 @@ describe('useEnvironmentDeployments', () => {
     return typeof interval === 'function' && query ? interval(query) : interval
   }
 
-  it('polls while the newest deploy runs, and refetches the hostings when it ends', async () => {
+  it('polls while the newest deploy runs, and refetches what the Overview reads when it ends', async () => {
     const client = createAppQueryClient()
     const invalidate = vi.spyOn(client, 'invalidateQueries')
     fetchEnvironmentDeployments.mockResolvedValueOnce(page('running'))
@@ -630,6 +630,8 @@ describe('useEnvironmentDeployments', () => {
     await waitFor(() => {
       expect(invalidate).toHaveBeenCalledWith({ queryKey: ['org', 'org-1', 'hostings'] })
     })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['org', 'org-1', 'services', 'env-1'] })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['org', 'org-1', 'containers'] })
     expect(pollInterval(client)).toBe(false)
   })
 })

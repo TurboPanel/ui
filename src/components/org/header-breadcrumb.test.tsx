@@ -46,7 +46,10 @@ afterEach(() => {
   push.mockReset()
 })
 
-async function mount(chip: { key: string; label?: string } | null = { key: 'online' }) {
+async function mount(
+  chip: { key: string; label?: string } | null = { key: 'online' },
+  leading?: ReactNode
+) {
   const { HeaderBreadcrumb } = await import('@/components/org/header-breadcrumb')
   render(
     <HeaderBreadcrumb
@@ -54,6 +57,7 @@ async function mount(chip: { key: string; label?: string } | null = { key: 'onli
         trail: [{ label: 'Servers', href: '/o1/servers' }],
         current: { label: 'derp', chip },
       }}
+      leading={leading}
     />
   )
 }
@@ -84,5 +88,13 @@ describe('HeaderBreadcrumb', () => {
   it('shows no chip when the status is not known', async () => {
     await mount(null)
     expect(screen.queryByTestId('chip')).toBeNull()
+  })
+
+  it('puts the organization first, inside the same breadcrumb, with the same separator', async () => {
+    await mount(null, <span>Acme</span>)
+    const nav = screen.getByRole('navigation', { name: 'Breadcrumb' })
+    const text = nav.textContent ?? ''
+    expect(text).toBe('Acme›Servers›derp')
+    expect(screen.getAllByText('›')).toHaveLength(2)
   })
 })

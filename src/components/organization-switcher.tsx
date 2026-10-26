@@ -18,6 +18,7 @@ import {
 } from '@/components/header-menu-group-styles'
 import { HeaderMenuOverlay } from '@/components/header-menu-overlay'
 import { HeaderMenuTrigger } from '@/components/header-menu-trigger'
+import { breadcrumbStyles, CRUMB_BOX, CRUMB_PADDING } from '@/components/org/breadcrumb-styles'
 import { BillingNavIcon, GearIcon, OrganizationIcon, PlusIcon } from '@/components/icons/nav-icons'
 import { OrganizationSwitcherList } from '@/components/org/organization-switcher-list'
 import { dropdownLeft, headerLayoutFor } from '@/lib/header-layout'
@@ -37,7 +38,7 @@ import {
   replaceOrganization,
 } from '@/lib/org-navigation'
 import { useCreateOrganization, useOrganizationsQuery } from '@/lib/queries/auth'
-import { colors, webPointer } from '@/lib/theme'
+import { colors, spacing, webPointer } from '@/lib/theme'
 
 const isNative = Platform.OS !== 'web'
 /** Desktop dropdown width; phones use the full-width top panel instead. */
@@ -53,7 +54,7 @@ function compactListMaxHeight(
   windowHeight: number,
   isCompact: boolean,
   showSearch: boolean,
-  footerRows: number,
+  footerRows: number
 ): number {
   if (!isCompact) {
     return 8 * 40
@@ -66,11 +67,25 @@ function compactListMaxHeight(
   return Math.max(COMPACT_LIST_MIN, panelMax - search - footer)
 }
 
+/**
+ * `menu` is the standalone header control; `crumb` draws the same button as
+ * the first level of the header breadcrumb (same height, text and padding as
+ * the other crumbs).
+ */
+export type OrganizationSwitcherVariant = 'menu' | 'crumb'
+
 type OrganizationSwitcherSegmentProps = Readonly<{
   orgId: string
+  variant?: OrganizationSwitcherVariant
+  /** As a crumb: no deeper level follows, so the name reads as the current page. */
+  current?: boolean
 }>
 
-export function OrganizationSwitcherSegment({ orgId }: OrganizationSwitcherSegmentProps) {
+export function OrganizationSwitcherSegment({
+  orgId,
+  variant = 'menu',
+  current = false,
+}: OrganizationSwitcherSegmentProps) {
   const router = useRouter()
   const pathname = usePathname()
   const { width, height } = useWindowDimensions()
@@ -129,7 +144,7 @@ export function OrganizationSwitcherSegment({ orgId }: OrganizationSwitcherSegme
     isCompact,
     showSearch,
     // New organization and Settings always show; Billing and View all do not.
-    2 + (billingEnabled ? 1 : 0) + (showViewAll ? 1 : 0),
+    2 + (billingEnabled ? 1 : 0) + (showViewAll ? 1 : 0)
   )
 
   const switchTo = (nextOrgId: string) => {
@@ -247,33 +262,20 @@ export function OrganizationSwitcherSegment({ orgId }: OrganizationSwitcherSegme
 
   return (
     <>
-      <View ref={buttonRef} collapsable={false} style={styles.triggerWrap}>
-        <HeaderMenuTrigger
+      <View
+        ref={buttonRef}
+        collapsable={false}
+        style={[styles.triggerWrap, variant === 'crumb' && styles.crumbWrap]}
+      >
+        <OrgTrigger
+          label={triggerLabel}
+          accessibilityName={label}
           open={menuOpen}
-          onPress={() => setMenuOpen((current) => !current)}
-          accessibilityRole="button"
-          accessibilityLabel={`Organization: ${label}`}
-          accessibilityState={{ expanded: menuOpen }}
-        >
-          {header.showOrgGlyph ? (
-            <View style={headerMenuGroupStyles.triggerGlyph}>
-              <OrganizationIcon size={HEADER_TRIGGER_ICON_SIZE} color={colors.textDim} />
-            </View>
-          ) : null}
-          <View style={headerMenuGroupStyles.triggerCopy}>
-            <Text
-              style={headerMenuGroupStyles.triggerLabel}
-              numberOfLines={1}
-              ellipsizeMode="tail"
-            >
-              {triggerLabel}
-            </Text>
-          </View>
-          <HeaderChevron
-            color={menuOpen ? colors.text : colors.textDim}
-            open={menuOpen}
-          />
-        </HeaderMenuTrigger>
+          showGlyph={header.showOrgGlyph}
+          variant={variant}
+          current={current}
+          onPress={() => setMenuOpen((wasOpen) => !wasOpen)}
+        />
       </View>
 
       <HeaderMenuOverlay
@@ -293,6 +295,64 @@ export function OrganizationSwitcherSegment({ orgId }: OrganizationSwitcherSegme
         onCreate={handleCreate}
       />
     </>
+  )
+}
+
+/** The org crumb's icon, sized to its 13px text rather than the 16px menu icon. */
+const CRUMB_GLYPH_SIZE = 14
+const CRUMB_CHEVRON_SIZE = 10
+/** The menu trigger's height: the crumb keeps it as its anchor so the menu opens where it always has. */
+const MENU_ANCHOR_HEIGHT = 40
+
+function OrgTrigger({
+  label,
+  accessibilityName,
+  open,
+  showGlyph,
+  variant,
+  current,
+  onPress,
+}: Readonly<{
+  label: string
+  accessibilityName: string
+  open: boolean
+  showGlyph: boolean
+  variant: OrganizationSwitcherVariant
+  current: boolean
+  onPress: () => void
+}>) {
+  const crumb = variant === 'crumb'
+  const labelStyle = crumb
+    ? [breadcrumbStyles.linkText, current && styles.crumbCurrentLabel]
+    : headerMenuGroupStyles.triggerLabel
+  return (
+    <HeaderMenuTrigger
+      open={open}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`Organization: ${accessibilityName}`}
+      accessibilityState={{ expanded: open }}
+      style={crumb ? styles.crumbTrigger : undefined}
+    >
+      {showGlyph ? (
+        <View style={[headerMenuGroupStyles.triggerGlyph, crumb && styles.crumbGlyph]}>
+          <OrganizationIcon
+            size={crumb ? CRUMB_GLYPH_SIZE : HEADER_TRIGGER_ICON_SIZE}
+            color={colors.textDim}
+          />
+        </View>
+      ) : null}
+      <View style={headerMenuGroupStyles.triggerCopy}>
+        <Text style={labelStyle} numberOfLines={1} ellipsizeMode="tail">
+          {label}
+        </Text>
+      </View>
+      <HeaderChevron
+        size={crumb ? CRUMB_CHEVRON_SIZE : undefined}
+        color={open ? colors.text : colors.textDim}
+        open={open}
+      />
+    </HeaderMenuTrigger>
   )
 }
 
@@ -349,5 +409,28 @@ const styles = StyleSheet.create({
   action: {
     paddingVertical: 0,
     minHeight: 40,
+  },
+  crumbWrap: {
+    minHeight: MENU_ANCHOR_HEIGHT,
+    justifyContent: 'center',
+  },
+  // The menu button as a crumb: the same box as a breadcrumb link, so the
+  // organization and the trail read as one bar.
+  crumbTrigger: {
+    ...CRUMB_BOX,
+    // The menu trigger sets the sides one by one, which beats paddingHorizontal.
+    paddingLeft: CRUMB_PADDING,
+    paddingRight: CRUMB_PADDING,
+    minHeight: 0,
+    gap: spacing.xs,
+  },
+  crumbGlyph: {
+    width: CRUMB_GLYPH_SIZE,
+    height: CRUMB_GLYPH_SIZE,
+    marginRight: 0,
+  },
+  crumbCurrentLabel: {
+    color: colors.text,
+    fontWeight: '600',
   },
 })

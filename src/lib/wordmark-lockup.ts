@@ -18,15 +18,32 @@ export const TURBOPANEL_MARK_ASPECT =
 /** Crossbar band = 120/370; wordmark sits in the remaining 250/370. */
 export const TURBOPANEL_UNDER_BAR_RATIO = 250 / TURBOPANEL_MARK_INK.height
 
-/** Plus Jakarta ExtraBold Italic cap height ≈ fontSize × this. */
-export const TURBOPANEL_WORDMARK_ASCENDER_RATIO = 0.78
+/** Figtree ExtraBold Italic cap height ≈ fontSize × this (0.70 em). */
+export const TURBOPANEL_WORDMARK_ASCENDER_RATIO = 0.7
 
 export const TURBOPANEL_WORDMARK_STYLE = {
-  skew: '-15deg',
-  letterSpacingEm: 0,
-  /** Width estimate per em for lockup bounding width. */
-  emWidth: 6.2,
+  /** Added to Figtree's own 9.5° italic: ~23.5°, a touch past the T stem's 21.8°. */
+  skew: '-14deg',
+  letterSpacingEm: 0.02,
+  /** “urboPanel” at weight 800 is 4.77 em wide, plus nine +0.02 em gaps and the skew overhang. */
+  emWidth: 5.2,
 } as const
+
+/**
+ * Figtree's vertical metrics (hhea ascent 0.95 em, descent 0.25 em). Browsers
+ * round each to whole pixels at the font size before centring the glyphs in a
+ * `line-height: 1` box, so the baseline height above the box bottom is
+ * (size + round(descent) - round(ascent)) / 2, not a fixed fraction of the size.
+ */
+export const TURBOPANEL_WORDMARK_ASCENT_EM = 0.95
+export const TURBOPANEL_WORDMARK_DESCENT_EM = 0.25
+
+/**
+ * How far the lowest letter of “urboPanel” (the e) dips below Figtree's
+ * baseline at weight 800: 12.74/1000 em (u, b, o, a dip 12). The word is
+ * placed by that lowest ink, so nothing crosses the base of the T.
+ */
+export const TURBOPANEL_WORDMARK_OVERSHOOT_EM = 0.0127
 
 /** Shared lockup tuning — px / percent tokens, not opaque multipliers in components. */
 export const TURBOPANEL_WORDMARK_LOCKUP_TUNING = {
@@ -37,19 +54,21 @@ export const TURBOPANEL_WORDMARK_LOCKUP_TUNING = {
   /** Horizontal start of “urboPanel” as a fraction of rendered mark width. */
   wordStartXRatio: 0.55,
   /** Space between T stem and first letter. */
-  gapPx: 2,
+  gapPx: 1,
+  /** Drop the word so its baseline sits on the base of the T (the stem tip). */
+  wordBaselineOnMarkBase: true,
   /** Subtracted before band-target sizing. */
   sizeTrimPx: 1,
   /**
    * Final word size as % of under-bar band fit (+ profile boost).
-   * 90 = intentionally 10% smaller than a full band fill.
+   * 97 = just under a full band fill (the chosen look).
    */
-  wordBandTargetPercent: 90,
+  wordBandTargetPercent: 97,
 } as const
 
 /** Platform-specific optical offsets (website header vs console chrome). */
 export const TURBOPANEL_WORDMARK_PROFILE = {
-  website: { wordBoostPx: 2, wordDownPx: 1 },
+  website: { wordBoostPx: 2, wordDownPx: 0 },
   console: { wordBoostPx: 4, wordDownPx: 2 },
 } as const
 
@@ -111,6 +130,21 @@ function wordSizeFromUnderBarBand(
   )
 }
 
+/** Baseline height (px) above the bottom of a `line-height: 1` box, as browsers lay it out. */
+export function wordBaselineAboveBoxBottomPx(wordSizePx: number): number {
+  const ascent = Math.round(wordSizePx * TURBOPANEL_WORDMARK_ASCENT_EM)
+  const descent = Math.round(wordSizePx * TURBOPANEL_WORDMARK_DESCENT_EM)
+  return (wordSizePx + descent - ascent) / 2
+}
+
+/** Extra drop (px) that puts the word's lowest ink on the mark's base, or 0 when off. */
+export function wordBaselineDropPx(wordSizePx: number): number {
+  return TURBOPANEL_WORDMARK_LOCKUP_TUNING.wordBaselineOnMarkBase
+    ? wordBaselineAboveBoxBottomPx(wordSizePx) -
+        wordSizePx * TURBOPANEL_WORDMARK_OVERSHOOT_EM
+    : 0
+}
+
 /** Compute absolute lockup box + wordmark placement for any host surface. */
 export function computeTurboPanelWordmarkLockup(
   options: ComputeTurboPanelWordmarkLockupOptions,
@@ -136,7 +170,7 @@ export function computeTurboPanelWordmarkLockup(
     markRenderHeight,
     wordLeft,
     wordSize,
-    wordBottomOffset: -wordDownPx,
+    wordBottomOffset: -(wordDownPx + wordBaselineDropPx(wordSize)),
     skew: style.skew,
     letterSpacingEm: style.letterSpacingEm,
     text: TURBOPANEL_WORDMARK_TEXT,

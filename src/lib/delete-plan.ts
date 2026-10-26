@@ -67,6 +67,24 @@ export function hostingAccountKeepReason(usedBy: DeletePlan['hostingAccounts'][n
     : 'Kept: still used outside this project.'
 }
 
+type PlanCertificate = NonNullable<DeletePlan['certificates']>[number]
+
+/** The Let's Encrypt certificates a delete removes or keeps, in the plan's order. */
+export function planCertificates(plan: DeletePlan): readonly PlanCertificate[] {
+  return plan.certificates ?? []
+}
+
+/** How a certificate reads in the list: its names, then what happens to it. */
+export function certificateLine(entry: PlanCertificate): string {
+  const names = entry.names.length > 0 ? entry.names.join(', ') : 'Unnamed certificate'
+  if (entry.action === 'remove') return `${names}: removed, no other site uses it.`
+  const others = entry.otherSites ?? 0
+  if (others > 0) {
+    return `${names}: kept, ${plural(others, 'other site uses', 'other sites use')} it.`
+  }
+  return `${names}: kept, another site uses it.`
+}
+
 /** One sentence for a short confirmation, e.g. the environment delete prompt. */
 export function deletePlanSummary(plan: DeletePlan, subject: string): string {
   const removed = plan.folders.filter((row) => row.action === 'remove')
@@ -77,6 +95,12 @@ export function deletePlanSummary(plan: DeletePlan, subject: string): string {
   ]
   const accounts = plan.hostingAccounts.filter((row) => row.action === 'remove')
   if (accounts.length > 0) parts.push(plural(accounts.length, 'Hosting Account', 'Hosting Accounts'))
+  const certificates = planCertificates(plan).filter((row) => row.action === 'remove')
+  if (certificates.length > 0) {
+    parts.push(
+      plural(certificates.length, "Let's Encrypt certificate", "Let's Encrypt certificates")
+    )
+  }
   const servers = groupFoldersByServer(plan)
     .filter((group) => group.remove.length > 0)
     .map((group) => group.serverName)

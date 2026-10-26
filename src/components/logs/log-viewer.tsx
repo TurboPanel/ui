@@ -1,3 +1,4 @@
+import { formatLogLineTime } from '@/lib/log-line-time'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   FlatList,
@@ -86,16 +87,6 @@ const STEP_WORDS: Readonly<Record<LogStepStatus, string>> = {
   running: 'running',
   skipped: 'skipped',
   pending: 'not started',
-}
-
-/** `12:04:37` — logs are read while watching, not audited by date. */
-function formatLineTime(timestamp: string | null): string | null {
-  if (!timestamp) return null
-  const parsed = new Date(timestamp)
-  if (Number.isNaN(parsed.getTime())) return null
-  return [parsed.getHours(), parsed.getMinutes(), parsed.getSeconds()]
-    .map((part) => String(part).padStart(2, '0'))
-    .join(':')
 }
 
 function plural(count: number, word: string): string {
@@ -197,7 +188,7 @@ function LogLineRow({
   wrap: boolean
   timestamps: boolean
 }>) {
-  const time = timestamps ? formatLineTime(line.timestamp) : null
+  const time = timestamps ? formatLogLineTime(line.timestamp) : null
   const chip = levelChip(level, line.stream)
   return (
     <View

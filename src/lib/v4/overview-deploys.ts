@@ -32,10 +32,27 @@ export type DeployRow = Readonly<{
 
 const SHA_LENGTH = 7
 
+/** Sent to the server but not finished: the server may already be running it. */
+const DELIVERED_STATUSES: ReadonlySet<string> = new Set(['sent', 'acked'])
+
+/**
+ * Is the deploy running on a server? A `running` row says so; a delivered row
+ * whose server already reported starting the work (`startedAt`) is running
+ * too, since the command status itself stays `sent` / `acked` until it ends.
+ */
+function groupIsRunning(group: DeploymentGroup): boolean {
+  if (group.status === 'running') return true
+  return (
+    DELIVERED_STATUSES.has(group.status) &&
+    group.commands.some((command) => command.startedAt !== null)
+  )
+}
+
 export function groupStatusKey(group: DeploymentGroup): string {
   if (group.strategyOutcome === 'rolled_back') return 'rolledback'
   // Stopped on purpose mid-deploy: the same red as a failure, as on the cards.
   if (group.strategyOutcome === 'needs_attention') return 'failed'
+  if (groupIsRunning(group)) return 'deploying'
   switch (group.status) {
     case 'succeeded':
       return 'deployed'
@@ -44,8 +61,6 @@ export function groupStatusKey(group: DeploymentGroup): string {
       return 'failed'
     case 'cancelled':
       return 'cancelled'
-    case 'running':
-      return 'deploying'
     default:
       return 'queued'
   }
@@ -80,13 +95,13 @@ const WAITING_STATUSES: ReadonlySet<string> = new Set(['queued', 'dispatching', 
 
 /**
  * The line under a deploy: how long it took, or - while it has no duration -
- * what it is doing. Only a deploy that is running reads "In progress"; one
+ * what it is doing. Only a deploy a server has started reads "In progress"; one
  * waiting its turn says so, and a finished deploy that never recorded a time
  * (cancelled before it started, say) shows a dash rather than a false claim.
  */
 function groupSub(group: DeploymentGroup): string {
   if (group.durationMs !== null) return formatDeployDuration(group.durationMs)
-  if (group.status === 'running') return 'In progress'
+  if (groupIsRunning(group)) return 'In progress'
   if (WAITING_STATUSES.has(group.status)) return 'Waiting to start'
   return formatDeployDuration(null)
 }
