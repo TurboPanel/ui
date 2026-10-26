@@ -4264,6 +4264,16 @@ export type DeletePlan = Readonly<{
     action: 'remove' | 'keep'
     usedBy?: Partial<PrincipalUsage>
   }[]
+  /**
+   * The Let's Encrypt certificates made for the deleted sites. `remove`: deleted
+   * with them. `keep`: another site still uses it. Missing from older panels.
+   */
+  certificates?: readonly {
+    id: string
+    names: readonly string[]
+    action: 'remove' | 'keep'
+    otherSites?: number
+  }[]
   blockers: readonly DeletePlanBlocker[]
 }>
 

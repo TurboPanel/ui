@@ -38,6 +38,10 @@ const PLAN: DeletePlan = {
     { id: 'p1', username: 'shop', action: 'remove' },
     { id: 'p2', username: 'shared', action: 'keep', usedBy: { tenancies: 2 } },
   ],
+  certificates: [
+    { id: 't1', names: ['shop.example.com'], action: 'remove' },
+    { id: 't2', names: ['shared.example.com'], action: 'keep', otherSites: 2 },
+  ],
   blockers: [
     {
       error: 'server_offline',
@@ -61,6 +65,9 @@ describe('DeletePlanList', () => {
     ).toBeTruthy()
     expect(screen.getByText(/removed with its home folder/)).toBeTruthy()
     expect(screen.getByText(/2 services run as it/)).toBeTruthy()
+    expect(screen.getByText("Let's Encrypt certificates")).toBeTruthy()
+    expect(screen.getByText('shop.example.com: removed, no other site uses it.')).toBeTruthy()
+    expect(screen.getByText('shared.example.com: kept, 2 other sites use it.')).toBeTruthy()
   })
 
   it('says None for an empty plan and leaves the blocker and account sections out', () => {
@@ -79,5 +86,6 @@ describe('DeletePlanList', () => {
     expect(screen.getAllByText('None')).toHaveLength(3)
     expect(screen.queryByText('Cannot delete yet')).toBeNull()
     expect(screen.queryByText(/Hosting Accounts/)).toBeNull()
+    expect(screen.queryByText(/Let's Encrypt/)).toBeNull()
   })
 })
