@@ -17,9 +17,9 @@ describe('computeTurboPanelWordmarkLockup', () => {
 
     expect(lockup).toMatchObject({
       lockupHeight: 32,
-      wordSize: 26,
+      wordSize: 28,
       wordBottomOffset: -TURBOPANEL_WORDMARK_PROFILE.website.wordDownPx,
-      skew: '-15deg',
+      skew: '-14deg',
       text: 'urboPanel',
     })
   })
@@ -29,7 +29,7 @@ describe('computeTurboPanelWordmarkLockup', () => {
 
     expect(lockup).toMatchObject({
       lockupHeight: 42,
-      wordSize: 35,
+      wordSize: 38,
       wordBottomOffset: -TURBOPANEL_WORDMARK_PROFILE.console.wordDownPx,
     })
   })
