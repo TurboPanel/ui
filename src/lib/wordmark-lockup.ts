@@ -18,7 +18,7 @@ export const TURBOPANEL_MARK_ASPECT =
 /** Crossbar band = 120/370; wordmark sits in the remaining 250/370. */
 export const TURBOPANEL_UNDER_BAR_RATIO = 250 / TURBOPANEL_MARK_INK.height
 
-/** Figtree Black Italic cap height ≈ fontSize × this (0.70 em). */
+/** Figtree ExtraBold Italic cap height ≈ fontSize × this (0.70 em). */
 export const TURBOPANEL_WORDMARK_ASCENDER_RATIO = 0.7
 
 export const TURBOPANEL_WORDMARK_STYLE = {
