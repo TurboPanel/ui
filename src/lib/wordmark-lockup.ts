@@ -24,16 +24,19 @@ export const TURBOPANEL_WORDMARK_ASCENDER_RATIO = 0.7
 export const TURBOPANEL_WORDMARK_STYLE = {
   /** Added to Figtree's own 9.5° italic: ~23.5°, a touch past the T stem's 21.8°. */
   skew: '-14deg',
-  letterSpacingEm: -0.01,
-  /** “urboPanel” at weight 800 is 4.77 em wide, plus the skew overhang. */
-  emWidth: 5,
+  letterSpacingEm: 0.02,
+  /** “urboPanel” at weight 800 is 4.77 em wide, plus nine +0.02 em gaps and the skew overhang. */
+  emWidth: 5.2,
 } as const
 
 /**
- * Where Figtree's baseline sits above the bottom of a `line-height: 1` text
- * box: hhea ascent 0.95 em and descent 0.25 em leave 0.15 em under the baseline.
+ * Figtree's vertical metrics (hhea ascent 0.95 em, descent 0.25 em). Browsers
+ * round each to whole pixels at the font size before centring the glyphs in a
+ * `line-height: 1` box, so the baseline height above the box bottom is
+ * (size + round(descent) - round(ascent)) / 2, not a fixed fraction of the size.
  */
-export const TURBOPANEL_WORDMARK_BASELINE_EM = 0.15
+export const TURBOPANEL_WORDMARK_ASCENT_EM = 0.95
+export const TURBOPANEL_WORDMARK_DESCENT_EM = 0.25
 
 /**
  * How far the lowest letter of “urboPanel” (the e) dips below Figtree's
@@ -50,17 +53,17 @@ export const TURBOPANEL_WORDMARK_LOCKUP_TUNING = {
   markInkScale: 0.88,
   /** Horizontal start of “urboPanel” as a fraction of rendered mark width. */
   wordStartXRatio: 0.55,
-  /** Space between T stem and first letter (0: the word hugs the stem). */
-  gapPx: 0,
+  /** Space between T stem and first letter. */
+  gapPx: 1,
   /** Drop the word so its baseline sits on the base of the T (the stem tip). */
   wordBaselineOnMarkBase: true,
   /** Subtracted before band-target sizing. */
   sizeTrimPx: 1,
   /**
    * Final word size as % of under-bar band fit (+ profile boost).
-   * 104 = the caps rise a little into the crossbar band (the chosen look).
+   * 97 = just under a full band fill (the chosen look).
    */
-  wordBandTargetPercent: 104,
+  wordBandTargetPercent: 97,
 } as const
 
 /** Platform-specific optical offsets (website header vs console chrome). */
@@ -127,11 +130,18 @@ function wordSizeFromUnderBarBand(
   )
 }
 
+/** Baseline height (px) above the bottom of a `line-height: 1` box, as browsers lay it out. */
+export function wordBaselineAboveBoxBottomPx(wordSizePx: number): number {
+  const ascent = Math.round(wordSizePx * TURBOPANEL_WORDMARK_ASCENT_EM)
+  const descent = Math.round(wordSizePx * TURBOPANEL_WORDMARK_DESCENT_EM)
+  return (wordSizePx + descent - ascent) / 2
+}
+
 /** Extra drop (px) that puts the word's lowest ink on the mark's base, or 0 when off. */
 export function wordBaselineDropPx(wordSizePx: number): number {
   return TURBOPANEL_WORDMARK_LOCKUP_TUNING.wordBaselineOnMarkBase
-    ? wordSizePx *
-        (TURBOPANEL_WORDMARK_BASELINE_EM - TURBOPANEL_WORDMARK_OVERSHOOT_EM)
+    ? wordBaselineAboveBoxBottomPx(wordSizePx) -
+        wordSizePx * TURBOPANEL_WORDMARK_OVERSHOOT_EM
     : 0
 }
 
