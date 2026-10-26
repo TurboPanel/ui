@@ -18,7 +18,11 @@ import {
 } from '@/lib/compose/hosting-service-context'
 import { hostingEntryKey, type ComposeHostingExtensionEntry } from '@/lib/compose/hosting-extension'
 import type { ComposeDocument } from '@/lib/compose/types'
-import { isAdoptedComposeHosting, isComposeOwnedHosting } from '@/lib/hosting-compose-owner'
+import {
+  isAdoptedComposeHosting,
+  isComposeOwnedHosting,
+  readHostingComposeRoute,
+} from '@/lib/hosting-compose-owner'
 import { resolveCertificateRef, type ConfiguredHostingState } from '@/lib/hosting-plain-words'
 import type { TlsRecord } from '@/lib/instance-api'
 
@@ -134,6 +138,24 @@ export function panelRowsBesideDeclarations<T extends HostingRowShape>(
       !isComposeOwnedHosting(row.metadata) &&
       !rowRouteKeys(row.options).some((key) => declared.has(key))
   )
+}
+
+/**
+ * Hostings the last deploy made from the file whose entry is no longer in it
+ * (Remove hostname, or a hostname changed in the file): the next deploy
+ * removes them, or hands back one the panel made first. Until then the screen
+ * shows them read-only with a note, never as an ordinary panel hostname.
+ */
+export function composeRowsAwaitingRemoval<T extends HostingRowShape>(
+  rows: readonly T[],
+  entries: readonly ComposeHostingExtensionEntry[]
+): T[] {
+  const declared = new Set(entries.map((entry) => hostingEntryKey(entry)))
+  return rows.filter((row) => {
+    if (!isComposeOwnedHosting(row.metadata)) return false
+    const route = readHostingComposeRoute(row.metadata)
+    return route === null || !declared.has(route)
+  })
 }
 
 /**

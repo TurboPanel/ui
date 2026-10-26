@@ -18,6 +18,8 @@ const q = vi.hoisted(() => ({
   history: {} as Query,
   ips: {} as Query,
   servers: {} as Query,
+  servicesOptions: [] as unknown[],
+  containersOptions: [] as unknown[],
   project: null as Record<string, unknown> | null,
   selected: { id: 'env-1', name: 'Staging' } as Record<string, unknown> | null,
   projectLoading: false,
@@ -35,15 +37,26 @@ vi.mock('@/components/org/project/project-context', () => ({
 }))
 vi.mock('@/lib/queries/environments', () => ({ useEnvironmentConfigView: () => q.view }))
 vi.mock('@/lib/queries/services', () => ({
-  useServices: () => q.services,
+  useServices: (_org: string, _env: string, options: unknown) => {
+    q.servicesOptions.push(options)
+    return q.services
+  },
   useHostingsByServices: () => q.hostings,
 }))
-vi.mock('@/lib/queries/containers', () => ({ useContainers: () => q.containers }))
+vi.mock('@/lib/queries/containers', () => ({
+  useContainers: (_org: string, _filters: unknown, options: unknown) => {
+    q.containersOptions.push(options)
+    return q.containers
+  },
+}))
 vi.mock('@/lib/queries/tls', () => ({ useTlsLibrary: () => q.tls }))
 vi.mock('@/lib/queries/storage', () => ({ useStorage: () => q.storage }))
 vi.mock('@/lib/queries/bindings', () => ({ useEnvironmentBindings: () => q.bindings }))
 vi.mock('@/lib/queries/projects', () => ({ useProjectPrincipals: () => q.principals }))
-vi.mock('@/lib/queries/execution-logs', () => ({ useEnvironmentDeployments: () => q.history }))
+vi.mock('@/lib/queries/execution-logs', () => ({
+  DEPLOYMENT_POLL_MS: 5000,
+  useEnvironmentDeployments: () => q.history,
+}))
 vi.mock('@/lib/queries/topology', () => ({ useIps: () => q.ips }))
 vi.mock('@/lib/queries/servers', () => ({ useOrgServers: () => q.servers }))
 
@@ -62,6 +75,8 @@ beforeEach(() => {
   q.ips = { data: { ips: [] } }
   q.servers = { data: { servers: [] } }
   q.project = null
+  q.servicesOptions = []
+  q.containersOptions = []
 })
 
 describe('useEnvironmentOverviewModel', () => {
@@ -171,5 +186,19 @@ describe('useEnvironmentOverviewModel', () => {
       publicIps: undefined,
     })
     expect(result.current.deployments).toEqual([])
+  })
+
+  it('follows a running deploy: the apps and containers are read again at the history pace', () => {
+    q.history = { data: { deployments: [{ id: 'd1', generation: 1, status: 'queued' }] } }
+    renderHook(() => useEnvironmentOverviewModel())
+    expect(q.servicesOptions.at(-1)).toMatchObject({ refetchInterval: 5000 })
+    expect(q.containersOptions.at(-1)).toMatchObject({ refetchInterval: 5000 })
+  })
+
+  it('stops reading them again once no deploy runs', () => {
+    q.history = { data: { deployments: [{ id: 'd1', generation: 1, status: 'succeeded' }] } }
+    renderHook(() => useEnvironmentOverviewModel())
+    expect(q.servicesOptions.at(-1)).toMatchObject({ refetchInterval: false })
+    expect(q.containersOptions.at(-1)).toMatchObject({ refetchInterval: false })
   })
 })

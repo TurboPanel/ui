@@ -103,15 +103,6 @@ export function siteEnvKeyForService(composeServiceName: string): string {
   return `TURBOPANEL_SITE_${sanitized.toUpperCase()}_URL`
 }
 
-function engineLabel(engine: SiteEngine | undefined): string {
-  if (engine === 'caddy') return 'Caddy'
-  if (engine === 'apache') return 'Apache'
-  if (engine === 'openlitespeed') return 'OpenLiteSpeed'
-  if (engine === 'nginx') return 'nginx'
-  if (engine === 'nginx+apache') return 'nginx + Apache'
-  return 'site'
-}
-
 /**
  * Every site engine runs PHP — only the mechanism differs (per-site
  * php-fpm pool for nginx/Apache, per-vhost LSAPI process for OpenLiteSpeed), and
@@ -123,8 +114,12 @@ function phpApplicabilityFor(
   return kind === 'site' ? 'applicable' : 'not_applicable'
 }
 
-/** `Site · Caddy` / `Node app` / `Container`, as a badge reads. */
+/**
+ * `Site` / `Node app` / `Container`, as a badge reads. The hosting form never
+ * names the web server product (the Services tab is where it is picked).
+ */
 function serviceKindLabel(kind: HostingServiceContext['kind']): string {
+  if (kind === 'site') return 'Site'
   if (kind === 'node') return 'Node app'
   return 'Container'
 }
@@ -192,9 +187,6 @@ export function resolveHostingServiceContext(
 }
 
 export function hostingServiceKindLabel(context: HostingServiceContext): string {
-  if (context.kind === 'site') {
-    return `Site · ${engineLabel(context.engine)}`
-  }
   return serviceKindLabel(context.kind)
 }
 
@@ -210,21 +202,18 @@ export function hostingTargetPortHint(
   context: HostingServiceContext,
 ): string | null {
   if (context.kind === 'site') {
-    return `Target port is allocated by TurboPanel: deploy gives this site its own ${
-      engineLabel(context.engine)
-    } vhost on a loopback port and routes the hostname to it.`
+    return 'TurboPanel picks the port: the deploy sets this site up on its web server on a private port and sends the hostname there.'
   }
   if (context.kind === 'node') {
-    return 'Target port is allocated by TurboPanel: this service runs as a host-supervised Node process under a generated systemd unit, which is told the port to bind through PORT, and hosting Caddy proxies the hostname to it.'
+    return 'TurboPanel picks the port: this Node app runs on the server as the app’s service, which is told the port through PORT, and TurboPanel’s web server sends the hostname to it.'
   }
   return null
 }
 
 /**
- * How this engine actually runs PHP. The hint names the real mechanism because
- * it is what an operator sees on the host — a pool process per site, or an
- * lsphp process per vhost — and because the isolation story differs: OpenLiteSpeed's
- * suEXEC identity is the process itself, where nginx/Apache get it from the pool.
+ * How this site runs PHP, in plain words: its own PHP process on the engine
+ * that runs PHP in-process, its own PHP worker pool on the others. Both run as
+ * the site's Hosting Account.
  */
 function phpRuntimeCopy(engine: SiteEngine | undefined): {
   title: string
@@ -232,16 +221,13 @@ function phpRuntimeCopy(engine: SiteEngine | undefined): {
 } {
   if (engine === 'openlitespeed') {
     return {
-      title: 'PHP settings (OpenLiteSpeed LSAPI)',
-      hint:
-        'Deploy gives this vhost its own lsphp LSAPI process under suEXEC (running as the assigned principal) and applies memory_limit / max_execution_time as phpIniOverride php_admin_value.',
+      title: 'PHP settings',
+      hint: 'The deploy gives this site its own PHP process, running as the site’s Hosting Account, and applies the memory and time limits to it.',
     }
   }
-  const label = engineLabel(engine)
-  const handler = engine === 'apache' || engine === 'nginx+apache' ? 'mod_proxy_fcgi' : 'fastcgi_pass'
   return {
-    title: `PHP settings (${label} php-fpm)`,
-    hint: `Deploy installs a per-site php-fpm pool, points ${label} at its unix socket via ${handler}, and applies memory_limit / max_execution_time as pool php_admin_value.`,
+    title: 'PHP settings',
+    hint: 'The deploy gives this site its own PHP worker pool, running as the site’s Hosting Account, and applies the memory and time limits to it.',
   }
 }
 
@@ -255,8 +241,7 @@ export function hostingPhpSectionCopy(context: HostingServiceContext): {
   }
   return {
     title: 'PHP settings',
-    hint:
-      'PHP options apply only to site services. Containers use their image runtime; host PHP packages are not installed from this panel.',
+    hint: 'PHP options apply only to site services. An app in a container uses the PHP its image brings; this screen does not install PHP on the server for it.',
     showFields: false,
   }
 }
@@ -269,47 +254,41 @@ export function hostingWebEnvSectionCopy(context: HostingServiceContext): {
   if (context.webEnvMode === 'caddy_env') {
     return {
       title: 'Web environment',
-      hint:
-        'Static KEY=VALUE pairs for this hostname. Deploy writes .turbopanel/hosting.env and injects entries into PHP through the php_fastcgi env directive. Hosting variables marked for runtime merge first; static lines here win on collision. Values containing braces or quotes are dropped — Caddy would reinterpret them.',
+      hint: 'KEY=VALUE lines for this hostname, saved in the site’s settings file and handed to PHP on the next deploy. Hosting variables meant for the running app are added first; a line here wins when both set the same name. A value with braces or quotes is left out, because the web server would read it as part of its own settings.',
       showFields: true,
     }
   }
   if (context.webEnvMode === 'apache_setenv') {
     return {
       title: 'Web environment',
-      hint:
-        'Static KEY=VALUE pairs for this hostname. Deploy writes .turbopanel/hosting.env and applies entries as Apache SetEnv. Hosting variables marked for runtime merge first; static lines here win on collision.',
+      hint: 'KEY=VALUE lines for this hostname, saved in the site’s settings file and handed to PHP on the next deploy. Hosting variables meant for the running app are added first; a line here wins when both set the same name.',
       showFields: true,
     }
   }
   if (context.webEnvMode === 'file_only') {
     return {
       title: 'Web environment',
-      hint:
-        'Static KEY=VALUE pairs are written to .turbopanel/hosting.env under the site directory. nginx does not inject them into the process — use them from your app/scripts, or use Caddy or Apache, which inject them into PHP.',
+      hint: 'KEY=VALUE lines are saved in the site’s settings file (.turbopanel/hosting.env in the site folder) on the next deploy. This site’s web server does not hand them to PHP, so read them from your app or scripts, or pick a web server under Services that hands them to PHP.',
       showFields: true,
     }
   }
   if (context.webEnvMode === 'node_unit_environment') {
     return {
       title: 'Web environment (not applied)',
-      hint:
-        'Static web.env is for site host stacks. This node service runs as a host-supervised process, not a container and not behind a php-fpm pool — give it configuration through the environment variables the generated unit carries, or through hosting-scoped variables below.',
+      hint: 'These lines are for sites. This Node app runs on the server as the app’s service, not in a container and not in a PHP worker pool, so give it settings through its environment variables or the hosting variables below.',
       showFields: false,
     }
   }
   if (context.webEnvMode === 'openlitespeed_rewrite') {
     return {
       title: 'Web environment',
-      hint:
-        "Static KEY=VALUE pairs for this hostname. Deploy writes .turbopanel/hosting.env and hands entries to PHP through the site's own rewrite rules, which OpenLiteSpeed passes to PHP as environment variables. Hosting variables marked for runtime merge first; static lines here win on collision. A value that contains a space, comma, quote, backslash, $, % or a bracket is dropped with a warning. If a required database setting is missing, the deploy stops.",
+      hint: 'KEY=VALUE lines for this hostname, saved in the site’s settings file and handed to PHP on the next deploy through the site’s own rewrite rules. Hosting variables meant for the running app are added first; a line here wins when both set the same name. A value that contains a space, comma, quote, backslash, $, % or a bracket is left out with a warning. If a required database setting is missing, the deploy stops.',
       showFields: true,
     }
   }
   return {
     title: 'Web environment',
-    hint:
-      'Static web.env is for site host stacks. For this container service, prefer Hosting variables below (forRuntime) — they inject into compose at deploy.',
+    hint: 'These lines are for sites. For an app in a container, use the hosting variables below: they reach the app on the next deploy.',
     showFields: false,
   }
 }
@@ -331,7 +310,7 @@ export function hostingDockerBridgeHint(
   const exampleKey = siteEnvKeyForService(
     context.siteSiblingNames[0] ?? 'site',
   )
-  return `This environment also has site services. On deploy, containers receive ${exampleKey} (and TURBOPANEL_SITE_ENDPOINTS JSON) pointing at http://host.docker.internal:<listenPort> so apps can call host-native sites.`
+  return `This environment also has site services. On deploy, the containers get ${exampleKey} (and TURBOPANEL_SITE_ENDPOINTS, which lists them all) with the address of each site, so apps can call the sites on this server.`
 }
 
 /** When PHP/env fields are hidden, still reveal them if the editor already has values so operators can clear stale data. */

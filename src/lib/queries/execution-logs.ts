@@ -300,10 +300,27 @@ export function useCommandLog(
 export const DEPLOYMENT_POLL_MS = 5000
 
 /**
+ * What a finished deploy can have changed, fetched again: the hostings (and
+ * their certificates), the services with their run state, and the containers.
+ * The Overview reads its status from these, so it shows the new state as soon
+ * as the deploy ends instead of when another tab is opened.
+ */
+function refetchAfterDeploy(
+  queryClient: ReturnType<typeof useQueryClient>,
+  orgId: string,
+  environmentId: string,
+): void {
+  const keys = queryKeys.org(orgId)
+  void queryClient.invalidateQueries({ queryKey: keys.hostings.all })
+  void queryClient.invalidateQueries({ queryKey: keys.services.list(environmentId) })
+  void queryClient.invalidateQueries({ queryKey: keys.containers.all })
+}
+
+/**
  * The environment's deploy history. Polls only while the newest deploy is
  * still going, so the status and the pages under it follow the deploy without
- * a reload; when it finishes, the hostings (and their certificates, which a
- * deploy can change) are fetched again.
+ * a reload; when it finishes, what the deploy can have changed is fetched
+ * again (see `refetchAfterDeploy`).
  */
 export function useEnvironmentDeployments(
   orgId: string,
@@ -320,7 +337,7 @@ export function useEnvironmentDeployments(
         ...(options?.limit ? { limit: options.limit } : {}),
       })
       if (newestDeploymentFinished(before?.deployments, page.deployments)) {
-        void queryClient.invalidateQueries({ queryKey: queryKeys.org(orgId).hostings.all })
+        refetchAfterDeploy(queryClient, orgId, environmentId)
       }
       return page
     },

@@ -53,6 +53,10 @@ export function ConfirmButton({
   const [confirmed, setConfirmed] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const armedAt = useRef(0)
+  // The armed button's width: the confirm button keeps it, so a second press
+  // anywhere on the spot of the first one lands on Confirm even when its label
+  // is shorter.
+  const [armedWidth, setArmedWidth] = useState<number | undefined>(undefined)
 
   useEffect(() => {
     return () => {
@@ -91,13 +95,16 @@ export function ConfirmButton({
         disabled={disabled}
         busy={busy}
         onPress={arm}
+        onLayout={(event) => setArmedWidth(event.nativeEvent.layout.width)}
       />
     )
   }
 
   // Drawn right to left: the question is first in reading order (screen
   // readers announce it before the buttons) but shows after them, so the
-  // confirm button sits where the arming press landed.
+  // confirm button sits where the arming press landed. The row never wraps:
+  // on a narrow screen the question wraps its own words instead, so Confirm
+  // cannot drop to a second line and leave Cancel under the press.
   return (
     <View style={styles.armedRow}>
       <Text style={styles.prompt}>{prompt}</Text>
@@ -114,6 +121,7 @@ export function ConfirmButton({
         size={size}
         busy={confirmed && busy}
         disabled={disabled || busy}
+        minWidth={armedWidth}
         onPress={() => {
           if (Date.now() - armedAt.current < CONFIRM_GUARD_MS) return
           disarm()
@@ -129,11 +137,13 @@ const styles = StyleSheet.create({
   armedRow: {
     flexDirection: 'row-reverse',
     justifyContent: 'flex-end',
-    flexWrap: 'wrap',
+    flexWrap: 'nowrap',
+    flexShrink: 1,
     alignItems: 'center',
     gap: spacing.sm,
   },
   prompt: {
+    flexShrink: 1,
     color: colors.errorText,
     fontSize: 13,
     fontWeight: '600',
