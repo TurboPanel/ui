@@ -35,6 +35,13 @@ export const TURBOPANEL_WORDMARK_STYLE = {
  */
 export const TURBOPANEL_WORDMARK_BASELINE_EM = 0.15
 
+/**
+ * How far Figtree's round letters (u, b, o, a, e) dip below the baseline at
+ * weight 900: 12/1000 em. The word is placed by its lowest ink, so nothing
+ * crosses the base of the T.
+ */
+export const TURBOPANEL_WORDMARK_OVERSHOOT_EM = 0.012
+
 /** Shared lockup tuning — px / percent tokens, not opaque multipliers in components. */
 export const TURBOPANEL_WORDMARK_LOCKUP_TUNING = {
   /** Lockup height vs caller `size` (lower = smaller overall chrome). */
@@ -120,10 +127,11 @@ function wordSizeFromUnderBarBand(
   )
 }
 
-/** Extra drop (px) that puts the baseline on the mark's base, or 0 when off. */
+/** Extra drop (px) that puts the word's lowest ink on the mark's base, or 0 when off. */
 export function wordBaselineDropPx(wordSizePx: number): number {
   return TURBOPANEL_WORDMARK_LOCKUP_TUNING.wordBaselineOnMarkBase
-    ? wordSizePx * TURBOPANEL_WORDMARK_BASELINE_EM
+    ? wordSizePx *
+        (TURBOPANEL_WORDMARK_BASELINE_EM - TURBOPANEL_WORDMARK_OVERSHOOT_EM)
     : 0
 }
 
