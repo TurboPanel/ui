@@ -3,6 +3,9 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { EnvironmentShell, useEnvironmentChrome } from './environment-shell'
+import { groupDeploymentsByGeneration } from '@/lib/deployment-history'
+import { runningStatusKey } from '@/lib/v4/project-home'
+import { statusInfo } from '@/lib/v4/status-vocab'
 
 type Props = Readonly<Record<string, unknown> & { children?: ReactNode }>
 
@@ -393,10 +396,31 @@ describe('environment header', () => {
     expect(screen.getByLabelText('Running now: Running')).toBeTruthy()
   })
 
-  it('keeps a native app running after its newest deploy timed out', () => {
+  it('does not claim a native app runs after its newest deploy timed out', () => {
     renderNativeApp([deployRow('timed_out', 2), deployRow('succeeded', 1)])
-    expect(screen.getByLabelText('Running now: Running')).toBeTruthy()
+    // The server may have stopped the app or still be working, so it is not guessed.
+    expect(screen.getByLabelText('Running now: Unknown')).toBeTruthy()
     expect(screen.getByLabelText(/^Last deploy: Timed out/)).toBeTruthy()
+  })
+
+  it.each([
+    [
+      'a running deploy after a success',
+      [deployRow('sent', 2, '2026-10-26T10:01:00Z'), deployRow('succeeded', 1)],
+    ],
+    ['a timed out deploy after a success', [deployRow('timed_out', 2), deployRow('succeeded', 1)]],
+    [
+      'a rolled back deploy',
+      [{ ...deployRow('failed', 2), strategyOutcome: 'rolled_back' }, deployRow('succeeded', 1)],
+    ],
+  ])('gives the header and the environment card the same word for %s', (_name, rows) => {
+    renderNativeApp(rows)
+    // The environment cards and the projects home both read a native app through this.
+    const cardKey = runningStatusKey([], {
+      latest: groupDeploymentsByGeneration(rows as never)[0] ?? null,
+    })
+    const word = statusInfo(cardKey ?? 'unknown').label
+    expect(screen.getByLabelText(`Running now: ${word}`)).toBeTruthy()
   })
 
   it('says starting for a first deploy that is still queued', () => {

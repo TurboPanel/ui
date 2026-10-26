@@ -37,6 +37,12 @@ export type DeploymentGroup = Readonly<{
   durationMs: number | null
   /** Earliest time someone asked to cancel this deploy; null when nobody did. */
   cancelRequestedAt: string | null
+  /**
+   * An older deploy in the same history page succeeded, so the release it left
+   * may still be serving. Set by {@link groupDeploymentsByGeneration}; absent
+   * when unknown.
+   */
+  earlierDeploySucceeded?: boolean
 }>
 
 /**
@@ -130,7 +136,7 @@ export function groupDeploymentsByGeneration(
     order.push(key)
   }
 
-  return order.map((key) => {
+  const groups = order.map((key): DeploymentGroup => {
     const commands = buckets.get(key) ?? []
     const anchor = commands[0]
     return {
@@ -147,6 +153,17 @@ export function groupDeploymentsByGeneration(
       cancelRequestedAt: earliestCancelRequest(commands),
     }
   })
+  return markEarlierSuccess(groups)
+}
+
+/** Groups arrive newest first: each learns whether an older one in the page succeeded. */
+function markEarlierSuccess(groups: readonly DeploymentGroup[]): DeploymentGroup[] {
+  let succeededBefore = false
+  return groups.reduceRight<DeploymentGroup[]>((marked, group) => {
+    marked.unshift({ ...group, earlierDeploySucceeded: succeededBefore })
+    if (group.status === 'succeeded') succeededBefore = true
+    return marked
+  }, [])
 }
 
 function earliestCancelRequest(rows: readonly DeploymentHistoryRecord[]): string | null {
@@ -274,7 +291,11 @@ export function isDeploymentRunning(group: Pick<DeploymentGroup, 'status' | 'com
   if (!DELIVERED_STATUSES.has(group.status) || !Array.isArray(group.commands)) {
     return false
   }
-  return group.commands.some((command) => Boolean(command.startedAt))
+  // Only a delivered host counts: a finished host's start time says nothing about
+  // a host that never started, which must stay visible as waiting.
+  return group.commands.some(
+    (command) => DELIVERED_STATUSES.has(command.status) && Boolean(command.startedAt)
+  )
 }
 
 /** The status a deploy is shown with: `running` once a server has started it. */

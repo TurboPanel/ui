@@ -71,35 +71,35 @@ export function nativeDeployKey(latest: DeploymentGroup | null | undefined): Sta
 }
 
 /**
+ * The newest deploy ended or is going without replacing the release before it,
+ * so that release still serves: a rollback, or a deploy still going or
+ * cancelled after an earlier one succeeded.
+ */
+function oldReleaseServes(latest: DeploymentGroup): boolean {
+  if (latest.strategyOutcome === 'rolled_back') return true
+  if (latest.earlierDeploySucceeded !== true) return false
+  return latest.status === 'cancelled' || isDeployInProgress(latest)
+}
+
+/**
  * A native app's "running now" from its newest deploy, in the environment
- * header's words: a finished deploy is running, one still going is starting,
- * anything else keeps the deploy's own word. `undefined` while the history loads.
+ * header's words: a finished deploy is running, and so is the release an
+ * earlier deploy left while a newer one runs, was cancelled or rolled back.
+ * A first deploy still going is starting. A deploy that failed or timed out
+ * after an earlier success reads unknown: the server may have stopped the app,
+ * or still be working, so it is not guessed. Anything else keeps the deploy's
+ * own word. `undefined` while the history loads. The header, the environment
+ * cards and the projects home all use this one rule.
  */
 export function nativeRunningKey(
   latest: DeploymentGroup | null | undefined
 ): StatusKey | undefined {
   const key = nativeDeployKey(latest)
   if (key === 'deployed' || key === 'live' || key === 'settling') return 'running'
+  if (latest && oldReleaseServes(latest)) return 'running'
   if (key === 'deploying' || key === 'building' || key === 'queued') return 'busy'
+  if (key === 'failed' && latest?.earlierDeploySucceeded === true) return 'unknown'
   return key
-}
-
-/**
- * A native app's "running now" from its deploy history, newest first. A deploy
- * that is still going, failed, timed out, was cancelled or rolled back leaves
- * the release before it serving, so an app with an earlier successful deploy
- * is running. A deploy stopped on purpose (needs attention) keeps its own
- * word. `undefined` while the history loads.
- */
-export function nativeRunningKeyFromHistory(
-  groups: readonly DeploymentGroup[] | undefined
-): StatusKey | undefined {
-  if (groups === undefined) return undefined
-  const [latest, ...earlier] = groups
-  const key = nativeRunningKey(latest ?? null)
-  if (latest === undefined || key === 'running') return key
-  if (latest.strategyOutcome === 'needs_attention') return key
-  return earlier.some((group) => group.status === 'succeeded') ? 'running' : key
 }
 
 /**

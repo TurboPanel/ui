@@ -602,6 +602,16 @@ describe('the started rule every deploy view shares', () => {
     )
   })
 
+  it('keeps a fan-out with a finished host and a host that never started waiting', () => {
+    const group = groupOf([
+      row({ id: 'a', serverId: 'srv-a', status: 'succeeded' }),
+      row({ id: 'b', serverId: 'srv-b', status: 'acked', startedAt: null, finishedAt: null }),
+    ])
+    expect(group.status).toBe('acked')
+    expect(isDeploymentRunning(group)).toBe(false)
+    expect(deploymentGroupTone(group).label).toBe('Queued')
+  })
+
   it('copes with a row from an older control plane that has no commands', () => {
     expect(isDeploymentRunning({ status: 'sent', commands: undefined as never })).toBe(false)
   })
@@ -616,5 +626,16 @@ describe('the started rule every deploy view shares', () => {
       }),
     ])
     expect(deploymentGroupTone(group).label).toBe('Cancelling…')
+  })
+})
+
+describe('earlierDeploySucceeded', () => {
+  it('tells each deploy whether an older one in the page succeeded', () => {
+    const groups = groupDeploymentsByGeneration([
+      row({ id: 'c', generation: 3, status: 'timed_out' }),
+      row({ id: 'b', generation: 2, status: 'succeeded' }),
+      row({ id: 'a', generation: 1, status: 'failed' }),
+    ])
+    expect(groups.map((group) => group.earlierDeploySucceeded)).toEqual([true, false, false])
   })
 })

@@ -25,7 +25,6 @@ import {
   miniMapColumns,
   nativeDeployKey,
   nativeRunningKey,
-  nativeRunningKeyFromHistory,
   newEnvironmentBody,
   reachNames,
   runningStatusKey,
@@ -200,30 +199,31 @@ describe('native apps (no container rows)', () => {
     expect(nativeDeployKey(group({ status: 'sent' }))).toBe('queued')
   })
   it('keeps a native app running while the release an earlier deploy left still serves', () => {
-    const done = group({ id: 'old', status: 'succeeded' })
-    expect(nativeRunningKeyFromHistory(undefined)).toBeUndefined()
-    expect(nativeRunningKeyFromHistory([])).toBe('never')
-    expect(nativeRunningKeyFromHistory([done])).toBe('running')
-    expect(nativeRunningKeyFromHistory([group({ status: 'timed_out' }), done])).toBe('running')
-    expect(nativeRunningKeyFromHistory([group({ status: 'cancelled' }), done])).toBe('running')
-    expect(nativeRunningKeyFromHistory([group({ status: 'running' }), done])).toBe('running')
-    expect(
-      nativeRunningKeyFromHistory([
-        group({ status: 'failed', strategyOutcome: 'rolled_back' }),
-        done,
-      ])
-    ).toBe('running')
+    const after = (partial: Partial<DeploymentGroup>) =>
+      group({ earlierDeploySucceeded: true, ...partial })
+    expect(nativeRunningKey(after({ status: 'running' }))).toBe('running')
+    expect(nativeRunningKey(after({ status: 'queued' }))).toBe('running')
+    expect(nativeRunningKey(after({ status: 'cancelled' }))).toBe('running')
+    expect(nativeRunningKey(group({ status: 'failed', strategyOutcome: 'rolled_back' }))).toBe(
+      'running'
+    )
   })
-  it('keeps the deploy word when no earlier deploy succeeded or it was stopped on purpose', () => {
-    const done = group({ id: 'old', status: 'succeeded' })
-    expect(nativeRunningKeyFromHistory([group({ status: 'queued' })])).toBe('busy')
-    expect(nativeRunningKeyFromHistory([group({ status: 'timed_out' })])).toBe('failed')
-    expect(
-      nativeRunningKeyFromHistory([
-        group({ status: 'failed', strategyOutcome: 'needs_attention' }),
-        done,
-      ])
-    ).toBe('failed')
+  it('does not guess after a plain failure or a timeout that followed a success', () => {
+    const after = (partial: Partial<DeploymentGroup>) =>
+      group({ earlierDeploySucceeded: true, ...partial })
+    // The server stops the app on most failure paths and may still be working after a timeout.
+    expect(nativeRunningKey(after({ status: 'failed' }))).toBe('unknown')
+    expect(nativeRunningKey(after({ status: 'timed_out' }))).toBe('unknown')
+    expect(nativeRunningKey(after({ status: 'failed', strategyOutcome: 'needs_attention' }))).toBe(
+      'unknown'
+    )
+  })
+  it('keeps the deploy word when no earlier deploy succeeded', () => {
+    const first = (partial: Partial<DeploymentGroup>) =>
+      group({ earlierDeploySucceeded: false, ...partial })
+    expect(nativeRunningKey(first({ status: 'running' }))).toBe('busy')
+    expect(nativeRunningKey(first({ status: 'cancelled' }))).toBe('cancelled')
+    expect(nativeRunningKey(first({ status: 'timed_out' }))).toBe('failed')
   })
   it('shows a succeeded deploy as running, in the header word, not never deployed', () => {
     expect(runningStatusKey([], { latest: group({ status: 'succeeded' }) })).toBe('running')
