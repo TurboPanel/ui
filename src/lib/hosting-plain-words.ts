@@ -193,6 +193,31 @@ export function manageHereInsteadPrompt(hostname: string, state: ConfiguredHosti
   return `Manage ${hostname} here instead of in the configuration file? It keeps its settings and certificate as last deployed; changes not deployed yet, or not saved here, are not carried over.`
 }
 
+/**
+ * On a hostname whose entry left the configuration file, until the next
+ * deploy acts on it: `handedBack` when the panel made the hosting first and
+ * gets it back.
+ */
+export function pendingRemovalNote(handedBack: boolean): string {
+  return handedBack
+    ? 'This hostname was removed from the configuration file. After the next deploy it is managed on this screen again; until then it cannot be changed here.'
+    : 'This hostname will be removed on the next deploy. Until then it keeps being served and cannot be changed here.'
+}
+
+/**
+ * The certificate picker's explanation for a hostname managed on this screen.
+ * It mentions the Let’s Encrypt box only while the box is shown (Self-signed
+ * picked and a hostname typed), and otherwise says how to get it.
+ */
+export function panelCertificateHint(letsEncryptBoxShown: boolean): string {
+  const base =
+    'Until a real certificate is in place the site uses a basic self-signed one. Pick a library certificate to use an upload or an org self-signed one'
+  return letsEncryptBoxShown
+    ? base + ', or tick the box below to get a free Let’s Encrypt certificate when you save.'
+    : base +
+        '. For a free Let’s Encrypt certificate, enter a hostname and keep Self-signed picked: a box to ask for one shows up below.'
+}
+
 /** A move refused because a deploy of the environment is running. */
 export const DEPLOY_RUNNING_MESSAGE =
   'A deploy of this environment is running. Try again when it has finished.'

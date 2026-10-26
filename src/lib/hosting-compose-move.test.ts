@@ -5,6 +5,7 @@ import { readComposeHostingEntries } from '@/lib/compose/hosting-service-context
 import { hostingEntryKey } from '@/lib/compose/hosting-extension'
 import type { TlsRecord } from '@/lib/instance-api'
 import {
+  composeRowsAwaitingRemoval,
   configuredHostingState,
   declaredHostingByService,
   findPanelRowForRoute,
@@ -136,6 +137,32 @@ describe('panelRowsBesideDeclarations', () => {
       options: { hostnames: ['example.test'], pathPrefix: '/api' },
     }
     expect(panelRowsBesideDeclarations([api], entries)).toEqual([api])
+  })
+})
+
+describe('composeRowsAwaitingRemoval', () => {
+  const entries = readComposeHostingEntries(overlay, 'web')
+  const madeFromFile = (route: string | undefined) => ({
+    id: route ?? 'no-route',
+    metadata: { composeOwned: true, composeRoute: route },
+    options: {},
+  })
+
+  it('lists a row the file made whose entry is gone', () => {
+    const removed = madeFromFile('blog.example.test /')
+    expect(composeRowsAwaitingRemoval([removed], entries)).toEqual([removed])
+    expect(composeRowsAwaitingRemoval([removed], [])).toEqual([removed])
+  })
+
+  it('treats a row the file made without a route as gone too', () => {
+    const unnamed = madeFromFile(undefined)
+    expect(composeRowsAwaitingRemoval([unnamed], entries)).toEqual([unnamed])
+  })
+
+  it('leaves out rows whose entry is still in the file, and rows this screen made', () => {
+    const declared = madeFromFile('example.test /')
+    const own = { id: 'own', metadata: {}, options: { hostnames: ['blog.example.test'] } }
+    expect(composeRowsAwaitingRemoval([declared, own], entries)).toEqual([])
   })
 })
 

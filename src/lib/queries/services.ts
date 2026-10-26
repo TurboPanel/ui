@@ -15,12 +15,13 @@ import { useApiMutation, queryKeys } from '@/lib/query-client'
 export function useServices(
   orgId: string,
   environmentId?: string,
-  options?: Readonly<{ enabled?: boolean }>,
+  options?: Readonly<{ enabled?: boolean; refetchInterval?: number | false }>,
 ) {
   return useQuery({
     queryKey: queryKeys.org(orgId).services.list(environmentId),
     queryFn: () => fetchVisibleServices(environmentId),
     enabled: (options?.enabled ?? true) && orgId.length > 0,
+    refetchInterval: options?.refetchInterval ?? false,
   })
 }
 

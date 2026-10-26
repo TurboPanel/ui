@@ -69,13 +69,12 @@ import {
 } from '@/lib/managed-login-limits'
 import { orEmptyArray } from '@/lib/or-empty-array'
 import { appLoginsSchemeProblem } from '@/lib/managed-app-logins'
+import { managedIdentifierProblem } from '@/lib/managed-identifier'
 import { recallSessionChoices, rememberSessionChoices } from '@/lib/session-choices'
 import { PrincipalNameSchemeField, usePrincipalNameScheme } from '@/components/org/principal-name-scheme-field'
 import { principalNamesLabel, principalSchemeErrorMessage, type NameScheme } from '@/lib/principal-name-scheme'
 import { chrome, colors, spacing, webPointer } from '@/lib/theme'
 
-const USERNAME_PATTERN = /^[a-zA-Z_]\w{0,62}$/
-const DATABASE_PATTERN = /^[a-zA-Z_]\w{0,62}$/
 
 /** What the single-login form keeps between logins for the rest of the session. */
 type LoginFormChoices = {
@@ -350,8 +349,9 @@ export function ManagedUsersPanel({
 
   const createDatabase = async () => {
     const trimmed = dbName.trim()
-    if (!DATABASE_PATTERN.test(trimmed)) {
-      setDatabaseError('Database name must start with a letter or underscore.')
+    const nameProblem = managedIdentifierProblem(trimmed, 'Database name')
+    if (nameProblem) {
+      setDatabaseError(nameProblem)
       return
     }
     setWorking(true)
@@ -384,8 +384,9 @@ export function ManagedUsersPanel({
 
   const createUser = async () => {
     const trimmed = username.trim()
-    if (!USERNAME_PATTERN.test(trimmed)) {
-      setNewLoginError('Username must start with a letter or underscore.')
+    const nameProblem = managedIdentifierProblem(trimmed, 'Username')
+    if (nameProblem) {
+      setNewLoginError(nameProblem)
       return
     }
     if (selectedDbs.length === 0) {

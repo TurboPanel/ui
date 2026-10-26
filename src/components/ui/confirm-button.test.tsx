@@ -10,8 +10,23 @@ vi.mock('@/components/ui/button', () => ({
     label,
     variant,
     onPress,
-  }: Readonly<{ label: string; variant: string; onPress: () => void }>) => (
-    <button type="button" data-variant={variant} onClick={onPress}>
+    minWidth,
+    onLayout,
+  }: Readonly<{
+    label: string
+    variant: string
+    onPress: () => void
+    minWidth?: number
+    onLayout?: (event: { nativeEvent: { layout: { width: number } } }) => void
+  }>) => (
+    <button
+      type="button"
+      data-variant={variant}
+      data-min-width={minWidth}
+      onClick={onPress}
+      // Stands in for the layout pass: a focus says how wide the button is drawn.
+      onFocus={() => onLayout?.({ nativeEvent: { layout: { width: 220 } } })}
+    >
       {label}
     </button>
   ),
@@ -99,5 +114,20 @@ describe('ConfirmButton double press', () => {
     later()
     fireEvent.click(screen.getByText('Delete now'))
     expect(onConfirm).toHaveBeenCalledTimes(1)
+  })
+
+  it("keeps the armed button's width on the confirm button, so a shorter label sits under the press", () => {
+    render(
+      <ConfirmButton
+        label="Manage on this screen instead"
+        confirmLabel="Move it here"
+        variant="secondary"
+        onConfirm={vi.fn()}
+      />
+    )
+    const armedButton = screen.getByText('Manage on this screen instead')
+    fireEvent.focus(armedButton)
+    fireEvent.click(armedButton)
+    expect(screen.getByText('Move it here').dataset.minWidth).toBe('220')
   })
 })

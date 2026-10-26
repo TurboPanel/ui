@@ -206,4 +206,14 @@ describe('ManagedUsersPanel errors next to their button', () => {
     const message = screen.getByText('Username must start with a letter or underscore.')
     expect(message.nextElementSibling?.textContent).toBe('Create user')
   })
+
+  it('names the space and the "!" in a username, not its first letter', () => {
+    draw('postgres')
+    fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'ct bad!' } })
+    fireEvent.click(screen.getByText('Create user'))
+    expect(
+      screen.getByText('Username can use only letters, digits and underscores, not spaces or “!”.')
+    ).toBeTruthy()
+    expect(screen.queryByText('Username must start with a letter or underscore.')).toBeNull()
+  })
 })
