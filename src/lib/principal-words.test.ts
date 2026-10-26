@@ -5,6 +5,7 @@ import {
   principalDeleteBlockedReason,
   principalFormLabels,
   principalStateLabel,
+  principalStatusBadge,
   principalUsageLines,
 } from '@/lib/principal-words'
 
@@ -62,5 +63,22 @@ describe('principal words', () => {
         row({ canDelete: false, usedBy: { tenancies: 2, bindings: 0, storages: 0, secrets: 0, logins: 0, folders: 0 } })
       )
     ).toBe('In use: 2 services run as it.')
+  })
+})
+
+describe('principalStatusBadge', () => {
+  it('shows a removal under way first, then a leftover, then the server state', () => {
+    expect(principalStatusBadge(row({ removalRequested: true, orphaned: true }))).toEqual({
+      label: 'Being removed',
+      tone: 'pending',
+    })
+    expect(principalStatusBadge(row({ orphaned: true }))).toEqual({
+      label: 'Left behind',
+      tone: 'pending',
+    })
+    expect(principalStatusBadge(row({ orphaned: false, state: 'present' }))).toEqual({
+      label: 'On the server',
+      tone: 'ok',
+    })
   })
 })

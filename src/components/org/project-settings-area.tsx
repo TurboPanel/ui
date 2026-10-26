@@ -19,8 +19,14 @@ import {
 } from '@/lib/project-navigation'
 import {
   useDeleteEnvironment,
+  useEnvironmentDeletePreview,
   useVariables,
 } from '@/lib/queries'
+import {
+  deleteFailureMessage,
+  deletePlanBlockerLines,
+  deletePlanSummary,
+} from '@/lib/delete-plan'
 import { colors, spacing, webPointer } from '@/lib/theme'
 
 type EnvironmentAddKind = 'variables'
@@ -126,6 +132,11 @@ function EnvironmentDeleteControl({
     invalidateEnvironments,
   } = useProjectContext()
   const deleteEnvironment = useDeleteEnvironment(orgId)
+  // Read when the button is armed, so the confirmation names what goes.
+  const [armed, setArmed] = useState(false)
+  const preview = useEnvironmentDeletePreview(orgId, selectedEnvironment.id, {
+    enabled: armed && canOwn && environments.length > 1,
+  })
 
   if (!canOwn) {
     return <Text style={panelStyles.muted}>View only</Text>
@@ -166,8 +177,14 @@ function EnvironmentDeleteControl({
       const deletedId = selectedEnvironment.id
       const result = await deleteEnvironment.run(deletedId)
       if (!result.ok) {
-        if (deleteEnvironment.actionError) {
-          setError(deleteEnvironment.actionError)
+        // The result, not `actionError`: that one is read from this render and is stale here.
+        if (result.error !== null) {
+          setError(
+            deleteFailureMessage(
+              result.cause ?? result.error,
+              'The environment could not be deleted. Try again.',
+            ),
+          )
         }
         return
       }
@@ -178,13 +195,23 @@ function EnvironmentDeleteControl({
     })()
   }
 
+  const name = selectedEnvironment.name?.trim() || 'this environment'
+  const blockers = deletePlanBlockerLines(preview.data)
+  let prompt = `Delete ${name}? Checking what it owns…`
+  if (preview.data) {
+    prompt = [deletePlanSummary(preview.data, name), ...blockers].join(' ')
+  } else if (preview.error) {
+    prompt = `Delete ${name}? ${deleteFailureMessage(preview.error, 'What it owns could not be read.')}`
+  }
+
   return (
     <ConfirmButton
       key={`${selectedEnvironment.id}:${environments.length}`}
       label="Delete environment"
-      prompt={`Delete ${selectedEnvironment.name?.trim() || 'environment'}?`}
+      prompt={prompt}
       confirmLabel="Delete environment"
       busy={removing}
+      onArmedChange={setArmed}
       onConfirm={handleDelete}
     />
   )

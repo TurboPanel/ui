@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   createEnvironment,
   deleteEnvironment,
+  fetchEnvironmentDeletePreview,
   deployEnvironment,
   fetchDeployPreview,
   fetchEnvironment,
@@ -135,6 +136,20 @@ export function useMakeEnvironmentPrimary(orgId: string) {
     onSuccess: async (_data, environmentId) => {
       await invalidateEnvironmentSubtree(queryClient, orgId, environmentId)
     },
+  })
+}
+
+/** What deleting the environment removes and keeps; read fresh each time it is asked for. */
+export function useEnvironmentDeletePreview(
+  orgId: string,
+  environmentId: string,
+  options?: Readonly<{ enabled?: boolean }>
+) {
+  return useQuery({
+    queryKey: queryKeys.org(orgId).environments.deletePreview(environmentId),
+    queryFn: () => fetchEnvironmentDeletePreview(environmentId),
+    enabled: (options?.enabled ?? true) && orgId.length > 0 && environmentId.length > 0,
+    staleTime: 0,
   })
 }
 

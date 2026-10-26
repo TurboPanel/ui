@@ -2451,6 +2451,8 @@ export type OrgPrincipalRecord = Readonly<{
   usedBy: Omit<PrincipalUsage, 'otherPlacements'>
   state: OrgPrincipalState
   orphaned: boolean
+  /** Its project's delete asked for it to go; it is removed once its folders are gone. */
+  removalRequested?: boolean
   canDelete: boolean
   createdAt: string
 }>
@@ -4234,7 +4236,57 @@ export async function updateProject(
   })
 }
 
-export async function deleteProject(id: string): Promise<{ ok: true }> {
+/** One reason a project or environment delete cannot run yet, in plain words. */
+export type DeletePlanBlocker = Readonly<{
+  error: string
+  message: string
+  serverIds?: readonly string[]
+}>
+
+/** What deleting a project or an environment removes and keeps (`GET …/delete-preview`). */
+export type DeletePlan = Readonly<{
+  environments: readonly { id: string; name: string | null }[]
+  services: readonly { id: string; name: string | null; environmentId: string }[]
+  servers: readonly { id: string; name: string | null; connected: boolean }[]
+  /** `remove`: deleted from the server. `keep`: a volume set to keep its data. */
+  folders: readonly {
+    id: string
+    serverId: string
+    kind: 'service' | 'volume'
+    path: string | null
+    assetName: string | null
+    action: 'remove' | 'keep'
+  }[]
+  /** Project delete only: the site owners' Linux users that go with it or stay. */
+  hostingAccounts: readonly {
+    id: string
+    username: string
+    action: 'remove' | 'keep'
+    usedBy?: Partial<PrincipalUsage>
+  }[]
+  blockers: readonly DeletePlanBlocker[]
+}>
+
+/** What a finished delete left for the servers to do. */
+export type DeleteCleanup = Readonly<{
+  folderServerIds: readonly string[]
+  hostingAccounts?: Readonly<{
+    removing: readonly { id: string; username: string; removed: boolean }[]
+    kept: readonly { id: string; username: string }[]
+  }>
+}>
+
+export async function fetchProjectDeletePreview(projectId: string): Promise<DeletePlan> {
+  return await apiFetch(`${CLIENT_API}/projects/${projectId}/delete-preview`)
+}
+
+export async function fetchEnvironmentDeletePreview(environmentId: string): Promise<DeletePlan> {
+  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/delete-preview`)
+}
+
+export async function deleteProject(
+  id: string
+): Promise<{ ok: true; cleanup?: DeleteCleanup }> {
   return await apiFetch(`${CLIENT_API}/projects/${id}`, {
     method: 'DELETE',
   })
@@ -4312,7 +4364,9 @@ export async function makeEnvironmentPrimary(
   return await apiFetch(`${CLIENT_API}/environments/${id}/primary`, { method: 'POST' })
 }
 
-export async function deleteEnvironment(id: string): Promise<{ ok: true }> {
+export async function deleteEnvironment(
+  id: string
+): Promise<{ ok: true; cleanup?: DeleteCleanup }> {
   return await apiFetch(`${CLIENT_API}/environments/${id}`, {
     method: 'DELETE',
   })

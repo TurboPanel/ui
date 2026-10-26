@@ -39,6 +39,19 @@ export function principalStateTone(state: OrgPrincipalState): 'ok' | 'pending' |
   }
 }
 
+/**
+ * The status a principal shows in the organization list: one its project's
+ * delete is removing, one left behind with nothing using it, or its state on
+ * the servers.
+ */
+export function principalStatusBadge(
+  row: Pick<OrgPrincipalRecord, 'removalRequested' | 'orphaned' | 'state'>
+): { label: string; tone: 'ok' | 'pending' | 'muted' | 'danger' } {
+  if (row.removalRequested) return { label: 'Being removed', tone: 'pending' }
+  if (row.orphaned) return { label: 'Left behind', tone: 'pending' }
+  return { label: principalStateLabel(row.state), tone: principalStateTone(row.state) }
+}
+
 export function principalFormLabels(forms: OrgPrincipalRecord['forms']): string {
   const labels = forms.map((form) => (form === 'system' ? 'System user' : 'Database login'))
   return labels.length > 0 ? labels.join(' and ') : 'No form yet'
