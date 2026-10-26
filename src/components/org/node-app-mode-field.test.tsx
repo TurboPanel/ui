@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { useState, type ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { NodeAppModeField, isCustomNodeAppMode } from './node-app-mode-field'
+import { NodeAppModeField, customModeLabel, isCustomNodeAppMode } from './node-app-mode-field'
 
 type Props = Readonly<Record<string, unknown> & { children?: ReactNode }>
 type Option = { value: string; label: string; accessibilityLabel?: string }
@@ -88,7 +88,24 @@ describe('isCustomNodeAppMode', () => {
   })
 })
 
+describe('customModeLabel', () => {
+  it('keeps a short value whole and cuts a long one short with an ellipsis', () => {
+    expect(customModeLabel('staging')).toBe('staging')
+    expect(customModeLabel('a'.repeat(16))).toBe('a'.repeat(16))
+    expect(customModeLabel('pre-production-eu-west-2')).toBe('pre-production-…')
+  })
+})
+
 describe('NodeAppModeField', () => {
+  it('shows a long custom value cut short, with the whole value for screen readers', () => {
+    const long = 'pre-production-eu-west-2'
+    render(<Harness initial={long} />)
+    const chip = option(`Custom mode ${long}, press to edit`)
+    expect(chip.textContent).toBe('pre-production-…')
+    fireEvent.click(chip)
+    expect(valueInput().value).toBe(long)
+  })
+
   it('switches between production and development without a popup', () => {
     const onChange = vi.fn()
     render(<Harness onChange={onChange} />)

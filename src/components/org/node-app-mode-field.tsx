@@ -15,13 +15,22 @@ export function isCustomNodeAppMode(mode: NodeAppMode): boolean {
   return !MAIN_NODE_APP_MODES.includes(mode)
 }
 
+/** Longest custom value shown whole on the option; longer ones end in "…". */
+const CUSTOM_LABEL_MAX_LENGTH = 16
+
+/** A long custom value is cut short on the option so the row keeps its size. */
+export function customModeLabel(mode: NodeAppMode): string {
+  if (mode.length <= CUSTOM_LABEL_MAX_LENGTH) return mode
+  return `${mode.slice(0, CUSTOM_LABEL_MAX_LENGTH - 1)}…`
+}
+
 function modeOptions(mode: NodeAppMode) {
   const custom = isCustomNodeAppMode(mode)
   return [
     ...MAIN_NODE_APP_MODES.map((main) => ({ value: main, label: main })),
     {
       value: CUSTOM_OPTION,
-      label: custom ? mode : 'Custom…',
+      label: custom ? customModeLabel(mode) : 'Custom…',
       accessibilityLabel: custom ? `Custom mode ${mode}, press to edit` : 'Custom…',
     },
   ]
@@ -93,7 +102,7 @@ function CustomNodeAppModeSheet({
     <ModalSheet
       visible
       title="Custom application mode"
-      description="NODE_ENV is set to this value for the build and the running process."
+      description="NODE_ENV is set to this value for the build and the running process. Most tools treat any value other than production as a development build."
       onRequestClose={onCancel}
       footer={
         <ButtonRow align="end">
