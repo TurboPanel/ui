@@ -27,7 +27,9 @@ vi.mock('@/components/header-account-controls', () => ({
 }))
 vi.mock('@/components/header-menu-button', () => ({ HeaderMenuButton: () => <i>menu</i> }))
 vi.mock('@/components/organization-switcher', () => ({
-  OrganizationSwitcherSegment: () => <i>org-name</i>,
+  OrganizationSwitcherSegment: ({ variant, current }: Props) => (
+    <i>{`org-name ${String(variant)}${current ? ' current' : ''}`}</i>
+  ),
 }))
 vi.mock('@/components/header-search', () => ({
   HeaderSearch: ({ keepWidth }: Props) => <i>{`search keepWidth=${String(keepWidth)}`}</i>,
@@ -35,8 +37,17 @@ vi.mock('@/components/header-search', () => ({
   useHeaderSearchShortcut: () => undefined,
 }))
 vi.mock('@/components/org/header-breadcrumb', () => ({
-  HeaderBreadcrumb: ({ crumb }: { crumb: { current: { label: string } } }) => (
-    <i>{`crumb ${crumb.current.label}`}</i>
+  HeaderBreadcrumb: ({
+    crumb,
+    leading,
+  }: {
+    crumb: { current: { label: string } }
+    leading?: ReactNode
+  }) => (
+    <nav>
+      {leading}
+      <i>{`crumb ${crumb.current.label}`}</i>
+    </nav>
   ),
 }))
 vi.mock('@/components/org/use-header-breadcrumb', () => ({
@@ -73,11 +84,26 @@ describe('OrgHeader breadcrumb', () => {
     expect(screen.getByText('account')).toBeTruthy()
   })
 
+  it('makes the organization the first crumb, inside the breadcrumb', async () => {
+    state.crumb = { trail: [], current: { label: 'derp', chip: null } }
+    await mount()
+    const nav = document.querySelector('nav')
+    expect(nav?.firstElementChild?.textContent).toBe('org-name crumb')
+    expect(screen.getAllByText(/^org-name/)).toHaveLength(1)
+  })
+
+  it('draws the organization as a crumb, the current one, on pages with no trail', async () => {
+    await mount()
+    expect(document.querySelector('nav')).toBeNull()
+    expect(screen.getByText('org-name crumb current')).toBeTruthy()
+  })
+
   it('keeps phones unchanged', async () => {
     state.crumb = { trail: [], current: { label: 'derp', chip: null } }
     state.width = 500
     await mount()
     expect(screen.queryByText('crumb derp')).toBeNull()
+    expect(screen.getByText('org-name menu current')).toBeTruthy()
   })
 
   it('still shows the breadcrumb on a narrow window where the search is an icon', async () => {
