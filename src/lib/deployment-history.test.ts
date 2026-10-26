@@ -9,8 +9,11 @@ import {
   findInFlightDeployment,
   isDeploymentCancelling,
   isDeploymentInFlight,
+  deploymentDisplayStatus,
+  deploymentGroupTone,
   deploymentServerLabel,
   deploymentStatusTone,
+  isDeploymentRunning,
   deploymentStrategyLabel,
   formatDeployActor,
   formatDeployDuration,
@@ -23,7 +26,7 @@ import {
 } from './deployment-history'
 
 function row(
-  overrides: Partial<DeploymentHistoryRecord> & { id: string },
+  overrides: Partial<DeploymentHistoryRecord> & { id: string }
 ): DeploymentHistoryRecord {
   return {
     commandId: overrides.id,
@@ -52,7 +55,7 @@ describe('worstDeploymentStatus', () => {
       worstDeploymentStatus([
         row({ id: 'a', status: 'succeeded' }),
         row({ id: 'b', status: 'failed' }),
-      ]),
+      ])
     ).toBe('failed')
   })
 
@@ -61,7 +64,7 @@ describe('worstDeploymentStatus', () => {
       worstDeploymentStatus([
         row({ id: 'a', status: 'succeeded' }),
         row({ id: 'b', status: 'running' }),
-      ]),
+      ])
     ).toBe('running')
   })
 
@@ -70,14 +73,14 @@ describe('worstDeploymentStatus', () => {
       worstDeploymentStatus([
         row({ id: 'a', status: 'queued' }),
         row({ id: 'b', status: 'running' }),
-      ]),
+      ])
     ).toBe('running')
     // Row order must not decide the label.
     expect(
       worstDeploymentStatus([
         row({ id: 'a', status: 'running' }),
         row({ id: 'b', status: 'queued' }),
-      ]),
+      ])
     ).toBe('running')
   })
 
@@ -87,7 +90,7 @@ describe('worstDeploymentStatus', () => {
         row({ id: 'a', status: 'running' }),
         row({ id: 'b', status: 'failed' }),
         row({ id: 'c', status: 'queued' }),
-      ]),
+      ])
     ).toBe('failed')
   })
 
@@ -100,13 +103,13 @@ describe('worstDeploymentStatus', () => {
       worstDeploymentStatus([
         row({ id: 'a', status: 'succeeded' }),
         row({ id: 'b', status: 'unknown' as CommandStatus }),
-      ]),
+      ])
     ).toBe('unknown')
     expect(
       worstDeploymentStatus([
         row({ id: 'a', status: 'queued' }),
         row({ id: 'b', status: 'unknown' as CommandStatus }),
-      ]),
+      ])
     ).toBe('queued')
   })
 
@@ -120,10 +123,7 @@ describe('worstDeploymentStatus', () => {
     ['timed_out', 'failed', 'timed_out'],
   ])('ranks %s vs %s as %s', (first, second, expected) => {
     expect(
-      worstDeploymentStatus([
-        row({ id: 'a', status: first }),
-        row({ id: 'b', status: second }),
-      ]),
+      worstDeploymentStatus([row({ id: 'a', status: first }), row({ id: 'b', status: second })])
     ).toBe(expected)
   })
 })
@@ -163,9 +163,7 @@ describe('groupDeploymentsByGeneration', () => {
     ])
     expect(groups).toHaveLength(1)
     expect(groups[0]?.status).toBe('running')
-    expect(deploymentStatusTone(groups[0]?.status ?? 'queued').label).toBe(
-      'Running',
-    )
+    expect(deploymentStatusTone(groups[0]?.status ?? 'queued').label).toBe('Running')
   })
 
   it('uses the earliest start across the fan-out', () => {
@@ -194,9 +192,7 @@ describe('groupDeploymentsByGeneration', () => {
   })
 
   it('reports a null start when no attempt carries a stamp', () => {
-    const groups = groupDeploymentsByGeneration([
-      row({ id: 'a', startedAt: null, queuedAt: null }),
-    ])
+    const groups = groupDeploymentsByGeneration([row({ id: 'a', startedAt: null, queuedAt: null })])
     expect(groups[0]?.startedAt).toBeNull()
   })
 
@@ -360,9 +356,7 @@ describe('deploymentServerLabel', () => {
   })
 
   it('prefers a trimmed display name', () => {
-    expect(deploymentServerLabel(row({ id: 'a', serverName: '  web-01  ' }))).toBe(
-      'web-01',
-    )
+    expect(deploymentServerLabel(row({ id: 'a', serverName: '  web-01  ' }))).toBe('web-01')
   })
 })
 
@@ -393,7 +387,7 @@ describe('push-triggered deploys', () => {
     expect(group?.trigger).toEqual(trigger)
   })
 
-  it('has no trigger for a person\'s deploy or an older API', () => {
+  it("has no trigger for a person's deploy or an older API", () => {
     const [group] = groupDeploymentsByGeneration([row({ id: 'a' })])
     expect(group?.trigger).toBeNull()
   })
@@ -405,16 +399,16 @@ describe('push-triggered deploys', () => {
         branch: 'release/1.4',
         commitSha: 'abc123def456',
         sourceId: null,
-      }),
+      })
     ).toEqual({ headline: 'Push to release/1.4', detail: 'abc123d' })
   })
 
   it('degrades when only part of the attribution was recorded', () => {
     expect(
-      formatDeployTrigger({ kind: 'push', branch: null, commitSha: 'abc123def', sourceId: null }),
+      formatDeployTrigger({ kind: 'push', branch: null, commitSha: 'abc123def', sourceId: null })
     ).toEqual({ headline: 'Git push', detail: 'abc123d' })
     expect(
-      formatDeployTrigger({ kind: 'push', branch: ' ', commitSha: null, sourceId: null }),
+      formatDeployTrigger({ kind: 'push', branch: ' ', commitSha: null, sourceId: null })
     ).toEqual({ headline: 'Git push', detail: null })
     expect(formatDeployTrigger(null)).toBeNull()
     expect(formatDeployTrigger(undefined)).toBeNull()
@@ -440,13 +434,10 @@ describe('deploy strategy and outcome', () => {
       worstStrategyOutcome([
         row({ id: 'a', strategyOutcome: 'rolled_back' }),
         row({ id: 'b', strategyOutcome: 'needs_attention' }),
-      ]),
+      ])
     ).toBe('needs_attention')
     expect(
-      worstStrategyOutcome([
-        row({ id: 'a', strategyOutcome: null }),
-        row({ id: 'b' }),
-      ]),
+      worstStrategyOutcome([row({ id: 'a', strategyOutcome: null }), row({ id: 'b' })])
     ).toBeNull()
   })
 
@@ -527,9 +518,7 @@ describe('cancelling a deploy', () => {
   })
 
   it('notes a cancel that came too late only on a succeeded deploy', () => {
-    const [late] = groupDeploymentsByGeneration([
-      row({ id: 'a', cancelRequestedAt: requested }),
-    ])
+    const [late] = groupDeploymentsByGeneration([row({ id: 'a', cancelRequestedAt: requested })])
     const [plain] = groupDeploymentsByGeneration([row({ id: 'a' })])
     const [cancelled] = groupDeploymentsByGeneration([
       row({ id: 'a', status: 'cancelled', cancelRequestedAt: requested }),
@@ -580,5 +569,52 @@ describe('newest deploy in flight', () => {
     expect(newestDeploymentFinished(done, [])).toBe(false)
     const newerRunning = [row({ id: 'c', generation: 9, status: 'running' })]
     expect(newestDeploymentFinished(done, newerRunning)).toBe(false)
+  })
+})
+
+describe('the started rule every deploy view shares', () => {
+  const groupOf = (rows: DeploymentHistoryRecord[]) => groupDeploymentsByGeneration(rows)[0]!
+
+  it('reads a delivered deploy the server has started as running', () => {
+    const group = groupOf([row({ id: 'a', status: 'sent', finishedAt: null, durationMs: null })])
+    expect(isDeploymentRunning(group)).toBe(true)
+    expect(deploymentDisplayStatus(group)).toBe('running')
+    expect(deploymentGroupTone(group)).toEqual({ label: 'Running', tone: 'pending' })
+  })
+
+  it('reads a running row as running', () => {
+    const group = groupOf([row({ id: 'a', status: 'running', startedAt: null })])
+    expect(isDeploymentRunning(group)).toBe(true)
+    expect(deploymentGroupTone(group).label).toBe('Running')
+  })
+
+  it('keeps a deploy no server has started queued', () => {
+    const group = groupOf([row({ id: 'a', status: 'acked', startedAt: null, finishedAt: null })])
+    expect(isDeploymentRunning(group)).toBe(false)
+    expect(deploymentDisplayStatus(group)).toBe('acked')
+    expect(deploymentGroupTone(group).label).toBe('Queued')
+  })
+
+  it('never calls a queued or finished deploy running for its start time', () => {
+    expect(isDeploymentRunning(groupOf([row({ id: 'a', status: 'queued' })]))).toBe(false)
+    expect(deploymentGroupTone(groupOf([row({ id: 'a', status: 'timed_out' })])).label).toBe(
+      'Timed out'
+    )
+  })
+
+  it('copes with a row from an older control plane that has no commands', () => {
+    expect(isDeploymentRunning({ status: 'sent', commands: undefined as never })).toBe(false)
+  })
+
+  it('says cancelling while a cancel is pending', () => {
+    const group = groupOf([
+      row({
+        id: 'a',
+        status: 'sent',
+        finishedAt: null,
+        cancelRequestedAt: '2026-08-21T12:00:03.000Z',
+      }),
+    ])
+    expect(deploymentGroupTone(group).label).toBe('Cancelling…')
   })
 })

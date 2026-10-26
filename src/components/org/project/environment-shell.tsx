@@ -22,7 +22,7 @@ import { useProjectContext } from '@/components/org/project/project-context'
 import { VisitSiteButton } from '@/components/org/project/visit-site-button'
 import { groupDeploymentsByGeneration, type DeploymentGroup } from '@/lib/deployment-history'
 import { managedEnvironmentTabs } from '@/lib/managed-navigation'
-import { hasNativeApp, nativeRunningKey } from '@/lib/v4/project-home'
+import { hasNativeApp, nativeRunningKeyFromHistory } from '@/lib/v4/project-home'
 import { useEnvironmentConfigViews } from '@/lib/queries/environment-cards'
 import {
   environmentSiteHostnames,
@@ -72,10 +72,14 @@ function useNow(intervalMs: number): number {
   return now
 }
 
-/** `Not started yet` is a container answer; a native app's comes from its newest deploy. */
-function nativeRunningLabel(label: string, lastDeploy: DeploymentGroup | null | undefined): string {
-  if (label !== 'Not started yet' || !lastDeploy) return label
-  const key = nativeRunningKey(lastDeploy)
+/**
+ * `Not started yet` is a container answer; a native app's comes from its
+ * deploy history, so the release an earlier deploy left serving still reads
+ * Running while a newer deploy runs or after it failed or was cancelled.
+ */
+function nativeRunningLabel(label: string, groups: readonly DeploymentGroup[] | undefined): string {
+  if (label !== 'Not started yet') return label
+  const key = nativeRunningKeyFromHistory(groups)
   if (key === 'running') return 'Running'
   if (key === 'busy') return 'Starting…'
   return label
@@ -118,14 +122,13 @@ function EnvironmentHeader() {
   const native = hasNativeApp(views[environmentId]?.effective.services)
   const now = useNow(60_000)
   const facts = useMemo(() => {
-    const lastDeploy = deploymentsQuery.isLoading
+    const groups = deploymentsQuery.isLoading
       ? undefined
-      : (groupDeploymentsByGeneration(deploymentRows ?? [])[0] ?? null)
+      : groupDeploymentsByGeneration(deploymentRows ?? [])
+    const lastDeploy = groups === undefined ? undefined : (groups[0] ?? null)
     return environmentStatusFacts({
-      // A native app has no containers: its newest deploy says whether it runs.
-      runningLabel: native
-        ? nativeRunningLabel(lifecycle.toneLabel, lastDeploy)
-        : lifecycle.toneLabel,
+      // A native app has no containers: its deploy history says whether it runs.
+      runningLabel: native ? nativeRunningLabel(lifecycle.toneLabel, groups) : lifecycle.toneLabel,
       lastDeploy,
       progressLabel: lifecycle.deployProgressLabel,
       now,

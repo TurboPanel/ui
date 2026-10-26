@@ -9,7 +9,7 @@
  */
 
 import { progressChipLabel } from '@/lib/deploy-progress'
-import type { DeploymentGroup } from '@/lib/deployment-history'
+import { deploymentDisplayStatus, type DeploymentGroup } from '@/lib/deployment-history'
 import { formatAgo, siteUrlFromHostname } from '@/lib/environment-status'
 import { hasHostDeployedContainers, isActiveContainerStatus } from '@/lib/container-status-guards'
 import type {
@@ -85,6 +85,24 @@ export function nativeRunningKey(
 }
 
 /**
+ * A native app's "running now" from its deploy history, newest first. A deploy
+ * that is still going, failed, timed out, was cancelled or rolled back leaves
+ * the release before it serving, so an app with an earlier successful deploy
+ * is running. A deploy stopped on purpose (needs attention) keeps its own
+ * word. `undefined` while the history loads.
+ */
+export function nativeRunningKeyFromHistory(
+  groups: readonly DeploymentGroup[] | undefined
+): StatusKey | undefined {
+  if (groups === undefined) return undefined
+  const [latest, ...earlier] = groups
+  const key = nativeRunningKey(latest ?? null)
+  if (latest === undefined || key === 'running') return key
+  if (latest.strategyOutcome === 'needs_attention') return key
+  return earlier.some((group) => group.status === 'succeeded') ? 'running' : key
+}
+
+/**
  * What an environment is running now, in the words of the status vocabulary.
  * Same buckets as the environment header (`environmentStatusTone`), so a card
  * and the page it opens never disagree. `undefined` while containers load.
@@ -131,7 +149,8 @@ function deployWords(group: DeploymentGroup): DeployWords {
   if (group.strategyOutcome === 'needs_attention') {
     return { status: 'failed', label: 'Needs attention' }
   }
-  switch (group.status) {
+  // A deploy a server has started reads as deploying, not queued (same rule as the history).
+  switch (deploymentDisplayStatus(group)) {
     case 'succeeded':
       return { status: 'deployed' }
     case 'failed':

@@ -20,14 +20,13 @@ import {
   cancelledDeploymentNote,
   cancelTooLateNote,
   deploymentServerLabel,
-  deploymentStatusTone,
+  deploymentGroupTone,
   deploymentStrategyLabel,
   formatDeployActor,
   formatDeployDuration,
   formatDeployTimestamp,
   formatDeployTrigger,
   groupDeploymentsByGeneration,
-  isDeploymentCancelling,
   isDeploymentInFlight,
   stalledDeploymentHint,
   type DeploymentGroup,
@@ -205,11 +204,7 @@ function DeploymentHostLog({
 }
 
 function DeploymentHeader({ group }: Readonly<{ group: DeploymentGroup }>) {
-  const tone = deploymentStatusTone(
-    group.status,
-    group.strategyOutcome,
-    isDeploymentCancelling(group)
-  )
+  const tone = deploymentGroupTone(group)
   const trigger = formatDeployTrigger(group.trigger)
   const meta = [
     trigger?.headline ?? formatDeployActor(group.actorEntityType),

@@ -62,9 +62,7 @@ function statusSeverity(status: CommandStatus): number {
 }
 
 /** Worst status wins, so a partially failed fan-out never reads as succeeded. */
-export function worstDeploymentStatus(
-  rows: readonly DeploymentHistoryRecord[],
-): CommandStatus {
+export function worstDeploymentStatus(rows: readonly DeploymentHistoryRecord[]): CommandStatus {
   let worst: CommandStatus = rows[0]?.status ?? 'queued'
   for (const row of rows) {
     if (statusSeverity(row.status) > statusSeverity(worst)) {
@@ -74,9 +72,7 @@ export function worstDeploymentStatus(
   return worst
 }
 
-function earliestTimestamp(
-  rows: readonly DeploymentHistoryRecord[],
-): string | null {
+function earliestTimestamp(rows: readonly DeploymentHistoryRecord[]): string | null {
   let earliest: string | null = null
   for (const row of rows) {
     const candidate = row.startedAt ?? row.queuedAt
@@ -88,9 +84,7 @@ function earliestTimestamp(
   return earliest
 }
 
-function fanOutDuration(
-  rows: readonly DeploymentHistoryRecord[],
-): number | null {
+function fanOutDuration(rows: readonly DeploymentHistoryRecord[]): number | null {
   let longest: number | null = null
   for (const row of rows) {
     // Any attempt still running makes the whole deploy's duration unknown.
@@ -102,7 +96,7 @@ function fanOutDuration(
 
 /** Needs attention outranks rolled back: one host stopped on purpose is what the owner must see. */
 export function worstStrategyOutcome(
-  rows: readonly DeploymentHistoryRecord[],
+  rows: readonly DeploymentHistoryRecord[]
 ): DeploymentStrategyOutcome | null {
   if (rows.some((row) => row.strategyOutcome === 'needs_attention')) {
     return 'needs_attention'
@@ -120,7 +114,7 @@ export function worstStrategyOutcome(
  * returns newest first.
  */
 export function groupDeploymentsByGeneration(
-  rows: readonly DeploymentHistoryRecord[],
+  rows: readonly DeploymentHistoryRecord[]
 ): DeploymentGroup[] {
   const order: string[] = []
   const buckets = new Map<string, DeploymentHistoryRecord[]>()
@@ -155,9 +149,7 @@ export function groupDeploymentsByGeneration(
   })
 }
 
-function earliestCancelRequest(
-  rows: readonly DeploymentHistoryRecord[],
-): string | null {
+function earliestCancelRequest(rows: readonly DeploymentHistoryRecord[]): string | null {
   let earliest: string | null = null
   for (const row of rows) {
     const requested = row.cancelRequestedAt
@@ -175,9 +167,7 @@ const FINISHED_STATUSES: ReadonlySet<CommandStatus> = new Set([
 ])
 
 /** True while at least one host of the deploy has not reached a final status. */
-export function isDeploymentInFlight(
-  commands: readonly DeploymentHistoryRecord[],
-): boolean {
+export function isDeploymentInFlight(commands: readonly DeploymentHistoryRecord[]): boolean {
   return commands.some((row) => !FINISHED_STATUSES.has(row.status))
 }
 
@@ -192,9 +182,7 @@ export function canCancelDeployment(group: DeploymentGroup): boolean {
 }
 
 /** The newest deploy that is still in flight, or null. Groups arrive newest first. */
-export function findInFlightDeployment(
-  groups: readonly DeploymentGroup[],
-): DeploymentGroup | null {
+export function findInFlightDeployment(groups: readonly DeploymentGroup[]): DeploymentGroup | null {
   return groups.find((group) => isDeploymentInFlight(group.commands)) ?? null
 }
 
@@ -219,9 +207,7 @@ export function formatDeployDuration(durationMs: number | null): string {
   if (durationMs < 1000) return `${durationMs}ms`
   const totalSeconds = Math.round(durationMs / 1000)
   if (totalSeconds < 60) {
-    return durationMs < 10_000
-      ? `${(durationMs / 1000).toFixed(1)}s`
-      : `${totalSeconds}s`
+    return durationMs < 10_000 ? `${(durationMs / 1000).toFixed(1)}s` : `${totalSeconds}s`
   }
   const minutes = Math.floor(totalSeconds / 60)
   const seconds = totalSeconds % 60
@@ -258,7 +244,7 @@ export function formatDeployActor(actorEntityType: string): string {
  * the plain actor label.
  */
 export function formatDeployTrigger(
-  trigger: DeploymentTriggerRecord | null | undefined,
+  trigger: DeploymentTriggerRecord | null | undefined
 ): Readonly<{ headline: string; detail: string | null }> | null {
   if (!trigger) return null
   const branch = trigger.branch?.trim()
@@ -272,11 +258,46 @@ export type DeploymentStatusTone = Readonly<{
   tone: 'success' | 'failed' | 'pending'
 }>
 
+/** Sent to the server but not finished: the server may already be running it. */
+const DELIVERED_STATUSES: ReadonlySet<CommandStatus> = new Set(['sent', 'acked'])
+
+/**
+ * Is the deploy running on a server? A `running` row says so; a delivered row
+ * whose server already reported starting the work (`startedAt`) is running
+ * too, since the command status itself stays `sent` / `acked` until it ends.
+ * Every view of a deploy (the header, the history, the overview rows, the
+ * cards) uses this one rule, so none of them reads "Queued" for a deploy that
+ * is running.
+ */
+export function isDeploymentRunning(group: Pick<DeploymentGroup, 'status' | 'commands'>): boolean {
+  if (group.status === 'running') return true
+  if (!DELIVERED_STATUSES.has(group.status) || !Array.isArray(group.commands)) {
+    return false
+  }
+  return group.commands.some((command) => Boolean(command.startedAt))
+}
+
+/** The status a deploy is shown with: `running` once a server has started it. */
+export function deploymentDisplayStatus(
+  group: Pick<DeploymentGroup, 'status' | 'commands'>
+): CommandStatus {
+  return isDeploymentRunning(group) ? 'running' : group.status
+}
+
+/** Status label + tone of a whole deploy, by the started rule above. */
+export function deploymentGroupTone(group: DeploymentGroup): DeploymentStatusTone {
+  return deploymentStatusTone(
+    deploymentDisplayStatus(group),
+    group.strategyOutcome,
+    isDeploymentCancelling(group)
+  )
+}
+
 /** Status label + tone. Callers pair the tone with the label — never colour alone. */
 export function deploymentStatusTone(
   status: CommandStatus,
   strategyOutcome: DeploymentStrategyOutcome | null = null,
-  cancelling = false,
+  cancelling = false
 ): DeploymentStatusTone {
   if (cancelling) return { label: 'Cancelling…', tone: 'pending' }
   if (strategyOutcome === 'rolled_back') {
@@ -295,7 +316,7 @@ export function deploymentStatusTone(
 
 /** `Sequential` / `In place` for the engine a deploy ran; null for older rows. */
 export function deploymentStrategyLabel(
-  strategy: DeploymentStrategy | null | undefined,
+  strategy: DeploymentStrategy | null | undefined
 ): string | null {
   if (strategy === 'sequential') return 'Sequential'
   if (strategy === 'inplace') return 'In place'
@@ -328,7 +349,7 @@ export function stalledDeploymentHint(errorCode: string | null): string | null {
 
 /** True while the newest deploy is still going (rows newest first, as the API sends them). */
 export function isNewestDeploymentInFlight(
-  rows: readonly DeploymentHistoryRecord[] | undefined,
+  rows: readonly DeploymentHistoryRecord[] | undefined
 ): boolean {
   const newest = groupDeploymentsByGeneration(rows ?? [])[0]
   return newest ? isDeploymentInFlight(newest.commands) : false
@@ -341,7 +362,7 @@ export function isNewestDeploymentInFlight(
  */
 export function newestDeploymentFinished(
   before: readonly DeploymentHistoryRecord[] | undefined,
-  after: readonly DeploymentHistoryRecord[] | undefined,
+  after: readonly DeploymentHistoryRecord[] | undefined
 ): boolean {
   if (before === undefined || isNewestDeploymentInFlight(after)) return false
   if (isNewestDeploymentInFlight(before)) return true

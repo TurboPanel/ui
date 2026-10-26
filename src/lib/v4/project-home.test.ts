@@ -25,6 +25,7 @@ import {
   miniMapColumns,
   nativeDeployKey,
   nativeRunningKey,
+  nativeRunningKeyFromHistory,
   newEnvironmentBody,
   reachNames,
   runningStatusKey,
@@ -189,6 +190,40 @@ describe('native apps (no container rows)', () => {
     expect(nativeRunningKey(group({ status: 'running' }))).toBe('busy')
     expect(nativeRunningKey(group({ status: 'queued' }))).toBe('busy')
     expect(nativeRunningKey(group({ status: 'failed' }))).toBe('failed')
+  })
+  it('reads a delivered deploy the server has started as deploying, not queued', () => {
+    const started = group({
+      status: 'sent',
+      commands: [{ status: 'sent', startedAt: '2026-10-05T11:57:00Z' }] as never,
+    })
+    expect(nativeDeployKey(started)).toBe('deploying')
+    expect(nativeDeployKey(group({ status: 'sent' }))).toBe('queued')
+  })
+  it('keeps a native app running while the release an earlier deploy left still serves', () => {
+    const done = group({ id: 'old', status: 'succeeded' })
+    expect(nativeRunningKeyFromHistory(undefined)).toBeUndefined()
+    expect(nativeRunningKeyFromHistory([])).toBe('never')
+    expect(nativeRunningKeyFromHistory([done])).toBe('running')
+    expect(nativeRunningKeyFromHistory([group({ status: 'timed_out' }), done])).toBe('running')
+    expect(nativeRunningKeyFromHistory([group({ status: 'cancelled' }), done])).toBe('running')
+    expect(nativeRunningKeyFromHistory([group({ status: 'running' }), done])).toBe('running')
+    expect(
+      nativeRunningKeyFromHistory([
+        group({ status: 'failed', strategyOutcome: 'rolled_back' }),
+        done,
+      ])
+    ).toBe('running')
+  })
+  it('keeps the deploy word when no earlier deploy succeeded or it was stopped on purpose', () => {
+    const done = group({ id: 'old', status: 'succeeded' })
+    expect(nativeRunningKeyFromHistory([group({ status: 'queued' })])).toBe('busy')
+    expect(nativeRunningKeyFromHistory([group({ status: 'timed_out' })])).toBe('failed')
+    expect(
+      nativeRunningKeyFromHistory([
+        group({ status: 'failed', strategyOutcome: 'needs_attention' }),
+        done,
+      ])
+    ).toBe('failed')
   })
   it('shows a succeeded deploy as running, in the header word, not never deployed', () => {
     expect(runningStatusKey([], { latest: group({ status: 'succeeded' }) })).toBe('running')
