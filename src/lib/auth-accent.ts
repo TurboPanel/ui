@@ -36,9 +36,7 @@ export function readStoredControlPlaneRuntime(): ControlPlaneRuntime | undefined
  * Remember the runtime for this browser tab (web), so a refresh knows it
  * before `/status` answers. No-ops when the runtime is unknown.
  */
-export function rememberControlPlaneRuntime(
-  runtime: ControlPlaneRuntime | undefined,
-): void {
+export function rememberControlPlaneRuntime(runtime: ControlPlaneRuntime | undefined): void {
   if (Platform.OS !== 'web') return
   if (runtime !== 'deno' && runtime !== 'workers') return
   try {
@@ -55,9 +53,7 @@ export function rememberControlPlaneRuntime(
  * variables. Both runtimes use the brand blue; only the label differs. Green
  * is reserved for "running / live".
  */
-export function authAccentForRuntime(
-  runtime: ControlPlaneRuntime | undefined,
-): AuthAccentTheme {
+export function authAccentForRuntime(runtime: ControlPlaneRuntime | undefined): AuthAccentTheme {
   return {
     accent: navyPalette.accent,
     onAccent: navyPalette.accentInk,
@@ -75,19 +71,21 @@ export function authSpinnerColor(): string {
  * Prefer explicit `runtime` from `GET /api/client/v1/status`.
  * Fallback: install fields are Deno-only; bare payloads default to Workers.
  */
-export function resolveControlPlaneRuntime(status: {
-  runtime?: ControlPlaneRuntime
-  needsInstall?: boolean
-  isInstallMode?: boolean
-} | null | undefined): ControlPlaneRuntime | undefined {
+export function resolveControlPlaneRuntime(
+  status:
+    | {
+        runtime?: ControlPlaneRuntime
+        needsInstall?: boolean
+        isInstallMode?: boolean
+      }
+    | null
+    | undefined
+): ControlPlaneRuntime | undefined {
   if (status?.runtime === 'deno' || status?.runtime === 'workers') {
     return status.runtime
   }
   // Deno self-hosted always includes these keys; Workers omits them.
-  if (
-    status?.needsInstall !== undefined ||
-    status?.isInstallMode !== undefined
-  ) {
+  if (status?.needsInstall !== undefined || status?.isInstallMode !== undefined) {
     return 'deno'
   }
   if (status != null) {

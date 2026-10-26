@@ -8,8 +8,7 @@
  * during tests, where neither global is guaranteed.
  */
 
-const ALPHABET =
-  'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'
+const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'
 
 const DIGITS = new Map<string, number>()
 for (let index = 0; index < ALPHABET.length; index += 1) {

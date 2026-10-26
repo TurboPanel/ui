@@ -2,10 +2,12 @@ import { StyleSheet, Text, View } from 'react-native'
 import { panelStyles } from '@/components/ui/panel-styles'
 import type { DeletePlan } from '@/lib/instance-api'
 import {
+  certificateLine,
   deletePlanBlockerLines,
   folderLabel,
   groupFoldersByServer,
   hostingAccountKeepReason,
+  planCertificates,
 } from '@/lib/delete-plan'
 import { colors, spacing } from '@/lib/theme'
 
@@ -35,6 +37,7 @@ function Section({ title, children }: Readonly<{ title: string; children: React.
 export function DeletePlanList({ plan }: Readonly<{ plan: DeletePlan }>) {
   const groups = groupFoldersByServer(plan)
   const blockers = deletePlanBlockerLines(plan)
+  const certificates = planCertificates(plan)
   return (
     <View style={styles.list}>
       {blockers.length > 0 ? (
@@ -91,6 +94,15 @@ export function DeletePlanList({ plan }: Readonly<{ plan: DeletePlan }>) {
               {row.action === 'remove'
                 ? 'removed with its home folder once its folders are gone.'
                 : hostingAccountKeepReason(row.usedBy)}
+            </Text>
+          ))}
+        </Section>
+      ) : null}
+      {certificates.length > 0 ? (
+        <Section title="Let's Encrypt certificates">
+          {certificates.map((row) => (
+            <Text key={row.id} style={styles.line}>
+              {certificateLine(row)}
             </Text>
           ))}
         </Section>

@@ -113,12 +113,15 @@ services:
       - TZ=UTC  # Set the timezone
 `
     const doc = yamlToComposeDocument(source)
-    expect(doc.presentation.comments['services.uptime-kuma.ports[0]']?.inline)
-      .toContain('This maps the container port')
-    expect(doc.presentation.comments['services.uptime-kuma.volumes[0]']?.inline)
-      .toContain('Configuring persistent storage')
-    expect(doc.presentation.comments['services.uptime-kuma.environment[0]']?.inline)
-      .toContain('Set the timezone')
+    expect(doc.presentation.comments['services.uptime-kuma.ports[0]']?.inline).toContain(
+      'This maps the container port'
+    )
+    expect(doc.presentation.comments['services.uptime-kuma.volumes[0]']?.inline).toContain(
+      'Configuring persistent storage'
+    )
+    expect(doc.presentation.comments['services.uptime-kuma.environment[0]']?.inline).toContain(
+      'Set the timezone'
+    )
 
     const roundTrip = composeDocumentToYaml(doc)
     expect(roundTrip).toContain('# This maps the container port')
@@ -167,9 +170,7 @@ x-turbopanel:
     expect(yaml).toContain(pin)
     expect(yaml.lastIndexOf('x-turbopanel:')).toBeGreaterThan(yaml.indexOf('services:'))
     const runtime = composeDocumentToRuntimeYaml(applyComposePlacement(source, pin))
-    expect(runtime.lastIndexOf('x-turbopanel:')).toBeGreaterThan(
-      runtime.indexOf('services:'),
-    )
+    expect(runtime.lastIndexOf('x-turbopanel:')).toBeGreaterThan(runtime.indexOf('services:'))
   })
 
   it('composePreviewMergedYaml annotates the pin after stripping a stale embed', () => {
@@ -184,7 +185,7 @@ x-turbopanel:
     server_id: ${stalePin}
 `),
       emptyComposeDocument(),
-      livePin,
+      livePin
     )
     expect(yaml).toContain(livePin)
     expect(yaml).not.toContain(stalePin)
@@ -213,9 +214,7 @@ x-turbopanel:
     expect(yaml).toContain('nginx:')
     expect(yaml).toContain('site:')
     // Full document still retained extensions before hide; managed strip is display-only.
-    expect(
-      (source.data.services as Record<string, unknown>).site,
-    ).toMatchObject({
+    expect((source.data.services as Record<string, unknown>).site).toMatchObject({
       'x-turbopanel': { serviceKind: 'site', engine: 'nginx' },
     })
   })
@@ -250,10 +249,9 @@ x-turbopanel:
     expect(normalized.presentation.editorView).toBeUndefined()
     expect(normalized.data['x-turbopanel']).toEqual({ view: 'visual' })
     expect(
-      composeDocumentToYaml(hideComposeTurbopanelExtensions(normalized).document),
+      composeDocumentToYaml(hideComposeTurbopanelExtensions(normalized).document)
     ).not.toContain('x-turbopanel')
   })
-
 })
 
 describe('blank compose drafts', () => {
@@ -313,10 +311,7 @@ describe('mergeComposeOverlay Compose Spec parity', () => {
     const overlay = docFrom({
       services: {
         web: {
-          volumes: [
-            'cache:/var/lib/data',
-            { type: 'volume', source: 'logs', target: '/var/log' },
-          ],
+          volumes: ['cache:/var/lib/data', { type: 'volume', source: 'logs', target: '/var/log' }],
         },
       },
     })
@@ -339,11 +334,7 @@ describe('mergeComposeOverlay Compose Spec parity', () => {
     const overlay = docFrom({
       services: {
         web: {
-          secrets: [
-            { source: 'db_password' },
-            { source: 'token', target: '/run/token' },
-            'extra',
-          ],
+          secrets: [{ source: 'db_password' }, { source: 'token', target: '/run/token' }, 'extra'],
           configs: [{ source: 'app.conf', mode: 0o444 }],
         },
       },
@@ -411,11 +402,7 @@ describe('mergeComposeOverlay Compose Spec parity', () => {
       },
     })
     const web = servicesOf(mergeComposeOverlay(base, overlay)).web
-    expect(web.labels).toEqual([
-      'com.example.foo=z',
-      'com.example.bar=b',
-      'com.example.baz=c',
-    ])
+    expect(web.labels).toEqual(['com.example.foo=z', 'com.example.bar=b', 'com.example.baz=c'])
     expect(web.environment).toEqual(['FOO=2', 'BAR', 'BAZ=3'])
   })
 

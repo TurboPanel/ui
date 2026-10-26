@@ -20,9 +20,7 @@ describe('inferSiteCidrFromAddress', () => {
 
   it('aligns IPv6 hosts to a /64 LAN', () => {
     expect(inferSiteCidrFromAddress('fd00::1')).toBe('fd00::/64')
-    expect(inferSiteCidrFromAddress('fd12:3456:789a:1:2::3')).toBe(
-      'fd12:3456:789a:1::/64',
-    )
+    expect(inferSiteCidrFromAddress('fd12:3456:789a:1:2::3')).toBe('fd12:3456:789a:1::/64')
   })
 
   it('rejects invalid addresses', () => {
@@ -117,19 +115,13 @@ describe('parseCidr and formatCidr', () => {
 
   it('formats IPv6 with zero runs at start, middle, and end', () => {
     expect(formatCidr(parseCidr('0:0:0:0:0:0:0:1/128')!)).toBe('::1/128')
-    expect(formatCidr(parseCidr('2001:db8:0:0:1:0:0:1/128')!)).toBe(
-      '2001:db8::1:0:0:1/128',
-    )
-    expect(formatCidr(parseCidr('2001:db8:1:2:3:4:0:0/128')!)).toBe(
-      '2001:db8:1:2:3:4::/128',
-    )
+    expect(formatCidr(parseCidr('2001:db8:0:0:1:0:0:1/128')!)).toBe('2001:db8::1:0:0:1/128')
+    expect(formatCidr(parseCidr('2001:db8:1:2:3:4:0:0/128')!)).toBe('2001:db8:1:2:3:4::/128')
     expect(formatCidr(parseCidr('0:0:0:0:0:0:0:0/128')!)).toBe('::/128')
   })
 
   it('leaves IPv6 uncompressed when there is no run of two or more zeros', () => {
-    expect(formatCidr(parseCidr('2001:db8:1:2:3:4:5:6/128')!)).toBe(
-      '2001:db8:1:2:3:4:5:6/128',
-    )
+    expect(formatCidr(parseCidr('2001:db8:1:2:3:4:5:6/128')!)).toBe('2001:db8:1:2:3:4:5:6/128')
   })
 
   it('parses a /0 prefix and a trailing-compression address', () => {

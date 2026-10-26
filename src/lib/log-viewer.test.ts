@@ -146,6 +146,29 @@ describe('buildLogSteps', () => {
     expect(steps[2]?.durationMs).toBeNull()
   })
 
+  it('files a Node app deploy under its plan steps, and a failed check never shows a switch', () => {
+    const lines = [
+      line('systemctl restart turbopanel-app-a-new.service', 'start-release'),
+      err('web: the new release did not answer on 127.0.0.1:41234 within 30s', 'health'),
+    ]
+    const steps = buildLogSteps(
+      lines,
+      [
+        planStep('start', 'done', 'Start the new release'),
+        planStep('health', 'failed', 'Check it answers'),
+        planStep('switch', 'skipped', 'Switch traffic'),
+        planStep('stop-old', 'skipped', 'Stop the old release'),
+      ],
+      'failed'
+    )
+    expect(steps.map((step) => [step.label, step.status])).toEqual([
+      ['Start the new release', 'ok'],
+      ['Check it answers', 'failed'],
+      ['Switch traffic', 'skipped'],
+      ['Stop the old release', 'skipped'],
+    ])
+  })
+
   it('marks only the last group of a repeated failed phase', () => {
     const lines = [
       line('fetch one', 'fetch'),

@@ -128,6 +128,7 @@ import {
   type HostingServiceContext,
 } from '@/lib/compose'
 import {
+  isAdoptedComposeHosting,
   isComposeOwnedHosting,
   readHostingComposeRoute,
 } from '@/lib/hosting-compose-owner'
@@ -141,11 +142,15 @@ import {
   EMPTY_COMPOSE_HOSTNAME_MESSAGE,
   hostingActionErrorMessage,
   missingCertificateMessage,
+  panelCertificateHint,
+  PENDING_REMOVAL_CERTIFICATE_HINT,
+  pendingRemovalNote,
   resolveCertificateRef,
   SERVICE_NOT_SAVED_MESSAGE,
   SHARED_FILE_HOSTNAME_MESSAGE,
 } from '@/lib/hosting-plain-words'
 import {
+  composeRowsAwaitingRemoval,
   configuredHostingState,
   findPanelRowForRoute,
   moveComposeHostnameToPanel,
@@ -389,6 +394,12 @@ function buildHostingOptions(editor: HostingEditorState): Record<string, unknown
  */
 type HostingRowSource =
   | { kind: 'panel' }
+  /**
+   * A hosting the last deploy made from the file whose entry has left it: the
+   * next deploy removes it (or hands it back to this screen). Read-only until
+   * then, with a note saying so.
+   */
+  | { kind: 'removing'; handedBack: boolean }
   | {
     kind: 'compose'
     /** {@link hostingEntryKey} of the declaration this row renders. */
@@ -461,7 +472,13 @@ function composeEditorHrefFor(
 
 /** True when this surface can actually author the row's declaration. */
 function isEditableRow(row: HostingPanelRowDescriptor): boolean {
-  return row.source.kind === 'panel' || row.source.overlayIndex !== null
+  if (row.source.kind === 'panel') return true
+  return row.source.kind === 'compose' && row.source.overlayIndex !== null
+}
+
+/** The note on a row waiting for the next deploy to remove it, or null. */
+function removalNoteFor(row: HostingPanelRowDescriptor): string | null {
+  return row.source.kind === 'removing' ? pendingRemovalNote(row.source.handedBack) : null
 }
 
 /** The compose-owned `hosting` row for one declared route, when deploy made it. */
@@ -564,6 +581,21 @@ function panelRowDescriptor(
   }
 }
 
+/** A row made from the file whose entry has left it, keyed apart from the rest. */
+function removingRowDescriptor(
+  ctx: ServiceRowContext,
+  row: HostingRecord,
+): HostingPanelRowDescriptor {
+  return {
+    editorKey: `${ctx.serviceKey}::removing::${row.id}`,
+    composeServiceName: ctx.composeServiceName,
+    serviceContext: ctx.serviceContext,
+    source: { kind: 'removing', handedBack: isAdoptedComposeHosting(row.metadata) },
+    hostingId: row.id,
+    seed: readHostingEditor([row]),
+  }
+}
+
 /**
  * One configured entry. With no row made from the file, a panel row on the
  * same route is the one the next deploy would adopt (a move that could not
@@ -601,13 +633,19 @@ function serviceRowDescriptors(
   overlayCompose: ComposeDocument,
 ): HostingPanelRowDescriptor[] {
   const entries = ctx.serviceContext.composeHostingEntries
+  // Rows made from the file whose entry is gone wait for the next deploy.
+  const removing = composeRowsAwaitingRemoval(ctx.serviceRows, entries).map((row) =>
+    removingRowDescriptor(ctx, row),
+  )
   if (entries.length === 0) {
     // No declaration: the historical single-row panel form, still saved
-    // straight to /hostings. Compose-owned rows can only exist alongside a
-    // declaration, so anything here is the operator's own.
-    const panelRow =
-      ctx.serviceRows.find((row) => !isComposeOwnedHosting(row.metadata)) ?? ctx.serviceRows[0]
-    return [panelRowDescriptor(ctx, ctx.serviceKey, panelRow)]
+    // straight to /hostings. A row made from the file is only here when its
+    // entry was removed, and shows as such rather than as an editable form;
+    // the empty form stays next to it so a new hostname can still be added.
+    // A just-removed hostname comes first, so its note is what shows.
+    const panelRow = ctx.serviceRows.find((row) => !isComposeOwnedHosting(row.metadata))
+    const panel = panelRowDescriptor(ctx, ctx.serviceKey, panelRow)
+    return panelRow ? [panel, ...removing] : [...removing, panel]
   }
   const overlayEntries = readComposeHostingEntries(overlayCompose, ctx.composeServiceName)
   return [
@@ -616,14 +654,15 @@ function serviceRowDescriptors(
     ...panelRowsBesideDeclarations(ctx.serviceRows, entries).map((row) =>
       panelRowDescriptor(ctx, `${ctx.serviceKey}::panel::${row.id}`, row),
     ),
+    ...removing,
   ]
 }
 
 /**
  * One descriptor per rendered row: every declared compose route on a service,
- * or the single panel row when compose declares none.
+ * or the single panel row when compose declares none. Exported for its tests.
  */
-function buildHostingPanelRows(params: {
+export function buildHostingPanelRows(params: {
   serviceNames: readonly string[]
   services: readonly ServiceRecord[]
   mergedCompose: ComposeDocument
@@ -831,7 +870,7 @@ function HostingWebEnvFields({
       <Text style={styles.fieldLabel}>PHP</Text>
       <Text style={panelStyles.muted}>
         PHP version, limits, and extensions are configured on the service
-        itself, under Services — one PHP process pool belongs to one service,
+        itself, under Services — one PHP worker pool belongs to one service,
         not to each hostname pointed at it.
       </Text>
     </>
@@ -1018,9 +1057,20 @@ function HostingWwwField({
   )
 }
 
+/** The sentence under Certificate: who sets it, and how to get Let’s Encrypt where it applies. */
+function tlsPickerHint(
+  composeOwned: boolean,
+  awaitingRemoval: boolean,
+  letsEncryptBoxShown: boolean,
+): string {
+  if (awaitingRemoval) return PENDING_REMOVAL_CERTIFICATE_HINT
+  return composeOwned ? COMPOSE_CERTIFICATE_HINT : panelCertificateHint(letsEncryptBoxShown)
+}
+
 function HostingTlsPicker({
   isHttp,
   composeOwned,
+  awaitingRemoval,
   editor,
   covering,
   pinnedGap,
@@ -1029,6 +1079,8 @@ function HostingTlsPicker({
 }: Readonly<{
   isHttp: boolean
   composeOwned: boolean
+  /** Waiting for the next deploy to remove it: no Save, so no Let’s Encrypt box. */
+  awaitingRemoval: boolean
   editor: HostingEditorState
   covering: TlsRecord[]
   /** A pinned certificate that no longer covers the names: still shown, with a note. */
@@ -1039,13 +1091,19 @@ function HostingTlsPicker({
   if (!isHttp) return null
   const chips = pinnedGap ? [...covering, pinnedGap.row] : covering
   const picked = resolveCertificateRef(editor.tlsId ?? undefined, chips)
+  const letsEncryptBoxShown =
+    !awaitingRemoval &&
+    offersLetsEncrypt({
+      composeOwned,
+      protocol: editor.protocol,
+      tlsId: editor.tlsId,
+      hostnameCount: parseHostnameList(editor.hostnames).length,
+    })
   return (
     <>
       <Text style={styles.tlsLabel}>Certificate</Text>
       <Text style={styles.tlsHint}>
-        {composeOwned
-          ? COMPOSE_CERTIFICATE_HINT
-          : 'Until a real certificate is in place the site uses a basic self-signed one. Pick a library certificate to use an upload or an org self-signed one, or tick the box below to get a free Let\u2019s Encrypt certificate when you save.'}
+        {tlsPickerHint(composeOwned, awaitingRemoval, letsEncryptBoxShown)}
       </Text>
       <SegmentedControl
         accessibilityLabel="Certificate"
@@ -1067,19 +1125,14 @@ function HostingTlsPicker({
         })}`}
       </Text>
       <HostingHintText hint={pinnedGap?.note ?? null} />
-      {!offersLetsEncrypt({
-        composeOwned,
-        protocol: editor.protocol,
-        tlsId: editor.tlsId,
-        hostnameCount: parseHostnameList(editor.hostnames).length,
-      }) ? null : (
+      {letsEncryptBoxShown ? (
         <Checkbox
           label="Get a free Let’s Encrypt certificate when I save"
           checked={editor.getLetsEncrypt}
           disabled={locked}
           onPress={() => onChange({ getLetsEncrypt: !editor.getLetsEncrypt })}
         />
-      )}
+      ) : null}
     </>
   )
 }
@@ -1330,6 +1383,50 @@ function HostingSaveControls({
   )
 }
 
+/**
+ * What a hosting row lets someone change. Compose authors the route, never the
+ * proxy toggles, the web env, or a raw tcp/udp publish — those stay on the row
+ * and survive every reconcile, so they are shown as stored rather than hidden
+ * or offered as a doomed edit. A row waiting for the next deploy to remove it
+ * changes nothing.
+ */
+function hostingRowLocks(
+  input: Readonly<{
+    disabled: boolean
+    awaitingRemoval: boolean
+    composeOwned: boolean
+    composeEditable: boolean
+  }>,
+): { frozen: boolean; locked: boolean; panelFieldsLocked: boolean; canSave: boolean } {
+  // Nothing on the row can change, the certificate actions included.
+  const frozen = input.disabled || input.awaitingRemoval
+  return {
+    frozen,
+    locked: frozen || (input.composeOwned && !input.composeEditable),
+    panelFieldsLocked: frozen || input.composeOwned,
+    canSave: input.composeEditable && !input.awaitingRemoval,
+  }
+}
+
+/** Hostname-scoped variables; left out on a row waiting to be removed. */
+function HostingVariablesSection({
+  orgId,
+  hostingId,
+  hidden,
+}: Readonly<{ orgId: string; hostingId: string | null; hidden: boolean }>) {
+  if (hidden) return null
+  return (
+    <>
+      <Text style={styles.tlsLabel}>Hosting variables</Text>
+      <Text style={styles.tlsHint}>
+        Hostname-scoped overrides for this service. Applied at deploy after
+        service scope (compose injects at the service level).
+      </Text>
+      <HostingVariablesBlock orgId={orgId} hostingId={hostingId} />
+    </>
+  )
+}
+
 /** Exported for its tests. */
 export function HostingPanelRow({
   orgId,
@@ -1345,6 +1442,7 @@ export function HostingPanelRow({
   onRemoveHostname,
   onManageHere,
   composeEditable = true,
+  removalNote = null,
   focused = false,
   expanded,
   onToggleExpanded,
@@ -1384,6 +1482,11 @@ export function HostingPanelRow({
    * environment overlay, so saving here would append a second declaration.
    */
   composeEditable?: boolean
+  /**
+   * Set on a hosting whose entry has left the configuration file: what the
+   * next deploy does with it. The row is then read-only and has no Save.
+   */
+  removalNote?: string | null
   /** Highlight when opened from a `/networking/:hostingId` deep link. */
   focused?: boolean
   /** Full editor visible; collapsed rows show the one-line summary only. */
@@ -1412,11 +1515,13 @@ export function HostingPanelRow({
   // Named per kind, so the row says which host process already owns the port
   // rather than only that the field is gone.
   const targetPortHint = hostingTargetPortHint(serviceContext) ?? ''
-  // Compose authors the route, never the proxy toggles, the web env, or a raw
-  // tcp/udp publish — those stay on the row and survive every reconcile, so
-  // they are shown as stored rather than hidden or offered as a doomed edit.
-  const locked = disabled || (composeOwned && !composeEditable)
-  const panelFieldsLocked = disabled || composeOwned
+  const awaitingRemoval = removalNote !== null
+  const { frozen, locked, panelFieldsLocked, canSave } = hostingRowLocks({
+    disabled,
+    awaitingRemoval,
+    composeOwned,
+    composeEditable,
+  })
   const isHttp = composeOwned || editor.protocol === 'http'
   const kindLabel = hostingServiceKindLabel(serviceContext)
   const dockerBridgeHint = hostingDockerBridgeHint(serviceContext)
@@ -1476,12 +1581,13 @@ export function HostingPanelRow({
           onManageHere={onManageHere}
         />
       ) : null}
+      <HostingHintText hint={removalNote} />
       <HostingHintText hint={dockerBridgeHint} />
 
       <HostingProtocolPicker
         composeOwned={composeOwned}
         editor={editor}
-        disabled={disabled}
+        disabled={locked}
         onChange={onChange}
       />
 
@@ -1504,6 +1610,7 @@ export function HostingPanelRow({
       <HostingTlsPicker
         isHttp={isHttp}
         composeOwned={composeOwned}
+        awaitingRemoval={awaitingRemoval}
         editor={editor}
         covering={covering}
         pinnedGap={pinnedGap}
@@ -1516,7 +1623,7 @@ export function HostingPanelRow({
           orgId={orgId}
           hostingId={hostingId}
           composeOwned={composeOwned}
-          disabled={disabled}
+          disabled={frozen}
         />
       ) : null}
 
@@ -1541,7 +1648,7 @@ export function HostingPanelRow({
         onChange={onChange}
       />
 
-      {composeEditable ? (
+      {canSave ? (
         <HostingSaveControls
           asksLetsEncrypt={!composeOwned && wantsLetsEncrypt(editor)}
           saving={saving}
@@ -1552,12 +1659,7 @@ export function HostingPanelRow({
         />
       ) : null}
 
-      <Text style={styles.tlsLabel}>Hosting variables</Text>
-      <Text style={styles.tlsHint}>
-        Hostname-scoped overrides for this service. Applied at deploy after
-        service scope (compose injects at the service level).
-      </Text>
-      <HostingVariablesBlock orgId={orgId} hostingId={hostingId} />
+      <HostingVariablesSection orgId={orgId} hostingId={hostingId} hidden={awaitingRemoval} />
     </View>
   )
 }
@@ -2068,6 +2170,7 @@ function EnvironmentHostingSectionPanel({
                 onRemoveHostname={() => hostingRowActions.onRemoveHostname(row)}
                 onManageHere={() => hostingRowActions.onManageHere(row)}
                 composeEditable={isEditableRow(row)}
+                removalNote={removalNoteFor(row)}
                 focused={focused}
                 expanded={expanded}
                 onToggleExpanded={() =>
@@ -3070,6 +3173,8 @@ export function EnvironmentDetailBody({
         await savePanelHostingRow(row)
         return
       }
+      // Nothing to save until the next deploy has removed it.
+      if (row.source.kind === 'removing') return
       if (row.source.overlayIndex === null) {
         setRowError(row.editorKey, { field: 'save', message: SHARED_FILE_HOSTNAME_MESSAGE })
         return

@@ -21,7 +21,7 @@ import {
 function event(
   sequence: number,
   message: string,
-  extra?: Partial<{ stream: string; phase: string; timestamp: string }>,
+  extra?: Partial<{ stream: string; phase: string; timestamp: string }>
 ): string {
   return `${JSON.stringify({
     commandId: 'cmd-1',
@@ -55,7 +55,7 @@ describe('stripAnsi', () => {
 describe('parseCommandLogChunk', () => {
   it('parses NDJSON events into transcript rows', () => {
     const rows = parseCommandLogChunk(
-      event(1, 'step 1') + event(2, 'boom', { stream: 'stderr', phase: 'pull' }),
+      event(1, 'step 1') + event(2, 'boom', { stream: 'stderr', phase: 'pull' })
     )
     expect(rows).toHaveLength(2)
     expect(rows[0]).toMatchObject({ seq: 1, stream: 'stdout', phase: 'build' })
@@ -68,10 +68,7 @@ describe('parseCommandLogChunk', () => {
   })
 
   it('falls back to a stdout row for plain text (truncation marker)', () => {
-    const rows = parseCommandLogChunk(
-      '[turbopanel] execution log truncated\n',
-      40,
-    )
+    const rows = parseCommandLogChunk('[turbopanel] execution log truncated\n', 40)
     expect(rows).toEqual([
       {
         seq: 41,
@@ -128,7 +125,7 @@ describe('parseCommandLogChunk', () => {
         stream: 'stdout',
         phase: '',
         message: 'ready',
-      })}\n`,
+      })}\n`
     )
     expect(rows[0]).toMatchObject({
       seq: 1,
@@ -151,14 +148,8 @@ describe('parseCommandLogChunk', () => {
   })
 
   it('skips empty lines between events and degrades broken JSON objects', () => {
-    const rows = parseCommandLogChunk(
-      event(1, 'first') + '\n' + '{not-json}\n' + event(3, 'third'),
-    )
-    expect(rows.map((row) => row.message)).toEqual([
-      'first',
-      '{not-json}',
-      'third',
-    ])
+    const rows = parseCommandLogChunk(event(1, 'first') + '\n' + '{not-json}\n' + event(3, 'third'))
+    expect(rows.map((row) => row.message)).toEqual(['first', '{not-json}', 'third'])
     expect(rows[1]).toMatchObject({
       stream: 'stdout',
       phase: null,
@@ -205,10 +196,7 @@ describe('parseCommandLogChunk', () => {
     ['{"message":"ok","sequence":1.5}\n', '{"message":"ok","sequence":1.5}'],
     ['{"message":"ok","sequence":"1"}\n', '{"message":"ok","sequence":"1"}'],
     ['{"message":"ok","sequence":null}\n', '{"message":"ok","sequence":null}'],
-    [
-      '{"message":["ok"],"sequence":1}\n',
-      '{"message":["ok"],"sequence":1}',
-    ],
+    ['{"message":["ok"],"sequence":1}\n', '{"message":["ok"],"sequence":1}'],
   ])('falls back to plain text for %s', (chunk, message) => {
     const rows = parseCommandLogChunk(chunk, 0)
     const row = rows[0]
@@ -223,11 +211,9 @@ describe('parseCommandLogChunk', () => {
   })
 
   it('treats a missing or unknown stream as stdout', () => {
-    const missing = parseCommandLogChunk(
-      `${JSON.stringify({ sequence: 1, message: 'ok' })}\n`,
-    )
+    const missing = parseCommandLogChunk(`${JSON.stringify({ sequence: 1, message: 'ok' })}\n`)
     const unknown = parseCommandLogChunk(
-      `${JSON.stringify({ sequence: 1, message: 'ok', stream: 'STDOUT' })}\n`,
+      `${JSON.stringify({ sequence: 1, message: 'ok', stream: 'STDOUT' })}\n`
     )
     expect(missing[0]?.stream).toBe('stdout')
     expect(unknown[0]?.stream).toBe('stdout')
@@ -240,7 +226,7 @@ describe('parseCommandLogChunk', () => {
         message: 'ok',
         timestamp: 12,
         phase: 3,
-      })}\n`,
+      })}\n`
     )
     const row = rows[0]
     if (!row) throw new TypeError('expected a parsed event row')
@@ -249,9 +235,7 @@ describe('parseCommandLogChunk', () => {
   })
 
   it('accepts sequence 0 and an empty message', () => {
-    const rows = parseCommandLogChunk(
-      `${JSON.stringify({ sequence: 0, message: '' })}\n`,
-    )
+    const rows = parseCommandLogChunk(`${JSON.stringify({ sequence: 0, message: '' })}\n`)
     const row = rows[0]
     if (!row) throw new TypeError('expected a parsed empty-message row')
     expect(row.seq).toBe(0)
@@ -269,26 +253,17 @@ describe('mergeTranscriptLines', () => {
   })
 
   it('appends new rows in sequence order', () => {
-    const merged = mergeTranscriptLines(
-      [line(1, 'a'), line(2, 'b')],
-      [line(3, 'c')],
-    )
+    const merged = mergeTranscriptLines([line(1, 'a'), line(2, 'b')], [line(3, 'c')])
     expect(merged.map((row) => row.message)).toEqual(['a', 'b', 'c'])
   })
 
   it('collapses a replayed chunk instead of duplicating it', () => {
-    const merged = mergeTranscriptLines(
-      [line(1, 'a'), line(2, 'b')],
-      [line(2, 'b'), line(3, 'c')],
-    )
+    const merged = mergeTranscriptLines([line(1, 'a'), line(2, 'b')], [line(2, 'b'), line(3, 'c')])
     expect(merged).toHaveLength(3)
   })
 
   it('keeps stdout and stderr rows with the same sequence apart', () => {
-    const merged = mergeTranscriptLines(
-      [line(1, 'out')],
-      [{ ...line(1, 'err'), stream: 'stderr' }],
-    )
+    const merged = mergeTranscriptLines([line(1, 'out')], [{ ...line(1, 'err'), stream: 'stderr' }])
     expect(merged).toHaveLength(2)
   })
 
@@ -300,10 +275,7 @@ describe('mergeTranscriptLines', () => {
   })
 
   it('replaces a replayed row when the same key arrives again', () => {
-    const merged = mergeTranscriptLines(
-      [line(1, 'old')],
-      [{ ...line(1, 'new'), stream: 'stdout' }],
-    )
+    const merged = mergeTranscriptLines([line(1, 'old')], [{ ...line(1, 'new'), stream: 'stdout' }])
     expect(merged).toEqual([line(1, 'new')])
   })
 
@@ -357,7 +329,7 @@ describe('plainTextTranscriptLines', () => {
 describe('dockerTimestampTranscriptLines', () => {
   it('splits docker --timestamps prefixes onto the time column', () => {
     const rows = dockerTimestampTranscriptLines(
-      '2026-01-01T00:00:01.000000000Z hello\nno-stamp line\n\n',
+      '2026-01-01T00:00:01.000000000Z hello\nno-stamp line\n\n'
     )
     expect(rows).toEqual([
       {
@@ -378,9 +350,7 @@ describe('dockerTimestampTranscriptLines', () => {
   })
 
   it('accepts an RFC3339 offset instead of Z', () => {
-    const rows = dockerTimestampTranscriptLines(
-      '2026-01-01T00:00:01.5+00:00 offset line\n',
-    )
+    const rows = dockerTimestampTranscriptLines('2026-01-01T00:00:01.5+00:00 offset line\n')
     expect(rows[0]).toMatchObject({
       timestamp: '2026-01-01T00:00:01.5+00:00',
       message: 'offset line',
@@ -389,7 +359,7 @@ describe('dockerTimestampTranscriptLines', () => {
 
   it('accepts a negative offset and a trailing line without a newline', () => {
     const rows = dockerTimestampTranscriptLines(
-      '2026-01-01T00:00:01-05:00 west\nansi \u001B[0mplain',
+      '2026-01-01T00:00:01-05:00 west\nansi \u001B[0mplain'
     )
     expect(rows).toHaveLength(2)
     expect(rows[0]).toMatchObject({
@@ -427,7 +397,7 @@ describe('transcriptPlainText', () => {
           phase: 'compose-up',
           message: ' 6d2dcf61e6fc Pull complete',
         },
-      ]),
+      ])
     ).toBe(' 6d2dcf61e6fc Pull complete')
   })
 
@@ -514,8 +484,7 @@ describe('docker progress lines', () => {
       timestamp: null,
       stream: 'stderr',
       phase: 'fetch',
-      message:
-        "Cloning into '/var/lib/turbopanel/release-build/…/source'...",
+      message: "Cloning into '/var/lib/turbopanel/release-build/…/source'...",
     }
     expect(isErrorLine(git)).toBe(false)
     expect(
@@ -523,22 +492,21 @@ describe('docker progress lines', () => {
         ...git,
         seq: 2,
         message: '▲ Next.js 16.3.3 (Turbopack)',
-      }),
+      })
     ).toBe(false)
     expect(
       isErrorLine({
         ...git,
         seq: 3,
         message: '$ next build',
-      }),
+      })
     ).toBe(false)
     expect(
       isErrorLine({
         ...git,
         seq: 4,
-        message:
-          'Error: ENOENT: no such file or directory, mkdir',
-      }),
+        message: 'Error: ENOENT: no such file or directory, mkdir',
+      })
     ).toBe(true)
   })
 
@@ -575,7 +543,7 @@ describe('docker progress lines', () => {
         stream: 'stderr',
         phase: 'build',
         message,
-      }),
+      })
     ).toBe(false)
   })
 
@@ -585,9 +553,9 @@ describe('docker progress lines', () => {
     '* branch            trunk      -> FETCH_HEAD',
     'HEAD is now at abc1234 document coverage',
     'remote: Enumerating objects: 12, done.',
-    'Switched to a new branch \'coverage\'',
+    "Switched to a new branch 'coverage'",
     'Already on trunk',
-    '  Cloning into \'/tmp/source\'...',
+    "  Cloning into '/tmp/source'...",
   ])('treats git stderr %s as benign', (message) => {
     expect(isBenignStderrLine(message)).toBe(true)
     expect(
@@ -597,7 +565,7 @@ describe('docker progress lines', () => {
         stream: 'stderr',
         phase: 'fetch',
         message,
-      }),
+      })
     ).toBe(false)
   })
 
@@ -622,7 +590,7 @@ describe('normalizeTranscriptMessage', () => {
 
   it('keeps a real size', () => {
     expect(normalizeTranscriptMessage(' 44dd5065ed48 Downloading 2.097MB')).toBe(
-      ' 44dd5065ed48 Downloading 2.097MB',
+      ' 44dd5065ed48 Downloading 2.097MB'
     )
   })
 
@@ -631,21 +599,15 @@ describe('normalizeTranscriptMessage', () => {
   })
 
   it('keeps a glued 0B suffix that is not a Compose byte counter', () => {
-    expect(normalizeTranscriptMessage('id Downloading 2MB0B')).toBe(
-      'id Downloading 2MB0B',
-    )
+    expect(normalizeTranscriptMessage('id Downloading 2MB0B')).toBe('id Downloading 2MB0B')
   })
 
   it('keeps a real 10B size whose suffix happens to end in 0B', () => {
-    expect(normalizeTranscriptMessage('id Extracting 10B')).toBe(
-      'id Extracting 10B',
-    )
+    expect(normalizeTranscriptMessage('id Extracting 10B')).toBe('id Extracting 10B')
   })
 
   it('leaves a progress line that does not end in a byte counter', () => {
-    expect(normalizeTranscriptMessage(' Container web-1 Started')).toBe(
-      ' Container web-1 Started',
-    )
+    expect(normalizeTranscriptMessage(' Container web-1 Started')).toBe(' Container web-1 Started')
   })
 })
 
@@ -655,17 +617,13 @@ describe('collapseRepeatedProgressLines', () => {
       event(1, ' 30d32a3eb4a4 Extracting 1B', { stream: 'stderr' }) +
         event(2, ' 30d32a3eb4a4 Extracting 1B', { stream: 'stderr' }) +
         event(3, ' 30d32a3eb4a4 Extracting 1B', { stream: 'stderr' }) +
-        event(4, ' 30d32a3eb4a4 Pull complete 0B', { stream: 'stderr' }),
+        event(4, ' 30d32a3eb4a4 Pull complete 0B', { stream: 'stderr' })
     )
-    expect(collapseRepeatedProgressLines(rows).map((row) => row.seq)).toEqual([
-      1, 4,
-    ])
+    expect(collapseRepeatedProgressLines(rows).map((row) => row.seq)).toEqual([1, 4])
   })
 
   it('keeps repeated non-progress output', () => {
-    const rows = parseCommandLogChunk(
-      event(1, 'retrying') + event(2, 'retrying'),
-    )
+    const rows = parseCommandLogChunk(event(1, 'retrying') + event(2, 'retrying'))
     expect(collapseRepeatedProgressLines(rows)).toHaveLength(2)
   })
 
@@ -682,7 +640,7 @@ describe('collapseRepeatedProgressLines', () => {
         event(3, ' 30d32a3eb4a4 Extracting 1B', {
           stream: 'stdout',
           phase: 'compose-up',
-        }),
+        })
     )
     expect(collapseRepeatedProgressLines(rows)).toHaveLength(3)
   })
@@ -697,7 +655,7 @@ describe('groupTranscriptByPhase', () => {
     const rows = parseCommandLogChunk(
       event(1, 'a', { phase: 'build' }) +
         event(2, 'b', { phase: 'build' }) +
-        event(3, 'c', { phase: 'compose-up' }),
+        event(3, 'c', { phase: 'compose-up' })
     )
     const groups = groupTranscriptByPhase(rows)
     expect(groups.map((group) => group.phase)).toEqual(['build', 'compose-up'])
@@ -708,7 +666,7 @@ describe('groupTranscriptByPhase', () => {
     const rows = parseCommandLogChunk(
       event(1, 'a', { phase: 'build' }) +
         event(2, 'b', { phase: 'health' }) +
-        event(3, 'c', { phase: 'build' }),
+        event(3, 'c', { phase: 'build' })
     )
     expect(groupTranscriptByPhase(rows)).toHaveLength(3)
   })
@@ -727,7 +685,7 @@ describe('groupTranscriptByPhase', () => {
         timestamp: '2026-08-21T12:00:00.000Z',
         stream: 'stdout',
         message: 'b',
-      })}\n`,
+      })}\n`
     )
     const groups = groupTranscriptByPhase(rows)
     expect(groups).toHaveLength(1)
@@ -747,6 +705,20 @@ describe('phaseLabel', () => {
     expect(phaseLabel('install-runtime')).toBe('Installing the runtime')
     expect(phaseLabel('install-web-server')).toBe('Installing the web server')
     expect(phaseLabel('install-build-tool')).toBe('Installing the build tool')
+  })
+
+  it('names a Node app deploy in the order it runs', () => {
+    expect(
+      ['release-promote', 'start-release', 'health', 'switch-traffic', 'stop-old-release'].map(
+        phaseLabel
+      )
+    ).toEqual([
+      'Publish the release',
+      'Start the new release',
+      'Check it answers',
+      'Switch traffic',
+      'Stop the old release',
+    ])
   })
 
   it('keeps the existing phases and shows an unknown phase by its id', () => {

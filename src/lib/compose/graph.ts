@@ -84,7 +84,7 @@ function stringListOrMapKeys(value: unknown): string[] {
 
 function serviceVolumeSources(
   service: Record<string, unknown>,
-  namedVolumes: ReadonlySet<string>,
+  namedVolumes: ReadonlySet<string>
 ): string[] {
   const value = service.volumes
   if (!Array.isArray(value)) return []
@@ -130,9 +130,7 @@ function servicePorts(service: Record<string, unknown>): string[] {
     } else if (isPlainObjectMap(entry) && entry.target != null) {
       const target = composePortField(entry.target)
       const published = composePortField(entry.published)
-      out.push(
-        published.length > 0 ? `${published}:${target}` : target,
-      )
+      out.push(published.length > 0 ? `${published}:${target}` : target)
     }
   }
   return out
@@ -148,7 +146,7 @@ function serviceImage(service: Record<string, unknown>): string | undefined {
 /** Longest-path layering by `depends_on` (dependency sits in an earlier row). Cycle-safe. */
 function computeServiceRows(
   names: readonly string[],
-  dependsOn: ReadonlyMap<string, readonly string[]>,
+  dependsOn: ReadonlyMap<string, readonly string[]>
 ): Map<string, number> {
   const row = new Map<string, number>()
   const visiting = new Set<string>()
@@ -174,13 +172,13 @@ function computeServiceRows(
 
 function buildDependsOnMap(
   services: readonly [string, Record<string, unknown>][],
-  serviceNameSet: ReadonlySet<string>,
+  serviceNameSet: ReadonlySet<string>
 ): Map<string, string[]> {
   const dependsOnMap = new Map<string, string[]>()
   for (const [name, service] of services) {
     dependsOnMap.set(
       name,
-      stringListOrMapKeys(service.depends_on).filter((dep) => serviceNameSet.has(dep)),
+      stringListOrMapKeys(service.depends_on).filter((dep) => serviceNameSet.has(dep))
     )
   }
   return dependsOnMap
@@ -189,7 +187,7 @@ function buildDependsOnMap(
 function appendMember(
   membersByResource: Map<string, string[]>,
   resource: string,
-  serviceName: string,
+  serviceName: string
 ): void {
   const members = membersByResource.get(resource) ?? []
   members.push(serviceName)
@@ -205,7 +203,7 @@ type ServiceGraphBuild = {
 function collectServiceGraph(
   services: readonly [string, Record<string, unknown>][],
   serviceRows: ReadonlyMap<string, number>,
-  namedVolumes: ReadonlySet<string>,
+  namedVolumes: ReadonlySet<string>
 ): ServiceGraphBuild {
   const rowColumnCounters = new Map<number, number>()
   const nodes: ComposeGraphNode[] = []
@@ -228,9 +226,7 @@ function collectServiceGraph(
       image: serviceImage(service),
       serviceKind: extension?.serviceKind ?? 'container',
       ports: servicePorts(service),
-      ...(source
-        ? { gitSource: { sourceId: source.sourceId, branch: source.branch } }
-        : {}),
+      ...(source ? { gitSource: { sourceId: source.sourceId, branch: source.branch } } : {}),
     })
 
     for (const net of stringListOrMapKeys(service.networks)) {
@@ -265,7 +261,7 @@ function appendResourceNodes(
   membersByResource: ReadonlyMap<string, readonly string[]>,
   kind: 'network' | 'volume',
   resourceRow: number,
-  startColumn: number,
+  startColumn: number
 ): number {
   let resourceColumn = startColumn
   const edgeKind: ComposeGraphEdgeKind = kind
@@ -295,11 +291,9 @@ function appendResourceNodes(
 function attachHostingNodes(
   nodes: ComposeGraphNode[],
   edges: ComposeGraphEdge[],
-  hostnamesByService: Readonly<Record<string, string>>,
+  hostnamesByService: Readonly<Record<string, string>>
 ): void {
-  const served = nodes.filter(
-    (node) => node.kind === 'service' && hostnamesByService[node.name],
-  )
+  const served = nodes.filter((node) => node.kind === 'service' && hostnamesByService[node.name])
   if (served.length === 0) return
   for (const node of nodes) node.row += 1
   let column = 0
@@ -339,10 +333,7 @@ function graphGridSize(nodes: readonly ComposeGraphNode[]): { columns: number; r
  * project-default network when none is declared). Optional {@link ComposeGraphFacts}
  * add live hosting nodes (hostnames) above the service layers.
  */
-export function buildComposeGraph(
-  document: unknown,
-  facts?: ComposeGraphFacts,
-): ComposeGraph {
+export function buildComposeGraph(document: unknown, facts?: ComposeGraphFacts): ComposeGraph {
   const normalized = normalizeCompose(document)
   const services = mapEntries(normalized.data.services)
   const namedVolumes = new Set(mapEntries(normalized.data.volumes).map(([name]) => name))
@@ -351,7 +342,7 @@ export function buildComposeGraph(
   const { nodes, networkMembers, volumeMembers } = collectServiceGraph(
     services,
     computeServiceRows(serviceNames, dependsOnMap),
-    namedVolumes,
+    namedVolumes
   )
 
   // Compose always creates a project-default network joining every service
@@ -362,14 +353,7 @@ export function buildComposeGraph(
 
   const resourceRow = nodes.reduce((max, node) => Math.max(max, node.row), -1) + 1
   const edges = dependsOnEdges(dependsOnMap)
-  const afterNetworks = appendResourceNodes(
-    nodes,
-    edges,
-    networkMembers,
-    'network',
-    resourceRow,
-    0,
-  )
+  const afterNetworks = appendResourceNodes(nodes, edges, networkMembers, 'network', resourceRow, 0)
   appendResourceNodes(nodes, edges, volumeMembers, 'volume', resourceRow, afterNetworks)
 
   if (facts?.hostnamesByService) {
@@ -390,7 +374,7 @@ export function buildComposeGraph(
  */
 export function annotateComposeGraphSources(
   graph: ComposeGraph,
-  repositoryLabelsById: Readonly<Record<string, string>>,
+  repositoryLabelsById: Readonly<Record<string, string>>
 ): ComposeGraph {
   if (Object.keys(repositoryLabelsById).length === 0) return graph
   let changed = false
@@ -414,11 +398,11 @@ function neighborNames(
   byId: Map<string, ComposeGraphNode>,
   nodeId: string,
   kind: ComposeGraphEdgeKind,
-  direction: 'incoming' | 'outgoing',
+  direction: 'incoming' | 'outgoing'
 ): string[] {
   return graph.edges
-    .filter((edge) =>
-      edge.kind === kind && (direction === 'incoming' ? edge.to : edge.from) === nodeId
+    .filter(
+      (edge) => edge.kind === kind && (direction === 'incoming' ? edge.to : edge.from) === nodeId
     )
     .map((edge) => byId.get(direction === 'incoming' ? edge.from : edge.to)?.name)
     .filter((name): name is string => Boolean(name))
@@ -427,7 +411,7 @@ function neighborNames(
 function describeServiceNode(
   graph: ComposeGraph,
   byId: Map<string, ComposeGraphNode>,
-  node: ComposeGraphNode,
+  node: ComposeGraphNode
 ): string {
   const hostnames = neighborNames(graph, byId, node.id, 'hosting', 'incoming')
   const dependsOn = neighborNames(graph, byId, node.id, 'depends_on', 'incoming')
@@ -446,7 +430,7 @@ function describeServiceNode(
     parts.push(
       node.gitSource.branch
         ? `builds from ${repository}, branch ${node.gitSource.branch}`
-        : `builds from ${repository}`,
+        : `builds from ${repository}`
     )
   }
   return parts.length > 1 ? `${parts[0]} — ${parts.slice(1).join('; ')}` : parts[0]

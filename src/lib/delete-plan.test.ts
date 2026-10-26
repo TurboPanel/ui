@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import type { DeletePlan } from '@/lib/instance-api'
 import {
+  certificateLine,
   deleteFailureMessage,
   deletePlanBlockerLines,
   deletePlanSummary,
   folderLabel,
   groupFoldersByServer,
   hostingAccountKeepReason,
+  planCertificates,
 } from '@/lib/delete-plan'
 import { CONTROL_PLANE_UNREACHABLE_COPY } from '@/lib/user-error'
 
@@ -97,7 +99,46 @@ describe('hostingAccountKeepReason', () => {
   })
 })
 
+describe('certificateLine', () => {
+  it("says what happens to each Let's Encrypt certificate", () => {
+    expect(certificateLine({ id: 't1', names: ['shop.example.com'], action: 'remove' })).toBe(
+      'shop.example.com: removed, no other site uses it.'
+    )
+    expect(
+      certificateLine({
+        id: 't2',
+        names: ['a.example.com', 'www.a.example.com'],
+        action: 'keep',
+        otherSites: 1,
+      })
+    ).toBe('a.example.com, www.a.example.com: kept, 1 other site uses it.')
+    expect(
+      certificateLine({ id: 't3', names: ['b.example.com'], action: 'keep', otherSites: 3 })
+    ).toBe('b.example.com: kept, 3 other sites use it.')
+    expect(certificateLine({ id: 't4', names: [], action: 'keep' })).toBe(
+      'Unnamed certificate: kept, another site uses it.'
+    )
+  })
+
+  it('reads an older plan without certificates as none', () => {
+    expect(planCertificates(EMPTY)).toEqual([])
+  })
+})
+
 describe('deletePlanSummary', () => {
+  it("counts the Let's Encrypt certificates that go", () => {
+    const plan: DeletePlan = {
+      ...EMPTY,
+      certificates: [
+        { id: 't1', names: ['a.example.com'], action: 'remove' },
+        { id: 't2', names: ['b.example.com'], action: 'keep', otherSites: 1 },
+      ],
+    }
+    expect(deletePlanSummary(plan, 'staging')).toBe(
+      "Delete staging? This removes 0 services, 0 folders, 1 Let's Encrypt certificate."
+    )
+  })
+
   it('counts what goes, names the servers and the kept volumes', () => {
     expect(deletePlanSummary(PLAN, 'production')).toBe(
       'Delete production? This removes 2 services, 2 folders, 1 Hosting Account on Alpha, Unnamed server. 1 volume is set to keep its data and stays.'

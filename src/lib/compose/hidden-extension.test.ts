@@ -59,12 +59,8 @@ x-turbopanel:
     expect(authorYaml).toContain('# keep me')
     expect(authorYaml).not.toContain('x-turbopanel')
 
-    const restored = restoreComposeTurbopanelExtensions(
-      yamlToComposeDocument(authorYaml),
-      hidden,
-    )
-    const site = (restored.data.services as Record<string, Record<string, unknown>>)
-      .site
+    const restored = restoreComposeTurbopanelExtensions(yamlToComposeDocument(authorYaml), hidden)
+    const site = (restored.data.services as Record<string, Record<string, unknown>>).site
     expect(site['x-turbopanel']).toEqual({
       serviceKind: 'site',
       engine: 'apache',
@@ -144,11 +140,9 @@ x-turbopanel:
     expect(visible.presentation.blankLines?.['services.web.image#key']).toBe(1)
 
     const restored = restoreComposeTurbopanelExtensions(visible, hidden)
-    expect(restored.presentation.comments['x-turbopanel']).toEqual(
-      hidden.comments['x-turbopanel'],
-    )
+    expect(restored.presentation.comments['x-turbopanel']).toEqual(hidden.comments['x-turbopanel'])
     expect(restored.presentation.comments['services.site.x-turbopanel']).toEqual(
-      hidden.comments['services.site.x-turbopanel'],
+      hidden.comments['services.site.x-turbopanel']
     )
     expect(restored.presentation.blankLines?.['x-turbopanel#key']).toBe(1)
   })
@@ -183,8 +177,7 @@ x-turbopanel:
       description: Author typed this
 `)
     const restored = restoreComposeTurbopanelExtensions(author, hidden)
-    const app = (restored.data.services as Record<string, Record<string, unknown>>)
-      .app
+    const app = (restored.data.services as Record<string, Record<string, unknown>>).app
     expect(app.image).toBe('app:2')
     expect(app['x-turbopanel']).toEqual({
       serviceKind: 'container',
@@ -242,9 +235,7 @@ x-turbopanel:
     expect(composeDocumentToYaml(restored)).toBe(source)
     expect(restored.presentation.keyOrder).toEqual(full.presentation.keyOrder)
     expect(restored.presentation.comments).toEqual(full.presentation.comments)
-    expect(restored.presentation.blankLines).toEqual(
-      full.presentation.blankLines,
-    )
+    expect(restored.presentation.blankLines).toEqual(full.presentation.blankLines)
     // Per-service extensions are what `hiddenSiteServiceNames` inspects; a root
     // principals block is none of its business and must not appear.
     expect(hiddenSiteServiceNames(hidden)).toEqual([])
@@ -316,11 +307,7 @@ networks:
   edge: {}
 `)
     const restored = restoreComposeTurbopanelExtensions(edited, hidden)
-    expect(restored.presentation.keyOrder).toEqual([
-      'services',
-      'x-turbopanel',
-      'networks',
-    ])
+    expect(restored.presentation.keyOrder).toEqual(['services', 'x-turbopanel', 'networks'])
   })
 
   it('preserves document comments when hiding and restoring', () => {
@@ -380,15 +367,13 @@ x-turbopanel:
     expect(hidden.comments['services.site.x-turbopanel.engine']).toEqual({
       inline: 'engine',
     })
-    expect(visible.presentation.comments['services.site.image']?.inline).toBe(
-      'keep',
-    )
+    expect(visible.presentation.comments['services.site.image']?.inline).toBe('keep')
 
     const restored = restoreComposeTurbopanelExtensions(visible, hidden)
     expect(restored.presentation.editorView).toBe('visual')
-    expect(restored.presentation.comments['services.site.x-turbopanel.engine']).toEqual(
-      { inline: 'engine' },
-    )
+    expect(restored.presentation.comments['services.site.x-turbopanel.engine']).toEqual({
+      inline: 'engine',
+    })
   })
 
   it('includes node services in hiddenSiteServiceNames', () => {

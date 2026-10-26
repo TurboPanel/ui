@@ -5,10 +5,7 @@ export function isSuperadminSession(session: SessionInfo | null): boolean {
 }
 
 export function isAdminSession(session: SessionInfo | null): boolean {
-  return (
-    session !== null &&
-    (session.role === 'superadmin' || session.role === 'admin')
-  )
+  return session !== null && (session.role === 'superadmin' || session.role === 'admin')
 }
 
 export function hasUserSession(session: SessionInfo | null): boolean {
@@ -17,7 +14,7 @@ export function hasUserSession(session: SessionInfo | null): boolean {
 
 export function dashboardHref(
   session: SessionInfo | null,
-  needsInstall: boolean,
+  needsInstall: boolean
 ): '/install' | '/sign-in' | '/welcome' | '/organizations' | `/${string}/overview` | '/' {
   if (needsInstall) {
     return '/install'

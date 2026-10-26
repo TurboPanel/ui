@@ -3,6 +3,7 @@ import { StatusChip } from '@/components/ui/v4/status-chip'
 import { themedStyles, usePalette } from '@/components/ui/v4/use-palette'
 import { typeStyle } from '@/components/ui/v4/type-styles'
 import { compactPendingLabel } from '@/lib/v4/status-vocab'
+import { CHIP_HEIGHT } from '@/lib/v4/ui-scale'
 
 export type TripletPart = Readonly<{
   /** A key of the status vocabulary. */
@@ -19,8 +20,10 @@ const styles = themedStyles((p) => ({
   compact: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
   part: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8, minWidth: 0 },
   divided: { paddingLeft: 20, borderLeftWidth: 1, borderLeftColor: p.sep },
-  key: { ...typeStyle('bodyMedium', 'footnote'), color: p.text3 },
-  sub: { ...typeStyle('body', 'footnote'), color: p.text3 },
+  // As tall as a small chip, so a "Last deploy" line with a chip and one with
+  // only a time are the same height and line up across cards.
+  key: { ...typeStyle('bodyMedium', 'footnote'), color: p.text3, lineHeight: CHIP_HEIGHT.sm },
+  sub: { ...typeStyle('body', 'footnote'), color: p.text3, lineHeight: CHIP_HEIGHT.sm },
 }))
 
 /**
@@ -90,10 +93,7 @@ export function StatusTriplet({
       ) : null}
       {hasPending ? (
         <View style={[s.part, divided && s.divided]}>
-          <StatusChip
-            status="changes"
-            label={pendingLabel ?? compactPendingLabel(pendingCount)}
-          />
+          <StatusChip status="changes" label={pendingLabel ?? compactPendingLabel(pendingCount)} />
         </View>
       ) : null}
     </View>

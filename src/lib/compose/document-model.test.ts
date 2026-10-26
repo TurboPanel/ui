@@ -59,7 +59,7 @@ networks:
 volumes:
   data:
     driver: overlay
-`),
+`)
     )
     expect(model.networks.map((n) => [n.name, n.detail])).toEqual([
       ['spans', 'overlay (TurboFabric)'],
@@ -189,14 +189,12 @@ volumes:
 networks:
   front: {}
   ignored: not-a-map
-`),
+`)
     )
 
     const web = model.services.find((service) => service.name === 'web')
     expect(web?.ports).toEqual(['8080', '80', '443:8443'])
-    expect(web?.mounts).toEqual([
-      { source: 'data', target: '/data', named: true },
-    ])
+    expect(web?.mounts).toEqual([{ source: 'data', target: '/data', named: true }])
     expect(web?.sourceBound).toBe(true)
     expect(web?.dependsOn).toEqual([])
 
@@ -300,7 +298,7 @@ networks:
       - ""
   other: not-a-map
 volumes: not-a-map
-`),
+`)
     )
     expect(model.services[0]?.source).toBeNull()
     expect(model.services[0]?.mounts).toEqual([])

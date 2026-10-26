@@ -19,12 +19,8 @@ import type { ComposeDocument } from './types'
 
 describe('siteEnvKeyForService', () => {
   it('sanitizes compose service names like the daemon', () => {
-    expect(siteEnvKeyForService('my-app')).toBe(
-      'TURBOPANEL_SITE_MY_APP_URL',
-    )
-    expect(siteEnvKeyForService('2web')).toBe(
-      'TURBOPANEL_SITE__2WEB_URL',
-    )
+    expect(siteEnvKeyForService('my-app')).toBe('TURBOPANEL_SITE_MY_APP_URL')
+    expect(siteEnvKeyForService('2web')).toBe('TURBOPANEL_SITE__2WEB_URL')
   })
 })
 
@@ -49,13 +45,13 @@ describe('resolveHostingServiceContext', () => {
     expect(apache.phpApplicability).toBe('applicable')
     expect(apache.webEnvMode).toBe('apache_setenv')
     expect(apache.siteSiblingNames).toEqual(['static'])
-    expect(hostingServiceKindLabel(apache)).toBe('Site · Apache')
+    expect(hostingServiceKindLabel(apache)).toBe('Site')
     expect(hostingPhpSectionCopy(apache).showFields).toBe(true)
-    expect(hostingPhpSectionCopy(apache).hint).toContain('mod_proxy_fcgi')
+    expect(hostingPhpSectionCopy(apache).hint).toContain('PHP worker pool')
     expect(hostingWebEnvSectionCopy(apache).showFields).toBe(true)
   })
 
-  it('labels the nginx+apache engine', () => {
+  it('labels a site without naming its web server', () => {
     const document = yamlToComposeDocument(`services:
   blog:
     x-turbopanel:
@@ -63,11 +59,11 @@ describe('resolveHostingServiceContext', () => {
       engine: nginx+apache
 `)
     const context = resolveHostingServiceContext(document, 'blog')
-    expect(hostingServiceKindLabel(context)).toBe('Site · nginx + Apache')
-    expect(hostingPhpSectionCopy(context).hint).toContain('mod_proxy_fcgi')
+    expect(hostingServiceKindLabel(context)).toBe('Site')
+    expect(hostingPhpSectionCopy(context).hint).toContain('PHP worker pool')
   })
 
-  it('offers PHP on every site engine, naming each mechanism', () => {
+  it('offers PHP on every site engine, saying each mechanism in plain words', () => {
     const document = yamlToComposeDocument(`services:
   static:
     x-turbopanel:
@@ -83,22 +79,22 @@ describe('resolveHostingServiceContext', () => {
     expect(nginx.phpApplicability).toBe('applicable')
     expect(nginx.webEnvMode).toBe('file_only')
     expect(hostingPhpSectionCopy(nginx).showFields).toBe(true)
-    expect(hostingPhpSectionCopy(nginx).title).toBe('PHP settings (nginx php-fpm)')
-    expect(hostingPhpSectionCopy(nginx).hint).toContain('fastcgi_pass')
-    expect(hostingServiceKindLabel(nginx)).toBe('Site · nginx')
+    expect(hostingPhpSectionCopy(nginx).title).toBe('PHP settings')
+    expect(hostingPhpSectionCopy(nginx).hint).toContain('PHP worker pool')
+    expect(hostingServiceKindLabel(nginx)).toBe('Site')
     expect(hostingWebEnvSectionCopy(nginx).showFields).toBe(true)
-    expect(hostingWebEnvSectionCopy(nginx).hint).toContain('nginx does not inject')
+    expect(hostingWebEnvSectionCopy(nginx).hint).toContain('does not hand them to PHP')
 
     const ols = resolveHostingServiceContext(document, 'site')
     expect(ols.phpApplicability).toBe('applicable')
     expect(hostingPhpSectionCopy(ols).showFields).toBe(true)
-    expect(hostingPhpSectionCopy(ols).title).toBe('PHP settings (OpenLiteSpeed LSAPI)')
-    expect(hostingPhpSectionCopy(ols).hint).toContain('suEXEC')
+    expect(hostingPhpSectionCopy(ols).title).toBe('PHP settings')
+    expect(hostingPhpSectionCopy(ols).hint).toContain('its own PHP process')
 
     // OpenLiteSpeed passes web.env to PHP through per-site rewrite rules.
     expect(ols.webEnvMode).toBe('openlitespeed_rewrite')
     expect(hostingWebEnvSectionCopy(ols).showFields).toBe(true)
-    expect(hostingWebEnvSectionCopy(ols).hint).not.toContain('does not inject')
+    expect(hostingWebEnvSectionCopy(ols).hint).not.toContain('does not hand')
     expect(hostingWebEnvSectionCopy(ols).hint).toContain('rewrite rules')
     expect(hostingWebEnvSectionCopy(ols).hint).toContain('the deploy stops')
   })
@@ -153,16 +149,16 @@ describe('node services are their own kind', () => {
     const node = resolveHostingServiceContext(document, 'app')
     expect(hostingServiceKindLabel(node)).toBe('Node app')
     const hint = hostingTargetPortHint(node)
-    expect(hint).toContain('systemd')
+    expect(hint).toContain('the app’s service')
     expect(hint).toContain('PORT')
-    // A site is answered by an engine vhost, not a supervised process — the
-    // hint names which, so the field reads as already decided rather than
+    // A site is answered by its web server, not a supervised process — the
+    // hint says which, so the field reads as already decided rather than
     // missing.
-    expect(hostingTargetPortHint(resolveHostingServiceContext(document, 'blog')))
-      .toContain('Caddy')
+    expect(hostingTargetPortHint(resolveHostingServiceContext(document, 'blog'))).toContain(
+      'on its web server'
+    )
     // A container keeps the field, so it has nothing to say in its place.
-    expect(hostingTargetPortHint(resolveHostingServiceContext(document, 'api')))
-      .toBeNull()
+    expect(hostingTargetPortHint(resolveHostingServiceContext(document, 'api'))).toBeNull()
   })
 
   it('offers neither PHP nor container-variable advice for a node service', () => {
@@ -172,7 +168,7 @@ describe('node services are their own kind', () => {
     expect(node.webEnvMode).toBe('node_unit_environment')
     const copy = hostingWebEnvSectionCopy(node)
     expect(copy.showFields).toBe(false)
-    expect(copy.hint).toContain('host-supervised process')
+    expect(copy.hint).toContain('the app’s service')
     // Not a container, so the docker bridge advice would point at a control
     // that cannot reach the process.
     expect(hostingDockerBridgeHint(node)).toBeNull()
@@ -234,7 +230,7 @@ describe('resolveHostingServiceContext edge cases', () => {
     const nginx = resolveHostingServiceContext(document, 'site')
     expect(nginx.engine).toBe('caddy')
     expect(nginx.webEnvMode).toBe('caddy_env')
-    expect(hostingServiceKindLabel(nginx)).toBe('Site · Caddy')
+    expect(hostingServiceKindLabel(nginx)).toBe('Site')
     expect(hostingPhpSectionCopy(nginx).showFields).toBe(true)
     expect(hostingWebEnvSectionCopy(nginx).showFields).toBe(true)
   })
@@ -253,7 +249,7 @@ describe('hosting copy helpers', () => {
       serviceKind: site
       engine: nginx
 `),
-      'api',
+      'api'
     )
     expect(hostingPathPrefixHint(withSiblings)).toContain('static')
     expect(hostingPathPrefixHint(withSiblings)).not.toContain('static nginx')
@@ -265,7 +261,7 @@ describe('hosting copy helpers', () => {
       serviceKind: site
       engine: apache
 `),
-      'api',
+      'api'
     )
     expect(hostingPathPrefixHint(alone)).not.toContain('Other site')
   })
@@ -276,11 +272,11 @@ describe('hosting copy helpers', () => {
   app:
     image: node:22
 `),
-      'app',
+      'app'
     )
     expect(hostingPhpSectionCopy(container).title).toBe('PHP settings')
-    expect(hostingPhpSectionCopy(container).hint).toContain('Containers use their image runtime')
-    expect(hostingWebEnvSectionCopy(container).hint).toContain('Hosting variables')
+    expect(hostingPhpSectionCopy(container).hint).toContain('uses the PHP its image brings')
+    expect(hostingWebEnvSectionCopy(container).hint).toContain('hosting variables below')
   })
 
   it('labels a site with no engine as a generic site', () => {
@@ -293,8 +289,8 @@ describe('hosting copy helpers', () => {
         phpApplicability: 'applicable',
         webEnvMode: 'file_only',
         composeHostingEntries: [],
-      }),
-    ).toBe('Site · site')
+      })
+    ).toBe('Site')
   })
 })
 
@@ -309,7 +305,7 @@ describe('caddy site engine', () => {
     const ctx = resolveHostingServiceContext(doc, 'web')
     expect(ctx.kind).toBe('site')
     expect(ctx.engine).toBe('caddy')
-    expect(hostingServiceKindLabel(ctx)).toBe('Site · Caddy')
+    expect(hostingServiceKindLabel(ctx)).toBe('Site')
   })
 
   it('defaults a site with no engine to caddy', () => {
@@ -336,9 +332,10 @@ describe('compose-authored hosting entries', () => {
 `)
 
   it('reads every entry a service declares, in document order', () => {
-    expect(
-      readComposeHostingEntries(overlay, 'web').map((e) => e.hostname),
-    ).toEqual(['app.example.com', 'docs.example.com'])
+    expect(readComposeHostingEntries(overlay, 'web').map((e) => e.hostname)).toEqual([
+      'app.example.com',
+      'docs.example.com',
+    ])
     expect(readComposeHostingEntries(overlay, 'missing')).toEqual([])
   })
 
@@ -361,20 +358,70 @@ describe('compose-authored hosting entries', () => {
   })
 
   it('declares a route on a service the overlay did not mention', () => {
-    const next = writeComposeHostingEntries(overlay, 'api', [
-      { hostname: 'api.example.com' },
-    ])
-    expect(readComposeHostingEntries(next, 'api')).toEqual([
-      { hostname: 'api.example.com' },
-    ])
+    const next = writeComposeHostingEntries(overlay, 'api', [{ hostname: 'api.example.com' }])
+    expect(readComposeHostingEntries(next, 'api')).toEqual([{ hostname: 'api.example.com' }])
     expect(readComposeHostingEntries(next, 'web')).toHaveLength(2)
   })
 
   it('drops the hosting key when the last entry goes away', () => {
     const next = writeComposeHostingEntries(overlay, 'web', [])
     expect(readComposeHostingEntries(next, 'web')).toEqual([])
-    expect(
-      resolveHostingServiceContext(next, 'web').composeHostingEntries,
-    ).toEqual([])
+    expect(resolveHostingServiceContext(next, 'web').composeHostingEntries).toEqual([])
+  })
+})
+
+describe('hosting form words', () => {
+  // Owner rule: the hosting form never names the web server or another vendor
+  // product, nor the raw names behind it.
+  const VENDOR_WORDS =
+    /caddy|apache|nginx|litespeed|lsphp|lsapi|suexec|systemd|web\.env|php-fpm|fpm pool|fastcgi|mod_proxy|SetEnv|vhost|docker/i
+  const document = yamlToComposeDocument(`services:
+  app:
+    x-turbopanel:
+      serviceKind: node
+      source:
+        sourceId: 11111111-2222-3333-4444-555555555555
+  api:
+    image: node:22
+  one:
+    x-turbopanel:
+      serviceKind: site
+      engine: caddy
+  two:
+    x-turbopanel:
+      serviceKind: site
+      engine: apache
+  three:
+    x-turbopanel:
+      serviceKind: site
+      engine: nginx
+  four:
+    x-turbopanel:
+      serviceKind: site
+      engine: nginx+apache
+  five:
+    x-turbopanel:
+      serviceKind: site
+      engine: openlitespeed
+`)
+
+  it('says every hint in plain words', () => {
+    const names = ['app', 'api', 'one', 'two', 'three', 'four', 'five']
+    for (const name of names) {
+      const context = resolveHostingServiceContext(document, name)
+      const php = hostingPhpSectionCopy(context)
+      const webEnv = hostingWebEnvSectionCopy(context)
+      const sentences = [
+        hostingServiceKindLabel(context),
+        hostingTargetPortHint(context) ?? '',
+        hostingDockerBridgeHint(context) ?? '',
+        hostingPathPrefixHint(context),
+        php.title,
+        php.hint,
+        webEnv.title,
+        webEnv.hint,
+      ]
+      for (const sentence of sentences) expect(sentence).not.toMatch(VENDOR_WORDS)
+    }
   })
 })

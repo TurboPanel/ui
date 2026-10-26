@@ -32,6 +32,13 @@ describe('Button sizes', () => {
     expect(styleOf(screen.getByRole('button')).minHeight).toBe(32)
   })
 
+  it('takes a minimum width only when given one', () => {
+    const { rerender } = render(<Button label="Move it here" onPress={vi.fn()} />)
+    expect(styleOf(screen.getByRole('button')).minWidth).toBeUndefined()
+    rerender(<Button label="Move it here" minWidth={220} onPress={vi.fn()} />)
+    expect(styleOf(screen.getByRole('button')).minWidth).toBe(220)
+  })
+
   it('is 44 at every size on a coarse pointer', () => {
     coarsePointer(true)
     const { rerender } = render(<Button label="Save" onPress={vi.fn()} />)
