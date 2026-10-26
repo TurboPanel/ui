@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  CERTIFICATE_DNS_POLL_MS,
+  CERTIFICATE_ISSUING_POLL_MS,
+  certificatePollInterval,
+  hostingSaveNote,
   describeCertificate,
   dnsResultHeadline,
   dnsSummaryLines,
@@ -224,5 +228,39 @@ describe('certificateAfterSave', () => {
     expect(
       await certificateAfterSave({ hostingId: null, wantsCertificate: true, request: ok })
     ).toBeNull()
+  })
+})
+
+describe('certificatePollInterval', () => {
+  it('follows a certificate the server is still issuing or waiting on', () => {
+    expect(certificatePollInterval(cert({ state: 'issuing' }))).toBe(CERTIFICATE_ISSUING_POLL_MS)
+    expect(certificatePollInterval(cert({ state: 'waiting_for_dns' }))).toBe(
+      CERTIFICATE_DNS_POLL_MS
+    )
+  })
+
+  it('does not poll one that waits for a deploy, has settled, or is not loaded', () => {
+    expect(certificatePollInterval(cert({ state: 'issuing', needsDeploy: true }))).toBe(false)
+    expect(certificatePollInterval(cert({ state: 'secure' }))).toBe(false)
+    expect(certificatePollInterval(cert({}))).toBe(false)
+    expect(certificatePollInterval(null)).toBe(false)
+    expect(certificatePollInterval(undefined)).toBe(false)
+  })
+})
+
+describe('hostingSaveNote', () => {
+  it('says the save went through, and that Let\u2019s Encrypt was asked', () => {
+    expect(hostingSaveNote(false, null)).toEqual({ tone: 'ok', message: 'Saved.' })
+    expect(hostingSaveNote(true, null)).toEqual({
+      tone: 'ok',
+      message: 'Saved. Let\u2019s Encrypt was asked for a certificate.',
+    })
+  })
+
+  it('says the hostname saved but the certificate did not start, with the reason', () => {
+    const note = hostingSaveNote(true, { message: 'DNS is not ready yet.', openSettings: false })
+    expect(note.tone).toBe('error')
+    expect(note.message).toContain('Saved the hostname')
+    expect(note.message).toContain('DNS is not ready yet.')
   })
 })

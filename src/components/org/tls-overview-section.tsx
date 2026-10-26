@@ -28,7 +28,7 @@ import {
 import { useApiMutation, useCan, queryKeys } from '@/lib/query-client'
 import { tlsDateLines, tlsStoredCopyLines } from '@/lib/tls-managed-dates'
 import { colors, spacing } from '@/lib/theme'
-import { userErrorMessage } from '@/lib/user-error'
+import { failedRunMessage, userErrorMessage } from '@/lib/user-error'
 
 function errorMessage(err: unknown, fallback: string): string {
   return userErrorMessage(err, fallback)
@@ -70,12 +70,16 @@ const SOURCE_OPTIONS = [
   { value: 'lets_encrypt', label: "Let's Encrypt" },
 ] as const
 
+/** Why the last delete of one certificate failed, shown on that certificate's card. */
+type DeleteFailure = Readonly<{ id: string; message: string }>
+
 function TlsCertificateList({
   loading,
   rows,
   canManage,
   deletingId,
   deletePending,
+  deleteFailure,
   onDelete,
 }: Readonly<{
   loading: boolean
@@ -83,6 +87,7 @@ function TlsCertificateList({
   canManage: boolean
   deletingId: string | null
   deletePending: boolean
+  deleteFailure: DeleteFailure | null
   onDelete: (id: string) => void
 }>) {
   if (loading) {
@@ -122,6 +127,9 @@ function TlsCertificateList({
           disabled={deletePending && deletingId !== row.id}
           onConfirm={() => onDelete(row.id)}
         />
+      ) : null}
+      {deleteFailure?.id === row.id ? (
+        <Text style={panelStyles.error}>{deleteFailure.message}</Text>
       ) : null}
     </View>
   ))
@@ -205,7 +213,9 @@ export function TlsOverviewSection({
       : option,
   )
 
-  const [error, setError] = useState<string | null>(null)
+  // Each failure is said next to the button that caused it.
+  const [createError, setCreateError] = useState<string | null>(null)
+  const [deleteFailure, setDeleteFailure] = useState<DeleteFailure | null>(null)
   const [source, setSource] = useState<TlsSource>('upload')
   const [displayName, setDisplayName] = useState('')
   const [certificatePem, setCertificatePem] = useState('')
@@ -220,8 +230,6 @@ export function TlsOverviewSection({
     queryError =
       userErrorMessage(tlsQuery.error, 'Failed to load TLS library')
   }
-  const displayError =
-    error ?? createMutation.actionError ?? deleteMutation.actionError ?? queryError
 
   const deletingId =
     deleteMutation.isPending &&
@@ -253,54 +261,30 @@ export function TlsOverviewSection({
     acmeMutation.mutate(next)
   }
 
-  const onCreate = () => {
+  const onCreate = async () => {
     if (!canManage) return
     if (source === 'lets_encrypt' && !acmeEnabled) return
-    setError(null)
-
-    if (source === 'upload') {
-      createMutation.mutate(
-        {
-          source: 'upload',
-          name: displayName.trim() || undefined,
-          certificatePem,
-          privateKeyPem,
-        },
-        {
-          onError: () => {
-            setError(createMutation.actionError ?? 'Failed to create certificate')
-          },
-        },
-      )
-      return
-    }
-
+    setCreateError(null)
+    const name = displayName.trim() || undefined
     const names = hostnames
       .split(',')
       .map((n) => n.trim())
       .filter((n) => n.length > 0)
-    createMutation.mutate(
-      {
-        source,
-        name: displayName.trim() || undefined,
-        hostnames: names,
-      },
-      {
-        onError: () => {
-          setError(createMutation.actionError ?? 'Failed to create certificate')
-        },
-      },
+    const result = await createMutation.run(
+      source === 'upload'
+        ? { source: 'upload', name, certificatePem, privateKeyPem }
+        : { source, name, hostnames: names },
     )
+    if (!result.ok) setCreateError(failedRunMessage(result, 'Failed to create certificate'))
   }
 
-  const onDelete = (id: string) => {
+  const onDelete = async (id: string) => {
     if (!canManage) return
-    setError(null)
-    deleteMutation.mutate(id, {
-      onError: () => {
-        setError(deleteMutation.actionError ?? 'Failed to delete certificate')
-      },
-    })
+    setDeleteFailure(null)
+    const result = await deleteMutation.run(id)
+    if (!result.ok) {
+      setDeleteFailure({ id, message: failedRunMessage(result, 'Failed to delete certificate') })
+    }
   }
 
   return (
@@ -325,8 +309,12 @@ export function TlsOverviewSection({
           canManage={canManage}
           deletingId={deletingId}
           deletePending={deleteMutation.isPending}
-          onDelete={onDelete}
+          deleteFailure={deleteFailure}
+          onDelete={(id) => {
+            void onDelete(id)
+          }}
         />
+        {queryError ? <Text style={panelStyles.error}>{queryError}</Text> : null}
       </SectionPanel>
 
       {canManage ? (
@@ -393,13 +381,12 @@ export function TlsOverviewSection({
             busyLabel="Saving…"
             variant="primary"
             busy={createMutation.isPending}
-            onPress={onCreate}
+            onPress={() => {
+              void onCreate()
+            }}
           />
+          {createError ? <Text style={panelStyles.error}>{createError}</Text> : null}
         </SectionPanel>
-      ) : null}
-
-      {displayError ? (
-        <Text style={panelStyles.error}>{displayError}</Text>
       ) : null}
     </View>
   )

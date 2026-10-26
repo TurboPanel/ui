@@ -325,3 +325,28 @@ export function stalledDeploymentHint(errorCode: string | null): string | null {
   }
   return null
 }
+
+/** True while the newest deploy is still going (rows newest first, as the API sends them). */
+export function isNewestDeploymentInFlight(
+  rows: readonly DeploymentHistoryRecord[] | undefined,
+): boolean {
+  const newest = groupDeploymentsByGeneration(rows ?? [])[0]
+  return newest ? isDeploymentInFlight(newest.commands) : false
+}
+
+/**
+ * Between two answers, a deploy finished that can have changed the hostings:
+ * the newest deploy was going and has finished, or a different deploy is now
+ * the newest and has finished (one that started and ended between two polls).
+ */
+export function newestDeploymentFinished(
+  before: readonly DeploymentHistoryRecord[] | undefined,
+  after: readonly DeploymentHistoryRecord[] | undefined,
+): boolean {
+  if (before === undefined || isNewestDeploymentInFlight(after)) return false
+  if (isNewestDeploymentInFlight(before)) return true
+  const newestId = (rows: readonly DeploymentHistoryRecord[]) =>
+    groupDeploymentsByGeneration(rows)[0]?.id ?? null
+  const afterId = newestId(after ?? [])
+  return afterId !== null && afterId !== newestId(before)
+}

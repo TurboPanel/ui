@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ComposeHostnameActions } from '@/components/org/project/compose-hostname-actions'
+import { CONFIRM_GUARD_MS } from '@/components/ui/confirm-button'
 
 const push = vi.fn()
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
@@ -21,10 +22,19 @@ vi.mock('@/components/ui/text-link', () => ({
   ),
 }))
 
+// A fake clock, moved past the confirm guard before each deliberate confirm.
+beforeEach(() => {
+  vi.useFakeTimers({ now: new Date('2026-01-01T00:00:00Z') })
+})
 afterEach(() => {
   cleanup()
   push.mockReset()
+  vi.useRealTimers()
 })
+
+function pastConfirmGuard() {
+  vi.setSystemTime(Date.now() + CONFIRM_GUARD_MS)
+}
 
 function renderActions(overrides: Partial<Parameters<typeof ComposeHostnameActions>[0]> = {}) {
   const onRemove = vi.fn()
@@ -72,6 +82,7 @@ describe('ComposeHostnameActions', () => {
       screen.getByText('Remove example.test? It stops being served after the next deploy.')
     ).toBeTruthy()
     expect(onRemove).not.toHaveBeenCalled()
+    pastConfirmGuard()
     fireEvent.click(screen.getByText('Remove'))
     expect(onRemove).toHaveBeenCalledTimes(1)
     expect(onManageHere).not.toHaveBeenCalled()
@@ -81,6 +92,7 @@ describe('ComposeHostnameActions', () => {
     const { onManageHere } = renderActions()
     fireEvent.click(screen.getByText('Manage on this screen instead'))
     expect(screen.getByText(/as last deployed/)).toBeTruthy()
+    pastConfirmGuard()
     fireEvent.click(screen.getByText('Move it here'))
     expect(onManageHere).toHaveBeenCalledTimes(1)
   })

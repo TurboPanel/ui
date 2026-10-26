@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import { SecretReveal } from '@/components/org/managed/secret-reveal'
 import {
   AppLoginsButton,
@@ -158,6 +158,31 @@ function RedeployServicesPanel({
   )
 }
 
+/** A failure said where it happened; nothing when there is none. */
+function InlineError({ message }: Readonly<{ message: string | null }>) {
+  return message ? <Text style={panelStyles.error}>{message}</Text> : null
+}
+
+/** What the last add form, edit or delete is waiting for while a change applies. */
+const FORM_WAITS = 'Wait until the current change finishes; this form unlocks by itself.'
+const EDITS_WAIT =
+  'The current change is still being applied on the server. Editing and deleting unlock by themselves when it finishes.'
+
+/**
+ * Why controls are locked while a change applies on the server: it refuses
+ * another change to this database until then (`managed_busy`), so the
+ * controls wait visibly instead of ignoring presses.
+ */
+function ApplyingNote({ shown, text }: Readonly<{ shown: boolean; text: string }>) {
+  if (!shown) return null
+  return (
+    <View style={styles.applying}>
+      <ActivityIndicator size="small" color={colors.textMuted} />
+      <Text style={panelStyles.muted}>{text}</Text>
+    </View>
+  )
+}
+
 /** The show-once passwords: the app logins list, or one login's new password. */
 function PasswordsPanel({
   appLoginsResult,
@@ -271,8 +296,12 @@ export function ManagedUsersPanel({
   const [straightChoice, setStraightChoice] = useState<boolean | null>(initial.straightChoice)
   const appLogins = useAppLogins(onCreateAppLogins, onReload, canManage)
   const [error, setError] = useState<string | null>(null)
+  // Said next to the button that failed, not at the top of the panel.
+  const [databaseError, setDatabaseError] = useState<string | null>(null)
+  const [newLoginError, setNewLoginError] = useState<string | null>(null)
   const [usernameHint, setUsernameHint] = useState<string | null>(null)
   const [working, setWorking] = useState(false)
+  const [adding, setAdding] = useState<'database' | 'login' | null>(null)
   const [revealedPassword, setRevealedPassword] = useState<string | null>(null)
   const [revealedUsername, setRevealedUsername] = useState<string | null>(null)
   const [redeployRequired, setRedeployRequired] =
@@ -322,19 +351,21 @@ export function ManagedUsersPanel({
   const createDatabase = async () => {
     const trimmed = dbName.trim()
     if (!DATABASE_PATTERN.test(trimmed)) {
-      setError('Database name must start with a letter or underscore.')
+      setDatabaseError('Database name must start with a letter or underscore.')
       return
     }
     setWorking(true)
-    setError(null)
+    setAdding('database')
+    setDatabaseError(null)
     try {
       await onCreateDatabase(trimmed)
       setDbName('')
       await onReload()
     } catch (err) {
-      setError(managedErrorMessage(err, 'Failed to create database'))
+      setDatabaseError(managedErrorMessage(err, 'Failed to create database'))
     } finally {
       setWorking(false)
+      setAdding(null)
     }
   }
 
@@ -354,11 +385,11 @@ export function ManagedUsersPanel({
   const createUser = async () => {
     const trimmed = username.trim()
     if (!USERNAME_PATTERN.test(trimmed)) {
-      setError('Username must start with a letter or underscore.')
+      setNewLoginError('Username must start with a letter or underscore.')
       return
     }
     if (selectedDbs.length === 0) {
-      setError('Select at least one database.')
+      setNewLoginError('Select at least one database.')
       return
     }
     const parsedLimits = limitsFromDraft(limits)
@@ -370,7 +401,8 @@ export function ManagedUsersPanel({
     setLimitsProblem(null)
     const { allowedSources, maxConnections } = parsedLimits.payload
     setWorking(true)
-    setError(null)
+    setAdding('login')
+    setNewLoginError(null)
     setUsernameHint(null)
     try {
       const result = await onCreateUser({
@@ -414,12 +446,13 @@ export function ManagedUsersPanel({
       if (code === 'username_in_use') {
         const suffix = crypto.randomUUID().replaceAll('-', '').slice(0, 3)
         setUsernameHint(`${message} Try ${trimmed}_${suffix}.`)
-        setError(null)
+        setNewLoginError(null)
       } else {
-        setError(message)
+        setNewLoginError(message)
       }
     } finally {
       setWorking(false)
+      setAdding(null)
     }
   }
 
@@ -473,12 +506,15 @@ export function ManagedUsersPanel({
     )
   }
 
+  // While a change applies (`busy`) the server refuses another one, so every
+  // control waits, with an ApplyingNote saying so next to it.
   const disabled = busy || working || !canManage
   const appLoginsProblem = appLoginsSchemeProblem(nameScheme)
 
   return (
     <SectionPanel title="Users & databases" hint="Engine users and databases">
-      {error ? <Text style={panelStyles.error}>{error}</Text> : null}
+      <InlineError message={error} />
+      <ApplyingNote shown={busy && canManage} text={EDITS_WAIT} />
 
       <Text style={styles.subheading}>Databases</Text>
       <View style={styles.list}>
@@ -541,14 +577,18 @@ export function ManagedUsersPanel({
             autoCorrect={false}
             editable={!disabled}
           />
+          <ApplyingNote shown={busy} text={FORM_WAITS} />
           <Button
             label="Add database"
+            busyLabel="Adding…"
             variant="primary"
+            busy={adding === 'database'}
             disabled={disabled}
             onPress={() => {
               void createDatabase()
             }}
           />
+          <InlineError message={databaseError} />
         </View>
       ) : null}
 
@@ -755,7 +795,7 @@ export function ManagedUsersPanel({
             servers={servers}
             disabled={disabled}
           />
-          {limitsProblem ? <Text style={panelStyles.error}>{limitsProblem}</Text> : null}
+          <InlineError message={limitsProblem} />
           <NewLoginStraightThroughField
             engine={engine}
             choice={straightChoice}
@@ -764,9 +804,13 @@ export function ManagedUsersPanel({
             disabled={disabled}
             onChange={setStraightChoice}
           />
+          <InlineError message={newLoginError} />
+          <ApplyingNote shown={busy} text={FORM_WAITS} />
           <Button
             label="Create user"
+            busyLabel="Creating…"
             variant="primary"
+            busy={adding === 'login'}
             disabled={disabled}
             onPress={() => {
               void createUser()
@@ -801,6 +845,11 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
   },
   formCol: {
+    gap: spacing.sm,
+  },
+  applying: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: spacing.sm,
   },
   userCard: {

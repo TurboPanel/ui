@@ -13,6 +13,7 @@ import {
   COMMAND_LOG_MAX_PAGES_PER_READ,
   COMMAND_LOG_POLL_MS,
   commandLogRefetchInterval,
+  DEPLOYMENT_POLL_MS,
   EMPTY_COMMAND_LOG_SNAPSHOT,
   orderDeploymentsNewestFirst,
   resolveCommandLogState,
@@ -548,7 +549,7 @@ describe('commandLogRefetchInterval', () => {
 })
 
 describe('useEnvironmentDeployments', () => {
-  it('fetches one page and does not poll', async () => {
+  it('fetches one page and does not poll when nothing is deploying', async () => {
     fetchEnvironmentDeployments.mockResolvedValue({
       ok: true,
       deployments: [],
@@ -595,6 +596,41 @@ describe('useEnvironmentDeployments', () => {
       { wrapper: createWrapper() },
     )
     expect(fetchEnvironmentDeployments).not.toHaveBeenCalled()
+  })
+  const deployRow = (status: string) =>
+    ({ id: 'd1', generation: 3, status }) as unknown as DeploymentHistoryRecord
+  const page = (status: string) => ({
+    ok: true,
+    deployments: [deployRow(status)],
+    nextCursor: null,
+  })
+  const pollInterval = (client: ReturnType<typeof createAppQueryClient>) => {
+    const query = client.getQueryCache().find({
+      queryKey: ['org', 'org-1', 'environment', 'env-1', 'deployments'],
+    })
+    const interval = query?.observers[0]?.options.refetchInterval
+    return typeof interval === 'function' && query ? interval(query) : interval
+  }
+
+  it('polls while the newest deploy runs, and refetches the hostings when it ends', async () => {
+    const client = createAppQueryClient()
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
+    fetchEnvironmentDeployments.mockResolvedValueOnce(page('running'))
+    const { result } = renderHook(() => useEnvironmentDeployments('org-1', 'env-1'), {
+      wrapper: createWrapper(client),
+    })
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+    expect(pollInterval(client)).toBe(DEPLOYMENT_POLL_MS)
+    expect(invalidate).not.toHaveBeenCalled()
+
+    fetchEnvironmentDeployments.mockResolvedValueOnce(page('succeeded'))
+    await result.current.refetch()
+    await waitFor(() => {
+      expect(invalidate).toHaveBeenCalledWith({ queryKey: ['org', 'org-1', 'hostings'] })
+    })
+    expect(pollInterval(client)).toBe(false)
   })
 })
 

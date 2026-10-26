@@ -6,12 +6,19 @@ import { colors, spacing } from '@/lib/theme'
 /**
  * Two-step destructive action (MASTER: destructive always confirms).
  * First press arms; the armed row shows Confirm / Cancel and auto-disarms
- * after 6s of inactivity. `variant="secondary"` is for an action that is
+ * after 6s of inactivity. The confirm button takes the armed button's place
+ * (the question still comes first for screen readers), so a deliberate
+ * second press on the same spot confirms; a press within
+ * {@link CONFIRM_GUARD_MS} of arming is ignored, so a double-click or two
+ * quick taps never arms and confirms in one gesture. `variant="secondary"` is for an action that is
  * confirmed but safe to undo (a rollback): a quiet button that confirms with
  * the primary one. While `busy` is true the armed row is shown only
  * for the instance that fired `onConfirm` — other instances sharing the
  * same busy flag render the base button, disabled.
  */
+/** How long after arming a press on the confirm button is ignored. */
+export const CONFIRM_GUARD_MS = 400
+
 export function ConfirmButton({
   label,
   confirmLabel = 'Confirm',
@@ -45,6 +52,7 @@ export function ConfirmButton({
   const [armed, setArmed] = useState(false)
   const [confirmed, setConfirmed] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const armedAt = useRef(0)
 
   useEffect(() => {
     return () => {
@@ -57,6 +65,7 @@ export function ConfirmButton({
   }, [confirmed, busy])
 
   const arm = () => {
+    armedAt.current = Date.now()
     setArmed(true)
     onArmedChange?.(true)
     if (timer.current) clearTimeout(timer.current)
@@ -86,21 +95,12 @@ export function ConfirmButton({
     )
   }
 
+  // Drawn right to left: the question is first in reading order (screen
+  // readers announce it before the buttons) but shows after them, so the
+  // confirm button sits where the arming press landed.
   return (
     <View style={styles.armedRow}>
       <Text style={styles.prompt}>{prompt}</Text>
-      <Button
-        label={confirmLabel}
-        variant={variant === 'danger' ? 'danger' : 'primary'}
-        size={size}
-        busy={confirmed && busy}
-        disabled={disabled || busy}
-        onPress={() => {
-          disarm()
-          setConfirmed(true)
-          onConfirm()
-        }}
-      />
       <Button
         label={dismissLabel}
         variant="ghost"
@@ -108,13 +108,27 @@ export function ConfirmButton({
         disabled={busy}
         onPress={disarm}
       />
+      <Button
+        label={confirmLabel}
+        variant={variant === 'danger' ? 'danger' : 'primary'}
+        size={size}
+        busy={confirmed && busy}
+        disabled={disabled || busy}
+        onPress={() => {
+          if (Date.now() - armedAt.current < CONFIRM_GUARD_MS) return
+          disarm()
+          setConfirmed(true)
+          onConfirm()
+        }}
+      />
     </View>
   )
 }
 
 const styles = StyleSheet.create({
   armedRow: {
-    flexDirection: 'row',
+    flexDirection: 'row-reverse',
+    justifyContent: 'flex-end',
     flexWrap: 'wrap',
     alignItems: 'center',
     gap: spacing.sm,

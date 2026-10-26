@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { CommandStatus, DeploymentHistoryRecord } from '@/lib/instance-api'
 import {
+  isNewestDeploymentInFlight,
+  newestDeploymentFinished,
   canCancelDeployment,
   cancelTooLateNote,
   cancelledDeploymentNote,
@@ -545,5 +547,38 @@ describe('cancelling a deploy', () => {
     ])
     expect(findInFlightDeployment(groups)?.id).toBe('n')
     expect(findInFlightDeployment(groups.slice(1))).toBeNull()
+  })
+})
+
+describe('newest deploy in flight', () => {
+  const running = [row({ id: 'b', generation: 8, status: 'running' })]
+  const done = [row({ id: 'b', generation: 8, status: 'succeeded' })]
+  const olderStuck = [
+    row({ id: 'b', generation: 8, status: 'succeeded' }),
+    row({ id: 'a', generation: 7, status: 'queued' }),
+  ]
+
+  it('looks only at the newest deploy', () => {
+    expect(isNewestDeploymentInFlight(running)).toBe(true)
+    expect(isNewestDeploymentInFlight(done)).toBe(false)
+    expect(isNewestDeploymentInFlight(olderStuck)).toBe(false)
+    expect(isNewestDeploymentInFlight([])).toBe(false)
+    expect(isNewestDeploymentInFlight(undefined)).toBe(false)
+  })
+
+  it('notices the newest deploy finishing', () => {
+    expect(newestDeploymentFinished(running, done)).toBe(true)
+    expect(newestDeploymentFinished(running, running)).toBe(false)
+    expect(newestDeploymentFinished(done, done)).toBe(false)
+    expect(newestDeploymentFinished(undefined, done)).toBe(false)
+  })
+
+  it('notices a newer deploy that started and finished between two answers', () => {
+    const newer = [row({ id: 'c', generation: 9, status: 'succeeded' }), ...done]
+    expect(newestDeploymentFinished(done, newer)).toBe(true)
+    expect(newestDeploymentFinished(newer, newer)).toBe(false)
+    expect(newestDeploymentFinished(done, [])).toBe(false)
+    const newerRunning = [row({ id: 'c', generation: 9, status: 'running' })]
+    expect(newestDeploymentFinished(done, newerRunning)).toBe(false)
   })
 })
