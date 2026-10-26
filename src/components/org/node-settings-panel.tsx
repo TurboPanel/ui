@@ -16,6 +16,7 @@ import {
   usePersistEnvironmentCompose,
   usePersistProjectCompose,
 } from '@/components/org/compose-persistence'
+import { NodeAppModeField } from '@/components/org/node-app-mode-field'
 import {
   FLOATING_NODE_VERSION,
   NEWEST_NODE_SERIES,
@@ -24,7 +25,6 @@ import {
   readServiceTurbopanelExtension,
   type ComposeServiceSourceExtension,
   type ComposeServiceTurbopanelExtension,
-  type NodeAppMode,
   type NodePackageManager,
 } from '@/lib/compose/service-kind'
 import {
@@ -100,7 +100,7 @@ type NodeSettingsDraft = Readonly<{
   enabled: boolean
   nodeVersion: string
   packageManager: string
-  appMode: NodeAppMode
+  appMode: string
   documentRoot: string
   appRoot: string
   startupFile: string
@@ -252,7 +252,7 @@ export function NodeSettingsPanel({
   const [enabled, setEnabled] = useState(true)
   const [nodeVersion, setNodeVersion] = useState('')
   const [packageManager, setPackageManager] = useState('')
-  const [appMode, setAppMode] = useState<NodeAppMode>('production')
+  const [appMode, setAppMode] = useState<string>('production')
   const [documentRoot, setDocumentRoot] = useState('')
   const [appRoot, setAppRoot] = useState('')
   const [startupFile, setStartupFile] = useState('')
@@ -431,8 +431,8 @@ function NodeSettingsFields({
   setNodeVersion: (value: string) => void
   packageManager: string
   setPackageManager: (value: string) => void
-  appMode: NodeAppMode
-  setAppMode: (value: NodeAppMode) => void
+  appMode: string
+  setAppMode: (value: string) => void
   documentRoot: string
   setDocumentRoot: (value: string) => void
   appRoot: string
@@ -518,16 +518,7 @@ function NodeSettingsFields({
         label="Application mode"
         description="Sets NODE_ENV for the build and the running process."
       >
-        <SegmentedControl
-          options={[
-            { value: 'production', label: 'production' },
-            { value: 'development', label: 'development' },
-          ]}
-          value={appMode}
-          onChange={setAppMode}
-          disabled={fieldsDisabled}
-          accessibilityLabel="Application mode"
-        />
+        <NodeAppModeField value={appMode} onChange={setAppMode} disabled={fieldsDisabled} />
       </SettingRow>
 
       <ApplicationUrlRow url={applicationUrl} />
