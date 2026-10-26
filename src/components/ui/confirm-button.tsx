@@ -102,7 +102,9 @@ export function ConfirmButton({
 
   // Drawn right to left: the question is first in reading order (screen
   // readers announce it before the buttons) but shows after them, so the
-  // confirm button sits where the arming press landed.
+  // confirm button sits where the arming press landed. The row never wraps:
+  // on a narrow screen the question wraps its own words instead, so Confirm
+  // cannot drop to a second line and leave Cancel under the press.
   return (
     <View style={styles.armedRow}>
       <Text style={styles.prompt}>{prompt}</Text>
@@ -135,11 +137,13 @@ const styles = StyleSheet.create({
   armedRow: {
     flexDirection: 'row-reverse',
     justifyContent: 'flex-end',
-    flexWrap: 'wrap',
+    flexWrap: 'nowrap',
+    flexShrink: 1,
     alignItems: 'center',
     gap: spacing.sm,
   },
   prompt: {
+    flexShrink: 1,
     color: colors.errorText,
     fontSize: 13,
     fontWeight: '600',

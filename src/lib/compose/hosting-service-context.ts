@@ -211,9 +211,9 @@ export function hostingTargetPortHint(
 }
 
 /**
- * How this site runs PHP, in plain words: its own PHP process on the
- * OpenLiteSpeed engine, its own PHP worker pool on the others. Both run as the
- * site's Hosting Account.
+ * How this site runs PHP, in plain words: its own PHP process on the engine
+ * that runs PHP in-process, its own PHP worker pool on the others. Both run as
+ * the site's Hosting Account.
  */
 function phpRuntimeCopy(engine: SiteEngine | undefined): {
   title: string

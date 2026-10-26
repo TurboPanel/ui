@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { resolveHostingServiceContext } from '@/lib/compose/hosting-service-context'
 import { normalizeCompose } from '@/lib/compose'
-import { pendingRemovalNote } from '@/lib/hosting-plain-words'
+import { PENDING_REMOVAL_CERTIFICATE_HINT, pendingRemovalNote } from '@/lib/hosting-plain-words'
 import type { HostingRecord } from '@/lib/instance-api'
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
@@ -240,9 +240,15 @@ describe('a hostname removed from the configuration file, before the next deploy
 
   it('is listed as waiting for removal, not as an editable hostname of this screen', () => {
     const rows = rowsFor([madeFromFile(false)])
-    expect(rows).toHaveLength(1)
+    expect(rows).toHaveLength(2)
     expect(rows[0]?.source).toEqual({ kind: 'removing', handedBack: false })
     expect(rows[0]?.hostingId).toBe('h1')
+  })
+
+  it('keeps the empty form next to it, so a new hostname can still be added', () => {
+    const rows = rowsFor([madeFromFile(false)])
+    expect(rows[1]?.source).toEqual({ kind: 'panel' })
+    expect(rows[1]?.hostingId).toBeNull()
   })
 
   it('says it goes back to this screen when the panel made it first', () => {
@@ -266,6 +272,8 @@ describe('a hostname removed from the configuration file, before the next deploy
     expect((screen.getByLabelText('Hostnames') as HTMLInputElement).disabled).toBe(true)
     expect(screen.queryByText('Save hosting')).toBeNull()
     expect(screen.queryByText('Hosting variables')).toBeNull()
+    expect(screen.getByText(PENDING_REMOVAL_CERTIFICATE_HINT)).toBeTruthy()
+    expect(screen.queryByText(/tick the box below/)).toBeNull()
   })
 
   it('keeps the certificate actions of a hostname set in the shared file, but not of one being removed', () => {

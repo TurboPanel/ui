@@ -204,6 +204,10 @@ export function pendingRemovalNote(handedBack: boolean): string {
     : 'This hostname will be removed on the next deploy. Until then it keeps being served and cannot be changed here.'
 }
 
+/** Under Certificate on a hostname waiting for the next deploy to remove it. */
+export const PENDING_REMOVAL_CERTIFICATE_HINT =
+  'The certificate stays as it is until the next deploy removes this hostname.'
+
 /**
  * The certificate picker's explanation for a hostname managed on this screen.
  * It mentions the Let’s Encrypt box only while the box is shown (Self-signed

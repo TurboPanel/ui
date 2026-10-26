@@ -91,6 +91,14 @@ describe('ConfirmButton placement', () => {
     expect(row.lastElementChild?.textContent).toBe('Delete certificate')
     expect(styleOf(row).flexDirection).toBe('row-reverse')
   })
+
+  it('never wraps the confirm button to a second line; the question wraps its words instead', () => {
+    render(<ConfirmButton label="Delete" prompt="Remove this certificate?" onConfirm={vi.fn()} />)
+    fireEvent.click(screen.getByText('Delete'))
+    const prompt = screen.getByText('Remove this certificate?')
+    expect(styleOf(prompt.parentElement).flexWrap).toBe('nowrap')
+    expect(styleOf(prompt).flexShrink).toBe(1)
+  })
 })
 
 describe('ConfirmButton double press', () => {

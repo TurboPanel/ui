@@ -69,7 +69,7 @@ import {
 } from '@/lib/managed-login-limits'
 import { orEmptyArray } from '@/lib/or-empty-array'
 import { appLoginsSchemeProblem } from '@/lib/managed-app-logins'
-import { managedIdentifierProblem } from '@/lib/managed-identifier'
+import { managedIdentifierMaxLength, managedIdentifierProblem } from '@/lib/managed-identifier'
 import { recallSessionChoices, rememberSessionChoices } from '@/lib/session-choices'
 import { PrincipalNameSchemeField, usePrincipalNameScheme } from '@/components/org/principal-name-scheme-field'
 import { principalNamesLabel, principalSchemeErrorMessage, type NameScheme } from '@/lib/principal-name-scheme'
@@ -349,7 +349,11 @@ export function ManagedUsersPanel({
 
   const createDatabase = async () => {
     const trimmed = dbName.trim()
-    const nameProblem = managedIdentifierProblem(trimmed, 'Database name')
+    const nameProblem = managedIdentifierProblem(
+      trimmed,
+      'Database name',
+      managedIdentifierMaxLength(engine)
+    )
     if (nameProblem) {
       setDatabaseError(nameProblem)
       return
@@ -384,7 +388,11 @@ export function ManagedUsersPanel({
 
   const createUser = async () => {
     const trimmed = username.trim()
-    const nameProblem = managedIdentifierProblem(trimmed, 'Username')
+    const nameProblem = managedIdentifierProblem(
+      trimmed,
+      'Username',
+      managedIdentifierMaxLength(engine, nameScheme.selected)
+    )
     if (nameProblem) {
       setNewLoginError(nameProblem)
       return

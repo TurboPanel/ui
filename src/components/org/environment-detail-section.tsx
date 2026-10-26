@@ -143,6 +143,7 @@ import {
   hostingActionErrorMessage,
   missingCertificateMessage,
   panelCertificateHint,
+  PENDING_REMOVAL_CERTIFICATE_HINT,
   pendingRemovalNote,
   resolveCertificateRef,
   SERVICE_NOT_SAVED_MESSAGE,
@@ -639,10 +640,12 @@ function serviceRowDescriptors(
   if (entries.length === 0) {
     // No declaration: the historical single-row panel form, still saved
     // straight to /hostings. A row made from the file is only here when its
-    // entry was removed, and shows as such rather than as an editable form.
+    // entry was removed, and shows as such rather than as an editable form;
+    // the empty form stays next to it so a new hostname can still be added.
+    // A just-removed hostname comes first, so its note is what shows.
     const panelRow = ctx.serviceRows.find((row) => !isComposeOwnedHosting(row.metadata))
-    if (!panelRow && removing.length > 0) return removing
-    return [panelRowDescriptor(ctx, ctx.serviceKey, panelRow), ...removing]
+    const panel = panelRowDescriptor(ctx, ctx.serviceKey, panelRow)
+    return panelRow ? [panel, ...removing] : [...removing, panel]
   }
   const overlayEntries = readComposeHostingEntries(overlayCompose, ctx.composeServiceName)
   return [
@@ -1054,9 +1057,20 @@ function HostingWwwField({
   )
 }
 
+/** The sentence under Certificate: who sets it, and how to get Let’s Encrypt where it applies. */
+function tlsPickerHint(
+  composeOwned: boolean,
+  awaitingRemoval: boolean,
+  letsEncryptBoxShown: boolean,
+): string {
+  if (awaitingRemoval) return PENDING_REMOVAL_CERTIFICATE_HINT
+  return composeOwned ? COMPOSE_CERTIFICATE_HINT : panelCertificateHint(letsEncryptBoxShown)
+}
+
 function HostingTlsPicker({
   isHttp,
   composeOwned,
+  awaitingRemoval,
   editor,
   covering,
   pinnedGap,
@@ -1065,6 +1079,8 @@ function HostingTlsPicker({
 }: Readonly<{
   isHttp: boolean
   composeOwned: boolean
+  /** Waiting for the next deploy to remove it: no Save, so no Let’s Encrypt box. */
+  awaitingRemoval: boolean
   editor: HostingEditorState
   covering: TlsRecord[]
   /** A pinned certificate that no longer covers the names: still shown, with a note. */
@@ -1075,17 +1091,19 @@ function HostingTlsPicker({
   if (!isHttp) return null
   const chips = pinnedGap ? [...covering, pinnedGap.row] : covering
   const picked = resolveCertificateRef(editor.tlsId ?? undefined, chips)
-  const letsEncryptBoxShown = offersLetsEncrypt({
-    composeOwned,
-    protocol: editor.protocol,
-    tlsId: editor.tlsId,
-    hostnameCount: parseHostnameList(editor.hostnames).length,
-  })
+  const letsEncryptBoxShown =
+    !awaitingRemoval &&
+    offersLetsEncrypt({
+      composeOwned,
+      protocol: editor.protocol,
+      tlsId: editor.tlsId,
+      hostnameCount: parseHostnameList(editor.hostnames).length,
+    })
   return (
     <>
       <Text style={styles.tlsLabel}>Certificate</Text>
       <Text style={styles.tlsHint}>
-        {composeOwned ? COMPOSE_CERTIFICATE_HINT : panelCertificateHint(letsEncryptBoxShown)}
+        {tlsPickerHint(composeOwned, awaitingRemoval, letsEncryptBoxShown)}
       </Text>
       <SegmentedControl
         accessibilityLabel="Certificate"
@@ -1592,6 +1610,7 @@ export function HostingPanelRow({
       <HostingTlsPicker
         isHttp={isHttp}
         composeOwned={composeOwned}
+        awaitingRemoval={awaitingRemoval}
         editor={editor}
         covering={covering}
         pinnedGap={pinnedGap}

@@ -23,6 +23,7 @@ import {
   manageHereInsteadPrompt,
   missingCertificateMessage,
   panelCertificateHint,
+  PENDING_REMOVAL_CERTIFICATE_HINT,
   pendingRemovalNote,
   removeHostnamePrompt,
   resolveCertificateRef,
@@ -84,6 +85,7 @@ describe('plain hosting words', () => {
       pendingRemovalNote(false),
       panelCertificateHint(true),
       panelCertificateHint(false),
+      PENDING_REMOVAL_CERTIFICATE_HINT,
       ...STATES.flatMap((state) => [
         removeHostnamePrompt('example.test', state),
         manageHereInsteadPrompt('example.test', state),
