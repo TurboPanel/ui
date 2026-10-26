@@ -10,6 +10,8 @@ export type StatusChipSize = 'sm' | 'md' | 'lg' | 'dot'
 
 const GLYPH_SIZE = { sm: 8, md: 10, lg: 12, dot: 10 } as const
 const FONT_SIZE = { sm: 'caption', md: 'footnote', lg: 'subhead', dot: 'footnote' } as const
+/** Chip border width; the word's line fills the height inside it. */
+const BORDER = 1
 
 /** The tone colour of a status on a palette. */
 export function toneColor(p: Palette, tone: StatusTone): string {
@@ -24,7 +26,7 @@ const styles = themedStyles(() => ({
     // Never wider than its box: a long word ends in an ellipsis instead.
     maxWidth: '100%',
     gap: 6,
-    borderWidth: 1,
+    borderWidth: BORDER,
     borderRadius: RADIUS.pill,
     backgroundColor: 'transparent',
   },
@@ -61,15 +63,14 @@ export function StatusChip({
       </View>
     )
   }
+  // A whole-pixel line as tall as the inside of the box, so the word sits on
+  // the box's centre line instead of rounding a pixel high.
+  const lineHeight = CHIP_HEIGHT[size] - 2 * BORDER
   return (
-    <View
-      accessible
-      accessibilityLabel={word}
-      style={[s.chip, s[size], { borderColor: color }]}
-    >
+    <View accessible accessibilityLabel={word} style={[s.chip, s[size], { borderColor: color }]}>
       {glyph}
       <Text
-        style={[typeStyle('bodySemibold', FONT_SIZE[size]), { color, flexShrink: 1 }]}
+        style={[typeStyle('bodySemibold', FONT_SIZE[size]), { color, lineHeight, flexShrink: 1 }]}
         numberOfLines={1}
       >
         {word}

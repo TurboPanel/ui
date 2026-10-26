@@ -1,11 +1,5 @@
 import { useState } from 'react'
-import {
-  StyleSheet,
-  View,
-  useWindowDimensions,
-  type StyleProp,
-  type ViewStyle,
-} from 'react-native'
+import { StyleSheet, View, useWindowDimensions, type StyleProp, type ViewStyle } from 'react-native'
 import { TurboPanelLogo } from '@/components/brand/turbopanel-logo'
 import { GlassSurface } from '@/components/glass/glass-surface'
 import { HeaderAccountControls } from '@/components/header-account-controls'
@@ -40,7 +34,10 @@ export function OrgHeader({
   const searchCollapsed = width < HEADER_SEARCH_COLLAPSE_WIDTH
   const [searchOpen, setSearchOpen] = useState(false)
   const crumb = useHeaderBreadcrumb(orgId)
-  const showCrumb = crumb !== null && showsBreadcrumb(width)
+  // From breadcrumb widths up the organization is always drawn as the first
+  // crumb, so it keeps its place and size whether or not a trail follows.
+  const crumbWidth = showsBreadcrumb(width)
+  const showCrumb = crumb !== null && crumbWidth
   useHeaderSearchShortcut(() => setSearchOpen(true), searchCollapsed)
 
   return (
@@ -52,21 +49,27 @@ export function OrgHeader({
       <View style={styles.headerMain}>
         {onMenuPress ? <HeaderMenuButton onPress={onMenuPress} /> : null}
         {header.showLogo ? <TurboPanelLogo size={28} /> : null}
-        <View style={styles.orgSlot}>
-          <OrganizationSwitcherSegment orgId={orgId} />
-        </View>
         {showCrumb ? (
           <View style={styles.crumbSlot}>
-            <HeaderBreadcrumb crumb={crumb} />
+            <HeaderBreadcrumb
+              crumb={crumb}
+              leading={<OrganizationSwitcherSegment orgId={orgId} variant="crumb" />}
+            />
           </View>
-        ) : null}
+        ) : (
+          <View style={styles.orgSlot}>
+            <OrganizationSwitcherSegment
+              orgId={orgId}
+              variant={crumbWidth ? 'crumb' : 'menu'}
+              current
+            />
+          </View>
+        )}
         {searchCollapsed ? null : <HeaderSearch orgId={orgId} keepWidth={showCrumb} />}
       </View>
 
       <View style={styles.headerActions}>
-        {searchCollapsed ? (
-          <HeaderSearchButton onPress={() => setSearchOpen(true)} />
-        ) : null}
+        {searchCollapsed ? <HeaderSearchButton onPress={() => setSearchOpen(true)} /> : null}
         {session && userLabel ? (
           <HeaderAccountControls email={userLabel} onSignOut={signOut} />
         ) : null}
@@ -117,7 +120,8 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     minWidth: 0,
   },
-  // Takes what the search leaves and shrinks (with an ellipsis) before the search does.
+  // The organization and the trail: takes what the search leaves and shrinks
+  // (with an ellipsis) before the search does.
   crumbSlot: {
     flexShrink: 1,
     minWidth: 0,
