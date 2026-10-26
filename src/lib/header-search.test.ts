@@ -85,7 +85,9 @@ describe('moveSearchIndex', () => {
 describe('isSearchShortcut', () => {
   const base = { metaKey: false, ctrlKey: false, targetIsTextField: false }
   it('accepts Cmd/Ctrl+K anywhere', () => {
-    expect(isSearchShortcut({ ...base, key: 'k', metaKey: true, targetIsTextField: true })).toBe(true)
+    expect(isSearchShortcut({ ...base, key: 'k', metaKey: true, targetIsTextField: true })).toBe(
+      true
+    )
     expect(isSearchShortcut({ ...base, key: 'K', ctrlKey: true })).toBe(true)
   })
   it('accepts / only outside text fields', () => {

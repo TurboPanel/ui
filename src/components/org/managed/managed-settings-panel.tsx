@@ -72,11 +72,11 @@ type SettingsForm = {
 
 /** Exported for tests. */
 export function settingsToForm(settings: ManagedSettings, storedImage: string): SettingsForm {
-  const labels = Object.entries(settings.dockerOptions?.labels ?? {}).map(
-    ([key, value]) => createKvRow(key, value),
+  const labels = Object.entries(settings.dockerOptions?.labels ?? {}).map(([key, value]) =>
+    createKvRow(key, value)
   )
-  const extraEnv = Object.entries(settings.dockerOptions?.extraEnv ?? {}).map(
-    ([key, value]) => createKvRow(key, value),
+  const extraEnv = Object.entries(settings.dockerOptions?.extraEnv ?? {}).map(([key, value]) =>
+    createKvRow(key, value)
   )
   return {
     image: storedImage,
@@ -93,9 +93,7 @@ export function settingsToForm(settings: ManagedSettings, storedImage: string): 
         : '',
     cpus: settings.resources?.cpus != null ? String(settings.resources.cpus) : '',
     memoryBytes:
-      settings.resources?.memoryBytes != null
-        ? String(settings.resources.memoryBytes)
-        : '',
+      settings.resources?.memoryBytes != null ? String(settings.resources.memoryBytes) : '',
     memoryReservationBytes:
       settings.resources?.memoryReservationBytes != null
         ? String(settings.resources.memoryReservationBytes)
@@ -103,9 +101,7 @@ export function settingsToForm(settings: ManagedSettings, storedImage: string): 
     labels: labels.length > 0 ? labels : [createKvRow()],
     extraEnv: extraEnv.length > 0 ? extraEnv : [createKvRow()],
     backupRetentionKeep:
-      settings.backups?.retentionKeep != null
-        ? String(settings.backups.retentionKeep)
-        : '',
+      settings.backups?.retentionKeep != null ? String(settings.backups.retentionKeep) : '',
   }
 }
 
@@ -126,9 +122,7 @@ function parseOptionalNumber(value: string): number | undefined {
   return Number.isFinite(n) ? n : undefined
 }
 
-type BuildSettingsResult =
-  | { ok: true; settings: ManagedSettings }
-  | { ok: false; error: string }
+type BuildSettingsResult = { ok: true; settings: ManagedSettings } | { ok: false; error: string }
 
 /** Pure validation + payload construction, pulled out of the component so
  * `apply()` stays a flat couple of statements instead of nested branches.
@@ -161,9 +155,7 @@ export function buildManagedSettingsPayload(form: SettingsForm): BuildSettingsRe
         memoryBytes: parseOptionalNumber(form.memoryBytes),
         memoryReservationBytes: parseOptionalNumber(form.memoryReservationBytes),
       },
-      ...(retentionKeep !== undefined
-        ? { backups: { retentionKeep } }
-        : {}),
+      ...(retentionKeep !== undefined ? { backups: { retentionKeep } } : {}),
     },
   }
 }
@@ -266,11 +258,7 @@ function ImagePicker({
   onSelect: (value: string) => void
 }>) {
   if (options.length === 0) {
-    return (
-      <Text style={panelStyles.muted}>
-        {value || 'Default image applies.'}
-      </Text>
-    )
+    return <Text style={panelStyles.muted}>{value || 'Default image applies.'}</Text>
   }
   return (
     <View style={styles.imageList}>
@@ -287,9 +275,7 @@ function ImagePicker({
             <Text style={[styles.pickerLabel, selected && styles.pickerLabelSelected]}>
               {label}
             </Text>
-            {label === option ? null : (
-              <Text style={styles.pickerHint}>{option}</Text>
-            )}
+            {label === option ? null : <Text style={styles.pickerHint}>{option}</Text>}
           </Pressable>
         )
       })}
@@ -442,8 +428,8 @@ function ClientTlsField({
     <>
       <Text style={panelStyles.detailLabel}>Client TLS</Text>
       <Text style={panelStyles.muted}>
-        Applies to clients dialing the shared managed listener. The listener ↔
-        engine leg is always encrypted regardless of this setting.
+        Applies to clients dialing the shared managed listener. The listener ↔ engine leg is always
+        encrypted regardless of this setting.
       </Text>
       <ManagedSslModePicker
         value={form.sslMode}
@@ -464,9 +450,7 @@ function EngineFields({ form, setForm, disabled }: FormProps) {
       <TextField
         label="Engine config"
         value={form.engineConfig}
-        onChangeText={(engineConfig) =>
-          setForm((current) => ({ ...current, engineConfig }))
-        }
+        onChangeText={(engineConfig) => setForm((current) => ({ ...current, engineConfig }))}
         placeholder="Optional engine configuration"
         multiline
         mono
