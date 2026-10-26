@@ -27,16 +27,8 @@ export type NativeRuntime = 'node' | 'deno'
  */
 export type NodePackageManager = 'npm' | 'yarn' | 'pnpm'
 
-/**
- * `NODE_ENV` for a `serviceKind: node` service (build + unit). Mirrors the
- * instance type. Omitted means `production`. Usually `production` or
- * `development`; any other value matching {@link NODE_APP_MODE_RE}
- * (`staging`, `test`, ...) is allowed.
- */
-export type NodeAppMode = string
-
 /** The two application modes offered as main choices. */
-export const MAIN_NODE_APP_MODES: readonly NodeAppMode[] = ['production', 'development']
+export const MAIN_NODE_APP_MODES: readonly string[] = ['production', 'development']
 
 /** Longest application mode the instance and the daemon accept. */
 export const NODE_APP_MODE_MAX_LENGTH = 64
@@ -170,8 +162,12 @@ export type ComposeServiceExtensionFields = {
    * auto-detect from the lockfile at build time.
    */
   packageManager?: NodePackageManager
-  /** `NODE_ENV` for a `serviceKind: node` service. Omitted means `production`. */
-  appMode?: NodeAppMode
+  /**
+   * `NODE_ENV` for a `serviceKind: node` service (build + unit). Omitted means
+   * `production`. Usually `production` or `development`; any other value
+   * matching {@link NODE_APP_MODE_RE} (`staging`, `test`, ...) is allowed.
+   */
+  appMode?: string
   /**
    * Whether a `serviceKind: node` process should run. Omitted means `true`.
    * When `false` the release still builds; the daemon stops and disables the
@@ -765,7 +761,7 @@ function readNodePackageManager(value: unknown): NodePackageManager | undefined 
   return trimmed as NodePackageManager
 }
 
-function readNodeAppMode(value: unknown): NodeAppMode | undefined {
+function readNodeAppMode(value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined
   const trimmed = value.trim()
   return NODE_APP_MODE_RE.test(trimmed) ? trimmed : undefined

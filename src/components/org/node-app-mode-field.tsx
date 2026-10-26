@@ -4,14 +4,13 @@ import {
   MAIN_NODE_APP_MODES,
   NODE_APP_MODE_MAX_LENGTH,
   nodeAppModeProblem,
-  type NodeAppMode,
 } from '@/lib/compose/service-kind'
 
 /** Value of the third option; never saved, it only opens the popup. */
 const CUSTOM_OPTION = 'custom'
 
 /** Whether a saved mode is a custom one rather than one of the two main choices. */
-export function isCustomNodeAppMode(mode: NodeAppMode): boolean {
+export function isCustomNodeAppMode(mode: string): boolean {
   return !MAIN_NODE_APP_MODES.includes(mode)
 }
 
@@ -19,12 +18,12 @@ export function isCustomNodeAppMode(mode: NodeAppMode): boolean {
 const CUSTOM_LABEL_MAX_LENGTH = 16
 
 /** A long custom value is cut short on the option so the row keeps its size. */
-export function customModeLabel(mode: NodeAppMode): string {
+export function customModeLabel(mode: string): string {
   if (mode.length <= CUSTOM_LABEL_MAX_LENGTH) return mode
   return `${mode.slice(0, CUSTOM_LABEL_MAX_LENGTH - 1)}…`
 }
 
-function modeOptions(mode: NodeAppMode) {
+function modeOptions(mode: string) {
   const custom = isCustomNodeAppMode(mode)
   return [
     ...MAIN_NODE_APP_MODES.map((main) => ({ value: main, label: main })),
@@ -47,8 +46,8 @@ export function NodeAppModeField({
   onChange,
   disabled,
 }: Readonly<{
-  value: NodeAppMode
-  onChange: (value: NodeAppMode) => void
+  value: string
+  onChange: (value: string) => void
   disabled: boolean
 }>) {
   const [editing, setEditing] = useState(false)
@@ -87,7 +86,7 @@ function CustomNodeAppModeSheet({
 }: Readonly<{
   initial: string
   onCancel: () => void
-  onSave: (mode: NodeAppMode) => void
+  onSave: (mode: string) => void
 }>) {
   const [draft, setDraft] = useState(initial)
   const [triedSave, setTriedSave] = useState(false)

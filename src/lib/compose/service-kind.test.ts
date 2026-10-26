@@ -122,9 +122,9 @@ describe('serviceKind: node', () => {
     expect(parsed?.packageManager).toBeUndefined()
     expect(parsed?.appMode).toBeUndefined()
     for (const appMode of ['', '-staging', 'stage$1', 'a'.repeat(65), 7]) {
-      expect(parseServiceTurbopanelExtension({ serviceKind: 'node', appMode })?.appMode).toBe(
-        undefined
-      )
+      expect(
+        parseServiceTurbopanelExtension({ serviceKind: 'node', appMode })?.appMode
+      ).toBeUndefined()
     }
   })
 

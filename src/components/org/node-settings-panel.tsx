@@ -25,7 +25,6 @@ import {
   readServiceTurbopanelExtension,
   type ComposeServiceSourceExtension,
   type ComposeServiceTurbopanelExtension,
-  type NodeAppMode,
   type NodePackageManager,
 } from '@/lib/compose/service-kind'
 import {
@@ -101,7 +100,7 @@ type NodeSettingsDraft = Readonly<{
   enabled: boolean
   nodeVersion: string
   packageManager: string
-  appMode: NodeAppMode
+  appMode: string
   documentRoot: string
   appRoot: string
   startupFile: string
@@ -253,7 +252,7 @@ export function NodeSettingsPanel({
   const [enabled, setEnabled] = useState(true)
   const [nodeVersion, setNodeVersion] = useState('')
   const [packageManager, setPackageManager] = useState('')
-  const [appMode, setAppMode] = useState<NodeAppMode>('production')
+  const [appMode, setAppMode] = useState<string>('production')
   const [documentRoot, setDocumentRoot] = useState('')
   const [appRoot, setAppRoot] = useState('')
   const [startupFile, setStartupFile] = useState('')
@@ -432,8 +431,8 @@ function NodeSettingsFields({
   setNodeVersion: (value: string) => void
   packageManager: string
   setPackageManager: (value: string) => void
-  appMode: NodeAppMode
-  setAppMode: (value: NodeAppMode) => void
+  appMode: string
+  setAppMode: (value: string) => void
   documentRoot: string
   setDocumentRoot: (value: string) => void
   appRoot: string
