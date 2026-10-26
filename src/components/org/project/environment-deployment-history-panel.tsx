@@ -1,10 +1,7 @@
 import { useRouter, type Href } from 'expo-router'
 import { useMemo, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
-import {
-  nestedScrollDomProps,
-  webNestedScrollStyle,
-} from '@/components/org/logs/nested-scroll'
+import { nestedScrollDomProps, webNestedScrollStyle } from '@/components/org/logs/nested-scroll'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { Section } from '@/components/ui/v4/section'
 import {
@@ -21,7 +18,7 @@ import {
   findInFlightDeployment,
   isDeploymentCancelling,
   deploymentServerLabel,
-  deploymentStatusTone,
+  deploymentGroupTone,
   formatDeployActor,
   formatDeployTrigger,
   formatDeployDuration,
@@ -45,11 +42,7 @@ function statusDotTone(tone: 'success' | 'failed' | 'pending'): StatusTone {
 }
 
 function StatusCell({ group }: Readonly<{ group: DeploymentGroup }>) {
-  const tone = deploymentStatusTone(
-    group.status,
-    group.strategyOutcome,
-    isDeploymentCancelling(group),
-  )
+  const tone = deploymentGroupTone(group)
   return (
     <View style={styles.statusCell}>
       <StatusDot size="sm" tone={statusDotTone(tone.tone)} />
@@ -62,18 +55,12 @@ function StatusCell({ group }: Readonly<{ group: DeploymentGroup }>) {
 function ActorCell({ group }: Readonly<{ group: DeploymentGroup }>) {
   const trigger = formatDeployTrigger(group.trigger)
   if (!trigger) {
-    return (
-      <Text style={styles.cellMuted}>
-        {formatDeployActor(group.actorEntityType)}
-      </Text>
-    )
+    return <Text style={styles.cellMuted}>{formatDeployActor(group.actorEntityType)}</Text>
   }
   return (
     <>
       <Text style={styles.cellMuted}>{trigger.headline}</Text>
-      {trigger.detail ? (
-        <Text style={styles.cellMono}>{trigger.detail}</Text>
-      ) : null}
+      {trigger.detail ? <Text style={styles.cellMono}>{trigger.detail}</Text> : null}
     </>
   )
 }
@@ -103,28 +90,20 @@ function DeploymentRow({
       accessibilityRole="link"
       accessibilityHint="Opens the deploy log"
       accessibilityLabel={`Deploy ${formatDeployTimestamp(group.startedAt)} — ${
-        deploymentStatusTone(
-          group.status,
-          group.strategyOutcome,
-          isDeploymentCancelling(group),
-        ).label
+        deploymentGroupTone(group).label
       }`}
     >
       <View style={[styles.cell, styles.colStatus]}>
         <StatusCell group={group} />
       </View>
       <View style={[styles.cell, styles.colWhen]}>
-        <Text style={styles.cellText}>
-          {formatDeployTimestamp(group.startedAt)}
-        </Text>
+        <Text style={styles.cellText}>{formatDeployTimestamp(group.startedAt)}</Text>
       </View>
       <View style={[styles.cell, styles.colActor]}>
         <ActorCell group={group} />
       </View>
       <View style={[styles.cell, styles.colDuration]}>
-        <Text style={styles.cellMono}>
-          {formatDeployDuration(group.durationMs)}
-        </Text>
+        <Text style={styles.cellMono}>{formatDeployDuration(group.durationMs)}</Text>
       </View>
       <View style={[styles.cell, styles.colServer]}>
         <Text style={styles.cellMono}>{hostLabel}</Text>
@@ -245,7 +224,7 @@ export function EnvironmentDeploymentHistoryPanel({
   const deploymentsQuery = useEnvironmentDeployments(orgId, environmentId)
   const groups = useMemo(
     () => groupDeploymentsByGeneration(deploymentsQuery.data?.deployments ?? []),
-    [deploymentsQuery.data?.deployments],
+    [deploymentsQuery.data?.deployments]
   )
 
   const running = findInFlightDeployment(groups)
@@ -266,9 +245,7 @@ export function EnvironmentDeploymentHistoryPanel({
         collapsible={!alwaysOpen}
         defaultCollapsed={!alwaysOpen}
       >
-        {deploymentsQuery.isLoading ? (
-          <LoadingState label="Loading deploy history…" />
-        ) : null}
+        {deploymentsQuery.isLoading ? <LoadingState label="Loading deploy history…" /> : null}
         {deploymentsQuery.error ? (
           <Text style={panelStyles.error}>
             {userErrorMessage(deploymentsQuery.error, 'Failed to load deploy history')}
@@ -299,8 +276,8 @@ export function EnvironmentDeploymentHistoryPanel({
                         orgId,
                         projectId,
                         environmentId,
-                        group.id,
-                      ) as Href,
+                        group.id
+                      ) as Href
                     )
                   }
                 />

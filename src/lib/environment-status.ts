@@ -1,7 +1,4 @@
-import {
-  deploymentStatusTone,
-  type DeploymentGroup,
-} from '@/lib/deployment-history'
+import { deploymentGroupTone, type DeploymentGroup } from '@/lib/deployment-history'
 
 /** The words behind one status chip. Tone pairs with the label; never colour alone. */
 export type StatusFactTone = 'ok' | 'busy' | 'bad' | 'idle'
@@ -16,9 +13,7 @@ export type EnvironmentStatusFact = Readonly<{
 }>
 
 /** `https://` form of a hosting hostname, or null when it is not a usable host. */
-export function siteUrlFromHostname(
-  hostname: string | null | undefined,
-): string | null {
+export function siteUrlFromHostname(hostname: string | null | undefined): string | null {
   const trimmed = hostname?.trim()
   if (!trimmed) return null
   if (/^https?:\/\//i.test(trimmed)) {
@@ -73,7 +68,7 @@ export function oldestHostingsFirst<T extends SiteHostingRow>(rows: readonly T[]
  */
 export function environmentSiteHostnames(
   rowsByService: Readonly<Record<string, readonly SiteHostingRow[]>>,
-  serviceIds: readonly string[],
+  serviceIds: readonly string[]
 ): string[] {
   const rows = oldestHostingsFirst(
     serviceIds.flatMap((serviceId) => rowsByService[serviceId] ?? []).filter(isPublicHosting)
@@ -114,10 +109,7 @@ export function primarySiteHostname(
 }
 
 /** "2h ago" from an ISO stamp; null when there is none to read. */
-export function formatAgo(
-  value: string | null | undefined,
-  now: number,
-): string | null {
+export function formatAgo(value: string | null | undefined, now: number): string | null {
   if (!value) return null
   const at = Date.parse(value)
   if (Number.isNaN(at)) return null
@@ -140,12 +132,13 @@ const RUNNING_TONES: Readonly<Record<string, StatusFactTone>> = {
 function lastDeployFact(
   lastDeploy: DeploymentGroup | null,
   now: number,
-  progressLabel: string | null | undefined,
+  progressLabel: string | null | undefined
 ): EnvironmentStatusFact {
   if (!lastDeploy) {
     return { key: 'lastDeploy', caption: 'Last deploy', value: 'Never', tone: 'idle' }
   }
-  const verdict = deploymentStatusTone(lastDeploy.status, lastDeploy.strategyOutcome)
+  // Same started rule as the Deployments tab: a deploy a server has started reads Running.
+  const verdict = deploymentGroupTone(lastDeploy)
   if (progressLabel && verdict.tone === 'pending') {
     return { key: 'lastDeploy', caption: 'Deploying', value: progressLabel, tone: 'busy' }
   }
@@ -179,7 +172,7 @@ export function environmentStatusFacts(
     progressLabel?: string | null
     changesNotDeployed?: number | null
     now: number
-  }>,
+  }>
 ): EnvironmentStatusFact[] {
   const facts: EnvironmentStatusFact[] = [
     {

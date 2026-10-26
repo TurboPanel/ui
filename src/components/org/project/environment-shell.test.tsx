@@ -3,6 +3,9 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { EnvironmentShell, useEnvironmentChrome } from './environment-shell'
+import { groupDeploymentsByGeneration } from '@/lib/deployment-history'
+import { runningStatusKey } from '@/lib/v4/project-home'
+import { statusInfo } from '@/lib/v4/status-vocab'
 
 type Props = Readonly<Record<string, unknown> & { children?: ReactNode }>
 
@@ -18,6 +21,8 @@ const state = vi.hoisted(() => ({
   services: [] as { id: string }[],
   deployments: undefined as undefined | readonly Record<string, unknown>[],
   deploymentsLoading: false,
+  toneLabel: 'Running',
+  views: {} as Record<string, unknown>,
   replace: vi.fn(),
   push: vi.fn(),
   openURL: vi.fn(() => Promise.resolve()),
@@ -102,7 +107,7 @@ vi.mock('@/components/org/project/overview-environments-panel', () => ({
   EnvironmentLifecycleActions: () => <div data-testid="actions" />,
   EnvironmentLifecycleNotices: () => <div data-testid="notices" />,
   useEnvironmentLifecycle: () => ({
-    toneLabel: 'Running',
+    toneLabel: state.toneLabel,
     statusLabel: 'Running',
     toneColor: '#0f0',
   }),
@@ -139,7 +144,7 @@ vi.mock('@/components/org/project/project-context', () => ({
   useProjectContext: () => state.ctx,
 }))
 vi.mock('@/lib/queries/environment-cards', () => ({
-  useEnvironmentConfigViews: () => ({ views: {}, isLoading: false }),
+  useEnvironmentConfigViews: () => ({ views: state.views, isLoading: false }),
 }))
 vi.mock('@/lib/queries/services', () => ({
   useServices: () => ({ data: { services: state.services } }),
@@ -151,7 +156,6 @@ vi.mock('@/lib/queries/execution-logs', () => ({
     data: state.deployments ? { deployments: state.deployments } : undefined,
   }),
 }))
-
 
 const COMPOSE = { id: 'p', name: 'Shop', kind: 'compose' }
 const ENVS = [
@@ -186,6 +190,8 @@ beforeEach(() => {
   state.services = []
   state.deployments = undefined
   state.deploymentsLoading = false
+  state.toneLabel = 'Running'
+  state.views = {}
   state.width = 1200
   state.replace.mockClear()
   state.push.mockClear()
@@ -199,7 +205,7 @@ describe('EnvironmentShell gating', () => {
     render(
       <EnvironmentShell>
         <p>page body</p>
-      </EnvironmentShell>,
+      </EnvironmentShell>
     )
     expect(screen.getByTestId('actions')).toBeTruthy()
     expect(screen.getByRole('tablist')).toBeTruthy()
@@ -216,7 +222,7 @@ describe('EnvironmentShell gating', () => {
     render(
       <EnvironmentShell>
         <p>page body</p>
-      </EnvironmentShell>,
+      </EnvironmentShell>
     )
     expect(screen.getByText('page body')).toBeTruthy()
     expect(screen.queryByRole('tablist')).toBeNull()
@@ -266,11 +272,9 @@ describe('EnvironmentShell gating', () => {
     render(
       <EnvironmentShell>
         <p>page body</p>
-      </EnvironmentShell>,
+      </EnvironmentShell>
     )
-    expect(screen.getByTestId('redirect').getAttribute('data-href')).toBe(
-      '/o/projects/p/overview',
-    )
+    expect(screen.getByTestId('redirect').getAttribute('data-href')).toBe('/o/projects/p/overview')
   })
 
   it('shows no tabs while the path names no environment', () => {
@@ -278,7 +282,7 @@ describe('EnvironmentShell gating', () => {
     render(
       <EnvironmentShell>
         <p>page body</p>
-      </EnvironmentShell>,
+      </EnvironmentShell>
     )
     expect(screen.getByText('page body')).toBeTruthy()
     expect(screen.queryByRole('tablist')).toBeNull()
@@ -289,7 +293,7 @@ describe('EnvironmentShell gating', () => {
     render(
       <EnvironmentShell>
         <p>page body</p>
-      </EnvironmentShell>,
+      </EnvironmentShell>
     )
     expect(screen.queryByTestId('redirect')).toBeNull()
   })
@@ -311,7 +315,7 @@ describe('environment header', () => {
       render(
         <EnvironmentShell>
           <p>body</p>
-        </EnvironmentShell>,
+        </EnvironmentShell>
       )
       const tabs = screen.getAllByRole('tab')
       expect(tabs.map((tab) => tab.textContent)).toEqual([
@@ -326,12 +330,10 @@ describe('environment header', () => {
       expect(
         tabs
           .filter((tab) => tab.getAttribute('aria-selected') === 'true')
-          .map((tab) => tab.textContent),
+          .map((tab) => tab.textContent)
       ).toEqual([active])
       fireEvent.click(tabs[1] as HTMLElement)
-      expect(state.push).toHaveBeenLastCalledWith(
-        '/o/projects/p/environments/e/deployments',
-      )
+      expect(state.push).toHaveBeenLastCalledWith('/o/projects/p/environments/e/deployments')
       fireEvent.click(tabs[5] as HTMLElement)
       expect(state.push).toHaveBeenLastCalledWith(
         '/o/projects/p/environments/e/configuration/hosting'
@@ -344,7 +346,7 @@ describe('environment header', () => {
     render(
       <EnvironmentShell>
         <p>body</p>
-      </EnvironmentShell>,
+      </EnvironmentShell>
     )
     expect(screen.getByText('Switch to Production')).toBeTruthy()
     // The old "All environments ›" crumb above the header is now in the picker.
@@ -358,9 +360,73 @@ describe('environment header', () => {
     render(
       <EnvironmentShell>
         <p>body</p>
-      </EnvironmentShell>,
+      </EnvironmentShell>
     )
     expect(screen.getByLabelText('Last deploy: Never')).toBeTruthy()
+  })
+
+  const deployRow = (status: string, generation: number, startedAt: string | null = null) => ({
+    id: `c${generation}`,
+    commandId: `c${generation}`,
+    generation,
+    serverId: 'srv',
+    status,
+    actorEntityType: 'user',
+    queuedAt: '2026-10-26T10:00:00Z',
+    startedAt,
+    durationMs: null,
+  })
+
+  function renderNativeApp(deployments: readonly Record<string, unknown>[]) {
+    // A native app has no containers, so the lifecycle reads "Not started yet".
+    state.toneLabel = 'Not started yet'
+    state.views = { e: { effective: { services: [{ kind: 'node' }] } } }
+    state.deployments = deployments
+    render(
+      <EnvironmentShell>
+        <p>body</p>
+      </EnvironmentShell>
+    )
+  }
+
+  it('reads a deploy the server has started as running in the header, not queued', () => {
+    renderNativeApp([deployRow('sent', 2, '2026-10-26T10:01:00Z'), deployRow('succeeded', 1)])
+    expect(screen.getByLabelText(/^Last deploy: Running/)).toBeTruthy()
+    // The release the earlier deploy left is still serving.
+    expect(screen.getByLabelText('Running now: Running')).toBeTruthy()
+  })
+
+  it('does not claim a native app runs after its newest deploy timed out', () => {
+    renderNativeApp([deployRow('timed_out', 2), deployRow('succeeded', 1)])
+    // The server may have stopped the app or still be working, so it is not guessed.
+    expect(screen.getByLabelText('Running now: Unknown')).toBeTruthy()
+    expect(screen.getByLabelText(/^Last deploy: Timed out/)).toBeTruthy()
+  })
+
+  it.each([
+    [
+      'a running deploy after a success',
+      [deployRow('sent', 2, '2026-10-26T10:01:00Z'), deployRow('succeeded', 1)],
+    ],
+    ['a timed out deploy after a success', [deployRow('timed_out', 2), deployRow('succeeded', 1)]],
+    [
+      'a rolled back deploy',
+      [{ ...deployRow('failed', 2), strategyOutcome: 'rolled_back' }, deployRow('succeeded', 1)],
+    ],
+  ])('gives the header and the environment card the same word for %s', (_name, rows) => {
+    renderNativeApp(rows)
+    // The environment cards and the projects home both read a native app through this.
+    const cardKey = runningStatusKey([], {
+      latest: groupDeploymentsByGeneration(rows as never)[0] ?? null,
+    })
+    const word = statusInfo(cardKey ?? 'unknown').label
+    expect(screen.getByLabelText(`Running now: ${word}`)).toBeTruthy()
+  })
+
+  it('says starting for a first deploy that is still queued', () => {
+    renderNativeApp([deployRow('queued', 1)])
+    expect(screen.getByLabelText('Running now: Starting…')).toBeTruthy()
+    expect(screen.getByLabelText(/^Last deploy: Queued/)).toBeTruthy()
   })
 
   it('leaves the last deploy out while history is loading', () => {
@@ -368,7 +434,7 @@ describe('environment header', () => {
     render(
       <EnvironmentShell>
         <p>body</p>
-      </EnvironmentShell>,
+      </EnvironmentShell>
     )
     expect(screen.queryByLabelText(/^Last deploy/)).toBeNull()
   })
@@ -392,7 +458,7 @@ describe('environment header', () => {
     render(
       <EnvironmentShell>
         <p>body</p>
-      </EnvironmentShell>,
+      </EnvironmentShell>
     )
   }
 
@@ -462,7 +528,7 @@ describe('environment header', () => {
     render(
       <EnvironmentShell>
         <p>body</p>
-      </EnvironmentShell>,
+      </EnvironmentShell>
     )
     expect(screen.getByLabelText('Primary environment').textContent).toBe('Primary')
   })
@@ -473,12 +539,10 @@ describe('environment header', () => {
     render(
       <EnvironmentShell>
         <p>body</p>
-      </EnvironmentShell>,
+      </EnvironmentShell>
     )
     fireEvent.click(screen.getByText('Switch to Staging'))
-    expect(state.push).toHaveBeenCalledWith(
-      '/o/projects/p/environments/e2/deployments',
-    )
+    expect(state.push).toHaveBeenCalledWith('/o/projects/p/environments/e2/deployments')
   })
 
   it('moves a ?hostingId= deep link to the Hosting lens', () => {
@@ -486,10 +550,10 @@ describe('environment header', () => {
     render(
       <EnvironmentShell>
         <p>body</p>
-      </EnvironmentShell>,
+      </EnvironmentShell>
     )
     expect(state.replace).toHaveBeenCalledWith(
-      '/o/projects/p/environments/e/configuration/hosting?hostingId=h9',
+      '/o/projects/p/environments/e/configuration/hosting?hostingId=h9'
     )
   })
 
@@ -499,7 +563,7 @@ describe('environment header', () => {
     render(
       <EnvironmentShell>
         <p>body</p>
-      </EnvironmentShell>,
+      </EnvironmentShell>
     )
     expect(state.replace).not.toHaveBeenCalled()
   })

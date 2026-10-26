@@ -12,6 +12,7 @@ import {
   deploymentStatusTone,
   formatDeployDuration,
   groupDeploymentsByGeneration,
+  isDeploymentRunning,
   type DeploymentGroup,
 } from '@/lib/deployment-history'
 import type { DeploymentHistoryRecord } from '@/lib/instance-api'
@@ -32,27 +33,11 @@ export type DeployRow = Readonly<{
 
 const SHA_LENGTH = 7
 
-/** Sent to the server but not finished: the server may already be running it. */
-const DELIVERED_STATUSES: ReadonlySet<string> = new Set(['sent', 'acked'])
-
-/**
- * Is the deploy running on a server? A `running` row says so; a delivered row
- * whose server already reported starting the work (`startedAt`) is running
- * too, since the command status itself stays `sent` / `acked` until it ends.
- */
-function groupIsRunning(group: DeploymentGroup): boolean {
-  if (group.status === 'running') return true
-  return (
-    DELIVERED_STATUSES.has(group.status) &&
-    group.commands.some((command) => command.startedAt !== null)
-  )
-}
-
 export function groupStatusKey(group: DeploymentGroup): string {
   if (group.strategyOutcome === 'rolled_back') return 'rolledback'
   // Stopped on purpose mid-deploy: the same red as a failure, as on the cards.
   if (group.strategyOutcome === 'needs_attention') return 'failed'
-  if (groupIsRunning(group)) return 'deploying'
+  if (isDeploymentRunning(group)) return 'deploying'
   switch (group.status) {
     case 'succeeded':
       return 'deployed'
@@ -101,7 +86,7 @@ const WAITING_STATUSES: ReadonlySet<string> = new Set(['queued', 'dispatching', 
  */
 function groupSub(group: DeploymentGroup): string {
   if (group.durationMs !== null) return formatDeployDuration(group.durationMs)
-  if (groupIsRunning(group)) return 'In progress'
+  if (isDeploymentRunning(group)) return 'In progress'
   if (WAITING_STATUSES.has(group.status)) return 'Waiting to start'
   return formatDeployDuration(null)
 }
@@ -111,10 +96,12 @@ export function deployRows(
   rows: readonly DeploymentHistoryRecord[],
   now: number,
   running: boolean,
-  limit = 3,
+  limit = 3
 ): DeployRow[] {
   const groups = groupDeploymentsByGeneration(rows)
-  const liveId = running ? groups.find((group) => groupStatusKey(group) === 'deployed')?.id : undefined
+  const liveId = running
+    ? groups.find((group) => groupStatusKey(group) === 'deployed')?.id
+    : undefined
   return groups.slice(0, limit).map((group) => {
     const statusLabel = groupStatusLabel(group)
     return {
@@ -170,7 +157,7 @@ function deployName(group: DeploymentGroup): string {
  */
 export function problemNotice(
   rows: readonly DeploymentHistoryRecord[],
-  running: boolean,
+  running: boolean
 ): ProblemNotice | null {
   const groups = groupDeploymentsByGeneration(rows)
   const latest = groups[0]
@@ -179,7 +166,9 @@ export function problemNotice(
   const errorLine = groupErrorLine(latest)
   const extra = errorLine === undefined ? {} : { errorLine }
   if (key === 'rolledback') {
-    const reason = latest.commands.find((command) => command.strategyOutcomeReason)?.strategyOutcomeReason
+    const reason = latest.commands.find(
+      (command) => command.strategyOutcomeReason
+    )?.strategyOutcomeReason
     return {
       tone: 'warn',
       title: `${deployName(latest)} was rolled back`,

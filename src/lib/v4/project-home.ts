@@ -9,7 +9,7 @@
  */
 
 import { progressChipLabel } from '@/lib/deploy-progress'
-import type { DeploymentGroup } from '@/lib/deployment-history'
+import { deploymentDisplayStatus, type DeploymentGroup } from '@/lib/deployment-history'
 import { formatAgo, siteUrlFromHostname } from '@/lib/environment-status'
 import { hasHostDeployedContainers, isActiveContainerStatus } from '@/lib/container-status-guards'
 import type {
@@ -71,16 +71,40 @@ export function nativeDeployKey(latest: DeploymentGroup | null | undefined): Sta
 }
 
 /**
+ * The newest deploy ended or is going without replacing the release before it,
+ * so that release still serves: a rollback, or a deploy still going or
+ * cancelled while the release before it was serving.
+ */
+function oldReleaseServes(latest: DeploymentGroup): boolean {
+  if (latest.strategyOutcome === 'rolled_back') return true
+  if (latest.releaseBefore !== 'serving') return false
+  return latest.status === 'cancelled' || isDeployInProgress(latest)
+}
+
+/** A release existed before the newest deploy, serving or since taken down. */
+function wasDeployedBefore(latest: DeploymentGroup | null | undefined): boolean {
+  return latest?.releaseBefore === 'serving' || latest?.releaseBefore === 'down'
+}
+
+/**
  * A native app's "running now" from its newest deploy, in the environment
- * header's words: a finished deploy is running, one still going is starting,
- * anything else keeps the deploy's own word. `undefined` while the history loads.
+ * header's words: a finished deploy is running, and so is the release before
+ * it while a newer deploy runs or was cancelled, or after a rollback. A deploy
+ * still going with nothing serving is starting. A failure, a timeout, or a
+ * cancel after the app was taken down reads unknown once the app had been
+ * deployed: the server may have stopped it, or still be working, so it is not
+ * guessed. Anything else keeps the deploy's own word. `undefined` while the
+ * history loads. The header, the environment cards and the projects home all
+ * use this one rule.
  */
 export function nativeRunningKey(
   latest: DeploymentGroup | null | undefined
 ): StatusKey | undefined {
   const key = nativeDeployKey(latest)
   if (key === 'deployed' || key === 'live' || key === 'settling') return 'running'
+  if (latest && oldReleaseServes(latest)) return 'running'
   if (key === 'deploying' || key === 'building' || key === 'queued') return 'busy'
+  if ((key === 'failed' || key === 'cancelled') && wasDeployedBefore(latest)) return 'unknown'
   return key
 }
 
@@ -131,7 +155,8 @@ function deployWords(group: DeploymentGroup): DeployWords {
   if (group.strategyOutcome === 'needs_attention') {
     return { status: 'failed', label: 'Needs attention' }
   }
-  switch (group.status) {
+  // A deploy a server has started reads as deploying, not queued (same rule as the history).
+  switch (deploymentDisplayStatus(group)) {
     case 'succeeded':
       return { status: 'deployed' }
     case 'failed':
