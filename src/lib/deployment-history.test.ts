@@ -629,13 +629,30 @@ describe('the started rule every deploy view shares', () => {
   })
 })
 
-describe('earlierDeploySucceeded', () => {
-  it('tells each deploy whether an older one in the page succeeded', () => {
+describe('releaseBefore', () => {
+  it('tells each deploy what the older ones left, walking oldest to newest', () => {
     const groups = groupDeploymentsByGeneration([
-      row({ id: 'c', generation: 3, status: 'timed_out' }),
+      row({ id: 'e', generation: 5, status: 'running', startedAt: null }),
+      row({ id: 'd', generation: 4, status: 'cancelled' }),
+      row({ id: 'c', generation: 3, status: 'failed' }),
       row({ id: 'b', generation: 2, status: 'succeeded' }),
       row({ id: 'a', generation: 1, status: 'failed' }),
     ])
-    expect(groups.map((group) => group.earlierDeploySucceeded)).toEqual([true, false, false])
+    expect(groups.map((group) => group.releaseBefore)).toEqual([
+      'down',
+      'down',
+      'serving',
+      'none',
+      'none',
+    ])
+  })
+
+  it('counts a rollback as serving and a stop on purpose as down', () => {
+    const groups = groupDeploymentsByGeneration([
+      row({ id: 'c', generation: 3, status: 'queued' }),
+      row({ id: 'b', generation: 2, status: 'failed', strategyOutcome: 'needs_attention' }),
+      row({ id: 'a', generation: 1, status: 'failed', strategyOutcome: 'rolled_back' }),
+    ])
+    expect(groups.map((group) => group.releaseBefore)).toEqual(['down', 'serving', 'none'])
   })
 })

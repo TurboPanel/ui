@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { DeploymentGroup } from '@/lib/deployment-history'
+import { groupDeploymentsByGeneration, type DeploymentGroup } from '@/lib/deployment-history'
 import type {
   ConfigViewFieldRow,
   EnvironmentConfigViewResponse,
@@ -200,7 +200,7 @@ describe('native apps (no container rows)', () => {
   })
   it('keeps a native app running while the release an earlier deploy left still serves', () => {
     const after = (partial: Partial<DeploymentGroup>) =>
-      group({ earlierDeploySucceeded: true, ...partial })
+      group({ releaseBefore: 'serving', ...partial })
     expect(nativeRunningKey(after({ status: 'running' }))).toBe('running')
     expect(nativeRunningKey(after({ status: 'queued' }))).toBe('running')
     expect(nativeRunningKey(after({ status: 'cancelled' }))).toBe('running')
@@ -210,7 +210,7 @@ describe('native apps (no container rows)', () => {
   })
   it('does not guess after a plain failure or a timeout that followed a success', () => {
     const after = (partial: Partial<DeploymentGroup>) =>
-      group({ earlierDeploySucceeded: true, ...partial })
+      group({ releaseBefore: 'serving', ...partial })
     // The server stops the app on most failure paths and may still be working after a timeout.
     expect(nativeRunningKey(after({ status: 'failed' }))).toBe('unknown')
     expect(nativeRunningKey(after({ status: 'timed_out' }))).toBe('unknown')
@@ -220,10 +220,31 @@ describe('native apps (no container rows)', () => {
   })
   it('keeps the deploy word when no earlier deploy succeeded', () => {
     const first = (partial: Partial<DeploymentGroup>) =>
-      group({ earlierDeploySucceeded: false, ...partial })
+      group({ releaseBefore: 'none', ...partial })
     expect(nativeRunningKey(first({ status: 'running' }))).toBe('busy')
     expect(nativeRunningKey(first({ status: 'cancelled' }))).toBe('cancelled')
     expect(nativeRunningKey(first({ status: 'timed_out' }))).toBe('failed')
+  })
+  it('follows the history oldest to newest, not just any earlier success', () => {
+    // Statuses oldest first; the newest is the one the header and cards read.
+    const keyAfter = (...statuses: string[]) => {
+      const rows = statuses
+        .map((status, index) => ({
+          id: `c${index}`,
+          generation: index + 1,
+          status,
+          startedAt: null,
+          cancelRequestedAt: null,
+        }))
+        .reverse()
+      return nativeRunningKey(groupDeploymentsByGeneration(rows as never)[0])
+    }
+    expect(keyAfter('succeeded', 'failed', 'cancelled')).toBe('unknown')
+    expect(keyAfter('succeeded', 'failed', 'running')).not.toBe('running')
+    expect(keyAfter('succeeded', 'cancelled')).toBe('running')
+    expect(keyAfter('failed', 'succeeded', 'running')).toBe('running')
+    expect(keyAfter('succeeded', 'timed_out', 'failed')).toBe('unknown')
+    expect(keyAfter('failed', 'cancelled')).toBe('cancelled')
   })
   it('shows a succeeded deploy as running, in the header word, not never deployed', () => {
     expect(runningStatusKey([], { latest: group({ status: 'succeeded' }) })).toBe('running')

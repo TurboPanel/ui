@@ -38,12 +38,16 @@ export type DeploymentGroup = Readonly<{
   /** Earliest time someone asked to cancel this deploy; null when nobody did. */
   cancelRequestedAt: string | null
   /**
-   * An older deploy in the same history page succeeded, so the release it left
-   * may still be serving. Set by {@link groupDeploymentsByGeneration}; absent
-   * when unknown.
+   * What the older deploys in the same history page left behind, before this
+   * one: `serving` (the last finished one succeeded or rolled back), `down`
+   * (a later one failed, timed out or was stopped on purpose) or `none` (none
+   * ever succeeded). Set by {@link groupDeploymentsByGeneration}; absent when
+   * unknown.
    */
-  earlierDeploySucceeded?: boolean
+  releaseBefore?: ReleaseBefore
 }>
+
+export type ReleaseBefore = 'serving' | 'down' | 'none'
 
 /**
  * Lifecycle ranking for a fan-out. Failures outrank everything, then an
@@ -153,15 +157,30 @@ export function groupDeploymentsByGeneration(
       cancelRequestedAt: earliestCancelRequest(commands),
     }
   })
-  return markEarlierSuccess(groups)
+  return markReleaseBefore(groups)
 }
 
-/** Groups arrive newest first: each learns whether an older one in the page succeeded. */
-function markEarlierSuccess(groups: readonly DeploymentGroup[]): DeploymentGroup[] {
-  let succeededBefore = false
+/**
+ * The release left after one more deploy. A success or a rollback leaves one
+ * serving; a failure, a timeout or a stop on purpose takes a release that
+ * existed down; a deploy cancelled or still going changes nothing yet.
+ */
+function releaseAfter(before: ReleaseBefore, group: DeploymentGroup): ReleaseBefore {
+  if (group.strategyOutcome === 'rolled_back' || group.status === 'succeeded') return 'serving'
+  const failed =
+    group.strategyOutcome === 'needs_attention' ||
+    group.status === 'failed' ||
+    group.status === 'timed_out'
+  if (failed && before !== 'none') return 'down'
+  return before
+}
+
+/** Groups arrive newest first: walk oldest to newest, telling each what was there before it. */
+function markReleaseBefore(groups: readonly DeploymentGroup[]): DeploymentGroup[] {
+  let before: ReleaseBefore = 'none'
   return groups.reduceRight<DeploymentGroup[]>((marked, group) => {
-    marked.unshift({ ...group, earlierDeploySucceeded: succeededBefore })
-    if (group.status === 'succeeded') succeededBefore = true
+    marked.unshift({ ...group, releaseBefore: before })
+    before = releaseAfter(before, group)
     return marked
   }, [])
 }
