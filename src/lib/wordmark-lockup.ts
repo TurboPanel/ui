@@ -18,14 +18,18 @@ export const TURBOPANEL_MARK_ASPECT =
 /** Crossbar band = 120/370; wordmark sits in the remaining 250/370. */
 export const TURBOPANEL_UNDER_BAR_RATIO = 250 / TURBOPANEL_MARK_INK.height
 
-/** Plus Jakarta ExtraBold Italic cap height ≈ fontSize × this. */
-export const TURBOPANEL_WORDMARK_ASCENDER_RATIO = 0.78
+/**
+ * Band-fit ratio for Exo 2 Black Italic. Its cap height is 0.69 em; 0.72 keeps
+ * the word a touch under a full crossbar-band fill.
+ */
+export const TURBOPANEL_WORDMARK_ASCENDER_RATIO = 0.72
 
 export const TURBOPANEL_WORDMARK_STYLE = {
-  skew: '-15deg',
+  /** Added to Exo 2's own 8° italic: ~22°, the lean of the T stem (21.8°). */
+  skew: '-14deg',
   letterSpacingEm: 0,
-  /** Width estimate per em for lockup bounding width. */
-  emWidth: 6.2,
+  /** “urboPanel” at weight 900 is 5.12 em wide, plus the skew overhang. */
+  emWidth: 5.3,
 } as const
 
 /** Shared lockup tuning — px / percent tokens, not opaque multipliers in components. */
@@ -36,8 +40,8 @@ export const TURBOPANEL_WORDMARK_LOCKUP_TUNING = {
   markInkScale: 0.88,
   /** Horizontal start of “urboPanel” as a fraction of rendered mark width. */
   wordStartXRatio: 0.55,
-  /** Space between T stem and first letter. */
-  gapPx: 2,
+  /** Space between T stem and first letter (0: the word hugs the stem). */
+  gapPx: 0,
   /** Subtracted before band-target sizing. */
   sizeTrimPx: 1,
   /**
