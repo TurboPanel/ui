@@ -12,7 +12,7 @@ export const ADMIN_AREAS = [
       },
       {
         id: 'trusted-proxies',
-        label: 'Trusted proxies',
+        label: 'Trusted Proxies',
         pathSegment: 'trusted-proxies',
       },
       {
@@ -43,21 +43,21 @@ export const ADMIN_AREAS = [
   },
   {
     id: 'auth-providers',
-    label: 'Sign-in providers',
+    label: 'Sign-In Providers',
     pathSegment: 'auth-providers',
     hint: 'GitHub and Google OAuth client credentials',
     subRoutes: [],
   },
   {
     id: 'git',
-    label: 'Git providers',
+    label: 'Git Providers',
     pathSegment: 'git',
     hint: 'GitHub Apps and GitLab OAuth applications shared with every organization',
     subRoutes: [],
   },
   {
     id: 'signup',
-    label: 'Sign-up',
+    label: 'Sign-Up',
     pathSegment: 'signup',
     hint: 'Public account creation toggle',
     subRoutes: [],
@@ -78,7 +78,7 @@ export const ADMIN_AREAS = [
   },
   {
     id: 'metrics',
-    label: 'Server metrics',
+    label: 'Server Metrics',
     pathSegment: 'metrics',
     hint: 'Live-session sampling limits',
     subRoutes: [],

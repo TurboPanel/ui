@@ -75,7 +75,7 @@ export function searchDestinations(
   }
   return [
     ...page('projects'),
-    ...projectSub('git-sources', 'Git sources', 'git-sources'),
+    ...projectSub('git-sources', 'Git Sources', 'git-sources'),
     ...projectSub('repositories', 'Repositories', 'repositories'),
     ...projectSub('settings', 'Project settings', 'project-settings'),
     ...page('activity'),

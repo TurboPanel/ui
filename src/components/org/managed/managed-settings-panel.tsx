@@ -554,6 +554,7 @@ export function ManagedSettingsPanel({
   externalAccess,
   canManage,
   busy,
+  running = false,
   onApply,
 }: Readonly<{
   section?: ManagedSettingsSection
@@ -567,6 +568,8 @@ export function ManagedSettingsPanel({
   externalAccess?: ManagedExternalAccessView | null
   canManage: boolean
   busy: boolean
+  /** The database is running; the base image can only be changed while it is stopped. */
+  running?: boolean
   onApply: (next: ManagedSettings) => Promise<void>
 }>) {
   const catalog = engineCode ? managedCatalogEntryForCode(engineCode) : undefined
@@ -648,14 +651,16 @@ export function ManagedSettingsPanel({
       ) : null}
       {showEngine ? (
         <View style={styles.body}>
-          <SectionHeading title="Database" note="Base image and backups" />
-          <ImageField
-            form={form}
-            setForm={setForm}
-            disabled={disabled}
-            imageOptions={imageOptions}
-            versionLabel={versionLabel}
-          />
+          <SectionHeading title="Database" note={running ? 'Backups' : 'Base image and backups'} />
+          {running ? null : (
+            <ImageField
+              form={form}
+              setForm={setForm}
+              disabled={disabled}
+              imageOptions={imageOptions}
+              versionLabel={versionLabel}
+            />
+          )}
           <LabeledNumber
             label="Manual backups to keep"
             hint="Applies to backups made with Back up now. Each schedule keeps its own count."

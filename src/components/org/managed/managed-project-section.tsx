@@ -662,6 +662,7 @@ function ManagedEnvironmentReadyPanels({
           externalAccess={detail.externalAccess ?? null}
           canManage={canManage}
           busy={inFlight}
+          running={clusterStatus === 'ready'}
           onApply={async (next: ManagedSettings) => {
             const updateResult = await updateManagedMutation.run({
               settings: next,

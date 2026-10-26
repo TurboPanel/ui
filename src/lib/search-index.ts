@@ -155,7 +155,7 @@ function pageItems(orgId: string, data: SearchData): SearchItem[] {
   return [
     ...pages,
     ...sub('servers', 'datacenters', 'Datacenters'),
-    ...sub('servers', 'keys', 'Pending keys', 'registration keys unused'),
+    ...sub('servers', 'keys', 'Pending Keys', 'registration keys unused'),
     ...sub('servers', 'tls', 'Server certificates', 'tls ssl'),
     ...sub('servers', 'settings', 'Server settings', 'defaults timezone'),
     ...(networkPages ?? []),
