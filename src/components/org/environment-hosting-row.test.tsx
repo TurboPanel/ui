@@ -14,7 +14,9 @@ vi.mock(
 )
 vi.mock('@/components/header-chevron', () => ({ HeaderChevron: () => null }))
 vi.mock('@/components/org/hosting-certificate-panel', () => ({
-  HostingCertificatePanel: () => null,
+  HostingCertificatePanel: ({ disabled }: { disabled: boolean }) => (
+    <div data-testid="certificate-panel" data-disabled={String(disabled)} />
+  ),
   HostingCertificateActionsContext: {},
 }))
 vi.mock('@/components/org/compose-editor-section', () => ({ ComposeEditorSection: () => null }))
@@ -264,6 +266,14 @@ describe('a hostname removed from the configuration file, before the next deploy
     expect((screen.getByLabelText('Hostnames') as HTMLInputElement).disabled).toBe(true)
     expect(screen.queryByText('Save hosting')).toBeNull()
     expect(screen.queryByText('Hosting variables')).toBeNull()
+  })
+
+  it('keeps the certificate actions of a hostname set in the shared file, but not of one being removed', () => {
+    drawRow({ hostingId: 'h1', composeRoute: 'shop.example /', composeEditable: false })
+    expect(screen.getByTestId('certificate-panel').dataset.disabled).toBe('false')
+    cleanup()
+    drawRow({ hostingId: 'h1', composeEditable: false, removalNote: pendingRemovalNote(false) })
+    expect(screen.getByTestId('certificate-panel').dataset.disabled).toBe('true')
   })
 
   it('has no note on an ordinary hostname', () => {

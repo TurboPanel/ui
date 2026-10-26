@@ -1379,9 +1379,11 @@ function hostingRowLocks(
     composeOwned: boolean
     composeEditable: boolean
   }>,
-): { locked: boolean; panelFieldsLocked: boolean; canSave: boolean } {
+): { frozen: boolean; locked: boolean; panelFieldsLocked: boolean; canSave: boolean } {
+  // Nothing on the row can change, the certificate actions included.
   const frozen = input.disabled || input.awaitingRemoval
   return {
+    frozen,
     locked: frozen || (input.composeOwned && !input.composeEditable),
     panelFieldsLocked: frozen || input.composeOwned,
     canSave: input.composeEditable && !input.awaitingRemoval,
@@ -1496,7 +1498,7 @@ export function HostingPanelRow({
   // rather than only that the field is gone.
   const targetPortHint = hostingTargetPortHint(serviceContext) ?? ''
   const awaitingRemoval = removalNote !== null
-  const { locked, panelFieldsLocked, canSave } = hostingRowLocks({
+  const { frozen, locked, panelFieldsLocked, canSave } = hostingRowLocks({
     disabled,
     awaitingRemoval,
     composeOwned,
@@ -1602,7 +1604,7 @@ export function HostingPanelRow({
           orgId={orgId}
           hostingId={hostingId}
           composeOwned={composeOwned}
-          disabled={locked}
+          disabled={frozen}
         />
       ) : null}
 
