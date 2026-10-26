@@ -1,3 +1,4 @@
+import { formatLogLineTime } from '@/lib/log-line-time'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   FlatList,
@@ -32,17 +33,6 @@ const FOLLOW_THRESHOLD_PX = 24
 /** Rows mounted ahead of the viewport. Transcripts can run to many thousands. */
 const INITIAL_ROWS = 60
 
-/** `12:04:37` — transcripts are read while watching, not audited by date. */
-function formatLineTime(timestamp: string | null): string | null {
-  if (!timestamp) return null
-  const parsed = new Date(timestamp)
-  if (Number.isNaN(parsed.getTime())) return null
-  const hours = String(parsed.getHours()).padStart(2, '0')
-  const minutes = String(parsed.getMinutes()).padStart(2, '0')
-  const seconds = String(parsed.getSeconds()).padStart(2, '0')
-  return `${hours}:${minutes}:${seconds}`
-}
-
 function isLiveState(state: CommandLogState): boolean {
   return state === 'waiting' || state === 'streaming'
 }
@@ -50,7 +40,7 @@ function isLiveState(state: CommandLogState): boolean {
 function TranscriptRow({
   line,
 }: Readonly<{ line: LogTranscriptLine }>) {
-  const time = formatLineTime(line.timestamp)
+  const time = formatLogLineTime(line.timestamp)
   // Docker writes progress to stderr too — the stream alone is not a verdict.
   const isError = isErrorLine(line)
   return (
