@@ -44,12 +44,10 @@ export type ComposeHostingEditorFields = {
 
 /** The `tls` block for the editor's certificate choice. */
 function composeTlsFromEditor(
-  editor: Pick<ComposeHostingEditorFields, 'tlsId' | 'tlsAutomatic'>,
+  editor: Pick<ComposeHostingEditorFields, 'tlsId' | 'tlsAutomatic'>
 ): NonNullable<ComposeHostingExtensionEntry['tls']> {
   if (editor.tlsAutomatic) return { mode: 'automatic' }
-  return editor.tlsId
-    ? { mode: 'certificate', certificateRef: editor.tlsId }
-    : { mode: 'internal' }
+  return editor.tlsId ? { mode: 'certificate', certificateRef: editor.tlsId } : { mode: 'internal' }
 }
 
 /**
@@ -69,7 +67,7 @@ function composeTlsFromEditor(
  */
 export function composeHostingEntryFromEditorFields(
   editor: ComposeHostingEditorFields,
-  serviceKind: ComposeServiceKind | undefined,
+  serviceKind: ComposeServiceKind | undefined
 ): ComposeHostingExtensionEntry | null {
   const hostname = parseHostnameList(editor.hostnames)[0]?.toLowerCase()
   if (!hostname) return null
@@ -81,7 +79,9 @@ export function composeHostingEntryFromEditorFields(
   const targetPort = Number.parseInt(editor.targetPort.trim(), 10)
   if (
     hostingTargetPortAuthorable(serviceKind) &&
-    Number.isInteger(targetPort) && targetPort >= 1 && targetPort <= 65535
+    Number.isInteger(targetPort) &&
+    targetPort >= 1 &&
+    targetPort <= 65535
   ) {
     entry.targetPort = targetPort
   }

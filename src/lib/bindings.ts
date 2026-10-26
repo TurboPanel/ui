@@ -50,32 +50,10 @@ export function bindingPrefixedKeys(prefix: string): BindingPrefixedKeys {
  * `spec.binding.unprefixed` in `turbopanel/src/features/managed/postgres.ts`,
  * `mysql.ts`, and `mariadb.ts`.
  */
-export const BINDING_ENGINE_DEFAULT_KEYS: Record<
-  ManagedServiceEngine,
-  string[]
-> = {
-  postgres: [
-    'PGHOST',
-    'PGPORT',
-    'PGDATABASE',
-    'PGUSER',
-    'PGPASSWORD',
-    'PGSSLMODE',
-  ],
-  mysql: [
-    'MYSQL_HOST',
-    'MYSQL_PORT',
-    'MYSQL_DATABASE',
-    'MYSQL_USER',
-    'MYSQL_PASSWORD',
-  ],
-  mariadb: [
-    'MYSQL_HOST',
-    'MYSQL_PORT',
-    'MYSQL_DATABASE',
-    'MYSQL_USER',
-    'MYSQL_PASSWORD',
-  ],
+export const BINDING_ENGINE_DEFAULT_KEYS: Record<ManagedServiceEngine, string[]> = {
+  postgres: ['PGHOST', 'PGPORT', 'PGDATABASE', 'PGUSER', 'PGPASSWORD', 'PGSSLMODE'],
+  mysql: ['MYSQL_HOST', 'MYSQL_PORT', 'MYSQL_DATABASE', 'MYSQL_USER', 'MYSQL_PASSWORD'],
+  mariadb: ['MYSQL_HOST', 'MYSQL_PORT', 'MYSQL_DATABASE', 'MYSQL_USER', 'MYSQL_PASSWORD'],
   redis: [],
   clickhouse: [],
 }
@@ -91,24 +69,16 @@ export const BINDING_SECRET_KEY_SUFFIXES = [
 
 export function isBindingSecretKey(key: string): boolean {
   if (key === 'PGPASSWORD' || key === 'MYSQL_PASSWORD') return true
-  return (
-    key.endsWith('_URL') ||
-    key.endsWith('_CA_CERT') ||
-    key.endsWith('_PASSWORD')
-  )
+  return key.endsWith('_URL') || key.endsWith('_CA_CERT') || key.endsWith('_PASSWORD')
 }
 
-export type BindingKeyPrefixValidation =
-  | { ok: true; prefix: string }
-  | { ok: false; error: string }
+export type BindingKeyPrefixValidation = { ok: true; prefix: string } | { ok: false; error: string }
 
 /**
  * Validate a binding key prefix for the create form. Rejects empty, oversize,
  * non-identifier, and reserved `TURBOPANEL` / `TURBOPANEL_*` prefixes.
  */
-export function validateBindingKeyPrefix(
-  prefix: string,
-): BindingKeyPrefixValidation {
+export function validateBindingKeyPrefix(prefix: string): BindingKeyPrefixValidation {
   const trimmed = prefix.trim()
   if (trimmed.length < 1) {
     return { ok: false, error: 'Key prefix is required.' }
@@ -139,13 +109,17 @@ export function validateBindingKeyPrefix(
  * Keys the service will receive if the create form is submitted as-is.
  * Do not use this for existing bindings — render server `keys[]` instead.
  */
-export function previewBindingKeys(input: Readonly<{
-  prefix: string
-  engine: ManagedServiceEngine
-  emitEngineDefaults: boolean
-}>): string[] {
+export function previewBindingKeys(
+  input: Readonly<{
+    prefix: string
+    engine: ManagedServiceEngine
+    emitEngineDefaults: boolean
+  }>
+): string[] {
   const validation = validateBindingKeyPrefix(input.prefix)
-  const prefix = validation.ok ? validation.prefix : input.prefix.trim() || DEFAULT_BINDING_KEY_PREFIX
+  const prefix = validation.ok
+    ? validation.prefix
+    : input.prefix.trim() || DEFAULT_BINDING_KEY_PREFIX
   const prefixed = bindingPrefixedKeys(prefix)
   const keys = Object.values(prefixed)
   if (input.emitEngineDefaults) {

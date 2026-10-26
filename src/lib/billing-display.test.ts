@@ -146,7 +146,12 @@ describe('describePendingChange', () => {
       'One license moves from S2 to S1 at the end of the current period.'
     )
     const dated = describePendingChange(
-      change({ kind: 'release-seat', fromTierId: 't1', toTierId: null, landsAt: '2026-10-01T00:00:00Z' }),
+      change({
+        kind: 'release-seat',
+        fromTierId: 't1',
+        toTierId: null,
+        landsAt: '2026-10-01T00:00:00Z',
+      }),
       tiers
     )
     expect(dated).toMatch(/^One S1 license ends on .+\.$/)
@@ -199,13 +204,27 @@ describe('license summary lines', () => {
       })
     ).toBe('1 of 4 licenses in use · 3 more servers can be added')
     expect(
-      licenseSummaryLine({ purchased: 1, ending: 0, endsAt: null, inUse: 1, bound: 1, available: 0 })
+      licenseSummaryLine({
+        purchased: 1,
+        ending: 0,
+        endsAt: null,
+        inUse: 1,
+        bound: 1,
+        available: 0,
+      })
     ).toBe('1 of 1 license in use · no room for another server')
   })
 
   it('never counts an ending license as in use — it names the date and says restore', () => {
     expect(
-      licenseSummaryLine({ purchased: 6, ending: 3, endsAt: OCT_26, inUse: 3, bound: 3, available: 0 })
+      licenseSummaryLine({
+        purchased: 6,
+        ending: 3,
+        endsAt: OCT_26,
+        inUse: 3,
+        bound: 3,
+        available: 0,
+      })
     ).toBe(`3 of 6 licenses in use · 3 end ${oct26} · restore one to add another server`)
   })
 
@@ -221,7 +240,9 @@ describe('license summary lines', () => {
         unusedKeys: 1,
         available: 0,
       })
-    ).toBe('6 of 7 licenses in use (1 provisioning) · 1 held by an unused key · no room for another server')
+    ).toBe(
+      '6 of 7 licenses in use (1 provisioning) · 1 held by an unused key · no room for another server'
+    )
     expect(
       licenseSummaryLine({
         purchased: 8,
@@ -339,15 +360,20 @@ describe('addServerTierState — restore before buy, per tier', () => {
   })
   it('says when unused registration keys are holding the licenses', () => {
     expect(
-      addServerTierState('S1', tierRow({ available: 1, ending: 0 }), { available: 0, unusedKeys: 1 })
+      addServerTierState('S1', tierRow({ available: 1, ending: 0 }), {
+        available: 0,
+        unusedKeys: 1,
+      })
     ).toEqual({
       kind: 'buy',
       message:
         'No S1 license is free. 1 license is held by unused registration keys — delete one to free it, or buy another.',
     })
     expect(
-      addServerTierState('S1', tierRow({ available: 0, ending: 0 }), { available: 0, unusedKeys: 2 })
-        .message
+      addServerTierState('S1', tierRow({ available: 0, ending: 0 }), {
+        available: 0,
+        unusedKeys: 2,
+      }).message
     ).toContain('2 licenses are held by unused registration keys')
   })
   it('still restores first when the tier has licenses ending, whatever the org total', () => {
@@ -362,8 +388,12 @@ describe('addServerTierState — restore before buy, per tier', () => {
 
 describe('effectiveTierAvailable', () => {
   it('is the smaller of the tier and the org-wide count, never negative', () => {
-    expect(effectiveTierAvailable(tierRow({ available: 3 }), { available: 1, unusedKeys: 0 })).toBe(1)
-    expect(effectiveTierAvailable(tierRow({ available: 1 }), { available: 5, unusedKeys: 0 })).toBe(1)
+    expect(effectiveTierAvailable(tierRow({ available: 3 }), { available: 1, unusedKeys: 0 })).toBe(
+      1
+    )
+    expect(effectiveTierAvailable(tierRow({ available: 1 }), { available: 5, unusedKeys: 0 })).toBe(
+      1
+    )
     expect(effectiveTierAvailable(tierRow({ available: -2 }), null)).toBe(0)
     expect(effectiveTierAvailable(null, { available: 4, unusedKeys: 0 })).toBe(0)
     expect(
@@ -376,7 +406,15 @@ describe('refusalTierId', () => {
   const refusal = {
     tiers: [
       { tierId: 't1', label: 'S1', purchased: 3, inUse: 3, ending: 0, endsAt: null, available: 0 },
-      { tierId: 't2', label: 'S2', purchased: 2, inUse: 0, ending: 2, endsAt: OCT_26, available: 0 },
+      {
+        tierId: 't2',
+        label: 'S2',
+        purchased: 2,
+        inUse: 0,
+        ending: 2,
+        endsAt: OCT_26,
+        available: 0,
+      },
     ],
   }
   it('prefers the tier the operator chose', () => {
@@ -432,10 +470,18 @@ describe('describeBillingRefusal', () => {
   it('names the server a reduction would strand and the tier it needs', () => {
     const names = { serverName: (id: string) => (id === 'srv-1' ? 'web-1' : null) }
     expect(
-      describeBillingRefusal(refusal({ error: 'servers_uncovered', serverId: 'srv-1', requiredTier: 'S5' }), names)
-    ).toBe('web-1 needs S5 and would be left uncovered. Move a license up to S5 or buy one there first.')
+      describeBillingRefusal(
+        refusal({ error: 'servers_uncovered', serverId: 'srv-1', requiredTier: 'S5' }),
+        names
+      )
+    ).toBe(
+      'web-1 needs S5 and would be left uncovered. Move a license up to S5 or buy one there first.'
+    )
     expect(
-      describeBillingRefusal(refusal({ error: 'servers_uncovered', serverId: 'srv-2', requiredTier: 'S2' }), names)
+      describeBillingRefusal(
+        refusal({ error: 'servers_uncovered', serverId: 'srv-2', requiredTier: 'S2' }),
+        names
+      )
     ).toContain('srv-2 needs S2')
     expect(describeBillingRefusal(refusal({ error: 'servers_uncovered' }))).toBe(
       'A server would be left uncovered. Buy or move a license that covers it first.'
@@ -451,7 +497,9 @@ describe('describeBillingRefusal', () => {
       )
     ).toBe(`You have 3 S1 licenses ending ${oct26} — restore those first.`)
     expect(
-      describeBillingRefusal(refusal({ error: 'licenses_ending', tierId: 'tx', ending: 1, endsAt: null }))
+      describeBillingRefusal(
+        refusal({ error: 'licenses_ending', tierId: 'tx', ending: 1, endsAt: null })
+      )
     ).toBe('You have 1 license ending at the end of the period — restore those first.')
     expect(describeBillingRefusal(refusal({ error: 'no_licenses_ending' }))).toContain('Refresh')
   })
@@ -495,17 +543,31 @@ describe('describeBillingRefusal', () => {
 
   it('explains the other refusals with a next step', () => {
     expect(
-      describeBillingRefusal(refusal({ error: 'licenses_in_use', purchasedAfter: 2, licensesHeld: 3 }))
+      describeBillingRefusal(
+        refusal({ error: 'licenses_in_use', purchasedAfter: 2, licensesHeld: 3 })
+      )
     ).toBe('3 licenses are in use but only 2 would remain. Remove a server or a waiting key first.')
-    expect(describeBillingRefusal(refusal({ error: 'licenses_in_use' }))).toContain('Remove a server')
-    expect(describeBillingRefusal(refusal({ error: 'subscription_past_due' }))).toContain('past due')
-    expect(describeBillingRefusal(refusal({ error: 'no_subscription' }))).toContain('no subscription')
-    expect(describeBillingRefusal(refusal({ error: 'subscription_exists' }))).toContain('already has')
+    expect(describeBillingRefusal(refusal({ error: 'licenses_in_use' }))).toContain(
+      'Remove a server'
+    )
+    expect(describeBillingRefusal(refusal({ error: 'subscription_past_due' }))).toContain(
+      'past due'
+    )
+    expect(describeBillingRefusal(refusal({ error: 'no_subscription' }))).toContain(
+      'no subscription'
+    )
+    expect(describeBillingRefusal(refusal({ error: 'subscription_exists' }))).toContain(
+      'already has'
+    )
     expect(describeBillingRefusal(refusal({ error: 'billing_mutation_in_progress' }))).toContain(
       'Try again'
     )
-    expect(describeBillingRefusal(refusal({ error: 'not_an_upgrade' }, 400))).toContain('down the ladder')
-    expect(describeBillingRefusal(refusal({ error: 'not_a_downgrade' }, 400))).toContain('up the ladder')
+    expect(describeBillingRefusal(refusal({ error: 'not_an_upgrade' }, 400))).toContain(
+      'down the ladder'
+    )
+    expect(describeBillingRefusal(refusal({ error: 'not_a_downgrade' }, 400))).toContain(
+      'up the ladder'
+    )
     expect(describeBillingRefusal(refusal({ error: 'tier_not_purchasable' }, 400))).toContain(
       'cannot be bought'
     )

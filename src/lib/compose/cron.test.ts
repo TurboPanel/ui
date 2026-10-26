@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  cronCommandIssue,
-  cronJobNameIssue,
-  cronScheduleIssue,
-} from '@/lib/compose/cron'
+import { cronCommandIssue, cronJobNameIssue, cronScheduleIssue } from '@/lib/compose/cron'
 
 describe('cronScheduleIssue', () => {
   it('accepts ordinary schedules', () => {
@@ -64,15 +60,13 @@ describe('cronCommandIssue', () => {
   it('rejects shell syntax with the reason', () => {
     // systemd runs the command directly, so `>>` would be passed to the script
     // as an argument — it looks like redirection and is not.
-    for (
-      const command of [
-        'php x.php >> /tmp/log',
-        'php x.php && echo ok',
-        'php x.php | tee log',
-        'php $(id).php',
-        'php *.php',
-      ]
-    ) {
+    for (const command of [
+      'php x.php >> /tmp/log',
+      'php x.php && echo ok',
+      'php x.php | tee log',
+      'php $(id).php',
+      'php *.php',
+    ]) {
       expect(cronCommandIssue(command)).toContain('no shell')
     }
   })

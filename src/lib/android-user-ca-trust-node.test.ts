@@ -13,13 +13,11 @@ import {
 import { withDevelopmentClientNativeNetwork } from '@/lib/metro-cleartext-node.mjs'
 
 function expoConfigPlugins() {
-  const expoPackage = realpathSync(
-    path.join(process.cwd(), 'node_modules/expo/package.json'),
-  )
+  const expoPackage = realpathSync(path.join(process.cwd(), 'node_modules/expo/package.json'))
   return createRequire(expoPackage)('@expo/config-plugins') as {
     evalModsAsync: (
       config: Record<string, unknown>,
-      props: { projectRoot: string; platforms: string[] },
+      props: { projectRoot: string; platforms: string[] }
     ) => Promise<unknown>
     withDefaultBaseMods: (config: Record<string, unknown>) => Record<string, unknown>
   }
@@ -40,7 +38,7 @@ async function evaluateAndroidTrustPlugin(profile: 'production' | 'development')
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="app.turbopanel">
   <application android:name=".MainApplication" />
 </manifest>
-`,
+`
     )
     const { evalModsAsync, withDefaultBaseMods } = expoConfigPlugins()
     await evalModsAsync(
@@ -49,18 +47,15 @@ async function evaluateAndroidTrustPlugin(profile: 'production' | 'development')
           name: 'TurboPanel',
           slug: 'ui',
           android: { package: 'app.turbopanel' },
-        }),
+        })
       ),
-      { projectRoot: root, platforms: ['android'] },
+      { projectRoot: root, platforms: ['android'] }
     )
     const xml = await readFile(
       path.join(android, 'app/src/main/res/xml/network_security_config.xml'),
-      'utf8',
+      'utf8'
     )
-    const manifest = await readFile(
-      path.join(android, 'app/src/main/AndroidManifest.xml'),
-      'utf8',
-    )
+    const manifest = await readFile(path.join(android, 'app/src/main/AndroidManifest.xml'), 'utf8')
     return { xml, manifest }
   } finally {
     if (previousProfile === undefined) delete process.env.EAS_BUILD_PROFILE
@@ -83,12 +78,8 @@ describe('networkSecurityConfigXml', () => {
   })
 
   it('permits Metro cleartext only when asked', () => {
-    expect(networkSecurityConfigXml(false)).toContain(
-      'cleartextTrafficPermitted="false"',
-    )
-    expect(networkSecurityConfigXml(true)).toContain(
-      'cleartextTrafficPermitted="true"',
-    )
+    expect(networkSecurityConfigXml(false)).toContain('cleartextTrafficPermitted="false"')
+    expect(networkSecurityConfigXml(true)).toContain('cleartextTrafficPermitted="true"')
   })
 })
 
@@ -102,11 +93,10 @@ describe('applyAndroidNetworkSecurityConfig', () => {
     const applied = applyAndroidNetworkSecurityConfig(manifest) as {
       manifest: { application: { $: Record<string, string> }[] }
     }
-    expect(applied.manifest.application[0]?.$['android:networkSecurityConfig'])
-      .toBe('@xml/network_security_config')
-    expect(applied.manifest.application[0]?.$['android:name']).toBe(
-      '.MainApplication',
+    expect(applied.manifest.application[0]?.$['android:networkSecurityConfig']).toBe(
+      '@xml/network_security_config'
     )
+    expect(applied.manifest.application[0]?.$['android:name']).toBe('.MainApplication')
   })
 })
 
@@ -132,7 +122,7 @@ describe('withAndroidUserCaTrust', () => {
       withDevelopmentClientNativeNetwork(expoBase, {
         EAS_BUILD: 'true',
         EAS_BUILD_PROFILE: 'production',
-      }),
+      })
     ) as typeof expoBase & {
       plugins: unknown[]
       android?: { package: string; usesCleartextTraffic?: boolean }
@@ -145,7 +135,7 @@ describe('withAndroidUserCaTrust', () => {
     const development = withAndroidUserCaTrust(
       withDevelopmentClientNativeNetwork(expoBase, {
         EAS_BUILD_PROFILE: 'development',
-      }),
+      })
     ) as typeof expoBase & {
       plugins: unknown[]
       android: { package: string; usesCleartextTraffic: boolean }
@@ -161,9 +151,7 @@ describe('androidUserCaTrustPlugin', () => {
     const { xml, manifest } = await evaluateAndroidTrustPlugin('production')
     trustAnchors(xml)
     expect(xml).toContain('cleartextTrafficPermitted="false"')
-    expect(manifest).toContain(
-      'android:networkSecurityConfig="@xml/network_security_config"',
-    )
+    expect(manifest).toContain('android:networkSecurityConfig="@xml/network_security_config"')
     expect(manifest).toContain('android:name=".MainApplication"')
   })
 

@@ -5,7 +5,7 @@
 
 const IPV4_OCTET = String.raw`(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)`
 const IPV4_ADDRESS_RE = new RegExp(
-  String.raw`^${IPV4_OCTET}\.${IPV4_OCTET}\.${IPV4_OCTET}\.${IPV4_OCTET}$`,
+  String.raw`^${IPV4_OCTET}\.${IPV4_OCTET}\.${IPV4_OCTET}\.${IPV4_OCTET}$`
 )
 
 function isIpv6Hextet(part: string): boolean {
@@ -21,11 +21,7 @@ function expandIpv6Hextets(address: string): string[] | null {
     const missing = 8 - leftParts.length - rightParts.length
     if (missing < 0) return null
     if (![...leftParts, ...rightParts].every(isIpv6Hextet)) return null
-    return [
-      ...leftParts,
-      ...Array.from({ length: missing }, () => '0'),
-      ...rightParts,
-    ]
+    return [...leftParts, ...Array.from({ length: missing }, () => '0'), ...rightParts]
   }
   const parts = address.split(':')
   if (parts.length !== 8) return null
@@ -94,8 +90,7 @@ export function parseCidr(value: string): ParsedCidr | null {
   const base = ipToBigInt(addressPart)
   if (base === null) return null
   const hostBits = maxPrefix - prefix
-  const aligned =
-    hostBits === 0 ? base : (base >> BigInt(hostBits)) << BigInt(hostBits)
+  const aligned = hostBits === 0 ? base : (base >> BigInt(hostBits)) << BigInt(hostBits)
   return { version, base: aligned, prefix }
 }
 
@@ -124,9 +119,7 @@ function ipv6HextetsFromBigInt(value: bigint): number[] {
 }
 
 /** Longest run of zero hextets (RFC 5952 prefers the leftmost on ties). */
-function longestIpv6ZeroRun(
-  hextets: readonly number[],
-): { start: number; length: number } {
+function longestIpv6ZeroRun(hextets: readonly number[]): { start: number; length: number } {
   let bestStart = -1
   let bestLen = 0
   let runStart = -1
@@ -164,10 +157,7 @@ function bigIntToIpv6(value: bigint): string {
 }
 
 export function formatCidr(parsed: ParsedCidr): string {
-  const address =
-    parsed.version === 4
-      ? bigIntToIpv4(parsed.base)
-      : bigIntToIpv6(parsed.base)
+  const address = parsed.version === 4 ? bigIntToIpv4(parsed.base) : bigIntToIpv6(parsed.base)
   return `${address}/${parsed.prefix}`
 }
 
@@ -221,7 +211,6 @@ export function cidrsOverlap(a: string, b: string): boolean {
   const bitWidth = shorter.version === 4 ? 32 : 128
   const hostBits = bitWidth - shorter.prefix
   if (hostBits === 0) return longer.base === shorter.base
-  const alignedLonger =
-    (longer.base >> BigInt(hostBits)) << BigInt(hostBits)
+  const alignedLonger = (longer.base >> BigInt(hostBits)) << BigInt(hostBits)
   return alignedLonger === shorter.base
 }

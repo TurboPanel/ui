@@ -47,9 +47,7 @@ export type ComposeLintLevel = 'error' | 'warning'
  * style the note as what it is rather than parse the sentence.
  */
 export type ComposeLintCode =
-  | 'field_unsupported'
-  | 'turbofabric_required'
-  | 'field_requires_org_opt_in'
+  'field_unsupported' | 'turbofabric_required' | 'field_requires_org_opt_in'
 
 export type ComposeLintIssue = {
   level: ComposeLintLevel
@@ -183,9 +181,7 @@ export function isComposeTopLevelKey(key: string): boolean {
  * Used by the YAML editor to re-indent misplaced service properties on Enter.
  */
 export function isComposeServicePropertyKey(key: string): boolean {
-  return (
-    classifyServiceKey(key) !== undefined && classifyTopLevelKey(key) === undefined
-  )
+  return classifyServiceKey(key) !== undefined && classifyTopLevelKey(key) === undefined
 }
 
 function levenshtein(a: string, b: string): number {
@@ -197,11 +193,7 @@ function levenshtein(a: string, b: string): number {
   for (let i = 1; i < rows; i += 1) {
     for (let j = 1; j < cols; j += 1) {
       const cost = a[i - 1] === b[j - 1] ? 0 : 1
-      dist[i][j] = Math.min(
-        dist[i - 1][j] + 1,
-        dist[i][j - 1] + 1,
-        dist[i - 1][j - 1] + cost,
-      )
+      dist[i][j] = Math.min(dist[i - 1][j] + 1, dist[i][j - 1] + 1, dist[i - 1][j - 1] + cost)
     }
   }
   return dist[a.length][b.length]
@@ -221,20 +213,13 @@ function suggestKey(key: string, allowed: Iterable<string>): string | null {
   return best
 }
 
-function unknownKeyMessage(
-  key: string,
-  kind: string,
-  allowed: Iterable<string>,
-): string {
+function unknownKeyMessage(key: string, kind: string, allowed: Iterable<string>): string {
   const suggestion = suggestKey(key, allowed)
   const base = `Unknown ${kind} key "${key}"`
   return suggestion ? `${base} — did you mean "${suggestion}"?` : base
 }
 
-function nodeLine(
-  node: Node | null | undefined,
-  lineCounter: LineCounter,
-): number | undefined {
+function nodeLine(node: Node | null | undefined, lineCounter: LineCounter): number | undefined {
   const range = (node as { range?: [number, number, number] } | null)?.range
   if (!range) return undefined
   return lineCounter.linePos(range[0]).line
@@ -361,7 +346,7 @@ function serviceIsRailpackBuilt(valueNode: YAMLMap): boolean {
 
 /** Locate `x-turbopanel.source.sourceId` so issues can carry the author's line. */
 function serviceSourceIdNode(
-  valueNode: YAMLMap,
+  valueNode: YAMLMap
 ): { sourceId: string | null; node: Node | null } | null {
   const sourceNode = serviceSourceEntry(valueNode)
   if (sourceNode === undefined) return null
@@ -380,7 +365,7 @@ function lintServiceSource(
   valueNode: YAMLMap,
   lineCounter: LineCounter,
   issues: ComposeLintIssue[],
-  options?: ComposeLintOptions,
+  options?: ComposeLintOptions
 ): void {
   const found = serviceSourceIdNode(valueNode)
   if (!found) return
@@ -420,7 +405,7 @@ function lintServiceTurbopanelFields(
   serviceKeyLine: number | undefined,
   lineCounter: LineCounter,
   issues: ComposeLintIssue[],
-  options?: ComposeLintOptions,
+  options?: ComposeLintOptions
 ): void {
   // With the managed extension hidden, author-typed `x-turbopanel` is dropped
   // on save and already carries the warning that says so — rules about a block
@@ -435,7 +420,7 @@ function lintServiceTurbopanelFields(
     valueNode,
     [TURBOPANEL_SERVICE_EXTENSION_KEY],
     lineCounter,
-    serviceKeyLine,
+    serviceKeyLine
   )
 
   if (!isMap(extensionNode)) {
@@ -468,12 +453,7 @@ function lintServiceTurbopanelFields(
       level: 'error',
       message: issue.message,
       path: `${basePath}.${issue.field}`,
-      line: lineForPath(
-        extensionNode,
-        [issue.field],
-        lineCounter,
-        keyLine,
-      ),
+      line: lineForPath(extensionNode, [issue.field], lineCounter, keyLine),
     })
   }
 }
@@ -486,7 +466,7 @@ function lintServiceTurbopanelFields(
 function isHostNativeForLint(
   name: string,
   valueNode: YAMLMap,
-  options?: ComposeLintOptions,
+  options?: ComposeLintOptions
 ): boolean {
   if (options?.siteServices?.includes(name)) return true
   if (options?.managedExtensionHidden) return false
@@ -498,7 +478,7 @@ function lintVariableRefScalar(
   path: string,
   node: Node | null | undefined,
   lineCounter: LineCounter,
-  issues: ComposeLintIssue[],
+  issues: ComposeLintIssue[]
 ): void {
   const parsed = parseExactVariableRef(raw)
   if (parsed.ok || parsed.error === 'not_a_ref') return
@@ -523,19 +503,13 @@ function lintEnvOrArgsMap(
   fieldPath: string,
   valueNode: YAMLMap,
   lineCounter: LineCounter,
-  issues: ComposeLintIssue[],
+  issues: ComposeLintIssue[]
 ): void {
   for (const item of valueNode.items) {
     const key = stringKey(item.key)
     const raw = scalarString(item.value as Node)
     if (key === null || raw === null) continue
-    lintVariableRefScalar(
-      raw,
-      `${fieldPath}.${key}`,
-      item.value as Node,
-      lineCounter,
-      issues,
-    )
+    lintVariableRefScalar(raw, `${fieldPath}.${key}`, item.value as Node, lineCounter, issues)
   }
 }
 
@@ -543,7 +517,7 @@ function lintEnvOrArgsSeq(
   fieldPath: string,
   valueNode: YAMLSeq,
   lineCounter: LineCounter,
-  issues: ComposeLintIssue[],
+  issues: ComposeLintIssue[]
 ): void {
   for (const [index, item] of valueNode.items.entries()) {
     const raw = scalarString(item as Node)
@@ -553,7 +527,7 @@ function lintEnvOrArgsSeq(
       `${fieldPath}[${index}]`,
       item as Node,
       lineCounter,
-      issues,
+      issues
     )
   }
 }
@@ -562,7 +536,7 @@ function lintEnvOrArgsCollection(
   fieldPath: string,
   valueNode: Node | null | undefined,
   lineCounter: LineCounter,
-  issues: ComposeLintIssue[],
+  issues: ComposeLintIssue[]
 ): void {
   if (!valueNode || typeof valueNode !== 'object') return
   if (isMap(valueNode)) {
@@ -578,7 +552,7 @@ function lintBuildArgs(
   fieldPath: string,
   valueNode: Node | null | undefined,
   lineCounter: LineCounter,
-  issues: ComposeLintIssue[],
+  issues: ComposeLintIssue[]
 ): void {
   if (!isMap(valueNode)) return
   for (const item of valueNode.items) {
@@ -587,7 +561,7 @@ function lintBuildArgs(
       `${fieldPath}.args`,
       item.value as Node | null | undefined,
       lineCounter,
-      issues,
+      issues
     )
   }
 }
@@ -599,12 +573,9 @@ function lintServiceKeySideEffects(
   keyLine: number | undefined,
   lineCounter: LineCounter,
   issues: ComposeLintIssue[],
-  options: ComposeLintOptions | undefined,
+  options: ComposeLintOptions | undefined
 ): boolean {
-  if (
-    options?.managedExtensionHidden &&
-    key === TURBOPANEL_SERVICE_EXTENSION_KEY
-  ) {
+  if (options?.managedExtensionHidden && key === TURBOPANEL_SERVICE_EXTENSION_KEY) {
     issues.push({
       level: 'warning',
       message: MANAGED_EXTENSION_WARNING,
@@ -655,7 +626,7 @@ function lintServicePropertyKey(
   keyLine: number | undefined,
   lineCounter: LineCounter,
   issues: ComposeLintIssue[],
-  options?: ComposeLintOptions,
+  options?: ComposeLintOptions
 ): { hasImage: boolean; hasBuild: boolean } {
   let hasImage = false
   let hasBuild = false
@@ -679,7 +650,7 @@ function lintServicePropertyKey(
     keyLine,
     lineCounter,
     issues,
-    options,
+    options
   )
   if (stop) return { hasImage, hasBuild }
 
@@ -691,7 +662,7 @@ function lintServiceKeys(
   valueNode: YAMLMap,
   lineCounter: LineCounter,
   issues: ComposeLintIssue[],
-  options?: ComposeLintOptions,
+  options?: ComposeLintOptions
 ): { hasImage: boolean; hasBuild: boolean } {
   let hasImage = false
   let hasBuild = false
@@ -705,7 +676,7 @@ function lintServiceKeys(
       nodeLine(item.key as Node, lineCounter),
       lineCounter,
       issues,
-      options,
+      options
     )
     if (result.hasImage) hasImage = true
     if (result.hasBuild) hasBuild = true
@@ -727,7 +698,7 @@ function lintServicePrincipal(
   valueNode: YAMLMap,
   lineCounter: LineCounter,
   issues: ComposeLintIssue[],
-  options?: ComposeLintOptions,
+  options?: ComposeLintOptions
 ): void {
   const knownPrincipalAliases = options?.knownPrincipalAliases
   if (!knownPrincipalAliases) return
@@ -766,7 +737,7 @@ function lintServiceHosting(
   serviceKeyLine: number | undefined,
   lineCounter: LineCounter,
   issues: ComposeLintIssue[],
-  options?: ComposeLintOptions,
+  options?: ComposeLintOptions
 ): void {
   // With the managed extension hidden, author-typed `x-turbopanel` is dropped
   // on save and already carries the warning that says so.
@@ -782,7 +753,7 @@ function lintServiceHosting(
     valueNode,
     [TURBOPANEL_EXTENSION_KEY, 'hosting'],
     lineCounter,
-    serviceKeyLine,
+    serviceKeyLine
   )
 
   let plain: unknown
@@ -794,13 +765,7 @@ function lintServiceHosting(
   }
 
   const serviceKind = readServiceKindForHosting(extensionNode)
-  for (
-    const issue of collectHostingExtensionValidationIssues(
-      basePath,
-      plain,
-      serviceKind,
-    )
-  ) {
+  for (const issue of collectHostingExtensionValidationIssues(basePath, plain, serviceKind)) {
     issues.push({
       level: 'error',
       message: issue.message,
@@ -813,9 +778,7 @@ function lintServiceHosting(
 }
 
 /** `serviceKind` as authored, so the site-only `targetPort` rule can fire. */
-function readServiceKindForHosting(
-  extensionNode: YAMLMap,
-): ComposeServiceKind | undefined {
+function readServiceKindForHosting(extensionNode: YAMLMap): ComposeServiceKind | undefined {
   const raw = scalarString(mapEntryValue(extensionNode, 'serviceKind'))?.trim()
   if (raw === 'site' || raw === 'node' || raw === 'container') return raw
   return undefined
@@ -831,7 +794,7 @@ function hostingEntryLine(
   hostingNode: Node | null | undefined,
   issuePath: string,
   lineCounter: LineCounter,
-  fallback: number | undefined,
+  fallback: number | undefined
 ): number | undefined {
   const match = /\.hosting\[(\d+)\]/.exec(issuePath)
   if (!match || !isSeq(hostingNode)) return fallback
@@ -845,7 +808,7 @@ function lintHostingRefs(
   hostingNode: Node | null | undefined,
   lineCounter: LineCounter,
   issues: ComposeLintIssue[],
-  options?: ComposeLintOptions,
+  options?: ComposeLintOptions
 ): void {
   if (!isSeq(hostingNode)) return
   for (const [index, item] of (hostingNode as YAMLSeq).items.entries()) {
@@ -871,11 +834,7 @@ function lintHostingRefs(
 }
 
 /** `entry.<block>.<key>` when both levels are maps, else undefined. */
-function nestedEntryValue(
-  entry: YAMLMap,
-  block: string,
-  key: string,
-): Node | null | undefined {
+function nestedEntryValue(entry: YAMLMap, block: string, key: string): Node | null | undefined {
   const blockNode = mapEntryValue(entry, block)
   if (!isMap(blockNode)) return undefined
   return mapEntryValue(blockNode as YAMLMap, key)
@@ -913,16 +872,13 @@ function lintHostingRef(params: {
  * into `replicated`. Refused by **value**, not by key: `mode` itself is
  * honoured, so `./field-policy` keeps it `interpreted`.
  */
-const UNSUPPORTED_DEPLOY_MODES: ReadonlySet<string> = new Set([
-  'replicated-job',
-  'global-job',
-])
+const UNSUPPORTED_DEPLOY_MODES: ReadonlySet<string> = new Set(['replicated-job', 'global-job'])
 
 function lintDeployMode(
   name: string,
   valueNode: Node | null | undefined,
   lineCounter: LineCounter,
-  issues: ComposeLintIssue[],
+  issues: ComposeLintIssue[]
 ): void {
   if (isComposeTagNode(valueNode)) return
   const value = scalarString(valueNode)?.trim()
@@ -954,7 +910,7 @@ function lintDeployResources(
   name: string,
   resourcesNode: Node | null | undefined,
   lineCounter: LineCounter,
-  issues: ComposeLintIssue[],
+  issues: ComposeLintIssue[]
 ): void {
   if (!isMap(resourcesNode) || isComposeTagNode(resourcesNode)) return
 
@@ -995,28 +951,20 @@ function lintDeployResources(
  * because the two surfaces ship separately and cannot import across the
  * boundary.
  */
-const NATIVE_RESTART_CONDITIONS: ReadonlySet<string> = new Set([
-  'none',
-  'on-failure',
-  'any',
-])
+const NATIVE_RESTART_CONDITIONS: ReadonlySet<string> = new Set(['none', 'on-failure', 'any'])
 
 /** Compose duration: one or more `<number><unit>` pairs (`5s`, `1m30s`). */
 const NATIVE_RESTART_DURATION_RE = /^(\d+(?:\.\d+)?(?:us|ms|s|m|h))+$/
 
 function nativeRestartExpectation(key: string, value: unknown): string | null {
   if (key === 'condition') {
-    if (
-      typeof value === 'string' && NATIVE_RESTART_CONDITIONS.has(value.trim())
-    ) {
+    if (typeof value === 'string' && NATIVE_RESTART_CONDITIONS.has(value.trim())) {
       return null
     }
     return `must be one of ${[...NATIVE_RESTART_CONDITIONS].join(', ')}`
   }
   if (key === 'delay' || key === 'window') {
-    if (
-      typeof value === 'string' && NATIVE_RESTART_DURATION_RE.test(value.trim())
-    ) {
+    if (typeof value === 'string' && NATIVE_RESTART_DURATION_RE.test(value.trim())) {
       return null
     }
     return 'must be a Compose duration such as 5s or 1m30s'
@@ -1026,7 +974,8 @@ function nativeRestartExpectation(key: string, value: unknown): string | null {
       return null
     }
     if (
-      typeof value === 'string' && /^\d+$/.test(value.trim()) &&
+      typeof value === 'string' &&
+      /^\d+$/.test(value.trim()) &&
       Number.parseInt(value.trim(), 10) >= 1
     ) {
       return null
@@ -1040,7 +989,7 @@ function lintNativeRestartPolicy(
   name: string,
   restartPolicyNode: Node | null | undefined,
   lineCounter: LineCounter,
-  issues: ComposeLintIssue[],
+  issues: ComposeLintIssue[]
 ): void {
   if (!isMap(restartPolicyNode) || isComposeTagNode(restartPolicyNode)) return
 
@@ -1055,10 +1004,7 @@ function lintNativeRestartPolicy(
     const value = scalarValueOf(valueNode)
     // A placeholder stands for a value no linter can see; the instance
     // substitutes it and checks the compiled document after that.
-    if (
-      typeof value === 'string' &&
-      (value.includes('${') || value.includes('{$'))
-    ) {
+    if (typeof value === 'string' && (value.includes('${') || value.includes('{$'))) {
       continue
     }
 
@@ -1101,7 +1047,7 @@ function lintDeployBlock(
   deployNode: Node | null | undefined,
   nativeApp: boolean,
   lineCounter: LineCounter,
-  issues: ComposeLintIssue[],
+  issues: ComposeLintIssue[]
 ): void {
   // A tagged `deploy:` is an overlay instruction; the merged result is linted
   // where the merge happens.
@@ -1111,37 +1057,20 @@ function lintDeployBlock(
     const key = stringKey(item.key)
     if (key === null || isExtensionKey(key)) continue
     if (key === 'mode') {
-      lintDeployMode(
-        name,
-        item.value as Node | null | undefined,
-        lineCounter,
-        issues,
-      )
+      lintDeployMode(name, item.value as Node | null | undefined, lineCounter, issues)
     }
     if (key === 'resources') {
-      lintDeployResources(
-        name,
-        item.value as Node | null | undefined,
-        lineCounter,
-        issues,
-      )
+      lintDeployResources(name, item.value as Node | null | undefined, lineCounter, issues)
     }
     if (key === 'restart_policy' && nativeApp) {
-      lintNativeRestartPolicy(
-        name,
-        item.value as Node | null | undefined,
-        lineCounter,
-        issues,
-      )
+      lintNativeRestartPolicy(name, item.value as Node | null | undefined, lineCounter, issues)
     }
     if (classifyDeployKey(key)?.state !== 'unsupported') continue
     const reason = unsupportedDeployReason(key)
     issues.push({
       level: 'warning',
       code: 'field_unsupported',
-      message: `deploy.${key} is not supported by TurboPanel${
-        reason ? ` \u2014 ${reason}` : ''
-      }`,
+      message: `deploy.${key} is not supported by TurboPanel${reason ? ` \u2014 ${reason}` : ''}`,
       path: `services.${name}.deploy.${key}`,
       line: nodeLine(item.key as Node, lineCounter),
       blocking: false,
@@ -1177,7 +1106,7 @@ function lintNetworkEntry(
   key: string,
   entryNode: Node | null | undefined,
   lineCounter: LineCounter,
-  issues: ComposeLintIssue[],
+  issues: ComposeLintIssue[]
 ): void {
   // A tagged entry is an overlay instruction; the merged result is linted
   // where the merge happens.
@@ -1220,18 +1149,13 @@ function lintNetworkEntry(
 function lintNetworks(
   networksNode: Node | null | undefined,
   lineCounter: LineCounter,
-  issues: ComposeLintIssue[],
+  issues: ComposeLintIssue[]
 ): void {
   if (!isMap(networksNode) || isComposeTagNode(networksNode)) return
   for (const item of (networksNode as YAMLMap).items) {
     const key = stringKey(item.key)
     if (key === null || isExtensionKey(key)) continue
-    lintNetworkEntry(
-      key,
-      item.value as Node | null | undefined,
-      lineCounter,
-      issues,
-    )
+    lintNetworkEntry(key, item.value as Node | null | undefined, lineCounter, issues)
   }
 }
 
@@ -1241,7 +1165,7 @@ function lintService(
   keyLine: number | undefined,
   lineCounter: LineCounter,
   issues: ComposeLintIssue[],
-  options?: ComposeLintOptions,
+  options?: ComposeLintOptions
 ): void {
   const path = `services.${name}`
   // `!reset` / `!override` on a service value is intentional; shape may be null.
@@ -1256,32 +1180,19 @@ function lintService(
     return
   }
 
-  const { hasImage, hasBuild } = lintServiceKeys(
-    path,
-    valueNode,
-    lineCounter,
-    issues,
-    options,
-  )
+  const { hasImage, hasBuild } = lintServiceKeys(path, valueNode, lineCounter, issues, options)
 
   lintDeployBlock(
     name,
     mapEntryValue(valueNode, 'deploy'),
     serviceIsNativeApp(valueNode),
     lineCounter,
-    issues,
+    issues
   )
   lintServiceSource(name, valueNode, lineCounter, issues, options)
   lintServicePrincipal(name, valueNode, lineCounter, issues, options)
   lintServiceHosting(name, valueNode, keyLine, lineCounter, issues, options)
-  lintServiceTurbopanelFields(
-    name,
-    valueNode,
-    keyLine,
-    lineCounter,
-    issues,
-    options,
-  )
+  lintServiceTurbopanelFields(name, valueNode, keyLine, lineCounter, issues, options)
 
   if (
     options?.requireImageOrBuild !== false &&
@@ -1309,7 +1220,7 @@ function lintServices(
   servicesKeyLine: number | undefined,
   lineCounter: LineCounter,
   issues: ComposeLintIssue[],
-  options?: ComposeLintOptions,
+  options?: ComposeLintOptions
 ): void {
   if (isComposeTagNode(servicesNode)) return
   if (!isMap(servicesNode)) {
@@ -1341,7 +1252,7 @@ function lintServices(
       nodeLine(item.key as Node, lineCounter),
       lineCounter,
       issues,
-      options,
+      options
     )
   }
 }
@@ -1355,7 +1266,7 @@ function lineForPath(
   node: Node | null | undefined,
   segments: readonly string[],
   lineCounter: LineCounter,
-  fallback: number | undefined,
+  fallback: number | undefined
 ): number | undefined {
   let current = node
   let line = fallback
@@ -1383,7 +1294,7 @@ function lintRootTurbopanelExtension(
   valueNode: Node | null | undefined,
   keyLine: number | undefined,
   lineCounter: LineCounter,
-  issues: ComposeLintIssue[],
+  issues: ComposeLintIssue[]
 ): void {
   if (!isMap(valueNode)) return
 
@@ -1396,12 +1307,7 @@ function lintRootTurbopanelExtension(
     return
   }
 
-  for (
-    const issue of collectRootExtensionValidationIssues(
-      TURBOPANEL_EXTENSION_KEY,
-      plain,
-    )
-  ) {
+  for (const issue of collectRootExtensionValidationIssues(TURBOPANEL_EXTENSION_KEY, plain)) {
     const segments = issue.path.split('.').slice(1)
     issues.push({
       level: 'error',
@@ -1417,7 +1323,7 @@ function lintRootExtensionEntry(
   keyLine: number | undefined,
   lineCounter: LineCounter,
   issues: ComposeLintIssue[],
-  options?: ComposeLintOptions,
+  options?: ComposeLintOptions
 ): void {
   if (options?.managedExtensionHidden) {
     issues.push({
@@ -1435,7 +1341,7 @@ function lintTopLevel(
   root: YAMLMap,
   lineCounter: LineCounter,
   issues: ComposeLintIssue[],
-  options?: ComposeLintOptions,
+  options?: ComposeLintOptions
 ): void {
   let servicesItem: (typeof root.items)[number] | null = null
   for (const item of root.items) {
@@ -1454,7 +1360,7 @@ function lintTopLevel(
         nodeLine(item.key as Node, lineCounter),
         lineCounter,
         issues,
-        options,
+        options
       )
       continue
     }
@@ -1482,7 +1388,7 @@ function lintTopLevel(
     nodeLine(servicesItem.key as Node, lineCounter),
     lineCounter,
     issues,
-    options,
+    options
   )
 }
 
@@ -1514,10 +1420,7 @@ function compareLintIssues(a: ComposeLintIssue, b: ComposeLintIssue): number {
  * Zero-arg signature mirrors instance `lintComposeYaml`. Optional `options` are
  * UI-editor-only (hidden site services + managed-extension warnings).
  */
-export function lintComposeYaml(
-  source: string,
-  options?: ComposeLintOptions,
-): ComposeLintIssue[] {
+export function lintComposeYaml(source: string, options?: ComposeLintOptions): ComposeLintIssue[] {
   const trimmed = source.trim()
   if (!trimmed) return []
 
@@ -1568,7 +1471,7 @@ export function lintComposeYaml(
  */
 function collectServiceSourceIds(
   root: YAMLMap,
-  lineCounter: LineCounter,
+  lineCounter: LineCounter
 ): { service: string; sourceId: string; line: number | undefined }[] {
   const servicesNode = mapEntryValue(root, 'services')
   if (!isMap(servicesNode)) return []
@@ -1599,7 +1502,7 @@ function lintSingleRepository(
   root: YAMLMap,
   lineCounter: LineCounter,
   projectRepositoryId: string | null,
-  issues: ComposeLintIssue[],
+  issues: ComposeLintIssue[]
 ): void {
   const bound = projectRepositoryId?.trim() || null
   let adopted = bound
@@ -1611,9 +1514,10 @@ function lintSingleRepository(
     if (entry.sourceId === adopted) continue
     issues.push({
       level: 'error',
-      message: bound === null
-        ? 'a project builds from one repository — every service that names a source must name the same one'
-        : `source '${entry.sourceId}' is not this project's repository — a project builds from one repository`,
+      message:
+        bound === null
+          ? 'a project builds from one repository — every service that names a source must name the same one'
+          : `source '${entry.sourceId}' is not this project's repository — a project builds from one repository`,
       path: `services.${entry.service}.x-turbopanel.source.sourceId`,
       line: entry.line,
     })
@@ -1624,11 +1528,8 @@ function lintSingleRepository(
  * Issues that must fail a save (everything except empty-draft warnings).
  * Mirrors instance `blockingComposeLintIssues` — keep in sync.
  */
-export function blockingComposeLintIssues(
-  issues: readonly ComposeLintIssue[],
-): ComposeLintIssue[] {
+export function blockingComposeLintIssues(issues: readonly ComposeLintIssue[]): ComposeLintIssue[] {
   return issues.filter(
-    (issue) =>
-      issue.blocking !== false && !DRAFT_ALLOWED_LINT_MESSAGES.has(issue.message),
+    (issue) => issue.blocking !== false && !DRAFT_ALLOWED_LINT_MESSAGES.has(issue.message)
   )
 }

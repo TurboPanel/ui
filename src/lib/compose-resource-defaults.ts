@@ -27,20 +27,17 @@ export type ComposeResourceDefaultsDraft = {
 
 /** The stored limits, rendered for the two text fields. */
 export function draftFromLimits(
-  limits: ComposeDefaultResourceLimits | null,
+  limits: ComposeDefaultResourceLimits | null
 ): ComposeResourceDefaultsDraft {
   return {
     cpus: limits?.cpus === undefined ? '' : String(limits.cpus),
     memoryMib:
-      limits?.memoryBytes === undefined
-        ? ''
-        : String(Math.round(limits.memoryBytes / MIB)),
+      limits?.memoryBytes === undefined ? '' : String(Math.round(limits.memoryBytes / MIB)),
   }
 }
 
 export type ParsedComposeResourceDefaults =
-  | { ok: true; limits: ComposeDefaultResourceLimits | null }
-  | { ok: false; error: string }
+  { ok: true; limits: ComposeDefaultResourceLimits | null } | { ok: false; error: string }
 
 /**
  * Validate the two fields the way the API will (`cpus` finite and positive,
@@ -48,7 +45,7 @@ export type ParsedComposeResourceDefaults =
  * parses to `null`, which the API reads as "clear the default".
  */
 export function parseComposeResourceDefaultsDraft(
-  draft: ComposeResourceDefaultsDraft,
+  draft: ComposeResourceDefaultsDraft
 ): ParsedComposeResourceDefaults {
   const cpusText = draft.cpus.trim()
   const memoryText = draft.memoryMib.trim()
@@ -77,7 +74,7 @@ export function parseComposeResourceDefaultsDraft(
 
 /** One line for the panel: what the ceiling currently is. */
 export function describeComposeResourceDefaults(
-  limits: ComposeDefaultResourceLimits | null,
+  limits: ComposeDefaultResourceLimits | null
 ): string {
   if (!limits) return 'No default ceiling — a service with no limits runs unbounded.'
   const parts: string[] = []

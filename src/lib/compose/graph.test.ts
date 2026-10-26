@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  annotateComposeGraphSources,
-  buildComposeGraph,
-  describeComposeGraph,
-} from './graph'
+import { annotateComposeGraphSources, buildComposeGraph, describeComposeGraph } from './graph'
 
 function doc(data: Record<string, unknown>) {
   return { version: 1 as const, data, presentation: { keyOrder: [], comments: {} } }
@@ -21,7 +17,7 @@ describe('buildComposeGraph', () => {
           db: { image: 'postgres:16' },
           web: { image: 'app:latest', depends_on: ['db'] },
         },
-      }),
+      })
     )
 
     const db = graph.nodes.find((n) => n.id === 'service:db')
@@ -43,7 +39,7 @@ describe('buildComposeGraph', () => {
           db: { image: 'postgres' },
           web: { image: 'app', depends_on: { db: { condition: 'service_healthy' } } },
         },
-      }),
+      })
     )
     expect(graph.edges.some((edge) => edge.kind === 'depends_on')).toBe(true)
   })
@@ -54,7 +50,7 @@ describe('buildComposeGraph', () => {
         services: {
           web: { image: 'app', depends_on: ['missing'] },
         },
-      }),
+      })
     )
     const web = graph.nodes.find((n) => n.id === 'service:web')
     expect(web?.row).toBe(0)
@@ -68,7 +64,7 @@ describe('buildComposeGraph', () => {
           a: { image: 'a', depends_on: ['b'] },
           b: { image: 'b', depends_on: ['a'] },
         },
-      }),
+      })
     )
     expect(graph.nodes.filter((n) => n.kind === 'service')).toHaveLength(2)
     expect(graph.rows).toBeGreaterThan(0)
@@ -82,14 +78,14 @@ describe('buildComposeGraph', () => {
           db: { image: 'postgres', networks: ['frontend', 'backend'] },
         },
         networks: { frontend: {}, backend: {} },
-      }),
+      })
     )
     const frontend = graph.nodes.find((n) => n.id === 'network:frontend')
     const backend = graph.nodes.find((n) => n.id === 'network:backend')
     expect(frontend).toBeDefined()
     expect(backend).toBeDefined()
     expect(
-      graph.edges.filter((edge) => edge.kind === 'network' && edge.to === 'network:frontend'),
+      graph.edges.filter((edge) => edge.kind === 'network' && edge.to === 'network:frontend')
     ).toHaveLength(2)
   })
 
@@ -100,7 +96,7 @@ describe('buildComposeGraph', () => {
           web: { image: 'app' },
           db: { image: 'postgres' },
         },
-      }),
+      })
     )
     expect(graph.nodes.find((n) => n.id === 'network:default')).toBeDefined()
     expect(graph.edges.filter((edge) => edge.kind === 'network')).toHaveLength(2)
@@ -121,7 +117,7 @@ describe('buildComposeGraph', () => {
           },
         },
         volumes: { data: {} },
-      }),
+      })
     )
     expect(graph.nodes.find((n) => n.id === 'volume:data')).toBeDefined()
     expect(graph.nodes.filter((n) => n.kind === 'volume')).toHaveLength(1)
@@ -134,7 +130,7 @@ describe('buildComposeGraph', () => {
         services: {
           web: { image: 'nginx:alpine', ports: ['8080:80'] },
         },
-      }),
+      })
     )
     const web = graph.nodes.find((n) => n.id === 'service:web')
     expect(web?.image).toBe('nginx:alpine')
@@ -147,13 +143,10 @@ describe('buildComposeGraph', () => {
         services: {
           web: {
             image: 'app',
-            ports: [
-              { target: 3000, published: 8080 },
-              { target: '5432' },
-            ],
+            ports: [{ target: 3000, published: 8080 }, { target: '5432' }],
           },
         },
-      }),
+      })
     )
     const web = graph.nodes.find((n) => n.id === 'service:web')
     expect(web?.ports).toEqual(['8080:3000', '5432'])
@@ -165,13 +158,10 @@ describe('buildComposeGraph', () => {
         services: {
           web: {
             image: 'app',
-            ports: [
-              { target: true },
-              { target: 80, published: { host: '127.0.0.1' } },
-            ],
+            ports: [{ target: true }, { target: 80, published: { host: '127.0.0.1' } }],
           },
         },
-      }),
+      })
     )
     const web = graph.nodes.find((n) => n.id === 'service:web')
     expect(web?.ports).toEqual(['', '80'])
@@ -185,11 +175,9 @@ describe('buildComposeGraph', () => {
             'x-turbopanel': { serviceKind: 'site', engine: 'nginx' },
           },
         },
-      }),
+      })
     )
-    expect(graph.nodes.find((n) => n.id === 'service:site')?.serviceKind).toBe(
-      'site',
-    )
+    expect(graph.nodes.find((n) => n.id === 'service:site')?.serviceKind).toBe('site')
   })
 
   it('marks services bound to a Git source, carrying the pinned branch', () => {
@@ -208,15 +196,13 @@ describe('buildComposeGraph', () => {
           },
           web: { image: 'nginx' },
         },
-      }),
+      })
     )
     expect(graph.nodes.find((n) => n.id === 'service:app')?.gitSource).toEqual({
       sourceId: '123e4567-e89b-12d3-a456-426614174000',
       branch: 'main',
     })
-    expect(
-      graph.nodes.find((n) => n.id === 'service:web')?.gitSource,
-    ).toBeUndefined()
+    expect(graph.nodes.find((n) => n.id === 'service:web')?.gitSource).toBeUndefined()
   })
 
   it('skips non-map services and volumes', () => {
@@ -230,7 +216,7 @@ describe('buildComposeGraph', () => {
           data: {},
           also: 'not-a-map',
         },
-      }),
+      })
     )
     expect(graph.nodes.filter((n) => n.kind === 'service')).toHaveLength(1)
     expect(graph.nodes.find((n) => n.kind === 'volume')).toBeUndefined()
@@ -254,14 +240,12 @@ describe('buildComposeGraph', () => {
         },
         networks: { frontend: {} },
         volumes: { data: {} },
-      }),
+      })
     )
     expect(graph.nodes.find((n) => n.id === 'volume:data')).toBeDefined()
     expect(graph.nodes.filter((n) => n.kind === 'volume')).toHaveLength(1)
     expect(
-      graph.edges.some(
-        (edge) => edge.kind === 'network' && edge.to === 'network:frontend',
-      ),
+      graph.edges.some((edge) => edge.kind === 'network' && edge.to === 'network:frontend')
     ).toBe(true)
   })
 
@@ -272,11 +256,9 @@ describe('buildComposeGraph', () => {
           web: { image: 'ghcr.io/org/app:1.2' },
           other: { image: 'nginx' },
         },
-      }),
+      })
     )
-    expect(graph.nodes.find((n) => n.id === 'service:web')?.image).toBe(
-      'ghcr.io/org/app:1.2',
-    )
+    expect(graph.nodes.find((n) => n.id === 'service:web')?.image).toBe('ghcr.io/org/app:1.2')
     expect(graph.nodes.find((n) => n.id === 'service:other')?.image).toBe('nginx')
   })
 
@@ -286,19 +268,12 @@ describe('buildComposeGraph', () => {
         services: {
           web: {
             image: 'app',
-            ports: [
-              { target: 80, published: null },
-              { target: 443 },
-              { published: 8080 },
-            ],
+            ports: [{ target: 80, published: null }, { target: 443 }, { published: 8080 }],
           },
         },
-      }),
+      })
     )
-    expect(graph.nodes.find((n) => n.id === 'service:web')?.ports).toEqual([
-      '80',
-      '443',
-    ])
+    expect(graph.nodes.find((n) => n.id === 'service:web')?.ports).toEqual(['80', '443'])
   })
 
   it('adds hosting nodes above services and shifts every row down', () => {
@@ -309,7 +284,7 @@ describe('buildComposeGraph', () => {
           web: { image: 'app', depends_on: ['db'] },
         },
       }),
-      { hostnamesByService: { web: 'app.example.com' } },
+      { hostnamesByService: { web: 'app.example.com' } }
     )
     const host = graph.nodes.find((n) => n.id === 'host:web')
     expect(host).toMatchObject({ kind: 'hosting', name: 'app.example.com', row: 0 })
@@ -324,10 +299,9 @@ describe('buildComposeGraph', () => {
   })
 
   it('ignores hostnames for services not in the document and stays flat without any match', () => {
-    const graph = buildComposeGraph(
-      doc({ services: { web: { image: 'app' } } }),
-      { hostnamesByService: { missing: 'gone.example.com' } },
-    )
+    const graph = buildComposeGraph(doc({ services: { web: { image: 'app' } } }), {
+      hostnamesByService: { missing: 'gone.example.com' },
+    })
     expect(graph.nodes.find((n) => n.kind === 'hosting')).toBeUndefined()
     expect(graph.nodes.find((n) => n.id === 'service:web')?.row).toBe(0)
   })
@@ -343,7 +317,7 @@ describe('describeComposeGraph', () => {
         },
         networks: { net: {} },
         volumes: { data: {} },
-      }),
+      })
     )
     const lines = describeComposeGraph(graph)
     expect(lines.find((line) => line.startsWith('web'))).toContain('depends on db')
@@ -356,13 +330,10 @@ describe('describeComposeGraph', () => {
   })
 
   it('mentions the hostname a service is served at', () => {
-    const graph = buildComposeGraph(
-      doc({ services: { web: { image: 'app' } } }),
-      { hostnamesByService: { web: 'app.example.com' } },
-    )
-    expect(describeComposeGraph(graph)).toEqual([
-      'web — served at app.example.com',
-    ])
+    const graph = buildComposeGraph(doc({ services: { web: { image: 'app' } } }), {
+      hostnamesByService: { web: 'app.example.com' },
+    })
+    expect(describeComposeGraph(graph)).toEqual(['web — served at app.example.com'])
   })
 
   it('mentions the Git repository a service builds from', () => {
@@ -380,7 +351,7 @@ describe('describeComposeGraph', () => {
         },
       })
     expect(
-      describeComposeGraph(buildComposeGraph(serviceDoc({ ...source, branch: 'main' }))),
+      describeComposeGraph(buildComposeGraph(serviceDoc({ ...source, branch: 'main' })))
     ).toEqual(['app — builds from a Git repository, branch main'])
     expect(describeComposeGraph(buildComposeGraph(serviceDoc(source)))).toEqual([
       'app — builds from a Git repository',
@@ -403,7 +374,7 @@ describe('annotateComposeGraphSources', () => {
           },
           web: { image: 'nginx' },
         },
-      }),
+      })
     )
 
   it('overlays repository names onto bound service nodes', () => {
@@ -415,9 +386,7 @@ describe('annotateComposeGraphSources', () => {
       branch: 'main',
       repoLabel: 'storefront',
     })
-    expect(
-      graph.nodes.find((n) => n.id === 'service:web')?.gitSource,
-    ).toBeUndefined()
+    expect(graph.nodes.find((n) => n.id === 'service:web')?.gitSource).toBeUndefined()
   })
 
   it('names the repository in the plain-text description', () => {
@@ -425,15 +394,13 @@ describe('annotateComposeGraphSources', () => {
       [sourceId]: 'storefront',
     })
     expect(describeComposeGraph(graph).join('; ')).toContain(
-      'builds from the storefront Git repository, branch main',
+      'builds from the storefront Git repository, branch main'
     )
   })
 
   it('returns the graph untouched when nothing resolves', () => {
     const graph = boundGraph()
     expect(annotateComposeGraphSources(graph, {})).toBe(graph)
-    expect(
-      annotateComposeGraphSources(graph, { 'other-id': 'other' }),
-    ).toBe(graph)
+    expect(annotateComposeGraphSources(graph, { 'other-id': 'other' })).toBe(graph)
   })
 })

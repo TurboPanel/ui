@@ -5,16 +5,11 @@ import {
   type ComposeHostingEditorFields,
 } from './hosting-editor-entry'
 import { composeDocumentToYaml, yamlToComposeDocument } from './convert'
-import {
-  resolveHostingServiceContext,
-  writeComposeHostingEntries,
-} from './hosting-service-context'
+import { resolveHostingServiceContext, writeComposeHostingEntries } from './hosting-service-context'
 import { collectServiceKindFieldIssues } from './service-kind'
 import { blockingComposeLintIssues, lintComposeYaml } from './lint'
 
-function editor(
-  overrides: Partial<ComposeHostingEditorFields> = {},
-): ComposeHostingEditorFields {
+function editor(overrides: Partial<ComposeHostingEditorFields> = {}): ComposeHostingEditorFields {
   return {
     hostnames: 'App.Example.test',
     pathPrefix: '/',
@@ -29,20 +24,16 @@ function editor(
 
 describe('parseHostnameList', () => {
   it('splits, trims, and drops empties', () => {
-    expect(parseHostnameList(' a.test , , b.test ')).toEqual([
-      'a.test',
-      'b.test',
-    ])
+    expect(parseHostnameList(' a.test , , b.test ')).toEqual(['a.test', 'b.test'])
   })
 })
 
 describe('composeHostingEntryFromEditorFields', () => {
   it('returns null without a hostname and lowercases the first one', () => {
-    expect(composeHostingEntryFromEditorFields(editor({ hostnames: '  ' }), 'container'))
-      .toBeNull()
-    expect(
-      composeHostingEntryFromEditorFields(editor(), 'container')?.hostname,
-    ).toBe('app.example.test')
+    expect(composeHostingEntryFromEditorFields(editor({ hostnames: '  ' }), 'container')).toBeNull()
+    expect(composeHostingEntryFromEditorFields(editor(), 'container')?.hostname).toBe(
+      'app.example.test'
+    )
   })
 
   it('writes only the keys that say something', () => {
@@ -58,11 +49,11 @@ describe('composeHostingEntryFromEditorFields', () => {
     expect(
       composeHostingEntryFromEditorFields(
         editor({ tlsAutomatic: true, tlsId: 'cert-1', bind: 'public' }),
-        'container',
-      )?.tls,
+        'container'
+      )?.tls
     ).toEqual({ mode: 'automatic' })
     expect(
-      composeHostingEntryFromEditorFields(editor({ tlsAutomatic: false }), 'container')?.tls,
+      composeHostingEntryFromEditorFields(editor({ tlsAutomatic: false }), 'container')?.tls
     ).toEqual({ mode: 'internal' })
   })
 
@@ -78,8 +69,8 @@ describe('composeHostingEntryFromEditorFields', () => {
           bind: 'public',
           ipId: 'ip-1',
         }),
-        'container',
-      ),
+        'container'
+      )
     ).toEqual({
       hostname: 'app.example.test',
       pathPrefix: '/app',
@@ -90,21 +81,15 @@ describe('composeHostingEntryFromEditorFields', () => {
     })
     // A pinned IP only means something on a public bind.
     expect(
-      composeHostingEntryFromEditorFields(
-        editor({ bind: 'datacenter', ipId: 'ip-1' }),
-        'container',
-      )?.bind,
+      composeHostingEntryFromEditorFields(editor({ bind: 'datacenter', ipId: 'ip-1' }), 'container')
+        ?.bind
     ).toEqual({ scope: 'datacenter' })
   })
 
   it('keeps an authored targetPort on a container service', () => {
-    expect(
-      composeHostingEntryFromEditorFields(editor(), 'container')?.targetPort,
-    ).toBe(8080)
+    expect(composeHostingEntryFromEditorFields(editor(), 'container')?.targetPort).toBe(8080)
     // An omitted `serviceKind` is the compose default, which is `container`.
-    expect(
-      composeHostingEntryFromEditorFields(editor(), undefined)?.targetPort,
-    ).toBe(8080)
+    expect(composeHostingEntryFromEditorFields(editor(), undefined)?.targetPort).toBe(8080)
   })
 
   it('never writes targetPort for a node service', () => {
@@ -149,21 +134,20 @@ describe('composeHostingEntryFromEditorFields', () => {
     // Serialized, not `next.text` — the write helper edits `data` and leaves
     // the original source alone, so linting the text would lint the document
     // before the edit and prove nothing.
-    expect(blockingComposeLintIssues(lintComposeYaml(composeDocumentToYaml(next))))
-      .toEqual([])
+    expect(blockingComposeLintIssues(lintComposeYaml(composeDocumentToYaml(next)))).toEqual([])
   })
 })
 
 describe('composeHostingEntryFromEditorFields www', () => {
   it('writes www only when it says something', () => {
     expect(
-      composeHostingEntryFromEditorFields(editor({ www: 'www-to-root' }), 'container')?.www,
+      composeHostingEntryFromEditorFields(editor({ www: 'www-to-root' }), 'container')?.www
     ).toBe('www-to-root')
     expect(
-      composeHostingEntryFromEditorFields(editor({ www: 'off' }), 'container'),
+      composeHostingEntryFromEditorFields(editor({ www: 'off' }), 'container')
     ).not.toHaveProperty('www')
     expect(
-      composeHostingEntryFromEditorFields(editor({ www: null }), 'container'),
+      composeHostingEntryFromEditorFields(editor({ www: null }), 'container')
     ).not.toHaveProperty('www')
   })
 })

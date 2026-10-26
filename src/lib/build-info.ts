@@ -34,7 +34,7 @@ function withV(version: string): string {
  */
 export function buildInfoSections(
   health: HealthResponse | null | undefined,
-  console: Pick<AppSourceRelease, 'version' | 'gitCommit' | 'sourceReleaseUrl'>,
+  console: Pick<AppSourceRelease, 'version' | 'gitCommit' | 'sourceReleaseUrl'>
 ): BuildInfoSection[] {
   const consoleRows: BuildInfoRow[] = [
     { label: 'Version', value: withV(console.version) },
@@ -46,7 +46,9 @@ export function buildInfoSections(
   if (version) controlPlaneRows.push({ label: 'Version', value: withV(version) })
   const build = health?.build?.trim()
   if (build) controlPlaneRows.push({ label: 'Build', value: withV(build) })
-  controlPlaneRows.push(commitRow(health?.revision?.commit?.trim() ?? '', health?.revision?.sourceUrl))
+  controlPlaneRows.push(
+    commitRow(health?.revision?.commit?.trim() ?? '', health?.revision?.sourceUrl)
+  )
   const channel = health?.channel?.trim()
   if (channel) controlPlaneRows.push({ label: 'Channel', value: channel })
   const environment = health?.environment?.trim()
