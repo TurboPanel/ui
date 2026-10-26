@@ -1067,10 +1067,11 @@ function lintDeployBlock(
     }
     if (classifyDeployKey(key)?.state !== 'unsupported') continue
     const reason = unsupportedDeployReason(key)
+    const reasonSuffix = reason ? ` \u2014 ${reason}` : ''
     issues.push({
       level: 'warning',
       code: 'field_unsupported',
-      message: `deploy.${key} is not supported by TurboPanel${reason ? ` \u2014 ${reason}` : ''}`,
+      message: `deploy.${key} is not supported by TurboPanel${reasonSuffix}`,
       path: `services.${name}.deploy.${key}`,
       line: nodeLine(item.key as Node, lineCounter),
       blocking: false,
