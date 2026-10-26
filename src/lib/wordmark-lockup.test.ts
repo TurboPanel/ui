@@ -6,6 +6,7 @@ import {
   TURBOPANEL_WORDMARK_BASELINE_EM,
   TURBOPANEL_WORDMARK_CHROME_SIZE,
   TURBOPANEL_WORDMARK_LOCKUP_TUNING,
+  TURBOPANEL_WORDMARK_OVERSHOOT_EM,
   TURBOPANEL_WORDMARK_PROFILE,
   wordBaselineDropPx,
   wordmarkLetterSpacingPx,
@@ -20,7 +21,9 @@ describe('wordBaselineDropPx', () => {
     expect(TURBOPANEL_WORDMARK_LOCKUP_TUNING.wordBaselineOnMarkBase).toBe(true)
     // Figtree: ascent 0.95 em, descent 0.25 em -> 0.25 - (1.2 - 1) / 2.
     expect(TURBOPANEL_WORDMARK_BASELINE_EM).toBe(0.15)
-    expect(wordBaselineDropPx(40)).toBeCloseTo(6)
+    // Round letters dip 12/1000 em below the baseline; the drop stops short by that.
+    expect(TURBOPANEL_WORDMARK_OVERSHOOT_EM).toBe(0.012)
+    expect(wordBaselineDropPx(40)).toBeCloseTo(5.52)
     expect(wordBaselineDropPx(0)).toBe(0)
   })
 })
@@ -39,8 +42,8 @@ describe('computeTurboPanelWordmarkLockup', () => {
       skew: '-14deg',
       text: 'urboPanel',
     })
-    // 33px word, no profile nudge: the baseline drop alone.
-    expect(lockup.wordBottomOffset).toBeCloseTo(-4.95)
+    // 33px word, no profile nudge: 33 * (0.15 - 0.012).
+    expect(lockup.wordBottomOffset).toBeCloseTo(-4.554)
   })
 
   it('matches console chrome geometry at default size', () => {
@@ -51,7 +54,8 @@ describe('computeTurboPanelWordmarkLockup', () => {
       wordSize: 46,
       wordBottomOffset: bottomFor(46, TURBOPANEL_WORDMARK_PROFILE.console.wordDownPx),
     })
-    expect(lockup.wordBottomOffset).toBeCloseTo(-8.9)
+    // 46px word plus the console profile's 2px nudge: 2 + 46 * 0.138.
+    expect(lockup.wordBottomOffset).toBeCloseTo(-8.348)
   })
 
   it('honours mark-only width', () => {
