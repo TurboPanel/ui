@@ -282,6 +282,19 @@ describe('HighAvailabilityUpdates', () => {
     ).toBeTruthy()
   })
 
+  it('never shows a rollback command: the platform updates the control plane', () => {
+    render(
+      <HighAvailabilityUpdates
+        data={{
+          ...DATA,
+          controlPlaneRecovery: { runId: 'run-42', backupPath: '/b', rollbackCommand: 'recover' },
+        }}
+      />
+    )
+    expect(screen.queryByText(/Rollback/)).toBeNull()
+    expect(screen.queryByText('recover')).toBeNull()
+  })
+
   it('labels its controls in title case', () => {
     render(<HighAvailabilityUpdates data={DATA} />)
     for (const title of ['Status', 'Control Plane', 'Connected Daemons']) {

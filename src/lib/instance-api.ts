@@ -5376,6 +5376,13 @@ export type InstanceUpdateTarget = {
   version?: string
 }
 
+/** The pre-update backup and rollback command for the waiting control plane install. */
+export type ControlPlaneRecovery = {
+  runId: string
+  backupPath: string
+  rollbackCommand: string
+}
+
 /** The instance admin who paused updates; any field may be missing (a removed account). */
 export type UpdatesPausedBy = {
   userId: string | null
@@ -5417,6 +5424,12 @@ export type InstanceUpdates = {
   checkIntervalMinutes?: number
   /** The update run going now, or null. */
   activeRunId?: string | null
+  /**
+   * Self-hosted only, while a control plane or web interface install waits:
+   * the backup the next automatic run takes first, and the command that rolls
+   * back to it. The next run uses this same `runId`, so the command names it.
+   */
+  controlPlaneRecovery?: ControlPlaneRecovery | null
   fleetSummary?: {
     connected: number
     upToDate: number

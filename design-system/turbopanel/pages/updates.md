@@ -24,7 +24,7 @@
 
 ## Self-hosted
 
-1. **Status card** (above) plus the channel badge.
+1. **Status card** (above) plus the channel badge and, while a control plane or web interface install waits, **Backup and Rollback**: the backup path and rollback command the next run uses, with **Copy Backup Path** and **Copy Rollback Command** (`CopyButton`).
 2. **Build names** — `Canary · Sep 19, 14:30` with version/commit behind **Details**.
 3. **Step indicator** — `WizardSteps`: Preparing → Downloading → Installing → Restarting → Verifying → Done for co-located daemon, then control plane, then fleet summary + paged `DataTable` (status, version, step, error; the pager sits under the table). No Retry or Cancel: failed servers are retried on their own, shown as **Tries Again Later** with "Tries again at <local time>".
 4. **Update history** — who or what started it, when, result; **See all** opens **Update History**, each run opens **Update Run**.

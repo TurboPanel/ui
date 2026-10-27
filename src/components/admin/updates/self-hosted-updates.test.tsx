@@ -56,6 +56,10 @@ vi.mock('@/components/admin/updates/upgrade-build-block', () => ({
 vi.mock('@/components/admin/updates/upgrade-step-tracker', () => ({
   UpgradeStepTracker: (props: MockProps) => <div>{props.title}</div>,
 }))
+vi.mock('@/components/admin/updates/control-plane-recovery-block', () => ({
+  ControlPlaneRecoveryBlock: (props: { recovery: { runId: string } | null | undefined }) =>
+    props.recovery ? <div>Recovery for {props.recovery.runId}</div> : null,
+}))
 vi.mock('@/components/admin/updates/upgrade-failure-notice', () => ({
   UpgradeFailureNotice: () => <div data-testid="failure" />,
 }))
@@ -179,5 +183,16 @@ describe('SelfHostedUpdates', () => {
     expect(screen.getByText('Updates Paused')).toBeTruthy()
     expect(screen.getByText('Updates paused since <2026-10-27T09:30:00.000Z> by Sam')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Resume Updates' })).toBeTruthy()
+  })
+
+  it('shows the backup and rollback command while a control plane install waits', () => {
+    const recovery = { runId: 'run-42', backupPath: '/b', rollbackCommand: 'recover run-42' }
+    const { unmount } = render(
+      <SelfHostedUpdates data={{ ...DATA, controlPlaneRecovery: recovery }} />
+    )
+    expect(screen.getByText('Recovery for run-42')).toBeTruthy()
+    unmount()
+    render(<SelfHostedUpdates data={{ ...DATA, controlPlaneRecovery: null }} />)
+    expect(screen.queryByText(/Recovery for/)).toBeNull()
   })
 })

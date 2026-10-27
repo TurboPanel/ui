@@ -231,8 +231,24 @@ function skippedOutcome(
   return { tone: 'muted', label: 'Skipped', detail }
 }
 
-/** An ISO instant inside a sentence (`… after 2026-10-27T15:40:00.000Z.`). */
-const ISO_INSTANT = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?/
+const TRAILING_PUNCTUATION = new Set(['.', ',', ';', ')'])
+
+function stripTrailingPunctuation(word: string): string {
+  let end = word.length
+  while (end > 0 && TRAILING_PUNCTUATION.has(word[end - 1])) end -= 1
+  return word.slice(0, end)
+}
+
+/** The first ISO instant in a sentence (`… after 2026-10-27T15:40:00.000Z.`), or null. */
+function isoInstantIn(message: string): Date | null {
+  for (const word of message.split(' ')) {
+    const candidate = stripTrailingPunctuation(word)
+    if (!/^\d{4}-\d{2}-\d{2}T/.test(candidate)) continue
+    const at = new Date(candidate)
+    if (!Number.isNaN(at.getTime())) return at
+  }
+  return null
+}
 
 export type LocalTimeOptions = Readonly<{ now?: Date; timeZone?: string }>
 
@@ -254,9 +270,8 @@ export function retryLaterText(
   message: string | null | undefined,
   options: LocalTimeOptions = {}
 ): string {
-  const found = message ? ISO_INSTANT.exec(message) : null
-  const at = found ? new Date(found[0]) : null
-  if (!at || Number.isNaN(at.getTime())) return 'Tries again later'
+  const at = message ? isoInstantIn(message) : null
+  if (!at) return 'Tries again later'
   const { now = new Date(), timeZone } = options
   const time = formatLocalDateTime(at, {
     includeDate: false,

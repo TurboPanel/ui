@@ -11,6 +11,7 @@ import {
 } from '@/components/admin/updates/upgrade-history-panel'
 import { UpgradeSettingsCard } from '@/components/admin/updates/upgrade-settings-card'
 import { UpgradeStepTracker } from '@/components/admin/updates/upgrade-step-tracker'
+import { ControlPlaneRecoveryBlock } from '@/components/admin/updates/control-plane-recovery-block'
 import { UpdatesStatusPanel } from '@/components/admin/updates/updates-status-panel'
 import { Badge, InlineNotice, SectionPanel } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
@@ -241,6 +242,9 @@ export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>)
         <View style={styles.row}>
           <Badge tone="muted" label={`Channel ${data.channel}`} />
         </View>
+        <ControlPlaneRecoveryBlock
+          recovery={data.runtime === 'workers' ? null : data.controlPlaneRecovery}
+        />
       </UpdatesStatusPanel>
 
       <ComponentsPanel
