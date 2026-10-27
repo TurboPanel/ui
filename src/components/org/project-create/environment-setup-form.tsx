@@ -22,6 +22,7 @@ import { orgSettingsTabHref } from '@/lib/org-navigation'
 import { useOrgAllowsLetsEncrypt } from '@/lib/queries/org-tls-settings'
 import {
   declaredHostname,
+  defaultAlsoWww,
   hostnameServiceNames,
   initialSetupServerId,
   setupAccounts,
@@ -96,7 +97,11 @@ export function EnvironmentSetupForm({
   const [serviceName, setServiceName] = useState<string | null>(serviceNames[0] ?? null)
   const declared = declaredHostname(compose, serviceName)
   const [hostname, setHostname] = useState(declared?.hostname ?? '')
-  const [alsoWww, setAlsoWww] = useState(declared?.www ? declared.www !== 'off' : true)
+  // null follows the typed name (on only for a bare domain) until the switch is flipped.
+  const [alsoWwwChoice, setAlsoWww] = useState<boolean | null>(
+    declared?.www ? declared.www !== 'off' : null
+  )
+  const alsoWww = alsoWwwChoice ?? defaultAlsoWww(hostname)
   const accounts = useMemo(() => setupAccounts(compose), [compose])
   const [accountNames, setAccountNames] = useState<Readonly<Record<string, string>>>({})
   const [variables, setVariables] = useState<SetupVariable[]>([])

@@ -22,6 +22,7 @@ import {
 import { isPrincipalAlias, readServiceTurbopanelExtension } from '@/lib/compose/service-kind'
 import type { ComposeDocument, CreateVariableBody, OrgServerRecord } from '@/lib/instance-api'
 import { validateEnvironmentName } from '@/lib/environment-validation'
+import { defaultWwwMode } from '@/lib/hosting-www'
 import { isLoopbackOrPrivateHostname } from '@/lib/install-tls'
 import { variableUseFlags, type VariableUse } from '@/lib/v4/config-edits'
 
@@ -88,6 +89,17 @@ export function wwwChoiceFor(hostname: string): string | null {
 }
 
 /**
+ * Whether "Also answer www.…" starts on for the typed name, until the person
+ * flips it: on for a bare registrable domain (`example.com`, `example.co.uk`),
+ * off for a subdomain (`app.example.com`), whose www name rarely has DNS, so a
+ * Let’s Encrypt request covering it would fail. Same rule as the Hosting tab.
+ */
+export function defaultAlsoWww(hostname: string): boolean {
+  const name = readHostingHostname(hostname)
+  return name ? defaultWwwMode(name) !== 'off' : false
+}
+
+/**
  * True when Let’s Encrypt can issue a certificate for the name: not a
  * wildcard, an IP address, a one-word name or a private name. Mirrors the
  * control plane's refusal, so the screen never writes a choice the deploy
@@ -136,7 +148,12 @@ export function setupCertificateNote(
  */
 export function composeWithHostname(
   compose: ComposeDocument,
-  input: Readonly<{ serviceName: string; hostname: string; alsoWww: boolean; letsEncrypt?: boolean }>
+  input: Readonly<{
+    serviceName: string
+    hostname: string
+    alsoWww: boolean
+    letsEncrypt?: boolean
+  }>
 ): ComposeDocument {
   const hostname = readHostingHostname(input.hostname)
   if (!hostname) return compose

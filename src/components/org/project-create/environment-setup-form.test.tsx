@@ -259,6 +259,36 @@ describe('EnvironmentSetupForm', () => {
     ])
   })
 
+  it('leaves www off for a subdomain unless it is turned on by hand', () => {
+    const props = renderForm()
+    const field = screen.getByLabelText('Visitors reach it at')
+    fireEvent.change(field, { target: { value: 'ct.turbopanel.dev' } })
+    expect(screen.getByText('Also answer www.ct.turbopanel.dev')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'www' }).getAttribute('aria-pressed')).toBe('false')
+    fireEvent.click(screen.getByRole('button', { name: 'Save without deploying' }))
+    expect(
+      readComposeHostingEntries(lastResult(props)[0].compose as ComposeDocument, 'web')
+    ).toEqual([{ hostname: 'ct.turbopanel.dev' }])
+    fireEvent.click(screen.getByRole('button', { name: 'www' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save without deploying' }))
+    expect(
+      readComposeHostingEntries(lastResult(props)[0].compose as ComposeDocument, 'web')
+    ).toEqual([{ hostname: 'ct.turbopanel.dev', www: 'www-to-root' }])
+  })
+
+  it('follows the typed name until the www switch is flipped', () => {
+    renderForm()
+    const field = screen.getByLabelText('Visitors reach it at')
+    const pressed = () => screen.getByRole('button', { name: 'www' }).getAttribute('aria-pressed')
+    fireEvent.change(field, { target: { value: 'app.example.com' } })
+    expect(pressed()).toBe('false')
+    fireEvent.change(field, { target: { value: 'example.co.uk' } })
+    expect(pressed()).toBe('true')
+    fireEvent.click(screen.getByRole('button', { name: 'www' }))
+    fireEvent.change(field, { target: { value: 'example.com' } })
+    expect(pressed()).toBe('false')
+  })
+
   it('asks for a Let\u2019s Encrypt certificate when the organization allows it', () => {
     state.acmeEnabled = true
     const props = renderForm()

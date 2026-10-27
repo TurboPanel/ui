@@ -5,6 +5,7 @@ import {
   accountNameProblem,
   composeWithHostname,
   declaredHostname,
+  defaultAlsoWww,
   hostnameProblem,
   hostnameServiceNames,
   initialSetupServerId,
@@ -80,6 +81,18 @@ describe('hostnames', () => {
     expect(wwwChoiceFor('example.com')).toBe('www.example.com')
     expect(wwwChoiceFor('203.0.113.5')).toBeNull()
     expect(wwwChoiceFor('')).toBeNull()
+  })
+
+  it('starts the www switch on only for a bare domain', () => {
+    expect(defaultAlsoWww('example.com')).toBe(true)
+    expect(defaultAlsoWww(' Example.CO.uk ')).toBe(true)
+    expect(defaultAlsoWww('ct.turbopanel.dev')).toBe(false)
+    expect(defaultAlsoWww('app.example.com')).toBe(false)
+    expect(defaultAlsoWww('203.0.113.5')).toBe(false)
+    expect(defaultAlsoWww('localhost')).toBe(false)
+    expect(defaultAlsoWww('nas.lan')).toBe(false)
+    expect(defaultAlsoWww('https://example.com/')).toBe(false)
+    expect(defaultAlsoWww('')).toBe(false)
   })
 
   it('replaces the first hostname and sets the www choice', () => {
