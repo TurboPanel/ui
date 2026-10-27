@@ -764,9 +764,7 @@ describe('servers query hooks', () => {
   })
 
   it('useServerNicSlotContext projects networks and the NIC-slot limit from a series seed', async () => {
-    const networks = [
-      { deviceId: 'mac:eth0', name: 'eth0', kind: 'uplink', role: 'nic' },
-    ]
+    const networks = [{ deviceId: 'mac:eth0', name: 'eth0', kind: 'uplink', role: 'nic' }]
     fetchServerMetricsSeries.mockResolvedValueOnce({
       ok: true,
       inventory: { networks },
@@ -940,7 +938,7 @@ describe('servers query hooks', () => {
   it('useServerUpdateStatus respects enabled:false', () => {
     const { result } = renderHook(
       () => useServerUpdateStatus(orgId, serverId, { enabled: false }),
-      { wrapper: createWrapper() },
+      { wrapper: createWrapper() }
     )
     expect(result.current.fetchStatus).toBe('idle')
     expect(fetchServerUpdate).not.toHaveBeenCalled()
@@ -1236,10 +1234,7 @@ describe('servers query hooks', () => {
     expect(outcome).toEqual({ ok: false, error: null, cause: forbidden })
     if (!outcome.ok) {
       expect(
-        licenseTierUserErrorMessage(
-          outcome.cause ?? outcome.error,
-          'Could not update license tier',
-        ),
+        licenseTierUserErrorMessage(outcome.cause ?? outcome.error, 'Could not update license tier')
       ).toContain('organization owners')
     }
   })
@@ -1299,8 +1294,9 @@ describe('servers query hooks', () => {
     await result.current.run({
       name: 'edge',
       installBaseUrl: 'https://203.0.113.1:8443',
+      tierId: 'tier-s1',
     })
-    expect(createLicense).toHaveBeenCalledWith('edge', 'https://203.0.113.1:8443')
+    expect(createLicense).toHaveBeenCalledWith('edge', 'https://203.0.113.1:8443', 'tier-s1')
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: queryKeys.org(orgId).settings.serverCapacity,
     })
@@ -1351,10 +1347,9 @@ describe('servers query hooks', () => {
   })
 
   it('useServerDetail respects enabled:false', () => {
-    const { result } = renderHook(
-      () => useServerDetail(orgId, serverId, { enabled: false }),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useServerDetail(orgId, serverId, { enabled: false }), {
+      wrapper: createWrapper(),
+    })
     expect(result.current.fetchStatus).toBe('idle')
     expect(fetchServer).not.toHaveBeenCalled()
   })
@@ -1363,18 +1358,14 @@ describe('servers query hooks', () => {
     fetchServer.mockResolvedValue({ id: serverId, name: 'edge' })
     const client = createTestQueryClient()
 
-    renderHook(
-      () => useServerDetail(orgId, serverId, { refetchInterval: 12_000 }),
-      { wrapper: createWrapper(client) },
-    )
+    renderHook(() => useServerDetail(orgId, serverId, { refetchInterval: 12_000 }), {
+      wrapper: createWrapper(client),
+    })
 
     await waitFor(() => {
-      expect(
-        resolveRefetchInterval(
-          client,
-          queryKeys.org(orgId).servers.detail(serverId),
-        ),
-      ).toBe(12_000)
+      expect(resolveRefetchInterval(client, queryKeys.org(orgId).servers.detail(serverId))).toBe(
+        12_000
+      )
     })
   })
 
@@ -1401,9 +1392,9 @@ describe('servers query hooks', () => {
       expect(result.current.isSuccess).toBe(true)
     })
     expect(result.current.data).toEqual(payload)
-    expect(
-      resolveRefetchInterval(client, queryKeys.org(orgId).servers.services(serverId)),
-    ).toBe(SERVERS_REFRESH_MS)
+    expect(resolveRefetchInterval(client, queryKeys.org(orgId).servers.services(serverId))).toBe(
+      SERVERS_REFRESH_MS
+    )
   })
 
   it('useServerServices stays idle when serverId is empty', () => {
@@ -1416,10 +1407,9 @@ describe('servers query hooks', () => {
   })
 
   it('useServerServices respects enabled:false', () => {
-    const { result } = renderHook(
-      () => useServerServices(orgId, serverId, { enabled: false }),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useServerServices(orgId, serverId, { enabled: false }), {
+      wrapper: createWrapper(),
+    })
     expect(result.current.fetchStatus).toBe('idle')
     expect(fetchServerServices).not.toHaveBeenCalled()
   })
@@ -1677,10 +1667,9 @@ describe('servers query hooks', () => {
   })
 
   it('useOrgTemperatureUnit respects enabled:false', () => {
-    const { result } = renderHook(
-      () => useOrgTemperatureUnit(orgId, { enabled: false }),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useOrgTemperatureUnit(orgId, { enabled: false }), {
+      wrapper: createWrapper(),
+    })
     expect(result.current.fetchStatus).toBe('idle')
     expect(fetchOrgTemperatureUnit).not.toHaveBeenCalled()
   })

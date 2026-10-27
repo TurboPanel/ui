@@ -379,6 +379,18 @@ export function describeUncoveredServer(entry: UncoveredServer): string {
  * The tier a refused Add Server should act on: the one the operator picked,
  * else the first tier the refusal says has licenses ending (restore before buy).
  */
+/**
+ * Hosted Add Server needs a license tier before Continue: the key carries it
+ * and the server comes up on it. Self-hosted has no tier to choose.
+ */
+export function addServerTierChoiceError(
+  billingEnabled: boolean,
+  chosenTierId: string | null
+): string | null {
+  if (!billingEnabled || chosenTierId) return null
+  return 'Choose the license tier for this server.'
+}
+
 export function refusalTierId(
   chosenTierId: string | null,
   refusal: Pick<LicenseAvailability, 'tiers'> | null

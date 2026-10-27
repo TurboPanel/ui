@@ -7,6 +7,7 @@ import {
   type OrgServerRecord,
 } from '@/lib/instance-api'
 import {
+  addServerTierChoiceError,
   addServerTierState,
   effectiveTierAvailable,
   canReleaseAt,
@@ -399,6 +400,17 @@ describe('effectiveTierAvailable', () => {
     expect(
       effectiveTierAvailable(tierRow({ available: 2 }), { available: Number.NaN, unusedKeys: 0 })
     ).toBe(2)
+  })
+})
+
+describe('addServerTierChoiceError', () => {
+  it('asks for a license tier on hosted until one is chosen', () => {
+    expect(addServerTierChoiceError(true, null)).toBe('Choose the license tier for this server.')
+    expect(addServerTierChoiceError(true, 'tier-s1')).toBeNull()
+  })
+
+  it('never asks on a self-hosted instance', () => {
+    expect(addServerTierChoiceError(false, null)).toBeNull()
   })
 })
 

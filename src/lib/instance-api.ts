@@ -2911,14 +2911,20 @@ function throwIfLicenseCreateFailed(status: number, errorBody: LicenseCreateErro
   throw new Error(`${CLIENT_API}/licenses failed: ${detail}`)
 }
 
-/** Mint a one-shot registration key for the Add Server flow. */
+/**
+ * Mint a one-shot registration key for the Add Server flow. `tierId` is the
+ * license tier the manager chose (hosted): the key holds a license at that
+ * tier and the server that enrolls with it is put on it.
+ */
 export async function createLicense(
   name?: string,
-  installBaseUrl?: string
+  installBaseUrl?: string,
+  tierId?: string
 ): Promise<CreatedLicense> {
   const body: Record<string, string> = {}
   if (name) body.name = name
   if (installBaseUrl?.trim()) body.installBaseUrl = installBaseUrl.trim()
+  if (tierId) body.tierId = tierId
 
   const resolvedOrgId = getActiveOrganizationId()
   const headers: Record<string, string> = {

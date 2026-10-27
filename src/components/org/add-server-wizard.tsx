@@ -30,6 +30,7 @@ import {
 import { installTlsHint } from '@/lib/install-tls'
 import { WAITING_POLL_MS, waitingHostNote } from '@/lib/add-server-waiting'
 import { orEmptyArray } from '@/lib/or-empty-array'
+import { addServerTierChoiceError } from '@/lib/billing-display'
 import { orgBillingHref } from '@/lib/org-navigation'
 import { usePublicUrlsOptional } from '@/lib/queries/admin'
 import { useCreateLicense, useOrgServers } from '@/lib/queries/servers'
@@ -426,9 +427,16 @@ export function AddServerWizard({ orgId, onComplete, onDismiss }: AddServerWizar
         return
       }
     }
+    const tierError = addServerTierChoiceError(billingEnabled, chosenTierId)
+    if (tierError) {
+      setCreateError(tierError)
+      return
+    }
     const result = await createLicenseMutation.run({
       name: displayName.trim() || undefined,
       installBaseUrl: __DEV__ ? installBaseUrl : undefined,
+      // The key carries the chosen tier, so the server comes up on it.
+      tierId: billingEnabled ? (chosenTierId ?? undefined) : undefined,
     })
     if (!result.ok) {
       if (result.error) setCreateError(result.error)

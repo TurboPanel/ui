@@ -775,6 +775,15 @@ describe('instance-api fetch wrappers', () => {
     })
   })
 
+  it('createLicense sends the license tier chosen in Add Server', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ licenseId: 'lic-2', licenseToken: 'tok', installCommand: 'curl | sh' })
+    )
+    await createLicense(undefined, undefined, 'tier-s1')
+    const [, init] = fetchMock.mock.calls[0] ?? []
+    expect(JSON.parse(String((init as RequestInit).body))).toEqual({ tierId: 'tier-s1' })
+  })
+
   it('fetchBindings and createBinding proxy binding routes', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ bindings: [] }))
     await expect(fetchBindings({ serviceId: 'svc-1' })).resolves.toEqual({
