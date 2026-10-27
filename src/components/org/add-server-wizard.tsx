@@ -30,12 +30,12 @@ import {
 import { installTlsHint } from '@/lib/install-tls'
 import { WAITING_POLL_MS, waitingHostNote } from '@/lib/add-server-waiting'
 import { orEmptyArray } from '@/lib/or-empty-array'
-import { addServerTierChoiceError } from '@/lib/billing-display'
+import { addServerCreateErrorMessage, addServerTierChoiceError } from '@/lib/billing-display'
 import { orgBillingHref } from '@/lib/org-navigation'
 import { usePublicUrlsOptional } from '@/lib/queries/admin'
 import { useCreateLicense, useOrgServers } from '@/lib/queries/servers'
 import { chrome, colors, spacing } from '@/lib/theme'
-import { failedRunMessage, userErrorMessage } from '@/lib/user-error'
+import { userErrorMessage } from '@/lib/user-error'
 
 const POLL_FAILURE_THRESHOLD = 3
 
@@ -439,8 +439,8 @@ export function AddServerWizard({ orgId, onComplete, onDismiss }: AddServerWizar
       tierId: billingEnabled ? (chosenTierId ?? undefined) : undefined,
     })
     if (!result.ok) {
-      // A known code (an unknown tier, …) reads as its sentence, never raw HTTP text.
-      setCreateError(failedRunMessage(result, 'Failed to start server setup'))
+      // A 403 or a known code (an unknown tier, …) reads as a sentence, never raw HTTP text.
+      setCreateError(addServerCreateErrorMessage(result))
       // No license is free. The control plane's message says why without
       // calling an ending license "in use"; the tier section offers the fix
       // (restore one that is ending, or buy one) for the tier this server needs.

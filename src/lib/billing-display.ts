@@ -28,6 +28,8 @@ import {
 } from '@/lib/instance-api'
 import type { BadgeTone } from '@/components/ui/badge'
 import { formatLocalDateTime } from '@/lib/format-datetime'
+import { isForbiddenError } from '@/lib/fetch-error-detail'
+import { failedRunMessage } from '@/lib/user-error'
 
 /**
  * Presentation helpers for the billing screen. Amounts arrive from the
@@ -386,6 +388,18 @@ export function addServerTierChoiceError(
 ): string | null {
   if (!billingEnabled || chosenTierId) return null
   return 'Choose the license tier for this server.'
+}
+
+/**
+ * The sentence under Continue when minting the registration key failed: a
+ * 403 is said plainly (never raw HTTP text), known codes read as their
+ * sentence, anything else as the server's words or the fallback.
+ */
+export function addServerCreateErrorMessage(
+  result: Readonly<{ error: string | null; cause?: unknown }>
+): string {
+  if (isForbiddenError(result.cause)) return 'Only organization owners can add servers.'
+  return failedRunMessage(result, 'Failed to start server setup')
 }
 
 /**

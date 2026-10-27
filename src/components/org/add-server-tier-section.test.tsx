@@ -5,7 +5,12 @@ import { AddServerTierSection } from './add-server-tier-section'
 
 const { useBillingCatalog } = vi.hoisted(() => ({ useBillingCatalog: vi.fn() }))
 
-vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
+vi.mock('react-native', async () => ({
+  ...(await import('@/components/ui/v4/rn-stub')).reactNativeStub,
+  TextInput: (props: { accessibilityLabel?: string }) => (
+    <input aria-label={props.accessibilityLabel} readOnly />
+  ),
+}))
 vi.mock('react-native-svg', async () => (await import('@/components/ui/v4/rn-stub')).svgStub)
 vi.mock(
   '@/lib/theme-preference',
@@ -44,12 +49,30 @@ describe('AddServerTierSection', () => {
       data: undefined,
       isError: true,
       isFetching: false,
-      error: new Error('Failed to fetch'),
+      error: new Error('/api/client/v1/billing/catalog failed: HTTP 502'),
       refetch,
     })
     renderSection()
     expect(screen.queryByLabelText('Tier this server needs')).toBeNull()
+    // Always the plain sentence, never the raw HTTP text.
+    expect(screen.getByText('Could not load the license tiers.')).toBeTruthy()
+    expect(screen.queryByText(/HTTP 502/)).toBeNull()
     fireEvent.click(screen.getByLabelText('Load the license tiers again'))
     expect(refetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the working picker when a refresh fails after the tiers loaded', () => {
+    useBillingCatalog.mockReturnValue({
+      data: { tiers: [], sizeCommand: null },
+      isError: true,
+      isFetching: false,
+      error: new Error('/api/client/v1/billing/catalog failed: HTTP 502'),
+      refetch: vi.fn(),
+    })
+    renderSection()
+    expect(screen.queryByLabelText('Load the license tiers again')).toBeNull()
+    expect(
+      screen.getByText('Could not refresh the license tiers; showing the last list.')
+    ).toBeTruthy()
   })
 })

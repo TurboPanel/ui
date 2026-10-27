@@ -37,7 +37,9 @@ import {
 import { useCan } from '@/lib/query-client'
 import { describeSizeFit, parseSizeOutput, sizeBandRows, tierForSize } from '@/lib/server-size'
 import { spacing } from '@/lib/theme'
-import { userErrorMessage } from '@/lib/user-error'
+
+const TIERS_LOAD_FAILED = 'Could not load the license tiers.'
+const TIERS_REFRESH_FAILED = 'Could not refresh the license tiers; showing the last list.'
 
 function tierOption(tier: BillingTier): SelectOption {
   return {
@@ -285,14 +287,12 @@ export function AddServerTierSection({
     }
   }
 
-  if (catalogQuery.isError) {
-    // No dead end: Continue needs a tier, so a failed catalogue offers a retry.
+  if (catalogQuery.isError && !catalogQuery.data) {
+    // No dead end: Continue needs a tier, so a catalogue that never loaded offers a retry.
     return (
       <View style={styles.root}>
         <Text style={panelStyles.detailLabel}>Which tier does this server need?</Text>
-        <Text style={panelStyles.error}>
-          {userErrorMessage(catalogQuery.error, 'Could not load the license tiers.')}
-        </Text>
+        <Text style={panelStyles.error}>{TIERS_LOAD_FAILED}</Text>
         <ButtonRow>
           <Button
             label="Retry"
@@ -330,6 +330,10 @@ export function AddServerTierSection({
           onChooseTier(next)
         }}
       />
+      {catalogQuery.isError ? (
+        // A background refresh failed after the list loaded: keep the working picker.
+        <Text style={panelStyles.muted}>{TIERS_REFRESH_FAILED}</Text>
+      ) : null}
       {state?.kind === 'available' ? (
         <Text style={panelStyles.detailLine}>{state.message}</Text>
       ) : null}

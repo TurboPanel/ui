@@ -7,6 +7,7 @@ import {
   type OrgServerRecord,
 } from '@/lib/instance-api'
 import {
+  addServerCreateErrorMessage,
   addServerTierChoiceError,
   addServerTierState,
   effectiveTierAvailable,
@@ -411,6 +412,20 @@ describe('addServerTierChoiceError', () => {
 
   it('never asks on a self-hosted instance', () => {
     expect(addServerTierChoiceError(false, null)).toBeNull()
+  })
+})
+
+describe('addServerCreateErrorMessage', () => {
+  it('says a 403 plainly and maps known codes, never raw HTTP text', () => {
+    const forbidden = new Error('/api/client/v1/licenses failed: HTTP 403: forbidden')
+    expect(addServerCreateErrorMessage({ error: null, cause: forbidden })).toBe(
+      'Only organization owners can add servers.'
+    )
+    const unknownTier = new Error('/api/client/v1/licenses failed: HTTP 400: tier_not_found')
+    expect(addServerCreateErrorMessage({ error: unknownTier.message, cause: unknownTier })).toBe(
+      'That size is no longer available. Refresh and pick again.'
+    )
+    expect(addServerCreateErrorMessage({ error: null })).toBe('Failed to start server setup')
   })
 })
 
