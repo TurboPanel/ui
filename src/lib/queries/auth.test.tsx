@@ -87,15 +87,12 @@ const { loginWithPasskey } = vi.hoisted(() => ({
   loginWithPasskey: vi.fn(),
 }))
 
-const {
-  getActiveControlPlaneAccount,
-  rememberSignedInAccount,
-  removeActiveControlPlaneAccount,
-} = vi.hoisted(() => ({
-  getActiveControlPlaneAccount: vi.fn((): ControlPlaneAccount | null => null),
-  rememberSignedInAccount: vi.fn(),
-  removeActiveControlPlaneAccount: vi.fn(),
-}))
+const { getActiveControlPlaneAccount, rememberSignedInAccount, removeActiveControlPlaneAccount } =
+  vi.hoisted(() => ({
+    getActiveControlPlaneAccount: vi.fn((): ControlPlaneAccount | null => null),
+    rememberSignedInAccount: vi.fn(),
+    removeActiveControlPlaneAccount: vi.fn(),
+  }))
 
 const { isRemoteCookieClient } = vi.hoisted(() => ({
   isRemoteCookieClient: vi.fn(() => false),
@@ -212,10 +209,9 @@ describe('auth query hooks', () => {
   })
 
   it('useInstallStatusQuery stays idle when enabled is false', () => {
-    const { result } = renderHook(
-      () => useInstallStatusQuery({ enabled: false }),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useInstallStatusQuery({ enabled: false }), {
+      wrapper: createWrapper(),
+    })
     expect(result.current.fetchStatus).toBe('idle')
     expect(fetchInstallStatus).not.toHaveBeenCalled()
   })
@@ -236,10 +232,9 @@ describe('auth query hooks', () => {
   })
 
   it('useOrganizationsQuery stays idle when enabled is false', () => {
-    const { result } = renderHook(
-      () => useOrganizationsQuery({ enabled: false }),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useOrganizationsQuery({ enabled: false }), {
+      wrapper: createWrapper(),
+    })
     expect(result.current.fetchStatus).toBe('idle')
     expect(fetchOrganizations).not.toHaveBeenCalled()
   })
@@ -256,7 +251,7 @@ describe('auth query hooks', () => {
     })
 
     await expect(
-      result.current.run({ email: 'ops@example.com', password: 'secret' }),
+      result.current.run({ email: 'ops@example.com', password: 'secret' })
     ).resolves.toMatchObject({
       ok: true,
       value: { email: 'ops@example.com' },
@@ -282,7 +277,7 @@ describe('auth query hooks', () => {
     })
 
     await expect(
-      result.current.run({ email: 'ops@example.com', password: 'secret' }),
+      result.current.run({ email: 'ops@example.com', password: 'secret' })
     ).resolves.toMatchObject({ ok: true })
 
     expect(rememberSignedInAccount).toHaveBeenCalledWith({
@@ -304,7 +299,7 @@ describe('auth query hooks', () => {
     })
 
     await expect(
-      result.current.run({ email: 'ops@example.com', password: 'secret' }),
+      result.current.run({ email: 'ops@example.com', password: 'secret' })
     ).resolves.toMatchObject({ ok: true })
 
     expect(rememberSignedInAccount).toHaveBeenCalledWith({
@@ -321,7 +316,7 @@ describe('auth query hooks', () => {
     })
 
     await expect(
-      result.current.run({ email: 'new@example.com', password: 'secret' }),
+      result.current.run({ email: 'new@example.com', password: 'secret' })
     ).resolves.toMatchObject({ ok: true })
     expect(signUp).toHaveBeenCalledWith('new@example.com', 'secret')
   })
@@ -338,12 +333,12 @@ describe('auth query hooks', () => {
         email: 'new@example.com',
         password: 'secret',
         invitationId: '11111111-1111-4111-8111-111111111111',
-      }),
+      })
     ).resolves.toMatchObject({ ok: true })
     expect(signUp).toHaveBeenCalledWith(
       'new@example.com',
       'secret',
-      '11111111-1111-4111-8111-111111111111',
+      '11111111-1111-4111-8111-111111111111'
     )
   })
 
@@ -355,7 +350,7 @@ describe('auth query hooks', () => {
     })
 
     await expect(
-      result.current.run({ username: 'root', password: 'secret' }),
+      result.current.run({ username: 'root', password: 'secret' })
     ).resolves.toMatchObject({ ok: true })
     expect(bootstrapInstall).toHaveBeenCalledWith('root', 'secret')
   })
@@ -384,9 +379,10 @@ describe('auth query hooks', () => {
       wrapper: createWrapper(client),
     })
 
-    await expect(
-      result.current.run({ name: 'Beta' }),
-    ).resolves.toMatchObject({ ok: true, value: { id: 'org-2' } })
+    await expect(result.current.run({ name: 'Beta' })).resolves.toMatchObject({
+      ok: true,
+      value: { id: 'org-2' },
+    })
   })
 
   it('useUpdateOrganization patches organizations cache', async () => {
@@ -407,7 +403,7 @@ describe('auth query hooks', () => {
     })
 
     await expect(
-      result.current.run({ organizationId: 'org-1', name: 'Renamed' }),
+      result.current.run({ organizationId: 'org-1', name: 'Renamed' })
     ).resolves.toMatchObject({ ok: true })
 
     await waitFor(() => {
@@ -435,7 +431,7 @@ describe('auth query hooks', () => {
     })
 
     await expect(
-      result.current.run({ organizationId: 'org-1', name: 'Renamed' }),
+      result.current.run({ organizationId: 'org-1', name: 'Renamed' })
     ).resolves.toMatchObject({ ok: true })
     expect(client.getQueryData(['auth', 'organizations'])).toBeUndefined()
   })
@@ -500,12 +496,14 @@ describe('auth query hooks', () => {
       wrapper: createWrapper(client),
     })
 
-    await expect(result.current.run({
-      username: 'root',
-      password: 'secret',
-      superadminEmail: 'admin@example.com',
-      superadminPassword: 'secret',
-    })).resolves.toMatchObject({ ok: true })
+    await expect(
+      result.current.run({
+        username: 'root',
+        password: 'secret',
+        superadminEmail: 'admin@example.com',
+        superadminPassword: 'secret',
+      })
+    ).resolves.toMatchObject({ ok: true })
 
     await waitFor(() => {
       const status = client.getQueryData<{
@@ -530,12 +528,14 @@ describe('auth query hooks', () => {
       wrapper: createWrapper(client),
     })
 
-    await expect(result.current.run({
-      username: 'root',
-      password: 'secret',
-      superadminEmail: 'admin@example.com',
-      superadminPassword: 'secret',
-    })).resolves.toMatchObject({ ok: true })
+    await expect(
+      result.current.run({
+        username: 'root',
+        password: 'secret',
+        superadminEmail: 'admin@example.com',
+        superadminPassword: 'secret',
+      })
+    ).resolves.toMatchObject({ ok: true })
 
     await waitFor(() => {
       const status = client.getQueryData<{
@@ -569,7 +569,7 @@ describe('two-factor sign-in', () => {
     })
 
     await expect(
-      result.current.run({ email: 'ops@example.com', password: 'secret' }),
+      result.current.run({ email: 'ops@example.com', password: 'secret' })
     ).resolves.toMatchObject({ ok: true, value: { requires2fa: true } })
 
     expect(client.getQueryData(['auth', 'session'])).toBeUndefined()
@@ -585,7 +585,7 @@ describe('two-factor sign-in', () => {
     })
 
     await expect(
-      result.current.run({ challenge: 'chal-1', code: '123456' }),
+      result.current.run({ challenge: 'chal-1', code: '123456' })
     ).resolves.toMatchObject({ ok: true })
 
     expect(signInTwoFactor).toHaveBeenCalledWith('chal-1', '123456', undefined)
@@ -696,10 +696,9 @@ describe('two-factor management hooks', () => {
   })
 
   it('useTwoFactorStatusQuery stays idle when enabled is false', () => {
-    const { result } = renderHook(
-      () => useTwoFactorStatusQuery({ enabled: false }),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useTwoFactorStatusQuery({ enabled: false }), {
+      wrapper: createWrapper(),
+    })
     expect(result.current.fetchStatus).toBe('idle')
     expect(fetchTwoFactorStatus).not.toHaveBeenCalled()
   })
@@ -711,9 +710,10 @@ describe('two-factor management hooks', () => {
       wrapper: createWrapper(),
     })
 
-    await expect(
-      result.current.run({ password: 'hunter2' }),
-    ).resolves.toMatchObject({ ok: true, value: { secret: 'JBSWY3DP' } })
+    await expect(result.current.run({ password: 'hunter2' })).resolves.toMatchObject({
+      ok: true,
+      value: { secret: 'JBSWY3DP' },
+    })
     expect(enrollTotp).toHaveBeenCalledWith('hunter2')
   })
 
@@ -789,7 +789,7 @@ describe('two-factor management hooks', () => {
     })
 
     await expect(
-      result.current.run({ password: 'hunter2', code: '123456' }),
+      result.current.run({ password: 'hunter2', code: '123456' })
     ).resolves.toMatchObject({ ok: true })
     expect(disableTwoFactor).toHaveBeenCalledWith('hunter2', '123456')
     expect(client.getQueryData(['auth', 'session'])).toMatchObject({
@@ -809,9 +809,10 @@ describe('passkey management hooks', () => {
       wrapper: createWrapper(),
     })
 
-    await expect(
-      result.current.run({ password: 'hunter2' }),
-    ).resolves.toMatchObject({ ok: true, value: { challenge: 'chal-1' } })
+    await expect(result.current.run({ password: 'hunter2' })).resolves.toMatchObject({
+      ok: true,
+      value: { challenge: 'chal-1' },
+    })
     expect(passkeyRegisterOptions).toHaveBeenCalledWith('hunter2')
   })
 
@@ -829,7 +830,7 @@ describe('passkey management hooks', () => {
         challenge: 'chal-1',
         name: 'Laptop',
         credential: { id: 'cred' },
-      }),
+      })
     ).resolves.toMatchObject({ ok: true })
 
     expect(passkeyRegisterVerify).toHaveBeenCalledWith('chal-1', 'Laptop', {
@@ -850,9 +851,9 @@ describe('passkey management hooks', () => {
       wrapper: createWrapper(client),
     })
 
-    await expect(
-      result.current.run({ id: 'pk-1', password: 'hunter2' }),
-    ).resolves.toMatchObject({ ok: true })
+    await expect(result.current.run({ id: 'pk-1', password: 'hunter2' })).resolves.toMatchObject({
+      ok: true,
+    })
 
     expect(deletePasskey).toHaveBeenCalledWith('pk-1', 'hunter2')
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['auth', 'passkeys'] })
@@ -868,7 +869,7 @@ describe('passkey management hooks', () => {
     })
 
     await expect(
-      result.current.run({ provider: 'github', password: 'hunter2' }),
+      result.current.run({ provider: 'github', password: 'hunter2' })
     ).resolves.toMatchObject({ ok: true })
 
     expect(unlinkProvider).toHaveBeenCalledWith('github', 'hunter2')

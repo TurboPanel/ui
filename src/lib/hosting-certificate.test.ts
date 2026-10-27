@@ -66,24 +66,24 @@ describe('describeCertificate', () => {
 
   it('uploaded says who renews and warns near expiry', () => {
     const calm = describeCertificate(
-      cert({ state: 'uploaded', source: 'uploaded', expiresInDays: 90 }),
+      cert({ state: 'uploaded', source: 'uploaded', expiresInDays: 90 })
     )
     expect(calm.tone).toBe('neutral')
     expect(calm.lines).toEqual(['expires in 90 days', 'You renew this one.'])
     const soon = describeCertificate(
-      cert({ state: 'uploaded', expiresInDays: 3, uploadedExpiryWarning: '3d' }),
+      cert({ state: 'uploaded', expiresInDays: 3, uploadedExpiryWarning: '3d' })
     )
     expect(soon.tone).toBe('warning')
     expect(soon.lines.at(-1)).toContain('three days')
     const gone = describeCertificate(
-      cert({ state: 'uploaded', expiresInDays: -1, uploadedExpiryWarning: 'expired' }),
+      cert({ state: 'uploaded', expiresInDays: -1, uploadedExpiryWarning: 'expired' })
     )
     expect(gone.lines.at(-1)).toContain('run out')
   })
 
   it('secure says it renews by itself', () => {
     const view = describeCertificate(
-      cert({ state: 'secure', source: 'lets_encrypt', expiresInDays: 61 }),
+      cert({ state: 'secure', source: 'lets_encrypt', expiresInDays: 61 })
     )
     expect(view.label).toBe('Secure')
     expect(view.tone).toBe('good')
@@ -96,10 +96,10 @@ describe('describeCertificate', () => {
     expect(view.label).toBe('Waiting for DNS')
     expect(view.actions).toEqual(['check_dns'])
     expect(view.lines).toContain(
-      'shop.example.com doesn’t point at this server yet: no DNS record found.',
+      'shop.example.com doesn’t point at this server yet: no DNS record found.'
     )
     expect(view.lines).toContain(
-      'www.shop.example.com doesn’t point at this server yet: it points to 198.51.100.4.',
+      'www.shop.example.com doesn’t point at this server yet: it points to 198.51.100.4.'
     )
     expect(view.lines).toContain('Point them at 203.0.113.7.')
     expect(view.lines.join(' ')).not.toContain('ok.example.com')
@@ -123,7 +123,7 @@ describe('describeCertificate', () => {
         state: 'renewal_failed',
         lastError: 'HTTP 404 on challenge',
         lastIssuedAt: '2026-09-01T00:00:00.000Z',
-      }),
+      })
     )
     expect(renewal.label).toBe('Renewal failed')
     expect(renewal.tone).toBe('bad')

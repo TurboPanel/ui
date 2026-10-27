@@ -53,7 +53,7 @@ export function DeletePlanList({ plan }: Readonly<{ plan: DeletePlan }>) {
         <Text style={styles.line}>
           {nameList(
             plan.environments.map((row) => row.name),
-            'None',
+            'None'
           )}
         </Text>
       </Section>
@@ -61,7 +61,7 @@ export function DeletePlanList({ plan }: Readonly<{ plan: DeletePlan }>) {
         <Text style={styles.line}>
           {nameList(
             plan.services.map((row) => row.name),
-            'None',
+            'None'
           )}
         </Text>
       </Section>

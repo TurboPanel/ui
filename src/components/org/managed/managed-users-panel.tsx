@@ -71,10 +71,16 @@ import { orEmptyArray } from '@/lib/or-empty-array'
 import { appLoginsSchemeProblem } from '@/lib/managed-app-logins'
 import { managedIdentifierMaxLength, managedIdentifierProblem } from '@/lib/managed-identifier'
 import { recallSessionChoices, rememberSessionChoices } from '@/lib/session-choices'
-import { PrincipalNameSchemeField, usePrincipalNameScheme } from '@/components/org/principal-name-scheme-field'
-import { principalNamesLabel, principalSchemeErrorMessage, type NameScheme } from '@/lib/principal-name-scheme'
+import {
+  PrincipalNameSchemeField,
+  usePrincipalNameScheme,
+} from '@/components/org/principal-name-scheme-field'
+import {
+  principalNamesLabel,
+  principalSchemeErrorMessage,
+  type NameScheme,
+} from '@/lib/principal-name-scheme'
 import { chrome, colors, spacing, webPointer } from '@/lib/theme'
-
 
 /** What the single-login form keeps between logins for the rest of the session. */
 type LoginFormChoices = {
@@ -130,14 +136,11 @@ function RedeployServicesPanel({
   return (
     <View style={styles.redeployCard}>
       <Text style={panelStyles.detailTitle}>
-        {redeployRequired.count} service(s) need a redeploy to pick up the new
-        password
+        {redeployRequired.count} service(s) need a redeploy to pick up the new password
       </Text>
       {redeployRequired.services.map((service) => (
         <View key={service.serviceId} style={styles.redeployRow}>
-          <Text style={styles.rowLabel}>
-            {service.name?.trim() || service.keyPrefix}
-          </Text>
+          <Text style={styles.rowLabel}>{service.name?.trim() || service.keyPrefix}</Text>
           <Button
             label="Redeploy"
             busyLabel="Redeploying…"
@@ -145,9 +148,7 @@ function RedeployServicesPanel({
             busy={busyId === service.serviceId}
             onPress={() => {
               setBusyId(service.serviceId)
-              void onRedeploy(service.environmentId).finally(() =>
-                setBusyId(null),
-              )
+              void onRedeploy(service.environmentId).finally(() => setBusyId(null))
             }}
           />
         </View>
@@ -303,8 +304,7 @@ export function ManagedUsersPanel({
   const [adding, setAdding] = useState<'database' | 'login' | null>(null)
   const [revealedPassword, setRevealedPassword] = useState<string | null>(null)
   const [revealedUsername, setRevealedUsername] = useState<string | null>(null)
-  const [redeployRequired, setRedeployRequired] =
-    useState<BindingRedeployRequired | null>(null)
+  const [redeployRequired, setRedeployRequired] = useState<BindingRedeployRequired | null>(null)
 
   const bindings = orEmptyArray(bindingsQuery.data?.bindings)
   const bindingCountByPrincipal = useMemo(() => {
@@ -317,10 +317,7 @@ export function ManagedUsersPanel({
   const bindingCountByDatabase = useMemo(() => {
     const map = new Map<string, number>()
     for (const binding of bindings) {
-      map.set(
-        binding.databaseName,
-        (map.get(binding.databaseName) ?? 0) + 1,
-      )
+      map.set(binding.databaseName, (map.get(binding.databaseName) ?? 0) + 1)
     }
     return map
   }, [bindings])
@@ -445,13 +442,8 @@ export function ManagedUsersPanel({
       })
       await onReload()
     } catch (err) {
-      const message = principalSchemeErrorMessage(
-        managedErrorMessage(err, 'Failed to create user'),
-      )
-      const code =
-        err instanceof Error
-          ? /HTTP \d+:\s*([a-z0-9_]+)/i.exec(err.message)?.[1]
-          : null
+      const message = principalSchemeErrorMessage(managedErrorMessage(err, 'Failed to create user'))
+      const code = err instanceof Error ? /HTTP \d+:\s*([a-z0-9_]+)/i.exec(err.message)?.[1] : null
       if (code === 'username_in_use') {
         const suffix = crypto.randomUUID().replaceAll('-', '').slice(0, 3)
         setUsernameHint(`${message} Try ${trimmed}_${suffix}.`)
@@ -603,8 +595,7 @@ export function ManagedUsersPanel({
 
       <Text style={styles.subheading}>Users</Text>
       <Text style={panelStyles.muted}>
-        Usernames are unique across every database on this server&apos;s
-        organization.
+        Usernames are unique across every database on this server&apos;s organization.
       </Text>
       <View style={styles.list}>
         {users.map((user) => {
@@ -635,9 +626,7 @@ export function ManagedUsersPanel({
                 </Text>
               ) : null}
               {user.privileges.length > 0 ? (
-                <Text style={panelStyles.muted}>
-                  {user.privileges.join(', ')}
-                </Text>
+                <Text style={panelStyles.muted}>{user.privileges.join(', ')}</Text>
               ) : null}
               {canManage ? (
                 <LoginLimitsEditor
@@ -705,9 +694,7 @@ export function ManagedUsersPanel({
                     }}
                   />
                   {deleteBlocked ? (
-                    <Text style={panelStyles.muted}>
-                      Remove connections first ({bindingCount})
-                    </Text>
+                    <Text style={panelStyles.muted}>Remove connections first ({bindingCount})</Text>
                   ) : (
                     <ConfirmButton
                       label="Delete"
@@ -724,9 +711,7 @@ export function ManagedUsersPanel({
             </View>
           )
         })}
-        {users.length === 0 ? (
-          <EmptyState title="No additional users yet." />
-        ) : null}
+        {users.length === 0 ? <EmptyState title="No additional users yet." /> : null}
       </View>
 
       {canManage ? (
@@ -743,9 +728,7 @@ export function ManagedUsersPanel({
             autoCorrect={false}
             editable={!disabled}
           />
-          {usernameHint ? (
-            <Text style={panelStyles.calloutWarning}>{usernameHint}</Text>
-          ) : null}
+          {usernameHint ? <Text style={panelStyles.calloutWarning}>{usernameHint}</Text> : null}
           <PrincipalNameSchemeField scheme={nameScheme} disabled={disabled} />
           <Text style={panelStyles.detailLabel}>Databases</Text>
           <View style={styles.chipRow}>
@@ -761,9 +744,7 @@ export function ManagedUsersPanel({
                   accessibilityState={{ checked: selected, disabled }}
                   accessibilityLabel={name}
                 >
-                  <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
-                    {name}
-                  </Text>
+                  <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{name}</Text>
                 </Pressable>
               )
             })}

@@ -369,16 +369,27 @@ describe('managed query hooks', () => {
 
   it('useManagedEffectivePermissions and useManagedPrivilegeCatalogue read on demand', async () => {
     fetchManagedEffectivePermissions.mockResolvedValueOnce({ username: 'u1', grants: [] })
-    fetchManagedPrivilegeCatalogue.mockResolvedValueOnce({ engine: 'postgres', series: '18', levels: [] })
-    const off = renderHook(() => useManagedEffectivePermissions(orgId, environmentId, 'p1', { enabled: false }), {
-      wrapper: createWrapper(),
+    fetchManagedPrivilegeCatalogue.mockResolvedValueOnce({
+      engine: 'postgres',
+      series: '18',
+      levels: [],
     })
+    const off = renderHook(
+      () => useManagedEffectivePermissions(orgId, environmentId, 'p1', { enabled: false }),
+      {
+        wrapper: createWrapper(),
+      }
+    )
     expect(off.result.current.fetchStatus).toBe('idle')
     expect(fetchManagedEffectivePermissions).not.toHaveBeenCalled()
-    const on = renderHook(() => useManagedEffectivePermissions(orgId, environmentId, 'p1'), { wrapper: createWrapper() })
+    const on = renderHook(() => useManagedEffectivePermissions(orgId, environmentId, 'p1'), {
+      wrapper: createWrapper(),
+    })
     await waitFor(() => expect(on.result.current.isSuccess).toBe(true))
     expect(fetchManagedEffectivePermissions).toHaveBeenCalledWith(environmentId, 'p1')
-    const cat = renderHook(() => useManagedPrivilegeCatalogue(orgId, environmentId), { wrapper: createWrapper() })
+    const cat = renderHook(() => useManagedPrivilegeCatalogue(orgId, environmentId), {
+      wrapper: createWrapper(),
+    })
     await waitFor(() => expect(cat.result.current.isSuccess).toBe(true))
     expect(fetchManagedPrivilegeCatalogue).toHaveBeenCalledWith(environmentId)
   })

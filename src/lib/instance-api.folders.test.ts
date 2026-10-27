@@ -104,7 +104,9 @@ describe('instance-api folder wrappers', () => {
   })
 
   it('explains a folder that is in use in plain words', () => {
-    expect(apiErrorCopy(new Error('HTTP 409: folder_in_use'))).toMatch(/Delete that service or volume/)
+    expect(apiErrorCopy(new Error('HTTP 409: folder_in_use'))).toMatch(
+      /Delete that service or volume/
+    )
   })
 
   it('reads what deleting a project or an environment would remove', async () => {
