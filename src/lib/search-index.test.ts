@@ -134,7 +134,7 @@ describe('buildSearchItems', () => {
     )
     expect(hrefs['Datacenters']).toBe('/o1/servers/datacenters')
     expect(hrefs['Pending Keys']).toBe('/o1/servers/keys')
-    expect(hrefs['Server Certificates']).toBe('/o1/servers/tls')
+    expect(hrefs['TLS Certificates']).toBe('/o1/servers/tls')
     expect(hrefs['Server Settings']).toBe('/o1/servers/settings')
     expect(hrefs['Firewall']).toBe('/o1/network/firewall')
     expect(hrefs['Members']).toBe('/o1/manage?tab=members')

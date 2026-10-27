@@ -20,11 +20,7 @@ import {
   type TlsRecord,
   type TlsSource,
 } from '@/lib/instance-api'
-import {
-  useCreateTlsCertificate,
-  useDeleteTlsCertificate,
-  useTlsLibrary,
-} from '@/lib/queries/tls'
+import { useCreateTlsCertificate, useDeleteTlsCertificate, useTlsLibrary } from '@/lib/queries/tls'
 import { useApiMutation, useCan, queryKeys } from '@/lib/query-client'
 import { tlsDateLines, tlsStoredCopyLines } from '@/lib/tls-managed-dates'
 import { colors, spacing } from '@/lib/theme'
@@ -114,9 +110,7 @@ function TlsCertificateList({
         </Text>
       ))}
       {row.metadata.acme?.lastError ? (
-        <Text style={panelStyles.error}>
-          Issuance failing: {row.metadata.acme.lastError}
-        </Text>
+        <Text style={panelStyles.error}>Issuance failing: {row.metadata.acme.lastError}</Text>
       ) : null}
       {canManage ? (
         <ConfirmButton
@@ -178,9 +172,7 @@ function TlsLetsEncryptPanel({
   )
 }
 
-export function TlsOverviewSection({
-  orgId,
-}: Readonly<{ orgId: string }>) {
+export function TlsOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
   const canManage = useCan('organization', orgId, 'organization:manage')
   const tlsQuery = useTlsLibrary(orgId)
   const createMutation = useCreateTlsCertificate(orgId)
@@ -208,9 +200,7 @@ export function TlsOverviewSection({
   })
   const acmeEnabled = draftAcmeEnabled ?? tlsSettingsQuery.data?.acmeEnabled ?? false
   const sourceOptions = SOURCE_OPTIONS.map((option) =>
-    option.value === 'lets_encrypt' && !acmeEnabled
-      ? { ...option, disabled: true }
-      : option,
+    option.value === 'lets_encrypt' && !acmeEnabled ? { ...option, disabled: true } : option
   )
 
   // Each failure is said next to the button that caused it.
@@ -227,13 +217,11 @@ export function TlsOverviewSection({
 
   let queryError: string | null = null
   if (tlsQuery.isError) {
-    queryError =
-      userErrorMessage(tlsQuery.error, 'Failed to load TLS library')
+    queryError = userErrorMessage(tlsQuery.error, 'Failed to load TLS library')
   }
 
   const deletingId =
-    deleteMutation.isPending &&
-    typeof deleteMutation.variables === 'string'
+    deleteMutation.isPending && typeof deleteMutation.variables === 'string'
       ? deleteMutation.variables
       : null
 
@@ -273,7 +261,7 @@ export function TlsOverviewSection({
     const result = await createMutation.run(
       source === 'upload'
         ? { source: 'upload', name, certificatePem, privateKeyPem }
-        : { source, name, hostnames: names },
+        : { source, name, hostnames: names }
     )
     if (!result.ok) setCreateError(failedRunMessage(result, 'Failed to create certificate'))
   }
@@ -300,7 +288,7 @@ export function TlsOverviewSection({
         onToggle={onToggleAcme}
       />
       <SectionPanel
-        title="TLS certificates"
+        title="TLS Certificates"
         hint="Organization certificate library — pin uploaded, self-signed, or Let's Encrypt certs explicitly on hosting (default is basic self-signed). The Organization CA row is platform-managed."
       >
         <TlsCertificateList
@@ -364,16 +352,15 @@ export function TlsOverviewSection({
           )}
           {!acmeEnabled ? (
             <Text style={panelStyles.muted}>
-              Your organization has not enabled Let&apos;s Encrypt — turn on
-              &ldquo;Allow Let&apos;s Encrypt certificates&rdquo; above to
-              request one.
+              Your organization has not enabled Let&apos;s Encrypt — turn on &ldquo;Allow Let&apos;s
+              Encrypt certificates&rdquo; above to request one.
             </Text>
           ) : null}
           {source === 'lets_encrypt' ? (
             <Text style={panelStyles.muted}>
-              Caddy issues and renews this certificate on the serving host. The
-              hostname must resolve there with :80 and :443 reachable; wildcards
-              and private bind scopes are not supported.
+              Caddy issues and renews this certificate on the serving host. The hostname must
+              resolve there with :80 and :443 reachable; wildcards and private bind scopes are not
+              supported.
             </Text>
           ) : null}
           <Button

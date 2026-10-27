@@ -3,30 +3,12 @@ import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { usePathname, useRouter, type Href } from 'expo-router'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { useProjectContext } from '@/components/org/project/project-context'
-import {
-  Button,
-  ButtonRow,
-  ConfirmButton,
-  SectionPanel,
-} from '@/components/ui'
+import { Button, ButtonRow, ConfirmButton, SectionPanel } from '@/components/ui'
 import { VariablesSection } from '@/components/org/variables-section'
-import type {
-  EnvironmentRecord,
-} from '@/lib/instance-api'
-import {
-  parseProjectEnvironmentId,
-  projectOverviewHref,
-} from '@/lib/project-navigation'
-import {
-  useDeleteEnvironment,
-  useEnvironmentDeletePreview,
-  useVariables,
-} from '@/lib/queries'
-import {
-  deleteFailureMessage,
-  deletePlanBlockerLines,
-  deletePlanSummary,
-} from '@/lib/delete-plan'
+import type { EnvironmentRecord } from '@/lib/instance-api'
+import { parseProjectEnvironmentId, projectOverviewHref } from '@/lib/project-navigation'
+import { useDeleteEnvironment, useEnvironmentDeletePreview, useVariables } from '@/lib/queries'
+import { deleteFailureMessage, deletePlanBlockerLines, deletePlanSummary } from '@/lib/delete-plan'
 import { colors, spacing, webPointer } from '@/lib/theme'
 
 type EnvironmentAddKind = 'variables'
@@ -34,11 +16,7 @@ type EnvironmentAddKind = 'variables'
 function openAddKind<K extends string>(
   kind: K,
   setOpened: (updater: (current: ReadonlySet<K>) => ReadonlySet<K>) => void,
-  setAddSeed: (
-    updater: (
-      current: Partial<Record<K, number>>,
-    ) => Partial<Record<K, number>>,
-  ) => void,
+  setAddSeed: (updater: (current: Partial<Record<K, number>>) => Partial<Record<K, number>>) => void
 ) {
   setOpened((current) => {
     if (current.has(kind)) return current
@@ -104,11 +82,7 @@ function AddToolbarRow<K extends string>({
   return (
     <View style={styles.addRow}>
       {pendingAdds.map((item) => (
-        <AddChip
-          key={item.kind}
-          label={item.label}
-          onPress={() => onOpen(item.kind)}
-        />
+        <AddChip key={item.kind} label={item.label} onPress={() => onOpen(item.kind)} />
       ))}
     </View>
   )
@@ -123,14 +97,8 @@ function EnvironmentDeleteControl({
 }>) {
   const router = useRouter()
   const pathname = usePathname()
-  const {
-    orgId,
-    projectId,
-    environments,
-    canOwn,
-    setError,
-    invalidateEnvironments,
-  } = useProjectContext()
+  const { orgId, projectId, environments, canOwn, setError, invalidateEnvironments } =
+    useProjectContext()
   const deleteEnvironment = useDeleteEnvironment(orgId)
   // Read when the button is armed, so the confirmation names what goes.
   const [armed, setArmed] = useState(false)
@@ -158,7 +126,7 @@ function EnvironmentDeleteControl({
           onPress={onOpenProjectSettings}
           disabled={!onOpenProjectSettings}
           accessibilityRole="button"
-          accessibilityLabel="Open Project settings to delete the project"
+          accessibilityLabel="Open Project Settings to delete the project"
         >
           <Text style={panelStyles.toolbarBtnTextSecondary}>
             Only environment — delete the project from Project → Settings
@@ -182,8 +150,8 @@ function EnvironmentDeleteControl({
           setError(
             deleteFailureMessage(
               result.cause ?? result.error,
-              'The environment could not be deleted. Try again.',
-            ),
+              'The environment could not be deleted. Try again.'
+            )
           )
         }
         return
@@ -217,9 +185,7 @@ function EnvironmentDeleteControl({
   )
 }
 
-function readFocusHostingId(
-  value: string | string[] | undefined,
-): string | null {
+function readFocusHostingId(value: string | string[] | undefined): string | null {
   if (typeof value === 'string' && value.length > 0) return value
   if (Array.isArray(value)) {
     const first = value[0]
@@ -244,12 +210,8 @@ export function EnvironmentSettingsPanel({
   const variablesQuery = useVariables(orgId, {
     environmentId: selectedEnvironment.id,
   })
-  const [opened, setOpened] = useState<ReadonlySet<EnvironmentAddKind>>(
-    () => new Set(),
-  )
-  const [addSeed, setAddSeed] = useState<
-    Partial<Record<EnvironmentAddKind, number>>
-  >({})
+  const [opened, setOpened] = useState<ReadonlySet<EnvironmentAddKind>>(() => new Set())
+  const [addSeed, setAddSeed] = useState<Partial<Record<EnvironmentAddKind, number>>>({})
   const scopeHint = 'This environment only'
   const canEdit = canManage && projectAllowsMutations
   const hasVariables = (variablesQuery.data?.variables?.length ?? 0) > 0
@@ -303,9 +265,7 @@ export function EnvironmentSettingsPanel({
 }
 
 /** Parse `?hostingId=` for focusing a hosting row on the Hosting tab. */
-export function readHostingIdParam(
-  value: string | string[] | undefined,
-): string | null {
+export function readHostingIdParam(value: string | string[] | undefined): string | null {
   return readFocusHostingId(value)
 }
 

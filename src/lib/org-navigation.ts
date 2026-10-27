@@ -45,7 +45,7 @@ export const ORG_AREAS = [
   },
   {
     // Not in the sidebar: managed databases are listed on Projects (the
-    // Managed databases filter, which links to these settings). `/managed`
+    // Managed Databases filter, which links to these settings). `/managed`
     // redirects there; the area stays so `/managed/settings` resolves.
     id: 'managed',
     label: 'Managed',
@@ -306,7 +306,7 @@ export function managedSettingsHref(orgId: string): `/${string}/managed/settings
 }
 
 /**
- * Where the retired `/managed` list goes: Projects with the Managed databases
+ * Where the retired `/managed` list goes: Projects with the Managed Databases
  * filter on, keeping the rest of the query (`?workspaceId=`). `params` is what
  * `useLocalSearchParams` returns, so the `orgId` path param is dropped.
  */
