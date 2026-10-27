@@ -1,3 +1,4 @@
+import { useGlobalSearchParams, usePathname } from 'expo-router'
 import type { OrganizationActivityFilter } from '@/lib/instance-api'
 
 /** What `useLocalSearchParams` hands back. */
@@ -64,4 +65,25 @@ export function activityParamsToUrl(view: ActivityView): UrlParams {
     environment: (view.projectId && view.environmentId) || undefined,
     offset: view.offset > 0 ? String(view.offset) : undefined,
   }
+}
+
+/** Whether `pathname` is this organization's Activity screen (query and trailing slash ignored). */
+export function isActivityPath(pathname: string, orgId: string): boolean {
+  const path = (pathname.split('?')[0] ?? '').replace(/\/+$/, '')
+  return orgId.length > 0 && path === `/${orgId}/activity`
+}
+
+/**
+ * The Activity view and whether Activity is the screen on show. Reads the
+ * global params, not the local ones: on a phone the section is drawn by the
+ * org tab pager in the `[orgId]` layout, whose local params never see the
+ * `activity` route's query, while `router.setParams` writes to that focused
+ * route. Off the Activity path (another pager tab) the view is the default
+ * and `visible` is false, so the screen can stop polling.
+ */
+export function useActivityView(orgId: string): Readonly<{ view: ActivityView; visible: boolean }> {
+  const pathname = usePathname()
+  const params = useGlobalSearchParams()
+  const visible = isActivityPath(pathname, orgId)
+  return { view: readActivityParams(visible ? params : {}), visible }
 }

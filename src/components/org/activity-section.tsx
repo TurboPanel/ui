@@ -1,4 +1,4 @@
-import { useLocalSearchParams, useRouter, type Href } from 'expo-router'
+import { useRouter, type Href } from 'expo-router'
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import {
   Badge,
@@ -21,7 +21,7 @@ import {
   activityStateLabel,
   activityStateTone,
 } from '@/lib/activity'
-import { activityParamsToUrl, readActivityParams, type ActivityView } from '@/lib/activity-params'
+import { activityParamsToUrl, type ActivityView, useActivityView } from '@/lib/activity-params'
 import { activityStepText } from '@/lib/deploy-progress'
 import { formatLocalDateTime } from '@/lib/format-datetime'
 import { formatDurationSeconds } from '@/lib/format-metrics'
@@ -55,7 +55,7 @@ const COLUMNS = [
   { key: 'by', header: 'Started By', flex: 1.2, minWidth: 140 },
   { key: 'started', header: 'Started', flex: 1.2, minWidth: 140 },
   { key: 'duration', header: 'Duration', flex: 0.7, minWidth: 80 },
-  { key: 'log', header: 'Log', flex: 0.6, minWidth: 80 },
+  { key: 'log', header: 'View Log', flex: 0.6, minWidth: 80 },
 ] as const satisfies readonly DataTableColumn[]
 
 /** What the Change column says: the commit, else the step a running item is on, else why it failed. */
@@ -257,7 +257,7 @@ function emptyText(view: ActivityView): string {
 export function ActivitySection({ orgId }: Readonly<{ orgId: string }>) {
   const canManage = useCan('organization', orgId, 'organization:manage')
   const router = useRouter()
-  const view = readActivityParams(useLocalSearchParams())
+  const { view, visible } = useActivityView(orgId)
   const update = (next: Partial<ActivityView>) => {
     router.setParams(activityParamsToUrl({ ...view, ...next }))
   }
@@ -269,11 +269,12 @@ export function ActivitySection({ orgId }: Readonly<{ orgId: string }>) {
       projectId: view.projectId || undefined,
       environmentId: view.environmentId || undefined,
     },
-    { enabled: canManage }
+    // A pager tab that is not on show (phones) does not poll.
+    { enabled: canManage && visible }
   )
 
   usePullToRefresh(async () => {
-    if (canManage) await activity.refetch()
+    if (canManage && visible) await activity.refetch()
   })
 
   if (!canManage) {

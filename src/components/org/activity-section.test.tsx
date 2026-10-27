@@ -14,10 +14,16 @@ const state = vi.hoisted(() => ({
   feedParams: [] as unknown[],
 }))
 
+/**
+ * Mirrors expo-router inside the org tab pager: the section sits in the
+ * `[orgId]` layout, so its local params only ever hold `orgId`; the Activity
+ * route's query is visible only through the global params.
+ */
 const router = vi.hoisted(() => ({
   push: vi.fn(),
   setParams: vi.fn(),
   params: {} as Record<string, string>,
+  pathname: '/o1/activity',
 }))
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
@@ -28,7 +34,9 @@ vi.mock(
 )
 vi.mock('expo-router', () => ({
   useRouter: () => router,
-  useLocalSearchParams: () => router.params,
+  useLocalSearchParams: () => ({ orgId: 'o1' }),
+  useGlobalSearchParams: () => ({ orgId: 'o1', ...router.params }),
+  usePathname: () => router.pathname,
 }))
 vi.mock('@/components/ui/panel-styles', () => ({ panelStyles: {} }))
 vi.mock('@/lib/pull-to-refresh', () => ({ usePullToRefresh: () => undefined }))
@@ -131,6 +139,7 @@ beforeEach(() => {
   state.canManage = true
   state.feedParams = []
   router.params = {}
+  router.pathname = '/o1/activity'
   router.push.mockReset()
   router.setParams.mockReset()
 })
@@ -291,6 +300,30 @@ describe('ActivitySection filters in the URL', () => {
       options: { enabled: true },
     })
     expect(screen.getByText('Nothing has been deployed yet.')).toBeTruthy()
+  })
+
+  it('reads the filters in the tab pager, where only the global params carry them', () => {
+    router.params = { status: 'failed', offset: '25' }
+    router.pathname = '/o1/activity/'
+    render(<ActivitySection orgId="o1" />)
+    expect(state.feedParams.at(-1)).toEqual({
+      params: { filter: 'failed', offset: 25, projectId: undefined, environmentId: undefined },
+      options: { enabled: true },
+    })
+    fireEvent.click(screen.getByText('Succeeded'))
+    expect(router.setParams).toHaveBeenLastCalledWith(
+      expect.objectContaining({ status: 'succeeded', offset: undefined })
+    )
+  })
+
+  it('stops polling and ignores other screens’ params while another pager tab is on show', () => {
+    router.params = { status: 'failed', project: PROJECT }
+    router.pathname = '/o1/projects'
+    render(<ActivitySection orgId="o1" />)
+    expect(state.feedParams.at(-1)).toEqual({
+      params: { filter: 'all', offset: 0, projectId: undefined, environmentId: undefined },
+      options: { enabled: false },
+    })
   })
 
   it('keeps the feed off for someone who cannot manage the organization', () => {

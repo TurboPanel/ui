@@ -1,5 +1,7 @@
-import { describe, expect, it } from 'vitest'
-import { activityParamsToUrl, readActivityParams } from '@/lib/activity-params'
+import { describe, expect, it, vi } from 'vitest'
+import { activityParamsToUrl, isActivityPath, readActivityParams } from '@/lib/activity-params'
+
+vi.mock('expo-router', () => ({ useGlobalSearchParams: () => ({}), usePathname: () => '/' }))
 
 const PROJECT = '0192f000-0000-7000-8000-00000000000a'
 const ENV = '0192f000-0000-7000-8000-00000000000b'
@@ -30,5 +32,13 @@ describe('activity URL params', () => {
     // an environment only counts inside a chosen project
     expect(readActivityParams({ environment: ENV }).environmentId).toBe('')
     expect(readActivityParams({ status: ['failed', 'succeeded'] }).filter).toBe('failed')
+  })
+
+  it('knows the Activity path of this organization only', () => {
+    expect(isActivityPath('/o1/activity', 'o1')).toBe(true)
+    expect(isActivityPath('/o1/activity/?status=failed', 'o1')).toBe(true)
+    expect(isActivityPath('/o1/projects', 'o1')).toBe(false)
+    expect(isActivityPath('/o2/activity', 'o1')).toBe(false)
+    expect(isActivityPath('/activity', '')).toBe(false)
   })
 })

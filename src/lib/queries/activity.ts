@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { isActivityLive } from '@/lib/activity'
 import {
   fetchOrganizationActivity,
   type OrganizationActivityFilter,
@@ -12,13 +13,9 @@ export const ACTIVITY_POLL_MS = 2000
 export const ACTIVITY_IDLE_POLL_MS = 15000
 export const ACTIVITY_PAGE_SIZE = 25
 
-function isLive(page: OrganizationActivityPage | undefined): boolean {
-  return (page?.items ?? []).some((item) => item.state === 'queued' || item.state === 'deploying')
-}
-
 /** How often to read the page again: fast while it shows work in progress, slowly otherwise. */
 export function activityPollInterval(page: OrganizationActivityPage | undefined): number {
-  return isLive(page) ? ACTIVITY_POLL_MS : ACTIVITY_IDLE_POLL_MS
+  return (page?.items ?? []).some(isActivityLive) ? ACTIVITY_POLL_MS : ACTIVITY_IDLE_POLL_MS
 }
 
 export type ActivityFeedParams = Readonly<{
