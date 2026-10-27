@@ -205,9 +205,7 @@ describe('deleteFailureMessage', () => {
   })
 
   it('maps a bare code to its fixed copy', () => {
-    expect(
-      deleteFailureMessage('/api/x failed: HTTP 409: project_stop_failed', 'fallback')
-    ).toBe(
+    expect(deleteFailureMessage('/api/x failed: HTTP 409: project_stop_failed', 'fallback')).toBe(
       'The servers did not accept the stop in time, so nothing was deleted. Check that they are online and try again.'
     )
   })

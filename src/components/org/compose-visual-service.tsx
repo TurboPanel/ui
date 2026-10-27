@@ -1,18 +1,5 @@
-import {
-  createElement,
-  useEffect,
-  useState,
-  type ComponentProps,
-  type CSSProperties,
-} from 'react'
-import {
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native'
+import { createElement, useEffect, useState, type ComponentProps, type CSSProperties } from 'react'
+import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { useRouter, type Href } from 'expo-router'
 import { CronFields } from '@/components/org/compose-cron-fields'
 import { DockerfileEditor } from '@/components/org/dockerfile-editor'
@@ -82,10 +69,7 @@ import { Button, Select, Toggle } from '@/components/ui'
 import { useProjectRepositoryId } from '@/components/org/project/project-context'
 import { getActiveOrganizationId } from '@/lib/org-context'
 import { projectGitSourcesHref } from '@/lib/org-navigation'
-import {
-  useRepositories,
-  useUpdateRepository,
-} from '@/lib/queries/releases'
+import { useRepositories, useUpdateRepository } from '@/lib/queries/releases'
 import { chrome, colors, spacing } from '@/lib/theme'
 
 const webSelectStyle: CSSProperties = {
@@ -123,7 +107,7 @@ function servicePorts(value: unknown): string {
  */
 export function servingPathLine(
   kind: 'container' | 'site' | 'node',
-  engine: SiteEngine | undefined,
+  engine: SiteEngine | undefined
 ): string {
   if (kind === 'container') return "Docker → TurboPanel's proxy → :443"
   if (kind === 'node') return "Node → TurboPanel's proxy → :443"
@@ -142,9 +126,7 @@ const VARIABLES_STAY_OUT =
   "The site's variables do not reach PHP; pick Apache if the app needs them."
 const PROXY_HTTPS = "TurboPanel's proxy handles HTTPS."
 
-function siteEngineHint(
-  engine: SiteEngine | undefined,
-): string {
+function siteEngineHint(engine: SiteEngine | undefined): string {
   if (engine === 'caddy') {
     return `Caddy serves the files from the site folder and runs PHP in the site's own PHP process. ${VARIABLES_REACH_PHP} ${PROXY_HTTPS}`
   }
@@ -236,11 +218,7 @@ function PhpFields({
     if (next.mode === undefined) delete next.mode
     onChange(Object.keys(next).length > 0 ? next : undefined)
   }
-  const setBlockValue = (
-    field: 'settings' | 'pool',
-    key: string,
-    raw: string,
-  ) => {
+  const setBlockValue = (field: 'settings' | 'pool', key: string, raw: string) => {
     const block = { ...php?.[field] }
     const trimmed = raw.trim()
     if (trimmed === '') delete block[key]
@@ -254,9 +232,10 @@ function PhpFields({
     emit({ ...php, extensions: next })
   }
 
-  const mechanism = engine === 'openlitespeed'
-    ? 'a per-vhost LSAPI process under suEXEC'
-    : 'a per-site php-fpm pool'
+  const mechanism =
+    engine === 'openlitespeed'
+      ? 'a per-vhost LSAPI process under suEXEC'
+      : 'a per-site php-fpm pool'
   const enabled = php !== undefined && Object.keys(php).length > 0
 
   return (
@@ -289,14 +268,14 @@ function PhpFields({
             onChange={(mode) => emit({ ...php, mode: isPhpMode(mode) ? mode : undefined })}
           />
           <Text style={styles.hint}>
-            Automatic keeps the mode the site already runs. A new site gets
-            FastCGI, or the next mode its organization and server allow.
+            Automatic keeps the mode the site already runs. A new site gets FastCGI, or the next
+            mode its organization and server allow.
           </Text>
         </>
       ) : null}
       <Text style={styles.hint}>
-        Leave every field blank to serve this site as static files. Setting any
-        of them turns PHP on, running in {mechanism}.
+        Leave every field blank to serve this site as static files. Setting any of them turns PHP
+        on, running in {mechanism}.
       </Text>
 
       {PHP_SETTING_FIELDS.slice(0, 4).map((field) => (
@@ -344,9 +323,9 @@ function PhpFields({
 
           <Text style={styles.label}>Extensions</Text>
           <Text style={styles.hint}>
-            {BASELINE_PHP_EXTENSIONS.join(', ')} are always installed. Anything
-            you add here is loaded for every site on this PHP version on the
-            same server — PHP has no per-site extension loading.
+            {BASELINE_PHP_EXTENSIONS.join(', ')} are always installed. Anything you add here is
+            loaded for every site on this PHP version on the same server — PHP has no per-site
+            extension loading.
           </Text>
           <View style={styles.extensionRow}>
             {OPTIONAL_PHP_EXTENSIONS.map((name: string) => {
@@ -361,9 +340,7 @@ function PhpFields({
                   accessibilityLabel={name}
                   style={[styles.extensionChip, on && styles.extensionChipOn]}
                 >
-                  <Text style={on ? styles.extensionTextOn : styles.extensionText}>
-                    {name}
-                  </Text>
+                  <Text style={on ? styles.extensionTextOn : styles.extensionText}>{name}</Text>
                 </Pressable>
               )
             })}
@@ -393,8 +370,7 @@ function PhpFields({
             style={styles.input}
           />
           <Text style={styles.hint}>
-            OpenLiteSpeed maps these onto its own LSAPI limits rather than an
-            FPM pool.
+            OpenLiteSpeed maps these onto its own LSAPI limits rather than an FPM pool.
           </Text>
         </>
       ) : null}
@@ -425,12 +401,8 @@ function OptionSelect({
         style: webSelectStyle,
       },
       options.map((option) =>
-        createElement(
-          'option',
-          { key: option.value, value: option.value },
-          option.label,
-        ),
-      ),
+        createElement('option', { key: option.value, value: option.value }, option.label)
+      )
     )
   }
 
@@ -445,12 +417,7 @@ function OptionSelect({
             disabled={disabled}
             onPress={() => onChange(option.value)}
           >
-            <Text
-              style={[
-                styles.optionChipText,
-                selected && styles.optionChipTextActive,
-              ]}
-            >
+            <Text style={[styles.optionChipText, selected && styles.optionChipTextActive]}>
               {option.label}
             </Text>
           </Pressable>
@@ -499,11 +466,7 @@ function ContainerNameField({
   const text = typeof value === 'string' ? value : ''
   return (
     <View style={styles.fieldBlock}>
-      <FieldHeader
-        label="Container name"
-        onRemove={onRemove}
-        disabled={disabled}
-      />
+      <FieldHeader label="Container name" onRemove={onRemove} disabled={disabled} />
       <TextInput
         value={text}
         onChangeText={onChange}
@@ -515,8 +478,8 @@ function ContainerNameField({
         style={styles.input}
       />
       <Text style={styles.hint}>
-        Sets Compose container_name. Leave blank / remove so project naming
-        (uuid or Docker defaults) applies at deploy.
+        Sets Compose container_name. Leave blank / remove so project naming (uuid or Docker
+        defaults) applies at deploy.
       </Text>
     </View>
   )
@@ -559,18 +522,13 @@ function RestartField({
             return
           }
           onChange(
-            formatComposeRestart(
-              nextPolicy,
-              nextPolicy === 'on-failure' ? parsed.maxRetries : null,
-            ),
+            formatComposeRestart(nextPolicy, nextPolicy === 'on-failure' ? parsed.maxRetries : null)
           )
         }}
       />
       {parsed.policy === 'on-failure' ? (
         <>
-          <Text style={styles.hint}>
-            Optional max retries (Compose: on-failure[:max-retries])
-          </Text>
+          <Text style={styles.hint}>Optional max retries (Compose: on-failure[:max-retries])</Text>
           <TextInput
             value={parsed.maxRetries === null ? '' : String(parsed.maxRetries)}
             onChangeText={(text) => {
@@ -618,7 +576,7 @@ function PortsField({
             ports
               .split(',')
               .map((port) => port.trim())
-              .filter(Boolean),
+              .filter(Boolean)
           )
         }
         editable={!disabled}
@@ -767,11 +725,7 @@ function DockerfileField({
 
   return (
     <View style={styles.fieldBlock}>
-      <FieldHeader
-        label="Dockerfile"
-        onRemove={handleRemove}
-        disabled={disabled}
-      />
+      <FieldHeader label="Dockerfile" onRemove={handleRemove} disabled={disabled} />
 
       {buildRef.kind === 'inline' ? (
         <>
@@ -782,17 +736,15 @@ function DockerfileField({
               onPatch(setComposeBuildInline(value, text))
             }}
           />
-          <Text style={styles.hint}>
-            Build context is the deployment directory (context: .).
-          </Text>
+          <Text style={styles.hint}>Build context is the deployment directory (context: .).</Text>
           {!dockerfileHasFromInstruction(buildRef.dockerfileInline) ? (
             <Text style={styles.hintWarn}>
               Dockerfile has no FROM instruction — the build will fail.
             </Text>
           ) : null}
           <Text style={styles.hint}>
-            Edits are picked up on Cacheless redeploy or when Disable build
-            cache is enabled for this service in Service settings.
+            Edits are picked up on Cacheless redeploy or when Disable build cache is enabled for
+            this service in Service settings.
           </Text>
         </>
       ) : null}
@@ -801,8 +753,8 @@ function DockerfileField({
         <>
           <Text style={styles.hint}>
             This service uses an external build
-            {externalBuildLocationSuffix(buildRef)}. Edit the Compose YAML to
-            change path-based builds, or convert to an inline Dockerfile below.
+            {externalBuildLocationSuffix(buildRef)}. Edit the Compose YAML to change path-based
+            builds, or convert to an inline Dockerfile below.
           </Text>
           <Pressable
             style={styles.convertChip}
@@ -811,16 +763,12 @@ function DockerfileField({
               onPatch(setComposeBuildInline(value, DEFAULT_INLINE_DOCKERFILE))
             }}
           >
-            <Text style={styles.convertChipText}>
-              Convert to inline Dockerfile
-            </Text>
+            <Text style={styles.convertChipText}>Convert to inline Dockerfile</Text>
           </Pressable>
         </>
       ) : null}
 
-      {buildRef.kind === 'none' ? (
-        <Text style={styles.hint}>No build configuration.</Text>
-      ) : null}
+      {buildRef.kind === 'none' ? <Text style={styles.hint}>No build configuration.</Text> : null}
     </View>
   )
 }
@@ -843,7 +791,7 @@ type ContainerVisualFlags = {
  * what is coming without pretending it works today.
  */
 const RESERVED_DEPLOYMENT_MODES: readonly { label: string; hint: string }[] = [
-  { label: 'Dockerfile', hint: 'Build the repository\'s Dockerfile — not wired up yet.' },
+  { label: 'Dockerfile', hint: "Build the repository's Dockerfile — not wired up yet." },
 ]
 
 /**
@@ -866,15 +814,13 @@ const SOURCE_BUILD_KIND_OPTIONS: readonly {
   {
     value: 'native',
     label: 'Automatic',
-    hint:
-      'Builds the repository and publishes the result as a release on the host.',
+    hint: 'Builds the repository and publishes the result as a release on the host.',
     containerOnly: false,
   },
   {
     value: 'railpack',
     label: 'Railpack — build an isolated OCI image automatically',
-    hint:
-      'Detects the language and builds a container image from the repository — no Dockerfile needed. The service then runs from that image like any other container.',
+    hint: 'Detects the language and builds a container image from the repository — no Dockerfile needed. The service then runs from that image like any other container.',
     containerOnly: true,
   },
 ]
@@ -888,11 +834,10 @@ const SOURCE_BUILD_KIND_OPTIONS: readonly {
  * a repository whose build emits something the heuristic reads wrong, where the
  * operator has to be able to say which lane it is.
  */
-const NATIVE_RUNTIME_MODES: readonly { value: NativeRuntime; label: string }[] =
-  [
-    { value: 'node', label: 'Node.js' },
-    { value: 'deno', label: 'Deno' },
-  ]
+const NATIVE_RUNTIME_MODES: readonly { value: NativeRuntime; label: string }[] = [
+  { value: 'node', label: 'Node.js' },
+  { value: 'deno', label: 'Deno' },
+]
 
 const NATIVE_FRAMEWORK_MODES: readonly {
   value: NativeRuntimeFramework
@@ -902,20 +847,17 @@ const NATIVE_FRAMEWORK_MODES: readonly {
   {
     value: 'auto',
     label: 'Native Node — automatic',
-    hint:
-      'Builds from the connected repository and detects the runtime from the build output.',
+    hint: 'Builds from the connected repository and detects the runtime from the build output.',
   },
   {
     value: 'next',
     label: 'Native Node — Next.js',
-    hint:
-      'Serves a Next.js build: a standalone tree is supervised, a static export is served as files.',
+    hint: 'Serves a Next.js build: a standalone tree is supervised, a static export is served as files.',
   },
   {
     value: 'node',
     label: 'Native Node — plain server',
-    hint:
-      'Supervises the start command as a host process. Set a start command on the repository below.',
+    hint: 'Supervises the start command as a host process. Set a start command on the repository below.',
   },
 ]
 
@@ -964,9 +906,7 @@ function NodeRuntimeBlock({
   onDenoVersionChange: (denoVersion: string) => void
 }>) {
   const activeFramework = framework ?? 'auto'
-  const activeHint = NATIVE_FRAMEWORK_MODES.find(
-    (mode) => mode.value === activeFramework,
-  )?.hint
+  const activeHint = NATIVE_FRAMEWORK_MODES.find((mode) => mode.value === activeFramework)?.hint
 
   const runtimeChooser = (
     <>
@@ -983,12 +923,7 @@ function NodeRuntimeBlock({
               accessibilityState={{ selected, disabled }}
               onPress={() => onRuntimeChange(mode.value)}
             >
-              <Text
-                style={[
-                  styles.optionChipText,
-                  selected && styles.optionChipTextActive,
-                ]}
-              >
+              <Text style={[styles.optionChipText, selected && styles.optionChipTextActive]}>
                 {mode.label}
               </Text>
             </Pressable>
@@ -1003,10 +938,9 @@ function NodeRuntimeBlock({
       <View style={styles.fieldBlock}>
         {runtimeChooser}
         <Text style={styles.hint}>
-          Starts with deno task start when deno.json defines a start task,
-          otherwise deno run --allow-all on the entry file (main.ts, mod.ts,
-          server.ts, main.js, or index.ts). The app must listen on 127.0.0.1
-          and the PORT variable.
+          Starts with deno task start when deno.json defines a start task, otherwise deno run
+          --allow-all on the entry file (main.ts, mod.ts, server.ts, main.js, or index.ts). The app
+          must listen on 127.0.0.1 and the PORT variable.
         </Text>
         <View style={styles.nativeFieldBlock}>
           <Text style={styles.label}>Deno version</Text>
@@ -1050,22 +984,14 @@ function NodeRuntimeBlock({
               accessibilityState={{ selected, disabled }}
               onPress={() => onSelectNative(mode.value)}
             >
-              <Text
-                style={[
-                  styles.optionChipText,
-                  selected && styles.optionChipTextActive,
-                ]}
-              >
+              <Text style={[styles.optionChipText, selected && styles.optionChipTextActive]}>
                 {mode.label}
               </Text>
             </Pressable>
           )
         })}
         {RESERVED_DEPLOYMENT_MODES.map((mode) => (
-          <View
-            key={mode.label}
-            style={[styles.optionChip, styles.optionChipDisabled]}
-          >
+          <View key={mode.label} style={[styles.optionChip, styles.optionChipDisabled]}>
             <Text style={styles.optionChipTextDisabled}>{mode.label}</Text>
           </View>
         ))}
@@ -1079,7 +1005,12 @@ function NodeRuntimeBlock({
             // Only an app that was never pinned shows this; it keeps following the server.
             ...(nodeVersion
               ? []
-              : [{ value: '', label: `Not pinned (follows the server, now ${NEWEST_NODE_SERIES}.x)` }]),
+              : [
+                  {
+                    value: '',
+                    label: `Not pinned (follows the server, now ${NEWEST_NODE_SERIES}.x)`,
+                  },
+                ]),
             // A pinned value outside the offered series still displays as itself.
             ...(nodeVersion &&
             nodeVersion !== FLOATING_NODE_VERSION &&
@@ -1099,10 +1030,9 @@ function NodeRuntimeBlock({
           onChange={onNodeVersionChange}
         />
         <Text style={styles.hint}>
-          Series the host runs this service under. A number keeps it there and
-          only gets patch updates; Latest follows the newest series the server
-          offers. Version, package manager, and mode are also on the
-          service&apos;s Node.js settings page.
+          Series the host runs this service under. A number keeps it there and only gets patch
+          updates; Latest follows the newest series the server offers. Version, package manager, and
+          mode are also on the service&apos;s Node.js settings page.
         </Text>
       </View>
     </View>
@@ -1183,7 +1113,7 @@ function dropEmptySourceKeys(next: ComposeServiceSourceExtension) {
 function commitSourceExtension(
   binding: ComposeServiceSourceExtension | undefined,
   patch: Partial<ComposeServiceSourceExtension>,
-  onChange: (source: ComposeServiceSourceExtension) => void,
+  onChange: (source: ComposeServiceSourceExtension) => void
 ) {
   if (!binding) return
   const next: ComposeServiceSourceExtension = { ...binding, ...patch }
@@ -1198,15 +1128,10 @@ function commitSourceExtension(
 
 function sourceBuildKindOptions(serviceKind: ComposeServiceKind | undefined) {
   const containerKind = serviceKind === undefined || serviceKind === 'container'
-  return SOURCE_BUILD_KIND_OPTIONS.filter(
-    (option) => containerKind || !option.containerOnly,
-  )
+  return SOURCE_BUILD_KIND_OPTIONS.filter((option) => containerKind || !option.containerOnly)
 }
 
-function sourceSelectOptions(
-  sourceOptions: readonly RepositoryRecord[],
-  sourceId: string,
-) {
+function sourceSelectOptions(sourceOptions: readonly RepositoryRecord[], sourceId: string) {
   if (sourceOptions.length === 0) {
     return [{ value: sourceId, label: sourceId }]
   }
@@ -1217,10 +1142,7 @@ function sourceSelectOptions(
 }
 
 function sourceBuildKindHint(buildKind: ComposeSourceBuildKind): string {
-  return (
-    SOURCE_BUILD_KIND_OPTIONS.find((option) => option.value === buildKind)
-      ?.hint ?? ''
-  )
+  return SOURCE_BUILD_KIND_OPTIONS.find((option) => option.value === buildKind)?.hint ?? ''
 }
 
 function sourceBranchHint(defaultBranch: string | null | undefined): string {
@@ -1290,9 +1212,7 @@ function BoundSourceFields({
           label: option.label,
         }))}
         disabled={disabled}
-        onChange={(value) =>
-          commit({ buildKind: value as ComposeSourceBuildKind })
-        }
+        onChange={(value) => commit({ buildKind: value as ComposeSourceBuildKind })}
       />
       <Text style={styles.hint}>{sourceBuildKindHint(buildKind)}</Text>
 
@@ -1318,9 +1238,8 @@ function BoundSourceFields({
         accessibilityLabel="Deploy when this branch is pushed"
       />
       <Text style={styles.hint}>
-        Off keeps pushes from deploying this service; you can still deploy it
-        by hand. To give one environment its own branch, use the Git branch
-        panel on that environment.
+        Off keeps pushes from deploying this service; you can still deploy it by hand. To give one
+        environment its own branch, use the Git branch panel on that environment.
       </Text>
 
       <Text style={styles.label}>Subdirectory</Text>
@@ -1352,9 +1271,8 @@ function BoundSourceFields({
       />
       {railpack ? (
         <Text style={styles.hint}>
-          Optional under Railpack — it detects a build command on its own,
-          and only uses this one where the language it detected has a slot
-          for it.
+          Optional under Railpack — it detects a build command on its own, and only uses this one
+          where the language it detected has a slot for it.
         </Text>
       ) : null}
 
@@ -1396,12 +1314,10 @@ function BoundSourceFields({
         onChange={onAutoDeploy}
       />
       <Text style={styles.hint}>
-        Saved on the repository, not in compose — it applies to every
-        service connected to it, and takes effect immediately.
+        Saved on the repository, not in compose — it applies to every service connected to it, and
+        takes effect immediately.
       </Text>
-      {autoDeployError ? (
-        <Text style={styles.hintWarn}>{autoDeployError}</Text>
-      ) : null}
+      {autoDeployError ? <Text style={styles.hintWarn}>{autoDeployError}</Text> : null}
     </>
   )
 }
@@ -1520,7 +1436,7 @@ function SourceSection({
 function containerVisualFlags(
   service: Record<string, unknown>,
   hostNative: boolean,
-  registryOpen: boolean,
+  registryOpen: boolean
 ): ContainerVisualFlags {
   if (hostNative) {
     return {
@@ -1544,10 +1460,7 @@ function containerVisualFlags(
     showRestart: serviceHasVisualField(service, visualFieldById('restart')),
     showPorts: serviceHasVisualField(service, visualFieldById('ports')),
     showBuild,
-    showContainerName: serviceHasVisualField(
-      service,
-      visualFieldById('container_name'),
-    ),
+    showContainerName: serviceHasVisualField(service, visualFieldById('container_name')),
     showImageFields,
     showRegistryAdd,
     hasAddChips: addable.length > 0 || showRegistryAdd,
@@ -1583,14 +1496,15 @@ function PrincipalField({
 }>) {
   // An alias the root no longer declares still has to be *shown* — silently
   // blanking the picker would look like the operator never chose one.
-  const options = (alias && !aliases.includes(alias) ? [...aliases, alias] : aliases)
-    .map((entry) => ({
+  const options = (alias && !aliases.includes(alias) ? [...aliases, alias] : aliases).map(
+    (entry) => ({
       value: entry,
       label: entry,
       ...(entry === alias && !aliases.includes(entry)
         ? { detail: 'not declared in x-turbopanel.principals' }
         : {}),
-    }))
+    })
+  )
 
   return (
     <View style={styles.fieldBlock}>
@@ -1604,16 +1518,11 @@ function PrincipalField({
         onChange={(next) => onChange(next ?? undefined)}
       />
       {onDeclare && !disabled ? (
-        <Button
-          label="New account"
-          size="sm"
-          onPress={() => onChange(onDeclare())}
-        />
+        <Button label="New account" size="sm" onPress={() => onChange(onDeclare())} />
       ) : null}
       <Text style={styles.hint}>
-        Required for sites and Node apps: the document root, the release tree,
-        and any scheduled jobs all belong to this account. Declare accounts
-        under Accounts on this document.
+        Required for sites and Node apps: the document root, the release tree, and any scheduled
+        jobs all belong to this account. Declare accounts under Accounts on this document.
       </Text>
     </View>
   )
@@ -1662,9 +1571,7 @@ export function ComposeVisualServiceCard({
   onAddField: (field: VisualFieldDef) => void
 }>) {
   const parsedImage = parseComposeImageRef(service.image)
-  const [registryOpen, setRegistryOpen] = useState(
-    () => parsedImage.registry.length > 0,
-  )
+  const [registryOpen, setRegistryOpen] = useState(() => parsedImage.registry.length > 0)
 
   useEffect(() => {
     if (parseComposeImageRef(service.image).registry) {
@@ -1686,9 +1593,7 @@ export function ComposeVisualServiceCard({
     hasAddChips,
   } = containerVisualFlags(service, hostNative, registryOpen)
 
-  const applyExtension = (
-    patch: Parameters<typeof patchServiceTurbopanelExtension>[1],
-  ) => {
+  const applyExtension = (patch: Parameters<typeof patchServiceTurbopanelExtension>[1]) => {
     const next = patchServiceTurbopanelExtension(service, patch)
     const extensionValue = next[TURBOPANEL_SERVICE_EXTENSION_KEY]
     if (extensionValue === undefined) {
@@ -1715,9 +1620,7 @@ export function ComposeVisualServiceCard({
     applyExtension({
       serviceKind: 'node',
       framework,
-      ...(extension.nodeVersion === undefined
-        ? {}
-        : { nodeVersion: extension.nodeVersion }),
+      ...(extension.nodeVersion === undefined ? {} : { nodeVersion: extension.nodeVersion }),
     })
     onClearField('image')
   }
@@ -1761,10 +1664,7 @@ export function ComposeVisualServiceCard({
     }
     applyExtension({ serviceKind: 'container' })
     const hasBuild = Object.hasOwn(service, 'build')
-    if (
-      !hasBuild &&
-      (typeof service.image !== 'string' || service.image.trim() === '')
-    ) {
+    if (!hasBuild && (typeof service.image !== 'string' || service.image.trim() === '')) {
       onPatchService({ image: 'nginx:alpine' })
     }
   }
@@ -1878,17 +1778,18 @@ export function ComposeVisualServiceCard({
           style={[styles.input, styles.descriptionInput]}
         />
         <Text style={styles.hint}>
-          TurboPanel-only metadata stored under x-turbopanel — not used by
-          Docker Compose.
+          TurboPanel-only metadata stored under x-turbopanel — not used by Docker Compose.
         </Text>
       </View>
 
       <View style={styles.fieldBlock}>
         <Text style={styles.label}>How is this served?</Text>
         <OptionSelect
-          value={extension.serviceKind === 'site'
-            ? (extension.engine ?? DEFAULT_SITE_ENGINE)
-            : (extension.serviceKind ?? 'container')}
+          value={
+            extension.serviceKind === 'site'
+              ? (extension.engine ?? DEFAULT_SITE_ENGINE)
+              : (extension.serviceKind ?? 'container')
+          }
           options={[
             { value: 'container', label: 'Container image' },
             ...SITE_ENGINE_OPTIONS.map((entry) => ({
@@ -1902,11 +1803,8 @@ export function ComposeVisualServiceCard({
         />
         <Text style={styles.hint}>
           {servingPathLine(
-            (extension.serviceKind ?? 'container') as
-              | 'container'
-              | 'site'
-              | 'node',
-            extension.engine,
+            (extension.serviceKind ?? 'container') as 'container' | 'site' | 'node',
+            extension.engine
           )}
         </Text>
       </View>
@@ -1921,17 +1819,18 @@ export function ComposeVisualServiceCard({
             applyExtension(
               extension.serviceKind === 'site'
                 ? {
-                  serviceKind: 'site',
-                  engine: extension.engine ?? DEFAULT_SITE_ENGINE,
-                  root: extension.root ?? 'public',
-                  principal,
-                }
+                    serviceKind: 'site',
+                    engine: extension.engine ?? DEFAULT_SITE_ENGINE,
+                    root: extension.root ?? 'public',
+                    principal,
+                  }
                 : {
-                  serviceKind: 'node',
-                  framework: extension.framework ?? 'auto',
-                  principal,
-                },
-            )}
+                    serviceKind: 'node',
+                    framework: extension.framework ?? 'auto',
+                    principal,
+                  }
+            )
+          }
         />
       ) : null}
 
@@ -1969,7 +1868,8 @@ export function ComposeVisualServiceCard({
               serviceKind: 'node',
               framework: extension.framework ?? 'auto',
               cron,
-            })}
+            })
+          }
         />
       ) : null}
 
@@ -1995,8 +1895,7 @@ export function ComposeVisualServiceCard({
               style={styles.input}
             />
             <Text style={styles.hint}>
-              Relative path under the site directory on the server (default
-              public).
+              Relative path under the site directory on the server (default public).
             </Text>
           </View>
           <PhpFields
@@ -2009,7 +1908,8 @@ export function ComposeVisualServiceCard({
                 engine: extension.engine ?? DEFAULT_SITE_ENGINE,
                 root: extension.root ?? 'public',
                 php,
-              })}
+              })
+            }
           />
           <ScheduledJobsFields
             hidden={hideScheduledJobs}
@@ -2021,7 +1921,8 @@ export function ComposeVisualServiceCard({
                 engine: extension.engine ?? DEFAULT_SITE_ENGINE,
                 root: extension.root ?? 'public',
                 cron,
-              })}
+              })
+            }
           />
         </>
       ) : null}
@@ -2064,9 +1965,7 @@ export function ComposeVisualServiceCard({
         <ContainerNameField
           value={service.container_name}
           disabled={saving}
-          onChange={(containerName) =>
-            onPatchService({ container_name: containerName })
-          }
+          onChange={(containerName) => onPatchService({ container_name: containerName })}
           onRemove={() => onClearField('container_name')}
         />
       ) : null}

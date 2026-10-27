@@ -61,7 +61,9 @@ describe('DeletePlanList', () => {
     expect(screen.getByText(/^Alpha \(offline\)$/)).toBeTruthy()
     expect(screen.getByText(/Removed: \/srv\/users\/shop\/production\/services\/web/)).toBeTruthy()
     expect(
-      screen.getByText(/Kept \(set to keep its data\): \/srv\/users\/shop\/production\/volumes\/data/)
+      screen.getByText(
+        /Kept \(set to keep its data\): \/srv\/users\/shop\/production\/volumes\/data/
+      )
     ).toBeTruthy()
     expect(screen.getByText(/removed with its home folder/)).toBeTruthy()
     expect(screen.getByText(/2 services run as it/)).toBeTruthy()

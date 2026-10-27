@@ -92,7 +92,9 @@ export function useEnvironmentOverviewModel(): OverviewModel {
       view: view.data,
       services: serviceRows,
       containers: containers.data?.containers,
-      latestDeploy: history.data ? (groupDeploymentsByGeneration(history.data.deployments)[0] ?? null) : undefined,
+      latestDeploy: history.data
+        ? (groupDeploymentsByGeneration(history.data.deployments)[0] ?? null)
+        : undefined,
       hostings: hostings.hostingsByService,
       tls: tls.data?.tls,
       storage: storage.data?.storage ?? NONE,

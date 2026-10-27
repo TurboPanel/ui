@@ -4294,9 +4294,7 @@ export async function fetchEnvironmentDeletePreview(environmentId: string): Prom
   return await apiFetch(`${CLIENT_API}/environments/${environmentId}/delete-preview`)
 }
 
-export async function deleteProject(
-  id: string
-): Promise<{ ok: true; cleanup?: DeleteCleanup }> {
+export async function deleteProject(id: string): Promise<{ ok: true; cleanup?: DeleteCleanup }> {
   return await apiFetch(`${CLIENT_API}/projects/${id}`, {
     method: 'DELETE',
   })

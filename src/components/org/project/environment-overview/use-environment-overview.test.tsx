@@ -84,7 +84,12 @@ describe('useEnvironmentOverviewModel', () => {
     const { result } = renderHook(() => useEnvironmentOverviewModel())
     expect(result.current).toMatchObject({ state: 'ready', running: true, deployments: [] })
     if (result.current.state !== 'ready') throw new Error('not ready')
-    expect(result.current.source).toMatchObject({ envName: 'Staging', tls: [], storage: [], bindings: [] })
+    expect(result.current.source).toMatchObject({
+      envName: 'Staging',
+      tls: [],
+      storage: [],
+      bindings: [],
+    })
     expect(result.current.source.containers).toHaveLength(1)
     expect(result.current.source).toMatchObject({
       publicIps: [],

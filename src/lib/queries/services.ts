@@ -15,7 +15,7 @@ import { useApiMutation, queryKeys } from '@/lib/query-client'
 export function useServices(
   orgId: string,
   environmentId?: string,
-  options?: Readonly<{ enabled?: boolean; refetchInterval?: number | false }>,
+  options?: Readonly<{ enabled?: boolean; refetchInterval?: number | false }>
 ) {
   return useQuery({
     queryKey: queryKeys.org(orgId).services.list(environmentId),
@@ -28,15 +28,12 @@ export function useServices(
 export function useHostings(
   orgId: string,
   serviceId: string,
-  options?: Readonly<{ enabled?: boolean }>,
+  options?: Readonly<{ enabled?: boolean }>
 ) {
   return useQuery({
     queryKey: queryKeys.org(orgId).hostings.list(serviceId),
     queryFn: () => fetchVisibleHostings(serviceId),
-    enabled:
-      (options?.enabled ?? true) &&
-      orgId.length > 0 &&
-      serviceId.length > 0,
+    enabled: (options?.enabled ?? true) && orgId.length > 0 && serviceId.length > 0,
   })
 }
 
@@ -61,8 +58,7 @@ export function useCreateService(orgId: string) {
 export function useUpdateService(orgId: string, serviceId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (body: Parameters<typeof updateService>[1]) =>
-      updateService(serviceId, body),
+    mutationFn: (body: Parameters<typeof updateService>[1]) => updateService(serviceId, body),
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({
@@ -79,8 +75,7 @@ export function useUpdateService(orgId: string, serviceId: string) {
 export function useCreateHosting(orgId: string, serviceId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (body: Parameters<typeof createHosting>[1]) =>
-      createHosting(serviceId, body),
+    mutationFn: (body: Parameters<typeof createHosting>[1]) => createHosting(serviceId, body),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
         queryKey: queryKeys.org(orgId).hostings.list(serviceId),
@@ -125,9 +120,7 @@ export function useUpsertHosting(orgId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
     mutationFn: ({ serviceId, hostingId, body }: UpsertHostingInput) =>
-      hostingId
-        ? updateHosting(hostingId, body)
-        : createHosting(serviceId, body),
+      hostingId ? updateHosting(hostingId, body) : createHosting(serviceId, body),
     onSuccess: async (_data, variables) => {
       await Promise.all([
         queryClient.invalidateQueries({
@@ -167,7 +160,7 @@ export function useReleaseHostingFromCompose(orgId: string) {
 export function useHostingsByServices(
   orgId: string,
   serviceIds: readonly string[],
-  options?: Readonly<{ enabled?: boolean }>,
+  options?: Readonly<{ enabled?: boolean }>
 ) {
   const enabled = (options?.enabled ?? true) && orgId.length > 0
   const queries = useQueries({
@@ -180,9 +173,7 @@ export function useHostingsByServices(
 
   // Depend on each query's data (stable) — not the `queries` array, which is a
   // new reference every render from useQueries and would thrash consumers.
-  const hostingsDataKey = queries
-    .map((query) => query.dataUpdatedAt)
-    .join(':')
+  const hostingsDataKey = queries.map((query) => query.dataUpdatedAt).join(':')
 
   const hostingsByService = useMemo(() => {
     const map: Record<string, HostingRecord[]> = {}
@@ -195,8 +186,7 @@ export function useHostingsByServices(
     // eslint-disable-next-line react-hooks/exhaustive-deps -- hostingsDataKey tracks query data identity
   }, [serviceIds, hostingsDataKey])
 
-  const isLoading =
-    enabled && serviceIds.length > 0 && queries.some((query) => query.isLoading)
+  const isLoading = enabled && serviceIds.length > 0 && queries.some((query) => query.isLoading)
 
   const hasError = enabled && queries.some((query) => query.isError)
 
@@ -211,7 +201,7 @@ export function useHostingsByServices(
 export function useServicesByEnvironments(
   orgId: string,
   environmentIds: readonly string[],
-  options?: Readonly<{ enabled?: boolean }>,
+  options?: Readonly<{ enabled?: boolean }>
 ) {
   const enabled = (options?.enabled ?? true) && orgId.length > 0
   const queries = useQueries({
@@ -222,13 +212,10 @@ export function useServicesByEnvironments(
     })),
   })
 
-  const servicesDataKey = queries
-    .map((query) => query.dataUpdatedAt)
-    .join(':')
+  const servicesDataKey = queries.map((query) => query.dataUpdatedAt).join(':')
 
   const servicesByEnv = useMemo(() => {
-    const map: Record<string, Awaited<ReturnType<typeof fetchVisibleServices>>['services']> =
-      {}
+    const map: Record<string, Awaited<ReturnType<typeof fetchVisibleServices>>['services']> = {}
     for (let index = 0; index < environmentIds.length; index++) {
       const environmentId = environmentIds[index]
       if (!environmentId) continue
@@ -238,10 +225,7 @@ export function useServicesByEnvironments(
     // eslint-disable-next-line react-hooks/exhaustive-deps -- servicesDataKey tracks query data identity
   }, [environmentIds, servicesDataKey])
 
-  const isLoading =
-    enabled &&
-    environmentIds.length > 0 &&
-    queries.some((query) => query.isLoading)
+  const isLoading = enabled && environmentIds.length > 0 && queries.some((query) => query.isLoading)
 
   return { servicesByEnv, isLoading }
 }

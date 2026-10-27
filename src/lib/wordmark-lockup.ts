@@ -12,8 +12,7 @@ export const TURBOPANEL_MARK_INK = {
   height: 370,
 } as const
 
-export const TURBOPANEL_MARK_ASPECT =
-  TURBOPANEL_MARK_INK.width / TURBOPANEL_MARK_INK.height
+export const TURBOPANEL_MARK_ASPECT = TURBOPANEL_MARK_INK.width / TURBOPANEL_MARK_INK.height
 
 /** Crossbar band = 120/370; wordmark sits in the remaining 250/370. */
 export const TURBOPANEL_UNDER_BAR_RATIO = 250 / TURBOPANEL_MARK_INK.height
@@ -105,7 +104,7 @@ export type ComputeTurboPanelWordmarkLockupOptions = Readonly<{
 
 function resolveProfileOffsets(
   profile: TurboPanelWordmarkProfile,
-  overrides: Pick<ComputeTurboPanelWordmarkLockupOptions, 'wordBoostPx' | 'wordDownPx'>,
+  overrides: Pick<ComputeTurboPanelWordmarkLockupOptions, 'wordBoostPx' | 'wordDownPx'>
 ): Readonly<{ wordBoostPx: number; wordDownPx: number }> {
   const base = TURBOPANEL_WORDMARK_PROFILE[profile]
   return {
@@ -114,20 +113,12 @@ function resolveProfileOffsets(
   }
 }
 
-function wordSizeFromUnderBarBand(
-  lockupHeightPx: number,
-  wordBoostPx: number,
-): number {
+function wordSizeFromUnderBarBand(lockupHeightPx: number, wordBoostPx: number): number {
   const tuning = TURBOPANEL_WORDMARK_LOCKUP_TUNING
   const underBarPx = lockupHeightPx * TURBOPANEL_UNDER_BAR_RATIO
   const bandFitPx =
-    Math.round(underBarPx / TURBOPANEL_WORDMARK_ASCENDER_RATIO) -
-    tuning.sizeTrimPx +
-    wordBoostPx
-  return Math.max(
-    1,
-    Math.round((bandFitPx * tuning.wordBandTargetPercent) / 100),
-  )
+    Math.round(underBarPx / TURBOPANEL_WORDMARK_ASCENDER_RATIO) - tuning.sizeTrimPx + wordBoostPx
+  return Math.max(1, Math.round((bandFitPx * tuning.wordBandTargetPercent) / 100))
 }
 
 /** Baseline height (px) above the bottom of a `line-height: 1` box, as browsers lay it out. */
@@ -140,14 +131,13 @@ export function wordBaselineAboveBoxBottomPx(wordSizePx: number): number {
 /** Extra drop (px) that puts the word's lowest ink on the mark's base, or 0 when off. */
 export function wordBaselineDropPx(wordSizePx: number): number {
   return TURBOPANEL_WORDMARK_LOCKUP_TUNING.wordBaselineOnMarkBase
-    ? wordBaselineAboveBoxBottomPx(wordSizePx) -
-        wordSizePx * TURBOPANEL_WORDMARK_OVERSHOOT_EM
+    ? wordBaselineAboveBoxBottomPx(wordSizePx) - wordSizePx * TURBOPANEL_WORDMARK_OVERSHOOT_EM
     : 0
 }
 
 /** Compute absolute lockup box + wordmark placement for any host surface. */
 export function computeTurboPanelWordmarkLockup(
-  options: ComputeTurboPanelWordmarkLockupOptions,
+  options: ComputeTurboPanelWordmarkLockupOptions
 ): TurboPanelWordmarkLockupGeometry {
   const profile = options.profile ?? 'console'
   const { wordBoostPx, wordDownPx } = resolveProfileOffsets(profile, options)
@@ -188,14 +178,14 @@ export function consoleMarkRenderSize(designSize: number): number {
       size: designSize,
       markOnly: true,
       profile: 'console',
-    }).markRenderHeight,
+    }).markRenderHeight
   )
 }
 
 /** Console sidebar / auth / shell lockup from a caller `size`. */
 export function consoleWordmarkLockup(
   size: number,
-  markOnly = false,
+  markOnly = false
 ): TurboPanelWordmarkLockupGeometry {
   return computeTurboPanelWordmarkLockup({
     size,

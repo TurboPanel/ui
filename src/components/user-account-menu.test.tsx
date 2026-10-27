@@ -92,12 +92,10 @@ afterEach(cleanup)
 describe('UserAccountMenuSegment', () => {
   it('lists Security, Notifications, About, Sign out, then UI settings', async () => {
     await openMenu()
-    const names = screen
-      .getAllByRole('menuitem')
-      .map((el) => el.getAttribute('aria-label'))
+    const names = screen.getAllByRole('menuitem').map((el) => el.getAttribute('aria-label'))
     expect(names).toEqual(['Security', 'Notifications', 'About', 'Sign out'])
     const all = Array.from(document.querySelectorAll('button')).map(
-      (el) => el.getAttribute('aria-label') ?? el.textContent,
+      (el) => el.getAttribute('aria-label') ?? el.textContent
     )
     expect(all.at(-1)).toBe('UI settings')
   })

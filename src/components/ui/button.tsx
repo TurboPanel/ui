@@ -56,8 +56,7 @@ export function Button({
   const touch = useTouch()
   const blocked = disabled || busy
   const shownLabel = busy && busyLabel ? busyLabel : label
-  const spinnerColor =
-    variant === 'primary' ? chrome.onAccent : colors.textMuted
+  const spinnerColor = variant === 'primary' ? chrome.onAccent : colors.textMuted
   return (
     <Pressable
       onPress={onPress}
@@ -81,11 +80,7 @@ export function Button({
     >
       {busy ? <ActivityIndicator size="small" color={spinnerColor} /> : icon}
       <Text
-        style={[
-          styles.text,
-          variantTextStyles[variant],
-          size === 'sm' && styles.textSm,
-        ]}
+        style={[styles.text, variantTextStyles[variant], size === 'sm' && styles.textSm]}
         numberOfLines={1}
       >
         {shownLabel}
@@ -103,11 +98,7 @@ export function ButtonRow({
   align?: 'start' | 'end'
   children: ReactNode
 }>) {
-  return (
-    <View style={[styles.row, align === 'end' && styles.rowEnd]}>
-      {children}
-    </View>
-  )
+  return <View style={[styles.row, align === 'end' && styles.rowEnd]}>{children}</View>
 }
 
 const styles = StyleSheet.create({
