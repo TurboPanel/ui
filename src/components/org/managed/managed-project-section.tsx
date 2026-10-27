@@ -54,6 +54,7 @@ import {
   useUpdateEnvironment,
 } from '@/lib/queries/environments'
 import {
+  alignContainerStatusesWithCluster,
   alignMemberStatusesWithCluster,
   mergeManagedMembers,
   useApplyEnvironmentManaged,
@@ -544,7 +545,7 @@ function ManagedEnvironmentReadyPanels({
   const backups = backupsQuery.data?.backups ?? []
   const members = alignMemberStatusesWithCluster(
     mergeManagedMembers(detail.members ?? [], status?.members ?? []),
-    status?.status ?? managed.status
+    clusterStatus
   )
   const invalidateManagedData = useCallback(() => {
     invalidateEnvironmentManagedQueries(queryClient, orgId, environmentId)
@@ -675,7 +676,7 @@ function ManagedEnvironmentReadyPanels({
       ) : null}
       {showSettings ? (
         <ManagedLifecyclePanel
-          status={managed.status}
+          status={clusterStatus}
           projectName={projectName}
           canManage={canManage}
           busy={inFlight}
@@ -684,7 +685,7 @@ function ManagedEnvironmentReadyPanels({
             if (!result.ok) {
               throw new Error(result.error ?? 'Lifecycle action failed')
             }
-            registerCommand(result.value.commandId, action)
+            registerCommand(result.value.commandId, action, result.value.serverId)
           }}
           onDelete={async () => {
             const result = await deleteManagedMutation.mutateAsync()
@@ -704,10 +705,10 @@ function ManagedEnvironmentReadyPanels({
           orgId={orgId}
           environmentId={environmentId}
           applyCommand={applyCommand}
-          status={status?.status ?? managed.status}
+          status={clusterStatus}
           host={status?.host ?? managed.host}
           port={status?.port ?? managed.port}
-          containers={status?.containers ?? []}
+          containers={alignContainerStatusesWithCluster(status?.containers ?? [], clusterStatus)}
           lastError={lastError}
           version={managedReleaseSummary(
             managed.engine ? managedCatalogEntryForCode(managed.engine)?.label : null,

@@ -5,7 +5,9 @@ import { renderHook, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ManagedMemberRecord } from '@/lib/managed-services'
 import { createAppQueryClient } from '@/lib/query-client'
+import type { ContainerRecord } from '@/lib/instance-api'
 import {
+  alignContainerStatusesWithCluster,
   alignMemberStatusesWithCluster,
   mergeManagedMembers,
   useCreateEnvironmentManaged,
@@ -30,16 +32,14 @@ function createWrapper(client = createAppQueryClient()) {
 }
 
 function member(
-  overrides: Partial<ManagedMemberRecord> & Pick<ManagedMemberRecord, 'id'>,
+  overrides: Partial<ManagedMemberRecord> & Pick<ManagedMemberRecord, 'id'>
 ): ManagedMemberRecord {
   return {
     id: overrides.id,
     serverId: overrides.serverId ?? 'server-1',
     serverName: overrides.serverName ?? 'host',
     role: overrides.role ?? 'primary',
-    replicaClass:
-      overrides.replicaClass ??
-      (overrides.role === 'replica' ? 'failover' : null),
+    replicaClass: overrides.replicaClass ?? (overrides.role === 'replica' ? 'failover' : null),
     readEligible: overrides.readEligible ?? true,
     ordinal: overrides.ordinal ?? 1,
     status: overrides.status ?? 'provisioning',
@@ -92,7 +92,7 @@ describe('mergeManagedMembers', () => {
     const ghost = { ...member({ id: '' }), memberId: '' }
     const merged = mergeManagedMembers(
       [ghost, member({ id: 'm1', role: 'replica', ordinal: 2 })],
-      null,
+      null
     )
     expect(merged).toHaveLength(1)
     expect(merged[0]?.id).toBe('m1')
@@ -124,7 +124,7 @@ describe('mergeManagedMembers', () => {
         member({ id: 'p1', role: 'primary', ordinal: 9 }),
         member({ id: 'r1', role: 'replica', ordinal: 1 }),
       ],
-      [],
+      []
     )
     expect(merged.map((row) => row.id)).toEqual(['p1', 'r1', 'r2'])
   })
@@ -132,7 +132,7 @@ describe('mergeManagedMembers', () => {
   it('sorts a later primary ahead of an earlier replica', () => {
     const merged = mergeManagedMembers(
       [member({ id: 'r1', role: 'replica', ordinal: 1 })],
-      [member({ id: 'p1', role: 'primary', ordinal: 1 })],
+      [member({ id: 'p1', role: 'primary', ordinal: 1 })]
     )
     expect(merged.map((row) => row.id)).toEqual(['p1', 'r1'])
   })
@@ -142,7 +142,7 @@ describe('alignMemberStatusesWithCluster', () => {
   it('marks stuck in-flight members failed when the cluster is failed', () => {
     const aligned = alignMemberStatusesWithCluster(
       [member({ id: 'm1', status: 'provisioning' })],
-      'failed',
+      'failed'
     )
     expect(aligned).toHaveLength(1)
     expect(aligned[0]?.status).toBe('failed')
@@ -151,7 +151,7 @@ describe('alignMemberStatusesWithCluster', () => {
   it('leaves member status alone when the cluster is not failed', () => {
     const aligned = alignMemberStatusesWithCluster(
       [member({ id: 'm1', status: 'provisioning' })],
-      'applying',
+      'applying'
     )
     expect(aligned[0]?.status).toBe('provisioning')
   })
@@ -163,23 +163,15 @@ describe('alignMemberStatusesWithCluster', () => {
         member({ id: 'applying', status: 'applying' }),
         member({ id: 'failed', status: 'failed' }),
       ],
-      'failed',
+      'failed'
     )
-    expect(aligned.map((row) => row.status)).toEqual([
-      'ready',
-      'failed',
-      'failed',
-    ])
+    expect(aligned.map((row) => row.status)).toEqual(['ready', 'failed', 'failed'])
   })
 
   it('leaves members unchanged when cluster status is missing', () => {
     const rows = [member({ id: 'm1', status: 'provisioning' })]
-    expect(alignMemberStatusesWithCluster(rows, null)[0]?.status).toBe(
-      'provisioning',
-    )
-    expect(alignMemberStatusesWithCluster(rows, undefined)[0]?.status).toBe(
-      'provisioning',
-    )
+    expect(alignMemberStatusesWithCluster(rows, null)[0]?.status).toBe('provisioning')
+    expect(alignMemberStatusesWithCluster(rows, undefined)[0]?.status).toBe('provisioning')
   })
 })
 
@@ -187,10 +179,9 @@ describe('useShowOnceSecretMutation error fallback', () => {
   it('uses the fallback message when the rejection is not an Error', async () => {
     createEnvironmentManaged.mockRejectedValueOnce('offline')
 
-    const { result } = renderHook(
-      () => useCreateEnvironmentManaged('org-1', 'env-1'),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useCreateEnvironmentManaged('org-1', 'env-1'), {
+      wrapper: createWrapper(),
+    })
 
     await expect(result.current.run(undefined)).resolves.toEqual({
       ok: false,
@@ -199,5 +190,34 @@ describe('useShowOnceSecretMutation error fallback', () => {
     await waitFor(() => {
       expect(result.current.actionError).toBe('Failed to create managed service')
     })
+  })
+})
+
+describe('alignment with a stopped cluster', () => {
+  it('shows every member that still reads the earlier run as stopped', () => {
+    const aligned = alignMemberStatusesWithCluster(
+      [
+        member({ id: 'primary', status: 'ready' }),
+        member({ id: 'replica', status: 'applying' }),
+        member({ id: 'broken', status: 'failed' }),
+      ],
+      'stopped'
+    )
+    expect(aligned.map((row) => row.status)).toEqual(['stopped', 'stopped', 'failed'])
+  })
+
+  it('shows the database containers as exited and leaves shared ingress alone', () => {
+    const rows = [
+      { id: 'db', role: 'service', status: 'running' },
+      { id: 'proxy', role: 'ingress', status: 'running' },
+    ] as unknown as ContainerRecord[]
+    expect(alignContainerStatusesWithCluster(rows, 'stopped').map((row) => row.status)).toEqual([
+      'exited',
+      'running',
+    ])
+    expect(alignContainerStatusesWithCluster(rows, 'ready').map((row) => row.status)).toEqual([
+      'running',
+      'running',
+    ])
   })
 })

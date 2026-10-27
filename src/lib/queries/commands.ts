@@ -29,16 +29,12 @@ export type TrackedCommandEntry = Readonly<{
 /** Structural minimum shared by {@link CommandRecord} and {@link CommandStatusRecord}. */
 type CommandStatusLike = Readonly<{ status: CommandStatus }>
 
-export function hasInFlightCommands(
-  commands: readonly CommandStatusLike[] | undefined,
-): boolean {
+export function hasInFlightCommands(commands: readonly CommandStatusLike[] | undefined): boolean {
   if (!commands || commands.length === 0) return false
   return commands.some((command) => !isTerminalCommandStatus(command.status))
 }
 
-export function anyCommandInFlight(
-  commands: readonly CommandStatusLike[] | undefined,
-): boolean {
+export function anyCommandInFlight(commands: readonly CommandStatusLike[] | undefined): boolean {
   return hasInFlightCommands(commands)
 }
 
@@ -49,17 +45,30 @@ function trackedEntryKey(entry: TrackedCommandEntry): string {
 /** True while a tracked Apply/reconcile batch is still loading or non-terminal. */
 export function hasPendingTrackedCommands(
   entries: readonly TrackedCommandEntry[],
-  commands: readonly CommandStatusLike[] | undefined,
+  commands: readonly CommandStatusLike[] | undefined
 ): boolean {
   if (entries.length === 0) return false
   if (!commands || commands.length === 0) return true
   return hasInFlightCommands(commands)
 }
 
+/**
+ * True while a tracked batch still has a command running. A batch that has not
+ * answered yet counts as running; one whose status read failed does not, so a
+ * failed read never leaves the controls it guards disabled until a reload.
+ */
+export function trackedCommandsInFlight(
+  entries: readonly TrackedCommandEntry[],
+  query: Readonly<{ data: readonly CommandStatusLike[] | undefined; isError: boolean }>
+): boolean {
+  if (entries.length === 0 || query.isError) return false
+  return query.data === undefined || hasInFlightCommands(query.data)
+}
+
 /** Keep earlier command ids when a later Apply returns more queued rows. */
 export function mergeTrackedCommandEntries(
   current: readonly TrackedCommandEntry[],
-  next: readonly TrackedCommandEntry[],
+  next: readonly TrackedCommandEntry[]
 ): TrackedCommandEntry[] {
   const seen = new Set(current.map((entry) => trackedEntryKey(entry)))
   const merged = [...current]
@@ -80,7 +89,7 @@ export function mergeTrackedCommandEntries(
  * must join on `commandId` through this map instead of pairing by position.
  */
 export function commandStatusById(
-  records: readonly CommandStatusRecord[] | undefined,
+  records: readonly CommandStatusRecord[] | undefined
 ): Map<string, CommandStatusRecord> {
   const byId = new Map<string, CommandStatusRecord>()
   for (const record of records ?? []) {
@@ -98,19 +107,14 @@ export function commandStatusById(
 export function useCommandsBatch(
   orgId: string,
   entries: readonly TrackedCommandEntry[],
-  options?: Readonly<{ enabled?: boolean }>,
+  options?: Readonly<{ enabled?: boolean }>
 ) {
-  const enabled =
-    (options?.enabled ?? true) &&
-    orgId.length > 0 &&
-    entries.length > 0
+  const enabled = (options?.enabled ?? true) && orgId.length > 0 && entries.length > 0
 
   return useQuery({
     queryKey: queryKeys.org(orgId).commands.batch(entries),
     queryFn: async (): Promise<CommandStatusRecord[]> => {
-      const records = await fetchCommandStatuses(
-        entries.map((entry) => entry.commandId),
-      )
+      const records = await fetchCommandStatuses(entries.map((entry) => entry.commandId))
       const byId = new Map(records.map((record) => [record.id, record]))
       return entries
         .map((entry) => byId.get(entry.commandId))
@@ -133,20 +137,15 @@ export function useCommandsBatch(
 export function useCommandRecordsBatch(
   orgId: string,
   entries: readonly TrackedCommandEntry[],
-  options?: Readonly<{ enabled?: boolean }>,
+  options?: Readonly<{ enabled?: boolean }>
 ) {
-  const enabled =
-    (options?.enabled ?? true) &&
-    orgId.length > 0 &&
-    entries.length > 0
+  const enabled = (options?.enabled ?? true) && orgId.length > 0 && entries.length > 0
 
   return useQuery({
     // Distinct from the batched-status key: same entries, different shape.
     queryKey: [...queryKeys.org(orgId).commands.batch(entries), 'records'],
     queryFn: (): Promise<CommandRecord[]> =>
-      Promise.all(
-        entries.map((entry) => fetchCommand(entry.serverId, entry.commandId)),
-      ),
+      Promise.all(entries.map((entry) => fetchCommand(entry.serverId, entry.commandId))),
     enabled,
     refetchInterval: (query) => {
       const data = query.state.data

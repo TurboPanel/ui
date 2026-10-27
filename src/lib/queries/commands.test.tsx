@@ -13,6 +13,7 @@ import {
   hasPendingTrackedCommands,
   isTerminalCommandStatus,
   mergeTrackedCommandEntries,
+  trackedCommandsInFlight,
   useCommandRecordsBatch,
   useCommandsBatch,
   type TrackedCommandEntry,
@@ -41,13 +42,11 @@ function createWrapper(client = createAppQueryClient()) {
 function resolveRefetchInterval(
   client: ReturnType<typeof createAppQueryClient>,
   queryKey: readonly unknown[],
-  data?: unknown,
+  data?: unknown
 ): number | false {
   const query = client.getQueryCache().find({ queryKey })
   if (!query) throw new TypeError('expected query in cache')
-  const interval = (
-    query.options as { refetchInterval?: unknown }
-  ).refetchInterval
+  const interval = (query.options as { refetchInterval?: unknown }).refetchInterval
   if (typeof interval !== 'function') {
     throw new TypeError('expected refetchInterval function')
   }
@@ -64,7 +63,7 @@ afterEach(() => {
 function command(
   status: CommandStatus,
   serverId = 'srv-a',
-  id = `cmd-${status}`,
+  id = `cmd-${status}`
 ): CommandStatusRecord {
   return {
     id,
@@ -91,6 +90,25 @@ describe('isTerminalCommandStatus', () => {
   })
 })
 
+describe('trackedCommandsInFlight', () => {
+  const tracked: TrackedCommandEntry[] = [{ serverId: 'srv-a', commandId: 'cmd-1' }]
+
+  it('is running until the batch answers, then until every command ends', () => {
+    expect(trackedCommandsInFlight(tracked, { data: undefined, isError: false })).toBe(true)
+    expect(trackedCommandsInFlight(tracked, { data: [command('running')], isError: false })).toBe(
+      true
+    )
+    expect(trackedCommandsInFlight(tracked, { data: [command('succeeded')], isError: false })).toBe(
+      false
+    )
+  })
+
+  it('never sticks on a failed status read or with nothing tracked', () => {
+    expect(trackedCommandsInFlight(tracked, { data: undefined, isError: true })).toBe(false)
+    expect(trackedCommandsInFlight([], { data: undefined, isError: false })).toBe(false)
+  })
+})
+
 describe('hasPendingTrackedCommands', () => {
   it('is idle when nothing is tracked', () => {
     expect(hasPendingTrackedCommands([], undefined)).toBe(false)
@@ -98,9 +116,7 @@ describe('hasPendingTrackedCommands', () => {
   })
 
   it('treats a tracked batch without command data as still in flight', () => {
-    const tracked: TrackedCommandEntry[] = [
-      { serverId: 'srv-a', commandId: 'cmd-1' },
-    ]
+    const tracked: TrackedCommandEntry[] = [{ serverId: 'srv-a', commandId: 'cmd-1' }]
     expect(hasPendingTrackedCommands(tracked, undefined)).toBe(true)
     expect(hasPendingTrackedCommands(tracked, [])).toBe(true)
   })
@@ -114,13 +130,13 @@ describe('hasPendingTrackedCommands', () => {
       hasPendingTrackedCommands(tracked, [
         command('running', 'srv-a'),
         command('succeeded', 'srv-b'),
-      ]),
+      ])
     ).toBe(true)
     expect(
       hasPendingTrackedCommands(tracked, [
         command('succeeded', 'srv-a'),
         command('failed', 'srv-b'),
-      ]),
+      ])
     ).toBe(false)
   })
 })
@@ -134,9 +150,7 @@ describe('hasInFlightCommands', () => {
 
   it('is true when any command is non-terminal', () => {
     expect(hasInFlightCommands([command('running')])).toBe(true)
-    expect(
-      hasInFlightCommands([command('succeeded'), command('queued')]),
-    ).toBe(true)
+    expect(hasInFlightCommands([command('succeeded'), command('queued')])).toBe(true)
   })
 
   it('anyCommandInFlight mirrors hasInFlightCommands', () => {
@@ -147,9 +161,7 @@ describe('hasInFlightCommands', () => {
 
 describe('mergeTrackedCommandEntries', () => {
   it('keeps earlier command ids and appends new ones', () => {
-    const first: TrackedCommandEntry[] = [
-      { serverId: 'srv-a', commandId: 'cmd-1' },
-    ]
+    const first: TrackedCommandEntry[] = [{ serverId: 'srv-a', commandId: 'cmd-1' }]
     const second: TrackedCommandEntry[] = [
       { serverId: 'srv-a', commandId: 'cmd-1' },
       { serverId: 'srv-b', commandId: 'cmd-2' },
@@ -161,13 +173,9 @@ describe('mergeTrackedCommandEntries', () => {
   })
 
   it('returns current unchanged when next adds nothing new', () => {
-    const current: TrackedCommandEntry[] = [
-      { serverId: 'srv-a', commandId: 'cmd-1' },
-    ]
+    const current: TrackedCommandEntry[] = [{ serverId: 'srv-a', commandId: 'cmd-1' }]
     expect(
-      mergeTrackedCommandEntries(current, [
-        { serverId: 'srv-a', commandId: 'cmd-1' },
-      ]),
+      mergeTrackedCommandEntries(current, [{ serverId: 'srv-a', commandId: 'cmd-1' }])
     ).toEqual(current)
   })
 })
@@ -202,10 +210,7 @@ describe('useCommandsBatch', () => {
     ])
     // Ids the session cannot read are omitted entirely, so positions no longer
     // line up with `entries` — consumers must join on `commandId`.
-    expect(result.current.data?.map((row) => row.id)).toEqual([
-      'cmd-running',
-      'cmd-succeeded',
-    ])
+    expect(result.current.data?.map((row) => row.id)).toEqual(['cmd-running', 'cmd-succeeded'])
     const byId = commandStatusById(result.current.data)
     expect(byId.get('cmd-running')?.status).toBe('running')
     expect(byId.get('cmd-succeeded')?.status).toBe('succeeded')
@@ -213,12 +218,12 @@ describe('useCommandsBatch', () => {
   })
 
   it('still issues exactly one request for a large batch', async () => {
-    const entries: TrackedCommandEntry[] = Array.from(
-      { length: 12 },
-      (_, index) => ({ serverId: 'srv-a', commandId: `cmd-${index}` }),
-    )
+    const entries: TrackedCommandEntry[] = Array.from({ length: 12 }, (_, index) => ({
+      serverId: 'srv-a',
+      commandId: `cmd-${index}`,
+    }))
     fetchCommandStatuses.mockResolvedValueOnce(
-      entries.map((entry) => command('running', entry.serverId, entry.commandId)),
+      entries.map((entry) => command('running', entry.serverId, entry.commandId))
     )
 
     const { result } = renderHook(() => useCommandsBatch(orgId, entries), {
@@ -241,13 +246,10 @@ describe('useCommandsBatch', () => {
   })
 
   it('stays idle when enabled is false or org id is empty', () => {
-    const entries: TrackedCommandEntry[] = [
-      { serverId: 'srv-a', commandId: 'cmd-1' },
-    ]
-    const disabled = renderHook(
-      () => useCommandsBatch(orgId, entries, { enabled: false }),
-      { wrapper: createWrapper() },
-    )
+    const entries: TrackedCommandEntry[] = [{ serverId: 'srv-a', commandId: 'cmd-1' }]
+    const disabled = renderHook(() => useCommandsBatch(orgId, entries, { enabled: false }), {
+      wrapper: createWrapper(),
+    })
     const emptyOrg = renderHook(() => useCommandsBatch('', entries), {
       wrapper: createWrapper(),
     })
@@ -258,12 +260,8 @@ describe('useCommandsBatch', () => {
 
   it('polls while any tracked command is in flight', async () => {
     const client = createAppQueryClient()
-    const entries: TrackedCommandEntry[] = [
-      { serverId: 'srv-a', commandId: 'cmd-running' },
-    ]
-    fetchCommandStatuses.mockResolvedValue([
-      command('running', 'srv-a', 'cmd-running'),
-    ])
+    const entries: TrackedCommandEntry[] = [{ serverId: 'srv-a', commandId: 'cmd-running' }]
+    fetchCommandStatuses.mockResolvedValue([command('running', 'srv-a', 'cmd-running')])
 
     renderHook(() => useCommandsBatch(orgId, entries), {
       wrapper: createWrapper(client),
@@ -272,15 +270,11 @@ describe('useCommandsBatch', () => {
     const key = queryKeys.org(orgId).commands.batch(entries)
     await waitFor(() => {
       expect(
-        resolveRefetchInterval(client, key, [
-          command('running', 'srv-a', 'cmd-running'),
-        ]),
+        resolveRefetchInterval(client, key, [command('running', 'srv-a', 'cmd-running')])
       ).toBe(COMMAND_POLL_MS)
     })
     expect(
-      resolveRefetchInterval(client, key, [
-        command('succeeded', 'srv-a', 'cmd-running'),
-      ]),
+      resolveRefetchInterval(client, key, [command('succeeded', 'srv-a', 'cmd-running')])
     ).toBe(false)
   })
 })
@@ -308,10 +302,9 @@ describe('useCommandRecordsBatch', () => {
       { serverId: 'srv-b', commandId: 'cmd-2' },
     ]
 
-    const { result } = renderHook(
-      () => useCommandRecordsBatch(orgId, entries),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useCommandRecordsBatch(orgId, entries), {
+      wrapper: createWrapper(),
+    })
 
     await waitFor(() => {
       expect(result.current.isSuccess).toBe(true)
@@ -319,10 +312,7 @@ describe('useCommandRecordsBatch', () => {
     expect(fetchCommand).toHaveBeenCalledTimes(2)
     expect(fetchCommand).toHaveBeenNthCalledWith(1, 'srv-a', 'cmd-1')
     expect(fetchCommand).toHaveBeenNthCalledWith(2, 'srv-b', 'cmd-2')
-    expect(result.current.data?.map((row) => row.id)).toEqual([
-      'cmd-1',
-      'cmd-2',
-    ])
+    expect(result.current.data?.map((row) => row.id)).toEqual(['cmd-1', 'cmd-2'])
   })
 
   it('stays idle without entries', () => {
@@ -334,12 +324,10 @@ describe('useCommandRecordsBatch', () => {
   })
 
   it('stays idle when disabled', () => {
-    const entries: TrackedCommandEntry[] = [
-      { serverId: 'srv-a', commandId: 'cmd-1' },
-    ]
+    const entries: TrackedCommandEntry[] = [{ serverId: 'srv-a', commandId: 'cmd-1' }]
     const { result } = renderHook(
       () => useCommandRecordsBatch(orgId, entries, { enabled: false }),
-      { wrapper: createWrapper() },
+      { wrapper: createWrapper() }
     )
     expect(result.current.fetchStatus).toBe('idle')
     expect(fetchCommand).not.toHaveBeenCalled()
@@ -347,9 +335,7 @@ describe('useCommandRecordsBatch', () => {
 
   it('polls while any tracked record is in flight', async () => {
     const client = createAppQueryClient()
-    const entries: TrackedCommandEntry[] = [
-      { serverId: 'srv-a', commandId: 'cmd-1' },
-    ]
+    const entries: TrackedCommandEntry[] = [{ serverId: 'srv-a', commandId: 'cmd-1' }]
     fetchCommand.mockResolvedValue({
       id: 'cmd-1',
       serverId: 'srv-a',
@@ -361,22 +347,13 @@ describe('useCommandRecordsBatch', () => {
       wrapper: createWrapper(client),
     })
 
-    const key = [
-      ...queryKeys.org(orgId).commands.batch(entries),
-      'records',
-    ] as const
+    const key = [...queryKeys.org(orgId).commands.batch(entries), 'records'] as const
     await waitFor(() => {
-      expect(
-        resolveRefetchInterval(client, key, [
-          { id: 'cmd-1', status: 'running' },
-        ]),
-      ).toBe(COMMAND_POLL_MS)
+      expect(resolveRefetchInterval(client, key, [{ id: 'cmd-1', status: 'running' }])).toBe(
+        COMMAND_POLL_MS
+      )
     })
-    expect(
-      resolveRefetchInterval(client, key, [
-        { id: 'cmd-1', status: 'succeeded' },
-      ]),
-    ).toBe(false)
+    expect(resolveRefetchInterval(client, key, [{ id: 'cmd-1', status: 'succeeded' }])).toBe(false)
   })
 })
 
@@ -387,10 +364,7 @@ describe('commandStatusById', () => {
   })
 
   it('keys every row by command id so gaps cannot shift the join', () => {
-    const rows = [
-      command('running', 'srv-a', 'cmd-1'),
-      command('succeeded', 'srv-c', 'cmd-3'),
-    ]
+    const rows = [command('running', 'srv-a', 'cmd-1'), command('succeeded', 'srv-c', 'cmd-3')]
     const byId = commandStatusById(rows)
     expect(byId.get('cmd-1')?.serverId).toBe('srv-a')
     // 'cmd-2' was dropped by the server; 'cmd-3' must not slide into its slot.

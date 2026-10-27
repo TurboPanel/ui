@@ -90,8 +90,11 @@ export function ConfirmButton({
     setArmed(false)
     onArmedChange?.(false)
   }
+  // The listener below outlives a render; it calls the newest disarm.
   const latestDisarm = useRef(disarm)
-  latestDisarm.current = disarm
+  useEffect(() => {
+    latestDisarm.current = disarm
+  })
 
   useEffect(() => {
     if (!armed || Platform.OS !== 'web') return

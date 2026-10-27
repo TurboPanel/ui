@@ -12,6 +12,7 @@ import type { ManagedDetailResponse } from '@/lib/managed-services'
 import {
   commandStatusById,
   isTerminalCommandStatus,
+  trackedCommandsInFlight,
   useCommandsBatch,
   type TrackedCommandEntry,
 } from '@/lib/queries/commands'
@@ -107,16 +108,14 @@ export function ManagedCommandsProvider({
     for (const entry of trackedEntries) {
       const record = recordsById.get(entry.commandId)
       if (!record || !isTerminalCommandStatus(record.status)) continue
-      if (record.status === 'succeeded') {
-        invalidateEnvironmentManagedQueries(queryClient, orgId, environmentId)
-      }
+      // A failed or cancelled command can still have moved the database (a
+      // stop that half ran), so every end refreshes what the screen shows.
+      invalidateEnvironmentManagedQueries(queryClient, orgId, environmentId)
       setTrackedEntries((current) => current.filter((row) => row.commandId !== entry.commandId))
     }
   }, [commandsQuery.data, trackedEntries, queryClient, orgId, environmentId])
 
-  const inFlight =
-    trackedEntries.length > 0 &&
-    (commandsQuery.data?.some((record) => !isTerminalCommandStatus(record.status)) ?? true)
+  const inFlight = trackedCommandsInFlight(trackedEntries, commandsQuery)
 
   const value = useMemo<ManagedEnvironmentValue>(
     () => ({
