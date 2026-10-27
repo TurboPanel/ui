@@ -125,6 +125,14 @@ type ProjectContextValue = {
   setError: (error: string | null) => void
 }
 
+/** See `environmentsSettled`: a draft has no list to wait for. */
+function environmentListSettled(
+  isDraft: boolean,
+  query: Readonly<{ isSuccess: boolean; isFetching: boolean }>
+): boolean {
+  return isDraft || (query.isSuccess && !query.isFetching)
+}
+
 const ProjectContext = createContext<ProjectContextValue | null>(null)
 
 /** Stable identity so a draft never remounts consumers via a fresh array. */
@@ -179,8 +187,7 @@ export function ProjectProvider({
   const loading =
     !isDraft && (projectQuery.isLoading || environmentsQuery.isLoading || workspacesQuery.isLoading)
 
-  const environmentsSettled =
-    isDraft || (environmentsQuery.isSuccess && !environmentsQuery.isFetching)
+  const environmentsSettled = environmentListSettled(isDraft, environmentsQuery)
 
   const queryError = useMemo(() => {
     if (isDraft) return null
