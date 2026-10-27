@@ -87,10 +87,27 @@ const RUN_SORTS: readonly UpgradeRunServerSort[] = [
   'attempts',
 ]
 
+/** The run screen's view with nothing chosen: every server, sorted by status. */
+export const DEFAULT_RUN_SERVER_VIEW: RunServerView = {
+  status: '',
+  organizationId: null,
+  q: '',
+  sort: 'status',
+  dir: 'asc',
+  offset: 0,
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/** An organization id from the address; anything that is not a uuid is dropped, never sent. */
+function organizationIdOf(value: string): string | null {
+  return UUID.test(value) ? value.toLowerCase() : null
+}
+
 export function readRunServerParams(raw: RawSearchParams): RunServerView {
   return {
     status: oneOf(first(raw, 'status'), SERVER_OUTCOME_FILTERS, ''),
-    organizationId: first(raw, 'org') || null,
+    organizationId: organizationIdOf(first(raw, 'org')),
     q: first(raw, 'q'),
     sort: oneOf(first(raw, 'sort'), RUN_SORTS, 'status'),
     dir: oneOf(first(raw, 'dir'), ['asc', 'desc'] as const, 'asc'),

@@ -1,7 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native'
 import { useLocalSearchParams, useRouter, type Href } from 'expo-router'
 import { HistoryPager } from '@/components/admin/updates/history-pager'
-import { useBackOr } from '@/components/admin/updates/use-back-or'
+import { useBackLink } from '@/components/admin/updates/use-back-link'
 import {
   Badge,
   DataTable,
@@ -124,7 +124,7 @@ function RunHistoryRow({
 export function UpdateHistoryScreen() {
   const router = useRouter()
   const view = readHistoryParams(useLocalSearchParams())
-  const back = useBackOr('/admin/updates')
+  const back = useBackLink({ href: '/admin/updates', label: 'Back to Updates' })
   const update = (next: Partial<HistoryView>) => {
     router.setParams(historyParamsToUrl({ ...view, ...next }))
   }
@@ -140,7 +140,7 @@ export function UpdateHistoryScreen() {
 
   return (
     <View style={styles.root}>
-      <TextLink label="Back to Updates" size="sm" onPress={back} />
+      <TextLink label={back.label} size="sm" onPress={back.onPress} />
       <SectionPanel
         title="Update History"
         hint="Every update run, newest first. Open one to see each server."

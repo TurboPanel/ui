@@ -53,7 +53,12 @@ vi.mock('@/components/ui', () => ({
     ),
   DataTableCell: (props: Kids) => <div>{props.children}</div>,
   DataTableEmpty: (props: Kids) => <p>{props.children}</p>,
-  InlineNotice: (props: { title: string }) => <p>{props.title}</p>,
+  InlineNotice: (props: { title: string; actions?: ReactNode }) => (
+    <div>
+      <p>{props.title}</p>
+      {props.actions}
+    </div>
+  ),
   LoadingState: () => <p>Loading</p>,
   MonoText: (props: Kids) => <code>{props.children}</code>,
   SectionPanel: (props: Kids & { title?: string; hint?: string; headerRight?: ReactNode }) => (
@@ -121,6 +126,8 @@ const queries = vi.hoisted(() => ({
   useUpgradeRunServers: vi.fn(),
 }))
 vi.mock('@/lib/queries/admin', () => queries)
+
+const ORG_ID = '0190a2b3-c4d5-7e6f-8a9b-0c1d2e3f4a5b'
 
 const RUN: UpgradeHistoryEntry = {
   id: 'run-1',
@@ -343,7 +350,7 @@ describe('UpdateRunScreen', () => {
   it('restores status, organization, search, sort and page from a deep link', () => {
     router.params = {
       status: 'failed',
-      org: 'org-1',
+      org: ORG_ID,
       q: 'web',
       sort: 'duration',
       dir: 'desc',
@@ -357,7 +364,7 @@ describe('UpdateRunScreen', () => {
       sort: 'duration',
       dir: 'desc',
       status: 'failed',
-      organizationId: 'org-1',
+      organizationId: ORG_ID,
       q: 'web',
     })
     expect(screen.getByLabelText('Search')).toHaveProperty('value', 'web')
@@ -393,6 +400,58 @@ describe('UpdateRunScreen', () => {
     )
     fireEvent.click(screen.getByText('Server page'))
     expect(push).toHaveBeenCalledWith(`/org-1/servers/${SERVER.serverId}`)
+  })
+
+  it('never claims to go to Update History when Back goes somewhere else', () => {
+    router.canGoBack.mockReturnValue(true)
+    queries.useUpgradeRunServers.mockReturnValue({ data: serversPage(), isFetching: false })
+    render(<UpdateRunScreen runId="run-1" />)
+    expect(screen.queryByText('Back to Update History')).toBeNull()
+    fireEvent.click(screen.getByText('Back'))
+    expect(router.back).toHaveBeenCalledTimes(1)
+    cleanup()
+    router.canGoBack.mockReturnValue(false)
+    render(<UpdateRunScreen runId="run-1" />)
+    fireEvent.click(screen.getByText('Back to Update History'))
+    expect(push).toHaveBeenCalledWith('/admin/updates/history')
+  })
+
+  it('drops a hand-edited organization that is not a uuid before asking', () => {
+    router.params = { org: 'acme', status: 'failed' }
+    queries.useUpgradeRunServers.mockReturnValue({ data: serversPage(), isFetching: false })
+    render(<UpdateRunScreen runId="run-1" />)
+    expect(lastServersQuery()).toEqual(
+      expect.objectContaining({ organizationId: null, status: 'failed' })
+    )
+  })
+
+  it('offers Clear filters when the control plane refuses a filter', () => {
+    router.params = { status: 'failed', q: 'web', offset: '50' }
+    queries.useUpgradeRunServers.mockReturnValue({
+      data: undefined,
+      isError: true,
+      error: new Error('HTTP 400: invalid_filter'),
+    })
+    render(<UpdateRunScreen runId="run-1" />)
+    fireEvent.click(screen.getByText('Clear filters'))
+    expect(router.setParams).toHaveBeenLastCalledWith({
+      status: undefined,
+      org: undefined,
+      q: undefined,
+      sort: undefined,
+      dir: undefined,
+      offset: undefined,
+    })
+  })
+
+  it('does not offer Clear filters for a run that is gone', () => {
+    queries.useUpgradeRunServers.mockReturnValue({
+      data: undefined,
+      isError: true,
+      error: new Error('HTTP 404: upgrade_run_not_found'),
+    })
+    render(<UpdateRunScreen runId="nope" />)
+    expect(screen.queryByText('Clear filters')).toBeNull()
   })
 
   it('says when the run does not exist', () => {
@@ -462,7 +521,7 @@ describe('ServerUpdateLogScreen', () => {
     expect(push).toHaveBeenCalledWith('/admin/updates/runs/run-1')
   })
 
-  it('goes back to the exact run view, or opens it with the same filters', () => {
+  it('opened directly, names the run it opens and keeps the filters', () => {
     router.params = { status: 'failed', sort: 'duration', dir: 'desc', offset: '100' }
     queries.useUpgradeRunServers.mockReturnValue({ data: serversPage() })
     render(<ServerUpdateLogScreen runId="run-1" serverId={SERVER.serverId} />)
@@ -470,10 +529,17 @@ describe('ServerUpdateLogScreen', () => {
     expect(push).toHaveBeenCalledWith(
       '/admin/updates/runs/run-1?status=failed&sort=duration&dir=desc&offset=100'
     )
+    expect(router.back).not.toHaveBeenCalled()
+  })
+
+  it('with history, reads a plain "Back" and goes back to the exact view', () => {
     router.canGoBack.mockReturnValue(true)
-    fireEvent.click(screen.getByText('Back to Update Run'))
+    queries.useUpgradeRunServers.mockReturnValue({ data: serversPage() })
+    render(<ServerUpdateLogScreen runId="run-1" serverId={SERVER.serverId} />)
+    expect(screen.queryByText('Back to Update Run')).toBeNull()
+    fireEvent.click(screen.getByText('Back'))
     expect(router.back).toHaveBeenCalledTimes(1)
-    expect(push).toHaveBeenCalledTimes(1)
+    expect(push).not.toHaveBeenCalled()
   })
 
   it('names a refused server id instead of a raw error', () => {

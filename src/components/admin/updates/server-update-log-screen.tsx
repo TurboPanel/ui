@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native'
 import { useLocalSearchParams, useRouter, type Href } from 'expo-router'
-import { useBackOr } from '@/components/admin/updates/use-back-or'
+import { useBackLink } from '@/components/admin/updates/use-back-link'
 import {
   Badge,
   InlineNotice,
@@ -118,7 +118,10 @@ export function ServerUpdateLogScreen({
   // The run screen's view rides along in this screen's URL, so "Back" lands on
   // the same filters, sort and page even when the log was opened directly.
   const runView = readRunServerParams(useLocalSearchParams())
-  const back = useBackOr(withQuery(updateRunHref(runId), runServerParamsToUrl(runView)))
+  const back = useBackLink({
+    href: withQuery(updateRunHref(runId), runServerParamsToUrl(runView)),
+    label: 'Back to Update Run',
+  })
   const query = useUpgradeRunServers(runId, { serverId, limit: 1 })
   const page = query.data
   const row = page?.servers.find((entry) => entry.serverId === serverId) ?? null
@@ -128,7 +131,7 @@ export function ServerUpdateLogScreen({
   return (
     <View style={styles.root}>
       <View style={styles.links}>
-        <TextLink label="Back to Update Run" size="sm" onPress={back} />
+        <TextLink label={back.label} size="sm" onPress={back.onPress} />
         {serverHref ? (
           <TextLink label="Server page" size="sm" onPress={() => router.push(serverHref as Href)} />
         ) : null}
