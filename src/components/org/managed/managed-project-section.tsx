@@ -80,6 +80,7 @@ import {
   useUpdateEnvironmentManaged,
   useUpdateManagedUser,
 } from '@/lib/queries/managed'
+import type { TrackedCommandLabel } from '@/lib/queries/commands'
 import { useOrgServers } from '@/lib/queries/servers'
 import { orEmptyArray } from '@/lib/or-empty-array'
 import { useCan } from '@/lib/query-client'
@@ -754,7 +755,7 @@ function ManagedDataPanels({
   deleteUserMutation: ReturnType<typeof useDeleteManagedUser>
   usersQuery: ReturnType<typeof useManagedUsers>
   databasesQuery: ReturnType<typeof useManagedDatabases>
-  registerCommand: (commandId: string, label: string, commandServerId?: string) => void
+  registerCommand: (commandId: string, label: TrackedCommandLabel, commandServerId?: string) => void
 }>) {
   const updateUserMutation = useUpdateManagedUser(orgId, environmentId)
   const appLoginsMutation = useCreateManagedAppLogins(orgId, environmentId)

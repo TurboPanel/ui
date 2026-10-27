@@ -105,7 +105,7 @@ describe('ServiceReleasesPanel', () => {
     )
   })
 
-  it('says in words why a failed release cannot be rolled back to', () => {
+  it('says in words that a failed release cannot be rolled back to', () => {
     state.releases = [
       release('r42', true, 'Fix pricing table layout'),
       { ...release('r41', false, 'Broken build'), status: 'failed' },
@@ -113,7 +113,12 @@ describe('ServiceReleasesPanel', () => {
     ]
     panel()
     expect(screen.queryByText('Roll back')).toBeNull()
-    expect(screen.getAllByText("Can't roll back: it did not finish building")).toHaveLength(2)
+    const notes = screen.getAllByText("Can't roll back")
+    expect(notes).toHaveLength(2)
+    // The short label fits the action cell; the full reason is read out.
+    expect(notes[0]?.getAttribute('aria-label')).toBe(
+      "Can't roll back to this release: it did not finish building."
+    )
   })
 
   it('never calls a release that is still building unfinished', () => {
@@ -122,7 +127,9 @@ describe('ServiceReleasesPanel', () => {
       { ...release('r43', false, 'New build'), status: 'running' },
     ]
     panel()
-    expect(screen.queryByText(/did not finish building/)).toBeNull()
-    expect(screen.getByText('Still building')).toBeTruthy()
+    expect(screen.queryByText("Can't roll back")).toBeNull()
+    expect(screen.getByText('Still building').getAttribute('aria-label')).not.toMatch(
+      /did not finish/
+    )
   })
 })

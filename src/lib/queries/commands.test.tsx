@@ -14,11 +14,13 @@ import {
   isTerminalCommandStatus,
   mergeTrackedCommandEntries,
   batchPollInterval,
+  TRACKED_COMMAND_WAIT_MS,
   trackedCommandWaitMs,
   trackedCommandsInFlight,
   useCommandRecordsBatch,
   useCommandsBatch,
   type TrackedCommandEntry,
+  type TrackedCommandLabel,
 } from './commands'
 
 const { fetchCommandStatuses, fetchCommand } = vi.hoisted(() => ({
@@ -117,9 +119,21 @@ describe('trackedCommandWaitMs', () => {
   it('waits as long as the server lets each kind of command run', () => {
     expect(trackedCommandWaitMs('stop')).toBe(120_000)
     expect(trackedCommandWaitMs('start')).toBe(120_000)
-    expect(trackedCommandWaitMs('Delete')).toBe(300_000)
+    // A managed destroy gets ten minutes on the server.
+    expect(trackedCommandWaitMs('Delete')).toBe(600_000)
+    expect(trackedCommandWaitMs('Remove replica')).toBe(600_000)
     expect(trackedCommandWaitMs('Back up now')).toBe(1_800_000)
     expect(trackedCommandWaitMs('Apply settings')).toBe(600_000)
+    expect(trackedCommandWaitMs('Update read eligibility')).toBe(300_000)
+  })
+
+  it('gives every tracked label its own wait, with no silent default', () => {
+    for (const [label, waitMs] of Object.entries(TRACKED_COMMAND_WAIT_MS)) {
+      expect(trackedCommandWaitMs(label as TrackedCommandLabel)).toBe(waitMs)
+      expect(waitMs).toBeGreaterThan(0)
+    }
+    // @ts-expect-error A label the table does not know fails the type check.
+    trackedCommandWaitMs('Destroy database')
   })
 })
 

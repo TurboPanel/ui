@@ -42,12 +42,19 @@ const UNFINISHED_RELEASE_STATUSES: ReadonlySet<string> = new Set([
 
 /**
  * What the action cell says instead of Roll back on a release that is not a
- * rollback target, shown in words (not only to screen readers).
+ * rollback target: a short label that fits the cell, and the full reason for
+ * screen readers (the expanded row shows it too).
  */
-function noRollbackText(status: string): string {
+function noRollbackCopy(status: string): Readonly<{ label: string; reason: string }> {
   return UNFINISHED_RELEASE_STATUSES.has(status)
-    ? "Can't roll back: it did not finish building"
-    : 'Still building'
+    ? {
+        label: "Can't roll back",
+        reason: "Can't roll back to this release: it did not finish building.",
+      }
+    : {
+        label: 'Still building',
+        reason: 'This release is still building. Roll back is offered once it has finished.',
+      }
 }
 
 /** Release ids are ULID/UUID-shaped; the head is enough to tell rows apart. */
@@ -219,7 +226,12 @@ function RollbackAction({
 }>) {
   if (release.isLive || !canRollback) return null
   if (release.status !== 'succeeded') {
-    return <Text style={styles.cellMuted}>{noRollbackText(release.status)}</Text>
+    const copy = noRollbackCopy(release.status)
+    return (
+      <Text style={styles.cellMuted} accessibilityLabel={copy.reason}>
+        {copy.label}
+      </Text>
+    )
   }
   return (
     <ConfirmButton

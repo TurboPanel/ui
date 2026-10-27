@@ -16,6 +16,7 @@ import {
   trackedCommandsInFlight,
   useCommandsBatch,
   type TrackedCommandEntry,
+  type TrackedCommandLabel,
 } from '@/lib/queries/commands'
 import { useEnvironment } from '@/lib/queries/environments'
 import { useEnvironmentManaged } from '@/lib/queries/managed'
@@ -66,7 +67,7 @@ export type ManagedEnvironmentValue = Readonly<{
   /** True once the database exists (it has a server and a managed record). */
   provisioned: boolean
   /** Track a queued command; its result refreshes the managed queries. */
-  registerCommand: (commandId: string, label: string, commandServerId?: string) => void
+  registerCommand: (commandId: string, label: TrackedCommandLabel, commandServerId?: string) => void
   /** The newest Apply queued here, kept after it finishes so its log stays readable. */
   applyCommand: TrackedCommandEntry | null
   /** A command queued here is still running. */
@@ -110,7 +111,7 @@ export function ManagedCommandsProvider({
   const serverId = detail?.managed?.serverId ?? detail?.server?.id ?? null
 
   const registerCommand = useCallback(
-    (commandId: string, label: string, commandServerId?: string) => {
+    (commandId: string, label: TrackedCommandLabel, commandServerId?: string) => {
       const resolvedServerId = commandServerId ?? serverId
       if (!resolvedServerId) return
       setTrackedEntries((current) => [...current, { serverId: resolvedServerId, commandId }])

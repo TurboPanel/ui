@@ -68,28 +68,57 @@ export function trackedCommandsInFlight(
   return query.data === undefined || hasInFlightCommands(query.data)
 }
 
-/** Start, stop and restart: the server gives them two minutes. */
+/** Start, stop and restart (`managed.lifecycle`). */
 const LIFECYCLE_WAIT_MS = 120_000
-/** The longest expiry the server gives a command tracked by label (backups and restores). */
-const LONG_WAIT_MS = 1_800_000
-/** Apply and the other database changes. */
-const DEFAULT_WAIT_MS = 600_000
+/** `managed.apply`, `managed.destroy`, `managed.promote` and failover. */
+const APPLY_WAIT_MS = 600_000
+/** `managed.backup` and `managed.restore`, a stored backup's removal included. */
+const BACKUP_WAIT_MS = 1_800_000
+/** `managed.ha.reconcile` (read eligibility). */
+const RECONCILE_WAIT_MS = 300_000
 
-const WAIT_MS_BY_LABEL: Readonly<Record<string, number>> = {
+/**
+ * Every command the database screens track, by what the person did, with the
+ * expiry the server gives that command. `registerCommand` takes only these
+ * labels, so a new or renamed label fails the type check until it has a wait.
+ */
+export const TRACKED_COMMAND_WAIT_MS = {
+  Apply: APPLY_WAIT_MS,
+  'Apply settings': APPLY_WAIT_MS,
   start: LIFECYCLE_WAIT_MS,
   stop: LIFECYCLE_WAIT_MS,
   restart: LIFECYCLE_WAIT_MS,
-  Delete: 300_000,
-  'Back up now': LONG_WAIT_MS,
-  'Restore backup': LONG_WAIT_MS,
-}
+  Delete: APPLY_WAIT_MS,
+  'Back up now': BACKUP_WAIT_MS,
+  'Delete backup': BACKUP_WAIT_MS,
+  'Restore backup': BACKUP_WAIT_MS,
+  'Rotate root password': APPLY_WAIT_MS,
+  'Redeploy service': APPLY_WAIT_MS,
+  'Create database': APPLY_WAIT_MS,
+  'Delete database': APPLY_WAIT_MS,
+  'Create user': APPLY_WAIT_MS,
+  'Delete user': APPLY_WAIT_MS,
+  'Change user permissions': APPLY_WAIT_MS,
+  'Rotate user password': APPLY_WAIT_MS,
+  'Add app logins': APPLY_WAIT_MS,
+  'Add replica': APPLY_WAIT_MS,
+  'Update read eligibility': RECONCILE_WAIT_MS,
+  'Convert to failover': APPLY_WAIT_MS,
+  'Remove replica': APPLY_WAIT_MS,
+  'Resync replica': APPLY_WAIT_MS,
+  Promote: APPLY_WAIT_MS,
+  'Promote (forced)': APPLY_WAIT_MS,
+  'Disaster recovery': APPLY_WAIT_MS,
+} as const satisfies Readonly<Record<string, number>>
+
+export type TrackedCommandLabel = keyof typeof TRACKED_COMMAND_WAIT_MS
 
 /**
  * How long a tracked command can go without a status answer before the screen
  * stops waiting for it: the expiry the server gives that kind of command.
  */
-export function trackedCommandWaitMs(label: string): number {
-  return WAIT_MS_BY_LABEL[label] ?? DEFAULT_WAIT_MS
+export function trackedCommandWaitMs(label: TrackedCommandLabel): number {
+  return TRACKED_COMMAND_WAIT_MS[label]
 }
 
 /** Keep earlier command ids when a later Apply returns more queued rows. */
@@ -156,7 +185,7 @@ export function useCommandsBatch(
  * Failed rounds with no answer at all after which the batch stops asking: ten
  * minutes of polling, as long as a tracked command can wait for an answer.
  */
-const UNANSWERED_POLL_ROUNDS = DEFAULT_WAIT_MS / COMMAND_POLL_MS
+const UNANSWERED_POLL_ROUNDS = APPLY_WAIT_MS / COMMAND_POLL_MS
 
 /**
  * Poll while a command runs, and while the batch has no answer yet: when the
