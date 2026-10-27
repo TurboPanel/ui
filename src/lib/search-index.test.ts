@@ -250,6 +250,11 @@ describe('rankSearchItems', () => {
     expect(found).not.toContain('Firewall')
   })
 
+  it('finds the TLS Certificates page by its old name: "server cert"', () => {
+    expect(names(rankSearchItems(list, 'server cert'))).toContain('TLS Certificates')
+    expect(names(rankSearchItems(list, 'server certificates'))).toContain('TLS Certificates')
+  })
+
   it('treats remove, delete and forget as the same word', () => {
     for (const q of ['remove zed', 'delete zed', 'forget zed']) {
       expect(names(rankSearchItems(list, q))[0]).toBe('Remove server zed (host is gone)')
