@@ -865,8 +865,16 @@ export function usePatchServer(orgId: string) {
 export function useCreateLicense(orgId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: ({ name, installBaseUrl }: { name?: string; installBaseUrl?: string }) =>
-      createLicense(name, installBaseUrl),
+    mutationFn: ({
+      name,
+      installBaseUrl,
+      tierId,
+    }: {
+      name?: string
+      installBaseUrl?: string
+      /** Hosted: the license tier chosen in Add Server; the server comes up on it. */
+      tierId?: string
+    }) => createLicense(name, installBaseUrl, tierId),
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({
@@ -874,6 +882,10 @@ export function useCreateLicense(orgId: string) {
         }),
         queryClient.invalidateQueries({
           queryKey: queryKeys.org(orgId).servers.licenses,
+        }),
+        // The new key holds a license at its tier: the "N free" counts change.
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.org(orgId).billing.subscription,
         }),
       ])
     },

@@ -1246,13 +1246,18 @@ describe('servers query hooks', () => {
     await result.current.run({
       name: 'edge',
       installBaseUrl: 'https://203.0.113.1:8443',
+      tierId: 'tier-s1',
     })
-    expect(createLicense).toHaveBeenCalledWith('edge', 'https://203.0.113.1:8443')
+    expect(createLicense).toHaveBeenCalledWith('edge', 'https://203.0.113.1:8443', 'tier-s1')
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: queryKeys.org(orgId).settings.serverCapacity,
     })
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: queryKeys.org(orgId).servers.licenses,
+    })
+    // The key holds a license at its tier, so the free counts refresh too.
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.org(orgId).billing.subscription,
     })
   })
 
