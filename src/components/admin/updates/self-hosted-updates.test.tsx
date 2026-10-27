@@ -160,7 +160,7 @@ describe('SelfHostedUpdates', () => {
         'Waiting to update: control plane v1.0.1. It starts on its own at the next check.'
       )
     ).toBeTruthy()
-    expect(screen.getByText('Next check: <2026-10-27T11:17:00.000Z>')).toBeTruthy()
+    expect(screen.getByText('Next Check: <2026-10-27T11:17:00.000Z>')).toBeTruthy()
   })
 
   it('says it is up to date when the control plane says nothing waits', () => {

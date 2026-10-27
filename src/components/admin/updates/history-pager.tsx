@@ -11,7 +11,7 @@ export function pageRangeText(offset: number, shown: number, total: number): str
   return `Showing ${first.toLocaleString()}–${last.toLocaleString()} of ${total.toLocaleString()}`
 }
 
-/** Previous / Next under a server-paged table, with the range it shows. */
+/** Previous / Next under a server-paged table, with the range it shows; nothing for an empty list. */
 export function HistoryPager({
   offset,
   pageSize,
@@ -25,6 +25,8 @@ export function HistoryPager({
   total: number
   onOffsetChange: (offset: number) => void
 }>) {
+  // An empty list says so in the table; a "None" under it would only repeat it.
+  if (total === 0 || shown === 0) return null
   return (
     <View style={styles.pager}>
       <Text style={panelStyles.muted}>{pageRangeText(offset, shown, total)}</Text>

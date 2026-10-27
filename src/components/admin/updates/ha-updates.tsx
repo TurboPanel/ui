@@ -11,7 +11,12 @@ import { Badge, InlineNotice, SectionPanel, SegmentedControl } from '@/component
 import { panelStyles } from '@/components/ui/panel-styles'
 import type { InstanceUpdates } from '@/lib/instance-api'
 import { HA_PRODUCT_NAME } from '@/lib/platform-copy'
-import { isUpdateWaiting, UPDATE_WAITING_COPY, waitingSentence } from '@/lib/update-automation'
+import {
+  isUpdateWaiting,
+  UPDATE_WAITING_COPY,
+  updatesCadenceText,
+  waitingSentence,
+} from '@/lib/update-automation'
 import {
   fleetProgressText,
   offlineWaitingNotice,
@@ -68,7 +73,9 @@ export function HighAvailabilityUpdates({ data }: Readonly<{ data: InstanceUpdat
       <InlineNotice
         tone="info"
         title={`${HA_PRODUCT_NAME} manages the control plane`}
-        body="Connected daemons update on their own: TurboPanel checks once an hour and updates them in groups. A server that fails is tried again later."
+        body={`${updatesCadenceText(data, 'Connected daemons update on their own')}${
+          data.updatesPaused === true ? '' : ' A server that fails is tried again later.'
+        }`}
       />
 
       <UpdatesStatusPanel data={data} headline={headline} waiting={waiting} />

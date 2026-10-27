@@ -1,23 +1,23 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { StyleSheet, Text, useWindowDimensions, View } from 'react-native'
+import { StyleSheet, Text, View } from 'react-native'
 import { readConsoleBuild } from '@/components/admin/updates/console-build'
 import { Button, ConfirmButton, SectionPanel, StatusDot } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
 import type { InstanceUpdates } from '@/lib/instance-api'
 import { useCheckForUpdates, usePauseUpdates, useResumeUpdates } from '@/lib/queries/admin'
 import {
-  CHECK_NOW_HELP,
-  checkCadence,
+  checkNowHelp,
   checkNowRefusal,
   lastCheckedText,
   nextCheckText,
   PAUSE_UPDATES_PROMPT,
   pausedSinceText,
   resumeUpdatesPrompt,
+  updatesCadenceText,
 } from '@/lib/update-automation'
 import { platformUpgradeHeadlineCopy, type PlatformUpgradeHeadline } from '@/lib/upgrade-display'
 import { failedRunMessage } from '@/lib/user-error'
-import { colors, layout, spacing } from '@/lib/theme'
+import { colors, spacing } from '@/lib/theme'
 
 function headlineTone(headline: PlatformUpgradeHeadline) {
   switch (headline) {
@@ -79,16 +79,14 @@ function StatusControls({
   data,
   check,
   pause,
-  narrow,
 }: Readonly<{
   data: InstanceUpdates
   check: ReturnType<typeof useCheckNow>
   pause: ReturnType<typeof usePauseControl>
-  narrow: boolean
 }>) {
   const paused = data.updatesPaused === true
   return (
-    <View style={narrow ? styles.controlsNarrow : styles.controls}>
+    <View style={styles.controls}>
       <Button
         label="Check Now"
         variant="secondary"
@@ -103,6 +101,7 @@ function StatusControls({
         dismissLabel="Cancel"
         prompt={paused ? resumeUpdatesPrompt(data.nextCheckAt) : PAUSE_UPDATES_PROMPT}
         variant="secondary"
+        stacked
         busy={pause.busy}
         onConfirm={() => {
           void pause.toggle()
@@ -116,9 +115,10 @@ function StatusControls({
  * The Status card of Admin > Updates, on both editions: where updates stand
  * (up to date, waiting, updating, paused), what waits, the last and next
  * check, and the controls: Check Now (a refresh only) and Pause All Updates /
- * Resume Updates. On a wide window the controls sit in the card header; on a
- * phone-width one they move into the card body, under the text, so the
- * confirmation and any message have the card's full width.
+ * Resume Updates. The controls sit in the card body under the text at every
+ * width, never in the header slot, which does not shrink: the confirmation
+ * gets the card's full width with its question on its own line, and resizing
+ * the window never moves (and so never closes) an open confirmation.
  */
 export function UpdatesStatusPanel({
   data,
@@ -133,15 +133,14 @@ export function UpdatesStatusPanel({
   /** Extra facts under the headline (the channel badge on self-hosted). */
   children?: ReactNode
 }>) {
-  const narrow = useWindowDimensions().width < layout.desktopBreakpoint
   const check = useCheckNow()
-  const pause = usePauseControl(data.updatesPaused === true)
+  const isPaused = data.updatesPaused === true
+  const pause = usePauseControl(isPaused)
   const paused = pausedSinceText(data)
-  const nextCheck = data.updatesPaused === true ? null : nextCheckText(data.nextCheckAt)
+  const nextCheck = isPaused ? null : nextCheckText(data.nextCheckAt)
   const lastChecked = lastCheckedText(data.lastCheckAt)
-  const controls = <StatusControls data={data} check={check} pause={pause} narrow={narrow} />
   return (
-    <SectionPanel title="Status" headerRight={narrow ? undefined : controls}>
+    <SectionPanel title="Status">
       <View style={styles.text}>
         <View style={styles.headlineRow}>
           <StatusDot tone={headlineTone(headline)} />
@@ -149,14 +148,12 @@ export function UpdatesStatusPanel({
         </View>
         {paused ? <Text style={panelStyles.pageCopy}>{paused}</Text> : null}
         {waiting ? <Text style={panelStyles.muted}>{waiting}</Text> : null}
-        <Text style={panelStyles.muted}>
-          {`Updates install on their own: TurboPanel checks ${checkCadence(data.checkIntervalMinutes)} and updates servers in groups.`}
-        </Text>
+        <Text style={panelStyles.muted}>{updatesCadenceText(data)}</Text>
         {lastChecked ? <Text style={panelStyles.muted}>{lastChecked}</Text> : null}
         {nextCheck ? <Text style={panelStyles.muted}>{nextCheck}</Text> : null}
-        <Text style={panelStyles.muted}>{CHECK_NOW_HELP}</Text>
+        <Text style={panelStyles.muted}>{checkNowHelp(isPaused)}</Text>
         {children}
-        {narrow ? controls : null}
+        <StatusControls data={data} check={check} pause={pause} />
         {check.error ? <Text style={panelStyles.error}>{check.error}</Text> : null}
         {pause.error ? <Text style={panelStyles.error}>{pause.error}</Text> : null}
       </View>
@@ -166,15 +163,8 @@ export function UpdatesStatusPanel({
 
 const styles = StyleSheet.create({
   controls: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    gap: spacing.sm,
-  },
-  controlsNarrow: {
-    width: '100%',
-    alignItems: 'stretch',
+    alignSelf: 'stretch',
+    alignItems: 'flex-start',
     gap: spacing.sm,
     marginTop: spacing.sm,
   },

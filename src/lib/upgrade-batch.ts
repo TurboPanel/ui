@@ -6,8 +6,7 @@ export type UpgradeBatchInput = {
 }
 
 export type UpgradeBatchValidation =
-  | { ok: true; mode: UpgradeBatchMode; value: number }
-  | { ok: false; message: string }
+  { ok: true; mode: UpgradeBatchMode; value: number } | { ok: false; message: string }
 
 const PERCENT_MIN = 1
 const PERCENT_MAX = 100
@@ -17,11 +16,11 @@ const COUNT_MAX = 10_000
 export function validateUpgradeBatchInput(input: UpgradeBatchInput): UpgradeBatchValidation {
   const trimmed = input.value.trim()
   if (trimmed === '') {
-    return { ok: false, message: 'Enter a batch size.' }
+    return { ok: false, message: 'Enter how many servers update at once.' }
   }
   const parsed = Number(trimmed)
   if (!Number.isInteger(parsed)) {
-    return { ok: false, message: 'Batch size must be a whole number.' }
+    return { ok: false, message: 'Use a whole number.' }
   }
   if (input.mode === 'percent') {
     if (parsed < PERCENT_MIN || parsed > PERCENT_MAX) {
@@ -35,7 +34,7 @@ export function validateUpgradeBatchInput(input: UpgradeBatchInput): UpgradeBatc
   if (parsed < COUNT_MIN || parsed > COUNT_MAX) {
     return {
       ok: false,
-      message: `Use ${COUNT_MIN}–${COUNT_MAX} servers per batch.`,
+      message: `Use ${COUNT_MIN}–${COUNT_MAX} servers.`,
     }
   }
   return { ok: true, mode: 'count', value: parsed }
@@ -47,13 +46,16 @@ export const UPGRADE_FLEET_PAGE_SIZE = 50
 export function fleetServersQuery(
   offset: number,
   status: string,
-  pageSize = UPGRADE_FLEET_PAGE_SIZE,
+  pageSize = UPGRADE_FLEET_PAGE_SIZE
 ): { offset: number; limit: number; status: string } {
   const safeOffset = Math.max(offset, 0)
   return { offset: safeOffset, limit: pageSize, status }
 }
 
+/** "Servers updated at once: all" (100%), "…: 25%", or "…: 4": one plain term for the group size. */
 export function formatUpgradeBatchLabel(mode: UpgradeBatchMode, value: number): string {
-  if (mode === 'percent') return `${value}% of fleet per batch`
-  return `${value} server${value === 1 ? '' : 's'} per batch`
+  if (mode === 'percent') {
+    return `Servers updated at once: ${value >= PERCENT_MAX ? 'all' : `${value}%`}`
+  }
+  return `Servers updated at once: ${value}`
 }

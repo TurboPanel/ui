@@ -104,7 +104,7 @@ export function UpdateRunSummary({ run }: Readonly<{ run: UpgradeHistoryEntry }>
         <Fact label="Trigger" value={upgradeTriggerLabel(run.source)} />
         <Fact label="Started by" value={upgradeStartedByLabel(run)} />
         <Fact label="Channel" value={upgradeChannelTitle(run.channel)} />
-        <Fact label="Target" value={upgradeRunTargetText(run.target)} />
+        <Fact label="Target" value={upgradeRunTargetText(run.target, run.units)} />
         <Fact label="Started" value={timeText(run.startedAt ?? run.createdAt)} />
         <Fact label="Finished" value={timeText(run.finishedAt)} />
         <Fact label="Duration" value={durationText(run.startedAt, run.finishedAt)} />

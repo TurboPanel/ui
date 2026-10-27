@@ -5578,6 +5578,12 @@ export type UpgradeRunRecord = {
   /** Absent on control planes older than the paged history. */
   trigger?: UpgradeRunTrigger
   summary?: UpgradeRunSummary
+  /**
+   * The parts the run planned steps for. `instance` means the control-plane
+   * install, which carries the web interface too. Empty when retention pruned
+   * the run's steps; absent on an older control plane.
+   */
+  units?: UpgradeRunUnit[]
 }
 
 export type UpgradeActiveRunResponse = {

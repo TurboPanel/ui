@@ -101,6 +101,33 @@ describe('ConfirmButton placement', () => {
   })
 })
 
+describe('ConfirmButton stacked', () => {
+  it('gives the question the full width under the buttons, Confirm first where the press landed', () => {
+    const onConfirm = vi.fn()
+    const { container } = render(
+      <ConfirmButton
+        label="Pause All Updates"
+        confirmLabel="Yes, Pause"
+        prompt="Pause all updates? Nothing new starts until you resume."
+        stacked
+        onConfirm={onConfirm}
+      />
+    )
+    fireEvent.click(screen.getByText('Pause All Updates'))
+    const prompt = screen.getByText('Pause all updates? Nothing new starts until you resume.')
+    const stack = prompt.parentElement as HTMLElement
+    expect((container.textContent ?? '').indexOf('Pause all updates?')).toBe(0)
+    expect(styleOf(stack).flexDirection).toBe('column-reverse')
+    expect(styleOf(stack).alignSelf).toBe('stretch')
+    const buttons = stack.lastElementChild as HTMLElement
+    expect(buttons.firstElementChild?.textContent).toBe('Yes, Pause')
+    expect(styleOf(buttons).flexWrap).toBe('wrap')
+    later()
+    fireEvent.click(screen.getByText('Yes, Pause'))
+    expect(onConfirm).toHaveBeenCalledTimes(1)
+  })
+})
+
 describe('ConfirmButton double press', () => {
   const draw = () => {
     const onConfirm = vi.fn()

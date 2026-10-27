@@ -39,20 +39,20 @@ export function pausedSinceText(
     : `Updates paused by ${by}`
 }
 
-/** "Next check: <time>", or null when the control plane names none. */
+/** "Next Check: <time>", or null when the control plane names none. */
 export function nextCheckText(
   nextCheckAt: string | null | undefined,
   format: FormatInstant = formatUpdateTime
 ): string | null {
-  return nextCheckAt ? `Next check: ${format(nextCheckAt)}` : null
+  return nextCheckAt ? `Next Check: ${format(nextCheckAt)}` : null
 }
 
-/** "Last checked <time>", scheduled or Check Now, or null before the first check. */
+/** "Last Checked: <time>", scheduled or Check Now, or null before the first check. */
 export function lastCheckedText(
   lastCheckAt: string | null | undefined,
   format: FormatInstant = formatUpdateTime
 ): string | null {
-  return lastCheckAt ? `Last checked ${format(lastCheckAt)}` : null
+  return lastCheckAt ? `Last Checked: ${format(lastCheckAt)}` : null
 }
 
 /** How often the scheduled check runs, for a sentence: "once an hour", "every 5 minutes". */
@@ -65,6 +65,29 @@ export function checkCadence(checkIntervalMinutes: number | null | undefined): s
 /** What Check Now does, under the button. */
 export const CHECK_NOW_HELP =
   'Check Now only looks for new builds. The next scheduled check starts the update.'
+
+/** What Check Now does while paused: nothing starts until updates are resumed. */
+export const CHECK_NOW_PAUSED_HELP =
+  'Check Now only looks for new builds. Nothing starts until updates are resumed.'
+
+export function checkNowHelp(paused: boolean): string {
+  return paused ? CHECK_NOW_PAUSED_HELP : CHECK_NOW_HELP
+}
+
+/**
+ * How updates run, for the Status card and the High Availability notice:
+ * "Updates install on their own: TurboPanel checks every 5 minutes." Paused:
+ * updates are paused and nothing new starts until they are resumed.
+ */
+export function updatesCadenceText(
+  updates: Pick<InstanceUpdates, 'updatesPaused' | 'checkIntervalMinutes'>,
+  what = 'Updates install on their own'
+): string {
+  if (updates.updatesPaused === true) {
+    return 'Updates are paused. Nothing new starts until they are resumed.'
+  }
+  return `${what}: TurboPanel checks ${checkCadence(updates.checkIntervalMinutes)}.`
+}
 
 /**
  * Why Check Now did not run, in plain words, and when that line should go
