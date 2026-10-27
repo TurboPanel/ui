@@ -10934,11 +10934,15 @@ export type OrganizationActivityItem = {
   totalSteps: number | null
   /** Label of the running step ("Install Docker"); absent on an older control plane. */
   stepLabel?: string | null
-  durationSecs: number
+  /** Running time so far, or how long it took; null for a finished row with no recorded end. */
+  durationSecs: number | null
   errorMessage: string | null
   /** `user` when a person asked for it, `system` when the panel did (a push). */
   actorType?: 'user' | 'system'
-  /** The person's name, else their email; null for the panel or a removed account. */
+  /**
+   * For a person: their name or email while they are a member, else
+   * "Platform admin" or "Former member" as the panel says; null for the panel.
+   */
   actorName?: string | null
   /** The push that set it off; null for a person's deploy. */
   trigger?: DeploymentTriggerRecord | null

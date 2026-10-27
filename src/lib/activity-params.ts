@@ -69,7 +69,8 @@ export function activityParamsToUrl(view: ActivityView): UrlParams {
 
 /** Whether `pathname` is this organization's Activity screen (query and trailing slash ignored). */
 export function isActivityPath(pathname: string, orgId: string): boolean {
-  const path = (pathname.split('?')[0] ?? '').replace(/\/+$/, '')
+  let path = pathname.split('?')[0] ?? ''
+  while (path.endsWith('/')) path = path.slice(0, -1)
   return orgId.length > 0 && path === `/${orgId}/activity`
 }
 
