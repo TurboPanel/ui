@@ -3,11 +3,12 @@ import { useMemo, useState } from 'react'
 import { StyleSheet, Text, useWindowDimensions, View } from 'react-native'
 import { readConsoleBuild } from '@/components/admin/updates/console-build'
 import { Button, InlineNotice, TextLink } from '@/components/ui'
-import { isSuperadminSession, useAuth } from '@/lib/auth-context'
+import { isAdminSession, useAuth } from '@/lib/auth-context'
 import { useInstallStatusQuery } from '@/lib/queries/auth'
 import { useInstanceUpdates, useUpgradeActiveRun } from '@/lib/queries/admin'
 import {
   readDismissedUpdateBanner,
+  showsUpdateBanner,
   UPDATE_NOW_HREF,
   updateBanner,
   updateOffered,
@@ -25,7 +26,7 @@ function webStorage(): Storage | undefined {
 }
 
 /**
- * The offered update for a superadmin on a self-hosted control plane, or null.
+ * The offered update for an instance admin on a self-hosted control plane, or null.
  * Shared by the banner and the admin sidebar badge.
  */
 export function useUpdateAvailable(): Readonly<{
@@ -36,7 +37,10 @@ export function useUpdateAvailable(): Readonly<{
 }> {
   const { session } = useAuth()
   const status = useInstallStatusQuery()
-  const eligible = isSuperadminSession(session) && status.data?.runtime === 'deno'
+  const eligible = showsUpdateBanner({
+    isInstanceAdmin: isAdminSession(session),
+    runtime: status.data?.runtime,
+  })
   const consoleBuild = useMemo(() => readConsoleBuild(), [])
   const updates = useInstanceUpdates({ enabled: eligible, consoleCommit: consoleBuild?.commit })
   const active = useUpgradeActiveRun({ enabled: eligible })

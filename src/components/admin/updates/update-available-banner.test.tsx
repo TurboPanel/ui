@@ -21,7 +21,7 @@ vi.mock('expo-router', () => ({ useRouter: () => ({ push }) }))
 vi.mock('@/components/admin/updates/console-build', () => ({ readConsoleBuild: () => null }))
 vi.mock('@/lib/auth-context', () => ({
   useAuth: () => ({ session: {} }),
-  isSuperadminSession: () => true,
+  isAdminSession: () => true,
 }))
 vi.mock('@/lib/queries/auth', () => ({
   useInstallStatusQuery: () => ({ data: { runtime: 'deno' } }),
@@ -35,6 +35,7 @@ vi.mock('@/lib/update-status', () => ({
   readDismissedUpdateBanner: () => null,
   writeDismissedUpdateBanner: writeDismissed,
   updateOffered: () => true,
+  showsUpdateBanner: () => true,
   updateBanner: () => ({
     key: 'cp:v0.1.20',
     title: 'TurboPanel update available: control plane v0.1.20',
