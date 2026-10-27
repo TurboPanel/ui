@@ -20,7 +20,6 @@ import {
 
 const api = vi.hoisted(() => ({
   fetchUpgradeActiveRun: vi.fn(),
-  fetchUpgradeRun: vi.fn(),
   fetchUpgradeHistory: vi.fn(),
   fetchUpgradeRunServers: vi.fn(),
   fetchUpgradeServersPage: vi.fn(),
@@ -167,10 +166,6 @@ describe('managed upgrade admin queries', () => {
     const wrapper = createWrapper(client)
     api.runUpgradePreflight.mockResolvedValue({ ok: true, checks: [] })
     api.startPlatformUpgradeRun.mockResolvedValue({ ok: true, runId: 'run-9' })
-    api.fetchUpgradeRun.mockResolvedValue({
-      ok: true,
-      run: { id: 'run-9', status: 'succeeded' },
-    })
     const savedSettings = {
       autoUpdate: true,
       batch: { mode: 'count' as const, value: 3 },
@@ -202,7 +197,6 @@ describe('managed upgrade admin queries', () => {
       ok: true,
       value: { kind: 'started', runId: 'run-9' },
     })
-    expect(api.fetchUpgradeRun).not.toHaveBeenCalled()
     await expect(save.result.current.run(savedSettings)).resolves.toMatchObject({ ok: true })
     await expect(check.result.current.run(undefined)).resolves.toMatchObject({ ok: true })
     await expect(retry.result.current.run('step-1')).resolves.toMatchObject({ ok: true })

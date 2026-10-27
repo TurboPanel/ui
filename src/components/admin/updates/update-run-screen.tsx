@@ -1,12 +1,12 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
-import { useRouter, type Href } from 'expo-router'
+import { useLocalSearchParams, useRouter, type Href } from 'expo-router'
 import { HistoryPager } from '@/components/admin/updates/history-pager'
 import {
   UpdateRunServersTable,
   type RunServerLinks,
-  type SortDir,
 } from '@/components/admin/updates/update-run-servers-table'
+import { useBackOr } from '@/components/admin/updates/use-back-or'
 import {
   Badge,
   InlineNotice,
@@ -18,13 +18,11 @@ import {
   TextLink,
 } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
-import { isHttpStatusError } from '@/lib/fetch-error-detail'
 import { formatLocalDateTime } from '@/lib/format-datetime'
 import type {
   UpgradeHistoryEntry,
   UpgradeRunServerSort,
   UpgradeRunServersPage,
-  UpgradeServerOutcome,
 } from '@/lib/instance-api'
 import { useUpgradeRunServers } from '@/lib/queries/admin'
 import { colors, spacing } from '@/lib/theme'
@@ -32,6 +30,7 @@ import { upgradeChannelTitle, upgradeRunErrorLabel } from '@/lib/upgrade-display
 import {
   countCellText,
   durationText,
+  historyLoadError,
   SERVER_OUTCOME_FILTERS,
   serverOutcomeFilterLabel,
   serverPageHref,
@@ -43,8 +42,14 @@ import {
   upgradeStartedByLabel,
   upgradeTriggerLabel,
 } from '@/lib/upgrade-history-display'
+import {
+  readRunServerParams,
+  runServerParamsToUrl,
+  withQuery,
+  type RunServerView,
+  type SortDir,
+} from '@/lib/upgrade-history-params'
 import { useDebouncedValue } from '@/lib/use-debounced-value'
-import { userErrorMessage } from '@/lib/user-error'
 
 export const UPDATE_RUN_PAGE_SIZE = 50
 
@@ -52,24 +57,6 @@ const SEARCH_DEBOUNCE_MS = 300
 
 /** Sorts that read best newest or largest first when picked. */
 const DESC_FIRST = new Set<UpgradeRunServerSort>(['started', 'finished', 'duration', 'attempts'])
-
-type ServerFilters = Readonly<{
-  status: '' | UpgradeServerOutcome
-  organizationId: string | null
-  search: string
-  sort: UpgradeRunServerSort
-  dir: SortDir
-  offset: number
-}>
-
-const INITIAL_FILTERS: ServerFilters = {
-  status: '',
-  organizationId: null,
-  search: '',
-  sort: 'status',
-  dir: 'asc',
-  offset: 0,
-}
 
 /** The next sort: the same column flips direction, a new one starts in its natural order. */
 export function nextSort(
@@ -133,12 +120,16 @@ export function UpdateRunSummary({ run }: Readonly<{ run: UpgradeHistoryEntry }>
 
 function ServerFiltersBar({
   page,
-  filters,
+  view,
+  searchText,
+  onSearchText,
   onChange,
 }: Readonly<{
   page: UpgradeRunServersPage | undefined
-  filters: ServerFilters
-  onChange: (next: Partial<ServerFilters>) => void
+  view: RunServerView
+  searchText: string
+  onSearchText: (text: string) => void
+  onChange: (next: Partial<RunServerView>) => void
 }>) {
   const organizations = (page?.organizations ?? []).map((org) => ({
     value: org.id,
@@ -152,14 +143,14 @@ function ServerFiltersBar({
           value,
           label: serverOutcomeFilterLabel(value, page?.statusCounts),
         }))}
-        value={filters.status}
+        value={view.status}
         accessibilityLabel="Filter servers by status"
         onChange={(status) => onChange({ status, offset: 0 })}
       />
       <View style={styles.filterRow}>
         <View style={styles.filterField}>
           <Select
-            value={filters.organizationId}
+            value={view.organizationId}
             options={organizations}
             noneLabel="All organizations"
             placeholder="All organizations"
@@ -170,11 +161,11 @@ function ServerFiltersBar({
         <View style={styles.filterField}>
           <TextField
             label="Search"
-            value={filters.search}
+            value={searchText}
             placeholder="Server or organization name or id"
             autoCapitalize="none"
             autoCorrect={false}
-            onChangeText={(search) => onChange({ search, offset: 0 })}
+            onChangeText={onSearchText}
           />
         </View>
       </View>
@@ -182,33 +173,42 @@ function ServerFiltersBar({
   )
 }
 
-function runLoadError(error: unknown): string {
-  if (isHttpStatusError(error, 404)) return 'This update was not found. It may have been removed.'
-  return userErrorMessage(error, 'This update could not be loaded')
-}
-
 /**
  * Update Run: one run's summary and a server-paged table of every server it
  * touched. Filters, sorting and paging all go to the control plane, so a run
- * over thousands of servers never loads more than one page.
+ * over thousands of servers never loads more than one page. The view (status,
+ * organization, search, sort, page) lives in the URL, so back, reload and a
+ * shared link land on the same rows.
  */
 export function UpdateRunScreen({ runId }: Readonly<{ runId: string }>) {
   const router = useRouter()
-  const [filters, setFilters] = useState<ServerFilters>(INITIAL_FILTERS)
-  const [search] = useDebouncedValue(filters.search, SEARCH_DEBOUNCE_MS)
+  const view = readRunServerParams(useLocalSearchParams())
+  const [searchText, setSearchText] = useState(view.q)
+  const [search] = useDebouncedValue(searchText, SEARCH_DEBOUNCE_MS)
+  const back = useBackOr(UPDATE_HISTORY_HREF)
   const query = useUpgradeRunServers(runId, {
-    offset: filters.offset,
+    offset: view.offset,
     limit: UPDATE_RUN_PAGE_SIZE,
-    sort: filters.sort,
-    dir: filters.dir,
-    status: filters.status,
-    organizationId: filters.organizationId,
-    q: search,
+    sort: view.sort,
+    dir: view.dir,
+    status: view.status,
+    organizationId: view.organizationId,
+    q: view.q,
   })
-  const update = (next: Partial<ServerFilters>) => setFilters((prev) => ({ ...prev, ...next }))
+  const update = (next: Partial<RunServerView>) => {
+    router.setParams(runServerParamsToUrl({ ...view, ...next }))
+  }
+  const currentQ = view.q
+  useEffect(() => {
+    const q = search.trim()
+    if (q !== currentQ) router.setParams({ q: q || undefined, offset: undefined })
+  }, [search, currentQ, router])
   const page = query.data
   const links: RunServerLinks = {
-    onOpenLog: (row) => router.push(serverUpdateLogHref(runId, row.serverId) as Href),
+    onOpenLog: (row) =>
+      router.push(
+        withQuery(serverUpdateLogHref(runId, row.serverId), runServerParamsToUrl(view)) as Href
+      ),
     serverPageFor: (row) => {
       const href = serverPageHref(row)
       return href ? () => router.push(href as Href) : null
@@ -217,32 +217,37 @@ export function UpdateRunScreen({ runId }: Readonly<{ runId: string }>) {
 
   return (
     <View style={styles.root}>
-      <TextLink
-        label="Back to Update History"
-        size="sm"
-        onPress={() => router.push(UPDATE_HISTORY_HREF as Href)}
-      />
+      <TextLink label="Back to Update History" size="sm" onPress={back} />
       {query.isLoading && !page ? <LoadingState label="Loading the update" /> : null}
       {query.isError && !page ? (
-        <InlineNotice tone="warning" title={runLoadError(query.error)} />
+        <InlineNotice
+          tone="warning"
+          title={historyLoadError(query.error, 'This update could not be loaded')}
+        />
       ) : null}
       {page ? (
         <>
           <UpdateRunSummary run={page.run} />
           <SectionPanel title="Servers" hint="One row per server. Sort by a column heading.">
-            <ServerFiltersBar page={page} filters={filters} onChange={update} />
+            <ServerFiltersBar
+              page={page}
+              view={view}
+              searchText={searchText}
+              onSearchText={setSearchText}
+              onChange={update}
+            />
             <UpdateRunServersTable
               run={page.run}
               units={page.units}
               rows={page.servers}
-              sort={filters.sort}
-              dir={filters.dir}
-              onSort={(picked) => update({ ...nextSort(filters, picked), offset: 0 })}
+              sort={view.sort}
+              dir={view.dir}
+              onSort={(picked) => update({ ...nextSort(view, picked), offset: 0 })}
               links={links}
               loading={query.isFetching}
             />
             <HistoryPager
-              offset={filters.offset}
+              offset={view.offset}
               pageSize={UPDATE_RUN_PAGE_SIZE}
               shown={page.servers.length}
               total={page.total}

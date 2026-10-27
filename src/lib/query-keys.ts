@@ -453,7 +453,6 @@ export const queryKeys = {
     upgradeActiveRun: ['admin', 'instance-updates', 'run'] as const,
     upgradeHistory: (offset: number, limit: number, status = '', trigger = '') =>
       ['admin', 'instance-updates', 'history', offset, limit, status, trigger] as const,
-    upgradeRun: (runId: string) => ['admin', 'instance-updates', 'runs', runId] as const,
     /** One page of a run's servers; `filters` is the serialized sort and filter set. */
     upgradeRunServers: (runId: string, filters: string) =>
       ['admin', 'instance-updates', 'runs', runId, 'servers', filters] as const,

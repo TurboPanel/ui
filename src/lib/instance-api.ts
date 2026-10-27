@@ -5576,10 +5576,6 @@ export async function fetchUpgradeActiveRun(): Promise<UpgradeActiveRunResponse>
   return await apiFetch(`${ADMIN_API}/instance/updates/run`)
 }
 
-export async function fetchUpgradeRun(runId: string): Promise<UpgradeActiveRunResponse> {
-  return await apiFetch(`${ADMIN_API}/instance/updates/runs/${encodeURIComponent(runId)}`)
-}
-
 /**
  * `status` omitted lists finished runs only (the original behaviour); `any`
  * lists every run, `active` the pending or running one.

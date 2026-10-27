@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import type { ReactNode } from 'react'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   UpgradeHistoryEntry,
@@ -10,6 +10,7 @@ import type {
 import { ServerUpdateLogScreen } from './server-update-log-screen'
 import { UpdateHistoryScreen } from './update-history-screen'
 import { nextSort, UpdateRunScreen } from './update-run-screen'
+import { sortHeaderLabel } from './update-run-servers-table'
 import { UpgradeHistoryPanel } from './upgrade-history-panel'
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
@@ -102,8 +103,18 @@ vi.mock('@/components/ui', () => ({
   ),
 }))
 
-const push = vi.fn()
-vi.mock('expo-router', () => ({ useRouter: () => ({ push }) }))
+const router = vi.hoisted(() => ({
+  push: vi.fn(),
+  back: vi.fn(),
+  canGoBack: vi.fn(() => false),
+  setParams: vi.fn(),
+  params: {} as Record<string, string>,
+}))
+const { push } = router
+vi.mock('expo-router', () => ({
+  useRouter: () => router,
+  useLocalSearchParams: () => router.params,
+}))
 
 const queries = vi.hoisted(() => ({
   useUpgradeHistory: vi.fn(),
@@ -204,11 +215,18 @@ function lastServersQuery() {
 
 beforeEach(() => {
   push.mockReset()
+  router.back.mockReset()
+  router.setParams.mockReset()
+  router.canGoBack.mockReturnValue(false)
+  router.params = {}
   queries.useUpgradeHistory.mockReset()
   queries.useUpgradeRunServers.mockReset()
 })
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.useRealTimers()
+})
 
 describe('UpdateHistoryScreen', () => {
   it('shows one row per run and reads a no-change run honestly', () => {
@@ -221,7 +239,7 @@ describe('UpdateHistoryScreen', () => {
     expect(screen.queryByText(/0\.1\.15 → 0\.1\.15/)).toBeNull()
   })
 
-  it('asks for every run first and pages and filters on the server', () => {
+  it('asks for every run first and writes paging and filters to the URL', () => {
     queries.useUpgradeHistory.mockReturnValue({ data: { ok: true, runs: [RUN], total: 60 } })
     render(<UpdateHistoryScreen />)
     expect(queries.useUpgradeHistory).toHaveBeenLastCalledWith({
@@ -231,17 +249,44 @@ describe('UpdateHistoryScreen', () => {
       trigger: '',
     })
     fireEvent.click(screen.getByText('Next'))
-    expect(queries.useUpgradeHistory).toHaveBeenLastCalledWith(
-      expect.objectContaining({ offset: 25 })
-    )
+    expect(router.setParams).toHaveBeenLastCalledWith({
+      status: undefined,
+      trigger: undefined,
+      offset: '25',
+    })
     fireEvent.click(screen.getByText('pick Failed'))
-    expect(queries.useUpgradeHistory).toHaveBeenLastCalledWith(
-      expect.objectContaining({ offset: 0, status: 'failed' })
-    )
+    expect(router.setParams).toHaveBeenLastCalledWith({
+      status: 'failed',
+      trigger: undefined,
+      offset: undefined,
+    })
     fireEvent.click(screen.getByText('Manual'))
-    expect(queries.useUpgradeHistory).toHaveBeenLastCalledWith(
+    expect(router.setParams).toHaveBeenLastCalledWith(
       expect.objectContaining({ trigger: 'manual' })
     )
+  })
+
+  it('restores the view from a deep link', () => {
+    router.params = { status: 'failed', trigger: 'automatic', offset: '50' }
+    queries.useUpgradeHistory.mockReturnValue({ data: { ok: true, runs: [RUN], total: 80 } })
+    render(<UpdateHistoryScreen />)
+    expect(queries.useUpgradeHistory).toHaveBeenLastCalledWith({
+      offset: 50,
+      limit: 25,
+      status: 'failed',
+      trigger: 'automatic',
+    })
+    expect(screen.getByText('Showing 51–51 of 80')).toBeTruthy()
+  })
+
+  it('shows only the error when the first page fails to load', () => {
+    queries.useUpgradeHistory.mockReturnValue({
+      data: undefined,
+      isError: true,
+      error: new Error('HTTP 500: boom'),
+    })
+    render(<UpdateHistoryScreen />)
+    expect(screen.queryByText('No updates match these filters.')).toBeNull()
   })
 
   it('opens the run screen from a row', () => {
@@ -277,18 +322,61 @@ describe('UpdateRunScreen', () => {
     expect(screen.getByText('Failed (1)')).toBeTruthy()
   })
 
-  it('sends status, organization, search and sort to the control plane', () => {
+  it('writes status, organization and sort to the URL', () => {
     queries.useUpgradeRunServers.mockReturnValue({ data: serversPage(), isFetching: false })
     render(<UpdateRunScreen runId="run-1" />)
     expect(lastServersQuery()).toEqual(
       expect.objectContaining({ offset: 0, limit: 50, sort: 'status', dir: 'asc' })
     )
     fireEvent.click(screen.getByText('Failed (1)'))
-    expect(lastServersQuery()).toEqual(expect.objectContaining({ status: 'failed' }))
+    expect(router.setParams).toHaveBeenLastCalledWith(
+      expect.objectContaining({ status: 'failed', offset: undefined })
+    )
     fireEvent.click(screen.getByText('pick Acme'))
-    expect(lastServersQuery()).toEqual(expect.objectContaining({ organizationId: 'org-1' }))
+    expect(router.setParams).toHaveBeenLastCalledWith(expect.objectContaining({ org: 'org-1' }))
     fireEvent.click(screen.getByRole('button', { name: 'Sort by Duration' }))
-    expect(lastServersQuery()).toEqual(expect.objectContaining({ sort: 'duration', dir: 'desc' }))
+    expect(router.setParams).toHaveBeenLastCalledWith(
+      expect.objectContaining({ sort: 'duration', dir: 'desc' })
+    )
+  })
+
+  it('restores status, organization, search, sort and page from a deep link', () => {
+    router.params = {
+      status: 'failed',
+      org: 'org-1',
+      q: 'web',
+      sort: 'duration',
+      dir: 'desc',
+      offset: '100',
+    }
+    queries.useUpgradeRunServers.mockReturnValue({ data: serversPage(), isFetching: false })
+    render(<UpdateRunScreen runId="run-1" />)
+    expect(lastServersQuery()).toEqual({
+      offset: 100,
+      limit: 50,
+      sort: 'duration',
+      dir: 'desc',
+      status: 'failed',
+      organizationId: 'org-1',
+      q: 'web',
+    })
+    expect(screen.getByLabelText('Search')).toHaveProperty('value', 'web')
+    expect(screen.getByRole('button', { name: 'Sort by Duration, sorted descending' })).toBeTruthy()
+  })
+
+  it('waits for typing to stop before writing the search to the URL', () => {
+    vi.useFakeTimers()
+    queries.useUpgradeRunServers.mockReturnValue({ data: serversPage(), isFetching: false })
+    render(<UpdateRunScreen runId="run-1" />)
+    fireEvent.change(screen.getByLabelText('Search'), { target: { value: 'web' } })
+    act(() => {
+      vi.advanceTimersByTime(200)
+    })
+    expect(router.setParams).not.toHaveBeenCalled()
+    act(() => {
+      vi.advanceTimersByTime(150)
+    })
+    expect(router.setParams).toHaveBeenCalledWith({ q: 'web', offset: undefined })
   })
 
   it('links each server to its page and its update log', () => {
@@ -296,6 +384,13 @@ describe('UpdateRunScreen', () => {
     render(<UpdateRunScreen runId="run-1" />)
     fireEvent.click(screen.getByText('Update log'))
     expect(push).toHaveBeenCalledWith(`/admin/updates/runs/run-1/servers/${SERVER.serverId}`)
+    router.params = { status: 'failed', sort: 'duration', dir: 'desc', offset: '100' }
+    cleanup()
+    render(<UpdateRunScreen runId="run-1" />)
+    fireEvent.click(screen.getByText('Update log'))
+    expect(push).toHaveBeenLastCalledWith(
+      `/admin/updates/runs/run-1/servers/${SERVER.serverId}?status=failed&sort=duration&dir=desc&offset=100`
+    )
     fireEvent.click(screen.getByText('Server page'))
     expect(push).toHaveBeenCalledWith(`/org-1/servers/${SERVER.serverId}`)
   })
@@ -322,6 +417,14 @@ describe('UpdateRunScreen', () => {
     render(<UpdateRunScreen runId="run-1" />)
     expect(screen.getByText(/removed after the retention window/)).toBeTruthy()
     expect(screen.getByText('No servers match these filters.')).toBeTruthy()
+  })
+})
+
+describe('sortHeaderLabel', () => {
+  it('says which way the active column is sorted', () => {
+    expect(sortHeaderLabel('Duration', false, 'asc')).toBe('Sort by Duration')
+    expect(sortHeaderLabel('Duration', true, 'asc')).toBe('Sort by Duration, sorted ascending')
+    expect(sortHeaderLabel('Duration', true, 'desc')).toBe('Sort by Duration, sorted descending')
   })
 })
 
@@ -357,6 +460,30 @@ describe('ServerUpdateLogScreen', () => {
     expect(screen.getByText(/daemon came back/)).toBeTruthy()
     fireEvent.click(screen.getByText('Back to Update Run'))
     expect(push).toHaveBeenCalledWith('/admin/updates/runs/run-1')
+  })
+
+  it('goes back to the exact run view, or opens it with the same filters', () => {
+    router.params = { status: 'failed', sort: 'duration', dir: 'desc', offset: '100' }
+    queries.useUpgradeRunServers.mockReturnValue({ data: serversPage() })
+    render(<ServerUpdateLogScreen runId="run-1" serverId={SERVER.serverId} />)
+    fireEvent.click(screen.getByText('Back to Update Run'))
+    expect(push).toHaveBeenCalledWith(
+      '/admin/updates/runs/run-1?status=failed&sort=duration&dir=desc&offset=100'
+    )
+    router.canGoBack.mockReturnValue(true)
+    fireEvent.click(screen.getByText('Back to Update Run'))
+    expect(router.back).toHaveBeenCalledTimes(1)
+    expect(push).toHaveBeenCalledTimes(1)
+  })
+
+  it('names a refused server id instead of a raw error', () => {
+    queries.useUpgradeRunServers.mockReturnValue({
+      data: undefined,
+      isError: true,
+      error: new Error('HTTP 400: invalid_filter'),
+    })
+    render(<ServerUpdateLogScreen runId="run-1" serverId="not-a-uuid" />)
+    expect(screen.getByText(/does not accept/)).toBeTruthy()
   })
 
   it('reads a component that was already current as such, never as an update', () => {

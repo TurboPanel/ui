@@ -1,7 +1,7 @@
-import { useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
-import { useRouter, type Href } from 'expo-router'
+import { useLocalSearchParams, useRouter, type Href } from 'expo-router'
 import { HistoryPager } from '@/components/admin/updates/history-pager'
+import { useBackOr } from '@/components/admin/updates/use-back-or'
 import {
   Badge,
   DataTable,
@@ -23,6 +23,7 @@ import { colors, spacing } from '@/lib/theme'
 import {
   countCellText,
   durationText,
+  historyLoadError,
   RUN_STATUS_FILTERS,
   RUN_TRIGGER_FILTERS,
   updateRunHref,
@@ -32,9 +33,12 @@ import {
   upgradeStartedByLabel,
   upgradeTriggerLabel,
   type RunStatusFilter,
-  type RunTriggerFilter,
 } from '@/lib/upgrade-history-display'
-import { userErrorMessage } from '@/lib/user-error'
+import {
+  historyParamsToUrl,
+  readHistoryParams,
+  type HistoryView,
+} from '@/lib/upgrade-history-params'
 
 export const UPDATE_HISTORY_PAGE_SIZE = 25
 
@@ -119,21 +123,24 @@ function RunHistoryRow({
  */
 export function UpdateHistoryScreen() {
   const router = useRouter()
-  const [status, setStatus] = useState<RunStatusFilter>('any')
-  const [trigger, setTrigger] = useState<RunTriggerFilter>('')
-  const [offset, setOffset] = useState(0)
+  const view = readHistoryParams(useLocalSearchParams())
+  const back = useBackOr('/admin/updates')
+  const update = (next: Partial<HistoryView>) => {
+    router.setParams(historyParamsToUrl({ ...view, ...next }))
+  }
   const history = useUpgradeHistory({
-    offset,
+    offset: view.offset,
     limit: UPDATE_HISTORY_PAGE_SIZE,
-    status,
-    trigger,
+    status: view.status,
+    trigger: view.trigger,
   })
   const runs = history.data?.runs ?? []
   const total = history.data?.total ?? 0
+  const failedEmpty = history.isError && runs.length === 0
 
   return (
     <View style={styles.root}>
-      <TextLink label="Back to Updates" size="sm" onPress={() => router.push('/admin/updates')} />
+      <TextLink label="Back to Updates" size="sm" onPress={back} />
       <SectionPanel
         title="Update History"
         hint="Every update run, newest first. Open one to see each server."
@@ -141,55 +148,51 @@ export function UpdateHistoryScreen() {
         <View style={styles.filters}>
           <View style={styles.statusFilter}>
             <Select
-              value={status}
+              value={view.status}
               options={RUN_STATUS_FILTERS}
               placeholder="Status"
               accessibilityLabel="Filter by status"
-              onChange={(next) => {
-                setStatus((next ?? 'any') as RunStatusFilter)
-                setOffset(0)
-              }}
+              onChange={(next) => update({ status: (next ?? 'any') as RunStatusFilter, offset: 0 })}
             />
           </View>
           <SegmentedControl
             options={RUN_TRIGGER_FILTERS}
-            value={trigger}
+            value={view.trigger}
             accessibilityLabel="Filter by trigger"
-            onChange={(next) => {
-              setTrigger(next)
-              setOffset(0)
-            }}
+            onChange={(trigger) => update({ trigger, offset: 0 })}
           />
         </View>
         {history.isError ? (
           <InlineNotice
             tone="warning"
-            title={userErrorMessage(history.error, 'Update History could not be loaded')}
+            title={historyLoadError(history.error, 'Update History could not be loaded')}
           />
         ) : null}
-        <DataTable columns={COLUMNS} minWidth={1180}>
-          {runs.length === 0 ? (
-            <DataTableEmpty>
-              {history.isLoading ? 'Loading updates…' : 'No updates match these filters.'}
-            </DataTableEmpty>
-          ) : (
-            runs.map((run, index) => (
-              <RunHistoryRow
-                key={run.id}
-                run={run}
-                index={index}
-                last={index === runs.length - 1}
-                onOpen={() => router.push(updateRunHref(run.id) as Href)}
-              />
-            ))
-          )}
-        </DataTable>
+        {failedEmpty ? null : (
+          <DataTable columns={COLUMNS} minWidth={1180}>
+            {runs.length === 0 ? (
+              <DataTableEmpty>
+                {history.isLoading ? 'Loading updates…' : 'No updates match these filters.'}
+              </DataTableEmpty>
+            ) : (
+              runs.map((run, index) => (
+                <RunHistoryRow
+                  key={run.id}
+                  run={run}
+                  index={index}
+                  last={index === runs.length - 1}
+                  onOpen={() => router.push(updateRunHref(run.id) as Href)}
+                />
+              ))
+            )}
+          </DataTable>
+        )}
         <HistoryPager
-          offset={offset}
+          offset={view.offset}
           pageSize={UPDATE_HISTORY_PAGE_SIZE}
           shown={runs.length}
           total={total}
-          onOffsetChange={setOffset}
+          onOffsetChange={(offset) => update({ offset })}
         />
       </SectionPanel>
     </View>

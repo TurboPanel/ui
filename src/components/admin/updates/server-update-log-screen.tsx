@@ -1,5 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native'
-import { useRouter, type Href } from 'expo-router'
+import { useLocalSearchParams, useRouter, type Href } from 'expo-router'
+import { useBackOr } from '@/components/admin/updates/use-back-or'
 import {
   Badge,
   InlineNotice,
@@ -28,13 +29,15 @@ import {
   durationText,
   EMPTY_CELL,
   heartbeatText,
+  historyLoadError,
   serverChangeText,
   serverPageHref,
   updateRunHref,
   upgradeServerOutcomeBadge,
   upgradeUnitLabel,
 } from '@/lib/upgrade-history-display'
-import { plainStepFailureMessage, userErrorMessage } from '@/lib/user-error'
+import { readRunServerParams, runServerParamsToUrl, withQuery } from '@/lib/upgrade-history-params'
+import { plainStepFailureMessage } from '@/lib/user-error'
 
 function timeText(iso: string | null | undefined): string {
   return formatLocalDateTime(iso ?? null, { includeSeconds: false })
@@ -112,6 +115,10 @@ export function ServerUpdateLogScreen({
   serverId,
 }: Readonly<{ runId: string; serverId: string }>) {
   const router = useRouter()
+  // The run screen's view rides along in this screen's URL, so "Back" lands on
+  // the same filters, sort and page even when the log was opened directly.
+  const runView = readRunServerParams(useLocalSearchParams())
+  const back = useBackOr(withQuery(updateRunHref(runId), runServerParamsToUrl(runView)))
   const query = useUpgradeRunServers(runId, { serverId, limit: 1 })
   const page = query.data
   const row = page?.servers.find((entry) => entry.serverId === serverId) ?? null
@@ -121,11 +128,7 @@ export function ServerUpdateLogScreen({
   return (
     <View style={styles.root}>
       <View style={styles.links}>
-        <TextLink
-          label="Back to Update Run"
-          size="sm"
-          onPress={() => router.push(updateRunHref(runId) as Href)}
-        />
+        <TextLink label="Back to Update Run" size="sm" onPress={back} />
         {serverHref ? (
           <TextLink label="Server page" size="sm" onPress={() => router.push(serverHref as Href)} />
         ) : null}
@@ -134,7 +137,7 @@ export function ServerUpdateLogScreen({
       {query.isError ? (
         <InlineNotice
           tone="warning"
-          title={userErrorMessage(query.error, 'This update log could not be loaded')}
+          title={historyLoadError(query.error, 'This update log could not be loaded')}
         />
       ) : null}
       {page && !row ? (

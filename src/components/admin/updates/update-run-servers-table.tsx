@@ -31,9 +31,8 @@ import {
   upgradeTriggerLabel,
   upgradeUnitLabel,
 } from '@/lib/upgrade-history-display'
+import type { SortDir } from '@/lib/upgrade-history-params'
 import { plainStepFailureMessage } from '@/lib/user-error'
-
-export type SortDir = 'asc' | 'desc'
 
 /** Column key → the sort the control plane accepts for it. */
 const SORTABLE: Readonly<Record<string, UpgradeRunServerSort>> = {
@@ -102,6 +101,12 @@ function sortArrow(dir: SortDir): string {
   return dir === 'asc' ? ' ↑' : ' ↓'
 }
 
+/** "Sort by Duration", plus which way it is sorted now when this is the active column. */
+export function sortHeaderLabel(header: string, active: boolean, dir: SortDir): string {
+  if (!active) return `Sort by ${header}`
+  return `Sort by ${header}, sorted ${dir === 'asc' ? 'ascending' : 'descending'}`
+}
+
 function SortableHeader({
   column,
   sort,
@@ -119,7 +124,7 @@ function SortableHeader({
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`Sort by ${column.header}`}
+      accessibilityLabel={sortHeaderLabel(column.header, active, dir)}
       accessibilityState={{ selected: active }}
       onPress={() => onSort(key)}
       style={webPointer}

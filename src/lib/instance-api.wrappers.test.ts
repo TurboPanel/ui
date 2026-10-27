@@ -14,7 +14,6 @@ import {
   saveOrgComposeRemoteBuildSources,
   fetchUnreadNotificationCount,
   fetchUpgradeHistory,
-  fetchUpgradeRun,
   fetchUpgradeRunServers,
   fetchUpgradeServersPage,
   fetchUpgradeSettings,
@@ -81,25 +80,22 @@ describe('instance-api upgrade, notification and compose-gated-field wrappers', 
     fetchMock.mockImplementation(() =>
       Promise.resolve(jsonResponse({ ok: true, runs: [], servers: [], total: 0 }))
     )
-    await fetchUpgradeRun('run/1')
-    expect(urlOf(0)).toContain('/instance/updates/runs/run%2F1')
-
     await fetchUpgradeHistory()
-    expect(urlOf(1)).toMatch(/\/instance\/updates\/history$/)
+    expect(urlOf(0)).toMatch(/\/instance\/updates\/history$/)
     await fetchUpgradeHistory({ offset: 8, limit: 4 })
-    expect(urlOf(2)).toContain('/instance/updates/history?offset=8&limit=4')
+    expect(urlOf(1)).toContain('/instance/updates/history?offset=8&limit=4')
 
     await fetchUpgradeServersPage()
-    expect(urlOf(3)).toMatch(/\/instance\/updates\/servers$/)
+    expect(urlOf(2)).toMatch(/\/instance\/updates\/servers$/)
     await fetchUpgradeServersPage({ offset: 0, limit: 25, status: 'needs_attention' })
-    expect(urlOf(4)).toContain('/instance/updates/servers?offset=0&limit=25&status=needs_attention')
+    expect(urlOf(3)).toContain('/instance/updates/servers?offset=0&limit=25&status=needs_attention')
 
     await fetchUpgradeHistory({ offset: 0, limit: 25, status: 'any', trigger: 'automatic' })
-    expect(urlOf(5)).toContain(
+    expect(urlOf(4)).toContain(
       '/instance/updates/history?offset=0&limit=25&status=any&trigger=automatic'
     )
     await fetchUpgradeHistory({ offset: 0, limit: 25, status: '', trigger: '' })
-    expect(urlOf(6)).toMatch(/\/instance\/updates\/history\?offset=0&limit=25$/)
+    expect(urlOf(5)).toMatch(/\/instance\/updates\/history\?offset=0&limit=25$/)
   })
 
   it('a run server page sends only the filters that are set', async () => {

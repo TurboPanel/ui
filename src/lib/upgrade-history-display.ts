@@ -9,7 +9,10 @@ import type {
   UpgradeRunUnit,
   UpgradeServerOutcome,
 } from '@/lib/instance-api'
+import { isHttpStatusError } from '@/lib/fetch-error-detail'
 import { formatDurationSeconds } from '@/lib/format-metrics'
+import { isUpgradeRunActive } from '@/lib/upgrade-run-poll'
+import { userErrorMessage } from '@/lib/user-error'
 import type { UpgradeRunStatus } from '@/lib/upgrade-vocabulary'
 
 /** What the update history and run screens show for an empty value. */
@@ -74,12 +77,18 @@ function plural(count: number, one: string, many: string): string {
 }
 
 /** "2 skipped, 1 failed" from the non-zero parts, or null when every part is zero. */
-function leftOverParts(summary: UpgradeRunSummary): string | null {
+function leftOverParts(summary: UpgradeRunSummary, withInProgress = true): string | null {
   const parts: string[] = []
   if (summary.failed > 0) parts.push(`${summary.failed} failed`)
   if (summary.skipped > 0) parts.push(`${summary.skipped} skipped`)
-  if (summary.inProgress > 0) parts.push(`${summary.inProgress} in progress`)
+  if (withInProgress && summary.inProgress > 0) parts.push(`${summary.inProgress} in progress`)
   return parts.length > 0 ? parts.join(', ') : null
+}
+
+/** A run that is still going and has not updated anything so far: "Nothing updated yet". */
+function nothingYetResult(summary: UpgradeRunSummary): string {
+  const rest = leftOverParts(summary, false)
+  return rest ? `Nothing updated yet, ${rest}` : 'Nothing updated yet'
 }
 
 /** Result line for a run whose per-server rows were removed after the retention window. */
@@ -108,8 +117,21 @@ export function upgradeRunResultLabel(
     const updated = `${summary.updated} updated`
     return rest ? `${updated}, ${rest}` : updated
   }
+  if (isUpgradeRunActive(run.status)) return nothingYetResult(summary)
   if (rest) return `Nothing updated, ${rest}`
   return 'Already up to date'
+}
+
+/**
+ * Why an update history screen could not load: a run that is gone (404), a
+ * link whose filter or id the control plane refused (400), else the plain error.
+ */
+export function historyLoadError(error: unknown, fallback: string): string {
+  if (isHttpStatusError(error, 404)) return 'This update was not found. It may have been removed.'
+  if (isHttpStatusError(error, 400)) {
+    return 'This link has a filter or id the control plane does not accept.'
+  }
+  return userErrorMessage(error, fallback)
 }
 
 /** A server count cell: the number, or a dash when it is not known. */

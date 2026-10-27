@@ -10,6 +10,7 @@ import {
   durationMsText,
   durationText,
   heartbeatText,
+  historyLoadError,
   serverChangeText,
   serverOutcomeFilterLabel,
   serverPageHref,
@@ -100,6 +101,15 @@ describe('upgradeRunResultLabel', () => {
     expect(
       upgradeRunResultLabel({ status: 'failed', summary: summary({ failed: 1, skipped: 2 }) })
     ).toBe('Nothing updated, 1 failed, 2 skipped')
+  })
+
+  it('says "Nothing updated yet" while a run is still going', () => {
+    expect(upgradeRunResultLabel({ status: 'running', summary: summary({ inProgress: 3 }) })).toBe(
+      'Nothing updated yet'
+    )
+    expect(
+      upgradeRunResultLabel({ status: 'pending', summary: summary({ inProgress: 2, failed: 1 }) })
+    ).toBe('Nothing updated yet, 1 failed')
   })
 
   it('counts updated servers and anything left over', () => {
@@ -259,5 +269,13 @@ describe('hrefs', () => {
     expect(serverUpdateLogHref('r', 's')).toBe('/admin/updates/runs/r/servers/s')
     expect(serverPageHref(ROW)).toBe('/org-1/servers/s-1')
     expect(serverPageHref({ ...ROW, organizationId: null })).toBeNull()
+  })
+})
+
+describe('historyLoadError', () => {
+  it('names a missing run and a refused link, else uses the error', () => {
+    expect(historyLoadError(new Error('HTTP 404: upgrade_run_not_found'), 'x')).toMatch(/not found/)
+    expect(historyLoadError(new Error('HTTP 400: invalid_filter'), 'x')).toMatch(/does not accept/)
+    expect(historyLoadError(null, 'Could not load')).toBe('Could not load')
   })
 })

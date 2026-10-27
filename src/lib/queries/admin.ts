@@ -13,7 +13,6 @@ import {
   fetchInstanceUpdates,
   fetchUpgradeActiveRun,
   fetchUpgradeHistory,
-  fetchUpgradeRun,
   fetchUpgradeRunServers,
   fetchUpgradeServersPage,
   fetchUpgradeSettings,
@@ -571,15 +570,6 @@ export function useSaveUpgradeSettings() {
  * refresh at a calmer pace than the active-run progress panel.
  */
 const UPGRADE_HISTORY_POLL_MS = 5_000
-
-/** One finished (or running) run with every step, fetched when a history row is opened. */
-export function useUpgradeRun(runId: string | null) {
-  return useQuery({
-    queryKey: queryKeys.admin.upgradeRun(runId ?? ''),
-    queryFn: async () => await fetchUpgradeRun(runId ?? ''),
-    enabled: runId !== null,
-  })
-}
 
 export function useUpgradeHistory(
   page: UpgradeHistoryQuery & Readonly<{ offset: number; limit: number }>,
