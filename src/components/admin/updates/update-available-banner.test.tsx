@@ -59,10 +59,10 @@ describe('update banner on a phone-width window', () => {
     env.width = 390
   })
 
-  it('is one line: "Update available · Details", with no detail', () => {
+  it('is one line: "Update available · See Updates", with no detail', () => {
     render(<UpdateAvailableBanner />)
     expect(screen.getByText('Update available ·')).toBeTruthy()
-    expect(screen.getByText('Details')).toBeTruthy()
+    expect(screen.getByText('See Updates')).toBeTruthy()
     expect(screen.queryByText(/installs on its own/)).toBeNull()
     expect(screen.getByText('Update available ·').getAttribute('data-lines')).toBe('1')
   })
@@ -70,7 +70,7 @@ describe('update banner on a phone-width window', () => {
   it('opens Admin > Updates from a 44 pt link', () => {
     render(<UpdateAvailableBanner />)
     const details = screen.getByRole('link', {
-      name: /^Open Admin > Updates\. TurboPanel update available/,
+      name: /^See Updates in Admin > Updates\. TurboPanel update available/,
     })
     expect(styleOf(details).minHeight).toBe(44)
     fireEvent.click(details)

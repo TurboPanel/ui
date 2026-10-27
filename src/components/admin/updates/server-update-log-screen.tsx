@@ -20,6 +20,7 @@ import { useUpgradeRunServers } from '@/lib/queries/admin'
 import { colors, spacing } from '@/lib/theme'
 import {
   upgradeServerLabel,
+  stepMessageText,
   upgradeStepErrorLabel,
   upgradeStepNote,
   upgradeStepOutcome,
@@ -37,7 +38,6 @@ import {
   upgradeUnitLabel,
 } from '@/lib/upgrade-history-display'
 import { readRunServerParams, runServerParamsToUrl, withQuery } from '@/lib/upgrade-history-params'
-import { plainStepFailureMessage } from '@/lib/user-error'
 
 function timeText(iso: string | null | undefined): string {
   return formatLocalDateTime(iso ?? null, { includeSeconds: false })
@@ -54,11 +54,7 @@ function Line({ label, value }: Readonly<{ label: string; value: string }>) {
 
 /** Why a component ended badly (or was skipped), in plain words; null when nothing went wrong. */
 export function componentReason(component: UpgradeRunServerComponent): string | null {
-  return (
-    plainStepFailureMessage(component.errorMessage) ??
-    upgradeStepErrorLabel(component.errorCode) ??
-    null
-  )
+  return stepMessageText(component) ?? upgradeStepErrorLabel(component.errorCode) ?? null
 }
 
 /** One component's part of this server's update: how it ended, when, and why. */

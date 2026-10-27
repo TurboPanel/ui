@@ -1,5 +1,5 @@
-import { useMemo, useState, type ReactNode } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { StyleSheet, Text, useWindowDimensions, View } from 'react-native'
 import { readConsoleBuild } from '@/components/admin/updates/console-build'
 import { Button, ConfirmButton, SectionPanel, StatusDot } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
@@ -8,7 +8,7 @@ import { useCheckForUpdates, usePauseUpdates, useResumeUpdates } from '@/lib/que
 import {
   CHECK_NOW_HELP,
   checkCadence,
-  checkNowErrorText,
+  checkNowRefusal,
   lastCheckedText,
   nextCheckText,
   PAUSE_UPDATES_PROMPT,
@@ -17,7 +17,7 @@ import {
 } from '@/lib/update-automation'
 import { platformUpgradeHeadlineCopy, type PlatformUpgradeHeadline } from '@/lib/upgrade-display'
 import { failedRunMessage } from '@/lib/user-error'
-import { colors, spacing } from '@/lib/theme'
+import { colors, layout, spacing } from '@/lib/theme'
 
 function headlineTone(headline: PlatformUpgradeHeadline) {
   switch (headline) {
@@ -34,36 +34,30 @@ function headlineTone(headline: PlatformUpgradeHeadline) {
 
 /**
  * Check Now: a refresh only (fresh manifests into the status), never a start.
- * A refusal, such as a second check within a minute, is said under the button
- * and the button stays usable.
+ * A refusal is said in the card; a check too soon after the last one says
+ * when to try again and clears once that time has passed. The button stays
+ * usable either way.
  */
-function CheckNowControl() {
+function useCheckNow() {
   const consoleCommit = useMemo(() => readConsoleBuild()?.commit, [])
   const check = useCheckForUpdates(consoleCommit)
-  const [error, setError] = useState<string | null>(null)
+  const [refusal, setRefusal] = useState<ReturnType<typeof checkNowRefusal> | null>(null)
+  useEffect(() => {
+    if (refusal?.clearAfterMs == null) return undefined
+    const timer = setTimeout(() => setRefusal(null), refusal.clearAfterMs)
+    return () => clearTimeout(timer)
+  }, [refusal])
   const run = async () => {
-    setError(null)
+    setRefusal(null)
     const result = await check.run(undefined)
-    if (!result.ok) setError(checkNowErrorText(result.cause ?? new Error(result.error ?? '')))
+    if (!result.ok) setRefusal(checkNowRefusal(result.cause ?? new Error(result.error ?? '')))
   }
-  return (
-    <View style={styles.control}>
-      <Button
-        label="Check Now"
-        variant="secondary"
-        busy={check.isPending}
-        onPress={() => {
-          void run()
-        }}
-      />
-      {error ? <Text style={panelStyles.error}>{error}</Text> : null}
-    </View>
-  )
+  return { busy: check.isPending, error: refusal?.text ?? null, run }
 }
 
 /**
  * Pause All Updates / Resume Updates. Both refetch the update status on success
- * (`usePauseUpdates` / `useResumeUpdates`); a refusal is said beside the button.
+ * (`usePauseUpdates` / `useResumeUpdates`); a refusal is said in the card.
  */
 function usePauseControl(paused: boolean) {
   const pause = usePauseUpdates()
@@ -81,32 +75,50 @@ function usePauseControl(paused: boolean) {
   return { busy: pause.isPending || resume.isPending, error, toggle }
 }
 
-function PauseControl({ data }: Readonly<{ data: InstanceUpdates }>) {
+function StatusControls({
+  data,
+  check,
+  pause,
+  narrow,
+}: Readonly<{
+  data: InstanceUpdates
+  check: ReturnType<typeof useCheckNow>
+  pause: ReturnType<typeof usePauseControl>
+  narrow: boolean
+}>) {
   const paused = data.updatesPaused === true
-  const control = usePauseControl(paused)
   return (
-    <View style={styles.control}>
+    <View style={narrow ? styles.controlsNarrow : styles.controls}>
+      <Button
+        label="Check Now"
+        variant="secondary"
+        busy={check.busy}
+        onPress={() => {
+          void check.run()
+        }}
+      />
       <ConfirmButton
         label={paused ? 'Resume Updates' : 'Pause All Updates'}
-        confirmLabel={paused ? 'Yes, Resume Updates' : 'Yes, Pause All Updates'}
+        confirmLabel={paused ? 'Yes, Resume' : 'Yes, Pause'}
         dismissLabel="Cancel"
         prompt={paused ? resumeUpdatesPrompt(data.nextCheckAt) : PAUSE_UPDATES_PROMPT}
         variant="secondary"
-        busy={control.busy}
+        busy={pause.busy}
         onConfirm={() => {
-          void control.toggle()
+          void pause.toggle()
         }}
       />
-      {control.error ? <Text style={panelStyles.error}>{control.error}</Text> : null}
     </View>
   )
 }
 
 /**
  * The Status card of Admin > Updates, on both editions: where updates stand
- * (up to date, waiting, updating, paused), what waits, when the next hourly
- * check runs, and the controls: Check Now (a refresh only) and Pause All
- * Updates / Resume Updates.
+ * (up to date, waiting, updating, paused), what waits, the last and next
+ * check, and the controls: Check Now (a refresh only) and Pause All Updates /
+ * Resume Updates. On a wide window the controls sit in the card header; on a
+ * phone-width one they move into the card body, under the text, so the
+ * confirmation and any message have the card's full width.
  */
 export function UpdatesStatusPanel({
   data,
@@ -121,19 +133,15 @@ export function UpdatesStatusPanel({
   /** Extra facts under the headline (the channel badge on self-hosted). */
   children?: ReactNode
 }>) {
+  const narrow = useWindowDimensions().width < layout.desktopBreakpoint
+  const check = useCheckNow()
+  const pause = usePauseControl(data.updatesPaused === true)
   const paused = pausedSinceText(data)
   const nextCheck = data.updatesPaused === true ? null : nextCheckText(data.nextCheckAt)
   const lastChecked = lastCheckedText(data.lastCheckAt)
+  const controls = <StatusControls data={data} check={check} pause={pause} narrow={narrow} />
   return (
-    <SectionPanel
-      title="Status"
-      headerRight={
-        <View style={styles.controls}>
-          <CheckNowControl />
-          <PauseControl data={data} />
-        </View>
-      }
-    >
+    <SectionPanel title="Status" headerRight={narrow ? undefined : controls}>
       <View style={styles.text}>
         <View style={styles.headlineRow}>
           <StatusDot tone={headlineTone(headline)} />
@@ -148,6 +156,9 @@ export function UpdatesStatusPanel({
         {nextCheck ? <Text style={panelStyles.muted}>{nextCheck}</Text> : null}
         <Text style={panelStyles.muted}>{CHECK_NOW_HELP}</Text>
         {children}
+        {narrow ? controls : null}
+        {check.error ? <Text style={panelStyles.error}>{check.error}</Text> : null}
+        {pause.error ? <Text style={panelStyles.error}>{pause.error}</Text> : null}
       </View>
     </SectionPanel>
   )
@@ -157,13 +168,15 @@ const styles = StyleSheet.create({
   controls: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'flex-end',
     gap: spacing.sm,
   },
-  control: {
-    alignItems: 'flex-end',
-    gap: spacing.xs,
+  controlsNarrow: {
+    width: '100%',
+    alignItems: 'stretch',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
   },
   headline: {
     fontSize: 20,
@@ -177,6 +190,7 @@ const styles = StyleSheet.create({
   },
   text: {
     flexShrink: 1,
+    minWidth: 0,
     gap: spacing.xs,
   },
 })

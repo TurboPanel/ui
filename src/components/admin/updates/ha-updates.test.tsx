@@ -194,7 +194,7 @@ describe('HighAvailabilityUpdates', () => {
 
   it('names what waits when a connected daemon is behind', () => {
     render(<HighAvailabilityUpdates data={{ ...DATA, daemonsBehind: true, updateWaiting: true }} />)
-    expect(screen.getByText('Update waiting')).toBeTruthy()
+    expect(screen.getByText('Update Waiting')).toBeTruthy()
     expect(
       screen.getByText(
         'Waiting to update: the daemon on some servers. It starts on its own at the next check.'
@@ -218,7 +218,7 @@ describe('HighAvailabilityUpdates', () => {
     expect(
       screen.getByText(/An update in progress finishes the servers it is updating, then stops/)
     ).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Yes, Pause All Updates' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, Pause' }))
     await waitFor(() => {
       expect(pauseRun).toHaveBeenCalledTimes(1)
     })
@@ -227,7 +227,7 @@ describe('HighAvailabilityUpdates', () => {
 
   it('shows who paused updates and since when, and resumes at the next check', async () => {
     render(<HighAvailabilityUpdates data={PAUSED} />)
-    expect(screen.getByText('Updates paused')).toBeTruthy()
+    expect(screen.getByText('Updates Paused')).toBeTruthy()
     expect(
       screen.getByText('Updates paused since <2026-10-27T09:30:00.000Z> by Dana Ops')
     ).toBeTruthy()
@@ -237,7 +237,7 @@ describe('HighAvailabilityUpdates', () => {
         'Resume updates? They start again at the next check (<2026-10-27T11:17:00.000Z>).'
       )
     ).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Yes, Resume Updates' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, Resume' }))
     await waitFor(() => {
       expect(resumeRun).toHaveBeenCalledTimes(1)
     })
@@ -259,7 +259,7 @@ describe('HighAvailabilityUpdates', () => {
   it('says a refused pause beside the button', async () => {
     pauseRun.mockResolvedValueOnce({ ok: false, error: 'Only instance admins can pause updates' })
     render(<HighAvailabilityUpdates data={DATA} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Yes, Pause All Updates' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, Pause' }))
     expect(await screen.findByText('Only instance admins can pause updates')).toBeTruthy()
   })
 

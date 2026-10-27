@@ -101,7 +101,7 @@ function ComponentsPanel({
         installedLabel={
           daemon.installed
             ? installedBuildLabel(daemon.installed, daemon.target, hideCommit)
-            : 'Not connected'
+            : 'Not Connected'
         }
         updateAvailable={daemon.connected ? unitUpdateAvailable(daemon) : null}
         running={daemon.installed}

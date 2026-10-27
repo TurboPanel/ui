@@ -3,7 +3,7 @@ import { UpdateCheckTooSoonError } from './instance-api'
 import {
   CHECK_NOW_HELP,
   checkCadence,
-  checkNowErrorText,
+  checkNowRefusal,
   formatUpdateTime,
   lastCheckedText,
   isUpdateWaiting,
@@ -136,17 +136,22 @@ describe('Check Now words', () => {
     )
   })
 
-  it('says when to try again after a check too soon', () => {
-    expect(checkNowErrorText(new UpdateCheckTooSoonError('x', 42))).toBe(
-      'Checked a moment ago. Try again in 42 seconds.'
-    )
-    expect(checkNowErrorText(new UpdateCheckTooSoonError('x', 0.4))).toBe(
-      'Checked a moment ago. Try again in 1 second.'
-    )
+  it('says when to try again after a check too soon, and clears after the wait', () => {
+    expect(checkNowRefusal(new UpdateCheckTooSoonError('x', 42))).toEqual({
+      text: 'Checked a moment ago. Try again in 42 seconds.',
+      clearAfterMs: 42_000,
+    })
+    expect(checkNowRefusal(new UpdateCheckTooSoonError('x', 0.4))).toEqual({
+      text: 'Checked a moment ago. Try again in 1 second.',
+      clearAfterMs: 1000,
+    })
   })
 
-  it('falls back to the plain error for anything else', () => {
-    expect(checkNowErrorText(new Error('HTTP 500'))).toBeTruthy()
-    expect(checkNowErrorText(null)).toBe('Could not check for updates')
+  it('falls back to the plain error for anything else, which stays', () => {
+    expect(checkNowRefusal(new Error('HTTP 500')).clearAfterMs).toBeNull()
+    expect(checkNowRefusal(null)).toEqual({
+      text: 'Could not check for updates',
+      clearAfterMs: null,
+    })
   })
 })

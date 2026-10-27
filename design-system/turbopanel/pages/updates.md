@@ -15,17 +15,18 @@
 
 ## Both editions: Status card (`updates-status-panel.tsx`)
 
-- Headline with `StatusDot`: `TurboPanel is up to date` / `Update waiting` / `Updating…` / `Needs attention` / `Updates paused` (paused leads).
+- Headline with `StatusDot`: `TurboPanel is up to date` / `Update Waiting` / `Updating…` / `Needs Attention` / `Updates Paused` (paused leads). Status labels use one spelling in title case, the same in filters and badges (`Needs Attention`, `Up to Date`).
 - Paused: "Updates paused since <local time> by <name>" (email, then "an administrator").
 - What waits ("Waiting to update: control plane v…, and the daemon on some servers. It starts on its own at the next check.") and "Next check: <local time>" while not paused.
 - "Last checked <local time>", and under it: "Check Now only looks for new builds. The next scheduled check starts the update."
+- On a phone-width window (below `layout.desktopBreakpoint`) the two controls leave the header and sit full width in the card body, under the text, so the armed confirmation and any message have room. Messages from either control always show in the body; a "Checked a moment ago" line clears once its wait has passed.
 - Header actions: **Check Now** (`Button`; a second check within a minute says "Checked a moment ago. Try again in N seconds." under it and stays usable) and `ConfirmButton` **Pause All Updates** (prompt: a run in progress finishes the servers it is updating, then stops) or **Resume Updates** (prompt: updates start again at the next check, with its time). A refusal shows beside the button.
 
 ## Self-hosted
 
 1. **Status card** (above) plus the channel badge.
 2. **Build names** — `Canary · Sep 19, 14:30` with version/commit behind **Details**.
-3. **Step indicator** — `WizardSteps`: Preparing → Downloading → Installing → Restarting → Verifying → Done for co-located daemon, then control plane, then fleet summary + paged `DataTable` (status, version, step, error). No Retry or Cancel: failed servers are retried on their own.
+3. **Step indicator** — `WizardSteps`: Preparing → Downloading → Installing → Restarting → Verifying → Done for co-located daemon, then control plane, then fleet summary + paged `DataTable` (status, version, step, error; the pager sits under the table). No Retry or Cancel: failed servers are retried on their own, shown as **Tries Again Later** with "Tries again at <local time>".
 4. **Update history** — who or what started it, when, result; **See all** opens **Update History**, each run opens **Update Run**.
 5. **Servers Updated at Once** — percent or count (default 100%); the next group starts on a later check once every server in this one has finished or failed.
 

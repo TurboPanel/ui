@@ -60,7 +60,7 @@ export function useUpdateAvailable(): Readonly<{
  * "Update available: control plane v0.1.5-canary.1" across the top of the app.
  * Updates install on their own, so it only says so and links to Admin >
  * Updates. On a phone-width window it is one line, "Update available ·
- * Details", so it never takes a third of the screen. On a wide window one line
+ * See Updates", so it never takes a third of the screen. On a wide window one line
  * of title and at most two of detail.
  */
 export function UpdateAvailableBanner() {
@@ -90,8 +90,8 @@ export function UpdateAvailableBanner() {
             Update available ·
           </Text>
           <TextLink
-            label="Details"
-            accessibilityLabel={`Open Admin > Updates. ${banner.title}`}
+            label="See Updates"
+            accessibilityLabel={`See Updates in Admin > Updates. ${banner.title}`}
             onPress={openUpdates}
           />
           <View style={styles.compactFill} />

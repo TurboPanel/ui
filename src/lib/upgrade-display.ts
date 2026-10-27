@@ -6,6 +6,8 @@ import type {
   UpgradeStepStatus,
 } from '@/lib/upgrade-vocabulary'
 import { UPGRADE_STEP_PIPELINE } from '@/lib/upgrade-vocabulary'
+import { formatLocalDateTime } from '@/lib/format-datetime'
+import { plainStepFailureMessage } from '@/lib/user-error'
 
 const PIPELINE_SET = new Set<string>(UPGRADE_STEP_PIPELINE)
 
@@ -207,6 +209,82 @@ export function upgradeStepNote(
   return note || null
 }
 
+/** A server left out of this update: offline, paused, or failed before and waiting to try again. */
+function skippedOutcome(
+  step: Readonly<{ errorCode?: string | null; errorMessage?: string | null }>,
+  detail: string | null
+): UpgradeStepOutcome {
+  if (step.errorCode === 'server_offline') {
+    const message = step.errorMessage?.trim()
+    return { tone: 'muted', label: 'Skipped: Offline', detail: message || SKIPPED_OFFLINE_DETAIL }
+  }
+  if (step.errorCode === 'retry_later') {
+    return {
+      tone: 'pending',
+      label: 'Tries Again Later',
+      detail: retryLaterText(step.errorMessage),
+    }
+  }
+  if (step.errorCode === 'updates_paused') {
+    return { tone: 'muted', label: 'Skipped: Paused', detail }
+  }
+  return { tone: 'muted', label: 'Skipped', detail }
+}
+
+/** An ISO instant inside a sentence (`… after 2026-10-27T15:40:00.000Z.`). */
+const ISO_INSTANT = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?/
+
+export type LocalTimeOptions = Readonly<{ now?: Date; timeZone?: string }>
+
+function localDayKey(at: Date, timeZone: string | undefined): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    timeZone,
+  }).format(at)
+}
+
+/**
+ * When a server that failed before tries again, in local plain words: "Tries
+ * again at 3:40 PM", with the date when it is not today. The control plane's
+ * sentence carries the time as ISO; the raw sentence is never shown.
+ */
+export function retryLaterText(
+  message: string | null | undefined,
+  options: LocalTimeOptions = {}
+): string {
+  const found = message ? ISO_INSTANT.exec(message) : null
+  const at = found ? new Date(found[0]) : null
+  if (!at || Number.isNaN(at.getTime())) return 'Tries again later'
+  const { now = new Date(), timeZone } = options
+  const time = formatLocalDateTime(at, {
+    includeDate: false,
+    includeSeconds: false,
+    timeZoneName: null,
+    timeZone,
+  })
+  if (localDayKey(at, timeZone) === localDayKey(now, timeZone)) return `Tries again at ${time}`
+  const day = new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    timeZone,
+  }).format(at)
+  return `Tries again on ${day} at ${time}`
+}
+
+/**
+ * The reason line for a step (fleet table, Update Run, server update log): a
+ * server waiting to try again says when, in local time; anything else is the
+ * step's own message in plain words, or null.
+ */
+export function stepMessageText(
+  step: Readonly<{ errorCode?: string | null; errorMessage?: string | null }>
+): string | null {
+  if (step.errorCode?.trim() === 'retry_later') return retryLaterText(step.errorMessage)
+  return plainStepFailureMessage(step.errorMessage)
+}
+
 /**
  * What a step's row says. A failed, rolled-back, or stuck step reads as that —
  * never as the pipeline stage it stopped on.
@@ -222,31 +300,23 @@ export function upgradeStepOutcome(
   switch (step.status) {
     case null:
     case undefined:
-      return { tone: 'muted', label: 'Not started', detail: null }
+      return { tone: 'muted', label: 'Not Started', detail: null }
     case 'done':
       return { tone: 'ok', label: 'Done', detail: null }
     case 'skipped':
-      if (step.errorCode === 'server_offline') {
-        const message = step.errorMessage?.trim()
-        return {
-          tone: 'muted',
-          label: 'Skipped: offline',
-          detail: message || SKIPPED_OFFLINE_DETAIL,
-        }
-      }
-      return { tone: 'muted', label: 'Skipped', detail }
+      return skippedOutcome(step, detail)
     case 'failed':
       return { tone: 'danger', label: 'Failed', detail }
     case 'rolled_back':
-      return { tone: 'danger', label: 'Rolled back', detail }
+      return { tone: 'danger', label: 'Rolled Back', detail }
     case 'needs_attention':
-      return { tone: 'pending', label: 'Needs attention', detail }
+      return { tone: 'pending', label: 'Needs Attention', detail }
     // Not started yet: it is waiting its turn (batch) or for the server to come
     // back online, not preparing anything.
     case 'pending':
       return { tone: 'pending', label: 'Queued', detail: null }
     case 'waiting':
-      return { tone: 'pending', label: 'Waiting for server', detail: null }
+      return { tone: 'pending', label: 'Waiting for Server', detail: null }
     default: {
       const stage = mapStepStatusToPipeline(step.status)
       return {
@@ -268,11 +338,12 @@ export const SKIPPED_OFFLINE_DETAIL =
   'It was offline when the update started. It updates on its own when it reconnects.'
 
 function skippedBadge(errorCode: string | null | undefined): {
-  tone: 'muted'
+  tone: 'muted' | 'pending'
   label: string
 } {
-  if (errorCode === 'server_offline') return { tone: 'muted', label: 'Skipped: offline' }
-  if (errorCode === 'updates_paused') return { tone: 'muted', label: 'Skipped: paused' }
+  if (errorCode === 'server_offline') return { tone: 'muted', label: 'Skipped: Offline' }
+  if (errorCode === 'updates_paused') return { tone: 'muted', label: 'Skipped: Paused' }
+  if (errorCode === 'retry_later') return { tone: 'pending', label: 'Tries Again Later' }
   return { tone: 'muted', label: 'Skipped' }
 }
 
@@ -290,13 +361,11 @@ export function fleetStatusBadge(
     case 'skipped':
       return skippedBadge(errorCode)
     case 'failed':
-      return errorCode === 'retry_later'
-        ? { tone: 'pending', label: 'Tries again later' }
-        : { tone: 'danger', label: 'Failed' }
+      return { tone: 'danger', label: 'Failed' }
     case 'rolled_back':
-      return { tone: 'danger', label: 'Rolled back' }
+      return { tone: 'danger', label: 'Rolled Back' }
     case 'needs_attention':
-      return { tone: 'pending', label: 'Needs attention' }
+      return { tone: 'pending', label: 'Needs Attention' }
     case 'pending':
       return { tone: 'muted', label: 'Waiting' }
     case 'waiting':
@@ -471,9 +540,9 @@ export function updateAvailabilityBadge(
   label: string
 } {
   if (inFlight) return { tone: 'pending', label: 'Updating' }
-  if (updateAvailable === null) return { tone: 'muted', label: 'Not connected' }
-  if (updateAvailable) return { tone: 'pending', label: 'Update available' }
-  return { tone: 'ok', label: 'Up to date' }
+  if (updateAvailable === null) return { tone: 'muted', label: 'Not Connected' }
+  if (updateAvailable) return { tone: 'pending', label: 'Update Waiting' }
+  return { tone: 'ok', label: 'Up to Date' }
 }
 
 /** `a`, `a and b`, `a, b and c`. */
@@ -592,12 +661,12 @@ export function platformUpgradeHeadlineCopy(headline: PlatformUpgradeHeadline): 
     case 'up_to_date':
       return 'TurboPanel is up to date'
     case 'update_available':
-      return 'Update waiting'
+      return 'Update Waiting'
     case 'updating':
       return 'Updating…'
     case 'needs_attention':
-      return 'Needs attention'
+      return 'Needs Attention'
     case 'paused':
-      return 'Updates paused'
+      return 'Updates Paused'
   }
 }

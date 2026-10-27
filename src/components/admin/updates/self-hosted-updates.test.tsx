@@ -150,7 +150,7 @@ describe('SelfHostedUpdates', () => {
 
   it('names what waits and when it starts', () => {
     render(<SelfHostedUpdates data={DATA} />)
-    expect(screen.getByText('Update waiting')).toBeTruthy()
+    expect(screen.getByText('Update Waiting')).toBeTruthy()
     expect(
       screen.getByText(
         'Waiting to update: control plane v1.0.1. It starts on its own at the next check.'
@@ -176,7 +176,7 @@ describe('SelfHostedUpdates', () => {
         }}
       />
     )
-    expect(screen.getByText('Updates paused')).toBeTruthy()
+    expect(screen.getByText('Updates Paused')).toBeTruthy()
     expect(screen.getByText('Updates paused since <2026-10-27T09:30:00.000Z> by Sam')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Resume Updates' })).toBeTruthy()
   })

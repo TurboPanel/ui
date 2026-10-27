@@ -66,13 +66,22 @@ export function checkCadence(checkIntervalMinutes: number | null | undefined): s
 export const CHECK_NOW_HELP =
   'Check Now only looks for new builds. The next scheduled check starts the update.'
 
-/** Why Check Now did not run, in plain words: too soon after the last one, or the error. */
-export function checkNowErrorText(err: unknown): string {
+/**
+ * Why Check Now did not run, in plain words, and when that line should go
+ * away: a check too soon after the last one clears once the wait has passed;
+ * any other error stays until the next try.
+ */
+export function checkNowRefusal(
+  err: unknown
+): Readonly<{ text: string; clearAfterMs: number | null }> {
   if (err instanceof UpdateCheckTooSoonError) {
     const seconds = Math.max(1, Math.ceil(err.retryAfterSeconds))
-    return `Checked a moment ago. Try again in ${seconds} second${seconds === 1 ? '' : 's'}.`
+    return {
+      text: `Checked a moment ago. Try again in ${seconds} second${seconds === 1 ? '' : 's'}.`,
+      clearAfterMs: seconds * 1000,
+    }
   }
-  return userErrorMessage(err, 'Could not check for updates')
+  return { text: userErrorMessage(err, 'Could not check for updates'), clearAfterMs: null }
 }
 
 /** What the Pause confirmation says before anything stops. */

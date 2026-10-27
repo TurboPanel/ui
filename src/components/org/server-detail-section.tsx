@@ -157,17 +157,17 @@ function resolveUpdateBadgeVariant(input: {
 function updateBadgeLabel(variant: UpdateBadgeVariant, runningVersionUnknown: boolean): string {
   switch (variant) {
     case 'updating':
-      return 'Update in progress'
+      return 'Update in Progress'
     case 'error':
-      return 'Update error'
+      return 'Update Error'
     case 'colocated':
-      return 'Updated together with the control plane'
+      return 'Updated with the Control Plane'
     case 'unknown':
-      return runningVersionUnknown ? 'Version unknown' : 'Target unavailable'
+      return runningVersionUnknown ? 'Version Unknown' : 'Target Unavailable'
     case 'available':
-      return 'Update waiting'
+      return 'Update Waiting'
     case 'current':
-      return 'Up to date'
+      return 'Up to Date'
   }
 }
 

@@ -6184,8 +6184,6 @@ export type ServerUpdateStatus = {
   target: (ServerUpdateCommit & { manifestUrl?: string }) | null
   updateAvailable: boolean
   colocatedWithInstance?: boolean
-  /** Daemons update on their own; nobody starts a server update by hand. */
-  updatesAutomatic?: boolean
   status: 'idle' | 'updating' | 'error'
   targetStatus: 'ok' | 'unknown'
   targetError?: string
