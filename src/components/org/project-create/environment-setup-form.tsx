@@ -98,7 +98,7 @@ export function EnvironmentSetupForm({
   const declared = declaredHostname(compose, serviceName)
   const [hostname, setHostname] = useState(declared?.hostname ?? '')
   // null follows the typed name (on only for a bare domain) until the switch is flipped.
-  const [alsoWwwChoice, setAlsoWww] = useState<boolean | null>(
+  const [alsoWwwChoice, setAlsoWwwChoice] = useState<boolean | null>(
     declared?.www ? declared.www !== 'off' : null
   )
   const alsoWww = alsoWwwChoice ?? defaultAlsoWww(hostname)
@@ -170,7 +170,7 @@ export function EnvironmentSetupForm({
         settingsHref={orgSettingsTabHref(orgId, 'domains')}
         onServiceNameChange={setServiceName}
         onHostnameChange={setHostname}
-        onAlsoWwwChange={setAlsoWww}
+        onAlsoWwwChange={setAlsoWwwChoice}
       />
 
       <AccountsSection
