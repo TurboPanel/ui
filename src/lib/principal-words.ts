@@ -27,7 +27,9 @@ export function principalStateLabel(state: OrgPrincipalState): string {
   return PRINCIPAL_STATE_LABELS[state]
 }
 
-export function principalStateTone(state: OrgPrincipalState): 'ok' | 'pending' | 'muted' | 'danger' {
+export function principalStateTone(
+  state: OrgPrincipalState
+): 'ok' | 'pending' | 'muted' | 'danger' {
   switch (state) {
     case 'present':
       return 'ok'
@@ -67,7 +69,11 @@ export function principalUsageLines(usage: Partial<PrincipalUsage>): string[] {
   return [
     countLine(usage.tenancies ?? 0, 'service runs as it', 'services run as it'),
     countLine(usage.bindings ?? 0, 'app is connected to it', 'apps are connected to it'),
-    countLine(usage.storages ?? 0, 'storage location is owned by it', 'storage locations are owned by it'),
+    countLine(
+      usage.storages ?? 0,
+      'storage location is owned by it',
+      'storage locations are owned by it'
+    ),
     countLine(usage.secrets ?? 0, 'secret belongs to it', 'secrets belong to it'),
     countLine(usage.logins ?? 0, 'database login', 'database logins'),
     countLine(usage.folders ?? 0, 'folder is owned by it', 'folders are owned by it'),
@@ -79,7 +85,9 @@ export function principalUsageLines(usage: Partial<PrincipalUsage>): string[] {
 export function principalDeleteBlockedReason(row: OrgPrincipalRecord): string | null {
   if (row.canDelete) return null
   if (row.projectId !== null) {
-    return `Belongs to the project ${row.projectName ?? ''}`.trim() + '. Remove it from that project.'
+    return (
+      `Belongs to the project ${row.projectName ?? ''}`.trim() + '. Remove it from that project.'
+    )
   }
   const lines = principalUsageLines(row.usedBy)
   return lines.length > 0 ? `In use: ${lines.join(', ')}.` : 'In use.'

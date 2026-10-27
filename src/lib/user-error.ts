@@ -60,7 +60,8 @@ const API_ERROR_COPY: Readonly<Record<string, string>> = {
   project_stop_failed:
     'The servers did not accept the stop in time, so nothing was deleted. Check that they are online and try again.',
   project_has_running_services: 'Services are still running. Stop them first, then delete.',
-  project_deploy_running: 'A deploy is running in this project. Delete it when the deploy finishes.',
+  project_deploy_running:
+    'A deploy is running in this project. Delete it when the deploy finishes.',
   environment_server_locked:
     'This environment has folders on its server, so it cannot move to another server. Remove its services and volumes first.',
   environment_name_in_use: 'Another environment in this project already has that name.',
