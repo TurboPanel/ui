@@ -3,15 +3,15 @@ import type { LicenseRecord } from '@/lib/instance-api'
 import { formatLocalDateTime } from '@/lib/format-datetime'
 import {
   pendingKeyDisplayName,
+  pendingKeyExpiryLabel,
+  pendingKeyTierLabel,
   provisioningKeys,
   provisioningServersLabel,
   unboundPendingKeys,
   unusedRegistrationKeysLabel,
 } from '@/lib/pending-keys'
 
-function license(
-  patch: Partial<LicenseRecord> & Pick<LicenseRecord, 'id'>,
-): LicenseRecord {
+function license(patch: Partial<LicenseRecord> & Pick<LicenseRecord, 'id'>): LicenseRecord {
   return {
     name: null,
     createdAt: '2026-01-01T00:00:00.000Z',
@@ -108,5 +108,28 @@ describe('unusedRegistrationKeysLabel', () => {
     expect(unusedRegistrationKeysLabel(1)).toBe('1 unused registration key')
     expect(unusedRegistrationKeysLabel(2)).toBe('2 unused registration keys')
     expect(unusedRegistrationKeysLabel(0)).toBe('0 unused registration keys')
+  })
+})
+
+describe('pending key tier and expiry', () => {
+  const NOW = Date.parse('2026-10-27T12:00:00.000Z')
+
+  it('shows the tier an unused key holds, or a dash', () => {
+    expect(pendingKeyTierLabel(license({ id: 'a', tier: { id: 't1', label: 'S1' } }))).toBe('S1')
+    expect(pendingKeyTierLabel(license({ id: 'b' }))).toBe('—')
+  })
+
+  it('counts down to the expiry and says when it has passed', () => {
+    const at = (iso: string) => license({ id: 'k', expiresAt: iso })
+    expect(pendingKeyExpiryLabel(at('2026-11-03T12:00:00.000Z'), NOW)).toBe('Expires in 7 days')
+    expect(pendingKeyExpiryLabel(at('2026-10-28T13:00:00.000Z'), NOW)).toBe('Expires in 1 day')
+    expect(pendingKeyExpiryLabel(at('2026-10-27T20:00:00.000Z'), NOW)).toBe(
+      'Expires in less than a day'
+    )
+    expect(pendingKeyExpiryLabel(at('2026-10-26T12:00:00.000Z'), NOW)).toBe('Expired')
+    expect(pendingKeyExpiryLabel(license({ id: 'k', expired: true }), NOW)).toBe('Expired')
+    expect(pendingKeyExpiryLabel(license({ id: 'k', expiresAt: null }), NOW)).toBe(
+      'Does not expire'
+    )
   })
 })

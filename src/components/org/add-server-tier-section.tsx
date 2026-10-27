@@ -10,10 +10,7 @@ import {
   TextField,
   type SelectOption,
 } from '@/components/ui'
-import {
-  LicenseDialog,
-  type LicenseDialogRequest,
-} from '@/components/org/billing-license-dialog'
+import { LicenseDialog, type LicenseDialogRequest } from '@/components/org/billing-license-dialog'
 import {
   addServerTierState,
   describeBillingRefusal,
@@ -40,6 +37,9 @@ import {
 import { useCan } from '@/lib/query-client'
 import { describeSizeFit, parseSizeOutput, sizeBandRows, tierForSize } from '@/lib/server-size'
 import { spacing } from '@/lib/theme'
+
+const TIERS_LOAD_FAILED = 'Could not load the license tiers.'
+const TIERS_REFRESH_FAILED = 'Could not refresh the license tiers; showing the last list.'
 
 function tierOption(tier: BillingTier): SelectOption {
   return {
@@ -122,7 +122,11 @@ function SizeHelp({
         }}
         placeholder="8 cores, 31.3 GiB RAM"
         accessibilityLabel="Size command output"
-        hint={size ? describeSizeFit(size, fit) : 'The smallest tier whose cores and RAM both cover the server.'}
+        hint={
+          size
+            ? describeSizeFit(size, fit)
+            : 'The smallest tier whose cores and RAM both cover the server.'
+        }
       />
     </View>
   )
@@ -185,9 +189,9 @@ function FirstPurchase({ orgId, tier }: Readonly<{ orgId: string; tier: BillingT
  * Hosted Add Server: which tier the server needs (a short size command, the
  * band table, and a paste box that picks the tier), and — for that tier —
  * whether a license is free, one ending must be restored first (free, right
- * here), or one has to be bought (right here too, for owners). The license
- * the wizard mints carries no tier; the control plane places the server by
- * its hardware, so this is guidance plus the fix, never a gate on Continue.
+ * here), or one has to be bought (right here too, for owners). The chosen
+ * tier is required on Continue and travels with the registration key: the key
+ * holds a license at that tier and the server comes up on it when it connects.
  */
 export function AddServerTierSection({
   orgId,
@@ -283,6 +287,27 @@ export function AddServerTierSection({
     }
   }
 
+  if (catalogQuery.isError && !catalogQuery.data) {
+    // No dead end: Continue needs a tier, so a catalogue that never loaded offers a retry.
+    return (
+      <View style={styles.root}>
+        <Text style={panelStyles.detailLabel}>Which tier does this server need?</Text>
+        <Text style={panelStyles.error}>{TIERS_LOAD_FAILED}</Text>
+        <ButtonRow>
+          <Button
+            label="Retry"
+            size="sm"
+            busy={catalogQuery.isFetching}
+            accessibilityLabel="Load the license tiers again"
+            onPress={() => {
+              void catalogQuery.refetch()
+            }}
+          />
+        </ButtonRow>
+      </View>
+    )
+  }
+
   return (
     <View style={styles.root}>
       <Text style={panelStyles.detailLabel}>Which tier does this server need?</Text>
@@ -305,6 +330,10 @@ export function AddServerTierSection({
           onChooseTier(next)
         }}
       />
+      {catalogQuery.isError ? (
+        // A background refresh failed after the list loaded: keep the working picker.
+        <Text style={panelStyles.muted}>{TIERS_REFRESH_FAILED}</Text>
+      ) : null}
       {state?.kind === 'available' ? (
         <Text style={panelStyles.detailLine}>{state.message}</Text>
       ) : null}

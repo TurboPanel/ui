@@ -2846,6 +2846,8 @@ function readText(value: unknown): string | null {
 
 type LicenseCreateErrorBody = {
   error?: string
+  /** Machine code next to a human `error` (e.g. `tier_not_found`). */
+  code?: string
   maxServers?: number | null
   usedSeats?: number
   message?: string
@@ -2908,20 +2910,28 @@ function throwIfLicenseCreateFailed(status: number, errorBody: LicenseCreateErro
   if (status === 409 && errorBody.error === NO_LICENSE_AVAILABLE_ERROR) {
     throw new NoLicenseAvailableError(licenseAvailabilityFromBody(errorBody))
   }
-  const detail = errorBody.error
-    ? formatFetchFailureDetail(status, errorBody.error)
+  // Prefer the machine code (`tier_not_found`, …) so the wizard maps it to a sentence.
+  const reason = errorBody.code ?? errorBody.error
+  const detail = reason
+    ? formatFetchFailureDetail(status, reason)
     : formatFetchFailureDetail(status)
   throw new Error(`${CLIENT_API}/licenses failed: ${detail}`)
 }
 
-/** Mint a one-shot registration key for the Add Server flow. */
+/**
+ * Mint a one-shot registration key for the Add Server flow. `tierId` is the
+ * license tier the manager chose (hosted): the key holds a license at that
+ * tier and the server that enrolls with it is put on it.
+ */
 export async function createLicense(
   name?: string,
-  installBaseUrl?: string
+  installBaseUrl?: string,
+  tierId?: string
 ): Promise<CreatedLicense> {
   const body: Record<string, string> = {}
   if (name) body.name = name
   if (installBaseUrl?.trim()) body.installBaseUrl = installBaseUrl.trim()
+  if (tierId) body.tierId = tierId
 
   const resolvedOrgId = getActiveOrganizationId()
   const headers: Record<string, string> = {
@@ -2971,6 +2981,12 @@ export type LicenseRecord = {
   boundServer: LicenseBoundServer | null
   /** Set while its server is being provisioned; absent on an older control plane. */
   provisioning?: LicenseProvisioning | null
+  /** An unused key's Add Server tier, whose license it holds; null once bound or when none. */
+  tier?: { id: string; label: string } | null
+  /** When an unused key stops working (7 days after it was made); null never expires. */
+  expiresAt?: string | null
+  /** An unused key past `expiresAt`: it can no longer add a server. */
+  expired?: boolean
 }
 
 export async function fetchLicenses(): Promise<{ licenses: LicenseRecord[] }> {
@@ -3003,6 +3019,8 @@ export const NO_SUBSCRIPTION_ERROR = 'no_subscription'
 export const SERVERS_UNCOVERED_ERROR = 'servers_uncovered'
 /** A reduction would leave fewer licenses purchased than held (`409`; carries `purchasedAfter` + `licensesHeld`). */
 export const LICENSES_IN_USE_ERROR = 'licenses_in_use'
+/** A change would take the license an unused Add Server key holds at its tier. */
+export const LICENSE_HELD_BY_KEY_ERROR = 'license_held_by_key'
 export const NOT_AN_UPGRADE_ERROR = 'not_an_upgrade'
 export const NOT_A_DOWNGRADE_ERROR = 'not_a_downgrade'
 export const TIER_NOT_PURCHASABLE_ERROR = 'tier_not_purchasable'
