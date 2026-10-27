@@ -1,13 +1,5 @@
 import { useState } from 'react'
-import {
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native'
+import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { Checkbox, LoadingState, SectionPanel } from '@/components/ui'
 import type { VariableParentFilter, VariableRecord } from '@/lib/instance-api'
@@ -38,10 +30,7 @@ function isBindingOwnedVariable(variable: VariableRecord): boolean {
   return variable.bindingId != null && variable.bindingId.length > 0
 }
 
-function resolveVariablesLoadError(
-  isError: boolean,
-  error: unknown,
-): string | null {
+function resolveVariablesLoadError(isError: boolean, error: unknown): string | null {
   if (!isError) {
     return null
   }
@@ -69,15 +58,9 @@ function VariablePresetRow({
       <Text style={styles.presetLabel}>Common keys</Text>
       <View style={styles.presetRow}>
         {VARIABLE_PRESETS.map((preset) => (
-          <Pressable
-            key={preset.key}
-            style={styles.presetChip}
-            onPress={() => onPick(preset)}
-          >
+          <Pressable key={preset.key} style={styles.presetChip} onPress={() => onPick(preset)}>
             <Text style={styles.presetChipText}>{preset.key}</Text>
-            {preset.isSecret ? (
-              <Text style={styles.presetChipHint}>secret</Text>
-            ) : null}
+            {preset.isSecret ? <Text style={styles.presetChipHint}>secret</Text> : null}
           </Pressable>
         ))}
       </View>
@@ -109,10 +92,7 @@ const webCellInputStyle = {
   minHeight: 32,
 } as const
 
-function trimOnBlur(
-  value: string,
-  setter: (next: string) => void,
-): { onBlur: () => void } {
+function trimOnBlur(value: string, setter: (next: string) => void): { onBlur: () => void } {
   return {
     onBlur: () => {
       const trimmed = value.trim()
@@ -125,14 +105,7 @@ function trimOnBlur(
 
 /** Read-only Type indicator for existing rows — secret status is fixed at creation. */
 function TypeCell({ secret }: Readonly<{ secret: boolean }>) {
-  return (
-    <Checkbox
-      checked={secret}
-      disabled
-      onPress={() => undefined}
-      label="Secret"
-    />
-  )
+  return <Checkbox checked={secret} disabled onPress={() => undefined} label="Secret" />
 }
 
 function FlagChip({
@@ -154,9 +127,7 @@ function FlagChip({
       onPress={onToggle}
       style={[styles.flagChip, checked && styles.flagChipActive]}
     >
-      <Text style={[styles.flagChipText, checked && styles.flagChipTextActive]}>
-        {label}
-      </Text>
+      <Text style={[styles.flagChipText, checked && styles.flagChipTextActive]}>{label}</Text>
     </Pressable>
   )
 }
@@ -185,9 +156,7 @@ function ViewModeTabs({
             style={[styles.viewTab, active && styles.viewTabActive]}
             onPress={() => onChange(entry)}
           >
-            <Text style={[styles.viewTabText, active && styles.viewTabTextActive]}>
-              {label}
-            </Text>
+            <Text style={[styles.viewTabText, active && styles.viewTabTextActive]}>{label}</Text>
           </Pressable>
         )
       })}
@@ -322,10 +291,7 @@ function VariableValueCell({
     )
   }
   return (
-    <Text
-      style={[styles.valueText, variable.isSecret && styles.valueSecretText]}
-      numberOfLines={1}
-    >
+    <Text style={[styles.valueText, variable.isSecret && styles.valueSecretText]} numberOfLines={1}>
       {displayVariableValue(variable)}
     </Text>
   )
@@ -373,13 +339,9 @@ function VariableRowActions({
     <View style={styles.actionsCell}>
       <Pressable
         style={styles.actionLink}
-        onPress={() =>
-          variable.isSecret ? onSecretUpdate(variable) : onEdit(variable)
-        }
+        onPress={() => (variable.isSecret ? onSecretUpdate(variable) : onEdit(variable))}
       >
-        <Text style={styles.actionLinkText}>
-          {variable.isSecret ? 'Update' : 'Edit'}
-        </Text>
+        <Text style={styles.actionLinkText}>{variable.isSecret ? 'Update' : 'Edit'}</Text>
       </Pressable>
       <Pressable
         style={styles.actionLink}
@@ -626,12 +588,7 @@ function NewVariableRow({
   return (
     <View style={[styles.row, styles.rowNew]}>
       <View style={styles.colType}>
-        <Checkbox
-          checked={newIsSecret}
-          disabled={adding}
-          onPress={onToggleSecret}
-          label="Secret"
-        />
+        <Checkbox checked={newIsSecret} disabled={adding} onPress={onToggleSecret} label="Secret" />
       </View>
       <View style={styles.colName}>
         <TextInput
@@ -661,9 +618,7 @@ function NewVariableRow({
           pending={false}
           onToggle={onToggleLiteral}
         />
-        {addFieldError ? (
-          <Text style={styles.fieldError}>{addFieldError}</Text>
-        ) : null}
+        {addFieldError ? <Text style={styles.fieldError}>{addFieldError}</Text> : null}
       </View>
       <View style={styles.colValue}>
         <TextInput
@@ -671,9 +626,7 @@ function NewVariableRow({
           value={newValue}
           onChangeText={onValueChange}
           {...trimOnBlur(newValue, onValueChange)}
-          placeholder={
-            newIsSecret ? 'Secret value (write-only)' : 'Plaintext value'
-          }
+          placeholder={newIsSecret ? 'Secret value (write-only)' : 'Plaintext value'}
           placeholderTextColor={colors.textDim}
           autoCapitalize="none"
           autoCorrect={false}
@@ -714,14 +667,8 @@ function VariablesTableHeader() {
       <Text style={[styles.headerCell, styles.colType]}>Type</Text>
       <Text style={[styles.headerCell, styles.colName]}>Name</Text>
       <Text style={[styles.headerCell, styles.colValue]}>Value</Text>
-      <Text style={[styles.headerCell, styles.colBuild, styles.headerCellCenter]}>
-        Build
-      </Text>
-      <Text
-        style={[styles.headerCell, styles.colRuntime, styles.headerCellCenter]}
-      >
-        Runtime
-      </Text>
+      <Text style={[styles.headerCell, styles.colBuild, styles.headerCellCenter]}>Build</Text>
+      <Text style={[styles.headerCell, styles.colRuntime, styles.headerCellCenter]}>Runtime</Text>
       <View style={styles.colActions} />
     </View>
   )
@@ -825,8 +772,8 @@ function VariablesTable({
   if (variables.length === 0 && !showAddForm) {
     return (
       <Text style={panelStyles.muted}>
-        No variables yet — add keys your compose references with {'{$KEY}'} or{' '}
-        {'{$project.KEY}'}. Secrets become /run/secrets/ plus KEY_FILE.
+        No variables yet — add keys your compose references with {'{$KEY}'} or {'{$project.KEY}'}.
+        Secrets become /run/secrets/ plus KEY_FILE.
       </Text>
     )
   }
@@ -903,7 +850,7 @@ function VariableEnvLine({
   variable,
   isLast,
 }: Readonly<{ variable: VariableRecord; isLast: boolean }>) {
-  const value = variable.isSecret ? HIDDEN_VALUE_LABEL : variable.value ?? ''
+  const value = variable.isSecret ? HIDDEN_VALUE_LABEL : (variable.value ?? '')
   const flags = buildEnvFlagsLabel(variable)
   return (
     <Text>
@@ -911,9 +858,7 @@ function VariableEnvLine({
         <Text style={styles.envComment}>{`# ${variable.description}\n`}</Text>
       ) : null}
       <Text style={styles.envCodeText}>{`${variable.key}=`}</Text>
-      <Text style={variable.isSecret ? styles.envSecretText : styles.envCodeText}>
-        {value}
-      </Text>
+      <Text style={variable.isSecret ? styles.envSecretText : styles.envCodeText}>{value}</Text>
       {flags ? <Text style={styles.envComment}>{`  # ${flags}`}</Text> : null}
       {isLast ? null : '\n'}
     </Text>
@@ -926,14 +871,12 @@ function VariableEnvLine({
  * over — a real encrypted value; secrets always render as
  * {@link HIDDEN_VALUE_LABEL}.
  */
-function VariablesEnvView({
-  variables,
-}: Readonly<{ variables: VariableRecord[] }>) {
+function VariablesEnvView({ variables }: Readonly<{ variables: VariableRecord[] }>) {
   if (variables.length === 0) {
     return (
       <Text style={panelStyles.muted}>
-        No variables yet — add keys your compose references with {'{$KEY}'} or{' '}
-        {'{$project.KEY}'}. Secrets become /run/secrets/ plus KEY_FILE.
+        No variables yet — add keys your compose references with {'{$KEY}'} or {'{$project.KEY}'}.
+        Secrets become /run/secrets/ plus KEY_FILE.
       </Text>
     )
   }
@@ -944,27 +887,19 @@ function VariablesEnvView({
   return (
     <View style={styles.envWrapper}>
       <Text style={styles.envHint}>
-        Read-only preview of how these keys sit in a .env file — secret
-        values are masked and can never be revealed here.
+        Read-only preview of how these keys sit in a .env file — secret values are masked and can
+        never be revealed here.
       </Text>
-      <ScrollView
-        style={styles.envBlock}
-        nestedScrollEnabled
-        accessibilityRole="text"
-      >
+      <ScrollView style={styles.envBlock} nestedScrollEnabled accessibilityRole="text">
         <Text style={styles.envText} selectable={Platform.OS === 'web'}>
           {bindingOwned.length > 0 ? (
-            <Text style={styles.envComment}>
-              {`# From connected databases (locked)\n`}
-            </Text>
+            <Text style={styles.envComment}>{`# From connected databases (locked)\n`}</Text>
           ) : null}
           {bindingOwned.map((variable, index) => (
             <VariableEnvLine
               key={variable.id}
               variable={variable}
-              isLast={
-                index === bindingOwned.length - 1 && editable.length === 0
-              }
+              isLast={index === bindingOwned.length - 1 && editable.length === 0}
             />
           ))}
           {bindingOwned.length > 0 && editable.length > 0 ? (
@@ -983,24 +918,20 @@ function VariablesEnvView({
   )
 }
 
-function BindingOwnedVariablesGroup({
-  variables,
-}: Readonly<{ variables: VariableRecord[] }>) {
+function BindingOwnedVariablesGroup({ variables }: Readonly<{ variables: VariableRecord[] }>) {
   if (variables.length === 0) return null
   return (
     <View style={styles.bindingGroup}>
       <Text style={styles.bindingGroupTitle}>From connected databases</Text>
       <Text style={panelStyles.muted}>
-        Locked keys delivered by database connections — edit or disconnect from
-        the managed Connect tab or Bound databases panel.
+        Locked keys delivered by database connections — edit or disconnect from the managed Connect
+        tab or Bound databases panel.
       </Text>
       {variables.map((variable) => (
         <View key={variable.id} style={styles.bindingRow}>
           <Text style={styles.bindingLock}>locked</Text>
           <Text style={styles.bindingKey}>{variable.key}</Text>
-          <Text style={styles.bindingValue}>
-            {displayVariableValue(variable)}
-          </Text>
+          <Text style={styles.bindingValue}>{displayVariableValue(variable)}</Text>
         </View>
       ))}
     </View>
@@ -1064,10 +995,7 @@ export function VariablesSection({
   const [secretNewValue, setSecretNewValue] = useState('')
   const [togglingKey, setTogglingKey] = useState<string | null>(null)
 
-  const queryError = resolveVariablesLoadError(
-    variablesQuery.isError,
-    variablesQuery.error,
-  )
+  const queryError = resolveVariablesLoadError(variablesQuery.isError, variablesQuery.error)
   const displayError =
     error ??
     createMutation.actionError ??
@@ -1115,9 +1043,7 @@ export function VariablesSection({
         isLiteral: newIsLiteral,
         forBuild: newForBuild,
         forRuntime: newForRuntime,
-        ...(newDescription.trim()
-          ? { description: newDescription.trim() }
-          : {}),
+        ...(newDescription.trim() ? { description: newDescription.trim() } : {}),
       },
       {
         onSuccess: () => {
@@ -1132,21 +1058,17 @@ export function VariablesSection({
         },
         onError: (err) => {
           const message =
-            createMutation.actionError ??
-            (userErrorMessage(err, 'Failed to create variable'))
-          if (
-            message.includes('binding_key_conflict') ||
-            message.includes('binding_owned_variable')
-          ) {
-            setAddFieldError(
-              `${trimmedKey} is provided by a connected database.`,
-            )
+            createMutation.actionError ?? userErrorMessage(err, 'Failed to create variable')
+          // The code is matched on the raw message: the shown one drops it.
+          const raw = err instanceof Error ? err.message : message
+          if (raw.includes('binding_key_conflict') || raw.includes('binding_owned_variable')) {
+            setAddFieldError(`${trimmedKey} is provided by a connected database.`)
             setError(null)
             return
           }
           setError(message)
         },
-      },
+      }
     )
   }
 
@@ -1195,7 +1117,7 @@ export function VariablesSection({
         onError: () => {
           setError(updateMutation.actionError ?? 'Failed to update variable')
         },
-      },
+      }
     )
   }
 
@@ -1222,19 +1144,15 @@ export function VariablesSection({
         onError: () => {
           setError(updateMutation.actionError ?? 'Failed to update secret value')
         },
-      },
+      }
     )
   }
 
-  const handleToggleFlag = (
-    variable: VariableRecord,
-    field: VariableBooleanField,
-  ) => {
+  const handleToggleFlag = (variable: VariableRecord, field: VariableBooleanField) => {
     const pendingKey = `${variable.id}:${field}`
     setTogglingKey(pendingKey)
     setError(null)
-    const body: { forBuild?: boolean; forRuntime?: boolean; isLiteral?: boolean } =
-      {}
+    const body: { forBuild?: boolean; forRuntime?: boolean; isLiteral?: boolean } = {}
     body[field] = !variable[field]
     updateMutation.mutate(
       { variableId: variable.id, body },
@@ -1246,7 +1164,7 @@ export function VariablesSection({
           setError(updateMutation.actionError ?? 'Failed to update variable')
           setTogglingKey((current) => (current === pendingKey ? null : current))
         },
-      },
+      }
     )
   }
 

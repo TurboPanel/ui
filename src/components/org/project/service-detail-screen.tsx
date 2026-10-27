@@ -52,9 +52,12 @@ export function EnvironmentServiceScreen() {
     enabled: !isSystemProject && environmentId !== '' && serviceId !== '',
   })
 
-  if (isSystemProject || environmentId === '') {
+  if (isSystemProject) {
     return <Redirect href={projectOverviewHref(orgId, projectId) as Href} />
   }
+  // On a direct link the router's path can lag one render behind the route
+  // (see DeploymentLogScreen): wait for the environment instead of leaving.
+  if (environmentId === '') return null
 
   const envName = environmentDisplayName(selectedEnvironment ?? {})
   const service = servicesQuery.data?.services.find((row) => row.id === serviceId) ?? null
