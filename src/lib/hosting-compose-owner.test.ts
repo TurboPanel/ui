@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  isComposeAutomaticTlsHosting,
   isComposeOwnedHosting,
   readHostingComposeRoute,
   readHostingComposeServiceName,
@@ -11,6 +12,13 @@ describe('hosting compose provenance', () => {
     composeServiceName: 'web',
     composeRoute: 'app.example.com /',
   }
+
+  it('recognizes a compose route that asks for Let\u2019s Encrypt', () => {
+    expect(isComposeAutomaticTlsHosting({ ...owned, composeTlsMode: 'automatic' })).toBe(true)
+    expect(isComposeAutomaticTlsHosting({ ...owned, composeTlsMode: 'internal' })).toBe(false)
+    expect(isComposeAutomaticTlsHosting(owned)).toBe(false)
+    expect(isComposeAutomaticTlsHosting({ composeTlsMode: 'automatic' })).toBe(false)
+  })
 
   it('recognizes a row the instance materialized from compose', () => {
     expect(isComposeOwnedHosting(owned)).toBe(true)
@@ -28,7 +36,6 @@ describe('hosting compose provenance', () => {
 
   it('reports no route when the marker is present but the route is not', () => {
     expect(readHostingComposeRoute({ composeOwned: true })).toBeNull()
-    expect(readHostingComposeRoute({ composeOwned: true, composeRoute: 3 }))
-      .toBeNull()
+    expect(readHostingComposeRoute({ composeOwned: true, composeRoute: 3 })).toBeNull()
   })
 })

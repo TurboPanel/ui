@@ -22,9 +22,8 @@ vi.mock('@/lib/auth-session', async (importOriginal) => {
   }
   return {
     ...actual,
-    dashboardHref: (
-      ...args: Parameters<typeof actual.dashboardHref>
-    ) => dashboardHrefMock.mock(...args),
+    dashboardHref: (...args: Parameters<typeof actual.dashboardHref>) =>
+      dashboardHrefMock.mock(...args),
   }
 })
 
@@ -52,7 +51,7 @@ describe('resolveAuthGuardHref', () => {
         needsInstall: false,
         topSegment: 'recovering',
         developerDevBypass: false,
-      }),
+      })
     ).toBeNull()
     expect(
       resolveAuthGuardHref({
@@ -60,7 +59,7 @@ describe('resolveAuthGuardHref', () => {
         needsInstall: true,
         topSegment: 'recovering',
         developerDevBypass: false,
-      }),
+      })
     ).toBeNull()
     expect(
       resolveAuthGuardHref({
@@ -69,7 +68,7 @@ describe('resolveAuthGuardHref', () => {
         topSegment: 'recovering',
         developerDevBypass: false,
         needsControlPlane: true,
-      }),
+      })
     ).toBeNull()
   })
 
@@ -80,7 +79,7 @@ describe('resolveAuthGuardHref', () => {
         needsInstall: true,
         topSegment: 'about',
         developerDevBypass: false,
-      }),
+      })
     ).toBeNull()
     expect(
       resolveAuthGuardHref({
@@ -89,7 +88,7 @@ describe('resolveAuthGuardHref', () => {
         topSegment: 'about',
         developerDevBypass: false,
         needsControlPlane: true,
-      }),
+      })
     ).toBeNull()
   })
 
@@ -100,7 +99,7 @@ describe('resolveAuthGuardHref', () => {
         needsInstall: true,
         topSegment: 'sign-in',
         developerDevBypass: false,
-      }),
+      })
     ).toBe('/install')
   })
 
@@ -111,7 +110,7 @@ describe('resolveAuthGuardHref', () => {
         needsInstall: true,
         topSegment: 'install',
         developerDevBypass: false,
-      }),
+      })
     ).toBeNull()
   })
 
@@ -122,7 +121,7 @@ describe('resolveAuthGuardHref', () => {
         needsInstall: false,
         topSegment: 'install',
         developerDevBypass: false,
-      }),
+      })
     ).toBe('/welcome')
   })
 
@@ -133,7 +132,7 @@ describe('resolveAuthGuardHref', () => {
         needsInstall: false,
         topSegment: 'install',
         developerDevBypass: false,
-      }),
+      })
     ).toBe('/sign-in')
   })
 
@@ -144,7 +143,7 @@ describe('resolveAuthGuardHref', () => {
         needsInstall: false,
         topSegment: 'welcome',
         developerDevBypass: false,
-      }),
+      })
     ).toBeNull()
   })
 
@@ -155,7 +154,7 @@ describe('resolveAuthGuardHref', () => {
         needsInstall: false,
         topSegment: 'organizations',
         developerDevBypass: false,
-      }),
+      })
     ).toBeNull()
   })
 
@@ -166,7 +165,7 @@ describe('resolveAuthGuardHref', () => {
         needsInstall: false,
         topSegment: '11111111-1111-1111-1111-111111111111',
         developerDevBypass: false,
-      }),
+      })
     ).toBeNull()
   })
 
@@ -177,7 +176,7 @@ describe('resolveAuthGuardHref', () => {
         needsInstall: false,
         topSegment: 'sign-in',
         developerDevBypass: false,
-      }),
+      })
     ).toBe('/welcome')
   })
 
@@ -189,7 +188,7 @@ describe('resolveAuthGuardHref', () => {
         topSegment: 'sign-in',
         developerDevBypass: false,
         needsControlPlane: true,
-      }),
+      })
     ).toBe('/connect')
   })
 
@@ -201,7 +200,7 @@ describe('resolveAuthGuardHref', () => {
         topSegment: 'connect',
         developerDevBypass: false,
         allowConnect: true,
-      }),
+      })
     ).toBeNull()
   })
 
@@ -213,7 +212,7 @@ describe('resolveAuthGuardHref', () => {
         topSegment: 'sign-in',
         developerDevBypass: false,
         blockNativeInstall: true,
-      }),
+      })
     ).toBe('/connect')
   })
 
@@ -224,7 +223,7 @@ describe('resolveAuthGuardHref', () => {
         needsInstall: false,
         topSegment: 'connect',
         developerDevBypass: false,
-      }),
+      })
     ).toBe('/sign-in')
   })
 
@@ -235,7 +234,7 @@ describe('resolveAuthGuardHref', () => {
         needsInstall: false,
         topSegment: 'admin',
         developerDevBypass: false,
-      }),
+      })
     ).toBeNull()
   })
 
@@ -246,7 +245,7 @@ describe('resolveAuthGuardHref', () => {
         needsInstall: false,
         topSegment: 'developer',
         developerDevBypass: false,
-      }),
+      })
     ).toBe('/welcome')
   })
 
@@ -257,7 +256,7 @@ describe('resolveAuthGuardHref', () => {
         needsInstall: false,
         topSegment: 'developer',
         developerDevBypass: true,
-      }),
+      })
     ).toBeNull()
   })
 
@@ -268,7 +267,7 @@ describe('resolveAuthGuardHref', () => {
         needsInstall: false,
         topSegment: '11111111-1111-1111-1111-111111111111',
         developerDevBypass: false,
-      }),
+      })
     ).toBe('/sign-in')
   })
 
@@ -279,7 +278,7 @@ describe('resolveAuthGuardHref', () => {
         needsInstall: false,
         topSegment: 'developer',
         developerDevBypass: true,
-      }),
+      })
     ).toBeNull()
   })
 
@@ -290,7 +289,7 @@ describe('resolveAuthGuardHref', () => {
         needsInstall: false,
         topSegment: 'accept-invitation',
         developerDevBypass: false,
-      }),
+      })
     ).toBeNull()
   })
 
@@ -301,7 +300,7 @@ describe('resolveAuthGuardHref', () => {
         needsInstall: false,
         topSegment: 'verify-email',
         developerDevBypass: false,
-      }),
+      })
     ).toBeNull()
   })
 
@@ -314,9 +313,9 @@ describe('resolveAuthGuardHref', () => {
           needsInstall: false,
           topSegment,
           developerDevBypass: false,
-        }),
+        })
       ).toBeNull()
-    },
+    }
   )
 
   it('keeps unsigned guests on sign-up when install is complete', () => {
@@ -326,7 +325,7 @@ describe('resolveAuthGuardHref', () => {
         needsInstall: false,
         topSegment: 'sign-up',
         developerDevBypass: false,
-      }),
+      })
     ).toBeNull()
   })
 
@@ -337,7 +336,7 @@ describe('resolveAuthGuardHref', () => {
         needsInstall: false,
         topSegment: 'sign-up',
         developerDevBypass: false,
-      }),
+      })
     ).toBe('/welcome')
   })
 
@@ -349,21 +348,19 @@ describe('resolveAuthGuardHref', () => {
         topSegment: 'sign-in',
         developerDevBypass: false,
         returnTo: '/accept-invitation?id=11111111-1111-4111-8111-111111111111',
-      }),
+      })
     ).toBe('/accept-invitation?id=11111111-1111-4111-8111-111111111111')
   })
 
   it('leaves welcome when the dashboard is an org overview', () => {
-    dashboardHrefMock.mock.mockReturnValueOnce(
-      '/11111111-1111-1111-1111-111111111111/overview',
-    )
+    dashboardHrefMock.mock.mockReturnValueOnce('/11111111-1111-1111-1111-111111111111/overview')
     expect(
       resolveAuthGuardHref({
         session,
         needsInstall: false,
         topSegment: 'welcome',
         developerDevBypass: false,
-      }),
+      })
     ).toBe('/11111111-1111-1111-1111-111111111111/overview')
     expect(dashboardHref(session, false)).toBe('/welcome')
   })
@@ -375,7 +372,7 @@ describe('resolveAuthGuardHref', () => {
         needsInstall: true,
         topSegment: 'developer',
         developerDevBypass: true,
-      }),
+      })
     ).toBeNull()
   })
 
@@ -387,7 +384,7 @@ describe('resolveAuthGuardHref', () => {
         topSegment: 'connect',
         developerDevBypass: false,
         needsControlPlane: true,
-      }),
+      })
     ).toBeNull()
   })
 
@@ -399,7 +396,7 @@ describe('resolveAuthGuardHref', () => {
         topSegment: 'connect',
         developerDevBypass: false,
         blockNativeInstall: true,
-      }),
+      })
     ).toBeNull()
   })
 
@@ -410,7 +407,7 @@ describe('resolveAuthGuardHref', () => {
         needsInstall: false,
         topSegment: 'admin',
         developerDevBypass: false,
-      }),
+      })
     ).toBe('/welcome')
   })
 
@@ -421,7 +418,7 @@ describe('resolveAuthGuardHref', () => {
         needsInstall: false,
         topSegment: undefined,
         developerDevBypass: false,
-      }),
+      })
     ).toBe('/welcome')
   })
 
@@ -432,7 +429,7 @@ describe('resolveAuthGuardHref', () => {
         needsInstall: false,
         topSegment: undefined,
         developerDevBypass: false,
-      }),
+      })
     ).toBe('/sign-in')
   })
 
@@ -443,7 +440,7 @@ describe('resolveAuthGuardHref', () => {
         needsInstall: false,
         topSegment: 'sign-in',
         developerDevBypass: false,
-      }),
+      })
     ).toBeNull()
   })
 
@@ -454,7 +451,7 @@ describe('resolveAuthGuardHref', () => {
         needsInstall: false,
         topSegment: 'accept-invitation',
         developerDevBypass: false,
-      }),
+      })
     ).toBeNull()
   })
 
@@ -465,7 +462,7 @@ describe('resolveAuthGuardHref', () => {
         needsInstall: false,
         topSegment: 'verify-email',
         developerDevBypass: false,
-      }),
+      })
     ).toBeNull()
   })
 
@@ -476,7 +473,7 @@ describe('resolveAuthGuardHref', () => {
         needsInstall: false,
         topSegment: 'connect',
         developerDevBypass: false,
-      }),
+      })
     ).toBe('/welcome')
   })
 
@@ -487,7 +484,7 @@ describe('resolveAuthGuardHref', () => {
         needsInstall: true,
         topSegment: undefined,
         developerDevBypass: false,
-      }),
+      })
     ).toBe('/install')
   })
 
@@ -498,7 +495,7 @@ describe('resolveAuthGuardHref', () => {
         needsInstall: false,
         topSegment: 'account',
         developerDevBypass: false,
-      }),
+      })
     ).toBeNull()
   })
 
@@ -509,21 +506,19 @@ describe('resolveAuthGuardHref', () => {
         needsInstall: false,
         topSegment: 'account',
         developerDevBypass: false,
-      }),
+      })
     ).toBeNull()
   })
 
   it('keeps signed-in users on account settings even when an org is the dashboard', () => {
-    dashboardHrefMock.mock.mockReturnValue(
-      '/11111111-1111-1111-1111-111111111111/overview',
-    )
+    dashboardHrefMock.mock.mockReturnValue('/11111111-1111-1111-1111-111111111111/overview')
     expect(
       resolveAuthGuardHref({
         session,
         needsInstall: false,
         topSegment: 'account',
         developerDevBypass: false,
-      }),
+      })
     ).toBeNull()
   })
 
@@ -534,7 +529,7 @@ describe('resolveAuthGuardHref', () => {
         needsInstall: false,
         topSegment: 'account',
         developerDevBypass: false,
-      }),
+      })
     ).toBe('/sign-in')
   })
 
@@ -545,7 +540,7 @@ describe('resolveAuthGuardHref', () => {
         needsInstall: true,
         topSegment: 'account',
         developerDevBypass: false,
-      }),
+      })
     ).toBe('/install')
   })
 })

@@ -199,7 +199,7 @@ describe('environmentStatusFacts', () => {
         lastDeploy: null,
         changesNotDeployed: 3,
         now: NOW,
-      })[2]?.value,
+      })[2]?.value
     ).toBe('3 changes')
   })
 })
@@ -237,5 +237,29 @@ describe('environmentStatusFacts while a deploy runs', () => {
     })
     expect(facts[1]?.caption).toBe('Last deploy')
     expect(facts[1]?.value).toMatch(/^Succeeded/)
+  })
+})
+
+describe('environmentStatusFacts uses the started rule of the Deployments tab', () => {
+  const command = (startedAt: string | null) =>
+    ({ id: 'c1', status: 'sent', startedAt }) as unknown as DeploymentGroup['commands'][number]
+
+  it('reads a delivered deploy the server has started as running, not queued', () => {
+    const facts = environmentStatusFacts({
+      runningLabel: 'Running',
+      lastDeploy: group({ status: 'sent', commands: [command('2026-10-05T11:59:00Z')] }),
+      now: NOW,
+    })
+    expect(facts[1]?.value).toBe('Running · 2h ago')
+    expect(facts[1]?.tone).toBe('busy')
+  })
+
+  it('keeps a deploy the server has not started queued', () => {
+    const facts = environmentStatusFacts({
+      runningLabel: 'Running',
+      lastDeploy: group({ status: 'sent', commands: [command(null)] }),
+      now: NOW,
+    })
+    expect(facts[1]?.value).toBe('Queued · 2h ago')
   })
 })

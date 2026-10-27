@@ -122,7 +122,7 @@ export function formatComposeImageRef(ref: ComposeImageRef): string {
 
 export function patchComposeImageRef(
   current: ComposeImageRef,
-  patch: Partial<ComposeImageRef>,
+  patch: Partial<ComposeImageRef>
 ): ComposeImageRef {
   return {
     registry: patch.registry ?? current.registry,

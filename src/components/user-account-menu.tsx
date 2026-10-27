@@ -28,10 +28,7 @@ import {
 import { NotificationsBellIcon, UserIcon } from '@/components/icons/nav-icons'
 import { UiSettings } from '@/components/ui-settings-panel'
 import { NotificationsPanelBody } from '@/components/notifications-panel-body'
-import {
-  formatControlPlaneHostLabel,
-  isRemoteCookieClient,
-} from '@/lib/control-plane'
+import { formatControlPlaneHostLabel, isRemoteCookieClient } from '@/lib/control-plane'
 import {
   switchControlPlaneAccount,
   useControlPlaneStore,
@@ -42,6 +39,7 @@ import { useUnreadNotificationCount } from '@/lib/notifications'
 import { setActiveOrganizationId } from '@/lib/org-context'
 import { HA_PRODUCT_NAME } from '@/lib/platform-copy'
 import { colors, layout, webPointer } from '@/lib/theme'
+import { forgetSessionChoices } from '@/lib/session-choices'
 
 const isNative = Platform.OS !== 'web'
 
@@ -56,7 +54,7 @@ type UserAccountMenuSegmentProps = Readonly<{
 function accountMenuA11yLabel(
   email: string,
   unreadCount: number,
-  foldNotifications: boolean,
+  foldNotifications: boolean
 ): string {
   if (!foldNotifications) {
     return `Account menu for ${email}`
@@ -67,9 +65,7 @@ function accountMenuA11yLabel(
   return `Account and notifications for ${email}`
 }
 
-function controlPlaneLabel(
-  account: Pick<ControlPlaneAccount, 'kind' | 'origin'>,
-): string {
+function controlPlaneLabel(account: Pick<ControlPlaneAccount, 'kind' | 'origin'>): string {
   if (account.kind === 'ha') {
     return HA_PRODUCT_NAME
   }
@@ -101,10 +97,7 @@ function UserAccountTriggerContent({
           {email}
         </Text>
       </View>
-      <HeaderChevron
-        color={open ? colors.text : colors.textDim}
-        open={open}
-      />
+      <HeaderChevron color={open ? colors.text : colors.textDim} open={open} />
     </>
   )
 }
@@ -173,10 +166,7 @@ function UserAccountMenuBody({
   onSignOut: () => void
 }>) {
   return (
-    <GlassSurface
-      style={[headerMenuGroupStyles.menu, panelStyle]}
-      intensity="strong"
-    >
+    <GlassSurface style={[headerMenuGroupStyles.menu, panelStyle]} intensity="strong">
       {foldNotifications ? (
         <>
           <NotificationsPanelBody onNavigate={onClose} />
@@ -241,9 +231,7 @@ function UserAccountMenuBody({
             accessibilityRole="menuitem"
             accessibilityLabel="Add control plane"
           >
-            <Text style={headerMenuGroupStyles.menuActionLabel}>
-              Add control plane…
-            </Text>
+            <Text style={headerMenuGroupStyles.menuActionLabel}>Add control plane…</Text>
           </Pressable>
         </>
       ) : null}
@@ -289,11 +277,9 @@ export function UserAccountMenuSegment({ email, onSignOut }: UserAccountMenuSegm
   const unreadCount = useUnreadNotificationCount()
   const showSwitcher = isRemoteCookieClient()
   const otherAccounts = store.accounts.filter(
-    (account) => account.origin !== store.activeOrigin && account.email,
+    (account) => account.origin !== store.activeOrigin && account.email
   )
-  const activeAccount = store.accounts.find(
-    (account) => account.origin === store.activeOrigin,
-  )
+  const activeAccount = store.accounts.find((account) => account.origin === store.activeOrigin)
 
   useEffect(() => {
     if (!open || isCompact) {
@@ -321,6 +307,7 @@ export function UserAccountMenuSegment({ email, onSignOut }: UserAccountMenuSegm
     if (!switchControlPlaneAccount(account.origin)) return
     setActiveOrganizationId(account.lastOrgId)
     queryClient.clear()
+    forgetSessionChoices()
   }
 
   const handleAddControlPlane = () => {

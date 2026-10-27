@@ -54,19 +54,14 @@ export function parseComposeBuild(value: unknown): ComposeBuildRef {
     return emptyComposeBuildRef()
   }
 
-  const context =
-    typeof value.context === 'string' ? value.context.trim() : ''
+  const context = typeof value.context === 'string' ? value.context.trim() : ''
   const dockerfileInline =
     typeof value.dockerfile_inline === 'string' ? value.dockerfile_inline : ''
-  const dockerfilePath =
-    typeof value.dockerfile === 'string' ? value.dockerfile.trim() : ''
+  const dockerfilePath = typeof value.dockerfile === 'string' ? value.dockerfile.trim() : ''
 
   // Own `dockerfile_inline` string (including empty) is inline so select-all
   // during edit does not flip to external path-based UX.
-  if (
-    Object.hasOwn(value, 'dockerfile_inline') &&
-    typeof value.dockerfile_inline === 'string'
-  ) {
+  if (Object.hasOwn(value, 'dockerfile_inline') && typeof value.dockerfile_inline === 'string') {
     return {
       kind: 'inline',
       context: context || '.',
@@ -92,10 +87,7 @@ export function parseComposeBuild(value: unknown): ComposeBuildRef {
  * unrelated keys (`args`, `target`, `network`, …), defaults `context` to
  * `'.'`, and drops a conflicting `dockerfile` path (Compose forbids both).
  */
-export function setComposeBuildInline(
-  current: unknown,
-  text: string,
-): Record<string, unknown> {
+export function setComposeBuildInline(current: unknown, text: string): Record<string, unknown> {
   const base = isPlainMapping(current) ? { ...current } : {}
   if (typeof current === 'string' && current.trim()) {
     base.context = current.trim()
@@ -113,9 +105,7 @@ export function setComposeBuildInline(
  * `undefined` when only the default `context: '.'` (or empty) would remain —
  * the caller then removes the whole `build` key.
  */
-export function clearComposeBuildInline(
-  current: unknown,
-): Record<string, unknown> | undefined {
+export function clearComposeBuildInline(current: unknown): Record<string, unknown> | undefined {
   if (!isPlainMapping(current)) {
     return undefined
   }

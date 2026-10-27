@@ -10,11 +10,7 @@ import {
   type YAMLMap,
   type YAMLSeq,
 } from 'yaml'
-import {
-  COMPOSE_TAG_KEY,
-  COMPOSE_YAML_OPTIONS,
-  type ComposeTagName,
-} from './tags'
+import { COMPOSE_TAG_KEY, COMPOSE_YAML_OPTIONS, type ComposeTagName } from './tags'
 import {
   emptyComposeDocument,
   isBlankComposeData,
@@ -37,7 +33,7 @@ function isYamlSequence(node: Node | null | undefined): node is YAMLSeq {
 
 function commentText(
   node: Node | null | undefined,
-  which: 'commentBefore' | 'comment',
+  which: 'commentBefore' | 'comment'
 ): string | undefined {
   if (!node || typeof node !== 'object') return undefined
   const raw = (node as { commentBefore?: string | null; comment?: string | null })[which]
@@ -75,11 +71,7 @@ function keyBlankPath(path: string): string {
   return `${path}#key`
 }
 
-function collectNodeFormatting(
-  node: Node,
-  path: string,
-  collector: PresentationCollector,
-): void {
+function collectNodeFormatting(node: Node, path: string, collector: PresentationCollector): void {
   const before = commentText(node, 'commentBefore')
   const inline = commentText(node, 'comment')
   if (before || inline) {
@@ -100,7 +92,7 @@ function collectNodeFormatting(
 function collectKeyFormatting(
   keyNode: Node | null | undefined,
   path: string,
-  collector: PresentationCollector,
+  collector: PresentationCollector
 ): void {
   const before = commentText(keyNode, 'commentBefore')
   const inline = commentText(keyNode, 'comment')
@@ -121,7 +113,7 @@ function collectKeyFormatting(
 function walkPresentation(
   node: Node | null | undefined,
   path: string,
-  collector: PresentationCollector,
+  collector: PresentationCollector
 ): void {
   if (!node || typeof node !== 'object') return
   collectNodeFormatting(node, path, collector)
@@ -137,11 +129,7 @@ function walkPresentation(
   }
 }
 
-function walkMapPresentation(
-  node: YAMLMap,
-  path: string,
-  collector: PresentationCollector,
-): void {
+function walkMapPresentation(node: YAMLMap, path: string, collector: PresentationCollector): void {
   for (const item of node.items) {
     const key = stringKey(item.key)
     if (key === null) continue
@@ -153,7 +141,7 @@ function walkMapPresentation(
 
 function documentCommentText(
   doc: Document | Document.Parsed,
-  which: 'commentBefore' | 'comment',
+  which: 'commentBefore' | 'comment'
 ): string | undefined {
   const raw = (doc as { commentBefore?: string | null; comment?: string | null })[which]
   if (typeof raw !== 'string' || raw.length === 0) return undefined
@@ -211,11 +199,7 @@ function reorderTopLevelKeys(root: YAMLMap, keyOrder: readonly string[]): void {
   root.items = [...ordered, ...byKey.values(), ...leftovers]
 }
 
-function applyNodeFormatting(
-  node: Node,
-  path: string,
-  presentation: ComposePresentation,
-): void {
+function applyNodeFormatting(node: Node, path: string, presentation: ComposePresentation): void {
   const comment = presentation.comments[presentationPath(path)]
   if (comment?.before) {
     ;(node as { commentBefore?: string }).commentBefore = comment.before
@@ -232,7 +216,7 @@ function applyNodeFormatting(
 function applyKeyFormatting(
   keyNode: unknown,
   path: string,
-  presentation: ComposePresentation,
+  presentation: ComposePresentation
 ): void {
   if (!keyNode || typeof keyNode !== 'object') return
 
@@ -252,7 +236,7 @@ function applyKeyFormatting(
 function applyPresentationAt(
   node: Node | null | undefined,
   path: string,
-  presentation: ComposePresentation,
+  presentation: ComposePresentation
 ): void {
   if (!node || typeof node !== 'object') return
   applyNodeFormatting(node, path, presentation)
@@ -263,11 +247,7 @@ function applyPresentationAt(
   }
   if (isYamlSequence(node)) {
     node.items.forEach((item, index) => {
-      applyPresentationAt(
-        item as Node | null | undefined,
-        `${path}[${index}]`,
-        presentation,
-      )
+      applyPresentationAt(item as Node | null | undefined, `${path}[${index}]`, presentation)
     })
   }
 }
@@ -275,7 +255,7 @@ function applyPresentationAt(
 function applyMapPresentation(
   node: YAMLMap,
   path: string,
-  presentation: ComposePresentation,
+  presentation: ComposePresentation
 ): void {
   for (const item of node.items) {
     const key = stringKey(item.key)
@@ -344,17 +324,16 @@ export function yamlToComposeDocument(source: string): ComposeDocument {
     version: 1,
     data,
     presentation: {
-      keyOrder: presentation.keyOrder.length > 0
-        ? presentation.keyOrder.filter((key) => key in data)
-        : Object.keys(data),
+      keyOrder:
+        presentation.keyOrder.length > 0
+          ? presentation.keyOrder.filter((key) => key in data)
+          : Object.keys(data),
       comments: presentation.comments,
       ...(presentation.blankLines ? { blankLines: presentation.blankLines } : {}),
       ...(presentation.documentCommentBefore
         ? { documentCommentBefore: presentation.documentCommentBefore }
         : {}),
-      ...(presentation.documentComment
-        ? { documentComment: presentation.documentComment }
-        : {}),
+      ...(presentation.documentComment ? { documentComment: presentation.documentComment } : {}),
     },
   }
 }
@@ -363,9 +342,7 @@ export function yamlToComposeDocument(source: string): ComposeDocument {
  * Detect a JSON-sentinel map (`__turbopanelComposeTag` + `value`) on a YAMLMap
  * built from payload JS, extract tag name + unwrapped value.
  */
-function readSentinelFromMap(
-  map: YAMLMap,
-): { tag: ComposeTagName; value: unknown } | null {
+function readSentinelFromMap(map: YAMLMap): { tag: ComposeTagName; value: unknown } | null {
   if (map.items.length !== 2) return null
   let tag: ComposeTagName | null = null
   let value: unknown = undefined
@@ -377,9 +354,10 @@ function readSentinelFromMap(
       if (raw === 'reset' || raw === 'override') tag = raw
     } else if (key === 'value') {
       sawValue = true
-      value = isMap(item.value) || isSeq(item.value) || isScalar(item.value)
-        ? (item.value as Node).toJSON()
-        : item.value
+      value =
+        isMap(item.value) || isSeq(item.value) || isScalar(item.value)
+          ? (item.value as Node).toJSON()
+          : item.value
     }
   }
   if (!tag || !sawValue) return null
@@ -410,9 +388,7 @@ function retagComposeSentinels(doc: Document): void {
  */
 const TURBOPANEL_EXTENSION_KEY = 'x-turbopanel'
 
-function withTurbopanelExtensionLast(
-  data: Record<string, unknown>,
-): Record<string, unknown> {
+function withTurbopanelExtensionLast(data: Record<string, unknown>): Record<string, unknown> {
   if (!Object.hasOwn(data, TURBOPANEL_EXTENSION_KEY)) return data
   const { [TURBOPANEL_EXTENSION_KEY]: extension, ...rest } = data
   return { ...rest, [TURBOPANEL_EXTENSION_KEY]: extension }
@@ -420,7 +396,7 @@ function withTurbopanelExtensionLast(
 
 function composeDataToYaml(
   data: Record<string, unknown>,
-  presentation?: ComposePresentation,
+  presentation?: ComposePresentation
 ): string {
   const payload = pruneBlankComposeData(data)
   // Blank drafts should look blank in the editor — not `{}` / `services: {}`

@@ -63,13 +63,7 @@ export function cronScheduleIssue(schedule: string): string | null {
     return `Expected 5 fields (minute hour day-of-month month day-of-week), got ${fields.length}.`
   }
 
-  const [, , dayOfMonth, , dayOfWeek] = fields as [
-    string,
-    string,
-    string,
-    string,
-    string,
-  ]
+  const [, , dayOfMonth, , dayOfWeek] = fields as [string, string, string, string, string]
   if (dayOfMonth.trim() !== '*' && dayOfWeek.trim() !== '*') {
     return 'Cron runs a job when the day-of-month **or** the day-of-week matches; a timer needs both to match. Restrict one and leave the other as “*”, or split this into two jobs.'
   }

@@ -15,6 +15,7 @@ import {
   createEnvironmentManaged,
   createManagedBackup,
   createManagedDatabase,
+  createManagedAppLogins,
   createManagedUser,
   deleteBinding,
   deleteEnvironmentManaged,
@@ -376,6 +377,23 @@ describe('instance-api managed-engine fetch wrappers', () => {
     )
   })
 
+  it('createManagedAppLogins posts the shared options for one database', async () => {
+    const logins = [{ user: { id: 'u-1', appliedUsername: 'shop_migrate' }, password: 'p1' }]
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ ok: true, logins, commandId: 'cmd-1', serverId: 'srv-1' })
+    )
+    const created = await createManagedAppLogins('env-1', 'my db', {
+      prefix: 'shop',
+      straightThrough: true,
+    })
+    expect(created.logins).toEqual(logins)
+    expect(lastFetch().init.method).toBe('POST')
+    expect(String(lastFetch().url)).toContain(
+      `/environments/env-1/managed/databases/${encodeURIComponent('my db')}/app-logins`
+    )
+    expect(lastJsonBody()).toEqual({ prefix: 'shop', straightThrough: true })
+  })
+
   it('sends straightThrough true, false and null on the wire', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, user: {}, password: 'p' }))
     await createManagedUser('env-1', { username: 'a', databases: ['app'], straightThrough: true })
@@ -406,19 +424,25 @@ describe('instance-api managed-engine fetch wrappers', () => {
     expect(lastFetch().init.method).toBe('PATCH')
     expect(String(lastFetch().url)).toContain('/managed/users/p%2F1')
     expect(JSON.parse(String(lastFetch().init.body))).toEqual({ grantMode: 'self', dryRun: true })
-    fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'managed_grant_reset_needs_confirm' }, 409))
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ error: 'managed_grant_reset_needs_confirm' }, 409)
+    )
     await expect(updateManagedUser('env-1', 'p1', { grantMode: 'recipe' })).rejects.toThrow(
       'HTTP 409: managed_grant_reset_needs_confirm'
     )
   })
 
-  it('reads a login\'s effective permissions and the privilege catalogue', async () => {
+  it("reads a login's effective permissions and the privilege catalogue", async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ username: 'u1', grants: [] }))
     const view = await fetchManagedEffectivePermissions('env-1', 'p/1')
     expect(view.username).toBe('u1')
-    expect(String(lastFetch().url)).toContain('/environments/env-1/managed/users/p%2F1/effective-permissions')
+    expect(String(lastFetch().url)).toContain(
+      '/environments/env-1/managed/users/p%2F1/effective-permissions'
+    )
     fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'daemon_update_required' }, 409))
-    await expect(fetchManagedEffectivePermissions('env-1', 'p1')).rejects.toThrow('HTTP 409: daemon_update_required')
+    await expect(fetchManagedEffectivePermissions('env-1', 'p1')).rejects.toThrow(
+      'HTTP 409: daemon_update_required'
+    )
     fetchMock.mockResolvedValueOnce(jsonResponse({ engine: 'postgres', series: '18', levels: [] }))
     expect((await fetchManagedPrivilegeCatalogue('env-1')).series).toBe('18')
     expect(String(lastFetch().url)).toContain('/environments/env-1/managed/privilege-catalogue')
@@ -427,20 +451,31 @@ describe('instance-api managed-engine fetch wrappers', () => {
   it('updateManagedUser sends privileges for a Database admin login', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
     await updateManagedUser('env-1', 'p1', { privileges: ['admin'], connectionRole: 'read-write' })
-    expect(JSON.parse(String(lastFetch().init.body))).toEqual({ privileges: ['admin'], connectionRole: 'read-write' })
+    expect(JSON.parse(String(lastFetch().init.body))).toEqual({
+      privileges: ['admin'],
+      connectionRole: 'read-write',
+    })
   })
 
   it('updateManagedUser sends places and the cap, and null clears them', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
-    await updateManagedUser('env-1', 'p1', { allowedSources: ['internal', 'address:10.1.%'], maxConnections: 5 })
+    await updateManagedUser('env-1', 'p1', {
+      allowedSources: ['internal', 'address:10.1.%'],
+      maxConnections: 5,
+    })
     expect(JSON.parse(String(lastFetch().init.body))).toEqual({
       allowedSources: ['internal', 'address:10.1.%'],
       maxConnections: 5,
     })
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
     await updateManagedUser('env-1', 'p1', { allowedSources: null, maxConnections: null })
-    expect(JSON.parse(String(lastFetch().init.body))).toEqual({ allowedSources: null, maxConnections: null })
-    fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'managed_login_limits_need_daemon_update' }, 409))
+    expect(JSON.parse(String(lastFetch().init.body))).toEqual({
+      allowedSources: null,
+      maxConnections: null,
+    })
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ error: 'managed_login_limits_need_daemon_update' }, 409)
+    )
     await expect(updateManagedUser('env-1', 'p1', { maxConnections: 3 })).rejects.toThrow(
       'HTTP 409: managed_login_limits_need_daemon_update'
     )

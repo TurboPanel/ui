@@ -12,6 +12,7 @@ import {
   deploymentStatusTone,
   formatDeployDuration,
   groupDeploymentsByGeneration,
+  isDeploymentRunning,
   type DeploymentGroup,
 } from '@/lib/deployment-history'
 import type { DeploymentHistoryRecord } from '@/lib/instance-api'
@@ -36,6 +37,7 @@ export function groupStatusKey(group: DeploymentGroup): string {
   if (group.strategyOutcome === 'rolled_back') return 'rolledback'
   // Stopped on purpose mid-deploy: the same red as a failure, as on the cards.
   if (group.strategyOutcome === 'needs_attention') return 'failed'
+  if (isDeploymentRunning(group)) return 'deploying'
   switch (group.status) {
     case 'succeeded':
       return 'deployed'
@@ -44,8 +46,6 @@ export function groupStatusKey(group: DeploymentGroup): string {
       return 'failed'
     case 'cancelled':
       return 'cancelled'
-    case 'running':
-      return 'deploying'
     default:
       return 'queued'
   }
@@ -80,13 +80,13 @@ const WAITING_STATUSES: ReadonlySet<string> = new Set(['queued', 'dispatching', 
 
 /**
  * The line under a deploy: how long it took, or - while it has no duration -
- * what it is doing. Only a deploy that is running reads "In progress"; one
+ * what it is doing. Only a deploy a server has started reads "In progress"; one
  * waiting its turn says so, and a finished deploy that never recorded a time
  * (cancelled before it started, say) shows a dash rather than a false claim.
  */
 function groupSub(group: DeploymentGroup): string {
   if (group.durationMs !== null) return formatDeployDuration(group.durationMs)
-  if (group.status === 'running') return 'In progress'
+  if (isDeploymentRunning(group)) return 'In progress'
   if (WAITING_STATUSES.has(group.status)) return 'Waiting to start'
   return formatDeployDuration(null)
 }
@@ -96,10 +96,12 @@ export function deployRows(
   rows: readonly DeploymentHistoryRecord[],
   now: number,
   running: boolean,
-  limit = 3,
+  limit = 3
 ): DeployRow[] {
   const groups = groupDeploymentsByGeneration(rows)
-  const liveId = running ? groups.find((group) => groupStatusKey(group) === 'deployed')?.id : undefined
+  const liveId = running
+    ? groups.find((group) => groupStatusKey(group) === 'deployed')?.id
+    : undefined
   return groups.slice(0, limit).map((group) => {
     const statusLabel = groupStatusLabel(group)
     return {
@@ -155,7 +157,7 @@ function deployName(group: DeploymentGroup): string {
  */
 export function problemNotice(
   rows: readonly DeploymentHistoryRecord[],
-  running: boolean,
+  running: boolean
 ): ProblemNotice | null {
   const groups = groupDeploymentsByGeneration(rows)
   const latest = groups[0]
@@ -164,7 +166,9 @@ export function problemNotice(
   const errorLine = groupErrorLine(latest)
   const extra = errorLine === undefined ? {} : { errorLine }
   if (key === 'rolledback') {
-    const reason = latest.commands.find((command) => command.strategyOutcomeReason)?.strategyOutcomeReason
+    const reason = latest.commands.find(
+      (command) => command.strategyOutcomeReason
+    )?.strategyOutcomeReason
     return {
       tone: 'warn',
       title: `${deployName(latest)} was rolled back`,

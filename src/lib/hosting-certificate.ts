@@ -219,3 +219,50 @@ export function dnsSummaryLines(dns: HostingDnsReport): string[] {
 export function dnsResultHeadline(dns: HostingDnsReport): string {
   return dns.ready ? 'Every name points at this server.' : 'DNS is not ready yet.'
 }
+
+/** How often a certificate still being issued is checked again (it usually takes a minute or two). */
+export const CERTIFICATE_ISSUING_POLL_MS = 5000
+/** How often a certificate waiting for DNS is checked again (the server retries on its own). */
+export const CERTIFICATE_DNS_POLL_MS = 30_000
+
+/**
+ * The refetch interval for a hosting's certificate: while it is being issued
+ * or waits for DNS the server moves it on by itself, so the page follows
+ * without a reload. A certificate that needs a deploy first, or has settled,
+ * is not polled.
+ */
+export function certificatePollInterval(
+  cert: HostingCertificate | null | undefined
+): number | false {
+  if (cert?.state === 'issuing' && !cert.needsDeploy) return CERTIFICATE_ISSUING_POLL_MS
+  if (cert?.state === 'waiting_for_dns') return CERTIFICATE_DNS_POLL_MS
+  return false
+}
+
+/**
+ * What the last save of one hosting row said, shown next to the control that
+ * caused it: a missing hostname under the Hostname field, anything else under
+ * the save button.
+ */
+export type HostingSaveNote = Readonly<{
+  tone: 'ok' | 'error'
+  message: string
+  field?: 'hostnames'
+}>
+
+/** What a saved hosting says next to its save button, including the Let's Encrypt step. */
+export function hostingSaveNote(
+  wantsCertificate: boolean,
+  refusal: LetsEncryptRefusal | null
+): HostingSaveNote {
+  if (refusal) {
+    return {
+      tone: 'error',
+      message: `Saved the hostname, but Let\u2019s Encrypt did not start: ${refusal.message}`,
+    }
+  }
+  if (wantsCertificate) {
+    return { tone: 'ok', message: 'Saved. Let\u2019s Encrypt was asked for a certificate.' }
+  }
+  return { tone: 'ok', message: 'Saved.' }
+}

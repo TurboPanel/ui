@@ -29,6 +29,7 @@ const styles = themedStyles((p) => ({
   footStart: { marginRight: 'auto' },
   label: { ...typeStyle('bodySemibold', 'subhead'), color: p.text2 },
   hint: { ...typeStyle('body', 'footnote'), color: p.text3 },
+  error: { ...typeStyle('body', 'footnote'), color: p.bad, textAlign: 'right' },
 }))
 
 function EditorFoot({
@@ -38,6 +39,8 @@ function EditorFoot({
   onCancel,
   start,
   cancelLabel = 'Cancel',
+  busy = false,
+  error = null,
 }: Readonly<{
   doneLabel: string
   cancelLabel?: string
@@ -46,14 +49,37 @@ function EditorFoot({
   onCancel: () => void
   /** Shown at the start of the row, away from Done (a Remove button). */
   start?: ReactNode
+  /** Done is saving: both buttons wait. */
+  busy?: boolean
+  /** Why Done did not go through, said right under the buttons. */
+  error?: string | null
 }>) {
   const s = styles(usePalette())
   return (
-    <View style={s.foot}>
-      {start ? <View style={s.footStart}>{start}</View> : null}
-      <ActionButton label={cancelLabel} variant="quiet" size="sm" onPress={onCancel} />
-      <ActionButton label={doneLabel} size="sm" onPress={onDone} disabled={doneDisabled} />
-    </View>
+    <>
+      <View style={s.foot}>
+        {start ? <View style={s.footStart}>{start}</View> : null}
+        <ActionButton
+          label={cancelLabel}
+          variant="quiet"
+          size="sm"
+          onPress={onCancel}
+          disabled={busy}
+        />
+        <ActionButton
+          label={doneLabel}
+          size="sm"
+          onPress={onDone}
+          disabled={doneDisabled || busy}
+          busy={busy}
+        />
+      </View>
+      {error ? (
+        <Text accessibilityRole="alert" style={s.error}>
+          {error}
+        </Text>
+      ) : null}
+    </>
   )
 }
 
@@ -241,6 +267,8 @@ export function NewVariableEditor({
   const [value, setValue] = useState('')
   const [secret, setSecret] = useState<boolean | null>(null)
   const [chosenUse, setChosenUse] = useState<VariableUse | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const trimmed = name.trim()
   const use = chosenUse ?? defaultVariableUse(trimmed)
   const exists = editing.variableFacts(trimmed) !== null
@@ -286,18 +314,32 @@ export function NewVariableEditor({
       <EditorFoot
         doneLabel="Add"
         doneDisabled={trimmed === '' || value === '' || exists}
+        busy={saving}
+        error={saveError}
         onCancel={onClose}
         onDone={() => {
-          editing.onStage(
-            variableEdit({
-              name: trimmed,
-              value,
-              secret: isSecret,
-              ...variableUseFlags(use),
-              was: 'Not set',
-            })
-          )
-          onClose()
+          const edit = variableEdit({
+            name: trimmed,
+            value,
+            secret: isSecret,
+            ...variableUseFlags(use),
+            was: 'Not set',
+          })
+          const saveNow = editing.onSaveNow
+          if (!saveNow) {
+            editing.onStage(edit)
+            onClose()
+            return
+          }
+          // Saved at once, like every other Add: the editor stays open with
+          // the reason when it does not go through.
+          setSaving(true)
+          setSaveError(null)
+          void saveNow(edit).then((problem) => {
+            setSaving(false)
+            if (problem === null) onClose()
+            else setSaveError(problem)
+          })
         }}
       />
     </View>

@@ -11,6 +11,7 @@ import {
   fetchPrincipalSshKeys,
   fetchProject,
   fetchProjectCatalog,
+  fetchProjectDeletePreview,
   fetchProjectPrincipals,
   fetchVisibleProjects,
   setPrincipalPassword,
@@ -27,7 +28,7 @@ export type { ConfigureProjectBody }
 export function useProjects(
   orgId: string,
   workspaceId?: string,
-  options?: Readonly<{ enabled?: boolean }>,
+  options?: Readonly<{ enabled?: boolean }>
 ) {
   return useQuery({
     queryKey: queryKeys.org(orgId).projects.list(workspaceId),
@@ -39,22 +40,30 @@ export function useProjects(
 export function useProject(
   orgId: string,
   projectId: string,
-  options?: Readonly<{ enabled?: boolean }>,
+  options?: Readonly<{ enabled?: boolean }>
 ) {
   return useQuery({
     queryKey: queryKeys.org(orgId).projects.detail(projectId),
     queryFn: () => fetchProject(projectId),
-    enabled:
-      (options?.enabled ?? true) &&
-      orgId.length > 0 &&
-      projectId.length > 0,
+    enabled: (options?.enabled ?? true) && orgId.length > 0 && projectId.length > 0,
   })
 }
 
-export function useProjectCatalog(
+/** What deleting the project removes and keeps; read fresh each time the delete panel opens. */
+export function useProjectDeletePreview(
   orgId: string,
-  options?: Readonly<{ enabled?: boolean }>,
+  projectId: string,
+  options?: Readonly<{ enabled?: boolean }>
 ) {
+  return useQuery({
+    queryKey: queryKeys.org(orgId).projects.deletePreview(projectId),
+    queryFn: () => fetchProjectDeletePreview(projectId),
+    enabled: (options?.enabled ?? true) && orgId.length > 0 && projectId.length > 0,
+    staleTime: 0,
+  })
+}
+
+export function useProjectCatalog(orgId: string, options?: Readonly<{ enabled?: boolean }>) {
   return useQuery({
     queryKey: queryKeys.org(orgId).projects.catalog,
     queryFn: fetchProjectCatalog,
@@ -65,15 +74,12 @@ export function useProjectCatalog(
 export function useProjectPrincipals(
   orgId: string,
   projectId: string,
-  options?: Readonly<{ enabled?: boolean }>,
+  options?: Readonly<{ enabled?: boolean }>
 ) {
   return useQuery({
     queryKey: queryKeys.org(orgId).projects.principals(projectId),
     queryFn: () => fetchProjectPrincipals(projectId),
-    enabled:
-      (options?.enabled ?? true) &&
-      orgId.length > 0 &&
-      projectId.length > 0,
+    enabled: (options?.enabled ?? true) && orgId.length > 0 && projectId.length > 0,
   })
 }
 
@@ -92,14 +98,10 @@ export function useCreateProject(orgId: string) {
 export function useConfigureProject(orgId: string, projectId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (body: ConfigureProjectBody) =>
-      configureProject(projectId, body),
+    mutationFn: (body: ConfigureProjectBody) => configureProject(projectId, body),
     onSuccess: async () => {
       const { project } = await fetchProject(projectId)
-      queryClient.setQueryData(
-        queryKeys.org(orgId).projects.detail(projectId),
-        { project },
-      )
+      queryClient.setQueryData(queryKeys.org(orgId).projects.detail(projectId), { project })
       await queryClient.invalidateQueries({
         queryKey: queryKeys.org(orgId).projects.all,
       })
@@ -110,14 +112,10 @@ export function useConfigureProject(orgId: string, projectId: string) {
 export function useUpdateProject(orgId: string, projectId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (body: Parameters<typeof updateProject>[1]) =>
-      updateProject(projectId, body),
+    mutationFn: (body: Parameters<typeof updateProject>[1]) => updateProject(projectId, body),
     onSuccess: async () => {
       const { project } = await fetchProject(projectId)
-      queryClient.setQueryData(
-        queryKeys.org(orgId).projects.detail(projectId),
-        { project },
-      )
+      queryClient.setQueryData(queryKeys.org(orgId).projects.detail(projectId), { project })
       await queryClient.invalidateQueries({
         queryKey: queryKeys.org(orgId).projects.all,
       })
@@ -180,19 +178,11 @@ export function useUpdateProjectPrincipal(orgId: string, projectId: string) {
 }
 
 /** Steward-only patch — wraps {@link updateProjectPrincipal} with `serviceIds`. */
-export function useUpdateProjectPrincipalAssignments(
-  orgId: string,
-  projectId: string,
-) {
+export function useUpdateProjectPrincipalAssignments(orgId: string, projectId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: ({
-      principalId,
-      serviceIds,
-    }: {
-      principalId: string
-      serviceIds: string[]
-    }) => updateProjectPrincipal(projectId, principalId, { serviceIds }),
+    mutationFn: ({ principalId, serviceIds }: { principalId: string; serviceIds: string[] }) =>
+      updateProjectPrincipal(projectId, principalId, { serviceIds }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
         queryKey: queryKeys.org(orgId).projects.principals(projectId),
@@ -204,8 +194,7 @@ export function useUpdateProjectPrincipalAssignments(
 export function useDeleteProjectPrincipal(orgId: string, projectId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (principalId: string) =>
-      deleteProjectPrincipal(projectId, principalId),
+    mutationFn: (principalId: string) => deleteProjectPrincipal(projectId, principalId),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
         queryKey: queryKeys.org(orgId).projects.principals(projectId),
@@ -225,13 +214,10 @@ export function usePrincipalSshKeys(
   orgId: string,
   projectId: string,
   principalId: string,
-  enabled = true,
+  enabled = true
 ) {
   return useQuery({
-    queryKey: queryKeys.org(orgId).projects.principalSshKeys(
-      projectId,
-      principalId,
-    ),
+    queryKey: queryKeys.org(orgId).projects.principalSshKeys(projectId, principalId),
     queryFn: () => fetchPrincipalSshKeys(projectId, principalId),
     enabled: enabled && Boolean(orgId && projectId && principalId),
   })
@@ -243,11 +229,7 @@ export function usePrincipalSshKeys(
  * on whether it holds any key at all. Refreshing only the keys would leave the
  * row still reading "No access" after the first key was added.
  */
-export function useAddPrincipalSshKey(
-  orgId: string,
-  projectId: string,
-  principalId: string,
-) {
+export function useAddPrincipalSshKey(orgId: string, projectId: string, principalId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
     mutationFn: (body: { name: string; publicKey: string }) =>
@@ -258,15 +240,10 @@ export function useAddPrincipalSshKey(
   })
 }
 
-export function useDeletePrincipalSshKey(
-  orgId: string,
-  projectId: string,
-  principalId: string,
-) {
+export function useDeletePrincipalSshKey(orgId: string, projectId: string, principalId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (keyId: string) =>
-      deletePrincipalSshKey(projectId, principalId, keyId),
+    mutationFn: (keyId: string) => deletePrincipalSshKey(projectId, principalId, keyId),
     onSuccess: async () => {
       await invalidatePrincipalKeys(queryClient, orgId, projectId, principalId)
     },
@@ -278,15 +255,10 @@ export function useDeletePrincipalSshKey(
  * it carries `passwordAuth`, and effective access flips the moment the first
  * credential of either kind exists.
  */
-export function useSetPrincipalPassword(
-  orgId: string,
-  projectId: string,
-  principalId: string,
-) {
+export function useSetPrincipalPassword(orgId: string, projectId: string, principalId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (body: { password?: string }) =>
-      setPrincipalPassword(projectId, principalId, body),
+    mutationFn: (body: { password?: string }) => setPrincipalPassword(projectId, principalId, body),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
         queryKey: queryKeys.org(orgId).projects.principals(projectId),
@@ -295,11 +267,7 @@ export function useSetPrincipalPassword(
   })
 }
 
-export function useDisablePrincipalPassword(
-  orgId: string,
-  projectId: string,
-  principalId: string,
-) {
+export function useDisablePrincipalPassword(orgId: string, projectId: string, principalId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
     mutationFn: () => disablePrincipalPassword(projectId, principalId),
@@ -315,13 +283,10 @@ async function invalidatePrincipalKeys(
   queryClient: ReturnType<typeof useQueryClient>,
   orgId: string,
   projectId: string,
-  principalId: string,
+  principalId: string
 ): Promise<void> {
   await queryClient.invalidateQueries({
-    queryKey: queryKeys.org(orgId).projects.principalSshKeys(
-      projectId,
-      principalId,
-    ),
+    queryKey: queryKeys.org(orgId).projects.principalSshKeys(projectId, principalId),
   })
   await queryClient.invalidateQueries({
     queryKey: queryKeys.org(orgId).projects.principals(projectId),

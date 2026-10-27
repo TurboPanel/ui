@@ -7,20 +7,20 @@ describe('commandErrorLine', () => {
       commandErrorLine({
         errorLine: ' Install Caddy: apt lock held ',
         errorMessage: 'ansible-playbook failed (exit 2): Install Caddy: apt lock held',
-      }),
+      })
     ).toBe('Install Caddy: apt lock held')
   })
 
   it('falls back to the last non-empty line of an older control plane error', () => {
-    expect(
-      commandErrorLine({ errorMessage: 'Step 1\nStep 2\nsh: 1: next: not found\n\n' }),
-    ).toBe('sh: 1: next: not found')
+    expect(commandErrorLine({ errorMessage: 'Step 1\nStep 2\nsh: 1: next: not found\n\n' })).toBe(
+      'sh: 1: next: not found'
+    )
     expect(commandErrorLine({ error: 'only the legacy field' })).toBe('only the legacy field')
   })
 
   it('never returns the truncation marker', () => {
     expect(commandErrorLine({ errorMessage: '[...truncated] tail of a cut line' })).toBe(
-      'tail of a cut line',
+      'tail of a cut line'
     )
     expect(commandErrorLine({ errorMessage: '[...truncated] ' })).toBeNull()
   })
@@ -49,7 +49,7 @@ describe('commandErrorDetail', () => {
       commandErrorDetail({
         errorLine: 'next: not found',
         errorMessage: 'build failed\nnext: not found',
-      }),
+      })
     ).toBe('build failed\nnext: not found')
   })
 })

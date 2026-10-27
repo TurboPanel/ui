@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   createEnvironment,
   deleteEnvironment,
+  fetchEnvironmentDeletePreview,
   deployEnvironment,
   fetchDeployPreview,
   fetchEnvironment,
@@ -93,8 +94,9 @@ async function invalidateEnvironmentSubtree(
       queryClient.invalidateQueries({
         queryKey: queryKeys.org(orgId).environments.deployPreview(environmentId),
       }),
-      // Deploy history has no interval — a new attempt only shows up because
-      // the enqueueing mutation invalidates this key.
+      // Deploy history polls only while its newest deploy runs, so a new
+      // attempt shows up (and starts that poll) because the enqueueing
+      // mutation invalidates this key.
       queryClient.invalidateQueries({
         queryKey: queryKeys.org(orgId).environments.deployments(environmentId),
       })
@@ -134,6 +136,20 @@ export function useMakeEnvironmentPrimary(orgId: string) {
     onSuccess: async (_data, environmentId) => {
       await invalidateEnvironmentSubtree(queryClient, orgId, environmentId)
     },
+  })
+}
+
+/** What deleting the environment removes and keeps; read fresh each time it is asked for. */
+export function useEnvironmentDeletePreview(
+  orgId: string,
+  environmentId: string,
+  options?: Readonly<{ enabled?: boolean }>
+) {
+  return useQuery({
+    queryKey: queryKeys.org(orgId).environments.deletePreview(environmentId),
+    queryFn: () => fetchEnvironmentDeletePreview(environmentId),
+    enabled: (options?.enabled ?? true) && orgId.length > 0 && environmentId.length > 0,
+    staleTime: 0,
   })
 }
 

@@ -10,11 +10,7 @@
 
 import { hideComposeTurbopanelExtensions as hideTurboExtensions } from './hidden-extension'
 import { composeDocumentToYaml } from './convert'
-import {
-  composeTagOf,
-  isComposeTaggedValue,
-  resolveComposeTags,
-} from './tags'
+import { composeTagOf, isComposeTaggedValue, resolveComposeTags } from './tags'
 import {
   isBlankComposeData,
   isComposeEditorView,
@@ -25,11 +21,7 @@ import {
   type ComposePresentation,
 } from './types'
 
-export type {
-  ComposeComment,
-  ComposeDocument,
-  ComposePresentation,
-} from './types'
+export type { ComposeComment, ComposeDocument, ComposePresentation } from './types'
 export {
   emptyComposeDocument,
   isBlankComposeData,
@@ -141,7 +133,6 @@ export {
   HOSTING_TARGET_PORT_NOT_FOR_NODE_MESSAGE,
   HOSTING_TARGET_PORT_NOT_FOR_SITE_MESSAGE,
   HOSTING_TARGET_PORT_RANGE_MESSAGE,
-  HOSTING_TLS_MODE_AUTOMATIC_UNSUPPORTED_MESSAGE,
   HOSTING_TLS_MODES,
   HOSTING_WWW_MODE_MESSAGE,
   HOSTING_WWW_MODES,
@@ -201,13 +192,8 @@ export {
   siteEnvKeyForService,
   writeComposeHostingEntries,
 } from './hosting-service-context'
-export type {
-  ComposeHostingEditorFields,
-} from './hosting-editor-entry'
-export {
-  composeHostingEntryFromEditorFields,
-  parseHostnameList,
-} from './hosting-editor-entry'
+export type { ComposeHostingEditorFields } from './hosting-editor-entry'
+export { composeHostingEntryFromEditorFields, parseHostnameList } from './hosting-editor-entry'
 export type { ComposeImageRef } from './image-ref'
 export {
   emptyComposeImageRef,
@@ -227,14 +213,8 @@ export {
 } from './build-ref'
 export type { ComposeOverlayState } from './overlay-state'
 export { resolveComposeOverlayState } from './overlay-state'
-export type {
-  ComposeDocumentSummary,
-  ComposeSummaryChip,
-} from './summary'
-export {
-  formatComposeSummaryChips,
-  summarizeComposeDocument,
-} from './summary'
+export type { ComposeDocumentSummary, ComposeSummaryChip } from './summary'
+export { formatComposeSummaryChips, summarizeComposeDocument } from './summary'
 export type {
   ComposeGraph,
   ComposeGraphEdge,
@@ -242,11 +222,7 @@ export type {
   ComposeGraphNode,
   ComposeGraphNodeKind,
 } from './graph'
-export {
-  annotateComposeGraphSources,
-  buildComposeGraph,
-  describeComposeGraph,
-} from './graph'
+export { annotateComposeGraphSources, buildComposeGraph, describeComposeGraph } from './graph'
 export type {
   ComposeRestartPolicy,
   ParsedComposeRestart,
@@ -270,12 +246,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 /** Preserve editor-only presentation metadata when rebuilding key order / comments. */
 function clonePresentationMetadata(
-  source: ComposePresentation,
-): Pick<ComposePresentation, 'blankLines' | 'documentCommentBefore' | 'documentComment' | 'editorView'> {
+  source: ComposePresentation
+): Pick<
+  ComposePresentation,
+  'blankLines' | 'documentCommentBefore' | 'documentComment' | 'editorView'
+> {
   return {
     ...(source.blankLines ? { blankLines: { ...source.blankLines } } : {}),
-    ...(typeof source.documentCommentBefore === 'string' &&
-        source.documentCommentBefore.length > 0
+    ...(typeof source.documentCommentBefore === 'string' && source.documentCommentBefore.length > 0
       ? { documentCommentBefore: source.documentCommentBefore }
       : {}),
     ...(typeof source.documentComment === 'string' && source.documentComment.length > 0
@@ -291,7 +269,7 @@ function buildPresentation(
     keyOrder: string[]
     comments: Record<string, ComposeComment>
   },
-  editorView?: ComposeEditorView,
+  editorView?: ComposeEditorView
 ): ComposePresentation {
   const nextEditorView = editorView ?? source.editorView
   return {
@@ -325,19 +303,11 @@ type SequenceStrategy =
  * `dns`, `dns_search`, `tmpfs`, and `env_file` intentionally stay plain-append
  * (Docker Compose preserves duplicate entries for those lists).
  */
-const SCALAR_DEDUP_ATTRS = new Set([
-  'expose',
-  'extra_hosts',
-])
+const SCALAR_DEDUP_ATTRS = new Set(['expose', 'extra_hosts'])
 
 const KEYED_LIST_ATTRS = new Set(['labels', 'environment', 'depends_on'])
 
-const MAP_LIST_DUALITY_ATTRS = new Set([
-  'labels',
-  'environment',
-  'depends_on',
-  'extra_hosts',
-])
+const MAP_LIST_DUALITY_ATTRS = new Set(['labels', 'environment', 'depends_on', 'extra_hosts'])
 
 function leafAttribute(path: MergePath): string {
   return path.at(-1) ?? ''
@@ -349,10 +319,7 @@ function leafAttribute(path: MergePath): string {
  */
 function isHealthcheckTestPath(path: MergePath): boolean {
   return (
-    path.length === 4 &&
-    path[0] === 'services' &&
-    path[2] === 'healthcheck' &&
-    path[3] === 'test'
+    path.length === 4 && path[0] === 'services' && path[2] === 'healthcheck' && path[3] === 'test'
   )
 }
 
@@ -369,10 +336,7 @@ function resolveSequenceStrategy(path: MergePath): SequenceStrategy {
   if (isServiceAttrPath(path, 'command') || isRootAttrPath(path, 'command')) {
     return 'replace'
   }
-  if (
-    isServiceAttrPath(path, 'entrypoint') ||
-    isRootAttrPath(path, 'entrypoint')
-  ) {
+  if (isServiceAttrPath(path, 'entrypoint') || isRootAttrPath(path, 'entrypoint')) {
     return 'replace'
   }
   if (isServiceAttrPath(path, 'ports') || isRootAttrPath(path, 'ports')) {
@@ -425,8 +389,7 @@ function portUniqueKey(entry: unknown): string | null {
     return portKeyString(parseShortPort(String(entry)))
   }
   if (!isPlainObject(entry)) return null
-  const protocol =
-    typeof entry.protocol === 'string' ? entry.protocol.toLowerCase() : 'tcp'
+  const protocol = typeof entry.protocol === 'string' ? entry.protocol.toLowerCase() : 'tcp'
   const hostIp = typeof entry.host_ip === 'string' ? entry.host_ip : ''
   const target = portFieldString(entry.target)
   const published = portFieldString(entry.published)
@@ -566,7 +529,7 @@ type SequenceMergeResult = {
 function appendWithUniqueKey(
   base: unknown[],
   overlay: unknown[],
-  keyOf: (entry: unknown) => string | null,
+  keyOf: (entry: unknown) => string | null
 ): SequenceMergeResult {
   const out = [...base]
   const indexByKey = new Map<string, number>()
@@ -596,10 +559,7 @@ function appendWithUniqueKey(
   return { value: out, overlayIndexMap }
 }
 
-function appendScalarDedup(
-  base: unknown[],
-  overlay: unknown[],
-): SequenceMergeResult {
+function appendScalarDedup(base: unknown[], overlay: unknown[]): SequenceMergeResult {
   const out = [...base]
   const seen = new Set<string>()
   for (const item of out) {
@@ -624,10 +584,7 @@ function appendScalarDedup(
   return { value: out, overlayIndexMap }
 }
 
-function appendKeyedList(
-  base: unknown[],
-  overlay: unknown[],
-): SequenceMergeResult {
+function appendKeyedList(base: unknown[], overlay: unknown[]): SequenceMergeResult {
   return appendWithUniqueKey(base, overlay, keyedListKey)
 }
 
@@ -639,11 +596,7 @@ function plainAppend(base: unknown[], overlay: unknown[]): SequenceMergeResult {
   return { value: [...base, ...overlay], overlayIndexMap }
 }
 
-function mergeSequences(
-  base: unknown[],
-  overlay: unknown[],
-  path: MergePath,
-): SequenceMergeResult {
+function mergeSequences(base: unknown[], overlay: unknown[], path: MergePath): SequenceMergeResult {
   const strategy = resolveSequenceStrategy(path)
   switch (strategy) {
     case 'replace':
@@ -690,7 +643,7 @@ function mergeMapListDuality(
   base: unknown,
   overlay: unknown,
   path: MergePath,
-  sequenceIndexMaps: SequenceIndexMaps,
+  sequenceIndexMaps: SequenceIndexMaps
 ): Record<string, unknown> | typeof NO_DUALITY_MERGE {
   if (!MAP_LIST_DUALITY_ATTRS.has(attr)) return NO_DUALITY_MERGE
   const baseIsMapOrList = isPlainObject(base) || Array.isArray(base)
@@ -707,7 +660,7 @@ function mergeArraySequences(
   base: unknown[],
   overlay: unknown[],
   path: MergePath,
-  sequenceIndexMaps: SequenceIndexMaps,
+  sequenceIndexMaps: SequenceIndexMaps
 ): unknown[] {
   const merged = mergeSequences(base, overlay, path)
   if (merged.overlayIndexMap !== null) {
@@ -725,7 +678,7 @@ function mergeNodes(
   base: unknown,
   overlay: unknown,
   path: MergePath,
-  sequenceIndexMaps: SequenceIndexMaps,
+  sequenceIndexMaps: SequenceIndexMaps
 ): unknown {
   if (overlay === undefined) return base
 
@@ -737,13 +690,7 @@ function mergeNodes(
     base = resolveComposeTags(base)
   }
 
-  const duality = mergeMapListDuality(
-    leafAttribute(path),
-    base,
-    overlay,
-    path,
-    sequenceIndexMaps,
-  )
+  const duality = mergeMapListDuality(leafAttribute(path), base, overlay, path, sequenceIndexMaps)
   if (duality !== NO_DUALITY_MERGE) return duality
 
   if (isPlainObject(base) && isPlainObject(overlay)) {
@@ -761,7 +708,7 @@ function mergeMappings(
   base: Record<string, unknown>,
   overlay: Record<string, unknown>,
   path: MergePath,
-  sequenceIndexMaps: SequenceIndexMaps,
+  sequenceIndexMaps: SequenceIndexMaps
 ): Record<string, unknown> {
   const out: Record<string, unknown> = { ...base }
   for (const [key, value] of Object.entries(overlay)) {
@@ -781,7 +728,7 @@ function mergeMappings(
 function mergeKeyOrder(
   baseOrder: string[],
   overlayOrder: string[],
-  merged: Record<string, unknown>,
+  merged: Record<string, unknown>
 ): string[] {
   const seen = new Set<string>()
   const result: string[] = []
@@ -806,7 +753,7 @@ const INDEXED_PATH_RE = /^(.*?)\[(\d+)\](.*)$/
  */
 function shiftPresentationPaths(
   overlayPaths: Record<string, unknown>,
-  sequenceIndexMaps: SequenceIndexMaps,
+  sequenceIndexMaps: SequenceIndexMaps
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {}
   for (const [rawPath, value] of Object.entries(overlayPaths)) {
@@ -823,10 +770,7 @@ function shiftPresentationPaths(
 /**
  * @returns remapped path, or `null` when the overlay entry was dropped.
  */
-function shiftIndexedPath(
-  path: string,
-  sequenceIndexMaps: SequenceIndexMaps,
-): string | null {
+function shiftIndexedPath(path: string, sequenceIndexMaps: SequenceIndexMaps): string | null {
   const match = INDEXED_PATH_RE.exec(path)
   if (!match) return path
   const prefix = match[1] ?? ''
@@ -843,13 +787,13 @@ function mergePresentation(
   base: ComposePresentation,
   overlay: ComposePresentation,
   mergedData: Record<string, unknown>,
-  sequenceIndexMaps: SequenceIndexMaps,
+  sequenceIndexMaps: SequenceIndexMaps
 ): ComposePresentation {
   const keyOrder = mergeKeyOrder(base.keyOrder, overlay.keyOrder, mergedData)
 
   const shiftedComments = shiftPresentationPaths(
     overlay.comments as Record<string, unknown>,
-    sequenceIndexMaps,
+    sequenceIndexMaps
   ) as Record<string, ComposeComment>
 
   const comments = {
@@ -859,14 +803,13 @@ function mergePresentation(
 
   const baseBlanks = base.blankLines ?? {}
   const overlayBlanks = (overlay.blankLines ?? {}) as Record<string, unknown>
-  const shiftedBlanks = shiftPresentationPaths(
-    overlayBlanks,
-    sequenceIndexMaps,
-  ) as Record<string, number>
+  const shiftedBlanks = shiftPresentationPaths(overlayBlanks, sequenceIndexMaps) as Record<
+    string,
+    number
+  >
   const blankLines = { ...baseBlanks, ...shiftedBlanks }
 
-  const documentCommentBefore =
-    base.documentCommentBefore ?? overlay.documentCommentBefore
+  const documentCommentBefore = base.documentCommentBefore ?? overlay.documentCommentBefore
   const documentComment = base.documentComment ?? overlay.documentComment
   const editorView = overlay.editorView ?? base.editorView
 
@@ -909,10 +852,7 @@ function resolveDocumentTags(doc: ComposeDocument): ComposeDocument {
  *   sequence-item comment paths remap via overlay-index maps
  * - Base-layer tags are always unwrapped (no effect; no leak into effective YAML)
  */
-export function mergeComposeOverlay(
-  base: unknown,
-  overlay: unknown,
-): ComposeDocument {
+export function mergeComposeOverlay(base: unknown, overlay: unknown): ComposeDocument {
   const baseDoc = resolveDocumentTags(normalizeCompose(base))
   if (overlay == null) return baseDoc
   const overlayDoc = normalizeCompose(overlay)
@@ -925,18 +865,13 @@ export function mergeComposeOverlay(
   }
 
   const sequenceIndexMaps: SequenceIndexMaps = new Map()
-  const mergedData = mergeMappings(
-    baseDoc.data,
-    overlayDoc.data,
-    [],
-    sequenceIndexMaps,
-  )
+  const mergedData = mergeMappings(baseDoc.data, overlayDoc.data, [], sequenceIndexMaps)
 
   const presentation = mergePresentation(
     baseDoc.presentation,
     overlayDoc.presentation,
     mergedData,
-    sequenceIndexMaps,
+    sequenceIndexMaps
   )
 
   return {
@@ -964,10 +899,7 @@ export type TurbopanelRuntimeRootExtension = {
   placement: { server_id: string }
 }
 
-function stripTurbopanelField(
-  document: ComposeDocument,
-  field: string,
-): ComposeDocument {
+function stripTurbopanelField(document: ComposeDocument, field: string): ComposeDocument {
   const normalized = normalizeCompose(document)
   const extension = normalized.data[TURBOPANEL_EXTENSION_KEY]
   if (!isRecord(extension) || !(field in extension)) {
@@ -1012,8 +944,7 @@ export function stripComposePlacement(document: ComposeDocument): ComposeDocumen
   return stripTurbopanelField(document, 'placement')
 }
 
-const PLACEMENT_SERVER_ID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const PLACEMENT_SERVER_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export function isPlacementServerId(value: unknown): boolean {
   return typeof value === 'string' && value.length > 0 && PLACEMENT_SERVER_ID_RE.test(value)
@@ -1025,7 +956,7 @@ export function isPlacementServerId(value: unknown): boolean {
  */
 export function applyComposePlacement(
   document: ComposeDocument,
-  serverId: string,
+  serverId: string
 ): ComposeDocument {
   if (!isPlacementServerId(serverId)) return document
   const normalized = normalizeCompose(document)
@@ -1036,7 +967,7 @@ export function applyComposePlacement(
   const { [TURBOPANEL_EXTENSION_KEY]: _existing, ...restData } = normalized.data
   const data = { ...restData, [TURBOPANEL_EXTENSION_KEY]: rest }
   const keyOrder = normalized.presentation.keyOrder.filter(
-    (key) => key !== TURBOPANEL_EXTENSION_KEY,
+    (key) => key !== TURBOPANEL_EXTENSION_KEY
   )
   keyOrder.push(TURBOPANEL_EXTENSION_KEY)
   return {
@@ -1056,20 +987,16 @@ export function applyComposePlacement(
 export function composePreviewMergedYaml(
   projectCompose: unknown,
   environmentCompose: unknown,
-  placementServerId?: string | null,
+  placementServerId?: string | null
 ): string {
-  let document = stripComposePlacement(
-    mergeComposeOverlay(projectCompose, environmentCompose),
-  )
+  let document = stripComposePlacement(mergeComposeOverlay(projectCompose, environmentCompose))
   if (placementServerId) {
     document = applyComposePlacement(document, placementServerId)
   }
   return composeDocumentToYaml(document)
 }
 
-export function readComposeEditorView(
-  document: ComposeDocument,
-): ComposeEditorView | null {
+export function readComposeEditorView(document: ComposeDocument): ComposeEditorView | null {
   const normalized = normalizeCompose(document)
   return isComposeEditorView(normalized.presentation.editorView)
     ? normalized.presentation.editorView
@@ -1078,7 +1005,7 @@ export function readComposeEditorView(
 
 export function setComposeEditorView(
   document: ComposeDocument,
-  view: ComposeEditorView,
+  view: ComposeEditorView
 ): ComposeDocument {
   const normalized = normalizeCompose(document)
   return {
@@ -1090,7 +1017,7 @@ export function setComposeEditorView(
         keyOrder: [...normalized.presentation.keyOrder],
         comments: { ...normalized.presentation.comments },
       },
-      view,
+      view
     ),
   }
 }
@@ -1103,9 +1030,6 @@ export function setComposeEditorView(
  * extension tree is removed via {@link hideComposeTurbopanelExtensions}.
  * Editor view lives in `presentation.editorView` and is not part of compose YAML.
  */
-export function stripComposeManagedExtension(
-  document: ComposeDocument,
-): ComposeDocument {
+export function stripComposeManagedExtension(document: ComposeDocument): ComposeDocument {
   return hideTurboExtensions(stripComposePlacement(document)).document
 }
-

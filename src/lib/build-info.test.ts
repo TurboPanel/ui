@@ -25,19 +25,26 @@ describe('buildInfoSections', () => {
       {
         ok: true,
         version: '0.1.1',
-        revision: { commit: CP_SHA, sourceUrl: `https://github.com/TurboPanel/turbopanel/tree/${CP_SHA}` },
+        revision: {
+          commit: CP_SHA,
+          sourceUrl: `https://github.com/TurboPanel/turbopanel/tree/${CP_SHA}`,
+        },
         channel: 'canary',
         environment: 'testing',
         build: null,
       },
-      consoleBuild,
+      consoleBuild
     )
     expect(sections).toEqual([
       {
         title: 'Web interface',
         rows: [
           { label: 'Version', value: 'v0.1.1' },
-          { label: 'Commit', value: 'aaaaaaa', url: `https://github.com/TurboPanel/ui/commit/${UI_SHA}` },
+          {
+            label: 'Commit',
+            value: 'aaaaaaa',
+            url: `https://github.com/TurboPanel/ui/commit/${UI_SHA}`,
+          },
         ],
       },
       {
@@ -58,8 +65,13 @@ describe('buildInfoSections', () => {
 
   it('shows an installed build label and marks unknown commits', () => {
     const sections = buildInfoSections(
-      { ok: true, version: '0.1.1', build: '0.1.1-rc.1', revision: { commit: 'unknown', sourceUrl: '' } },
-      { ...consoleBuild, gitCommit: '' },
+      {
+        ok: true,
+        version: '0.1.1',
+        build: '0.1.1-rc.1',
+        revision: { commit: 'unknown', sourceUrl: '' },
+      },
+      { ...consoleBuild, gitCommit: '' }
     )
     expect(sections[0].rows[1]).toEqual({ label: 'Commit', value: 'unknown' })
     expect(sections[1].rows).toEqual([
@@ -71,8 +83,12 @@ describe('buildInfoSections', () => {
 
   it('does not link a commit whose source is not https', () => {
     const sections = buildInfoSections(
-      { ok: true, version: '0.1.1', revision: { commit: CP_SHA, sourceUrl: 'javascript:alert(1)' } },
-      consoleBuild,
+      {
+        ok: true,
+        version: '0.1.1',
+        revision: { commit: CP_SHA, sourceUrl: 'javascript:alert(1)' },
+      },
+      consoleBuild
     )
     expect(sections[1].rows[1]).toEqual({ label: 'Commit', value: 'bbbbbbb' })
   })

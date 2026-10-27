@@ -5,17 +5,20 @@ import {
   requestLetsEncryptForHosting,
 } from '@/lib/instance-api'
 import { useApiMutation, queryKeys } from '@/lib/query-client'
+import { certificatePollInterval } from '@/lib/hosting-certificate'
 
 /** One hosting with its derived certificate block. */
 export function useHostingCertificate(
   orgId: string,
   hostingId: string | null,
-  options?: Readonly<{ enabled?: boolean }>,
+  options?: Readonly<{ enabled?: boolean }>
 ) {
   return useQuery({
     queryKey: queryKeys.org(orgId).hostings.detail(hostingId ?? ''),
     queryFn: () => fetchHosting(hostingId ?? ''),
     enabled: (options?.enabled ?? true) && orgId.length > 0 && hostingId !== null,
+    // Follows a certificate the server is still issuing, without a reload.
+    refetchInterval: (query) => certificatePollInterval(query.state.data?.hosting.certificate),
   })
 }
 

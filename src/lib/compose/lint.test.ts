@@ -45,7 +45,7 @@ describe('lintComposeYaml', () => {
 `
     const issues = lintComposeYaml(source)
     const missing = issues.find(
-      (issue) => issue.level === 'error' && issue.path === 'services.nginx',
+      (issue) => issue.level === 'error' && issue.path === 'services.nginx'
     )
     expect(missing).toBeDefined()
     expect(missing?.message).toContain('image')
@@ -85,10 +85,12 @@ x-turbopanel:
     expect(blockingComposeLintIssues(lintComposeYaml('networks:\n  default: {}\n'))).toEqual([])
     expect(blockingComposeLintIssues(lintComposeYaml('services: {}\n'))).toEqual([])
     expect(
-      blockingComposeLintIssues(lintComposeYaml(`services:
+      blockingComposeLintIssues(
+        lintComposeYaml(`services:
   nginx:
     imaage: nginx
-`)).length,
+`)
+      ).length
     ).toBeGreaterThan(0)
   })
 
@@ -106,9 +108,7 @@ x-turbopanel:
     image: ""
 `
     const issues = lintComposeYaml(source)
-    const missing = issues.find(
-      (issue) => issue.level === 'error' && issue.path === 'services.app',
-    )
+    const missing = issues.find((issue) => issue.level === 'error' && issue.path === 'services.app')
     expect(missing).toBeDefined()
     expect(missing?.message).toContain('image')
     expect(missing?.message).toContain('build')
@@ -141,9 +141,7 @@ x-turbopanel:
     const source = `services:
   site: {}
 `
-    expect(
-      lintComposeYaml(source, { siteServices: ['site'] }),
-    ).toEqual([])
+    expect(lintComposeYaml(source, { siteServices: ['site'] })).toEqual([])
   })
 
   it('still errors for missing image when siteServices omits the service', () => {
@@ -153,12 +151,9 @@ x-turbopanel:
     const issues = lintComposeYaml(source, {
       siteServices: ['other'],
     })
-    expect(
-      issues.some(
-        (issue) =>
-          issue.level === 'error' && issue.path === 'services.site',
-      ),
-    ).toBe(true)
+    expect(issues.some((issue) => issue.level === 'error' && issue.path === 'services.site')).toBe(
+      true
+    )
   })
 
   it('warns when x-turbopanel is typed and managedExtensionHidden is set', () => {
@@ -172,9 +167,7 @@ x-turbopanel:
     server_id: abc
 `
     const issues = lintComposeYaml(source, { managedExtensionHidden: true })
-    const serviceExt = issues.find(
-      (issue) => issue.path === 'services.nginx.x-turbopanel',
-    )
+    const serviceExt = issues.find((issue) => issue.path === 'services.nginx.x-turbopanel')
     const rootExt = issues.find((issue) => issue.path === 'x-turbopanel')
     expect(serviceExt?.level).toBe('warning')
     expect(serviceExt?.message).toContain('managed by TurboPanel')
@@ -191,11 +184,9 @@ x-turbopanel:
       engine: nginx
 `
     const issues = lintComposeYaml(source, { managedExtensionHidden: true })
-    const managedWarning = issues.find(
-      (issue) => issue.path === 'services.site.x-turbopanel',
-    )
+    const managedWarning = issues.find((issue) => issue.path === 'services.site.x-turbopanel')
     const missing = issues.find(
-      (issue) => issue.level === 'error' && issue.path === 'services.site',
+      (issue) => issue.level === 'error' && issue.path === 'services.site'
     )
     expect(managedWarning?.level).toBe('warning')
     expect(managedWarning?.message).toContain('managed by TurboPanel')
@@ -283,9 +274,7 @@ services:
 `
     const issues = lintComposeYaml(source)
     expect(issues.filter((issue) => issue.level === 'error')).toEqual([])
-    expect(
-      issues.some((issue) => issue.message.toLowerCase().includes('unresolved')),
-    ).toBe(false)
+    expect(issues.some((issue) => issue.message.toLowerCase().includes('unresolved'))).toBe(false)
   })
 
   it('tolerates !reset scalar tags without unresolved-tag errors', () => {
@@ -296,9 +285,7 @@ services:
 `
     const issues = lintComposeYaml(source)
     expect(issues.filter((issue) => issue.level === 'error')).toEqual([])
-    expect(
-      issues.some((issue) => /tag|unresolved/i.test(issue.message)),
-    ).toBe(false)
+    expect(issues.some((issue) => /tag|unresolved/i.test(issue.message))).toBe(false)
   })
 
   it('skips mapping checks when a service value is fully tagged', () => {
@@ -308,13 +295,10 @@ services:
     const issues = lintComposeYaml(source)
     expect(
       issues.some(
-        (issue) =>
-          issue.path === 'services.nginx' && issue.message.includes('must be a mapping'),
-      ),
+        (issue) => issue.path === 'services.nginx' && issue.message.includes('must be a mapping')
+      )
     ).toBe(false)
-    expect(
-      issues.some((issue) => issue.message.toLowerCase().includes('unresolved')),
-    ).toBe(false)
+    expect(issues.some((issue) => issue.message.toLowerCase().includes('unresolved'))).toBe(false)
   })
 
   it('errors on invalid TurboPanel variable refs in environment', () => {
@@ -327,15 +311,9 @@ services:
       OK: "{$NODE_ENV}"
 `
     const issues = lintComposeYaml(source)
-    expect(
-      issues.some((issue) => issue.path === 'services.web.environment.BAD'),
-    ).toBe(true)
-    expect(
-      issues.some((issue) => issue.path === 'services.web.environment.SCOPE'),
-    ).toBe(true)
-    expect(
-      issues.some((issue) => issue.path === 'services.web.environment.OK'),
-    ).toBe(false)
+    expect(issues.some((issue) => issue.path === 'services.web.environment.BAD')).toBe(true)
+    expect(issues.some((issue) => issue.path === 'services.web.environment.SCOPE')).toBe(true)
+    expect(issues.some((issue) => issue.path === 'services.web.environment.OK')).toBe(false)
   })
 })
 
@@ -351,9 +329,7 @@ describe('railpack-built services', () => {
 
   it('does not require image or build — the daemon mints the image', () => {
     const issues = lintComposeYaml(railpackService)
-    expect(
-      issues.some((issue) => issue.message.includes('must define "image"')),
-    ).toBe(false)
+    expect(issues.some((issue) => issue.message.includes('must define "image"'))).toBe(false)
     expect(blockingComposeLintIssues(issues)).toEqual([])
   })
 
@@ -366,9 +342,7 @@ describe('railpack-built services', () => {
         sourceId: 11111111-2222-3333-4444-555555555555
 `
     expect(
-      lintComposeYaml(source).some((issue) =>
-        issue.message.includes('must define "image"'),
-      ),
+      lintComposeYaml(source).some((issue) => issue.message.includes('must define "image"'))
     ).toBe(true)
   })
 })
@@ -388,14 +362,13 @@ describe('lintComposeYaml source ids and interpolation collections', () => {
     expect(
       issues.some(
         (issue) =>
-          issue.level === 'error' &&
-          issue.path === 'services.api.x-turbopanel.source.sourceId',
-      ),
+          issue.level === 'error' && issue.path === 'services.api.x-turbopanel.source.sourceId'
+      )
     ).toBe(true)
     expect(
       lintComposeYaml(source, {
         knownSourceIds: new Set(['11111111-2222-3333-4444-555555555555']),
-      }).some((issue) => issue.level === 'error'),
+      }).some((issue) => issue.level === 'error')
     ).toBe(false)
   })
 
@@ -411,18 +384,10 @@ describe('lintComposeYaml source ids and interpolation collections', () => {
       - "BOTH=prefix:{$PORT}"
 `
     const issues = lintComposeYaml(source)
-    expect(
-      issues.some((issue) => issue.path === 'services.web.environment[0]'),
-    ).toBe(true)
-    expect(
-      issues.some((issue) => issue.path === 'services.web.environment[1]'),
-    ).toBe(true)
-    expect(
-      issues.some((issue) => issue.path === 'services.web.environment[3]'),
-    ).toBe(false)
-    expect(
-      issues.some((issue) => issue.path === 'services.web.environment[4]'),
-    ).toBe(true)
+    expect(issues.some((issue) => issue.path === 'services.web.environment[0]')).toBe(true)
+    expect(issues.some((issue) => issue.path === 'services.web.environment[1]')).toBe(true)
+    expect(issues.some((issue) => issue.path === 'services.web.environment[3]')).toBe(false)
+    expect(issues.some((issue) => issue.path === 'services.web.environment[4]')).toBe(true)
   })
 
   it('lints build.args maps and sequences', () => {
@@ -433,9 +398,7 @@ describe('lintComposeYaml source ids and interpolation collections', () => {
       args:
         TOKEN: prefix-{$KEY}
 `)
-    expect(
-      mapped.some((issue) => issue.path === 'services.web.build.args.TOKEN'),
-    ).toBe(true)
+    expect(mapped.some((issue) => issue.path === 'services.web.build.args.TOKEN')).toBe(true)
 
     const sequenced = lintComposeYaml(`services:
   web:
@@ -444,9 +407,7 @@ describe('lintComposeYaml source ids and interpolation collections', () => {
       args:
         - TOKEN=prefix-{$KEY}
 `)
-    expect(
-      sequenced.some((issue) => issue.path === 'services.web.build.args[0]'),
-    ).toBe(true)
+    expect(sequenced.some((issue) => issue.path === 'services.web.build.args[0]')).toBe(true)
   })
 
   it('errors when a service value is not a mapping', () => {
@@ -455,10 +416,8 @@ describe('lintComposeYaml source ids and interpolation collections', () => {
 `)
     expect(
       issues.some(
-        (issue) =>
-          issue.path === 'services.nginx' &&
-          issue.message.includes('must be a mapping'),
-      ),
+        (issue) => issue.path === 'services.nginx' && issue.message.includes('must be a mapping')
+      )
     ).toBe(true)
   })
 
@@ -488,9 +447,7 @@ describe('lintComposeYaml source ids and interpolation collections', () => {
       serviceKind: node
       framework: auto
 `)
-    expect(
-      issues.some((issue) => issue.message.includes('must define "image"')),
-    ).toBe(false)
+    expect(issues.some((issue) => issue.message.includes('must define "image"'))).toBe(false)
   })
 
   it('warns on a source block that is not a mapping and skips empty ids', () => {
@@ -502,10 +459,8 @@ describe('lintComposeYaml source ids and interpolation collections', () => {
 `)
     expect(
       notAMap.some(
-        (issue) =>
-          issue.path === 'services.api.x-turbopanel.source' &&
-          issue.blocking === false,
-      ),
+        (issue) => issue.path === 'services.api.x-turbopanel.source' && issue.blocking === false
+      )
     ).toBe(true)
 
     const emptyId = lintComposeYaml(
@@ -516,11 +471,9 @@ describe('lintComposeYaml source ids and interpolation collections', () => {
       source:
         sourceId: ""
 `,
-      { knownSourceIds: new Set(['aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee']) },
+      { knownSourceIds: new Set(['aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee']) }
     )
-    expect(
-      emptyId.some((issue) => issue.level === 'error'),
-    ).toBe(false)
+    expect(emptyId.some((issue) => issue.level === 'error')).toBe(false)
   })
 
   it('treats a tagged image as present and skips a tagged services mapping', () => {
@@ -528,12 +481,12 @@ describe('lintComposeYaml source ids and interpolation collections', () => {
       lintComposeYaml(`services:
   web:
     image: !override nginx
-`).some((issue) => issue.message.includes('must define "image"')),
+`).some((issue) => issue.message.includes('must define "image"'))
     ).toBe(false)
 
     expect(
       lintComposeYaml(`services: !reset null
-`).some((issue) => issue.path === 'services' && issue.level === 'error'),
+`).some((issue) => issue.path === 'services' && issue.level === 'error')
     ).toBe(false)
   })
 
@@ -547,17 +500,14 @@ services:
 `)
     expect(
       issues.some(
-        (issue) =>
-          issue.path === 'zzzzzzzzzz' &&
-          issue.message.includes('Unknown top-level key'),
-      ),
+        (issue) => issue.path === 'zzzzzzzzzz' && issue.message.includes('Unknown top-level key')
+      )
     ).toBe(true)
     expect(
       issues.some(
         (issue) =>
-          issue.path === 'services.web.zzzzzzzzzz' &&
-          issue.message.includes('Unknown service key'),
-      ),
+          issue.path === 'services.web.zzzzzzzzzz' && issue.message.includes('Unknown service key')
+      )
     ).toBe(true)
   })
 
@@ -566,12 +516,9 @@ services:
   web:
     image: ~
 `)
-    expect(
-      issues.some(
-        (issue) =>
-          issue.level === 'error' && issue.path === 'services.web',
-      ),
-    ).toBe(true)
+    expect(issues.some((issue) => issue.level === 'error' && issue.path === 'services.web')).toBe(
+      true
+    )
   })
 
   it('sorts lineless issues after lined issues', () => {
@@ -643,14 +590,14 @@ services:
   web:
     image:
       name: nginx
-`).some((issue) => issue.message.includes('must define "image"')),
+`).some((issue) => issue.message.includes('must define "image"'))
     ).toBe(false)
 
     expect(
       lintComposeYaml(`services:
   web:
     build: !override .
-`).some((issue) => issue.message.includes('must define "image"')),
+`).some((issue) => issue.message.includes('must define "image"'))
     ).toBe(false)
   })
 
@@ -669,10 +616,8 @@ services:
 `)
     expect(
       issues.some(
-        (issue) =>
-          issue.path === 'services.api.x-turbopanel.source' &&
-          issue.blocking === false,
-      ),
+        (issue) => issue.path === 'services.api.x-turbopanel.source' && issue.blocking === false
+      )
     ).toBe(true)
     expect(issues.filter((issue) => issue.level === 'error')).toEqual([])
   })
@@ -708,9 +653,7 @@ describe('one repository per project', () => {
 
   it('skips the rule when there is no project context', () => {
     expect(
-      lintComposeYaml(twoRepositories).some((issue) =>
-        issue.message.includes('one repository'),
-      ),
+      lintComposeYaml(twoRepositories).some((issue) => issue.message.includes('one repository'))
     ).toBe(false)
   })
 
@@ -719,16 +662,14 @@ describe('one repository per project', () => {
     expect(
       issues.some(
         (issue) =>
-          issue.level === 'error' &&
-          issue.path === 'services.jobs.x-turbopanel.source.sourceId',
-      ),
+          issue.level === 'error' && issue.path === 'services.jobs.x-turbopanel.source.sourceId'
+      )
     ).toBe(true)
     expect(
       issues.some(
         (issue) =>
-          issue.level === 'error' &&
-          issue.path === 'services.web.x-turbopanel.source.sourceId',
-      ),
+          issue.level === 'error' && issue.path === 'services.web.x-turbopanel.source.sourceId'
+      )
     ).toBe(false)
     expect(blockingComposeLintIssues(issues).length).toBeGreaterThan(0)
   })
@@ -749,11 +690,9 @@ describe('one repository per project', () => {
         sourceId: ${REPO_A}
         subdirectory: apps/api
 `,
-      { projectRepositoryId: REPO_A },
+      { projectRepositoryId: REPO_A }
     )
-    expect(
-      issues.some((issue) => issue.message.includes('one repository')),
-    ).toBe(false)
+    expect(issues.some((issue) => issue.message.includes('one repository'))).toBe(false)
   })
 
   it("rejects a source that is not the bound project's repository", () => {
@@ -765,10 +704,10 @@ describe('one repository per project', () => {
       source:
         sourceId: ${REPO_B}
 `,
-      { projectRepositoryId: REPO_A },
+      { projectRepositoryId: REPO_A }
     )
     const offender = issues.find(
-      (issue) => issue.path === 'services.web.x-turbopanel.source.sourceId',
+      (issue) => issue.path === 'services.web.x-turbopanel.source.sourceId'
     )
     expect(offender?.level).toBe('error')
     expect(offender?.message).toContain(REPO_B)
@@ -778,7 +717,7 @@ describe('one repository per project', () => {
     expect(
       lintComposeYaml(`services:\n  db:\n    image: postgres:17\n`, {
         projectRepositoryId: null,
-      }).some((issue) => issue.message.includes('one repository')),
+      }).some((issue) => issue.message.includes('one repository'))
     ).toBe(false)
   })
 })
@@ -800,12 +739,10 @@ describe('per-service x-turbopanel field legality', () => {
       engine: nginx
 `
     const issue = lintComposeYaml(source).find(
-      (found) => found.path === 'services.web.x-turbopanel.engine',
+      (found) => found.path === 'services.web.x-turbopanel.engine'
     )
     expect(issue?.level).toBe('error')
-    expect(issue?.message).toBe(
-      'engine is only valid when serviceKind is site',
-    )
+    expect(issue?.message).toBe('engine is only valid when serviceKind is site')
     expect(issue?.line).toBe(5)
     expect(blockingComposeLintIssues(lintComposeYaml(source))).toHaveLength(1)
   })
@@ -818,9 +755,7 @@ describe('per-service x-turbopanel field legality', () => {
       serviceKind: container
       root: public
 `)
-    const issue = issues.find(
-      (found) => found.path === 'services.web.x-turbopanel.root',
-    )
+    const issue = issues.find((found) => found.path === 'services.web.x-turbopanel.root')
     expect(issue?.level).toBe('error')
     expect(issue?.message).toBe('root is only valid when serviceKind is site')
     expect(issue?.line).toBe(6)
@@ -833,15 +768,11 @@ describe('per-service x-turbopanel field legality', () => {
       serviceKind: node
       framework: next
 `)
-    const issue = issues.find(
-      (found) => found.path === 'services.api.x-turbopanel.source',
-    )
+    const issue = issues.find((found) => found.path === 'services.api.x-turbopanel.source')
     expect(issue?.level).toBe('error')
     expect(issue?.message).toBe('node services require source')
     // A node service is host-native, so the missing source is the only error.
-    expect(
-      issues.some((found) => found.message.includes('must define "image"')),
-    ).toBe(false)
+    expect(issues.some((found) => found.message.includes('must define "image"'))).toBe(false)
   })
 
   it('accepts a node service with a source and its node-only fields', () => {
@@ -871,13 +802,9 @@ x-turbopanel:
       root: public
       framework: next
 `)
-    const issue = issues.find(
-      (found) => found.path === 'services.site.x-turbopanel.framework',
-    )
+    const issue = issues.find((found) => found.path === 'services.site.x-turbopanel.framework')
     expect(issue?.level).toBe('error')
-    expect(issue?.message).toBe(
-      'framework is only valid when serviceKind is node',
-    )
+    expect(issue?.message).toBe('framework is only valid when serviceKind is node')
   })
 
   it('errors on cron authored on a container, naming both host-native kinds', () => {
@@ -890,13 +817,9 @@ x-turbopanel:
           schedule: "@daily"
           command: /srv/nightly.sh
 `)
-    const issue = issues.find(
-      (found) => found.path === 'services.web.x-turbopanel.cron',
-    )
+    const issue = issues.find((found) => found.path === 'services.web.x-turbopanel.cron')
     expect(issue?.level).toBe('error')
-    expect(issue?.message).toBe(
-      'cron is only valid when serviceKind is site or node',
-    )
+    expect(issue?.message).toBe('cron is only valid when serviceKind is site or node')
   })
 
   it('errors when x-turbopanel is not a mapping', () => {
@@ -905,9 +828,7 @@ x-turbopanel:
     image: nginx
     x-turbopanel: nope
 `)
-    const issue = issues.find(
-      (found) => found.path === 'services.web.x-turbopanel',
-    )
+    const issue = issues.find((found) => found.path === 'services.web.x-turbopanel')
     expect(issue?.level).toBe('error')
     expect(issue?.message).toBe('x-turbopanel must be a mapping')
   })
@@ -919,8 +840,8 @@ x-turbopanel:
   web:
     image: nginx
     x-turbopanel:
-`),
-      ),
+`)
+      )
     ).toEqual([])
     expect(
       blockingComposeLintIssues(
@@ -929,8 +850,8 @@ x-turbopanel:
     image: nginx
     x-turbopanel:
       futureField: keep-this
-`),
-      ),
+`)
+      )
     ).toEqual([])
   })
 
@@ -945,15 +866,12 @@ x-turbopanel:
     x-turbopanel:
       engine: nginx
 `,
-      { managedExtensionHidden: true },
+      { managedExtensionHidden: true }
     )
-    expect(
-      issues.some((found) => found.message.includes('only valid when')),
-    ).toBe(false)
-    expect(
-      issues.find((found) => found.path === 'services.web.x-turbopanel')
-        ?.message,
-    ).toContain('managed by TurboPanel')
+    expect(issues.some((found) => found.message.includes('only valid when'))).toBe(false)
+    expect(issues.find((found) => found.path === 'services.web.x-turbopanel')?.message).toContain(
+      'managed by TurboPanel'
+    )
   })
 })
 
@@ -972,9 +890,7 @@ x-turbopanel:
     // Mirrors the instance contract: a surface that cannot see the sibling
     // layer must not be made to false-flag.
     expect(
-      lintComposeYaml(SITE).some((issue) =>
-        issue.path === 'services.blog.x-turbopanel.principal',
-      ),
+      lintComposeYaml(SITE).some((issue) => issue.path === 'services.blog.x-turbopanel.principal')
     ).toBe(false)
   })
 
@@ -982,9 +898,7 @@ x-turbopanel:
     const issues = lintComposeYaml(SITE, {
       knownPrincipalAliases: new Set(['app']),
     })
-    const issue = issues.find(
-      (found) => found.path === 'services.blog.x-turbopanel.principal',
-    )
+    const issue = issues.find((found) => found.path === 'services.blog.x-turbopanel.principal')
     expect(issue?.level).toBe('error')
     expect(issue?.line).toBe(5)
     expect(issue?.message).toContain("principal 'ghost'")
@@ -1001,7 +915,7 @@ x-turbopanel:
   principals:
     app: {}
 `,
-      { knownPrincipalAliases: new Set(['app']) },
+      { knownPrincipalAliases: new Set(['app']) }
     )
     expect(blockingComposeLintIssues(issues)).toEqual([])
   })
@@ -1036,9 +950,7 @@ x-turbopanel:
       principal: app
 `)
     expect(
-      issues.find(
-        (found) => found.path === 'services.api.x-turbopanel.principal',
-      )?.message,
+      issues.find((found) => found.path === 'services.api.x-turbopanel.principal')?.message
     ).toContain('only valid when serviceKind is site or node')
   })
 })
@@ -1065,7 +977,7 @@ describe('native restart_policy values', () => {
       issues
         .filter((issue) => issue.code === 'field_unsupported')
         .map((issue) => issue.path)
-        .sort(),
+        .sort()
     ).toEqual([
       'services.web.deploy.restart_policy.condition',
       'services.web.deploy.restart_policy.delay',
@@ -1075,7 +987,7 @@ describe('native restart_policy values', () => {
     expect(
       blockingComposeLintIssues(issues).some((issue) =>
         issue.path.startsWith('services.web.deploy.restart_policy')
-      ),
+      )
     ).toBe(false)
   })
 
@@ -1094,9 +1006,7 @@ describe('native restart_policy values', () => {
         max_attempts: 3
         window: 1m30s
 `)
-    expect(issues.filter((issue) => issue.code === 'field_unsupported')).toEqual(
-      [],
-    )
+    expect(issues.filter((issue) => issue.code === 'field_unsupported')).toEqual([])
   })
 
   it('leaves a container service the whole Compose vocabulary', () => {
@@ -1109,9 +1019,7 @@ describe('native restart_policy values', () => {
         condition: unless-stopped
         max_attempts: 0
 `)
-    expect(issues.filter((issue) => issue.code === 'field_unsupported')).toEqual(
-      [],
-    )
+    expect(issues.filter((issue) => issue.code === 'field_unsupported')).toEqual([])
   })
 
   it('accepts max_attempts as a quoted integer of at least 1', () => {
@@ -1128,9 +1036,7 @@ describe('native restart_policy values', () => {
         max_attempts: "3"
         window: 1m
 `)
-    expect(issues.filter((issue) => issue.code === 'field_unsupported')).toEqual(
-      [],
-    )
+    expect(issues.filter((issue) => issue.code === 'field_unsupported')).toEqual([])
   })
 
   it('skips restart_policy values that are compose interpolations', () => {
@@ -1147,9 +1053,7 @@ describe('native restart_policy values', () => {
         max_attempts: \${MAX_ATTEMPTS}
 `)
     expect(
-      issues.filter((issue) =>
-        issue.path.startsWith('services.web.deploy.restart_policy'),
-      ),
+      issues.filter((issue) => issue.path.startsWith('services.web.deploy.restart_policy'))
     ).toEqual([])
   })
 
@@ -1172,8 +1076,8 @@ describe('native restart_policy values', () => {
       issues.filter(
         (issue) =>
           issue.path === 'services.web.deploy.restart_policy.extra' ||
-          issue.path === 'services.web.deploy.restart_policy.window',
-      ),
+          issue.path === 'services.web.deploy.restart_policy.window'
+      )
     ).toEqual([])
   })
 })
@@ -1188,9 +1092,7 @@ describe('authored hosting lint', () => {
     x-turbopanel:
       hosting: yes
 `)
-    const issue = issues.find(
-      (found) => found.path === 'services.web.x-turbopanel.hosting',
-    )
+    const issue = issues.find((found) => found.path === 'services.web.x-turbopanel.hosting')
     expect(issue?.level).toBe('error')
     expect(issue?.message).toContain('must be a list')
     expect(issue?.line).toBe(5)
@@ -1204,9 +1106,7 @@ describe('authored hosting lint', () => {
       hosting:
         - app.example.com
 `)
-    const issue = issues.find(
-      (found) => found.path === 'services.web.x-turbopanel.hosting[0]',
-    )
+    const issue = issues.find((found) => found.path === 'services.web.x-turbopanel.hosting[0]')
     expect(issue?.level).toBe('error')
     expect(issue?.message).toContain('must be a mapping')
     expect(typeof issue?.line).toBe('number')
@@ -1223,16 +1123,12 @@ describe('authored hosting lint', () => {
           targetPort: 8080
 `)
     expect(
-      issues.find(
-        (found) =>
-          found.path === 'services.site.x-turbopanel.hosting[0].hostname',
-      )?.message,
+      issues.find((found) => found.path === 'services.site.x-turbopanel.hosting[0].hostname')
+        ?.message
     ).toContain('hostname is required')
     expect(
-      issues.find(
-        (found) =>
-          found.path === 'services.site.x-turbopanel.hosting[0].targetPort',
-      )?.message,
+      issues.find((found) => found.path === 'services.site.x-turbopanel.hosting[0].targetPort')
+        ?.message
     ).toContain('not valid on a site')
   })
 
@@ -1248,10 +1144,8 @@ describe('authored hosting lint', () => {
           targetPort: 3000
 `)
     expect(
-      nodeIssues.find(
-        (found) =>
-          found.path === 'services.api.x-turbopanel.hosting[0].targetPort',
-      )?.message,
+      nodeIssues.find((found) => found.path === 'services.api.x-turbopanel.hosting[0].targetPort')
+        ?.message
     ).toContain('not valid on a node')
 
     const containerIssues = lintComposeYaml(`services:
@@ -1263,11 +1157,7 @@ describe('authored hosting lint', () => {
         - hostname: app.example.com
           targetPort: 8080
 `)
-    expect(
-      containerIssues.filter((issue) =>
-        issue.path.includes('hosting'),
-      ),
-    ).toEqual([])
+    expect(containerIssues.filter((issue) => issue.path.includes('hosting'))).toEqual([])
   })
 
   it('treats an omitted serviceKind as container for hosting targetPort', () => {
@@ -1279,9 +1169,7 @@ describe('authored hosting lint', () => {
         - hostname: app.example.com
           targetPort: 8080
 `)
-    expect(
-      issues.filter((issue) => issue.path.includes('hosting')),
-    ).toEqual([])
+    expect(issues.filter((issue) => issue.path.includes('hosting'))).toEqual([])
   })
 
   it('points each hosting finding at the matching list entry', () => {
@@ -1296,12 +1184,10 @@ describe('authored hosting lint', () => {
           pathPrefix: not-a-path
 `)
     const missing = issues.find(
-      (found) =>
-        found.path === 'services.web.x-turbopanel.hosting[1].hostname',
+      (found) => found.path === 'services.web.x-turbopanel.hosting[1].hostname'
     )
     const prefix = issues.find(
-      (found) =>
-        found.path === 'services.web.x-turbopanel.hosting[2].pathPrefix',
+      (found) => found.path === 'services.web.x-turbopanel.hosting[2].pathPrefix'
     )
     expect(missing?.line).toBe(7)
     expect(prefix?.line).toBe(8)
@@ -1323,9 +1209,9 @@ describe('authored hosting lint', () => {
 `
 
     expect(
-      lintComposeYaml(source).filter((issue) =>
-        issue.path.includes('certificateRef') || issue.path.includes('ipRef'),
-      ),
+      lintComposeYaml(source).filter(
+        (issue) => issue.path.includes('certificateRef') || issue.path.includes('ipRef')
+      )
     ).toEqual([])
 
     const unresolved = lintComposeYaml(source, {
@@ -1333,13 +1219,10 @@ describe('authored hosting lint', () => {
       knownIpIds: new Set(['other-ip']),
     })
     const tls = unresolved.find(
-      (issue) =>
-        issue.path ===
-        'services.web.x-turbopanel.hosting[0].tls.certificateRef',
+      (issue) => issue.path === 'services.web.x-turbopanel.hosting[0].tls.certificateRef'
     )
     const ip = unresolved.find(
-      (issue) =>
-        issue.path === 'services.web.x-turbopanel.hosting[0].bind.ipRef',
+      (issue) => issue.path === 'services.web.x-turbopanel.hosting[0].bind.ipRef'
     )
     expect(tls?.level).toBe('error')
     expect(tls?.message).toContain("certificate 'wildcard'")
@@ -1352,14 +1235,13 @@ describe('authored hosting lint', () => {
       lintComposeYaml(source, {
         knownTlsIds: new Set(['wildcard']),
         knownIpIds: new Set(['edge-1']),
-      }).filter((issue) =>
-        issue.path.includes('certificateRef') || issue.path.includes('ipRef'),
-      ),
+      }).filter((issue) => issue.path.includes('certificateRef') || issue.path.includes('ipRef'))
     ).toEqual([])
   })
 
   it('skips resolving blank hosting refs and tagged hosting blocks', () => {
-    const blankRefs = lintComposeYaml(`services:
+    const blankRefs = lintComposeYaml(
+      `services:
   web:
     image: nginx
     x-turbopanel:
@@ -1370,13 +1252,13 @@ describe('authored hosting lint', () => {
             certificateRef: ""
           bind:
             ipRef: "   "
-`, {
-      knownTlsIds: new Set(['wildcard']),
-      knownIpIds: new Set(['edge-1']),
-    })
-    expect(
-      blankRefs.some((issue) => issue.message.includes('was not found')),
-    ).toBe(false)
+`,
+      {
+        knownTlsIds: new Set(['wildcard']),
+        knownIpIds: new Set(['edge-1']),
+      }
+    )
+    expect(blankRefs.some((issue) => issue.message.includes('was not found'))).toBe(false)
 
     const tagged = lintComposeYaml(`services:
   web:
@@ -1384,9 +1266,7 @@ describe('authored hosting lint', () => {
     x-turbopanel:
       hosting: !reset null
 `)
-    expect(
-      tagged.filter((issue) => issue.path.includes('hosting')),
-    ).toEqual([])
+    expect(tagged.filter((issue) => issue.path.includes('hosting'))).toEqual([])
   })
 
   it('does not lint hosting when the managed extension is hidden', () => {
@@ -1398,11 +1278,9 @@ describe('authored hosting lint', () => {
       hosting:
         - hostname: ""
 `,
-      { managedExtensionHidden: true },
+      { managedExtensionHidden: true }
     )
-    expect(
-      issues.some((issue) => issue.path.includes('hosting')),
-    ).toBe(false)
+    expect(issues.some((issue) => issue.path.includes('hosting'))).toBe(false)
   })
 })
 
@@ -1414,14 +1292,10 @@ describe('cyclic and unreadable extension blocks', () => {
     x-turbopanel: &cycle
       nested: *cycle
 `)
-    expect(issues.some((issue) => issue.level === 'error' && issue.path === '$')).toBe(
-      false,
+    expect(issues.some((issue) => issue.level === 'error' && issue.path === '$')).toBe(false)
+    expect(issues.filter((issue) => issue.path.startsWith('services.web.x-turbopanel.'))).toEqual(
+      []
     )
-    expect(
-      issues.filter((issue) =>
-        issue.path.startsWith('services.web.x-turbopanel.'),
-      ),
-    ).toEqual([])
   })
 
   it('swallows a cyclic hosting block instead of throwing', () => {
@@ -1432,9 +1306,7 @@ describe('cyclic and unreadable extension blocks', () => {
       hosting: &cycle
         nested: *cycle
 `)
-    expect(issues.some((issue) => issue.level === 'error' && issue.path === '$')).toBe(
-      false,
-    )
+    expect(issues.some((issue) => issue.level === 'error' && issue.path === '$')).toBe(false)
   })
 
   it('does not throw on a cyclic root extension', () => {
@@ -1473,7 +1345,7 @@ services:
   })
 })
 
-describe('lintComposeYaml: an environment\'s changes as a partial layer', () => {
+describe("lintComposeYaml: an environment's changes as a partial layer", () => {
   const messages = (source: string, options?: Parameters<typeof lintComposeYaml>[1]) =>
     lintComposeYaml(source, options).map((issue) => issue.message)
   const NO_IMAGE = `services:
@@ -1495,7 +1367,7 @@ describe('lintComposeYaml: an environment\'s changes as a partial layer', () => 
     ])
   })
 
-  it('reads an unstated kind as the Base\'s, and does not demand a node app\'s source', () => {
+  it("reads an unstated kind as the Base's, and does not demand a node app's source", () => {
     const changes = `services:
   app:
     x-turbopanel:
@@ -1534,7 +1406,7 @@ describe('lintComposeYaml: an environment\'s changes as a partial layer', () => 
       framework: next
 `
     expect(messages(wrong, { requireImageOrBuild: false })).toContain(
-      'framework is only valid when serviceKind is node',
+      'framework is only valid when serviceKind is node'
     )
   })
 })

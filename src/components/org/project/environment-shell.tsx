@@ -78,6 +78,7 @@ function nativeRunningLabel(label: string, lastDeploy: DeploymentGroup | null | 
   const key = nativeRunningKey(lastDeploy)
   if (key === 'running') return 'Running'
   if (key === 'busy') return 'Starting…'
+  if (key === 'unknown') return 'Unknown'
   return label
 }
 

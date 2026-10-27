@@ -47,11 +47,7 @@
  *   Requires {@link ComposeFieldPolicy.reason}, same as `unsupported`.
  */
 export type ComposeFieldState =
-  | 'passthrough'
-  | 'interpreted'
-  | 'runtime-generated'
-  | 'unsupported'
-  | 'gated'
+  'passthrough' | 'interpreted' | 'runtime-generated' | 'unsupported' | 'gated'
 
 export type ComposeFieldPolicy = {
   state: ComposeFieldState
@@ -449,26 +445,16 @@ const DEPLOY_PLACEMENT_FIELD_POLICY = new Map<string, ComposeFieldPolicy>([
 ])
 
 /** Key sets, for "did you mean" suggestions on an unknown key. */
-export const TOP_LEVEL_FIELD_KEYS: ReadonlySet<string> = new Set(
-  TOP_LEVEL_FIELD_POLICY.keys(),
-)
-export const SERVICE_FIELD_KEYS: ReadonlySet<string> = new Set(
-  SERVICE_FIELD_POLICY.keys(),
-)
-export const DEPLOY_FIELD_KEYS: ReadonlySet<string> = new Set(
-  DEPLOY_FIELD_POLICY.keys(),
-)
-export const NETWORK_FIELD_KEYS: ReadonlySet<string> = new Set(
-  NETWORK_FIELD_POLICY.keys(),
-)
+export const TOP_LEVEL_FIELD_KEYS: ReadonlySet<string> = new Set(TOP_LEVEL_FIELD_POLICY.keys())
+export const SERVICE_FIELD_KEYS: ReadonlySet<string> = new Set(SERVICE_FIELD_POLICY.keys())
+export const DEPLOY_FIELD_KEYS: ReadonlySet<string> = new Set(DEPLOY_FIELD_POLICY.keys())
+export const NETWORK_FIELD_KEYS: ReadonlySet<string> = new Set(NETWORK_FIELD_POLICY.keys())
 
 /**
  * Service-level keys classified `gated`. Mirrors the instance registry's
  * export of the same name.
  */
-export const GATED_SERVICE_FIELD_KEYS: ReadonlySet<string> = new Set(
-  GATED_SERVICE_FIELD_NAMES,
-)
+export const GATED_SERVICE_FIELD_KEYS: ReadonlySet<string> = new Set(GATED_SERVICE_FIELD_NAMES)
 
 /** Policy for a top-level Compose key, or `undefined` when it is unknown. */
 export function classifyTopLevelKey(key: string): ComposeFieldPolicy | undefined {
@@ -494,10 +480,7 @@ export function classifyDeployKey(key: string): ComposeFieldPolicy | undefined {
  * verbatim (or omit it); anything other than `overlay` gets the base table, so
  * a `bridge` or default network keeps handing every attribute to Docker.
  */
-export function classifyNetworkKey(
-  key: string,
-  driver?: string,
-): ComposeFieldPolicy | undefined {
+export function classifyNetworkKey(key: string, driver?: string): ComposeFieldPolicy | undefined {
   if (driver?.trim() === SPANNING_NETWORK_DRIVER) {
     const overlay = OVERLAY_NETWORK_FIELD_POLICY.get(key)
     if (overlay) return overlay
@@ -506,16 +489,12 @@ export function classifyNetworkKey(
 }
 
 /** Policy for a `services.<name>.deploy.placement` key, or `undefined`. */
-export function classifyDeployPlacementKey(
-  key: string,
-): ComposeFieldPolicy | undefined {
+export function classifyDeployPlacementKey(key: string): ComposeFieldPolicy | undefined {
   return DEPLOY_PLACEMENT_FIELD_POLICY.get(key)
 }
 
 /** Policy for a `services.<name>.deploy.resources` key, or `undefined`. */
-export function classifyDeployResourcesKey(
-  key: string,
-): ComposeFieldPolicy | undefined {
+export function classifyDeployResourcesKey(key: string): ComposeFieldPolicy | undefined {
   return DEPLOY_RESOURCES_FIELD_POLICY.get(key)
 }
 
@@ -525,9 +504,7 @@ export function classifyDeployResourcesKey(
  * Same sentence shape as {@link unsupportedDeployReason}: the diagnostic reads
  * `deploy.resources.<key> is not supported — <reason>`.
  */
-export function unsupportedDeployResourcesReason(
-  key: string,
-): string | undefined {
+export function unsupportedDeployResourcesReason(key: string): string | undefined {
   const policy = DEPLOY_RESOURCES_FIELD_POLICY.get(key)
   return policy?.state === 'unsupported' ? policy.reason : undefined
 }
@@ -538,10 +515,7 @@ export function unsupportedDeployResourcesReason(
  * Same sentence shape as {@link unsupportedDeployReason}: the diagnostic reads
  * `networks.<key>.<field> is not supported ... \u2014 <reason>`.
  */
-export function unsupportedNetworkReason(
-  key: string,
-  driver?: string,
-): string | undefined {
+export function unsupportedNetworkReason(key: string, driver?: string): string | undefined {
   const policy = classifyNetworkKey(key, driver)
   return policy?.state === 'unsupported' ? policy.reason : undefined
 }

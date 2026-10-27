@@ -163,7 +163,7 @@ export type ManagedServiceCatalogEntry = {
  */
 export function managedStoredImage(
   entry: { defaultImage: string; legacyDefaultImage?: string } | undefined,
-  image: string | undefined,
+  image: string | undefined
 ): string {
   return image ?? entry?.legacyDefaultImage ?? entry?.defaultImage ?? ''
 }
@@ -550,8 +550,10 @@ const MANAGED_ERROR_COPY: Record<string, string> = {
   server_placement_required: 'Select a server before creating this managed service.',
   server_offline: 'The selected server is offline. Choose a connected server.',
   managed_busy: 'Another managed operation is still in progress. Wait and try again.',
-  reserved_username: 'That login name is kept for the database engine or TurboPanel. Pick a different name.',
-  reserved_database_name: 'That database name is kept for the database engine. Pick a different name.',
+  reserved_username:
+    'That login name is kept for the database engine or TurboPanel. Pick a different name.',
+  reserved_database_name:
+    'That database name is kept for the database engine. Pick a different name.',
   managed_login_defines_objects:
     'This login still defines views, triggers, routines or events. Drop them or recreate them under another login, then delete the login again.',
   managed_settings_invalid: 'Managed settings are invalid. Check the form and try again.',
@@ -583,26 +585,26 @@ const MANAGED_ERROR_COPY: Record<string, string> = {
     'This change resets permissions the panel does not manage. Confirm the reset to continue.',
   managed_grant_mode_invalid_transition:
     'An older login cannot be switched back to its original permissions. Choose one of the two modes shown.',
-  managed_login_not_editable:
-    'This login is kept by the panel and cannot be changed here.',
+  managed_login_not_editable: 'This login is kept by the panel and cannot be changed here.',
   managed_login_limits_need_daemon_update:
     'This server needs updating before it can limit where a login connects from or how many connections it holds. Update the server, then try again.',
-  managed_login_sources_empty:
-    'Choose at least one place, or choose Anywhere to remove the limit.',
+  managed_login_sources_empty: 'Choose at least one place, or choose Anywhere to remove the limit.',
   managed_login_source_range_not_exact:
     'That range can’t be matched exactly. List the addresses one by one, or use a prefix such as 203.0.113.%.',
   managed_login_source_invalid: 'One of the places is not a valid address, prefix or range.',
   managed_login_sources_invalid: 'The list of places is not valid.',
-  managed_login_sources_too_many: 'Too many places. Use an address prefix such as 203.0.113.% to cover more.',
+  managed_login_sources_too_many:
+    'Too many places. Use an address prefix such as 203.0.113.% to cover more.',
   managed_login_sources_any_alone: 'Anywhere can’t be combined with other places.',
   managed_login_source_server_unknown: 'One of the chosen servers is not in this organization.',
-  managed_login_max_connections_invalid: 'Most connections at once must be a whole number from 1 to 10000.',
+  managed_login_max_connections_invalid:
+    'Most connections at once must be a whole number from 1 to 10000.',
   ...STRAIGHT_THROUGH_ERROR_COPY,
   managed_grant_mode_invalid: 'That permission mode is not valid.',
   managed_admin_needs_owner_role:
-    'A Database admin login cannot be made on some of these databases. Choose different databases, or use a different kind of login.',
+    'A login cannot own some of these databases. Choose different databases, or use a different kind of login.',
   managed_admin_login_not_read_only:
-    'A Database admin login changes things, so it cannot be read-only. Use Read/write.',
+    'The owner of a database changes things, so it cannot be read-only. Use Read/write.',
   managed_self_login_has_no_privileges:
     'A login you manage yourself has no permissions yet. Set them in your own tools first.',
   datacenter_required: 'That server is not assigned to a datacenter.',

@@ -4,15 +4,38 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
 vi.mock('react-native-svg', async () => (await import('@/components/ui/v4/rn-stub')).svgStub)
-vi.mock('@/lib/theme-preference', async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub)
+vi.mock(
+  '@/lib/theme-preference',
+  async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub
+)
 vi.mock('@/components/ui/panel-styles', () => ({ panelStyles: {} }))
 vi.mock('@/components/ui', () => ({
   Badge: ({ label }: { label: string }) => <span>{label}</span>,
-  Button: ({ label, onPress, disabled }: { label: string; onPress?: () => void; disabled?: boolean }) => (
-    <button disabled={disabled} onClick={onPress}>{label}</button>
+  Button: ({
+    label,
+    onPress,
+    disabled,
+  }: {
+    label: string
+    onPress?: () => void
+    disabled?: boolean
+  }) => (
+    <button disabled={disabled} onClick={onPress}>
+      {label}
+    </button>
   ),
   ButtonRow: ({ children }: { children?: unknown }) => <div>{children as never}</div>,
-  ModalSheet: ({ visible, title, children, footer }: { visible: boolean; title: string; children?: unknown; footer?: unknown }) =>
+  ModalSheet: ({
+    visible,
+    title,
+    children,
+    footer,
+  }: {
+    visible: boolean
+    title: string
+    children?: unknown
+    footer?: unknown
+  }) =>
     visible ? (
       <div role="dialog">
         <h1>{title}</h1>
@@ -20,15 +43,39 @@ vi.mock('@/components/ui', () => ({
         {footer as never}
       </div>
     ) : null,
-  SettingRow: ({ label, description, children }: { label: string; description?: string; children?: unknown }) => (
+  SettingRow: ({
+    label,
+    description,
+    children,
+  }: {
+    label: string
+    description?: string
+    children?: unknown
+  }) => (
     <div>
       <span>{label}</span>
       <span>{description}</span>
       {children as never}
     </div>
   ),
-  Toggle: ({ value, disabled, onValueChange, accessibilityLabel }: { value: boolean; disabled?: boolean; onValueChange: (n: boolean) => void; accessibilityLabel?: string }) => (
-    <button role="switch" aria-label={accessibilityLabel} aria-checked={value} disabled={disabled} onClick={() => onValueChange(!value)}>
+  Toggle: ({
+    value,
+    disabled,
+    onValueChange,
+    accessibilityLabel,
+  }: {
+    value: boolean
+    disabled?: boolean
+    onValueChange: (n: boolean) => void
+    accessibilityLabel?: string
+  }) => (
+    <button
+      role="switch"
+      aria-label={accessibilityLabel}
+      aria-checked={value}
+      disabled={disabled}
+      onClick={() => onValueChange(!value)}
+    >
       {value ? 'Yes' : 'No'}
     </button>
   ),
@@ -37,6 +84,7 @@ vi.mock('@/components/ui', () => ({
 import type { ManagedUserRecord } from '@/lib/managed-services'
 import {
   ADMIN_HINT,
+  ADMIN_HINT_MYSQL,
   LoginAdminBadge,
   LoginAdminEditor,
   NewLoginAdminField,
@@ -60,7 +108,7 @@ const user = (over: Partial<ManagedUserRecord> = {}): ManagedUserRecord => ({
   ...over,
 })
 
-describe('Database admin login', () => {
+describe('Owner of this database', () => {
   it('explains itself in one line and reports the switch', () => {
     const onAdminChange = vi.fn()
     render(<NewLoginAdminField admin={false} onAdminChange={onAdminChange} disabled={false} />)
@@ -69,10 +117,28 @@ describe('Database admin login', () => {
     expect(onAdminChange).toHaveBeenCalledWith(true)
   })
 
+  it('says what MySQL and MariaDB give instead of an owner', () => {
+    render(
+      <NewLoginAdminField admin={false} onAdminChange={vi.fn()} disabled={false} engine="mariadb" />
+    )
+    expect(screen.getByText(ADMIN_HINT_MYSQL)).toBeTruthy()
+    cleanup()
+    render(
+      <LoginAdminEditor
+        user={user()}
+        engine="mysql"
+        disabled={false}
+        onUpdate={vi.fn()}
+        onError={vi.fn()}
+      />
+    )
+    expect(screen.getByText(ADMIN_HINT_MYSQL)).toBeTruthy()
+  })
+
   it('badges only admin logins', () => {
     expect(isAdminLogin(user())).toBe(false)
     render(<LoginAdminBadge user={user({ privileges: ['admin'] })} />)
-    expect(screen.getByText('Database admin')).toBeTruthy()
+    expect(screen.getByText('Database owner')).toBeTruthy()
   })
 
   it('builds the patch: admin alone, forced read/write; off goes back to read-write', () => {
@@ -81,16 +147,22 @@ describe('Database admin login', () => {
       connectionRole: 'read-write',
     })
     expect(adminPatch(user(), true)).toEqual({ privileges: ['admin'] })
-    expect(adminPatch(user({ privileges: ['admin'] }), false)).toEqual({ privileges: ['read-write'] })
+    expect(adminPatch(user({ privileges: ['admin'] }), false)).toEqual({
+      privileges: ['read-write'],
+    })
   })
 
   it('previews, then applies', async () => {
     const onUpdate = vi.fn(async (_id: string, body: { dryRun?: boolean }) =>
-      body.dryRun ? { ok: true as const, dryRun: true, statements: ['Give app access management'] } : { ok: true as const }
+      body.dryRun
+        ? { ok: true as const, dryRun: true, statements: ['Give app access management'] }
+        : { ok: true as const }
     )
-    render(<LoginAdminEditor user={user()} disabled={false} onUpdate={onUpdate} onError={vi.fn()} />)
+    render(
+      <LoginAdminEditor user={user()} disabled={false} onUpdate={onUpdate} onError={vi.fn()} />
+    )
     fireEvent.click(screen.getByRole('switch'))
-    await screen.findByText('Make this a Database admin login?')
+    await screen.findByText('Make this login the owner?')
     expect(onUpdate).toHaveBeenCalledWith('u1', { privileges: ['admin'], dryRun: true })
     fireEvent.click(screen.getByText('Switch'))
     await waitFor(() => expect(onUpdate).toHaveBeenCalledWith('u1', { privileges: ['admin'] }))
@@ -101,11 +173,24 @@ describe('Database admin login', () => {
     const onUpdate = vi.fn(async () => {
       throw new Error('HTTP 422: managed_admin_needs_owner_role')
     })
-    const { unmount } = render(<LoginAdminEditor user={user()} disabled={false} onUpdate={onUpdate} onError={onError} />)
+    const { unmount } = render(
+      <LoginAdminEditor user={user()} disabled={false} onUpdate={onUpdate} onError={onError} />
+    )
     fireEvent.click(screen.getByRole('switch'))
-    await waitFor(() => expect(onError).toHaveBeenLastCalledWith(expect.stringMatching(/cannot be made on some of these databases/)))
+    await waitFor(() =>
+      expect(onError).toHaveBeenLastCalledWith(
+        expect.stringMatching(/cannot own some of these databases/)
+      )
+    )
     unmount()
-    render(<LoginAdminEditor user={user({ grantMode: 'self' })} disabled={false} onUpdate={onUpdate} onError={onError} />)
+    render(
+      <LoginAdminEditor
+        user={user({ grantMode: 'self' })}
+        disabled={false}
+        onUpdate={onUpdate}
+        onError={onError}
+      />
+    )
     expect((screen.getByRole('switch') as HTMLButtonElement).disabled).toBe(true)
   })
 })

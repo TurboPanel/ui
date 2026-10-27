@@ -1,4 +1,8 @@
 import { useRouter, type Href } from 'expo-router'
+import {
+  COMPOSE_AUTOMATIC_CERTIFICATE_NOTE,
+  COMPOSE_OWNED_CERTIFICATE_NOTE,
+} from '@/lib/hosting-plain-words'
 import { createContext, useContext } from 'react'
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
 import { useOptionalEnvironmentLifecycle } from '@/components/org/project/overview-environments-panel'
@@ -18,6 +22,7 @@ import {
   useHostingDnsCheck,
   useUseLetsEncrypt,
 } from '@/lib/queries/hosting-certificate'
+import { isComposeAutomaticTlsHosting } from '@/lib/hosting-compose-owner'
 import { orgSettingsTabHref } from '@/lib/org-navigation'
 import { colors, spacing } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
@@ -30,8 +35,11 @@ const TONE_COLOR: Record<CertificateTone, string> = {
   pending: colors.command,
 }
 
-const COMPOSE_OWNED_COPY =
-  'Compose declares this domain, so its certificate is set there too. Let’s Encrypt cannot be switched on from this screen.'
+/** The note under a compose-owned domain's certificate state; none for a panel domain. */
+function composeNote(composeOwned: boolean, composeAutomatic: boolean): string | null {
+  if (!composeOwned) return null
+  return composeAutomatic ? COMPOSE_AUTOMATIC_CERTIFICATE_NOTE : COMPOSE_OWNED_CERTIFICATE_NOTE
+}
 
 /** What the screen around the certificate panels can do for them. */
 export type HostingCertificateActions = Readonly<{
@@ -151,6 +159,7 @@ function DnsResult({ dns }: Readonly<{ dns: HostingDnsReport }>) {
 function CertificateButtons({
   view,
   composeOwned,
+  composeAutomatic,
   disabled,
   deploy,
   requesting,
@@ -160,6 +169,8 @@ function CertificateButtons({
 }: Readonly<{
   view: CertificateView
   composeOwned: boolean
+  /** Compose asks for Let's Encrypt on this domain, so Try again may re-run the request. */
+  composeAutomatic: boolean
   disabled: boolean
   deploy: DeployShortcut | null
   requesting: boolean
@@ -195,7 +206,7 @@ function CertificateButtons({
           onPress={onCheckDns}
         />
       ) : null}
-      {view.actions.includes('try_again') && !composeOwned ? (
+      {view.actions.includes('try_again') && (!composeOwned || composeAutomatic) ? (
         <Button
           label="Try again"
           busyLabel="Trying…"
@@ -231,14 +242,14 @@ export function HostingCertificatePanel({
   const dnsCheck = useHostingDnsCheck(hostingId)
   const { deploy, refusal, onRefusal } = useScreenCertificateActions(hostingId, letsEncrypt.error)
   const certificate = query.data?.hosting.certificate ?? null
+  const composeAutomatic = isComposeAutomaticTlsHosting(query.data?.hosting.metadata)
+  const note = composeNote(composeOwned, composeAutomatic)
   if (!certificate) {
     return refusal ? <RefusalNote orgId={orgId} refusal={refusal} /> : null
   }
 
   const view = describeCertificate(certificate)
-  const dnsError = dnsCheck.error
-    ? userErrorMessage(dnsCheck.error, 'Could not check DNS.')
-    : null
+  const dnsError = dnsCheck.error ? userErrorMessage(dnsCheck.error, 'Could not check DNS.') : null
   const dns = dnsCheck.data?.dns ?? null
   const request = () => {
     void letsEncrypt.run().then((result) => reportRequest(result, hostingId, onRefusal))
@@ -257,7 +268,7 @@ export function HostingCertificatePanel({
         </Text>
       ))}
       {view.reason ? <Text style={styles.reason}>{view.reason}</Text> : null}
-      {composeOwned ? <Text style={styles.hint}>{COMPOSE_OWNED_COPY}</Text> : null}
+      {note ? <Text style={styles.hint}>{note}</Text> : null}
       {dns ? <DnsResult dns={dns} /> : null}
       {refusal ? <RefusalNote orgId={orgId} refusal={refusal} /> : null}
       {dnsError ? <Text style={styles.reason}>{dnsError}</Text> : null}
@@ -265,6 +276,7 @@ export function HostingCertificatePanel({
       <CertificateButtons
         view={view}
         composeOwned={composeOwned}
+        composeAutomatic={composeAutomatic}
         disabled={disabled}
         deploy={deploy}
         requesting={letsEncrypt.isPending}

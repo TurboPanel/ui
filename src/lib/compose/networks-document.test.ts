@@ -23,7 +23,7 @@ describe('readComposeNetworks', () => {
           frontend: { driver: 'overlay' },
           backend: { driver: 'bridge' },
         },
-      }),
+      })
     )
     expect(Object.keys(networks)).toEqual(['frontend', 'backend'])
     expect(networks.frontend).toEqual({ driver: 'overlay' })
@@ -32,9 +32,10 @@ describe('readComposeNetworks', () => {
   it('reads an empty or non-mapping entry as {}', () => {
     // `frontend:` with nothing under it is valid Compose; the editor still
     // needs an object to render and to write a driver onto.
-    expect(
-      readComposeNetworks(doc({ networks: { frontend: null, backend: 'nope' } })),
-    ).toEqual({ frontend: {}, backend: {} })
+    expect(readComposeNetworks(doc({ networks: { frontend: null, backend: 'nope' } }))).toEqual({
+      frontend: {},
+      backend: {},
+    })
   })
 
   it('is empty for a document with no usable networks block', () => {
@@ -42,18 +43,17 @@ describe('readComposeNetworks', () => {
     expect(readComposeNetworks(doc({ networks: [] }))).toEqual({})
     expect(readComposeNetworks(null)).toEqual({})
     expect(readComposeNetworks(undefined)).toEqual({})
-    expect(
-      readComposeNetworks({ version: 1, data: null } as unknown as ComposeDocument),
-    ).toEqual({})
+    expect(readComposeNetworks({ version: 1, data: null } as unknown as ComposeDocument)).toEqual(
+      {}
+    )
   })
 })
 
 describe('writeComposeNetworks', () => {
   it('replaces the whole block and leaves the rest of the document alone', () => {
-    const next = writeComposeNetworks(
-      doc({ services: { web: {} }, networks: { old: {} } }),
-      { app: { driver: 'overlay' } },
-    )
+    const next = writeComposeNetworks(doc({ services: { web: {} }, networks: { old: {} } }), {
+      app: { driver: 'overlay' },
+    })
     expect(next.data).toEqual({
       services: { web: {} },
       networks: { app: { driver: 'overlay' } },
@@ -88,15 +88,14 @@ describe('isSpanningComposeNetwork', () => {
 
 describe('setComposeNetworkDriver', () => {
   it('sets the driver without disturbing other attributes', () => {
-    expect(
-      setComposeNetworkDriver({ labels: { a: 'b' } }, 'overlay'),
-    ).toEqual({ labels: { a: 'b' }, driver: 'overlay' })
+    expect(setComposeNetworkDriver({ labels: { a: 'b' } }, 'overlay')).toEqual({
+      labels: { a: 'b' },
+      driver: 'overlay',
+    })
   })
 
   it('deletes the key rather than writing the default out', () => {
-    expect(
-      setComposeNetworkDriver({ driver: 'bridge', labels: {} }, null),
-    ).toEqual({ labels: {} })
+    expect(setComposeNetworkDriver({ driver: 'bridge', labels: {} }, null)).toEqual({ labels: {} })
   })
 
   it('does not mutate the entry it was given', () => {
@@ -142,11 +141,7 @@ describe('nextComposeNetworkName', () => {
 
 describe('renameComposeNetwork', () => {
   it('keeps the renamed entry in its original position', () => {
-    const renamed = renameComposeNetwork(
-      { a: { driver: 'overlay' }, b: {}, c: {} },
-      'b',
-      'middle',
-    )
+    const renamed = renameComposeNetwork({ a: { driver: 'overlay' }, b: {}, c: {} }, 'b', 'middle')
     expect(Object.keys(renamed)).toEqual(['a', 'middle', 'c'])
   })
 })

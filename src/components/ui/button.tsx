@@ -1,5 +1,12 @@
 import { type ReactNode } from 'react'
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
+import {
+  ActivityIndicator,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  type LayoutChangeEvent,
+} from 'react-native'
 import { useTouch } from '@/components/ui/v4/use-palette'
 import { chrome, colors, webPointer } from '@/lib/theme'
 import { CONTROL_HEIGHT } from '@/lib/v4/ui-scale'
@@ -28,6 +35,8 @@ export function Button({
   disabled = false,
   icon,
   accessibilityLabel,
+  minWidth,
+  onLayout,
 }: Readonly<{
   label: string
   onPress: () => void
@@ -40,15 +49,18 @@ export function Button({
   /** Optional leading SVG icon (never emoji). */
   icon?: ReactNode
   accessibilityLabel?: string
+  /** At least this wide (a confirm button keeps the width of the button it replaces). */
+  minWidth?: number
+  onLayout?: (event: LayoutChangeEvent) => void
 }>) {
   const touch = useTouch()
   const blocked = disabled || busy
   const shownLabel = busy && busyLabel ? busyLabel : label
-  const spinnerColor =
-    variant === 'primary' ? chrome.onAccent : colors.textMuted
+  const spinnerColor = variant === 'primary' ? chrome.onAccent : colors.textMuted
   return (
     <Pressable
       onPress={onPress}
+      onLayout={onLayout}
       disabled={blocked}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}
@@ -60,6 +72,7 @@ export function Button({
         variantStyles[variant],
         size === 'sm' && styles.sm,
         { minHeight: touch ? CONTROL_HEIGHT.touch : BUTTON_HEIGHT[size] },
+        minWidth === undefined ? null : { minWidth },
         webPointer,
         pressed && !blocked && styles.pressed,
         blocked && styles.disabled,
@@ -67,11 +80,7 @@ export function Button({
     >
       {busy ? <ActivityIndicator size="small" color={spinnerColor} /> : icon}
       <Text
-        style={[
-          styles.text,
-          variantTextStyles[variant],
-          size === 'sm' && styles.textSm,
-        ]}
+        style={[styles.text, variantTextStyles[variant], size === 'sm' && styles.textSm]}
         numberOfLines={1}
       >
         {shownLabel}
@@ -89,11 +98,7 @@ export function ButtonRow({
   align?: 'start' | 'end'
   children: ReactNode
 }>) {
-  return (
-    <View style={[styles.row, align === 'end' && styles.rowEnd]}>
-      {children}
-    </View>
-  )
+  return <View style={[styles.row, align === 'end' && styles.rowEnd]}>{children}</View>
 }
 
 const styles = StyleSheet.create({

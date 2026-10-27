@@ -20,15 +20,11 @@ import {
   type TlsRecord,
   type TlsSource,
 } from '@/lib/instance-api'
-import {
-  useCreateTlsCertificate,
-  useDeleteTlsCertificate,
-  useTlsLibrary,
-} from '@/lib/queries/tls'
+import { useCreateTlsCertificate, useDeleteTlsCertificate, useTlsLibrary } from '@/lib/queries/tls'
 import { useApiMutation, useCan, queryKeys } from '@/lib/query-client'
 import { tlsDateLines, tlsStoredCopyLines } from '@/lib/tls-managed-dates'
 import { colors, spacing } from '@/lib/theme'
-import { userErrorMessage } from '@/lib/user-error'
+import { failedRunMessage, userErrorMessage } from '@/lib/user-error'
 
 function errorMessage(err: unknown, fallback: string): string {
   return userErrorMessage(err, fallback)
@@ -70,12 +66,16 @@ const SOURCE_OPTIONS = [
   { value: 'lets_encrypt', label: "Let's Encrypt" },
 ] as const
 
+/** Why the last delete of one certificate failed, shown on that certificate's card. */
+type DeleteFailure = Readonly<{ id: string; message: string }>
+
 function TlsCertificateList({
   loading,
   rows,
   canManage,
   deletingId,
   deletePending,
+  deleteFailure,
   onDelete,
 }: Readonly<{
   loading: boolean
@@ -83,6 +83,7 @@ function TlsCertificateList({
   canManage: boolean
   deletingId: string | null
   deletePending: boolean
+  deleteFailure: DeleteFailure | null
   onDelete: (id: string) => void
 }>) {
   if (loading) {
@@ -109,9 +110,7 @@ function TlsCertificateList({
         </Text>
       ))}
       {row.metadata.acme?.lastError ? (
-        <Text style={panelStyles.error}>
-          Issuance failing: {row.metadata.acme.lastError}
-        </Text>
+        <Text style={panelStyles.error}>Issuance failing: {row.metadata.acme.lastError}</Text>
       ) : null}
       {canManage ? (
         <ConfirmButton
@@ -122,6 +121,9 @@ function TlsCertificateList({
           disabled={deletePending && deletingId !== row.id}
           onConfirm={() => onDelete(row.id)}
         />
+      ) : null}
+      {deleteFailure?.id === row.id ? (
+        <Text style={panelStyles.error}>{deleteFailure.message}</Text>
       ) : null}
     </View>
   ))
@@ -147,7 +149,7 @@ function TlsLetsEncryptPanel({
   return (
     <SectionPanel
       title="Let's Encrypt"
-      hint="Off by default — opt in before any Let's Encrypt certificate can be requested"
+      hint="On for new organizations — turn it off to stop any Let's Encrypt certificate being requested"
     >
       {acmeError ? <Text style={panelStyles.error}>{acmeError}</Text> : null}
       {settingsError && !acmeError ? (
@@ -157,7 +159,7 @@ function TlsLetsEncryptPanel({
       ) : null}
       <SettingRow
         label="Allow Let's Encrypt certificates"
-        description="When off, no new Let's Encrypt / ACME certificate can be requested for this organization, and a deploy that still pins a Let's Encrypt certificate is refused until it is turned back on or the pin is changed. Certificates already issued are not revoked by turning this off, but the encrypted copies of their keys that the panel stores are erased."
+        description="When off, no new Let's Encrypt / ACME certificate can be requested for this organization, and a deploy that still pins a Let's Encrypt certificate (or whose compose asks for tls.mode automatic) is refused until it is turned back on or the choice is changed. Certificates already issued are not revoked by turning this off, but the encrypted copies of their keys that the panel stores are erased."
       >
         <Toggle
           value={acmeEnabled}
@@ -170,9 +172,7 @@ function TlsLetsEncryptPanel({
   )
 }
 
-export function TlsOverviewSection({
-  orgId,
-}: Readonly<{ orgId: string }>) {
+export function TlsOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
   const canManage = useCan('organization', orgId, 'organization:manage')
   const tlsQuery = useTlsLibrary(orgId)
   const createMutation = useCreateTlsCertificate(orgId)
@@ -200,12 +200,12 @@ export function TlsOverviewSection({
   })
   const acmeEnabled = draftAcmeEnabled ?? tlsSettingsQuery.data?.acmeEnabled ?? false
   const sourceOptions = SOURCE_OPTIONS.map((option) =>
-    option.value === 'lets_encrypt' && !acmeEnabled
-      ? { ...option, disabled: true }
-      : option,
+    option.value === 'lets_encrypt' && !acmeEnabled ? { ...option, disabled: true } : option
   )
 
-  const [error, setError] = useState<string | null>(null)
+  // Each failure is said next to the button that caused it.
+  const [createError, setCreateError] = useState<string | null>(null)
+  const [deleteFailure, setDeleteFailure] = useState<DeleteFailure | null>(null)
   const [source, setSource] = useState<TlsSource>('upload')
   const [displayName, setDisplayName] = useState('')
   const [certificatePem, setCertificatePem] = useState('')
@@ -217,15 +217,11 @@ export function TlsOverviewSection({
 
   let queryError: string | null = null
   if (tlsQuery.isError) {
-    queryError =
-      userErrorMessage(tlsQuery.error, 'Failed to load TLS library')
+    queryError = userErrorMessage(tlsQuery.error, 'Failed to load TLS library')
   }
-  const displayError =
-    error ?? createMutation.actionError ?? deleteMutation.actionError ?? queryError
 
   const deletingId =
-    deleteMutation.isPending &&
-    typeof deleteMutation.variables === 'string'
+    deleteMutation.isPending && typeof deleteMutation.variables === 'string'
       ? deleteMutation.variables
       : null
 
@@ -253,54 +249,30 @@ export function TlsOverviewSection({
     acmeMutation.mutate(next)
   }
 
-  const onCreate = () => {
+  const onCreate = async () => {
     if (!canManage) return
     if (source === 'lets_encrypt' && !acmeEnabled) return
-    setError(null)
-
-    if (source === 'upload') {
-      createMutation.mutate(
-        {
-          source: 'upload',
-          name: displayName.trim() || undefined,
-          certificatePem,
-          privateKeyPem,
-        },
-        {
-          onError: () => {
-            setError(createMutation.actionError ?? 'Failed to create certificate')
-          },
-        },
-      )
-      return
-    }
-
+    setCreateError(null)
+    const name = displayName.trim() || undefined
     const names = hostnames
       .split(',')
       .map((n) => n.trim())
       .filter((n) => n.length > 0)
-    createMutation.mutate(
-      {
-        source,
-        name: displayName.trim() || undefined,
-        hostnames: names,
-      },
-      {
-        onError: () => {
-          setError(createMutation.actionError ?? 'Failed to create certificate')
-        },
-      },
+    const result = await createMutation.run(
+      source === 'upload'
+        ? { source: 'upload', name, certificatePem, privateKeyPem }
+        : { source, name, hostnames: names }
     )
+    if (!result.ok) setCreateError(failedRunMessage(result, 'Failed to create certificate'))
   }
 
-  const onDelete = (id: string) => {
+  const onDelete = async (id: string) => {
     if (!canManage) return
-    setError(null)
-    deleteMutation.mutate(id, {
-      onError: () => {
-        setError(deleteMutation.actionError ?? 'Failed to delete certificate')
-      },
-    })
+    setDeleteFailure(null)
+    const result = await deleteMutation.run(id)
+    if (!result.ok) {
+      setDeleteFailure({ id, message: failedRunMessage(result, 'Failed to delete certificate') })
+    }
   }
 
   return (
@@ -325,8 +297,12 @@ export function TlsOverviewSection({
           canManage={canManage}
           deletingId={deletingId}
           deletePending={deleteMutation.isPending}
-          onDelete={onDelete}
+          deleteFailure={deleteFailure}
+          onDelete={(id) => {
+            void onDelete(id)
+          }}
         />
+        {queryError ? <Text style={panelStyles.error}>{queryError}</Text> : null}
       </SectionPanel>
 
       {canManage ? (
@@ -376,16 +352,15 @@ export function TlsOverviewSection({
           )}
           {!acmeEnabled ? (
             <Text style={panelStyles.muted}>
-              Your organization has not enabled Let&apos;s Encrypt — turn on
-              &ldquo;Allow Let&apos;s Encrypt certificates&rdquo; above to
-              request one.
+              Your organization has not enabled Let&apos;s Encrypt — turn on &ldquo;Allow Let&apos;s
+              Encrypt certificates&rdquo; above to request one.
             </Text>
           ) : null}
           {source === 'lets_encrypt' ? (
             <Text style={panelStyles.muted}>
-              Caddy issues and renews this certificate on the serving host. The
-              hostname must resolve there with :80 and :443 reachable; wildcards
-              and private bind scopes are not supported.
+              Caddy issues and renews this certificate on the serving host. The hostname must
+              resolve there with :80 and :443 reachable; wildcards and private bind scopes are not
+              supported.
             </Text>
           ) : null}
           <Button
@@ -393,13 +368,12 @@ export function TlsOverviewSection({
             busyLabel="Saving…"
             variant="primary"
             busy={createMutation.isPending}
-            onPress={onCreate}
+            onPress={() => {
+              void onCreate()
+            }}
           />
+          {createError ? <Text style={panelStyles.error}>{createError}</Text> : null}
         </SectionPanel>
-      ) : null}
-
-      {displayError ? (
-        <Text style={panelStyles.error}>{displayError}</Text>
       ) : null}
     </View>
   )

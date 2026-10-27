@@ -168,7 +168,7 @@ export function EnvironmentConfigurationScreen() {
   let hostingsStatus: HostingsStatus = 'ready'
   if (hostings.hasError) hostingsStatus = 'error'
   else if (hostings.isLoading) hostingsStatus = 'loading'
-  const { staged, stage, unstage, discard, saveAll, saveError, problems, savedCount } =
+  const { staged, stage, unstage, discard, saveAll, saveNow, saveError, problems, savedCount } =
     useStagedEdits(save)
 
   const editable = canOwn && projectAllowsMutations
@@ -184,8 +184,19 @@ export function EnvironmentConfigurationScreen() {
       actionsFor: (change) => changeActions(change, envVariableRecords, model.standsAlone),
       onStage: stage,
       onUnstage: unstage,
+      onSaveNow: saveNow,
     }
-  }, [editable, model, envVariableRecords, projectVariableRecords, envName, staged, stage, unstage])
+  }, [
+    editable,
+    model,
+    envVariableRecords,
+    projectVariableRecords,
+    envName,
+    staged,
+    stage,
+    unstage,
+    saveNow,
+  ])
 
   if (query.isPending) return <LoadingState label="Loading configuration…" />
   if (query.error || !model) {

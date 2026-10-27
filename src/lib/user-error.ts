@@ -55,8 +55,13 @@ const API_ERROR_COPY: Readonly<Record<string, string>> = {
     'No free license at that size. Buy one first, or give one back from another server.',
   environment_name_locked:
     "This environment's name is part of the folder path on your servers, so it cannot change while services or volumes have folders in it.",
-  environment_has_folders:
-    'This environment still has folders on your servers. Remove its services and volumes first, then delete it.',
+  managed_runtime_present:
+    'This includes a managed database. Delete the database first (it asks for its own confirmation), then try again.',
+  project_stop_failed:
+    'The servers did not accept the stop in time, so nothing was deleted. Check that they are online and try again.',
+  project_has_running_services: 'Services are still running. Stop them first, then delete.',
+  project_deploy_running:
+    'A deploy is running in this project. Delete it when the deploy finishes.',
   environment_server_locked:
     'This environment has folders on its server, so it cannot move to another server. Remove its services and volumes first.',
   environment_name_in_use: 'Another environment in this project already has that name.',
@@ -172,4 +177,17 @@ export function plainStepFailureMessage(message: string | null | undefined): str
   const trimmed = message?.trim() ?? ''
   if (trimmed === '') return null
   return RAW_NETWORK_TEXT.test(trimmed) ? STEP_NETWORK_FAILURE_COPY : trimmed
+}
+
+/**
+ * The sentence for a failed `useApiMutation().run`: the mapped error code,
+ * else the server's words, else the fallback. Read from the run result, never
+ * from `actionError`, which is render state and still empty inside the call
+ * that just failed (so a first failure would show nothing).
+ */
+export function failedRunMessage(
+  result: Readonly<{ error: string | null; cause?: unknown }>,
+  fallback: string
+): string {
+  return result.cause ? userErrorMessage(result.cause, fallback) : (result.error ?? fallback)
 }

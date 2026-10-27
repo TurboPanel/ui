@@ -14,7 +14,7 @@ describe('searchDestinations', () => {
     const items = searchDestinations('o1', opts)
     expect(items.map((i) => [i.name, i.href])).toEqual([
       ['Projects', '/o1/projects'],
-      ['Git sources', '/o1/projects/git-sources'],
+      ['Git Sources', '/o1/projects/git-sources'],
       ['Repositories', '/o1/projects/repositories'],
       ['Project settings', '/o1/projects/settings'],
       ['Activity', '/o1/activity'],
@@ -85,7 +85,9 @@ describe('moveSearchIndex', () => {
 describe('isSearchShortcut', () => {
   const base = { metaKey: false, ctrlKey: false, targetIsTextField: false }
   it('accepts Cmd/Ctrl+K anywhere', () => {
-    expect(isSearchShortcut({ ...base, key: 'k', metaKey: true, targetIsTextField: true })).toBe(true)
+    expect(isSearchShortcut({ ...base, key: 'k', metaKey: true, targetIsTextField: true })).toBe(
+      true
+    )
     expect(isSearchShortcut({ ...base, key: 'K', ctrlKey: true })).toBe(true)
   })
   it('accepts / only outside text fields', () => {

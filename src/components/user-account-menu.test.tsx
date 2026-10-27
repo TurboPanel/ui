@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 type Props = Readonly<Record<string, unknown> & { children?: ReactNode }>
 
-const state = vi.hoisted(() => ({ switcher: false }))
+const state = vi.hoisted(() => ({ switcher: false, forget: { calls: 0 } }))
 
 vi.mock('react-native', () => ({
   Platform: { OS: 'web', select: (o: Record<string, unknown>) => o.web ?? o.default },
@@ -60,11 +60,19 @@ vi.mock('@/lib/control-plane', () => ({
   isRemoteCookieClient: () => state.switcher,
 }))
 vi.mock('@/lib/control-plane-accounts', () => ({
-  switchControlPlaneAccount: vi.fn(),
+  switchControlPlaneAccount: vi.fn(() => true),
   useControlPlaneStore: () => ({
-    accounts: [{ kind: 'self-hosted', origin: 'https://one.example', email: 'a@b.c' }],
+    accounts: [
+      { kind: 'self-hosted', origin: 'https://one.example', email: 'a@b.c' },
+      { kind: 'self-hosted', origin: 'https://two.example', email: 'd@e.f' },
+    ],
     activeOrigin: 'https://one.example',
   }),
+}))
+vi.mock('@/lib/session-choices', () => ({
+  forgetSessionChoices: () => {
+    state.forget.calls += 1
+  },
 }))
 vi.mock('@/lib/notifications', () => ({ useUnreadNotificationCount: () => 0 }))
 vi.mock('@/lib/org-context', () => ({ setActiveOrganizationId: vi.fn() }))
@@ -84,12 +92,10 @@ afterEach(cleanup)
 describe('UserAccountMenuSegment', () => {
   it('lists Security, Notifications, About, Sign out, then UI settings', async () => {
     await openMenu()
-    const names = screen
-      .getAllByRole('menuitem')
-      .map((el) => el.getAttribute('aria-label'))
+    const names = screen.getAllByRole('menuitem').map((el) => el.getAttribute('aria-label'))
     expect(names).toEqual(['Security', 'Notifications', 'About', 'Sign out'])
     const all = Array.from(document.querySelectorAll('button')).map(
-      (el) => el.getAttribute('aria-label') ?? el.textContent,
+      (el) => el.getAttribute('aria-label') ?? el.textContent
     )
     expect(all.at(-1)).toBe('UI settings')
   })
@@ -105,5 +111,13 @@ describe('UserAccountMenuSegment', () => {
     await openMenu()
     expect(screen.getByText('Signed in as')).toBeTruthy()
     expect(screen.getByRole('menuitem', { name: 'Add control plane' })).toBeTruthy()
+  })
+
+  it('forgets the remembered form choices when switching control plane', async () => {
+    state.switcher = true
+    state.forget.calls = 0
+    await openMenu()
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Switch to d@e.f' }))
+    expect(state.forget.calls).toBe(1)
   })
 })
