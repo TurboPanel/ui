@@ -72,7 +72,7 @@ describe('HighAvailabilityWordmark', () => {
   beforeEach(() => {
     healthState.data = undefined
     push.mockReset()
-    useVersionUpdateEntry.mockReturnValue({ viewer: 'other', pending: false })
+    useVersionUpdateEntry.mockReturnValue({ viewer: 'other', pending: false, orgId: '' })
   })
   afterEach(cleanup)
 
@@ -118,9 +118,13 @@ describe('HighAvailabilityWordmark', () => {
 
   it('self-hosted release: an instance admin sees the icon and "Update", and goes to Admin > Updates', () => {
     useAuth.mockReturnValue({ controlPlaneRuntime: 'deno' })
-    useVersionUpdateEntry.mockReturnValue({ viewer: 'instance-admin', pending: true })
+    useVersionUpdateEntry.mockReturnValue({
+      viewer: 'instance-admin',
+      pending: true,
+      orgId: 'org-1',
+    })
     healthState.data = { ok: true, version: '0.1.20', build: '0.1.20', channel: 'release' }
-    const { container } = render(<HighAvailabilityWordmark orgId="org-1" />)
+    const { container } = render(<HighAvailabilityWordmark />)
     expect(container.textContent).toBe('v0.1.20update iconUpdate')
     fireEvent.click(versionButton())
     expect(push).toHaveBeenCalledWith('/admin/updates')
@@ -128,9 +132,9 @@ describe('HighAvailabilityWordmark', () => {
 
   it('self-hosted canary: an organization manager sees the icon alone and goes to the Servers page', () => {
     useAuth.mockReturnValue({ controlPlaneRuntime: 'deno' })
-    useVersionUpdateEntry.mockReturnValue({ viewer: 'org-manager', pending: true })
+    useVersionUpdateEntry.mockReturnValue({ viewer: 'org-manager', pending: true, orgId: 'org-1' })
     healthState.data = { ok: true, version: '0.1.21', build: '0.1.21-canary.24', channel: 'canary' }
-    const { container } = render(<HighAvailabilityWordmark orgId="org-1" />)
+    const { container } = render(<HighAvailabilityWordmark />)
     expect(container.textContent).toBe('v0.1.21-canary.24Canaryupdate icon')
     expect(versionButton().getAttribute('aria-label')).toBe(
       'Control plane v0.1.21-canary.24, Canary build, update available, open Servers'

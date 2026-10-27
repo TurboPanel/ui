@@ -45,8 +45,8 @@ import { useColors, useColorScheme } from '@/lib/theme-preference'
  * Self-hosted has no pill and no edition text: the full form is just the
  * version line beside the T, with the same behaviour.
  *
- * `orgId` is the organization the sidebar is for, so an organization manager
- * is sent to that organization's Servers page.
+ * The organization comes from the route (`/[orgId]/…`), so an organization
+ * manager is sent to that organization's Servers page.
  *
  * `style` is applied to whatever the wordmark renders (its root), so a caller
  * can nudge it without a wrapper that would stay behind when it renders nothing.
@@ -57,12 +57,10 @@ import { useColors, useColorScheme } from '@/lib/theme-preference'
 export function HighAvailabilityWordmark({
   compact = false,
   showVersion = true,
-  orgId,
   style,
 }: Readonly<{
   compact?: boolean
   showVersion?: boolean
-  orgId?: string
   style?: StyleProp<ViewStyle>
 }>) {
   const { controlPlaneRuntime } = useAuth()
@@ -76,7 +74,7 @@ export function HighAvailabilityWordmark({
   if (selfHosted && withVersion) {
     return (
       <View style={[styles.stack, styles.stackSelfHosted, style]}>
-        <VersionLine health={health.data} runtime="deno" orgId={orgId} />
+        <VersionLine health={health.data} runtime="deno" />
       </View>
     )
   }
@@ -111,7 +109,7 @@ export function HighAvailabilityWordmark({
   return (
     <View style={[styles.stack, style]}>
       {pill}
-      <VersionLine health={health.data} runtime="workers" orgId={orgId} />
+      <VersionLine health={health.data} runtime="workers" />
     </View>
   )
 }
@@ -119,15 +117,10 @@ export function HighAvailabilityWordmark({
 function VersionLine({
   health,
   runtime,
-  orgId,
-}: Readonly<{
-  health: HealthResponse | undefined
-  runtime: 'deno' | 'workers'
-  orgId?: string | null
-}>) {
+}: Readonly<{ health: HealthResponse | undefined; runtime: 'deno' | 'workers' }>) {
   const router = useRouter()
   const [versionsOpen, setVersionsOpen] = useState(false)
-  const { viewer, pending } = useVersionUpdateEntry(orgId)
+  const { viewer, pending, orgId } = useVersionUpdateEntry()
   const version = controlPlaneVersionLabel(health)
   const environment = controlPlaneEnvironmentLabel(health, runtime)
   const indicator = updateIndicator({ pending, live: environment === null })
