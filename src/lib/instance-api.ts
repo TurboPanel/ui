@@ -2727,7 +2727,10 @@ export type HealthResponse = {
   revision?: { commit: string; sourceUrl: string }
   /** The update channel the instance follows (`canary`, `rc`, `release`, `trunk`); newer control planes only. */
   channel?: string
-  /** Self-hosted: the installed pre-release label (`0.1.1-canary.…`, `0.1.1-rc.1`), else null. */
+  /**
+   * Self-hosted: the installed package's full label (`0.1.21-canary.24`,
+   * `0.1.21-rc.2`), else null. The sidebar shows only its `X.Y.Z`.
+   */
   build?: string | null
   /** Hosted: `testing`, `staging` or `live`; null on self-hosted and local dev. */
   environment?: string | null
@@ -5363,6 +5366,17 @@ export type InstanceUpdates = {
   updatesManaged?: boolean
   /** Present once the managed upgrade coordinator is mounted. */
   managedUpgrade?: boolean
+  /**
+   * Reserved for the automatic update system: a connected daemon runs an
+   * older build than the channel's daemon target. Not sent by any control
+   * plane yet; read only through `fleetUpdateSignals` in `lib/update-entry.ts`.
+   */
+  daemonsBehind?: boolean
+  /**
+   * Reserved for the automatic update system: an admin has paused updates.
+   * Not sent by any control plane yet; read only through `fleetUpdateSignals`.
+   */
+  updatesPaused?: boolean
   fleetSummary?: {
     connected: number
     upToDate: number

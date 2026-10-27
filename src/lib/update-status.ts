@@ -411,3 +411,14 @@ export function writeDismissedUpdateBanner(
 
 /** Path that opens the Updates screen with the update confirmation already up. */
 export const UPDATE_NOW_HREF = '/admin/updates?update=1'
+
+/**
+ * Who sees the instance-wide update banner: instance admins (admin and
+ * superadmin) on a self-hosted control plane, nobody else. On TurboPanel High
+ * Availability the platform updates the control plane, so there is no banner.
+ */
+export function showsUpdateBanner(
+  input: Readonly<{ isInstanceAdmin: boolean; runtime: string | null | undefined }>
+): boolean {
+  return input.isInstanceAdmin && input.runtime === 'deno'
+}
