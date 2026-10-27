@@ -451,9 +451,11 @@ export const queryKeys = {
     instanceDaemon: ['admin', 'instance-daemon'] as const,
     instanceUpdates: ['admin', 'instance-updates'] as const,
     upgradeActiveRun: ['admin', 'instance-updates', 'run'] as const,
-    upgradeHistory: (offset: number, limit: number) =>
-      ['admin', 'instance-updates', 'history', offset, limit] as const,
-    upgradeRun: (runId: string) => ['admin', 'instance-updates', 'runs', runId] as const,
+    upgradeHistory: (offset: number, limit: number, status = '', trigger = '') =>
+      ['admin', 'instance-updates', 'history', offset, limit, status, trigger] as const,
+    /** One page of a run's servers; `filters` is the serialized sort and filter set. */
+    upgradeRunServers: (runId: string, filters: string) =>
+      ['admin', 'instance-updates', 'runs', runId, 'servers', filters] as const,
     upgradeServers: (offset: number, limit: number, status: string) =>
       ['admin', 'instance-updates', 'servers', offset, limit, status] as const,
     upgradeSettings: ['admin', 'instance-updates', 'settings'] as const,

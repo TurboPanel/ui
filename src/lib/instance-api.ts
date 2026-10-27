@@ -5474,22 +5474,62 @@ export type UpgradeStepDetail = {
   restartNote?: string
 }
 
+export type UpgradeRunSource = 'manual' | 'auto' | 'server'
+
+/** `automatic` is a run the maintenance tick started; `manual` covers a person's run and a one-server run. */
+export type UpgradeRunTrigger = 'automatic' | 'manual'
+
+/** One unit's pinned build in a run's target. */
+export type UpgradeRunTargetUnit = {
+  version?: string | null
+  commit?: string | null
+  builtAt?: string | null
+}
+
+export type UpgradeRunTarget = {
+  daemon?: UpgradeRunTargetUnit | null
+  instance?: UpgradeRunTargetUnit | null
+  ui?: UpgradeRunTargetUnit | null
+}
+
+/**
+ * Per-server totals of a run (one per server, the worst of its components).
+ * `detail: 'pruned'` means the per-server rows were removed after the retention
+ * window: `updated` and `alreadyCurrent` are then unknown (null) and the other
+ * totals come from the run's stored step counts.
+ */
+export type UpgradeRunSummary = {
+  detail: 'steps' | 'pruned'
+  total: number
+  updated: number | null
+  alreadyCurrent: number | null
+  skipped: number
+  failed: number
+  inProgress: number
+}
+
 export type UpgradeRunRecord = {
   id: string
   status: UpgradeRunStatus
   phase: UpgradePhase | null
   channel: string
-  source: 'manual' | 'auto' | 'server'
+  source: UpgradeRunSource
+  createdAt?: string
   startedAt?: string | null
   finishedAt?: string | null
+  startedBy?: string | null
   startedByEmail?: string | null
   error?: string | null
+  target?: UpgradeRunTarget | null
   counts?: {
     done: number
     failed: number
     total: number
     needsAttention?: number
-  }
+  } | null
+  /** Absent on control planes older than the paged history. */
+  trigger?: UpgradeRunTrigger
+  summary?: UpgradeRunSummary
 }
 
 export type UpgradeActiveRunResponse = {
@@ -5536,18 +5576,130 @@ export async function fetchUpgradeActiveRun(): Promise<UpgradeActiveRunResponse>
   return await apiFetch(`${ADMIN_API}/instance/updates/run`)
 }
 
-export async function fetchUpgradeRun(runId: string): Promise<UpgradeActiveRunResponse> {
-  return await apiFetch(`${ADMIN_API}/instance/updates/runs/${encodeURIComponent(runId)}`)
+/**
+ * `status` omitted lists finished runs only (the original behaviour); `any`
+ * lists every run, `active` the pending or running one.
+ */
+export type UpgradeHistoryQuery = Readonly<{
+  offset?: number
+  limit?: number
+  status?: UpgradeRunStatus | 'any' | 'active' | ''
+  trigger?: UpgradeRunTrigger | ''
+}>
+
+/** Query string from the set values only (`''`, null and undefined are left out). */
+function queryString(params: Readonly<Record<string, string | number | null | undefined>>): string {
+  const query = new URLSearchParams()
+  for (const [key, value] of Object.entries(params)) {
+    if (value === null || value === undefined || value === '') continue
+    query.set(key, String(value))
+  }
+  return query.size > 0 ? `?${query.toString()}` : ''
 }
 
 export async function fetchUpgradeHistory(
-  params?: Readonly<{ offset?: number; limit?: number }>
+  params?: UpgradeHistoryQuery
 ): Promise<UpgradeHistoryResponse> {
-  const query = new URLSearchParams()
-  if (params?.offset != null) query.set('offset', String(params.offset))
-  if (params?.limit != null) query.set('limit', String(params.limit))
-  const suffix = query.size > 0 ? `?${query.toString()}` : ''
+  const suffix = queryString({
+    offset: params?.offset,
+    limit: params?.limit,
+    status: params?.status,
+    trigger: params?.trigger,
+  })
   return await apiFetch(`${ADMIN_API}/instance/updates/history${suffix}`)
+}
+
+/** How one server (or one of its components) ended in a run. */
+export type UpgradeServerOutcome =
+  'updated' | 'already_current' | 'skipped' | 'failed' | 'in_progress'
+
+export type UpgradeRunUnit = 'daemon' | 'instance'
+
+export type UpgradeRunServerComponent = {
+  stepId: string
+  unit: UpgradeRunUnit
+  phase: UpgradePhase
+  status: UpgradeStepStatus
+  outcome: UpgradeServerOutcome
+  fromVersion: string | null
+  toVersion: string | null
+  fromCommit: string | null
+  toCommit: string | null
+  attempts: number
+  startedAt: string | null
+  finishedAt: string | null
+  lastStageAt: string | null
+  errorCode: string | null
+  errorMessage: string | null
+  detail?: (UpgradeStepDetail & { progressDetail?: string; uiRefresh?: boolean }) | null
+}
+
+export type UpgradeRunServerRow = {
+  serverId: string
+  serverName: string | null
+  hostname: string | null
+  organizationId: string | null
+  organizationName: string | null
+  datacenterId: string | null
+  datacenterName: string | null
+  status: UpgradeServerOutcome
+  fromVersion: string | null
+  toVersion: string | null
+  fromCommit: string | null
+  toCommit: string | null
+  startedAt: string | null
+  finishedAt: string | null
+  durationMs: number | null
+  errorCode: string | null
+  errorMessage: string | null
+  attempts: number
+  connected: boolean
+  lastHeartbeatAt: string | null
+  components: Partial<Record<UpgradeRunUnit, UpgradeRunServerComponent>>
+}
+
+export type UpgradeRunServerSort =
+  'status' | 'organization' | 'server' | 'started' | 'finished' | 'duration' | 'attempts'
+
+export type UpgradeRunServersQuery = Readonly<{
+  offset?: number
+  limit?: number
+  sort?: UpgradeRunServerSort
+  dir?: 'asc' | 'desc'
+  status?: UpgradeServerOutcome | ''
+  organizationId?: string | null
+  q?: string
+  serverId?: string
+}>
+
+export type UpgradeRunServersPage = {
+  ok: boolean
+  run: UpgradeHistoryEntry
+  units: UpgradeRunUnit[]
+  statusCounts: Record<UpgradeServerOutcome | 'all', number>
+  organizations: { id: string; name: string | null; servers: number }[]
+  servers: UpgradeRunServerRow[]
+  total: number
+}
+
+/** One page of a run's servers: one row per server with each component it updated. */
+export async function fetchUpgradeRunServers(
+  runId: string,
+  params?: UpgradeRunServersQuery
+): Promise<UpgradeRunServersPage> {
+  const suffix = queryString({
+    offset: params?.offset,
+    limit: params?.limit,
+    sort: params?.sort,
+    dir: params?.dir,
+    status: params?.status,
+    organizationId: params?.organizationId,
+    q: params?.q?.trim(),
+    serverId: params?.serverId,
+  })
+  return await apiFetch(
+    `${ADMIN_API}/instance/updates/runs/${encodeURIComponent(runId)}/servers${suffix}`
+  )
 }
 
 export async function fetchUpgradeServersPage(

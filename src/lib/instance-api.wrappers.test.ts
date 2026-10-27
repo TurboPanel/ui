@@ -14,7 +14,7 @@ import {
   saveOrgComposeRemoteBuildSources,
   fetchUnreadNotificationCount,
   fetchUpgradeHistory,
-  fetchUpgradeRun,
+  fetchUpgradeRunServers,
   fetchUpgradeServersPage,
   fetchUpgradeSettings,
   markNotificationsRead,
@@ -80,18 +80,49 @@ describe('instance-api upgrade, notification and compose-gated-field wrappers', 
     fetchMock.mockImplementation(() =>
       Promise.resolve(jsonResponse({ ok: true, runs: [], servers: [], total: 0 }))
     )
-    await fetchUpgradeRun('run/1')
-    expect(urlOf(0)).toContain('/instance/updates/runs/run%2F1')
-
     await fetchUpgradeHistory()
-    expect(urlOf(1)).toMatch(/\/instance\/updates\/history$/)
+    expect(urlOf(0)).toMatch(/\/instance\/updates\/history$/)
     await fetchUpgradeHistory({ offset: 8, limit: 4 })
-    expect(urlOf(2)).toContain('/instance/updates/history?offset=8&limit=4')
+    expect(urlOf(1)).toContain('/instance/updates/history?offset=8&limit=4')
 
     await fetchUpgradeServersPage()
-    expect(urlOf(3)).toMatch(/\/instance\/updates\/servers$/)
+    expect(urlOf(2)).toMatch(/\/instance\/updates\/servers$/)
     await fetchUpgradeServersPage({ offset: 0, limit: 25, status: 'needs_attention' })
-    expect(urlOf(4)).toContain('/instance/updates/servers?offset=0&limit=25&status=needs_attention')
+    expect(urlOf(3)).toContain('/instance/updates/servers?offset=0&limit=25&status=needs_attention')
+
+    await fetchUpgradeHistory({ offset: 0, limit: 25, status: 'any', trigger: 'automatic' })
+    expect(urlOf(4)).toContain(
+      '/instance/updates/history?offset=0&limit=25&status=any&trigger=automatic'
+    )
+    await fetchUpgradeHistory({ offset: 0, limit: 25, status: '', trigger: '' })
+    expect(urlOf(5)).toMatch(/\/instance\/updates\/history\?offset=0&limit=25$/)
+  })
+
+  it('a run server page sends only the filters that are set', async () => {
+    fetchMock.mockImplementation(() =>
+      Promise.resolve(jsonResponse({ ok: true, servers: [], total: 0 }))
+    )
+    await fetchUpgradeRunServers('run/1')
+    expect(urlOf(0)).toMatch(/\/instance\/updates\/runs\/run%2F1\/servers$/)
+    await fetchUpgradeRunServers('run-1', {
+      offset: 50,
+      limit: 50,
+      sort: 'duration',
+      dir: 'desc',
+      status: 'failed',
+      organizationId: 'org-1',
+      q: '  web  ',
+    })
+    expect(urlOf(1)).toContain(
+      '/instance/updates/runs/run-1/servers?offset=50&limit=50&sort=duration&dir=desc&status=failed&organizationId=org-1&q=web'
+    )
+    await fetchUpgradeRunServers('run-1', {
+      serverId: 's-1',
+      limit: 1,
+      organizationId: null,
+      q: '',
+    })
+    expect(urlOf(2)).toContain('/instance/updates/runs/run-1/servers?limit=1&serverId=s-1')
   })
 
   it('upgrade settings and run controls use their routes and methods', async () => {
