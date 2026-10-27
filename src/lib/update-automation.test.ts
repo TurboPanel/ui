@@ -8,6 +8,7 @@ import {
   pausedSinceText,
   resumeUpdatesPrompt,
   SERVER_UPDATES_AUTOMATIC_COPY,
+  UPDATE_WAITING_COPY,
   waitingSentence,
 } from './update-automation'
 
@@ -96,6 +97,12 @@ describe('what waits', () => {
     expect(isUpdateWaiting({}, true)).toBe(true)
     expect(isUpdateWaiting({ daemonsBehind: true }, false)).toBe(true)
     expect(isUpdateWaiting({}, false)).toBe(false)
+  })
+
+  it('has a general sentence for a wait it cannot name', () => {
+    expect(UPDATE_WAITING_COPY).toBe(
+      'An update is waiting. It starts on its own at the next check.'
+    )
   })
 
   it('says a server updates on its own', () => {

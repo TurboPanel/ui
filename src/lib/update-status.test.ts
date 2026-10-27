@@ -148,6 +148,23 @@ describe('runToShow', () => {
     expect(runToShow({ run: null, lastRun: partial }).run).toBe(partial)
   })
 
+  it('does not draw a run that Pause all updates stopped as a failure', () => {
+    const paused = run({
+      status: 'cancelled',
+      error: 'updates_paused',
+      steps: [step({ status: 'done' })],
+    })
+    expect(runToShow({ run: null, lastRun: paused })).toEqual({ run: null, finished: false })
+    const pausedWithFailure = run({
+      status: 'cancelled',
+      error: 'updates_paused',
+      steps: [step({ status: 'failed' })],
+    })
+    expect(runToShow({ run: null, lastRun: pausedWithFailure }).run).toBe(pausedWithFailure)
+    const cancelled = run({ status: 'cancelled', steps: [step({ status: 'done' })] })
+    expect(runToShow({ run: null, lastRun: cancelled }).run).toBe(cancelled)
+  })
+
   it('does not redraw a successful last run, or nothing at all', () => {
     expect(runToShow({ run: null, lastRun: run({ status: 'succeeded' }) }).run).toBeNull()
     expect(runToShow({ run: null }).run).toBeNull()

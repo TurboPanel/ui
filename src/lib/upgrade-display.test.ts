@@ -473,6 +473,17 @@ describe('fleetStatusBadge', () => {
       label: 'Skipped: offline',
     })
   })
+
+  it('names the automatic update codes in the Status column, whatever the message says', () => {
+    expect(fleetStatusBadge('skipped', 'updates_paused')).toEqual({
+      tone: 'muted',
+      label: 'Skipped: paused',
+    })
+    expect(fleetStatusBadge('failed', 'retry_later')).toEqual({
+      tone: 'pending',
+      label: 'Tries again later',
+    })
+  })
 })
 
 describe('offlineWaitingNotice', () => {

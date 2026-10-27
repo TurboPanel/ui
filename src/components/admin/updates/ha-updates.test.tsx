@@ -194,6 +194,16 @@ describe('HighAvailabilityUpdates', () => {
     ).toBeTruthy()
   })
 
+  it('does not claim daemons are behind when only something else waits', () => {
+    render(
+      <HighAvailabilityUpdates data={{ ...DATA, daemonsBehind: false, updateWaiting: true }} />
+    )
+    expect(screen.queryByText(/the daemon on some servers/)).toBeNull()
+    expect(
+      screen.getByText('An update is waiting. It starts on its own at the next check.')
+    ).toBeTruthy()
+  })
+
   it('pauses after the confirmation that a run in progress finishes its servers', async () => {
     render(<HighAvailabilityUpdates data={DATA} />)
     expect(screen.getByRole('button', { name: 'Pause all updates' })).toBeTruthy()

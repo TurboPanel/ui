@@ -68,6 +68,9 @@ export function waitingSentence(
   return `Waiting to update: ${joinWithAnd(items)}. It starts on its own at the next check.`
 }
 
+/** When something waits that the screen cannot name piece by piece. */
+export const UPDATE_WAITING_COPY = 'An update is waiting. It starts on its own at the next check.'
+
 /**
  * Whether anything waits to update. The control plane's `updateWaiting` is the
  * answer; an older control plane without the field falls back to what the

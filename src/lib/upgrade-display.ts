@@ -267,6 +267,15 @@ export function stepHasStarted(status: UpgradeStepStatus | null | undefined): bo
 export const SKIPPED_OFFLINE_DETAIL =
   'It was offline when the update started. It updates on its own when it reconnects.'
 
+function skippedBadge(errorCode: string | null | undefined): {
+  tone: 'muted'
+  label: string
+} {
+  if (errorCode === 'server_offline') return { tone: 'muted', label: 'Skipped: offline' }
+  if (errorCode === 'updates_paused') return { tone: 'muted', label: 'Skipped: paused' }
+  return { tone: 'muted', label: 'Skipped' }
+}
+
 /** The fleet table's Status column: what the update is doing with this server, in plain words. */
 export function fleetStatusBadge(
   status: UpgradeStepStatus,
@@ -279,12 +288,11 @@ export function fleetStatusBadge(
     case 'done':
       return { tone: 'ok', label: 'Updated' }
     case 'skipped':
-      if (errorCode === 'server_offline') {
-        return { tone: 'muted', label: 'Skipped: offline' }
-      }
-      return { tone: 'muted', label: 'Skipped' }
+      return skippedBadge(errorCode)
     case 'failed':
-      return { tone: 'danger', label: 'Failed' }
+      return errorCode === 'retry_later'
+        ? { tone: 'pending', label: 'Tries again later' }
+        : { tone: 'danger', label: 'Failed' }
     case 'rolled_back':
       return { tone: 'danger', label: 'Rolled back' }
     case 'needs_attention':

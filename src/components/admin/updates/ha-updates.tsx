@@ -11,7 +11,7 @@ import { Badge, InlineNotice, SectionPanel, SegmentedControl } from '@/component
 import { panelStyles } from '@/components/ui/panel-styles'
 import type { InstanceUpdates } from '@/lib/instance-api'
 import { HA_PRODUCT_NAME } from '@/lib/platform-copy'
-import { isUpdateWaiting, waitingSentence } from '@/lib/update-automation'
+import { isUpdateWaiting, UPDATE_WAITING_COPY, waitingSentence } from '@/lib/update-automation'
 import {
   fleetProgressText,
   offlineWaitingNotice,
@@ -29,10 +29,17 @@ import { fleetServersQuery, UPGRADE_FLEET_PAGE_SIZE } from '@/lib/upgrade-batch'
 import { isUpgradeRunActive } from '@/lib/upgrade-run-poll'
 import { spacing } from '@/lib/theme'
 
-/** What waits on TurboPanel High Availability: only daemons; the platform updates the control plane. */
+/**
+ * What waits on TurboPanel High Availability. Daemons are the only piece this
+ * screen can name (the platform updates the control plane); anything else
+ * waiting gets the general sentence.
+ */
 function fleetWaiting(data: InstanceUpdates, runActive: boolean): string | null {
   if (runActive || !isUpdateWaiting(data, false)) return null
-  return waitingSentence({ pieceLabels: [], daemonsBehind: true })
+  return (
+    waitingSentence({ pieceLabels: [], daemonsBehind: data.daemonsBehind === true }) ??
+    UPDATE_WAITING_COPY
+  )
 }
 
 export function HighAvailabilityUpdates({ data }: Readonly<{ data: InstanceUpdates }>) {
