@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { Platform, StyleSheet, Text, View } from 'react-native'
 import { Button, type ButtonSize } from '@/components/ui/button'
+import { listenForDismiss } from '@/lib/dismiss-listener'
 import { colors, spacing } from '@/lib/theme'
 
 /**
  * Two-step destructive action (MASTER: destructive always confirms).
- * First press arms; the armed row shows Confirm / Cancel and auto-disarms
- * after 6s of inactivity. The confirm button takes the armed button's place
+ * First press arms; the armed row shows Confirm / Cancel and stays until the
+ * person backs out: Cancel, Escape or a press anywhere else on the page (web),
+ * or {@link ARMED_TIMEOUT_MS} without a press. The confirm button takes the armed button's place
  * (the question still comes first for screen readers), so a deliberate
  * second press on the same spot confirms; a press within
  * {@link CONFIRM_GUARD_MS} of arming is ignored, so a double-click or two
@@ -18,6 +20,9 @@ import { colors, spacing } from '@/lib/theme'
  */
 /** How long after arming a press on the confirm button is ignored. */
 export const CONFIRM_GUARD_MS = 400
+
+/** How long the armed row waits for a press before it backs out by itself. */
+export const ARMED_TIMEOUT_MS = 60_000
 
 export function ConfirmButton({
   label,
@@ -53,6 +58,7 @@ export function ConfirmButton({
   const [confirmed, setConfirmed] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const armedAt = useRef(0)
+  const armedRow = useRef<View>(null)
   // The armed button's width: the confirm button keeps it, so a second press
   // anywhere on the spot of the first one lands on Confirm even when its label
   // is shorter.
@@ -76,7 +82,7 @@ export function ConfirmButton({
     timer.current = setTimeout(() => {
       setArmed(false)
       onArmedChange?.(false)
-    }, 6000)
+    }, ARMED_TIMEOUT_MS)
   }
 
   const disarm = () => {
@@ -84,6 +90,17 @@ export function ConfirmButton({
     setArmed(false)
     onArmedChange?.(false)
   }
+  const latestDisarm = useRef(disarm)
+  latestDisarm.current = disarm
+
+  useEffect(() => {
+    if (!armed || Platform.OS !== 'web') return
+    return listenForDismiss(
+      typeof document === 'undefined' ? undefined : document,
+      () => armedRow.current,
+      () => latestDisarm.current()
+    )
+  }, [armed])
 
   const showArmedRow = armed || (confirmed && busy)
   if (!showArmedRow) {
@@ -106,15 +123,9 @@ export function ConfirmButton({
   // on a narrow screen the question wraps its own words instead, so Confirm
   // cannot drop to a second line and leave Cancel under the press.
   return (
-    <View style={styles.armedRow}>
+    <View ref={armedRow} style={styles.armedRow}>
       <Text style={styles.prompt}>{prompt}</Text>
-      <Button
-        label={dismissLabel}
-        variant="ghost"
-        size={size}
-        disabled={busy}
-        onPress={disarm}
-      />
+      <Button label={dismissLabel} variant="ghost" size={size} disabled={busy} onPress={disarm} />
       <Button
         label={confirmLabel}
         variant={variant === 'danger' ? 'danger' : 'primary'}

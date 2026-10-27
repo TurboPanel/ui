@@ -4294,9 +4294,7 @@ export async function fetchEnvironmentDeletePreview(environmentId: string): Prom
   return await apiFetch(`${CLIENT_API}/environments/${environmentId}/delete-preview`)
 }
 
-export async function deleteProject(
-  id: string
-): Promise<{ ok: true; cleanup?: DeleteCleanup }> {
+export async function deleteProject(id: string): Promise<{ ok: true; cleanup?: DeleteCleanup }> {
   return await apiFetch(`${CLIENT_API}/projects/${id}`, {
     method: 'DELETE',
   })
@@ -6553,6 +6551,12 @@ export type CommandProgress = {
    * when the server is heard from again and is absent once the deploy ends.
    */
   contactLostAt?: string | null
+  /**
+   * Sent by the server: when the deploy started running, or null while it
+   * waits for another build on the server to finish (one build at a time).
+   * Absent from servers that do not report it.
+   */
+  runningSince?: string | null
 }
 
 /**

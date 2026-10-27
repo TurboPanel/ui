@@ -33,6 +33,10 @@ const RELEASE_LIST_MAX_HEIGHT = 480
 /** Wide enough for the Roll back button, so rows with and without one line up. */
 const RELEASE_ACTION_WIDTH = 112
 
+/** Why a release that did not finish building offers no Roll back. */
+const NO_ROLLBACK_REASON =
+  "Can't roll back to this release: it did not finish building, so its files were not kept on the server."
+
 /** Release ids are ULID/UUID-shaped; the head is enough to tell rows apart. */
 function shortReleaseId(releaseId: string): string {
   return releaseId.length > 10 ? releaseId.slice(0, 10) : releaseId
@@ -185,7 +189,9 @@ function releaseWhen(release: ReleaseRecord): string {
 
 /**
  * Roll back is confirmed but safe (the previous release is still published), so
- * it is a quiet button, not a danger one. The live release has none.
+ * it is a quiet button, not a danger one. The live release has none. A release
+ * that did not finish building has no tree kept on the server, so it says it
+ * cannot be rolled back to instead of offering a button that cannot work.
  */
 function RollbackAction({
   release,
@@ -199,6 +205,13 @@ function RollbackAction({
   onRollback: () => void
 }>) {
   if (release.isLive || !canRollback) return null
+  if (release.status !== 'succeeded') {
+    return (
+      <Text style={styles.cellMuted} accessibilityLabel={NO_ROLLBACK_REASON}>
+        {"Can't roll back"}
+      </Text>
+    )
+  }
   return (
     <ConfirmButton
       // Remounting on the row id disarms every other row's confirm when
@@ -208,7 +221,6 @@ function RollbackAction({
       confirmLabel="Roll back"
       prompt={rollbackPrompt(release)}
       variant="secondary"
-      disabled={release.status !== 'succeeded'}
       busy={rollingBack}
       onConfirm={onRollback}
     />

@@ -15,7 +15,7 @@ import {
 } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { commandErrorDetail, commandErrorLine } from '@/lib/command-error'
-import { progressHeadline, stepsOf } from '@/lib/deploy-progress'
+import { liveProgressHeadline, stepsOf } from '@/lib/deploy-progress'
 import {
   cancelledDeploymentNote,
   cancelTooLateNote,
@@ -156,7 +156,7 @@ function DeploymentHostLog({
     poll: shouldPollLog({ running, paused, openedFinished }),
   })
   const plan = useMemo(() => stepsOf(record?.progress), [record?.progress])
-  const headline = progressHeadline(record?.progress)
+  const headline = liveProgressHeadline(record?.progress, !running)
 
   // When the deploy ends here, the history row's status and duration catch up.
   const wasRunning = useRef(running)

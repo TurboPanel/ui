@@ -104,4 +104,15 @@ describe('ServiceReleasesPanel', () => {
       false
     )
   })
+
+  it('says a failed release cannot be rolled back to instead of offering the button', () => {
+    state.releases = [
+      release('r42', true, 'Fix pricing table layout'),
+      { ...release('r41', false, 'Broken build'), status: 'failed' },
+    ]
+    panel()
+    expect(screen.queryByText('Roll back')).toBeNull()
+    const note = screen.getByText("Can't roll back")
+    expect(note.getAttribute('aria-label')).toMatch(/did not finish building/)
+  })
 })

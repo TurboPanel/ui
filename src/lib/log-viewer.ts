@@ -47,7 +47,11 @@ const SETUP_PHASE = 'prepare'
 /** Header for lines that arrived without a phase. */
 const UNPHASED_LABEL = 'Output'
 
-const WARN_PATTERN = /\b(warn|warning|deprecated)\b/i
+/**
+ * Warn words, plus Node's process warnings (`DeprecationWarning`,
+ * `ExperimentalWarning`, …), which tools print on stderr while the build goes on.
+ */
+const WARN_PATTERN = /\b(?:warn|warning|deprecated|deprecation)\b|\b[a-z]+warning\b/i
 
 /**
  * Hand mirror of the server's phase-to-step table (`PHASE_STEPS` in the

@@ -95,6 +95,21 @@ describe('lineLevel and isNoiseLine', () => {
     expect(lineLevel(line('warning on stdout', 'build'))).toBeNull()
   })
 
+  it('reads Node process warnings as warnings, never errors', () => {
+    const nodeDeprecation =
+      '(node:4242) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead.'
+    expect(lineLevel(err(nodeDeprecation, 'build'))).toBe('warn')
+    expect(
+      lineLevel(
+        err('(node:7) ExperimentalWarning: Type Stripping is an experimental feature', 'build')
+      )
+    ).toBe('warn')
+    expect(
+      lineLevel(err('npm warn deprecated inflight@1.0.6: This module is not supported', 'build'))
+    ).toBe('warn')
+    expect(lineLevel(err('Error: Cannot find module express', 'build'))).toBe('error')
+  })
+
   it('treats benign stderr progress as not an error', () => {
     expect(lineLevel(err('Image nginx Pulling', 'pull'))).toBeNull()
   })

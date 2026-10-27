@@ -33,10 +33,7 @@ import {
   type ComposeProjectTabId,
 } from '@/lib/project-navigation'
 import { queryKeys, useCan } from '@/lib/query-client'
-import {
-  isTurbopanelProject,
-  systemComponentKey,
-} from '@/lib/system-inventory'
+import { isTurbopanelProject, systemComponentKey } from '@/lib/system-inventory'
 import { recordProjectTouch } from '@/lib/recent-projects'
 import { userErrorMessage } from '@/lib/user-error'
 
@@ -108,6 +105,13 @@ type ProjectContextValue = {
    */
   environmentScopeActive: boolean
   loading: boolean
+  /**
+   * True once the environment list has loaded and no refetch is running. Only
+   * then can a path that names an environment missing from the list be called
+   * gone: a list that is still loading, failed or is being refreshed (a cached
+   * one may not have the environment yet) says nothing about it.
+   */
+  environmentsSettled: boolean
   error: string | null
   canOwn: boolean
   canManage: boolean
@@ -126,10 +130,7 @@ const ProjectContext = createContext<ProjectContextValue | null>(null)
 /** Stable identity so a draft never remounts consumers via a fresh array. */
 const EMPTY_ENVIRONMENTS: EnvironmentRecord[] = []
 
-function resolveNeedsSetup(
-  isDraft: boolean,
-  project: ProjectRecord | null,
-): boolean {
+function resolveNeedsSetup(isDraft: boolean, project: ProjectRecord | null): boolean {
   if (isDraft || project == null) {
     return false
   }
@@ -171,30 +172,22 @@ export function ProjectProvider({
     : orEmptyArray(environmentsQuery.data?.environments)
   const workspaces = orEmptyArray(workspacesQuery.data?.workspaces)
 
-  const [selectedEnvironmentId, setSelectedEnvironmentId] = useState<
-    string | null
-  >(null)
+  const [selectedEnvironmentId, setSelectedEnvironmentId] = useState<string | null>(null)
   const [environmentScopeActive, setEnvironmentScopeActive] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const loading =
-    !isDraft &&
-    (projectQuery.isLoading ||
-      environmentsQuery.isLoading ||
-      workspacesQuery.isLoading)
+    !isDraft && (projectQuery.isLoading || environmentsQuery.isLoading || workspacesQuery.isLoading)
+
+  const environmentsSettled =
+    isDraft || (environmentsQuery.isSuccess && !environmentsQuery.isFetching)
 
   const queryError = useMemo(() => {
     if (isDraft) return null
-    const err =
-      projectQuery.error ?? environmentsQuery.error ?? workspacesQuery.error
+    const err = projectQuery.error ?? environmentsQuery.error ?? workspacesQuery.error
     if (!err) return null
     return userErrorMessage(err, 'Failed to load project')
-  }, [
-    isDraft,
-    projectQuery.error,
-    environmentsQuery.error,
-    workspacesQuery.error,
-  ])
+  }, [isDraft, projectQuery.error, environmentsQuery.error, workspacesQuery.error])
 
   useEffect(() => {
     setError(queryError)
@@ -232,19 +225,15 @@ export function ProjectProvider({
     // without flipping the Base highlight.
     setSelectedEnvironmentId((previous) =>
       resolveSelectedEnvironmentId(
-        baseSelected ? previous : pathEnvironmentId ?? previous,
-        environments,
-      ),
+        baseSelected ? previous : (pathEnvironmentId ?? previous),
+        environments
+      )
     )
   }, [environments, pathEnvironmentId, baseSelected])
 
   useEffect(() => {
     setEnvironmentScopeActive((previous) =>
-      resolveEnvironmentScopeActive(
-        baseSelected,
-        pathEnvironmentId,
-        previous,
-      ),
+      resolveEnvironmentScopeActive(baseSelected, pathEnvironmentId, previous)
     )
   }, [baseSelected, pathEnvironmentId])
 
@@ -261,23 +250,20 @@ export function ProjectProvider({
         router.push(projectEnvironmentHref(orgId, projectId, id) as Href)
       }
     },
-    [router, orgId, projectId, baseSelected, pathEnvironmentId],
+    [router, orgId, projectId, baseSelected, pathEnvironmentId]
   )
 
   const selectBaseCompose = useCallback(() => {
     router.push(projectOverviewHref(orgId, projectId) as Href)
   }, [router, orgId, projectId])
 
-  const selectedEnvironment =
-    environments.find((env) => env.id === selectedEnvironmentId) ?? null
+  const selectedEnvironment = environments.find((env) => env.id === selectedEnvironmentId) ?? null
 
   // A draft is always Project scope: it has no environments to select and its
   // section tabs are local state, so nothing may be inferred from the URL.
   const resolvedBaseSelected = isDraft || baseSelected
   const resolvedPathEnvironmentId = isDraft ? null : pathEnvironmentId
-  const resolvedEnvironmentScopeActive = isDraft
-    ? false
-    : environmentScopeActive
+  const resolvedEnvironmentScopeActive = isDraft ? false : environmentScopeActive
   const resolvedSelectedEnvironmentId = isDraft ? null : selectedEnvironmentId
   const resolvedSelectedEnvironment = isDraft ? null : selectedEnvironment
 
@@ -288,19 +274,16 @@ export function ProjectProvider({
     return workspaces.find((entry) => entry.id === project.workspaceId) ?? null
   }, [project, workspaces])
 
-  const workspaceKind = isDraft ? 'user' : owningWorkspace?.kind ?? null
+  const workspaceKind = isDraft ? 'user' : (owningWorkspace?.kind ?? null)
   const isWorkspaceKindResolved =
     isDraft ||
     project == null ||
     owningWorkspace != null ||
     (workspacesQuery.isFetched && !workspacesQuery.isLoading)
   const projectIsSystem =
-    !isDraft && project
-      ? isTurbopanelProject(project, workspaceKind ?? workspaces)
-      : false
+    !isDraft && project ? isTurbopanelProject(project, workspaceKind ?? workspaces) : false
   // A draft is authored by someone who already passed the org create gate.
-  const projectAllowsMutations =
-    isDraft || (isWorkspaceKindResolved && workspaceKind === 'user')
+  const projectAllowsMutations = isDraft || (isWorkspaceKindResolved && workspaceKind === 'user')
   const systemComponent = isDraft || !project ? null : systemComponentKey(project)
 
   const value = useMemo<ProjectContextValue>(
@@ -321,6 +304,7 @@ export function ProjectProvider({
       baseSelected: resolvedBaseSelected,
       environmentScopeActive: resolvedEnvironmentScopeActive,
       loading,
+      environmentsSettled,
       error,
       canOwn,
       canManage,
@@ -349,6 +333,7 @@ export function ProjectProvider({
       resolvedBaseSelected,
       resolvedEnvironmentScopeActive,
       loading,
+      environmentsSettled,
       error,
       canOwn,
       canManage,
@@ -358,7 +343,7 @@ export function ProjectProvider({
       selectBaseCompose,
       invalidateProject,
       invalidateEnvironments,
-    ],
+    ]
   )
 
   return (

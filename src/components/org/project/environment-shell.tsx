@@ -224,11 +224,15 @@ export function useEnvironmentChrome(): boolean {
  * back to the project.
  */
 export function EnvironmentShell({ children }: Readonly<{ children: ReactNode }>) {
-  const { orgId, projectId, project, environments, loading, pathEnvironmentId } =
+  const { orgId, projectId, project, environments, environmentsSettled, pathEnvironmentId } =
     useProjectContext()
   const withChrome = useEnvironmentChrome()
   if (!withChrome) return <>{children}</>
-  if (!loading && pathEnvironmentId && !environments.some((env) => env.id === pathEnvironmentId)) {
+  if (
+    environmentsSettled &&
+    pathEnvironmentId &&
+    !environments.some((env) => env.id === pathEnvironmentId)
+  ) {
     return <Redirect href={projectOverviewHref(orgId, projectId) as Href} />
   }
   if (project && isManagedProject(project)) {

@@ -172,6 +172,7 @@ function setContext(overrides: Record<string, unknown> = {}) {
     selectedEnvironment: ENVS[0],
     pathEnvironmentId: 'e',
     loading: false,
+    environmentsSettled: true,
     isSystemProject: false,
     draft: null,
     needsSetup: false,
@@ -288,8 +289,29 @@ describe('EnvironmentShell gating', () => {
     expect(screen.queryByRole('tablist')).toBeNull()
   })
 
+  it('goes back to the project once the loaded list lacks the environment', () => {
+    setContext({ pathEnvironmentId: 'gone' })
+    render(
+      <EnvironmentShell>
+        <p>page body</p>
+      </EnvironmentShell>
+    )
+    expect(screen.getByTestId('redirect')).toBeTruthy()
+  })
+
+  it('keeps a deep link while the list is not settled (failed, retrying or refreshing)', () => {
+    setContext({ pathEnvironmentId: 'gone', environments: [], environmentsSettled: false })
+    render(
+      <EnvironmentShell>
+        <p>page body</p>
+      </EnvironmentShell>
+    )
+    expect(screen.queryByTestId('redirect')).toBeNull()
+    expect(screen.getByText('page body')).toBeTruthy()
+  })
+
   it('waits for environments to load before deciding one is gone', () => {
-    setContext({ pathEnvironmentId: 'gone', loading: true })
+    setContext({ pathEnvironmentId: 'gone', loading: true, environmentsSettled: false })
     render(
       <EnvironmentShell>
         <p>page body</p>
