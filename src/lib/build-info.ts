@@ -6,7 +6,7 @@ export type VersionRow = Readonly<{ label: 'Control plane' | 'Web interface'; va
 
 /**
  * What the versions popup lists, and nothing else: the control plane's
- * running build (`v0.1.21-canary.24`) and this web interface's own version.
+ * version as plain `vX.Y.Z` and this web interface's own version.
  * A version that is not known yet reads "Unknown".
  */
 export function versionRows(

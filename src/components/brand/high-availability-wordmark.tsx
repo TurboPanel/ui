@@ -33,8 +33,8 @@ import { useColors, useColorScheme } from '@/lib/theme-preference'
  * light mode the text is white on a solid HA-blue fill (`haWordmarkColors`).
  *
  * Under the full pill, right-aligned to its edge: the version line. It is the
- * control plane's running build from `/api/health` (`v0.1.21-canary.24`,
- * never the commit), then a yellow word on a build that is not live
+ * control plane's version from `/api/health` as plain `vX.Y.Z` (no
+ * pre-release suffix, never the commit), then a yellow word on a build that is not live
  * (hosted: Testing / Staging; self-hosted: Canary / RC), then an update icon
  * when this viewer has an update to apply ("Update" beside it on a live
  * build). Clicking it opens the versions popup, or the update screen when

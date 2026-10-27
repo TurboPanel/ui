@@ -210,12 +210,12 @@ describe('versionEntryAccessibilityLabel', () => {
     ).toBe('Control plane v0.1.20, show versions')
     expect(
       versionEntryAccessibilityLabel({
-        version: 'v0.1.21-rc.2',
+        version: 'v0.1.21',
         environment: 'Staging',
         pending: true,
         click: { kind: 'navigate', href: '/admin/updates' },
       })
-    ).toBe('Control plane v0.1.21-rc.2, Staging build, update available, open Updates')
+    ).toBe('Control plane v0.1.21, Staging build, update available, open Updates')
     expect(
       versionEntryAccessibilityLabel({
         version: null,

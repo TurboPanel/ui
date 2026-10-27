@@ -21,13 +21,15 @@ describe('controlPlaneVersionLabel', () => {
     expect(controlPlaneVersionLabel({ ok: true, version: 'v0.1.20' })).toBe('v0.1.20')
   })
 
-  it('shows the running build with its pre-release suffix', () => {
+  it('shows plain vX.Y.Z for canary and rc builds, never the pre-release suffix', () => {
     expect(
       controlPlaneVersionLabel({ ok: true, version: '0.1.17', build: '0.1.17-canary.24', revision })
-    ).toBe('v0.1.17-canary.24')
+    ).toBe('v0.1.17')
     expect(controlPlaneVersionLabel({ ok: true, version: '0.1.17', build: '0.1.17-rc.2' })).toBe(
-      'v0.1.17-rc.2'
+      'v0.1.17'
     )
+    expect(controlPlaneVersionLabel({ ok: true, version: '0.1.17-rc.2' })).toBe('v0.1.17')
+    expect(controlPlaneVersionLabel({ ok: true, build: '0.1.17-canary.24' })).toBe('v0.1.17')
   })
 
   it('never shows the commit, whatever the environment', () => {
@@ -38,7 +40,7 @@ describe('controlPlaneVersionLabel', () => {
     }
   })
 
-  it('falls back to the plain version when the build is missing or not a version', () => {
+  it('ignores a build label that is missing or not a version', () => {
     expect(controlPlaneVersionLabel({ ok: true, version: '0.1.21', build: null })).toBe('v0.1.21')
     expect(controlPlaneVersionLabel({ ok: true, version: '0.1.21', build: 'not a label' })).toBe(
       'v0.1.21'
@@ -71,8 +73,9 @@ describe('controlPlaneEnvironmentLabel', () => {
     expect(on('canary')).toBe('Canary')
     expect(on('rc')).toBe('RC')
     expect(on('RC')).toBe('RC')
-    expect(on('trunk')).toBe('Trunk')
-    expect(on('edge')).toBe('Edge')
+    expect(on('trunk')).toBe('Canary')
+    expect(on('edge')).toBeNull()
+    expect(on('something-new')).toBeNull()
     expect(on('release')).toBeNull()
     expect(on(undefined)).toBeNull()
   })

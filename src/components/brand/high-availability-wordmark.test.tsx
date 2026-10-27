@@ -88,7 +88,7 @@ describe('HighAvailabilityWordmark', () => {
     expect(container.innerHTML).toContain('top: 2px')
   })
 
-  it('shows the running build and the yellow Testing word on hosted testing, never the commit', () => {
+  it('shows plain vX.Y.Z and the yellow Testing word on hosted testing, never the commit', () => {
     useAuth.mockReturnValue({ controlPlaneRuntime: 'workers' })
     healthState.data = {
       ok: true,
@@ -100,7 +100,8 @@ describe('HighAvailabilityWordmark', () => {
     }
     const { container } = render(<HighAvailabilityWordmark />)
     expect(container.textContent).toContain('HIGH AVAILABILITY')
-    expect(container.textContent).toContain('v0.1.21-canary.3')
+    expect(container.textContent).toContain('v0.1.21')
+    expect(container.textContent).not.toContain('canary')
     expect(container.textContent).toContain('Testing')
     expect(container.textContent).not.toContain('5efa9c1')
     expect(container.textContent).not.toContain('update icon')
@@ -135,9 +136,9 @@ describe('HighAvailabilityWordmark', () => {
     useVersionUpdateEntry.mockReturnValue({ viewer: 'org-manager', pending: true, orgId: 'org-1' })
     healthState.data = { ok: true, version: '0.1.21', build: '0.1.21-canary.24', channel: 'canary' }
     const { container } = render(<HighAvailabilityWordmark />)
-    expect(container.textContent).toBe('v0.1.21-canary.24Canaryupdate icon')
+    expect(container.textContent).toBe('v0.1.21Canaryupdate icon')
     expect(versionButton().getAttribute('aria-label')).toBe(
-      'Control plane v0.1.21-canary.24, Canary build, update available, open Servers'
+      'Control plane v0.1.21, Canary build, update available, open Servers'
     )
     fireEvent.click(versionButton())
     expect(push).toHaveBeenCalledWith('/org-1/servers')

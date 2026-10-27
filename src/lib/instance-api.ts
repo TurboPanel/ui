@@ -2728,10 +2728,8 @@ export type HealthResponse = {
   /** The update channel the instance follows (`canary`, `rc`, `release`, `trunk`); newer control planes only. */
   channel?: string
   /**
-   * The running build's full label (`0.1.21-canary.24`, `0.1.21-rc.2`), else
-   * null: the installed package's on self-hosted, and on TurboPanel High
-   * Availability the channel build of the deployed commit (newer control
-   * planes; older hosted ones always send null).
+   * Self-hosted: the installed package's full label (`0.1.21-canary.24`,
+   * `0.1.21-rc.2`), else null. The sidebar shows only its `X.Y.Z`.
    */
   build?: string | null
   /** Hosted: `testing`, `staging` or `live`; null on self-hosted and local dev. */

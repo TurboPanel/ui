@@ -1,13 +1,12 @@
 import type { HealthResponse } from '@/lib/instance-api'
 
 /** The yellow word beside the version when this is not a live build. */
-export type ControlPlaneEnvironmentLabel =
-  'Testing' | 'Staging' | 'Canary' | 'RC' | 'Trunk' | 'Edge'
+export type ControlPlaneEnvironmentLabel = 'Testing' | 'Staging' | 'Canary' | 'RC'
 
 export type ControlPlaneRuntime = 'deno' | 'workers'
 
-/** A semver release or pre-release (`0.1.21`, `0.1.21-rc.2`, `0.1.21-canary.24`). */
-const BUILD_LABEL = /^v?\d+\.\d+\.\d+(?:-[0-9A-Za-z][0-9A-Za-z.-]*)?$/
+/** The `X.Y.Z` at the start of a version or build label (`0.1.21`, `v0.1.21-canary.24`). */
+const PLAIN_SEMVER = /^v?(\d+\.\d+\.\d+)(?:[-+][0-9A-Za-z.+-]*)?$/
 
 /** TurboPanel High Availability: the deployment decides. Live has no word. */
 const HOSTED_LABELS: Readonly<Record<string, ControlPlaneEnvironmentLabel>> = {
@@ -15,43 +14,42 @@ const HOSTED_LABELS: Readonly<Record<string, ControlPlaneEnvironmentLabel>> = {
   staging: 'Staging',
 }
 
-/** Self-hosted: the update channel decides. Release has no word. */
+/**
+ * Self-hosted: the update channel decides. Release has no word. `trunk` is the
+ * old name of the canary channel; any other channel shows no word.
+ */
 const CHANNEL_LABELS: Readonly<Record<string, ControlPlaneEnvironmentLabel>> = {
   canary: 'Canary',
+  trunk: 'Canary',
   rc: 'RC',
-  trunk: 'Trunk',
-  edge: 'Edge',
-}
-
-function withV(version: string): string {
-  return version.startsWith('v') ? version : `v${version}`
 }
 
 function lower(value: string | null | undefined): string {
   return value?.trim().toLowerCase() ?? ''
 }
 
+function plainSemver(value: string | null | undefined): string | null {
+  const match = PLAIN_SEMVER.exec(value?.trim() ?? '')
+  return match ? `v${match[1]}` : null
+}
+
 /**
- * The control plane's running build as `vX.Y.Z`, with its pre-release suffix
- * when the control plane reports one (`v0.1.21-canary.24`, `v0.1.21-rc.2`).
- * `build` is the running build's full label on both editions (installed
- * package on self-hosted, the matching channel build on TurboPanel High
- * Availability); without it the plain `version` stands. Never the commit.
- * `null` until `/api/health` has answered with a version.
+ * The control plane's version as plain `vX.Y.Z` on both editions: no
+ * pre-release suffix (`-canary.N`, `-rc.N`) and never the commit; the yellow
+ * environment word says which kind of build it is. Read from `/api/health`
+ * `version` (the build label's `X.Y.Z` when only that is sent). `null` until
+ * the control plane has answered with a version.
  */
 export function controlPlaneVersionLabel(health: HealthResponse | null | undefined): string | null {
-  const build = health?.build?.trim() ?? ''
-  if (BUILD_LABEL.test(build)) return withV(build)
-  const version = health?.version?.trim() ?? ''
-  return BUILD_LABEL.test(version) ? withV(version) : null
+  return plainSemver(health?.version) ?? plainSemver(health?.build)
 }
 
 /**
  * The yellow word beside the version, or null on a live build. TurboPanel
  * High Availability decides by its deployment (`testing` → Testing,
  * `staging` → Staging, `live` → none); self-hosted by its update channel
- * (`canary` → Canary, `rc` → RC, `release` → none; the development channels
- * name themselves).
+ * (`canary` or the old `trunk` → Canary, `rc` → RC, `release` and anything
+ * else → none).
  */
 export function controlPlaneEnvironmentLabel(
   health: HealthResponse | null | undefined,
@@ -69,8 +67,12 @@ export function isLiveBuild(
   return controlPlaneEnvironmentLabel(health, runtime) === null
 }
 
-/** This web interface's own version as `vX.Y.Z`. */
+/** A semver release or pre-release, as the web interface bundle names itself. */
+const BUNDLE_VERSION = /^v?\d+\.\d+\.\d+(?:-[0-9A-Za-z][0-9A-Za-z.-]*)?$/
+
+/** This web interface's own version as `vX.Y.Z` (the bundle's base version). */
 export function webInterfaceVersionLabel(version: string | null | undefined): string | null {
   const trimmed = version?.trim() ?? ''
-  return BUILD_LABEL.test(trimmed) ? withV(trimmed) : null
+  if (!BUNDLE_VERSION.test(trimmed)) return null
+  return trimmed.startsWith('v') ? trimmed : `v${trimmed}`
 }

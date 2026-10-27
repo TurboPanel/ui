@@ -16,7 +16,7 @@ describe('versionRows', () => {
         '0.1.17'
       )
     ).toEqual([
-      { label: 'Control plane', value: 'v0.1.21-canary.3' },
+      { label: 'Control plane', value: 'v0.1.21' },
       { label: 'Web interface', value: 'v0.1.17' },
     ])
   })
