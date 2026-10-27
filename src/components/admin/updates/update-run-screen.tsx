@@ -6,7 +6,7 @@ import {
   UpdateRunServersTable,
   type RunServerLinks,
 } from '@/components/admin/updates/update-run-servers-table'
-import { useBackOr } from '@/components/admin/updates/use-back-or'
+import { useBackLink } from '@/components/admin/updates/use-back-link'
 import {
   Badge,
   InlineNotice,
@@ -18,6 +18,7 @@ import {
   TextLink,
 } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
+import { isHttpStatusError } from '@/lib/fetch-error-detail'
 import { formatLocalDateTime } from '@/lib/format-datetime'
 import type {
   UpgradeHistoryEntry,
@@ -43,6 +44,7 @@ import {
   upgradeTriggerLabel,
 } from '@/lib/upgrade-history-display'
 import {
+  DEFAULT_RUN_SERVER_VIEW,
   readRunServerParams,
   runServerParamsToUrl,
   withQuery,
@@ -185,7 +187,7 @@ export function UpdateRunScreen({ runId }: Readonly<{ runId: string }>) {
   const view = readRunServerParams(useLocalSearchParams())
   const [searchText, setSearchText] = useState(view.q)
   const [search] = useDebouncedValue(searchText, SEARCH_DEBOUNCE_MS)
-  const back = useBackOr(UPDATE_HISTORY_HREF)
+  const back = useBackLink({ href: UPDATE_HISTORY_HREF, label: 'Back to Update History' })
   const query = useUpgradeRunServers(runId, {
     offset: view.offset,
     limit: UPDATE_RUN_PAGE_SIZE,
@@ -203,6 +205,12 @@ export function UpdateRunScreen({ runId }: Readonly<{ runId: string }>) {
     const q = search.trim()
     if (q !== currentQ) router.setParams({ q: q || undefined, offset: undefined })
   }, [search, currentQ, router])
+  // A filter the control plane refused (a hand-edited link) must not strand
+  // the person on the error: this puts the view back to its defaults.
+  const clearFilters = () => {
+    setSearchText('')
+    router.setParams(runServerParamsToUrl(DEFAULT_RUN_SERVER_VIEW))
+  }
   const page = query.data
   const links: RunServerLinks = {
     onOpenLog: (row) =>
@@ -217,12 +225,17 @@ export function UpdateRunScreen({ runId }: Readonly<{ runId: string }>) {
 
   return (
     <View style={styles.root}>
-      <TextLink label="Back to Update History" size="sm" onPress={back} />
+      <TextLink label={back.label} size="sm" onPress={back.onPress} />
       {query.isLoading && !page ? <LoadingState label="Loading the update" /> : null}
       {query.isError && !page ? (
         <InlineNotice
           tone="warning"
           title={historyLoadError(query.error, 'This update could not be loaded')}
+          actions={
+            isHttpStatusError(query.error, 400) ? (
+              <TextLink label="Clear filters" size="sm" onPress={clearFilters} />
+            ) : undefined
+          }
         />
       ) : null}
       {page ? (
