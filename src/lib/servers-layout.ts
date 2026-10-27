@@ -28,7 +28,6 @@ export function usesCompactServersList(platformOS: string): boolean {
 }
 
 export type ServersFleetSurface = Readonly<{
-  showToolbarSelectAll: boolean
   showDetailFleet: boolean
   showSummaryFleet: boolean
   showStatusPanel: boolean
@@ -49,7 +48,6 @@ export function resolveServersFleetSurface(input: {
   const showStatusPanel = input.hasError || !hasServers
   const showDetailInPanel = showDetailFleet && !input.compactChrome
   return {
-    showToolbarSelectAll: hasServers && (showSummaryFleet || input.compactChrome),
     showDetailFleet,
     showSummaryFleet,
     showStatusPanel,

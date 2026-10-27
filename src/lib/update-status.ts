@@ -217,7 +217,7 @@ export function failureSupersededByRunningBuild(
 }
 
 /**
- * A run that Pause all updates stopped, with no server that failed: not a
+ * A run that Pause All Updates stopped, with no server that failed: not a
  * failure. The Status card already says updates are paused.
  */
 function endedByPauseOnly(run: RunWithSteps): boolean {
@@ -232,8 +232,8 @@ function endedByPauseOnly(run: RunWithSteps): boolean {
  * The run the Updates screen should draw: the active one, else the last run
  * when it ended badly (the server keeps it for a day). A successful last run
  * is not drawn — the screen already says "up to date". A failed last run for
- * the build that is running now is not drawn either, nor one that Pause all
- * updates stopped.
+ * the build that is running now is not drawn either, nor one that Pause All
+ * Updates stopped.
  */
 export function runToShow(
   response: (Pick<UpgradeActiveRunResponse, 'run'> & { lastRun?: RunWithSteps | null }) | undefined,

@@ -21,7 +21,6 @@ import {
   fetchServerMetricsFacts,
   fetchServerMetricsSeries,
   fetchServerMetricsSummary,
-  fetchServersUpdateStatus,
   fetchServerUpdate,
   fetchTimezones,
   formatEntityMetricId,
@@ -232,25 +231,6 @@ export function useServerDeletePreview(
     queryFn: () => getServerDeletePreview(serverId, orgId),
     enabled: (options?.enabled ?? true) && orgId.length > 0 && serverId.length > 0,
     refetchInterval: false,
-  })
-}
-
-export function useServersUpdateStatus(
-  orgId: string,
-  options?: Readonly<{ enabled?: boolean; pollWhileUpdating?: boolean }>
-) {
-  return useQuery({
-    queryKey: queryKeys.org(orgId).servers.updatesBatch,
-    queryFn: fetchServersUpdateStatus,
-    enabled: (options?.enabled ?? true) && orgId.length > 0,
-    refetchInterval: (query) => {
-      if (!options?.pollWhileUpdating) return false
-      const data = query.state.data
-      if (!data?.servers.some((server) => server.status === 'updating')) {
-        return false
-      }
-      return UPDATE_PROGRESS_POLL_MS
-    },
   })
 }
 
@@ -644,14 +624,9 @@ export function useResetServerUpdateStatus(orgId: string, serverId: string) {
   return useApiMutation({
     mutationFn: () => resetServerUpdateStatus(serverId),
     onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.org(orgId).servers.updateStatus(serverId),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.org(orgId).servers.updatesBatch,
-        }),
-      ])
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.org(orgId).servers.updateStatus(serverId),
+      })
     },
   })
 }

@@ -5,6 +5,7 @@ import { renderHook, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { createAppQueryClient, queryKeys } from '../query-client'
 import {
+  useCheckForUpdates,
   usePauseUpdates,
   useResumeUpdates,
   useSaveUpgradeSettings,
@@ -22,6 +23,7 @@ const api = vi.hoisted(() => ({
   fetchUpgradeServersPage: vi.fn(),
   fetchUpgradeSettings: vi.fn(),
   saveUpgradeSettings: vi.fn(),
+  checkForUpdates: vi.fn(),
   pauseUpdates: vi.fn(),
   resumeUpdates: vi.fn(),
 }))
@@ -198,5 +200,21 @@ describe('managed upgrade admin queries', () => {
     const pause = renderHook(() => usePauseUpdates(), { wrapper: createWrapper(client) })
     await expect(pause.result.current.run(undefined)).resolves.toMatchObject({ ok: false })
     expect(invalidate).not.toHaveBeenCalled()
+  })
+
+  it('Check Now writes the fresh status into the cache, then reads it again', async () => {
+    api.pauseUpdates.mockClear()
+    api.resumeUpdates.mockClear()
+    const client = createAppQueryClient()
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
+    const fresh = { ok: true, channel: 'release', automatic: true, updateWaiting: true }
+    api.checkForUpdates.mockResolvedValue(fresh)
+    const check = renderHook(() => useCheckForUpdates('abc'), { wrapper: createWrapper(client) })
+    await expect(check.result.current.run(undefined)).resolves.toMatchObject({ ok: true })
+    expect(api.checkForUpdates).toHaveBeenCalledWith('abc')
+    expect(client.getQueryData(queryKeys.admin.instanceUpdates)).toEqual(fresh)
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.admin.instanceUpdates })
+    expect(api.pauseUpdates).not.toHaveBeenCalled()
+    expect(api.resumeUpdates).not.toHaveBeenCalled()
   })
 })

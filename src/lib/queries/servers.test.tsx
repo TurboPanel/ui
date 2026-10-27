@@ -45,7 +45,6 @@ import {
   useServerMetricsSeriesBatches,
   useServerNicSlotContext,
   useServerUpdateStatus,
-  useServersUpdateStatus,
   useSetServerHostname,
   useSetServerMachineClass,
   useSetServerNtp,
@@ -73,7 +72,6 @@ const {
   fetchTimezones,
   deleteServer,
   getServerDeletePreview,
-  fetchServersUpdateStatus,
   fetchServerUpdate,
   fetchOrgServerCapacity,
   resetServerUpdateStatus,
@@ -111,7 +109,6 @@ const {
   fetchTimezones: vi.fn(),
   deleteServer: vi.fn(),
   getServerDeletePreview: vi.fn(),
-  fetchServersUpdateStatus: vi.fn(),
   fetchServerUpdate: vi.fn(),
   fetchOrgServerCapacity: vi.fn(),
   resetServerUpdateStatus: vi.fn(),
@@ -154,7 +151,6 @@ vi.mock('@/lib/instance-api', async (importOriginal) => {
     fetchTimezones,
     deleteServer,
     getServerDeletePreview,
-    fetchServersUpdateStatus,
     fetchServerUpdate,
     fetchOrgServerCapacity,
     resetServerUpdateStatus,
@@ -822,53 +818,6 @@ describe('servers query hooks', () => {
     })
     expect(fetchFleetMetricsLatest).toHaveBeenCalledTimes(1)
     expect(fetchFleetMetricsLatest).toHaveBeenCalledWith(orgId)
-  })
-
-  it('useServersUpdateStatus loads batch update status', async () => {
-    fetchServersUpdateStatus.mockResolvedValueOnce({
-      servers: [{ serverId, status: 'idle' }],
-    })
-
-    const { result } = renderHook(() => useServersUpdateStatus(orgId), {
-      wrapper: createWrapper(),
-    })
-
-    await waitFor(() => {
-      expect(result.current.isSuccess).toBe(true)
-    })
-    expect(fetchServersUpdateStatus).toHaveBeenCalled()
-  })
-
-  it('useServersUpdateStatus polls only while a server is updating', async () => {
-    const client = createAppQueryClient()
-    fetchServersUpdateStatus.mockResolvedValue({
-      servers: [{ serverId, status: 'updating' }],
-    })
-
-    renderHook(() => useServersUpdateStatus(orgId, { pollWhileUpdating: true }), {
-      wrapper: createWrapper(client),
-    })
-
-    await waitFor(() => {
-      expect(resolveRefetchInterval(client, queryKeys.org(orgId).servers.updatesBatch)).toBe(false)
-    })
-
-    await waitFor(() => {
-      expect(
-        resolveRefetchInterval(client, queryKeys.org(orgId).servers.updatesBatch, {
-          servers: [{ serverId, status: 'updating' }],
-        })
-      ).toBe(UPDATE_PROGRESS_POLL_MS)
-    })
-  })
-
-  it('useServersUpdateStatus stays idle when orgId is empty', () => {
-    const { result } = renderHook(() => useServersUpdateStatus(''), {
-      wrapper: createWrapper(),
-    })
-
-    expect(result.current.fetchStatus).toBe('idle')
-    expect(fetchServersUpdateStatus).not.toHaveBeenCalled()
   })
 
   it('useServerUpdateStatus loads per-server update status', async () => {

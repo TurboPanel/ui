@@ -180,4 +180,12 @@ describe('ServersOverviewSection updates', () => {
     expect(screen.queryByText(/^Update/)).toBeNull()
     expect(screen.queryByText(/updatable/)).toBeNull()
   })
+
+  it('has no selection column: nothing on the list acts on a selection', () => {
+    renderList(false)
+    expect(screen.getAllByTestId('column-header').map((el) => el.textContent)).not.toContain(
+      'Select'
+    )
+    expect(screen.queryByText(/selected$/)).toBeNull()
+  })
 })

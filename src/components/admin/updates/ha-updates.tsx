@@ -73,13 +73,13 @@ export function HighAvailabilityUpdates({ data }: Readonly<{ data: InstanceUpdat
 
       <UpdatesStatusPanel data={data} headline={headline} waiting={waiting} />
 
-      <SectionPanel title="Control plane">
+      <SectionPanel title="Control Plane">
         <Text style={panelStyles.pageCopy}>Managed by TurboPanel</Text>
         <Badge tone="muted" label={`Installed ${data.units.instance.installed.version}`} />
       </SectionPanel>
 
       {run ? (
-        <SectionPanel title="Server updates">
+        <SectionPanel title="Server Updates">
           <Text style={panelStyles.pageCopy}>
             {fleetSummary.total > 0
               ? fleetProgressText(fleetSummary, 'connected daemons')
@@ -89,7 +89,7 @@ export function HighAvailabilityUpdates({ data }: Readonly<{ data: InstanceUpdat
         </SectionPanel>
       ) : null}
 
-      <SectionPanel title="Connected daemons">
+      <SectionPanel title="Connected Daemons">
         <SegmentedControl
           value={statusFilter}
           onChange={(value) => {
@@ -99,8 +99,8 @@ export function HighAvailabilityUpdates({ data }: Readonly<{ data: InstanceUpdat
           options={[
             { value: '' as const, label: 'All' },
             { value: 'active' as const, label: 'Updating' },
-            { value: 'needs_attention' as const, label: 'Needs attention' },
-            { value: 'done' as const, label: 'Up to date' },
+            { value: 'needs_attention' as const, label: 'Needs Attention' },
+            { value: 'done' as const, label: 'Up to Date' },
           ]}
         />
         <UpgradeFleetTable

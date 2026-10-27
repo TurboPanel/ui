@@ -101,10 +101,10 @@ describe('update banner on a wide window', () => {
     expect(body.getAttribute('data-lines')).toBe('2')
   })
 
-  it('has no Update button; See updates opens Admin > Updates', () => {
+  it('has no Update button; See Updates opens Admin > Updates', () => {
     render(<UpdateAvailableBanner />)
     expect(screen.queryByRole('button', { name: 'Update' })).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'See updates' }))
+    fireEvent.click(screen.getByRole('button', { name: 'See Updates' }))
     expect(push).toHaveBeenCalledWith('/admin/updates')
   })
 })

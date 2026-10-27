@@ -109,7 +109,7 @@ export function UpdateAvailableBanner() {
         bodyLines={2}
         actions={
           <>
-            <Button label="See updates" variant="secondary" onPress={openUpdates} />
+            <Button label="See Updates" variant="secondary" onPress={openUpdates} />
             {dismissButton}
           </>
         }

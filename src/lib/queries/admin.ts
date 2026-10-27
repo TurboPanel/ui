@@ -14,6 +14,7 @@ import {
   fetchUpgradeRunServers,
   fetchUpgradeServersPage,
   fetchUpgradeSettings,
+  checkForUpdates,
   pauseUpdates,
   resumeUpdates,
   saveUpgradeSettings,
@@ -583,6 +584,22 @@ function usePauseToggle(request: () => Promise<UpdatesPauseResult>) {
   return useApiMutation({
     mutationFn: request,
     onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.admin.instanceUpdates })
+    },
+  })
+}
+
+/**
+ * Check Now: the answer is a fresh `GET /instance/updates` body, so it goes
+ * straight into the status cache, then the update reads refetch. It never
+ * starts an update.
+ */
+export function useCheckForUpdates(consoleCommit?: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: () => checkForUpdates(consoleCommit),
+    onSuccess: async (fresh) => {
+      queryClient.setQueryData(queryKeys.admin.instanceUpdates, fresh)
       await queryClient.invalidateQueries({ queryKey: queryKeys.admin.instanceUpdates })
     },
   })

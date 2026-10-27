@@ -1111,7 +1111,7 @@ function ServerControlTab({
         />
       </SectionPanel>
 
-      <SectionPanel title="Daemon update">
+      <SectionPanel title="Daemon Update">
         {viewModel.colocated ? (
           <Text style={panelStyles.muted}>
             This daemon updates on its own, together with the control plane.
@@ -1144,7 +1144,7 @@ function ServerControlTab({
         {canManage && viewModel.canResetUpdateStatus ? (
           <ButtonRow>
             <Button
-              label="Clear stuck update"
+              label="Clear Stuck Update"
               variant="secondary"
               size="sm"
               disabled={updateState.resetting}

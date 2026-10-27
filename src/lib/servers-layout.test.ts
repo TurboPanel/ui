@@ -57,7 +57,6 @@ describe('resolveServersFleetSurface', () => {
         hasError: false,
       })
     ).toEqual({
-      showToolbarSelectAll: false,
       showDetailFleet: true,
       showSummaryFleet: false,
       showStatusPanel: false,
@@ -83,7 +82,6 @@ describe('resolveServersFleetSurface', () => {
         hasError: false,
       })
     ).toMatchObject({
-      showToolbarSelectAll: true,
       showSummaryFleet: true,
       showFleetPanel: false,
     })

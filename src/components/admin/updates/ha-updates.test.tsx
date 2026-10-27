@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { InstanceUpdates } from '@/lib/instance-api'
+import { UpdateCheckTooSoonError, type InstanceUpdates } from '@/lib/instance-api'
 import { HighAvailabilityUpdates } from './ha-updates'
 
 type MockProps = {
@@ -60,6 +60,7 @@ vi.mock('@/components/ui', () => ({
   StatusDot: () => <span />,
 }))
 
+vi.mock('@/components/admin/updates/console-build', () => ({ readConsoleBuild: () => null }))
 vi.mock('@/components/admin/updates/upgrade-fleet-table', () => ({
   UpgradeFleetTable: () => <div data-testid="fleet-table" />,
 }))
@@ -83,8 +84,10 @@ const {
   useSaveUpgradeSettings,
   usePauseUpdates,
   useResumeUpdates,
+  useCheckForUpdates,
   pauseRun,
   resumeRun,
+  checkRun,
 } = vi.hoisted(() => ({
   useUpgradeActiveRun: vi.fn(),
   useUpgradeHistory: vi.fn(),
@@ -93,8 +96,10 @@ const {
   useSaveUpgradeSettings: vi.fn(),
   usePauseUpdates: vi.fn(),
   useResumeUpdates: vi.fn(),
+  useCheckForUpdates: vi.fn(),
   pauseRun: vi.fn(),
   resumeRun: vi.fn(),
+  checkRun: vi.fn(),
 }))
 
 vi.mock('@/lib/queries/admin', () => ({
@@ -105,6 +110,7 @@ vi.mock('@/lib/queries/admin', () => ({
   useSaveUpgradeSettings,
   usePauseUpdates,
   useResumeUpdates,
+  useCheckForUpdates,
 }))
 
 const DATA: InstanceUpdates = {
@@ -149,6 +155,8 @@ function idleQueries() {
   resumeRun.mockResolvedValue({ ok: true, value: { updatesPaused: false } })
   usePauseUpdates.mockReturnValue({ run: pauseRun, isPending: false })
   useResumeUpdates.mockReturnValue({ run: resumeRun, isPending: false })
+  checkRun.mockResolvedValue({ ok: true, value: DATA })
+  useCheckForUpdates.mockReturnValue({ run: checkRun, isPending: false })
 }
 
 afterEach(() => {
@@ -206,11 +214,11 @@ describe('HighAvailabilityUpdates', () => {
 
   it('pauses after the confirmation that a run in progress finishes its servers', async () => {
     render(<HighAvailabilityUpdates data={DATA} />)
-    expect(screen.getByRole('button', { name: 'Pause all updates' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Pause All Updates' })).toBeTruthy()
     expect(
       screen.getByText(/An update in progress finishes the servers it is updating, then stops/)
     ).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Yes, pause updates' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, Pause All Updates' }))
     await waitFor(() => {
       expect(pauseRun).toHaveBeenCalledTimes(1)
     })
@@ -229,7 +237,7 @@ describe('HighAvailabilityUpdates', () => {
         'Resume updates? They start again at the next check (<2026-10-27T11:17:00.000Z>).'
       )
     ).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Yes, resume updates' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, Resume Updates' }))
     await waitFor(() => {
       expect(resumeRun).toHaveBeenCalledTimes(1)
     })
@@ -251,7 +259,7 @@ describe('HighAvailabilityUpdates', () => {
   it('says a refused pause beside the button', async () => {
     pauseRun.mockResolvedValueOnce({ ok: false, error: 'Only instance admins can pause updates' })
     render(<HighAvailabilityUpdates data={DATA} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Yes, pause updates' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, Pause All Updates' }))
     expect(await screen.findByText('Only instance admins can pause updates')).toBeTruthy()
   })
 
@@ -272,5 +280,55 @@ describe('HighAvailabilityUpdates', () => {
         /1 server is offline, so this update is waiting for it. It is skipped if it stays offline/
       )
     ).toBeTruthy()
+  })
+
+  it('labels its controls in title case', () => {
+    render(<HighAvailabilityUpdates data={DATA} />)
+    for (const title of ['Status', 'Control Plane', 'Connected Daemons']) {
+      expect(screen.getByRole('heading', { name: title })).toBeTruthy()
+    }
+    expect(screen.getByRole('button', { name: 'Check Now' })).toBeTruthy()
+  })
+})
+
+describe('Check Now', () => {
+  beforeEach(idleQueries)
+
+  it('only checks: it says so and shows the last check', async () => {
+    render(<HighAvailabilityUpdates data={{ ...DATA, lastCheckAt: '2026-10-27T10:17:00.000Z' }} />)
+    expect(screen.getByText('Last checked <2026-10-27T10:17:00.000Z>')).toBeTruthy()
+    expect(
+      screen.getByText(
+        'Check Now only looks for new builds. The next scheduled check starts the update.'
+      )
+    ).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Check Now' }))
+    await waitFor(() => {
+      expect(checkRun).toHaveBeenCalledTimes(1)
+    })
+    expect(pauseRun).not.toHaveBeenCalled()
+    expect(resumeRun).not.toHaveBeenCalled()
+  })
+
+  it('says when to try again after a check under a minute ago, and stays usable', async () => {
+    checkRun.mockResolvedValueOnce({
+      ok: false,
+      error: 'too soon',
+      cause: new UpdateCheckTooSoonError('too soon', 42),
+    })
+    render(<HighAvailabilityUpdates data={DATA} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Check Now' }))
+    expect(await screen.findByText('Checked a moment ago. Try again in 42 seconds.')).toBeTruthy()
+    const button = screen.getByRole('button', { name: 'Check Now' }) as HTMLButtonElement
+    expect(button.disabled).toBe(false)
+    fireEvent.click(button)
+    await waitFor(() => {
+      expect(checkRun).toHaveBeenCalledTimes(2)
+    })
+  })
+
+  it('names the check interval when it is not an hour', () => {
+    render(<HighAvailabilityUpdates data={{ ...DATA, checkIntervalMinutes: 5 }} />)
+    expect(screen.getByText(/TurboPanel checks every 5 minutes/)).toBeTruthy()
   })
 })

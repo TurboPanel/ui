@@ -148,7 +148,7 @@ describe('runToShow', () => {
     expect(runToShow({ run: null, lastRun: partial }).run).toBe(partial)
   })
 
-  it('does not draw a run that Pause all updates stopped as a failure', () => {
+  it('does not draw a run that Pause All Updates stopped as a failure', () => {
     const paused = run({
       status: 'cancelled',
       error: 'updates_paused',

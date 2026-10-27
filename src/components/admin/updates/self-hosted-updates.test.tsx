@@ -25,6 +25,7 @@ vi.mock(
 
 vi.mock('@/components/ui', () => ({
   Badge: (props: MockProps) => <span>{props.label}</span>,
+  Button: (props: MockProps) => <button type="button">{props.label}</button>,
   ConfirmButton: (props: MockProps) => (
     <div>
       <button type="button">{props.label}</button>
@@ -80,6 +81,7 @@ const queries = vi.hoisted(() => ({
   useSaveUpgradeSettings: vi.fn(),
   usePauseUpdates: vi.fn(),
   useResumeUpdates: vi.fn(),
+  useCheckForUpdates: vi.fn(),
 }))
 vi.mock('@/lib/queries/admin', () => queries)
 
@@ -124,6 +126,7 @@ beforeEach(() => {
   queries.useSaveUpgradeSettings.mockReturnValue({ mutate: vi.fn(), isPending: false })
   queries.usePauseUpdates.mockReturnValue({ run: vi.fn(), isPending: false })
   queries.useResumeUpdates.mockReturnValue({ run: vi.fn(), isPending: false })
+  queries.useCheckForUpdates.mockReturnValue({ run: vi.fn(), isPending: false })
 })
 
 afterEach(() => {
@@ -132,12 +135,16 @@ afterEach(() => {
 })
 
 describe('SelfHostedUpdates', () => {
-  it('has no Update TurboPanel, Check now or Cancel button; only Pause all updates', () => {
+  it('has no Update TurboPanel, Update Now or Cancel button; only Check Now and Pause All Updates', () => {
     render(<SelfHostedUpdates data={DATA} />)
-    for (const name of ['Update TurboPanel', 'Update now', 'Check now', 'Cancel update']) {
+    for (const name of ['Update TurboPanel', 'Update now', 'Update Now', 'Cancel update']) {
       expect(screen.queryByRole('button', { name })).toBeNull()
     }
-    expect(screen.getByRole('button', { name: 'Pause all updates' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Check Now' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Pause All Updates' })).toBeTruthy()
+    for (const title of ['Control Plane', 'Web Interface', 'Co-located Daemon']) {
+      expect(screen.getByText(title)).toBeTruthy()
+    }
     expect(screen.queryByText(/Auto-update/)).toBeNull()
   })
 
@@ -171,6 +178,6 @@ describe('SelfHostedUpdates', () => {
     )
     expect(screen.getByText('Updates paused')).toBeTruthy()
     expect(screen.getByText('Updates paused since <2026-10-27T09:30:00.000Z> by Sam')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Resume updates' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Resume Updates' })).toBeTruthy()
   })
 })

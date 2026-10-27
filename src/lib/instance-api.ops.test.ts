@@ -29,7 +29,6 @@ import {
   fetchProjectPrincipals,
   fetchServerResourceLimits,
   fetchServerUpdate,
-  fetchServersUpdateStatus,
   fetchServiceReleases,
   fetchMarkers,
   fetchRepository,
@@ -111,24 +110,12 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
     await expect(fetchServerUpdate('srv-1')).resolves.toEqual(updateStatus)
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/servers/srv-1/update')
 
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({
-        ok: true,
-        channel: 'trunk',
-        target: null,
-        targetStatus: 'ok',
-        servers: [{ ...updateStatus, serverId: 'srv-1' }],
-      })
-    )
-    await expect(fetchServersUpdateStatus()).resolves.toMatchObject({ ok: true })
-    expect(String(fetchMock.mock.calls[1]?.[0])).toContain('/servers/updates')
-
     fetchMock.mockResolvedValueOnce(jsonResponse({ ...updateStatus, cleared: 1 }))
     await expect(resetServerUpdateStatus('srv-1')).resolves.toMatchObject({
       cleared: 1,
     })
-    expect(String(fetchMock.mock.calls[2]?.[0])).toContain('/update/reset')
-    expect(fetchMock.mock.calls[2]?.[1]).toMatchObject({ method: 'POST' })
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain('/update/reset')
+    expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({ method: 'POST' })
   })
 
   it('admin email and signup settings use admin routes', async () => {

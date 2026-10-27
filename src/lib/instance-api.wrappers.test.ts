@@ -15,11 +15,13 @@ import {
   fetchUpgradeRunServers,
   fetchUpgradeServersPage,
   fetchUpgradeSettings,
+  checkForUpdates,
   markNotificationsRead,
   pauseUpdates,
   resumeUpdates,
   saveUpgradeSettings,
   updateNotificationChannel,
+  UpdateCheckTooSoonError,
 } from './instance-api'
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -137,6 +139,32 @@ describe('instance-api upgrade, notification and compose-gated-field wrappers', 
     await resumeUpdates()
     expect(urlOf(3)).toMatch(/\/instance\/updates\/resume$/)
     for (const i of [2, 3]) expect(initOf(i)).toMatchObject({ method: 'POST' })
+  })
+
+  it('Check Now posts only to the check route and answers the status body', async () => {
+    const status = { ok: true, channel: 'release', automatic: true, units: {} }
+    fetchMock.mockResolvedValueOnce(jsonResponse(status))
+    await expect(checkForUpdates('abc')).resolves.toEqual(status)
+    expect(urlOf(0)).toMatch(/\/instance\/updates\/check\?consoleCommit=abc$/)
+    expect(initOf(0)).toMatchObject({ method: 'POST' })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('Check Now too soon names when to try again', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(
+        { ok: false, error: 'check_too_soon', retryAfterSeconds: 37, message: 'Too soon' },
+        429
+      )
+    )
+    const refused = await checkForUpdates().catch((err: unknown) => err)
+    expect(refused).toBeInstanceOf(UpdateCheckTooSoonError)
+    expect((refused as UpdateCheckTooSoonError).retryAfterSeconds).toBe(37)
+    expect(urlOf(0)).toMatch(/\/instance\/updates\/check$/)
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: false, error: 'check_too_soon' }, 429))
+    const noWait = await checkForUpdates().catch((err: unknown) => err)
+    expect((noWait as UpdateCheckTooSoonError).retryAfterSeconds).toBe(60)
   })
 
   it('notification reads default missing fields and pass the paging params', async () => {

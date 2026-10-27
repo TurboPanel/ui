@@ -1,11 +1,17 @@
 import { formatLocalDateTime } from '@/lib/format-datetime'
-import type { InstanceUpdates, UpdatesPausedBy } from '@/lib/instance-api'
+import {
+  UpdateCheckTooSoonError,
+  type InstanceUpdates,
+  type UpdatesPausedBy,
+} from '@/lib/instance-api'
 import { joinWithAnd } from '@/lib/upgrade-display'
+import { userErrorMessage } from '@/lib/user-error'
 
 /**
  * Words for automatic updates on Admin > Updates. Updates of the control
  * plane, the web interface and every daemon start on their own at the hourly
- * check; the only control is Pause all updates / Resume.
+ * check; the controls are Pause All Updates / Resume Updates and Check Now,
+ * which only looks for new builds.
  */
 
 /** Formats an ISO instant for a sentence; the screens use local time. */
@@ -39,6 +45,34 @@ export function nextCheckText(
   format: FormatInstant = formatUpdateTime
 ): string | null {
   return nextCheckAt ? `Next check: ${format(nextCheckAt)}` : null
+}
+
+/** "Last checked <time>", scheduled or Check Now, or null before the first check. */
+export function lastCheckedText(
+  lastCheckAt: string | null | undefined,
+  format: FormatInstant = formatUpdateTime
+): string | null {
+  return lastCheckAt ? `Last checked ${format(lastCheckAt)}` : null
+}
+
+/** How often the scheduled check runs, for a sentence: "once an hour", "every 5 minutes". */
+export function checkCadence(checkIntervalMinutes: number | null | undefined): string {
+  if (!checkIntervalMinutes || checkIntervalMinutes === 60) return 'once an hour'
+  if (checkIntervalMinutes === 1) return 'every minute'
+  return `every ${checkIntervalMinutes} minutes`
+}
+
+/** What Check Now does, under the button. */
+export const CHECK_NOW_HELP =
+  'Check Now only looks for new builds. The next scheduled check starts the update.'
+
+/** Why Check Now did not run, in plain words: too soon after the last one, or the error. */
+export function checkNowErrorText(err: unknown): string {
+  if (err instanceof UpdateCheckTooSoonError) {
+    const seconds = Math.max(1, Math.ceil(err.retryAfterSeconds))
+    return `Checked a moment ago. Try again in ${seconds} second${seconds === 1 ? '' : 's'}.`
+  }
+  return userErrorMessage(err, 'Could not check for updates')
 }
 
 /** What the Pause confirmation says before anything stops. */
@@ -86,4 +120,4 @@ export function isUpdateWaiting(
 
 /** Plain status of updates on a server page: nobody starts a server update by hand. */
 export const SERVER_UPDATES_AUTOMATIC_COPY =
-  'Updates automatically. An instance administrator can pause all updates in Admin > Updates.'
+  'Updates automatically. An instance administrator can use Pause All Updates in Admin > Updates.'

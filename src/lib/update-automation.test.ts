@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
+import { UpdateCheckTooSoonError } from './instance-api'
 import {
+  CHECK_NOW_HELP,
+  checkCadence,
+  checkNowErrorText,
   formatUpdateTime,
+  lastCheckedText,
   isUpdateWaiting,
   nextCheckText,
   PAUSE_UPDATES_PROMPT,
@@ -107,5 +112,41 @@ describe('what waits', () => {
 
   it('says a server updates on its own', () => {
     expect(SERVER_UPDATES_AUTOMATIC_COPY).toMatch(/^Updates automatically\./)
+  })
+})
+
+describe('Check Now words', () => {
+  it('names the last check, or nothing before the first one', () => {
+    expect(lastCheckedText('2026-10-27T10:17:00.000Z', fmt)).toBe(
+      'Last checked <2026-10-27T10:17:00.000Z>'
+    )
+    expect(lastCheckedText(null, fmt)).toBeNull()
+  })
+
+  it('says how often the scheduled check runs', () => {
+    expect(checkCadence(60)).toBe('once an hour')
+    expect(checkCadence(undefined)).toBe('once an hour')
+    expect(checkCadence(5)).toBe('every 5 minutes')
+    expect(checkCadence(1)).toBe('every minute')
+  })
+
+  it('says Check Now only looks; the scheduled check updates', () => {
+    expect(CHECK_NOW_HELP).toBe(
+      'Check Now only looks for new builds. The next scheduled check starts the update.'
+    )
+  })
+
+  it('says when to try again after a check too soon', () => {
+    expect(checkNowErrorText(new UpdateCheckTooSoonError('x', 42))).toBe(
+      'Checked a moment ago. Try again in 42 seconds.'
+    )
+    expect(checkNowErrorText(new UpdateCheckTooSoonError('x', 0.4))).toBe(
+      'Checked a moment ago. Try again in 1 second.'
+    )
+  })
+
+  it('falls back to the plain error for anything else', () => {
+    expect(checkNowErrorText(new Error('HTTP 500'))).toBeTruthy()
+    expect(checkNowErrorText(null)).toBe('Could not check for updates')
   })
 })

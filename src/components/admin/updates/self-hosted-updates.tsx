@@ -80,7 +80,7 @@ function ComponentsPanel({
   return (
     <SectionPanel title="Versions">
       <UpgradeBuildBlock
-        title="Control plane"
+        title="Control Plane"
         target={instance.target}
         installedLabel={installedBuildLabel(instance.installed, instance.target, hideCommit)}
         updateAvailable={unitUpdateAvailable(instance)}
@@ -88,7 +88,7 @@ function ComponentsPanel({
         step={controlPlaneStep}
       />
       <UpgradeBuildBlock
-        title="Web interface"
+        title="Web Interface"
         target={instance.uiTarget}
         installedLabel={installedBuildLabel(consoleBuild, instance.uiTarget, hideCommit)}
         updateAvailable={consoleUpdateAvailable(consoleBuild, instance.uiTarget)}
@@ -96,7 +96,7 @@ function ComponentsPanel({
         step={controlPlaneStep}
       />
       <UpgradeBuildBlock
-        title="Co-located daemon"
+        title="Co-located Daemon"
         target={daemon.target}
         installedLabel={
           daemon.installed
@@ -139,13 +139,13 @@ function UpgradeProgressPanel({
         phase="colocated_daemon"
         status={daemonStep?.status ?? null}
         errorCode={daemonStep?.errorCode ?? null}
-        title="Daemon step"
+        title="Daemon Step"
       />
       <UpgradeStepTracker
         phase="control_plane"
         status={controlPlaneStep?.status ?? null}
         errorCode={controlPlaneStep?.errorCode ?? null}
-        title="Control plane step"
+        title="Control Plane Step"
       />
       {hasUiTarget ? (
         // The UI package is unpacked and swapped in by the same control-plane
@@ -154,7 +154,7 @@ function UpgradeProgressPanel({
           phase="control_plane"
           status={controlPlaneStep?.status ?? null}
           errorCode={controlPlaneStep?.errorCode ?? null}
-          title="Web interface step"
+          title="Web Interface Step"
           note="Installed in the same step as the control plane."
         />
       ) : null}

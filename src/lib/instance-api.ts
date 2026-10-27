@@ -5411,8 +5411,10 @@ export type InstanceUpdates = {
   updateWaiting?: boolean
   /** The next hourly check (ISO), or null when none is planned. */
   nextCheckAt?: string | null
-  /** The last check (ISO), or null before the first one. */
+  /** The last check (ISO), scheduled or Check Now, or null before the first one. */
   lastCheckAt?: string | null
+  /** How often the scheduled check runs, in minutes (60; 5 on the testing environment). */
+  checkIntervalMinutes?: number
   /** The update run going now, or null. */
   activeRunId?: string | null
   fleetSummary?: {
@@ -5603,6 +5605,31 @@ export type UpgradeServersPage = {
 export async function fetchInstanceUpdates(consoleCommit?: string): Promise<InstanceUpdates> {
   const query = consoleCommit ? `?consoleCommit=${encodeURIComponent(consoleCommit)}` : ''
   return await apiFetch(`${ADMIN_API}/instance/updates${query}`)
+}
+
+/**
+ * Check Now refused because the last check was under a minute ago (once a
+ * minute per install). `retryAfterSeconds` says when to try again.
+ */
+export class UpdateCheckTooSoonError extends Error {
+  readonly retryAfterSeconds: number
+
+  constructor(message: string, retryAfterSeconds: number) {
+    super(message)
+    this.name = 'UpdateCheckTooSoonError'
+    this.retryAfterSeconds = retryAfterSeconds
+  }
+}
+
+/**
+ * Check Now: read the channel manifests again and answer the same body as
+ * `GET /instance/updates`. Only a refresh; it never starts an update (the
+ * next scheduled check does). A 429 `check_too_soon` throws
+ * `UpdateCheckTooSoonError`.
+ */
+export async function checkForUpdates(consoleCommit?: string): Promise<InstanceUpdates> {
+  const query = consoleCommit ? `?consoleCommit=${encodeURIComponent(consoleCommit)}` : ''
+  return await adminJson(`${ADMIN_API}/instance/updates/check${query}`, { method: 'POST' })
 }
 
 export async function fetchUpgradeActiveRun(): Promise<UpgradeActiveRunResponse> {
@@ -5820,9 +5847,14 @@ async function adminJson<T>(path: string, init: RequestInit): Promise<T> {
   const body = (await response.json().catch(() => null)) as {
     error?: string
     invalid?: unknown
+    retryAfterSeconds?: unknown
   } | null
   if (!response.ok) {
     const detail = formatFetchFailureDetail(response.status, body?.error)
+    if (body?.error === 'check_too_soon') {
+      const wait = typeof body.retryAfterSeconds === 'number' ? body.retryAfterSeconds : 60
+      throw new UpdateCheckTooSoonError(`${path} failed: ${detail}`, wait)
+    }
     const invalid = Array.isArray(body?.invalid)
       ? body.invalid.filter((item): item is string => typeof item === 'string')
       : null
@@ -6167,23 +6199,8 @@ export type ServerUpdateResetResult = ServerUpdateStatus & {
   cleared: number
 }
 
-export type ServerBatchUpdateStatus = {
-  ok: boolean
-  channel: string
-  target: (ServerUpdateCommit & { manifestUrl?: string }) | null
-  targetStatus: 'ok' | 'unknown'
-  targetError?: string
-  servers: (ServerUpdateStatus & { serverId: string })[]
-  /** Daemons update on their own; nobody starts a server update by hand. */
-  updatesAutomatic?: boolean
-}
-
 export async function fetchServerUpdate(serverId: string): Promise<ServerUpdateStatus> {
   return await apiFetch(`${CLIENT_API}/servers/${serverId}/update`)
-}
-
-export async function fetchServersUpdateStatus(): Promise<ServerBatchUpdateStatus> {
-  return await apiFetch(`${CLIENT_API}/servers/updates`)
 }
 
 export async function resetServerUpdateStatus(serverId: string): Promise<ServerUpdateResetResult> {

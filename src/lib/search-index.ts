@@ -220,7 +220,7 @@ function generalActions(orgId: string, data: SearchData): SearchItem[] {
       ? [
           action(
             'update-panel',
-            'Pause or resume updates',
+            'Pause or Resume Updates',
             adminAreaHref('updates'),
             'update upgrade version release automatic'
           ),

@@ -69,7 +69,7 @@ export function UpgradeSettingsCard({
         />
         <TextField
           label={
-            mode === 'percent' ? 'Percent of servers (1 to 100)' : 'Number of servers (1 to 10000)'
+            mode === 'percent' ? 'Percent of Servers (1 to 100)' : 'Number of Servers (1 to 10000)'
           }
           value={batchValue}
           onChangeText={setBatchValue}
@@ -81,7 +81,7 @@ export function UpgradeSettingsCard({
         <Text style={panelStyles.muted}>
           The default is 100%: every server updates in one group unless you lower it.
         </Text>
-        <SettingRow label="Save group size">
+        <SettingRow label="Save Group Size">
           <ActionButton
             label="Apply"
             variant="quiet"
