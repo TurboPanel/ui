@@ -37,14 +37,22 @@ vi.mock('react-native', () => {
     children,
     style,
     onPress,
+    disabled,
     accessibilityLabel,
   }: {
     children?: React.ReactNode
     style?: unknown
     onPress?: () => void
+    disabled?: boolean
     accessibilityLabel?: string
   }) => (
-    <button type="button" style={flat(style)} onClick={onPress} aria-label={accessibilityLabel}>
+    <button
+      type="button"
+      style={flat(style)}
+      onClick={onPress}
+      disabled={disabled}
+      aria-label={accessibilityLabel}
+    >
       {children}
     </button>
   )
@@ -129,6 +137,14 @@ describe('HighAvailabilityWordmark', () => {
     expect(container.textContent).toBe('v0.1.20update iconUpdate')
     fireEvent.click(versionButton())
     expect(push).toHaveBeenCalledWith('/admin/updates')
+  })
+
+  it('shows no update icon before the version is known, while the entry cannot be pressed', () => {
+    useAuth.mockReturnValue({ controlPlaneRuntime: 'deno' })
+    useVersionUpdateEntry.mockReturnValue({ viewer: 'instance-admin', pending: true, orgId: '' })
+    const { container } = render(<HighAvailabilityWordmark />)
+    expect(container.textContent).not.toContain('update icon')
+    expect(versionButton().hasAttribute('disabled')).toBe(true)
   })
 
   it('self-hosted canary: an organization manager sees the icon alone and goes to the Servers page', () => {

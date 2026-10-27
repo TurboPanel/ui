@@ -123,7 +123,11 @@ function VersionLine({
   const { viewer, pending, orgId } = useVersionUpdateEntry()
   const version = controlPlaneVersionLabel(health)
   const environment = controlPlaneEnvironmentLabel(health, runtime)
-  const indicator = updateIndicator({ pending, live: environment === null })
+  const indicator = updateIndicator({
+    pending,
+    live: environment === null,
+    versionKnown: version !== null,
+  })
   const click = versionClick({ viewer, pending, orgId })
   const onPress = () => {
     if (click.kind === 'navigate') router.push(click.href as Href)

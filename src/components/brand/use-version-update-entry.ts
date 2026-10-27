@@ -3,7 +3,7 @@ import { useMemo } from 'react'
 import { readConsoleBuild } from '@/components/admin/updates/console-build'
 import { isAdminSession, useAuth } from '@/lib/auth-context'
 import { useInstanceUpdates, useUpgradeActiveRun } from '@/lib/queries/admin'
-import { useServersUpdateStatus } from '@/lib/queries/servers'
+import { useOrgServers, useServersUpdateStatus } from '@/lib/queries/servers'
 import { useCan } from '@/lib/query-client'
 import {
   canUpdateOrgServers,
@@ -17,7 +17,8 @@ import {
  * Whether this viewer has an update to apply, and who they are for routing.
  * Instance admins read the instance update status (control plane, web
  * interface and every connected daemon); someone who can update the
- * organization's servers reads that organization's server update status;
+ * organization's servers reads that organization's servers and their update
+ * status (the same rows the Servers page reads);
  * anyone else reads nothing. The organization is the one in the route
  * (`/[orgId]/…`), when there is one; it is returned for routing.
  */
@@ -38,7 +39,9 @@ export function useVersionUpdateEntry(): Readonly<{
   const isAdmin = viewer === 'instance-admin'
   const updates = useInstanceUpdates({ enabled: isAdmin, consoleCommit: consoleBuild?.commit })
   const active = useUpgradeActiveRun({ enabled: isAdmin })
-  const servers = useServersUpdateStatus(org, { enabled: viewer === 'org-manager' })
+  const isManager = viewer === 'org-manager'
+  const servers = useOrgServers(org, { enabled: isManager })
+  const serverUpdates = useServersUpdateStatus(org, { enabled: isManager })
   const adminPending = instanceAdminUpdatePending({
     updates: updates.data,
     activeRun: Boolean(active.data?.run),
@@ -46,7 +49,12 @@ export function useVersionUpdateEntry(): Readonly<{
   })
   return {
     viewer,
-    pending: viewerUpdatePending({ viewer, adminPending, servers: servers.data?.servers }),
+    pending: viewerUpdatePending({
+      viewer,
+      adminPending,
+      servers: servers.data?.servers,
+      updates: serverUpdates.data?.servers,
+    }),
     orgId: org,
   }
 }

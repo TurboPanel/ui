@@ -40,8 +40,7 @@ import {
   type RelayRecord,
   type ServerUpdateStatus,
 } from '@/lib/instance-api'
-import { isServerUpdateActionHidden } from '@/lib/daemon-update-labels'
-import { canUpdateOrgServers } from '@/lib/update-entry'
+import { canUpdateOrgServers, indexUpdatesByServerId, isServerUpdatable } from '@/lib/update-entry'
 import { serverDetailHref, serversPendingKeysHref } from '@/lib/org-navigation'
 import { useAddServerLink } from '@/lib/use-add-server-link'
 import {
@@ -110,30 +109,6 @@ function overlayByServerId(
 
 function serverTitle(server: OrgServerRecord): string {
   return server.name?.trim() || server.hostname?.trim() || server.id
-}
-
-function isColocatedServer(
-  server: OrgServerRecord,
-  updateData?: ServerUpdateStatus | null
-): boolean {
-  return server.colocatedWithInstance === true || updateData?.colocatedWithInstance === true
-}
-
-function isServerUpdatable(
-  server: OrgServerRecord,
-  updateByServerId: ReadonlyMap<string, ServerUpdateStatus>,
-  triggeringServerIds: ReadonlySet<string>
-): boolean {
-  const data = updateByServerId.get(server.id)
-  return (
-    server.connected &&
-    !isColocatedServer(server, data) &&
-    !isServerUpdateActionHidden(data) &&
-    data?.targetStatus === 'ok' &&
-    data.updateAvailable === true &&
-    !triggeringServerIds.has(server.id) &&
-    data.status !== 'updating'
-  )
 }
 
 function selectedUpdateButtonLabel(batchUpdating: boolean, selectedUpdatableCount: number): string {
@@ -988,16 +963,6 @@ function ServersOverviewFleet({
   )
 }
 
-function indexUpdatesByServerId(
-  entries: readonly ServerUpdateStatus[] | undefined
-): Map<string, ServerUpdateStatus> {
-  const map = new Map<string, ServerUpdateStatus>()
-  for (const entry of entries ?? []) {
-    map.set(entry.serverId, entry)
-  }
-  return map
-}
-
 function collectTriggeringServerIds(
   pending: boolean,
   variables: readonly string[] | undefined,
@@ -1027,7 +992,7 @@ function countSelectedUpdatable(
   for (const server of servers) {
     if (
       selectedIds.has(server.id) &&
-      isServerUpdatable(server, updateByServerId, triggeringServerIds)
+      isServerUpdatable(server, updateByServerId.get(server.id), triggeringServerIds.has(server.id))
     ) {
       count += 1
     }
@@ -1042,7 +1007,7 @@ function countUpdatable(
   triggeringServerIds: ReadonlySet<string>
 ): number {
   return servers.filter((server) =>
-    isServerUpdatable(server, updateByServerId, triggeringServerIds)
+    isServerUpdatable(server, updateByServerId.get(server.id), triggeringServerIds.has(server.id))
   ).length
 }
 
@@ -1145,7 +1110,11 @@ export function ServersOverviewSection({
     const targets = servers.filter(
       (server) =>
         selectedIds.has(server.id) &&
-        isServerUpdatable(server, updateByServerId, triggeringServerIds)
+        isServerUpdatable(
+          server,
+          updateByServerId.get(server.id),
+          triggeringServerIds.has(server.id)
+        )
     )
     if (targets.length === 0) return
     batchUpdateMutation.mutate(targets.map((server) => server.id))

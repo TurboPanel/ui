@@ -67,10 +67,14 @@ export function isLiveBuild(
   return controlPlaneEnvironmentLabel(health, runtime) === null
 }
 
-/** A semver release or pre-release, as the web interface bundle names itself. */
+/** A semver release or pre-release, as the web interface bundle's app config names it. */
 const BUNDLE_VERSION = /^v?\d+\.\d+\.\d+(?:-[0-9A-Za-z][0-9A-Za-z.-]*)?$/
 
-/** This web interface's own version as `vX.Y.Z` (the bundle's base version). */
+/**
+ * This web interface's own version exactly as its app config names it, with
+ * a `v` in front (`v0.1.17`; a pre-release suffix there would be kept). Null
+ * when the config holds no semver.
+ */
 export function webInterfaceVersionLabel(version: string | null | undefined): string | null {
   const trimmed = version?.trim() ?? ''
   if (!BUNDLE_VERSION.test(trimmed)) return null

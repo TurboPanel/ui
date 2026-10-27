@@ -3,6 +3,7 @@ import type { InstanceUpdates, ServerUpdateStatus } from '@/lib/instance-api'
 import {
   canUpdateOrgServers,
   instanceAdminUpdatePending,
+  isServerUpdatable,
   orgServersUpdatePending,
   updateIndicator,
   updateViewer,
@@ -124,45 +125,98 @@ describe('instanceAdminUpdatePending', () => {
   })
 })
 
-describe('orgServersUpdatePending', () => {
-  it('a server of the organization has a daemon update it may take', () => {
-    expect(orgServersUpdatePending([serverStatus()])).toBe(true)
-    expect(orgServersUpdatePending([serverStatus({ updateAvailable: false })])).toBe(false)
-    expect(orgServersUpdatePending([])).toBe(false)
-    expect(orgServersUpdatePending(undefined)).toBe(false)
+const host = { id: 'server-1', connected: true }
+
+describe('isServerUpdatable (the Servers page and the sidebar icon share it)', () => {
+  it('a connected server with a known, newer target and nothing running', () => {
+    expect(isServerUpdatable(host, serverStatus())).toBe(true)
   })
 
-  it('ignores servers it cannot or need not update', () => {
-    expect(orgServersUpdatePending([serverStatus({ colocatedWithInstance: true })])).toBe(false)
-    expect(orgServersUpdatePending([serverStatus({ status: 'updating' })])).toBe(false)
+  it('refuses what the Servers page offers no button for', () => {
+    expect(isServerUpdatable({ ...host, connected: false }, serverStatus())).toBe(false)
+    expect(isServerUpdatable(host, serverStatus({ targetStatus: 'unknown' }))).toBe(false)
+    expect(isServerUpdatable(host, serverStatus({ updateAvailable: false }))).toBe(false)
+    expect(isServerUpdatable(host, serverStatus({ status: 'updating' }))).toBe(false)
+    expect(isServerUpdatable(host, serverStatus(), true)).toBe(false)
+    expect(isServerUpdatable({ ...host, colocatedWithInstance: true }, serverStatus())).toBe(false)
+    expect(isServerUpdatable(host, serverStatus({ colocatedWithInstance: true }))).toBe(false)
     expect(
-      orgServersUpdatePending([
-        serverStatus({ updateBlocked: true, updateBlockedCode: 'updates_managed' }),
-      ])
+      isServerUpdatable(
+        host,
+        serverStatus({ updateBlocked: true, updateBlockedCode: 'updates_managed' })
+      )
     ).toBe(false)
+    expect(isServerUpdatable(host, undefined)).toBe(false)
+  })
+})
+
+describe('orgServersUpdatePending', () => {
+  it('a server of the organization can be updated now', () => {
+    expect(orgServersUpdatePending([host], [serverStatus()])).toBe(true)
+    expect(orgServersUpdatePending([host], [serverStatus({ updateAvailable: false })])).toBe(false)
+    expect(orgServersUpdatePending([], [serverStatus()])).toBe(false)
+    expect(orgServersUpdatePending(undefined, undefined)).toBe(false)
+  })
+
+  it('a disconnected server that is behind shows no icon', () => {
+    expect(orgServersUpdatePending([{ ...host, connected: false }], [serverStatus()])).toBe(false)
+  })
+
+  it('a server with no update row shows no icon', () => {
+    expect(orgServersUpdatePending([host], [serverStatus({ serverId: 'other' })])).toBe(false)
   })
 })
 
 describe('viewerUpdatePending', () => {
-  const servers = [serverStatus()]
+  const servers = [host]
+  const updates = [serverStatus()]
   it('reads what the role may read', () => {
-    expect(viewerUpdatePending({ viewer: 'instance-admin', adminPending: true, servers: [] })).toBe(
-      true
-    )
-    expect(viewerUpdatePending({ viewer: 'instance-admin', adminPending: false, servers })).toBe(
+    expect(
+      viewerUpdatePending({
+        viewer: 'instance-admin',
+        adminPending: true,
+        servers: [],
+        updates: [],
+      })
+    ).toBe(true)
+    expect(
+      viewerUpdatePending({ viewer: 'instance-admin', adminPending: false, servers, updates })
+    ).toBe(false)
+    expect(
+      viewerUpdatePending({ viewer: 'org-manager', adminPending: false, servers, updates })
+    ).toBe(true)
+    expect(viewerUpdatePending({ viewer: 'other', adminPending: true, servers, updates })).toBe(
       false
     )
-    expect(viewerUpdatePending({ viewer: 'org-manager', adminPending: false, servers })).toBe(true)
-    expect(viewerUpdatePending({ viewer: 'other', adminPending: true, servers })).toBe(false)
   })
 })
 
 describe('updateIndicator', () => {
   it('icon and "Update" on a live build, the icon alone elsewhere, nothing without an update', () => {
-    expect(updateIndicator({ pending: true, live: true })).toEqual({ icon: true, word: 'Update' })
-    expect(updateIndicator({ pending: true, live: false })).toEqual({ icon: true, word: null })
-    expect(updateIndicator({ pending: false, live: true })).toEqual({ icon: false, word: null })
-    expect(updateIndicator({ pending: false, live: false })).toEqual({ icon: false, word: null })
+    const known = { versionKnown: true }
+    expect(updateIndicator({ pending: true, live: true, ...known })).toEqual({
+      icon: true,
+      word: 'Update',
+    })
+    expect(updateIndicator({ pending: true, live: false, ...known })).toEqual({
+      icon: true,
+      word: null,
+    })
+    expect(updateIndicator({ pending: false, live: true, ...known })).toEqual({
+      icon: false,
+      word: null,
+    })
+    expect(updateIndicator({ pending: false, live: false, ...known })).toEqual({
+      icon: false,
+      word: null,
+    })
+  })
+
+  it('nothing until the version is known, so no icon sits on an entry that cannot be pressed', () => {
+    expect(updateIndicator({ pending: true, live: true, versionKnown: false })).toEqual({
+      icon: false,
+      word: null,
+    })
   })
 })
 

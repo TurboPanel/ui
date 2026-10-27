@@ -50,31 +50,69 @@ export function instanceAdminUpdatePending(
   return updateOffered(input)
 }
 
+/** The fields of a servers-list row the update rule reads. */
+export type UpdatableServer = Readonly<{
+  id: string
+  connected: boolean
+  colocatedWithInstance?: boolean
+}>
+
 /**
- * Someone who can update the organization's servers has something to apply:
- * a server of theirs reports a newer daemon build it is allowed to update to
- * (not one updated together with the control plane, not refused, not already
- * updating).
+ * Whether an update can be started for this server now: it is connected, not
+ * updated together with the control plane, not refused by the control plane,
+ * its target build is known and newer, and no update is already starting or
+ * running. The Servers page's Update actions and the sidebar's update icon
+ * both use this, so the icon never sends someone to a page with no button.
  */
-export function orgServersUpdatePending(
-  servers: readonly ServerUpdateStatus[] | null | undefined
+export function isServerUpdatable(
+  server: UpdatableServer,
+  update: ServerUpdateStatus | null | undefined,
+  starting = false
 ): boolean {
-  return (servers ?? []).some(
-    (server) =>
-      server.updateAvailable === true &&
-      server.colocatedWithInstance !== true &&
-      server.status !== 'updating' &&
-      !isServerUpdateActionHidden(server)
+  return (
+    server.connected &&
+    server.colocatedWithInstance !== true &&
+    update?.colocatedWithInstance !== true &&
+    !isServerUpdateActionHidden(update) &&
+    update?.targetStatus === 'ok' &&
+    update.updateAvailable === true &&
+    !starting &&
+    update.status !== 'updating'
   )
 }
 
-/** Whether the update icon shows, and the word beside it (live builds only). */
+/** Update status rows by server id. */
+export function indexUpdatesByServerId(
+  entries: readonly ServerUpdateStatus[] | null | undefined
+): Map<string, ServerUpdateStatus> {
+  const map = new Map<string, ServerUpdateStatus>()
+  for (const entry of entries ?? []) map.set(entry.serverId, entry)
+  return map
+}
+
+/**
+ * Someone who can update the organization's servers has something to apply:
+ * one of its servers passes {@link isServerUpdatable}.
+ */
+export function orgServersUpdatePending(
+  servers: readonly UpdatableServer[] | null | undefined,
+  updates: readonly ServerUpdateStatus[] | null | undefined
+): boolean {
+  const byId = indexUpdatesByServerId(updates)
+  return (servers ?? []).some((server) => isServerUpdatable(server, byId.get(server.id)))
+}
+
+/**
+ * Whether the update icon shows, and the word beside it (live builds only).
+ * Nothing until the version is known: the entry is not pressable before
+ * then, and an icon must never sit on an entry that cannot be pressed.
+ */
 export type UpdateIndicator = Readonly<{ icon: boolean; word: 'Update' | null }>
 
 export function updateIndicator(
-  input: Readonly<{ pending: boolean; live: boolean }>
+  input: Readonly<{ pending: boolean; live: boolean; versionKnown: boolean }>
 ): UpdateIndicator {
-  if (!input.pending) return { icon: false, word: null }
+  if (!input.pending || !input.versionKnown) return { icon: false, word: null }
   return { icon: true, word: input.live ? 'Update' : null }
 }
 
@@ -104,11 +142,12 @@ export function viewerUpdatePending(
   input: Readonly<{
     viewer: UpdateViewer
     adminPending: boolean
-    servers: readonly ServerUpdateStatus[] | null | undefined
+    servers: readonly UpdatableServer[] | null | undefined
+    updates: readonly ServerUpdateStatus[] | null | undefined
   }>
 ): boolean {
   if (input.viewer === 'instance-admin') return input.adminPending
-  if (input.viewer === 'org-manager') return orgServersUpdatePending(input.servers)
+  if (input.viewer === 'org-manager') return orgServersUpdatePending(input.servers, input.updates)
   return false
 }
 
