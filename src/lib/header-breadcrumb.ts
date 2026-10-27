@@ -67,7 +67,7 @@ export function projectBreadcrumb(orgId: string, name: string | null, status: st
   }
 }
 
-/** A managed database is a project: `Projects ›` opens the list with the Managed databases filter on. */
+/** A managed database is a project: `Projects ›` opens the list with the Managed Databases filter on. */
 export function databaseBreadcrumb(orgId: string, name: string | null, status: string): Breadcrumb {
   return {
     trail: [{ label: 'Projects', href: projectsListHref(orgId, ALL_WORKSPACES_SCOPE, 'managed') }],

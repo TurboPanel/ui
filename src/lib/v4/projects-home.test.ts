@@ -498,8 +498,8 @@ describe('the type filter', () => {
       { value: 'apps', label: 'Apps 2', accessibilityLabel: 'Apps, 2 projects' },
       {
         value: 'managed',
-        label: 'Managed databases 1',
-        accessibilityLabel: 'Managed databases, 1 project',
+        label: 'Managed Databases 1',
+        accessibilityLabel: 'Managed Databases, 1 project',
       },
     ])
   })

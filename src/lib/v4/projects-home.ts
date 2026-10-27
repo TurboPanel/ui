@@ -254,7 +254,7 @@ export type ProjectTypeFilter = (typeof PROJECT_TYPE_FILTERS)[number]
 const PROJECT_TYPE_LABELS: Readonly<Record<ProjectTypeFilter, string>> = {
   all: 'All',
   apps: 'Apps',
-  managed: 'Managed databases',
+  managed: 'Managed Databases',
 }
 
 /** The filter a `?type=` value names; anything else is All. */
@@ -285,7 +285,7 @@ export function filterProjectsByType<T extends Pick<HomeProject, 'kind'>>(
   return cards.filter((card) => projectTypeOf(card.kind) === filter)
 }
 
-/** "All 3", "Apps 2", "Managed databases 1", each read out as "Apps, 2 projects". */
+/** "All 3", "Apps 2", "Managed Databases 1", each read out as "Apps, 2 projects". */
 export function projectTypeOptions(counts: Readonly<Record<ProjectTypeFilter, number>>): {
   value: ProjectTypeFilter
   label: string

@@ -1,11 +1,5 @@
 import { useState } from 'react'
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native'
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import { panelStyles } from '@/components/ui/panel-styles'
 import {
   DataTable,
@@ -212,8 +206,7 @@ export function PendingKeysSection({ orgId }: Readonly<{ orgId: string }>) {
   const loading = licensesQuery.isLoading && rows.length === 0
   let queryError: string | null = null
   if (licensesQuery.isError) {
-    queryError =
-      userErrorMessage(licensesQuery.error, 'Failed to load registration keys')
+    queryError = userErrorMessage(licensesQuery.error, 'Failed to load registration keys')
   }
   const displayError = deleteError ?? deleteMutation.actionError ?? queryError
 
@@ -233,9 +226,7 @@ export function PendingKeysSection({ orgId }: Readonly<{ orgId: string }>) {
         setConfirmingId(null)
       },
       onError: (err) => {
-        setDeleteError(
-          userErrorMessage(err, 'Failed to delete registration key'),
-        )
+        setDeleteError(userErrorMessage(err, 'Failed to delete registration key'))
       },
     })
   }
@@ -243,7 +234,7 @@ export function PendingKeysSection({ orgId }: Readonly<{ orgId: string }>) {
   if (!canOwn) {
     return (
       <View style={styles.root}>
-        <Text style={panelStyles.pageTitle}>Pending keys</Text>
+        <Text style={panelStyles.pageTitle}>Pending Keys</Text>
         <Text style={panelStyles.pageCopy}>
           Only organization owners can view servers waiting to connect.
         </Text>
@@ -253,11 +244,11 @@ export function PendingKeysSection({ orgId }: Readonly<{ orgId: string }>) {
 
   return (
     <View style={styles.root}>
-      <Text style={panelStyles.pageTitle}>Pending keys</Text>
+      <Text style={panelStyles.pageTitle}>Pending Keys</Text>
       <Text style={panelStyles.pageCopy}>
-        Servers still waiting to connect. Each row is an install command that
-        has not enrolled a host yet; delete one if you no longer need it — the
-        command cannot be recovered after you leave Add server.
+        Servers still waiting to connect. Each row is an install command that has not enrolled a
+        host yet; delete one if you no longer need it — the command cannot be recovered after you
+        leave Add server.
       </Text>
 
       {displayError ? <Text style={panelStyles.error}>{displayError}</Text> : null}
@@ -273,8 +264,8 @@ export function PendingKeysSection({ orgId }: Readonly<{ orgId: string }>) {
 
         {!loading && rows.length === 0 ? (
           <Text style={panelStyles.muted}>
-            No servers waiting to connect. Rows appear here after you add a server,
-            until the host connects.
+            No servers waiting to connect. Rows appear here after you add a server, until the host
+            connects.
           </Text>
         ) : null}
 

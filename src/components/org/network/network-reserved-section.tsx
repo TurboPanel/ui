@@ -15,10 +15,7 @@ import {
 } from '@/components/ui'
 import { isValidCidr, normalizeCidr } from '@/lib/cidr'
 import type { NetworkRecord } from '@/lib/instance-api'
-import {
-  describeNetworkError,
-  type NetworkErrorDescription,
-} from '@/lib/network-error-copy'
+import { describeNetworkError, type NetworkErrorDescription } from '@/lib/network-error-copy'
 import {
   useCreateNetwork,
   useDeleteNetwork,
@@ -76,7 +73,7 @@ function ReservedRangeAddPanel({ orgId }: Readonly<{ orgId: string }>) {
         onError: (err) => {
           setError(describeNetworkError(err, 'Failed to reserve range'))
         },
-      },
+      }
     )
   }
 
@@ -222,7 +219,7 @@ function ReservedRangeListPanel({
         onError: (err) => {
           setError(describeNetworkError(err, 'Failed to rename reserved range'))
         },
-      },
+      }
     )
   }
 
@@ -236,14 +233,9 @@ function ReservedRangeListPanel({
   }
 
   return (
-    <SectionPanel
-      title="Reserved ranges"
-      hint={reservedListHint(loading, networks.length)}
-    >
+    <SectionPanel title="Reserved Ranges" hint={reservedListHint(loading, networks.length)}>
       <NetworkErrorLine error={error} />
-      {loading && networks.length === 0 ? (
-        <LoadingState label="Loading reserved ranges…" />
-      ) : null}
+      {loading && networks.length === 0 ? <LoadingState label="Loading reserved ranges…" /> : null}
       {!loading && networks.length === 0 ? (
         <EmptyState
           title="No reserved ranges."
@@ -273,9 +265,7 @@ function ReservedRangeListPanel({
  * meshes, or internal services because something outside TurboPanel already
  * routes them. Org-scoped rows (`kind: 'reserved'`), no datacenter or host.
  */
-export function NetworkReservedSection({
-  orgId,
-}: Readonly<{ orgId: string }>) {
+export function NetworkReservedSection({ orgId }: Readonly<{ orgId: string }>) {
   const canManage = useCan('organization', orgId, 'organization:manage')
   const networksQuery = useNetworks(orgId, { kind: 'reserved' })
   const networks = networksQuery.data?.networks ?? []
@@ -286,14 +276,13 @@ export function NetworkReservedSection({
 
   return (
     <View style={styles.root}>
-      <Text style={panelStyles.pageTitle}>Reserved ranges</Text>
+      <Text style={panelStyles.pageTitle}>Reserved Ranges</Text>
       <Text style={panelStyles.pageCopy}>
-        Ranges TurboPanel must never assign — to containers, the mesh, or
-        internal services — because something outside TurboPanel already
-        routes them: a corporate VPN, a remote branch, an upstream allocation.
-        Declaring them here keeps those addresses able to reach Caddy and
-        published services without colliding with a TurboPanel-assigned
-        address. The mesh and Docker address-pool allocators avoid them too.
+        Ranges TurboPanel must never assign — to containers, the mesh, or internal services —
+        because something outside TurboPanel already routes them: a corporate VPN, a remote branch,
+        an upstream allocation. Declaring them here keeps those addresses able to reach Caddy and
+        published services without colliding with a TurboPanel-assigned address. The mesh and Docker
+        address-pool allocators avoid them too.
       </Text>
 
       <NetworkErrorLine error={queryError} />

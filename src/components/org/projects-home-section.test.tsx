@@ -209,13 +209,13 @@ describe.each(SCENARIOS)('Projects home ($name)', (scenario) => {
     expect(Array.from(types.querySelectorAll('[role="tab"]')).map((t) => t.textContent)).toEqual([
       'All 3',
       'Apps 2',
-      'Managed databases 1',
+      'Managed Databases 1',
     ])
     expect(screen.getByRole('tab', { name: 'All, 3 projects' }).getAttribute('aria-selected')).toBe(
       'true'
     )
     expect(screen.getByRole('radiogroup', { name: 'View' })).toBeTruthy()
-    expect(screen.queryByRole('link', { name: 'Managed database settings' })).toBeNull()
+    expect(screen.queryByRole('link', { name: 'Managed Database Settings' })).toBeNull()
   })
 
   it('lists only managed databases with ?type=managed, with the settings link', () => {
@@ -238,10 +238,10 @@ describe.each(SCENARIOS)('Projects home ($name)', (scenario) => {
     )
     expect(
       screen
-        .getByRole('tab', { name: 'Managed databases, 2 projects' })
+        .getByRole('tab', { name: 'Managed Databases, 2 projects' })
         .getAttribute('aria-selected')
     ).toBe('true')
-    fireEvent.click(screen.getByRole('link', { name: 'Managed database settings' }))
+    fireEvent.click(screen.getByRole('link', { name: 'Managed Database Settings' }))
     expect(state.push).toHaveBeenLastCalledWith('/o/managed/settings')
     fireEvent.click(screen.getByRole('button', { name: 'New project' }))
     expect(state.push).toHaveBeenLastCalledWith('/o/projects/new?type=managed')
@@ -251,12 +251,12 @@ describe.each(SCENARIOS)('Projects home ($name)', (scenario) => {
     render(<ProjectsHomeSection orgId="o" type="apps" />)
     expect(screen.getByRole('button', { name: /^Open Shop/ })).toBeTruthy()
     expect(screen.queryByRole('button', { name: /^Open Orders DB/ })).toBeNull()
-    expect(screen.queryByRole('link', { name: 'Managed database settings' })).toBeNull()
+    expect(screen.queryByRole('link', { name: 'Managed Database Settings' })).toBeNull()
   })
 
   it('changes the type in the address and keeps the workspace', () => {
     render(<ProjectsHomeSection orgId="o" workspaceId="w1" />)
-    fireEvent.click(screen.getByRole('tab', { name: /^Managed databases/ }))
+    fireEvent.click(screen.getByRole('tab', { name: /^Managed Databases/ }))
     expect(state.replace).toHaveBeenLastCalledWith('/o/projects?workspaceId=w1&type=managed')
     fireEvent.click(screen.getByRole('tab', { name: /^All/ }))
     expect(state.replace).toHaveBeenLastCalledWith('/o/projects?workspaceId=w1')
@@ -266,7 +266,7 @@ describe.each(SCENARIOS)('Projects home ($name)', (scenario) => {
     state.projects = { ...state.projects, data: { projects: [project('p1', 'Shop', 'compose')] } }
     render(<ProjectsHomeSection orgId="o" type="managed" />)
     expect(screen.getByText('No managed databases here yet.')).toBeTruthy()
-    expect(screen.getByRole('link', { name: 'Managed database settings' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Managed Database Settings' })).toBeTruthy()
   })
 
   it('says what each project is: repository, Compose, and the managed engine and version', () => {
