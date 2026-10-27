@@ -7,25 +7,17 @@ import { createAppQueryClient } from '@/lib/query-client'
 import { queryKeys } from '@/lib/query-keys'
 import {
   SERVERS_REFRESH_MS,
-  UPDATE_PROGRESS_POLL_MS,
   useOrgServers,
   useServerDetail,
   useServerMetricsSeries,
   useServerMetricsSeriesBatches,
-  useServersUpdateStatus,
 } from '@/lib/queries/servers'
 import { SERVER_INITIALIZING_POLL_MS } from '@/lib/server-connection-status'
 
-const {
-  fetchOrgServers,
-  fetchServer,
-  fetchServerMetricsSeries,
-  fetchServersUpdateStatus,
-} = vi.hoisted(() => ({
+const { fetchOrgServers, fetchServer, fetchServerMetricsSeries } = vi.hoisted(() => ({
   fetchOrgServers: vi.fn(),
   fetchServer: vi.fn(),
   fetchServerMetricsSeries: vi.fn(),
-  fetchServersUpdateStatus: vi.fn(),
 }))
 
 vi.mock('@/lib/instance-api', async (importOriginal) => {
@@ -35,7 +27,6 @@ vi.mock('@/lib/instance-api', async (importOriginal) => {
     fetchOrgServers,
     fetchServer,
     fetchServerMetricsSeries,
-    fetchServersUpdateStatus,
   }
 })
 
@@ -56,13 +47,11 @@ function createWrapper(client = createTestQueryClient()) {
 function resolveRefetchInterval(
   client: ReturnType<typeof createAppQueryClient>,
   queryKey: readonly unknown[],
-  data?: unknown,
+  data?: unknown
 ): number | false | undefined {
   const query = client.getQueryCache().find({ queryKey })
   if (!query) throw new TypeError('expected query in cache')
-  const interval = (
-    query.options as { refetchInterval?: unknown }
-  ).refetchInterval
+  const interval = (query.options as { refetchInterval?: unknown }).refetchInterval
   if (typeof interval === 'function') {
     if (data !== undefined) {
       query.setState({ ...query.state, data })
@@ -92,13 +81,11 @@ describe('servers interval and option branches', () => {
           retry: 0,
           refetchInterval: 7_000,
         }),
-      { wrapper: createWrapper(client) },
+      { wrapper: createWrapper(client) }
     )
 
     await waitFor(() => {
-      expect(
-        resolveRefetchInterval(client, queryKeys.org(orgId).servers.list),
-      ).toBe(7_000)
+      expect(resolveRefetchInterval(client, queryKeys.org(orgId).servers.list)).toBe(7_000)
     })
     const query = client.getQueryCache().find({
       queryKey: queryKeys.org(orgId).servers.list,
@@ -129,7 +116,7 @@ describe('servers interval and option branches', () => {
         id: serverId,
         connected: false,
         statusChangedAt: null,
-      }),
+      })
     ).toBe(SERVER_INITIALIZING_POLL_MS)
     expect(resolveRefetchInterval(client, key, null)).toBe(SERVERS_REFRESH_MS)
     expect(
@@ -137,55 +124,8 @@ describe('servers interval and option branches', () => {
         id: serverId,
         connected: true,
         statusChangedAt: '2026-01-01T00:00:00.000Z',
-      }),
+      })
     ).toBe(SERVERS_REFRESH_MS)
-  })
-
-  it('useServersUpdateStatus does not poll unless asked', async () => {
-    fetchServersUpdateStatus.mockResolvedValue({
-      servers: [{ serverId, status: 'updating' }],
-    })
-    const client = createTestQueryClient()
-
-    renderHook(() => useServersUpdateStatus(orgId), {
-      wrapper: createWrapper(client),
-    })
-
-    const key = queryKeys.org(orgId).servers.updatesBatch
-    await waitFor(() => {
-      expect(client.getQueryCache().find({ queryKey: key })).toBeTruthy()
-    })
-    expect(
-      resolveRefetchInterval(client, key, {
-        servers: [{ serverId, status: 'updating' }],
-      }),
-    ).toBe(false)
-  })
-
-  it('useServersUpdateStatus stops polling when no host is updating', async () => {
-    fetchServersUpdateStatus.mockResolvedValue({
-      servers: [{ serverId, status: 'idle' }],
-    })
-    const client = createTestQueryClient()
-
-    renderHook(
-      () => useServersUpdateStatus(orgId, { pollWhileUpdating: true }),
-      { wrapper: createWrapper(client) },
-    )
-
-    const key = queryKeys.org(orgId).servers.updatesBatch
-    await waitFor(() => {
-      expect(
-        resolveRefetchInterval(client, key, {
-          servers: [{ serverId, status: 'idle' }],
-        }),
-      ).toBe(false)
-    })
-    expect(
-      resolveRefetchInterval(client, key, {
-        servers: [{ serverId, status: 'updating' }],
-      }),
-    ).toBe(UPDATE_PROGRESS_POLL_MS)
   })
 
   it('useServerMetricsSeries evaluates a getter at fetch time', async () => {
@@ -199,19 +139,14 @@ describe('servers interval and option branches', () => {
       entities: [],
     })
 
-    const { result } = renderHook(
-      () => useServerMetricsSeries(orgId, serverId, () => range),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useServerMetricsSeries(orgId, serverId, () => range), {
+      wrapper: createWrapper(),
+    })
 
     await waitFor(() => {
       expect(result.current.isSuccess).toBe(true)
     })
-    expect(fetchServerMetricsSeries).toHaveBeenCalledWith(
-      serverId,
-      range,
-      orgId,
-    )
+    expect(fetchServerMetricsSeries).toHaveBeenCalledWith(serverId, range, orgId)
   })
 
   it('useServerMetricsSeriesBatches keys on fromIso when rangeKey is omitted', async () => {
@@ -226,14 +161,8 @@ describe('servers interval and option branches', () => {
     const client = createTestQueryClient()
 
     renderHook(
-      () =>
-        useServerMetricsSeriesBatches(
-          orgId,
-          serverId,
-          [['host.cpu.busyPercent']],
-          () => range,
-        ),
-      { wrapper: createWrapper(client) },
+      () => useServerMetricsSeriesBatches(orgId, serverId, [['host.cpu.busyPercent']], () => range),
+      { wrapper: createWrapper(client) }
     )
 
     await waitFor(() => {
@@ -241,17 +170,14 @@ describe('servers interval and option branches', () => {
         client.getQueryCache().find({
           queryKey: queryKeys
             .org(orgId)
-            .servers.metricsSeries(
-              serverId,
-              `${range.fromIso}:entities:0`,
-            ),
-        }),
+            .servers.metricsSeries(serverId, `${range.fromIso}:entities:0`),
+        })
       ).toBeTruthy()
     })
     expect(fetchServerMetricsSeries).toHaveBeenCalledWith(
       serverId,
       { ...range, metrics: ['host.cpu.busyPercent'] },
-      orgId,
+      orgId
     )
   })
 })

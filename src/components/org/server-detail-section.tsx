@@ -49,13 +49,8 @@ import {
   SectionPanel,
   SegmentedControl,
 } from '@/components/ui'
-import {
-  channelLabel,
-  daemonUnsupportedLabel,
-  isServerUpdateActionHidden,
-  runningBuildLabel,
-  serverUpdateBlockedLabel,
-} from '@/lib/daemon-update-labels'
+import { channelLabel, daemonUnsupportedLabel, runningBuildLabel } from '@/lib/daemon-update-labels'
+import { SERVER_UPDATES_AUTOMATIC_COPY } from '@/lib/update-automation'
 import { formatLocalDateTime } from '@/lib/format-datetime'
 import { configuredSourceLabel } from '@/lib/host-defaults'
 import { formatMemoryPageSize, memoryPageSizeHint } from '@/lib/memory-page-size'
@@ -92,7 +87,6 @@ import {
   useServerDetail,
   useServerUpdateStatus,
   useSetServerHostname,
-  useTriggerServerUpdate,
   useUpdateServer,
 } from '@/lib/queries/servers'
 import { useCan, queryKeys } from '@/lib/query-client'
@@ -116,7 +110,6 @@ type DetailPollCommand = {
 
 type UpdateState = {
   loading: boolean
-  triggering: boolean
   resetting: boolean
   data: ServerUpdateStatus | null
   error: string | null
@@ -148,13 +141,11 @@ function resolveUpdateBadgeVariant(input: {
   targetStatus: ServerUpdateStatus['targetStatus'] | undefined
   updateAvailable: boolean | undefined
   colocated: boolean
-  block: ServerUpdateStatus | null | undefined
   showUpdateErrorBadge: boolean
   runningVersionUnknown: boolean
 }): UpdateBadgeVariant {
   if (input.status === 'updating') return 'updating'
   if (input.showUpdateErrorBadge) return 'error'
-  if (serverUpdateBlockedLabel(input.block)) return 'colocated'
   if (input.colocated) return 'colocated'
   if (input.targetStatus === 'unknown' || input.runningVersionUnknown) {
     return 'unknown'
@@ -163,24 +154,20 @@ function resolveUpdateBadgeVariant(input: {
   return 'current'
 }
 
-function updateBadgeLabel(
-  variant: UpdateBadgeVariant,
-  runningVersionUnknown: boolean,
-  blockedLabel: string | null
-): string {
+function updateBadgeLabel(variant: UpdateBadgeVariant, runningVersionUnknown: boolean): string {
   switch (variant) {
     case 'updating':
-      return 'Update in progress'
+      return 'Update in Progress'
     case 'error':
-      return 'Update error'
+      return 'Update Error'
     case 'colocated':
-      return blockedLabel ?? 'Co-located daemon'
+      return 'Updated with the Control Plane'
     case 'unknown':
-      return runningVersionUnknown ? 'Version unknown' : 'Target unavailable'
+      return runningVersionUnknown ? 'Version Unknown' : 'Target Unavailable'
     case 'available':
-      return 'Update available'
+      return 'Update Waiting'
     case 'current':
-      return 'Up to date'
+      return 'Up to Date'
   }
 }
 
@@ -248,7 +235,6 @@ function DetailTabBody({
   onPing,
   onSetHostname,
   onReboot,
-  onTriggerUpdate,
   onResetUpdate,
   onEnqueueCommand,
   systemRestartInFlight,
@@ -269,7 +255,6 @@ function DetailTabBody({
   onPing: () => void
   onSetHostname: (hostname: string) => void
   onReboot: () => void
-  onTriggerUpdate: () => void
   onResetUpdate: () => void
   onEnqueueCommand: (
     response: CommandEnqueueResponse,
@@ -294,7 +279,6 @@ function DetailTabBody({
           onPing={onPing}
           onSetHostname={onSetHostname}
           onReboot={onReboot}
-          onTriggerUpdate={onTriggerUpdate}
           onResetUpdate={onResetUpdate}
           systemRestartInFlight={systemRestartInFlight}
           systemRestartPollError={systemRestartPollError}
@@ -333,20 +317,16 @@ function deriveServerUpdateViewModel(server: ServerDetailRecord, updateState: Up
   const updateData = updateState.data
   const colocated = isColocatedServer(server, updateData)
   const isUpdateStatusLoading = updateState.loading && updateData === null
-  const isUpdateInProgress =
-    updateState.triggering || updateState.resetting || updateData?.status === 'updating'
   const canResetUpdateStatus = updateData?.canResetUpdateStatus === true && !updateState.resetting
   const showUpdateErrorBadge = updateData?.status === 'error' && !updateData?.updateAvailable
   const targetKnown = updateData?.targetStatus === 'ok'
   const runningVersionUnknown =
     targetKnown && server.connected && !colocated && !updateData?.current?.commit
-  const blockedLabel = serverUpdateBlockedLabel(updateData)
   const badgeVariant = resolveUpdateBadgeVariant({
     status: updateData?.status,
     targetStatus: updateData?.targetStatus,
     updateAvailable: updateData?.updateAvailable,
     colocated,
-    block: updateData,
     showUpdateErrorBadge,
     runningVersionUnknown,
   })
@@ -354,10 +334,7 @@ function deriveServerUpdateViewModel(server: ServerDetailRecord, updateState: Up
   return {
     updateData,
     colocated,
-    blockedLabel,
-    hideServerUpdateAction: isServerUpdateActionHidden(updateData),
     isUpdateStatusLoading,
-    isUpdateInProgress,
     canResetUpdateStatus,
     targetKnown,
     runningVersionUnknown,
@@ -549,7 +526,6 @@ export function ServerDetailSection({
 
   const serverQuery = useServerDetail(orgId, serverId)
   const updateStatusQuery = useServerUpdateStatus(orgId, serverId)
-  const triggerUpdateMutation = useTriggerServerUpdate(orgId, serverId)
   const resetUpdateMutation = useResetServerUpdateStatus(orgId, serverId)
   const pingMutation = usePingDaemon(orgId, serverId)
   const hostnameMutation = useSetServerHostname(orgId, serverId)
@@ -574,16 +550,13 @@ export function ServerDetailSection({
   const updateState = useMemo((): UpdateState => {
     const data = updateStatusQuery.data ?? null
     let error: string | null = null
-    if (triggerUpdateMutation.actionError) {
-      error = triggerUpdateMutation.actionError
-    } else if (resetUpdateMutation.actionError) {
+    if (resetUpdateMutation.actionError) {
       error = resetUpdateMutation.actionError
     } else if (updateStatusQuery.error instanceof Error) {
       error = userErrorMessage(updateStatusQuery.error, 'Failed to load update status')
     }
     return {
       loading: updateStatusQuery.isLoading,
-      triggering: triggerUpdateMutation.isPending || data?.status === 'updating',
       resetting: resetUpdateMutation.isPending,
       data,
       error,
@@ -592,8 +565,6 @@ export function ServerDetailSection({
     updateStatusQuery.data,
     updateStatusQuery.isLoading,
     updateStatusQuery.error,
-    triggerUpdateMutation.isPending,
-    triggerUpdateMutation.actionError,
     resetUpdateMutation.isPending,
     resetUpdateMutation.actionError,
   ])
@@ -768,10 +739,6 @@ export function ServerDetailSection({
     })
   }
 
-  const onTriggerUpdate = () => {
-    triggerUpdateMutation.mutate()
-  }
-
   const onResetUpdate = () => {
     resetUpdateMutation.mutate()
   }
@@ -902,7 +869,6 @@ export function ServerDetailSection({
         onPing={onPing}
         onSetHostname={onSetHostname}
         onReboot={onReboot}
-        onTriggerUpdate={onTriggerUpdate}
         onResetUpdate={onResetUpdate}
         onEnqueueCommand={(response, kind, meta) => {
           if (kind === 'timezone') {
@@ -1099,7 +1065,6 @@ function ServerControlTab({
   onPing,
   onSetHostname,
   onReboot,
-  onTriggerUpdate,
   onResetUpdate,
   systemRestartInFlight,
   systemRestartPollError,
@@ -1114,7 +1079,6 @@ function ServerControlTab({
   onPing: () => void
   onSetHostname: (hostname: string) => void
   onReboot: () => void
-  onTriggerUpdate: () => void
   onResetUpdate: () => void
   systemRestartInFlight: boolean
   systemRestartPollError: string | null
@@ -1147,10 +1111,10 @@ function ServerControlTab({
         />
       </SectionPanel>
 
-      <SectionPanel title="Daemon update">
+      <SectionPanel title="Daemon Update">
         {viewModel.colocated ? (
           <Text style={panelStyles.muted}>
-            Co-located hosts are updated via local git, not remote updates.
+            This daemon updates on its own, together with the control plane.
           </Text>
         ) : null}
         <Text style={panelStyles.detailLine}>
@@ -1172,38 +1136,20 @@ function ServerControlTab({
         ) : null}
         <Badge
           tone={updateBadgeTone(viewModel.badgeVariant)}
-          label={updateBadgeLabel(
-            viewModel.badgeVariant,
-            viewModel.runningVersionUnknown,
-            viewModel.blockedLabel
-          )}
+          label={updateBadgeLabel(viewModel.badgeVariant, viewModel.runningVersionUnknown)}
         />
-        {viewModel.blockedLabel ? (
-          <Text style={panelStyles.muted}>{viewModel.blockedLabel}</Text>
-        ) : null}
-        {canManage && !viewModel.hideServerUpdateAction ? (
+        {viewModel.colocated ? null : (
+          <Text style={panelStyles.muted}>{SERVER_UPDATES_AUTOMATIC_COPY}</Text>
+        )}
+        {canManage && viewModel.canResetUpdateStatus ? (
           <ButtonRow>
             <Button
-              label="Update"
-              variant="primary"
-              disabled={
-                viewModel.isUpdateInProgress ||
-                !server.connected ||
-                !viewModel.targetKnown ||
-                viewModel.colocated ||
-                !viewModel.updateData?.updateAvailable
-              }
-              onPress={onTriggerUpdate}
+              label="Clear Stuck Update"
+              variant="secondary"
+              size="sm"
+              disabled={updateState.resetting}
+              onPress={onResetUpdate}
             />
-            {viewModel.canResetUpdateStatus ? (
-              <Button
-                label="Clear stuck update"
-                variant="secondary"
-                size="sm"
-                disabled={updateState.resetting}
-                onPress={onResetUpdate}
-              />
-            ) : null}
           </ButtonRow>
         ) : null}
         {updateState.error ? <Text style={panelStyles.error}>{updateState.error}</Text> : null}

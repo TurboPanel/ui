@@ -29,7 +29,6 @@ import {
   fetchProjectPrincipals,
   fetchServerResourceLimits,
   fetchServerUpdate,
-  fetchServersUpdateStatus,
   fetchServiceReleases,
   fetchMarkers,
   fetchRepository,
@@ -58,8 +57,6 @@ import {
   TASK_LIMIT_REACHED_ERROR,
   TASK_NAME_IN_USE_ERROR,
   TASK_SCHEDULE_INVALID_ERROR,
-  triggerAllServerUpdates,
-  triggerServerUpdate,
   updateProjectPrincipal,
   updateRepository,
   updateStorage,
@@ -113,48 +110,12 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
     await expect(fetchServerUpdate('srv-1')).resolves.toEqual(updateStatus)
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/servers/srv-1/update')
 
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({
-        ok: true,
-        channel: 'trunk',
-        target: null,
-        targetStatus: 'ok',
-        servers: [{ ...updateStatus, serverId: 'srv-1' }],
-      }),
-    )
-    await expect(fetchServersUpdateStatus()).resolves.toMatchObject({ ok: true })
-    expect(String(fetchMock.mock.calls[1]?.[0])).toContain('/servers/updates')
-
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({
-        ok: true,
-        serverId: 'srv-1',
-        status: 'updating',
-      }),
-    )
-    await expect(triggerServerUpdate('srv-1')).resolves.toMatchObject({
-      serverId: 'srv-1',
-      status: 'updating',
-    })
-    expect(fetchMock.mock.calls[2]?.[1]).toMatchObject({ method: 'POST' })
-
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({ ...updateStatus, cleared: 1 }),
-    )
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ...updateStatus, cleared: 1 }))
     await expect(resetServerUpdateStatus('srv-1')).resolves.toMatchObject({
       cleared: 1,
     })
-    expect(String(fetchMock.mock.calls[3]?.[0])).toContain('/update/reset')
-
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({
-        ok: true,
-        results: [{ serverId: 'srv-1', ok: true, status: 'updating' }],
-      }),
-    )
-    await expect(triggerAllServerUpdates()).resolves.toMatchObject({ ok: true })
-    expect(fetchMock.mock.calls[4]?.[1]).toMatchObject({ method: 'POST' })
-    expect(String(fetchMock.mock.calls[4]?.[0])).toContain('/servers/updates')
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain('/update/reset')
+    expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({ method: 'POST' })
   })
 
   it('admin email and signup settings use admin routes', async () => {
@@ -163,7 +124,7 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
         settings: {
           SMTP_HOST: { value: 'smtp.example.com', source: 'db' },
         },
-      }),
+      })
     )
     await expect(fetchEmailSettings()).resolves.toEqual({
       ok: true,
@@ -171,9 +132,7 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
         SMTP_HOST: { value: 'smtp.example.com', source: 'db' },
       },
     })
-    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
-      '/api/admin/v1/settings/email',
-    )
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/api/admin/v1/settings/email')
 
     fetchMock.mockResolvedValueOnce(jsonResponse({}))
     await expect(fetchEmailSettings()).resolves.toEqual({
@@ -186,11 +145,11 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
         settings: {
           SMTP_HOST: { value: 'mail.example.com', source: 'db' },
         },
-      }),
+      })
     )
-    await expect(
-      saveEmailSettings({ SMTP_HOST: 'mail.example.com' }),
-    ).resolves.toMatchObject({ ok: true })
+    await expect(saveEmailSettings({ SMTP_HOST: 'mail.example.com' })).resolves.toMatchObject({
+      ok: true,
+    })
     expect(fetchMock.mock.calls[2]?.[1]).toMatchObject({ method: 'PUT' })
     expect(JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body))).toEqual({
       SMTP_HOST: 'mail.example.com',
@@ -210,7 +169,7 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
             source: 'db',
           },
         },
-      }),
+      })
     )
     await expect(fetchAuthProviderSettings()).resolves.toEqual({
       ok: true,
@@ -221,9 +180,7 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
         },
       },
     })
-    expect(String(fetchMock.mock.calls[4]?.[0])).toContain(
-      '/api/admin/v1/settings/auth-providers',
-    )
+    expect(String(fetchMock.mock.calls[4]?.[0])).toContain('/api/admin/v1/settings/auth-providers')
 
     fetchMock.mockResolvedValueOnce(
       jsonResponse({
@@ -233,12 +190,12 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
             source: 'db',
           },
         },
-      }),
+      })
     )
     await expect(
       saveAuthProviderSettings({
         TURBOPANEL_AUTH_PROVIDERS__GITHUB_CLIENT_ID: 'Iv1.saved',
-      }),
+      })
     ).resolves.toMatchObject({ ok: true })
     expect(fetchMock.mock.calls[5]?.[1]).toMatchObject({ method: 'PUT' })
     expect(JSON.parse(String(fetchMock.mock.calls[5]?.[1]?.body))).toEqual({
@@ -253,9 +210,7 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
     }
     fetchMock.mockResolvedValueOnce(jsonResponse(signup))
     await expect(fetchSignupSettings()).resolves.toEqual(signup)
-    expect(String(fetchMock.mock.calls[6]?.[0])).toContain(
-      '/api/admin/v1/settings/signup',
-    )
+    expect(String(fetchMock.mock.calls[6]?.[0])).toContain('/api/admin/v1/settings/signup')
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ ...signup, enabled: false }))
     await expect(saveSignupSettings(false)).resolves.toMatchObject({
@@ -274,13 +229,14 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
         commandId: 'cmd-1',
         status: 'queued',
         serverId: 'srv-1',
-      }),
+      })
     )
-    await expect(
-      restartSystemComponent('srv-1', 'hosting-ingress'),
-    ).resolves.toMatchObject({ commandId: 'cmd-1', serverId: 'srv-1' })
+    await expect(restartSystemComponent('srv-1', 'hosting-ingress')).resolves.toMatchObject({
+      commandId: 'cmd-1',
+      serverId: 'srv-1',
+    })
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
-      '/servers/srv-1/system/hosting-ingress/restart',
+      '/servers/srv-1/system/hosting-ingress/restart'
     )
     expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ method: 'POST' })
   })
@@ -303,9 +259,9 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
     }
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, commands: [readable] }))
-    await expect(
-      fetchCommandStatuses(['cmd-1', 'cmd-hidden', 'cmd-2']),
-    ).resolves.toEqual([readable])
+    await expect(fetchCommandStatuses(['cmd-1', 'cmd-hidden', 'cmd-2'])).resolves.toEqual([
+      readable,
+    ])
     const [, init] = fetchMock.mock.calls[0] ?? []
     expect((init as RequestInit).method).toBe('POST')
     expect(JSON.parse(String((init as RequestInit).body))).toEqual({
@@ -313,9 +269,7 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
     })
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, commands: [readable] }))
-    await expect(fetchCommandStatuses(['cmd-1', 'cmd-2'])).resolves.toEqual([
-      readable,
-    ])
+    await expect(fetchCommandStatuses(['cmd-1', 'cmd-2'])).resolves.toEqual([readable])
 
     const manyIds = Array.from({ length: 101 }, (_, index) => `cmd-${index}`)
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, commands: [] }))
@@ -336,11 +290,12 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
         sealed: false,
         truncated: false,
         exists: false,
-      }),
+      })
     )
-    await expect(
-      fetchCommandLog('srv-1', 'cmd-1', { from: 5, max: 256 }),
-    ).resolves.toMatchObject({ exists: false, nextSeq: 0 })
+    await expect(fetchCommandLog('srv-1', 'cmd-1', { from: 5, max: 256 })).resolves.toMatchObject({
+      exists: false,
+      nextSeq: 0,
+    })
     const url = String(fetchMock.mock.calls[0]?.[0])
     expect(url).toContain('/servers/srv-1/commands/cmd-1/log')
     expect(url).toContain('from=5')
@@ -354,7 +309,7 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
         sealed: true,
         truncated: false,
         exists: true,
-      }),
+      })
     )
     await expect(fetchCommandLog('srv-1', 'cmd-1')).resolves.toMatchObject({
       exists: true,
@@ -369,10 +324,10 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
         ok: true,
         deployments: [],
         nextCursor: null,
-      }),
+      })
     )
     await expect(
-      fetchEnvironmentDeployments('env-1', { limit: 10, before: 'dep-old' }),
+      fetchEnvironmentDeployments('env-1', { limit: 10, before: 'dep-old' })
     ).resolves.toMatchObject({ ok: true, deployments: [] })
     const listUrl = String(fetchMock.mock.calls[0]?.[0])
     expect(listUrl).toContain('/environments/env-1/deployments')
@@ -384,7 +339,7 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
         ok: true,
         deployments: [],
         nextCursor: null,
-      }),
+      })
     )
     await expect(fetchEnvironmentDeployments('env-1')).resolves.toMatchObject({
       ok: true,
@@ -405,14 +360,13 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
           commands: [],
           servers: [],
         },
-      }),
+      })
     )
-    await expect(
-      fetchEnvironmentDeployment('env-1', 'dep-1'),
-    ).resolves.toMatchObject({ ok: true, deployment: { id: 'dep-1' } })
-    expect(String(fetchMock.mock.calls[2]?.[0])).toContain(
-      '/environments/env-1/deployments/dep-1',
-    )
+    await expect(fetchEnvironmentDeployment('env-1', 'dep-1')).resolves.toMatchObject({
+      ok: true,
+      deployment: { id: 'dep-1' },
+    })
+    expect(String(fetchMock.mock.calls[2]?.[0])).toContain('/environments/env-1/deployments/dep-1')
   })
 
   it('repository helpers cover list, inspect, detail, git, and mutations', async () => {
@@ -426,7 +380,7 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
         via: 'provider',
         files: [],
         entries: [],
-      }),
+      })
     )
     await expect(inspectRepository('src-1', 'main')).resolves.toMatchObject({
       commitSha: 'abc123',
@@ -442,7 +396,7 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
           repositoryUrl: 'https://github.com/org/repo',
           webhookUrl: 'https://panel.example/webhook',
         },
-      }),
+      })
     )
     await expect(fetchRepository('src-1')).resolves.toMatchObject({
       repository: { id: 'src-1' },
@@ -453,11 +407,9 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
     expect(String(fetchMock.mock.calls[3]?.[0])).toContain('/repositories/connections')
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ repositories: [] }))
-    await expect(
-      fetchConnectionRepositories('inst-1'),
-    ).resolves.toEqual({ repositories: [] })
+    await expect(fetchConnectionRepositories('inst-1')).resolves.toEqual({ repositories: [] })
     expect(String(fetchMock.mock.calls[4]?.[0])).toContain(
-      '/repositories/connections/inst-1/repositories',
+      '/repositories/connections/inst-1/repositories'
     )
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, id: 'src-new' }))
@@ -467,13 +419,13 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
         repositoryUrl: 'https://github.com/org/repo',
         connectionId: 'inst-1',
         autoDeploy: 'immediate',
-      }),
+      })
     ).resolves.toEqual({ ok: true, id: 'src-new' })
     expect(fetchMock.mock.calls[5]?.[1]).toMatchObject({ method: 'POST' })
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
     await expect(
-      updateRepository('src-1', { autoDeploy: 'disabled', defaultBranch: 'trunk' }),
+      updateRepository('src-1', { autoDeploy: 'disabled', defaultBranch: 'trunk' })
     ).resolves.toEqual({ ok: true })
     expect(fetchMock.mock.calls[6]?.[1]).toMatchObject({ method: 'PATCH' })
 
@@ -482,10 +434,10 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
     expect(fetchMock.mock.calls[7]?.[1]).toMatchObject({ method: 'DELETE' })
 
     fetchMock.mockResolvedValueOnce(
-      jsonResponse({ error: REPOSITORY_REFERENCED_BY_COMPOSE_ERROR }, 409),
+      jsonResponse({ error: REPOSITORY_REFERENCED_BY_COMPOSE_ERROR }, 409)
     )
     await expect(deleteRepository('src-bound')).rejects.toThrow(
-      REPOSITORY_REFERENCED_BY_COMPOSE_ERROR,
+      REPOSITORY_REFERENCED_BY_COMPOSE_ERROR
     )
   })
 
@@ -516,7 +468,7 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
         via: 'provider',
         files: [],
         entries: [],
-      }),
+      })
     )
     await expect(inspectRepository('src-1')).resolves.toMatchObject({
       commitSha: 'def456',
@@ -529,7 +481,7 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
         via: 'provider',
         files: [],
         entries: [],
-      }),
+      })
     )
     await expect(inspectRepository('src-1', '', '')).resolves.toMatchObject({
       commitSha: 'ghi789',
@@ -542,11 +494,11 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
         via: 'provider',
         files: [],
         entries: [],
-      }),
+      })
     )
-    await expect(
-      inspectRepository('src-1', 'trunk', 'apps/web'),
-    ).resolves.toMatchObject({ commitSha: 'abc123' })
+    await expect(inspectRepository('src-1', 'trunk', 'apps/web')).resolves.toMatchObject({
+      commitSha: 'abc123',
+    })
     const inspectUrl = String(fetchMock.mock.calls[2]?.[0])
     expect(inspectUrl).toContain('ref=trunk')
     expect(inspectUrl).toContain('listPath=apps%2Fweb')
@@ -559,22 +511,21 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
         secretId: 'cred-1',
         publicKey: 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5',
         fingerprint: 'SHA256:abc',
-      }),
+      })
     )
     await expect(createGitlabDeployKey({ name: 'deploy' })).resolves.toMatchObject({
       secretId: 'cred-1',
     })
-    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
-      '/repositories/gitlab/deploy-keys',
-    )
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/repositories/gitlab/deploy-keys')
     expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ method: 'POST' })
   })
 
   it('service releases and rollback hit environment routes', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, releases: [] }))
-    await expect(
-      fetchServiceReleases('env-1', 'web', { limit: 5 }),
-    ).resolves.toMatchObject({ ok: true, releases: [] })
+    await expect(fetchServiceReleases('env-1', 'web', { limit: 5 })).resolves.toMatchObject({
+      ok: true,
+      releases: [],
+    })
     const releasesUrl = String(fetchMock.mock.calls[0]?.[0])
     expect(releasesUrl).toContain('/environments/env-1/releases')
     expect(releasesUrl).toContain('composeServiceName=web')
@@ -588,13 +539,13 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
     expect(String(fetchMock.mock.calls[1]?.[0])).toMatch(/\/releases$/)
 
     fetchMock.mockResolvedValueOnce(
-      jsonResponse({ ok: true, commandId: 'cmd-roll', status: 'queued' }),
+      jsonResponse({ ok: true, commandId: 'cmd-roll', status: 'queued' })
     )
     await expect(
       rollbackEnvironment('env-1', {
         composeServiceName: 'web',
         releaseId: 'rel-1',
-      }),
+      })
     ).resolves.toMatchObject({ commandId: 'cmd-roll' })
     expect(fetchMock.mock.calls[2]?.[1]).toMatchObject({ method: 'POST' })
     expect(String(fetchMock.mock.calls[2]?.[0])).toContain('/rollback')
@@ -613,13 +564,13 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
         environmentId: 'env-1',
         kind: 'volume',
         name: 'data',
-      }),
+      })
     ).resolves.toEqual({ ok: true, id: 'stor-1' })
     expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({ method: 'POST' })
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
     await expect(
-      updateStorage('stor-1', { name: 'data-v2', accessMode: 'single_writer' }),
+      updateStorage('stor-1', { name: 'data-v2', accessMode: 'single_writer' })
     ).resolves.toEqual({ ok: true })
     expect(fetchMock.mock.calls[2]?.[1]).toMatchObject({ method: 'PATCH' })
 
@@ -629,11 +580,9 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
         destinationPath: '/data',
         subpath: null,
         readOnly: true,
-      }),
+      })
     ).resolves.toEqual({ ok: true })
-    expect(String(fetchMock.mock.calls[3]?.[0])).toContain(
-      '/storage/stor-1/mounts/mount-1',
-    )
+    expect(String(fetchMock.mock.calls[3]?.[0])).toContain('/storage/stor-1/mounts/mount-1')
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
     await expect(deleteStorage('stor-1')).resolves.toEqual({ ok: true })
@@ -642,11 +591,9 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
 
   it('project principal and SSH key helpers proxy project routes', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ keys: [] }))
-    await expect(
-      fetchPrincipalSshKeys('proj-1', 'principal-1'),
-    ).resolves.toEqual({ keys: [] })
+    await expect(fetchPrincipalSshKeys('proj-1', 'principal-1')).resolves.toEqual({ keys: [] })
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
-      '/projects/proj-1/principals/principal-1/ssh-keys',
+      '/projects/proj-1/principals/principal-1/ssh-keys'
     )
 
     const key = {
@@ -663,13 +610,13 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
       jsonResponse({
         key,
         reconciled: { queuedServerIds: ['srv-1'], failedServerIds: [] },
-      }),
+      })
     )
     await expect(
       addPrincipalSshKey('proj-1', 'principal-1', {
         name: 'laptop',
         publicKey: key.publicKey,
-      }),
+      })
     ).resolves.toMatchObject({ key: { id: 'key-1' } })
     expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({ method: 'POST' })
 
@@ -677,11 +624,9 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
       jsonResponse({
         ok: true,
         reconciled: { queuedServerIds: [], failedServerIds: ['srv-2'] },
-      }),
+      })
     )
-    await expect(
-      deletePrincipalSshKey('proj-1', 'principal-1', 'key-1'),
-    ).resolves.toMatchObject({
+    await expect(deletePrincipalSshKey('proj-1', 'principal-1', 'key-1')).resolves.toMatchObject({
       ok: true,
       reconciled: { failedServerIds: ['srv-2'] },
     })
@@ -699,14 +644,14 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
         uid: 1001,
         gid: 1001,
         serviceIds: ['svc-1'],
-      }),
+      })
     )
     await expect(
       createProjectPrincipal('proj-1', {
         username: 'deploy',
         serviceIds: ['svc-1'],
         access: 'shell',
-      }),
+      })
     ).resolves.toMatchObject({ id: 'principal-1', uid: 1001 })
 
     fetchMock.mockResolvedValueOnce(
@@ -714,26 +659,22 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
         ok: true,
         serviceIds: ['svc-1', 'svc-2'],
         reconciled: { queuedServerIds: ['srv-1'], failedServerIds: [] },
-      }),
+      })
     )
     await expect(
       updateProjectPrincipal('proj-1', 'principal-1', {
         serviceIds: ['svc-1', 'svc-2'],
         access: 'sftp',
-      }),
+      })
     ).resolves.toMatchObject({ serviceIds: ['svc-1', 'svc-2'] })
 
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({ ok: true, serviceIds: ['svc-1'] }),
-    )
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, serviceIds: ['svc-1'] }))
     await expect(
-      updateProjectPrincipal('proj-1', 'principal-1', { serviceIds: ['svc-1'] }),
+      updateProjectPrincipal('proj-1', 'principal-1', { serviceIds: ['svc-1'] })
     ).resolves.toMatchObject({ serviceIds: ['svc-1'] })
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
-    await expect(
-      deleteProjectPrincipal('proj-1', 'principal-1'),
-    ).resolves.toEqual({ ok: true })
+    await expect(deleteProjectPrincipal('proj-1', 'principal-1')).resolves.toEqual({ ok: true })
     expect(fetchMock.mock.calls[7]?.[1]).toMatchObject({ method: 'DELETE' })
 
     fetchMock.mockResolvedValueOnce(
@@ -741,7 +682,7 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
         ok: true,
         generatedPassword: 'once-only',
         reconciled: { queuedServerIds: ['srv-1'], failedServerIds: [] },
-      }),
+      })
     )
     await expect(setPrincipalPassword('proj-1', 'principal-1', {})).resolves.toMatchObject({
       ok: true,
@@ -755,11 +696,11 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
       jsonResponse({
         ok: true,
         reconciled: { queuedServerIds: [], failedServerIds: [] },
-      }),
+      })
     )
-    await expect(
-      disablePrincipalPassword('proj-1', 'principal-1'),
-    ).resolves.toMatchObject({ ok: true })
+    await expect(disablePrincipalPassword('proj-1', 'principal-1')).resolves.toMatchObject({
+      ok: true,
+    })
     expect(fetchMock.mock.calls[9]?.[1]).toMatchObject({ method: 'DELETE' })
   })
 
@@ -770,13 +711,9 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
     await expect(fetchOrgResourceLimits('org-1')).resolves.toEqual({
       resourceLimits: limits,
     })
-    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
-      '/organizations/org-1/resource-limits',
-    )
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/organizations/org-1/resource-limits')
 
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({ ok: true, resourceLimits: limits }),
-    )
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, resourceLimits: limits }))
     await expect(saveOrgResourceLimits('org-1', limits)).resolves.toMatchObject({
       ok: true,
       resourceLimits: limits,
@@ -788,15 +725,11 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
       resourceLimits: limits,
     })
 
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({ ok: true, resourceLimits: limits }),
-    )
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, resourceLimits: limits }))
     await expect(saveServerResourceLimits('srv-1', limits)).resolves.toMatchObject({
       ok: true,
     })
-    expect(String(fetchMock.mock.calls[3]?.[0])).toContain(
-      '/servers/srv-1/resource-limits',
-    )
+    expect(String(fetchMock.mock.calls[3]?.[0])).toContain('/servers/srv-1/resource-limits')
   })
 
   it('fetchFleetMetricsLatest attaches org header and maps backend 503', async () => {
@@ -810,7 +743,7 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
         available: true,
         metrics: ['cpuUserPercent'],
         servers: [],
-      }),
+      })
     )
     await expect(fetchFleetMetricsLatest()).resolves.toMatchObject({
       ok: true,
@@ -820,15 +753,10 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
     expect((init as RequestInit).headers).toMatchObject({
       [ORG_ID_HEADER]: 'org-active',
     })
-    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
-      '/servers/metrics/latest',
-    )
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/servers/metrics/latest')
 
     fetchMock.mockResolvedValueOnce(
-      jsonResponse(
-        { error: 'metrics_backend_unavailable', backend: 'disabled' },
-        503,
-      ),
+      jsonResponse({ error: 'metrics_backend_unavailable', backend: 'disabled' }, 503)
     )
     try {
       await fetchFleetMetricsLatest('org-explicit')
@@ -841,9 +769,7 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
       expect(error.backend).toBe('disabled')
     }
 
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({ error: 'metrics_backend_unavailable' }, 503),
-    )
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'metrics_backend_unavailable' }, 503))
     try {
       await fetchFleetMetricsLatest()
       throw new TypeError('expected fetchFleetMetricsLatest to throw')
@@ -856,20 +782,14 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
     }
 
     fetchMock.mockResolvedValueOnce(textResponse('down', 503))
-    await expect(fetchFleetMetricsLatest()).rejects.toThrow(
-      /metrics\/latest failed: HTTP 503/,
-    )
+    await expect(fetchFleetMetricsLatest()).rejects.toThrow(/metrics\/latest failed: HTTP 503/)
 
     fetchMock.mockResolvedValueOnce(textResponse('nope', 500))
-    await expect(fetchFleetMetricsLatest()).rejects.toThrow(
-      /metrics\/latest failed: HTTP 500/,
-    )
+    await expect(fetchFleetMetricsLatest()).rejects.toThrow(/metrics\/latest failed: HTTP 500/)
 
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({ error: 'forbidden' }, 403),
-    )
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'forbidden' }, 403))
     await expect(fetchFleetMetricsLatest()).rejects.toThrow(
-      /metrics\/latest failed: HTTP 403: forbidden/,
+      /metrics\/latest failed: HTTP 403: forbidden/
     )
   })
 
@@ -923,9 +843,10 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
     expect(String(fetchMock.mock.calls[5]?.[0])).toContain('/markers?tagId=tag-1')
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, tags: [] }))
-    await expect(
-      setEntityTags({ projectId: 'p1', tagIds: ['tag-1'] }),
-    ).resolves.toEqual({ ok: true, tags: [] })
+    await expect(setEntityTags({ projectId: 'p1', tagIds: ['tag-1'] })).resolves.toEqual({
+      ok: true,
+      tags: [],
+    })
     expect(fetchMock.mock.calls[6]?.[1]).toMatchObject({ method: 'PUT' })
     expect(String(fetchMock.mock.calls[6]?.[0])).toContain('/markers')
 
@@ -952,7 +873,7 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
       fetchTags({
         projectId: 'p1',
         serviceId: 's1',
-      } as unknown as TaggableParentFilter),
+      } as unknown as TaggableParentFilter)
     ).rejects.toBeInstanceOf(TypeError)
     expect(fetchMock).not.toHaveBeenCalled()
 
@@ -961,14 +882,14 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
         projectId: 'p1',
         serviceId: 's1',
         tagIds: ['tag-1'],
-      } as unknown as TaggableParentFilter & { tagIds: string[] }),
+      } as unknown as TaggableParentFilter & { tagIds: string[] })
     ).rejects.toBeInstanceOf(TypeError)
 
     await expect(
       fetchTasks({
         serviceId: 'svc-1',
         environmentId: 'env-1',
-      } as unknown as TaskListFilter),
+      } as unknown as TaskListFilter)
     ).rejects.toBeInstanceOf(TypeError)
   })
 
@@ -987,9 +908,7 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
     await expect(fetchTasks({ environmentId: 'env-1' })).resolves.toEqual({
       tasks: [],
     })
-    expect(String(fetchMock.mock.calls[1]?.[0])).toContain(
-      '/tasks?environmentId=env-1',
-    )
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain('/tasks?environmentId=env-1')
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ task: { id: 'task-1' } }))
     await expect(fetchTask('task-1')).resolves.toEqual({ task: { id: 'task-1' } })
@@ -1002,7 +921,7 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
         name: 'nightly',
         schedule: '0 2 * * *',
         command: 'backup',
-      }),
+      })
     ).resolves.toEqual({ ok: true, id: 'task-2' })
     expect(fetchMock.mock.calls[3]?.[1]).toMatchObject({ method: 'POST' })
 
@@ -1023,13 +942,10 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
       'p1',
     ])
     expect(() =>
-      requireExclusiveQueryEntry({ projectId: '', serviceId: '' }, ['projectId', 'serviceId']),
+      requireExclusiveQueryEntry({ projectId: '', serviceId: '' }, ['projectId', 'serviceId'])
     ).toThrow(TypeError)
     expect(() =>
-      requireExclusiveQueryEntry(
-        { projectId: 'p1', serviceId: 's1' },
-        ['projectId', 'serviceId'],
-      ),
+      requireExclusiveQueryEntry({ projectId: 'p1', serviceId: 's1' }, ['projectId', 'serviceId'])
     ).toThrow(TypeError)
     expect(() => requireExclusiveQueryEntry({}, ['projectId'])).toThrow(TypeError)
   })

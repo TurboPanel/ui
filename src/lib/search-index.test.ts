@@ -163,8 +163,7 @@ describe('buildSearchItems', () => {
       'Add project': '/o1/projects/new',
       'Add database': '/o1/projects/new?type=managed',
       'Invite member': '/o1/manage?tab=members',
-      'Update servers': '/o1/servers',
-      'Update TurboPanel': '/admin/updates',
+      'Pause or Resume Updates': '/admin/updates',
     })
   })
 
@@ -173,8 +172,7 @@ describe('buildSearchItems', () => {
     const actionNames = names(list.filter((i) => i.group === 'Actions'))
     expect(actionNames).not.toContain('Add server')
     expect(actionNames).not.toContain('Invite member')
-    expect(actionNames).not.toContain('Update servers')
-    expect(actionNames).not.toContain('Update TurboPanel')
+    expect(actionNames).not.toContain('Pause or Resume Updates')
     expect(actionNames).not.toContain('Remove server derp')
     expect(actionNames).not.toContain('Reboot server derp')
     expect(actionNames).toContain('Add project')

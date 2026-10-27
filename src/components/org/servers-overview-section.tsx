@@ -8,7 +8,6 @@ import { OsIdentityMark } from '@/components/org/os-identity-mark'
 import {
   Badge,
   type BadgeTone,
-  Checkbox,
   InlineNotice,
   DataTable,
   DataTableCell,
@@ -27,7 +26,6 @@ import {
   SERVERS_TILE_MIN_WIDTH,
   serversLayoutAccessibilityLabel,
   setStoredServersLayout,
-  showServersToolbarUpdate,
   usesCompactServersList,
   type ServersLayout,
 } from '@/lib/servers-layout'
@@ -36,9 +34,7 @@ import {
   type FleetServerUsageRecord,
   type OrgServerRecord,
   type RelayRecord,
-  type ServerUpdateStatus,
 } from '@/lib/instance-api'
-import { isServerUpdateActionHidden } from '@/lib/daemon-update-labels'
 import { serverDetailHref, serversPendingKeysHref } from '@/lib/org-navigation'
 import { useAddServerLink } from '@/lib/use-add-server-link'
 import {
@@ -50,12 +46,10 @@ import {
 import { useOrgFabric } from '@/lib/queries/fabric'
 import {
   SERVERS_REFRESH_MS,
-  useBatchTriggerServerUpdates,
   useFleetServerUsage,
   useOrgLicenses,
   useOrgServerCapacity,
   useOrgServers,
-  useServersUpdateStatus,
 } from '@/lib/queries/servers'
 import { orEmptyArray } from '@/lib/or-empty-array'
 import { queryKeys, useCan } from '@/lib/query-client'
@@ -79,17 +73,8 @@ import { chrome, colors, spacing, webPointer } from '@/lib/theme'
 import { usePullToRefresh } from '@/lib/pull-to-refresh'
 import { useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'expo-router'
-import { useEffect, useMemo, useState, type ReactElement } from 'react'
-import {
-  ActivityIndicator,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-  type ViewStyle,
-} from 'react-native'
+import { useMemo, useState, type ReactElement } from 'react'
+import { Platform, Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native'
 import Svg, { Path } from 'react-native-svg'
 import { userErrorMessage } from '@/lib/user-error'
 
@@ -106,48 +91,6 @@ function overlayByServerId(
 
 function serverTitle(server: OrgServerRecord): string {
   return server.name?.trim() || server.hostname?.trim() || server.id
-}
-
-function isColocatedServer(
-  server: OrgServerRecord,
-  updateData?: ServerUpdateStatus | null
-): boolean {
-  return server.colocatedWithInstance === true || updateData?.colocatedWithInstance === true
-}
-
-function isServerUpdatable(
-  server: OrgServerRecord,
-  updateByServerId: ReadonlyMap<string, ServerUpdateStatus>,
-  triggeringServerIds: ReadonlySet<string>
-): boolean {
-  const data = updateByServerId.get(server.id)
-  return (
-    server.connected &&
-    !isColocatedServer(server, data) &&
-    !isServerUpdateActionHidden(data) &&
-    data?.targetStatus === 'ok' &&
-    data.updateAvailable === true &&
-    !triggeringServerIds.has(server.id) &&
-    data.status !== 'updating'
-  )
-}
-
-function selectedUpdateButtonLabel(batchUpdating: boolean, selectedUpdatableCount: number): string {
-  if (batchUpdating) return 'Updating…'
-  if (selectedUpdatableCount > 0) return `Update (${selectedUpdatableCount})`
-  return 'Update'
-}
-
-function pruneSelectedServerIds(
-  prev: Set<string>,
-  servers: readonly OrgServerRecord[]
-): Set<string> {
-  if (prev.size === 0) return prev
-  const next = new Set<string>()
-  for (const server of servers) {
-    if (prev.has(server.id)) next.add(server.id)
-  }
-  return next.size === prev.size ? prev : next
 }
 
 function serversRefreshErrorMessage(err: unknown, forbidden: boolean): string {
@@ -299,42 +242,20 @@ function ServersOverviewToolbar({
   layout,
   onLayoutChange,
   canOwn,
-  canManage,
   addServerEligibility,
   showAddServerWizard,
   onAddServer,
-  anyUpdateInProgress,
-  batchUpdating,
-  selectedCount,
-  selectedUpdatableCount,
-  showSelectAll,
-  allSelected,
-  someSelected,
-  onToggleSelectAll,
-  onTriggerSelectedUpdates,
   compactChrome,
 }: Readonly<{
   layout: ServersLayout
   onLayoutChange: (next: ServersLayout) => void
   canOwn: boolean
-  canManage: boolean
   addServerEligibility: ReturnType<typeof resolveServerAddEligibility>
   showAddServerWizard: boolean
   onAddServer: () => void
-  anyUpdateInProgress: boolean
-  batchUpdating: boolean
-  selectedCount: number
-  selectedUpdatableCount: number
-  showSelectAll: boolean
-  allSelected: boolean
-  someSelected: boolean
-  onToggleSelectAll: () => void
-  onTriggerSelectedUpdates: () => void
   compactChrome: boolean
 }>) {
   const addDisabled = !addServerEligibility.canAdd
-  const updateDisabled = anyUpdateInProgress || batchUpdating || selectedUpdatableCount === 0
-  const showUpdate = showServersToolbarUpdate(canManage, compactChrome, selectedCount)
 
   return (
     <View style={styles.toolbarActions}>
@@ -345,32 +266,6 @@ function ServersOverviewToolbar({
           compact={compactChrome}
           onPress={onAddServer}
         />
-      ) : null}
-      {showUpdate ? (
-        <TouchableOpacity
-          style={[
-            panelStyles.toolbarBtnSecondary,
-            compactChrome && styles.toolbarBtnCompact,
-            updateDisabled && styles.buttonDisabled,
-          ]}
-          onPress={onTriggerSelectedUpdates}
-          disabled={updateDisabled}
-        >
-          {batchUpdating ? <ActivityIndicator size="small" color={colors.textMuted} /> : null}
-          <Text style={panelStyles.toolbarBtnTextSecondary}>
-            {selectedUpdateButtonLabel(batchUpdating, selectedUpdatableCount)}
-          </Text>
-        </TouchableOpacity>
-      ) : null}
-      {showSelectAll ? (
-        <View style={styles.checkboxHit}>
-          <Checkbox
-            checked={allSelected}
-            indeterminate={someSelected}
-            onPress={onToggleSelectAll}
-            accessibilityLabel="Select all servers"
-          />
-        </View>
       ) : null}
       <ServersLayoutToggle layout={layout} onChange={onLayoutChange} />
     </View>
@@ -419,10 +314,9 @@ const SERVER_COLUMNS = [
   { key: 'location', header: 'Location', flex: 2, minWidth: 190 },
   { key: 'usage', header: 'Usage', flex: 1.6, minWidth: 148 },
   { key: 'mesh', header: 'Mesh', flex: 1.1, minWidth: 110 },
-  { key: 'check', header: 'Select', width: 40, align: 'center' },
 ] as const satisfies readonly DataTableColumn[]
 
-const [SV_NAME, SV_STATUS, SV_TIER, SV_LOCATION, SV_USAGE, SV_MESH, SV_CHECK] = SERVER_COLUMNS
+const [SV_NAME, SV_STATUS, SV_TIER, SV_LOCATION, SV_USAGE, SV_MESH] = SERVER_COLUMNS
 
 function ServerNameCell({ server }: Readonly<{ server: OrgServerRecord }>) {
   return (
@@ -621,19 +515,15 @@ function OrgServerTableRow({
   server,
   rowIndex,
   isLast,
-  selected,
   overlayAddress,
   usage,
-  onToggleSelected,
 }: Readonly<{
   orgId: string
   server: OrgServerRecord
   rowIndex: number
   isLast: boolean
-  selected: boolean
   overlayAddress: string | null
   usage: FleetServerUsageRecord | null
-  onToggleSelected: () => void
 }>) {
   const router = useRouter()
 
@@ -642,7 +532,6 @@ function OrgServerTableRow({
       onPress={() => router.push(serverDetailHref(orgId, server.id))}
       last={isLast}
       alt={rowIndex % 2 === 1}
-      selected={selected}
       accessibilityLabel={`Open ${serverTitle(server)}`}
     >
       <ServerNameCell server={server} />
@@ -651,13 +540,6 @@ function OrgServerTableRow({
       <ServerLocationCell server={server} />
       <ServerUsageCell usage={usage} />
       <ServerMeshCell overlayAddress={overlayAddress} />
-      <DataTableCell column={SV_CHECK}>
-        <Checkbox
-          checked={selected}
-          onPress={onToggleSelected}
-          accessibilityLabel={`Select ${serverTitle(server)}`}
-        />
-      </DataTableCell>
     </DataTableRow>
   )
 }
@@ -665,28 +547,20 @@ function OrgServerTableRow({
 function OrgServerCompactRow({
   orgId,
   server,
-  selected,
   overlayAddress,
   usage,
-  onToggleSelected,
 }: Readonly<{
   orgId: string
   server: OrgServerRecord
-  selected: boolean
   overlayAddress: string | null
   usage: FleetServerUsageRecord | null
-  onToggleSelected: () => void
 }>) {
   const router = useRouter()
 
   return (
     <Pressable
       onPress={() => router.push(serverDetailHref(orgId, server.id))}
-      style={({ pressed }) => [
-        styles.compactRow,
-        selected ? styles.tableRowSelected : null,
-        pressed && styles.buttonPressed,
-      ]}
+      style={({ pressed }) => [styles.compactRow, pressed && styles.buttonPressed]}
       accessibilityRole="button"
       accessibilityLabel={`Open ${serverTitle(server)}`}
     >
@@ -698,13 +572,6 @@ function OrgServerCompactRow({
             <ServerTierLine server={server} />
             <ServerLocationLines server={server} inline />
           </View>
-        </View>
-        <View style={styles.compactCheck}>
-          <Checkbox
-            checked={selected}
-            onPress={onToggleSelected}
-            accessibilityLabel={`Select ${serverTitle(server)}`}
-          />
         </View>
       </View>
       <View style={styles.compactStats}>
@@ -720,11 +587,9 @@ function OrgServerCompactRow({
 function ServersFleetCompactList({
   orgId,
   servers,
-  selectedIds,
   meshOverlayByServer,
   usageByServerId,
-  onToggleSelected,
-}: Omit<ServersFleetViewProps, 'allSelected' | 'someSelected' | 'onToggleSelectAll'>) {
+}: ServersFleetViewProps) {
   return (
     <View style={styles.compactList}>
       {servers.map((server) => (
@@ -732,10 +597,8 @@ function ServersFleetCompactList({
           key={server.id}
           orgId={orgId}
           server={server}
-          selected={selectedIds.has(server.id)}
           overlayAddress={meshOverlayByServer.get(server.id) ?? null}
           usage={usageByServerId.get(server.id) ?? null}
-          onToggleSelected={() => onToggleSelected(server.id)}
         />
       ))}
     </View>
@@ -755,45 +618,22 @@ function ServersFleetEmptyState() {
 type ServersFleetViewProps = Readonly<{
   orgId: string
   servers: readonly OrgServerRecord[]
-  selectedIds: ReadonlySet<string>
-  allSelected: boolean
-  someSelected: boolean
   meshOverlayByServer: ReadonlyMap<string, string>
   usageByServerId: ReadonlyMap<string, FleetServerUsageRecord>
-  onToggleSelectAll: () => void
-  onToggleSelected: (serverId: string) => void
 }>
 
 function ServersFleetTable({
   orgId,
   servers,
-  selectedIds,
-  allSelected,
-  someSelected,
   meshOverlayByServer,
   usageByServerId,
-  onToggleSelectAll,
-  onToggleSelected,
 }: ServersFleetViewProps) {
   const { billingEnabled } = useAuth()
   const columns = billingEnabled
     ? SERVER_COLUMNS
     : SERVER_COLUMNS.filter((column) => column.key !== 'tier')
   return (
-    <DataTable
-      columns={columns}
-      minWidth={1000}
-      renderHeaderCell={(column) =>
-        column.key === 'check' ? (
-          <Checkbox
-            checked={allSelected}
-            indeterminate={someSelected}
-            onPress={onToggleSelectAll}
-            accessibilityLabel="Select all servers"
-          />
-        ) : undefined
-      }
-    >
+    <DataTable columns={columns} minWidth={1000}>
       {servers.map((server, index) => (
         <OrgServerTableRow
           key={server.id}
@@ -801,10 +641,8 @@ function ServersFleetTable({
           server={server}
           rowIndex={index}
           isLast={index === servers.length - 1}
-          selected={selectedIds.has(server.id)}
           overlayAddress={meshOverlayByServer.get(server.id) ?? null}
           usage={usageByServerId.get(server.id) ?? null}
-          onToggleSelected={() => onToggleSelected(server.id)}
         />
       ))}
     </DataTable>
@@ -814,17 +652,13 @@ function ServersFleetTable({
 function OrgServerTile({
   orgId,
   server,
-  selected,
   overlayAddress,
   usage,
-  onToggleSelected,
 }: Readonly<{
   orgId: string
   server: OrgServerRecord
-  selected: boolean
   overlayAddress: string | null
   usage: FleetServerUsageRecord | null
-  onToggleSelected: () => void
 }>) {
   const router = useRouter()
   const [hovered, setHovered] = useState(false)
@@ -838,7 +672,6 @@ function OrgServerTile({
       onPointerLeave={() => setHovered(false)}
       style={({ pressed }) => [
         styles.tile,
-        selected ? styles.tileSelected : null,
         hovered ? styles.tileHovered : null,
         pressed && styles.buttonPressed,
         webPointer,
@@ -849,13 +682,6 @@ function OrgServerTile({
       <View style={styles.tileHeader}>
         <View style={styles.tileIdentity}>
           <ServerHostIdentity server={server} />
-        </View>
-        <View style={styles.tileCheck}>
-          <Checkbox
-            checked={selected}
-            onPress={onToggleSelected}
-            accessibilityLabel={`Select ${title}`}
-          />
         </View>
       </View>
       <View style={styles.tileMeta}>
@@ -876,11 +702,9 @@ function OrgServerTile({
 function ServersFleetTiles({
   orgId,
   servers,
-  selectedIds,
   meshOverlayByServer,
   usageByServerId,
-  onToggleSelected,
-}: Omit<ServersFleetViewProps, 'allSelected' | 'someSelected' | 'onToggleSelectAll'>) {
+}: ServersFleetViewProps) {
   return (
     <View style={styles.tilesGrid}>
       {servers.map((server) => (
@@ -888,10 +712,8 @@ function ServersFleetTiles({
           key={server.id}
           orgId={orgId}
           server={server}
-          selected={selectedIds.has(server.id)}
           overlayAddress={meshOverlayByServer.get(server.id) ?? null}
           usage={usageByServerId.get(server.id) ?? null}
-          onToggleSelected={() => onToggleSelected(server.id)}
         />
       ))}
     </View>
@@ -943,66 +765,11 @@ function ServersOverviewFleet({
   )
 }
 
-function indexUpdatesByServerId(
-  entries: readonly ServerUpdateStatus[] | undefined
-): Map<string, ServerUpdateStatus> {
-  const map = new Map<string, ServerUpdateStatus>()
-  for (const entry of entries ?? []) {
-    map.set(entry.serverId, entry)
-  }
-  return map
-}
-
-function collectTriggeringServerIds(
-  pending: boolean,
-  variables: readonly string[] | undefined,
-  updates: readonly ServerUpdateStatus[] | undefined
-): Set<string> {
-  const ids = new Set<string>()
-  if (pending && variables) {
-    for (const serverId of variables) {
-      ids.add(serverId)
-    }
-  }
-  for (const entry of updates ?? []) {
-    if (entry.status === 'updating') {
-      ids.add(entry.serverId)
-    }
-  }
-  return ids
-}
-
-function countSelectedUpdatable(
-  servers: readonly OrgServerRecord[],
-  selectedIds: ReadonlySet<string>,
-  updateByServerId: ReadonlyMap<string, ServerUpdateStatus>,
-  triggeringServerIds: ReadonlySet<string>
-): number {
-  let count = 0
-  for (const server of servers) {
-    if (
-      selectedIds.has(server.id) &&
-      isServerUpdatable(server, updateByServerId, triggeringServerIds)
-    ) {
-      count += 1
-    }
-  }
-  return count
-}
-
-function toggleIdInSet(prev: Set<string>, serverId: string): Set<string> {
-  const next = new Set(prev)
-  if (next.has(serverId)) next.delete(serverId)
-  else next.add(serverId)
-  return next
-}
-
 export function ServersOverviewSection({
   orgId,
   removedServerName,
 }: Readonly<{ orgId: string; removedServerName?: string }>) {
   const queryClient = useQueryClient()
-  const canManage = useCan('organization', orgId, 'organization:manage')
   const canOwn = useCan('organization', orgId, 'organization:own')
 
   const fabricQuery = useOrgFabric(orgId)
@@ -1016,18 +783,15 @@ export function ServersOverviewSection({
         idleMs: SERVERS_REFRESH_MS,
       }),
   })
-  const updatesQuery = useServersUpdateStatus(orgId, { pollWhileUpdating: true })
   const capacityQuery = useOrgServerCapacity(orgId, { enabled: canOwn })
   const licensesQuery = useOrgLicenses(orgId, { enabled: canOwn })
   const fleetUsageQuery = useFleetServerUsage(orgId, {
     enabled: !serversQuery.isLoading,
   })
-  const batchUpdateMutation = useBatchTriggerServerUpdates(orgId)
 
   usePullToRefresh(async () => {
     await Promise.all([
       serversQuery.refetch(),
-      updatesQuery.refetch(),
       fleetUsageQuery.refetch(),
       fabricQuery.refetch(),
       ...(canOwn ? [capacityQuery.refetch(), licensesQuery.refetch()] : []),
@@ -1036,7 +800,6 @@ export function ServersOverviewSection({
 
   const [showAddServerWizard, setShowAddServerWizard] = useState(false)
   useAddServerLink(() => setShowAddServerWizard(true))
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [serversLayout, setServersLayout] = useState<ServersLayout>(() => getStoredServersLayout())
 
   const handleLayoutChange = (next: ServersLayout): void => {
@@ -1064,59 +827,6 @@ export function ServersOverviewSection({
     [capacityQuery.data, capacityQuery.isError]
   )
 
-  const updateByServerId = useMemo(
-    () => indexUpdatesByServerId(updatesQuery.data?.servers),
-    [updatesQuery.data]
-  )
-
-  const triggeringServerIds = useMemo(
-    () =>
-      collectTriggeringServerIds(
-        batchUpdateMutation.isPending,
-        batchUpdateMutation.variables,
-        updatesQuery.data?.servers
-      ),
-    [batchUpdateMutation.isPending, batchUpdateMutation.variables, updatesQuery.data]
-  )
-
-  useEffect(() => {
-    setSelectedIds((prev) => pruneSelectedServerIds(prev, servers))
-  }, [servers])
-
-  const handleTriggerSelectedUpdates = (): void => {
-    const targets = servers.filter(
-      (server) =>
-        selectedIds.has(server.id) &&
-        isServerUpdatable(server, updateByServerId, triggeringServerIds)
-    )
-    if (targets.length === 0) return
-    batchUpdateMutation.mutate(targets.map((server) => server.id))
-  }
-
-  const selectedUpdatableCount = countSelectedUpdatable(
-    servers,
-    selectedIds,
-    updateByServerId,
-    triggeringServerIds
-  )
-
-  const allSelected = servers.length > 0 && servers.every((server) => selectedIds.has(server.id))
-  const someSelected = selectedIds.size > 0 && !allSelected
-
-  const toggleSelectAll = (): void => {
-    if (allSelected) {
-      setSelectedIds(new Set())
-      return
-    }
-    setSelectedIds(new Set(servers.map((server) => server.id)))
-  }
-
-  const toggleSelected = (serverId: string): void => {
-    setSelectedIds((prev) => toggleIdInSet(prev, serverId))
-  }
-
-  const batchUpdating = batchUpdateMutation.isPending
-  const anyUpdateInProgress = batchUpdating || triggeringServerIds.size > 0
   const compactChrome = usesCompactServersList(Platform.OS)
   const fleetSurface = resolveServersFleetSurface({
     layout: serversLayout,
@@ -1128,13 +838,8 @@ export function ServersOverviewSection({
   const fleetViewProps = {
     orgId,
     servers,
-    selectedIds,
-    allSelected,
-    someSelected,
     meshOverlayByServer,
     usageByServerId,
-    onToggleSelectAll: toggleSelectAll,
-    onToggleSelected: toggleSelected,
   }
 
   const refreshServersList = (): void => {
@@ -1145,7 +850,7 @@ export function ServersOverviewSection({
 
   return (
     <View style={styles.root}>
-      <View style={[styles.titleRow, selectedIds.size > 0 && styles.titleRowPinned]}>
+      <View style={styles.titleRow}>
         <Text style={[panelStyles.pageTitle, styles.titleText]} numberOfLines={1}>
           Servers
         </Text>
@@ -1153,19 +858,9 @@ export function ServersOverviewSection({
           layout={serversLayout}
           onLayoutChange={handleLayoutChange}
           canOwn={canOwn}
-          canManage={canManage}
           addServerEligibility={addServerEligibility}
           showAddServerWizard={showAddServerWizard}
           onAddServer={() => setShowAddServerWizard((open) => !open)}
-          anyUpdateInProgress={anyUpdateInProgress}
-          batchUpdating={batchUpdating}
-          selectedCount={selectedIds.size}
-          selectedUpdatableCount={selectedUpdatableCount}
-          showSelectAll={fleetSurface.showToolbarSelectAll}
-          allSelected={allSelected}
-          someSelected={someSelected}
-          onToggleSelectAll={toggleSelectAll}
-          onTriggerSelectedUpdates={handleTriggerSelectedUpdates}
           compactChrome={compactChrome}
         />
       </View>
@@ -1177,12 +872,6 @@ export function ServersOverviewSection({
       ) : null}
       {canOwn && addServerEligibility.reason ? (
         <Text style={styles.capacityHint}>{addServerEligibility.reason}</Text>
-      ) : null}
-      {selectedIds.size > 0 ? (
-        <Text style={styles.selectionHint}>
-          {selectedIds.size} selected
-          {selectedUpdatableCount > 0 ? ` · ${selectedUpdatableCount} updatable` : ''}
-        </Text>
       ) : null}
 
       {canOwn ? (
@@ -1231,17 +920,6 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     alignSelf: 'stretch',
   },
-  titleRowPinned: {
-    ...(Platform.OS === 'web'
-      ? ({
-          position: 'sticky',
-          top: 0,
-          zIndex: 3,
-          backgroundColor: colors.bg,
-          paddingVertical: spacing.xs,
-        } as unknown as ViewStyle)
-      : null),
-  },
   titleText: {
     flexShrink: 1,
     minWidth: 0,
@@ -1273,13 +951,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  selectionHint: {
-    color: colors.textDim,
-    fontSize: 11,
-    fontWeight: '600',
-    fontFamily: 'monospace',
-    textAlign: 'right',
-  },
   capacityHint: {
     color: colors.pending,
     fontSize: 12,
@@ -1295,9 +966,6 @@ const styles = StyleSheet.create({
     color: colors.link,
     fontSize: 13,
     fontWeight: '600',
-  },
-  tableRowSelected: {
-    backgroundColor: chrome.bgActive,
   },
   meshText: {
     color: colors.stdout,
@@ -1395,12 +1063,6 @@ const styles = StyleSheet.create({
   statusTextOffline: {
     color: colors.textDim,
   },
-  checkboxHit: {
-    minWidth: 44,
-    minHeight: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   compactList: {
     alignSelf: 'stretch',
     width: '100%',
@@ -1431,12 +1093,6 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     alignItems: 'center',
     gap: spacing.sm,
-  },
-  compactCheck: {
-    minWidth: 44,
-    minHeight: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   compactStats: {
     flexDirection: 'row',
@@ -1476,10 +1132,6 @@ const styles = StyleSheet.create({
   tileHovered: {
     backgroundColor: colors.bgSecondary,
   },
-  tileSelected: {
-    backgroundColor: chrome.bgActive,
-    borderColor: chrome.accent,
-  },
   tileHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -1488,9 +1140,6 @@ const styles = StyleSheet.create({
   tileIdentity: {
     flex: 1,
     minWidth: 0,
-  },
-  tileCheck: {
-    paddingTop: 2,
   },
   tileMeta: {
     flexDirection: 'row',

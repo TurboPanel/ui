@@ -31,7 +31,6 @@ vi.mock('@/lib/queries/admin', () => ({
   useUpgradeActiveRun: () => ({ data: null }),
 }))
 vi.mock('@/lib/update-status', () => ({
-  UPDATE_NOW_HREF: '/admin/updates?update=1',
   readDismissedUpdateBanner: () => null,
   writeDismissedUpdateBanner: writeDismissed,
   updateOffered: () => true,
@@ -39,7 +38,7 @@ vi.mock('@/lib/update-status', () => ({
   updateBanner: () => ({
     key: 'cp:v0.1.20',
     title: 'TurboPanel update available: control plane v0.1.20',
-    body: 'This updates the control plane. Choose Update to review it first; nothing changes until you confirm.',
+    body: 'This updates the control plane. It installs on its own at the next check; open Admin > Updates to follow it or pause updates.',
   }),
 }))
 
@@ -60,22 +59,22 @@ describe('update banner on a phone-width window', () => {
     env.width = 390
   })
 
-  it('is one line: "Update available · Review", with no detail', () => {
+  it('is one line: "Update available · See Updates", with no detail', () => {
     render(<UpdateAvailableBanner />)
     expect(screen.getByText('Update available ·')).toBeTruthy()
-    expect(screen.getByText('Review')).toBeTruthy()
-    expect(screen.queryByText(/nothing changes until you confirm/)).toBeNull()
+    expect(screen.getByText('See Updates')).toBeTruthy()
+    expect(screen.queryByText(/installs on its own/)).toBeNull()
     expect(screen.getByText('Update available ·').getAttribute('data-lines')).toBe('1')
   })
 
-  it('opens the review screen from a 44 pt link', () => {
+  it('opens Admin > Updates from a 44 pt link', () => {
     render(<UpdateAvailableBanner />)
-    const review = screen.getByRole('link', {
-      name: /^Review the update\. TurboPanel update available/,
+    const details = screen.getByRole('link', {
+      name: /^See Updates in Admin > Updates\. TurboPanel update available/,
     })
-    expect(styleOf(review).minHeight).toBe(44)
-    fireEvent.click(review)
-    expect(push).toHaveBeenCalledWith('/admin/updates?update=1')
+    expect(styleOf(details).minHeight).toBe(44)
+    fireEvent.click(details)
+    expect(push).toHaveBeenCalledWith('/admin/updates')
   })
 
   it('keeps a 44 pt Dismiss', () => {
@@ -97,14 +96,15 @@ describe('update banner on a wide window', () => {
   it('shows one line of title and at most two of detail, so the detail is not cut short', () => {
     render(<UpdateAvailableBanner />)
     const title = screen.getByText('TurboPanel update available: control plane v0.1.20')
-    const body = screen.getByText(/nothing changes until you confirm/)
+    const body = screen.getByText(/installs on its own/)
     expect(title.getAttribute('data-lines')).toBe('1')
     expect(body.getAttribute('data-lines')).toBe('2')
   })
 
-  it('Update opens the review screen', () => {
+  it('has no Update button; See Updates opens Admin > Updates', () => {
     render(<UpdateAvailableBanner />)
-    fireEvent.click(screen.getByRole('button', { name: 'Update' }))
-    expect(push).toHaveBeenCalledWith('/admin/updates?update=1')
+    expect(screen.queryByRole('button', { name: 'Update' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'See Updates' }))
+    expect(push).toHaveBeenCalledWith('/admin/updates')
   })
 })

@@ -5376,6 +5376,20 @@ export type InstanceUpdateTarget = {
   version?: string
 }
 
+/** The pre-update backup and rollback command for the waiting control plane install. */
+export type ControlPlaneRecovery = {
+  runId: string
+  backupPath: string
+  rollbackCommand: string
+}
+
+/** The instance admin who paused updates; any field may be missing (a removed account). */
+export type UpdatesPausedBy = {
+  userId: string | null
+  email: string | null
+  name: string | null
+}
+
 export type InstanceUpdates = {
   ok: boolean
   channel: string
@@ -5385,16 +5399,37 @@ export type InstanceUpdates = {
   /** Present once the managed upgrade coordinator is mounted. */
   managedUpgrade?: boolean
   /**
-   * Reserved for the automatic update system: a connected daemon runs an
-   * older build than the channel's daemon target. Not sent by any control
-   * plane yet; read only through `fleetUpdateSignals` in `lib/update-entry.ts`.
+   * Updates always run on their own (nobody starts one by hand). Optional
+   * only because an older control plane does not send the automatic fields.
    */
+  automatic?: boolean
+  /** A connected daemon runs an older build than the channel's daemon target. */
   daemonsBehind?: boolean
-  /**
-   * Reserved for the automatic update system: an admin has paused updates.
-   * Not sent by any control plane yet; read only through `fleetUpdateSignals`.
-   */
+  /** An instance admin paused all updates (Admin > Updates). */
   updatesPaused?: boolean
+  /** When updates were paused (ISO), or null while they run. */
+  pausedAt?: string | null
+  /** Who paused updates, or null while they run. */
+  pausedBy?: UpdatesPausedBy | null
+  /**
+   * Something waits to update: a daemon is behind, or the control plane or
+   * the web interface has a newer build.
+   */
+  updateWaiting?: boolean
+  /** The next hourly check (ISO), or null when none is planned. */
+  nextCheckAt?: string | null
+  /** The last check (ISO), scheduled or Check Now, or null before the first one. */
+  lastCheckAt?: string | null
+  /** How often the scheduled check runs, in minutes (60; 5 on the testing environment). */
+  checkIntervalMinutes?: number
+  /** The update run going now, or null. */
+  activeRunId?: string | null
+  /**
+   * Self-hosted only, while a control plane or web interface install waits:
+   * the backup the next automatic run takes first, and the command that rolls
+   * back to it. The next run uses this same `runId`, so the command names it.
+   */
+  controlPlaneRecovery?: ControlPlaneRecovery | null
   fleetSummary?: {
     connected: number
     upToDate: number
@@ -5431,32 +5466,13 @@ export type InstanceUpdates = {
   }
 }
 
+/**
+ * How many servers one group of a daemon rollout updates (default 100%: every
+ * server at once). The next group starts on a later hourly check, once every
+ * server in the current one has finished or failed.
+ */
 export type UpgradeSettings = {
-  autoUpdate: boolean
   batch: { mode: 'percent' | 'count'; value: number }
-  maintenanceWindow: {
-    enabled: boolean
-    startMinute: number
-    durationMinutes: number
-    weekdays: number[]
-  }
-}
-
-export type UpgradePreflightCheck = {
-  id: string
-  label: string
-  passed: boolean
-  detail?: string
-}
-
-export type UpgradePreflightResult = {
-  ok: boolean
-  canStart: boolean
-  checks: UpgradePreflightCheck[]
-  recoveryCommand?: string
-  runId?: string
-  backupPath?: string
-  blockers?: string[]
 }
 
 export type UpgradeRunStatus =
@@ -5602,6 +5618,31 @@ export type UpgradeServersPage = {
 export async function fetchInstanceUpdates(consoleCommit?: string): Promise<InstanceUpdates> {
   const query = consoleCommit ? `?consoleCommit=${encodeURIComponent(consoleCommit)}` : ''
   return await apiFetch(`${ADMIN_API}/instance/updates${query}`)
+}
+
+/**
+ * Check Now refused because the last check was under a minute ago (once a
+ * minute per install). `retryAfterSeconds` says when to try again.
+ */
+export class UpdateCheckTooSoonError extends Error {
+  readonly retryAfterSeconds: number
+
+  constructor(message: string, retryAfterSeconds: number) {
+    super(message)
+    this.name = 'UpdateCheckTooSoonError'
+    this.retryAfterSeconds = retryAfterSeconds
+  }
+}
+
+/**
+ * Check Now: read the channel manifests again and answer the same body as
+ * `GET /instance/updates`. Only a refresh; it never starts an update (the
+ * next scheduled check does). A 429 `check_too_soon` throws
+ * `UpdateCheckTooSoonError`.
+ */
+export async function checkForUpdates(consoleCommit?: string): Promise<InstanceUpdates> {
+  const query = consoleCommit ? `?consoleCommit=${encodeURIComponent(consoleCommit)}` : ''
+  return await adminJson(`${ADMIN_API}/instance/updates/check${query}`, { method: 'POST' })
 }
 
 export async function fetchUpgradeActiveRun(): Promise<UpgradeActiveRunResponse> {
@@ -5758,48 +5799,22 @@ export async function saveUpgradeSettings(
   })
 }
 
-export async function runUpgradePreflight(): Promise<UpgradePreflightResult> {
-  return await apiFetch(`${ADMIN_API}/instance/updates/preflight`, { method: 'POST' })
+/** What pause and resume answer: the paused state after the change. */
+export type UpdatesPauseResult = {
+  ok: boolean
+  updatesPaused: boolean
+  pausedAt: string | null
+  pausedBy: UpdatesPausedBy | null
 }
 
-export async function startPlatformUpgradeRun(
-  runId?: string,
-  consoleCommit?: string
-): Promise<{ ok: boolean; runId: string }> {
-  return await apiFetch(`${ADMIN_API}/instance/updates/runs`, {
-    method: 'POST',
-    body: JSON.stringify({
-      ...(runId ? { runId } : {}),
-      ...(consoleCommit ? { consoleCommit } : {}),
-    }),
-  })
+/** Stop starting updates (idempotent). A run in progress finishes the servers it is on, then stops. */
+export async function pauseUpdates(): Promise<UpdatesPauseResult> {
+  return await apiFetch(`${ADMIN_API}/instance/updates/pause`, { method: 'POST' })
 }
 
-export async function checkUpgradeManifests(): Promise<{ ok: boolean }> {
-  return await apiFetch(`${ADMIN_API}/instance/updates/check`, { method: 'POST' })
-}
-
-export async function retryUpgradeStep(stepId: string): Promise<{ ok: boolean }> {
-  return await apiFetch(`${ADMIN_API}/instance/updates/steps/${encodeURIComponent(stepId)}/retry`, {
-    method: 'POST',
-  })
-}
-
-export async function cancelUpgradeRun(runId: string): Promise<{ ok: boolean }> {
-  return await apiFetch(`${ADMIN_API}/instance/updates/runs/${encodeURIComponent(runId)}/cancel`, {
-    method: 'POST',
-  })
-}
-
-export async function requestInstanceUpdate(): Promise<{ ok: true; dispatched: true }> {
-  return await apiFetch(`${ADMIN_API}/instance/updates/instance`, { method: 'POST' })
-}
-
-export async function requestColocatedDaemonUpdate(): Promise<{
-  ok: true
-  dispatched: true
-}> {
-  return await apiFetch(`${ADMIN_API}/instance/updates/daemon`, { method: 'POST' })
+/** Let updates start again from the next hourly check (idempotent). */
+export async function resumeUpdates(): Promise<UpdatesPauseResult> {
+  return await apiFetch(`${ADMIN_API}/instance/updates/resume`, { method: 'POST' })
 }
 
 export async function fetchPlatformCa(): Promise<PlatformCaInfo> {
@@ -5845,9 +5860,14 @@ async function adminJson<T>(path: string, init: RequestInit): Promise<T> {
   const body = (await response.json().catch(() => null)) as {
     error?: string
     invalid?: unknown
+    retryAfterSeconds?: unknown
   } | null
   if (!response.ok) {
     const detail = formatFetchFailureDetail(response.status, body?.error)
+    if (body?.error === 'check_too_soon') {
+      const wait = typeof body.retryAfterSeconds === 'number' ? body.retryAfterSeconds : 60
+      throw new UpdateCheckTooSoonError(`${path} failed: ${detail}`, wait)
+    }
     const invalid = Array.isArray(body?.invalid)
       ? body.invalid.filter((item): item is string => typeof item === 'string')
       : null
@@ -6169,13 +6189,6 @@ export type DaemonSupport = {
   minVersion: string
 }
 
-/** `updateBlockedCode` values this ui names; any other code shows the server's sentence. */
-export type ServerUpdateBlockedCode =
-  | 'updates_managed'
-  | 'control_plane_upgrade_required'
-  | 'upgrade_gate_unavailable'
-  | 'colocated_with_instance'
-
 export type ServerUpdateStatus = {
   ok: boolean
   serverId: string
@@ -6184,10 +6197,6 @@ export type ServerUpdateStatus = {
   target: (ServerUpdateCommit & { manifestUrl?: string }) | null
   updateAvailable: boolean
   colocatedWithInstance?: boolean
-  updateBlocked?: boolean
-  /** Why updates are refused, as a code. Absent on a control plane older than the field. */
-  updateBlockedCode?: ServerUpdateBlockedCode | (string & {})
-  updateBlockedReason?: string
   status: 'idle' | 'updating' | 'error'
   targetStatus: 'ok' | 'unknown'
   targetError?: string
@@ -6197,64 +6206,16 @@ export type ServerUpdateStatus = {
   daemonSupport?: DaemonSupport
 }
 
-export type ServerUpdateTriggerResult = {
-  ok: boolean
-  queued?: boolean
-  status?: 'updating'
-  serverId: string
-  requestId?: string
-  channel?: string
-  error?: string
-}
-
 export type ServerUpdateResetResult = ServerUpdateStatus & {
   cleared: number
-}
-
-export type ServerBatchUpdateStatus = {
-  ok: boolean
-  channel: string
-  target: (ServerUpdateCommit & { manifestUrl?: string }) | null
-  targetStatus: 'ok' | 'unknown'
-  targetError?: string
-  servers: (ServerUpdateStatus & { serverId: string })[]
-}
-
-export type ServerBatchUpdateTriggerResult = {
-  ok: boolean
-  results: {
-    serverId: string
-    ok: boolean
-    queued?: boolean
-    status?: 'updating'
-    requestId?: string
-    channel?: string
-    error?: string
-  }[]
 }
 
 export async function fetchServerUpdate(serverId: string): Promise<ServerUpdateStatus> {
   return await apiFetch(`${CLIENT_API}/servers/${serverId}/update`)
 }
 
-export async function fetchServersUpdateStatus(): Promise<ServerBatchUpdateStatus> {
-  return await apiFetch(`${CLIENT_API}/servers/updates`)
-}
-
-export async function triggerServerUpdate(serverId: string): Promise<ServerUpdateTriggerResult> {
-  return await apiFetch(`${CLIENT_API}/servers/${serverId}/update`, {
-    method: 'POST',
-  })
-}
-
 export async function resetServerUpdateStatus(serverId: string): Promise<ServerUpdateResetResult> {
   return await apiFetch(`${CLIENT_API}/servers/${serverId}/update/reset`, {
-    method: 'POST',
-  })
-}
-
-export async function triggerAllServerUpdates(): Promise<ServerBatchUpdateTriggerResult> {
-  return await apiFetch(`${CLIENT_API}/servers/updates`, {
     method: 'POST',
   })
 }

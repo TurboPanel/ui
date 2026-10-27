@@ -8,20 +8,17 @@ import {
   fetchInstanceCertificates,
   fetchInstanceDaemon,
   fetchInstanceHostnames,
-  cancelUpgradeRun,
-  checkUpgradeManifests,
   fetchInstanceUpdates,
   fetchUpgradeActiveRun,
   fetchUpgradeHistory,
   fetchUpgradeRunServers,
   fetchUpgradeServersPage,
   fetchUpgradeSettings,
-  requestColocatedDaemonUpdate,
-  requestInstanceUpdate,
-  retryUpgradeStep,
-  runUpgradePreflight,
+  checkForUpdates,
+  pauseUpdates,
+  resumeUpdates,
   saveUpgradeSettings,
-  startPlatformUpgradeRun,
+  type UpdatesPauseResult,
   type UpgradeSettings,
   type UpgradeHistoryQuery,
   type UpgradeRunServersQuery,
@@ -86,12 +83,6 @@ import {
 import { getActiveOrganizationId } from '@/lib/org-context'
 import { isManagedUpgradeApiMissing } from '@/lib/upgrade-api'
 import { isUpgradeRunActive, UPGRADE_RUN_POLL_MS } from '@/lib/upgrade-run-poll'
-import { markControlPlaneUpgradeWatch } from '@/lib/upgrade-watch'
-import {
-  waitForUnitUpdate,
-  type UnitUpdateWait,
-  type UpdateTargetIdentity,
-} from '@/lib/instance-updates'
 
 export function usePublicUrls(options?: Readonly<{ enabled?: boolean }>) {
   return useQuery({
@@ -476,70 +467,6 @@ export function useInstanceUpdates(
   })
 }
 
-async function dispatchThenWait(
-  request: () => Promise<unknown>,
-  read: () => Promise<{ version: string | null; commit: string | null }>,
-  target: UpdateTargetIdentity,
-  before: string
-): Promise<UnitUpdateWait> {
-  try {
-    await request()
-  } catch (err) {
-    if (!isControlPlaneRestartError(err)) throw err
-  }
-  return await waitForUnitUpdate({ read, target, before })
-}
-
-/**
- * Queue a control-plane update, then poll until the new version answers.
- * The POST returns as soon as the daemon is asked; the install restarts the
- * control plane this request is talking through.
- */
-export function useUpgradeInstance() {
-  const queryClient = useQueryClient()
-  return useApiMutation({
-    mutationFn: (vars: Readonly<{ target: UpdateTargetIdentity; before: string }>) =>
-      dispatchThenWait(
-        requestInstanceUpdate,
-        async () => (await fetchInstanceUpdates()).units.instance.installed,
-        vars.target,
-        vars.before
-      ),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: queryKeys.admin.instanceUpdates,
-      })
-    },
-  })
-}
-
-export type UpgradeStartResult = { kind: 'started'; runId: string }
-
-export function useRunUpgradePreflight() {
-  return useApiMutation({
-    mutationFn: () => runUpgradePreflight(),
-  })
-}
-
-export function useStartPlatformUpgrade(consoleCommit?: string) {
-  const queryClient = useQueryClient()
-  return useApiMutation({
-    // Returns as soon as the run exists. Progress comes from the active-run
-    // query, which polls while the run is active — never from holding this
-    // mutation open for the length of an upgrade.
-    mutationFn: async (runId?: string): Promise<UpgradeStartResult> => {
-      const started = await startPlatformUpgradeRun(runId, consoleCommit)
-      markControlPlaneUpgradeWatch()
-      return { kind: 'started', runId: started.runId }
-    },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.admin.instanceUpdates })
-      await queryClient.invalidateQueries({ queryKey: queryKeys.admin.upgradeActiveRun })
-      await queryClient.invalidateQueries({ queryKey: ['admin', 'instance-updates'] })
-    },
-  })
-}
-
 export function useUpgradeSettings(options?: Readonly<{ enabled?: boolean }>) {
   return useQuery({
     queryKey: queryKeys.admin.upgradeSettings,
@@ -647,56 +574,43 @@ export function useUpgradeServersPage(
   })
 }
 
-export function useRetryUpgradeStep() {
+/**
+ * Pause or resume all updates, then read the status again: the whole
+ * `instance-updates` prefix (status, active run, recent runs), since a pause
+ * can end the run in progress as cancelled.
+ */
+function usePauseToggle(request: () => Promise<UpdatesPauseResult>) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (stepId: string) => retryUpgradeStep(stepId),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.admin.upgradeActiveRun })
-      await queryClient.invalidateQueries({ queryKey: ['admin', 'instance-updates'] })
-    },
-  })
-}
-
-export function useCancelUpgradeRun() {
-  const queryClient = useQueryClient()
-  return useApiMutation({
-    mutationFn: (runId: string) => cancelUpgradeRun(runId),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.admin.upgradeActiveRun })
-    },
-  })
-}
-
-export function useCheckUpgradeManifests() {
-  const queryClient = useQueryClient()
-  return useApiMutation({
-    mutationFn: () => checkUpgradeManifests(),
+    mutationFn: request,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.admin.instanceUpdates })
     },
   })
 }
 
-export function useUpgradeColocatedDaemon() {
+/**
+ * Check Now: the answer is a fresh `GET /instance/updates` body, so it goes
+ * straight into the status cache, then the update reads refetch. It never
+ * starts an update.
+ */
+export function useCheckForUpdates(consoleCommit?: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (vars: Readonly<{ target: UpdateTargetIdentity; before: string }>) =>
-      dispatchThenWait(
-        requestColocatedDaemonUpdate,
-        async () => {
-          const installed = (await fetchInstanceUpdates()).units.daemon.installed
-          return installed ?? { version: null, commit: null }
-        },
-        vars.target,
-        vars.before
-      ),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: queryKeys.admin.instanceUpdates,
-      })
+    mutationFn: () => checkForUpdates(consoleCommit),
+    onSuccess: async (fresh) => {
+      queryClient.setQueryData(queryKeys.admin.instanceUpdates, fresh)
+      await queryClient.invalidateQueries({ queryKey: queryKeys.admin.instanceUpdates })
     },
   })
+}
+
+export function usePauseUpdates() {
+  return usePauseToggle(pauseUpdates)
+}
+
+export function useResumeUpdates() {
+  return usePauseToggle(resumeUpdates)
 }
 
 /** Capability gate. `staleTime` and no interval — this must not be polled. */

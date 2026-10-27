@@ -13,7 +13,6 @@ import { licenseTierUserErrorMessage } from '@/lib/user-error'
 import {
   SERVERS_REFRESH_MS,
   UPDATE_PROGRESS_POLL_MS,
-  useBatchTriggerServerUpdates,
   useCreateLicense,
   useDeleteLicense,
   useDeleteServer,
@@ -46,7 +45,6 @@ import {
   useServerMetricsSeriesBatches,
   useServerNicSlotContext,
   useServerUpdateStatus,
-  useServersUpdateStatus,
   useSetServerHostname,
   useSetServerMachineClass,
   useSetServerNtp,
@@ -54,7 +52,6 @@ import {
   useStartServerMetricsLive,
   useStopServerMetricsLive,
   useTimezones,
-  useTriggerServerUpdate,
   useUpdateServer,
 } from '@/lib/queries/servers'
 
@@ -75,10 +72,8 @@ const {
   fetchTimezones,
   deleteServer,
   getServerDeletePreview,
-  fetchServersUpdateStatus,
   fetchServerUpdate,
   fetchOrgServerCapacity,
-  triggerServerUpdate,
   resetServerUpdateStatus,
   revokeServerDaemonKey,
   rebootServer,
@@ -114,10 +109,8 @@ const {
   fetchTimezones: vi.fn(),
   deleteServer: vi.fn(),
   getServerDeletePreview: vi.fn(),
-  fetchServersUpdateStatus: vi.fn(),
   fetchServerUpdate: vi.fn(),
   fetchOrgServerCapacity: vi.fn(),
-  triggerServerUpdate: vi.fn(),
   resetServerUpdateStatus: vi.fn(),
   revokeServerDaemonKey: vi.fn(),
   rebootServer: vi.fn(),
@@ -158,10 +151,8 @@ vi.mock('@/lib/instance-api', async (importOriginal) => {
     fetchTimezones,
     deleteServer,
     getServerDeletePreview,
-    fetchServersUpdateStatus,
     fetchServerUpdate,
     fetchOrgServerCapacity,
-    triggerServerUpdate,
     resetServerUpdateStatus,
     revokeServerDaemonKey,
     rebootServer,
@@ -829,53 +820,6 @@ describe('servers query hooks', () => {
     expect(fetchFleetMetricsLatest).toHaveBeenCalledWith(orgId)
   })
 
-  it('useServersUpdateStatus loads batch update status', async () => {
-    fetchServersUpdateStatus.mockResolvedValueOnce({
-      servers: [{ serverId, status: 'idle' }],
-    })
-
-    const { result } = renderHook(() => useServersUpdateStatus(orgId), {
-      wrapper: createWrapper(),
-    })
-
-    await waitFor(() => {
-      expect(result.current.isSuccess).toBe(true)
-    })
-    expect(fetchServersUpdateStatus).toHaveBeenCalled()
-  })
-
-  it('useServersUpdateStatus polls only while a server is updating', async () => {
-    const client = createAppQueryClient()
-    fetchServersUpdateStatus.mockResolvedValue({
-      servers: [{ serverId, status: 'updating' }],
-    })
-
-    renderHook(() => useServersUpdateStatus(orgId, { pollWhileUpdating: true }), {
-      wrapper: createWrapper(client),
-    })
-
-    await waitFor(() => {
-      expect(resolveRefetchInterval(client, queryKeys.org(orgId).servers.updatesBatch)).toBe(false)
-    })
-
-    await waitFor(() => {
-      expect(
-        resolveRefetchInterval(client, queryKeys.org(orgId).servers.updatesBatch, {
-          servers: [{ serverId, status: 'updating' }],
-        })
-      ).toBe(UPDATE_PROGRESS_POLL_MS)
-    })
-  })
-
-  it('useServersUpdateStatus stays idle when orgId is empty', () => {
-    const { result } = renderHook(() => useServersUpdateStatus(''), {
-      wrapper: createWrapper(),
-    })
-
-    expect(result.current.fetchStatus).toBe('idle')
-    expect(fetchServersUpdateStatus).not.toHaveBeenCalled()
-  })
-
   it('useServerUpdateStatus loads per-server update status', async () => {
     fetchServerUpdate.mockResolvedValueOnce({
       serverId,
@@ -980,29 +924,6 @@ describe('servers query hooks', () => {
 
     await expect(result.current.run()).resolves.toMatchObject({ ok: true })
     expect(pingDaemon).toHaveBeenCalledWith(serverId)
-  })
-
-  it('useTriggerServerUpdate invalidates update queries', async () => {
-    triggerServerUpdate.mockResolvedValueOnce({
-      ok: true,
-      commandId: 'cmd-update',
-      status: 'queued',
-    })
-    const client = createAppQueryClient()
-    const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
-
-    const { result } = renderHook(() => useTriggerServerUpdate(orgId, serverId), {
-      wrapper: createWrapper(client),
-    })
-
-    await result.current.run()
-    expect(triggerServerUpdate).toHaveBeenCalledWith(serverId)
-    expect(invalidateSpy).toHaveBeenCalledWith({
-      queryKey: queryKeys.org(orgId).servers.updateStatus(serverId),
-    })
-    expect(invalidateSpy).toHaveBeenCalledWith({
-      queryKey: queryKeys.org(orgId).servers.updatesBatch,
-    })
   })
 
   it('useResetServerUpdateStatus clears update progress', async () => {
@@ -1255,26 +1176,6 @@ describe('servers query hooks', () => {
     expect(updateServer).toHaveBeenCalledWith(serverId, { name: 'patched' })
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: queryKeys.org(orgId).topology.all,
-    })
-  })
-
-  it('useBatchTriggerServerUpdates fans out updates', async () => {
-    triggerServerUpdate.mockResolvedValue({
-      ok: true,
-      commandId: 'cmd-batch',
-      status: 'queued',
-    })
-    const client = createAppQueryClient()
-    const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
-
-    const { result } = renderHook(() => useBatchTriggerServerUpdates(orgId), {
-      wrapper: createWrapper(client),
-    })
-
-    await result.current.run(['srv-1', 'srv-2'])
-    expect(triggerServerUpdate).toHaveBeenCalledTimes(2)
-    expect(invalidateSpy).toHaveBeenCalledWith({
-      queryKey: queryKeys.org(orgId).servers.updatesBatch,
     })
   })
 

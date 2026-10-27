@@ -329,6 +329,23 @@ describe('UpdateRunScreen', () => {
     expect(screen.getByText('Failed (1)')).toBeTruthy()
   })
 
+  it('says when a server that failed before tries again, never the raw message', () => {
+    const waiting = {
+      ...SERVER,
+      status: 'skipped' as const,
+      errorCode: 'retry_later',
+      errorMessage:
+        'It failed to update to this build 3 times. It tries again automatically after 2026-10-27T15:40:00.000Z.',
+    }
+    queries.useUpgradeRunServers.mockReturnValue({
+      data: serversPage({ servers: [waiting] }),
+      isFetching: false,
+    })
+    render(<UpdateRunScreen runId="run-1" />)
+    expect(screen.getByText(/^Tries again (at|on) /)).toBeTruthy()
+    expect(screen.queryByText(/2026-10-27T15:40/)).toBeNull()
+  })
+
   it('writes status, organization and sort to the URL', () => {
     queries.useUpgradeRunServers.mockReturnValue({ data: serversPage(), isFetching: false })
     render(<UpdateRunScreen runId="run-1" />)
@@ -514,7 +531,7 @@ describe('ServerUpdateLogScreen', () => {
     })
     expect(screen.getByText('Server Update Log')).toBeTruthy()
     expect(screen.getByText('web-1')).toBeTruthy()
-    expect(screen.getByText('Needs attention')).toBeTruthy()
+    expect(screen.getByText('Needs Attention')).toBeTruthy()
     expect(screen.getByText('Stopped reporting progress')).toBeTruthy()
     expect(screen.getByText(/daemon came back/)).toBeTruthy()
     fireEvent.click(screen.getByText('Back to Update Run'))

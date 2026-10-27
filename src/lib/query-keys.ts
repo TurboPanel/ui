@@ -98,7 +98,6 @@ export const queryKeys = {
         detail: (serverId: string) => ['org', orgId, 'server', serverId] as const,
         status: (serverId: string) => ['org', orgId, 'server', serverId, 'status'] as const,
         updateStatus: (serverId: string) => ['org', orgId, 'server', serverId, 'update'] as const,
-        updatesBatch: ['org', orgId, 'servers', 'updates'] as const,
         /** One O(1) fleet usage snapshot (CPU stack / load / memory / swap). */
         fleetUsage: ['org', orgId, 'servers', 'fleet-usage'] as const,
         /** Active registration keys (owner-only GET /licenses). */

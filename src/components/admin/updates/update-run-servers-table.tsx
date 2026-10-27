@@ -19,7 +19,7 @@ import type {
   UpgradeRunUnit,
 } from '@/lib/instance-api'
 import { colors, spacing, webPointer } from '@/lib/theme'
-import { upgradeChannelTitle, upgradeStepErrorLabel } from '@/lib/upgrade-display'
+import { stepMessageText, upgradeChannelTitle, upgradeStepErrorLabel } from '@/lib/upgrade-display'
 import {
   componentChangeText,
   durationMsText,
@@ -32,7 +32,6 @@ import {
   upgradeUnitLabel,
 } from '@/lib/upgrade-history-display'
 import type { SortDir } from '@/lib/upgrade-history-params'
-import { plainStepFailureMessage } from '@/lib/user-error'
 
 /** Column key → the sort the control plane accepts for it. */
 const SORTABLE: Readonly<Record<string, UpgradeRunServerSort>> = {
@@ -92,9 +91,7 @@ function timeText(iso: string | null | undefined): string {
 }
 
 function rowReason(row: UpgradeRunServerRow): string {
-  return (
-    plainStepFailureMessage(row.errorMessage) ?? upgradeStepErrorLabel(row.errorCode) ?? EMPTY_CELL
-  )
+  return stepMessageText(row) ?? upgradeStepErrorLabel(row.errorCode) ?? EMPTY_CELL
 }
 
 function sortArrow(dir: SortDir): string {

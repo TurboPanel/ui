@@ -162,7 +162,7 @@ export function userErrorMessage(err: unknown, fallback: string): string {
 }
 
 export const STEP_NETWORK_FAILURE_COPY =
-  'A network problem interrupted this step, so it could not finish. Try the update again.'
+  'A network problem interrupted this step, so it could not finish. TurboPanel tries again on its own.'
 
 /** Raw transport wording from browsers, Node and Go that must not reach an Updates page. */
 const RAW_NETWORK_TEXT =

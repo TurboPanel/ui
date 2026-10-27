@@ -21,7 +21,6 @@ import {
   fetchServerMetricsFacts,
   fetchServerMetricsSeries,
   fetchServerMetricsSummary,
-  fetchServersUpdateStatus,
   fetchServerUpdate,
   fetchTimezones,
   formatEntityMetricId,
@@ -43,7 +42,6 @@ import {
   setServerHostname,
   setServerNtp,
   setServerTimezone,
-  triggerServerUpdate,
   updateServer,
   type ConnectionHistoryChartResponse,
   type EffectiveCpuThermalLimits,
@@ -233,25 +231,6 @@ export function useServerDeletePreview(
     queryFn: () => getServerDeletePreview(serverId, orgId),
     enabled: (options?.enabled ?? true) && orgId.length > 0 && serverId.length > 0,
     refetchInterval: false,
-  })
-}
-
-export function useServersUpdateStatus(
-  orgId: string,
-  options?: Readonly<{ enabled?: boolean; pollWhileUpdating?: boolean }>
-) {
-  return useQuery({
-    queryKey: queryKeys.org(orgId).servers.updatesBatch,
-    queryFn: fetchServersUpdateStatus,
-    enabled: (options?.enabled ?? true) && orgId.length > 0,
-    refetchInterval: (query) => {
-      if (!options?.pollWhileUpdating) return false
-      const data = query.state.data
-      if (!data?.servers.some((server) => server.status === 'updating')) {
-        return false
-      }
-      return UPDATE_PROGRESS_POLL_MS
-    },
   })
 }
 
@@ -640,36 +619,14 @@ async function invalidateServerQueries(
   await Promise.all(tasks)
 }
 
-export function useTriggerServerUpdate(orgId: string, serverId: string) {
-  const queryClient = useQueryClient()
-  return useApiMutation({
-    mutationFn: () => triggerServerUpdate(serverId),
-    onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.org(orgId).servers.updateStatus(serverId),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.org(orgId).servers.updatesBatch,
-        }),
-      ])
-    },
-  })
-}
-
 export function useResetServerUpdateStatus(orgId: string, serverId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
     mutationFn: () => resetServerUpdateStatus(serverId),
     onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.org(orgId).servers.updateStatus(serverId),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.org(orgId).servers.updatesBatch,
-        }),
-      ])
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.org(orgId).servers.updateStatus(serverId),
+      })
     },
   })
 }
@@ -873,30 +830,6 @@ export function usePatchServer(orgId: string) {
         invalidateServerQueries(queryClient, orgId, serverId),
         queryClient.invalidateQueries({
           queryKey: queryKeys.org(orgId).topology.all,
-        }),
-      ])
-    },
-  })
-}
-
-export function useBatchTriggerServerUpdates(orgId: string) {
-  const queryClient = useQueryClient()
-  return useApiMutation({
-    mutationFn: async (serverIds: readonly string[]) => {
-      const results = await Promise.allSettled(
-        serverIds.map((serverId) => triggerServerUpdate(serverId))
-      )
-      return results
-    },
-    onSuccess: async (_data, serverIds) => {
-      await Promise.all([
-        ...serverIds.map((serverId) =>
-          queryClient.invalidateQueries({
-            queryKey: queryKeys.org(orgId).servers.updateStatus(serverId),
-          })
-        ),
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.org(orgId).servers.updatesBatch,
         }),
       ])
     },
