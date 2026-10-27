@@ -1,3 +1,6 @@
+import { breachedPasswordCopy } from '@/lib/password-policy'
+import { userErrorMessage } from '@/lib/user-error'
+
 /**
  * What the reset-password page was opened with. The control plane's link
  * redirect lands here with `?token=<64 hex>` for a live link, or
@@ -19,4 +22,18 @@ export function resetLinkState(params: {
   if (firstParam(params.error)) return { kind: 'invalid' }
   const token = firstParam(params.token)
   return RESET_TOKEN_PATTERN.test(token) ? { kind: 'ready', token } : { kind: 'invalid' }
+}
+
+/**
+ * What a failed reset shows: the expired-link screen for `INVALID_TOKEN`, else
+ * one sentence. Both codes are read from the raw message, before
+ * `userErrorMessage` drops the code, so a breached password reads the same
+ * sentence as sign-up and invitations.
+ */
+export function resetPasswordFailure(err: unknown): { expired: true } | { message: string } {
+  const raw = err instanceof Error ? err.message : ''
+  if (raw.includes('INVALID_TOKEN')) return { expired: true }
+  const breached = breachedPasswordCopy(raw)
+  if (breached !== raw) return { message: breached }
+  return { message: userErrorMessage(err, '') || 'Could not reset the password' }
 }

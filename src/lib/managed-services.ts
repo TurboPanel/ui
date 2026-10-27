@@ -11,7 +11,7 @@ import {
 import type { ManagedSslMode } from '@/lib/managed-ssl'
 import { STRAIGHT_THROUGH_ERROR_COPY } from '@/lib/managed-straight-through'
 import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
-import { MANAGED_HAS_BINDINGS_COPY } from '@/lib/user-error'
+import { apiErrorSentence, MANAGED_HAS_BINDINGS_COPY } from '@/lib/user-error'
 
 import type { NameScheme } from '@/lib/principal-name-scheme'
 
@@ -711,7 +711,8 @@ export function managedErrorMessage(err: unknown, fallback: string): string {
   if (code && MANAGED_ERROR_COPY[code]) {
     return MANAGED_ERROR_COPY[code]
   }
-  return raw || fallback
+  if (!raw) return fallback
+  return apiErrorSentence(raw) ?? raw
 }
 
 /** Status pill vocabulary shared with the servers fleet. */

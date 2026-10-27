@@ -6,6 +6,7 @@ import {
   TOO_MANY_ATTEMPTS_COPY,
   UPDATE_ALREADY_ACTIVE_COPY,
   apiErrorCopy,
+  apiErrorSentence,
   failedRunMessage,
   isNetworkFetchError,
   licenseTierUserErrorMessage,
@@ -82,6 +83,52 @@ describe('userErrorMessage', () => {
     expect(userErrorMessage(new Error('Nope'), 'f')).toBe('Nope')
     expect(userErrorMessage(new Error('  '), 'f')).toBe('f')
     expect(userErrorMessage(undefined, 'f')).toBe('f')
+  })
+
+  it('shows the control plane\u2019s own sentence without the request in front of it', () => {
+    const busy = new Error(
+      '/api/client/v1/environments/env-1/managed failed: HTTP 409: managed_busy \u2014 This database is already starting, stopping or being destroyed. Try again when that has finished.'
+    )
+    expect(userErrorMessage(busy, 'Action failed')).toBe(
+      'This database is already starting, stopping or being destroyed. Try again when that has finished.'
+    )
+    expect(failedRunMessage({ error: busy.message, cause: busy }, 'x')).toBe(
+      'This database is already starting, stopping or being destroyed. Try again when that has finished.'
+    )
+    // A known code keeps its fixed sentence; a message without one is kept whole.
+    expect(
+      userErrorMessage(new Error('/p failed: HTTP 409: environment_running \u2014 Running.'), 'f')
+    ).toBe(ENVIRONMENT_RUNNING_COPY)
+    expect(userErrorMessage(new Error('/p failed: HTTP 409: odd_code'), 'f')).toBe(
+      '/p failed: HTTP 409: odd_code'
+    )
+  })
+})
+
+describe('apiErrorSentence', () => {
+  it('reads the text after the code and nothing else', () => {
+    expect(apiErrorSentence('/p failed: HTTP 422: bad \u2014 Fix the name.')).toBe('Fix the name.')
+    expect(apiErrorSentence('/p failed: HTTP 422: bad \u2014 One \u2014 two.')).toBe(
+      'One \u2014 two.'
+    )
+    expect(apiErrorSentence('/p failed: HTTP 422: bad \u2014   ')).toBeNull()
+    expect(apiErrorSentence('/p failed: HTTP 500')).toBeNull()
+    expect(apiErrorSentence('Plain words \u2014 with a dash.')).toBeNull()
+    expect(apiErrorSentence('/p failed: HTTP 409: odd_code')).toBeNull()
+  })
+
+  it('keeps server text that has no code in front of it whole', () => {
+    const encryption =
+      '/api/client/v1/tls/certificates failed: HTTP 503: Encryption unavailable \u2014 no encryption key configured'
+    expect(apiErrorSentence(encryption)).toBe(
+      'Encryption unavailable \u2014 no encryption key configured'
+    )
+    expect(userErrorMessage(new Error(encryption), 'f')).toBe(
+      'Encryption unavailable \u2014 no encryption key configured'
+    )
+    expect(apiErrorSentence('/p failed: HTTP 400: Password must include a number')).toBe(
+      'Password must include a number'
+    )
   })
 })
 

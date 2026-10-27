@@ -129,6 +129,17 @@ describe('EnvironmentServiceScreen', () => {
     render(<EnvironmentServiceScreen />)
     expect(screen.getByTestId('redirect').dataset.href).toBe('/o/projects/p/overview')
   })
+
+  it('waits on a direct link while the path does not name the environment yet', () => {
+    state.ctx = { ...state.ctx, pathEnvironmentId: null }
+    const view = render(<EnvironmentServiceScreen />)
+    expect(screen.queryByTestId('redirect')).toBeNull()
+
+    state.ctx = { ...state.ctx, pathEnvironmentId: 'env-1' }
+    view.rerender(<EnvironmentServiceScreen />)
+    expect(screen.queryByTestId('redirect')).toBeNull()
+    expect(screen.getByLabelText('website')).toBeTruthy()
+  })
 })
 
 describe('ProjectServiceRedirectScreen', () => {

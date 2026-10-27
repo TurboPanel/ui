@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { Link, Redirect, useLocalSearchParams, type Href } from 'expo-router'
+import { Link, useLocalSearchParams, type Href } from 'expo-router'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 import { LogViewer } from '@/components/logs/log-viewer'
@@ -33,11 +33,7 @@ import {
 } from '@/lib/deployment-history'
 import type { DeploymentHistoryRecord } from '@/lib/instance-api'
 import { liveState, nextLivePaused, shouldPollLog } from '@/lib/log-viewer'
-import {
-  isManagedProject,
-  projectEnvironmentDeploymentsHref,
-  projectOverviewHref,
-} from '@/lib/project-navigation'
+import { isManagedProject, projectEnvironmentDeploymentsHref } from '@/lib/project-navigation'
 import { isTerminalCommandStatus, useCommandsBatch } from '@/lib/queries/commands'
 import { useCommandLog, useEnvironmentDeployments } from '@/lib/queries/execution-logs'
 import { queryKeys } from '@/lib/query-keys'
@@ -321,7 +317,11 @@ export function DeploymentLogScreen() {
   )
 
   if (managed) return <ManagedFocusTab focus="overview" />
-  if (!pathEnvironmentId) return <Redirect href={projectOverviewHref(orgId, projectId) as Href} />
+  // This route always names an environment, but on a direct link the router's
+  // path can still read the project's own path on the first render, while the
+  // project loads. Wait for it: leaving here would drop the link.
+  // A path naming an environment that is gone is EnvironmentShell's to handle.
+  if (!pathEnvironmentId) return null
 
   const backHref = projectEnvironmentDeploymentsHref(orgId, projectId, environmentId)
   const group = findDeployment(groups, deploymentId)
