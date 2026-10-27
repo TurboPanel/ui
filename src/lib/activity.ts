@@ -77,7 +77,7 @@ export function activityStartedByLabel(
     const branch = item.trigger.branch?.trim()
     return branch ? `Push to ${branch}` : 'Git push'
   }
-  return item.actorType === 'user' ? 'Removed user' : 'System'
+  return item.actorType === 'user' ? 'Former Member' : 'System'
 }
 
 /** The commit as "abc1234 Fix the login page", or null when none was recorded. */

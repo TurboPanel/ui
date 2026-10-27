@@ -48,7 +48,7 @@ describe('activity labels', () => {
       })
     ).toBe('Push to main')
     expect(activityStartedByLabel({ actorType: 'system' })).toBe('System')
-    expect(activityStartedByLabel({ actorType: 'user', actorName: null })).toBe('Removed user')
+    expect(activityStartedByLabel({ actorType: 'user', actorName: null })).toBe('Former Member')
     expect(activityCommitText({ commit: { sha: 'abcdef123456', message: ' Fix it ' } })).toBe(
       'abcdef1 Fix it'
     )

@@ -10941,7 +10941,7 @@ export type OrganizationActivityItem = {
   actorType?: 'user' | 'system'
   /**
    * For a person: their name or email while they are a member, else
-   * "Platform admin" or "Former member" as the panel says; null for the panel.
+   * "Platform Admin" or "Former Member" as the panel says; null for the panel.
    */
   actorName?: string | null
   /** The push that set it off; null for a person's deploy. */
