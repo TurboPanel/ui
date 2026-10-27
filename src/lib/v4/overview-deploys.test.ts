@@ -5,7 +5,11 @@ import { groupDeploymentsByGeneration } from '@/lib/deployment-history'
 
 const NOW = Date.parse('2026-10-05T12:00:00Z')
 
-function deploy(id: string, generation: number | null, extra: Partial<DeploymentHistoryRecord> = {}): DeploymentHistoryRecord {
+function deploy(
+  id: string,
+  generation: number | null,
+  extra: Partial<DeploymentHistoryRecord> = {}
+): DeploymentHistoryRecord {
   return {
     id,
     commandId: id,
@@ -138,7 +142,11 @@ describe('problemNotice', () => {
 
   it('names a failed deploy with its error line, and says the old version serves only when it does', () => {
     const history = [
-      deploy('d2', 2, { status: 'failed', errorMessage: 'Build stopped with an error\ndetails', trigger: push }),
+      deploy('d2', 2, {
+        status: 'failed',
+        errorMessage: 'Build stopped with an error\ndetails',
+        trigger: push,
+      }),
       deploy('d1', 1),
     ]
     expect(problemNotice(history, true)).toEqual({
@@ -153,25 +161,42 @@ describe('problemNotice', () => {
 
   it('has no error line when the control plane gave none', () => {
     const notice = problemNotice([deploy('d1', 1, { status: 'timed_out' })], true)
-    expect(notice).toEqual({ tone: 'bad', title: 'The last deploy failed', body: 'It did not go live.' })
+    expect(notice).toEqual({
+      tone: 'bad',
+      title: 'The last deploy failed',
+      body: 'It did not go live.',
+    })
   })
 
   it('reads the error from any server of the deploy', () => {
     const notice = problemNotice(
-      [deploy('a', 5, { status: 'failed' }), deploy('b', 5, { status: 'failed', errorMessage: 'second server' })],
-      true,
+      [
+        deploy('a', 5, { status: 'failed' }),
+        deploy('b', 5, { status: 'failed', errorMessage: 'second server' }),
+      ],
+      true
     )
     expect(notice?.errorLine).toBe('second server')
   })
 
   it('warns about a rollback and gives the reason when there is one', () => {
     const notice = problemNotice(
-      [deploy('d1', 1, { status: 'failed', strategyOutcome: 'rolled_back', strategyOutcomeReason: 'Health check failed' })],
-      true,
+      [
+        deploy('d1', 1, {
+          status: 'failed',
+          strategyOutcome: 'rolled_back',
+          strategyOutcomeReason: 'Health check failed',
+        }),
+      ],
+      true
     )
-    expect(notice).toMatchObject({ tone: 'warn', title: 'The last deploy was rolled back', body: 'Health check failed' })
+    expect(notice).toMatchObject({
+      tone: 'warn',
+      title: 'The last deploy was rolled back',
+      body: 'Health check failed',
+    })
     expect(problemNotice([deploy('d1', 1, { strategyOutcome: 'rolled_back' })], true)?.body).toBe(
-      'The previous version is back in place.',
+      'The previous version is back in place.'
     )
   })
 })

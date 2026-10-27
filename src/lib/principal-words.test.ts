@@ -60,7 +60,10 @@ describe('principal words', () => {
     ).toBe('Belongs to the project Shop. Remove it from that project.')
     expect(
       principalDeleteBlockedReason(
-        row({ canDelete: false, usedBy: { tenancies: 2, bindings: 0, storages: 0, secrets: 0, logins: 0, folders: 0 } })
+        row({
+          canDelete: false,
+          usedBy: { tenancies: 2, bindings: 0, storages: 0, secrets: 0, logins: 0, folders: 0 },
+        })
       )
     ).toBe('In use: 2 services run as it.')
   })

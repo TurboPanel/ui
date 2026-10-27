@@ -56,7 +56,7 @@ function withStopState(
   environment: EnvironmentRecord,
   activeCount: number,
   serverId: string | null,
-  stopState: StopRowState | undefined,
+  stopState: StopRowState | undefined
 ): EnvStopRow {
   return {
     environment,
@@ -72,11 +72,9 @@ function collectManagedDeleteRows(
   projectId: string,
   environments: readonly EnvironmentRecord[],
   orgManaged: readonly ManagedListRecord[],
-  stopRows: Record<string, StopRowState>,
+  stopRows: Record<string, StopRowState>
 ): EnvStopRow[] {
-  const environmentsById = new Map(
-    environments.map((environment) => [environment.id, environment]),
-  )
+  const environmentsById = new Map(environments.map((environment) => [environment.id, environment]))
   const rows: EnvStopRow[] = []
   for (const cluster of orgManaged) {
     if (cluster.projectId !== projectId || !cluster.environmentId) continue
@@ -87,8 +85,8 @@ function collectManagedDeleteRows(
         environment,
         1,
         cluster.serverId ?? environment.serverId,
-        stopRows[environment.id],
-      ),
+        stopRows[environment.id]
+      )
     )
   }
   return rows
@@ -96,9 +94,7 @@ function collectManagedDeleteRows(
 
 function sortEnvStopRows(rows: EnvStopRow[]): EnvStopRow[] {
   return rows.sort((a, b) =>
-    environmentLabel(a.environment).localeCompare(
-      environmentLabel(b.environment),
-    ),
+    environmentLabel(a.environment).localeCompare(environmentLabel(b.environment))
   )
 }
 
@@ -151,18 +147,10 @@ export function StopStepSection({
         {envRows.map((row) => (
           <View key={row.environment.id} style={styles.envRow}>
             <View style={styles.envInfo}>
-              <Text style={styles.envName}>
-                {environmentLabel(row.environment)}
-              </Text>
-              <Text style={panelStyles.muted}>
-                {copy.countLabel(row.activeCount)}
-              </Text>
-              {row.status ? (
-                <Text style={panelStyles.muted}>{row.status}</Text>
-              ) : null}
-              {row.error ? (
-                <Text style={panelStyles.error}>{row.error}</Text>
-              ) : null}
+              <Text style={styles.envName}>{environmentLabel(row.environment)}</Text>
+              <Text style={panelStyles.muted}>{copy.countLabel(row.activeCount)}</Text>
+              {row.status ? <Text style={panelStyles.muted}>{row.status}</Text> : null}
+              {row.error ? <Text style={panelStyles.error}>{row.error}</Text> : null}
             </View>
             <View style={styles.envActions}>
               <ConfirmButton
@@ -209,8 +197,8 @@ function ConfirmStepSection({
       {plan ? <DeletePlanList plan={plan} /> : null}
       <Text style={styles.stepLabel}>Confirm deletion</Text>
       <Text style={styles.stepCopy}>
-        Type <Text style={styles.confirmName}>{confirmName}</Text> to
-        permanently delete this project.
+        Type <Text style={styles.confirmName}>{confirmName}</Text> to permanently delete this
+        project.
       </Text>
       <TextField
         label="Project name"
@@ -226,24 +214,28 @@ function ConfirmStepSection({
   )
 }
 
-function isProjectDeleteLoading(input: Readonly<{
-  managedProject: boolean
-  environmentsLoading: boolean
-  orgManagedLoading: boolean
-  previewLoading: boolean
-}>): boolean {
+function isProjectDeleteLoading(
+  input: Readonly<{
+    managedProject: boolean
+    environmentsLoading: boolean
+    orgManagedLoading: boolean
+    previewLoading: boolean
+  }>
+): boolean {
   if (input.environmentsLoading || input.previewLoading) return true
   return input.managedProject && input.orgManagedLoading
 }
 
-function canConfirmProjectDelete(input: Readonly<{
-  hasActiveServices: boolean
-  blocked: boolean
-  confirmText: string
-  confirmName: string
-  deleting: boolean
-  loading: boolean
-}>): boolean {
+function canConfirmProjectDelete(
+  input: Readonly<{
+    hasActiveServices: boolean
+    blocked: boolean
+    confirmText: string
+    confirmName: string
+    deleting: boolean
+    loading: boolean
+  }>
+): boolean {
   if (input.hasActiveServices || input.blocked || input.deleting || input.loading) return false
   return input.confirmText.trim() === input.confirmName
 }
@@ -285,11 +277,7 @@ function DeletePanelBody({
   if (loading) {
     return (
       <LoadingState
-        label={
-          managedProject
-            ? 'Checking managed databases…'
-            : 'Checking what the project owns…'
-        }
+        label={managedProject ? 'Checking managed databases…' : 'Checking what the project owns…'}
       />
     )
   }
@@ -330,13 +318,7 @@ function ProjectDeleteActions({
 }>) {
   return (
     <View style={styles.actions}>
-      <Button
-        label="Cancel"
-        variant="secondary"
-        size="sm"
-        disabled={deleting}
-        onPress={onCancel}
-      />
+      <Button label="Cancel" variant="secondary" size="sm" disabled={deleting} onPress={onCancel} />
       {showDelete ? (
         <Button
           label="Delete permanently"
@@ -352,16 +334,18 @@ function ProjectDeleteActions({
   )
 }
 
-function useSyncTerminalProjectDeleteCommands(input: Readonly<{
-  commands: readonly CommandStatusRecord[] | undefined
-  trackedCommands: readonly TrackedCommandEntry[]
-  commandEnvById: Record<string, string>
-  managedProject: boolean
-  refetchManaged: () => void
-  setStopRows: Dispatch<SetStateAction<Record<string, StopRowState>>>
-  setTrackedCommands: Dispatch<SetStateAction<readonly TrackedCommandEntry[]>>
-  setCommandEnvById: Dispatch<SetStateAction<Record<string, string>>>
-}>) {
+function useSyncTerminalProjectDeleteCommands(
+  input: Readonly<{
+    commands: readonly CommandStatusRecord[] | undefined
+    trackedCommands: readonly TrackedCommandEntry[]
+    commandEnvById: Record<string, string>
+    managedProject: boolean
+    refetchManaged: () => void
+    setStopRows: Dispatch<SetStateAction<Record<string, StopRowState>>>
+    setTrackedCommands: Dispatch<SetStateAction<readonly TrackedCommandEntry[]>>
+    setCommandEnvById: Dispatch<SetStateAction<Record<string, string>>>
+  }>
+) {
   const {
     commands,
     trackedCommands,
@@ -400,15 +384,14 @@ function useSyncTerminalProjectDeleteCommands(input: Readonly<{
           [environmentId]: {
             stopping: false,
             status: null,
-            error: commandErrorLine(command) ??
+            error:
+              commandErrorLine(command) ??
               `${managedProject ? 'Destroy' : 'Stop'} ${command.status}`,
             serverId: entry.serverId,
           },
         }))
       }
-      setTrackedCommands((current) =>
-        current.filter((row) => row.commandId !== entry.commandId),
-      )
+      setTrackedCommands((current) => current.filter((row) => row.commandId !== entry.commandId))
       setCommandEnvById((current) => {
         const next = { ...current }
         delete next[entry.commandId]
@@ -452,12 +435,8 @@ export function ProjectDeletePanel({
   const destroyManagedMutation = useDeleteEnvironmentManagedMutation(orgId)
 
   const [stopRows, setStopRows] = useState<Record<string, StopRowState>>({})
-  const [trackedCommands, setTrackedCommands] = useState<
-    readonly TrackedCommandEntry[]
-  >([])
-  const [commandEnvById, setCommandEnvById] = useState<Record<string, string>>(
-    {},
-  )
+  const [trackedCommands, setTrackedCommands] = useState<readonly TrackedCommandEntry[]>([])
+  const [commandEnvById, setCommandEnvById] = useState<Record<string, string>>({})
 
   const commandsQuery = useCommandsBatch(orgId, trackedCommands)
 
@@ -485,11 +464,9 @@ export function ProjectDeletePanel({
   const envRows = useMemo(
     () =>
       managedProject
-        ? sortEnvStopRows(
-          collectManagedDeleteRows(project.id, environments, orgManaged, stopRows),
-        )
+        ? sortEnvStopRows(collectManagedDeleteRows(project.id, environments, orgManaged, stopRows))
         : [],
-    [managedProject, orgManaged, project.id, environments, stopRows],
+    [managedProject, orgManaged, project.id, environments, stopRows]
   )
 
   const loading = isProjectDeleteLoading({
@@ -532,7 +509,7 @@ export function ProjectDeletePanel({
     environmentId: string,
     serverId: string,
     commandId: string,
-    status: string,
+    status: string
   ) => {
     setStopRows((current) => ({
       ...current,
@@ -550,10 +527,7 @@ export function ProjectDeletePanel({
     }))
   }
 
-  const handleDestroyManaged = async (
-    environmentId: string,
-    options?: { force?: boolean },
-  ) => {
+  const handleDestroyManaged = async (environmentId: string, options?: { force?: boolean }) => {
     setStopRows((current) => ({
       ...current,
       [environmentId]: {
@@ -564,14 +538,14 @@ export function ProjectDeletePanel({
       },
     }))
     const result = await destroyManagedMutation.run(
-      options?.force ? { environmentId, force: true } : environmentId,
+      options?.force ? { environmentId, force: true } : environmentId
     )
     if (!result.ok) {
       markStopFailed(
         environmentId,
         result.error
           ? userErrorMessage(result.cause ?? new Error(result.error), '')
-          : 'Failed to destroy database',
+          : 'Failed to destroy database'
       )
       return
     }
@@ -586,20 +560,11 @@ export function ProjectDeletePanel({
     }
     const { commandId, serverId } = result.value
     if (!commandId || !serverId) {
-      markStopFailed(
-        environmentId,
-        'Destroy queued but target server was not returned',
-      )
+      markStopFailed(environmentId, 'Destroy queued but target server was not returned')
       return
     }
-    trackQueuedCommand(
-      environmentId,
-      serverId,
-      commandId,
-      'Destroying database…',
-    )
+    trackQueuedCommand(environmentId, serverId, commandId, 'Destroying database…')
   }
-
 
   const handleDelete = async () => {
     if (!canDelete) return
@@ -609,8 +574,8 @@ export function ProjectDeletePanel({
       setDeleteError(
         deleteFailureMessage(
           result.cause ?? result.error,
-          'The project could not be deleted. Try again.',
-        ),
+          'The project could not be deleted. Try again.'
+        )
       )
       // Whatever refused it may have changed (a server came back, a database went).
       void previewQuery.refetch()
@@ -633,7 +598,8 @@ export function ProjectDeletePanel({
         envRows={envRows}
         onStop={(environmentId) => void handleDestroyManaged(environmentId)}
         onForceDestroy={(environmentId) =>
-          void handleDestroyManaged(environmentId, { force: true })}
+          void handleDestroyManaged(environmentId, { force: true })
+        }
         plan={plan}
         confirmName={confirmName}
         confirmText={confirmText}

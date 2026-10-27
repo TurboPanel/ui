@@ -108,13 +108,7 @@ export function ConfirmButton({
   return (
     <View style={styles.armedRow}>
       <Text style={styles.prompt}>{prompt}</Text>
-      <Button
-        label={dismissLabel}
-        variant="ghost"
-        size={size}
-        disabled={busy}
-        onPress={disarm}
-      />
+      <Button label={dismissLabel} variant="ghost" size={size} disabled={busy} onPress={disarm} />
       <Button
         label={confirmLabel}
         variant={variant === 'danger' ? 'danger' : 'primary'}

@@ -11,7 +11,7 @@ import { certificatePollInterval } from '@/lib/hosting-certificate'
 export function useHostingCertificate(
   orgId: string,
   hostingId: string | null,
-  options?: Readonly<{ enabled?: boolean }>,
+  options?: Readonly<{ enabled?: boolean }>
 ) {
   return useQuery({
     queryKey: queryKeys.org(orgId).hostings.detail(hostingId ?? ''),

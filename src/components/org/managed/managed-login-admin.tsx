@@ -3,10 +3,7 @@ import { panelStyles } from '@/components/ui/panel-styles'
 import { Badge, SettingRow, Toggle } from '@/components/ui'
 import { PreviewSheet, usePreviewedChange } from '@/components/org/managed/managed-login-preview'
 import type { ManagedUserPatch, ManagedUserPatchResult } from '@/lib/instance-api'
-import {
-  MANAGED_ADMIN_PRIVILEGE,
-  type ManagedUserRecord,
-} from '@/lib/managed-services'
+import { MANAGED_ADMIN_PRIVILEGE, type ManagedUserRecord } from '@/lib/managed-services'
 
 export const ADMIN_LABEL = 'Owner of this database'
 export const ADMIN_HINT =

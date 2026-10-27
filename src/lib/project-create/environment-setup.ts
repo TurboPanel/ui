@@ -136,7 +136,12 @@ export function setupCertificateNote(
  */
 export function composeWithHostname(
   compose: ComposeDocument,
-  input: Readonly<{ serviceName: string; hostname: string; alsoWww: boolean; letsEncrypt?: boolean }>
+  input: Readonly<{
+    serviceName: string
+    hostname: string
+    alsoWww: boolean
+    letsEncrypt?: boolean
+  }>
 ): ComposeDocument {
   const hostname = readHostingHostname(input.hostname)
   if (!hostname) return compose
