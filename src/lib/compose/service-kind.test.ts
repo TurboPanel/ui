@@ -190,10 +190,7 @@ describe('serviceKind: node', () => {
 
 describe('patchServiceTurbopanelExtension node fields', () => {
   it('persists enabled only when false and removes the key when true', () => {
-    const stopped = patchServiceTurbopanelExtension(
-      {},
-      { serviceKind: 'node', enabled: false }
-    )
+    const stopped = patchServiceTurbopanelExtension({}, { serviceKind: 'node', enabled: false })
     expect(stopped['x-turbopanel']).toEqual({ serviceKind: 'node', enabled: false })
     // Toggling back on collapses to the default rather than writing `true`,
     // which would just be noise in the YAML.
@@ -246,21 +243,21 @@ describe('x-turbopanel.source.deployOnPush', () => {
   it('keeps false and true as authored, and nothing when absent', () => {
     expect(
       parseServiceTurbopanelExtension({ source: { sourceId, deployOnPush: false } })?.source
-        ?.deployOnPush,
+        ?.deployOnPush
     ).toBe(false)
     expect(
       parseServiceTurbopanelExtension({ source: { sourceId, deployOnPush: true } })?.source
-        ?.deployOnPush,
+        ?.deployOnPush
     ).toBe(true)
     expect(
-      parseServiceTurbopanelExtension({ source: { sourceId } })?.source?.deployOnPush,
+      parseServiceTurbopanelExtension({ source: { sourceId } })?.source?.deployOnPush
     ).toBeUndefined()
   })
 
   it('drops a value that is not a boolean', () => {
     expect(
       parseServiceTurbopanelExtension({ source: { sourceId, deployOnPush: 'false' } })?.source
-        ?.deployOnPush,
+        ?.deployOnPush
     ).toBeUndefined()
   })
 })
@@ -393,15 +390,13 @@ describe('PHP extension lists', () => {
     // A name in both would render as an opt-in chip for something already
     // installed, which tells the operator the wrong thing about what their
     // choice does.
-    const overlap = BASELINE_PHP_EXTENSIONS.filter((name) =>
-      OPTIONAL_PHP_EXTENSIONS.includes(name)
-    )
+    const overlap = BASELINE_PHP_EXTENSIONS.filter((name) => OPTIONAL_PHP_EXTENSIONS.includes(name))
     expect(overlap).toEqual([])
   })
 
   it('exposes ALLOWED as exactly the union', () => {
     expect([...ALLOWED_PHP_EXTENSIONS].sort()).toEqual(
-      [...BASELINE_PHP_EXTENSIONS, ...OPTIONAL_PHP_EXTENSIONS].sort(),
+      [...BASELINE_PHP_EXTENSIONS, ...OPTIONAL_PHP_EXTENSIONS].sort()
     )
   })
 
@@ -453,21 +448,21 @@ describe('parseServiceTurbopanelExtension shapes', () => {
     })
     expect(parseServiceTurbopanelExtension({ php: [] })?.php).toBeUndefined()
     expect(
-      parseServiceTurbopanelExtension({ php: { settings: { skip: true } } })?.php,
+      parseServiceTurbopanelExtension({ php: { settings: { skip: true } } })?.php
     ).toBeUndefined()
   })
 
   it('keeps a known php.mode and drops anything else', () => {
     expect(
-      parseServiceTurbopanelExtension({ serviceKind: 'site', php: { mode: 'fastcgi' } })?.php,
+      parseServiceTurbopanelExtension({ serviceKind: 'site', php: { mode: 'fastcgi' } })?.php
     ).toEqual({ mode: 'fastcgi' })
-    expect(
-      parseServiceTurbopanelExtension({ php: { version: '8.4', mode: 'cgi' } })?.php,
-    ).toEqual({ version: '8.4' })
+    expect(parseServiceTurbopanelExtension({ php: { version: '8.4', mode: 'cgi' } })?.php).toEqual({
+      version: '8.4',
+    })
     // A patch that touches another field keeps the authored mode.
     const patched = patchServiceTurbopanelExtension(
       { 'x-turbopanel': { serviceKind: 'site', engine: 'nginx', php: { mode: 'fpm' } } },
-      { engine: 'apache' },
+      { engine: 'apache' }
     )
     expect(patched['x-turbopanel']).toMatchObject({ engine: 'apache', php: { mode: 'fpm' } })
   })
@@ -493,20 +488,14 @@ describe('parseServiceTurbopanelExtension shapes', () => {
       sourceKind: 'managed-directory',
     })
     expect(parsed?.sourceKind).toBe('managed-directory')
-    expect(
-      parseServiceTurbopanelExtension({ sourceKind: 'bucket' })?.sourceKind,
-    ).toBeUndefined()
-    expect(
-      parseServiceTurbopanelExtension({ sourceKind: 1 })?.sourceKind,
-    ).toBeUndefined()
+    expect(parseServiceTurbopanelExtension({ sourceKind: 'bucket' })?.sourceKind).toBeUndefined()
+    expect(parseServiceTurbopanelExtension({ sourceKind: 1 })?.sourceKind).toBeUndefined()
   })
 
   it('drops a source block without a usable sourceId', () => {
     expect(parseServiceSourceExtension(null)).toBeNull()
     expect(parseServiceSourceExtension('nope')).toBeNull()
-    expect(
-      parseServiceSourceExtension({ sourceId: 'not-a-uuid' }),
-    ).toBeNull()
+    expect(parseServiceSourceExtension({ sourceId: 'not-a-uuid' })).toBeNull()
   })
 
   it('keeps in-range source strings and skips empty or overlong ones', () => {
@@ -530,7 +519,7 @@ describe('parseServiceTurbopanelExtension shapes', () => {
         sourceId,
         branch: 'b'.repeat(SOURCE_BRANCH_MAX_LENGTH + 1),
         buildCommand: 'c'.repeat(SOURCE_COMMAND_MAX_LENGTH + 1),
-      }),
+      })
     ).toEqual({ sourceId })
   })
 
@@ -539,7 +528,7 @@ describe('parseServiceTurbopanelExtension shapes', () => {
     expect(
       readServiceSourceExtension({
         'x-turbopanel': { source: { sourceId } },
-      })?.sourceId,
+      })?.sourceId
     ).toBe(sourceId)
     expect(isSiteComposeService({ 'x-turbopanel': 5 })).toBe(false)
     expect(isNodeComposeService({ 'x-turbopanel': 5 })).toBe(false)
@@ -556,7 +545,7 @@ describe('patchServiceTurbopanelExtension cron and php', () => {
         serviceKind: 'site',
         engine: 'caddy',
         cron: [{ name: 'nightly', schedule: '0 0 * * *', command: '/usr/bin/true' }],
-      },
+      }
     )
     expect(withCron['x-turbopanel']).toEqual({
       serviceKind: 'site',
@@ -580,7 +569,7 @@ describe('patchServiceTurbopanelExtension cron and php', () => {
           sourceId: '11111111-2222-3333-4444-555555555555',
           branch: 'main',
         },
-      },
+      }
     )
     expect(withPhp['x-turbopanel']).toMatchObject({
       php: { version: '8.4', extensions: ['redis'] },
@@ -590,9 +579,7 @@ describe('patchServiceTurbopanelExtension cron and php', () => {
       },
     })
     const cleared = patchServiceTurbopanelExtension(withPhp, { source: null })
-    expect(
-      (cleared['x-turbopanel'] as { source?: unknown }).source,
-    ).toBeUndefined()
+    expect((cleared['x-turbopanel'] as { source?: unknown }).source).toBeUndefined()
   })
 
   it('drops an empty hosting list rather than persisting it', () => {
@@ -601,32 +588,30 @@ describe('patchServiceTurbopanelExtension cron and php', () => {
       {
         serviceKind: 'container',
         hosting: [{ hostname: 'app.example.com' }],
-      },
+      }
     )
     expect(withHosting['x-turbopanel']).toMatchObject({
       hosting: [{ hostname: 'app.example.com' }],
     })
     const cleared = patchServiceTurbopanelExtension(withHosting, { hosting: [] })
-    expect(
-      (cleared['x-turbopanel'] as { hosting?: unknown }).hosting,
-    ).toBeUndefined()
+    expect((cleared['x-turbopanel'] as { hosting?: unknown }).hosting).toBeUndefined()
   })
 })
 
 describe('serviceKindFieldMessage', () => {
   it('describes a single allowed kind', () => {
     expect(serviceKindFieldMessage('engine', 'container')).toBe(
-      'engine is only valid when serviceKind is site',
+      'engine is only valid when serviceKind is site'
     )
     expect(serviceKindFieldMessage('engine', 'site')).toBeNull()
   })
 
   it('joins two host-native kinds with or', () => {
     expect(serviceKindFieldMessage('cron', 'container')).toBe(
-      'cron is only valid when serviceKind is site or node',
+      'cron is only valid when serviceKind is site or node'
     )
     expect(serviceKindFieldMessage('principal', undefined)).toBe(
-      'principal is only valid when serviceKind is site or node',
+      'principal is only valid when serviceKind is site or node'
     )
   })
 
@@ -713,7 +698,10 @@ describe('x-turbopanel.runtime: deno', () => {
     expect(messages({ serviceKind: 'container', runtime: 'deno' })).toEqual(['runtime'])
     // A partial layer may set one without restating the other.
     expect(
-      collectServiceKindFieldIssues({ serviceKind: 'node', denoVersion: '2' }, { partialLayer: true })
+      collectServiceKindFieldIssues(
+        { serviceKind: 'node', denoVersion: '2' },
+        { partialLayer: true }
+      )
     ).toEqual([])
   })
 

@@ -311,17 +311,12 @@ type NotForThisKind<Field extends keyof ComposeServiceExtensionFields> = {
 /** The default kind. Runs from an image; everything host-native is off-limits. */
 export type ComposeContainerServiceExtension = CommonServiceExtensionFields & {
   serviceKind?: 'container'
-} & NotForThisKind<
-    SiteOnlyExtensionField | NodeOnlyExtensionField | HostNativeExtensionField
-  >
+} & NotForThisKind<SiteOnlyExtensionField | NodeOnlyExtensionField | HostNativeExtensionField>
 
 /** Served by a host engine out of a document root. */
 export type ComposeSiteServiceExtension = CommonServiceExtensionFields & {
   serviceKind: 'site'
-} & Pick<
-    ComposeServiceExtensionFields,
-    SiteOnlyExtensionField | HostNativeExtensionField
-  > &
+} & Pick<ComposeServiceExtensionFields, SiteOnlyExtensionField | HostNativeExtensionField> &
   NotForThisKind<NodeOnlyExtensionField>
 
 /**
@@ -348,9 +343,7 @@ export type ComposeNodeServiceExtension = Omit<
  * instance's validators.
  */
 export type ComposeServiceTurbopanelExtension =
-  | ComposeContainerServiceExtension
-  | ComposeSiteServiceExtension
-  | ComposeNodeServiceExtension
+  ComposeContainerServiceExtension | ComposeSiteServiceExtension | ComposeNodeServiceExtension
 
 /**
  * The one table of "which fields may a service of this kind carry". Mirrors the
@@ -369,19 +362,13 @@ type ServiceExtensionFieldRule = {
   readonly typeMessage?: string
 }
 
-const ALL_SERVICE_KINDS: readonly ComposeServiceKind[] = [
-  'container',
-  'site',
-  'node',
-]
+const ALL_SERVICE_KINDS: readonly ComposeServiceKind[] = ['container', 'site', 'node']
 const SITE_KIND_ONLY: readonly ComposeServiceKind[] = ['site']
 const NODE_KIND_ONLY: readonly ComposeServiceKind[] = ['node']
 /** Both host-native kinds — the set {@link isHostNativeServiceKind} names. */
 const HOST_NATIVE_KINDS: readonly ComposeServiceKind[] = ['site', 'node']
 
-const SERVICE_EXTENSION_FIELDS: Readonly<
-  Record<string, ServiceExtensionFieldRule>
-> = {
+const SERVICE_EXTENSION_FIELDS: Readonly<Record<string, ServiceExtensionFieldRule>> = {
   serviceKind: {
     kinds: ALL_SERVICE_KINDS,
     typeMessage: 'serviceKind must be "container", "site", or "node"',
@@ -458,9 +445,7 @@ const SERVICE_EXTENSION_FIELDS: Readonly<
  * refused on `container`, alias shape, and alias resolution against the root
  * `principals` map — is still checked here and in `./lint.ts`.
  */
-const SERVICE_KIND_REQUIRED_FIELDS: Readonly<
-  Record<ComposeServiceKind, readonly string[]>
-> = {
+const SERVICE_KIND_REQUIRED_FIELDS: Readonly<Record<ComposeServiceKind, readonly string[]>> = {
   container: [],
   site: [],
   node: ['source'],
@@ -471,9 +456,7 @@ export type ServiceKindFieldRules = {
   readonly requiredFields: ReadonlySet<string>
 }
 
-function buildServiceKindFieldTable(): Readonly<
-  Record<ComposeServiceKind, ServiceKindFieldRules>
-> {
+function buildServiceKindFieldTable(): Readonly<Record<ComposeServiceKind, ServiceKindFieldRules>> {
   const table = {} as Record<ComposeServiceKind, ServiceKindFieldRules>
   for (const kind of ALL_SERVICE_KINDS) {
     const allowedFields = new Set<string>()
@@ -492,9 +475,8 @@ function buildServiceKindFieldTable(): Readonly<
  * Per-kind view of {@link SERVICE_EXTENSION_FIELDS}, derived rather than
  * written twice. Mirrors the instance export of the same name.
  */
-export const SERVICE_KIND_FIELD_TABLE: Readonly<
-  Record<ComposeServiceKind, ServiceKindFieldRules>
-> = buildServiceKindFieldTable()
+export const SERVICE_KIND_FIELD_TABLE: Readonly<Record<ComposeServiceKind, ServiceKindFieldRules>> =
+  buildServiceKindFieldTable()
 
 /** `site` / `site or node` / `container, site, or node`, as a message reads. */
 function describeKinds(kinds: readonly ComposeServiceKind[]): string {
@@ -550,8 +532,7 @@ function denoRuntimeIssues(
   const runtime = readNativeRuntime(extension.runtime)
   // A partial layer that does not restate `runtime` leaves it to the Base.
   if (partialLayer && runtime === undefined) return []
-  const present = (field: string) =>
-    extension[field] !== null && extension[field] !== undefined
+  const present = (field: string) => extension[field] !== null && extension[field] !== undefined
   if (runtime !== 'deno') {
     return present('denoVersion')
       ? [{ field: 'denoVersion', message: 'denoVersion is only valid when runtime is "deno"' }]
@@ -666,10 +647,7 @@ const NODE_PACKAGE_MANAGERS = new Set<NodePackageManager>(['npm', 'yarn', 'pnpm'
 /** Where a site's content comes from. Omitted means `release`. */
 export type SiteSourceKind = 'release' | 'managed-directory'
 
-export const SITE_SOURCE_KINDS = new Set<SiteSourceKind>([
-  'release',
-  'managed-directory',
-])
+export const SITE_SOURCE_KINDS = new Set<SiteSourceKind>(['release', 'managed-directory'])
 
 /**
  * Shape-only read; the instance's `lib/cron.ts` is what validates the schedule
@@ -736,9 +714,7 @@ function readSourceBuildKind(value: unknown): ComposeSourceBuildKind | undefined
 function readNativeRuntime(value: unknown): NativeRuntime | undefined {
   if (typeof value !== 'string') return undefined
   const trimmed = value.trim()
-  return NATIVE_RUNTIMES.has(trimmed as NativeRuntime)
-    ? (trimmed as NativeRuntime)
-    : undefined
+  return NATIVE_RUNTIMES.has(trimmed as NativeRuntime) ? (trimmed as NativeRuntime) : undefined
 }
 
 function readNodeVersion(value: unknown): string | undefined {
@@ -839,9 +815,7 @@ function readBoundedString(value: unknown, maxLength: number): string | undefine
 
 /** Drop the keys whose reader found nothing, so the block collapses when unused. */
 function withoutEmptyFields<T extends object>(candidate: T): T {
-  return Object.fromEntries(
-    Object.entries(candidate).filter(([, field]) => Boolean(field))
-  ) as T
+  return Object.fromEntries(Object.entries(candidate).filter(([, field]) => Boolean(field))) as T
 }
 
 export function parseServiceTurbopanelExtension(
@@ -870,9 +844,7 @@ export function parseServiceTurbopanelExtension(
     // Shape-only, like every other reader here. Whether the alias *resolves* is
     // a question about the document as a whole, so the linter answers it
     // (`knownPrincipalAliases`).
-    principal: isPrincipalAlias(value.principal)
-      ? value.principal.trim()
-      : undefined,
+    principal: isPrincipalAlias(value.principal) ? value.principal.trim() : undefined,
     description: readBoundedString(value.description, SERVICE_DESCRIPTION_MAX_LENGTH),
     source: parseServiceSourceExtension(value.source) ?? undefined,
     php: parseServicePhpExtension(value.php) ?? undefined,
@@ -897,9 +869,7 @@ function parsePhpExtensionNames(value: unknown): string[] | undefined {
   return [...new Set(names)].sort((a, b) => a.localeCompare(b))
 }
 
-function parsePhpStringNumberMap(
-  value: unknown,
-): Record<string, string | number> | undefined {
+function parsePhpStringNumberMap(value: unknown): Record<string, string | number> | undefined {
   if (!isPlainMapping(value)) return undefined
   const kept: Record<string, string | number> = {}
   for (const [key, entry] of Object.entries(value)) {
@@ -914,9 +884,7 @@ function parsePhpStringNumberMap(
  * Shape-only read; the instance's `php-settings.ts` table is what validates
  * values, and its linter is what tells the operator why one was refused.
  */
-function parseServicePhpExtension(
-  value: unknown
-): ComposeServicePhpExtension | null {
+function parseServicePhpExtension(value: unknown): ComposeServicePhpExtension | null {
   if (!isPlainMapping(value)) return null
   const php: ComposeServicePhpExtension = {}
   const version = readBoundedString(value.version, 16)
@@ -987,9 +955,7 @@ export type ComposeServiceTurbopanelExtensionPatch = Omit<
  * rejected on save. Drop the field entirely rather than rewriting it to
  * `native`, which is what omitting it already means.
  */
-function dropFieldsForOtherKinds(
-  next: ComposeServiceTurbopanelExtensionPatch
-): void {
+function dropFieldsForOtherKinds(next: ComposeServiceTurbopanelExtensionPatch): void {
   // One loop over {@link SERVICE_KIND_FIELD_TABLE} rather than a hand-listed
   // `delete` per kind: PHP belongs to a site, a container's runtime comes from
   // its image, where content comes from is a site question, and a container has
@@ -1011,9 +977,7 @@ function dropFieldsForOtherKinds(
  * Empty string clears description so the extension can collapse when unused.
  * Cap length so we never persist a value parseServiceTurbopanelExtension drops.
  */
-function normalizeDescription(
-  next: ComposeServiceTurbopanelExtensionPatch
-): void {
+function normalizeDescription(next: ComposeServiceTurbopanelExtensionPatch): void {
   if (typeof next.description !== 'string') return
   const description = next.description.trim()
   if (description.length === 0) {
@@ -1059,12 +1023,8 @@ export function patchServiceTurbopanelExtension(
     principal: next.principal,
     description: next.description,
     source: next.source ? { ...next.source } : undefined,
-    php:
-      next.php && Object.keys(next.php).length > 0 ? { ...next.php } : undefined,
-    cron:
-      next.cron && next.cron.length > 0
-        ? next.cron.map((job) => ({ ...job }))
-        : undefined,
+    php: next.php && Object.keys(next.php).length > 0 ? { ...next.php } : undefined,
+    cron: next.cron && next.cron.length > 0 ? next.cron.map((job) => ({ ...job })) : undefined,
     hosting:
       next.hosting && next.hosting.length > 0
         ? next.hosting.map((entry) => ({ ...entry }))
@@ -1110,12 +1070,7 @@ export const SUPPORTED_PHP_SERIES: readonly string[] = ['8.1', '8.2', '8.3', '8.
 /** PHP modes, mirroring the instance's `contracts/commands/schemas.ts`. */
 export type PhpMode = 'fastcgi' | 'fpm' | 'lsphp-detached' | 'lsphp-attached'
 
-export const PHP_MODES: readonly PhpMode[] = [
-  'fastcgi',
-  'fpm',
-  'lsphp-detached',
-  'lsphp-attached',
-]
+export const PHP_MODES: readonly PhpMode[] = ['fastcgi', 'fpm', 'lsphp-detached', 'lsphp-attached']
 
 /**
  * Modes each engine can run, mirroring the instance's
@@ -1233,7 +1188,8 @@ export const SITE_ENGINE_OPTIONS: readonly {
   },
   {
     value: 'nginx+apache',
-    label: 'nginx + Apache — nginx in front of one shared Apache, for sites that need .htaccess or Apache modules',
+    label:
+      'nginx + Apache — nginx in front of one shared Apache, for sites that need .htaccess or Apache modules',
     deployable: true,
   },
   {

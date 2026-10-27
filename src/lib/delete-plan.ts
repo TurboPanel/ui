@@ -1,10 +1,6 @@
 import type { DeletePlan } from '@/lib/instance-api'
 import { principalUsageLines } from '@/lib/principal-words'
-import {
-  apiErrorCopy,
-  CONTROL_PLANE_UNREACHABLE_COPY,
-  isNetworkFetchError,
-} from '@/lib/user-error'
+import { apiErrorCopy, CONTROL_PLANE_UNREACHABLE_COPY, isNetworkFetchError } from '@/lib/user-error'
 
 /**
  * Words for deleting a project or an environment in one step: what the
@@ -60,7 +56,9 @@ export function folderLabel(entry: PlanFolder): string {
 }
 
 /** Why a Hosting Account stays, in plain words. */
-export function hostingAccountKeepReason(usedBy: DeletePlan['hostingAccounts'][number]['usedBy']): string {
+export function hostingAccountKeepReason(
+  usedBy: DeletePlan['hostingAccounts'][number]['usedBy']
+): string {
   const lines = principalUsageLines(usedBy ?? {})
   return lines.length > 0
     ? `Kept: still used outside this project (${lines.join(', ')}).`
@@ -94,7 +92,8 @@ export function deletePlanSummary(plan: DeletePlan, subject: string): string {
     plural(removed.length, 'folder', 'folders'),
   ]
   const accounts = plan.hostingAccounts.filter((row) => row.action === 'remove')
-  if (accounts.length > 0) parts.push(plural(accounts.length, 'Hosting Account', 'Hosting Accounts'))
+  if (accounts.length > 0)
+    parts.push(plural(accounts.length, 'Hosting Account', 'Hosting Accounts'))
   const certificates = planCertificates(plan).filter((row) => row.action === 'remove')
   if (certificates.length > 0) {
     parts.push(

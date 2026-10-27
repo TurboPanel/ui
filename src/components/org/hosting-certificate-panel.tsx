@@ -249,9 +249,7 @@ export function HostingCertificatePanel({
   }
 
   const view = describeCertificate(certificate)
-  const dnsError = dnsCheck.error
-    ? userErrorMessage(dnsCheck.error, 'Could not check DNS.')
-    : null
+  const dnsError = dnsCheck.error ? userErrorMessage(dnsCheck.error, 'Could not check DNS.') : null
   const dns = dnsCheck.data?.dns ?? null
   const request = () => {
     void letsEncrypt.run().then((result) => reportRequest(result, hostingId, onRefusal))

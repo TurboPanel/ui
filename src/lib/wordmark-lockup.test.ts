@@ -99,7 +99,7 @@ describe('computeTurboPanelWordmarkLockup', () => {
       wordDownPx: 0,
     })
     expect(defaults.wordBottomOffset).toBe(
-      bottomFor(defaults.wordSize, TURBOPANEL_WORDMARK_PROFILE.console.wordDownPx),
+      bottomFor(defaults.wordSize, TURBOPANEL_WORDMARK_PROFILE.console.wordDownPx)
     )
     expect(boosted.wordSize).toBeGreaterThan(defaults.wordSize)
     expect(boosted.wordBottomOffset).toBe(bottomFor(boosted.wordSize, 0))
@@ -115,8 +115,6 @@ describe('wordmarkLetterSpacingPx', () => {
 describe('consoleMarkRenderSize', () => {
   it('maps design size to mark ink height', () => {
     const lockup = consoleWordmarkLockup(40, true)
-    expect(consoleMarkRenderSize(40)).toBe(
-      Math.round(lockup.markRenderHeight),
-    )
+    expect(consoleMarkRenderSize(40)).toBe(Math.round(lockup.markRenderHeight))
   })
 })

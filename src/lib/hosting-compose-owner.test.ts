@@ -36,7 +36,6 @@ describe('hosting compose provenance', () => {
 
   it('reports no route when the marker is present but the route is not', () => {
     expect(readHostingComposeRoute({ composeOwned: true })).toBeNull()
-    expect(readHostingComposeRoute({ composeOwned: true, composeRoute: 3 }))
-      .toBeNull()
+    expect(readHostingComposeRoute({ composeOwned: true, composeRoute: 3 })).toBeNull()
   })
 })
