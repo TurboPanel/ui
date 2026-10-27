@@ -80,6 +80,7 @@ import {
   useUpdateEnvironmentManaged,
   useUpdateManagedUser,
 } from '@/lib/queries/managed'
+import type { TrackedCommandLabel } from '@/lib/queries/commands'
 import { useOrgServers } from '@/lib/queries/servers'
 import { orEmptyArray } from '@/lib/or-empty-array'
 import { useCan } from '@/lib/query-client'
@@ -479,7 +480,7 @@ function ManagedEnvironmentBodyContent({
   )
 }
 
-function ManagedEnvironmentReadyPanels({
+export function ManagedEnvironmentReadyPanels({
   orgId,
   environmentId,
   focus,
@@ -544,7 +545,7 @@ function ManagedEnvironmentReadyPanels({
   const backups = backupsQuery.data?.backups ?? []
   const members = alignMemberStatusesWithCluster(
     mergeManagedMembers(detail.members ?? [], status?.members ?? []),
-    status?.status ?? managed.status
+    clusterStatus
   )
   const invalidateManagedData = useCallback(() => {
     invalidateEnvironmentManagedQueries(queryClient, orgId, environmentId)
@@ -675,7 +676,7 @@ function ManagedEnvironmentReadyPanels({
       ) : null}
       {showSettings ? (
         <ManagedLifecyclePanel
-          status={managed.status}
+          status={clusterStatus}
           projectName={projectName}
           canManage={canManage}
           busy={inFlight}
@@ -684,7 +685,7 @@ function ManagedEnvironmentReadyPanels({
             if (!result.ok) {
               throw new Error(result.error ?? 'Lifecycle action failed')
             }
-            registerCommand(result.value.commandId, action)
+            registerCommand(result.value.commandId, action, result.value.serverId)
           }}
           onDelete={async () => {
             const result = await deleteManagedMutation.mutateAsync()
@@ -704,7 +705,7 @@ function ManagedEnvironmentReadyPanels({
           orgId={orgId}
           environmentId={environmentId}
           applyCommand={applyCommand}
-          status={status?.status ?? managed.status}
+          status={clusterStatus}
           host={status?.host ?? managed.host}
           port={status?.port ?? managed.port}
           containers={status?.containers ?? []}
@@ -754,7 +755,7 @@ function ManagedDataPanels({
   deleteUserMutation: ReturnType<typeof useDeleteManagedUser>
   usersQuery: ReturnType<typeof useManagedUsers>
   databasesQuery: ReturnType<typeof useManagedDatabases>
-  registerCommand: (commandId: string, label: string, commandServerId?: string) => void
+  registerCommand: (commandId: string, label: TrackedCommandLabel, commandServerId?: string) => void
 }>) {
   const updateUserMutation = useUpdateManagedUser(orgId, environmentId)
   const appLoginsMutation = useCreateManagedAppLogins(orgId, environmentId)

@@ -568,24 +568,26 @@ export function mergeManagedMembers(
   })
 }
 
+/** Labels of work in progress, stale once the cluster row has settled. */
+const IN_FLIGHT_MEMBER_STATUSES = new Set(['provisioning', 'applying'])
+
 /**
- * When the cluster row is already terminal-failed, in-flight member labels
- * (`provisioning` / `applying`) are stale — older applies only flipped
- * `managed.status`. Align display so Cluster does not claim work is ongoing.
+ * In-flight member labels (`provisioning` / `applying`) are stale once the
+ * cluster row has settled — older applies only flipped `managed.status` — so
+ * Cluster does not claim work is ongoing: they follow a failed or stopped
+ * cluster. A member that reads ready or running keeps it: that is what the
+ * server last saw, and a replica whose stop failed must not look stopped.
  */
 export function alignMemberStatusesWithCluster(
   members: readonly ManagedMemberRecord[],
   clusterStatus: string | null | undefined
 ): ManagedMemberRecord[] {
-  if (clusterStatus !== 'failed') {
-    return [...members]
-  }
-  return members.map((member) => {
-    if (member.status === 'provisioning' || member.status === 'applying') {
-      return { ...member, status: 'failed' }
-    }
-    return member
-  })
+  if (clusterStatus !== 'failed' && clusterStatus !== 'stopped') return [...members]
+  return members.map((member) =>
+    IN_FLIGHT_MEMBER_STATUSES.has(member.status ?? '')
+      ? { ...member, status: clusterStatus }
+      : member
+  )
 }
 
 function invalidateManagedMembers(

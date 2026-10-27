@@ -11,7 +11,10 @@ import {
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
 vi.mock('react-native-svg', async () => (await import('@/components/ui/v4/rn-stub')).svgStub)
-vi.mock('@/lib/theme-preference', async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub)
+vi.mock(
+  '@/lib/theme-preference',
+  async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub
+)
 vi.mock('@/components/ui/panel-styles', () => ({ panelStyles: {} }))
 vi.mock('@/components/ui', () => ({
   Button: ({ label, onPress }: { label: string; onPress?: () => void }) => (
@@ -57,7 +60,7 @@ describe('settings form for an imageless MariaDB service', () => {
     const { managedStoredImage } = await import('@/lib/managed-services')
     const catalog = managedCatalogEntryForCode('mariadb')
     expect(managedStoredImage(catalog, 'docker.io/library/mariadb:11.8')).toBe(
-      'docker.io/library/mariadb:11.8',
+      'docker.io/library/mariadb:11.8'
     )
     const postgres = managedCatalogEntryForCode('postgres')
     expect(managedStoredImage(postgres, undefined)).toBe(postgres?.defaultImage)
@@ -89,5 +92,34 @@ describe('Hosting part of the settings', () => {
     fireEvent.click(screen.getByLabelText('Hide advanced settings'))
     expect(screen.queryByText('pick verify-full')).toBeNull()
     expect(screen.getByText('Save and apply')).toBeTruthy()
+  })
+})
+
+describe('Base image while the database runs', () => {
+  const renderSettings = (running: boolean) =>
+    render(
+      <ManagedSettingsPanel
+        section="settings"
+        settings={{ ssl: {} } as never}
+        engineCode="postgres"
+        organizationSslMode={null}
+        orgId="o"
+        canManage
+        busy={false}
+        running={running}
+        onApply={vi.fn()}
+      />
+    )
+
+  it('says how to change the base image instead of hiding it silently', () => {
+    renderSettings(true)
+    expect(screen.queryByText('Base image')).toBeNull()
+    expect(screen.getByText('Stop the database to change its base image.')).toBeTruthy()
+  })
+
+  it('offers the picker and no hint while stopped', () => {
+    renderSettings(false)
+    expect(screen.getByText('Base image')).toBeTruthy()
+    expect(screen.queryByText('Stop the database to change its base image.')).toBeNull()
   })
 })
