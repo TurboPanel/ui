@@ -8,7 +8,9 @@ import {
   hostnameProblem,
   hostnameServiceNames,
   initialSetupServerId,
+  letsEncryptCanIssueFor,
   setupAccounts,
+  setupCertificateNote,
   setupCompose,
   setupFormProblems,
   setupEnvironmentPatch,
@@ -99,6 +101,64 @@ describe('hostnames', () => {
     expect(readComposeHostingEntries(next, 'web')).toEqual([
       { hostname: 'example.com', www: 'www-to-root' },
     ])
+  })
+
+  it('asks for a Let\u2019s Encrypt certificate only when the organization allows it', () => {
+    const on = composeWithHostname(APP, {
+      serviceName: 'web',
+      hostname: 'example.com',
+      alsoWww: true,
+      letsEncrypt: true,
+    })
+    expect(readComposeHostingEntries(on, 'web')).toEqual([
+      { hostname: 'example.com', www: 'www-to-root', tls: { mode: 'automatic' } },
+    ])
+    const off = composeWithHostname(APP, {
+      serviceName: 'web',
+      hostname: 'example.com',
+      alsoWww: false,
+      letsEncrypt: false,
+    })
+    expect(readComposeHostingEntries(off, 'web')).toEqual([{ hostname: 'example.com' }])
+  })
+
+  it('keeps a certificate choice the compose already made, and skips names that cannot get one', () => {
+    const pinned = doc({
+      services: {
+        web: {
+          'x-turbopanel': {
+            hosting: [
+              { hostname: 'old.example.com', tls: { mode: 'certificate', certificateRef: 'mine' } },
+            ],
+          },
+        },
+      },
+    })
+    const kept = composeWithHostname(pinned, {
+      serviceName: 'web',
+      hostname: 'example.com',
+      alsoWww: false,
+      letsEncrypt: true,
+    })
+    expect(readComposeHostingEntries(kept, 'web')[0]?.tls).toEqual({
+      mode: 'certificate',
+      certificateRef: 'mine',
+    })
+    const lan = composeWithHostname(APP, {
+      serviceName: 'web',
+      hostname: 'nas.local',
+      alsoWww: false,
+      letsEncrypt: true,
+    })
+    expect(readComposeHostingEntries(lan, 'web')[0]?.tls).toBeUndefined()
+  })
+
+  it('knows which names Let\u2019s Encrypt can issue for', () => {
+    expect(letsEncryptCanIssueFor('Example.com')).toBe(true)
+    expect(letsEncryptCanIssueFor('203.0.113.5')).toBe(false)
+    expect(letsEncryptCanIssueFor('intranet')).toBe(false)
+    expect(letsEncryptCanIssueFor('nas.local')).toBe(false)
+    expect(letsEncryptCanIssueFor('')).toBe(false)
   })
 
   it('leaves the compose alone without a hostname', () => {
@@ -206,6 +266,19 @@ describe('setupCompose', () => {
     })
     expect(setupAccounts(next)).toEqual([{ alias: 'site', services: ['web'] }])
     expect(declaredHostname(next, 'web')?.hostname).toBe('example.com')
+    expect(declaredHostname(next, 'web')?.tls).toBeUndefined()
+  })
+
+  it('passes the Let\u2019s Encrypt choice through to the hostname', () => {
+    const next = setupCompose(APP, {
+      accounts: [],
+      accountNames: {},
+      serviceName: 'web',
+      hostname: 'example.com',
+      alsoWww: false,
+      letsEncrypt: true,
+    })
+    expect(declaredHostname(next, 'web')?.tls).toEqual({ mode: 'automatic' })
   })
 
   it('has nothing to write without a compose', () => {
@@ -217,6 +290,38 @@ describe('setupCompose', () => {
         hostname: 'example.com',
         alsoWww: true,
       })
+    ).toBeNull()
+  })
+})
+
+describe('setupCertificateNote', () => {
+  it('says the certificate is free when the organization allows it', () => {
+    expect(
+      setupCertificateNote({ hostname: 'example.com', acmeEnabled: true, tlsChosen: false })
+        ?.openSettings
+    ).toBe(false)
+  })
+
+  it('points at the setting when it is off', () => {
+    const note = setupCertificateNote({
+      hostname: 'example.com',
+      acmeEnabled: false,
+      tlsChosen: false,
+    })
+    expect(note?.openSettings).toBe(true)
+    expect(note?.text).toContain('Organization settings \u203a Domains & certificates')
+  })
+
+  it('says nothing without a usable name, a known setting, or when compose already chose', () => {
+    expect(setupCertificateNote({ hostname: '', acmeEnabled: false, tlsChosen: false })).toBeNull()
+    expect(
+      setupCertificateNote({ hostname: 'nas.local', acmeEnabled: false, tlsChosen: false })
+    ).toBeNull()
+    expect(
+      setupCertificateNote({ hostname: 'example.com', acmeEnabled: null, tlsChosen: false })
+    ).toBeNull()
+    expect(
+      setupCertificateNote({ hostname: 'example.com', acmeEnabled: true, tlsChosen: true })
     ).toBeNull()
   })
 })

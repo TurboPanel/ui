@@ -11,9 +11,8 @@ import { panelStyles } from '@/components/ui/panel-styles'
 import { Button, ConfirmButton, LoadingState, TextField } from '@/components/ui'
 import {
   MANAGED_RUNTIME_PRESENT_ERROR,
-  PROJECT_HAS_RUNNING_SERVICES_ERROR,
   type CommandStatusRecord,
-  type ContainerRecord,
+  type DeletePlan,
   type EnvironmentRecord,
   type ProjectRecord,
 } from '@/lib/instance-api'
@@ -21,22 +20,21 @@ import {
   commandStatusById,
   isTerminalCommandStatus,
   useCommandsBatch,
-  useContainersByProject,
   useDeleteEnvironmentManagedMutation,
   useDeleteProject,
   useEnvironments,
   useOrganizationManaged,
-  useStopEnvironmentMutation,
+  useProjectDeletePreview,
   type TrackedCommandEntry,
 } from '@/lib/queries'
+import { DeletePlanList } from '@/components/org/delete-plan-list'
+import { deleteFailureMessage } from '@/lib/delete-plan'
 import { commandErrorLine } from '@/lib/command-error'
 import { orEmptyArray } from '@/lib/or-empty-array'
 import type { ManagedListRecord } from '@/lib/managed-services'
 import { isManagedProject } from '@/lib/project-navigation'
 import { colors, spacing } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
-
-const STOPPED_CONTAINER_STATUSES = new Set(['exited', 'dead', 'removing'])
 
 type EnvStopRow = {
   environment: EnvironmentRecord
@@ -58,7 +56,7 @@ function withStopState(
   environment: EnvironmentRecord,
   activeCount: number,
   serverId: string | null,
-  stopState: StopRowState | undefined,
+  stopState: StopRowState | undefined
 ): EnvStopRow {
   return {
     environment,
@@ -74,11 +72,9 @@ function collectManagedDeleteRows(
   projectId: string,
   environments: readonly EnvironmentRecord[],
   orgManaged: readonly ManagedListRecord[],
-  stopRows: Record<string, StopRowState>,
+  stopRows: Record<string, StopRowState>
 ): EnvStopRow[] {
-  const environmentsById = new Map(
-    environments.map((environment) => [environment.id, environment]),
-  )
+  const environmentsById = new Map(environments.map((environment) => [environment.id, environment]))
   const rows: EnvStopRow[] = []
   for (const cluster of orgManaged) {
     if (cluster.projectId !== projectId || !cluster.environmentId) continue
@@ -89,32 +85,8 @@ function collectManagedDeleteRows(
         environment,
         1,
         cluster.serverId ?? environment.serverId,
-        stopRows[environment.id],
-      ),
-    )
-  }
-  return rows
-}
-
-function collectComposeDeleteRows(
-  environments: readonly EnvironmentRecord[],
-  containersByEnv: Record<string, ContainerRecord[]>,
-  stopRows: Record<string, StopRowState>,
-): EnvStopRow[] {
-  const rows: EnvStopRow[] = []
-  for (const environment of environments) {
-    const containers = containersByEnv[environment.id] ?? []
-    const active = containers.filter((container) =>
-      isActiveContainerStatus(container.status),
-    )
-    if (active.length === 0) continue
-    rows.push(
-      withStopState(
-        environment,
-        active.length,
-        resolveEnvServerId(environment, active),
-        stopRows[environment.id],
-      ),
+        stopRows[environment.id]
+      )
     )
   }
   return rows
@@ -122,39 +94,8 @@ function collectComposeDeleteRows(
 
 function sortEnvStopRows(rows: EnvStopRow[]): EnvStopRow[] {
   return rows.sort((a, b) =>
-    environmentLabel(a.environment).localeCompare(
-      environmentLabel(b.environment),
-    ),
+    environmentLabel(a.environment).localeCompare(environmentLabel(b.environment))
   )
-}
-
-function projectDeleteFailureCopy(
-  message: string,
-): { text: string; kind: 'managed' | 'compose' | 'other' } {
-  if (message.includes(MANAGED_RUNTIME_PRESENT_ERROR)) {
-    return {
-      text: 'A managed database is still on the server. Destroy it first.',
-      kind: 'managed',
-    }
-  }
-  if (message.includes(PROJECT_HAS_RUNNING_SERVICES_ERROR)) {
-    return {
-      text: 'Services are still running. Stop every environment first.',
-      kind: 'compose',
-    }
-  }
-  if (message.includes('project_stop_failed')) {
-    return {
-      text: 'The site could not be stopped on every server, so nothing was deleted. Try again.',
-      kind: 'compose',
-    }
-  }
-  return { text: message, kind: 'other' }
-}
-
-function isActiveContainerStatus(status: string | undefined): boolean {
-  if (status === undefined || status.length === 0) return true
-  return !STOPPED_CONTAINER_STATUSES.has(status)
 }
 
 function environmentLabel(environment: EnvironmentRecord): string {
@@ -165,42 +106,29 @@ function projectConfirmName(project: ProjectRecord): string {
   return project.name?.trim() || 'Unnamed project'
 }
 
-function resolveEnvServerId(
-  environment: EnvironmentRecord,
-  containers: ContainerRecord[],
-): string | null {
-  if (environment.serverId) return environment.serverId
-  return containers.find((row) => row.serverId)?.serverId ?? null
-}
-
 type StopStepCopy = Readonly<{
   stepLabel: string
   stepCopy: string
   countLabel: (count: number) => string
   actionLabel: string
   actionBusyLabel: string
+  /** The second press: the action destroys data, so it always confirms. */
+  confirmLabel: string
+  confirmPrompt: string
 }>
 
-const COMPOSE_STOP_COPY: StopStepCopy = {
-  stepLabel: 'Stop running services',
-  stepCopy:
-    'Stop every environment that still has active containers before the project can be deleted.',
-  countLabel: (count) =>
-    `${count} active container${count === 1 ? '' : 's'}`,
-  actionLabel: 'Stop services',
-  actionBusyLabel: 'Stopping…',
-}
-
-const MANAGED_DESTROY_COPY: StopStepCopy = {
+export const MANAGED_DESTROY_COPY: StopStepCopy = {
   stepLabel: 'Destroy databases',
   stepCopy:
     'Destroy every managed database before the project can be deleted. This stops the containers and removes their data volumes.',
   countLabel: () => 'Still running on the server',
   actionLabel: 'Destroy database',
   actionBusyLabel: 'Destroying…',
+  confirmLabel: 'Destroy it',
+  confirmPrompt: 'Destroy the databases in this environment and their data?',
 }
 
-function StopStepSection({
+export function StopStepSection({
   envRows,
   onStop,
   onForceDestroy,
@@ -219,26 +147,18 @@ function StopStepSection({
         {envRows.map((row) => (
           <View key={row.environment.id} style={styles.envRow}>
             <View style={styles.envInfo}>
-              <Text style={styles.envName}>
-                {environmentLabel(row.environment)}
-              </Text>
-              <Text style={panelStyles.muted}>
-                {copy.countLabel(row.activeCount)}
-              </Text>
-              {row.status ? (
-                <Text style={panelStyles.muted}>{row.status}</Text>
-              ) : null}
-              {row.error ? (
-                <Text style={panelStyles.error}>{row.error}</Text>
-              ) : null}
+              <Text style={styles.envName}>{environmentLabel(row.environment)}</Text>
+              <Text style={panelStyles.muted}>{copy.countLabel(row.activeCount)}</Text>
+              {row.status ? <Text style={panelStyles.muted}>{row.status}</Text> : null}
+              {row.error ? <Text style={panelStyles.error}>{row.error}</Text> : null}
             </View>
             <View style={styles.envActions}>
-              <Button
+              <ConfirmButton
                 label={row.stopping ? copy.actionBusyLabel : copy.actionLabel}
-                variant="danger"
-                size="sm"
+                confirmLabel={copy.confirmLabel}
+                prompt={copy.confirmPrompt}
                 busy={row.stopping}
-                onPress={() => onStop(row.environment.id)}
+                onConfirm={() => onStop(row.environment.id)}
               />
               {row.error && onForceDestroy ? (
                 <ConfirmButton
@@ -257,12 +177,14 @@ function StopStepSection({
 }
 
 function ConfirmStepSection({
+  plan,
   confirmName,
   confirmText,
   onConfirmTextChange,
   deleteError,
   deleting,
 }: Readonly<{
+  plan: DeletePlan | undefined
   confirmName: string
   confirmText: string
   onConfirmTextChange: (value: string) => void
@@ -271,10 +193,12 @@ function ConfirmStepSection({
 }>) {
   return (
     <View style={styles.section}>
+      <Text style={styles.stepLabel}>What will be removed</Text>
+      {plan ? <DeletePlanList plan={plan} /> : null}
       <Text style={styles.stepLabel}>Confirm deletion</Text>
       <Text style={styles.stepCopy}>
-        Type <Text style={styles.confirmName}>{confirmName}</Text> to
-        permanently delete this project.
+        Type <Text style={styles.confirmName}>{confirmName}</Text> to permanently delete this
+        project.
       </Text>
       <TextField
         label="Project name"
@@ -290,26 +214,29 @@ function ConfirmStepSection({
   )
 }
 
-function isProjectDeleteLoading(input: Readonly<{
-  managedProject: boolean
-  environmentsLoading: boolean
-  orgManagedLoading: boolean
-  environmentCount: number
-  containersLoading: boolean
-}>): boolean {
-  if (input.environmentsLoading) return true
-  if (input.managedProject) return input.orgManagedLoading
-  return input.environmentCount > 0 && input.containersLoading
+function isProjectDeleteLoading(
+  input: Readonly<{
+    managedProject: boolean
+    environmentsLoading: boolean
+    orgManagedLoading: boolean
+    previewLoading: boolean
+  }>
+): boolean {
+  if (input.environmentsLoading || input.previewLoading) return true
+  return input.managedProject && input.orgManagedLoading
 }
 
-function canConfirmProjectDelete(input: Readonly<{
-  hasActiveServices: boolean
-  confirmText: string
-  confirmName: string
-  deleting: boolean
-  loading: boolean
-}>): boolean {
-  if (input.hasActiveServices || input.deleting || input.loading) return false
+function canConfirmProjectDelete(
+  input: Readonly<{
+    hasActiveServices: boolean
+    blocked: boolean
+    confirmText: string
+    confirmName: string
+    deleting: boolean
+    loading: boolean
+  }>
+): boolean {
+  if (input.hasActiveServices || input.blocked || input.deleting || input.loading) return false
   return input.confirmText.trim() === input.confirmName
 }
 
@@ -317,7 +244,7 @@ function projectDeleteWarning(managedProject: boolean): string {
   if (managedProject) {
     return 'This is permanent and cannot be undone. Destroying a database removes its containers and data volumes on the server, then deletes the project.'
   }
-  return 'This is permanent and cannot be undone. Deleting removes all environments, services, hostings, containers, variables, and Docker volumes for stopped stacks under this project.'
+  return 'This is permanent and cannot be undone. Deleting stops every environment, then removes its services, domains, variables and folders on your servers, and the Hosting Accounts nothing else uses. Volumes set to keep their data stay.'
 }
 
 function DeletePanelBody({
@@ -327,6 +254,7 @@ function DeletePanelBody({
   envRows,
   onStop,
   onForceDestroy,
+  plan,
   confirmName,
   confirmText,
   onConfirmTextChange,
@@ -339,6 +267,7 @@ function DeletePanelBody({
   envRows: EnvStopRow[]
   onStop: (environmentId: string) => void
   onForceDestroy?: (environmentId: string) => void
+  plan: DeletePlan | undefined
   confirmName: string
   confirmText: string
   onConfirmTextChange: (value: string) => void
@@ -348,11 +277,7 @@ function DeletePanelBody({
   if (loading) {
     return (
       <LoadingState
-        label={
-          managedProject
-            ? 'Checking managed databases…'
-            : 'Checking running services…'
-        }
+        label={managedProject ? 'Checking managed databases…' : 'Checking what the project owns…'}
       />
     )
   }
@@ -362,12 +287,13 @@ function DeletePanelBody({
         envRows={envRows}
         onStop={onStop}
         onForceDestroy={managedProject ? onForceDestroy : undefined}
-        copy={managedProject ? MANAGED_DESTROY_COPY : COMPOSE_STOP_COPY}
+        copy={MANAGED_DESTROY_COPY}
       />
     )
   }
   return (
     <ConfirmStepSection
+      plan={plan}
       confirmName={confirmName}
       confirmText={confirmText}
       onConfirmTextChange={onConfirmTextChange}
@@ -392,13 +318,7 @@ function ProjectDeleteActions({
 }>) {
   return (
     <View style={styles.actions}>
-      <Button
-        label="Cancel"
-        variant="secondary"
-        size="sm"
-        disabled={deleting}
-        onPress={onCancel}
-      />
+      <Button label="Cancel" variant="secondary" size="sm" disabled={deleting} onPress={onCancel} />
       {showDelete ? (
         <Button
           label="Delete permanently"
@@ -414,24 +334,24 @@ function ProjectDeleteActions({
   )
 }
 
-function useSyncTerminalProjectDeleteCommands(input: Readonly<{
-  commands: readonly CommandStatusRecord[] | undefined
-  trackedCommands: readonly TrackedCommandEntry[]
-  commandEnvById: Record<string, string>
-  managedProject: boolean
-  refetchManaged: () => void
-  refetchContainers: () => void
-  setStopRows: Dispatch<SetStateAction<Record<string, StopRowState>>>
-  setTrackedCommands: Dispatch<SetStateAction<readonly TrackedCommandEntry[]>>
-  setCommandEnvById: Dispatch<SetStateAction<Record<string, string>>>
-}>) {
+function useSyncTerminalProjectDeleteCommands(
+  input: Readonly<{
+    commands: readonly CommandStatusRecord[] | undefined
+    trackedCommands: readonly TrackedCommandEntry[]
+    commandEnvById: Record<string, string>
+    managedProject: boolean
+    refetchManaged: () => void
+    setStopRows: Dispatch<SetStateAction<Record<string, StopRowState>>>
+    setTrackedCommands: Dispatch<SetStateAction<readonly TrackedCommandEntry[]>>
+    setCommandEnvById: Dispatch<SetStateAction<Record<string, string>>>
+  }>
+) {
   const {
     commands,
     trackedCommands,
     commandEnvById,
     managedProject,
     refetchManaged,
-    refetchContainers,
     setStopRows,
     setTrackedCommands,
     setCommandEnvById,
@@ -448,11 +368,7 @@ function useSyncTerminalProjectDeleteCommands(input: Readonly<{
       if (!environmentId || !isTerminalCommandStatus(command.status)) continue
 
       if (command.status === 'succeeded') {
-        if (managedProject) {
-          refetchManaged()
-        } else {
-          refetchContainers()
-        }
+        refetchManaged()
         setStopRows((current) => ({
           ...current,
           [environmentId]: {
@@ -468,15 +384,14 @@ function useSyncTerminalProjectDeleteCommands(input: Readonly<{
           [environmentId]: {
             stopping: false,
             status: null,
-            error: commandErrorLine(command) ??
+            error:
+              commandErrorLine(command) ??
               `${managedProject ? 'Destroy' : 'Stop'} ${command.status}`,
             serverId: entry.serverId,
           },
         }))
       }
-      setTrackedCommands((current) =>
-        current.filter((row) => row.commandId !== entry.commandId),
-      )
+      setTrackedCommands((current) => current.filter((row) => row.commandId !== entry.commandId))
       setCommandEnvById((current) => {
         const next = { ...current }
         delete next[entry.commandId]
@@ -489,7 +404,6 @@ function useSyncTerminalProjectDeleteCommands(input: Readonly<{
     commandEnvById,
     managedProject,
     refetchManaged,
-    refetchContainers,
     setStopRows,
     setTrackedCommands,
     setCommandEnvById,
@@ -511,29 +425,18 @@ export function ProjectDeletePanel({
   const managedProject = isManagedProject(project)
   const environmentsQuery = useEnvironments(orgId, project.id)
   const environments = orEmptyArray(environmentsQuery.data?.environments)
-  const environmentIds = useMemo(
-    () => environments.map((env) => env.id),
-    [environments],
-  )
-  const containersQuery = useContainersByProject(orgId, project.id, {
-    enabled: !managedProject && environmentIds.length > 0,
-    environmentIds,
-  })
+  const previewQuery = useProjectDeletePreview(orgId, project.id)
+  const plan = previewQuery.data
   const orgManagedQuery = useOrganizationManaged(orgId, {
     enabled: managedProject,
   })
   const orgManaged = orEmptyArray(orgManagedQuery.data?.managed)
   const deleteProjectMutation = useDeleteProject(orgId)
-  const stopEnvironmentMutation = useStopEnvironmentMutation(orgId)
   const destroyManagedMutation = useDeleteEnvironmentManagedMutation(orgId)
 
   const [stopRows, setStopRows] = useState<Record<string, StopRowState>>({})
-  const [trackedCommands, setTrackedCommands] = useState<
-    readonly TrackedCommandEntry[]
-  >([])
-  const [commandEnvById, setCommandEnvById] = useState<Record<string, string>>(
-    {},
-  )
+  const [trackedCommands, setTrackedCommands] = useState<readonly TrackedCommandEntry[]>([])
+  const [commandEnvById, setCommandEnvById] = useState<Record<string, string>>({})
 
   const commandsQuery = useCommandsBatch(orgId, trackedCommands)
 
@@ -542,10 +445,8 @@ export function ProjectDeletePanel({
 
   const refetchManaged = useCallback(() => {
     void orgManagedQuery.refetch()
-  }, [orgManagedQuery])
-  const refetchContainers = useCallback(() => {
-    void containersQuery.refetchAll()
-  }, [containersQuery])
+    void previewQuery.refetch()
+  }, [orgManagedQuery, previewQuery])
 
   useSyncTerminalProjectDeleteCommands({
     commands: commandsQuery.data,
@@ -553,45 +454,39 @@ export function ProjectDeletePanel({
     commandEnvById,
     managedProject,
     refetchManaged,
-    refetchContainers,
     setStopRows,
     setTrackedCommands,
     setCommandEnvById,
   })
 
-  const envRows = useMemo(() => {
-    const rows = managedProject
-      ? collectManagedDeleteRows(project.id, environments, orgManaged, stopRows)
-      : collectComposeDeleteRows(
-        environments,
-        containersQuery.containersByEnv,
-        stopRows,
-      )
-    return sortEnvStopRows(rows)
-  }, [
-    managedProject,
-    orgManaged,
-    project.id,
-    environments,
-    containersQuery.containersByEnv,
-    stopRows,
-  ])
+  // Only managed databases need their own step: they are destroyed with
+  // their own confirmation. Everything else goes with the delete itself.
+  const envRows = useMemo(
+    () =>
+      managedProject
+        ? sortEnvStopRows(collectManagedDeleteRows(project.id, environments, orgManaged, stopRows))
+        : [],
+    [managedProject, orgManaged, project.id, environments, stopRows]
+  )
 
   const loading = isProjectDeleteLoading({
     managedProject,
     environmentsLoading: environmentsQuery.isLoading,
     orgManagedLoading: orgManagedQuery.isLoading,
-    environmentCount: environmentIds.length,
-    containersLoading: containersQuery.isLoading,
+    previewLoading: previewQuery.isLoading,
   })
 
+  const queryError = environmentsQuery.error ?? previewQuery.error
   const loadError =
-    environmentsQuery.error instanceof Error ? userErrorMessage(environmentsQuery.error, '') : null
+    queryError instanceof Error
+      ? deleteFailureMessage(queryError, 'Could not read what this project owns. Try again.')
+      : null
 
   const hasActiveServices = envRows.length > 0
   const deleting = deleteProjectMutation.isPending
   const canDelete = canConfirmProjectDelete({
     hasActiveServices,
+    blocked: !plan || plan.blockers.length > 0,
     confirmText,
     confirmName,
     deleting,
@@ -614,7 +509,7 @@ export function ProjectDeletePanel({
     environmentId: string,
     serverId: string,
     commandId: string,
-    status: string,
+    status: string
   ) => {
     setStopRows((current) => ({
       ...current,
@@ -632,36 +527,7 @@ export function ProjectDeletePanel({
     }))
   }
 
-  const handleStopCompose = async (environmentId: string) => {
-    setStopRows((current) => ({
-      ...current,
-      [environmentId]: {
-        stopping: true,
-        status: 'Queueing stop…',
-        error: null,
-        serverId: current[environmentId]?.serverId ?? null,
-      },
-    }))
-    const result = await stopEnvironmentMutation.run(environmentId)
-    if (!result.ok) {
-      markStopFailed(
-        environmentId,
-        stopEnvironmentMutation.actionError ?? 'Failed to stop services',
-      )
-      return
-    }
-    const { commandId, serverId } = result.value
-    if (!serverId) {
-      markStopFailed(environmentId, 'Stop queued but target server was not returned')
-      return
-    }
-    trackQueuedCommand(environmentId, serverId, commandId, 'Stopping services…')
-  }
-
-  const handleDestroyManaged = async (
-    environmentId: string,
-    options?: { force?: boolean },
-  ) => {
+  const handleDestroyManaged = async (environmentId: string, options?: { force?: boolean }) => {
     setStopRows((current) => ({
       ...current,
       [environmentId]: {
@@ -672,14 +538,14 @@ export function ProjectDeletePanel({
       },
     }))
     const result = await destroyManagedMutation.run(
-      options?.force ? { environmentId, force: true } : environmentId,
+      options?.force ? { environmentId, force: true } : environmentId
     )
     if (!result.ok) {
       markStopFailed(
         environmentId,
         result.error
           ? userErrorMessage(result.cause ?? new Error(result.error), '')
-          : 'Failed to destroy database',
+          : 'Failed to destroy database'
       )
       return
     }
@@ -694,26 +560,10 @@ export function ProjectDeletePanel({
     }
     const { commandId, serverId } = result.value
     if (!commandId || !serverId) {
-      markStopFailed(
-        environmentId,
-        'Destroy queued but target server was not returned',
-      )
+      markStopFailed(environmentId, 'Destroy queued but target server was not returned')
       return
     }
-    trackQueuedCommand(
-      environmentId,
-      serverId,
-      commandId,
-      'Destroying database…',
-    )
-  }
-
-  const handleStop = async (environmentId: string) => {
-    if (managedProject) {
-      await handleDestroyManaged(environmentId)
-      return
-    }
-    await handleStopCompose(environmentId)
+    trackQueuedCommand(environmentId, serverId, commandId, 'Destroying database…')
   }
 
   const handleDelete = async () => {
@@ -721,11 +571,15 @@ export function ProjectDeletePanel({
     setDeleteError(null)
     const result = await deleteProjectMutation.run(project.id)
     if (!result.ok) {
-      const message = result.error ?? 'Failed to delete project'
-      const failure = projectDeleteFailureCopy(message)
-      setDeleteError(failure.text)
-      if (failure.kind === 'managed') void orgManagedQuery.refetch()
-      if (failure.kind === 'compose') void containersQuery.refetchAll()
+      setDeleteError(
+        deleteFailureMessage(
+          result.cause ?? result.error,
+          'The project could not be deleted. Try again.'
+        )
+      )
+      // Whatever refused it may have changed (a server came back, a database went).
+      void previewQuery.refetch()
+      if (result.error?.includes(MANAGED_RUNTIME_PRESENT_ERROR)) void orgManagedQuery.refetch()
       return
     }
     onDeleted()
@@ -742,9 +596,11 @@ export function ProjectDeletePanel({
         managedProject={managedProject}
         hasActiveServices={hasActiveServices}
         envRows={envRows}
-        onStop={(environmentId) => void handleStop(environmentId)}
+        onStop={(environmentId) => void handleDestroyManaged(environmentId)}
         onForceDestroy={(environmentId) =>
-          void handleDestroyManaged(environmentId, { force: true })}
+          void handleDestroyManaged(environmentId, { force: true })
+        }
+        plan={plan}
         confirmName={confirmName}
         confirmText={confirmText}
         onConfirmTextChange={setConfirmText}

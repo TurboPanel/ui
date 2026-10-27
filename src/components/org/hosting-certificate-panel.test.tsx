@@ -12,6 +12,7 @@ import {
 
 const state = vi.hoisted(() => ({
   certificate: null as unknown,
+  metadata: null as unknown,
   requestError: null as unknown,
   lifecycle: null as unknown,
   push: vi.fn(),
@@ -26,7 +27,9 @@ vi.mock('@/components/org/project/overview-environments-panel', () => ({
 }))
 vi.mock('@/lib/queries/hosting-certificate', () => ({
   useHostingCertificate: () => ({
-    data: state.certificate ? { hosting: { certificate: state.certificate } } : undefined,
+    data: state.certificate
+      ? { hosting: { certificate: state.certificate, metadata: state.metadata } }
+      : undefined,
   }),
   useUseLetsEncrypt: () => ({ run: state.run, isPending: false, error: state.requestError }),
   useHostingDnsCheck: () => ({ run: vi.fn(), isPending: false, error: null, data: undefined }),
@@ -81,6 +84,7 @@ const OFF = {
 
 beforeEach(() => {
   state.certificate = cert({})
+  state.metadata = null
   state.requestError = null
   state.lifecycle = null
 })
@@ -194,6 +198,46 @@ describe('a certificate that starts on the next deploy', () => {
     renderPanel({ onDeploy: vi.fn(), deployDisabled: true })
     const button = screen.getByLabelText('Deploy this environment to get the certificate')
     expect((button as HTMLButtonElement).disabled).toBe(true)
+  })
+})
+
+describe('a domain compose declares', () => {
+  const owned = {
+    composeOwned: true,
+    composeServiceName: 'web',
+    composeRoute: 'app.example.com /',
+  }
+  const failed = cert({
+    state: 'renewal_failed',
+    source: 'lets_encrypt',
+    lastError: 'DNS problem',
+    letsEncryptAvailable: false,
+  })
+
+  function renderComposePanel() {
+    return render(
+      <HostingCertificatePanel orgId="o1" hostingId="h1" composeOwned disabled={false} />
+    )
+  }
+
+  it('offers Check DNS and Try again when compose asks for Let\u2019s Encrypt', () => {
+    state.certificate = failed
+    state.metadata = { ...owned, composeTlsMode: 'automatic' }
+    renderComposePanel()
+    expect(screen.getByText(/The configuration file asks Let\u2019s Encrypt/)).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Check DNS' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(state.run).toHaveBeenCalled()
+    expect(screen.queryByRole('button', { name: 'Use Let\u2019s Encrypt' })).toBeNull()
+  })
+
+  it('points at the hostname\u2019s certificate setting otherwise, without Try again', () => {
+    state.certificate = failed
+    state.metadata = { ...owned, composeTlsMode: 'certificate' }
+    renderComposePanel()
+    expect(screen.getByText(/Pick Let\u2019s Encrypt there/)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Check DNS' })).toBeTruthy()
   })
 })
 

@@ -93,6 +93,10 @@ describe('a save from an environment', () => {
     expect(shownAfter({ appMode: 'production' }).ext.appMode).toBe('production')
   })
 
+  it('sets a custom mode over a Base mode', () => {
+    expect(shownAfter({ appMode: 'staging' }).ext.appMode).toBe('staging')
+  })
+
   it('turns start-after-deploy back on over a Base that has it off', () => {
     expect(shownAfter({ enabled: true }).ext.enabled).toBe(true)
   })

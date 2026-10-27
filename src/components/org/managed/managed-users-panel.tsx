@@ -1,6 +1,15 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Fragment, useEffect, useMemo, useState } from 'react'
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import { SecretReveal } from '@/components/org/managed/secret-reveal'
+import {
+  AppLoginsButton,
+  AppLoginsPasswords,
+  AppLoginsRowForm,
+  AppLoginsSchemeNote,
+  useAppLogins,
+  type AppLoginsBody,
+  type AppLoginsResult,
+} from '@/components/org/managed/managed-app-logins'
 import { panelStyles } from '@/components/ui/panel-styles'
 import {
   Button,
@@ -59,12 +68,52 @@ import {
   type LoginLimitsDraft,
 } from '@/lib/managed-login-limits'
 import { orEmptyArray } from '@/lib/or-empty-array'
-import { PrincipalNameSchemeField, usePrincipalNameScheme } from '@/components/org/principal-name-scheme-field'
-import { principalNamesLabel, principalSchemeErrorMessage, type NameScheme } from '@/lib/principal-name-scheme'
+import { appLoginsSchemeProblem } from '@/lib/managed-app-logins'
+import { managedIdentifierMaxLength, managedIdentifierProblem } from '@/lib/managed-identifier'
+import { recallSessionChoices, rememberSessionChoices } from '@/lib/session-choices'
+import {
+  PrincipalNameSchemeField,
+  usePrincipalNameScheme,
+} from '@/components/org/principal-name-scheme-field'
+import {
+  principalNamesLabel,
+  principalSchemeErrorMessage,
+  type NameScheme,
+} from '@/lib/principal-name-scheme'
 import { chrome, colors, spacing, webPointer } from '@/lib/theme'
 
-const USERNAME_PATTERN = /^[a-zA-Z_]\w{0,62}$/
-const DATABASE_PATTERN = /^[a-zA-Z_]\w{0,62}$/
+/** What the single-login form keeps between logins for the rest of the session. */
+type LoginFormChoices = {
+  job: LoginJob
+  grantMode: LoginMode
+  tool: boolean
+  admin: boolean
+  toolBeforeAdmin: boolean
+  limits: LoginLimitsDraft
+  straightChoice: boolean | null
+  nameScheme?: NameScheme
+}
+
+const loginFormKey = (orgId: string) => `managed-login-form:${orgId}`
+
+const DEFAULT_LOGIN_FORM: LoginFormChoices = {
+  job: 'read-write',
+  grantMode: 'recipe',
+  tool: false,
+  admin: false,
+  toolBeforeAdmin: false,
+  limits: EMPTY_LIMITS_DRAFT,
+  // null = the owner has not touched the switch, so the default for the chosen level shows.
+  straightChoice: null,
+}
+
+/** The last login's choices in this session, or the defaults. */
+function initialLoginForm(orgId: string): LoginFormChoices {
+  return {
+    ...DEFAULT_LOGIN_FORM,
+    ...recallSessionChoices<LoginFormChoices>(loginFormKey(orgId)),
+  }
+}
 
 function Chip({ label }: Readonly<{ label: string }>) {
   return (
@@ -87,14 +136,11 @@ function RedeployServicesPanel({
   return (
     <View style={styles.redeployCard}>
       <Text style={panelStyles.detailTitle}>
-        {redeployRequired.count} service(s) need a redeploy to pick up the new
-        password
+        {redeployRequired.count} service(s) need a redeploy to pick up the new password
       </Text>
       {redeployRequired.services.map((service) => (
         <View key={service.serviceId} style={styles.redeployRow}>
-          <Text style={styles.rowLabel}>
-            {service.name?.trim() || service.keyPrefix}
-          </Text>
+          <Text style={styles.rowLabel}>{service.name?.trim() || service.keyPrefix}</Text>
           <Button
             label="Redeploy"
             busyLabel="Redeploying…"
@@ -102,15 +148,81 @@ function RedeployServicesPanel({
             busy={busyId === service.serviceId}
             onPress={() => {
               setBusyId(service.serviceId)
-              void onRedeploy(service.environmentId).finally(() =>
-                setBusyId(null),
-              )
+              void onRedeploy(service.environmentId).finally(() => setBusyId(null))
             }}
           />
         </View>
       ))}
       <Button label="Done" onPress={onDismiss} />
     </View>
+  )
+}
+
+/** A failure said where it happened; nothing when there is none. */
+function InlineError({ message }: Readonly<{ message: string | null }>) {
+  return message ? <Text style={panelStyles.error}>{message}</Text> : null
+}
+
+/** What the last add form, edit or delete is waiting for while a change applies. */
+const FORM_WAITS = 'Wait until the current change finishes; this form unlocks by itself.'
+const EDITS_WAIT =
+  'The current change is still being applied on the server. Editing and deleting unlock by themselves when it finishes.'
+
+/**
+ * Why controls are locked while a change applies on the server: it refuses
+ * another change to this database until then (`managed_busy`), so the
+ * controls wait visibly instead of ignoring presses.
+ */
+function ApplyingNote({ shown, text }: Readonly<{ shown: boolean; text: string }>) {
+  if (!shown) return null
+  return (
+    <View style={styles.applying}>
+      <ActivityIndicator size="small" color={colors.textMuted} />
+      <Text style={panelStyles.muted}>{text}</Text>
+    </View>
+  )
+}
+
+/** The show-once passwords: the app logins list, or one login's new password. */
+function PasswordsPanel({
+  appLoginsResult,
+  onAppLoginsDone,
+  username,
+  password,
+  onPasswordDone,
+  redeployRequired,
+  onRedeploy,
+  onDismissRedeploy,
+}: Readonly<{
+  appLoginsResult: AppLoginsResult | null
+  onAppLoginsDone: () => void
+  username: string | null
+  password: string | null
+  onPasswordDone: () => void
+  redeployRequired: BindingRedeployRequired | null
+  onRedeploy: (environmentId: string) => Promise<void>
+  onDismissRedeploy: () => void
+}>) {
+  return (
+    <SectionPanel title="Users & databases" hint="Engine users and databases">
+      {appLoginsResult ? (
+        <AppLoginsPasswords result={appLoginsResult} onDone={onAppLoginsDone} />
+      ) : (
+        <SecretReveal
+          username={username}
+          password={password ?? ''}
+          onContinue={onPasswordDone}
+          continueLabel="Done"
+        />
+      )}
+      {!appLoginsResult && redeployRequired ? (
+        <RedeployServicesPanel
+          redeployRequired={redeployRequired}
+          onRedeploy={onRedeploy}
+          onDismiss={onDismissRedeploy}
+        />
+      ) : null}
+    </SectionPanel>
   )
 }
 
@@ -130,6 +242,7 @@ export function ManagedUsersPanel({
   onRotateUserPassword,
   onRedeployService,
   onReload,
+  onCreateAppLogins,
 }: Readonly<{
   orgId: string
   environmentId: string
@@ -161,30 +274,37 @@ export function ManagedUsersPanel({
   } | null>
   onRedeployService: (environmentId: string) => Promise<void>
   onReload: () => Promise<void>
+  /** The three app logins for one database in one step; no action when absent. */
+  onCreateAppLogins?: (databaseName: string, body: AppLoginsBody) => Promise<AppLoginsResult>
 }>) {
   const bindingsQuery = useManagedEnvironmentBindings(orgId, environmentId)
-  const nameScheme = usePrincipalNameScheme(orgId)
+  // The form starts from the last login's choices in this session.
+  const [initial] = useState(() => initialLoginForm(orgId))
+  const nameScheme = usePrincipalNameScheme(orgId, initial.nameScheme)
   const serversQuery = useOrgServers(orgId)
   const servers = orEmptyArray(serversQuery.data?.servers)
   const [dbName, setDbName] = useState('')
   const [username, setUsername] = useState('')
   const [selectedDbs, setSelectedDbs] = useState<string[]>([])
-  const [job, setJob] = useState<LoginJob>('read-write')
-  const [grantMode, setGrantMode] = useState<LoginMode>('recipe')
-  const [tool, setTool] = useState(false)
-  const [admin, setAdmin] = useState(false)
-  const [toolBeforeAdmin, setToolBeforeAdmin] = useState(false)
-  const [limits, setLimits] = useState<LoginLimitsDraft>(EMPTY_LIMITS_DRAFT)
+  const [job, setJob] = useState<LoginJob>(initial.job)
+  const [grantMode, setGrantMode] = useState<LoginMode>(initial.grantMode)
+  const [tool, setTool] = useState(initial.tool)
+  const [admin, setAdmin] = useState(initial.admin)
+  const [toolBeforeAdmin, setToolBeforeAdmin] = useState(initial.toolBeforeAdmin)
+  const [limits, setLimits] = useState<LoginLimitsDraft>(initial.limits)
   const [limitsProblem, setLimitsProblem] = useState<string | null>(null)
-  // null = the owner has not touched the switch, so the default for the chosen level shows.
-  const [straightChoice, setStraightChoice] = useState<boolean | null>(null)
+  const [straightChoice, setStraightChoice] = useState<boolean | null>(initial.straightChoice)
+  const appLogins = useAppLogins(onCreateAppLogins, onReload, canManage)
   const [error, setError] = useState<string | null>(null)
+  // Said next to the button that failed, not at the top of the panel.
+  const [databaseError, setDatabaseError] = useState<string | null>(null)
+  const [newLoginError, setNewLoginError] = useState<string | null>(null)
   const [usernameHint, setUsernameHint] = useState<string | null>(null)
   const [working, setWorking] = useState(false)
+  const [adding, setAdding] = useState<'database' | 'login' | null>(null)
   const [revealedPassword, setRevealedPassword] = useState<string | null>(null)
   const [revealedUsername, setRevealedUsername] = useState<string | null>(null)
-  const [redeployRequired, setRedeployRequired] =
-    useState<BindingRedeployRequired | null>(null)
+  const [redeployRequired, setRedeployRequired] = useState<BindingRedeployRequired | null>(null)
 
   const bindings = orEmptyArray(bindingsQuery.data?.bindings)
   const bindingCountByPrincipal = useMemo(() => {
@@ -197,10 +317,7 @@ export function ManagedUsersPanel({
   const bindingCountByDatabase = useMemo(() => {
     const map = new Map<string, number>()
     for (const binding of bindings) {
-      map.set(
-        binding.databaseName,
-        (map.get(binding.databaseName) ?? 0) + 1,
-      )
+      map.set(binding.databaseName, (map.get(binding.databaseName) ?? 0) + 1)
     }
     return map
   }, [bindings])
@@ -229,20 +346,27 @@ export function ManagedUsersPanel({
 
   const createDatabase = async () => {
     const trimmed = dbName.trim()
-    if (!DATABASE_PATTERN.test(trimmed)) {
-      setError('Database name must start with a letter or underscore.')
+    const nameProblem = managedIdentifierProblem(
+      trimmed,
+      'Database name',
+      managedIdentifierMaxLength(engine)
+    )
+    if (nameProblem) {
+      setDatabaseError(nameProblem)
       return
     }
     setWorking(true)
-    setError(null)
+    setAdding('database')
+    setDatabaseError(null)
     try {
       await onCreateDatabase(trimmed)
       setDbName('')
       await onReload()
     } catch (err) {
-      setError(managedErrorMessage(err, 'Failed to create database'))
+      setDatabaseError(managedErrorMessage(err, 'Failed to create database'))
     } finally {
       setWorking(false)
+      setAdding(null)
     }
   }
 
@@ -261,12 +385,17 @@ export function ManagedUsersPanel({
 
   const createUser = async () => {
     const trimmed = username.trim()
-    if (!USERNAME_PATTERN.test(trimmed)) {
-      setError('Username must start with a letter or underscore.')
+    const nameProblem = managedIdentifierProblem(
+      trimmed,
+      'Username',
+      managedIdentifierMaxLength(engine, nameScheme.selected)
+    )
+    if (nameProblem) {
+      setNewLoginError(nameProblem)
       return
     }
     if (selectedDbs.length === 0) {
-      setError('Select at least one database.')
+      setNewLoginError('Select at least one database.')
       return
     }
     const parsedLimits = limitsFromDraft(limits)
@@ -278,7 +407,8 @@ export function ManagedUsersPanel({
     setLimitsProblem(null)
     const { allowedSources, maxConnections } = parsedLimits.payload
     setWorking(true)
-    setError(null)
+    setAdding('login')
+    setNewLoginError(null)
     setUsernameHint(null)
     try {
       const result = await onCreateUser({
@@ -298,32 +428,32 @@ export function ManagedUsersPanel({
         setRevealedUsername(result.appliedUsername ?? trimmed)
         setRevealedPassword(result.password)
       }
+      // Only the name is cleared: the next login usually wants the same choices.
       setUsername('')
-      setJob('read-write')
-      setGrantMode('recipe')
-      setTool(false)
-      setAdmin(false)
-      setLimits(EMPTY_LIMITS_DRAFT)
-      setStraightChoice(null)
-      nameScheme.reset()
+      rememberSessionChoices<LoginFormChoices>(loginFormKey(orgId), {
+        job,
+        grantMode,
+        tool,
+        admin,
+        toolBeforeAdmin,
+        limits,
+        straightChoice,
+        nameScheme: nameScheme.requestScheme,
+      })
       await onReload()
     } catch (err) {
-      const message = principalSchemeErrorMessage(
-        managedErrorMessage(err, 'Failed to create user'),
-      )
-      const code =
-        err instanceof Error
-          ? /HTTP \d+:\s*([a-z0-9_]+)/i.exec(err.message)?.[1]
-          : null
+      const message = principalSchemeErrorMessage(managedErrorMessage(err, 'Failed to create user'))
+      const code = err instanceof Error ? /HTTP \d+:\s*([a-z0-9_]+)/i.exec(err.message)?.[1] : null
       if (code === 'username_in_use') {
         const suffix = crypto.randomUUID().replaceAll('-', '').slice(0, 3)
         setUsernameHint(`${message} Try ${trimmed}_${suffix}.`)
-        setError(null)
+        setNewLoginError(null)
       } else {
-        setError(message)
+        setNewLoginError(message)
       }
     } finally {
       setWorking(false)
+      setAdding(null)
     }
   }
 
@@ -359,34 +489,33 @@ export function ManagedUsersPanel({
     }
   }
 
-  if (revealedPassword) {
+  if (appLogins.result || revealedPassword) {
     return (
-      <SectionPanel title="Users & databases" hint="Engine users and databases">
-        <SecretReveal
-          username={revealedUsername}
-          password={revealedPassword}
-          onContinue={() => {
-            setRevealedPassword(null)
-            setRevealedUsername(null)
-          }}
-          continueLabel="Done"
-        />
-        {redeployRequired ? (
-          <RedeployServicesPanel
-            redeployRequired={redeployRequired}
-            onRedeploy={onRedeployService}
-            onDismiss={() => setRedeployRequired(null)}
-          />
-        ) : null}
-      </SectionPanel>
+      <PasswordsPanel
+        appLoginsResult={appLogins.result}
+        onAppLoginsDone={appLogins.dismiss}
+        username={revealedUsername}
+        password={revealedPassword}
+        onPasswordDone={() => {
+          setRevealedPassword(null)
+          setRevealedUsername(null)
+        }}
+        redeployRequired={redeployRequired}
+        onRedeploy={onRedeployService}
+        onDismissRedeploy={() => setRedeployRequired(null)}
+      />
     )
   }
 
+  // While a change applies (`busy`) the server refuses another one, so every
+  // control waits, with an ApplyingNote saying so next to it.
   const disabled = busy || working || !canManage
+  const appLoginsProblem = appLoginsSchemeProblem(nameScheme)
 
   return (
     <SectionPanel title="Users & databases" hint="Engine users and databases">
-      {error ? <Text style={panelStyles.error}>{error}</Text> : null}
+      <InlineError message={error} />
+      <ApplyingNote shown={busy && canManage} text={EDITS_WAIT} />
 
       <Text style={styles.subheading}>Databases</Text>
       <View style={styles.list}>
@@ -394,33 +523,48 @@ export function ManagedUsersPanel({
           const bindingCount = bindingCountByDatabase.get(name) ?? 0
           const deleteBlocked = bindingCount > 0
           return (
-            <View key={name} style={styles.row}>
-              <Text style={styles.rowLabel}>{name}</Text>
-              {bindingCount > 0 ? (
-                <Text style={styles.connectedChip}>
-                  Connected to {bindingCount} service
-                  {bindingCount === 1 ? '' : 's'} — remove on Connect tab
-                </Text>
-              ) : null}
-              {canManage && deleteBlocked ? (
-                <Text style={panelStyles.muted}>
-                  Remove connections first ({bindingCount})
-                </Text>
-              ) : null}
-              {canManage && !deleteBlocked ? (
-                <ConfirmButton
-                  label="Delete"
-                  confirmLabel="Confirm delete"
-                  prompt="Delete this database?"
+            <Fragment key={name}>
+              <View style={styles.row}>
+                <Text style={styles.rowLabel}>{name}</Text>
+                {bindingCount > 0 ? (
+                  <Text style={styles.connectedChip}>
+                    Connected to {bindingCount} service
+                    {bindingCount === 1 ? '' : 's'} — remove on Connect tab
+                  </Text>
+                ) : null}
+                {canManage && deleteBlocked ? (
+                  <Text style={panelStyles.muted}>Remove connections first ({bindingCount})</Text>
+                ) : null}
+                {canManage && !deleteBlocked ? (
+                  <ConfirmButton
+                    label="Delete"
+                    confirmLabel="Confirm delete"
+                    prompt="Delete this database?"
+                    disabled={disabled}
+                    onConfirm={() => {
+                      void deleteDatabase(name)
+                    }}
+                  />
+                ) : null}
+                <AppLoginsButton
+                  appLogins={appLogins}
+                  databaseName={name}
                   disabled={disabled}
-                  onConfirm={() => {
-                    void deleteDatabase(name)
-                  }}
+                  problem={appLoginsProblem}
                 />
-              ) : null}
-            </View>
+              </View>
+              <AppLoginsRowForm
+                appLogins={appLogins}
+                orgId={orgId}
+                engine={engine}
+                databaseName={name}
+                servers={servers}
+                disabled={disabled}
+              />
+            </Fragment>
           )
         })}
+        <AppLoginsSchemeNote appLogins={appLogins} problem={appLoginsProblem} />
       </View>
 
       {canManage ? (
@@ -434,21 +578,24 @@ export function ManagedUsersPanel({
             autoCorrect={false}
             editable={!disabled}
           />
+          <ApplyingNote shown={busy} text={FORM_WAITS} />
           <Button
             label="Add database"
+            busyLabel="Adding…"
             variant="primary"
+            busy={adding === 'database'}
             disabled={disabled}
             onPress={() => {
               void createDatabase()
             }}
           />
+          <InlineError message={databaseError} />
         </View>
       ) : null}
 
       <Text style={styles.subheading}>Users</Text>
       <Text style={panelStyles.muted}>
-        Usernames are unique across every database on this server&apos;s
-        organization.
+        Usernames are unique across every database on this server&apos;s organization.
       </Text>
       <View style={styles.list}>
         {users.map((user) => {
@@ -479,9 +626,7 @@ export function ManagedUsersPanel({
                 </Text>
               ) : null}
               {user.privileges.length > 0 ? (
-                <Text style={panelStyles.muted}>
-                  {user.privileges.join(', ')}
-                </Text>
+                <Text style={panelStyles.muted}>{user.privileges.join(', ')}</Text>
               ) : null}
               {canManage ? (
                 <LoginLimitsEditor
@@ -523,6 +668,7 @@ export function ManagedUsersPanel({
               ) : null}
               {canManage ? (
                 <LoginAdminEditor
+                  engine={engine}
                   user={user}
                   disabled={disabled}
                   onUpdate={onUpdateUser}
@@ -548,9 +694,7 @@ export function ManagedUsersPanel({
                     }}
                   />
                   {deleteBlocked ? (
-                    <Text style={panelStyles.muted}>
-                      Remove connections first ({bindingCount})
-                    </Text>
+                    <Text style={panelStyles.muted}>Remove connections first ({bindingCount})</Text>
                   ) : (
                     <ConfirmButton
                       label="Delete"
@@ -567,9 +711,7 @@ export function ManagedUsersPanel({
             </View>
           )
         })}
-        {users.length === 0 ? (
-          <EmptyState title="No additional users yet." />
-        ) : null}
+        {users.length === 0 ? <EmptyState title="No additional users yet." /> : null}
       </View>
 
       {canManage ? (
@@ -586,9 +728,7 @@ export function ManagedUsersPanel({
             autoCorrect={false}
             editable={!disabled}
           />
-          {usernameHint ? (
-            <Text style={panelStyles.calloutWarning}>{usernameHint}</Text>
-          ) : null}
+          {usernameHint ? <Text style={panelStyles.calloutWarning}>{usernameHint}</Text> : null}
           <PrincipalNameSchemeField scheme={nameScheme} disabled={disabled} />
           <Text style={panelStyles.detailLabel}>Databases</Text>
           <View style={styles.chipRow}>
@@ -604,21 +744,18 @@ export function ManagedUsersPanel({
                   accessibilityState={{ checked: selected, disabled }}
                   accessibilityLabel={name}
                 >
-                  <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
-                    {name}
-                  </Text>
+                  <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{name}</Text>
                 </Pressable>
               )
             })}
           </View>
           {admin ? (
-            <Text style={panelStyles.muted}>
-              A Database admin login always reads and writes.
-            </Text>
+            <Text style={panelStyles.muted}>The owner of a database always reads and writes.</Text>
           ) : (
             <NewLoginJobField job={job} onJobChange={setJob} disabled={disabled} />
           )}
           <NewLoginAdminField
+            engine={engine}
             admin={admin}
             onAdminChange={(next) => {
               setAdmin(next)
@@ -648,7 +785,7 @@ export function ManagedUsersPanel({
             servers={servers}
             disabled={disabled}
           />
-          {limitsProblem ? <Text style={panelStyles.error}>{limitsProblem}</Text> : null}
+          <InlineError message={limitsProblem} />
           <NewLoginStraightThroughField
             engine={engine}
             choice={straightChoice}
@@ -657,9 +794,13 @@ export function ManagedUsersPanel({
             disabled={disabled}
             onChange={setStraightChoice}
           />
+          <InlineError message={newLoginError} />
+          <ApplyingNote shown={busy} text={FORM_WAITS} />
           <Button
             label="Create user"
+            busyLabel="Creating…"
             variant="primary"
+            busy={adding === 'login'}
             disabled={disabled}
             onPress={() => {
               void createUser()
@@ -694,6 +835,11 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
   },
   formCol: {
+    gap: spacing.sm,
+  },
+  applying: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: spacing.sm,
   },
   userCard: {

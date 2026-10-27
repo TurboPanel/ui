@@ -1,3 +1,4 @@
+import { formatLogLineTime } from '@/lib/log-line-time'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   FlatList,
@@ -9,10 +10,7 @@ import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native'
-import {
-  nestedScrollDomProps,
-  webNestedScrollStyle,
-} from '@/components/org/logs/nested-scroll'
+import { nestedScrollDomProps, webNestedScrollStyle } from '@/components/org/logs/nested-scroll'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { Button, CopyButton, EmptyState, LoadingState } from '@/components/ui'
 import {
@@ -32,25 +30,12 @@ const FOLLOW_THRESHOLD_PX = 24
 /** Rows mounted ahead of the viewport. Transcripts can run to many thousands. */
 const INITIAL_ROWS = 60
 
-/** `12:04:37` — transcripts are read while watching, not audited by date. */
-function formatLineTime(timestamp: string | null): string | null {
-  if (!timestamp) return null
-  const parsed = new Date(timestamp)
-  if (Number.isNaN(parsed.getTime())) return null
-  const hours = String(parsed.getHours()).padStart(2, '0')
-  const minutes = String(parsed.getMinutes()).padStart(2, '0')
-  const seconds = String(parsed.getSeconds()).padStart(2, '0')
-  return `${hours}:${minutes}:${seconds}`
-}
-
 function isLiveState(state: CommandLogState): boolean {
   return state === 'waiting' || state === 'streaming'
 }
 
-function TranscriptRow({
-  line,
-}: Readonly<{ line: LogTranscriptLine }>) {
-  const time = formatLineTime(line.timestamp)
+function TranscriptRow({ line }: Readonly<{ line: LogTranscriptLine }>) {
+  const time = formatLogLineTime(line.timestamp)
   // Docker writes progress to stderr too — the stream alone is not a verdict.
   const isError = isErrorLine(line)
   return (
@@ -60,10 +45,7 @@ function TranscriptRow({
         // Never colour-only: stderr carries a literal marker too.
         <Text style={styles.streamMarker}>stderr</Text>
       ) : null}
-      <Text
-        style={[styles.rowText, isError && styles.rowTextError]}
-        selectable
-      >
+      <Text style={[styles.rowText, isError && styles.rowTextError]} selectable>
         {line.message}
       </Text>
     </View>
@@ -92,9 +74,7 @@ function itemKey(item: TranscriptItem): string {
   return item.key
 }
 
-function flattenTranscript(
-  lines: readonly LogTranscriptLine[],
-): TranscriptItem[] {
+function flattenTranscript(lines: readonly LogTranscriptLine[]): TranscriptItem[] {
   const items: TranscriptItem[] = []
   groupTranscriptByPhase(lines).forEach((group, groupIndex) => {
     if (group.phase) {
@@ -117,9 +97,7 @@ function flattenTranscript(
  */
 export function downloadTranscript(fileName: string, contents: string): void {
   if (Platform.OS !== 'web') return
-  const globalDocument = (
-    globalThis as unknown as { document?: Document }
-  ).document
+  const globalDocument = (globalThis as unknown as { document?: Document }).document
   if (!globalDocument) return
   const blob = new Blob([contents], { type: 'text/plain;charset=utf-8' })
   const url = URL.createObjectURL(blob)
@@ -132,9 +110,7 @@ export function downloadTranscript(fileName: string, contents: string): void {
   URL.revokeObjectURL(url)
 }
 
-export function TranscriptPlaceholder({
-  state,
-}: Readonly<{ state: CommandLogState }>) {
+export function TranscriptPlaceholder({ state }: Readonly<{ state: CommandLogState }>) {
   if (state === 'waiting') {
     return <LoadingState label="Waiting for output…" />
   }
@@ -169,9 +145,7 @@ function FollowToggle({
       variant={following ? 'primary' : 'secondary'}
       size="sm"
       onPress={onToggle}
-      accessibilityLabel={
-        following ? 'Stop following new output' : 'Follow new output'
-      }
+      accessibilityLabel={following ? 'Stop following new output' : 'Follow new output'}
     />
   )
 }
@@ -222,19 +196,14 @@ export function LogTranscriptView({
       ) : (
         <TranscriptRow line={item.line} />
       ),
-    [],
+    []
   )
 
-  const handleScroll = useCallback(
-    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-      const { contentOffset, contentSize, layoutMeasurement } =
-        event.nativeEvent
-      const distanceFromBottom =
-        contentSize.height - (contentOffset.y + layoutMeasurement.height)
-      setFollowing(distanceFromBottom <= FOLLOW_THRESHOLD_PX)
-    },
-    [],
-  )
+  const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent
+    const distanceFromBottom = contentSize.height - (contentOffset.y + layoutMeasurement.height)
+    setFollowing(distanceFromBottom <= FOLLOW_THRESHOLD_PX)
+  }, [])
 
   const hasLines = items.length > 0
   const plainText = hasLines ? transcriptPlainText(visible) : ''
@@ -261,8 +230,8 @@ export function LogTranscriptView({
       {state === 'truncated' ? (
         <View style={panelStyles.calloutWarning}>
           <Text style={panelStyles.calloutWarningText}>
-            Output exceeded the retained size limit — earlier lines were kept and
-            later output was dropped.
+            Output exceeded the retained size limit — earlier lines were kept and later output was
+            dropped.
           </Text>
         </View>
       ) : null}
@@ -287,11 +256,7 @@ export function LogTranscriptView({
             ) : null}
           </View>
           <View
-            style={[
-              panelStyles.commandCodeBlock,
-              styles.viewport,
-              { height: maxHeight },
-            ]}
+            style={[panelStyles.commandCodeBlock, styles.viewport, { height: maxHeight }]}
             {...nestedScrollDomProps}
           >
             <FlatList

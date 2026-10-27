@@ -1,11 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { ComposeNetworksFields } from '@/components/org/compose-networks-fields'
 import { ComposePrincipalsFields } from '@/components/org/compose-principals-fields'
@@ -20,11 +13,9 @@ import {
   ComposeDocumentView,
   type ComposeDocFacts,
 } from '@/components/org/project/compose-document-view'
-import {
-  ComposeEditorIcon,
-  ComposeVisualIcon,
-} from '@/components/org/compose-view-icons'
+import { ComposeEditorIcon, ComposeVisualIcon } from '@/components/org/compose-view-icons'
 import { panelStyles } from '@/components/ui/panel-styles'
+import { ComposeHostingReadOnly } from '@/components/org/compose-hosting-readonly'
 import {
   composeFullYaml,
   composeVisibleYaml,
@@ -127,7 +118,7 @@ function fullYaml(doc: ComposeDocument): string {
 function snapshotFromState(
   draft: ComposeDocument,
   yaml: string,
-  baselineYaml: string,
+  baselineYaml: string
 ): ComposeDraftSnapshot {
   return { draft, yaml, baselineYaml }
 }
@@ -135,12 +126,12 @@ function snapshotFromState(
 /** Flush Compose-tab YAML into draft when opening Services (or after remount). */
 function flushYamlIntoDraft(
   draft: ComposeDocument,
-  yaml: string,
+  yaml: string
 ): { draft: ComposeDocument; yaml: string } | { error: string } {
   try {
     const parsed = restoreComposeTurbopanelExtensions(
       yamlToComposeDocument(yaml),
-      hideComposeTurbopanelExtensions(draft).hidden,
+      hideComposeTurbopanelExtensions(draft).hidden
     )
     return { draft: parsed, yaml: visibleYaml(parsed) }
   } catch (err) {
@@ -154,7 +145,7 @@ function initEditorState(
   document: unknown,
   sessionKey: string | undefined,
   getSnapshot: ((key: string) => ComposeDraftSnapshot | null) | undefined,
-  initialView: EditorTab,
+  initialView: EditorTab
 ): ComposeDraftSnapshot {
   if (sessionKey && getSnapshot) {
     const existing = getSnapshot(sessionKey)
@@ -176,12 +167,8 @@ function initEditorState(
 }
 
 /** Live editor: keep soft warnings; defer hard errors until a save attempt. */
-function liveComposeLintIssues(
-  issues: readonly ComposeLintIssue[],
-): ComposeLintIssue[] {
-  return blockingComposeLintIssues(issues).filter(
-    (issue) => issue.level === 'warning',
-  )
+function liveComposeLintIssues(issues: readonly ComposeLintIssue[]): ComposeLintIssue[] {
+  return blockingComposeLintIssues(issues).filter((issue) => issue.level === 'warning')
 }
 
 function ComposeLintPanel({
@@ -199,10 +186,7 @@ function ComposeLintPanel({
 
   const errorCount = issues.filter((issue) => issue.level === 'error').length
   const warningCount = issues.length - errorCount
-  const summary = [
-    countLabel(errorCount, 'error'),
-    countLabel(warningCount, 'warning'),
-  ]
+  const summary = [countLabel(errorCount, 'error'), countLabel(warningCount, 'warning')]
     .filter(Boolean)
     .join(', ')
 
@@ -219,10 +203,7 @@ function ComposeLintPanel({
         return (
           <View key={`${issue.level}:${issue.path}:${issue.message}`} style={styles.lintRow}>
             <Text
-              style={[
-                styles.lintBadge,
-                isError ? styles.lintBadgeError : styles.lintBadgeWarning,
-              ]}
+              style={[styles.lintBadge, isError ? styles.lintBadgeError : styles.lintBadgeWarning]}
             >
               {isError ? 'error' : 'warn'}
             </Text>
@@ -287,9 +268,7 @@ function DiscardChangesButton({
   return (
     <Button
       label={armed ? 'Discard?' : 'Discard'}
-      accessibilityLabel={
-        armed ? 'Confirm discard changes' : 'Discard changes'
-      }
+      accessibilityLabel={armed ? 'Confirm discard changes' : 'Discard changes'}
       variant={armed ? 'danger' : 'ghost'}
       size="sm"
       disabled={disabled}
@@ -419,12 +398,7 @@ export function ComposeEditorChrome({
   return (
     <View style={styles.editorShell}>
       <View style={styles.editorSurface}>
-        <View
-          style={[
-            styles.editorSurfaceHeader,
-            !headerNav && styles.editorSurfaceHeaderPadded,
-          ]}
-        >
+        <View style={[styles.editorSurfaceHeader, !headerNav && styles.editorSurfaceHeaderPadded]}>
           {headerNav}
           <SurfaceToolbarEnd leading={leading} trailing={trailing} />
         </View>
@@ -438,14 +412,11 @@ export function ComposeEditorChrome({
  * The full document behind the YAML tab: the visible text re-joined with the
  * platform shadow the tab never showed. `null` when the text will not parse.
  */
-function draftFromYaml(
-  yamlText: string,
-  draft: ComposeDocument,
-): ComposeDocument | null {
+function draftFromYaml(yamlText: string, draft: ComposeDocument): ComposeDocument | null {
   try {
     return restoreComposeTurbopanelExtensions(
       yamlToComposeDocument(yamlText),
-      hideComposeTurbopanelExtensions(draft).hidden,
+      hideComposeTurbopanelExtensions(draft).hidden
     )
   } catch {
     return null
@@ -462,7 +433,7 @@ function draftFromYaml(
 function editorMatchesBaseline(
   yamlText: string,
   draft: ComposeDocument,
-  baselineYaml: string,
+  baselineYaml: string
 ): boolean {
   const reconciled = draftFromYaml(yamlText, draft)
   if (reconciled) return fullYaml(reconciled) === baselineYaml
@@ -480,9 +451,7 @@ function ComposeEditorHeader({
     <View style={styles.header}>
       <View style={styles.headerTitleRow}>
         <Text style={styles.title}>{title}</Text>
-        <Text style={styles.serviceCount}>
-          {serviceCountLabel(serviceCount)}
-        </Text>
+        <Text style={styles.serviceCount}>{serviceCountLabel(serviceCount)}</Text>
       </View>
     </View>
   )
@@ -593,12 +562,7 @@ function ComposeDocumentBody({
         />
       </View>
       <View style={styles.documentFooter}>
-        <Button
-          label="Add service"
-          size="sm"
-          disabled={saving}
-          onPress={onAddService}
-        />
+        <Button label="Add service" size="sm" disabled={saving} onPress={onAddService} />
       </View>
     </>
   )
@@ -670,6 +634,7 @@ export function ComposeEditorSection({
   /**
    * Hide the Save action. For surfaces that commit the draft elsewhere (the
    * create wizard's Create project button), where there is nothing to save yet.
+   * The service forms then also leave out scheduled jobs.
    */
   hideSave?: boolean
   /** Surface header: Project / environment buttons (right-aligned). */
@@ -695,11 +660,7 @@ export function ComposeEditorSection({
   const draftStore = useOptionalComposeDraftStore()
   const isViewControlled = controlledView != null
   const [internalTab, setInternalTab] = useState<EditorTab>(
-    () =>
-      controlledView ??
-      readComposeEditorView(source) ??
-      defaultView ??
-      'editor',
+    () => controlledView ?? readComposeEditorView(source) ?? defaultView ?? 'editor'
   )
   const tab: EditorTab = isViewControlled ? controlledView : internalTab
   // Full document (x-turbopanel intact). YAML tab shows visibleYaml(draft) only.
@@ -711,11 +672,8 @@ export function ComposeEditorSection({
       document,
       sessionKey,
       draftStore?.getSnapshot,
-      controlledView
-        ?? readComposeEditorView(source)
-        ?? defaultView
-        ?? 'editor',
-    ),
+      controlledView ?? readComposeEditorView(source) ?? defaultView ?? 'editor'
+    )
   )
   const [draft, setDraft] = useState<ComposeDocument>(() => seed.draft)
   const [yaml, setYaml] = useState(() => seed.yaml)
@@ -743,15 +701,12 @@ export function ComposeEditorSection({
   draftStoreRef.current = draftStore
 
   /** Flush synchronously so a fast route switch does not drop the last keystroke. */
-  const persistSession = useCallback(
-    (next: ComposeDraftSnapshot) => {
-      const key = sessionKeyRef.current
-      const store = draftStoreRef.current
-      if (!key || !store) return
-      store.setSnapshot(key, next)
-    },
-    [],
-  )
+  const persistSession = useCallback((next: ComposeDraftSnapshot) => {
+    const key = sessionKeyRef.current
+    const store = draftStoreRef.current
+    if (!key || !store) return
+    store.setSnapshot(key, next)
+  }, [])
 
   const currentDocument = (): ComposeDocument => {
     if (tab === 'visual') {
@@ -760,28 +715,21 @@ export function ComposeEditorSection({
     // Platform shadow re-attaches extensions the YAML tab never showed.
     return restoreComposeTurbopanelExtensions(
       yamlToComposeDocument(yaml),
-      hideComposeTurbopanelExtensions(draft).hidden,
+      hideComposeTurbopanelExtensions(draft).hidden
     )
   }
 
   // Keep store in step after state commits (and after mount seed).
   useEffect(() => {
     if (!sessionKey || !draftStore) return
-    draftStore.setSnapshot(
-      sessionKey,
-      snapshotFromState(draft, yaml, baselineYaml),
-    )
+    draftStore.setSnapshot(sessionKey, snapshotFromState(draft, yaml, baselineYaml))
   }, [sessionKey, draftStore, draft, yaml, baselineYaml])
 
   useEffect(() => {
     const full = stripComposePlacement(normalizeCompose(document))
     const savedYaml = fullYaml(full)
     // Keep in-progress edits when server `document` refreshes (query/cache).
-    const unedited = editorMatchesBaseline(
-      yamlRef.current,
-      draftRef.current,
-      baselineRef.current,
-    )
+    const unedited = editorMatchesBaseline(yamlRef.current, draftRef.current, baselineRef.current)
     if (!unedited) return
     // Already matches last save (or post-save document catch-up).
     if (savedYaml === baselineRef.current) return
@@ -808,9 +756,7 @@ export function ComposeEditorSection({
 
   const applyYamlEdit = (text: string, nextSelection: TextSelection) => {
     setYaml(text)
-    persistSession(
-      snapshotFromState(draftRef.current, text, baselineRef.current),
-    )
+    persistSession(snapshotFromState(draftRef.current, text, baselineRef.current))
     selectionRef.current = nextSelection
     setError(null)
     setShowSaveLint(false)
@@ -826,9 +772,7 @@ export function ComposeEditorSection({
       return
     }
     setYaml(value)
-    persistSession(
-      snapshotFromState(draftRef.current, value, baselineRef.current),
-    )
+    persistSession(snapshotFromState(draftRef.current, value, baselineRef.current))
     setError(null)
     setShowSaveLint(false)
   }
@@ -862,9 +806,7 @@ export function ComposeEditorSection({
     const nextYaml = visibleYaml(next)
     setDraft(next)
     setYaml(nextYaml)
-    persistSession(
-      snapshotFromState(next, nextYaml, baselineRef.current),
-    )
+    persistSession(snapshotFromState(next, nextYaml, baselineRef.current))
     setServiceNameDrafts({})
     setError(null)
     setShowSaveLint(false)
@@ -881,28 +823,20 @@ export function ComposeEditorSection({
         }
         setDraft(flushed.draft)
         setYaml(flushed.yaml)
-        persistSession(
-          snapshotFromState(
-            flushed.draft,
-            flushed.yaml,
-            baselineRef.current,
-          ),
-        )
+        persistSession(snapshotFromState(flushed.draft, flushed.yaml, baselineRef.current))
         setError(null)
       }
       if (entry === 'editor' && tab === 'visual') {
         const nextYaml = visibleYaml(draft)
         setYaml(nextYaml)
-        persistSession(
-          snapshotFromState(draft, nextYaml, baselineRef.current),
-        )
+        persistSession(snapshotFromState(draft, nextYaml, baselineRef.current))
       }
       if (!isViewControlled) {
         setInternalTab(entry)
       }
       onViewChange?.(entry)
     },
-    [tab, yaml, draft, isViewControlled, onViewChange, persistSession],
+    [tab, yaml, draft, isViewControlled, onViewChange, persistSession]
   )
 
   // URL/browser navigation can change the controlled Compose/Services view
@@ -921,33 +855,18 @@ export function ComposeEditorSection({
       }
       setDraft(flushed.draft)
       setYaml(flushed.yaml)
-      persistSession(
-        snapshotFromState(
-          flushed.draft,
-          flushed.yaml,
-          baselineRef.current,
-        ),
-      )
+      persistSession(snapshotFromState(flushed.draft, flushed.yaml, baselineRef.current))
       setError(null)
       return
     }
     if (controlledView === 'editor') {
       const nextYaml = visibleYaml(draftRef.current)
       setYaml(nextYaml)
-      persistSession(
-        snapshotFromState(
-          draftRef.current,
-          nextYaml,
-          baselineRef.current,
-        ),
-      )
+      persistSession(snapshotFromState(draftRef.current, nextYaml, baselineRef.current))
     }
   }, [controlledView, isViewControlled, persistSession])
 
-  const documentForSave = (
-    edited: ComposeDocument,
-    view: EditorTab,
-  ): ComposeDocument => {
+  const documentForSave = (edited: ComposeDocument, view: EditorTab): ComposeDocument => {
     return stripComposePlacement(setComposeEditorView(edited, view))
   }
 
@@ -962,13 +881,15 @@ export function ComposeEditorSection({
       const blocking = blockingComposeLintIssues(
         lintComposeYaml(composeDocumentToYaml(next), {
           ...(projectRepositoryId === undefined ? {} : { projectRepositoryId }),
-          ...(extraPrincipalAliases === undefined ? {} : {
-            knownPrincipalAliases: new Set([
-              ...extraPrincipalAliases,
-              ...composePrincipalAliases(next),
-            ]),
-          }),
-        }),
+          ...(extraPrincipalAliases === undefined
+            ? {}
+            : {
+                knownPrincipalAliases: new Set([
+                  ...extraPrincipalAliases,
+                  ...composePrincipalAliases(next),
+                ]),
+              }),
+        })
       )
       if (blocking.length > 0) {
         setShowSaveLint(true)
@@ -1189,39 +1110,35 @@ export function ComposeEditorSection({
     // Lint the *visible* text so line numbers match the textarea. Site
     // service kinds live only on the full draft shadow when hidden.
     const lintSource = tab === 'visual' ? visibleYaml(draft) : lintYaml
-    const siteServices = hiddenSiteServiceNames(
-      hideComposeTurbopanelExtensions(draft).hidden,
-    )
+    const siteServices = hiddenSiteServiceNames(hideComposeTurbopanelExtensions(draft).hidden)
     return lintComposeYaml(lintSource, {
       siteServices,
       managedExtensionHidden: true,
-      ...(extraPrincipalAliases === undefined ? {} : {
-        knownPrincipalAliases: new Set([
-          ...extraPrincipalAliases,
-          ...composePrincipalAliases(draft),
-        ]),
-      }),
+      ...(extraPrincipalAliases === undefined
+        ? {}
+        : {
+            knownPrincipalAliases: new Set([
+              ...extraPrincipalAliases,
+              ...composePrincipalAliases(draft),
+            ]),
+          }),
     })
   }, [tab, lintYaml, draft, extraPrincipalAliases])
-  const blockingLintIssues = useMemo(
-    () => blockingComposeLintIssues(lintIssues),
-    [lintIssues],
-  )
+  const blockingLintIssues = useMemo(() => blockingComposeLintIssues(lintIssues), [lintIssues])
   const displayLintIssues = useMemo(
-    () =>
-      showSaveLint ? blockingLintIssues : liveComposeLintIssues(lintIssues),
-    [showSaveLint, blockingLintIssues, lintIssues],
+    () => (showSaveLint ? blockingLintIssues : liveComposeLintIssues(lintIssues)),
+    [showSaveLint, blockingLintIssues, lintIssues]
   )
   const indentFixAvailable = useMemo(
     () => tab === 'editor' && canFixComposeYamlIndentation(lintYaml),
-    [tab, lintYaml],
+    [tab, lintYaml]
   )
   // Every `networks.*` verdict, not just the ones the panel is showing: the
   // networks editor renders them beside the field they name, so an advisory the
   // panel is currently hiding still has to reach its own control.
   const networkLintIssues = useMemo(
     () => lintIssues.filter((issue) => issue.path.startsWith('networks.')),
-    [lintIssues],
+    [lintIssues]
   )
   // Dirty vs full-document baseline (not visible YAML).
   const isDirty = useMemo(() => {
@@ -1231,7 +1148,7 @@ export function ComposeEditorSection({
           ? draft
           : restoreComposeTurbopanelExtensions(
               yamlToComposeDocument(yaml),
-              hideComposeTurbopanelExtensions(draft).hidden,
+              hideComposeTurbopanelExtensions(draft).hidden
             )
       return fullYaml(current) !== baselineYaml
     } catch {
@@ -1263,9 +1180,10 @@ export function ComposeEditorSection({
         nameDraft={serviceNameDrafts[name] ?? name}
         saving={saving}
         principalAliases={principalAliases}
-        {...(hideSave
-          ? {}
-          : { onDeclarePrincipalAlias: () => declarePrincipalAlias(name) })}
+        {...(hideSave ? {} : { onDeclarePrincipalAlias: () => declarePrincipalAlias(name) })}
+        // Only the create wizard hides Save; scheduled jobs wait until the
+        // project exists.
+        hideScheduledJobs={hideSave}
         onNameDraftChange={(value) =>
           setServiceNameDrafts((current) => ({ ...current, [name]: value }))
         }
@@ -1336,11 +1254,7 @@ export function ComposeEditorSection({
 
   return (
     <View style={styles.root}>
-      <ComposeEditorHeader
-        hidden={hideHeader}
-        title={title}
-        serviceCount={serviceCount}
-      />
+      <ComposeEditorHeader hidden={hideHeader} title={title} serviceCount={serviceCount} />
 
       <ComposeEditorChrome
         leading={toolbarLeading}
@@ -1379,6 +1293,8 @@ export function ComposeEditorSection({
         }}
       />
 
+      {tab === 'editor' ? <ComposeHostingReadOnly document={draft} /> : null}
+
       {error ? <Text style={panelStyles.error}>{error}</Text> : null}
 
       <DockerRunImportModal
@@ -1394,8 +1310,18 @@ export function ComposeEditorSection({
 
 const styles = StyleSheet.create({
   root: { gap: spacing.sm },
-  header: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: spacing.sm },
-  headerTitleRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', gap: spacing.sm },
+  header: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  headerTitleRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'baseline',
+    gap: spacing.sm,
+  },
   title: { color: colors.text, fontSize: 16, fontWeight: '700' },
   serviceCount: { color: colors.textMuted, fontSize: 12, fontWeight: '600' },
   editorShell: {

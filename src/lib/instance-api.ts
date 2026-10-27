@@ -2451,6 +2451,8 @@ export type OrgPrincipalRecord = Readonly<{
   usedBy: Omit<PrincipalUsage, 'otherPlacements'>
   state: OrgPrincipalState
   orphaned: boolean
+  /** Its project's delete asked for it to go; it is removed once its folders are gone. */
+  removalRequested?: boolean
   canDelete: boolean
   createdAt: string
 }>
@@ -4234,7 +4236,65 @@ export async function updateProject(
   })
 }
 
-export async function deleteProject(id: string): Promise<{ ok: true }> {
+/** One reason a project or environment delete cannot run yet, in plain words. */
+export type DeletePlanBlocker = Readonly<{
+  error: string
+  message: string
+  serverIds?: readonly string[]
+}>
+
+/** What deleting a project or an environment removes and keeps (`GET …/delete-preview`). */
+export type DeletePlan = Readonly<{
+  environments: readonly { id: string; name: string | null }[]
+  services: readonly { id: string; name: string | null; environmentId: string }[]
+  servers: readonly { id: string; name: string | null; connected: boolean }[]
+  /** `remove`: deleted from the server. `keep`: a volume set to keep its data. */
+  folders: readonly {
+    id: string
+    serverId: string
+    kind: 'service' | 'volume'
+    path: string | null
+    assetName: string | null
+    action: 'remove' | 'keep'
+  }[]
+  /** Project delete only: the site owners' Linux users that go with it or stay. */
+  hostingAccounts: readonly {
+    id: string
+    username: string
+    action: 'remove' | 'keep'
+    usedBy?: Partial<PrincipalUsage>
+  }[]
+  /**
+   * The Let's Encrypt certificates made for the deleted sites. `remove`: deleted
+   * with them. `keep`: another site still uses it. Missing from older panels.
+   */
+  certificates?: readonly {
+    id: string
+    names: readonly string[]
+    action: 'remove' | 'keep'
+    otherSites?: number
+  }[]
+  blockers: readonly DeletePlanBlocker[]
+}>
+
+/** What a finished delete left for the servers to do. */
+export type DeleteCleanup = Readonly<{
+  folderServerIds: readonly string[]
+  hostingAccounts?: Readonly<{
+    removing: readonly { id: string; username: string; removed: boolean }[]
+    kept: readonly { id: string; username: string }[]
+  }>
+}>
+
+export async function fetchProjectDeletePreview(projectId: string): Promise<DeletePlan> {
+  return await apiFetch(`${CLIENT_API}/projects/${projectId}/delete-preview`)
+}
+
+export async function fetchEnvironmentDeletePreview(environmentId: string): Promise<DeletePlan> {
+  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/delete-preview`)
+}
+
+export async function deleteProject(id: string): Promise<{ ok: true; cleanup?: DeleteCleanup }> {
   return await apiFetch(`${CLIENT_API}/projects/${id}`, {
     method: 'DELETE',
   })
@@ -4312,7 +4372,9 @@ export async function makeEnvironmentPrimary(
   return await apiFetch(`${CLIENT_API}/environments/${id}/primary`, { method: 'POST' })
 }
 
-export async function deleteEnvironment(id: string): Promise<{ ok: true }> {
+export async function deleteEnvironment(
+  id: string
+): Promise<{ ok: true; cleanup?: DeleteCleanup }> {
   return await apiFetch(`${CLIENT_API}/environments/${id}`, {
     method: 'DELETE',
   })
@@ -4429,6 +4491,20 @@ export async function requestLetsEncryptForHosting(
 ): Promise<UseLetsEncryptResult> {
   return await apiFetch(`${CLIENT_API}/hostings/${hostingId}/use-letsencrypt`, {
     method: 'PUT',
+    body: JSON.stringify({}),
+  })
+}
+
+/**
+ * Hand a hosting the last deploy made from the environment's compose file back
+ * to the panel (it keeps its id, names, certificate and variables). The Hosting
+ * screen calls this, then removes the entry from the compose file.
+ */
+export async function releaseHostingFromCompose(
+  hostingId: string
+): Promise<{ ok: true; released: boolean }> {
+  return await apiFetch(`${CLIENT_API}/hostings/${hostingId}/release-from-compose`, {
+    method: 'POST',
     body: JSON.stringify({}),
   })
 }
@@ -9473,6 +9549,42 @@ export async function createManagedUser(
     method: 'POST',
     body: JSON.stringify(body),
   })
+}
+
+/** One new login of an app-logins request, with its show-once password. */
+export type ManagedAppLogin = { user: ManagedUserRecord; password: string }
+
+/**
+ * The three logins an app usually needs on one database, in one step:
+ * `<prefix>_migrate` (owner of the database), `<prefix>_rw` (rows only) and
+ * `<prefix>_ro` (read only), names exactly as written, same limits for all
+ * three. All or nothing: 409 `username_in_use` / `managed_user_exists` (with
+ * `username`) adds none; 400 `managed_app_login_prefix_invalid` /
+ * `managed_app_login_prefix_too_long`; 409 `principal_scheme_locked` when the
+ * organization locks another name scheme.
+ */
+export async function createManagedAppLogins(
+  environmentId: string,
+  databaseName: string,
+  body: {
+    /** Omit (or empty) for the database name. */
+    prefix?: string
+    allowedSources?: string[]
+    maxConnections?: number
+    /** PostgreSQL only; applies to all three. */
+    straightThrough?: boolean
+  }
+): Promise<{
+  ok: true
+  logins: ManagedAppLogin[]
+  notes?: string[]
+  commandId: string
+  serverId: string
+}> {
+  return await apiFetch(
+    `${CLIENT_API}/environments/${environmentId}/managed/databases/${encodeURIComponent(databaseName)}/app-logins`,
+    { method: 'POST', body: JSON.stringify(body) }
+  )
 }
 
 /**

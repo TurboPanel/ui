@@ -196,7 +196,7 @@ describe('editing a variable', () => {
 })
 
 describe('adding a variable', () => {
-  it('checks the name, the value and an existing variable', () => {
+  it('checks the name, the value and an existing variable, then saves on Add', async () => {
     render(<EnvironmentConfigurationScreen />)
     fireEvent.click(screen.getByText('Add variable'))
     const done = () => screen.getByLabelText('Add') as HTMLButtonElement
@@ -209,13 +209,16 @@ describe('adding a variable', () => {
     expect(done().disabled).toBe(false)
     fireEvent.click(screen.getByRole('radio', { name: /^Show it/ }))
     fireEvent.click(done())
-    expect(screen.getByText('1 unsaved change')).toBeTruthy()
-    expect(screen.getByLabelText('NEW_TOKEN, 1, unsaved')).toBeTruthy()
-    fireEvent.click(screen.getByLabelText('Review changes'))
-    expect(screen.getAllByText('NEW_TOKEN').length).toBeGreaterThan(1)
+    // Add saves at once: no Unsaved row, no Save changes bar to find.
+    await waitFor(() => expect(screen.getByText('Saved')).toBeTruthy())
+    expect(state.run).toHaveBeenCalledTimes(1)
+    const [edits] = state.run.mock.calls[0] as [{ name: string; value: string }[]]
+    expect(edits.map((edit) => [edit.name, edit.value])).toEqual([['NEW_TOKEN', '1']])
+    expect(screen.queryByText('1 unsaved change')).toBeNull()
+    expect(screen.queryByLabelText('Variable name')).toBeNull()
   })
 
-  it('keeps a value secret by default for a name like a key', () => {
+  it('keeps a value secret by default for a name like a key', async () => {
     render(<EnvironmentConfigurationScreen />)
     fireEvent.click(screen.getByText('Add variable'))
     fireEvent.change(screen.getByLabelText('Variable name'), { target: { value: 'API_KEY' } })
@@ -224,8 +227,8 @@ describe('adding a variable', () => {
       screen.getByRole('radio', { name: /^Keep it secret/ }).getAttribute('aria-checked')
     ).toBe('true')
     fireEvent.click(screen.getByLabelText('Add'))
-    fireEvent.click(screen.getByLabelText('Review changes'))
-    expect(screen.getAllByText('Hidden').length).toBeGreaterThan(1)
+    await waitFor(() => expect(state.run).toHaveBeenCalled())
+    expect(JSON.stringify(state.run.mock.calls[0])).toMatch(/"secret":true/)
   })
 })
 
@@ -256,7 +259,6 @@ describe('where a new variable is used', () => {
     fireEvent.click(screen.getByRole('radio', { name: /^Build only|^Build\b(?! and)/ }))
     expect(checked(/^Build and run/)).toBe(false)
     fireEvent.click(screen.getByLabelText('Add'))
-    fireEvent.click(screen.getByLabelText('Save changes'))
     await waitFor(() => expect(state.run).toHaveBeenCalled())
     expect(JSON.stringify(state.run.mock.calls[0])).toMatch(/"forBuild":true,"forRuntime":false/)
   })
@@ -349,24 +351,65 @@ describe('where an existing variable is used, and removing it', () => {
   })
 })
 
-describe('a variable added and not saved yet', () => {
-  it('is listed straight away with an Unsaved mark, and Undo takes it out', () => {
-    state.query = {
-      ...state.query,
-      data: { ...stagingView(), effective: { ...stagingView().effective, variables: [] } },
-    }
+describe('a new variable that does not save', () => {
+  const addPort = () => {
     render(<EnvironmentConfigurationScreen />)
-    expect(screen.getByText('No variables')).toBeTruthy()
     fireEvent.click(screen.getByText('Add variable'))
     fireEvent.change(screen.getByLabelText('Variable name'), { target: { value: 'PORT' } })
     fireEvent.change(screen.getByLabelText('Variable value'), { target: { value: '3000' } })
     fireEvent.click(screen.getByLabelText('Add'))
-    expect(screen.queryByText('No variables')).toBeNull()
-    const row = screen.getByLabelText('PORT, 3000, unsaved')
-    expect(within(row).getByText('Unsaved')).toBeTruthy()
-    expect(screen.getByText('1 variable')).toBeTruthy()
-    fireEvent.click(within(row).getByLabelText('Undo PORT'))
-    expect(screen.getByText('No variables')).toBeTruthy()
+  }
+
+  it('keeps the editor open and says why next to Add', async () => {
+    state.run = vi.fn(() => Promise.resolve({ ok: false, error: 'Name taken' }))
+    addPort()
+    expect(await screen.findByText('Name taken')).toBeTruthy()
+    expect(screen.getByLabelText('Variable name')).toBeTruthy()
+    expect(screen.queryByText('1 unsaved change')).toBeNull()
+    expect(screen.queryByText('Saved')).toBeNull()
+  })
+
+  it('says why when the server could not apply it', async () => {
+    state.run = vi.fn(() =>
+      Promise.resolve({
+        ok: true,
+        value: {
+          remaining: [],
+          problems: [{ key: 'var:PORT', reason: 'It changed.' }],
+          error: null,
+          saved: 0,
+        },
+      })
+    )
+    addPort()
+    expect(await screen.findByText('It changed.')).toBeTruthy()
+  })
+
+  it('says it did not save when the edit is left over without a reason', async () => {
+    state.run = vi.fn(() =>
+      Promise.resolve({
+        ok: true,
+        value: {
+          remaining: [{ key: 'var:PORT' }],
+          problems: [],
+          error: null,
+          saved: 0,
+        },
+      })
+    )
+    addPort()
+    expect(await screen.findByText('Could not save these changes.')).toBeTruthy()
+  })
+
+  it('shows the save error the server gave', async () => {
+    state.run = vi.fn(() =>
+      Promise.resolve({
+        ok: true,
+        value: { remaining: [], problems: [], error: 'Try again later.', saved: 0 },
+      })
+    )
+    addPort()
+    expect(await screen.findByText('Try again later.')).toBeTruthy()
   })
 })
 
@@ -470,7 +513,7 @@ describe('saving', () => {
   })
 
   it('shows the server’s message when the request itself fails', async () => {
-    state.run = vi.fn(() => Promise.resolve({ ok: false, error: 'x' }))
+    state.run = vi.fn(() => Promise.resolve({ ok: false, error: 'Server said no' }))
     stageOne()
     fireEvent.click(screen.getByLabelText('Save changes'))
     expect(await screen.findByText('Server said no')).toBeTruthy()

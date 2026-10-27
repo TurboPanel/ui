@@ -36,8 +36,18 @@ export type ComposeHostingEditorFields = {
   /** The www choice; omitted or `off` writes no `www` key (the default). */
   www?: HostingWwwMode | null
   tlsId: string | null
+  /** Let's Encrypt (`tls.mode: automatic`); wins over `tlsId`. */
+  tlsAutomatic?: boolean
   ipId: string | null
   bind: 'public' | 'datacenter' | 'local'
+}
+
+/** The `tls` block for the editor's certificate choice. */
+function composeTlsFromEditor(
+  editor: Pick<ComposeHostingEditorFields, 'tlsId' | 'tlsAutomatic'>
+): NonNullable<ComposeHostingExtensionEntry['tls']> {
+  if (editor.tlsAutomatic) return { mode: 'automatic' }
+  return editor.tlsId ? { mode: 'certificate', certificateRef: editor.tlsId } : { mode: 'internal' }
 }
 
 /**
@@ -57,7 +67,7 @@ export type ComposeHostingEditorFields = {
  */
 export function composeHostingEntryFromEditorFields(
   editor: ComposeHostingEditorFields,
-  serviceKind: ComposeServiceKind | undefined,
+  serviceKind: ComposeServiceKind | undefined
 ): ComposeHostingExtensionEntry | null {
   const hostname = parseHostnameList(editor.hostnames)[0]?.toLowerCase()
   if (!hostname) return null
@@ -69,7 +79,9 @@ export function composeHostingEntryFromEditorFields(
   const targetPort = Number.parseInt(editor.targetPort.trim(), 10)
   if (
     hostingTargetPortAuthorable(serviceKind) &&
-    Number.isInteger(targetPort) && targetPort >= 1 && targetPort <= 65535
+    Number.isInteger(targetPort) &&
+    targetPort >= 1 &&
+    targetPort <= 65535
   ) {
     entry.targetPort = targetPort
   }
@@ -77,9 +89,7 @@ export function composeHostingEntryFromEditorFields(
   if (!editor.forceHttps) entry.forceHttps = false
   if (editor.www && editor.www !== 'off') entry.www = editor.www
 
-  entry.tls = editor.tlsId
-    ? { mode: 'certificate', certificateRef: editor.tlsId }
-    : { mode: 'internal' }
+  entry.tls = composeTlsFromEditor(editor)
 
   entry.bind = {
     scope: editor.bind,

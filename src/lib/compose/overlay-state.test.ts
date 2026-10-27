@@ -8,7 +8,13 @@ describe('resolveComposeOverlayState', () => {
       overriddenKeys: [],
       serviceNames: [],
     })
-    expect(resolveComposeOverlayState({ version: 1, data: {}, presentation: { keyOrder: [], comments: {} } })).toEqual({
+    expect(
+      resolveComposeOverlayState({
+        version: 1,
+        data: {},
+        presentation: { keyOrder: [], comments: {} },
+      })
+    ).toEqual({
       blank: true,
       overriddenKeys: [],
       serviceNames: [],

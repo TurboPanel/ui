@@ -75,7 +75,7 @@ function clonePresentationShell(
     keyOrder: string[]
     comments: Record<string, ComposeComment>
     blankLines?: Record<string, number>
-  },
+  }
 ): ComposePresentation {
   return {
     keyOrder: patch.keyOrder,
@@ -83,21 +83,17 @@ function clonePresentationShell(
     ...(patch.blankLines && Object.keys(patch.blankLines).length > 0
       ? { blankLines: patch.blankLines }
       : {}),
-    ...(typeof source.documentCommentBefore === 'string' &&
-        source.documentCommentBefore.length > 0
+    ...(typeof source.documentCommentBefore === 'string' && source.documentCommentBefore.length > 0
       ? { documentCommentBefore: source.documentCommentBefore }
       : {}),
-    ...(typeof source.documentComment === 'string' &&
-        source.documentComment.length > 0
+    ...(typeof source.documentComment === 'string' && source.documentComment.length > 0
       ? { documentComment: source.documentComment }
       : {}),
     ...(source.editorView ? { editorView: source.editorView } : {}),
   }
 }
 
-function withoutServiceExtension(
-  service: Record<string, unknown>,
-): Record<string, unknown> {
+function withoutServiceExtension(service: Record<string, unknown>): Record<string, unknown> {
   const { [TURBOPANEL_SERVICE_EXTENSION_KEY]: _removed, ...rest } = service
   return rest
 }
@@ -105,7 +101,7 @@ function withoutServiceExtension(
 function stashRootExtension(
   data: Record<string, unknown>,
   keyOrder: readonly string[],
-  hidden: ComposeHiddenExtensions,
+  hidden: ComposeHiddenExtensions
 ): void {
   if (!(TURBOPANEL_EXTENSION_KEY in data)) return
   hidden.root = deepCopy(data[TURBOPANEL_EXTENSION_KEY])
@@ -120,19 +116,17 @@ function stashRootExtension(
 function stashVisibleService(
   name: string,
   serviceValue: unknown,
-  hidden: ComposeHiddenExtensions,
+  hidden: ComposeHiddenExtensions
 ): unknown {
   if (!isRecord(serviceValue)) return serviceValue
   if (!(TURBOPANEL_SERVICE_EXTENSION_KEY in serviceValue)) return serviceValue
-  hidden.services[name] = deepCopy(
-    serviceValue[TURBOPANEL_SERVICE_EXTENSION_KEY],
-  )
+  hidden.services[name] = deepCopy(serviceValue[TURBOPANEL_SERVICE_EXTENSION_KEY])
   return withoutServiceExtension(serviceValue)
 }
 
 function stashServiceExtensions(
   data: Record<string, unknown>,
-  hidden: ComposeHiddenExtensions,
+  hidden: ComposeHiddenExtensions
 ): void {
   const servicesValue = data.services
   if (!isRecord(servicesValue)) return
@@ -146,7 +140,7 @@ function stashServiceExtensions(
 function takeManagedPresentation<T>(
   source: Record<string, T>,
   into: Record<string, T>,
-  copy: (value: T) => T,
+  copy: (value: T) => T
 ): Record<string, T> {
   const kept: Record<string, T> = {}
   for (const [path, value] of Object.entries(source)) {
@@ -165,10 +159,7 @@ function takeManagedPresentation<T>(
  * only at the end when neither is knowable (a shadow from before the anchor was
  * recorded, or one built by hand).
  */
-function rootRestoreIndex(
-  keyOrder: readonly string[],
-  hidden: ComposeHiddenExtensions,
-): number {
+function rootRestoreIndex(keyOrder: readonly string[], hidden: ComposeHiddenExtensions): number {
   const { rootAfterKey, rootKeyIndex } = hidden
   if (rootAfterKey !== undefined) {
     const anchor = keyOrder.indexOf(rootAfterKey)
@@ -185,7 +176,7 @@ function rootRestoreIndex(
 function applyHiddenRoot(
   data: Record<string, unknown>,
   keyOrder: string[],
-  hidden: ComposeHiddenExtensions,
+  hidden: ComposeHiddenExtensions
 ): void {
   if (hidden.root !== undefined) {
     data[TURBOPANEL_EXTENSION_KEY] = deepCopy(hidden.root)
@@ -206,7 +197,7 @@ function applyHiddenRoot(
 function restoreVisibleService(
   name: string,
   serviceValue: unknown,
-  hiddenServices: Record<string, unknown>,
+  hiddenServices: Record<string, unknown>
 ): unknown {
   if (!isRecord(serviceValue)) return serviceValue
   const rest = withoutServiceExtension(serviceValue)
@@ -219,7 +210,7 @@ function restoreVisibleService(
 
 function restoreServiceExtensions(
   data: Record<string, unknown>,
-  hiddenServices: Record<string, unknown>,
+  hiddenServices: Record<string, unknown>
 ): void {
   const servicesValue = data.services
   if (!isRecord(servicesValue)) return
@@ -233,7 +224,7 @@ function restoreServiceExtensions(
 function overlayHiddenPresentation<T>(
   visible: Record<string, T>,
   hidden: Record<string, T>,
-  copy: (value: T) => T,
+  copy: (value: T) => T
 ): Record<string, T> {
   const next: Record<string, T> = {}
   for (const [path, value] of Object.entries(visible)) {
@@ -251,9 +242,10 @@ function overlayHiddenPresentation<T>(
  * presentation entries into a shadow. Service keys stay even when empty
  * (site often has no other compose fields).
  */
-export function hideComposeTurbopanelExtensions(
-  document: ComposeDocument,
-): { document: ComposeDocument; hidden: ComposeHiddenExtensions } {
+export function hideComposeTurbopanelExtensions(document: ComposeDocument): {
+  document: ComposeDocument
+  hidden: ComposeHiddenExtensions
+} {
   const normalized = normalizeCompose(document)
   const data = { ...normalized.data }
   const hidden: ComposeHiddenExtensions = {
@@ -268,15 +260,15 @@ export function hideComposeTurbopanelExtensions(
   const comments = takeManagedPresentation(
     normalized.presentation.comments,
     hidden.comments,
-    (comment) => ({ ...comment }),
+    (comment) => ({ ...comment })
   )
   const blankLines = takeManagedPresentation(
     normalized.presentation.blankLines ?? {},
     hidden.blankLines,
-    (count) => count,
+    (count) => count
   )
   const keyOrder = normalized.presentation.keyOrder.filter(
-    (key) => key !== TURBOPANEL_EXTENSION_KEY,
+    (key) => key !== TURBOPANEL_EXTENSION_KEY
   )
 
   return {
@@ -300,7 +292,7 @@ export function hideComposeTurbopanelExtensions(
  */
 export function restoreComposeTurbopanelExtensions(
   visible: ComposeDocument,
-  hidden: ComposeHiddenExtensions,
+  hidden: ComposeHiddenExtensions
 ): ComposeDocument {
   const normalized = normalizeCompose(visible)
   const data = { ...normalized.data }
@@ -312,12 +304,12 @@ export function restoreComposeTurbopanelExtensions(
   const comments = overlayHiddenPresentation(
     normalized.presentation.comments,
     hidden.comments,
-    (comment) => ({ ...comment }),
+    (comment) => ({ ...comment })
   )
   const blankLines = overlayHiddenPresentation(
     normalized.presentation.blankLines ?? {},
     hidden.blankLines,
-    (count) => count,
+    (count) => count
   )
 
   return {
@@ -338,9 +330,7 @@ export function restoreComposeTurbopanelExtensions(
  * without this list the hidden extension would make the editor flag every one
  * of them.
  */
-export function hiddenSiteServiceNames(
-  hidden: ComposeHiddenExtensions,
-): string[] {
+export function hiddenSiteServiceNames(hidden: ComposeHiddenExtensions): string[] {
   const names: string[] = []
   for (const [name, raw] of Object.entries(hidden.services)) {
     const parsed = parseServiceTurbopanelExtension(raw)

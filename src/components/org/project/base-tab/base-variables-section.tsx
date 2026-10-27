@@ -36,7 +36,7 @@ export function BaseVariablesSection({
   const projectVariables = useVariables(orgId, { projectId })
   const save = useSaveBaseVariables(orgId, projectId)
   const refreshViews = useRefreshBaseConfiguration(orgId, projectId)
-  const { staged, stage, unstage, discard, saveAll, saveError, problems, savedCount } =
+  const { staged, stage, unstage, discard, saveAll, saveNow, saveError, problems, savedCount } =
     useStagedEdits(save)
   const records = projectVariables.data?.variables
   const shown = useMemo(() => rows ?? projectVariableRows(records ?? []), [rows, records])
@@ -51,9 +51,10 @@ export function BaseVariablesSection({
       actionsFor: () => NO_ACTIONS,
       onStage: stage,
       onUnstage: unstage,
+      onSaveNow: saveNow,
       base: true,
     }
-  }, [editable, records, staged, stage, unstage])
+  }, [editable, records, staged, stage, unstage, saveNow])
   return (
     <View style={styles.stack}>
       {savedCount > 0 && staged.length === 0 ? (

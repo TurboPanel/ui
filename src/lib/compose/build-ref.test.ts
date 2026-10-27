@@ -29,7 +29,7 @@ describe('parseComposeBuild', () => {
       parseComposeBuild({
         context: '.',
         dockerfile_inline: 'FROM alpine\n',
-      }),
+      })
     ).toEqual({
       kind: 'inline',
       context: '.',
@@ -43,7 +43,7 @@ describe('parseComposeBuild', () => {
       parseComposeBuild({
         context: '.',
         dockerfile_inline: '',
-      }),
+      })
     ).toEqual({
       kind: 'inline',
       context: '.',
@@ -57,7 +57,7 @@ describe('parseComposeBuild', () => {
       parseComposeBuild({
         context: './svc',
         dockerfile: 'Dockerfile.prod',
-      }),
+      })
     ).toEqual({
       kind: 'external',
       context: './svc',
@@ -85,7 +85,7 @@ describe('parseComposeBuild', () => {
     expect(
       parseComposeBuild({
         dockerfile_inline: 'FROM alpine\n',
-      }),
+      })
     ).toEqual({
       kind: 'inline',
       context: '.',
@@ -98,7 +98,7 @@ describe('parseComposeBuild', () => {
     expect(
       parseComposeBuild({
         dockerfile: 'Dockerfile.prod',
-      }),
+      })
     ).toEqual({
       kind: 'external',
       context: '.',
@@ -112,7 +112,7 @@ describe('setComposeBuildInline / clearComposeBuildInline', () => {
   it('round-trips inline while preserving args and target', () => {
     const next = setComposeBuildInline(
       { context: './src', args: { NODE_ENV: 'production' }, target: 'runtime' },
-      'FROM node:22\n',
+      'FROM node:22\n'
     )
     expect(next).toEqual({
       context: './src',
@@ -124,10 +124,7 @@ describe('setComposeBuildInline / clearComposeBuildInline', () => {
   })
 
   it('defaults context to . and removes conflicting dockerfile path', () => {
-    const next = setComposeBuildInline(
-      { dockerfile: 'Dockerfile' },
-      DEFAULT_INLINE_DOCKERFILE,
-    )
+    const next = setComposeBuildInline({ dockerfile: 'Dockerfile' }, DEFAULT_INLINE_DOCKERFILE)
     expect(next.context).toBe('.')
     expect(next.dockerfile_inline).toBe(DEFAULT_INLINE_DOCKERFILE)
     expect(Object.hasOwn(next, 'dockerfile')).toBe(false)
@@ -142,7 +139,7 @@ describe('setComposeBuildInline / clearComposeBuildInline', () => {
         target: 'runtime',
         ssh: ['default'],
       },
-      DEFAULT_INLINE_DOCKERFILE,
+      DEFAULT_INLINE_DOCKERFILE
     )
     expect(next).toEqual({
       context: './app',
@@ -174,11 +171,9 @@ describe('setComposeBuildInline / clearComposeBuildInline', () => {
       clearComposeBuildInline({
         context: '.',
         dockerfile_inline: 'FROM alpine\n',
-      }),
+      })
     ).toBeUndefined()
-    expect(
-      clearComposeBuildInline({ dockerfile_inline: 'FROM alpine\n' }),
-    ).toBeUndefined()
+    expect(clearComposeBuildInline({ dockerfile_inline: 'FROM alpine\n' })).toBeUndefined()
   })
 
   it('clear keeps remaining non-default keys', () => {
@@ -187,7 +182,7 @@ describe('setComposeBuildInline / clearComposeBuildInline', () => {
         context: './svc',
         dockerfile_inline: 'FROM alpine\n',
         args: { A: '1' },
-      }),
+      })
     ).toEqual({
       context: './svc',
       args: { A: '1' },

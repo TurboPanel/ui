@@ -50,6 +50,23 @@ describe('switch state on the web', () => {
     fireEvent.click(screen.getByRole('switch'))
     expect(onValueChange).toHaveBeenCalledWith(true)
   })
+
+  it('flips on a click on the knob, which passes the press to the switch', () => {
+    const onValueChange = vi.fn()
+    render(
+      <Toggle
+        value={false}
+        accessibilityLabel="Database admin login"
+        onValueChange={onValueChange}
+      />
+    )
+    const control = screen.getByRole('switch')
+    const track = control.firstElementChild as HTMLElement
+    const knob = track.firstElementChild as HTMLElement
+    expect(getComputedStyle(track).pointerEvents).toBe('none')
+    fireEvent.click(knob)
+    expect(onValueChange).toHaveBeenCalledWith(true)
+  })
 })
 
 describe('checkbox state on the web', () => {

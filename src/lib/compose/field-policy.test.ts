@@ -41,12 +41,8 @@ describe('field policy registry', () => {
   })
 
   it('leaves placement sub-keys to the scheduler work', () => {
-    expect(classifyDeployPlacementKey('max_replicas_per_node')?.state).toBe(
-      'interpreted',
-    )
-    expect(classifyDeployPlacementKey('server_id')?.state).toBe(
-      'runtime-generated',
-    )
+    expect(classifyDeployPlacementKey('max_replicas_per_node')?.state).toBe('interpreted')
+    expect(classifyDeployPlacementKey('server_id')?.state).toBe('runtime-generated')
   })
 
   it('treats driver: overlay as the authored spanning signal', () => {
@@ -89,8 +85,7 @@ describe('field policy registry', () => {
     expect(unsupportedDeployResourcesReason('limits')).toBeUndefined()
     expect(unsupportedDeployResourcesReason('not-a-key')).toBeUndefined()
     expect(classifyDeployResourcesKey('reservations')?.state).toBe('unsupported')
-    expect(unsupportedDeployResourcesReason('reservations')?.length ?? 0)
-      .toBeGreaterThan(20)
+    expect(unsupportedDeployResourcesReason('reservations')?.length ?? 0).toBeGreaterThan(20)
   })
 
   it('answers for top-level and service keys', () => {
@@ -114,7 +109,7 @@ describe('field policy registry', () => {
     }
   })
 
-  it('mirrors the instance registry\'s sixteen gated host-level keys', () => {
+  it("mirrors the instance registry's sixteen gated host-level keys", () => {
     expect([...GATED_SERVICE_FIELD_KEYS].sort()).toEqual([
       'cap_add',
       'cgroup',
@@ -142,7 +137,7 @@ describe('field policy registry', () => {
 
   it('flags the Docker API socket key as host-level, not passthrough', () => {
     const issues = lintComposeYaml(
-      'services:\n  web:\n    image: nginx:alpine\n    use_api_socket: true\n',
+      'services:\n  web:\n    image: nginx:alpine\n    use_api_socket: true\n'
     )
     const found = issues.find((issue) => issue.path === 'services.web.use_api_socket')
     expect(found?.code).toBe('field_requires_org_opt_in')
@@ -158,22 +153,18 @@ describe('field policy registry', () => {
 
   it('flags a gated key as an always-advisory, never-blocking note', () => {
     const issues = lintComposeYaml(
-      'services:\n  web:\n    image: nginx:alpine\n    privileged: true\n',
+      'services:\n  web:\n    image: nginx:alpine\n    privileged: true\n'
     )
     const found = issues.find((issue) => issue.path === 'services.web.privileged')
     expect(found?.level).toBe('warning')
     expect(found?.code).toBe('field_requires_org_opt_in')
     expect(
-      blockingComposeLintIssues(issues).some((issue) =>
-        issue.path === 'services.web.privileged'
-      ),
+      blockingComposeLintIssues(issues).some((issue) => issue.path === 'services.web.privileged')
     ).toBe(false)
   })
 
   it('trims the overlay driver and falls through unknown overlay keys', () => {
-    expect(classifyNetworkKey('attachable', '  overlay  ')?.state).toBe(
-      'unsupported',
-    )
+    expect(classifyNetworkKey('attachable', '  overlay  ')?.state).toBe('unsupported')
     expect(classifyNetworkKey('labels', '  overlay  ')?.state).toBe('passthrough')
     expect(classifyNetworkKey('nope', 'overlay')).toBeUndefined()
     expect(classifyDeployPlacementKey('constraints')?.state).toBeTypeOf('string')
@@ -192,18 +183,16 @@ describe('shared field-policy fixtures', () => {
       for (const expected of fixture.expectedIssues) {
         const found = issues.find((issue) => issue.path === expected.path)
         expect(found?.level, `level for ${expected.path}`).toBe(expected.level)
-        expect(found?.message, `message for ${expected.path}`).toContain(
-          expected.messageIncludes,
-        )
+        expect(found?.message, `message for ${expected.path}`).toContain(expected.messageIncludes)
         expect(
           blocking.some((issue) => issue.path === expected.path),
-          `blocking for ${expected.path}`,
+          `blocking for ${expected.path}`
         ).toBe(expected.blocking)
       }
       // Nothing beyond what the fixture declares — an extra diagnostic is drift
       // between the two linters just as surely as a missing one.
       expect(issues.map((issue) => issue.path).sort()).toEqual(
-        fixture.expectedIssues.map((issue) => issue.path).sort(),
+        fixture.expectedIssues.map((issue) => issue.path).sort()
       )
     })
   }

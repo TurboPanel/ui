@@ -88,7 +88,12 @@ export function summarizePurchasePreview(input: PurchasePreviewInput): PreviewSu
     followUp = `From ${end}: ${formatMinorUnits(unit * total, currency)}/month for ${total} × ${label} (${formatMinorUnits(unit, currency)} each, before tax).`
   }
 
-  return { headline, followUp, tax: taxLine(preview, currency), hasDetails: preview.lines.length > 0 }
+  return {
+    headline,
+    followUp,
+    tax: taxLine(preview, currency),
+    hasDetails: preview.lines.length > 0,
+  }
 }
 
 /** Moving one license up a tier, charged now for the rest of the period. */

@@ -22,6 +22,7 @@ import {
 import { isPrincipalAlias, readServiceTurbopanelExtension } from '@/lib/compose/service-kind'
 import type { ComposeDocument, CreateVariableBody, OrgServerRecord } from '@/lib/instance-api'
 import { validateEnvironmentName } from '@/lib/environment-validation'
+import { isLoopbackOrPrivateHostname } from '@/lib/install-tls'
 import { variableUseFlags, type VariableUse } from '@/lib/v4/config-edits'
 
 // --- server -------------------------------------------------------------------
@@ -87,13 +88,60 @@ export function wwwChoiceFor(hostname: string): string | null {
 }
 
 /**
+ * True when Let’s Encrypt can issue a certificate for the name: not a
+ * wildcard, an IP address, a one-word name or a private name. Mirrors the
+ * control plane's refusal, so the screen never writes a choice the deploy
+ * would refuse.
+ */
+export function letsEncryptCanIssueFor(hostname: string): boolean {
+  const name = readHostingHostname(hostname)
+  if (!name || name.includes('*') || name.includes(':') || !name.includes('.')) return false
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(name)) return false
+  return !isLoopbackOrPrivateHostname(name)
+}
+
+export type SetupCertificateNote = Readonly<{ text: string; openSettings: boolean }>
+
+/**
+ * What the screen says about the first hostname's certificate, or null when
+ * there is nothing to say: no name yet, a name Let’s Encrypt cannot issue
+ * for, a compose that already chose its certificate, or the organization
+ * setting could not be read (`acmeEnabled` null).
+ */
+export function setupCertificateNote(
+  input: Readonly<{ hostname: string; acmeEnabled: boolean | null; tlsChosen: boolean }>
+): SetupCertificateNote | null {
+  if (input.acmeEnabled === null || input.tlsChosen) return null
+  if (!letsEncryptCanIssueFor(input.hostname)) return null
+  if (input.acmeEnabled) {
+    return {
+      text: 'Gets a free Let’s Encrypt certificate on the first deploy, once the name points at the server. It renews by itself.',
+      openSettings: false,
+    }
+  }
+  return {
+    text: 'Let’s Encrypt certificates are off for this organization, so this name gets a self-signed certificate that browsers warn about. An organization owner or manager can turn them on in Organization settings › Domains & certificates.',
+    openSettings: true,
+  }
+}
+
+/**
  * The compose with the first hostname set on one service. The entry the
  * service already declared (if any) is replaced; its other entries stay. An
  * empty hostname leaves the compose as it was.
+ *
+ * `letsEncrypt` (the organization allows Let’s Encrypt certificates)
+ * writes `tls.mode: automatic` for a name that can get one, unless the
+ * service's own entry already says how its certificate is chosen.
  */
 export function composeWithHostname(
   compose: ComposeDocument,
-  input: Readonly<{ serviceName: string; hostname: string; alsoWww: boolean }>
+  input: Readonly<{
+    serviceName: string
+    hostname: string
+    alsoWww: boolean
+    letsEncrypt?: boolean
+  }>
 ): ComposeDocument {
   const hostname = readHostingHostname(input.hostname)
   if (!hostname) return compose
@@ -103,6 +151,9 @@ export function composeWithHostname(
   const entry: ComposeHostingExtensionEntry = { ...first, hostname }
   delete entry.www
   if (input.alsoWww && wwwChoiceFor(hostname)) entry.www = 'www-to-root'
+  if (input.letsEncrypt === true && !entry.tls && letsEncryptCanIssueFor(hostname)) {
+    entry.tls = { mode: 'automatic' }
+  }
   const others = rest.filter((item) => item.hostname !== hostname)
   return writeComposeHostingEntries(compose, input.serviceName, [entry, ...others])
 }
@@ -252,6 +303,8 @@ export function setupCompose(
     serviceName: string | null
     hostname: string
     alsoWww: boolean
+    /** The organization allows Let’s Encrypt certificates (see {@link composeWithHostname}). */
+    letsEncrypt?: boolean
   }>
 ): ComposeDocument | null {
   if (!compose) return null
@@ -265,5 +318,6 @@ export function setupCompose(
     serviceName: input.serviceName,
     hostname: input.hostname,
     alsoWww: input.alsoWww,
+    letsEncrypt: input.letsEncrypt,
   })
 }

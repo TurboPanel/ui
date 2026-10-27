@@ -2,11 +2,11 @@ import { useMemo } from 'react'
 import { useEnvironmentConfigView } from '@/lib/queries/environments'
 import { useProjectContext } from '@/components/org/project/project-context'
 import { environmentStatusTone } from '@/lib/container-status'
-import { groupDeploymentsByGeneration } from '@/lib/deployment-history'
+import { groupDeploymentsByGeneration, isNewestDeploymentInFlight } from '@/lib/deployment-history'
 import type { DeploymentHistoryRecord } from '@/lib/instance-api'
 import { useContainers } from '@/lib/queries/containers'
 import { useEnvironmentBindings } from '@/lib/queries/bindings'
-import { useEnvironmentDeployments } from '@/lib/queries/execution-logs'
+import { DEPLOYMENT_POLL_MS, useEnvironmentDeployments } from '@/lib/queries/execution-logs'
 import { useProjectPrincipals } from '@/lib/queries/projects'
 import { useOrgServers } from '@/lib/queries/servers'
 import { useHostingsByServices, useServices } from '@/lib/queries/services'
@@ -51,8 +51,21 @@ export function useEnvironmentOverviewModel(): OverviewModel {
   } = useProjectContext()
   const environmentId = selectedEnvironment?.id ?? ''
   const view = useEnvironmentConfigView(orgId, environmentId)
-  const services = useServices(orgId, environmentId, { enabled: environmentId !== '' })
-  const containers = useContainers(orgId, { environmentId }, { enabled: environmentId !== '' })
+  const history = useEnvironmentDeployments(orgId, environmentId, { enabled: environmentId !== '' })
+  // While a deploy runs, the apps' run state follows it at the history's pace;
+  // the history fetches them once more when the deploy ends.
+  const followDeploy = isNewestDeploymentInFlight(history.data?.deployments)
+    ? DEPLOYMENT_POLL_MS
+    : false
+  const services = useServices(orgId, environmentId, {
+    enabled: environmentId !== '',
+    refetchInterval: followDeploy,
+  })
+  const containers = useContainers(
+    orgId,
+    { environmentId },
+    { enabled: environmentId !== '', refetchInterval: followDeploy }
+  )
   const serviceRows = services.data?.services ?? NONE
   const serviceIds = useMemo(() => serviceRows.map((service) => service.id), [serviceRows])
   const hostings = useHostingsByServices(orgId, serviceIds, { enabled: serviceIds.length > 0 })
@@ -60,7 +73,6 @@ export function useEnvironmentOverviewModel(): OverviewModel {
   const storage = useStorage(orgId, { environmentId }, { enabled: environmentId !== '' })
   const bindings = useEnvironmentBindings(orgId, environmentId)
   const principals = useProjectPrincipals(orgId, projectId)
-  const history = useEnvironmentDeployments(orgId, environmentId, { enabled: environmentId !== '' })
   const ips = useIps(orgId, { scope: 'public' })
   const serverId = selectedEnvironment?.serverId ?? project?.options?.defaultServerId ?? null
   const primaryHostname = selectedEnvironment?.options?.primaryHostname ?? null
@@ -80,7 +92,9 @@ export function useEnvironmentOverviewModel(): OverviewModel {
       view: view.data,
       services: serviceRows,
       containers: containers.data?.containers,
-      latestDeploy: history.data ? (groupDeploymentsByGeneration(history.data.deployments)[0] ?? null) : undefined,
+      latestDeploy: history.data
+        ? (groupDeploymentsByGeneration(history.data.deployments)[0] ?? null)
+        : undefined,
       hostings: hostings.hostingsByService,
       tls: tls.data?.tls,
       storage: storage.data?.storage ?? NONE,

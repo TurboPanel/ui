@@ -227,6 +227,9 @@ export const queryKeys = {
           ['org', orgId, 'project', projectId, 'principals'] as const,
         principalSshKeys: (projectId: string, principalId: string) =>
           ['org', orgId, 'project', projectId, 'principals', principalId, 'ssh-keys'] as const,
+        /** What deleting the project removes and keeps (read when the delete panel opens). */
+        deletePreview: (projectId: string) =>
+          ['org', orgId, 'project', projectId, 'delete-preview'] as const,
       },
 
       environments: {
@@ -239,6 +242,9 @@ export const queryKeys = {
         /** Common services and volumes the environment uses. */
         shares: (environmentId: string) =>
           ['org', orgId, 'environment', environmentId, 'shares'] as const,
+        /** What deleting the environment removes and keeps. */
+        deletePreview: (environmentId: string) =>
+          ['org', orgId, 'environment', environmentId, 'delete-preview'] as const,
         deployPreview: (environmentId: string) =>
           ['org', orgId, 'environment', environmentId, 'deploy-preview'] as const,
         /** Effective configuration and changes from the Base (no interval; invalidated by every config save). */

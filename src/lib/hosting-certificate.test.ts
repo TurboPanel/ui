@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  CERTIFICATE_DNS_POLL_MS,
+  CERTIFICATE_ISSUING_POLL_MS,
+  certificatePollInterval,
+  hostingSaveNote,
   describeCertificate,
   dnsResultHeadline,
   dnsSummaryLines,
@@ -62,24 +66,24 @@ describe('describeCertificate', () => {
 
   it('uploaded says who renews and warns near expiry', () => {
     const calm = describeCertificate(
-      cert({ state: 'uploaded', source: 'uploaded', expiresInDays: 90 }),
+      cert({ state: 'uploaded', source: 'uploaded', expiresInDays: 90 })
     )
     expect(calm.tone).toBe('neutral')
     expect(calm.lines).toEqual(['expires in 90 days', 'You renew this one.'])
     const soon = describeCertificate(
-      cert({ state: 'uploaded', expiresInDays: 3, uploadedExpiryWarning: '3d' }),
+      cert({ state: 'uploaded', expiresInDays: 3, uploadedExpiryWarning: '3d' })
     )
     expect(soon.tone).toBe('warning')
     expect(soon.lines.at(-1)).toContain('three days')
     const gone = describeCertificate(
-      cert({ state: 'uploaded', expiresInDays: -1, uploadedExpiryWarning: 'expired' }),
+      cert({ state: 'uploaded', expiresInDays: -1, uploadedExpiryWarning: 'expired' })
     )
     expect(gone.lines.at(-1)).toContain('run out')
   })
 
   it('secure says it renews by itself', () => {
     const view = describeCertificate(
-      cert({ state: 'secure', source: 'lets_encrypt', expiresInDays: 61 }),
+      cert({ state: 'secure', source: 'lets_encrypt', expiresInDays: 61 })
     )
     expect(view.label).toBe('Secure')
     expect(view.tone).toBe('good')
@@ -92,10 +96,10 @@ describe('describeCertificate', () => {
     expect(view.label).toBe('Waiting for DNS')
     expect(view.actions).toEqual(['check_dns'])
     expect(view.lines).toContain(
-      'shop.example.com doesn’t point at this server yet: no DNS record found.',
+      'shop.example.com doesn’t point at this server yet: no DNS record found.'
     )
     expect(view.lines).toContain(
-      'www.shop.example.com doesn’t point at this server yet: it points to 198.51.100.4.',
+      'www.shop.example.com doesn’t point at this server yet: it points to 198.51.100.4.'
     )
     expect(view.lines).toContain('Point them at 203.0.113.7.')
     expect(view.lines.join(' ')).not.toContain('ok.example.com')
@@ -119,7 +123,7 @@ describe('describeCertificate', () => {
         state: 'renewal_failed',
         lastError: 'HTTP 404 on challenge',
         lastIssuedAt: '2026-09-01T00:00:00.000Z',
-      }),
+      })
     )
     expect(renewal.label).toBe('Renewal failed')
     expect(renewal.tone).toBe('bad')
@@ -224,5 +228,39 @@ describe('certificateAfterSave', () => {
     expect(
       await certificateAfterSave({ hostingId: null, wantsCertificate: true, request: ok })
     ).toBeNull()
+  })
+})
+
+describe('certificatePollInterval', () => {
+  it('follows a certificate the server is still issuing or waiting on', () => {
+    expect(certificatePollInterval(cert({ state: 'issuing' }))).toBe(CERTIFICATE_ISSUING_POLL_MS)
+    expect(certificatePollInterval(cert({ state: 'waiting_for_dns' }))).toBe(
+      CERTIFICATE_DNS_POLL_MS
+    )
+  })
+
+  it('does not poll one that waits for a deploy, has settled, or is not loaded', () => {
+    expect(certificatePollInterval(cert({ state: 'issuing', needsDeploy: true }))).toBe(false)
+    expect(certificatePollInterval(cert({ state: 'secure' }))).toBe(false)
+    expect(certificatePollInterval(cert({}))).toBe(false)
+    expect(certificatePollInterval(null)).toBe(false)
+    expect(certificatePollInterval(undefined)).toBe(false)
+  })
+})
+
+describe('hostingSaveNote', () => {
+  it('says the save went through, and that Let\u2019s Encrypt was asked', () => {
+    expect(hostingSaveNote(false, null)).toEqual({ tone: 'ok', message: 'Saved.' })
+    expect(hostingSaveNote(true, null)).toEqual({
+      tone: 'ok',
+      message: 'Saved. Let\u2019s Encrypt was asked for a certificate.',
+    })
+  })
+
+  it('says the hostname saved but the certificate did not start, with the reason', () => {
+    const note = hostingSaveNote(true, { message: 'DNS is not ready yet.', openSettings: false })
+    expect(note.tone).toBe('error')
+    expect(note.message).toContain('Saved the hostname')
+    expect(note.message).toContain('DNS is not ready yet.')
   })
 })

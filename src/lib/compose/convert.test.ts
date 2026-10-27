@@ -22,9 +22,7 @@ describe('yamlToComposeDocument errors', () => {
 
   it('throws when the document root is not a mapping', () => {
     expect(() => yamlToComposeDocument('- not-a-map\n')).toThrow(ComposeParseError)
-    expect(() => yamlToComposeDocument('- not-a-map\n')).toThrow(
-      /root must be a mapping/,
-    )
+    expect(() => yamlToComposeDocument('- not-a-map\n')).toThrow(/root must be a mapping/)
   })
 
   it('preserves key comments on nested service fields', () => {
@@ -90,9 +88,7 @@ services:
     image: nginx
 `)
     const runtime = composeDocumentToRuntimeYaml(doc)
-    expect(runtime.indexOf('services:')).toBeLessThan(
-      runtime.indexOf('x-turbopanel:'),
-    )
+    expect(runtime.indexOf('services:')).toBeLessThan(runtime.indexOf('x-turbopanel:'))
     expect(composeDocumentToRuntimeYaml(yamlToComposeDocument(''))).toBe('')
   })
 

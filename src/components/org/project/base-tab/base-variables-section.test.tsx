@@ -151,7 +151,7 @@ describe('Base project variables', () => {
     expect(sent()).toMatchObject([{ kind: 'remove-variable', name: 'MODE' }])
   })
 
-  it('lists an added variable straight away as Unsaved, with Undo', () => {
+  it('saves an added variable straight away, on its own', async () => {
     render(<BaseVariablesSection rows={[]} />)
     expect(screen.getByText('No project variables')).toBeTruthy()
     fireEvent.click(screen.getByText('Add variable'))
@@ -160,10 +160,10 @@ describe('Base project variables', () => {
     fireEvent.change(screen.getByLabelText('Variable name'), { target: { value: 'PORT' } })
     fireEvent.change(screen.getByLabelText('Variable value'), { target: { value: '3000' } })
     fireEvent.click(screen.getByLabelText('Add'))
-    const row = screen.getByLabelText('PORT, 3000, unsaved')
-    expect(within(row).getByText('Unsaved')).toBeTruthy()
-    fireEvent.click(within(row).getByLabelText('Undo PORT'))
-    expect(screen.getByText('No project variables')).toBeTruthy()
+    await waitFor(() => expect(state.run).toHaveBeenCalledTimes(1))
+    expect(sent().map((edit) => (edit as { name: string }).name)).toEqual(['PORT'])
+    expect(await screen.findByText('Saved')).toBeTruthy()
+    expect(screen.queryByLabelText('PORT, 3000, unsaved')).toBeNull()
   })
 
   it('lists the project’s records when no configuration can be read, a secret hidden', () => {

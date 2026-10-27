@@ -38,7 +38,16 @@ export function deployErrorMessage(err: unknown): string {
     return `${TURBOFABRIC_PRODUCT_NAME} is still converging on the target servers — try the deploy again in a moment.`
   }
   if (message.includes('acme_requires_org_opt_in')) {
-    return "A hosting is pinned to a Let's Encrypt certificate, but this organization has not enabled Let's Encrypt. Turn on \"Allow Let's Encrypt certificates\" in TLS settings, or pin a different certificate."
+    return (
+      serverSentence(message) ??
+      "A domain asks for a Let's Encrypt certificate, but this organization does not allow Let's Encrypt certificates. An organization owner or manager can turn on \"Allow Let's Encrypt certificates\" under Organization settings \u203a Domains & certificates, or pick a different certificate."
+    )
+  }
+  if (message.includes('letsencrypt_hostname_unsupported')) {
+    return (
+      serverSentence(message) ??
+      "Let's Encrypt cannot issue a certificate for one of these names (a wildcard, an IP address or a private name). Pick a different certificate."
+    )
   }
   if (message.includes('tls_pin_mismatch')) {
     return (
@@ -47,7 +56,10 @@ export function deployErrorMessage(err: unknown): string {
     )
   }
   if (message.includes('acme_requires_public_bind')) {
-    return "A hosting pinned to a Let's Encrypt certificate is bound to a local or datacenter-only address — ACME issuance needs a public bind scope."
+    return (
+      serverSentence(message) ??
+      "A hosting pinned to a Let's Encrypt certificate is bound to a local or datacenter-only address — ACME issuance needs a public bind scope."
+    )
   }
   return message
 }

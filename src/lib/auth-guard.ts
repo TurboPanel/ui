@@ -1,9 +1,5 @@
 import type { Href } from 'expo-router'
-import {
-  dashboardHref,
-  hasUserSession,
-  isAdminSession,
-} from '@/lib/auth-session'
+import { dashboardHref, hasUserSession, isAdminSession } from '@/lib/auth-session'
 import type { SessionInfo } from '@/lib/instance-api'
 
 export type AuthGuardContext = Readonly<{
@@ -63,7 +59,7 @@ function resolveConnectHref(ctx: AuthGuardContext): Href | null {
 
 function resolveNeedsInstallHref(
   topSegment: string | undefined,
-  developerDevBypass: boolean,
+  developerDevBypass: boolean
 ): Href | null {
   if (developerDevBypass || topSegment === 'install') {
     return null

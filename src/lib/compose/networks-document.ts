@@ -47,7 +47,7 @@ function isPlainMapping(value: unknown): value is Record<string, unknown> {
  * write a driver onto.
  */
 export function readComposeNetworks(
-  document: ComposeDocument | null | undefined,
+  document: ComposeDocument | null | undefined
 ): Record<string, ComposeNetworkEntry> {
   const data = document?.data
   if (!isPlainMapping(data)) return {}
@@ -69,7 +69,7 @@ export function readComposeNetworks(
  */
 export function writeComposeNetworks(
   document: ComposeDocument,
-  networks: Readonly<Record<string, ComposeNetworkEntry>>,
+  networks: Readonly<Record<string, ComposeNetworkEntry>>
 ): ComposeDocument {
   const data = { ...document.data } as Record<string, unknown>
   if (Object.keys(networks).length === 0) {
@@ -102,7 +102,7 @@ export function isSpanningComposeNetwork(entry: ComposeNetworkEntry): boolean {
  */
 export function setComposeNetworkDriver(
   entry: ComposeNetworkEntry,
-  driver: string | null,
+  driver: string | null
 ): ComposeNetworkEntry {
   const next = { ...entry }
   if (driver === null) delete next.driver
@@ -111,12 +111,12 @@ export function setComposeNetworkDriver(
 }
 
 /** A network key seeded from `seed` that does not collide with an existing one. */
-export function nextComposeNetworkName(
-  existing: Iterable<string>,
-  seed: string,
-): string {
+export function nextComposeNetworkName(existing: Iterable<string>, seed: string): string {
   const taken = new Set(existing)
-  const folded = seed.trim().toLowerCase().replace(/[^a-z0-9._-]/g, '')
+  const folded = seed
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]/g, '')
   const base = isComposeNetworkName(folded) ? folded : 'network'
   if (!taken.has(base)) return base
   for (let index = 2; index < 1000; index += 1) {
@@ -135,7 +135,7 @@ export function nextComposeNetworkName(
 export function renameComposeNetwork(
   networks: Readonly<Record<string, ComposeNetworkEntry>>,
   from: string,
-  to: string,
+  to: string
 ): Record<string, ComposeNetworkEntry> {
   const out: Record<string, ComposeNetworkEntry> = {}
   for (const [key, entry] of Object.entries(networks)) {

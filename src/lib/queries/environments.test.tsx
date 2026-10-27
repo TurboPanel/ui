@@ -11,6 +11,7 @@ import {
   useMakeEnvironmentPrimary,
   useEnvironment,
   useEnvironmentConfigView,
+  useEnvironmentDeletePreview,
   useEnvironments,
   useRunEnvironmentLifecycle,
   useCancelDeployment,
@@ -32,6 +33,7 @@ const {
   makeEnvironmentPrimary,
   stopEnvironment,
   cancelDeployment,
+  fetchEnvironmentDeletePreview,
 } = vi.hoisted(() => ({
   fetchVisibleEnvironments: vi.fn(),
   fetchDeployPreview: vi.fn(),
@@ -45,6 +47,7 @@ const {
   makeEnvironmentPrimary: vi.fn(),
   stopEnvironment: vi.fn(),
   cancelDeployment: vi.fn(),
+  fetchEnvironmentDeletePreview: vi.fn(),
 }))
 
 vi.mock('@/lib/instance-api', async (importOriginal) => {
@@ -63,6 +66,7 @@ vi.mock('@/lib/instance-api', async (importOriginal) => {
     makeEnvironmentPrimary,
     stopEnvironment,
     cancelDeployment,
+    fetchEnvironmentDeletePreview,
   }
 })
 
@@ -396,5 +400,20 @@ describe('environments query hooks', () => {
       ok: true,
     })
     expect(stopEnvironment.mock.calls[0]?.[0]).toBe(environmentId)
+  })
+})
+
+describe('useEnvironmentDeletePreview', () => {
+  it('reads the plan only once it is enabled', async () => {
+    fetchEnvironmentDeletePreview.mockResolvedValueOnce({ blockers: [] })
+    const { result, rerender } = renderHook(
+      ({ enabled }: { enabled: boolean }) =>
+        useEnvironmentDeletePreview('org-1', 'env-1', { enabled }),
+      { wrapper: createWrapper(), initialProps: { enabled: false } }
+    )
+    expect(result.current.fetchStatus).toBe('idle')
+    rerender({ enabled: true })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(fetchEnvironmentDeletePreview).toHaveBeenCalledWith('env-1')
   })
 })

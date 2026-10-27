@@ -13,6 +13,7 @@ import {
   useDisablePrincipalPassword,
   useProject,
   useProjectCatalog,
+  useProjectDeletePreview,
   useProjectPrincipals,
   useProjects,
   useSetPrincipalPassword,
@@ -28,6 +29,7 @@ const {
   deleteProject,
   configureProject,
   fetchProjectCatalog,
+  fetchProjectDeletePreview,
   fetchProjectPrincipals,
   createProjectPrincipal,
   updateProjectPrincipal,
@@ -42,6 +44,7 @@ const {
   deleteProject: vi.fn(),
   configureProject: vi.fn(),
   fetchProjectCatalog: vi.fn(),
+  fetchProjectDeletePreview: vi.fn(),
   fetchProjectPrincipals: vi.fn(),
   createProjectPrincipal: vi.fn(),
   updateProjectPrincipal: vi.fn(),
@@ -58,6 +61,7 @@ vi.mock('@/lib/instance-api', () => ({
   deleteProject,
   configureProject,
   fetchProjectCatalog,
+  fetchProjectDeletePreview,
   fetchProjectPrincipals,
   createProjectPrincipal,
   updateProjectPrincipal,
@@ -108,10 +112,9 @@ describe('projects query hooks', () => {
   })
 
   it('useProjects stays idle when disabled', () => {
-    const { result } = renderHook(
-      () => useProjects(orgId, 'ws-1', { enabled: false }),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useProjects(orgId, 'ws-1', { enabled: false }), {
+      wrapper: createWrapper(),
+    })
     expect(result.current.fetchStatus).toBe('idle')
     expect(fetchVisibleProjects).not.toHaveBeenCalled()
   })
@@ -132,10 +135,9 @@ describe('projects query hooks', () => {
   })
 
   it('useProject stays idle when disabled', () => {
-    const { result } = renderHook(
-      () => useProject(orgId, projectId, { enabled: false }),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useProject(orgId, projectId, { enabled: false }), {
+      wrapper: createWrapper(),
+    })
     expect(result.current.fetchStatus).toBe('idle')
     expect(fetchProject).not.toHaveBeenCalled()
   })
@@ -152,7 +154,7 @@ describe('projects query hooks', () => {
         type: 'empty',
         workspaceId: 'ws-1',
         name: 'New',
-      }),
+      })
     ).resolves.toMatchObject({ ok: true, value: { ok: true, id: 'proj-2' } })
   })
 
@@ -167,14 +169,10 @@ describe('projects query hooks', () => {
       wrapper: createWrapper(client),
     })
 
-    await expect(
-      result.current.run({ name: 'Renamed' }),
-    ).resolves.toMatchObject({ ok: true })
+    await expect(result.current.run({ name: 'Renamed' })).resolves.toMatchObject({ ok: true })
 
     await waitFor(() => {
-      const cached = client.getQueryData(
-        queryKeys.org(orgId).projects.detail(projectId),
-      )
+      const cached = client.getQueryData(queryKeys.org(orgId).projects.detail(projectId))
       expect(cached).toEqual({
         project: { id: projectId, name: 'Renamed' },
       })
@@ -209,10 +207,9 @@ describe('projects query hooks', () => {
   })
 
   it('useProjectCatalog stays idle when disabled', () => {
-    const { result } = renderHook(
-      () => useProjectCatalog(orgId, { enabled: false }),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useProjectCatalog(orgId, { enabled: false }), {
+      wrapper: createWrapper(),
+    })
     expect(result.current.fetchStatus).toBe('idle')
     expect(fetchProjectCatalog).not.toHaveBeenCalled()
   })
@@ -220,10 +217,9 @@ describe('projects query hooks', () => {
   it('useProjectPrincipals loads project principals', async () => {
     fetchProjectPrincipals.mockResolvedValueOnce({ principals: [] })
 
-    const { result } = renderHook(
-      () => useProjectPrincipals(orgId, projectId),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useProjectPrincipals(orgId, projectId), {
+      wrapper: createWrapper(),
+    })
 
     await waitFor(() => {
       expect(result.current.isSuccess).toBe(true)
@@ -234,7 +230,7 @@ describe('projects query hooks', () => {
   it('useProjectPrincipals stays idle when disabled', () => {
     const { result } = renderHook(
       () => useProjectPrincipals(orgId, projectId, { enabled: false }),
-      { wrapper: createWrapper() },
+      { wrapper: createWrapper() }
     )
     expect(result.current.fetchStatus).toBe('idle')
     expect(fetchProjectPrincipals).not.toHaveBeenCalled()
@@ -256,19 +252,16 @@ describe('projects query hooks', () => {
     const client = createAppQueryClient()
     const invalidate = vi.spyOn(client, 'invalidateQueries')
 
-    const { result } = renderHook(
-      () => useConfigureProject(orgId, projectId),
-      { wrapper: createWrapper(client) },
-    )
+    const { result } = renderHook(() => useConfigureProject(orgId, projectId), {
+      wrapper: createWrapper(client),
+    })
 
-    await expect(
-      result.current.run({ type: 'docker-compose' }),
-    ).resolves.toMatchObject({ ok: true })
+    await expect(result.current.run({ type: 'docker-compose' })).resolves.toMatchObject({
+      ok: true,
+    })
 
     await waitFor(() => {
-      expect(client.getQueryData(
-        queryKeys.org(orgId).projects.detail(projectId),
-      )).toEqual({
+      expect(client.getQueryData(queryKeys.org(orgId).projects.detail(projectId))).toEqual({
         project: { id: projectId, name: 'Configured' },
       })
     })
@@ -282,14 +275,11 @@ describe('projects query hooks', () => {
     const client = createAppQueryClient()
     const invalidate = vi.spyOn(client, 'invalidateQueries')
 
-    const { result } = renderHook(
-      () => useCreateProjectPrincipal(orgId, projectId),
-      { wrapper: createWrapper(client) },
-    )
+    const { result } = renderHook(() => useCreateProjectPrincipal(orgId, projectId), {
+      wrapper: createWrapper(client),
+    })
 
-    await expect(
-      result.current.run({ username: 'deploy' }),
-    ).resolves.toMatchObject({ ok: true })
+    await expect(result.current.run({ username: 'deploy' })).resolves.toMatchObject({ ok: true })
 
     await waitFor(() => {
       expect(invalidate).toHaveBeenCalledWith({
@@ -303,16 +293,15 @@ describe('projects query hooks', () => {
     const client = createAppQueryClient()
     const invalidate = vi.spyOn(client, 'invalidateQueries')
 
-    const { result } = renderHook(
-      () => useUpdateProjectPrincipalAssignments(orgId, projectId),
-      { wrapper: createWrapper(client) },
-    )
+    const { result } = renderHook(() => useUpdateProjectPrincipalAssignments(orgId, projectId), {
+      wrapper: createWrapper(client),
+    })
 
     await expect(
       result.current.run({
         principalId: 'pr-1',
         serviceIds: ['svc-1'],
-      }),
+      })
     ).resolves.toMatchObject({ ok: true })
 
     expect(updateProjectPrincipal).toHaveBeenCalledWith(projectId, 'pr-1', {
@@ -330,10 +319,9 @@ describe('projects query hooks', () => {
     const client = createAppQueryClient()
     const invalidate = vi.spyOn(client, 'invalidateQueries')
 
-    const { result } = renderHook(
-      () => useDeleteProjectPrincipal(orgId, projectId),
-      { wrapper: createWrapper(client) },
-    )
+    const { result } = renderHook(() => useDeleteProjectPrincipal(orgId, projectId), {
+      wrapper: createWrapper(client),
+    })
 
     await expect(result.current.run('pr-1')).resolves.toMatchObject({
       ok: true,
@@ -352,14 +340,13 @@ describe('projects query hooks', () => {
     const client = createAppQueryClient()
     const invalidate = vi.spyOn(client, 'invalidateQueries')
 
-    const { result } = renderHook(
-      () => useSetPrincipalPassword(orgId, projectId, 'pr-1'),
-      { wrapper: createWrapper(client) },
-    )
+    const { result } = renderHook(() => useSetPrincipalPassword(orgId, projectId, 'pr-1'), {
+      wrapper: createWrapper(client),
+    })
 
-    await expect(
-      result.current.run({ password: 'hunter2hunter2' }),
-    ).resolves.toMatchObject({ ok: true })
+    await expect(result.current.run({ password: 'hunter2hunter2' })).resolves.toMatchObject({
+      ok: true,
+    })
 
     expect(setPrincipalPassword).toHaveBeenCalledWith(projectId, 'pr-1', {
       password: 'hunter2hunter2',
@@ -376,10 +363,9 @@ describe('projects query hooks', () => {
     const client = createAppQueryClient()
     const invalidate = vi.spyOn(client, 'invalidateQueries')
 
-    const { result } = renderHook(
-      () => useDisablePrincipalPassword(orgId, projectId, 'pr-1'),
-      { wrapper: createWrapper(client) },
-    )
+    const { result } = renderHook(() => useDisablePrincipalPassword(orgId, projectId, 'pr-1'), {
+      wrapper: createWrapper(client),
+    })
 
     await expect(result.current.run()).resolves.toMatchObject({ ok: true })
 
@@ -389,5 +375,21 @@ describe('projects query hooks', () => {
         queryKey: queryKeys.org(orgId).projects.principals(projectId),
       })
     })
+  })
+})
+
+describe('useProjectDeletePreview', () => {
+  it('reads what deleting the project removes, and waits for an id', async () => {
+    fetchProjectDeletePreview.mockResolvedValueOnce({ blockers: [] })
+    const { result } = renderHook(() => useProjectDeletePreview('org-1', 'proj-1'), {
+      wrapper: createWrapper(),
+    })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(fetchProjectDeletePreview).toHaveBeenCalledWith('proj-1')
+
+    const idle = renderHook(() => useProjectDeletePreview('org-1', ''), {
+      wrapper: createWrapper(),
+    })
+    expect(idle.result.current.fetchStatus).toBe('idle')
   })
 })

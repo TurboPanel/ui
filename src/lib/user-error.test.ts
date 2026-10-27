@@ -6,6 +6,7 @@ import {
   TOO_MANY_ATTEMPTS_COPY,
   UPDATE_ALREADY_ACTIVE_COPY,
   apiErrorCopy,
+  failedRunMessage,
   isNetworkFetchError,
   licenseTierUserErrorMessage,
   plainStepFailureMessage,
@@ -166,6 +167,26 @@ describe('licenseTierUserErrorMessage', () => {
     )
     expect(licenseTierUserErrorMessage('   ', 'Could not update license tier')).toBe(
       'Could not update license tier'
+    )
+  })
+})
+
+describe('failedRunMessage', () => {
+  it('maps a known error code from the thrown value', () => {
+    const cause = new Error('HTTP 409: environment_running')
+    expect(failedRunMessage({ error: cause.message, cause }, 'Could not save.')).toBe(
+      ENVIRONMENT_RUNNING_COPY
+    )
+  })
+
+  it('keeps the server words, and falls back when there are none', () => {
+    expect(failedRunMessage({ error: 'Name taken' }, 'Could not save.')).toBe('Name taken')
+    expect(failedRunMessage({ error: null }, 'Could not save.')).toBe('Could not save.')
+  })
+
+  it('says something for a refusal with no message (a permission error)', () => {
+    expect(failedRunMessage({ error: null, cause: new Error('') }, 'Could not save.')).toBe(
+      'Could not save.'
     )
   })
 })

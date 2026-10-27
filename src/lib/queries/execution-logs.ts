@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   fetchCommandLog,
   fetchEnvironmentDeployments,
@@ -13,6 +13,7 @@ import {
   type LogTranscriptLine,
 } from '@/lib/execution-log-lines'
 import { queryKeys } from '@/lib/query-keys'
+import { isNewestDeploymentInFlight, newestDeploymentFinished } from '@/lib/deployment-history'
 
 /** Transcript poll cadence while a command is live. Sealed transcripts stop. */
 export const COMMAND_LOG_POLL_MS = 1000
@@ -26,13 +27,7 @@ export const COMMAND_LOG_MAX_PAGES_PER_READ = 32
 
 /** Render state of a transcript — see `pages/deploy-logs.md` (state matrix). */
 export type CommandLogState =
-  | 'idle'
-  | 'waiting'
-  | 'streaming'
-  | 'sealed'
-  | 'truncated'
-  | 'unavailable'
-  | 'forbidden'
+  'idle' | 'waiting' | 'streaming' | 'sealed' | 'truncated' | 'unavailable' | 'forbidden'
 
 /**
  * Whether the last read could see the transcript at all.
@@ -85,14 +80,11 @@ export const EMPTY_COMMAND_LOG_SNAPSHOT: CommandLogSnapshot = {
  */
 export function accumulateCommandLog(
   current: CommandLogSnapshot,
-  response: CommandLogResponse,
+  response: CommandLogResponse
 ): CommandLogSnapshot {
   const lastSeq = current.lines.at(-1)?.seq ?? 0
   const incoming = parseCommandLogChunk(response.text, lastSeq)
-  const lines =
-    incoming.length > 0
-      ? mergeTranscriptLines(current.lines, incoming)
-      : current.lines
+  const lines = incoming.length > 0 ? mergeTranscriptLines(current.lines, incoming) : current.lines
   return {
     lines,
     nextSeq: Math.max(current.nextSeq, response.nextSeq),
@@ -113,9 +105,7 @@ export function accumulateCommandLog(
  * `unavailable`. Transient failures (network, `5xx`, `429`) return `null` so the
  * query keeps its normal retry/error behaviour.
  */
-export function classifyCommandLogFailure(
-  error: unknown,
-): Exclude<CommandLogAccess, 'ok'> | null {
+export function classifyCommandLogFailure(error: unknown): Exclude<CommandLogAccess, 'ok'> | null {
   if (isForbiddenError(error)) return 'forbidden'
   if (!(error instanceof Error)) return null
   const status = /HTTP (\d{3})(?!\d)/.exec(error.message)?.[1]
@@ -132,7 +122,7 @@ export function resolveCommandLogState(
     snapshot: CommandLogSnapshot
     error: unknown
     hasFetched: boolean
-  }>,
+  }>
 ): CommandLogState {
   if (!input.enabled) return 'idle'
   if (input.snapshot.access !== 'ok') return input.snapshot.access
@@ -205,13 +195,10 @@ export function useCommandLog(
   orgId: string,
   serverId: string | null,
   commandId: string | null,
-  options?: Readonly<{ enabled?: boolean; poll?: boolean }>,
+  options?: Readonly<{ enabled?: boolean; poll?: boolean }>
 ): UseCommandLogResult {
   const enabled =
-    (options?.enabled ?? true) &&
-    orgId.length > 0 &&
-    Boolean(serverId) &&
-    Boolean(commandId)
+    (options?.enabled ?? true) && orgId.length > 0 && Boolean(serverId) && Boolean(commandId)
   const poll = options?.poll ?? true
 
   // Accumulator + the command it belongs to. Both are read and written only
@@ -232,9 +219,7 @@ export function useCommandLog(
     // A different command reuses this hook instance: start from scratch rather
     // than resuming another transcript's cursor.
     const current =
-      accumulator.identity === identity
-        ? accumulator.snapshot
-        : EMPTY_COMMAND_LOG_SNAPSHOT
+      accumulator.identity === identity ? accumulator.snapshot : EMPTY_COMMAND_LOG_SNAPSHOT
     let next = current
     for (let page = 0; page < COMMAND_LOG_MAX_PAGES_PER_READ; page++) {
       const from = next.nextSeq
@@ -293,32 +278,62 @@ export function useCommandLog(
 }
 
 /**
- * Deploy history for one environment. No `refetchInterval` — the list is
- * invalidated by the deploy mutation and whenever a tracked command reaches a
- * terminal status, mirroring the containers-on-Project-Overview rule.
+ * History poll cadence while the newest deploy is still going. The deploy
+ * mutation invalidates the history, which starts the poll.
+ */
+export const DEPLOYMENT_POLL_MS = 5000
+
+/**
+ * What a finished deploy can have changed, fetched again: the hostings (and
+ * their certificates), the services with their run state, and the containers.
+ * The Overview reads its status from these, so it shows the new state as soon
+ * as the deploy ends instead of when another tab is opened.
+ */
+function refetchAfterDeploy(
+  queryClient: ReturnType<typeof useQueryClient>,
+  orgId: string,
+  environmentId: string
+): void {
+  const keys = queryKeys.org(orgId)
+  void queryClient.invalidateQueries({ queryKey: keys.hostings.all })
+  void queryClient.invalidateQueries({ queryKey: keys.services.list(environmentId) })
+  void queryClient.invalidateQueries({ queryKey: keys.containers.all })
+}
+
+/**
+ * The environment's deploy history. Polls only while the newest deploy is
+ * still going, so the status and the pages under it follow the deploy without
+ * a reload; when it finishes, what the deploy can have changed is fetched
+ * again (see `refetchAfterDeploy`).
  */
 export function useEnvironmentDeployments(
   orgId: string,
   environmentId: string,
-  options?: Readonly<{ enabled?: boolean; limit?: number }>,
+  options?: Readonly<{ enabled?: boolean; limit?: number }>
 ) {
+  const queryClient = useQueryClient()
+  const queryKey = queryKeys.org(orgId).environments.deployments(environmentId)
   return useQuery({
-    queryKey: queryKeys.org(orgId).environments.deployments(environmentId),
-    queryFn: () =>
-      fetchEnvironmentDeployments(environmentId, {
+    queryKey,
+    queryFn: async () => {
+      const before = queryClient.getQueryData<{ deployments: DeploymentHistoryRecord[] }>(queryKey)
+      const page = await fetchEnvironmentDeployments(environmentId, {
         ...(options?.limit ? { limit: options.limit } : {}),
-      }),
-    enabled:
-      (options?.enabled ?? true) &&
-      orgId.length > 0 &&
-      environmentId.length > 0,
-    refetchInterval: false,
+      })
+      if (newestDeploymentFinished(before?.deployments, page.deployments)) {
+        refetchAfterDeploy(queryClient, orgId, environmentId)
+      }
+      return page
+    },
+    enabled: (options?.enabled ?? true) && orgId.length > 0 && environmentId.length > 0,
+    refetchInterval: (query) =>
+      isNewestDeploymentInFlight(query.state.data?.deployments) ? DEPLOYMENT_POLL_MS : false,
   })
 }
 
 /** Newest-first rows for the history table (the API already sorts; be explicit). */
 export function orderDeploymentsNewestFirst(
-  rows: readonly DeploymentHistoryRecord[] | undefined,
+  rows: readonly DeploymentHistoryRecord[] | undefined
 ): DeploymentHistoryRecord[] {
   return [...(rows ?? [])].sort((a, b) => b.id.localeCompare(a.id))
 }

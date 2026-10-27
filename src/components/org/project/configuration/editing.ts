@@ -10,6 +10,11 @@ export type EditingApi = Readonly<{
   actionsFor: (change: ChangeRowModel) => ChangeActions
   onStage: (edit: StagedEdit) => void
   onUnstage: (key: string) => void
+  /**
+   * Saves one edit straight away (a new variable's Add). Resolves to why it
+   * did not save, or null. Without it, Add stages like every other edit.
+   */
+  onSaveNow?: (edit: StagedEdit) => Promise<string | null>
   /** The rows are the Base's own variables (the Base tab), not an environment's. */
   base?: boolean
 }>

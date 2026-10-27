@@ -44,6 +44,7 @@ import { setActiveOrganizationId } from '@/lib/org-context'
 import { loginWithPasskey } from '@/lib/passkey-client'
 import { PASSKEY_WEB_ONLY_NOTE } from '@/lib/passkey-client-types'
 import { useApiMutation, queryKeys } from '@/lib/query-client'
+import { forgetSessionChoices } from '@/lib/session-choices'
 
 export function useSessionQuery(options?: Readonly<{ enabled?: boolean }>) {
   return useQuery({
@@ -87,13 +88,8 @@ export function useCreateOrganization() {
 export function useUpdateOrganization() {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: ({
-      organizationId,
-      name,
-    }: {
-      organizationId: string
-      name: string
-    }) => updateOrganization(organizationId, { name }),
+    mutationFn: ({ organizationId, name }: { organizationId: string; name: string }) =>
+      updateOrganization(organizationId, { name }),
     onSuccess: (data) => {
       queryClient.setQueryData<{ organizations: OrganizationRecord[] }>(
         queryKeys.auth.organizations,
@@ -103,25 +99,20 @@ export function useUpdateOrganization() {
           }
           return {
             organizations: previous.organizations.map((org) =>
-              org.id === data.organization.id ? data.organization : org,
+              org.id === data.organization.id ? data.organization : org
             ),
           }
-        },
+        }
       )
     },
   })
 }
 
 /** Cache + remembered-account bookkeeping every successful sign-in lane runs. */
-async function applySignedInSession(
-  queryClient: QueryClient,
-  session: SessionInfo,
-): Promise<void> {
+async function applySignedInSession(queryClient: QueryClient, session: SessionInfo): Promise<void> {
   queryClient.setQueryData<SessionInfo | null>(queryKeys.auth.session, session)
   if (isRemoteCookieClient()) {
-    const status = queryClient.getQueryData<InstallStatus>(
-      queryKeys.auth.status,
-    )
+    const status = queryClient.getQueryData<InstallStatus>(queryKeys.auth.status)
     rememberSignedInAccount({
       email: session.email,
       runtime: status?.runtime ?? null,
@@ -135,13 +126,8 @@ async function applySignedInSession(
 export function useSignIn() {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: ({
-      email,
-      password,
-    }: {
-      email: string
-      password: string
-    }) => signIn(email, password),
+    mutationFn: ({ email, password }: { email: string; password: string }) =>
+      signIn(email, password),
     onSuccess: async (result) => {
       // A pending second factor is not a session yet — leave the cache alone
       // until the code step answers.
@@ -202,10 +188,7 @@ export function useSignUp() {
       email: string
       password: string
       invitationId?: string
-    }) =>
-      invitationId
-        ? signUp(email, password, invitationId)
-        : signUp(email, password),
+    }) => (invitationId ? signUp(email, password, invitationId) : signUp(email, password)),
   })
 }
 
@@ -220,25 +203,19 @@ export function useSignOut() {
       return result
     },
     onSuccess: () => {
-      const next = isRemoteCookieClient()
-        ? getActiveControlPlaneAccount()
-        : null
+      const next = isRemoteCookieClient() ? getActiveControlPlaneAccount() : null
       setActiveOrganizationId(next?.lastOrgId ?? null)
       // Drop every cached row so a second sign-in never renders another account.
       queryClient.clear()
+      forgetSessionChoices()
     },
   })
 }
 
 export function useBootstrapInstall() {
   return useApiMutation({
-    mutationFn: ({
-      username,
-      password,
-    }: {
-      username: string
-      password: string
-    }) => bootstrapInstall(username, password),
+    mutationFn: ({ username, password }: { username: string; password: string }) =>
+      bootstrapInstall(username, password),
   })
 }
 
@@ -247,29 +224,23 @@ export function useCompleteInstall() {
   return useApiMutation({
     mutationFn: completeInstall,
     onSuccess: async (result: InstallCompleteResult) => {
-      queryClient.setQueryData<SessionInfo | null>(
-        queryKeys.auth.session,
-        result,
-      )
+      queryClient.setQueryData<SessionInfo | null>(queryKeys.auth.session, result)
       // Clear install mode before navigation so AuthGuard / org layout do not
       // bounce back to /install while status refetch is in flight.
-      queryClient.setQueryData<InstallStatus>(
-        queryKeys.auth.status,
-        (previous) => {
-          if (!previous) {
-            return {
-              needsInstall: false,
-              isInstallMode: false,
-              isSignupEnabled: false,
-            }
-          }
+      queryClient.setQueryData<InstallStatus>(queryKeys.auth.status, (previous) => {
+        if (!previous) {
           return {
-            ...previous,
             needsInstall: false,
             isInstallMode: false,
+            isSignupEnabled: false,
           }
-        },
-      )
+        }
+        return {
+          ...previous,
+          needsInstall: false,
+          isInstallMode: false,
+        }
+      })
       await Promise.all([
         queryClient.invalidateQueries({
           queryKey: queryKeys.auth.status,
@@ -334,13 +305,9 @@ async function invalidatePasskeys(queryClient: QueryClient): Promise<void> {
  * Keep the cached session's `is2faEnabled` in step with an enroll/disable the
  * user just performed, so chrome reading the session does not lag a refetch.
  */
-function setSessionTwoFactorEnabled(
-  queryClient: QueryClient,
-  enabled: boolean,
-): void {
-  queryClient.setQueryData<SessionInfo | null>(
-    queryKeys.auth.session,
-    (previous) => (previous ? { ...previous, is2faEnabled: enabled } : previous),
+function setSessionTwoFactorEnabled(queryClient: QueryClient, enabled: boolean): void {
+  queryClient.setQueryData<SessionInfo | null>(queryKeys.auth.session, (previous) =>
+    previous ? { ...previous, is2faEnabled: enabled } : previous
   )
 }
 
@@ -368,8 +335,7 @@ export function useVerifyTotp() {
 export function useRegenerateBackupCodes() {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: ({ password }: { password?: string }) =>
-      regenerateBackupCodes(password),
+    mutationFn: ({ password }: { password?: string }) => regenerateBackupCodes(password),
     onSuccess: async () => {
       await invalidateTwoFactor(queryClient)
     },
@@ -390,8 +356,7 @@ export function useDisableTwoFactor() {
 
 export function usePasskeyRegisterOptions() {
   return useApiMutation({
-    mutationFn: ({ password }: { password?: string }) =>
-      passkeyRegisterOptions(password),
+    mutationFn: ({ password }: { password?: string }) => passkeyRegisterOptions(password),
   })
 }
 
@@ -427,13 +392,8 @@ export function useDeletePasskey() {
 export function useUnlinkProvider() {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: ({
-      provider,
-      password,
-    }: {
-      provider: OAuthProvider
-      password?: string
-    }) => unlinkProvider(provider, password),
+    mutationFn: ({ provider, password }: { provider: OAuthProvider; password?: string }) =>
+      unlinkProvider(provider, password),
     onSuccess: async () => {
       await invalidateTwoFactor(queryClient)
     },

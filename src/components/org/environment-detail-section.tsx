@@ -68,9 +68,7 @@ import {
   useCommandsBatch,
   type TrackedCommandEntry,
 } from '@/lib/queries/commands'
-import {
-  useContainersByServices,
-} from '@/lib/queries/containers'
+import { useContainersByServices } from '@/lib/queries/containers'
 import {
   useDeployEnvironment,
   useEnvironment,
@@ -81,6 +79,7 @@ import { useProject } from '@/lib/queries/projects'
 import { useOrgServers } from '@/lib/queries/servers'
 import {
   useHostingsByServices,
+  useReleaseHostingFromCompose,
   useServices,
   useUpsertHosting,
 } from '@/lib/queries/services'
@@ -127,9 +126,39 @@ import {
   type HostingServiceContext,
 } from '@/lib/compose'
 import {
+  isAdoptedComposeHosting,
   isComposeOwnedHosting,
   readHostingComposeRoute,
 } from '@/lib/hosting-compose-owner'
+import {
+  certificateChoiceText,
+  certificateLabel as tlsLabel,
+  COMPOSE_CERTIFICATE_HINT,
+  COMPOSE_HOSTNAME_HINT,
+  COMPOSE_PROXY_NOTE,
+  type ConfiguredHostingState,
+  EMPTY_COMPOSE_HOSTNAME_MESSAGE,
+  hostingActionErrorMessage,
+  missingCertificateMessage,
+  panelCertificateHint,
+  PENDING_REMOVAL_CERTIFICATE_HINT,
+  pendingRemovalNote,
+  resolveCertificateRef,
+  SERVICE_NOT_SAVED_MESSAGE,
+  SHARED_FILE_HOSTNAME_MESSAGE,
+} from '@/lib/hosting-plain-words'
+import {
+  composeRowsAwaitingRemoval,
+  configuredHostingState,
+  findPanelRowForRoute,
+  moveComposeHostnameToPanel,
+  panelCertificateForMovedRoute,
+  panelRowsBesideDeclarations,
+  withoutComposeHostingRoute,
+} from '@/lib/hosting-compose-move'
+import { ComposeHostnameActions } from '@/components/org/project/compose-hostname-actions'
+import { COMPOSE_HOSTING_FOCUS_PARAM } from '@/components/org/compose-hosting-readonly'
+import { projectComposeHref, projectEnvironmentComposeHref } from '@/lib/project-navigation'
 import { hostPickerLabel, pickHostKey } from '@/lib/hosting-host-label'
 import { HostingHostPicker } from '@/components/org/project/hosting-host-picker'
 import { chrome, colors, layout, spacing, webPointer } from '@/lib/theme'
@@ -141,14 +170,18 @@ import { queryKeys } from '@/lib/query-keys'
 import { offersLetsEncrypt } from '@/lib/hosting-letsencrypt-choice'
 import {
   certificateAfterSave,
+  hostingSaveNote,
   withCertificateRefusal,
+  type HostingSaveNote,
   type LetsEncryptRefusal,
 } from '@/lib/hosting-certificate'
 import { RemovedServiceCard } from '@/components/org/removed-service-card'
 import { containerCardServices, removedFromComposeServiceIds } from '@/lib/directory-names'
 import { useEnvironmentFolders } from '@/lib/queries/folders'
 import { useRequestLetsEncrypt } from '@/lib/queries/hosting-certificate'
-import { userErrorMessage } from '@/lib/user-error'
+import { failedRunMessage, userErrorMessage } from '@/lib/user-error'
+import { useLeaveWarning } from '@/components/ui/use-leave-warning'
+import { useSyncedEditors } from '@/components/org/use-synced-editors'
 
 type HostingBind = 'public' | 'datacenter' | 'local'
 type HostingProtocol = 'http' | 'tcp' | 'udp'
@@ -156,6 +189,8 @@ type HostingProtocol = 'http' | 'tcp' | 'udp'
 type HostingEditorState = {
   hostnames: string
   tlsId: string | null
+  /** A compose route's Let’s Encrypt choice (`tls.mode: automatic`); always false on a panel hosting. */
+  tlsAutomatic: boolean
   ipId: string | null
   bind: HostingBind
   forceHttps: boolean
@@ -213,9 +248,7 @@ function readWebOptions(optionsRecord: Record<string, unknown> | null): {
   return { webEnvLines: formatWebEnvLines(optionsRecord?.web) }
 }
 
-function readHostingProtocol(
-  options: Record<string, unknown> | null | undefined,
-): HostingProtocol {
+function readHostingProtocol(options: Record<string, unknown> | null | undefined): HostingProtocol {
   const protocol = options?.protocol
   return protocol === 'tcp' || protocol === 'udp' ? protocol : 'http'
 }
@@ -231,10 +264,12 @@ function formatHostingPorts(options: Record<string, unknown> | null | undefined)
         typeof entry === 'object' &&
         entry !== null &&
         typeof (entry as { published?: unknown }).published === 'number' &&
-        typeof (entry as { target?: unknown }).target === 'number',
+        typeof (entry as { target?: unknown }).target === 'number'
     )
     .map((entry) =>
-      entry.published === entry.target ? String(entry.published) : `${entry.published}:${entry.target}`,
+      entry.published === entry.target
+        ? String(entry.published)
+        : `${entry.published}:${entry.target}`
     )
     .join(', ')
 }
@@ -258,7 +293,7 @@ function parsePortsList(value: string): { published: number; target: number }[] 
         port.published <= 65535 &&
         Number.isInteger(port.target) &&
         port.target >= 1 &&
-        port.target <= 65535,
+        port.target <= 65535
     )
 }
 
@@ -270,7 +305,8 @@ function readHostingBind(options: Record<string, unknown> | null | undefined): H
   return 'public'
 }
 
-function readHostingEditor(hostings: HostingRecord[]): HostingEditorState {
+/** Exported for its tests. */
+export function readHostingEditor(hostings: HostingRecord[]): HostingEditorState {
   const options = hostings[0]?.options
   const optionsRecord =
     options && typeof options === 'object' && !Array.isArray(options)
@@ -283,13 +319,8 @@ function readHostingEditor(hostings: HostingRecord[]): HostingEditorState {
       ? (optionsRecord.proxy as Record<string, unknown>)
       : undefined
   const targetPort =
-    typeof optionsRecord?.targetPort === 'number'
-      ? String(optionsRecord.targetPort)
-      : ''
-  const pathPrefix =
-    typeof optionsRecord?.pathPrefix === 'string'
-      ? optionsRecord.pathPrefix
-      : ''
+    typeof optionsRecord?.targetPort === 'number' ? String(optionsRecord.targetPort) : ''
+  const pathPrefix = typeof optionsRecord?.pathPrefix === 'string' ? optionsRecord.pathPrefix : ''
   return {
     hostnames: formatHostingHostnames(hostings),
     tlsId: hostings[0]?.tlsId ?? null,
@@ -306,6 +337,7 @@ function readHostingEditor(hostings: HostingRecord[]): HostingEditorState {
     ports: formatHostingPorts(optionsRecord),
     ...readWebOptions(optionsRecord),
     getLetsEncrypt: hostings.length === 0,
+    tlsAutomatic: false,
   }
 }
 
@@ -355,21 +387,31 @@ function buildHostingOptions(editor: HostingEditorState): Record<string, unknown
  */
 type HostingRowSource =
   | { kind: 'panel' }
+  /**
+   * A hosting the last deploy made from the file whose entry has left it: the
+   * next deploy removes it (or hands it back to this screen). Read-only until
+   * then, with a note saying so.
+   */
+  | { kind: 'removing'; handedBack: boolean }
   | {
-    kind: 'compose'
-    /** {@link hostingEntryKey} of the declaration this row renders. */
-    route: string
-    /**
-     * Index in the **environment overlay's** entry list, or null when the
-     * route is inherited from the project compose.
-     *
-     * Only the overlay is editable from this surface. `hosting` is a plain
-     * compose sequence, so an overlay list is appended to the project's rather
-     * than merged entry-by-entry — writing an inherited route here would add a
-     * second declaration, not change the one on screen.
-     */
-    overlayIndex: number | null
-  }
+      kind: 'compose'
+      /** {@link hostingEntryKey} of the declaration this row renders. */
+      route: string
+      /**
+       * Index in the **environment overlay's** entry list, or null when the
+       * route is inherited from the project compose.
+       *
+       * Only the overlay is editable from this surface. `hosting` is a plain
+       * compose sequence, so an overlay list is appended to the project's rather
+       * than merged entry-by-entry — writing an inherited route here would add a
+       * second declaration, not change the one on screen.
+       */
+      overlayIndex: number | null
+      /** The entry itself, for the readable summary and the exact configuration. */
+      entry: ComposeHostingExtensionEntry
+      /** Where its hosting stands, which decides what the two actions do and say. */
+      state: ConfiguredHostingState
+    }
 
 type HostingPanelRowDescriptor = {
   /** Key into `hostingEditors`, and the row's React key. */
@@ -383,15 +425,59 @@ type HostingPanelRowDescriptor = {
   seed: HostingEditorState
 }
 
+/** A problem with one hosting row, shown next to the control that caused it. */
+type HostingRowError = {
+  field: 'hostname' | 'save' | 'actions'
+  message: string
+}
+
+/** What a row needs beyond saving: its last problem, the two moves, and where its file is. */
+type HostingRowActions = {
+  /** By `editorKey`. */
+  rowErrors: Readonly<Record<string, HostingRowError>>
+  /** What the last save of a row said when it went through, by `editorKey`. */
+  savedNotes: Readonly<Record<string, HostingSaveNote>>
+  /** The Compose editor for this environment's own file. */
+  environmentComposeHref: string
+  /** The Compose editor for the project's shared file (the Base tab). */
+  baseComposeHref: string
+  onRemoveHostname: (row: HostingPanelRowDescriptor) => void
+  onManageHere: (row: HostingPanelRowDescriptor) => void
+}
+
+function rowErrorFor(
+  error: HostingRowError | undefined,
+  field: HostingRowError['field']
+): string | null {
+  return error?.field === field ? error.message : null
+}
+
+/** The Compose editor link for a configured row, opened at its service. */
+function composeEditorHrefFor(
+  row: HostingPanelRowDescriptor,
+  actions: HostingRowActions
+): string | null {
+  if (row.source.kind !== 'compose') return null
+  if (row.source.overlayIndex === null) return actions.baseComposeHref
+  const query = new URLSearchParams({ [COMPOSE_HOSTING_FOCUS_PARAM]: row.composeServiceName })
+  return `${actions.environmentComposeHref}?${query.toString()}`
+}
+
 /** True when this surface can actually author the row's declaration. */
 function isEditableRow(row: HostingPanelRowDescriptor): boolean {
-  return row.source.kind === 'panel' || row.source.overlayIndex !== null
+  if (row.source.kind === 'panel') return true
+  return row.source.kind === 'compose' && row.source.overlayIndex !== null
+}
+
+/** The note on a row waiting for the next deploy to remove it, or null. */
+function removalNoteFor(row: HostingPanelRowDescriptor): string | null {
+  return row.source.kind === 'removing' ? pendingRemovalNote(row.source.handedBack) : null
 }
 
 /** The compose-owned `hosting` row for one declared route, when deploy made it. */
 function findComposeOwnedRow(
   rows: readonly HostingRecord[],
-  route: string,
+  route: string
 ): HostingRecord | undefined {
   return rows.find((row) => readHostingComposeRoute(row.metadata) === route)
 }
@@ -407,7 +493,7 @@ function findComposeOwnedRow(
  */
 function readComposeHostingEditor(
   entry: ComposeHostingExtensionEntry,
-  row: HostingRecord | undefined,
+  row: HostingRecord | undefined
 ): HostingEditorState {
   const base = readHostingEditor(row ? [row] : [])
   return {
@@ -420,9 +506,8 @@ function readComposeHostingEditor(
     www: wwwChoiceFromComposeEntry(entry),
     bind: hostingBindScopeOf(entry),
     ipId: entry.bind?.ipRef ?? null,
-    tlsId: entry.tls?.mode === 'certificate'
-      ? entry.tls.certificateRef ?? null
-      : null,
+    tlsId: entry.tls?.mode === 'certificate' ? (entry.tls.certificateRef ?? null) : null,
+    tlsAutomatic: entry.tls?.mode === 'automatic',
     // Compose sets the certificate for a route it declares.
     getLetsEncrypt: false,
   }
@@ -439,12 +524,12 @@ function readComposeHostingEditor(
  */
 function composeHostingEntryFromEditor(
   editor: HostingEditorState,
-  serviceContext: HostingServiceContext,
+  serviceContext: HostingServiceContext
 ): ComposeHostingExtensionEntry | null {
   // Save the choice that applies, never one the names leave no room for.
   return composeHostingEntryFromEditorFields(
     { ...editor, www: wwwOptionForSave(editor.www, editor.hostnames) ?? null },
-    composeServiceKindOf(serviceContext),
+    composeServiceKindOf(serviceContext)
   )
 }
 
@@ -457,76 +542,134 @@ function composeHostingEntryFromEditor(
  * folding `node` into `container` is exactly what let the editor offer — and
  * write — a `targetPort` the control plane refuses on a native app.
  */
-function composeServiceKindOf(
-  serviceContext: HostingServiceContext,
-): ComposeServiceKind {
+function composeServiceKindOf(serviceContext: HostingServiceContext): ComposeServiceKind {
   return serviceContext.kind
+}
+
+/** What every row of one service shares while its descriptors are built. */
+type ServiceRowContext = {
+  serviceKey: string
+  composeServiceName: string
+  serviceContext: HostingServiceContext
+  serviceRows: readonly HostingRecord[]
+}
+
+/** A panel-authored row, keyed by `editorKey`. */
+function panelRowDescriptor(
+  ctx: ServiceRowContext,
+  editorKey: string,
+  row: HostingRecord | undefined
+): HostingPanelRowDescriptor {
+  return {
+    editorKey,
+    composeServiceName: ctx.composeServiceName,
+    serviceContext: ctx.serviceContext,
+    source: { kind: 'panel' },
+    hostingId: row?.id ?? null,
+    seed: readHostingEditor(row ? [row] : []),
+  }
+}
+
+/** A row made from the file whose entry has left it, keyed apart from the rest. */
+function removingRowDescriptor(
+  ctx: ServiceRowContext,
+  row: HostingRecord
+): HostingPanelRowDescriptor {
+  return {
+    editorKey: `${ctx.serviceKey}::removing::${row.id}`,
+    composeServiceName: ctx.composeServiceName,
+    serviceContext: ctx.serviceContext,
+    source: { kind: 'removing', handedBack: isAdoptedComposeHosting(row.metadata) },
+    hostingId: row.id,
+    seed: readHostingEditor([row]),
+  }
+}
+
+/**
+ * One configured entry. With no row made from the file, a panel row on the
+ * same route is the one the next deploy would adopt (a move that could not
+ * drop the entry), so the entry uses it.
+ */
+function composeEntryDescriptor(
+  ctx: ServiceRowContext,
+  entry: ComposeHostingExtensionEntry,
+  overlayEntries: readonly ComposeHostingExtensionEntry[]
+): HostingPanelRowDescriptor {
+  const route = hostingEntryKey(entry)
+  const overlayIndex = findComposeHostingEntryIndex(overlayEntries, route)
+  const composeOwnedRow = findComposeOwnedRow(ctx.serviceRows, route)
+  const panelRow = composeOwnedRow ? undefined : findPanelRowForRoute(ctx.serviceRows, route)
+  const row = composeOwnedRow ?? panelRow
+  return {
+    editorKey: `${ctx.serviceKey}::${route}`,
+    composeServiceName: ctx.composeServiceName,
+    serviceContext: ctx.serviceContext,
+    source: {
+      kind: 'compose',
+      route,
+      overlayIndex: overlayIndex === -1 ? null : overlayIndex,
+      entry,
+      state: configuredHostingState(composeOwnedRow, panelRow),
+    },
+    hostingId: row?.id ?? null,
+    seed: readComposeHostingEditor(entry, row),
+  }
+}
+
+/** Every row one service renders. */
+function serviceRowDescriptors(
+  ctx: ServiceRowContext,
+  overlayCompose: ComposeDocument
+): HostingPanelRowDescriptor[] {
+  const entries = ctx.serviceContext.composeHostingEntries
+  // Rows made from the file whose entry is gone wait for the next deploy.
+  const removing = composeRowsAwaitingRemoval(ctx.serviceRows, entries).map((row) =>
+    removingRowDescriptor(ctx, row)
+  )
+  if (entries.length === 0) {
+    // No declaration: the historical single-row panel form, still saved
+    // straight to /hostings. A row made from the file is only here when its
+    // entry was removed, and shows as such rather than as an editable form;
+    // the empty form stays next to it so a new hostname can still be added.
+    // A just-removed hostname comes first, so its note is what shows.
+    const panelRow = ctx.serviceRows.find((row) => !isComposeOwnedHosting(row.metadata))
+    const panel = panelRowDescriptor(ctx, ctx.serviceKey, panelRow)
+    return panelRow ? [panel, ...removing] : [...removing, panel]
+  }
+  const overlayEntries = readComposeHostingEntries(overlayCompose, ctx.composeServiceName)
+  return [
+    ...entries.map((entry) => composeEntryDescriptor(ctx, entry, overlayEntries)),
+    // A hostname moved out of the file sits next to the entries still in it.
+    ...panelRowsBesideDeclarations(ctx.serviceRows, entries).map((row) =>
+      panelRowDescriptor(ctx, `${ctx.serviceKey}::panel::${row.id}`, row)
+    ),
+    ...removing,
+  ]
 }
 
 /**
  * One descriptor per rendered row: every declared compose route on a service,
- * or the single panel row when compose declares none.
+ * or the single panel row when compose declares none. Exported for its tests.
  */
-function buildHostingPanelRows(params: {
+export function buildHostingPanelRows(params: {
   serviceNames: readonly string[]
   services: readonly ServiceRecord[]
   mergedCompose: ComposeDocument
   overlayCompose: ComposeDocument
   hostingsByService: Record<string, HostingRecord[]>
 }): HostingPanelRowDescriptor[] {
-  const rows: HostingPanelRowDescriptor[] = []
-  for (const composeServiceName of params.serviceNames) {
-    const service = params.services.find(
-      (item) => item.composeServiceName === composeServiceName,
-    )
-    const serviceKey = service?.id ?? composeServiceName
-    const serviceRows = service ? params.hostingsByService[service.id] ?? [] : []
-    const serviceContext = resolveHostingServiceContext(
-      params.mergedCompose,
-      composeServiceName,
-    )
-
-    if (serviceContext.composeHostingEntries.length === 0) {
-      // No declaration: the historical single-row panel form, still saved
-      // straight to /hostings. Compose-owned rows can only exist alongside a
-      // declaration, so anything here is the operator's own.
-      const panelRow = serviceRows.find(
-        (row) => !isComposeOwnedHosting(row.metadata),
-      ) ?? serviceRows[0]
-      rows.push({
-        editorKey: serviceKey,
+  return params.serviceNames.flatMap((composeServiceName) => {
+    const service = params.services.find((item) => item.composeServiceName === composeServiceName)
+    return serviceRowDescriptors(
+      {
+        serviceKey: service?.id ?? composeServiceName,
         composeServiceName,
-        serviceContext,
-        source: { kind: 'panel' },
-        hostingId: panelRow?.id ?? null,
-        seed: readHostingEditor(panelRow ? [panelRow] : []),
-      })
-      continue
-    }
-
-    const overlayEntries = readComposeHostingEntries(
-      params.overlayCompose,
-      composeServiceName,
+        serviceContext: resolveHostingServiceContext(params.mergedCompose, composeServiceName),
+        serviceRows: service ? (params.hostingsByService[service.id] ?? []) : [],
+      },
+      params.overlayCompose
     )
-    for (const entry of serviceContext.composeHostingEntries) {
-      const route = hostingEntryKey(entry)
-      const overlayIndex = findComposeHostingEntryIndex(overlayEntries, route)
-      const composeOwnedRow = findComposeOwnedRow(serviceRows, route)
-      rows.push({
-        editorKey: `${serviceKey}::${route}`,
-        composeServiceName,
-        serviceContext,
-        source: {
-          kind: 'compose',
-          route,
-          overlayIndex: overlayIndex === -1 ? null : overlayIndex,
-        },
-        hostingId: composeOwnedRow?.id ?? null,
-        seed: readComposeHostingEditor(entry, composeOwnedRow),
-      })
-    }
-  }
-  return rows
+  })
 }
 
 function composeServiceNames(document: ComposeDocument): string[] {
@@ -567,18 +710,13 @@ function containerDisplayName(container: ContainerRecord): string {
  * ingress rows. The ingress partition does not cover ProxySQL — that row
  * lives on the `managed-ingress` system service.
  */
-function partitionContainersForDisplay(
-  containers: ContainerRecord[],
-): ContainerRecord[] {
+function partitionContainersForDisplay(containers: ContainerRecord[]): ContainerRecord[] {
   const serviceRows = containers.filter((row) => row.role !== 'ingress')
   const ingressRows = containers.filter((row) => row.role === 'ingress')
   return [...serviceRows, ...ingressRows]
 }
 
-function containerHostLabel(
-  container: ContainerRecord,
-  allServers: OrgServerRecord[],
-): string {
+function containerHostLabel(container: ContainerRecord, allServers: OrgServerRecord[]): string {
   const host = allServers.find((server) => server.id === container.serverId)
   if (host) {
     return serverLabel(host)
@@ -586,10 +724,7 @@ function containerHostLabel(
   return container.serverId
 }
 
-function upsertServiceById(
-  current: ServiceRecord[],
-  nextService: ServiceRecord,
-): ServiceRecord[] {
+function upsertServiceById(current: ServiceRecord[], nextService: ServiceRecord): ServiceRecord[] {
   const index = current.findIndex((row) => row.id === nextService.id)
   if (index === -1) {
     return [...current, nextService]
@@ -606,15 +741,10 @@ function deployStatusMessage(command: CommandStatusRecord): string {
   return commandErrorLine(command) ?? `Deployment ${command.status}.`
 }
 
-
-function tlsLabel(row: TlsRecord): string {
-  return row.name?.trim() || row.metadata.dnsNames[0] || row.id.slice(0, 8)
-}
-
 function deployBlockedReason(
   placementServerId: string | null,
   pinnedServer: OrgServerRecord | null,
-  serviceCount: number,
+  serviceCount: number
 ): string | null {
   if (serviceCount === 0) {
     return 'Add at least one service to Compose before deploying.'
@@ -633,7 +763,7 @@ function deployBlockedReason(
 
 function placementDropdownOptions(
   sortedServers: OrgServerRecord[],
-  placementServerId: string | null,
+  placementServerId: string | null
 ): OrgServerRecord[] {
   const connected = sortedServers.filter((server) => server.connected)
   if (!placementServerId) {
@@ -674,10 +804,7 @@ function HostingWebEnvFields({
 }>) {
   const webEnvCopy = hostingWebEnvSectionCopy(serviceContext)
   const hasWebEnvValues = editor.webEnvLines.trim().length > 0
-  const showWebEnvFields = shouldRevealOptionalHostingFields(
-    webEnvCopy.showFields,
-    hasWebEnvValues,
-  )
+  const showWebEnvFields = shouldRevealOptionalHostingFields(webEnvCopy.showFields, hasWebEnvValues)
 
   return (
     <>
@@ -690,8 +817,8 @@ function HostingWebEnvFields({
         <>
           {!webEnvCopy.showFields && hasWebEnvValues ? (
             <Text style={styles.staleFieldWarn}>
-              Stored values are ignored for this service kind — clear them
-              before save if you no longer need them.
+              Stored values are ignored for this service kind — clear them before save if you no
+              longer need them.
             </Text>
           ) : null}
           <TextField
@@ -717,9 +844,8 @@ function HostingWebEnvFields({
       */}
       <Text style={styles.fieldLabel}>PHP</Text>
       <Text style={panelStyles.muted}>
-        PHP version, limits, and extensions are configured on the service
-        itself, under Services — one PHP process pool belongs to one service,
-        not to each hostname pointed at it.
+        PHP version, limits, and extensions are configured on the service itself, under Services —
+        one PHP worker pool belongs to one service, not to each hostname pointed at it.
       </Text>
     </>
   )
@@ -727,6 +853,27 @@ function HostingWebEnvFields({
 
 /** The "Self-signed" / "Any interface" option of a picker whose saved value is null. */
 const NO_CHOICE = ''
+/** The compose picker's Let’s Encrypt chip; never a certificate id. */
+const AUTOMATIC_CHOICE = '__automatic__'
+
+function hostingTlsSummary(
+  editor: Pick<HostingEditorState, 'tlsAutomatic'>,
+  tlsRow: TlsRecord | undefined
+): string {
+  if (editor.tlsAutomatic) return 'Let’s Encrypt'
+  return tlsRow ? tlsLabel(tlsRow) : 'Self-signed'
+}
+
+/** The picker value for the editor's choice, and the editor patch for a picked value. */
+function tlsPickerValue(editor: Pick<HostingEditorState, 'tlsId' | 'tlsAutomatic'>): string {
+  if (editor.tlsAutomatic) return AUTOMATIC_CHOICE
+  return editor.tlsId ?? NO_CHOICE
+}
+
+function tlsPickerPatch(value: string): Pick<HostingEditorState, 'tlsId' | 'tlsAutomatic'> {
+  if (value === AUTOMATIC_CHOICE) return { tlsId: null, tlsAutomatic: true }
+  return { tlsId: value === NO_CHOICE ? null : value, tlsAutomatic: false }
+}
 
 const HOSTING_BIND_LABELS: Record<HostingBind, string> = {
   public: 'Public',
@@ -735,10 +882,7 @@ const HOSTING_BIND_LABELS: Record<HostingBind, string> = {
 }
 
 /** One-line collapsed summary: hostnames/ports + port + TLS mode + bind. */
-function hostingRowSummary(
-  editor: HostingEditorState,
-  tlsOptions: TlsRecord[],
-): string {
+function hostingRowSummary(editor: HostingEditorState, tlsOptions: TlsRecord[]): string {
   const bindLabel = HOSTING_BIND_LABELS[editor.bind]
   if (editor.protocol !== 'http') {
     return [
@@ -747,13 +891,11 @@ function hostingRowSummary(
       bindLabel,
     ].join(' · ')
   }
-  const tlsRow = editor.tlsId
-    ? tlsOptions.find((row) => row.id === editor.tlsId)
-    : undefined
+  const tlsRow = resolveCertificateRef(editor.tlsId ?? undefined, tlsOptions)
   const parts = [
     editor.hostnames.trim() || 'no hostnames',
     editor.targetPort.trim() ? `port ${editor.targetPort.trim()}` : null,
-    tlsRow ? tlsLabel(tlsRow) : 'Self-signed',
+    hostingTlsSummary(editor, tlsRow),
     bindLabel,
   ]
   return parts.filter(Boolean).join(' · ')
@@ -762,20 +904,6 @@ function hostingRowSummary(
 function HostingHintText({ hint }: Readonly<{ hint: string | null }>) {
   if (!hint) return null
   return <Text style={styles.tlsHint}>{hint}</Text>
-}
-
-function ComposeOwnedHint({
-  composeOwned,
-  composeEditable,
-}: Readonly<{ composeOwned: boolean; composeEditable: boolean }>) {
-  if (!composeOwned) return null
-  return (
-    <Text style={styles.tlsHint}>
-      {composeEditable
-        ? 'Compose declares this route in x-turbopanel.hosting. Saving writes the environment compose overlay — the hosting row is re-materialized from it on the next deploy.'
-        : 'The project compose declares this route in x-turbopanel.hosting. Edit it there: an entry saved here would be appended to the project list, not replace it.'}
-    </Text>
-  )
 }
 
 function HostingProtocolPicker({
@@ -817,12 +945,15 @@ function HostingAddressField({
   composeOwned,
   editor,
   locked,
+  error,
   onChange,
 }: Readonly<{
   isHttp: boolean
   composeOwned: boolean
   editor: HostingEditorState
   locked: boolean
+  /** A problem with what was typed, shown under the field. */
+  error: string | null
   onChange: (patch: Partial<HostingEditorState>) => void
 }>) {
   if (!isHttp) {
@@ -833,6 +964,7 @@ function HostingAddressField({
           'Comma-separated published[:target] pairs. Target defaults to published when omitted (e.g. "5432, 8443:8080").'
         }
         value={editor.ports}
+        error={error}
         onChangeText={(value) => onChange({ ports: value })}
         placeholder="5432, 8443:8080"
         mono
@@ -843,10 +975,9 @@ function HostingAddressField({
   return (
     <TextField
       label={composeOwned ? 'Hostname' : 'Hostnames'}
-      hint={composeOwned
-        ? 'One hostname per x-turbopanel.hosting entry. Add another entry for another route.'
-        : undefined}
+      hint={composeOwned ? COMPOSE_HOSTNAME_HINT : undefined}
       value={editor.hostnames}
+      error={error}
       editable={!locked}
       onChangeText={(value) => onChange({ hostnames: value })}
       placeholder="app.example.com"
@@ -897,9 +1028,20 @@ function HostingWwwField({
   )
 }
 
+/** The sentence under Certificate: who sets it, and how to get Let’s Encrypt where it applies. */
+function tlsPickerHint(
+  composeOwned: boolean,
+  awaitingRemoval: boolean,
+  letsEncryptBoxShown: boolean
+): string {
+  if (awaitingRemoval) return PENDING_REMOVAL_CERTIFICATE_HINT
+  return composeOwned ? COMPOSE_CERTIFICATE_HINT : panelCertificateHint(letsEncryptBoxShown)
+}
+
 function HostingTlsPicker({
   isHttp,
   composeOwned,
+  awaitingRemoval,
   editor,
   covering,
   pinnedGap,
@@ -908,6 +1050,8 @@ function HostingTlsPicker({
 }: Readonly<{
   isHttp: boolean
   composeOwned: boolean
+  /** Waiting for the next deploy to remove it: no Save, so no Let’s Encrypt box. */
+  awaitingRemoval: boolean
   editor: HostingEditorState
   covering: TlsRecord[]
   /** A pinned certificate that no longer covers the names: still shown, with a note. */
@@ -917,38 +1061,47 @@ function HostingTlsPicker({
 }>) {
   if (!isHttp) return null
   const chips = pinnedGap ? [...covering, pinnedGap.row] : covering
+  const picked = resolveCertificateRef(editor.tlsId ?? undefined, chips)
+  const letsEncryptBoxShown =
+    !awaitingRemoval &&
+    offersLetsEncrypt({
+      composeOwned,
+      protocol: editor.protocol,
+      tlsId: editor.tlsId,
+      hostnameCount: parseHostnameList(editor.hostnames).length,
+    })
   return (
     <>
-      <Text style={styles.tlsLabel}>TLS certificate</Text>
+      <Text style={styles.tlsLabel}>Certificate</Text>
       <Text style={styles.tlsHint}>
-        {composeOwned
-          ? 'Self-signed is tls.mode "internal"; picking a library certificate is tls.mode "certificate" with tls.certificateRef. Nothing is requested automatically — "automatic" is refused at deploy rather than served as self-signed.'
-          : 'Until a real certificate is in place the site uses a basic self-signed one. Pick a library certificate to use an upload or an org self-signed one, or tick the box below to get a free Let\u2019s Encrypt certificate when you save.'}
+        {tlsPickerHint(composeOwned, awaitingRemoval, letsEncryptBoxShown)}
       </Text>
       <SegmentedControl
-        accessibilityLabel="TLS certificate"
+        accessibilityLabel="Certificate"
         options={[
+          ...(composeOwned ? [{ value: AUTOMATIC_CHOICE, label: 'Let\u2019s Encrypt' }] : []),
           { value: NO_CHOICE, label: 'Self-signed' },
           ...chips.map((row) => ({ value: row.id, label: tlsLabel(row) })),
         ]}
-        value={editor.tlsId ?? NO_CHOICE}
+        value={tlsPickerValue(editor)}
         disabled={locked}
-        onChange={(id) => onChange({ tlsId: id === NO_CHOICE ? null : id })}
+        onChange={(value) => onChange(tlsPickerPatch(value))}
       />
+      <Text style={styles.wwwResult}>
+        {`Certificate: ${certificateChoiceText({
+          automatic: editor.tlsAutomatic,
+          certificate: picked,
+        })}`}
+      </Text>
       <HostingHintText hint={pinnedGap?.note ?? null} />
-      {!offersLetsEncrypt({
-        composeOwned,
-        protocol: editor.protocol,
-        tlsId: editor.tlsId,
-        hostnameCount: parseHostnameList(editor.hostnames).length,
-      }) ? null : (
+      {letsEncryptBoxShown ? (
         <Checkbox
           label="Get a free Let’s Encrypt certificate when I save"
           checked={editor.getLetsEncrypt}
           disabled={locked}
           onPress={() => onChange({ getLetsEncrypt: !editor.getLetsEncrypt })}
         />
-      )}
+      ) : null}
     </>
   )
 }
@@ -966,8 +1119,8 @@ function HostingBindPicker({
     <>
       <Text style={styles.tlsLabel}>Bind</Text>
       <Text style={styles.tlsHint}>
-        Public — reachable on the internet. Datacenter — private network only.
-        Local — this server only (127.x).
+        Public — reachable on the internet. Datacenter — private network only. Local — this server
+        only (127.x).
       </Text>
       <SegmentedControl
         accessibilityLabel="Bind"
@@ -1000,8 +1153,7 @@ function HostingPublicIpPicker({
     <>
       <Text style={styles.tlsLabel}>Public IP</Text>
       <Text style={styles.tlsHint}>
-        Pin a managed public address, or leave Any interface for the server
-        to choose.
+        Pin a managed public address, or leave Any interface for the server to choose.
       </Text>
       <SegmentedControl
         accessibilityLabel="Public IP"
@@ -1042,13 +1194,7 @@ function HostingProxyFields({
   return (
     <>
       <Text style={styles.tlsLabel}>Proxy</Text>
-      {composeOwned ? (
-        <Text style={styles.tlsHint}>
-          Only Force HTTPS is authored in compose (forceHttps). The rest are
-          hosting-row settings with no compose spelling; deploy preserves
-          them as stored.
-        </Text>
-      ) : null}
+      {composeOwned ? <Text style={styles.tlsHint}>{COMPOSE_PROXY_NOTE}</Text> : null}
       <Checkbox
         label="Force HTTPS"
         checked={editor.forceHttps}
@@ -1117,28 +1263,143 @@ function HostingVariablesBlock({
 }: Readonly<{ orgId: string; hostingId: string | null }>) {
   if (!hostingId) {
     return (
-      <Text style={panelStyles.muted}>
-        Save hosting first to add hostname-scoped variables.
-      </Text>
+      <Text style={panelStyles.muted}>Save hosting first to add hostname-scoped variables.</Text>
     )
   }
+  return <VariablesSection orgId={orgId} parentField={{ hostingId }} embedded showPresets={false} />
+}
+
+/**
+ * The editor key a compose route has after a save: the key ends in the
+ * route's hostname and path, so a new hostname gives the row a new key.
+ */
+function composeRowKeyAfterSave(
+  row: HostingPanelRowDescriptor,
+  entry: Pick<ComposeHostingExtensionEntry, 'hostname' | 'pathPrefix'>
+): string {
+  if (row.source.kind !== 'compose') return row.editorKey
+  const prefix = row.editorKey.slice(0, row.editorKey.length - row.source.route.length)
+  return `${prefix}${hostingEntryKey(entry)}`
+}
+
+/** A panel hosting save also asks Let's Encrypt for a certificate. */
+function wantsLetsEncrypt(editor: HostingEditorState): boolean {
   return (
-    <VariablesSection
-      orgId={orgId}
-      parentField={{ hostingId }}
-      embedded
-      showPresets={false}
-    />
+    editor.getLetsEncrypt &&
+    offersLetsEncrypt({
+      composeOwned: false,
+      protocol: editor.protocol,
+      tlsId: editor.tlsId,
+      hostnameCount: parseHostnameList(editor.hostnames).length,
+    })
   )
 }
 
-function HostingPanelRow({
+/** A row's save button, and right after it what its last save said. */
+function HostingSaveControls({
+  asksLetsEncrypt,
+  saving,
+  disabled,
+  error,
+  savedNote,
+  onSave,
+}: Readonly<{
+  /** The save also asks Let's Encrypt for a certificate. */
+  asksLetsEncrypt: boolean
+  saving: boolean
+  disabled: boolean
+  /** Why the last save failed, in plain words. */
+  error: string | null
+  savedNote: HostingSaveNote | null
+  onSave: () => void
+}>) {
+  // Said while saving, so leaving early is not mistaken for done.
+  const busyLabel = asksLetsEncrypt ? 'Saving and asking Let’s Encrypt…' : 'Saving…'
+  const note = error === null ? savedNote : { tone: 'error' as const, message: error }
+  const failed = note?.tone === 'error'
+  return (
+    <>
+      <Button
+        label="Save hosting"
+        busyLabel={busyLabel}
+        size="sm"
+        variant="secondary"
+        busy={saving}
+        disabled={disabled}
+        onPress={onSave}
+      />
+      {note ? (
+        <Text
+          accessibilityRole={failed ? 'alert' : undefined}
+          style={failed ? panelStyles.error : styles.savedNote}
+        >
+          {note.message}
+        </Text>
+      ) : null}
+    </>
+  )
+}
+
+/**
+ * What a hosting row lets someone change. Compose authors the route, never the
+ * proxy toggles, the web env, or a raw tcp/udp publish — those stay on the row
+ * and survive every reconcile, so they are shown as stored rather than hidden
+ * or offered as a doomed edit. A row waiting for the next deploy to remove it
+ * changes nothing.
+ */
+function hostingRowLocks(
+  input: Readonly<{
+    disabled: boolean
+    awaitingRemoval: boolean
+    composeOwned: boolean
+    composeEditable: boolean
+  }>
+): { frozen: boolean; locked: boolean; panelFieldsLocked: boolean; canSave: boolean } {
+  // Nothing on the row can change, the certificate actions included.
+  const frozen = input.disabled || input.awaitingRemoval
+  return {
+    frozen,
+    locked: frozen || (input.composeOwned && !input.composeEditable),
+    panelFieldsLocked: frozen || input.composeOwned,
+    canSave: input.composeEditable && !input.awaitingRemoval,
+  }
+}
+
+/** Hostname-scoped variables; left out on a row waiting to be removed. */
+function HostingVariablesSection({
+  orgId,
+  hostingId,
+  hidden,
+}: Readonly<{ orgId: string; hostingId: string | null; hidden: boolean }>) {
+  if (hidden) return null
+  return (
+    <>
+      <Text style={styles.tlsLabel}>Hosting variables</Text>
+      <Text style={styles.tlsHint}>
+        Hostname-scoped overrides for this service. Applied at deploy after service scope (compose
+        injects at the service level).
+      </Text>
+      <HostingVariablesBlock orgId={orgId} hostingId={hostingId} />
+    </>
+  )
+}
+
+/** Exported for its tests. */
+export function HostingPanelRow({
   orgId,
   composeServiceName,
   serviceContext,
   hostingId,
   composeRoute = null,
+  composeEntry = null,
+  composeState = 'not-deployed',
+  configurationHref = null,
+  rowError,
+  savedNote = null,
+  onRemoveHostname,
+  onManageHere,
   composeEditable = true,
+  removalNote = null,
   focused = false,
   expanded,
   onToggleExpanded,
@@ -1162,12 +1423,27 @@ function HostingPanelRow({
    * shown read-only rather than offered as edits the API would refuse.
    */
   composeRoute?: string | null
+  /** The configured entry this row renders, for its readable words and actions. */
+  composeEntry?: ComposeHostingExtensionEntry | null
+  composeState?: ConfiguredHostingState
+  /** The Compose editor that holds the entry. */
+  configurationHref?: string | null
+  rowError?: HostingRowError
+  /** What the last save of this row said when it went through. */
+  savedNote?: HostingSaveNote | null
+  onRemoveHostname: () => void
+  onManageHere: () => void
   /**
    * False when the declaration lives in the project compose. The route still
    * renders — it is what will deploy — but this surface only authors the
    * environment overlay, so saving here would append a second declaration.
    */
   composeEditable?: boolean
+  /**
+   * Set on a hosting whose entry has left the configuration file: what the
+   * next deploy does with it. The row is then read-only and has no Save.
+   */
+  removalNote?: string | null
   /** Highlight when opened from a `/networking/:hostingId` deep link. */
   focused?: boolean
   /** Full editor visible; collapsed rows show the one-line summary only. */
@@ -1182,33 +1458,24 @@ function HostingPanelRow({
   onSave: () => void
 }>) {
   const covering = coveringCertificates(tlsOptions, editor.hostnames, editor.www)
-  const pinnedGap = pinnedCertificateGap(
-    tlsOptions,
-    editor.tlsId,
-    editor.hostnames,
-    editor.www,
-  )
+  const pinnedGap = pinnedCertificateGap(tlsOptions, editor.tlsId, editor.hostnames, editor.www)
 
   const composeOwned = composeRoute !== null
-  const targetPortAuthorable = hostingTargetPortAuthorable(
-    composeServiceKindOf(serviceContext),
-  )
+  const targetPortAuthorable = hostingTargetPortAuthorable(composeServiceKindOf(serviceContext))
   // Named per kind, so the row says which host process already owns the port
   // rather than only that the field is gone.
   const targetPortHint = hostingTargetPortHint(serviceContext) ?? ''
-  // Compose authors the route, never the proxy toggles, the web env, or a raw
-  // tcp/udp publish — those stay on the row and survive every reconcile, so
-  // they are shown as stored rather than hidden or offered as a doomed edit.
-  const locked = disabled || (composeOwned && !composeEditable)
-  const panelFieldsLocked = disabled || composeOwned
+  const awaitingRemoval = removalNote !== null
+  const { frozen, locked, panelFieldsLocked, canSave } = hostingRowLocks({
+    disabled,
+    awaitingRemoval,
+    composeOwned,
+    composeEditable,
+  })
   const isHttp = composeOwned || editor.protocol === 'http'
   const kindLabel = hostingServiceKindLabel(serviceContext)
   const dockerBridgeHint = hostingDockerBridgeHint(serviceContext)
-  const saveLabel = composeOwned ? 'Save route to compose' : 'Save hosting'
-  const cardStyle = [
-    panelStyles.detailCard,
-    focused && styles.hostingRowFocused,
-  ]
+  const cardStyle = [panelStyles.detailCard, focused && styles.hostingRowFocused]
   const cardAccessibilityState = focused ? { selected: true } : undefined
 
   const header = (
@@ -1218,9 +1485,7 @@ function HostingPanelRow({
       accessibilityRole="button"
       accessibilityState={{ expanded }}
       accessibilityLabel={
-        expanded
-          ? `Collapse ${composeServiceName} hosting`
-          : `Expand ${composeServiceName} hosting`
+        expanded ? `Collapse ${composeServiceName} hosting` : `Expand ${composeServiceName} hosting`
       }
     >
       <View style={styles.hostingSummaryCopy}>
@@ -1247,16 +1512,27 @@ function HostingPanelRow({
   return (
     <View style={cardStyle} accessibilityState={cardAccessibilityState}>
       {header}
-      <ComposeOwnedHint
-        composeOwned={composeOwned}
-        composeEditable={composeEditable}
-      />
+      {composeEntry ? (
+        <ComposeHostnameActions
+          composeServiceName={composeServiceName}
+          entry={composeEntry}
+          editable={composeEditable}
+          state={composeState}
+          configurationHref={configurationHref}
+          busy={saving}
+          disabled={disabled}
+          error={rowErrorFor(rowError, 'actions')}
+          onRemove={onRemoveHostname}
+          onManageHere={onManageHere}
+        />
+      ) : null}
+      <HostingHintText hint={removalNote} />
       <HostingHintText hint={dockerBridgeHint} />
 
       <HostingProtocolPicker
         composeOwned={composeOwned}
         editor={editor}
-        disabled={disabled}
+        disabled={locked}
         onChange={onChange}
       />
 
@@ -1265,19 +1541,16 @@ function HostingPanelRow({
         composeOwned={composeOwned}
         editor={editor}
         locked={locked}
+        error={rowErrorFor(rowError, 'hostname')}
         onChange={onChange}
       />
 
-      <HostingWwwField
-        isHttp={isHttp}
-        editor={editor}
-        locked={locked}
-        onChange={onChange}
-      />
+      <HostingWwwField isHttp={isHttp} editor={editor} locked={locked} onChange={onChange} />
 
       <HostingTlsPicker
         isHttp={isHttp}
         composeOwned={composeOwned}
+        awaitingRemoval={awaitingRemoval}
         editor={editor}
         covering={covering}
         pinnedGap={pinnedGap}
@@ -1290,7 +1563,7 @@ function HostingPanelRow({
           orgId={orgId}
           hostingId={hostingId}
           composeOwned={composeOwned}
-          disabled={disabled}
+          disabled={frozen}
         />
       ) : null}
 
@@ -1315,24 +1588,18 @@ function HostingPanelRow({
         onChange={onChange}
       />
 
-      {composeEditable ? (
-        <Button
-          label={saveLabel}
-          busyLabel="Saving…"
-          size="sm"
-          variant="secondary"
-          busy={saving}
+      {canSave ? (
+        <HostingSaveControls
+          asksLetsEncrypt={!composeOwned && wantsLetsEncrypt(editor)}
+          saving={saving}
           disabled={disabled}
-          onPress={onSave}
+          error={rowErrorFor(rowError, 'save')}
+          savedNote={savedNote}
+          onSave={onSave}
         />
       ) : null}
 
-      <Text style={styles.tlsLabel}>Hosting variables</Text>
-      <Text style={styles.tlsHint}>
-        Hostname-scoped overrides for this service. Applied at deploy after
-        service scope (compose injects at the service level).
-      </Text>
-      <HostingVariablesBlock orgId={orgId} hostingId={hostingId} />
+      <HostingVariablesSection orgId={orgId} hostingId={hostingId} hidden={awaitingRemoval} />
     </View>
   )
 }
@@ -1356,9 +1623,7 @@ function EnvironmentPlacementPanel({
 
   let picker
   if (options.length === 0) {
-    picker = (
-      <Text style={panelStyles.muted}>No connected servers available.</Text>
-    )
+    picker = <Text style={panelStyles.muted}>No connected servers available.</Text>
   } else if (Platform.OS === 'web') {
     picker = createElement(
       'select',
@@ -1374,26 +1639,16 @@ function EnvironmentPlacementPanel({
         'aria-required': true,
       },
       [
-        createElement(
-          'option',
-          { key: '', value: '', disabled: true },
-          'Select a server…',
-        ),
+        createElement('option', { key: '', value: '', disabled: true }, 'Select a server…'),
         ...options.map((server) =>
-          createElement(
-            'option',
-            { key: server.id, value: server.id },
-            serverOptionLabel(server),
-          ),
+          createElement('option', { key: server.id, value: server.id }, serverOptionLabel(server))
         ),
-      ],
+      ]
     )
   } else {
     picker = (
       <View style={styles.serverList}>
-        {!placementServerId ? (
-          <Text style={panelStyles.muted}>Select a server…</Text>
-        ) : null}
+        {!placementServerId ? <Text style={panelStyles.muted}>Select a server…</Text> : null}
         {options.map((server) => {
           const isSelected = placementServerId === server.id
           const canSelect = server.connected
@@ -1407,12 +1662,7 @@ function EnvironmentPlacementPanel({
                   isSelected && styles.serverOptionSelected,
                 ]}
               >
-                <Text
-                  style={[
-                    styles.serverOptionText,
-                    styles.serverOptionTextDisabled,
-                  ]}
-                >
+                <Text style={[styles.serverOptionText, styles.serverOptionTextDisabled]}>
                   {serverOptionLabel(server)}
                 </Text>
               </View>
@@ -1421,16 +1671,11 @@ function EnvironmentPlacementPanel({
           return (
             <Pressable
               key={server.id}
-              style={[
-                styles.serverOption,
-                isSelected && styles.serverOptionSelected,
-              ]}
+              style={[styles.serverOption, isSelected && styles.serverOptionSelected]}
               disabled={savingPlacement}
               onPress={() => onSavePlacement(server.id)}
             >
-              <Text style={styles.serverOptionText}>
-                {serverOptionLabel(server)}
-              </Text>
+              <Text style={styles.serverOptionText}>{serverOptionLabel(server)}</Text>
             </Pressable>
           )
         })}
@@ -1458,9 +1703,7 @@ function EnvironmentPlacementPanel({
           Selected server is offline. Choose a connected server.
         </Text>
       ) : null}
-      {savingPlacement ? (
-        <Text style={panelStyles.muted}>Saving…</Text>
-      ) : null}
+      {savingPlacement ? <Text style={panelStyles.muted}>Saving…</Text> : null}
     </Section>
   )
 }
@@ -1492,12 +1735,7 @@ function HealthCheckAckModal({
         </Text>
         <Text style={styles.modalServices}>{serviceList || 'Unknown services'}</Text>
         <ButtonRow>
-          <Button
-            label="Cancel"
-            variant="secondary"
-            disabled={deploying}
-            onPress={onCancel}
-          />
+          <Button label="Cancel" variant="secondary" disabled={deploying} onPress={onCancel} />
           {!required ? (
             <Button
               label="Deploy anyway"
@@ -1514,11 +1752,7 @@ function HealthCheckAckModal({
   )
 }
 
-export type EnvironmentDetailSectionId =
-  | 'hosting'
-  | 'service-settings'
-  | 'storage'
-  | 'containers'
+export type EnvironmentDetailSectionId = 'hosting' | 'service-settings' | 'storage' | 'containers'
 
 const ALL_ENVIRONMENT_DETAIL_SECTIONS: readonly EnvironmentDetailSectionId[] = [
   'hosting',
@@ -1540,9 +1774,7 @@ function EnvironmentInfoPanel({
         {environment.name?.trim() || 'Unnamed environment'}
       </Text>
       {environment.description ? (
-        <Text style={panelStyles.detailLine}>
-          {environment.description}
-        </Text>
+        <Text style={panelStyles.detailLine}>{environment.description}</Text>
       ) : null}
       <Text style={panelStyles.detailLine}>
         <Text style={panelStyles.detailLabel}>Project: </Text>
@@ -1678,9 +1910,7 @@ function EnvironmentDeployChromePanels({
             accessibilityLabel="Deploy environment"
           />
         </View>
-        {deployStatus ? (
-          <Text style={panelStyles.detailLine}>{deployStatus}</Text>
-        ) : null}
+        {deployStatus ? <Text style={panelStyles.detailLine}>{deployStatus}</Text> : null}
       </Section>
 
       <Modal
@@ -1689,12 +1919,7 @@ function EnvironmentDeployChromePanels({
         animationType={isCompact ? 'slide' : 'fade'}
         onRequestClose={() => setPreviewMenuOpen(false)}
       >
-        <View
-          style={[
-            styles.menuBackdrop,
-            isCompact && styles.menuBackdropCompact,
-          ]}
-        >
+        <View style={[styles.menuBackdrop, isCompact && styles.menuBackdropCompact]}>
           <Pressable
             style={StyleSheet.absoluteFill}
             onPress={() => setPreviewMenuOpen(false)}
@@ -1729,8 +1954,8 @@ function EnvironmentDeployChromePanels({
             >
               <Text style={styles.menuItemTitle}>Merged compose</Text>
               <Text style={styles.menuItemSub}>
-                Project base combined with this environment’s overrides,
-                including x-turbopanel metadata
+                Project base combined with this environment’s overrides, including TurboPanel’s own
+                settings
               </Text>
             </Pressable>
             <Pressable
@@ -1748,8 +1973,7 @@ function EnvironmentDeployChromePanels({
             >
               <Text style={styles.menuItemTitle}>Prepared compose</Text>
               <Text style={styles.menuItemSub}>
-                Deploy-ready document after variables, naming, and
-                site split
+                Deploy-ready document after variables, naming, and site split
               </Text>
             </Pressable>
           </View>
@@ -1768,6 +1992,7 @@ function EnvironmentHostingSectionPanel({
   publicIps,
   savingHosting,
   onSaveHosting,
+  hostingRowActions,
   focusHostingId,
 }: Readonly<{
   orgId: string
@@ -1785,6 +2010,7 @@ function EnvironmentHostingSectionPanel({
   /** `editorKey` of the row being saved, or null. */
   savingHosting: string | null
   onSaveHosting: (row: HostingPanelRowDescriptor) => void
+  hostingRowActions: HostingRowActions
   focusHostingId: string | null
 }>) {
   // Per-row expand-in-place; deep-linked (focused) rows open by default.
@@ -1792,7 +2018,7 @@ function EnvironmentHostingSectionPanel({
   const [pickedKey, setPickedKey] = useState<string | null>(null)
   const rowKeys = hostingRows.map((row) => row.editorKey)
   const focusedRow = hostingRows.find(
-    (row) => focusHostingId != null && row.hostingId === focusHostingId,
+    (row) => focusHostingId != null && row.hostingId === focusHostingId
   )
   const selectedKey = pickHostKey(rowKeys, pickedKey, focusedRow?.editorKey ?? null)
   const pickerEntries = hostingRows.map((row) => ({
@@ -1804,7 +2030,7 @@ function EnvironmentHostingSectionPanel({
     }),
   }))
   return (
-    <Section title="Hosting" note="Map compose services to hostnames (http) or raw ports (tcp/udp)">
+    <Section title="Hosting" note="Point each service at a hostname, or open a raw port for it">
       {hostingRows.length === 0 ? (
         <EmptyState title="Add services to Compose before configuring hostnames." />
       ) : (
@@ -1816,47 +2042,54 @@ function EnvironmentHostingSectionPanel({
               onSelect={setPickedKey}
             />
           ) : null}
-          {hostingRows.filter((row) => row.editorKey === selectedKey).map((row) => {
-            const editor = hostingEditors[row.editorKey] ?? row.seed
-            const focused =
-              focusHostingId != null && row.hostingId === focusHostingId
-            // The picked hostname is always open; the picker replaced the
-            // per-row expand toggle.
-            const expanded = expandedRows[row.editorKey] ?? true
-            return (
-              <HostingPanelRow
-                key={row.editorKey}
-                orgId={orgId}
-                composeServiceName={row.composeServiceName}
-                serviceContext={row.serviceContext}
-                hostingId={row.hostingId}
-                composeRoute={row.source.kind === 'compose'
-                  ? row.source.route
-                  : null}
-                composeEditable={isEditableRow(row)}
-                focused={focused}
-                expanded={expanded}
-                onToggleExpanded={() =>
-                  setExpandedRows((current) => ({
-                    ...current,
-                    [row.editorKey]: !expanded,
-                  }))
-                }
-                editor={editor}
-                tlsOptions={tlsLibrary}
-                publicIps={publicIps}
-                saving={savingHosting === row.editorKey}
-                disabled={savingHosting !== null}
-                onChange={(patch) =>
-                  setHostingEditors((current) => ({
-                    ...current,
-                    [row.editorKey]: { ...editor, ...patch },
-                  }))
-                }
-                onSave={() => onSaveHosting(row)}
-              />
-            )
-          })}
+          {hostingRows
+            .filter((row) => row.editorKey === selectedKey)
+            .map((row) => {
+              const editor = hostingEditors[row.editorKey] ?? row.seed
+              const focused = focusHostingId != null && row.hostingId === focusHostingId
+              // The picked hostname is always open; the picker replaced the
+              // per-row expand toggle.
+              const expanded = expandedRows[row.editorKey] ?? true
+              return (
+                <HostingPanelRow
+                  key={row.editorKey}
+                  orgId={orgId}
+                  composeServiceName={row.composeServiceName}
+                  serviceContext={row.serviceContext}
+                  hostingId={row.hostingId}
+                  composeRoute={row.source.kind === 'compose' ? row.source.route : null}
+                  composeEntry={row.source.kind === 'compose' ? row.source.entry : null}
+                  composeState={row.source.kind === 'compose' ? row.source.state : undefined}
+                  configurationHref={composeEditorHrefFor(row, hostingRowActions)}
+                  rowError={hostingRowActions.rowErrors[row.editorKey]}
+                  savedNote={hostingRowActions.savedNotes[row.editorKey] ?? null}
+                  onRemoveHostname={() => hostingRowActions.onRemoveHostname(row)}
+                  onManageHere={() => hostingRowActions.onManageHere(row)}
+                  composeEditable={isEditableRow(row)}
+                  removalNote={removalNoteFor(row)}
+                  focused={focused}
+                  expanded={expanded}
+                  onToggleExpanded={() =>
+                    setExpandedRows((current) => ({
+                      ...current,
+                      [row.editorKey]: !expanded,
+                    }))
+                  }
+                  editor={editor}
+                  tlsOptions={tlsLibrary}
+                  publicIps={publicIps}
+                  saving={savingHosting === row.editorKey}
+                  disabled={savingHosting !== null}
+                  onChange={(patch) =>
+                    setHostingEditors((current) => ({
+                      ...current,
+                      [row.editorKey]: { ...editor, ...patch },
+                    }))
+                  }
+                  onSave={() => onSaveHosting(row)}
+                />
+              )
+            })}
         </View>
       )}
     </Section>
@@ -1888,9 +2121,7 @@ function EnvironmentServiceSettingsSectionPanel({
       ) : (
         <View style={styles.hostingList}>
           {serviceNames.map((composeServiceName) => {
-            const service = services.find(
-              (item) => item.composeServiceName === composeServiceName,
-            )
+            const service = services.find((item) => item.composeServiceName === composeServiceName)
             return (
               <ServiceSettingsPanel
                 key={composeServiceName}
@@ -1928,16 +2159,16 @@ function EnvironmentContainersSectionPanel({
   const listed = containerCardServices(
     services,
     Object.fromEntries(
-      services.map((service) => [service.id, (containersByService[service.id] ?? []).length]),
+      services.map((service) => [service.id, (containersByService[service.id] ?? []).length])
     ),
-    removedIds,
+    removedIds
   )
   return (
     <Section title="Containers" note="Deployed containers and their status">
       {partial ? (
         <Text style={panelStyles.muted}>
-          Only the first 20 folders were checked, so a site removed from compose may not be
-          marked here.
+          Only the first 20 folders were checked, so a site removed from compose may not be marked
+          here.
         </Text>
       ) : null}
       {listed.length === 0 ? (
@@ -1945,27 +2176,19 @@ function EnvironmentContainersSectionPanel({
       ) : (
         <View style={styles.containerList}>
           {listed.map((service) => {
-            const containers = partitionContainersForDisplay(
-              containersByService[service.id] ?? [],
-            )
-            const title =
-              service.name?.trim() || String(service.composeServiceName ?? service.id)
+            const containers = partitionContainersForDisplay(containersByService[service.id] ?? [])
+            const title = service.name?.trim() || String(service.composeServiceName ?? service.id)
             if (containers.length === 0) {
               // A removed site has no containers; show it so it does not look gone.
               return removedIds.has(service.id) ? (
-                <RemovedServiceCard
-                  key={service.id}
-                  name={title}
-                  foldersWhere="above"
-                />
+                <RemovedServiceCard key={service.id} name={title} foldersWhere="above" />
               ) : null
             }
             return (
               <View key={service.id} style={panelStyles.detailCard}>
                 <View style={styles.hostingTitleRow}>
                   <Text style={panelStyles.detailTitle}>
-                    {service.name?.trim() ||
-                      String(service.composeServiceName ?? service.id)}
+                    {service.name?.trim() || String(service.composeServiceName ?? service.id)}
                   </Text>
                   {removedIds.has(service.id) ? (
                     <Badge label="Removed from compose" tone="danger" />
@@ -1980,9 +2203,7 @@ function EnvironmentContainersSectionPanel({
                     ]}
                   >
                     <View style={styles.containerHeader}>
-                      <Text style={panelStyles.detailLine}>
-                        {containerDisplayName(container)}
-                      </Text>
+                      <Text style={panelStyles.detailLine}>{containerDisplayName(container)}</Text>
                       <ContainerRoleBadge role={container.role} />
                       <ContainerStatusBadge status={container.status} />
                     </View>
@@ -2031,6 +2252,7 @@ function EnvironmentLoadedPanels({
   publicIps,
   savingHosting,
   onSaveHosting,
+  hostingRowActions,
   containersByService,
   canManage,
   showEnvironmentPanel = true,
@@ -2068,6 +2290,7 @@ function EnvironmentLoadedPanels({
   publicIps: IpRecord[]
   savingHosting: string | null
   onSaveHosting: (row: HostingPanelRowDescriptor) => void
+  hostingRowActions: HostingRowActions
   containersByService: Record<string, ContainerRecord[]>
   canManage: boolean
   showEnvironmentPanel?: boolean
@@ -2126,6 +2349,7 @@ function EnvironmentLoadedPanels({
           publicIps={publicIps}
           savingHosting={savingHosting}
           onSaveHosting={onSaveHosting}
+          hostingRowActions={hostingRowActions}
           focusHostingId={focusHostingId}
         />
       ) : null}
@@ -2184,39 +2408,7 @@ function computeEnvironmentDetailLoading(queries: {
   ) {
     return true
   }
-  return (
-    queries.hasServiceIds &&
-    (queries.hostingsLoading || queries.containersLoading)
-  )
-}
-
-/**
- * Seed `hostingEditors` for any row not yet present. Returns the same object
- * when nothing is missing so a new `hostingRows` identity does not loop the
- * seeding effect.
- *
- * Keyed on `editorKey` rather than service id: a service declaring three
- * routes in compose has three editors, and collapsing them onto the service
- * would put every route's edits in one box.
- */
-function seedHostingEditors(
-  current: Record<string, HostingEditorState>,
-  hostingRows: readonly HostingPanelRowDescriptor[],
-): Record<string, HostingEditorState> {
-  const missing = hostingRows.filter((row) => !(row.editorKey in current))
-  if (missing.length === 0) return current
-  const next = { ...current }
-  for (const row of missing) next[row.editorKey] = row.seed
-  return next
-}
-
-/** Every editor re-seeded from the rows a refetch produced. */
-function resetHostingEditors(
-  hostingRows: readonly HostingPanelRowDescriptor[],
-): Record<string, HostingEditorState> {
-  const editors: Record<string, HostingEditorState> = {}
-  for (const row of hostingRows) editors[row.editorKey] = row.seed
-  return editors
+  return queries.hasServiceIds && (queries.hostingsLoading || queries.containersLoading)
 }
 
 /**
@@ -2226,12 +2418,10 @@ function resetHostingEditors(
 function findTerminalDeployEntry(
   data: readonly CommandStatusRecord[],
   entries: readonly TrackedCommandEntry[],
-  activeDeployCommandId: string | null,
+  activeDeployCommandId: string | null
 ): { entry: TrackedCommandEntry; record: CommandStatusRecord } | null {
   if (!activeDeployCommandId) return null
-  const entry = entries.find(
-    (row) => row.commandId === activeDeployCommandId,
-  )
+  const entry = entries.find((row) => row.commandId === activeDeployCommandId)
   if (!entry) return null
   // Join on command id: unreadable ids are dropped from the batched response.
   const record = commandStatusById(data).get(entry.commandId)
@@ -2298,14 +2488,10 @@ function EnvironmentDetailChromeExtras({
           visible={previewOpen != null}
           orgId={orgId}
           environmentId={environment.id}
-          environmentLabel={
-            environment.name?.trim() || 'this environment'
-          }
+          environmentLabel={environment.name?.trim() || 'this environment'}
           canManage={canManage}
           placementServerId={placementServerId}
-          placementServerLabel={
-            pinnedServer ? serverLabel(pinnedServer) : placementServerId
-          }
+          placementServerLabel={pinnedServer ? serverLabel(pinnedServer) : placementServerId}
           projectCompose={projectCompose}
           environmentCompose={environment.options?.compose}
           deploying={deployPending}
@@ -2345,9 +2531,7 @@ function EnvironmentDetailChromeExtras({
 }
 
 /** Poll (up to 5 attempts, 400ms apart) until containers show up post-deploy. */
-async function refreshEnvironmentAfterDeploy(
-  options: PostDeployRefreshOptions,
-): Promise<void> {
+async function refreshEnvironmentAfterDeploy(options: PostDeployRefreshOptions): Promise<void> {
   for (let attempt = 0; attempt < 5; attempt++) {
     if (!options.isCurrentAttempt()) return
     if (attempt > 0) {
@@ -2358,10 +2542,9 @@ async function refreshEnvironmentAfterDeploy(
       options.refetchContainers(),
       options.refetchHostings(),
     ])
-    const refreshedServices =
-      servicesResult.data?.services ?? options.getCachedServices()
+    const refreshedServices = servicesResult.data?.services ?? options.getCachedServices()
     const hasContainers = refreshedServices.some((service) =>
-      options.hasContainersForService(service.id),
+      options.hasContainersForService(service.id)
     )
     if (attempt > 0 && hasContainers) break
   }
@@ -2402,10 +2585,7 @@ export function EnvironmentDetailBody({
   const showEnvironmentChrome = sections == null
   const queryClient = useQueryClient()
   const canManage = useCan('organization', orgId, 'organization:manage')
-  const persistEnvironmentCompose = usePersistEnvironmentCompose(
-    orgId,
-    environmentId,
-  )
+  const persistEnvironmentCompose = usePersistEnvironmentCompose(orgId, environmentId)
 
   const environmentQuery = useEnvironment(orgId, environmentId)
   const projectQuery = useProject(orgId, projectId)
@@ -2415,10 +2595,7 @@ export function EnvironmentDetailBody({
   const ipsQuery = useIps(orgId, { scope: 'public' })
 
   const services = servicesQuery.data?.services
-  const serviceIds = useMemo(
-    () => (services ?? []).map((service) => service.id),
-    [services],
-  )
+  const serviceIds = useMemo(() => (services ?? []).map((service) => service.id), [services])
 
   const hostingsQuery = useHostingsByServices(orgId, serviceIds, {
     enabled: serviceIds.length > 0,
@@ -2430,13 +2607,13 @@ export function EnvironmentDetailBody({
   const updateEnvironmentMutation = useUpdateEnvironment(orgId, environmentId)
   const deployEnvironmentMutation = useDeployEnvironment(orgId, environmentId)
   const upsertHostingMutation = useUpsertHosting(orgId)
+  const releaseHostingMutation = useReleaseHostingFromCompose(orgId)
   const letsEncryptMutation = useRequestLetsEncrypt(orgId)
 
   const [error, setError] = useState<string | null>(null)
-  const [hostingEditors, setHostingEditors] = useState<
-    Record<string, HostingEditorState>
-  >({})
   const [savingHosting, setSavingHosting] = useState<string | null>(null)
+  const [hostingRowErrors, setHostingRowErrors] = useState<Record<string, HostingRowError>>({})
+  const [hostingSavedNotes, setHostingSavedNotes] = useState<Record<string, HostingSaveNote>>({})
   // Why Let's Encrypt was refused on the last save that asked for it, by hosting id.
   const [certificateRefusals, setCertificateRefusals] = useState<
     Record<string, LetsEncryptRefusal>
@@ -2450,20 +2627,15 @@ export function EnvironmentDetailBody({
     purpose: PreviewDeploymentPurpose
     mode: ComposePreviewMode
   } | null>(null)
-  const [trackedEntries, setTrackedEntries] = useState<
-    readonly TrackedCommandEntry[]
-  >([])
-  const [activeDeployCommandId, setActiveDeployCommandId] = useState<
-    string | null
-  >(null)
+  const [trackedEntries, setTrackedEntries] = useState<readonly TrackedCommandEntry[]>([])
+  const [activeDeployCommandId, setActiveDeployCommandId] = useState<string | null>(null)
   const postDeployRefreshRef = useRef(0)
 
   const commandsQuery = useCommandsBatch(orgId, trackedEntries)
 
   const environment = environmentQuery.data?.environment ?? null
   const projectCompose = projectQuery.data?.project.options?.compose ?? null
-  const projectDefaultServerId =
-    projectQuery.data?.project.options?.defaultServerId ?? null
+  const projectDefaultServerId = projectQuery.data?.project.options?.defaultServerId ?? null
   const allServers = orEmptyArray(serversQuery.data?.servers)
   const tlsLibrary = tlsQuery.data?.tls ?? []
   const publicIps = ipsQuery.data?.ips ?? []
@@ -2496,9 +2668,7 @@ export function EnvironmentDetailBody({
 
   useEffect(() => {
     if (queryError) {
-      setError(
-        userErrorMessage(queryError, 'Failed to load environment'),
-      )
+      setError(userErrorMessage(queryError, 'Failed to load environment'))
     }
   }, [queryError])
 
@@ -2507,16 +2677,14 @@ export function EnvironmentDetailBody({
     const terminal = findTerminalDeployEntry(
       commandsQuery.data,
       trackedEntries,
-      activeDeployCommandId,
+      activeDeployCommandId
     )
     if (!terminal) return
     const { entry, record } = terminal
 
     setDeployStatus(deployStatusMessage(record))
     setActiveDeployCommandId(null)
-    setTrackedEntries((current) =>
-      current.filter((row) => row.commandId !== entry.commandId),
-    )
+    setTrackedEntries((current) => current.filter((row) => row.commandId !== entry.commandId))
 
     if (record.status !== 'succeeded') return
 
@@ -2529,7 +2697,7 @@ export function EnvironmentDetailBody({
       getCachedServices: () => servicesQuery.data?.services ?? [],
       hasContainersForService: (serviceId) => {
         const rows = queryClient.getQueryData<{ containers: ContainerRecord[] }>(
-          queryKeys.org(orgId).containers.list({ serviceId }),
+          queryKeys.org(orgId).containers.list({ serviceId })
         )?.containers
         return (rows?.length ?? 0) > 0
       },
@@ -2547,15 +2715,14 @@ export function EnvironmentDetailBody({
 
   const envServerId = environment?.serverId ?? null
   const placementServerId = envServerId ?? projectDefaultServerId
-  const inheritsProjectDefault =
-    !envServerId && Boolean(projectDefaultServerId)
+  const inheritsProjectDefault = !envServerId && Boolean(projectDefaultServerId)
   const mergedCompose = useMemo(
     () =>
       mergeComposeOverlay(
         stripComposePlacement(normalizeCompose(projectCompose)),
-        environment?.options?.compose,
+        environment?.options?.compose
       ),
-    [environment?.options?.compose, projectCompose],
+    [environment?.options?.compose, projectCompose]
   )
   const serviceNames = useMemo(() => {
     const all = composeServiceNames(mergedCompose)
@@ -2567,7 +2734,7 @@ export function EnvironmentDetailBody({
   // can author, so it decides which compose-declared routes are editable here.
   const overlayCompose = useMemo(
     () => normalizeCompose(environment?.options?.compose),
-    [environment?.options?.compose],
+    [environment?.options?.compose]
   )
   const hostingRows = useMemo(
     () =>
@@ -2578,37 +2745,25 @@ export function EnvironmentDetailBody({
         overlayCompose,
         hostingsByService,
       }),
-    [
-      serviceNames,
-      resolvedServices,
-      mergedCompose,
-      overlayCompose,
-      hostingsByService,
-    ],
+    [serviceNames, resolvedServices, mergedCompose, overlayCompose, hostingsByService]
   )
 
-  // Seed editors once per rendered row. Return the same state object when
-  // nothing is missing so a new hostingRows identity cannot loop.
-  useEffect(() => {
-    if (loading) return
-    setHostingEditors((current) => seedHostingEditors(current, hostingRows))
-  }, [loading, hostingRows])
+  // Each editor follows its row while it has no unsaved edits (a save, a deploy).
+  const {
+    editors: hostingEditors,
+    setEditors: setHostingEditors,
+    markSaved: markEditorsSaved,
+  } = useSyncedEditors(hostingRows, loading)
+  useLeaveWarning(savingHosting !== null)
   const pinnedServer = useMemo(
     () => allServers.find((server) => server.id === placementServerId) ?? null,
-    [allServers, placementServerId],
+    [allServers, placementServerId]
   )
   const deployBlocked =
-    deployBlockedReason(
-      placementServerId,
-      pinnedServer,
-      serviceNames.length,
-    ) !== null
+    deployBlockedReason(placementServerId, pinnedServer, serviceNames.length) !== null
   const sortedServers = useMemo(
-    () =>
-      [...allServers].sort((a, b) =>
-        (a.name ?? a.id).localeCompare(b.name ?? b.id),
-      ),
-    [allServers],
+    () => [...allServers].sort((a, b) => (a.name ?? a.id).localeCompare(b.name ?? b.id)),
+    [allServers]
   )
 
   const savingCompose = persistEnvironmentCompose.isPending
@@ -2618,26 +2773,57 @@ export function EnvironmentDetailBody({
     activeDeployCommandId !== null ||
     trackedEntries.length > 0
 
-  const resetHostingEditorsFromQueries = async () => {
-    await Promise.all([hostingsQuery.refetchAll(), servicesQuery.refetch()])
-    setHostingEditors(resetHostingEditors(hostingRows))
-  }
-
-  const saveCompose = async (compose: ComposeDocument) => {
-    setError(null)
-    const result = await persistEnvironmentCompose.run(compose)
-    if (!result.ok) {
-      if (persistEnvironmentCompose.actionError) {
-        setError(persistEnvironmentCompose.actionError)
-      }
-      return
-    }
+  /**
+   * After a save: refetch, then refill the saved rows' editors from the
+   * answer (never from rows read before the save, which showed an empty form
+   * after a successful save). Other rows refill only without unsaved edits.
+   */
+  const refreshEditorsAfterSave = async (savedKeys: readonly string[]) => {
     await Promise.all([
       servicesQuery.refetch(),
       containersQuery.refetchAll(),
       hostingsQuery.refetchAll(),
     ])
-    await resetHostingEditorsFromQueries()
+    markEditorsSaved(savedKeys)
+  }
+
+  /**
+   * Save the environment's compose file. `onError` says where a refusal is
+   * shown: the top of the page by default, next to the hosting row's control
+   * when a row saved it. Answers whether it saved.
+   */
+  const saveCompose = async (
+    compose: ComposeDocument,
+    onError: (message: string) => void = setError,
+    savedKeys: readonly string[] = []
+  ): Promise<boolean> => {
+    setError(null)
+    const result = await persistEnvironmentCompose.run(compose)
+    if (!result.ok) {
+      onError(failedRunMessage(result, 'Could not save the compose file.'))
+      return false
+    }
+    await refreshEditorsAfterSave(savedKeys)
+    return true
+  }
+
+  const setSavedNote = (editorKey: string, note: HostingSaveNote | null) => {
+    setHostingSavedNotes((current) => {
+      const { [editorKey]: _previous, ...rest } = current
+      return note ? { ...rest, [editorKey]: note } : rest
+    })
+  }
+
+  /** Every row problem is shown in plain words: no request paths or codes. */
+  const setRowError = (editorKey: string, rowError: HostingRowError | null) => {
+    setHostingRowErrors((current) => {
+      const { [editorKey]: _previous, ...rest } = current
+      if (!rowError) return rest
+      return {
+        ...rest,
+        [editorKey]: { ...rowError, message: hostingActionErrorMessage(rowError.message) },
+      }
+    })
   }
 
   const savePlacement = async (serverIdToPin: string) => {
@@ -2645,22 +2831,15 @@ export function EnvironmentDetailBody({
     const result = await updateEnvironmentMutation.run({
       serverId: serverIdToPin,
     })
-    if (!result.ok && updateEnvironmentMutation.actionError) {
-      setError(updateEnvironmentMutation.actionError)
+    if (!result.ok) {
+      setError(failedRunMessage(result, 'Could not save the server for this environment.'))
     }
   }
 
   const runDeploy = async (acknowledgeHealthCheckWarnings = false) => {
-    const blockedReason = deployBlockedReason(
-      placementServerId,
-      pinnedServer,
-      serviceNames.length,
-    )
+    const blockedReason = deployBlockedReason(placementServerId, pinnedServer, serviceNames.length)
     if (blockedReason || !placementServerId) {
-      setDeployStatus(
-        blockedReason ??
-          'Select a server for this environment before deploying.',
-      )
+      setDeployStatus(blockedReason ?? 'Select a server for this environment before deploying.')
       setPreviewOpen(null)
       return
     }
@@ -2668,9 +2847,7 @@ export function EnvironmentDetailBody({
     setError(null)
     try {
       const result = await deployEnvironmentMutation.mutateAsync({
-        ...(acknowledgeHealthCheckWarnings
-          ? { acknowledgeHealthCheckWarnings: true }
-          : {}),
+        ...(acknowledgeHealthCheckWarnings ? { acknowledgeHealthCheckWarnings: true } : {}),
       })
       setHealthCheckPrompt(null)
       setPreviewOpen(null)
@@ -2692,7 +2869,7 @@ export function EnvironmentDetailBody({
         setDeployStatus(
           err.required
             ? 'Deploy blocked — add healthchecks to required services.'
-            : 'Confirm deploy without healthchecks.',
+            : 'Confirm deploy without healthchecks.'
         )
         return
       }
@@ -2724,39 +2901,44 @@ export function EnvironmentDetailBody({
    */
   const saveComposeHostingRow = async (
     row: HostingPanelRowDescriptor,
-    overlayIndex: number,
+    overlayIndex: number
   ): Promise<void> => {
     const editor = hostingEditors[row.editorKey] ?? row.seed
     const entry = composeHostingEntryFromEditor(editor, row.serviceContext)
     if (!entry) {
-      setError('Enter a hostname for this route.')
+      setRowError(row.editorKey, { field: 'hostname', message: EMPTY_COMPOSE_HOSTNAME_MESSAGE })
       return
     }
-    const entries = [
-      ...readComposeHostingEntries(overlayCompose, row.composeServiceName),
-    ]
+    const entries = [...readComposeHostingEntries(overlayCompose, row.composeServiceName)]
     entries[overlayIndex] = entry
-    await saveCompose(
-      writeComposeHostingEntries(
-        overlayCompose,
-        row.composeServiceName,
-        entries,
-      ),
+    const saved = await saveCompose(
+      writeComposeHostingEntries(overlayCompose, row.composeServiceName, entries),
+      (message) => setRowError(row.editorKey, { field: 'save', message }),
+      [row.editorKey]
     )
+    // A new hostname renames the route, and with it the row the note goes on.
+    if (saved) {
+      setSavedNote(composeRowKeyAfterSave(row, entry), {
+        tone: 'ok',
+        message: 'Saved. It goes live on the next deploy.',
+      })
+    }
   }
 
   /** Persist one panel-authored row straight to `/hostings`, as before. */
   const savePanelHostingRow = async (
     row: HostingPanelRowDescriptor,
-  ): Promise<void> => {
+    editor: HostingEditorState = hostingEditors[row.editorKey] ?? row.seed,
+    onError: (message: string) => void = (message) =>
+      setRowError(row.editorKey, { field: 'save', message })
+  ): Promise<boolean> => {
     const service = resolvedServices.find(
-      (item) => item.composeServiceName === row.composeServiceName,
+      (item) => item.composeServiceName === row.composeServiceName
     )
     if (!service) {
-      setError('Save the compose document first.')
-      return
+      onError(SERVICE_NOT_SAVED_MESSAGE)
+      return false
     }
-    const editor = hostingEditors[row.editorKey] ?? row.seed
     const result = await upsertHostingMutation.run({
       serviceId: service.id,
       ...(row.hostingId ? { hostingId: row.hostingId } : {}),
@@ -2769,22 +2951,13 @@ export function EnvironmentDetailBody({
       },
     })
     if (!result.ok) {
-      if (upsertHostingMutation.actionError) {
-        setError(upsertHostingMutation.actionError)
-      }
-      return
+      onError(failedRunMessage(result, 'Could not save this hostname.'))
+      return false
     }
     const savedHostingId =
       row.hostingId ??
       ('id' in result.value && typeof result.value.id === 'string' ? result.value.id : null)
-    const wantsCertificate =
-      editor.getLetsEncrypt &&
-      offersLetsEncrypt({
-        composeOwned: false,
-        protocol: editor.protocol,
-        tlsId: editor.tlsId,
-        hostnameCount: parseHostnameList(editor.hostnames).length,
-      })
+    const wantsCertificate = wantsLetsEncrypt(editor)
     // The hosting is already saved; a refused certificate is said next to its
     // Certificate section (with the fix when there is one), never undone.
     const certificateStep = await certificateAfterSave({
@@ -2797,33 +2970,103 @@ export function EnvironmentDetailBody({
         withCertificateRefusal(current, certificateStep.hostingId, certificateStep.refusal)
       )
     }
-    await Promise.all([
-      servicesQuery.refetch(),
-      hostingsQuery.refetchAll(),
-      containersQuery.refetchAll(),
-    ])
-    await resetHostingEditorsFromQueries()
+    await refreshEditorsAfterSave([row.editorKey])
+    setSavedNote(row.editorKey, hostingSaveNote(wantsCertificate, certificateStep?.refusal ?? null))
+    return true
   }
 
-  const saveHosting = async (row: HostingPanelRowDescriptor) => {
+  /** Run one row's action with the row marked busy and its last problem cleared. */
+  const runRowAction = async (row: HostingPanelRowDescriptor, action: () => Promise<void>) => {
     setSavingHosting(row.editorKey)
     setError(null)
+    setRowError(row.editorKey, null)
+    setSavedNote(row.editorKey, null)
     try {
-      if (row.source.kind === 'panel') {
-        await savePanelHostingRow(row)
-        return
-      }
-      if (row.source.overlayIndex === null) {
-        setError(
-          'This route is declared by the project compose. Edit it there — saving here would append a second declaration.',
-        )
-        return
-      }
-      await saveComposeHostingRow(row, row.source.overlayIndex)
+      await action()
     } finally {
       setSavingHosting(null)
     }
   }
+
+  const saveHosting = (row: HostingPanelRowDescriptor) =>
+    runRowAction(row, async () => {
+      if (row.source.kind === 'panel') {
+        await savePanelHostingRow(row)
+        return
+      }
+      // Nothing to save until the next deploy has removed it.
+      if (row.source.kind === 'removing') return
+      if (row.source.overlayIndex === null) {
+        setRowError(row.editorKey, { field: 'save', message: SHARED_FILE_HOSTNAME_MESSAGE })
+        return
+      }
+      await saveComposeHostingRow(row, row.source.overlayIndex)
+    })
+
+  /** The environment's file without this row's entry, or null (with the reason shown). */
+  const overlayWithoutRow = (row: HostingPanelRowDescriptor): ComposeDocument | null => {
+    const next =
+      row.source.kind === 'compose'
+        ? withoutComposeHostingRoute(overlayCompose, row.composeServiceName, row.source.route)
+        : null
+    if (!next) {
+      setRowError(row.editorKey, { field: 'actions', message: SHARED_FILE_HOSTNAME_MESSAGE })
+    }
+    return next
+  }
+
+  const actionsErrorSink = (row: HostingPanelRowDescriptor) => (message: string) =>
+    setRowError(row.editorKey, { field: 'actions', message })
+
+  /** Remove hostname: drop the entry; the next deploy removes (or hands back) its hosting. */
+  const removeComposeHostname = (row: HostingPanelRowDescriptor) =>
+    runRowAction(row, async () => {
+      const next = overlayWithoutRow(row)
+      if (next) await saveCompose(next, actionsErrorSink(row))
+    })
+
+  /** Manage on this screen instead: see `moveComposeHostnameToPanel` for the order. */
+  const moveRowToPanel = (row: HostingPanelRowDescriptor) =>
+    runRowAction(row, async () => {
+      if (row.source.kind !== 'compose') return
+      const next = overlayWithoutRow(row)
+      if (!next) return
+      const onError = actionsErrorSink(row)
+      const editor = hostingEditors[row.editorKey] ?? row.seed
+      const certificate = panelCertificateForMovedRoute(row.source.entry, tlsLibrary)
+      if (!row.hostingId && certificate.missingRef !== null) {
+        onError(missingCertificateMessage(certificate.missingRef))
+        return
+      }
+      const serviceId = resolvedServices.find(
+        (item) => item.composeServiceName === row.composeServiceName
+      )?.id
+      await moveComposeHostnameToPanel(
+        { hostingId: row.hostingId, next },
+        {
+          release: async (hostingId) => {
+            const released = await releaseHostingMutation.run({ hostingId, serviceId })
+            if (!released.ok) {
+              onError(failedRunMessage(released, 'Could not hand this hostname to this screen.'))
+            }
+            return released.ok
+          },
+          saveFile: (document) => saveCompose(document, onError),
+          createPanelHosting: () =>
+            savePanelHostingRow(
+              { ...row, source: { kind: 'panel' }, hostingId: null },
+              {
+                ...editor,
+                tlsId: certificate.tlsId,
+                getLetsEncrypt: certificate.getLetsEncrypt,
+                tlsAutomatic: false,
+                protocol: 'http',
+              },
+              onError
+            ),
+        }
+      )
+    })
 
   const updateServiceInCache = (nextService: ServiceRecord) => {
     queryClient.setQueryData(
@@ -2833,7 +3076,7 @@ export function EnvironmentDetailBody({
         return {
           services: upsertServiceById(current.services, nextService),
         }
-      },
+      }
     )
   }
 
@@ -2849,6 +3092,19 @@ export function EnvironmentDetailBody({
     }),
     [showEnvironmentChrome, openDeployConfirm, deployBlocked, deploying, certificateRefusals]
   )
+
+  const hostingRowActions: HostingRowActions = {
+    rowErrors: hostingRowErrors,
+    savedNotes: hostingSavedNotes,
+    environmentComposeHref: projectEnvironmentComposeHref(orgId, projectId, environmentId),
+    baseComposeHref: projectComposeHref(orgId, projectId),
+    onRemoveHostname: (row) => {
+      void removeComposeHostname(row)
+    },
+    onManageHere: (row) => {
+      void moveRowToPanel(row)
+    },
+  }
 
   if (loading && !environment) {
     return <LoadingState />
@@ -2875,7 +3131,9 @@ export function EnvironmentDetailBody({
           onPreviewMerged={() => openComposeInspect('merged')}
           onPreviewPrepared={() => openComposeInspect('prepared')}
           onDeploy={openDeployConfirm}
-          onSaveCompose={saveCompose}
+          onSaveCompose={async (compose) => {
+            await saveCompose(compose)
+          }}
           savingCompose={savingCompose}
           savingPlacement={savingPlacement}
           onSavePlacement={(nextServerId) => {
@@ -2891,10 +3149,14 @@ export function EnvironmentDetailBody({
           publicIps={publicIps}
           savingHosting={savingHosting}
           onSaveHosting={(row) => {
-            saveHosting(row).catch(() => {
-              // Errors are surfaced via setError.
+            saveHosting(row).catch((err: unknown) => {
+              setRowError(row.editorKey, {
+                field: 'save',
+                message: userErrorMessage(err, 'Could not save this hostname.'),
+              })
             })
           }}
+          hostingRowActions={hostingRowActions}
           containersByService={containersByService}
           canManage={canManage}
           showEnvironmentPanel={!embedded}
@@ -2949,11 +3211,7 @@ export function EnvironmentDetailSection({
   return (
     <View style={styles.root}>
       <Text style={styles.heading}>Environment</Text>
-      <EnvironmentDetailBody
-        orgId={orgId}
-        projectId={projectId}
-        environmentId={environmentId}
-      />
+      <EnvironmentDetailBody orgId={orgId} projectId={projectId} environmentId={environmentId} />
     </View>
   )
 }
@@ -3093,6 +3351,10 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: spacing.sm,
     marginBottom: spacing.xs,
+  },
+  savedNote: {
+    color: colors.textBody,
+    fontSize: 13,
   },
   tlsHint: {
     color: colors.textDim,
