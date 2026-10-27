@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { ComponentProps, ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { readComposeHostingEntries } from '@/lib/compose/hosting-service-context'
+import { composeWithHostname } from '@/lib/project-create/environment-setup'
 import { composePrincipalAliases } from '@/lib/compose/principals-document'
 import type { ComposeDocument, OrgServerRecord } from '@/lib/instance-api'
 import { EnvironmentSetupForm } from './environment-setup-form'
@@ -100,9 +101,18 @@ vi.mock('@/components/ui', () => ({
   ),
   FormField: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   Select: () => null,
-  SettingRow: ({ label, children }: { label: string; children?: ReactNode }) => (
+  SettingRow: ({
+    label,
+    description,
+    children,
+  }: {
+    label: string
+    description?: string
+    children?: ReactNode
+  }) => (
     <div>
       <span>{label}</span>
+      {description ? <p>{description}</p> : null}
       {children}
     </div>
   ),
@@ -212,6 +222,10 @@ function renderForm(overrides: Partial<Props> = {}) {
   return props
 }
 
+function savedEntries(props: Props) {
+  return readComposeHostingEntries(lastResult(props)[0].compose as ComposeDocument, 'web')
+}
+
 function lastResult(props: Props) {
   const submit = props.onSubmit as ReturnType<typeof vi.fn>
   return submit.mock.calls.at(-1) as Parameters<Props['onSubmit']>
@@ -274,6 +288,53 @@ describe('EnvironmentSetupForm', () => {
     expect(
       readComposeHostingEntries(lastResult(props)[0].compose as ComposeDocument, 'web')
     ).toEqual([{ hostname: 'ct.turbopanel.dev', www: 'www-to-root' }])
+  })
+
+  it('sends the bare name to a typed www name and says so', () => {
+    const props = renderForm()
+    fireEvent.change(screen.getByLabelText('Visitors reach it at'), {
+      target: { value: 'www.example.com' },
+    })
+    expect(screen.getByText('Also answer example.com')).toBeTruthy()
+    expect(
+      screen.getByText('example.com → www.example.com (permanent redirect, path kept)')
+    ).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Save without deploying' }))
+    expect(savedEntries(props)).toEqual([{ hostname: 'www.example.com', www: 'root-to-www' }])
+  })
+
+  it('reopens a saved name with the www switch as it was saved', () => {
+    const saved = composeWithHostname(COMPOSE, {
+      serviceName: 'web',
+      hostname: 'example.com',
+      alsoWww: false,
+    })
+    const props = renderForm({ compose: saved })
+    expect(screen.getByRole('button', { name: 'www' }).getAttribute('aria-pressed')).toBe('false')
+    fireEvent.click(screen.getByRole('button', { name: 'Save without deploying' }))
+    expect(savedEntries(props)).toEqual([{ hostname: 'example.com' }])
+  })
+
+  it('keeps a declared www mode the switch was not changed for', () => {
+    const both = {
+      ...COMPOSE,
+      data: {
+        ...COMPOSE.data,
+        services: {
+          web: {
+            'x-turbopanel': {
+              serviceKind: 'node',
+              principal: 'website',
+              hosting: [{ hostname: 'example.com', www: 'both' }],
+            },
+          },
+        },
+      },
+    } as unknown as ComposeDocument
+    const props = renderForm({ compose: both })
+    expect(screen.getByText('example.com and www.example.com both show the site')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Save without deploying' }))
+    expect(savedEntries(props)).toEqual([{ hostname: 'example.com', www: 'both' }])
   })
 
   it('follows the typed name until the www switch is flipped', () => {
