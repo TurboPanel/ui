@@ -55,12 +55,18 @@ const COLUMNS: readonly DataTableColumn[] = [
   { key: 'startedBy', header: 'Started By', flex: 1.2, minWidth: 160 },
 ]
 
-/** An empty table: still loading, no runs at all, or none for the chosen filters. */
+/**
+ * An empty table: still loading; a page past the end while it moves back (the
+ * list has runs); no runs at all; or none for the chosen filters. It reads the
+ * list's total, never only the page.
+ */
 export function emptyHistoryText(
   loading: boolean,
-  view: Readonly<Pick<HistoryView, 'status' | 'trigger'>>
+  view: Readonly<Pick<HistoryView, 'status' | 'trigger'>>,
+  total: number
 ): string {
   if (loading) return 'Loading updates…'
+  if (total > 0) return 'Nothing on this page. Going back to the last page…'
   const filtered = view.status !== 'any' || view.trigger !== ''
   return filtered ? 'No updates match these filters.' : 'No updates yet.'
 }
@@ -181,7 +187,7 @@ export function UpdateHistoryScreen() {
         {failedEmpty ? null : (
           <DataTable columns={COLUMNS} minWidth={1180}>
             {runs.length === 0 ? (
-              <DataTableEmpty>{emptyHistoryText(history.isLoading, view)}</DataTableEmpty>
+              <DataTableEmpty>{emptyHistoryText(history.isLoading, view, total)}</DataTableEmpty>
             ) : (
               runs.map((run, index) => (
                 <RunHistoryRow

@@ -167,7 +167,7 @@ describe('run labels', () => {
     expect(upgradeRunStatusBadge('succeeded')).toEqual({ tone: 'ok', label: 'Succeeded' })
     expect(upgradeRunStatusBadge('partially_failed')).toEqual({
       tone: 'pending',
-      label: 'Partly failed',
+      label: 'Partly Failed',
     })
     expect(upgradeRunStatusBadge('failed').tone).toBe('danger')
     expect(upgradeRunStatusBadge('running').tone).toBe('info')
@@ -190,7 +190,7 @@ describe('run labels', () => {
     )
   })
 
-  it('names every part the run planned, with the web interface for a control plane install', () => {
+  it('names every part the run sent, with the web interface for a control plane install', () => {
     const target = {
       daemon: { version: '0.1.21-canary.8' },
       instance: { version: '0.1.21-canary.8' },

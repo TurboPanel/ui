@@ -294,6 +294,23 @@ describe('UpdateHistoryScreen', () => {
     expect(screen.queryByText('None')).toBeNull()
   })
 
+  it('moves a page past the end back to the last page, and never says "No updates yet" then', () => {
+    router.params = { offset: '75' }
+    queries.useUpgradeHistory.mockReturnValue({ data: { ok: true, runs: [], total: 30 } })
+    render(<UpdateHistoryScreen />)
+    expect(router.setParams).toHaveBeenLastCalledWith(expect.objectContaining({ offset: '25' }))
+    expect(screen.queryByText('No updates yet.')).toBeNull()
+    expect(screen.getByText(/^Nothing on this page/)).toBeTruthy()
+    expect(screen.getByText('Showing 0 of 30')).toBeTruthy()
+  })
+
+  it('labels the filters in title case', () => {
+    queries.useUpgradeHistory.mockReturnValue({ data: { ok: true, runs: [RUN], total: 1 } })
+    render(<UpdateHistoryScreen />)
+    expect(screen.getByText('Any Trigger')).toBeTruthy()
+    expect(screen.getByText('pick Partly Failed')).toBeTruthy()
+  })
+
   it('says no updates match when a filter is set', () => {
     router.params = { trigger: 'manual' }
     queries.useUpgradeHistory.mockReturnValue({ data: { ok: true, runs: [], total: 0 } })
@@ -385,7 +402,14 @@ describe('UpdateRunScreen', () => {
     expect(screen.queryByText(/2026-10-27T15:40/)).toBeNull()
   })
 
-  it('names every planned part as the Update Run target', () => {
+  it('labels who started the run in title case', () => {
+    queries.useUpgradeRunServers.mockReturnValue({ data: serversPage(), isFetching: false })
+    render(<UpdateRunScreen runId="run-1" />)
+    expect(screen.getAllByText('Started By').length).toBeGreaterThan(0)
+    expect(screen.queryByText(/Started by/)).toBeNull()
+  })
+
+  it('names every part the run sent as the Update Run target', () => {
     queries.useUpgradeRunServers.mockReturnValue({
       data: serversPage({
         run: {

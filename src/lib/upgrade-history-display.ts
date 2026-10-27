@@ -43,7 +43,7 @@ const RUN_STATUS_BADGES: Readonly<Record<UpgradeRunStatus, HistoryBadge>> = {
   pending: { tone: 'info', label: 'Starting' },
   running: { tone: 'info', label: 'Running' },
   succeeded: { tone: 'ok', label: 'Succeeded' },
-  partially_failed: { tone: 'pending', label: 'Partly failed' },
+  partially_failed: { tone: 'pending', label: 'Partly Failed' },
   failed: { tone: 'danger', label: 'Failed' },
   cancelled: { tone: 'muted', label: 'Cancelled' },
 }
@@ -57,7 +57,7 @@ export const RUN_STATUS_FILTERS = [
   { value: 'any', label: 'All' },
   { value: 'active', label: 'Running' },
   { value: 'succeeded', label: 'Succeeded' },
-  { value: 'partially_failed', label: 'Partly failed' },
+  { value: 'partially_failed', label: 'Partly Failed' },
   { value: 'failed', label: 'Failed' },
   { value: 'cancelled', label: 'Cancelled' },
 ] as const
@@ -65,7 +65,7 @@ export const RUN_STATUS_FILTERS = [
 export type RunStatusFilter = (typeof RUN_STATUS_FILTERS)[number]['value']
 
 export const RUN_TRIGGER_FILTERS = [
-  { value: '', label: 'Any trigger' },
+  { value: '', label: 'Any Trigger' },
   { value: 'automatic', label: 'Automatic' },
   { value: 'manual', label: 'Manual' },
 ] as const
@@ -76,7 +76,6 @@ function plural(count: number, one: string, many: string): string {
   return `${count} ${count === 1 ? one : many}`
 }
 
-/** "2 skipped, 1 failed" from the non-zero parts, or null when every part is zero. */
 /** "3 servers updated": the summary counts servers, never parts of a server. */
 function serversText(count: number, what: string): string {
   return `${plural(count, 'server', 'servers')} ${what}`
@@ -191,8 +190,9 @@ function storedTargetText(target: UpgradeRunTarget | null | undefined): string {
 }
 
 /**
- * The build(s) a run moved to. With the run's `units`, each part it planned
- * is named: the daemon, and for `instance` both the control plane and the web
+ * The build(s) a run moved to. With the run's `units` (the parts it sent to a
+ * host; parts settled at planning, such as already current or offline, are
+ * left out), each is named: the daemon, and for `instance` both the control plane and the web
  * interface, which the control-plane install carries ("Daemon 0.1.21 ·
  * Control Plane 0.1.21 · Web Interface 0.1.21"). Without `units` (an older
  * control plane, or steps pruned after retention), the stored target as

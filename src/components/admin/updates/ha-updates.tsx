@@ -47,6 +47,16 @@ function fleetWaiting(data: InstanceUpdates, runActive: boolean): string | null 
   )
 }
 
+/**
+ * The notice over the High Availability screen. While paused the Status card
+ * says so, so the notice does not repeat it.
+ */
+function haNoticeBody(data: InstanceUpdates): string {
+  const retried = 'A server that fails is tried again later.'
+  if (data.updatesPaused === true) return `Connected daemons update on their own. ${retried}`
+  return `${updatesCadenceText(data, 'Connected daemons update on their own')} ${retried}`
+}
+
 export function HighAvailabilityUpdates({ data }: Readonly<{ data: InstanceUpdates }>) {
   const [statusFilter, setStatusFilter] = useState('')
   const [offset, setOffset] = useState(0)
@@ -73,9 +83,7 @@ export function HighAvailabilityUpdates({ data }: Readonly<{ data: InstanceUpdat
       <InlineNotice
         tone="info"
         title={`${HA_PRODUCT_NAME} manages the control plane`}
-        body={`${updatesCadenceText(data, 'Connected daemons update on their own')}${
-          data.updatesPaused === true ? '' : ' A server that fails is tried again later.'
-        }`}
+        body={haNoticeBody(data)}
       />
 
       <UpdatesStatusPanel data={data} headline={headline} waiting={waiting} />

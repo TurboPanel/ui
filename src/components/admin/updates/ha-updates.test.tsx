@@ -248,6 +248,14 @@ describe('HighAvailabilityUpdates', () => {
     expect(pauseRun).not.toHaveBeenCalled()
   })
 
+  it('says updates are paused once, in the card, not again in the notice', () => {
+    render(<HighAvailabilityUpdates data={PAUSED} />)
+    expect(screen.getAllByText(/Nothing new starts until they are resumed/)).toHaveLength(1)
+    expect(
+      screen.getByText(/Connected daemons update on their own\. A server that fails/)
+    ).toBeTruthy()
+  })
+
   it('falls back to the email, then to "an administrator"', () => {
     const { unmount } = render(
       <HighAvailabilityUpdates

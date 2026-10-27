@@ -112,15 +112,13 @@ export function UpgradeFleetTable({
           ))
         )}
       </DataTable>
-      {total > pageSize ? (
-        <HistoryPager
-          offset={offset}
-          pageSize={pageSize}
-          shown={servers.length}
-          total={total}
-          onOffsetChange={onOffsetChange}
-        />
-      ) : null}
+      <HistoryPager
+        offset={offset}
+        pageSize={pageSize}
+        shown={servers.length}
+        total={total}
+        onOffsetChange={onOffsetChange}
+      />
     </View>
   )
 }

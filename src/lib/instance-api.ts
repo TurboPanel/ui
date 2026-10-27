@@ -5579,8 +5579,10 @@ export type UpgradeRunRecord = {
   trigger?: UpgradeRunTrigger
   summary?: UpgradeRunSummary
   /**
-   * The parts the run planned steps for. `instance` means the control-plane
-   * install, which carries the web interface too. Empty when retention pruned
+   * The parts the run sent to a host (steps settled at planning, such as
+   * already current, retry later, paused or offline, are left out).
+   * `instance` means the control-plane install, which carries the web
+   * interface too. Empty when retention pruned
    * the run's steps; absent on an older control plane.
    */
   units?: UpgradeRunUnit[]
