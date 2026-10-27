@@ -10910,10 +10910,11 @@ export async function deleteNotificationChannel(
   )
 }
 
-export type OrganizationActivityFilter = 'all' | 'deploying' | 'failed'
+/** `deploying` is everything still in progress (queued or being worked on). */
+export type OrganizationActivityFilter = 'all' | 'deploying' | 'succeeded' | 'failed'
 
 export type OrganizationActivityItem = {
-  /** The command id. */
+  /** The command id; for a deploy it is also the deployment id its log page takes. */
   id: string
   projectId: string | null
   projectName: string | null
@@ -10922,15 +10923,31 @@ export type OrganizationActivityItem = {
   serverId: string
   action: 'deploy' | 'start' | 'restart' | 'stop'
   /** `queued` is waiting to start; `deploying` is being worked on by the server. */
-  state: 'queued' | 'deploying' | 'failed'
+  state: 'queued' | 'deploying' | 'succeeded' | 'failed' | 'cancelled'
+  /** How a `failed` item ended, when it was more than a plain failure; absent on an older control plane. */
+  failure?: 'timed_out' | 'rolled_back' | 'needs_attention' | null
   startedAt: string
+  /** When it ended; null while in progress. */
+  finishedAt?: string | null
   /** Steps done so far (plus the running one) and steps planned; null before the daemon reports a plan. */
   step: number | null
   totalSteps: number | null
   /** Label of the running step ("Install Docker"); absent on an older control plane. */
   stepLabel?: string | null
-  durationSecs: number
+  /** Running time so far, or how long it took; null for a finished row with no recorded end. */
+  durationSecs: number | null
   errorMessage: string | null
+  /** `user` when a person asked for it, `system` when the panel did (a push). */
+  actorType?: 'user' | 'system'
+  /**
+   * For a person: their name or email while they are a member, else
+   * "Platform Admin" or "Former Member" as the panel says; null for the panel.
+   */
+  actorName?: string | null
+  /** The push that set it off; null for a person's deploy. */
+  trigger?: DeploymentTriggerRecord | null
+  /** The commit the deploy put live, when it recorded one. */
+  commit?: { sha: string; message: string | null } | null
   /** Not recorded yet; always null. */
   crashCount: number | null
 }
@@ -10938,20 +10955,32 @@ export type OrganizationActivityItem = {
 export type OrganizationActivityPage = {
   ok: true
   items: OrganizationActivityItem[]
+  /** Counted up to 1000 rows past the page; `totalCapped` says there are more. */
   total: number
+  totalCapped?: boolean
   hasMore: boolean
 }
 
+export type OrganizationActivityParams = Readonly<{
+  filter?: OrganizationActivityFilter
+  projectId?: string
+  environmentId?: string
+  limit?: number
+  offset?: number
+}>
+
 /**
- * Running and recently failed deploys, restarts and stops across the
- * organization, newest first. Owners and managers only (403 otherwise); poll it.
+ * Every deploy, restart and stop across the organization, newest first,
+ * whatever the outcome. Owners and managers only (403 otherwise); poll it.
  */
 export async function fetchOrganizationActivity(
   orgId: string,
-  params: Readonly<{ filter?: OrganizationActivityFilter; limit?: number; offset?: number }> = {}
+  params: OrganizationActivityParams = {}
 ): Promise<OrganizationActivityPage> {
   const query = new URLSearchParams()
   if (params.filter) query.set('filter', params.filter)
+  if (params.projectId) query.set('projectId', params.projectId)
+  if (params.environmentId) query.set('environmentId', params.environmentId)
   if (params.limit !== undefined) query.set('limit', String(params.limit))
   if (params.offset !== undefined) query.set('offset', String(params.offset))
   const suffix = query.size > 0 ? `?${query.toString()}` : ''
