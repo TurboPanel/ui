@@ -10,6 +10,8 @@ import {
   serversLayoutAccessibilityLabel,
   setStoredServersLayout,
   showServersToolbarUpdate,
+  showUpdateAllBehind,
+  updateAllBehindLabel,
   usesCompactServersList,
 } from './servers-layout'
 
@@ -56,7 +58,7 @@ describe('resolveServersFleetSurface', () => {
         serverCount: 2,
         compactChrome: false,
         hasError: false,
-      }),
+      })
     ).toEqual({
       showToolbarSelectAll: false,
       showDetailFleet: true,
@@ -74,7 +76,7 @@ describe('resolveServersFleetSurface', () => {
         serverCount: 2,
         compactChrome: true,
         hasError: false,
-      }).showDetailInPanel,
+      }).showDetailInPanel
     ).toBe(false)
     expect(
       resolveServersFleetSurface({
@@ -82,7 +84,7 @@ describe('resolveServersFleetSurface', () => {
         serverCount: 2,
         compactChrome: true,
         hasError: false,
-      }),
+      })
     ).toMatchObject({
       showToolbarSelectAll: true,
       showSummaryFleet: true,
@@ -97,7 +99,7 @@ describe('resolveServersFleetSurface', () => {
         serverCount: 0,
         compactChrome: true,
         hasError: false,
-      }).showFleetPanel,
+      }).showFleetPanel
     ).toBe(true)
     expect(
       resolveServersFleetSurface({
@@ -105,7 +107,7 @@ describe('resolveServersFleetSurface', () => {
         serverCount: 3,
         compactChrome: false,
         hasError: true,
-      }).showStatusPanel,
+      }).showStatusPanel
     ).toBe(true)
   })
 })
@@ -159,5 +161,18 @@ describe('SERVERS_TILE_MIN_WIDTH', () => {
   it('is compact enough to tile several cards', () => {
     expect(SERVERS_TILE_MIN_WIDTH).toBeGreaterThanOrEqual(180)
     expect(SERVERS_TILE_MIN_WIDTH).toBeLessThanOrEqual(240)
+  })
+})
+
+describe('Update all behind', () => {
+  it('shows for someone who can update servers once one is behind', () => {
+    expect(showUpdateAllBehind(true, 2)).toBe(true)
+    expect(showUpdateAllBehind(true, 0)).toBe(false)
+    expect(showUpdateAllBehind(false, 2)).toBe(false)
+  })
+
+  it('names the count, or that the update is starting', () => {
+    expect(updateAllBehindLabel(false, 3)).toBe('Update all behind (3)')
+    expect(updateAllBehindLabel(true, 3)).toBe('Starting update…')
   })
 })

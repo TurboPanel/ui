@@ -65,7 +65,7 @@ export function HighAvailabilityUpdates({ data }: Readonly<{ data: InstanceUpdat
       <InlineNotice
         tone="info"
         title={`${HA_PRODUCT_NAME} manages the control plane`}
-        body="Connected daemons follow the update below. Per-server Update actions stay off while updates are platform-managed. Use Update fleet now to roll out the newest build to every connected daemon."
+        body="Connected daemons follow the update below. Use Update fleet now to roll out the newest build to every connected daemon. Organization managers can also update their own servers from their Servers page."
       />
       {displayNotice ? <InlineNotice tone="info" title={displayNotice} /> : null}
 

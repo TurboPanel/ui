@@ -2727,7 +2727,12 @@ export type HealthResponse = {
   revision?: { commit: string; sourceUrl: string }
   /** The update channel the instance follows (`canary`, `rc`, `release`, `trunk`); newer control planes only. */
   channel?: string
-  /** Self-hosted: the installed pre-release label (`0.1.1-canary.…`, `0.1.1-rc.1`), else null. */
+  /**
+   * The running build's full label (`0.1.21-canary.24`, `0.1.21-rc.2`), else
+   * null: the installed package's on self-hosted, and on TurboPanel High
+   * Availability the channel build of the deployed commit (newer control
+   * planes; older hosted ones always send null).
+   */
   build?: string | null
   /** Hosted: `testing`, `staging` or `live`; null on self-hosted and local dev. */
   environment?: string | null
@@ -5363,6 +5368,11 @@ export type InstanceUpdates = {
   updatesManaged?: boolean
   /** Present once the managed upgrade coordinator is mounted. */
   managedUpgrade?: boolean
+  /**
+   * A connected daemon (the co-located one included) runs an older build than
+   * the channel's daemon target. Absent on a control plane older than the field.
+   */
+  daemonsBehind?: boolean
   fleetSummary?: {
     connected: number
     upToDate: number

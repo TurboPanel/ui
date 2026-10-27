@@ -12,6 +12,7 @@ import {
   UPGRADE_DOCS_URL,
   UpgradeStartTimeoutError,
   updateBanner,
+  showsUpdateBanner,
   updateOffered,
   withStartTimeout,
   writeDismissedUpdateBanner,
@@ -374,7 +375,9 @@ describe('updateBanner', () => {
     data.units.instance.updateAvailable = false
     const banner = updateBanner({ updates: data, activeRun: false, dismissedKey: null })
     expect(banner?.title).toBe('TurboPanel update available: daemon v0.1.6-canary.3')
-    expect(banner?.body).toBe('This updates the daemon (the software on each of your servers). Choose Update to review it first; nothing changes until you confirm.')
+    expect(banner?.body).toBe(
+      'This updates the daemon (the software on each of your servers). Choose Update to review it first; nothing changes until you confirm.'
+    )
   })
 
   it('lists the web interface only when this app differs from the one the channel serves', () => {
@@ -482,6 +485,15 @@ describe('updateOffered (the admin sidebar badge)', () => {
     noTarget.units.instance.target = null
     noTarget.units.daemon.target = null
     expect(updateOffered({ updates: noTarget, activeRun: false })).toBe(false)
+  })
+})
+
+describe('showsUpdateBanner', () => {
+  it('shows only to instance admins on a self-hosted control plane', () => {
+    expect(showsUpdateBanner({ isInstanceAdmin: true, runtime: 'deno' })).toBe(true)
+    expect(showsUpdateBanner({ isInstanceAdmin: false, runtime: 'deno' })).toBe(false)
+    expect(showsUpdateBanner({ isInstanceAdmin: true, runtime: 'workers' })).toBe(false)
+    expect(showsUpdateBanner({ isInstanceAdmin: true, runtime: undefined })).toBe(false)
   })
 })
 

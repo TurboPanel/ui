@@ -1,95 +1,30 @@
 import { describe, expect, it } from 'vitest'
-import { buildInfoSections, showsBuildInfo } from './build-info'
+import { versionRows } from './build-info'
 
-const UI_SHA = 'a'.repeat(40)
-const CP_SHA = 'b'.repeat(40)
-const consoleBuild = {
-  version: '0.1.1',
-  gitCommit: UI_SHA,
-  sourceReleaseUrl: `https://github.com/TurboPanel/ui/tree/${UI_SHA}`,
-}
-
-describe('showsBuildInfo', () => {
-  it('opens only on hosted testing and staging', () => {
-    expect(showsBuildInfo({ ok: true, environment: 'testing' })).toBe(true)
-    expect(showsBuildInfo({ ok: true, environment: 'Staging' })).toBe(true)
-    expect(showsBuildInfo({ ok: true, environment: 'live' })).toBe(false)
-    expect(showsBuildInfo({ ok: true, environment: null })).toBe(false)
-    expect(showsBuildInfo(undefined)).toBe(false)
-  })
-})
-
-describe('buildInfoSections', () => {
-  it('lists the web interface and control plane with linked commits', () => {
-    const sections = buildInfoSections(
-      {
-        ok: true,
-        version: '0.1.1',
-        revision: {
-          commit: CP_SHA,
-          sourceUrl: `https://github.com/TurboPanel/turbopanel/tree/${CP_SHA}`,
+describe('versionRows', () => {
+  it('lists only the control plane and web interface versions', () => {
+    expect(
+      versionRows(
+        {
+          ok: true,
+          version: '0.1.21',
+          build: '0.1.21-canary.3',
+          channel: 'canary',
+          environment: 'testing',
+          revision: { commit: '5efa9c1d0f6b4a3e2c1b0a9f8e7d6c5b4a3f2e1d', sourceUrl: '' },
         },
-        channel: 'canary',
-        environment: 'testing',
-        build: null,
-      },
-      consoleBuild
-    )
-    expect(sections).toEqual([
-      {
-        title: 'Web interface',
-        rows: [
-          { label: 'Version', value: 'v0.1.1' },
-          {
-            label: 'Commit',
-            value: 'aaaaaaa',
-            url: `https://github.com/TurboPanel/ui/commit/${UI_SHA}`,
-          },
-        ],
-      },
-      {
-        title: 'Control plane',
-        rows: [
-          { label: 'Version', value: 'v0.1.1' },
-          {
-            label: 'Commit',
-            value: 'bbbbbbb',
-            url: `https://github.com/TurboPanel/turbopanel/commit/${CP_SHA}`,
-          },
-          { label: 'Channel', value: 'canary' },
-          { label: 'Environment', value: 'testing' },
-        ],
-      },
+        '0.1.17'
+      )
+    ).toEqual([
+      { label: 'Control plane', value: 'v0.1.21-canary.3' },
+      { label: 'Web interface', value: 'v0.1.17' },
     ])
   })
 
-  it('shows an installed build label and marks unknown commits', () => {
-    const sections = buildInfoSections(
-      {
-        ok: true,
-        version: '0.1.1',
-        build: '0.1.1-rc.1',
-        revision: { commit: 'unknown', sourceUrl: '' },
-      },
-      { ...consoleBuild, gitCommit: '' }
-    )
-    expect(sections[0].rows[1]).toEqual({ label: 'Commit', value: 'unknown' })
-    expect(sections[1].rows).toEqual([
-      { label: 'Version', value: 'v0.1.1' },
-      { label: 'Build', value: 'v0.1.1-rc.1' },
-      { label: 'Commit', value: 'unknown' },
+  it('reads Unknown for a version that has not arrived', () => {
+    expect(versionRows(undefined, null)).toEqual([
+      { label: 'Control plane', value: 'Unknown' },
+      { label: 'Web interface', value: 'Unknown' },
     ])
-  })
-
-  it('does not link a commit whose source is not https', () => {
-    const sections = buildInfoSections(
-      {
-        ok: true,
-        version: '0.1.1',
-        revision: { commit: CP_SHA, sourceUrl: 'javascript:alert(1)' },
-      },
-      consoleBuild
-    )
-    expect(sections[1].rows[1]).toEqual({ label: 'Commit', value: 'bbbbbbb' })
   })
 })
