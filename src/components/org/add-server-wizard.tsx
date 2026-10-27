@@ -35,7 +35,7 @@ import { orgBillingHref } from '@/lib/org-navigation'
 import { usePublicUrlsOptional } from '@/lib/queries/admin'
 import { useCreateLicense, useOrgServers } from '@/lib/queries/servers'
 import { chrome, colors, spacing } from '@/lib/theme'
-import { userErrorMessage } from '@/lib/user-error'
+import { failedRunMessage, userErrorMessage } from '@/lib/user-error'
 
 const POLL_FAILURE_THRESHOLD = 3
 
@@ -439,7 +439,8 @@ export function AddServerWizard({ orgId, onComplete, onDismiss }: AddServerWizar
       tierId: billingEnabled ? (chosenTierId ?? undefined) : undefined,
     })
     if (!result.ok) {
-      if (result.error) setCreateError(result.error)
+      // A known code (an unknown tier, …) reads as its sentence, never raw HTTP text.
+      setCreateError(failedRunMessage(result, 'Failed to start server setup'))
       // No license is free. The control plane's message says why without
       // calling an ending license "in use"; the tier section offers the fix
       // (restore one that is ending, or buy one) for the tier this server needs.
@@ -566,7 +567,12 @@ export function AddServerWizard({ orgId, onComplete, onDismiss }: AddServerWizar
               <AddServerTierSection
                 orgId={orgId}
                 chosenTierId={chosenTierId}
-                onChooseTier={setChosenTierId}
+                onChooseTier={(tierId) => {
+                  // A new pick replaces the old one's prompt and refusal.
+                  setChosenTierId(tierId)
+                  setCreateError(null)
+                  setLicenseRefusal(null)
+                }}
                 refusal={licenseRefusal}
                 onLicenseReady={() => {
                   // A license was restored or bought. When the last Continue

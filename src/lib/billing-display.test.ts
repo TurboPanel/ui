@@ -479,6 +479,21 @@ describe('describeBillingRefusal', () => {
   const refusal = (body: Record<string, unknown>, status = 409) =>
     new BillingRefusalError('/billing/seats', status, body)
 
+  it('names the unused install command that holds the license a change would take', () => {
+    expect(
+      describeBillingRefusal(
+        refusal({ error: 'license_held_by_key', message: 'Delete edge-2 first.' })
+      )
+    ).toBe('Delete edge-2 first.')
+    expect(
+      describeBillingRefusal(
+        refusal({ error: 'license_held_by_key', keyName: 'edge-2', tierLabel: 'S1' })
+      )
+    ).toBe(
+      'The unused install command “edge-2” holds one S1 license for a server that has not connected yet. Delete it on Pending keys first, or wait for it to expire.'
+    )
+  })
+
   it('names the server a reduction would strand and the tier it needs', () => {
     const names = { serverName: (id: string) => (id === 'srv-1' ? 'web-1' : null) }
     expect(

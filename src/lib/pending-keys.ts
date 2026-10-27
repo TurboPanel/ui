@@ -43,3 +43,25 @@ export function provisioningServersLabel(rows: readonly LicenseRecord[]): string
   const dated = since ? ` since ${since}` : ''
   return `1 server provisioning${named}${dated}`
 }
+
+/** The tier an unused key holds a license at (chosen in Add Server), or a dash. */
+export function pendingKeyTierLabel(row: Pick<LicenseRecord, 'tier'>): string {
+  return row.tier?.label ?? '—'
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000
+
+/** `Expires in 3 days` / `Expires in less than a day` / `Expired` / `Does not expire`. */
+export function pendingKeyExpiryLabel(
+  row: Pick<LicenseRecord, 'expiresAt' | 'expired'>,
+  nowMs: number = Date.now()
+): string {
+  if (row.expired) return 'Expired'
+  const at = row.expiresAt ? Date.parse(row.expiresAt) : Number.NaN
+  if (!Number.isFinite(at)) return 'Does not expire'
+  const left = at - nowMs
+  if (left <= 0) return 'Expired'
+  if (left < DAY_MS) return 'Expires in less than a day'
+  const days = Math.floor(left / DAY_MS)
+  return days === 1 ? 'Expires in 1 day' : `Expires in ${days} days`
+}

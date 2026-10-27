@@ -37,6 +37,7 @@ import {
 import { useCan } from '@/lib/query-client'
 import { describeSizeFit, parseSizeOutput, sizeBandRows, tierForSize } from '@/lib/server-size'
 import { spacing } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 function tierOption(tier: BillingTier): SelectOption {
   return {
@@ -282,6 +283,29 @@ export function AddServerTierSection({
     } else if (subscriptionQuery.isSuccess) {
       fix = <FirstPurchase orgId={orgId} tier={actingTier} />
     }
+  }
+
+  if (catalogQuery.isError) {
+    // No dead end: Continue needs a tier, so a failed catalogue offers a retry.
+    return (
+      <View style={styles.root}>
+        <Text style={panelStyles.detailLabel}>Which tier does this server need?</Text>
+        <Text style={panelStyles.error}>
+          {userErrorMessage(catalogQuery.error, 'Could not load the license tiers.')}
+        </Text>
+        <ButtonRow>
+          <Button
+            label="Retry"
+            size="sm"
+            busy={catalogQuery.isFetching}
+            accessibilityLabel="Load the license tiers again"
+            onPress={() => {
+              void catalogQuery.refetch()
+            }}
+          />
+        </ButtonRow>
+      </View>
+    )
   }
 
   return (

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setActiveOrganizationId, ORG_ID_HEADER } from '@/lib/org-context'
+import { userErrorMessage } from '@/lib/user-error'
 import {
   applyOrgFabric,
   bootstrapInstall,
@@ -782,6 +783,17 @@ describe('instance-api fetch wrappers', () => {
     await createLicense(undefined, undefined, 'tier-s1')
     const [, init] = fetchMock.mock.calls[0] ?? []
     expect(JSON.parse(String((init as RequestInit).body))).toEqual({ tierId: 'tier-s1' })
+  })
+
+  it('createLicense refusal carries the machine code, so an unknown tier reads as a sentence', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ error: 'Unknown license tier', code: 'tier_not_found' }, 400)
+    )
+    const error = await createLicense(undefined, undefined, 'tier-gone').catch((err) => err)
+    expect(String(error)).toContain('tier_not_found')
+    expect(userErrorMessage(error, 'fallback')).toBe(
+      'That size is no longer available. Refresh and pick again.'
+    )
   })
 
   it('fetchBindings and createBinding proxy binding routes', async () => {

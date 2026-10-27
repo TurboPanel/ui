@@ -1303,6 +1303,10 @@ describe('servers query hooks', () => {
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: queryKeys.org(orgId).servers.licenses,
     })
+    // The key holds a license at its tier, so the free counts refresh too.
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.org(orgId).billing.subscription,
+    })
   })
 
   it('useDeleteLicense revokes a key', async () => {

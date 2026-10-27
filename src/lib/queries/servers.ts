@@ -925,6 +925,10 @@ export function useCreateLicense(orgId: string) {
         queryClient.invalidateQueries({
           queryKey: queryKeys.org(orgId).servers.licenses,
         }),
+        // The new key holds a license at its tier: the "N free" counts change.
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.org(orgId).billing.subscription,
+        }),
       ])
     },
     fallbackError: 'Failed to start server setup',

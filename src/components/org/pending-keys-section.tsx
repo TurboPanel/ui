@@ -12,6 +12,8 @@ import { formatLocalDateTime } from '@/lib/format-datetime'
 import type { LicenseRecord } from '@/lib/instance-api'
 import {
   pendingKeyDisplayName,
+  pendingKeyExpiryLabel,
+  pendingKeyTierLabel,
   provisioningKeys,
   provisioningServersLabel,
   unboundPendingKeys,
@@ -108,6 +110,8 @@ function PendingKeyDeleteControl({
 const PENDING_KEY_COLUMNS = [
   { key: 'name', header: 'Name', flex: 1.6, minWidth: 140 },
   { key: 'created', header: 'Created', flex: 1.4, minWidth: 160 },
+  { key: 'tier', header: 'Tier', flex: 0.6, minWidth: 60 },
+  { key: 'expires', header: 'Expires', flex: 1.2, minWidth: 150 },
   { key: 'delete', header: 'Delete', flex: 1.4, minWidth: 160, align: 'end' },
 ] as const satisfies readonly DataTableColumn[]
 
@@ -130,7 +134,7 @@ function PendingKeyRow({
 }>) {
   const title = pendingKeyDisplayName(row)
 
-  const [nameColumn, createdColumn, deleteColumn] = PENDING_KEY_COLUMNS
+  const [nameColumn, createdColumn, tierColumn, expiresColumn, deleteColumn] = PENDING_KEY_COLUMNS
 
   return (
     <DataTableRow alt={rowIndex % 2 === 1}>
@@ -142,6 +146,16 @@ function PendingKeyRow({
       <DataTableCell column={createdColumn}>
         <Text style={styles.createdText} numberOfLines={1}>
           {formatLocalDateTime(row.createdAt, { includeSeconds: false })}
+        </Text>
+      </DataTableCell>
+      <DataTableCell column={tierColumn}>
+        <Text style={styles.createdText} numberOfLines={1}>
+          {pendingKeyTierLabel(row)}
+        </Text>
+      </DataTableCell>
+      <DataTableCell column={expiresColumn}>
+        <Text style={row.expired ? panelStyles.error : styles.createdText} numberOfLines={1}>
+          {pendingKeyExpiryLabel(row)}
         </Text>
       </DataTableCell>
       <DataTableCell column={deleteColumn}>
@@ -174,7 +188,7 @@ function PendingKeysTable({
   onConfirm: (id: string) => void
 }>) {
   return (
-    <DataTable columns={PENDING_KEY_COLUMNS} minWidth={520}>
+    <DataTable columns={PENDING_KEY_COLUMNS} minWidth={760}>
       {rows.map((row, index) => (
         <PendingKeyRow
           key={row.id}
