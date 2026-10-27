@@ -7,6 +7,9 @@ const state = vi.hoisted(() => ({
   server: undefined as unknown,
   project: undefined as unknown,
   containersLoading: false,
+  managedLive: undefined as string | undefined,
+  managedStored: undefined as string | undefined,
+  managedEnabled: [] as string[],
 }))
 
 vi.mock('expo-router', () => ({ usePathname: () => state.pathname }))
@@ -18,7 +21,7 @@ vi.mock('@/lib/queries/projects', () => ({
 }))
 vi.mock('@/lib/queries/environments', () => ({
   useEnvironments: () => ({
-    data: { environments: [{ id: 'e1', projectId: 'p1', name: 'prod' }] },
+    data: { environments: [{ id: 'e1', projectId: 'p1', name: 'prod', serverId: 's1' }] },
   }),
 }))
 vi.mock('@/lib/queries/containers', () => ({
@@ -33,12 +36,34 @@ vi.mock('@/lib/queries/environment-cards', () => ({
   useEnvironmentConfigViews: () => ({ views: {} }),
   useLatestDeployments: () => ({ latest: {} }),
 }))
+vi.mock('@/lib/queries/managed', () => ({
+  useEnvironmentManaged: (_o: string, id: string, options: { enabled: boolean }) => {
+    if (options.enabled) state.managedEnabled.push(id)
+    return {
+      data:
+        options.enabled && state.managedStored
+          ? { managed: { status: state.managedStored } }
+          : undefined,
+    }
+  },
+  useManagedStatus: (_o: string, _id: string, options: { enabled: boolean }) => ({
+    data: options.enabled && state.managedLive ? { status: state.managedLive } : undefined,
+  }),
+}))
 vi.mock('@/lib/v4/projects-home', () => ({
+  homeKind: (project: { kind?: string | null }) =>
+    project.kind === 'managed' ? 'managed' : 'compose',
   wantsConfigView: (project: { kind?: string | null }) => project.kind !== 'managed',
-  homeProject: ({ project }: { project: { name: string; kind?: string | null } }) => ({
+  homeProject: ({
+    project,
+    facts,
+  }: {
+    project: { name: string; kind?: string | null }
+    facts?: { managedRows?: { status: string }[] }
+  }) => ({
     name: project.name,
     kind: project.kind === 'managed' ? 'managed' : 'compose',
-    status: 'running',
+    status: facts?.managedRows?.[0]?.status ?? 'running',
     environments: [{ id: 'e1', name: 'prod', status: 'deploying', isPrimary: true, pinned: false }],
   }),
 }))
@@ -47,6 +72,9 @@ beforeEach(() => {
   state.pathname = '/o1/servers/s1'
   state.server = undefined
   state.project = undefined
+  state.managedLive = undefined
+  state.managedStored = undefined
+  state.managedEnabled = []
 })
 
 async function run() {
@@ -121,5 +149,22 @@ describe('useHeaderBreadcrumb', () => {
   it('is null on other pages', async () => {
     state.pathname = '/o1/activity'
     expect(await run()).toBeNull()
+  })
+
+  it('gives a database the status its header shows: live, else the stored row', async () => {
+    state.pathname = '/o1/projects/p1/environments/e1'
+    state.project = { id: 'p1', name: 'Orders db', kind: 'managed' }
+    state.managedStored = 'ready'
+    state.managedLive = 'stopped'
+    expect((await run())?.current.chip).toEqual({ key: 'stopped' })
+    state.managedLive = undefined
+    expect((await run())?.current.chip).toEqual({ key: 'ready' })
+  })
+
+  it('reads no database status for an app project', async () => {
+    state.pathname = '/o1/projects/p1/environments/e1'
+    state.project = { id: 'p1', name: 'Blog', metadata: null }
+    await run()
+    expect(state.managedEnabled).toEqual([])
   })
 })

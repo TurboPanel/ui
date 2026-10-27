@@ -552,7 +552,7 @@ export function ManagedSettingsPanel({
   externalAccess?: ManagedExternalAccessView | null
   canManage: boolean
   busy: boolean
-  /** The database is running; the base image can only be changed while it is stopped. */
+  /** The database is running; the base image picker is only offered while stopped. */
   running?: boolean
   onApply: (next: ManagedSettings) => Promise<void>
 }>) {
@@ -636,7 +636,9 @@ export function ManagedSettingsPanel({
       {showEngine ? (
         <View style={styles.body}>
           <SectionHeading title="Database" note={running ? 'Backups' : 'Base image and backups'} />
-          {running ? null : (
+          {running ? (
+            <Text style={panelStyles.muted}>Stop the database to change its base image.</Text>
+          ) : (
             <ImageField
               form={form}
               setForm={setForm}

@@ -33,6 +33,30 @@ const RELEASE_LIST_MAX_HEIGHT = 480
 /** Wide enough for the Roll back button, so rows with and without one line up. */
 const RELEASE_ACTION_WIDTH = 112
 
+/** Release outcomes that end without a published tree on the server. */
+const UNFINISHED_RELEASE_STATUSES: ReadonlySet<string> = new Set([
+  'failed',
+  'timed_out',
+  'cancelled',
+])
+
+/**
+ * What the action cell says instead of Roll back on a release that is not a
+ * rollback target: a short label that fits the cell, and the full reason for
+ * screen readers (the expanded row shows it too).
+ */
+function noRollbackCopy(status: string): Readonly<{ label: string; reason: string }> {
+  return UNFINISHED_RELEASE_STATUSES.has(status)
+    ? {
+        label: "Can't roll back",
+        reason: "Can't roll back to this release: it did not finish building.",
+      }
+    : {
+        label: 'Still building',
+        reason: 'This release is still building. Roll back is offered once it has finished.',
+      }
+}
+
 /** Release ids are ULID/UUID-shaped; the head is enough to tell rows apart. */
 function shortReleaseId(releaseId: string): string {
   return releaseId.length > 10 ? releaseId.slice(0, 10) : releaseId
@@ -185,7 +209,9 @@ function releaseWhen(release: ReleaseRecord): string {
 
 /**
  * Roll back is confirmed but safe (the previous release is still published), so
- * it is a quiet button, not a danger one. The live release has none.
+ * it is a quiet button, not a danger one. The live release has none. A release
+ * that failed has no tree kept on the server and one still building has none
+ * yet, so the cell says so instead of offering a button that cannot work.
  */
 function RollbackAction({
   release,
@@ -199,6 +225,14 @@ function RollbackAction({
   onRollback: () => void
 }>) {
   if (release.isLive || !canRollback) return null
+  if (release.status !== 'succeeded') {
+    const copy = noRollbackCopy(release.status)
+    return (
+      <Text style={styles.cellMuted} accessibilityLabel={copy.reason}>
+        {copy.label}
+      </Text>
+    )
+  }
   return (
     <ConfirmButton
       // Remounting on the row id disarms every other row's confirm when
@@ -208,7 +242,6 @@ function RollbackAction({
       confirmLabel="Roll back"
       prompt={rollbackPrompt(release)}
       variant="secondary"
-      disabled={release.status !== 'succeeded'}
       busy={rollingBack}
       onConfirm={onRollback}
     />
@@ -289,7 +322,7 @@ function ReleaseRow({
   onRollback,
 }: ReleaseRowProps) {
   const tone = deploymentStatusTone(release.status)
-  const succeeded = release.status === 'succeeded'
+  const unfinished = UNFINISHED_RELEASE_STATUSES.has(release.status)
 
   return (
     <View>
@@ -322,13 +355,13 @@ function ReleaseRow({
       </View>
       {expanded ? (
         <View style={styles.detail}>
-          {succeeded ? null : (
+          {unfinished ? (
             <InlineNotice
               tone="warning"
               title="Not a rollback target"
               body="This release did not finish building on every server it was dispatched to, so a host may never have published its tree."
             />
-          )}
+          ) : null}
           <ReleaseImageIdentity release={release} />
           {release.attempts.length > 1 ? (
             <Text style={styles.cellMuted}>

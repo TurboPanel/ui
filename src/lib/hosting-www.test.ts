@@ -4,6 +4,7 @@ import {
   effectiveWwwMode,
   hostingWwwNames,
   initialWwwChoice,
+  isBareRegistrableDomain,
   isHostingWwwMode,
   readWwwMode,
   wwwCertificateNames,
@@ -66,6 +67,36 @@ describe('hosting www names', () => {
   })
 })
 
+describe('bare registrable domains', () => {
+  it('knows a bare domain, including under a two-part public suffix', () => {
+    for (const name of ['example.com', 'turbopanel.dev', 'example.co.uk', 'example.com.au']) {
+      expect(isBareRegistrableDomain(name)).toBe(true)
+    }
+  })
+
+  it('reads subdomains, suffixes, IPs and one-word names as not bare', () => {
+    for (const name of [
+      'ct.turbopanel.dev',
+      'app.example.com',
+      'a.b.example.com',
+      'app.example.co.uk',
+      'www.example.com',
+      'co.uk',
+      'com.au',
+      'localhost',
+      'com',
+      '203.0.113.5',
+      '10.0',
+      '::1',
+      '*.example.com',
+      'example..com',
+      '',
+    ]) {
+      expect(isBareRegistrableDomain(name)).toBe(false)
+    }
+  })
+})
+
 describe('defaults', () => {
   it('sends www to a bare domain, keeps a typed www, leaves subdomains alone', () => {
     expect(defaultWwwMode('turbopanel.io')).toBe('www-to-root')
@@ -74,6 +105,20 @@ describe('defaults', () => {
     expect(defaultWwwMode('app.turbopanel.io')).toBe('off')
     expect(defaultWwwMode('*.turbopanel.io')).toBe('off')
     expect(defaultWwwMode('203.0.113.5')).toBe('off')
+  })
+
+  it('treats a domain under a two-part public suffix as bare', () => {
+    expect(defaultWwwMode('example.co.uk')).toBe('www-to-root')
+    expect(defaultWwwMode('www.example.co.uk')).toBe('root-to-www')
+    expect(defaultWwwMode('app.example.co.uk')).toBe('off')
+    expect(defaultWwwMode('co.uk')).toBe('off')
+  })
+
+  it('leaves www off for a subdomain, also when its www name is typed', () => {
+    expect(defaultWwwMode('ct.turbopanel.dev')).toBe('off')
+    expect(defaultWwwMode('app.example.com')).toBe('off')
+    expect(defaultWwwMode('www.app.example.com')).toBe('off')
+    expect(defaultWwwMode('localhost')).toBe('off')
   })
 
   it('does not guess www for private or reserved names', () => {

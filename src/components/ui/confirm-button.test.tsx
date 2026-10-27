@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { CONFIRM_GUARD_MS, ConfirmButton } from '@/components/ui/confirm-button'
+import { ARMED_TIMEOUT_MS, CONFIRM_GUARD_MS, ConfirmButton } from '@/components/ui/confirm-button'
 import { styleOf } from '@/components/ui/v4/rn-stub'
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
@@ -137,5 +137,31 @@ describe('ConfirmButton double press', () => {
     fireEvent.focus(armedButton)
     fireEvent.click(armedButton)
     expect(screen.getByText('Move it here').dataset.minWidth).toBe('220')
+  })
+
+  it('stays armed long enough to read the question and press Confirm', () => {
+    render(<ConfirmButton label="Cancel deploy" confirmLabel="Yes, cancel" onConfirm={vi.fn()} />)
+    fireEvent.click(screen.getByText('Cancel deploy'))
+    act(() => vi.advanceTimersByTime(10_000))
+    expect(screen.getByText('Yes, cancel')).toBeTruthy()
+    act(() => vi.advanceTimersByTime(ARMED_TIMEOUT_MS))
+    expect(screen.queryByText('Yes, cancel')).toBeNull()
+  })
+
+  it('backs out on Escape', () => {
+    const onArmedChange = vi.fn()
+    render(
+      <ConfirmButton
+        label="Destroy database"
+        confirmLabel="Destroy it"
+        onArmedChange={onArmedChange}
+        onConfirm={vi.fn()}
+      />
+    )
+    fireEvent.click(screen.getByText('Destroy database'))
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.queryByText('Destroy it')).toBeNull()
+    expect(screen.getByText('Destroy database')).toBeTruthy()
+    expect(onArmedChange).toHaveBeenLastCalledWith(false)
   })
 })

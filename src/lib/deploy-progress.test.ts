@@ -10,6 +10,7 @@ import {
   gerundLabel,
   planElapsedSeconds,
   progressChipLabel,
+  liveProgressHeadline,
   progressHeadline,
   progressSummary,
   runningStep,
@@ -18,6 +19,7 @@ import {
   stepNodeInfo,
   stepPosition,
   stepsOf,
+  WAITING_FOR_BUILD_TEXT,
 } from '@/lib/deploy-progress'
 import type { CommandProgressStep, CommandProgressStepState } from '@/lib/instance-api'
 
@@ -336,6 +338,26 @@ describe('step nodes', () => {
     )
     expect(stepAccessibilityLabel(FRESH_HOST, FRESH_HOST[1]!)).toBe(
       'Set up the web gateway, already on this server'
+    )
+  })
+})
+
+describe('liveProgressHeadline', () => {
+  const plan = { steps: FRESH_HOST, current: 'install-runtime:node-22' }
+
+  it('says the deploy waits for another build while the server reports it', () => {
+    expect(liveProgressHeadline({ ...plan, runningSince: null }, false)).toBe(
+      WAITING_FOR_BUILD_TEXT
+    )
+  })
+
+  it('shows the step line once the deploy runs, on older servers and after the end', () => {
+    expect(liveProgressHeadline({ ...plan, runningSince: '2026-10-26T10:00:00Z' }, false)).toBe(
+      'Step 2 of 6 · Installing Node 22'
+    )
+    expect(liveProgressHeadline(plan, false)).toBe('Step 2 of 6 · Installing Node 22')
+    expect(liveProgressHeadline({ ...plan, runningSince: null }, true)).toBe(
+      'Step 2 of 6 · Installing Node 22'
     )
   })
 })

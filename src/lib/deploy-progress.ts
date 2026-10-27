@@ -15,6 +15,7 @@ import type { GlyphKey, StatusTone } from '@/lib/v4/status-vocab'
 type ProgressLike = Readonly<{
   steps?: unknown
   current?: string | null
+  runningSince?: string | null
 }>
 
 /** The steps of a payload as a list; an absent or malformed list reads as empty. */
@@ -208,6 +209,22 @@ export function progressHeadline(progress: ProgressLike | null | undefined): str
   if (!summary) return null
   if (summary.phase === 'running') return stepCountText(summary.step, summary.total, summary.title)
   return summary.title
+}
+
+/** What a deploy that waits for the server's one build slot shows. */
+export const WAITING_FOR_BUILD_TEXT = 'Waiting for another build on this server to finish'
+
+/**
+ * The headline of a deploy that has not finished: the waiting line while the
+ * server reports it is waiting for another build (`runningSince: null`), the
+ * step line otherwise. A finished deploy always gets the step line.
+ */
+export function liveProgressHeadline(
+  progress: ProgressLike | null | undefined,
+  finished: boolean
+): string | null {
+  if (!finished && progress?.runningSince === null) return WAITING_FOR_BUILD_TEXT
+  return progressHeadline(progress)
 }
 
 /** The short "Step N of M · Installing Docker" for a status chip; null unless a step is running. */
