@@ -80,7 +80,7 @@ describe('HighAvailabilityWordmark', () => {
   beforeEach(() => {
     healthState.data = undefined
     push.mockReset()
-    useVersionUpdateEntry.mockReturnValue({ viewer: 'other', pending: false, orgId: '' })
+    useVersionUpdateEntry.mockReturnValue({ isInstanceAdmin: false, pending: false })
   })
   afterEach(cleanup)
 
@@ -127,11 +127,7 @@ describe('HighAvailabilityWordmark', () => {
 
   it('self-hosted release: an instance admin sees the icon and "Update", and goes to Admin > Updates', () => {
     useAuth.mockReturnValue({ controlPlaneRuntime: 'deno' })
-    useVersionUpdateEntry.mockReturnValue({
-      viewer: 'instance-admin',
-      pending: true,
-      orgId: 'org-1',
-    })
+    useVersionUpdateEntry.mockReturnValue({ isInstanceAdmin: true, pending: true })
     healthState.data = { ok: true, version: '0.1.20', build: '0.1.20', channel: 'release' }
     const { container } = render(<HighAvailabilityWordmark />)
     expect(container.textContent).toBe('v0.1.20update iconUpdate')
@@ -141,22 +137,31 @@ describe('HighAvailabilityWordmark', () => {
 
   it('shows no update icon before the version is known, while the entry cannot be pressed', () => {
     useAuth.mockReturnValue({ controlPlaneRuntime: 'deno' })
-    useVersionUpdateEntry.mockReturnValue({ viewer: 'instance-admin', pending: true, orgId: '' })
+    useVersionUpdateEntry.mockReturnValue({ isInstanceAdmin: true, pending: true })
     const { container } = render(<HighAvailabilityWordmark />)
     expect(container.textContent).not.toContain('update icon')
     expect(versionButton().hasAttribute('disabled')).toBe(true)
   })
 
-  it('self-hosted canary: an organization manager sees the icon alone and goes to the Servers page', () => {
+  it('self-hosted canary: an instance admin sees the icon alone, no word', () => {
     useAuth.mockReturnValue({ controlPlaneRuntime: 'deno' })
-    useVersionUpdateEntry.mockReturnValue({ viewer: 'org-manager', pending: true, orgId: 'org-1' })
+    useVersionUpdateEntry.mockReturnValue({ isInstanceAdmin: true, pending: true })
     healthState.data = { ok: true, version: '0.1.21', build: '0.1.21-canary.24', channel: 'canary' }
     const { container } = render(<HighAvailabilityWordmark />)
     expect(container.textContent).toBe('v0.1.21Canaryupdate icon')
     expect(versionButton().getAttribute('aria-label')).toBe(
-      'Control plane v0.1.21, Canary build, update available, open Servers'
+      'Control plane v0.1.21, Canary build, update notice, open Updates'
     )
+  })
+
+  it('anyone who is not an instance admin gets no icon and the versions popup', () => {
+    useAuth.mockReturnValue({ controlPlaneRuntime: 'deno' })
+    useVersionUpdateEntry.mockReturnValue({ isInstanceAdmin: false, pending: false })
+    healthState.data = { ok: true, version: '0.1.21', channel: 'canary' }
+    const { container } = render(<HighAvailabilityWordmark />)
+    expect(container.textContent).toBe('v0.1.21Canary')
     fireEvent.click(versionButton())
-    expect(push).toHaveBeenCalledWith('/org-1/servers')
+    expect(screen.getByText('Versions popup')).toBeTruthy()
+    expect(push).not.toHaveBeenCalled()
   })
 })

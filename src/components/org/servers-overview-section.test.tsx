@@ -38,7 +38,6 @@ vi.mock('@/lib/queries/servers', () => ({
   useOrgLicenses: () => idle,
   useFleetServerUsage: () => idle,
   useBatchTriggerServerUpdates: () => ({ isPending: false, variables: undefined, mutate: vi.fn() }),
-  useTriggerAllServerUpdates: () => ({ isPending: false, actionError: null, mutate: vi.fn() }),
 }))
 vi.mock('@/lib/servers-layout', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/servers-layout')>()),

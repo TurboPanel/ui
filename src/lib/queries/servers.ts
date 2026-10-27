@@ -43,7 +43,6 @@ import {
   setServerHostname,
   setServerNtp,
   setServerTimezone,
-  triggerAllServerUpdates,
   triggerServerUpdate,
   updateServer,
   type ConnectionHistoryChartResponse,
@@ -658,21 +657,6 @@ export function useTriggerServerUpdate(orgId: string, serverId: string) {
   })
 }
 
-/**
- * "Update all behind": one update run over every server of this organization
- * (`POST /servers/updates`). Servers already on the target build are left as
- * they are by the run.
- */
-export function useTriggerAllServerUpdates(orgId: string) {
-  const queryClient = useQueryClient()
-  return useApiMutation({
-    mutationFn: () => triggerAllServerUpdates(),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.org(orgId).servers.updatesBatch })
-    },
-  })
-}
-
 export function useResetServerUpdateStatus(orgId: string, serverId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
@@ -713,7 +697,8 @@ export function useDeleteServer(orgId: string) {
         forgetResources?: boolean
         principals?: readonly PrincipalRemovalChoice[]
       }>
-    ) => deleteServer(input.serverId, orgId, deleteServerOptions(input)),
+    ) =>
+      deleteServer(input.serverId, orgId, deleteServerOptions(input)),
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.org(orgId).servers.list }),

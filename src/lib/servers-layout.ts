@@ -61,24 +61,16 @@ export function resolveServersFleetSurface(input: {
 export function showServersToolbarUpdate(
   canManage: boolean,
   compactChrome: boolean,
-  selectedCount: number
+  selectedCount: number,
 ): boolean {
   if (!canManage) return false
   if (!compactChrome) return true
   return selectedCount > 0
 }
 
-/** "Update all behind" shows for someone who can update the servers, once a server is behind. */
-export function showUpdateAllBehind(canUpdate: boolean, behindCount: number): boolean {
-  return canUpdate && behindCount > 0
-}
-
-/** `Update all behind (3)`, or `Starting update…` while the request is out. */
-export function updateAllBehindLabel(starting: boolean, behindCount: number): string {
-  return starting ? 'Starting update…' : `Update all behind (${behindCount})`
-}
-
-export function parseServersLayout(value: string | null | undefined): ServersLayout {
+export function parseServersLayout(
+  value: string | null | undefined,
+): ServersLayout {
   if (value === 'tiles' || value === 'summary') return 'tiles'
   return DEFAULT_SERVERS_LAYOUT
 }

@@ -56,7 +56,6 @@ import {
   runningBuildLabel,
   serverUpdateBlockedLabel,
 } from '@/lib/daemon-update-labels'
-import { canUpdateOrgServers } from '@/lib/update-entry'
 import { formatLocalDateTime } from '@/lib/format-datetime'
 import { configuredSourceLabel } from '@/lib/host-defaults'
 import { formatMemoryPageSize, memoryPageSizeHint } from '@/lib/memory-page-size'
@@ -1182,8 +1181,7 @@ function ServerControlTab({
         {viewModel.blockedLabel ? (
           <Text style={panelStyles.muted}>{viewModel.blockedLabel}</Text>
         ) : null}
-        {canUpdateOrgServers({ canManageOrganization: canManage }) &&
-        !viewModel.hideServerUpdateAction ? (
+        {canManage && !viewModel.hideServerUpdateAction ? (
           <ButtonRow>
             <Button
               label="Update"

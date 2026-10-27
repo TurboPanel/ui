@@ -1,15 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import type { InstanceUpdates, ServerUpdateStatus } from '@/lib/instance-api'
+import type { InstanceUpdates } from '@/lib/instance-api'
 import {
-  canUpdateOrgServers,
+  fleetUpdateSignals,
   instanceAdminUpdatePending,
-  isServerUpdatable,
-  orgServersUpdatePending,
   updateIndicator,
-  updateViewer,
   versionClick,
   versionEntryAccessibilityLabel,
-  viewerUpdatePending,
 } from '@/lib/update-entry'
 
 function updates(overrides: Partial<InstanceUpdates> = {}): InstanceUpdates {
@@ -44,35 +40,14 @@ function updates(overrides: Partial<InstanceUpdates> = {}): InstanceUpdates {
   }
 }
 
-function serverStatus(overrides: Partial<ServerUpdateStatus> = {}): ServerUpdateStatus {
-  return {
-    ok: true,
-    serverId: 'server-1',
-    channel: 'canary',
-    current: { commit: 'old', buildId: 'b-old' },
-    target: { commit: 'new', buildId: 'b-new' },
-    updateAvailable: true,
-    status: 'idle',
-    targetStatus: 'ok',
-    ...overrides,
-  }
-}
-
-describe('canUpdateOrgServers and updateViewer', () => {
-  it('follows organization manage today', () => {
-    expect(canUpdateOrgServers({ canManageOrganization: true })).toBe(true)
-    expect(canUpdateOrgServers({ canManageOrganization: false })).toBe(false)
-  })
-
-  it('an instance admin is always the admin, then the manager, then anyone else', () => {
-    expect(updateViewer({ isInstanceAdmin: true, canUpdateOrgServers: true })).toBe(
-      'instance-admin'
-    )
-    expect(updateViewer({ isInstanceAdmin: true, canUpdateOrgServers: false })).toBe(
-      'instance-admin'
-    )
-    expect(updateViewer({ isInstanceAdmin: false, canUpdateOrgServers: true })).toBe('org-manager')
-    expect(updateViewer({ isInstanceAdmin: false, canUpdateOrgServers: false })).toBe('other')
+describe('fleetUpdateSignals', () => {
+  it('reads the reserved daemons-behind and paused fields, false when absent', () => {
+    expect(fleetUpdateSignals(updates())).toEqual({ daemonsBehind: false, paused: false })
+    expect(fleetUpdateSignals(updates({ daemonsBehind: true, updatesPaused: true }))).toEqual({
+      daemonsBehind: true,
+      paused: true,
+    })
+    expect(fleetUpdateSignals(undefined)).toEqual({ daemonsBehind: false, paused: false })
   })
 })
 
@@ -113,6 +88,19 @@ describe('instanceAdminUpdatePending', () => {
     ).toBe(true)
   })
 
+  it('paused updates always show, even with nothing waiting or a run open', () => {
+    expect(instanceAdminUpdatePending({ updates: updates({ updatesPaused: true }), ...none })).toBe(
+      true
+    )
+    expect(
+      instanceAdminUpdatePending({
+        updates: updates({ runtime: 'workers', updatesPaused: true }),
+        activeRun: true,
+        consoleBuild: null,
+      })
+    ).toBe(true)
+  })
+
   it('nothing while a run is going or before the status arrives', () => {
     expect(
       instanceAdminUpdatePending({
@@ -122,72 +110,6 @@ describe('instanceAdminUpdatePending', () => {
       })
     ).toBe(false)
     expect(instanceAdminUpdatePending({ updates: undefined, ...none })).toBe(false)
-  })
-})
-
-const host = { id: 'server-1', connected: true }
-
-describe('isServerUpdatable (the Servers page and the sidebar icon share it)', () => {
-  it('a connected server with a known, newer target and nothing running', () => {
-    expect(isServerUpdatable(host, serverStatus())).toBe(true)
-  })
-
-  it('refuses what the Servers page offers no button for', () => {
-    expect(isServerUpdatable({ ...host, connected: false }, serverStatus())).toBe(false)
-    expect(isServerUpdatable(host, serverStatus({ targetStatus: 'unknown' }))).toBe(false)
-    expect(isServerUpdatable(host, serverStatus({ updateAvailable: false }))).toBe(false)
-    expect(isServerUpdatable(host, serverStatus({ status: 'updating' }))).toBe(false)
-    expect(isServerUpdatable(host, serverStatus(), true)).toBe(false)
-    expect(isServerUpdatable({ ...host, colocatedWithInstance: true }, serverStatus())).toBe(false)
-    expect(isServerUpdatable(host, serverStatus({ colocatedWithInstance: true }))).toBe(false)
-    expect(
-      isServerUpdatable(
-        host,
-        serverStatus({ updateBlocked: true, updateBlockedCode: 'updates_managed' })
-      )
-    ).toBe(false)
-    expect(isServerUpdatable(host, undefined)).toBe(false)
-  })
-})
-
-describe('orgServersUpdatePending', () => {
-  it('a server of the organization can be updated now', () => {
-    expect(orgServersUpdatePending([host], [serverStatus()])).toBe(true)
-    expect(orgServersUpdatePending([host], [serverStatus({ updateAvailable: false })])).toBe(false)
-    expect(orgServersUpdatePending([], [serverStatus()])).toBe(false)
-    expect(orgServersUpdatePending(undefined, undefined)).toBe(false)
-  })
-
-  it('a disconnected server that is behind shows no icon', () => {
-    expect(orgServersUpdatePending([{ ...host, connected: false }], [serverStatus()])).toBe(false)
-  })
-
-  it('a server with no update row shows no icon', () => {
-    expect(orgServersUpdatePending([host], [serverStatus({ serverId: 'other' })])).toBe(false)
-  })
-})
-
-describe('viewerUpdatePending', () => {
-  const servers = [host]
-  const updates = [serverStatus()]
-  it('reads what the role may read', () => {
-    expect(
-      viewerUpdatePending({
-        viewer: 'instance-admin',
-        adminPending: true,
-        servers: [],
-        updates: [],
-      })
-    ).toBe(true)
-    expect(
-      viewerUpdatePending({ viewer: 'instance-admin', adminPending: false, servers, updates })
-    ).toBe(false)
-    expect(
-      viewerUpdatePending({ viewer: 'org-manager', adminPending: false, servers, updates })
-    ).toBe(true)
-    expect(viewerUpdatePending({ viewer: 'other', adminPending: true, servers, updates })).toBe(
-      false
-    )
   })
 })
 
@@ -221,34 +143,17 @@ describe('updateIndicator', () => {
 })
 
 describe('versionClick', () => {
-  it('opens the versions popup when nothing is pending, for everyone', () => {
-    for (const viewer of ['instance-admin', 'org-manager', 'other'] as const) {
-      expect(versionClick({ viewer, pending: false, orgId: 'org-1' })).toEqual({ kind: 'versions' })
-    }
-  })
-
-  it('goes to the update screen for the viewer when something is pending', () => {
-    expect(versionClick({ viewer: 'instance-admin', pending: true, orgId: 'org-1' })).toEqual({
+  it('sends an instance admin with something pending to Admin > Updates', () => {
+    expect(versionClick({ isInstanceAdmin: true, pending: true })).toEqual({
       kind: 'navigate',
       href: '/admin/updates',
     })
-    expect(versionClick({ viewer: 'instance-admin', pending: true, orgId: null })).toEqual({
-      kind: 'navigate',
-      href: '/admin/updates',
-    })
-    expect(versionClick({ viewer: 'org-manager', pending: true, orgId: 'org-1' })).toEqual({
-      kind: 'navigate',
-      href: '/org-1/servers',
-    })
   })
 
-  it('falls back to the popup when there is nowhere to send the viewer', () => {
-    expect(versionClick({ viewer: 'org-manager', pending: true, orgId: ' ' })).toEqual({
-      kind: 'versions',
-    })
-    expect(versionClick({ viewer: 'other', pending: true, orgId: 'org-1' })).toEqual({
-      kind: 'versions',
-    })
+  it('opens the versions popup otherwise, for admins, managers and members alike', () => {
+    expect(versionClick({ isInstanceAdmin: true, pending: false })).toEqual({ kind: 'versions' })
+    expect(versionClick({ isInstanceAdmin: false, pending: false })).toEqual({ kind: 'versions' })
+    expect(versionClick({ isInstanceAdmin: false, pending: true })).toEqual({ kind: 'versions' })
   })
 })
 
@@ -269,7 +174,7 @@ describe('versionEntryAccessibilityLabel', () => {
         pending: true,
         click: { kind: 'navigate', href: '/admin/updates' },
       })
-    ).toBe('Control plane v0.1.21, Staging build, update available, open Updates')
+    ).toBe('Control plane v0.1.21, Staging build, update notice, open Updates')
     expect(
       versionEntryAccessibilityLabel({
         version: null,

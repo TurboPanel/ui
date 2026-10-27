@@ -5367,10 +5367,16 @@ export type InstanceUpdates = {
   /** Present once the managed upgrade coordinator is mounted. */
   managedUpgrade?: boolean
   /**
-   * A connected daemon (the co-located one included) runs an older build than
-   * the channel's daemon target. Absent on a control plane older than the field.
+   * Reserved for the automatic update system: a connected daemon runs an
+   * older build than the channel's daemon target. Not sent by any control
+   * plane yet; read only through `fleetUpdateSignals` in `lib/update-entry.ts`.
    */
   daemonsBehind?: boolean
+  /**
+   * Reserved for the automatic update system: an admin has paused updates.
+   * Not sent by any control plane yet; read only through `fleetUpdateSignals`.
+   */
+  updatesPaused?: boolean
   fleetSummary?: {
     connected: number
     upToDate: number

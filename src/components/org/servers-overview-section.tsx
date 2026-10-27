@@ -28,8 +28,6 @@ import {
   serversLayoutAccessibilityLabel,
   setStoredServersLayout,
   showServersToolbarUpdate,
-  showUpdateAllBehind,
-  updateAllBehindLabel,
   usesCompactServersList,
   type ServersLayout,
 } from '@/lib/servers-layout'
@@ -40,7 +38,7 @@ import {
   type RelayRecord,
   type ServerUpdateStatus,
 } from '@/lib/instance-api'
-import { canUpdateOrgServers, indexUpdatesByServerId, isServerUpdatable } from '@/lib/update-entry'
+import { isServerUpdateActionHidden } from '@/lib/daemon-update-labels'
 import { serverDetailHref, serversPendingKeysHref } from '@/lib/org-navigation'
 import { useAddServerLink } from '@/lib/use-add-server-link'
 import {
@@ -53,7 +51,6 @@ import { useOrgFabric } from '@/lib/queries/fabric'
 import {
   SERVERS_REFRESH_MS,
   useBatchTriggerServerUpdates,
-  useTriggerAllServerUpdates,
   useFleetServerUsage,
   useOrgLicenses,
   useOrgServerCapacity,
@@ -109,6 +106,30 @@ function overlayByServerId(
 
 function serverTitle(server: OrgServerRecord): string {
   return server.name?.trim() || server.hostname?.trim() || server.id
+}
+
+function isColocatedServer(
+  server: OrgServerRecord,
+  updateData?: ServerUpdateStatus | null
+): boolean {
+  return server.colocatedWithInstance === true || updateData?.colocatedWithInstance === true
+}
+
+function isServerUpdatable(
+  server: OrgServerRecord,
+  updateByServerId: ReadonlyMap<string, ServerUpdateStatus>,
+  triggeringServerIds: ReadonlySet<string>
+): boolean {
+  const data = updateByServerId.get(server.id)
+  return (
+    server.connected &&
+    !isColocatedServer(server, data) &&
+    !isServerUpdateActionHidden(data) &&
+    data?.targetStatus === 'ok' &&
+    data.updateAvailable === true &&
+    !triggeringServerIds.has(server.id) &&
+    data.status !== 'updating'
+  )
 }
 
 function selectedUpdateButtonLabel(batchUpdating: boolean, selectedUpdatableCount: number): string {
@@ -278,13 +299,12 @@ function ServersOverviewToolbar({
   layout,
   onLayoutChange,
   canOwn,
-  canUpdate,
+  canManage,
   addServerEligibility,
   showAddServerWizard,
   onAddServer,
   anyUpdateInProgress,
   batchUpdating,
-  updateAll,
   selectedCount,
   selectedUpdatableCount,
   showSelectAll,
@@ -297,13 +317,12 @@ function ServersOverviewToolbar({
   layout: ServersLayout
   onLayoutChange: (next: ServersLayout) => void
   canOwn: boolean
-  canUpdate: boolean
+  canManage: boolean
   addServerEligibility: ReturnType<typeof resolveServerAddEligibility>
   showAddServerWizard: boolean
   onAddServer: () => void
   anyUpdateInProgress: boolean
   batchUpdating: boolean
-  updateAll: UpdateAllBehindState
   selectedCount: number
   selectedUpdatableCount: number
   showSelectAll: boolean
@@ -315,7 +334,7 @@ function ServersOverviewToolbar({
 }>) {
   const addDisabled = !addServerEligibility.canAdd
   const updateDisabled = anyUpdateInProgress || batchUpdating || selectedUpdatableCount === 0
-  const showUpdate = showServersToolbarUpdate(canUpdate, compactChrome, selectedCount)
+  const showUpdate = showServersToolbarUpdate(canManage, compactChrome, selectedCount)
 
   return (
     <View style={styles.toolbarActions}>
@@ -325,13 +344,6 @@ function ServersOverviewToolbar({
           disabled={addDisabled}
           compact={compactChrome}
           onPress={onAddServer}
-        />
-      ) : null}
-      {showUpdateAllBehind(canUpdate, updateAll.behindCount) ? (
-        <UpdateAllBehindButton
-          state={updateAll}
-          disabled={anyUpdateInProgress || updateAll.starting}
-          compact={compactChrome}
         />
       ) : null}
       {showUpdate ? (
@@ -362,38 +374,6 @@ function ServersOverviewToolbar({
       ) : null}
       <ServersLayoutToggle layout={layout} onChange={onLayoutChange} />
     </View>
-  )
-}
-
-type UpdateAllBehindState = Readonly<{
-  behindCount: number
-  starting: boolean
-  onPress: () => void
-}>
-
-/** One update run over every server of this organization that is behind. */
-function UpdateAllBehindButton({
-  state,
-  disabled,
-  compact,
-}: Readonly<{ state: UpdateAllBehindState; disabled: boolean; compact: boolean }>) {
-  return (
-    <TouchableOpacity
-      style={[
-        panelStyles.toolbarBtnSecondary,
-        compact && styles.toolbarBtnCompact,
-        disabled && styles.buttonDisabled,
-      ]}
-      onPress={state.onPress}
-      disabled={disabled}
-      accessibilityRole="button"
-      accessibilityLabel={`Update all ${state.behindCount} servers that are behind`}
-    >
-      {state.starting ? <ActivityIndicator size="small" color={colors.textMuted} /> : null}
-      <Text style={panelStyles.toolbarBtnTextSecondary}>
-        {updateAllBehindLabel(state.starting, state.behindCount)}
-      </Text>
-    </TouchableOpacity>
   )
 }
 
@@ -963,6 +943,16 @@ function ServersOverviewFleet({
   )
 }
 
+function indexUpdatesByServerId(
+  entries: readonly ServerUpdateStatus[] | undefined
+): Map<string, ServerUpdateStatus> {
+  const map = new Map<string, ServerUpdateStatus>()
+  for (const entry of entries ?? []) {
+    map.set(entry.serverId, entry)
+  }
+  return map
+}
+
 function collectTriggeringServerIds(
   pending: boolean,
   variables: readonly string[] | undefined,
@@ -992,23 +982,12 @@ function countSelectedUpdatable(
   for (const server of servers) {
     if (
       selectedIds.has(server.id) &&
-      isServerUpdatable(server, updateByServerId.get(server.id), triggeringServerIds.has(server.id))
+      isServerUpdatable(server, updateByServerId, triggeringServerIds)
     ) {
       count += 1
     }
   }
   return count
-}
-
-/** Servers of this organization an update would move to the target build now. */
-function countUpdatable(
-  servers: readonly OrgServerRecord[],
-  updateByServerId: ReadonlyMap<string, ServerUpdateStatus>,
-  triggeringServerIds: ReadonlySet<string>
-): number {
-  return servers.filter((server) =>
-    isServerUpdatable(server, updateByServerId.get(server.id), triggeringServerIds.has(server.id))
-  ).length
 }
 
 function toggleIdInSet(prev: Set<string>, serverId: string): Set<string> {
@@ -1024,7 +1003,6 @@ export function ServersOverviewSection({
 }: Readonly<{ orgId: string; removedServerName?: string }>) {
   const queryClient = useQueryClient()
   const canManage = useCan('organization', orgId, 'organization:manage')
-  const canUpdate = canUpdateOrgServers({ canManageOrganization: canManage })
   const canOwn = useCan('organization', orgId, 'organization:own')
 
   const fabricQuery = useOrgFabric(orgId)
@@ -1045,7 +1023,6 @@ export function ServersOverviewSection({
     enabled: !serversQuery.isLoading,
   })
   const batchUpdateMutation = useBatchTriggerServerUpdates(orgId)
-  const updateAllMutation = useTriggerAllServerUpdates(orgId)
 
   usePullToRefresh(async () => {
     await Promise.all([
@@ -1110,11 +1087,7 @@ export function ServersOverviewSection({
     const targets = servers.filter(
       (server) =>
         selectedIds.has(server.id) &&
-        isServerUpdatable(
-          server,
-          updateByServerId.get(server.id),
-          triggeringServerIds.has(server.id)
-        )
+        isServerUpdatable(server, updateByServerId, triggeringServerIds)
     )
     if (targets.length === 0) return
     batchUpdateMutation.mutate(targets.map((server) => server.id))
@@ -1126,12 +1099,6 @@ export function ServersOverviewSection({
     updateByServerId,
     triggeringServerIds
   )
-
-  const updateAll: UpdateAllBehindState = {
-    behindCount: countUpdatable(servers, updateByServerId, triggeringServerIds),
-    starting: updateAllMutation.isPending,
-    onPress: () => updateAllMutation.mutate(),
-  }
 
   const allSelected = servers.length > 0 && servers.every((server) => selectedIds.has(server.id))
   const someSelected = selectedIds.size > 0 && !allSelected
@@ -1186,13 +1153,12 @@ export function ServersOverviewSection({
           layout={serversLayout}
           onLayoutChange={handleLayoutChange}
           canOwn={canOwn}
-          canUpdate={canUpdate}
+          canManage={canManage}
           addServerEligibility={addServerEligibility}
           showAddServerWizard={showAddServerWizard}
           onAddServer={() => setShowAddServerWizard((open) => !open)}
           anyUpdateInProgress={anyUpdateInProgress}
           batchUpdating={batchUpdating}
-          updateAll={updateAll}
           selectedCount={selectedIds.size}
           selectedUpdatableCount={selectedUpdatableCount}
           showSelectAll={fleetSurface.showToolbarSelectAll}
@@ -1217,9 +1183,6 @@ export function ServersOverviewSection({
           {selectedIds.size} selected
           {selectedUpdatableCount > 0 ? ` · ${selectedUpdatableCount} updatable` : ''}
         </Text>
-      ) : null}
-      {updateAllMutation.actionError ? (
-        <Text style={panelStyles.error}>{updateAllMutation.actionError}</Text>
       ) : null}
 
       {canOwn ? (

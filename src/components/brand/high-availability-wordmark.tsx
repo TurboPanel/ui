@@ -34,19 +34,17 @@ import { useColors, useColorScheme } from '@/lib/theme-preference'
  *
  * Under the full pill, right-aligned to its edge: the version line. It is the
  * control plane's version from `/api/health` as plain `vX.Y.Z` (no
- * pre-release suffix, never the commit), then a yellow word on a build that is not live
- * (hosted: Testing / Staging; self-hosted: Canary / RC), then an update icon
- * when this viewer has an update to apply ("Update" beside it on a live
- * build). Clicking it opens the versions popup, or the update screen when
- * there is an update to apply (`lib/update-entry.ts`). Its line is reserved
- * from the first render so the pill never moves when it arrives; the compact
- * pill has no version line. On a narrow sidebar the version truncates first.
+ * pre-release suffix, never the commit), then a yellow word on a build that
+ * is not live (hosted: Testing / Staging; self-hosted: Canary / RC), then, for
+ * instance admins only, an update icon when an update is waiting or updates
+ * are paused ("Update" beside it on a live build). Clicking it opens the
+ * versions popup, or Admin > Updates for an instance admin with the icon
+ * showing (`lib/update-entry.ts`). Its line is reserved from the first render
+ * so the pill never moves when it arrives; the compact pill has no version
+ * line. On a narrow sidebar the version truncates first.
  *
  * Self-hosted has no pill and no edition text: the full form is just the
  * version line beside the T, with the same behaviour.
- *
- * The organization comes from the route (`/[orgId]/…`), so an organization
- * manager is sent to that organization's Servers page.
  *
  * `style` is applied to whatever the wordmark renders (its root), so a caller
  * can nudge it without a wrapper that would stay behind when it renders nothing.
@@ -120,7 +118,7 @@ function VersionLine({
 }: Readonly<{ health: HealthResponse | undefined; runtime: 'deno' | 'workers' }>) {
   const router = useRouter()
   const [versionsOpen, setVersionsOpen] = useState(false)
-  const { viewer, pending, orgId } = useVersionUpdateEntry()
+  const { isInstanceAdmin, pending } = useVersionUpdateEntry()
   const version = controlPlaneVersionLabel(health)
   const environment = controlPlaneEnvironmentLabel(health, runtime)
   const indicator = updateIndicator({
@@ -128,7 +126,7 @@ function VersionLine({
     live: environment === null,
     versionKnown: version !== null,
   })
-  const click = versionClick({ viewer, pending, orgId })
+  const click = versionClick({ isInstanceAdmin, pending })
   const onPress = () => {
     if (click.kind === 'navigate') router.push(click.href as Href)
     else setVersionsOpen(true)
