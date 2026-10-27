@@ -55,7 +55,8 @@ export function fleetServersQuery(
 /** "Servers updated at once: all" (100%), "…: 25%", or "…: 4": one plain term for the group size. */
 export function formatUpgradeBatchLabel(mode: UpgradeBatchMode, value: number): string {
   if (mode === 'percent') {
-    return `Servers updated at once: ${value >= PERCENT_MAX ? 'all' : `${value}%`}`
+    const share = value >= PERCENT_MAX ? 'all' : `${value}%`
+    return `Servers updated at once: ${share}`
   }
   return `Servers updated at once: ${value}`
 }

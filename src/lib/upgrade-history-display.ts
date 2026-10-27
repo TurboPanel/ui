@@ -206,8 +206,10 @@ export function upgradeRunTargetText(
   const parts: [string, string | null][] = []
   if (units.includes('daemon')) parts.push(['Daemon', unitVersion(target?.daemon)])
   if (units.includes('instance')) {
-    parts.push(['Control Plane', unitVersion(target?.instance)])
-    parts.push(['Web Interface', unitVersion(target?.ui)])
+    parts.push(
+      ['Control Plane', unitVersion(target?.instance)],
+      ['Web Interface', unitVersion(target?.ui)]
+    )
   }
   const named = parts.filter(([, version]) => version !== null)
   if (named.length === 0) return storedTargetText(target)
