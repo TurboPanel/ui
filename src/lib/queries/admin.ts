@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef } from 'react'
 import {
   applyPublicUrls,
@@ -14,6 +14,7 @@ import {
   fetchUpgradeActiveRun,
   fetchUpgradeHistory,
   fetchUpgradeRun,
+  fetchUpgradeRunServers,
   fetchUpgradeServersPage,
   fetchUpgradeSettings,
   requestColocatedDaemonUpdate,
@@ -23,6 +24,8 @@ import {
   saveUpgradeSettings,
   startPlatformUpgradeRun,
   type UpgradeSettings,
+  type UpgradeHistoryQuery,
+  type UpgradeRunServersQuery,
   fetchPlatformCa,
   fetchTrustedProxies,
   type InstanceHostnameInput,
@@ -579,6 +582,12 @@ export function useSaveUpgradeSettings() {
   })
 }
 
+/**
+ * History and run-server pages are paged SQL reads over a whole fleet, so they
+ * refresh at a calmer pace than the active-run progress panel.
+ */
+const UPGRADE_HISTORY_POLL_MS = 5_000
+
 /** One finished (or running) run with every step, fetched when a history row is opened. */
 export function useUpgradeRun(runId: string | null) {
   return useQuery({
@@ -589,11 +598,21 @@ export function useUpgradeRun(runId: string | null) {
 }
 
 export function useUpgradeHistory(
-  page: Readonly<{ offset: number; limit: number }>,
-  options?: Readonly<{ enabled?: boolean }>,
+  page: UpgradeHistoryQuery & Readonly<{ offset: number; limit: number }>,
+  options?: Readonly<{ enabled?: boolean }>
 ) {
   return useQuery({
-    queryKey: queryKeys.admin.upgradeHistory(page.offset, page.limit),
+    queryKey: queryKeys.admin.upgradeHistory(
+      page.offset,
+      page.limit,
+      page.status ?? '',
+      page.trigger ?? ''
+    ),
+    placeholderData: keepPreviousData,
+    refetchInterval: (query) =>
+      query.state.data?.runs.some((run) => isUpgradeRunActive(run.status))
+        ? UPGRADE_HISTORY_POLL_MS
+        : false,
     queryFn: async () => {
       try {
         return await fetchUpgradeHistory(page)
@@ -605,6 +624,27 @@ export function useUpgradeHistory(
       }
     },
     enabled: options?.enabled ?? true,
+  })
+}
+
+/**
+ * One page of a run's servers (one row per server). Polls while the run is
+ * still going; never loads every step of the run.
+ */
+export function useUpgradeRunServers(
+  runId: string,
+  query: UpgradeRunServersQuery,
+  options?: Readonly<{ enabled?: boolean }>
+) {
+  return useQuery({
+    queryKey: queryKeys.admin.upgradeRunServers(runId, JSON.stringify(query)),
+    queryFn: async () => await fetchUpgradeRunServers(runId, query),
+    enabled: (options?.enabled ?? true) && runId !== '',
+    placeholderData: keepPreviousData,
+    refetchInterval: (state) => {
+      const run = state.state.data?.run
+      return run && isUpgradeRunActive(run.status) ? UPGRADE_HISTORY_POLL_MS : false
+    },
   })
 }
 

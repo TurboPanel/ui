@@ -7,7 +7,10 @@ import { useStartUpgradeFlow } from '@/components/admin/updates/use-start-upgrad
 import { UpgradeBuildBlock } from '@/components/admin/updates/upgrade-build-block'
 import { UpgradeFailureNotice } from '@/components/admin/updates/upgrade-failure-notice'
 import { UpgradeFleetTable } from '@/components/admin/updates/upgrade-fleet-table'
-import { UpgradeHistoryPanel } from '@/components/admin/updates/upgrade-history-panel'
+import {
+  RECENT_UPDATE_RUNS,
+  UpgradeHistoryPanel,
+} from '@/components/admin/updates/upgrade-history-panel'
 import { StartUpgradeSheet } from '@/components/admin/updates/start-upgrade-sheet'
 import { UpgradeSettingsCard } from '@/components/admin/updates/upgrade-settings-card'
 import { UpgradeStepTracker } from '@/components/admin/updates/upgrade-step-tracker'
@@ -270,7 +273,7 @@ export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>)
   const [offset, setOffset] = useState(0)
   const consoleBuild = useMemo(() => readConsoleBuild(), [])
   const activeRun = useUpgradeActiveRun()
-  const history = useUpgradeHistory({ offset: 0, limit: 8 })
+  const history = useUpgradeHistory({ offset: 0, limit: RECENT_UPDATE_RUNS })
   const serversPage = useUpgradeServersPage(fleetServersQuery(offset, ''))
   const settingsQuery = useUpgradeSettings()
   const saveSettings = useSaveUpgradeSettings()

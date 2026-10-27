@@ -60,6 +60,7 @@ vi.mock('@/components/admin/updates/upgrade-fleet-table', () => ({
   UpgradeFleetTable: () => <div data-testid="fleet-table" />,
 }))
 vi.mock('@/components/admin/updates/upgrade-history-panel', () => ({
+  RECENT_UPDATE_RUNS: 5,
   UpgradeHistoryPanel: () => <div data-testid="history-panel" />,
 }))
 vi.mock('@/components/admin/updates/upgrade-preflight-sheet', () => ({

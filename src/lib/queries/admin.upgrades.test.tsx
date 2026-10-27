@@ -13,6 +13,7 @@ import {
   useStartPlatformUpgrade,
   useUpgradeActiveRun,
   useUpgradeHistory,
+  useUpgradeRunServers,
   useUpgradeServersPage,
   useUpgradeSettings,
 } from './admin'
@@ -21,6 +22,7 @@ const api = vi.hoisted(() => ({
   fetchUpgradeActiveRun: vi.fn(),
   fetchUpgradeRun: vi.fn(),
   fetchUpgradeHistory: vi.fn(),
+  fetchUpgradeRunServers: vi.fn(),
   fetchUpgradeServersPage: vi.fn(),
   fetchUpgradeSettings: vi.fn(),
   saveUpgradeSettings: vi.fn(),
@@ -81,6 +83,62 @@ describe('managed upgrade admin queries', () => {
       expect(history.result.current.isSuccess).toBe(true)
       expect(fleet.result.current.isSuccess).toBe(true)
     })
+  })
+
+  it('passes history filters and run server queries through to the control plane', async () => {
+    api.fetchUpgradeHistory.mockResolvedValue({ ok: true, runs: [], total: 0 })
+    api.fetchUpgradeRunServers.mockResolvedValue({
+      ok: true,
+      run: { id: 'run-1', status: 'succeeded' },
+      units: ['daemon'],
+      statusCounts: { all: 0 },
+      organizations: [],
+      servers: [],
+      total: 0,
+    })
+    const wrapper = createWrapper()
+    const history = renderHook(
+      () =>
+        useUpgradeHistory({
+          offset: 25,
+          limit: 25,
+          status: 'failed',
+          trigger: 'manual',
+        }),
+      { wrapper },
+    )
+    const servers = renderHook(
+      () =>
+        useUpgradeRunServers('run-1', {
+          offset: 0,
+          limit: 50,
+          sort: 'status',
+          q: 'web',
+        }),
+      { wrapper },
+    )
+    const idle = renderHook(() => useUpgradeRunServers('', { limit: 1 }), {
+      wrapper,
+    })
+
+    await waitFor(() => {
+      expect(history.result.current.isSuccess).toBe(true)
+      expect(servers.result.current.isSuccess).toBe(true)
+    })
+    expect(api.fetchUpgradeHistory).toHaveBeenCalledWith({
+      offset: 25,
+      limit: 25,
+      status: 'failed',
+      trigger: 'manual',
+    })
+    expect(api.fetchUpgradeRunServers).toHaveBeenCalledTimes(1)
+    expect(api.fetchUpgradeRunServers).toHaveBeenCalledWith('run-1', {
+      offset: 0,
+      limit: 50,
+      sort: 'status',
+      q: 'web',
+    })
+    expect(idle.result.current.fetchStatus).toBe('idle')
   })
 
   it('treats a missing upgrade API as empty state', async () => {

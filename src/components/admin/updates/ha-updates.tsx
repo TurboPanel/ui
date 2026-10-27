@@ -1,7 +1,10 @@
 import { useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { UpgradeFleetTable } from '@/components/admin/updates/upgrade-fleet-table'
-import { UpgradeHistoryPanel } from '@/components/admin/updates/upgrade-history-panel'
+import {
+  RECENT_UPDATE_RUNS,
+  UpgradeHistoryPanel,
+} from '@/components/admin/updates/upgrade-history-panel'
 import { StartUpgradeSheet } from '@/components/admin/updates/start-upgrade-sheet'
 import { UpgradeSettingsCard } from '@/components/admin/updates/upgrade-settings-card'
 import { useStartUpgradeFlow } from '@/components/admin/updates/use-start-upgrade-flow'
@@ -40,7 +43,7 @@ export function HighAvailabilityUpdates({ data }: Readonly<{ data: InstanceUpdat
   const [statusFilter, setStatusFilter] = useState('')
   const [offset, setOffset] = useState(0)
   const activeRun = useUpgradeActiveRun()
-  const history = useUpgradeHistory({ offset: 0, limit: 8 })
+  const history = useUpgradeHistory({ offset: 0, limit: RECENT_UPDATE_RUNS })
   const serversPage = useUpgradeServersPage(fleetServersQuery(offset, statusFilter))
   const settingsQuery = useUpgradeSettings()
   const saveSettings = useSaveUpgradeSettings()

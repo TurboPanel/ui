@@ -27,6 +27,8 @@ describe('ADMIN_AREAS', () => {
           'tunnel',
           'platform-ca',
         ])
+      } else if (area.id === 'updates') {
+        expect(area.subRoutes.map((sub) => sub.id)).toEqual(['history'])
       } else {
         expect(area.subRoutes).toEqual([])
       }
@@ -85,6 +87,15 @@ describe('adminAreaFromPathname', () => {
     )
     expect(adminAreaFromPathname('/admin/access/unknown')?.area.id).toBe('access')
     expect(adminAreaFromPathname('/admin/access/unknown')?.subRoute).toBeNull()
+  })
+
+  it('resolves Update History and keeps a run screen on the Updates area', () => {
+    expect(adminAreaFromPathname('/admin/updates/history')?.subRoute?.id).toBe(
+      'history',
+    )
+    const run = adminAreaFromPathname('/admin/updates/runs/run-1')
+    expect(run?.area.id).toBe('updates')
+    expect(run?.subRoute).toBeNull()
   })
 
   it('keeps a git app id on the git area with no sub-route', () => {
