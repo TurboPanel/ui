@@ -8,7 +8,6 @@ import {
   SERVER_DETAIL_TAB_IDS,
   SERVER_DETAIL_TAB_LABELS,
   datacenterHref,
-  orgAreaHref,
   orgRouteHref,
   orgSettingsTabHref,
   serverDetailHref,
@@ -215,21 +214,15 @@ function generalActions(orgId: string, data: SearchData): SearchItem[] {
             'add people user team',
             'action-add'
           ),
-          action(
-            'update-servers',
-            'Update servers',
-            orgAreaHref(orgId, 'servers'),
-            'upgrade daemon version'
-          ),
         ]
       : []),
     ...(data.isPlatformAdmin
       ? [
           action(
             'update-panel',
-            'Update TurboPanel',
+            'Pause or resume updates',
             adminAreaHref('updates'),
-            'upgrade version release'
+            'update upgrade version release automatic'
           ),
         ]
       : []),

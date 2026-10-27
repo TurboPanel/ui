@@ -60,16 +60,12 @@ export function UpgradeFleetTable({
   offset,
   pageSize,
   onOffsetChange,
-  onRetry,
-  retryingId,
 }: Readonly<{
   servers: readonly FleetRow[]
   total: number
   offset: number
   pageSize: number
   onOffsetChange: (offset: number) => void
-  onRetry: (stepId: string) => void
-  retryingId: string | null
 }>) {
   const narrow = useWindowDimensions().width < NARROW_WIDTH
   const columns = narrow ? ALL_COLUMNS.filter((column) => column.key !== 'component') : ALL_COLUMNS
@@ -112,18 +108,8 @@ export function UpgradeFleetTable({
                 {plainStepFailureMessage(row.errorMessage) ?? upgradeStepOutcome(row).detail ?? '—'}
               </Text>
             </DataTableCell>
-            <DataTableCell column={col('action')}>
-              {row.status === 'needs_attention' || row.status === 'failed' ? (
-                <Button
-                  label="Retry step"
-                  size="sm"
-                  busy={retryingId === row.id}
-                  onPress={() => {
-                    onRetry(row.id)
-                  }}
-                />
-              ) : null}
-            </DataTableCell>
+            {/* Failed servers are retried on their own; this column holds the pager. */}
+            <DataTableCell column={col('action')}>{null}</DataTableCell>
           </DataTableRow>
         ))
       )}

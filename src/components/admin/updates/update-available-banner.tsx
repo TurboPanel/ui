@@ -2,6 +2,7 @@ import { useRouter, type Href } from 'expo-router'
 import { useMemo, useState } from 'react'
 import { StyleSheet, Text, useWindowDimensions, View } from 'react-native'
 import { readConsoleBuild } from '@/components/admin/updates/console-build'
+import { adminAreaHref } from '@/lib/admin-navigation'
 import { Button, InlineNotice, TextLink } from '@/components/ui'
 import { isAdminSession, useAuth } from '@/lib/auth-context'
 import { useInstallStatusQuery } from '@/lib/queries/auth'
@@ -9,7 +10,6 @@ import { useInstanceUpdates, useUpgradeActiveRun } from '@/lib/queries/admin'
 import {
   readDismissedUpdateBanner,
   showsUpdateBanner,
-  UPDATE_NOW_HREF,
   updateBanner,
   updateOffered,
   writeDismissedUpdateBanner,
@@ -57,19 +57,19 @@ export function useUpdateAvailable(): Readonly<{
 }
 
 /**
- * "Update available: control plane v0.1.5-canary.1 — Update" across the top of
- * the app. On a phone-width window it is one line, "Update available · Review",
- * so it never takes a third of the screen; what the update holds is on the
- * review screen it opens. On a wide window one line of title and at most two
- * of detail.
+ * "Update available: control plane v0.1.5-canary.1" across the top of the app.
+ * Updates install on their own, so it only says so and links to Admin >
+ * Updates. On a phone-width window it is one line, "Update available ·
+ * Details", so it never takes a third of the screen. On a wide window one line
+ * of title and at most two of detail.
  */
 export function UpdateAvailableBanner() {
   const router = useRouter()
   const { width } = useWindowDimensions()
   const { banner, dismiss } = useUpdateAvailable()
   if (!banner) return null
-  const review = () => {
-    router.push(UPDATE_NOW_HREF as Href)
+  const openUpdates = () => {
+    router.push(adminAreaHref('updates') as Href)
   }
   const dismissButton = (
     <Button
@@ -90,9 +90,9 @@ export function UpdateAvailableBanner() {
             Update available ·
           </Text>
           <TextLink
-            label="Review"
-            accessibilityLabel={`Review the update. ${banner.title}`}
-            onPress={review}
+            label="Details"
+            accessibilityLabel={`Open Admin > Updates. ${banner.title}`}
+            onPress={openUpdates}
           />
           <View style={styles.compactFill} />
           {dismissButton}
@@ -109,7 +109,7 @@ export function UpdateAvailableBanner() {
         bodyLines={2}
         actions={
           <>
-            <Button label="Update" variant="primary" onPress={review} />
+            <Button label="See updates" variant="secondary" onPress={openUpdates} />
             {dismissButton}
           </>
         }

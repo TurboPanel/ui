@@ -1,9 +1,7 @@
-import { useLocalSearchParams, useRouter } from 'expo-router'
 import { getInstanceRevision, getInstanceVersion } from '@/lib/instance-version'
-import { useEffect, useMemo, useRef, useState, type ComponentProps } from 'react'
+import { useEffect, useMemo, useState, type ComponentProps } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { readConsoleBuild } from '@/components/admin/updates/console-build'
-import { useStartUpgradeFlow } from '@/components/admin/updates/use-start-upgrade-flow'
 import { UpgradeBuildBlock } from '@/components/admin/updates/upgrade-build-block'
 import { UpgradeFailureNotice } from '@/components/admin/updates/upgrade-failure-notice'
 import { UpgradeFleetTable } from '@/components/admin/updates/upgrade-fleet-table'
@@ -11,17 +9,10 @@ import {
   RECENT_UPDATE_RUNS,
   UpgradeHistoryPanel,
 } from '@/components/admin/updates/upgrade-history-panel'
-import { StartUpgradeSheet } from '@/components/admin/updates/start-upgrade-sheet'
 import { UpgradeSettingsCard } from '@/components/admin/updates/upgrade-settings-card'
 import { UpgradeStepTracker } from '@/components/admin/updates/upgrade-step-tracker'
-import {
-  Badge,
-  Button,
-  ConfirmButton,
-  InlineNotice,
-  SectionPanel,
-  StatusDot,
-} from '@/components/ui'
+import { UpdatesStatusPanel } from '@/components/admin/updates/updates-status-panel'
+import { Badge, InlineNotice, SectionPanel } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
 import type { InstanceUpdates } from '@/lib/instance-api'
 import {
@@ -37,17 +28,13 @@ import {
   fleetProgressText,
   installedBuildLabel,
   offlineWaitingNotice,
-  platformUpgradeHeadlineCopy,
   type PieceStepView,
   resolvePlatformUpgradeHeadline,
-  runWaitsOnlyOnOffline,
   summarizeFleetSteps,
-  updateAvailableSentence,
   upgradeRunErrorLabel,
 } from '@/lib/upgrade-display'
+import { isUpdateWaiting, waitingSentence } from '@/lib/update-automation'
 import {
-  useCancelUpgradeRun,
-  useRetryUpgradeStep,
   useSaveUpgradeSettings,
   useUpgradeActiveRun,
   useUpgradeHistory,
@@ -55,8 +42,7 @@ import {
   useUpgradeSettings,
 } from '@/lib/queries/admin'
 import { runFailure, runToShow, stallHint } from '@/lib/update-status'
-import { colors, spacing } from '@/lib/theme'
-import { userErrorMessage } from '@/lib/user-error'
+import { spacing } from '@/lib/theme'
 
 type ShownRun = NonNullable<ReturnType<typeof runToShow>['run']>
 type FleetServers = ComponentProps<typeof UpgradeFleetTable>['servers']
@@ -73,49 +59,6 @@ function useStallClock(run: ShownRun | null, finished: boolean): number {
     return () => clearInterval(timer)
   }, [run, finished])
   return nowMs
-}
-
-/** The update banner links here with ?update=1: open the confirmation once. */
-function useAutoOpenPreflight(canStart: boolean, openPreflight: () => Promise<void>) {
-  const router = useRouter()
-  const params = useLocalSearchParams<{ update?: string }>()
-  const autoOpened = useRef(false)
-  useEffect(() => {
-    if (params.update !== '1' || autoOpened.current || !canStart) return
-    autoOpened.current = true
-    router.setParams({ update: undefined })
-    void openPreflight()
-  })
-}
-
-function useCancelRun(setNotice: (notice: string | null) => void) {
-  const cancelRun = useCancelUpgradeRun()
-  const cancel = (runId: string) => {
-    setNotice(null)
-    cancelRun.mutate(runId, {
-      onSuccess: () => {
-        setNotice('Update cancelled. Start a fresh update to try again.')
-      },
-      onError: (err) => {
-        setNotice(userErrorMessage(err, 'Failed to cancel the update'))
-      },
-    })
-  }
-  return { cancel, cancelling: cancelRun.isPending }
-}
-
-function useRetryFleetStep() {
-  const retryStep = useRetryUpgradeStep()
-  const [retryingStepId, setRetryingStepId] = useState<string | null>(null)
-  const retry = (stepId: string) => {
-    setRetryingStepId(stepId)
-    retryStep.mutate(stepId, {
-      onSettled: () => {
-        setRetryingStepId(null)
-      },
-    })
-  }
-  return { retryingStepId, retry }
 }
 
 function ComponentsPanel({
@@ -170,30 +113,20 @@ function ComponentsPanel({
 
 function UpgradeProgressPanel({
   run,
-  finished,
   hasUiTarget,
   fleetSummary,
   fleetServers,
   fleetTotal,
   offset,
   onOffsetChange,
-  retryingId,
-  onRetry,
-  cancelling,
-  onCancel,
 }: Readonly<{
   run: ShownRun | null
-  finished: boolean
   hasUiTarget: boolean
   fleetSummary: ReturnType<typeof summarizeFleetSteps>
   fleetServers: FleetServers
   fleetTotal: number
   offset: number
   onOffsetChange: (offset: number) => void
-  retryingId: string | null
-  onRetry: (stepId: string) => void
-  cancelling: boolean
-  onCancel: (runId: string) => void
 }>) {
   const daemonStep = run?.steps.find((step) => step.phase === 'colocated_daemon')
   const controlPlaneStep = run?.steps.find((step) => step.phase === 'control_plane')
@@ -201,23 +134,7 @@ function UpgradeProgressPanel({
   const waitingOffline = offlineWaitingNotice(run?.steps ?? [])
 
   return (
-    <SectionPanel
-      title="Progress"
-      headerRight={
-        run && !finished ? (
-          <ConfirmButton
-            label="Cancel update"
-            confirmLabel="Yes, cancel the update"
-            dismissLabel="No, keep it"
-            prompt="Stop this update? Finished steps stay, and steps that have not started are skipped. A server already installing is not stopped and finishes on its own. The next update starts against the current build."
-            busy={cancelling}
-            onConfirm={() => {
-              onCancel(run.id)
-            }}
-          />
-        ) : null
-      }
-    >
+    <SectionPanel title="Progress">
       <UpgradeStepTracker
         phase="colocated_daemon"
         status={daemonStep?.status ?? null}
@@ -254,19 +171,27 @@ function UpgradeProgressPanel({
         offset={offset}
         pageSize={UPGRADE_FLEET_PAGE_SIZE}
         onOffsetChange={onOffsetChange}
-        retryingId={retryingId}
-        onRetry={onRetry}
       />
     </SectionPanel>
   )
 }
 
-/** An update in progress blocks a new one, unless it is only waiting on offline servers. */
-function runBlocksNewUpdate(
-  headline: ReturnType<typeof resolvePlatformUpgradeHeadline>,
-  run: Parameters<typeof runWaitsOnlyOnOffline>[0]
-): boolean {
-  return headline === 'updating' && !runWaitsOnlyOnOffline(run)
+/**
+ * What waits to update on self-hosted, as a sentence: each piece with a newer
+ * build (with its version) and daemons behind on other servers. Null while a
+ * run is going or nothing waits.
+ */
+function selfHostedWaiting(
+  data: InstanceUpdates,
+  consoleBuild: ConsoleBuild | null,
+  runGoing: boolean
+): string | null {
+  const localWaiting = selfHostedUpdateAvailable(data.units, consoleBuild)
+  if (runGoing || !isUpdateWaiting(data, localWaiting)) return null
+  return waitingSentence({
+    pieceLabels: updatePieces(data.units, consoleBuild).map(updatePieceLabel),
+    daemonsBehind: data.daemonsBehind === true,
+  })
 }
 
 export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>) {
@@ -277,9 +202,6 @@ export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>)
   const serversPage = useUpgradeServersPage(fleetServersQuery(offset, ''))
   const settingsQuery = useUpgradeSettings()
   const saveSettings = useSaveUpgradeSettings()
-  const flow = useStartUpgradeFlow(() => activeRun.refetch(), consoleBuild?.commit)
-  const { cancel, cancelling } = useCancelRun(flow.setNotice)
-  const { retryingStepId, retry } = useRetryFleetStep()
 
   const shown = runToShow(activeRun.data, {
     version: getInstanceVersion(),
@@ -296,11 +218,14 @@ export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>)
   const daemonStep = run?.steps.find((step) => step.phase === 'colocated_daemon')
   const controlPlaneStep = run?.steps.find((step) => step.phase === 'control_plane')
   const needsAttention = fleetSummary.needsAttention + (run?.counts?.needsAttention ?? 0)
+  const runGoing = Boolean(run && !shown.finished)
+  const waiting = selfHostedWaiting(data, consoleBuild, runGoing)
 
   const headline = resolvePlatformUpgradeHeadline({
     activeRunStatus: shown.finished ? null : (run?.status ?? null),
-    updateAvailable: selfHostedUpdateAvailable(data.units, consoleBuild),
+    updateAvailable: waiting !== null,
     needsAttentionCount: needsAttention,
+    paused: data.updatesPaused === true,
   })
 
   const waitingStep = shown.finished
@@ -310,48 +235,13 @@ export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>)
 
   const fleetServers = serversPage.data?.servers.length ? serversPage.data.servers : fleetSteps
 
-  const canStart =
-    data.managedUpgrade === true &&
-    data.units.daemon.connected &&
-    selfHostedUpdateAvailable(data.units, consoleBuild) &&
-    !runBlocksNewUpdate(headline, run) &&
-    !flow.starting
-
-  useAutoOpenPreflight(canStart, flow.openPreflight)
-
   return (
     <View style={styles.root}>
-      {flow.notice ? <InlineNotice tone="info" title={flow.notice} /> : null}
-
-      <SectionPanel title="Status">
-        <View style={styles.statusRow}>
-          <View style={styles.statusText}>
-            <View style={styles.headlineRow}>
-              <StatusDot tone={headlineTone(headline)} />
-              <Text style={styles.headline}>{platformUpgradeHeadlineCopy(headline)}</Text>
-            </View>
-            {headline === 'update_available' ? (
-              <Text style={panelStyles.muted}>
-                {updateAvailableSentence(
-                  updatePieces(data.units, consoleBuild).map(updatePieceLabel)
-                ) ?? ''}
-              </Text>
-            ) : null}
-            <View style={styles.row}>
-              <Badge tone="muted" label={`Channel ${data.channel}`} />
-            </View>
-          </View>
-          <Button
-            label="Update TurboPanel"
-            variant="primary"
-            busy={flow.starting || flow.preflightPending}
-            disabled={!canStart}
-            onPress={() => {
-              void flow.openPreflight()
-            }}
-          />
+      <UpdatesStatusPanel data={data} headline={headline} waiting={waiting}>
+        <View style={styles.row}>
+          <Badge tone="muted" label={`Channel ${data.channel}`} />
         </View>
-      </SectionPanel>
+      </UpdatesStatusPanel>
 
       <ComponentsPanel
         units={data.units}
@@ -369,20 +259,15 @@ export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>)
       ) : null}
       {stalled ? <InlineNotice title={stalled} /> : null}
 
-      {run && !shown.finished ? (
+      {run && runGoing ? (
         <UpgradeProgressPanel
           run={run}
-          finished={shown.finished}
           hasUiTarget={Boolean(data.units.instance.uiTarget)}
           fleetSummary={fleetSummary}
           fleetServers={fleetServers}
           fleetTotal={serversPage.data?.total ?? fleetServers.length}
           offset={offset}
           onOffsetChange={setOffset}
-          retryingId={retryingStepId}
-          onRetry={retry}
-          cancelling={cancelling}
-          onCancel={cancel}
         />
       ) : null}
 
@@ -396,47 +281,13 @@ export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>)
           saveSettings.mutate(next)
         }}
       />
-
-      <StartUpgradeSheet flow={flow} />
     </View>
   )
-}
-
-function headlineTone(headline: ReturnType<typeof resolvePlatformUpgradeHeadline>) {
-  switch (headline) {
-    case 'up_to_date':
-      return 'online' as const
-    case 'needs_attention':
-      return 'failed' as const
-    default:
-      return 'pending' as const
-  }
 }
 
 const styles = StyleSheet.create({
   root: {
     gap: spacing.md,
-  },
-  headline: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  headlineRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  statusRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-  },
-  statusText: {
-    flexShrink: 1,
-    gap: spacing.xs,
   },
   row: {
     flexDirection: 'row',

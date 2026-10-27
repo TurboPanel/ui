@@ -19,10 +19,7 @@ import {
   UptimeMetricIcon,
 } from '@/components/icons/metric-icons'
 import { ChartCard } from '@/components/org/charts/chart-card'
-import {
-  ChartLegend,
-  type ChartLegendEntry,
-} from '@/components/org/charts/chart-legend'
+import { ChartLegend, type ChartLegendEntry } from '@/components/org/charts/chart-legend'
 import {
   MetricLineChart,
   type MetricGapBand,
@@ -80,7 +77,6 @@ import {
   type TopologyInventory,
 } from '@/lib/instance-api'
 import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
-import { useCan } from '@/lib/query-client'
 import {
   useOrgServers,
   useServerMetricsConnection,
@@ -91,7 +87,6 @@ import {
   useServerUpdateStatus,
   useStartServerMetricsLive,
   useStopServerMetricsLive,
-  useTriggerServerUpdate,
 } from '@/lib/queries/servers'
 import { CPU_IOWAIT, CPU_SYSTEM, CPU_USER, usedPercentFromBytes } from '@/lib/server-usage'
 import { chrome, colors, layout, spacing, webPointer } from '@/lib/theme'
@@ -346,7 +341,14 @@ const V12_CHART_DEFINITIONS: readonly ChartDefinition[] = [
   compactChart('health-oom-kills', 'Processes killed for memory', 'count', 'count', [
     ['kills', 'Killed for memory', 'extended.host', 'oomKills'],
   ]),
-  compactChart('health-pid-limit', 'Process limit used', '%', 'percent', [['used', 'Processes / limit', 'extended.host', 'pidLimitUsedPercent']], [0, 100]),
+  compactChart(
+    'health-pid-limit',
+    'Process limit used',
+    '%',
+    'percent',
+    [['used', 'Processes / limit', 'extended.host', 'pidLimitUsedPercent']],
+    [0, 100]
+  ),
   compactChart('health-root-disk-queue', 'Root disk queue', 'count', 'count', [
     ['queue', 'Waiting disk requests', 'extended.host', 'rootDiskQueueDepth'],
   ]),
@@ -375,11 +377,24 @@ const V12_CHART_DEFINITIONS: readonly ChartDefinition[] = [
     ['unhealthy', 'Unhealthy', 'extended.docker', 'containersUnhealthy', colors.pending],
     ['restarting', 'Restarting', 'extended.docker', 'containersRestarting', colors.command],
   ]),
-  compactChart('docker-container-events', 'Docker · Containers that stopped unexpectedly', 'count', 'count', [
-    ['died', 'Exits', 'extended.docker', 'containerDieEvents'],
-    ['oom', 'Out of memory', 'extended.docker', 'containerOomEvents', colors.pending],
-  ]),
-  compactChart('docker-container-cpu', 'Docker · Containers CPU', '%', 'percent', [['cpu', 'Share of host', 'extended.docker', 'containersCpuPercent']], [0, 100]),
+  compactChart(
+    'docker-container-events',
+    'Docker · Containers that stopped unexpectedly',
+    'count',
+    'count',
+    [
+      ['died', 'Exits', 'extended.docker', 'containerDieEvents'],
+      ['oom', 'Out of memory', 'extended.docker', 'containerOomEvents', colors.pending],
+    ]
+  ),
+  compactChart(
+    'docker-container-cpu',
+    'Docker · Containers CPU',
+    '%',
+    'percent',
+    [['cpu', 'Share of host', 'extended.docker', 'containersCpuPercent']],
+    [0, 100]
+  ),
   compactChart('docker-container-memory', 'Docker · Containers memory', 'bytes', 'bytes', [
     ['memory', 'In use', 'extended.docker', 'containersMemoryBytes'],
   ]),
@@ -700,14 +715,24 @@ const HOST_CHART_DEFINITIONS: readonly ChartDefinition[] = [
     unit: 'MHz',
     range: true,
     series: [
-      { id: 'min', label: 'Min', color: colors.textChip, read: hostMetric('diagnostics', 'minimumFrequencyMHz') },
+      {
+        id: 'min',
+        label: 'Min',
+        color: colors.textChip,
+        read: hostMetric('diagnostics', 'minimumFrequencyMHz'),
+      },
       {
         id: 'avg',
         label: 'Average',
         color: colors.ok,
         read: hostMetric('diagnostics', 'averageFrequencyMHz'),
       },
-      { id: 'max', label: 'Max', color: colors.pending, read: hostMetric('diagnostics', 'maximumFrequencyMHz') },
+      {
+        id: 'max',
+        label: 'Max',
+        color: colors.pending,
+        read: hostMetric('diagnostics', 'maximumFrequencyMHz'),
+      },
     ],
     yFormat: (v) => `${formatCount(v)} MHz`,
     hideWhenEmpty: true,
@@ -812,9 +837,7 @@ const HOST_CHART_DEFINITIONS: readonly ChartDefinition[] = [
     id: 'memory-detail-other-gauges',
     title: 'Shared memory',
     unit: 'bytes',
-    series: [
-      { id: 'shmem', label: 'Shared', read: hostMetric('diagnostics', 'shmemBytes') },
-    ],
+    series: [{ id: 'shmem', label: 'Shared', read: hostMetric('diagnostics', 'shmemBytes') }],
     yFormat: (v) => formatBytes(v),
     hideWhenEmpty: true,
   },
@@ -965,9 +988,7 @@ const HOST_CHART_DEFINITIONS: readonly ChartDefinition[] = [
     id: 'router-config',
     title: 'Router · Config reloads',
     unit: 'count',
-    series: [
-      { id: 'reloads', label: 'Reloads', read: hostMetric('router', 'configReloads') },
-    ],
+    series: [{ id: 'reloads', label: 'Reloads', read: hostMetric('router', 'configReloads') }],
     yFormat: (v) => formatCount(v),
     hideWhenEmpty: true,
   },
@@ -1089,12 +1110,46 @@ const HOST_CHART_DEFINITIONS: readonly ChartDefinition[] = [
     title: 'Managed databases · Running vs healthy',
     unit: 'count',
     series: [
-      { id: 'pg-running', label: 'Postgres running', read: hostMetric('storage', 'postgresInstancesRunning') },
-      { id: 'pg-healthy', label: 'Postgres healthy', color: colors.command, read: hostMetric('storage', 'postgresInstancesHealthy'), hideWhenEmpty: true },
-      { id: 'my-running', label: 'MySQL running', color: colors.pending, read: hostMetric('storage', 'mysqlInstancesRunning'), hideWhenEmpty: true },
-      { id: 'my-healthy', label: 'MySQL healthy', color: colors.log, read: hostMetric('storage', 'mysqlInstancesHealthy'), hideWhenEmpty: true },
-      { id: 'ma-running', label: 'MariaDB running', color: colors.errorSoft, read: hostMetric('storage', 'mariadbInstancesRunning'), hideWhenEmpty: true },
-      { id: 'ma-healthy', label: 'MariaDB healthy', color: colors.stdout, read: hostMetric('storage', 'mariadbInstancesHealthy'), hideWhenEmpty: true },
+      {
+        id: 'pg-running',
+        label: 'Postgres running',
+        read: hostMetric('storage', 'postgresInstancesRunning'),
+      },
+      {
+        id: 'pg-healthy',
+        label: 'Postgres healthy',
+        color: colors.command,
+        read: hostMetric('storage', 'postgresInstancesHealthy'),
+        hideWhenEmpty: true,
+      },
+      {
+        id: 'my-running',
+        label: 'MySQL running',
+        color: colors.pending,
+        read: hostMetric('storage', 'mysqlInstancesRunning'),
+        hideWhenEmpty: true,
+      },
+      {
+        id: 'my-healthy',
+        label: 'MySQL healthy',
+        color: colors.log,
+        read: hostMetric('storage', 'mysqlInstancesHealthy'),
+        hideWhenEmpty: true,
+      },
+      {
+        id: 'ma-running',
+        label: 'MariaDB running',
+        color: colors.errorSoft,
+        read: hostMetric('storage', 'mariadbInstancesRunning'),
+        hideWhenEmpty: true,
+      },
+      {
+        id: 'ma-healthy',
+        label: 'MariaDB healthy',
+        color: colors.stdout,
+        read: hostMetric('storage', 'mariadbInstancesHealthy'),
+        hideWhenEmpty: true,
+      },
     ],
     yFormat: (v) => formatCount(v),
     hideWhenEmpty: true,
@@ -1104,12 +1159,46 @@ const HOST_CHART_DEFINITIONS: readonly ChartDefinition[] = [
     title: 'Managed databases · Connections used vs max',
     unit: 'count',
     series: [
-      { id: 'pg-used', label: 'Postgres used', read: hostMetric('storage', 'postgresConnectionsUsed') },
-      { id: 'pg-max', label: 'Postgres max', color: colors.command, read: hostMetric('storage', 'postgresConnectionsMax'), hideWhenEmpty: true },
-      { id: 'my-used', label: 'MySQL used', color: colors.pending, read: hostMetric('storage', 'mysqlConnectionsUsed'), hideWhenEmpty: true },
-      { id: 'my-max', label: 'MySQL max', color: colors.log, read: hostMetric('storage', 'mysqlConnectionsMax'), hideWhenEmpty: true },
-      { id: 'ma-used', label: 'MariaDB used', color: colors.errorSoft, read: hostMetric('storage', 'mariadbConnectionsUsed'), hideWhenEmpty: true },
-      { id: 'ma-max', label: 'MariaDB max', color: colors.stdout, read: hostMetric('storage', 'mariadbConnectionsMax'), hideWhenEmpty: true },
+      {
+        id: 'pg-used',
+        label: 'Postgres used',
+        read: hostMetric('storage', 'postgresConnectionsUsed'),
+      },
+      {
+        id: 'pg-max',
+        label: 'Postgres max',
+        color: colors.command,
+        read: hostMetric('storage', 'postgresConnectionsMax'),
+        hideWhenEmpty: true,
+      },
+      {
+        id: 'my-used',
+        label: 'MySQL used',
+        color: colors.pending,
+        read: hostMetric('storage', 'mysqlConnectionsUsed'),
+        hideWhenEmpty: true,
+      },
+      {
+        id: 'my-max',
+        label: 'MySQL max',
+        color: colors.log,
+        read: hostMetric('storage', 'mysqlConnectionsMax'),
+        hideWhenEmpty: true,
+      },
+      {
+        id: 'ma-used',
+        label: 'MariaDB used',
+        color: colors.errorSoft,
+        read: hostMetric('storage', 'mariadbConnectionsUsed'),
+        hideWhenEmpty: true,
+      },
+      {
+        id: 'ma-max',
+        label: 'MariaDB max',
+        color: colors.stdout,
+        read: hostMetric('storage', 'mariadbConnectionsMax'),
+        hideWhenEmpty: true,
+      },
     ],
     yFormat: (v) => formatCount(v),
     hideWhenEmpty: true,
@@ -1142,7 +1231,9 @@ const HOST_CHART_DEFINITIONS: readonly ChartDefinition[] = [
     id: 'managed-docker-containers',
     title: 'Docker · Container writable layers',
     unit: 'bytes',
-    series: [{ id: 'bytes', label: 'Containers', read: hostMetric('dockerUsage', 'containersBytes') }],
+    series: [
+      { id: 'bytes', label: 'Containers', read: hostMetric('dockerUsage', 'containersBytes') },
+    ],
     yFormat: (v) => formatBytes(v),
     hideWhenEmpty: true,
   },
@@ -1186,8 +1277,18 @@ const HOST_CHART_DEFINITIONS: readonly ChartDefinition[] = [
     unit: 'count',
     series: [
       { id: 'images', label: 'Images', read: hostMetric('dockerUsage', 'imagesCount') },
-      { id: 'containers', label: 'Containers', color: colors.command, read: hostMetric('dockerUsage', 'containersCount') },
-      { id: 'volumes', label: 'Volumes', color: colors.pending, read: hostMetric('dockerUsage', 'volumesCount') },
+      {
+        id: 'containers',
+        label: 'Containers',
+        color: colors.command,
+        read: hostMetric('dockerUsage', 'containersCount'),
+      },
+      {
+        id: 'volumes',
+        label: 'Volumes',
+        color: colors.pending,
+        read: hostMetric('dockerUsage', 'volumesCount'),
+      },
     ],
     yFormat: (v) => formatCount(v),
     hideWhenEmpty: true,
@@ -1393,7 +1494,7 @@ function buildEntityMetricPlan(inventory: TopologyInventory | null): string[][] 
       scope: 'databaseProxy',
       entityId,
       fields: DATABASE_PROXY_FIELDS,
-    })),
+    }))
   )
 
   const batches: string[][] = []
@@ -1783,7 +1884,6 @@ function ingressChartDefinitions(entityId: string): ChartDefinition[] {
   ]
 }
 
-
 function databaseProxyChartDefinitions(entityId: string): ChartDefinition[] {
   const title = DATABASE_PROXY_SOURCE_TITLES[entityId] ?? entityId
   return [
@@ -1873,9 +1973,7 @@ function databaseProxyChartDefinitions(entityId: string): ChartDefinition[] {
       id: `databaseProxy:${entityId}:rejected`,
       title: `${title} · Rejected (max connections)`,
       unit: 'count',
-      series: [
-        { id: 'rejected', label: 'Rejected', read: metric('connectionsRejectedMaxConns') },
-      ],
+      series: [{ id: 'rejected', label: 'Rejected', read: metric('connectionsRejectedMaxConns') }],
       yFormat: (v) => formatCount(v),
       hideWhenEmpty: true,
     },
@@ -1883,9 +1981,7 @@ function databaseProxyChartDefinitions(entityId: string): ChartDefinition[] {
       id: `databaseProxy:${entityId}:transactions`,
       title: `${title} · Active transactions`,
       unit: 'count',
-      series: [
-        { id: 'active', label: 'Active', read: metric('activeTransactions') },
-      ],
+      series: [{ id: 'active', label: 'Active', read: metric('activeTransactions') }],
       yFormat: (v) => formatCount(v),
       hideWhenEmpty: true,
     },
@@ -2364,8 +2460,8 @@ function noDataCopy(
   }
   if (updateAvailable) {
     return {
-      title: 'Daemon update available',
-      body: 'A newer daemon build is available. Update this host to the current build; samples appear after it reconnects and begins reporting.',
+      title: 'Daemon update waiting',
+      body: 'A newer daemon build is waiting. This host updates on its own at the next check; samples appear after it reconnects and begins reporting.',
     }
   }
   return {
@@ -2478,9 +2574,6 @@ function MetricsStatusMessages({
   onRetry,
   updateAvailable,
   updating,
-  canUpdate,
-  updateBusy,
-  onUpdate,
 }: Readonly<{
   viewState: MetricsViewState
   backend: MetricsBackendKind
@@ -2490,16 +2583,12 @@ function MetricsStatusMessages({
   onRetry: () => void
   updateAvailable: boolean
   updating: boolean
-  canUpdate: boolean
-  updateBusy: boolean
-  onUpdate: () => void
 }>) {
   const showGenericError =
     queryError != null && !(queryError instanceof MetricsBackendUnavailableError)
   const unavailableBackend =
     queryError instanceof MetricsBackendUnavailableError ? queryError.backend : backend
   const emptyCopy = noDataCopy(updateAvailable, updating)
-  const showUpdateAction = updateAvailable && canUpdate && !updating
 
   return (
     <>
@@ -2559,17 +2648,6 @@ function MetricsStatusMessages({
           tone={updateAvailable || updating ? 'warn' : 'neutral'}
           title={emptyCopy.title}
           body={emptyCopy.body}
-          action={
-            showUpdateAction ? (
-              <Button
-                label="Update daemon"
-                variant="primary"
-                busy={updateBusy}
-                busyLabel="Updating…"
-                onPress={onUpdate}
-              />
-            ) : undefined
-          }
         />
       ) : null}
     </>
@@ -2628,7 +2706,7 @@ function MetricsChartCard({
   const rangeLabel = isRange ? frequencyRangeLabel(series) : undefined
   let headline = lastFormattedValue(
     isRange ? series.filter((entry) => entry.key === 'avg') : visibleSeries,
-    definition.yFormat,
+    definition.yFormat
   )
   if (definition.stacked) {
     headline = lastStackedTotal(visibleSeries, definition.yFormat)
@@ -2786,10 +2864,7 @@ function summaryBarColor(tone: SummaryTone): string {
   return colors.ok
 }
 
-function SummaryBars({
-  bars,
-  tone,
-}: Readonly<{ bars: SummaryBar[]; tone: SummaryTone }>) {
+function SummaryBars({ bars, tone }: Readonly<{ bars: SummaryBar[]; tone: SummaryTone }>) {
   // A bar is a fixed time bucket, so its position is its identity — the row
   // is a constant length, never reordered, and rebuilt wholesale whenever the
   // range changes.
@@ -2817,9 +2892,7 @@ function SummaryBars({
 }
 
 /** The collapsed header's right-hand readout: headline figure, mini bars, and a state chip when toned. */
-function GroupSummary({
-  summary,
-}: Readonly<{ summary: GroupSummaryData | null }>) {
+function GroupSummary({ summary }: Readonly<{ summary: GroupSummaryData | null }>) {
   if (!summary) return null
   const critical = summary.tone === 'critical'
   return (
@@ -2888,11 +2961,7 @@ function CollapsibleChartGroup({
         accessibilityLabel={`${expanded ? 'Collapse' : 'Expand'} ${label} charts`}
       >
         <View style={styles.chartGroupChevron}>
-          <HeaderChevron
-            size={12}
-            color={expanded ? colors.ok : colors.textDim}
-            open={expanded}
-          />
+          <HeaderChevron size={12} color={expanded ? colors.ok : colors.textDim} open={expanded} />
         </View>
         <View style={styles.chartGroupCopy}>
           <Text style={styles.chartGroupTitle}>{label}</Text>
@@ -3478,7 +3547,9 @@ function MetricsCharts({
             twoColumn={twoColumn}
             charts={[
               ...group.chartIds
-                .map((id) => (id === DOCKER_STORAGE_CHART_ID ? dockerStorage : hostChartsById.get(id)))
+                .map((id) =>
+                  id === DOCKER_STORAGE_CHART_ID ? dockerStorage : hostChartsById.get(id)
+                )
                 .filter((chart): chart is RenderableChart => chart != null),
               ...(group.id === MANAGED_STORAGE_GROUP_ID ? storageInodeCharts : []),
             ]}
@@ -3650,8 +3721,6 @@ export function ServerMetricsSection({
 
   const serversQuery = useOrgServers(orgId)
   const updateStatusQuery = useServerUpdateStatus(orgId, serverId)
-  const triggerUpdateMutation = useTriggerServerUpdate(orgId, serverId)
-  const canManage = useCan('organization', orgId, 'organization:manage')
 
   const liveEligible = isLiveRange(rangeId)
   const live = useLiveMetricsSession(orgId, serverId, liveEligible, rangeId)
@@ -3676,10 +3745,7 @@ export function ServerMetricsSection({
 
   const data = metricsQuery.data
   const inventory = data?.inventory ?? null
-  const entityMetricBatches = useMemo(
-    () => buildEntityMetricPlan(inventory),
-    [inventory]
-  )
+  const entityMetricBatches = useMemo(() => buildEntityMetricPlan(inventory), [inventory])
 
   const entityQueries = useServerMetricsSeriesBatches(
     orgId,
@@ -3718,7 +3784,7 @@ export function ServerMetricsSection({
   const viewState = resolveViewState(server, data, metricsQuery.error)
   const stale = isServerStale(server)
   const updateAvailable = updateStatusQuery.data?.updateAvailable === true
-  const updating = triggerUpdateMutation.isPending || updateStatusQuery.data?.status === 'updating'
+  const updating = updateStatusQuery.data?.status === 'updating'
 
   const hostGrid = useMemo(() => (data ? normalizeHostGrid(data) : null), [data])
 
@@ -3726,12 +3792,7 @@ export function ServerMetricsSection({
   const entityGroups = useMemo(
     () =>
       hostGrid
-        ? buildEntityChartGroups(
-            inventory,
-            entityResults,
-            hostGrid.bucketGrid,
-            temperatureUnit
-          )
+        ? buildEntityChartGroups(inventory, entityResults, hostGrid.bucketGrid, temperatureUnit)
         : [],
     [inventory, entityResults, hostGrid, temperatureUnit]
   )
@@ -3772,11 +3833,6 @@ export function ServerMetricsSection({
         onRetry={handleRetry}
         updateAvailable={updateAvailable}
         updating={updating}
-        canUpdate={canManage && server?.connected === true}
-        updateBusy={triggerUpdateMutation.isPending}
-        onUpdate={() => {
-          triggerUpdateMutation.mutate()
-        }}
       />
 
       {viewState === 'charts' ? <HostFactsPanel orgId={orgId} serverId={serverId} /> : null}
@@ -3816,7 +3872,9 @@ function HostFactsPanel({ orgId, serverId }: Readonly<{ orgId: string; serverId:
   return (
     <SectionPanel
       title="About this host"
-      hint={response.sampledAt ? `Reported ${new Date(response.sampledAt).toLocaleString()}` : undefined}
+      hint={
+        response.sampledAt ? `Reported ${new Date(response.sampledAt).toLocaleString()}` : undefined
+      }
     >
       <View style={styles.hostFacts}>
         {rows.map((row) => (

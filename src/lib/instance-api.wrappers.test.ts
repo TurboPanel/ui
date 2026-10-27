@@ -1,8 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setActiveOrganizationId } from '@/lib/org-context'
 import {
-  cancelUpgradeRun,
-  checkUpgradeManifests,
   createNotificationChannel,
   deleteNotificationChannel,
   dismissNotification,
@@ -18,11 +16,9 @@ import {
   fetchUpgradeServersPage,
   fetchUpgradeSettings,
   markNotificationsRead,
-  requestInstanceUpdate,
-  retryUpgradeStep,
-  runUpgradePreflight,
+  pauseUpdates,
+  resumeUpdates,
   saveUpgradeSettings,
-  startPlatformUpgradeRun,
   updateNotificationChannel,
 } from './instance-api'
 
@@ -125,15 +121,9 @@ describe('instance-api upgrade, notification and compose-gated-field wrappers', 
     expect(urlOf(2)).toContain('/instance/updates/runs/run-1/servers?limit=1&serverId=s-1')
   })
 
-  it('upgrade settings and run controls use their routes and methods', async () => {
-    const settings = {
-      autoUpdate: true,
-      batch: { mode: 'count', value: 1 },
-      maintenanceWindow: { enabled: false },
-    }
-    fetchMock.mockImplementation(() =>
-      Promise.resolve(jsonResponse({ ok: true, settings, runId: 'r-1' }))
-    )
+  it('upgrade settings and the pause control use their routes and methods', async () => {
+    const settings = { batch: { mode: 'count', value: 1 } }
+    fetchMock.mockImplementation(() => Promise.resolve(jsonResponse({ ok: true, settings })))
 
     await fetchUpgradeSettings()
     expect(urlOf(0)).toContain('/instance/updates/settings')
@@ -142,24 +132,11 @@ describe('instance-api upgrade, notification and compose-gated-field wrappers', 
     expect(urlOf(1)).toContain('/instance/updates/settings')
     expect(initOf(1)).toMatchObject({ method: 'PUT', body: JSON.stringify(settings) })
 
-    await runUpgradePreflight()
-    expect(urlOf(2)).toContain('/instance/updates/preflight')
-    expect(initOf(2)).toMatchObject({ method: 'POST' })
-
-    await startPlatformUpgradeRun()
-    expect(initOf(3)).toMatchObject({ method: 'POST', body: '{}' })
-    await startPlatformUpgradeRun('r-1')
-    expect(initOf(4)).toMatchObject({ method: 'POST', body: JSON.stringify({ runId: 'r-1' }) })
-
-    await checkUpgradeManifests()
-    expect(urlOf(5)).toContain('/instance/updates/check')
-    await retryUpgradeStep('step/9')
-    expect(urlOf(6)).toContain('/instance/updates/steps/step%2F9/retry')
-    await cancelUpgradeRun('run/2')
-    expect(urlOf(7)).toContain('/instance/updates/runs/run%2F2/cancel')
-    await requestInstanceUpdate()
-    expect(urlOf(8)).toContain('/instance/updates/instance')
-    for (const i of [5, 6, 7, 8]) expect(initOf(i)).toMatchObject({ method: 'POST' })
+    await pauseUpdates()
+    expect(urlOf(2)).toMatch(/\/instance\/updates\/pause$/)
+    await resumeUpdates()
+    expect(urlOf(3)).toMatch(/\/instance\/updates\/resume$/)
+    for (const i of [2, 3]) expect(initOf(i)).toMatchObject({ method: 'POST' })
   })
 
   it('notification reads default missing fields and pass the paging params', async () => {

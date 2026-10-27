@@ -67,7 +67,7 @@ export function UpdatesSection() {
       <Text style={panelStyles.pageCopy}>
         {managed
           ? 'Server update status for your servers on TurboPanel High Availability. TurboPanel updates the control plane itself on its own release cadence.'
-          : 'Update the control plane, the web interface and the daemon here, then the daemon on each connected server.'}
+          : 'The control plane, the web interface and the daemon on every connected server update on their own. Pause all updates here when you need them to wait.'}
       </Text>
       {managed ? <HighAvailabilityUpdates data={data} /> : <SelfHostedUpdates data={data} />}
     </View>

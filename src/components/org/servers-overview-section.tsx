@@ -27,7 +27,6 @@ import {
   SERVERS_TILE_MIN_WIDTH,
   serversLayoutAccessibilityLabel,
   setStoredServersLayout,
-  showServersToolbarUpdate,
   usesCompactServersList,
   type ServersLayout,
 } from '@/lib/servers-layout'
@@ -36,9 +35,7 @@ import {
   type FleetServerUsageRecord,
   type OrgServerRecord,
   type RelayRecord,
-  type ServerUpdateStatus,
 } from '@/lib/instance-api'
-import { isServerUpdateActionHidden } from '@/lib/daemon-update-labels'
 import { serverDetailHref, serversPendingKeysHref } from '@/lib/org-navigation'
 import { useAddServerLink } from '@/lib/use-add-server-link'
 import {
@@ -50,12 +47,10 @@ import {
 import { useOrgFabric } from '@/lib/queries/fabric'
 import {
   SERVERS_REFRESH_MS,
-  useBatchTriggerServerUpdates,
   useFleetServerUsage,
   useOrgLicenses,
   useOrgServerCapacity,
   useOrgServers,
-  useServersUpdateStatus,
 } from '@/lib/queries/servers'
 import { orEmptyArray } from '@/lib/or-empty-array'
 import { queryKeys, useCan } from '@/lib/query-client'
@@ -80,16 +75,7 @@ import { usePullToRefresh } from '@/lib/pull-to-refresh'
 import { useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'expo-router'
 import { useEffect, useMemo, useState, type ReactElement } from 'react'
-import {
-  ActivityIndicator,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-  type ViewStyle,
-} from 'react-native'
+import { Platform, Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native'
 import Svg, { Path } from 'react-native-svg'
 import { userErrorMessage } from '@/lib/user-error'
 
@@ -106,36 +92,6 @@ function overlayByServerId(
 
 function serverTitle(server: OrgServerRecord): string {
   return server.name?.trim() || server.hostname?.trim() || server.id
-}
-
-function isColocatedServer(
-  server: OrgServerRecord,
-  updateData?: ServerUpdateStatus | null
-): boolean {
-  return server.colocatedWithInstance === true || updateData?.colocatedWithInstance === true
-}
-
-function isServerUpdatable(
-  server: OrgServerRecord,
-  updateByServerId: ReadonlyMap<string, ServerUpdateStatus>,
-  triggeringServerIds: ReadonlySet<string>
-): boolean {
-  const data = updateByServerId.get(server.id)
-  return (
-    server.connected &&
-    !isColocatedServer(server, data) &&
-    !isServerUpdateActionHidden(data) &&
-    data?.targetStatus === 'ok' &&
-    data.updateAvailable === true &&
-    !triggeringServerIds.has(server.id) &&
-    data.status !== 'updating'
-  )
-}
-
-function selectedUpdateButtonLabel(batchUpdating: boolean, selectedUpdatableCount: number): string {
-  if (batchUpdating) return 'Updating…'
-  if (selectedUpdatableCount > 0) return `Update (${selectedUpdatableCount})`
-  return 'Update'
 }
 
 function pruneSelectedServerIds(
@@ -299,42 +255,28 @@ function ServersOverviewToolbar({
   layout,
   onLayoutChange,
   canOwn,
-  canManage,
   addServerEligibility,
   showAddServerWizard,
   onAddServer,
-  anyUpdateInProgress,
-  batchUpdating,
-  selectedCount,
-  selectedUpdatableCount,
   showSelectAll,
   allSelected,
   someSelected,
   onToggleSelectAll,
-  onTriggerSelectedUpdates,
   compactChrome,
 }: Readonly<{
   layout: ServersLayout
   onLayoutChange: (next: ServersLayout) => void
   canOwn: boolean
-  canManage: boolean
   addServerEligibility: ReturnType<typeof resolveServerAddEligibility>
   showAddServerWizard: boolean
   onAddServer: () => void
-  anyUpdateInProgress: boolean
-  batchUpdating: boolean
-  selectedCount: number
-  selectedUpdatableCount: number
   showSelectAll: boolean
   allSelected: boolean
   someSelected: boolean
   onToggleSelectAll: () => void
-  onTriggerSelectedUpdates: () => void
   compactChrome: boolean
 }>) {
   const addDisabled = !addServerEligibility.canAdd
-  const updateDisabled = anyUpdateInProgress || batchUpdating || selectedUpdatableCount === 0
-  const showUpdate = showServersToolbarUpdate(canManage, compactChrome, selectedCount)
 
   return (
     <View style={styles.toolbarActions}>
@@ -345,22 +287,6 @@ function ServersOverviewToolbar({
           compact={compactChrome}
           onPress={onAddServer}
         />
-      ) : null}
-      {showUpdate ? (
-        <TouchableOpacity
-          style={[
-            panelStyles.toolbarBtnSecondary,
-            compactChrome && styles.toolbarBtnCompact,
-            updateDisabled && styles.buttonDisabled,
-          ]}
-          onPress={onTriggerSelectedUpdates}
-          disabled={updateDisabled}
-        >
-          {batchUpdating ? <ActivityIndicator size="small" color={colors.textMuted} /> : null}
-          <Text style={panelStyles.toolbarBtnTextSecondary}>
-            {selectedUpdateButtonLabel(batchUpdating, selectedUpdatableCount)}
-          </Text>
-        </TouchableOpacity>
       ) : null}
       {showSelectAll ? (
         <View style={styles.checkboxHit}>
@@ -943,53 +869,6 @@ function ServersOverviewFleet({
   )
 }
 
-function indexUpdatesByServerId(
-  entries: readonly ServerUpdateStatus[] | undefined
-): Map<string, ServerUpdateStatus> {
-  const map = new Map<string, ServerUpdateStatus>()
-  for (const entry of entries ?? []) {
-    map.set(entry.serverId, entry)
-  }
-  return map
-}
-
-function collectTriggeringServerIds(
-  pending: boolean,
-  variables: readonly string[] | undefined,
-  updates: readonly ServerUpdateStatus[] | undefined
-): Set<string> {
-  const ids = new Set<string>()
-  if (pending && variables) {
-    for (const serverId of variables) {
-      ids.add(serverId)
-    }
-  }
-  for (const entry of updates ?? []) {
-    if (entry.status === 'updating') {
-      ids.add(entry.serverId)
-    }
-  }
-  return ids
-}
-
-function countSelectedUpdatable(
-  servers: readonly OrgServerRecord[],
-  selectedIds: ReadonlySet<string>,
-  updateByServerId: ReadonlyMap<string, ServerUpdateStatus>,
-  triggeringServerIds: ReadonlySet<string>
-): number {
-  let count = 0
-  for (const server of servers) {
-    if (
-      selectedIds.has(server.id) &&
-      isServerUpdatable(server, updateByServerId, triggeringServerIds)
-    ) {
-      count += 1
-    }
-  }
-  return count
-}
-
 function toggleIdInSet(prev: Set<string>, serverId: string): Set<string> {
   const next = new Set(prev)
   if (next.has(serverId)) next.delete(serverId)
@@ -1002,7 +881,6 @@ export function ServersOverviewSection({
   removedServerName,
 }: Readonly<{ orgId: string; removedServerName?: string }>) {
   const queryClient = useQueryClient()
-  const canManage = useCan('organization', orgId, 'organization:manage')
   const canOwn = useCan('organization', orgId, 'organization:own')
 
   const fabricQuery = useOrgFabric(orgId)
@@ -1016,18 +894,15 @@ export function ServersOverviewSection({
         idleMs: SERVERS_REFRESH_MS,
       }),
   })
-  const updatesQuery = useServersUpdateStatus(orgId, { pollWhileUpdating: true })
   const capacityQuery = useOrgServerCapacity(orgId, { enabled: canOwn })
   const licensesQuery = useOrgLicenses(orgId, { enabled: canOwn })
   const fleetUsageQuery = useFleetServerUsage(orgId, {
     enabled: !serversQuery.isLoading,
   })
-  const batchUpdateMutation = useBatchTriggerServerUpdates(orgId)
 
   usePullToRefresh(async () => {
     await Promise.all([
       serversQuery.refetch(),
-      updatesQuery.refetch(),
       fleetUsageQuery.refetch(),
       fabricQuery.refetch(),
       ...(canOwn ? [capacityQuery.refetch(), licensesQuery.refetch()] : []),
@@ -1064,41 +939,9 @@ export function ServersOverviewSection({
     [capacityQuery.data, capacityQuery.isError]
   )
 
-  const updateByServerId = useMemo(
-    () => indexUpdatesByServerId(updatesQuery.data?.servers),
-    [updatesQuery.data]
-  )
-
-  const triggeringServerIds = useMemo(
-    () =>
-      collectTriggeringServerIds(
-        batchUpdateMutation.isPending,
-        batchUpdateMutation.variables,
-        updatesQuery.data?.servers
-      ),
-    [batchUpdateMutation.isPending, batchUpdateMutation.variables, updatesQuery.data]
-  )
-
   useEffect(() => {
     setSelectedIds((prev) => pruneSelectedServerIds(prev, servers))
   }, [servers])
-
-  const handleTriggerSelectedUpdates = (): void => {
-    const targets = servers.filter(
-      (server) =>
-        selectedIds.has(server.id) &&
-        isServerUpdatable(server, updateByServerId, triggeringServerIds)
-    )
-    if (targets.length === 0) return
-    batchUpdateMutation.mutate(targets.map((server) => server.id))
-  }
-
-  const selectedUpdatableCount = countSelectedUpdatable(
-    servers,
-    selectedIds,
-    updateByServerId,
-    triggeringServerIds
-  )
 
   const allSelected = servers.length > 0 && servers.every((server) => selectedIds.has(server.id))
   const someSelected = selectedIds.size > 0 && !allSelected
@@ -1115,8 +958,6 @@ export function ServersOverviewSection({
     setSelectedIds((prev) => toggleIdInSet(prev, serverId))
   }
 
-  const batchUpdating = batchUpdateMutation.isPending
-  const anyUpdateInProgress = batchUpdating || triggeringServerIds.size > 0
   const compactChrome = usesCompactServersList(Platform.OS)
   const fleetSurface = resolveServersFleetSurface({
     layout: serversLayout,
@@ -1153,19 +994,13 @@ export function ServersOverviewSection({
           layout={serversLayout}
           onLayoutChange={handleLayoutChange}
           canOwn={canOwn}
-          canManage={canManage}
           addServerEligibility={addServerEligibility}
           showAddServerWizard={showAddServerWizard}
           onAddServer={() => setShowAddServerWizard((open) => !open)}
-          anyUpdateInProgress={anyUpdateInProgress}
-          batchUpdating={batchUpdating}
-          selectedCount={selectedIds.size}
-          selectedUpdatableCount={selectedUpdatableCount}
           showSelectAll={fleetSurface.showToolbarSelectAll}
           allSelected={allSelected}
           someSelected={someSelected}
           onToggleSelectAll={toggleSelectAll}
-          onTriggerSelectedUpdates={handleTriggerSelectedUpdates}
           compactChrome={compactChrome}
         />
       </View>
@@ -1179,10 +1014,7 @@ export function ServersOverviewSection({
         <Text style={styles.capacityHint}>{addServerEligibility.reason}</Text>
       ) : null}
       {selectedIds.size > 0 ? (
-        <Text style={styles.selectionHint}>
-          {selectedIds.size} selected
-          {selectedUpdatableCount > 0 ? ` · ${selectedUpdatableCount} updatable` : ''}
-        </Text>
+        <Text style={styles.selectionHint}>{selectedIds.size} selected</Text>
       ) : null}
 
       {canOwn ? (

@@ -43,7 +43,6 @@ import {
   setServerHostname,
   setServerNtp,
   setServerTimezone,
-  triggerServerUpdate,
   updateServer,
   type ConnectionHistoryChartResponse,
   type EffectiveCpuThermalLimits,
@@ -640,23 +639,6 @@ async function invalidateServerQueries(
   await Promise.all(tasks)
 }
 
-export function useTriggerServerUpdate(orgId: string, serverId: string) {
-  const queryClient = useQueryClient()
-  return useApiMutation({
-    mutationFn: () => triggerServerUpdate(serverId),
-    onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.org(orgId).servers.updateStatus(serverId),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.org(orgId).servers.updatesBatch,
-        }),
-      ])
-    },
-  })
-}
-
 export function useResetServerUpdateStatus(orgId: string, serverId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
@@ -697,8 +679,7 @@ export function useDeleteServer(orgId: string) {
         forgetResources?: boolean
         principals?: readonly PrincipalRemovalChoice[]
       }>
-    ) =>
-      deleteServer(input.serverId, orgId, deleteServerOptions(input)),
+    ) => deleteServer(input.serverId, orgId, deleteServerOptions(input)),
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.org(orgId).servers.list }),
@@ -874,30 +855,6 @@ export function usePatchServer(orgId: string) {
         invalidateServerQueries(queryClient, orgId, serverId),
         queryClient.invalidateQueries({
           queryKey: queryKeys.org(orgId).topology.all,
-        }),
-      ])
-    },
-  })
-}
-
-export function useBatchTriggerServerUpdates(orgId: string) {
-  const queryClient = useQueryClient()
-  return useApiMutation({
-    mutationFn: async (serverIds: readonly string[]) => {
-      const results = await Promise.allSettled(
-        serverIds.map((serverId) => triggerServerUpdate(serverId))
-      )
-      return results
-    },
-    onSuccess: async (_data, serverIds) => {
-      await Promise.all([
-        ...serverIds.map((serverId) =>
-          queryClient.invalidateQueries({
-            queryKey: queryKeys.org(orgId).servers.updateStatus(serverId),
-          })
-        ),
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.org(orgId).servers.updatesBatch,
         }),
       ])
     },

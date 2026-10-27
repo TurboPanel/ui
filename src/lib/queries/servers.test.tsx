@@ -13,7 +13,6 @@ import { licenseTierUserErrorMessage } from '@/lib/user-error'
 import {
   SERVERS_REFRESH_MS,
   UPDATE_PROGRESS_POLL_MS,
-  useBatchTriggerServerUpdates,
   useCreateLicense,
   useDeleteLicense,
   useDeleteServer,
@@ -54,7 +53,6 @@ import {
   useStartServerMetricsLive,
   useStopServerMetricsLive,
   useTimezones,
-  useTriggerServerUpdate,
   useUpdateServer,
 } from '@/lib/queries/servers'
 
@@ -78,7 +76,6 @@ const {
   fetchServersUpdateStatus,
   fetchServerUpdate,
   fetchOrgServerCapacity,
-  triggerServerUpdate,
   resetServerUpdateStatus,
   revokeServerDaemonKey,
   rebootServer,
@@ -117,7 +114,6 @@ const {
   fetchServersUpdateStatus: vi.fn(),
   fetchServerUpdate: vi.fn(),
   fetchOrgServerCapacity: vi.fn(),
-  triggerServerUpdate: vi.fn(),
   resetServerUpdateStatus: vi.fn(),
   revokeServerDaemonKey: vi.fn(),
   rebootServer: vi.fn(),
@@ -161,7 +157,6 @@ vi.mock('@/lib/instance-api', async (importOriginal) => {
     fetchServersUpdateStatus,
     fetchServerUpdate,
     fetchOrgServerCapacity,
-    triggerServerUpdate,
     resetServerUpdateStatus,
     revokeServerDaemonKey,
     rebootServer,
@@ -764,9 +759,7 @@ describe('servers query hooks', () => {
   })
 
   it('useServerNicSlotContext projects networks and the NIC-slot limit from a series seed', async () => {
-    const networks = [
-      { deviceId: 'mac:eth0', name: 'eth0', kind: 'uplink', role: 'nic' },
-    ]
+    const networks = [{ deviceId: 'mac:eth0', name: 'eth0', kind: 'uplink', role: 'nic' }]
     fetchServerMetricsSeries.mockResolvedValueOnce({
       ok: true,
       inventory: { networks },
@@ -940,7 +933,7 @@ describe('servers query hooks', () => {
   it('useServerUpdateStatus respects enabled:false', () => {
     const { result } = renderHook(
       () => useServerUpdateStatus(orgId, serverId, { enabled: false }),
-      { wrapper: createWrapper() },
+      { wrapper: createWrapper() }
     )
     expect(result.current.fetchStatus).toBe('idle')
     expect(fetchServerUpdate).not.toHaveBeenCalled()
@@ -982,29 +975,6 @@ describe('servers query hooks', () => {
 
     await expect(result.current.run()).resolves.toMatchObject({ ok: true })
     expect(pingDaemon).toHaveBeenCalledWith(serverId)
-  })
-
-  it('useTriggerServerUpdate invalidates update queries', async () => {
-    triggerServerUpdate.mockResolvedValueOnce({
-      ok: true,
-      commandId: 'cmd-update',
-      status: 'queued',
-    })
-    const client = createAppQueryClient()
-    const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
-
-    const { result } = renderHook(() => useTriggerServerUpdate(orgId, serverId), {
-      wrapper: createWrapper(client),
-    })
-
-    await result.current.run()
-    expect(triggerServerUpdate).toHaveBeenCalledWith(serverId)
-    expect(invalidateSpy).toHaveBeenCalledWith({
-      queryKey: queryKeys.org(orgId).servers.updateStatus(serverId),
-    })
-    expect(invalidateSpy).toHaveBeenCalledWith({
-      queryKey: queryKeys.org(orgId).servers.updatesBatch,
-    })
   })
 
   it('useResetServerUpdateStatus clears update progress', async () => {
@@ -1236,10 +1206,7 @@ describe('servers query hooks', () => {
     expect(outcome).toEqual({ ok: false, error: null, cause: forbidden })
     if (!outcome.ok) {
       expect(
-        licenseTierUserErrorMessage(
-          outcome.cause ?? outcome.error,
-          'Could not update license tier',
-        ),
+        licenseTierUserErrorMessage(outcome.cause ?? outcome.error, 'Could not update license tier')
       ).toContain('organization owners')
     }
   })
@@ -1260,26 +1227,6 @@ describe('servers query hooks', () => {
     expect(updateServer).toHaveBeenCalledWith(serverId, { name: 'patched' })
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: queryKeys.org(orgId).topology.all,
-    })
-  })
-
-  it('useBatchTriggerServerUpdates fans out updates', async () => {
-    triggerServerUpdate.mockResolvedValue({
-      ok: true,
-      commandId: 'cmd-batch',
-      status: 'queued',
-    })
-    const client = createAppQueryClient()
-    const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
-
-    const { result } = renderHook(() => useBatchTriggerServerUpdates(orgId), {
-      wrapper: createWrapper(client),
-    })
-
-    await result.current.run(['srv-1', 'srv-2'])
-    expect(triggerServerUpdate).toHaveBeenCalledTimes(2)
-    expect(invalidateSpy).toHaveBeenCalledWith({
-      queryKey: queryKeys.org(orgId).servers.updatesBatch,
     })
   })
 
@@ -1351,10 +1298,9 @@ describe('servers query hooks', () => {
   })
 
   it('useServerDetail respects enabled:false', () => {
-    const { result } = renderHook(
-      () => useServerDetail(orgId, serverId, { enabled: false }),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useServerDetail(orgId, serverId, { enabled: false }), {
+      wrapper: createWrapper(),
+    })
     expect(result.current.fetchStatus).toBe('idle')
     expect(fetchServer).not.toHaveBeenCalled()
   })
@@ -1363,18 +1309,14 @@ describe('servers query hooks', () => {
     fetchServer.mockResolvedValue({ id: serverId, name: 'edge' })
     const client = createTestQueryClient()
 
-    renderHook(
-      () => useServerDetail(orgId, serverId, { refetchInterval: 12_000 }),
-      { wrapper: createWrapper(client) },
-    )
+    renderHook(() => useServerDetail(orgId, serverId, { refetchInterval: 12_000 }), {
+      wrapper: createWrapper(client),
+    })
 
     await waitFor(() => {
-      expect(
-        resolveRefetchInterval(
-          client,
-          queryKeys.org(orgId).servers.detail(serverId),
-        ),
-      ).toBe(12_000)
+      expect(resolveRefetchInterval(client, queryKeys.org(orgId).servers.detail(serverId))).toBe(
+        12_000
+      )
     })
   })
 
@@ -1401,9 +1343,9 @@ describe('servers query hooks', () => {
       expect(result.current.isSuccess).toBe(true)
     })
     expect(result.current.data).toEqual(payload)
-    expect(
-      resolveRefetchInterval(client, queryKeys.org(orgId).servers.services(serverId)),
-    ).toBe(SERVERS_REFRESH_MS)
+    expect(resolveRefetchInterval(client, queryKeys.org(orgId).servers.services(serverId))).toBe(
+      SERVERS_REFRESH_MS
+    )
   })
 
   it('useServerServices stays idle when serverId is empty', () => {
@@ -1416,10 +1358,9 @@ describe('servers query hooks', () => {
   })
 
   it('useServerServices respects enabled:false', () => {
-    const { result } = renderHook(
-      () => useServerServices(orgId, serverId, { enabled: false }),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useServerServices(orgId, serverId, { enabled: false }), {
+      wrapper: createWrapper(),
+    })
     expect(result.current.fetchStatus).toBe('idle')
     expect(fetchServerServices).not.toHaveBeenCalled()
   })
@@ -1677,10 +1618,9 @@ describe('servers query hooks', () => {
   })
 
   it('useOrgTemperatureUnit respects enabled:false', () => {
-    const { result } = renderHook(
-      () => useOrgTemperatureUnit(orgId, { enabled: false }),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useOrgTemperatureUnit(orgId, { enabled: false }), {
+      wrapper: createWrapper(),
+    })
     expect(result.current.fetchStatus).toBe('idle')
     expect(fetchOrgTemperatureUnit).not.toHaveBeenCalled()
   })

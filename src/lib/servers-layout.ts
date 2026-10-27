@@ -58,19 +58,7 @@ export function resolveServersFleetSurface(input: {
   }
 }
 
-export function showServersToolbarUpdate(
-  canManage: boolean,
-  compactChrome: boolean,
-  selectedCount: number,
-): boolean {
-  if (!canManage) return false
-  if (!compactChrome) return true
-  return selectedCount > 0
-}
-
-export function parseServersLayout(
-  value: string | null | undefined,
-): ServersLayout {
+export function parseServersLayout(value: string | null | undefined): ServersLayout {
   if (value === 'tiles' || value === 'summary') return 'tiles'
   return DEFAULT_SERVERS_LAYOUT
 }

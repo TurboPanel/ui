@@ -153,12 +153,15 @@ const STEP_ERROR_LABELS: Readonly<Record<string, string>> = {
   dispatch_failed: "Couldn't reach the server",
   managed_upgrade_required: 'This server needs a managed update',
   downgrade_refused: 'Already newer than the target',
+  updates_paused: 'Not started because updates were paused',
+  retry_later: 'Failed before; tries again later',
 }
 
 /** Run `error` codes (the control plane's `UPGRADE_RUN_ERROR_CODES`). */
 const RUN_ERROR_LABELS: Readonly<Record<string, string>> = {
   colocated_daemon_failed: 'The daemon step failed',
   control_plane_failed: 'The control plane step failed',
+  updates_paused: 'Stopped because updates were paused',
 }
 
 export function upgradeStepErrorLabel(code: string | null | undefined): string | null {
@@ -556,15 +559,18 @@ export function summarizeFleetSteps(
 }
 
 export type PlatformUpgradeHeadline =
-  'up_to_date' | 'update_available' | 'updating' | 'needs_attention'
+  'up_to_date' | 'update_available' | 'updating' | 'needs_attention' | 'paused'
 
 export function resolvePlatformUpgradeHeadline(
   input: Readonly<{
     activeRunStatus: UpgradeRunStatus | null
     updateAvailable: boolean
     needsAttentionCount: number
+    /** An instance admin paused all updates; that is the first thing to say. */
+    paused?: boolean
   }>
 ): PlatformUpgradeHeadline {
+  if (input.paused) return 'paused'
   if (input.needsAttentionCount > 0) return 'needs_attention'
   if (input.activeRunStatus === 'pending' || input.activeRunStatus === 'running') {
     return 'updating'
@@ -578,10 +584,12 @@ export function platformUpgradeHeadlineCopy(headline: PlatformUpgradeHeadline): 
     case 'up_to_date':
       return 'TurboPanel is up to date'
     case 'update_available':
-      return 'Update available'
+      return 'Update waiting'
     case 'updating':
       return 'Updating…'
     case 'needs_attention':
       return 'Needs attention'
+    case 'paused':
+      return 'Updates paused'
   }
 }

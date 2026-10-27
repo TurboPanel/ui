@@ -448,7 +448,7 @@ environment map layout (`map-layout.ts`), "Runs as" and Linux user rules (`linux
 
 ## Admin area (`/admin/*`)
 
-Moved to `src/app/admin/AGENTS.md`. **`/admin/updates`** is the managed upgrade console (self-hosted vs TurboPanel High Availability layouts, preflight `ModalSheet`, run polling via `src/lib/upgrade-run-poll.ts`, full-screen restart overlay). Page override: `design-system/turbopanel/pages/updates.md`.
+Moved to `src/app/admin/AGENTS.md`. **`/admin/updates`** is the automatic update status page (self-hosted vs TurboPanel High Availability layouts, Pause all updates / Resume, run polling via `src/lib/upgrade-run-poll.ts`, full-screen restart overlay). Nobody starts an update by hand. Page override: `design-system/turbopanel/pages/updates.md`.
 
 ## Command Pipeline UI
 

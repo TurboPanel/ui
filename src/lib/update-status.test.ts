@@ -57,7 +57,9 @@ describe('explainUpgradeFailure', () => {
     expect(explained.body).toContain('A network problem interrupted this step')
     expect(
       explainUpgradeFailure({ errorCode: 'x', errorMessage: 'TypeError: Failed to fetch' }).body
-    ).toBe('A network problem interrupted this step, so it could not finish. Try the update again.')
+    ).toBe(
+      'A network problem interrupted this step, so it could not finish. TurboPanel tries again on its own.'
+    )
   })
 
   it('tells an old daemon to reinstall once for a bad signature', () => {
@@ -350,7 +352,7 @@ describe('updateBanner', () => {
     const banner = updateBanner({ updates: updates(), activeRun: false, dismissedKey: null })
     expect(banner?.title).toBe('TurboPanel update available: control plane v0.1.2')
     expect(banner?.body).toBe(
-      'This updates the control plane (the part that runs TurboPanel). Choose Update to review it first; nothing changes until you confirm.'
+      'This updates the control plane (the part that runs TurboPanel). It installs on its own at the next check; open Admin > Updates to follow it or pause updates.'
     )
     expect(banner?.key).toBe('control plane|canary|0.1.2|abc1234def|20260927-180000-abc1234')
   })
@@ -366,7 +368,7 @@ describe('updateBanner', () => {
       'TurboPanel update available: control plane v0.1.5-canary.1, web interface v0.1.5-canary.2, daemon v0.1.6-canary.3'
     )
     expect(banner?.body).toBe(
-      'This updates the control plane (the part that runs TurboPanel), the web interface (the pages you are using now) and the daemon (the software on each of your servers). Choose Update to review it first; nothing changes until you confirm.'
+      'This updates the control plane (the part that runs TurboPanel), the web interface (the pages you are using now) and the daemon (the software on each of your servers). It installs on its own at the next check; open Admin > Updates to follow it or pause updates.'
     )
   })
 
@@ -376,7 +378,7 @@ describe('updateBanner', () => {
     const banner = updateBanner({ updates: data, activeRun: false, dismissedKey: null })
     expect(banner?.title).toBe('TurboPanel update available: daemon v0.1.6-canary.3')
     expect(banner?.body).toBe(
-      'This updates the daemon (the software on each of your servers). Choose Update to review it first; nothing changes until you confirm.'
+      'This updates the daemon (the software on each of your servers). It installs on its own at the next check; open Admin > Updates to follow it or pause updates.'
     )
   })
 

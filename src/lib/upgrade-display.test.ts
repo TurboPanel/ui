@@ -136,6 +136,19 @@ describe('resolvePlatformUpgradeHeadline', () => {
       })
     ).toBe('up_to_date')
     expect(platformUpgradeHeadlineCopy('needs_attention')).toBe('Needs attention')
+    expect(platformUpgradeHeadlineCopy('update_available')).toBe('Update waiting')
+  })
+
+  it('leads with a pause over everything else', () => {
+    expect(
+      resolvePlatformUpgradeHeadline({
+        activeRunStatus: 'running',
+        updateAvailable: true,
+        needsAttentionCount: 2,
+        paused: true,
+      })
+    ).toBe('paused')
+    expect(platformUpgradeHeadlineCopy('paused')).toBe('Updates paused')
   })
 })
 
@@ -250,7 +263,20 @@ describe('upgradeStepOutcome', () => {
   it('names the run errors the control plane ends a run with', () => {
     expect(upgradeRunErrorLabel('colocated_daemon_failed')).toBe('The daemon step failed')
     expect(upgradeRunErrorLabel('control_plane_failed')).toBe('The control plane step failed')
+    expect(upgradeRunErrorLabel('updates_paused')).toBe('Stopped because updates were paused')
     expect(upgradeRunErrorLabel('')).toBeNull()
+  })
+
+  it('names the automatic update step codes in plain words', () => {
+    expect(upgradeStepErrorLabel('updates_paused')).toBe('Not started because updates were paused')
+    expect(upgradeStepErrorLabel('retry_later')).toBe('Failed before; tries again later')
+    expect(upgradeStepOutcome({ status: 'skipped', errorCode: 'updates_paused' })).toMatchObject({
+      label: 'Skipped',
+      detail: 'Not started because updates were paused',
+    })
+    expect(upgradeStepOutcome({ status: 'failed', errorCode: 'retry_later' }).detail).toBe(
+      'Failed before; tries again later'
+    )
   })
 })
 

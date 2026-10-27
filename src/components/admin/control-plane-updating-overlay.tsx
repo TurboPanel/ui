@@ -25,6 +25,7 @@ import {
   controlPlaneOverlayState,
   controlPlaneStepStale,
   controlPlaneUpgradeWatchRemainingMs,
+  markControlPlaneUpgradeWatch,
 } from '@/lib/upgrade-watch'
 import { colors, spacing } from '@/lib/theme'
 
@@ -73,6 +74,13 @@ export function ControlPlaneUpdatingOverlay() {
     observedRevision,
   })
 
+  // Updates start on their own, so nobody marks the watch when one begins:
+  // arm it while the run says the control plane is updating, so the overlay
+  // stays up through the restart, when the run cannot be read.
+  useEffect(() => {
+    if (controlPlaneStepActive) markControlPlaneUpgradeWatch()
+  }, [controlPlaneStepActive])
+
   useEffect(() => {
     if (overlay.clearWatch) clearControlPlaneUpgradeWatch()
   }, [overlay.clearWatch])
@@ -107,9 +115,7 @@ function ReloadPrompt({ onDismiss }: Readonly<{ onDismiss: () => void }>) {
     <View style={styles.scrim} accessibilityViewIsModal>
       <View style={styles.card}>
         <Text style={styles.title}>A newer TurboPanel version is live</Text>
-        <Text style={styles.copy}>
-          Reload this page so it matches the new TurboPanel version.
-        </Text>
+        <Text style={styles.copy}>Reload this page so it matches the new TurboPanel version.</Text>
         <View style={styles.actions}>
           {Platform.OS === 'web' ? (
             <Button label="Reload now" variant="primary" onPress={reloadWebClient} />
@@ -141,7 +147,11 @@ function UpdatingCard({
         <View style={styles.actions}>
           {slow ? (
             <>
-              <Button label={RECONNECT_RETRY_LABEL} variant="primary" onPress={reconnect.retryNow} />
+              <Button
+                label={RECONNECT_RETRY_LABEL}
+                variant="primary"
+                onPress={reconnect.retryNow}
+              />
               <Button label="Keep waiting" variant="secondary" onPress={reconnect.keepWaiting} />
             </>
           ) : null}
