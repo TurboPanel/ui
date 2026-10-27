@@ -35,7 +35,6 @@ import {
   updateEnvironmentManaged,
   updateManagedMember,
 } from '@/lib/instance-api'
-import type { ContainerRecord } from '@/lib/instance-api'
 import type { ManagedMemberRecord } from '@/lib/managed-services'
 import { queryKeys, useApiMutation, type ApiMutationResult } from '@/lib/query-client'
 import {
@@ -569,54 +568,25 @@ export function mergeManagedMembers(
   })
 }
 
-/** Member states a stopped database cannot be in: they still read the run before the stop. */
-const LIVE_MEMBER_STATUSES = new Set(['ready', 'running', 'provisioning', 'applying'])
+/** Labels of work in progress, stale once the cluster row has settled. */
+const IN_FLIGHT_MEMBER_STATUSES = new Set(['provisioning', 'applying'])
 
 /**
- * Member labels follow the cluster row when it is newer than them:
- * - failed: in-flight member labels (`provisioning` / `applying`) are stale —
- *   older applies only flipped `managed.status` — so Cluster does not claim
- *   work is ongoing;
- * - stopped: a stop stops every member, so a member still reading Running (its
- *   row is only rewritten on the next apply) shows Stopped like the header.
+ * In-flight member labels (`provisioning` / `applying`) are stale once the
+ * cluster row has settled — older applies only flipped `managed.status` — so
+ * Cluster does not claim work is ongoing: they follow a failed or stopped
+ * cluster. A member that reads ready or running keeps it: that is what the
+ * server last saw, and a replica whose stop failed must not look stopped.
  */
 export function alignMemberStatusesWithCluster(
   members: readonly ManagedMemberRecord[],
   clusterStatus: string | null | undefined
 ): ManagedMemberRecord[] {
-  if (clusterStatus === 'failed') {
-    return members.map((member) =>
-      member.status === 'provisioning' || member.status === 'applying'
-        ? { ...member, status: 'failed' }
-        : member
-    )
-  }
-  if (clusterStatus === 'stopped') {
-    return members.map((member) =>
-      LIVE_MEMBER_STATUSES.has(member.status ?? '') ? { ...member, status: 'stopped' } : member
-    )
-  }
-  return [...members]
-}
-
-/** Container states a stopped database's own containers cannot be in. */
-const LIVE_CONTAINER_STATUSES = new Set(['running', 'restarting', 'created', 'paused'])
-
-/**
- * The database's containers as a stopped cluster has them: the stored list is
- * only refreshed by a later server report, so a row still reading running after
- * a stop shows as exited. Shared ingress rows serve other databases too and
- * keep their own state.
- */
-export function alignContainerStatusesWithCluster(
-  containers: readonly ContainerRecord[],
-  clusterStatus: string | null | undefined
-): ContainerRecord[] {
-  if (clusterStatus !== 'stopped') return [...containers]
-  return containers.map((container) =>
-    container.role !== 'ingress' && LIVE_CONTAINER_STATUSES.has(container.status)
-      ? { ...container, status: 'exited' }
-      : container
+  if (clusterStatus !== 'failed' && clusterStatus !== 'stopped') return [...members]
+  return members.map((member) =>
+    IN_FLIGHT_MEMBER_STATUSES.has(member.status ?? '')
+      ? { ...member, status: clusterStatus }
+      : member
   )
 }
 

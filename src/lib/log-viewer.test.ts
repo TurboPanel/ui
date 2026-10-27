@@ -110,6 +110,20 @@ describe('lineLevel and isNoiseLine', () => {
     expect(lineLevel(err('Error: Cannot find module express', 'build'))).toBe('error')
   })
 
+  it('lets an error win over a warn word on the same row', () => {
+    expect(
+      lineLevel(err('Error: deprecated option --legacy is no longer supported', 'build'))
+    ).toBe('error')
+    expect(lineLevel(err('TypeError: warning is not a function', 'build'))).toBe('error')
+    expect(lineLevel(err('npm ERR! deprecated package failed to install', 'build'))).toBe('error')
+    expect(lineLevel(err('npm error code ERESOLVE (warn: peer conflict)', 'build'))).toBe('error')
+    expect(
+      lineLevel(
+        err('(node:12) UnhandledPromiseRejectionWarning: Error: connect ECONNREFUSED', 'build')
+      )
+    ).toBe('error')
+  })
+
   it('treats benign stderr progress as not an error', () => {
     expect(lineLevel(err('Image nginx Pulling', 'pull'))).toBeNull()
   })

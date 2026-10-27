@@ -54,7 +54,6 @@ import {
   useUpdateEnvironment,
 } from '@/lib/queries/environments'
 import {
-  alignContainerStatusesWithCluster,
   alignMemberStatusesWithCluster,
   mergeManagedMembers,
   useApplyEnvironmentManaged,
@@ -480,7 +479,7 @@ function ManagedEnvironmentBodyContent({
   )
 }
 
-function ManagedEnvironmentReadyPanels({
+export function ManagedEnvironmentReadyPanels({
   orgId,
   environmentId,
   focus,
@@ -708,7 +707,7 @@ function ManagedEnvironmentReadyPanels({
           status={clusterStatus}
           host={status?.host ?? managed.host}
           port={status?.port ?? managed.port}
-          containers={alignContainerStatusesWithCluster(status?.containers ?? [], clusterStatus)}
+          containers={status?.containers ?? []}
           lastError={lastError}
           version={managedReleaseSummary(
             managed.engine ? managedCatalogEntryForCode(managed.engine)?.label : null,

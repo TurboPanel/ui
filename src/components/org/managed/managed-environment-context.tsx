@@ -12,6 +12,7 @@ import type { ManagedDetailResponse } from '@/lib/managed-services'
 import {
   commandStatusById,
   isTerminalCommandStatus,
+  trackedCommandWaitMs,
   trackedCommandsInFlight,
   useCommandsBatch,
   type TrackedCommandEntry,
@@ -38,6 +39,23 @@ export function invalidateEnvironmentManagedQueries(
   ).catch(() => {
     // Best-effort; the queries surface their own errors.
   })
+}
+
+/**
+ * A tracked command whose status has never been read (every read failed) is
+ * waited for until it expires on the server; then the screen stops waiting and
+ * reads what the database says now. Any answer before that cancels the timer.
+ */
+function useStopWaitingWhenUnanswered({
+  unanswered,
+  waitUntilMs,
+  onGiveUp,
+}: Readonly<{ unanswered: boolean; waitUntilMs: number; onGiveUp: () => void }>): void {
+  useEffect(() => {
+    if (!unanswered) return
+    const timer = setTimeout(onGiveUp, Math.max(0, waitUntilMs - Date.now()))
+    return () => clearTimeout(timer)
+  }, [unanswered, waitUntilMs, onGiveUp])
 }
 
 export type ManagedEnvironmentValue = Readonly<{
@@ -86,6 +104,8 @@ export function ManagedCommandsProvider({
   const detail = hasServerPin ? (managedQuery.data ?? null) : null
   const [trackedEntries, setTrackedEntries] = useState<readonly TrackedCommandEntry[]>([])
   const [applyCommand, setApplyCommand] = useState<TrackedCommandEntry | null>(null)
+  // When the newest tracked command expires on the server (epoch ms).
+  const [waitUntilMs, setWaitUntilMs] = useState(0)
   const commandsQuery = useCommandsBatch(orgId, trackedEntries)
   const serverId = detail?.managed?.serverId ?? detail?.server?.id ?? null
 
@@ -94,6 +114,8 @@ export function ManagedCommandsProvider({
       const resolvedServerId = commandServerId ?? serverId
       if (!resolvedServerId) return
       setTrackedEntries((current) => [...current, { serverId: resolvedServerId, commandId }])
+      const until = Date.now() + trackedCommandWaitMs(label)
+      setWaitUntilMs((current) => Math.max(current, until))
       if (label === 'Apply' || label === 'Apply settings') {
         setApplyCommand({ serverId: resolvedServerId, commandId })
       }
@@ -114,6 +136,16 @@ export function ManagedCommandsProvider({
       setTrackedEntries((current) => current.filter((row) => row.commandId !== entry.commandId))
     }
   }, [commandsQuery.data, trackedEntries, queryClient, orgId, environmentId])
+
+  const giveUpWaiting = useCallback(() => {
+    setTrackedEntries([])
+    invalidateEnvironmentManagedQueries(queryClient, orgId, environmentId)
+  }, [queryClient, orgId, environmentId])
+  useStopWaitingWhenUnanswered({
+    unanswered: trackedEntries.length > 0 && commandsQuery.data === undefined,
+    waitUntilMs,
+    onGiveUp: giveUpWaiting,
+  })
 
   const inFlight = trackedCommandsInFlight(trackedEntries, commandsQuery)
 

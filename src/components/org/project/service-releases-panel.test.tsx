@@ -105,14 +105,24 @@ describe('ServiceReleasesPanel', () => {
     )
   })
 
-  it('says a failed release cannot be rolled back to instead of offering the button', () => {
+  it('says in words why a failed release cannot be rolled back to', () => {
     state.releases = [
       release('r42', true, 'Fix pricing table layout'),
       { ...release('r41', false, 'Broken build'), status: 'failed' },
+      { ...release('r40', false, 'Cancelled build'), status: 'cancelled' },
     ]
     panel()
     expect(screen.queryByText('Roll back')).toBeNull()
-    const note = screen.getByText("Can't roll back")
-    expect(note.getAttribute('aria-label')).toMatch(/did not finish building/)
+    expect(screen.getAllByText("Can't roll back: it did not finish building")).toHaveLength(2)
+  })
+
+  it('never calls a release that is still building unfinished', () => {
+    state.releases = [
+      release('r42', true, 'Fix pricing table layout'),
+      { ...release('r43', false, 'New build'), status: 'running' },
+    ]
+    panel()
+    expect(screen.queryByText(/did not finish building/)).toBeNull()
+    expect(screen.getByText('Still building')).toBeTruthy()
   })
 })

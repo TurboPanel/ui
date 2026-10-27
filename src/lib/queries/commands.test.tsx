@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { QueryClientProvider } from '@tanstack/react-query'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { renderHook, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { CommandStatus, CommandStatusRecord } from '@/lib/instance-api'
@@ -13,6 +13,8 @@ import {
   hasPendingTrackedCommands,
   isTerminalCommandStatus,
   mergeTrackedCommandEntries,
+  batchPollInterval,
+  trackedCommandWaitMs,
   trackedCommandsInFlight,
   useCommandRecordsBatch,
   useCommandsBatch,
@@ -94,18 +96,46 @@ describe('trackedCommandsInFlight', () => {
   const tracked: TrackedCommandEntry[] = [{ serverId: 'srv-a', commandId: 'cmd-1' }]
 
   it('is running until the batch answers, then until every command ends', () => {
-    expect(trackedCommandsInFlight(tracked, { data: undefined, isError: false })).toBe(true)
-    expect(trackedCommandsInFlight(tracked, { data: [command('running')], isError: false })).toBe(
-      true
-    )
-    expect(trackedCommandsInFlight(tracked, { data: [command('succeeded')], isError: false })).toBe(
-      false
-    )
+    expect(trackedCommandsInFlight(tracked, { data: undefined })).toBe(true)
+    expect(trackedCommandsInFlight(tracked, { data: [command('running')] })).toBe(true)
+    expect(trackedCommandsInFlight(tracked, { data: [command('succeeded')] })).toBe(false)
+    expect(trackedCommandsInFlight([], { data: undefined })).toBe(false)
   })
 
-  it('never sticks on a failed status read or with nothing tracked', () => {
-    expect(trackedCommandsInFlight(tracked, { data: undefined, isError: true })).toBe(false)
-    expect(trackedCommandsInFlight([], { data: undefined, isError: false })).toBe(false)
+  it('trusts rows that say a command runs even when the latest read failed', () => {
+    expect(
+      trackedCommandsInFlight(tracked, { data: [command('running')], isError: true } as never)
+    ).toBe(true)
+  })
+
+  it('keeps waiting while every read so far has failed', () => {
+    expect(trackedCommandsInFlight(tracked, { data: undefined, isError: true } as never)).toBe(true)
+  })
+})
+
+describe('trackedCommandWaitMs', () => {
+  it('waits as long as the server lets each kind of command run', () => {
+    expect(trackedCommandWaitMs('stop')).toBe(120_000)
+    expect(trackedCommandWaitMs('start')).toBe(120_000)
+    expect(trackedCommandWaitMs('Delete')).toBe(300_000)
+    expect(trackedCommandWaitMs('Back up now')).toBe(1_800_000)
+    expect(trackedCommandWaitMs('Apply settings')).toBe(600_000)
+  })
+})
+
+describe('batchPollInterval', () => {
+  it('keeps asking while the first reads fail, then gives up after ten minutes of rounds', () => {
+    expect(batchPollInterval({ data: undefined, errorUpdateCount: 0 })).toBe(COMMAND_POLL_MS)
+    expect(batchPollInterval({ data: undefined, errorUpdateCount: 3 })).toBe(COMMAND_POLL_MS)
+    expect(batchPollInterval({ data: undefined, errorUpdateCount: 300 })).toBe(false)
+  })
+
+  it('polls while a command runs and stops once every one has ended', () => {
+    expect(batchPollInterval({ data: [command('running')], errorUpdateCount: 1 })).toBe(
+      COMMAND_POLL_MS
+    )
+    expect(batchPollInterval({ data: [command('failed')], errorUpdateCount: 0 })).toBe(false)
+    expect(batchPollInterval({ data: [], errorUpdateCount: 0 })).toBe(false)
   })
 })
 
@@ -256,6 +286,25 @@ describe('useCommandsBatch', () => {
     expect(disabled.result.current.fetchStatus).toBe('idle')
     expect(emptyOrg.result.current.fetchStatus).toBe('idle')
     expect(fetchCommandStatuses).not.toHaveBeenCalled()
+  })
+
+  it('keeps asking after the first status read fails, so a running command is still seen', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const entries: TrackedCommandEntry[] = [{ serverId: 'srv-a', commandId: 'cmd-stop' }]
+    fetchCommandStatuses
+      .mockRejectedValueOnce(new Error('network'))
+      .mockResolvedValue([command('running', 'srv-a', 'cmd-stop')])
+
+    const { result } = renderHook(() => useCommandsBatch(orgId, entries), {
+      wrapper: createWrapper(client as ReturnType<typeof createAppQueryClient>),
+    })
+
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    expect(trackedCommandsInFlight(entries, result.current)).toBe(true)
+    await waitFor(() => expect(result.current.data?.[0]?.status).toBe('running'), {
+      timeout: COMMAND_POLL_MS * 3,
+    })
+    expect(trackedCommandsInFlight(entries, result.current)).toBe(true)
   })
 
   it('polls while any tracked command is in flight', async () => {

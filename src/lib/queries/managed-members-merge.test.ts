@@ -5,9 +5,7 @@ import { renderHook, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ManagedMemberRecord } from '@/lib/managed-services'
 import { createAppQueryClient } from '@/lib/query-client'
-import type { ContainerRecord } from '@/lib/instance-api'
 import {
-  alignContainerStatusesWithCluster,
   alignMemberStatusesWithCluster,
   mergeManagedMembers,
   useCreateEnvironmentManaged,
@@ -194,30 +192,24 @@ describe('useShowOnceSecretMutation error fallback', () => {
 })
 
 describe('alignment with a stopped cluster', () => {
-  it('shows every member that still reads the earlier run as stopped', () => {
+  it('settles stale in-flight labels and keeps what the server last saw', () => {
     const aligned = alignMemberStatusesWithCluster(
       [
-        member({ id: 'primary', status: 'ready' }),
-        member({ id: 'replica', status: 'applying' }),
+        member({ id: 'primary', status: 'applying' }),
+        member({ id: 'new', status: 'provisioning' }),
+        // A replica whose stop failed still runs: it must not look stopped.
+        member({ id: 'replica', status: 'ready' }),
+        member({ id: 'other', status: 'running' }),
         member({ id: 'broken', status: 'failed' }),
       ],
       'stopped'
     )
-    expect(aligned.map((row) => row.status)).toEqual(['stopped', 'stopped', 'failed'])
-  })
-
-  it('shows the database containers as exited and leaves shared ingress alone', () => {
-    const rows = [
-      { id: 'db', role: 'service', status: 'running' },
-      { id: 'proxy', role: 'ingress', status: 'running' },
-    ] as unknown as ContainerRecord[]
-    expect(alignContainerStatusesWithCluster(rows, 'stopped').map((row) => row.status)).toEqual([
-      'exited',
+    expect(aligned.map((row) => row.status)).toEqual([
+      'stopped',
+      'stopped',
+      'ready',
       'running',
-    ])
-    expect(alignContainerStatusesWithCluster(rows, 'ready').map((row) => row.status)).toEqual([
-      'running',
-      'running',
+      'failed',
     ])
   })
 })

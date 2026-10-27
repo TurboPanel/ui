@@ -71,9 +71,17 @@ const PHASE_PLAN_STEP: Readonly<Record<string, string>> = {
   'stop-old-release': 'stop-old',
 }
 
-/** Error, warning or neither. Only rows `isErrorLine` flags can be either. */
+/**
+ * Rows that are errors whatever else they say: a thrown error (`Error:`,
+ * `TypeError: …`), npm's error lines, and Node's unhandled rejection, which is
+ * named a warning but means the program lost an error.
+ */
+const ERROR_PATTERN = /^\s*\w*Error\b|^npm (?:ERR!|error )|UnhandledPromiseRejectionWarning/
+
+/** Error, warning or neither. Only rows `isErrorLine` flags can be either; the error check wins. */
 export function lineLevel(line: LogTranscriptLine): LogLineLevel {
   if (!isErrorLine(line)) return null
+  if (ERROR_PATTERN.test(line.message)) return 'error'
   return WARN_PATTERN.test(line.message) ? 'warn' : 'error'
 }
 

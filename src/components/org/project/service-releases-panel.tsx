@@ -33,9 +33,22 @@ const RELEASE_LIST_MAX_HEIGHT = 480
 /** Wide enough for the Roll back button, so rows with and without one line up. */
 const RELEASE_ACTION_WIDTH = 112
 
-/** Why a release that did not finish building offers no Roll back. */
-const NO_ROLLBACK_REASON =
-  "Can't roll back to this release: it did not finish building, so its files were not kept on the server."
+/** Release outcomes that end without a published tree on the server. */
+const UNFINISHED_RELEASE_STATUSES: ReadonlySet<string> = new Set([
+  'failed',
+  'timed_out',
+  'cancelled',
+])
+
+/**
+ * What the action cell says instead of Roll back on a release that is not a
+ * rollback target, shown in words (not only to screen readers).
+ */
+function noRollbackText(status: string): string {
+  return UNFINISHED_RELEASE_STATUSES.has(status)
+    ? "Can't roll back: it did not finish building"
+    : 'Still building'
+}
 
 /** Release ids are ULID/UUID-shaped; the head is enough to tell rows apart. */
 function shortReleaseId(releaseId: string): string {
@@ -190,8 +203,8 @@ function releaseWhen(release: ReleaseRecord): string {
 /**
  * Roll back is confirmed but safe (the previous release is still published), so
  * it is a quiet button, not a danger one. The live release has none. A release
- * that did not finish building has no tree kept on the server, so it says it
- * cannot be rolled back to instead of offering a button that cannot work.
+ * that failed has no tree kept on the server and one still building has none
+ * yet, so the cell says so instead of offering a button that cannot work.
  */
 function RollbackAction({
   release,
@@ -206,11 +219,7 @@ function RollbackAction({
 }>) {
   if (release.isLive || !canRollback) return null
   if (release.status !== 'succeeded') {
-    return (
-      <Text style={styles.cellMuted} accessibilityLabel={NO_ROLLBACK_REASON}>
-        {"Can't roll back"}
-      </Text>
-    )
+    return <Text style={styles.cellMuted}>{noRollbackText(release.status)}</Text>
   }
   return (
     <ConfirmButton
@@ -301,7 +310,7 @@ function ReleaseRow({
   onRollback,
 }: ReleaseRowProps) {
   const tone = deploymentStatusTone(release.status)
-  const succeeded = release.status === 'succeeded'
+  const unfinished = UNFINISHED_RELEASE_STATUSES.has(release.status)
 
   return (
     <View>
@@ -334,13 +343,13 @@ function ReleaseRow({
       </View>
       {expanded ? (
         <View style={styles.detail}>
-          {succeeded ? null : (
+          {unfinished ? (
             <InlineNotice
               tone="warning"
               title="Not a rollback target"
               body="This release did not finish building on every server it was dispatched to, so a host may never have published its tree."
             />
-          )}
+          ) : null}
           <ReleaseImageIdentity release={release} />
           {release.attempts.length > 1 ? (
             <Text style={styles.cellMuted}>
