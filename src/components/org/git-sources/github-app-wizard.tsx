@@ -24,15 +24,9 @@ import {
   type WebhookOriginsState,
   webhookOriginsState,
 } from '@/lib/git-webhook-url'
-import {
-  githubAppNameError,
-  suggestGithubAppName,
-} from '@/lib/github-app-name'
+import { githubAppNameError, suggestGithubAppName } from '@/lib/github-app-name'
 import { githubOrgLoginError, normalizeGithubOrgLogin } from '@/lib/github-org-login'
-import {
-  MANIFEST_WEB_ONLY_NOTE,
-  submitGithubAppManifest,
-} from '@/lib/github-manifest-submit'
+import { MANIFEST_WEB_ONLY_NOTE, submitGithubAppManifest } from '@/lib/github-manifest-submit'
 import type { GithubManifestStartInput } from '@/lib/instance-api'
 import { useForgeWebhookOrigins, useStartGithubAppManifest } from '@/lib/queries/admin'
 import { colors, spacing } from '@/lib/theme'
@@ -92,7 +86,7 @@ function identityError(identity: Identity): string | null {
 function registerError(
   identity: Identity,
   resolvedOrigin: string,
-  originsState: WebhookOriginsState,
+  originsState: WebhookOriginsState
 ): string | null {
   if (originsState.kind === 'loading') return 'Webhook addresses are still loading.'
   if (originsState.kind === 'error') return WEBHOOK_ORIGINS_LOAD_ERROR.body
@@ -108,7 +102,7 @@ function registerError(
 function manifestInput(
   identity: Identity,
   resolvedOrigin: string,
-  pullRequests: 'read' | 'write',
+  pullRequests: 'read' | 'write'
 ): GithubManifestStartInput {
   return {
     name: identity.name.trim(),
@@ -120,11 +114,11 @@ function manifestInput(
     pullRequestAccess: pullRequests,
     ...(identity.selfHosted
       ? {
-        baseUrl: identity.baseUrl.trim(),
-        apiUrl: identity.apiUrl.trim() || null,
-        customGitUser: identity.customGitUser.trim() || null,
-        customGitPort: Number(identity.customGitPort),
-      }
+          baseUrl: identity.baseUrl.trim(),
+          apiUrl: identity.apiUrl.trim() || null,
+          customGitUser: identity.customGitUser.trim() || null,
+          customGitPort: Number(identity.customGitPort),
+        }
       : {}),
   }
 }
@@ -137,10 +131,12 @@ function manifestInput(
  * ordinary blank creation page with nothing filled in. Nothing but a browser
  * can do that, which is what the note says.
  */
-function handoffError(data: Readonly<{
-  createUrl: string
-  manifest: Record<string, unknown>
-}>): string | null {
+function handoffError(
+  data: Readonly<{
+    createUrl: string
+    manifest: Record<string, unknown>
+  }>
+): string | null {
   return submitGithubAppManifest(data.createUrl, data.manifest) ? null : MANIFEST_WEB_ONLY_NOTE
 }
 
@@ -190,34 +186,33 @@ function IdentityStep({
         />
       </FormField>
 
-      {identity.owner === 'organization'
-        ? (
-          <TextField
-            label="GitHub organization"
-            value={identity.organizationLogin}
-            onChangeText={(organizationLogin) => patch({ organizationLogin })}
-            placeholder="acme"
-            hint="The login in github.com/acme — not the organization's display name."
-            autoCapitalize="none"
-            autoCorrect={false}
-            editable={!busy}
-          />
-        )
-        : null}
+      {identity.owner === 'organization' ? (
+        <TextField
+          label="GitHub organization"
+          value={identity.organizationLogin}
+          onChangeText={(organizationLogin) => patch({ organizationLogin })}
+          placeholder="acme"
+          hint="The login in github.com/acme — not the organization's display name."
+          autoCapitalize="none"
+          autoCorrect={false}
+          editable={!busy}
+        />
+      ) : null}
 
       <InlineNotice
-        title={scope === 'admin'
-          ? 'Available to every organization on this control plane'
-          : 'Available to this organization only'}
-        body={scope === 'admin'
-          ? 'Apps registered here are always shared with every organization, so this one is created public on GitHub — a private App can only be installed on the account that owns it.'
-          : "Apps registered here always belong to this organization, so this one is created private on GitHub. Only an administrator can register an instance-wide App, on the instance's own Git sources page."}
+        title={
+          scope === 'admin'
+            ? 'Available to every organization on this control plane'
+            : 'Available to this organization only'
+        }
+        body={
+          scope === 'admin'
+            ? 'Apps registered here are always shared with every organization, so this one is created public on GitHub — a private App can only be installed on the account that owns it.'
+            : "Apps registered here always belong to this organization, so this one is created private on GitHub. Only an administrator can register an instance-wide App, on the instance's own Git Providers page."
+        }
       />
 
-      <FormField
-        label="GitHub Enterprise"
-        hint="Leave off for github.com."
-      >
+      <FormField label="GitHub Enterprise" hint="Leave off for github.com.">
         <Checkbox
           checked={identity.selfHosted}
           onPress={() => patch({ selfHosted: !identity.selfHosted })}
@@ -226,52 +221,50 @@ function IdentityStep({
         />
       </FormField>
 
-      {identity.selfHosted
-        ? (
-          <View style={styles.nested}>
-            <TextField
-              label="HTML URL"
-              value={identity.baseUrl}
-              onChangeText={(baseUrl) => patch({ baseUrl })}
-              placeholder="https://github.acme.test"
-              hint="Where operators browse the App and install it."
-              autoCapitalize="none"
-              autoCorrect={false}
-              editable={!busy}
-            />
-            <TextField
-              label="API URL"
-              value={identity.apiUrl}
-              onChangeText={(apiUrl) => patch({ apiUrl })}
-              placeholder="https://github.acme.test/api/v3"
-              hint="Leave empty to derive it from the HTML URL."
-              autoCapitalize="none"
-              autoCorrect={false}
-              editable={!busy}
-            />
-            <TextField
-              label="Custom Git user"
-              value={identity.customGitUser}
-              onChangeText={(customGitUser) => patch({ customGitUser })}
-              placeholder="git"
-              hint="Only used when cloning over SSH. GitHub App sources clone over HTTPS with a minted token and ignore this."
-              autoCapitalize="none"
-              autoCorrect={false}
-              editable={!busy}
-            />
-            <TextField
-              label="Custom Git port"
-              value={identity.customGitPort}
-              onChangeText={(customGitPort) => patch({ customGitPort })}
-              placeholder="22"
-              hint="Same — SSH clones only."
-              autoCapitalize="none"
-              autoCorrect={false}
-              editable={!busy}
-            />
-          </View>
-        )
-        : null}
+      {identity.selfHosted ? (
+        <View style={styles.nested}>
+          <TextField
+            label="HTML URL"
+            value={identity.baseUrl}
+            onChangeText={(baseUrl) => patch({ baseUrl })}
+            placeholder="https://github.acme.test"
+            hint="Where operators browse the App and install it."
+            autoCapitalize="none"
+            autoCorrect={false}
+            editable={!busy}
+          />
+          <TextField
+            label="API URL"
+            value={identity.apiUrl}
+            onChangeText={(apiUrl) => patch({ apiUrl })}
+            placeholder="https://github.acme.test/api/v3"
+            hint="Leave empty to derive it from the HTML URL."
+            autoCapitalize="none"
+            autoCorrect={false}
+            editable={!busy}
+          />
+          <TextField
+            label="Custom Git user"
+            value={identity.customGitUser}
+            onChangeText={(customGitUser) => patch({ customGitUser })}
+            placeholder="git"
+            hint="Only used when cloning over SSH. GitHub App sources clone over HTTPS with a minted token and ignore this."
+            autoCapitalize="none"
+            autoCorrect={false}
+            editable={!busy}
+          />
+          <TextField
+            label="Custom Git port"
+            value={identity.customGitPort}
+            onChangeText={(customGitPort) => patch({ customGitPort })}
+            placeholder="22"
+            hint="Same — SSH clones only."
+            autoCapitalize="none"
+            autoCorrect={false}
+            editable={!busy}
+          />
+        </View>
+      ) : null}
 
       <ButtonRow align="end">
         <Button label="Cancel" variant="ghost" onPress={onCancel} />
@@ -360,20 +353,20 @@ export function WebhookStep({
         />
       </FormField>
 
-      {previewUrl
-        ? (
-          <View style={styles.preview}>
-            <Text style={styles.previewLabel}>Deliveries will arrive at</Text>
-            <MonoText numberOfLines={1}>{previewUrl}</MonoText>
-          </View>
-        )
-        : null}
+      {previewUrl ? (
+        <View style={styles.preview}>
+          <Text style={styles.previewLabel}>Deliveries will arrive at</Text>
+          <MonoText numberOfLines={1}>{previewUrl}</MonoText>
+        </View>
+      ) : null}
 
       <FormField
         label="Preview deployment access"
-        hint={pullRequests === 'write'
-          ? 'The App may comment on and update pull requests — what a preview deployment needs to post its URL back. This is the only write access it gets.'
-          : 'The App can read pull requests but not change them. Everything it does stays read-only.'}
+        hint={
+          pullRequests === 'write'
+            ? 'The App may comment on and update pull requests — what a preview deployment needs to post its URL back. This is the only write access it gets.'
+            : 'The App can read pull requests but not change them. Everything it does stays read-only.'
+        }
       >
         <SegmentedControl
           options={[
@@ -481,30 +474,28 @@ export function GithubAppWizard({
       <WizardSteps steps={STEPS} current={step} />
       {error ? <Text style={panelStyles.error}>{error}</Text> : null}
 
-      {step === 'identity'
-        ? (
-          <IdentityStep
-            identity={identity}
-            patch={patch}
-            scope={scope}
-            busy={start.isPending}
-            onCancel={onCancel}
-            onContinue={continueFromIdentity}
-          />
-        )
-        : (
-          <WebhookStep
-            originsState={originsState}
-            resolvedOrigin={resolvedOrigin}
-            previewUrl={previewUrl}
-            onOriginChange={setWebhookOrigin}
-            pullRequests={pullRequests}
-            onPullRequestsChange={setPullRequests}
-            busy={start.isPending}
-            onBack={() => setStep('identity')}
-            onRegister={register}
-          />
-        )}
+      {step === 'identity' ? (
+        <IdentityStep
+          identity={identity}
+          patch={patch}
+          scope={scope}
+          busy={start.isPending}
+          onCancel={onCancel}
+          onContinue={continueFromIdentity}
+        />
+      ) : (
+        <WebhookStep
+          originsState={originsState}
+          resolvedOrigin={resolvedOrigin}
+          previewUrl={previewUrl}
+          onOriginChange={setWebhookOrigin}
+          pullRequests={pullRequests}
+          onPullRequestsChange={setPullRequests}
+          busy={start.isPending}
+          onBack={() => setStep('identity')}
+          onRegister={register}
+        />
+      )}
     </SectionPanel>
   )
 }

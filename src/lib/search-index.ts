@@ -156,10 +156,10 @@ function pageItems(orgId: string, data: SearchData): SearchItem[] {
     ...pages,
     ...sub('servers', 'datacenters', 'Datacenters'),
     ...sub('servers', 'keys', 'Pending Keys', 'registration keys unused'),
-    ...sub('servers', 'tls', 'Server certificates', 'tls ssl'),
-    ...sub('servers', 'settings', 'Server settings', 'defaults timezone'),
+    ...sub('servers', 'tls', 'Server Certificates', 'tls ssl'),
+    ...sub('servers', 'settings', 'Server Settings', 'defaults timezone'),
     ...(networkPages ?? []),
-    ...sub('managed', 'settings', 'Managed database settings', 'defaults'),
+    ...sub('managed', 'settings', 'Managed Database Settings', 'defaults'),
     ...settingsPages,
   ]
 }

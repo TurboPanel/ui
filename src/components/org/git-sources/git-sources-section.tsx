@@ -14,10 +14,7 @@ import {
   SectionPanel,
   SegmentedControl,
 } from '@/components/ui'
-import {
-  githubManifestReturnNotice,
-  readGithubManifestReturn,
-} from '@/lib/github-manifest-return'
+import { githubManifestReturnNotice, readGithubManifestReturn } from '@/lib/github-manifest-return'
 import type { ForgeSummary } from '@/lib/instance-api'
 import { useDeleteForge, useForges } from '@/lib/queries/admin'
 import { useGitConnections } from '@/lib/queries/releases'
@@ -61,88 +58,83 @@ function GitAppRow({
   const [error, setError] = useState<string | null>(null)
 
   return (
-    <SectionPanel
-      title={app.name}
-      hint={`${PROVIDER_LABEL[app.provider]} · ${app.baseUrl}`}
-    >
+    <SectionPanel title={app.name} hint={`${PROVIDER_LABEL[app.provider]} · ${app.baseUrl}`}>
       {error ? <Text style={panelStyles.error}>{error}</Text> : null}
 
       <View style={styles.badges}>
-        {app.organizationId === null
-          ? <Badge label="All organizations" tone="info" />
-          : <Badge label="This organization" tone="muted" />}
+        {app.organizationId === null ? (
+          <Badge label="All organizations" tone="info" />
+        ) : (
+          <Badge label="This organization" tone="muted" />
+        )}
         {app.readOnly ? <Badge label="Read-only" tone="muted" /> : null}
-        {installed
-          ? <Badge label="Installed" tone="ok" />
-          : <Badge label="Not installed" tone="pending" />}
+        {installed ? (
+          <Badge label="Installed" tone="ok" />
+        ) : (
+          <Badge label="Not installed" tone="pending" />
+        )}
         <SealedBadge
           configured={app.provider === 'github' ? app.hasPrivateKey : app.hasClientSecret}
         />
       </View>
 
-      {!installed
-        ? (
-          // The gap that used to be invisible: a registered App with no
-          // installation looks configured while being unable to see a single
-          // repository.
-          <Text style={styles.muted}>
-            Repository access has not been installed yet. Open this application to
-            finish the setup.
-          </Text>
-        )
-        : null}
+      {!installed ? (
+        // The gap that used to be invisible: a registered App with no
+        // installation looks configured while being unable to see a single
+        // repository.
+        <Text style={styles.muted}>
+          Repository access has not been installed yet. Open this application to finish the setup.
+        </Text>
+      ) : null}
 
-      {app.webhookUrl
-        ? (
-          <MonoText style={styles.webhook} numberOfLines={1}>{app.webhookUrl}</MonoText>
-        )
-        : null}
+      {app.webhookUrl ? (
+        <MonoText style={styles.webhook} numberOfLines={1}>
+          {app.webhookUrl}
+        </MonoText>
+      ) : null}
 
-      {editing
-        ? (
-          <ForgeEditor
-            provider={app.provider}
-            existing={app}
-            scope={scope}
-            onDone={onCancelEdit}
-            onCancel={onCancelEdit}
+      {editing ? (
+        <ForgeEditor
+          provider={app.provider}
+          existing={app}
+          scope={scope}
+          onDone={onCancelEdit}
+          onCancel={onCancelEdit}
+        />
+      ) : (
+        <ButtonRow align="end">
+          <Button
+            label="Open"
+            variant="primary"
+            size="sm"
+            onPress={() =>
+              router.push(
+                (orgId
+                  ? `/${orgId}/projects/git-sources/${app.id}`
+                  : `/admin/git/${app.id}`) as Href
+              )
+            }
           />
-        )
-        : (
-          <ButtonRow align="end">
-            <Button
-              label="Open"
-              variant="primary"
-              size="sm"
-              onPress={() =>
-                router.push(
-                  (orgId
-                    ? `/${orgId}/projects/git-sources/${app.id}`
-                    : `/admin/git/${app.id}`) as Href,
-                )}
-            />
-            {app.readOnly
-              ? null
-              : (
-                <>
-                  <Button label="Edit" variant="secondary" size="sm" onPress={onEdit} />
-                  <ConfirmButton
-                    label="Delete"
-                    prompt="Delete this application? Accounts connected through it are disconnected."
-                    busy={remove.isPending}
-                    onConfirm={() => {
-                      setError(null)
-                      remove.mutate(app.id, {
-                        onError: (err) => {
-                          setError(errorMessage(err, 'Failed to delete the application'))
-                        },
-                      })
-                    }}
-                  />
-                </>
-              )}
-          </ButtonRow>
-        )}
+          {app.readOnly ? null : (
+            <>
+              <Button label="Edit" variant="secondary" size="sm" onPress={onEdit} />
+              <ConfirmButton
+                label="Delete"
+                prompt="Delete this application? Accounts connected through it are disconnected."
+                busy={remove.isPending}
+                onConfirm={() => {
+                  setError(null)
+                  remove.mutate(app.id, {
+                    onError: (err) => {
+                      setError(errorMessage(err, 'Failed to delete the application'))
+                    },
+                  })
+                }}
+              />
+            </>
+          )}
+        </ButtonRow>
+      )}
     </SectionPanel>
   )
 }
@@ -175,11 +167,8 @@ export function GitSourcesSection({
 
   const apps = useMemo(() => query.data ?? [], [query.data])
   const installedAppIds = useMemo(
-    () =>
-      new Set(
-        (connectionsQuery.data?.connections ?? []).map((row) => row.forgeId),
-      ),
-    [connectionsQuery.data],
+    () => new Set((connectionsQuery.data?.connections ?? []).map((row) => row.forgeId)),
+    [connectionsQuery.data]
   )
 
   // A row that disappeared underneath an open editor must not leave the form
@@ -196,34 +185,32 @@ export function GitSourcesSection({
 
   return (
     <View style={styles.root}>
-      <Text style={panelStyles.pageTitle}>Git sources</Text>
+      <Text style={panelStyles.pageTitle}>
+        {scope === 'admin' ? 'Git Providers' : 'Git Sources'}
+      </Text>
       <Text style={panelStyles.pageCopy}>
         {scope === 'admin'
           ? 'Applications shared with every organization on this control plane. Every organization can connect accounts through these.'
           : 'Applications this organization connects repositories through, plus any this control plane shares. Repositories themselves are attached when you create or edit a project, and listed under Repositories.'}
       </Text>
 
-      {returnNotice
-        ? (
-          <InlineNotice
-            tone={returnNotice.tone}
-            title={returnNotice.title}
-            body={returnNotice.body}
-          />
-        )
-        : null}
+      {returnNotice ? (
+        <InlineNotice
+          tone={returnNotice.tone}
+          title={returnNotice.title}
+          body={returnNotice.body}
+        />
+      ) : null}
       {loadError ? <Text style={panelStyles.error}>{loadError}</Text> : null}
       {query.isLoading ? <LoadingState /> : null}
 
-      {!query.isLoading && apps.length === 0 && !busy
-        ? (
-          <EmptyState
-            panel
-            title="No Git applications yet"
-            hint="Register a GitHub App to connect repositories. Each one gets its own webhook URL."
-          />
-        )
-        : null}
+      {!query.isLoading && apps.length === 0 && !busy ? (
+        <EmptyState
+          panel
+          title="No Git applications yet"
+          hint="Register a GitHub App to connect repositories. Each one gets its own webhook URL."
+        />
+      ) : null}
 
       {apps.map((app) => (
         <GitAppRow
@@ -242,66 +229,55 @@ export function GitSourcesSection({
         />
       ))}
 
-      {wizard
-        ? (
-          <GithubAppWizard
-            scope={scope}
-            onCancel={() => setWizard(false)}
+      {wizard ? <GithubAppWizard scope={scope} onCancel={() => setWizard(false)} /> : null}
+
+      {adding ? (
+        <SectionPanel
+          title="Register an existing application"
+          hint="For an App you already created, or any GitLab OAuth application."
+        >
+          <SegmentedControl
+            options={[
+              { value: 'github', label: 'GitHub' },
+              { value: 'gitlab', label: 'GitLab' },
+            ]}
+            value={adding}
+            onChange={(value) => setAdding(value as Provider)}
           />
-        )
-        : null}
+          <ForgeEditor
+            key={adding}
+            provider={adding}
+            scope={scope}
+            onDone={() => setAdding(null)}
+            onCancel={() => setAdding(null)}
+          />
+        </SectionPanel>
+      ) : null}
 
-      {adding
-        ? (
-          <SectionPanel
-            title="Register an existing application"
-            hint="For an App you already created, or any GitLab OAuth application."
-          >
-            <SegmentedControl
-              options={[
-                { value: 'github', label: 'GitHub' },
-                { value: 'gitlab', label: 'GitLab' },
-              ]}
-              value={adding}
-              onChange={(value) => setAdding(value as Provider)}
-            />
-            <ForgeEditor
-              key={adding}
-              provider={adding}
-              scope={scope}
-              onDone={() => setAdding(null)}
-              onCancel={() => setAdding(null)}
-            />
-          </SectionPanel>
-        )
-        : null}
-
-      {busy
-        ? null
-        : (
-          <ButtonRow>
-            <Button
-              label="Create a GitHub App"
-              variant="primary"
-              size="sm"
-              onPress={() => {
-                setEditingId(null)
-                setAdding(null)
-                setWizard(true)
-              }}
-            />
-            <Button
-              label="Register an existing one"
-              variant="secondary"
-              size="sm"
-              onPress={() => {
-                setEditingId(null)
-                setWizard(false)
-                setAdding('github')
-              }}
-            />
-          </ButtonRow>
-        )}
+      {busy ? null : (
+        <ButtonRow>
+          <Button
+            label="Create a GitHub App"
+            variant="primary"
+            size="sm"
+            onPress={() => {
+              setEditingId(null)
+              setAdding(null)
+              setWizard(true)
+            }}
+          />
+          <Button
+            label="Register an existing one"
+            variant="secondary"
+            size="sm"
+            onPress={() => {
+              setEditingId(null)
+              setWizard(false)
+              setAdding('github')
+            }}
+          />
+        </ButtonRow>
+      )}
     </View>
   )
 }

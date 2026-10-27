@@ -68,7 +68,7 @@ export function RepositoryPicker({
     sourceId: string,
     repository: GitRepositorySummary | null,
     record?: RepositoryRecord,
-    reused?: boolean,
+    reused?: boolean
   ) => void
   /** Nothing to pick from yet — the caller decides where to send the operator. */
   onNeedsApp?: () => void
@@ -100,11 +100,11 @@ export function RepositoryPicker({
   const apps = useMemo(() => appsQuery.data ?? [], [appsQuery.data])
   const connections = useMemo(
     () => connectionsQuery.data?.connections ?? [],
-    [connectionsQuery.data],
+    [connectionsQuery.data]
   )
   const connected = useMemo(
     () => repositoriesQuery.data?.repositories ?? [],
-    [repositoriesQuery.data],
+    [repositoriesQuery.data]
   )
   // Two rows can share an `owner/repo` label across hosts; the URL on the
   // detail line is what tells them apart, and the filter matches it too.
@@ -115,13 +115,13 @@ export function RepositoryPicker({
         label: repositoryLabel(row),
         detail: row.repositoryUrl,
       })),
-    [connected],
+    [connected]
   )
 
   /** Only apps that actually have a connected account can offer repositories. */
   const usableApps = useMemo(
     () => apps.filter((app) => connections.some((row) => row.forgeId === app.id)),
-    [apps, connections],
+    [apps, connections]
   )
 
   const pickConnected = (id: string | null) => {
@@ -164,10 +164,7 @@ export function RepositoryPicker({
     )
   }
 
-  if (
-    appsQuery.isLoading || connectionsQuery.isLoading ||
-    repositoriesQuery.isLoading
-  ) {
+  if (appsQuery.isLoading || connectionsQuery.isLoading || repositoriesQuery.isLoading) {
     return <LoadingState label="Loading repositories…" />
   }
 
@@ -180,55 +177,45 @@ export function RepositoryPicker({
     <View style={styles.root}>
       {error ? <InlineNotice tone="warning" title="Could not attach" body={error} /> : null}
 
-      {hasConnected
-        ? (
-          <FormField
-            label="Connected repositories"
-            hint="Repositories this organization already uses."
-          >
-            <Select
-              value={null}
-              options={connectedOptions}
-              placeholder="Pick a connected repository…"
-              searchPlaceholder="Search repositories"
-              mono
-              disabled={busy}
-              accessibilityLabel="Connected repository"
-              onChange={pickConnected}
-            />
-          </FormField>
-        )
-        : null}
-
-      {hasApps && hasConnected
-        ? (
-          <Text style={panelStyles.muted}>
-            Or browse a connected account for a new one:
-          </Text>
-        )
-        : null}
-
-      {hasApps
-        ? (
-          <BrowseAccountsLane
-            orgId={orgId}
-            apps={usableApps}
-            connections={connections}
-            busy={busy}
-            attaching={attaching}
-            onPickRepository={attachAndPick}
+      {hasConnected ? (
+        <FormField
+          label="Connected repositories"
+          hint="Repositories this organization already uses."
+        >
+          <Select
+            value={null}
+            options={connectedOptions}
+            placeholder="Pick a connected repository…"
+            searchPlaceholder="Search repositories"
+            mono
+            disabled={busy}
+            accessibilityLabel="Connected repository"
+            onChange={pickConnected}
           />
-        )
-        : null}
+        </FormField>
+      ) : null}
 
-      {!hasApps && !hasConnected
-        ? (
-          <Text style={panelStyles.muted}>
-            Nothing is connected yet — paste a clone URL below, or add a Git
-            application to browse the repositories its account can read.
-          </Text>
-        )
-        : null}
+      {hasApps && hasConnected ? (
+        <Text style={panelStyles.muted}>Or browse a connected account for a new one:</Text>
+      ) : null}
+
+      {hasApps ? (
+        <BrowseAccountsLane
+          orgId={orgId}
+          apps={usableApps}
+          connections={connections}
+          busy={busy}
+          attaching={attaching}
+          onPickRepository={attachAndPick}
+        />
+      ) : null}
+
+      {!hasApps && !hasConnected ? (
+        <Text style={panelStyles.muted}>
+          Nothing is connected yet — paste a clone URL below, or add a Git application to browse the
+          repositories its account can read.
+        </Text>
+      ) : null}
 
       <View style={styles.actions}>
         <Button
@@ -238,19 +225,15 @@ export function RepositoryPicker({
           disabled={busy}
           onPress={() => setDeployKeyLane(true)}
         />
-        {onNeedsApp
-          ? (
-            <Button
-              label={apps.length === 0
-                ? 'Add a GitHub or GitLab app'
-                : 'Manage Git sources'}
-              variant="ghost"
-              size="sm"
-              disabled={busy}
-              onPress={onNeedsApp}
-            />
-          )
-          : null}
+        {onNeedsApp ? (
+          <Button
+            label={apps.length === 0 ? 'Add a GitHub or GitLab app' : 'Manage Git Sources'}
+            variant="ghost"
+            size="sm"
+            disabled={busy}
+            onPress={onNeedsApp}
+          />
+        ) : null}
       </View>
     </View>
   )
@@ -282,7 +265,7 @@ function BrowseAccountsLane({
 
   const accounts = useMemo(
     () => connections.filter((row) => row.forgeId === appId && !row.suspended),
-    [connections, appId],
+    [connections, appId]
   )
 
   // Collapse the single-option cases so the common setup is one click, not three.
@@ -320,45 +303,41 @@ function BrowseAccountsLane({
         />
       </FormField>
 
-      {appId
-        ? (
-          <FormField label="Account">
-            <FormSelect
-              value={connectionId}
-              options={accounts.map((row) => ({
-                value: row.id,
-                label: row.accountLogin ?? row.externalInstallationId,
-              }))}
-              placeholder="Select an account…"
-              disabled={busy}
-              accessibilityLabel="GitHub account"
-              onChange={setConnectionId}
-            />
-          </FormField>
-        )
-        : null}
+      {appId ? (
+        <FormField label="Account">
+          <FormSelect
+            value={connectionId}
+            options={accounts.map((row) => ({
+              value: row.id,
+              label: row.accountLogin ?? row.externalInstallationId,
+            }))}
+            placeholder="Select an account…"
+            disabled={busy}
+            accessibilityLabel="GitHub account"
+            onChange={setConnectionId}
+          />
+        </FormField>
+      ) : null}
 
-      {connectionId
-        ? (
-          <FormField
-            label="Repository"
-            hint={reposQuery.isLoading ? 'Loading repositories…' : undefined}
-          >
-            <FormSelect
-              value=""
-              options={repositories.map((repo) => ({
-                value: repo.id,
-                label: repo.private ? `${repo.fullName} (private)` : repo.fullName,
-              }))}
-              placeholder={attaching ? 'Attaching…' : 'Select a repository…'}
-              disabled={busy || reposQuery.isLoading}
-              mono
-              accessibilityLabel="Repository"
-              onChange={pick}
-            />
-          </FormField>
-        )
-        : null}
+      {connectionId ? (
+        <FormField
+          label="Repository"
+          hint={reposQuery.isLoading ? 'Loading repositories…' : undefined}
+        >
+          <FormSelect
+            value=""
+            options={repositories.map((repo) => ({
+              value: repo.id,
+              label: repo.private ? `${repo.fullName} (private)` : repo.fullName,
+            }))}
+            placeholder={attaching ? 'Attaching…' : 'Select a repository…'}
+            disabled={busy || reposQuery.isLoading}
+            mono
+            accessibilityLabel="Repository"
+            onChange={pick}
+          />
+        </FormField>
+      ) : null}
     </>
   )
 }

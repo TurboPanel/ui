@@ -39,10 +39,7 @@ import { userErrorMessage } from '@/lib/user-error'
 const POLL_FAILURE_THRESHOLD = 3
 
 function isAuthorizationError(err: unknown): boolean {
-  return (
-    isForbiddenError(err)
-    || (err instanceof Error && err.message.includes('HTTP 401'))
-  )
+  return isForbiddenError(err) || (err instanceof Error && err.message.includes('HTTP 401'))
 }
 
 type WizardStep = 'create' | 'install' | 'waiting'
@@ -52,7 +49,6 @@ const WIZARD_STEPS: readonly { id: WizardStep; label: string }[] = [
   { id: 'install', label: 'Install' },
   { id: 'waiting', label: 'Connect' },
 ]
-
 
 type AddServerWizardProps = Readonly<{
   orgId: string
@@ -114,18 +110,10 @@ function DevInstallUrlFields({
                 accessibilityRole="button"
                 accessibilityState={{ selected: active, disabled: !canEdit }}
                 disabled={!canEdit}
-                style={[
-                  styles.secondaryButton,
-                  active && styles.devUrlChipActive,
-                ]}
+                style={[styles.secondaryButton, active && styles.devUrlChipActive]}
                 onPress={() => onChange(origin)}
               >
-                <Text
-                  style={[
-                    styles.secondaryButtonText,
-                    active && styles.devUrlChipTextActive,
-                  ]}
-                >
+                <Text style={[styles.secondaryButtonText, active && styles.devUrlChipTextActive]}>
                   {origin}
                 </Text>
               </Pressable>
@@ -144,13 +132,11 @@ function DevInstallUrlFields({
       ) : null}
       {locked ? (
         <Text style={panelStyles.muted}>
-          This address was checked against the Platform CA certificate. The
-          install command is the one the control plane issued.
+          This address was checked against the Platform CA certificate. The install command is the
+          one the control plane issued.
         </Text>
       ) : null}
-      {tlsHint ? (
-        <Text style={panelStyles.muted}>{tlsHint}</Text>
-      ) : null}
+      {tlsHint ? <Text style={panelStyles.muted}>{tlsHint}</Text> : null}
     </>
   )
 }
@@ -195,16 +181,10 @@ function CreateStep({
         editable={!creating}
       />
       {tierSection}
-      {createError ? (
-        <Text style={panelStyles.error}>{createError}</Text>
-      ) : null}
+      {createError ? <Text style={panelStyles.error}>{createError}</Text> : null}
       {createError && billingHref ? (
         <ButtonRow>
-          <Button
-            label="Open billing"
-            size="sm"
-            onPress={() => router.push(billingHref)}
-          />
+          <Button label="Open billing" size="sm" onPress={() => router.push(billingHref)} />
         </ButtonRow>
       ) : null}
       {__DEV__ ? (
@@ -228,9 +208,7 @@ function CreateStep({
           busy={creating}
           onPress={onContinue}
         />
-        {onCancel ? (
-          <Button label="Cancel" disabled={creating} onPress={onCancel} />
-        ) : null}
+        {onCancel ? <Button label="Cancel" disabled={creating} onPress={onCancel} /> : null}
       </ButtonRow>
     </View>
   )
@@ -255,8 +233,8 @@ function InstallStep({
     <View style={styles.revealed}>
       <View style={panelStyles.calloutWarning}>
         <Text style={panelStyles.calloutWarningText}>
-          Run this install command on the new server. The registration key is
-          embedded and can only enroll one host.
+          Run this install command on the new server. The registration key is embedded and can only
+          enroll one host.
         </Text>
       </View>
       <Text style={styles.secretLabel}>Install command</Text>
@@ -315,9 +293,7 @@ function WaitingActions({
   return (
     <ButtonRow>
       <Button label={primaryLabel} variant="primary" onPress={onPrimary} />
-      {extraLabel && onExtra ? (
-        <Button label={extraLabel} onPress={onExtra} />
-      ) : null}
+      {extraLabel && onExtra ? <Button label={extraLabel} onPress={onExtra} /> : null}
       {secondaryLabel && onSecondary ? (
         <Button label={secondaryLabel} onPress={onSecondary} />
       ) : null}
@@ -353,13 +329,10 @@ function WaitingStep({
   if (connectedServer == null) {
     return (
       <View style={styles.waiting}>
-        <LoadingState
-          label={`Waiting for this host to connect (${elapsedSeconds}s)`}
-        />
+        <LoadingState label={`Waiting for this host to connect (${elapsedSeconds}s)`} />
         <Text style={panelStyles.muted}>{waitingHostNote(elapsedSeconds)}</Text>
         <Text style={panelStyles.muted}>
-          This key stays under Pending keys until a host enrolls. You can add
-          another server now.
+          This key stays under Pending Keys until a host enrolls. You can add another server now.
         </Text>
         <WaitingActions
           primaryLabel="Add another server"
@@ -392,18 +365,14 @@ function WaitingStep({
   )
 }
 
-export function AddServerWizard({
-  orgId,
-  onComplete,
-  onDismiss,
-}: AddServerWizardProps) {
+export function AddServerWizard({ orgId, onComplete, onDismiss }: AddServerWizardProps) {
   const publicUrlsQuery = usePublicUrlsOptional({ enabled: __DEV__ })
   const managedUrls = orEmptyArray(publicUrlsQuery.data?.urls)
   const createLicenseMutation = useCreateLicense(orgId)
   const [step, setStep] = useState<WizardStep>('create')
   const [displayName, setDisplayName] = useState('')
   const [installBaseUrl, setInstallBaseUrl] = useState(() =>
-    __DEV__ ? defaultDevInstallBaseUrl() : '',
+    __DEV__ ? defaultDevInstallBaseUrl() : ''
   )
   const [createError, setCreateError] = useState<string | null>(null)
   const { billingEnabled } = useAuth()
@@ -428,7 +397,7 @@ export function AddServerWizard({
   useEffect(() => {
     if (!__DEV__ || managedUrls.length === 0) return
     setInstallBaseUrl((current) =>
-      current.trim() ? current : defaultDevInstallBaseUrl(managedUrls),
+      current.trim() ? current : defaultDevInstallBaseUrl(managedUrls)
     )
   }, [managedUrls])
 
@@ -467,7 +436,7 @@ export function AddServerWizard({
       // calling an ending license "in use"; the tier section offers the fix
       // (restore one that is ending, or buy one) for the tier this server needs.
       setLicenseRefusal(
-        result.cause instanceof NoLicenseAvailableError ? result.cause.availability : null,
+        result.cause instanceof NoLicenseAvailableError ? result.cause.availability : null
       )
       return
     }
@@ -511,7 +480,7 @@ export function AddServerWizard({
     }
 
     const match = serversQuery.data.servers.find(
-      (server) => server.licenseId === revealed.licenseId && server.connected,
+      (server) => server.licenseId === revealed.licenseId && server.connected
     )
     if (match) {
       setConnectedServer(match)
@@ -532,17 +501,13 @@ export function AddServerWizard({
     }
 
     if (isAuthorizationError(err)) {
-      setPollError(
-        userErrorMessage(err, 'Session expired or access denied'),
-      )
+      setPollError(userErrorMessage(err, 'Session expired or access denied'))
       return
     }
 
     consecutivePollFailuresRef.current += 1
     if (consecutivePollFailuresRef.current >= POLL_FAILURE_THRESHOLD) {
-      setPollError(
-        userErrorMessage(err, 'Failed to check server status'),
-      )
+      setPollError(userErrorMessage(err, 'Failed to check server status'))
     }
   }, [
     waitingForConnection,
@@ -572,11 +537,10 @@ export function AddServerWizard({
     setPollAttempt((current) => current + 1)
   }
 
-  const clearCreateErrorOnChange = (setter: (value: string) => void) =>
-    (text: string) => {
-      setter(text)
-      setCreateError(null)
-    }
+  const clearCreateErrorOnChange = (setter: (value: string) => void) => (text: string) => {
+    setter(text)
+    setCreateError(null)
+  }
 
   const body = (
     <>

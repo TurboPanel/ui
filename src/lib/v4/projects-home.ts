@@ -240,7 +240,7 @@ export type ProjectTypeFilter = (typeof PROJECT_TYPE_FILTERS)[number]
 const PROJECT_TYPE_LABELS: Readonly<Record<ProjectTypeFilter, string>> = {
   all: 'All',
   apps: 'Apps',
-  managed: 'Managed databases',
+  managed: 'Managed Databases',
 }
 
 /** The filter a `?type=` value names; anything else is All. */

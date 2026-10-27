@@ -3,10 +3,7 @@ import { StyleSheet, Text, View } from 'react-native'
 import { SectionPanel, SettingRow, Toggle } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
 import type { SignupSettingsResponse } from '@/lib/instance-api'
-import {
-  useSaveSignupSettings,
-  useSignupSettings,
-} from '@/lib/queries/admin'
+import { useSaveSignupSettings, useSignupSettings } from '@/lib/queries/admin'
 import { HA_SIGNUP_SETTINGS_NOTE } from '@/lib/platform-copy'
 import { spacing } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
@@ -27,17 +24,15 @@ export function SignupSettingsSection() {
   const pending = mutation.isPending || query.isLoading
 
   const queryError =
-    query.isError && !error
-      ? errorMessage(query.error, 'Failed to load sign-up setting')
-      : null
+    query.isError && !error ? errorMessage(query.error, 'Failed to load sign-up setting') : null
   const displayError = error ?? mutation.actionError ?? queryError
 
   return (
     <View style={styles.root}>
-      <Text style={panelStyles.pageTitle}>Sign-up</Text>
+      <Text style={panelStyles.pageTitle}>Sign-Up</Text>
       <Text style={panelStyles.pageCopy}>
-        Control whether public account creation is available on the sign-in
-        page. {HA_SIGNUP_SETTINGS_NOTE}
+        Control whether public account creation is available on the sign-in page.{' '}
+        {HA_SIGNUP_SETTINGS_NOTE}
       </Text>
 
       <SectionPanel
@@ -49,8 +44,8 @@ export function SignupSettingsSection() {
         {envForced ? (
           <Text style={panelStyles.muted}>
             Sign-up is force-controlled by TURBOPANEL_IS_SIGNUP_ENABLED
-            {settings?.envOverride ? ` (${settings.envOverride})` : ''}. Clear
-            that environment variable to use this panel toggle.
+            {settings?.envOverride ? ` (${settings.envOverride})` : ''}. Clear that environment
+            variable to use this panel toggle.
           </Text>
         ) : null}
 
@@ -65,9 +60,7 @@ export function SignupSettingsSection() {
               setError(null)
               mutation.mutate(next, {
                 onError: () => {
-                  setError(
-                    mutation.actionError ?? 'Failed to update sign-up setting',
-                  )
+                  setError(mutation.actionError ?? 'Failed to update sign-up setting')
                 },
               })
             }}
@@ -80,9 +73,7 @@ export function SignupSettingsSection() {
   )
 }
 
-function SignupMeta({
-  settings,
-}: Readonly<{ settings: SignupSettingsResponse | undefined }>) {
+function SignupMeta({ settings }: Readonly<{ settings: SignupSettingsResponse | undefined }>) {
   if (!settings) return null
   return (
     <View style={styles.meta}>

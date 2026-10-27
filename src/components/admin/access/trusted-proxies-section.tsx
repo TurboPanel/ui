@@ -27,7 +27,7 @@ export function TrustedProxiesSection() {
   if (query.data?.applicable === false) {
     return (
       <View style={styles.root}>
-        <Text style={panelStyles.pageTitle}>Trusted proxies</Text>
+        <Text style={panelStyles.pageTitle}>Trusted Proxies</Text>
         <InlineNotice
           title="Not applicable on this runtime"
           body="TurboPanel High Availability reads the client's real address from Cloudflare's own CF-Connecting-IP header — there is no local proxy in front of it, so this setting has no effect here."
@@ -39,16 +39,15 @@ export function TrustedProxiesSection() {
   const isDefault = query.data?.isDefault === true
   let loadError: string | null = null
   if (query.isError) {
-    loadError =
-      userErrorMessage(query.error, 'Failed to load trusted proxies')
+    loadError = userErrorMessage(query.error, 'Failed to load trusted proxies')
   }
 
   return (
     <View style={styles.root}>
-      <Text style={panelStyles.pageTitle}>Trusted proxies</Text>
+      <Text style={panelStyles.pageTitle}>Trusted Proxies</Text>
       <Text style={panelStyles.pageCopy}>
-        Peer addresses whose forwarded client headers this control plane
-        believes. The list is read from the process environment at startup.
+        Peer addresses whose forwarded client headers this control plane believes. The list is read
+        from the process environment at startup.
       </Text>
       <InlineNotice
         tone="warning"
@@ -68,11 +67,7 @@ export function TrustedProxiesSection() {
         }
       >
         {loadError ? <Text style={panelStyles.error}>{loadError}</Text> : null}
-        {query.isLoading ? (
-          <LoadingState />
-        ) : (
-          <CidrTable cidrs={cidrs} />
-        )}
+        {query.isLoading ? <LoadingState /> : <CidrTable cidrs={cidrs} />}
       </SectionPanel>
     </View>
   )
@@ -89,11 +84,7 @@ function CidrTable({ cidrs }: Readonly<{ cidrs: readonly string[] }>) {
   return (
     <DataTable columns={COLUMNS} minWidth={240}>
       {cidrs.map((cidr, index) => (
-        <DataTableRow
-          key={cidr}
-          alt={index % 2 === 1}
-          last={index === cidrs.length - 1}
-        >
+        <DataTableRow key={cidr} alt={index % 2 === 1} last={index === cidrs.length - 1}>
           <DataTableCell column={COLUMNS[0]}>
             <Text style={styles.mono}>{cidr}</Text>
           </DataTableCell>

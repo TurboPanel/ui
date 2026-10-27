@@ -35,7 +35,7 @@ export function searchDestinations(
   const area = (id: OrgAreaId) => ORG_AREAS.find((entry) => entry.id === id)
   const pageHref = (id: OrgAreaId, pathSegment: string): string => {
     if (id === 'projects') return projectsHrefForScope(orgId, options.projectsScopeId)
-    // Managed databases are the Projects list with its Managed databases filter.
+    // Managed databases are the Projects list with its Managed Databases filter.
     if (id === 'managed') return projectsListHref(orgId, options.projectsScopeId, 'managed')
     return orgAreaHref(orgId, pathSegment)
   }
@@ -69,15 +69,15 @@ export function searchDestinations(
     ...page('projects'),
     ...projectSub('git-sources', 'Git Sources', 'git-sources'),
     ...projectSub('repositories', 'Repositories', 'repositories'),
-    ...projectSub('settings', 'Project settings', 'project-settings'),
+    ...projectSub('settings', 'Project Settings', 'project-settings'),
     ...page('activity'),
     ...page('servers'),
-    ...page('managed', 'Managed databases'),
+    ...page('managed', 'Managed Databases'),
     ...page('network'),
     ...page('access'),
     {
       id: 'org-settings',
-      name: 'Organization settings',
+      name: 'Organization Settings',
       type: 'Page',
       href: orgManageHref(orgId),
       icon: 'org-settings',
