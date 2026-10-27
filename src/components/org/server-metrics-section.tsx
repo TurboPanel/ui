@@ -277,6 +277,47 @@ function hostMetric(scope: HostScope, field: string): PointValueReader {
   return metric(id)
 }
 
+/** One series on one line: its id, label, colour and reader. */
+function seriesLine(
+  id: string,
+  label: string,
+  color: string,
+  read: PointValueReader
+): ChartSeriesDefinition {
+  return { id, label, color, read }
+}
+
+/** Managed database engines, in legend order, with the two colours each engine's pair uses. */
+const MANAGED_ENGINES = [
+  { id: 'pg', label: 'Postgres', field: 'postgres', colors: [undefined, colors.command] },
+  { id: 'my', label: 'MySQL', field: 'mysql', colors: [colors.pending, colors.log] },
+  { id: 'ma', label: 'MariaDB', field: 'mariadb', colors: [colors.errorSoft, colors.stdout] },
+] as const
+
+type EngineMeasure = Readonly<{ id: string; word: string; field: string }>
+
+/**
+ * A pair of `storage` readings for every managed engine (`postgresInstancesRunning`,
+ * `postgresInstancesHealthy`, ...). The first series always draws; the rest
+ * drop out when an engine is not on this server.
+ */
+function managedEngineSeries(
+  measures: readonly [EngineMeasure, EngineMeasure]
+): ChartSeriesDefinition[] {
+  return MANAGED_ENGINES.flatMap((engine, engineIndex) =>
+    measures.map((measure, measureIndex): ChartSeriesDefinition => {
+      const color = engine.colors[measureIndex]
+      return {
+        id: `${engine.id}-${measure.id}`,
+        label: `${engine.label} ${measure.word}`,
+        ...(color ? { color } : {}),
+        read: hostMetric('storage', `${engine.field}${measure.field}`),
+        ...(engineIndex === 0 && measureIndex === 0 ? {} : { hideWhenEmpty: true }),
+      }
+    })
+  )
+}
+
 type ValueFormat = 'count' | 'percent' | 'bytes' | 'perSecond'
 
 const VALUE_FORMATTERS: Readonly<Record<ValueFormat, (value: number) => string>> = {
@@ -715,24 +756,14 @@ const HOST_CHART_DEFINITIONS: readonly ChartDefinition[] = [
     unit: 'MHz',
     range: true,
     series: [
-      {
-        id: 'min',
-        label: 'Min',
-        color: colors.textChip,
-        read: hostMetric('diagnostics', 'minimumFrequencyMHz'),
-      },
+      seriesLine('min', 'Min', colors.textChip, hostMetric('diagnostics', 'minimumFrequencyMHz')),
       {
         id: 'avg',
         label: 'Average',
         color: colors.ok,
         read: hostMetric('diagnostics', 'averageFrequencyMHz'),
       },
-      {
-        id: 'max',
-        label: 'Max',
-        color: colors.pending,
-        read: hostMetric('diagnostics', 'maximumFrequencyMHz'),
-      },
+      seriesLine('max', 'Max', colors.pending, hostMetric('diagnostics', 'maximumFrequencyMHz')),
     ],
     yFormat: (v) => `${formatCount(v)} MHz`,
     hideWhenEmpty: true,
@@ -1109,48 +1140,10 @@ const HOST_CHART_DEFINITIONS: readonly ChartDefinition[] = [
     id: 'managed-storage-engines',
     title: 'Managed databases · Running vs healthy',
     unit: 'count',
-    series: [
-      {
-        id: 'pg-running',
-        label: 'Postgres running',
-        read: hostMetric('storage', 'postgresInstancesRunning'),
-      },
-      {
-        id: 'pg-healthy',
-        label: 'Postgres healthy',
-        color: colors.command,
-        read: hostMetric('storage', 'postgresInstancesHealthy'),
-        hideWhenEmpty: true,
-      },
-      {
-        id: 'my-running',
-        label: 'MySQL running',
-        color: colors.pending,
-        read: hostMetric('storage', 'mysqlInstancesRunning'),
-        hideWhenEmpty: true,
-      },
-      {
-        id: 'my-healthy',
-        label: 'MySQL healthy',
-        color: colors.log,
-        read: hostMetric('storage', 'mysqlInstancesHealthy'),
-        hideWhenEmpty: true,
-      },
-      {
-        id: 'ma-running',
-        label: 'MariaDB running',
-        color: colors.errorSoft,
-        read: hostMetric('storage', 'mariadbInstancesRunning'),
-        hideWhenEmpty: true,
-      },
-      {
-        id: 'ma-healthy',
-        label: 'MariaDB healthy',
-        color: colors.stdout,
-        read: hostMetric('storage', 'mariadbInstancesHealthy'),
-        hideWhenEmpty: true,
-      },
-    ],
+    series: managedEngineSeries([
+      { id: 'running', word: 'running', field: 'InstancesRunning' },
+      { id: 'healthy', word: 'healthy', field: 'InstancesHealthy' },
+    ]),
     yFormat: (v) => formatCount(v),
     hideWhenEmpty: true,
   },
@@ -1158,48 +1151,10 @@ const HOST_CHART_DEFINITIONS: readonly ChartDefinition[] = [
     id: 'managed-storage-connections',
     title: 'Managed databases · Connections used vs max',
     unit: 'count',
-    series: [
-      {
-        id: 'pg-used',
-        label: 'Postgres used',
-        read: hostMetric('storage', 'postgresConnectionsUsed'),
-      },
-      {
-        id: 'pg-max',
-        label: 'Postgres max',
-        color: colors.command,
-        read: hostMetric('storage', 'postgresConnectionsMax'),
-        hideWhenEmpty: true,
-      },
-      {
-        id: 'my-used',
-        label: 'MySQL used',
-        color: colors.pending,
-        read: hostMetric('storage', 'mysqlConnectionsUsed'),
-        hideWhenEmpty: true,
-      },
-      {
-        id: 'my-max',
-        label: 'MySQL max',
-        color: colors.log,
-        read: hostMetric('storage', 'mysqlConnectionsMax'),
-        hideWhenEmpty: true,
-      },
-      {
-        id: 'ma-used',
-        label: 'MariaDB used',
-        color: colors.errorSoft,
-        read: hostMetric('storage', 'mariadbConnectionsUsed'),
-        hideWhenEmpty: true,
-      },
-      {
-        id: 'ma-max',
-        label: 'MariaDB max',
-        color: colors.stdout,
-        read: hostMetric('storage', 'mariadbConnectionsMax'),
-        hideWhenEmpty: true,
-      },
-    ],
+    series: managedEngineSeries([
+      { id: 'used', word: 'used', field: 'ConnectionsUsed' },
+      { id: 'max', word: 'max', field: 'ConnectionsMax' },
+    ]),
     yFormat: (v) => formatCount(v),
     hideWhenEmpty: true,
   },
@@ -1277,18 +1232,13 @@ const HOST_CHART_DEFINITIONS: readonly ChartDefinition[] = [
     unit: 'count',
     series: [
       { id: 'images', label: 'Images', read: hostMetric('dockerUsage', 'imagesCount') },
-      {
-        id: 'containers',
-        label: 'Containers',
-        color: colors.command,
-        read: hostMetric('dockerUsage', 'containersCount'),
-      },
-      {
-        id: 'volumes',
-        label: 'Volumes',
-        color: colors.pending,
-        read: hostMetric('dockerUsage', 'volumesCount'),
-      },
+      seriesLine(
+        'containers',
+        'Containers',
+        colors.command,
+        hostMetric('dockerUsage', 'containersCount')
+      ),
+      seriesLine('volumes', 'Volumes', colors.pending, hostMetric('dockerUsage', 'volumesCount')),
     ],
     yFormat: (v) => formatCount(v),
     hideWhenEmpty: true,
