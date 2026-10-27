@@ -50,12 +50,8 @@ describe('adminAreaHref', () => {
   })
 
   it('joins an area and a sub-route', () => {
-    expect(adminRouteHref('access', 'certificates')).toBe(
-      '/admin/access/certificates',
-    )
-    expect(adminRouteHref('access', 'platform-ca')).toBe(
-      '/admin/access/platform-ca',
-    )
+    expect(adminRouteHref('access', 'certificates')).toBe('/admin/access/certificates')
+    expect(adminRouteHref('access', 'platform-ca')).toBe('/admin/access/platform-ca')
   })
 })
 
@@ -82,17 +78,13 @@ describe('adminAreaFromPathname', () => {
 
   it('resolves Access and its sub-routes', () => {
     expect(adminAreaFromPathname('/admin/access')?.subRoute).toBeNull()
-    expect(adminAreaFromPathname('/admin/access/certificates')?.subRoute?.id).toBe(
-      'certificates',
-    )
+    expect(adminAreaFromPathname('/admin/access/certificates')?.subRoute?.id).toBe('certificates')
     expect(adminAreaFromPathname('/admin/access/unknown')?.area.id).toBe('access')
     expect(adminAreaFromPathname('/admin/access/unknown')?.subRoute).toBeNull()
   })
 
   it('resolves Update History and keeps a run screen on the Updates area', () => {
-    expect(adminAreaFromPathname('/admin/updates/history')?.subRoute?.id).toBe(
-      'history',
-    )
+    expect(adminAreaFromPathname('/admin/updates/history')?.subRoute?.id).toBe('history')
     const run = adminAreaFromPathname('/admin/updates/runs/run-1')
     expect(run?.area.id).toBe('updates')
     expect(run?.subRoute).toBeNull()

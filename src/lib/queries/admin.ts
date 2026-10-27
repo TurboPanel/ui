@@ -86,10 +86,7 @@ import {
 } from '@/lib/control-plane-recovery'
 import { getActiveOrganizationId } from '@/lib/org-context'
 import { isManagedUpgradeApiMissing } from '@/lib/upgrade-api'
-import {
-  isUpgradeRunActive,
-  UPGRADE_RUN_POLL_MS,
-} from '@/lib/upgrade-run-poll'
+import { isUpgradeRunActive, UPGRADE_RUN_POLL_MS } from '@/lib/upgrade-run-poll'
 import { markControlPlaneUpgradeWatch } from '@/lib/upgrade-watch'
 import {
   waitForUnitUpdate,
@@ -217,17 +214,13 @@ const BASELINE_READ_MS = 10_000
  */
 async function issuanceBaselineBeforeApply(
   hostnames: readonly InstanceHostnameInput[] | undefined,
-  signal: AbortSignal,
+  signal: AbortSignal
 ): Promise<IssuanceBaseline> {
   if (hostnames && !hostnames.some((entry) => entry.source === 'lets-encrypt')) {
     return new Map()
   }
   try {
-    const read = await raceWindow(
-      fetchInstanceHostnames({ signal }),
-      BASELINE_READ_MS,
-      signal,
-    )
+    const read = await raceWindow(fetchInstanceHostnames({ signal }), BASELINE_READ_MS, signal)
     return read ? takeIssuanceBaseline(read.hostnames) : null
   } catch {
     return null
@@ -244,7 +237,7 @@ function hostnameIdentity(entry: {
 
 function sameHostnameSet(
   saved: readonly InstanceHostnameRecord[],
-  expected: readonly InstanceHostnameInput[],
+  expected: readonly InstanceHostnameInput[]
 ): boolean {
   const left = saved.map(hostnameIdentity).sort((a, b) => a.localeCompare(b))
   const right = expected.map(hostnameIdentity).sort((a, b) => a.localeCompare(b))
@@ -252,9 +245,7 @@ function sameHostnameSet(
   return left.every((value, index) => value === right[index])
 }
 
-function hostnameInputs(
-  records: readonly InstanceHostnameRecord[],
-): InstanceHostnameInput[] {
+function hostnameInputs(records: readonly InstanceHostnameRecord[]): InstanceHostnameInput[] {
   return records.map((record) => ({
     host: record.host,
     source: record.source,
@@ -292,10 +283,7 @@ export function useApplyPublicUrls() {
       const controller = new AbortController()
       waiting.current.add(controller)
       try {
-        return await applyAndConfirm(
-          { hostnames, onReconnecting },
-          controller.signal,
-        )
+        return await applyAndConfirm({ hostnames, onReconnecting }, controller.signal)
       } finally {
         waiting.current.delete(controller)
       }
@@ -314,7 +302,7 @@ export function useApplyPublicUrls() {
 
 async function applyAndConfirm(
   { hostnames, onReconnecting }: ApplyPublicUrlsVariables,
-  signal: AbortSignal,
+  signal: AbortSignal
 ): Promise<ApplyPublicUrlsOutcome> {
   const baseline = await issuanceBaselineBeforeApply(hostnames, signal)
   try {
@@ -421,7 +409,7 @@ export function useInstanceAcmeSettings(options?: Readonly<{ enabled?: boolean }
  * `null` when the save may go ahead.
  */
 export function useLetsEncryptTermsGuard(): (
-  rows: readonly HostnameSourceDraft[],
+  rows: readonly HostnameSourceDraft[]
 ) => string | null {
   const acme = useInstanceAcmeSettings()
   return (rows) =>
@@ -466,9 +454,7 @@ export function useUpgradeActiveRun(options?: Readonly<{ enabled?: boolean }>) {
  * target identities here used to spin a 2 s loop whenever the ui's reading of
  * "behind" disagreed with the server's.
  */
-export function instanceUpdatesPollInterval(
-  activeRunStatus: string | undefined,
-): number | false {
+export function instanceUpdatesPollInterval(activeRunStatus: string | undefined): number | false {
   if (activeRunStatus && isUpgradeRunActive(activeRunStatus as 'running')) {
     return UPGRADE_RUN_POLL_MS
   }
@@ -495,7 +481,7 @@ async function dispatchThenWait(
   request: () => Promise<unknown>,
   read: () => Promise<{ version: string | null; commit: string | null }>,
   target: UpdateTargetIdentity,
-  before: string,
+  before: string
 ): Promise<UnitUpdateWait> {
   try {
     await request()
@@ -513,14 +499,12 @@ async function dispatchThenWait(
 export function useUpgradeInstance() {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (
-      vars: Readonly<{ target: UpdateTargetIdentity; before: string }>,
-    ) =>
+    mutationFn: (vars: Readonly<{ target: UpdateTargetIdentity; before: string }>) =>
       dispatchThenWait(
         requestInstanceUpdate,
         async () => (await fetchInstanceUpdates()).units.instance.installed,
         vars.target,
-        vars.before,
+        vars.before
       ),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
@@ -650,7 +634,7 @@ export function useUpgradeRunServers(
 
 export function useUpgradeServersPage(
   page: Readonly<{ offset: number; limit: number; status: string }>,
-  options?: Readonly<{ enabled?: boolean }>,
+  options?: Readonly<{ enabled?: boolean }>
 ) {
   const activeRun = useUpgradeActiveRun({ enabled: options?.enabled ?? true })
   return useQuery({
@@ -707,9 +691,7 @@ export function useCheckUpgradeManifests() {
 export function useUpgradeColocatedDaemon() {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (
-      vars: Readonly<{ target: UpdateTargetIdentity; before: string }>,
-    ) =>
+    mutationFn: (vars: Readonly<{ target: UpdateTargetIdentity; before: string }>) =>
       dispatchThenWait(
         requestColocatedDaemonUpdate,
         async () => {
@@ -717,7 +699,7 @@ export function useUpgradeColocatedDaemon() {
           return installed ?? { version: null, commit: null }
         },
         vars.target,
-        vars.before,
+        vars.before
       ),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
@@ -787,14 +769,11 @@ export function useEmailSettings(options?: Readonly<{ enabled?: boolean }>) {
 
 export function useApplyReencryptSecrets() {
   return useApiMutation({
-    mutationFn: (body?: Parameters<typeof applyReencryptSecrets>[0]) =>
-      applyReencryptSecrets(body),
+    mutationFn: (body?: Parameters<typeof applyReencryptSecrets>[0]) => applyReencryptSecrets(body),
   })
 }
 
-export function useServerMetricsLiveSettings(
-  options?: Readonly<{ enabled?: boolean }>,
-) {
+export function useServerMetricsLiveSettings(options?: Readonly<{ enabled?: boolean }>) {
   return useQuery({
     queryKey: queryKeys.admin.metricsLiveSettings,
     queryFn: fetchServerMetricsLiveSettings,
@@ -875,10 +854,7 @@ function forgesKey(scope: 'admin' | 'org') {
  * would mean two copies of the cache-invalidation rules for one collection.
  * Org-scoped screens importing from here is deliberate, not a stray import.
  */
-export function useForges(
-  scope: 'admin' | 'org',
-  options?: Readonly<{ enabled?: boolean }>
-) {
+export function useForges(scope: 'admin' | 'org', options?: Readonly<{ enabled?: boolean }>) {
   return useQuery({
     queryKey: forgesKey(scope),
     queryFn: () => fetchForges(scope),
@@ -962,8 +938,7 @@ export function useDeleteForge(scope: 'admin' | 'org') {
  */
 export function useStartGithubAppManifest(scope: 'admin' | 'org') {
   return useApiMutation({
-    mutationFn: (input: GithubManifestStartInput) =>
-      startGithubAppManifest(scope, input),
+    mutationFn: (input: GithubManifestStartInput) => startGithubAppManifest(scope, input),
   })
 }
 

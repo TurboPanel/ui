@@ -72,10 +72,9 @@ describe('managed upgrade admin queries', () => {
     const active = renderHook(() => useUpgradeActiveRun(), { wrapper })
     const settings = renderHook(() => useUpgradeSettings(), { wrapper })
     const history = renderHook(() => useUpgradeHistory({ offset: 0, limit: 10 }), { wrapper })
-    const fleet = renderHook(
-      () => useUpgradeServersPage({ offset: 0, limit: 50, status: '' }),
-      { wrapper },
-    )
+    const fleet = renderHook(() => useUpgradeServersPage({ offset: 0, limit: 50, status: '' }), {
+      wrapper,
+    })
 
     await waitFor(() => {
       expect(active.result.current.isSuccess).toBe(true)
@@ -105,7 +104,7 @@ describe('managed upgrade admin queries', () => {
           status: 'failed',
           trigger: 'manual',
         }),
-      { wrapper },
+      { wrapper }
     )
     const servers = renderHook(
       () =>
@@ -115,7 +114,7 @@ describe('managed upgrade admin queries', () => {
           sort: 'status',
           q: 'web',
         }),
-      { wrapper },
+      { wrapper }
     )
     const idle = renderHook(() => useUpgradeRunServers('', { limit: 1 }), {
       wrapper,
@@ -151,10 +150,9 @@ describe('managed upgrade admin queries', () => {
     const active = renderHook(() => useUpgradeActiveRun(), { wrapper })
     const settings = renderHook(() => useUpgradeSettings(), { wrapper })
     const history = renderHook(() => useUpgradeHistory({ offset: 0, limit: 5 }), { wrapper })
-    const fleet = renderHook(
-      () => useUpgradeServersPage({ offset: 0, limit: 5, status: 'done' }),
-      { wrapper },
-    )
+    const fleet = renderHook(() => useUpgradeServersPage({ offset: 0, limit: 5, status: 'done' }), {
+      wrapper,
+    })
 
     await waitFor(() => {
       expect(active.result.current.data).toEqual({ ok: true, run: null })
