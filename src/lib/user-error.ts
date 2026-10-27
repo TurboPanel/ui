@@ -150,14 +150,34 @@ export function apiErrorCopy(err: unknown): string | null {
   return null
 }
 
-/** `err` as customer text: network failures and known codes mapped, else its message, else `fallback`. */
+const API_FAILURE_MARKER = ' failed: HTTP '
+const API_SENTENCE_SEPARATOR = ' \u2014 '
+
+/**
+ * The control plane's own sentence in an `apiFetch` message
+ * (`<path> failed: HTTP <status>: <code> — <text>`), without the request
+ * path, status and code in front of it; null when the message has none.
+ */
+export function apiErrorSentence(message: string): string | null {
+  const failure = message.indexOf(API_FAILURE_MARKER)
+  if (failure < 0) return null
+  const separator = message.indexOf(API_SENTENCE_SEPARATOR, failure + API_FAILURE_MARKER.length)
+  if (separator < 0) return null
+  const sentence = message.slice(separator + API_SENTENCE_SEPARATOR.length).trim()
+  return sentence === '' ? null : sentence
+}
+
+/**
+ * `err` as customer text: network failures and known codes mapped, else the
+ * control plane's own sentence, else its message, else `fallback`.
+ */
 export function userErrorMessage(err: unknown, fallback: string): string {
   const source = asErrorForCopy(err)
   if (isNetworkFetchError(source)) return CONTROL_PLANE_UNREACHABLE_COPY
   const mapped = apiErrorCopy(err)
   if (mapped) return mapped
   const message = source?.message.trim()
-  if (message) return message
+  if (message) return apiErrorSentence(message) ?? message
   return fallback
 }
 
