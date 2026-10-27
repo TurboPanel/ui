@@ -114,6 +114,21 @@ describe('apiErrorSentence', () => {
     expect(apiErrorSentence('/p failed: HTTP 422: bad \u2014   ')).toBeNull()
     expect(apiErrorSentence('/p failed: HTTP 500')).toBeNull()
     expect(apiErrorSentence('Plain words \u2014 with a dash.')).toBeNull()
+    expect(apiErrorSentence('/p failed: HTTP 409: odd_code')).toBeNull()
+  })
+
+  it('keeps server text that has no code in front of it whole', () => {
+    const encryption =
+      '/api/client/v1/tls/certificates failed: HTTP 503: Encryption unavailable \u2014 no encryption key configured'
+    expect(apiErrorSentence(encryption)).toBe(
+      'Encryption unavailable \u2014 no encryption key configured'
+    )
+    expect(userErrorMessage(new Error(encryption), 'f')).toBe(
+      'Encryption unavailable \u2014 no encryption key configured'
+    )
+    expect(apiErrorSentence('/p failed: HTTP 400: Password must include a number')).toBe(
+      'Password must include a number'
+    )
   })
 })
 

@@ -154,16 +154,24 @@ const API_FAILURE_MARKER = ' failed: HTTP '
 const API_SENTENCE_SEPARATOR = ' \u2014 '
 
 /**
- * The control plane's own sentence in an `apiFetch` message
- * (`<path> failed: HTTP <status>: <code> — <text>`), without the request
- * path, status and code in front of it; null when the message has none.
+ * The control plane's own words in an `apiFetch` message, without the request
+ * path and status in front of them. `<path> failed: HTTP <status>: <code> — <text>`
+ * gives `<text>` (the code is for screens that match on it); server text that
+ * is not a code (`HTTP 503: Encryption unavailable — no encryption key
+ * configured`) is kept whole. Null when there are no words, only a code.
  */
 export function apiErrorSentence(message: string): string | null {
   const failure = message.indexOf(API_FAILURE_MARKER)
   if (failure < 0) return null
-  const separator = message.indexOf(API_SENTENCE_SEPARATOR, failure + API_FAILURE_MARKER.length)
-  if (separator < 0) return null
-  const sentence = message.slice(separator + API_SENTENCE_SEPARATOR.length).trim()
+  const statusStart = failure + API_FAILURE_MARKER.length
+  const statusEnd = message.indexOf(': ', statusStart)
+  if (statusEnd < 0 || !/^\d{3}$/.test(message.slice(statusStart, statusEnd))) return null
+  const detail = message.slice(statusEnd + 2)
+  const separator = detail.indexOf(API_SENTENCE_SEPARATOR)
+  const head = (separator < 0 ? detail : detail.slice(0, separator)).trim()
+  if (/\s/.test(head)) return detail.trim()
+  const sentence =
+    separator < 0 ? '' : detail.slice(separator + API_SENTENCE_SEPARATOR.length).trim()
   return sentence === '' ? null : sentence
 }
 

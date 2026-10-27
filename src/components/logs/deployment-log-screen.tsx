@@ -318,8 +318,8 @@ export function DeploymentLogScreen() {
 
   if (managed) return <ManagedFocusTab focus="overview" />
   // This route always names an environment, but on a direct link the router's
-  // path can still read the project's own path for the first render (while the
-  // project loaded). Wait for it: leaving here would drop the link.
+  // path can still read the project's own path on the first render, while the
+  // project loads. Wait for it: leaving here would drop the link.
   // A path naming an environment that is gone is EnvironmentShell's to handle.
   if (!pathEnvironmentId) return null
 
