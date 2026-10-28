@@ -4,25 +4,19 @@ import { Link, useLocalSearchParams, useRouter } from 'expo-router'
 import { AuthNewPasswordField } from '@/components/auth/auth-new-password-field'
 import { AuthPrimaryButton } from '@/components/auth/auth-primary-button'
 import { AuthScreenShell } from '@/components/auth/auth-screen-shell'
-import {
-  authAccentStyles,
-  authFormStyles,
-  webPointer,
-} from '@/components/auth/auth-form-styles'
+import { authAccentStyles, authFormStyles, webPointer } from '@/components/auth/auth-form-styles'
 import { authAccentForRuntime, resolveControlPlaneRuntime } from '@/lib/auth-accent'
 import {
-  breachedPasswordCopy,
   checkPwnedPassword,
   COMPROMISED_PASSWORD_MESSAGE,
   passwordHint,
   resolveMeterStatus,
   validatePassword,
 } from '@/lib/password-policy'
-import { resetLinkState } from '@/lib/password-reset'
+import { resetLinkState, resetPasswordFailure } from '@/lib/password-reset'
 import { useResetPassword } from '@/lib/queries/auth'
 import { useAuthStatus } from '@/lib/query-client'
 import { colors } from '@/lib/theme'
-import { userErrorMessage } from '@/lib/user-error'
 
 const styles = StyleSheet.create({
   title: {
@@ -85,23 +79,25 @@ export function ResetPasswordScreenContent() {
       await reset.mutateAsync({ newPassword: password, token: link.token })
       setDone(true)
     } catch (err) {
-      const message = userErrorMessage(err, '')
-      if (message.includes('INVALID_TOKEN')) {
+      const failure = resetPasswordFailure(err)
+      if ('expired' in failure) {
         setExpired(true)
       } else {
-        setError(breachedPasswordCopy(message) || 'Could not reset the password')
+        setError(failure.message)
       }
     }
   }, [link, validation.isValid, loading, password, reset])
 
   const requestNewLink = (
     <Link href="/forgot-password" asChild>
-      <Pressable accessibilityRole="link" accessibilityLabel="Request a new link" style={webPointer}>
+      <Pressable
+        accessibilityRole="link"
+        accessibilityLabel="Request a new link"
+        style={webPointer}
+      >
         <Text style={authFormStyles.footerLink}>
           Need a new link?{' '}
-          <Text style={[authFormStyles.footerLinkAccent, tint.footerLinkAccent]}>
-            Request one
-          </Text>
+          <Text style={[authFormStyles.footerLinkAccent, tint.footerLinkAccent]}>Request one</Text>
         </Text>
       </Pressable>
     </Link>

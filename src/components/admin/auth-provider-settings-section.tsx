@@ -3,14 +3,8 @@ import { StyleSheet, Text, TextInput, View } from 'react-native'
 import Svg, { Path, Rect } from 'react-native-svg'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { Badge, Button, LoadingState, SectionPanel } from '@/components/ui'
-import type {
-  EmailSettingSource,
-  EmailSettingsResponse,
-} from '@/lib/instance-api'
-import {
-  useAuthProviderSettings,
-  useSaveAuthProviderSettings,
-} from '@/lib/queries/admin'
+import type { EmailSettingSource, EmailSettingsResponse } from '@/lib/instance-api'
+import { useAuthProviderSettings, useSaveAuthProviderSettings } from '@/lib/queries/admin'
 import { colors, spacing } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
 
@@ -110,10 +104,7 @@ export function AuthProviderSettingsSection() {
   const [loaded, setLoaded] = useState<
     Record<FullKey, { value: string | null; source: EmailSettingSource }>
   >(() => {
-    const init = {} as Record<
-      FullKey,
-      { value: string | null; source: EmailSettingSource }
-    >
+    const init = {} as Record<FullKey, { value: string | null; source: EmailSettingSource }>
     for (const k of FULL_KEYS) init[k] = { value: null, source: 'default' }
     return init
   })
@@ -121,10 +112,7 @@ export function AuthProviderSettingsSection() {
   const applyServerResponse = (res: EmailSettingsResponse) => {
     const nextSources = {} as Record<FullKey, EmailSettingSource>
     const nextDraft = {} as Record<FullKey, string>
-    const nextLoaded = {} as Record<
-      FullKey,
-      { value: string | null; source: EmailSettingSource }
-    >
+    const nextLoaded = {} as Record<FullKey, { value: string | null; source: EmailSettingSource }>
     const nextTouched = {} as Record<FullKey, boolean>
 
     for (const k of FULL_KEYS) {
@@ -199,9 +187,7 @@ export function AuthProviderSettingsSection() {
         setSaveError(null)
       },
       onError: () => {
-        setSaveError(
-          saveMutation.actionError ?? 'Failed to save sign-in provider settings',
-        )
+        setSaveError(saveMutation.actionError ?? 'Failed to save sign-in provider settings')
         setSuccess(null)
       },
     })
@@ -231,7 +217,7 @@ export function AuthProviderSettingsSection() {
         <View style={[styles.input, styles.inputDisabled, styles.lockRow]}>
           <LockIcon />
           <Text style={styles.lockValue} numberOfLines={1}>
-            {isSecret ? '••••••••' : (value || '')}
+            {isSecret ? '••••••••' : value || ''}
           </Text>
         </View>
       )
@@ -263,31 +249,28 @@ export function AuthProviderSettingsSection() {
 
         {isEnv ? (
           <Text style={styles.help}>
-            This setting is controlled by the {envName} environment variable and cannot be changed here.
+            This setting is controlled by the {envName} environment variable and cannot be changed
+            here.
           </Text>
         ) : null}
 
-        {isDefault ? (
-          <Text style={styles.helpMuted}>Using default value.</Text>
-        ) : null}
+        {isDefault ? <Text style={styles.helpMuted}>Using default value.</Text> : null}
       </View>
     )
   }
 
   return (
     <View style={styles.root}>
-      <Text style={panelStyles.pageTitle}>Sign-in providers</Text>
+      <Text style={panelStyles.pageTitle}>Sign-In Providers</Text>
       <Text style={panelStyles.pageCopy}>
-        GitHub and Google OAuth client credentials. Settings stored in the
-        database can be edited here. Environment variables take precedence and
-        appear read-only.
+        GitHub and Google OAuth client credentials. Settings stored in the database can be edited
+        here. Environment variables take precedence and appear read-only.
       </Text>
       <Text style={panelStyles.muted}>
-        Register each provider&apos;s callback as
-        {' '}<Text style={styles.mono}>/api/client/v1/auth/oauth/github/callback</Text>
-        {' '}or
-        {' '}<Text style={styles.mono}>/api/client/v1/auth/oauth/google/callback</Text>
-        {' '}on this control plane&apos;s public origin.
+        Register each provider&apos;s callback as{' '}
+        <Text style={styles.mono}>/api/client/v1/auth/oauth/github/callback</Text> or{' '}
+        <Text style={styles.mono}>/api/client/v1/auth/oauth/google/callback</Text> on this control
+        plane&apos;s public origin.
       </Text>
 
       {settingsQuery.isError ? (
@@ -302,17 +285,11 @@ export function AuthProviderSettingsSection() {
         <LoadingState />
       ) : (
         <>
-          <SectionPanel
-            title="GitHub"
-            hint="OAuth App client ID and secret"
-          >
+          <SectionPanel title="GitHub" hint="OAuth App client ID and secret">
             {GITHUB_KEYS.map((k) => renderField(k))}
           </SectionPanel>
 
-          <SectionPanel
-            title="Google"
-            hint="OAuth 2.0 client ID and secret"
-          >
+          <SectionPanel title="Google" hint="OAuth 2.0 client ID and secret">
             {GOOGLE_KEYS.map((k) => renderField(k))}
           </SectionPanel>
 
@@ -325,8 +302,8 @@ export function AuthProviderSettingsSection() {
           />
 
           <Text style={panelStyles.muted}>
-            Only fields not overridden by environment variables are sent on save.
-            Clear a field to remove its stored value and fall back to defaults.
+            Only fields not overridden by environment variables are sent on save. Clear a field to
+            remove its stored value and fall back to defaults.
           </Text>
         </>
       )}

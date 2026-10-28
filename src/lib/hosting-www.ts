@@ -45,6 +45,82 @@ const PRIVATE_SUFFIXES: readonly string[] = [
   '.example',
 ]
 
+/**
+ * Common two-part public suffixes, where a site's own domain has three labels
+ * (`example.co.uk`). A short list of the usual country forms, not the full
+ * public suffix list: a name under a suffix missing here reads as a subdomain,
+ * so its www choice starts off and the person turns it on by hand.
+ */
+const TWO_PART_PUBLIC_SUFFIXES: ReadonlySet<string> = new Set([
+  'co.uk',
+  'org.uk',
+  'me.uk',
+  'ltd.uk',
+  'plc.uk',
+  'net.uk',
+  'ac.uk',
+  'gov.uk',
+  'com.au',
+  'net.au',
+  'org.au',
+  'edu.au',
+  'gov.au',
+  'co.nz',
+  'net.nz',
+  'org.nz',
+  'co.jp',
+  'ne.jp',
+  'or.jp',
+  'ac.jp',
+  'co.kr',
+  'or.kr',
+  'com.cn',
+  'net.cn',
+  'org.cn',
+  'com.hk',
+  'com.tw',
+  'com.sg',
+  'com.my',
+  'co.in',
+  'net.in',
+  'org.in',
+  'co.id',
+  'co.th',
+  'com.ph',
+  'com.vn',
+  'co.il',
+  'com.tr',
+  'co.za',
+  'com.ng',
+  'co.ke',
+  'com.eg',
+  'com.br',
+  'net.br',
+  'org.br',
+  'com.mx',
+  'com.ar',
+  'com.co',
+  'com.pe',
+  'com.uy',
+  'com.ve',
+  'com.ua',
+  'com.pl',
+])
+
+/**
+ * True for a bare registrable domain: the name someone buys, with nothing in
+ * front of it (`example.com`, `example.co.uk`). False for a subdomain
+ * (`app.example.com`), a public suffix on its own (`co.uk`), a one-word name
+ * and an IP address. Expects a lowercased name without a trailing dot.
+ */
+export function isBareRegistrableDomain(hostname: string): boolean {
+  const labels = hostname.split('.')
+  if (labels.some((label) => label === '' || label === '*')) return false
+  if (labels.every((label) => /^\d+$/.test(label))) return false
+  if (labels.length === 2) return !TWO_PART_PUBLIC_SUFFIXES.has(hostname)
+  return labels.length === 3 && TWO_PART_PUBLIC_SUFFIXES.has(labels.slice(1).join('.'))
+}
+
 /** The typed hostnames as the www rules read them: lowercased, each one once. */
 export function wwwHostnames(text: string): string[] {
   return [...new Set(parseHostnameList(text.toLowerCase()))]
@@ -76,18 +152,21 @@ function rootOf(hostname: string): string {
 
 /**
  * The choice preselected for a hostname typed into a new hosting. A bare
- * two-label domain (`turbopanel.io`) most often wants `www.` sent to it; a
- * typed `www.` name wants the bare one sent to it; any other subdomain answers
- * on itself only. This is a guess shown before saving, never applied to a
- * saved hosting: it cannot know public suffixes (`example.co.uk` reads as a
- * subdomain), so the person always sees and can change it.
+ * registrable domain (`turbopanel.io`, `example.co.uk`) most often wants
+ * `www.` sent to it; a typed `www.` name on one wants the bare one sent to
+ * it; any other subdomain answers on itself only, because its www name rarely has DNS
+ * and a Let's Encrypt request covering it would fail. This is a guess shown
+ * before saving, never applied to a saved hosting, so the person always sees
+ * and can change it ({@link isBareRegistrableDomain} knows only the common
+ * two-part suffixes).
  */
 export function defaultWwwMode(hostname: string): HostingWwwMode {
   const name = hostname.trim().toLowerCase()
   if (wwwSiblingHostname(name) === null) return 'off'
   if (PRIVATE_SUFFIXES.some((suffix) => name.endsWith(suffix))) return 'off'
-  if (name.startsWith(WWW_PREFIX)) return 'root-to-www'
-  return name.split('.').length === 2 ? 'www-to-root' : 'off'
+  const typedIsWww = name.startsWith(WWW_PREFIX)
+  if (!isBareRegistrableDomain(typedIsWww ? rootOf(name) : name)) return 'off'
+  return typedIsWww ? 'root-to-www' : 'www-to-root'
 }
 
 /**

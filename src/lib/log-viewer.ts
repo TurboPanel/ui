@@ -47,7 +47,11 @@ const SETUP_PHASE = 'prepare'
 /** Header for lines that arrived without a phase. */
 const UNPHASED_LABEL = 'Output'
 
-const WARN_PATTERN = /\b(warn|warning|deprecated)\b/i
+/**
+ * Warn words, plus Node's process warnings (`DeprecationWarning`,
+ * `ExperimentalWarning`, …), which tools print on stderr while the build goes on.
+ */
+const WARN_PATTERN = /\b(?:warn|warning|deprecated|deprecation)\b|\b[a-z]+warning\b/i
 
 /**
  * Hand mirror of the server's phase-to-step table (`PHASE_STEPS` in the
@@ -67,9 +71,17 @@ const PHASE_PLAN_STEP: Readonly<Record<string, string>> = {
   'stop-old-release': 'stop-old',
 }
 
-/** Error, warning or neither. Only rows `isErrorLine` flags can be either. */
+/**
+ * Rows that are errors whatever else they say: a thrown error (`Error:`,
+ * `TypeError: …`), npm's error lines, and Node's unhandled rejection, which is
+ * named a warning but means the program lost an error.
+ */
+const ERROR_PATTERN = /^\s*\w*Error\b|^npm (?:ERR!|error )|UnhandledPromiseRejectionWarning/
+
+/** Error, warning or neither. Only rows `isErrorLine` flags can be either; the error check wins. */
 export function lineLevel(line: LogTranscriptLine): LogLineLevel {
   if (!isErrorLine(line)) return null
+  if (ERROR_PATTERN.test(line.message)) return 'error'
   return WARN_PATTERN.test(line.message) ? 'warn' : 'error'
 }
 

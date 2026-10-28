@@ -245,7 +245,23 @@ describe('a project tile', () => {
       latest: { e1: { status: 'succeeded' } as DeploymentGroup },
     })
     expect(card.kind).toBe('managed')
-    expect(card.environments[0]?.status).toBe('never')
+    // A database has no deploys: with no container reported it is unknown, never "Not deployed yet".
+    expect(card.environments[0]?.status).toBe('unknown')
+  })
+
+  it('gives a managed database the managed row status over its containers', () => {
+    const card = homeProject({
+      project: project({ kind: 'managed' }),
+      environments: [production],
+      containersByEnvironment: { e1: [container('e1', 'running')] },
+      facts: {
+        managedRows: [
+          { environmentId: 'e1', status: 'stopped', engineDisplayName: null, options: null },
+        ],
+      },
+    })
+    expect(card.environments[0]?.status).toBe('stopped')
+    expect(card.status).toBe('stopped')
   })
 
   it('gives a platform project no environments, only its status', () => {
@@ -482,8 +498,8 @@ describe('the type filter', () => {
       { value: 'apps', label: 'Apps 2', accessibilityLabel: 'Apps, 2 projects' },
       {
         value: 'managed',
-        label: 'Managed databases 1',
-        accessibilityLabel: 'Managed databases, 1 project',
+        label: 'Managed Databases 1',
+        accessibilityLabel: 'Managed Databases, 1 project',
       },
     ])
   })

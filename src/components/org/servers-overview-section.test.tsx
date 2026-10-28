@@ -4,9 +4,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { OrgServerRecord } from '@/lib/instance-api'
 import { ServersOverviewSection } from './servers-overview-section'
 
-const { useAuth, useOrgServers, compactChrome } = vi.hoisted(() => ({
+const { useAuth, useOrgServers, useCan, compactChrome } = vi.hoisted(() => ({
   useAuth: vi.fn(),
   useOrgServers: vi.fn(),
+  useCan: vi.fn(() => false),
   compactChrome: { current: false },
 }))
 
@@ -19,7 +20,7 @@ vi.mock(
 
 vi.mock('@/lib/auth-context', () => ({ useAuth }))
 vi.mock('@/lib/query-client', () => ({
-  useCan: () => false,
+  useCan,
   queryKeys: { org: () => ({ servers: { list: ['servers'] } }) },
 }))
 vi.mock('@tanstack/react-query', () => ({ useQueryClient: () => ({ invalidateQueries: vi.fn() }) }))
@@ -33,11 +34,9 @@ vi.mock('@/lib/queries/fabric', () => ({ useOrgFabric: () => idle }))
 vi.mock('@/lib/queries/servers', () => ({
   SERVERS_REFRESH_MS: 1000,
   useOrgServers,
-  useServersUpdateStatus: () => idle,
   useOrgServerCapacity: () => idle,
   useOrgLicenses: () => idle,
   useFleetServerUsage: () => idle,
-  useBatchTriggerServerUpdates: () => ({ isPending: false, variables: undefined, mutate: vi.fn() }),
 }))
 vi.mock('@/lib/servers-layout', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/servers-layout')>()),
@@ -171,5 +170,22 @@ describe('ServersOverviewSection tier display', () => {
     compactChrome.current = true
     renderList(false)
     expect(screen.queryByText('S4')).toBeNull()
+  })
+})
+
+describe('ServersOverviewSection updates', () => {
+  it('offers no Update button: servers update on their own', () => {
+    useCan.mockReturnValue(true)
+    renderList(false)
+    expect(screen.queryByText(/^Update/)).toBeNull()
+    expect(screen.queryByText(/updatable/)).toBeNull()
+  })
+
+  it('has no selection column: nothing on the list acts on a selection', () => {
+    renderList(false)
+    expect(screen.getAllByTestId('column-header').map((el) => el.textContent)).not.toContain(
+      'Select'
+    )
+    expect(screen.queryByText(/selected$/)).toBeNull()
   })
 })

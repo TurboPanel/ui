@@ -37,7 +37,9 @@ export const ADMIN_AREAS = [
       adminSubRoute('platform-ca', 'Platform CA'),
     ]
   ),
-  adminArea('updates', 'Updates', 'Control plane and co-located daemon versions'),
+  adminArea('updates', 'Updates', 'Control plane and co-located daemon versions', [
+    adminSubRoute('history', 'Update History'),
+  ]),
   adminArea('email', 'Email', 'Email provider and SMTP/Mailgun configuration'),
   adminArea('auth-providers', 'Sign-In Providers', 'GitHub and Google OAuth client credentials'),
   adminArea(

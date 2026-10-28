@@ -1,11 +1,5 @@
 import { useState } from 'react'
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native'
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import { panelStyles } from '@/components/ui/panel-styles'
 import {
   DataTable,
@@ -18,6 +12,8 @@ import { formatLocalDateTime } from '@/lib/format-datetime'
 import type { LicenseRecord } from '@/lib/instance-api'
 import {
   pendingKeyDisplayName,
+  pendingKeyExpiryLabel,
+  pendingKeyTierLabel,
   provisioningKeys,
   provisioningServersLabel,
   unboundPendingKeys,
@@ -114,6 +110,8 @@ function PendingKeyDeleteControl({
 const PENDING_KEY_COLUMNS = [
   { key: 'name', header: 'Name', flex: 1.6, minWidth: 140 },
   { key: 'created', header: 'Created', flex: 1.4, minWidth: 160 },
+  { key: 'tier', header: 'Tier', flex: 0.6, minWidth: 60 },
+  { key: 'expires', header: 'Expires', flex: 1.2, minWidth: 150 },
   { key: 'delete', header: 'Delete', flex: 1.4, minWidth: 160, align: 'end' },
 ] as const satisfies readonly DataTableColumn[]
 
@@ -136,7 +134,7 @@ function PendingKeyRow({
 }>) {
   const title = pendingKeyDisplayName(row)
 
-  const [nameColumn, createdColumn, deleteColumn] = PENDING_KEY_COLUMNS
+  const [nameColumn, createdColumn, tierColumn, expiresColumn, deleteColumn] = PENDING_KEY_COLUMNS
 
   return (
     <DataTableRow alt={rowIndex % 2 === 1}>
@@ -148,6 +146,16 @@ function PendingKeyRow({
       <DataTableCell column={createdColumn}>
         <Text style={styles.createdText} numberOfLines={1}>
           {formatLocalDateTime(row.createdAt, { includeSeconds: false })}
+        </Text>
+      </DataTableCell>
+      <DataTableCell column={tierColumn}>
+        <Text style={styles.createdText} numberOfLines={1}>
+          {pendingKeyTierLabel(row)}
+        </Text>
+      </DataTableCell>
+      <DataTableCell column={expiresColumn}>
+        <Text style={row.expired ? panelStyles.error : styles.createdText} numberOfLines={1}>
+          {pendingKeyExpiryLabel(row)}
         </Text>
       </DataTableCell>
       <DataTableCell column={deleteColumn}>
@@ -180,7 +188,7 @@ function PendingKeysTable({
   onConfirm: (id: string) => void
 }>) {
   return (
-    <DataTable columns={PENDING_KEY_COLUMNS} minWidth={520}>
+    <DataTable columns={PENDING_KEY_COLUMNS} minWidth={760}>
       {rows.map((row, index) => (
         <PendingKeyRow
           key={row.id}
@@ -212,8 +220,7 @@ export function PendingKeysSection({ orgId }: Readonly<{ orgId: string }>) {
   const loading = licensesQuery.isLoading && rows.length === 0
   let queryError: string | null = null
   if (licensesQuery.isError) {
-    queryError =
-      userErrorMessage(licensesQuery.error, 'Failed to load registration keys')
+    queryError = userErrorMessage(licensesQuery.error, 'Failed to load registration keys')
   }
   const displayError = deleteError ?? deleteMutation.actionError ?? queryError
 
@@ -233,9 +240,7 @@ export function PendingKeysSection({ orgId }: Readonly<{ orgId: string }>) {
         setConfirmingId(null)
       },
       onError: (err) => {
-        setDeleteError(
-          userErrorMessage(err, 'Failed to delete registration key'),
-        )
+        setDeleteError(userErrorMessage(err, 'Failed to delete registration key'))
       },
     })
   }
@@ -243,7 +248,7 @@ export function PendingKeysSection({ orgId }: Readonly<{ orgId: string }>) {
   if (!canOwn) {
     return (
       <View style={styles.root}>
-        <Text style={panelStyles.pageTitle}>Pending keys</Text>
+        <Text style={panelStyles.pageTitle}>Pending Keys</Text>
         <Text style={panelStyles.pageCopy}>
           Only organization owners can view servers waiting to connect.
         </Text>
@@ -253,11 +258,11 @@ export function PendingKeysSection({ orgId }: Readonly<{ orgId: string }>) {
 
   return (
     <View style={styles.root}>
-      <Text style={panelStyles.pageTitle}>Pending keys</Text>
+      <Text style={panelStyles.pageTitle}>Pending Keys</Text>
       <Text style={panelStyles.pageCopy}>
-        Servers still waiting to connect. Each row is an install command that
-        has not enrolled a host yet; delete one if you no longer need it — the
-        command cannot be recovered after you leave Add server.
+        Servers still waiting to connect. Each row is an install command that has not enrolled a
+        host yet; delete one if you no longer need it — the command cannot be recovered after you
+        leave Add server.
       </Text>
 
       {displayError ? <Text style={panelStyles.error}>{displayError}</Text> : null}
@@ -273,8 +278,8 @@ export function PendingKeysSection({ orgId }: Readonly<{ orgId: string }>) {
 
         {!loading && rows.length === 0 ? (
           <Text style={panelStyles.muted}>
-            No servers waiting to connect. Rows appear here after you add a server,
-            until the host connects.
+            No servers waiting to connect. Rows appear here after you add a server, until the host
+            connects.
           </Text>
         ) : null}
 

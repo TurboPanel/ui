@@ -6,6 +6,8 @@ import type {
   UpgradeStepStatus,
 } from '@/lib/upgrade-vocabulary'
 import { UPGRADE_STEP_PIPELINE } from '@/lib/upgrade-vocabulary'
+import { formatLocalDateTime } from '@/lib/format-datetime'
+import { plainStepFailureMessage } from '@/lib/user-error'
 
 const PIPELINE_SET = new Set<string>(UPGRADE_STEP_PIPELINE)
 
@@ -153,12 +155,15 @@ const STEP_ERROR_LABELS: Readonly<Record<string, string>> = {
   dispatch_failed: "Couldn't reach the server",
   managed_upgrade_required: 'This server needs a managed update',
   downgrade_refused: 'Already newer than the target',
+  updates_paused: 'Not started because updates were paused',
+  retry_later: 'Failed before; tries again later',
 }
 
 /** Run `error` codes (the control plane's `UPGRADE_RUN_ERROR_CODES`). */
 const RUN_ERROR_LABELS: Readonly<Record<string, string>> = {
   colocated_daemon_failed: 'The daemon step failed',
   control_plane_failed: 'The control plane step failed',
+  updates_paused: 'Stopped because updates were paused',
 }
 
 export function upgradeStepErrorLabel(code: string | null | undefined): string | null {
@@ -204,6 +209,97 @@ export function upgradeStepNote(
   return note || null
 }
 
+/** A server left out of this update: offline, paused, or failed before and waiting to try again. */
+function skippedOutcome(
+  step: Readonly<{ errorCode?: string | null; errorMessage?: string | null }>,
+  detail: string | null
+): UpgradeStepOutcome {
+  if (step.errorCode === 'server_offline') {
+    const message = step.errorMessage?.trim()
+    return { tone: 'muted', label: 'Skipped: Offline', detail: message || SKIPPED_OFFLINE_DETAIL }
+  }
+  if (step.errorCode === 'retry_later') {
+    return {
+      tone: 'pending',
+      label: 'Tries Again Later',
+      detail: retryLaterText(step.errorMessage),
+    }
+  }
+  if (step.errorCode === 'updates_paused') {
+    return { tone: 'muted', label: 'Skipped: Paused', detail }
+  }
+  return { tone: 'muted', label: 'Skipped', detail }
+}
+
+const TRAILING_PUNCTUATION = new Set(['.', ',', ';', ')'])
+
+function stripTrailingPunctuation(word: string): string {
+  let end = word.length
+  while (end > 0 && TRAILING_PUNCTUATION.has(word[end - 1])) end -= 1
+  return word.slice(0, end)
+}
+
+/** The first ISO instant in a sentence (`… after 2026-10-27T15:40:00.000Z.`), or null. */
+function isoInstantIn(message: string): Date | null {
+  for (const word of message.split(' ')) {
+    const candidate = stripTrailingPunctuation(word)
+    if (!/^\d{4}-\d{2}-\d{2}T/.test(candidate)) continue
+    const at = new Date(candidate)
+    if (!Number.isNaN(at.getTime())) return at
+  }
+  return null
+}
+
+export type LocalTimeOptions = Readonly<{ now?: Date; timeZone?: string }>
+
+function localDayKey(at: Date, timeZone: string | undefined): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    timeZone,
+  }).format(at)
+}
+
+/**
+ * When a server that failed before tries again, in local plain words: "Tries
+ * again at 3:40 PM", with the date when it is not today. The control plane's
+ * sentence carries the time as ISO; the raw sentence is never shown.
+ */
+export function retryLaterText(
+  message: string | null | undefined,
+  options: LocalTimeOptions = {}
+): string {
+  const at = message ? isoInstantIn(message) : null
+  if (!at) return 'Tries again later'
+  const { now = new Date(), timeZone } = options
+  const time = formatLocalDateTime(at, {
+    includeDate: false,
+    includeSeconds: false,
+    timeZoneName: null,
+    timeZone,
+  })
+  if (localDayKey(at, timeZone) === localDayKey(now, timeZone)) return `Tries again at ${time}`
+  const day = new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    timeZone,
+  }).format(at)
+  return `Tries again on ${day} at ${time}`
+}
+
+/**
+ * The reason line for a step (fleet table, Update Run, server update log): a
+ * server waiting to try again says when, in local time; anything else is the
+ * step's own message in plain words, or null.
+ */
+export function stepMessageText(
+  step: Readonly<{ errorCode?: string | null; errorMessage?: string | null }>
+): string | null {
+  if (step.errorCode?.trim() === 'retry_later') return retryLaterText(step.errorMessage)
+  return plainStepFailureMessage(step.errorMessage)
+}
+
 /**
  * What a step's row says. A failed, rolled-back, or stuck step reads as that —
  * never as the pipeline stage it stopped on.
@@ -219,31 +315,23 @@ export function upgradeStepOutcome(
   switch (step.status) {
     case null:
     case undefined:
-      return { tone: 'muted', label: 'Not started', detail: null }
+      return { tone: 'muted', label: 'Not Started', detail: null }
     case 'done':
       return { tone: 'ok', label: 'Done', detail: null }
     case 'skipped':
-      if (step.errorCode === 'server_offline') {
-        const message = step.errorMessage?.trim()
-        return {
-          tone: 'muted',
-          label: 'Skipped: offline',
-          detail: message || SKIPPED_OFFLINE_DETAIL,
-        }
-      }
-      return { tone: 'muted', label: 'Skipped', detail }
+      return skippedOutcome(step, detail)
     case 'failed':
       return { tone: 'danger', label: 'Failed', detail }
     case 'rolled_back':
-      return { tone: 'danger', label: 'Rolled back', detail }
+      return { tone: 'danger', label: 'Rolled Back', detail }
     case 'needs_attention':
-      return { tone: 'pending', label: 'Needs attention', detail }
+      return { tone: 'pending', label: 'Needs Attention', detail }
     // Not started yet: it is waiting its turn (batch) or for the server to come
     // back online, not preparing anything.
     case 'pending':
       return { tone: 'pending', label: 'Queued', detail: null }
     case 'waiting':
-      return { tone: 'pending', label: 'Waiting for server', detail: null }
+      return { tone: 'pending', label: 'Waiting for Server', detail: null }
     default: {
       const stage = mapStepStatusToPipeline(step.status)
       return {
@@ -264,6 +352,16 @@ export function stepHasStarted(status: UpgradeStepStatus | null | undefined): bo
 export const SKIPPED_OFFLINE_DETAIL =
   'It was offline when the update started. It updates on its own when it reconnects.'
 
+function skippedBadge(errorCode: string | null | undefined): {
+  tone: 'muted' | 'pending'
+  label: string
+} {
+  if (errorCode === 'server_offline') return { tone: 'muted', label: 'Skipped: Offline' }
+  if (errorCode === 'updates_paused') return { tone: 'muted', label: 'Skipped: Paused' }
+  if (errorCode === 'retry_later') return { tone: 'pending', label: 'Tries Again Later' }
+  return { tone: 'muted', label: 'Skipped' }
+}
+
 /** The fleet table's Status column: what the update is doing with this server, in plain words. */
 export function fleetStatusBadge(
   status: UpgradeStepStatus,
@@ -276,16 +374,13 @@ export function fleetStatusBadge(
     case 'done':
       return { tone: 'ok', label: 'Updated' }
     case 'skipped':
-      if (errorCode === 'server_offline') {
-        return { tone: 'muted', label: 'Skipped: offline' }
-      }
-      return { tone: 'muted', label: 'Skipped' }
+      return skippedBadge(errorCode)
     case 'failed':
       return { tone: 'danger', label: 'Failed' }
     case 'rolled_back':
-      return { tone: 'danger', label: 'Rolled back' }
+      return { tone: 'danger', label: 'Rolled Back' }
     case 'needs_attention':
-      return { tone: 'pending', label: 'Needs attention' }
+      return { tone: 'pending', label: 'Needs Attention' }
     case 'pending':
       return { tone: 'muted', label: 'Waiting' }
     case 'waiting':
@@ -460,9 +555,9 @@ export function updateAvailabilityBadge(
   label: string
 } {
   if (inFlight) return { tone: 'pending', label: 'Updating' }
-  if (updateAvailable === null) return { tone: 'muted', label: 'Not connected' }
-  if (updateAvailable) return { tone: 'pending', label: 'Update available' }
-  return { tone: 'ok', label: 'Up to date' }
+  if (updateAvailable === null) return { tone: 'muted', label: 'Not Connected' }
+  if (updateAvailable) return { tone: 'pending', label: 'Update Waiting' }
+  return { tone: 'ok', label: 'Up to Date' }
 }
 
 /** `a`, `a and b`, `a, b and c`. */
@@ -556,15 +651,18 @@ export function summarizeFleetSteps(
 }
 
 export type PlatformUpgradeHeadline =
-  'up_to_date' | 'update_available' | 'updating' | 'needs_attention'
+  'up_to_date' | 'update_available' | 'updating' | 'needs_attention' | 'paused'
 
 export function resolvePlatformUpgradeHeadline(
   input: Readonly<{
     activeRunStatus: UpgradeRunStatus | null
     updateAvailable: boolean
     needsAttentionCount: number
+    /** An instance admin paused all updates; that is the first thing to say. */
+    paused?: boolean
   }>
 ): PlatformUpgradeHeadline {
+  if (input.paused) return 'paused'
   if (input.needsAttentionCount > 0) return 'needs_attention'
   if (input.activeRunStatus === 'pending' || input.activeRunStatus === 'running') {
     return 'updating'
@@ -578,10 +676,12 @@ export function platformUpgradeHeadlineCopy(headline: PlatformUpgradeHeadline): 
     case 'up_to_date':
       return 'TurboPanel is up to date'
     case 'update_available':
-      return 'Update available'
+      return 'Update Waiting'
     case 'updating':
       return 'Updating…'
     case 'needs_attention':
-      return 'Needs attention'
+      return 'Needs Attention'
+    case 'paused':
+      return 'Updates Paused'
   }
 }

@@ -14,10 +14,37 @@ import { parseProjectEnvironmentId } from '@/lib/project-navigation'
 import { useContainersByProject } from '@/lib/queries/containers'
 import { useEnvironmentConfigViews, useLatestDeployments } from '@/lib/queries/environment-cards'
 import { useEnvironments } from '@/lib/queries/environments'
+import { useEnvironmentManaged, useManagedStatus } from '@/lib/queries/managed'
 import { useProject } from '@/lib/queries/projects'
 import { useServerDetail } from '@/lib/queries/servers'
 import { environmentDisplayName } from '@/lib/resource-labels'
-import { homeProject, wantsConfigView } from '@/lib/v4/projects-home'
+import type { EnvironmentRecord, ProjectRecord } from '@/lib/instance-api'
+import { homeKind, homeProject, wantsConfigView, type ProjectFacts } from '@/lib/v4/projects-home'
+
+/**
+ * A managed database's status for the environment in the path, read the way its
+ * header reads it (live status, else the stored row) and through the same
+ * queries, so the breadcrumb and the header never disagree.
+ */
+function useManagedFacts(
+  orgId: string,
+  project: ProjectRecord | undefined,
+  environment: EnvironmentRecord | undefined
+): ProjectFacts | undefined {
+  const environmentId =
+    project && homeKind(project) === 'managed' && environment?.serverId ? environment.id : ''
+  const detail = useEnvironmentManaged(orgId, environmentId, { enabled: environmentId !== '' })
+  const provisioned = Boolean(detail.data?.managed)
+  const live = useManagedStatus(orgId, environmentId, { enabled: provisioned })
+  const status = live.data?.status ?? detail.data?.managed?.status
+  return useMemo(
+    () =>
+      environmentId && status
+        ? { managedRows: [{ environmentId, status, engineDisplayName: null, options: null }] }
+        : undefined,
+    [environmentId, status]
+  )
+}
 
 /**
  * The breadcrumb for the page the person is on: a server, project (down to the
@@ -50,13 +77,25 @@ export function useHeaderBreadcrumb(orgId: string): Breadcrumb | null {
   const { views } = useEnvironmentConfigViews(orgId, composeIds, { enabled: onProject })
   const { latest } = useLatestDeployments(orgId, composeIds, { enabled: onProject })
   const containersByEnvironment = containers.isLoading ? undefined : containers.containersByEnv
+  const facts = useManagedFacts(
+    orgId,
+    project,
+    environments.find((env) => env.id === environmentId)
+  )
 
   return useMemo(() => {
     if (route?.kind === 'server') {
       return server.data ? serverBreadcrumb(orgId, server.data) : null
     }
     if (route?.kind === 'project' && project) {
-      const card = homeProject({ project, environments, containersByEnvironment, views, latest })
+      const card = homeProject({
+        project,
+        environments,
+        containersByEnvironment,
+        views,
+        latest,
+        facts,
+      })
       if (card.kind === 'managed') return databaseBreadcrumb(orgId, card.name, card.status)
       const environment = environments.find((env) => env.id === environmentId)
       if (card.kind === 'compose' && environment) {
@@ -85,5 +124,6 @@ export function useHeaderBreadcrumb(orgId: string): Breadcrumb | null {
     containersByEnvironment,
     views,
     latest,
+    facts,
   ])
 }

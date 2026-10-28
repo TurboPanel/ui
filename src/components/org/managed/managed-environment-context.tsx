@@ -12,8 +12,11 @@ import type { ManagedDetailResponse } from '@/lib/managed-services'
 import {
   commandStatusById,
   isTerminalCommandStatus,
+  trackedCommandWaitMs,
+  trackedCommandsInFlight,
   useCommandsBatch,
   type TrackedCommandEntry,
+  type TrackedCommandLabel,
 } from '@/lib/queries/commands'
 import { useEnvironment } from '@/lib/queries/environments'
 import { useEnvironmentManaged } from '@/lib/queries/managed'
@@ -39,6 +42,23 @@ export function invalidateEnvironmentManagedQueries(
   })
 }
 
+/**
+ * A tracked command whose status has never been read (every read failed) is
+ * waited for until it expires on the server; then the screen stops waiting and
+ * reads what the database says now. Any answer before that cancels the timer.
+ */
+function useStopWaitingWhenUnanswered({
+  unanswered,
+  waitUntilMs,
+  onGiveUp,
+}: Readonly<{ unanswered: boolean; waitUntilMs: number; onGiveUp: () => void }>): void {
+  useEffect(() => {
+    if (!unanswered) return
+    const timer = setTimeout(onGiveUp, Math.max(0, waitUntilMs - Date.now()))
+    return () => clearTimeout(timer)
+  }, [unanswered, waitUntilMs, onGiveUp])
+}
+
 export type ManagedEnvironmentValue = Readonly<{
   orgId: string
   environmentId: string
@@ -47,7 +67,7 @@ export type ManagedEnvironmentValue = Readonly<{
   /** True once the database exists (it has a server and a managed record). */
   provisioned: boolean
   /** Track a queued command; its result refreshes the managed queries. */
-  registerCommand: (commandId: string, label: string, commandServerId?: string) => void
+  registerCommand: (commandId: string, label: TrackedCommandLabel, commandServerId?: string) => void
   /** The newest Apply queued here, kept after it finishes so its log stays readable. */
   applyCommand: TrackedCommandEntry | null
   /** A command queued here is still running. */
@@ -85,14 +105,18 @@ export function ManagedCommandsProvider({
   const detail = hasServerPin ? (managedQuery.data ?? null) : null
   const [trackedEntries, setTrackedEntries] = useState<readonly TrackedCommandEntry[]>([])
   const [applyCommand, setApplyCommand] = useState<TrackedCommandEntry | null>(null)
+  // When the newest tracked command expires on the server (epoch ms).
+  const [waitUntilMs, setWaitUntilMs] = useState(0)
   const commandsQuery = useCommandsBatch(orgId, trackedEntries)
   const serverId = detail?.managed?.serverId ?? detail?.server?.id ?? null
 
   const registerCommand = useCallback(
-    (commandId: string, label: string, commandServerId?: string) => {
+    (commandId: string, label: TrackedCommandLabel, commandServerId?: string) => {
       const resolvedServerId = commandServerId ?? serverId
       if (!resolvedServerId) return
       setTrackedEntries((current) => [...current, { serverId: resolvedServerId, commandId }])
+      const until = Date.now() + trackedCommandWaitMs(label)
+      setWaitUntilMs((current) => Math.max(current, until))
       if (label === 'Apply' || label === 'Apply settings') {
         setApplyCommand({ serverId: resolvedServerId, commandId })
       }
@@ -107,16 +131,24 @@ export function ManagedCommandsProvider({
     for (const entry of trackedEntries) {
       const record = recordsById.get(entry.commandId)
       if (!record || !isTerminalCommandStatus(record.status)) continue
-      if (record.status === 'succeeded') {
-        invalidateEnvironmentManagedQueries(queryClient, orgId, environmentId)
-      }
+      // A failed or cancelled command can still have moved the database (a
+      // stop that half ran), so every end refreshes what the screen shows.
+      invalidateEnvironmentManagedQueries(queryClient, orgId, environmentId)
       setTrackedEntries((current) => current.filter((row) => row.commandId !== entry.commandId))
     }
   }, [commandsQuery.data, trackedEntries, queryClient, orgId, environmentId])
 
-  const inFlight =
-    trackedEntries.length > 0 &&
-    (commandsQuery.data?.some((record) => !isTerminalCommandStatus(record.status)) ?? true)
+  const giveUpWaiting = useCallback(() => {
+    setTrackedEntries([])
+    invalidateEnvironmentManagedQueries(queryClient, orgId, environmentId)
+  }, [queryClient, orgId, environmentId])
+  useStopWaitingWhenUnanswered({
+    unanswered: trackedEntries.length > 0 && commandsQuery.data === undefined,
+    waitUntilMs,
+    onGiveUp: giveUpWaiting,
+  })
+
+  const inFlight = trackedCommandsInFlight(trackedEntries, commandsQuery)
 
   const value = useMemo<ManagedEnvironmentValue>(
     () => ({

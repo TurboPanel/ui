@@ -22,14 +22,16 @@ import { orgSettingsTabHref } from '@/lib/org-navigation'
 import { useOrgAllowsLetsEncrypt } from '@/lib/queries/org-tls-settings'
 import {
   declaredHostname,
+  defaultAlsoWww,
   hostnameServiceNames,
+  initialAlsoWwwChoice,
   initialSetupServerId,
   setupAccounts,
   setupCertificateNote,
   setupCompose,
   setupFormProblems,
+  setupWwwSwitch,
   variableKeyProblem,
-  wwwChoiceFor,
   type SetupAccount,
   type SetupCertificateNote,
   type SetupVariable,
@@ -96,7 +98,9 @@ export function EnvironmentSetupForm({
   const [serviceName, setServiceName] = useState<string | null>(serviceNames[0] ?? null)
   const declared = declaredHostname(compose, serviceName)
   const [hostname, setHostname] = useState(declared?.hostname ?? '')
-  const [alsoWww, setAlsoWww] = useState(declared?.www ? declared.www !== 'off' : true)
+  // null follows the typed name (on only for a bare domain) until the switch is flipped.
+  const [alsoWwwChoice, setAlsoWwwChoice] = useState(() => initialAlsoWwwChoice(declared))
+  const alsoWww = alsoWwwChoice ?? defaultAlsoWww(hostname)
   const accounts = useMemo(() => setupAccounts(compose), [compose])
   const [accountNames, setAccountNames] = useState<Readonly<Record<string, string>>>({})
   const [variables, setVariables] = useState<SetupVariable[]>([])
@@ -160,12 +164,13 @@ export function EnvironmentSetupForm({
         serviceName={serviceName}
         hostname={hostname}
         alsoWww={alsoWww}
+        wwwSwitch={setupWwwSwitch(hostname, declared)}
         error={errors.hostname}
         certificateNote={certificateNote}
         settingsHref={orgSettingsTabHref(orgId, 'domains')}
         onServiceNameChange={setServiceName}
         onHostnameChange={setHostname}
-        onAlsoWwwChange={setAlsoWww}
+        onAlsoWwwChange={setAlsoWwwChoice}
       />
 
       <AccountsSection
@@ -212,6 +217,7 @@ function HostnameSection({
   serviceName,
   hostname,
   alsoWww,
+  wwwSwitch,
   error,
   certificateNote,
   settingsHref,
@@ -223,6 +229,7 @@ function HostnameSection({
   serviceName: string | null
   hostname: string
   alsoWww: boolean
+  wwwSwitch: Readonly<{ label: string; description: string }> | null
   error?: string
   certificateNote: SetupCertificateNote | null
   settingsHref: string
@@ -230,7 +237,6 @@ function HostnameSection({
   onHostnameChange: (hostname: string) => void
   onAlsoWwwChange: (on: boolean) => void
 }>) {
-  const www = wwwChoiceFor(hostname)
   return (
     <View style={styles.section}>
       <SectionHeading title="Hostname" />
@@ -262,15 +268,12 @@ function HostnameSection({
             hint="Optional. Point the name's DNS at the server. Later changes go in the Hosting tab."
             error={error}
           />
-          {www ? (
-            <SettingRow
-              label={`Also answer ${www}`}
-              description={`${www} goes to ${hostname.trim().toLowerCase()}`}
-            >
+          {wwwSwitch ? (
+            <SettingRow label={wwwSwitch.label} description={wwwSwitch.description}>
               <Toggle
                 value={alsoWww}
                 onValueChange={onAlsoWwwChange}
-                accessibilityLabel={`Also answer ${www}`}
+                accessibilityLabel={wwwSwitch.label}
               />
             </SettingRow>
           ) : null}

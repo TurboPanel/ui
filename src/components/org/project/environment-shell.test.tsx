@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { EnvironmentShell, useEnvironmentChrome } from './environment-shell'
@@ -172,6 +172,8 @@ function setContext(overrides: Record<string, unknown> = {}) {
     selectedEnvironment: ENVS[0],
     pathEnvironmentId: 'e',
     loading: false,
+    environmentsSettled: true,
+    invalidateEnvironments: () => Promise.resolve(),
     isSystemProject: false,
     draft: null,
     needsSetup: false,
@@ -267,14 +269,16 @@ describe('EnvironmentShell gating', () => {
     expect(screen.getByText('plain')).toBeTruthy()
   })
 
-  it('goes back to the project when the path names an environment that is gone', () => {
+  it('goes back to the project when the path names an environment that is gone', async () => {
     setContext({ pathEnvironmentId: 'gone' })
     render(
       <EnvironmentShell>
         <p>page body</p>
       </EnvironmentShell>
     )
-    expect(screen.getByTestId('redirect').getAttribute('data-href')).toBe('/o/projects/p/overview')
+    expect((await screen.findByTestId('redirect')).getAttribute('data-href')).toBe(
+      '/o/projects/p/overview'
+    )
   })
 
   it('shows no tabs while the path names no environment', () => {
@@ -288,8 +292,64 @@ describe('EnvironmentShell gating', () => {
     expect(screen.queryByRole('tablist')).toBeNull()
   })
 
+  it('reads the list again once, then goes back to the project when it still lacks the environment', async () => {
+    const refresh = vi.fn(() => Promise.resolve())
+    setContext({ pathEnvironmentId: 'gone', invalidateEnvironments: refresh })
+    render(
+      <EnvironmentShell>
+        <p>page body</p>
+      </EnvironmentShell>
+    )
+    expect(screen.queryByTestId('redirect')).toBeNull()
+    expect(await screen.findByTestId('redirect')).toBeTruthy()
+    expect(refresh).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the path when the fresh read has the environment', async () => {
+    let finishRefresh = () => {}
+    const refresh = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishRefresh = resolve
+        })
+    )
+    setContext({ pathEnvironmentId: 'e2', invalidateEnvironments: refresh })
+    const view = render(
+      <EnvironmentShell>
+        <p>page body</p>
+      </EnvironmentShell>
+    )
+    expect(refresh).toHaveBeenCalledTimes(1)
+    setContext({
+      pathEnvironmentId: 'e2',
+      environments: [ENVS[0], { ...ENVS[0], id: 'e2' }],
+      invalidateEnvironments: refresh,
+    })
+    await act(async () => {
+      finishRefresh()
+      view.rerender(
+        <EnvironmentShell>
+          <p>page body</p>
+        </EnvironmentShell>
+      )
+    })
+    expect(screen.queryByTestId('redirect')).toBeNull()
+    expect(screen.getByText('page body')).toBeTruthy()
+  })
+
+  it('keeps a deep link while the list is not settled (failed, retrying or refreshing)', () => {
+    setContext({ pathEnvironmentId: 'gone', environments: [], environmentsSettled: false })
+    render(
+      <EnvironmentShell>
+        <p>page body</p>
+      </EnvironmentShell>
+    )
+    expect(screen.queryByTestId('redirect')).toBeNull()
+    expect(screen.getByText('page body')).toBeTruthy()
+  })
+
   it('waits for environments to load before deciding one is gone', () => {
-    setContext({ pathEnvironmentId: 'gone', loading: true })
+    setContext({ pathEnvironmentId: 'gone', loading: true, environmentsSettled: false })
     render(
       <EnvironmentShell>
         <p>page body</p>

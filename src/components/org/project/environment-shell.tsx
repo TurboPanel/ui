@@ -1,5 +1,5 @@
 import { Redirect, useLocalSearchParams, usePathname, useRouter, type Href } from 'expo-router'
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { UnderlineTabs, type UnderlineTab } from '@/components/ui/v4'
 import { readHostingIdParam } from '@/components/org/project-settings-area'
@@ -218,17 +218,54 @@ export function useEnvironmentChrome(): boolean {
 }
 
 /**
+ * True once `key` is still missing after one fresh read of the list. A cached
+ * list can predate the environment (created in another tab, or just now), so
+ * the list is read again once before the path is called gone.
+ */
+function useMissingAfterRefresh(
+  missing: boolean,
+  key: string | null,
+  refresh: () => Promise<void>
+): boolean {
+  const requested = useRef<string | null>(null)
+  const [checked, setChecked] = useState<string | null>(null)
+  useEffect(() => {
+    if (!missing || !key || requested.current === key) return
+    requested.current = key
+    refresh()
+      .catch(() => {
+        // A failed read leaves the list as it was; the path is judged on it.
+      })
+      .finally(() => setChecked(key))
+  }, [missing, key, refresh])
+  return missing && key !== null && checked === key
+}
+
+/**
  * The environment header and its one tab bar (Overview · Deployments ·
  * Services · Compose · Bindings · Hosting · Settings) around every environment
  * route of a Compose project. A path that names an environment that does not exist goes
  * back to the project.
  */
 export function EnvironmentShell({ children }: Readonly<{ children: ReactNode }>) {
-  const { orgId, projectId, project, environments, loading, pathEnvironmentId } =
-    useProjectContext()
+  const {
+    orgId,
+    projectId,
+    project,
+    environments,
+    environmentsSettled,
+    pathEnvironmentId,
+    invalidateEnvironments,
+  } = useProjectContext()
   const withChrome = useEnvironmentChrome()
+  const missing = Boolean(
+    environmentsSettled &&
+    pathEnvironmentId &&
+    !environments.some((env) => env.id === pathEnvironmentId)
+  )
+  const gone = useMissingAfterRefresh(missing, pathEnvironmentId, invalidateEnvironments)
   if (!withChrome) return <>{children}</>
-  if (!loading && pathEnvironmentId && !environments.some((env) => env.id === pathEnvironmentId)) {
+  if (gone) {
     return <Redirect href={projectOverviewHref(orgId, projectId) as Href} />
   }
   if (project && isManagedProject(project)) {

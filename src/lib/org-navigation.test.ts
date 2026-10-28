@@ -241,7 +241,7 @@ describe('orgManageHref', () => {
 })
 
 describe('managedListRedirectHref', () => {
-  it('opens Projects with the Managed databases filter', () => {
+  it('opens Projects with the Managed Databases filter', () => {
     expect(managedListRedirectHref('o1', { orgId: 'o1' })).toBe('/o1/projects?type=managed')
   })
 

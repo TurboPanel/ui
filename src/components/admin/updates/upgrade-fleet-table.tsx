@@ -1,7 +1,7 @@
-import { StyleSheet, Text, useWindowDimensions } from 'react-native'
+import { StyleSheet, Text, useWindowDimensions, View } from 'react-native'
+import { HistoryPager } from '@/components/admin/updates/history-pager'
 import {
   Badge,
-  Button,
   DataTable,
   DataTableCell,
   DataTableEmpty,
@@ -14,11 +14,11 @@ import {
   fleetComponentLabel,
   fleetStatusBadge,
   installedBuildLabel,
+  stepMessageText,
   upgradeServerLabel,
   upgradeStepOutcome,
 } from '@/lib/upgrade-display'
-import { plainStepFailureMessage } from '@/lib/user-error'
-import { colors } from '@/lib/theme'
+import { colors, spacing } from '@/lib/theme'
 
 const ALL_COLUMNS: readonly DataTableColumn[] = [
   { key: 'server', header: 'Server', flex: 1.2, minWidth: 140 },
@@ -28,7 +28,6 @@ const ALL_COLUMNS: readonly DataTableColumn[] = [
   { key: 'target', header: 'Target', flex: 1, minWidth: 110 },
   { key: 'step', header: 'Step', width: 120 },
   { key: 'error', header: 'Error', flex: 1.2, minWidth: 160 },
-  { key: 'action', header: '', width: 110 },
 ]
 
 /** Below this width the Component column folds into a prefix on the server name. */
@@ -60,107 +59,74 @@ export function UpgradeFleetTable({
   offset,
   pageSize,
   onOffsetChange,
-  onRetry,
-  retryingId,
 }: Readonly<{
   servers: readonly FleetRow[]
   total: number
   offset: number
   pageSize: number
   onOffsetChange: (offset: number) => void
-  onRetry: (stepId: string) => void
-  retryingId: string | null
 }>) {
   const narrow = useWindowDimensions().width < NARROW_WIDTH
   const columns = narrow ? ALL_COLUMNS.filter((column) => column.key !== 'component') : ALL_COLUMNS
   const col = (key: string) => columns.find((column) => column.key === key) ?? columns[0]
-  const page = pageSize > 0 ? Math.floor(offset / pageSize) : 0
-  const pageCount = Math.max(1, Math.ceil(total / Math.max(pageSize, 1)))
 
   return (
-    <DataTable columns={columns} minWidth={narrow ? 760 : 970}>
-      {servers.length === 0 ? (
-        <DataTableEmpty>No servers in this update yet.</DataTableEmpty>
-      ) : (
-        servers.map((row, index) => (
-          <DataTableRow key={row.id} last={index === servers.length - 1}>
-            <DataTableCell column={col('server')}>
-              <Text style={styles.cell}>
-                {narrow ? `${fleetComponentLabel(row)}: ` : ''}
-                {upgradeServerLabel(row).primary}
-              </Text>
-            </DataTableCell>
-            {narrow ? null : (
-              <DataTableCell column={col('component')}>
-                <Text style={styles.cell}>{fleetComponentLabel(row)}</Text>
+    <View style={styles.root}>
+      <DataTable columns={columns} minWidth={narrow ? 650 : 860}>
+        {servers.length === 0 ? (
+          <DataTableEmpty>No servers in this update yet.</DataTableEmpty>
+        ) : (
+          servers.map((row, index) => (
+            <DataTableRow key={row.id} last={index === servers.length - 1}>
+              <DataTableCell column={col('server')}>
+                <Text style={styles.cell}>
+                  {narrow ? `${fleetComponentLabel(row)}: ` : ''}
+                  {upgradeServerLabel(row).primary}
+                </Text>
               </DataTableCell>
-            )}
-            <DataTableCell column={col('status')}>
-              <Badge {...fleetStatusBadge(row.status, row.errorCode)} />
-            </DataTableCell>
-            <DataTableCell column={col('installed')}>
-              <Text style={styles.cell}>{installedText(row)}</Text>
-            </DataTableCell>
-            <DataTableCell column={col('target')}>
-              <Text style={styles.cell}>{row.toVersion ?? row.toCommit?.slice(0, 12) ?? '—'}</Text>
-            </DataTableCell>
-            <DataTableCell column={col('step')}>
-              <Text style={styles.cell}>{stepLabel(row)}</Text>
-            </DataTableCell>
-            <DataTableCell column={col('error')}>
-              <Text style={panelStyles.muted} numberOfLines={2}>
-                {plainStepFailureMessage(row.errorMessage) ?? upgradeStepOutcome(row).detail ?? '—'}
-              </Text>
-            </DataTableCell>
-            <DataTableCell column={col('action')}>
-              {row.status === 'needs_attention' || row.status === 'failed' ? (
-                <Button
-                  label="Retry step"
-                  size="sm"
-                  busy={retryingId === row.id}
-                  onPress={() => {
-                    onRetry(row.id)
-                  }}
-                />
-              ) : null}
-            </DataTableCell>
-          </DataTableRow>
-        ))
-      )}
-      {total > pageSize ? (
-        <DataTableRow last>
-          <DataTableCell column={col('server')}>
-            <Text style={panelStyles.muted}>
-              Page {page + 1} of {pageCount}
-            </Text>
-          </DataTableCell>
-          <DataTableCell column={col('action')}>
-            <Button
-              label="Previous"
-              size="sm"
-              variant="secondary"
-              disabled={page === 0}
-              onPress={() => {
-                onOffsetChange(Math.max(0, offset - pageSize))
-              }}
-            />
-            <Button
-              label="Next"
-              size="sm"
-              variant="secondary"
-              disabled={page + 1 >= pageCount}
-              onPress={() => {
-                onOffsetChange(offset + pageSize)
-              }}
-            />
-          </DataTableCell>
-        </DataTableRow>
-      ) : null}
-    </DataTable>
+              {narrow ? null : (
+                <DataTableCell column={col('component')}>
+                  <Text style={styles.cell}>{fleetComponentLabel(row)}</Text>
+                </DataTableCell>
+              )}
+              <DataTableCell column={col('status')}>
+                <Badge {...fleetStatusBadge(row.status, row.errorCode)} />
+              </DataTableCell>
+              <DataTableCell column={col('installed')}>
+                <Text style={styles.cell}>{installedText(row)}</Text>
+              </DataTableCell>
+              <DataTableCell column={col('target')}>
+                <Text style={styles.cell}>
+                  {row.toVersion ?? row.toCommit?.slice(0, 12) ?? '—'}
+                </Text>
+              </DataTableCell>
+              <DataTableCell column={col('step')}>
+                <Text style={styles.cell}>{stepLabel(row)}</Text>
+              </DataTableCell>
+              <DataTableCell column={col('error')}>
+                <Text style={panelStyles.muted} numberOfLines={2}>
+                  {stepMessageText(row) ?? upgradeStepOutcome(row).detail ?? '—'}
+                </Text>
+              </DataTableCell>
+            </DataTableRow>
+          ))
+        )}
+      </DataTable>
+      <HistoryPager
+        offset={offset}
+        pageSize={pageSize}
+        shown={servers.length}
+        total={total}
+        onOffsetChange={onOffsetChange}
+      />
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
+  root: {
+    gap: spacing.sm,
+  },
   cell: {
     color: colors.text,
   },

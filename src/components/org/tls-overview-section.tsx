@@ -288,7 +288,7 @@ export function TlsOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
         onToggle={onToggleAcme}
       />
       <SectionPanel
-        title="TLS certificates"
+        title="TLS Certificates"
         hint="Organization certificate library — pin uploaded, self-signed, or Let's Encrypt certs explicitly on hosting (default is basic self-signed). The Organization CA row is platform-managed."
       >
         <TlsCertificateList

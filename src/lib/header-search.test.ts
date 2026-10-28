@@ -16,13 +16,13 @@ describe('searchDestinations', () => {
       ['Projects', '/o1/projects'],
       ['Git Sources', '/o1/projects/git-sources'],
       ['Repositories', '/o1/projects/repositories'],
-      ['Project settings', '/o1/projects/settings'],
+      ['Project Settings', '/o1/projects/settings'],
       ['Activity', '/o1/activity'],
       ['Servers', '/o1/servers'],
-      ['Managed databases', '/o1/projects?type=managed'],
+      ['Managed Databases', '/o1/projects?type=managed'],
       ['Network', '/o1/network'],
       ['Access', '/o1/access'],
-      ['Organization settings', '/o1/manage'],
+      ['Organization Settings', '/o1/manage'],
       ['Billing', '/o1/billing'],
     ])
   })
@@ -48,8 +48,8 @@ describe('filterSearchDestinations', () => {
   })
   it('matches names case-insensitively', () => {
     expect(filterSearchDestinations(items, 'SET').map((i) => i.name)).toEqual([
-      'Project settings',
-      'Organization settings',
+      'Project Settings',
+      'Organization Settings',
     ])
   })
   it('returns nothing when nothing matches', () => {

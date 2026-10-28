@@ -59,6 +59,18 @@ describe('deployRows', () => {
     deploy('d1', 1),
   ]
 
+  it('names the git login that pushed when the panel recorded one', () => {
+    const titled = deployRows(
+      [
+        deploy('d2', 2, { trigger: { ...push, pushedBy: 'octocat' } }),
+        deploy('d1', 1, { trigger: { ...push, branch: null, pushedBy: 'octocat' } }),
+      ],
+      NOW,
+      false
+    ).map((r) => r.title)
+    expect(titled).toEqual(['octocat (Push to main)', 'octocat (Git push)'])
+  })
+
   it('lists the newest three, with how each started and ended', () => {
     const list = deployRows(rows, NOW, true)
     expect(list.map((r) => [r.id, r.statusKey, r.title, r.sha, r.sub, r.when])).toEqual([

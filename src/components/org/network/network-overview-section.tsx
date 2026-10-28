@@ -37,12 +37,12 @@ function hubLinks(orgId: string): NetworkHubLink[] {
       href: networkAddressesHref(orgId),
     },
     {
-      title: 'Docker networks',
+      title: 'Docker Networks',
       hint: 'Compose external Docker network registry and the host address pools dockerd carves new networks from.',
       href: networkDockerHref(orgId),
     },
     {
-      title: 'Reserved ranges',
+      title: 'Reserved Ranges',
       hint: 'Ranges something outside TurboPanel already routes — never assigned to containers, the mesh, or internal services.',
       href: networkReservedHref(orgId),
     },
@@ -54,17 +54,15 @@ function hubLinks(orgId: string): NetworkHubLink[] {
   ]
 }
 
-export function NetworkOverviewSection({
-  orgId,
-}: Readonly<{ orgId: string }>) {
+export function NetworkOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
   const router = useRouter()
 
   return (
     <View style={styles.root}>
       <Text style={panelStyles.pageTitle}>Network</Text>
       <Text style={panelStyles.pageCopy}>
-        Private subnets live on Datacenters. This area is the mesh, address pool,
-        Docker registry, and reserved ranges.
+        Private subnets live on Datacenters. This area is the mesh, address pool, Docker registry,
+        and reserved ranges.
       </Text>
 
       <SectionPanel title="Areas" hint="One job each">

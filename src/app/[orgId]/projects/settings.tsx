@@ -9,10 +9,10 @@ export default function ProjectSettingsScreen() {
 
   return (
     <View style={styles.root}>
-      <Text style={styles.heading}>Project settings</Text>
+      <Text style={styles.heading}>Project Settings</Text>
       <Text style={styles.copy}>
-        Defaults applied when new projects are created. Existing projects keep
-        their current environments and names.
+        Defaults applied when new projects are created. Existing projects keep their current
+        environments and names.
       </Text>
       <DefaultEnvironmentSettingsSection orgId={id} />
     </View>

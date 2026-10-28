@@ -126,7 +126,7 @@ function EnvironmentDeleteControl({
           onPress={onOpenProjectSettings}
           disabled={!onOpenProjectSettings}
           accessibilityRole="button"
-          accessibilityLabel="Open Project settings to delete the project"
+          accessibilityLabel="Open Project Settings to delete the project"
         >
           <Text style={panelStyles.toolbarBtnTextSecondary}>
             Only environment — delete the project from Project → Settings

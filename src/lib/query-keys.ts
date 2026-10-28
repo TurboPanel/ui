@@ -98,7 +98,6 @@ export const queryKeys = {
         detail: (serverId: string) => ['org', orgId, 'server', serverId] as const,
         status: (serverId: string) => ['org', orgId, 'server', serverId, 'status'] as const,
         updateStatus: (serverId: string) => ['org', orgId, 'server', serverId, 'update'] as const,
-        updatesBatch: ['org', orgId, 'servers', 'updates'] as const,
         /** One O(1) fleet usage snapshot (CPU stack / load / memory / swap). */
         fleetUsage: ['org', orgId, 'servers', 'fleet-usage'] as const,
         /** Active registration keys (owner-only GET /licenses). */
@@ -385,9 +384,9 @@ export const queryKeys = {
         logs: (environmentId: string) => ['org', orgId, 'managed', environmentId, 'logs'] as const,
       },
 
-      /** The org-wide activity feed (running and recently failed deploys). */
-      activity: (filter: string, offset: number) =>
-        ['org', orgId, 'activity', filter, offset] as const,
+      /** The org-wide activity feed: every deploy, restart and stop, one page per filter set. */
+      activity: (filter: string, offset: number, projectId = '', environmentId = '') =>
+        ['org', orgId, 'activity', filter, offset, projectId, environmentId] as const,
 
       /** The people in the organization (owners and managers). */
       members: ['org', orgId, 'members'] as const,
@@ -451,9 +450,11 @@ export const queryKeys = {
     instanceDaemon: ['admin', 'instance-daemon'] as const,
     instanceUpdates: ['admin', 'instance-updates'] as const,
     upgradeActiveRun: ['admin', 'instance-updates', 'run'] as const,
-    upgradeHistory: (offset: number, limit: number) =>
-      ['admin', 'instance-updates', 'history', offset, limit] as const,
-    upgradeRun: (runId: string) => ['admin', 'instance-updates', 'runs', runId] as const,
+    upgradeHistory: (offset: number, limit: number, status = '', trigger = '') =>
+      ['admin', 'instance-updates', 'history', offset, limit, status, trigger] as const,
+    /** One page of a run's servers; `filters` is the serialized sort and filter set. */
+    upgradeRunServers: (runId: string, filters: string) =>
+      ['admin', 'instance-updates', 'runs', runId, 'servers', filters] as const,
     upgradeServers: (offset: number, limit: number, status: string) =>
       ['admin', 'instance-updates', 'servers', offset, limit, status] as const,
     upgradeSettings: ['admin', 'instance-updates', 'settings'] as const,

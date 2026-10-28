@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { Platform, StyleSheet, Text, View } from 'react-native'
 import { Button, type ButtonSize } from '@/components/ui/button'
+import { listenForDismiss } from '@/lib/dismiss-listener'
 import { colors, spacing } from '@/lib/theme'
 
 /**
  * Two-step destructive action (MASTER: destructive always confirms).
- * First press arms; the armed row shows Confirm / Cancel and auto-disarms
- * after 6s of inactivity. The confirm button takes the armed button's place
+ * First press arms; the armed row shows Confirm / Cancel and stays until the
+ * person backs out: Cancel, Escape or a press anywhere else on the page (web),
+ * or {@link ARMED_TIMEOUT_MS} without a press. The confirm button takes the armed button's place
  * (the question still comes first for screen readers), so a deliberate
  * second press on the same spot confirms; a press within
  * {@link CONFIRM_GUARD_MS} of arming is ignored, so a double-click or two
@@ -19,6 +21,9 @@ import { colors, spacing } from '@/lib/theme'
 /** How long after arming a press on the confirm button is ignored. */
 export const CONFIRM_GUARD_MS = 400
 
+/** How long the armed row waits for a press before it backs out by itself. */
+export const ARMED_TIMEOUT_MS = 60_000
+
 export function ConfirmButton({
   label,
   confirmLabel = 'Confirm',
@@ -30,6 +35,7 @@ export function ConfirmButton({
   disabled = false,
   size = 'sm',
   variant = 'danger',
+  stacked = false,
 }: Readonly<{
   label: string
   confirmLabel?: string
@@ -48,11 +54,17 @@ export function ConfirmButton({
   disabled?: boolean
   size?: ButtonSize
   variant?: 'danger' | 'secondary'
+  /**
+   * Armed layout: the two buttons with the prompt on its own full-width line
+   * under them, for a long prompt or a narrow container. Default: one row.
+   */
+  stacked?: boolean
 }>) {
   const [armed, setArmed] = useState(false)
   const [confirmed, setConfirmed] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const armedAt = useRef(0)
+  const armedRow = useRef<View>(null)
   // The armed button's width: the confirm button keeps it, so a second press
   // anywhere on the spot of the first one lands on Confirm even when its label
   // is shorter.
@@ -76,7 +88,7 @@ export function ConfirmButton({
     timer.current = setTimeout(() => {
       setArmed(false)
       onArmedChange?.(false)
-    }, 6000)
+    }, ARMED_TIMEOUT_MS)
   }
 
   const disarm = () => {
@@ -84,6 +96,20 @@ export function ConfirmButton({
     setArmed(false)
     onArmedChange?.(false)
   }
+  // The listener below outlives a render; it calls the newest disarm.
+  const latestDisarm = useRef(disarm)
+  useEffect(() => {
+    latestDisarm.current = disarm
+  })
+
+  useEffect(() => {
+    if (!armed || Platform.OS !== 'web') return
+    return listenForDismiss(
+      typeof document === 'undefined' ? undefined : document,
+      () => armedRow.current,
+      () => latestDisarm.current()
+    )
+  }, [armed])
 
   const showArmedRow = armed || (confirmed && busy)
   if (!showArmedRow) {
@@ -105,24 +131,46 @@ export function ConfirmButton({
   // confirm button sits where the arming press landed. The row never wraps:
   // on a narrow screen the question wraps its own words instead, so Confirm
   // cannot drop to a second line and leave Cancel under the press.
+  const dismissButton = (
+    <Button label={dismissLabel} variant="ghost" size={size} disabled={busy} onPress={disarm} />
+  )
+  const confirmButton = (
+    <Button
+      label={confirmLabel}
+      variant={variant === 'danger' ? 'danger' : 'primary'}
+      size={size}
+      busy={confirmed && busy}
+      disabled={disabled || busy}
+      minWidth={armedWidth}
+      onPress={() => {
+        if (Date.now() - armedAt.current < CONFIRM_GUARD_MS) return
+        disarm()
+        setConfirmed(true)
+        onConfirm()
+      }}
+    />
+  )
+
+  // Stacked: the same idea in a column. The question comes first in reading
+  // order but is drawn under the buttons at full width, so Confirm takes the
+  // place of the arming press.
+  if (stacked) {
+    return (
+      <View ref={armedRow} style={styles.armedStack}>
+        <Text style={styles.prompt}>{prompt}</Text>
+        <View style={styles.stackButtons}>
+          {confirmButton}
+          {dismissButton}
+        </View>
+      </View>
+    )
+  }
+
   return (
-    <View style={styles.armedRow}>
+    <View ref={armedRow} style={styles.armedRow}>
       <Text style={styles.prompt}>{prompt}</Text>
-      <Button label={dismissLabel} variant="ghost" size={size} disabled={busy} onPress={disarm} />
-      <Button
-        label={confirmLabel}
-        variant={variant === 'danger' ? 'danger' : 'primary'}
-        size={size}
-        busy={confirmed && busy}
-        disabled={disabled || busy}
-        minWidth={armedWidth}
-        onPress={() => {
-          if (Date.now() - armedAt.current < CONFIRM_GUARD_MS) return
-          disarm()
-          setConfirmed(true)
-          onConfirm()
-        }}
-      />
+      {dismissButton}
+      {confirmButton}
     </View>
   )
 }
@@ -133,6 +181,17 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     flexWrap: 'nowrap',
     flexShrink: 1,
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  armedStack: {
+    flexDirection: 'column-reverse',
+    alignSelf: 'stretch',
+    gap: spacing.sm,
+  },
+  stackButtons: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     gap: spacing.sm,
   },

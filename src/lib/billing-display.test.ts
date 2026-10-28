@@ -7,6 +7,8 @@ import {
   type OrgServerRecord,
 } from '@/lib/instance-api'
 import {
+  addServerCreateErrorMessage,
+  addServerTierChoiceError,
   addServerTierState,
   effectiveTierAvailable,
   canReleaseAt,
@@ -402,6 +404,31 @@ describe('effectiveTierAvailable', () => {
   })
 })
 
+describe('addServerTierChoiceError', () => {
+  it('asks for a license tier on hosted until one is chosen', () => {
+    expect(addServerTierChoiceError(true, null)).toBe('Choose the license tier for this server.')
+    expect(addServerTierChoiceError(true, 'tier-s1')).toBeNull()
+  })
+
+  it('never asks on a self-hosted instance', () => {
+    expect(addServerTierChoiceError(false, null)).toBeNull()
+  })
+})
+
+describe('addServerCreateErrorMessage', () => {
+  it('says a 403 plainly and maps known codes, never raw HTTP text', () => {
+    const forbidden = new Error('/api/client/v1/licenses failed: HTTP 403: forbidden')
+    expect(addServerCreateErrorMessage({ error: null, cause: forbidden })).toBe(
+      'Only organization owners can add servers.'
+    )
+    const unknownTier = new Error('/api/client/v1/licenses failed: HTTP 400: tier_not_found')
+    expect(addServerCreateErrorMessage({ error: unknownTier.message, cause: unknownTier })).toBe(
+      'That size is no longer available. Refresh and pick again.'
+    )
+    expect(addServerCreateErrorMessage({ error: null })).toBe('Failed to start server setup')
+  })
+})
+
 describe('refusalTierId', () => {
   const refusal = {
     tiers: [
@@ -466,6 +493,21 @@ describe('uncoveredServers', () => {
 describe('describeBillingRefusal', () => {
   const refusal = (body: Record<string, unknown>, status = 409) =>
     new BillingRefusalError('/billing/seats', status, body)
+
+  it('names the unused install command that holds the license a change would take', () => {
+    expect(
+      describeBillingRefusal(
+        refusal({ error: 'license_held_by_key', message: 'Delete edge-2 first.' })
+      )
+    ).toBe('Delete edge-2 first.')
+    expect(
+      describeBillingRefusal(
+        refusal({ error: 'license_held_by_key', keyName: 'edge-2', tierLabel: 'S1' })
+      )
+    ).toBe(
+      'The unused install command “edge-2” holds one S1 license for a server that has not connected yet. Delete it on Pending keys first, or wait for it to expire.'
+    )
+  })
 
   it('names the server a reduction would strand and the tier it needs', () => {
     const names = { serverName: (id: string) => (id === 'srv-1' ? 'web-1' : null) }

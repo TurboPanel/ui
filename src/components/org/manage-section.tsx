@@ -59,10 +59,7 @@ function GeneralTab({ orgId }: Readonly<{ orgId: string }>) {
   )
 }
 
-function SettingsTabBody({
-  orgId,
-  tab,
-}: Readonly<{ orgId: string; tab: OrgSettingsTabId }>) {
+function SettingsTabBody({ orgId, tab }: Readonly<{ orgId: string; tab: OrgSettingsTabId }>) {
   switch (tab) {
     case 'members':
       return <AccessOverviewSection orgId={orgId} />
@@ -93,7 +90,7 @@ export function ManageSection({ orgId }: Readonly<{ orgId: string }>) {
   const router = useRouter()
   const tabs = useMemo<UnderlineTab[]>(
     () => ORG_SETTINGS_TAB_IDS.map((key) => ({ key, label: ORG_SETTINGS_TAB_LABELS[key] })),
-    [],
+    []
   )
 
   usePullToRefresh(async () => {
@@ -102,13 +99,11 @@ export function ManageSection({ orgId }: Readonly<{ orgId: string }>) {
 
   return (
     <View style={styles.root}>
-      <Text style={panelStyles.pageTitle}>Organization settings</Text>
+      <Text style={panelStyles.pageTitle}>Organization Settings</Text>
       <UnderlineTabs
         tabs={tabs}
         value={activeTab}
-        onChange={(key) =>
-          router.push(orgSettingsTabHref(orgId, key as OrgSettingsTabId) as Href)
-        }
+        onChange={(key) => router.push(orgSettingsTabHref(orgId, key as OrgSettingsTabId) as Href)}
         ariaLabel="Organization settings sections"
       />
       <SettingsTabBody orgId={orgId} tab={activeTab} />

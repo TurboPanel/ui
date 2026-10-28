@@ -72,6 +72,7 @@ import { useDatacenters } from '@/lib/queries/topology'
 import { useOrgFabric } from '@/lib/queries/fabric'
 import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
 import { chrome, colors, spacing, webPointer } from '@/lib/theme'
+import type { TrackedCommandLabel } from '@/lib/queries/commands'
 
 const PROMOTE_GATE_CODES = new Set([
   MANAGED_REPLICA_NOT_STREAMING_ERROR,
@@ -142,7 +143,7 @@ export function ManagedClusterPanel({
   canManage: boolean
   busy: boolean
   lastError?: string | null
-  onRegisterCommand: (commandId: string, label: string, serverId?: string) => void
+  onRegisterCommand: (commandId: string, label: TrackedCommandLabel, serverId?: string) => void
 }>) {
   const router = useRouter()
   const slotRetention = currentSlotRetention(members)
@@ -169,8 +170,7 @@ export function ManagedClusterPanel({
   const [forceGateMessage, setForceGateMessage] = useState<string | null>(null)
   const [working, setWorking] = useState(false)
   const failoverSupport = managedSeriesFailoverSupport(engine, imageOrSeries)
-  const failoverUnsupportedReason =
-    failoverSupport === 'supported' ? null : failoverSupport
+  const failoverUnsupportedReason = failoverSupport === 'supported' ? null : failoverSupport
 
   const servers = orEmptyArray(serversQuery.data?.servers)
   const datacenters = orEmptyArray(datacentersQuery.data?.datacenters)
@@ -670,50 +670,50 @@ function ClusterMemberRow({
 
       {canManage && member.role === 'replica' ? (
         <>
-        {isReadReplica && failoverUnsupportedReason ? (
-          <Text style={panelStyles.muted}>{failoverUnsupportedReason}</Text>
-        ) : null}
-        <ButtonRow>
-          <Button
-            label={member.readEligible ? 'Stop serving reads' : 'Serve read traffic'}
-            size="sm"
-            disabled={disabled}
-            onPress={onToggleReads}
-          />
-          <ConfirmButton
-            label="Remove replica"
-            confirmLabel="Confirm remove"
-            prompt="Removes this replica and destroys its data volume."
-            disabled={disabled}
-            onConfirm={onConfirmRemove}
-          />
-          <ConfirmButton
-            label="Resync"
-            confirmLabel="Confirm resync"
-            prompt="Wipes this replica's data and re-seeds it from the primary."
-            disabled={disabled}
-            onConfirm={onConfirmResync}
-          />
-          {isReadReplica ? (
-            <>
-              <ConfirmButton
-                label="Convert to failover"
-                confirmLabel="Confirm convert"
-                prompt="Converts this replica to failover. It must share the primary's datacenter LAN."
-                disabled={disabled || failoverUnsupportedReason !== null}
-                onConfirm={onConfirmConvert}
-              />
-              <Button
-                label="Promote for disaster recovery"
-                size="sm"
-                disabled={disabled}
-                onPress={onStartDisasterRecovery}
-              />
-            </>
-          ) : (
-            <Button label="Promote" size="sm" disabled={disabled} onPress={onStartPromote} />
-          )}
-        </ButtonRow>
+          {isReadReplica && failoverUnsupportedReason ? (
+            <Text style={panelStyles.muted}>{failoverUnsupportedReason}</Text>
+          ) : null}
+          <ButtonRow>
+            <Button
+              label={member.readEligible ? 'Stop serving reads' : 'Serve read traffic'}
+              size="sm"
+              disabled={disabled}
+              onPress={onToggleReads}
+            />
+            <ConfirmButton
+              label="Remove replica"
+              confirmLabel="Confirm remove"
+              prompt="Removes this replica and destroys its data volume."
+              disabled={disabled}
+              onConfirm={onConfirmRemove}
+            />
+            <ConfirmButton
+              label="Resync"
+              confirmLabel="Confirm resync"
+              prompt="Wipes this replica's data and re-seeds it from the primary."
+              disabled={disabled}
+              onConfirm={onConfirmResync}
+            />
+            {isReadReplica ? (
+              <>
+                <ConfirmButton
+                  label="Convert to failover"
+                  confirmLabel="Confirm convert"
+                  prompt="Converts this replica to failover. It must share the primary's datacenter LAN."
+                  disabled={disabled || failoverUnsupportedReason !== null}
+                  onConfirm={onConfirmConvert}
+                />
+                <Button
+                  label="Promote for disaster recovery"
+                  size="sm"
+                  disabled={disabled}
+                  onPress={onStartDisasterRecovery}
+                />
+              </>
+            ) : (
+              <Button label="Promote" size="sm" disabled={disabled} onPress={onStartPromote} />
+            )}
+          </ButtonRow>
         </>
       ) : null}
     </View>

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { CONFIRM_GUARD_MS, ConfirmButton } from '@/components/ui/confirm-button'
+import { ARMED_TIMEOUT_MS, CONFIRM_GUARD_MS, ConfirmButton } from '@/components/ui/confirm-button'
 import { styleOf } from '@/components/ui/v4/rn-stub'
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
@@ -101,6 +101,33 @@ describe('ConfirmButton placement', () => {
   })
 })
 
+describe('ConfirmButton stacked', () => {
+  it('gives the question the full width under the buttons, Confirm first where the press landed', () => {
+    const onConfirm = vi.fn()
+    const { container } = render(
+      <ConfirmButton
+        label="Pause All Updates"
+        confirmLabel="Yes, Pause"
+        prompt="Pause all updates? Nothing new starts until you resume."
+        stacked
+        onConfirm={onConfirm}
+      />
+    )
+    fireEvent.click(screen.getByText('Pause All Updates'))
+    const prompt = screen.getByText('Pause all updates? Nothing new starts until you resume.')
+    const stack = prompt.parentElement as HTMLElement
+    expect((container.textContent ?? '').indexOf('Pause all updates?')).toBe(0)
+    expect(styleOf(stack).flexDirection).toBe('column-reverse')
+    expect(styleOf(stack).alignSelf).toBe('stretch')
+    const buttons = stack.lastElementChild as HTMLElement
+    expect(buttons.firstElementChild?.textContent).toBe('Yes, Pause')
+    expect(styleOf(buttons).flexWrap).toBe('wrap')
+    later()
+    fireEvent.click(screen.getByText('Yes, Pause'))
+    expect(onConfirm).toHaveBeenCalledTimes(1)
+  })
+})
+
 describe('ConfirmButton double press', () => {
   const draw = () => {
     const onConfirm = vi.fn()
@@ -137,5 +164,31 @@ describe('ConfirmButton double press', () => {
     fireEvent.focus(armedButton)
     fireEvent.click(armedButton)
     expect(screen.getByText('Move it here').dataset.minWidth).toBe('220')
+  })
+
+  it('stays armed long enough to read the question and press Confirm', () => {
+    render(<ConfirmButton label="Cancel deploy" confirmLabel="Yes, cancel" onConfirm={vi.fn()} />)
+    fireEvent.click(screen.getByText('Cancel deploy'))
+    act(() => vi.advanceTimersByTime(10_000))
+    expect(screen.getByText('Yes, cancel')).toBeTruthy()
+    act(() => vi.advanceTimersByTime(ARMED_TIMEOUT_MS))
+    expect(screen.queryByText('Yes, cancel')).toBeNull()
+  })
+
+  it('backs out on Escape', () => {
+    const onArmedChange = vi.fn()
+    render(
+      <ConfirmButton
+        label="Destroy database"
+        confirmLabel="Destroy it"
+        onArmedChange={onArmedChange}
+        onConfirm={vi.fn()}
+      />
+    )
+    fireEvent.click(screen.getByText('Destroy database'))
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.queryByText('Destroy it')).toBeNull()
+    expect(screen.getByText('Destroy database')).toBeTruthy()
+    expect(onArmedChange).toHaveBeenLastCalledWith(false)
   })
 })

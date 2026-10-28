@@ -28,7 +28,6 @@ export function usesCompactServersList(platformOS: string): boolean {
 }
 
 export type ServersFleetSurface = Readonly<{
-  showToolbarSelectAll: boolean
   showDetailFleet: boolean
   showSummaryFleet: boolean
   showStatusPanel: boolean
@@ -49,7 +48,6 @@ export function resolveServersFleetSurface(input: {
   const showStatusPanel = input.hasError || !hasServers
   const showDetailInPanel = showDetailFleet && !input.compactChrome
   return {
-    showToolbarSelectAll: hasServers && (showSummaryFleet || input.compactChrome),
     showDetailFleet,
     showSummaryFleet,
     showStatusPanel,
@@ -58,19 +56,7 @@ export function resolveServersFleetSurface(input: {
   }
 }
 
-export function showServersToolbarUpdate(
-  canManage: boolean,
-  compactChrome: boolean,
-  selectedCount: number,
-): boolean {
-  if (!canManage) return false
-  if (!compactChrome) return true
-  return selectedCount > 0
-}
-
-export function parseServersLayout(
-  value: string | null | undefined,
-): ServersLayout {
+export function parseServersLayout(value: string | null | undefined): ServersLayout {
   if (value === 'tiles' || value === 'summary') return 'tiles'
   return DEFAULT_SERVERS_LAYOUT
 }

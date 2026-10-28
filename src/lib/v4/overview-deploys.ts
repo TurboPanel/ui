@@ -7,6 +7,7 @@
  * when an earlier deploy did succeed and the environment is running.
  */
 
+import { gitPushLabel } from '@/lib/activity'
 import { formatAgo } from '@/lib/environment-status'
 import {
   deploymentStatusTone,
@@ -57,8 +58,7 @@ function groupSha(group: DeploymentGroup): string | null {
 }
 
 function groupTitle(group: DeploymentGroup): string {
-  const branch = group.trigger?.branch?.trim()
-  if (group.trigger) return branch ? `Push to ${branch}` : 'Git push'
+  if (group.trigger) return gitPushLabel(group.trigger)
   return group.actorEntityType === 'user' ? 'Started in the console' : 'Started by the system'
 }
 

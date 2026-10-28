@@ -30,13 +30,6 @@ vi.mock('@/components/ui', () => ({
     </div>
   ),
   TextField: () => <input />,
-  Toggle: (props: MockProps) => (
-    <button
-      type="button"
-      disabled={Boolean(props.disabled)}
-      onClick={() => props.onValueChange?.(!props.value)}
-    />
-  ),
 }))
 vi.mock('@/components/ui/v4/action-button', () => ({
   ActionButton: (props: { label?: string; disabled?: boolean; onPress?: () => void }) => (
@@ -47,59 +40,49 @@ vi.mock('@/components/ui/v4/action-button', () => ({
 }))
 
 const SAVED: UpgradeSettings = {
-  autoUpdate: false,
   batch: { mode: 'percent', value: 10 },
-  maintenanceWindow: { enabled: true, startMinute: 1080, durationMinutes: 60, weekdays: [1, 3] },
 }
 
 afterEach(cleanup)
 
 describe('UpgradeSettingsCard', () => {
-  it('saves the whole settings object when the auto-update toggle changes', () => {
+  it('offers only the group size: no Auto-update switch and no maintenance window', () => {
+    render(<UpgradeSettingsCard settings={SAVED} loading={false} saving={false} onSave={vi.fn()} />)
+    expect(screen.queryByTestId('Auto-update servers')).toBeNull()
+    expect(screen.queryByTestId('Maintenance window')).toBeNull()
+    expect(screen.queryByText(/Auto-update/)).toBeNull()
+    expect(screen.getByTestId('Save Servers Updated at Once')).toBeTruthy()
+  })
+
+  it('saves how many servers update at once, alone', () => {
     const onSave = vi.fn()
     render(<UpgradeSettingsCard settings={SAVED} loading={false} saving={false} onSave={onSave} />)
-    fireEvent.click(within(screen.getByTestId('Auto-update servers')).getByRole('button'))
+    fireEvent.click(within(screen.getByTestId('Save Servers Updated at Once')).getByRole('button'))
     expect(onSave).toHaveBeenCalledTimes(1)
-    expect(onSave).toHaveBeenCalledWith({ ...SAVED, autoUpdate: true })
+    expect(onSave).toHaveBeenCalledWith({ batch: { mode: 'percent', value: 10 } })
   })
 
   it('does not save when the saved settings failed to load', () => {
     const onSave = vi.fn()
     render(<UpgradeSettingsCard settings={null} loading={false} saving={false} onSave={onSave} />)
-    const toggle = within(screen.getByTestId('Auto-update servers')).getByRole('button')
-    expect((toggle as HTMLButtonElement).disabled).toBe(true)
-    fireEvent.click(toggle)
+    const apply = within(screen.getByTestId('Save Servers Updated at Once')).getByRole('button')
+    expect((apply as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.click(apply)
     expect(onSave).not.toHaveBeenCalled()
     expect(screen.getByText(/Settings could not be loaded/)).toBeTruthy()
   })
 
-  it('disables Apply until saved settings have loaded', () => {
+  it('enables Apply once saved settings have loaded', () => {
     const onSave = vi.fn()
     const { rerender } = render(
       <UpgradeSettingsCard settings={null} loading={false} saving={false} onSave={onSave} />
     )
-    const apply = within(screen.getByTestId('Save batch size')).getByRole('button')
-    expect((apply as HTMLButtonElement).disabled).toBe(true)
-    fireEvent.click(apply)
-    expect(onSave).not.toHaveBeenCalled()
-
     rerender(
       <UpgradeSettingsCard settings={SAVED} loading={false} saving={false} onSave={onSave} />
     )
-    const applySaved = within(screen.getByTestId('Save batch size')).getByRole('button')
-    expect((applySaved as HTMLButtonElement).disabled).toBe(false)
-  })
-
-  it('hides the toggle when hideAutoUpdate is set', () => {
-    render(
-      <UpgradeSettingsCard
-        settings={SAVED}
-        loading={false}
-        saving={false}
-        hideAutoUpdate
-        onSave={vi.fn()}
-      />
+    const applySaved = within(screen.getByTestId('Save Servers Updated at Once')).getByRole(
+      'button'
     )
-    expect(screen.queryByTestId('Auto-update servers')).toBeNull()
+    expect((applySaved as HTMLButtonElement).disabled).toBe(false)
   })
 })
