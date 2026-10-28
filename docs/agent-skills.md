@@ -6,7 +6,7 @@ Canonical skill footprint is **only** under `.agents/skills/` (pinned in `skills
 
 | Skill | Why retained |
 | --- | --- |
-| **ui-ux-pro-max** | Mandatory design workflow for console visuals — see [Design system (ui-ux-pro-max)](#design-system-ui-ux-pro-max) |
+| **ui-ux-pro-max** | Mandatory design workflow for console visuals — see [Design system (ui-ux-pro-max)](../design-system/AGENTS.md) |
 | **building-native-ui** | Expo Router / native UI patterns for this Expo app |
 | **native-data-fetching** | Fetch / React Query / Expo Router loader guidance |
 | **expo-deployment** | Web / store / hosting deploy paths for the Expo export |

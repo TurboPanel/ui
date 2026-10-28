@@ -1,6 +1,6 @@
 # Organization console (`/<organizationId>/*`) — AGENTS.md
 
-Repo-wide rules (design system, tokens, platform copy, testing): `../../../AGENTS.md`.
+Repo-wide rules (design system, tokens, platform copy, testing): `../../../AGENTS.md`, `../../../design-system/AGENTS.md`.
 
 Main product shell for signed-in users. Web keeps the sidebar + narrow-viewport drawer (`org-shell.tsx`); iOS/Android use `org-shell.native.tsx` with `OrgTabBar` (Projects, Activity, Servers, plus a fourth Search tab that opens `/<orgId>/search`, `search-screen.tsx`). `ORG_TAB_AREA_IDS` is the native tab set; managed databases are listed on Projects (the **Managed databases** filter); Network / Access / Billing / Workspaces / Admin / Pending keys remain deep-link-only on native for now. **Organization settings** (`/manage`, six tabs) is not a sidebar area — reach it from the header org switcher **Settings** row, a gear on `/organizations`, or a deep link.
 

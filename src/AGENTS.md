@@ -20,7 +20,7 @@ Authored Tamagui config lives in `babel.config.cjs`, `src/lib/tamagui.config.ts`
 
 - **Expo SDK 57** (React Native 0.86, React 19.2) — keep Expo module versions aligned with `pnpm expo install --fix`. Native `ios/` / `android/` are not checked in (CNG).
 - **Tamagui** `^2.0.0-rc.26` — configured via `babel.config.cjs` (not `app.json` plugins); `reactCompiler` experiment is disabled to avoid conflicts with the Tamagui babel plugin.
-- **React Query** `^5.90.14` — see [Server state (React Query)](#server-state-react-query) below.
+- **React Query** `^5.90.14` — see [Server state (React Query)](./lib/queries/AGENTS.md).
 - **Fonts** — `RootLayout` registers everything through `useFonts` and returns `null` until the fonts are ready. v4 type is Plus Jakarta Sans (700; 800 italic for page titles), Geist (400 / 500 / 600) and Geist Mono (400 / 500 / 600), packaged from `@expo-google-fonts/*` and bundled as same-origin assets: on the web `font-src 'self' data:` already covers them (`scripts/hosted-security-headers.test.ts` keeps it that way), and no font host is linked. Each weight is its own family name (`Geist_500Medium`); `src/lib/v4/typography.ts` maps roles to those names and never sets `fontWeight` beside them, because a phone applies it unreliably to a custom font. A test keeps the `useFonts` map and the role table equal. The old `@tamagui/font-inter` files stay loaded until no screen uses them. A new font weight needs the same three steps: `pnpm add`, a `useFonts` entry, a role in `typography.ts`; then `pnpm notices:generate`.
 
 

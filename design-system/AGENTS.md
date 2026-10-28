@@ -39,7 +39,7 @@ Skip the skill for pure non-visual work (API wiring with no UI change, types-onl
 | Page overrides | `design-system/turbopanel/pages/<page>.md` (page **wins** over Master) |
 | Runtime tokens | `src/lib/theme.ts` over `src/lib/theme-palettes.ts` — no one-off hex in components |
 | Frosted chrome | `src/lib/glass.ts` + `src/components/glass/glass-surface.tsx` (frosted surface; iOS 26+ `expo-glass-effect`) |
-| Shared UI primitives | `src/components/ui/` — barrel `src/components/ui/index.ts` (see [Component layer](#component-layer)) |
+| Shared UI primitives | `src/components/ui/` — barrel `src/components/ui/index.ts` (see [Component layer](../src/components/AGENTS.md)) |
 | Shared panel patterns | `src/components/ui/panel-styles.ts` (`panelStyles`) |
 
 **Page overrides that exist today** (do not invent others): `sign-in.md`, `about.md`, `overview.md`, `manage.md`, `organizations.md`, `servers.md`, `datacenters.md`, `server-detail.md`, `server-metrics.md`, `network.md`, `projects.md`, `project-create.md`, `managed-services.md`, `variables.md`, `service-settings.md`, `storage.md`, `tls.md`, `deploy-logs.md`, `container-logs.md`, `git-sources.md`, `billing.md`, `access.md`, `updates.md`. If no page file exists for a surface, follow Master only; add a page override when that surface needs durable exceptions.

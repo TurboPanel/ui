@@ -1,6 +1,6 @@
 # Admin area (`/admin/*`) — AGENTS.md
 
-Repo-wide rules (design system, tokens, platform copy, testing): `../../../AGENTS.md`.
+Repo-wide rules (design system, tokens, platform copy, testing): `../../../AGENTS.md`, `../../../design-system/AGENTS.md`.
 
 Instance-wide administration for users with the `admin` or `superadmin` role.
 

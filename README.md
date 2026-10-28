@@ -32,7 +32,7 @@ Console visual rules live in:
 - [`design-system/turbopanel/pages/`](./design-system/turbopanel/pages/) — per-surface overrides
 - [`src/lib/theme.ts`](./src/lib/theme.ts) — runtime Tamagui tokens
 
-Read [AGENTS.md](./AGENTS.md) before visual work — the **ui-ux-pro-max** skill is mandatory for layout and chrome changes.
+Read [AGENTS.md](./AGENTS.md) and [design-system/AGENTS.md](./design-system/AGENTS.md) before visual work — the **ui-ux-pro-max** skill is mandatory for layout and chrome changes.
 
 ## Documentation
 
