@@ -123,6 +123,12 @@ export const ORG_AREAS = [
         hint: 'Ranges TurboPanel must never assign because something else routes them',
       },
       {
+        id: 'cloudflare',
+        label: 'Cloudflare Accounts',
+        pathSegment: 'cloudflare',
+        hint: 'Cloudflare accounts and the API tokens TurboPanel uses for tunnels',
+      },
+      {
         id: 'firewall',
         label: 'Firewall',
         pathSegment: 'firewall',
@@ -481,6 +487,10 @@ export function networkFirewallHref(orgId: string): `/${string}/network/firewall
 
 export function networkReservedHref(orgId: string): `/${string}/network/reserved` {
   return `/${orgId}/network/reserved`
+}
+
+export function networkCloudflareHref(orgId: string): `/${string}/network/cloudflare` {
+  return `/${orgId}/network/cloudflare`
 }
 
 export const SERVER_DETAIL_TAB_IDS = [

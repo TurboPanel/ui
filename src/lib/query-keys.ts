@@ -391,6 +391,9 @@ export const queryKeys = {
       /** The people in the organization (owners and managers). */
       members: ['org', orgId, 'members'] as const,
 
+      /** Connected Cloudflare accounts and their API tokens. */
+      tunnelCarriers: ['org', orgId, 'tunnel-carriers'] as const,
+
       /** The organization firewall: policy, typed rules, and each server's mode + preview. */
       firewall: {
         all: ['org', orgId, 'firewall'] as const,
