@@ -299,6 +299,7 @@ describe('hostnames', () => {
   })
   it('says what happened to the DNS name', () => {
     expect(dnsOutcome('created')).toMatch(/created/)
-    expect(dnsOutcome('none')).toMatch(/no zone this API Token can edit/)
+    expect(dnsOutcome('none')).toMatch(/no zone for this hostname/)
+    expect(dnsOutcome('none')).toMatch(/Added to the tunnel/)
   })
 })

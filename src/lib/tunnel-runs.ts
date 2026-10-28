@@ -308,7 +308,7 @@ export function normalizeHostname(raw: string): string {
 export function dnsOutcome(dns: TunnelHostnameRecord['dns']): string {
   return dns === 'created'
     ? 'DNS name created in Cloudflare.'
-    : 'No DNS name was made: no zone this API Token can edit holds this hostname. Create the DNS record yourself, or add an API Token that can edit this zone.'
+    : 'Added to the tunnel, but no DNS name was made: Cloudflare shows no zone for this hostname under this account. Create the DNS record yourself, pointing it at this tunnel.'
 }
 
 export function hostnameStatusLabel(status: string): string {

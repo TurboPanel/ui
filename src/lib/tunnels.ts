@@ -91,7 +91,7 @@ const ERROR_COPY: Readonly<Record<string, string>> = {
   badge_cannot_tunnel:
     'No API Token on this Cloudflare account can manage tunnels. Add or fix one under Cloudflare Accounts.',
   badge_cannot_dns:
-    'No API Token on this Cloudflare account can edit DNS for this hostname. The tunnel still works once a DNS record points at it.',
+    'The hostname was not added. Its zone is in this Cloudflare account, but no API Token on it can edit DNS there. Add an API Token that can edit DNS for that zone, then try again.',
   carrier_missing:
     'The Cloudflare account for this tunnel was removed. Connect it again under Cloudflare Accounts.',
   datacenter_required: 'Choose the datacenter whose servers should run this tunnel.',

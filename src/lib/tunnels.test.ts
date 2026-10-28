@@ -113,6 +113,7 @@ describe('tunnelErrorMessage', () => {
     }
     expect(tunnelErrorMessage(err('HTTP 409: tunnel_in_use'), 'f')).toMatch(/Remove them first/)
     expect(tunnelErrorMessage(err('HTTP 409: tunnel_limit'), 'f')).toMatch(/up to 50/)
+    expect(tunnelErrorMessage(err('HTTP 409: badge_cannot_dns'), 'f')).toMatch(/was not added/)
   })
   it('keeps the panel sentence when it names what is missing', () => {
     expect(

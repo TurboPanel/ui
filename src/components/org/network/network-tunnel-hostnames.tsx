@@ -5,7 +5,6 @@ import {
   Badge,
   Button,
   ButtonRow,
-  Checkbox,
   ConfirmButton,
   LoadingState,
   MonoText,
@@ -72,7 +71,6 @@ function HostnameRow({
 
 function AddHostnameForm({ orgId, tunnelId }: Readonly<{ orgId: string; tunnelId: string }>) {
   const [hostname, setHostname] = useState('')
-  const [alsoPublic, setAlsoPublic] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState<string | null>(null)
   const add = useAddTunnelHostname(orgId, tunnelId)
@@ -82,14 +80,10 @@ function AddHostnameForm({ orgId, tunnelId }: Readonly<{ orgId: string; tunnelId
   async function send() {
     setError(null)
     setDone(null)
-    const result = await add.run({
-      hostname: normalizeHostname(hostname),
-      isLocalOnly: !alsoPublic,
-    })
+    const result = await add.run({ hostname: normalizeHostname(hostname) })
     if (result.ok) {
       setDone(dnsOutcome(result.value.hostname.dns))
       setHostname('')
-      setAlsoPublic(false)
       return
     }
     setError(tunnelErrorMessage(result.cause, 'Failed to add the hostname'))
@@ -116,13 +110,6 @@ function AddHostnameForm({ orgId, tunnelId }: Readonly<{ orgId: string; tunnelId
         autoCorrect={false}
         keyboardType="url"
         mono
-      />
-      <Checkbox
-        checked={alsoPublic}
-        onPress={() => setAlsoPublic((v) => !v)}
-        disabled={add.isPending}
-        label="This name is also a public site name"
-        accessibilityLabel="This name is also a public site name"
       />
       <ButtonRow>
         <Button
