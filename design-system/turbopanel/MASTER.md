@@ -250,7 +250,7 @@ Default: **no decorative cards**. Use bordered panels only when they group an in
 - Touch targets ≥ 44×44; web hover must not be the only affordance  
 - `accessibilityLabel` / `accessibilityRole` on icon-only controls  
 - Deep links via Expo Router already — preserve URL-addressable org routes  
-- Never per-server Durable Object polls from UI — O(1) Postgres status reads only (see AGENTS.md)
+- Never per-server Durable Object polls from UI — O(1) Postgres status reads only (see src/lib/queries/AGENTS.md)
 
 ---
 
