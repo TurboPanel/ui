@@ -4,6 +4,7 @@ import { SectionPanel } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
 import {
   networkAddressesHref,
+  networkCloudflareHref,
   networkDockerHref,
   networkFabricHref,
   networkFirewallHref,
@@ -45,6 +46,11 @@ function hubLinks(orgId: string): NetworkHubLink[] {
       title: 'Reserved Ranges',
       hint: 'Ranges something outside TurboPanel already routes — never assigned to containers, the mesh, or internal services.',
       href: networkReservedHref(orgId),
+    },
+    {
+      title: 'Cloudflare Accounts',
+      hint: 'The Cloudflare accounts and API Tokens TurboPanel uses to run tunnels.',
+      href: networkCloudflareHref(orgId),
     },
     {
       title: 'Firewall',

@@ -10997,3 +10997,139 @@ export async function removeOrganizationMember(
     orgId
   )
 }
+
+/** A Cloudflare API token as the panel shows it: label and last four, never the token. */
+export type TunnelBadge = {
+  id: string
+  carrierId: string
+  label: string
+  lastFour: string
+  capabilities: {
+    tunnels: boolean
+    dns: { id: string; name: string }[]
+    certificates: { id: string; name: string }[]
+  }
+  /** `account` or `user`: who owns the token at the provider, when known. */
+  kind: string | null
+  expiresAt: string | null
+  /** `active` or `attention`. */
+  status: string
+  lastCheckedAt: string | null
+  createdAt: string
+}
+
+/** One connected Cloudflare account and the API tokens added to it. */
+export type TunnelCarrier = {
+  id: string
+  provider: string
+  name: string
+  externalAccountId: string | null
+  status: string
+  createdAt: string
+  badges: TunnelBadge[]
+}
+
+export type TunnelAccountChoice = { id: string; name: string }
+
+/** **409** `account_choice_needed`: the API token reaches several accounts; the person picks. */
+export class AccountChoiceNeededError extends Error {
+  readonly accounts: TunnelAccountChoice[]
+
+  constructor(path: string, accounts: TunnelAccountChoice[]) {
+    super(`${path} failed: ${formatFetchFailureDetail(409, 'account_choice_needed')}`)
+    this.name = 'AccountChoiceNeededError'
+    this.accounts = accounts
+  }
+}
+
+function carriersPath(orgId: string): string {
+  return `${CLIENT_API}/organizations/${orgId}/carriers`
+}
+
+export async function fetchTunnelCarriers(orgId: string): Promise<{ carriers: TunnelCarrier[] }> {
+  return await apiFetch(carriersPath(orgId))
+}
+
+export type ConnectTunnelCarrierBody = {
+  label: string
+  token: string
+  /** Only after an `AccountChoiceNeededError`: the accounts to connect. */
+  accountIds?: string[]
+}
+
+export type ConnectedTunnelCarrier = {
+  carrier: TunnelCarrier
+  badge: TunnelBadge
+  missing: string[]
+}
+
+/**
+ * Paste only the API token: the panel finds the accounts it reaches and
+ * connects the one (or the chosen ones). Several accounts and no choice yet is
+ * an {@link AccountChoiceNeededError} carrying the list.
+ */
+export async function connectTunnelCarrier(
+  orgId: string,
+  body: ConnectTunnelCarrierBody
+): Promise<{ connected: ConnectedTunnelCarrier[] }> {
+  const path = `${carriersPath(orgId)}/connect`
+  const response = await fetchWithStepUp(controlPlaneUrl(path), {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json', [ORG_ID_HEADER]: orgId },
+    body: JSON.stringify({ provider: 'cloudflare', ...body }),
+  })
+  const parsed = (await response.json().catch(() => null)) as Record<string, unknown> | null
+  if (response.ok) return parsed as { connected: ConnectedTunnelCarrier[] }
+  const code = typeof parsed?.error === 'string' ? parsed.error : undefined
+  if (response.status === 409 && code === 'account_choice_needed') {
+    throw new AccountChoiceNeededError(path, choiceAccounts(parsed?.accounts))
+  }
+  const explanation = errorExplanation(code, parsed?.message)
+  const detail = formatFetchFailureDetail(response.status, code)
+  const suffix = explanation ? ` — ${explanation}` : ''
+  throw new Error(`${path} failed: ${detail}${suffix}`)
+}
+
+function choiceAccounts(value: unknown): TunnelAccountChoice[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((a: { id?: unknown; name?: unknown }) =>
+    typeof a?.id === 'string' && typeof a.name === 'string' ? [{ id: a.id, name: a.name }] : []
+  )
+}
+
+export async function addTunnelBadge(
+  orgId: string,
+  carrierId: string,
+  body: { label: string; token: string }
+): Promise<{ badge: TunnelBadge; missing: string[] }> {
+  return await apiFetch(`${carriersPath(orgId)}/${carrierId}/badges`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function checkTunnelBadge(
+  orgId: string,
+  carrierId: string,
+  badgeId: string
+): Promise<{ badge: TunnelBadge; ok: boolean; missing: string[] }> {
+  return await apiFetch(`${carriersPath(orgId)}/${carrierId}/badges/${badgeId}/check`, {
+    method: 'POST',
+  })
+}
+
+export async function deleteTunnelBadge(
+  orgId: string,
+  carrierId: string,
+  badgeId: string
+): Promise<{ ok: true }> {
+  return await apiFetch(`${carriersPath(orgId)}/${carrierId}/badges/${badgeId}`, {
+    method: 'DELETE',
+  })
+}
+
+/** **409** `carrier_in_use` while a tunnel still uses the account. */
+export async function deleteTunnelCarrier(orgId: string, carrierId: string): Promise<{ ok: true }> {
+  return await apiFetch(`${carriersPath(orgId)}/${carrierId}`, { method: 'DELETE' })
+}
