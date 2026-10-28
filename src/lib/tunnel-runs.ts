@@ -265,7 +265,8 @@ export function placementSummary(
   const count = tunnel.carryingServerIds.length
   const servers = count === 1 ? '1 server' : `${count} servers`
   if (tunnel.placement === 'all') {
-    return `All servers${datacenterName ? ` in ${datacenterName}` : ''} (${servers} now)`
+    const where = datacenterName ? ' in ' + datacenterName : ''
+    return `All servers${where} (${servers} now)`
   }
   if (tunnel.placement === 'one') return `One server (${servers} now)`
   return `Chosen servers (${servers} now)`
