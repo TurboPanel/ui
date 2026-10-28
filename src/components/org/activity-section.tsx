@@ -12,10 +12,12 @@ import {
   type SelectOption,
   TextLink,
 } from '@/components/ui'
+import { GitNavIcon } from '@/components/icons/nav-icons'
 import { panelStyles } from '@/components/ui/panel-styles'
 import {
   activityActionLabel,
   activityCommitText,
+  activityPushedBy,
   activityRangeLabel,
   activityStartedByLabel,
   activityStateLabel,
@@ -131,6 +133,26 @@ function ChangeCell({ item }: Readonly<{ item: OrganizationActivityItem }>) {
   )
 }
 
+/** Who started it; a git push that named its pusher gets the git icon, so the login reads as a git user. */
+function StartedByCell({ item }: Readonly<{ item: OrganizationActivityItem }>) {
+  const label = activityStartedByLabel(item)
+  if (!activityPushedBy(item)) {
+    return (
+      <Text style={styles.mutedText} numberOfLines={1}>
+        {label}
+      </Text>
+    )
+  }
+  return (
+    <View style={styles.gitUserRow}>
+      <GitNavIcon size={13} color={colors.textMuted} />
+      <Text style={[styles.mutedText, styles.gitUserText]} numberOfLines={1}>
+        {label}
+      </Text>
+    </View>
+  )
+}
+
 function ActivityRow({
   orgId,
   item,
@@ -159,9 +181,7 @@ function ActivityRow({
         <ChangeCell item={item} />
       </DataTableCell>
       <DataTableCell column={by}>
-        <Text style={styles.mutedText} numberOfLines={1}>
-          {activityStartedByLabel(item)}
-        </Text>
+        <StartedByCell item={item} />
       </DataTableCell>
       <DataTableCell column={started}>
         <Text style={styles.mutedText} numberOfLines={1}>
@@ -362,6 +382,8 @@ const styles = StyleSheet.create({
   loadingRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   pager: { flexDirection: 'row', justifyContent: 'flex-end', gap: spacing.sm },
   mutedText: { color: colors.textMuted, fontSize: 13 },
+  gitUserRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, minWidth: 0 },
+  gitUserText: { flexShrink: 1 },
   problemText: { color: colors.errorText, fontSize: 12 },
   pressed: { opacity: 0.88 },
 })

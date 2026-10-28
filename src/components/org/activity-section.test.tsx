@@ -208,6 +208,25 @@ describe('ActivitySection states', () => {
     expect(screen.getByText('Timed Out')).toBeTruthy()
     expect(screen.getByText('Cancelled')).toBeTruthy()
   })
+
+  it('names the git login that pushed, beside the branch', () => {
+    state.items = [
+      item({
+        id: 'c1',
+        state: 'succeeded',
+        actorType: 'system',
+        trigger: {
+          kind: 'push',
+          branch: 'main',
+          commitSha: 'fff0000',
+          sourceId: null,
+          pushedBy: 'octocat',
+        },
+      }),
+    ]
+    render(<ActivitySection orgId="o1" />)
+    expect(screen.getByText('octocat (Push to main)')).toBeTruthy()
+  })
 })
 
 describe('ActivitySection links', () => {

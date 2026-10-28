@@ -1,5 +1,5 @@
 import type { BadgeTone } from '@/components/ui'
-import type { OrganizationActivityItem } from '@/lib/instance-api'
+import type { DeploymentTriggerRecord, OrganizationActivityItem } from '@/lib/instance-api'
 
 const ACTION_LABELS: Record<OrganizationActivityItem['action'], string> = {
   deploy: 'Deploy',
@@ -65,18 +65,46 @@ export function isActivityLive(item: Pick<OrganizationActivityItem, 'state'>): b
   return item.state === 'queued' || item.state === 'deploying'
 }
 
+/** The git login behind a push, or null when the panel did not record one. */
+export function gitPusherLogin(
+  trigger: Pick<DeploymentTriggerRecord, 'pushedBy'> | null | undefined
+): string | null {
+  return trigger?.pushedBy?.trim() || null
+}
+
 /**
- * Who or what started it, in a few words: the person, the push ("Push to
- * main"), or "System" for the panel's own work.
+ * A push in a few words: "octocat (Push to main)" when the pusher's git login
+ * is known, else "Push to main", or "Git push" when no branch was recorded.
+ */
+export function gitPushLabel(
+  trigger: Pick<DeploymentTriggerRecord, 'branch' | 'pushedBy'>
+): string {
+  const branch = trigger.branch?.trim()
+  const push = branch ? `Push to ${branch}` : 'Git push'
+  const login = gitPusherLogin(trigger)
+  return login ? `${login} (${push})` : push
+}
+
+/**
+ * The git login to show beside a git icon when a push started this, else null
+ * (a person, the panel, or a push that named nobody).
+ */
+export function activityPushedBy(
+  item: Pick<OrganizationActivityItem, 'actorName' | 'trigger'>
+): string | null {
+  return item.actorName ? null : gitPusherLogin(item.trigger)
+}
+
+/**
+ * Who or what started it, in a few words: the person, the push ("octocat
+ * (Push to main)", or "Push to main" when the pusher is unknown), or "System"
+ * for the panel's own work.
  */
 export function activityStartedByLabel(
   item: Pick<OrganizationActivityItem, 'actorType' | 'actorName' | 'trigger'>
 ): string {
   if (item.actorName) return item.actorName
-  if (item.trigger) {
-    const branch = item.trigger.branch?.trim()
-    return branch ? `Push to ${branch}` : 'Git push'
-  }
+  if (item.trigger) return gitPushLabel(item.trigger)
   return item.actorType === 'user' ? 'Former Member' : 'System'
 }
 

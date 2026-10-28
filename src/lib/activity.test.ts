@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   activityActionLabel,
   activityCommitText,
+  activityPushedBy,
   activityRangeLabel,
   activityStartedByLabel,
   activityStateLabel,
@@ -54,6 +55,60 @@ describe('activity labels', () => {
     )
     expect(activityCommitText({ commit: { sha: 'abcdef123456', message: null } })).toBe('abcdef1')
     expect(activityCommitText({})).toBeNull()
+  })
+
+  it('names the git login that pushed, and falls back when none was recorded', () => {
+    const startedBy = (branch: string | null, pushedBy?: string | null) =>
+      activityStartedByLabel({
+        actorType: 'system',
+        actorName: null,
+        trigger: {
+          kind: 'push',
+          branch,
+          commitSha: null,
+          sourceId: null,
+          ...(pushedBy === undefined ? {} : { pushedBy }),
+        },
+      })
+    expect(startedBy('main', 'octocat')).toBe('octocat (Push to main)')
+    expect(startedBy(null, 'octocat')).toBe('octocat (Git push)')
+    expect(startedBy(' main ', '  ')).toBe('Push to main')
+    expect(startedBy('main', null)).toBe('Push to main')
+    // A panel that predates the field sends no pushedBy at all.
+    expect(startedBy('main')).toBe('Push to main')
+    expect(startedBy(null)).toBe('Git push')
+  })
+
+  it('shows the git icon only for a push that named its pusher', () => {
+    const trigger = { kind: 'push' as const, branch: 'main', commitSha: null, sourceId: null }
+    expect(
+      activityPushedBy({ actorName: null, trigger: { ...trigger, pushedBy: 'octocat' } })
+    ).toBe('octocat')
+    expect(activityPushedBy({ actorName: null, trigger })).toBeNull()
+    expect(activityPushedBy({ actorName: null, trigger: null })).toBeNull()
+    expect(
+      activityPushedBy({ actorName: 'Ada', trigger: { ...trigger, pushedBy: 'x' } })
+    ).toBeNull()
+  })
+
+  it('keeps members, Platform Admin, Former Member and System as they were', () => {
+    const trigger = {
+      kind: 'push' as const,
+      branch: 'main',
+      commitSha: null,
+      sourceId: null,
+      pushedBy: 'octocat',
+    }
+    expect(activityStartedByLabel({ actorType: 'user', actorName: 'Ada', trigger })).toBe('Ada')
+    expect(activityStartedByLabel({ actorType: 'user', actorName: 'Platform Admin' })).toBe(
+      'Platform Admin'
+    )
+    expect(activityStartedByLabel({ actorType: 'user', actorName: null, trigger: null })).toBe(
+      'Former Member'
+    )
+    expect(activityStartedByLabel({ actorType: 'system', actorName: null, trigger: null })).toBe(
+      'System'
+    )
   })
 
   it('joins project and environment, degrading to what is known', () => {
