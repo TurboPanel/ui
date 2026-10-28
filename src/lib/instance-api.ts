@@ -6857,6 +6857,11 @@ export type DeploymentTriggerRecord = {
   commitSha: string | null
   /** The repository the push came from. */
   sourceId: string | null
+  /**
+   * Git login of the person who pushed (never an email). Null or absent when
+   * the push named nobody, for older deploys, and from panels that predate it.
+   */
+  pushedBy?: string | null
 }
 
 /** Per-server convergence for one generation, read from *current* state. */
