@@ -8,7 +8,7 @@ import { paletteFor, type ColorScheme, type Palette } from '@/lib/theme-palettes
  *
  * The browser app has both themes. The phone app's screens still read fixed
  * Navy colours, so there the resolved scheme is always dark until each screen
- * moves to `useColors()` (see design-system/AGENTS.md, Theme).
+ * moves to `useColors()` (see AGENTS.md, Theme).
  */
 export type ThemeMode = 'light' | 'dark' | 'system'
 
@@ -33,7 +33,7 @@ export function parseThemeMode(value: string | null | undefined): ThemeMode {
 export function resolveColorScheme(
   mode: ThemeMode,
   deviceIsDark: boolean,
-  supportsLight = true
+  supportsLight = true,
 ): ColorScheme {
   if (!supportsLight) return 'dark'
   if (mode === 'system') return deviceIsDark ? 'dark' : 'light'

@@ -33,9 +33,9 @@ Skip the skill for pure non-visual work (API wiring with no UI change, types-onl
 
 | What | Path |
 | --- | --- |
-| Skill (read first) | [`.agents/skills/ui-ux-pro-max/SKILL.md`](.agents/skills/ui-ux-pro-max/SKILL.md) |
+| Skill (read first) | [`.agents/skills/ui-ux-pro-max/SKILL.md`](../.agents/skills/ui-ux-pro-max/SKILL.md) |
 | Search CLI | `.agents/skills/ui-ux-pro-max/scripts/search.py` |
-| Master (global SoT) | [`design-system/turbopanel/MASTER.md`](design-system/turbopanel/MASTER.md) |
+| Master (global SoT) | [`design-system/turbopanel/MASTER.md`](./turbopanel/MASTER.md) |
 | Page overrides | `design-system/turbopanel/pages/<page>.md` (page **wins** over Master) |
 | Runtime tokens | `src/lib/theme.ts` over `src/lib/theme-palettes.ts` — no one-off hex in components |
 | Frosted chrome | `src/lib/glass.ts` + `src/components/glass/glass-surface.tsx` (frosted surface; iOS 26+ `expo-glass-effect`) |

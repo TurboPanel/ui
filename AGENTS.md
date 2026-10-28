@@ -3,7 +3,7 @@
 Expo web UI for TurboPanel. Read the exact versioned docs at https://docs.expo.dev/versions/v57.0.0/ before writing any code.
 This is a short root. Nested `AGENTS.md` files hold the rules for the directory they sit in; the nearest one to the file you edit wins. Long runbooks live in `docs/`.
 
-## Project metadata / public naming
+## Project Metadata and Public Naming
 
 | Public name   | GitHub                                            | Internal term |
 | ------------- | ------------------------------------------------- | ------------- |
@@ -17,7 +17,7 @@ Licensing, notices and store provenance: [docs/licensing-and-provenance.md](./do
 
 How changes ship: squash-merge into `trunk`, then two bot-opened pull requests (`trunk` to `staging`, `staging` to `live`) that a maintainer merges with merge commits. Hotfixes land on `trunk` first, and the daemon ships before the control plane. See [How changes ship](https://github.com/TurboPanel/.github/blob/trunk/CONTRIBUTING.md#how-changes-ship) and [How to ship](https://turbopanel.io/docs/development/how-to-ship). The manual promotion form (`.github/workflows/promote.yml`) is the break-glass path, for when the automatic path cannot run ([docs/deployment-and-identifiers.md](./docs/deployment-and-identifiers.md)).
 
-## Documentation discipline
+## Documentation Discipline
 
 **Keep this file current.** When you learn something durable about the UI — instance API shapes, developer/diagnostic panels, fetch patterns, Expo constraints — add or update a note here alongside code changes.
 
