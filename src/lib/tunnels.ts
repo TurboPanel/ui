@@ -7,6 +7,7 @@ import type { BadgeTone } from '@/components/ui/badge'
 
 export const CARRIER_LIMIT = 10
 export const BADGE_LIMIT = 5
+export const TUNNEL_LIMIT = 50
 
 const GLOBAL_KEY_COPY =
   'This looks like a Global API Key, which does not work here. Create an API Token in Cloudflare and paste that instead.'
@@ -82,6 +83,30 @@ const ERROR_COPY: Readonly<Record<string, string>> = {
   account_invalid: 'Choose accounts this API Token can reach.',
   badge_invalid: 'Check the label and the API Token, then try again.',
   secrets_unavailable: 'TurboPanel cannot store tokens on this instance yet.',
+  tunnel_invalid: 'Check the name and where the tunnel should run, then try again.',
+  tunnel_exists: 'A tunnel with this name already exists. Choose another name.',
+  tunnel_limit: `An organization can have up to ${TUNNEL_LIMIT} tunnels. Remove one to add another.`,
+  tunnel_in_use: 'This tunnel still carries hostnames. Remove them first.',
+  tunnel_not_ready: 'This tunnel is not ready at Cloudflare yet. Wait a moment, then try again.',
+  badge_cannot_tunnel:
+    'No API Token on this Cloudflare account can manage tunnels. Add or fix one under Cloudflare Accounts.',
+  badge_cannot_dns:
+    'No API Token on this Cloudflare account can edit DNS for this hostname. The tunnel still works once a DNS record points at it.',
+  carrier_missing:
+    'The Cloudflare account for this tunnel was removed. Connect it again under Cloudflare Accounts.',
+  datacenter_required: 'Choose the datacenter whose servers should run this tunnel.',
+  datacenter_invalid: 'Choose a datacenter of this organization.',
+  server_invalid: 'Choose servers of this organization.',
+  server_not_in_datacenter: 'Every server has to be in the datacenter you chose.',
+  server_never_carries:
+    'One of these servers is set to never run tunnels. Turn that off for it, or leave it out.',
+  hostname_invalid: 'That does not look like a hostname, for example app.example.com.',
+  hostname_in_use: 'This hostname is already on a tunnel.',
+  hosting_mismatch: 'This hostname belongs to a site of another organization.',
+  doorway_limit: 'This is the most hostnames a tunnel can carry. Remove one to add another.',
+  zone_not_found:
+    'Cloudflare could not find the zone for this hostname under this account. Check the hostname.',
+  carry_invalid: 'Choose whether this server runs tunnels.',
 }
 
 /** Codes where the panel's own sentence is worth showing after the dash. */

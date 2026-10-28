@@ -86,6 +86,34 @@ describe('tunnelErrorMessage', () => {
     expect(tunnelErrorMessage(err('HTTP 400: account_invalid'), 'f')).toMatch(/Choose accounts/)
     expect(tunnelErrorMessage(err('HTTP 400: badge_invalid'), 'f')).toMatch(/Check the label/)
   })
+  it('maps every refusal the tunnel routes can send', () => {
+    const codes = [
+      'tunnel_invalid',
+      'tunnel_exists',
+      'tunnel_limit',
+      'tunnel_in_use',
+      'tunnel_not_ready',
+      'badge_cannot_tunnel',
+      'badge_cannot_dns',
+      'carrier_missing',
+      'datacenter_required',
+      'datacenter_invalid',
+      'server_invalid',
+      'server_not_in_datacenter',
+      'server_never_carries',
+      'hostname_invalid',
+      'hostname_in_use',
+      'hosting_mismatch',
+      'doorway_limit',
+      'zone_not_found',
+      'carry_invalid',
+    ]
+    for (const code of codes) {
+      expect(tunnelErrorMessage(err(`HTTP 409: ${code} — raw`), 'Fallback')).not.toBe('Fallback')
+    }
+    expect(tunnelErrorMessage(err('HTTP 409: tunnel_in_use'), 'f')).toMatch(/Remove them first/)
+    expect(tunnelErrorMessage(err('HTTP 409: tunnel_limit'), 'f')).toMatch(/up to 50/)
+  })
   it('keeps the panel sentence when it names what is missing', () => {
     expect(
       tunnelErrorMessage(err('HTTP 400: badge_not_useful — This token cannot be used.'), 'f')

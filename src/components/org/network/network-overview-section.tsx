@@ -9,6 +9,7 @@ import {
   networkFabricHref,
   networkFirewallHref,
   networkReservedHref,
+  networkTunnelsHref,
   serversDatacentersHref,
 } from '@/lib/org-navigation'
 import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
@@ -51,6 +52,11 @@ function hubLinks(orgId: string): NetworkHubLink[] {
       title: 'Cloudflare Accounts',
       hint: 'The Cloudflare accounts and API Tokens TurboPanel uses to run tunnels.',
       href: networkCloudflareHref(orgId),
+    },
+    {
+      title: 'Tunnels',
+      hint: 'Run a tunnel on the servers you choose and add the hostnames it carries.',
+      href: networkTunnelsHref(orgId),
     },
     {
       title: 'Firewall',
