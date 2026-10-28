@@ -57,3 +57,8 @@ When apply returns 422 with `"cert apply is not applicable on this runtime"` (Wo
 
 `useCan` is display-only; rely on server 403s and `handleUnauthorized()`.
 
+
+## Admin area (`/admin/*`)
+
+Moved to `src/app/admin/AGENTS.md`. **`/admin/updates`** is the automatic update status page (self-hosted vs TurboPanel High Availability layouts, Check Now, Pause All Updates / Resume Updates, run polling via `src/lib/upgrade-run-poll.ts`, full-screen restart overlay). Nobody starts an update by hand. Page override: `design-system/turbopanel/pages/updates.md`.
+
