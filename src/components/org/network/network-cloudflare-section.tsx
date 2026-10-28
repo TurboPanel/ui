@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { panelStyles } from '@/components/ui/panel-styles'
 import {
@@ -36,6 +36,10 @@ import {
   tokenProblem,
   tunnelErrorMessage,
 } from '@/lib/tunnels'
+
+function missingLine(missing: readonly string[]): string {
+  return `This API Token still needs: ${missing.join(', ')}.`
+}
 
 function ErrorLine({ message }: Readonly<{ message: string | null }>) {
   if (!message) return null
@@ -82,7 +86,7 @@ function TokenFields({
         onChangeText={onToken}
         editable={!disabled}
         error={tokenError}
-        hint="Create it in Cloudflare with permission to edit Cloudflare Tunnel. It is stored sealed and never shown again."
+        hint="Create it in Cloudflare with permission to edit Cloudflare Tunnel. It is stored securely and never shown again."
         accessibilityLabel="API Token"
         autoCapitalize="none"
         autoCorrect={false}
@@ -139,7 +143,9 @@ function ConnectPanel({ orgId }: Readonly<{ orgId: string }>) {
     const result = await connect.run({ label: label.trim(), token: token.trim(), accountIds })
     if (result.ok) {
       const count = result.value.connected.length
-      setDone(count === 1 ? 'Connected 1 Cloudflare account.' : `Connected ${count} accounts.`)
+      const base = count === 1 ? 'Connected 1 Cloudflare account.' : `Connected ${count} accounts.`
+      const missing = [...new Set(result.value.connected.flatMap((c) => c.missing))]
+      setDone(missing.length > 0 ? `${base} ${missingLine(missing)}` : base)
       setLabel('')
       setToken('')
       setChoices(null)
@@ -207,11 +213,13 @@ function BadgeRow({
   const remove = useDeleteTunnelBadge(orgId, carrierId)
   const busy = check.isPending || remove.isPending
   const expiry = expiryLabel(badge.expiresAt)
+  const [missing, setMissing] = useState<string[]>([])
 
   async function runCheck() {
     onError(null)
     const result = await check.run(badge.id)
-    if (!result.ok) onError(tunnelErrorMessage(result.cause, 'Failed to check the API Token'))
+    if (result.ok) setMissing(result.value.missing)
+    else onError(tunnelErrorMessage(result.cause, 'Failed to check the API Token'))
   }
 
   async function runRemove() {
@@ -241,6 +249,7 @@ function BadgeRow({
             label="Remove"
             confirmLabel="Remove API Token"
             prompt="Remove this API Token? Tunnels that depend on it stop being managed until you add another."
+            stacked
             busy={remove.isPending}
             disabled={pending || busy}
             onConfirm={() => void runRemove()}
@@ -254,11 +263,16 @@ function BadgeRow({
         {checkedLabel(badge.lastCheckedAt)}
         {expiry ? `. ${expiry}` : ''}
       </Text>
+      {missing.length > 0 ? <Text style={panelStyles.muted}>{missingLine(missing)}</Text> : null}
     </View>
   )
 }
 
-function AddBadgeForm({ orgId, carrierId }: Readonly<{ orgId: string; carrierId: string }>) {
+function AddBadgeForm({
+  orgId,
+  carrierId,
+  trailing,
+}: Readonly<{ orgId: string; carrierId: string; trailing?: ReactNode }>) {
   const [open, setOpen] = useState(false)
   const [label, setLabel] = useState('')
   const [token, setToken] = useState('')
@@ -288,6 +302,7 @@ function AddBadgeForm({ orgId, carrierId }: Readonly<{ orgId: string; carrierId:
           onPress={() => setOpen(true)}
           accessibilityLabel="Add an API Token to this account"
         />
+        {trailing}
       </ButtonRow>
     )
   }
@@ -340,15 +355,6 @@ function CarrierCard({ orgId, carrier }: Readonly<{ orgId: string; carrier: Tunn
     <SectionPanel
       title={carrier.name}
       hint={carrier.externalAccountId ? `Account ${carrier.externalAccountId}` : undefined}
-      headerRight={
-        <ConfirmButton
-          label="Remove Account"
-          confirmLabel="Remove account"
-          prompt="Remove this account and its API Tokens from TurboPanel? Nothing is deleted in Cloudflare."
-          busy={remove.isPending}
-          onConfirm={() => void runRemove()}
-        />
-      }
     >
       <ErrorLine message={error} />
       <View style={styles.list}>
@@ -366,7 +372,20 @@ function CarrierCard({ orgId, carrier }: Readonly<{ orgId: string; carrier: Tunn
           />
         ))}
       </View>
-      <AddBadgeForm orgId={orgId} carrierId={carrier.id} />
+      <AddBadgeForm
+        orgId={orgId}
+        carrierId={carrier.id}
+        trailing={
+          <ConfirmButton
+            label="Remove Account"
+            confirmLabel="Remove Account"
+            prompt="Remove this account and its API Tokens from TurboPanel? Nothing is deleted in Cloudflare."
+            stacked
+            busy={remove.isPending}
+            onConfirm={() => void runRemove()}
+          />
+        }
+      />
     </SectionPanel>
   )
 }

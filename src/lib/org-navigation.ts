@@ -126,7 +126,7 @@ export const ORG_AREAS = [
         id: 'cloudflare',
         label: 'Cloudflare Accounts',
         pathSegment: 'cloudflare',
-        hint: 'Cloudflare accounts and the API tokens TurboPanel uses for tunnels',
+        hint: 'Cloudflare accounts and the API Tokens TurboPanel uses for tunnels',
       },
       {
         id: 'firewall',

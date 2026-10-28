@@ -28,6 +28,18 @@ describe('tokenProblem', () => {
   })
 })
 
+describe('tokenProblem boundaries', () => {
+  it('treats 37 to 45 hex characters as a Global API Key', () => {
+    expect(tokenProblem('a'.repeat(36))).toBeNull()
+    expect(tokenProblem('a'.repeat(37))).toMatch(/Global API Key/)
+    expect(tokenProblem('a'.repeat(45))).toMatch(/Global API Key/)
+    expect(tokenProblem('a'.repeat(46))).toBeNull()
+  })
+  it('lets a 40 character value with other letters through', () => {
+    expect(tokenProblem('g'.repeat(40))).toBeNull()
+  })
+})
+
 describe('labels', () => {
   it('names who owns the token', () => {
     expect(tokenKindLabel('account')).toBe('Account-owned')
@@ -67,6 +79,12 @@ describe('tunnelErrorMessage', () => {
     expect(tunnelErrorMessage(err('HTTP 409: carrier_limit'), 'f')).toMatch(/up to 10/)
     expect(tunnelErrorMessage(err('HTTP 409: badge_limit'), 'f')).toMatch(/up to 5/)
     expect(tunnelErrorMessage(err('HTTP 400: badge_rejected'), 'f')).toMatch(/did not accept/)
+  })
+  it('maps the account refusals', () => {
+    expect(tunnelErrorMessage(err('HTTP 400: badge_wrong_account'), 'f')).toMatch(/cannot see/)
+    expect(tunnelErrorMessage(err('HTTP 400: account_required'), 'f')).toMatch(/no accounts/)
+    expect(tunnelErrorMessage(err('HTTP 400: account_invalid'), 'f')).toMatch(/Choose accounts/)
+    expect(tunnelErrorMessage(err('HTTP 400: badge_invalid'), 'f')).toMatch(/Check the label/)
   })
   it('keeps the panel sentence when it names what is missing', () => {
     expect(

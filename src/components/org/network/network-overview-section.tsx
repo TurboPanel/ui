@@ -49,7 +49,7 @@ function hubLinks(orgId: string): NetworkHubLink[] {
     },
     {
       title: 'Cloudflare Accounts',
-      hint: 'The Cloudflare accounts and API tokens TurboPanel uses to run tunnels.',
+      hint: 'The Cloudflare accounts and API Tokens TurboPanel uses to run tunnels.',
       href: networkCloudflareHref(orgId),
     },
     {

@@ -80,11 +80,12 @@ const ERROR_COPY: Readonly<Record<string, string>> = {
   account_required:
     'Cloudflare listed no accounts for this API Token. Check that it can read your account.',
   account_invalid: 'Choose accounts this API Token can reach.',
+  badge_invalid: 'Check the label and the API Token, then try again.',
   secrets_unavailable: 'TurboPanel cannot store tokens on this instance yet.',
 }
 
 /** Codes where the panel's own sentence is worth showing after the dash. */
-const KEEP_SERVER_TEXT = new Set(['badge_not_useful', 'badge_invalid', 'provider_unavailable'])
+const KEEP_SERVER_TEXT = new Set(['badge_not_useful', 'provider_unavailable'])
 
 /** The error code and the text after the dash in a failed-call message. */
 function parseFailure(raw: string): { code?: string; text?: string } {
