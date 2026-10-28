@@ -107,6 +107,8 @@ const ERROR_COPY: Readonly<Record<string, string>> = {
   zone_not_found:
     'Cloudflare could not find the zone for this hostname under this account. Check the hostname.',
   carry_invalid: 'Choose whether this server runs tunnels.',
+  tunnel_daemon_too_old: 'Update this server before deploying a site with a tunnel-only name.',
+  tunnel_name_public_certificate: 'A tunnel-only name cannot use a public certificate.',
 }
 
 /** Codes where the panel's own sentence is worth showing after the dash. */

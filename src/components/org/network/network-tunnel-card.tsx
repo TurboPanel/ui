@@ -24,6 +24,7 @@ import {
   draftFromTunnel,
   placementBody,
   placementSummary,
+  REDEPLOY_NOTE,
   portalState,
   seenLabel,
   serverLabel,
@@ -109,6 +110,7 @@ function PlacementEditor({
         datacenters={datacenters}
         disabled={update.isPending}
       />
+      <Text style={panelStyles.muted}>{REDEPLOY_NOTE}</Text>
       {body.ok ? null : <Text style={panelStyles.muted}>{body.problem}</Text>}
       <ButtonRow>
         <Button

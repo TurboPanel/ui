@@ -336,3 +336,7 @@ export function hostnameStatusTone(status: string): BadgeTone {
       return 'danger'
   }
 }
+
+/** Shown while changing where a tunnel runs: the name lock is applied per site, at its next deploy. */
+export const REDEPLOY_NOTE =
+  'A site with a tunnel-only name picks up the change when it is deployed again. Redeploy those sites after you save.'

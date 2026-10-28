@@ -107,6 +107,8 @@ describe('tunnelErrorMessage', () => {
       'doorway_limit',
       'zone_not_found',
       'carry_invalid',
+      'tunnel_daemon_too_old',
+      'tunnel_name_public_certificate',
     ]
     for (const code of codes) {
       expect(tunnelErrorMessage(err(`HTTP 409: ${code} — raw`), 'Fallback')).not.toBe('Fallback')
