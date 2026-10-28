@@ -43,7 +43,7 @@ const RUN_STATUS_BADGES: Readonly<Record<UpgradeRunStatus, HistoryBadge>> = {
   pending: { tone: 'info', label: 'Starting' },
   running: { tone: 'info', label: 'Running' },
   succeeded: { tone: 'ok', label: 'Succeeded' },
-  partially_failed: { tone: 'pending', label: 'Partly failed' },
+  partially_failed: { tone: 'pending', label: 'Partly Failed' },
   failed: { tone: 'danger', label: 'Failed' },
   cancelled: { tone: 'muted', label: 'Cancelled' },
 }
@@ -57,7 +57,7 @@ export const RUN_STATUS_FILTERS = [
   { value: 'any', label: 'All' },
   { value: 'active', label: 'Running' },
   { value: 'succeeded', label: 'Succeeded' },
-  { value: 'partially_failed', label: 'Partly failed' },
+  { value: 'partially_failed', label: 'Partly Failed' },
   { value: 'failed', label: 'Failed' },
   { value: 'cancelled', label: 'Cancelled' },
 ] as const
@@ -65,7 +65,7 @@ export const RUN_STATUS_FILTERS = [
 export type RunStatusFilter = (typeof RUN_STATUS_FILTERS)[number]['value']
 
 export const RUN_TRIGGER_FILTERS = [
-  { value: '', label: 'Any trigger' },
+  { value: '', label: 'Any Trigger' },
   { value: 'automatic', label: 'Automatic' },
   { value: 'manual', label: 'Manual' },
 ] as const
@@ -76,12 +76,19 @@ function plural(count: number, one: string, many: string): string {
   return `${count} ${count === 1 ? one : many}`
 }
 
-/** "2 skipped, 1 failed" from the non-zero parts, or null when every part is zero. */
+/** "3 servers updated": the summary counts servers, never parts of a server. */
+function serversText(count: number, what: string): string {
+  return `${plural(count, 'server', 'servers')} ${what}`
+}
+
+/** "2 servers skipped, 1 server failed" from the non-zero parts, or null when every part is zero. */
 function leftOverParts(summary: UpgradeRunSummary, withInProgress = true): string | null {
   const parts: string[] = []
-  if (summary.failed > 0) parts.push(`${summary.failed} failed`)
-  if (summary.skipped > 0) parts.push(`${summary.skipped} skipped`)
-  if (withInProgress && summary.inProgress > 0) parts.push(`${summary.inProgress} in progress`)
+  if (summary.failed > 0) parts.push(serversText(summary.failed, 'failed'))
+  if (summary.skipped > 0) parts.push(serversText(summary.skipped, 'skipped'))
+  if (withInProgress && summary.inProgress > 0) {
+    parts.push(serversText(summary.inProgress, 'in progress'))
+  }
   return parts.length > 0 ? parts.join(', ') : null
 }
 
@@ -114,7 +121,7 @@ export function upgradeRunResultLabel(
   if (summary.total === 0) return 'No servers in this update'
   const rest = leftOverParts(summary)
   if (summary.updated > 0) {
-    const updated = `${summary.updated} updated`
+    const updated = serversText(summary.updated, 'updated')
     return rest ? `${updated}, ${rest}` : updated
   }
   if (isUpgradeRunActive(run.status)) return nothingYetResult(summary)
@@ -172,22 +179,46 @@ function unitVersion(unit: UpgradeRunTargetUnit | null | undefined): string | nu
   return commit ? commit.slice(0, 7) : null
 }
 
-/**
- * The build(s) a run moved to: one version when the daemon and the control
- * plane share it, else each named ("Daemon 0.1.16 · Control plane 0.1.17").
- */
-export function upgradeRunTargetText(target: UpgradeRunTarget | null | undefined): string {
+/** One version when the daemon and the control plane share it, else each named. */
+function storedTargetText(target: UpgradeRunTarget | null | undefined): string {
   const daemon = unitVersion(target?.daemon)
   const instance = unitVersion(target?.instance)
   if (daemon && instance && daemon !== instance) {
-    return `Daemon ${daemon} · Control plane ${instance}`
+    return `Daemon ${daemon} · Control Plane ${instance}`
   }
   return daemon ?? instance ?? EMPTY_CELL
 }
 
+/**
+ * The build(s) a run moved to. With the run's `units` (the parts it sent to a
+ * host; parts settled at planning, such as already current or offline, are
+ * left out), each is named: the daemon, and for `instance` both the control plane and the web
+ * interface, which the control-plane install carries ("Daemon 0.1.21 ·
+ * Control Plane 0.1.21 · Web Interface 0.1.21"). Without `units` (an older
+ * control plane, or steps pruned after retention), the stored target as
+ * before: one version when the daemon and the control plane share it.
+ */
+export function upgradeRunTargetText(
+  target: UpgradeRunTarget | null | undefined,
+  units?: readonly UpgradeRunUnit[] | null
+): string {
+  if (!units || units.length === 0) return storedTargetText(target)
+  const parts: [string, string | null][] = []
+  if (units.includes('daemon')) parts.push(['Daemon', unitVersion(target?.daemon)])
+  if (units.includes('instance')) {
+    parts.push(
+      ['Control Plane', unitVersion(target?.instance)],
+      ['Web Interface', unitVersion(target?.ui)]
+    )
+  }
+  const named = parts.filter(([, version]) => version !== null)
+  if (named.length === 0) return storedTargetText(target)
+  return named.map(([label, version]) => `${label} ${version}`).join(' · ')
+}
+
 const UNIT_LABELS: Readonly<Record<UpgradeRunUnit, string>> = {
   daemon: 'Daemon',
-  instance: 'Control plane',
+  instance: 'Control Plane',
 }
 
 export function upgradeUnitLabel(unit: UpgradeRunUnit): string {

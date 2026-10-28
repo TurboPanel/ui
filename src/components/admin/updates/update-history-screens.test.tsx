@@ -286,6 +286,62 @@ describe('UpdateHistoryScreen', () => {
     expect(screen.getByText('Showing 51–51 of 80')).toBeTruthy()
   })
 
+  it('says "No updates yet" with no runs and no filters, and no stray "None"', () => {
+    queries.useUpgradeHistory.mockReturnValue({ data: { ok: true, runs: [], total: 0 } })
+    render(<UpdateHistoryScreen />)
+    expect(screen.getByText('No updates yet.')).toBeTruthy()
+    expect(screen.queryByText('No updates match these filters.')).toBeNull()
+    expect(screen.queryByText('None')).toBeNull()
+  })
+
+  it('moves a page past the end back to the last page, and never says "No updates yet" then', () => {
+    router.params = { offset: '75' }
+    queries.useUpgradeHistory.mockReturnValue({ data: { ok: true, runs: [], total: 30 } })
+    render(<UpdateHistoryScreen />)
+    expect(router.setParams).toHaveBeenLastCalledWith(expect.objectContaining({ offset: '25' }))
+    expect(screen.queryByText('No updates yet.')).toBeNull()
+    expect(screen.getByText(/^Nothing on this page/)).toBeTruthy()
+    expect(screen.getByText('Showing 0 of 30')).toBeTruthy()
+  })
+
+  it('labels the filters in title case', () => {
+    queries.useUpgradeHistory.mockReturnValue({ data: { ok: true, runs: [RUN], total: 1 } })
+    render(<UpdateHistoryScreen />)
+    expect(screen.getByText('Any Trigger')).toBeTruthy()
+    expect(screen.getByText('pick Partly Failed')).toBeTruthy()
+  })
+
+  it('says no updates match when a filter is set', () => {
+    router.params = { trigger: 'manual' }
+    queries.useUpgradeHistory.mockReturnValue({ data: { ok: true, runs: [], total: 0 } })
+    render(<UpdateHistoryScreen />)
+    expect(screen.getByText('No updates match these filters.')).toBeTruthy()
+    expect(screen.queryByText('None')).toBeNull()
+    expect(screen.getByText('Manual')).toBeTruthy()
+  })
+
+  it('names the web interface in the target of a run that installed the control plane', () => {
+    const run = {
+      ...RUN,
+      source: 'manual' as const,
+      units: ['daemon', 'instance'] as ('daemon' | 'instance')[],
+      target: {
+        daemon: { version: '0.1.21-canary.8' },
+        instance: { version: '0.1.21-canary.8' },
+        ui: { version: '0.1.21-canary.8' },
+      },
+      summary: { ...RUN.summary!, updated: 1, alreadyCurrent: 0, total: 1 },
+    }
+    queries.useUpgradeHistory.mockReturnValue({ data: { ok: true, runs: [run], total: 1 } })
+    render(<UpdateHistoryScreen />)
+    expect(
+      screen.getByText(
+        'Daemon 0.1.21-canary.8 · Control Plane 0.1.21-canary.8 · Web Interface 0.1.21-canary.8'
+      )
+    ).toBeTruthy()
+    expect(screen.getByText('1 server updated')).toBeTruthy()
+  })
+
   it('shows only the error when the first page fails to load', () => {
     queries.useUpgradeHistory.mockReturnValue({
       data: undefined,
@@ -309,7 +365,7 @@ describe('UpgradeHistoryPanel', () => {
     render(<UpgradeHistoryPanel runs={[RUN]} />)
     fireEvent.click(screen.getByRole('link', { name: /Open the update started/ }))
     expect(push).toHaveBeenCalledWith('/admin/updates/runs/run-1')
-    fireEvent.click(screen.getByText('See all'))
+    fireEvent.click(screen.getByText('See All'))
     expect(push).toHaveBeenCalledWith('/admin/updates/history')
   })
 })
@@ -344,6 +400,29 @@ describe('UpdateRunScreen', () => {
     render(<UpdateRunScreen runId="run-1" />)
     expect(screen.getByText(/^Tries again (at|on) /)).toBeTruthy()
     expect(screen.queryByText(/2026-10-27T15:40/)).toBeNull()
+  })
+
+  it('labels who started the run in title case', () => {
+    queries.useUpgradeRunServers.mockReturnValue({ data: serversPage(), isFetching: false })
+    render(<UpdateRunScreen runId="run-1" />)
+    expect(screen.getAllByText('Started By').length).toBeGreaterThan(0)
+    expect(screen.queryByText(/Started by/)).toBeNull()
+  })
+
+  it('names every part the run sent as the Update Run target', () => {
+    queries.useUpgradeRunServers.mockReturnValue({
+      data: serversPage({
+        run: {
+          ...RUN,
+          status: 'succeeded',
+          units: ['instance'],
+          target: { instance: { version: '0.1.22' }, ui: { version: '0.1.23' } },
+        },
+      }),
+      isFetching: false,
+    })
+    render(<UpdateRunScreen runId="run-1" />)
+    expect(screen.getByText('Control Plane 0.1.22 · Web Interface 0.1.23')).toBeTruthy()
   })
 
   it('writes status, organization and sort to the URL', () => {

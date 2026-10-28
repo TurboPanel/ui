@@ -75,13 +75,13 @@ export function UpgradeSettingsCard({
           onChangeText={setBatchValue}
           keyboardType="number-pad"
           placeholder={mode === 'percent' ? '100' : '5'}
-          hint={`${formatUpgradeBatchLabel(base.batch.mode, base.batch.value)}. The next group starts on a later check, once every server in this one has finished or failed.`}
+          hint={`${formatUpgradeBatchLabel(base.batch.mode, base.batch.value)}. When that is fewer than all, the next servers start on a later check, once every server updating now has finished or failed.`}
           error={batchError}
         />
         <Text style={panelStyles.muted}>
-          The default is 100%: every server updates in one group unless you lower it.
+          The default is all: every server updates at once unless you lower it.
         </Text>
-        <SettingRow label="Save Group Size">
+        <SettingRow label="Save Servers Updated at Once">
           <ActionButton
             label="Apply"
             variant="quiet"

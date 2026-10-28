@@ -11,7 +11,12 @@ import { Badge, InlineNotice, SectionPanel, SegmentedControl } from '@/component
 import { panelStyles } from '@/components/ui/panel-styles'
 import type { InstanceUpdates } from '@/lib/instance-api'
 import { HA_PRODUCT_NAME } from '@/lib/platform-copy'
-import { isUpdateWaiting, UPDATE_WAITING_COPY, waitingSentence } from '@/lib/update-automation'
+import {
+  isUpdateWaiting,
+  UPDATE_WAITING_COPY,
+  updatesCadenceText,
+  waitingSentence,
+} from '@/lib/update-automation'
 import {
   fleetProgressText,
   offlineWaitingNotice,
@@ -42,6 +47,16 @@ function fleetWaiting(data: InstanceUpdates, runActive: boolean): string | null 
   )
 }
 
+/**
+ * The notice over the High Availability screen. While paused the Status card
+ * says so, so the notice does not repeat it.
+ */
+function haNoticeBody(data: InstanceUpdates): string {
+  const retried = 'A server that fails is tried again later.'
+  if (data.updatesPaused === true) return `Connected daemons update on their own. ${retried}`
+  return `${updatesCadenceText(data, 'Connected daemons update on their own')} ${retried}`
+}
+
 export function HighAvailabilityUpdates({ data }: Readonly<{ data: InstanceUpdates }>) {
   const [statusFilter, setStatusFilter] = useState('')
   const [offset, setOffset] = useState(0)
@@ -68,7 +83,7 @@ export function HighAvailabilityUpdates({ data }: Readonly<{ data: InstanceUpdat
       <InlineNotice
         tone="info"
         title={`${HA_PRODUCT_NAME} manages the control plane`}
-        body="Connected daemons update on their own: TurboPanel checks once an hour and updates them in groups. A server that fails is tried again later."
+        body={haNoticeBody(data)}
       />
 
       <UpdatesStatusPanel data={data} headline={headline} waiting={waiting} />

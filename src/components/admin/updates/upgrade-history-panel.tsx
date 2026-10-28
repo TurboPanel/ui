@@ -13,7 +13,7 @@ import {
   upgradeStartedByLabel,
 } from '@/lib/upgrade-history-display'
 
-/** How many recent runs the Updates page lists before "See all". */
+/** How many recent runs the Updates page lists before "See All". */
 export const RECENT_UPDATE_RUNS = 5
 
 function RecentRunRow({
@@ -56,7 +56,7 @@ export function UpgradeHistoryPanel({ runs }: Readonly<{ runs: readonly UpgradeH
       title="Recent Updates"
       headerRight={
         <TextLink
-          label="See all"
+          label="See All"
           size="sm"
           accessibilityLabel="Open Update History"
           onPress={() => router.push(UPDATE_HISTORY_HREF as Href)}

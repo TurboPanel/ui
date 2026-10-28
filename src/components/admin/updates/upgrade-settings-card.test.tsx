@@ -51,13 +51,13 @@ describe('UpgradeSettingsCard', () => {
     expect(screen.queryByTestId('Auto-update servers')).toBeNull()
     expect(screen.queryByTestId('Maintenance window')).toBeNull()
     expect(screen.queryByText(/Auto-update/)).toBeNull()
-    expect(screen.getByTestId('Save Group Size')).toBeTruthy()
+    expect(screen.getByTestId('Save Servers Updated at Once')).toBeTruthy()
   })
 
-  it('saves the group size alone', () => {
+  it('saves how many servers update at once, alone', () => {
     const onSave = vi.fn()
     render(<UpgradeSettingsCard settings={SAVED} loading={false} saving={false} onSave={onSave} />)
-    fireEvent.click(within(screen.getByTestId('Save Group Size')).getByRole('button'))
+    fireEvent.click(within(screen.getByTestId('Save Servers Updated at Once')).getByRole('button'))
     expect(onSave).toHaveBeenCalledTimes(1)
     expect(onSave).toHaveBeenCalledWith({ batch: { mode: 'percent', value: 10 } })
   })
@@ -65,7 +65,7 @@ describe('UpgradeSettingsCard', () => {
   it('does not save when the saved settings failed to load', () => {
     const onSave = vi.fn()
     render(<UpgradeSettingsCard settings={null} loading={false} saving={false} onSave={onSave} />)
-    const apply = within(screen.getByTestId('Save Group Size')).getByRole('button')
+    const apply = within(screen.getByTestId('Save Servers Updated at Once')).getByRole('button')
     expect((apply as HTMLButtonElement).disabled).toBe(true)
     fireEvent.click(apply)
     expect(onSave).not.toHaveBeenCalled()
@@ -80,7 +80,9 @@ describe('UpgradeSettingsCard', () => {
     rerender(
       <UpgradeSettingsCard settings={SAVED} loading={false} saving={false} onSave={onSave} />
     )
-    const applySaved = within(screen.getByTestId('Save Group Size')).getByRole('button')
+    const applySaved = within(screen.getByTestId('Save Servers Updated at Once')).getByRole(
+      'button'
+    )
     expect((applySaved as HTMLButtonElement).disabled).toBe(false)
   })
 })

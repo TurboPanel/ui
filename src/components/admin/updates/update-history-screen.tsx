@@ -55,6 +55,22 @@ const COLUMNS: readonly DataTableColumn[] = [
   { key: 'startedBy', header: 'Started By', flex: 1.2, minWidth: 160 },
 ]
 
+/**
+ * An empty table: still loading; a page past the end while it moves back (the
+ * list has runs); no runs at all; or none for the chosen filters. It reads the
+ * list's total, never only the page.
+ */
+export function emptyHistoryText(
+  loading: boolean,
+  view: Readonly<Pick<HistoryView, 'status' | 'trigger'>>,
+  total: number
+): string {
+  if (loading) return 'Loading updates…'
+  if (total > 0) return 'Nothing on this page. Going back to the last page…'
+  const filtered = view.status !== 'any' || view.trigger !== ''
+  return filtered ? 'No updates match these filters.' : 'No updates yet.'
+}
+
 const col = (key: string): DataTableColumn =>
   COLUMNS.find((column) => column.key === key) ?? COLUMNS[0]
 
@@ -85,7 +101,7 @@ function RunHistoryRow({
         <Text style={styles.cell}>{upgradeTriggerLabel(run.source)}</Text>
       </DataTableCell>
       <DataTableCell column={col('target')}>
-        <Text style={styles.cell}>{upgradeRunTargetText(run.target)}</Text>
+        <Text style={styles.cell}>{upgradeRunTargetText(run.target, run.units)}</Text>
       </DataTableCell>
       <DataTableCell column={col('status')}>
         <Badge {...upgradeRunStatusBadge(run.status)} />
@@ -171,9 +187,7 @@ export function UpdateHistoryScreen() {
         {failedEmpty ? null : (
           <DataTable columns={COLUMNS} minWidth={1180}>
             {runs.length === 0 ? (
-              <DataTableEmpty>
-                {history.isLoading ? 'Loading updates…' : 'No updates match these filters.'}
-              </DataTableEmpty>
+              <DataTableEmpty>{emptyHistoryText(history.isLoading, view, total)}</DataTableEmpty>
             ) : (
               runs.map((run, index) => (
                 <RunHistoryRow

@@ -3,6 +3,8 @@ import { UpdateCheckTooSoonError } from './instance-api'
 import {
   CHECK_NOW_HELP,
   checkCadence,
+  checkNowHelp,
+  updatesCadenceText,
   checkNowRefusal,
   formatUpdateTime,
   lastCheckedText,
@@ -61,7 +63,7 @@ describe('pausedSinceText', () => {
 describe('next check and the confirmations', () => {
   it('names the next check, or nothing', () => {
     expect(nextCheckText('2026-10-27T11:17:00.000Z', fmt)).toBe(
-      'Next check: <2026-10-27T11:17:00.000Z>'
+      'Next Check: <2026-10-27T11:17:00.000Z>'
     )
     expect(nextCheckText(null, fmt)).toBeNull()
     expect(nextCheckText(undefined, fmt)).toBeNull()
@@ -118,7 +120,7 @@ describe('what waits', () => {
 describe('Check Now words', () => {
   it('names the last check, or nothing before the first one', () => {
     expect(lastCheckedText('2026-10-27T10:17:00.000Z', fmt)).toBe(
-      'Last checked <2026-10-27T10:17:00.000Z>'
+      'Last Checked: <2026-10-27T10:17:00.000Z>'
     )
     expect(lastCheckedText(null, fmt)).toBeNull()
   })
@@ -153,5 +155,26 @@ describe('Check Now words', () => {
       text: 'Could not check for updates',
       clearAfterMs: null,
     })
+  })
+})
+
+describe('how updates run', () => {
+  it('follows the check interval, in the card and the High Availability notice', () => {
+    expect(updatesCadenceText({ checkIntervalMinutes: 5 })).toBe(
+      'Updates install on their own: TurboPanel checks every 5 minutes.'
+    )
+    expect(
+      updatesCadenceText({ checkIntervalMinutes: 60 }, 'Connected daemons update on their own')
+    ).toBe('Connected daemons update on their own: TurboPanel checks once an hour.')
+  })
+
+  it('says updates are paused instead of that they install on their own', () => {
+    const text = updatesCadenceText({ updatesPaused: true, checkIntervalMinutes: 5 })
+    expect(text).toBe('Updates are paused. Nothing new starts until they are resumed.')
+    expect(text).not.toMatch(/on their own/)
+    expect(checkNowHelp(true)).toBe(
+      'Check Now only looks for new builds. Nothing starts until updates are resumed.'
+    )
+    expect(checkNowHelp(false)).toBe(CHECK_NOW_HELP)
   })
 })

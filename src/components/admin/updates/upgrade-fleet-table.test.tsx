@@ -95,4 +95,19 @@ describe('UpgradeFleetTable', () => {
     expect(screen.getByText('Showing 26–26 of 60')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Next' })).toBeTruthy()
   })
+
+  it('moves back to the last page when the list shrank under an open later page', () => {
+    const onOffsetChange = vi.fn()
+    render(
+      <UpgradeFleetTable
+        servers={[]}
+        total={60}
+        offset={75}
+        pageSize={25}
+        onOffsetChange={onOffsetChange}
+      />
+    )
+    expect(onOffsetChange).toHaveBeenCalledWith(50)
+    expect(screen.getByText('Showing 0 of 60')).toBeTruthy()
+  })
 })

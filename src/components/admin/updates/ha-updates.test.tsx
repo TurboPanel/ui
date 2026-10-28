@@ -188,8 +188,12 @@ describe('HighAvailabilityUpdates', () => {
   it('says updates run on their own and when the next check is', () => {
     render(<HighAvailabilityUpdates data={DATA} />)
     expect(screen.getByText('TurboPanel is up to date')).toBeTruthy()
-    expect(screen.getByText('Next check: <2026-10-27T11:17:00.000Z>')).toBeTruthy()
-    expect(screen.getByText(/update on their own/)).toBeTruthy()
+    expect(screen.getByText('Next Check: <2026-10-27T11:17:00.000Z>')).toBeTruthy()
+    expect(
+      screen.getByText(
+        /Connected daemons update on their own: TurboPanel checks once an hour\. A server that fails is tried again later\./
+      )
+    ).toBeTruthy()
   })
 
   it('names what waits when a connected daemon is behind', () => {
@@ -231,7 +235,7 @@ describe('HighAvailabilityUpdates', () => {
     expect(
       screen.getByText('Updates paused since <2026-10-27T09:30:00.000Z> by Dana Ops')
     ).toBeTruthy()
-    expect(screen.queryByText(/^Next check:/)).toBeNull()
+    expect(screen.queryByText(/^Next Check:/)).toBeNull()
     expect(
       screen.getByText(
         'Resume updates? They start again at the next check (<2026-10-27T11:17:00.000Z>).'
@@ -242,6 +246,14 @@ describe('HighAvailabilityUpdates', () => {
       expect(resumeRun).toHaveBeenCalledTimes(1)
     })
     expect(pauseRun).not.toHaveBeenCalled()
+  })
+
+  it('says updates are paused once, in the card, not again in the notice', () => {
+    render(<HighAvailabilityUpdates data={PAUSED} />)
+    expect(screen.getAllByText(/Nothing new starts until they are resumed/)).toHaveLength(1)
+    expect(
+      screen.getByText(/Connected daemons update on their own\. A server that fails/)
+    ).toBeTruthy()
   })
 
   it('falls back to the email, then to "an administrator"', () => {
@@ -309,7 +321,7 @@ describe('Check Now', () => {
 
   it('only checks: it says so and shows the last check', async () => {
     render(<HighAvailabilityUpdates data={{ ...DATA, lastCheckAt: '2026-10-27T10:17:00.000Z' }} />)
-    expect(screen.getByText('Last checked <2026-10-27T10:17:00.000Z>')).toBeTruthy()
+    expect(screen.getByText('Last Checked: <2026-10-27T10:17:00.000Z>')).toBeTruthy()
     expect(
       screen.getByText(
         'Check Now only looks for new builds. The next scheduled check starts the update.'
@@ -342,6 +354,8 @@ describe('Check Now', () => {
 
   it('names the check interval when it is not an hour', () => {
     render(<HighAvailabilityUpdates data={{ ...DATA, checkIntervalMinutes: 5 }} />)
-    expect(screen.getByText(/TurboPanel checks every 5 minutes/)).toBeTruthy()
+    // The notice and the Status card both follow the interval; neither says once an hour.
+    expect(screen.getAllByText(/TurboPanel checks every 5 minutes\./)).toHaveLength(2)
+    expect(screen.queryByText(/once an hour/)).toBeNull()
   })
 })

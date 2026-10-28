@@ -19,8 +19,8 @@
 - Paused: "Updates paused since <local time> by <name>" (email, then "an administrator").
 - What waits ("Waiting to update: control plane v…, and the daemon on some servers. It starts on its own at the next check.") and "Next check: <local time>" while not paused.
 - "Last checked <local time>", and under it: "Check Now only looks for new builds. The next scheduled check starts the update."
-- On a phone-width window (below `layout.desktopBreakpoint`) the two controls leave the header and sit full width in the card body, under the text, so the armed confirmation and any message have room. Messages from either control always show in the body; a "Checked a moment ago" line clears once its wait has passed.
-- Header actions: **Check Now** (`Button`; a second check within a minute says "Checked a moment ago. Try again in N seconds." under it and stays usable) and `ConfirmButton` **Pause All Updates** (prompt: a run in progress finishes the servers it is updating, then stops) or **Resume Updates** (prompt: updates start again at the next check, with its time). A refusal shows beside the button.
+- The two controls sit in the card body under the text at every width, never in the header slot (it does not shrink, so a long confirmation there clipped the card). The Pause / Resume confirmation uses `ConfirmButton stacked`: the buttons, then the question on its own full-width line. Resizing the window never closes an open confirmation. Messages from either control always show in the body; a "Checked a moment ago" line clears once its wait has passed.
+- Card actions: **Check Now** (`Button`; a second check within a minute says "Checked a moment ago. Try again in N seconds." in the card and stays usable) and `ConfirmButton` **Pause All Updates** (prompt: a run in progress finishes the servers it is updating, then stops) or **Resume Updates** (prompt: updates start again at the next check, with its time). A refusal shows in the card body. While paused the card says "Updates are paused. Nothing new starts until they are resumed." instead of how updates install; labels read **Last Checked** and **Next Check**.
 
 ## Self-hosted
 

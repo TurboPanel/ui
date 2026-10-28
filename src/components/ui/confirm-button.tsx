@@ -35,6 +35,7 @@ export function ConfirmButton({
   disabled = false,
   size = 'sm',
   variant = 'danger',
+  stacked = false,
 }: Readonly<{
   label: string
   confirmLabel?: string
@@ -53,6 +54,11 @@ export function ConfirmButton({
   disabled?: boolean
   size?: ButtonSize
   variant?: 'danger' | 'secondary'
+  /**
+   * Armed layout: the two buttons with the prompt on its own full-width line
+   * under them, for a long prompt or a narrow container. Default: one row.
+   */
+  stacked?: boolean
 }>) {
   const [armed, setArmed] = useState(false)
   const [confirmed, setConfirmed] = useState(false)
@@ -125,24 +131,46 @@ export function ConfirmButton({
   // confirm button sits where the arming press landed. The row never wraps:
   // on a narrow screen the question wraps its own words instead, so Confirm
   // cannot drop to a second line and leave Cancel under the press.
+  const dismissButton = (
+    <Button label={dismissLabel} variant="ghost" size={size} disabled={busy} onPress={disarm} />
+  )
+  const confirmButton = (
+    <Button
+      label={confirmLabel}
+      variant={variant === 'danger' ? 'danger' : 'primary'}
+      size={size}
+      busy={confirmed && busy}
+      disabled={disabled || busy}
+      minWidth={armedWidth}
+      onPress={() => {
+        if (Date.now() - armedAt.current < CONFIRM_GUARD_MS) return
+        disarm()
+        setConfirmed(true)
+        onConfirm()
+      }}
+    />
+  )
+
+  // Stacked: the same idea in a column. The question comes first in reading
+  // order but is drawn under the buttons at full width, so Confirm takes the
+  // place of the arming press.
+  if (stacked) {
+    return (
+      <View ref={armedRow} style={styles.armedStack}>
+        <Text style={styles.prompt}>{prompt}</Text>
+        <View style={styles.stackButtons}>
+          {confirmButton}
+          {dismissButton}
+        </View>
+      </View>
+    )
+  }
+
   return (
     <View ref={armedRow} style={styles.armedRow}>
       <Text style={styles.prompt}>{prompt}</Text>
-      <Button label={dismissLabel} variant="ghost" size={size} disabled={busy} onPress={disarm} />
-      <Button
-        label={confirmLabel}
-        variant={variant === 'danger' ? 'danger' : 'primary'}
-        size={size}
-        busy={confirmed && busy}
-        disabled={disabled || busy}
-        minWidth={armedWidth}
-        onPress={() => {
-          if (Date.now() - armedAt.current < CONFIRM_GUARD_MS) return
-          disarm()
-          setConfirmed(true)
-          onConfirm()
-        }}
-      />
+      {dismissButton}
+      {confirmButton}
     </View>
   )
 }
@@ -153,6 +181,17 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     flexWrap: 'nowrap',
     flexShrink: 1,
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  armedStack: {
+    flexDirection: 'column-reverse',
+    alignSelf: 'stretch',
+    gap: spacing.sm,
+  },
+  stackButtons: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     gap: spacing.sm,
   },
