@@ -11172,6 +11172,7 @@ export type TunnelHostnameRecord = {
   tunnelId: string
   hostname: string
   hostingId: string | null
+  /** A recorded wish that only the tunnel and peer servers answer this name; not enforced yet. */
   isLocalOnly: boolean
   /** `pending`, `live`, `attention` or `removing`. */
   status: string
