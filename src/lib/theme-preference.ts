@@ -33,7 +33,7 @@ export function parseThemeMode(value: string | null | undefined): ThemeMode {
 export function resolveColorScheme(
   mode: ThemeMode,
   deviceIsDark: boolean,
-  supportsLight = true,
+  supportsLight = true
 ): ColorScheme {
   if (!supportsLight) return 'dark'
   if (mode === 'system') return deviceIsDark ? 'dark' : 'light'
