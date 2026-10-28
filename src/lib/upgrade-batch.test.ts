@@ -45,12 +45,27 @@ describe('validateUpgradeBatchInput', () => {
     expect(validateUpgradeBatchInput({ mode: 'percent', value: '101' }).ok).toBe(false)
     expect(validateUpgradeBatchInput({ mode: 'count', value: '0' }).ok).toBe(false)
     expect(validateUpgradeBatchInput({ mode: 'count', value: '10001' }).ok).toBe(false)
+    expect(validateUpgradeBatchInput({ mode: 'count', value: '' })).toEqual({
+      ok: false,
+      message: 'Enter how many servers update at once.',
+    })
+    expect(validateUpgradeBatchInput({ mode: 'count', value: '10001' })).toEqual({
+      ok: false,
+      message: 'Use 1–10000 servers.',
+    })
   })
 
   it('clamps negative fleet offsets and formats labels', () => {
     expect(fleetServersQuery(-3, 'pending').offset).toBe(0)
-    expect(formatUpgradeBatchLabel('percent', 25)).toBe('25% of fleet per batch')
-    expect(formatUpgradeBatchLabel('count', 1)).toBe('1 server per batch')
-    expect(formatUpgradeBatchLabel('count', 4)).toBe('4 servers per batch')
+    expect(formatUpgradeBatchLabel('percent', 100)).toBe('Servers updated at once: all')
+    expect(formatUpgradeBatchLabel('percent', 25)).toBe('Servers updated at once: 25%')
+    expect(formatUpgradeBatchLabel('count', 1)).toBe('Servers updated at once: 1')
+    expect(formatUpgradeBatchLabel('count', 4)).toBe('Servers updated at once: 4')
+    for (const label of [
+      formatUpgradeBatchLabel('percent', 100),
+      formatUpgradeBatchLabel('count', 4),
+    ]) {
+      expect(label).not.toMatch(/fleet|batch|group/)
+    }
   })
 })

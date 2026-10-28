@@ -501,7 +501,7 @@ function ProjectsList({
 }
 
 /**
- * The type filter (All, Apps, Managed databases, each with its count), the
+ * The type filter (All, Apps, Managed Databases, each with its count), the
  * workspace filter and the grid or list switch. The type rides in `?type=` so
  * the view is linkable and keeps the workspace. On a phone the type filter
  * takes its own row.
@@ -541,14 +541,14 @@ function AllProjectsTools({
   )
 }
 
-/** With the Managed databases filter on: the organization defaults those databases inherit. */
+/** With the Managed Databases filter on: the organization defaults those databases inherit. */
 function ManagedSettingsLink({ orgId }: Readonly<{ orgId: string }>) {
   const s = styles(usePalette())
   const router = useRouter()
   return (
     <View style={s.links}>
       <TextLink
-        label="Managed database settings"
+        label="Managed Database Settings"
         size="sm"
         onPress={() => router.push(managedSettingsHref(orgId) as Href)}
       />
@@ -590,7 +590,7 @@ export function ProjectsHomeSection({
   const canCreate = canOwn && !isSystemScope
   // While the first-run welcome shows, it carries the New Project button.
   const welcomeShown = !loading && data.cards.length === 0 && !error
-  // With the Managed databases filter on, New project opens on the managed type.
+  // With the Managed Databases filter on, New project opens on the managed type.
   const newProjectHref = withQueryParam(
     newProjectHrefForScope(orgId, scopeId),
     'type',

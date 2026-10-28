@@ -9,7 +9,6 @@ import {
   SERVERS_TILE_MIN_WIDTH,
   serversLayoutAccessibilityLabel,
   setStoredServersLayout,
-  showServersToolbarUpdate,
   usesCompactServersList,
 } from './servers-layout'
 
@@ -56,9 +55,8 @@ describe('resolveServersFleetSurface', () => {
         serverCount: 2,
         compactChrome: false,
         hasError: false,
-      }),
+      })
     ).toEqual({
-      showToolbarSelectAll: false,
       showDetailFleet: true,
       showSummaryFleet: false,
       showStatusPanel: false,
@@ -74,7 +72,7 @@ describe('resolveServersFleetSurface', () => {
         serverCount: 2,
         compactChrome: true,
         hasError: false,
-      }).showDetailInPanel,
+      }).showDetailInPanel
     ).toBe(false)
     expect(
       resolveServersFleetSurface({
@@ -82,9 +80,8 @@ describe('resolveServersFleetSurface', () => {
         serverCount: 2,
         compactChrome: true,
         hasError: false,
-      }),
+      })
     ).toMatchObject({
-      showToolbarSelectAll: true,
       showSummaryFleet: true,
       showFleetPanel: false,
     })
@@ -97,7 +94,7 @@ describe('resolveServersFleetSurface', () => {
         serverCount: 0,
         compactChrome: true,
         hasError: false,
-      }).showFleetPanel,
+      }).showFleetPanel
     ).toBe(true)
     expect(
       resolveServersFleetSurface({
@@ -105,17 +102,8 @@ describe('resolveServersFleetSurface', () => {
         serverCount: 3,
         compactChrome: false,
         hasError: true,
-      }).showStatusPanel,
+      }).showStatusPanel
     ).toBe(true)
-  })
-})
-
-describe('showServersToolbarUpdate', () => {
-  it('hides Update on native until hosts are selected', () => {
-    expect(showServersToolbarUpdate(true, false, 0)).toBe(true)
-    expect(showServersToolbarUpdate(true, true, 0)).toBe(false)
-    expect(showServersToolbarUpdate(true, true, 2)).toBe(true)
-    expect(showServersToolbarUpdate(false, true, 2)).toBe(false)
   })
 })
 

@@ -2727,7 +2727,10 @@ export type HealthResponse = {
   revision?: { commit: string; sourceUrl: string }
   /** The update channel the instance follows (`canary`, `rc`, `release`, `trunk`); newer control planes only. */
   channel?: string
-  /** Self-hosted: the installed pre-release label (`0.1.1-canary.…`, `0.1.1-rc.1`), else null. */
+  /**
+   * Self-hosted: the installed package's full label (`0.1.21-canary.24`,
+   * `0.1.21-rc.2`), else null. The sidebar shows only its `X.Y.Z`.
+   */
   build?: string | null
   /** Hosted: `testing`, `staging` or `live`; null on self-hosted and local dev. */
   environment?: string | null
@@ -2843,6 +2846,8 @@ function readText(value: unknown): string | null {
 
 type LicenseCreateErrorBody = {
   error?: string
+  /** Machine code next to a human `error` (e.g. `tier_not_found`). */
+  code?: string
   maxServers?: number | null
   usedSeats?: number
   message?: string
@@ -2905,20 +2910,28 @@ function throwIfLicenseCreateFailed(status: number, errorBody: LicenseCreateErro
   if (status === 409 && errorBody.error === NO_LICENSE_AVAILABLE_ERROR) {
     throw new NoLicenseAvailableError(licenseAvailabilityFromBody(errorBody))
   }
-  const detail = errorBody.error
-    ? formatFetchFailureDetail(status, errorBody.error)
+  // Prefer the machine code (`tier_not_found`, …) so the wizard maps it to a sentence.
+  const reason = errorBody.code ?? errorBody.error
+  const detail = reason
+    ? formatFetchFailureDetail(status, reason)
     : formatFetchFailureDetail(status)
   throw new Error(`${CLIENT_API}/licenses failed: ${detail}`)
 }
 
-/** Mint a one-shot registration key for the Add Server flow. */
+/**
+ * Mint a one-shot registration key for the Add Server flow. `tierId` is the
+ * license tier the manager chose (hosted): the key holds a license at that
+ * tier and the server that enrolls with it is put on it.
+ */
 export async function createLicense(
   name?: string,
-  installBaseUrl?: string
+  installBaseUrl?: string,
+  tierId?: string
 ): Promise<CreatedLicense> {
   const body: Record<string, string> = {}
   if (name) body.name = name
   if (installBaseUrl?.trim()) body.installBaseUrl = installBaseUrl.trim()
+  if (tierId) body.tierId = tierId
 
   const resolvedOrgId = getActiveOrganizationId()
   const headers: Record<string, string> = {
@@ -2968,6 +2981,12 @@ export type LicenseRecord = {
   boundServer: LicenseBoundServer | null
   /** Set while its server is being provisioned; absent on an older control plane. */
   provisioning?: LicenseProvisioning | null
+  /** An unused key's Add Server tier, whose license it holds; null once bound or when none. */
+  tier?: { id: string; label: string } | null
+  /** When an unused key stops working (7 days after it was made); null never expires. */
+  expiresAt?: string | null
+  /** An unused key past `expiresAt`: it can no longer add a server. */
+  expired?: boolean
 }
 
 export async function fetchLicenses(): Promise<{ licenses: LicenseRecord[] }> {
@@ -3000,6 +3019,8 @@ export const NO_SUBSCRIPTION_ERROR = 'no_subscription'
 export const SERVERS_UNCOVERED_ERROR = 'servers_uncovered'
 /** A reduction would leave fewer licenses purchased than held (`409`; carries `purchasedAfter` + `licensesHeld`). */
 export const LICENSES_IN_USE_ERROR = 'licenses_in_use'
+/** A change would take the license an unused Add Server key holds at its tier. */
+export const LICENSE_HELD_BY_KEY_ERROR = 'license_held_by_key'
 export const NOT_AN_UPGRADE_ERROR = 'not_an_upgrade'
 export const NOT_A_DOWNGRADE_ERROR = 'not_a_downgrade'
 export const TIER_NOT_PURCHASABLE_ERROR = 'tier_not_purchasable'
@@ -5355,6 +5376,20 @@ export type InstanceUpdateTarget = {
   version?: string
 }
 
+/** The pre-update backup and rollback command for the waiting control plane install. */
+export type ControlPlaneRecovery = {
+  runId: string
+  backupPath: string
+  rollbackCommand: string
+}
+
+/** The instance admin who paused updates; any field may be missing (a removed account). */
+export type UpdatesPausedBy = {
+  userId: string | null
+  email: string | null
+  name: string | null
+}
+
 export type InstanceUpdates = {
   ok: boolean
   channel: string
@@ -5363,6 +5398,38 @@ export type InstanceUpdates = {
   updatesManaged?: boolean
   /** Present once the managed upgrade coordinator is mounted. */
   managedUpgrade?: boolean
+  /**
+   * Updates always run on their own (nobody starts one by hand). Optional
+   * only because an older control plane does not send the automatic fields.
+   */
+  automatic?: boolean
+  /** A connected daemon runs an older build than the channel's daemon target. */
+  daemonsBehind?: boolean
+  /** An instance admin paused all updates (Admin > Updates). */
+  updatesPaused?: boolean
+  /** When updates were paused (ISO), or null while they run. */
+  pausedAt?: string | null
+  /** Who paused updates, or null while they run. */
+  pausedBy?: UpdatesPausedBy | null
+  /**
+   * Something waits to update: a daemon is behind, or the control plane or
+   * the web interface has a newer build.
+   */
+  updateWaiting?: boolean
+  /** The next hourly check (ISO), or null when none is planned. */
+  nextCheckAt?: string | null
+  /** The last check (ISO), scheduled or Check Now, or null before the first one. */
+  lastCheckAt?: string | null
+  /** How often the scheduled check runs, in minutes (60; 5 on the testing environment). */
+  checkIntervalMinutes?: number
+  /** The update run going now, or null. */
+  activeRunId?: string | null
+  /**
+   * Self-hosted only, while a control plane or web interface install waits:
+   * the backup the next automatic run takes first, and the command that rolls
+   * back to it. The next run uses this same `runId`, so the command names it.
+   */
+  controlPlaneRecovery?: ControlPlaneRecovery | null
   fleetSummary?: {
     connected: number
     upToDate: number
@@ -5399,32 +5466,13 @@ export type InstanceUpdates = {
   }
 }
 
+/**
+ * How many servers one group of a daemon rollout updates (default 100%: every
+ * server at once). The next group starts on a later hourly check, once every
+ * server in the current one has finished or failed.
+ */
 export type UpgradeSettings = {
-  autoUpdate: boolean
   batch: { mode: 'percent' | 'count'; value: number }
-  maintenanceWindow: {
-    enabled: boolean
-    startMinute: number
-    durationMinutes: number
-    weekdays: number[]
-  }
-}
-
-export type UpgradePreflightCheck = {
-  id: string
-  label: string
-  passed: boolean
-  detail?: string
-}
-
-export type UpgradePreflightResult = {
-  ok: boolean
-  canStart: boolean
-  checks: UpgradePreflightCheck[]
-  recoveryCommand?: string
-  runId?: string
-  backupPath?: string
-  blockers?: string[]
 }
 
 export type UpgradeRunStatus =
@@ -5474,22 +5522,70 @@ export type UpgradeStepDetail = {
   restartNote?: string
 }
 
+export type UpgradeRunSource = 'manual' | 'auto' | 'server'
+
+/** `automatic` is a run the maintenance tick started; `manual` covers a person's run and a one-server run. */
+export type UpgradeRunTrigger = 'automatic' | 'manual'
+
+/** One unit's pinned build in a run's target. */
+export type UpgradeRunTargetUnit = {
+  version?: string | null
+  commit?: string | null
+  builtAt?: string | null
+}
+
+export type UpgradeRunTarget = {
+  daemon?: UpgradeRunTargetUnit | null
+  instance?: UpgradeRunTargetUnit | null
+  ui?: UpgradeRunTargetUnit | null
+}
+
+/**
+ * Per-server totals of a run (one per server, the worst of its components).
+ * `detail: 'pruned'` means the per-server rows were removed after the retention
+ * window: `updated` and `alreadyCurrent` are then unknown (null) and the other
+ * totals come from the run's stored step counts.
+ */
+export type UpgradeRunSummary = {
+  detail: 'steps' | 'pruned'
+  total: number
+  updated: number | null
+  alreadyCurrent: number | null
+  skipped: number
+  failed: number
+  inProgress: number
+}
+
 export type UpgradeRunRecord = {
   id: string
   status: UpgradeRunStatus
   phase: UpgradePhase | null
   channel: string
-  source: 'manual' | 'auto' | 'server'
+  source: UpgradeRunSource
+  createdAt?: string
   startedAt?: string | null
   finishedAt?: string | null
+  startedBy?: string | null
   startedByEmail?: string | null
   error?: string | null
+  target?: UpgradeRunTarget | null
   counts?: {
     done: number
     failed: number
     total: number
     needsAttention?: number
-  }
+  } | null
+  /** Absent on control planes older than the paged history. */
+  trigger?: UpgradeRunTrigger
+  summary?: UpgradeRunSummary
+  /**
+   * The parts the run sent to a host (steps settled at planning, such as
+   * already current, retry later, paused or offline, are left out).
+   * `instance` means the control-plane install, which carries the web
+   * interface too. Empty when retention pruned
+   * the run's steps; absent on an older control plane.
+   */
+  units?: UpgradeRunUnit[]
 }
 
 export type UpgradeActiveRunResponse = {
@@ -5532,22 +5628,159 @@ export async function fetchInstanceUpdates(consoleCommit?: string): Promise<Inst
   return await apiFetch(`${ADMIN_API}/instance/updates${query}`)
 }
 
+/**
+ * Check Now refused because the last check was under a minute ago (once a
+ * minute per install). `retryAfterSeconds` says when to try again.
+ */
+export class UpdateCheckTooSoonError extends Error {
+  readonly retryAfterSeconds: number
+
+  constructor(message: string, retryAfterSeconds: number) {
+    super(message)
+    this.name = 'UpdateCheckTooSoonError'
+    this.retryAfterSeconds = retryAfterSeconds
+  }
+}
+
+/**
+ * Check Now: read the channel manifests again and answer the same body as
+ * `GET /instance/updates`. Only a refresh; it never starts an update (the
+ * next scheduled check does). A 429 `check_too_soon` throws
+ * `UpdateCheckTooSoonError`.
+ */
+export async function checkForUpdates(consoleCommit?: string): Promise<InstanceUpdates> {
+  const query = consoleCommit ? `?consoleCommit=${encodeURIComponent(consoleCommit)}` : ''
+  return await adminJson(`${ADMIN_API}/instance/updates/check${query}`, { method: 'POST' })
+}
+
 export async function fetchUpgradeActiveRun(): Promise<UpgradeActiveRunResponse> {
   return await apiFetch(`${ADMIN_API}/instance/updates/run`)
 }
 
-export async function fetchUpgradeRun(runId: string): Promise<UpgradeActiveRunResponse> {
-  return await apiFetch(`${ADMIN_API}/instance/updates/runs/${encodeURIComponent(runId)}`)
+/**
+ * `status` omitted lists finished runs only (the original behaviour); `any`
+ * lists every run, `active` the pending or running one.
+ */
+export type UpgradeHistoryQuery = Readonly<{
+  offset?: number
+  limit?: number
+  status?: UpgradeRunStatus | 'any' | 'active' | ''
+  trigger?: UpgradeRunTrigger | ''
+}>
+
+/** Query string from the set values only (`''`, null and undefined are left out). */
+function queryString(params: Readonly<Record<string, string | number | null | undefined>>): string {
+  const query = new URLSearchParams()
+  for (const [key, value] of Object.entries(params)) {
+    if (value === null || value === undefined || value === '') continue
+    query.set(key, String(value))
+  }
+  return query.size > 0 ? `?${query.toString()}` : ''
 }
 
 export async function fetchUpgradeHistory(
-  params?: Readonly<{ offset?: number; limit?: number }>
+  params?: UpgradeHistoryQuery
 ): Promise<UpgradeHistoryResponse> {
-  const query = new URLSearchParams()
-  if (params?.offset != null) query.set('offset', String(params.offset))
-  if (params?.limit != null) query.set('limit', String(params.limit))
-  const suffix = query.size > 0 ? `?${query.toString()}` : ''
+  const suffix = queryString({
+    offset: params?.offset,
+    limit: params?.limit,
+    status: params?.status,
+    trigger: params?.trigger,
+  })
   return await apiFetch(`${ADMIN_API}/instance/updates/history${suffix}`)
+}
+
+/** How one server (or one of its components) ended in a run. */
+export type UpgradeServerOutcome =
+  'updated' | 'already_current' | 'skipped' | 'failed' | 'in_progress'
+
+export type UpgradeRunUnit = 'daemon' | 'instance'
+
+export type UpgradeRunServerComponent = {
+  stepId: string
+  unit: UpgradeRunUnit
+  phase: UpgradePhase
+  status: UpgradeStepStatus
+  outcome: UpgradeServerOutcome
+  fromVersion: string | null
+  toVersion: string | null
+  fromCommit: string | null
+  toCommit: string | null
+  attempts: number
+  startedAt: string | null
+  finishedAt: string | null
+  lastStageAt: string | null
+  errorCode: string | null
+  errorMessage: string | null
+  detail?: (UpgradeStepDetail & { progressDetail?: string; uiRefresh?: boolean }) | null
+}
+
+export type UpgradeRunServerRow = {
+  serverId: string
+  serverName: string | null
+  hostname: string | null
+  organizationId: string | null
+  organizationName: string | null
+  datacenterId: string | null
+  datacenterName: string | null
+  status: UpgradeServerOutcome
+  fromVersion: string | null
+  toVersion: string | null
+  fromCommit: string | null
+  toCommit: string | null
+  startedAt: string | null
+  finishedAt: string | null
+  durationMs: number | null
+  errorCode: string | null
+  errorMessage: string | null
+  attempts: number
+  connected: boolean
+  lastHeartbeatAt: string | null
+  components: Partial<Record<UpgradeRunUnit, UpgradeRunServerComponent>>
+}
+
+export type UpgradeRunServerSort =
+  'status' | 'organization' | 'server' | 'started' | 'finished' | 'duration' | 'attempts'
+
+export type UpgradeRunServersQuery = Readonly<{
+  offset?: number
+  limit?: number
+  sort?: UpgradeRunServerSort
+  dir?: 'asc' | 'desc'
+  status?: UpgradeServerOutcome | ''
+  organizationId?: string | null
+  q?: string
+  serverId?: string
+}>
+
+export type UpgradeRunServersPage = {
+  ok: boolean
+  run: UpgradeHistoryEntry
+  units: UpgradeRunUnit[]
+  statusCounts: Record<UpgradeServerOutcome | 'all', number>
+  organizations: { id: string; name: string | null; servers: number }[]
+  servers: UpgradeRunServerRow[]
+  total: number
+}
+
+/** One page of a run's servers: one row per server with each component it updated. */
+export async function fetchUpgradeRunServers(
+  runId: string,
+  params?: UpgradeRunServersQuery
+): Promise<UpgradeRunServersPage> {
+  const suffix = queryString({
+    offset: params?.offset,
+    limit: params?.limit,
+    sort: params?.sort,
+    dir: params?.dir,
+    status: params?.status,
+    organizationId: params?.organizationId,
+    q: params?.q?.trim(),
+    serverId: params?.serverId,
+  })
+  return await apiFetch(
+    `${ADMIN_API}/instance/updates/runs/${encodeURIComponent(runId)}/servers${suffix}`
+  )
 }
 
 export async function fetchUpgradeServersPage(
@@ -5574,48 +5807,22 @@ export async function saveUpgradeSettings(
   })
 }
 
-export async function runUpgradePreflight(): Promise<UpgradePreflightResult> {
-  return await apiFetch(`${ADMIN_API}/instance/updates/preflight`, { method: 'POST' })
+/** What pause and resume answer: the paused state after the change. */
+export type UpdatesPauseResult = {
+  ok: boolean
+  updatesPaused: boolean
+  pausedAt: string | null
+  pausedBy: UpdatesPausedBy | null
 }
 
-export async function startPlatformUpgradeRun(
-  runId?: string,
-  consoleCommit?: string
-): Promise<{ ok: boolean; runId: string }> {
-  return await apiFetch(`${ADMIN_API}/instance/updates/runs`, {
-    method: 'POST',
-    body: JSON.stringify({
-      ...(runId ? { runId } : {}),
-      ...(consoleCommit ? { consoleCommit } : {}),
-    }),
-  })
+/** Stop starting updates (idempotent). A run in progress finishes the servers it is on, then stops. */
+export async function pauseUpdates(): Promise<UpdatesPauseResult> {
+  return await apiFetch(`${ADMIN_API}/instance/updates/pause`, { method: 'POST' })
 }
 
-export async function checkUpgradeManifests(): Promise<{ ok: boolean }> {
-  return await apiFetch(`${ADMIN_API}/instance/updates/check`, { method: 'POST' })
-}
-
-export async function retryUpgradeStep(stepId: string): Promise<{ ok: boolean }> {
-  return await apiFetch(`${ADMIN_API}/instance/updates/steps/${encodeURIComponent(stepId)}/retry`, {
-    method: 'POST',
-  })
-}
-
-export async function cancelUpgradeRun(runId: string): Promise<{ ok: boolean }> {
-  return await apiFetch(`${ADMIN_API}/instance/updates/runs/${encodeURIComponent(runId)}/cancel`, {
-    method: 'POST',
-  })
-}
-
-export async function requestInstanceUpdate(): Promise<{ ok: true; dispatched: true }> {
-  return await apiFetch(`${ADMIN_API}/instance/updates/instance`, { method: 'POST' })
-}
-
-export async function requestColocatedDaemonUpdate(): Promise<{
-  ok: true
-  dispatched: true
-}> {
-  return await apiFetch(`${ADMIN_API}/instance/updates/daemon`, { method: 'POST' })
+/** Let updates start again from the next hourly check (idempotent). */
+export async function resumeUpdates(): Promise<UpdatesPauseResult> {
+  return await apiFetch(`${ADMIN_API}/instance/updates/resume`, { method: 'POST' })
 }
 
 export async function fetchPlatformCa(): Promise<PlatformCaInfo> {
@@ -5661,9 +5868,14 @@ async function adminJson<T>(path: string, init: RequestInit): Promise<T> {
   const body = (await response.json().catch(() => null)) as {
     error?: string
     invalid?: unknown
+    retryAfterSeconds?: unknown
   } | null
   if (!response.ok) {
     const detail = formatFetchFailureDetail(response.status, body?.error)
+    if (body?.error === 'check_too_soon') {
+      const wait = typeof body.retryAfterSeconds === 'number' ? body.retryAfterSeconds : 60
+      throw new UpdateCheckTooSoonError(`${path} failed: ${detail}`, wait)
+    }
     const invalid = Array.isArray(body?.invalid)
       ? body.invalid.filter((item): item is string => typeof item === 'string')
       : null
@@ -5985,13 +6197,6 @@ export type DaemonSupport = {
   minVersion: string
 }
 
-/** `updateBlockedCode` values this ui names; any other code shows the server's sentence. */
-export type ServerUpdateBlockedCode =
-  | 'updates_managed'
-  | 'control_plane_upgrade_required'
-  | 'upgrade_gate_unavailable'
-  | 'colocated_with_instance'
-
 export type ServerUpdateStatus = {
   ok: boolean
   serverId: string
@@ -6000,10 +6205,6 @@ export type ServerUpdateStatus = {
   target: (ServerUpdateCommit & { manifestUrl?: string }) | null
   updateAvailable: boolean
   colocatedWithInstance?: boolean
-  updateBlocked?: boolean
-  /** Why updates are refused, as a code. Absent on a control plane older than the field. */
-  updateBlockedCode?: ServerUpdateBlockedCode | (string & {})
-  updateBlockedReason?: string
   status: 'idle' | 'updating' | 'error'
   targetStatus: 'ok' | 'unknown'
   targetError?: string
@@ -6013,64 +6214,16 @@ export type ServerUpdateStatus = {
   daemonSupport?: DaemonSupport
 }
 
-export type ServerUpdateTriggerResult = {
-  ok: boolean
-  queued?: boolean
-  status?: 'updating'
-  serverId: string
-  requestId?: string
-  channel?: string
-  error?: string
-}
-
 export type ServerUpdateResetResult = ServerUpdateStatus & {
   cleared: number
-}
-
-export type ServerBatchUpdateStatus = {
-  ok: boolean
-  channel: string
-  target: (ServerUpdateCommit & { manifestUrl?: string }) | null
-  targetStatus: 'ok' | 'unknown'
-  targetError?: string
-  servers: (ServerUpdateStatus & { serverId: string })[]
-}
-
-export type ServerBatchUpdateTriggerResult = {
-  ok: boolean
-  results: {
-    serverId: string
-    ok: boolean
-    queued?: boolean
-    status?: 'updating'
-    requestId?: string
-    channel?: string
-    error?: string
-  }[]
 }
 
 export async function fetchServerUpdate(serverId: string): Promise<ServerUpdateStatus> {
   return await apiFetch(`${CLIENT_API}/servers/${serverId}/update`)
 }
 
-export async function fetchServersUpdateStatus(): Promise<ServerBatchUpdateStatus> {
-  return await apiFetch(`${CLIENT_API}/servers/updates`)
-}
-
-export async function triggerServerUpdate(serverId: string): Promise<ServerUpdateTriggerResult> {
-  return await apiFetch(`${CLIENT_API}/servers/${serverId}/update`, {
-    method: 'POST',
-  })
-}
-
 export async function resetServerUpdateStatus(serverId: string): Promise<ServerUpdateResetResult> {
   return await apiFetch(`${CLIENT_API}/servers/${serverId}/update/reset`, {
-    method: 'POST',
-  })
-}
-
-export async function triggerAllServerUpdates(): Promise<ServerBatchUpdateTriggerResult> {
-  return await apiFetch(`${CLIENT_API}/servers/updates`, {
     method: 'POST',
   })
 }
@@ -6551,6 +6704,12 @@ export type CommandProgress = {
    * when the server is heard from again and is absent once the deploy ends.
    */
   contactLostAt?: string | null
+  /**
+   * Sent by the server: when the deploy started running, or null while it
+   * waits for another build on the server to finish (one build at a time).
+   * Absent from servers that do not report it.
+   */
+  runningSince?: string | null
 }
 
 /**
@@ -6698,6 +6857,11 @@ export type DeploymentTriggerRecord = {
   commitSha: string | null
   /** The repository the push came from. */
   sourceId: string | null
+  /**
+   * Git login of the person who pushed (never an email). Null or absent when
+   * the push named nobody, for older deploys, and from panels that predate it.
+   */
+  pushedBy?: string | null
 }
 
 /** Per-server convergence for one generation, read from *current* state. */
@@ -10720,10 +10884,11 @@ export async function deleteNotificationChannel(
   )
 }
 
-export type OrganizationActivityFilter = 'all' | 'deploying' | 'failed'
+/** `deploying` is everything still in progress (queued or being worked on). */
+export type OrganizationActivityFilter = 'all' | 'deploying' | 'succeeded' | 'failed'
 
 export type OrganizationActivityItem = {
-  /** The command id. */
+  /** The command id; for a deploy it is also the deployment id its log page takes. */
   id: string
   projectId: string | null
   projectName: string | null
@@ -10732,15 +10897,31 @@ export type OrganizationActivityItem = {
   serverId: string
   action: 'deploy' | 'start' | 'restart' | 'stop'
   /** `queued` is waiting to start; `deploying` is being worked on by the server. */
-  state: 'queued' | 'deploying' | 'failed'
+  state: 'queued' | 'deploying' | 'succeeded' | 'failed' | 'cancelled'
+  /** How a `failed` item ended, when it was more than a plain failure; absent on an older control plane. */
+  failure?: 'timed_out' | 'rolled_back' | 'needs_attention' | null
   startedAt: string
+  /** When it ended; null while in progress. */
+  finishedAt?: string | null
   /** Steps done so far (plus the running one) and steps planned; null before the daemon reports a plan. */
   step: number | null
   totalSteps: number | null
   /** Label of the running step ("Install Docker"); absent on an older control plane. */
   stepLabel?: string | null
-  durationSecs: number
+  /** Running time so far, or how long it took; null for a finished row with no recorded end. */
+  durationSecs: number | null
   errorMessage: string | null
+  /** `user` when a person asked for it, `system` when the panel did (a push). */
+  actorType?: 'user' | 'system'
+  /**
+   * For a person: their name or email while they are a member, else
+   * "Platform Admin" or "Former Member" as the panel says; null for the panel.
+   */
+  actorName?: string | null
+  /** The push that set it off; null for a person's deploy. */
+  trigger?: DeploymentTriggerRecord | null
+  /** The commit the deploy put live, when it recorded one. */
+  commit?: { sha: string; message: string | null } | null
   /** Not recorded yet; always null. */
   crashCount: number | null
 }
@@ -10748,20 +10929,32 @@ export type OrganizationActivityItem = {
 export type OrganizationActivityPage = {
   ok: true
   items: OrganizationActivityItem[]
+  /** Counted up to 1000 rows past the page; `totalCapped` says there are more. */
   total: number
+  totalCapped?: boolean
   hasMore: boolean
 }
 
+export type OrganizationActivityParams = Readonly<{
+  filter?: OrganizationActivityFilter
+  projectId?: string
+  environmentId?: string
+  limit?: number
+  offset?: number
+}>
+
 /**
- * Running and recently failed deploys, restarts and stops across the
- * organization, newest first. Owners and managers only (403 otherwise); poll it.
+ * Every deploy, restart and stop across the organization, newest first,
+ * whatever the outcome. Owners and managers only (403 otherwise); poll it.
  */
 export async function fetchOrganizationActivity(
   orgId: string,
-  params: Readonly<{ filter?: OrganizationActivityFilter; limit?: number; offset?: number }> = {}
+  params: OrganizationActivityParams = {}
 ): Promise<OrganizationActivityPage> {
   const query = new URLSearchParams()
   if (params.filter) query.set('filter', params.filter)
+  if (params.projectId) query.set('projectId', params.projectId)
+  if (params.environmentId) query.set('environmentId', params.environmentId)
   if (params.limit !== undefined) query.set('limit', String(params.limit))
   if (params.offset !== undefined) query.set('offset', String(params.offset))
   const suffix = query.size > 0 ? `?${query.toString()}` : ''

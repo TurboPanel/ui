@@ -111,7 +111,7 @@ export function explainUpgradeFailure(
       title: "Can't verify the new release",
       body:
         "This server's TurboPanel can't verify the new release's signature. " +
-        'Reinstall the daemon once to trust the current signing key: run this as root on the server, then try the update again.',
+        'Reinstall the daemon once to trust the current signing key: run this as root on the server; TurboPanel tries again on its own.',
       command: daemonReinstallCommand(channel),
       docsUrl: UPGRADE_DOCS_URL,
     }
@@ -129,7 +129,7 @@ export function explainUpgradeFailure(
   if (code === 'preflight_disk') {
     return {
       title: 'Not enough disk space',
-      body: 'The server does not have enough free disk space for the new build. Free some space, then retry.',
+      body: 'The server does not have enough free disk space for the new build. Free some space; TurboPanel tries again on its own.',
       command: null,
       docsUrl: null,
     }
@@ -145,7 +145,7 @@ export function explainUpgradeFailure(
   if (code === 'step_timeout') {
     return {
       title: 'The server stopped reporting progress',
-      body: 'The server did not report progress, and the update stopped waiting. Check the daemon log on the server, then retry.',
+      body: 'The server did not report progress, and the update stopped waiting. Check the daemon log on the server; TurboPanel tries again on its own.',
       command: DAEMON_LOGS_COMMAND,
       docsUrl: null,
     }
@@ -153,7 +153,7 @@ export function explainUpgradeFailure(
   if (code === 'server_offline') {
     return {
       title: 'The server went offline',
-      body: 'It was offline for over an hour, so the update stopped waiting. Bring it back online, then retry.',
+      body: 'It was offline for over an hour, so the update stopped waiting. Bring it back online; TurboPanel tries again on its own.',
       command: null,
       docsUrl: null,
     }
@@ -161,7 +161,7 @@ export function explainUpgradeFailure(
   if (code === 'dispatch_failed') {
     return {
       title: "The update couldn't reach the server",
-      body: "The control plane could not deliver the update command to the server's daemon after several tries. Check that the server is online and connected, then retry.",
+      body: "The control plane could not deliver the update command to the server's daemon after several tries. Check that the server is online and connected; TurboPanel tries again on its own.",
       command: null,
       docsUrl: null,
     }
@@ -217,10 +217,23 @@ export function failureSupersededByRunningBuild(
 }
 
 /**
+ * A run that Pause All Updates stopped, with no server that failed: not a
+ * failure. The Status card already says updates are paused.
+ */
+function endedByPauseOnly(run: RunWithSteps): boolean {
+  return (
+    run.status === 'cancelled' &&
+    run.error === 'updates_paused' &&
+    !run.steps.some((item) => FAILED_STEP_STATUSES.has(item.status))
+  )
+}
+
+/**
  * The run the Updates screen should draw: the active one, else the last run
  * when it ended badly (the server keeps it for a day). A successful last run
  * is not drawn — the screen already says "up to date". A failed last run for
- * the build that is running now is not drawn either.
+ * the build that is running now is not drawn either, nor one that Pause All
+ * Updates stopped.
  */
 export function runToShow(
   response: (Pick<UpgradeActiveRunResponse, 'run'> & { lastRun?: RunWithSteps | null }) | undefined,
@@ -230,7 +243,9 @@ export function runToShow(
   if (active) return { run: active, finished: false }
   const last = response?.lastRun ?? null
   if (!last || !FAILED_RUN_STATUSES.has(last.status)) return { run: null, finished: false }
-  if (failureSupersededByRunningBuild(last, running)) return { run: null, finished: false }
+  if (failureSupersededByRunningBuild(last, running) || endedByPauseOnly(last)) {
+    return { run: null, finished: false }
+  }
   return { run: last, finished: true }
 }
 
@@ -380,8 +395,7 @@ export function updateBanner(
   return {
     key,
     title: `TurboPanel update available: ${labels}`,
-    // The restart note lives on the review sheet (upgrade-preflight-sheet.tsx), not here.
-    body: `This updates ${names}. Choose Update to review it first; nothing changes until you confirm.`,
+    body: `This updates ${names}. It installs on its own at the next check; open Admin > Updates to follow it or pause updates.`,
   }
 }
 
@@ -409,5 +423,13 @@ export function writeDismissedUpdateBanner(
   }
 }
 
-/** Path that opens the Updates screen with the update confirmation already up. */
-export const UPDATE_NOW_HREF = '/admin/updates?update=1'
+/**
+ * Who sees the instance-wide update banner: instance admins (admin and
+ * superadmin) on a self-hosted control plane, nobody else. On TurboPanel High
+ * Availability the platform updates the control plane, so there is no banner.
+ */
+export function showsUpdateBanner(
+  input: Readonly<{ isInstanceAdmin: boolean; runtime: string | null | undefined }>
+): boolean {
+  return input.isInstanceAdmin && input.runtime === 'deno'
+}

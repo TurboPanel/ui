@@ -11,12 +11,12 @@ import {
   fetchTrustedProxies,
   InstanceHostnameValidationError,
   reconcilePlatformCaTrust,
-  requestColocatedDaemonUpdate,
-  requestInstanceUpdate,
   saveInstanceAcmeSettings,
   saveInstanceHostnames,
   setInstanceTunnelToken,
   uploadInstanceCertificate,
+  pauseUpdates,
+  resumeUpdates,
 } from './instance-api'
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -54,8 +54,8 @@ describe('instance hostname and update fetch wrappers', () => {
     await saveInstanceAcmeSettings({ contactEmail: 'ops@example.com' })
     await fetchInstanceDaemon()
     await fetchInstanceUpdates()
-    await requestInstanceUpdate()
-    await requestColocatedDaemonUpdate()
+    await pauseUpdates()
+    await resumeUpdates()
     await fetchPlatformCa()
     await reconcilePlatformCaTrust()
     await fetchTrustedProxies()
@@ -73,21 +73,14 @@ describe('instance hostname and update fetch wrappers', () => {
     })
 
     fetchMock.mockResolvedValueOnce(
-      jsonResponse(
-        { error: 'bad host', invalid: ['*.example.com', 1] },
-        422,
-      ),
+      jsonResponse({ error: 'bad host', invalid: ['*.example.com', 1] }, 422)
     )
-    await expect(saveInstanceHostnames([])).rejects.toBeInstanceOf(
-      InstanceHostnameValidationError,
-    )
+    await expect(saveInstanceHostnames([])).rejects.toBeInstanceOf(InstanceHostnameValidationError)
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'nope' }, 500))
     await expect(saveInstanceHostnames([])).rejects.toThrow('HTTP 500')
 
-    fetchMock.mockResolvedValueOnce(
-      new Response('not-json', { status: 502 }),
-    )
+    fetchMock.mockResolvedValueOnce(new Response('not-json', { status: 502 }))
     await expect(saveInstanceHostnames([])).rejects.toThrow('HTTP 502')
   })
 })

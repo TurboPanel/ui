@@ -11,14 +11,8 @@ import {
   SectionPanel,
   TextField,
 } from '@/components/ui'
-import type {
-  DatacenterNameSuggestion,
-  OrgServerRecord,
-} from '@/lib/instance-api'
-import {
-  ADDRESS_IN_USE_ERROR,
-  ADDRESS_NOT_IN_ANY_SUBNET_ERROR,
-} from '@/lib/instance-api'
+import type { DatacenterNameSuggestion, OrgServerRecord } from '@/lib/instance-api'
+import { ADDRESS_IN_USE_ERROR, ADDRESS_NOT_IN_ANY_SUBNET_ERROR } from '@/lib/instance-api'
 import {
   buildCreateDatacenterFromSeed,
   listServersWithReportedPrivateNetworks,
@@ -27,10 +21,7 @@ import {
 } from '@/lib/datacenter-list'
 import { datacenterHref, serversDatacentersHref } from '@/lib/org-navigation'
 import { orEmptyArray } from '@/lib/or-empty-array'
-import {
-  useCreateDatacenter,
-  useDatacenterNameSuggestions,
-} from '@/lib/queries/topology'
+import { useCreateDatacenter, useDatacenterNameSuggestions } from '@/lib/queries/topology'
 import { useOrgServers } from '@/lib/queries/servers'
 import { useCan } from '@/lib/query-client'
 import { colors, spacing, webPointer } from '@/lib/theme'
@@ -133,20 +124,12 @@ function CreateDatacenterFields({
   const [description, setDescription] = useState('')
   const [selectedServerId, setSelectedServerId] = useState('')
   const [selectedAddress, setSelectedAddress] = useState('')
-  const [activeSuggestionKey, setActiveSuggestionKey] = useState<string | null>(
-    null,
-  )
+  const [activeSuggestionKey, setActiveSuggestionKey] = useState<string | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
 
-  const selectedServer = eligibleServers.find(
-    (server) => server.id === selectedServerId,
-  )
-  const serverNetworks = selectedServer
-    ? reportedPrivateNetworks(selectedServer)
-    : []
-  const selectedNetwork = serverNetworks.find(
-    (network) => network.address === selectedAddress,
-  )
+  const selectedServer = eligibleServers.find((server) => server.id === selectedServerId)
+  const serverNetworks = selectedServer ? reportedPrivateNetworks(selectedServer) : []
+  const selectedNetwork = serverNetworks.find((network) => network.address === selectedAddress)
   const detectedCidr = selectedNetwork?.cidr ?? null
   const cidrSource = selectedNetwork?.cidrSource ?? null
   const body = buildCreateDatacenterFromSeed({
@@ -252,9 +235,7 @@ function CreateDatacenterFields({
             <Text style={styles.detectedCidr} selectable>
               {detectedCidr}
             </Text>
-            {cidrSource === 'assumed' ? (
-              <Text style={styles.cidrMeta}>typical LAN</Text>
-            ) : null}
+            {cidrSource === 'assumed' ? <Text style={styles.cidrMeta}>typical LAN</Text> : null}
           </View>
         </FormField>
       ) : null}
@@ -278,18 +259,14 @@ function CreateDatacenterFields({
   )
 }
 
-export function DatacenterFormSection({
-  orgId,
-}: Readonly<{ orgId: string }>) {
+export function DatacenterFormSection({ orgId }: Readonly<{ orgId: string }>) {
   const router = useRouter()
   const canManage = useCan('organization', orgId, 'organization:manage')
   const serversQuery = useOrgServers(orgId)
   const servers = orEmptyArray(serversQuery.data?.servers)
   const eligibleServers = useMemo(() => {
     const rows = listServersWithReportedPrivateNetworks(servers)
-    return [...rows].sort((a, b) =>
-      serverInventoryTitle(a).localeCompare(serverInventoryTitle(b)),
-    )
+    return [...rows].sort((a, b) => serverInventoryTitle(a).localeCompare(serverInventoryTitle(b)))
   }, [servers])
   const eligibility = resolveDatacenterAddEligibility({
     serversWithPrivateAddress: eligibleServers.length,
@@ -298,15 +275,12 @@ export function DatacenterFormSection({
   const loading = serversQuery.isLoading && servers.length === 0
   const listHref = serversDatacentersHref(orgId) as Href
 
-  const queryError = serversLoadError(
-    serversQuery.isError,
-    serversQuery.error,
-  )
+  const queryError = serversLoadError(serversQuery.isError, serversQuery.error)
   const blocked = !canManage || !eligibility.canAdd
 
   return (
     <View style={styles.root}>
-      <Text style={panelStyles.pageTitle}>New datacenter</Text>
+      <Text style={panelStyles.pageTitle}>New Datacenter</Text>
 
       {queryError ? <Text style={panelStyles.error}>{queryError}</Text> : null}
 
@@ -326,10 +300,7 @@ export function DatacenterFormSection({
             </View>
           ) : null}
           {!loading && !blocked ? (
-            <CreateDatacenterFields
-              orgId={orgId}
-              eligibleServers={eligibleServers}
-            />
+            <CreateDatacenterFields orgId={orgId} eligibleServers={eligibleServers} />
           ) : null}
         </SectionPanel>
       </View>

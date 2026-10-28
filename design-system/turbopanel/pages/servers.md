@@ -11,14 +11,14 @@
 
 - One job: **fleet inventory**, not a dashboard of widgets
 - Two layouts, toggled from the **title row** (icon-only; persisted in `localStorage` `turbopanel.serversLayout`; default Detail): **Detail** (full-width rows) and **Summary** (compact hairline tiles). Visible chrome is icons only — accessible names are **Detail view** / **Summary view**.
-- All actions sit on the **right** of the **Servers** title: **+ Server** / **Update** / select-all (when needed) / view toggle. No intro `pageCopy` blurb.
-- **Native (iOS/Android):** title and actions share one row. Detail stacks each host (name, status, country, usage, mesh) so the list **never scrolls sideways**. Summary tiles and native Detail rows sit on the page background — **not** inside the fleet glass. **Update** appears only after hosts are selected.
+- All actions sit on the **right** of the **Servers** title: **+ Server** / view toggle. No intro `pageCopy` blurb. There is no batch **Update** and no row selection: servers update on their own (Admin > Updates).
+- **Native (iOS/Android):** title and actions share one row. Detail stacks each host (name, status, country, usage, mesh) so the list **never scrolls sideways**. Summary tiles and native Detail rows sit on the page background — **not** inside the fleet glass.
 - Fleet capacity totals (Cores · RAM) and online count live on **Overview**, not here  
 - Row / card press navigates to `/[orgId]/servers/[serverId]` (control panel tabs)  
 - Toolbar sits **in the title row** — no toolbar hairline / HR separators  
 - **+ Server** opens a separate glass `SectionPanel` (Add server) between the title row and the fleet  
 - **Web Detail:** fleet hosts sit in their own glass `SectionPanel` (no nested second glass / bordered table card inside it). Table itself has **no outer border/radius box** — header + zebra rows only inside the panel.
-- **Summary:** CSS `auto-fill` grid (native: wrapping tiles). Hairline `bgArea` tiles — not glass, not a decorative bento. Select-all lives in the title-row checkbox (not a lone control above the grid).  
+- **Summary:** CSS `auto-fill` grid (native: wrapping tiles). Hairline `bgArea` tiles — not glass, not a decorative bento.  
 - **Datacenters** sub-route (`/servers/datacenters`) for org location inventory (member counts, private CIDRs) — see `pages/datacenters.md`  
 - **Pending keys** sub-route (`/servers/keys`) for unused registration keys (not yet bound to a host). Owner-only list + two-press delete. Copy says **keys**, never “license”.  
 - **Settings** sub-route (`/servers/settings`) for org default timezone, host defaults (SSH port, NTP, TurboFabric preference), and seat capacity  
@@ -30,17 +30,16 @@
 
 ## Toolbar
 
-- Icon-only **Detail / Summary** segmented control (`segmentGroup` / `segmentChip`, no visible labels) plus **+ Server** (own-gated) + batch **Update (N)** — all **right-aligned** on the title row  
+- Icon-only **Detail / Summary** segmented control (`segmentGroup` / `segmentChip`, no visible labels) plus **+ Server** (own-gated) — both **right-aligned** on the title row  
 - **+ Server** toggles a dedicated Add server glass panel between the title row and the fleet; open state shows **Close**  
-- Selection hint: `{N} selected · {M} updatable` in monospace when any rows checked (right-aligned under the title row)  
 - No horizontal rules under the toolbar
 - No “select hosts…” page blurb
 
 ## Density
 
-- Detail: compact row height, checkbox column, Host | Status | Country | Usage | Mesh (web table). Native stacks those fields in a full-width row (no horizontal scroll).  
-- Summary: OS + name, status + country, vertical usage columns, mesh address, trailing checkbox  
-- Web row/tile hover (`bgSecondary`) and selected tint (`bgActive`; cards also accent border)  
+- Detail: compact row height, Host | Status | Country | Usage | Mesh (web table). Native stacks those fields in a full-width row (no horizontal scroll).  
+- Summary: OS + name, status + country, vertical usage columns, mesh address  
+- Web row/tile hover (`bgSecondary`)  
 - Hostname subtext (monospace) when distinct from display name  
 - Alternating row tint (`bgInset`) for scanability on the **web Detail** table  
 - OS mark beside name — licensed density-aware PNG when we ship one (Debian); otherwise the product name as plain text (e.g. Raspberry Pi OS). No UUID in the primary column  

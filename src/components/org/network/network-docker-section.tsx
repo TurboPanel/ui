@@ -31,10 +31,7 @@ import {
   type OrganizationDockerNetworking,
   type OrgServerRecord,
 } from '@/lib/instance-api'
-import {
-  describeNetworkError,
-  type NetworkErrorDescription,
-} from '@/lib/network-error-copy'
+import { describeNetworkError, type NetworkErrorDescription } from '@/lib/network-error-copy'
 import {
   useCreateNetwork,
   useDeleteNetwork,
@@ -76,7 +73,7 @@ function poolDraftsFrom(stored: OrganizationDockerNetworking | undefined): Addre
 function poolFieldError(
   error: DockerAddressPoolDraftError | null,
   index: number,
-  field: 'base' | 'size',
+  field: 'base' | 'size'
 ): string | null {
   if (error?.index !== index) return null
   if (error === null) return null
@@ -205,7 +202,7 @@ function DockerHostAddressPoolsPanel({ orgId }: Readonly<{ orgId: string }>) {
     const bridgeText = bridge.trim()
     if (bridgeText.length > 0 && !isValidDefaultBridgeCidr(bridgeText)) {
       setBridgeError(
-        `Enter the bridge host address with its prefix (${PLACEHOLDER_BRIDGE_BIP}), not the network address.`,
+        `Enter the bridge host address with its prefix (${PLACEHOLDER_BRIDGE_BIP}), not the network address.`
       )
       return
     }
@@ -220,7 +217,7 @@ function DockerHostAddressPoolsPanel({ orgId }: Readonly<{ orgId: string }>) {
         onError: (err) => {
           setError(describeNetworkError(err, 'Failed to save Docker host addressing'))
         },
-      },
+      }
     )
   }
 
@@ -250,9 +247,8 @@ function DockerHostAddressPoolsPanel({ orgId }: Readonly<{ orgId: string }>) {
       {query.isLoading ? <LoadingState label="Loading host addressing…" /> : null}
       {usingDefaults ? (
         <Text style={panelStyles.muted}>
-          Docker&apos;s built-in defaults apply: no pools are declared and the
-          default bridge keeps its own address. Add a pool to move new networks
-          off the ranges Docker picks by itself.
+          Docker&apos;s built-in defaults apply: no pools are declared and the default bridge keeps
+          its own address. Add a pool to move new networks off the ranges Docker picks by itself.
         </Text>
       ) : null}
       <View style={styles.poolList}>
@@ -269,9 +265,9 @@ function DockerHostAddressPoolsPanel({ orgId }: Readonly<{ orgId: string }>) {
         ))}
       </View>
       <Text style={panelStyles.muted}>
-        Base is the pool CIDR; size is the prefix length dockerd carves each
-        new network at — at least the base prefix, at most /30 (IPv4) or /126
-        (IPv6). Up to {DOCKER_ADDRESS_POOLS_MAX} pools.
+        Base is the pool CIDR; size is the prefix length dockerd carves each new network at — at
+        least the base prefix, at most /30 (IPv4) or /126 (IPv6). Up to {DOCKER_ADDRESS_POOLS_MAX}{' '}
+        pools.
       </Text>
       <Button
         label="Add pool"
@@ -305,9 +301,7 @@ function DockerHostAddressPoolsPanel({ orgId }: Readonly<{ orgId: string }>) {
           onPress={save}
           accessibilityLabel="Save host address pools"
         />
-        {dirty ? (
-          <Button label="Discard" disabled={pending} onPress={reset} />
-        ) : null}
+        {dirty ? <Button label="Discard" disabled={pending} onPress={reset} /> : null}
       </ButtonRow>
     </SectionPanel>
   )
@@ -322,7 +316,7 @@ const EMPTY_ADDRESSING: DockerNetworkAddressingDraft = {
 
 function addressingFieldError(
   error: { field: DockerNetworkAddressingField; message: string } | null,
-  field: DockerNetworkAddressingField,
+  field: DockerNetworkAddressingField
 ): string | null {
   return error?.field === field ? error.message : null
 }
@@ -423,8 +417,7 @@ function DockerNetworkRegisterPanel({
   const [displayName, setDisplayName] = useState('')
   const [dockerNetworkName, setDockerNetworkName] = useState('')
   const [hostPinServerId, setHostPinServerId] = useState('')
-  const [addressing, setAddressing] =
-    useState<DockerNetworkAddressingDraft>(EMPTY_ADDRESSING)
+  const [addressing, setAddressing] = useState<DockerNetworkAddressingDraft>(EMPTY_ADDRESSING)
   const [addressingError, setAddressingError] = useState<{
     field: DockerNetworkAddressingField
     message: string
@@ -439,7 +432,7 @@ function DockerNetworkRegisterPanel({
         label: serverTitle(server),
       })),
     ],
-    [servers],
+    [servers]
   )
 
   const creating = createMutation.isPending
@@ -474,17 +467,12 @@ function DockerNetworkRegisterPanel({
         onError: (err) => {
           setError(describeNetworkError(err, 'Failed to create Docker network'))
         },
-      },
+      }
     )
   }
 
   return (
-    <SectionPanel
-      title="Register Docker network"
-      hint="Manage-gated"
-      collapsible
-      defaultCollapsed
-    >
+    <SectionPanel title="Register Docker network" hint="Manage-gated" collapsible defaultCollapsed>
       <NetworkErrorLine error={error} />
       <TextField
         label="Display name"
@@ -523,8 +511,8 @@ function DockerNetworkRegisterPanel({
         }}
       />
       <Text style={panelStyles.muted}>
-        Addressing applies when the daemon first creates the network. Docker
-        cannot re-range an existing network.
+        Addressing applies when the daemon first creates the network. Docker cannot re-range an
+        existing network.
       </Text>
       <Button
         label="Register"
@@ -563,13 +551,11 @@ function DockerNetworkListPanel({
 
   return (
     <SectionPanel
-      title="Docker networks"
+      title="Docker Networks"
       hint={loading ? 'Loading…' : `${networks.length} network(s)`}
     >
       <NetworkErrorLine error={error} />
-      {loading && networks.length === 0 ? (
-        <LoadingState label="Loading Docker networks…" />
-      ) : null}
+      {loading && networks.length === 0 ? <LoadingState label="Loading Docker networks…" /> : null}
       {!loading && networks.length === 0 ? (
         <EmptyState title="No Docker networks registered yet." />
       ) : null}
@@ -593,9 +579,7 @@ function DockerNetworkListPanel({
  * on these rows, so this is a read-only listing with no affordances. Hidden
  * entirely until the platform has allocated one.
  */
-function ManagedNetworkListPanel({
-  networks,
-}: Readonly<{ networks: NetworkRecord[] }>) {
+function ManagedNetworkListPanel({ networks }: Readonly<{ networks: NetworkRecord[] }>) {
   if (networks.length === 0) return null
 
   return (
@@ -614,9 +598,7 @@ function ManagedNetworkListPanel({
  * host addressing dockerd carves new networks from.
  * Deliberately quiet — deploy identity, not topology.
  */
-export function NetworkDockerSection({
-  orgId,
-}: Readonly<{ orgId: string }>) {
+export function NetworkDockerSection({ orgId }: Readonly<{ orgId: string }>) {
   const canManage = useCan('organization', orgId, 'organization:manage')
 
   const networksQuery = useNetworks(orgId, { kind: 'docker' })
@@ -628,8 +610,7 @@ export function NetworkDockerSection({
   const servers = serversQuery.data?.servers ?? []
 
   const loading =
-    (networksQuery.isLoading && !networksQuery.isPlaceholderData) ||
-    serversQuery.isLoading
+    (networksQuery.isLoading && !networksQuery.isPlaceholderData) || serversQuery.isLoading
 
   const queryError = networksQuery.isError
     ? describeNetworkError(networksQuery.error, 'Failed to load Docker networks')
@@ -637,20 +618,18 @@ export function NetworkDockerSection({
 
   return (
     <View style={styles.root}>
-      <Text style={panelStyles.pageTitle}>Docker networks</Text>
+      <Text style={panelStyles.pageTitle}>Docker Networks</Text>
       <Text style={panelStyles.pageCopy}>
-        External Docker network registry for compose. Compose must reference the
-        same name under networks.*.name. Host address pools decide which ranges
-        dockerd hands to networks that name no subnet.
+        External Docker network registry for compose. Compose must reference the same name under
+        networks.*.name. Host address pools decide which ranges dockerd hands to networks that name
+        no subnet.
       </Text>
 
       <NetworkErrorLine error={queryError} />
 
       {canManage ? <DockerHostAddressPoolsPanel orgId={orgId} /> : null}
 
-      {canManage ? (
-        <DockerNetworkRegisterPanel orgId={orgId} servers={servers} />
-      ) : null}
+      {canManage ? <DockerNetworkRegisterPanel orgId={orgId} servers={servers} /> : null}
 
       <DockerNetworkListPanel
         orgId={orgId}

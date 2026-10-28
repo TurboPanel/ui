@@ -19,15 +19,11 @@ function errorMessage(err: unknown, fallback: string): string {
   return userErrorMessage(err, fallback)
 }
 
-export function ServerTimezoneSettingsSection({
-  orgId,
-}: Readonly<{ orgId: string }>) {
+export function ServerTimezoneSettingsSection({ orgId }: Readonly<{ orgId: string }>) {
   const queryClient = useQueryClient()
   const canManage = useCan('organization', orgId, 'organization:manage')
   const [error, setError] = useState<string | null>(null)
-  const [draftTimezone, setDraftTimezone] = useState<string | null | undefined>(
-    undefined,
-  )
+  const [draftTimezone, setDraftTimezone] = useState<string | null | undefined>(undefined)
   const [draftEnforce, setDraftEnforce] = useState<boolean | null>(null)
 
   const settingsKey = queryKeys.org(orgId).settings.defaultTimezone
@@ -53,9 +49,7 @@ export function ServerTimezoneSettingsSection({
 
   const settings = query.data
   const effectiveTimezone =
-    draftTimezone !== undefined
-      ? draftTimezone
-      : (settings?.defaultServerTimezone ?? null)
+    draftTimezone !== undefined ? draftTimezone : (settings?.defaultServerTimezone ?? null)
   const enforce = draftEnforce ?? settings?.enforceServerTimezone ?? false
   const pending = mutation.isPending || query.isLoading
   const readOnly = !canManage
@@ -70,18 +64,14 @@ export function ServerTimezoneSettingsSection({
 
   return (
     <View style={styles.root}>
-      <Text style={panelStyles.pageTitle}>Server timezone settings</Text>
+      <Text style={panelStyles.pageTitle}>Server Settings</Text>
       <Text style={panelStyles.pageCopy}>
-        Default timezone applied to new hosts and optionally enforced across the
-        fleet. SSH port, NTP, and a {TURBOFABRIC_PRODUCT_NAME} preference sit in
-        Host defaults below. Per-server overrides live on each host unless
-        enforcement is on.
+        Default timezone applied to new hosts and optionally enforced across the fleet. SSH port,
+        NTP, and a {TURBOFABRIC_PRODUCT_NAME} preference sit in Host defaults below. Per-server
+        overrides live on each host unless enforcement is on.
       </Text>
 
-      <SectionPanel
-        title="Default server timezone"
-        hint="Manage-gated · Postgres-backed settings"
-      >
+      <SectionPanel title="Default server timezone" hint="Manage-gated · Postgres-backed settings">
         {error ? <Text style={panelStyles.error}>{error}</Text> : null}
         {query.isError && !error ? (
           <Text style={panelStyles.error}>

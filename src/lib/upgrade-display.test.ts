@@ -26,6 +26,8 @@ import {
   upgradeStepNote,
   upgradeStepErrorLabel,
   upgradeStepOutcome,
+  retryLaterText,
+  stepMessageText,
 } from '@/lib/upgrade-display'
 
 describe('formatUpgradeBuildDisplayName', () => {
@@ -135,7 +137,20 @@ describe('resolvePlatformUpgradeHeadline', () => {
         needsAttentionCount: 0,
       })
     ).toBe('up_to_date')
-    expect(platformUpgradeHeadlineCopy('needs_attention')).toBe('Needs attention')
+    expect(platformUpgradeHeadlineCopy('needs_attention')).toBe('Needs Attention')
+    expect(platformUpgradeHeadlineCopy('update_available')).toBe('Update Waiting')
+  })
+
+  it('leads with a pause over everything else', () => {
+    expect(
+      resolvePlatformUpgradeHeadline({
+        activeRunStatus: 'running',
+        updateAvailable: true,
+        needsAttentionCount: 2,
+        paused: true,
+      })
+    ).toBe('paused')
+    expect(platformUpgradeHeadlineCopy('paused')).toBe('Updates Paused')
   })
 })
 
@@ -183,17 +198,17 @@ describe('upgradeStepOutcome', () => {
     expect(upgradeStepOutcome({ status: 'failed' }).tone).toBe('danger')
     expect(upgradeStepOutcome({ status: 'rolled_back', errorCode: 'rolled_back' })).toEqual({
       tone: 'danger',
-      label: 'Rolled back',
+      label: 'Rolled Back',
       detail: 'Rolled back to the previous build',
     })
     expect(upgradeStepOutcome({ status: 'needs_attention', errorCode: 'server_offline' })).toEqual({
       tone: 'pending',
-      label: 'Needs attention',
+      label: 'Needs Attention',
       detail: 'Server offline for over an hour',
     })
     expect(upgradeStepOutcome({ status: 'skipped', errorCode: 'server_offline' })).toEqual({
       tone: 'muted',
-      label: 'Skipped: offline',
+      label: 'Skipped: Offline',
       detail: 'It was offline when the update started. It updates on its own when it reconnects.',
     })
   })
@@ -203,7 +218,7 @@ describe('upgradeStepOutcome', () => {
       'It stayed offline for 15 minutes during the update. It updates on its own when it reconnects.'
     expect(
       upgradeStepOutcome({ status: 'skipped', errorCode: 'server_offline', errorMessage: own })
-    ).toMatchObject({ label: 'Skipped: offline', detail: own })
+    ).toMatchObject({ label: 'Skipped: Offline', detail: own })
     expect(
       upgradeStepOutcome({ status: 'skipped', errorCode: 'server_offline', errorMessage: ' ' })
     ).toMatchObject({
@@ -229,7 +244,7 @@ describe('upgradeStepOutcome', () => {
       label: 'Queued',
       detail: null,
     })
-    expect(upgradeStepOutcome({ status: 'waiting' }).label).toBe('Waiting for server')
+    expect(upgradeStepOutcome({ status: 'waiting' }).label).toBe('Waiting for Server')
     expect(upgradeStepOutcome({ status: 'preparing' }).label).toBe('Preparing')
   })
 
@@ -250,7 +265,24 @@ describe('upgradeStepOutcome', () => {
   it('names the run errors the control plane ends a run with', () => {
     expect(upgradeRunErrorLabel('colocated_daemon_failed')).toBe('The daemon step failed')
     expect(upgradeRunErrorLabel('control_plane_failed')).toBe('The control plane step failed')
+    expect(upgradeRunErrorLabel('updates_paused')).toBe('Stopped because updates were paused')
     expect(upgradeRunErrorLabel('')).toBeNull()
+  })
+
+  it('names the automatic update step codes in plain words', () => {
+    expect(upgradeStepErrorLabel('updates_paused')).toBe('Not started because updates were paused')
+    expect(upgradeStepErrorLabel('retry_later')).toBe('Failed before; tries again later')
+    expect(upgradeStepOutcome({ status: 'skipped', errorCode: 'updates_paused' })).toMatchObject({
+      label: 'Skipped: Paused',
+      detail: 'Not started because updates were paused',
+    })
+    expect(
+      upgradeStepOutcome({
+        status: 'skipped',
+        errorCode: 'retry_later',
+        errorMessage: RETRY_MESSAGE,
+      })
+    ).toMatchObject({ tone: 'pending', label: 'Tries Again Later' })
   })
 })
 
@@ -415,7 +447,7 @@ describe('a run that has not started reads as not started', () => {
   it('says "Not started" for a step with no status, never "Preparing"', () => {
     expect(upgradeStepOutcome({ status: null })).toEqual({
       tone: 'muted',
-      label: 'Not started',
+      label: 'Not Started',
       detail: null,
     })
   })
@@ -423,9 +455,9 @@ describe('a run that has not started reads as not started', () => {
 
 describe('updateAvailabilityBadge', () => {
   it('names each state in words', () => {
-    expect(updateAvailabilityBadge(null)).toEqual({ tone: 'muted', label: 'Not connected' })
-    expect(updateAvailabilityBadge(true)).toEqual({ tone: 'pending', label: 'Update available' })
-    expect(updateAvailabilityBadge(false)).toEqual({ tone: 'ok', label: 'Up to date' })
+    expect(updateAvailabilityBadge(null)).toEqual({ tone: 'muted', label: 'Not Connected' })
+    expect(updateAvailabilityBadge(true)).toEqual({ tone: 'pending', label: 'Update Waiting' })
+    expect(updateAvailabilityBadge(false)).toEqual({ tone: 'ok', label: 'Up to Date' })
   })
 })
 
@@ -436,16 +468,28 @@ describe('fleetStatusBadge', () => {
     expect(fleetStatusBadge('installing')).toEqual({ tone: 'info', label: 'Updating' })
     expect(fleetStatusBadge('done')).toEqual({ tone: 'ok', label: 'Updated' })
     expect(fleetStatusBadge('failed')).toEqual({ tone: 'danger', label: 'Failed' })
-    expect(fleetStatusBadge('rolled_back')).toEqual({ tone: 'danger', label: 'Rolled back' })
+    expect(fleetStatusBadge('rolled_back')).toEqual({ tone: 'danger', label: 'Rolled Back' })
     expect(fleetStatusBadge('needs_attention')).toEqual({
       tone: 'pending',
-      label: 'Needs attention',
+      label: 'Needs Attention',
     })
     expect(fleetStatusBadge('skipped')).toEqual({ tone: 'muted', label: 'Skipped' })
     expect(fleetStatusBadge('skipped', 'server_offline')).toEqual({
       tone: 'muted',
-      label: 'Skipped: offline',
+      label: 'Skipped: Offline',
     })
+  })
+
+  it('names the automatic update codes in the Status column, whatever the message says', () => {
+    expect(fleetStatusBadge('skipped', 'updates_paused')).toEqual({
+      tone: 'muted',
+      label: 'Skipped: Paused',
+    })
+    expect(fleetStatusBadge('skipped', 'retry_later')).toEqual({
+      tone: 'pending',
+      label: 'Tries Again Later',
+    })
+    expect(fleetStatusBadge('failed', 'retry_later')).toEqual({ tone: 'danger', label: 'Failed' })
   })
 })
 
@@ -572,7 +616,7 @@ describe('upgrade step wording', () => {
 
   it('never says Up to date while a run is working on the piece', () => {
     expect(updateAvailabilityBadge(false, true)).toEqual({ tone: 'pending', label: 'Updating' })
-    expect(updateAvailabilityBadge(false)).toEqual({ tone: 'ok', label: 'Up to date' })
+    expect(updateAvailabilityBadge(false)).toEqual({ tone: 'ok', label: 'Up to Date' })
   })
 })
 
@@ -689,5 +733,42 @@ describe('upgradeStepNote', () => {
     expect(upgradeStepNote({ detail: {} })).toBeNull()
     expect(upgradeStepNote({ detail: null })).toBeNull()
     expect(upgradeStepNote({})).toBeNull()
+  })
+})
+
+const RETRY_MESSAGE =
+  'It failed to update to this build 3 times. It tries again automatically after 2026-10-27T15:40:00.000Z.'
+
+describe('retryLaterText', () => {
+  const utc = { timeZone: 'UTC' }
+
+  it('says the time alone when the retry is today, never the raw message', () => {
+    const text = retryLaterText(RETRY_MESSAGE, { ...utc, now: new Date('2026-10-27T09:00:00Z') })
+    expect(text).toMatch(/^Tries again at 3:40\sPM$/)
+    expect(text).not.toContain('2026-10-27T')
+  })
+
+  it('adds the date when the retry is another day', () => {
+    expect(
+      retryLaterText(RETRY_MESSAGE, { ...utc, now: new Date('2026-10-26T09:00:00Z') })
+    ).toMatch(/^Tries again on Oct 27 at 3:40\sPM$/)
+  })
+
+  it('says later when the message has no time', () => {
+    expect(retryLaterText('It tries again automatically soon.')).toBe('Tries again later')
+    expect(retryLaterText(null)).toBe('Tries again later')
+    expect(retryLaterText('after 2026-13-45T99:99Z')).toBe('Tries again later')
+  })
+})
+
+describe('stepMessageText', () => {
+  it('turns a retry into local words and keeps other messages plain', () => {
+    expect(stepMessageText({ errorCode: 'retry_later', errorMessage: RETRY_MESSAGE })).toMatch(
+      /^Tries again (at|on) /
+    )
+    expect(stepMessageText({ errorCode: 'step_timeout', errorMessage: ' timed out ' })).toBe(
+      'timed out'
+    )
+    expect(stepMessageText({ errorCode: null, errorMessage: null })).toBeNull()
   })
 })

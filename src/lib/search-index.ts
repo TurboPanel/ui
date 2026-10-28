@@ -8,7 +8,6 @@ import {
   SERVER_DETAIL_TAB_IDS,
   SERVER_DETAIL_TAB_LABELS,
   datacenterHref,
-  orgAreaHref,
   orgRouteHref,
   orgSettingsTabHref,
   serverDetailHref,
@@ -144,8 +143,8 @@ function pageItems(orgId: string, data: SearchData): SearchItem[] {
   const settingsPages = ORG_SETTINGS_TAB_IDS.filter((tab) => tab !== 'general').map(
     (tab): SearchItem => ({
       id: `org-settings-${tab}`,
-      name: tab === 'notifications' ? 'Notification settings' : ORG_SETTINGS_TAB_LABELS[tab],
-      type: 'Organization settings',
+      name: tab === 'notifications' ? 'Notification Settings' : ORG_SETTINGS_TAB_LABELS[tab],
+      type: 'Organization Settings',
       group: 'Pages',
       href: orgSettingsTabHref(orgId, tab),
       icon: 'org-settings',
@@ -156,10 +155,10 @@ function pageItems(orgId: string, data: SearchData): SearchItem[] {
     ...pages,
     ...sub('servers', 'datacenters', 'Datacenters'),
     ...sub('servers', 'keys', 'Pending Keys', 'registration keys unused'),
-    ...sub('servers', 'tls', 'Server certificates', 'tls ssl'),
-    ...sub('servers', 'settings', 'Server settings', 'defaults timezone'),
+    ...sub('servers', 'tls', 'TLS Certificates', 'tls ssl server certificates'),
+    ...sub('servers', 'settings', 'Server Settings', 'defaults timezone'),
     ...(networkPages ?? []),
-    ...sub('managed', 'settings', 'Managed database settings', 'defaults'),
+    ...sub('managed', 'settings', 'Managed Database Settings', 'defaults'),
     ...settingsPages,
   ]
 }
@@ -215,21 +214,15 @@ function generalActions(orgId: string, data: SearchData): SearchItem[] {
             'add people user team',
             'action-add'
           ),
-          action(
-            'update-servers',
-            'Update servers',
-            orgAreaHref(orgId, 'servers'),
-            'upgrade daemon version'
-          ),
         ]
       : []),
     ...(data.isPlatformAdmin
       ? [
           action(
             'update-panel',
-            'Update TurboPanel',
+            'Pause or Resume Updates',
             adminAreaHref('updates'),
-            'upgrade version release'
+            'update upgrade version release automatic'
           ),
         ]
       : []),

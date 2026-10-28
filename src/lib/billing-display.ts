@@ -4,6 +4,7 @@ import {
   BILLING_NOT_CONFIGURED_ERROR,
   DELINQUENT_SUBSCRIPTION_STATUSES,
   formatShortDate,
+  LICENSE_HELD_BY_KEY_ERROR,
   LICENSES_ENDING_ERROR,
   LICENSES_IN_USE_ERROR,
   NO_LICENSES_ENDING_ERROR,
@@ -27,6 +28,8 @@ import {
 } from '@/lib/instance-api'
 import type { BadgeTone } from '@/components/ui/badge'
 import { formatLocalDateTime } from '@/lib/format-datetime'
+import { isForbiddenError } from '@/lib/fetch-error-detail'
+import { failedRunMessage } from '@/lib/user-error'
 
 /**
  * Presentation helpers for the billing screen. Amounts arrive from the
@@ -376,6 +379,30 @@ export function describeUncoveredServer(entry: UncoveredServer): string {
 }
 
 /**
+ * Hosted Add Server needs a license tier before Continue: the key carries it
+ * and the server comes up on it. Self-hosted has no tier to choose.
+ */
+export function addServerTierChoiceError(
+  billingEnabled: boolean,
+  chosenTierId: string | null
+): string | null {
+  if (!billingEnabled || chosenTierId) return null
+  return 'Choose the license tier for this server.'
+}
+
+/**
+ * The sentence under Continue when minting the registration key failed: a
+ * 403 is said plainly (never raw HTTP text), known codes read as their
+ * sentence, anything else as the server's words or the fallback.
+ */
+export function addServerCreateErrorMessage(
+  result: Readonly<{ error: string | null; cause?: unknown }>
+): string {
+  if (isForbiddenError(result.cause)) return 'Only organization owners can add servers.'
+  return failedRunMessage(result, 'Failed to start server setup')
+}
+
+/**
  * The tier a refused Add Server should act on: the one the operator picked,
  * else the first tier the refusal says has licenses ending (restore before buy).
  */
@@ -406,6 +433,8 @@ export function describeBillingRefusal(err: unknown, context: RefusalContext = {
       return describeServersUncovered(err, context)
     case LICENSES_IN_USE_ERROR:
       return describeLicensesInUse(err)
+    case LICENSE_HELD_BY_KEY_ERROR:
+      return describeLicenseHeldByKey(err)
     case SUBSCRIPTION_PAST_DUE_ERROR:
       return 'Payment is past due. Update the payment method, then try again.'
     case NO_SUBSCRIPTION_ERROR:
@@ -431,6 +460,15 @@ export function describeBillingRefusal(err: unknown, context: RefusalContext = {
     default:
       return null
   }
+}
+
+function describeLicenseHeldByKey(err: BillingRefusalError): string {
+  const message = err.text('message')
+  if (message) return message
+  const name = err.text('keyName')
+  const tier = err.text('tierLabel') ?? 'that tier'
+  const which = name ? `The unused install command “${name}”` : 'An unused install command'
+  return `${which} holds one ${tier} license for a server that has not connected yet. Delete it on Pending keys first, or wait for it to expire.`
 }
 
 function describeServersUncovered(err: BillingRefusalError, context: RefusalContext): string {

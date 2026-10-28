@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef } from 'react'
 import {
   applyPublicUrls,
@@ -8,21 +8,20 @@ import {
   fetchInstanceCertificates,
   fetchInstanceDaemon,
   fetchInstanceHostnames,
-  cancelUpgradeRun,
-  checkUpgradeManifests,
   fetchInstanceUpdates,
   fetchUpgradeActiveRun,
   fetchUpgradeHistory,
-  fetchUpgradeRun,
+  fetchUpgradeRunServers,
   fetchUpgradeServersPage,
   fetchUpgradeSettings,
-  requestColocatedDaemonUpdate,
-  requestInstanceUpdate,
-  retryUpgradeStep,
-  runUpgradePreflight,
+  checkForUpdates,
+  pauseUpdates,
+  resumeUpdates,
   saveUpgradeSettings,
-  startPlatformUpgradeRun,
+  type UpdatesPauseResult,
   type UpgradeSettings,
+  type UpgradeHistoryQuery,
+  type UpgradeRunServersQuery,
   fetchPlatformCa,
   fetchTrustedProxies,
   type InstanceHostnameInput,
@@ -83,16 +82,7 @@ import {
 } from '@/lib/control-plane-recovery'
 import { getActiveOrganizationId } from '@/lib/org-context'
 import { isManagedUpgradeApiMissing } from '@/lib/upgrade-api'
-import {
-  isUpgradeRunActive,
-  UPGRADE_RUN_POLL_MS,
-} from '@/lib/upgrade-run-poll'
-import { markControlPlaneUpgradeWatch } from '@/lib/upgrade-watch'
-import {
-  waitForUnitUpdate,
-  type UnitUpdateWait,
-  type UpdateTargetIdentity,
-} from '@/lib/instance-updates'
+import { isUpgradeRunActive, UPGRADE_RUN_POLL_MS } from '@/lib/upgrade-run-poll'
 
 export function usePublicUrls(options?: Readonly<{ enabled?: boolean }>) {
   return useQuery({
@@ -214,17 +204,13 @@ const BASELINE_READ_MS = 10_000
  */
 async function issuanceBaselineBeforeApply(
   hostnames: readonly InstanceHostnameInput[] | undefined,
-  signal: AbortSignal,
+  signal: AbortSignal
 ): Promise<IssuanceBaseline> {
   if (hostnames && !hostnames.some((entry) => entry.source === 'lets-encrypt')) {
     return new Map()
   }
   try {
-    const read = await raceWindow(
-      fetchInstanceHostnames({ signal }),
-      BASELINE_READ_MS,
-      signal,
-    )
+    const read = await raceWindow(fetchInstanceHostnames({ signal }), BASELINE_READ_MS, signal)
     return read ? takeIssuanceBaseline(read.hostnames) : null
   } catch {
     return null
@@ -241,7 +227,7 @@ function hostnameIdentity(entry: {
 
 function sameHostnameSet(
   saved: readonly InstanceHostnameRecord[],
-  expected: readonly InstanceHostnameInput[],
+  expected: readonly InstanceHostnameInput[]
 ): boolean {
   const left = saved.map(hostnameIdentity).sort((a, b) => a.localeCompare(b))
   const right = expected.map(hostnameIdentity).sort((a, b) => a.localeCompare(b))
@@ -249,9 +235,7 @@ function sameHostnameSet(
   return left.every((value, index) => value === right[index])
 }
 
-function hostnameInputs(
-  records: readonly InstanceHostnameRecord[],
-): InstanceHostnameInput[] {
+function hostnameInputs(records: readonly InstanceHostnameRecord[]): InstanceHostnameInput[] {
   return records.map((record) => ({
     host: record.host,
     source: record.source,
@@ -289,10 +273,7 @@ export function useApplyPublicUrls() {
       const controller = new AbortController()
       waiting.current.add(controller)
       try {
-        return await applyAndConfirm(
-          { hostnames, onReconnecting },
-          controller.signal,
-        )
+        return await applyAndConfirm({ hostnames, onReconnecting }, controller.signal)
       } finally {
         waiting.current.delete(controller)
       }
@@ -311,7 +292,7 @@ export function useApplyPublicUrls() {
 
 async function applyAndConfirm(
   { hostnames, onReconnecting }: ApplyPublicUrlsVariables,
-  signal: AbortSignal,
+  signal: AbortSignal
 ): Promise<ApplyPublicUrlsOutcome> {
   const baseline = await issuanceBaselineBeforeApply(hostnames, signal)
   try {
@@ -418,7 +399,7 @@ export function useInstanceAcmeSettings(options?: Readonly<{ enabled?: boolean }
  * `null` when the save may go ahead.
  */
 export function useLetsEncryptTermsGuard(): (
-  rows: readonly HostnameSourceDraft[],
+  rows: readonly HostnameSourceDraft[]
 ) => string | null {
   const acme = useInstanceAcmeSettings()
   return (rows) =>
@@ -463,9 +444,7 @@ export function useUpgradeActiveRun(options?: Readonly<{ enabled?: boolean }>) {
  * target identities here used to spin a 2 s loop whenever the ui's reading of
  * "behind" disagreed with the server's.
  */
-export function instanceUpdatesPollInterval(
-  activeRunStatus: string | undefined,
-): number | false {
+export function instanceUpdatesPollInterval(activeRunStatus: string | undefined): number | false {
   if (activeRunStatus && isUpgradeRunActive(activeRunStatus as 'running')) {
     return UPGRADE_RUN_POLL_MS
   }
@@ -485,72 +464,6 @@ export function useInstanceUpdates(
     queryFn: () => fetchInstanceUpdates(options?.consoleCommit),
     enabled: options?.enabled ?? true,
     refetchInterval: () => instanceUpdatesPollInterval(activeRun.data?.run?.status),
-  })
-}
-
-async function dispatchThenWait(
-  request: () => Promise<unknown>,
-  read: () => Promise<{ version: string | null; commit: string | null }>,
-  target: UpdateTargetIdentity,
-  before: string,
-): Promise<UnitUpdateWait> {
-  try {
-    await request()
-  } catch (err) {
-    if (!isControlPlaneRestartError(err)) throw err
-  }
-  return await waitForUnitUpdate({ read, target, before })
-}
-
-/**
- * Queue a control-plane update, then poll until the new version answers.
- * The POST returns as soon as the daemon is asked; the install restarts the
- * control plane this request is talking through.
- */
-export function useUpgradeInstance() {
-  const queryClient = useQueryClient()
-  return useApiMutation({
-    mutationFn: (
-      vars: Readonly<{ target: UpdateTargetIdentity; before: string }>,
-    ) =>
-      dispatchThenWait(
-        requestInstanceUpdate,
-        async () => (await fetchInstanceUpdates()).units.instance.installed,
-        vars.target,
-        vars.before,
-      ),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: queryKeys.admin.instanceUpdates,
-      })
-    },
-  })
-}
-
-export type UpgradeStartResult = { kind: 'started'; runId: string }
-
-export function useRunUpgradePreflight() {
-  return useApiMutation({
-    mutationFn: () => runUpgradePreflight(),
-  })
-}
-
-export function useStartPlatformUpgrade(consoleCommit?: string) {
-  const queryClient = useQueryClient()
-  return useApiMutation({
-    // Returns as soon as the run exists. Progress comes from the active-run
-    // query, which polls while the run is active — never from holding this
-    // mutation open for the length of an upgrade.
-    mutationFn: async (runId?: string): Promise<UpgradeStartResult> => {
-      const started = await startPlatformUpgradeRun(runId, consoleCommit)
-      markControlPlaneUpgradeWatch()
-      return { kind: 'started', runId: started.runId }
-    },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.admin.instanceUpdates })
-      await queryClient.invalidateQueries({ queryKey: queryKeys.admin.upgradeActiveRun })
-      await queryClient.invalidateQueries({ queryKey: ['admin', 'instance-updates'] })
-    },
   })
 }
 
@@ -579,21 +492,28 @@ export function useSaveUpgradeSettings() {
   })
 }
 
-/** One finished (or running) run with every step, fetched when a history row is opened. */
-export function useUpgradeRun(runId: string | null) {
-  return useQuery({
-    queryKey: queryKeys.admin.upgradeRun(runId ?? ''),
-    queryFn: async () => await fetchUpgradeRun(runId ?? ''),
-    enabled: runId !== null,
-  })
-}
+/**
+ * History and run-server pages are paged SQL reads over a whole fleet, so they
+ * refresh at a calmer pace than the active-run progress panel.
+ */
+const UPGRADE_HISTORY_POLL_MS = 5_000
 
 export function useUpgradeHistory(
-  page: Readonly<{ offset: number; limit: number }>,
-  options?: Readonly<{ enabled?: boolean }>,
+  page: UpgradeHistoryQuery & Readonly<{ offset: number; limit: number }>,
+  options?: Readonly<{ enabled?: boolean }>
 ) {
   return useQuery({
-    queryKey: queryKeys.admin.upgradeHistory(page.offset, page.limit),
+    queryKey: queryKeys.admin.upgradeHistory(
+      page.offset,
+      page.limit,
+      page.status ?? '',
+      page.trigger ?? ''
+    ),
+    placeholderData: keepPreviousData,
+    refetchInterval: (query) =>
+      query.state.data?.runs.some((run) => isUpgradeRunActive(run.status))
+        ? UPGRADE_HISTORY_POLL_MS
+        : false,
     queryFn: async () => {
       try {
         return await fetchUpgradeHistory(page)
@@ -608,9 +528,30 @@ export function useUpgradeHistory(
   })
 }
 
+/**
+ * One page of a run's servers (one row per server). Polls while the run is
+ * still going; never loads every step of the run.
+ */
+export function useUpgradeRunServers(
+  runId: string,
+  query: UpgradeRunServersQuery,
+  options?: Readonly<{ enabled?: boolean }>
+) {
+  return useQuery({
+    queryKey: queryKeys.admin.upgradeRunServers(runId, JSON.stringify(query)),
+    queryFn: async () => await fetchUpgradeRunServers(runId, query),
+    enabled: (options?.enabled ?? true) && runId !== '',
+    placeholderData: keepPreviousData,
+    refetchInterval: (state) => {
+      const run = state.state.data?.run
+      return run && isUpgradeRunActive(run.status) ? UPGRADE_HISTORY_POLL_MS : false
+    },
+  })
+}
+
 export function useUpgradeServersPage(
   page: Readonly<{ offset: number; limit: number; status: string }>,
-  options?: Readonly<{ enabled?: boolean }>,
+  options?: Readonly<{ enabled?: boolean }>
 ) {
   const activeRun = useUpgradeActiveRun({ enabled: options?.enabled ?? true })
   return useQuery({
@@ -633,58 +574,43 @@ export function useUpgradeServersPage(
   })
 }
 
-export function useRetryUpgradeStep() {
+/**
+ * Pause or resume all updates, then read the status again: the whole
+ * `instance-updates` prefix (status, active run, recent runs), since a pause
+ * can end the run in progress as cancelled.
+ */
+function usePauseToggle(request: () => Promise<UpdatesPauseResult>) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (stepId: string) => retryUpgradeStep(stepId),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.admin.upgradeActiveRun })
-      await queryClient.invalidateQueries({ queryKey: ['admin', 'instance-updates'] })
-    },
-  })
-}
-
-export function useCancelUpgradeRun() {
-  const queryClient = useQueryClient()
-  return useApiMutation({
-    mutationFn: (runId: string) => cancelUpgradeRun(runId),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.admin.upgradeActiveRun })
-    },
-  })
-}
-
-export function useCheckUpgradeManifests() {
-  const queryClient = useQueryClient()
-  return useApiMutation({
-    mutationFn: () => checkUpgradeManifests(),
+    mutationFn: request,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.admin.instanceUpdates })
     },
   })
 }
 
-export function useUpgradeColocatedDaemon() {
+/**
+ * Check Now: the answer is a fresh `GET /instance/updates` body, so it goes
+ * straight into the status cache, then the update reads refetch. It never
+ * starts an update.
+ */
+export function useCheckForUpdates(consoleCommit?: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (
-      vars: Readonly<{ target: UpdateTargetIdentity; before: string }>,
-    ) =>
-      dispatchThenWait(
-        requestColocatedDaemonUpdate,
-        async () => {
-          const installed = (await fetchInstanceUpdates()).units.daemon.installed
-          return installed ?? { version: null, commit: null }
-        },
-        vars.target,
-        vars.before,
-      ),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: queryKeys.admin.instanceUpdates,
-      })
+    mutationFn: () => checkForUpdates(consoleCommit),
+    onSuccess: async (fresh) => {
+      queryClient.setQueryData(queryKeys.admin.instanceUpdates, fresh)
+      await queryClient.invalidateQueries({ queryKey: queryKeys.admin.instanceUpdates })
     },
   })
+}
+
+export function usePauseUpdates() {
+  return usePauseToggle(pauseUpdates)
+}
+
+export function useResumeUpdates() {
+  return usePauseToggle(resumeUpdates)
 }
 
 /** Capability gate. `staleTime` and no interval — this must not be polled. */
@@ -747,14 +673,11 @@ export function useEmailSettings(options?: Readonly<{ enabled?: boolean }>) {
 
 export function useApplyReencryptSecrets() {
   return useApiMutation({
-    mutationFn: (body?: Parameters<typeof applyReencryptSecrets>[0]) =>
-      applyReencryptSecrets(body),
+    mutationFn: (body?: Parameters<typeof applyReencryptSecrets>[0]) => applyReencryptSecrets(body),
   })
 }
 
-export function useServerMetricsLiveSettings(
-  options?: Readonly<{ enabled?: boolean }>,
-) {
+export function useServerMetricsLiveSettings(options?: Readonly<{ enabled?: boolean }>) {
   return useQuery({
     queryKey: queryKeys.admin.metricsLiveSettings,
     queryFn: fetchServerMetricsLiveSettings,
@@ -835,10 +758,7 @@ function forgesKey(scope: 'admin' | 'org') {
  * would mean two copies of the cache-invalidation rules for one collection.
  * Org-scoped screens importing from here is deliberate, not a stray import.
  */
-export function useForges(
-  scope: 'admin' | 'org',
-  options?: Readonly<{ enabled?: boolean }>
-) {
+export function useForges(scope: 'admin' | 'org', options?: Readonly<{ enabled?: boolean }>) {
   return useQuery({
     queryKey: forgesKey(scope),
     queryFn: () => fetchForges(scope),
@@ -922,8 +842,7 @@ export function useDeleteForge(scope: 'admin' | 'org') {
  */
 export function useStartGithubAppManifest(scope: 'admin' | 'org') {
   return useApiMutation({
-    mutationFn: (input: GithubManifestStartInput) =>
-      startGithubAppManifest(scope, input),
+    mutationFn: (input: GithubManifestStartInput) => startGithubAppManifest(scope, input),
   })
 }
 

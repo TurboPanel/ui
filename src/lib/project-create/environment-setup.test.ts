@@ -1,12 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { readComposeHostingEntries } from '@/lib/compose/hosting-service-context'
+import {
+  readComposeHostingEntries,
+  writeComposeHostingEntries,
+} from '@/lib/compose/hosting-service-context'
 import type { ComposeDocument } from '@/lib/instance-api'
 import {
   accountNameProblem,
   composeWithHostname,
   declaredHostname,
+  defaultAlsoWww,
   hostnameProblem,
   hostnameServiceNames,
+  initialAlsoWwwChoice,
   initialSetupServerId,
   letsEncryptCanIssueFor,
   setupAccounts,
@@ -15,6 +20,8 @@ import {
   setupFormProblems,
   setupEnvironmentPatch,
   setupVariableBodies,
+  setupWwwMode,
+  setupWwwSwitch,
   variableKeyProblem,
   wwwChoiceFor,
 } from '@/lib/project-create/environment-setup'
@@ -80,6 +87,88 @@ describe('hostnames', () => {
     expect(wwwChoiceFor('example.com')).toBe('www.example.com')
     expect(wwwChoiceFor('203.0.113.5')).toBeNull()
     expect(wwwChoiceFor('')).toBeNull()
+  })
+
+  it('starts the www switch on only for a bare domain', () => {
+    expect(defaultAlsoWww('example.com')).toBe(true)
+    expect(defaultAlsoWww(' Example.CO.uk ')).toBe(true)
+    expect(defaultAlsoWww('ct.turbopanel.dev')).toBe(false)
+    expect(defaultAlsoWww('app.example.com')).toBe(false)
+    expect(defaultAlsoWww('203.0.113.5')).toBe(false)
+    expect(defaultAlsoWww('localhost')).toBe(false)
+    expect(defaultAlsoWww('nas.lan')).toBe(false)
+    expect(defaultAlsoWww('https://example.com/')).toBe(false)
+    expect(defaultAlsoWww('')).toBe(false)
+  })
+
+  it('starts the switch from the declared entry, where there is one', () => {
+    expect(initialAlsoWwwChoice(null)).toBeNull()
+    expect(initialAlsoWwwChoice({ hostname: 'example.com' })).toBe(false)
+    expect(initialAlsoWwwChoice({ hostname: 'example.com', www: 'off' })).toBe(false)
+    expect(initialAlsoWwwChoice({ hostname: 'example.com', www: 'both' })).toBe(true)
+  })
+
+  it('keeps the typed spelling as the site when www is on', () => {
+    expect(setupWwwMode('example.com', true)).toBe('www-to-root')
+    expect(setupWwwMode('WWW.example.com', true)).toBe('root-to-www')
+    expect(setupWwwMode('example.com', false)).toBe('off')
+    expect(setupWwwMode('203.0.113.5', true)).toBe('off')
+    expect(setupWwwMode('', true)).toBe('off')
+  })
+
+  it('keeps a declared www mode for the same name only', () => {
+    const both = { hostname: 'example.com', www: 'both' } as const
+    const toWww = { hostname: 'example.com', www: 'root-to-www' } as const
+    expect(setupWwwMode('example.com', true, both)).toBe('both')
+    expect(setupWwwMode('example.com', true, toWww)).toBe('root-to-www')
+    expect(setupWwwMode('example.com', false, both)).toBe('off')
+    expect(setupWwwMode('example.org', true, toWww)).toBe('www-to-root')
+    expect(setupWwwMode('example.com', true, { hostname: 'example.com' })).toBe('www-to-root')
+  })
+
+  it('describes the switch the way it saves', () => {
+    expect(setupWwwSwitch('example.com')).toEqual({
+      label: 'Also answer www.example.com',
+      description: 'www.example.com → example.com (permanent redirect, path kept)',
+    })
+    expect(setupWwwSwitch('www.example.com')).toEqual({
+      label: 'Also answer example.com',
+      description: 'example.com → www.example.com (permanent redirect, path kept)',
+    })
+    expect(setupWwwSwitch('example.com', { hostname: 'example.com', www: 'both' })).toEqual({
+      label: 'Also answer www.example.com',
+      description: 'example.com and www.example.com both show the site',
+    })
+    expect(setupWwwSwitch('203.0.113.5')).toBeNull()
+    expect(setupWwwSwitch('')).toBeNull()
+  })
+
+  it('saves the direction the switch describes and keeps a declared mode', () => {
+    const typedWww = composeWithHostname(APP, {
+      serviceName: 'web',
+      hostname: 'www.example.com',
+      alsoWww: true,
+    })
+    expect(readComposeHostingEntries(typedWww, 'web')).toEqual([
+      { hostname: 'www.example.com', www: 'root-to-www' },
+    ])
+    const declared = writeComposeHostingEntries(APP, 'web', [
+      { hostname: 'example.com', www: 'both' },
+    ])
+    const kept = composeWithHostname(declared, {
+      serviceName: 'web',
+      hostname: 'example.com',
+      alsoWww: true,
+    })
+    expect(readComposeHostingEntries(kept, 'web')).toEqual([
+      { hostname: 'example.com', www: 'both' },
+    ])
+    const cleared = composeWithHostname(declared, {
+      serviceName: 'web',
+      hostname: 'example.com',
+      alsoWww: false,
+    })
+    expect(readComposeHostingEntries(cleared, 'web')).toEqual([{ hostname: 'example.com' }])
   })
 
   it('replaces the first hostname and sets the www choice', () => {

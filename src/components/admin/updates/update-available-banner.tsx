@@ -2,13 +2,14 @@ import { useRouter, type Href } from 'expo-router'
 import { useMemo, useState } from 'react'
 import { StyleSheet, Text, useWindowDimensions, View } from 'react-native'
 import { readConsoleBuild } from '@/components/admin/updates/console-build'
+import { adminAreaHref } from '@/lib/admin-navigation'
 import { Button, InlineNotice, TextLink } from '@/components/ui'
-import { isSuperadminSession, useAuth } from '@/lib/auth-context'
+import { isAdminSession, useAuth } from '@/lib/auth-context'
 import { useInstallStatusQuery } from '@/lib/queries/auth'
 import { useInstanceUpdates, useUpgradeActiveRun } from '@/lib/queries/admin'
 import {
   readDismissedUpdateBanner,
-  UPDATE_NOW_HREF,
+  showsUpdateBanner,
   updateBanner,
   updateOffered,
   writeDismissedUpdateBanner,
@@ -25,7 +26,7 @@ function webStorage(): Storage | undefined {
 }
 
 /**
- * The offered update for a superadmin on a self-hosted control plane, or null.
+ * The offered update for an instance admin on a self-hosted control plane, or null.
  * Shared by the banner and the admin sidebar badge.
  */
 export function useUpdateAvailable(): Readonly<{
@@ -36,7 +37,10 @@ export function useUpdateAvailable(): Readonly<{
 }> {
   const { session } = useAuth()
   const status = useInstallStatusQuery()
-  const eligible = isSuperadminSession(session) && status.data?.runtime === 'deno'
+  const eligible = showsUpdateBanner({
+    isInstanceAdmin: isAdminSession(session),
+    runtime: status.data?.runtime,
+  })
   const consoleBuild = useMemo(() => readConsoleBuild(), [])
   const updates = useInstanceUpdates({ enabled: eligible, consoleCommit: consoleBuild?.commit })
   const active = useUpgradeActiveRun({ enabled: eligible })
@@ -53,19 +57,19 @@ export function useUpdateAvailable(): Readonly<{
 }
 
 /**
- * "Update available: control plane v0.1.5-canary.1 — Update" across the top of
- * the app. On a phone-width window it is one line, "Update available · Review",
- * so it never takes a third of the screen; what the update holds is on the
- * review screen it opens. On a wide window one line of title and at most two
- * of detail.
+ * "Update available: control plane v0.1.5-canary.1" across the top of the app.
+ * Updates install on their own, so it only says so and links to Admin >
+ * Updates. On a phone-width window it is one line, "Update available ·
+ * See Updates", so it never takes a third of the screen. On a wide window one line
+ * of title and at most two of detail.
  */
 export function UpdateAvailableBanner() {
   const router = useRouter()
   const { width } = useWindowDimensions()
   const { banner, dismiss } = useUpdateAvailable()
   if (!banner) return null
-  const review = () => {
-    router.push(UPDATE_NOW_HREF as Href)
+  const openUpdates = () => {
+    router.push(adminAreaHref('updates') as Href)
   }
   const dismissButton = (
     <Button
@@ -86,9 +90,9 @@ export function UpdateAvailableBanner() {
             Update available ·
           </Text>
           <TextLink
-            label="Review"
-            accessibilityLabel={`Review the update. ${banner.title}`}
-            onPress={review}
+            label="See Updates"
+            accessibilityLabel={`See Updates in Admin > Updates. ${banner.title}`}
+            onPress={openUpdates}
           />
           <View style={styles.compactFill} />
           {dismissButton}
@@ -105,7 +109,7 @@ export function UpdateAvailableBanner() {
         bodyLines={2}
         actions={
           <>
-            <Button label="Update" variant="primary" onPress={review} />
+            <Button label="See Updates" variant="secondary" onPress={openUpdates} />
             {dismissButton}
           </>
         }

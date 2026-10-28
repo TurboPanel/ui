@@ -9,12 +9,11 @@ export default function ManagedSettingsScreen() {
 
   return (
     <View style={styles.root}>
-      <Text style={styles.heading}>Managed database settings</Text>
+      <Text style={styles.heading}>Managed Database Settings</Text>
       <Text style={styles.copy}>
-        Organization-wide settings for managed databases. TLS is an inherited
-        default, so a service that set its own mode keeps it. Listener ports have
-        no per-service override — one shared listener fronts every managed
-        database on a server.
+        Organization-wide settings for managed databases. TLS is an inherited default, so a service
+        that set its own mode keeps it. Listener ports have no per-service override — one shared
+        listener fronts every managed database on a server.
       </Text>
       <ManagedDefaultsSettingsSection orgId={id} />
     </View>

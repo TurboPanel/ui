@@ -1,57 +1,79 @@
-import { useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { HeaderChevron } from '@/components/header-chevron'
-import { Badge, SectionPanel } from '@/components/ui'
-import { UpgradeRunDetail } from '@/components/admin/updates/upgrade-run-detail'
+import { useRouter, type Href } from 'expo-router'
+import { Badge, SectionPanel, TextLink } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
+import { formatLocalDateTime } from '@/lib/format-datetime'
 import type { UpgradeHistoryEntry } from '@/lib/instance-api'
-import { colors, spacing } from '@/lib/theme'
+import { colors, spacing, webPointer } from '@/lib/theme'
+import {
+  UPDATE_HISTORY_HREF,
+  updateRunHref,
+  upgradeRunResultLabel,
+  upgradeRunStatusBadge,
+  upgradeStartedByLabel,
+} from '@/lib/upgrade-history-display'
 
-function resultTone(status: string): 'ok' | 'danger' | 'pending' | 'muted' {
-  if (status === 'succeeded') return 'ok'
-  if (status === 'failed') return 'danger'
-  if (status === 'partially_failed') return 'pending'
-  if (status === 'cancelled') return 'muted'
-  return 'pending'
-}
+/** How many recent runs the Updates page lists before "See All". */
+export const RECENT_UPDATE_RUNS = 5
 
-function RunRow({ run, last }: Readonly<{ run: UpgradeHistoryEntry; last: boolean }>) {
-  const [open, setOpen] = useState(false)
-  const started = run.startedAt ? new Date(run.startedAt).toLocaleString() : '—'
+function RecentRunRow({
+  run,
+  last,
+  onOpen,
+}: Readonly<{ run: UpgradeHistoryEntry; last: boolean; onOpen: () => void }>) {
+  const started = formatLocalDateTime(run.startedAt ?? run.createdAt ?? null, {
+    includeSeconds: false,
+  })
   return (
-    <View style={[styles.row, !last && styles.rowDivider]}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`${open ? 'Hide' : 'Show'} what happened in the update started ${started}`}
-        onPress={() => {
-          setOpen((value) => !value)
-        }}
-        style={styles.summary}
-      >
-        <View style={styles.summaryText}>
-          <Text style={{ color: colors.text }}>{started}</Text>
-          <Text style={panelStyles.muted}>{run.startedByEmail ?? 'Automatic'}</Text>
-        </View>
-        <Badge tone={resultTone(run.status)} label={run.resultLabel ?? run.status} />
-        <HeaderChevron size={14} color={colors.textMuted} open={open} />
-      </Pressable>
-      {open ? <UpgradeRunDetail runId={run.id} /> : null}
-    </View>
+    <Pressable
+      accessibilityRole="link"
+      accessibilityLabel={`Open the update started ${started}`}
+      onPress={onOpen}
+      style={({ pressed }) => [
+        styles.row,
+        !last && styles.rowDivider,
+        webPointer,
+        pressed && styles.pressed,
+      ]}
+    >
+      <View style={styles.summaryText}>
+        <Text style={styles.started}>{started}</Text>
+        <Text style={panelStyles.muted} numberOfLines={1}>
+          {upgradeStartedByLabel(run)} · {upgradeRunResultLabel(run)}
+        </Text>
+      </View>
+      <Badge {...upgradeRunStatusBadge(run.status)} />
+    </Pressable>
   )
 }
 
+/** The last few update runs on the Updates page; each opens its Update Run screen. */
 export function UpgradeHistoryPanel({ runs }: Readonly<{ runs: readonly UpgradeHistoryEntry[] }>) {
+  const router = useRouter()
+  const recent = runs.slice(0, RECENT_UPDATE_RUNS)
   return (
-    <SectionPanel title="Update history">
-      {runs.length === 0 ? (
+    <SectionPanel
+      title="Recent Updates"
+      headerRight={
+        <TextLink
+          label="See All"
+          size="sm"
+          accessibilityLabel="Open Update History"
+          onPress={() => router.push(UPDATE_HISTORY_HREF as Href)}
+        />
+      }
+    >
+      {recent.length === 0 ? (
         <Text style={panelStyles.muted}>No updates recorded yet.</Text>
       ) : (
-        <>
-          <Text style={panelStyles.muted}>Open an update to see how each step and server ended.</Text>
-          {runs.map((run, index) => (
-            <RunRow key={run.id} run={run} last={index === runs.length - 1} />
-          ))}
-        </>
+        recent.map((run, index) => (
+          <RecentRunRow
+            key={run.id}
+            run={run}
+            last={index === recent.length - 1}
+            onOpen={() => router.push(updateRunHref(run.id) as Href)}
+          />
+        ))
       )}
     </SectionPanel>
   )
@@ -59,20 +81,24 @@ export function UpgradeHistoryPanel({ runs }: Readonly<{ runs: readonly UpgradeH
 
 const styles = StyleSheet.create({
   row: {
-    paddingVertical: spacing.xs,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
   },
   rowDivider: {
     borderBottomWidth: 1,
     borderBottomColor: colors.borderMuted,
   },
-  summary: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.xs,
+  pressed: {
+    opacity: 0.88,
   },
   summaryText: {
     flex: 1,
+    minWidth: 0,
     gap: 2,
+  },
+  started: {
+    color: colors.text,
   },
 })

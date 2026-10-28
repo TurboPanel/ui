@@ -13,6 +13,7 @@ import {
   readHostingHostname,
   wwwSiblingHostname,
   type ComposeHostingExtensionEntry,
+  type HostingWwwMode,
 } from '@/lib/compose/hosting-extension'
 import {
   readComposeHostingEntries,
@@ -22,6 +23,7 @@ import {
 import { isPrincipalAlias, readServiceTurbopanelExtension } from '@/lib/compose/service-kind'
 import type { ComposeDocument, CreateVariableBody, OrgServerRecord } from '@/lib/instance-api'
 import { validateEnvironmentName } from '@/lib/environment-validation'
+import { defaultWwwMode, wwwResultLines } from '@/lib/hosting-www'
 import { isLoopbackOrPrivateHostname } from '@/lib/install-tls'
 import { variableUseFlags, type VariableUse } from '@/lib/v4/config-edits'
 
@@ -88,6 +90,61 @@ export function wwwChoiceFor(hostname: string): string | null {
 }
 
 /**
+ * Whether "Also answer www.…" starts on for the typed name, until the person
+ * flips it: on for a bare registrable domain (`example.com`, `example.co.uk`),
+ * off for a subdomain (`app.example.com`), whose www name rarely has DNS, so a
+ * Let’s Encrypt request covering it would fail. Same rule as the Hosting tab.
+ */
+export function defaultAlsoWww(hostname: string): boolean {
+  const name = readHostingHostname(hostname)
+  return name ? defaultWwwMode(name) !== 'off' : false
+}
+
+/**
+ * Where the switch starts: what the service's declared entry says (no `www`
+ * there means off), else null to follow {@link defaultAlsoWww}.
+ */
+export function initialAlsoWwwChoice(
+  declared: ComposeHostingExtensionEntry | null
+): boolean | null {
+  return declared ? (declared.www ?? 'off') !== 'off' : null
+}
+
+/**
+ * The www mode the switch saves for a name. Off when the switch is off or the
+ * name has no www spelling. On keeps the mode the service already declares for
+ * the same name (`both`, a redirect either way); otherwise the typed spelling
+ * stays the site, as on the Hosting tab: `www.example.com` gets `example.com`
+ * sent to it, `example.com` gets `www.example.com` sent to it.
+ */
+export function setupWwwMode(
+  hostname: string,
+  alsoWww: boolean,
+  declared?: ComposeHostingExtensionEntry | null
+): HostingWwwMode {
+  const name = readHostingHostname(hostname)
+  if (!alsoWww || !name || !wwwSiblingHostname(name)) return 'off'
+  const kept = declared?.hostname === name ? declared.www : undefined
+  if (kept && kept !== 'off') return kept
+  return name.startsWith('www.') ? 'root-to-www' : 'www-to-root'
+}
+
+/**
+ * The switch's label and what turning it on does, in the words the Hosting
+ * tab uses; null when the name has no www spelling (no switch is shown).
+ */
+export function setupWwwSwitch(
+  hostname: string,
+  declared?: ComposeHostingExtensionEntry | null
+): Readonly<{ label: string; description: string }> | null {
+  const name = readHostingHostname(hostname)
+  const sibling = name ? wwwSiblingHostname(name) : null
+  if (!name || !sibling) return null
+  const [description = ''] = wwwResultLines([name], setupWwwMode(name, true, declared))
+  return { label: `Also answer ${sibling}`, description }
+}
+
+/**
  * True when Let’s Encrypt can issue a certificate for the name: not a
  * wildcard, an IP address, a one-word name or a private name. Mirrors the
  * control plane's refusal, so the screen never writes a choice the deploy
@@ -150,7 +207,8 @@ export function composeWithHostname(
   // The service's own first entry keeps its other settings; the www choice is this screen's.
   const entry: ComposeHostingExtensionEntry = { ...first, hostname }
   delete entry.www
-  if (input.alsoWww && wwwChoiceFor(hostname)) entry.www = 'www-to-root'
+  const www = setupWwwMode(hostname, input.alsoWww, first)
+  if (www !== 'off') entry.www = www
   if (input.letsEncrypt === true && !entry.tls && letsEncryptCanIssueFor(hostname)) {
     entry.tls = { mode: 'automatic' }
   }

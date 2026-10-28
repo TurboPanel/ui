@@ -86,12 +86,26 @@ function nativeFallback(envId: string, latest: Latest | undefined, views: Views 
   return { latest: latest[envId] }
 }
 
+/**
+ * A managed database's status: what the managed rows say, else its containers.
+ * Containers never call it "Not deployed yet": a database has no deploys, and
+ * a container row without a Docker id only means the server has not reported.
+ */
+function managedEnvironmentStatus(
+  managedStatus: Readonly<Record<string, StatusKey>>,
+  envId: string,
+  containers: readonly ContainerRecord[] | undefined
+): string {
+  const fromContainers = runningStatusKey(containers)
+  return managedStatus[envId] ?? (fromContainers === 'never' ? null : fromContainers) ?? 'unknown'
+}
+
 function homeEnvironments(
   environments: readonly EnvironmentRecord[],
   containersOf: (environmentId: string) => readonly ContainerRecord[] | undefined,
   latest: Latest | undefined,
   views: Views | undefined,
-  managedStatus: Readonly<Record<string, StatusKey>> = {}
+  managedStatus?: Readonly<Record<string, StatusKey>>
 ): HomeEnvironment[] {
   const sorted = [...environments].sort(byCreated)
   const primary = primaryEnvironmentOf(sorted)
@@ -100,10 +114,10 @@ function homeEnvironments(
   ).map((env) => ({
     id: env.id,
     name: environmentDisplayName(env),
-    status:
-      managedStatus[env.id] ??
-      runningStatusKey(containersOf(env.id), nativeFallback(env.id, latest, views)) ??
-      'unknown',
+    status: managedStatus
+      ? managedEnvironmentStatus(managedStatus, env.id, containersOf(env.id))
+      : (runningStatusKey(containersOf(env.id), nativeFallback(env.id, latest, views)) ??
+        'unknown'),
     isPrimary: env.isPrimary === true,
     pinned: env.isPrimary !== true && env.pinned === true,
   }))
@@ -240,7 +254,7 @@ export type ProjectTypeFilter = (typeof PROJECT_TYPE_FILTERS)[number]
 const PROJECT_TYPE_LABELS: Readonly<Record<ProjectTypeFilter, string>> = {
   all: 'All',
   apps: 'Apps',
-  managed: 'Managed databases',
+  managed: 'Managed Databases',
 }
 
 /** The filter a `?type=` value names; anything else is All. */
@@ -271,7 +285,7 @@ export function filterProjectsByType<T extends Pick<HomeProject, 'kind'>>(
   return cards.filter((card) => projectTypeOf(card.kind) === filter)
 }
 
-/** "All 3", "Apps 2", "Managed databases 1", each read out as "Apps, 2 projects". */
+/** "All 3", "Apps 2", "Managed Databases 1", each read out as "Apps, 2 projects". */
 export function projectTypeOptions(counts: Readonly<Record<ProjectTypeFilter, number>>): {
   value: ProjectTypeFilter
   label: string

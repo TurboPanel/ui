@@ -1,10 +1,12 @@
 import { LinearGradient } from 'expo-linear-gradient'
+import { useRouter, type Href } from 'expo-router'
 import { useState } from 'react'
-import { Linking, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native'
-import { BuildInfoSheet } from '@/components/brand/build-info-sheet'
+import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native'
+import { useVersionUpdateEntry } from '@/components/brand/use-version-update-entry'
+import { VersionsSheet } from '@/components/brand/versions-sheet'
+import { UpdatesNavIcon } from '@/components/icons/nav-icons'
 import { useAuth } from '@/lib/auth-context'
-import { showsBuildInfo } from '@/lib/build-info'
-import { controlPlaneVersionLine } from '@/lib/control-plane-version'
+import { controlPlaneEnvironmentLabel, controlPlaneVersionLabel } from '@/lib/control-plane-version'
 import { haWordmarkColors } from '@/lib/ha-wordmark-colors'
 import type { HealthResponse } from '@/lib/instance-api'
 import {
@@ -15,6 +17,7 @@ import {
 } from '@/lib/platform-copy'
 import { useControlPlaneHealth } from '@/lib/queries/system'
 import { colors, webPointer } from '@/lib/theme'
+import { updateIndicator, versionClick, versionEntryAccessibilityLabel } from '@/lib/update-entry'
 import { useColors, useColorScheme } from '@/lib/theme-preference'
 
 /**
@@ -29,16 +32,19 @@ import { useColors, useColorScheme } from '@/lib/theme-preference'
  * blue-tinted fill, so it reads the same on every surface it sits on. In
  * light mode the text is white on a solid HA-blue fill (`haWordmarkColors`).
  *
- * Under the full pill, right-aligned to its edge: the control plane's version
- * (and short commit, linked to the source) from `/api/health`, followed on a
- * testing or staging deployment by the environment in its colour ("Testing"
- * amber, "Staging" blue; nothing on live). Its line is reserved from the first
- * render so the pill never moves when it arrives; the compact pill has no
- * version line.
+ * Under the full pill, right-aligned to its edge: the version line. It is the
+ * control plane's version from `/api/health` as plain `vX.Y.Z` (no
+ * pre-release suffix, never the commit), then a yellow word on a build that
+ * is not live (hosted: Testing / Staging; self-hosted: Canary / RC), then, for
+ * instance admins only, an update icon when an update is waiting or updates
+ * are paused ("Update" beside it on a live build). Clicking it opens the
+ * versions popup, or Admin > Updates for an instance admin with the icon
+ * showing (`lib/update-entry.ts`). Its line is reserved from the first render
+ * so the pill never moves when it arrives; the compact pill has no version
+ * line. On a narrow sidebar the version truncates first.
  *
- * Self-hosted has no pill: the full form is just the version line beside the
- * T, carrying the exact installed build label (`v0.1.1-canary.…`,
- * `v0.1.1-rc.1`) when the control plane reports one.
+ * Self-hosted has no pill and no edition text: the full form is just the
+ * version line beside the T, with the same behaviour.
  *
  * `style` is applied to whatever the wordmark renders (its root), so a caller
  * can nudge it without a wrapper that would stay behind when it renders nothing.
@@ -50,7 +56,11 @@ export function HighAvailabilityWordmark({
   compact = false,
   showVersion = true,
   style,
-}: Readonly<{ compact?: boolean; showVersion?: boolean; style?: StyleProp<ViewStyle> }>) {
+}: Readonly<{
+  compact?: boolean
+  showVersion?: boolean
+  style?: StyleProp<ViewStyle>
+}>) {
   const { controlPlaneRuntime } = useAuth()
   // The gradient needs real colour values, not theme variables.
   const palette = useColors()
@@ -102,67 +112,77 @@ export function HighAvailabilityWordmark({
   )
 }
 
-const ENVIRONMENT_COLOR = {
-  testing: colors.pending,
-  staging: colors.command,
-} as const
-
 function VersionLine({
   health,
   runtime,
 }: Readonly<{ health: HealthResponse | undefined; runtime: 'deno' | 'workers' }>) {
-  const [infoOpen, setInfoOpen] = useState(false)
-  const versionLine = controlPlaneVersionLine(health, runtime)
-  const environment = versionLine?.environment ?? null
-  // Testing and staging: the whole line opens "What's running" (console and
-  // control plane versions + commits). Elsewhere the commit links to GitHub.
-  const opensBuildInfo = runtime === 'workers' && showsBuildInfo(health)
-  const commitUrl = opensBuildInfo ? null : (versionLine?.commitUrl ?? null)
-
-  const content = (
-    <>
-      <Text
-        style={styles.version}
-        numberOfLines={1}
-        {...(commitUrl
-          ? {
-              accessibilityRole: 'link' as const,
-              accessibilityLabel: `Control plane ${versionLine?.label ?? ''}, view source commit`,
-              onPress: () => {
-                void Linking.openURL(commitUrl).catch(() => undefined)
-              },
-            }
-          : {})}
-      >
-        {versionLine?.label ?? ''}
-      </Text>
-      {environment ? (
-        <Text
-          style={[styles.version, styles.environment, { color: ENVIRONMENT_COLOR[environment.tone] }]}
-          numberOfLines={1}
-          accessibilityLabel={`${environment.text} environment`}
-        >
-          {environment.text}
-        </Text>
-      ) : null}
-    </>
-  )
-
-  if (!opensBuildInfo) {
-    return <View style={styles.versionRow}>{content}</View>
+  const router = useRouter()
+  const [versionsOpen, setVersionsOpen] = useState(false)
+  const { isInstanceAdmin, pending } = useVersionUpdateEntry()
+  const version = controlPlaneVersionLabel(health)
+  const environment = controlPlaneEnvironmentLabel(health, runtime)
+  const indicator = updateIndicator({
+    pending,
+    live: environment === null,
+    versionKnown: version !== null,
+  })
+  const click = versionClick({ isInstanceAdmin, pending })
+  const onPress = () => {
+    if (click.kind === 'navigate') router.push(click.href as Href)
+    else setVersionsOpen(true)
   }
+
   return (
     <>
       <Pressable
         style={[styles.versionRow, webPointer]}
-        onPress={() => setInfoOpen(true)}
+        onPress={onPress}
+        disabled={version === null}
         accessibilityRole="button"
-        accessibilityLabel={`${versionLine?.label ?? 'Version'}, show what's running`}
+        accessibilityLabel={versionEntryAccessibilityLabel({
+          version,
+          environment,
+          pending,
+          click,
+        })}
       >
-        {content}
+        <Text style={[styles.version, styles.versionText]} numberOfLines={1}>
+          {version ?? ''}
+        </Text>
+        {environment ? <EnvironmentLabel text={environment} /> : null}
+        {indicator.icon ? <UpdateMark word={indicator.word} /> : null}
       </Pressable>
-      <BuildInfoSheet visible={infoOpen} health={health} onClose={() => setInfoOpen(false)} />
+      <VersionsSheet
+        visible={versionsOpen}
+        health={health}
+        onClose={() => setVersionsOpen(false)}
+      />
     </>
+  )
+}
+
+/** The yellow word beside the version on a build that is not live. */
+function EnvironmentLabel({ text }: Readonly<{ text: string }>) {
+  return (
+    <View style={styles.environment} importantForAccessibility="no-hide-descendants">
+      <Text style={styles.environmentText} numberOfLines={1}>
+        {text}
+      </Text>
+    </View>
+  )
+}
+
+/** The update icon, with the word "Update" beside it on a live build. */
+function UpdateMark({ word }: Readonly<{ word: string | null }>) {
+  return (
+    <View style={styles.update} importantForAccessibility="no-hide-descendants">
+      <UpdatesNavIcon size={11} color={colors.command} />
+      {word ? (
+        <Text style={styles.updateWord} numberOfLines={1}>
+          {word}
+        </Text>
+      ) : null}
+    </View>
   )
 }
 
@@ -191,10 +211,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-  },
-  environment: {
-    fontWeight: '700',
-    letterSpacing: 0.5,
+    maxWidth: '100%',
+    minWidth: 0,
   },
   version: {
     height: 11,
@@ -203,6 +221,37 @@ const styles = StyleSheet.create({
     lineHeight: 11,
     fontVariant: ['tabular-nums'],
     letterSpacing: 0.3,
+  },
+  versionText: {
+    flexShrink: 1,
+    minWidth: 0,
+  },
+  environment: {
+    flexShrink: 0,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.warnLine,
+    backgroundColor: colors.warnSoft,
+    paddingHorizontal: 5,
+  },
+  environmentText: {
+    color: colors.warn,
+    fontSize: 9,
+    lineHeight: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  update: {
+    flexShrink: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  updateWord: {
+    color: colors.command,
+    fontSize: 9,
+    lineHeight: 11,
+    fontWeight: '700',
   },
   fill: {
     borderRadius: 999,

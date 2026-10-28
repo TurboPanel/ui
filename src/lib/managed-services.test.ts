@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { MANAGED_FAILOVER_UNSUPPORTED_ERROR, MANAGED_SERIES_IMMUTABLE_ERROR, MANAGED_VARIANT_SWAP_UNSAFE_ERROR } from './instance-api'
+import {
+  MANAGED_FAILOVER_UNSUPPORTED_ERROR,
+  MANAGED_SERIES_IMMUTABLE_ERROR,
+  MANAGED_VARIANT_SWAP_UNSAFE_ERROR,
+} from './instance-api'
 import { MANAGED_FAILOVER_UNSUPPORTED_REASON } from './managed-releases'
 import { TURBOFABRIC_PRODUCT_NAME } from './platform-copy'
 import { MANAGED_HAS_BINDINGS_COPY } from './user-error'
@@ -122,39 +126,51 @@ describe('managedErrorMessage', () => {
     expect(
       managedErrorMessage(
         new Error(
-          '/x failed: HTTP 422: fabric_address_required — Server db-2 has no TurboFabric address, so the TurboFabric scope cannot be used on it.',
+          '/x failed: HTTP 422: fabric_address_required — Server db-2 has no TurboFabric address, so the TurboFabric scope cannot be used on it.'
         ),
-        'fallback',
-      ),
-    ).toBe(
-      'Server db-2 has no TurboFabric address, so the TurboFabric scope cannot be used on it.',
-    )
+        'fallback'
+      )
+    ).toBe('Server db-2 has no TurboFabric address, so the TurboFabric scope cannot be used on it.')
     expect(
-      managedErrorMessage(new Error('HTTP 422: fabric_address_required'), 'fallback'),
+      managedErrorMessage(new Error('HTTP 422: fabric_address_required'), 'fallback')
     ).toContain('no TurboFabric address')
     expect(
       managedErrorMessage(
-        new Error('/x failed: HTTP 502: ingress_reconcile_failed — Saved, but db-1 could not be told yet.'),
-        'fallback',
-      ),
+        new Error(
+          '/x failed: HTTP 502: ingress_reconcile_failed — Saved, but db-1 could not be told yet.'
+        ),
+        'fallback'
+      )
     ).toBe('Saved, but db-1 could not be told yet.')
+  })
+
+  it('shows the server sentence without the request for a code it has no copy for', () => {
+    expect(
+      managedErrorMessage(
+        new Error('/x failed: HTTP 409: managed_new_refusal — Wait for the restore to finish.'),
+        'fallback'
+      )
+    ).toBe('Wait for the restore to finish.')
+    expect(managedErrorMessage(new Error(''), 'fallback')).toBe('fallback')
   })
 
   it('keeps the names in SSL minimum refusals, with plain copy when the message is missing', () => {
     expect(
       managedErrorMessage(
         new Error(
-          '/x failed: HTTP 409: external_access_weak_ssl — These databases on this server still accept connections without SSL: Orders. Set them to Require or stronger before allowing external access.',
+          '/x failed: HTTP 409: external_access_weak_ssl — These databases on this server still accept connections without SSL: Orders. Set them to Require or stronger before allowing external access.'
         ),
-        'fallback',
-      ),
+        'fallback'
+      )
     ).toBe(
-      'These databases on this server still accept connections without SSL: Orders. Set them to Require or stronger before allowing external access.',
+      'These databases on this server still accept connections without SSL: Orders. Set them to Require or stronger before allowing external access.'
     )
     expect(
       managedNamedErrorMessage(
-        new Error('/x failed: HTTP 409: managed_ssl_external_access_minimum — External access is on for db-1.'),
-      ),
+        new Error(
+          '/x failed: HTTP 409: managed_ssl_external_access_minimum — External access is on for db-1.'
+        )
+      )
     ).toBe('External access is on for db-1.')
     expect(managedNamedErrorMessage(new Error('HTTP 409: managed_busy'))).toBeNull()
     for (const code of [
@@ -170,22 +186,28 @@ describe('managedErrorMessage', () => {
     expect(
       managedErrorMessage(
         new Error(
-          '/x failed: HTTP 422: reserved_username — \'postgres\' is a name the database engine or TurboPanel keeps for itself. Pick a different login name.',
+          "/x failed: HTTP 422: reserved_username — 'postgres' is a name the database engine or TurboPanel keeps for itself. Pick a different login name."
         ),
-        'fallback',
-      ),
-    ).toBe("'postgres' is a name the database engine or TurboPanel keeps for itself. Pick a different login name.")
+        'fallback'
+      )
+    ).toBe(
+      "'postgres' is a name the database engine or TurboPanel keeps for itself. Pick a different login name."
+    )
     expect(
       managedErrorMessage(
         new Error(
-          "/x failed: HTTP 409: managed_login_defines_objects — The login 'app' is still the definer of view shop.v.",
+          "/x failed: HTTP 409: managed_login_defines_objects — The login 'app' is still the definer of view shop.v."
         ),
-        'fallback',
-      ),
+        'fallback'
+      )
     ).toBe("The login 'app' is still the definer of view shop.v.")
     // An older server sends no sentence: the plain copy still reads well.
-    expect(managedErrorMessage(new Error('HTTP 422: reserved_database_name'), 'fallback')).toMatch(/database name/)
-    expect(managedErrorMessage(new Error('HTTP 422: reserved_username'), 'fallback')).toMatch(/login name/)
+    expect(managedErrorMessage(new Error('HTTP 422: reserved_database_name'), 'fallback')).toMatch(
+      /database name/
+    )
+    expect(managedErrorMessage(new Error('HTTP 422: reserved_username'), 'fallback')).toMatch(
+      /login name/
+    )
   })
 
   it('maps known HTTP error codes to operator copy', () => {
@@ -676,7 +698,9 @@ describe('managedRecoveryBanner after a finished failover', () => {
   })
 
   it('goes away after a day and never shows for a planned switchover', () => {
-    expect(managedRecoveryBanner(done, { nowMs: Date.parse('2026-08-21T00:00:00.000Z') })).toBeNull()
+    expect(
+      managedRecoveryBanner(done, { nowMs: Date.parse('2026-08-21T00:00:00.000Z') })
+    ).toBeNull()
     expect(
       managedRecoveryBanner(
         { ...done, kind: 'switchover' },

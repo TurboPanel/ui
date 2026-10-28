@@ -134,14 +134,14 @@ describe('buildSearchItems', () => {
     )
     expect(hrefs['Datacenters']).toBe('/o1/servers/datacenters')
     expect(hrefs['Pending Keys']).toBe('/o1/servers/keys')
-    expect(hrefs['Server certificates']).toBe('/o1/servers/tls')
-    expect(hrefs['Server settings']).toBe('/o1/servers/settings')
+    expect(hrefs['TLS Certificates']).toBe('/o1/servers/tls')
+    expect(hrefs['Server Settings']).toBe('/o1/servers/settings')
     expect(hrefs['Firewall']).toBe('/o1/network/firewall')
     expect(hrefs['Members']).toBe('/o1/manage?tab=members')
     expect(hrefs['Domains & certificates']).toBe('/o1/manage?tab=domains')
     expect(hrefs['Git connections']).toBe('/o1/manage?tab=git')
     expect(hrefs['Principals']).toBe('/o1/manage?tab=principals')
-    expect(hrefs['Managed database settings']).toBe('/o1/managed/settings')
+    expect(hrefs['Managed Database Settings']).toBe('/o1/managed/settings')
     expect(hrefs['Billing']).toBe('/o1/billing')
   })
 
@@ -163,8 +163,7 @@ describe('buildSearchItems', () => {
       'Add project': '/o1/projects/new',
       'Add database': '/o1/projects/new?type=managed',
       'Invite member': '/o1/manage?tab=members',
-      'Update servers': '/o1/servers',
-      'Update TurboPanel': '/admin/updates',
+      'Pause or Resume Updates': '/admin/updates',
     })
   })
 
@@ -173,8 +172,7 @@ describe('buildSearchItems', () => {
     const actionNames = names(list.filter((i) => i.group === 'Actions'))
     expect(actionNames).not.toContain('Add server')
     expect(actionNames).not.toContain('Invite member')
-    expect(actionNames).not.toContain('Update servers')
-    expect(actionNames).not.toContain('Update TurboPanel')
+    expect(actionNames).not.toContain('Pause or Resume Updates')
     expect(actionNames).not.toContain('Remove server derp')
     expect(actionNames).not.toContain('Reboot server derp')
     expect(actionNames).toContain('Add project')
@@ -248,6 +246,11 @@ describe('rankSearchItems', () => {
     expect(found).toContain('derp: Firewall')
     expect(found).toContain('Open firewall for derp')
     expect(found).not.toContain('Firewall')
+  })
+
+  it('finds the TLS Certificates page by its old name: "server cert"', () => {
+    expect(names(rankSearchItems(list, 'server cert'))).toContain('TLS Certificates')
+    expect(names(rankSearchItems(list, 'server certificates'))).toContain('TLS Certificates')
   })
 
   it('treats remove, delete and forget as the same word', () => {

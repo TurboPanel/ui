@@ -1,8 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setActiveOrganizationId } from '@/lib/org-context'
 import {
-  cancelUpgradeRun,
-  checkUpgradeManifests,
   createNotificationChannel,
   deleteNotificationChannel,
   dismissNotification,
@@ -14,16 +12,16 @@ import {
   saveOrgComposeRemoteBuildSources,
   fetchUnreadNotificationCount,
   fetchUpgradeHistory,
-  fetchUpgradeRun,
+  fetchUpgradeRunServers,
   fetchUpgradeServersPage,
   fetchUpgradeSettings,
+  checkForUpdates,
   markNotificationsRead,
-  requestInstanceUpdate,
-  retryUpgradeStep,
-  runUpgradePreflight,
+  pauseUpdates,
+  resumeUpdates,
   saveUpgradeSettings,
-  startPlatformUpgradeRun,
   updateNotificationChannel,
+  UpdateCheckTooSoonError,
 } from './instance-api'
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -80,29 +78,54 @@ describe('instance-api upgrade, notification and compose-gated-field wrappers', 
     fetchMock.mockImplementation(() =>
       Promise.resolve(jsonResponse({ ok: true, runs: [], servers: [], total: 0 }))
     )
-    await fetchUpgradeRun('run/1')
-    expect(urlOf(0)).toContain('/instance/updates/runs/run%2F1')
-
     await fetchUpgradeHistory()
-    expect(urlOf(1)).toMatch(/\/instance\/updates\/history$/)
+    expect(urlOf(0)).toMatch(/\/instance\/updates\/history$/)
     await fetchUpgradeHistory({ offset: 8, limit: 4 })
-    expect(urlOf(2)).toContain('/instance/updates/history?offset=8&limit=4')
+    expect(urlOf(1)).toContain('/instance/updates/history?offset=8&limit=4')
 
     await fetchUpgradeServersPage()
-    expect(urlOf(3)).toMatch(/\/instance\/updates\/servers$/)
+    expect(urlOf(2)).toMatch(/\/instance\/updates\/servers$/)
     await fetchUpgradeServersPage({ offset: 0, limit: 25, status: 'needs_attention' })
-    expect(urlOf(4)).toContain('/instance/updates/servers?offset=0&limit=25&status=needs_attention')
+    expect(urlOf(3)).toContain('/instance/updates/servers?offset=0&limit=25&status=needs_attention')
+
+    await fetchUpgradeHistory({ offset: 0, limit: 25, status: 'any', trigger: 'automatic' })
+    expect(urlOf(4)).toContain(
+      '/instance/updates/history?offset=0&limit=25&status=any&trigger=automatic'
+    )
+    await fetchUpgradeHistory({ offset: 0, limit: 25, status: '', trigger: '' })
+    expect(urlOf(5)).toMatch(/\/instance\/updates\/history\?offset=0&limit=25$/)
   })
 
-  it('upgrade settings and run controls use their routes and methods', async () => {
-    const settings = {
-      autoUpdate: true,
-      batch: { mode: 'count', value: 1 },
-      maintenanceWindow: { enabled: false },
-    }
+  it('a run server page sends only the filters that are set', async () => {
     fetchMock.mockImplementation(() =>
-      Promise.resolve(jsonResponse({ ok: true, settings, runId: 'r-1' }))
+      Promise.resolve(jsonResponse({ ok: true, servers: [], total: 0 }))
     )
+    await fetchUpgradeRunServers('run/1')
+    expect(urlOf(0)).toMatch(/\/instance\/updates\/runs\/run%2F1\/servers$/)
+    await fetchUpgradeRunServers('run-1', {
+      offset: 50,
+      limit: 50,
+      sort: 'duration',
+      dir: 'desc',
+      status: 'failed',
+      organizationId: 'org-1',
+      q: '  web  ',
+    })
+    expect(urlOf(1)).toContain(
+      '/instance/updates/runs/run-1/servers?offset=50&limit=50&sort=duration&dir=desc&status=failed&organizationId=org-1&q=web'
+    )
+    await fetchUpgradeRunServers('run-1', {
+      serverId: 's-1',
+      limit: 1,
+      organizationId: null,
+      q: '',
+    })
+    expect(urlOf(2)).toContain('/instance/updates/runs/run-1/servers?limit=1&serverId=s-1')
+  })
+
+  it('upgrade settings and the pause control use their routes and methods', async () => {
+    const settings = { batch: { mode: 'count', value: 1 } }
+    fetchMock.mockImplementation(() => Promise.resolve(jsonResponse({ ok: true, settings })))
 
     await fetchUpgradeSettings()
     expect(urlOf(0)).toContain('/instance/updates/settings')
@@ -111,24 +134,37 @@ describe('instance-api upgrade, notification and compose-gated-field wrappers', 
     expect(urlOf(1)).toContain('/instance/updates/settings')
     expect(initOf(1)).toMatchObject({ method: 'PUT', body: JSON.stringify(settings) })
 
-    await runUpgradePreflight()
-    expect(urlOf(2)).toContain('/instance/updates/preflight')
-    expect(initOf(2)).toMatchObject({ method: 'POST' })
+    await pauseUpdates()
+    expect(urlOf(2)).toMatch(/\/instance\/updates\/pause$/)
+    await resumeUpdates()
+    expect(urlOf(3)).toMatch(/\/instance\/updates\/resume$/)
+    for (const i of [2, 3]) expect(initOf(i)).toMatchObject({ method: 'POST' })
+  })
 
-    await startPlatformUpgradeRun()
-    expect(initOf(3)).toMatchObject({ method: 'POST', body: '{}' })
-    await startPlatformUpgradeRun('r-1')
-    expect(initOf(4)).toMatchObject({ method: 'POST', body: JSON.stringify({ runId: 'r-1' }) })
+  it('Check Now posts only to the check route and answers the status body', async () => {
+    const status = { ok: true, channel: 'release', automatic: true, units: {} }
+    fetchMock.mockResolvedValueOnce(jsonResponse(status))
+    await expect(checkForUpdates('abc')).resolves.toEqual(status)
+    expect(urlOf(0)).toMatch(/\/instance\/updates\/check\?consoleCommit=abc$/)
+    expect(initOf(0)).toMatchObject({ method: 'POST' })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
 
-    await checkUpgradeManifests()
-    expect(urlOf(5)).toContain('/instance/updates/check')
-    await retryUpgradeStep('step/9')
-    expect(urlOf(6)).toContain('/instance/updates/steps/step%2F9/retry')
-    await cancelUpgradeRun('run/2')
-    expect(urlOf(7)).toContain('/instance/updates/runs/run%2F2/cancel')
-    await requestInstanceUpdate()
-    expect(urlOf(8)).toContain('/instance/updates/instance')
-    for (const i of [5, 6, 7, 8]) expect(initOf(i)).toMatchObject({ method: 'POST' })
+  it('Check Now too soon names when to try again', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(
+        { ok: false, error: 'check_too_soon', retryAfterSeconds: 37, message: 'Too soon' },
+        429
+      )
+    )
+    const refused = await checkForUpdates().catch((err: unknown) => err)
+    expect(refused).toBeInstanceOf(UpdateCheckTooSoonError)
+    expect((refused as UpdateCheckTooSoonError).retryAfterSeconds).toBe(37)
+    expect(urlOf(0)).toMatch(/\/instance\/updates\/check$/)
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: false, error: 'check_too_soon' }, 429))
+    const noWait = await checkForUpdates().catch((err: unknown) => err)
+    expect((noWait as UpdateCheckTooSoonError).retryAfterSeconds).toBe(60)
   })
 
   it('notification reads default missing fields and pass the paging params', async () => {

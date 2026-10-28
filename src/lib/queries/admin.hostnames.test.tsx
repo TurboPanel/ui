@@ -20,8 +20,6 @@ import {
   useSaveInstanceHostnames,
   useSetInstanceTunnelToken,
   useTrustedProxies,
-  useUpgradeColocatedDaemon,
-  useUpgradeInstance,
   useUploadInstanceCertificate,
 } from './admin'
 
@@ -35,8 +33,6 @@ const api = vi.hoisted(() => ({
   saveInstanceAcmeSettings: vi.fn(),
   fetchInstanceUpdates: vi.fn(),
   fetchUpgradeActiveRun: vi.fn(),
-  requestInstanceUpdate: vi.fn(),
-  requestColocatedDaemonUpdate: vi.fn(),
   fetchInstanceDaemon: vi.fn(),
   fetchPlatformCa: vi.fn(),
   reconcilePlatformCaTrust: vi.fn(),
@@ -139,53 +135,20 @@ describe('instance hostname and update queries', () => {
 
     await expect(saveHostnames.result.current.run([])).resolves.toMatchObject({ ok: true })
     await expect(
-      upload.result.current.run({ label: 'edge', certPem: 'c', keyPem: 'k' }),
+      upload.result.current.run({ label: 'edge', certPem: 'c', keyPem: 'k' })
     ).resolves.toMatchObject({ ok: true })
     await expect(
-      attach.result.current.run({ id: 'cert-1', hosts: ['panel.example.com'] }),
+      attach.result.current.run({ id: 'cert-1', hosts: ['panel.example.com'] })
     ).resolves.toMatchObject({ ok: true })
-    await expect(
-      saveAcme.result.current.run({ contactEmail: 'a@b.c' }),
-    ).resolves.toMatchObject({ ok: true })
+    await expect(saveAcme.result.current.run({ contactEmail: 'a@b.c' })).resolves.toMatchObject({
+      ok: true,
+    })
     await expect(reconcile.result.current.run(undefined)).resolves.toMatchObject({ ok: true })
     await expect(tunnel.result.current.run('')).resolves.toMatchObject({ ok: true })
 
     expect(client.getQueryData(queryKeys.admin.instanceAcme)).toEqual({
       settings: { contactEmail: 'a@b.c' },
     })
-  })
-
-  it('waits for a control-plane and daemon update, including a restart and a missing daemon', async () => {
-    const wrapper = createWrapper()
-    api.fetchInstanceUpdates.mockResolvedValue(updatesPayload(installed))
-    api.requestInstanceUpdate.mockResolvedValue({ ok: true, dispatched: true })
-    api.requestColocatedDaemonUpdate.mockResolvedValue({ ok: true, dispatched: true })
-    const target = { version: '0.1.1', commit: 'abc' }
-    const before = '0.1.0:old'
-
-    const instance = renderHook(() => useUpgradeInstance(), { wrapper })
-    await expect(
-      instance.result.current.run({ target, before }),
-    ).resolves.toMatchObject({ ok: true, value: { kind: 'applied' } })
-
-    api.requestInstanceUpdate.mockRejectedValueOnce(new TypeError('Failed to fetch'))
-    await expect(
-      instance.result.current.run({ target, before }),
-    ).resolves.toMatchObject({ ok: true, value: { kind: 'applied' } })
-
-    api.requestInstanceUpdate.mockRejectedValueOnce(new Error('HTTP 422: refused'))
-    await expect(
-      instance.result.current.run({ target, before }),
-    ).resolves.toMatchObject({ ok: false })
-
-    api.fetchInstanceUpdates.mockResolvedValue(updatesPayload(null))
-    const daemon = renderHook(() => useUpgradeColocatedDaemon(), { wrapper })
-    await expect(
-      daemon.result.current.run({
-        target: { version: null, commit: null },
-        before: '0.1.0:old',
-      }),
-    ).resolves.toMatchObject({ ok: true, value: { kind: 'applied' } })
   })
 })
 
@@ -198,7 +161,7 @@ describe("Let's Encrypt terms guard before a hostnames save", () => {
     api.fetchInstanceAcmeSettings.mockReturnValue(
       new Promise((r) => {
         resolve = r
-      }),
+      })
     )
     const guard = renderHook(() => useLetsEncryptTermsGuard(), {
       wrapper: createWrapper(),
