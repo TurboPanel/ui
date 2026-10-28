@@ -394,6 +394,11 @@ export const queryKeys = {
       /** Connected Cloudflare accounts and their API tokens. */
       tunnelCarriers: ['org', orgId, 'tunnel-carriers'] as const,
 
+      /** Tunnels, where they run, and the hostnames each carries. */
+      tunnels: ['org', orgId, 'tunnels'] as const,
+      tunnelHostnames: (tunnelId: string) =>
+        ['org', orgId, 'tunnels', tunnelId, 'hostnames'] as const,
+
       /** The organization firewall: policy, typed rules, and each server's mode + preview. */
       firewall: {
         all: ['org', orgId, 'firewall'] as const,

@@ -11133,3 +11133,138 @@ export async function deleteTunnelBadge(
 export async function deleteTunnelCarrier(orgId: string, carrierId: string): Promise<{ ok: true }> {
   return await apiFetch(`${carriersPath(orgId)}/${carrierId}`, { method: 'DELETE' })
 }
+
+/** Where a tunnel runs: one server, the chosen servers, or every server of a datacenter. */
+export type TunnelPlacement = 'one' | 'chosen' | 'all'
+
+/** One server's connector for a tunnel: what is wanted and what it last reported. */
+export type TunnelPortal = {
+  serverId: string
+  /** `run` or `skip` (an all-servers tunnel leaves this server out). */
+  wanted: string
+  /** `unknown`, `connected`, `down` or `error`. */
+  reported: string
+  lastSeenAt: string | null
+  lastError: string | null
+  connectorVersion: string | null
+}
+
+export type TunnelRecord = {
+  id: string
+  name: string
+  provider: string
+  carrierId: string | null
+  placement: TunnelPlacement
+  datacenterId: string | null
+  /** `pending`, `active`, `attention` or `removing`. */
+  status: string
+  createdAt: string
+  portals: TunnelPortal[]
+  /** Servers that run a connector now, from the placement rules. */
+  carryingServerIds: string[]
+  warnings: string[]
+  doorwayCount: number
+}
+
+/** A hostname a tunnel carries, and whether a DNS name was made for it. */
+export type TunnelHostnameRecord = {
+  id: string
+  tunnelId: string
+  hostname: string
+  hostingId: string | null
+  /** True: only the tunnel and peer servers answer this name, applied at the site's next deploy. False: also a public name, lock off. */
+  isLocalOnly: boolean
+  /** `pending`, `live`, `attention` or `removing`. */
+  status: string
+  /** `created` when a DNS name was made, `none` when no zone the token can edit holds it. */
+  dns: 'created' | 'none'
+  createdAt: string
+}
+
+export type TunnelPlacementBody = {
+  placement: TunnelPlacement
+  /** `one` (exactly one) and `chosen` (at least one). */
+  serverIds?: string[]
+  /** `all` only: servers of the datacenter left out. */
+  exceptServerIds?: string[]
+  /** `all` only: the datacenter whose servers run it. */
+  datacenterId?: string
+}
+
+export type CreateTunnelBody = TunnelPlacementBody & { carrierId: string; name: string }
+
+function tunnelsPath(orgId: string): string {
+  return `${CLIENT_API}/organizations/${orgId}/tunnels`
+}
+
+export async function fetchTunnels(orgId: string): Promise<{ tunnels: TunnelRecord[] }> {
+  return await apiFetch(tunnelsPath(orgId))
+}
+
+/** **409** `tunnel_exists`, `tunnel_limit`, `badge_cannot_tunnel`, `server_never_carries`. */
+export async function createTunnel(
+  orgId: string,
+  body: CreateTunnelBody
+): Promise<{ tunnel: TunnelRecord }> {
+  return await apiFetch(tunnelsPath(orgId), { method: 'POST', body: JSON.stringify(body) })
+}
+
+export async function updateTunnelPlacement(
+  orgId: string,
+  tunnelId: string,
+  body: TunnelPlacementBody
+): Promise<{ tunnel: TunnelRecord }> {
+  return await apiFetch(`${tunnelsPath(orgId)}/${tunnelId}/placement`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  })
+}
+
+/** **409** `tunnel_in_use` while the tunnel still carries hostnames. */
+export async function deleteTunnel(orgId: string, tunnelId: string): Promise<{ ok: true }> {
+  return await apiFetch(`${tunnelsPath(orgId)}/${tunnelId}`, { method: 'DELETE' })
+}
+
+export async function fetchTunnelHostnames(
+  orgId: string,
+  tunnelId: string
+): Promise<{ hostnames: TunnelHostnameRecord[] }> {
+  return await apiFetch(`${tunnelsPath(orgId)}/${tunnelId}/hostnames`)
+}
+
+/** **409** `hostname_in_use`, `doorway_limit`, `badge_cannot_dns`, `tunnel_not_ready`. */
+export async function addTunnelHostname(
+  orgId: string,
+  tunnelId: string,
+  body: { hostname: string; isLocalOnly?: boolean }
+): Promise<{ hostname: TunnelHostnameRecord }> {
+  return await apiFetch(`${tunnelsPath(orgId)}/${tunnelId}/hostnames`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function removeTunnelHostname(
+  orgId: string,
+  tunnelId: string,
+  hostnameId: string
+): Promise<{ ok: true }> {
+  return await apiFetch(`${tunnelsPath(orgId)}/${tunnelId}/hostnames/${hostnameId}`, {
+    method: 'DELETE',
+  })
+}
+
+/** "This server never runs tunnels": `carry: false` keeps it out of every placement. */
+export async function setServerTunnelCarrying(
+  orgId: string,
+  serverId: string,
+  carry: boolean
+): Promise<{ serverId: string; carry: boolean }> {
+  return await apiFetch(
+    `${CLIENT_API}/organizations/${orgId}/servers/${serverId}/tunnel-carrying`,
+    {
+      method: 'PUT',
+      body: JSON.stringify({ carry }),
+    }
+  )
+}

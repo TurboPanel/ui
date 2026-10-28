@@ -129,6 +129,12 @@ export const ORG_AREAS = [
         hint: 'Cloudflare accounts and the API Tokens TurboPanel uses for tunnels',
       },
       {
+        id: 'tunnels',
+        label: 'Tunnels',
+        pathSegment: 'tunnels',
+        hint: 'Tunnels, the servers that run them and the hostnames they carry',
+      },
+      {
         id: 'firewall',
         label: 'Firewall',
         pathSegment: 'firewall',
@@ -491,6 +497,10 @@ export function networkReservedHref(orgId: string): `/${string}/network/reserved
 
 export function networkCloudflareHref(orgId: string): `/${string}/network/cloudflare` {
   return `/${orgId}/network/cloudflare`
+}
+
+export function networkTunnelsHref(orgId: string): `/${string}/network/tunnels` {
+  return `/${orgId}/network/tunnels`
 }
 
 export const SERVER_DETAIL_TAB_IDS = [
