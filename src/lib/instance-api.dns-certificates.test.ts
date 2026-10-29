@@ -36,7 +36,9 @@ describe('instance-api certificate order wrappers', () => {
   })
 
   it('orders, checks and retries by posting to the order paths', async () => {
-    fetchMock.mockResolvedValue(jsonResponse({ certificate: { id: 'c1' }, reused: false }))
+    fetchMock.mockImplementation(async () =>
+      jsonResponse({ certificate: { id: 'c1' }, reused: false })
+    )
     await orderDnsCertificate('org-1', { carrierId: 'k1', names: ['*.example.com'] })
     const orderInit = fetchMock.mock.calls[0]?.[1] as RequestInit
     expect(orderInit.method).toBe('POST')
