@@ -7,7 +7,7 @@ Third-party components remain under their own copyright and license terms and ar
 Third-party OS artwork under `assets/os/` is recorded separately in `assets/os/NOTICE.md` and is not licensed under this repository’s AGPL or the Apple App Store additional permission.
 
 <!-- lockfiles
-pnpm-lock.yaml sha256:0e79880f4012d1109ae8deadaac5c220bb38857b68ef38efe0908fbce68a911d
+pnpm-lock.yaml sha256:c4117c4bcdd64e55835fd1c1c2392e576c0f954fef5a004730f740916469a9d5
 -->
 
 ## Production dependencies
@@ -2164,7 +2164,7 @@ pnpm-lock.yaml sha256:0e79880f4012d1109ae8deadaac5c220bb38857b68ef38efe0908fbce6
 - Copyright: Josh Junon
 - Homepage: https://github.com/debug-js/debug#readme
 
-### decode-uri-component@0.5.0
+### decode-uri-component@0.5.1
 
 - License: MIT
 - Copyright: Sam Verschueren
