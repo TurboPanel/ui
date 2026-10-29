@@ -87,13 +87,13 @@ describe('TlsOverviewSection delete', () => {
 
   it('offers no Delete on the Organization CA and points to Rotate instead', () => {
     state.rows = [
-      certificate('ca', 'Organization CA', 'organization_ca'),
+      certificate('ca', 'Company root', 'organization_ca'),
       certificate('t2', 'two.example'),
     ]
     render(<TlsOverviewSection orgId="o1" />)
     expect(screen.getAllByText('Delete certificate')).toHaveLength(1)
     const hint = screen.getByText('Replace it with Rotate on the Organization CA panel.')
-    expect(hint.parentElement?.textContent).toContain('Organization CA')
+    expect(hint.parentElement?.textContent).toContain('Company root')
     expect(hint.parentElement?.textContent).not.toContain('two.example')
   })
 
