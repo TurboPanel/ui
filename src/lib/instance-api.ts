@@ -11048,6 +11048,10 @@ export type TunnelBadge = {
   status: string
   lastCheckedAt: string | null
   createdAt: string
+  /** Zones the person named for this token; every check probes them again. */
+  declaredZones: { id: string; name: string }[]
+  /** Plain-words things to look at: a token about to expire, a right Cloudflare refused. */
+  warnings: string[]
 }
 
 /** One connected Cloudflare account and the API tokens added to it. */
@@ -11130,10 +11134,13 @@ function choiceAccounts(value: unknown): TunnelAccountChoice[] {
   )
 }
 
+/** A zone the person names for an API Token: its Cloudflare id, and its name when Cloudflare may not tell us. */
+export type TunnelZoneBody = { id: string; name?: string }
+
 export async function addTunnelBadge(
   orgId: string,
   carrierId: string,
-  body: { label: string; token: string }
+  body: { label: string; token: string; zones?: TunnelZoneBody[] }
 ): Promise<{ badge: TunnelBadge; missing: string[] }> {
   return await apiFetch(`${carriersPath(orgId)}/${carrierId}/badges`, {
     method: 'POST',
@@ -11151,14 +11158,89 @@ export async function checkTunnelBadge(
   })
 }
 
+/** Name a zone the API Token covers; Cloudflare is asked with the token before it is kept. */
+export async function addTunnelBadgeZone(
+  orgId: string,
+  carrierId: string,
+  badgeId: string,
+  body: TunnelZoneBody
+): Promise<{ badge: TunnelBadge; missing: string[] }> {
+  return await apiFetch(`${carriersPath(orgId)}/${carrierId}/badges/${badgeId}/zones`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+/** What still needs an API Token: a tunnel, or a hostname whose DNS name this token made. */
+export type TunnelBadgeDependent = {
+  kind: 'tunnel' | 'hostname'
+  id: string
+  name: string
+  zone: string | null
+}
+
+/** **409** `badge_in_use`: no other API Token covers what this one does, and something depends on it. */
+export class BadgeInUseError extends Error {
+  readonly dependents: TunnelBadgeDependent[]
+  readonly total: number
+
+  constructor(path: string, dependents: TunnelBadgeDependent[], total: number) {
+    super(`${path} failed: ${formatFetchFailureDetail(409, 'badge_in_use')}`)
+    this.name = 'BadgeInUseError'
+    this.dependents = dependents
+    this.total = total
+  }
+}
+
+function badgeDependents(value: unknown): TunnelBadgeDependent[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((d: Record<string, unknown>) =>
+    (d?.kind === 'tunnel' || d?.kind === 'hostname') &&
+    typeof d.id === 'string' &&
+    typeof d.name === 'string'
+      ? [{ kind: d.kind, id: d.id, name: d.name, zone: typeof d.zone === 'string' ? d.zone : null }]
+      : []
+  )
+}
+
+/** A DELETE that can answer 409 `badge_in_use` with the list of what depends on the token. */
+async function deleteBadgeCall<T>(orgId: string, path: string): Promise<T> {
+  const response = await fetchWithStepUp(controlPlaneUrl(path), {
+    method: 'DELETE',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json', [ORG_ID_HEADER]: orgId },
+  })
+  const parsed = (await response.json().catch(() => null)) as Record<string, unknown> | null
+  if (response.ok) return parsed as T
+  const code = typeof parsed?.error === 'string' ? parsed.error : undefined
+  if (response.status === 409 && code === 'badge_in_use') {
+    const total = typeof parsed?.total === 'number' ? parsed.total : 0
+    throw new BadgeInUseError(path, badgeDependents(parsed?.dependents), total)
+  }
+  const explanation = errorExplanation(code, parsed?.message)
+  const detail = formatFetchFailureDetail(response.status, code)
+  throw new Error(`${path} failed: ${detail}${explanation ? ` — ${explanation}` : ''}`)
+}
+
 export async function deleteTunnelBadge(
   orgId: string,
   carrierId: string,
   badgeId: string
 ): Promise<{ ok: true }> {
-  return await apiFetch(`${carriersPath(orgId)}/${carrierId}/badges/${badgeId}`, {
-    method: 'DELETE',
-  })
+  return await deleteBadgeCall(orgId, `${carriersPath(orgId)}/${carrierId}/badges/${badgeId}`)
+}
+
+/** Stop naming a zone for an API Token; **409** `badge_in_use` while hostnames depend on it. */
+export async function removeTunnelBadgeZone(
+  orgId: string,
+  carrierId: string,
+  badgeId: string,
+  zoneId: string
+): Promise<{ badge: TunnelBadge; missing: string[] }> {
+  return await deleteBadgeCall(
+    orgId,
+    `${carriersPath(orgId)}/${carrierId}/badges/${badgeId}/zones/${encodeURIComponent(zoneId)}`
+  )
 }
 
 /** **409** `carrier_in_use` while a tunnel still uses the account. */
