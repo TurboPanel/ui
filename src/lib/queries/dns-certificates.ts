@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { useEffect, useRef } from 'react'
 import {
   checkDnsCertificate,
@@ -47,6 +47,11 @@ export function useDnsCertificates(orgId: string, options?: Readonly<{ enabled?:
   })
 }
 
+async function nudge(orgId: string, ids: readonly string[], queryClient: QueryClient) {
+  await Promise.all(ids.map((id) => checkDnsCertificate(orgId, id).catch(() => undefined)))
+  await queryClient.invalidateQueries({ queryKey: queryKeys.org(orgId).dnsCertificates })
+}
+
 /**
  * Gives every running order a step at a modest interval while the screen is
  * open, the same call as "Check Now". The server takes each row for one caller
@@ -63,14 +68,9 @@ export function useAdvanceRunningOrders(orgId: string, runningIds: readonly stri
     const timer = setInterval(() => {
       if (busy.current) return
       busy.current = true
-      void (async () => {
-        try {
-          await Promise.all(ids.map((id) => checkDnsCertificate(orgId, id).catch(() => undefined)))
-          await queryClient.invalidateQueries({ queryKey: queryKeys.org(orgId).dnsCertificates })
-        } finally {
-          busy.current = false
-        }
-      })()
+      void nudge(orgId, ids, queryClient).finally(() => {
+        busy.current = false
+      })
     }, ORDER_NUDGE_MS)
     return () => clearInterval(timer)
   }, [orgId, key, queryClient])
