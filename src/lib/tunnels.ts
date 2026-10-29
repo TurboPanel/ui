@@ -2,11 +2,11 @@
  * Cloudflare accounts and their API tokens (the carrier and badge routes).
  * Pure rules and copy; the transport lives in `instance-api.ts`.
  */
-import type { TunnelBadge } from '@/lib/instance-api'
+import type { TunnelBadge, TunnelBadgeDependent } from '@/lib/instance-api'
 import type { BadgeTone } from '@/components/ui/badge'
 
 export const CARRIER_LIMIT = 10
-export const BADGE_LIMIT = 5
+export const BADGE_LIMIT = 50
 export const TUNNEL_LIMIT = 50
 
 const GLOBAL_KEY_COPY =
@@ -87,6 +87,17 @@ const ERROR_COPY: Readonly<Record<string, string>> = {
   tunnel_exists: 'A tunnel with this name already exists. Choose another name.',
   tunnel_limit: `An organization can have up to ${TUNNEL_LIMIT} tunnels. Remove one to add another.`,
   tunnel_in_use: 'This tunnel still carries hostnames. Remove them first.',
+  tunnel_removing: 'This tunnel is being removed. Use another tunnel, or wait until it is gone.',
+  badge_in_use:
+    'Other API Tokens do not cover everything this one does. Add one that does first, or remove what depends on it.',
+  zone_invalid: 'Check the zone id and name, then try again.',
+  zone_not_reachable:
+    'This API Token cannot read DNS for that zone. It needs Zone · DNS · Edit on the zone, and the zone id has to be right.',
+  zone_wrong_account:
+    'That zone belongs to another Cloudflare account. A tunnel can only use zones of its own account.',
+  zone_name_needed:
+    'Cloudflare did not tell us the name of that zone. Type the zone name as well, for example example.com.',
+  zone_limit: 'An API Token can name up to 50 zones.',
   tunnel_not_ready: 'This tunnel is not ready at Cloudflare yet. Wait a moment, then try again.',
   badge_cannot_tunnel:
     'No API Token on this Cloudflare account can manage tunnels. Add or fix one under Cloudflare Accounts.',
@@ -112,7 +123,13 @@ const ERROR_COPY: Readonly<Record<string, string>> = {
 }
 
 /** Codes where the panel's own sentence is worth showing after the dash. */
-const KEEP_SERVER_TEXT = new Set(['badge_not_useful', 'provider_unavailable'])
+const KEEP_SERVER_TEXT = new Set([
+  'badge_not_useful',
+  'provider_unavailable',
+  // These say which zone or permission is missing, so the panel's own sentence is the useful one.
+  'badge_cannot_dns',
+  'badge_cannot_tunnel',
+])
 
 /** The error code and the text after the dash in a failed-call message. */
 export function parseFailure(raw: string): { code?: string; text?: string } {
@@ -127,8 +144,8 @@ export function parseFailure(raw: string): { code?: string; text?: string } {
 export function tunnelErrorMessage(err: unknown, fallback: string): string {
   const raw = err instanceof Error ? err.message : ''
   const { code, text } = parseFailure(raw)
-  if (code && ERROR_COPY[code]) return ERROR_COPY[code]
   if (code && KEEP_SERVER_TEXT.has(code) && text) return text
+  if (code && ERROR_COPY[code]) return ERROR_COPY[code]
   if (code === 'provider_unavailable') {
     return 'Cloudflare could not be reached just now. Try again in a moment.'
   }
@@ -151,4 +168,37 @@ export function tunnelDeployRefusalMessage(
     return `Update this server before deploying a site with a tunnel-only name${names}. It installs on its own at the next update check.`
   }
   return null
+}
+
+/** "Still needed for: the tunnel web; the hostname blog.example.com (example.com) and 3 more." */
+export function dependentsSummary(
+  dependents: readonly TunnelBadgeDependent[],
+  total: number
+): string {
+  const listed = dependents.slice(0, 5).map((d) => {
+    if (d.kind === 'tunnel') return `the tunnel ${d.name}`
+    return d.zone ? `the hostname ${d.name} (${d.zone})` : `the hostname ${d.name}`
+  })
+  const more = Math.max(total, dependents.length) - listed.length
+  const tail = more > 0 ? ` and ${more} more` : ''
+  return `Still needed for ${listed.join('; ')}${tail}. Add another API Token that covers it first.`
+}
+
+const ZONE_ID = /^[A-Za-z0-9_-]{1,64}$/
+const ZONE_NAME = /^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/
+
+/** A zone the person types, checked before sending; null means it is fine. */
+export function zoneProblem(rawId: string, rawName: string): string | null {
+  const id = rawId.trim()
+  const name = rawName.trim().toLowerCase()
+  if (id.length === 0) return 'Paste the Zone ID from the zone page in Cloudflare.'
+  if (!ZONE_ID.test(id)) return 'A Zone ID is letters and numbers only, without spaces.'
+  if (name.length > 0 && !ZONE_NAME.test(name)) return 'A zone name looks like example.com.'
+  return null
+}
+
+/** The zone body to send: the name is left out when it was not typed. */
+export function zoneBody(rawId: string, rawName: string): { id: string; name?: string } {
+  const name = rawName.trim().toLowerCase()
+  return name.length > 0 ? { id: rawId.trim(), name } : { id: rawId.trim() }
 }

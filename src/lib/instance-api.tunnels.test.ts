@@ -3,6 +3,9 @@ import { setActiveOrganizationId } from '@/lib/org-context'
 import {
   AccountChoiceNeededError,
   addTunnelBadge,
+  addTunnelBadgeZone,
+  BadgeInUseError,
+  removeTunnelBadgeZone,
   checkTunnelBadge,
   connectTunnelCarrier,
   deleteTunnelBadge,
@@ -120,5 +123,53 @@ describe('instance-api Cloudflare account wrappers', () => {
     expect(lastCall().url).toMatch(/\/carriers\/c1\/badges\/b1$/)
     await deleteTunnelCarrier('org-1', 'c1')
     expect(lastCall().url).toMatch(/\/carriers\/c1$/)
+  })
+  it('names a zone for a token and stops naming it', async () => {
+    fetchMock.mockImplementation(async () => jsonResponse({ badge: {}, missing: [] }))
+    await addTunnelBadgeZone('org-1', 'c1', 'b1', { id: 'z9', name: 'shop.example.org' })
+    expect(lastCall().url).toContain('/carriers/c1/badges/b1/zones')
+    expect(lastCall().init.method).toBe('POST')
+    expect(JSON.parse(String(lastCall().init.body))).toEqual({ id: 'z9', name: 'shop.example.org' })
+    await removeTunnelBadgeZone('org-1', 'c1', 'b1', 'z 9')
+    expect(lastCall().init.method).toBe('DELETE')
+    expect(lastCall().url).toMatch(/\/badges\/b1\/zones\/z%209$/)
+  })
+
+  it('sends the zones named while adding a token', async () => {
+    fetchMock.mockImplementation(async () => jsonResponse({ badge: {}, missing: [] }, 201))
+    await addTunnelBadge('org-1', 'c1', {
+      label: 'L',
+      token: `cfat_${'x'.repeat(8)}`,
+      zones: [{ id: 'z1' }],
+    })
+    expect(JSON.parse(String(lastCall().init.body)).zones).toEqual([{ id: 'z1' }])
+  })
+
+  it('carries what depends on a token when removing it is refused', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(
+        {
+          error: 'badge_in_use',
+          total: 2,
+          dependents: [
+            { kind: 'tunnel', id: 't1', name: 'web', zone: null },
+            { kind: 'hostname', id: 'h1', name: 'blog.example.com', zone: 'example.com' },
+            { kind: 'other', id: 'x', name: 'dropped' },
+          ],
+        },
+        409
+      )
+    )
+    const failure = await deleteTunnelBadge('org-1', 'c1', 'b1').catch((e: unknown) => e)
+    expect(failure).toBeInstanceOf(BadgeInUseError)
+    const refused = failure as BadgeInUseError
+    expect(refused.total).toBe(2)
+    expect(refused.dependents.map((d) => d.name)).toEqual(['web', 'blog.example.com'])
+    expect(refused.message).toMatch(/badge_in_use/)
+  })
+
+  it('keeps the usual message for any other refusal of a removal', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'Not found' }, 404))
+    await expect(deleteTunnelBadge('org-1', 'c1', 'b1')).rejects.toThrow(/HTTP 404/)
   })
 })
