@@ -35,8 +35,10 @@ function tlsTitle(row: TlsRecord): string {
   return row.name?.trim() || row.metadata.dnsNames[0] || row.id
 }
 
-function tlsSourceLabel(source: string): string {
-  switch (source) {
+function tlsSourceLabel(row: TlsRecord): string {
+  // A certificate TurboPanel orders by DNS challenge is stored as a library upload.
+  if (row.metadata.acme?.managedBy === 'panel') return "Let's Encrypt"
+  switch (row.source) {
     case 'organization_ca':
       return 'Organization CA'
     case 'upload':
@@ -48,7 +50,7 @@ function tlsSourceLabel(source: string): string {
     case 'provider_origin':
       return 'Cloudflare Origin'
     default:
-      return source
+      return row.source
   }
 }
 
@@ -100,7 +102,7 @@ function TlsCertificateList({
     <View key={row.id} style={panelStyles.detailCard}>
       <Text style={panelStyles.detailTitle}>{tlsTitle(row)}</Text>
       <Text style={panelStyles.muted}>
-        {tlsSourceLabel(row.source)} · {tlsStatusLabel(row)}
+        {tlsSourceLabel(row)} · {tlsStatusLabel(row)}
       </Text>
       <Text style={styles.sans}>{formatSans(row)}</Text>
       {tlsDateLines(row).map((line) => (

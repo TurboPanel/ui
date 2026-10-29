@@ -3841,7 +3841,8 @@ export type TlsMetadata = {
     lastIssuedAt?: string
     /** Expiry of the certificate Caddy is serving, as the daemon's probe read it (ISO 8601). */
     notAfter?: string
-    managedBy?: 'caddy'
+    /** `panel`: TurboPanel orders it itself with a DNS challenge (the row's source stays `upload`). */
+    managedBy?: 'caddy' | 'panel'
   }
 }
 

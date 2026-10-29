@@ -12,7 +12,7 @@ import {
   useOrderDnsCertificate,
   useRetryDnsCertificate,
 } from '@/lib/queries/dns-certificates'
-import { createAppQueryClient } from '@/lib/query-client'
+import { createAppQueryClient, queryKeys } from '@/lib/query-client'
 
 const api = vi.hoisted(() => ({
   fetchDnsCertificates: vi.fn(),
@@ -71,6 +71,32 @@ describe('certificate order queries', () => {
     api.fetchDnsCertificates.mockRejectedValue(new Error('boom'))
     const failed = renderHook(() => useDnsCertificates(orgId), { wrapper: createWrapper() })
     await waitFor(() => expect(failed.result.current.isError).toBe(true))
+  })
+
+  it('refreshes the library when a running order finishes', async () => {
+    api.fetchDnsCertificates.mockResolvedValueOnce({
+      certificates: [{ id: 'c1', status: 'pending' }],
+    })
+    const client = createAppQueryClient()
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
+    const { result } = renderHook(() => useDnsCertificates(orgId), {
+      wrapper: createWrapper(client),
+    })
+    await waitFor(() => expect(result.current.data?.certificates[0]?.status).toBe('pending'))
+    const libraryRefreshes = () =>
+      invalidate.mock.calls.filter(
+        ([filters]) =>
+          JSON.stringify(filters?.queryKey) === JSON.stringify(queryKeys.org(orgId).tls)
+      ).length
+    expect(libraryRefreshes()).toBe(0)
+
+    api.fetchDnsCertificates.mockResolvedValueOnce({
+      certificates: [{ id: 'c1', status: 'ready' }],
+    })
+    await act(async () => {
+      await result.current.refetch()
+    })
+    await waitFor(() => expect(libraryRefreshes()).toBe(1))
   })
 
   it('orders, checks and retries, then refreshes the lists', async () => {
