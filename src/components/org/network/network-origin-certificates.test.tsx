@@ -113,8 +113,8 @@ describe('the origin certificates of a Cloudflare account', () => {
     // A replaced certificate stays listed until it is revoked, with the reason.
     expect(screen.getByText('old.example.com')).toBeTruthy()
     expect(screen.getByText('kept.example.com')).toBeTruthy()
-    expect(screen.getAllByText('Replaced').length).toBe(2)
-    expect(screen.getAllByText(/revoked once no site uses it/).length).toBe(2)
+    expect(screen.getAllByText('Replaced')).toHaveLength(2)
+    expect(screen.getAllByText(/revoked once no site uses it/)).toHaveLength(2)
   })
 
   it('shows a loading line, and a plain error when the list cannot be loaded', () => {
