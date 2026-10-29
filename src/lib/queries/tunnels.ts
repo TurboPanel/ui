@@ -1,6 +1,9 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   addTunnelBadge,
+  addTunnelBadgeZone,
+  removeTunnelBadgeZone,
+  type TunnelZoneBody,
   checkTunnelBadge,
   connectTunnelCarrier,
   deleteTunnelBadge,
@@ -49,7 +52,8 @@ export function useConnectTunnelCarrier(orgId: string) {
 export function useAddTunnelBadge(orgId: string, carrierId: string) {
   const invalidate = useInvalidateCarriers(orgId)
   return useApiMutation({
-    mutationFn: (body: { label: string; token: string }) => addTunnelBadge(orgId, carrierId, body),
+    mutationFn: (body: { label: string; token: string; zones?: TunnelZoneBody[] }) =>
+      addTunnelBadge(orgId, carrierId, body),
     retry: false,
     onSuccess: invalidate,
     fallbackError: 'Failed to add the API Token',
@@ -63,6 +67,26 @@ export function useCheckTunnelBadge(orgId: string, carrierId: string) {
     retry: false,
     onSuccess: invalidate,
     fallbackError: 'Failed to check the API Token',
+  })
+}
+
+export function useAddTunnelBadgeZone(orgId: string, carrierId: string, badgeId: string) {
+  const invalidate = useInvalidateCarriers(orgId)
+  return useApiMutation({
+    mutationFn: (body: TunnelZoneBody) => addTunnelBadgeZone(orgId, carrierId, badgeId, body),
+    retry: false,
+    onSuccess: invalidate,
+    fallbackError: 'Failed to add the zone',
+  })
+}
+
+export function useRemoveTunnelBadgeZone(orgId: string, carrierId: string, badgeId: string) {
+  const invalidate = useInvalidateCarriers(orgId)
+  return useApiMutation({
+    mutationFn: (zoneId: string) => removeTunnelBadgeZone(orgId, carrierId, badgeId, zoneId),
+    retry: false,
+    onSuccess: invalidate,
+    fallbackError: 'Failed to remove the zone',
   })
 }
 
