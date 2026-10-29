@@ -11219,7 +11219,8 @@ async function deleteBadgeCall<T>(orgId: string, path: string): Promise<T> {
   }
   const explanation = errorExplanation(code, parsed?.message)
   const detail = formatFetchFailureDetail(response.status, code)
-  throw new Error(`${path} failed: ${detail}${explanation ? ` — ${explanation}` : ''}`)
+  const suffix = explanation ? ` — ${explanation}` : ''
+  throw new Error(`${path} failed: ${detail}${suffix}`)
 }
 
 export async function deleteTunnelBadge(
