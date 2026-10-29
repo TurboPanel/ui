@@ -14,14 +14,16 @@ import {
   SectionPanel,
   TextField,
 } from '@/components/ui'
-import { AccountChoiceNeededError } from '@/lib/instance-api'
+import { AccountChoiceNeededError, BadgeInUseError } from '@/lib/instance-api'
 import type { TunnelAccountChoice, TunnelBadge, TunnelCarrier } from '@/lib/instance-api'
 import {
   useAddTunnelBadge,
+  useAddTunnelBadgeZone,
   useCheckTunnelBadge,
   useConnectTunnelCarrier,
   useDeleteTunnelBadge,
   useDeleteTunnelCarrier,
+  useRemoveTunnelBadgeZone,
   useTunnelCarriers,
 } from '@/lib/queries/tunnels'
 import { useCanState } from '@/lib/query-client'
@@ -29,17 +31,26 @@ import { spacing } from '@/lib/theme'
 import {
   capabilitySummary,
   checkedLabel,
+  dependentsSummary,
   expiryLabel,
   statusLabel,
   statusTone,
   tokenKindLabel,
   tokenProblem,
   tunnelErrorMessage,
+  zoneBody,
+  zoneProblem,
 } from '@/lib/tunnels'
 import { NetworkOriginCertificates } from './network-origin-certificates'
 
 function missingLine(missing: readonly string[]): string {
   return `This API Token still needs: ${missing.join(', ')}.`
+}
+
+/** A refusal in words; a token others do not cover lists what still needs it. */
+function blockedMessage(cause: unknown, fallback: string): string {
+  if (cause instanceof BadgeInUseError) return dependentsSummary(cause.dependents, cause.total)
+  return tunnelErrorMessage(cause, fallback)
 }
 
 function ErrorLine({ message }: Readonly<{ message: string | null }>) {
@@ -171,6 +182,10 @@ function ConnectPanel({ orgId }: Readonly<{ orgId: string }>) {
         Paste an API Token. TurboPanel finds the Cloudflare account it belongs to. Account-owned and
         user-owned tokens both work. A Global API Key does not.
       </Text>
+      <Text style={panelStyles.muted}>
+        A hostname you add to a tunnel has to sit in a zone of the same Cloudflare account. DNS can
+        use separate API Tokens, one for each zone or group of zones: add them to the account below.
+      </Text>
       <ErrorLine message={error} />
       {done ? <InlineNotice title={done} /> : null}
       <TokenFields
@@ -226,7 +241,7 @@ function BadgeRow({
   async function runRemove() {
     onError(null)
     const result = await remove.run(badge.id)
-    if (!result.ok) onError(tunnelErrorMessage(result.cause, 'Failed to remove the API Token'))
+    if (!result.ok) onError(blockedMessage(result.cause, 'Failed to remove the API Token'))
   }
 
   return (
@@ -265,6 +280,203 @@ function BadgeRow({
         {expiry ? `. ${expiry}` : ''}
       </Text>
       {missing.length > 0 ? <Text style={panelStyles.muted}>{missingLine(missing)}</Text> : null}
+      {(badge.warnings ?? []).map((warning) => (
+        <InlineNotice key={warning} title={warning} />
+      ))}
+      <ZonesBlock
+        orgId={orgId}
+        carrierId={carrierId}
+        badge={badge}
+        disabled={pending || busy}
+        onError={onError}
+      />
+    </View>
+  )
+}
+
+/** The zones the person named for a token, and a way to name another. */
+function ZonesBlock({
+  orgId,
+  carrierId,
+  badge,
+  disabled,
+  onError,
+}: Readonly<{
+  orgId: string
+  carrierId: string
+  badge: TunnelBadge
+  disabled: boolean
+  onError: (message: string | null) => void
+}>) {
+  const zones = badge.declaredZones ?? []
+  return (
+    <View style={styles.list}>
+      {zones.length > 0 ? (
+        <Text style={panelStyles.muted}>
+          Zones you named for this API Token. Every check looks at them again.
+        </Text>
+      ) : null}
+      {zones.map((zone) => (
+        <ZoneRow
+          key={zone.id}
+          orgId={orgId}
+          carrierId={carrierId}
+          badgeId={badge.id}
+          zone={zone}
+          disabled={disabled}
+          onError={onError}
+        />
+      ))}
+      <AddZoneForm
+        orgId={orgId}
+        carrierId={carrierId}
+        badgeId={badge.id}
+        disabled={disabled}
+        onError={onError}
+      />
+    </View>
+  )
+}
+
+function ZoneRow({
+  orgId,
+  carrierId,
+  badgeId,
+  zone,
+  disabled,
+  onError,
+}: Readonly<{
+  orgId: string
+  carrierId: string
+  badgeId: string
+  zone: { id: string; name: string }
+  disabled: boolean
+  onError: (message: string | null) => void
+}>) {
+  const remove = useRemoveTunnelBadgeZone(orgId, carrierId, badgeId)
+
+  async function run() {
+    onError(null)
+    const result = await remove.run(zone.id)
+    if (!result.ok) onError(blockedMessage(result.cause, 'Failed to remove the zone'))
+  }
+
+  return (
+    <View style={styles.titleRow}>
+      <Text style={panelStyles.detailLine}>{zone.name || 'Zone'}</Text>
+      <MonoText>{zone.id}</MonoText>
+      <ConfirmButton
+        label="Remove Zone"
+        confirmLabel="Remove Zone"
+        prompt="Stop naming this zone for the API Token? If the token can still reach it, nothing changes."
+        stacked
+        busy={remove.isPending}
+        disabled={disabled}
+        onConfirm={() => void run()}
+      />
+    </View>
+  )
+}
+
+/**
+ * A token limited to one zone is usually not allowed to list zones, so the
+ * person names the zone: its id from the zone page in Cloudflare, and its name
+ * only if Cloudflare asks for it. Cloudflare is asked with the token before the
+ * zone is kept.
+ */
+function AddZoneForm({
+  orgId,
+  carrierId,
+  badgeId,
+  disabled,
+  onError,
+}: Readonly<{
+  orgId: string
+  carrierId: string
+  badgeId: string
+  disabled: boolean
+  onError: (message: string | null) => void
+}>) {
+  const [open, setOpen] = useState(false)
+  const [zoneId, setZoneId] = useState('')
+  const [zoneName, setZoneName] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const add = useAddTunnelBadgeZone(orgId, carrierId, badgeId)
+  const problem = zoneId.length > 0 || zoneName.length > 0 ? zoneProblem(zoneId, zoneName) : null
+  const canSend = !add.isPending && zoneId.trim().length > 0 && !problem
+
+  async function send() {
+    setError(null)
+    onError(null)
+    const result = await add.run(zoneBody(zoneId, zoneName))
+    if (result.ok) {
+      setZoneId('')
+      setZoneName('')
+      setOpen(false)
+      return
+    }
+    setError(tunnelErrorMessage(result.cause, 'Failed to add the zone'))
+  }
+
+  if (!open) {
+    return (
+      <ButtonRow>
+        <Button
+          label="Add Zone"
+          size="sm"
+          disabled={disabled}
+          onPress={() => setOpen(true)}
+          accessibilityLabel="Name a zone this API Token covers"
+        />
+      </ButtonRow>
+    )
+  }
+  return (
+    <View style={styles.form}>
+      <ErrorLine message={error} />
+      <TextField
+        label="Zone ID"
+        value={zoneId}
+        onChangeText={setZoneId}
+        editable={!add.isPending}
+        error={problem && zoneId.trim().length === 0 ? problem : null}
+        hint="From the zone's Overview page in Cloudflare."
+        accessibilityLabel="Zone ID"
+        autoCapitalize="none"
+        autoCorrect={false}
+        mono
+      />
+      <TextField
+        label="Zone Name (only if asked)"
+        placeholder="example.com"
+        value={zoneName}
+        onChangeText={setZoneName}
+        editable={!add.isPending}
+        error={problem && zoneId.trim().length > 0 ? problem : null}
+        accessibilityLabel="Zone name"
+        autoCapitalize="none"
+        autoCorrect={false}
+      />
+      <ButtonRow>
+        <Button
+          label="Check And Add"
+          variant="primary"
+          size="sm"
+          busy={add.isPending}
+          disabled={!canSend}
+          onPress={() => void send()}
+          accessibilityLabel="Check and add the zone"
+        />
+        <Button
+          label="Cancel"
+          size="sm"
+          disabled={add.isPending}
+          onPress={() => {
+            setOpen(false)
+            setError(null)
+          }}
+        />
+      </ButtonRow>
     </View>
   )
 }
@@ -277,17 +489,29 @@ function AddBadgeForm({
   const [open, setOpen] = useState(false)
   const [label, setLabel] = useState('')
   const [token, setToken] = useState('')
+  const [zoneId, setZoneId] = useState('')
+  const [zoneName, setZoneName] = useState('')
   const [error, setError] = useState<string | null>(null)
   const add = useAddTunnelBadge(orgId, carrierId)
   const problem = token.length > 0 ? tokenProblem(token) : null
-  const canSend = !add.isPending && label.trim().length > 0 && token.trim().length > 0 && !problem
+  const named = zoneId.trim().length > 0 || zoneName.trim().length > 0
+  const zoneIssue = named ? zoneProblem(zoneId, zoneName) : null
+  const canSend =
+    !add.isPending &&
+    label.trim().length > 0 &&
+    token.trim().length > 0 &&
+    !problem &&
+    zoneIssue === null
 
   async function send() {
     setError(null)
-    const result = await add.run({ label: label.trim(), token: token.trim() })
+    const zones = named ? [zoneBody(zoneId, zoneName)] : undefined
+    const result = await add.run({ label: label.trim(), token: token.trim(), zones })
     if (result.ok) {
       setLabel('')
       setToken('')
+      setZoneId('')
+      setZoneName('')
       setOpen(false)
       return
     }
@@ -317,6 +541,32 @@ function AddBadgeForm({
         onToken={setToken}
         disabled={add.isPending}
         tokenError={problem}
+      />
+      <Text style={panelStyles.muted}>
+        A token limited to one zone, for DNS only? Name the zone it covers, because Cloudflare does
+        not let such a token list zones. Leave both empty for a token that can.
+      </Text>
+      <TextField
+        label="Zone ID (optional)"
+        value={zoneId}
+        onChangeText={setZoneId}
+        editable={!add.isPending}
+        error={zoneIssue && zoneId.trim().length === 0 ? zoneIssue : null}
+        accessibilityLabel="Zone ID"
+        autoCapitalize="none"
+        autoCorrect={false}
+        mono
+      />
+      <TextField
+        label="Zone Name (only if asked)"
+        placeholder="example.com"
+        value={zoneName}
+        onChangeText={setZoneName}
+        editable={!add.isPending}
+        error={zoneIssue && zoneId.trim().length > 0 ? zoneIssue : null}
+        accessibilityLabel="Zone name"
+        autoCapitalize="none"
+        autoCorrect={false}
       />
       <ButtonRow>
         <Button

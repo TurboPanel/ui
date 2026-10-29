@@ -2,12 +2,15 @@ import { describe, expect, it } from 'vitest'
 import {
   capabilitySummary,
   checkedLabel,
+  dependentsSummary,
   expiryLabel,
   statusLabel,
   statusTone,
   tokenKindLabel,
   tokenProblem,
   tunnelErrorMessage,
+  zoneBody,
+  zoneProblem,
 } from './tunnels'
 
 describe('tokenProblem', () => {
@@ -77,7 +80,7 @@ describe('tunnelErrorMessage', () => {
     expect(tunnelErrorMessage(err('HTTP 409: carrier_in_use'), 'f')).toMatch(/still has tunnels/)
     expect(tunnelErrorMessage(err('HTTP 409: badge_exists — x'), 'f')).toMatch(/already added/)
     expect(tunnelErrorMessage(err('HTTP 409: carrier_limit'), 'f')).toMatch(/up to 10/)
-    expect(tunnelErrorMessage(err('HTTP 409: badge_limit'), 'f')).toMatch(/up to 5/)
+    expect(tunnelErrorMessage(err('HTTP 409: badge_limit'), 'f')).toMatch(/up to 50/)
     expect(tunnelErrorMessage(err('HTTP 400: badge_rejected'), 'f')).toMatch(/did not accept/)
   })
   it('maps the account refusals', () => {
@@ -128,5 +131,67 @@ describe('tunnelErrorMessage', () => {
   it('falls back for anything else', () => {
     expect(tunnelErrorMessage(new Error('boom'), 'Fallback')).toBe('Fallback')
     expect(tunnelErrorMessage('x', 'Fallback')).toBe('Fallback')
+  })
+})
+
+describe('several API Tokens on one account', () => {
+  const err = (detail: string) => new Error(`/x failed: ${detail}`)
+
+  it("shows the panel's own sentence when it says which zone or permission is missing", () => {
+    expect(
+      tunnelErrorMessage(
+        err(
+          'HTTP 409: badge_cannot_dns — No API Token on this Carrier covers DNS for example.com.'
+        ),
+        'f'
+      )
+    ).toBe('No API Token on this Carrier covers DNS for example.com.')
+    // Without the panel's sentence the fixed words still say what to do.
+    expect(tunnelErrorMessage(err('HTTP 409: badge_cannot_dns'), 'f')).toMatch(/can edit DNS there/)
+    expect(tunnelErrorMessage(err('HTTP 409: badge_cannot_tunnel'), 'f')).toMatch(/manage tunnels/)
+  })
+
+  it('maps the zone refusals and the removing tunnel', () => {
+    expect(tunnelErrorMessage(err('HTTP 400: zone_wrong_account'), 'f')).toMatch(
+      /another Cloudflare/
+    )
+    expect(tunnelErrorMessage(err('HTTP 400: zone_name_needed'), 'f')).toMatch(/Type the zone name/)
+    expect(tunnelErrorMessage(err('HTTP 400: zone_not_reachable'), 'f')).toMatch(
+      /Zone · DNS · Edit/
+    )
+    expect(tunnelErrorMessage(err('HTTP 409: zone_limit'), 'f')).toMatch(/up to 50/)
+    expect(tunnelErrorMessage(err('HTTP 409: tunnel_removing'), 'f')).toMatch(/being removed/)
+    expect(tunnelErrorMessage(err('HTTP 409: badge_in_use'), 'f')).toMatch(/Add one that does/)
+  })
+
+  it('lists what still needs a token, a few by name and the rest counted', () => {
+    const text = dependentsSummary(
+      [
+        { kind: 'tunnel', id: 't', name: 'web', zone: null },
+        { kind: 'hostname', id: 'h', name: 'blog.example.com', zone: 'example.com' },
+        { kind: 'hostname', id: 'h2', name: 'bare.dev', zone: null },
+      ],
+      10
+    )
+    expect(text).toContain(
+      'the tunnel web; the hostname blog.example.com (example.com); the hostname bare.dev'
+    )
+    expect(text).toContain('and 7 more')
+    expect(
+      dependentsSummary([{ kind: 'tunnel', id: 't', name: 'web', zone: null }], 1)
+    ).not.toContain('more')
+  })
+
+  it('checks a typed zone and leaves the name out unless it was typed', () => {
+    expect(zoneProblem('', '')).toMatch(/Zone ID/)
+    expect(zoneProblem('not an id', '')).toMatch(/letters and numbers/)
+    expect(zoneProblem('abc123', 'not a zone')).toMatch(/example.com/)
+    expect(zoneProblem('abc123', '')).toBeNull()
+    expect(zoneProblem(' abc123 ', 'Docs.Example.net')).toBeNull()
+    expect(zoneBody(' abc123 ', '')).toEqual({ id: 'abc123' })
+    expect(zoneBody('abc123', ' Docs.Example.net ')).toEqual({
+      id: 'abc123',
+      name: 'docs.example.net',
+    })
   })
 })
