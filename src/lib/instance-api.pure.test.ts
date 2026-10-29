@@ -4,6 +4,7 @@ import {
   DATABASE_NOT_FOUND_ERROR,
   DeployHealthCheckMissingError,
   DeployResourceLimitExceededError,
+  DeployTunnelRefusedError,
   DEV_SYNC_WEB_AVAILABLE,
   FABRIC_RECONCILE_FAILED_ERROR,
   FABRIC_RECONCILE_PENDING_ERROR,
@@ -147,7 +148,6 @@ describe('formatEntityMetricId', () => {
       formatEntityMetricId({ scope: 'diagnostics', entityId: 'nope', field: 'averageFrequencyMHz' })
     ).toThrow()
   })
-
 })
 
 describe('toRelayRecord', () => {
@@ -302,9 +302,9 @@ describe('formatServerDeleteBlockedError', () => {
     expect(formatBlockedDatabaseReason('analytics', 'primary_here')).toBe(
       'Database "analytics" has its primary copy on this server. Promote another member or delete the database first.'
     )
-    expect(formatBlockedEnvironmentReason('Shop', 'staging', ['Worker 2'], 'present_elsewhere')).toBe(
-      'App "Shop / staging" also runs on "Worker 2". Move or delete it first.'
-    )
+    expect(
+      formatBlockedEnvironmentReason('Shop', 'staging', ['Worker 2'], 'present_elsewhere')
+    ).toBe('App "Shop / staging" also runs on "Worker 2". Move or delete it first.')
     expect(
       formatServerDeleteBlockedError(
         new ServerDeleteBlockedError(
@@ -463,7 +463,7 @@ describe('fetch wrappers (mocked fetch)', () => {
         password: 'pw',
         superadminEmail: 'admin@example.com',
         superadminPassword: 'admin-pw',
-      }),
+      })
     ).resolves.toEqual({
       userId: null,
       email: null,
@@ -523,7 +523,7 @@ describe('fetch wrappers (mocked fetch)', () => {
         runtime: 'workers',
         isSignupEnabled: true,
         authProviders: ['github', 'unknown', 'google'],
-      }),
+      })
     )
     await expect(fetchInstallStatus()).resolves.toMatchObject({
       authProviders: ['github', 'google'],
@@ -549,7 +549,7 @@ describe('fetch wrappers (mocked fetch)', () => {
         runtime: 'workers',
         needsInstall: false,
         isSignupEnabled: true,
-      }),
+      })
     )
     await expect(fetchInstallStatus()).resolves.toEqual({
       billingEnabled: false,
@@ -566,7 +566,7 @@ describe('fetch wrappers (mocked fetch)', () => {
         runtime: 'workers',
         isInstallMode: null,
         isSignupEnabled: false,
-      }),
+      })
     )
     await expect(fetchInstallStatus()).resolves.toEqual({
       billingEnabled: false,
@@ -761,7 +761,7 @@ describe('fetch wrappers (mocked fetch)', () => {
           priority: 10,
           trusted: false,
         },
-      }),
+      })
     )
     const empty = await fetchDatacenter('dc-2')
     expect(empty.members).toEqual([])
@@ -901,7 +901,12 @@ describe('fetch wrappers (mocked fetch)', () => {
   })
 
   it('falls back to a truthful sentence sized to what was bought', () => {
-    const counts = (purchased: number, inUse: number, ending = 0, endsAt: string | null = null) => ({
+    const counts = (
+      purchased: number,
+      inUse: number,
+      ending = 0,
+      endsAt: string | null = null
+    ) => ({
       purchased,
       inUse,
       ending,
@@ -962,7 +967,7 @@ describe('fetch wrappers (mocked fetch)', () => {
         licenseId: 'lic-1',
         licenseToken: 'tok',
         installCommand: 'curl | sh',
-      }),
+      })
     )
     await createLicense()
     const [, init] = fetchMock.mock.calls[0] ?? []
@@ -1069,9 +1074,7 @@ describe('fetch wrappers (mocked fetch)', () => {
       if (!(err instanceof ServerDeleteBlockedError)) {
         throw new TypeError('expected ServerDeleteBlockedError')
       }
-      expect(err.blockedDatabases).toEqual([
-        { id: 'db-1', name: 'orders', reason: 'only_member' },
-      ])
+      expect(err.blockedDatabases).toEqual([{ id: 'db-1', name: 'orders', reason: 'only_member' }])
       expect(formatServerDeleteBlockedError(err)).toContain('Database "orders"')
     }
   })
@@ -1113,8 +1116,8 @@ describe('fetch wrappers (mocked fetch)', () => {
           code: 'server_has_blockers',
           blockers: [{ kind: 'network', count: 1 }],
         },
-        409,
-      ),
+        409
+      )
     )
     try {
       await deleteServer('srv-1')
@@ -1124,9 +1127,7 @@ describe('fetch wrappers (mocked fetch)', () => {
       if (!(err instanceof ServerDeleteBlockedError)) {
         throw new TypeError('expected ServerDeleteBlockedError')
       }
-      expect(err.message).toBe(
-        'Cannot delete this server while dependent resources still exist',
-      )
+      expect(err.message).toBe('Cannot delete this server while dependent resources still exist')
     }
   })
 
@@ -1191,7 +1192,7 @@ describe('fetch wrappers (mocked fetch)', () => {
   it('deleteServer keeps HTTP status when the error body is not JSON', async () => {
     fetchMock.mockResolvedValueOnce(textResponse('nope', 500))
     await expect(deleteServer('srv-1')).rejects.toThrow(
-      '/api/client/v1/servers/srv-1 failed: HTTP 500',
+      '/api/client/v1/servers/srv-1 failed: HTTP 500'
     )
   })
 
@@ -1240,9 +1241,9 @@ describe('fetch wrappers (mocked fetch)', () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse({ code: 'server_online', error: 'Host is connected' }, 409)
     )
-    await expect(deleteServer('srv-1', 'org-del', { forgetResources: true })).rejects.toBeInstanceOf(
-      ServerDeleteOnlineError
-    )
+    await expect(
+      deleteServer('srv-1', 'org-del', { forgetResources: true })
+    ).rejects.toBeInstanceOf(ServerDeleteOnlineError)
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ code: 'server_online' }, 409))
     try {
@@ -1293,9 +1294,38 @@ describe('fetch wrappers (mocked fetch)', () => {
     )
   })
 
+  it('deployEnvironment keeps the hostnames of a tunnel refusal', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(
+        {
+          error: 'tunnel_name_public_certificate',
+          hostingId: 'h1',
+          hostnames: ['a.example.com', 7, 'b.example.com'],
+        },
+        409
+      )
+    )
+    try {
+      await deployEnvironment('env-1')
+      throw new TypeError('expected deployEnvironment to throw')
+    } catch (err) {
+      expect(err).toBeInstanceOf(DeployTunnelRefusedError)
+      if (!(err instanceof DeployTunnelRefusedError)) {
+        throw new TypeError('expected DeployTunnelRefusedError')
+      }
+      expect(err.code).toBe('tunnel_name_public_certificate')
+      expect(err.hostnames).toEqual(['a.example.com', 'b.example.com'])
+    }
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'tunnel_daemon_too_old' }, 409))
+    await expect(deployEnvironment('env-1')).rejects.toMatchObject({
+      code: 'tunnel_daemon_too_old',
+      hostnames: [],
+    })
+  })
+
   it('deployEnvironment treats missing services/violations as empty arrays', async () => {
     fetchMock.mockResolvedValueOnce(
-      jsonResponse({ error: 'health_check_missing', required: false }, 409),
+      jsonResponse({ error: 'health_check_missing', required: false }, 409)
     )
     try {
       await deployEnvironment('env-1')
@@ -1309,9 +1339,7 @@ describe('fetch wrappers (mocked fetch)', () => {
       expect(err.services).toEqual([])
     }
 
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({ error: 'resource_limit_exceeded' }, 409),
-    )
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'resource_limit_exceeded' }, 409))
     try {
       await deployEnvironment('env-1')
       throw new TypeError('expected deployEnvironment to throw')
@@ -1385,7 +1413,7 @@ describe('fetch wrappers (mocked fetch)', () => {
         metrics: ['host.cpu.userPercent'],
         resolution: 60,
         maxPoints: 60,
-      }),
+      })
     ).resolves.toEqual(series)
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/metrics/series')
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain('metrics=host.cpu.userPercent')
@@ -1463,9 +1491,7 @@ describe('fetch wrappers (mocked fetch)', () => {
   })
 
   it('fetchServerMetricsSeries treats a 503 without backend as disabled', async () => {
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({ error: 'metrics_backend_unavailable' }, 503),
-    )
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'metrics_backend_unavailable' }, 503))
     try {
       await fetchServerMetricsSeries('srv-1', {
         fromIso: '2026-01-01T00:00:00.000Z',
@@ -1540,16 +1566,14 @@ describe('fetch wrappers (mocked fetch)', () => {
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'other_conflict' }, 409))
     await expect(startServerMetricsLive('srv-1')).rejects.toThrow(
-      /metrics\/live failed: HTTP 409: other_conflict/,
+      /metrics\/live failed: HTTP 409: other_conflict/
     )
 
     fetchMock.mockResolvedValueOnce(textResponse('down', 503))
     await expect(startServerMetricsLive('srv-1')).rejects.toThrow(/metrics\/live failed: HTTP 503/)
 
     fetchMock.mockResolvedValueOnce(jsonResponse({}, 409))
-    await expect(startServerMetricsLive('srv-1')).rejects.toThrow(
-      /metrics\/live failed: HTTP 409$/,
-    )
+    await expect(startServerMetricsLive('srv-1')).rejects.toThrow(/metrics\/live failed: HTTP 409$/)
   })
 
   it('startServerMetricsLive attaches an explicit organization header', async () => {
@@ -1559,7 +1583,7 @@ describe('fetch wrappers (mocked fetch)', () => {
         leaseId: 'lease-org',
         intervalSeconds: 10,
         expiresAt: '2026-01-01T01:00:00.000Z',
-      }),
+      })
     )
     await expect(startServerMetricsLive('srv-1', undefined, 'org-live')).resolves.toMatchObject({
       kind: 'started',
@@ -1641,12 +1665,12 @@ describe('fetch wrappers (mocked fetch)', () => {
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'other_conflict' }, 409))
     await expect(fetchServerMetricsCapabilities('srv-1')).rejects.toThrow(
-      /metrics\/capabilities failed: HTTP 409: other_conflict/,
+      /metrics\/capabilities failed: HTTP 409: other_conflict/
     )
 
     fetchMock.mockResolvedValueOnce(jsonResponse({}, 409))
     await expect(fetchServerMetricsCapabilities('srv-1')).rejects.toThrow(
-      /metrics\/capabilities failed: HTTP 409$/,
+      /metrics\/capabilities failed: HTTP 409$/
     )
 
     fetchMock.mockResolvedValueOnce(textResponse('gone', 503))
@@ -1683,7 +1707,7 @@ describe('fetch wrappers (mocked fetch)', () => {
           networkInterfaces: [],
           process: { probedPath: '/proc' },
         },
-      }),
+      })
     )
     await fetchServerMetricsCapabilities('srv-1', 'org-cap')
     const [, init] = fetchMock.mock.calls[0] ?? []
@@ -1742,11 +1766,11 @@ describe('fetch wrappers (mocked fetch)', () => {
           error: 'compose_invalid',
           message: 'image tag is missing',
         },
-        422,
-      ),
+        422
+      )
     )
     await expect(fetchHealth()).rejects.toThrow(
-      '/api/health failed: HTTP 422: compose_invalid — image tag is missing',
+      '/api/health failed: HTTP 422: compose_invalid — image tag is missing'
     )
   })
 
@@ -1770,8 +1794,8 @@ describe('fetch wrappers (mocked fetch)', () => {
           error: 'compose_invalid',
           issues: [{}, { message: '' }],
         },
-        400,
-      ),
+        400
+      )
     )
     await expect(fetchHealth()).rejects.toThrow('/api/health failed: compose_invalid')
   })
@@ -1820,7 +1844,13 @@ describe('hasLiveBillingSubscription', () => {
   const summary = (status: string | null) => ({
     payer: null,
     subscription: status
-      ? { status, currentPeriodEnd: null, pastDueSince: null, graceExpiresAt: null, scheduleAttached: false }
+      ? {
+          status,
+          currentPeriodEnd: null,
+          pastDueSince: null,
+          graceExpiresAt: null,
+          scheduleAttached: false,
+        }
       : null,
     tiers: [],
     licenses: { purchased: 0, ending: 0, endsAt: null, inUse: 0, bound: 0, available: 0 },

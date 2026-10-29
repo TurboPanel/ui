@@ -27,7 +27,7 @@ import {
   type PreviewDeploymentPurpose,
 } from '@/components/org/project/preview-deployment-modal'
 import { environmentStatusTone, hasHostDeployedContainers } from '@/lib/container-status'
-import { deployPreviewFailureMessage } from '@/lib/deploy-error-message'
+import { deployPreviewFailureMessage, deployRefusalMessage } from '@/lib/deploy-error-message'
 import {
   type CommandProgress,
   type CommandStatus,
@@ -991,7 +991,10 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
         confirmMode === 'cacheless' ? { noCache: true } : undefined
       )
       if (!result.ok) {
-        setActionError(deployEnvironmentMutation.actionError ?? 'Failed to deploy')
+        // `actionError` still holds the previous render's value here; the refusal itself is `cause`.
+        setActionError(
+          result.cause ? deployRefusalMessage(result.cause) : (result.error ?? 'Failed to deploy')
+        )
         return
       }
       setPreviewOpen(null)

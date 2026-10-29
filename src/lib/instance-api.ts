@@ -7488,11 +7488,31 @@ export class DeployResourceLimitExceededError extends Error {
   }
 }
 
+/**
+ * A deploy the panel refused because of a tunnel-only hostname: the server's
+ * daemon is too old to lock the name, or the site is pinned to a public
+ * certificate. The body names the site and the hostnames that are locked.
+ */
+export type DeployTunnelRefusalCode = 'tunnel_daemon_too_old' | 'tunnel_name_public_certificate'
+
+export class DeployTunnelRefusedError extends Error {
+  readonly code: DeployTunnelRefusalCode
+  readonly hostnames: string[]
+
+  constructor(code: DeployTunnelRefusalCode, hostnames: string[]) {
+    super(code)
+    this.name = 'DeployTunnelRefusedError'
+    this.code = code
+    this.hostnames = hostnames
+  }
+}
+
 type DeployConflictBody = {
   error?: string
   required?: boolean
   services?: string[]
   violations?: ResourceLimitViolation[]
+  hostnames?: unknown
 }
 
 async function throwIfDeployConflict(response: Response): Promise<void> {
@@ -7512,6 +7532,17 @@ async function throwIfDeployConflict(response: Response): Promise<void> {
         Array.isArray(errorBody.violations) ? errorBody.violations : []
       )
     }
+    if (
+      errorBody.error === 'tunnel_daemon_too_old' ||
+      errorBody.error === 'tunnel_name_public_certificate'
+    ) {
+      throw new DeployTunnelRefusedError(
+        errorBody.error,
+        Array.isArray(errorBody.hostnames)
+          ? errorBody.hostnames.filter((name): name is string => typeof name === 'string')
+          : []
+      )
+    }
     if (errorBody.error === 'fabric_reconcile_pending') {
       throw new Error(formatFetchFailureDetail(409, 'fabric_reconcile_pending'))
     }
@@ -7519,6 +7550,7 @@ async function throwIfDeployConflict(response: Response): Promise<void> {
     if (
       err instanceof DeployHealthCheckMissingError ||
       err instanceof DeployResourceLimitExceededError ||
+      err instanceof DeployTunnelRefusedError ||
       (err instanceof Error && err.message.includes('fabric_reconcile_pending'))
     ) {
       throw err

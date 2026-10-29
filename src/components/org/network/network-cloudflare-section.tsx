@@ -24,7 +24,7 @@ import {
   useDeleteTunnelCarrier,
   useTunnelCarriers,
 } from '@/lib/queries/tunnels'
-import { useCan } from '@/lib/query-client'
+import { useCanState } from '@/lib/query-client'
 import { spacing } from '@/lib/theme'
 import {
   capabilitySummary,
@@ -396,7 +396,11 @@ function CarrierCard({ orgId, carrier }: Readonly<{ orgId: string; carrier: Tunn
  * shows the label and last four characters, never the token.
  */
 export function NetworkCloudflareSection({ orgId }: Readonly<{ orgId: string }>) {
-  const canManage = useCan('organization', orgId, 'organization:manage')
+  const { allowed: canManage, loading: roleLoading } = useCanState(
+    'organization',
+    orgId,
+    'organization:manage'
+  )
   const query = useTunnelCarriers(orgId, { enabled: canManage })
   const carriers = query.data?.carriers ?? []
 
@@ -407,7 +411,8 @@ export function NetworkCloudflareSection({ orgId }: Readonly<{ orgId: string }>)
         The Cloudflare accounts and API Tokens TurboPanel uses to run tunnels for your sites. A
         tunnel lets visitors reach a site without opening a port to the internet.
       </Text>
-      {canManage ? null : (
+      {roleLoading ? <LoadingState label="Checking your access…" /> : null}
+      {canManage || roleLoading ? null : (
         <Text style={panelStyles.muted}>
           Only owners and managers can manage Cloudflare accounts.
         </Text>
