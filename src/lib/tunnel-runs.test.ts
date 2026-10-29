@@ -26,6 +26,7 @@ import {
   tunnelsRunningOn,
   withPlacementKind,
   type PlacementDraft,
+  issuedCertificateNote,
   verifyOriginSummary,
 } from './tunnel-runs'
 
@@ -374,5 +375,15 @@ describe('verifyOriginSummary', () => {
     expect(verifyOriginSummary({ enabled: true, active: false, pendingNames: [] }).line).toContain(
       'Add a hostname'
     )
+  })
+})
+
+describe('issuedCertificateNote', () => {
+  it('explains a replaced certificate, a renewal coming up, or says nothing', () => {
+    expect(issuedCertificateNote({ retired: true, renewalDue: true })).toContain(
+      'revoked once no site uses it'
+    )
+    expect(issuedCertificateNote({ retired: false, renewalDue: true })).toContain('renewed soon')
+    expect(issuedCertificateNote({ retired: false, renewalDue: false })).toBe('')
   })
 })

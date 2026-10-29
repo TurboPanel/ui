@@ -5,6 +5,7 @@ import { Badge, Button, ButtonRow, LoadingState, MonoText, TextField } from '@/c
 import type { ExistingOriginCertificateRecord, OriginCertificateRecord } from '@/lib/instance-api'
 import { useExistingOriginCertificates, useOriginCertificates } from '@/lib/queries/tunnel-routes'
 import { spacing } from '@/lib/theme'
+import { issuedCertificateNote } from '@/lib/tunnel-runs'
 import { expiryLabel, tunnelErrorMessage } from '@/lib/tunnels'
 
 function namesLine(names: readonly string[]): string {
@@ -24,11 +25,7 @@ function IssuedRow({ certificate }: Readonly<{ certificate: OriginCertificateRec
       </View>
       <Text style={panelStyles.muted}>
         {expiryLabel(certificate.notAfter) ?? 'No expiry recorded'}.
-        {certificate.retired
-          ? ' Not needed any more. It is revoked once no site uses it.'
-          : certificate.renewalDue
-            ? ' It is renewed soon.'
-            : ''}
+        {issuedCertificateNote(certificate)}
       </Text>
     </View>
   )
@@ -116,7 +113,7 @@ export function NetworkOriginCertificates({
             {tunnelErrorMessage(existing.error, 'Failed to look up certificates')}
           </Text>
         ) : null}
-        {existing.data && existing.data.certificates.length === 0 ? (
+        {existing.data?.certificates.length === 0 ? (
           <Text style={panelStyles.muted}>Cloudflare holds no certificates for {zone}.</Text>
         ) : null}
         {(existing.data?.certificates ?? []).map((certificate) => (

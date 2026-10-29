@@ -7,6 +7,7 @@ import type {
   OrgServerRecord,
   TunnelCarrier,
   TunnelHostnameRecord,
+  OriginCertificateRecord,
   TunnelPlacement,
   TunnelPlacementBody,
   TunnelPortal,
@@ -263,14 +264,22 @@ export function verifyOriginSummary(state: VerifyOriginState): {
     }
   }
   const count = state.pendingNames.length
-  return {
-    label: 'Waiting',
-    tone: 'pending',
-    line:
-      count === 0
-        ? 'Add a hostname to start checking the certificate of your web server.'
-        : `Waiting for ${state.pendingNames.join(', ')}. Until ${count === 1 ? 'it has a site and a certificate' : 'they have sites and certificates'}, the connector does not check the certificate for any hostname of this tunnel.`,
-  }
+  const names = state.pendingNames.join(', ')
+  const until = count === 1 ? 'it has a site and a certificate' : 'they have sites and certificates'
+  const line =
+    count === 0
+      ? 'Add a hostname to start checking the certificate of your web server.'
+      : `Waiting for ${names}. Until ${until}, the connector does not check the certificate for any hostname of this tunnel.`
+  return { label: 'Waiting', tone: 'pending', line }
+}
+
+/** The sentence under an origin certificate TurboPanel issued: replaced, renewing soon, or nothing to say. */
+export function issuedCertificateNote(
+  certificate: Pick<OriginCertificateRecord, 'retired' | 'renewalDue'>
+): string {
+  if (certificate.retired) return ' Not needed any more. It is revoked once no site uses it.'
+  if (certificate.renewalDue) return ' It is renewed soon.'
+  return ''
 }
 
 /** A server's connector, as a badge: what it last reported, or that it is left out. */
