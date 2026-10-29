@@ -97,6 +97,23 @@ describe('TlsOverviewSection delete', () => {
     expect(hint.parentElement?.textContent).not.toContain('two.example')
   })
 
+  it("labels a certificate TurboPanel ordered by DNS challenge as Let's Encrypt", () => {
+    state.rows = [
+      {
+        ...certificate('d1', 'dns.example', 'upload'),
+        metadata: {
+          status: 'ready',
+          dnsNames: ['dns.example'],
+          acme: { managedBy: 'panel', challengeType: 'dns-01' },
+        },
+      } as unknown as TlsRecord,
+      certificate('u1', 'upload.example', 'upload'),
+    ]
+    render(<TlsOverviewSection orgId="o1" />)
+    expect(screen.getByText("Let's Encrypt · Ready")).toBeTruthy()
+    expect(screen.getByText('Uploaded · Issued and renewed by the serving host')).toBeTruthy()
+  })
+
   it('says why a new certificate was not added, under Add certificate', async () => {
     state.createRun = vi.fn(() => Promise.resolve({ ok: false, error: 'Bad PEM.' }))
     render(<TlsOverviewSection orgId="o1" />)

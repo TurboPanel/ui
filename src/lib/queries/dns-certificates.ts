@@ -10,6 +10,7 @@ import {
 } from '@/lib/instance-api'
 import { isHttpStatusError } from '@/lib/fetch-error-detail'
 import { queryKeys, useApiMutation } from '@/lib/query-client'
+import { invalidateCertificateLists } from '@/lib/queries/tls'
 
 /** While an order runs the list is looked at again every few seconds. */
 const ORDERING_REFRESH_MS = 5_000
@@ -28,7 +29,9 @@ export const ORDER_NUDGE_MS = 15_000
  * check the screen already shows.
  */
 export function useDnsCertificates(orgId: string, options?: Readonly<{ enabled?: boolean }>) {
-  return useQuery({
+  const queryClient = useQueryClient()
+  const pending = useRef<ReadonlySet<string>>(new Set())
+  const query = useQuery({
     queryKey: queryKeys.org(orgId).dnsCertificates,
     queryFn: async () => {
       try {
@@ -45,6 +48,16 @@ export function useDnsCertificates(orgId: string, options?: Readonly<{ enabled?:
         ? ORDERING_REFRESH_MS
         : IDLE_REFRESH_MS,
   })
+  const certificates = query.data?.certificates
+  useEffect(() => {
+    if (!certificates) return
+    const now = new Set(certificates.filter((c) => c.status === 'pending').map((c) => c.id))
+    const finished = [...pending.current].some((id) => !now.has(id))
+    pending.current = now
+    // An order that finished (or was removed) changed its library card too.
+    if (finished) void queryClient.invalidateQueries({ queryKey: queryKeys.org(orgId).tls })
+  }, [certificates, orgId, queryClient])
+  return query
 }
 
 /** At most this many checks are in flight at once. */
@@ -72,7 +85,7 @@ async function nudge(
     return next()
   }
   await Promise.all(Array.from({ length: ORDER_NUDGE_CONCURRENCY }, next))
-  await queryClient.invalidateQueries({ queryKey: queryKeys.org(orgId).dnsCertificates })
+  await invalidateCertificateLists(queryClient, orgId)
 }
 
 /**
@@ -106,9 +119,7 @@ export function useAdvanceRunningOrders(orgId: string, runningIds: readonly stri
 function useInvalidate(orgId: string) {
   const queryClient = useQueryClient()
   return () => {
-    void queryClient.invalidateQueries({ queryKey: queryKeys.org(orgId).dnsCertificates })
-    // The same rows show in the certificate library.
-    void queryClient.invalidateQueries({ queryKey: queryKeys.org(orgId).tls })
+    void invalidateCertificateLists(queryClient, orgId)
   }
 }
 
