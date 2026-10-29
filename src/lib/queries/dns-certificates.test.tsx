@@ -3,6 +3,8 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  ORDER_NUDGE_MS,
+  useAdvanceRunningOrders,
   useCheckDnsCertificate,
   useDnsCertificates,
   useOrderDnsCertificate,
@@ -98,5 +100,46 @@ describe('certificate order queries', () => {
       await retry.result.current.mutateAsync('c1')
     })
     expect(api.retryDnsCertificate).toHaveBeenCalledWith(orgId, 'c1')
+  })
+})
+
+describe('automatic stepping of running orders', () => {
+  afterEach(() => vi.useRealTimers())
+
+  it('checks each running order on the interval and stops when none is running', async () => {
+    vi.useFakeTimers()
+    api.checkDnsCertificate.mockResolvedValue({ certificate: {}, outcome: 'waiting' })
+    const { rerender } = renderHook(({ ids }) => useAdvanceRunningOrders(orgId, ids), {
+      wrapper: createWrapper(),
+      initialProps: { ids: ['c1', 'c2'] as readonly string[] },
+    })
+    expect(api.checkDnsCertificate).not.toHaveBeenCalled()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(ORDER_NUDGE_MS)
+    })
+    expect(api.checkDnsCertificate.mock.calls).toEqual([
+      [orgId, 'c1'],
+      [orgId, 'c2'],
+    ])
+    rerender({ ids: [] })
+    api.checkDnsCertificate.mockClear()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(ORDER_NUDGE_MS * 3)
+    })
+    expect(api.checkDnsCertificate).not.toHaveBeenCalled()
+  })
+
+  it('keeps going after a failed check and never overlaps rounds', async () => {
+    vi.useFakeTimers()
+    let release: () => void = () => undefined
+    api.checkDnsCertificate
+      .mockRejectedValueOnce(new Error('boom'))
+      .mockImplementationOnce(() => new Promise<void>((r) => (release = r)))
+    renderHook(() => useAdvanceRunningOrders(orgId, ['c1', 'c2']), { wrapper: createWrapper() })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(ORDER_NUDGE_MS * 3)
+    })
+    expect(api.checkDnsCertificate).toHaveBeenCalledTimes(2)
+    release()
   })
 })

@@ -33,6 +33,7 @@ import {
   type OrderMode,
 } from '@/lib/dns-certificates'
 import {
+  useAdvanceRunningOrders,
   useCheckDnsCertificate,
   useDnsCertificates,
   useOrderDnsCertificate,
@@ -270,6 +271,10 @@ function CertificateCard({
 
 function OrderedList({ orgId }: Readonly<{ orgId: string }>) {
   const query = useDnsCertificates(orgId)
+  const running = (query.data?.certificates ?? [])
+    .filter((row) => row.status === 'pending')
+    .map((row) => row.id)
+  useAdvanceRunningOrders(orgId, running)
   if (query.isLoading) return <LoadingState label="Loading certificates…" />
   if (query.isError) {
     return (
