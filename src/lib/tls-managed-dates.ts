@@ -53,3 +53,17 @@ export function tlsStoredCopyLines(row: TlsRecord, locale?: string): string[] {
   }
   return lines
 }
+
+/** A day for any date line; an empty or epoch date reads "No expiry" so the line is left out. */
+export function formatDay(value: string | null): string {
+  if (!value) return 'No expiry'
+  const parsed = realDate(value)
+  if (!parsed) return Number.isNaN(new Date(value).getTime()) ? value : 'No expiry'
+  return parsed.toISOString().slice(0, 10)
+}
+
+/** The library's Expiry cell: "Pending" only for a row that has a placeholder date and is not issued yet. */
+export function expiryCell(value: string | null): string {
+  if (value && !realDate(value) && !Number.isNaN(new Date(value).getTime())) return 'Pending'
+  return formatDay(value)
+}

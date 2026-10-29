@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { TlsRecord } from '@/lib/instance-api'
-import { realDate, tlsDateLines, tlsStoredCopyLines } from './tls-managed-dates'
+import {
+  expiryCell,
+  formatDay,
+  realDate,
+  tlsDateLines,
+  tlsStoredCopyLines,
+} from './tls-managed-dates'
 
 function row(status: string, notAfter: string, acme?: Record<string, string>): TlsRecord {
   return {
@@ -90,5 +96,19 @@ describe('realDate', () => {
 
   it('shows no expiry line for a certificate that is not issued yet', () => {
     expect(tlsDateLines(row('active', '1970-01-01T00:00:00Z'), 'en-US')).toEqual([])
+  })
+})
+
+describe('certificate dates', () => {
+  it('says Pending only in the Expiry cell for a placeholder date', () => {
+    expect(expiryCell('1970-01-01T00:00:00Z')).toBe('Pending')
+    expect(expiryCell(null)).toBe('No expiry')
+    expect(expiryCell('2026-11-03T00:00:00Z')).toBe('2026-11-03')
+  })
+
+  it('leaves other date lines empty for a placeholder date', () => {
+    expect(formatDay('1970-01-01T00:00:00Z')).toBe('No expiry')
+    expect(formatDay('2026-11-03T00:00:00Z')).toBe('2026-11-03')
+    expect(formatDay('soon')).toBe('soon')
   })
 })

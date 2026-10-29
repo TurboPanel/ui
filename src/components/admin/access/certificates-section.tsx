@@ -40,7 +40,7 @@ import {
   useUploadInstanceCertificate,
 } from '@/lib/queries/admin'
 import { coversHostname } from '@/lib/tls-match'
-import { realDate } from '@/lib/tls-managed-dates'
+import { expiryCell, formatDay, realDate } from '@/lib/tls-managed-dates'
 import { colors, spacing } from '@/lib/theme'
 
 const CERT_COLUMNS: readonly DataTableColumn[] = [
@@ -205,7 +205,7 @@ function CertificateRow({
         ) : null}
       </DataTableCell>
       <DataTableCell column={CERT_COLUMNS[2]}>
-        <Text style={styles.muted}>{formatDay(certificate.notAfter)}</Text>
+        <Text style={styles.muted}>{expiryCell(certificate.notAfter)}</Text>
       </DataTableCell>
       <DataTableCell column={CERT_COLUMNS[3]}>
         <Text style={styles.muted}>{attached}</Text>
@@ -579,7 +579,7 @@ function ReachabilityRow({
       {status.expiry === 'No expiry' ? null : (
         <Text style={styles.rowHint}>Expires {status.expiry}</Text>
       )}
-      {record.acmeLastAttemptAt ? (
+      {realDate(record.acmeLastAttemptAt) ? (
         <Text style={styles.rowHint}>Last attempt {formatDay(record.acmeLastAttemptAt)}</Text>
       ) : null}
     </View>
@@ -624,13 +624,6 @@ function hostnameOf(entry: string): string {
 function toggleHost(current: readonly string[], host: string): string[] {
   if (current.includes(host)) return current.filter((item) => item !== host)
   return [...current, host]
-}
-
-function formatDay(value: string | null): string {
-  if (!value) return 'No expiry'
-  const parsed = realDate(value)
-  if (!parsed) return Number.isNaN(new Date(value).getTime()) ? value : 'Pending'
-  return parsed.toISOString().slice(0, 10)
 }
 
 const styles = StyleSheet.create({
