@@ -16,6 +16,7 @@ const state = vi.hoisted(() => ({
   })) as ReturnType<typeof vi.fn>,
   check: vi.fn(async (_id: string) => ({ ok: true })),
   retry: vi.fn(async (_id: string) => ({ ok: true })),
+  advanced: [] as (readonly string[])[],
 }))
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
@@ -94,6 +95,7 @@ vi.mock('@/lib/queries/tunnels', () => ({
   useTunnelCarriers: () => ({ data: { carriers: state.carriers } }),
 }))
 vi.mock('@/lib/queries/dns-certificates', () => ({
+  useAdvanceRunningOrders: (_org: string, ids: readonly string[]) => state.advanced.push(ids),
   useDnsCertificates: () => ({
     data: { certificates: state.certificates },
     isLoading: false,
@@ -227,6 +229,13 @@ describe('the orders list', () => {
     expect(screen.getByText('Test Certificate')).toBeTruthy()
     fireEvent.click(screen.getByText('Check Now'))
     await waitFor(() => expect(state.check).toHaveBeenCalledWith('c1'))
+  })
+
+  it('hands only the orders still running to the automatic stepping', () => {
+    state.advanced = []
+    state.certificates = [cert(), cert({ id: 'c2', status: 'ready' })]
+    render(<DnsCertificatePanel orgId="o1" acmeEnabled />)
+    expect(state.advanced.at(-1)).toEqual(['c1'])
   })
 
   it('shows a renewal warning and a failure reason, and offers Try Again only after giving up', async () => {
