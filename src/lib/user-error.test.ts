@@ -51,6 +51,9 @@ describe('apiErrorCopy', () => {
     expect(apiErrorCopy(new Error('x failed: HTTP 409: tls_in_use'))).toContain(
       'A site still uses this certificate'
     )
+    expect(apiErrorCopy(new Error('x failed: HTTP 409: tls_organization_ca'))).toContain(
+      'Replace it with Rotate on the Organization CA panel.'
+    )
   })
 
   it('maps a Make primary conflict to a retry message', () => {

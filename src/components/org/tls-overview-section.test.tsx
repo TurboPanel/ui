@@ -6,6 +6,7 @@ import type { TlsRecord } from '@/lib/instance-api'
 const state = vi.hoisted(() => ({
   deleteRun: vi.fn(),
   createRun: vi.fn(),
+  rows: [] as TlsRecord[],
 }))
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
@@ -43,17 +44,17 @@ vi.mock('@/lib/query-client', () => ({
 }))
 vi.mock('@/lib/tls-managed-dates', () => ({ tlsDateLines: () => [], tlsStoredCopyLines: () => [] }))
 
-const certificate = (id: string, name: string): TlsRecord =>
+const certificate = (id: string, name: string, source = 'lets_encrypt'): TlsRecord =>
   ({
     id,
     name,
-    source: 'lets_encrypt',
+    source,
     metadata: { status: 'automatic', dnsNames: [name] },
   }) as unknown as TlsRecord
 
 vi.mock('@/lib/queries/tls', () => ({
   useTlsLibrary: () => ({
-    data: { tls: [certificate('t1', 'one.example'), certificate('t2', 'two.example')] },
+    data: { tls: state.rows },
     isLoading: false,
     isError: false,
   }),
@@ -64,6 +65,7 @@ vi.mock('@/lib/queries/tls', () => ({
 import { TlsOverviewSection } from './tls-overview-section'
 
 beforeEach(() => {
+  state.rows = [certificate('t1', 'one.example'), certificate('t2', 'two.example')]
   state.deleteRun = vi.fn(() => Promise.resolve({ ok: true, value: {} }))
   state.createRun = vi.fn(() => Promise.resolve({ ok: true, value: {} }))
 })
@@ -81,6 +83,18 @@ describe('TlsOverviewSection delete', () => {
     expect(state.deleteRun).toHaveBeenCalledWith('t2')
     expect(message.parentElement?.textContent).toContain('two.example')
     expect(message.parentElement?.textContent).not.toContain('one.example')
+  })
+
+  it('offers no Delete on the Organization CA and points to Rotate instead', () => {
+    state.rows = [
+      certificate('ca', 'Company root', 'organization_ca'),
+      certificate('t2', 'two.example'),
+    ]
+    render(<TlsOverviewSection orgId="o1" />)
+    expect(screen.getAllByText('Delete certificate')).toHaveLength(1)
+    const hint = screen.getByText('Replace it with Rotate on the Organization CA panel.')
+    expect(hint.parentElement?.textContent).toContain('Company root')
+    expect(hint.parentElement?.textContent).not.toContain('two.example')
   })
 
   it('says why a new certificate was not added, under Add certificate', async () => {

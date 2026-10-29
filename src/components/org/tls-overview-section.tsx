@@ -116,7 +116,10 @@ function TlsCertificateList({
       {row.metadata.acme?.lastError ? (
         <Text style={panelStyles.error}>Issuance failing: {row.metadata.acme.lastError}</Text>
       ) : null}
-      {canManage ? (
+      {canManage && row.source === 'organization_ca' ? (
+        <Text style={panelStyles.muted}>Replace it with Rotate on the Organization CA panel.</Text>
+      ) : null}
+      {canManage && row.source !== 'organization_ca' ? (
         <ConfirmButton
           label={deletingId === row.id ? 'Deleting…' : 'Delete'}
           confirmLabel="Delete certificate"
