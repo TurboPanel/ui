@@ -31,6 +31,12 @@ describe('deployErrorMessage', () => {
     ).toContain('host-level Compose features')
   })
 
+  it('says what to add when a Hosting Account is required', () => {
+    expect(deployErrorMessage(new Error('HTTP 422: principal_required_for_service_kind'))).toBe(
+      'Add a Hosting Account under Bindings first.'
+    )
+  })
+
   it('keeps the existing mappings and passes other messages through', () => {
     expect(deployErrorMessage(new Error('x server_placement_mismatch'))).toContain('pinned server')
     expect(deployErrorMessage(new Error('something else'))).toBe('something else')

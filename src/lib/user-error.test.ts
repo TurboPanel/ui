@@ -31,6 +31,12 @@ describe('isNetworkFetchError', () => {
 })
 
 describe('apiErrorCopy', () => {
+  it('says what to do when a deploy needs a Hosting Account', () => {
+    expect(userErrorMessage(new Error('HTTP 422: principal_required_for_service_kind'), 'x')).toBe(
+      'Add a Hosting Account under Bindings first.'
+    )
+  })
+
   it('maps upgrade_run_active and environment_running', () => {
     expect(apiErrorCopy(new Error('x failed: HTTP 409: upgrade_run_active'))).toBe(
       UPDATE_ALREADY_ACTIVE_COPY

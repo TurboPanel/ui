@@ -323,6 +323,8 @@ export function tilePills(project: Pick<HomeProject, 'environments'>): {
   shown: HomeEnvironment[]
   more: number
 } {
+  // A project with a single environment always names it (as its status).
+  if (project.environments.length === 1) return { shown: [...project.environments], more: 0 }
   const shown = project.environments.filter((env) => env.isPrimary || env.pinned)
   return { shown, more: project.environments.length - shown.length }
 }

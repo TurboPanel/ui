@@ -40,6 +40,7 @@ import {
   useUploadInstanceCertificate,
 } from '@/lib/queries/admin'
 import { coversHostname } from '@/lib/tls-match'
+import { realDate } from '@/lib/tls-managed-dates'
 import { colors, spacing } from '@/lib/theme'
 
 const CERT_COLUMNS: readonly DataTableColumn[] = [
@@ -667,8 +668,8 @@ function toggleHost(current: readonly string[], host: string): string[] {
 
 function formatDay(value: string | null): string {
   if (!value) return 'No expiry'
-  const parsed = new Date(value)
-  if (Number.isNaN(parsed.getTime())) return value
+  const parsed = realDate(value)
+  if (!parsed) return Number.isNaN(new Date(value).getTime()) ? value : 'Pending'
   return parsed.toISOString().slice(0, 10)
 }
 

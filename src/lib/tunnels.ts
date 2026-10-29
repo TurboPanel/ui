@@ -4,6 +4,7 @@
  */
 import type { TunnelBadge, TunnelBadgeDependent } from '@/lib/instance-api'
 import type { BadgeTone } from '@/components/ui/badge'
+import { realDate } from '@/lib/tls-managed-dates'
 
 export const CARRIER_LIMIT = 10
 export const BADGE_LIMIT = 50
@@ -64,9 +65,8 @@ export function checkedLabel(iso: string | null): string {
 
 /** "Expires 3 Nov 2026", or null when Cloudflare reports no expiry. */
 export function expiryLabel(iso: string | null): string | null {
-  if (!iso) return null
-  const when = new Date(iso)
-  if (Number.isNaN(when.getTime())) return null
+  const when = realDate(iso)
+  if (!when) return null
   return `Expires ${when.toLocaleDateString()}`
 }
 

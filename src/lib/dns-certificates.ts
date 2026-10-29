@@ -6,6 +6,7 @@
 import type { BadgeTone } from '@/components/ui/badge'
 import type { DnsCertificate, TunnelCarrier } from '@/lib/instance-api'
 import { parseFailure } from '@/lib/tunnels'
+import { realDate } from '@/lib/tls-managed-dates'
 
 export const MAX_NAMES = 10
 
@@ -154,9 +155,8 @@ export function renewalLabel(c: Pick<DnsCertificate, 'status' | 'renewAt'>): str
 }
 
 export function expiryLabel(c: Pick<DnsCertificate, 'notAfter'>): string | null {
-  if (!c.notAfter) return null
-  const when = new Date(c.notAfter)
-  return Number.isNaN(when.getTime()) ? null : `Expires ${when.toLocaleDateString()}`
+  const when = realDate(c.notAfter)
+  return when ? `Expires ${when.toLocaleDateString()}` : null
 }
 
 /** When a failed order will be tried again by itself, if it will. */

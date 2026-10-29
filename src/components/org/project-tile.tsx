@@ -81,6 +81,7 @@ const styles = themedStyles((p) => ({
   name: { ...typeStyle('bodySemibold', 'body'), color: p.text },
   sub: { ...typeStyle('body', 'caption'), color: p.text3 },
   pills: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6, minHeight: 22 },
+  pillsGrid: { justifyContent: 'flex-end' },
   pillsList: { flexBasis: 420, flexGrow: 0, flexShrink: 0, flexWrap: 'nowrap', overflow: 'hidden' },
   pillsStacked: {
     flexBasis: 'auto',
@@ -165,14 +166,17 @@ export function pillLabel(env: HomeEnvironment): string {
   return `${env.name}${role}: ${statusInfo(env.status).label}`
 }
 
-function EnvironmentPill({ env }: Readonly<{ env: HomeEnvironment }>) {
+function EnvironmentPill({
+  env,
+  statusOnly = false,
+}: Readonly<{ env: HomeEnvironment; statusOnly?: boolean }>) {
   const s = styles(usePalette())
   const label = pillLabel(env)
   return (
     <View ref={titleRef(label)} style={s.pill}>
       <PillDot tone={pillTone(env.status)} />
       <Text style={env.isPrimary ? s.pillPrimary : s.pillText} numberOfLines={1}>
-        {env.name}
+        {statusOnly ? statusInfo(env.status).label : env.name}
       </Text>
       {env.pinned ? <PinGlyph /> : null}
     </View>
@@ -195,7 +199,7 @@ function ProjectPills({ project }: Readonly<{ project: HomeProject }>) {
   return (
     <>
       {shown.map((env) => (
-        <EnvironmentPill key={env.id} env={env} />
+        <EnvironmentPill key={env.id} env={env} statusOnly={project.environments.length === 1} />
       ))}
       {more > 0 ? <QuietPill text={`+${more}`} title={moreLabel(more)} /> : null}
     </>
@@ -308,7 +312,14 @@ export function ProjectTile({
           ) : null}
         </View>
       </View>
-      <View style={[s.pills, list && !stacked && s.pillsList, stacked && s.pillsStacked]}>
+      <View
+        style={[
+          s.pills,
+          !list && s.pillsGrid,
+          list && !stacked && s.pillsList,
+          stacked && s.pillsStacked,
+        ]}
+      >
         <ProjectPills project={project} />
       </View>
       {list && !stacked ? (

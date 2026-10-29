@@ -24,11 +24,12 @@ import {
   useDeleteProject,
   useEnvironments,
   useOrganizationManaged,
+  useOrgServers,
   useProjectDeletePreview,
   type TrackedCommandEntry,
 } from '@/lib/queries'
 import { DeletePlanList } from '@/components/org/delete-plan-list'
-import { deleteFailureMessage } from '@/lib/delete-plan'
+import { deleteFailureMessage, withServerNames } from '@/lib/delete-plan'
 import { commandErrorLine } from '@/lib/command-error'
 import { orEmptyArray } from '@/lib/or-empty-array'
 import type { ManagedListRecord } from '@/lib/managed-services'
@@ -426,7 +427,11 @@ export function ProjectDeletePanel({
   const environmentsQuery = useEnvironments(orgId, project.id)
   const environments = orEmptyArray(environmentsQuery.data?.environments)
   const previewQuery = useProjectDeletePreview(orgId, project.id)
-  const plan = previewQuery.data
+  const serversQuery = useOrgServers(orgId)
+  const plan = useMemo(
+    () => withServerNames(previewQuery.data, orEmptyArray(serversQuery.data?.servers)),
+    [previewQuery.data, serversQuery.data?.servers]
+  )
   const orgManagedQuery = useOrganizationManaged(orgId, {
     enabled: managedProject,
   })

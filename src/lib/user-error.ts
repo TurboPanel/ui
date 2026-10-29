@@ -24,6 +24,7 @@ const API_ERROR_COPY: Readonly<Record<string, string>> = {
   upgrade_run_active: UPDATE_ALREADY_ACTIVE_COPY,
   environment_running: ENVIRONMENT_RUNNING_COPY,
   managed_has_bindings: MANAGED_HAS_BINDINGS_COPY,
+  principal_required_for_service_kind: 'Add a Hosting Account under Bindings first.',
   server_offline: 'The server is offline. Try again when it is back.',
   server_placement_required: 'Put this storage on a server first.',
   backup_target_unsupported: 'This kind of storage cannot be backed up yet.',
