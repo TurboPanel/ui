@@ -394,6 +394,9 @@ export const queryKeys = {
       /** Connected Cloudflare accounts and their API tokens. */
       tunnelCarriers: ['org', orgId, 'tunnel-carriers'] as const,
 
+      /** Certificates the panel orders itself through a DNS challenge. */
+      dnsCertificates: ['org', orgId, 'dns-certificates'] as const,
+
       /** Tunnels, where they run, and the hostnames each carries. */
       tunnels: ['org', orgId, 'tunnels'] as const,
       tunnelHostnames: (tunnelId: string) =>

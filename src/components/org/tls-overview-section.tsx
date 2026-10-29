@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { panelStyles } from '@/components/ui/panel-styles'
+import { DnsCertificatePanel } from '@/components/org/dns-certificate-panel'
 import { OrganizationCaPanel } from '@/components/org/organization-ca-panel'
 import {
   Button,
@@ -304,6 +305,8 @@ export function TlsOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
         />
         {queryError ? <Text style={panelStyles.error}>{queryError}</Text> : null}
       </SectionPanel>
+
+      {canManage ? <DnsCertificatePanel orgId={orgId} acmeEnabled={acmeEnabled} /> : null}
 
       {canManage ? (
         <SectionPanel

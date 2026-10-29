@@ -143,7 +143,7 @@ const KEEP_SERVER_TEXT = new Set([
 ])
 
 /** The error code and the text after the dash in a failed-call message. */
-function parseFailure(raw: string): { code?: string; text?: string } {
+export function parseFailure(raw: string): { code?: string; text?: string } {
   const at = raw.search(/HTTP \d+: /)
   if (at < 0) return {}
   const rest = raw.slice(raw.indexOf(': ', at) + 2)
