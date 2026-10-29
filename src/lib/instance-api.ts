@@ -11196,6 +11196,45 @@ export type TunnelRecord = {
   carryingServerIds: string[]
   warnings: string[]
   doorwayCount: number
+  /** The verified connection to your web server (see `setTunnelVerifyOrigin`). */
+  verifyOrigin: VerifyOriginState
+}
+
+/** Asked for, in effect, and which names still wait for a site or a certificate. */
+export type VerifyOriginState = {
+  enabled: boolean
+  /** Every name is served with a covering origin certificate, so the connector verifies. */
+  active: boolean
+  pendingNames: string[]
+}
+
+/** An origin certificate TurboPanel issued. The key stays sealed on the panel and is never returned. */
+export type OriginCertificateRecord = {
+  id: string
+  carrierId: string
+  zone: string
+  names: string[]
+  /** `names` is a certificate for exact hostnames (the default); `wildcard` covers the zone and one label below it. */
+  scope: 'names' | 'wildcard'
+  /** No longer needed; it is revoked once no site uses it. */
+  retired: boolean
+  notAfter: string | null
+  status: string
+  createdAt: string
+  inUse: boolean
+  renewalDue: boolean
+}
+
+/** A certificate the provider holds for a zone, whoever made it. Only one TurboPanel issued can be installed. */
+export type ExistingOriginCertificateRecord = {
+  externalId: string
+  hostnames: string[]
+  notAfter: string | null
+  issuedHere: boolean
+  tlsId: string | null
+  retired: boolean
+  wildcard: boolean
+  note: string
 }
 
 /** A hostname a tunnel carries, and whether a DNS name was made for it. */
@@ -11250,6 +11289,48 @@ export async function updateTunnelPlacement(
     method: 'PUT',
     body: JSON.stringify(body),
   })
+}
+
+export type TunnelVerifyOriginBody = { enabled: boolean; wildcard?: boolean }
+
+/**
+ * Turn the verified connection on or off for a tunnel. Safe to repeat. **409**
+ * `verify_origin_public_names`, `verify_origin_zones`, `verify_origin_names`,
+ * `badge_cannot_certify`, `badge_cannot_dns`, `badge_cannot_tunnel`.
+ */
+export async function setTunnelVerifyOrigin(
+  orgId: string,
+  tunnelId: string,
+  body: TunnelVerifyOriginBody
+): Promise<{
+  tunnel: TunnelRecord
+  verifyOrigin: VerifyOriginState
+  pinnedHostingIds: string[]
+  needsDeploy: boolean
+}> {
+  return await apiFetch(`${tunnelsPath(orgId)}/${tunnelId}/verify-origin`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  })
+}
+
+/** The origin certificates TurboPanel issued for a Cloudflare account. */
+export async function fetchOriginCertificates(
+  orgId: string,
+  carrierId: string
+): Promise<{ originCertificates: OriginCertificateRecord[] }> {
+  return await apiFetch(`${carriersPath(orgId)}/${carrierId}/origin-certificates`)
+}
+
+/** Every valid certificate the provider holds for a zone (read-only). **400** `badge_cannot_certify`. */
+export async function fetchExistingOriginCertificates(
+  orgId: string,
+  carrierId: string,
+  zone: string
+): Promise<{ zone: string; certificates: ExistingOriginCertificateRecord[] }> {
+  return await apiFetch(
+    `${carriersPath(orgId)}/${carrierId}/origin-certificates/existing?zone=${encodeURIComponent(zone)}`
+  )
 }
 
 /** **409** `tunnel_in_use` while the tunnel still carries hostnames. */

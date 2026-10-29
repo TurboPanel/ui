@@ -107,6 +107,18 @@ const ERROR_COPY: Readonly<Record<string, string>> = {
   zone_not_found:
     'Cloudflare could not find the zone for this hostname under this account. Check the hostname.',
   carry_invalid: 'Choose whether this server runs tunnels.',
+  tunnel_removing: 'This tunnel is being removed.',
+  verify_origin_public_names:
+    'This site also serves a name that is not a tunnel name with a verified connection. A certificate from Cloudflare is not trusted by browsers, so it would break that name. Move the other names to another site, or leave the verified connection off.',
+  verify_origin_zones:
+    'This site serves names in more than one zone, and a site can use only one certificate. Split the names across sites, or leave the verified connection off.',
+  verify_origin_names:
+    'A wildcard certificate covers one label below the zone, and this site serves a deeper name. Use certificates for exact hostnames instead.',
+  badge_cannot_certify:
+    'No API Token on this Cloudflare account can manage certificates for that zone. Add one that can edit certificates under Cloudflare Accounts.',
+  origin_certificate_invalid: 'Check the zone and the hostnames, then try again.',
+  origin_certificate_names: 'Give exact hostnames inside the zone, at most 100 per certificate.',
+  origin_certificate_limit: 'This organization has reached its limit of origin certificates.',
   tunnel_daemon_too_old: 'Update this server before deploying a site with a tunnel-only name.',
   tunnel_name_public_certificate: 'A tunnel-only name cannot use a public certificate.',
 }

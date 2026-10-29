@@ -26,6 +26,7 @@ import {
   tunnelsRunningOn,
   withPlacementKind,
   type PlacementDraft,
+  verifyOriginSummary,
 } from './tunnel-runs'
 
 function server(
@@ -55,6 +56,7 @@ function tunnel(extra: Partial<TunnelRecord> = {}): TunnelRecord {
     carryingServerIds: [],
     warnings: [],
     doorwayCount: 0,
+    verifyOrigin: { enabled: false, active: false, pendingNames: [] },
     ...extra,
   }
 }
@@ -342,5 +344,35 @@ describe('hostnames', () => {
     expect(dnsOutcome('created')).toMatch(/created/)
     expect(dnsOutcome('none')).toMatch(/no zone for this hostname/)
     expect(dnsOutcome('none')).toMatch(/Added to the tunnel/)
+  })
+})
+
+describe('verifyOriginSummary', () => {
+  it('says Off, On and Waiting in plain words, and names what it waits for', () => {
+    expect(verifyOriginSummary({ enabled: false, active: false, pendingNames: [] }).label).toBe(
+      'Off'
+    )
+    expect(verifyOriginSummary({ enabled: true, active: true, pendingNames: [] })).toMatchObject({
+      label: 'On',
+      tone: 'ok',
+    })
+    const one = verifyOriginSummary({
+      enabled: true,
+      active: false,
+      pendingNames: ['a.example.com'],
+    })
+    expect(one.label).toBe('Waiting')
+    expect(one.line).toContain('a.example.com')
+    expect(one.line).toContain('it has a site and a certificate')
+    const two = verifyOriginSummary({
+      enabled: true,
+      active: false,
+      pendingNames: ['a.example.com', 'b.example.com'],
+    })
+    expect(two.line).toContain('a.example.com, b.example.com')
+    expect(two.line).toContain('they have sites and certificates')
+    expect(verifyOriginSummary({ enabled: true, active: false, pendingNames: [] }).line).toContain(
+      'Add a hostname'
+    )
   })
 })

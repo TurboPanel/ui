@@ -11,6 +11,7 @@ import type {
   TunnelPlacementBody,
   TunnelPortal,
   TunnelRecord,
+  VerifyOriginState,
 } from '@/lib/instance-api'
 import type { BadgeTone } from '@/components/ui/badge'
 
@@ -234,6 +235,42 @@ export function tunnelHealth(tunnel: Pick<TunnelRecord, 'status' | 'portals'>): 
     return { label: 'Needs Attention', tone: 'danger' }
   }
   return { label: 'Setting Up', tone: 'pending' }
+}
+
+/**
+ * The verified connection, as a badge and a sentence. "Waiting" is the safe
+ * state: the choice is made but a name has no site or certificate yet, so the
+ * connector keeps skipping verification for the whole tunnel until it is
+ * applied again.
+ */
+export function verifyOriginSummary(state: VerifyOriginState): {
+  label: string
+  tone: BadgeTone
+  line: string
+} {
+  if (!state.enabled) {
+    return {
+      label: 'Off',
+      tone: 'muted',
+      line: 'The connector does not check the certificate of your web server.',
+    }
+  }
+  if (state.active) {
+    return {
+      label: 'On',
+      tone: 'ok',
+      line: 'The connector checks the certificate of your web server for every hostname.',
+    }
+  }
+  const count = state.pendingNames.length
+  return {
+    label: 'Waiting',
+    tone: 'pending',
+    line:
+      count === 0
+        ? 'Add a hostname to start checking the certificate of your web server.'
+        : `Waiting for ${state.pendingNames.join(', ')}. Until ${count === 1 ? 'it has a site and a certificate' : 'they have sites and certificates'}, the connector does not check the certificate for any hostname of this tunnel.`,
+  }
 }
 
 /** A server's connector, as a badge: what it last reported, or that it is left out. */

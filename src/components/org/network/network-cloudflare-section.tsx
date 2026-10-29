@@ -36,6 +36,7 @@ import {
   tokenProblem,
   tunnelErrorMessage,
 } from '@/lib/tunnels'
+import { NetworkOriginCertificates } from './network-origin-certificates'
 
 function missingLine(missing: readonly string[]): string {
   return `This API Token still needs: ${missing.join(', ')}.`
@@ -372,6 +373,7 @@ function CarrierCard({ orgId, carrier }: Readonly<{ orgId: string; carrier: Tunn
           />
         ))}
       </View>
+      <NetworkOriginCertificates orgId={orgId} carrierId={carrier.id} />
       <AddBadgeForm
         orgId={orgId}
         carrierId={carrier.id}
