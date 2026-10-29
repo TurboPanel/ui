@@ -52,6 +52,7 @@ vi.mock('@/components/ui', () => ({
 vi.mock('@/lib/query-client', () => ({
   useCanState: () => ({ allowed: true, loading: false }),
 }))
+vi.mock('./network-origin-certificates', () => ({ NetworkOriginCertificates: () => null }))
 vi.mock('@/lib/queries/tunnels', () => ({
   useTunnelCarriers: () => ({
     data: { carriers: state.carriers },

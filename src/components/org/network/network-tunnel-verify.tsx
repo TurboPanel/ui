@@ -26,6 +26,7 @@ export function NetworkTunnelVerify({
   const [needsDeploy, setNeedsDeploy] = useState(false)
   const set = useSetTunnelVerifyOrigin(orgId, tunnel.id)
   const summary = verifyOriginSummary(tunnel.verifyOrigin)
+  const isOn = tunnel.verifyOrigin?.enabled === true
   const removing = tunnel.status === 'removing'
 
   async function apply(enabled: boolean) {
@@ -97,7 +98,7 @@ export function NetworkTunnelVerify({
         </View>
       ) : (
         <ButtonRow>
-          {tunnel.verifyOrigin.enabled ? (
+          {isOn ? (
             <>
               <Button
                 label="Apply Again"

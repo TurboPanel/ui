@@ -118,7 +118,6 @@ const ERROR_COPY: Readonly<Record<string, string>> = {
   zone_not_found:
     'Cloudflare could not find the zone for this hostname under this account. Check the hostname.',
   carry_invalid: 'Choose whether this server runs tunnels.',
-  tunnel_removing: 'This tunnel is being removed.',
   verify_origin_public_names:
     'This site also serves a name that is not a tunnel name with a verified connection. A certificate from Cloudflare is not trusted by browsers, so it would break that name. Move the other names to another site, or leave the verified connection off.',
   verify_origin_zones:

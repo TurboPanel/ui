@@ -238,17 +238,25 @@ export function tunnelHealth(tunnel: Pick<TunnelRecord, 'status' | 'portals'>): 
   return { label: 'Setting Up', tone: 'pending' }
 }
 
+/** What an older panel, which sends no verified-connection field, means: off. */
+export const VERIFY_ORIGIN_OFF: VerifyOriginState = {
+  enabled: false,
+  active: false,
+  pendingNames: [],
+}
+
 /**
  * The verified connection, as a badge and a sentence. "Waiting" is the safe
  * state: the choice is made but a name has no site or certificate yet, so the
  * connector keeps skipping verification for the whole tunnel until it is
  * applied again.
  */
-export function verifyOriginSummary(state: VerifyOriginState): {
+export function verifyOriginSummary(given?: VerifyOriginState | null): {
   label: string
   tone: BadgeTone
   line: string
 } {
+  const state = given ?? VERIFY_ORIGIN_OFF
   if (!state.enabled) {
     return {
       label: 'Off',

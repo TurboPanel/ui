@@ -349,6 +349,10 @@ describe('hostnames', () => {
 })
 
 describe('verifyOriginSummary', () => {
+  it('reads a missing field, as sent by an older panel, as off', () => {
+    expect(verifyOriginSummary(undefined).label).toBe('Off')
+    expect(verifyOriginSummary(null).label).toBe('Off')
+  })
   it('says Off, On and Waiting in plain words, and names what it waits for', () => {
     expect(verifyOriginSummary({ enabled: false, active: false, pendingNames: [] }).label).toBe(
       'Off'

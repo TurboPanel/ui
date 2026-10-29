@@ -11279,8 +11279,8 @@ export type TunnelRecord = {
   carryingServerIds: string[]
   warnings: string[]
   doorwayCount: number
-  /** The verified connection to your web server (see `setTunnelVerifyOrigin`). */
-  verifyOrigin: VerifyOriginState
+  /** The verified connection to your web server (see `setTunnelVerifyOrigin`). Missing from an older panel, which means off. */
+  verifyOrigin?: VerifyOriginState
 }
 
 /** Asked for, in effect, and which names still wait for a site or a certificate. */

@@ -128,4 +128,15 @@ describe('the verified connection of a tunnel', () => {
     render(<NetworkTunnelVerify orgId="o1" tunnel={tunnel(OFF, 'removing')} />)
     expect((screen.getByText('Verify the Connection') as HTMLButtonElement).disabled).toBe(true)
   })
+
+  it('shows Off and the turn-on button when an older panel sends no field', () => {
+    render(
+      <NetworkTunnelVerify
+        orgId="o1"
+        tunnel={{ id: 't1', name: 'edge', status: 'active' } as TunnelRecord}
+      />
+    )
+    expect(screen.getByTestId('badge').textContent).toBe('Off')
+    expect(screen.getByText('Verify the Connection')).toBeTruthy()
+  })
 })
