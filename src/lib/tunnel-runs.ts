@@ -7,10 +7,12 @@ import type {
   OrgServerRecord,
   TunnelCarrier,
   TunnelHostnameRecord,
+  OriginCertificateRecord,
   TunnelPlacement,
   TunnelPlacementBody,
   TunnelPortal,
   TunnelRecord,
+  VerifyOriginState,
 } from '@/lib/instance-api'
 import type { BadgeTone } from '@/components/ui/badge'
 
@@ -234,6 +236,58 @@ export function tunnelHealth(tunnel: Pick<TunnelRecord, 'status' | 'portals'>): 
     return { label: 'Needs Attention', tone: 'danger' }
   }
   return { label: 'Setting Up', tone: 'pending' }
+}
+
+/** What an older panel, which sends no verified-connection field, means: off. */
+export const VERIFY_ORIGIN_OFF: VerifyOriginState = {
+  enabled: false,
+  active: false,
+  pendingNames: [],
+}
+
+/**
+ * The verified connection, as a badge and a sentence. "Waiting" is the safe
+ * state: the choice is made but a name has no site or certificate yet, so the
+ * connector keeps skipping verification for the whole tunnel until it is
+ * applied again.
+ */
+export function verifyOriginSummary(given?: VerifyOriginState | null): {
+  label: string
+  tone: BadgeTone
+  line: string
+} {
+  const state = given ?? VERIFY_ORIGIN_OFF
+  if (!state.enabled) {
+    return {
+      label: 'Off',
+      tone: 'muted',
+      line: 'The connector does not check the certificate of your web server.',
+    }
+  }
+  if (state.active) {
+    return {
+      label: 'On',
+      tone: 'ok',
+      line: 'The connector checks the certificate of your web server for every hostname.',
+    }
+  }
+  const count = state.pendingNames.length
+  const names = state.pendingNames.join(', ')
+  const until = count === 1 ? 'it has a site and a certificate' : 'they have sites and certificates'
+  const line =
+    count === 0
+      ? 'Add a hostname to start checking the certificate of your web server.'
+      : `Waiting for ${names}. Until ${until}, the connector does not check the certificate for any hostname of this tunnel.`
+  return { label: 'Waiting', tone: 'pending', line }
+}
+
+/** The sentence under an origin certificate TurboPanel issued: replaced, renewing soon, or nothing to say. */
+export function issuedCertificateNote(
+  certificate: Pick<OriginCertificateRecord, 'retired' | 'renewalDue'>
+): string {
+  if (certificate.retired) return ' Not needed any more. It is revoked once no site uses it.'
+  if (certificate.renewalDue) return ' It is renewed soon.'
+  return ''
 }
 
 /** A server's connector, as a badge: what it last reported, or that it is left out. */

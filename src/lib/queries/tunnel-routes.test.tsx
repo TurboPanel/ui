@@ -7,8 +7,11 @@ import {
   useAddTunnelHostname,
   useCreateTunnel,
   useDeleteTunnel,
+  useExistingOriginCertificates,
+  useOriginCertificates,
   useRemoveTunnelHostname,
   useSetServerTunnelCarrying,
+  useSetTunnelVerifyOrigin,
   useTunnelHostnames,
   useTunnels,
   useUpdateTunnelPlacement,
@@ -23,6 +26,9 @@ const api = vi.hoisted(() => ({
   addTunnelHostname: vi.fn(),
   removeTunnelHostname: vi.fn(),
   setServerTunnelCarrying: vi.fn(),
+  setTunnelVerifyOrigin: vi.fn(),
+  fetchOriginCertificates: vi.fn(),
+  fetchExistingOriginCertificates: vi.fn(),
 }))
 
 vi.mock('@/lib/instance-api', async (importOriginal) => ({
@@ -143,5 +149,63 @@ describe('tunnel queries', () => {
     expect(api.setServerTunnelCarrying).toHaveBeenCalledWith(orgId, 's1', false)
     expect(spy).toHaveBeenCalledWith({ queryKey: queryKeys.org(orgId).servers.list })
     expect(spy).toHaveBeenCalledWith({ queryKey: queryKeys.org(orgId).tunnels })
+  })
+
+  it('turning the verified connection on or off refreshes the tunnels', async () => {
+    const client = createAppQueryClient()
+    const spy = vi.spyOn(client, 'invalidateQueries')
+    api.setTunnelVerifyOrigin.mockResolvedValue({ needsDeploy: false })
+    const { result } = renderHook(() => useSetTunnelVerifyOrigin(orgId, 't1'), {
+      wrapper: createWrapper(client),
+    })
+    await act(async () => {
+      await result.current.run({ enabled: true, wildcard: true })
+    })
+    expect(api.setTunnelVerifyOrigin).toHaveBeenCalledWith(orgId, 't1', {
+      enabled: true,
+      wildcard: true,
+    })
+    expect(spy).toHaveBeenCalledWith({ queryKey: queryKeys.org(orgId).tunnels })
+  })
+
+  it('loads the origin certificates of an account, reads a refusal as an empty list, and stays idle without ids', async () => {
+    api.fetchOriginCertificates.mockResolvedValueOnce({ originCertificates: [{ id: 'tls1' }] })
+    const ok = renderHook(() => useOriginCertificates(orgId, 'c1'), { wrapper: createWrapper() })
+    await waitFor(() => expect(ok.result.current.isSuccess).toBe(true))
+    expect(api.fetchOriginCertificates).toHaveBeenCalledWith(orgId, 'c1')
+    expect(ok.result.current.data).toEqual({ originCertificates: [{ id: 'tls1' }] })
+
+    api.fetchOriginCertificates.mockRejectedValueOnce(new Error('/x failed: HTTP 403: forbidden'))
+    const refused = renderHook(() => useOriginCertificates(orgId, 'c1'), {
+      wrapper: createWrapper(),
+    })
+    await waitFor(() => expect(refused.result.current.isSuccess).toBe(true))
+    expect(refused.result.current.data).toEqual({ originCertificates: [] })
+
+    api.fetchOriginCertificates.mockRejectedValueOnce(new Error('boom'))
+    const broken = renderHook(() => useOriginCertificates(orgId, 'c1'), {
+      wrapper: createWrapper(),
+    })
+    await waitFor(() => expect(broken.result.current.isError).toBe(true))
+
+    const idle = renderHook(() => useOriginCertificates(orgId, ''), { wrapper: createWrapper() })
+    expect(idle.result.current.fetchStatus).toBe('idle')
+  })
+
+  it('looks a zone up only once a zone is given', async () => {
+    api.fetchExistingOriginCertificates.mockResolvedValueOnce({
+      zone: 'example.com',
+      certificates: [],
+    })
+    const none = renderHook(() => useExistingOriginCertificates(orgId, 'c1', ''), {
+      wrapper: createWrapper(),
+    })
+    expect(none.result.current.fetchStatus).toBe('idle')
+    expect(api.fetchExistingOriginCertificates).not.toHaveBeenCalled()
+    const found = renderHook(() => useExistingOriginCertificates(orgId, 'c1', 'example.com'), {
+      wrapper: createWrapper(),
+    })
+    await waitFor(() => expect(found.result.current.isSuccess).toBe(true))
+    expect(api.fetchExistingOriginCertificates).toHaveBeenCalledWith(orgId, 'c1', 'example.com')
   })
 })

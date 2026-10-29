@@ -4,10 +4,13 @@ import {
   addTunnelHostname,
   createTunnel,
   deleteTunnel,
+  fetchExistingOriginCertificates,
+  fetchOriginCertificates,
   fetchTunnelHostnames,
   fetchTunnels,
   removeTunnelHostname,
   setServerTunnelCarrying,
+  setTunnelVerifyOrigin,
   updateTunnelPlacement,
 } from './instance-api'
 
@@ -106,5 +109,32 @@ describe('instance-api tunnel wrappers', () => {
     expect(url).toMatch(/\/organizations\/org-1\/servers\/s1\/tunnel-carrying$/)
     expect(init.method).toBe('PUT')
     expect(JSON.parse(String(init.body))).toEqual({ carry: false })
+  })
+
+  it('turns the verified connection on with the wildcard choice, or off', async () => {
+    await setTunnelVerifyOrigin('org-1', 't1', { enabled: true, wildcard: true })
+    expect(lastCall().url).toMatch(/\/organizations\/org-1\/tunnels\/t1\/verify-origin$/)
+    expect(lastCall().init.method).toBe('PUT')
+    expect(JSON.parse(String(lastCall().init.body))).toEqual({ enabled: true, wildcard: true })
+    await setTunnelVerifyOrigin('org-1', 't1', { enabled: false })
+    expect(JSON.parse(String(lastCall().init.body))).toEqual({ enabled: false })
+  })
+
+  it('lists the origin certificates TurboPanel issued for an account', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ originCertificates: [] }))
+    await expect(fetchOriginCertificates('org-1', 'c1')).resolves.toEqual({
+      originCertificates: [],
+    })
+    expect(lastCall().url).toMatch(/\/organizations\/org-1\/carriers\/c1\/origin-certificates$/)
+  })
+
+  it('looks up what the provider holds for a zone, with the zone encoded', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ zone: 'example.com', certificates: [] }))
+    await fetchExistingOriginCertificates('org-1', 'c1', 'example.com')
+    expect(lastCall().url).toMatch(
+      /\/carriers\/c1\/origin-certificates\/existing\?zone=example\.com$/
+    )
+    await fetchExistingOriginCertificates('org-1', 'c1', 'a b&c')
+    expect(lastCall().url).toContain('zone=a%20b%26c')
   })
 })
