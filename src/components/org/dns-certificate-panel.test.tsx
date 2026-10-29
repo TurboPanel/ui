@@ -190,7 +190,7 @@ describe('the order form', () => {
   it('asks for test certificates only when the toggle is turned on', async () => {
     render(<DnsCertificatePanel orgId="o1" acmeEnabled />)
     type('Names for the certificate', 'app.example.com')
-    fireEvent.click(screen.getByLabelText('Test certificates'))
+    fireEvent.click(screen.getByLabelText('Test Certificates'))
     fireEvent.click(screen.getByText('Order Certificate'))
     await waitFor(() => expect(state.order).toHaveBeenCalledTimes(1))
     expect((state.order.mock.calls[0]![0] as { staging: boolean }).staging).toBe(true)

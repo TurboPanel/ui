@@ -166,14 +166,14 @@ function OrderForm({
           </>
         )}
         <SettingRow
-          label="Test certificates"
+          label="Test Certificates"
           description="Order from Let’s Encrypt’s test service instead. Browsers do not trust these, and they cannot be used on a site. For trying this out."
         >
           <Toggle
             value={test}
             onValueChange={setTest}
             disabled={order.isPending}
-            accessibilityLabel="Test certificates"
+            accessibilityLabel="Test Certificates"
           />
         </SettingRow>
         {problem && draft.namesText + draft.domain !== '' ? (

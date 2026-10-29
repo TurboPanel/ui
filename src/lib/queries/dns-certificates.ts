@@ -7,6 +7,7 @@ import {
   retryDnsCertificate,
   type OrderDnsCertificateBody,
 } from '@/lib/instance-api'
+import { isHttpStatusError } from '@/lib/fetch-error-detail'
 import { queryKeys, useApiMutation } from '@/lib/query-client'
 
 /** While an order runs the list is looked at again every few seconds. */
@@ -25,7 +26,8 @@ export function useDnsCertificates(orgId: string, options?: Readonly<{ enabled?:
       try {
         return await fetchDnsCertificates(orgId)
       } catch (err) {
-        if (isForbiddenError(err)) return { certificates: [] }
+        // A refusal, or a panel too old to have the route, shows no section.
+        if (isForbiddenError(err) || isHttpStatusError(err, 404)) return { certificates: [] }
         throw err
       }
     },

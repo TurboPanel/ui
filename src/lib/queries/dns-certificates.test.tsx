@@ -59,6 +59,11 @@ describe('certificate order queries', () => {
     await waitFor(() => expect(refused.result.current.data).toEqual({ certificates: [] }))
 
     api.isForbiddenError.mockReturnValue(false)
+    api.fetchDnsCertificates.mockRejectedValueOnce(new Error('HTTP 404: Not found'))
+    const missing = renderHook(() => useDnsCertificates(orgId), { wrapper: createWrapper() })
+    await waitFor(() => expect(missing.result.current.data).toEqual({ certificates: [] }))
+
+    api.isForbiddenError.mockReturnValue(false)
     api.fetchDnsCertificates.mockRejectedValue(new Error('boom'))
     const failed = renderHook(() => useDnsCertificates(orgId), { wrapper: createWrapper() })
     await waitFor(() => expect(failed.result.current.isError).toBe(true))
