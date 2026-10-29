@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { deployErrorMessage, deployRefusalMessage } from '@/lib/deploy-error-message'
-import { DeployHealthCheckMissingError, DeployResourceLimitExceededError } from '@/lib/instance-api'
+import {
+  DeployHealthCheckMissingError,
+  DeployResourceLimitExceededError,
+  DeployTunnelRefusedError,
+} from '@/lib/instance-api'
 
 const wrapped = (code: string, sentence: string) =>
   new Error(`/api/client/v1/environments/e1/deploy failed: 403 ${code} — ${sentence}`)
@@ -72,6 +76,33 @@ describe('deployRefusalMessage', () => {
   it('falls back to the coded refusals', () => {
     expect(deployRefusalMessage(new Error('409 — server_placement_mismatch'))).toBe(
       "Deploy target does not match the project's pinned server placement."
+    )
+  })
+})
+
+describe('tunnel deploy refusals', () => {
+  it('names the hostnames and the next step for a typed refusal', () => {
+    const cert = new DeployTunnelRefusedError('tunnel_name_public_certificate', ['a.example.com'])
+    expect(deployRefusalMessage(cert)).toBe(
+      "A tunnel-only name cannot use a public certificate (a.example.com). Choose Self-signed for this site's certificate, then deploy again."
+    )
+    expect(deployErrorMessage(cert)).toBe(deployRefusalMessage(cert))
+    const old = new DeployTunnelRefusedError('tunnel_daemon_too_old', [
+      'a.example.com',
+      'b.example.com',
+    ])
+    expect(deployRefusalMessage(old)).toMatch(
+      /Update this server .*\(a\.example\.com, b\.example\.com\)/
+    )
+  })
+  it('still reads a coded message that lost its type', () => {
+    expect(
+      deployErrorMessage(
+        new Error('/environments/e1/deploy failed: HTTP 409: tunnel_name_public_certificate')
+      )
+    ).toMatch(/cannot use a public certificate\. Choose Self-signed/)
+    expect(deployErrorMessage(new Error('HTTP 409: tunnel_daemon_too_old'))).toMatch(
+      /Update this server/
     )
   })
 })

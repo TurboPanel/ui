@@ -199,29 +199,41 @@ export function carryCountNote(count: number): string | null {
   return null
 }
 
-export function tunnelStatusLabel(status: string): string {
-  switch (status) {
-    case 'active':
-      return 'Ready'
-    case 'pending':
-      return 'Setting Up'
-    case 'removing':
-      return 'Removing'
-    default:
-      return 'Needs Attention'
-  }
+/** The tunnels that currently want a connector on this server. */
+export function tunnelsRunningOn(
+  tunnels: readonly Pick<TunnelRecord, 'name' | 'portals'>[],
+  serverId: string
+): Pick<TunnelRecord, 'name' | 'portals'>[] {
+  return tunnels.filter((tunnel) =>
+    tunnel.portals.some((portal) => portal.serverId === serverId && portal.wanted === 'run')
+  )
 }
 
-export function tunnelStatusTone(status: string): BadgeTone {
-  switch (status) {
-    case 'active':
-      return 'ok'
-    case 'pending':
-    case 'removing':
-      return 'pending'
-    default:
-      return 'danger'
+/**
+ * The badge on a tunnel card, worked out from what the servers report. The
+ * panel's own status stays "pending" after creation, so it cannot say whether
+ * the tunnel works: one connected server means Running; only silence or no
+ * report yet means Setting Up; with none connected, a wanted server that is
+ * down or in error, no wanted server at all, or an attention flag from the
+ * panel, means Needs Attention.
+ */
+export function tunnelHealth(tunnel: Pick<TunnelRecord, 'status' | 'portals'>): {
+  label: string
+  tone: BadgeTone
+} {
+  if (tunnel.status === 'removing') return { label: 'Removing', tone: 'pending' }
+  const wanted = tunnel.portals.filter((portal) => portal.wanted === 'run')
+  if (wanted.some((portal) => portal.reported === 'connected')) {
+    return { label: 'Running', tone: 'ok' }
   }
+  if (
+    tunnel.status === 'attention' ||
+    wanted.length === 0 ||
+    wanted.some((portal) => portal.reported === 'down' || portal.reported === 'error')
+  ) {
+    return { label: 'Needs Attention', tone: 'danger' }
+  }
+  return { label: 'Setting Up', tone: 'pending' }
 }
 
 /** A server's connector, as a badge: what it last reported, or that it is left out. */

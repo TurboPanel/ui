@@ -28,8 +28,7 @@ import {
   portalState,
   seenLabel,
   serverLabel,
-  tunnelStatusLabel,
-  tunnelStatusTone,
+  tunnelHealth,
   type PlacementDraft,
 } from '@/lib/tunnel-runs'
 import { NetworkTunnelHostnames } from './network-tunnel-hostnames'
@@ -152,6 +151,7 @@ export function NetworkTunnelCard({
   const remove = useDeleteTunnel(orgId)
   const datacenterName = datacenters.find((d) => d.id === tunnel.datacenterId)?.name ?? null
   const names = new Map(servers.map((s) => [s.id, serverLabel(s)]))
+  const health = tunnelHealth(tunnel)
 
   async function runRemove() {
     setError(null)
@@ -162,7 +162,7 @@ export function NetworkTunnelCard({
   return (
     <SectionPanel title={tunnel.name} hint={placementSummary(tunnel, datacenterName)}>
       <View style={styles.titleRow}>
-        <Badge label={tunnelStatusLabel(tunnel.status)} tone={tunnelStatusTone(tunnel.status)} />
+        <Badge label={health.label} tone={health.tone} />
         <MonoText>{`${tunnel.doorwayCount} ${tunnel.doorwayCount === 1 ? 'hostname' : 'hostnames'}`}</MonoText>
       </View>
       {error ? (
@@ -195,6 +195,7 @@ export function NetworkTunnelCard({
           prompt="Remove this tunnel from TurboPanel and from Cloudflare? It has to carry no hostnames first."
           stacked
           busy={remove.isPending}
+          disabled={tunnel.status === 'removing'}
           onConfirm={() => void runRemove()}
         />
       </ButtonRow>

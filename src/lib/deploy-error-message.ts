@@ -1,4 +1,9 @@
-import { DeployHealthCheckMissingError, DeployResourceLimitExceededError } from '@/lib/instance-api'
+import {
+  DeployHealthCheckMissingError,
+  DeployResourceLimitExceededError,
+  DeployTunnelRefusedError,
+} from '@/lib/instance-api'
+import { tunnelDeployRefusalMessage } from '@/lib/tunnels'
 import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
 
 /**
@@ -21,12 +26,18 @@ function serverSentence(message: string): string | null {
 
 /** What to show when `POST /environments/:id/deploy` is refused. */
 export function deployErrorMessage(err: unknown): string {
+  if (err instanceof DeployTunnelRefusedError) {
+    return tunnelDeployRefusalMessage(err.code, err.hostnames) ?? err.message
+  }
   const message = err instanceof Error ? err.message : 'Failed to deploy environment'
   if (SERVER_SENTENCE_CODES.some((code) => message.includes(code))) {
     return (
       serverSentence(message) ??
       'This deploy uses host-level Compose features that this organization or your role does not allow.'
     )
+  }
+  for (const code of ['tunnel_name_public_certificate', 'tunnel_daemon_too_old']) {
+    if (message.includes(code)) return tunnelDeployRefusalMessage(code) ?? message
   }
   if (message.includes('server_placement_mismatch')) {
     return "Deploy target does not match the project's pinned server placement."
@@ -77,6 +88,9 @@ export function deployPreviewFailureMessage(err: unknown): string | null {
   }
   if (err instanceof DeployResourceLimitExceededError) {
     return 'This start would exceed a resource limit. Review the capacity of this environment and try again.'
+  }
+  if (err instanceof DeployTunnelRefusedError) {
+    return tunnelDeployRefusalMessage(err.code, err.hostnames)
   }
   return null
 }

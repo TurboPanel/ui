@@ -134,3 +134,21 @@ export function tunnelErrorMessage(err: unknown, fallback: string): string {
   }
   return fallback
 }
+
+/**
+ * A deploy refused because of a tunnel-only hostname, in plain words with the
+ * next step and the names it is about. `null` for any other code.
+ */
+export function tunnelDeployRefusalMessage(
+  code: string,
+  hostnames: readonly string[] = []
+): string | null {
+  const names = hostnames.length > 0 ? ` (${hostnames.join(', ')})` : ''
+  if (code === 'tunnel_name_public_certificate') {
+    return `A tunnel-only name cannot use a public certificate${names}. Choose Self-signed for this site's certificate, then deploy again.`
+  }
+  if (code === 'tunnel_daemon_too_old') {
+    return `Update this server before deploying a site with a tunnel-only name${names}. It installs on its own at the next update check.`
+  }
+  return null
+}

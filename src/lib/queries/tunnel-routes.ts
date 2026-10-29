@@ -45,6 +45,7 @@ export function useTunnelHostnames(
     queryKey: queryKeys.org(orgId).tunnelHostnames(tunnelId),
     queryFn: () => fetchTunnelHostnames(orgId, tunnelId),
     enabled: (options?.enabled ?? true) && orgId.length > 0 && tunnelId.length > 0,
+    refetchInterval: 30_000,
   })
 }
 

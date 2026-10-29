@@ -49,7 +49,7 @@ function HostnameRow({
     <View style={panelStyles.detailCard}>
       <View style={styles.rowHeader}>
         <View style={styles.titleRow}>
-          <MonoText>{record.hostname}</MonoText>
+          <MonoText style={styles.hostname}>{record.hostname}</MonoText>
           <Badge
             label={hostnameStatusLabel(record.status)}
             tone={hostnameStatusTone(record.status)}
@@ -168,6 +168,8 @@ export function NetworkTunnelHostnames({
 
 const styles = StyleSheet.create({
   root: { gap: spacing.sm },
+  // A hostname can be 253 characters with no break in it: let it shrink and wrap.
+  hostname: { flexShrink: 1, minWidth: 0 },
   form: { gap: spacing.sm },
   rowHeader: {
     flexDirection: 'row',
@@ -180,6 +182,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
+    flexShrink: 1,
     gap: spacing.sm,
   },
 })

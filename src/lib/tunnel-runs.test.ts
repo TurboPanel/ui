@@ -22,8 +22,8 @@ import {
   serverNeverCarries,
   toggleDraftServer,
   tunnelCapableCarriers,
-  tunnelStatusLabel,
-  tunnelStatusTone,
+  tunnelHealth,
+  tunnelsRunningOn,
   withPlacementKind,
   type PlacementDraft,
 } from './tunnel-runs'
@@ -214,15 +214,56 @@ describe('placementBody', () => {
   })
 })
 
+describe('which tunnels run on a server', () => {
+  it('lists the tunnels that want a connector there, not the ones that skip it', () => {
+    const a = tunnel({ name: 'a', portals: [portal({ serverId: 's1' })] })
+    const b = tunnel({ name: 'b', portals: [portal({ serverId: 's1', wanted: 'skip' })] })
+    const c = tunnel({ name: 'c', portals: [portal({ serverId: 's2' })] })
+    expect(tunnelsRunningOn([a, b, c], 's1').map((t) => t.name)).toEqual(['a'])
+    expect(tunnelsRunningOn([a, b, c], 's3')).toEqual([])
+  })
+})
+
+describe('the tunnel badge', () => {
+  const run = (reported: TunnelPortal['reported'], wanted: TunnelPortal['wanted'] = 'run') =>
+    portal({ reported, wanted })
+
+  it('says Running once one wanted server is connected, whatever the panel status says', () => {
+    const connected = tunnelHealth({ status: 'pending', portals: [run('connected'), run('down')] })
+    expect(connected).toEqual({ label: 'Running', tone: 'ok' })
+    expect(tunnelHealth({ status: 'attention', portals: [run('connected')] }).label).toBe('Running')
+  })
+  it('says Setting Up while no server has reported yet', () => {
+    expect(tunnelHealth({ status: 'pending', portals: [run('unknown'), run('unknown')] })).toEqual({
+      label: 'Setting Up',
+      tone: 'pending',
+    })
+  })
+  it('says Needs Attention when every wanted server is down or in error, or none is wanted', () => {
+    expect(tunnelHealth({ status: 'pending', portals: [run('down')] }).label).toBe(
+      'Needs Attention'
+    )
+    expect(tunnelHealth({ status: 'pending', portals: [run('unknown'), run('error')] }).tone).toBe(
+      'danger'
+    )
+    expect(tunnelHealth({ status: 'attention', portals: [run('unknown')] }).label).toBe(
+      'Needs Attention'
+    )
+    expect(tunnelHealth({ status: 'pending', portals: [] }).label).toBe('Needs Attention')
+    expect(tunnelHealth({ status: 'pending', portals: [run('connected', 'skip')] }).label).toBe(
+      'Needs Attention'
+    )
+  })
+  it('says Removing whatever the servers report', () => {
+    expect(tunnelHealth({ status: 'removing', portals: [run('connected')] })).toEqual({
+      label: 'Removing',
+      tone: 'pending',
+    })
+  })
+})
+
 describe('words for status', () => {
-  it('names tunnel and hostname states', () => {
-    expect(tunnelStatusLabel('active')).toBe('Ready')
-    expect(tunnelStatusLabel('pending')).toBe('Setting Up')
-    expect(tunnelStatusLabel('removing')).toBe('Removing')
-    expect(tunnelStatusLabel('attention')).toBe('Needs Attention')
-    expect(tunnelStatusTone('active')).toBe('ok')
-    expect(tunnelStatusTone('pending')).toBe('pending')
-    expect(tunnelStatusTone('attention')).toBe('danger')
+  it('names hostname states', () => {
     expect(hostnameStatusLabel('live')).toBe('Live')
     expect(hostnameStatusLabel('pending')).toBe('Setting Up')
     expect(hostnameStatusLabel('removing')).toBe('Removing')

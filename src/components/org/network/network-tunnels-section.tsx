@@ -5,7 +5,7 @@ import { useOrgServers } from '@/lib/queries/servers'
 import { useTunnelCarriers } from '@/lib/queries/tunnels'
 import { useTunnels } from '@/lib/queries/tunnel-routes'
 import { useDatacenters } from '@/lib/queries/topology'
-import { useCan } from '@/lib/query-client'
+import { useCanState } from '@/lib/query-client'
 import { spacing } from '@/lib/theme'
 import { tunnelErrorMessage } from '@/lib/tunnels'
 import { NetworkTunnelCard } from './network-tunnel-card'
@@ -17,7 +17,11 @@ import { NetworkTunnelServers } from './network-tunnel-servers'
  * and add the hostnames it carries. Owners and managers only.
  */
 export function NetworkTunnelsSection({ orgId }: Readonly<{ orgId: string }>) {
-  const canManage = useCan('organization', orgId, 'organization:manage')
+  const { allowed: canManage, loading: roleLoading } = useCanState(
+    'organization',
+    orgId,
+    'organization:manage'
+  )
   const tunnels = useTunnels(orgId, { enabled: canManage })
   const carriers = useTunnelCarriers(orgId, { enabled: canManage })
   const servers = useOrgServers(orgId, { enabled: canManage })
@@ -33,7 +37,8 @@ export function NetworkTunnelsSection({ orgId }: Readonly<{ orgId: string }>) {
         A tunnel lets visitors reach a site through Cloudflare without opening a port on your
         server. Choose which servers run it, then add the hostnames it carries.
       </Text>
-      {canManage ? null : (
+      {roleLoading ? <LoadingState label="Checking your access…" /> : null}
+      {canManage || roleLoading ? null : (
         <Text style={panelStyles.muted}>Only owners and managers can manage tunnels.</Text>
       )}
       {canManage ? (
@@ -62,7 +67,9 @@ export function NetworkTunnelsSection({ orgId }: Readonly<{ orgId: string }>) {
           datacenters={datacenterList}
         />
       ))}
-      {canManage ? <NetworkTunnelServers orgId={orgId} servers={serverList} /> : null}
+      {canManage ? (
+        <NetworkTunnelServers orgId={orgId} servers={serverList} tunnels={list} />
+      ) : null}
     </View>
   )
 }
