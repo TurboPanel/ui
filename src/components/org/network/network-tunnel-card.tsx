@@ -33,6 +33,7 @@ import {
 } from '@/lib/tunnel-runs'
 import { NetworkTunnelHostnames } from './network-tunnel-hostnames'
 import { NetworkTunnelPlacement } from './network-tunnel-placement'
+import { NetworkTunnelVerify } from './network-tunnel-verify'
 
 function PortalRow({ portal, serverName }: Readonly<{ portal: TunnelPortal; serverName: string }>) {
   const state = portalState(portal)
@@ -187,6 +188,7 @@ export function NetworkTunnelCard({
         ))}
       </View>
       <PlacementEditor orgId={orgId} tunnel={tunnel} servers={servers} datacenters={datacenters} />
+      <NetworkTunnelVerify orgId={orgId} tunnel={tunnel} />
       <NetworkTunnelHostnames orgId={orgId} tunnelId={tunnel.id} />
       <ButtonRow>
         <ConfirmButton

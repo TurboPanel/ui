@@ -69,6 +69,7 @@ vi.mock('@/lib/queries/tunnel-routes', () => ({
 vi.mock('./network-tunnel-create', () => ({ NetworkTunnelCreate: () => <p>create form</p> }))
 vi.mock('./network-tunnel-hostnames', () => ({ NetworkTunnelHostnames: () => null }))
 vi.mock('./network-tunnel-placement', () => ({ NetworkTunnelPlacement: () => null }))
+vi.mock('./network-tunnel-verify', () => ({ NetworkTunnelVerify: () => null }))
 
 const portal = (extra: Partial<TunnelPortal> = {}): TunnelPortal => ({
   serverId: 's1',
@@ -94,6 +95,7 @@ const tunnel = (extra: Partial<TunnelRecord> = {}): TunnelRecord =>
     carryingServerIds: ['s1'],
     warnings: [],
     doorwayCount: 0,
+    verifyOrigin: { enabled: false, active: false, pendingNames: [] },
     ...extra,
   }) as TunnelRecord
 

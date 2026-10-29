@@ -26,6 +26,8 @@ import {
   tunnelsRunningOn,
   withPlacementKind,
   type PlacementDraft,
+  issuedCertificateNote,
+  verifyOriginSummary,
 } from './tunnel-runs'
 
 function server(
@@ -55,6 +57,7 @@ function tunnel(extra: Partial<TunnelRecord> = {}): TunnelRecord {
     carryingServerIds: [],
     warnings: [],
     doorwayCount: 0,
+    verifyOrigin: { enabled: false, active: false, pendingNames: [] },
     ...extra,
   }
 }
@@ -342,5 +345,49 @@ describe('hostnames', () => {
     expect(dnsOutcome('created')).toMatch(/created/)
     expect(dnsOutcome('none')).toMatch(/no zone for this hostname/)
     expect(dnsOutcome('none')).toMatch(/Added to the tunnel/)
+  })
+})
+
+describe('verifyOriginSummary', () => {
+  it('reads a missing field, as sent by an older panel, as off', () => {
+    expect(verifyOriginSummary(undefined).label).toBe('Off')
+    expect(verifyOriginSummary(null).label).toBe('Off')
+  })
+  it('says Off, On and Waiting in plain words, and names what it waits for', () => {
+    expect(verifyOriginSummary({ enabled: false, active: false, pendingNames: [] }).label).toBe(
+      'Off'
+    )
+    expect(verifyOriginSummary({ enabled: true, active: true, pendingNames: [] })).toMatchObject({
+      label: 'On',
+      tone: 'ok',
+    })
+    const one = verifyOriginSummary({
+      enabled: true,
+      active: false,
+      pendingNames: ['a.example.com'],
+    })
+    expect(one.label).toBe('Waiting')
+    expect(one.line).toContain('a.example.com')
+    expect(one.line).toContain('it has a site and a certificate')
+    const two = verifyOriginSummary({
+      enabled: true,
+      active: false,
+      pendingNames: ['a.example.com', 'b.example.com'],
+    })
+    expect(two.line).toContain('a.example.com, b.example.com')
+    expect(two.line).toContain('they have sites and certificates')
+    expect(verifyOriginSummary({ enabled: true, active: false, pendingNames: [] }).line).toContain(
+      'Add a hostname'
+    )
+  })
+})
+
+describe('issuedCertificateNote', () => {
+  it('explains a replaced certificate, a renewal coming up, or says nothing', () => {
+    expect(issuedCertificateNote({ retired: true, renewalDue: true })).toContain(
+      'revoked once no site uses it'
+    )
+    expect(issuedCertificateNote({ retired: false, renewalDue: true })).toContain('renewed soon')
+    expect(issuedCertificateNote({ retired: false, renewalDue: false })).toBe('')
   })
 })

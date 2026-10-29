@@ -3,14 +3,18 @@ import {
   addTunnelHostname,
   createTunnel,
   deleteTunnel,
+  fetchExistingOriginCertificates,
+  fetchOriginCertificates,
   fetchTunnelHostnames,
   fetchTunnels,
   isForbiddenError,
   removeTunnelHostname,
   setServerTunnelCarrying,
+  setTunnelVerifyOrigin,
   updateTunnelPlacement,
   type CreateTunnelBody,
   type TunnelPlacementBody,
+  type TunnelVerifyOriginBody,
 } from '@/lib/instance-api'
 import { queryKeys, useApiMutation } from '@/lib/query-client'
 
@@ -119,5 +123,41 @@ export function useSetServerTunnelCarrying(orgId: string) {
       await invalidate()
     },
     fallbackError: 'Failed to change this server',
+  })
+}
+
+export function useSetTunnelVerifyOrigin(orgId: string, tunnelId: string) {
+  const invalidate = useInvalidateTunnels(orgId)
+  return useApiMutation({
+    mutationFn: (body: TunnelVerifyOriginBody) => setTunnelVerifyOrigin(orgId, tunnelId, body),
+    retry: false,
+    onSuccess: invalidate,
+    fallbackError: 'Failed to change the verified connection',
+  })
+}
+
+/** Origin certificates TurboPanel issued for one Cloudflare account. Owners and managers only. */
+export function useOriginCertificates(orgId: string, carrierId: string) {
+  return useQuery({
+    queryKey: [...queryKeys.org(orgId).tunnels, 'origin-certificates', carrierId],
+    queryFn: async () => {
+      try {
+        return await fetchOriginCertificates(orgId, carrierId)
+      } catch (err) {
+        if (isForbiddenError(err)) return { originCertificates: [] }
+        throw err
+      }
+    },
+    enabled: orgId.length > 0 && carrierId.length > 0,
+  })
+}
+
+/** What the provider holds for a zone; only asked for after the person looks a zone up. */
+export function useExistingOriginCertificates(orgId: string, carrierId: string, zone: string) {
+  return useQuery({
+    queryKey: [...queryKeys.org(orgId).tunnels, 'origin-certificates-existing', carrierId, zone],
+    queryFn: () => fetchExistingOriginCertificates(orgId, carrierId, zone),
+    enabled: orgId.length > 0 && carrierId.length > 0 && zone.length > 0,
+    retry: false,
   })
 }
