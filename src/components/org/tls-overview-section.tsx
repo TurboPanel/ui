@@ -45,6 +45,8 @@ function tlsSourceLabel(source: string): string {
       return 'Self-signed'
     case 'lets_encrypt':
       return "Let's Encrypt"
+    case 'provider_origin':
+      return 'Cloudflare Origin'
     default:
       return source
   }
@@ -58,7 +60,8 @@ function tlsStatusLabel(row: TlsRecord): string {
   if (row.metadata.status === 'automatic') {
     return 'Issued and renewed by the serving host'
   }
-  return row.metadata.status
+  const status = row.metadata.status
+  return status.charAt(0).toUpperCase() + status.slice(1)
 }
 
 const SOURCE_OPTIONS = [

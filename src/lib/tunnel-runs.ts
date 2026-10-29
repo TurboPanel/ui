@@ -285,7 +285,8 @@ export function verifyOriginSummary(given?: VerifyOriginState | null): {
 export function issuedCertificateNote(
   certificate: Pick<OriginCertificateRecord, 'retired' | 'renewalDue'>
 ): string {
-  if (certificate.retired) return ' Not needed any more. It is revoked once no site uses it.'
+  if (certificate.retired)
+    return ' Not needed any more. It is revoked once no site uses it, or delete it from the Certificates library to revoke it now.'
   if (certificate.renewalDue) return ' It is renewed soon.'
   return ''
 }
