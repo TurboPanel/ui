@@ -11300,3 +11300,69 @@ export async function setServerTunnelCarrying(
     }
   )
 }
+
+// ---------------------------------------------------------------------------
+// Certificates ordered through a DNS challenge
+
+/** One certificate TurboPanel orders itself, proven by a DNS record in the connected account. */
+export type DnsCertificate = {
+  id: string
+  names: string[]
+  wildcard: boolean
+  /** `pending` while ordering, `ready`, `failed` after three failed orders, or `expired`. */
+  status: string
+  /** `queued`, `presented`, `validating`, `finalizing`, `issued`, `backoff` or `failed`. */
+  stage: string
+  /** Ordered from the test directory: no browser trusts it. */
+  staging: boolean
+  lastError: string | null
+  /** Something that will stop the next renewal, in plain words. */
+  warning: string | null
+  attempts: number
+  nextAttemptAt: string | null
+  renewAt: string | null
+  notAfter: string | null
+  issuer: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type OrderDnsCertificateBody = {
+  carrierId: string
+  names: string[]
+  /** Tests only: the authority's test directory. */
+  staging?: boolean
+}
+
+function dnsCertificatesPath(orgId: string): string {
+  return `${CLIENT_API}/organizations/${orgId}/dns-certificates`
+}
+
+export async function fetchDnsCertificates(
+  orgId: string
+): Promise<{ certificates: DnsCertificate[] }> {
+  return await apiFetch(dnsCertificatesPath(orgId))
+}
+
+export async function orderDnsCertificate(
+  orgId: string,
+  body: OrderDnsCertificateBody
+): Promise<{ certificate: DnsCertificate; reused: boolean }> {
+  return await apiFetch(dnsCertificatesPath(orgId), { method: 'POST', body: JSON.stringify(body) })
+}
+
+/** Move an order on now. */
+export async function checkDnsCertificate(
+  orgId: string,
+  id: string
+): Promise<{ certificate: DnsCertificate; outcome: string }> {
+  return await apiFetch(`${dnsCertificatesPath(orgId)}/${id}/check`, { method: 'POST' })
+}
+
+/** Try again a certificate that gave up. */
+export async function retryDnsCertificate(
+  orgId: string,
+  id: string
+): Promise<{ certificate: DnsCertificate }> {
+  return await apiFetch(`${dnsCertificatesPath(orgId)}/${id}/retry`, { method: 'POST' })
+}
