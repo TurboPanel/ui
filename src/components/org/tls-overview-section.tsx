@@ -60,7 +60,7 @@ function tlsStatusLabel(row: TlsRecord): string {
   if (row.metadata.status === 'automatic') {
     return 'Issued and renewed by the serving host'
   }
-  const status = row.metadata.status
+  const status = row.metadata.status ?? ''
   return status.charAt(0).toUpperCase() + status.slice(1)
 }
 
@@ -120,7 +120,11 @@ function TlsCertificateList({
         <ConfirmButton
           label={deletingId === row.id ? 'Deleting…' : 'Delete'}
           confirmLabel="Delete certificate"
-          prompt="Remove this certificate?"
+          prompt={
+            row.source === 'provider_origin'
+              ? 'Remove this certificate? It is also revoked at Cloudflare.'
+              : 'Remove this certificate?'
+          }
           busy={deletingId === row.id}
           disabled={deletePending && deletingId !== row.id}
           onConfirm={() => onDelete(row.id)}

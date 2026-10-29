@@ -114,7 +114,8 @@ describe('the origin certificates of a Cloudflare account', () => {
     expect(screen.getByText('old.example.com')).toBeTruthy()
     expect(screen.getByText('kept.example.com')).toBeTruthy()
     expect(screen.getAllByText('Replaced')).toHaveLength(2)
-    expect(screen.getAllByText(/revoked once no site uses it/)).toHaveLength(2)
+    expect(screen.getAllByText(/revoked once no site uses it/)).toHaveLength(1)
+    expect(screen.getAllByText(/delete it from the Certificates library/)).toHaveLength(1)
   })
 
   it('shows a loading line, and a plain error when the list cannot be loaded', () => {
