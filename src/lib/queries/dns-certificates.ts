@@ -65,7 +65,7 @@ export function useAdvanceRunningOrders(orgId: string, runningIds: readonly stri
       busy.current = true
       void (async () => {
         try {
-          for (const id of ids) await checkDnsCertificate(orgId, id).catch(() => undefined)
+          await Promise.all(ids.map((id) => checkDnsCertificate(orgId, id).catch(() => undefined)))
           await queryClient.invalidateQueries({ queryKey: queryKeys.org(orgId).dnsCertificates })
         } finally {
           busy.current = false
