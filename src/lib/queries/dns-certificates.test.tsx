@@ -3,6 +3,8 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  ORDER_NUDGE_CONCURRENCY,
+  ORDER_NUDGE_MAX_FAILURES,
   ORDER_NUDGE_MS,
   useAdvanceRunningOrders,
   useCheckDnsCertificate,
@@ -141,5 +143,44 @@ describe('automatic stepping of running orders', () => {
     })
     expect(api.checkDnsCertificate).toHaveBeenCalledTimes(2)
     release()
+  })
+
+  it('never has more than three checks in flight', async () => {
+    vi.useFakeTimers()
+    let active = 0
+    let peak = 0
+    api.checkDnsCertificate.mockImplementation(async () => {
+      active += 1
+      peak = Math.max(peak, active)
+      await new Promise((r) => setTimeout(r, 1_000))
+      active -= 1
+      return { certificate: {}, outcome: 'waiting' }
+    })
+    const ids = Array.from({ length: 7 }, (_, n) => `c${n}`)
+    renderHook(() => useAdvanceRunningOrders(orgId, ids), { wrapper: createWrapper() })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(ORDER_NUDGE_MS + 10_000)
+    })
+    expect(api.checkDnsCertificate).toHaveBeenCalledTimes(7)
+    expect(peak).toBe(ORDER_NUDGE_CONCURRENCY)
+  })
+
+  it('drops an order after three failures in a row and clears the count on success', async () => {
+    vi.useFakeTimers()
+    api.checkDnsCertificate.mockImplementation(async (_o: string, id: string) => {
+      if (id === 'bad') throw new Error('404')
+      return { certificate: {}, outcome: 'waiting' }
+    })
+    renderHook(() => useAdvanceRunningOrders(orgId, ['bad', 'good']), {
+      wrapper: createWrapper(),
+    })
+    for (let round = 0; round < ORDER_NUDGE_MAX_FAILURES + 2; round += 1) {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(ORDER_NUDGE_MS)
+      })
+    }
+    const calls = api.checkDnsCertificate.mock.calls.map((c) => c[1])
+    expect(calls.filter((id) => id === 'bad')).toHaveLength(ORDER_NUDGE_MAX_FAILURES)
+    expect(calls.filter((id) => id === 'good')).toHaveLength(ORDER_NUDGE_MAX_FAILURES + 2)
   })
 })
