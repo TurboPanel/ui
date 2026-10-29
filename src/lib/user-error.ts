@@ -25,6 +25,10 @@ const API_ERROR_COPY: Readonly<Record<string, string>> = {
   environment_running: ENVIRONMENT_RUNNING_COPY,
   managed_has_bindings: MANAGED_HAS_BINDINGS_COPY,
   principal_required_for_service_kind: 'Add a Hosting Account under Bindings first.',
+  provider_origin_managed:
+    'A Tunnel manages this certificate. Turn off Verified Connection on the Tunnel and it is removed once no site uses it.',
+  tls_in_use:
+    'A site still uses this certificate. Turn off Verified Connection on its Tunnel and deploy the site again first.',
   server_offline: 'The server is offline. Try again when it is back.',
   server_placement_required: 'Put this storage on a server first.',
   backup_target_unsupported: 'This kind of storage cannot be backed up yet.',

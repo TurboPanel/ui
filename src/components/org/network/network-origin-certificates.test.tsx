@@ -93,7 +93,7 @@ describe('the origin certificates of a Cloudflare account', () => {
     expect(screen.getByText('TurboPanel has not issued any certificates yet.')).toBeTruthy()
   })
 
-  it('lists exact names, marks a wildcard, and hides a replaced certificate nothing uses', () => {
+  it('lists exact names, marks a wildcard, and keeps a replaced certificate until it is revoked', () => {
     state.issued.data = {
       originCertificates: [
         issued({ names: ['a.example.com', 'b.example.com', 'c.example.com', 'd.example.com'] }),
@@ -110,11 +110,12 @@ describe('the origin certificates of a Cloudflare account', () => {
     render(<NetworkOriginCertificates orgId="o1" carrierId="c1" />)
     expect(screen.getByText('a.example.com, b.example.com, c.example.com and 1 more')).toBeTruthy()
     expect(screen.getByText('Wildcard')).toBeTruthy()
-    expect(screen.queryByText('old.example.com')).toBeNull()
-    // A replaced certificate a site still uses stays visible, with the reason.
+    // A replaced certificate stays listed until it is revoked, with the reason.
+    expect(screen.getByText('old.example.com')).toBeTruthy()
     expect(screen.getByText('kept.example.com')).toBeTruthy()
-    expect(screen.getByText('Replaced')).toBeTruthy()
-    expect(screen.getByText(/revoked once no site uses it/)).toBeTruthy()
+    expect(screen.getAllByText('Replaced')).toHaveLength(2)
+    expect(screen.getAllByText(/revoked once no site uses it/)).toHaveLength(1)
+    expect(screen.getAllByText(/delete it from the Certificates library/)).toHaveLength(1)
   })
 
   it('shows a loading line, and a plain error when the list cannot be loaded', () => {

@@ -384,8 +384,14 @@ describe('verifyOriginSummary', () => {
 
 describe('issuedCertificateNote', () => {
   it('explains a replaced certificate, a renewal coming up, or says nothing', () => {
-    expect(issuedCertificateNote({ retired: true, renewalDue: true })).toContain(
+    expect(issuedCertificateNote({ retired: true, renewalDue: true, inUse: true })).toContain(
       'revoked once no site uses it'
+    )
+    expect(issuedCertificateNote({ retired: true, renewalDue: false, inUse: true })).not.toContain(
+      'delete it'
+    )
+    expect(issuedCertificateNote({ retired: true, renewalDue: false, inUse: false })).toContain(
+      'delete it from the Certificates library'
     )
     expect(issuedCertificateNote({ retired: false, renewalDue: true })).toContain('renewed soon')
     expect(issuedCertificateNote({ retired: false, renewalDue: false })).toBe('')

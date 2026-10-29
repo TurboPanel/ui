@@ -64,7 +64,7 @@ export function NetworkOriginCertificates({
   const [zoneText, setZoneText] = useState('')
   const [zone, setZone] = useState('')
   const existing = useExistingOriginCertificates(orgId, carrierId, zone)
-  const rows = (issued.data?.originCertificates ?? []).filter((c) => !c.retired || c.inUse)
+  const rows = issued.data?.originCertificates ?? []
 
   return (
     <View style={styles.root}>

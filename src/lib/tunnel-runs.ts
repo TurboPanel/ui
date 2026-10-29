@@ -283,9 +283,14 @@ export function verifyOriginSummary(given?: VerifyOriginState | null): {
 
 /** The sentence under an origin certificate TurboPanel issued: replaced, renewing soon, or nothing to say. */
 export function issuedCertificateNote(
-  certificate: Pick<OriginCertificateRecord, 'retired' | 'renewalDue'>
+  certificate: Pick<OriginCertificateRecord, 'retired' | 'renewalDue'> &
+    Partial<Pick<OriginCertificateRecord, 'inUse'>>
 ): string {
-  if (certificate.retired) return ' Not needed any more. It is revoked once no site uses it.'
+  if (certificate.retired) {
+    return certificate.inUse
+      ? ' Not needed any more. It is revoked once no site uses it.'
+      : ' Not needed any more. It is revoked soon, or delete it from the Certificates library to revoke it now.'
+  }
   if (certificate.renewalDue) return ' It is renewed soon.'
   return ''
 }

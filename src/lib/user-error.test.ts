@@ -44,6 +44,15 @@ describe('apiErrorCopy', () => {
     expect(apiErrorCopy(new Error('HTTP 409: environment_running'))).toBe(ENVIRONMENT_RUNNING_COPY)
   })
 
+  it('explains a certificate a Tunnel manages or a site still uses', () => {
+    expect(apiErrorCopy(new Error('x failed: HTTP 409: provider_origin_managed'))).toContain(
+      'Turn off Verified Connection'
+    )
+    expect(apiErrorCopy(new Error('x failed: HTTP 409: tls_in_use'))).toContain(
+      'A site still uses this certificate'
+    )
+  })
+
   it('maps a Make primary conflict to a retry message', () => {
     expect(apiErrorCopy(new Error('HTTP 409: primary_environment_conflict'))).toContain('try again')
   })
