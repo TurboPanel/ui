@@ -329,7 +329,7 @@ export function ProjectPrincipalsSection({
     if (!result.ok) {
       const raw = result.error ?? createPrincipal.actionError
       if (raw) {
-        setError(principalSchemeErrorMessage(raw))
+        setError(principalSchemeErrorMessage(raw, trimmed))
       }
       return
     }
