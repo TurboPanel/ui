@@ -39,6 +39,9 @@ export function deployErrorMessage(err: unknown): string {
   for (const code of ['tunnel_name_public_certificate', 'tunnel_daemon_too_old']) {
     if (message.includes(code)) return tunnelDeployRefusalMessage(code) ?? message
   }
+  if (message.includes('principal_required_for_service_kind')) {
+    return 'Add a Hosting Account under Bindings first.'
+  }
   if (message.includes('server_placement_mismatch')) {
     return "Deploy target does not match the project's pinned server placement."
   }

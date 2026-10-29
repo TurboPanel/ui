@@ -40,6 +40,7 @@ import {
   useUploadInstanceCertificate,
 } from '@/lib/queries/admin'
 import { coversHostname } from '@/lib/tls-match'
+import { expiryCell, formatDay, realDate } from '@/lib/tls-managed-dates'
 import { colors, spacing } from '@/lib/theme'
 
 const CERT_COLUMNS: readonly DataTableColumn[] = [
@@ -55,7 +56,7 @@ const DIRECTORY_KEY = 'TURBOPANEL_INSTANCE_ACME__DIRECTORY_URL'
 const STAGING_KEY = 'TURBOPANEL_INSTANCE_ACME__USE_STAGING'
 
 const WILDCARD_COPY =
-  'A name starting with *. covers one label only (*.example.com covers www.example.com). Let\'s Encrypt cannot issue a wildcard for this control plane. Attach only hostnames the uploaded pair already covers.'
+  "A name starting with *. covers one label only (*.example.com covers www.example.com). Let's Encrypt cannot issue a wildcard for this control plane. Attach only hostnames the uploaded pair already covers."
 
 const CAPABILITY_KEY = 'instance-cert-sources-per-hostname'
 
@@ -64,8 +65,7 @@ export function CertificatesSection() {
   const hostnamesQuery = useInstanceHostnames()
   const acmeQuery = useInstanceAcmeSettings()
   const daemonQuery = useInstanceDaemon()
-  const capable =
-    daemonQuery.data?.capabilities?.[CAPABILITY_KEY] === true
+  const capable = daemonQuery.data?.capabilities?.[CAPABILITY_KEY] === true
   const capabilitiesKnown = daemonQuery.isSuccess || daemonQuery.isError
 
   if (certificatesQuery.data && 'applicable' in certificatesQuery.data) {
@@ -84,9 +84,9 @@ export function CertificatesSection() {
     <View style={styles.root}>
       <Text style={panelStyles.pageTitle}>Certificates</Text>
       <Text style={panelStyles.pageCopy}>
-        Certificate material for this control plane. An uploaded pair and
-        Let&apos;s Encrypt are control plane settings. They are unrelated to any
-        organization&apos;s Let&apos;s Encrypt opt-in.
+        Certificate material for this control plane. An uploaded pair and Let&apos;s Encrypt are
+        control plane settings. They are unrelated to any organization&apos;s Let&apos;s Encrypt
+        opt-in.
       </Text>
       {capabilitiesKnown && !capable ? (
         <InlineNotice
@@ -96,11 +96,7 @@ export function CertificatesSection() {
       ) : null}
       <UploadedPanel
         loading={certificatesQuery.isLoading}
-        error={
-          certificatesQuery.isError
-            ? 'Failed to load uploaded certificates'
-            : null
-        }
+        error={certificatesQuery.isError ? 'Failed to load uploaded certificates' : null}
         certificates={certificatesQuery.data?.certificates ?? []}
         hostnames={hostnamesQuery.data?.hostnames ?? []}
         sourcesEnabled={capable}
@@ -110,9 +106,7 @@ export function CertificatesSection() {
         settings={acmeQuery.data?.settings}
         hostnames={hostnamesQuery.data?.hostnames ?? []}
         capabilities={daemonQuery.data?.capabilities ?? null}
-        error={
-          acmeQuery.isError ? "Failed to load Let's Encrypt settings" : null
-        }
+        error={acmeQuery.isError ? "Failed to load Let's Encrypt settings" : null}
       />
     </View>
   )
@@ -131,20 +125,14 @@ function UploadedPanel({
   hostnames: readonly InstanceHostnameRecord[]
   sourcesEnabled: boolean
 }>) {
-  const wildcard = certificates.some((certificate) =>
-    certificateHasWildcard(certificate.dnsNames),
-  )
+  const wildcard = certificates.some((certificate) => certificateHasWildcard(certificate.dnsNames))
   return (
     <SectionPanel
       title="Uploaded certificates"
       hint="The private key is sealed at rest and is never shown again"
     >
       {error ? <Text style={panelStyles.error}>{error}</Text> : null}
-      {loading ? (
-        <LoadingState />
-      ) : (
-        <CertificateTable certificates={certificates} />
-      )}
+      {loading ? <LoadingState /> : <CertificateTable certificates={certificates} />}
       {wildcard ? (
         <InlineNotice title="Wildcard names" body={WILDCARD_COPY} />
       ) : (
@@ -202,9 +190,7 @@ function CertificateRow({
 }>) {
   const names = certificate.dnsNames.join(', ')
   const attached =
-    certificate.hostnames.length > 0
-      ? certificate.hostnames.join(', ')
-      : 'None attached'
+    certificate.hostnames.length > 0 ? certificate.hostnames.join(', ') : 'None attached'
   return (
     <DataTableRow alt={alt} last={last}>
       <DataTableCell column={CERT_COLUMNS[0]}>
@@ -219,7 +205,7 @@ function CertificateRow({
         ) : null}
       </DataTableCell>
       <DataTableCell column={CERT_COLUMNS[2]}>
-        <Text style={styles.muted}>{formatDay(certificate.notAfter)}</Text>
+        <Text style={styles.muted}>{expiryCell(certificate.notAfter)}</Text>
       </DataTableCell>
       <DataTableCell column={CERT_COLUMNS[3]}>
         <Text style={styles.muted}>{attached}</Text>
@@ -238,9 +224,7 @@ function AttachmentEditor({
   sourcesEnabled: boolean
 }>) {
   const attach = useAttachInstanceCertificate()
-  const [selected, setSelected] = useState<readonly string[]>(
-    certificate.hostnames,
-  )
+  const [selected, setSelected] = useState<readonly string[]>(certificate.hostnames)
   const [error, setError] = useState<string | null>(null)
 
   const onSave = async () => {
@@ -256,12 +240,10 @@ function AttachmentEditor({
 
   return (
     <View style={styles.attachBlock}>
-      <Text style={styles.attachTitle}>
-        Attach {certificate.label}
-      </Text>
+      <Text style={styles.attachTitle}>Attach {certificate.label}</Text>
       <Text style={panelStyles.muted}>
-        Saving replaces the full attachment set. A hostname you clear stays
-        published with the Platform CA leaf.
+        Saving replaces the full attachment set. A hostname you clear stays published with the
+        Platform CA leaf.
       </Text>
       {hostnames.length === 0 ? (
         <Text style={panelStyles.muted}>
@@ -428,11 +410,7 @@ function LetsEncryptPanel({
       hint="Contact, terms, directory, and staging for this control plane only"
     >
       {error ? <Text style={panelStyles.error}>{error}</Text> : null}
-      {loading ? (
-        <LoadingState />
-      ) : (
-        <AcmeSettingsForm settings={settings} />
-      )}
+      {loading ? <LoadingState /> : <AcmeSettingsForm settings={settings} />}
       <ReachabilityList hostnames={hostnames} capabilities={capabilities} />
     </SectionPanel>
   )
@@ -445,9 +423,7 @@ type AcmeDraft = {
   staging: boolean
 }
 
-function AcmeSettingsForm({
-  settings,
-}: Readonly<{ settings: InstanceAcmeSettings | undefined }>) {
+function AcmeSettingsForm({ settings }: Readonly<{ settings: InstanceAcmeSettings | undefined }>) {
   const save = useSaveInstanceAcmeSettings()
   const [draft, setDraft] = useState<AcmeDraft>(() => readAcme(settings))
   const [error, setError] = useState<string | null>(null)
@@ -491,9 +467,7 @@ function AcmeSettingsForm({
       />
       <TextField
         label="Directory URL"
-        labelRight={
-          directoryLocked ? <Badge label="Environment" tone="muted" /> : null
-        }
+        labelRight={directoryLocked ? <Badge label="Environment" tone="muted" /> : null}
         hint="Leave this on the production Let's Encrypt directory unless you run another ACME server."
         value={draft.directory}
         onChangeText={(directory) => {
@@ -535,9 +509,7 @@ function AcmeSettingsForm({
         />
       </SettingRow>
       {error ? <Text style={panelStyles.error}>{error}</Text> : null}
-      {saved ? (
-        <Text style={styles.saved}>Let&apos;s Encrypt settings saved.</Text>
-      ) : null}
+      {saved ? <Text style={styles.saved}>Let&apos;s Encrypt settings saved.</Text> : null}
       <ButtonRow>
         <Button
           label="Save Let's Encrypt"
@@ -564,23 +536,17 @@ function ReachabilityList({
     <View style={styles.reach}>
       <Text style={styles.attachTitle}>Reachability and last error</Text>
       <Text style={panelStyles.muted}>
-        Each hostname is served at https://&lt;host&gt;:8443. Port 80 is opened
-        only while a certificate is being issued or renewed. During that window
-        the daemon answers a nonce and requires
-        http://&lt;hostname&gt;/.well-known/acme-challenge/&lt;nonce&gt; to
-        reach the control plane’s ACME issuer. A private or wildcard name is refused
-        before that check. Issuance errors are listed separately from that
-        preflight.
+        Each hostname is served at https://&lt;host&gt;:8443. Port 80 is opened only while a
+        certificate is being issued or renewed. During that window the daemon answers a nonce and
+        requires http://&lt;hostname&gt;/.well-known/acme-challenge/&lt;nonce&gt; to reach the
+        control plane’s ACME issuer. A private or wildcard name is refused before that check.
+        Issuance errors are listed separately from that preflight.
       </Text>
       {hostnames.length === 0 ? (
         <Text style={panelStyles.muted}>No hostnames configured.</Text>
       ) : (
         hostnames.map((record) => (
-          <ReachabilityRow
-            key={record.id}
-            record={record}
-            capabilities={capabilities}
-          />
+          <ReachabilityRow key={record.id} record={record} capabilities={capabilities} />
         ))
       )}
     </View>
@@ -613,10 +579,8 @@ function ReachabilityRow({
       {status.expiry === 'No expiry' ? null : (
         <Text style={styles.rowHint}>Expires {status.expiry}</Text>
       )}
-      {record.acmeLastAttemptAt ? (
-        <Text style={styles.rowHint}>
-          Last attempt {formatDay(record.acmeLastAttemptAt)}
-        </Text>
+      {realDate(record.acmeLastAttemptAt) ? (
+        <Text style={styles.rowHint}>Last attempt {formatDay(record.acmeLastAttemptAt)}</Text>
       ) : null}
     </View>
   )
@@ -631,16 +595,13 @@ function readAcme(settings: InstanceAcmeSettings | undefined): AcmeDraft {
   }
 }
 
-function isEnvLocked(
-  settings: InstanceAcmeSettings | undefined,
-  key: string,
-): boolean {
+function isEnvLocked(settings: InstanceAcmeSettings | undefined, key: string): boolean {
   return settings?.[key]?.source === 'env'
 }
 
 function acmeUpdates(
   settings: InstanceAcmeSettings | undefined,
-  draft: AcmeDraft,
+  draft: AcmeDraft
 ): Record<string, string | boolean | null> {
   const updates: Record<string, string | boolean | null> = {}
   if (!isEnvLocked(settings, EMAIL_KEY)) updates[EMAIL_KEY] = draft.email.trim()
@@ -663,13 +624,6 @@ function hostnameOf(entry: string): string {
 function toggleHost(current: readonly string[], host: string): string[] {
   if (current.includes(host)) return current.filter((item) => item !== host)
   return [...current, host]
-}
-
-function formatDay(value: string | null): string {
-  if (!value) return 'No expiry'
-  const parsed = new Date(value)
-  if (Number.isNaN(parsed.getTime())) return value
-  return parsed.toISOString().slice(0, 10)
 }
 
 const styles = StyleSheet.create({

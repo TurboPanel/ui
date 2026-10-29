@@ -7,6 +7,7 @@ import {
   deletePlanSummary,
   folderLabel,
   groupFoldersByServer,
+  withServerNames,
   hostingAccountKeepReason,
   planCertificates,
 } from '@/lib/delete-plan'
@@ -69,8 +70,8 @@ describe('groupFoldersByServer', () => {
     const groups = groupFoldersByServer(PLAN)
     expect(groups.map((group) => [group.serverName, group.connected])).toEqual([
       ['Alpha', true],
-      ['Unnamed server', false],
-      ['Unnamed server', false],
+      ['Server', false],
+      ['Server', false],
     ])
     expect(groups[0]?.remove.map((row) => row.id)).toEqual(['f1'])
     expect(groups[1]?.keep.map((row) => row.id)).toEqual(['f2'])
@@ -141,7 +142,7 @@ describe('deletePlanSummary', () => {
 
   it('counts what goes, names the servers and the kept volumes', () => {
     expect(deletePlanSummary(PLAN, 'production')).toBe(
-      'Delete production? This removes 2 services, 2 folders, 1 Hosting Account on Alpha, Unnamed server. 1 volume is set to keep its data and stays.'
+      'Delete production? This removes 2 services, 2 folders, 1 Hosting Account on Alpha, Server. 1 volume is set to keep its data and stays.'
     )
   })
 
@@ -227,5 +228,23 @@ describe('deleteFailureMessage', () => {
     expect(deleteFailureMessage(new TypeError('Failed to fetch'), 'x')).toBe(
       CONTROL_PLANE_UNREACHABLE_COPY
     )
+  })
+})
+
+describe('withServerNames', () => {
+  it('fills only the names the plan left empty', () => {
+    const plan = {
+      ...EMPTY,
+      servers: [
+        { id: 'a', name: null, connected: true },
+        { id: 'b', name: 'Beta', connected: true },
+      ],
+    }
+    const filled = withServerNames(plan, [
+      { id: 'a', name: ' Alpha ' },
+      { id: 'b', name: 'Other' },
+    ])
+    expect(filled?.servers.map((row) => row.name)).toEqual(['Alpha', 'Beta'])
+    expect(withServerNames(undefined, [])).toBeUndefined()
   })
 })

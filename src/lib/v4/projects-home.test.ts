@@ -300,6 +300,12 @@ describe('what a tile shows of the environments', () => {
     expect(shown.more).toBe(2)
   })
 
+  it('shows a lone environment even when it is neither primary nor pinned', () => {
+    const lone = tilePills({ environments: [row('a', false, false)] })
+    expect(lone.shown.map((e) => e.id)).toEqual(['a'])
+    expect(lone.more).toBe(0)
+  })
+
   it('has no count when everything is shown or nothing exists', () => {
     expect(tilePills({ environments: [row('a', true, false)] }).more).toBe(0)
     expect(tilePills({ environments: [] })).toEqual({ shown: [], more: 0 })

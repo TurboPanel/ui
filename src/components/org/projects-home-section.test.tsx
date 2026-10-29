@@ -322,7 +322,7 @@ describe.each(SCENARIOS)('Projects home ($name)', (scenario) => {
     const shop = screen.getByRole('button', {
       name: 'Open Shop. Production (primary): Running',
     })
-    expect(shop.textContent).toBe('ShopCompose · AcmeProduction')
+    expect(shop.textContent).toBe('ShopCompose · AcmeRunning')
   })
 
   it('gives a managed project the database sub line', () => {
@@ -379,13 +379,13 @@ describe.each(SCENARIOS)('Projects home ($name)', (scenario) => {
 
   it('switches between grid and list and remembers the choice', () => {
     render(<ProjectsHomeSection orgId="o" />)
-    expect(screen.queryByText('Environments')).toBeNull()
+    expect(screen.queryByText('Status')).toBeNull()
     fireEvent.click(screen.getByRole('radio', { name: 'List' }))
-    expect(screen.getByText('Environments')).toBeTruthy()
+    expect(screen.getByText('Status')).toBeTruthy()
     expect(screen.getByRole('radio', { name: 'List' }).getAttribute('aria-checked')).toBe('true')
     expect(getProjectsView()).toBe('list')
     fireEvent.click(screen.getByRole('radio', { name: 'Grid' }))
-    expect(screen.queryByText('Environments')).toBeNull()
+    expect(screen.queryByText('Status')).toBeNull()
     expect(getProjectsView()).toBe('grid')
   })
 
@@ -402,7 +402,7 @@ describe.each(SCENARIOS)('Projects home ($name)', (scenario) => {
     env.width = 400
     setProjectsView('list')
     render(<ProjectsHomeSection orgId="o" />)
-    expect(screen.queryByText('Environments')).toBeNull()
+    expect(screen.queryByText('Status')).toBeNull()
     expect(screen.getByRole('button', { name: /^Open Shop/ })).toBeTruthy()
   })
 

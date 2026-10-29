@@ -106,6 +106,38 @@ describe.each(SCENARIOS)('Project tile ($name)', (scenario) => {
     expect(weight(primary)).not.toEqual(weight(pinned))
   })
 
+  it('shows the status instead of the name when there is one environment', () => {
+    render(
+      <ProjectTile
+        project={project({ environments: [env('e1', 'Production', 'running')] })}
+        layout="grid"
+        onOpen={vi.fn()}
+      />
+    )
+    expect(screen.getByText('Running')).toBeTruthy()
+    expect(screen.queryByText('Production')).toBeNull()
+  })
+
+  it('right aligns the pills on a grid tile only', () => {
+    const view = (layout: 'grid' | 'list') =>
+      render(
+        <ProjectTile
+          project={project({ environments: [env('e1', 'Production', 'running')] })}
+          layout={layout}
+          onOpen={vi.fn()}
+        />
+      )
+    view('grid')
+    expect(styleOf(screen.getByText('Running').parentElement?.parentElement).justifyContent).toBe(
+      'flex-end'
+    )
+    cleanup()
+    view('list')
+    expect(
+      styleOf(screen.getByText('Running').parentElement?.parentElement).justifyContent
+    ).toBeUndefined()
+  })
+
   it('folds the rest into a dashed plus-N pill named for screen readers', () => {
     render(
       <ProjectTile

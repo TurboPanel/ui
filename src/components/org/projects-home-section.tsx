@@ -343,7 +343,7 @@ function ListHead() {
         <Text style={s.listHeadText}>Name</Text>
       </View>
       <View style={s.listHeadEnvs}>
-        <Text style={s.listHeadText}>Environments</Text>
+        <Text style={s.listHeadText}>Status</Text>
       </View>
     </View>
   )

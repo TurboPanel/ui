@@ -1,6 +1,7 @@
 import { isLoopbackOrPrivateHostname } from '@/lib/install-tls'
 import { parsePublicUrlEntry } from '@/lib/public-url-entry'
 import { coversHostname } from '@/lib/tls-match'
+import { realDate } from '@/lib/tls-managed-dates'
 
 export const INSTANCE_HOSTNAME_SOURCE_LABELS = {
   'platform-ca': 'Platform CA',
@@ -27,15 +28,12 @@ const STATUS_PRESENTATION: Record<
   expired: { dot: 'offline', badge: 'danger', label: 'Expired' },
 }
 
-const OLD_DAEMON_REASON =
-  "this host's daemon is too old to render per-hostname certificate sources"
+const OLD_DAEMON_REASON = "this host's daemon is too old to render per-hostname certificate sources"
 
-export const INSTANCE_ACME_TOS_SETTING_KEY =
-  'TURBOPANEL_INSTANCE_ACME__TOS_ACCEPTED' as const
+export const INSTANCE_ACME_TOS_SETTING_KEY = 'TURBOPANEL_INSTANCE_ACME__TOS_ACCEPTED' as const
 
 /** The sentence the control plane sends beside {@link INSTANCE_ACME_TOS_NOT_ACCEPTED_CODE}. */
-export const INSTANCE_ACME_TOS_NOT_ACCEPTED_MESSAGE =
-  "Let's Encrypt terms have not been accepted"
+export const INSTANCE_ACME_TOS_NOT_ACCEPTED_MESSAGE = "Let's Encrypt terms have not been accepted"
 
 /** Machine code the control plane returns when a save or apply needs the terms. */
 export const INSTANCE_ACME_TOS_NOT_ACCEPTED_CODE = 'acme_terms_not_accepted'
@@ -54,9 +52,7 @@ export type InstanceAcmeTermsData = Readonly<{
  * a control plane that predates the field is read with the server's own flag
  * rule (`1`, `true`, `yes`, any case), never a narrower one.
  */
-export function letsEncryptTermsAccepted(
-  data: InstanceAcmeTermsData | undefined,
-): boolean {
+export function letsEncryptTermsAccepted(data: InstanceAcmeTermsData | undefined): boolean {
   if (typeof data?.tosAccepted === 'boolean') return data.tosAccepted
   const raw = data?.settings?.[INSTANCE_ACME_TOS_SETTING_KEY]?.value
   const normalized = raw?.trim().toLowerCase()
@@ -75,10 +71,12 @@ export const LETS_ENCRYPT_TERMS_UNAVAILABLE_MESSAGE =
  * it too; checking first keeps the draft intact and says what to do. While the
  * settings are loading or failed to load, say that — never "not accepted".
  */
-export function letsEncryptSaveBlockedMessage(input: Readonly<{
-  usesLetsEncrypt: boolean
-  acme: Readonly<{ data?: InstanceAcmeTermsData; isError: boolean }>
-}>): string | null {
+export function letsEncryptSaveBlockedMessage(
+  input: Readonly<{
+    usesLetsEncrypt: boolean
+    acme: Readonly<{ data?: InstanceAcmeTermsData; isError: boolean }>
+  }>
+): string | null {
   if (!input.usesLetsEncrypt) return null
   if (input.acme.data === undefined) {
     return input.acme.isError
@@ -93,10 +91,12 @@ export function letsEncryptSaveBlockedMessage(input: Readonly<{
   return `${INSTANCE_ACME_TOS_NOT_ACCEPTED_MESSAGE}. Open Access → Certificates, check Terms accepted, click Save Let's Encrypt, then save your hostnames here.`
 }
 
-export function hostnameStatusPresentation(record: Readonly<{
-  status: keyof typeof STATUS_PRESENTATION
-  notAfter: string | null
-}>): HostnameStatusPresentation {
+export function hostnameStatusPresentation(
+  record: Readonly<{
+    status: keyof typeof STATUS_PRESENTATION
+    notAfter: string | null
+  }>
+): HostnameStatusPresentation {
   const presentation = STATUS_PRESENTATION[record.status]
   return {
     ...presentation,
@@ -108,8 +108,7 @@ export function hostnameStatusPresentation(record: Readonly<{
  * Detail phrase from the daemon (`INSTANCE_ACME_HTTP01_ISSUER_UNREACHABLE`).
  * A preflight miss includes this sentence; a later issuance error does not.
  */
-export const INSTANCE_ACME_HTTP01_ISSUER_UNREACHABLE =
-  'did not reach the instance ACME issuer'
+export const INSTANCE_ACME_HTTP01_ISSUER_UNREACHABLE = 'did not reach the instance ACME issuer'
 
 /** Every panel hostname is served on this port, whatever its certificate source. */
 export const PANEL_HTTPS_PORT = '8443'
@@ -121,11 +120,13 @@ export type Http01PreflightKind = 'failed' | 'passed' | 'unrecorded'
  * error is issuance and stays on `acmeLastError` only when it is not that
  * preflight.
  */
-export function http01PreflightPresentation(record: Readonly<{
-  source: string
-  acmeLastError: string | null
-  acmeLastAttemptAt: string | null
-}>): { kind: Http01PreflightKind; text: string } | null {
+export function http01PreflightPresentation(
+  record: Readonly<{
+    source: string
+    acmeLastError: string | null
+    acmeLastAttemptAt: string | null
+  }>
+): { kind: Http01PreflightKind; text: string } | null {
   if (record.source !== 'lets-encrypt') return null
   const error = record.acmeLastError?.trim() ?? ''
   if (error.includes(INSTANCE_ACME_HTTP01_ISSUER_UNREACHABLE)) {
@@ -158,6 +159,8 @@ function expiryLine(notAfter: string | null): string {
   if (!notAfter) return 'No expiry'
   const parsed = new Date(notAfter)
   if (Number.isNaN(parsed.getTime())) return notAfter
+  // An epoch date is a placeholder for a certificate not issued yet.
+  if (!realDate(notAfter)) return 'No expiry'
   return parsed.toISOString().slice(0, 10)
 }
 
@@ -180,19 +183,15 @@ export type CertificateSourceContext = Readonly<{
  * the daemon is too old; every other state has its own reason.
  */
 export type DaemonCapabilitiesStatus =
-  | 'loading'
-  | 'error'
-  | 'not-applicable'
-  | 'disconnected'
-  | 'ready'
+  'loading' | 'error' | 'not-applicable' | 'disconnected' | 'ready'
 
-const DAEMON_STATUS_REASONS: Readonly<Record<Exclude<DaemonCapabilitiesStatus, 'ready'>, string>> = {
-  loading: "Checking this host's daemon.",
-  error: "Couldn't read this host's daemon, so this source can't be chosen right now.",
-  'not-applicable':
-    'Only a self-hosted control plane issues certificates for its own hostnames.',
-  disconnected: "This host's daemon isn't connected, so this source can't be chosen right now.",
-}
+const DAEMON_STATUS_REASONS: Readonly<Record<Exclude<DaemonCapabilitiesStatus, 'ready'>, string>> =
+  {
+    loading: "Checking this host's daemon.",
+    error: "Couldn't read this host's daemon, so this source can't be chosen right now.",
+    'not-applicable': 'Only a self-hosted control plane issues certificates for its own hostnames.',
+    disconnected: "This host's daemon isn't connected, so this source can't be chosen right now.",
+  }
 
 function daemonCapabilityRefusal(options: CertificateSourceContext): string | null {
   const status = options.capabilitiesStatus ?? 'ready'
@@ -203,10 +202,12 @@ function daemonCapabilityRefusal(options: CertificateSourceContext): string | nu
 }
 
 /** The daemon read's state, from the query and what it returned. */
-export function daemonCapabilitiesStatus(query: Readonly<{
-  data?: Readonly<{ applicable: boolean; connected?: boolean }>
-  isError: boolean
-}>): DaemonCapabilitiesStatus {
+export function daemonCapabilitiesStatus(
+  query: Readonly<{
+    data?: Readonly<{ applicable: boolean; connected?: boolean }>
+    isError: boolean
+  }>
+): DaemonCapabilitiesStatus {
   if (!query.data) return query.isError ? 'error' : 'loading'
   if (query.data.applicable === false) return 'not-applicable'
   if (query.data.connected === false) return 'disconnected'
@@ -219,7 +220,7 @@ export function daemonCapabilitiesStatus(query: Readonly<{
  */
 export function certificateSourceEligibility(
   host: string,
-  options: CertificateSourceContext,
+  options: CertificateSourceContext
 ): Partial<Record<'uploaded' | 'lets-encrypt', string>> {
   const daemonRefusal = daemonCapabilityRefusal(options)
   if (daemonRefusal) {
@@ -231,14 +232,13 @@ export function certificateSourceEligibility(
   const refused: Partial<Record<'uploaded' | 'lets-encrypt', string>> = {}
   const hostname = hostnameOf(host)
   if (hostname.startsWith('*.')) {
-    refused['lets-encrypt'] =
-      "Let's Encrypt cannot issue a certificate for a wildcard name."
+    refused['lets-encrypt'] = "Let's Encrypt cannot issue a certificate for a wildcard name."
   } else if (isLoopbackOrPrivateHostname(hostname)) {
     refused['lets-encrypt'] =
       "Let's Encrypt cannot issue a certificate for a loopback or private name."
   }
   const covered = options.certificates.some((certificate) =>
-    coversHostname([...certificate.dnsNames], hostname),
+    coversHostname([...certificate.dnsNames], hostname)
   )
   if (!covered) {
     refused.uploaded = 'No uploaded certificate covers this hostname.'
@@ -251,9 +251,7 @@ export type HostnameSourceDraft = Readonly<{
   source: InstanceHostnameSource
 }>
 
-export function draftUsesLetsEncryptSource(
-  draft: readonly HostnameSourceDraft[],
-): boolean {
+export function draftUsesLetsEncryptSource(draft: readonly HostnameSourceDraft[]): boolean {
   return draft.some((row) => row.source === 'lets-encrypt')
 }
 
@@ -263,7 +261,7 @@ export function draftUsesLetsEncryptSource(
  */
 export function lockoutWarning(
   current: readonly HostnameSourceDraft[],
-  next: readonly HostnameSourceDraft[],
+  next: readonly HostnameSourceDraft[]
 ): string | null {
   const changed = changedHosts(current, next)
   const host = changed[0]
@@ -281,20 +279,16 @@ export function lockoutWarning(
  */
 export function requiresPlatformCaConfirm(
   current: readonly HostnameSourceDraft[],
-  next: readonly HostnameSourceDraft[],
+  next: readonly HostnameSourceDraft[]
 ): boolean {
   const currentCa = current.filter((entry) => entry.source === 'platform-ca')
   const nextCa = next.filter((entry) => entry.source === 'platform-ca')
   if (currentCa.length > 0 && nextCa.length === 0) return true
-  const routable = currentCa.filter(
-    (entry) => !isLoopbackOrPrivateHostname(hostnameOf(entry.host)),
-  )
+  const routable = currentCa.filter((entry) => !isLoopbackOrPrivateHostname(hostnameOf(entry.host)))
   if (routable.length !== 1) return false
   const only = routable[0]
   if (!only) return false
-  return !next.some(
-    (entry) => entry.host === only.host && entry.source === 'platform-ca',
-  )
+  return !next.some((entry) => entry.host === only.host && entry.source === 'platform-ca')
 }
 
 function hostnameOf(entry: string): string {
@@ -307,7 +301,7 @@ function sourceKey(entry: HostnameSourceDraft): string {
 
 function changedHosts(
   current: readonly HostnameSourceDraft[],
-  next: readonly HostnameSourceDraft[],
+  next: readonly HostnameSourceDraft[]
 ): string[] {
   const nextKeys = new Set(next.map(sourceKey))
   const changed: string[] = []
