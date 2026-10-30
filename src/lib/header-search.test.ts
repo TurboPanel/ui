@@ -20,8 +20,6 @@ describe('searchDestinations', () => {
       ['Activity', '/o1/activity'],
       ['Servers', '/o1/servers'],
       ['Managed Databases', '/o1/projects?type=managed'],
-      ['Network', '/o1/network'],
-      ['Access', '/o1/access'],
       ['Organization Settings', '/o1/manage'],
       ['Billing', '/o1/billing'],
     ])

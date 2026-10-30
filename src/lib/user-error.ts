@@ -14,7 +14,7 @@ export const UPDATE_ALREADY_ACTIVE_COPY = 'Another update is already in progress
 export const ENVIRONMENT_RUNNING_COPY = 'This environment is still running. Stop it first.'
 
 export const LETS_ENCRYPT_OFF_COPY =
-  'Let\u2019s Encrypt is turned off for this organization. An owner can turn it on in Organization settings \u203a Domains & certificates.'
+  'Let\u2019s Encrypt is turned off for this organization. An owner can turn it on in Organization Settings \u203a Domains & Certificates.'
 
 export const MANAGED_HAS_BINDINGS_COPY =
   'One or more services are still connected to this cluster. Remove those connections first, then destroy it.'
