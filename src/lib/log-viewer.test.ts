@@ -68,10 +68,10 @@ function failedBuild(): { lines: LogTranscriptLine[]; plan: CommandProgressStep[
   const plan = [
     planStep('install-docker', 'ready', 'Install Docker'),
     planStep('install-runtime:node-22', 'done', 'Install Node 22'),
-    planStep('fetch', 'done', 'Fetch the code'),
+    planStep('fetch', 'done', 'Fetch the Source Code'),
     planStep('build', 'failed', 'Build'),
-    planStep('start', 'skipped', 'Start the app'),
-    planStep('health', 'skipped', 'Check it answers'),
+    planStep('start', 'skipped', 'Start the App'),
+    planStep('health', 'skipped', 'Check Service Health'),
   ]
   return { lines, plan }
 }
@@ -143,11 +143,11 @@ describe('buildLogSteps', () => {
     const steps = buildLogSteps(lines, plan, 'failed')
     expect(steps.map((step) => step.label)).toEqual([
       'Prepare',
-      'Fetch source',
-      'Installing the runtime',
+      'Fetch Source',
+      'Installing the Runtime',
       'Build',
-      'Start the app',
-      'Check it answers',
+      'Start the App',
+      'Check Service Health',
     ])
     expect(steps.map((step) => step.lines.length)).toEqual([2, 2, 1, 7, 0, 0])
   })
@@ -183,18 +183,18 @@ describe('buildLogSteps', () => {
     const steps = buildLogSteps(
       lines,
       [
-        planStep('start', 'done', 'Start the new release'),
-        planStep('health', 'failed', 'Check it answers'),
-        planStep('switch', 'skipped', 'Switch traffic'),
-        planStep('stop-old', 'skipped', 'Stop the old release'),
+        planStep('start', 'done', 'Start the New Release'),
+        planStep('health', 'failed', 'Check Service Health'),
+        planStep('switch', 'skipped', 'Switch Traffic'),
+        planStep('stop-old', 'skipped', 'Stop the Old Release'),
       ],
       'failed'
     )
     expect(steps.map((step) => [step.label, step.status])).toEqual([
-      ['Start the new release', 'ok'],
-      ['Check it answers', 'failed'],
-      ['Switch traffic', 'skipped'],
-      ['Stop the old release', 'skipped'],
+      ['Start the New Release', 'ok'],
+      ['Check Service Health', 'failed'],
+      ['Switch Traffic', 'skipped'],
+      ['Stop the Old Release', 'skipped'],
     ])
   })
 
@@ -262,13 +262,13 @@ describe('buildLogSteps', () => {
     const steps = buildLogSteps(
       [],
       [
-        { ...planStep('certificates', 'done', 'Set up certificates'), detail: note },
+        { ...planStep('certificates', 'done', 'Set Up Certificates'), detail: note },
         planStep('install-docker', 'ready'),
       ],
       'succeeded'
     )
     expect(steps.map((step) => [step.label, step.status, step.detail])).toEqual([
-      ['Set up certificates', 'ok', note],
+      ['Set Up Certificates', 'ok', note],
     ])
   })
 
@@ -278,17 +278,17 @@ describe('buildLogSteps', () => {
       lines,
       [
         planStep('build', 'done', 'Build'),
-        planStep('start', 'done', 'Compose up'),
-        planStep('certificates', 'done', 'Set up certificates'),
-        planStep('health', 'done', 'Check it answers'),
+        planStep('start', 'done', 'Compose Up'),
+        planStep('certificates', 'done', 'Set Up Certificates'),
+        planStep('health', 'done', 'Check Service Health'),
       ],
       'succeeded'
     )
     expect(steps.map((step) => step.label)).toEqual([
       'Build',
-      'Compose up',
-      'Set up certificates',
-      'Check it answers',
+      'Compose Up',
+      'Set Up Certificates',
+      'Check Service Health',
     ])
   })
 
@@ -432,7 +432,7 @@ describe('buildLogViewerModel', () => {
     const headers = stepItems(model)
     const open = headers.filter((item) => item.kind === 'step' && item.open)
     expect(open.map((item) => (item.kind === 'step' ? item.step.label : ''))).toEqual([
-      'Fetch source',
+      'Fetch Source',
       'Build',
     ])
     expect(open.map((item) => (item.kind === 'step' ? item.hits : null))).toEqual([1, 1])
