@@ -58,7 +58,7 @@ export function fabricMemberLabel(member: boolean): string {
 }
 
 export const FABRIC_ROLE_HELP =
-  'A gateway accepts connections from other servers; a client only connects out. Automatic picks gateway when the server has a public address. Roles are saved now and used for routing in a later release.'
+  'A gateway accepts connections from other servers; a client only connects out. Automatic picks gateway when the server has its own public address; an endpoint override does not count, so pick Gateway for a server behind NAT with a forwarded port. Roles are saved now and used for routing in a later release.'
 
 export const FABRIC_PAUSED_NOTICE =
   'TurboFabric is turned off. Tunnels are down on every server, but keys and container networks are kept, so turning it back on is instant.'
