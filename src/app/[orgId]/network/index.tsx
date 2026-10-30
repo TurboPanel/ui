@@ -1,7 +1,11 @@
-import { useLocalSearchParams } from 'expo-router'
-import { NetworkOverviewSection } from '@/components/org/network/network-overview-section'
+import { Redirect, useLocalSearchParams, type Href } from 'expo-router'
+import { networkRedirectHref } from '@/lib/org-navigation'
 
-export default function NetworkOverviewScreen() {
+/**
+ * Retired: the Network pages live under Servers now. Kept as a redirect so old
+ * links and bookmarks still land somewhere useful.
+ */
+export default function NetworkRedirect() {
   const { orgId } = useLocalSearchParams<{ orgId: string }>()
-  return <NetworkOverviewSection orgId={orgId ?? ''} />
+  return <Redirect href={networkRedirectHref(orgId ?? '', undefined) as Href} />
 }
