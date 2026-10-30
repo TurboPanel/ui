@@ -9,7 +9,6 @@ import { isAdminSession, useAuth } from '@/lib/auth-context'
 import {
   ORG_AREAS,
   ORG_SIDEBAR_AREA_IDS,
-  ORG_SIDEBAR_MORE_AREA_IDS,
   isOrgAreaActive,
   orgAreaFromPathname,
   orgAreaHref,
@@ -201,7 +200,6 @@ export function OrgSidebar({
   // Billing is not a sidebar area: it lives behind the organization menu
   // (hosted only), so people reach it when they need to buy, not in passing.
   const mainAreas = sidebarAreas(ORG_SIDEBAR_AREA_IDS)
-  const moreAreas = sidebarAreas(ORG_SIDEBAR_MORE_AREA_IDS)
 
   return (
     <GlassSurface style={styles.sidebar} intensity="strong">
@@ -218,14 +216,6 @@ export function OrgSidebar({
         ))}
 
         <RecentProjects orgId={orgId} onNavigate={onNavigate} />
-
-        {moreAreas.length > 0 ? (
-          <View style={styles.more}>
-            {moreAreas.map((area) => (
-              <SidebarAreaItem key={area.id} area={area} orgId={orgId} onNavigate={onNavigate} />
-            ))}
-          </View>
-        ) : null}
       </View>
 
       {showAdminLink ? (
@@ -389,10 +379,6 @@ const styles = StyleSheet.create({
   recentLabelActive: {
     color: colors.link,
     fontWeight: '600',
-  },
-  more: {
-    marginTop: spacing.md,
-    gap: spacing.xs,
   },
   adminNav: {
     marginTop: 'auto',

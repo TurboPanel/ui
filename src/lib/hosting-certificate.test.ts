@@ -228,7 +228,7 @@ describe('letsEncryptRefusal', () => {
   it('says Let’s Encrypt is off for the organization and offers its settings', () => {
     expect(letsEncryptRefusal(refused(403, 'lets_encrypt_not_enabled'))).toEqual({
       message:
-        'Let’s Encrypt is turned off for this organization. An owner can turn it on in Organization settings › Domains & certificates.',
+        'Let’s Encrypt is turned off for this organization. An owner can turn it on in Organization Settings › Domains & Certificates.',
       openSettings: true,
     })
   })
