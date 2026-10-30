@@ -257,13 +257,39 @@ describe('buildLogSteps', () => {
     expect(steps.map((step) => step.status)).toEqual(['failed', 'ok'])
   })
 
-  it('hides done and ready plan steps that printed nothing', () => {
+  it('hides a ready plan step that printed nothing, and keeps a done one with its note', () => {
+    const note = 'Requested in the background; the Certificate panel shows progress: a.example.com'
     const steps = buildLogSteps(
       [],
-      [planStep('certificates', 'done'), planStep('install-docker', 'ready')],
+      [
+        { ...planStep('certificates', 'done', 'Set up certificates'), detail: note },
+        planStep('install-docker', 'ready'),
+      ],
       'succeeded'
     )
-    expect(steps).toEqual([])
+    expect(steps.map((step) => [step.label, step.status, step.detail])).toEqual([
+      ['Set up certificates', 'ok', note],
+    ])
+  })
+
+  it('lists a finished silent step where the plan puts it', () => {
+    const lines = [line('Building', 'build'), line('up', 'compose-up'), line('200', 'health')]
+    const steps = buildLogSteps(
+      lines,
+      [
+        planStep('build', 'done', 'Build'),
+        planStep('start', 'done', 'Compose up'),
+        planStep('certificates', 'done', 'Set up certificates'),
+        planStep('health', 'done', 'Check it answers'),
+      ],
+      'succeeded'
+    )
+    expect(steps.map((step) => step.label)).toEqual([
+      'Build',
+      'Compose up',
+      'Set up certificates',
+      'Check it answers',
+    ])
   })
 
   it('collapses repeated progress ticks before grouping', () => {

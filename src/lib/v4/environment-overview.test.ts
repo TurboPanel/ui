@@ -282,6 +282,32 @@ describe('domains, volumes and databases', () => {
     )
   })
 
+  it('names what a waiting request waits on: DNS, port 80 or CAA', () => {
+    const waiting = (hostname: Record<string, unknown>) =>
+      hostingCertificateKey({
+        state: 'waiting_for_dns',
+        source: 'lets_encrypt',
+        expiresAt: null,
+        expiresInDays: null,
+        renewsAutomatically: true,
+        lastError: null,
+        lastIssuedAt: null,
+        uploadedExpiryWarning: 'none',
+        dns: {
+          ready: false,
+          checkedAt: '2026-10-30T12:00:00.000Z',
+          expectedAddresses: ['203.0.113.7'],
+          hostnames: [{ hostname: 'a.example.com', addresses: ['203.0.113.7'], ...hostname }],
+        },
+        letsEncryptAvailable: true,
+        www: 'off',
+        needsDeploy: false,
+      } as Parameters<typeof hostingCertificateKey>[0])
+    expect(waiting({ resolves: false })).toBe('waiting')
+    expect(waiting({ resolves: true, port80: 'closed' })).toBe('waiting_port80')
+    expect(waiting({ resolves: true, caa: 'blocked' })).toBe('waiting_caa')
+  })
+
   it('lists each domain once, skips blank names, and names the certificate only from what is pinned', () => {
     expect(domainsOf(source)).toEqual([
       { host: 'shop.example.com', status: { key: 'ok', label: 'Secure' }, serviceId: 'web' },

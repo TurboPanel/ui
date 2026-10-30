@@ -116,6 +116,21 @@ describe('LogViewer', () => {
     expect(shownText()).toContain('Checking types')
   })
 
+  it('keeps a finished certificates step and its note on a finished deploy', () => {
+    const note = 'Requested in the background; the Certificate panel shows progress: a.example.com'
+    renderViewer({
+      lines: [line('Compiling', 'build'), line('200 OK', 'health')],
+      plan: [
+        { id: 'build', label: 'Build', state: 'done' },
+        { id: 'certificates', label: 'Set up certificates', state: 'done', detail: note },
+        { id: 'health', label: 'Check it answers', state: 'done' },
+      ],
+      commandStatus: 'succeeded',
+    })
+    expect(shownText()).toContain('Set up certificates')
+    expect(shownText()).toContain(note)
+  })
+
   it('opens and closes steps by their header', () => {
     renderViewer()
     act(() => {

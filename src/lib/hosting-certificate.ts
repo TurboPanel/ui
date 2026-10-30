@@ -106,6 +106,33 @@ function withLine(lines: string[], line: string | null): string[] {
   return line === null ? lines : [...lines, line]
 }
 
+/** What a waiting request still waits on. */
+export type WaitingCause = 'dns' | 'port80' | 'caa'
+
+/**
+ * DNS while any name does not point at the server yet; once every name does,
+ * the port 80 or CAA check that still stops it, so a closed port is never shown
+ * as a DNS problem.
+ */
+export function waitingCause(dns: HostingDnsReport | null): WaitingCause {
+  const names = dns?.hostnames ?? []
+  if (names.length === 0 || names.some((name) => !name.resolves)) return 'dns'
+  if (names.some((name) => name.port80 === 'closed')) return 'port80'
+  if (names.some((name) => name.caa === 'blocked')) return 'caa'
+  return 'dns'
+}
+
+const WAITING_LABELS: Readonly<Record<WaitingCause, string>> = {
+  dns: 'Waiting for DNS',
+  port80: 'Waiting for Port 80',
+  caa: 'Blocked by a CAA Record',
+}
+
+/** The status label of a waiting request, by what it waits on. */
+export function waitingLabel(dns: HostingDnsReport | null): string {
+  return WAITING_LABELS[waitingCause(dns)]
+}
+
 function waitingView(cert: HostingCertificate): CertificateView {
   let lines = [
     'Let’s Encrypt starts as soon as this domain points at your server and answers on port 80.',
@@ -113,7 +140,7 @@ function waitingView(cert: HostingCertificate): CertificateView {
   if (cert.dns && !cert.dns.ready) lines.push(...dnsSummaryLines(cert.dns))
   lines = withLine(lines, waitingTimingLine(cert))
   return {
-    label: 'Waiting for DNS',
+    label: waitingLabel(cert.dns),
     tone: 'pending',
     lines,
     reason: null,

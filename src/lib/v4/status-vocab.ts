@@ -64,6 +64,8 @@ export const STATUS = {
   changes: { label: 'Not deployed', glyph: 'half', tone: 'warn' },
   // Domains and certificates
   waiting: { label: 'Waiting for DNS', glyph: 'dotted', tone: 'busy' },
+  waiting_port80: { label: 'Waiting for Port 80', glyph: 'dotted', tone: 'busy' },
+  waiting_caa: { label: 'Blocked by a CAA Record', glyph: 'dotted', tone: 'busy' },
   issuing: { label: 'Getting certificate', glyph: 'spinner', tone: 'busy' },
   ok: { label: 'Secure', glyph: 'lock', tone: 'ok' },
   expiring: { label: 'Expires soon', glyph: 'clock', tone: 'warn' },
