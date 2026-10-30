@@ -10,6 +10,21 @@ export const CLOSED_PROJECT_FORM_SECTIONS: OrgProjectSettings = {
 }
 
 /**
+ * The cache update after one switch saved: lay the saved value over what the
+ * cache already holds. An entry that was never fetched stays empty (undefined
+ * means "do not write"), because inventing one would store the other switch
+ * as off until the cache went stale.
+ */
+export function overlaySavedSwitch(
+  before: OrgProjectSettings | undefined,
+  key: keyof OrgProjectSettings,
+  value: boolean
+): OrgProjectSettings | undefined {
+  if (!before) return undefined
+  return { ...before, [key]: value }
+}
+
+/**
  * Whether a form section is open: a field error in it always opens it, then
  * the person's own choice, then the organization's default.
  */

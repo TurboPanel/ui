@@ -11,7 +11,7 @@ import {
   type OrgProjectSettings,
 } from '@/lib/instance-api'
 import { managedSettingsHref } from '@/lib/org-navigation'
-import { CLOSED_PROJECT_FORM_SECTIONS } from '@/lib/org-project-settings'
+import { CLOSED_PROJECT_FORM_SECTIONS, overlaySavedSwitch } from '@/lib/org-project-settings'
 import { useApiMutation, useCanState, queryKeys } from '@/lib/query-client'
 import { spacing } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
@@ -34,9 +34,11 @@ const SWITCHES: readonly { key: ProjectFormSwitch; label: string; description: s
 ]
 
 /**
- * One "open by default" switch. Each switch saves on its own, so pressing the
- * second while the first is still saving is never dropped. The toggle shows
- * the new value while it saves and falls back to the stored one on failure.
+ * One "open by default" switch. Each switch saves on its own and keeps its
+ * own error, so pressing the second while the first is still saving is never
+ * dropped, and one switch's success does not clear the other's failure. The
+ * toggle shows the new value while it saves and falls back to the stored one
+ * on failure.
  */
 function ProjectFormSwitchRow({
   orgId,
@@ -44,76 +46,67 @@ function ProjectFormSwitchRow({
   label,
   description,
   stored,
-  loading,
-  onError,
 }: Readonly<{
   orgId: string
   switchKey: ProjectFormSwitch
   label: string
   description: string
   stored: boolean
-  loading: boolean
-  onError: (message: string | null) => void
 }>) {
   const queryClient = useQueryClient()
   const [draft, setDraft] = useState<boolean | null>(null)
+  const [error, setError] = useState<string | null>(null)
   const mutation = useApiMutation({
     mutationFn: (next: boolean) => saveOrgProjectSettings(orgId, { [switchKey]: next }),
     onSuccess: (data) => {
-      onError(null)
+      setError(null)
       setDraft(null)
       const keys = queryKeys.org(orgId).settings
       for (const key of [keys.projectSettings, keys.projectFormDefaults]) {
-        queryClient.setQueryData<OrgProjectSettings>(key, (before) => ({
-          ...CLOSED_PROJECT_FORM_SECTIONS,
-          ...before,
-          [switchKey]: data[switchKey],
-        }))
+        queryClient.setQueryData<OrgProjectSettings>(key, (before) =>
+          overlaySavedSwitch(before, switchKey, data[switchKey])
+        )
       }
     },
     onError: (err) => {
       setDraft(null)
-      onError(userErrorMessage(err, 'Failed to save the new project form settings'))
+      setError(userErrorMessage(err, 'Failed to save the new project form settings'))
     },
   })
   return (
-    <SettingRow label={label} description={description}>
-      <Toggle
-        value={draft ?? stored}
-        onValueChange={(next) => {
-          setDraft(next)
-          mutation.mutate(next)
-        }}
-        disabled={mutation.isPending || loading}
-        accessibilityLabel={label}
-      />
-    </SettingRow>
+    <>
+      {error ? <Text style={panelStyles.error}>{error}</Text> : null}
+      <SettingRow label={label} description={description}>
+        <Toggle
+          value={draft ?? stored}
+          onValueChange={(next) => {
+            setDraft(next)
+            mutation.mutate(next)
+          }}
+          disabled={mutation.isPending}
+          accessibilityLabel={label}
+        />
+      </SettingRow>
+    </>
   )
 }
 
 /** The two "open by default" switches for the new-project form. */
-function ProjectFormSettingsSection({
-  orgId,
-  permissionLoading,
-}: Readonly<{ orgId: string; permissionLoading: boolean }>) {
+function ProjectFormSettingsSection({ orgId }: Readonly<{ orgId: string }>) {
   const query = useQuery({
     queryKey: queryKeys.org(orgId).settings.projectSettings,
     queryFn: () => fetchOrgProjectSettings(orgId),
-    enabled: !permissionLoading,
   })
-  const [error, setError] = useState<string | null>(null)
   const stored = { ...CLOSED_PROJECT_FORM_SECTIONS, ...query.data }
-  const loading = permissionLoading || query.isLoading
 
   return (
     <SectionPanel title="New Project Form" hint="Applies to everyone in this organization">
-      {error ? <Text style={panelStyles.error}>{error}</Text> : null}
-      {query.isError && !error ? (
+      {query.isError ? (
         <Text style={panelStyles.error}>
           {userErrorMessage(query.error, 'Failed to load the new project form settings')}
         </Text>
       ) : null}
-      {loading ? (
+      {query.isLoading ? (
         <LoadingState />
       ) : (
         SWITCHES.map(({ key, label, description }) => (
@@ -124,8 +117,6 @@ function ProjectFormSettingsSection({
             label={label}
             description={description}
             stored={stored[key]}
-            loading={loading}
-            onError={setError}
           />
         ))
       )}
@@ -166,7 +157,15 @@ export function ProjectSettingsTab({ orgId }: Readonly<{ orgId: string }>) {
       environments and names.
     </Text>
   )
-  if (!manage.loading && !manage.allowed) {
+  if (manage.loading) {
+    return (
+      <View style={styles.tab}>
+        {intro}
+        <LoadingState />
+      </View>
+    )
+  }
+  if (!manage.allowed) {
     return (
       <View style={styles.tab}>
         {intro}
@@ -179,7 +178,7 @@ export function ProjectSettingsTab({ orgId }: Readonly<{ orgId: string }>) {
   return (
     <View style={styles.tab}>
       {intro}
-      <ProjectFormSettingsSection orgId={orgId} permissionLoading={manage.loading} />
+      <ProjectFormSettingsSection orgId={orgId} />
       <DefaultEnvironmentSettingsSection orgId={orgId} />
       <ManagedDatabasesLinkSection orgId={orgId} />
     </View>

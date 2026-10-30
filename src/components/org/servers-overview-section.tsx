@@ -202,7 +202,7 @@ function AddServerToolbarButton({
       disabled={disabled}
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={open ? 'Close Add Server' : 'Add Server'}
+      accessibilityLabel={open ? 'Close the Add Server form' : 'Add Server'}
       accessibilityState={{ disabled, expanded: open }}
       aria-expanded={open}
     >

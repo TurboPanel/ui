@@ -332,9 +332,8 @@ export function tilePills(project: Pick<HomeProject, 'environments'>): {
 /** Deploys in Progress show this many rows; the rest are reached from Activity. */
 export const IN_PROGRESS_LIMIT = 3
 
-/** "4 projects · 9 environments · 7 running" (the running part waits for containers). */
 /**
- * The Projects page subtitle. A count that is still loading (null) is left
+ * The Projects page subtitle, e.g. "4 projects · 9 environments · 7 running". A count that is still loading (null) is left
  * out rather than shown as 0, so the line never says "0 running" next to
  * tiles that say Running.
  */

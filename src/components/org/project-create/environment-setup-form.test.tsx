@@ -381,7 +381,7 @@ describe('EnvironmentSetupForm', () => {
     })
     expect(screen.getByText(/Let\u2019s Encrypt certificates are off/)).toBeTruthy()
     fireEvent.click(
-      screen.getByRole('button', { name: 'Open Organization settings, Domains & certificates' })
+      screen.getByRole('button', { name: 'Open Organization Settings, Domains & Certificates' })
     )
     expect(state.push).toHaveBeenCalledWith('/o/manage?tab=domains')
     fireEvent.click(screen.getByRole('button', { name: 'Deploy production' }))

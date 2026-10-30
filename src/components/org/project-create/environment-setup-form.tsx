@@ -322,8 +322,8 @@ function CertificateNote({
       <Text style={panelStyles.muted}>{note.text}</Text>
       {note.openSettings ? (
         <TextLink
-          label="Open Domains & certificates"
-          accessibilityLabel="Open Organization settings, Domains & certificates"
+          label="Open Domains & Certificates"
+          accessibilityLabel="Open Organization Settings, Domains & Certificates"
           onPress={() => router.push(settingsHref as Href)}
         />
       ) : null}

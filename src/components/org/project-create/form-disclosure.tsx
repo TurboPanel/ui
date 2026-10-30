@@ -10,8 +10,8 @@ import { colors, spacing, webPointer } from '@/lib/theme'
  * opens on press, when the organization opens it by default (Organization
  * Settings › Project Settings), or whenever a field inside it has an error.
  * A section that has shown an error stays open after the error is fixed, and
- * a press while the error shows does nothing, so it never quietly records
- * "closed" and shuts on the next submit.
+ * a press while the error shows cannot close it, so it never shuts on the
+ * next submit behind the person's back.
  */
 export function FormDisclosure({
   title,
@@ -27,8 +27,9 @@ export function FormDisclosure({
   children: ReactNode
 }>) {
   const [choice, setChoice] = useState<boolean | null>(null)
-  // Adjusting state while rendering (not in an effect) so the open state
-  // never flickers closed for a frame.
+  // While a field shows an error the choice is pinned to open, which also
+  // undoes a press made during the error. Adjusted while rendering (not in an
+  // effect) so the section never flickers closed for a frame.
   if (hasError && choice !== true) setChoice(true)
   const open = projectFormSectionOpen(choice, openByDefault, hasError)
   return (
@@ -36,7 +37,6 @@ export function FormDisclosure({
       <Pressable
         style={[styles.header, webPointer]}
         onPress={() => {
-          if (hasError) return
           setChoice(!open)
         }}
         accessibilityRole="button"

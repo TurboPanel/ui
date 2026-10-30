@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import ProjectSettingsRedirect from '@/app/[orgId]/projects/settings'
 import { ProjectSettingsTab } from './project-settings-tab'
@@ -40,13 +41,27 @@ vi.mock('@tanstack/react-query', () => ({
 }))
 vi.mock('@/lib/query-client', () => ({
   useCanState: () => state.manage,
-  // Runs the real mutationFn so the test sees exactly what is sent.
-  useApiMutation: (options: MutationOptions) => ({
-    mutate: (value: boolean) => {
-      options.mutationFn(value).then(options.onSuccess, options.onError)
-    },
-    isPending: false,
-  }),
+  // Runs the real mutationFn so the test sees exactly what is sent, and is
+  // pending until it settles, like the real hook.
+  useApiMutation: (options: MutationOptions) => {
+    const [isPending, setPending] = useState(false)
+    return {
+      mutate: (value: boolean) => {
+        setPending(true)
+        options.mutationFn(value).then(
+          (data) => {
+            setPending(false)
+            options.onSuccess(data)
+          },
+          (err: unknown) => {
+            setPending(false)
+            options.onError(err)
+          }
+        )
+      },
+      isPending,
+    }
+  },
   queryKeys: {
     org: () => ({
       settings: { projectSettings: ['settings'], projectFormDefaults: ['defaults'] },
@@ -128,26 +143,38 @@ describe('ProjectSettingsTab', () => {
     expect(screen.queryByText('Managed Database Settings')).toBeNull()
   })
 
-  it('shows a loading state while the permission or the settings load', () => {
+  it('shows only the intro and a loading state while the permission loads', () => {
     state.manage = { allowed: false, loading: true }
     render(<ProjectSettingsTab orgId="org-1" />)
     expect(screen.getByRole('progressbar')).toBeTruthy()
+    expect(screen.getByText(/Defaults applied when new projects are created/)).toBeTruthy()
     expect(screen.queryByText(/Only organization owners and managers/)).toBeNull()
+    expect(screen.queryByText('Managed Database Settings')).toBeNull()
+    expect(screen.queryByLabelText(ENVIRONMENT)).toBeNull()
   })
 
-  it('sends only the pressed switch, and the other switch stays usable while it saves', async () => {
+  it('shows a loading state in the card while the settings load', () => {
+    state.query = { data: undefined, isLoading: true, isError: false, error: null }
+    render(<ProjectSettingsTab orgId="org-1" />)
+    expect(screen.getByRole('progressbar')).toBeTruthy()
+    expect(screen.queryByLabelText(ENVIRONMENT)).toBeNull()
+  })
+
+  it('sends only the pressed switch, and the other stays usable while it saves', () => {
     state.save.mockReturnValue(new Promise(() => {}))
     render(<ProjectSettingsTab orgId="org-1" />)
     fireEvent.click(screen.getByLabelText(ENVIRONMENT))
     expect(state.save).toHaveBeenCalledWith('org-1', { openEnvironmentSectionByDefault: true })
-    expect(screen.getByLabelText(ENVIRONMENT).getAttribute('aria-pressed')).toBe('true')
+    const environment = screen.getByLabelText(ENVIRONMENT) as HTMLButtonElement
+    expect(environment.getAttribute('aria-pressed')).toBe('true')
+    expect(environment.disabled).toBe(true)
     const workspace = screen.getByLabelText(WORKSPACE) as HTMLButtonElement
     expect(workspace.disabled).toBe(false)
     fireEvent.click(workspace)
     expect(state.save).toHaveBeenLastCalledWith('org-1', { openWorkspaceSectionByDefault: true })
   })
 
-  it('updates both caches with the saved switch only', async () => {
+  it('lays the saved switch over both caches and leaves a never-fetched cache empty', async () => {
     state.save.mockResolvedValue({
       ok: true,
       openEnvironmentSectionByDefault: true,
@@ -159,10 +186,11 @@ describe('ProjectSettingsTab', () => {
     })
     const keys = state.setQueryData.mock.calls.map(([key]) => key)
     expect(keys).toEqual([['settings'], ['defaults']])
-    const update = state.setQueryData.mock.calls[0][1] as (before: unknown) => unknown
+    const update = state.setQueryData.mock.calls[1][1] as (before: unknown) => unknown
     expect(
       update({ openEnvironmentSectionByDefault: false, openWorkspaceSectionByDefault: true })
     ).toEqual({ openEnvironmentSectionByDefault: true, openWorkspaceSectionByDefault: true })
+    expect(update(undefined)).toBeUndefined()
   })
 
   it('puts the switch back and says so when the save fails', async () => {
@@ -172,6 +200,22 @@ describe('ProjectSettingsTab', () => {
       fireEvent.click(screen.getByLabelText(ENVIRONMENT))
     })
     expect(screen.getByLabelText(ENVIRONMENT).getAttribute('aria-pressed')).toBe('false')
+    expect(screen.getByText('Failed to save the new project form settings')).toBeTruthy()
+  })
+
+  it("keeps one switch's error when the other switch saves", async () => {
+    state.save.mockRejectedValueOnce(new Error('nope')).mockResolvedValueOnce({
+      ok: true,
+      openEnvironmentSectionByDefault: false,
+      openWorkspaceSectionByDefault: true,
+    })
+    render(<ProjectSettingsTab orgId="org-1" />)
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText(ENVIRONMENT))
+    })
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText(WORKSPACE))
+    })
     expect(screen.getByText('Failed to save the new project form settings')).toBeTruthy()
   })
 

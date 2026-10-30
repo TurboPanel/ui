@@ -73,7 +73,7 @@ export function ServerTimezoneSettingsSection({ orgId }: Readonly<{ orgId: strin
 
       <SectionPanel
         title="Default Server Timezone"
-        hint="Applies to every server in this organization"
+        hint="Default for every server in this organization"
       >
         {error ? <Text style={panelStyles.error}>{error}</Text> : null}
         {query.isError && !error ? (

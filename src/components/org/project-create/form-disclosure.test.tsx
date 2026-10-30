@@ -53,15 +53,19 @@ describe('FormDisclosure', () => {
     expect(header.getAttribute('aria-expanded')).toBe('true')
   })
 
-  it('ignores a press while an error shows and stays open once the error is fixed', () => {
+  it('cannot be closed while an error shows, stays open once it is fixed, then closes on press', () => {
     const view = renderDisclosure(false, true)
-    fireEvent.click(screen.getByRole('button', { name: 'Workspace: Marketing' }))
+    const header = () => screen.getByRole('button', { name: 'Workspace: Marketing' })
+    fireEvent.click(header())
     expect(screen.getByText('inside')).toBeTruthy()
+    expect(header().getAttribute('aria-expanded')).toBe('true')
     view.rerender(
       <FormDisclosure title="Workspace" summary="Marketing" openByDefault={false} hasError={false}>
         <p>inside</p>
       </FormDisclosure>
     )
     expect(screen.getByText('inside')).toBeTruthy()
+    fireEvent.click(header())
+    expect(screen.queryByText('inside')).toBeNull()
   })
 })
