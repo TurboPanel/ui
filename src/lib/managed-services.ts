@@ -549,7 +549,7 @@ export const UNTRUSTED_NETWORK_NEEDS_FABRIC_COPY = `The only datacenter those se
  * route this pair over TurboFabric, so the advice differs.
  */
 export const FAILOVER_REQUIRES_TRUSTED_DATACENTER_COPY =
-  'The only datacenter those servers share is marked untrusted. Failover replicas need a trusted datacenter LAN — mark the datacenter trusted, or add the replica as a read replica over ' +
+  'The only datacenter those servers share is marked untrusted. Failover replicas need a trusted datacenter LAN, so mark the datacenter trusted, or add the replica as a read replica over ' +
   `${TURBOFABRIC_PRODUCT_NAME} instead.`
 
 const MANAGED_ERROR_COPY: Record<string, string> = {
