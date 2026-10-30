@@ -3,6 +3,7 @@ import type { TlsRecord } from '@/lib/instance-api'
 import {
   expiryCell,
   formatDay,
+  plainIssuer,
   realDate,
   tlsDateLines,
   tlsStoredCopyLines,
@@ -110,5 +111,14 @@ describe('certificate dates', () => {
     expect(formatDay('1970-01-01T00:00:00Z')).toBe('No expiry')
     expect(formatDay('2026-11-03T00:00:00Z')).toBe('2026-11-03')
     expect(formatDay('soon')).toBe('soon')
+  })
+})
+
+describe('plainIssuer', () => {
+  it('reads attribute codes and short names into the organization and its issuer name', () => {
+    expect(plainIssuer("2.5.4.6=US, O=Let's Encrypt, CN=YE1")).toBe("Let's Encrypt (YE1)")
+    expect(plainIssuer("C=US/O=Let's Encrypt/CN=R11")).toBe("Let's Encrypt (R11)")
+    expect(plainIssuer('CN=Acme Root')).toBe('Acme Root')
+    expect(plainIssuer('R11')).toBe('R11')
   })
 })

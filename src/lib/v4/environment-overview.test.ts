@@ -9,6 +9,7 @@ import type {
 import {
   appRows,
   certificateKey,
+  hostingCertificateKey,
   changeNames,
   changeRows,
   databasesOf,
@@ -232,7 +233,7 @@ describe('domains, volumes and databases', () => {
       tlsRecord('old', 'upload', 'expired'),
     ]
     expect(certificateKey('ok', tls)).toBe('ok')
-    expect(certificateKey('automatic', tls)).toBe('ok')
+    expect(certificateKey('automatic', tls)).toBe('issuing')
     expect(certificateKey('wait', tls)).toBe('issuing')
     expect(certificateKey('self', tls)).toBe('test')
     expect(certificateKey('old', tls)).toBe('renewal_failed')
@@ -240,6 +241,38 @@ describe('domains, volumes and databases', () => {
     expect(certificateKey('ok', undefined)).toBe('unknown')
     expect(certificateKey(null, tls)).toBe('test')
     expect(certificateKey(undefined, undefined)).toBe('test')
+    const issued = tlsRecord('issued', 'lets_encrypt', 'automatic')
+    issued.metadata.acme = { notAfter: '2027-01-01T00:00:00.000Z' }
+    const failing = tlsRecord('failing', 'lets_encrypt', 'automatic')
+    failing.metadata.acme = { lastError: 'boom' }
+    expect(certificateKey('issued', [issued])).toBe('ok')
+    expect(certificateKey('failing', [failing])).toBe('issue_failed')
+  })
+
+  it('never calls a domain secure before a deploy has carried its certificate', () => {
+    const base = {
+      state: 'issuing',
+      source: 'lets_encrypt',
+      expiresAt: null,
+      expiresInDays: null,
+      renewsAutomatically: true,
+      lastError: null,
+      lastIssuedAt: null,
+      uploadedExpiryWarning: 'none',
+      dns: null,
+      letsEncryptAvailable: true,
+      www: 'off',
+      needsDeploy: true,
+    } as const
+    expect(hostingCertificateKey(base)).toBe('cert_not_deployed')
+    expect(hostingCertificateKey({ ...base, needsDeploy: false, serverProgress: 'working' })).toBe(
+      'issuing'
+    )
+    expect(
+      hostingCertificateKey({ ...base, needsDeploy: false, serverProgress: 'not_reported' })
+    ).toBe('cert_not_reported')
+    expect(hostingCertificateKey({ ...base, state: 'secure' })).toBe('ok')
+    expect(hostingCertificateKey({ ...base, state: 'renewal_failed' })).toBe('issue_failed')
   })
 
   it('lists each domain once, skips blank names, and names the certificate only from what is pinned', () => {

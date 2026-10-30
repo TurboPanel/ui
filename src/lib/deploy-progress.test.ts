@@ -5,6 +5,7 @@ import {
   counterDigits,
   elapsedSeconds,
   failedStep,
+  certificateStepNote,
   firstTimeSetupCaption,
   formatElapsed,
   gerundLabel,
@@ -359,5 +360,20 @@ describe('liveProgressHeadline', () => {
     expect(liveProgressHeadline({ ...plan, runningSince: null }, true)).toBe(
       'Step 2 of 6 · Installing Node 22'
     )
+  })
+})
+
+describe('certificateStepNote', () => {
+  it('keeps the certificates step line once that step is done', () => {
+    const done = {
+      id: 'certificates',
+      label: 'Set up certificates',
+      state: 'done' as const,
+      detail: 'Requested in the background; the Certificate panel shows progress: a.example.com',
+    }
+    expect(certificateStepNote([done])).toBe(done.detail)
+    expect(certificateStepNote([{ ...done, state: 'running' as const }])).toBeNull()
+    expect(certificateStepNote([{ ...done, detail: ' ' }])).toBeNull()
+    expect(certificateStepNote(undefined)).toBeNull()
   })
 })

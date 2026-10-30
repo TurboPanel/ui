@@ -46,7 +46,7 @@ export function tlsStoredCopyLines(row: TlsRecord, locale?: string): string[] {
   }
   const lines = ['A copy of the certificate and its key is stored encrypted.']
   const { issuer, notBefore } = row.metadata
-  if (issuer) lines.push(`Issued by ${issuer}`)
+  if (issuer) lines.push(`Issued by ${plainIssuer(issuer)}`)
   const started = notBefore ? Date.parse(notBefore) : Number.NaN
   if (Number.isFinite(started) && started > 0) {
     lines.push(`Valid from ${new Date(started).toLocaleString(locale)}`)
@@ -66,4 +66,32 @@ export function formatDay(value: string | null): string {
 export function expiryCell(value: string | null): string {
   if (value && !realDate(value) && !Number.isNaN(new Date(value).getTime())) return 'Pending'
   return formatDay(value)
+}
+
+/** Attribute codes a certificate name may carry instead of their short names. */
+const NAME_ATTRIBUTE_CODES: Readonly<Record<string, string>> = {
+  '2.5.4.3': 'CN',
+  '2.5.4.6': 'C',
+  '2.5.4.10': 'O',
+  '2.5.4.11': 'OU',
+}
+
+/**
+ * A certificate's issuer in plain words: the organization with the issuer's
+ * own name after it ("Let's Encrypt (YE1)"), read from a name such as
+ * `2.5.4.6=US, O=Let's Encrypt, CN=YE1` or `C=US/O=Let's Encrypt/CN=YE1`.
+ * Anything it cannot read comes back unchanged.
+ */
+export function plainIssuer(issuer: string): string {
+  const parts = new Map<string, string>()
+  for (const raw of issuer.split(/[,/]/)) {
+    const at = raw.indexOf('=')
+    if (at <= 0) continue
+    const key = raw.slice(0, at).trim()
+    parts.set(NAME_ATTRIBUTE_CODES[key] ?? key.toUpperCase(), raw.slice(at + 1).trim())
+  }
+  const organization = parts.get('O')
+  const common = parts.get('CN')
+  if (organization && common && common !== organization) return `${organization} (${common})`
+  return organization ?? common ?? issuer
 }

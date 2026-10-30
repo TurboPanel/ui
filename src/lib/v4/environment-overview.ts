@@ -23,6 +23,7 @@ import type {
   ConfigViewSide,
   ContainerRecord,
   EnvironmentConfigViewResponse as EnvironmentConfigView,
+  HostingCertificate,
   HostingRecord,
   IpRecord,
   OrgServerRecord,
@@ -231,9 +232,39 @@ export function certificateKey(
   if (record === undefined) return 'unknown'
   if (record.source === 'self_signed') return 'test'
   const status = record.metadata.status
-  if (status === 'ready' || status === 'automatic') return 'ok'
+  if (status === 'automatic') return automaticKey(record.metadata.acme)
+  if (status === 'ready') return 'ok'
   if (status === 'pending') return 'issuing'
   return 'renewal_failed'
+}
+
+/** An automatic row is secure only once a server has reported a certificate in place. */
+function automaticKey(acme: TlsRecord['metadata']['acme']): string {
+  if (acme?.lastError) return acme.lastIssuedAt ? 'renewal_failed' : 'issue_failed'
+  return acme?.notAfter ? 'ok' : 'issuing'
+}
+
+/**
+ * The certificate word from the block the server derives for each hosting
+ * (newer control planes): it knows whether a deploy has carried the
+ * certificate yet and whether a server has reported on it, so a domain is
+ * never called secure before its first deploy.
+ */
+export function hostingCertificateKey(cert: HostingCertificate): string {
+  switch (cert.state) {
+    case 'secure':
+    case 'uploaded':
+      return 'ok'
+    case 'waiting_for_dns':
+      return 'waiting'
+    case 'renewal_failed':
+      return cert.lastIssuedAt ? 'renewal_failed' : 'issue_failed'
+    case 'issuing':
+      if (cert.needsDeploy) return 'cert_not_deployed'
+      return cert.serverProgress === 'not_reported' ? 'cert_not_reported' : 'issuing'
+    default:
+      return 'test'
+  }
 }
 
 /** Shorter certificate words where the full one would not fit a map box. */
@@ -321,7 +352,9 @@ function hostingDomains(
   serviceName: string,
   source: OverviewSource
 ): MapDomain[] {
-  const key = certificateKey(hosting.tlsId, source.tls)
+  const key = hosting.certificate
+    ? hostingCertificateKey(hosting.certificate)
+    : certificateKey(hosting.tlsId, source.tls)
   const label = CERTIFICATE_BADGE_WORDS[key] ?? statusInfo(key).label
   const servedFrom = servedFromOf(hosting, source)
   return hostsOf(hosting).map((host) => ({
