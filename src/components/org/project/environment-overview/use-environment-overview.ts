@@ -14,7 +14,11 @@ import { useStorage } from '@/lib/queries/storage'
 import { useTlsLibrary } from '@/lib/queries/tls'
 import { useIps } from '@/lib/queries/topology'
 import { environmentDisplayName } from '@/lib/resource-labels'
-import { serverPublicAddresses, type OverviewSource } from '@/lib/v4/environment-overview'
+import {
+  serverOwnAddresses,
+  serverPublicAddresses,
+  type OverviewSource,
+} from '@/lib/v4/environment-overview'
 
 const NONE: never[] = []
 
@@ -77,11 +81,15 @@ export function useEnvironmentOverviewModel(): OverviewModel {
   const serverId = selectedEnvironment?.serverId ?? project?.options?.defaultServerId ?? null
   const primaryHostname = selectedEnvironment?.options?.primaryHostname ?? null
   const servers = useOrgServers(orgId, { enabled: serverId !== null })
-  const serverAddresses = useMemo(() => {
+  const server = useMemo(() => {
     const list = servers.data?.servers
     if (serverId === null || list === undefined) return undefined
-    return serverPublicAddresses(list.find((server) => server.id === serverId))
+    return list.find((row) => row.id === serverId) ?? null
   }, [servers.data, serverId])
+  const serverAddresses = useMemo(
+    () => (server === undefined ? undefined : serverPublicAddresses(server)),
+    [server]
+  )
 
   const envName = environmentDisplayName(selectedEnvironment ?? {})
   const loaded = view.data !== undefined && services.isSuccess && !hostings.isLoading
@@ -103,6 +111,8 @@ export function useEnvironmentOverviewModel(): OverviewModel {
       publicIps: ips.data?.ips,
       serverId,
       serverAddresses,
+      serverName: server?.name ?? server?.hostname ?? null,
+      serverOwnAddresses: serverOwnAddresses(server),
       primaryHostname,
     }
   }, [
@@ -119,6 +129,7 @@ export function useEnvironmentOverviewModel(): OverviewModel {
     ips.data,
     serverId,
     serverAddresses,
+    server,
     primaryHostname,
   ])
 

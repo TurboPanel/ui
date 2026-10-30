@@ -3855,8 +3855,28 @@ export type HostingRecord = {
   options?: Record<string, unknown> | null
   /** Derived by the server on GET responses; absent on older control planes. */
   certificate?: HostingCertificate | null
+  /** The names a tunnel carries, one entry per name; absent on older control planes. */
+  tunnels?: HostingTunnelPath[]
   createdAt: string
   updatedAt: string
+}
+
+/**
+ * One hostname visitors reach through a tunnel: the tunnel's edge ends TLS with
+ * a trusted certificate, then reaches the site on its server over HTTPS.
+ */
+export type HostingTunnelPath = {
+  hostname: string
+  tunnelId: string
+  tunnelName: string
+  /** `cloudflare` today. */
+  provider: string
+  /** True: only the tunnel reaches this name. False: it is also served directly. */
+  tunnelOnly: boolean
+  /** True: the tunnel checks the server's certificate. False: it accepts the server's own certificate on purpose. */
+  originVerified: boolean
+  /** `pending`, `live` or `attention`. */
+  status: string
 }
 
 export type HostingCertificateState =
