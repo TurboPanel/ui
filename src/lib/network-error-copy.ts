@@ -29,12 +29,16 @@ import {
   DOCKER_NETWORK_SUBNET_MISMATCH_ERROR,
   DOCKER_NETWORK_SUBNET_REQUIRED_ERROR,
   FAILOVER_REQUIRES_TRUSTED_DATACENTER_ERROR,
+  UNTRUSTED_NETWORK_NEEDS_FABRIC_ERROR,
   INVALID_CIDR_ERROR,
   NETWORK_CIDR_REQUIRED_ERROR,
   SUBNET_HAS_MEMBERS_ERROR,
   SUBNET_OVERLAPS_ERROR,
 } from '@/lib/instance-api'
-import { FAILOVER_REQUIRES_TRUSTED_DATACENTER_COPY } from '@/lib/managed-services'
+import {
+  FAILOVER_REQUIRES_TRUSTED_DATACENTER_COPY,
+  UNTRUSTED_NETWORK_NEEDS_FABRIC_COPY,
+} from '@/lib/managed-services'
 import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
 
 /** Codes the collision authority answers a CIDR write with (**409**). */
@@ -52,8 +56,7 @@ export type CidrCollisionCode = (typeof CIDR_COLLISION_CODES)[number]
 const CIDR_COLLISION_CODE_SET: ReadonlySet<string> = new Set(CIDR_COLLISION_CODES)
 
 /** Copy kept identical to the datacenter Subnets panel's existing wording. */
-export const SUBNET_OVERLAPS_COPY =
-  'That range overlaps an existing subnet in this organization.'
+export const SUBNET_OVERLAPS_COPY = 'That range overlaps an existing subnet in this organization.'
 
 export const NETWORK_ERROR_COPY: Readonly<Record<string, string>> = {
   // --- CIDR collisions (409) ------------------------------------------------
@@ -69,6 +72,7 @@ export const NETWORK_ERROR_COPY: Readonly<Record<string, string>> = {
 
   // --- Managed placement (422) -----------------------------------------------
   [FAILOVER_REQUIRES_TRUSTED_DATACENTER_ERROR]: FAILOVER_REQUIRES_TRUSTED_DATACENTER_COPY,
+  [UNTRUSTED_NETWORK_NEEDS_FABRIC_ERROR]: UNTRUSTED_NETWORK_NEEDS_FABRIC_COPY,
 
   // --- Field-level (400) ----------------------------------------------------
   [INVALID_CIDR_ERROR]: 'Enter a valid IPv4 or IPv6 CIDR.',
@@ -81,8 +85,7 @@ export const NETWORK_ERROR_COPY: Readonly<Record<string, string>> = {
   [DOCKER_NETWORK_SUBNET_MISMATCH_ERROR]:
     'The subnet and the CIDR disagree — send one of them, or make them the same range.',
   [DOCKER_NETWORK_SUBNET_INVALID_ERROR]: 'Subnet must be a valid IPv4 or IPv6 CIDR.',
-  [DOCKER_NETWORK_IP_RANGE_INVALID_ERROR]:
-    'IP range must be a CIDR inside the subnet.',
+  [DOCKER_NETWORK_IP_RANGE_INVALID_ERROR]: 'IP range must be a CIDR inside the subnet.',
   [DOCKER_NETWORK_GATEWAY_INVALID_ERROR]:
     'Gateway must be a bare address inside the subnet (no prefix).',
   [DOCKER_NETWORK_MTU_INVALID_ERROR]: `MTU must be a whole number from ${DOCKER_NETWORK_MTU_MIN} to ${DOCKER_NETWORK_MTU_MAX}.`,
@@ -91,14 +94,14 @@ export const NETWORK_ERROR_COPY: Readonly<Record<string, string>> = {
   address_pool_base_invalid: 'Each pool base must be a valid IPv4 or IPv6 CIDR.',
   address_pool_size_invalid:
     'Each pool size must be a prefix length between the base prefix and /30 (IPv4) or /126 (IPv6).',
-  address_pools_overlap: 'Address pools overlap each other — dockerd would hand the same subnet to two networks.',
+  address_pools_overlap:
+    'Address pools overlap each other — dockerd would hand the same subnet to two networks.',
   default_bridge_cidr_invalid:
     'Default bridge must be the bridge host address with its prefix, e.g. 172.17.0.1/16 — not a network address.',
 
   // --- Datacenter pins / subnets --------------------------------------------
   [ADDRESS_IN_USE_ERROR]: 'That address is already pinned.',
-  [ADDRESS_NOT_IN_ANY_SUBNET_ERROR]:
-    'That address is not in any subnet of this datacenter.',
+  [ADDRESS_NOT_IN_ANY_SUBNET_ERROR]: 'That address is not in any subnet of this datacenter.',
   [SUBNET_HAS_MEMBERS_ERROR]: 'Unassign the pinned servers first.',
   address_cidr_unreported: 'That server has not reported a private IP.',
   address_not_reported: 'Pick a private IP reported on that server.',
@@ -139,13 +142,9 @@ export type NetworkErrorDescription = {
  * `conflictingCidr` keep it separate so the surface can render the range in
  * monospace next to the sentence.
  */
-export function describeNetworkError(
-  err: unknown,
-  fallback: string,
-): NetworkErrorDescription {
+export function describeNetworkError(err: unknown, fallback: string): NetworkErrorDescription {
   const code = networkErrorCode(err)
-  const conflictingCidr =
-    err instanceof CidrCollisionError ? err.conflictingCidr : null
+  const conflictingCidr = err instanceof CidrCollisionError ? err.conflictingCidr : null
   if (code && NETWORK_ERROR_COPY[code]) {
     return { message: NETWORK_ERROR_COPY[code], code, conflictingCidr }
   }

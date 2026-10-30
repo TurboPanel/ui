@@ -80,7 +80,9 @@ export const ADDRESS_NOT_IN_ANY_SUBNET_ERROR = 'address_not_in_any_subnet'
 export const ADDRESS_IN_USE_ERROR = 'address_in_use'
 export const PRIVATE_FAMILY_MISMATCH_ERROR = 'private_family_mismatch'
 export const PRIVATE_PATH_UNAVAILABLE_ERROR = 'private_path_unavailable'
+/** Sent by control planes before the TurboFabric path existed. */
 export const FAILOVER_REQUIRES_TRUSTED_DATACENTER_ERROR = 'failover_requires_trusted_datacenter'
+export const UNTRUSTED_NETWORK_NEEDS_FABRIC_ERROR = 'untrusted_network_needs_fabric'
 /**
  * CIDR collision codes (**409**) from the instance's single collision
  * authority (`turbopanel/src/features/net/cidr-collisions.ts`). Every CIDR write —
