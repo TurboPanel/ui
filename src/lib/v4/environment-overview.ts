@@ -398,7 +398,8 @@ const PROVIDER_NAMES: Readonly<Record<string, string>> = { cloudflare: 'Cloudfla
 function tunnelOrigin(path: HostingTunnelPath, source: OverviewSource): string[] {
   const server = source.serverName?.trim() ? `on ${source.serverName.trim()}` : 'on the server'
   const addresses = addressText(source.serverOwnAddresses ?? [])
-  const reach = `HTTPS ${server}${addresses === null ? '' : ` · ${addresses}`}`
+  const where = addresses === null ? server : `${server} · ${addresses}`
+  const reach = `HTTPS ${where}`
   if (path.originVerified) return [reach, 'Certificate checked by the tunnel']
   return [reach, 'Server’s own certificate', 'Not checked, on purpose']
 }
@@ -452,15 +453,25 @@ function hostingDomains(
   })
 }
 
+/** A hostname and its path, so a name with both a direct and a tunnel path keeps both. */
+function domainKey(domain: MapDomain): string {
+  const path = domain.tunnel === undefined ? 'direct' : 'tunnel'
+  return `${path}:${domain.host.toLowerCase()}`
+}
+
+/** The hosting rows of one service in the effective view, oldest first. */
+function serviceHostings(source: OverviewSource, serviceId: string | null): HostingRecord[] {
+  return serviceId === null ? [] : oldestHostingsFirst(source.hostings[serviceId] ?? [])
+}
+
 /** One map domain per hostname and path, oldest hosting first, each pair once. */
 export function domainsOf(source: OverviewSource): MapDomain[] {
   const seen = new Set<string>()
   const domains: MapDomain[] = []
   for (const service of source.view.effective.services) {
-    const rows = service.serviceId === null ? [] : (source.hostings[service.serviceId] ?? [])
-    for (const hosting of oldestHostingsFirst(rows)) {
+    for (const hosting of serviceHostings(source, service.serviceId)) {
       for (const domain of hostingDomains(hosting, service.name, source)) {
-        const key = `${domain.tunnel === undefined ? 'direct' : 'tunnel'}:${domain.host.toLowerCase()}`
+        const key = domainKey(domain)
         if (seen.has(key)) continue
         seen.add(key)
         domains.push(domain)
