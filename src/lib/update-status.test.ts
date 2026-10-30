@@ -554,7 +554,7 @@ describe('installer host per channel', () => {
     expect(installerHostForChannel('release')).toBe('turbopanel.sh')
     expect(installerHostForChannel(null)).toBe('turbopanel.sh')
     expect(daemonReinstallCommand('rc')).toBe(
-      'curl -fsSL staging.turbopanel.sh | TURBOPANEL_DAEMON_ONLY=1 sh'
+      'curl -fsSL https://staging.turbopanel.sh | TURBOPANEL_DAEMON_ONLY=1 sh'
     )
   })
 })

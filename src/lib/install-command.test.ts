@@ -10,7 +10,7 @@ import {
 const revealed = {
   licenseId: 'license-id',
   licenseToken: 'token',
-  installCommand: 'curl -fsSL turbopanel.sh | TURBOPANEL_LICENSE=abc sh',
+  installCommand: 'curl -fsSL https://turbopanel.sh | TURBOPANEL_LICENSE=abc sh',
 }
 
 afterEach(() => {
