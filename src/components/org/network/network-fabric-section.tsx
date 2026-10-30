@@ -940,6 +940,21 @@ function FabricServersPanel({
   )
 }
 
+function eligibleGatewayRows(
+  relays: readonly RelayRecord[],
+  serverNameById: ReadonlyMap<string, string>
+): { serverId: string; label: string }[] {
+  const rows: { serverId: string; label: string }[] = []
+  for (const relay of relays) {
+    if (!relay.gatewayEligible) continue
+    rows.push({
+      serverId: relay.serverId,
+      label: serverNameById.get(relay.serverId) ?? relay.serverId,
+    })
+  }
+  return rows.sort((a, b) => a.label.localeCompare(b.label))
+}
+
 function isFabricToggleDisabled(
   flags: Readonly<{ pending: boolean; unavailable: boolean; canManage: boolean; loaded: boolean }>
 ): boolean {
@@ -1009,17 +1024,10 @@ export function NetworkFabricSection({ orgId }: Readonly<{ orgId: string }>) {
     [relays, serverNameById]
   )
 
-  const eligibleGateways = useMemo(() => {
-    const rows: { serverId: string; label: string }[] = []
-    for (const relay of relays) {
-      if (!relay.gatewayEligible) continue
-      rows.push({
-        serverId: relay.serverId,
-        label: serverNameById.get(relay.serverId) ?? relay.serverId,
-      })
-    }
-    return rows.sort((a, b) => a.label.localeCompare(b.label))
-  }, [relays, serverNameById])
+  const eligibleGateways = useMemo(
+    () => eligibleGatewayRows(relays, serverNameById),
+    [relays, serverNameById]
+  )
 
   const commandByServerId = useMemo(() => {
     const map = new Map<string, CommandStatus>()
@@ -1061,7 +1069,7 @@ export function NetworkFabricSection({ orgId }: Readonly<{ orgId: string }>) {
   }
 
   function handleApply() {
-    if (!canManage || !enabled || applyMutation.isPending || applyBusy) return
+    if (applyDisabled) return
     setError(null)
     setApplyErrors({})
     applyMutation.mutate(undefined, {
