@@ -39,18 +39,22 @@ import { userErrorMessage } from '@/lib/user-error'
 const SCOPES: IpScope[] = ['public', 'datacenter']
 const ALLOCATIONS: IpAllocation[] = ['dedicated', 'shared']
 
-const SCOPE_OPTIONS: readonly SegmentedOption<IpScope>[] = SCOPES.map(
-  (value) => ({ value, label: value }),
-)
-const ALLOCATION_OPTIONS: readonly SegmentedOption<IpAllocation>[] =
-  ALLOCATIONS.map((value) => ({ value, label: value }))
+const SCOPE_OPTIONS: readonly SegmentedOption<IpScope>[] = SCOPES.map((value) => ({
+  value,
+  label: value,
+}))
+const ALLOCATION_OPTIONS: readonly SegmentedOption<IpAllocation>[] = ALLOCATIONS.map((value) => ({
+  value,
+  label: value,
+}))
 const SCOPE_FILTER_OPTIONS: readonly SegmentedOption<IpScope | 'all'>[] = [
   { value: 'all', label: 'All' },
   ...SCOPE_OPTIONS,
 ]
-const ALLOCATION_FILTER_OPTIONS: readonly SegmentedOption<
-  IpAllocation | 'all'
->[] = [{ value: 'all', label: 'All' }, ...ALLOCATION_OPTIONS]
+const ALLOCATION_FILTER_OPTIONS: readonly SegmentedOption<IpAllocation | 'all'>[] = [
+  { value: 'all', label: 'All' },
+  ...ALLOCATION_OPTIONS,
+]
 
 /** Simple client pre-check; server `ip-address.ts` is authoritative. */
 const IP_LITERAL_OR_CIDR =
@@ -62,7 +66,7 @@ function serverTitle(server: OrgServerRecord): string {
 
 function datacenterOptions(
   datacenters: readonly DatacenterRecord[],
-  emptyLabel: string,
+  emptyLabel: string
 ): SegmentedOption<string>[] {
   return [
     { value: '', label: emptyLabel },
@@ -77,20 +81,16 @@ function datacenterOptions(
  * `kind: managed` rows are platform-allocated with no CIDR of their own —
  * Docker owns the subnet — so they are never a target for IP assignment.
  */
-function selectableNetworks(
-  networks: readonly NetworkRecord[],
-): NetworkRecord[] {
+function selectableNetworks(networks: readonly NetworkRecord[]): NetworkRecord[] {
   return networks.filter((row) => row.kind !== 'managed')
 }
 
 function siteSubnetsForDatacenter(
   networks: readonly NetworkRecord[],
-  datacenterId: string,
+  datacenterId: string
 ): NetworkRecord[] {
   if (!datacenterId) return []
-  return networks.filter(
-    (row) => row.kind === 'datacenter' && row.datacenterId === datacenterId,
-  )
+  return networks.filter((row) => row.kind === 'datacenter' && row.datacenterId === datacenterId)
 }
 
 function isDatacenterMembershipPin(scope: IpScope, serverId: string): boolean {
@@ -101,16 +101,13 @@ function isMembershipPinIncomplete(
   scope: IpScope,
   datacenterId: string,
   networkId: string,
-  serverId: string,
+  serverId: string
 ): boolean {
   if (!isDatacenterMembershipPin(scope, serverId)) return false
   return datacenterId.length === 0 || networkId.length === 0
 }
 
-function isCreateIpDisabled(
-  creating: boolean,
-  membershipIncomplete: boolean,
-): boolean {
+function isCreateIpDisabled(creating: boolean, membershipIncomplete: boolean): boolean {
   return creating || membershipIncomplete
 }
 
@@ -118,12 +115,12 @@ function retainedNetworkId(
   networks: readonly NetworkRecord[],
   datacenterId: string,
   networkId: string,
-  requireSiteSubnet: boolean,
+  requireSiteSubnet: boolean
 ): string {
   if (!networkId) return ''
   if (!requireSiteSubnet) return networkId
   const stillValid = siteSubnetsForDatacenter(networks, datacenterId).some(
-    (row) => row.id === networkId,
+    (row) => row.id === networkId
   )
   return stillValid ? networkId : ''
 }
@@ -131,7 +128,7 @@ function retainedNetworkId(
 function resolveSubmittedNetworkId(
   scope: IpScope,
   serverId: string,
-  networkId: string,
+  networkId: string
 ): string | null {
   if (serverId && networkId) return networkId
   if (scope !== 'datacenter' && networkId) return networkId
@@ -145,7 +142,7 @@ function mutationErrorMessage(err: unknown, fallback: string): string {
 function buildIpListFilters(
   scopeFilter: IpScope | 'all',
   allocationFilter: IpAllocation | 'all',
-  datacenterFilter: string,
+  datacenterFilter: string
 ): {
   scope?: IpScope
   allocation?: IpAllocation
@@ -162,33 +159,26 @@ function buildIpListFilters(
   return filters
 }
 
-function resolveIpsQueryError(
-  isError: boolean,
-  error: unknown,
-): string | null {
+function resolveIpsQueryError(isError: boolean, error: unknown): string | null {
   if (!isError) return null
   if (error instanceof Error) return userErrorMessage(error, '')
   return 'Failed to load IP addresses'
 }
 
-function isIpsOverviewLoading(queries: Readonly<{
-  ipsLoading: boolean
-  ipsPlaceholder: boolean
-  serversLoading: boolean
-  networksLoading: boolean
-  datacentersLoading: boolean
-}>): boolean {
+function isIpsOverviewLoading(
+  queries: Readonly<{
+    ipsLoading: boolean
+    ipsPlaceholder: boolean
+    serversLoading: boolean
+    networksLoading: boolean
+    datacentersLoading: boolean
+  }>
+): boolean {
   if (queries.ipsLoading && !queries.ipsPlaceholder) return true
-  return (
-    queries.serversLoading ||
-    queries.networksLoading ||
-    queries.datacentersLoading
-  )
+  return queries.serversLoading || queries.networksLoading || queries.datacentersLoading
 }
 
-function indexById<T extends { id: string }>(
-  rows: readonly T[],
-): Map<string, T> {
+function indexById<T extends { id: string }>(rows: readonly T[]): Map<string, T> {
   const map = new Map<string, T>()
   for (const row of rows) map.set(row.id, row)
   return map
@@ -204,15 +194,17 @@ type CreateIpInput = {
   serverId?: string
 }
 
-function buildCreateIpBody(input: Readonly<{
-  address: string
-  allocation: IpAllocation
-  scope: IpScope
-  description: string
-  createDatacenterId: string
-  createNetworkId: string
-  createServerId: string
-}>): CreateIpInput {
+function buildCreateIpBody(
+  input: Readonly<{
+    address: string
+    allocation: IpAllocation
+    scope: IpScope
+    description: string
+    createDatacenterId: string
+    createNetworkId: string
+    createServerId: string
+  }>
+): CreateIpInput {
   const body: CreateIpInput = {
     address: input.address,
     allocation: input.allocation,
@@ -224,19 +216,21 @@ function buildCreateIpBody(input: Readonly<{
   const networkId = resolveSubmittedNetworkId(
     input.scope,
     input.createServerId,
-    input.createNetworkId,
+    input.createNetworkId
   )
   if (networkId) body.networkId = networkId
   return body
 }
 
-function buildUpdateIpBody(input: Readonly<{
-  description: string
-  scope: IpScope
-  datacenterId: string
-  networkId: string
-  serverId: string
-}>): {
+function buildUpdateIpBody(
+  input: Readonly<{
+    description: string
+    scope: IpScope
+    datacenterId: string
+    networkId: string
+    serverId: string
+  }>
+): {
   description: string | null
   datacenterId: string | null
   networkId: string | null
@@ -246,11 +240,7 @@ function buildUpdateIpBody(input: Readonly<{
     description: input.description.trim() || null,
     datacenterId: input.datacenterId || null,
     serverId: input.serverId || null,
-    networkId: resolveSubmittedNetworkId(
-      input.scope,
-      input.serverId,
-      input.networkId,
-    ),
+    networkId: resolveSubmittedNetworkId(input.scope, input.serverId, input.networkId),
   }
 }
 
@@ -370,8 +360,7 @@ function IpEditPanel({
   onCancel: () => void
   onSave: () => void
 }>) {
-  const saveDisabled = saving ||
-    isMembershipPinIncomplete(scope, datacenterId, networkId, serverId)
+  const saveDisabled = saving || isMembershipPinIncomplete(scope, datacenterId, networkId, serverId)
   return (
     <View style={[panelStyles.detailCard, styles.editCard]}>
       <Text style={panelStyles.detailTitle}>Edit address</Text>
@@ -505,12 +494,7 @@ function AddAddressPanel({
   onCreate: () => void
 }>) {
   return (
-    <SectionPanel
-      title="Add IP address"
-      hint="Manage-gated"
-      collapsible
-      defaultCollapsed
-    >
+    <SectionPanel title="Add IP address" hint="Manage-gated" collapsible defaultCollapsed>
       <TextField
         label="Address"
         value={address}
@@ -572,7 +556,7 @@ function addressRowLabels(
     serverById: Map<string, OrgServerRecord>
     networkById: Map<string, NetworkRecord>
     datacenterById: Map<string, DatacenterRecord>
-  }>,
+  }>
 ): {
   serverLabel: string | null
   networkLabel: string | null
@@ -580,9 +564,7 @@ function addressRowLabels(
 } {
   const server = ip.serverId ? lookups.serverById.get(ip.serverId) : null
   const network = ip.networkId ? lookups.networkById.get(ip.networkId) : null
-  const datacenter = ip.datacenterId
-    ? lookups.datacenterById.get(ip.datacenterId)
-    : null
+  const datacenter = ip.datacenterId ? lookups.datacenterById.get(ip.datacenterId) : null
   return {
     serverLabel: server ? serverTitle(server) : null,
     networkLabel: network?.name?.trim() || network?.cidr || null,
@@ -648,13 +630,8 @@ function AddressPoolPanel({
   onDelete: (ipId: string) => void
 }>) {
   return (
-    <SectionPanel
-      title="Address pool"
-      hint={loading ? 'Loading…' : `${ips.length} address(es)`}
-    >
-      {loading && ips.length === 0 ? (
-        <LoadingState label="Loading addresses…" />
-      ) : null}
+    <SectionPanel title="Address pool" hint={loading ? 'Loading…' : `${ips.length} address(es)`}>
+      {loading && ips.length === 0 ? <LoadingState label="Loading addresses…" /> : null}
       {!loading && ips.length === 0 ? (
         <EmptyState title="No addresses match these filters." />
       ) : null}
@@ -717,9 +694,7 @@ export function NetworkAddressesSection({
   const canManage = useCan('organization', orgId, 'organization:manage')
   const [error, setError] = useState<string | null>(null)
   const [scopeFilter, setScopeFilter] = useState<IpScope | 'all'>('all')
-  const [allocationFilter, setAllocationFilter] = useState<IpAllocation | 'all'>(
-    'all',
-  )
+  const [allocationFilter, setAllocationFilter] = useState<IpAllocation | 'all'>('all')
   const [datacenterFilter, setDatacenterFilter] = useState('')
   const [address, setAddress] = useState('')
   const [description, setDescription] = useState('')
@@ -738,9 +713,8 @@ export function NetworkAddressesSection({
   const [editServerId, setEditServerId] = useState('')
 
   const ipFilters = useMemo(
-    () =>
-      buildIpListFilters(scopeFilter, allocationFilter, datacenterFilter),
-    [allocationFilter, datacenterFilter, scopeFilter],
+    () => buildIpListFilters(scopeFilter, allocationFilter, datacenterFilter),
+    [allocationFilter, datacenterFilter, scopeFilter]
   )
 
   const ipsQuery = useIps(orgId, ipFilters)
@@ -776,18 +750,11 @@ export function NetworkAddressesSection({
     deleteMutation.actionError ??
     queryError
 
-  const deletingId = deleteMutation.isPending
-    ? deleteMutation.variables
-    : undefined
+  const deletingId = deleteMutation.isPending ? deleteMutation.variables : undefined
   const creating = createMutation.isPending
   const createDisabled = isCreateIpDisabled(
     creating,
-    isMembershipPinIncomplete(
-      scope,
-      createDatacenterId,
-      createNetworkId,
-      createServerId,
-    ),
+    isMembershipPinIncomplete(scope, createDatacenterId, createNetworkId, createServerId)
   )
   const savingEdit = updateMutation.isPending
 
@@ -803,7 +770,7 @@ export function NetworkAddressesSection({
         networks,
         createDatacenterId,
         current,
-        isDatacenterMembershipPin(next, createServerId),
+        isDatacenterMembershipPin(next, createServerId)
       )
     })
   }
@@ -811,12 +778,7 @@ export function NetworkAddressesSection({
   const handleCreateDatacenterIdChange = (id: string) => {
     setCreateDatacenterId(id)
     setCreateNetworkId((current) =>
-      retainedNetworkId(
-        networks,
-        id,
-        current,
-        isDatacenterMembershipPin(scope, createServerId),
-      ),
+      retainedNetworkId(networks, id, current, isDatacenterMembershipPin(scope, createServerId))
     )
   }
 
@@ -828,7 +790,7 @@ export function NetworkAddressesSection({
         networks,
         createDatacenterId,
         current,
-        isDatacenterMembershipPin(scope, id),
+        isDatacenterMembershipPin(scope, id)
       )
     })
   }
@@ -836,12 +798,7 @@ export function NetworkAddressesSection({
   const handleEditDatacenterIdChange = (id: string) => {
     setEditDatacenterId(id)
     setEditNetworkId((current) =>
-      retainedNetworkId(
-        networks,
-        id,
-        current,
-        isDatacenterMembershipPin(editScope, editServerId),
-      ),
+      retainedNetworkId(networks, id, current, isDatacenterMembershipPin(editScope, editServerId))
     )
   }
 
@@ -853,7 +810,7 @@ export function NetworkAddressesSection({
         networks,
         editDatacenterId,
         current,
-        isDatacenterMembershipPin(editScope, id),
+        isDatacenterMembershipPin(editScope, id)
       )
     })
   }
@@ -868,14 +825,7 @@ export function NetworkAddressesSection({
 
   const handleCreate = () => {
     if (!canManage) return
-    if (
-      isMembershipPinIncomplete(
-        scope,
-        createDatacenterId,
-        createNetworkId,
-        createServerId,
-      )
-    ) {
+    if (isMembershipPinIncomplete(scope, createDatacenterId, createNetworkId, createServerId)) {
       return
     }
     const trimmed = address.trim()
@@ -899,7 +849,7 @@ export function NetworkAddressesSection({
         onError: (err) => {
           setError(mutationErrorMessage(err, 'Failed to create IP'))
         },
-      },
+      }
     )
   }
 
@@ -934,14 +884,7 @@ export function NetworkAddressesSection({
 
   const handleSaveEdit = () => {
     if (!canManage || !editingId) return
-    if (
-      isMembershipPinIncomplete(
-        editScope,
-        editDatacenterId,
-        editNetworkId,
-        editServerId,
-      )
-    ) {
+    if (isMembershipPinIncomplete(editScope, editDatacenterId, editNetworkId, editServerId)) {
       return
     }
     setError(null)
@@ -961,7 +904,7 @@ export function NetworkAddressesSection({
         onError: (err) => {
           setError(mutationErrorMessage(err, 'Failed to update IP'))
         },
-      },
+      }
     )
   }
 
@@ -972,9 +915,7 @@ export function NetworkAddressesSection({
         Organization address pool for ingress and internal routing.
       </Text>
 
-      {displayError ? (
-        <Text style={panelStyles.error}>{displayError}</Text>
-      ) : null}
+      {displayError ? <Text style={panelStyles.error}>{displayError}</Text> : null}
 
       <AddressFiltersPanel
         scopeFilter={scopeFilter}
