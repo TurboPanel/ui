@@ -36,7 +36,7 @@ import {
  * account).
  */
 export function principalRequiredServiceNames(
-  document: ComposeDocument | null | undefined,
+  document: ComposeDocument | null | undefined
 ): string[] {
   const services = document?.data?.services
   if (typeof services !== 'object' || services === null) return []
@@ -46,16 +46,13 @@ export function principalRequiredServiceNames(
     if (typeof raw !== 'object' || raw === null) continue
     const extension = readServiceTurbopanelExtension(raw as Record<string, unknown>)
     if (!extension) continue
-    const nativeRelease =
-      extension.source != null && !isImageBuildKind(extension.source.buildKind)
+    const nativeRelease = extension.source != null && !isImageBuildKind(extension.source.buildKind)
     const uploadedDirectory =
-      extension.serviceKind === 'site' &&
-      extension.sourceKind === 'managed-directory'
+      extension.serviceKind === 'site' && extension.sourceKind === 'managed-directory'
     if (nativeRelease || uploadedDirectory) names.push(name)
   }
   return names.sort((a, b) => a.localeCompare(b))
 }
-
 
 /**
  * Compose service names whose declared `x-turbopanel.principal` resolves to an
@@ -65,9 +62,7 @@ export function principalRequiredServiceNames(
  * account that does not exist, which is the same standing as naming none. The
  * compose linter reports it separately, with the line number.
  */
-function aliasOwnedServiceNames(
-  document: ComposeDocument | null | undefined
-): Set<string> {
+function aliasOwnedServiceNames(document: ComposeDocument | null | undefined): Set<string> {
   const services = document?.data?.services
   if (typeof services !== 'object' || services === null) return new Set()
 
@@ -75,8 +70,7 @@ function aliasOwnedServiceNames(
   const owned = new Set<string>()
   for (const [name, raw] of Object.entries(services as Record<string, unknown>)) {
     if (typeof raw !== 'object' || raw === null) continue
-    const alias = readServiceTurbopanelExtension(raw as Record<string, unknown>)
-      ?.principal
+    const alias = readServiceTurbopanelExtension(raw as Record<string, unknown>)?.principal
     if (alias && declared.has(alias)) owned.add(name)
   }
   return owned
@@ -119,9 +113,7 @@ export function unownedPrincipalRequiredServices(params: {
       ownedNames.add(service.composeServiceName)
     }
   }
-  return declared.filter(
-    (name) => !aliasOwned.has(name) && !ownedNames.has(name),
-  )
+  return declared.filter((name) => !aliasOwned.has(name) && !ownedNames.has(name))
 }
 
 /** Point the named services at `alias`, leaving any that already name one. */

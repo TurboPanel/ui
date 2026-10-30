@@ -8,10 +8,7 @@ import {
 } from '@/lib/project-create/repository-seed'
 import { lintComposeYaml, composeDocumentToYaml } from '@/lib/compose'
 import { readComposePrincipals } from '@/lib/compose/principals-document'
-import {
-  DEFAULT_PHP_SERIES,
-  readServiceTurbopanelExtension,
-} from '@/lib/compose/service-kind'
+import { DEFAULT_PHP_SERIES, readServiceTurbopanelExtension } from '@/lib/compose/service-kind'
 import type { RepositoryRecord } from '@/lib/instance-api'
 
 const SOURCE_ID = '11111111-2222-4333-8444-555555555555'
@@ -37,10 +34,7 @@ function source(overrides: Partial<RepositoryRecord> = {}): RepositoryRecord {
 }
 
 function seededService(document: ReturnType<typeof seedComposeForLane>) {
-  const services = document.data.services as Record<
-    string,
-    Record<string, unknown>
-  >
+  const services = document.data.services as Record<string, Record<string, unknown>>
   const name = Object.keys(services)[0] ?? ''
   return { name, service: services[name] ?? {} }
 }
@@ -52,30 +46,26 @@ describe('repositoryServiceName', () => {
 
   it('reads an SSH remote the same way', () => {
     expect(
-      repositoryServiceName(
-        source({ repositoryUrl: 'git@gitlab.com:acme/Web_App.git' }),
-      ),
+      repositoryServiceName(source({ repositoryUrl: 'git@gitlab.com:acme/Web_App.git' }))
     ).toBe('web-app')
   })
 
   it('never emits a leading or trailing dash', () => {
     expect(
-      repositoryServiceName(
-        source({ repositoryUrl: 'https://example.com/acme/--api--' }),
-      ),
+      repositoryServiceName(source({ repositoryUrl: 'https://example.com/acme/--api--' }))
     ).toBe('api')
   })
 
   it('falls back when the name slugs away to nothing', () => {
-    expect(
-      repositoryServiceName(source({ repositoryUrl: 'https://example.com/a/…' })),
-    ).toBe('app')
+    expect(repositoryServiceName(source({ repositoryUrl: 'https://example.com/a/…' }))).toBe('app')
   })
 })
 
 describe('seedComposeForLane', () => {
   it('binds one service to the source id', () => {
-    const { name, service } = seededService(seedComposeForLane({ source: source(), branch: '', lane: 'app' }))
+    const { name, service } = seededService(
+      seedComposeForLane({ source: source(), branch: '', lane: 'app' })
+    )
     expect(name).toBe('storefront-api')
     expect(readServiceTurbopanelExtension(service)?.source).toEqual({
       sourceId: SOURCE_ID,
@@ -84,14 +74,12 @@ describe('seedComposeForLane', () => {
 
   it('pins the branch only when one was typed', () => {
     const { service } = seededService(
-      seedComposeForLane({ source: source(), branch: '  release/2.0  ', lane: 'app' }),
+      seedComposeForLane({ source: source(), branch: '  release/2.0  ', lane: 'app' })
     )
-    expect(readServiceTurbopanelExtension(service)?.source?.branch).toBe(
-      'release/2.0',
-    )
+    expect(readServiceTurbopanelExtension(service)?.source?.branch).toBe('release/2.0')
 
     const { service: blank } = seededService(
-      seedComposeForLane({ source: source(), branch: '   ', lane: 'app' }),
+      seedComposeForLane({ source: source(), branch: '   ', lane: 'app' })
     )
     expect(readServiceTurbopanelExtension(blank)?.source?.branch).toBeUndefined()
   })
@@ -102,10 +90,10 @@ describe('seedComposeForLane', () => {
    * never chose.
    */
   it('leaves the build backend at its default', () => {
-    const { service } = seededService(seedComposeForLane({ source: source(), branch: 'main', lane: 'app' }))
-    expect(
-      readServiceTurbopanelExtension(service)?.source?.buildKind,
-    ).toBeUndefined()
+    const { service } = seededService(
+      seedComposeForLane({ source: source(), branch: 'main', lane: 'app' })
+    )
+    expect(readServiceTurbopanelExtension(service)?.source?.buildKind).toBeUndefined()
   })
 
   /**
@@ -119,15 +107,15 @@ describe('seedComposeForLane', () => {
     expect(readServiceTurbopanelExtension(service)?.serviceKind).toBe('node')
 
     const blocking = lintComposeYaml(composeDocumentToYaml(document)).filter(
-      (issue) => issue.level === 'error',
+      (issue) => issue.level === 'error'
     )
     expect(blocking).toEqual([])
   })
 
   it('orders services first so the YAML reads top-down', () => {
-    expect(seedComposeForLane({ source: source(), branch: '', lane: 'app' }).presentation.keyOrder).toEqual([
-      'services',
-    ])
+    expect(
+      seedComposeForLane({ source: source(), branch: '', lane: 'app' }).presentation.keyOrder
+    ).toEqual(['services'])
   })
 
   it('writes the Simple-application fields onto the source binding', () => {
@@ -141,7 +129,7 @@ describe('seedComposeForLane', () => {
           startCommand: 'pnpm start',
           subdirectory: 'apps/web',
         },
-      }),
+      })
     )
     expect(readServiceTurbopanelExtension(service)?.source).toEqual({
       sourceId: SOURCE_ID,
@@ -156,8 +144,8 @@ describe('seedComposeForLane', () => {
     const seed = (nodeVersion: string, lane: 'app' | 'static') =>
       readServiceTurbopanelExtension(
         seededService(
-          seedComposeForLane({ source: source(), branch: '', lane, simple: { nodeVersion } }),
-        ).service,
+          seedComposeForLane({ source: source(), branch: '', lane, simple: { nodeVersion } })
+        ).service
       )
     expect(seed('26', 'app')?.nodeVersion).toBe('26')
     expect(seed('latest', 'app')?.nodeVersion).toBe('latest')
@@ -171,7 +159,7 @@ describe('seedComposeForLane', () => {
         branch: '',
         lane: 'app',
         simple: { buildCommand: '   ', startCommand: '', subdirectory: '' },
-      }),
+      })
     )
     expect(readServiceTurbopanelExtension(service)?.source).toEqual({
       sourceId: SOURCE_ID,
@@ -190,7 +178,7 @@ describe('seedComposeForLane', () => {
           startCommand: 'npm start',
           subdirectory: '',
         },
-      }),
+      })
     )
     const extension = readServiceTurbopanelExtension(service)
     expect(extension?.serviceKind).toBe('site')
@@ -212,7 +200,7 @@ describe('seedComposeForLane', () => {
           startCommand: 'npm start',
           subdirectory: 'web',
         },
-      }),
+      })
     )
     expect(readServiceTurbopanelExtension(service)?.source).toEqual({
       sourceId: SOURCE_ID,
@@ -262,12 +250,12 @@ describe('seedComposeForLane produces a valid document for every lane', () => {
 
   it('turns PHP on for the site-php lane and leaves it off for static', () => {
     const php = seededService(
-      seedComposeForLane({ source: source(), branch: '', lane: 'site-php' }),
+      seedComposeForLane({ source: source(), branch: '', lane: 'site-php' })
     ).service['x-turbopanel'] as Record<string, unknown>
     expect(php.php).toBeDefined()
 
     const staticSite = seededService(
-      seedComposeForLane({ source: source(), branch: '', lane: 'static' }),
+      seedComposeForLane({ source: source(), branch: '', lane: 'static' })
     ).service['x-turbopanel'] as Record<string, unknown>
     expect(staticSite.php).toBeUndefined()
   })
@@ -308,7 +296,7 @@ describe('seeded principal is the operator’s choice', () => {
     })
     expect(readComposePrincipals(document)).toEqual({})
     expect(
-      readServiceTurbopanelExtension(seededService(document).service)?.principal,
+      readServiceTurbopanelExtension(seededService(document).service)?.principal
     ).toBeUndefined()
   })
 
@@ -321,7 +309,7 @@ describe('seeded principal is the operator’s choice', () => {
         ...(principalAlias ? { principalAlias } : {}),
       })
       const blocking = lintComposeYaml(composeDocumentToYaml(document)).filter(
-        (issue) => issue.level === 'error',
+        (issue) => issue.level === 'error'
       )
       expect(blocking).toEqual([])
     }
@@ -368,18 +356,13 @@ describe('seedHostingCompose', () => {
     // `php: {}` is a no-op twice over — the extension parser drops an empty
     // block and the daemon's `siteNeedsPhp` requires a non-empty one.
     const extension = readServiceTurbopanelExtension(
-      (seedHostingCompose({ php: true }).data.services as Record<
-        string,
-        Record<string, unknown>
-      >).site!,
+      (seedHostingCompose({ php: true }).data.services as Record<string, Record<string, unknown>>)
+        .site!
     )
     expect(extension?.php?.version).toBe(DEFAULT_PHP_SERIES)
 
     const staticSite = readServiceTurbopanelExtension(
-      (seedHostingCompose({}).data.services as Record<
-        string,
-        Record<string, unknown>
-      >).site!,
+      (seedHostingCompose({}).data.services as Record<string, Record<string, unknown>>).site!
     )
     expect(staticSite?.php).toBeUndefined()
   })
@@ -401,16 +384,16 @@ describe('seedHostingCompose', () => {
     expect(readComposePrincipals(bare)).toEqual({})
     expect(
       readServiceTurbopanelExtension(
-        (bare.data.services as Record<string, Record<string, unknown>>).site!,
-      )?.principal,
+        (bare.data.services as Record<string, Record<string, unknown>>).site!
+      )?.principal
     ).toBeUndefined()
 
     const chosen = seedHostingCompose({ principalAlias: 'blog' })
     expect(readComposePrincipals(chosen)).toEqual({ blog: {} })
     expect(
       readServiceTurbopanelExtension(
-        (chosen.data.services as Record<string, Record<string, unknown>>).site!,
-      )?.principal,
+        (chosen.data.services as Record<string, Record<string, unknown>>).site!
+      )?.principal
     ).toBe('blog')
   })
 })
