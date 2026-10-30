@@ -955,6 +955,26 @@ function eligibleGatewayRows(
   return rows.sort((a, b) => a.label.localeCompare(b.label))
 }
 
+/** Which optional parts of the fabric section show, decided outside the component. */
+function fabricSectionView(
+  input: Readonly<{
+    canManage: boolean
+    unavailable: boolean
+    enabled: boolean
+    state: ReturnType<typeof fabricState>
+    loading: boolean
+    defaultFabricEnabled: boolean
+    serverCount: number
+  }>
+): { showLoading: boolean; showDefaultHint: boolean; showServers: boolean; showMesh: boolean } {
+  return {
+    showLoading: input.loading,
+    showDefaultHint: input.canManage && input.state === 'off' && input.defaultFabricEnabled,
+    showServers: input.canManage && !input.unavailable && input.serverCount > 0,
+    showMesh: input.enabled && !input.unavailable,
+  }
+}
+
 function isFabricToggleDisabled(
   flags: Readonly<{ pending: boolean; unavailable: boolean; canManage: boolean; loaded: boolean }>
 ): boolean {
@@ -1004,6 +1024,15 @@ export function NetworkFabricSection({ orgId }: Readonly<{ orgId: string }>) {
     loaded: query.data !== undefined,
   })
   const showToggle = canManage && !unavailable
+  const view = fabricSectionView({
+    canManage,
+    unavailable,
+    enabled,
+    state,
+    loading: query.isLoading && !query.data,
+    defaultFabricEnabled: hostDefaultsQuery.data?.defaultFabricEnabled === true,
+    serverCount: fabricServers.length,
+  })
 
   const relayByServerId = useMemo(() => {
     const map = new Map<string, RelayRecord>()
@@ -1096,7 +1125,7 @@ export function NetworkFabricSection({ orgId }: Readonly<{ orgId: string }>) {
       {displayError ? <Text style={panelStyles.error}>{displayError}</Text> : null}
 
       <SectionPanel title={TURBOFABRIC_PRODUCT_NAME} hint="Opt-in · default off">
-        {query.isLoading && !query.data ? <LoadingState /> : null}
+        {view.showLoading ? <LoadingState /> : null}
 
         <FabricStatusBlock state={state} cidr={fabric?.cidr} status={fabric?.status} />
 
@@ -1118,7 +1147,7 @@ export function NetworkFabricSection({ orgId }: Readonly<{ orgId: string }>) {
           />
         ) : null}
 
-        {canManage && state === 'off' && hostDefaultsQuery.data?.defaultFabricEnabled === true ? (
+        {view.showDefaultHint ? (
           <Text style={panelStyles.muted}>
             Host defaults prefer {TURBOFABRIC_PRODUCT_NAME} on. Enabling here still creates the
             mesh.
@@ -1128,11 +1157,11 @@ export function NetworkFabricSection({ orgId }: Readonly<{ orgId: string }>) {
         {canManage ? null : <FabricManageHint />}
       </SectionPanel>
 
-      {canManage && !unavailable && fabricServers.length > 0 ? (
+      {view.showServers ? (
         <FabricServersPanel orgId={orgId} servers={fabricServers} canManage={canManage} />
       ) : null}
 
-      {enabled && !unavailable ? (
+      {view.showMesh ? (
         <>
           <FabricRelaysPanel
             orgId={orgId}
