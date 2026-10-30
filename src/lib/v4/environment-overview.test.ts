@@ -233,7 +233,7 @@ describe('domains, volumes and databases', () => {
       tlsRecord('old', 'upload', 'expired'),
     ]
     expect(certificateKey('ok', tls)).toBe('ok')
-    expect(certificateKey('automatic', tls)).toBe('issuing')
+    expect(certificateKey('automatic', tls)).toBe('ok')
     expect(certificateKey('wait', tls)).toBe('issuing')
     expect(certificateKey('self', tls)).toBe('test')
     expect(certificateKey('old', tls)).toBe('renewal_failed')
@@ -273,6 +273,12 @@ describe('domains, volumes and databases', () => {
     ).toBe('cert_not_reported')
     expect(hostingCertificateKey({ ...base, state: 'secure' })).toBe('ok')
     expect(hostingCertificateKey({ ...base, state: 'renewal_failed' })).toBe('issue_failed')
+    const upload = { ...base, state: 'uploaded', source: 'uploaded' } as const
+    expect(hostingCertificateKey(upload)).toBe('ok')
+    expect(hostingCertificateKey({ ...upload, uploadedExpiryWarning: '3d' })).toBe('expiring')
+    expect(hostingCertificateKey({ ...upload, uploadedExpiryWarning: 'expired' })).toBe(
+      'cert_expired'
+    )
   })
 
   it('lists each domain once, skips blank names, and names the certificate only from what is pinned', () => {

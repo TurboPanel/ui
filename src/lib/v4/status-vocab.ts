@@ -69,6 +69,7 @@ export const STATUS = {
   expiring: { label: 'Expires soon', glyph: 'clock', tone: 'warn' },
   renewal_failed: { label: 'Renewal failed', glyph: 'diamond', tone: 'bad' },
   issue_failed: { label: 'Couldn’t get a certificate', glyph: 'diamond', tone: 'bad' },
+  cert_expired: { label: 'Certificate expired', glyph: 'diamond', tone: 'bad' },
   cert_not_deployed: { label: 'Not deployed yet', glyph: 'half', tone: 'warn' },
   cert_not_reported: { label: 'Not on the server yet', glyph: 'triangle', tone: 'warn' },
   test: { label: 'Self-signed certificate (browsers warn)', glyph: 'unlock', tone: 'warn' },

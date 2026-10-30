@@ -116,9 +116,18 @@ describe('certificate dates', () => {
 
 describe('plainIssuer', () => {
   it('reads attribute codes and short names into the organization and its issuer name', () => {
-    expect(plainIssuer("2.5.4.6=US, O=Let's Encrypt, CN=YE1")).toBe("Let's Encrypt (YE1)")
-    expect(plainIssuer("C=US/O=Let's Encrypt/CN=R11")).toBe("Let's Encrypt (R11)")
-    expect(plainIssuer('CN=Acme Root')).toBe('Acme Root')
+    expect(plainIssuer('2.5.4.6=US, O=Example Trust, CN=R1')).toBe('Example Trust (R1)')
+    expect(plainIssuer('/C=US/O=Example Trust/CN=R2')).toBe('Example Trust (R2)')
+    expect(plainIssuer('CN=Example Root')).toBe('Example Root')
     expect(plainIssuer('R11')).toBe('R11')
+  })
+
+  it('keeps a comma that is escaped or quoted inside a value', () => {
+    expect(plainIssuer('C=US, O=Example Hosting\\, Inc., CN=Example CA 1')).toBe(
+      'Example Hosting, Inc. (Example CA 1)'
+    )
+    expect(plainIssuer('C=US, O="Example Hosting, Inc.", CN=Example CA 2')).toBe(
+      'Example Hosting, Inc. (Example CA 2)'
+    )
   })
 })

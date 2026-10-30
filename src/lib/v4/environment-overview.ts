@@ -238,10 +238,20 @@ export function certificateKey(
   return 'renewal_failed'
 }
 
-/** An automatic row is secure only once a server has reported a certificate in place. */
+/**
+ * An automatic row read without the server's certificate block (an older
+ * control plane): a reported failure says so, anything else keeps the word it
+ * always had.
+ */
 function automaticKey(acme: TlsRecord['metadata']['acme']): string {
   if (acme?.lastError) return acme.lastIssuedAt ? 'renewal_failed' : 'issue_failed'
-  return acme?.notAfter ? 'ok' : 'issuing'
+  return 'ok'
+}
+
+/** An uploaded certificate is secure until it runs out: near the end it warns, after it fails. */
+function uploadedKey(cert: HostingCertificate): string {
+  if (cert.uploadedExpiryWarning === 'expired') return 'cert_expired'
+  return cert.uploadedExpiryWarning === 'none' ? 'ok' : 'expiring'
 }
 
 /**
@@ -253,8 +263,9 @@ function automaticKey(acme: TlsRecord['metadata']['acme']): string {
 export function hostingCertificateKey(cert: HostingCertificate): string {
   switch (cert.state) {
     case 'secure':
-    case 'uploaded':
       return 'ok'
+    case 'uploaded':
+      return uploadedKey(cert)
     case 'waiting_for_dns':
       return 'waiting'
     case 'renewal_failed':
