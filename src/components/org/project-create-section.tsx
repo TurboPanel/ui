@@ -64,6 +64,7 @@ import {
   useWorkspaces,
 } from '@/lib/queries'
 import { useOrgDefaultEnvironmentName } from '@/lib/org-default-environment'
+import { useOrgProjectFormDefaults } from '@/lib/org-project-settings'
 import type { RepositoryInspection, RepositoryRecord } from '@/lib/instance-api'
 import { userWorkspaces } from '@/lib/system-inventory'
 import { spacing } from '@/lib/theme'
@@ -253,6 +254,7 @@ function ProjectCreateWizard({ orgId }: Readonly<{ orgId: string }>) {
   const params = useLocalSearchParams<{ workspaceId?: string; type?: string }>()
   const workspaceScope = useOptionalWorkspaceScope()
   const { defaultEnvironmentName } = useOrgDefaultEnvironmentName(orgId)
+  const { openWorkspaceSectionByDefault } = useOrgProjectFormDefaults(orgId)
 
   const workspacesQuery = useWorkspaces(orgId)
   const projectsQuery = useProjects(orgId)
@@ -736,6 +738,7 @@ function ProjectCreateWizard({ orgId }: Readonly<{ orgId: string }>) {
           onWorkspaceModeChange={handleWorkspaceModeChange}
           onPickedWorkspaceIdChange={setPickedWorkspaceId}
           onNewWorkspaceNameChange={handleNewWorkspaceNameChange}
+          openWorkspaceByDefault={openWorkspaceSectionByDefault}
         />
       }
       selectedChoice={selectedChoice}

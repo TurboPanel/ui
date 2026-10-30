@@ -163,6 +163,8 @@ export const queryKeys = {
         /** PHP modes the organization offers (`/organizations/:id/php-modes`). */
         phpModes: ['org', orgId, 'php-modes'] as const,
         defaultEnvironment: ['org', orgId, 'default-environment'] as const,
+        /** New-project form switches (`/organizations/:id/project-settings`). */
+        projectSettings: ['org', orgId, 'project-settings'] as const,
         managedDefaults: ['org', orgId, 'managed-defaults'] as const,
         /** Org-wide dockerd `default-address-pools` + `bip` (`/organizations/:id/docker-networking`). */
         dockerNetworking: ['org', orgId, 'docker-networking'] as const,

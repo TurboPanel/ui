@@ -1,37 +1,11 @@
-import { StyleSheet, Text, View } from 'react-native'
-import { useLocalSearchParams } from 'expo-router'
-import { DefaultEnvironmentSettingsSection } from '@/components/org/default-environment-settings-section'
-import { colors, spacing } from '@/lib/theme'
+import { Redirect, useLocalSearchParams, type Href } from 'expo-router'
+import { orgProjectSettingsHref } from '@/lib/org-navigation'
 
-export default function ProjectSettingsScreen() {
+/**
+ * Retired: project defaults live in Organization Settings › Project Settings.
+ * Kept as a redirect so old links and bookmarks still land there.
+ */
+export default function ProjectSettingsRedirect() {
   const { orgId } = useLocalSearchParams<{ orgId: string }>()
-  const id = orgId ?? ''
-
-  return (
-    <View style={styles.root}>
-      <Text style={styles.heading}>Project Settings</Text>
-      <Text style={styles.copy}>
-        Defaults applied when new projects are created. Existing projects keep their current
-        environments and names.
-      </Text>
-      <DefaultEnvironmentSettingsSection orgId={id} />
-    </View>
-  )
+  return <Redirect href={orgProjectSettingsHref(orgId ?? '') as Href} />
 }
-
-const styles = StyleSheet.create({
-  root: {
-    width: '100%',
-    gap: spacing.xl,
-  },
-  heading: {
-    color: colors.text,
-    fontSize: 28,
-    fontWeight: '700',
-  },
-  copy: {
-    color: colors.textMuted,
-    fontSize: 16,
-    lineHeight: 24,
-  },
-})

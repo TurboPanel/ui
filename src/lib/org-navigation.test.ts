@@ -8,6 +8,7 @@ import {
   ORG_SIDEBAR_AREA_IDS,
   ORG_SIDEBAR_MORE_AREA_IDS,
   ORG_TAB_AREA_IDS,
+  orgProjectSettingsHref,
   orgSettingsTabHref,
   parseOrgSettingsTab,
   adjacentOrgTabHref,
@@ -294,9 +295,10 @@ describe('sidebar areas', () => {
 })
 
 describe('organization settings tabs', () => {
-  it('has six tabs, each with a label and a link', () => {
+  it('has seven tabs, each with a label and a link', () => {
     expect([...ORG_SETTINGS_TAB_IDS]).toEqual([
       'general',
+      'projects',
       'members',
       'notifications',
       'domains',
@@ -305,6 +307,7 @@ describe('organization settings tabs', () => {
     ])
     expect(ORG_SETTINGS_TAB_IDS.map((id) => ORG_SETTINGS_TAB_LABELS[id])).toEqual([
       'General',
+      'Project Settings',
       'Members',
       'Notifications',
       'Domains & certificates',
@@ -313,12 +316,18 @@ describe('organization settings tabs', () => {
     ])
     expect(ORG_SETTINGS_TAB_IDS.map((id) => orgSettingsTabHref('o', id))).toEqual([
       '/o/manage',
+      '/o/manage?tab=projects',
       '/o/manage?tab=members',
       '/o/manage?tab=notifications',
       '/o/manage?tab=domains',
       '/o/manage?tab=git',
       '/o/manage?tab=principals',
     ])
+  })
+
+  it('sends project defaults to the Project Settings tab', () => {
+    expect(orgProjectSettingsHref('o')).toBe('/o/manage?tab=projects')
+    expect(parseOrgSettingsTab('projects')).toBe('projects')
   })
 
   it('opens General for a missing or unknown ?tab=', () => {
