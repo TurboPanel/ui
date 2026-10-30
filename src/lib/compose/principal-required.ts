@@ -1,7 +1,7 @@
 /**
  * Which compose services cannot deploy without a project principal.
  *
- * A native (non-Railpack) release publishes a filesystem tree into
+ * A native (non-image) release publishes a filesystem tree into
  * `/srv/users/<owner>/<environment>/services/<service>/releases/`, so with no Unix account there
  * is no home to publish into. The daemon answers that by *silently skipping*
  * the release ("release skipped for <name>: no project principal assigned" in
@@ -19,6 +19,7 @@
 import type { ComposeDocument } from '@/lib/compose'
 import { principalAliasesInComposeData } from '@/lib/compose/root-extension'
 import {
+  isImageBuildKind,
   patchServiceTurbopanelExtension,
   readServiceTurbopanelExtension,
 } from '@/lib/compose/service-kind'
@@ -30,7 +31,7 @@ import {
 
 /**
  * Compose service names that need a principal to release: a Git source built
- * on the native lane (`buildKind` omitted or `native` — Railpack publishes an
+ * on the native lane (`buildKind` omitted or `native` — an image build publishes an
  * image, not a tree), or an uploaded-directory site (a directory *and* an
  * account).
  */
@@ -46,7 +47,7 @@ export function principalRequiredServiceNames(
     const extension = readServiceTurbopanelExtension(raw as Record<string, unknown>)
     if (!extension) continue
     const nativeRelease =
-      extension.source != null && extension.source.buildKind !== 'railpack'
+      extension.source != null && !isImageBuildKind(extension.source.buildKind)
     const uploadedDirectory =
       extension.serviceKind === 'site' &&
       extension.sourceKind === 'managed-directory'

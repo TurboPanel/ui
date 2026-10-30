@@ -222,7 +222,7 @@ describe('seedComposeForLane', () => {
 
 describe('seedComposeForLane produces a valid document for every lane', () => {
   // The trap this guards: a compose service needs `image` or `build` unless it
-  // is host-native or Railpack-built. Every synthesized lane must be
+  // is host-native or image-built. Every synthesized lane must be
   // host-native, or Create fails with `compose_invalid`.
   const lanes = ['app', 'static', 'site-php'] as const
 

@@ -17,7 +17,7 @@ import type { RepositoryInspection, RepositoryProbedFile } from '@/lib/instance-
 import { rootFromEntries } from '@/lib/compose/repository-lane'
 
 /** Builder card picked on the repository screen. */
-export type RepositoryBuilder = 'simple' | 'railpack' | 'compose' | 'site-php'
+export type RepositoryBuilder = 'simple' | 'image' | 'compose' | 'site-php'
 
 /** What a Simple application produces: a supervised process, or built files. */
 export type SimpleAppKind = 'web' | 'static'

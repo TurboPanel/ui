@@ -7412,16 +7412,21 @@ export type ReleaseRecord = {
   commitMessage?: string
   commitAuthor?: string
   /**
-   * Railpack lane only: the OCI image this release resolved to, and the pinned
+   * Image lane only: the OCI image this release resolved to, and the pinned
    * build inputs that produced it.
    *
-   * A Railpack release publishes no directory — the image tag *is* its identity,
+   * An image release publishes no directory — the image tag *is* its identity,
    * and rolling one back redeploys that tag rather than re-pointing `current`.
    * Absent on every native (directory) release, which is how the two lanes are
    * told apart in the list.
    */
   imageTag?: string
+  /** Build tool and plan versions; older instances send the `railpack*` names. */
+  builderFrontendVersion?: string
+  builderPlanVersion?: string
+  /** @deprecated previous name of {@link builderFrontendVersion}. */
   railpackFrontendVersion?: string
+  /** @deprecated previous name of {@link builderPlanVersion}. */
   railpackPlanVersion?: string
   /** Aggregate status across every host in {@link ReleaseRecord.attempts}. */
   status: CommandStatus
