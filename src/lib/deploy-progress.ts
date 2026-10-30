@@ -325,7 +325,8 @@ export function certificateStepNote(
 
 /**
  * The line the health step left when it ended: how long the service took to
- * answer, or why it did not. Null while it runs or when it said nothing.
+ * answer, with the time it did, or why it did not. Null while it runs or when
+ * it said nothing.
  */
 export function healthStepNote(
   steps: readonly CommandProgressStep[] | null | undefined
@@ -333,7 +334,10 @@ export function healthStepNote(
   const step = stepsOf({ steps }).find((entry) => entry.id === 'health')
   const ended = step?.state === 'done' || step?.state === 'failed'
   const detail = ended ? step.detail?.trim() : undefined
-  return detail || null
+  if (!detail) return null
+  const at = step?.state === 'done' && step.finishedAt ? new Date(step.finishedAt) : null
+  if (at === null || Number.isNaN(at.getTime())) return detail
+  return `${detail} (at ${at.toLocaleTimeString()})`
 }
 
 export type StepNodeInfo = Readonly<{

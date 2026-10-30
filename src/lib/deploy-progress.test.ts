@@ -431,6 +431,20 @@ describe('healthStepNote', () => {
     )
   })
 
+  it('adds the time the service first answered', () => {
+    const finishedAt = '2026-10-12T10:00:12.000Z'
+    const note = healthStepNote([
+      {
+        id: 'health',
+        label: 'Service Is Healthy',
+        state: 'done',
+        detail: 'Healthy after 12 s',
+        finishedAt,
+      },
+    ])
+    expect(note).toBe(`Healthy after 12 s (at ${new Date(finishedAt).toLocaleTimeString()})`)
+  })
+
   it('is null while the step runs, when it said nothing, or without a plan', () => {
     expect(healthStepNote([health('running', 'Attempt 2, 4 s of up to 120 s')])).toBeNull()
     expect(healthStepNote([health('done')])).toBeNull()
