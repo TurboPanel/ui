@@ -79,7 +79,7 @@ export const FABRIC_REMOVE_CONFIRM: FabricConfirmCopy = {
 export function fabricServerOffConfirm(serverName: string): FabricConfirmCopy {
   return {
     title: 'Take This Server Off TurboFabric',
-    body: `${serverName}'s tunnel goes down and the other servers stop reaching it over TurboFabric. Apps on other servers that talk to it that way lose the connection. While it is off, it cannot be reached over TurboFabric. Its address and settings are kept, so you can switch it back on at any time.`,
+    body: `${serverName}'s tunnel goes down and the other servers stop reaching it over TurboFabric. Apps on other servers that talk to it that way lose the connection. Its address and settings are kept, so you can switch it back on at any time.`,
     confirmLabel: 'Switch Off',
   }
 }
