@@ -16,6 +16,7 @@
 import { DEFAULT_HOSTING_BIND_SCOPE, isHostingBindScope } from '@/lib/compose/hosting-extension'
 import type { DeploymentGroup } from '@/lib/deployment-history'
 import { hostingHostnames, oldestHostingsFirst } from '@/lib/environment-status'
+import { hostnameStatusLabel } from '@/lib/tunnel-runs'
 import type {
   BindingRecord,
   ConfigViewChange,
@@ -416,6 +417,17 @@ function mapTunnel(path: HostingTunnelPath, source: OverviewSource): MapTunnel {
 const EDGE_STATUS: MapStatus = { key: 'edge', label: statusInfo('edge').label }
 
 /**
+ * The badge of a tunnel box from its route's state: live is trusted at the
+ * edge; a route still being set up waits; anything else needs attention. A
+ * name whose route is not live never reads as served.
+ */
+function tunnelStatus(path: HostingTunnelPath): MapStatus {
+  if (path.status === 'live') return EDGE_STATUS
+  if (path.status === 'pending') return { key: 'queued', label: hostnameStatusLabel('pending') }
+  return { key: 'failed', label: hostnameStatusLabel(path.status) }
+}
+
+/**
  * The map domains of one hosting row, one per host and path: a name a tunnel
  * carries is reached through it (the edge's trusted certificate, then the
  * server), and a name that is not tunnel-only is also reached directly with
@@ -445,7 +457,7 @@ function hostingDomains(
     if (path === undefined) return [direct]
     const through: MapDomain = {
       host,
-      status: EDGE_STATUS,
+      status: tunnelStatus(path),
       serviceId: serviceName,
       tunnel: mapTunnel(path, source),
     }

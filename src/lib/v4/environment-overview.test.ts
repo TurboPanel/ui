@@ -449,6 +449,17 @@ describe('domains, volumes and databases', () => {
       ])
     })
 
+    it('does not read as served while the route is being set up or needs attention', () => {
+      const pending = domainsOf(withTunnel([tunnelPath({ status: 'pending' })]))
+      expect(pending[0]?.status).toEqual({ key: 'queued', label: 'Setting Up' })
+      const attention = domainsOf(withTunnel([tunnelPath({ status: 'attention' })]))
+      expect(attention[0]?.status).toEqual({ key: 'failed', label: 'Needs Attention' })
+      for (const domain of [...pending, ...attention]) {
+        expect(domain.servedFrom).toBeUndefined()
+        expect(domain.status.key).not.toBe('edge')
+      }
+    })
+
     it('says only what is known about the server', () => {
       const unknown = domainsOf(
         withTunnel([tunnelPath({ provider: 'other' })], {
