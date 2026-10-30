@@ -48,9 +48,9 @@ const nativeSourceContainer = patchServiceTurbopanelExtension(
   { image: 'node:24' },
   { source: { sourceId: '33333333-3333-4333-8333-333333333333' } }
 )
-const railpackContainer = patchServiceTurbopanelExtension(
+const imageContainer = patchServiceTurbopanelExtension(
   { image: 'node:24' },
-  { source: { sourceId: '44444444-4444-4444-8444-444444444444', buildKind: 'railpack' } }
+  { source: { sourceId: '44444444-4444-4444-8444-444444444444', buildKind: 'image' } }
 )
 const plainContainer = { image: 'nginx' }
 
@@ -61,10 +61,10 @@ describe('principalRequiredServiceNames', () => {
       site: gitSite,
       blog: uploadedSite,
       api: nativeSourceContainer,
-      worker: railpackContainer,
+      worker: imageContainer,
       db: plainContainer,
     })
-    // Railpack publishes an image, not a tree — no principal needed.
+    // An image build publishes an image, not a tree — no principal needed.
     expect(principalRequiredServiceNames(document)).toEqual(['api', 'app', 'blog', 'site'])
   })
 
@@ -123,10 +123,10 @@ describe('unownedPrincipalRequiredServices', () => {
     ).toEqual([])
   })
 
-  it('never reports railpack or plain container services', () => {
+  it('never reports image-built or plain container services', () => {
     expect(
       unownedPrincipalRequiredServices({
-        document: documentWith({ worker: railpackContainer, db: plainContainer }),
+        document: documentWith({ worker: imageContainer, db: plainContainer }),
         services: [],
         principals: [],
       })

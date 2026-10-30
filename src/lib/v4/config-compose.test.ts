@@ -18,7 +18,7 @@ function doc(data: Record<string, unknown>): ComposeDocument {
 const web = {
   serviceKind: 'node',
   principal: 'website',
-  source: { sourceId: 's1', buildKind: 'railpack', branch: 'main' },
+  source: { sourceId: 's1', buildKind: 'image', branch: 'main' },
 }
 
 function project(extra: Record<string, unknown> = {}): ComposeDocument {
@@ -102,7 +102,7 @@ describe('setEnvironmentValue', () => {
         web: {
           'x-turbopanel': {
             serviceKind: 'node',
-            source: { sourceId: 's1', buildKind: 'railpack' },
+            source: { sourceId: 's1', buildKind: 'image' },
             principal: 'staging-web',
           },
         },
@@ -131,7 +131,32 @@ describe('setEnvironmentValue', () => {
         web: {
           'x-turbopanel': {
             serviceKind: 'node',
-            source: { sourceId: 's1', buildKind: 'railpack', branch: 'staging' },
+            source: { sourceId: 's1', buildKind: 'image', branch: 'staging' },
+          },
+        },
+      },
+    })
+  })
+
+  it('writes the new value when the project still carries the previous one', () => {
+    const result = setEnvironmentValue({
+      projectCompose: project({
+        'x-turbopanel': {
+          ...web,
+          source: { sourceId: 's1', buildKind: 'railpack', branch: 'main' },
+        },
+      }),
+      environmentCompose: null,
+      target: web$,
+      path: ['x-turbopanel', 'source', 'branch'],
+      value: 'staging',
+    })
+    expect(data(result)).toEqual({
+      services: {
+        web: {
+          'x-turbopanel': {
+            serviceKind: 'node',
+            source: { sourceId: 's1', buildKind: 'image', branch: 'staging' },
           },
         },
       },
@@ -269,7 +294,7 @@ describe('removeEnvironmentValue (Go back to Base)', () => {
           'x-turbopanel': {
             serviceKind: 'node',
             principal: 'a',
-            source: { sourceId: 's1', buildKind: 'railpack' },
+            source: { sourceId: 's1', buildKind: 'image' },
           },
         },
       },

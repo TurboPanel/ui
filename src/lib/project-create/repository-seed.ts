@@ -109,7 +109,7 @@ function seedNodeVersion(lane: RepositoryLane, value: string | undefined): strin
  *
  * The invariant that made `node` defensible still holds and is respected here:
  * a compose service needs `image` or `build` unless it is host-native (`site` /
- * `node`) or Railpack-built, so every synthesized lane below is host-native and
+ * `node`) or image-built, so every synthesized lane below is host-native and
  * therefore a valid document on its own.
  */
 export function seedComposeForLane(params: {

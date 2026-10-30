@@ -15,7 +15,7 @@ export function laneForBuilder(
 ): RepositoryLane {
   if (builder === 'compose') return 'compose'
   if (builder === 'site-php') return 'site-php'
-  // Railpack's card is disabled until the wizard can seed it; `simple` is the
+  // The image card is disabled until the wizard can seed it; `simple` is the
   // only builder left, split by what it produces.
   return kind === 'static' ? 'static' : 'app'
 }
