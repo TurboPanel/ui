@@ -114,7 +114,8 @@ function encodeLicenseArg(licenseId: string, licenseToken: string): string {
 /**
  * Validate an edited install base URL with the same origin rules as the
  * instance `parseInstallBaseUrl` / `publicUrlEntryToInstallOrigin` helpers:
- * https scheme, no credentials, no path/query/hash.
+ * https scheme, no credentials, no path/query/hash, and a bare host dials the
+ * self-hosted listener on 8443.
  */
 export function parseInstallBaseUrl(value: string | undefined): string | null {
   const trimmed = value?.trim()
@@ -126,6 +127,8 @@ export function parseInstallBaseUrl(value: string | undefined): string | null {
     if (!host || host === 'null') return null
     if (url.username || url.password) return null
     if (hasNonOriginUrlParts(url)) return null
+    // A bare host is the self-hosted panel, which always listens on 8443.
+    if (!trimmed.includes('://') && !url.port) return `https://${url.host}:8443`
     return trimTrailingSlash(url.origin)
   } catch {
     return null
