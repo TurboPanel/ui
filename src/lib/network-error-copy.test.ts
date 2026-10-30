@@ -67,6 +67,13 @@ describe('network-error-copy', () => {
     ).toBe(FAILOVER_REQUIRES_TRUSTED_DATACENTER_COPY)
   })
 
+  it('keeps separate sentences for the old and new refusal codes', () => {
+    expect(FAILOVER_REQUIRES_TRUSTED_DATACENTER_COPY).not.toBe(UNTRUSTED_NETWORK_NEEDS_FABRIC_COPY)
+    expect(NETWORK_ERROR_COPY[FAILOVER_REQUIRES_TRUSTED_DATACENTER_ERROR]).not.toBe(
+      NETWORK_ERROR_COPY[UNTRUSTED_NETWORK_NEEDS_FABRIC_ERROR]
+    )
+  })
+
   it('maps the TurboFabric refusal code to the same sentence', () => {
     expect(NETWORK_ERROR_COPY[UNTRUSTED_NETWORK_NEEDS_FABRIC_ERROR]).toBe(
       UNTRUSTED_NETWORK_NEEDS_FABRIC_COPY

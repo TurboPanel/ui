@@ -538,13 +538,19 @@ export function shortBackupChecksum(checksum: string): string {
 }
 
 /**
- * Instance **422** `untrusted_network_needs_fabric` (and the older
- * `failover_requires_trusted_datacenter`). One sentence shared with the
- * network surfaces (`network-error-copy.ts`) so the datacenter Routing panel
- * and the replica picker never explain the same refusal two ways.
+ * Instance **422** `untrusted_network_needs_fabric`. One sentence shared with
+ * the network surfaces (`network-error-copy.ts`) so the datacenter Routing
+ * panel and the replica picker never explain the same refusal two ways.
  */
-export const UNTRUSTED_NETWORK_NEEDS_FABRIC_COPY = `The only datacenter those servers share is marked untrusted, and ${TURBOFABRIC_PRODUCT_NAME} is not carrying traffic between them yet. Turn on ${TURBOFABRIC_PRODUCT_NAME} for both servers, or mark the datacenter trusted.`
-export const FAILOVER_REQUIRES_TRUSTED_DATACENTER_COPY = UNTRUSTED_NETWORK_NEEDS_FABRIC_COPY
+export const UNTRUSTED_NETWORK_NEEDS_FABRIC_COPY = `The only datacenter those servers share is marked untrusted, and ${TURBOFABRIC_PRODUCT_NAME} is not carrying traffic between them right now. Check that ${TURBOFABRIC_PRODUCT_NAME} is on and healthy for both servers, or mark the datacenter trusted.`
+
+/**
+ * Older control planes answer `failover_requires_trusted_datacenter` and never
+ * route this pair over TurboFabric, so the advice differs.
+ */
+export const FAILOVER_REQUIRES_TRUSTED_DATACENTER_COPY =
+  'The only datacenter those servers share is marked untrusted. Failover replicas need a trusted datacenter LAN — mark the datacenter trusted, or add the replica as a read replica over ' +
+  `${TURBOFABRIC_PRODUCT_NAME} instead.`
 
 const MANAGED_ERROR_COPY: Record<string, string> = {
   server_placement_required: 'Select a server before creating this managed service.',
