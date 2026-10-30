@@ -3,10 +3,7 @@ import { usePathname, useRouter, type Href } from 'expo-router'
 import { HighAvailabilityWordmark } from '@/components/brand/high-availability-wordmark'
 import { TurboPanelLogo } from '@/components/brand/turbopanel-logo'
 import { GlassSurface } from '@/components/glass/glass-surface'
-import {
-  AdminNavIcon,
-  OrgAreaIcon,
-} from '@/components/icons/nav-icons'
+import { AdminNavIcon, OrgAreaIcon } from '@/components/icons/nav-icons'
 import { adminAreaHref } from '@/lib/admin-navigation'
 import { isAdminSession, useAuth } from '@/lib/auth-context'
 import {
@@ -20,11 +17,7 @@ import {
   type OrgAreaId,
 } from '@/lib/org-navigation'
 import type { ProjectRecord } from '@/lib/instance-api'
-import {
-  isComposeProject,
-  projectHref,
-  recentProjectHref,
-} from '@/lib/project-navigation'
+import { isComposeProject, projectHref, recentProjectHref } from '@/lib/project-navigation'
 import { useEnvironments } from '@/lib/queries/environments'
 import { useProjects } from '@/lib/queries/projects'
 import { resolveRecentProjects, useRecentProjectIds } from '@/lib/recent-projects'
@@ -82,9 +75,7 @@ function SidebarAreaItem({
       >
         {areaActive ? <View style={styles.areaActiveBar} /> : null}
         <OrgAreaIcon areaId={area.id} size={16} color={iconColor} />
-        <Text style={[styles.areaLabel, areaActive && styles.areaLabelActive]}>
-          {area.label}
-        </Text>
+        <Text style={[styles.areaLabel, areaActive && styles.areaLabelActive]}>{area.label}</Text>
       </Pressable>
 
       {areaActive && area.subRoutes.length > 0 ? (
@@ -92,11 +83,7 @@ function SidebarAreaItem({
           <View style={styles.subNavRail} />
           <View style={styles.subNavItems}>
             {area.subRoutes.map((subRoute) => {
-              const subHref = orgRouteHref(
-                orgId,
-                area.pathSegment,
-                subRoute.pathSegment,
-              )
+              const subHref = orgRouteHref(orgId, area.pathSegment, subRoute.pathSegment)
               const subActive =
                 activeSubRouteId === subRoute.id ||
                 pathname === subHref ||
@@ -116,9 +103,7 @@ function SidebarAreaItem({
                     onNavigate?.()
                   }}
                 >
-                  <Text
-                    style={[styles.subLabel, subActive && styles.subLabelActive]}
-                  >
+                  <Text style={[styles.subLabel, subActive && styles.subLabelActive]}>
                     {subRoute.label}
                   </Text>
                 </Pressable>
@@ -149,11 +134,7 @@ function RecentProjectItem({
   const environmentsQuery = useEnvironments(orgId, project.id, {
     enabled: isComposeProject(project),
   })
-  const href = recentProjectHref(
-    orgId,
-    project,
-    environmentsQuery.data?.environments,
-  )
+  const href = recentProjectHref(orgId, project, environmentsQuery.data?.environments)
   const active = pathname.startsWith(projectHref(orgId, project.id))
   const name = project.name?.trim() || 'Unnamed project'
 
@@ -173,10 +154,7 @@ function RecentProjectItem({
         onNavigate?.()
       }}
     >
-      <Text
-        style={[styles.recentLabel, active && styles.recentLabelActive]}
-        numberOfLines={1}
-      >
+      <Text style={[styles.recentLabel, active && styles.recentLabelActive]} numberOfLines={1}>
         {name}
       </Text>
     </Pressable>
@@ -190,14 +168,11 @@ function RecentProjects({
 }: Readonly<{ orgId: string; onNavigate?: () => void }>) {
   const recentIds = useRecentProjectIds(orgId)
   const projectsQuery = useProjects(orgId)
-  const recent = resolveRecentProjects(
-    recentIds,
-    projectsQuery.data?.projects ?? [],
-  )
+  const recent = resolveRecentProjects(recentIds, projectsQuery.data?.projects ?? [])
   if (recent.length === 0) return null
   return (
-    <View style={styles.recent} accessibilityLabel="Recent projects">
-      <Text style={styles.groupLabel}>Recent projects</Text>
+    <View style={styles.recent} accessibilityLabel="Recent Projects">
+      <Text style={styles.groupLabel}>Recent Projects</Text>
       {recent.map((project) => (
         <RecentProjectItem
           key={project.id}
@@ -222,8 +197,7 @@ export function OrgSidebar({
   const router = useRouter()
   const showAdminLink = isAdminSession(session)
   const adminHref = adminAreaHref('access')
-  const adminActive =
-    pathname === adminHref || pathname.startsWith('/admin/')
+  const adminActive = pathname === adminHref || pathname.startsWith('/admin/')
   // Billing is not a sidebar area: it lives behind the organization menu
   // (hosted only), so people reach it when they need to buy, not in passing.
   const mainAreas = sidebarAreas(ORG_SIDEBAR_AREA_IDS)
@@ -240,26 +214,15 @@ export function OrgSidebar({
 
       <View style={styles.nav}>
         {mainAreas.map((area) => (
-          <SidebarAreaItem
-            key={area.id}
-            area={area}
-            orgId={orgId}
-            onNavigate={onNavigate}
-          />
+          <SidebarAreaItem key={area.id} area={area} orgId={orgId} onNavigate={onNavigate} />
         ))}
 
         <RecentProjects orgId={orgId} onNavigate={onNavigate} />
 
         {moreAreas.length > 0 ? (
           <View style={styles.more}>
-            <Text style={styles.groupLabel}>More</Text>
             {moreAreas.map((area) => (
-              <SidebarAreaItem
-                key={area.id}
-                area={area}
-                orgId={orgId}
-                onNavigate={onNavigate}
-              />
+              <SidebarAreaItem key={area.id} area={area} orgId={orgId} onNavigate={onNavigate} />
             ))}
           </View>
         ) : null}
@@ -281,18 +244,8 @@ export function OrgSidebar({
             }}
           >
             {adminActive ? <View style={styles.areaActiveBar} /> : null}
-            <AdminNavIcon
-              size={16}
-              color={adminActive ? colors.text : colors.textMuted}
-            />
-            <Text
-              style={[
-                styles.adminLabel,
-                adminActive && styles.adminLabelActive,
-              ]}
-            >
-              Admin
-            </Text>
+            <AdminNavIcon size={16} color={adminActive ? colors.text : colors.textMuted} />
+            <Text style={[styles.adminLabel, adminActive && styles.adminLabelActive]}>Admin</Text>
           </Pressable>
         </View>
       ) : null}
@@ -302,8 +255,7 @@ export function OrgSidebar({
 
 // Light theme: a faint edge shadow; dark keeps the glass lift. Web only, the
 // shared glass shadow is untouched.
-const sidebarShadow =
-  Platform.OS === 'web' ? ({ boxShadow: colors.sideShadow } as const) : {}
+const sidebarShadow = Platform.OS === 'web' ? ({ boxShadow: colors.sideShadow } as const) : {}
 
 const styles = StyleSheet.create({
   sidebar: {

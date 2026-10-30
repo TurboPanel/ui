@@ -329,7 +329,7 @@ export function tilePills(project: Pick<HomeProject, 'environments'>): {
   return { shown, more: project.environments.length - shown.length }
 }
 
-/** Deploys in progress show this many rows; the rest are reached from Activity. */
+/** Deploys in Progress show this many rows; the rest are reached from Activity. */
 export const IN_PROGRESS_LIMIT = 3
 
 /** "4 projects · 9 environments · 7 running" (the running part waits for containers). */

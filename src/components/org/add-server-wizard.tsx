@@ -617,7 +617,7 @@ export function AddServerWizard({ orgId, onComplete, onDismiss }: AddServerWizar
   )
 
   return (
-    <SectionPanel title="Add server" accent>
+    <SectionPanel title="Add Server" accent>
       {body}
     </SectionPanel>
   )

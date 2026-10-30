@@ -6805,8 +6805,7 @@ export type ContainerLogStream = 'stdout' | 'stderr'
  * Container output is an **analytics row** stamped with
  * `organization → server → environment → service → container`, not a keyed
  * blob like an execution-log transcript. The two are read completely
- * differently and are deliberately not unified — see the control plane's
- * `src/lib/container-logs/AGENTS.md`.
+ * differently and are deliberately not unified.
  */
 export type ContainerLogEventRecord = {
   /** ISO-8601 UTC timestamp of the line (millisecond precision). */
