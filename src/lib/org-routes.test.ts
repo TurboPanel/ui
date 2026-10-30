@@ -35,7 +35,7 @@ describe('organization routes', () => {
     expect(overview).toContain('defaultOrgDashboardHref')
   })
 
-  it('opens Organization settings from the picker menu route', () => {
+  it('opens Organization Settings from the picker menu route', () => {
     expect(orgManageHref('o')).toBe('/o/manage')
     expect(existsSync(path.join(ORG_ROOT, 'manage/index.tsx'))).toBe(true)
   })

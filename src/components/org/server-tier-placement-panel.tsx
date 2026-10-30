@@ -405,9 +405,9 @@ function LicenseTierPanelBody({
         {notice ? (
           <Text
             style={panelStyles.detailLine}
-            accessibilityLabel={`Daily Notice: ${describeTierNotice(notice)}`}
+            accessibilityLabel={`Daily notice: ${describeTierNotice(notice)}`}
           >
-            <Text style={panelStyles.detailLabel}>Daily Notice: </Text>
+            <Text style={panelStyles.detailLabel}>Daily notice: </Text>
             {describeTierNotice(notice)}
           </Text>
         ) : null}

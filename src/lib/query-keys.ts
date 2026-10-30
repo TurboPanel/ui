@@ -165,6 +165,12 @@ export const queryKeys = {
         defaultEnvironment: ['org', orgId, 'default-environment'] as const,
         /** New-project form switches (`/organizations/:id/project-settings`). */
         projectSettings: ['org', orgId, 'project-settings'] as const,
+        /**
+         * The same switches as read by the new-project form, where a 403/404
+         * means "both closed". Kept apart from `projectSettings` so that
+         * fallback never hides the settings tab's own load error.
+         */
+        projectFormDefaults: ['org', orgId, 'project-settings', 'form-defaults'] as const,
         managedDefaults: ['org', orgId, 'managed-defaults'] as const,
         /** Org-wide dockerd `default-address-pools` + `bip` (`/organizations/:id/docker-networking`). */
         dockerNetworking: ['org', orgId, 'docker-networking'] as const,

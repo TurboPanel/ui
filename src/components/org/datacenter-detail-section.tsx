@@ -734,7 +734,7 @@ function MemberServersPanel({
                   options={serverOptions}
                   placeholder="Select a server…"
                   disabled={pending}
-                  accessibilityLabel="Add server"
+                  accessibilityLabel="Server to add to this datacenter"
                   onChange={selectAssignServer}
                 />
               </FormField>

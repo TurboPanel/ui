@@ -398,7 +398,7 @@ describe('setupCertificateNote', () => {
       tlsChosen: false,
     })
     expect(note?.openSettings).toBe(true)
-    expect(note?.text).toContain('Organization settings \u203a Domains & certificates')
+    expect(note?.text).toContain('Organization Settings \u203a Domains & Certificates')
   })
 
   it('says nothing without a usable name, a known setting, or when compose already chose', () => {

@@ -314,17 +314,22 @@ function useHomeCards(
     () => deploysInProgress({ projects, environments, latest, now }),
     [projects, environments, latest, now]
   )
-  const runningCount = containersByEnvironment
-    ? cards.reduce(
-        (sum, card) => sum + card.environments.filter((env) => env.status === 'running').length,
-        0
-      )
-    : null
+  // Until environments and containers have both loaded the counts are
+  // unknown, not 0.
+  const environmentCount = environmentsQuery.data ? environments.length : null
+  const runningCount =
+    containersByEnvironment && environmentsQuery.data
+      ? cards.reduce(
+          (sum, card) => sum + card.environments.filter((env) => env.status === 'running').length,
+          0
+        )
+      : null
   return {
     environmentsQuery,
     containersQuery,
     refetchFacts: facts.refetch,
     environments,
+    environmentCount,
     cards,
     inProgress,
     runningCount,
@@ -603,7 +608,7 @@ export function ProjectsHomeSection({
         title="Projects"
         sub={
           data.cards.length > 0
-            ? summaryLine(data.cards.length, data.environments.length, data.runningCount)
+            ? summaryLine(data.cards.length, data.environmentCount, data.runningCount)
             : undefined
         }
         actions={
