@@ -186,6 +186,10 @@ function ConnectPanel({ orgId }: Readonly<{ orgId: string }>) {
         A hostname you add to a tunnel has to sit in a zone of the same Cloudflare account. DNS can
         use separate API Tokens, one for each zone or group of zones: add them to the account below.
       </Text>
+      <Text style={panelStyles.muted}>
+        Tunnels, DNS names and certificates belong to the Cloudflare account, not to one API Token.
+        With several accounts connected, you pick the account for each of them, never a token.
+      </Text>
       <ErrorLine message={error} />
       {done ? <InlineNotice title={done} /> : null}
       <TokenFields
@@ -264,7 +268,7 @@ function BadgeRow({
           <ConfirmButton
             label="Remove"
             confirmLabel="Remove API Token"
-            prompt="Remove this API Token? Tunnels that depend on it stop being managed until you add another."
+            prompt="Remove this API Token? The other tokens on this account take over. Removal is refused only if none of them covers something this one is needed for."
             stacked
             busy={remove.isPending}
             disabled={pending || busy}
@@ -607,6 +611,11 @@ function CarrierCard({ orgId, carrier }: Readonly<{ orgId: string; carrier: Tunn
       title={carrier.name}
       hint={carrier.externalAccountId ? `Account ${carrier.externalAccountId}` : undefined}
     >
+      <Text style={panelStyles.muted}>
+        TurboPanel uses whichever API Token on this account has the rights a task needs, and tries
+        the next one if Cloudflare refuses it. To replace a token, add the new one, then remove the
+        old one. Nothing has to be moved over.
+      </Text>
       <ErrorLine message={error} />
       <View style={styles.list}>
         {carrier.badges.length === 0 ? (

@@ -170,13 +170,14 @@ describe('several API Tokens on one account', () => {
         { kind: 'tunnel', id: 't', name: 'web', zone: null },
         { kind: 'hostname', id: 'h', name: 'blog.example.com', zone: 'example.com' },
         { kind: 'hostname', id: 'h2', name: 'bare.dev', zone: null },
+        { kind: 'certificate', id: 'c', name: 'DNS example.com', zone: 'example.com' },
       ],
       10
     )
     expect(text).toContain(
-      'the tunnel web; the hostname blog.example.com (example.com); the hostname bare.dev'
+      'the tunnel web; the hostname blog.example.com (example.com); the hostname bare.dev; the certificate DNS example.com (example.com)'
     )
-    expect(text).toContain('and 7 more')
+    expect(text).toContain('and 6 more')
     expect(
       dependentsSummary([{ kind: 'tunnel', id: 't', name: 'web', zone: null }], 1)
     ).not.toContain('more')
