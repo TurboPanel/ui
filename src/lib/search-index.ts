@@ -184,7 +184,7 @@ function generalActions(orgId: string, data: SearchData): SearchItem[] {
       ? [
           action(
             'add-server',
-            'Add server',
+            'Add Server',
             serversAddHref(orgId),
             'new create enroll host',
             'action-add'

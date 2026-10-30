@@ -203,7 +203,7 @@ function AddServerToolbarButton({
       onPress={onPress}
     >
       <Text style={open ? panelStyles.toolbarBtnTextSecondary : panelStyles.toolbarBtnTextPrimary}>
-        {open ? 'Close' : '+ Server'}
+        {open ? 'Close' : 'Add Server'}
       </Text>
     </Pressable>
   )
@@ -428,7 +428,7 @@ function ServerTierLine({ server }: Readonly<{ server: OrgServerRecord }>) {
       <View style={styles.tierChips}>
         <Badge label={placement.licenseTier ?? 'Unlicensed'} tone={tierChipTone(state)} />
         {notice ? (
-          <Badge label="Daily notice" tone={notice.kind === 'exceeds' ? 'pending' : 'info'} />
+          <Badge label="Daily Notice" tone={notice.kind === 'exceeds' ? 'pending' : 'info'} />
         ) : null}
       </View>
       {note ? (
@@ -610,7 +610,7 @@ function ServersFleetEmptyState() {
     <EmptyState
       panel
       title="Add your first server"
-      hint="Use + Server to enroll a host and start deploying projects to your servers."
+      hint="Use Add Server to enroll a host and start deploying projects to your servers."
     />
   )
 }
