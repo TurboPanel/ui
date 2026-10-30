@@ -517,17 +517,23 @@ function AllProjectsTools({
   cards,
   filter,
   view,
+  loading,
 }: Readonly<{
   orgId: string
   scopeId: string
   cards: readonly HomeProject[]
   filter: ProjectTypeFilter
   view: ProjectsView
+  /** The list has not arrived yet: no counts, never a row of zeros. */
+  loading: boolean
 }>) {
   const s = styles(usePalette())
   const router = useRouter()
   const phone = useWindowDimensions().width <= PHONE_MAX_WIDTH
-  const options = useMemo(() => projectTypeOptions(projectTypeCounts(cards)), [cards])
+  const options = useMemo(
+    () => projectTypeOptions(loading ? null : projectTypeCounts(cards)),
+    [cards, loading]
+  )
   return (
     <View style={s.tools}>
       <View style={phone ? s.typeOwnRow : s.typeFilter}>
@@ -631,6 +637,7 @@ export function ProjectsHomeSection({
           cards={data.cards}
           filter={filter}
           view={view}
+          loading={loading}
         />
         {filter === 'managed' ? <ManagedSettingsLink orgId={orgId} /> : null}
         <ProjectsList

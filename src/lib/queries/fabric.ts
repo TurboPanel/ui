@@ -18,11 +18,15 @@ function isFabricUnavailableError(error: unknown): boolean {
   return isHttpStatusError(error, 404) || isHttpStatusError(error, 503)
 }
 
-export function useOrgFabric(orgId: string, options?: Readonly<{ enabled?: boolean }>) {
+export function useOrgFabric(
+  orgId: string,
+  options?: Readonly<{ enabled?: boolean; /** Read it again on every mount. */ fresh?: boolean }>
+) {
   return useQuery({
     queryKey: queryKeys.org(orgId).settings.fabric,
     queryFn: () => fetchOrgFabric(orgId),
     enabled: (options?.enabled ?? true) && orgId.length > 0,
+    ...(options?.fresh ? { staleTime: 0 } : {}),
     retry: (failureCount, error) => {
       if (isFabricUnavailableError(error)) return false
       return failureCount < 2

@@ -33,7 +33,6 @@ import {
   isForbiddenError,
   type FleetServerUsageRecord,
   type OrgServerRecord,
-  type RelayRecord,
 } from '@/lib/instance-api'
 import { serverDetailHref, serversPendingKeysHref } from '@/lib/org-navigation'
 import { useAddServerLink } from '@/lib/use-add-server-link'
@@ -44,6 +43,11 @@ import {
   unusedRegistrationKeysLabel,
 } from '@/lib/pending-keys'
 import { useOrgFabric } from '@/lib/queries/fabric'
+import {
+  fabricServerCell,
+  fabricServerCells,
+  type FabricServerCell,
+} from '@/lib/fabric-server-cell'
 import {
   SERVERS_REFRESH_MS,
   useFleetServerUsage,
@@ -77,17 +81,6 @@ import { useMemo, useState, type ReactElement } from 'react'
 import { Platform, Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native'
 import Svg, { Path } from 'react-native-svg'
 import { userErrorMessage } from '@/lib/user-error'
-
-/** Group TurboFabric tp0 addresses by server — O(1) page-level fan-in. */
-function overlayByServerId(
-  relays: readonly Pick<RelayRecord, 'serverId' | 'address'>[]
-): Map<string, string> {
-  const result = new Map<string, string>()
-  for (const relay of relays) {
-    result.set(relay.serverId, relay.address)
-  }
-  return result
-}
 
 function serverTitle(server: OrgServerRecord): string {
   return server.name?.trim() || server.hostname?.trim() || server.id
@@ -320,7 +313,7 @@ const SERVER_COLUMNS = [
   { key: 'tier', header: 'Tier', flex: 1, minWidth: 96, gap: 2 },
   { key: 'location', header: 'Location', flex: 2, minWidth: 190 },
   { key: 'usage', header: 'Usage', flex: 1.6, minWidth: 148 },
-  { key: 'mesh', header: 'Mesh', flex: 1.1, minWidth: 110 },
+  { key: 'mesh', header: 'TurboFabric', flex: 1.1, minWidth: 110 },
 ] as const satisfies readonly DataTableColumn[]
 
 const [SV_NAME, SV_STATUS, SV_TIER, SV_LOCATION, SV_USAGE, SV_MESH] = SERVER_COLUMNS
@@ -507,12 +500,32 @@ function ServerUsageCell({
   )
 }
 
-function ServerMeshCell({ overlayAddress }: Readonly<{ overlayAddress: string | null }>) {
+/** One server's TurboFabric state: its address, or a word, and the error when it needs attention. */
+function ServerFabricText({ cell }: Readonly<{ cell: FabricServerCell }>) {
+  return (
+    <View>
+      <Text
+        style={[
+          cell.address ? styles.meshText : styles.fabricWord,
+          cell.attention ? styles.fabricAttention : null,
+        ]}
+        numberOfLines={1}
+      >
+        {cell.label}
+      </Text>
+      {cell.detail ? (
+        <Text style={styles.fabricDetail} numberOfLines={2}>
+          {cell.detail}
+        </Text>
+      ) : null}
+    </View>
+  )
+}
+
+function ServerMeshCell({ cell }: Readonly<{ cell: FabricServerCell }>) {
   return (
     <DataTableCell column={SV_MESH}>
-      <Text style={styles.meshText} numberOfLines={1}>
-        {overlayAddress ?? '—'}
-      </Text>
+      <ServerFabricText cell={cell} />
     </DataTableCell>
   )
 }
@@ -522,14 +535,14 @@ function OrgServerTableRow({
   server,
   rowIndex,
   isLast,
-  overlayAddress,
+  fabric,
   usage,
 }: Readonly<{
   orgId: string
   server: OrgServerRecord
   rowIndex: number
   isLast: boolean
-  overlayAddress: string | null
+  fabric: FabricServerCell
   usage: FleetServerUsageRecord | null
 }>) {
   const router = useRouter()
@@ -546,7 +559,7 @@ function OrgServerTableRow({
       <ServerTierCell server={server} />
       <ServerLocationCell server={server} />
       <ServerUsageCell usage={usage} />
-      <ServerMeshCell overlayAddress={overlayAddress} />
+      <ServerMeshCell cell={fabric} />
     </DataTableRow>
   )
 }
@@ -554,12 +567,12 @@ function OrgServerTableRow({
 function OrgServerCompactRow({
   orgId,
   server,
-  overlayAddress,
+  fabric,
   usage,
 }: Readonly<{
   orgId: string
   server: OrgServerRecord
-  overlayAddress: string | null
+  fabric: FabricServerCell
   usage: FleetServerUsageRecord | null
 }>) {
   const router = useRouter()
@@ -583,9 +596,7 @@ function OrgServerCompactRow({
       </View>
       <View style={styles.compactStats}>
         <ServerUsageBars density="list" {...usageBarMetrics(usage)} />
-        <Text style={styles.meshText} numberOfLines={1}>
-          {overlayAddress ?? '—'}
-        </Text>
+        <ServerFabricText cell={fabric} />
       </View>
     </Pressable>
   )
@@ -594,7 +605,7 @@ function OrgServerCompactRow({
 function ServersFleetCompactList({
   orgId,
   servers,
-  meshOverlayByServer,
+  fabricCells,
   usageByServerId,
 }: ServersFleetViewProps) {
   return (
@@ -604,7 +615,7 @@ function ServersFleetCompactList({
           key={server.id}
           orgId={orgId}
           server={server}
-          overlayAddress={meshOverlayByServer.get(server.id) ?? null}
+          fabric={fabricServerCell(fabricCells, server.id)}
           usage={usageByServerId.get(server.id) ?? null}
         />
       ))}
@@ -625,14 +636,14 @@ function ServersFleetEmptyState() {
 type ServersFleetViewProps = Readonly<{
   orgId: string
   servers: readonly OrgServerRecord[]
-  meshOverlayByServer: ReadonlyMap<string, string>
+  fabricCells: ReadonlyMap<string, FabricServerCell>
   usageByServerId: ReadonlyMap<string, FleetServerUsageRecord>
 }>
 
 function ServersFleetTable({
   orgId,
   servers,
-  meshOverlayByServer,
+  fabricCells,
   usageByServerId,
 }: ServersFleetViewProps) {
   const { billingEnabled } = useAuth()
@@ -648,7 +659,7 @@ function ServersFleetTable({
           server={server}
           rowIndex={index}
           isLast={index === servers.length - 1}
-          overlayAddress={meshOverlayByServer.get(server.id) ?? null}
+          fabric={fabricServerCell(fabricCells, server.id)}
           usage={usageByServerId.get(server.id) ?? null}
         />
       ))}
@@ -659,12 +670,12 @@ function ServersFleetTable({
 function OrgServerTile({
   orgId,
   server,
-  overlayAddress,
+  fabric,
   usage,
 }: Readonly<{
   orgId: string
   server: OrgServerRecord
-  overlayAddress: string | null
+  fabric: FabricServerCell
   usage: FleetServerUsageRecord | null
 }>) {
   const router = useRouter()
@@ -699,9 +710,7 @@ function OrgServerTile({
       <View style={styles.tileUsage}>
         <ServerUsageBars density="tile" {...usageBarMetrics(usage)} />
       </View>
-      <Text style={styles.meshText} numberOfLines={1}>
-        {overlayAddress ?? '—'}
-      </Text>
+      <ServerFabricText cell={fabric} />
     </Pressable>
   )
 }
@@ -709,7 +718,7 @@ function OrgServerTile({
 function ServersFleetTiles({
   orgId,
   servers,
-  meshOverlayByServer,
+  fabricCells,
   usageByServerId,
 }: ServersFleetViewProps) {
   return (
@@ -719,7 +728,7 @@ function ServersFleetTiles({
           key={server.id}
           orgId={orgId}
           server={server}
-          overlayAddress={meshOverlayByServer.get(server.id) ?? null}
+          fabric={fabricServerCell(fabricCells, server.id)}
           usage={usageByServerId.get(server.id) ?? null}
         />
       ))}
@@ -779,8 +788,9 @@ export function ServersOverviewSection({
   const queryClient = useQueryClient()
   const canOwn = useCan('organization', orgId, 'organization:own')
 
-  const fabricQuery = useOrgFabric(orgId)
-  const meshOverlayByServer = overlayByServerId(fabricQuery.data?.relays ?? [])
+  // A fresh read on every visit, so the TurboFabric column never shows an old state.
+  const fabricQuery = useOrgFabric(orgId, { fresh: true })
+  const fabricCells = useMemo(() => fabricServerCells(fabricQuery.data), [fabricQuery.data])
 
   const serversQuery = useOrgServers(orgId, {
     staleTime: 0,
@@ -845,7 +855,7 @@ export function ServersOverviewSection({
   const fleetViewProps = {
     orgId,
     servers,
-    meshOverlayByServer,
+    fabricCells,
     usageByServerId,
   }
 
@@ -976,6 +986,20 @@ const styles = StyleSheet.create({
     color: colors.link,
     fontSize: 13,
     fontWeight: '600',
+  },
+  fabricWord: {
+    color: colors.text,
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  fabricAttention: {
+    color: colors.errorText,
+    fontWeight: '600',
+  },
+  fabricDetail: {
+    color: colors.textDim,
+    fontSize: 11,
+    lineHeight: 14,
   },
   meshText: {
     color: colors.stdout,

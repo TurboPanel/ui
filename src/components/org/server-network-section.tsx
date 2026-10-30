@@ -204,7 +204,7 @@ function ServerMeshMembershipPanel({
 
   return (
     <SectionPanel
-      title="Mesh"
+      title={TURBOFABRIC_PRODUCT_NAME}
       hint={`${TURBOFABRIC_PRODUCT_NAME} membership and paths for this host`}
     >
       {!canManage ? (

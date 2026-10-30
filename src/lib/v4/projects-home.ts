@@ -285,16 +285,21 @@ export function filterProjectsByType<T extends Pick<HomeProject, 'kind'>>(
   return cards.filter((card) => projectTypeOf(card.kind) === filter)
 }
 
-/** "All 3", "Apps 2", "Managed Databases 1", each read out as "Apps, 2 projects". */
-export function projectTypeOptions(counts: Readonly<Record<ProjectTypeFilter, number>>): {
+/**
+ * "All 3", "Apps 2", "Managed Databases 1", each read out as "Apps, 2 projects".
+ * While the list still loads (`null`) the labels carry no count, never a 0.
+ */
+export function projectTypeOptions(counts: Readonly<Record<ProjectTypeFilter, number>> | null): {
   value: ProjectTypeFilter
   label: string
   accessibilityLabel: string
 }[] {
   return PROJECT_TYPE_FILTERS.map((value) => ({
     value,
-    label: `${PROJECT_TYPE_LABELS[value]} ${counts[value]}`,
-    accessibilityLabel: `${PROJECT_TYPE_LABELS[value]}, ${plural(counts[value], 'project')}`,
+    label: counts ? `${PROJECT_TYPE_LABELS[value]} ${counts[value]}` : PROJECT_TYPE_LABELS[value],
+    accessibilityLabel: counts
+      ? `${PROJECT_TYPE_LABELS[value]}, ${plural(counts[value], 'project')}`
+      : PROJECT_TYPE_LABELS[value],
   }))
 }
 

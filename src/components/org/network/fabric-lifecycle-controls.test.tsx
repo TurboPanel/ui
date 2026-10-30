@@ -61,12 +61,83 @@ describe('FabricLifecycleControls', () => {
     expect(save).not.toHaveBeenCalled()
   })
 
-  it('a paused fabric shows the kept notice and resumes without a confirm', () => {
+  it('a paused fabric with no server confirmation never claims tunnels are down', () => {
     render(<FabricLifecycleControls orgId="org-1" state="paused" hasFabric disabled={false} />)
+    expect(screen.queryByText(/turning it back on is instant/)).toBeNull()
+    expect(screen.getByText(/no server has confirmed that its tunnel is down yet/)).toBeTruthy()
+  })
+
+  it('a paused fabric can be turned off again, after the same confirm', () => {
+    render(<FabricLifecycleControls orgId="org-1" state="paused" hasFabric disabled={false} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Turn Off Again' }))
+    expect(save).not.toHaveBeenCalled()
+    expect(screen.getByRole('dialog', { name: 'Turn Off TurboFabric' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Turn Off TurboFabric' }))
+    expect(save).toHaveBeenCalledWith({ enabled: false }, expect.anything())
+  })
+
+  it('a paused fabric every server confirmed shows the kept notice and resumes without a confirm', () => {
+    render(
+      <FabricLifecycleControls
+        orgId="org-1"
+        state="paused"
+        hasFabric
+        disabled={false}
+        serverOutcomes={[
+          { name: 'a', reconcile: { commandId: 'c1', action: 'pause', state: 'done', at: 't' } },
+        ]}
+      />
+    )
     expect(screen.getByText(/turning it back on is instant/)).toBeTruthy()
     fireEvent.click(screen.getByRole('switch'))
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(save).toHaveBeenCalledWith({ enabled: true }, expect.anything())
+  })
+
+  it('a paused fabric names each server that could not take its tunnel down', () => {
+    render(
+      <FabricLifecycleControls
+        orgId="org-1"
+        state="paused"
+        hasFabric
+        disabled={false}
+        serverOutcomes={[
+          {
+            name: 'a',
+            reconcile: { commandId: 'c1', action: 'pause', state: 'done', at: 't' },
+          },
+          {
+            name: 'w',
+            reconcile: {
+              commandId: 'c2',
+              action: 'pause',
+              state: 'failed',
+              at: 't',
+              error: 'TurboFabric pause did not finish: delete tp0: busy',
+            },
+          },
+        ]}
+      />
+    )
+    expect(screen.queryByText(/turning it back on is instant/)).toBeNull()
+    expect(screen.getByText(/could not take their tunnel down/)).toBeTruthy()
+    expect(screen.getByText('w: TurboFabric pause did not finish: delete tp0: busy')).toBeTruthy()
+  })
+
+  it('a pause still in progress counts the servers that confirmed', () => {
+    render(
+      <FabricLifecycleControls
+        orgId="org-1"
+        state="paused"
+        hasFabric
+        disabled={false}
+        serverOutcomes={[
+          { name: 'a', reconcile: { commandId: 'c1', action: 'pause', state: 'done', at: 't' } },
+          { name: 'w', reconcile: { commandId: 'c2', action: 'pause', state: 'pending', at: 't' } },
+        ]}
+      />
+    )
+    expect(screen.getByText(/1 of 2 servers have taken their tunnel down/)).toBeTruthy()
   })
 
   it('hides remove when there is no fabric', () => {

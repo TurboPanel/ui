@@ -4,10 +4,12 @@ import { Button, SettingRow, Toggle } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { FabricConfirmSheet } from '@/components/org/network/fabric-confirm-sheet'
 import {
-  FABRIC_PAUSED_NOTICE,
   FABRIC_PAUSE_CONFIRM,
+  FABRIC_PAUSE_RETRY_HINT,
   FABRIC_REMOVE_CONFIRM,
   type FabricConfirmCopy,
+  fabricPausedNotice,
+  type FabricServerOutcome,
   type FabricState,
 } from '@/lib/fabric-servers'
 import { useRemoveOrgFabric, useSaveOrgFabric } from '@/lib/queries/fabric'
@@ -24,6 +26,32 @@ function confirmCopy(pending: PendingConfirm): FabricConfirmCopy | null {
 }
 
 /**
+ * While paused: tunnels are only called down once every server confirmed;
+ * until then it counts, and a server that failed is named with its error.
+ */
+function FabricPausedCallout({ outcomes }: Readonly<{ outcomes: readonly FabricServerOutcome[] }>) {
+  const notice = fabricPausedNotice(outcomes)
+  if (notice.kind !== 'failed') {
+    return (
+      <View style={panelStyles.calloutWarning}>
+        <Text style={panelStyles.calloutWarningText}>{notice.text}</Text>
+      </View>
+    )
+  }
+  return (
+    <View style={styles.failedNotice}>
+      <Text style={panelStyles.error}>{notice.text}</Text>
+      {notice.failures.map((line) => (
+        <Text key={line} style={panelStyles.error}>
+          {line}
+        </Text>
+      ))}
+      <Text style={panelStyles.muted}>{FABRIC_PAUSE_RETRY_HINT}</Text>
+    </View>
+  )
+}
+
+/**
  * The organization switch (on, or off and kept) and the separate remove
  * action. Turning on or resuming needs no confirm; turning off and removing
  * each ask first, and the control plane's own words show when it refuses.
@@ -33,9 +61,12 @@ export function FabricLifecycleControls({
   state,
   hasFabric,
   disabled,
+  serverOutcomes = [],
 }: Readonly<{
   orgId: string
   state: FabricState
+  /** Each server's last reconcile, for the paused notice. */
+  serverOutcomes?: readonly FabricServerOutcome[]
   /** A fabric exists (on or paused), so there is something to remove. */
   hasFabric: boolean
   disabled: boolean
@@ -94,13 +125,18 @@ export function FabricLifecycleControls({
           }}
         />
       </SettingRow>
-      {state === 'paused' ? (
-        <View style={panelStyles.calloutWarning}>
-          <Text style={panelStyles.calloutWarningText}>{FABRIC_PAUSED_NOTICE}</Text>
-        </View>
-      ) : null}
+      {state === 'paused' ? <FabricPausedCallout outcomes={serverOutcomes} /> : null}
       {hasFabric ? (
         <View style={styles.removeRow}>
+          {state === 'paused' ? (
+            // Asks every server again to take its tunnel down.
+            <Button
+              label="Turn Off Again"
+              variant="secondary"
+              disabled={disabled || busy}
+              onPress={() => setPending('pause')}
+            />
+          ) : null}
           <Button
             label={FABRIC_REMOVE_CONFIRM.title}
             variant="danger"
@@ -124,8 +160,12 @@ const styles = StyleSheet.create({
   root: {
     gap: spacing.sm,
   },
+  failedNotice: {
+    gap: spacing.xs,
+  },
   removeRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    gap: spacing.sm,
   },
 })

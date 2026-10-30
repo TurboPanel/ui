@@ -29,6 +29,8 @@ export function NetworkTunnelsSection({ orgId }: Readonly<{ orgId: string }>) {
   const serverList = servers.data?.servers ?? []
   const datacenterList = datacenters.data?.datacenters ?? []
   const list = tunnels.data?.tunnels ?? []
+  // Until the servers load, a tunnel would name its server by raw id.
+  const serversReady = !servers.isLoading
 
   return (
     <View style={styles.root}>
@@ -41,7 +43,10 @@ export function NetworkTunnelsSection({ orgId }: Readonly<{ orgId: string }>) {
       {canManage || roleLoading ? null : (
         <Text style={panelStyles.muted}>Only owners and managers can manage tunnels.</Text>
       )}
-      {canManage ? (
+      {canManage && carriers.isLoading ? (
+        <LoadingState label="Loading Cloudflare accounts…" />
+      ) : null}
+      {canManage && !carriers.isLoading ? (
         <NetworkTunnelCreate
           orgId={orgId}
           carriers={carriers.data?.carriers ?? []}
@@ -54,11 +59,13 @@ export function NetworkTunnelsSection({ orgId }: Readonly<{ orgId: string }>) {
           {tunnelErrorMessage(tunnels.error, 'Failed to load tunnels')}
         </Text>
       ) : null}
-      {canManage && tunnels.isLoading ? <LoadingState label="Loading tunnels…" /> : null}
+      {canManage && (tunnels.isLoading || !serversReady) ? (
+        <LoadingState label="Loading tunnels…" />
+      ) : null}
       {canManage && !tunnels.isLoading && list.length === 0 ? (
         <EmptyState title="No tunnels yet." hint="Create one above." panel />
       ) : null}
-      {list.map((tunnel) => (
+      {(serversReady ? list : []).map((tunnel) => (
         <NetworkTunnelCard
           key={tunnel.id}
           orgId={orgId}
@@ -67,7 +74,7 @@ export function NetworkTunnelsSection({ orgId }: Readonly<{ orgId: string }>) {
           datacenters={datacenterList}
         />
       ))}
-      {canManage ? (
+      {canManage && serversReady ? (
         <NetworkTunnelServers orgId={orgId} servers={serverList} tunnels={list} />
       ) : null}
     </View>
