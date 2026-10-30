@@ -251,10 +251,10 @@ describe('ProjectEnvironmentSetupSection', () => {
     expect(mocks.replace).not.toHaveBeenCalled()
   })
 
-  it('opens the project instead when the environment has deployed before', () => {
+  it('opens the environment instead when it has deployed before', () => {
     mocks.history.current = { data: { deployments: [{ id: 'd1' }] }, isError: false }
     render(<ProjectEnvironmentSetupSection />)
-    expect(mocks.replace).toHaveBeenCalledWith('/o/projects/p')
+    expect(mocks.replace).toHaveBeenCalledWith('/o/projects/p/environments/e1')
     expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
   })
 

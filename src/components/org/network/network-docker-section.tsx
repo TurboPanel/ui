@@ -588,7 +588,7 @@ function ManagedNetworkListPanel({ networks }: Readonly<{ networks: NetworkRecor
   if (networks.length === 0) return null
 
   return (
-    <SectionPanel title="Managed networks" hint="Platform-allocated">
+    <SectionPanel title="Managed Networks" hint="Platform-allocated">
       <View style={styles.list}>
         {networks.map((network) => (
           <NetworkListItem key={network.id} network={network} showDelete={false} />

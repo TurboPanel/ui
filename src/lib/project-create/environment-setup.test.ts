@@ -36,7 +36,7 @@ describe('setupPageStep', () => {
     expect(setupPageStep({ deployments: [] }, false)).toBe('form')
   })
 
-  it('leaves for the project once the environment has deployed', () => {
+  it('leaves for the environment once it has deployed', () => {
     expect(setupPageStep({ deployments: [{ id: 'd1' }] }, false)).toBe('deployed')
   })
 

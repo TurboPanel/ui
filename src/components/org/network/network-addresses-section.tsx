@@ -635,7 +635,7 @@ function AddressPoolPanel({
   onDelete: (ipId: string) => void
 }>) {
   return (
-    <SectionPanel title="Address pool" hint={loading ? 'Loading…' : `${ips.length} address(es)`}>
+    <SectionPanel title="Address Pool" hint={loading ? 'Loading…' : `${ips.length} address(es)`}>
       {loading && ips.length === 0 ? <LoadingState label="Loading addresses…" /> : null}
       {!loading && ips.length === 0 ? (
         <EmptyState title="No addresses match these filters." />

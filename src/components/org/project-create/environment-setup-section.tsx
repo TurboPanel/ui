@@ -23,7 +23,7 @@ import {
   setupPageStep,
   setupVariableBodies,
 } from '@/lib/project-create/environment-setup'
-import { projectEnvironmentHref, projectHref } from '@/lib/project-navigation'
+import { projectEnvironmentHref } from '@/lib/project-navigation'
 import {
   useCreateVariable,
   useDeployEnvironment,
@@ -39,9 +39,10 @@ import { primaryEnvironmentOf } from '@/lib/v4/primary-environment'
 /**
  * Route body for `/[projectId]/setup/environment`: loads the project's first
  * environment, its deploy history and the servers, then hands them to the
- * form. An environment that has deployed before opens its project instead. Save writes the
- * environment once (name, server, compose with the hostname) and then each
- * variable; Deploy does the same and opens the plain deploy confirm.
+ * form. An environment that has deployed before opens that environment
+ * instead. Save writes the environment once (name, server, compose with the
+ * hostname) and then each variable; Deploy does the same and opens the plain
+ * deploy confirm.
  */
 export function ProjectEnvironmentSetupSection() {
   const { orgId, project, environments, loading, canManage } = useProjectContext()
@@ -87,9 +88,12 @@ function EnvironmentSetupLoader({
   const historyQuery = useEnvironmentDeployments(orgId, environmentId)
   const step = setupPageStep(historyQuery.data, historyQuery.isError)
   useEffect(() => {
-    if (step === 'deployed') router.replace(projectHref(orgId, projectId) as Href)
-  }, [step, router, orgId, projectId])
-  if (step === 'deployed') return <LoadingState label="Opening the project…" />
+    // The same place Save and Deploy open, so it never races their own move.
+    if (step === 'deployed') {
+      router.replace(projectEnvironmentHref(orgId, projectId, environmentId) as Href)
+    }
+  }, [step, router, orgId, projectId, environmentId])
+  if (step === 'deployed') return <LoadingState label="Opening the environment…" />
   const environment = environmentQuery.data?.environment
   if (!environment || !serversQuery.data || step === 'loading') {
     const failed = environmentQuery.error ?? serversQuery.error
