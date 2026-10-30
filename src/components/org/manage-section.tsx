@@ -80,7 +80,7 @@ function SettingsTabBody({ orgId, tab }: Readonly<{ orgId: string; tab: OrgSetti
 }
 
 /**
- * Organization settings: seven tabs (General, Project Settings, Access,
+ * Organization Settings: seven tabs (General, Project Settings, Access,
  * Notifications, Domains & Certificates, Git Connections, Principals), reached
  * from the organization menu in the header. Each tab hosts the screen that
  * already did the job, so every setting keeps its place and its route
@@ -108,7 +108,7 @@ export function ManageSection({ orgId }: Readonly<{ orgId: string }>) {
         tabs={tabs}
         value={activeTab}
         onChange={(key) => router.push(orgSettingsTabHref(orgId, key as OrgSettingsTabId) as Href)}
-        ariaLabel="Organization settings sections"
+        ariaLabel="Organization Settings sections"
       />
       <SettingsTabBody orgId={orgId} tab={activeTab} />
     </View>
