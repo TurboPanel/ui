@@ -201,8 +201,15 @@ function AddServerToolbarButton({
       ]}
       disabled={disabled}
       onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={open ? 'Close the Add Server form' : 'Add Server'}
+      accessibilityState={{ disabled, expanded: open }}
+      aria-expanded={open}
     >
-      <Text style={open ? panelStyles.toolbarBtnTextSecondary : panelStyles.toolbarBtnTextPrimary}>
+      <Text
+        style={open ? panelStyles.toolbarBtnTextSecondary : panelStyles.toolbarBtnTextPrimary}
+        numberOfLines={1}
+      >
         {open ? 'Close' : 'Add Server'}
       </Text>
     </Pressable>
@@ -935,6 +942,9 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   toolbarBtnCompact: {
+    // "Add Server" is wider than the old "+ Server"; never let a 390 px
+    // toolbar squeeze it onto two lines.
+    flexShrink: 0,
     paddingHorizontal: 8,
     paddingVertical: 6,
     minHeight: 44,

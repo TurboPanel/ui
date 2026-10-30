@@ -359,7 +359,7 @@ export function orgManageHref(orgId: string): `/${string}/manage` {
   return `/${orgId}/manage`
 }
 
-/** Tabs on Organization settings, in bar order (the picker menu is the only way in). */
+/** Tabs on Organization Settings, in bar order (the picker menu is the only way in). */
 export const ORG_SETTINGS_TAB_IDS = [
   'general',
   'projects',

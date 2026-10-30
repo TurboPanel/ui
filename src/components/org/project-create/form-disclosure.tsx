@@ -9,6 +9,9 @@ import { colors, spacing, webPointer } from '@/lib/theme'
  * row with the title, a short summary of what is picked and a chevron. It
  * opens on press, when the organization opens it by default (Organization
  * Settings › Project Settings), or whenever a field inside it has an error.
+ * A section that has shown an error stays open after the error is fixed, and
+ * a press while the error shows cannot close it, so it never shuts on the
+ * next submit behind the person's back.
  */
 export function FormDisclosure({
   title,
@@ -24,6 +27,10 @@ export function FormDisclosure({
   children: ReactNode
 }>) {
   const [choice, setChoice] = useState<boolean | null>(null)
+  // While a field shows an error the choice is pinned to open, which also
+  // undoes a press made during the error. Adjusted while rendering (not in an
+  // effect) so the section never flickers closed for a frame.
+  if (hasError && choice !== true) setChoice(true)
   const open = projectFormSectionOpen(choice, openByDefault, hasError)
   return (
     <View style={[styles.root, open && styles.rootOpen]}>
@@ -34,6 +41,8 @@ export function FormDisclosure({
         }}
         accessibilityRole="button"
         accessibilityState={{ expanded: open }}
+        // React Native Web does not map accessibilityState.expanded to the DOM.
+        aria-expanded={open}
         accessibilityLabel={`${title}: ${summary}`}
       >
         <Text style={styles.title}>{title}</Text>

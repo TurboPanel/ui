@@ -25,6 +25,11 @@ describe('searchDestinations', () => {
     ])
   })
 
+  it('files Project Settings under Organization Settings, where the page lives', () => {
+    const items = searchDestinations('o1', opts)
+    expect(items.find((i) => i.id === 'projects-settings')?.type).toBe('Organization Settings')
+  })
+
   it('hides Billing when the install has none', () => {
     const items = searchDestinations('o1', { ...opts, billingEnabled: false })
     expect(items.some((i) => i.id === 'billing')).toBe(false)

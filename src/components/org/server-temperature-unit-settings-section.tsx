@@ -1,17 +1,8 @@
 import { useState } from 'react'
 import { Text } from 'react-native'
 import { panelStyles } from '@/components/ui/panel-styles'
-import {
-  Button,
-  SectionPanel,
-  Select,
-  SettingRow,
-  type SelectOption,
-} from '@/components/ui'
-import {
-  useOrgTemperatureUnit,
-  useSaveOrgTemperatureUnit,
-} from '@/lib/queries/servers'
+import { Button, SectionPanel, Select, SettingRow, type SelectOption } from '@/components/ui'
+import { useOrgTemperatureUnit, useSaveOrgTemperatureUnit } from '@/lib/queries/servers'
 import { useCan } from '@/lib/query-client'
 import { userErrorMessage } from '@/lib/user-error'
 
@@ -24,14 +15,10 @@ const UNIT_OPTIONS: SelectOption[] = [
   { value: 'fahrenheit', label: 'Fahrenheit (°F)' },
 ]
 
-export function ServerTemperatureUnitSettingsSection({
-  orgId,
-}: Readonly<{ orgId: string }>) {
+export function ServerTemperatureUnitSettingsSection({ orgId }: Readonly<{ orgId: string }>) {
   const canManage = useCan('organization', orgId, 'organization:manage')
   const [error, setError] = useState<string | null>(null)
-  const [draftUnit, setDraftUnit] = useState<
-    'celsius' | 'fahrenheit' | null
-  >(null)
+  const [draftUnit, setDraftUnit] = useState<'celsius' | 'fahrenheit' | null>(null)
 
   const query = useOrgTemperatureUnit(orgId, { enabled: canManage })
 
@@ -53,19 +40,14 @@ export function ServerTemperatureUnitSettingsSection({
           setDraftUnit(null)
         },
         onError: (err) => {
-          setError(
-            errorMessage(err, 'Failed to save temperature display setting'),
-          )
+          setError(errorMessage(err, 'Failed to save temperature display setting'))
         },
-      },
+      }
     )
   }
 
   return (
-    <SectionPanel
-      title="Temperature display"
-      hint="Manage-gated · affects chart axes, tooltips, and readouts only"
-    >
+    <SectionPanel title="Temperature Display" hint="Changes chart axes, tooltips and readouts only">
       {error ? <Text style={panelStyles.error}>{error}</Text> : null}
       {query.isError && !error ? (
         <Text style={panelStyles.error}>
@@ -74,9 +56,8 @@ export function ServerTemperatureUnitSettingsSection({
       ) : null}
 
       <Text style={panelStyles.muted}>
-        Metrics are always stored and compared in Celsius. This only changes
-        how temperatures render across charts and summaries for this
-        organization.
+        Metrics are always stored and compared in Celsius. This only changes how temperatures render
+        across charts and summaries for this organization.
       </Text>
 
       <SettingRow label="Display unit">

@@ -177,7 +177,7 @@ export function setupCertificateNote(
     }
   }
   return {
-    text: 'Let’s Encrypt certificates are off for this organization, so this name gets a self-signed certificate that browsers warn about. An organization owner or manager can turn them on in Organization settings › Domains & certificates.',
+    text: 'Let’s Encrypt certificates are off for this organization, so this name gets a self-signed certificate that browsers warn about. An organization owner or manager can turn them on in Organization Settings › Domains & Certificates.',
     openSettings: true,
   }
 }
