@@ -662,6 +662,31 @@ describe('fetch wrappers (mocked fetch)', () => {
     expect(settings.relays).toEqual([])
   })
 
+  it('fetchOrgFabric defaults paused and servers for an older control plane', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ enabled: false, relays: [] }))
+    const settings = await fetchOrgFabric('org-1')
+    expect(settings.paused).toBe(false)
+    expect(settings.servers).toEqual([])
+  })
+
+  it('fetchOrgFabric keeps paused and the server list', async () => {
+    const server = {
+      serverId: 'srv-1',
+      name: 'alpha',
+      enabled: true,
+      member: false,
+      role: 'client',
+      roleSource: 'automatic',
+      automaticRole: 'client',
+    }
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ enabled: false, paused: true, relays: [], servers: [server] })
+    )
+    const settings = await fetchOrgFabric('org-1')
+    expect(settings.paused).toBe(true)
+    expect(settings.servers).toEqual([server])
+  })
+
   it('fetchOrgFabric maps relays through toRelayRecord and allowRelay', async () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse({

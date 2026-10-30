@@ -2022,10 +2022,40 @@ export type RelayRecord = {
   gatewayEligible: boolean
 }
 
-export type OrgFabricSettings = {
+/** TurboFabric role for one server: a gateway accepts connections, a client only connects out. */
+export type FabricServerRole = 'gateway' | 'client'
+
+/** One org server's TurboFabric switch and role (`GET …/fabric` `servers[]`). */
+export type OrgFabricServerRecord = {
+  serverId: string
+  name: string
+  /** The server switch; false keeps the server out of the mesh. */
   enabled: boolean
+  /** Holds a TurboFabric address (`tp0`) right now. */
+  member: boolean
+  role: FabricServerRole
+  roleSource: 'automatic' | 'operator'
+  /** What the role resolves to when the operator has not picked one. */
+  automaticRole: FabricServerRole
+}
+
+export type OrgFabricSettings = {
+  /** True only while the mesh carries traffic. */
+  enabled: boolean
+  /** Turned off but kept (keys, relays and container networks stay). An older control plane omits it. */
+  paused: boolean
   fabric?: OrgFabricRecord
   relays: RelayRecord[]
+  /** Every org server's switch and role; empty on an older control plane. */
+  servers: OrgFabricServerRecord[]
+}
+
+type OrgFabricWireBody = {
+  enabled: boolean
+  paused?: boolean
+  fabric?: OrgFabricRecord
+  relays?: FabricRelayWireRow[]
+  servers?: OrgFabricServerRecord[]
 }
 
 export const GATEWAY_DATACENTER_REQUIRED_ERROR = 'gateway_datacenter_required'
@@ -2090,13 +2120,10 @@ export function toRelayRecord(row: FabricRelayWireRow): RelayRecord {
   }
 }
 
-function toOrgFabricSettings(body: {
-  enabled: boolean
-  fabric?: OrgFabricRecord
-  relays?: FabricRelayWireRow[]
-}): OrgFabricSettings {
+function toOrgFabricSettings(body: OrgFabricWireBody): OrgFabricSettings {
   return {
     enabled: body.enabled,
+    paused: body.paused === true,
     ...(body.fabric
       ? {
           fabric: {
@@ -2106,16 +2133,47 @@ function toOrgFabricSettings(body: {
         }
       : {}),
     relays: (body.relays ?? []).map(toRelayRecord),
+    servers: body.servers ?? [],
   }
 }
 
 export async function fetchOrgFabric(orgId: string): Promise<OrgFabricSettings> {
-  const body = await apiFetch<{
-    enabled: boolean
-    fabric?: OrgFabricRecord
-    relays?: FabricRelayWireRow[]
-  }>(`${CLIENT_API}/organizations/${orgId}/fabric`)
+  const body = await apiFetch<OrgFabricWireBody>(`${CLIENT_API}/organizations/${orgId}/fabric`)
   return toOrgFabricSettings(body)
+}
+
+/**
+ * Removes TurboFabric completely: tunnels, keys and cross-server container
+ * networks are deleted. **503** `fabric_teardown_not_queued` (with `message`)
+ * keeps everything when a server could not be reached.
+ */
+export async function deleteOrgFabric(orgId: string): Promise<OrgFabricSettings> {
+  const body = await apiFetch<OrgFabricWireBody>(`${CLIENT_API}/organizations/${orgId}/fabric`, {
+    method: 'DELETE',
+  })
+  return toOrgFabricSettings(body)
+}
+
+export type PatchOrgFabricServerBody = {
+  enabled?: boolean
+  /** null = automatic. */
+  role?: FabricServerRole | null
+}
+
+/**
+ * One server's TurboFabric switch and role. **409** `fabric_server_in_use`
+ * (plain `message` naming what depends on the server) refuses switching it
+ * off; **503** `fabric_teardown_not_queued` when its tunnel could not be taken down.
+ */
+export async function patchOrgFabricServer(
+  orgId: string,
+  serverId: string,
+  body: PatchOrgFabricServerBody
+): Promise<{ ok: true; server: OrgFabricServerRecord }> {
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/fabric/servers/${serverId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  })
 }
 
 /**
@@ -2139,11 +2197,7 @@ export async function saveOrgFabric(
   if (extras?.containerPool !== undefined) {
     payload.containerPool = extras.containerPool
   }
-  const body = await apiFetch<{
-    enabled: boolean
-    fabric?: OrgFabricRecord
-    relays?: FabricRelayWireRow[]
-  }>(`${CLIENT_API}/organizations/${orgId}/fabric`, {
+  const body = await apiFetch<OrgFabricWireBody>(`${CLIENT_API}/organizations/${orgId}/fabric`, {
     method: 'PUT',
     body: JSON.stringify(payload),
   })

@@ -9,6 +9,8 @@ import {
   useApplyOrgFabric,
   useOrgFabric,
   usePatchOrgFabricRelay,
+  usePatchOrgFabricServer,
+  useRemoveOrgFabric,
   useSaveOrgFabric,
 } from '@/lib/queries/fabric'
 
@@ -17,11 +19,15 @@ const {
   saveOrgFabric,
   applyOrgFabric,
   patchOrgFabricRelay,
+  deleteOrgFabric,
+  patchOrgFabricServer,
 } = vi.hoisted(() => ({
   fetchOrgFabric: vi.fn(),
   saveOrgFabric: vi.fn(),
   applyOrgFabric: vi.fn(),
   patchOrgFabricRelay: vi.fn(),
+  deleteOrgFabric: vi.fn(),
+  patchOrgFabricServer: vi.fn(),
 }))
 
 vi.mock('@/lib/instance-api', async (importOriginal) => {
@@ -32,6 +38,8 @@ vi.mock('@/lib/instance-api', async (importOriginal) => {
     saveOrgFabric,
     applyOrgFabric,
     patchOrgFabricRelay,
+    deleteOrgFabric,
+    patchOrgFabricServer,
   }
 })
 
@@ -62,16 +70,15 @@ describe('fabric query hooks', () => {
       () => {
         expect(result.current.isSuccess).toBe(true)
       },
-      { timeout: 3000 },
+      { timeout: 3000 }
     )
     expect(fetchOrgFabric).toHaveBeenCalledWith(orgId)
   })
 
   it('useOrgFabric stays idle when disabled or org id is empty', () => {
-    const disabled = renderHook(
-      () => useOrgFabric(orgId, { enabled: false }),
-      { wrapper: createWrapper() },
-    )
+    const disabled = renderHook(() => useOrgFabric(orgId, { enabled: false }), {
+      wrapper: createWrapper(),
+    })
     const empty = renderHook(() => useOrgFabric(''), {
       wrapper: createWrapper(),
     })
@@ -139,17 +146,15 @@ describe('fabric query hooks', () => {
       wrapper: createWrapper(client),
     })
 
-    await expect(
-      result.current.run({ enabled: true, allowRelay: false }),
-    ).resolves.toMatchObject({ ok: true })
+    await expect(result.current.run({ enabled: true, allowRelay: false })).resolves.toMatchObject({
+      ok: true,
+    })
 
     expect(saveOrgFabric).toHaveBeenCalledWith(orgId, true, {
       allowRelay: false,
     })
     await waitFor(() => {
-      expect(client.getQueryData(queryKeys.org(orgId).settings.fabric)).toEqual(
-        fabric,
-      )
+      expect(client.getQueryData(queryKeys.org(orgId).settings.fabric)).toEqual(fabric)
     })
   })
 
@@ -160,9 +165,7 @@ describe('fabric query hooks', () => {
       wrapper: createWrapper(),
     })
 
-    await expect(
-      result.current.run({ enabled: false }),
-    ).resolves.toMatchObject({ ok: true })
+    await expect(result.current.run({ enabled: false })).resolves.toMatchObject({ ok: true })
     expect(saveOrgFabric).toHaveBeenCalledWith(orgId, false)
   })
 
@@ -188,14 +191,11 @@ describe('fabric query hooks', () => {
       relays: [],
     })
 
-    const { result } = renderHook(
-      () => usePatchOrgFabricRelay(orgId, 'srv-1'),
-      { wrapper: createWrapper(client) },
-    )
+    const { result } = renderHook(() => usePatchOrgFabricRelay(orgId, 'srv-1'), {
+      wrapper: createWrapper(client),
+    })
 
-    await expect(
-      result.current.run({ role: 'gateway' }),
-    ).resolves.toMatchObject({ ok: true })
+    await expect(result.current.run({ role: 'gateway' })).resolves.toMatchObject({ ok: true })
     expect(patchOrgFabricRelay).toHaveBeenCalledWith(orgId, 'srv-1', {
       role: 'gateway',
     })
@@ -228,6 +228,54 @@ describe('fabric query hooks', () => {
       ok: false,
       error: 'Failed to apply TurboFabric',
       cause: expect.anything(),
+    })
+  })
+
+  it('useRemoveOrgFabric deletes and writes the cleared settings', async () => {
+    const cleared = { enabled: false, paused: false, relays: [], servers: [] }
+    deleteOrgFabric.mockResolvedValueOnce(cleared)
+    const client = createAppQueryClient()
+
+    const { result } = renderHook(() => useRemoveOrgFabric(orgId), {
+      wrapper: createWrapper(client),
+    })
+
+    await expect(result.current.run()).resolves.toMatchObject({ ok: true })
+    expect(deleteOrgFabric).toHaveBeenCalledWith(orgId)
+    await waitFor(() => {
+      expect(client.getQueryData(queryKeys.org(orgId).settings.fabric)).toEqual(cleared)
+    })
+  })
+
+  it('useRemoveOrgFabric surfaces fallback error message', async () => {
+    deleteOrgFabric.mockRejectedValueOnce('offline')
+
+    const { result } = renderHook(() => useRemoveOrgFabric(orgId), {
+      wrapper: createWrapper(),
+    })
+
+    await expect(result.current.run()).resolves.toEqual({
+      ok: false,
+      error: 'Failed to remove TurboFabric',
+      cause: expect.anything(),
+    })
+  })
+
+  it('usePatchOrgFabricServer patches one server and invalidates fabric cache', async () => {
+    patchOrgFabricServer.mockResolvedValueOnce({ ok: true, server: {} })
+    const client = createAppQueryClient()
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
+
+    const { result } = renderHook(() => usePatchOrgFabricServer(orgId, 'srv-1'), {
+      wrapper: createWrapper(client),
+    })
+
+    await expect(result.current.run({ role: null })).resolves.toMatchObject({ ok: true })
+    expect(patchOrgFabricServer).toHaveBeenCalledWith(orgId, 'srv-1', {
+      role: null,
+    })
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: queryKeys.org(orgId).settings.fabric,
     })
   })
 })
