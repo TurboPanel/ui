@@ -388,6 +388,9 @@ describe('topology query hooks', () => {
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: queryKeys.org(orgId).topology.datacenter(datacenterId),
     })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.org(orgId).settings.fabric,
+    })
   })
 
   it('useDeleteDatacenter invalidates topology subtree', async () => {

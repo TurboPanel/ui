@@ -502,7 +502,7 @@ function RoutingPanel({
 
       <SettingRow
         label={trusted ? 'Trusted' : 'Untrusted'}
-        description={`Trusted: servers on this network talk over the LAN with no tunnel, even with ${TURBOFABRIC_PRODUCT_NAME} off. Untrusted: ${TURBOFABRIC_PRODUCT_NAME} runs over it, encrypted, and database failover replicas are refused. Mark a network you share with others untrusted.`}
+        description={`Trusted: servers on this network talk over the LAN with no tunnel, even with ${TURBOFABRIC_PRODUCT_NAME} off. Untrusted: ${TURBOFABRIC_PRODUCT_NAME} runs over it, encrypted, and database failover replicas are refused. Mark a network you share with others untrusted. Marking it untrusted is refused while it carries a container network that spans servers and ${TURBOFABRIC_PRODUCT_NAME} is off.`}
         align="start"
       >
         <Toggle
