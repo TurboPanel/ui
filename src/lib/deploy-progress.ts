@@ -297,7 +297,7 @@ export function certificateStepNote(
 ): string | null {
   const step = stepsOf({ steps }).find((entry) => entry.id === 'certificates')
   const detail = step?.state === 'done' ? step.detail?.trim() : undefined
-  return detail ? detail : null
+  return detail || null
 }
 
 export type StepNodeInfo = Readonly<{
