@@ -19,6 +19,7 @@ import {
   elapsedSeconds,
   CHECKING_WITH_SERVER_LABEL,
   CHECKING_WITH_SERVER_TEXT,
+  certificateStepNote,
   firstTimeSetupCaption,
   isCheckingWithServer,
   formatElapsed,
@@ -71,7 +72,13 @@ const styles = themedStyles((p) => ({
   lineFill: { position: 'absolute', left: 0, height: TRACK },
   sweepClip: { position: 'absolute', left: 0, right: 0, height: TRACK, overflow: 'hidden' },
   sweep: { position: 'absolute', top: 0, height: TRACK, width: '40%', backgroundColor: p.busy },
-  nodeWrap: { width: NODE, height: NODE, alignItems: 'center', justifyContent: 'center', overflow: 'visible' },
+  nodeWrap: {
+    width: NODE,
+    height: NODE,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'visible',
+  },
   node: {
     width: NODE,
     height: NODE,
@@ -80,7 +87,13 @@ const styles = themedStyles((p) => ({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  halo: { position: 'absolute', width: NODE, height: NODE, borderRadius: NODE / 2, pointerEvents: 'none' },
+  halo: {
+    position: 'absolute',
+    width: NODE,
+    height: NODE,
+    borderRadius: NODE / 2,
+    pointerEvents: 'none',
+  },
   endCap: {
     width: 6,
     height: 6,
@@ -167,7 +180,7 @@ function RunningHalo({ color }: Readonly<{ color: string }>) {
     progress.value = withRepeat(
       withTiming(1, { duration: PULSE_MS, easing: Easing.inOut(Easing.sin) }),
       -1,
-      true,
+      true
     )
     return () => {
       cancelAnimation(progress)
@@ -189,7 +202,11 @@ function Sweep() {
 
   useEffect(() => {
     offset.value = -40
-    offset.value = withRepeat(withTiming(100, { duration: SWEEP_MS, easing: Easing.linear }), -1, false)
+    offset.value = withRepeat(
+      withTiming(100, { duration: SWEEP_MS, easing: Easing.linear }),
+      -1,
+      false
+    )
     return () => {
       cancelAnimation(offset)
     }
@@ -234,7 +251,9 @@ function StepNode({
     <View style={s.nodeWrap}>
       {pulse ? <RunningHalo color={p.busy} /> : null}
       <View style={[s.node, nodePaint(p, step.state)]}>
-        {info.glyph ? <StatusGlyph glyph={info.glyph} color={glyphColor(p, step.state, info)} size={GLYPH} /> : null}
+        {info.glyph ? (
+          <StatusGlyph glyph={info.glyph} color={glyphColor(p, step.state, info)} size={GLYPH} />
+        ) : null}
       </View>
     </View>
   )
@@ -245,13 +264,22 @@ function Segment({
   step,
   steps,
   reduceMotion,
-}: Readonly<{ step: CommandProgressStep; steps: readonly CommandProgressStep[]; reduceMotion: boolean }>) {
+}: Readonly<{
+  step: CommandProgressStep
+  steps: readonly CommandProgressStep[]
+  reduceMotion: boolean
+}>) {
   const p = usePalette()
   const s = styles(p)
   const info = stepNodeInfo(step.state)
   const fill = segmentFill(p, step.state, reduceMotion)
   return (
-    <View style={s.segment} role="listitem" accessible accessibilityLabel={stepAccessibilityLabel(steps, step)}>
+    <View
+      style={s.segment}
+      role="listitem"
+      accessible
+      accessibilityLabel={stepAccessibilityLabel(steps, step)}
+    >
       <View style={s.line} />
       {fill ? <SegmentFill key={step.state} color={fill} reduceMotion={reduceMotion} /> : null}
       {step.state === 'running' && !reduceMotion ? <Sweep /> : null}
@@ -307,7 +335,13 @@ function Checklist({ steps }: Readonly<{ steps: readonly CommandProgressStep[] }
         return (
           <View key={step.id} style={s.checkRow}>
             <View style={s.checkGlyph}>
-              {info.glyph ? <StatusGlyph glyph={info.glyph} color={glyphColor(p, step.state, info)} size={GLYPH} /> : null}
+              {info.glyph ? (
+                <StatusGlyph
+                  glyph={info.glyph}
+                  color={glyphColor(p, step.state, info)}
+                  size={GLYPH}
+                />
+              ) : null}
             </View>
             <Text style={labelStyle(s, step.state)} numberOfLines={1}>
               {step.label}
@@ -422,6 +456,7 @@ export function DeployProgressRail({
   if (!summary) return null
 
   const caption = firstTimeSetupCaption(steps)
+  const certificateNote = certificateStepNote(steps)
   const detail = running?.detail?.trim()
 
   return (
@@ -458,6 +493,7 @@ export function DeployProgressRail({
       </View>
       {compact ? <Checklist steps={steps} /> : <LabelRow steps={steps} />}
       {caption ? <Text style={s.caption}>{caption}</Text> : null}
+      {certificateNote ? <Text style={s.caption}>{certificateNote}</Text> : null}
     </View>
   )
 }
