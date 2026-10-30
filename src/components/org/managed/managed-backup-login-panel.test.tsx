@@ -6,6 +6,7 @@ import type { ManagedUserRecord } from '@/lib/managed-services'
 import {
   BACKUP_LOGIN_HELP,
   BACKUP_LOGIN_LOAD_ERROR,
+  BACKUP_PLACES_HELP,
   describeBackupPlaces,
   ManagedBackupLoginPanel,
   ManagedBackupLoginSection,
@@ -117,6 +118,11 @@ describe('backup login places', () => {
     expect(describeBackupPlaces(['any'])).toBe('Anywhere')
     expect(describeBackupPlaces(undefined)).toBe('Anywhere')
     expect(describeBackupPlaces(['internal'])).toBe('internal')
+  })
+
+  it("says 'internal' means this server only, as the panel resolves it", () => {
+    expect(BACKUP_PLACES_HELP).toContain("'internal' (this server only")
+    expect(BACKUP_PLACES_HELP).not.toContain("'internal' (this organization")
   })
 })
 

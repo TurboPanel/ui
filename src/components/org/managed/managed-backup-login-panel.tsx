@@ -17,7 +17,7 @@ export const BACKUP_LOGIN_HELP =
   'A read-only login a backup tool uses to copy every database on this cluster. It sees every row, writes nothing, and always connects to the primary. A cluster has one.'
 
 export const BACKUP_PLACES_HELP =
-  "Where the backup tool connects from, separated by commas: 'internal' (this organization's servers), 'server:<id>' or 'address:<ip or range>'. 'any' is not allowed."
+  "Where the backup tool connects from, separated by commas: 'internal' (this server only: its own programs and containers), 'server:<id>' (one of this organization's servers) or 'address:<ip or range>'. 'any' is not allowed."
 
 export const BACKUP_LOGIN_LOAD_ERROR =
   'The backup login could not be loaded. Reload the page to try again.'
