@@ -36,6 +36,11 @@ vi.mock('@/lib/queries/topology', () => ({
   useChooseServerTrafficNetwork,
 }))
 vi.mock('@/lib/query-client', () => ({ useCan }))
+vi.mock('@/lib/queries/servers', () => ({
+  useOrgServers: () => ({
+    data: { servers: [{ id: 'srv-unnamed', name: null, hostname: 'db-2.example.net' }] },
+  }),
+}))
 vi.mock('@/components/ui/panel-styles', () => ({ panelStyles: {} }))
 
 type Props = Record<string, unknown> & { children?: unknown }
@@ -187,6 +192,13 @@ describe('ServerTrafficCard', () => {
     expect(screen.getByText('The network card is down on this server.')).toBeTruthy()
     expect(screen.getByText('Carrying traffic to 1 server from here')).toBeTruthy()
     expect(screen.getByText('eth1')).toBeTruthy()
+  })
+
+  it('names a server without a display name by its hostname', () => {
+    const peer = map.peers[0]!
+    show(true, { ...map, peers: [{ ...peer, serverId: 'srv-unnamed', name: null }] })
+    expect(screen.getByText('db-2.example.net')).toBeTruthy()
+    expect(screen.queryByText('Unnamed server')).toBeNull()
   })
 
   it('saves a new priority number', () => {

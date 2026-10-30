@@ -17,6 +17,7 @@ vi.mock(
 )
 vi.mock('@/components/ui/panel-styles', () => ({ panelStyles: {} }))
 vi.mock('@/components/org/organization-ca-panel', () => ({ OrganizationCaPanel: () => null }))
+vi.mock('@/components/org/dns-certificate-panel', () => ({ DnsCertificatePanel: () => null }))
 vi.mock('@/components/ui', () => ({
   Button: ({ label, onPress }: { label: string; onPress?: () => void }) => (
     <button onClick={onPress}>{label}</button>
@@ -112,6 +113,42 @@ describe('TlsOverviewSection delete', () => {
     render(<TlsOverviewSection orgId="o1" />)
     expect(screen.getByText("Let's Encrypt · Ready")).toBeTruthy()
     expect(screen.getByText('Uploaded · Issued and renewed by the serving host')).toBeTruthy()
+  })
+
+  it('shows who issued a DNS-ordered wildcard and from when it is valid', () => {
+    state.rows = [
+      {
+        ...certificate('w1', '*.example.net', 'upload'),
+        metadata: {
+          status: 'ready',
+          dnsNames: ['*.example.net', 'example.net'],
+          issuer: 'CN=R11,O=Let’s Encrypt,C=US',
+          notBefore: '2026-10-20T08:00:00.000Z',
+          acme: { managedBy: 'panel', challengeType: 'dns-01' },
+        },
+      } as unknown as TlsRecord,
+    ]
+    render(<TlsOverviewSection orgId="o1" />)
+    expect(screen.getByText('Issued by CN=R11,O=Let’s Encrypt,C=US')).toBeTruthy()
+    expect(screen.getByText(/^Valid from /)).toBeTruthy()
+  })
+
+  it('leaves out placeholder issuer and start dates of an order still running', () => {
+    state.rows = [
+      {
+        ...certificate('w2', 'queued.example', 'upload'),
+        metadata: {
+          status: 'pending',
+          dnsNames: ['queued.example'],
+          issuer: '',
+          notBefore: '1970-01-01T00:00:00.000Z',
+          acme: { managedBy: 'panel', challengeType: 'dns-01' },
+        },
+      } as unknown as TlsRecord,
+    ]
+    render(<TlsOverviewSection orgId="o1" />)
+    expect(screen.queryByText(/^Issued by /)).toBeNull()
+    expect(screen.queryByText(/^Valid from /)).toBeNull()
   })
 
   it('says why a new certificate was not added, under Add certificate', async () => {
