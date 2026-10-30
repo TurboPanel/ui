@@ -73,6 +73,8 @@ export const STATUS = {
   cert_not_deployed: { label: 'Not deployed yet', glyph: 'half', tone: 'warn' },
   cert_not_reported: { label: 'Not on the server yet', glyph: 'triangle', tone: 'warn' },
   test: { label: 'Self-signed certificate (browsers warn)', glyph: 'unlock', tone: 'warn' },
+  // A tunnel's edge ends TLS with a trusted certificate, whatever the server holds.
+  edge: { label: 'Trusted at the Edge', glyph: 'lock', tone: 'ok' },
   // Servers and databases
   online: { label: 'Online', glyph: 'dot', tone: 'ok' },
   offline: { label: 'Offline', glyph: 'diamond', tone: 'bad' },
