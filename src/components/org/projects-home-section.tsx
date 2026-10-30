@@ -174,8 +174,8 @@ function RecentProjects({
   if (recent.length === 0) return null
   return (
     <View style={s.recent}>
-      <SectionHeading title="Recent projects" />
-      <View accessibilityRole="summary" accessibilityLabel="Recent projects" style={s.chips}>
+      <SectionHeading title="Recent Projects" />
+      <View accessibilityRole="summary" accessibilityLabel="Recent Projects" style={s.chips}>
         {recent.map((project) => {
           const href = recentHref(orgId, project, environments)
           return (
@@ -399,7 +399,7 @@ function DeploysInProgress({
   if (rows.length === 0) return null
   return (
     <View style={s.section}>
-      <SectionHeading title="Deploys in progress" />
+      <SectionHeading title="Deploys in Progress" />
       <ListGroup>
         {rows.slice(0, IN_PROGRESS_LIMIT).map((row) => (
           <ListRow
@@ -590,7 +590,7 @@ export function ProjectsHomeSection({
   const canCreate = canOwn && !isSystemScope
   // While the first-run welcome shows, it carries the New Project button.
   const welcomeShown = !loading && data.cards.length === 0 && !error
-  // With the Managed Databases filter on, New project opens on the managed type.
+  // With the Managed Databases filter on, New Project opens on the managed type.
   const newProjectHref = withQueryParam(
     newProjectHrefForScope(orgId, scopeId),
     'type',
@@ -609,7 +609,7 @@ export function ProjectsHomeSection({
         actions={
           canCreate && !welcomeShown ? (
             <ActionButton
-              label="New project"
+              label="New Project"
               variant="primary"
               onPress={() => router.push(newProjectHref)}
             />

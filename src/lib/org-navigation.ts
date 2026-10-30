@@ -454,12 +454,12 @@ export function isOrgSearchPath(pathname: string, orgId: string): boolean {
   return orgPathWithoutQuery(pathname) === orgSearchHref(orgId)
 }
 
-/** The Servers list with the Add server steps already open (the search's "Add server"). */
+/** The Servers list with the Add Server steps already open (the search's "Add Server"). */
 export function serversAddHref(orgId: string): `/${string}/servers?add=1` {
   return `/${orgId}/servers?add=1`
 }
 
-/** True when the `add` query value asks for the Add server steps. */
+/** True when the `add` query value asks for the Add Server steps. */
 export function isAddServerRequest(value: string | readonly string[] | null | undefined): boolean {
   return (typeof value === 'string' ? value : value?.[0]) === '1'
 }

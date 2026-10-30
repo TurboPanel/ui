@@ -1,4 +1,4 @@
-/** How often the Add server wizard asks whether the new host has connected. */
+/** How often the Add Server wizard asks whether the new host has connected. */
 export const WAITING_POLL_MS = 1000
 
 /** Past this the wait is longer than a normal first set-up. */
