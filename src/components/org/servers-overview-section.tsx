@@ -788,7 +788,8 @@ export function ServersOverviewSection({
   const queryClient = useQueryClient()
   const canOwn = useCan('organization', orgId, 'organization:own')
 
-  const fabricQuery = useOrgFabric(orgId)
+  // A fresh read on every visit, so the TurboFabric column never shows an old state.
+  const fabricQuery = useOrgFabric(orgId, { fresh: true })
   const fabricCells = useMemo(() => fabricServerCells(fabricQuery.data), [fabricQuery.data])
 
   const serversQuery = useOrgServers(orgId, {
