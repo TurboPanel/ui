@@ -990,9 +990,14 @@ function fabricSectionView(
   showServers: boolean
   showMesh: boolean
   showPairs: boolean
+  showToggle: boolean
+  showAllowRelay: boolean
 } {
   const showMesh = input.enabled && !input.unavailable
+  const showToggle = input.canManage && !input.unavailable
   return {
+    showToggle,
+    showAllowRelay: showToggle && input.enabled,
     showLoading: input.loading,
     showDefaultHint: input.canManage && input.state === 'off' && input.defaultFabricEnabled,
     showServers: input.canManage && !input.unavailable && input.serverCount > 0,
@@ -1062,7 +1067,6 @@ export function NetworkFabricSection({ orgId }: Readonly<{ orgId: string }>) {
     canManage,
     loaded: query.data !== undefined,
   })
-  const showToggle = canManage && !unavailable
 
   const relayByServerId = useMemo(() => {
     const map = new Map<string, RelayRecord>()
@@ -1171,7 +1175,7 @@ export function NetworkFabricSection({ orgId }: Readonly<{ orgId: string }>) {
 
         <FabricStatusBlock state={state} cidr={fabric?.cidr} status={fabric?.status} />
 
-        {showToggle ? (
+        {view.showToggle ? (
           <FabricLifecycleControls
             orgId={orgId}
             state={state}
@@ -1180,7 +1184,7 @@ export function NetworkFabricSection({ orgId }: Readonly<{ orgId: string }>) {
           />
         ) : null}
 
-        {showToggle && enabled ? (
+        {view.showAllowRelay ? (
           <FabricAllowRelayToggle
             enabled={fabric?.allowRelay === true}
             disabled={toggleDisabled}
