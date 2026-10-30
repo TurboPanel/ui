@@ -667,6 +667,19 @@ describe('fetch wrappers (mocked fetch)', () => {
     const settings = await fetchOrgFabric('org-1')
     expect(settings.paused).toBe(false)
     expect(settings.servers).toEqual([])
+    expect(settings.pairs).toBeUndefined()
+  })
+
+  it('fetchOrgFabric keeps the server pairs when the panel sends them', async () => {
+    const pair = {
+      fromServerId: 'srv-1',
+      toServerId: 'srv-2',
+      path: 'lan',
+      reason: 'They share the trusted network Rack A.',
+    }
+    fetchMock.mockResolvedValueOnce(jsonResponse({ enabled: false, relays: [], pairs: [pair] }))
+    const settings = await fetchOrgFabric('org-1')
+    expect(settings.pairs).toEqual([pair])
   })
 
   it('fetchOrgFabric keeps paused and the server list', async () => {

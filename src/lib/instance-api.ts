@@ -2039,6 +2039,22 @@ export type OrgFabricServerRecord = {
   automaticRole: FabricServerRole
 }
 
+/**
+ * How one pair of servers talks (`GET …/fabric` `pairs[].path`): `lan` shares a
+ * trusted datacenter network with no tunnel, `fabric` is a TurboFabric tunnel,
+ * `fabric_over_untrusted_lan` is the tunnel running over a shared untrusted
+ * network, `none` has no private path.
+ */
+export type FabricPairPath = 'lan' | 'fabric' | 'fabric_over_untrusted_lan' | 'none'
+
+/** One pair of org servers, listed once per pair; `reason` is one plain sentence from the panel. */
+export type OrgFabricPairRecord = {
+  fromServerId: string
+  toServerId: string
+  path: FabricPairPath
+  reason: string
+}
+
 export type OrgFabricSettings = {
   /** True only while the mesh carries traffic. */
   enabled: boolean
@@ -2048,6 +2064,8 @@ export type OrgFabricSettings = {
   relays: RelayRecord[]
   /** Every org server's switch and role; empty on an older control plane. */
   servers: OrgFabricServerRecord[]
+  /** How each server pair talks; absent with fewer than two servers or on an older control plane. */
+  pairs?: OrgFabricPairRecord[]
 }
 
 type OrgFabricWireBody = {
@@ -2056,6 +2074,7 @@ type OrgFabricWireBody = {
   fabric?: OrgFabricRecord
   relays?: FabricRelayWireRow[]
   servers?: OrgFabricServerRecord[]
+  pairs?: OrgFabricPairRecord[]
 }
 
 export const GATEWAY_DATACENTER_REQUIRED_ERROR = 'gateway_datacenter_required'
@@ -2134,6 +2153,7 @@ function toOrgFabricSettings(body: OrgFabricWireBody): OrgFabricSettings {
       : {}),
     relays: (body.relays ?? []).map(toRelayRecord),
     servers: body.servers ?? [],
+    ...(body.pairs ? { pairs: body.pairs } : {}),
   }
 }
 

@@ -20,17 +20,20 @@ import {
   fetchOrgHostDefaults,
   type CommandStatus,
   type FabricRelaySegment,
+  type OrgFabricPairRecord,
   type OrgFabricServerRecord,
   type OrgServerRecord,
   type RelayRecord,
   type RelayRole,
 } from '@/lib/instance-api'
 import {
+  buildFabricPairRows,
   buildFabricPathMatrix,
   fabricPathIsDegraded,
   fabricPathKindLabel,
   formatResolvedAdvertisedCidrs,
   relayRoleLabel,
+  type FabricPairRow,
   type FabricPathMatrixRow,
 } from '@/lib/fabric-mesh'
 import {
@@ -40,6 +43,7 @@ import {
   type FabricState,
 } from '@/lib/fabric-servers'
 import { formatRelativeLocalDateTime } from '@/lib/format-datetime'
+import { FabricPairPathList } from '@/components/org/network/fabric-pair-paths'
 import { FabricLifecycleControls } from '@/components/org/network/fabric-lifecycle-controls'
 import { FabricServerControls } from '@/components/org/network/fabric-server-controls'
 import {
@@ -390,6 +394,19 @@ function pathRowLatency(row: FabricPathMatrixRow): string | null {
   return `${String(row.latencyMs)} ms`
 }
 
+const PAIR_PATHS_HELP = `Servers that share a trusted datacenter network talk over the LAN with no tunnel, even with ${TURBOFABRIC_PRODUCT_NAME} off. ${TURBOFABRIC_PRODUCT_NAME} carries traffic between datacenters and runs encrypted over a network marked untrusted.`
+
+/** Server pairs as the panel reports them (`pairs[]`), with tunnel readings folded in. */
+function FabricPairPathsPanel({ rows }: Readonly<{ rows: readonly FabricPairRow[] }>) {
+  return (
+    <SectionPanel title="Paths" hint={`${rows.length} pair(s)`}>
+      <Text style={panelStyles.muted}>{PAIR_PATHS_HELP}</Text>
+      <FabricPairPathList rows={rows} />
+    </SectionPanel>
+  )
+}
+
+/** Older control plane without `pairs[]`: the relay-observed tunnel paths. */
 function FabricPathMatrixPanel({ rows }: Readonly<{ rows: readonly FabricPathMatrixRow[] }>) {
   return (
     <SectionPanel title="Paths" hint={`${rows.length} pair(s)`}>
@@ -965,13 +982,28 @@ function fabricSectionView(
     loading: boolean
     defaultFabricEnabled: boolean
     serverCount: number
+    pairCount: number
   }>
-): { showLoading: boolean; showDefaultHint: boolean; showServers: boolean; showMesh: boolean } {
+): {
+  showLoading: boolean
+  showDefaultHint: boolean
+  showServers: boolean
+  showMesh: boolean
+  showPairs: boolean
+  showToggle: boolean
+  showAllowRelay: boolean
+} {
+  const showMesh = input.enabled && !input.unavailable
+  const showToggle = input.canManage && !input.unavailable
   return {
+    showToggle,
+    showAllowRelay: showToggle && input.enabled,
     showLoading: input.loading,
     showDefaultHint: input.canManage && input.state === 'off' && input.defaultFabricEnabled,
     showServers: input.canManage && !input.unavailable && input.serverCount > 0,
-    showMesh: input.enabled && !input.unavailable,
+    showMesh,
+    // LAN pairs exist with TurboFabric off or paused, so the pair list does not wait for the mesh.
+    showPairs: !input.unavailable && input.pairCount > 0,
   }
 }
 
@@ -985,6 +1017,18 @@ function isFabricApplyDisabled(
   flags: Readonly<{ canManage: boolean; enabled: boolean; unavailable: boolean; busy: boolean }>
 ): boolean {
   return !flags.canManage || !flags.enabled || flags.unavailable || flags.busy
+}
+
+/** Server pairs from the panel's `pairs[]` (empty on an older panel), with tunnel readings folded in. */
+function useFabricPairRows(
+  pairs: OrgFabricPairRecord[] | undefined,
+  pathMatrix: Parameters<typeof buildFabricPairRows>[1],
+  serverNameById: Parameters<typeof buildFabricPairRows>[2]
+): FabricPairRow[] {
+  return useMemo(
+    () => buildFabricPairRows(orEmptyArray(pairs), pathMatrix, serverNameById),
+    [pairs, pathMatrix, serverNameById]
+  )
 }
 
 /**
@@ -1023,16 +1067,6 @@ export function NetworkFabricSection({ orgId }: Readonly<{ orgId: string }>) {
     canManage,
     loaded: query.data !== undefined,
   })
-  const showToggle = canManage && !unavailable
-  const view = fabricSectionView({
-    canManage,
-    unavailable,
-    enabled,
-    state,
-    loading: query.isLoading && !query.data,
-    defaultFabricEnabled: hostDefaultsQuery.data?.defaultFabricEnabled === true,
-    serverCount: fabricServers.length,
-  })
 
   const relayByServerId = useMemo(() => {
     const map = new Map<string, RelayRecord>()
@@ -1052,6 +1086,18 @@ export function NetworkFabricSection({ orgId }: Readonly<{ orgId: string }>) {
     () => buildFabricPathMatrix(relays, serverNameById),
     [relays, serverNameById]
   )
+
+  const pairRows = useFabricPairRows(query.data?.pairs, pathMatrix, serverNameById)
+  const view = fabricSectionView({
+    canManage,
+    unavailable,
+    enabled,
+    state,
+    loading: query.isLoading && !query.data,
+    defaultFabricEnabled: hostDefaultsQuery.data?.defaultFabricEnabled === true,
+    serverCount: fabricServers.length,
+    pairCount: pairRows.length,
+  })
 
   const eligibleGateways = useMemo(
     () => eligibleGatewayRows(relays, serverNameById),
@@ -1129,7 +1175,7 @@ export function NetworkFabricSection({ orgId }: Readonly<{ orgId: string }>) {
 
         <FabricStatusBlock state={state} cidr={fabric?.cidr} status={fabric?.status} />
 
-        {showToggle ? (
+        {view.showToggle ? (
           <FabricLifecycleControls
             orgId={orgId}
             state={state}
@@ -1138,7 +1184,7 @@ export function NetworkFabricSection({ orgId }: Readonly<{ orgId: string }>) {
           />
         ) : null}
 
-        {showToggle && enabled ? (
+        {view.showAllowRelay ? (
           <FabricAllowRelayToggle
             enabled={fabric?.allowRelay === true}
             disabled={toggleDisabled}
@@ -1178,9 +1224,11 @@ export function NetworkFabricSection({ orgId }: Readonly<{ orgId: string }>) {
             eligibleGateways={eligibleGateways}
             onApply={handleApply}
           />
-          <FabricPathMatrixPanel rows={pathMatrix} />
+          {view.showPairs ? null : <FabricPathMatrixPanel rows={pathMatrix} />}
         </>
       ) : null}
+
+      {view.showPairs ? <FabricPairPathsPanel rows={pairRows} /> : null}
     </View>
   )
 }

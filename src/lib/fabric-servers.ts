@@ -72,7 +72,7 @@ export const FABRIC_PAUSE_CONFIRM: FabricConfirmCopy = {
 
 export const FABRIC_REMOVE_CONFIRM: FabricConfirmCopy = {
   title: 'Remove TurboFabric Completely',
-  body: 'This deletes every tunnel, every server key and every container network that spans servers. Running apps that span servers lose that network. Turning TurboFabric on again later starts from scratch.',
+  body: 'This deletes every tunnel, every server key and every container network that spans servers, except networks whose servers all share a trusted LAN, which are kept. Running apps on the other networks lose that connection. Turning TurboFabric on again later starts from scratch.',
   confirmLabel: 'Remove TurboFabric Completely',
 }
 

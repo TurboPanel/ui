@@ -44,7 +44,9 @@ describe('FabricLifecycleControls', () => {
     render(<FabricLifecycleControls orgId="org-1" state="paused" hasFabric disabled={false} />)
     fireEvent.click(screen.getByRole('button', { name: 'Remove TurboFabric Completely' }))
     const dialog = screen.getByRole('dialog', { name: 'Remove TurboFabric Completely' })
-    expect(dialog.textContent).toContain('Running apps that span servers lose that network')
+    expect(dialog.textContent).toContain(
+      'networks whose servers all share a trusted LAN, which are kept'
+    )
     const buttons = screen.getAllByRole('button', { name: 'Remove TurboFabric Completely' })
     fireEvent.click(buttons.at(-1) as HTMLElement)
     expect(remove).toHaveBeenCalledWith(undefined, expect.anything())
