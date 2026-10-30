@@ -2020,6 +2020,22 @@ export type RelayRecord = {
   effectiveAllowRelay: boolean
   preferredGatewayIds: string[]
   gatewayEligible: boolean
+  /** How the last reconcile sent to this server ended; null or absent on an older control plane. */
+  reconcile?: FabricReconcileOutcome | null
+}
+
+/**
+ * The last `server.fabric.reconcile` sent to one server (`relays[].reconcile`):
+ * `pending` until it answers, then `done` (with any `warnings`) or `failed`
+ * (with the server's own `error`).
+ */
+export type FabricReconcileOutcome = {
+  commandId: string
+  action: 'apply' | 'pause' | 'remove'
+  state: 'pending' | 'done' | 'failed'
+  at: string
+  error?: string
+  warnings?: string[]
 }
 
 /** TurboFabric role for one server: a gateway accepts connections, a client only connects out. */
@@ -2108,6 +2124,7 @@ export type FabricRelayWireRow = {
   effectiveAllowRelay?: boolean
   preferredGatewayIds?: string[]
   gatewayEligible?: boolean
+  reconcile?: FabricReconcileOutcome | null
 }
 
 export function toRelayRecord(row: FabricRelayWireRow): RelayRecord {
@@ -2136,6 +2153,7 @@ export function toRelayRecord(row: FabricRelayWireRow): RelayRecord {
     effectiveAllowRelay: row.effectiveAllowRelay === true,
     preferredGatewayIds: row.preferredGatewayIds ?? [],
     gatewayEligible: row.gatewayEligible === true,
+    reconcile: row.reconcile ?? null,
   }
 }
 

@@ -92,7 +92,10 @@ export function useEnvironmentOverviewModel(): OverviewModel {
   )
 
   const envName = environmentDisplayName(selectedEnvironment ?? {})
-  const loaded = view.data !== undefined && services.isSuccess && !hostings.isLoading
+  // The deploy history is waited for too, or the page says "No deployments yet"
+  // while it is still on its way.
+  const loaded =
+    view.data !== undefined && services.isSuccess && !hostings.isLoading && !history.isLoading
   const source = useMemo<OverviewSource | null>(() => {
     if (!view.data) return null
     return {

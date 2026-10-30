@@ -512,6 +512,14 @@ describe('the type filter', () => {
     ])
   })
 
+  it('shows no count while the list still loads', () => {
+    expect(projectTypeOptions(null).map((option) => option.label)).toEqual([
+      'All',
+      'Apps',
+      'Managed Databases',
+    ])
+  })
+
   it('says what is missing when a filter leaves nothing', () => {
     expect(emptyTypeMessage('managed')).toBe('No managed databases here yet.')
     expect(emptyTypeMessage('apps')).toBe('No apps here yet.')

@@ -1,4 +1,9 @@
-import type { FabricServerRole, OrgFabricServerRecord, OrgFabricSettings } from '@/lib/instance-api'
+import type {
+  FabricReconcileOutcome,
+  FabricServerRole,
+  OrgFabricServerRecord,
+  OrgFabricSettings,
+} from '@/lib/instance-api'
 
 /** Where TurboFabric stands for an organization. */
 export type FabricState = 'on' | 'paused' | 'off'
@@ -57,6 +62,80 @@ export const FABRIC_ROLE_HELP =
 
 export const FABRIC_PAUSED_NOTICE =
   'TurboFabric is turned off. Tunnels are down on every server, but keys and container networks are kept, so turning it back on is instant.'
+
+/** A server's last reconcile, with the name to show for it. */
+export type FabricServerOutcome = Readonly<{
+  name: string
+  reconcile: FabricReconcileOutcome | null
+}>
+
+/**
+ * What the paused notice says, from what each server reported. Tunnels are
+ * only called down once every server confirmed it.
+ */
+export type FabricPausedNotice =
+  | Readonly<{ kind: 'down'; text: string }>
+  | Readonly<{ kind: 'pending'; text: string }>
+  | Readonly<{ kind: 'unconfirmed'; text: string }>
+  | Readonly<{ kind: 'failed'; text: string; failures: readonly string[] }>
+
+export const FABRIC_PAUSE_FAILED_NOTICE =
+  'Some servers could not take their tunnel down, so it is still up on them:'
+
+export const FABRIC_PAUSE_RETRY_HINT =
+  'Fix the problem on those servers, then press Turn Off Again to retry.'
+
+/** A pause, or a server switched off (removed), takes the tunnel down. */
+function takesTunnelDown(reconcile: FabricReconcileOutcome | null): boolean {
+  return reconcile?.action === 'pause' || reconcile?.action === 'remove'
+}
+
+function isPauseDone(outcome: FabricServerOutcome): boolean {
+  return takesTunnelDown(outcome.reconcile) && outcome.reconcile?.state === 'done'
+}
+
+function pauseFailure(outcome: FabricServerOutcome): string | null {
+  const reconcile = outcome.reconcile
+  if (!reconcile || !takesTunnelDown(reconcile) || reconcile.state !== 'failed') return null
+  return `${outcome.name}: ${reconcile.error ?? 'The server did not say why.'}`
+}
+
+export const FABRIC_PAUSE_UNCONFIRMED_NOTICE =
+  'TurboFabric is turned off, but no server has confirmed that its tunnel is down yet. Turn it off again to ask every server.'
+
+export function fabricPausedNotice(outcomes: readonly FabricServerOutcome[]): FabricPausedNotice {
+  // Nothing confirmed (an older control plane, or a pause from before servers
+  // reported back) is never read as down.
+  if (outcomes.every((outcome) => outcome.reconcile === null)) {
+    return { kind: 'unconfirmed', text: FABRIC_PAUSE_UNCONFIRMED_NOTICE }
+  }
+  const failures = outcomes.map(pauseFailure).filter((line): line is string => line !== null)
+  if (failures.length > 0) {
+    return { kind: 'failed', text: FABRIC_PAUSE_FAILED_NOTICE, failures }
+  }
+  const done = outcomes.filter(isPauseDone).length
+  if (done === outcomes.length) return { kind: 'down', text: FABRIC_PAUSED_NOTICE }
+  return {
+    kind: 'pending',
+    text: `Turning TurboFabric off: ${String(done)} of ${String(outcomes.length)} servers have taken their tunnel down.`,
+  }
+}
+
+/**
+ * Plain sentences about one server's last reconcile: its own error when it
+ * failed, or what an apply that worked had to leave out.
+ */
+export function fabricReconcileLines(reconcile: FabricReconcileOutcome | null): {
+  error: string | null
+  warnings: readonly string[]
+} {
+  if (!reconcile) return { error: null, warnings: [] }
+  if (reconcile.state === 'failed') {
+    return { error: reconcile.error ?? 'The server did not say why.', warnings: [] }
+  }
+  if (reconcile.state === 'done') return { error: null, warnings: reconcile.warnings ?? [] }
+  return { error: null, warnings: [] }
+}
 
 export type FabricConfirmCopy = Readonly<{
   title: string
