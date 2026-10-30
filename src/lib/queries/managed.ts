@@ -25,6 +25,7 @@ import {
   fetchOrganizationManaged,
   fetchServerManagedExternalAccess,
   isForbiddenError,
+  isHttpStatusError,
   promoteManagedDisasterRecovery,
   promoteManagedMember,
   removeManagedMember,
@@ -450,6 +451,12 @@ export function useDeleteManagedUser(orgId: string, environmentId: string) {
   })
 }
 
+/**
+ * The cluster's backup login. `null` when this screen cannot have one: an
+ * older control plane without the route answers 404 (the ui can ship first),
+ * and a viewer without manage gets 403, which must not reach the global
+ * sign-out handler. `{ login: null }` means the cluster has none yet.
+ */
 export function useManagedBackupLogin(
   orgId: string,
   environmentId: string,
@@ -457,7 +464,14 @@ export function useManagedBackupLogin(
 ) {
   return useQuery({
     queryKey: queryKeys.org(orgId).managed.backupLogin(environmentId),
-    queryFn: () => fetchManagedBackupLogin(environmentId),
+    queryFn: async () => {
+      try {
+        return await fetchManagedBackupLogin(environmentId)
+      } catch (err) {
+        if (isHttpStatusError(err, 404) || isForbiddenError(err)) return null
+        throw err
+      }
+    },
     enabled: (options?.enabled ?? true) && orgId.length > 0 && environmentId.length > 0,
   })
 }

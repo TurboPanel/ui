@@ -19,6 +19,9 @@ export const BACKUP_LOGIN_HELP =
 export const BACKUP_PLACES_HELP =
   "Where the backup tool connects from, separated by commas: 'internal' (this organization's servers), 'server:<id>' or 'address:<ip or range>'. 'any' is not allowed."
 
+export const BACKUP_LOGIN_LOAD_ERROR =
+  'The backup login could not be loaded. Reload the page to try again.'
+
 /** The places typed in the field, trimmed, empty entries dropped. */
 export function parseBackupPlaces(value: string): string[] {
   return value
@@ -190,9 +193,18 @@ export function ManagedBackupLoginSection({
   const createMutation = useCreateManagedBackupLogin(orgId, environmentId)
   const deleteMutation = useDeleteManagedBackupLogin(orgId, environmentId)
   if (query.isPending) return null
+  if (query.isError) {
+    return (
+      <SectionPanel title={BACKUP_LOGIN_TITLE} hint="One per cluster">
+        <Text style={panelStyles.error}>{BACKUP_LOGIN_LOAD_ERROR}</Text>
+      </SectionPanel>
+    )
+  }
+  // An older control plane, or a viewer without manage: no panel at all.
+  if (query.data === null) return null
   return (
     <ManagedBackupLoginPanel
-      login={query.data?.login ?? null}
+      login={query.data.login}
       canManage={canManage}
       busy={busy}
       onCreate={async (body) => {

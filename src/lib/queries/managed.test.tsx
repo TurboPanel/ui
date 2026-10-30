@@ -923,6 +923,34 @@ describe('managed query hooks', () => {
     expect(idle.result.current.fetchStatus).toBe('idle')
   })
 
+  it('useManagedBackupLogin answers null, without retrying, on 404 and 403', async () => {
+    for (const status of [404, 403]) {
+      fetchManagedBackupLogin.mockReset()
+      fetchManagedBackupLogin.mockRejectedValue(new Error(`HTTP ${status}: refused`))
+      const { result } = renderHook(() => useManagedBackupLogin(orgId, environmentId), {
+        wrapper: createWrapper(),
+      })
+      await waitFor(() => {
+        expect(result.current.isSuccess).toBe(true)
+      })
+      expect(result.current.data).toBeNull()
+      expect(fetchManagedBackupLogin).toHaveBeenCalledTimes(1)
+    }
+  })
+
+  it('useManagedBackupLogin passes other failures through', async () => {
+    fetchManagedBackupLogin.mockReset()
+    fetchManagedBackupLogin.mockRejectedValue(new Error('HTTP 500: boom'))
+    const client = createAppQueryClient()
+    client.setDefaultOptions({ queries: { retry: false } })
+    const { result } = renderHook(() => useManagedBackupLogin(orgId, environmentId), {
+      wrapper: createWrapper(client),
+    })
+    await waitFor(() => {
+      expect(result.current.isError).toBe(true)
+    })
+  })
+
   it('useCreateManagedBackupLogin keeps no password and refreshes the logins', async () => {
     createManagedBackupLogin.mockResolvedValueOnce({
       ok: true,
