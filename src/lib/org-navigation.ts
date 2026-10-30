@@ -35,12 +35,6 @@ export const ORG_AREAS = [
         pathSegment: 'repositories',
         hint: 'Git repositories connected to this organization and what uses them',
       },
-      {
-        id: 'settings',
-        label: 'Settings',
-        pathSegment: 'settings',
-        hint: 'Project defaults such as the primary environment name',
-      },
     ],
   },
   {
@@ -347,6 +341,7 @@ export function orgManageHref(orgId: string): `/${string}/manage` {
 /** Tabs on Organization settings, in bar order (the picker menu is the only way in). */
 export const ORG_SETTINGS_TAB_IDS = [
   'general',
+  'projects',
   'members',
   'notifications',
   'domains',
@@ -358,6 +353,7 @@ export type OrgSettingsTabId = (typeof ORG_SETTINGS_TAB_IDS)[number]
 
 export const ORG_SETTINGS_TAB_LABELS: Record<OrgSettingsTabId, string> = {
   general: 'General',
+  projects: 'Project Settings',
   members: 'Members',
   notifications: 'Notifications',
   domains: 'Domains & certificates',
@@ -375,6 +371,11 @@ export function parseOrgSettingsTab(
 
 export function orgSettingsTabHref(orgId: string, tab: OrgSettingsTabId): string {
   return tab === 'general' ? orgManageHref(orgId) : `${orgManageHref(orgId)}?tab=${tab}`
+}
+
+/** Organization Settings › Project Settings, which replaced the Projects › Settings page. */
+export function orgProjectSettingsHref(orgId: string): string {
+  return orgSettingsTabHref(orgId, 'projects')
 }
 
 /**

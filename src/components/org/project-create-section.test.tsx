@@ -29,6 +29,12 @@ vi.mock('@/lib/workspace-scope-context', () => ({ useOptionalWorkspaceScope: () 
 vi.mock('@/lib/org-default-environment', () => ({
   useOrgDefaultEnvironmentName: () => ({ defaultEnvironmentName: 'production' }),
 }))
+vi.mock('@/lib/org-project-settings', () => ({
+  useOrgProjectFormDefaults: () => ({
+    openEnvironmentSectionByDefault: false,
+    openWorkspaceSectionByDefault: false,
+  }),
+}))
 vi.mock('@/lib/queries', () => ({
   useWorkspaces: () => ({
     data: { workspaces: [{ id: 'w1', name: 'ACME', kind: 'user' }] },
