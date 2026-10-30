@@ -3,8 +3,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 import { isAddServerRequest } from '@/lib/org-navigation'
 
 /**
- * Opens the Add server steps whenever the address asks for them (`?add=1`, the
- * search's "Add server"), also when the Servers list is already showing, then
+ * Opens the Add Server steps whenever the address asks for them (`?add=1`, the
+ * search's "Add Server"), also when the Servers list is already showing, then
  * clears the query so a refresh or Back does not open them again.
  */
 export function useAddServerLink(onOpen: () => void): void {

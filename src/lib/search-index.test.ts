@@ -159,7 +159,7 @@ describe('buildSearchItems', () => {
     const list = items()
     const actions = list.filter((i) => i.group === 'Actions' && !i.objectId)
     expect(Object.fromEntries(actions.map((a) => [a.name, a.href]))).toEqual({
-      'Add server': '/o1/servers?add=1',
+      'Add Server': '/o1/servers?add=1',
       'Add project': '/o1/projects/new',
       'Add database': '/o1/projects/new?type=managed',
       'Invite member': '/o1/manage?tab=members',
@@ -170,7 +170,7 @@ describe('buildSearchItems', () => {
   it('hides actions the person may not run', () => {
     const list = items({ canManage: false, canOwn: false, isPlatformAdmin: false })
     const actionNames = names(list.filter((i) => i.group === 'Actions'))
-    expect(actionNames).not.toContain('Add server')
+    expect(actionNames).not.toContain('Add Server')
     expect(actionNames).not.toContain('Invite member')
     expect(actionNames).not.toContain('Pause or Resume Updates')
     expect(actionNames).not.toContain('Remove server derp')
@@ -226,7 +226,7 @@ describe('rankSearchItems', () => {
 
   it('on an empty query shows the general actions then the pages, never per-object rows', () => {
     const ranked = rankSearchItems(list, '')
-    expect(ranked[0]?.name).toBe('Add server')
+    expect(ranked[0]?.name).toBe('Add Server')
     expect(ranked.some((i) => i.group === 'Servers')).toBe(false)
     expect(ranked.some((i) => i.objectId)).toBe(false)
     expect(ranked.some((i) => i.group === 'Pages')).toBe(true)
@@ -261,7 +261,7 @@ describe('rankSearchItems', () => {
 
   it('treats add, new and create as the same word', () => {
     for (const q of ['new server', 'create server']) {
-      expect(names(rankSearchItems(list, q))).toContain('Add server')
+      expect(names(rankSearchItems(list, q))).toContain('Add Server')
     }
   })
 
