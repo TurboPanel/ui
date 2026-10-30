@@ -20,6 +20,7 @@ import {
   fetchOrgHostDefaults,
   type CommandStatus,
   type FabricRelaySegment,
+  type OrgFabricPairRecord,
   type OrgFabricServerRecord,
   type OrgServerRecord,
   type RelayRecord,
@@ -1013,6 +1014,18 @@ function isFabricApplyDisabled(
   return !flags.canManage || !flags.enabled || flags.unavailable || flags.busy
 }
 
+/** Server pairs from the panel's `pairs[]` (empty on an older panel), with tunnel readings folded in. */
+function useFabricPairRows(
+  pairs: OrgFabricPairRecord[] | undefined,
+  pathMatrix: Parameters<typeof buildFabricPairRows>[1],
+  serverNameById: Parameters<typeof buildFabricPairRows>[2]
+): FabricPairRow[] {
+  return useMemo(
+    () => buildFabricPairRows(orEmptyArray(pairs), pathMatrix, serverNameById),
+    [pairs, pathMatrix, serverNameById]
+  )
+}
+
 /**
  * Org opt-in for TurboFabric. Default off. Enabling lets environments run
  * across servers; standalone Docker does not require it.
@@ -1050,16 +1063,6 @@ export function NetworkFabricSection({ orgId }: Readonly<{ orgId: string }>) {
     loaded: query.data !== undefined,
   })
   const showToggle = canManage && !unavailable
-  const view = fabricSectionView({
-    canManage,
-    unavailable,
-    enabled,
-    state,
-    loading: query.isLoading && !query.data,
-    defaultFabricEnabled: hostDefaultsQuery.data?.defaultFabricEnabled === true,
-    serverCount: fabricServers.length,
-    pairCount: query.data?.pairs?.length ?? 0,
-  })
 
   const relayByServerId = useMemo(() => {
     const map = new Map<string, RelayRecord>()
@@ -1080,11 +1083,17 @@ export function NetworkFabricSection({ orgId }: Readonly<{ orgId: string }>) {
     [relays, serverNameById]
   )
 
-  const pairData = query.data?.pairs
-  const pairRows = useMemo(
-    () => buildFabricPairRows(orEmptyArray(pairData), pathMatrix, serverNameById),
-    [pairData, pathMatrix, serverNameById]
-  )
+  const pairRows = useFabricPairRows(query.data?.pairs, pathMatrix, serverNameById)
+  const view = fabricSectionView({
+    canManage,
+    unavailable,
+    enabled,
+    state,
+    loading: query.isLoading && !query.data,
+    defaultFabricEnabled: hostDefaultsQuery.data?.defaultFabricEnabled === true,
+    serverCount: fabricServers.length,
+    pairCount: pairRows.length,
+  })
 
   const eligibleGateways = useMemo(
     () => eligibleGatewayRows(relays, serverNameById),
