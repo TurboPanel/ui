@@ -33,7 +33,7 @@ export type SiteLinkSites = {
  */
 export function resolveSiteLinks(
   relays: readonly Pick<RelayRecord, 'serverId'>[],
-  serverById: ReadonlyMap<string, SiteLinkServerRef>,
+  serverById: ReadonlyMap<string, SiteLinkServerRef>
 ): SiteLinkSites {
   const ids = new Set<string>()
   let hasUnassignedPeers = false
@@ -60,11 +60,9 @@ export function resolveSiteLinks(
  */
 export function formatSiteLinkLabel(
   sites: SiteLinkSites,
-  siteNameById: ReadonlyMap<string, string>,
+  siteNameById: ReadonlyMap<string, string>
 ): string {
-  const names = sites.datacenterIds.map(
-    (id) => siteNameById.get(id) ?? id,
-  )
+  const names = sites.datacenterIds.map((id) => siteNameById.get(id) ?? id)
   if (names.length === 0) {
     return sites.hasUnassignedPeers ? 'Unassigned hosts' : 'No sites yet'
   }
@@ -84,7 +82,7 @@ export function formatSiteLinkLabel(
 export function meshLabelForSite(
   siteId: string,
   mesh: SiteLinkSites,
-  siteNameById: ReadonlyMap<string, string>,
+  siteNameById: ReadonlyMap<string, string>
 ): string | null {
   if (!mesh.datacenterIds.includes(siteId)) return null
   return formatSiteLinkLabel(mesh, siteNameById)
@@ -97,7 +95,7 @@ export function meshLabelForSite(
  */
 export function resolvePrimaryGatewayByDatacenter(
   relays: readonly Pick<RelayRecord, 'serverId' | 'role'>[],
-  serverById: ReadonlyMap<string, MeshServerRef>,
+  serverById: ReadonlyMap<string, MeshServerRef>
 ): Map<string, string> {
   type Candidate = { serverId: string; online: boolean }
   const byDc = new Map<string, Candidate[]>()
@@ -119,9 +117,7 @@ export function resolvePrimaryGatewayByDatacenter(
 
   const primary = new Map<string, string>()
   for (const [datacenterId, candidates] of byDc) {
-    const sorted = [...candidates].sort((a, b) =>
-      a.serverId.localeCompare(b.serverId),
-    )
+    const sorted = [...candidates].sort((a, b) => a.serverId.localeCompare(b.serverId))
     const online = sorted.find((c) => c.online)
     const chosen = online ?? sorted[0]
     if (chosen) primary.set(datacenterId, chosen.serverId)
@@ -129,28 +125,22 @@ export function resolvePrimaryGatewayByDatacenter(
   return primary
 }
 
+/** Whether a relay shares its datacenter's LAN ranges with the mesh. */
 export function relayRoleLabel(role: RelayRole): string {
-  if (role === 'gateway') return 'Gateway'
-  return 'Member'
+  if (role === 'gateway') return 'Shared'
+  return 'Not Shared'
 }
 
 /**
  * Display string for a gateway's effective advertised CIDRs (operator
  * override when stored, otherwise derived IPv4 datacenter subnets).
  */
-export function formatResolvedAdvertisedCidrs(
-  cidrs: readonly string[],
-): string {
+export function formatResolvedAdvertisedCidrs(cidrs: readonly string[]): string {
   if (cidrs.length === 0) return 'none'
   return cidrs.join(', ')
 }
 
-export type FabricPathKindLabel =
-  | 'Direct'
-  | 'NAT direct'
-  | 'Gateway'
-  | 'Relayed'
-  | 'Unreachable'
+export type FabricPathKindLabel = 'Direct' | 'NAT direct' | 'Gateway' | 'Relayed' | 'Unreachable'
 
 export type FabricPathMatrixRow = {
   fromServerId: string
@@ -166,9 +156,7 @@ export type FabricPathMatrixRow = {
   degraded: boolean
 }
 
-export function fabricPathKindLabel(
-  kind: FabricRelayPathKind,
-): FabricPathKindLabel {
+export function fabricPathKindLabel(kind: FabricRelayPathKind): FabricPathKindLabel {
   if (kind === 'direct_nat') return 'NAT direct'
   if (kind === 'gateway') return 'Gateway'
   if (kind === 'relay') return 'Relayed'
@@ -177,7 +165,7 @@ export function fabricPathKindLabel(
 }
 
 export function fabricPathIsDegraded(
-  row: Readonly<{ kind: FabricRelayPathKind; degraded?: boolean }>,
+  row: Readonly<{ kind: FabricRelayPathKind; degraded?: boolean }>
 ): boolean {
   if (row.kind === 'relay') return true
   return row.degraded === true
@@ -185,22 +173,19 @@ export function fabricPathIsDegraded(
 
 export function fabricPathViaLabel(
   viaServerId: string | undefined,
-  serverNameById: ReadonlyMap<string, string>,
+  serverNameById: ReadonlyMap<string, string>
 ): string | undefined {
   if (!viaServerId) return undefined
   return serverNameById.get(viaServerId) ?? viaServerId
 }
 
-function serverLabel(
-  serverId: string,
-  serverNameById: ReadonlyMap<string, string>,
-): string {
+function serverLabel(serverId: string, serverNameById: ReadonlyMap<string, string>): string {
   return serverNameById.get(serverId) ?? serverId
 }
 
 function optionalPathFields(
   path: FabricRelayPathState,
-  serverNameById: ReadonlyMap<string, string>,
+  serverNameById: ReadonlyMap<string, string>
 ): Partial<FabricPathMatrixRow> {
   const fields: Partial<FabricPathMatrixRow> = {}
   if (path.endpoint) fields.endpoint = path.endpoint
@@ -216,7 +201,7 @@ function optionalPathFields(
 function fabricPathMatrixRow(
   fromServerId: string,
   path: FabricRelayPathState,
-  serverNameById: ReadonlyMap<string, string>,
+  serverNameById: ReadonlyMap<string, string>
 ): FabricPathMatrixRow {
   return {
     fromServerId,
@@ -232,10 +217,7 @@ function fabricPathMatrixRow(
   }
 }
 
-function comparePathMatrixRows(
-  a: FabricPathMatrixRow,
-  b: FabricPathMatrixRow,
-): number {
+function comparePathMatrixRows(a: FabricPathMatrixRow, b: FabricPathMatrixRow): number {
   const from = a.fromLabel.localeCompare(b.fromLabel)
   if (from !== 0) return from
   return a.toLabel.localeCompare(b.toLabel)
@@ -246,7 +228,7 @@ function comparePathMatrixRows(
  */
 export function buildFabricPathMatrix(
   relays: readonly RelayRecord[],
-  serverNameById: ReadonlyMap<string, string>,
+  serverNameById: ReadonlyMap<string, string>
 ): FabricPathMatrixRow[] {
   const rows: FabricPathMatrixRow[] = []
   for (const relay of relays) {
@@ -263,7 +245,7 @@ export function buildFabricPathMatrix(
  */
 export function fabricRoutedViaLabels(
   relay: Pick<RelayRecord, 'paths'>,
-  serverNameById: ReadonlyMap<string, string>,
+  serverNameById: ReadonlyMap<string, string>
 ): string[] {
   const labels: string[] = []
   const seen = new Set<string>()
@@ -271,9 +253,7 @@ export function fabricRoutedViaLabels(
     if (path.selected !== 'gateway' || !path.viaServerId) continue
     if (seen.has(path.viaServerId)) continue
     seen.add(path.viaServerId)
-    labels.push(
-      fabricPathViaLabel(path.viaServerId, serverNameById) ?? path.viaServerId,
-    )
+    labels.push(fabricPathViaLabel(path.viaServerId, serverNameById) ?? path.viaServerId)
   }
   return labels.sort((a, b) => a.localeCompare(b))
 }

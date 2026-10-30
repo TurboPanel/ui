@@ -1,11 +1,15 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   applyOrgFabric,
+  deleteOrgFabric,
   fetchOrgFabric,
   isHttpStatusError,
   patchOrgFabricRelay,
+  patchOrgFabricServer,
   saveOrgFabric,
+  type OrgFabricSettings,
   type PatchOrgFabricRelayBody,
+  type PatchOrgFabricServerBody,
 } from '@/lib/instance-api'
 import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
 import { useApiMutation, queryKeys } from '@/lib/query-client'
@@ -14,10 +18,7 @@ function isFabricUnavailableError(error: unknown): boolean {
   return isHttpStatusError(error, 404) || isHttpStatusError(error, 503)
 }
 
-export function useOrgFabric(
-  orgId: string,
-  options?: Readonly<{ enabled?: boolean }>,
-) {
+export function useOrgFabric(orgId: string, options?: Readonly<{ enabled?: boolean }>) {
   return useQuery({
     queryKey: queryKeys.org(orgId).settings.fabric,
     queryFn: () => fetchOrgFabric(orgId),
@@ -33,8 +34,18 @@ export function isOrgFabricUnavailable(error: unknown): boolean {
   return isFabricUnavailableError(error)
 }
 
-export function useSaveOrgFabric(orgId: string) {
+function useFabricSettingsWriter(orgId: string) {
   const queryClient = useQueryClient()
+  return async (data: OrgFabricSettings) => {
+    queryClient.setQueryData(queryKeys.org(orgId).settings.fabric, data)
+    await queryClient.invalidateQueries({
+      queryKey: queryKeys.org(orgId).settings.fabric,
+    })
+  }
+}
+
+export function useSaveOrgFabric(orgId: string) {
+  const writeSettings = useFabricSettingsWriter(orgId)
   return useApiMutation({
     mutationFn: (input: { enabled: boolean; allowRelay?: boolean }) => {
       if (input.allowRelay === undefined) {
@@ -44,18 +55,38 @@ export function useSaveOrgFabric(orgId: string) {
         allowRelay: input.allowRelay,
       })
     },
-    onSuccess: (data) => {
-      queryClient.setQueryData(queryKeys.org(orgId).settings.fabric, data)
-    },
+    onSuccess: writeSettings,
     fallbackError: `Failed to update ${TURBOFABRIC_PRODUCT_NAME}`,
+  })
+}
+
+/** Removes TurboFabric completely (keys and cross-server container networks deleted). */
+export function useRemoveOrgFabric(orgId: string) {
+  const writeSettings = useFabricSettingsWriter(orgId)
+  return useApiMutation({
+    mutationFn: () => deleteOrgFabric(orgId),
+    onSuccess: writeSettings,
+    fallbackError: `Failed to remove ${TURBOFABRIC_PRODUCT_NAME}`,
+  })
+}
+
+/** One server's TurboFabric switch and role. */
+export function usePatchOrgFabricServer(orgId: string, serverId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (body: PatchOrgFabricServerBody) => patchOrgFabricServer(orgId, serverId, body),
+    onSuccess: () =>
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.org(orgId).settings.fabric,
+      }),
+    fallbackError: `Failed to update this server's ${TURBOFABRIC_PRODUCT_NAME} settings`,
   })
 }
 
 export function usePatchOrgFabricRelay(orgId: string, serverId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (body: PatchOrgFabricRelayBody) =>
-      patchOrgFabricRelay(orgId, serverId, body),
+    mutationFn: (body: PatchOrgFabricRelayBody) => patchOrgFabricRelay(orgId, serverId, body),
     onSuccess: () =>
       queryClient.invalidateQueries({
         queryKey: queryKeys.org(orgId).settings.fabric,

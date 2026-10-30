@@ -14,8 +14,7 @@ import {
 } from './fabric-mesh'
 
 function relay(
-  partial: Pick<RelayRecord, 'serverId' | 'role'> &
-    Partial<Omit<RelayRecord, 'serverId' | 'role'>>,
+  partial: Pick<RelayRecord, 'serverId' | 'role'> & Partial<Omit<RelayRecord, 'serverId' | 'role'>>
 ): RelayRecord {
   return {
     address: '10.64.0.1',
@@ -51,17 +50,14 @@ describe('resolveSiteLinks', () => {
         relay({ serverId: 'srv-b', role: 'member' }),
         relay({ serverId: 'srv-c', role: 'member' }),
       ],
-      serverById,
+      serverById
     )
     expect(mesh.datacenterIds).toEqual(['dc-ams', 'dc-fra'])
     expect(mesh.hasUnassignedPeers).toBe(true)
   })
 
   it('treats a missing server as unassigned', () => {
-    const mesh = resolveSiteLinks(
-      [relay({ serverId: 'srv-missing', role: 'member' })],
-      new Map(),
-    )
+    const mesh = resolveSiteLinks([relay({ serverId: 'srv-missing', role: 'member' })], new Map())
     expect(mesh.datacenterIds).toEqual([])
     expect(mesh.hasUnassignedPeers).toBe(true)
   })
@@ -79,7 +75,7 @@ describe('resolveSiteLinks', () => {
             ],
           },
         ],
-      ]),
+      ])
     )
     expect(mesh.datacenterIds).toEqual(['dc-ams', 'dc-fra'])
   })
@@ -94,10 +90,7 @@ describe('formatSiteLinkLabel', () => {
 
   it('labels two sites as A ↔ B', () => {
     expect(
-      formatSiteLinkLabel(
-        { datacenterIds: ['dc-ams', 'dc-fra'], hasUnassignedPeers: false },
-        names,
-      ),
+      formatSiteLinkLabel({ datacenterIds: ['dc-ams', 'dc-fra'], hasUnassignedPeers: false }, names)
     ).toBe('AMS ↔ FRA')
   })
 
@@ -108,50 +101,35 @@ describe('formatSiteLinkLabel', () => {
           datacenterIds: ['dc-ams', 'dc-fra', 'dc-sfo'],
           hasUnassignedPeers: false,
         },
-        names,
-      ),
+        names
+      )
     ).toBe('AMS ↔ 2 sites')
   })
 
   it('labels unassigned-only meshes', () => {
-    expect(
-      formatSiteLinkLabel(
-        { datacenterIds: [], hasUnassignedPeers: true },
-        names,
-      ),
-    ).toBe('Unassigned hosts')
+    expect(formatSiteLinkLabel({ datacenterIds: [], hasUnassignedPeers: true }, names)).toBe(
+      'Unassigned hosts'
+    )
   })
 
   it('labels an empty mesh with no peers', () => {
-    expect(
-      formatSiteLinkLabel(
-        { datacenterIds: [], hasUnassignedPeers: false },
-        names,
-      ),
-    ).toBe('No sites yet')
+    expect(formatSiteLinkLabel({ datacenterIds: [], hasUnassignedPeers: false }, names)).toBe(
+      'No sites yet'
+    )
   })
 
   it('labels a single site alone or with unassigned peers', () => {
     expect(
-      formatSiteLinkLabel(
-        { datacenterIds: ['dc-ams'], hasUnassignedPeers: false },
-        names,
-      ),
+      formatSiteLinkLabel({ datacenterIds: ['dc-ams'], hasUnassignedPeers: false }, names)
     ).toBe('AMS')
     expect(
-      formatSiteLinkLabel(
-        { datacenterIds: ['dc-ams'], hasUnassignedPeers: true },
-        names,
-      ),
+      formatSiteLinkLabel({ datacenterIds: ['dc-ams'], hasUnassignedPeers: true }, names)
     ).toBe('AMS ↔ Unassigned hosts')
   })
 
   it('falls back to the datacenter id when a name is missing', () => {
     expect(
-      formatSiteLinkLabel(
-        { datacenterIds: ['dc-unknown'], hasUnassignedPeers: false },
-        names,
-      ),
+      formatSiteLinkLabel({ datacenterIds: ['dc-unknown'], hasUnassignedPeers: false }, names)
     ).toBe('dc-unknown')
   })
 })
@@ -162,8 +140,8 @@ describe('meshLabelForSite', () => {
       meshLabelForSite(
         'dc-other',
         { datacenterIds: ['dc-ams'], hasUnassignedPeers: false },
-        new Map([['dc-ams', 'AMS']]),
-      ),
+        new Map([['dc-ams', 'AMS']])
+      )
     ).toBeNull()
   })
 
@@ -175,8 +153,8 @@ describe('meshLabelForSite', () => {
         new Map([
           ['dc-ams', 'AMS'],
           ['dc-fra', 'FRA'],
-        ]),
-      ),
+        ])
+      )
     ).toBe('AMS ↔ FRA')
   })
 })
@@ -205,7 +183,7 @@ describe('resolvePrimaryGatewayByDatacenter', () => {
         relay({ serverId: 'srv-b', role: 'gateway' }),
         relay({ serverId: 'srv-c', role: 'member' }),
       ],
-      serverById,
+      serverById
     )
     expect(primary.get('dc-1')).toBe('srv-b')
   })
@@ -232,7 +210,7 @@ describe('resolvePrimaryGatewayByDatacenter', () => {
         relay({ serverId: 'srv-z', role: 'gateway' }),
         relay({ serverId: 'srv-m', role: 'gateway' }),
       ],
-      serverById,
+      serverById
     )
     expect(primary.get('dc-1')).toBe('srv-m')
   })
@@ -240,16 +218,16 @@ describe('resolvePrimaryGatewayByDatacenter', () => {
 
 describe('relayRoleLabel', () => {
   it('labels gateway and member', () => {
-    expect(relayRoleLabel('gateway')).toBe('Gateway')
-    expect(relayRoleLabel('member')).toBe('Member')
+    expect(relayRoleLabel('gateway')).toBe('Shared')
+    expect(relayRoleLabel('member')).toBe('Not Shared')
   })
 })
 
 describe('formatResolvedAdvertisedCidrs', () => {
   it('joins derived IPv4 defaults for display', () => {
-    expect(
-      formatResolvedAdvertisedCidrs(['198.51.100.0/24', '203.0.113.0/24']),
-    ).toBe('198.51.100.0/24, 203.0.113.0/24')
+    expect(formatResolvedAdvertisedCidrs(['198.51.100.0/24', '203.0.113.0/24'])).toBe(
+      '198.51.100.0/24, 203.0.113.0/24'
+    )
   })
 
   it('labels an empty derived list', () => {
@@ -274,9 +252,7 @@ describe('fabricPathIsDegraded', () => {
   })
 
   it('honors the stamped degraded flag for other kinds', () => {
-    expect(fabricPathIsDegraded({ kind: 'direct_lan', degraded: true })).toBe(
-      true,
-    )
+    expect(fabricPathIsDegraded({ kind: 'direct_lan', degraded: true })).toBe(true)
     expect(fabricPathIsDegraded({ kind: 'gateway' })).toBe(false)
   })
 })
@@ -333,7 +309,7 @@ describe('buildFabricPathMatrix', () => {
           ],
         }),
       ],
-      names,
+      names
     )
     expect(rows.map((row) => `${row.fromLabel}→${row.toLabel}`)).toEqual([
       'Server A→Server B',
@@ -378,7 +354,7 @@ describe('buildFabricPathMatrix', () => {
           ],
         }),
       ],
-      names,
+      names
     )
     expect(rows[0]?.fromLabel).toBe('srv-unknown')
     expect(rows[0]?.toLabel).toBe('Server B')
@@ -400,7 +376,7 @@ describe('buildFabricPathMatrix', () => {
           ],
         }),
       ],
-      names,
+      names
     )
     expect(rows[0]?.lastHandshakeAt).toBe('2026-08-19T12:00:00.000Z')
   })
@@ -431,8 +407,8 @@ describe('fabricRoutedViaLabels', () => {
             },
           ],
         },
-        new Map([['srv-gw', 'dc-gw-1']]),
-      ),
+        new Map([['srv-gw', 'dc-gw-1']])
+      )
     ).toEqual(['dc-gw-1'])
   })
 
@@ -449,8 +425,8 @@ describe('fabricRoutedViaLabels', () => {
             },
           ],
         },
-        new Map(),
-      ),
+        new Map()
+      )
     ).toEqual(['srv-unknown-gw'])
   })
 })
