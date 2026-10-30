@@ -538,13 +538,13 @@ export function shortBackupChecksum(checksum: string): string {
 }
 
 /**
- * Instance **422** `failover_requires_trusted_datacenter`. One sentence shared
- * with the network surfaces (`network-error-copy.ts`) so the datacenter
- * Routing panel and the replica picker never explain the same refusal two ways.
+ * Instance **422** `untrusted_network_needs_fabric` (and the older
+ * `failover_requires_trusted_datacenter`). One sentence shared with the
+ * network surfaces (`network-error-copy.ts`) so the datacenter Routing panel
+ * and the replica picker never explain the same refusal two ways.
  */
-export const FAILOVER_REQUIRES_TRUSTED_DATACENTER_COPY =
-  'The only datacenter those servers share is marked untrusted. Failover replicas need a trusted datacenter LAN — mark the datacenter trusted, or add the replica as a read replica over ' +
-  `${TURBOFABRIC_PRODUCT_NAME} instead.`
+export const UNTRUSTED_NETWORK_NEEDS_FABRIC_COPY = `The only datacenter those servers share is marked untrusted, and ${TURBOFABRIC_PRODUCT_NAME} is not carrying traffic between them yet. Turn on ${TURBOFABRIC_PRODUCT_NAME} for both servers, or mark the datacenter trusted.`
+export const FAILOVER_REQUIRES_TRUSTED_DATACENTER_COPY = UNTRUSTED_NETWORK_NEEDS_FABRIC_COPY
 
 const MANAGED_ERROR_COPY: Record<string, string> = {
   server_placement_required: 'Select a server before creating this managed service.',
@@ -577,7 +577,7 @@ const MANAGED_ERROR_COPY: Record<string, string> = {
     'Only failover replicas can be promoted on this path. Convert this replica to failover for a recorded switchover, or use Promote for disaster recovery.',
   managed_automatic_failover_blocked: AUTOMATIC_FAILOVER_BLOCKED_MESSAGE,
   failover_replica_requires_datacenter_transport:
-    'Failover replicas must share a datacenter LAN with the primary — TurboFabric and public paths are not allowed.',
+    'Failover replicas must share a datacenter LAN with the primary, or an untrusted one carried by TurboFabric — public paths are not allowed.',
   managed_member_is_primary: 'Promote another member first — the primary cannot be removed.',
   managed_no_read_targets:
     'This cluster has no replica serving read traffic yet. Add a replica with reads enabled, then create the read-only login.',
@@ -617,6 +617,7 @@ const MANAGED_ERROR_COPY: Record<string, string> = {
     'Those servers share a datacenter but not an address family (one is IPv4-only, the other IPv6-only).',
   private_path_unavailable: 'No private path between that server and the primary.',
   failover_requires_trusted_datacenter: FAILOVER_REQUIRES_TRUSTED_DATACENTER_COPY,
+  untrusted_network_needs_fabric: UNTRUSTED_NETWORK_NEEDS_FABRIC_COPY,
   peer_tunnel_address_required: `The ${TURBOFABRIC_PRODUCT_NAME} path between those datacenters has no overlay address yet.`,
   managed_private_port_exhausted: 'No free private listener port on that server.',
   managed_listener_bind_conflict:

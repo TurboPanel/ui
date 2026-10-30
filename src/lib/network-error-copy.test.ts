@@ -9,10 +9,12 @@ import {
   DOCKER_NETWORK_MTU_INVALID_ERROR,
   FAILOVER_REQUIRES_TRUSTED_DATACENTER_ERROR,
   NETWORK_CIDR_REQUIRED_ERROR,
+  UNTRUSTED_NETWORK_NEEDS_FABRIC_ERROR,
   SUBNET_OVERLAPS_ERROR,
 } from '@/lib/instance-api'
 import {
   FAILOVER_REQUIRES_TRUSTED_DATACENTER_COPY,
+  UNTRUSTED_NETWORK_NEEDS_FABRIC_COPY,
   managedErrorMessage,
 } from '@/lib/managed-services'
 import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
@@ -52,28 +54,37 @@ describe('network-error-copy', () => {
   it('keeps the existing subnet_overlaps wording', () => {
     expect(NETWORK_ERROR_COPY[SUBNET_OVERLAPS_ERROR]).toBe(SUBNET_OVERLAPS_COPY)
     expect(SUBNET_OVERLAPS_COPY).toBe(
-      'That range overlaps an existing subnet in this organization.',
+      'That range overlaps an existing subnet in this organization.'
     )
   })
 
   it('reuses the managed failover-trust sentence instead of forking it', () => {
     expect(NETWORK_ERROR_COPY[FAILOVER_REQUIRES_TRUSTED_DATACENTER_ERROR]).toBe(
-      FAILOVER_REQUIRES_TRUSTED_DATACENTER_COPY,
+      FAILOVER_REQUIRES_TRUSTED_DATACENTER_COPY
     )
     expect(
-      managedErrorMessage(httpError(422, FAILOVER_REQUIRES_TRUSTED_DATACENTER_ERROR), 'x'),
+      managedErrorMessage(httpError(422, FAILOVER_REQUIRES_TRUSTED_DATACENTER_ERROR), 'x')
     ).toBe(FAILOVER_REQUIRES_TRUSTED_DATACENTER_COPY)
+  })
+
+  it('maps the TurboFabric refusal code to the same sentence', () => {
+    expect(NETWORK_ERROR_COPY[UNTRUSTED_NETWORK_NEEDS_FABRIC_ERROR]).toBe(
+      UNTRUSTED_NETWORK_NEEDS_FABRIC_COPY
+    )
+    expect(managedErrorMessage(httpError(422, UNTRUSTED_NETWORK_NEEDS_FABRIC_ERROR), 'x')).toBe(
+      UNTRUSTED_NETWORK_NEEDS_FABRIC_COPY
+    )
   })
 
   it('extracts a known code from an apiFetch message and ignores human text', () => {
     expect(networkErrorCode(httpError(409, CIDR_OVERLAPS_RESERVED_ERROR))).toBe(
-      CIDR_OVERLAPS_RESERVED_ERROR,
+      CIDR_OVERLAPS_RESERVED_ERROR
     )
     expect(networkErrorCode(httpError(400, NETWORK_CIDR_REQUIRED_ERROR))).toBe(
-      NETWORK_CIDR_REQUIRED_ERROR,
+      NETWORK_CIDR_REQUIRED_ERROR
     )
     expect(
-      networkErrorCode(new Error('x failed: HTTP 400: Invalid addressPools base (entry 0)')),
+      networkErrorCode(new Error('x failed: HTTP 400: Invalid addressPools base (entry 0)'))
     ).toBeNull()
     expect(networkErrorCode(new Error('offline'))).toBeNull()
     expect(networkErrorCode('nope')).toBeNull()
@@ -99,7 +110,7 @@ describe('network-error-copy', () => {
       conflictingCidr: '10.200.5.0/24',
     })
     expect(networkErrorMessage(err, 'Failed')).toBe(
-      `${NETWORK_ERROR_COPY[CIDR_OVERLAPS_DOCKER_NETWORK_ERROR]} (10.200.5.0/24)`,
+      `${NETWORK_ERROR_COPY[CIDR_OVERLAPS_DOCKER_NETWORK_ERROR]} (10.200.5.0/24)`
     )
   })
 
@@ -115,7 +126,7 @@ describe('network-error-copy', () => {
       conflictingCidr: null,
     })
     expect(networkErrorMessage(httpError(400, DOCKER_NETWORK_MTU_INVALID_ERROR), 'x')).toBe(
-      NETWORK_ERROR_COPY[DOCKER_NETWORK_MTU_INVALID_ERROR],
+      NETWORK_ERROR_COPY[DOCKER_NETWORK_MTU_INVALID_ERROR]
     )
   })
 })
