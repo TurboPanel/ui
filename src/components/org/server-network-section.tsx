@@ -18,7 +18,7 @@ import {
   type ServerDetailRecord,
   type ServerReportedIp,
 } from '@/lib/instance-api'
-import { datacenterHref, networkFabricHref } from '@/lib/org-navigation'
+import { datacenterHref, serversFabricHref } from '@/lib/org-navigation'
 import { useOrgFabric } from '@/lib/queries/fabric'
 import { queryKeys, useCan } from '@/lib/query-client'
 import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
@@ -206,7 +206,7 @@ function ServerMeshMembershipPanel({
         <View style={panelStyles.detailCard}>
           <Pressable
             style={webPointer}
-            onPress={() => router.push(networkFabricHref(orgId) as Href)}
+            onPress={() => router.push(serversFabricHref(orgId) as Href)}
             accessibilityRole="link"
             accessibilityLabel={`Open ${TURBOFABRIC_PRODUCT_NAME}`}
           >

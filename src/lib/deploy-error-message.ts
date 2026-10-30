@@ -59,7 +59,7 @@ export function deployErrorMessage(err: unknown): string {
   if (message.includes('acme_requires_org_opt_in')) {
     return (
       serverSentence(message) ??
-      "A domain asks for a Let's Encrypt certificate, but this organization does not allow Let's Encrypt certificates. An organization owner or manager can turn on \"Allow Let's Encrypt certificates\" under Organization settings \u203a Domains & certificates, or pick a different certificate."
+      "A domain asks for a Let's Encrypt certificate, but this organization does not allow Let's Encrypt certificates. An organization owner or manager can turn on \"Allow Let's Encrypt certificates\" under Organization Settings \u203a Domains & Certificates, or pick a different certificate."
     )
   }
   if (message.includes('letsencrypt_hostname_unsupported')) {

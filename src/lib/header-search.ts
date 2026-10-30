@@ -80,8 +80,6 @@ export function searchDestinations(
     ...page('activity'),
     ...page('servers'),
     ...page('managed', 'Managed Databases'),
-    ...page('network'),
-    ...page('access'),
     {
       id: 'org-settings',
       name: 'Organization Settings',

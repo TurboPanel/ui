@@ -6,7 +6,8 @@ import {
   ORG_SETTINGS_TAB_IDS,
   ORG_SETTINGS_TAB_LABELS,
   ORG_SIDEBAR_AREA_IDS,
-  ORG_SIDEBAR_MORE_AREA_IDS,
+  SERVERS_NETWORK_SUB_ROUTE_IDS,
+  networkRedirectHref,
   ORG_TAB_AREA_IDS,
   orgProjectSettingsHref,
   orgSettingsTabHref,
@@ -31,11 +32,11 @@ import {
   orgSearchHref,
   serversAddHref,
   datacenterNewHref,
-  networkAddressesHref,
-  networkDockerHref,
-  networkFabricHref,
-  networkFirewallHref,
-  networkReservedHref,
+  serversAddressesHref,
+  serversDockerHref,
+  serversFabricHref,
+  serversFirewallHref,
+  serversReservedHref,
   replaceOrganization,
   serverDetailHref,
   serverDetailTabHref,
@@ -59,8 +60,8 @@ describe('orgAreaFromPathname', () => {
 
   it.each([
     {
-      pathname: '/org/network/fabric',
-      areaId: 'network',
+      pathname: '/org/servers/fabric',
+      areaId: 'servers',
       subRouteId: 'fabric',
       pathSegment: 'fabric',
     },
@@ -274,19 +275,39 @@ describe('defaultOrgDashboardHref', () => {
 })
 
 describe('sidebar areas', () => {
-  it('lists Projects, Activity, Servers, with the unchanged areas below', () => {
+  it('lists only Projects, Activity, Servers', () => {
     expect([...ORG_SIDEBAR_AREA_IDS]).toEqual(['projects', 'activity', 'servers'])
-    expect([...ORG_SIDEBAR_MORE_AREA_IDS]).toEqual(['network', 'access'])
-    const known = ORG_AREAS.map((area) => area.id) as string[]
-    for (const id of [...ORG_SIDEBAR_AREA_IDS, ...ORG_SIDEBAR_MORE_AREA_IDS]) {
-      expect(known).toContain(id)
+    const listed: readonly string[] = ORG_SIDEBAR_AREA_IDS
+    for (const id of ['managed', 'network', 'access', 'billing']) {
+      expect(listed).not.toContain(id)
     }
+    expect(managedSettingsHref('org-1')).toBe('/org-1/managed/settings')
   })
 
-  it('no longer lists Managed: managed databases are a filter on Projects', () => {
-    const listed: readonly string[] = [...ORG_SIDEBAR_AREA_IDS, ...ORG_SIDEBAR_MORE_AREA_IDS]
-    expect(listed).not.toContain('managed')
-    expect(managedSettingsHref('org-1')).toBe('/org-1/managed/settings')
+  it('puts the old Network pages under Servers, after its own pages', () => {
+    const servers = ORG_AREAS.find((area) => area.id === 'servers')
+    expect(servers?.subRoutes.map((sub) => sub.label)).toEqual([
+      'Datacenters',
+      'Pending Keys',
+      'Settings',
+      'TLS',
+      'TurboFabric',
+      'Addresses',
+      'Docker Networks',
+      'Reserved Ranges',
+      'Cloudflare Accounts',
+      'Tunnels',
+      'Firewall',
+    ])
+    expect(ORG_AREAS.find((area) => area.id === 'network')?.subRoutes).toEqual([])
+  })
+
+  it('sends old Network links to the same page under Servers', () => {
+    for (const page of SERVERS_NETWORK_SUB_ROUTE_IDS) {
+      expect(networkRedirectHref('o', page)).toBe(`/o/servers/${page}`)
+    }
+    expect(networkRedirectHref('o', undefined)).toBe('/o/servers')
+    expect(networkRedirectHref('o', 'links')).toBe('/o/servers')
   })
 
   it('keeps the native tab set to the same three areas', () => {
@@ -299,7 +320,7 @@ describe('organization settings tabs', () => {
     expect([...ORG_SETTINGS_TAB_IDS]).toEqual([
       'general',
       'projects',
-      'members',
+      'access',
       'notifications',
       'domains',
       'git',
@@ -308,16 +329,16 @@ describe('organization settings tabs', () => {
     expect(ORG_SETTINGS_TAB_IDS.map((id) => ORG_SETTINGS_TAB_LABELS[id])).toEqual([
       'General',
       'Project Settings',
-      'Members',
+      'Access',
       'Notifications',
-      'Domains & certificates',
-      'Git connections',
+      'Domains & Certificates',
+      'Git Connections',
       'Principals',
     ])
     expect(ORG_SETTINGS_TAB_IDS.map((id) => orgSettingsTabHref('o', id))).toEqual([
       '/o/manage',
       '/o/manage?tab=projects',
-      '/o/manage?tab=members',
+      '/o/manage?tab=access',
       '/o/manage?tab=notifications',
       '/o/manage?tab=domains',
       '/o/manage?tab=git',
@@ -334,8 +355,9 @@ describe('organization settings tabs', () => {
     expect(parseOrgSettingsTab(undefined)).toBe('general')
     expect(parseOrgSettingsTab(null)).toBe('general')
     expect(parseOrgSettingsTab('nope')).toBe('general')
-    expect(parseOrgSettingsTab('members')).toBe('members')
-    expect(parseOrgSettingsTab(['git', 'members'])).toBe('git')
+    expect(parseOrgSettingsTab('access')).toBe('access')
+    expect(parseOrgSettingsTab('members')).toBe('access')
+    expect(parseOrgSettingsTab(['git', 'access'])).toBe('git')
     expect(parseOrgSettingsTab([])).toBe('general')
   })
 })
@@ -351,10 +373,10 @@ describe('serversDatacentersHref', () => {
     expect(serversDatacentersHref('org-1')).toBe('/org-1/servers/datacenters')
     expect(datacenterHref('org-1', 'dc-9')).toBe('/org-1/servers/datacenters/dc-9')
     expect(datacenterNewHref('org-1')).toBe('/org-1/servers/datacenters/new')
-    expect(networkAddressesHref('org-1')).toBe('/org-1/network/addresses')
-    expect(networkDockerHref('org-1')).toBe('/org-1/network/docker')
-    expect(networkReservedHref('org-1')).toBe('/org-1/network/reserved')
-    expect(networkFirewallHref('org-1')).toBe('/org-1/network/firewall')
+    expect(serversAddressesHref('org-1')).toBe('/org-1/servers/addresses')
+    expect(serversDockerHref('org-1')).toBe('/org-1/servers/docker')
+    expect(serversReservedHref('org-1')).toBe('/org-1/servers/reserved')
+    expect(serversFirewallHref('org-1')).toBe('/org-1/servers/firewall')
     expect(serversPendingKeysHref('org-1')).toBe('/org-1/servers/keys')
   })
 })
@@ -369,8 +391,8 @@ describe('remaining org href builders', () => {
     expect(projectGitSourcesHref('org-1')).toBe('/org-1/projects/git-sources')
     expect(projectRepositoriesHref('org-1')).toBe('/org-1/projects/repositories')
     expect(orgAreaHref('org-1', 'network')).toBe('/org-1/network')
-    expect(networkFabricHref('org-1')).toBe('/org-1/network/fabric')
-    expect(orgRouteHref('org-1', 'network', 'addresses')).toBe('/org-1/network/addresses')
+    expect(serversFabricHref('org-1')).toBe('/org-1/servers/fabric')
+    expect(orgRouteHref('org-1', 'servers', 'addresses')).toBe('/org-1/servers/addresses')
   })
 
   it('replaceOrganization uses the singular org-console identity', () => {

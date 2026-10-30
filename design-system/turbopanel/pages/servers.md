@@ -23,7 +23,7 @@
 - **Pending keys** sub-route (`/servers/keys`) for unused registration keys (not yet bound to a host). Owner-only list + two-press delete. Copy says **keys**, never “license”.  
 - **Settings** sub-route (`/servers/settings`) for org default timezone, host defaults (SSH port, NTP, TurboFabric preference), and seat capacity  
 - **TLS** sub-route (`/servers/tls`) for the organization certificate library  
-- Networking topology: **Datacenters** under Servers (private subnets + members); **Addresses**, **Docker networks**, and TurboFabric under the **Network** area — see `pages/datacenters.md` and `pages/network.md`  
+- Networking topology: all under Servers — **Datacenters** (private subnets + members), then the old Network pages **TurboFabric**, **Addresses**, **Docker Networks**, **Reserved Ranges**, **Cloudflare Accounts**, **Tunnels** and **Firewall** at `/servers/<page>` (`/network/<page>` redirects) — see `pages/datacenters.md` and `pages/network.md`  
 - Page title uses shared `orgPanelStyles.pageTitle`; route context lives in `OrgHeader` eyebrow  
 - No hero, no decorative bento above the table
 - No inventory KPI strip on this page — org Overview owns Servers / Online / Cores / RAM tiles
