@@ -192,7 +192,35 @@ export function knownAccountNames(
 }
 
 /**
- * What "Add system user" has to write while apps are waiting for an account.
+ * Aliases the documents declare that no account row stands for yet, in the
+ * order first declared. The panel creates those rows on the next deploy, so
+ * until then this is the only place they show. A row stands for an alias when
+ * it came from it, or when it is a hand-made account with the same name (the
+ * deploy adopts that one instead of making another).
+ */
+export function declaredAccountsWithoutRows(
+  documents: readonly (ComposeDocument | null | undefined)[],
+  rows: readonly AccountRow[]
+): string[] {
+  const covered = new Set<string>()
+  for (const row of rows) {
+    covered.add(row.username.toLowerCase())
+    if (row.metadata?.composeAlias) covered.add(row.metadata.composeAlias.toLowerCase())
+  }
+  const missing: string[] = []
+  for (const document of documents) {
+    for (const alias of Object.keys(readComposePrincipals(document))) {
+      const key = alias.toLowerCase()
+      if (covered.has(key)) continue
+      covered.add(key)
+      missing.push(alias)
+    }
+  }
+  return missing
+}
+
+/**
+ * What "Add Hosting Account" has to write while apps are waiting for an account.
  *
  * Apps wait in whichever document declares them: the Base, or an
  * environment's own compose (a project created from a repository keeps its

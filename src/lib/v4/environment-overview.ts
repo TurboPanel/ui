@@ -23,6 +23,7 @@ import type {
   ConfigViewSide,
   ContainerRecord,
   EnvironmentConfigViewResponse as EnvironmentConfigView,
+  HostingCertificate,
   HostingRecord,
   IpRecord,
   OrgServerRecord,
@@ -231,9 +232,50 @@ export function certificateKey(
   if (record === undefined) return 'unknown'
   if (record.source === 'self_signed') return 'test'
   const status = record.metadata.status
-  if (status === 'ready' || status === 'automatic') return 'ok'
+  if (status === 'automatic') return automaticKey(record.metadata.acme)
+  if (status === 'ready') return 'ok'
   if (status === 'pending') return 'issuing'
   return 'renewal_failed'
+}
+
+/**
+ * An automatic row read without the server's certificate block (an older
+ * control plane): a reported failure says so, anything else keeps the word it
+ * always had.
+ */
+function automaticKey(acme: TlsRecord['metadata']['acme']): string {
+  if (acme?.lastError) return acme.lastIssuedAt ? 'renewal_failed' : 'issue_failed'
+  return 'ok'
+}
+
+/** An uploaded certificate is secure until it runs out: near the end it warns, after it fails. */
+function uploadedKey(cert: HostingCertificate): string {
+  if (cert.uploadedExpiryWarning === 'expired') return 'cert_expired'
+  return cert.uploadedExpiryWarning === 'none' ? 'ok' : 'expiring'
+}
+
+/**
+ * The certificate word from the block the server derives for each hosting
+ * (newer control planes): it knows whether a deploy has carried the
+ * certificate yet and whether a server has reported on it, so a domain is
+ * never called secure before its first deploy.
+ */
+export function hostingCertificateKey(cert: HostingCertificate): string {
+  switch (cert.state) {
+    case 'secure':
+      return 'ok'
+    case 'uploaded':
+      return uploadedKey(cert)
+    case 'waiting_for_dns':
+      return 'waiting'
+    case 'renewal_failed':
+      return cert.lastIssuedAt ? 'renewal_failed' : 'issue_failed'
+    case 'issuing':
+      if (cert.needsDeploy) return 'cert_not_deployed'
+      return cert.serverProgress === 'not_reported' ? 'cert_not_reported' : 'issuing'
+    default:
+      return 'test'
+  }
 }
 
 /** Shorter certificate words where the full one would not fit a map box. */
@@ -321,7 +363,9 @@ function hostingDomains(
   serviceName: string,
   source: OverviewSource
 ): MapDomain[] {
-  const key = certificateKey(hosting.tlsId, source.tls)
+  const key = hosting.certificate
+    ? hostingCertificateKey(hosting.certificate)
+    : certificateKey(hosting.tlsId, source.tls)
   const label = CERTIFICATE_BADGE_WORDS[key] ?? statusInfo(key).label
   const servedFrom = servedFromOf(hosting, source)
   return hostsOf(hosting).map((host) => ({

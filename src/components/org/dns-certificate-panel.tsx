@@ -41,6 +41,7 @@ import {
 } from '@/lib/queries/dns-certificates'
 import { useTunnelCarriers } from '@/lib/queries/tunnels'
 import { spacing } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 const MODE_OPTIONS = [
   { value: 'exact', label: 'Exact Names' },
@@ -168,7 +169,7 @@ function OrderForm({
         )}
         <SettingRow
           label="Test Certificates"
-          description="Order from Let’s Encrypt’s test service instead. Browsers do not trust these, and they cannot be used on a site. For trying this out."
+          description="Order from Let’s Encrypt’s test service instead. Test certificates are only for trying out ordering. Browsers show a security warning for them, so they can’t be attached to a site."
         >
           <Toggle
             value={test}
@@ -234,7 +235,8 @@ function CertificateCard({
       ))}
       {certificate.staging ? (
         <Text style={panelStyles.muted}>
-          Browsers do not trust a Test Certificate, so it cannot be used on a site.
+          Test certificates are only for trying out ordering. Browsers show a security warning for
+          them, so they can&apos;t be attached to a site.
         </Text>
       ) : null}
       {certificate.lastError ? (
@@ -289,6 +291,25 @@ function OrderedList({ orgId }: Readonly<{ orgId: string }>) {
 }
 
 /**
+ * The order form waits for the Cloudflare accounts: until they load it cannot
+ * tell whether one is connected, so it says loading (or why it could not
+ * load) instead of asking for an account.
+ */
+function CarriersPending({ error }: Readonly<{ error: unknown }>) {
+  return (
+    <SectionPanel title="Order A Certificate">
+      {error ? (
+        <Text style={panelStyles.error}>
+          {userErrorMessage(error, 'Could not load the Cloudflare accounts.')}
+        </Text>
+      ) : (
+        <LoadingState label="Loading Cloudflare accounts…" />
+      )}
+    </SectionPanel>
+  )
+}
+
+/**
  * Certificates TurboPanel orders itself through a DNS challenge: the order
  * form (exact names, or a wildcard that has to be asked for) and the orders'
  * progress. Delete one in the certificate list above.
@@ -300,7 +321,11 @@ export function DnsCertificatePanel({
   const carriers = useTunnelCarriers(orgId)
   return (
     <View style={styles.root}>
-      <OrderForm orgId={orgId} acmeEnabled={acmeEnabled} carriers={carriers.data?.carriers ?? []} />
+      {carriers.data ? (
+        <OrderForm orgId={orgId} acmeEnabled={acmeEnabled} carriers={carriers.data.carriers} />
+      ) : (
+        <CarriersPending error={carriers.error} />
+      )}
       <SectionPanel
         title="Ordered By TurboPanel"
         hint="Certificates TurboPanel orders and renews itself"

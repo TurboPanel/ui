@@ -255,9 +255,10 @@ export function parseRepositoryCompose(content: string): ComposeDocument | undef
  * Caddy by default: a static site then needs no engine choice, no PHP pool, and
  * no vhost tuning at all. PHP is one field away on the Services tab.
  *
- * No account is invented here either: the operator declares one in the
- * Accounts section of the draft (or after create), same as the repository
- * lanes.
+ * The card promises "a directory and an account", so the wizard passes the
+ * project's name (`projectAccountAlias`) and the site runs as that account,
+ * same as the repository lanes. The operator can rename or remove it in the
+ * Accounts section of the draft.
  */
 export function seedHostingCompose(params: {
   serviceName?: string

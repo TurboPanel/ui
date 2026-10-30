@@ -172,7 +172,7 @@ export function setupCertificateNote(
   if (!letsEncryptCanIssueFor(input.hostname)) return null
   if (input.acmeEnabled) {
     return {
-      text: 'Gets a free Let’s Encrypt certificate on the first deploy, once the name points at the server. It renews by itself.',
+      text: 'Gets a free Let’s Encrypt certificate on the first deploy, once the name points at the server. It renews by itself. To use a certificate from your library (Servers › TLS) instead, pick it in the Hosting tab after saving.',
       openSettings: false,
     }
   }

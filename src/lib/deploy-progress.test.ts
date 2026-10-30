@@ -5,6 +5,7 @@ import {
   counterDigits,
   elapsedSeconds,
   failedStep,
+  certificateStepNote,
   firstTimeSetupCaption,
   formatElapsed,
   gerundLabel,
@@ -359,5 +360,52 @@ describe('liveProgressHeadline', () => {
     expect(liveProgressHeadline({ ...plan, runningSince: null }, true)).toBe(
       'Step 2 of 6 · Installing Node 22'
     )
+  })
+})
+
+describe('certificateStepNote', () => {
+  // The payload the daemon sends once the certificates step is done: the step
+  // keeps its note as `detail` (the daemon's `done(id, { note })`).
+  const sent = {
+    current: 'health',
+    steps: [
+      {
+        id: 'start',
+        label: 'Start the app',
+        state: 'done' as const,
+        startedAt: '2026-10-29T10:00:00.000Z',
+        finishedAt: '2026-10-29T10:00:05.000Z',
+      },
+      {
+        id: 'certificates',
+        label: 'Set up certificates',
+        state: 'done' as const,
+        startedAt: '2026-10-29T10:00:05.000Z',
+        finishedAt: '2026-10-29T10:00:06.000Z',
+        detail: 'Requested in the background; the Certificate panel shows progress: a.example.com',
+      },
+      {
+        id: 'health',
+        label: 'Check it answers',
+        state: 'running' as const,
+        startedAt: '2026-10-29T10:00:06.000Z',
+      },
+    ],
+  }
+
+  it('shows the line the finished certificates step kept', () => {
+    expect(certificateStepNote(stepsOf(sent))).toBe(
+      'Requested in the background; the Certificate panel shows progress: a.example.com'
+    )
+  })
+
+  it('shows nothing while the step runs, or when it kept no line', () => {
+    const running = sent.steps.map((step) =>
+      step.id === 'certificates' ? { ...step, state: 'running' as const } : step
+    )
+    expect(certificateStepNote(running)).toBeNull()
+    const silent = sent.steps.map(({ detail: _detail, ...step }) => step)
+    expect(certificateStepNote(silent)).toBeNull()
+    expect(certificateStepNote(undefined)).toBeNull()
   })
 })

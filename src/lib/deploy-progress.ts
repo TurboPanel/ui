@@ -287,6 +287,19 @@ export function firstTimeSetupCaption(
   return installing ? FIRST_TIME_SETUP_CAPTION : null
 }
 
+/**
+ * The line a finished certificates step leaves behind: the server asked for a
+ * certificate in the background and says where to watch it. Null until that
+ * step is done, or when it said nothing.
+ */
+export function certificateStepNote(
+  steps: readonly CommandProgressStep[] | null | undefined
+): string | null {
+  const step = stepsOf({ steps }).find((entry) => entry.id === 'certificates')
+  const detail = step?.state === 'done' ? step.detail?.trim() : undefined
+  return detail || null
+}
+
 export type StepNodeInfo = Readonly<{
   /** The state in a word, read beside the label ("Install Docker: done"). */
   word: string

@@ -3808,11 +3808,29 @@ export type HostingRecord = {
 export type HostingCertificateState =
   'test_certificate' | 'uploaded' | 'secure' | 'waiting_for_dns' | 'issuing' | 'renewal_failed'
 
+export type HostingDnsHostname = {
+  hostname: string
+  /** Has an address, and every address is a serving server's. */
+  resolves: boolean
+  addresses: string[]
+  /** Answers that are not a serving server's address (newer control planes). */
+  wrongAddresses?: string[]
+  /** Port 80 from the panel; absent when not checked. */
+  port80?: 'open' | 'closed'
+  /** Whether CAA lets Let’s Encrypt issue; absent when unknown. */
+  caa?: 'allowed' | 'blocked'
+  /** What stops this name, in plain words, written by the server. */
+  problem?: string
+}
+
 export type HostingDnsReport = {
   ready: boolean
   checkedAt: string
-  hostnames: { hostname: string; resolves: boolean; addresses: string[] }[]
+  hostnames: HostingDnsHostname[]
   expectedAddresses: string[]
+  /** When a waiting request is checked again. */
+  nextCheckAt?: string
+  checks?: number
 }
 
 /** What a hosting shows about its certificate; the server decides every field. */
@@ -3830,6 +3848,16 @@ export type HostingCertificate = {
   /** The hosting's www choice (`options.www`); Let’s Encrypt covers every name it adds. */
   www: 'off' | 'both' | 'www-to-root' | 'root-to-www'
   needsDeploy: boolean
+  /**
+   * While `issuing`: no deploy has carried it yet, a server has it (or the
+   * deploy just finished), or no server has reported since the deploy.
+   * Absent on older control planes.
+   */
+  serverProgress?: 'waiting_for_deploy' | 'working' | 'not_reported' | null
+  /** The last DNS check while waiting, or the last reported failure. */
+  lastTriedAt?: string | null
+  /** When the panel checks a waiting request again. */
+  nextTryAt?: string | null
 }
 
 export type UseLetsEncryptResult = {
@@ -9880,6 +9908,50 @@ export async function deleteManagedUser(
     `${CLIENT_API}/environments/${environmentId}/managed/users/${encodeURIComponent(principalId)}`,
     { method: 'DELETE' }
   )
+}
+
+/** `GET …/managed/backup-login`: the cluster's one backup login, or `null`. */
+export async function fetchManagedBackupLogin(
+  environmentId: string
+): Promise<{ login: ManagedUserRecord | null }> {
+  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/managed/backup-login`)
+}
+
+/**
+ * Create the cluster's backup login: read-only rights a backup tool needs to
+ * copy every database, always routed to the primary. `allowedSources` is
+ * required and never `any` (400 `managed_backup_login_sources_required`); 409
+ * `managed_backup_login_exists` / `managed_backup_login_needs_daemon_update`.
+ * The returned `password` is **show-once**.
+ */
+export async function createManagedBackupLogin(
+  environmentId: string,
+  body: {
+    allowedSources: string[]
+    /** Omit for `backup`. */
+    username?: string
+    maxConnections?: number
+  }
+): Promise<{
+  ok: true
+  login: ManagedUserRecord
+  password: string
+  commandId: string
+  serverId: string
+}> {
+  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/managed/backup-login`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+/** Delete the cluster's backup login (the server drops the account through an apply). */
+export async function deleteManagedBackupLogin(
+  environmentId: string
+): Promise<ManagedCommandResponse> {
+  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/managed/backup-login`, {
+    method: 'DELETE',
+  })
 }
 
 export async function fetchManagedDatabases(

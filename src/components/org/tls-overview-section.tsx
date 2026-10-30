@@ -54,6 +54,25 @@ function tlsSourceLabel(row: TlsRecord): string {
   }
 }
 
+/**
+ * Who issued a certificate and from when it is valid, for every row the
+ * stored-copy lines leave out (they cover Let's Encrypt rows the serving host
+ * renews). A certificate TurboPanel ordered by DNS challenge is kept as an
+ * upload, so it is read here too. Placeholder values (empty issuer, epoch
+ * start) say nothing and are skipped.
+ */
+export function tlsIssuerLines(row: TlsRecord, locale?: string): string[] {
+  if (row.source === 'lets_encrypt') return []
+  const { issuer, notBefore } = row.metadata
+  const lines: string[] = []
+  if (issuer) lines.push(`Issued by ${issuer}`)
+  const started = notBefore ? Date.parse(notBefore) : Number.NaN
+  if (Number.isFinite(started) && started > 0) {
+    lines.push(`Valid from ${new Date(started).toLocaleString(locale)}`)
+  }
+  return lines
+}
+
 function formatSans(row: TlsRecord): string {
   return row.metadata.dnsNames.join(', ') || '—'
 }
@@ -110,7 +129,7 @@ function TlsCertificateList({
           {line}
         </Text>
       ))}
-      {tlsStoredCopyLines(row).map((line) => (
+      {[...tlsIssuerLines(row), ...tlsStoredCopyLines(row)].map((line) => (
         <Text key={line} style={panelStyles.muted}>
           {line}
         </Text>

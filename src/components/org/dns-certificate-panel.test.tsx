@@ -9,6 +9,8 @@ type Props = Readonly<Record<string, unknown> & { children?: ReactNode }>
 
 const state = vi.hoisted(() => ({
   carriers: [] as unknown[],
+  carriersLoaded: true,
+  carriersError: null as unknown,
   certificates: [] as unknown[],
   order: vi.fn(async (_body: unknown) => ({
     ok: true,
@@ -92,7 +94,10 @@ vi.mock('@/components/ui', () => ({
   ),
 }))
 vi.mock('@/lib/queries/tunnels', () => ({
-  useTunnelCarriers: () => ({ data: { carriers: state.carriers } }),
+  useTunnelCarriers: () => ({
+    data: state.carriersLoaded ? { carriers: state.carriers } : undefined,
+    error: state.carriersError,
+  }),
 }))
 vi.mock('@/lib/queries/dns-certificates', () => ({
   useAdvanceRunningOrders: (_org: string, ids: readonly string[]) => state.advanced.push(ids),
@@ -144,6 +149,8 @@ const cert = (extra: Partial<DnsCertificate> = {}): DnsCertificate => ({
 beforeEach(() => {
   state.carriers = [carrier('k1')]
   state.certificates = []
+  state.carriersLoaded = true
+  state.carriersError = null
   state.order.mockClear()
   state.check.mockClear()
   state.retry.mockClear()
@@ -161,6 +168,21 @@ describe('the order form', () => {
       screen.getByText(/Connect a Cloudflare account with an API Token that can edit DNS/)
     ).toBeTruthy()
     expect(screen.queryByText('Order Certificate')).toBeNull()
+  })
+
+  it('says loading, not that an account is needed, while the accounts load', () => {
+    state.carriersLoaded = false
+    render(<DnsCertificatePanel orgId="o1" acmeEnabled />)
+    expect(screen.getByText('Loading Cloudflare accounts…')).toBeTruthy()
+    expect(screen.queryByText(/Connect a Cloudflare account/)).toBeNull()
+  })
+
+  it('says why the accounts could not be read', () => {
+    state.carriersLoaded = false
+    state.carriersError = new Error('Network down')
+    render(<DnsCertificatePanel orgId="o1" acmeEnabled />)
+    expect(screen.queryByText('Loading Cloudflare accounts…')).toBeNull()
+    expect(screen.queryByText(/Connect a Cloudflare account/)).toBeNull()
   })
 
   it('orders exact names by default, with the test service off', async () => {
@@ -227,6 +249,7 @@ describe('the orders list', () => {
       screen.getByText(/Waiting for Let’s Encrypt to check the records\. Step 3 of 4/)
     ).toBeTruthy()
     expect(screen.getByText('Test Certificate')).toBeTruthy()
+    expect(screen.getByText(/Test certificates are only for trying out ordering\./)).toBeTruthy()
     fireEvent.click(screen.getByText('Check Now'))
     await waitFor(() => expect(state.check).toHaveBeenCalledWith('c1'))
   })

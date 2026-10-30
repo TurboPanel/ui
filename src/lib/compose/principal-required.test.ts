@@ -3,6 +3,7 @@ import type { ComposeDocument } from '@/lib/compose'
 import {
   attachSoleAccountToNewApps,
   declareAccountAndAttach,
+  declaredAccountsWithoutRows,
   knownAccountNames,
   planAccountDeclaration,
   principalRequiredServiceNames,
@@ -345,5 +346,35 @@ describe('accounts made by hand on Bindings', () => {
     const after = { ...one, data: { ...one.data, services: { web: plainContainer, app: nodeApp } } }
     expect(attachSoleAccountToNewApps(one, after, new Set(['shop', 'site']))).toBe(after)
     expect(attachSoleAccountToNewApps(one, after, new Set(['shop']))).not.toBe(after)
+  })
+})
+
+describe('declaredAccountsWithoutRows', () => {
+  const declaring = (...aliases: string[]) =>
+    writeComposePrincipals(
+      documentWith({ site: uploadedSite }),
+      Object.fromEntries(aliases.map((alias) => [alias, {}]))
+    )
+
+  it('lists the aliases no row stands for yet, each once', () => {
+    expect(
+      declaredAccountsWithoutRows([declaring('website'), declaring('website', 'worker')], [])
+    ).toEqual(['website', 'worker'])
+  })
+
+  it('leaves out an alias a row came from or a hand-made row shares', () => {
+    expect(
+      declaredAccountsWithoutRows(
+        [declaring('website', 'worker', 'Shop')],
+        [
+          { username: 'website-x7', metadata: { composeAlias: 'website' } },
+          { username: 'shop', metadata: null },
+        ]
+      )
+    ).toEqual(['worker'])
+  })
+
+  it('is empty for documents that declare nothing', () => {
+    expect(declaredAccountsWithoutRows([null, undefined, documentWith({})], [])).toEqual([])
   })
 })

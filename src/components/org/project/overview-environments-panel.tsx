@@ -472,11 +472,11 @@ function MissingPrincipalBindingsLink({ environmentId }: Readonly<{ environmentI
     <Link href={projectEnvironmentBindingsHref(orgId, projectId, environmentId) as Href} asChild>
       <Pressable
         accessibilityRole="link"
-        accessibilityLabel="Assign a system user on the Bindings tab"
+        accessibilityLabel="Assign a Hosting Account on the Bindings tab"
         style={webPointer}
       >
         <Text style={styles.statusText}>
-          No system user — <Text style={styles.hostingLink}>assign one in Bindings</Text>
+          No Hosting Account — <Text style={styles.hostingLink}>assign one in Bindings</Text>
         </Text>
       </Pressable>
     </Link>
