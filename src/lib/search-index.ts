@@ -144,7 +144,7 @@ function pageItems(orgId: string, data: SearchData): SearchItem[] {
       group: 'Pages' as const,
       href: orgRouteHref(orgId, 'servers', entry.pathSegment),
       icon: 'network' as const,
-      keywords: '',
+      keywords: 'network',
     }))
   const settingsPages = ORG_SETTINGS_TAB_IDS.filter((tab) => tab !== 'general').map(
     (tab): SearchItem => ({

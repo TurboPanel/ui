@@ -89,7 +89,7 @@ Everything below it is display-only. One `InlineNotice` (`info`) at the top: **T
 
 ## Anti-patterns
 
-- ❌ A second Sites inventory or CIDR editor on `/network`
+- ❌ A second Sites inventory or CIDR editor on the network pages under Servers
 - ❌ N+1 server/IP fetches per card
 - ❌ Unbounded per-server queries for mesh membership
 - ❌ Rendering `presharedKey` on relays
