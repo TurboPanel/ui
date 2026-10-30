@@ -174,24 +174,25 @@ export function seedComposeForLane(params: {
     ...(startCommand ? { startCommand } : {}),
   }
 
-  const extension = lane === 'app'
-    ? {
-      serviceKind: 'node' as const,
-      ...nodeVersionField(nodeVersion),
-      ...(alias ? { principal: alias } : {}),
-      source: binding,
-    }
-    : {
-      serviceKind: 'site' as const,
-      engine: params.engine ?? DEFAULT_SITE_ENGINE,
-      root: params.root ?? 'public',
-      ...(alias ? { principal: alias } : {}),
-      source: binding,
-      // An empty `php: {}` would be a no-op twice over: the extension parser
-      // drops an empty block, and the daemon's `siteNeedsPhp` requires a
-      // non-empty one. Naming the default series is what actually turns PHP on.
-      ...(lane === 'site-php' ? { php: { version: DEFAULT_PHP_SERIES } } : {}),
-    }
+  const extension =
+    lane === 'app'
+      ? {
+          serviceKind: 'node' as const,
+          ...nodeVersionField(nodeVersion),
+          ...(alias ? { principal: alias } : {}),
+          source: binding,
+        }
+      : {
+          serviceKind: 'site' as const,
+          engine: params.engine ?? DEFAULT_SITE_ENGINE,
+          root: params.root ?? 'public',
+          ...(alias ? { principal: alias } : {}),
+          source: binding,
+          // An empty `php: {}` would be a no-op twice over: the extension parser
+          // drops an empty block, and the daemon's `siteNeedsPhp` requires a
+          // non-empty one. Naming the default series is what actually turns PHP on.
+          ...(lane === 'site-php' ? { php: { version: DEFAULT_PHP_SERIES } } : {}),
+        }
 
   const service = patchServiceTurbopanelExtension({}, extension)
   return withSeedPrincipal(
@@ -200,7 +201,7 @@ export function seedComposeForLane(params: {
       data: { services: { [repositoryServiceName(source)]: service } },
       presentation: { keyOrder: ['services'], comments: {} },
     },
-    alias,
+    alias
   )
 }
 
@@ -211,10 +212,7 @@ export function seedComposeForLane(params: {
  * the linter says so, and deploy-prepare refuses it — so the two are written
  * together or not at all.
  */
-function withSeedPrincipal(
-  document: ComposeDocument,
-  alias: string | undefined,
-): ComposeDocument {
+function withSeedPrincipal(document: ComposeDocument, alias: string | undefined): ComposeDocument {
   if (!alias) return document
   return writeComposePrincipals(document, { [alias]: {} })
 }
@@ -226,9 +224,7 @@ function withSeedPrincipal(
  * write, so it can be anything. The caller falls back to a lane it can actually
  * seed instead of handing the operator a draft that cannot be created.
  */
-export function parseRepositoryCompose(
-  content: string,
-): ComposeDocument | undefined {
+export function parseRepositoryCompose(content: string): ComposeDocument | undefined {
   try {
     const document = yamlToComposeDocument(content)
     const services = document.data.services
@@ -259,9 +255,10 @@ export function parseRepositoryCompose(
  * Caddy by default: a static site then needs no engine choice, no PHP pool, and
  * no vhost tuning at all. PHP is one field away on the Services tab.
  *
- * No account is invented here either: the operator declares one in the
- * Accounts section of the draft (or after create), same as the repository
- * lanes.
+ * The card promises "a directory and an account", so the wizard passes the
+ * project's name (`projectAccountAlias`) and the site runs as that account,
+ * same as the repository lanes. The operator can rename or remove it in the
+ * Accounts section of the draft.
  */
 export function seedHostingCompose(params: {
   serviceName?: string
@@ -285,7 +282,7 @@ export function seedHostingCompose(params: {
       // empty block and the daemon's `siteNeedsPhp` requires a non-empty one —
       // so naming the default series is what actually turns PHP on.
       ...(params.php ? { php: { version: DEFAULT_PHP_SERIES } } : {}),
-    },
+    }
   )
   return withSeedPrincipal(
     {
@@ -293,6 +290,6 @@ export function seedHostingCompose(params: {
       data: { services: { [params.serviceName ?? 'site']: service } },
       presentation: { keyOrder: ['services'], comments: {} },
     },
-    alias,
+    alias
   )
 }

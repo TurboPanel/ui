@@ -32,7 +32,11 @@ import {
 } from '@/components/org/compose-persistence'
 import { PrincipalAccessPanel } from '@/components/org/principal-access-panel'
 import { nextPrincipalAlias } from '@/lib/compose/principals-document'
-import { knownAccountNames, planAccountDeclaration } from '@/lib/compose/principal-required'
+import {
+  declaredAccountsWithoutRows,
+  knownAccountNames,
+  planAccountDeclaration,
+} from '@/lib/compose/principal-required'
 import { unownedSitesAcrossDocuments } from '@/lib/compose/managed-directory-sites'
 import {
   type ComposeDocument,
@@ -80,7 +84,7 @@ function formatServiceOptionLabel(environment: EnvironmentRecord, service: Servi
 }
 
 /**
- * What "Add system user" would do while apps wait for an account: the plan for
+ * What "Add Hosting Account" would do while apps wait for an account: the plan for
  * a given name, whether any app is waiting, and the name suggested for it.
  */
 function useAccountPlan({
@@ -145,10 +149,49 @@ function WaitingForAccountNotice({ suggested }: Readonly<{ suggested: string }>)
   return (
     <InlineNotice
       tone="warning"
-      title="An app is waiting for a system user"
-      body={`Add one below (${suggested} if you leave it blank) and the app runs as it, so Deploy is ready. With more than one system user, pick which one each app runs as in Configuration.`}
+      title="An app is waiting for a Hosting Account"
+      body={`Add one below (${suggested} if you leave it blank) and the app runs as it, so Deploy is ready. With more than one Hosting Account, pick which one each app runs as in Configuration.`}
     />
   )
+}
+
+/**
+ * Whether an app in this project is waiting for a Hosting Account, read from
+ * the same documents and rows the Hosting Account list uses. Screens outside
+ * Bindings (Set Up Production) use it to offer the add form in place.
+ */
+export function useProjectAccountWaiting(orgId: string, projectId: string): boolean {
+  const principalsQuery = useProjectPrincipals(orgId, projectId)
+  const projectQuery = useProject(orgId, projectId)
+  const environmentsQuery = useEnvironments(orgId, projectId)
+  const environments = orEmptyArray(environmentsQuery.data?.environments)
+  const environmentIds = useMemo(() => environments.map((env) => env.id), [environments])
+  const servicesByEnvQuery = useServicesByEnvironments(orgId, environmentIds)
+  const principals = useMemo(() => principalsQuery.data?.principals ?? [], [principalsQuery.data])
+  const { waitingForAccount } = useAccountPlan({
+    project: projectQuery.data?.project,
+    environments,
+    servicesByEnv: servicesByEnvQuery.servicesByEnv,
+    principals,
+    loading:
+      principalsQuery.isLoading || environmentsQuery.isLoading || servicesByEnvQuery.isLoading,
+  })
+  return waitingForAccount
+}
+
+/**
+ * Accounts the compose declares that have no row yet: the panel creates each
+ * one on the next deploy, so the list shows them instead of looking empty.
+ */
+function DeclaredAccountRows({ names }: Readonly<{ names: readonly string[] }>) {
+  return names.map((name) => (
+    <View key={name} style={panelStyles.detailCard}>
+      <Text style={panelStyles.detailTitle}>{name}</Text>
+      <Text style={styles.principalSummary} numberOfLines={2}>
+        Declared in the configuration file. It is created on the server with the next deploy.
+      </Text>
+    </View>
+  ))
 }
 
 export function ProjectPrincipalsSection({
@@ -160,7 +203,7 @@ export function ProjectPrincipalsSection({
   orgId: string
   projectId: string
   canManage: boolean
-  /** Body only — no surrounding `SectionPanel` (Settings Add System user). */
+  /** Body only — no surrounding `SectionPanel` (Bindings, Set Up Production). */
   embedded?: boolean
 }>) {
   const principalsQuery = useProjectPrincipals(orgId, projectId)
@@ -238,6 +281,18 @@ export function ProjectPrincipalsSection({
     [projectQuery.data, environments, servicesByEnvQuery.servicesByEnv, principals]
   )
 
+  const declaredOnly = useMemo(
+    () =>
+      declaredAccountsWithoutRows(
+        [
+          projectQuery.data?.project?.options?.compose,
+          ...environments.map((env) => env.options?.compose),
+        ],
+        principals
+      ),
+    [projectQuery.data, environments, principals]
+  )
+
   const loading =
     principalsQuery.isLoading || environmentsQuery.isLoading || servicesByEnvQuery.isLoading
 
@@ -304,7 +359,7 @@ export function ProjectPrincipalsSection({
   const saveDeclaredAccount = async (writes: Parameters<typeof persistAccount.run>[0]) => {
     const saved = await persistAccount.run(writes)
     if (saved.ok) setUsername('')
-    else setError(persistAccount.actionError ?? 'Could not add the system user.')
+    else setError(persistAccount.actionError ?? 'Could not add the Hosting Account.')
   }
 
   const handleAdd = async () => {
@@ -364,15 +419,18 @@ export function ProjectPrincipalsSection({
               ? `"${unownedSites[0]}" has no account yet`
               : `${unownedSites.length} sites have no account yet`
           }
-          body={`An uploaded-directory site is a directory and an account — the webroot belongs to the account, and without one there is nobody to upload as. Add a system user below and assign it to ${
+          body={`An uploaded-directory site is a directory and an account — the webroot belongs to the account, and without one there is nobody to upload as. Add a Hosting Account below and assign it to ${
             unownedSites.length === 1 ? 'that service' : 'those services'
           }.`}
         />
       ) : null}
       {waitingForAccount ? <WaitingForAccountNotice suggested={suggestedUsername} /> : null}
       {loading && principals.length === 0 ? <LoadingState /> : null}
-      {!loading && principals.length === 0 ? <EmptyState title="No Hosting Accounts yet." /> : null}
+      {!loading && principals.length === 0 && declaredOnly.length === 0 ? (
+        <EmptyState title="No Hosting Accounts yet." />
+      ) : null}
       <View style={styles.principalList}>
+        <DeclaredAccountRows names={declaredOnly} />
         {principals.map((row) => {
           const expanded = expandedIds.has(row.id)
           const header = (
@@ -481,7 +539,7 @@ export function ProjectPrincipalsSection({
         <View style={styles.principalForm}>
           <View style={styles.principalFormField}>
             <TextField
-              label="Add system user"
+              label="Add Hosting Account"
               value={username}
               onChangeText={setUsername}
               onBlur={() => setUsername((current) => current.trim())}
@@ -498,7 +556,7 @@ export function ProjectPrincipalsSection({
             variant="primary"
             size="sm"
             busy={adding}
-            accessibilityLabel="Add system user"
+            accessibilityLabel="Add Hosting Account"
             onPress={() => {
               void handleAdd()
             }}
@@ -515,7 +573,7 @@ export function ProjectPrincipalsSection({
   return (
     <SectionPanel
       title="Project Hosting Accounts"
-      hint="Linux system users for this project. Assign a service so deploy ensures the account on the host — sites use that Hosting Account for document-root ownership (and Apache php-fpm run-as); storage chown follows the same pin. Assign at most one Hosting Account per site service."
+      hint="The Linux accounts for this project. Assign a service so deploy ensures the account on the host — sites use that Hosting Account for document-root ownership (and Apache php-fpm run-as); storage chown follows the same pin. Assign at most one Hosting Account per site service."
     >
       {body}
     </SectionPanel>

@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { ReactNode } from 'react'
 import { DeployHealthCheckMissingError } from '@/lib/instance-api'
 import { ProjectEnvironmentSetupSection } from './environment-setup-section'
 
@@ -11,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   variableRun: vi.fn(),
   deployRun: vi.fn(),
   result: { current: null as unknown },
+  waiting: { current: false },
 }))
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
@@ -20,6 +22,13 @@ vi.mock('@/components/org/project/project-context', () => ({
 }))
 vi.mock('@/components/ui', () => ({
   LoadingState: ({ label }: { label: string }) => <p>{label}</p>,
+}))
+vi.mock('@/components/org/project-detail-section', () => ({
+  useProjectAccountWaiting: () => mocks.waiting.current,
+  ProjectPrincipalsSection: () => <p>Hosting Account list</p>,
+}))
+vi.mock('@/components/ui/v4', () => ({
+  SectionHeading: ({ title }: { title: string }) => <h2>{title}</h2>,
 }))
 vi.mock('@/lib/org-default-environment', () => ({
   useOrgDefaultEnvironmentName: () => ({ customDefaultEnvironmentName: null }),
@@ -44,13 +53,16 @@ vi.mock('@/lib/queries', () => ({
 vi.mock('@/components/org/project-create/environment-setup-form', () => ({
   EnvironmentSetupForm: ({
     error,
+    accountsSlot,
     onSubmit,
   }: {
     error?: string | null
+    accountsSlot?: ReactNode
     onSubmit: (result: unknown, intent: 'save' | 'deploy') => void
   }) => (
     <div>
       {error ? <p role="alert">{error}</p> : null}
+      {accountsSlot}
       <button onClick={() => onSubmit(mocks.result.current, 'save')}>Save</button>
       <button onClick={() => onSubmit(mocks.result.current, 'deploy')}>Deploy</button>
     </div>
@@ -59,10 +71,12 @@ vi.mock('@/components/org/project-create/environment-setup-form', () => ({
 vi.mock('@/components/org/project/preview-deployment-modal', () => ({
   PreviewDeploymentModal: ({
     visible,
+    placementServerId,
     placementServerLabel,
     onConfirm,
   }: {
     visible: boolean
+    placementServerId: string | null
     placementServerLabel?: string | null
     onConfirm: () => void
   }) =>
@@ -71,7 +85,9 @@ vi.mock('@/components/org/project/preview-deployment-modal', () => ({
         <p>{placementServerLabel}</p>
         <button onClick={onConfirm}>Confirm deploy</button>
       </div>
-    ) : null,
+    ) : (
+      <p data-testid="closed-dialog-server">{placementServerId ?? 'none'}</p>
+    ),
 }))
 
 const COMPOSE = { version: 1, data: { services: { web: {} } } }
@@ -87,6 +103,7 @@ beforeEach(() => {
   mocks.updateRun.mockResolvedValue({ ok: true, value: { ok: true } })
   mocks.variableRun.mockResolvedValue({ ok: true, value: { ok: true, id: 'v' } })
   mocks.deployRun.mockResolvedValue({ ok: true, value: {} })
+  mocks.waiting.current = false
   mocks.result.current = {
     name: 'live',
     serverId: 's1',
@@ -147,6 +164,41 @@ describe('ProjectEnvironmentSetupSection', () => {
     await press('Confirm deploy')
     expect(screen.getByRole('alert').textContent).toMatch(/requires a compose healthcheck/)
     expect(mocks.replace).not.toHaveBeenCalled()
+  })
+
+  it('keeps the chosen server on the dialog while it closes after a refusal', async () => {
+    mocks.deployRun.mockResolvedValue({
+      ok: false,
+      error: 'health_check_missing',
+      cause: new DeployHealthCheckMissingError(true, ['web']),
+    })
+    render(<ProjectEnvironmentSetupSection />)
+    await press('Deploy')
+    await press('Confirm deploy')
+    expect(screen.getByTestId('closed-dialog-server').textContent).toBe('s1')
+  })
+
+  it('offers the Hosting Account form when a deploy is refused for one', async () => {
+    mocks.deployRun.mockResolvedValue({
+      ok: false,
+      error: 'principal_required_for_service_kind',
+      cause: new Error('HTTP 409: principal_required_for_service_kind'),
+    })
+    render(<ProjectEnvironmentSetupSection />)
+    expect(screen.queryByText('Hosting Account list')).toBeNull()
+    await press('Deploy')
+    await press('Confirm deploy')
+    expect(screen.getByRole('alert').textContent).toBe(
+      'This app needs a Hosting Account to run as. Add one below, then deploy again.'
+    )
+    expect(screen.getByRole('heading', { name: 'Hosting Account' })).toBeTruthy()
+    expect(screen.getByText('Hosting Account list')).toBeTruthy()
+  })
+
+  it('shows the Hosting Account form up front while an app waits for one', () => {
+    mocks.waiting.current = true
+    render(<ProjectEnvironmentSetupSection />)
+    expect(screen.getByText('Hosting Account list')).toBeTruthy()
   })
 
   it('stays with the error when a save is refused, and does not add a variable twice', async () => {

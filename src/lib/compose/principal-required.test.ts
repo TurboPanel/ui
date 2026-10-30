@@ -3,6 +3,7 @@ import type { ComposeDocument } from '@/lib/compose'
 import {
   attachSoleAccountToNewApps,
   declareAccountAndAttach,
+  declaredAccountsWithoutRows,
   knownAccountNames,
   planAccountDeclaration,
   principalRequiredServiceNames,
@@ -14,9 +15,7 @@ import {
   readServiceTurbopanelExtension,
 } from '@/lib/compose/service-kind'
 
-function documentWith(
-  services: Record<string, Record<string, unknown>>,
-): ComposeDocument {
+function documentWith(services: Record<string, Record<string, unknown>>): ComposeDocument {
   return {
     version: 1,
     data: { services },
@@ -26,11 +25,15 @@ function documentWith(
 
 const nodeApp = patchServiceTurbopanelExtension(
   {},
-  { serviceKind: 'node', source: { sourceId: '11111111-1111-4111-8111-111111111111' } },
+  { serviceKind: 'node', source: { sourceId: '11111111-1111-4111-8111-111111111111' } }
 )
 const gitSite = patchServiceTurbopanelExtension(
   {},
-  { serviceKind: 'site', engine: 'caddy', source: { sourceId: '22222222-2222-4222-8222-222222222222' } },
+  {
+    serviceKind: 'site',
+    engine: 'caddy',
+    source: { sourceId: '22222222-2222-4222-8222-222222222222' },
+  }
 )
 const uploadedSite = patchServiceTurbopanelExtension(
   {},
@@ -39,15 +42,15 @@ const uploadedSite = patchServiceTurbopanelExtension(
     engine: 'caddy',
     root: 'public',
     sourceKind: 'managed-directory',
-  },
+  }
 )
 const nativeSourceContainer = patchServiceTurbopanelExtension(
   { image: 'node:24' },
-  { source: { sourceId: '33333333-3333-4333-8333-333333333333' } },
+  { source: { sourceId: '33333333-3333-4333-8333-333333333333' } }
 )
 const railpackContainer = patchServiceTurbopanelExtension(
   { image: 'node:24' },
-  { source: { sourceId: '44444444-4444-4444-8444-444444444444', buildKind: 'railpack' } },
+  { source: { sourceId: '44444444-4444-4444-8444-444444444444', buildKind: 'railpack' } }
 )
 const plainContainer = { image: 'nginx' }
 
@@ -62,12 +65,7 @@ describe('principalRequiredServiceNames', () => {
       db: plainContainer,
     })
     // Railpack publishes an image, not a tree — no principal needed.
-    expect(principalRequiredServiceNames(document)).toEqual([
-      'api',
-      'app',
-      'blog',
-      'site',
-    ])
+    expect(principalRequiredServiceNames(document)).toEqual(['api', 'app', 'blog', 'site'])
   })
 
   it('returns nothing for an absent or empty document', () => {
@@ -79,14 +77,14 @@ describe('principalRequiredServiceNames', () => {
         version: 1,
         data: { services: 'not-a-map' },
         presentation: { keyOrder: [], comments: {} },
-      }),
+      })
     ).toEqual([])
     expect(
       principalRequiredServiceNames({
         version: 1,
         data: { services: { broken: 'not-a-map', app: nodeApp } },
         presentation: { keyOrder: [], comments: {} },
-      }),
+      })
     ).toEqual(['app'])
   })
 })
@@ -101,7 +99,7 @@ describe('unownedPrincipalRequiredServices', () => {
         document: documentWith({ app: nodeApp }),
         services: [],
         principals: [],
-      }),
+      })
     ).toEqual(['app'])
   })
 
@@ -111,7 +109,7 @@ describe('unownedPrincipalRequiredServices', () => {
         document: documentWith({ app: nodeApp }),
         services: [{ id: 'svc-1', composeServiceName: 'app' }],
         principals: [{ serviceIds: ['svc-other'] }],
-      }),
+      })
     ).toEqual(['app'])
   })
 
@@ -121,7 +119,7 @@ describe('unownedPrincipalRequiredServices', () => {
         document: documentWith({ app: nodeApp }),
         services: [{ id: 'svc-1', composeServiceName: 'app' }],
         principals: [{ serviceIds: ['svc-1'] }],
-      }),
+      })
     ).toEqual([])
   })
 
@@ -131,7 +129,7 @@ describe('unownedPrincipalRequiredServices', () => {
         document: documentWith({ worker: railpackContainer, db: plainContainer }),
         services: [],
         principals: [],
-      }),
+      })
     ).toEqual([])
   })
 
@@ -144,7 +142,7 @@ describe('unownedPrincipalRequiredServices', () => {
           { id: 'svc-2', composeServiceName: 'site' },
         ],
         principals: [{ serviceIds: ['svc-1'] }],
-      }),
+      })
     ).toEqual(['site'])
   })
 })
@@ -156,12 +154,12 @@ describe('declared aliases settle ownership without a query', () => {
       serviceKind: 'node',
       principal: 'app',
       source: { sourceId: '11111111-1111-4111-8111-111111111111' },
-    },
+    }
   )
 
   function withPrincipals(
     services: Record<string, Record<string, unknown>>,
-    principals: Record<string, Record<string, unknown>>,
+    principals: Record<string, Record<string, unknown>>
   ): ComposeDocument {
     return {
       version: 1,
@@ -179,7 +177,7 @@ describe('declared aliases settle ownership without a query', () => {
         document: withPrincipals({ api: aliased }, { app: {} }),
         services: [],
         principals: [],
-      }),
+      })
     ).toEqual([])
   })
 
@@ -191,7 +189,7 @@ describe('declared aliases settle ownership without a query', () => {
         document: withPrincipals({ api: aliased }, { other: {} }),
         services: [],
         principals: [],
-      }),
+      })
     ).toEqual(['api'])
   })
 
@@ -201,7 +199,7 @@ describe('declared aliases settle ownership without a query', () => {
         document: documentWith({ api: nodeApp }),
         services: [{ id: 'svc-1', composeServiceName: 'api' }],
         principals: [{ serviceIds: ['svc-1'] }],
-      }),
+      })
     ).toEqual([])
   })
 })
@@ -348,5 +346,35 @@ describe('accounts made by hand on Bindings', () => {
     const after = { ...one, data: { ...one.data, services: { web: plainContainer, app: nodeApp } } }
     expect(attachSoleAccountToNewApps(one, after, new Set(['shop', 'site']))).toBe(after)
     expect(attachSoleAccountToNewApps(one, after, new Set(['shop']))).not.toBe(after)
+  })
+})
+
+describe('declaredAccountsWithoutRows', () => {
+  const declaring = (...aliases: string[]) =>
+    writeComposePrincipals(
+      documentWith({ site: uploadedSite }),
+      Object.fromEntries(aliases.map((alias) => [alias, {}]))
+    )
+
+  it('lists the aliases no row stands for yet, each once', () => {
+    expect(
+      declaredAccountsWithoutRows([declaring('website'), declaring('website', 'worker')], [])
+    ).toEqual(['website', 'worker'])
+  })
+
+  it('leaves out an alias a row came from or a hand-made row shares', () => {
+    expect(
+      declaredAccountsWithoutRows(
+        [declaring('website', 'worker', 'Shop')],
+        [
+          { username: 'website-x7', metadata: { composeAlias: 'website' } },
+          { username: 'shop', metadata: null },
+        ]
+      )
+    ).toEqual(['worker'])
+  })
+
+  it('is empty for documents that declare nothing', () => {
+    expect(declaredAccountsWithoutRows([null, undefined, documentWith({})], [])).toEqual([])
   })
 })

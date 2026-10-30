@@ -244,7 +244,8 @@ describe('plain hosting words', () => {
   })
 
   it('names the real place certificates are added', () => {
-    expect(COMPOSE_CERTIFICATE_HINT).toContain('Organization settings › Domains & certificates')
+    expect(COMPOSE_CERTIFICATE_HINT).toContain('Servers › TLS')
     expect(missingCertificateMessage('Shop wildcard')).toContain('“Shop wildcard”')
+    expect(missingCertificateMessage('Shop wildcard')).toContain('Servers › TLS')
   })
 })

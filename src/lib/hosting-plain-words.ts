@@ -110,7 +110,7 @@ export function composeRouteSourceText(editable: boolean): string {
 
 /** The certificate picker's explanation for a hostname set in the configuration file. */
 export const COMPOSE_CERTIFICATE_HINT =
-  'Let’s Encrypt gets a free certificate on the next deploy and renews it by itself. Self-signed works straight away, but browsers warn visitors. A certificate from your library uses one you added under Organization settings › Domains & certificates.'
+  'Let’s Encrypt gets a free certificate on the next deploy and renews it by itself. Self-signed works straight away, but browsers warn visitors. A certificate from your library uses one you added under Servers › TLS.'
 
 /** Under the hostname field of a configured hostname. */
 export const COMPOSE_HOSTNAME_HINT =
@@ -138,7 +138,7 @@ export const SERVICE_NOT_SAVED_MESSAGE =
 
 /** A move refused because the file names a certificate the library does not have. */
 export function missingCertificateMessage(ref: string): string {
-  return `The configuration file names a certificate “${ref}” that is not in your library. Pick a certificate for this hostname and save, or add it under Organization settings › Domains & certificates, then move it.`
+  return `The configuration file names a certificate “${ref}” that is not in your library. Pick a certificate for this hostname and save, or add it under Servers › TLS, then move it.`
 }
 
 /** The refusal when someone saves a hostname the project's shared file sets. */
