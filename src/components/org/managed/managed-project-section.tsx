@@ -1,3 +1,4 @@
+import { ManagedBackupLoginSection } from '@/components/org/managed/managed-backup-login-panel'
 import {
   Button,
   ButtonRow,
@@ -848,6 +849,13 @@ function ManagedDataPanels({
           registerCommand(result.value.commandId, 'Add app logins')
           return { logins: result.value.logins, notes: result.value.notes }
         }}
+      />
+      <ManagedBackupLoginSection
+        orgId={orgId}
+        environmentId={environmentId}
+        canManage={canManage}
+        busy={inFlight}
+        registerCommand={registerCommand}
       />
     </>
   )
