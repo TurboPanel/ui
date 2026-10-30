@@ -188,7 +188,8 @@ export function dependentsSummary(
 ): string {
   const listed = dependents.slice(0, 5).map((d) => {
     if (d.kind === 'tunnel') return `the tunnel ${d.name}`
-    return d.zone ? `the hostname ${d.name} (${d.zone})` : `the hostname ${d.name}`
+    const what = d.kind === 'certificate' ? 'certificate' : 'hostname'
+    return d.zone ? `the ${what} ${d.name} (${d.zone})` : `the ${what} ${d.name}`
   })
   const more = Math.max(total, dependents.length) - listed.length
   const tail = more > 0 ? ` and ${more} more` : ''

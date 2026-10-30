@@ -11346,7 +11346,7 @@ export async function addTunnelBadgeZone(
 
 /** What still needs an API Token: a tunnel, or a hostname whose DNS name this token made. */
 export type TunnelBadgeDependent = {
-  kind: 'tunnel' | 'hostname'
+  kind: 'tunnel' | 'hostname' | 'certificate'
   id: string
   name: string
   zone: string | null
