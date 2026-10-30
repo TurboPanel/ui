@@ -1,5 +1,5 @@
 import { useRouter, type Href } from 'expo-router'
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { EnvironmentNameField } from '@/components/org/project-create/details-step'
 import { FormDisclosure } from '@/components/org/project-create/form-disclosure'
@@ -77,6 +77,7 @@ export function EnvironmentSetupForm({
   defaultEnvironmentName,
   busy,
   error,
+  accountsSlot,
   onSubmit,
 }: Readonly<{
   orgId: string
@@ -90,6 +91,11 @@ export function EnvironmentSetupForm({
   defaultEnvironmentName: string | null
   busy: EnvironmentSetupIntent | null
   error?: string | null
+  /**
+   * The project's Hosting Account list with its add form, shown in place of
+   * the declared accounts when an app is waiting for one.
+   */
+  accountsSlot?: ReactNode
   onSubmit: (result: EnvironmentSetupResult, intent: EnvironmentSetupIntent) => void
 }>) {
   const [name, setName] = useState(environmentName)
@@ -185,14 +191,16 @@ export function EnvironmentSetupForm({
         onAlsoWwwChange={setAlsoWwwChoice}
       />
 
-      <AccountsSection
-        accounts={accounts}
-        names={accountNames}
-        errors={errors}
-        onNameChange={(alias, text) => {
-          setAccountNames((current) => ({ ...current, [alias]: text }))
-        }}
-      />
+      {accountsSlot ?? (
+        <AccountsSection
+          accounts={accounts}
+          names={accountNames}
+          errors={errors}
+          onNameChange={(alias, text) => {
+            setAccountNames((current) => ({ ...current, [alias]: text }))
+          }}
+        />
+      )}
 
       <VariablesSection variables={variables} onChange={setVariables} />
 

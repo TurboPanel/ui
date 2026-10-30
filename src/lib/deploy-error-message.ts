@@ -24,6 +24,11 @@ function serverSentence(message: string): string | null {
   return sentence.length > 0 ? sentence : null
 }
 
+/** The deploy was refused because an app has no Hosting Account to run as. */
+export function isHostingAccountRefusal(err: unknown): boolean {
+  return err instanceof Error && err.message.includes('principal_required_for_service_kind')
+}
+
 /** What to show when `POST /environments/:id/deploy` is refused. */
 export function deployErrorMessage(err: unknown): string {
   if (err instanceof DeployTunnelRefusedError) {

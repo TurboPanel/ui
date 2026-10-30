@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { deployErrorMessage, deployRefusalMessage } from '@/lib/deploy-error-message'
+import {
+  deployErrorMessage,
+  deployRefusalMessage,
+  isHostingAccountRefusal,
+} from '@/lib/deploy-error-message'
 import {
   DeployHealthCheckMissingError,
   DeployResourceLimitExceededError,
@@ -110,5 +114,16 @@ describe('tunnel deploy refusals', () => {
     expect(deployErrorMessage(new Error('HTTP 409: tunnel_daemon_too_old'))).toMatch(
       /Update this server/
     )
+  })
+})
+
+describe('isHostingAccountRefusal', () => {
+  it('spots the missing Hosting Account refusal and nothing else', () => {
+    expect(
+      isHostingAccountRefusal(new Error('HTTP 409: principal_required_for_service_kind'))
+    ).toBe(true)
+    expect(isHostingAccountRefusal(new Error('HTTP 409: server_placement_mismatch'))).toBe(false)
+    expect(isHostingAccountRefusal('principal_required_for_service_kind')).toBe(false)
+    expect(isHostingAccountRefusal(undefined)).toBe(false)
   })
 })
