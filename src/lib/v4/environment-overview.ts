@@ -25,6 +25,7 @@ import type {
   EnvironmentConfigViewResponse as EnvironmentConfigView,
   HostingCertificate,
   HostingRecord,
+  HostingTunnelPath,
   IpRecord,
   OrgServerRecord,
   ProjectPrincipalRecord,
@@ -34,7 +35,15 @@ import type {
   TlsRecord,
 } from '@/lib/instance-api'
 import { accessText, RUNS_IN_CONTAINER, type RunsAs } from './linux-users'
-import type { MapDomain, MapInput, MapLink, MapMode, MapStatus, MapVolume } from './map-layout'
+import type {
+  MapDomain,
+  MapInput,
+  MapLink,
+  MapMode,
+  MapStatus,
+  MapTunnel,
+  MapVolume,
+} from './map-layout'
 import { isAppService, isDataStoreContainer, serviceKindLabel } from './service-roles'
 import { nativeDeployKey, type NativeRunFallback } from './project-home'
 import { runStateKey } from './run-state'
@@ -62,6 +71,10 @@ export type OverviewSource = Readonly<{
   serverId?: string | null
   /** Public addresses that server reports itself (preferred first); `undefined` until read. */
   serverAddresses?: readonly string[]
+  /** That server's name, for the tunnel's origin line; absent when not known. */
+  serverName?: string | null
+  /** Every address that server reports on its own interfaces, public or private. */
+  serverOwnAddresses?: readonly string[]
   /** The hostname Visit opens; it leads its box on the map. */
   primaryHostname?: string | null
 }>
@@ -291,21 +304,38 @@ function addressText(addresses: readonly string[]): string | null {
   return unique.length > 1 ? `${first} +${unique.length - 1}` : first
 }
 
+type ServerAddressFields = Pick<OrgServerRecord, 'ips' | 'address' | 'addressScope'> &
+  Partial<Pick<OrgServerRecord, 'addressSource'>>
+
+/** A server's interface addresses of the given scopes, the default-route ones first. */
+function interfaceAddresses(server: ServerAddressFields, scopes: ReadonlySet<string>): string[] {
+  return (server.ips ?? [])
+    .filter((ip) => scopes.has(ip.scope))
+    .sort((a, b) => Number(b.preferred === true) - Number(a.preferred === true))
+    .map((ip) => ip.address)
+}
+
+const PUBLIC_SCOPE: ReadonlySet<string> = new Set(['public'])
+const EVERY_SCOPE: ReadonlySet<string> = new Set(['public', 'private'])
+
 /**
  * The public addresses a server reports itself: its public interface
  * addresses (the default-route one first), else its best-known address when
- * that is public. Empty when it has reported none.
+ * that is public and not only the address the panel saw it connect from (a
+ * server behind NAT connects from the router's address, which visitors cannot
+ * reach). Empty when it has reported none.
  */
-export function serverPublicAddresses(
-  server: Pick<OrgServerRecord, 'ips' | 'address' | 'addressScope'> | null | undefined
-): string[] {
+export function serverPublicAddresses(server: ServerAddressFields | null | undefined): string[] {
   if (!server) return []
-  const reported = (server.ips ?? [])
-    .filter((ip) => ip.scope === 'public')
-    .sort((a, b) => Number(b.preferred === true) - Number(a.preferred === true))
-    .map((ip) => ip.address)
+  const reported = interfaceAddresses(server, PUBLIC_SCOPE)
   if (reported.length > 0) return reported
-  return server.address && server.addressScope === 'public' ? [server.address] : []
+  const own = server.address && server.addressSource !== 'observed'
+  return own && server.addressScope === 'public' ? [server.address as string] : []
+}
+
+/** Every address a server reports on its own interfaces, public or private, default route first. */
+export function serverOwnAddresses(server: ServerAddressFields | null | undefined): string[] {
+  return server ? [...new Set(interfaceAddresses(server, EVERY_SCOPE))] : []
 }
 
 /**
@@ -357,7 +387,39 @@ function hostsOf(hosting: HostingRecord): string[] {
   return name === '' ? [] : [name]
 }
 
-/** The map domains of one hosting row: one per host, all with its certificate and served line. */
+const PROVIDER_NAMES: Readonly<Record<string, string>> = { cloudflare: 'Cloudflare Tunnel' }
+
+/**
+ * How the tunnel reaches the site, in plain words: over HTTPS to the
+ * environment's server on its own addresses, then whether the tunnel checks
+ * the server's certificate. Off is the usual case and on purpose: the server
+ * answers with its own certificate, which only the tunnel ever sees.
+ */
+function tunnelOrigin(path: HostingTunnelPath, source: OverviewSource): string[] {
+  const server = source.serverName?.trim() ? `on ${source.serverName.trim()}` : 'on the server'
+  const addresses = addressText(source.serverOwnAddresses ?? [])
+  const reach = `HTTPS ${server}${addresses === null ? '' : ` · ${addresses}`}`
+  if (path.originVerified) return [reach, 'Certificate checked by the tunnel']
+  return [reach, 'Server’s own certificate', 'Not checked, on purpose']
+}
+
+function mapTunnel(path: HostingTunnelPath, source: OverviewSource): MapTunnel {
+  return {
+    provider: PROVIDER_NAMES[path.provider] ?? 'Tunnel',
+    name: path.tunnelName,
+    origin: tunnelOrigin(path, source),
+    originVerified: path.originVerified,
+  }
+}
+
+const EDGE_STATUS: MapStatus = { key: 'edge', label: statusInfo('edge').label }
+
+/**
+ * The map domains of one hosting row, one per host and path: a name a tunnel
+ * carries is reached through it (the edge's trusted certificate, then the
+ * server), and a name that is not tunnel-only is also reached directly with
+ * the hosting's certificate and served line. A direct path is listed first.
+ */
 function hostingDomains(
   hosting: HostingRecord,
   serviceName: string,
@@ -368,15 +430,29 @@ function hostingDomains(
     : certificateKey(hosting.tlsId, source.tls)
   const label = CERTIFICATE_BADGE_WORDS[key] ?? statusInfo(key).label
   const servedFrom = servedFromOf(hosting, source)
-  return hostsOf(hosting).map((host) => ({
-    host,
-    status: { key, label },
-    serviceId: serviceName,
-    ...(servedFrom === null ? {} : { servedFrom }),
-  }))
+  const tunnels = new Map(
+    (hosting.tunnels ?? []).map((path) => [path.hostname.toLowerCase(), path] as const)
+  )
+  return hostsOf(hosting).flatMap((host) => {
+    const path = tunnels.get(host.toLowerCase())
+    const direct: MapDomain = {
+      host,
+      status: { key, label },
+      serviceId: serviceName,
+      ...(servedFrom === null ? {} : { servedFrom }),
+    }
+    if (path === undefined) return [direct]
+    const through: MapDomain = {
+      host,
+      status: EDGE_STATUS,
+      serviceId: serviceName,
+      tunnel: mapTunnel(path, source),
+    }
+    return path.tunnelOnly ? [through] : [direct, through]
+  })
 }
 
-/** One map domain per hostname, oldest hosting first, each hostname once. */
+/** One map domain per hostname and path, oldest hosting first, each pair once. */
 export function domainsOf(source: OverviewSource): MapDomain[] {
   const seen = new Set<string>()
   const domains: MapDomain[] = []
@@ -384,7 +460,7 @@ export function domainsOf(source: OverviewSource): MapDomain[] {
     const rows = service.serviceId === null ? [] : (source.hostings[service.serviceId] ?? [])
     for (const hosting of oldestHostingsFirst(rows)) {
       for (const domain of hostingDomains(hosting, service.name, source)) {
-        const key = domain.host.toLowerCase()
+        const key = `${domain.tunnel === undefined ? 'direct' : 'tunnel'}:${domain.host.toLowerCase()}`
         if (seen.has(key)) continue
         seen.add(key)
         domains.push(domain)
