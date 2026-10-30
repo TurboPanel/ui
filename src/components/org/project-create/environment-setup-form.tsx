@@ -2,6 +2,7 @@ import { useRouter, type Href } from 'expo-router'
 import { useMemo, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { EnvironmentNameField } from '@/components/org/project-create/details-step'
+import { FormDisclosure } from '@/components/org/project-create/form-disclosure'
 import { NEW_PROJECT_COLUMN_MAX_WIDTH } from '@/components/org/project-create/new-project-screen'
 import { VariableUseChoice } from '@/components/org/project/configuration/row-editors'
 import { ServerPinSelect } from '@/components/org/project/server-pin-select'
@@ -19,6 +20,7 @@ import { panelStyles } from '@/components/ui/panel-styles'
 import { ListGroup, ListRow, PageTitle, SectionHeading } from '@/components/ui/v4'
 import type { ComposeDocument, OrgServerRecord } from '@/lib/instance-api'
 import { orgSettingsTabHref } from '@/lib/org-navigation'
+import { useOrgProjectFormDefaults } from '@/lib/org-project-settings'
 import { useOrgAllowsLetsEncrypt } from '@/lib/queries/org-tls-settings'
 import {
   declaredHostname,
@@ -108,6 +110,9 @@ export function EnvironmentSetupForm({
   // "Allow Let's Encrypt certificates": on writes tls.mode automatic with the
   // hostname. Unknown (still loading, or not readable) writes nothing.
   const acmeEnabled = useOrgAllowsLetsEncrypt(orgId)
+  // Most projects keep one environment, so its name stays tucked away unless
+  // the organization opens the section by default (or the name has an error).
+  const { openEnvironmentSectionByDefault } = useOrgProjectFormDefaults(orgId)
   const certificateNote = setupCertificateNote({
     hostname,
     acmeEnabled,
@@ -141,13 +146,20 @@ export function EnvironmentSetupForm({
 
       <View style={styles.section}>
         <SectionHeading title="Where it runs" />
-        <EnvironmentNameField
-          orgId={orgId}
-          value={name}
-          defaultName={defaultEnvironmentName}
-          onChange={setName}
-          error={errors.name}
-        />
+        <FormDisclosure
+          title="Environment"
+          summary={shownName}
+          openByDefault={openEnvironmentSectionByDefault}
+          hasError={errors.name !== undefined}
+        >
+          <EnvironmentNameField
+            orgId={orgId}
+            value={name}
+            defaultName={defaultEnvironmentName}
+            onChange={setName}
+            error={errors.name}
+          />
+        </FormDisclosure>
         <ServerPinSelect
           label="Server"
           hint={serverId ? undefined : 'Pick the server it runs on. Deploy needs one.'}

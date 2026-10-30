@@ -1683,6 +1683,27 @@ export async function saveOrgDefaultEnvironment(
   })
 }
 
+/** Whether the new-project form opens its Environment and Workspace sections without being asked. */
+export type OrgProjectSettings = {
+  openEnvironmentSectionByDefault: boolean
+  openWorkspaceSectionByDefault: boolean
+}
+
+export async function fetchOrgProjectSettings(orgId: string): Promise<OrgProjectSettings> {
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/project-settings`)
+}
+
+/** Send one switch or both; a switch left out keeps its stored value. */
+export async function saveOrgProjectSettings(
+  orgId: string,
+  patch: Partial<OrgProjectSettings>
+): Promise<OrgProjectSettings & { ok: true }> {
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/project-settings`, {
+    method: 'PUT',
+    body: JSON.stringify(patch),
+  })
+}
+
 /**
  * Organization-wide managed-database defaults. `sslMode` / `ports` are the
  * configured values (`null` = inheriting the platform value); the `effective*`

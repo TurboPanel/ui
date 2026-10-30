@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { EnvironmentNameField } from './details-step'
+import { EnvironmentNameField, workspaceSummary } from './details-step'
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
 vi.mock('react-native-svg', async () => (await import('@/components/ui/v4/rn-stub')).svgStub)
@@ -95,5 +95,26 @@ describe('EnvironmentNameField', () => {
       target: { value: 'Edge' },
     })
     expect(onChange).toHaveBeenCalledWith('Edge')
+  })
+})
+
+describe('workspaceSummary', () => {
+  const workspaces = [
+    { id: 'w1', name: 'Marketing' },
+    { id: 'w2', name: null },
+  ] as never[]
+
+  it('names the picked workspace', () => {
+    expect(workspaceSummary('existing', workspaces, 'w1', '')).toBe('Marketing')
+    expect(workspaceSummary('existing', workspaces, 'w2', '')).toBe('Workspace')
+  })
+
+  it('asks for a pick when none is picked', () => {
+    expect(workspaceSummary('existing', workspaces, '', '')).toBe('Choose a workspace')
+  })
+
+  it('names a new workspace once it has a name', () => {
+    expect(workspaceSummary('new', workspaces, 'w1', '  Shop  ')).toBe('New: Shop')
+    expect(workspaceSummary('new', workspaces, 'w1', ' ')).toBe('New workspace')
   })
 })
