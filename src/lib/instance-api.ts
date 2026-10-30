@@ -7424,9 +7424,9 @@ export type ReleaseRecord = {
   /** Build tool and plan versions; older instances send the `railpack*` names. */
   builderFrontendVersion?: string
   builderPlanVersion?: string
-  /** @deprecated previous name of {@link builderFrontendVersion}. */
+  /** Previous name of {@link builderFrontendVersion}; still read from older instances. */
   railpackFrontendVersion?: string
-  /** @deprecated previous name of {@link builderPlanVersion}. */
+  /** Previous name of {@link builderPlanVersion}; still read from older instances. */
   railpackPlanVersion?: string
   /** Aggregate status across every host in {@link ReleaseRecord.attempts}. */
   status: CommandStatus
