@@ -63,7 +63,7 @@ import {
 import { useOrgFabric } from '@/lib/queries/fabric'
 import { useOrganizationManaged } from '@/lib/queries/managed'
 import { useOrgServers, useTimezones } from '@/lib/queries/servers'
-import { networkFabricHref, serversDatacentersHref } from '@/lib/org-navigation'
+import { serversFabricHref, serversDatacentersHref } from '@/lib/org-navigation'
 import { orEmptyArray } from '@/lib/or-empty-array'
 import { useCan } from '@/lib/query-client'
 import {
@@ -885,7 +885,7 @@ function MeshFromDatacenterPanel({
             <Pressable
               key={row.serverId}
               style={[panelStyles.detailCard, webPointer]}
-              onPress={() => router.push(networkFabricHref(orgId) as Href)}
+              onPress={() => router.push(serversFabricHref(orgId) as Href)}
             >
               <View style={styles.gatewayTitleRow}>
                 <Text style={panelStyles.detailTitle}>{row.serverLabel}</Text>

@@ -1,7 +1,7 @@
 import { useLocalSearchParams } from 'expo-router'
 import { NetworkAddressesSection } from '@/components/org/network/network-addresses-section'
 
-export default function NetworkAddressesScreen() {
+export default function ServersAddressesScreen() {
   const { orgId } = useLocalSearchParams<{
     orgId: string
   }>()

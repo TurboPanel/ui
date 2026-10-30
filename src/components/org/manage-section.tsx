@@ -64,7 +64,7 @@ function SettingsTabBody({ orgId, tab }: Readonly<{ orgId: string; tab: OrgSetti
   switch (tab) {
     case 'projects':
       return <ProjectSettingsTab orgId={orgId} />
-    case 'members':
+    case 'access':
       return <AccessOverviewSection orgId={orgId} />
     case 'notifications':
       return <OrganizationChannelsSection orgId={orgId} />
@@ -80,12 +80,12 @@ function SettingsTabBody({ orgId, tab }: Readonly<{ orgId: string; tab: OrgSetti
 }
 
 /**
- * Organization settings: seven tabs (General, Project Settings, Members,
- * Notifications, Domains & certificates, Git connections, Principals), reached
+ * Organization settings: seven tabs (General, Project Settings, Access,
+ * Notifications, Domains & Certificates, Git Connections, Principals), reached
  * from the organization menu in the header. Each tab hosts the screen that
  * already did the job, so every setting keeps its place and its route
- * (`/access`, `/servers/tls`, `/projects/git-sources`, `/account/notifications`);
- * the old `/projects/settings` page redirects to Project Settings.
+ * (`/servers/tls`, `/projects/git-sources`, `/account/notifications`); the old
+ * `/projects/settings` and `/access` pages redirect to their tabs.
  */
 export function ManageSection({ orgId }: Readonly<{ orgId: string }>) {
   const orgsQuery = useOrganizationsQuery()

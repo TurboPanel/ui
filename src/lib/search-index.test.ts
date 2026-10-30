@@ -136,10 +136,12 @@ describe('buildSearchItems', () => {
     expect(hrefs['Pending Keys']).toBe('/o1/servers/keys')
     expect(hrefs['TLS Certificates']).toBe('/o1/servers/tls')
     expect(hrefs['Server Settings']).toBe('/o1/servers/settings')
-    expect(hrefs['Firewall']).toBe('/o1/network/firewall')
-    expect(hrefs['Members']).toBe('/o1/manage?tab=members')
-    expect(hrefs['Domains & certificates']).toBe('/o1/manage?tab=domains')
-    expect(hrefs['Git connections']).toBe('/o1/manage?tab=git')
+    expect(hrefs['Firewall']).toBe('/o1/servers/firewall')
+    expect(hrefs['TurboFabric']).toBe('/o1/servers/fabric')
+    expect(hrefs['Tunnels']).toBe('/o1/servers/tunnels')
+    expect(hrefs['Access']).toBe('/o1/manage?tab=access')
+    expect(hrefs['Domains & Certificates']).toBe('/o1/manage?tab=domains')
+    expect(hrefs['Git Connections']).toBe('/o1/manage?tab=git')
     expect(hrefs['Principals']).toBe('/o1/manage?tab=principals')
     expect(hrefs['Managed Database Settings']).toBe('/o1/managed/settings')
     expect(hrefs['Billing']).toBe('/o1/billing')
@@ -162,7 +164,7 @@ describe('buildSearchItems', () => {
       'Add Server': '/o1/servers?add=1',
       'Add project': '/o1/projects/new',
       'Add database': '/o1/projects/new?type=managed',
-      'Invite member': '/o1/manage?tab=members',
+      'Invite member': '/o1/manage?tab=access',
       'Pause or Resume Updates': '/admin/updates',
     })
   })
