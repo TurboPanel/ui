@@ -5,6 +5,7 @@ import {
   certificatePollInterval,
   hostingSaveNote,
   describeCertificate,
+  waitingLabel,
   dnsResultHeadline,
   dnsSummaryLines,
   formatDaysLeft,
@@ -105,6 +106,21 @@ describe('describeCertificate', () => {
     )
     expect(view.lines).toContain('Point them at 203.0.113.7.')
     expect(view.lines.join(' ')).not.toContain('ok.example.com')
+  })
+
+  it('names the port 80 or CAA check when DNS is right and only that stops it', () => {
+    const name = { hostname: 'a.example.com', resolves: true, addresses: ['203.0.113.7'] }
+    const report = (extra: Partial<typeof name> & Record<string, unknown>): HostingDnsReport => ({
+      ...DNS_NOT_READY,
+      hostnames: [{ ...name, ...extra }],
+    })
+    const closed = describeCertificate(
+      cert({ state: 'waiting_for_dns', dns: report({ port80: 'closed' }) })
+    )
+    expect(closed.label).toBe('Waiting for Port 80')
+    expect(waitingLabel(report({ caa: 'blocked' }))).toBe('Blocked by a CAA Record')
+    expect(waitingLabel(DNS_NOT_READY)).toBe('Waiting for DNS')
+    expect(waitingLabel(null)).toBe('Waiting for DNS')
   })
 
   it('issuing spins, or asks for a redeploy when one is due', () => {

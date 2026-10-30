@@ -36,6 +36,8 @@ export type LogStep = Readonly<{
   errorCount: number
   /** Milliseconds from the first to the last line; null without timestamps or with one line. */
   durationMs: number | null
+  /** The line a finished plan step left behind (the certificates step's note); absent when none. */
+  detail?: string
 }>
 
 /** Lines of context kept on each side of a match in Highlight mode. */
@@ -163,23 +165,64 @@ function settleRepeatedPlanSteps(drafts: DraftStep[]): void {
   }
 }
 
-/** Plan steps that never printed a line (skipped, still to run), in plan order. */
+/** The note a finished plan step left, trimmed; undefined when it left none. */
+function finishedDetail(steps: readonly CommandProgressStep[]): string | undefined {
+  const detail = steps.find((step) => step.state === 'done' && step.detail?.trim())?.detail?.trim()
+  return detail || undefined
+}
+
+/**
+ * Plan steps that never printed a line (skipped, still to run, or done without
+ * output, such as setting up certificates), in plan order. Only a step that
+ * was already in place on the server is left out.
+ */
 function silentPlanSteps(
   plan: readonly CommandProgressStep[],
   drafts: readonly DraftStep[]
-): LogStep[] {
+): { planIndex: number; step: LogStep }[] {
   const reported = new Set(drafts.flatMap((draft) => draft.planned.map((step) => step.id)))
-  return plan
-    .filter((step) => step.state !== 'ready' && step.state !== 'done' && !reported.has(step.id))
-    .map((step) => ({
-      id: `plan:${step.id}`,
-      phase: null,
-      label: step.label,
-      status: planStatus([step]) ?? 'pending',
-      lines: [],
-      errorCount: 0,
-      durationMs: null,
-    }))
+  return plan.flatMap((step, planIndex) => {
+    if (step.state === 'ready' || reported.has(step.id)) return []
+    const detail = finishedDetail([step])
+    return [
+      {
+        planIndex,
+        step: {
+          id: `plan:${step.id}`,
+          phase: null,
+          label: step.label,
+          status: planStatus([step]) ?? 'pending',
+          lines: [],
+          errorCount: 0,
+          durationMs: null,
+          ...(detail ? { detail } : {}),
+        },
+      },
+    ]
+  })
+}
+
+/**
+ * The silent steps woven in where the plan puts them: each goes before the
+ * first reported step that comes later in the plan; steps no plan step covers
+ * keep their place.
+ */
+function inPlanOrder(
+  reported: readonly { planIndex: number | null; step: LogStep }[],
+  silent: readonly { planIndex: number; step: LogStep }[]
+): LogStep[] {
+  const out: LogStep[] = []
+  let next = 0
+  for (const entry of reported) {
+    let waiting = silent[next]
+    while (entry.planIndex !== null && waiting && waiting.planIndex < entry.planIndex) {
+      out.push(waiting.step)
+      next += 1
+      waiting = silent[next]
+    }
+    out.push(entry.step)
+  }
+  return [...out, ...silent.slice(next).map((entry) => entry.step)]
 }
 
 /**
@@ -208,13 +251,14 @@ export function buildLogSteps(
   )
   settleRepeatedPlanSteps(drafts)
   const planDecided = drafts.some((draft) => draft.status === 'failed')
-  const steps: LogStep[] = drafts.map((draft, index) => {
+  const steps = drafts.map((draft, index) => {
     let resolved = draft.status
     if (resolved === null) {
       const last = index === drafts.length - 1
       resolved = last && !planDecided ? outcomeStatus(status) : 'ok'
     }
-    return {
+    const detail = finishedDetail(draft.planned)
+    const step: LogStep = {
       id: draft.id,
       phase: draft.phase,
       label: draft.label,
@@ -222,9 +266,12 @@ export function buildLogSteps(
       lines: draft.lines,
       errorCount: draft.lines.filter((line) => lineLevel(line) === 'error').length,
       durationMs: durationOf(draft.lines),
+      ...(detail ? { detail } : {}),
     }
+    const indexes = draft.planned.map((planned) => planSteps.indexOf(planned))
+    return { planIndex: indexes.length > 0 ? Math.min(...indexes) : null, step }
   })
-  return [...steps, ...silentPlanSteps(planSteps, drafts)]
+  return inPlanOrder(steps, silentPlanSteps(planSteps, drafts))
 }
 
 /**

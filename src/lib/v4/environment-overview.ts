@@ -17,6 +17,7 @@ import { DEFAULT_HOSTING_BIND_SCOPE, isHostingBindScope } from '@/lib/compose/ho
 import type { DeploymentGroup } from '@/lib/deployment-history'
 import { hostingHostnames, oldestHostingsFirst } from '@/lib/environment-status'
 import { hostnameStatusLabel } from '@/lib/tunnel-runs'
+import { type WaitingCause, waitingCause } from '@/lib/hosting-certificate'
 import type {
   BindingRecord,
   ConfigViewChange,
@@ -268,6 +269,13 @@ function uploadedKey(cert: HostingCertificate): string {
   return cert.uploadedExpiryWarning === 'none' ? 'ok' : 'expiring'
 }
 
+/** The status key for each thing a waiting certificate request can wait on. */
+const WAITING_KEYS: Readonly<Record<WaitingCause, string>> = {
+  dns: 'waiting',
+  port80: 'waiting_port80',
+  caa: 'waiting_caa',
+}
+
 /**
  * The certificate word from the block the server derives for each hosting
  * (newer control planes): it knows whether a deploy has carried the
@@ -281,7 +289,7 @@ export function hostingCertificateKey(cert: HostingCertificate): string {
     case 'uploaded':
       return uploadedKey(cert)
     case 'waiting_for_dns':
-      return 'waiting'
+      return WAITING_KEYS[waitingCause(cert.dns)]
     case 'renewal_failed':
       return cert.lastIssuedAt ? 'renewal_failed' : 'issue_failed'
     case 'issuing':
