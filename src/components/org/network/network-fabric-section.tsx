@@ -940,6 +940,18 @@ function FabricServersPanel({
   )
 }
 
+function isFabricToggleDisabled(
+  flags: Readonly<{ pending: boolean; unavailable: boolean; canManage: boolean; loaded: boolean }>
+): boolean {
+  return flags.pending || flags.unavailable || !flags.canManage || !flags.loaded
+}
+
+function isFabricApplyDisabled(
+  flags: Readonly<{ canManage: boolean; enabled: boolean; unavailable: boolean; busy: boolean }>
+): boolean {
+  return !flags.canManage || !flags.enabled || flags.unavailable || flags.busy
+}
+
 /**
  * Org opt-in for TurboFabric. Default off. Enabling lets environments run
  * across servers; standalone Docker does not require it.
@@ -970,7 +982,12 @@ export function NetworkFabricSection({ orgId }: Readonly<{ orgId: string }>) {
   const pending = mutation.isPending || query.isLoading
   const queryError = fabricLoadError(query.isError, unavailable, query.error)
   const displayError = error ?? mutation.actionError ?? applyMutation.actionError ?? queryError
-  const toggleDisabled = pending || unavailable || !canManage || query.data === undefined
+  const toggleDisabled = isFabricToggleDisabled({
+    pending,
+    unavailable,
+    canManage,
+    loaded: query.data !== undefined,
+  })
   const showToggle = canManage && !unavailable
 
   const relayByServerId = useMemo(() => {
@@ -1023,8 +1040,12 @@ export function NetworkFabricSection({ orgId }: Readonly<{ orgId: string }>) {
   }, [commandsQuery.data])
 
   const applyBusy = hasPendingTrackedCommands(tracked, commandsQuery.data)
-  const applyDisabled =
-    !canManage || !enabled || unavailable || applyMutation.isPending || applyBusy
+  const applyDisabled = isFabricApplyDisabled({
+    canManage,
+    enabled,
+    unavailable,
+    busy: applyMutation.isPending || applyBusy,
+  })
 
   function handleAllowRelayToggle() {
     if (toggleDisabled || !enabled) return

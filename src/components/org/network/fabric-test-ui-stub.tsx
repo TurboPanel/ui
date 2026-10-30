@@ -28,10 +28,10 @@ export const fabricUiStub = {
     footer,
   }: Children & Readonly<{ visible: boolean; title: string; footer?: ReactNode }>) =>
     visible ? (
-      <div role="dialog" aria-label={title}>
+      <dialog open aria-label={title}>
         {children}
         {footer}
-      </div>
+      </dialog>
     ) : null,
   SegmentedControl: ({
     options,
