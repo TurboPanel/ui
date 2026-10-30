@@ -27,6 +27,26 @@ import { defaultWwwMode, wwwResultLines } from '@/lib/hosting-www'
 import { isLoopbackOrPrivateHostname } from '@/lib/install-tls'
 import { variableUseFlags, type VariableUse } from '@/lib/v4/config-edits'
 
+// --- page ---------------------------------------------------------------------
+
+/**
+ * What the page does once it knows the environment's deploy history. The page
+ * is the first-deploy step a new Compose project opens on, so an environment
+ * that has deployed before opens that environment instead (an old link or a
+ * typed URL). It waits while the history loads, so it neither flashes the
+ * form nor leaves too early. A failed history read keeps the form: a read
+ * error never blocks setting up.
+ */
+export type SetupPageStep = 'loading' | 'form' | 'deployed'
+
+export function setupPageStep(
+  history: Readonly<{ deployments: readonly unknown[] }> | undefined,
+  failed: boolean
+): SetupPageStep {
+  if (history) return history.deployments.length > 0 ? 'deployed' : 'form'
+  return failed ? 'form' : 'loading'
+}
+
 // --- server -------------------------------------------------------------------
 
 /**

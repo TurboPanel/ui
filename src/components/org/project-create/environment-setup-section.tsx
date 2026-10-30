@@ -18,12 +18,17 @@ import type { EnvironmentRecord } from '@/lib/instance-api'
 import { deployRefusalMessage, isHostingAccountRefusal } from '@/lib/deploy-error-message'
 import { SectionHeading } from '@/components/ui/v4'
 import { useOrgDefaultEnvironmentName } from '@/lib/org-default-environment'
-import { setupEnvironmentPatch, setupVariableBodies } from '@/lib/project-create/environment-setup'
+import {
+  setupEnvironmentPatch,
+  setupPageStep,
+  setupVariableBodies,
+} from '@/lib/project-create/environment-setup'
 import { projectEnvironmentHref } from '@/lib/project-navigation'
 import {
   useCreateVariable,
   useDeployEnvironment,
   useEnvironment,
+  useEnvironmentDeployments,
   useOrgServers,
   useUpdateEnvironment,
 } from '@/lib/queries'
@@ -33,9 +38,11 @@ import { primaryEnvironmentOf } from '@/lib/v4/primary-environment'
 
 /**
  * Route body for `/[projectId]/setup/environment`: loads the project's first
- * environment and the servers, then hands them to the form. Save writes the
- * environment once (name, server, compose with the hostname) and then each
- * variable; Deploy does the same and opens the plain deploy confirm.
+ * environment, its deploy history and the servers, then hands them to the
+ * form. An environment that has deployed before opens that environment
+ * instead. Save writes the environment once (name, server, compose with the
+ * hostname) and then each variable; Deploy does the same and opens the plain
+ * deploy confirm.
  */
 export function ProjectEnvironmentSetupSection() {
   const { orgId, project, environments, loading, canManage } = useProjectContext()
@@ -74,11 +81,21 @@ function EnvironmentSetupLoader({
   environmentId: string
   canManage: boolean
 }>) {
+  const router = useRouter()
   // The environment is read on its own so the form starts from the saved compose.
   const environmentQuery = useEnvironment(orgId, environmentId)
   const serversQuery = useOrgServers(orgId)
+  const historyQuery = useEnvironmentDeployments(orgId, environmentId)
+  const step = setupPageStep(historyQuery.data, historyQuery.isError)
+  useEffect(() => {
+    // The same place Save and Deploy open, so it never races their own move.
+    if (step === 'deployed') {
+      router.replace(projectEnvironmentHref(orgId, projectId, environmentId) as Href)
+    }
+  }, [step, router, orgId, projectId, environmentId])
+  if (step === 'deployed') return <LoadingState label="Opening the environment…" />
   const environment = environmentQuery.data?.environment
-  if (!environment || !serversQuery.data) {
+  if (!environment || !serversQuery.data || step === 'loading') {
     const failed = environmentQuery.error ?? serversQuery.error
     if (failed) {
       return (

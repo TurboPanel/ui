@@ -13,6 +13,12 @@ const mocks = vi.hoisted(() => ({
   deployRun: vi.fn(),
   result: { current: null as unknown },
   waiting: { current: false },
+  history: {
+    current: { data: { deployments: [] }, isError: false } as {
+      data: { deployments: unknown[] } | undefined
+      isError: boolean
+    },
+  },
 }))
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
@@ -45,6 +51,7 @@ vi.mock('@/lib/queries', () => ({
     },
     error: null,
   }),
+  useEnvironmentDeployments: () => mocks.history.current,
   useOrgServers: () => ({ data: { servers: [{ id: 's1', name: 'web-1', connected: true }] } }),
   useUpdateEnvironment: () => ({ run: mocks.updateRun }),
   useCreateVariable: () => ({ run: mocks.variableRun }),
@@ -104,6 +111,7 @@ beforeEach(() => {
   mocks.variableRun.mockResolvedValue({ ok: true, value: { ok: true, id: 'v' } })
   mocks.deployRun.mockResolvedValue({ ok: true, value: {} })
   mocks.waiting.current = false
+  mocks.history.current = { data: { deployments: [] }, isError: false }
   mocks.result.current = {
     name: 'live',
     serverId: 's1',
@@ -233,5 +241,33 @@ describe('ProjectEnvironmentSetupSection', () => {
     })
     render(<ProjectEnvironmentSetupSection />)
     expect(screen.getByText('This project has no environment to set up.')).toBeTruthy()
+  })
+
+  it('waits for the deploy history before showing the form', () => {
+    mocks.history.current = { data: undefined, isError: false }
+    render(<ProjectEnvironmentSetupSection />)
+    expect(screen.getByText('Loading environment…')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
+    expect(mocks.replace).not.toHaveBeenCalled()
+  })
+
+  it('opens the environment instead when it has deployed before', () => {
+    mocks.history.current = { data: { deployments: [{ id: 'd1' }] }, isError: false }
+    render(<ProjectEnvironmentSetupSection />)
+    expect(mocks.replace).toHaveBeenCalledWith('/o/projects/p/environments/e1')
+    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
+  })
+
+  it('shows the form for an environment that never deployed', () => {
+    render(<ProjectEnvironmentSetupSection />)
+    expect(screen.getByRole('button', { name: 'Save' })).toBeTruthy()
+    expect(mocks.replace).not.toHaveBeenCalled()
+  })
+
+  it('keeps the form when the deploy history cannot be read', () => {
+    mocks.history.current = { data: undefined, isError: true }
+    render(<ProjectEnvironmentSetupSection />)
+    expect(screen.getByRole('button', { name: 'Save' })).toBeTruthy()
+    expect(mocks.replace).not.toHaveBeenCalled()
   })
 })

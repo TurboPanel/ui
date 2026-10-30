@@ -35,18 +35,27 @@ afterEach(() => {
 })
 
 describe('overlaySavedSwitch', () => {
-  it('changes only the saved switch', () => {
+  // The other switch differs between the cache and the answer, as when a
+  // slower answer for it is still on its way.
+  const SAVED = { openEnvironmentSectionByDefault: true, openWorkspaceSectionByDefault: false }
+
+  it('changes only the saved switch in an entry the cache holds', () => {
     expect(
       overlaySavedSwitch(
         { openEnvironmentSectionByDefault: false, openWorkspaceSectionByDefault: true },
         'openEnvironmentSectionByDefault',
-        true
+        SAVED
       )
     ).toEqual({ openEnvironmentSectionByDefault: true, openWorkspaceSectionByDefault: true })
   })
 
-  it('writes nothing into a cache entry that was never fetched', () => {
-    expect(overlaySavedSwitch(undefined, 'openWorkspaceSectionByDefault', true)).toBeUndefined()
+  it("fills an entry that was never fetched from the save's answer", () => {
+    expect(
+      overlaySavedSwitch(undefined, 'openEnvironmentSectionByDefault', {
+        ...SAVED,
+        ok: true,
+      } as never)
+    ).toEqual(SAVED)
   })
 })
 
