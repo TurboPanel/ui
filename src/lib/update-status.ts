@@ -40,9 +40,13 @@ export function installerHostForChannel(channel: string | null | undefined): str
   }
 }
 
-/** Refreshes the co-located daemon in place (instance, UI and database untouched). */
+/**
+ * Refreshes the co-located daemon in place (instance, UI and database
+ * untouched). Always `https://`: a bare host makes curl's first request
+ * plain HTTP, and whoever answers it picks the script that runs as root.
+ */
 export function daemonReinstallCommand(channel?: string | null): string {
-  return `curl -fsSL ${installerHostForChannel(channel)} | TURBOPANEL_DAEMON_ONLY=1 sh`
+  return `curl -fsSL https://${installerHostForChannel(channel)} | TURBOPANEL_DAEMON_ONLY=1 sh`
 }
 
 export const DAEMON_LOGS_COMMAND = 'journalctl -u turbopaneld -n 100 --no-pager'

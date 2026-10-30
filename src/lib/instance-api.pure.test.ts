@@ -813,13 +813,13 @@ describe('fetch wrappers (mocked fetch)', () => {
       jsonResponse({
         licenseId: 'lic-1',
         licenseToken: 'tok',
-        installCommand: 'curl -fsSL turbopanel.sh | sh',
+        installCommand: 'curl -fsSL https://turbopanel.sh | sh',
       })
     )
     await expect(createLicense('Huey', ' https://panel.example.com ')).resolves.toEqual({
       licenseId: 'lic-1',
       licenseToken: 'tok',
-      installCommand: 'curl -fsSL turbopanel.sh | sh',
+      installCommand: 'curl -fsSL https://turbopanel.sh | sh',
     })
     const [, init] = fetchMock.mock.calls[0] ?? []
     expect(JSON.parse(String((init as RequestInit).body))).toEqual({
