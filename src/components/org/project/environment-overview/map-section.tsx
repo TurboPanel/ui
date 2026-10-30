@@ -1,11 +1,15 @@
 import { useMemo, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { EnvironmentMap, type StationHref } from '@/components/org/project/environment-overview/environment-map'
+import {
+  EnvironmentMap,
+  type StationHref,
+} from '@/components/org/project/environment-overview/environment-map'
 import { SectionHeading } from '@/components/ui/v4/section-heading'
 import { typeStyle } from '@/components/ui/v4/type-styles'
 import { themedStyles, usePalette } from '@/components/ui/v4/use-palette'
 import { webPointer } from '@/lib/theme'
 import { mapInputOf, type OverviewSource } from '@/lib/v4/environment-overview'
+import { withDeclaredDomains } from '@/lib/v4/declared-map-domains'
 import { mapLayout, type MapLayout, type MapMode } from '@/lib/v4/map-layout'
 import { RADIUS } from '@/lib/v4/ui-scale'
 
@@ -24,7 +28,12 @@ const styles = themedStyles((p) => ({
     backgroundColor: p.surface2,
     padding: 2,
   },
-  option: { paddingHorizontal: 10, minHeight: 28, justifyContent: 'center', borderRadius: RADIUS.row },
+  option: {
+    paddingHorizontal: 10,
+    minHeight: 28,
+    justifyContent: 'center',
+    borderRadius: RADIUS.row,
+  },
   optionOn: { backgroundColor: p.surface3 },
   optionText: { ...typeStyle('bodyMedium', 'footnote'), color: p.text3 },
   optionTextOn: { color: p.text },
@@ -82,7 +91,10 @@ export function Legend({ layout }: Readonly<{ layout: MapLayout }>) {
     <View style={s.legend}>
       {items.map((item) => (
         <View key={item.kind} style={s.legendItem}>
-          <View accessibilityElementsHidden style={[s.key, { backgroundColor: p[LINE_KEY_COLOR[item.kind]] }]} />
+          <View
+            accessibilityElementsHidden
+            style={[s.key, { backgroundColor: p[LINE_KEY_COLOR[item.kind]] }]}
+          />
           <Text style={s.legendText}>{item.label}</Text>
         </View>
       ))}
@@ -96,7 +108,10 @@ export function MapSection({
   hrefFor,
 }: Readonly<{ source: OverviewSource; hrefFor: StationHref }>) {
   const [mode, setMode] = useState<MapMode>('env')
-  const layout = useMemo(() => mapLayout(mapInputOf(source, mode)), [source, mode])
+  const layout = useMemo(
+    () => mapLayout(withDeclaredDomains(mapInputOf(source, mode), source.view.effective)),
+    [source, mode]
+  )
   return (
     <View>
       <SectionHeading
