@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import type { RelayRecord } from './instance-api'
+import type { OrgFabricPairRecord, OrgFabricServerRecord, RelayRecord } from './instance-api'
 import {
+  buildFabricPairRows,
   buildFabricPathMatrix,
+  buildServerPairRows,
+  fabricPairPathLabel,
+  fabricPairUsesTunnel,
+  fabricServerPairRows,
   fabricPathIsDegraded,
   fabricPathKindLabel,
   fabricRoutedViaLabels,
@@ -428,5 +433,146 @@ describe('fabricRoutedViaLabels', () => {
         new Map()
       )
     ).toEqual(['srv-unknown-gw'])
+  })
+})
+
+function pair(
+  fromServerId: string,
+  toServerId: string,
+  path: OrgFabricPairRecord['path'],
+  reason = 'Because.'
+): OrgFabricPairRecord {
+  return { fromServerId, toServerId, path, reason }
+}
+
+function fabricServer(serverId: string, name: string): OrgFabricServerRecord {
+  return {
+    serverId,
+    name,
+    enabled: true,
+    member: true,
+    role: 'gateway',
+    roleSource: 'automatic',
+    automaticRole: 'gateway',
+  }
+}
+
+const names = new Map([
+  ['srv-a', 'alpha'],
+  ['srv-b', 'bravo'],
+  ['srv-c', 'charlie'],
+])
+
+describe('fabricPairPathLabel', () => {
+  it('names each path in book title case', () => {
+    expect(fabricPairPathLabel('lan')).toBe('LAN')
+    expect(fabricPairPathLabel('fabric')).toBe('TurboFabric')
+    expect(fabricPairPathLabel('fabric_over_untrusted_lan')).toBe('TurboFabric over LAN')
+    expect(fabricPairPathLabel('none')).toBe('No Path')
+  })
+
+  it('treats only the tunnel paths as using a tunnel', () => {
+    expect(fabricPairUsesTunnel('fabric')).toBe(true)
+    expect(fabricPairUsesTunnel('fabric_over_untrusted_lan')).toBe(true)
+    expect(fabricPairUsesTunnel('lan')).toBe(false)
+    expect(fabricPairUsesTunnel('none')).toBe(false)
+  })
+})
+
+describe('buildFabricPairRows', () => {
+  it('keeps the reason and adds tunnel readings from either direction', () => {
+    const relays = [
+      relay({
+        serverId: 'srv-c',
+        role: 'gateway',
+        paths: [
+          { peerServerId: 'srv-a', selected: 'direct_public', latencyMs: 42, degraded: false },
+        ],
+      }),
+    ]
+    const matrix = buildFabricPathMatrix(relays, names)
+    const rows = buildFabricPairRows(
+      [
+        pair('srv-a', 'srv-c', 'fabric', 'They are in different datacenters.'),
+        pair('srv-a', 'srv-b', 'lan', 'They share the trusted network Rack A.'),
+      ],
+      matrix,
+      names
+    )
+    expect(rows.map((row) => [row.title, row.pathLabel, row.reason, row.latencyMs])).toEqual([
+      ['alpha ↔ bravo', 'LAN', 'They share the trusted network Rack A.', undefined],
+      ['alpha ↔ charlie', 'TurboFabric', 'They are in different datacenters.', 42],
+    ])
+  })
+
+  it('never warns about a tunnel on a LAN pair', () => {
+    const relays = [
+      relay({
+        serverId: 'srv-a',
+        role: 'gateway',
+        paths: [{ peerServerId: 'srv-b', selected: 'unreachable', degraded: true }],
+      }),
+    ]
+    const matrix = buildFabricPathMatrix(relays, names)
+    const [lanRow] = buildFabricPairRows([pair('srv-a', 'srv-b', 'lan')], matrix, names)
+    expect(lanRow?.warning).toBeUndefined()
+    const [tunnelRow] = buildFabricPairRows(
+      [pair('srv-a', 'srv-b', 'fabric_over_untrusted_lan')],
+      matrix,
+      names
+    )
+    expect(tunnelRow?.pathLabel).toBe('TurboFabric over LAN')
+    expect(tunnelRow?.warning).toBe('Unreachable')
+  })
+
+  it('falls back to the server id when a name is unknown', () => {
+    const [row] = buildFabricPairRows([pair('srv-a', 'srv-x', 'none')], [], names)
+    expect(row?.title).toBe('alpha ↔ srv-x')
+    expect(row?.pathLabel).toBe('No Path')
+  })
+})
+
+describe('buildServerPairRows', () => {
+  it('lists only the pairs with this server, titled by the other server', () => {
+    const rows = buildServerPairRows(
+      'srv-b',
+      [
+        pair('srv-a', 'srv-b', 'lan'),
+        pair('srv-b', 'srv-c', 'fabric'),
+        pair('srv-a', 'srv-c', 'fabric'),
+      ],
+      [],
+      names
+    )
+    expect(rows.map((row) => [row.key, row.title, row.pathLabel])).toEqual([
+      ['srv-a', 'alpha', 'LAN'],
+      ['srv-c', 'charlie', 'TurboFabric'],
+    ])
+  })
+})
+
+describe('fabricServerPairRows', () => {
+  it('is empty when the panel sends no pairs', () => {
+    expect(fabricServerPairRows('srv-a', undefined)).toEqual([])
+    expect(
+      fabricServerPairRows('srv-a', { servers: [fabricServer('srv-a', 'alpha')], relays: [] })
+    ).toEqual([])
+  })
+
+  it('names the other servers from the fabric server list', () => {
+    const rows = fabricServerPairRows('srv-a', {
+      servers: [fabricServer('srv-a', 'alpha'), fabricServer('srv-b', 'bravo')],
+      relays: [],
+      pairs: [pair('srv-a', 'srv-b', 'lan', 'They share the trusted network Rack A.')],
+    })
+    expect(rows).toEqual([
+      {
+        key: 'srv-b',
+        title: 'bravo',
+        path: 'lan',
+        pathLabel: 'LAN',
+        reason: 'They share the trusted network Rack A.',
+      },
+    ])
   })
 })

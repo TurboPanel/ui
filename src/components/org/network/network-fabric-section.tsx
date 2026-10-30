@@ -26,11 +26,13 @@ import {
   type RelayRole,
 } from '@/lib/instance-api'
 import {
+  buildFabricPairRows,
   buildFabricPathMatrix,
   fabricPathIsDegraded,
   fabricPathKindLabel,
   formatResolvedAdvertisedCidrs,
   relayRoleLabel,
+  type FabricPairRow,
   type FabricPathMatrixRow,
 } from '@/lib/fabric-mesh'
 import {
@@ -40,6 +42,7 @@ import {
   type FabricState,
 } from '@/lib/fabric-servers'
 import { formatRelativeLocalDateTime } from '@/lib/format-datetime'
+import { FabricPairPathList } from '@/components/org/network/fabric-pair-paths'
 import { FabricLifecycleControls } from '@/components/org/network/fabric-lifecycle-controls'
 import { FabricServerControls } from '@/components/org/network/fabric-server-controls'
 import {
@@ -390,6 +393,19 @@ function pathRowLatency(row: FabricPathMatrixRow): string | null {
   return `${String(row.latencyMs)} ms`
 }
 
+const PAIR_PATHS_HELP = `Servers that share a trusted datacenter network talk over the LAN with no tunnel, even with ${TURBOFABRIC_PRODUCT_NAME} off. ${TURBOFABRIC_PRODUCT_NAME} carries traffic between datacenters and runs encrypted over a network marked untrusted.`
+
+/** Server pairs as the panel reports them (`pairs[]`), with tunnel readings folded in. */
+function FabricPairPathsPanel({ rows }: Readonly<{ rows: readonly FabricPairRow[] }>) {
+  return (
+    <SectionPanel title="Paths" hint={`${rows.length} pair(s)`}>
+      <Text style={panelStyles.muted}>{PAIR_PATHS_HELP}</Text>
+      <FabricPairPathList rows={rows} />
+    </SectionPanel>
+  )
+}
+
+/** Older control plane without `pairs[]`: the relay-observed tunnel paths. */
 function FabricPathMatrixPanel({ rows }: Readonly<{ rows: readonly FabricPathMatrixRow[] }>) {
   return (
     <SectionPanel title="Paths" hint={`${rows.length} pair(s)`}>
@@ -965,13 +981,23 @@ function fabricSectionView(
     loading: boolean
     defaultFabricEnabled: boolean
     serverCount: number
+    pairCount: number
   }>
-): { showLoading: boolean; showDefaultHint: boolean; showServers: boolean; showMesh: boolean } {
+): {
+  showLoading: boolean
+  showDefaultHint: boolean
+  showServers: boolean
+  showMesh: boolean
+  showPairs: boolean
+} {
+  const showMesh = input.enabled && !input.unavailable
   return {
     showLoading: input.loading,
     showDefaultHint: input.canManage && input.state === 'off' && input.defaultFabricEnabled,
     showServers: input.canManage && !input.unavailable && input.serverCount > 0,
-    showMesh: input.enabled && !input.unavailable,
+    showMesh,
+    // LAN pairs exist with TurboFabric off or paused, so the pair list does not wait for the mesh.
+    showPairs: !input.unavailable && input.pairCount > 0,
   }
 }
 
@@ -1032,6 +1058,7 @@ export function NetworkFabricSection({ orgId }: Readonly<{ orgId: string }>) {
     loading: query.isLoading && !query.data,
     defaultFabricEnabled: hostDefaultsQuery.data?.defaultFabricEnabled === true,
     serverCount: fabricServers.length,
+    pairCount: query.data?.pairs?.length ?? 0,
   })
 
   const relayByServerId = useMemo(() => {
@@ -1051,6 +1078,12 @@ export function NetworkFabricSection({ orgId }: Readonly<{ orgId: string }>) {
   const pathMatrix = useMemo(
     () => buildFabricPathMatrix(relays, serverNameById),
     [relays, serverNameById]
+  )
+
+  const pairData = query.data?.pairs
+  const pairRows = useMemo(
+    () => buildFabricPairRows(orEmptyArray(pairData), pathMatrix, serverNameById),
+    [pairData, pathMatrix, serverNameById]
   )
 
   const eligibleGateways = useMemo(
@@ -1178,9 +1211,11 @@ export function NetworkFabricSection({ orgId }: Readonly<{ orgId: string }>) {
             eligibleGateways={eligibleGateways}
             onApply={handleApply}
           />
-          <FabricPathMatrixPanel rows={pathMatrix} />
+          {view.showPairs ? null : <FabricPathMatrixPanel rows={pathMatrix} />}
         </>
       ) : null}
+
+      {view.showPairs ? <FabricPairPathsPanel rows={pairRows} /> : null}
     </View>
   )
 }

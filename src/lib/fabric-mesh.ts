@@ -1,5 +1,8 @@
 import type {
+  FabricPairPath,
   FabricRelayPathKind,
+  OrgFabricPairRecord,
+  OrgFabricSettings,
   FabricRelayPathState,
   RelayRecord,
   RelayRole,
@@ -238,6 +241,146 @@ export function buildFabricPathMatrix(
   }
   rows.sort(comparePathMatrixRows)
   return rows
+}
+
+export type FabricPairPathLabel = 'LAN' | 'TurboFabric' | 'TurboFabric over LAN' | 'No Path'
+
+/** Short label for how a server pair talks. */
+export function fabricPairPathLabel(path: FabricPairPath): FabricPairPathLabel {
+  if (path === 'lan') return 'LAN'
+  if (path === 'fabric') return 'TurboFabric'
+  if (path === 'fabric_over_untrusted_lan') return 'TurboFabric over LAN'
+  return 'No Path'
+}
+
+/** True when a TurboFabric tunnel carries the pair, so tunnel readings apply. */
+export function fabricPairUsesTunnel(path: FabricPairPath): boolean {
+  return path === 'fabric' || path === 'fabric_over_untrusted_lan'
+}
+
+/** One server pair ready to show: who, the path label, the panel's reason and tunnel readings. */
+export type FabricPairRow = {
+  key: string
+  title: string
+  path: FabricPairPath
+  pathLabel: FabricPairPathLabel
+  reason: string
+  latencyMs?: number
+  viaLabel?: string
+  /** Tunnel warning ("Unreachable" / "Degraded"); only for a pair a tunnel carries. */
+  warning?: string
+}
+
+function tunnelReading(
+  pair: OrgFabricPairRecord,
+  matrix: readonly FabricPathMatrixRow[]
+): FabricPathMatrixRow | undefined {
+  return (
+    matrix.find(
+      (row) => row.fromServerId === pair.fromServerId && row.toServerId === pair.toServerId
+    ) ??
+    matrix.find(
+      (row) => row.fromServerId === pair.toServerId && row.toServerId === pair.fromServerId
+    )
+  )
+}
+
+function tunnelWarning(row: FabricPathMatrixRow): string | undefined {
+  if (row.kind === 'unreachable') return 'Unreachable'
+  if (fabricPathIsDegraded(row)) return 'Degraded'
+  return undefined
+}
+
+function tunnelFields(
+  pair: OrgFabricPairRecord,
+  matrix: readonly FabricPathMatrixRow[]
+): Partial<FabricPairRow> {
+  if (!fabricPairUsesTunnel(pair.path)) return {}
+  const row = tunnelReading(pair, matrix)
+  if (!row) return {}
+  const fields: Partial<FabricPairRow> = {}
+  if (row.kind !== 'unreachable' && row.latencyMs !== undefined) fields.latencyMs = row.latencyMs
+  if (row.viaLabel) fields.viaLabel = row.viaLabel
+  const warning = tunnelWarning(row)
+  if (warning) fields.warning = warning
+  return fields
+}
+
+function pairRow(
+  pair: OrgFabricPairRecord,
+  key: string,
+  title: string,
+  matrix: readonly FabricPathMatrixRow[]
+): FabricPairRow {
+  return {
+    key,
+    title,
+    path: pair.path,
+    pathLabel: fabricPairPathLabel(pair.path),
+    reason: pair.reason,
+    ...tunnelFields(pair, matrix),
+  }
+}
+
+function comparePairRows(a: FabricPairRow, b: FabricPairRow): number {
+  return a.title.localeCompare(b.title)
+}
+
+/**
+ * One row per server pair from `GET …/fabric` `pairs[]`, with the tunnel's
+ * latency and warning taken from the relay path matrix (either direction)
+ * when a tunnel carries the pair. A LAN pair has no tunnel readings.
+ */
+export function buildFabricPairRows(
+  pairs: readonly OrgFabricPairRecord[],
+  matrix: readonly FabricPathMatrixRow[],
+  serverNameById: ReadonlyMap<string, string>
+): FabricPairRow[] {
+  const rows = pairs.map((pair) =>
+    pairRow(
+      pair,
+      `${pair.fromServerId}:${pair.toServerId}`,
+      `${serverLabel(pair.fromServerId, serverNameById)} ↔ ${serverLabel(pair.toServerId, serverNameById)}`,
+      matrix
+    )
+  )
+  return rows.sort(comparePairRows)
+}
+
+/**
+ * The pairs that include one server, seen from that server: each row is titled
+ * with the other server's name. Tunnel readings come from the matrix as above.
+ */
+export function buildServerPairRows(
+  serverId: string,
+  pairs: readonly OrgFabricPairRecord[],
+  matrix: readonly FabricPathMatrixRow[],
+  serverNameById: ReadonlyMap<string, string>
+): FabricPairRow[] {
+  const rows: FabricPairRow[] = []
+  for (const pair of pairs) {
+    let otherId: string | null = null
+    if (pair.fromServerId === serverId) otherId = pair.toServerId
+    else if (pair.toServerId === serverId) otherId = pair.fromServerId
+    if (!otherId) continue
+    rows.push(pairRow(pair, otherId, serverLabel(otherId, serverNameById), matrix))
+  }
+  return rows.sort(comparePairRows)
+}
+
+/**
+ * How one server reaches every other org server, straight from `GET …/fabric`:
+ * names from `servers[]`, tunnel readings from the relay matrix. Empty when
+ * `pairs[]` is absent (older control plane, or fewer than two servers).
+ */
+export function fabricServerPairRows(
+  serverId: string,
+  fabric: Pick<OrgFabricSettings, 'pairs' | 'servers' | 'relays'> | undefined
+): FabricPairRow[] {
+  if (!fabric?.pairs) return []
+  const nameById = new Map(fabric.servers.map((row) => [row.serverId, row.name]))
+  const matrix = buildFabricPathMatrix(fabric.relays, nameById)
+  return buildServerPairRows(serverId, fabric.pairs, matrix, nameById)
 }
 
 /**

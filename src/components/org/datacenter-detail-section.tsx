@@ -502,7 +502,7 @@ function RoutingPanel({
 
       <SettingRow
         label={trusted ? 'Trusted' : 'Untrusted'}
-        description={`Trusted means this L2 is under your control. Across an untrusted datacenter, server-to-server traffic is forced through ${TURBOFABRIC_PRODUCT_NAME} and encrypted, and a failover replica is refused (failover_requires_trusted_datacenter) — mark a shared retail LAN or a provider segment untrusted.`}
+        description={`Trusted: servers on this network talk over the LAN with no tunnel, even with ${TURBOFABRIC_PRODUCT_NAME} off. Untrusted: ${TURBOFABRIC_PRODUCT_NAME} runs over it, encrypted, and database failover replicas are refused. Mark a network you share with others untrusted.`}
         align="start"
       >
         <Toggle
@@ -518,7 +518,7 @@ function RoutingPanel({
         <InlineNotice
           tone="warning"
           title="Saving recomputes managed transports."
-          body={`Servers in this datacenter host managed database members. Stored replication transports and ProxySQL backends will be recomputed on save — pairs that only share this datacenter move to ${TURBOFABRIC_PRODUCT_NAME} or public TLS, and failover replicas that depended on it stop being eligible.`}
+          body={`Servers in this datacenter host managed database members. Stored replication transports and ProxySQL backends will be recomputed on save — pairs that only share this datacenter move to the encrypted ${TURBOFABRIC_PRODUCT_NAME} tunnel over this network, or to public TLS when ${TURBOFABRIC_PRODUCT_NAME} is off, and failover replicas that depended on it stop being eligible.`}
         />
       ) : null}
 

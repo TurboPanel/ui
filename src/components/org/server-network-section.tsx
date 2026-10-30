@@ -2,6 +2,7 @@ import { useRouter, type Href } from 'expo-router'
 import { useQuery } from '@tanstack/react-query'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { AddressFamilyBadge } from '@/components/org/address-family-badge'
+import { FabricPairPathList } from '@/components/org/network/fabric-pair-paths'
 import { FabricServerControls } from '@/components/org/network/fabric-server-controls'
 import { IpListRow } from '@/components/org/network/network-rows'
 import { ServerAddressesCard } from '@/components/org/server-addresses-card'
@@ -18,6 +19,7 @@ import {
   type ServerDetailRecord,
   type ServerReportedIp,
 } from '@/lib/instance-api'
+import { fabricServerPairRows, type FabricPairRow } from '@/lib/fabric-mesh'
 import { datacenterHref, networkFabricHref } from '@/lib/org-navigation'
 import { useOrgFabric } from '@/lib/queries/fabric'
 import { queryKeys, useCan } from '@/lib/query-client'
@@ -168,10 +170,25 @@ function DatacenterPrivatePins({
   )
 }
 
+function ServerPairPaths({ rows }: Readonly<{ rows: readonly FabricPairRow[] }>) {
+  if (rows.length === 0) return null
+  return (
+    <View style={styles.pairPaths}>
+      <Text style={panelStyles.detailTitle}>How Traffic Reaches Other Servers</Text>
+      <Text style={panelStyles.muted}>
+        A server on a shared trusted network is reached over the LAN with no tunnel.{' '}
+        {TURBOFABRIC_PRODUCT_NAME} carries the rest, encrypted.
+      </Text>
+      <FabricPairPathList rows={rows} />
+    </View>
+  )
+}
+
 function ServerMeshMembershipPanel({
   orgId,
   relay,
   fabricServer,
+  pairRows,
   loading,
   canManage,
 }: Readonly<{
@@ -179,13 +196,17 @@ function ServerMeshMembershipPanel({
   relay: RelayRecord | null
   /** This server's switch and role; null on an older control plane. */
   fabricServer: OrgFabricServerRecord | null
+  pairRows: readonly FabricPairRow[]
   loading: boolean
   canManage: boolean
 }>) {
   const router = useRouter()
 
   return (
-    <SectionPanel title="Mesh" hint={`${TURBOFABRIC_PRODUCT_NAME} membership for this host`}>
+    <SectionPanel
+      title="Mesh"
+      hint={`${TURBOFABRIC_PRODUCT_NAME} membership and paths for this host`}
+    >
       {!canManage ? (
         <Text style={panelStyles.muted}>
           Organization manage permission is required to view {TURBOFABRIC_PRODUCT_NAME} membership.
@@ -220,6 +241,7 @@ function ServerMeshMembershipPanel({
           </Text>
         </View>
       ) : null}
+      {canManage ? <ServerPairPaths rows={pairRows} /> : null}
     </SectionPanel>
   )
 }
@@ -264,6 +286,7 @@ export function ServerNetworkSection({
   const relay = fabricQuery.data?.relays.find((row) => row.serverId === server.id) ?? null
   const fabricServer = fabricQuery.data?.servers.find((row) => row.serverId === server.id) ?? null
   const meshLoading = fabricQuery.isLoading
+  const pairRows = fabricServerPairRows(server.id, fabricQuery.data)
 
   const memberships = server.datacenters ?? []
   const datacenterNameById = new Map(memberships.map((row) => [row.id, row.name?.trim() || row.id]))
@@ -348,6 +371,7 @@ export function ServerNetworkSection({
         orgId={orgId}
         relay={relay}
         fabricServer={fabricServer}
+        pairRows={pairRows}
         loading={meshLoading}
         canManage={canManage}
       />
@@ -384,6 +408,9 @@ export function ServerNetworkSection({
 }
 
 const styles = StyleSheet.create({
+  pairPaths: {
+    gap: spacing.sm,
+  },
   root: {
     gap: spacing.lg,
   },
