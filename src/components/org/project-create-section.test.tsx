@@ -175,7 +175,7 @@ describe('ProjectCreateSection', () => {
     await press('Continue')
     expect(screen.getByText('Compose editor on compose')).toBeTruthy()
     await press('Back')
-    expect(screen.getByRole('heading', { name: 'New project' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'New Project' })).toBeTruthy()
   })
 
   it('creates a managed database from the inline pick and opens the project', async () => {

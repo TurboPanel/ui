@@ -175,8 +175,9 @@ export const ORG_SIDEBAR_AREA_IDS = [
 
 /**
  * Areas the redesign leaves as they are (network, access). They stay one click
- * away in a quiet group under Recent projects so none of their routes becomes
- * a deep link only. Managed databases are a filter on Projects instead.
+ * away below a small gap after Recent Projects, with no group heading, so none
+ * of their routes becomes a deep link only. Managed databases are a filter on
+ * Projects instead.
  */
 export const ORG_SIDEBAR_MORE_AREA_IDS = [
   'network',
