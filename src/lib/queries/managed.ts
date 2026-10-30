@@ -1,4 +1,7 @@
 import {
+  createManagedBackupLogin,
+  deleteManagedBackupLogin,
+  fetchManagedBackupLogin,
   addManagedReplica,
   applyEnvironmentManaged,
   createEnvironmentManaged,
@@ -444,6 +447,37 @@ export function useDeleteManagedUser(orgId: string, environmentId: string) {
           queryKey: queryKeys.org(orgId).commands.all,
         }),
       ]),
+  })
+}
+
+export function useManagedBackupLogin(
+  orgId: string,
+  environmentId: string,
+  options?: Readonly<{ enabled?: boolean }>
+) {
+  return useQuery({
+    queryKey: queryKeys.org(orgId).managed.backupLogin(environmentId),
+    queryFn: () => fetchManagedBackupLogin(environmentId),
+    enabled: (options?.enabled ?? true) && orgId.length > 0 && environmentId.length > 0,
+  })
+}
+
+/** The backup login; its password is never kept in the cache. */
+export function useCreateManagedBackupLogin(orgId: string, environmentId: string) {
+  const queryClient = useQueryClient()
+  const mutation = useMutation({
+    mutationFn: (body: Parameters<typeof createManagedBackupLogin>[1]) =>
+      createManagedBackupLogin(environmentId, body),
+    onSuccess: () => invalidateAfterLoginCreate(queryClient, orgId, environmentId),
+  })
+  return useShowOnceSecretMutation(mutation, 'Failed to add the backup login')
+}
+
+export function useDeleteManagedBackupLogin(orgId: string, environmentId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: () => deleteManagedBackupLogin(environmentId),
+    onSuccess: () => invalidateAfterLoginCreate(queryClient, orgId, environmentId),
   })
 }
 

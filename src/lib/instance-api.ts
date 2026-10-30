@@ -9857,6 +9857,50 @@ export async function deleteManagedUser(
   )
 }
 
+/** `GET …/managed/backup-login`: the cluster's one backup login, or `null`. */
+export async function fetchManagedBackupLogin(
+  environmentId: string
+): Promise<{ login: ManagedUserRecord | null }> {
+  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/managed/backup-login`)
+}
+
+/**
+ * Create the cluster's backup login: read-only rights a backup tool needs to
+ * copy every database, always routed to the primary. `allowedSources` is
+ * required and never `any` (400 `managed_backup_login_sources_required`); 409
+ * `managed_backup_login_exists` / `managed_backup_login_needs_daemon_update`.
+ * The returned `password` is **show-once**.
+ */
+export async function createManagedBackupLogin(
+  environmentId: string,
+  body: {
+    allowedSources: string[]
+    /** Omit for `backup`. */
+    username?: string
+    maxConnections?: number
+  }
+): Promise<{
+  ok: true
+  login: ManagedUserRecord
+  password: string
+  commandId: string
+  serverId: string
+}> {
+  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/managed/backup-login`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+/** Delete the cluster's backup login (the server drops the account through an apply). */
+export async function deleteManagedBackupLogin(
+  environmentId: string
+): Promise<ManagedCommandResponse> {
+  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/managed/backup-login`, {
+    method: 'DELETE',
+  })
+}
+
 export async function fetchManagedDatabases(
   environmentId: string
 ): Promise<{ databases: string[] }> {

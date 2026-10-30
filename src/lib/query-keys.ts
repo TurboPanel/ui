@@ -373,6 +373,9 @@ export const queryKeys = {
           ['org', orgId, 'managed', environmentId, 'privilege-catalogue'] as const,
         users: (environmentId: string) =>
           ['org', orgId, 'managed', environmentId, 'users'] as const,
+        /** Under `users`, so every invalidation of the logins refreshes it too. */
+        backupLogin: (environmentId: string) =>
+          ['org', orgId, 'managed', environmentId, 'users', 'backup-login'] as const,
         databases: (environmentId: string) =>
           ['org', orgId, 'managed', environmentId, 'databases'] as const,
         backups: (environmentId: string) =>

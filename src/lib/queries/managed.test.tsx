@@ -10,6 +10,9 @@ import {
   useCreateManagedBackup,
   useCreateManagedDatabase,
   useCreateManagedAppLogins,
+  useCreateManagedBackupLogin,
+  useDeleteManagedBackupLogin,
+  useManagedBackupLogin,
   useCreateManagedUser,
   useDeleteEnvironmentManaged,
   useDeleteEnvironmentManagedMutation,
@@ -62,6 +65,9 @@ const {
   rotateManagedRootPassword,
   rotateManagedUserPassword,
   createManagedAppLogins,
+  createManagedBackupLogin,
+  deleteManagedBackupLogin,
+  fetchManagedBackupLogin,
   createManagedUser,
   deleteManagedUser,
   updateManagedUser,
@@ -97,6 +103,9 @@ const {
   rotateManagedRootPassword: vi.fn(),
   rotateManagedUserPassword: vi.fn(),
   createManagedAppLogins: vi.fn(),
+  createManagedBackupLogin: vi.fn(),
+  deleteManagedBackupLogin: vi.fn(),
+  fetchManagedBackupLogin: vi.fn(),
   createManagedUser: vi.fn(),
   deleteManagedUser: vi.fn(),
   updateManagedUser: vi.fn(),
@@ -137,6 +146,9 @@ vi.mock('@/lib/instance-api', async (importOriginal) => {
     rotateManagedRootPassword,
     rotateManagedUserPassword,
     createManagedAppLogins,
+    createManagedBackupLogin,
+    deleteManagedBackupLogin,
+    fetchManagedBackupLogin,
     createManagedUser,
     deleteManagedUser,
     updateManagedUser,
@@ -888,6 +900,65 @@ describe('managed query hooks', () => {
     ).resolves.toMatchObject({ ok: true })
     expect(createManagedAppLogins).toHaveBeenCalledWith(environmentId, 'app', { prefix: 'shop' })
     expect(result.current.data).toBeUndefined()
+    await waitFor(() => {
+      expect(invalidate).toHaveBeenCalledWith({
+        queryKey: queryKeys.org(orgId).managed.users(environmentId),
+      })
+    })
+  })
+
+  it('useManagedBackupLogin reads the backup login and stays idle without ids', async () => {
+    fetchManagedBackupLogin.mockResolvedValueOnce({ login: null })
+    const { result } = renderHook(() => useManagedBackupLogin(orgId, environmentId), {
+      wrapper: createWrapper(),
+    })
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+    expect(fetchManagedBackupLogin).toHaveBeenCalledWith(environmentId)
+    expect(result.current.data).toEqual({ login: null })
+    const idle = renderHook(() => useManagedBackupLogin(orgId, environmentId, { enabled: false }), {
+      wrapper: createWrapper(),
+    })
+    expect(idle.result.current.fetchStatus).toBe('idle')
+  })
+
+  it('useCreateManagedBackupLogin keeps no password and refreshes the logins', async () => {
+    createManagedBackupLogin.mockResolvedValueOnce({
+      ok: true,
+      login: { id: 'b-1', appliedUsername: 'backup' },
+      password: 'once',
+      commandId: 'cmd-1',
+      serverId: 'srv-1',
+    })
+    const client = createAppQueryClient()
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
+    const { result } = renderHook(() => useCreateManagedBackupLogin(orgId, environmentId), {
+      wrapper: createWrapper(client),
+    })
+    await expect(result.current.run({ allowedSources: ['internal'] })).resolves.toMatchObject({
+      ok: true,
+    })
+    expect(createManagedBackupLogin).toHaveBeenCalledWith(environmentId, {
+      allowedSources: ['internal'],
+    })
+    expect(result.current.data).toBeUndefined()
+    await waitFor(() => {
+      expect(invalidate).toHaveBeenCalledWith({
+        queryKey: queryKeys.org(orgId).managed.users(environmentId),
+      })
+    })
+  })
+
+  it('useDeleteManagedBackupLogin deletes and refreshes the logins', async () => {
+    deleteManagedBackupLogin.mockResolvedValueOnce(commandResponse)
+    const client = createAppQueryClient()
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
+    const { result } = renderHook(() => useDeleteManagedBackupLogin(orgId, environmentId), {
+      wrapper: createWrapper(client),
+    })
+    await expect(result.current.run()).resolves.toMatchObject({ ok: true })
+    expect(deleteManagedBackupLogin).toHaveBeenCalledWith(environmentId)
     await waitFor(() => {
       expect(invalidate).toHaveBeenCalledWith({
         queryKey: queryKeys.org(orgId).managed.users(environmentId),
