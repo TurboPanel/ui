@@ -28,10 +28,11 @@ export function projectFormSectionOpen(
  * Manage-gated like the primary environment name, so a 403 must not sign the
  * person out, and a control plane older than the route answers 404: both
  * read as "closed" inside the queryFn, so the global onError never sees them.
+ * Its own query key keeps that fallback out of the settings tab's cache.
  */
 export function useOrgProjectFormDefaults(orgId: string): OrgProjectSettings {
   const query = useQuery({
-    queryKey: queryKeys.org(orgId).settings.projectSettings,
+    queryKey: queryKeys.org(orgId).settings.projectFormDefaults,
     queryFn: async () => {
       try {
         return await fetchOrgProjectSettings(orgId)

@@ -19,7 +19,7 @@ export type SearchDestination = Readonly<{
   id: string
   name: string
   /** Muted label at the right of the row. */
-  type: 'Page' | 'Projects'
+  type: 'Page' | 'Projects' | 'Organization Settings'
   href: string
   icon: SearchIconId
 }>
@@ -73,7 +73,7 @@ export function searchDestinations(
     {
       id: 'projects-settings',
       name: 'Project Settings',
-      type: 'Projects',
+      type: 'Organization Settings',
       href: orgProjectSettingsHref(orgId),
       icon: 'project-settings',
     },

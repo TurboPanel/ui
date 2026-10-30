@@ -243,9 +243,9 @@ function lastResult(props: Props) {
 describe('EnvironmentSetupForm', () => {
   it('prefills the environment, the only server and the Hosting Account', () => {
     renderForm()
-    expect(screen.getByRole('heading', { name: 'Set up production' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Set Up production' })).toBeTruthy()
     expect(
-      screen.getByText("website's first environment. Add another environment any time later.")
+      screen.getByText("website's primary environment. Add another environment any time later.")
     ).toBeTruthy()
     expect(screen.getByLabelText('Server').textContent).toBe('s1')
     expect(screen.getByText('website')).toBeTruthy()
@@ -420,7 +420,7 @@ describe('EnvironmentSetupForm', () => {
     fireEvent.change(screen.getByLabelText('Primary environment name'), {
       target: { value: 'live' },
     })
-    expect(screen.getByRole('heading', { name: 'Set up live' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Set Up live' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Save without deploying' }))
     expect(lastResult(props)).toEqual([expect.objectContaining({ name: 'live' }), 'save'])
   })

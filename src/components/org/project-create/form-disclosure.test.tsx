@@ -44,4 +44,24 @@ describe('FormDisclosure', () => {
     renderDisclosure(false, true)
     expect(screen.getByText('inside')).toBeTruthy()
   })
+
+  it('exposes its open state as aria-expanded', () => {
+    renderDisclosure(false)
+    const header = screen.getByRole('button', { name: 'Workspace: Marketing' })
+    expect(header.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(header)
+    expect(header.getAttribute('aria-expanded')).toBe('true')
+  })
+
+  it('ignores a press while an error shows and stays open once the error is fixed', () => {
+    const view = renderDisclosure(false, true)
+    fireEvent.click(screen.getByRole('button', { name: 'Workspace: Marketing' }))
+    expect(screen.getByText('inside')).toBeTruthy()
+    view.rerender(
+      <FormDisclosure title="Workspace" summary="Marketing" openByDefault={false} hasError={false}>
+        <p>inside</p>
+      </FormDisclosure>
+    )
+    expect(screen.getByText('inside')).toBeTruthy()
+  })
 })

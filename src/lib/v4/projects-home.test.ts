@@ -332,6 +332,7 @@ describe('summary line', () => {
   it('counts what is there and waits for the running count', () => {
     expect(summaryLine(4, 9, 7)).toBe('4 projects · 9 environments · 7 running')
     expect(summaryLine(1, 1, null)).toBe('1 project · 1 environment')
+    expect(summaryLine(5, null, 0)).toBe('5 projects')
   })
 })
 
