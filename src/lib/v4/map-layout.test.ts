@@ -340,6 +340,46 @@ describe('map details', () => {
     expect(layout.counts.domains).toBe(5)
   })
 
+  it('gives hostnames reached through a tunnel a box of their own, and a name served both ways two', () => {
+    const input = sampleMapInput(api, sampleEnvironment(api, 'production'), 'env')
+    const tunnel = {
+      provider: 'Cloudflare Tunnel',
+      name: 'edge',
+      origin: ['HTTPS on z · 10.0.0.5', 'Server’s own certificate', 'Not checked, on purpose'],
+      originVerified: false,
+    }
+    const edge = { key: 'edge', label: 'Trusted at the Edge' }
+    const layout = mapLayout({
+      ...input,
+      domains: [
+        {
+          host: 'shop.example.com',
+          status: { key: 'test', label: 'Self-signed (browsers warn)' },
+          servedFrom: 'Served from 203.0.113.24',
+        },
+        { host: 'shop.example.com', status: edge, tunnel },
+        { host: 'tunnel-only.example.com', status: edge, tunnel },
+      ],
+    })
+    const boxes = layout.nodes.filter((n) => n.kind === 'domain')
+    expect(boxes.map((box) => box.id)).toEqual(['d:shop.example.com', 't:shop.example.com'])
+    const [direct, through] = boxes
+    expect(direct?.tunnel).toBeUndefined()
+    expect(direct?.lines).toEqual(['Served from 203.0.113.24'])
+    // The tunnel box never claims a public address: the tunnel, its hostnames, the edge, then the origin.
+    expect(through?.tunnel).toEqual({ label: 'Cloudflare Tunnel · edge', origin: tunnel.origin })
+    expect(through?.lines).toEqual(['tunnel-only.example.com'])
+    expect(through?.status).toEqual(edge)
+    expect(through?.h).toBe(MAP.h.domain + (1 + 2 + tunnel.origin.length) * MAP.domainLine)
+    expect(through?.aria).toContain('through Cloudflare Tunnel · edge')
+    expect(through?.aria).toContain('origin: https on z · 10.0.0.5')
+    expect(through?.aria).not.toContain('served from')
+    // Both boxes lead to the same app; each hostname counts once.
+    expect(layout.counts.domains).toBe(2)
+    const app = layout.nodes.find((n) => n.kind === 'app')
+    expect(app?.aria.match(/shop\.example\.com/g)).toHaveLength(1)
+  })
+
   it('lists a redirect with its target and leaves the served line out when unknown', () => {
     const input = sampleMapInput(api, sampleEnvironment(api, 'production'), 'env')
     const status = { key: 'ok', label: 'Secure' }

@@ -145,8 +145,8 @@ export function EnvironmentSetupForm({
   return (
     <View style={styles.column}>
       <PageTitle
-        title={`Set up ${shownName}`}
-        sub={`${projectName}'s first environment. Add another environment any time later.`}
+        title={`Set Up ${shownName}`}
+        sub={`${projectName}'s primary environment. Add another environment any time later.`}
       />
       {error ? <Text style={panelStyles.error}>{error}</Text> : null}
 
@@ -322,8 +322,8 @@ function CertificateNote({
       <Text style={panelStyles.muted}>{note.text}</Text>
       {note.openSettings ? (
         <TextLink
-          label="Open Domains & certificates"
-          accessibilityLabel="Open Organization settings, Domains & certificates"
+          label="Open Domains & Certificates"
+          accessibilityLabel="Open Organization Settings, Domains & Certificates"
           onPress={() => router.push(settingsHref as Href)}
         />
       ) : null}

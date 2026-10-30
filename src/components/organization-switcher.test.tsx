@@ -100,7 +100,7 @@ describe('OrganizationSwitcherSegment menu', () => {
     openMenu(2)
     expect(screen.getByText('New organization')).toBeTruthy()
     expect(screen.getByLabelText('Create organization')).toBeTruthy()
-    expect(screen.getByLabelText('Organization settings')).toBeTruthy()
+    expect(screen.getByLabelText('Organization Settings')).toBeTruthy()
     expect(screen.queryByLabelText('Organization billing and licenses')).toBeNull()
   })
 
@@ -119,6 +119,6 @@ describe('OrganizationSwitcherSegment menu', () => {
     fireEvent.click(button)
     expect(screen.getByRole('menu')).toBeTruthy()
     expect(screen.getByLabelText('Organization: Org 1').getAttribute('aria-expanded')).toBe('true')
-    expect(screen.getByLabelText('Organization settings')).toBeTruthy()
+    expect(screen.getByLabelText('Organization Settings')).toBeTruthy()
   })
 })

@@ -10,15 +10,21 @@ import { mapLayout, type MapTarget } from '@/lib/v4/map-layout'
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
 vi.mock('react-native-svg', async () => (await import('@/components/ui/v4/rn-stub')).svgStub)
-vi.mock('@/lib/theme-preference', async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub)
+vi.mock(
+  '@/lib/theme-preference',
+  async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub
+)
 vi.mock('expo-router', () => ({
-  Link: ({ href, children }: Readonly<{ href: string; children: ReactNode }>) => <div data-href={href}>{children}</div>,
+  Link: ({ href, children }: Readonly<{ href: string; children: ReactNode }>) => (
+    <div data-href={href}>{children}</div>
+  ),
 }))
 
 afterEach(cleanup)
 
 const layout = mapLayout(mapInputOf(overviewSource(), 'env'))
-const hrefFor = (target: MapTarget) => (target.kind === 'volume' ? null : `/go/${target.kind}/${target.id}`)
+const hrefFor = (target: MapTarget) =>
+  target.kind === 'volume' ? null : `/go/${target.kind}/${target.id}`
 
 describe.each(SCENARIOS)('EnvironmentMap ($name)', (scenario) => {
   beforeEach(() => applyScenario(scenario))
@@ -40,9 +46,17 @@ describe.each(SCENARIOS)('EnvironmentMap ($name)', (scenario) => {
     const web = layout.nodes.find((node) => node.name === 'web')!
     const link = screen.getByRole('link', { name: web.aria })
     expect(link.closest('[data-href]')?.getAttribute('data-href')).toBe('/go/service/web')
-    expect(styleOf(link)).toMatchObject({ position: 'absolute', left: web.x, top: web.y, width: web.w, height: web.h })
+    expect(styleOf(link)).toMatchObject({
+      position: 'absolute',
+      left: web.x,
+      top: web.y,
+      width: web.w,
+      height: web.h,
+    })
     expect(web.aria).toContain('web, Node.js app, running, runs as website')
-    expect(screen.getAllByRole('link')).toHaveLength(layout.nodes.filter((node) => node.kind !== 'volume').length)
+    expect(screen.getAllByRole('link')).toHaveLength(
+      layout.nodes.filter((node) => node.kind !== 'volume').length
+    )
   })
 
   it('shows what each station says: status, who it runs as, the change tag', () => {
@@ -68,8 +82,13 @@ describe.each(SCENARIOS)('EnvironmentMap ($name)', (scenario) => {
     const colors = new Set(
       [...container.querySelectorAll('div[data-style]')]
         .map((el) => styleOf(el))
-        .filter((style) => style.position === 'absolute' && typeof style.height === 'number' && style.backgroundColor)
-        .map((style) => style.backgroundColor),
+        .filter(
+          (style) =>
+            style.position === 'absolute' &&
+            typeof style.height === 'number' &&
+            style.backgroundColor
+        )
+        .map((style) => style.backgroundColor)
     )
     expect(colors.has(token(scenario, 'railHttps'))).toBe(true)
     expect(colors.has(token(scenario, 'railData'))).toBe(true)
@@ -112,6 +131,34 @@ describe.each(SCENARIOS)('EnvironmentMap ($name)', (scenario) => {
     )
   })
 
+  it('draws a tunnel box: the tunnel under the name, the edge badge, then how it reaches the site', () => {
+    const origin = ['HTTPS on z · 10.0.0.5', 'Server’s own certificate', 'Not checked, on purpose']
+    const tunneled = mapLayout({
+      ...mapInputOf(overviewSource(), 'env'),
+      domains: [
+        {
+          host: 'shop.example.com',
+          status: { key: 'edge', label: 'Trusted at the Edge' },
+          tunnel: { provider: 'Cloudflare Tunnel', name: 'edge', origin, originVerified: false },
+        },
+      ],
+    })
+    render(<EnvironmentMap layout={tunneled} hrefFor={hrefFor} />)
+    const box = screen.getByRole('link', {
+      name: /^shop\.example\.com, domain, through Cloudflare Tunnel/,
+    })
+    const node = tunneled.nodes.find((n) => n.kind === 'domain')!
+    expect(styleOf(box)).toMatchObject({ height: node.h, overflow: 'hidden' })
+    const tunnelLine = within(box).getByText('Cloudflare Tunnel · edge')
+    const badge = within(box).getByLabelText('Trusted at the Edge')
+    const heading = within(box).getByText('Origin')
+    expect(tunnelLine.compareDocumentPosition(badge)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
+    expect(badge.compareDocumentPosition(heading)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
+    for (const line of origin) expect(within(box).getByText(line).dataset.lines).toBe('1')
+    expect(within(box).queryByText(/Served from/)).toBeNull()
+    expect(within(box).queryByText(/browsers warn/)).toBeNull()
+  })
+
   it('shows the legend it is given', () => {
     render(<EnvironmentMap layout={layout} hrefFor={hrefFor} legend={<span>legend here</span>} />)
     expect(screen.getByText('legend here')).toBeTruthy()
@@ -126,7 +173,11 @@ describe.each(SCENARIOS)('EnvironmentMap, narrow ($name)', (scenario) => {
 
   it('stacks Visitors, Apps and Data with a link per station and its connections as words', () => {
     render(<EnvironmentMap layout={layout} hrefFor={hrefFor} />)
-    expect(screen.getAllByRole('heading').map((h) => h.textContent)).toEqual(['Visitors', 'Apps', 'Data'])
+    expect(screen.getAllByRole('heading').map((h) => h.textContent)).toEqual([
+      'Visitors',
+      'Apps',
+      'Data',
+    ])
     const web = screen.getByRole('link', { name: /^web, Node\.js app/ })
     expect(within(web).getByText('-> redis')).toBeTruthy()
     expect(within(web).getByText('<- shop.example.com')).toBeTruthy()

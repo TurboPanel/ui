@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { DefaultEnvironmentSettingsSection } from '@/components/org/default-environment-settings-section'
-import { Button, ButtonRow, SectionPanel, SettingRow, Toggle } from '@/components/ui'
+import { Button, ButtonRow, LoadingState, SectionPanel, SettingRow, Toggle } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
 import {
   fetchOrgProjectSettings,
@@ -11,8 +11,8 @@ import {
   type OrgProjectSettings,
 } from '@/lib/instance-api'
 import { managedSettingsHref } from '@/lib/org-navigation'
-import { CLOSED_PROJECT_FORM_SECTIONS } from '@/lib/org-project-settings'
-import { useApiMutation, useCan, queryKeys } from '@/lib/query-client'
+import { CLOSED_PROJECT_FORM_SECTIONS, overlaySavedSwitch } from '@/lib/org-project-settings'
+import { useApiMutation, useCanState, queryKeys } from '@/lib/query-client'
 import { spacing } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
 
@@ -34,61 +34,92 @@ const SWITCHES: readonly { key: ProjectFormSwitch; label: string; description: s
 ]
 
 /**
- * The two "open by default" switches for the new-project form. Each press
- * saves that switch alone; the toggle shows the new value while it saves and
- * falls back to the stored one if the save fails.
+ * One "open by default" switch. Each switch saves on its own and keeps its
+ * own error, so pressing the second while the first is still saving is never
+ * dropped, and one switch's success does not clear the other's failure. The
+ * toggle shows the new value while it saves and falls back to the stored one
+ * on failure.
  */
-function ProjectFormSettingsSection({ orgId }: Readonly<{ orgId: string }>) {
+function ProjectFormSwitchRow({
+  orgId,
+  switchKey,
+  label,
+  description,
+  stored,
+}: Readonly<{
+  orgId: string
+  switchKey: ProjectFormSwitch
+  label: string
+  description: string
+  stored: boolean
+}>) {
   const queryClient = useQueryClient()
-  const canManage = useCan('organization', orgId, 'organization:manage')
-  const queryKey = queryKeys.org(orgId).settings.projectSettings
-  const query = useQuery({
-    queryKey,
-    queryFn: () => fetchOrgProjectSettings(orgId),
-    enabled: canManage,
-  })
+  const [draft, setDraft] = useState<boolean | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [draft, setDraft] = useState<Partial<OrgProjectSettings>>({})
   const mutation = useApiMutation({
-    mutationFn: (patch: Partial<OrgProjectSettings>) => saveOrgProjectSettings(orgId, patch),
+    mutationFn: (next: boolean) => saveOrgProjectSettings(orgId, { [switchKey]: next }),
     onSuccess: (data) => {
       setError(null)
-      setDraft({})
-      queryClient.setQueryData(queryKey, {
-        openEnvironmentSectionByDefault: data.openEnvironmentSectionByDefault,
-        openWorkspaceSectionByDefault: data.openWorkspaceSectionByDefault,
-      })
+      setDraft(null)
+      const keys = queryKeys.org(orgId).settings
+      for (const key of [keys.projectSettings, keys.projectFormDefaults]) {
+        queryClient.setQueryData<OrgProjectSettings>(key, (before) =>
+          overlaySavedSwitch(before, switchKey, data[switchKey])
+        )
+      }
     },
     onError: (err) => {
-      setDraft({})
+      setDraft(null)
       setError(userErrorMessage(err, 'Failed to save the new project form settings'))
     },
   })
-  const current = { ...CLOSED_PROJECT_FORM_SECTIONS, ...query.data, ...draft }
+  return (
+    <>
+      {error ? <Text style={panelStyles.error}>{error}</Text> : null}
+      <SettingRow label={label} description={description}>
+        <Toggle
+          value={draft ?? stored}
+          onValueChange={(next) => {
+            setDraft(next)
+            mutation.mutate(next)
+          }}
+          disabled={mutation.isPending}
+          accessibilityLabel={label}
+        />
+      </SettingRow>
+    </>
+  )
+}
 
-  if (!canManage) return null
+/** The two "open by default" switches for the new-project form. */
+function ProjectFormSettingsSection({ orgId }: Readonly<{ orgId: string }>) {
+  const query = useQuery({
+    queryKey: queryKeys.org(orgId).settings.projectSettings,
+    queryFn: () => fetchOrgProjectSettings(orgId),
+  })
+  const stored = { ...CLOSED_PROJECT_FORM_SECTIONS, ...query.data }
 
   return (
     <SectionPanel title="New Project Form" hint="Applies to everyone in this organization">
-      {error ? <Text style={panelStyles.error}>{error}</Text> : null}
-      {query.isError && !error ? (
+      {query.isError ? (
         <Text style={panelStyles.error}>
           {userErrorMessage(query.error, 'Failed to load the new project form settings')}
         </Text>
       ) : null}
-      {SWITCHES.map(({ key, label, description }) => (
-        <SettingRow key={key} label={label} description={description}>
-          <Toggle
-            value={current[key]}
-            onValueChange={(next) => {
-              setDraft((before) => ({ ...before, [key]: next }))
-              mutation.mutate({ [key]: next })
-            }}
-            disabled={mutation.isPending || query.isLoading}
-            accessibilityLabel={label}
+      {query.isLoading ? (
+        <LoadingState />
+      ) : (
+        SWITCHES.map(({ key, label, description }) => (
+          <ProjectFormSwitchRow
+            key={key}
+            orgId={orgId}
+            switchKey={key}
+            label={label}
+            description={description}
+            stored={stored[key]}
           />
-        </SettingRow>
-      ))}
+        ))
+      )}
     </SectionPanel>
   )
 }
@@ -114,15 +145,39 @@ function ManagedDatabasesLinkSection({ orgId }: Readonly<{ orgId: string }>) {
 
 /**
  * Organization Settings › Project Settings: the defaults new projects start
- * from. It replaced the Projects › Settings page in the sidebar.
+ * from. It replaced the Projects › Settings page in the sidebar. Only owners
+ * and managers can change these, so everyone else gets one line saying so
+ * instead of panels and links that would open empty.
  */
 export function ProjectSettingsTab({ orgId }: Readonly<{ orgId: string }>) {
+  const manage = useCanState('organization', orgId, 'organization:manage')
+  const intro = (
+    <Text style={panelStyles.muted}>
+      Defaults applied when new projects are created. Existing projects keep their current
+      environments and names.
+    </Text>
+  )
+  if (manage.loading) {
+    return (
+      <View style={styles.tab}>
+        {intro}
+        <LoadingState />
+      </View>
+    )
+  }
+  if (!manage.allowed) {
+    return (
+      <View style={styles.tab}>
+        {intro}
+        <Text style={panelStyles.muted}>
+          Only organization owners and managers can change project settings.
+        </Text>
+      </View>
+    )
+  }
   return (
     <View style={styles.tab}>
-      <Text style={panelStyles.muted}>
-        Defaults applied when new projects are created. Existing projects keep their current
-        environments and names.
-      </Text>
+      {intro}
       <ProjectFormSettingsSection orgId={orgId} />
       <DefaultEnvironmentSettingsSection orgId={orgId} />
       <ManagedDatabasesLinkSection orgId={orgId} />

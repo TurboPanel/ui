@@ -3,6 +3,7 @@ import { fetchOrgProjectSettings, saveOrgProjectSettings } from '@/lib/instance-
 import { setActiveOrganizationId } from '@/lib/org-context'
 import {
   CLOSED_PROJECT_FORM_SECTIONS,
+  overlaySavedSwitch,
   projectFormSectionOpen,
   useOrgProjectFormDefaults,
 } from '@/lib/org-project-settings'
@@ -31,6 +32,22 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals()
+})
+
+describe('overlaySavedSwitch', () => {
+  it('changes only the saved switch', () => {
+    expect(
+      overlaySavedSwitch(
+        { openEnvironmentSectionByDefault: false, openWorkspaceSectionByDefault: true },
+        'openEnvironmentSectionByDefault',
+        true
+      )
+    ).toEqual({ openEnvironmentSectionByDefault: true, openWorkspaceSectionByDefault: true })
+  })
+
+  it('writes nothing into a cache entry that was never fetched', () => {
+    expect(overlaySavedSwitch(undefined, 'openWorkspaceSectionByDefault', true)).toBeUndefined()
+  })
 })
 
 describe('projectFormSectionOpen', () => {

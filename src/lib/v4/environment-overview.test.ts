@@ -23,6 +23,7 @@ import {
   runsAsOf,
   runStatusKey,
   servedFromOf,
+  serverOwnAddresses,
   serverPublicAddresses,
   shortLabel,
   sideServices,
@@ -352,6 +353,123 @@ describe('domains, volumes and databases', () => {
       })
     ).toEqual([])
     expect(serverPublicAddresses(undefined)).toEqual([])
+    // The address the panel saw it connect from is a NAT router's, not the server's.
+    expect(
+      serverPublicAddresses({
+        ips: [reported('10.0.0.5', 'private')],
+        address: '198.203.204.120',
+        addressScope: 'public',
+        addressSource: 'observed',
+      })
+    ).toEqual([])
+    expect(
+      serverOwnAddresses({
+        ips: [reported('10.0.0.5', 'private'), reported('fd00::5', 'private', true)],
+        address: '198.203.204.120',
+        addressScope: 'public',
+      })
+    ).toEqual(['fd00::5', '10.0.0.5'])
+    expect(serverOwnAddresses(null)).toEqual([])
+  })
+
+  describe('a hostname a tunnel carries', () => {
+    const tunnelPath = (patch: Partial<NonNullable<HostingRecord['tunnels']>[number]> = {}) => ({
+      hostname: 'shop.example.com',
+      tunnelId: 'tun-1',
+      tunnelName: 'edge',
+      provider: 'cloudflare',
+      tunnelOnly: true,
+      originVerified: false,
+      status: 'live',
+      ...patch,
+    })
+    const withTunnel = (
+      paths: NonNullable<HostingRecord['tunnels']>,
+      extra: Partial<Parameters<typeof overviewSource>[0]> = {}
+    ) =>
+      overviewSource({
+        hostings: {
+          's-web': [
+            hosting('shop', null, {
+              options: { hostnames: ['shop.example.com'] },
+              tunnels: paths,
+            }),
+          ],
+        },
+        serverId: 'srv-z',
+        publicIps: [],
+        serverAddresses: ['198.203.204.120'],
+        serverName: 'z',
+        serverOwnAddresses: ['10.0.0.5'],
+        ...extra,
+      })
+    const edge = { key: 'edge', label: 'Trusted at the Edge' }
+
+    it('is reached only through the tunnel when it is tunnel-only: no served line, no browser warning', () => {
+      expect(domainsOf(withTunnel([tunnelPath()]))).toEqual([
+        {
+          host: 'shop.example.com',
+          status: edge,
+          serviceId: 'web',
+          tunnel: {
+            provider: 'Cloudflare Tunnel',
+            name: 'edge',
+            origin: [
+              'HTTPS on z · 10.0.0.5',
+              'Server’s own certificate',
+              'Not checked, on purpose',
+            ],
+            originVerified: false,
+          },
+        },
+      ])
+    })
+
+    it('keeps today’s direct box when no tunnel carries it', () => {
+      expect(domainsOf(withTunnel([]))).toEqual([
+        {
+          host: 'shop.example.com',
+          status: { key: 'test', label: 'Self-signed (browsers warn)' },
+          serviceId: 'web',
+          servedFrom: 'Served from 198.203.204.120',
+        },
+      ])
+    })
+
+    it('shows both paths when the name is also served directly, the direct one first', () => {
+      const both = domainsOf(withTunnel([tunnelPath({ tunnelOnly: false, originVerified: true })]))
+      expect(both.map((domain) => [domain.host, domain.tunnel === undefined])).toEqual([
+        ['shop.example.com', true],
+        ['shop.example.com', false],
+      ])
+      expect(both[0]?.servedFrom).toBe('Served from 198.203.204.120')
+      expect(both[1]?.tunnel?.origin).toEqual([
+        'HTTPS on z · 10.0.0.5',
+        'Certificate checked by the tunnel',
+      ])
+    })
+
+    it('does not read as served while the route is being set up or needs attention', () => {
+      const pending = domainsOf(withTunnel([tunnelPath({ status: 'pending' })]))
+      expect(pending[0]?.status).toEqual({ key: 'queued', label: 'Setting Up' })
+      const attention = domainsOf(withTunnel([tunnelPath({ status: 'attention' })]))
+      expect(attention[0]?.status).toEqual({ key: 'failed', label: 'Needs Attention' })
+      for (const domain of [...pending, ...attention]) {
+        expect(domain.servedFrom).toBeUndefined()
+        expect(domain.status.key).not.toBe('edge')
+      }
+    })
+
+    it('says only what is known about the server', () => {
+      const unknown = domainsOf(
+        withTunnel([tunnelPath({ provider: 'other' })], {
+          serverName: null,
+          serverOwnAddresses: undefined,
+        })
+      )
+      expect(unknown[0]?.tunnel?.provider).toBe('Tunnel')
+      expect(unknown[0]?.tunnel?.origin[0]).toBe('HTTPS on the server')
+    })
   })
 
   it('says where a hostname is served from, only from what is known', () => {

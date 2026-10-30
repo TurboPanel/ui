@@ -182,10 +182,10 @@ export function describeCertificate(cert: HostingCertificate): CertificateView {
   return BUILDERS[cert.state](cert)
 }
 
-/** Why Let's Encrypt was refused, in plain words, and whether Organization settings can fix it. */
+/** Why Let's Encrypt was refused, in plain words, and whether Organization Settings can fix it. */
 export type LetsEncryptRefusal = Readonly<{
   message: string
-  /** The organization has Let's Encrypt turned off: link to Domains & certificates. */
+  /** The organization has Let's Encrypt turned off: link to Domains & Certificates. */
   openSettings: boolean
 }>
 

@@ -84,14 +84,6 @@ export const ORG_AREAS = [
         pathSegment: 'tls',
         hint: 'Organization certificate library',
       },
-    ],
-  },
-  {
-    id: 'network',
-    label: 'Network',
-    pathSegment: 'network',
-    hint: 'TurboFabric, addresses, Docker networks, and the firewall',
-    subRoutes: [
       {
         id: 'fabric',
         label: TURBOFABRIC_PRODUCT_NAME,
@@ -137,6 +129,19 @@ export const ORG_AREAS = [
     ],
   },
   {
+    // Not in the sidebar: its pages (TurboFabric, Addresses, Docker Networks,
+    // Reserved Ranges, Cloudflare Accounts, Tunnels, Firewall) live under
+    // Servers. `/network` and `/network/<page>` redirect there; the area stays
+    // so the old links resolve and the moved pages keep the Network icon.
+    id: 'network',
+    label: 'Network',
+    pathSegment: 'network',
+    hint: 'TurboFabric, addresses, Docker networks, and the firewall',
+    subRoutes: [],
+  },
+  {
+    // Not in the sidebar: Access is a tab of Organization Settings. `/access`
+    // redirects there; the area stays so the old link resolves.
     id: 'access',
     label: 'Access',
     pathSegment: 'access',
@@ -166,7 +171,11 @@ export const ORG_TAB_AREA_IDS = [
   'servers',
 ] as const satisfies readonly OrgAreaId[]
 
-/** Web sidebar, in order: the three places people work. Recent projects follow. */
+/**
+ * Web sidebar, in order: the three places people work. Recent projects follow,
+ * then (for platform admins) Admin. Network's pages sit under Servers, Access is
+ * an Organization Settings tab, and managed databases are a filter on Projects.
+ */
 export const ORG_SIDEBAR_AREA_IDS = [
   'projects',
   'activity',
@@ -174,15 +183,26 @@ export const ORG_SIDEBAR_AREA_IDS = [
 ] as const satisfies readonly OrgAreaId[]
 
 /**
- * Areas the redesign leaves as they are (network, access). They stay one click
- * away below a small gap after Recent Projects, with no group heading, so none
- * of their routes becomes a deep link only. Managed databases are a filter on
- * Projects instead.
+ * The Servers sub-pages that used to make up the Network area, in sidebar
+ * order. `/network/<page>` redirects to `/servers/<page>` for these.
  */
-export const ORG_SIDEBAR_MORE_AREA_IDS = [
-  'network',
-  'access',
-] as const satisfies readonly OrgAreaId[]
+export const SERVERS_NETWORK_SUB_ROUTE_IDS = [
+  'fabric',
+  'addresses',
+  'docker',
+  'reserved',
+  'cloudflare',
+  'tunnels',
+  'firewall',
+] as const satisfies readonly OrgSubRouteId[]
+
+export type ServersNetworkSubRouteId = (typeof SERVERS_NETWORK_SUB_ROUTE_IDS)[number]
+
+/** Where an old `/network/<page>` link goes: the page under Servers, or the Servers list. */
+export function networkRedirectHref(orgId: string, page: string | undefined): string {
+  const moved = SERVERS_NETWORK_SUB_ROUTE_IDS.find((id) => id === page)
+  return moved ? orgRouteHref(orgId, 'servers', moved) : orgAreaHref(orgId, 'servers')
+}
 
 export type OrgTabAreaId = (typeof ORG_TAB_AREA_IDS)[number]
 
@@ -339,11 +359,11 @@ export function orgManageHref(orgId: string): `/${string}/manage` {
   return `/${orgId}/manage`
 }
 
-/** Tabs on Organization settings, in bar order (the picker menu is the only way in). */
+/** Tabs on Organization Settings, in bar order (the picker menu is the only way in). */
 export const ORG_SETTINGS_TAB_IDS = [
   'general',
   'projects',
-  'members',
+  'access',
   'notifications',
   'domains',
   'git',
@@ -355,18 +375,19 @@ export type OrgSettingsTabId = (typeof ORG_SETTINGS_TAB_IDS)[number]
 export const ORG_SETTINGS_TAB_LABELS: Record<OrgSettingsTabId, string> = {
   general: 'General',
   projects: 'Project Settings',
-  members: 'Members',
+  access: 'Access',
   notifications: 'Notifications',
-  domains: 'Domains & certificates',
-  git: 'Git connections',
+  domains: 'Domains & Certificates',
+  git: 'Git Connections',
   principals: 'Principals',
 }
 
-/** The tab a `?tab=` value names; anything else opens General. */
+/** The tab a `?tab=` value names; anything else opens General. `members` was Access's old name. */
 export function parseOrgSettingsTab(
   value: string | readonly string[] | null | undefined
 ): OrgSettingsTabId {
   const first = typeof value === 'string' ? value : value?.[0]
+  if (first === 'members') return 'access'
   return ORG_SETTINGS_TAB_IDS.find((id) => id === first) ?? 'general'
 }
 
@@ -477,32 +498,32 @@ export function datacenterNewHref(orgId: string): `/${string}/servers/datacenter
   return `/${orgId}/servers/datacenters/new`
 }
 
-export function networkFabricHref(orgId: string): `/${string}/network/fabric` {
-  return `/${orgId}/network/fabric`
+export function serversFabricHref(orgId: string): `/${string}/servers/fabric` {
+  return `/${orgId}/servers/fabric`
 }
 
-export function networkAddressesHref(orgId: string): `/${string}/network/addresses` {
-  return `/${orgId}/network/addresses`
+export function serversAddressesHref(orgId: string): `/${string}/servers/addresses` {
+  return `/${orgId}/servers/addresses`
 }
 
-export function networkDockerHref(orgId: string): `/${string}/network/docker` {
-  return `/${orgId}/network/docker`
+export function serversDockerHref(orgId: string): `/${string}/servers/docker` {
+  return `/${orgId}/servers/docker`
 }
 
-export function networkFirewallHref(orgId: string): `/${string}/network/firewall` {
-  return `/${orgId}/network/firewall`
+export function serversFirewallHref(orgId: string): `/${string}/servers/firewall` {
+  return `/${orgId}/servers/firewall`
 }
 
-export function networkReservedHref(orgId: string): `/${string}/network/reserved` {
-  return `/${orgId}/network/reserved`
+export function serversReservedHref(orgId: string): `/${string}/servers/reserved` {
+  return `/${orgId}/servers/reserved`
 }
 
-export function networkCloudflareHref(orgId: string): `/${string}/network/cloudflare` {
-  return `/${orgId}/network/cloudflare`
+export function serversCloudflareHref(orgId: string): `/${string}/servers/cloudflare` {
+  return `/${orgId}/servers/cloudflare`
 }
 
-export function networkTunnelsHref(orgId: string): `/${string}/network/tunnels` {
-  return `/${orgId}/network/tunnels`
+export function serversTunnelsHref(orgId: string): `/${string}/servers/tunnels` {
+  return `/${orgId}/servers/tunnels`
 }
 
 export const SERVER_DETAIL_TAB_IDS = [
