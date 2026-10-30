@@ -10,18 +10,25 @@ export const CLOSED_PROJECT_FORM_SECTIONS: OrgProjectSettings = {
 }
 
 /**
- * The cache update after one switch saved: lay the saved value over what the
- * cache already holds. An entry that was never fetched stays empty (undefined
- * means "do not write"), because inventing one would store the other switch
- * as off until the cache went stale.
+ * The cache update after one switch saved. Over an entry the cache already
+ * holds, only the saved switch changes, so a slower answer for the other
+ * switch cannot undo a newer one. An entry that was never fetched (or whose
+ * load failed) takes both values from the save's answer, which carries what is
+ * stored now, so the switch just saved does not snap back and the other one
+ * is never guessed.
  */
 export function overlaySavedSwitch(
   before: OrgProjectSettings | undefined,
   key: keyof OrgProjectSettings,
-  value: boolean
-): OrgProjectSettings | undefined {
-  if (!before) return undefined
-  return { ...before, [key]: value }
+  saved: OrgProjectSettings
+): OrgProjectSettings {
+  if (!before) {
+    return {
+      openEnvironmentSectionByDefault: saved.openEnvironmentSectionByDefault,
+      openWorkspaceSectionByDefault: saved.openWorkspaceSectionByDefault,
+    }
+  }
+  return { ...before, [key]: saved[key] }
 }
 
 /**

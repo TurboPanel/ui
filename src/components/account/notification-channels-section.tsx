@@ -534,7 +534,7 @@ function ChannelsPanel({
  * the organization in context and need a manager.
  */
 /**
- * The organization's own channels, on their own: what Organization settings
+ * The organization's own channels, on their own: what Organization Settings
  * shows under Notifications. Personal channels stay on the account page.
  */
 export function OrganizationChannelsSection({ orgId }: Readonly<{ orgId: string }>) {

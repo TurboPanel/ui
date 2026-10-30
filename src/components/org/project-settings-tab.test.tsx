@@ -18,6 +18,8 @@ const state = vi.hoisted(() => ({
     isLoading: false,
     isError: false,
     error: null as unknown,
+    isFetching: false,
+    refetch: (() => Promise.resolve()) as () => Promise<unknown>,
   },
   save: vi.fn(),
   setQueryData: vi.fn(),
@@ -128,6 +130,8 @@ beforeEach(() => {
     isLoading: false,
     isError: false,
     error: null,
+    isFetching: false,
+    refetch: () => Promise.resolve(),
   }
   state.save.mockReset()
   state.setQueryData.mockReset()
@@ -154,7 +158,7 @@ describe('ProjectSettingsTab', () => {
   })
 
   it('shows a loading state in the card while the settings load', () => {
-    state.query = { data: undefined, isLoading: true, isError: false, error: null }
+    state.query = { ...state.query, data: undefined, isLoading: true }
     render(<ProjectSettingsTab orgId="org-1" />)
     expect(screen.getByRole('progressbar')).toBeTruthy()
     expect(screen.queryByLabelText(ENVIRONMENT)).toBeNull()
@@ -174,7 +178,7 @@ describe('ProjectSettingsTab', () => {
     expect(state.save).toHaveBeenLastCalledWith('org-1', { openWorkspaceSectionByDefault: true })
   })
 
-  it('lays the saved switch over both caches and leaves a never-fetched cache empty', async () => {
+  it('lays the saved switch over both caches and fills a never-fetched one from the answer', async () => {
     state.save.mockResolvedValue({
       ok: true,
       openEnvironmentSectionByDefault: true,
@@ -190,7 +194,10 @@ describe('ProjectSettingsTab', () => {
     expect(
       update({ openEnvironmentSectionByDefault: false, openWorkspaceSectionByDefault: true })
     ).toEqual({ openEnvironmentSectionByDefault: true, openWorkspaceSectionByDefault: true })
-    expect(update(undefined)).toBeUndefined()
+    expect(update(undefined)).toEqual({
+      openEnvironmentSectionByDefault: true,
+      openWorkspaceSectionByDefault: false,
+    })
   })
 
   it('puts the switch back and says so when the save fails', async () => {
@@ -219,10 +226,22 @@ describe('ProjectSettingsTab', () => {
     expect(screen.getByText('Failed to save the new project form settings')).toBeTruthy()
   })
 
-  it('shows the load error when the settings cannot be read', () => {
-    state.query = { data: undefined, isLoading: false, isError: true, error: new Error('x') }
+  it('hides the switches and offers a retry when the settings cannot be read', () => {
+    const refetch = vi.fn().mockResolvedValue(undefined)
+    state.query = {
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      error: new Error('x'),
+      isFetching: false,
+      refetch,
+    }
     render(<ProjectSettingsTab orgId="org-1" />)
     expect(screen.getByText('Failed to load the new project form settings')).toBeTruthy()
+    expect(screen.queryByLabelText(ENVIRONMENT)).toBeNull()
+    expect(screen.queryByLabelText(WORKSPACE)).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Try Again' }))
+    expect(refetch).toHaveBeenCalled()
   })
 })
 

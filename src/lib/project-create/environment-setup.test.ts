@@ -19,12 +19,31 @@ import {
   setupCompose,
   setupFormProblems,
   setupEnvironmentPatch,
+  setupPageStep,
   setupVariableBodies,
   setupWwwMode,
   setupWwwSwitch,
   variableKeyProblem,
   wwwChoiceFor,
 } from '@/lib/project-create/environment-setup'
+
+describe('setupPageStep', () => {
+  it('waits while the deploy history loads', () => {
+    expect(setupPageStep(undefined, false)).toBe('loading')
+  })
+
+  it('shows the form for an environment that never deployed', () => {
+    expect(setupPageStep({ deployments: [] }, false)).toBe('form')
+  })
+
+  it('leaves for the project once the environment has deployed', () => {
+    expect(setupPageStep({ deployments: [{ id: 'd1' }] }, false)).toBe('deployed')
+  })
+
+  it('keeps the form when the history cannot be read', () => {
+    expect(setupPageStep(undefined, true)).toBe('form')
+  })
+})
 
 function doc(data: Record<string, unknown>): ComposeDocument {
   return { version: 1, data, presentation: { keyOrder: [], comments: {} } } as ComposeDocument

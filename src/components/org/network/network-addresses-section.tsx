@@ -494,7 +494,12 @@ function AddAddressPanel({
   onCreate: () => void
 }>) {
   return (
-    <SectionPanel title="Add IP address" hint="Manage-gated" collapsible defaultCollapsed>
+    <SectionPanel
+      title="Add IP Address"
+      hint="Owners and managers can change this"
+      collapsible
+      defaultCollapsed
+    >
       <TextField
         label="Address"
         value={address}

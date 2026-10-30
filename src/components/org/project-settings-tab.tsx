@@ -11,7 +11,7 @@ import {
   type OrgProjectSettings,
 } from '@/lib/instance-api'
 import { managedSettingsHref } from '@/lib/org-navigation'
-import { CLOSED_PROJECT_FORM_SECTIONS, overlaySavedSwitch } from '@/lib/org-project-settings'
+import { overlaySavedSwitch } from '@/lib/org-project-settings'
 import { useApiMutation, useCanState, queryKeys } from '@/lib/query-client'
 import { spacing } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
@@ -64,7 +64,7 @@ function ProjectFormSwitchRow({
       const keys = queryKeys.org(orgId).settings
       for (const key of [keys.projectSettings, keys.projectFormDefaults]) {
         queryClient.setQueryData<OrgProjectSettings>(key, (before) =>
-          overlaySavedSwitch(before, switchKey, data[switchKey])
+          overlaySavedSwitch(before, switchKey, data)
         )
       }
     },
@@ -91,13 +91,31 @@ function ProjectFormSwitchRow({
   )
 }
 
-/** The two "open by default" switches for the new-project form. */
+/** Before the stored values arrive: a spinner, or a retry once the load failed. */
+function SwitchesNotLoaded({
+  failed,
+  retrying,
+  retry,
+}: Readonly<{ failed: boolean; retrying: boolean; retry: () => Promise<unknown> }>) {
+  if (!failed) return <LoadingState />
+  return (
+    <ButtonRow>
+      <Button label="Try Again" size="sm" busy={retrying} onPress={() => void retry()} />
+    </ButtonRow>
+  )
+}
+
+/**
+ * The two "open by default" switches for the new-project form. They show only
+ * once the stored values are known: after a failed load they would read off
+ * whatever is stored, so the panel offers to try again instead.
+ */
 function ProjectFormSettingsSection({ orgId }: Readonly<{ orgId: string }>) {
   const query = useQuery({
     queryKey: queryKeys.org(orgId).settings.projectSettings,
     queryFn: () => fetchOrgProjectSettings(orgId),
   })
-  const stored = { ...CLOSED_PROJECT_FORM_SECTIONS, ...query.data }
+  const stored = query.data
 
   return (
     <SectionPanel title="New Project Form" hint="Applies to everyone in this organization">
@@ -106,8 +124,12 @@ function ProjectFormSettingsSection({ orgId }: Readonly<{ orgId: string }>) {
           {userErrorMessage(query.error, 'Failed to load the new project form settings')}
         </Text>
       ) : null}
-      {query.isLoading ? (
-        <LoadingState />
+      {stored === undefined ? (
+        <SwitchesNotLoaded
+          failed={query.isError}
+          retrying={query.isFetching}
+          retry={query.refetch}
+        />
       ) : (
         SWITCHES.map(({ key, label, description }) => (
           <ProjectFormSwitchRow

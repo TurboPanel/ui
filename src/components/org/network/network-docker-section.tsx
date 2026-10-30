@@ -223,8 +223,8 @@ function DockerHostAddressPoolsPanel({ orgId }: Readonly<{ orgId: string }>) {
 
   return (
     <SectionPanel
-      title="Host address pools"
-      hint="Manage-gated · every enrolled host"
+      title="Host Address Pools"
+      hint="Owners and managers can change this · applies to every server"
       collapsible
       defaultCollapsed
     >
@@ -472,7 +472,12 @@ function DockerNetworkRegisterPanel({
   }
 
   return (
-    <SectionPanel title="Register Docker network" hint="Manage-gated" collapsible defaultCollapsed>
+    <SectionPanel
+      title="Register Docker Network"
+      hint="Owners and managers can change this"
+      collapsible
+      defaultCollapsed
+    >
       <NetworkErrorLine error={error} />
       <TextField
         label="Display name"
