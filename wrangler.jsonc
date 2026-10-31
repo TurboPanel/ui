@@ -13,9 +13,15 @@
   },
   "workers_dev": false,
   "preview_urls": false,
+  // The Worker only runs in front of the hashed bundle prefixes (worker/hosted-ui.ts turns
+  // the single-page fallback into a 404 there). Every other path is served by the assets
+  // directly. Environments inherit main and assets; none may define its own.
+  "main": "worker/hosted-ui.ts",
   "assets": {
     "directory": "./dist",
-    "not_found_handling": "single-page-application"
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/_expo/static/*", "/assets/*"]
   },
   "env": {
     "testing": {
