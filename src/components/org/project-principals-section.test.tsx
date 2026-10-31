@@ -261,6 +261,9 @@ describe('ProjectPrincipalsSection add Hosting Account', () => {
       state.principals = [row([])]
       open()
       expect(screen.getByText('Linked')).toBeTruthy()
+      expect(
+        screen.getByText('Linked by the compose file. Edit the file to change it.')
+      ).toBeTruthy()
       expect(screen.queryByRole('button', { name: /^Link shop to / })).toBeNull()
       expect(screen.queryByRole('button', { name: /^Unlink / })).toBeNull()
     })
@@ -273,6 +276,28 @@ describe('ProjectPrincipalsSection add Hosting Account', () => {
       state.principals = [row([], { composeAlias: 'site' })]
       open()
       expect(screen.getByText('Linked')).toBeTruthy()
+    })
+
+    it('offers no Link button when the compose file names another account', () => {
+      state.environments = [
+        { id: 'env-1', name: 'production', options: { compose: compose('other') } },
+      ]
+      state.services = { 'env-1': [web] }
+      state.principals = [row([])]
+      open()
+      expect(screen.getByText('Set by the compose file for other.')).toBeTruthy()
+      expect(screen.queryByRole('button', { name: /^Link shop to / })).toBeNull()
+    })
+
+    it('says so when the row holds a service the compose file gives to another account', () => {
+      state.environments = [
+        { id: 'env-1', name: 'production', options: { compose: compose('other') } },
+      ]
+      state.services = { 'env-1': [web] }
+      state.principals = [row(['svc-1'])]
+      open()
+      expect(screen.getByText('Linked, but the compose file uses other.')).toBeTruthy()
+      expect(screen.queryByText('Linked')).toBeNull()
     })
   })
 })

@@ -30,6 +30,7 @@ import {
   usePersistAccountWrites,
   usePersistProjectCompose,
 } from '@/components/org/compose-persistence'
+import { mergeComposeOverlay } from '@/lib/compose'
 import { PrincipalAccessPanel } from '@/components/org/principal-access-panel'
 import { nextPrincipalAlias } from '@/lib/compose/principals-document'
 import {
@@ -85,27 +86,36 @@ function ServiceLinkRow({
   username,
   label,
   linked,
-  fromDocument,
+  fileAlias,
+  fileNamesThisAccount,
   disabled,
   onToggle,
 }: Readonly<{
   username: string
   label: string
   linked: boolean
+  /** The account the compose file names for this service, if any. */
+  fileAlias: string | null
   /** The compose file names this account, so the row cannot undo the link here. */
-  fromDocument: boolean
+  fileNamesThisAccount: boolean
   disabled: boolean
   onToggle: () => void
 }>) {
+  const fileNamesOther = fileAlias !== null && !fileNamesThisAccount
+  let note: string | null = null
+  if (fileNamesThisAccount) note = 'Linked by the compose file. Edit the file to change it.'
+  else if (fileNamesOther && linked) note = `Linked, but the compose file uses ${fileAlias}.`
+  else if (fileNamesOther) note = `Set by the compose file for ${fileAlias}.`
+  const showButton = !fileNamesThisAccount && !(fileNamesOther && !linked)
   return (
     <View style={styles.serviceLinkRow}>
       <Text style={styles.serviceLinkName} numberOfLines={1}>
         {label}
       </Text>
-      {linked ? <Text style={styles.serviceLinkedText}>Linked</Text> : null}
-      {linked && fromDocument ? null : (
+      {linked && !fileNamesOther ? <Text style={styles.serviceLinkedText}>Linked</Text> : null}
+      {showButton ? (
         <Button
-          label={linked ? 'Unlink' : `Link to ${label}`}
+          label={linked ? 'Unlink' : 'Link'}
           size="sm"
           variant={linked ? 'secondary' : 'primary'}
           disabled={disabled}
@@ -114,7 +124,8 @@ function ServiceLinkRow({
           }
           onPress={onToggle}
         />
-      )}
+      ) : null}
+      {note ? <Text style={styles.serviceLinkNote}>{note}</Text> : null}
     </View>
   )
 }
@@ -269,15 +280,14 @@ export function ProjectPrincipalsSection({
     const flat: ProjectServiceOption[] = []
     for (const env of environments) {
       const services = servicesByEnvQuery.servicesByEnv[env.id] ?? []
+      const merged = mergeComposeOverlay(
+        projectQuery.data?.project?.options?.compose,
+        env.options?.compose
+      )
       for (const service of services) {
         // The compose alias wins over serviceIds at deploy, so a service whose
         // document names an account is linked to it whatever the row says.
-        const alias =
-          servicePrincipalAlias(env.options?.compose, service.composeServiceName) ??
-          servicePrincipalAlias(
-            projectQuery.data?.project?.options?.compose,
-            service.composeServiceName
-          )
+        const alias = servicePrincipalAlias(merged, service.composeServiceName)
         flat.push({
           id: service.id,
           label: formatServiceOptionLabel(env, service),
@@ -525,19 +535,23 @@ export function ProjectPrincipalsSection({
                   <View style={styles.serviceChipRow}>
                     {serviceOptions.map((option) => {
                       const rowAlias = (row.metadata?.composeAlias ?? row.username).toLowerCase()
-                      const assigned =
-                        row.serviceIds.includes(option.id) || option.alias === rowAlias
-                      // A document that names this account owns the link; the row
-                      // cannot undo it from here.
-                      const fromDocument = option.alias === rowAlias
+                      const fileNamesThisAccount = option.alias === rowAlias
+                      const linked = row.serviceIds.includes(option.id) || fileNamesThisAccount
                       const disabled = !canManage || savingAssignments.has(row.id)
                       return (
                         <ServiceLinkRow
                           key={option.id}
                           username={row.username}
                           label={option.label}
-                          linked={assigned}
-                          fromDocument={fromDocument}
+                          linked={linked}
+                          fileAlias={
+                            principals.find(
+                              (p) =>
+                                (p.metadata?.composeAlias ?? p.username).toLowerCase() ===
+                                option.alias
+                            )?.username ?? option.alias
+                          }
+                          fileNamesThisAccount={fileNamesThisAccount}
                           disabled={disabled}
                           onToggle={() => {
                             void toggleServiceAssignment(row.id, option.id)
@@ -1217,6 +1231,10 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   serviceLinkName: {
+    color: colors.textMuted,
+    fontSize: 12,
+  },
+  serviceLinkNote: {
     color: colors.textMuted,
     fontSize: 12,
   },
