@@ -209,21 +209,47 @@ describe('upgradeStepOutcome', () => {
     expect(upgradeStepOutcome({ status: 'skipped', errorCode: 'server_offline' })).toEqual({
       tone: 'muted',
       label: 'Skipped: Offline',
-      detail: 'It was offline when the update started. It updates on its own when it reconnects.',
+      detail:
+        'Skipped: offline when the update started. It updates at the next automatic check after it reconnects (within the hour), unless updates are paused.',
     })
   })
 
   it('shows the panel message for a skipped offline step, else the fixed text', () => {
     const own =
-      'It stayed offline for 15 minutes during the update. It updates on its own when it reconnects.'
+      'Skipped: offline for 15 minutes during the update. It updates at the next automatic check after it reconnects (within the hour), unless updates are paused.'
     expect(
       upgradeStepOutcome({ status: 'skipped', errorCode: 'server_offline', errorMessage: own })
     ).toMatchObject({ label: 'Skipped: Offline', detail: own })
     expect(
       upgradeStepOutcome({ status: 'skipped', errorCode: 'server_offline', errorMessage: ' ' })
     ).toMatchObject({
-      detail: 'It was offline when the update started. It updates on its own when it reconnects.',
+      detail:
+        'Skipped: offline when the update started. It updates at the next automatic check after it reconnects (within the hour), unless updates are paused.',
     })
+  })
+
+  it('rewrites the old stored promise on a skipped offline step and leaves new text alone', () => {
+    const tail =
+      'It updates at the next automatic check after it reconnects (within the hour), unless updates are paused.'
+    const detail = (errorMessage: string) =>
+      upgradeStepOutcome({ status: 'skipped', errorCode: 'server_offline', errorMessage }).detail
+    expect(
+      detail('It was offline when the update started. It updates on its own when it reconnects.')
+    ).toBe(`Skipped: offline when the update started. ${tail}`)
+    expect(
+      detail(
+        'It stayed offline for 15 minutes during the update. It updates on its own when it reconnects.'
+      )
+    ).toBe(`Skipped: offline for 15 minutes during the update. ${tail}`)
+    const fresh = `Skipped: offline when the update started. ${tail}`
+    expect(detail(fresh)).toBe(fresh)
+    expect(
+      stepMessageText({
+        errorCode: 'server_offline',
+        errorMessage:
+          'It was offline when the update started. It updates on its own when it reconnects.',
+      })
+    ).toBe(fresh)
   })
 
   it('words a failed update delivery in plain language, not as the raw code', () => {
@@ -502,10 +528,10 @@ describe('offlineWaitingNotice', () => {
         { status: 'waiting', connected: false, attempts: 0 },
       ])
     ).toBe(
-      '2 servers are offline, so this update is waiting for them. They are skipped if they stay offline, and they update on their own when they reconnect.'
+      '2 servers are offline, so this update is waiting for them. They update as soon as they reconnect; if one stays offline for 15 minutes it is skipped and updates at the next automatic check after it reconnects.'
     )
     expect(offlineWaitingNotice([{ status: 'waiting', connected: false, attempts: 0 }])).toBe(
-      '1 server is offline, so this update is waiting for it. It is skipped if it stays offline, and it updates on its own when it reconnects.'
+      '1 server is offline, so this update is waiting for it. It updates as soon as it reconnects; if it stays offline for 15 minutes it is skipped and updates at the next automatic check after it reconnects.'
     )
   })
 
