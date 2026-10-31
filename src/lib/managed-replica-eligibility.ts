@@ -237,6 +237,30 @@ export function predictReplicaTransport(
   return 'public'
 }
 
+/**
+ * A pair whose only shared datacenters are untrusted rides TurboFabric when
+ * both servers are on it; otherwise a new replica is refused (the instance
+ * answers `untrusted_network_needs_fabric`). Returns the ineligible row, or
+ * null when both servers are on the fabric.
+ */
+function untrustedOnlyRefusal(
+  params: Readonly<{
+    serverId: string
+    primaryServerId: string
+    untrusted: readonly string[]
+    fabricRelays: readonly { serverId: string }[]
+  }>
+): ReplicaServerEligibility | null {
+  const onFabric = new Set(params.fabricRelays.map((row) => row.serverId))
+  if (onFabric.has(params.primaryServerId) && onFabric.has(params.serverId)) return null
+  return {
+    serverId: params.serverId,
+    eligible: false,
+    reason: 'untrusted-datacenter',
+    candidateDatacenterId: params.untrusted[0] ?? null,
+  }
+}
+
 function failoverEligibility(
   params: Readonly<{
     serverId: string
@@ -265,21 +289,19 @@ function failoverEligibility(
     // pair rides TurboFabric over the LAN when both servers are on the
     // fabric; otherwise the instance answers `untrusted_network_needs_fabric`.
     if (untrusted.length > 0) {
-      const onFabric = new Set(params.fabricRelays.map((row) => row.serverId))
-      if (onFabric.has(params.primaryServerId) && onFabric.has(params.serverId)) {
-        return {
+      return (
+        untrustedOnlyRefusal({
+          serverId: params.serverId,
+          primaryServerId: params.primaryServerId,
+          untrusted,
+          fabricRelays: params.fabricRelays,
+        }) ?? {
           serverId: params.serverId,
           eligible: true,
           candidateDatacenterId: untrusted[0] ?? null,
           predictedTransport: 'fabric',
         }
-      }
-      return {
-        serverId: params.serverId,
-        eligible: false,
-        reason: 'untrusted-datacenter',
-        candidateDatacenterId: untrusted[0] ?? null,
-      }
+      )
     }
     return {
       serverId: params.serverId,
@@ -318,6 +340,23 @@ function readEligibility(
   }>
 ): ReplicaServerEligibility {
   const readyDatacenterId = firstDatacenterWithCidr(params.membershipIds, params.cidrsByDatacenter)
+  // A pair whose only shared datacenters are untrusted never falls to the
+  // public address for a new replica: TurboFabric has to carry it, as for a
+  // failover replica. Pairs sharing no datacenter, or a trusted one, are unchanged.
+  const { trusted, untrusted } = partitionSharedDatacenters(
+    params.membershipIds,
+    params.primaryDatacenterIds,
+    params.policyByDatacenter
+  )
+  if (params.primaryServerId && trusted.length === 0 && untrusted.length > 0) {
+    const refusal = untrustedOnlyRefusal({
+      serverId: params.serverId,
+      primaryServerId: params.primaryServerId,
+      untrusted,
+      fabricRelays: params.fabricRelays,
+    })
+    if (refusal) return refusal
+  }
   return {
     serverId: params.serverId,
     eligible: true,
@@ -338,8 +377,9 @@ function readEligibility(
  *
  * Failover: only servers that share a **trusted** datacenter with the primary
  * (lowest `priority` first) that has a usable subnet. Read-only: any org
- * server that is not already a member and is online; predicted transport is
- * shown for the picker.
+ * server that is not already a member and is online, except one whose only
+ * shared datacenter with the primary is untrusted and that is not on
+ * TurboFabric with it; predicted transport is shown for the picker.
  *
  * Precedence when multiple reasons apply: already-member → offline →
  * no-datacenter → untrusted-datacenter → no-private-cidr → no-private-path.
