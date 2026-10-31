@@ -215,7 +215,7 @@ function skippedOutcome(
   detail: string | null
 ): UpgradeStepOutcome {
   if (step.errorCode === 'server_offline') {
-    const message = step.errorMessage?.trim()
+    const message = modernSkippedOfflineText(step.errorMessage?.trim())
     return { tone: 'muted', label: 'Skipped: Offline', detail: message || SKIPPED_OFFLINE_DETAIL }
   }
   if (step.errorCode === 'retry_later') {
@@ -297,7 +297,10 @@ export function stepMessageText(
   step: Readonly<{ errorCode?: string | null; errorMessage?: string | null }>
 ): string | null {
   if (step.errorCode?.trim() === 'retry_later') return retryLaterText(step.errorMessage)
-  return plainStepFailureMessage(step.errorMessage)
+  const message = plainStepFailureMessage(step.errorMessage)
+  return step.errorCode?.trim() === 'server_offline'
+    ? (modernSkippedOfflineText(message) ?? null)
+    : message
 }
 
 /**
@@ -351,6 +354,24 @@ export function stepHasStarted(status: UpgradeStepStatus | null | undefined): bo
 /** Shown for a server the update left out because it was offline. */
 export const SKIPPED_OFFLINE_DETAIL =
   'Skipped: offline when the update started. It updates at the next automatic check after it reconnects (within the hour), unless updates are paused.'
+
+const OLD_SKIPPED_OFFLINE_TAIL = 'It updates on its own when it reconnects.'
+const NEW_SKIPPED_OFFLINE_TAIL =
+  'It updates at the next automatic check after it reconnects (within the hour), unless updates are paused.'
+
+/**
+ * Stored history rows keep the sentence the control plane wrote at the time.
+ * Older rows promise an update on reconnect; show the current tail instead.
+ */
+function modernSkippedOfflineText(message: string | undefined): string | undefined {
+  if (!message?.endsWith(OLD_SKIPPED_OFFLINE_TAIL)) return message
+  const lead = message
+    .slice(0, -OLD_SKIPPED_OFFLINE_TAIL.length)
+    .trim()
+    .replace(/^It was offline when/, 'Skipped: offline when')
+    .replace(/^It stayed offline for/, 'Skipped: offline for')
+  return `${lead} ${NEW_SKIPPED_OFFLINE_TAIL}`
+}
 
 function skippedBadge(errorCode: string | null | undefined): {
   tone: 'muted' | 'pending'
@@ -460,8 +481,8 @@ export function offlineWaitingNotice(steps: readonly OfflineWaitStep[]): string 
   if (remaining.length === 0 || !remaining.every(isOfflineWaitStep)) return null
   const n = remaining.length
   return n === 1
-    ? '1 server is offline, so this update is waiting for it. It is skipped if it stays offline, and it updates at the next automatic check after it reconnects.'
-    : `${n} servers are offline, so this update is waiting for them. They are skipped if they stay offline, and they update at the next automatic check after they reconnect.`
+    ? '1 server is offline, so this update is waiting for it. It updates as soon as it reconnects; if it stays offline for 15 minutes it is skipped and updates at the next automatic check after it reconnects.'
+    : `${n} servers are offline, so this update is waiting for them. They update as soon as they reconnect; if one stays offline for 15 minutes it is skipped and updates at the next automatic check after it reconnects.`
 }
 
 /**
