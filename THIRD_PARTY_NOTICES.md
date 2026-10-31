@@ -7,7 +7,7 @@ Third-party components remain under their own copyright and license terms and ar
 Third-party OS artwork under `assets/os/` is recorded separately in `assets/os/NOTICE.md` and is not licensed under this repository’s AGPL or the Apple App Store additional permission.
 
 <!-- lockfiles
-pnpm-lock.yaml sha256:c4117c4bcdd64e55835fd1c1c2392e576c0f954fef5a004730f740916469a9d5
+pnpm-lock.yaml sha256:1dfc09b9f0fca1522f43d43f5884abdcd5ff7f616d5a320a1fdbe60fcaba8cc1
 -->
 
 ## Production dependencies
@@ -3309,7 +3309,7 @@ pnpm-lock.yaml sha256:c4117c4bcdd64e55835fd1c1c2392e576c0f954fef5a004730f7409164
 - Copyright: David Frank
 - Homepage: https://github.com/bitinn/node-fetch
 
-### node-forge@1.4.0
+### node-forge@1.4.2
 
 - License: (BSD-3-Clause OR GPL-2.0)
 - Copyright: Digital Bazaar, Inc.
