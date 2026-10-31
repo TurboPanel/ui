@@ -309,8 +309,8 @@ function tunnelReading(
   for (const row of [forward, backward]) {
     if (row && row.kind !== 'unreachable' && readingIsCurrent(row, nowMs)) return row
   }
-  if (forward && forward.kind === 'unreachable') return forward
-  if (backward && backward.kind === 'unreachable') return backward
+  if (forward?.kind === 'unreachable') return forward
+  if (backward?.kind === 'unreachable') return backward
   return forward ?? backward
 }
 
@@ -366,6 +366,10 @@ function tunnelWarning(row: FabricPathMatrixRow): string | undefined {
 /** What the page shows for a pair's tunnel: the reading and nothing more while the mesh is paused or off. */
 export type FabricReadingContext = Readonly<{ nowMs: number; quiet: boolean }>
 
+function currentReadingContext(): FabricReadingContext {
+  return { nowMs: Date.now(), quiet: false }
+}
+
 function tunnelFields(
   pair: OrgFabricPairRecord,
   matrix: readonly FabricPathMatrixRow[],
@@ -414,15 +418,16 @@ export function buildFabricPairRows(
   pairs: readonly OrgFabricPairRecord[],
   matrix: readonly FabricPathMatrixRow[],
   serverNameById: ReadonlyMap<string, string>,
-  context: FabricReadingContext = { nowMs: Date.now(), quiet: false }
+  context?: FabricReadingContext
 ): FabricPairRow[] {
+  const reading = context ?? currentReadingContext()
   const rows = pairs.map((pair) =>
     pairRow(
       pair,
       `${pair.fromServerId}:${pair.toServerId}`,
       `${serverLabel(pair.fromServerId, serverNameById)} ↔ ${serverLabel(pair.toServerId, serverNameById)}`,
       matrix,
-      context
+      reading
     )
   )
   return rows.sort(comparePairRows)
@@ -437,15 +442,16 @@ export function buildServerPairRows(
   pairs: readonly OrgFabricPairRecord[],
   matrix: readonly FabricPathMatrixRow[],
   serverNameById: ReadonlyMap<string, string>,
-  context: FabricReadingContext = { nowMs: Date.now(), quiet: false }
+  context?: FabricReadingContext
 ): FabricPairRow[] {
+  const reading = context ?? currentReadingContext()
   const rows: FabricPairRow[] = []
   for (const pair of pairs) {
     let otherId: string | null = null
     if (pair.fromServerId === serverId) otherId = pair.toServerId
     else if (pair.toServerId === serverId) otherId = pair.fromServerId
     if (!otherId) continue
-    rows.push(pairRow(pair, otherId, serverLabel(otherId, serverNameById), matrix, context))
+    rows.push(pairRow(pair, otherId, serverLabel(otherId, serverNameById), matrix, reading))
   }
   return rows.sort(comparePairRows)
 }

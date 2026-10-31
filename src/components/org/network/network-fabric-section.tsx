@@ -20,7 +20,7 @@ import {
   fetchOrgHostDefaults,
   type CommandStatus,
   type FabricRelaySegment,
-  type OrgFabricPairRecord,
+  type OrgFabricSettings,
   type OrgFabricServerRecord,
   type OrgServerRecord,
   type RelayRecord,
@@ -37,7 +37,6 @@ import {
   formatResolvedAdvertisedCidrs,
   relayRoleLabel,
   type FabricPairRow,
-  type FabricReadingContext,
   type FabricPathMatrixRow,
 } from '@/lib/fabric-mesh'
 import {
@@ -1083,14 +1082,16 @@ function isFabricApplyDisabled(
 
 /** Server pairs from the panel's `pairs[]` (empty on an older panel), with tunnel readings folded in. */
 function useFabricPairRows(
-  pairs: OrgFabricPairRecord[] | undefined,
+  fabric: OrgFabricSettings | undefined,
   pathMatrix: Parameters<typeof buildFabricPairRows>[1],
-  serverNameById: Parameters<typeof buildFabricPairRows>[2],
-  context: FabricReadingContext
+  serverNameById: Parameters<typeof buildFabricPairRows>[2]
 ): FabricPairRow[] {
+  const nowMs = useNowMs(CLOCK_TICK_MS)
+  const quiet = fabric ? fabricIsQuiet(fabric) : false
+  const pairs = fabric?.pairs
   return useMemo(
-    () => buildFabricPairRows(orEmptyArray(pairs), pathMatrix, serverNameById, context),
-    [pairs, pathMatrix, serverNameById, context]
+    () => buildFabricPairRows(orEmptyArray(pairs), pathMatrix, serverNameById, { nowMs, quiet }),
+    [pairs, pathMatrix, serverNameById, nowMs, quiet]
   )
 }
 
@@ -1157,10 +1158,7 @@ export function NetworkFabricSection({ orgId }: Readonly<{ orgId: string }>) {
     [relays, serverNameById, fabricData]
   )
 
-  const nowMs = useNowMs(CLOCK_TICK_MS)
-  const quiet = fabricData ? fabricIsQuiet(fabricData) : false
-  const readingContext = useMemo(() => ({ nowMs, quiet }), [nowMs, quiet])
-  const pairRows = useFabricPairRows(fabricData?.pairs, pathMatrix, serverNameById, readingContext)
+  const pairRows = useFabricPairRows(fabricData, pathMatrix, serverNameById)
   const serverOutcomes = useMemo<FabricServerOutcome[]>(
     () =>
       relays.map((relay) => ({
