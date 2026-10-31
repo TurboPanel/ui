@@ -5,8 +5,8 @@ import { saveOrgTlsSettings } from '@/lib/instance-api'
 import { queryKeys, useApiMutation } from '@/lib/query-client'
 
 /**
- * The address Let's Encrypt can use for important notices about the
- * organization's certificates (it no longer sends expiry reminders).
+ * The contact address for the organization's Let's Encrypt account (Let's
+ * Encrypt no longer sends expiry reminders).
  * Shown to managers only: the setting is manager-readable on the server.
  * It is its own setting: nothing is taken from a member's account.
  */
@@ -44,7 +44,7 @@ export function TlsContactEmailField({
     <>
       <TextField
         label="Certificate Contact Email"
-        hint="The address Let's Encrypt can use for important notices about this organization's certificates. It will be used for certificates ordered once and shared across servers."
+        hint="The contact address for this organization's Let's Encrypt account. Let's Encrypt no longer sends expiry reminders. It will be used for certificates ordered once and shared across servers."
         value={value}
         onChangeText={(text) => {
           setDraft(text)
