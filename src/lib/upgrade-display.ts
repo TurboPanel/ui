@@ -350,7 +350,7 @@ export function stepHasStarted(status: UpgradeStepStatus | null | undefined): bo
 
 /** Shown for a server the update left out because it was offline. */
 export const SKIPPED_OFFLINE_DETAIL =
-  'It was offline when the update started. It updates on its own when it reconnects.'
+  'Skipped: offline when the update started. It updates at the next automatic check after it reconnects (within the hour), unless updates are paused.'
 
 function skippedBadge(errorCode: string | null | undefined): {
   tone: 'muted' | 'pending'
@@ -460,8 +460,8 @@ export function offlineWaitingNotice(steps: readonly OfflineWaitStep[]): string 
   if (remaining.length === 0 || !remaining.every(isOfflineWaitStep)) return null
   const n = remaining.length
   return n === 1
-    ? '1 server is offline, so this update is waiting for it. It is skipped if it stays offline, and it updates on its own when it reconnects.'
-    : `${n} servers are offline, so this update is waiting for them. They are skipped if they stay offline, and they update on their own when they reconnect.`
+    ? '1 server is offline, so this update is waiting for it. It is skipped if it stays offline, and it updates at the next automatic check after it reconnects.'
+    : `${n} servers are offline, so this update is waiting for them. They are skipped if they stay offline, and they update at the next automatic check after they reconnect.`
 }
 
 /**

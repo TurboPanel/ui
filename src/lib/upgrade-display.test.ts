@@ -209,20 +209,22 @@ describe('upgradeStepOutcome', () => {
     expect(upgradeStepOutcome({ status: 'skipped', errorCode: 'server_offline' })).toEqual({
       tone: 'muted',
       label: 'Skipped: Offline',
-      detail: 'It was offline when the update started. It updates on its own when it reconnects.',
+      detail:
+        'Skipped: offline when the update started. It updates at the next automatic check after it reconnects (within the hour), unless updates are paused.',
     })
   })
 
   it('shows the panel message for a skipped offline step, else the fixed text', () => {
     const own =
-      'It stayed offline for 15 minutes during the update. It updates on its own when it reconnects.'
+      'Skipped: offline for 15 minutes during the update. It updates at the next automatic check after it reconnects (within the hour), unless updates are paused.'
     expect(
       upgradeStepOutcome({ status: 'skipped', errorCode: 'server_offline', errorMessage: own })
     ).toMatchObject({ label: 'Skipped: Offline', detail: own })
     expect(
       upgradeStepOutcome({ status: 'skipped', errorCode: 'server_offline', errorMessage: ' ' })
     ).toMatchObject({
-      detail: 'It was offline when the update started. It updates on its own when it reconnects.',
+      detail:
+        'Skipped: offline when the update started. It updates at the next automatic check after it reconnects (within the hour), unless updates are paused.',
     })
   })
 
@@ -502,10 +504,10 @@ describe('offlineWaitingNotice', () => {
         { status: 'waiting', connected: false, attempts: 0 },
       ])
     ).toBe(
-      '2 servers are offline, so this update is waiting for them. They are skipped if they stay offline, and they update on their own when they reconnect.'
+      '2 servers are offline, so this update is waiting for them. They are skipped if they stay offline, and they update at the next automatic check after they reconnect.'
     )
     expect(offlineWaitingNotice([{ status: 'waiting', connected: false, attempts: 0 }])).toBe(
-      '1 server is offline, so this update is waiting for it. It is skipped if it stays offline, and it updates on its own when it reconnects.'
+      '1 server is offline, so this update is waiting for it. It is skipped if it stays offline, and it updates at the next automatic check after it reconnects.'
     )
   })
 
