@@ -3,6 +3,7 @@ import { setActiveOrganizationId, ORG_ID_HEADER } from '@/lib/org-context'
 import { userErrorMessage } from '@/lib/user-error'
 import {
   applyOrgFabric,
+  deleteOrgFabric,
   bootstrapInstall,
   checkPermission,
   completeInstall,
@@ -50,6 +51,7 @@ import {
   fetchWorkspace,
   IP_IN_USE_ERROR,
   patchOrgFabricRelay,
+  patchOrgFabricServer,
   pingDaemon,
   PROJECT_HAS_RUNNING_SERVICES_ERROR,
   rebootServer,
@@ -593,6 +595,29 @@ describe('instance-api fetch wrappers', () => {
     await expect(applyOrgFabric('org-1')).resolves.toMatchObject({
       fabricId: 'fab-1',
       interfaceName: 'tp0',
+    })
+  })
+
+  it('fabric remove and server patch wrappers proxy org fabric routes', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ enabled: false, relays: [] }))
+    await expect(deleteOrgFabric('org-1')).resolves.toMatchObject({
+      enabled: false,
+      paused: false,
+      servers: [],
+    })
+    expect(fetchMock.mock.calls.at(-1)?.[0]).toContain('/organizations/org-1/fabric')
+    expect(fetchMock.mock.calls.at(-1)?.[1]).toMatchObject({ method: 'DELETE' })
+
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ ok: true, server: { serverId: 'srv-1', enabled: false } })
+    )
+    await expect(patchOrgFabricServer('org-1', 'srv-1', { enabled: false })).resolves.toMatchObject(
+      { ok: true, server: { serverId: 'srv-1' } }
+    )
+    expect(fetchMock.mock.calls.at(-1)?.[0]).toContain('/organizations/org-1/fabric/servers/srv-1')
+    expect(fetchMock.mock.calls.at(-1)?.[1]).toMatchObject({
+      method: 'PATCH',
+      body: JSON.stringify({ enabled: false }),
     })
   })
 

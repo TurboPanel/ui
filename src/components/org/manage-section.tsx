@@ -9,6 +9,7 @@ import { OrganizationChannelsSection } from '@/components/account/notification-c
 import { AccessOverviewSection } from '@/components/org/access-overview-section'
 import { GitSourcesSection } from '@/components/org/git-sources/git-sources-section'
 import { OrgPrincipalsTab } from '@/components/org/org-principals-tab'
+import { ProjectSettingsTab } from '@/components/org/project-settings-tab'
 import { TlsOverviewSection } from '@/components/org/tls-overview-section'
 import { Button, ButtonRow, SectionPanel } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
@@ -61,7 +62,9 @@ function GeneralTab({ orgId }: Readonly<{ orgId: string }>) {
 
 function SettingsTabBody({ orgId, tab }: Readonly<{ orgId: string; tab: OrgSettingsTabId }>) {
   switch (tab) {
-    case 'members':
+    case 'projects':
+      return <ProjectSettingsTab orgId={orgId} />
+    case 'access':
       return <AccessOverviewSection orgId={orgId} />
     case 'notifications':
       return <OrganizationChannelsSection orgId={orgId} />
@@ -77,11 +80,12 @@ function SettingsTabBody({ orgId, tab }: Readonly<{ orgId: string; tab: OrgSetti
 }
 
 /**
- * Organization settings: six tabs (General, Members, Notifications, Domains
- * & certificates, Git connections, Principals), reached from the organization menu in the
- * header. Each tab hosts the screen that already did the job, so every setting
- * keeps its place and its route (`/access`, `/servers/tls`,
- * `/projects/git-sources`, `/account/notifications`).
+ * Organization Settings: seven tabs (General, Project Settings, Access,
+ * Notifications, Domains & Certificates, Git Connections, Principals), reached
+ * from the organization menu in the header. Each tab hosts the screen that
+ * already did the job, so every setting keeps its place and its route
+ * (`/servers/tls`, `/projects/git-sources`, `/account/notifications`); the old
+ * `/projects/settings` and `/access` pages redirect to their tabs.
  */
 export function ManageSection({ orgId }: Readonly<{ orgId: string }>) {
   const orgsQuery = useOrganizationsQuery()
@@ -104,7 +108,7 @@ export function ManageSection({ orgId }: Readonly<{ orgId: string }>) {
         tabs={tabs}
         value={activeTab}
         onChange={(key) => router.push(orgSettingsTabHref(orgId, key as OrgSettingsTabId) as Href)}
-        ariaLabel="Organization settings sections"
+        ariaLabel="Organization Settings sections"
       />
       <SettingsTabBody orgId={orgId} tab={activeTab} />
     </View>

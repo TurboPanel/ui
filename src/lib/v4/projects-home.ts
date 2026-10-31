@@ -285,16 +285,21 @@ export function filterProjectsByType<T extends Pick<HomeProject, 'kind'>>(
   return cards.filter((card) => projectTypeOf(card.kind) === filter)
 }
 
-/** "All 3", "Apps 2", "Managed Databases 1", each read out as "Apps, 2 projects". */
-export function projectTypeOptions(counts: Readonly<Record<ProjectTypeFilter, number>>): {
+/**
+ * "All 3", "Apps 2", "Managed Databases 1", each read out as "Apps, 2 projects".
+ * While the list still loads (`null`) the labels carry no count, never a 0.
+ */
+export function projectTypeOptions(counts: Readonly<Record<ProjectTypeFilter, number>> | null): {
   value: ProjectTypeFilter
   label: string
   accessibilityLabel: string
 }[] {
   return PROJECT_TYPE_FILTERS.map((value) => ({
     value,
-    label: `${PROJECT_TYPE_LABELS[value]} ${counts[value]}`,
-    accessibilityLabel: `${PROJECT_TYPE_LABELS[value]}, ${plural(counts[value], 'project')}`,
+    label: counts ? `${PROJECT_TYPE_LABELS[value]} ${counts[value]}` : PROJECT_TYPE_LABELS[value],
+    accessibilityLabel: counts
+      ? `${PROJECT_TYPE_LABELS[value]}, ${plural(counts[value], 'project')}`
+      : PROJECT_TYPE_LABELS[value],
   }))
 }
 
@@ -323,21 +328,28 @@ export function tilePills(project: Pick<HomeProject, 'environments'>): {
   shown: HomeEnvironment[]
   more: number
 } {
+  // A project with a single environment always names it (as its status).
+  if (project.environments.length === 1) return { shown: [...project.environments], more: 0 }
   const shown = project.environments.filter((env) => env.isPrimary || env.pinned)
   return { shown, more: project.environments.length - shown.length }
 }
 
-/** Deploys in progress show this many rows; the rest are reached from Activity. */
+/** Deploys in Progress show this many rows; the rest are reached from Activity. */
 export const IN_PROGRESS_LIMIT = 3
 
-/** "4 projects · 9 environments · 7 running" (the running part waits for containers). */
+/**
+ * The Projects page subtitle, e.g. "4 projects · 9 environments · 7 running".
+ * A count that is still loading (null) is left out rather than shown as 0, so
+ * the line never says "0 running" next to tiles that say Running.
+ */
 export function summaryLine(
   projectCount: number,
-  environmentCount: number,
+  environmentCount: number | null,
   runningCount: number | null
 ): string {
-  const parts = [plural(projectCount, 'project'), plural(environmentCount, 'environment')]
-  if (runningCount !== null) parts.push(`${runningCount} running`)
+  const parts = [plural(projectCount, 'project')]
+  if (environmentCount !== null) parts.push(plural(environmentCount, 'environment'))
+  if (environmentCount !== null && runningCount !== null) parts.push(`${runningCount} running`)
   return parts.join(' · ')
 }
 

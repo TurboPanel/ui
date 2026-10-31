@@ -1,7 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import type { RelayRecord } from './instance-api'
+import type { OrgFabricPairRecord, OrgFabricServerRecord, RelayRecord } from './instance-api'
 import {
+  buildFabricPairRows,
   buildFabricPathMatrix,
+  buildServerPairRows,
+  fabricPairPathLabel,
+  fabricHandshakeDisplay,
+  fabricHandshakeReading,
+  fabricInactiveServerIds,
+  fabricIsQuiet,
+  fabricPairUsesTunnel,
+  fabricReadingAgeLabel,
+  fabricServerPairRows,
   fabricPathIsDegraded,
   fabricPathKindLabel,
   fabricRoutedViaLabels,
@@ -14,8 +24,7 @@ import {
 } from './fabric-mesh'
 
 function relay(
-  partial: Pick<RelayRecord, 'serverId' | 'role'> &
-    Partial<Omit<RelayRecord, 'serverId' | 'role'>>,
+  partial: Pick<RelayRecord, 'serverId' | 'role'> & Partial<Omit<RelayRecord, 'serverId' | 'role'>>
 ): RelayRecord {
   return {
     address: '10.64.0.1',
@@ -51,17 +60,14 @@ describe('resolveSiteLinks', () => {
         relay({ serverId: 'srv-b', role: 'member' }),
         relay({ serverId: 'srv-c', role: 'member' }),
       ],
-      serverById,
+      serverById
     )
     expect(mesh.datacenterIds).toEqual(['dc-ams', 'dc-fra'])
     expect(mesh.hasUnassignedPeers).toBe(true)
   })
 
   it('treats a missing server as unassigned', () => {
-    const mesh = resolveSiteLinks(
-      [relay({ serverId: 'srv-missing', role: 'member' })],
-      new Map(),
-    )
+    const mesh = resolveSiteLinks([relay({ serverId: 'srv-missing', role: 'member' })], new Map())
     expect(mesh.datacenterIds).toEqual([])
     expect(mesh.hasUnassignedPeers).toBe(true)
   })
@@ -79,7 +85,7 @@ describe('resolveSiteLinks', () => {
             ],
           },
         ],
-      ]),
+      ])
     )
     expect(mesh.datacenterIds).toEqual(['dc-ams', 'dc-fra'])
   })
@@ -94,10 +100,7 @@ describe('formatSiteLinkLabel', () => {
 
   it('labels two sites as A ↔ B', () => {
     expect(
-      formatSiteLinkLabel(
-        { datacenterIds: ['dc-ams', 'dc-fra'], hasUnassignedPeers: false },
-        names,
-      ),
+      formatSiteLinkLabel({ datacenterIds: ['dc-ams', 'dc-fra'], hasUnassignedPeers: false }, names)
     ).toBe('AMS ↔ FRA')
   })
 
@@ -108,50 +111,35 @@ describe('formatSiteLinkLabel', () => {
           datacenterIds: ['dc-ams', 'dc-fra', 'dc-sfo'],
           hasUnassignedPeers: false,
         },
-        names,
-      ),
+        names
+      )
     ).toBe('AMS ↔ 2 sites')
   })
 
   it('labels unassigned-only meshes', () => {
-    expect(
-      formatSiteLinkLabel(
-        { datacenterIds: [], hasUnassignedPeers: true },
-        names,
-      ),
-    ).toBe('Unassigned hosts')
+    expect(formatSiteLinkLabel({ datacenterIds: [], hasUnassignedPeers: true }, names)).toBe(
+      'Unassigned hosts'
+    )
   })
 
   it('labels an empty mesh with no peers', () => {
-    expect(
-      formatSiteLinkLabel(
-        { datacenterIds: [], hasUnassignedPeers: false },
-        names,
-      ),
-    ).toBe('No sites yet')
+    expect(formatSiteLinkLabel({ datacenterIds: [], hasUnassignedPeers: false }, names)).toBe(
+      'No sites yet'
+    )
   })
 
   it('labels a single site alone or with unassigned peers', () => {
     expect(
-      formatSiteLinkLabel(
-        { datacenterIds: ['dc-ams'], hasUnassignedPeers: false },
-        names,
-      ),
+      formatSiteLinkLabel({ datacenterIds: ['dc-ams'], hasUnassignedPeers: false }, names)
     ).toBe('AMS')
     expect(
-      formatSiteLinkLabel(
-        { datacenterIds: ['dc-ams'], hasUnassignedPeers: true },
-        names,
-      ),
+      formatSiteLinkLabel({ datacenterIds: ['dc-ams'], hasUnassignedPeers: true }, names)
     ).toBe('AMS ↔ Unassigned hosts')
   })
 
   it('falls back to the datacenter id when a name is missing', () => {
     expect(
-      formatSiteLinkLabel(
-        { datacenterIds: ['dc-unknown'], hasUnassignedPeers: false },
-        names,
-      ),
+      formatSiteLinkLabel({ datacenterIds: ['dc-unknown'], hasUnassignedPeers: false }, names)
     ).toBe('dc-unknown')
   })
 })
@@ -162,8 +150,8 @@ describe('meshLabelForSite', () => {
       meshLabelForSite(
         'dc-other',
         { datacenterIds: ['dc-ams'], hasUnassignedPeers: false },
-        new Map([['dc-ams', 'AMS']]),
-      ),
+        new Map([['dc-ams', 'AMS']])
+      )
     ).toBeNull()
   })
 
@@ -175,8 +163,8 @@ describe('meshLabelForSite', () => {
         new Map([
           ['dc-ams', 'AMS'],
           ['dc-fra', 'FRA'],
-        ]),
-      ),
+        ])
+      )
     ).toBe('AMS ↔ FRA')
   })
 })
@@ -205,7 +193,7 @@ describe('resolvePrimaryGatewayByDatacenter', () => {
         relay({ serverId: 'srv-b', role: 'gateway' }),
         relay({ serverId: 'srv-c', role: 'member' }),
       ],
-      serverById,
+      serverById
     )
     expect(primary.get('dc-1')).toBe('srv-b')
   })
@@ -232,7 +220,7 @@ describe('resolvePrimaryGatewayByDatacenter', () => {
         relay({ serverId: 'srv-z', role: 'gateway' }),
         relay({ serverId: 'srv-m', role: 'gateway' }),
       ],
-      serverById,
+      serverById
     )
     expect(primary.get('dc-1')).toBe('srv-m')
   })
@@ -240,16 +228,16 @@ describe('resolvePrimaryGatewayByDatacenter', () => {
 
 describe('relayRoleLabel', () => {
   it('labels gateway and member', () => {
-    expect(relayRoleLabel('gateway')).toBe('Gateway')
-    expect(relayRoleLabel('member')).toBe('Member')
+    expect(relayRoleLabel('gateway')).toBe('Shared')
+    expect(relayRoleLabel('member')).toBe('Not Shared')
   })
 })
 
 describe('formatResolvedAdvertisedCidrs', () => {
   it('joins derived IPv4 defaults for display', () => {
-    expect(
-      formatResolvedAdvertisedCidrs(['198.51.100.0/24', '203.0.113.0/24']),
-    ).toBe('198.51.100.0/24, 203.0.113.0/24')
+    expect(formatResolvedAdvertisedCidrs(['198.51.100.0/24', '203.0.113.0/24'])).toBe(
+      '198.51.100.0/24, 203.0.113.0/24'
+    )
   })
 
   it('labels an empty derived list', () => {
@@ -274,9 +262,7 @@ describe('fabricPathIsDegraded', () => {
   })
 
   it('honors the stamped degraded flag for other kinds', () => {
-    expect(fabricPathIsDegraded({ kind: 'direct_lan', degraded: true })).toBe(
-      true,
-    )
+    expect(fabricPathIsDegraded({ kind: 'direct_lan', degraded: true })).toBe(true)
     expect(fabricPathIsDegraded({ kind: 'gateway' })).toBe(false)
   })
 })
@@ -333,7 +319,7 @@ describe('buildFabricPathMatrix', () => {
           ],
         }),
       ],
-      names,
+      names
     )
     expect(rows.map((row) => `${row.fromLabel}→${row.toLabel}`)).toEqual([
       'Server A→Server B',
@@ -378,7 +364,7 @@ describe('buildFabricPathMatrix', () => {
           ],
         }),
       ],
-      names,
+      names
     )
     expect(rows[0]?.fromLabel).toBe('srv-unknown')
     expect(rows[0]?.toLabel).toBe('Server B')
@@ -400,7 +386,7 @@ describe('buildFabricPathMatrix', () => {
           ],
         }),
       ],
-      names,
+      names
     )
     expect(rows[0]?.lastHandshakeAt).toBe('2026-08-19T12:00:00.000Z')
   })
@@ -431,8 +417,8 @@ describe('fabricRoutedViaLabels', () => {
             },
           ],
         },
-        new Map([['srv-gw', 'dc-gw-1']]),
-      ),
+        new Map([['srv-gw', 'dc-gw-1']])
+      )
     ).toEqual(['dc-gw-1'])
   })
 
@@ -449,8 +435,516 @@ describe('fabricRoutedViaLabels', () => {
             },
           ],
         },
-        new Map(),
-      ),
+        new Map()
+      )
     ).toEqual(['srv-unknown-gw'])
+  })
+})
+
+function pair(
+  fromServerId: string,
+  toServerId: string,
+  path: OrgFabricPairRecord['path'],
+  reason = 'Because.'
+): OrgFabricPairRecord {
+  return { fromServerId, toServerId, path, reason }
+}
+
+function fabricServer(serverId: string, name: string): OrgFabricServerRecord {
+  return {
+    serverId,
+    name,
+    enabled: true,
+    member: true,
+    role: 'gateway',
+    roleSource: 'automatic',
+    automaticRole: 'gateway',
+  }
+}
+
+const names = new Map([
+  ['srv-a', 'alpha'],
+  ['srv-b', 'bravo'],
+  ['srv-c', 'charlie'],
+])
+
+describe('fabricPairPathLabel', () => {
+  it('names each path in book title case', () => {
+    expect(fabricPairPathLabel('lan')).toBe('LAN')
+    expect(fabricPairPathLabel('fabric')).toBe('TurboFabric')
+    expect(fabricPairPathLabel('fabric_over_untrusted_lan')).toBe('TurboFabric over LAN')
+    expect(fabricPairPathLabel('none')).toBe('No Path')
+  })
+
+  it('treats only the tunnel paths as using a tunnel', () => {
+    expect(fabricPairUsesTunnel('fabric')).toBe(true)
+    expect(fabricPairUsesTunnel('fabric_over_untrusted_lan')).toBe(true)
+    expect(fabricPairUsesTunnel('lan')).toBe(false)
+    expect(fabricPairUsesTunnel('none')).toBe(false)
+  })
+})
+
+describe('buildFabricPairRows', () => {
+  it('keeps the reason and adds tunnel readings from either direction', () => {
+    const relays = [
+      relay({
+        serverId: 'srv-c',
+        role: 'gateway',
+        paths: [
+          { peerServerId: 'srv-a', selected: 'direct_public', latencyMs: 42, degraded: false },
+        ],
+      }),
+    ]
+    const matrix = buildFabricPathMatrix(relays, names)
+    const rows = buildFabricPairRows(
+      [
+        pair('srv-a', 'srv-c', 'fabric', 'They are in different datacenters.'),
+        pair('srv-a', 'srv-b', 'lan', 'They share the trusted network Rack A.'),
+      ],
+      matrix,
+      names
+    )
+    expect(rows.map((row) => [row.title, row.pathLabel, row.reason, row.latencyMs])).toEqual([
+      ['alpha ↔ bravo', 'LAN', 'They share the trusted network Rack A.', undefined],
+      ['alpha ↔ charlie', 'TurboFabric', 'They are in different datacenters.', 42],
+    ])
+  })
+
+  it('never warns about a tunnel on a LAN pair', () => {
+    const relays = [
+      relay({
+        serverId: 'srv-a',
+        role: 'gateway',
+        paths: [{ peerServerId: 'srv-b', selected: 'unreachable', degraded: true }],
+      }),
+    ]
+    const matrix = buildFabricPathMatrix(relays, names)
+    const [lanRow] = buildFabricPairRows([pair('srv-a', 'srv-b', 'lan')], matrix, names)
+    expect(lanRow?.warning).toBeUndefined()
+    const [tunnelRow] = buildFabricPairRows(
+      [pair('srv-a', 'srv-b', 'fabric_over_untrusted_lan')],
+      matrix,
+      names
+    )
+    expect(tunnelRow?.pathLabel).toBe('TurboFabric over LAN')
+    expect(tunnelRow?.warning).toBe('Unreachable')
+  })
+
+  it('does not call a tunnel unreachable when the other end connects out to it', () => {
+    const relays = [
+      relay({
+        serverId: 'srv-a',
+        role: 'gateway',
+        paths: [{ peerServerId: 'srv-c', selected: 'unreachable', degraded: false }],
+      }),
+      relay({
+        serverId: 'srv-c',
+        role: 'member',
+        paths: [
+          { peerServerId: 'srv-a', selected: 'direct_public', latencyMs: 21, degraded: false },
+        ],
+      }),
+    ]
+    const matrix = buildFabricPathMatrix(relays, names)
+    const [row] = buildFabricPairRows([pair('srv-a', 'srv-c', 'fabric')], matrix, names)
+    expect(row?.warning).toBeUndefined()
+    expect(row?.latencyMs).toBe(21)
+  })
+
+  it('still says unreachable when neither end reaches the other', () => {
+    const relays = [
+      relay({
+        serverId: 'srv-a',
+        role: 'gateway',
+        paths: [{ peerServerId: 'srv-c', selected: 'unreachable', degraded: false }],
+      }),
+      relay({
+        serverId: 'srv-c',
+        role: 'member',
+        paths: [{ peerServerId: 'srv-a', selected: 'unreachable', degraded: false }],
+      }),
+    ]
+    const matrix = buildFabricPathMatrix(relays, names)
+    const [row] = buildFabricPairRows([pair('srv-a', 'srv-c', 'fabric')], matrix, names)
+    expect(row?.warning).toBe('Unreachable')
+  })
+
+  describe('a silent server never hides the warning', () => {
+    const natPaths = (observedAt: string | undefined) => [
+      relay({
+        serverId: 'srv-a',
+        role: 'gateway',
+        paths: [{ peerServerId: 'srv-c', selected: 'unreachable', degraded: false }],
+        observedAt: '2026-10-31T01:00:00.000Z',
+      }),
+      relay({
+        serverId: 'srv-c',
+        role: 'member',
+        paths: [{ peerServerId: 'srv-a', selected: 'direct_public', degraded: false }],
+        ...(observedAt ? { observedAt } : {}),
+      }),
+    ]
+    const warningAt = (
+      nowIso: string,
+      observedAt: string | undefined,
+      inactive?: Set<string>,
+      quiet = false
+    ) => {
+      const matrix = buildFabricPathMatrix(natPaths(observedAt), names, inactive)
+      const [row] = buildFabricPairRows([pair('srv-a', 'srv-c', 'fabric')], matrix, names, {
+        nowMs: Date.parse(nowIso),
+        quiet,
+      })
+      return row?.warning
+    }
+
+    it('trusts the other end while it reports', () => {
+      expect(warningAt('2026-10-31T01:03:00.000Z', '2026-10-31T01:01:00.000Z')).toBeUndefined()
+    })
+
+    it('warns once nobody has reported for more than 7 minutes', () => {
+      expect(warningAt('2026-10-31T01:20:00.000Z', '2026-10-31T01:01:00.000Z')).toBe(
+        'Not Reporting'
+      )
+    })
+
+    it('warns when the other end is switched off or the mesh is paused', () => {
+      expect(
+        warningAt('2026-10-31T01:03:00.000Z', '2026-10-31T01:01:00.000Z', new Set(['srv-c']))
+      ).toBe('Unreachable')
+    })
+
+    it('says Not Reporting when neither end has reported for minutes', () => {
+      const relays = [
+        relay({
+          serverId: 'srv-a',
+          role: 'gateway',
+          paths: [{ peerServerId: 'srv-c', selected: 'direct_public', degraded: false }],
+          observedAt: '2026-10-31T01:00:00.000Z',
+        }),
+        relay({
+          serverId: 'srv-c',
+          role: 'member',
+          paths: [{ peerServerId: 'srv-a', selected: 'direct_public', degraded: false }],
+          observedAt: '2026-10-31T01:00:00.000Z',
+        }),
+      ]
+      const matrix = buildFabricPathMatrix(relays, names)
+      const read = (nowIso: string) =>
+        buildFabricPairRows([pair('srv-a', 'srv-c', 'fabric')], matrix, names, {
+          nowMs: Date.parse(nowIso),
+          quiet: false,
+        })[0]?.warning
+      expect(read('2026-10-31T01:03:00.000Z')).toBeUndefined()
+      expect(read('2026-10-31T01:30:00.000Z')).toBe('Not Reporting')
+    })
+
+    it('stays quiet while the mesh is paused or off', () => {
+      expect(
+        warningAt('2026-10-31T01:20:00.000Z', '2026-10-31T01:01:00.000Z', undefined, true)
+      ).toBeUndefined()
+    })
+
+    it('trusts the other end when an older control plane sends no reading time', () => {
+      expect(warningAt('2026-10-31T01:50:00.000Z', undefined)).toBeUndefined()
+    })
+  })
+
+  it('falls back to the server id when a name is unknown', () => {
+    const [row] = buildFabricPairRows([pair('srv-a', 'srv-x', 'none')], [], names)
+    expect(row?.title).toBe('alpha ↔ srv-x')
+    expect(row?.pathLabel).toBe('No Path')
+  })
+})
+
+describe('buildServerPairRows', () => {
+  it('lists only the pairs with this server, titled by the other server', () => {
+    const rows = buildServerPairRows(
+      'srv-b',
+      [
+        pair('srv-a', 'srv-b', 'lan'),
+        pair('srv-b', 'srv-c', 'fabric'),
+        pair('srv-a', 'srv-c', 'fabric'),
+      ],
+      [],
+      names
+    )
+    expect(rows.map((row) => [row.key, row.title, row.pathLabel])).toEqual([
+      ['srv-a', 'alpha', 'LAN'],
+      ['srv-c', 'charlie', 'TurboFabric'],
+    ])
+  })
+})
+
+describe('fabricServerPairRows', () => {
+  it('is empty when the panel sends no pairs', () => {
+    expect(fabricServerPairRows('srv-a', undefined)).toEqual([])
+    expect(
+      fabricServerPairRows('srv-a', { servers: [fabricServer('srv-a', 'alpha')], relays: [] })
+    ).toEqual([])
+  })
+
+  it('names the other servers from the fabric server list', () => {
+    const rows = fabricServerPairRows('srv-a', {
+      servers: [fabricServer('srv-a', 'alpha'), fabricServer('srv-b', 'bravo')],
+      relays: [],
+      pairs: [pair('srv-a', 'srv-b', 'lan', 'They share the trusted network Rack A.')],
+    })
+    expect(rows).toEqual([
+      {
+        key: 'srv-b',
+        title: 'bravo',
+        path: 'lan',
+        pathLabel: 'LAN',
+        reason: 'They share the trusted network Rack A.',
+      },
+    ])
+  })
+})
+
+describe('fabricHandshakeReading', () => {
+  const at = (iso: string) => Date.parse(iso)
+  const reading = '2026-10-31T01:00:00.000Z'
+
+  it('judges the handshake against the reading time, not against now', () => {
+    // 100 s old when read; the page opens 4 minutes later, before the next reading.
+    expect(
+      fabricHandshakeReading('2026-10-31T00:58:20.000Z', reading, at('2026-10-31T01:04:00.000Z'))
+    ).toBe('fresh')
+  })
+
+  it('warns when the handshake was already too old when the reading was taken', () => {
+    expect(
+      fabricHandshakeReading('2026-10-31T00:56:00.000Z', reading, at('2026-10-31T01:00:30.000Z'))
+    ).toBe('stale')
+  })
+
+  it('says the server has stopped reporting when its reading is too old, never a quiet fine', () => {
+    expect(
+      fabricHandshakeReading('2026-10-31T00:59:00.000Z', reading, at('2026-10-31T01:20:00.000Z'))
+    ).toBe('unreported')
+  })
+
+  it('asks for a handshake that has never happened', () => {
+    expect(fabricHandshakeReading(null, reading, at(reading))).toBe('stale')
+  })
+
+  it('allows for reading lag when an older control plane sends no reading time', () => {
+    const now = at('2026-10-31T01:05:00.000Z')
+    expect(fabricHandshakeReading('2026-10-31T01:00:00.000Z', undefined, now)).toBe('fresh')
+    expect(fabricHandshakeReading('2026-10-31T00:50:00.000Z', undefined, now)).toBe('stale')
+  })
+})
+
+describe('fabricInactiveServerIds and fabricIsQuiet', () => {
+  const servers = [
+    { serverId: 'srv-a', enabled: true },
+    { serverId: 'srv-b', enabled: false },
+  ] as OrgFabricServerRecord[]
+  const relays = [relay({ serverId: 'srv-a', role: 'member' })]
+
+  it('lists the servers switched out of the mesh', () => {
+    expect([...fabricInactiveServerIds({ servers, relays })]).toEqual(['srv-b'])
+  })
+
+  it('is quiet while paused or off, loud otherwise', () => {
+    expect(fabricIsQuiet({ paused: true, enabled: false })).toBe(true)
+    expect(fabricIsQuiet({ enabled: false })).toBe(true)
+    expect(fabricIsQuiet({ paused: false, enabled: true })).toBe(false)
+    expect(fabricIsQuiet({})).toBe(false)
+  })
+})
+
+describe("pairs judged from each end's own reading", () => {
+  const NOW = Date.parse('2026-10-31T10:05:00.000Z')
+  const names = new Map([
+    ['srv-a', 'Server A'],
+    ['srv-c', 'Server C'],
+  ])
+  const storedUnreachable = buildFabricPathMatrix(
+    [
+      relay({
+        serverId: 'srv-a',
+        role: 'gateway',
+        paths: [{ peerServerId: 'srv-c', selected: 'unreachable', degraded: false }],
+      }),
+      relay({
+        serverId: 'srv-c',
+        role: 'member',
+        paths: [{ peerServerId: 'srv-a', selected: 'unreachable', degraded: false }],
+      }),
+    ],
+    names
+  )
+  const withReadings = (
+    readings: NonNullable<OrgFabricPairRecord['tunnel']>['readings'],
+    matrix = storedUnreachable,
+    quiet = false
+  ) => {
+    const [row] = buildFabricPairRows(
+      [{ ...pair('srv-a', 'srv-c', 'fabric'), tunnel: { readings } }],
+      matrix,
+      names,
+      { nowMs: NOW, quiet }
+    )
+    return row
+  }
+  const fresh = (reporterServerId: string) => ({
+    reporterServerId,
+    observedAt: '2026-10-31T10:03:00.000Z',
+    lastHandshakeAt: '2026-10-31T10:02:30.000Z',
+  })
+  const stale = (reporterServerId: string) => ({
+    reporterServerId,
+    observedAt: '2026-10-31T10:03:00.000Z',
+    lastHandshakeAt: '2026-10-31T09:50:00.000Z',
+  })
+
+  it('is healthy when the NAT side saw a fresh handshake though both stored paths read unreachable', () => {
+    const row = withReadings([
+      { reporterServerId: 'srv-a', observedAt: '2026-10-31T10:02:00.000Z' },
+      fresh('srv-c'),
+    ])
+    expect(row?.warning).toBeUndefined()
+    expect(row?.readingAt).toBe('2026-10-31T10:03:00.000Z')
+    expect(row?.readingAge).toBe('2 min ago')
+  })
+
+  it('is healthy when only the public side saw a fresh handshake', () => {
+    expect(withReadings([fresh('srv-a')])?.warning).toBeUndefined()
+  })
+
+  it('is unreachable when no end saw a fresh handshake', () => {
+    expect(withReadings([stale('srv-a'), stale('srv-c')])?.warning).toBe('Unreachable')
+  })
+
+  it('lets the newest current reading decide when the ends disagree', () => {
+    const early = {
+      ...fresh('srv-a'),
+      observedAt: '2026-10-31T10:00:00.000Z',
+      lastHandshakeAt: '2026-10-31T09:59:30.000Z',
+    }
+    const late = { ...stale('srv-c'), observedAt: '2026-10-31T10:04:30.000Z' }
+    expect(withReadings([early, late])?.warning).toBe('Unreachable')
+    expect(withReadings([late, early])?.warning).toBe('Unreachable')
+  })
+
+  it('is healthy when the fresh reading is newer than a stale one from the other end', () => {
+    const olderStale = { ...stale('srv-c'), observedAt: '2026-10-31T10:00:00.000Z' }
+    expect(withReadings([olderStale, fresh('srv-a')])?.warning).toBeUndefined()
+  })
+
+  it('reads unreachable when a fresh and a stale reading carry the same time', () => {
+    expect(withReadings([fresh('srv-a'), stale('srv-c')])?.warning).toBe('Unreachable')
+  })
+
+  it('treats a reading with no readable time as unreported, fresh or stale', () => {
+    const bad = (reading: ReturnType<typeof fresh>) => ({ ...reading, observedAt: 'not a time' })
+    expect(withReadings([bad(stale('srv-a'))])?.warning).toBe('Not Reporting')
+    expect(withReadings([bad(fresh('srv-a'))])?.warning).toBe('Not Reporting')
+  })
+
+  it('is unreachable when one end is stale and the other has not reported', () => {
+    const old = { ...fresh('srv-c'), observedAt: '2026-10-31T09:30:00.000Z' }
+    expect(withReadings([stale('srv-a'), old])?.warning).toBe('Unreachable')
+  })
+
+  it('says not reporting, never healthy, when every reading is older than 7 minutes', () => {
+    const old = (id: string) => ({ ...fresh(id), observedAt: '2026-10-31T09:30:00.000Z' })
+    expect(withReadings([old('srv-a'), old('srv-c')])?.warning).toBe('Not Reporting')
+  })
+
+  it('does not trust a reading from a switched-off server', () => {
+    const inactive = buildFabricPathMatrix(
+      [
+        relay({
+          serverId: 'srv-a',
+          role: 'gateway',
+          paths: [{ peerServerId: 'srv-c', selected: 'unreachable', degraded: false }],
+        }),
+      ],
+      names,
+      new Set(['srv-a'])
+    )
+    expect(withReadings([fresh('srv-c')], inactive)?.warning).toBe('Not Reporting')
+  })
+
+  it('shows nothing about the tunnel while the mesh is paused', () => {
+    const row = withReadings([stale('srv-a'), stale('srv-c')], storedUnreachable, true)
+    expect(row?.warning).toBeUndefined()
+    expect(row?.readingAt).toBeUndefined()
+  })
+
+  it('still says degraded when a fresh handshake meets a stored degraded direct path', () => {
+    const degraded = buildFabricPathMatrix(
+      [
+        relay({
+          serverId: 'srv-c',
+          role: 'member',
+          paths: [{ peerServerId: 'srv-a', selected: 'direct_public', degraded: true }],
+        }),
+      ],
+      names
+    )
+    expect(withReadings([fresh('srv-a'), fresh('srv-c')], degraded)?.warning).toBe('Degraded')
+  })
+
+  it('keeps a gateway pair with no readings as the stored path says', () => {
+    const viaGateway = buildFabricPathMatrix(
+      [
+        relay({
+          serverId: 'srv-c',
+          role: 'member',
+          paths: [{ peerServerId: 'srv-a', selected: 'gateway', degraded: false }],
+        }),
+      ],
+      names
+    )
+    const [row] = buildFabricPairRows([pair('srv-a', 'srv-c', 'fabric')], viaGateway, names, {
+      nowMs: NOW,
+      quiet: false,
+    })
+    expect(row?.warning).toBeUndefined()
+  })
+
+  it('keeps the old behaviour when the panel sends no readings', () => {
+    const [row] = buildFabricPairRows(
+      [pair('srv-a', 'srv-c', 'fabric')],
+      storedUnreachable,
+      names,
+      {
+        nowMs: NOW,
+        quiet: false,
+      }
+    )
+    expect(row?.warning).toBe('Unreachable')
+    expect(row?.readingAt).toBeUndefined()
+  })
+})
+
+describe('fabricReadingAgeLabel', () => {
+  it('names the age plainly', () => {
+    const now = Date.parse('2026-10-31T10:00:00.000Z')
+    expect(fabricReadingAgeLabel('2026-10-31T09:59:40.000Z', now)).toBe('just now')
+    expect(fabricReadingAgeLabel('2026-10-31T09:57:00.000Z', now)).toBe('3 min ago')
+    expect(fabricReadingAgeLabel('2026-10-31T07:00:00.000Z', now)).toBe('3 h ago')
+    expect(fabricReadingAgeLabel('not a time', now)).toBeUndefined()
+  })
+})
+
+describe('fabricHandshakeDisplay', () => {
+  const now = Date.parse('2026-10-31T01:20:00.000Z')
+
+  it('hides old handshake and unreported readings while the mesh is paused', () => {
+    expect(
+      fabricHandshakeDisplay(true, '2026-10-31T00:59:00.000Z', '2026-10-31T00:59:30.000Z', now)
+    ).toBe('paused')
+    expect(fabricHandshakeDisplay(true, null, undefined, now)).toBe('paused')
+  })
+
+  it('keeps the normal reading when the mesh is not paused', () => {
+    expect(
+      fabricHandshakeDisplay(false, '2026-10-31T00:59:00.000Z', '2026-10-31T00:59:30.000Z', now)
+    ).toBe('unreported')
   })
 })

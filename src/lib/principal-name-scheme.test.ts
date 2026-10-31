@@ -3,6 +3,9 @@ import {
   NAME_SCHEME_OPTIONS,
   USERNAME_IN_USE_COPY,
   USERNAME_RESERVED_COPY,
+  USERNAME_RESERVED_PATTERN_COPY,
+  USERNAME_TP_PREFIX_COPY,
+  reservedUsernameMessage,
   USERNAME_TOO_LONG_COPY,
   effectiveNameScheme,
   isNameScheme,
@@ -70,12 +73,30 @@ describe('principal-name-scheme', () => {
   it('maps Linux user name refusals to plain words', () => {
     expect(principalSchemeErrorMessage('HTTP 400: username_reserved')).toBe(USERNAME_RESERVED_COPY)
     expect(principalSchemeErrorMessage('create failed: HTTP 400: username_reserved')).toBe(
-      USERNAME_RESERVED_COPY,
+      USERNAME_RESERVED_COPY
     )
     expect(principalSchemeErrorMessage('username_reserved')).toBe(USERNAME_RESERVED_COPY)
     expect(principalSchemeErrorMessage('HTTP 400: username_too_long')).toBe(USERNAME_TOO_LONG_COPY)
     expect(principalSchemeErrorMessage('HTTP 409: username_in_use')).toBe(USERNAME_IN_USE_COPY)
     expect(USERNAME_RESERVED_COPY).toContain('Hosting Account')
     expect(USERNAME_RESERVED_COPY).not.toMatch(/username_reserved/)
+  })
+
+  it('says why a reserved name was refused, from the typed name', () => {
+    const reserved = 'HTTP 400: username_reserved'
+    expect(principalSchemeErrorMessage(reserved, 'tptestacct')).toBe(USERNAME_TP_PREFIX_COPY)
+    expect(principalSchemeErrorMessage(reserved, ' TPctrl ')).toBe(USERNAME_TP_PREFIX_COPY)
+    expect(principalSchemeErrorMessage(reserved, 'systemd-foo')).toBe(
+      USERNAME_RESERVED_PATTERN_COPY
+    )
+    expect(principalSchemeErrorMessage(reserved, 'shop-grp')).toBe(USERNAME_RESERVED_PATTERN_COPY)
+    for (const name of ['root', 'git', 'ftp', null, undefined]) {
+      expect(principalSchemeErrorMessage(reserved, name)).toBe(USERNAME_RESERVED_COPY)
+    }
+    expect(reservedUsernameMessage('testuser')).toBe(USERNAME_RESERVED_COPY)
+    expect(USERNAME_TP_PREFIX_COPY).toContain('Hosting Account')
+    expect(principalSchemeErrorMessage('HTTP 409: username_in_use', 'tpx')).toBe(
+      USERNAME_IN_USE_COPY
+    )
   })
 })

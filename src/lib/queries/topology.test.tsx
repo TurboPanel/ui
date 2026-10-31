@@ -135,10 +135,9 @@ describe('topology query hooks', () => {
   })
 
   it('useDatacenters respects enabled:false', () => {
-    const { result } = renderHook(
-      () => useDatacenters(orgId, { enabled: false }),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useDatacenters(orgId, { enabled: false }), {
+      wrapper: createWrapper(),
+    })
     expect(result.current.fetchStatus).toBe('idle')
     expect(fetchDatacenters).not.toHaveBeenCalled()
   })
@@ -169,10 +168,9 @@ describe('topology query hooks', () => {
   })
 
   it('useDatacenter respects enabled:false', () => {
-    const { result } = renderHook(
-      () => useDatacenter(orgId, datacenterId, { enabled: false }),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useDatacenter(orgId, datacenterId, { enabled: false }), {
+      wrapper: createWrapper(),
+    })
     expect(result.current.fetchStatus).toBe('idle')
     expect(fetchDatacenter).not.toHaveBeenCalled()
   })
@@ -182,10 +180,9 @@ describe('topology query hooks', () => {
       suggestions: [{ name: 'Chicago DC', serverCount: 2 }],
     })
 
-    const { result } = renderHook(
-      () => useDatacenterNameSuggestions(orgId, { limit: 5 }),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useDatacenterNameSuggestions(orgId, { limit: 5 }), {
+      wrapper: createWrapper(),
+    })
 
     await waitFor(() => {
       expect(result.current.isSuccess).toBe(true)
@@ -198,10 +195,9 @@ describe('topology query hooks', () => {
       suggestions: [],
     })
 
-    const { result } = renderHook(
-      () => useDatacenterNameSuggestions(orgId),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useDatacenterNameSuggestions(orgId), {
+      wrapper: createWrapper(),
+    })
 
     await waitFor(() => {
       expect(result.current.isSuccess).toBe(true)
@@ -210,10 +206,9 @@ describe('topology query hooks', () => {
   })
 
   it('useDatacenterNameSuggestions respects enabled:false', () => {
-    const { result } = renderHook(
-      () => useDatacenterNameSuggestions(orgId, { enabled: false }),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useDatacenterNameSuggestions(orgId, { enabled: false }), {
+      wrapper: createWrapper(),
+    })
 
     expect(result.current.fetchStatus).toBe('idle')
     expect(fetchDatacenterNameSuggestions).not.toHaveBeenCalled()
@@ -228,7 +223,7 @@ describe('topology query hooks', () => {
           organizationId: orgId,
           scope: 'public',
         }),
-      { wrapper: createWrapper() },
+      { wrapper: createWrapper() }
     )
 
     await waitFor(() => {
@@ -251,10 +246,9 @@ describe('topology query hooks', () => {
   })
 
   it('useIps stays idle when disabled', () => {
-    const { result } = renderHook(
-      () => useIps(orgId, { scope: 'public' }, { enabled: false }),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useIps(orgId, { scope: 'public' }, { enabled: false }), {
+      wrapper: createWrapper(),
+    })
 
     expect(result.current.fetchStatus).toBe('idle')
     expect(fetchIps).not.toHaveBeenCalled()
@@ -292,10 +286,9 @@ describe('topology query hooks', () => {
   })
 
   it('useIp respects enabled:false', () => {
-    const { result } = renderHook(
-      () => useIp(orgId, ipId, { enabled: false }),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useIp(orgId, ipId, { enabled: false }), {
+      wrapper: createWrapper(),
+    })
     expect(result.current.fetchStatus).toBe('idle')
     expect(fetchIp).not.toHaveBeenCalled()
   })
@@ -309,7 +302,7 @@ describe('topology query hooks', () => {
           organizationId: orgId,
           kind: 'docker',
         }),
-      { wrapper: createWrapper() },
+      { wrapper: createWrapper() }
     )
 
     await waitFor(() => {
@@ -342,13 +335,8 @@ describe('topology query hooks', () => {
 
   it('useNetworks respects enabled:false and can disable keepPreviousData', () => {
     const disabled = renderHook(
-      () =>
-        useNetworks(
-          orgId,
-          { kind: 'docker' },
-          { enabled: false, keepPreviousData: false },
-        ),
-      { wrapper: createWrapper() },
+      () => useNetworks(orgId, { kind: 'docker' }, { enabled: false, keepPreviousData: false }),
+      { wrapper: createWrapper() }
     )
     expect(disabled.result.current.fetchStatus).toBe('idle')
     expect(fetchNetworks).not.toHaveBeenCalled()
@@ -367,7 +355,7 @@ describe('topology query hooks', () => {
     await expect(
       result.current.run({
         members: [{ serverId: 'srv-1', address: '203.0.113.10' }],
-      }),
+      })
     ).resolves.toMatchObject({ ok: true })
   })
 
@@ -376,10 +364,9 @@ describe('topology query hooks', () => {
     const client = createAppQueryClient()
     const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
 
-    const { result } = renderHook(
-      () => useUpdateDatacenter(orgId, datacenterId),
-      { wrapper: createWrapper(client) },
-    )
+    const { result } = renderHook(() => useUpdateDatacenter(orgId, datacenterId), {
+      wrapper: createWrapper(client),
+    })
 
     await result.current.run({ name: 'Renamed DC' })
     expect(updateDatacenter).toHaveBeenCalledWith(datacenterId, {
@@ -387,6 +374,9 @@ describe('topology query hooks', () => {
     })
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: queryKeys.org(orgId).topology.datacenter(datacenterId),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.org(orgId).settings.fabric,
     })
   })
 
@@ -412,14 +402,11 @@ describe('topology query hooks', () => {
     const client = createAppQueryClient()
     const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
 
-    const { result } = renderHook(
-      () => useAddDatacenterMembers(orgId, datacenterId),
-      { wrapper: createWrapper(client) },
-    )
+    const { result } = renderHook(() => useAddDatacenterMembers(orgId, datacenterId), {
+      wrapper: createWrapper(client),
+    })
 
-    await result.current.run([
-      { serverId: 'srv-1', address: '203.0.113.20' },
-    ])
+    await result.current.run([{ serverId: 'srv-1', address: '203.0.113.20' }])
     expect(addDatacenterMembers).toHaveBeenCalledWith(datacenterId, [
       { serverId: 'srv-1', address: '203.0.113.20' },
     ])
@@ -436,16 +423,12 @@ describe('topology query hooks', () => {
     const client = createAppQueryClient()
     const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
 
-    const { result } = renderHook(
-      () => useRemoveDatacenterMember(orgId, datacenterId),
-      { wrapper: createWrapper(client) },
-    )
+    const { result } = renderHook(() => useRemoveDatacenterMember(orgId, datacenterId), {
+      wrapper: createWrapper(client),
+    })
 
     await result.current.run('srv-1')
-    expect(removeDatacenterMember).toHaveBeenCalledWith(
-      datacenterId,
-      'srv-1',
-    )
+    expect(removeDatacenterMember).toHaveBeenCalledWith(datacenterId, 'srv-1')
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: queryKeys.org(orgId).servers.list,
     })
@@ -459,10 +442,9 @@ describe('topology query hooks', () => {
     const client = createAppQueryClient()
     const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
 
-    const { result } = renderHook(
-      () => useCreateDatacenterSubnet(orgId, datacenterId),
-      { wrapper: createWrapper(client) },
-    )
+    const { result } = renderHook(() => useCreateDatacenterSubnet(orgId, datacenterId), {
+      wrapper: createWrapper(client),
+    })
 
     await result.current.run({ cidr: '203.0.113.0/24' })
     expect(createDatacenterSubnet).toHaveBeenCalledWith(datacenterId, {
@@ -478,20 +460,17 @@ describe('topology query hooks', () => {
     const client = createAppQueryClient()
     const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
 
-    const { result } = renderHook(
-      () => useUpdateDatacenterSubnet(orgId, datacenterId),
-      { wrapper: createWrapper(client) },
-    )
+    const { result } = renderHook(() => useUpdateDatacenterSubnet(orgId, datacenterId), {
+      wrapper: createWrapper(client),
+    })
 
     await result.current.run({
       networkId,
       body: { description: 'Primary subnet' },
     })
-    expect(updateDatacenterSubnet).toHaveBeenCalledWith(
-      datacenterId,
-      networkId,
-      { description: 'Primary subnet' },
-    )
+    expect(updateDatacenterSubnet).toHaveBeenCalledWith(datacenterId, networkId, {
+      description: 'Primary subnet',
+    })
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: queryKeys.org(orgId).topology.datacenters,
     })
@@ -502,16 +481,12 @@ describe('topology query hooks', () => {
     const client = createAppQueryClient()
     const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
 
-    const { result } = renderHook(
-      () => useDeleteDatacenterSubnet(orgId, datacenterId),
-      { wrapper: createWrapper(client) },
-    )
+    const { result } = renderHook(() => useDeleteDatacenterSubnet(orgId, datacenterId), {
+      wrapper: createWrapper(client),
+    })
 
     await result.current.run(networkId)
-    expect(deleteDatacenterSubnet).toHaveBeenCalledWith(
-      datacenterId,
-      networkId,
-    )
+    expect(deleteDatacenterSubnet).toHaveBeenCalledWith(datacenterId, networkId)
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: queryKeys.org(orgId).topology.datacenter(datacenterId),
     })

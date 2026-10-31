@@ -243,7 +243,7 @@ describe.each(SCENARIOS)('Projects home ($name)', (scenario) => {
     ).toBe('true')
     fireEvent.click(screen.getByRole('link', { name: 'Managed Database Settings' }))
     expect(state.push).toHaveBeenLastCalledWith('/o/managed/settings')
-    fireEvent.click(screen.getByRole('button', { name: 'New project' }))
+    fireEvent.click(screen.getByRole('button', { name: 'New Project' }))
     expect(state.push).toHaveBeenLastCalledWith('/o/projects/new?type=managed')
   })
 
@@ -322,7 +322,7 @@ describe.each(SCENARIOS)('Projects home ($name)', (scenario) => {
     const shop = screen.getByRole('button', {
       name: 'Open Shop. Production (primary): Running',
     })
-    expect(shop.textContent).toBe('ShopCompose · AcmeProduction')
+    expect(shop.textContent).toBe('ShopCompose · AcmeRunning')
   })
 
   it('gives a managed project the database sub line', () => {
@@ -379,13 +379,13 @@ describe.each(SCENARIOS)('Projects home ($name)', (scenario) => {
 
   it('switches between grid and list and remembers the choice', () => {
     render(<ProjectsHomeSection orgId="o" />)
-    expect(screen.queryByText('Environments')).toBeNull()
+    expect(screen.queryByText('Status')).toBeNull()
     fireEvent.click(screen.getByRole('radio', { name: 'List' }))
-    expect(screen.getByText('Environments')).toBeTruthy()
+    expect(screen.getByText('Status')).toBeTruthy()
     expect(screen.getByRole('radio', { name: 'List' }).getAttribute('aria-checked')).toBe('true')
     expect(getProjectsView()).toBe('list')
     fireEvent.click(screen.getByRole('radio', { name: 'Grid' }))
-    expect(screen.queryByText('Environments')).toBeNull()
+    expect(screen.queryByText('Status')).toBeNull()
     expect(getProjectsView()).toBe('grid')
   })
 
@@ -402,24 +402,24 @@ describe.each(SCENARIOS)('Projects home ($name)', (scenario) => {
     env.width = 400
     setProjectsView('list')
     render(<ProjectsHomeSection orgId="o" />)
-    expect(screen.queryByText('Environments')).toBeNull()
+    expect(screen.queryByText('Status')).toBeNull()
     expect(screen.getByRole('button', { name: /^Open Shop/ })).toBeTruthy()
   })
 
-  it('offers New project to organization owners only', () => {
+  it('offers New Project to organization owners only', () => {
     const { unmount } = render(<ProjectsHomeSection orgId="o" />)
-    fireEvent.click(screen.getByRole('button', { name: 'New project' }))
+    fireEvent.click(screen.getByRole('button', { name: 'New Project' }))
     expect(state.push).toHaveBeenCalledWith(expect.stringContaining('/o/projects/new'))
     unmount()
     state.canOwn = false
     render(<ProjectsHomeSection orgId="o" />)
-    expect(screen.queryByRole('button', { name: 'New project' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'New Project' })).toBeNull()
   })
 
   it('lists the projects opened last, newest first, skipping any that are gone', () => {
     state.recent = ['p2', 'gone', 'p1']
     render(<ProjectsHomeSection orgId="o" />)
-    const recent = screen.getByRole('group', { name: 'Recent projects' })
+    const recent = screen.getByRole('group', { name: 'Recent Projects' })
     const links = recent.querySelectorAll('button')
     expect(Array.from(links).map((link) => link.getAttribute('aria-label'))).toEqual([
       'Orders DB',
@@ -433,7 +433,7 @@ describe.each(SCENARIOS)('Projects home ($name)', (scenario) => {
 
   it('shows no recent row when nothing was opened', () => {
     render(<ProjectsHomeSection orgId="o" />)
-    expect(screen.queryByRole('group', { name: 'Recent projects' })).toBeNull()
+    expect(screen.queryByRole('group', { name: 'Recent Projects' })).toBeNull()
   })
 
   it('lists deploys in progress and opens that environment Deployments tab', () => {
@@ -452,7 +452,7 @@ describe.each(SCENARIOS)('Projects home ($name)', (scenario) => {
       },
     }
     render(<ProjectsHomeSection orgId="o" />)
-    expect(screen.getByRole('heading', { name: 'Deploys in progress' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Deploys in Progress' })).toBeTruthy()
     const row = screen.getByRole('button', { name: 'Shop · Production' })
     expect(row.textContent).toContain('Deploying')
     expect(row.textContent).toContain('Started 2m ago')
@@ -514,7 +514,7 @@ describe.each(SCENARIOS)('Projects home ($name)', (scenario) => {
 
   it('shows no in-progress list when nothing is deploying', () => {
     render(<ProjectsHomeSection orgId="o" />)
-    expect(screen.queryByRole('heading', { name: 'Deploys in progress' })).toBeNull()
+    expect(screen.queryByRole('heading', { name: 'Deploys in Progress' })).toBeNull()
   })
 
   it('says it is loading', () => {
@@ -529,8 +529,8 @@ describe.each(SCENARIOS)('Projects home ($name)', (scenario) => {
     render(<ProjectsHomeSection orgId="o" />)
     expectWelcomeHeading()
     expect(screen.getByText(/No servers are connected yet\./)).toBeTruthy()
-    // The header carries no New project button; the card does.
-    expect(screen.queryByRole('button', { name: 'New project' })).toBeNull()
+    // The header carries no New Project button; the card does.
+    expect(screen.getAllByRole('button', { name: 'New Project' })).toHaveLength(1)
     fireEvent.click(screen.getByRole('button', { name: 'New Project' }))
     expect(state.push).toHaveBeenLastCalledWith(expect.stringContaining('/o/projects/new'))
     fireEvent.click(screen.getByRole('button', { name: 'Add Server' }))
@@ -603,7 +603,7 @@ describe.each(SCENARIOS)('Projects home ($name)', (scenario) => {
     expect(read()).toBe(first)
   })
 
-  it('keeps the header New project button when the projects load failed', () => {
+  it('keeps the header New Project button when the projects load failed', () => {
     state.projects = {
       data: undefined,
       isLoading: false,
@@ -612,7 +612,8 @@ describe.each(SCENARIOS)('Projects home ($name)', (scenario) => {
     }
     state.servers = { data: undefined }
     render(<ProjectsHomeSection orgId="o" />)
-    expect(screen.getByRole('button', { name: 'New project' })).toBeTruthy()
+    // The header button plus the welcome card's own.
+    expect(screen.getAllByRole('button', { name: 'New Project' })).toHaveLength(2)
   })
 
   it('shows the reason when projects cannot be loaded', () => {
@@ -649,7 +650,7 @@ describe.each(SCENARIOS)('Projects home ($name)', (scenario) => {
     expect(refreshWorkspaces).toHaveBeenCalled()
   })
 
-  it('in one workspace: no workspace labels, platform projects not hidden, no New project in the platform workspace', () => {
+  it('in one workspace: no workspace labels, platform projects not hidden, no New Project in the platform workspace', () => {
     state.scope = {
       scopeId: 'platform',
       workspaces: [{ id: 'platform', name: 'TurboPanel' }],
@@ -660,7 +661,7 @@ describe.each(SCENARIOS)('Projects home ($name)', (scenario) => {
     render(<ProjectsHomeSection orgId="o" workspaceId="platform" />)
     expect(screen.getByRole('button', { name: 'Open Platform' })).toBeTruthy()
     expect(screen.queryByText(/· Acme$/)).toBeNull()
-    expect(screen.queryByRole('button', { name: 'New project' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'New Project' })).toBeNull()
   })
 
   it('the platform workspace with no projects shows the welcome with no buttons', () => {

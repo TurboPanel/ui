@@ -800,7 +800,7 @@ const RESERVED_DEPLOYMENT_MODES: readonly { label: string; hint: string }[] = [
  * This is a property of the **source binding**, not of the service kind, which
  * is why it lives beside the build / start command rather than in the
  * Deployment mode chips above: the same container service can be built either
- * way without changing what it *is*. `railpack` is offered only for a container
+ * way without changing what it *is*. `image` is offered only for a container
  * service — `site` and `node` already have their own build and
  * runtime lanes, and the instance rejects the combination on save rather than
  * quietly ignoring it.
@@ -818,9 +818,9 @@ const SOURCE_BUILD_KIND_OPTIONS: readonly {
     containerOnly: false,
   },
   {
-    value: 'railpack',
-    label: 'Railpack — build an isolated OCI image automatically',
-    hint: 'Detects the language and builds a container image from the repository — no Dockerfile needed. The service then runs from that image like any other container.',
+    value: 'image',
+    label: 'Container Image (Auto-Detected)',
+    hint: 'Container image, built automatically in an isolated build. Detects the language and builds the image from the repository — no Dockerfile needed. The service then runs from that image like any other container.',
     containerOnly: true,
   },
 ]
@@ -1154,16 +1154,16 @@ function sourceBranchHint(defaultBranch: string | null | undefined): string {
   return `Leave empty to build the default branch of the connected repository (${defaultBranch}).`
 }
 
-function sourceStartCommandHint(railpack: boolean): string {
-  if (railpack) {
-    return 'Overrides the start command Railpack detected for the image. Leave empty to use its own.'
+function sourceStartCommandHint(isImage: boolean): string {
+  if (isImage) {
+    return 'Overrides the start command detected for the image. Leave empty to use its own.'
   }
   return 'Only a native (node) service runs a start command; other kinds ignore it. Leave empty to use the detected default: a Next.js standalone build starts with node server.js, and a package start script such as pnpm start does not work there.'
 }
 
-function sourceOutputDirectoryHint(railpack: boolean): string {
-  if (railpack) {
-    return 'Not used under Railpack — the release is an image, not a directory. The value is kept but ignored, so switching modes back restores it.'
+function sourceOutputDirectoryHint(isImage: boolean): string {
+  if (isImage) {
+    return 'Not used for a container image build — the release is an image, not a directory. The value is kept but ignored, so switching modes back restores it.'
   }
   return 'Publishes this directory as the release instead of the whole checkout. Setting it turns off framework detection.'
 }
@@ -1190,7 +1190,7 @@ function BoundSourceFields({
   onAutoDeploy: (value: string) => void
 }>) {
   const buildKind: ComposeSourceBuildKind = binding.buildKind ?? 'native'
-  const railpack = buildKind === 'railpack'
+  const isImage = buildKind === 'image'
   const commit = (patch: Partial<ComposeServiceSourceExtension>) => {
     commitSourceExtension(binding, patch, onChange)
   }
@@ -1269,10 +1269,10 @@ function BoundSourceFields({
         placeholderTextColor={colors.textDim}
         style={styles.input}
       />
-      {railpack ? (
+      {isImage ? (
         <Text style={styles.hint}>
-          Optional under Railpack — it detects a build command on its own, and only uses this one
-          where the language it detected has a slot for it.
+          Optional for a container image build — it detects a build command on its own, and only
+          uses this one where the language it detected has a slot for it.
         </Text>
       ) : null}
 
@@ -1288,7 +1288,7 @@ function BoundSourceFields({
         placeholderTextColor={colors.textDim}
         style={styles.input}
       />
-      <Text style={styles.hint}>{sourceStartCommandHint(railpack)}</Text>
+      <Text style={styles.hint}>{sourceStartCommandHint(isImage)}</Text>
 
       <Text style={styles.label}>Output directory</Text>
       <TextInput
@@ -1301,7 +1301,7 @@ function BoundSourceFields({
         placeholderTextColor={colors.textDim}
         style={styles.input}
       />
-      <Text style={styles.hint}>{sourceOutputDirectoryHint(railpack)}</Text>
+      <Text style={styles.hint}>{sourceOutputDirectoryHint(isImage)}</Text>
 
       <Text style={styles.label}>Auto-deploy</Text>
       <OptionSelect
@@ -1338,7 +1338,7 @@ function BoundSourceFields({
  * The compose document key is intentionally still `x-turbopanel.source`.
  *
  * `serviceKind` is passed in only to decide which build modes are offerable:
- * Railpack produces an image, which is something only a container service can
+ * An image build produces an image, which is something only a container service can
  * run.
  */
 function SourceSection({

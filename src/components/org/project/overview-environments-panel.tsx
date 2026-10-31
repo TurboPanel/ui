@@ -27,7 +27,7 @@ import {
   type PreviewDeploymentPurpose,
 } from '@/components/org/project/preview-deployment-modal'
 import { environmentStatusTone, hasHostDeployedContainers } from '@/lib/container-status'
-import { deployPreviewFailureMessage } from '@/lib/deploy-error-message'
+import { deployPreviewFailureMessage, deployRefusalMessage } from '@/lib/deploy-error-message'
 import {
   type CommandProgress,
   type CommandStatus,
@@ -472,11 +472,11 @@ function MissingPrincipalBindingsLink({ environmentId }: Readonly<{ environmentI
     <Link href={projectEnvironmentBindingsHref(orgId, projectId, environmentId) as Href} asChild>
       <Pressable
         accessibilityRole="link"
-        accessibilityLabel="Assign a system user on the Bindings tab"
+        accessibilityLabel="Assign a Hosting Account on the Bindings tab"
         style={webPointer}
       >
         <Text style={styles.statusText}>
-          No system user — <Text style={styles.hostingLink}>assign one in Bindings</Text>
+          No Hosting Account — <Text style={styles.hostingLink}>assign one in Bindings</Text>
         </Text>
       </Pressable>
     </Link>
@@ -991,7 +991,10 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
         confirmMode === 'cacheless' ? { noCache: true } : undefined
       )
       if (!result.ok) {
-        setActionError(deployEnvironmentMutation.actionError ?? 'Failed to deploy')
+        // `actionError` still holds the previous render's value here; the refusal itself is `cause`.
+        setActionError(
+          result.cause ? deployRefusalMessage(result.cause) : (result.error ?? 'Failed to deploy')
+        )
         return
       }
       setPreviewOpen(null)

@@ -1,8 +1,11 @@
-import { useLocalSearchParams } from 'expo-router'
-import { AccessOverviewSection } from '@/components/org/access-overview-section'
+import { Redirect, useLocalSearchParams, type Href } from 'expo-router'
+import { orgSettingsTabHref } from '@/lib/org-navigation'
 
-export default function AccessOverviewScreen() {
+/**
+ * Retired: Access is a tab of Organization Settings. Kept as a redirect so old
+ * links and bookmarks still land there.
+ */
+export default function AccessRedirect() {
   const { orgId } = useLocalSearchParams<{ orgId: string }>()
-
-  return <AccessOverviewSection orgId={orgId ?? ''} />
+  return <Redirect href={orgSettingsTabHref(orgId ?? '', 'access') as Href} />
 }

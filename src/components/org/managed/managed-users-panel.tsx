@@ -744,7 +744,14 @@ export function ManagedUsersPanel({
                   accessibilityState={{ checked: selected, disabled }}
                   accessibilityLabel={name}
                 >
-                  <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{name}</Text>
+                  <View style={styles.chipInner}>
+                    <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
+                      {selected ? '✓' : '+'}
+                    </Text>
+                    <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
+                      {name}
+                    </Text>
+                  </View>
                 </Pressable>
               )
             })}
@@ -862,6 +869,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgInput,
     paddingHorizontal: 10,
     paddingVertical: 4,
+  },
+  chipInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   chipSelected: {
     borderColor: chrome.accent,

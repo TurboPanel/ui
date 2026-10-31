@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import type { TlsRecord } from '@/lib/instance-api'
-import { tlsDateLines, tlsStoredCopyLines } from './tls-managed-dates'
+import {
+  expiryCell,
+  formatDay,
+  plainIssuer,
+  realDate,
+  tlsDateLines,
+  tlsStoredCopyLines,
+} from './tls-managed-dates'
 
 function row(status: string, notAfter: string, acme?: Record<string, string>): TlsRecord {
   return {
@@ -39,7 +46,7 @@ describe('tlsDateLines', () => {
         notAfter: '2027-01-02T03:04:05.000Z',
         lastIssuedAt: '2026-10-19T10:00:00.000Z',
       }),
-      'en-US',
+      'en-US'
     )
     expect(lines).toHaveLength(2)
     expect(lines[0]).toMatch(/^Expires .*2027/)
@@ -48,10 +55,12 @@ describe('tlsDateLines', () => {
 })
 
 describe('tlsStoredCopyLines', () => {
-  it('says nothing for a certificate that is not from Let\'s Encrypt or is revoked', () => {
+  it("says nothing for a certificate that is not from Let's Encrypt or is revoked", () => {
     const upload = { ...row('ready', '2027-01-02T03:04:05.000Z'), source: 'upload' } as TlsRecord
     expect(tlsStoredCopyLines(upload)).toEqual([])
-    expect(tlsStoredCopyLines({ ...row('revoked', ''), certificatePem: 'x' } as TlsRecord)).toEqual([])
+    expect(tlsStoredCopyLines({ ...row('revoked', ''), certificatePem: 'x' } as TlsRecord)).toEqual(
+      []
+    )
   })
 
   it('says a copy is still to come while only the host has reported dates', () => {
@@ -73,5 +82,52 @@ describe('tlsStoredCopyLines', () => {
     expect(lines).toContain('Issued by R11')
     expect(lines.some((l) => l.startsWith('Valid from '))).toBe(true)
     expect(lines.join(' ').toLowerCase()).not.toContain('private key pem')
+  })
+})
+
+describe('realDate', () => {
+  it('treats empty and epoch dates as no date', () => {
+    expect(realDate(null)).toBeNull()
+    expect(realDate('')).toBeNull()
+    expect(realDate('1970-01-01T00:00:00Z')).toBeNull()
+    expect(realDate(0)).toBeNull()
+    expect(realDate('nonsense')).toBeNull()
+    expect(realDate('2026-11-03T00:00:00Z')?.getUTCFullYear()).toBe(2026)
+  })
+
+  it('shows no expiry line for a certificate that is not issued yet', () => {
+    expect(tlsDateLines(row('active', '1970-01-01T00:00:00Z'), 'en-US')).toEqual([])
+  })
+})
+
+describe('certificate dates', () => {
+  it('says Pending only in the Expiry cell for a placeholder date', () => {
+    expect(expiryCell('1970-01-01T00:00:00Z')).toBe('Pending')
+    expect(expiryCell(null)).toBe('No expiry')
+    expect(expiryCell('2026-11-03T00:00:00Z')).toBe('2026-11-03')
+  })
+
+  it('leaves other date lines empty for a placeholder date', () => {
+    expect(formatDay('1970-01-01T00:00:00Z')).toBe('No expiry')
+    expect(formatDay('2026-11-03T00:00:00Z')).toBe('2026-11-03')
+    expect(formatDay('soon')).toBe('soon')
+  })
+})
+
+describe('plainIssuer', () => {
+  it('reads attribute codes and short names into the organization and its issuer name', () => {
+    expect(plainIssuer('2.5.4.6=US, O=Example Trust, CN=R1')).toBe('Example Trust (R1)')
+    expect(plainIssuer('/C=US/O=Example Trust/CN=R2')).toBe('Example Trust (R2)')
+    expect(plainIssuer('CN=Example Root')).toBe('Example Root')
+    expect(plainIssuer('R11')).toBe('R11')
+  })
+
+  it('keeps a comma that is escaped or quoted inside a value', () => {
+    expect(plainIssuer('C=US, O=Example Hosting\\, Inc., CN=Example CA 1')).toBe(
+      'Example Hosting, Inc. (Example CA 1)'
+    )
+    expect(plainIssuer('C=US, O="Example Hosting, Inc.", CN=Example CA 2')).toBe(
+      'Example Hosting, Inc. (Example CA 2)'
+    )
   })
 })

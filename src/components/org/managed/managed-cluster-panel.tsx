@@ -433,7 +433,7 @@ export function ManagedClusterPanel({
   return (
     <SectionPanel
       title="Cluster"
-      hint={`Failover stays on the datacenter LAN · remote/read replicas may use ${TURBOFABRIC_PRODUCT_NAME} or public TLS`}
+      hint={`Failover stays on the datacenter LAN · remote/read replicas may use ${TURBOFABRIC_PRODUCT_NAME} or public TLS, except across an untrusted network, where ${TURBOFABRIC_PRODUCT_NAME} is required`}
       accent
     >
       {error ? <Text style={panelStyles.error}>{error}</Text> : null}

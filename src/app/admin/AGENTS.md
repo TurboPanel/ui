@@ -1,6 +1,6 @@
 # Admin area (`/admin/*`) — AGENTS.md
 
-Repo-wide rules (design system, tokens, platform copy, testing): `../../../AGENTS.md`.
+Repo-wide rules (design system, tokens, platform copy, testing): `../../../AGENTS.md`, `../../../design-system/AGENTS.md`.
 
 Instance-wide administration for users with the `admin` or `superadmin` role.
 
@@ -56,4 +56,9 @@ Admin helpers in `src/lib/instance-api.ts` (`ADMIN_API = '/api/admin/v1'`):
 When apply returns 422 with `"cert apply is not applicable on this runtime"` (Workers), hide the Apply button and show an informational note instead.
 
 `useCan` is display-only; rely on server 403s and `handleUnauthorized()`.
+
+
+## Admin area (`/admin/*`)
+
+**`/admin/updates`** is the automatic update status page (self-hosted vs TurboPanel High Availability layouts, Check Now, Pause All Updates / Resume Updates, run polling via `src/lib/upgrade-run-poll.ts`, full-screen restart overlay). Nobody starts an update by hand. Page override: `design-system/turbopanel/pages/updates.md`.
 

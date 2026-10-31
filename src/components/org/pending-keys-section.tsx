@@ -262,7 +262,7 @@ export function PendingKeysSection({ orgId }: Readonly<{ orgId: string }>) {
       <Text style={panelStyles.pageCopy}>
         Servers still waiting to connect. Each row is an install command that has not enrolled a
         host yet; delete one if you no longer need it — the command cannot be recovered after you
-        leave Add server.
+        leave Add Server.
       </Text>
 
       {displayError ? <Text style={panelStyles.error}>{displayError}</Text> : null}

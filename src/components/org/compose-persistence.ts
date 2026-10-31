@@ -109,6 +109,18 @@ export function usePersistAccountWrites(orgId: string, projectId: string) {
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.org(orgId).projects.all }),
+        // The Hosting Account list and the Base screen read these two, and
+        // neither sits under the `projects` or `environments` prefixes.
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.org(orgId).projects.principals(projectId),
+        }),
+        queryClient.invalidateQueries({
+          predicate: ({ queryKey }) =>
+            queryKey[0] === 'org' &&
+            queryKey[1] === orgId &&
+            queryKey[2] === 'environment' &&
+            queryKey[4] === 'config-view',
+        }),
         queryClient.invalidateQueries({ queryKey: queryKeys.org(orgId).environments.all }),
         queryClient.invalidateQueries({ queryKey: queryKeys.org(orgId).services.all }),
       ])

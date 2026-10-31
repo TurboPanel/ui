@@ -19,7 +19,10 @@ vi.mock('react-native', async () => {
   return { ...stub, TextInput: stub.View }
 })
 vi.mock('react-native-svg', async () => (await import('@/components/ui/v4/rn-stub')).svgStub)
-vi.mock('@/lib/theme-preference', async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub)
+vi.mock(
+  '@/lib/theme-preference',
+  async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub
+)
 vi.mock('@/components/ui/panel-styles', () => ({
   panelStyles: { error: {}, detailTitle: {}, muted: {} },
 }))
@@ -118,7 +121,7 @@ vi.mock('@/lib/query-client', () => ({ useCan: () => true }))
 
 afterEach(cleanup)
 
-describe('ProjectPrincipalsSection add system user', () => {
+describe('ProjectPrincipalsSection add Hosting Account', () => {
   beforeEach(() => {
     state.run.mockReset()
     state.persist.mockReset()
@@ -151,9 +154,9 @@ describe('ProjectPrincipalsSection add system user', () => {
       },
     ]
     render(<ProjectPrincipalsSection orgId="org-1" projectId="proj-1" canManage />)
-    expect(screen.getByText('An app is waiting for a system user')).toBeTruthy()
+    expect(screen.getByText('An app is waiting for a Hosting Account')).toBeTruthy()
     // Left blank, the account is named after the project (no name here: "app").
-    fireEvent.click(screen.getByRole('button', { name: 'Add system user' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add Hosting Account' }))
     await waitFor(() => expect(state.persist).toHaveBeenCalledTimes(1))
     expect(state.run).not.toHaveBeenCalled()
     const writes = state.persist.mock.calls[0][0]
@@ -162,18 +165,38 @@ describe('ProjectPrincipalsSection add system user', () => {
     expect(JSON.stringify(writes[0].document)).toContain('"principal":"app"')
   })
 
+  it('lists an account the file declares before the deploy creates it', () => {
+    state.environments = [
+      {
+        id: 'env-1',
+        name: 'production',
+        options: {
+          compose: {
+            version: 1,
+            data: {
+              services: { site: { 'x-turbopanel': { serviceKind: 'site', principal: 'website' } } },
+              'x-turbopanel': { principals: { website: {} } },
+            },
+            presentation: { keyOrder: ['services'], comments: {} },
+          },
+        },
+      },
+    ]
+    render(<ProjectPrincipalsSection orgId="org-1" projectId="proj-1" canManage />)
+    expect(screen.getByText('website')).toBeTruthy()
+    expect(screen.queryByText('No Hosting Accounts yet.')).toBeNull()
+  })
+
   it('shows plain words when the control plane refuses a reserved name', async () => {
     state.run.mockImplementation(async () => {
       state.actionError = 'HTTP 400: username_reserved'
       return { ok: false, error: 'HTTP 400: username_reserved' }
     })
-    render(
-      <ProjectPrincipalsSection orgId="org-1" projectId="proj-1" canManage />,
-    )
-    fireEvent.change(screen.getByRole('textbox', { name: 'Add system user' }), {
+    render(<ProjectPrincipalsSection orgId="org-1" projectId="proj-1" canManage />)
+    fireEvent.change(screen.getByRole('textbox', { name: 'Add Hosting Account' }), {
       target: { value: 'ftp' },
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Add system user' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add Hosting Account' }))
     await waitFor(() => {
       expect(screen.getByText(USERNAME_RESERVED_COPY)).toBeTruthy()
     })

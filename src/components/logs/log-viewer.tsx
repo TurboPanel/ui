@@ -120,7 +120,7 @@ function StepHeaderRow({
 }>) {
   const empty = step.lines.length === 0
   const note = stepNote(step, hits)
-  return (
+  const header = (
     <Pressable
       onPress={() => onToggle(step.id)}
       disabled={empty}
@@ -143,6 +143,14 @@ function StepHeaderRow({
       <View style={styles.flex} />
       <Text style={styles.stepTime}>{stepTime(step)}</Text>
     </Pressable>
+  )
+  if (!step.detail) return header
+  // A finished step's note (where to watch a certificate) stays under its row.
+  return (
+    <View>
+      {header}
+      <Text style={styles.stepDetail}>{step.detail}</Text>
+    </View>
   )
 }
 
@@ -1102,6 +1110,16 @@ const styles = StyleSheet.create({
     color: colors.textFaint,
     fontFamily: BODY,
     fontSize: 12,
+  },
+  stepDetail: {
+    paddingRight: spacing.md,
+    paddingBottom: spacing.sm,
+    // Lines up with the step label: chevron, dot and the gaps between them.
+    paddingLeft: spacing.md + 40,
+    color: colors.textMuted,
+    fontFamily: BODY,
+    fontSize: 12,
+    backgroundColor: colors.bgSecondary,
   },
   stepNote: {
     color: colors.command,

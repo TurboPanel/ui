@@ -163,6 +163,14 @@ export const queryKeys = {
         /** PHP modes the organization offers (`/organizations/:id/php-modes`). */
         phpModes: ['org', orgId, 'php-modes'] as const,
         defaultEnvironment: ['org', orgId, 'default-environment'] as const,
+        /** New-project form switches (`/organizations/:id/project-settings`). */
+        projectSettings: ['org', orgId, 'project-settings'] as const,
+        /**
+         * The same switches as read by the new-project form, where a 403/404
+         * means "both closed". Kept apart from `projectSettings` so that
+         * fallback never hides the settings tab's own load error.
+         */
+        projectFormDefaults: ['org', orgId, 'project-settings', 'form-defaults'] as const,
         managedDefaults: ['org', orgId, 'managed-defaults'] as const,
         /** Org-wide dockerd `default-address-pools` + `bip` (`/organizations/:id/docker-networking`). */
         dockerNetworking: ['org', orgId, 'docker-networking'] as const,
@@ -373,6 +381,9 @@ export const queryKeys = {
           ['org', orgId, 'managed', environmentId, 'privilege-catalogue'] as const,
         users: (environmentId: string) =>
           ['org', orgId, 'managed', environmentId, 'users'] as const,
+        /** Under `users`, so every invalidation of the logins refreshes it too. */
+        backupLogin: (environmentId: string) =>
+          ['org', orgId, 'managed', environmentId, 'users', 'backup-login'] as const,
         databases: (environmentId: string) =>
           ['org', orgId, 'managed', environmentId, 'databases'] as const,
         backups: (environmentId: string) =>
@@ -390,6 +401,17 @@ export const queryKeys = {
 
       /** The people in the organization (owners and managers). */
       members: ['org', orgId, 'members'] as const,
+
+      /** Connected Cloudflare accounts and their API tokens. */
+      tunnelCarriers: ['org', orgId, 'tunnel-carriers'] as const,
+
+      /** Certificates the panel orders itself through a DNS challenge. */
+      dnsCertificates: ['org', orgId, 'dns-certificates'] as const,
+
+      /** Tunnels, where they run, and the hostnames each carries. */
+      tunnels: ['org', orgId, 'tunnels'] as const,
+      tunnelHostnames: (tunnelId: string) =>
+        ['org', orgId, 'tunnels', tunnelId, 'hostnames'] as const,
 
       /** The organization firewall: policy, typed rules, and each server's mode + preview. */
       firewall: {

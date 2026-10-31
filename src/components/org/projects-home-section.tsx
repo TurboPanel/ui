@@ -174,8 +174,8 @@ function RecentProjects({
   if (recent.length === 0) return null
   return (
     <View style={s.recent}>
-      <SectionHeading title="Recent projects" />
-      <View accessibilityRole="summary" accessibilityLabel="Recent projects" style={s.chips}>
+      <SectionHeading title="Recent Projects" />
+      <View accessibilityRole="summary" accessibilityLabel="Recent Projects" style={s.chips}>
         {recent.map((project) => {
           const href = recentHref(orgId, project, environments)
           return (
@@ -314,17 +314,22 @@ function useHomeCards(
     () => deploysInProgress({ projects, environments, latest, now }),
     [projects, environments, latest, now]
   )
-  const runningCount = containersByEnvironment
-    ? cards.reduce(
-        (sum, card) => sum + card.environments.filter((env) => env.status === 'running').length,
-        0
-      )
-    : null
+  // Until environments and containers have both loaded the counts are
+  // unknown, not 0.
+  const environmentCount = environmentsQuery.data ? environments.length : null
+  const runningCount =
+    containersByEnvironment && environmentsQuery.data
+      ? cards.reduce(
+          (sum, card) => sum + card.environments.filter((env) => env.status === 'running').length,
+          0
+        )
+      : null
   return {
     environmentsQuery,
     containersQuery,
     refetchFacts: facts.refetch,
     environments,
+    environmentCount,
     cards,
     inProgress,
     runningCount,
@@ -343,7 +348,7 @@ function ListHead() {
         <Text style={s.listHeadText}>Name</Text>
       </View>
       <View style={s.listHeadEnvs}>
-        <Text style={s.listHeadText}>Environments</Text>
+        <Text style={s.listHeadText}>Status</Text>
       </View>
     </View>
   )
@@ -399,7 +404,7 @@ function DeploysInProgress({
   if (rows.length === 0) return null
   return (
     <View style={s.section}>
-      <SectionHeading title="Deploys in progress" />
+      <SectionHeading title="Deploys in Progress" />
       <ListGroup>
         {rows.slice(0, IN_PROGRESS_LIMIT).map((row) => (
           <ListRow
@@ -512,17 +517,23 @@ function AllProjectsTools({
   cards,
   filter,
   view,
+  loading,
 }: Readonly<{
   orgId: string
   scopeId: string
   cards: readonly HomeProject[]
   filter: ProjectTypeFilter
   view: ProjectsView
+  /** The list has not arrived yet: no counts, never a row of zeros. */
+  loading: boolean
 }>) {
   const s = styles(usePalette())
   const router = useRouter()
   const phone = useWindowDimensions().width <= PHONE_MAX_WIDTH
-  const options = useMemo(() => projectTypeOptions(projectTypeCounts(cards)), [cards])
+  const options = useMemo(
+    () => projectTypeOptions(loading ? null : projectTypeCounts(cards)),
+    [cards, loading]
+  )
   return (
     <View style={s.tools}>
       <View style={phone ? s.typeOwnRow : s.typeFilter}>
@@ -590,7 +601,7 @@ export function ProjectsHomeSection({
   const canCreate = canOwn && !isSystemScope
   // While the first-run welcome shows, it carries the New Project button.
   const welcomeShown = !loading && data.cards.length === 0 && !error
-  // With the Managed Databases filter on, New project opens on the managed type.
+  // With the Managed Databases filter on, New Project opens on the managed type.
   const newProjectHref = withQueryParam(
     newProjectHrefForScope(orgId, scopeId),
     'type',
@@ -603,13 +614,13 @@ export function ProjectsHomeSection({
         title="Projects"
         sub={
           data.cards.length > 0
-            ? summaryLine(data.cards.length, data.environments.length, data.runningCount)
+            ? summaryLine(data.cards.length, data.environmentCount, data.runningCount)
             : undefined
         }
         actions={
           canCreate && !welcomeShown ? (
             <ActionButton
-              label="New project"
+              label="New Project"
               variant="primary"
               onPress={() => router.push(newProjectHref)}
             />
@@ -626,6 +637,7 @@ export function ProjectsHomeSection({
           cards={data.cards}
           filter={filter}
           view={view}
+          loading={loading}
         />
         {filter === 'managed' ? <ManagedSettingsLink orgId={orgId} /> : null}
         <ProjectsList

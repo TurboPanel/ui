@@ -8,6 +8,7 @@ import { MANAGED_FAILOVER_UNSUPPORTED_REASON } from './managed-releases'
 import { TURBOFABRIC_PRODUCT_NAME } from './platform-copy'
 import { MANAGED_HAS_BINDINGS_COPY } from './user-error'
 import {
+  bindingEnvironmentLabel,
   MANAGED_INGRESS_MYSQL_PORT,
   MANAGED_INGRESS_PGSQL_PORT,
   MANAGED_SERVICE_CATALOG,
@@ -142,6 +143,28 @@ describe('managedErrorMessage', () => {
         'fallback'
       )
     ).toBe('Saved, but db-1 could not be told yet.')
+  })
+
+  it('shows the TurboFabric sentence for an untrusted binding path and keeps the general copy otherwise', () => {
+    const sentence =
+      "The only datacenter the app's server and the database's server share is marked untrusted, and TurboFabric is not carrying traffic between them right now."
+    expect(
+      managedErrorMessage(
+        new Error(`/x failed: HTTP 422: binding_endpoint_unavailable — ${sentence}`),
+        'fallback'
+      )
+    ).toBe(sentence)
+    expect(
+      managedErrorMessage(
+        new Error(
+          '/x failed: HTTP 422: binding_endpoint_unavailable — The server this app runs on cannot reach the database.'
+        ),
+        'fallback'
+      )
+    ).toBe("No network path from that service's server to this cluster.")
+    expect(
+      managedErrorMessage(new Error('HTTP 422: binding_endpoint_unavailable'), 'fallback')
+    ).toBe("No network path from that service's server to this cluster.")
   })
 
   it('shows the server sentence without the request for a code it has no copy for', () => {
@@ -912,5 +935,16 @@ describe('cut-off replica visibility', () => {
       'A replica is far behind, so this server is keeping extra log files for it.'
     )
     expect(REPLICA_CUT_OFF_LABEL).toContain('Resync needed')
+  })
+})
+
+describe('bindingEnvironmentLabel', () => {
+  it('puts the project name before the environment', () => {
+    expect(bindingEnvironmentLabel('production', 'Shop')).toBe('Shop / production')
+  })
+
+  it('falls back to the environment alone when the project is unknown', () => {
+    expect(bindingEnvironmentLabel('production', undefined)).toBe('production')
+    expect(bindingEnvironmentLabel('  ', ' ')).toBe('Environment')
   })
 })
