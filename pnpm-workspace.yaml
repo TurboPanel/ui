@@ -53,3 +53,5 @@ overrides:
   compression: 1.8.2
   # GHSA-587h-7wmj-h5pm and two related advisories: vite <= 6.4.3 bundles a vulnerable dev-server editor opener (Windows only); force the fixed release.
   vite: 6.4.4
+  # GHSA-5x38-2vff-x55p and four more HIGH advisories: node-forge <= 1.4.0 (pulled in by the Expo command-line and code-signing tooling, build machines only); 1.4.2 also restores Buffer input to pem.decode that 1.4.1 broke.
+  node-forge: 1.4.2
