@@ -30,12 +30,14 @@ import {
   usePersistAccountWrites,
   usePersistProjectCompose,
 } from '@/components/org/compose-persistence'
+import { mergeComposeOverlay } from '@/lib/compose'
 import { PrincipalAccessPanel } from '@/components/org/principal-access-panel'
 import { nextPrincipalAlias } from '@/lib/compose/principals-document'
 import {
   declaredAccountsWithoutRows,
   knownAccountNames,
   planAccountDeclaration,
+  servicePrincipalAlias,
 } from '@/lib/compose/principal-required'
 import { unownedSitesAcrossDocuments } from '@/lib/compose/managed-directory-sites'
 import {
@@ -75,6 +77,71 @@ import { userErrorMessage } from '@/lib/user-error'
 type ProjectServiceOption = {
   id: string
   label: string
+  /** Lowercase compose account alias the service names, if any. */
+  alias: string | null
+}
+
+/** What a service line shows, given the compose file's say over the link. */
+function serviceLinkView(linked: boolean, fileAlias: string | null, fileNamesThisAccount: boolean) {
+  if (fileNamesThisAccount) {
+    return {
+      showLinked: true,
+      showButton: false,
+      note: 'Linked by the compose file. Edit the file to change it.',
+    }
+  }
+  if (fileAlias === null) return { showLinked: linked, showButton: true, note: null }
+  return {
+    showLinked: false,
+    showButton: linked,
+    note: linked
+      ? `Linked, but the compose file uses ${fileAlias}.`
+      : `Set by the compose file for ${fileAlias}.`,
+  }
+}
+
+/** One service in a Hosting Account row: a Link button, or Linked with Unlink. */
+function ServiceLinkRow({
+  username,
+  label,
+  linked,
+  fileAlias,
+  fileNamesThisAccount,
+  disabled,
+  onToggle,
+}: Readonly<{
+  username: string
+  label: string
+  linked: boolean
+  /** The account the compose file names for this service, if any. */
+  fileAlias: string | null
+  /** The compose file names this account, so the row cannot undo the link here. */
+  fileNamesThisAccount: boolean
+  disabled: boolean
+  onToggle: () => void
+}>) {
+  const view = serviceLinkView(linked, fileAlias, fileNamesThisAccount)
+  return (
+    <View style={styles.serviceLinkRow}>
+      <Text style={styles.serviceLinkName} numberOfLines={1}>
+        {label}
+      </Text>
+      {view.showLinked ? <Text style={styles.serviceLinkedText}>Linked</Text> : null}
+      {view.showButton ? (
+        <Button
+          label={linked ? 'Unlink' : 'Link'}
+          size="sm"
+          variant={linked ? 'secondary' : 'primary'}
+          disabled={disabled}
+          accessibilityLabel={
+            linked ? `Unlink ${username} from ${label}` : `Link ${username} to ${label}`
+          }
+          onPress={onToggle}
+        />
+      ) : null}
+      {view.note ? <Text style={styles.serviceLinkNote}>{view.note}</Text> : null}
+    </View>
+  )
 }
 
 function formatServiceOptionLabel(environment: EnvironmentRecord, service: ServiceRecord): string {
@@ -227,16 +294,24 @@ export function ProjectPrincipalsSection({
     const flat: ProjectServiceOption[] = []
     for (const env of environments) {
       const services = servicesByEnvQuery.servicesByEnv[env.id] ?? []
+      const merged = mergeComposeOverlay(
+        projectQuery.data?.project?.options?.compose,
+        env.options?.compose
+      )
       for (const service of services) {
+        // The compose alias wins over serviceIds at deploy, so a service whose
+        // document names an account is linked to it whatever the row says.
+        const alias = servicePrincipalAlias(merged, service.composeServiceName)
         flat.push({
           id: service.id,
           label: formatServiceOptionLabel(env, service),
+          alias: alias?.toLowerCase() ?? null,
         })
       }
     }
     flat.sort((a, b) => a.label.localeCompare(b.label))
     return flat
-  }, [environments, servicesByEnvQuery.servicesByEnv])
+  }, [environments, servicesByEnvQuery.servicesByEnv, projectQuery.data])
 
   const [error, setError] = useState<string | null>(null)
   const [username, setUsername] = useState('')
@@ -473,27 +548,29 @@ export function ProjectPrincipalsSection({
                   <Text style={panelStyles.detailLabel}>Services</Text>
                   <View style={styles.serviceChipRow}>
                     {serviceOptions.map((option) => {
-                      const assigned = row.serviceIds.includes(option.id)
+                      const rowAlias = (row.metadata?.composeAlias ?? row.username).toLowerCase()
+                      const fileNamesThisAccount = option.alias === rowAlias
+                      const linked = row.serviceIds.includes(option.id) || fileNamesThisAccount
                       const disabled = !canManage || savingAssignments.has(row.id)
                       return (
-                        <Pressable
+                        <ServiceLinkRow
                           key={option.id}
+                          username={row.username}
+                          label={option.label}
+                          linked={linked}
+                          fileAlias={
+                            principals.find(
+                              (p) =>
+                                (p.metadata?.composeAlias ?? p.username).toLowerCase() ===
+                                option.alias
+                            )?.username ?? option.alias
+                          }
+                          fileNamesThisAccount={fileNamesThisAccount}
                           disabled={disabled}
-                          style={[
-                            styles.serviceChip,
-                            assigned && styles.serviceChipOn,
-                            disabled && styles.buttonDisabled,
-                          ]}
-                          onPress={() => {
+                          onToggle={() => {
                             void toggleServiceAssignment(row.id, option.id)
                           }}
-                        >
-                          <Text
-                            style={[styles.serviceChipText, assigned && styles.serviceChipTextOn]}
-                          >
-                            {option.label}
-                          </Text>
-                        </Pressable>
+                        />
                       )
                     })}
                   </View>
@@ -1159,28 +1236,25 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   serviceChipRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: spacing.xs,
   },
-  serviceChip: {
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-    borderRadius: 6,
-    backgroundColor: colors.bgSecondary,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+  serviceLinkRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: spacing.sm,
   },
-  serviceChipOn: {
-    borderColor: chrome.accent,
-    backgroundColor: chrome.bgActive,
-  },
-  serviceChipText: {
+  serviceLinkName: {
     color: colors.textMuted,
     fontSize: 12,
   },
-  serviceChipTextOn: {
+  serviceLinkNote: {
+    color: colors.textMuted,
+    fontSize: 12,
+  },
+  serviceLinkedText: {
     color: colors.link,
+    fontSize: 12,
     fontWeight: '600',
   },
   principalForm: {
