@@ -49,13 +49,7 @@ import { TlsContactEmailField } from './tls-contact-email-field'
 
 const field = (props: Partial<Parameters<typeof TlsContactEmailField>[0]> = {}) =>
   render(
-    <TlsContactEmailField
-      orgId="o1"
-      canManage
-      savedEmail="ops@example.com"
-      loading={false}
-      {...props}
-    />
+    <TlsContactEmailField orgId="o1" canManage savedEmail="ops@example.com" loaded {...props} />
   )
 
 describe('TlsContactEmailField', () => {
@@ -91,8 +85,13 @@ describe('TlsContactEmailField', () => {
     expect(screen.getByText('Add a contact email')).toBeTruthy()
   })
 
-  it('has no Save button without permission', () => {
-    field({ canManage: false })
-    expect(screen.queryByText('Save Contact Email')).toBeNull()
+  it('shows nothing without permission', () => {
+    const { container } = field({ canManage: false, savedEmail: null })
+    expect(container.innerHTML).toBe('')
+  })
+
+  it('does not say none is set when the settings failed to load', () => {
+    field({ savedEmail: null, loaded: false })
+    expect(screen.queryByText('Add a contact email')).toBeNull()
   })
 })

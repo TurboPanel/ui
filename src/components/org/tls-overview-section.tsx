@@ -209,7 +209,7 @@ function TlsLetsEncryptPanel({
         orgId={orgId}
         canManage={canManage}
         savedEmail={contactEmail}
-        loading={settingsLoading}
+        loaded={!settingsLoading && !settingsError}
       />
     </SectionPanel>
   )
