@@ -806,6 +806,7 @@ describe("pairs judged from each end's own reading", () => {
     ])
     expect(row?.warning).toBeUndefined()
     expect(row?.readingAt).toBe('2026-10-31T10:03:00.000Z')
+    expect(row?.readingAge).toBe('2 min ago')
   })
 
   it('is healthy when only the public side saw a fresh handshake', () => {

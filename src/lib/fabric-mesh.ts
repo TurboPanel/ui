@@ -279,6 +279,8 @@ export type FabricPairRow = {
   warning?: string
   /** When the newest reading behind this row was taken; shown as "as of ..." so a reading's age is plain. */
   readingAt?: string
+  /** The age of `readingAt` in plain words, judged at build time ("3 min ago"). */
+  readingAge?: string
 }
 
 /** A reading counts only from a server that is in the mesh and reported lately. */
@@ -431,7 +433,10 @@ function tunnelFields(
   // A paused or switched-off mesh has no tunnel to warn about; that is the user's choice.
   if (context.quiet) return fields
   const live = judgeTunnelReadings(pair, matrix, context.nowMs)
-  if (live.readingAt) fields.readingAt = live.readingAt
+  if (live.readingAt) {
+    fields.readingAt = live.readingAt
+    fields.readingAge = fabricReadingAgeLabel(live.readingAt, context.nowMs)
+  }
   if (live.verdict === 'up') {
     // A live handshake overrides only a stored "unreachable"; a degraded direct path is still a real signal.
     if (row && row.kind !== 'unreachable' && readingIsCurrent(row, context.nowMs)) {
