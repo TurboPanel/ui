@@ -387,14 +387,6 @@ export function fabricReadingAgeLabel(observedAt: string, nowMs: number): string
 
 type TunnelVerdict = { verdict: 'up' | 'down' | 'unreported' | 'none'; readingAt?: string }
 
-/**
- * What the ends' own latest reports say about the tunnel, judged each against
- * its own reading time: up when either end saw a fresh handshake (a tunnel is
- * one wire; the stored path summary only changes on a reconcile and can still
- * read unreachable), down when a current reading shows a stale handshake and
- * no end saw a fresh one, unreported when every reading is too old, none when
- * the panel sent no readings (older control plane) or a server is switched out.
- */
 /** The newest current reading that shows a fresh handshake and the newest that shows a stale one (ms). */
 function newestFreshAndStale(
   readings: readonly OrgFabricPairReading[],
@@ -402,15 +394,25 @@ function newestFreshAndStale(
 ): { up?: number; down?: number } {
   const newest: { up?: number; down?: number } = {}
   for (const reading of readings) {
+    // A reading with no readable time says nothing, whatever its handshake looks like.
+    const at = Date.parse(reading.observedAt)
+    if (Number.isNaN(at)) continue
     const judged = fabricHandshakeReading(reading.lastHandshakeAt, reading.observedAt, nowMs)
     if (judged === 'unreported') continue
     const key = judged === 'fresh' ? 'up' : 'down'
-    const at = Date.parse(reading.observedAt)
-    if (!Number.isNaN(at) && (newest[key] === undefined || at > newest[key])) newest[key] = at
+    if (newest[key] === undefined || at > newest[key]) newest[key] = at
   }
   return newest
 }
 
+/**
+ * What the ends' own latest reports say about the tunnel, judged each against
+ * its own reading time: the newest current reading decides (a tunnel is one
+ * wire and handshakes are symmetric; the stored path summary only changes on a
+ * reconcile and can still read unreachable): up when it shows a fresh
+ * handshake, down when it shows a stale one, and down on a tie. Unreported when every reading is too old, none when
+ * the panel sent no readings (older control plane) or a server is switched out.
+ */
 function judgeTunnelReadings(
   pair: OrgFabricPairRecord,
   matrix: readonly FabricPathMatrixRow[],
@@ -425,8 +427,8 @@ function judgeTunnelReadings(
   if (readings.length === 0 || switchedOut) return { verdict: 'none' }
   const { up, down } = newestFreshAndStale(readings, nowMs)
   // Handshakes are symmetric: a live tunnel never shows fresh on one end and stale on a newer reading
-  // from the other, so the newest current reading decides.
-  if (up !== undefined && (down === undefined || up >= down)) {
+  // from the other, so the newest current reading decides. A tie is not proof the tunnel is up.
+  if (up !== undefined && (down === undefined || up > down)) {
     return { verdict: 'up', readingAt: new Date(up).toISOString() }
   }
   if (down !== undefined) return { verdict: 'down', readingAt: new Date(down).toISOString() }

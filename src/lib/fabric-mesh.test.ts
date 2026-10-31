@@ -801,7 +801,7 @@ describe("pairs judged from each end's own reading", () => {
 
   it('is healthy when the NAT side saw a fresh handshake though both stored paths read unreachable', () => {
     const row = withReadings([
-      { reporterServerId: 'srv-a', observedAt: '2026-10-31T10:03:00.000Z' },
+      { reporterServerId: 'srv-a', observedAt: '2026-10-31T10:02:00.000Z' },
       fresh('srv-c'),
     ])
     expect(row?.warning).toBeUndefined()
@@ -810,7 +810,7 @@ describe("pairs judged from each end's own reading", () => {
   })
 
   it('is healthy when only the public side saw a fresh handshake', () => {
-    expect(withReadings([fresh('srv-a'), stale('srv-c')])?.warning).toBeUndefined()
+    expect(withReadings([fresh('srv-a')])?.warning).toBeUndefined()
   })
 
   it('is unreachable when no end saw a fresh handshake', () => {
@@ -831,6 +831,16 @@ describe("pairs judged from each end's own reading", () => {
   it('is healthy when the fresh reading is newer than a stale one from the other end', () => {
     const olderStale = { ...stale('srv-c'), observedAt: '2026-10-31T10:00:00.000Z' }
     expect(withReadings([olderStale, fresh('srv-a')])?.warning).toBeUndefined()
+  })
+
+  it('reads unreachable when a fresh and a stale reading carry the same time', () => {
+    expect(withReadings([fresh('srv-a'), stale('srv-c')])?.warning).toBe('Unreachable')
+  })
+
+  it('treats a reading with no readable time as unreported, fresh or stale', () => {
+    const bad = (reading: ReturnType<typeof fresh>) => ({ ...reading, observedAt: 'not a time' })
+    expect(withReadings([bad(stale('srv-a'))])?.warning).toBe('Not Reporting')
+    expect(withReadings([bad(fresh('srv-a'))])?.warning).toBe('Not Reporting')
   })
 
   it('is unreachable when one end is stale and the other has not reported', () => {
