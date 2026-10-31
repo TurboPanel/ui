@@ -1135,3 +1135,13 @@ export function clusterHasUnhealthyMember(
     return m.status !== 'ready' && m.status !== 'running'
   })
 }
+
+/** Picker label for an environment: `Project Name / environment`, so same-named environments can be told apart. */
+export function bindingEnvironmentLabel(
+  environmentName: string | null | undefined,
+  projectName: string | null | undefined
+): string {
+  const env = environmentName?.trim() || 'Environment'
+  const project = projectName?.trim()
+  return project ? `${project} / ${env}` : env
+}

@@ -8,6 +8,7 @@ import { MANAGED_FAILOVER_UNSUPPORTED_REASON } from './managed-releases'
 import { TURBOFABRIC_PRODUCT_NAME } from './platform-copy'
 import { MANAGED_HAS_BINDINGS_COPY } from './user-error'
 import {
+  bindingEnvironmentLabel,
   MANAGED_INGRESS_MYSQL_PORT,
   MANAGED_INGRESS_PGSQL_PORT,
   MANAGED_SERVICE_CATALOG,
@@ -934,5 +935,16 @@ describe('cut-off replica visibility', () => {
       'A replica is far behind, so this server is keeping extra log files for it.'
     )
     expect(REPLICA_CUT_OFF_LABEL).toContain('Resync needed')
+  })
+})
+
+describe('bindingEnvironmentLabel', () => {
+  it('puts the project name before the environment', () => {
+    expect(bindingEnvironmentLabel('production', 'Shop')).toBe('Shop / production')
+  })
+
+  it('falls back to the environment alone when the project is unknown', () => {
+    expect(bindingEnvironmentLabel('production', undefined)).toBe('production')
+    expect(bindingEnvironmentLabel('  ', ' ')).toBe('Environment')
   })
 })

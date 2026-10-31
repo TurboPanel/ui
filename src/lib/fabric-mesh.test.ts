@@ -5,6 +5,7 @@ import {
   buildFabricPathMatrix,
   buildServerPairRows,
   fabricPairPathLabel,
+  fabricHandshakeDisplay,
   fabricHandshakeReading,
   fabricInactiveServerIds,
   fabricIsQuiet,
@@ -928,5 +929,22 @@ describe('fabricReadingAgeLabel', () => {
     expect(fabricReadingAgeLabel('2026-10-31T09:57:00.000Z', now)).toBe('3 min ago')
     expect(fabricReadingAgeLabel('2026-10-31T07:00:00.000Z', now)).toBe('3 h ago')
     expect(fabricReadingAgeLabel('not a time', now)).toBeUndefined()
+  })
+})
+
+describe('fabricHandshakeDisplay', () => {
+  const now = Date.parse('2026-10-31T01:20:00.000Z')
+
+  it('hides old handshake and unreported readings while the mesh is paused', () => {
+    expect(
+      fabricHandshakeDisplay(true, '2026-10-31T00:59:00.000Z', '2026-10-31T00:59:30.000Z', now)
+    ).toBe('paused')
+    expect(fabricHandshakeDisplay(true, null, undefined, now)).toBe('paused')
+  })
+
+  it('keeps the normal reading when the mesh is not paused', () => {
+    expect(
+      fabricHandshakeDisplay(false, '2026-10-31T00:59:00.000Z', '2026-10-31T00:59:30.000Z', now)
+    ).toBe('unreported')
   })
 })
