@@ -2081,6 +2081,16 @@ export type OrgFabricPairRecord = {
   toServerId: string
   path: FabricPairPath
   reason: string
+  /** For a pair a tunnel carries: each end's own latest peer report about the other end. Absent on an older control plane or before either end reports. */
+  tunnel?: { readings: OrgFabricPairReading[] }
+}
+
+/** One end's report about the other end of a pair. */
+export type OrgFabricPairReading = {
+  reporterServerId: string
+  observedAt: string
+  /** The other end's last handshake in that reading; absent when it never handshook. */
+  lastHandshakeAt?: string
 }
 
 export type OrgFabricSettings = {

@@ -9,6 +9,7 @@ import {
   fabricInactiveServerIds,
   fabricIsQuiet,
   fabricPairUsesTunnel,
+  fabricReadingAgeLabel,
   fabricServerPairRows,
   fabricPathIsDegraded,
   fabricPathKindLabel,
@@ -750,5 +751,154 @@ describe('fabricInactiveServerIds and fabricIsQuiet', () => {
     expect(fabricIsQuiet({ enabled: false })).toBe(true)
     expect(fabricIsQuiet({ paused: false, enabled: true })).toBe(false)
     expect(fabricIsQuiet({})).toBe(false)
+  })
+})
+
+describe("pairs judged from each end's own reading", () => {
+  const NOW = Date.parse('2026-10-31T10:05:00.000Z')
+  const names = new Map([
+    ['srv-a', 'Server A'],
+    ['srv-c', 'Server C'],
+  ])
+  const storedUnreachable = buildFabricPathMatrix(
+    [
+      relay({
+        serverId: 'srv-a',
+        role: 'gateway',
+        paths: [{ peerServerId: 'srv-c', selected: 'unreachable', degraded: false }],
+      }),
+      relay({
+        serverId: 'srv-c',
+        role: 'member',
+        paths: [{ peerServerId: 'srv-a', selected: 'unreachable', degraded: false }],
+      }),
+    ],
+    names
+  )
+  const withReadings = (
+    readings: NonNullable<OrgFabricPairRecord['tunnel']>['readings'],
+    matrix = storedUnreachable,
+    quiet = false
+  ) => {
+    const [row] = buildFabricPairRows(
+      [{ ...pair('srv-a', 'srv-c', 'fabric'), tunnel: { readings } }],
+      matrix,
+      names,
+      { nowMs: NOW, quiet }
+    )
+    return row
+  }
+  const fresh = (reporterServerId: string) => ({
+    reporterServerId,
+    observedAt: '2026-10-31T10:03:00.000Z',
+    lastHandshakeAt: '2026-10-31T10:02:30.000Z',
+  })
+  const stale = (reporterServerId: string) => ({
+    reporterServerId,
+    observedAt: '2026-10-31T10:03:00.000Z',
+    lastHandshakeAt: '2026-10-31T09:50:00.000Z',
+  })
+
+  it('is healthy when the NAT side saw a fresh handshake though both stored paths read unreachable', () => {
+    const row = withReadings([
+      { reporterServerId: 'srv-a', observedAt: '2026-10-31T10:03:00.000Z' },
+      fresh('srv-c'),
+    ])
+    expect(row?.warning).toBeUndefined()
+    expect(row?.readingAt).toBe('2026-10-31T10:03:00.000Z')
+  })
+
+  it('is healthy when only the public side saw a fresh handshake', () => {
+    expect(withReadings([fresh('srv-a'), stale('srv-c')])?.warning).toBeUndefined()
+  })
+
+  it('is unreachable when no end saw a fresh handshake', () => {
+    expect(withReadings([stale('srv-a'), stale('srv-c')])?.warning).toBe('Unreachable')
+  })
+
+  it('is unreachable when one end is stale and the other has not reported', () => {
+    const old = { ...fresh('srv-c'), observedAt: '2026-10-31T09:30:00.000Z' }
+    expect(withReadings([stale('srv-a'), old])?.warning).toBe('Unreachable')
+  })
+
+  it('says not reporting, never healthy, when every reading is older than 7 minutes', () => {
+    const old = (id: string) => ({ ...fresh(id), observedAt: '2026-10-31T09:30:00.000Z' })
+    expect(withReadings([old('srv-a'), old('srv-c')])?.warning).toBe('Not Reporting')
+  })
+
+  it('does not trust a reading from a switched-off server', () => {
+    const inactive = buildFabricPathMatrix(
+      [
+        relay({
+          serverId: 'srv-a',
+          role: 'gateway',
+          paths: [{ peerServerId: 'srv-c', selected: 'unreachable', degraded: false }],
+        }),
+      ],
+      names,
+      new Set(['srv-a'])
+    )
+    expect(withReadings([fresh('srv-c')], inactive)?.warning).toBe('Not Reporting')
+  })
+
+  it('shows nothing about the tunnel while the mesh is paused', () => {
+    const row = withReadings([stale('srv-a'), stale('srv-c')], storedUnreachable, true)
+    expect(row?.warning).toBeUndefined()
+    expect(row?.readingAt).toBeUndefined()
+  })
+
+  it('still says degraded when a fresh handshake meets a stored degraded direct path', () => {
+    const degraded = buildFabricPathMatrix(
+      [
+        relay({
+          serverId: 'srv-c',
+          role: 'member',
+          paths: [{ peerServerId: 'srv-a', selected: 'direct_public', degraded: true }],
+        }),
+      ],
+      names
+    )
+    expect(withReadings([fresh('srv-a'), fresh('srv-c')], degraded)?.warning).toBe('Degraded')
+  })
+
+  it('keeps a gateway pair with no readings as the stored path says', () => {
+    const viaGateway = buildFabricPathMatrix(
+      [
+        relay({
+          serverId: 'srv-c',
+          role: 'member',
+          paths: [{ peerServerId: 'srv-a', selected: 'gateway', degraded: false }],
+        }),
+      ],
+      names
+    )
+    const [row] = buildFabricPairRows([pair('srv-a', 'srv-c', 'fabric')], viaGateway, names, {
+      nowMs: NOW,
+      quiet: false,
+    })
+    expect(row?.warning).toBeUndefined()
+  })
+
+  it('keeps the old behaviour when the panel sends no readings', () => {
+    const [row] = buildFabricPairRows(
+      [pair('srv-a', 'srv-c', 'fabric')],
+      storedUnreachable,
+      names,
+      {
+        nowMs: NOW,
+        quiet: false,
+      }
+    )
+    expect(row?.warning).toBe('Unreachable')
+    expect(row?.readingAt).toBeUndefined()
+  })
+})
+
+describe('fabricReadingAgeLabel', () => {
+  it('names the age plainly', () => {
+    const now = Date.parse('2026-10-31T10:00:00.000Z')
+    expect(fabricReadingAgeLabel('2026-10-31T09:59:40.000Z', now)).toBe('just now')
+    expect(fabricReadingAgeLabel('2026-10-31T09:57:00.000Z', now)).toBe('3 min ago')
+    expect(fabricReadingAgeLabel('2026-10-31T07:00:00.000Z', now)).toBe('3 h ago')
   })
 })

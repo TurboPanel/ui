@@ -277,6 +277,8 @@ export type FabricPairRow = {
   viaLabel?: string
   /** Tunnel warning ("Unreachable" / "Degraded"); only for a pair a tunnel carries. */
   warning?: string
+  /** When the newest reading behind this row was taken; shown as "as of ..." so a reading's age is plain. */
+  readingAt?: string
 }
 
 /** A reading counts only from a server that is in the mesh and reported lately. */
@@ -370,6 +372,50 @@ function currentReadingContext(): FabricReadingContext {
   return { nowMs: Date.now(), quiet: false }
 }
 
+/** Plain age of a reading, for "as of ...": "just now", "3 min ago", "2 h ago". */
+export function fabricReadingAgeLabel(observedAt: string, nowMs: number): string {
+  const at = Date.parse(observedAt)
+  if (Number.isNaN(at)) return 'unknown'
+  const minutes = Math.floor(Math.max(0, nowMs - at) / 60_000)
+  if (minutes < 1) return 'just now'
+  if (minutes < 60) return `${String(minutes)} min ago`
+  return `${String(Math.floor(minutes / 60))} h ago`
+}
+
+type TunnelVerdict = { verdict: 'up' | 'down' | 'unreported' | 'none'; readingAt?: string }
+
+/**
+ * What the ends' own latest reports say about the tunnel, judged each against
+ * its own reading time: up when either end saw a fresh handshake (a tunnel is
+ * one wire; the stored path summary only changes on a reconcile and can still
+ * read unreachable), down when a current reading shows a stale handshake and
+ * no end saw a fresh one, unreported when every reading is too old, none when
+ * the panel sent no readings (older control plane) or a server is switched out.
+ */
+function judgeTunnelReadings(
+  pair: OrgFabricPairRecord,
+  matrix: readonly FabricPathMatrixRow[],
+  nowMs: number
+): TunnelVerdict {
+  const readings = pair.tunnel?.readings ?? []
+  const switchedOut = matrix.some(
+    (row) =>
+      row.inactive === true &&
+      (row.fromServerId === pair.fromServerId || row.fromServerId === pair.toServerId)
+  )
+  if (readings.length === 0 || switchedOut) return { verdict: 'none' }
+  let up: string | undefined
+  let down: string | undefined
+  for (const reading of readings) {
+    const judged = fabricHandshakeReading(reading.lastHandshakeAt, reading.observedAt, nowMs)
+    if (judged === 'fresh' && (!up || reading.observedAt > up)) up = reading.observedAt
+    if (judged === 'stale' && (!down || reading.observedAt > down)) down = reading.observedAt
+  }
+  if (up) return { verdict: 'up', readingAt: up }
+  if (down) return { verdict: 'down', readingAt: down }
+  return { verdict: 'unreported' }
+}
+
 function tunnelFields(
   pair: OrgFabricPairRecord,
   matrix: readonly FabricPathMatrixRow[],
@@ -377,12 +423,31 @@ function tunnelFields(
 ): Partial<FabricPairRow> {
   if (!fabricPairUsesTunnel(pair.path)) return {}
   const row = tunnelReading(pair, matrix, context.nowMs)
-  if (!row) return {}
   const fields: Partial<FabricPairRow> = {}
-  if (row.kind !== 'unreachable' && row.latencyMs !== undefined) fields.latencyMs = row.latencyMs
-  if (row.viaLabel) fields.viaLabel = row.viaLabel
+  if (row && row.kind !== 'unreachable' && row.latencyMs !== undefined) {
+    fields.latencyMs = row.latencyMs
+  }
+  if (row?.viaLabel) fields.viaLabel = row.viaLabel
   // A paused or switched-off mesh has no tunnel to warn about; that is the user's choice.
   if (context.quiet) return fields
+  const live = judgeTunnelReadings(pair, matrix, context.nowMs)
+  if (live.readingAt) fields.readingAt = live.readingAt
+  if (live.verdict === 'up') {
+    // A live handshake overrides only a stored "unreachable"; a degraded direct path is still a real signal.
+    if (row && row.kind !== 'unreachable' && readingIsCurrent(row, context.nowMs)) {
+      if (fabricPathIsDegraded(row)) fields.warning = 'Degraded'
+    }
+    return fields
+  }
+  if (live.verdict === 'down') {
+    fields.warning = 'Unreachable'
+    return fields
+  }
+  if (live.verdict === 'unreported') {
+    fields.warning = 'Not Reporting'
+    return fields
+  }
+  if (!row) return fields
   const warning = readingIsCurrent(row, context.nowMs) ? tunnelWarning(row) : 'Not Reporting'
   if (warning) fields.warning = warning
   return fields

@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native'
 import { panelStyles } from '@/components/ui/panel-styles'
-import type { FabricPairRow } from '@/lib/fabric-mesh'
+import { fabricReadingAgeLabel, type FabricPairRow } from '@/lib/fabric-mesh'
 import { spacing } from '@/lib/theme'
 
 function FabricPairPathRow({ row }: Readonly<{ row: FabricPairRow }>) {
@@ -23,6 +23,11 @@ function FabricPairPathRow({ row }: Readonly<{ row: FabricPairRow }>) {
         <Text style={panelStyles.detailLine}>
           <Text style={panelStyles.detailLabel}>Via: </Text>
           {row.viaLabel}
+        </Text>
+      ) : null}
+      {row.readingAt ? (
+        <Text style={panelStyles.muted}>
+          Reading as of {fabricReadingAgeLabel(row.readingAt, Date.now())}
         </Text>
       ) : null}
       {row.warning ? (

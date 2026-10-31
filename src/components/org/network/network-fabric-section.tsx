@@ -30,6 +30,7 @@ import {
   buildFabricPairRows,
   buildFabricPathMatrix,
   fabricHandshakeReading,
+  fabricReadingAgeLabel,
   fabricInactiveServerIds,
   fabricIsQuiet,
   fabricPathIsDegraded,
@@ -514,6 +515,7 @@ function HandshakeLine({
       <Text style={panelStyles.detailLine}>
         <Text style={panelStyles.detailLabel}>Last handshake: </Text>
         {label}
+        {observedAt ? ` — reading as of ${fabricReadingAgeLabel(observedAt, nowMs)}` : ''}
       </Text>
     )
   }
