@@ -81,7 +81,7 @@ describe('fabric polling while servers answer', () => {
       await waitFor(() => expect(result.current.data?.relays[0]?.reconcile?.state).toBe('done'))
       const reads = fetchOrgFabric.mock.calls.length
       await vi.advanceTimersByTimeAsync(FABRIC_PENDING_POLL_MS * 3)
-      expect(fetchOrgFabric.mock.calls.length).toBe(reads)
+      expect(fetchOrgFabric.mock.calls).toHaveLength(reads)
     } finally {
       vi.useRealTimers()
     }
