@@ -13,6 +13,21 @@ describe('hosted UI security headers', () => {
     expect(headers).toMatch(/^\/\*$/m)
   })
 
+  it('caches hashed bundles for a year and leaves pages revalidating', () => {
+    const lines = headers.split('\n')
+    const blockOf = (rule: string) => {
+      const start = lines.indexOf(rule)
+      expect(start).toBeGreaterThanOrEqual(0)
+      const rest = lines.slice(start + 1)
+      const end = rest.findIndex((line) => !line.startsWith('  '))
+      return (end === -1 ? rest : rest.slice(0, end)).join('\n')
+    }
+    for (const rule of ['/_expo/static/*', '/assets/*']) {
+      expect(blockOf(rule)).toContain('Cache-Control: public, max-age=31536000, immutable')
+    }
+    expect(blockOf('/*')).not.toMatch(/cache-control/i)
+  })
+
   it('refuses framing and content sniffing and limits referrers', () => {
     expect(headers).toContain('X-Content-Type-Options: nosniff')
     expect(headers).toContain('X-Frame-Options: DENY')
