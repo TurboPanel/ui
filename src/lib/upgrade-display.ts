@@ -298,9 +298,7 @@ export function stepMessageText(
 ): string | null {
   if (step.errorCode?.trim() === 'retry_later') return retryLaterText(step.errorMessage)
   const message = plainStepFailureMessage(step.errorMessage)
-  return step.errorCode?.trim() === 'server_offline'
-    ? (modernSkippedOfflineText(message) ?? null)
-    : message
+  return step.errorCode?.trim() === 'server_offline' ? modernSkippedOfflineText(message) : message
 }
 
 /**
@@ -363,7 +361,7 @@ const NEW_SKIPPED_OFFLINE_TAIL =
  * Stored history rows keep the sentence the control plane wrote at the time.
  * Older rows promise an update on reconnect; show the current tail instead.
  */
-function modernSkippedOfflineText(message: string | undefined): string | undefined {
+function modernSkippedOfflineText<T extends string | null | undefined>(message: T): T | string {
   if (!message?.endsWith(OLD_SKIPPED_OFFLINE_TAIL)) return message
   const lead = message
     .slice(0, -OLD_SKIPPED_OFFLINE_TAIL.length)
