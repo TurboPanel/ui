@@ -1,6 +1,7 @@
 import type {
   FabricPairPath,
   FabricRelayPathKind,
+  OrgFabricPairReading,
   OrgFabricPairRecord,
   OrgFabricSettings,
   FabricRelayPathState,
@@ -375,9 +376,9 @@ function currentReadingContext(): FabricReadingContext {
 }
 
 /** Plain age of a reading, for "as of ...": "just now", "3 min ago", "2 h ago". */
-export function fabricReadingAgeLabel(observedAt: string, nowMs: number): string {
+export function fabricReadingAgeLabel(observedAt: string, nowMs: number): string | undefined {
   const at = Date.parse(observedAt)
-  if (Number.isNaN(at)) return 'unknown'
+  if (Number.isNaN(at)) return undefined
   const minutes = Math.floor(Math.max(0, nowMs - at) / 60_000)
   if (minutes < 1) return 'just now'
   if (minutes < 60) return `${String(minutes)} min ago`
@@ -394,6 +395,22 @@ type TunnelVerdict = { verdict: 'up' | 'down' | 'unreported' | 'none'; readingAt
  * no end saw a fresh one, unreported when every reading is too old, none when
  * the panel sent no readings (older control plane) or a server is switched out.
  */
+/** The newest current reading that shows a fresh handshake and the newest that shows a stale one (ms). */
+function newestFreshAndStale(
+  readings: readonly OrgFabricPairReading[],
+  nowMs: number
+): { up?: number; down?: number } {
+  const newest: { up?: number; down?: number } = {}
+  for (const reading of readings) {
+    const judged = fabricHandshakeReading(reading.lastHandshakeAt, reading.observedAt, nowMs)
+    if (judged === 'unreported') continue
+    const key = judged === 'fresh' ? 'up' : 'down'
+    const at = Date.parse(reading.observedAt)
+    if (!Number.isNaN(at) && (newest[key] === undefined || at > newest[key])) newest[key] = at
+  }
+  return newest
+}
+
 function judgeTunnelReadings(
   pair: OrgFabricPairRecord,
   matrix: readonly FabricPathMatrixRow[],
@@ -406,15 +423,13 @@ function judgeTunnelReadings(
       (row.fromServerId === pair.fromServerId || row.fromServerId === pair.toServerId)
   )
   if (readings.length === 0 || switchedOut) return { verdict: 'none' }
-  let up: string | undefined
-  let down: string | undefined
-  for (const reading of readings) {
-    const judged = fabricHandshakeReading(reading.lastHandshakeAt, reading.observedAt, nowMs)
-    if (judged === 'fresh' && (!up || reading.observedAt > up)) up = reading.observedAt
-    if (judged === 'stale' && (!down || reading.observedAt > down)) down = reading.observedAt
+  const { up, down } = newestFreshAndStale(readings, nowMs)
+  // Handshakes are symmetric: a live tunnel never shows fresh on one end and stale on a newer reading
+  // from the other, so the newest current reading decides.
+  if (up !== undefined && (down === undefined || up >= down)) {
+    return { verdict: 'up', readingAt: new Date(up).toISOString() }
   }
-  if (up) return { verdict: 'up', readingAt: up }
-  if (down) return { verdict: 'down', readingAt: down }
+  if (down !== undefined) return { verdict: 'down', readingAt: new Date(down).toISOString() }
   return { verdict: 'unreported' }
 }
 
@@ -449,7 +464,8 @@ function tunnelFields(
   const live = judgeTunnelReadings(pair, matrix, context.nowMs)
   if (live.readingAt) {
     fields.readingAt = live.readingAt
-    fields.readingAge = fabricReadingAgeLabel(live.readingAt, context.nowMs)
+    const age = fabricReadingAgeLabel(live.readingAt, context.nowMs)
+    if (age) fields.readingAge = age
   }
   const warning = tunnelWarningFor(live, row, context.nowMs)
   if (warning) fields.warning = warning

@@ -817,6 +817,22 @@ describe("pairs judged from each end's own reading", () => {
     expect(withReadings([stale('srv-a'), stale('srv-c')])?.warning).toBe('Unreachable')
   })
 
+  it('lets the newest current reading decide when the ends disagree', () => {
+    const early = {
+      ...fresh('srv-a'),
+      observedAt: '2026-10-31T10:00:00.000Z',
+      lastHandshakeAt: '2026-10-31T09:59:30.000Z',
+    }
+    const late = { ...stale('srv-c'), observedAt: '2026-10-31T10:04:30.000Z' }
+    expect(withReadings([early, late])?.warning).toBe('Unreachable')
+    expect(withReadings([late, early])?.warning).toBe('Unreachable')
+  })
+
+  it('is healthy when the fresh reading is newer than a stale one from the other end', () => {
+    const olderStale = { ...stale('srv-c'), observedAt: '2026-10-31T10:00:00.000Z' }
+    expect(withReadings([olderStale, fresh('srv-a')])?.warning).toBeUndefined()
+  })
+
   it('is unreachable when one end is stale and the other has not reported', () => {
     const old = { ...fresh('srv-c'), observedAt: '2026-10-31T09:30:00.000Z' }
     expect(withReadings([stale('srv-a'), old])?.warning).toBe('Unreachable')
@@ -901,5 +917,6 @@ describe('fabricReadingAgeLabel', () => {
     expect(fabricReadingAgeLabel('2026-10-31T09:59:40.000Z', now)).toBe('just now')
     expect(fabricReadingAgeLabel('2026-10-31T09:57:00.000Z', now)).toBe('3 min ago')
     expect(fabricReadingAgeLabel('2026-10-31T07:00:00.000Z', now)).toBe('3 h ago')
+    expect(fabricReadingAgeLabel('not a time', now)).toBeUndefined()
   })
 })
