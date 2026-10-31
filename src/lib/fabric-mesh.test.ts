@@ -5,6 +5,7 @@ import {
   buildFabricPathMatrix,
   buildServerPairRows,
   fabricPairPathLabel,
+  fabricHandshakeReading,
   fabricPairUsesTunnel,
   fabricServerPairRows,
   fabricPathIsDegraded,
@@ -525,6 +526,45 @@ describe('buildFabricPairRows', () => {
     expect(tunnelRow?.warning).toBe('Unreachable')
   })
 
+  it('does not call a tunnel unreachable when the other end connects out to it', () => {
+    const relays = [
+      relay({
+        serverId: 'srv-a',
+        role: 'gateway',
+        paths: [{ peerServerId: 'srv-c', selected: 'unreachable', degraded: false }],
+      }),
+      relay({
+        serverId: 'srv-c',
+        role: 'member',
+        paths: [
+          { peerServerId: 'srv-a', selected: 'direct_public', latencyMs: 21, degraded: false },
+        ],
+      }),
+    ]
+    const matrix = buildFabricPathMatrix(relays, names)
+    const [row] = buildFabricPairRows([pair('srv-a', 'srv-c', 'fabric')], matrix, names)
+    expect(row?.warning).toBeUndefined()
+    expect(row?.latencyMs).toBe(21)
+  })
+
+  it('still says unreachable when neither end reaches the other', () => {
+    const relays = [
+      relay({
+        serverId: 'srv-a',
+        role: 'gateway',
+        paths: [{ peerServerId: 'srv-c', selected: 'unreachable', degraded: false }],
+      }),
+      relay({
+        serverId: 'srv-c',
+        role: 'member',
+        paths: [{ peerServerId: 'srv-a', selected: 'unreachable', degraded: false }],
+      }),
+    ]
+    const matrix = buildFabricPathMatrix(relays, names)
+    const [row] = buildFabricPairRows([pair('srv-a', 'srv-c', 'fabric')], matrix, names)
+    expect(row?.warning).toBe('Unreachable')
+  })
+
   it('falls back to the server id when a name is unknown', () => {
     const [row] = buildFabricPairRows([pair('srv-a', 'srv-x', 'none')], [], names)
     expect(row?.title).toBe('alpha ↔ srv-x')
@@ -574,5 +614,39 @@ describe('fabricServerPairRows', () => {
         reason: 'They share the trusted network Rack A.',
       },
     ])
+  })
+})
+
+describe('fabricHandshakeReading', () => {
+  const at = (iso: string) => Date.parse(iso)
+  const reading = '2026-10-31T01:00:00.000Z'
+
+  it('judges the handshake against the reading time, not against now', () => {
+    // 100 s old when read; the page opens 4 minutes later, before the next reading.
+    expect(
+      fabricHandshakeReading('2026-10-31T00:58:20.000Z', reading, at('2026-10-31T01:04:00.000Z'))
+    ).toBe('fresh')
+  })
+
+  it('warns when the handshake was already too old when the reading was taken', () => {
+    expect(
+      fabricHandshakeReading('2026-10-31T00:56:00.000Z', reading, at('2026-10-31T01:00:30.000Z'))
+    ).toBe('stale')
+  })
+
+  it('says the server has stopped reporting when its reading is too old, never a quiet fine', () => {
+    expect(
+      fabricHandshakeReading('2026-10-31T00:59:00.000Z', reading, at('2026-10-31T01:20:00.000Z'))
+    ).toBe('unreported')
+  })
+
+  it('asks for a handshake that has never happened', () => {
+    expect(fabricHandshakeReading(null, reading, at(reading))).toBe('stale')
+  })
+
+  it('allows for reading lag when an older control plane sends no reading time', () => {
+    const now = at('2026-10-31T01:05:00.000Z')
+    expect(fabricHandshakeReading('2026-10-31T01:00:00.000Z', undefined, now)).toBe('fresh')
+    expect(fabricHandshakeReading('2026-10-31T00:50:00.000Z', undefined, now)).toBe('stale')
   })
 })

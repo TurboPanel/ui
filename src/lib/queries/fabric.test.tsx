@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createAppQueryClient } from '@/lib/query-client'
 import { queryKeys } from '@/lib/query-keys'
 import {
+  FABRIC_PENDING_POLL_MS,
+  fabricPollInterval,
   isOrgFabricUnavailable,
   useApplyOrgFabric,
   useOrgFabric,
@@ -51,6 +53,39 @@ function createWrapper(client = createAppQueryClient()) {
 
 afterEach(() => {
   vi.clearAllMocks()
+})
+
+function relayRow(state: 'pending' | 'done') {
+  return { serverId: 's1', reconcile: { commandId: 'c1', action: 'pause', state, at: 'now' } }
+}
+
+describe('fabric polling while servers answer', () => {
+  it('polls only while some server has not answered', () => {
+    expect(fabricPollInterval(undefined)).toBe(false)
+    expect(fabricPollInterval({ relays: [] } as never)).toBe(false)
+    expect(fabricPollInterval({ relays: [relayRow('done')] } as never)).toBe(false)
+    expect(fabricPollInterval({ relays: [relayRow('done'), relayRow('pending')] } as never)).toBe(
+      FABRIC_PENDING_POLL_MS
+    )
+  })
+
+  it('reads again until every server has answered, with no reload', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      fetchOrgFabric
+        .mockResolvedValueOnce({ enabled: false, paused: true, relays: [relayRow('pending')] })
+        .mockResolvedValue({ enabled: false, paused: true, relays: [relayRow('done')] })
+      const { result } = renderHook(() => useOrgFabric('org-1'), { wrapper: createWrapper() })
+      await waitFor(() => expect(result.current.data?.relays[0]?.reconcile?.state).toBe('pending'))
+      await vi.advanceTimersByTimeAsync(FABRIC_PENDING_POLL_MS + 100)
+      await waitFor(() => expect(result.current.data?.relays[0]?.reconcile?.state).toBe('done'))
+      const reads = fetchOrgFabric.mock.calls.length
+      await vi.advanceTimersByTimeAsync(FABRIC_PENDING_POLL_MS * 3)
+      expect(fetchOrgFabric.mock.calls.length).toBe(reads)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })
 
 describe('fabric query hooks', () => {

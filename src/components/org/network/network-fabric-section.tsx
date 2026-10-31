@@ -29,6 +29,7 @@ import {
 import {
   buildFabricPairRows,
   buildFabricPathMatrix,
+  fabricHandshakeReading,
   fabricPathIsDegraded,
   fabricPathKindLabel,
   formatResolvedAdvertisedCidrs,
@@ -68,8 +69,6 @@ import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
 import { useCanState, queryKeys } from '@/lib/query-client'
 import { colors, spacing, webPointer } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
-
-const HANDSHAKE_STALE_MS = 3 * 60 * 1000
 
 function fabricStatusLabel(state: FabricState, status?: string): string {
   if (state !== 'on') return fabricStateLabel(state)
@@ -152,13 +151,6 @@ function parseKeepaliveDraft(
     }
   }
   return { ok: true, value: parsed }
-}
-
-function handshakeIsStale(lastHandshakeAt: string | null): boolean {
-  if (!lastHandshakeAt) return true
-  const then = Date.parse(lastHandshakeAt)
-  if (Number.isNaN(then)) return true
-  return Date.now() - then > HANDSHAKE_STALE_MS
 }
 
 function queuedApplyEntries(
@@ -493,12 +485,15 @@ function RolePicker({
   )
 }
 
-function HandshakeLine({ lastHandshakeAt }: Readonly<{ lastHandshakeAt: string | null }>) {
-  const stale = handshakeIsStale(lastHandshakeAt)
+function HandshakeLine({
+  lastHandshakeAt,
+  observedAt,
+}: Readonly<{ lastHandshakeAt: string | null; observedAt?: string }>) {
+  const reading = fabricHandshakeReading(lastHandshakeAt, observedAt, Date.now())
   const label = formatRelativeLocalDateTime(lastHandshakeAt, {
     neverLabel: 'Never',
   })
-  if (!stale) {
+  if (reading === 'fresh') {
     return (
       <Text style={panelStyles.detailLine}>
         <Text style={panelStyles.detailLabel}>Last handshake: </Text>
@@ -506,13 +501,14 @@ function HandshakeLine({ lastHandshakeAt }: Readonly<{ lastHandshakeAt: string |
       </Text>
     )
   }
+  let warning = `Last handshake stale — ${label}`
+  if (!lastHandshakeAt) warning = 'Not converged yet — no handshake observed'
+  else if (reading === 'unreported') {
+    warning = `This server has not reported lately. Last handshake it saw: ${label}`
+  }
   return (
     <View style={panelStyles.calloutWarning}>
-      <Text style={panelStyles.calloutWarningText}>
-        {lastHandshakeAt
-          ? `Last handshake stale — ${label}`
-          : 'Not converged yet — no handshake observed'}
-      </Text>
+      <Text style={panelStyles.calloutWarningText}>{warning}</Text>
     </View>
   )
 }
@@ -721,7 +717,7 @@ function RelayConfiguredFields({
         <Text style={panelStyles.detailLabel}>Preshared key: </Text>
         {relay.hasPresharedKey ? 'Present' : 'Not set'}
       </Text>
-      <HandshakeLine lastHandshakeAt={relay.lastHandshakeAt} />
+      <HandshakeLine lastHandshakeAt={relay.lastHandshakeAt} observedAt={relay.observedAt} />
       {canManage ? (
         <RelayPresharedKeyField
           draft={pskDraft}

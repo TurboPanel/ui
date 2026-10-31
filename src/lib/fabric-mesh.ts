@@ -271,18 +271,68 @@ export type FabricPairRow = {
   warning?: string
 }
 
+/**
+ * A tunnel is one wire with two ends. A server that cannot dial the other
+ * (it sits behind NAT) reads "unreachable" from its own side while the other
+ * end connects out to it fine, so that reading only counts when no other
+ * reading for the pair says the tunnel is up.
+ */
 function tunnelReading(
   pair: OrgFabricPairRecord,
   matrix: readonly FabricPathMatrixRow[]
 ): FabricPathMatrixRow | undefined {
-  return (
-    matrix.find(
-      (row) => row.fromServerId === pair.fromServerId && row.toServerId === pair.toServerId
-    ) ??
-    matrix.find(
-      (row) => row.fromServerId === pair.toServerId && row.toServerId === pair.fromServerId
-    )
+  const forward = matrix.find(
+    (row) => row.fromServerId === pair.fromServerId && row.toServerId === pair.toServerId
   )
+  const backward = matrix.find(
+    (row) => row.fromServerId === pair.toServerId && row.toServerId === pair.fromServerId
+  )
+  if (forward && forward.kind !== 'unreachable') return forward
+  if (backward && backward.kind !== 'unreachable') return backward
+  return forward ?? backward
+}
+
+/**
+ * A session with no new handshake for this long is dead: WireGuard renews one
+ * after 120 s of traffic and drops it after 180 s (15 s margin for the poll).
+ * Same limit as the control plane and the daemon.
+ */
+export const FABRIC_HANDSHAKE_HEALTHY_MS = 195_000
+
+/**
+ * A reading older than this says nothing about now: a steady mesh is read
+ * every 5 minutes, plus 2 minutes of margin.
+ */
+export const FABRIC_OBSERVATION_MAX_AGE_MS = 7 * 60_000
+
+/** What the latest reading says about a peer's handshake. */
+export type FabricHandshakeReading = 'fresh' | 'stale' | 'unreported'
+
+/**
+ * Judge a peer's last handshake against the moment the server took its
+ * reading, not against now: an idle tunnel only renews its handshake every
+ * couple of minutes, and the reading itself may be a few minutes old.
+ * `stale` is a handshake that was already too old when the reading was taken
+ * (or has never happened). `unreported` is a reading too old to say anything:
+ * the server has stopped reporting, which is its own warning, never a quiet
+ * "fine".
+ */
+export function fabricHandshakeReading(
+  lastHandshakeAt: string | null | undefined,
+  observedAt: string | null | undefined,
+  nowMs: number
+): FabricHandshakeReading {
+  if (!lastHandshakeAt) return 'stale'
+  const handshake = Date.parse(lastHandshakeAt)
+  if (Number.isNaN(handshake)) return 'stale'
+  const reading = observedAt ? Date.parse(observedAt) : Number.NaN
+  if (Number.isNaN(reading)) {
+    // An older control plane sends no reading time: allow for its lag too.
+    const limit = FABRIC_HANDSHAKE_HEALTHY_MS + FABRIC_OBSERVATION_MAX_AGE_MS
+    return nowMs - handshake > limit ? 'stale' : 'fresh'
+  }
+  if (nowMs - reading > FABRIC_OBSERVATION_MAX_AGE_MS) return 'unreported'
+  return reading - handshake > FABRIC_HANDSHAKE_HEALTHY_MS ? 'stale' : 'fresh'
 }
 
 function tunnelWarning(row: FabricPathMatrixRow): string | undefined {
