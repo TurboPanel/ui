@@ -9,6 +9,7 @@ import type {
   RelayRole,
   ServerDatacenterRef,
 } from './instance-api.ts'
+import { TURBOFABRIC_PRODUCT_NAME } from './platform-copy'
 
 /** Minimal server facts needed for primary-gateway resolution. */
 export type MeshServerRef = {
@@ -360,6 +361,21 @@ export function fabricHandshakeReading(
   }
   if (nowMs - reading > FABRIC_OBSERVATION_MAX_AGE_MS) return 'unreported'
   return reading - handshake > FABRIC_HANDSHAKE_HEALTHY_MS ? 'stale' : 'fresh'
+}
+
+/** What a server's handshake line shows: while the mesh is paused no tunnel runs, so an old reading is not shown. */
+export type FabricHandshakeDisplay = FabricHandshakeReading | 'paused'
+
+export const FABRIC_PAUSED_HANDSHAKE_NOTE = `${TURBOFABRIC_PRODUCT_NAME} is paused, so no tunnel is running on this server.`
+
+export function fabricHandshakeDisplay(
+  paused: boolean,
+  lastHandshakeAt: string | null | undefined,
+  observedAt: string | null | undefined,
+  nowMs: number
+): FabricHandshakeDisplay {
+  if (paused) return 'paused'
+  return fabricHandshakeReading(lastHandshakeAt, observedAt, nowMs)
 }
 
 function tunnelWarning(row: FabricPathMatrixRow): string | undefined {

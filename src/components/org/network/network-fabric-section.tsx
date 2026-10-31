@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { panelStyles } from '@/components/ui/panel-styles'
@@ -29,7 +29,8 @@ import {
 import {
   buildFabricPairRows,
   buildFabricPathMatrix,
-  fabricHandshakeReading,
+  FABRIC_PAUSED_HANDSHAKE_NOTE,
+  fabricHandshakeDisplay,
   fabricReadingAgeLabel,
   fabricInactiveServerIds,
   fabricIsQuiet,
@@ -501,12 +502,19 @@ function useNowMs(intervalMs: number): number {
   return nowMs
 }
 
+/** True while the mesh is paused: no tunnel runs, so old readings are not shown. */
+const FabricPausedContext = createContext(false)
+
 function HandshakeLine({
   lastHandshakeAt,
   observedAt,
 }: Readonly<{ lastHandshakeAt: string | null; observedAt?: string }>) {
   const nowMs = useNowMs(CLOCK_TICK_MS)
-  const reading = fabricHandshakeReading(lastHandshakeAt, observedAt, nowMs)
+  const paused = useContext(FabricPausedContext)
+  const reading = fabricHandshakeDisplay(paused, lastHandshakeAt, observedAt, nowMs)
+  if (reading === 'paused') {
+    return <Text style={panelStyles.muted}>{FABRIC_PAUSED_HANDSHAKE_NOTE}</Text>
+  }
   const readingAge = observedAt ? fabricReadingAgeLabel(observedAt, nowMs) : undefined
   const label = formatRelativeLocalDateTime(lastHandshakeAt, {
     neverLabel: 'Never',
@@ -1300,22 +1308,24 @@ export function NetworkFabricSection({ orgId }: Readonly<{ orgId: string }>) {
 
       {view.showMesh ? (
         <>
-          <FabricRelaysPanel
-            orgId={orgId}
-            servers={servers}
-            serversLoading={serversQuery.isLoading}
-            relayCount={relays.length}
-            relayByServerId={relayByServerId}
-            commandByServerId={commandByServerId}
-            inFlightByServerId={inFlightByServerId}
-            applyErrors={applyErrors}
-            canManage={canManage}
-            applyDisabled={applyDisabled}
-            applyBusy={applyMutation.isPending || applyBusy}
-            eligibleGateways={eligibleGateways}
-            publicRelayIds={publicRelayIds}
-            onApply={handleApply}
-          />
+          <FabricPausedContext.Provider value={state === 'paused'}>
+            <FabricRelaysPanel
+              orgId={orgId}
+              servers={servers}
+              serversLoading={serversQuery.isLoading}
+              relayCount={relays.length}
+              relayByServerId={relayByServerId}
+              commandByServerId={commandByServerId}
+              inFlightByServerId={inFlightByServerId}
+              applyErrors={applyErrors}
+              canManage={canManage}
+              applyDisabled={applyDisabled}
+              applyBusy={applyMutation.isPending || applyBusy}
+              eligibleGateways={eligibleGateways}
+              publicRelayIds={publicRelayIds}
+              onApply={handleApply}
+            />
+          </FabricPausedContext.Provider>
           {view.showPairs ? null : <FabricPathMatrixPanel rows={pathMatrix} />}
         </>
       ) : null}
