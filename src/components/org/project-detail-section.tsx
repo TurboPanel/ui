@@ -80,6 +80,45 @@ type ProjectServiceOption = {
   alias: string | null
 }
 
+/** One service in a Hosting Account row: a Link button, or Linked with Unlink. */
+function ServiceLinkRow({
+  username,
+  label,
+  linked,
+  fromDocument,
+  disabled,
+  onToggle,
+}: Readonly<{
+  username: string
+  label: string
+  linked: boolean
+  /** The compose file names this account, so the row cannot undo the link here. */
+  fromDocument: boolean
+  disabled: boolean
+  onToggle: () => void
+}>) {
+  return (
+    <View style={styles.serviceLinkRow}>
+      <Text style={styles.serviceLinkName} numberOfLines={1}>
+        {label}
+      </Text>
+      {linked ? <Text style={styles.serviceLinkedText}>Linked</Text> : null}
+      {linked && fromDocument ? null : (
+        <Button
+          label={linked ? 'Unlink' : `Link to ${label}`}
+          size="sm"
+          variant={linked ? 'secondary' : 'primary'}
+          disabled={disabled}
+          accessibilityLabel={
+            linked ? `Unlink ${username} from ${label}` : `Link ${username} to ${label}`
+          }
+          onPress={onToggle}
+        />
+      )}
+    </View>
+  )
+}
+
 function formatServiceOptionLabel(environment: EnvironmentRecord, service: ServiceRecord): string {
   const envName = environment.name ?? 'Environment'
   const serviceName = service.name ?? service.composeServiceName ?? service.id.slice(0, 8)
@@ -493,38 +532,17 @@ export function ProjectPrincipalsSection({
                       const fromDocument = option.alias === rowAlias
                       const disabled = !canManage || savingAssignments.has(row.id)
                       return (
-                        <View key={option.id} style={styles.serviceLinkRow}>
-                          <Text style={styles.serviceLinkName} numberOfLines={1}>
-                            {option.label}
-                          </Text>
-                          {assigned ? (
-                            <>
-                              <Text style={styles.serviceLinkedText}>Linked</Text>
-                              {fromDocument ? null : (
-                                <Button
-                                  label="Unlink"
-                                  size="sm"
-                                  disabled={disabled}
-                                  accessibilityLabel={`Unlink ${row.username} from ${option.label}`}
-                                  onPress={() => {
-                                    void toggleServiceAssignment(row.id, option.id)
-                                  }}
-                                />
-                              )}
-                            </>
-                          ) : (
-                            <Button
-                              label={`Link to ${option.label}`}
-                              size="sm"
-                              variant="primary"
-                              disabled={disabled}
-                              accessibilityLabel={`Link ${row.username} to ${option.label}`}
-                              onPress={() => {
-                                void toggleServiceAssignment(row.id, option.id)
-                              }}
-                            />
-                          )}
-                        </View>
+                        <ServiceLinkRow
+                          key={option.id}
+                          username={row.username}
+                          label={option.label}
+                          linked={assigned}
+                          fromDocument={fromDocument}
+                          disabled={disabled}
+                          onToggle={() => {
+                            void toggleServiceAssignment(row.id, option.id)
+                          }}
+                        />
                       )
                     })}
                   </View>
