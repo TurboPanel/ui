@@ -708,9 +708,22 @@ export function managedNamedErrorMessage(err: unknown): string | null {
   return /\s—\s(.+)$/s.exec(raw)?.[1] ?? null
 }
 
+/**
+ * `binding_endpoint_unavailable` has two causes: no path at all (the general
+ * copy fits) and a path that only exists over an untrusted network without
+ * TurboFabric, where the server's own sentence says what to do.
+ */
+function untrustedBindingMessage(raw: string): string | null {
+  if (managedErrorCode(raw) !== 'binding_endpoint_unavailable') return null
+  const sentence = /\s—\s(.+)$/s.exec(raw)?.[1]
+  return sentence?.includes('marked untrusted') ? sentence : null
+}
+
 export function managedErrorMessage(err: unknown, fallback: string): string {
   const raw = err instanceof Error ? err.message : fallback
   const code = managedErrorCode(raw)
+  const untrustedBinding = untrustedBindingMessage(raw)
+  if (untrustedBinding) return untrustedBinding
   // These refusals say which server they are about; the general copy would
   // lose that.
   const named = managedNamedErrorMessage(err)

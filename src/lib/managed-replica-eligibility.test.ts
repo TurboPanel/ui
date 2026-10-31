@@ -366,7 +366,7 @@ describe('datacenter routing policy', () => {
     expect(result.servers[1]?.reason).toBe('untrusted-datacenter')
   })
 
-  it('predicts fabric (then public) for read replicas over an untrusted datacenter', () => {
+  it('predicts fabric for read replicas over an untrusted datacenter when both are on TurboFabric', () => {
     const withFabric = eligibility({
       servers: UNTRUSTED_SERVERS,
       datacenters: UNTRUSTED_DATACENTERS,
@@ -379,12 +379,35 @@ describe('datacenter routing policy', () => {
       candidateDatacenterId: 'dc-shared',
       predictedTransport: 'fabric',
     })
-    const withoutFabric = eligibility({
-      servers: UNTRUSTED_SERVERS,
-      datacenters: UNTRUSTED_DATACENTERS,
-      replicaClass: 'read',
+  })
+
+  it('refuses read replicas over an untrusted-only pair without TurboFabric on both servers', () => {
+    for (const fabricRelays of [
+      [],
+      [{ serverId: 'srv-primary' }],
+      [{ serverId: 'srv-candidate' }],
+    ]) {
+      const result = eligibility({
+        servers: UNTRUSTED_SERVERS,
+        datacenters: UNTRUSTED_DATACENTERS,
+        replicaClass: 'read',
+        fabricRelays,
+      })
+      expect(result.servers[1]).toEqual({
+        serverId: 'srv-candidate',
+        eligible: false,
+        reason: 'untrusted-datacenter',
+        candidateDatacenterId: 'dc-shared',
+      })
+    }
+  })
+
+  it('keeps read replicas public-eligible when the pair shares no datacenter', () => {
+    const result = eligibility({ replicaClass: 'read' })
+    expect(result.servers.find((s) => s.serverId === 'srv-no-dc')).toMatchObject({
+      eligible: true,
+      predictedTransport: 'public',
     })
-    expect(withoutFabric.servers[1]?.predictedTransport).toBe('public')
   })
 
   it('prefers a trusted shared datacenter over a lower-priority untrusted one', () => {
