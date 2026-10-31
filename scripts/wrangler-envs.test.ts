@@ -11,7 +11,12 @@ function readJsonc(file: string): unknown {
   return JSON.parse(raw.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, ''))
 }
 
-type Wrangler = { name: string; env: Record<string, { name: string; route?: { pattern: string } }> }
+type Wrangler = {
+  name: string
+  main?: string
+  assets?: { binding?: string; run_worker_first?: string[] }
+  env: Record<string, { name: string; route?: { pattern: string } }>
+}
 
 describe('wrangler environments', () => {
   const config = readJsonc('wrangler.jsonc') as Wrangler
@@ -31,6 +36,17 @@ describe('wrangler environments', () => {
     expect(new Set(names).size).toBe(names.length)
     // The top level is for local `wrangler dev` only and must not be a real Worker.
     expect(config.name).toBe('dev-ui')
+  })
+
+  it('runs the hosted UI Worker in front of the hashed bundle paths, in every environment', () => {
+    expect(config.main).toBe('worker/hosted-ui.ts')
+    expect(config.assets?.binding).toBe('ASSETS')
+    expect(config.assets?.run_worker_first).toEqual(['/_expo/static/*', '/assets/*'])
+    // Environments inherit these; an override would silently drop the Worker.
+    for (const env of Object.values(config.env)) {
+      expect(env).not.toHaveProperty('main')
+      expect(env).not.toHaveProperty('assets')
+    }
   })
 
   it('has no default deploy target: only deploy:testing, deploy:staging and deploy:live deploy', () => {
