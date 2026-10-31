@@ -1262,6 +1262,14 @@ export async function saveOrgTemperatureUnit(
 export type OrgTlsSettings = {
   /** Opt-in gate for Let's Encrypt / ACME issuance. Off by default. */
   acmeEnabled: boolean
+  /** The one address on this organization's Let's Encrypt orders; null when none is set. */
+  acmeContactEmail: string | null
+}
+
+/** Either key, or both; a key left out keeps its stored value. null or '' clears the contact. */
+export type OrgTlsSettingsPatch = {
+  acmeEnabled?: boolean
+  acmeContactEmail?: string | null
 }
 
 export async function fetchOrgTlsSettings(orgId: string): Promise<OrgTlsSettings> {
@@ -1270,7 +1278,7 @@ export async function fetchOrgTlsSettings(orgId: string): Promise<OrgTlsSettings
 
 export async function saveOrgTlsSettings(
   orgId: string,
-  patch: OrgTlsSettings
+  patch: OrgTlsSettingsPatch
 ): Promise<OrgTlsSettings> {
   return await apiFetch(`${CLIENT_API}/organizations/${orgId}/tls-settings`, {
     method: 'PUT',
