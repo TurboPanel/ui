@@ -81,6 +81,25 @@ type ProjectServiceOption = {
   alias: string | null
 }
 
+/** What a service line shows, given the compose file's say over the link. */
+function serviceLinkView(linked: boolean, fileAlias: string | null, fileNamesThisAccount: boolean) {
+  if (fileNamesThisAccount) {
+    return {
+      showLinked: true,
+      showButton: false,
+      note: 'Linked by the compose file. Edit the file to change it.',
+    }
+  }
+  if (fileAlias === null) return { showLinked: linked, showButton: true, note: null }
+  return {
+    showLinked: false,
+    showButton: linked,
+    note: linked
+      ? `Linked, but the compose file uses ${fileAlias}.`
+      : `Set by the compose file for ${fileAlias}.`,
+  }
+}
+
 /** One service in a Hosting Account row: a Link button, or Linked with Unlink. */
 function ServiceLinkRow({
   username,
@@ -101,19 +120,14 @@ function ServiceLinkRow({
   disabled: boolean
   onToggle: () => void
 }>) {
-  const fileNamesOther = fileAlias !== null && !fileNamesThisAccount
-  let note: string | null = null
-  if (fileNamesThisAccount) note = 'Linked by the compose file. Edit the file to change it.'
-  else if (fileNamesOther && linked) note = `Linked, but the compose file uses ${fileAlias}.`
-  else if (fileNamesOther) note = `Set by the compose file for ${fileAlias}.`
-  const showButton = !fileNamesThisAccount && !(fileNamesOther && !linked)
+  const view = serviceLinkView(linked, fileAlias, fileNamesThisAccount)
   return (
     <View style={styles.serviceLinkRow}>
       <Text style={styles.serviceLinkName} numberOfLines={1}>
         {label}
       </Text>
-      {linked && !fileNamesOther ? <Text style={styles.serviceLinkedText}>Linked</Text> : null}
-      {showButton ? (
+      {view.showLinked ? <Text style={styles.serviceLinkedText}>Linked</Text> : null}
+      {view.showButton ? (
         <Button
           label={linked ? 'Unlink' : 'Link'}
           size="sm"
@@ -125,7 +139,7 @@ function ServiceLinkRow({
           onPress={onToggle}
         />
       ) : null}
-      {note ? <Text style={styles.serviceLinkNote}>{note}</Text> : null}
+      {view.note ? <Text style={styles.serviceLinkNote}>{view.note}</Text> : null}
     </View>
   )
 }
