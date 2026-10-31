@@ -21,11 +21,13 @@ import {
   CHECKING_WITH_SERVER_TEXT,
   certificateStepNote,
   firstTimeSetupCaption,
+  healthStepNote,
   isCheckingWithServer,
   formatElapsed,
   progressSummary,
   stepAccessibilityLabel,
   stepNodeInfo,
+  stepTitle,
   stepsOf,
   type ProgressSummary,
   type StepNodeInfo,
@@ -304,8 +306,9 @@ function labelStyle(s: Sheet, state: string): TextStyle {
 
 /** The label with the state word where the mark alone would leave a question. */
 function labelText(step: CommandProgressStep, info: StepNodeInfo): string {
-  if (step.state === 'failed' || step.state === 'skipped') return `${step.label} · ${info.word}`
-  return step.label
+  const title = stepTitle(step.label)
+  if (step.state === 'failed' || step.state === 'skipped') return `${title} · ${info.word}`
+  return title
 }
 
 /** Wide screens: one label under each node, in the node's column. */
@@ -344,7 +347,7 @@ function Checklist({ steps }: Readonly<{ steps: readonly CommandProgressStep[] }
               ) : null}
             </View>
             <Text style={labelStyle(s, step.state)} numberOfLines={1}>
-              {step.label}
+              {stepTitle(step.label)}
             </Text>
             <Text style={s.checkWord}>{info.word}</Text>
           </View>
@@ -398,7 +401,7 @@ function counterText(summary: ProgressSummary): string {
 }
 
 function counterSpoken(summary: ProgressSummary): string {
-  if (summary.phase === 'waiting') return `Getting ready, ${summary.total} steps`
+  if (summary.phase === 'waiting') return `Getting Ready, ${summary.total} steps`
   return `Step ${summary.step} of ${summary.total}`
 }
 
@@ -457,6 +460,7 @@ export function DeployProgressRail({
 
   const caption = firstTimeSetupCaption(steps)
   const certificateNote = certificateStepNote(steps)
+  const healthNote = healthStepNote(steps)
   const detail = running?.detail?.trim()
 
   return (
@@ -494,6 +498,7 @@ export function DeployProgressRail({
       {compact ? <Checklist steps={steps} /> : <LabelRow steps={steps} />}
       {caption ? <Text style={s.caption}>{caption}</Text> : null}
       {certificateNote ? <Text style={s.caption}>{certificateNote}</Text> : null}
+      {healthNote ? <Text style={s.caption}>{healthNote}</Text> : null}
     </View>
   )
 }

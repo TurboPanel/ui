@@ -66,6 +66,29 @@ export function stepPosition(
   return countedSteps(steps).indexOf(step) + 1
 }
 
+/**
+ * Titles an older daemon sends, as the book title case this app shows. Only
+ * exact matches change, so a title the daemon already cased (or one this app
+ * has never seen, like "Install nginx") is shown as sent.
+ */
+const LEGACY_STEP_TITLES: Readonly<Record<string, string>> = {
+  'Set up the web gateway': 'Set Up the Web Gateway',
+  'Install the build tool': 'Install the Build Tool',
+  'Fetch the code': 'Fetch the Source Code',
+  'Start the new release': 'Start the New Release',
+  'Start the app': 'Start the App',
+  'Set up certificates': 'Set Up Certificates',
+  'Check it answers': 'Check Service Health',
+  'Switch traffic': 'Switch Traffic',
+  'Stop the old release': 'Stop the Old Release',
+}
+
+/** A step title as shown: an older daemon's wording becomes the current title. */
+export function stepTitle(label: string): string {
+  const trimmed = label.trim()
+  return LEGACY_STEP_TITLES[trimmed] ?? trimmed
+}
+
 const GERUNDS: Readonly<Record<string, string>> = {
   Install: 'Installing',
   Fetch: 'Fetching',
@@ -82,11 +105,11 @@ const GERUNDS: Readonly<Record<string, string>> = {
 
 /**
  * The label as something happening now: "Install Docker" reads "Installing
- * Docker", "Set up certificates" reads "Setting up certificates". A label
+ * Docker", "Set Up Certificates" reads "Setting Up Certificates". A label
  * whose first word is not a known verb is returned unchanged.
  */
 export function gerundLabel(label: string): string {
-  const trimmed = label.trim()
+  const trimmed = stepTitle(label)
   const space = trimmed.indexOf(' ')
   const first = space === -1 ? trimmed : trimmed.slice(0, space)
   const gerund = GERUNDS[first]
@@ -143,7 +166,7 @@ export type ProgressSummary = Readonly<{
   step: number
   /** Steps the server has to do (not `ready`). */
   total: number
-  /** The step name line: "Installing Docker", "All 7 steps done · 03:12", "Failed at step 4 of 7 · Build". */
+  /** The step name line: "Installing Docker", "All 7 Steps Done · 03:12", "Failed at Step 4 of 7 · Build". */
   title: string
   /** The step the title is about, when there is one. */
   focus: CommandProgressStep | null
@@ -176,7 +199,7 @@ export function progressSummary(progress: ProgressLike | null | undefined): Prog
       phase: 'failed',
       step: at,
       total,
-      title: `Failed at step ${at} of ${total} · ${failed.label}`,
+      title: `Failed at Step ${at} of ${total} · ${stepTitle(failed.label)}`,
       focus: failed,
     }
   }
@@ -187,7 +210,7 @@ export function progressSummary(progress: ProgressLike | null | undefined): Prog
       phase: 'done',
       step: total,
       total,
-      title: `All ${total} steps done${time}`,
+      title: `All ${total} Steps Done${time}`,
       focus: null,
     }
   }
@@ -196,11 +219,11 @@ export function progressSummary(progress: ProgressLike | null | undefined): Prog
       phase: 'stopped',
       step: done,
       total,
-      title: `Stopped after step ${done} of ${total}`,
+      title: `Stopped After Step ${done} of ${total}`,
       focus: null,
     }
   }
-  return { phase: 'waiting', step: 0, total, title: 'Getting ready', focus: counted[0] ?? null }
+  return { phase: 'waiting', step: 0, total, title: 'Getting Ready', focus: counted[0] ?? null }
 }
 
 /** The line a single-line surface shows: "Step 3 of 7 · Installing Docker". Null until a step is counted. */
@@ -251,7 +274,7 @@ export function activityStepText(
   )
 }
 
-export const CHECKING_WITH_SERVER_LABEL = 'Checking with the server'
+export const CHECKING_WITH_SERVER_LABEL = 'Checking with the Server'
 
 export const CHECKING_WITH_SERVER_TEXT =
   'Lost contact with the server during the deploy. TurboPanel is checking whether it finished and will update this page. The deploy has not failed.'
@@ -300,6 +323,23 @@ export function certificateStepNote(
   return detail || null
 }
 
+/**
+ * The line the health step left when it ended: how long the service took to
+ * answer, with the time it did, or why it did not. Null while it runs or when
+ * it said nothing.
+ */
+export function healthStepNote(
+  steps: readonly CommandProgressStep[] | null | undefined
+): string | null {
+  const step = stepsOf({ steps }).find((entry) => entry.id === 'health')
+  const ended = step?.state === 'done' || step?.state === 'failed'
+  const detail = ended ? step.detail?.trim() : undefined
+  if (!detail) return null
+  const at = step?.state === 'done' && step.finishedAt ? new Date(step.finishedAt) : null
+  if (at === null || Number.isNaN(at.getTime())) return detail
+  return `${detail} (at ${at.toLocaleTimeString()})`
+}
+
 export type StepNodeInfo = Readonly<{
   /** The state in a word, read beside the label ("Install Docker: done"). */
   word: string
@@ -333,8 +373,8 @@ export function stepAccessibilityLabel(
 ): string {
   const info = stepNodeInfo(step.state)
   const position = stepPosition(steps, step)
-  if (position === 0) return `${step.label}, ${info.word}`
-  return `Step ${position} of ${countedSteps(steps).length}, ${step.label}, ${info.word}`
+  if (position === 0) return `${stepTitle(step.label)}, ${info.word}`
+  return `Step ${position} of ${countedSteps(steps).length}, ${stepTitle(step.label)}, ${info.word}`
 }
 
 /** `03` for the mono counter: two digits, more when the plan is that long. */

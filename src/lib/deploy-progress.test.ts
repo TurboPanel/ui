@@ -19,6 +19,8 @@ import {
   stepCountText,
   stepNodeInfo,
   stepPosition,
+  stepTitle,
+  healthStepNote,
   stepsOf,
   WAITING_FOR_BUILD_TEXT,
 } from '@/lib/deploy-progress'
@@ -35,28 +37,36 @@ function step(
 
 const FRESH_HOST: CommandProgressStep[] = [
   step('install-docker', 'Install Docker', 'done'),
-  step('install-gateway', 'Set up the web gateway', 'ready'),
+  step('install-gateway', 'Set Up the Web Gateway', 'ready'),
   step('install-runtime:node-22', 'Install Node 22', 'running', { detail: 'Unpack the archive' }),
-  step('fetch', 'Fetch the code', 'pending'),
+  step('fetch', 'Fetch the Source Code', 'pending'),
   step('build', 'Build', 'pending'),
-  step('start', 'Start the app', 'pending'),
-  step('health', 'Check it answers', 'pending'),
+  step('start', 'Start the App', 'pending'),
+  step('health', 'Check Service Health', 'pending'),
 ]
 
 describe('gerundLabel', () => {
   it.each([
     ['Install Docker', 'Installing Docker'],
-    ['Fetch the code', 'Fetching the code'],
+    ['Fetch the Source Code', 'Fetching the Source Code'],
     ['Build', 'Building'],
-    ['Start the app', 'Starting the app'],
-    ['Check it answers', 'Checking it answers'],
-    ['Set up certificates', 'Setting up certificates'],
+    ['Start the App', 'Starting the App'],
+    ['Check Service Health', 'Checking Service Health'],
+    ['Set Up Certificates', 'Setting Up Certificates'],
     ['Install PHP 8.3', 'Installing PHP 8.3'],
-    ['Start the new release', 'Starting the new release'],
-    ['Switch traffic', 'Switching traffic'],
-    ['Stop the old release', 'Stopping the old release'],
+    ['Start the New Release', 'Starting the New Release'],
+    ['Switch Traffic', 'Switching Traffic'],
+    ['Stop the Old Release', 'Stopping the Old Release'],
   ])('turns %s into %s', (label, expected) => {
     expect(gerundLabel(label)).toBe(expected)
+  })
+
+  it("shows an older daemon's wording as the current title", () => {
+    expect(gerundLabel('Check it answers')).toBe('Checking Service Health')
+    expect(gerundLabel('Set up certificates')).toBe('Setting Up Certificates')
+    expect(stepTitle('Fetch the code')).toBe('Fetch the Source Code')
+    expect(stepTitle('Install nginx')).toBe('Install nginx')
+    expect(stepTitle('  Build ')).toBe('Build')
   })
 
   it('leaves a label with an unknown first word alone, trimmed', () => {
@@ -131,15 +141,15 @@ describe('progressSummary', () => {
     const steps = [
       step('install-docker', 'Install Docker', 'done'),
       step('build', 'Build', 'failed'),
-      step('start', 'Start the app', 'skipped'),
+      step('start', 'Start the App', 'skipped'),
     ]
     expect(progressSummary({ steps, current: null })).toMatchObject({
       phase: 'failed',
       step: 2,
       total: 3,
-      title: 'Failed at step 2 of 3 · Build',
+      title: 'Failed at Step 2 of 3 · Build',
     })
-    expect(progressHeadline({ steps, current: null })).toBe('Failed at step 2 of 3 · Build')
+    expect(progressHeadline({ steps, current: null })).toBe('Failed at Step 2 of 3 · Build')
   })
 
   it('reads done with the time it took, stopped, and getting ready', () => {
@@ -148,7 +158,7 @@ describe('progressSummary', () => {
         startedAt: '2026-10-12T10:00:00Z',
         finishedAt: '2026-10-12T10:01:00Z',
       }),
-      step('start', 'Start the app', 'done', {
+      step('start', 'Start the App', 'done', {
         startedAt: '2026-10-12T10:01:00Z',
         finishedAt: '2026-10-12T10:03:12Z',
       }),
@@ -157,23 +167,23 @@ describe('progressSummary', () => {
       phase: 'done',
       step: 2,
       total: 2,
-      title: 'All 2 steps done · 03:12',
+      title: 'All 2 Steps Done · 03:12',
     })
     expect(
       progressSummary({
-        steps: [step('build', 'Build', 'done'), step('start', 'Start the app', 'done')],
+        steps: [step('build', 'Build', 'done'), step('start', 'Start the App', 'done')],
       })?.title
-    ).toBe('All 2 steps done')
+    ).toBe('All 2 Steps Done')
     expect(
       progressSummary({
-        steps: [step('build', 'Build', 'done'), step('start', 'Start the app', 'skipped')],
+        steps: [step('build', 'Build', 'done'), step('start', 'Start the App', 'skipped')],
       })
-    ).toMatchObject({ phase: 'stopped', step: 1, total: 2, title: 'Stopped after step 1 of 2' })
+    ).toMatchObject({ phase: 'stopped', step: 1, total: 2, title: 'Stopped After Step 1 of 2' })
     expect(
       progressSummary({
-        steps: [step('build', 'Build', 'pending'), step('start', 'Start the app', 'pending')],
+        steps: [step('build', 'Build', 'pending'), step('start', 'Start the App', 'pending')],
       })
-    ).toMatchObject({ phase: 'waiting', step: 0, total: 2, title: 'Getting ready' })
+    ).toMatchObject({ phase: 'waiting', step: 0, total: 2, title: 'Getting Ready' })
   })
 
   it('has nothing to say when every step was already there', () => {
@@ -246,7 +256,7 @@ describe('firstTimeSetupCaption', () => {
         step('build', 'Build', 'skipped'),
       ])
     ).toBeNull()
-    expect(firstTimeSetupCaption([step('fetch', 'Fetch the code', 'pending')])).toBeNull()
+    expect(firstTimeSetupCaption([step('fetch', 'Fetch the Source Code', 'pending')])).toBeNull()
   })
 })
 
@@ -338,7 +348,7 @@ describe('step nodes', () => {
       'Step 2 of 6, Install Node 22, in progress'
     )
     expect(stepAccessibilityLabel(FRESH_HOST, FRESH_HOST[1]!)).toBe(
-      'Set up the web gateway, already on this server'
+      'Set Up the Web Gateway, already on this server'
     )
   })
 })
@@ -371,14 +381,14 @@ describe('certificateStepNote', () => {
     steps: [
       {
         id: 'start',
-        label: 'Start the app',
+        label: 'Start the App',
         state: 'done' as const,
         startedAt: '2026-10-29T10:00:00.000Z',
         finishedAt: '2026-10-29T10:00:05.000Z',
       },
       {
         id: 'certificates',
-        label: 'Set up certificates',
+        label: 'Set Up Certificates',
         state: 'done' as const,
         startedAt: '2026-10-29T10:00:05.000Z',
         finishedAt: '2026-10-29T10:00:06.000Z',
@@ -386,7 +396,7 @@ describe('certificateStepNote', () => {
       },
       {
         id: 'health',
-        label: 'Check it answers',
+        label: 'Check Service Health',
         state: 'running' as const,
         startedAt: '2026-10-29T10:00:06.000Z',
       },
@@ -407,5 +417,37 @@ describe('certificateStepNote', () => {
     const silent = sent.steps.map(({ detail: _detail, ...step }) => step)
     expect(certificateStepNote(silent)).toBeNull()
     expect(certificateStepNote(undefined)).toBeNull()
+  })
+})
+
+describe('healthStepNote', () => {
+  const health = (state: CommandProgressStepState, detail?: string) =>
+    step('health', 'Service Is Healthy', state, detail ? { detail } : undefined)
+
+  it('is the line the health step left once it ended', () => {
+    expect(healthStepNote([health('done', ' Healthy after 12 s ')])).toBe('Healthy after 12 s')
+    expect(healthStepNote([health('failed', 'Did not become healthy within 120 s')])).toBe(
+      'Did not become healthy within 120 s'
+    )
+  })
+
+  it('adds the time the service first answered', () => {
+    const finishedAt = '2026-10-12T10:00:12.000Z'
+    const note = healthStepNote([
+      {
+        id: 'health',
+        label: 'Service Is Healthy',
+        state: 'done',
+        detail: 'Healthy after 12 s',
+        finishedAt,
+      },
+    ])
+    expect(note).toBe(`Healthy after 12 s (at ${new Date(finishedAt).toLocaleTimeString()})`)
+  })
+
+  it('is null while the step runs, when it said nothing, or without a plan', () => {
+    expect(healthStepNote([health('running', 'Attempt 2, 4 s of up to 120 s')])).toBeNull()
+    expect(healthStepNote([health('done')])).toBeNull()
+    expect(healthStepNote(null)).toBeNull()
   })
 })

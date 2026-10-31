@@ -66,9 +66,9 @@ const LINES = [
 ]
 
 const PLAN: CommandProgressStep[] = [
-  { id: 'fetch', label: 'Fetch the code', state: 'done' },
+  { id: 'fetch', label: 'Fetch the Source Code', state: 'done' },
   { id: 'build', label: 'Build', state: 'failed' },
-  { id: 'start', label: 'Start the app', state: 'skipped' },
+  { id: 'start', label: 'Start the App', state: 'skipped' },
 ]
 
 function renderViewer(overrides?: Partial<Parameters<typeof LogViewer>[0]>) {
@@ -94,7 +94,7 @@ describe('LogViewer', () => {
     renderViewer()
     expect(shownText()).toContain('Build failed: exited with code 1')
     expect(shownText()).not.toContain('Checked out 1a2b3c4')
-    expect(shownText()).toContain('Start the app')
+    expect(shownText()).toContain('Start the App')
   })
 
   it('search reaches into a closed step and Only matching hides context', async () => {
@@ -122,12 +122,12 @@ describe('LogViewer', () => {
       lines: [line('Compiling', 'build'), line('200 OK', 'health')],
       plan: [
         { id: 'build', label: 'Build', state: 'done' },
-        { id: 'certificates', label: 'Set up certificates', state: 'done', detail: note },
-        { id: 'health', label: 'Check it answers', state: 'done' },
+        { id: 'certificates', label: 'Set Up Certificates', state: 'done', detail: note },
+        { id: 'health', label: 'Check Service Health', state: 'done' },
       ],
       commandStatus: 'succeeded',
     })
-    expect(shownText()).toContain('Set up certificates')
+    expect(shownText()).toContain('Set Up Certificates')
     expect(shownText()).toContain(note)
   })
 
