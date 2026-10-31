@@ -76,6 +76,18 @@ function aliasOwnedServiceNames(document: ComposeDocument | null | undefined): S
   return owned
 }
 
+/** The alias a document's service names in `x-turbopanel.principal`, if any. */
+export function servicePrincipalAlias(
+  document: ComposeDocument | null | undefined,
+  composeServiceName: string | null | undefined
+): string | null {
+  const services = document?.data?.services
+  if (!composeServiceName || typeof services !== 'object' || services === null) return null
+  const raw = (services as Record<string, unknown>)[composeServiceName]
+  if (typeof raw !== 'object' || raw === null) return null
+  return readServiceTurbopanelExtension(raw as Record<string, unknown>)?.principal ?? null
+}
+
 /**
  * Of those, the ones with nobody to own them.
  *

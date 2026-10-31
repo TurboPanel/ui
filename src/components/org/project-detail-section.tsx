@@ -36,6 +36,7 @@ import {
   declaredAccountsWithoutRows,
   knownAccountNames,
   planAccountDeclaration,
+  servicePrincipalAlias,
 } from '@/lib/compose/principal-required'
 import { unownedSitesAcrossDocuments } from '@/lib/compose/managed-directory-sites'
 import {
@@ -75,6 +76,8 @@ import { userErrorMessage } from '@/lib/user-error'
 type ProjectServiceOption = {
   id: string
   label: string
+  /** Lowercase compose account alias the service names, if any. */
+  alias: string | null
 }
 
 function formatServiceOptionLabel(environment: EnvironmentRecord, service: ServiceRecord): string {
@@ -228,15 +231,24 @@ export function ProjectPrincipalsSection({
     for (const env of environments) {
       const services = servicesByEnvQuery.servicesByEnv[env.id] ?? []
       for (const service of services) {
+        // The compose alias wins over serviceIds at deploy, so a service whose
+        // document names an account is linked to it whatever the row says.
+        const alias =
+          servicePrincipalAlias(env.options?.compose, service.composeServiceName) ??
+          servicePrincipalAlias(
+            projectQuery.data?.project?.options?.compose,
+            service.composeServiceName
+          )
         flat.push({
           id: service.id,
           label: formatServiceOptionLabel(env, service),
+          alias: alias?.toLowerCase() ?? null,
         })
       }
     }
     flat.sort((a, b) => a.label.localeCompare(b.label))
     return flat
-  }, [environments, servicesByEnvQuery.servicesByEnv])
+  }, [environments, servicesByEnvQuery.servicesByEnv, projectQuery.data])
 
   const [error, setError] = useState<string | null>(null)
   const [username, setUsername] = useState('')
@@ -473,27 +485,46 @@ export function ProjectPrincipalsSection({
                   <Text style={panelStyles.detailLabel}>Services</Text>
                   <View style={styles.serviceChipRow}>
                     {serviceOptions.map((option) => {
-                      const assigned = row.serviceIds.includes(option.id)
+                      const rowAlias = (row.metadata?.composeAlias ?? row.username).toLowerCase()
+                      const assigned =
+                        row.serviceIds.includes(option.id) || option.alias === rowAlias
+                      // A document that names this account owns the link; the row
+                      // cannot undo it from here.
+                      const fromDocument = option.alias === rowAlias
                       const disabled = !canManage || savingAssignments.has(row.id)
                       return (
-                        <Pressable
-                          key={option.id}
-                          disabled={disabled}
-                          style={[
-                            styles.serviceChip,
-                            assigned && styles.serviceChipOn,
-                            disabled && styles.buttonDisabled,
-                          ]}
-                          onPress={() => {
-                            void toggleServiceAssignment(row.id, option.id)
-                          }}
-                        >
-                          <Text
-                            style={[styles.serviceChipText, assigned && styles.serviceChipTextOn]}
-                          >
+                        <View key={option.id} style={styles.serviceLinkRow}>
+                          <Text style={styles.serviceLinkName} numberOfLines={1}>
                             {option.label}
                           </Text>
-                        </Pressable>
+                          {assigned ? (
+                            <>
+                              <Text style={styles.serviceLinkedText}>Linked</Text>
+                              {fromDocument ? null : (
+                                <Button
+                                  label="Unlink"
+                                  size="sm"
+                                  disabled={disabled}
+                                  accessibilityLabel={`Unlink ${row.username} from ${option.label}`}
+                                  onPress={() => {
+                                    void toggleServiceAssignment(row.id, option.id)
+                                  }}
+                                />
+                              )}
+                            </>
+                          ) : (
+                            <Button
+                              label={`Link to ${option.label}`}
+                              size="sm"
+                              variant="primary"
+                              disabled={disabled}
+                              accessibilityLabel={`Link ${row.username} to ${option.label}`}
+                              onPress={() => {
+                                void toggleServiceAssignment(row.id, option.id)
+                              }}
+                            />
+                          )}
+                        </View>
                       )
                     })}
                   </View>
@@ -1159,28 +1190,21 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   serviceChipRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: spacing.xs,
   },
-  serviceChip: {
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-    borderRadius: 6,
-    backgroundColor: colors.bgSecondary,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+  serviceLinkRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: spacing.sm,
   },
-  serviceChipOn: {
-    borderColor: chrome.accent,
-    backgroundColor: chrome.bgActive,
-  },
-  serviceChipText: {
+  serviceLinkName: {
     color: colors.textMuted,
     fontSize: 12,
   },
-  serviceChipTextOn: {
+  serviceLinkedText: {
     color: colors.link,
+    fontSize: 12,
     fontWeight: '600',
   },
   principalForm: {
