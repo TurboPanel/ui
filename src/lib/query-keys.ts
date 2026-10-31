@@ -163,6 +163,7 @@ export const queryKeys = {
         /** PHP modes the organization offers (`/organizations/:id/php-modes`). */
         phpModes: ['org', orgId, 'php-modes'] as const,
         defaultEnvironment: ['org', orgId, 'default-environment'] as const,
+        deployTimeout: ['org', orgId, 'deploy-timeout'] as const,
         /** New-project form switches (`/organizations/:id/project-settings`). */
         projectSettings: ['org', orgId, 'project-settings'] as const,
         /**
