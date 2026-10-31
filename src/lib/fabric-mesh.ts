@@ -157,6 +157,10 @@ export type FabricPathMatrixRow = {
   latencyMs?: number
   lastHandshakeAt?: string
   degraded: boolean
+  /** When the `from` server last reported; absent on an older control plane. */
+  observedAt?: string
+  /** The `from` server is switched off or the mesh is paused: its reading says nothing about the tunnel. */
+  inactive?: boolean
 }
 
 export function fabricPathKindLabel(kind: FabricRelayPathKind): FabricPathKindLabel {
@@ -231,12 +235,16 @@ function comparePathMatrixRows(a: FabricPathMatrixRow, b: FabricPathMatrixRow): 
  */
 export function buildFabricPathMatrix(
   relays: readonly RelayRecord[],
-  serverNameById: ReadonlyMap<string, string>
+  serverNameById: ReadonlyMap<string, string>,
+  inactiveServerIds: ReadonlySet<string> = new Set()
 ): FabricPathMatrixRow[] {
   const rows: FabricPathMatrixRow[] = []
   for (const relay of relays) {
     for (const path of relay.paths) {
-      rows.push(fabricPathMatrixRow(relay.serverId, path, serverNameById))
+      const row = fabricPathMatrixRow(relay.serverId, path, serverNameById)
+      if (relay.observedAt) row.observedAt = relay.observedAt
+      if (inactiveServerIds.has(relay.serverId)) row.inactive = true
+      rows.push(row)
     }
   }
   rows.sort(comparePathMatrixRows)
@@ -271,18 +279,82 @@ export type FabricPairRow = {
   warning?: string
 }
 
+/** A reading counts only from a server that is in the mesh and reported lately. */
+function readingIsCurrent(row: FabricPathMatrixRow, nowMs: number): boolean {
+  if (row.inactive) return false
+  const at = row.observedAt ? Date.parse(row.observedAt) : Number.NaN
+  // An older control plane sends no reading time: nothing to check it against.
+  if (Number.isNaN(at)) return true
+  return nowMs - at <= FABRIC_OBSERVATION_MAX_AGE_MS
+}
+
+/**
+ * A tunnel is one wire with two ends. A server that cannot dial the other
+ * (it sits behind NAT) reads "unreachable" from its own side while the other
+ * end connects out to it fine, so that reading only counts when no other
+ * current reading for the pair says the tunnel is up. A silent, switched-off
+ * or paused server's last reading proves nothing, so it never hides the warning.
+ */
 function tunnelReading(
   pair: OrgFabricPairRecord,
-  matrix: readonly FabricPathMatrixRow[]
+  matrix: readonly FabricPathMatrixRow[],
+  nowMs: number
 ): FabricPathMatrixRow | undefined {
-  return (
-    matrix.find(
-      (row) => row.fromServerId === pair.fromServerId && row.toServerId === pair.toServerId
-    ) ??
-    matrix.find(
-      (row) => row.fromServerId === pair.toServerId && row.toServerId === pair.fromServerId
-    )
+  const forward = matrix.find(
+    (row) => row.fromServerId === pair.fromServerId && row.toServerId === pair.toServerId
   )
+  const backward = matrix.find(
+    (row) => row.fromServerId === pair.toServerId && row.toServerId === pair.fromServerId
+  )
+  for (const row of [forward, backward]) {
+    if (row && row.kind !== 'unreachable' && readingIsCurrent(row, nowMs)) return row
+  }
+  if (forward?.kind === 'unreachable') return forward
+  if (backward?.kind === 'unreachable') return backward
+  return forward ?? backward
+}
+
+/**
+ * A session with no new handshake for this long is dead: WireGuard renews one
+ * after 120 s of traffic and drops it after 180 s (15 s margin for the poll).
+ * Same limit as the control plane and the daemon.
+ */
+export const FABRIC_HANDSHAKE_HEALTHY_MS = 195_000
+
+/**
+ * A reading older than this says nothing about now: a steady mesh is read
+ * every 5 minutes, plus 2 minutes of margin.
+ */
+export const FABRIC_OBSERVATION_MAX_AGE_MS = 7 * 60_000
+
+/** What the latest reading says about a peer's handshake. */
+export type FabricHandshakeReading = 'fresh' | 'stale' | 'unreported'
+
+/**
+ * Judge a peer's last handshake against the moment the server took its
+ * reading, not against now: an idle tunnel only renews its handshake every
+ * couple of minutes, and the reading itself may be a few minutes old.
+ * `stale` is a handshake that was already too old when the reading was taken
+ * (or has never happened). `unreported` is a reading too old to say anything:
+ * the server has stopped reporting, which is its own warning, never a quiet
+ * "fine".
+ */
+export function fabricHandshakeReading(
+  lastHandshakeAt: string | null | undefined,
+  observedAt: string | null | undefined,
+  nowMs: number
+): FabricHandshakeReading {
+  if (!lastHandshakeAt) return 'stale'
+  const handshake = Date.parse(lastHandshakeAt)
+  if (Number.isNaN(handshake)) return 'stale'
+  const reading = observedAt ? Date.parse(observedAt) : Number.NaN
+  if (Number.isNaN(reading)) {
+    // An older control plane sends no reading time: allow for its lag too.
+    const limit = FABRIC_HANDSHAKE_HEALTHY_MS + FABRIC_OBSERVATION_MAX_AGE_MS
+    return nowMs - handshake > limit ? 'stale' : 'fresh'
+  }
+  if (nowMs - reading > FABRIC_OBSERVATION_MAX_AGE_MS) return 'unreported'
+  return reading - handshake > FABRIC_HANDSHAKE_HEALTHY_MS ? 'stale' : 'fresh'
 }
 
 function tunnelWarning(row: FabricPathMatrixRow): string | undefined {
@@ -291,17 +363,27 @@ function tunnelWarning(row: FabricPathMatrixRow): string | undefined {
   return undefined
 }
 
+/** What the page shows for a pair's tunnel: the reading and nothing more while the mesh is paused or off. */
+export type FabricReadingContext = Readonly<{ nowMs: number; quiet: boolean }>
+
+function currentReadingContext(): FabricReadingContext {
+  return { nowMs: Date.now(), quiet: false }
+}
+
 function tunnelFields(
   pair: OrgFabricPairRecord,
-  matrix: readonly FabricPathMatrixRow[]
+  matrix: readonly FabricPathMatrixRow[],
+  context: FabricReadingContext
 ): Partial<FabricPairRow> {
   if (!fabricPairUsesTunnel(pair.path)) return {}
-  const row = tunnelReading(pair, matrix)
+  const row = tunnelReading(pair, matrix, context.nowMs)
   if (!row) return {}
   const fields: Partial<FabricPairRow> = {}
   if (row.kind !== 'unreachable' && row.latencyMs !== undefined) fields.latencyMs = row.latencyMs
   if (row.viaLabel) fields.viaLabel = row.viaLabel
-  const warning = tunnelWarning(row)
+  // A paused or switched-off mesh has no tunnel to warn about; that is the user's choice.
+  if (context.quiet) return fields
+  const warning = readingIsCurrent(row, context.nowMs) ? tunnelWarning(row) : 'Not Reporting'
   if (warning) fields.warning = warning
   return fields
 }
@@ -310,7 +392,8 @@ function pairRow(
   pair: OrgFabricPairRecord,
   key: string,
   title: string,
-  matrix: readonly FabricPathMatrixRow[]
+  matrix: readonly FabricPathMatrixRow[],
+  context: FabricReadingContext
 ): FabricPairRow {
   return {
     key,
@@ -318,7 +401,7 @@ function pairRow(
     path: pair.path,
     pathLabel: fabricPairPathLabel(pair.path),
     reason: pair.reason,
-    ...tunnelFields(pair, matrix),
+    ...tunnelFields(pair, matrix, context),
   }
 }
 
@@ -334,14 +417,17 @@ function comparePairRows(a: FabricPairRow, b: FabricPairRow): number {
 export function buildFabricPairRows(
   pairs: readonly OrgFabricPairRecord[],
   matrix: readonly FabricPathMatrixRow[],
-  serverNameById: ReadonlyMap<string, string>
+  serverNameById: ReadonlyMap<string, string>,
+  context?: FabricReadingContext
 ): FabricPairRow[] {
+  const reading = context ?? currentReadingContext()
   const rows = pairs.map((pair) =>
     pairRow(
       pair,
       `${pair.fromServerId}:${pair.toServerId}`,
       `${serverLabel(pair.fromServerId, serverNameById)} ↔ ${serverLabel(pair.toServerId, serverNameById)}`,
-      matrix
+      matrix,
+      reading
     )
   )
   return rows.sort(comparePairRows)
@@ -355,17 +441,36 @@ export function buildServerPairRows(
   serverId: string,
   pairs: readonly OrgFabricPairRecord[],
   matrix: readonly FabricPathMatrixRow[],
-  serverNameById: ReadonlyMap<string, string>
+  serverNameById: ReadonlyMap<string, string>,
+  context?: FabricReadingContext
 ): FabricPairRow[] {
+  const reading = context ?? currentReadingContext()
   const rows: FabricPairRow[] = []
   for (const pair of pairs) {
     let otherId: string | null = null
     if (pair.fromServerId === serverId) otherId = pair.toServerId
     else if (pair.toServerId === serverId) otherId = pair.fromServerId
     if (!otherId) continue
-    rows.push(pairRow(pair, otherId, serverLabel(otherId, serverNameById), matrix))
+    rows.push(pairRow(pair, otherId, serverLabel(otherId, serverNameById), matrix, reading))
   }
   return rows.sort(comparePairRows)
+}
+
+/** True while the whole mesh is paused or off: no tunnel is expected, so none is warned about. */
+export function fabricIsQuiet(
+  fabric: Partial<Pick<OrgFabricSettings, 'enabled' | 'paused'>>
+): boolean {
+  return fabric.paused === true || fabric.enabled === false
+}
+
+/** Servers switched out of the mesh: their last reading says nothing about the tunnel now. */
+export function fabricInactiveServerIds(
+  fabric: Pick<OrgFabricSettings, 'servers' | 'relays'> &
+    Partial<Pick<OrgFabricSettings, 'enabled' | 'paused'>>
+): Set<string> {
+  if (fabric.paused === true || fabric.enabled === false)
+    return new Set(fabric.relays.map((row) => row.serverId))
+  return new Set(fabric.servers.filter((row) => !row.enabled).map((row) => row.serverId))
 }
 
 /**
@@ -375,12 +480,18 @@ export function buildServerPairRows(
  */
 export function fabricServerPairRows(
   serverId: string,
-  fabric: Pick<OrgFabricSettings, 'pairs' | 'servers' | 'relays'> | undefined
+  fabric:
+    | (Pick<OrgFabricSettings, 'pairs' | 'servers' | 'relays'> &
+        Partial<Pick<OrgFabricSettings, 'enabled' | 'paused'>>)
+    | undefined
 ): FabricPairRow[] {
   if (!fabric?.pairs) return []
   const nameById = new Map(fabric.servers.map((row) => [row.serverId, row.name]))
-  const matrix = buildFabricPathMatrix(fabric.relays, nameById)
-  return buildServerPairRows(serverId, fabric.pairs, matrix, nameById)
+  const matrix = buildFabricPathMatrix(fabric.relays, nameById, fabricInactiveServerIds(fabric))
+  return buildServerPairRows(serverId, fabric.pairs, matrix, nameById, {
+    nowMs: Date.now(),
+    quiet: fabricIsQuiet(fabric),
+  })
 }
 
 /**

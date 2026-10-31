@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { panelStyles } from '@/components/ui/panel-styles'
@@ -20,7 +20,7 @@ import {
   fetchOrgHostDefaults,
   type CommandStatus,
   type FabricRelaySegment,
-  type OrgFabricPairRecord,
+  type OrgFabricSettings,
   type OrgFabricServerRecord,
   type OrgServerRecord,
   type RelayRecord,
@@ -29,6 +29,9 @@ import {
 import {
   buildFabricPairRows,
   buildFabricPathMatrix,
+  fabricHandshakeReading,
+  fabricInactiveServerIds,
+  fabricIsQuiet,
   fabricPathIsDegraded,
   fabricPathKindLabel,
   formatResolvedAdvertisedCidrs,
@@ -68,8 +71,6 @@ import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
 import { useCanState, queryKeys } from '@/lib/query-client'
 import { colors, spacing, webPointer } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
-
-const HANDSHAKE_STALE_MS = 3 * 60 * 1000
 
 function fabricStatusLabel(state: FabricState, status?: string): string {
   if (state !== 'on') return fabricStateLabel(state)
@@ -152,13 +153,6 @@ function parseKeepaliveDraft(
     }
   }
   return { ok: true, value: parsed }
-}
-
-function handshakeIsStale(lastHandshakeAt: string | null): boolean {
-  if (!lastHandshakeAt) return true
-  const then = Date.parse(lastHandshakeAt)
-  if (Number.isNaN(then)) return true
-  return Date.now() - then > HANDSHAKE_STALE_MS
 }
 
 function queuedApplyEntries(
@@ -493,12 +487,29 @@ function RolePicker({
   )
 }
 
-function HandshakeLine({ lastHandshakeAt }: Readonly<{ lastHandshakeAt: string | null }>) {
-  const stale = handshakeIsStale(lastHandshakeAt)
+/** How often the screen re-reads the clock to judge how old a reading is. */
+const CLOCK_TICK_MS = 30_000
+
+/** The current time, refreshed on an interval, so an age judged against it keeps moving. */
+function useNowMs(intervalMs: number): number {
+  const [nowMs, setNowMs] = useState(() => Date.now())
+  useEffect(() => {
+    const timer = setInterval(() => setNowMs(Date.now()), intervalMs)
+    return () => clearInterval(timer)
+  }, [intervalMs])
+  return nowMs
+}
+
+function HandshakeLine({
+  lastHandshakeAt,
+  observedAt,
+}: Readonly<{ lastHandshakeAt: string | null; observedAt?: string }>) {
+  const nowMs = useNowMs(CLOCK_TICK_MS)
+  const reading = fabricHandshakeReading(lastHandshakeAt, observedAt, nowMs)
   const label = formatRelativeLocalDateTime(lastHandshakeAt, {
     neverLabel: 'Never',
   })
-  if (!stale) {
+  if (reading === 'fresh') {
     return (
       <Text style={panelStyles.detailLine}>
         <Text style={panelStyles.detailLabel}>Last handshake: </Text>
@@ -506,13 +517,14 @@ function HandshakeLine({ lastHandshakeAt }: Readonly<{ lastHandshakeAt: string |
       </Text>
     )
   }
+  let warning = `Last handshake stale — ${label}`
+  if (!lastHandshakeAt) warning = 'Not converged yet — no handshake observed'
+  else if (reading === 'unreported') {
+    warning = `This server has not reported lately. Last handshake it saw: ${label}`
+  }
   return (
     <View style={panelStyles.calloutWarning}>
-      <Text style={panelStyles.calloutWarningText}>
-        {lastHandshakeAt
-          ? `Last handshake stale — ${label}`
-          : 'Not converged yet — no handshake observed'}
-      </Text>
+      <Text style={panelStyles.calloutWarningText}>{warning}</Text>
     </View>
   )
 }
@@ -721,7 +733,7 @@ function RelayConfiguredFields({
         <Text style={panelStyles.detailLabel}>Preshared key: </Text>
         {relay.hasPresharedKey ? 'Present' : 'Not set'}
       </Text>
-      <HandshakeLine lastHandshakeAt={relay.lastHandshakeAt} />
+      <HandshakeLine lastHandshakeAt={relay.lastHandshakeAt} observedAt={relay.observedAt} />
       {canManage ? (
         <RelayPresharedKeyField
           draft={pskDraft}
@@ -1070,13 +1082,16 @@ function isFabricApplyDisabled(
 
 /** Server pairs from the panel's `pairs[]` (empty on an older panel), with tunnel readings folded in. */
 function useFabricPairRows(
-  pairs: OrgFabricPairRecord[] | undefined,
+  fabric: OrgFabricSettings | undefined,
   pathMatrix: Parameters<typeof buildFabricPairRows>[1],
   serverNameById: Parameters<typeof buildFabricPairRows>[2]
 ): FabricPairRow[] {
+  const nowMs = useNowMs(CLOCK_TICK_MS)
+  const quiet = fabric ? fabricIsQuiet(fabric) : false
+  const pairs = fabric?.pairs
   return useMemo(
-    () => buildFabricPairRows(orEmptyArray(pairs), pathMatrix, serverNameById),
-    [pairs, pathMatrix, serverNameById]
+    () => buildFabricPairRows(orEmptyArray(pairs), pathMatrix, serverNameById, { nowMs, quiet }),
+    [pairs, pathMatrix, serverNameById, nowMs, quiet]
   )
 }
 
@@ -1132,12 +1147,18 @@ export function NetworkFabricSection({ orgId }: Readonly<{ orgId: string }>) {
     return map
   }, [servers])
 
+  const fabricData = query.data
   const pathMatrix = useMemo(
-    () => buildFabricPathMatrix(relays, serverNameById),
-    [relays, serverNameById]
+    () =>
+      buildFabricPathMatrix(
+        relays,
+        serverNameById,
+        fabricData ? fabricInactiveServerIds(fabricData) : undefined
+      ),
+    [relays, serverNameById, fabricData]
   )
 
-  const pairRows = useFabricPairRows(query.data?.pairs, pathMatrix, serverNameById)
+  const pairRows = useFabricPairRows(fabricData, pathMatrix, serverNameById)
   const serverOutcomes = useMemo<FabricServerOutcome[]>(
     () =>
       relays.map((relay) => ({

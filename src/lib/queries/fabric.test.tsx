@@ -2,9 +2,13 @@
 import { QueryClientProvider } from '@tanstack/react-query'
 import { renderHook, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { OrgFabricSettings } from '@/lib/instance-api'
 import { createAppQueryClient } from '@/lib/query-client'
 import { queryKeys } from '@/lib/query-keys'
 import {
+  FABRIC_PENDING_GIVE_UP_MS,
+  FABRIC_PENDING_POLL_MS,
+  fabricPollInterval,
   isOrgFabricUnavailable,
   useApplyOrgFabric,
   useOrgFabric,
@@ -51,6 +55,59 @@ function createWrapper(client = createAppQueryClient()) {
 
 afterEach(() => {
   vi.clearAllMocks()
+})
+
+function relayRow(state: 'pending' | 'done', at = '2026-10-31T01:00:00.000Z') {
+  return { serverId: 's1', reconcile: { commandId: 'c1', action: 'pause', state, at } }
+}
+
+function asQuery(relays: ReturnType<typeof relayRow>[], status = 'success') {
+  return { state: { data: { relays } as unknown as OrgFabricSettings, status } }
+}
+
+describe('fabric polling while servers answer', () => {
+  const now = Date.parse('2026-10-31T01:01:00.000Z')
+
+  it('polls only while some server has not answered', () => {
+    expect(fabricPollInterval({ state: { data: undefined, status: 'pending' } }, now)).toBe(false)
+    expect(fabricPollInterval(asQuery([]), now)).toBe(false)
+    expect(fabricPollInterval(asQuery([relayRow('done')]), now)).toBe(false)
+    expect(fabricPollInterval(asQuery([relayRow('done'), relayRow('pending')]), now)).toBe(
+      FABRIC_PENDING_POLL_MS
+    )
+  })
+
+  it('gives up on a request nobody answered for minutes', () => {
+    const late = now + FABRIC_PENDING_GIVE_UP_MS + 1000
+    expect(fabricPollInterval(asQuery([relayRow('pending')]), late)).toBe(false)
+  })
+
+  it('stops while the last read failed, even with pending rows from the last good read', () => {
+    expect(fabricPollInterval(asQuery([relayRow('pending')], 'error'), now)).toBe(false)
+  })
+
+  it('reads again until every server has answered, with no reload', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const fresh = new Date().toISOString()
+    try {
+      fetchOrgFabric
+        .mockResolvedValueOnce({
+          enabled: false,
+          paused: true,
+          relays: [relayRow('pending', fresh)],
+        })
+        .mockResolvedValue({ enabled: false, paused: true, relays: [relayRow('done', fresh)] })
+      const { result } = renderHook(() => useOrgFabric('org-1'), { wrapper: createWrapper() })
+      await waitFor(() => expect(result.current.data?.relays[0]?.reconcile?.state).toBe('pending'))
+      await vi.advanceTimersByTimeAsync(FABRIC_PENDING_POLL_MS + 100)
+      await waitFor(() => expect(result.current.data?.relays[0]?.reconcile?.state).toBe('done'))
+      const reads = fetchOrgFabric.mock.calls.length
+      await vi.advanceTimersByTimeAsync(FABRIC_PENDING_POLL_MS * 3)
+      expect(fetchOrgFabric.mock.calls).toHaveLength(reads)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })
 
 describe('fabric query hooks', () => {

@@ -2015,6 +2015,8 @@ export type RelayRecord = {
    */
   segments: FabricRelaySegment[]
   lastHandshakeAt: string | null
+  /** When the server took the reading the handshake comes from; absent on an older control plane. */
+  observedAt?: string
   transferRxBytes?: number
   transferTxBytes?: number
   paths: FabricRelayPathState[]
@@ -2117,6 +2119,8 @@ export type FabricRelayWireRow = {
   transferRxBytes?: number
   transferTxBytes?: number
   observed?: {
+    /** When the server took the reading. */
+    at?: string
     lastHandshakeAt?: string
     transferRx?: number
     transferTx?: number
@@ -2148,6 +2152,7 @@ export function toRelayRecord(row: FabricRelayWireRow): RelayRecord {
     hasPresharedKey: row.hasPresharedKey === true,
     segments: row.segments ?? [],
     lastHandshakeAt,
+    ...(observed?.at ? { observedAt: observed.at } : {}),
     ...(transferRx !== undefined ? { transferRxBytes: transferRx } : {}),
     ...(transferTx !== undefined ? { transferTxBytes: transferTx } : {}),
     paths: row.paths ?? [],
