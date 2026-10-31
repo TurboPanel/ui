@@ -489,7 +489,8 @@ function HandshakeLine({
   lastHandshakeAt,
   observedAt,
 }: Readonly<{ lastHandshakeAt: string | null; observedAt?: string }>) {
-  const reading = fabricHandshakeReading(lastHandshakeAt, observedAt, Date.now())
+  const [openedAtMs] = useState(() => Date.now())
+  const reading = fabricHandshakeReading(lastHandshakeAt, observedAt, openedAtMs)
   const label = formatRelativeLocalDateTime(lastHandshakeAt, {
     neverLabel: 'Never',
   })
