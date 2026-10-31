@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { panelStyles } from '@/components/ui/panel-styles'
@@ -30,11 +30,14 @@ import {
   buildFabricPairRows,
   buildFabricPathMatrix,
   fabricHandshakeReading,
+  fabricInactiveServerIds,
+  fabricIsQuiet,
   fabricPathIsDegraded,
   fabricPathKindLabel,
   formatResolvedAdvertisedCidrs,
   relayRoleLabel,
   type FabricPairRow,
+  type FabricReadingContext,
   type FabricPathMatrixRow,
 } from '@/lib/fabric-mesh'
 import {
@@ -485,12 +488,25 @@ function RolePicker({
   )
 }
 
+/** How often the screen re-reads the clock to judge how old a reading is. */
+const CLOCK_TICK_MS = 30_000
+
+/** The current time, refreshed on an interval, so an age judged against it keeps moving. */
+function useNowMs(intervalMs: number): number {
+  const [nowMs, setNowMs] = useState(() => Date.now())
+  useEffect(() => {
+    const timer = setInterval(() => setNowMs(Date.now()), intervalMs)
+    return () => clearInterval(timer)
+  }, [intervalMs])
+  return nowMs
+}
+
 function HandshakeLine({
   lastHandshakeAt,
   observedAt,
 }: Readonly<{ lastHandshakeAt: string | null; observedAt?: string }>) {
-  const [openedAtMs] = useState(() => Date.now())
-  const reading = fabricHandshakeReading(lastHandshakeAt, observedAt, openedAtMs)
+  const nowMs = useNowMs(CLOCK_TICK_MS)
+  const reading = fabricHandshakeReading(lastHandshakeAt, observedAt, nowMs)
   const label = formatRelativeLocalDateTime(lastHandshakeAt, {
     neverLabel: 'Never',
   })
@@ -1069,11 +1085,12 @@ function isFabricApplyDisabled(
 function useFabricPairRows(
   pairs: OrgFabricPairRecord[] | undefined,
   pathMatrix: Parameters<typeof buildFabricPairRows>[1],
-  serverNameById: Parameters<typeof buildFabricPairRows>[2]
+  serverNameById: Parameters<typeof buildFabricPairRows>[2],
+  context: FabricReadingContext
 ): FabricPairRow[] {
   return useMemo(
-    () => buildFabricPairRows(orEmptyArray(pairs), pathMatrix, serverNameById),
-    [pairs, pathMatrix, serverNameById]
+    () => buildFabricPairRows(orEmptyArray(pairs), pathMatrix, serverNameById, context),
+    [pairs, pathMatrix, serverNameById, context]
   )
 }
 
@@ -1129,12 +1146,21 @@ export function NetworkFabricSection({ orgId }: Readonly<{ orgId: string }>) {
     return map
   }, [servers])
 
+  const fabricData = query.data
   const pathMatrix = useMemo(
-    () => buildFabricPathMatrix(relays, serverNameById),
-    [relays, serverNameById]
+    () =>
+      buildFabricPathMatrix(
+        relays,
+        serverNameById,
+        fabricData ? fabricInactiveServerIds(fabricData) : undefined
+      ),
+    [relays, serverNameById, fabricData]
   )
 
-  const pairRows = useFabricPairRows(query.data?.pairs, pathMatrix, serverNameById)
+  const nowMs = useNowMs(CLOCK_TICK_MS)
+  const quiet = fabricData ? fabricIsQuiet(fabricData) : false
+  const readingContext = useMemo(() => ({ nowMs, quiet }), [nowMs, quiet])
+  const pairRows = useFabricPairRows(fabricData?.pairs, pathMatrix, serverNameById, readingContext)
   const serverOutcomes = useMemo<FabricServerOutcome[]>(
     () =>
       relays.map((relay) => ({

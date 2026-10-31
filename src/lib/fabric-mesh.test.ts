@@ -6,6 +6,8 @@ import {
   buildServerPairRows,
   fabricPairPathLabel,
   fabricHandshakeReading,
+  fabricInactiveServerIds,
+  fabricIsQuiet,
   fabricPairUsesTunnel,
   fabricServerPairRows,
   fabricPathIsDegraded,
@@ -565,6 +567,87 @@ describe('buildFabricPairRows', () => {
     expect(row?.warning).toBe('Unreachable')
   })
 
+  describe('a silent server never hides the warning', () => {
+    const natPaths = (observedAt: string | undefined) => [
+      relay({
+        serverId: 'srv-a',
+        role: 'gateway',
+        paths: [{ peerServerId: 'srv-c', selected: 'unreachable', degraded: false }],
+        observedAt: '2026-10-31T01:00:00.000Z',
+      }),
+      relay({
+        serverId: 'srv-c',
+        role: 'member',
+        paths: [{ peerServerId: 'srv-a', selected: 'direct_public', degraded: false }],
+        ...(observedAt ? { observedAt } : {}),
+      }),
+    ]
+    const warningAt = (
+      nowIso: string,
+      observedAt: string | undefined,
+      inactive?: Set<string>,
+      quiet = false
+    ) => {
+      const matrix = buildFabricPathMatrix(natPaths(observedAt), names, inactive)
+      const [row] = buildFabricPairRows([pair('srv-a', 'srv-c', 'fabric')], matrix, names, {
+        nowMs: Date.parse(nowIso),
+        quiet,
+      })
+      return row?.warning
+    }
+
+    it('trusts the other end while it reports', () => {
+      expect(warningAt('2026-10-31T01:03:00.000Z', '2026-10-31T01:01:00.000Z')).toBeUndefined()
+    })
+
+    it('warns once nobody has reported for more than 7 minutes', () => {
+      expect(warningAt('2026-10-31T01:20:00.000Z', '2026-10-31T01:01:00.000Z')).toBe(
+        'Not Reporting'
+      )
+    })
+
+    it('warns when the other end is switched off or the mesh is paused', () => {
+      expect(
+        warningAt('2026-10-31T01:03:00.000Z', '2026-10-31T01:01:00.000Z', new Set(['srv-c']))
+      ).toBe('Unreachable')
+    })
+
+    it('says Not Reporting when neither end has reported for minutes', () => {
+      const relays = [
+        relay({
+          serverId: 'srv-a',
+          role: 'gateway',
+          paths: [{ peerServerId: 'srv-c', selected: 'direct_public', degraded: false }],
+          observedAt: '2026-10-31T01:00:00.000Z',
+        }),
+        relay({
+          serverId: 'srv-c',
+          role: 'member',
+          paths: [{ peerServerId: 'srv-a', selected: 'direct_public', degraded: false }],
+          observedAt: '2026-10-31T01:00:00.000Z',
+        }),
+      ]
+      const matrix = buildFabricPathMatrix(relays, names)
+      const read = (nowIso: string) =>
+        buildFabricPairRows([pair('srv-a', 'srv-c', 'fabric')], matrix, names, {
+          nowMs: Date.parse(nowIso),
+          quiet: false,
+        })[0]?.warning
+      expect(read('2026-10-31T01:03:00.000Z')).toBeUndefined()
+      expect(read('2026-10-31T01:30:00.000Z')).toBe('Not Reporting')
+    })
+
+    it('stays quiet while the mesh is paused or off', () => {
+      expect(
+        warningAt('2026-10-31T01:20:00.000Z', '2026-10-31T01:01:00.000Z', undefined, true)
+      ).toBeUndefined()
+    })
+
+    it('trusts the other end when an older control plane sends no reading time', () => {
+      expect(warningAt('2026-10-31T01:50:00.000Z', undefined)).toBeUndefined()
+    })
+  })
+
   it('falls back to the server id when a name is unknown', () => {
     const [row] = buildFabricPairRows([pair('srv-a', 'srv-x', 'none')], [], names)
     expect(row?.title).toBe('alpha ↔ srv-x')
@@ -648,5 +731,24 @@ describe('fabricHandshakeReading', () => {
     const now = at('2026-10-31T01:05:00.000Z')
     expect(fabricHandshakeReading('2026-10-31T01:00:00.000Z', undefined, now)).toBe('fresh')
     expect(fabricHandshakeReading('2026-10-31T00:50:00.000Z', undefined, now)).toBe('stale')
+  })
+})
+
+describe('fabricInactiveServerIds and fabricIsQuiet', () => {
+  const servers = [
+    { serverId: 'srv-a', enabled: true },
+    { serverId: 'srv-b', enabled: false },
+  ] as OrgFabricServerRecord[]
+  const relays = [relay({ serverId: 'srv-a', role: 'member' })]
+
+  it('lists the servers switched out of the mesh', () => {
+    expect([...fabricInactiveServerIds({ servers, relays })]).toEqual(['srv-b'])
+  })
+
+  it('is quiet while paused or off, loud otherwise', () => {
+    expect(fabricIsQuiet({ paused: true, enabled: false })).toBe(true)
+    expect(fabricIsQuiet({ enabled: false })).toBe(true)
+    expect(fabricIsQuiet({ paused: false, enabled: true })).toBe(false)
+    expect(fabricIsQuiet({})).toBe(false)
   })
 })
