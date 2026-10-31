@@ -17,6 +17,7 @@ vi.mock(
 )
 vi.mock('@/components/ui/panel-styles', () => ({ panelStyles: {} }))
 vi.mock('@/components/org/organization-ca-panel', () => ({ OrganizationCaPanel: () => null }))
+vi.mock('@/components/org/tls-contact-email-field', () => ({ TlsContactEmailField: () => null }))
 vi.mock('@/components/org/dns-certificate-panel', () => ({ DnsCertificatePanel: () => null }))
 vi.mock('@/components/ui', () => ({
   Button: ({ label, onPress }: { label: string; onPress?: () => void }) => (

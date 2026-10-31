@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { DnsCertificatePanel } from '@/components/org/dns-certificate-panel'
 import { OrganizationCaPanel } from '@/components/org/organization-ca-panel'
+import { TlsContactEmailField } from '@/components/org/tls-contact-email-field'
 import {
   Button,
   ConfirmButton,
@@ -169,7 +170,11 @@ function TlsLetsEncryptPanel({
   settingsLoading,
   pending,
   onToggle,
+  orgId,
+  contactEmail,
 }: Readonly<{
+  orgId: string
+  contactEmail: string | null
   canManage: boolean
   acmeEnabled: boolean
   acmeError: string | null
@@ -200,6 +205,12 @@ function TlsLetsEncryptPanel({
           accessibilityLabel="Allow Let's Encrypt certificates"
         />
       </SettingRow>
+      <TlsContactEmailField
+        orgId={orgId}
+        canManage={canManage}
+        savedEmail={contactEmail}
+        loading={settingsLoading}
+      />
     </SectionPanel>
   )
 }
@@ -312,6 +323,8 @@ export function TlsOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
       <OrganizationCaPanel orgId={orgId} />
       <TlsLetsEncryptPanel
         canManage={canManage}
+        orgId={orgId}
+        contactEmail={tlsSettingsQuery.data?.acmeContactEmail ?? null}
         acmeEnabled={acmeEnabled}
         acmeError={acmeError}
         settingsError={tlsSettingsQuery.isError ? tlsSettingsQuery.error : null}
