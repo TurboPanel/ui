@@ -12,7 +12,7 @@ type Listener = (ev: unknown) => void
 interface Api {
   isBundleUrl(url: string, origin: string): boolean
   isStaleBundleEvent(ev: unknown, origin: string): boolean
-  isStaleBundleRejection(reason: unknown): boolean
+  isStaleBundleRejection(reason: unknown, origin: string): boolean
   mayReload(stored: string | null, now: number): boolean
 }
 
@@ -104,17 +104,51 @@ describe('stale bundle detection', () => {
       expect(api.isStaleBundleEvent(ev, ORIGIN)).toBe(false)
     }
   })
-  it('flags chunk-load rejections only', () => {
+  it('flags chunk-load rejections that name one of our built files', () => {
     for (const m of [
-      'Loading chunk 3 failed',
-      'Failed to fetch dynamically imported module: x',
-      'Importing a module script failed.',
-      'error loading dynamically imported module',
+      `Loading chunk 3 failed. (error: ${BUNDLE})`,
+      `Failed to fetch dynamically imported module: ${BUNDLE}`,
+      `error loading dynamically imported module: ${BUNDLE}`,
     ]) {
-      expect(api.isStaleBundleRejection(new Error(m))).toBe(true)
+      expect(api.isStaleBundleRejection(new Error(m), ORIGIN)).toBe(true)
     }
-    expect(api.isStaleBundleRejection(new Error('Network request failed'))).toBe(false)
-    expect(api.isStaleBundleRejection(undefined)).toBe(false)
+  })
+  it('ignores other rejections, including third-party chunk failures', () => {
+    for (const m of [
+      'Network request failed',
+      'Loading chunk 3 failed.',
+      'Failed to fetch dynamically imported module: https://cdn.example/_expo/static/a.js',
+      `Failed to fetch dynamically imported module: ${ORIGIN}/vendor/a.js`,
+    ]) {
+      expect(api.isStaleBundleRejection(new Error(m), ORIGIN)).toBe(false)
+    }
+    expect(api.isStaleBundleRejection(undefined, ORIGIN)).toBe(false)
+  })
+  it('ignores a runtime SyntaxError raised inside the bundle', () => {
+    let err: unknown
+    try {
+      err = new RegExp('(')
+    } catch (e) {
+      err = e
+    }
+    expect((err as Error).name).toBe('SyntaxError')
+    const ev = {
+      type: 'error',
+      target: {},
+      filename: BUNDLE,
+      message: (err as Error).message,
+      error: err,
+    }
+    expect(api.isStaleBundleEvent(ev, ORIGIN)).toBe(false)
+  })
+  it('knows the Firefox wording for an HTML page run as code', () => {
+    const ev = {
+      type: 'error',
+      target: {},
+      filename: BUNDLE,
+      message: "expected expression, got '<'",
+    }
+    expect(api.isStaleBundleEvent(ev, ORIGIN)).toBe(true)
   })
 })
 
@@ -138,9 +172,22 @@ describe('installed listeners', () => {
     expect(w.reloads()).toBe(1)
     // The page reloads: fresh script state, same sessionStorage.
     install(w, 105000)
-    w.listeners.unhandledrejection({ reason: new Error('Loading chunk 1 failed') })
+    w.listeners.unhandledrejection({
+      reason: new Error(`Loading chunk 1 failed. (error: ${BUNDLE})`),
+    })
     expect(w.reloads()).toBe(1)
     expect(w.warnings).toHaveLength(1)
+  })
+  it('does not reload while offline, but can once back online', () => {
+    const w = fakeWindow()
+    const nav = { onLine: false }
+    Object.assign(w.win, { navigator: nav })
+    install(w, 1000)
+    w.listeners.error(scriptError(BUNDLE))
+    expect(w.reloads()).toBe(0)
+    nav.onLine = true
+    w.listeners.error(scriptError(BUNDLE))
+    expect(w.reloads()).toBe(1)
   })
   it('does not reload on unrelated errors', () => {
     const w = fakeWindow()
@@ -157,6 +204,13 @@ describe('installed listeners', () => {
     install(w, 101000)
     w.listeners.error(scriptError(BUNDLE))
     expect(w.reloads()).toBe(1)
+  })
+  it('does not reload when window.name ignores the write and holds an old marker', () => {
+    const w = fakeWindow({ storage: 'throws' })
+    Object.defineProperty(w.win, 'name', { get: () => ';tpStaleReload=5', set: () => {} })
+    install(w, 100000)
+    w.listeners.error(scriptError(BUNDLE))
+    expect(w.reloads()).toBe(0)
   })
   it('does not reload when no marker can be stored', () => {
     const w = fakeWindow({ storage: 'throws' })

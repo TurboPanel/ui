@@ -11,7 +11,7 @@
   var WINDOW_MS = 60000
   var REJECTION =
     /ChunkLoadError|Loading (CSS )?chunk|Failed to fetch dynamically imported module|Importing a module script failed|error loading dynamically imported module/i
-  var PARSE_ERROR = /Unexpected token '?<|Unexpected end of input/
+  var PARSE_ERROR = /Unexpected token '?<|expected expression, got '<'/
 
   function isBundleUrl(url, origin) {
     try {
@@ -32,15 +32,18 @@
     if (ev && ev.filename && isBundleUrl(ev.filename, origin)) {
       // A JSON parse error from an API answer is not a stale bundle.
       if (/JSON/i.test(String(ev.message || ''))) return false
-      var err = ev.error
-      return (!!err && err.name === 'SyntaxError') || PARSE_ERROR.test(String(ev.message || ''))
+      // Only the message of an HTML page run as code counts; a runtime SyntaxError from the app
+      // (bad RegExp, bad selector, bad URL) is not a stale bundle.
+      return PARSE_ERROR.test(String(ev.message || ''))
     }
     return false
   }
 
-  function isStaleBundleRejection(reason) {
+  // The failure must name one of our own built files, so a third-party import never triggers it.
+  function isStaleBundleRejection(reason, origin) {
     var text = reason && (reason.name || '') + ' ' + (reason.message || reason)
-    return REJECTION.test(String(text || ''))
+    text = String(text || '')
+    return REJECTION.test(text) && text.indexOf(origin + PREFIX) !== -1
   }
 
   // One reload per tab per minute. stored is the last marker (ms) or null.
@@ -74,13 +77,16 @@
       try {
         win.name =
           (win.name || '').replace(/(?:^|;)tpStaleReload=\d+/, '') + ';tpStaleReload=' + value
-        return /(?:^|;)tpStaleReload=(\d+)/.test(win.name)
+        var written = /(?:^|;)tpStaleReload=(\d+)/.exec(win.name)
+        return !!written && written[1] === value
       } catch (e) {
         return false
       }
     }
     function recover(why) {
       if (memory) return
+      // Offline: a lazy chunk may just have hit a network drop, so leave the page alone.
+      if (win.navigator && win.navigator.onLine === false) return
       memory = true
       var now = Date.now()
       if (!mayReload(readMarker(), now) || !writeMarker(now)) {
@@ -98,7 +104,7 @@
       true
     )
     win.addEventListener('unhandledrejection', function (ev) {
-      if (isStaleBundleRejection(ev && ev.reason)) recover('chunk load')
+      if (isStaleBundleRejection(ev && ev.reason, win.location.origin)) recover('chunk load')
     })
   }
 
