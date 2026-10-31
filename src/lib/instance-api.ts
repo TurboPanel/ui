@@ -1259,6 +1259,26 @@ export async function saveOrgTemperatureUnit(
   })
 }
 
+export type OrgDeployTimeout = {
+  /** Whole minutes a deploy may take before it is stopped (5 to 240; 30 when never set). */
+  deployTimeoutMinutes: number
+}
+
+export async function fetchOrgDeployTimeout(orgId: string): Promise<OrgDeployTimeout> {
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/deploy-timeout`)
+}
+
+/** The server cannot unset the option: send 30 to restore the default. */
+export async function saveOrgDeployTimeout(
+  orgId: string,
+  deployTimeoutMinutes: number
+): Promise<OrgDeployTimeout & { ok: true }> {
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/deploy-timeout`, {
+    method: 'PUT',
+    body: JSON.stringify({ deployTimeoutMinutes }),
+  })
+}
+
 export type OrgTlsSettings = {
   /** Opt-in gate for Let's Encrypt / ACME issuance. Off by default. */
   acmeEnabled: boolean

@@ -2,6 +2,7 @@ import { useLocalSearchParams, useRouter, type Href } from 'expo-router'
 import { useMemo } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { ComposeSettingsSection } from '@/components/org/compose-settings-section'
+import { DeployTimeLimitSettingsSection } from '@/components/org/deploy-time-limit-settings-section'
 import { PhpModePolicyPanel } from '@/components/org/php-mode-policy-panel'
 import { OrganizationFormSection } from '@/components/org/organization-form-section'
 import { ReauthSettingsSection } from '@/components/org/reauth-settings-section'
@@ -55,6 +56,7 @@ function GeneralTab({ orgId }: Readonly<{ orgId: string }>) {
       {billingEnabled ? <BillingLinkSection orgId={orgId} /> : null}
       <ReauthSettingsSection orgId={orgId} />
       <ComposeSettingsSection orgId={orgId} />
+      <DeployTimeLimitSettingsSection orgId={orgId} />
       <PhpModePolicyPanel orgId={orgId} />
     </View>
   )
