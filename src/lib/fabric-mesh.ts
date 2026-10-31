@@ -418,6 +418,20 @@ function judgeTunnelReadings(
   return { verdict: 'unreported' }
 }
 
+/** The warning once the ends' readings are judged; the stored path decides only when they say nothing. */
+function tunnelWarningFor(
+  live: TunnelVerdict,
+  row: FabricPathMatrixRow | undefined,
+  nowMs: number
+): string | undefined {
+  const stored = row && readingIsCurrent(row, nowMs) ? tunnelWarning(row) : 'Not Reporting'
+  if (live.verdict === 'down') return 'Unreachable'
+  if (live.verdict === 'unreported') return 'Not Reporting'
+  if (live.verdict === 'none') return row ? stored : undefined
+  // A live handshake overrides only a stored "unreachable"; a degraded direct path is still a real signal.
+  return stored === 'Degraded' ? stored : undefined
+}
+
 function tunnelFields(
   pair: OrgFabricPairRecord,
   matrix: readonly FabricPathMatrixRow[],
@@ -437,23 +451,7 @@ function tunnelFields(
     fields.readingAt = live.readingAt
     fields.readingAge = fabricReadingAgeLabel(live.readingAt, context.nowMs)
   }
-  if (live.verdict === 'up') {
-    // A live handshake overrides only a stored "unreachable"; a degraded direct path is still a real signal.
-    if (row && row.kind !== 'unreachable' && readingIsCurrent(row, context.nowMs)) {
-      if (fabricPathIsDegraded(row)) fields.warning = 'Degraded'
-    }
-    return fields
-  }
-  if (live.verdict === 'down') {
-    fields.warning = 'Unreachable'
-    return fields
-  }
-  if (live.verdict === 'unreported') {
-    fields.warning = 'Not Reporting'
-    return fields
-  }
-  if (!row) return fields
-  const warning = readingIsCurrent(row, context.nowMs) ? tunnelWarning(row) : 'Not Reporting'
+  const warning = tunnelWarningFor(live, row, context.nowMs)
   if (warning) fields.warning = warning
   return fields
 }
