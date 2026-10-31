@@ -16,6 +16,7 @@ import {
   phaseLabel,
   type LogTranscriptLine,
 } from '@/lib/execution-log-lines'
+import { stepTitle } from '@/lib/deploy-progress'
 import type { CommandProgressStep, CommandStatus } from '@/lib/instance-api'
 import type { CommandLogState } from '@/lib/queries/execution-logs'
 
@@ -112,6 +113,17 @@ function planStepsForPhase(
   return id ? plan.filter((step) => step.id === id) : []
 }
 
+/**
+ * The header of a phase group. The health step is renamed to its result when
+ * it ends ("Service Is Healthy"), so its group shows that title.
+ */
+function draftLabel(phase: string | null, planned: readonly CommandProgressStep[]): string {
+  if (!phase) return UNPHASED_LABEL
+  const [only] = planned
+  if (phase === 'health' && planned.length === 1 && only) return stepTitle(only.label)
+  return phaseLabel(phase)
+}
+
 /** One status for several plan steps: failed, then running, then the rest. */
 function planStatus(steps: readonly CommandProgressStep[]): LogStepStatus | null {
   if (steps.length === 0) return null
@@ -190,7 +202,7 @@ function silentPlanSteps(
         step: {
           id: `plan:${step.id}`,
           phase: null,
-          label: step.label,
+          label: stepTitle(step.label),
           status: planStatus([step]) ?? 'pending',
           lines: [],
           errorCount: 0,
@@ -242,7 +254,7 @@ export function buildLogSteps(
       return {
         id: `${group.phase ?? 'output'}:${group.lines[0]?.seq ?? index}`,
         phase: group.phase,
-        label: group.phase ? phaseLabel(group.phase) : UNPHASED_LABEL,
+        label: draftLabel(group.phase, planned),
         planned,
         status: planStatus(planned),
         lines: [...group.lines],
