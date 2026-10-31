@@ -1,6 +1,7 @@
 import type {
   FabricPairPath,
   FabricRelayPathKind,
+  OrgFabricPairReading,
   OrgFabricPairRecord,
   OrgFabricSettings,
   FabricRelayPathState,
@@ -277,6 +278,10 @@ export type FabricPairRow = {
   viaLabel?: string
   /** Tunnel warning ("Unreachable" / "Degraded"); only for a pair a tunnel carries. */
   warning?: string
+  /** When the newest reading behind this row was taken; shown as "as of ..." so a reading's age is plain. */
+  readingAt?: string
+  /** The age of `readingAt` in plain words, judged at build time ("3 min ago"). */
+  readingAge?: string
 }
 
 /** A reading counts only from a server that is in the mesh and reported lately. */
@@ -370,6 +375,80 @@ function currentReadingContext(): FabricReadingContext {
   return { nowMs: Date.now(), quiet: false }
 }
 
+/** Plain age of a reading, for "as of ...": "just now", "3 min ago", "2 h ago". */
+export function fabricReadingAgeLabel(observedAt: string, nowMs: number): string | undefined {
+  const at = Date.parse(observedAt)
+  if (Number.isNaN(at)) return undefined
+  const minutes = Math.floor(Math.max(0, nowMs - at) / 60_000)
+  if (minutes < 1) return 'just now'
+  if (minutes < 60) return `${String(minutes)} min ago`
+  return `${String(Math.floor(minutes / 60))} h ago`
+}
+
+type TunnelVerdict = { verdict: 'up' | 'down' | 'unreported' | 'none'; readingAt?: string }
+
+/** The newest current reading that shows a fresh handshake and the newest that shows a stale one (ms). */
+function newestFreshAndStale(
+  readings: readonly OrgFabricPairReading[],
+  nowMs: number
+): { up?: number; down?: number } {
+  const newest: { up?: number; down?: number } = {}
+  for (const reading of readings) {
+    // A reading with no readable time says nothing, whatever its handshake looks like.
+    const at = Date.parse(reading.observedAt)
+    if (Number.isNaN(at)) continue
+    const judged = fabricHandshakeReading(reading.lastHandshakeAt, reading.observedAt, nowMs)
+    if (judged === 'unreported') continue
+    const key = judged === 'fresh' ? 'up' : 'down'
+    if (newest[key] === undefined || at > newest[key]) newest[key] = at
+  }
+  return newest
+}
+
+/**
+ * What the ends' own latest reports say about the tunnel, judged each against
+ * its own reading time: the newest current reading decides (a tunnel is one
+ * wire and handshakes are symmetric; the stored path summary only changes on a
+ * reconcile and can still read unreachable): up when it shows a fresh
+ * handshake, down when it shows a stale one, and down on a tie. Unreported when every reading is too old, none when
+ * the panel sent no readings (older control plane) or a server is switched out.
+ */
+function judgeTunnelReadings(
+  pair: OrgFabricPairRecord,
+  matrix: readonly FabricPathMatrixRow[],
+  nowMs: number
+): TunnelVerdict {
+  const readings = pair.tunnel?.readings ?? []
+  const switchedOut = matrix.some(
+    (row) =>
+      row.inactive === true &&
+      (row.fromServerId === pair.fromServerId || row.fromServerId === pair.toServerId)
+  )
+  if (readings.length === 0 || switchedOut) return { verdict: 'none' }
+  const { up, down } = newestFreshAndStale(readings, nowMs)
+  // Handshakes are symmetric: a live tunnel never shows fresh on one end and stale on a newer reading
+  // from the other, so the newest current reading decides. A tie is not proof the tunnel is up.
+  if (up !== undefined && (down === undefined || up > down)) {
+    return { verdict: 'up', readingAt: new Date(up).toISOString() }
+  }
+  if (down !== undefined) return { verdict: 'down', readingAt: new Date(down).toISOString() }
+  return { verdict: 'unreported' }
+}
+
+/** The warning once the ends' readings are judged; the stored path decides only when they say nothing. */
+function tunnelWarningFor(
+  live: TunnelVerdict,
+  row: FabricPathMatrixRow | undefined,
+  nowMs: number
+): string | undefined {
+  const stored = row && readingIsCurrent(row, nowMs) ? tunnelWarning(row) : 'Not Reporting'
+  if (live.verdict === 'down') return 'Unreachable'
+  if (live.verdict === 'unreported') return 'Not Reporting'
+  if (live.verdict === 'none') return row ? stored : undefined
+  // A live handshake overrides only a stored "unreachable"; a degraded direct path is still a real signal.
+  return stored === 'Degraded' ? stored : undefined
+}
+
 function tunnelFields(
   pair: OrgFabricPairRecord,
   matrix: readonly FabricPathMatrixRow[],
@@ -377,13 +456,20 @@ function tunnelFields(
 ): Partial<FabricPairRow> {
   if (!fabricPairUsesTunnel(pair.path)) return {}
   const row = tunnelReading(pair, matrix, context.nowMs)
-  if (!row) return {}
   const fields: Partial<FabricPairRow> = {}
-  if (row.kind !== 'unreachable' && row.latencyMs !== undefined) fields.latencyMs = row.latencyMs
-  if (row.viaLabel) fields.viaLabel = row.viaLabel
+  if (row && row.kind !== 'unreachable' && row.latencyMs !== undefined) {
+    fields.latencyMs = row.latencyMs
+  }
+  if (row?.viaLabel) fields.viaLabel = row.viaLabel
   // A paused or switched-off mesh has no tunnel to warn about; that is the user's choice.
   if (context.quiet) return fields
-  const warning = readingIsCurrent(row, context.nowMs) ? tunnelWarning(row) : 'Not Reporting'
+  const live = judgeTunnelReadings(pair, matrix, context.nowMs)
+  if (live.readingAt) {
+    fields.readingAt = live.readingAt
+    const age = fabricReadingAgeLabel(live.readingAt, context.nowMs)
+    if (age) fields.readingAge = age
+  }
+  const warning = tunnelWarningFor(live, row, context.nowMs)
   if (warning) fields.warning = warning
   return fields
 }

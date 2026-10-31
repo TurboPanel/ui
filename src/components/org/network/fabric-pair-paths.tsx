@@ -25,6 +25,9 @@ function FabricPairPathRow({ row }: Readonly<{ row: FabricPairRow }>) {
           {row.viaLabel}
         </Text>
       ) : null}
+      {row.readingAge ? (
+        <Text style={panelStyles.muted}>Reading as of {row.readingAge}</Text>
+      ) : null}
       {row.warning ? (
         <View style={panelStyles.calloutWarning}>
           <Text style={panelStyles.calloutWarningText}>{row.warning}</Text>

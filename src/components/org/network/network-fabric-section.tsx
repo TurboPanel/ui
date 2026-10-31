@@ -30,6 +30,7 @@ import {
   buildFabricPairRows,
   buildFabricPathMatrix,
   fabricHandshakeReading,
+  fabricReadingAgeLabel,
   fabricInactiveServerIds,
   fabricIsQuiet,
   fabricPathIsDegraded,
@@ -506,6 +507,7 @@ function HandshakeLine({
 }: Readonly<{ lastHandshakeAt: string | null; observedAt?: string }>) {
   const nowMs = useNowMs(CLOCK_TICK_MS)
   const reading = fabricHandshakeReading(lastHandshakeAt, observedAt, nowMs)
+  const readingAge = observedAt ? fabricReadingAgeLabel(observedAt, nowMs) : undefined
   const label = formatRelativeLocalDateTime(lastHandshakeAt, {
     neverLabel: 'Never',
   })
@@ -514,6 +516,7 @@ function HandshakeLine({
       <Text style={panelStyles.detailLine}>
         <Text style={panelStyles.detailLabel}>Last handshake: </Text>
         {label}
+        {readingAge ? ` — reading as of ${readingAge}` : ''}
       </Text>
     )
   }
