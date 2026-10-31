@@ -144,6 +144,28 @@ describe('managedErrorMessage', () => {
     ).toBe('Saved, but db-1 could not be told yet.')
   })
 
+  it('shows the TurboFabric sentence for an untrusted binding path and keeps the general copy otherwise', () => {
+    const sentence =
+      "The only datacenter the app's server and the database's server share is marked untrusted, and TurboFabric is not carrying traffic between them right now."
+    expect(
+      managedErrorMessage(
+        new Error(`/x failed: HTTP 422: binding_endpoint_unavailable — ${sentence}`),
+        'fallback'
+      )
+    ).toBe(sentence)
+    expect(
+      managedErrorMessage(
+        new Error(
+          '/x failed: HTTP 422: binding_endpoint_unavailable — The server this app runs on cannot reach the database.'
+        ),
+        'fallback'
+      )
+    ).toBe("No network path from that service's server to this cluster.")
+    expect(
+      managedErrorMessage(new Error('HTTP 422: binding_endpoint_unavailable'), 'fallback')
+    ).toBe("No network path from that service's server to this cluster.")
+  })
+
   it('shows the server sentence without the request for a code it has no copy for', () => {
     expect(
       managedErrorMessage(
