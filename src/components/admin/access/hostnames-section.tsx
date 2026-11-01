@@ -129,10 +129,10 @@ function toInput(record: InstanceHostnameRecord): InstanceHostnameInput {
   }
 }
 
-const SOURCES: readonly string[] = ['platform-ca', 'uploaded', 'lets-encrypt', 'dns-01']
+const SOURCES: ReadonlySet<string> = new Set(['platform-ca', 'uploaded', 'lets-encrypt', 'dns-01'])
 
 function isSource(value: string | null): value is InstanceHostnameSource {
-  return value !== null && SOURCES.includes(value)
+  return value !== null && SOURCES.has(value)
 }
 
 function sameDraft(
