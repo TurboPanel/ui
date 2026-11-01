@@ -42,8 +42,7 @@ const FEEDBACK: Record<
   },
   reconnecting: {
     tone: 'pending',
-    message:
-      'The control plane restarted during the request. Waiting for it to respond again…',
+    message: 'The control plane restarted during the request. Waiting for it to respond again…',
   },
   applied: {
     tone: 'done',
@@ -56,8 +55,7 @@ const FEEDBACK: Record<
   },
   'reconnected-trusted': {
     tone: 'done',
-    message:
-      'Applied. The control plane is back and its certificate is in place.',
+    message: 'Applied. The control plane is back and its certificate is in place.',
   },
   'reconnected-mixed': {
     tone: 'done',
@@ -84,7 +82,7 @@ const FEEDBACK: Record<
 /** The one line to show under the Save & Apply row, or nothing when idle. */
 export function publicUrlsApplyFeedback(
   status: PublicUrlsApplyStatus,
-  error?: string | null,
+  error?: string | null
 ): PublicUrlsApplyFeedback {
   if (status === 'idle') return null
   if (status === 'failed') {
@@ -95,11 +93,9 @@ export function publicUrlsApplyFeedback(
 
 /** Which kinds of certificate a hostname set asks for, in the words the banner needs. */
 export function applyCertificateKind(
-  hostnames: readonly { source: string }[],
+  hostnames: readonly { source: string }[]
 ): 'platform' | 'trusted' | 'mixed' {
-  const platform = hostnames.filter(
-    (entry) => entry.source === 'platform-ca',
-  ).length
+  const platform = hostnames.filter((entry) => entry.source === 'platform-ca').length
   if (platform === hostnames.length) return 'platform'
   return platform === 0 ? 'trusted' : 'mixed'
 }
@@ -113,7 +109,7 @@ const RECONNECTED_STATUS = {
 /** The banner state for an apply that finished by way of the reconnect wait. */
 export function reconnectedStatus(
   hostnames: readonly { source: string }[],
-  kept = false,
+  kept = false
 ): PublicUrlsApplyStatus {
   if (kept) return 'reconnected-kept'
   return RECONNECTED_STATUS[applyCertificateKind(hostnames)]

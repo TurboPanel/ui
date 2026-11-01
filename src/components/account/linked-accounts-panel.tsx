@@ -15,11 +15,7 @@ import {
 } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { usesSameOriginApi } from '@/lib/control-plane'
-import {
-  OAUTH_WEB_ONLY_NOTE,
-  oauthStartUrl,
-  type OAuthProvider,
-} from '@/lib/instance-api'
+import { OAUTH_WEB_ONLY_NOTE, oauthStartUrl, type OAuthProvider } from '@/lib/instance-api'
 import { useUnlinkProvider } from '@/lib/queries/auth'
 import {
   optionalPassword,
@@ -44,9 +40,7 @@ const PROVIDER_LABEL: Record<OAuthProvider, string> = {
 const LAST_SIGN_IN_METHOD = 'last_sign_in_method'
 const LAST_SIGN_IN_NOTE = 'Keep at least one way to sign in.'
 
-function firstSearchParam(
-  value: string | string[] | undefined,
-): string | undefined {
+function firstSearchParam(value: string | string[] | undefined): string | undefined {
   if (Array.isArray(value)) return value[0]
   return value
 }
@@ -59,7 +53,7 @@ function unlinkResultMessage(result: SecurityActionResult): string | null {
 
 function uniqueProviderRows(
   linkedProviders: readonly OAuthProvider[],
-  authProviders: readonly OAuthProvider[],
+  authProviders: readonly OAuthProvider[]
 ): OAuthProvider[] {
   const rows: OAuthProvider[] = []
   const seen = new Set<OAuthProvider>()
@@ -142,8 +136,8 @@ export function LinkedAccountsPanel({
         <InlineNotice title="Link from a browser" body={OAUTH_WEB_ONLY_NOTE} />
       ) : null}
       <Text style={panelStyles.muted}>
-        Sign in with a provider you already use. Unlinking still needs a
-        remaining password, passkey, or other provider.
+        Sign in with a provider you already use. Unlinking still needs a remaining password,
+        passkey, or other provider.
       </Text>
       <ProviderList
         linkedProviders={linkedProviders}
@@ -170,9 +164,7 @@ function ProviderList({
   const [password, setPassword] = useState('')
   const [passwordRequired, setPasswordRequired] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
-  const [pendingProvider, setPendingProvider] = useState<OAuthProvider | null>(
-    null,
-  )
+  const [pendingProvider, setPendingProvider] = useState<OAuthProvider | null>(null)
   const linkedSet = new Set(linkedProviders)
   const configuredSet = new Set(authProviders)
   const rows = uniqueProviderRows(linkedProviders, authProviders)
@@ -195,7 +187,7 @@ function ProviderList({
           setPendingProvider(null)
         })
     },
-    [password, unlink],
+    [password, unlink]
   )
 
   const onLink = useCallback((provider: OAuthProvider) => {
@@ -206,11 +198,7 @@ function ProviderList({
   if (loading) {
     body = <DataTableEmpty>Loading linked accounts…</DataTableEmpty>
   } else if (rows.length === 0) {
-    body = (
-      <DataTableEmpty>
-        No sign-in providers are configured on this instance.
-      </DataTableEmpty>
-    )
+    body = <DataTableEmpty>No sign-in providers are configured on this instance.</DataTableEmpty>
   } else {
     body = rows.map((provider, index) => {
       const linked = linkedSet.has(provider)
@@ -226,20 +214,10 @@ function ProviderList({
           />
         )
       } else if (canLink && configuredSet.has(provider)) {
-        action = (
-          <Button
-            label="Link"
-            size="sm"
-            onPress={() => onLink(provider)}
-          />
-        )
+        action = <Button label="Link" size="sm" onPress={() => onLink(provider)} />
       }
       return (
-        <DataTableRow
-          key={provider}
-          alt={index % 2 === 1}
-          last={index === rows.length - 1}
-        >
+        <DataTableRow key={provider} alt={index % 2 === 1} last={index === rows.length - 1}>
           <DataTableCell column={COLUMNS[0]}>
             <Text style={styles.name}>{PROVIDER_LABEL[provider]}</Text>
           </DataTableCell>
