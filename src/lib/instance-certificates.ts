@@ -7,6 +7,7 @@ export const INSTANCE_HOSTNAME_SOURCE_LABELS = {
   'platform-ca': 'Platform CA',
   uploaded: 'Uploaded',
   'lets-encrypt': "Let's Encrypt",
+  'dns-01': 'DNS-01',
 } as const
 
 export type InstanceHostnameSource = keyof typeof INSTANCE_HOSTNAME_SOURCE_LABELS
@@ -214,6 +215,29 @@ export function daemonCapabilitiesStatus(
   return 'ready'
 }
 
+type RefusableSource = Exclude<InstanceHostnameSource, 'platform-ca'>
+
+const IPV4_LITERAL = /^\d{1,3}(?:\.\d{1,3}){3}$/
+
+/**
+ * DNS-01 orders one exact public DNS name (mirrors the control plane's
+ * `validateDns01Host`): no address literal, no `localhost`, no wildcard.
+ */
+function dns01Refusal(hostname: string): string | null {
+  if (
+    IPV4_LITERAL.test(hostname) ||
+    hostname.includes(':') ||
+    hostname === 'localhost' ||
+    !hostname.includes('.')
+  ) {
+    return 'DNS-01 needs a public DNS name.'
+  }
+  if (hostname.startsWith('*.')) {
+    return 'DNS-01 orders one exact name. Upload a wildcard certificate instead.'
+  }
+  return null
+}
+
 /**
  * Client-side mirror of `validateHostnameSource`. Each refusal is a sentence
  * the picker shows beside a disabled option.
@@ -221,16 +245,19 @@ export function daemonCapabilitiesStatus(
 export function certificateSourceEligibility(
   host: string,
   options: CertificateSourceContext
-): Partial<Record<'uploaded' | 'lets-encrypt', string>> {
+): Partial<Record<RefusableSource, string>> {
   const daemonRefusal = daemonCapabilityRefusal(options)
   if (daemonRefusal) {
     return {
       uploaded: daemonRefusal,
       'lets-encrypt': daemonRefusal,
+      'dns-01': daemonRefusal,
     }
   }
-  const refused: Partial<Record<'uploaded' | 'lets-encrypt', string>> = {}
+  const refused: Partial<Record<RefusableSource, string>> = {}
   const hostname = hostnameOf(host)
+  const dns01 = dns01Refusal(hostname)
+  if (dns01) refused['dns-01'] = dns01
   if (hostname.startsWith('*.')) {
     refused['lets-encrypt'] = "Let's Encrypt cannot issue a certificate for a wildcard name."
   } else if (isLoopbackOrPrivateHostname(hostname)) {

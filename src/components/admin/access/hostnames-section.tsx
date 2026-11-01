@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { AddPublicUrlRow, PublicUrlsApplyFeedback } from '@/components/admin/public-url-fields'
-import { PrimaryCell, PublicPortCell } from '@/components/admin/access/hostname-ingress-cells'
+import {
+  ConnectionModeCell,
+  IngressPhaseChip,
+  SAVE_FIRST_HINT,
+  SAVE_OTHERS_HINT,
+} from '@/components/admin/access/connection-mode-cell'
+import { ModePublicPortCell, PrimaryCell } from '@/components/admin/access/hostname-ingress-cells'
 import { panelStyles } from '@/components/ui/panel-styles'
 import {
   Badge,
@@ -31,6 +37,9 @@ import {
   requiresPlatformCaConfirm,
 } from '@/lib/instance-certificates'
 import {
+  type EdgeGate,
+  type IngressAccountRecord,
+  type IngressCapabilities,
   InstanceHostnameValidationError,
   type InstanceHostnameInput,
   type InstanceHostnameRecord,
@@ -45,6 +54,9 @@ import {
   withPrimary,
 } from '@/lib/hostname-ingress'
 import { HA_CERT_APPLY_NOTE } from '@/lib/platform-copy'
+import { isProviderMode } from '@/lib/connection-modes'
+import { useAuth } from '@/lib/auth-context'
+import { useIngressAccounts, useIngressCapabilities } from '@/lib/queries/ingress'
 import {
   addPublicUrlEntry,
   parsePublicUrlEntry,
@@ -79,6 +91,7 @@ const OUTCOME_STATUS: Record<ApplyPublicUrlsOutcome['kind'], PublicUrlsApplyStat
 
 const COLUMNS: readonly DataTableColumn[] = [
   { key: 'address', header: 'Address', flex: 2, minWidth: 200 },
+  { key: 'mode', header: 'Connection Mode', flex: 2, minWidth: 240, gap: 6 },
   { key: 'publicPort', header: 'Public Port', minWidth: 150 },
   { key: 'primary', header: 'Primary', minWidth: 120 },
   { key: 'certificate', header: 'Certificate', flex: 2, minWidth: 220, gap: 6 },
@@ -86,6 +99,18 @@ const COLUMNS: readonly DataTableColumn[] = [
   { key: 'expires', header: 'Expires', minWidth: 110 },
   { key: 'actions', header: 'Actions', width: 168, align: 'end' },
 ]
+
+const TABLE_MIN_WIDTH = 1370
+
+/** What the Connection Mode column needs: the modes, the edge gate and the accounts. */
+type IngressContext = {
+  modes: readonly IngressCapabilities[]
+  gate: EdgeGate | null
+  accounts: readonly IngressAccountRecord[]
+  /** Unsaved edits elsewhere would be lost when a mode change refreshes the rows. */
+  dirty: boolean
+  enabled: boolean
+}
 
 const ADDRESS_ONLY_COLUMNS: readonly DataTableColumn[] = [
   { key: 'address', header: 'Address', flex: 1 },
@@ -104,8 +129,35 @@ function toInput(record: InstanceHostnameRecord): InstanceHostnameInput {
   }
 }
 
+const SOURCES: readonly string[] = ['platform-ca', 'uploaded', 'lets-encrypt', 'dns-01']
+
 function isSource(value: string | null): value is InstanceHostnameSource {
-  return value === 'platform-ca' || value === 'uploaded' || value === 'lets-encrypt'
+  return value !== null && SOURCES.includes(value)
+}
+
+function sameDraft(
+  stored: readonly InstanceHostnameRecord[],
+  draft: readonly InstanceHostnameInput[]
+) {
+  return JSON.stringify(stored.map(toInput)) === JSON.stringify(draft)
+}
+
+/** The modes, gate and accounts for the Connection Mode column; nothing is read on High Availability. */
+function useIngressContext(
+  stored: readonly InstanceHostnameRecord[],
+  draft: readonly InstanceHostnameInput[]
+): IngressContext {
+  const { controlPlaneRuntime } = useAuth()
+  const enabled = controlPlaneRuntime !== 'workers'
+  const capabilities = useIngressCapabilities({ enabled })
+  const accounts = useIngressAccounts({ enabled })
+  return {
+    modes: capabilities.data?.modes ?? [],
+    gate: capabilities.data?.gate ?? null,
+    accounts: accounts.data?.accounts ?? [],
+    dirty: !sameDraft(stored, draft),
+    enabled,
+  }
 }
 
 function hostnameOf(entry: string): string {
@@ -182,6 +234,7 @@ export function HostnamesSection() {
     setDraft(hostnamesQuery.data.hostnames.map(toInput))
   }, [hostnamesQuery.data])
 
+  const ingress = useIngressContext(stored, draft)
   const certificates = certificatesQuery.data?.certificates ?? []
   const capabilities = daemonQuery.data?.capabilities ?? null
   const capabilitiesStatus = daemonCapabilitiesStatus(daemonQuery)
@@ -348,6 +401,7 @@ export function HostnamesSection() {
           <HostnamesEditor
             draft={draft}
             stored={stored}
+            ingress={ingress}
             certificates={certificates}
             capabilities={capabilities}
             capabilitiesStatus={capabilitiesStatus}
@@ -412,6 +466,7 @@ export function HostnamesSection() {
 function HostnamesEditor({
   draft,
   stored,
+  ingress,
   certificates,
   capabilities,
   capabilitiesStatus,
@@ -434,6 +489,7 @@ function HostnamesEditor({
 }: Readonly<{
   draft: InstanceHostnameInput[]
   stored: InstanceHostnameRecord[]
+  ingress: IngressContext
   certificates: UploadedCertificateRecord[]
   capabilities: Record<string, boolean> | null
   capabilitiesStatus: DaemonCapabilitiesStatus
@@ -462,6 +518,7 @@ function HostnamesEditor({
       <HostnameTable
         draft={draft}
         byHost={byHost}
+        ingress={ingress}
         certificates={certificates}
         capabilities={capabilities}
         capabilitiesStatus={capabilitiesStatus}
@@ -506,6 +563,7 @@ function HostnamesEditor({
 function HostnameTable({
   draft,
   byHost,
+  ingress,
   certificates,
   capabilities,
   capabilitiesStatus,
@@ -516,6 +574,7 @@ function HostnameTable({
 }: Readonly<{
   draft: InstanceHostnameInput[]
   byHost: Map<string, InstanceHostnameRecord>
+  ingress: IngressContext
   certificates: UploadedCertificateRecord[]
   capabilities: Record<string, boolean> | null
   capabilitiesStatus: DaemonCapabilitiesStatus
@@ -526,19 +585,20 @@ function HostnameTable({
 }>) {
   if (draft.length === 0) {
     return (
-      <DataTable columns={COLUMNS} minWidth={1130}>
+      <DataTable columns={COLUMNS} minWidth={TABLE_MIN_WIDTH}>
         <DataTableEmpty>No hostnames configured.</DataTableEmpty>
       </DataTable>
     )
   }
 
   return (
-    <DataTable columns={COLUMNS} minWidth={1130}>
+    <DataTable columns={COLUMNS} minWidth={TABLE_MIN_WIDTH}>
       {draft.map((row, index) => (
         <HostnameRow
           key={`${row.host}-${index}`}
           row={row}
           record={byHost.get(row.host) ?? null}
+          ingress={ingress}
           certificates={certificates}
           capabilities={capabilities}
           capabilitiesStatus={capabilitiesStatus}
@@ -564,6 +624,7 @@ function HostnameTable({
 function HostnameRow({
   row,
   record,
+  ingress,
   certificates,
   capabilities,
   capabilitiesStatus,
@@ -579,6 +640,7 @@ function HostnameRow({
 }: Readonly<{
   row: InstanceHostnameInput
   record: InstanceHostnameRecord | null
+  ingress: IngressContext
   certificates: UploadedCertificateRecord[]
   capabilities: Record<string, boolean> | null
   capabilitiesStatus: DaemonCapabilitiesStatus
@@ -594,6 +656,8 @@ function HostnameRow({
 }>) {
   const status = record ? hostnameStatusPresentation(record) : null
   const address = panelHostnameHttpsUrl(row.host)
+  const mode = record?.mode ?? 'direct'
+  const edge = record !== null && isProviderMode(ingress.modes, mode)
   return (
     <DataTableRow alt={alt} last={last}>
       <DataTableCell column={COLUMNS[0]}>
@@ -603,17 +667,28 @@ function HostnameRow({
         {invalid ? <Text style={styles.rowError}>This hostname was refused.</Text> : null}
       </DataTableCell>
       <DataTableCell column={COLUMNS[1]}>
-        <PublicPortCell
+        <ConnectionModeCell
+          record={record}
+          modes={ingress.modes}
+          gate={ingress.gate}
+          accounts={ingress.accounts}
+          lockedReason={modeLockedReason(record, ingress.dirty)}
+          busy={busy}
+        />
+      </DataTableCell>
+      <DataTableCell column={COLUMNS[2]}>
+        <ModePublicPortCell
+          mode={mode}
           row={row}
           busy={busy}
           onChange={onChange}
           onValidityChange={onPortValidity}
         />
       </DataTableCell>
-      <DataTableCell column={COLUMNS[2]}>
+      <DataTableCell column={COLUMNS[3]}>
         <PrimaryCell primary={primary} busy={busy} onMakePrimary={onMakePrimary} />
       </DataTableCell>
-      <DataTableCell column={COLUMNS[3]}>
+      <DataTableCell column={COLUMNS[4]}>
         <CertificatePicker
           row={row}
           certificates={certificates}
@@ -623,7 +698,7 @@ function HostnameRow({
           onChange={onChange}
         />
       </DataTableCell>
-      <DataTableCell column={COLUMNS[4]}>
+      <DataTableCell column={COLUMNS[5]}>
         {status ? (
           <View style={styles.status}>
             <StatusDot tone={status.dot} />
@@ -632,11 +707,14 @@ function HostnameRow({
         ) : (
           <Text style={styles.muted}>Not saved</Text>
         )}
-      </DataTableCell>
-      <DataTableCell column={COLUMNS[5]}>
-        <Text style={styles.muted}>{status?.expiry ?? '—'}</Text>
+        {edge && record ? (
+          <IngressPhaseChip hostnameId={record.id} enabled={ingress.enabled} />
+        ) : null}
       </DataTableCell>
       <DataTableCell column={COLUMNS[6]}>
+        <Text style={styles.muted}>{status?.expiry ?? '—'}</Text>
+      </DataTableCell>
+      <DataTableCell column={COLUMNS[7]}>
         <View style={styles.actions}>
           <CopyButton value={publicOriginForRecord(row)} />
           <Button label="Remove" size="sm" disabled={busy} onPress={onRemove} />
@@ -691,6 +769,12 @@ function CertificatePicker({
             disabled: Boolean(refused['lets-encrypt']),
             detail: refused['lets-encrypt'] ?? null,
           },
+          {
+            value: 'dns-01',
+            label: INSTANCE_HOSTNAME_SOURCE_LABELS['dns-01'],
+            disabled: Boolean(refused['dns-01']),
+            detail: refused['dns-01'] ?? null,
+          },
         ]}
         onChange={(value) => {
           if (!isSource(value) || value === row.source) return
@@ -714,6 +798,11 @@ function CertificatePicker({
       ) : null}
     </View>
   )
+}
+
+function modeLockedReason(record: InstanceHostnameRecord | null, dirty: boolean): string | null {
+  if (record === null) return SAVE_FIRST_HINT
+  return dirty ? SAVE_OTHERS_HINT : null
 }
 
 function uploadedIdFor(

@@ -7,7 +7,7 @@
 - Hostnames (area root) → `hostnames-section.tsx` at `/admin/access`
 - Certificates → `certificates-section.tsx` at `/admin/access/certificates`
 - Trusted proxies → `trusted-proxies-section.tsx` at `/admin/access/trusted-proxies`
-- Tunnel → `tunnel-section.tsx` at `/admin/access/tunnel`
+- Cloudflare Connection → `cloudflare-connection-section.tsx` at `/admin/access/cloudflare` (`/admin/access/tunnel` redirects there)
 - Platform CA → `platform-ca-section.tsx` at `/admin/access/platform-ca`
 
 `/admin` redirects to `/admin/access`. `/admin/networking` stays as a bookmark redirect to `/admin/access` and is not a sidebar area. Do not mount `control-plane-urls-section.tsx` here.
@@ -47,10 +47,18 @@
 - Read-only CIDR table from `GET /instance/trusted-proxies`, with a **Loopback default** or **Custom list** badge.
 - Persistent warning: `TURBOPANEL_TRUSTED_PROXY_CIDRS` **replaces** `127.0.0.0/8, ::1/128`. It does not add to that list. Include loopback when Caddy is still on this host.
 
-## Tunnel
+## Cloudflare Connection
 
-- Write-only token field. Never pre-fill a stored value — the API does not return one.
-- **Save token** sends the typed value. **Tear down** sends an empty token. Clear the field after either succeeds.
+- Superadmin only; on TurboPanel High Availability show the not-applicable note and nothing else.
+- Say the tunnel connector runs on the control plane host only.
+- **Edge Go-Live** is a two-step confirm with a warning notice above it; disabled with a sentence when the host holds the gate closed.
+- Account token: write-only, cleared from the field as soon as it is sent, never rendered. Failed checks show as **Fail** rows with their detail; scopes show as **Tunnel Scope** / **DNS Scope** rows. Status pairs a word with its colour.
+- The pasted run token stays behind a collapsed **Paste a run token instead** disclosure at the bottom. Never pre-fill it. **Save Token** sends the typed value, **Tear Down** sends an empty token, and the field clears after either.
+
+## Connection modes (Hostnames)
+
+- Connection Mode, Cloudflare Account, Preflight / Connect / Disconnect live in the row (expand in place, no modal). Disabled options carry their reason as the option detail.
+- The DNS-01 ladder on Certificates is a row of step chips; the current step is the one in the info tone and announced as the current step.
 
 ## Platform CA
 

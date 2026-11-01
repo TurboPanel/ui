@@ -1,13 +1,16 @@
 import { useState } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, Text } from 'react-native'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { Button, ButtonRow, InlineNotice, SectionPanel, TextField } from '@/components/ui'
-import { useAuth } from '@/lib/auth-context'
 import { useSetInstanceTunnelToken } from '@/lib/queries/admin'
-import { colors, spacing } from '@/lib/theme'
+import { colors } from '@/lib/theme'
 
-export function TunnelSection() {
-  const { controlPlaneRuntime } = useAuth()
+/**
+ * The pasted run token for a tunnel made by hand. Write-only: the control
+ * plane never returns the stored token. Lives at the bottom of the Cloudflare
+ * Connection screen, behind a disclosure.
+ */
+export function TunnelTokenPanel() {
   const mutation = useSetInstanceTunnelToken()
   const [token, setToken] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -28,85 +31,59 @@ export function TunnelSection() {
     setNotice(
       next === ''
         ? 'Tunnel torn down. The co-located daemon was told to drop it.'
-        : 'Tunnel token sent. It is not stored in this page and will not be shown again.',
-    )
-  }
-
-  if (controlPlaneRuntime === 'workers') {
-    return (
-      <View style={styles.root}>
-        <Text style={panelStyles.pageTitle}>Tunnel</Text>
-        <InlineNotice
-          title="Not applicable on this runtime"
-          body="A tunnel token is for a co-located daemon's own outbound connection. TurboPanel High Availability is a distributed control plane for many remote daemons — none of them co-located with it — so there is no co-located daemon here to tunnel for."
-        />
-      </View>
+        : 'Tunnel token sent. It is not stored in this page and will not be shown again.'
     )
   }
 
   return (
-    <View style={styles.root}>
-      <Text style={panelStyles.pageTitle}>Tunnel</Text>
-      <Text style={panelStyles.pageCopy}>
-        The token the co-located daemon uses for its outbound tunnel. This
-        field is write-only: the control plane never returns the stored token.
-      </Text>
+    <SectionPanel title="Run Token" hint="Requires a connected co-located daemon">
       <InlineNotice
         title="Write-only"
         body="An empty token tears the tunnel down. A replacement is sent once and then cleared from this form."
       />
-      <SectionPanel
-        title="Tunnel token"
-        hint="Requires a connected co-located daemon"
-      >
-        {error ? <Text style={panelStyles.error}>{error}</Text> : null}
-        {notice ? <Text style={styles.saved}>{notice}</Text> : null}
-        <TextField
-          label="Token"
-          hint="Paste a new token. Leave this blank and use Tear down to remove the tunnel."
-          value={token}
-          onChangeText={(value) => {
-            setToken(value)
-            setNotice(null)
-            setError(null)
+      {error ? <Text style={panelStyles.error}>{error}</Text> : null}
+      {notice ? <Text style={styles.saved}>{notice}</Text> : null}
+      <TextField
+        label="Token"
+        hint="Paste a new token. Leave this blank and use Tear Down to remove the tunnel."
+        value={token}
+        onChangeText={(value) => {
+          setToken(value)
+          setNotice(null)
+          setError(null)
+        }}
+        secureTextEntry
+        autoCapitalize="none"
+        autoCorrect={false}
+        editable={!mutation.isPending}
+      />
+      <ButtonRow>
+        <Button
+          label="Save Token"
+          busyLabel="Saving…"
+          variant="primary"
+          busy={pending === 'save'}
+          disabled={token.trim() === '' || pending !== null}
+          onPress={() => {
+            void onSave(token)
           }}
-          secureTextEntry
-          autoCapitalize="none"
-          autoCorrect={false}
-          editable={!mutation.isPending}
         />
-        <ButtonRow>
-          <Button
-            label="Save token"
-            busyLabel="Saving…"
-            variant="primary"
-            busy={pending === 'save'}
-            disabled={token.trim() === '' || pending !== null}
-            onPress={() => {
-              void onSave(token)
-            }}
-          />
-          <Button
-            label="Tear down"
-            busyLabel="Tearing down…"
-            variant="danger"
-            busy={pending === 'teardown'}
-            disabled={pending !== null}
-            onPress={() => {
-              void onSave('')
-            }}
-          />
-        </ButtonRow>
-      </SectionPanel>
-    </View>
+        <Button
+          label="Tear Down"
+          busyLabel="Tearing down…"
+          variant="danger"
+          busy={pending === 'teardown'}
+          disabled={pending !== null}
+          onPress={() => {
+            void onSave('')
+          }}
+        />
+      </ButtonRow>
+    </SectionPanel>
   )
 }
 
 const styles = StyleSheet.create({
-  root: {
-    width: '100%',
-    gap: spacing.lg,
-  },
   saved: {
     color: colors.ok,
     fontSize: 13,

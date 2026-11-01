@@ -24,7 +24,7 @@ describe('ADMIN_AREAS', () => {
         expect(area.subRoutes.map((sub) => sub.id)).toEqual([
           'certificates',
           'trusted-proxies',
-          'tunnel',
+          'cloudflare',
           'platform-ca',
           'panel-identity',
         ])

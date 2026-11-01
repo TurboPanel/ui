@@ -33,7 +33,7 @@ export const ADMIN_AREAS = [
     [
       adminSubRoute('certificates', 'Certificates'),
       adminSubRoute('trusted-proxies', 'Trusted Proxies'),
-      adminSubRoute('tunnel', 'Tunnel'),
+      adminSubRoute('cloudflare', 'Cloudflare Connection'),
       adminSubRoute('platform-ca', 'Platform CA'),
       adminSubRoute('panel-identity', 'Control Plane Identity'),
     ]
