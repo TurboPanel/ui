@@ -112,7 +112,7 @@ export function PanelIdentitySection() {
 
   return (
     <View style={styles.root}>
-      <Text style={panelStyles.pageTitle}>Panel Identity</Text>
+      <Text style={panelStyles.pageTitle}>Control Plane Identity</Text>
       <Text style={panelStyles.pageCopy}>
         The keys this control plane signs with. Servers pin the current key when they are installed.
       </Text>
@@ -124,7 +124,7 @@ export function PanelIdentitySection() {
       ) : null}
       {identity?.configured === false ? (
         <InlineNotice
-          title="Panel identity is off"
+          title="Control plane identity is off"
           body="Set the TURBOPANEL_IDENTITY_KEYS secret (High Availability) or start the control plane once (self-hosted) to create it."
         />
       ) : null}

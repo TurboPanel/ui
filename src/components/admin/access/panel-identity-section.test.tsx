@@ -123,7 +123,7 @@ describe('PanelIdentitySection', () => {
 
   it('explains the off state when no identity key exists', () => {
     setup(identity({ configured: false, current: null, next: null, seal: null }))
-    expect(screen.getByText(/Panel identity is off/)).toBeTruthy()
+    expect(screen.getByText(/Control plane identity is off/)).toBeTruthy()
     expect(screen.queryByText(CURRENT)).toBeNull()
   })
 })

@@ -19,7 +19,7 @@ export function PanelKeyLines({
       {nextFingerprint ? <FingerprintLine label="Next Key" value={nextFingerprint} /> : null}
       <Text style={panelStyles.muted}>
         The server will only trust a control plane that signs with this key. If this fingerprint and
-        the one in Admin › Access › Panel Identity differ, do not run the command.
+        the one in Admin › Access › Control Plane Identity differ, do not run the command.
       </Text>
     </View>
   )

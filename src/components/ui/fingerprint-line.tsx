@@ -1,5 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native'
 import { CopyButton } from '@/components/ui/copy-button'
+import { MonoText } from '@/components/ui/mono-text'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { colors, spacing } from '@/lib/theme'
 
@@ -20,9 +21,7 @@ export function FingerprintLine({
       <Text style={styles.label}>{label}</Text>
       {value ? (
         <>
-          <Text selectable style={styles.mono}>
-            {value}
-          </Text>
+          <MonoText selectable>{value}</MonoText>
           {copy ? (
             <CopyButton value={value} label="Copy" accessibilityLabel={`Copy ${label}`} />
           ) : null}
@@ -37,5 +36,4 @@ export function FingerprintLine({
 const styles = StyleSheet.create({
   line: { gap: spacing.xs },
   label: { color: colors.textDim, fontSize: 11, fontWeight: '600' },
-  mono: { color: colors.stdout, fontFamily: 'monospace', fontSize: 13 },
 })
