@@ -9,7 +9,7 @@ const SECRET_VALUE_SHAPES: readonly RegExp[] = [
   /-----BEGIN [A-Z ]*PRIVATE KEY-----/,
   /^[a-z][a-z0-9+.-]*:\/\/[^\s/:@]+:[^\s/@]+@/i,
   /^eyJ[\w-]+\.eyJ[\w-]+\.[\w-]+$/,
-  /^(ghp|gho|ghs|github_pat)_[A-Za-z0-9_]{20,}$/,
+  /^(ghp|gho|ghs|github_pat)_\w{20,}$/,
   /^AKIA[0-9A-Z]{16}$/,
   /^(sk|rk)_(live|test)_[A-Za-z0-9]{16,}$/,
 ]
