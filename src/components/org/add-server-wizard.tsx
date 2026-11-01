@@ -245,7 +245,7 @@ function KeyFingerprints({
         </>
       ) : null}
       <Text style={panelStyles.muted}>
-        The installer checks this fingerprint against the control plane's key before it sends
+        The installer checks this fingerprint against the key of the control plane before it sends
         anything. Run the command only if the fingerprint matches what you expect.
       </Text>
     </View>
