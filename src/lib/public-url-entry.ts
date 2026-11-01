@@ -60,12 +60,10 @@ export type PublicUrlDraft = {
 }
 
 export type PublicUrlEntryResult =
-  | { ok: true; value: string; parts: PublicUrlParts }
-  | { ok: false; error: string }
+  { ok: true; value: string; parts: PublicUrlParts } | { ok: false; error: string }
 
 export type PublicUrlAddResult =
-  | { ok: true; urls: string[]; value: string }
-  | { ok: false; error: string }
+  { ok: true; urls: string[]; value: string } | { ok: false; error: string }
 
 export const PUBLIC_URL_ENTRY_HINT =
   'Hostname or IP; leave the port blank for the scheme default. Paste a whole address and its scheme, port, and path are sorted out for you.'
@@ -222,7 +220,7 @@ function comparableEntry(entry: string): string {
  */
 export function addPublicUrlEntry(
   current: readonly string[],
-  draft: PublicUrlDraft,
+  draft: PublicUrlDraft
 ): PublicUrlAddResult {
   const built = buildPublicUrlEntry(draft)
   if (!built.ok) return built
@@ -247,4 +245,28 @@ export function samePublicUrlSet(a: readonly string[], b: readonly string[]): bo
     if (!right.has(entry)) return false
   }
   return true
+}
+
+/** Port a stored name is published on until told otherwise (the panel's own listener). */
+export const DEFAULT_PANEL_PUBLIC_PORT = 8443
+
+/**
+ * The address people open for a stored hostname: `https://host` on port 443,
+ * `https://host:<port>` otherwise. A missing port reads as 8443. Mirrors the
+ * control plane's public origin helper; the stored entry itself stays the
+ * `:8443` dial.
+ */
+export function publicOriginForRecord(record: { host: string; publicPort?: number }): string {
+  const host = parsePublicUrlEntry(record.host)?.host ?? record.host.trim().toLowerCase()
+  const literal = host.includes(':') ? `[${host}]` : host
+  const port = record.publicPort ?? DEFAULT_PANEL_PUBLIC_PORT
+  return port === 443 ? `https://${literal}` : `https://${literal}:${port}`
+}
+
+/** A typed public port, or `null` when it is not a whole number from 1 to 65535. */
+export function parsePublicPort(text: string): number | null {
+  const trimmed = text.trim()
+  if (!/^\d{1,5}$/.test(trimmed)) return null
+  const port = Number(trimmed)
+  return port >= 1 && port <= 65535 ? port : null
 }

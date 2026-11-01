@@ -5424,12 +5424,29 @@ export type InstanceHostnameRecord = {
   notAfter: string | null
   acmeLastAttemptAt: string | null
   acmeLastError: string | null
+  /** Port visitors use; 443 shows no port in links. Absent from older control planes (8443). */
+  publicPort?: number
+  /** Links, OAuth and webhook URLs follow the primary; without one, the oldest name. */
+  isPrimary?: boolean
 }
 
 export type InstanceHostnameInput = {
   host: string
   source: InstanceHostnameSource
   uploadedCertId: string | null
+  /** Left out, the stored value stays. */
+  publicPort?: number
+  /** True makes this name the primary; the control plane demotes the rest. */
+  isPrimary?: boolean
+}
+
+/** Sent back by a save that moved the primary name's public address. */
+export type InstanceHostnamesSaveResult = {
+  ok: boolean
+  hostnames: InstanceHostnameRecord[]
+  warnings?: string[]
+  previousPrimaryOrigin?: string
+  primaryOrigin?: string | null
 }
 
 export type UploadedCertificateRecord = {
@@ -5507,7 +5524,7 @@ export async function fetchInstanceHostnames(options: { signal?: AbortSignal } =
 
 export async function saveInstanceHostnames(
   hostnames: InstanceHostnameInput[]
-): Promise<{ ok: boolean; hostnames: InstanceHostnameRecord[] }> {
+): Promise<InstanceHostnamesSaveResult> {
   return await adminJson(`${ADMIN_API}/instance/hostnames`, {
     method: 'PUT',
     body: JSON.stringify({ hostnames }),
