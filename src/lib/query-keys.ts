@@ -481,6 +481,7 @@ export const queryKeys = {
     upgradeServers: (offset: number, limit: number, status: string) =>
       ['admin', 'instance-updates', 'servers', offset, limit, status] as const,
     upgradeSettings: ['admin', 'instance-updates', 'settings'] as const,
+    instanceIdentity: ['admin', 'instance-identity'] as const,
     platformCa: ['admin', 'platform-ca'] as const,
     trustedProxies: ['admin', 'trusted-proxies'] as const,
     signup: ['admin', 'settings', 'signup'] as const,

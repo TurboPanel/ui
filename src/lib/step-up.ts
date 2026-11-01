@@ -37,6 +37,8 @@ const ACTION_LABELS: Readonly<Record<string, string>> = {
   'managed.delete': 'delete this managed database',
   'managed.database.delete': 'delete this database',
   'member.remove': 'remove this member',
+  'panel.identity_next.set': "change the control plane's next key",
+  'instance.tunnel_token.set': 'change the tunnel token',
 }
 
 export function stepUpActionLabel(action: string | null): string {

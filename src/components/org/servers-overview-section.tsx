@@ -5,6 +5,7 @@ import { panelStyles } from '@/components/ui/panel-styles'
 import { GeoLocationLines } from '@/components/org/geo-location-lines'
 import { isCustomLocation, locationDisplayGeo } from '@/lib/location'
 import { OsIdentityMark } from '@/components/org/os-identity-mark'
+import { PanelKeyBadge } from '@/components/org/panel-key-badge'
 import {
   Badge,
   type BadgeTone,
@@ -369,6 +370,7 @@ function ServerStatusCell({ server }: Readonly<{ server: OrgServerRecord }>) {
   return (
     <DataTableCell column={SV_STATUS}>
       <ServerStatusBadge server={server} />
+      <PanelKeyBadge pinnedBy={server.trustPinnedBy} />
     </DataTableCell>
   )
 }
@@ -589,6 +591,7 @@ function OrgServerCompactRow({
           <ServerHostIdentity server={server} />
           <View style={styles.compactMeta}>
             <ServerStatusBadge server={server} />
+            <PanelKeyBadge pinnedBy={server.trustPinnedBy} />
             <ServerTierLine server={server} />
             <ServerLocationLines server={server} inline />
           </View>
@@ -704,6 +707,7 @@ function OrgServerTile({
       </View>
       <View style={styles.tileMeta}>
         <ServerStatusBadge server={server} />
+        <PanelKeyBadge pinnedBy={server.trustPinnedBy} />
         <ServerTierLine server={server} />
         <ServerLocationLines server={server} inline />
       </View>

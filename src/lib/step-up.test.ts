@@ -57,6 +57,8 @@ describe('parseStepUpChallenge', () => {
 describe('step-up copy and input', () => {
   it('names the action in app vocabulary and has a fallback', () => {
     expect(stepUpActionLabel('project.delete')).toBe('delete this project')
+    expect(stepUpActionLabel('panel.identity_next.set')).toBe("change the control plane's next key")
+    expect(stepUpActionLabel('instance.tunnel_token.set')).toBe('change the tunnel token')
     expect(stepUpActionLabel('nothing.known')).toBe('do this')
     expect(stepUpActionLabel(null)).toBe('do this')
   })
