@@ -2902,6 +2902,14 @@ export type CreatedLicense = {
   licenseId: string
   licenseToken: string
   installCommand: string
+  /**
+   * Fingerprint of the control plane's current identity key, which the signed
+   * install command names. Absent from an older control plane; null when the
+   * command is the older form.
+   */
+  panelFingerprint?: string | null
+  /** Fingerprint of the offline next key, when one is set. */
+  nextFingerprint?: string | null
 }
 
 export class ServerCapacityExceededError extends Error {

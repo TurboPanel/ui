@@ -219,14 +219,45 @@ type InstallStepProps = Readonly<{
   installBaseUrl: string
   managedUrls: string[]
   displayedInstallCommand: string
+  panelFingerprint?: string | null
+  nextFingerprint?: string | null
   onInstallBaseUrlChange: (url: string) => void
   onContinue: () => void
 }>
+
+function KeyFingerprints({
+  panelFingerprint,
+  nextFingerprint,
+}: Readonly<{ panelFingerprint?: string | null; nextFingerprint?: string | null }>) {
+  if (!panelFingerprint) return null
+  return (
+    <View style={styles.revealed}>
+      <Text style={styles.secretLabel}>Control Plane Key Fingerprint</Text>
+      <Text selectable style={styles.secretValue}>
+        {panelFingerprint}
+      </Text>
+      {nextFingerprint ? (
+        <>
+          <Text style={styles.secretLabel}>Next Key Fingerprint</Text>
+          <Text selectable style={styles.secretValue}>
+            {nextFingerprint}
+          </Text>
+        </>
+      ) : null}
+      <Text style={panelStyles.muted}>
+        The installer checks this fingerprint against the control plane's key before it sends
+        anything. Run the command only if the fingerprint matches what you expect.
+      </Text>
+    </View>
+  )
+}
 
 function InstallStep({
   installBaseUrl,
   managedUrls,
   displayedInstallCommand,
+  panelFingerprint,
+  nextFingerprint,
   onInstallBaseUrlChange,
   onContinue,
 }: InstallStepProps) {
@@ -258,6 +289,7 @@ function InstallStep({
         label="Copy install command"
         copiedLabel="Copied install command"
       />
+      <KeyFingerprints panelFingerprint={panelFingerprint} nextFingerprint={nextFingerprint} />
       <Text style={panelStyles.muted}>
         Run this command on your new server, then click Continue.
       </Text>
@@ -597,6 +629,8 @@ export function AddServerWizard({ orgId, onComplete, onDismiss }: AddServerWizar
           installBaseUrl={installBaseUrl}
           managedUrls={managedUrls}
           displayedInstallCommand={displayedInstallCommand}
+          panelFingerprint={revealed.panelFingerprint}
+          nextFingerprint={revealed.nextFingerprint}
           onInstallBaseUrlChange={setInstallBaseUrl}
           onContinue={() => setStep('waiting')}
         />
