@@ -20,8 +20,24 @@ describe('publicUrlsApplyFeedback', () => {
     expect(publicUrlsApplyFeedback('unreachable')).toMatchObject({ tone: 'failed' })
   })
 
-  it('tells the operator to accept the new certificate once it is back', () => {
-    expect(publicUrlsApplyFeedback('reconnected')?.message).toContain('certificate')
+  it('never tells people to click through a browser certificate warning', () => {
+    const statuses: PublicUrlsApplyStatus[] = [
+      'applying',
+      'reconnecting',
+      'applied',
+      'reconnected',
+      'reconnected-trusted',
+      'reconnected-mixed',
+      'reconnected-kept',
+      'not-saved',
+      'unreachable',
+    ]
+    for (const status of statuses) {
+      expect(publicUrlsApplyFeedback(status)?.message).not.toMatch(/\baccept\b|came back|—/i)
+    }
+    expect(publicUrlsApplyFeedback('reconnected')?.message).toBe(
+      'Applied. The control plane now serves the new certificate. A self-signed certificate still triggers a browser warning on this address; use a hostname with a public certificate, or trust the Platform CA, to avoid it.'
+    )
   })
 
   it('carries the control plane message through a real failure', () => {

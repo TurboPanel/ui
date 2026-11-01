@@ -135,7 +135,7 @@ export function LinkedAccountsPanel({
         <InlineNotice
           tone="warning"
           title="Could not link that account"
-          body="Your session ended before the provider came back. Sign in and try again."
+          body="Your session ended before the provider responded. Sign in and try again."
         />
       ) : null}
       {!canLink && authProviders.length > 0 ? (
