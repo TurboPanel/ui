@@ -7,7 +7,6 @@ export {
 } from '@/components/ui/button'
 export { Checkbox } from '@/components/ui/checkbox'
 export { ConfirmButton } from '@/components/ui/confirm-button'
-export { FingerprintLine } from '@/components/ui/fingerprint-line'
 export { CopyButton } from '@/components/ui/copy-button'
 export {
   DataTable,

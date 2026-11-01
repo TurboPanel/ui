@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native'
 import { panelStyles } from '@/components/ui/panel-styles'
-import { FingerprintLine } from '@/components/ui'
+import { FingerprintLine } from '@/components/ui/fingerprint-line'
 import { spacing } from '@/lib/theme'
 
 /**

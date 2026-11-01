@@ -4,12 +4,12 @@ import { panelStyles } from '@/components/ui/panel-styles'
 import {
   ButtonRow,
   ConfirmButton,
-  FingerprintLine,
   InlineNotice,
   LoadingState,
   SectionPanel,
   TextField,
 } from '@/components/ui'
+import { FingerprintLine } from '@/components/ui/fingerprint-line'
 import { SuperadminOnly } from '@/components/admin/access/superadmin-only'
 import { useAuth } from '@/lib/auth-context'
 import type { InstanceIdentity } from '@/lib/instance-api'

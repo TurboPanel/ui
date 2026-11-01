@@ -4,7 +4,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { PanelKeyLines } from './panel-key-lines'
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
-vi.mock('@/components/ui', () => ({
+vi.mock('@/components/ui', () => ({}))
+vi.mock('@/components/ui/fingerprint-line', () => ({
   FingerprintLine: ({ label, value }: { label: string; value: string }) => (
     <p>
       <b>{label}</b>

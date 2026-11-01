@@ -27,20 +27,6 @@ vi.mock('@/components/ui', () => {
   return {
     ButtonRow: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
     ConfirmButton: ({ label }: { label: string }) => <button type="button">{label}</button>,
-    FingerprintLine: ({
-      label,
-      value,
-      fallback = 'Not set',
-    }: {
-      label: string
-      value?: string | null
-      fallback?: string
-    }) => (
-      <p>
-        <b>{label}</b>
-        <span>{value ?? fallback}</span>
-      </p>
-    ),
     InlineNotice: ({ title, body }: { title: string; body: string }) => (
       <p>
         {title} {body}
@@ -56,6 +42,22 @@ vi.mock('@/components/ui', () => {
     TextField: ({ label }: { label: string }) => <input aria-label={label} />,
   }
 })
+vi.mock('@/components/ui/fingerprint-line', () => ({
+  FingerprintLine: ({
+    label,
+    value,
+    fallback = 'Not set',
+  }: {
+    label: string
+    value?: string | null
+    fallback?: string
+  }) => (
+    <p>
+      <b>{label}</b>
+      <span>{value ?? fallback}</span>
+    </p>
+  ),
+}))
 vi.mock('@/components/ui/panel-styles', () => ({
   panelStyles: { pageTitle: {}, pageCopy: {}, muted: {}, error: {} },
 }))
