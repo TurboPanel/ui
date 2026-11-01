@@ -35,6 +35,7 @@ export const ADMIN_AREAS = [
       adminSubRoute('trusted-proxies', 'Trusted Proxies'),
       adminSubRoute('tunnel', 'Tunnel'),
       adminSubRoute('platform-ca', 'Platform CA'),
+      adminSubRoute('panel-identity', 'Panel Identity'),
     ]
   ),
   adminArea('updates', 'Updates', 'Control plane and co-located daemon versions', [

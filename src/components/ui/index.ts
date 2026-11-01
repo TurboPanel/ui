@@ -1,12 +1,8 @@
 export { Badge, type BadgeTone } from '@/components/ui/badge'
-export {
-  Button,
-  ButtonRow,
-  type ButtonSize,
-  type ButtonVariant,
-} from '@/components/ui/button'
+export { Button, ButtonRow, type ButtonSize, type ButtonVariant } from '@/components/ui/button'
 export { Checkbox } from '@/components/ui/checkbox'
 export { ConfirmButton } from '@/components/ui/confirm-button'
+export { FingerprintLine } from '@/components/ui/fingerprint-line'
 export { CopyButton } from '@/components/ui/copy-button'
 export {
   DataTable,
@@ -16,31 +12,17 @@ export {
   type DataTableColumn,
 } from '@/components/ui/data-table'
 export { FormField, TextField } from '@/components/ui/form-field'
-export {
-  InlineNotice,
-  type InlineNoticeTone,
-} from '@/components/ui/inline-notice'
+export { InlineNotice, type InlineNoticeTone } from '@/components/ui/inline-notice'
 export { ModalSheet } from '@/components/ui/modal-sheet'
 export { MonoText } from '@/components/ui/mono-text'
-export {
-  SectionNav,
-  SECTION_NAV_HEIGHT,
-  type SectionNavItem,
-} from '@/components/ui/section-nav'
+export { SectionNav, SECTION_NAV_HEIGHT, type SectionNavItem } from '@/components/ui/section-nav'
 export { SectionPanel } from '@/components/ui/section-panel'
 export { Select, type SelectOption } from '@/components/ui/select'
 export { SettingRow } from '@/components/ui/setting-row'
-export {
-  SegmentedControl,
-  type SegmentedOption,
-} from '@/components/ui/segmented-control'
+export { SegmentedControl, type SegmentedOption } from '@/components/ui/segmented-control'
 export { TextLink, type TextLinkSize } from '@/components/ui/text-link'
 export { Toggle } from '@/components/ui/toggle'
 export { StatusDot, type StatusTone } from '@/components/ui/status-dot'
-export {
-  StatTiles,
-  type StatTileIcon,
-  type StatTileItem,
-} from '@/components/ui/stat-tiles'
+export { StatTiles, type StatTileIcon, type StatTileItem } from '@/components/ui/stat-tiles'
 export { EmptyState, LoadingState } from '@/components/ui/state-views'
 export { WizardSteps, type WizardStepItem } from '@/components/ui/wizard-steps'

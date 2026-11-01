@@ -1,4 +1,5 @@
 import { PhpModePolicyPanel } from '@/components/org/php-mode-policy-panel'
+import { PanelKeyBadge } from '@/components/org/panel-key-badge'
 import {
   useCallback,
   useEffect,
@@ -838,6 +839,7 @@ export function ServerDetailSection({
               </View>
             ) : null}
           </View>
+          <PanelKeyBadge pinnedBy={server.trustPinnedBy} withHelp />
           {connectedVia ? <MonoText style={styles.connectedVia}>{connectedVia}</MonoText> : null}
         </View>
       </View>

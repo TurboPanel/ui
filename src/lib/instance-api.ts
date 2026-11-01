@@ -946,6 +946,8 @@ export type OrgServerRecord = {
   /** Capacity totals from daemon hello (`server.metadata.resources`, including ips). */
   resources: ServerHostResources | null
   colocatedWithInstance?: boolean
+  /** How this server learned the control plane's key; absent from an older control plane. */
+  trustPinnedBy?: PinnedBy
   ips: ServerReportedIp[] | null
   timeSync: ServerTimeSync | null
   /**
@@ -2902,6 +2904,12 @@ export type CreatedLicense = {
   licenseId: string
   licenseToken: string
   installCommand: string
+  /** The control plane's current key fingerprint; omitted by an older control plane or one with no identity key. */
+  panelFingerprint?: string
+  /** The key servers accept after a rotation; null when none is set. */
+  nextFingerprint?: string | null
+  /** The address the new server will dial. */
+  installUrl?: string
 }
 
 export class ServerCapacityExceededError extends Error {
@@ -6031,6 +6039,35 @@ export async function pauseUpdates(): Promise<UpdatesPauseResult> {
 /** Let updates start again from the next hourly check (idempotent). */
 export async function resumeUpdates(): Promise<UpdatesPauseResult> {
   return await apiFetch(`${ADMIN_API}/instance/updates/resume`, { method: 'POST' })
+}
+
+/** How a server learned the control plane's key. `none` means no pin is recorded. */
+export type PinnedBy = 'install' | 'upgrade' | 'unsafe' | 'none'
+
+/** The control plane's key fingerprints (public values) and each server's pinned-by state. */
+export type InstanceIdentity = {
+  ok: true
+  configured: boolean
+  current: { fingerprint: string; keyset: number } | null
+  next: { fingerprint: string } | null
+  seal: { fingerprint: string } | null
+  urls: string[]
+  installUrl: string | null
+  servers: { id: string; name: string | null; organizationId: string | null; pinnedBy: PinnedBy }[]
+}
+
+export async function fetchInstanceIdentity(): Promise<InstanceIdentity> {
+  return await apiFetch(`${ADMIN_API}/instance/identity`)
+}
+
+/** Superadmin, self-hosted. A stale session opens the re-authentication sheet. `null` clears the next key. */
+export async function saveInstanceIdentityNext(
+  fingerprint: string | null
+): Promise<{ ok: boolean; next: { fingerprint: string } | null }> {
+  return await apiFetch(`${ADMIN_API}/instance/identity/next`, {
+    method: 'PUT',
+    body: JSON.stringify({ fingerprint }),
+  })
 }
 
 export async function fetchPlatformCa(): Promise<PlatformCaInfo> {

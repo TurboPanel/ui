@@ -23,6 +23,8 @@ import {
   type UpgradeHistoryQuery,
   type UpgradeRunServersQuery,
   fetchPlatformCa,
+  fetchInstanceIdentity,
+  saveInstanceIdentityNext,
   fetchTrustedProxies,
   type InstanceHostnameInput,
   type InstanceHostnameRecord,
@@ -620,6 +622,26 @@ export function useInstanceDaemon(options?: Readonly<{ enabled?: boolean }>) {
     queryFn: fetchInstanceDaemon,
     enabled: options?.enabled ?? true,
     staleTime: 5 * 60 * 1000,
+  })
+}
+
+/** The control plane's key fingerprints. Rarely changes: `staleTime`, no interval. */
+export function useInstanceIdentity(options?: Readonly<{ enabled?: boolean }>) {
+  return useQuery({
+    queryKey: queryKeys.admin.instanceIdentity,
+    queryFn: fetchInstanceIdentity,
+    enabled: options?.enabled ?? true,
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
+export function useSaveInstanceIdentityNext() {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: saveInstanceIdentityNext,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.admin.instanceIdentity })
+    },
   })
 }
 
