@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { isEffectivePrimary, primaryChangeNotice, withPrimary } from '@/lib/hostname-ingress'
+import {
+  isEffectivePrimary,
+  primaryChangeNotice,
+  primaryHostWouldChange,
+  withPrimary,
+} from '@/lib/hostname-ingress'
 
 const rows = [
   { host: 'a.example.test', source: 'platform-ca' as const, uploadedCertId: null },
@@ -33,7 +38,35 @@ describe('primaryChangeNotice', () => {
     expect(notice).toContain('OAuth callback URLs')
   })
 
+  it('names passkeys only when the host changed', () => {
+    const base = { ok: true, hostnames: [], previousPrimaryOrigin: 'https://a.example.test' }
+    expect(
+      primaryChangeNotice({
+        ...base,
+        warnings: ['primary-host-changed'],
+        primaryOrigin: 'https://b.example.test',
+      })
+    ).toContain('Passkeys')
+    expect(
+      primaryChangeNotice({
+        ...base,
+        warnings: ['primary-origin-changed'],
+        primaryOrigin: 'https://a.example.test:8443',
+      })
+    ).not.toContain('Passkeys')
+  })
+
   it('says nothing when the primary did not change', () => {
     expect(primaryChangeNotice({ ok: true, hostnames: [] })).toBeNull()
+  })
+})
+
+describe('primaryHostWouldChange', () => {
+  it('is true only when the effective primary host differs', () => {
+    expect(primaryHostWouldChange(rows, rows)).toBe(false)
+    expect(primaryHostWouldChange(rows, withPrimary(rows, 1))).toBe(true)
+    const portOnly = [{ ...rows[0], publicPort: 443 }, rows[1]]
+    expect(primaryHostWouldChange(rows, portOnly)).toBe(false)
+    expect(primaryHostWouldChange([], rows)).toBe(false)
   })
 })

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { AddPublicUrlRow, PublicUrlsApplyFeedback } from '@/components/admin/public-url-fields'
 import { PrimaryCell, PublicPortCell } from '@/components/admin/access/hostname-ingress-cells'
@@ -37,7 +37,13 @@ import {
   type InstanceHostnameSource,
   type UploadedCertificateRecord,
 } from '@/lib/instance-api'
-import { isEffectivePrimary, primaryChangeNotice, withPrimary } from '@/lib/hostname-ingress'
+import {
+  isEffectivePrimary,
+  PRIMARY_HOST_CONFIRM,
+  primaryChangeNotice,
+  primaryHostWouldChange,
+  withPrimary,
+} from '@/lib/hostname-ingress'
 import { HA_CERT_APPLY_NOTE } from '@/lib/platform-copy'
 import {
   addPublicUrlEntry,
@@ -159,6 +165,16 @@ export function HostnamesSection() {
   const [entryError, setEntryError] = useState<string | null>(null)
   const [applyNotAvailable, setApplyNotAvailable] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const [passkeyConfirm, setPasskeyConfirm] = useState<'save' | 'apply' | null>(null)
+  const [badPorts, setBadPorts] = useState<string[]>([])
+
+  const onPortValidity = useCallback((host: string, valid: boolean) => {
+    setBadPorts((current) => {
+      const has = current.includes(host)
+      if (valid === !has) return current
+      return valid ? current.filter((item) => item !== host) : [...current, host]
+    })
+  }, [])
 
   useEffect(() => {
     if (!hostnamesQuery.data) return
@@ -280,7 +296,23 @@ export function HostnamesSection() {
     setApplyError(message)
   }
 
+  const askPasskeys = (action: 'save' | 'apply'): boolean => {
+    if (!primaryHostWouldChange(stored, draft)) return false
+    setPasskeyConfirm(action)
+    return true
+  }
+
+  const onSaveClick = () => {
+    if (askPasskeys('save')) return
+    void onSave()
+  }
+
   const onSaveAndApply = () => {
+    if (askPasskeys('apply')) return
+    continueApply()
+  }
+
+  const continueApply = () => {
     if (requiresPlatformCaConfirm(stored, draft)) {
       setConfirmOpen(true)
       return
@@ -331,13 +363,35 @@ export function HostnamesSection() {
             onEntryChange={setEntry}
             onAddUrl={onAddUrl}
             onDraftChange={setDraft}
-            onSave={() => {
-              void onSave()
-            }}
+            portsInvalid={badPorts.length > 0}
+            onPortValidity={onPortValidity}
+            onSave={onSaveClick}
             onSaveAndApply={onSaveAndApply}
           />
         )}
       </SectionPanel>
+
+      <ModalSheet
+        visible={passkeyConfirm !== null}
+        title="Change the Primary Host"
+        description={PRIMARY_HOST_CONFIRM}
+        onRequestClose={() => setPasskeyConfirm(null)}
+        footer={
+          <ButtonRow>
+            <Button label="Cancel" onPress={() => setPasskeyConfirm(null)} />
+            <Button
+              label="Change Primary Host"
+              variant="primary"
+              onPress={() => {
+                const action = passkeyConfirm
+                setPasskeyConfirm(null)
+                if (action === 'save') void onSave()
+                else continueApply()
+              }}
+            />
+          </ButtonRow>
+        }
+      />
 
       <ModalSheet
         visible={confirmOpen}
@@ -373,6 +427,8 @@ function HostnamesEditor({
   onEntryChange,
   onAddUrl,
   onDraftChange,
+  portsInvalid,
+  onPortValidity,
   onSave,
   onSaveAndApply,
 }: Readonly<{
@@ -393,6 +449,8 @@ function HostnamesEditor({
   onEntryChange: (entry: PublicUrlDraft) => void
   onAddUrl: () => void
   onDraftChange: (next: InstanceHostnameInput[]) => void
+  portsInvalid: boolean
+  onPortValidity: (host: string, valid: boolean) => void
   onSave: () => void
   onSaveAndApply: () => void
 }>) {
@@ -410,6 +468,7 @@ function HostnamesEditor({
         invalidHosts={invalidHosts}
         busy={busy}
         onDraftChange={onDraftChange}
+        onPortValidity={onPortValidity}
       />
       <AddPublicUrlRow
         entry={entry}
@@ -424,7 +483,7 @@ function HostnamesEditor({
           busyLabel="Saving…"
           variant="primary"
           busy={saving}
-          disabled={applying}
+          disabled={applying || portsInvalid}
           onPress={onSave}
         />
         {applyNotAvailable ? null : (
@@ -433,7 +492,7 @@ function HostnamesEditor({
             busyLabel={applyStatus === 'reconnecting' ? 'Reconnecting…' : 'Saving & Applying…'}
             variant="primary"
             busy={applying}
-            disabled={saving}
+            disabled={saving || portsInvalid}
             onPress={onSaveAndApply}
           />
         )}
@@ -453,6 +512,7 @@ function HostnameTable({
   invalidHosts,
   busy,
   onDraftChange,
+  onPortValidity,
 }: Readonly<{
   draft: InstanceHostnameInput[]
   byHost: Map<string, InstanceHostnameRecord>
@@ -462,6 +522,7 @@ function HostnameTable({
   invalidHosts: string[]
   busy: boolean
   onDraftChange: (next: InstanceHostnameInput[]) => void
+  onPortValidity: (host: string, valid: boolean) => void
 }>) {
   if (draft.length === 0) {
     return (
@@ -487,6 +548,7 @@ function HostnameTable({
           last={index === draft.length - 1}
           primary={isEffectivePrimary(draft, index)}
           onMakePrimary={() => onDraftChange(withPrimary(draft, index))}
+          onPortValidity={onPortValidity}
           onChange={(next) => {
             onDraftChange(draft.map((item, i) => (i === index ? next : item)))
           }}
@@ -511,6 +573,7 @@ function HostnameRow({
   last,
   primary,
   onMakePrimary,
+  onPortValidity,
   onChange,
   onRemove,
 }: Readonly<{
@@ -525,6 +588,7 @@ function HostnameRow({
   last: boolean
   primary: boolean
   onMakePrimary: () => void
+  onPortValidity: (host: string, valid: boolean) => void
   onChange: (next: InstanceHostnameInput) => void
   onRemove: () => void
 }>) {
@@ -539,7 +603,12 @@ function HostnameRow({
         {invalid ? <Text style={styles.rowError}>This hostname was refused.</Text> : null}
       </DataTableCell>
       <DataTableCell column={COLUMNS[1]}>
-        <PublicPortCell row={row} busy={busy} onChange={onChange} />
+        <PublicPortCell
+          row={row}
+          busy={busy}
+          onChange={onChange}
+          onValidityChange={onPortValidity}
+        />
       </DataTableCell>
       <DataTableCell column={COLUMNS[2]}>
         <PrimaryCell primary={primary} busy={busy} onMakePrimary={onMakePrimary} />

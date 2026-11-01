@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
+import { panelStyles } from '@/components/ui/panel-styles'
 import { Badge, Button, TextField } from '@/components/ui'
 import type { InstanceHostnameInput } from '@/lib/instance-api'
 import {
@@ -7,20 +8,33 @@ import {
   parsePublicPort,
   publicOriginForRecord,
 } from '@/lib/public-url-entry'
-import { colors, spacing } from '@/lib/theme'
+import { spacing } from '@/lib/theme'
 
 export function PublicPortCell({
   row,
   busy,
   onChange,
+  onValidityChange,
 }: Readonly<{
   row: InstanceHostnameInput
   busy: boolean
   onChange: (next: InstanceHostnameInput) => void
+  /** Reports whether the typed text is a usable port, so Save can wait for a fix. */
+  onValidityChange: (host: string, valid: boolean) => void
 }>) {
   const port = row.publicPort ?? DEFAULT_PANEL_PUBLIC_PORT
   const [text, setText] = useState(String(port))
   const typed = parsePublicPort(text)
+  // A save or refetch changes the row; show its value, but never overwrite
+  // text the operator is still typing.
+  useEffect(() => {
+    setText((current) => (parsePublicPort(current) === port ? current : String(port)))
+  }, [port])
+  useEffect(() => {
+    const host = row.host
+    onValidityChange(host, typed !== null)
+    return () => onValidityChange(host, true)
+  }, [typed, row.host, onValidityChange])
   return (
     <View style={styles.stack}>
       <TextField
@@ -36,7 +50,7 @@ export function PublicPortCell({
           if (next !== null) onChange({ ...row, publicPort: next })
         }}
       />
-      <Text style={styles.muted}>
+      <Text style={panelStyles.muted}>
         {publicOriginForRecord({ ...row, publicPort: typed ?? port })}
       </Text>
     </View>
@@ -54,5 +68,4 @@ export function PrimaryCell({
 
 const styles = StyleSheet.create({
   stack: { width: '100%', gap: spacing.xs },
-  muted: { color: colors.textMuted, fontSize: 12 },
 })
