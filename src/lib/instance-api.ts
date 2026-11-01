@@ -6236,6 +6236,47 @@ export type RemoveIngressAccountResult =
 
 const INGRESS = `${ADMIN_API}/instance/ingress`
 
+export type TunnelConnectorStatus =
+  'not-installed' | 'connected' | 'connecting' | 'stopped' | 'failed'
+
+/**
+ * The control plane's own tunnel: the connector half (from the daemon) and the
+ * edge half (from Cloudflare, only when an account is connected). A note is a
+ * plain sentence to show when its half is empty.
+ */
+export type InstanceTunnelStatus = {
+  ok: boolean
+  connector: {
+    status: TunnelConnectorStatus
+    version: string | null
+    pinnedVersion: string | null
+    slot: string | null
+    lastUpdate: { outcome: string; at: string; reason?: string } | null
+    checkedAt: string | null
+  } | null
+  connectorNote: string | null
+  edge: {
+    tunnelId: string
+    tunnelName: string
+    status: string
+    connections: number
+    locations: string[]
+    hostnames: string[]
+    checkedAt: string | null
+  } | null
+  edgeNote: string | null
+  edgeError: string | null
+}
+
+export async function fetchInstanceTunnelStatus(): Promise<InstanceTunnelStatus> {
+  return await apiFetch(`${INGRESS}/tunnel`)
+}
+
+/** Asks the daemon again; answers the same shape. */
+export async function refreshInstanceTunnelStatus(): Promise<InstanceTunnelStatus> {
+  return await adminJson(`${INGRESS}/tunnel/refresh`, { method: 'POST' })
+}
+
 function hostnamePath(id: string, action: string): string {
   return `${INGRESS}/hostnames/${encodeURIComponent(id)}${action}`
 }

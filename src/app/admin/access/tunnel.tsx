@@ -1,6 +1,10 @@
-import { Redirect } from 'expo-router'
+import { CloudflareTunnelSection } from '@/components/admin/access/cloudflare-tunnel-section'
+import { SuperadminOnly } from '@/components/admin/access/superadmin-only'
 
-/** The Tunnel screen became Cloudflare Connection; old bookmarks land there. */
-export default function AdminAccessTunnelRedirect() {
-  return <Redirect href="/admin/access/cloudflare" />
+export default function AdminAccessTunnelScreen() {
+  return (
+    <SuperadminOnly title="Cloudflare Tunnel">
+      <CloudflareTunnelSection />
+    </SuperadminOnly>
+  )
 }

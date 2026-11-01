@@ -6,10 +6,12 @@ import {
   fetchHostnameIngressStatus,
   fetchIngressAccounts,
   fetchIngressCapabilities,
+  fetchInstanceTunnelStatus,
   fetchPanelDnsCertificate,
   orderPanelDnsCertificate,
   preflightHostnameIngress,
   recheckIngressAccount,
+  refreshInstanceTunnelStatus,
   removeHostnameIngress,
   removeIngressAccount,
   setEdgeGate,
@@ -60,6 +62,8 @@ describe('connection mode, account and DNS-01 wrappers', () => {
     await fetchPanelDnsCertificate('h1')
     await orderPanelDnsCertificate('h1', false)
     await orderPanelDnsCertificate('h1', true)
+    await fetchInstanceTunnelStatus()
+    await refreshInstanceTunnelStatus()
     expect(calls()).toEqual([
       ['/instance/ingress/capabilities', undefined, undefined],
       ['/instance/ingress/gate', 'PUT', '{"confirmed":true}'],
@@ -83,6 +87,8 @@ describe('connection mode, account and DNS-01 wrappers', () => {
       ['/instance/acme-dns/hostnames/h1', undefined, undefined],
       ['/instance/acme-dns/hostnames/h1/order', 'POST', undefined],
       ['/instance/acme-dns/hostnames/h1/retry', 'POST', undefined],
+      ['/instance/ingress/tunnel', undefined, undefined],
+      ['/instance/ingress/tunnel/refresh', 'POST', undefined],
     ])
   })
 

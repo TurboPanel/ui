@@ -10,6 +10,9 @@ import {
   useAddIngressAccount,
   useApplyHostnameIngress,
   useHostnameIngressStatus,
+  useHostnameIngressStatuses,
+  useInstanceTunnelStatus,
+  useRefreshInstanceTunnelStatus,
   useIngressAccounts,
   useIngressCapabilities,
   useOrderPanelDnsCertificate,
@@ -28,6 +31,8 @@ const api = vi.hoisted(() => ({
   fetchHostnameIngressStatus: vi.fn(),
   fetchIngressAccounts: vi.fn(),
   fetchIngressCapabilities: vi.fn(),
+  fetchInstanceTunnelStatus: vi.fn(),
+  refreshInstanceTunnelStatus: vi.fn(),
   fetchPanelDnsCertificate: vi.fn(),
   orderPanelDnsCertificate: vi.fn(),
   preflightHostnameIngress: vi.fn(),
@@ -100,6 +105,33 @@ describe('ingress queries', () => {
     expect(api.fetchPanelDnsCertificate).toHaveBeenCalledWith('h1')
     expect(intervalOf(client, queryKeys.admin.hostnameIngressStatus('h1'))).toBe(15_000)
     expect(intervalOf(client, queryKeys.admin.panelDnsCertificate('h1'))).toBe(10_000)
+  })
+
+  it('reads the tunnel every minute and writes a refresh into the cache', async () => {
+    api.fetchInstanceTunnelStatus.mockResolvedValue({ ok: true, connector: null })
+    api.refreshInstanceTunnelStatus.mockResolvedValue({ ok: true, connector: null, edge: null })
+    api.fetchHostnameIngressStatus.mockResolvedValue({ phase: 'healthy' })
+    const { client, wrapper } = setup()
+    const { result } = renderHook(
+      () => ({
+        status: useInstanceTunnelStatus(),
+        refresh: useRefreshInstanceTunnelStatus(),
+        many: useHostnameIngressStatuses(['h1', 'h2']),
+      }),
+      { wrapper }
+    )
+    await waitFor(() => expect(result.current.status.data).toBeTruthy())
+    await waitFor(() => expect(result.current.many.every((item) => item.data)).toBe(true))
+    expect(intervalOf(client, queryKeys.admin.instanceTunnel)).toBe(60_000)
+    expect(intervalOf(client, queryKeys.admin.hostnameIngressStatus('h2'))).toBe(60_000)
+    await act(async () => {
+      await result.current.refresh.run()
+    })
+    expect(client.getQueryData(queryKeys.admin.instanceTunnel)).toEqual({
+      ok: true,
+      connector: null,
+      edge: null,
+    })
   })
 
   it('writes a changed hostname into the list without a refetch', async () => {

@@ -139,7 +139,7 @@ function AccountPicker({
       <TextLink
         label="Connect a Cloudflare account"
         size="sm"
-        onPress={() => router.push('/admin/access/cloudflare')}
+        onPress={() => router.push('/admin/access/tunnel')}
       />
     )
   }

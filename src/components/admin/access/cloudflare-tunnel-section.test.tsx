@@ -5,10 +5,10 @@ import type { IngressAccountRecord } from '@/lib/instance-api'
 import { CloudflareAccountCard } from './cloudflare-account-card'
 import {
   AddAccountForm,
-  CloudflareConnectionSection,
+  CloudflareTunnelSection,
   EdgeGatePanel,
   EDGE_GATE_WARNING,
-} from './cloudflare-connection-section'
+} from './cloudflare-tunnel-section'
 
 const mocks = vi.hoisted(() => ({
   useAuth: vi.fn(),
@@ -27,6 +27,7 @@ vi.mock(
 vi.mock('@/lib/auth-context', () => ({ useAuth: mocks.useAuth }))
 vi.mock('./tunnel-section', () => ({ TunnelTokenPanel: () => <p>Run Token</p> }))
 vi.mock('./tunnel-health-panel', () => ({ TunnelHealthPanel: () => <p>Tunnel Health</p> }))
+vi.mock('./tunnel-status-panel', () => ({ TunnelStatusPanel: () => <p>Status</p> }))
 vi.mock('@/lib/queries/admin', () => ({
   useInstanceHostnames: () => ({ data: { hostnames: [] } }),
 }))
@@ -68,18 +69,23 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-describe('Cloudflare Connection', () => {
+describe('Cloudflare Tunnel', () => {
   it('renders the not-applicable note on High Availability', () => {
     mocks.useAuth.mockReturnValue({ controlPlaneRuntime: 'workers' })
-    render(<CloudflareConnectionSection />)
+    render(<CloudflareTunnelSection />)
     expect(screen.getByText(/Not applicable on this runtime/)).toBeTruthy()
     expect(screen.queryByText('Accounts')).toBeNull()
   })
 
   it('says the connector runs on the control plane host only', () => {
     mocks.useAuth.mockReturnValue({ controlPlaneRuntime: 'deno' })
-    render(<CloudflareConnectionSection />)
+    render(<CloudflareTunnelSection />)
     expect(screen.getByText(/runs on the control plane host only/)).toBeTruthy()
+    expect(screen.getAllByText('Cloudflare Tunnel')).toHaveLength(2)
+    expect(screen.getByText('More tunnel types may come later.')).toBeTruthy()
+    expect(screen.getByText('Status')).toBeTruthy()
+    expect(screen.getByText('Managed by an API Token')).toBeTruthy()
+    expect(screen.queryByText('Run Token')).toBeNull()
   })
 })
 

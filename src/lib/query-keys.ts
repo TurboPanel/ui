@@ -485,6 +485,8 @@ export const queryKeys = {
     /** Connection modes and the edge gate (self-hosted only). */
     ingressCapabilities: ['admin', 'ingress', 'capabilities'] as const,
     ingressAccounts: ['admin', 'ingress', 'accounts'] as const,
+    /** The control plane's own tunnel: connector and edge halves. */
+    instanceTunnel: ['admin', 'ingress', 'tunnel'] as const,
     /** Live read of one hostname's connection, never cached across names. */
     hostnameIngressStatus: (id: string) => ['admin', 'ingress', 'status', id] as const,
     panelDnsCertificate: (id: string) => ['admin', 'acme-dns', id] as const,

@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
+import { useQueries, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { ingressStatusInterval } from '@/lib/connection-modes'
 import {
   addIngressAccount,
@@ -6,12 +6,15 @@ import {
   fetchHostnameIngressStatus,
   fetchIngressAccounts,
   fetchIngressCapabilities,
+  fetchInstanceTunnelStatus,
   fetchPanelDnsCertificate,
   type HostnameIngressPatch,
+  type IngressStatus,
   type InstanceHostnameRecord,
   orderPanelDnsCertificate,
   preflightHostnameIngress,
   recheckIngressAccount,
+  refreshInstanceTunnelStatus,
   removeHostnameIngress,
   removeIngressAccount,
   setEdgeGate,
@@ -45,6 +48,29 @@ export function useIngressAccounts(options?: Enabled) {
   })
 }
 
+export const TUNNEL_STATUS_POLL_MS = 60_000
+
+/** The tunnel Status panel: read every minute. */
+export function useInstanceTunnelStatus(options?: Enabled) {
+  return useQuery({
+    queryKey: queryKeys.admin.instanceTunnel,
+    queryFn: fetchInstanceTunnelStatus,
+    enabled: options?.enabled ?? true,
+    refetchInterval: TUNNEL_STATUS_POLL_MS,
+  })
+}
+
+/** Refresh asks the daemon again and writes the answer straight into the panel. */
+export function useRefreshInstanceTunnelStatus() {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: refreshInstanceTunnelStatus,
+    onSuccess: (fresh) => {
+      queryClient.setQueryData(queryKeys.admin.instanceTunnel, fresh)
+    },
+  })
+}
+
 /** Live read: every 15 seconds while applying or degraded, else every minute. */
 export function useHostnameIngressStatus(id: string | null, options?: Enabled) {
   return useQuery({
@@ -52,6 +78,19 @@ export function useHostnameIngressStatus(id: string | null, options?: Enabled) {
     queryFn: () => fetchHostnameIngressStatus(id ?? ''),
     enabled: (options?.enabled ?? true) && id !== null,
     refetchInterval: (query) => ingressStatusInterval(query.state.data),
+  })
+}
+
+/** The same live reads for several names at once (shares the cache with the single hook). */
+export function useHostnameIngressStatuses(ids: readonly string[], options?: Enabled) {
+  return useQueries({
+    queries: ids.map((id) => ({
+      queryKey: queryKeys.admin.hostnameIngressStatus(id),
+      queryFn: () => fetchHostnameIngressStatus(id),
+      enabled: options?.enabled ?? true,
+      refetchInterval: (query: { state: { data?: IngressStatus } }) =>
+        ingressStatusInterval(query.state.data),
+    })),
   })
 }
 

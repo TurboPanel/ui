@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { CloudflareAccountCard } from '@/components/admin/access/cloudflare-account-card'
 import { TunnelHealthPanel } from '@/components/admin/access/tunnel-health-panel'
+import { TunnelStatusPanel } from '@/components/admin/access/tunnel-status-panel'
 import { CheckList } from '@/components/admin/access/check-list'
 import { TunnelTokenPanel } from '@/components/admin/access/tunnel-section'
 import { panelStyles } from '@/components/ui/panel-styles'
@@ -26,6 +27,7 @@ import {
 } from '@/lib/queries/ingress'
 import { useInstanceHostnames } from '@/lib/queries/admin'
 import { colors, spacing } from '@/lib/theme'
+import { TUNNEL_PROVIDER_LABEL } from '@/lib/tunnel-status'
 
 export const CONNECTOR_NOTICE =
   'The tunnel connector runs on the control plane host only. Other servers never receive the tunnel token.'
@@ -33,12 +35,12 @@ export const CONNECTOR_NOTICE =
 export const EDGE_GATE_WARNING =
   'Confirm this only once every server trusts this control plane. A server that does not trust it loses its connection when an edge mode is applied.'
 
-export function CloudflareConnectionSection() {
+export function CloudflareTunnelSection() {
   const { controlPlaneRuntime } = useAuth()
   if (controlPlaneRuntime === 'workers') {
     return (
       <View style={styles.root}>
-        <Text style={panelStyles.pageTitle}>Cloudflare Connection</Text>
+        <Text style={panelStyles.pageTitle}>Cloudflare Tunnel</Text>
         <InlineNotice
           title="Not applicable on this runtime"
           body="TurboPanel High Availability is already served from a global edge network. There is no control plane host here to run a tunnel connector on."
@@ -46,10 +48,13 @@ export function CloudflareConnectionSection() {
       </View>
     )
   }
-  return <CloudflareConnectionScreen />
+  return <CloudflareTunnelScreen />
 }
 
-function CloudflareConnectionScreen() {
+export const MANAGED_TUNNEL_COPY =
+  "Enter one Cloudflare API token. The control plane creates the tunnel, or adopts the one your hostname already points at (its other routes are kept and it is never deleted), manages the DNS records, and issues and renews a DNS-01 Let's Encrypt certificate for each name."
+
+function CloudflareTunnelScreen() {
   const capabilities = useIngressCapabilities()
   const accounts = useIngressAccounts()
   const hostnames = useInstanceHostnames()
@@ -58,14 +63,16 @@ function CloudflareConnectionScreen() {
 
   return (
     <View style={styles.root}>
-      <Text style={panelStyles.pageTitle}>Cloudflare Connection</Text>
-      <Text style={panelStyles.pageCopy}>
-        Connect a Cloudflare account so this control plane can run its own tunnel and publish DNS
-        records for its hostnames. The token is checked, stored sealed and never shown again.
-      </Text>
+      <Text style={panelStyles.pageTitle}>Cloudflare Tunnel</Text>
+      <View style={styles.provider}>
+        <Text style={styles.providerLabel}>Provider</Text>
+        <Text style={styles.providerValue}>{TUNNEL_PROVIDER_LABEL}</Text>
+        <Text style={panelStyles.muted}>More tunnel types may come later.</Text>
+      </View>
       <InlineNotice title="Control Plane Host Only" body={CONNECTOR_NOTICE} />
-      <EdgeGatePanel gate={capabilities.data?.gate ?? null} loading={capabilities.isLoading} />
-      <SectionPanel title="Accounts" hint="Scopes are checked when the account is added">
+      <TunnelStatusPanel hostnames={records} />
+      <SectionPanel title="Managed by an API Token" hint="The main way to run this tunnel">
+        <Text style={styles.body}>{MANAGED_TUNNEL_COPY}</Text>
         {accounts.isError ? (
           <Text style={panelStyles.error}>Failed to load Cloudflare accounts</Text>
         ) : null}
@@ -79,6 +86,7 @@ function CloudflareConnectionScreen() {
         ))}
         <AddAccountForm />
       </SectionPanel>
+      <EdgeGatePanel gate={capabilities.data?.gate ?? null} loading={capabilities.isLoading} />
       <TunnelHealthPanel hostnames={records} />
       <TextLink
         label="Paste a run token instead"
@@ -228,6 +236,9 @@ const styles = StyleSheet.create({
   root: { width: '100%', gap: spacing.lg },
   body: { color: colors.text, fontSize: 13, lineHeight: 19 },
   form: { gap: spacing.sm },
+  provider: { gap: 2 },
+  providerLabel: { color: colors.textDim, fontSize: 12, fontWeight: '600' },
+  providerValue: { color: colors.text, fontSize: 14, fontWeight: '600' },
   formTitle: { color: colors.text, fontSize: 14, fontWeight: '600' },
   saved: { color: colors.ok, fontSize: 13, fontWeight: '600', lineHeight: 18 },
 })

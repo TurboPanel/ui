@@ -105,9 +105,14 @@ export const accessUiStub = {
     </p>
   ),
   LoadingState: () => <span>Loading</span>,
-  SectionPanel: ({ title, children }: Readonly<{ title: string; children?: ReactNode }>) => (
+  SectionPanel: ({
+    title,
+    headerRight,
+    children,
+  }: Readonly<{ title: string; headerRight?: ReactNode; children?: ReactNode }>) => (
     <section>
       <h2>{title}</h2>
+      {headerRight}
       {children}
     </section>
   ),
