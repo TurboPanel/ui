@@ -55,7 +55,7 @@ function returnNotice(
       install_authorization_required:
         'GitHub did not send an authorization code. On the GitHub App\u2019s settings, enable \u201cRequest user authorization (OAuth) during installation\u201d and set its Callback URL to this instance\u2019s /api/client/v1/repositories/github/callback, then install again.',
       install_not_authorized:
-        'The GitHub account that came back cannot see that installation, so it was not recorded. Install the App from the account that owns the repositories.',
+        'The GitHub account returned by GitHub cannot see that installation, so it was not recorded. Install the App from the account that owns the repositories.',
       rate_limited: 'Too many connection attempts. Wait a minute and try again.',
       unavailable: 'The control plane could not complete the connection. Try again.',
       invalid_request: 'The provider sent back an incomplete response.',
