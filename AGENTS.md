@@ -47,9 +47,9 @@ Vagrant guest** from the host `dev` checkout. Canonical detail:
 `../dev/AGENTS.md` → Testing. Do not run `pnpm test` on the host.
 
 ```bash
-vagrant ssh -c 'export PATH="/opt/turbopanel/vendor/node/current/bin:$PATH"; cd ~/ui && pnpm test'
+vagrant ssh -c 'export PATH="/opt/turbopanel/vendor/node/current/bin:$PATH"; cd ~/turbopanel/ui && pnpm test'
 # CI-parity (vocabulary + notices + typecheck + LCOV; skips `pnpm lint` because it autofixes):
-vagrant ssh -c 'export PATH="/opt/turbopanel/vendor/node/current/bin:$PATH"; cd ~/ui && pnpm verify:ci'
+vagrant ssh -c 'export PATH="/opt/turbopanel/vendor/node/current/bin:$PATH"; cd ~/turbopanel/ui && pnpm verify:ci'
 ```
 
 Flaky-test rules, CI jobs and the `allowBuilds` note: [docs/testing-and-ci.md](./docs/testing-and-ci.md).

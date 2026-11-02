@@ -4,9 +4,9 @@
 
 This repo is the **signed-in product console** (org + admin + install/sign-in), not the public marketing site. Visual work must follow the installed **ui-ux-pro-max** skill and the persisted TurboPanel console design system. Do not invent a parallel look from generic SaaS defaults or from `~/website`.
 
-### This repo vs marketing site (`~/website`)
+### This repo vs marketing site (`~/turbopanel/website`)
 
-| | **ui** (this repo) | **website** (`~/website`) |
+| | **ui** (this repo) | **website** (`~/turbopanel/website`) |
 | --- | --- | --- |
 | Surface | Org console, admin, install/sign-in product UI | Marketing pages, landing/heroes, docs chrome, pricing/roadmap |
 | North star | Ops console in two first-class themes (Navy dark, Paper light), dense tables | Fast, trustworthy, **light-first** marketing + readable docs (dark mode supported) |
@@ -102,7 +102,7 @@ These are non-negotiable for the console (detail lives in Master):
 ### Anti-patterns / do-not
 
 - Skip the skill and freestyle a purple/indigo SaaS or cream+serif “AI default” look
-- Apply the `~/website` light-first marketing / docs chrome or its Master to the console
+- Apply the `~/turbopanel/website` light-first marketing / docs chrome or its Master to the console
 - A screen that is only checked in one theme; colour maths on `colors.*` (web values are CSS variables)
 - Raw hex in components when a `theme.ts` token exists
 - Ignore a page override when one exists for the surface you’re editing
