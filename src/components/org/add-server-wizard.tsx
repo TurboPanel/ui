@@ -25,7 +25,7 @@ import {
 import {
   defaultDevCaddyHttpsBaseUrl,
   defaultDevInstallBaseUrl,
-  INSTALL_COMMAND_HELP,
+  installCommandHelp,
   parseInstallBaseUrl,
   resolveDisplayedInstallCommand,
 } from '@/lib/install-command'
@@ -239,7 +239,9 @@ function InstallStep({
   return (
     <View style={styles.revealed}>
       <View style={panelStyles.calloutWarning}>
-        <Text style={panelStyles.calloutWarningText}>{INSTALL_COMMAND_HELP}</Text>
+        <Text style={panelStyles.calloutWarningText}>
+          {installCommandHelp(displayedInstallCommand)}
+        </Text>
       </View>
       <Text style={styles.secretLabel}>Install command</Text>
       {__DEV__ ? (

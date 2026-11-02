@@ -3,7 +3,7 @@ import {
   buildInstallCommandWithBaseUrl,
   defaultDevCaddyHttpsBaseUrl,
   defaultDevInstallBaseUrl,
-  INSTALL_COMMAND_HELP,
+  installCommandHelp,
   parseInstallBaseUrl,
   resolveDisplayedInstallCommand,
 } from './install-command'
@@ -224,9 +224,12 @@ describe('resolveDisplayedInstallCommand', () => {
     ).toBe(installCommand)
   })
 
-  it('names the TOKEN value in the install step notice', () => {
-    expect(INSTALL_COMMAND_HELP).toContain('TOKEN')
-    expect(INSTALL_COMMAND_HELP).not.toContain('panel ')
+  it('names the TOKEN value in the notice only when the command carries one', () => {
+    expect(installCommandHelp('curl -fsSL https://turbopanel.sh | TOKEN=abc.def sh')).toContain(
+      'TOKEN value'
+    )
+    expect(installCommandHelp(revealed.installCommand)).not.toContain('TOKEN')
+    expect(installCommandHelp(revealed.installCommand)).toContain('registration key is embedded')
   })
 
   it('returns the server command when the edited URL is empty', () => {
