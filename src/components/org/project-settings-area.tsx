@@ -1,3 +1,5 @@
+import { EnvironmentDeleteNameModal } from '@/components/org/environment-delete-name-modal'
+import { environmentDeleteInput, environmentDeleteOutcome } from '@/lib/environment-delete'
 import { useState, type ReactNode } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { usePathname, useRouter, type Href } from 'expo-router'
@@ -102,6 +104,7 @@ function EnvironmentDeleteControl({
   const deleteEnvironment = useDeleteEnvironment(orgId)
   // Read when the button is armed, so the confirmation names what goes.
   const [armed, setArmed] = useState(false)
+  const [nameStep, setNameStep] = useState<{ error: string | null } | null>(null)
   const preview = useEnvironmentDeletePreview(orgId, selectedEnvironment.id, {
     enabled: armed && canOwn && environments.length > 1,
   })
@@ -138,15 +141,21 @@ function EnvironmentDeleteControl({
 
   const removing = deleteEnvironment.isPending
 
-  const handleDelete = () => {
+  const handleDelete = (confirmName?: string) => {
     if (removing) return
     void (async () => {
       setError(null)
       const deletedId = selectedEnvironment.id
-      const result = await deleteEnvironment.run(deletedId)
+      const result = await deleteEnvironment.run(environmentDeleteInput(deletedId, confirmName))
       if (!result.ok) {
         // The result, not `actionError`: that one is read from this render and is stale here.
-        if (result.error !== null) {
+        const outcome =
+          result.error === null ? null : environmentDeleteOutcome(result.error, '', confirmName)
+        if (outcome?.kind === 'ask-name') {
+          setNameStep({ error: null })
+        } else if (outcome?.kind === 'name-error') {
+          setNameStep({ error: outcome.text })
+        } else if (result.error !== null) {
           setError(
             deleteFailureMessage(
               result.cause ?? result.error,
@@ -156,6 +165,7 @@ function EnvironmentDeleteControl({
         }
         return
       }
+      setNameStep(null)
       await invalidateEnvironments()
       if (parseProjectEnvironmentId(pathname, projectId) === deletedId) {
         router.replace(projectOverviewHref(orgId, projectId) as Href)
@@ -173,15 +183,26 @@ function EnvironmentDeleteControl({
   }
 
   return (
-    <ConfirmButton
-      key={`${selectedEnvironment.id}:${environments.length}`}
-      label="Delete environment"
-      prompt={prompt}
-      confirmLabel="Delete environment"
-      busy={removing}
-      onArmedChange={setArmed}
-      onConfirm={handleDelete}
-    />
+    <>
+      <ConfirmButton
+        key={`${selectedEnvironment.id}:${environments.length}`}
+        label="Delete environment"
+        prompt={prompt}
+        confirmLabel="Delete environment"
+        busy={removing}
+        onArmedChange={setArmed}
+        onConfirm={() => handleDelete()}
+      />
+      {nameStep ? (
+        <EnvironmentDeleteNameModal
+          name={selectedEnvironment.name ?? ''}
+          pending={removing}
+          error={nameStep.error}
+          onCancel={() => setNameStep(null)}
+          onConfirm={(typed) => handleDelete(typed)}
+        />
+      ) : null}
+    </>
   )
 }
 
