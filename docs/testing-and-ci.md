@@ -5,6 +5,9 @@
 **CI:** `.github/workflows/verify.yml` runs lint, `check:vocabulary`, `notices:check`, typecheck, `pnpm test:coverage`,
 then a SonarCloud scan with `sonar.qualitygate.wait=true` (`SONAR_TOKEN` required).
 Automatic Analysis must stay **off** for `turbopanel_ui`.
+
+**Fork pull requests.** CI runs on `pull_request` only (never `pull_request_target`), so a run from a fork gets a read-only token and no secrets, and waits for a maintainer to approve it (a repository Actions setting, not workflow code). The code scan and the no-new-issues step skip there; the `Note a skipped code scan` step then writes a notice and a job summary that say why and that a maintainer will push the branch to the TurboPanel repository if a scan is needed. Formatting, the vocabulary check, the secret scan and the tests run as usual, and `ci-ok` still requires every needed job to succeed: a step skipped inside a job leaves the job green, while a skipped or cancelled job turns `ci-ok` red.
+
 `pnpm-workspace.yaml` `allowBuilds` must keep native postinstalls (`esbuild`,
 `workerd`, `sharp`, …) approved; pnpm 12 `strictDepBuilds` otherwise fails
 `pnpm install` with `ERR_PNPM_IGNORED_BUILDS`.
