@@ -679,6 +679,7 @@ function HostnameRow({
       <DataTableCell column={COLUMNS[2]}>
         <ModePublicPortCell
           mode={mode}
+          selfHosted={ingress.enabled}
           row={row}
           busy={busy}
           onChange={onChange}

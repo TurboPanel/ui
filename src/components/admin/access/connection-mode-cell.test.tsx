@@ -15,7 +15,7 @@ import {
   MODES_UNAVAILABLE,
   SAVE_FIRST_HINT,
 } from './connection-mode-cell'
-import { ModePublicPortCell } from './hostname-ingress-cells'
+import { ModePublicPortCell, SELF_HOSTED_PORT_HELP } from './hostname-ingress-cells'
 
 const update = vi.hoisted(() => ({ run: vi.fn(), isPending: false }))
 
@@ -300,5 +300,25 @@ describe('ModePublicPortCell', () => {
       />
     )
     expect(screen.getAllByRole('option').map((item) => item.textContent)).toEqual(['443', '8443'])
+  })
+
+  it('shows read-only 8443 with help on a self-hosted control plane, in every mode', () => {
+    for (const mode of ['direct', 'cloudflare-tunnel', 'lan-only'] as const) {
+      render(
+        <ModePublicPortCell
+          mode={mode}
+          selfHosted
+          row={{ ...row, publicPort: 443 }}
+          busy={false}
+          onChange={noop}
+          onValidityChange={noop}
+        />
+      )
+      expect(screen.getByText('8443')).toBeTruthy()
+      expect(screen.getByText(SELF_HOSTED_PORT_HELP)).toBeTruthy()
+      expect(screen.queryByLabelText('Public Port')).toBeNull()
+      expect(screen.queryAllByRole('option')).toHaveLength(0)
+      cleanup()
+    }
   })
 })
