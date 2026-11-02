@@ -35,6 +35,9 @@ export const SAVE_FIRST_HINT = 'Save this hostname before choosing its connectio
 /** An older control plane has no connection modes to offer. */
 export const MODES_UNAVAILABLE = 'Direct. Connection modes need a newer control plane.'
 export const SAVE_OTHERS_HINT = 'Save your other changes before changing a connection mode.'
+/** A tunnel row with no account: the tunnel runs from a pasted run token. */
+export const PASTED_TOKEN_HINT =
+  'Served by a tunnel run from a pasted token, with its routes set in Cloudflare. Connect an account only for DNS-01 certificates and edge details.'
 
 /** The patch for a new mode: an edge mode picks the only matching account; others clear it. */
 export function modeChangePatch(
@@ -112,7 +115,10 @@ export function ConnectionModeCell({
         />
       ) : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
-      {capability?.provider && record ? (
+      {capability?.provider && record && pastedTokenRow(record, accounts) ? (
+        <Text style={styles.muted}>{PASTED_TOKEN_HINT}</Text>
+      ) : null}
+      {capability?.provider && record && !pastedTokenRow(record, accounts) ? (
         <IngressActions
           key={record.ingressId ?? 'no-account'}
           hostnameId={record.id}
@@ -120,6 +126,22 @@ export function ConnectionModeCell({
         />
       ) : null}
     </View>
+  )
+}
+
+/**
+ * A tunnel row while no Cloudflare account is connected at all: the tunnel can
+ * only run from a pasted run token, and Preflight and Connect (which need an
+ * account) are not offered.
+ */
+function pastedTokenRow(
+  record: InstanceHostnameRecord,
+  accounts: readonly IngressAccountRecord[]
+): boolean {
+  return (
+    record.mode === 'cloudflare-tunnel' &&
+    !record.ingressId &&
+    !accounts.some((account) => account.provider === 'cloudflare')
   )
 }
 

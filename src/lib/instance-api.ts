@@ -6204,12 +6204,26 @@ export type IngressCapabilities = {
   isEdge: boolean
 }
 
-/** Edge modes stay closed until a superadmin confirms every server trusts this control plane. */
+/** A remote server that still has to learn this control plane's key before edge modes open. */
+export type EdgeGateWaitingServer = {
+  id: string
+  name: string
+  /** Null for a server no organization owns yet (no server page to link to). */
+  organizationId: string | null
+  /** `unsafe` (installed with the skip flag) or null (never reported a pin). */
+  pinnedBy: string | null
+}
+
+/**
+ * The control plane opens edge modes by itself once every remote server has
+ * its key pinned; the server on the control plane host never counts.
+ */
 export type EdgeGate = {
   open: boolean
   reason?: string
-  confirmedAt: string | null
-  confirmedBy: string | null
+  /** Absent from an older control plane. */
+  waiting?: EdgeGateWaitingServer[]
+  remoteServers?: number
   forcedClosed: boolean
 }
 
@@ -6255,7 +6269,13 @@ export type HostnameIngressPatch = {
 }
 
 export type HostnameIngressPatchResult =
-  { ok: true; hostname: InstanceHostnameRecord } | { ok: false; error: string }
+  | { ok: true; hostname: InstanceHostnameRecord }
+  | {
+      ok: false
+      error: string
+      /** On a 409 from the edge gate: the servers that hold it shut. */
+      waiting?: EdgeGateWaitingServer[]
+    }
 
 export type CloudflarePreflight = {
   ok: boolean
@@ -6309,6 +6329,10 @@ export type InstanceTunnelStatus = {
     slot: string | null
     lastUpdate: { outcome: string; at: string; reason?: string } | null
     checkedAt: string | null
+    /** Live edge connections the connector reports; null or absent when it did not say. */
+    edgeConnections?: number | null
+    /** Names the connector routes (also for a pasted run token); null or absent when not reported. */
+    hostnames?: string[] | null
   } | null
   connectorNote: string | null
   edge: {
@@ -6339,13 +6363,6 @@ function hostnamePath(id: string, action: string): string {
 
 export async function fetchIngressCapabilities(): Promise<IngressCapabilitiesResponse> {
   return await apiFetch(`${INGRESS}/capabilities`)
-}
-
-export async function setEdgeGate(confirmed: boolean): Promise<{ ok: boolean; gate: EdgeGate }> {
-  return await adminJson(`${INGRESS}/gate`, {
-    method: 'PUT',
-    body: JSON.stringify({ confirmed }),
-  })
 }
 
 /** Sets mode, account and public port. A 409 means the name is still connected. */

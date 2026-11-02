@@ -14,7 +14,6 @@ import {
   refreshInstanceTunnelStatus,
   removeHostnameIngress,
   removeIngressAccount,
-  setEdgeGate,
   updateHostnameIngress,
 } from './instance-api'
 
@@ -49,7 +48,6 @@ describe('connection mode, account and DNS-01 wrappers', () => {
   it('sends each request to its path with its method and body', async () => {
     fetchMock.mockImplementation(() => Promise.resolve(jsonResponse({ ok: true })))
     await fetchIngressCapabilities()
-    await setEdgeGate(true)
     await updateHostnameIngress('h 1', { mode: 'cloudflare-tunnel', ingressId: 'a1' })
     await preflightHostnameIngress('h1')
     await applyHostnameIngress('h1', { replaceExisting: true })
@@ -66,7 +64,6 @@ describe('connection mode, account and DNS-01 wrappers', () => {
     await refreshInstanceTunnelStatus()
     expect(calls()).toEqual([
       ['/instance/ingress/capabilities', undefined, undefined],
-      ['/instance/ingress/gate', 'PUT', '{"confirmed":true}'],
       [
         '/instance/ingress/hostnames/h%201',
         'PATCH',

@@ -13,6 +13,7 @@ import {
   ConnectionModeCell,
   modeChangePatch,
   MODES_UNAVAILABLE,
+  PASTED_TOKEN_HINT,
   SAVE_FIRST_HINT,
 } from './connection-mode-cell'
 import { ModePublicPortCell, SELF_HOSTED_PORT_HELP } from './hostname-ingress-cells'
@@ -68,9 +69,10 @@ const MODES = [
 
 const CLOSED: EdgeGate = {
   open: false,
-  reason: 'One server is not pinned.',
-  confirmedAt: null,
-  confirmedBy: null,
+  reason:
+    "1 server still needs to re-learn this control plane's key before an edge mode can be used: kappa.",
+  waiting: [{ id: 's1', name: 'kappa', organizationId: 'o1', pinnedBy: null }],
+  remoteServers: 1,
   forcedClosed: false,
 }
 
@@ -112,7 +114,7 @@ describe('ConnectionModeCell', () => {
     expect(option('Direct').disabled).toBe(false)
     expect(option('LAN Only').disabled).toBe(false)
     expect(option('Cloudflare Tunnel').disabled).toBe(true)
-    expect(screen.getByText(`${GATE_CLOSED_HINT}. One server is not pinned.`)).toBeTruthy()
+    expect(screen.getByText(CLOSED.reason!)).toBeTruthy()
   })
 
   it('disables a mode the control plane does not run yet, even with the gate open', () => {
@@ -186,7 +188,7 @@ describe('ConnectionModeCell', () => {
     ).toBeTruthy()
   })
 
-  it('shows the account link and connection actions for an edge row', () => {
+  it('a tunnel row with no account is served by the pasted token: no Preflight or Connect', () => {
     render(
       <ConnectionModeCell
         record={{ ...RECORD, mode: 'cloudflare-tunnel' }}
@@ -198,8 +200,50 @@ describe('ConnectionModeCell', () => {
       />
     )
     expect(screen.getByText('Connect a Cloudflare account')).toBeTruthy()
+    expect(screen.getByText(PASTED_TOKEN_HINT)).toBeTruthy()
+    expect(screen.queryByText('Preflight')).toBeNull()
+    expect(screen.queryByText('Connect')).toBeNull()
+  })
+
+  it('a tunnel row offers the actions again once a Cloudflare account exists', () => {
+    render(
+      <ConnectionModeCell
+        record={{ ...RECORD, mode: 'cloudflare-tunnel' }}
+        modes={MODES}
+        gate={CLOSED}
+        accounts={[
+          {
+            id: 'a1',
+            provider: 'cloudflare',
+            label: 'Main',
+            accountId: 'acc',
+            zoneIds: [],
+            scopes: null,
+            lastVerifiedAt: null,
+            lastError: null,
+            createdAt: '2026-11-01T00:00:00Z',
+          },
+        ]}
+        lockedReason={null}
+        busy={false}
+      />
+    )
+    expect(screen.queryByText(PASTED_TOKEN_HINT)).toBeNull()
     expect((screen.getByText('Preflight') as HTMLButtonElement).disabled).toBe(true)
-    expect((screen.getByText('Connect') as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('falls back to the generic hint when the gate gives no reason', () => {
+    render(
+      <ConnectionModeCell
+        record={RECORD}
+        modes={MODES}
+        gate={{ open: false, forcedClosed: false }}
+        accounts={[]}
+        lockedReason={null}
+        busy={false}
+      />
+    )
+    expect(screen.getByText(GATE_CLOSED_HINT)).toBeTruthy()
   })
 })
 
