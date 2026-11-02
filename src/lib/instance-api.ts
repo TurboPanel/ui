@@ -24,7 +24,7 @@ import type {
 } from '@/lib/managed-services'
 import type { ManagedSslMode } from '@/lib/managed-ssl'
 import { getActiveOrganizationId, ORG_ID_HEADER } from '@/lib/org-context'
-import { CONFIRM_NAME_REQUIRED_ERROR, confirmNameQuery } from '@/lib/confirm-name'
+import { confirmNameQuery } from '@/lib/confirm-name'
 import { fetchWithStepUp, reauthFailureMessage } from '@/lib/step-up'
 export {
   isForbiddenError,
@@ -4412,8 +4412,6 @@ export const PROJECT_HAS_CHILDREN_ERROR = 'Cannot delete while child resources e
 export const PROJECT_HAS_RUNNING_SERVICES_ERROR = 'project_has_running_services'
 export const MANAGED_RUNTIME_PRESENT_ERROR = 'managed_runtime_present'
 export const ENVIRONMENT_RUNNING_ERROR = 'environment_running'
-/** The gated deletes (environment, server, project, managed database, Hosting Account): 400 until `confirmName` is the exact name. */
-export const ENVIRONMENT_CONFIRM_NAME_ERROR = CONFIRM_NAME_REQUIRED_ERROR
 
 export const UNKNOWN_SYSTEM_COMPONENT_ERROR = 'unknown_system_component'
 export const SYSTEM_COMPONENT_NOT_PROVISIONED_ERROR = 'system_component_not_provisioned'
