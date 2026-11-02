@@ -284,6 +284,25 @@ function useEnvironmentDeleteFlow(
   }
 }
 
+function EnvironmentDeleteNameStep({
+  name,
+  flow,
+}: Readonly<{
+  name: string
+  flow: ReturnType<typeof useEnvironmentDeleteFlow>
+}>) {
+  if (!flow.nameStep) return null
+  return (
+    <EnvironmentDeleteNameModal
+      name={name}
+      pending={flow.deleting}
+      error={flow.nameStep.error}
+      onCancel={flow.closeNameStep}
+      onConfirm={(typed) => void flow.deleteActive(typed)}
+    />
+  )
+}
+
 export function ProjectEnvironmentsSection({
   orgId,
   projectId,
@@ -445,15 +464,7 @@ export function ProjectEnvironmentsSection({
             onConfirmDelete={() => void deleteFlow.deleteActive()}
           />
         )}
-        {deleteFlow.nameStep ? (
-          <EnvironmentDeleteNameModal
-            name={environmentLabel(activeEnvironment)}
-            pending={deleteFlow.deleting}
-            error={deleteFlow.nameStep.error}
-            onCancel={deleteFlow.closeNameStep}
-            onConfirm={(typed) => void deleteFlow.deleteActive(typed)}
-          />
-        ) : null}
+        <EnvironmentDeleteNameStep name={environmentLabel(activeEnvironment)} flow={deleteFlow} />
         <EnvironmentDeleteNotice
           failure={deleteFlow.failure}
           stopping={deleteFlow.stopping}
