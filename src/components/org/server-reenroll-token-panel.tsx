@@ -43,14 +43,14 @@ function ReenrollTokenCard({ serverId }: Readonly<{ serverId: string }>) {
     setRevokeError(null)
     const result = await issue.run(undefined)
     if (result.ok) setShown(toShown(result.value))
-    else if (result.error) setError(result.error)
+    else if (result.error !== null) setError(result.error || 'Failed to issue a Re-Enroll Token')
   }
 
   const onRevoke = async () => {
     setRevokeError(null)
     const result = await revoke.run(undefined)
     if (result.ok) setShown(null)
-    else if (result.error) setRevokeError(result.error)
+    else if (result.error !== null) setRevokeError(result.error || 'Failed to revoke the token')
   }
 
   return (
@@ -82,7 +82,9 @@ function MintedKeysCard({ orgId }: Readonly<{ orgId: string }>) {
   const licensesQuery = useOrgLicenses(orgId)
   const reissue = useReissueLicenseTicket(orgId)
   const burn = useDeleteLicense(orgId)
-  const [shown, setShown] = useState<(ShownTicket & { keyName: string }) | null>(null)
+  const [shown, setShown] = useState<(ShownTicket & { keyName: string; keyId: string }) | null>(
+    null
+  )
   const [error, setError] = useState<string | null>(null)
 
   const rows = unboundPendingKeys(licensesQuery.data?.licenses ?? [])
@@ -90,15 +92,15 @@ function MintedKeysCard({ orgId }: Readonly<{ orgId: string }>) {
   const onReissue = async (id: string, keyName: string) => {
     setError(null)
     const result = await reissue.run(id)
-    if (result.ok) setShown({ ...reissuedToShown(result.value), keyName })
-    else if (result.error) setError(result.error)
+    if (result.ok) setShown({ ...reissuedToShown(result.value), keyName, keyId: id })
+    else if (result.error !== null) setError(result.error || 'Failed to reissue the key')
   }
 
   const onBurn = async (id: string) => {
     setError(null)
     const result = await burn.run(id)
-    if (!result.ok && result.error) setError(result.error)
-    else setShown(null)
+    if (result.ok) setShown((current) => (current?.keyId === id ? null : current))
+    else if (result.error !== null) setError(result.error || 'Failed to burn the key')
   }
 
   return (
@@ -117,6 +119,7 @@ function MintedKeysCard({ orgId }: Readonly<{ orgId: string }>) {
           <View style={styles.actions}>
             <Button
               label="Reissue"
+              accessibilityLabel={`Reissue key ${pendingKeyDisplayName(row)}`}
               busyLabel="Reissuing…"
               busy={reissue.isPending && reissue.variables === row.id}
               onPress={() => void onReissue(row.id, pendingKeyDisplayName(row))}
