@@ -12,20 +12,25 @@ import {
 import { spacing } from '@/lib/theme'
 
 /**
- * The Public Port for a row's connection mode: LAN Only is fixed on 8443 and
- * shows no field, a Cloudflare tunnel picks 443 or 8443, and every other mode
- * takes any port.
+ * The Public Port for a row's connection mode. A self-hosted control plane is
+ * always reached on 8443, so the port is read-only text whatever the mode.
+ * Otherwise LAN Only is fixed on 8443 and shows no field, a Cloudflare tunnel
+ * picks 443 or 8443, and every other mode takes any port.
  */
 export function ModePublicPortCell({
   mode,
+  selfHosted = false,
   ...props
 }: Readonly<{
   mode: IngressMode
+  /** True on the self-hosted runtime, where the port is fixed. */
+  selfHosted?: boolean
   row: InstanceHostnameInput
   busy: boolean
   onChange: (next: InstanceHostnameInput) => void
   onValidityChange: (host: string, valid: boolean) => void
 }>) {
+  if (selfHosted) return <FixedPublicPortCell />
   if (!showsPublicPort(mode)) {
     return <Text style={panelStyles.muted}>8443, fixed for LAN Only</Text>
   }
@@ -33,6 +38,17 @@ export function ModePublicPortCell({
     return <TunnelPortCell row={props.row} busy={props.busy} onChange={props.onChange} />
   }
   return <PublicPortCell {...props} />
+}
+
+export const SELF_HOSTED_PORT_HELP = 'Self-hosted control planes are always reached on port 8443.'
+
+function FixedPublicPortCell() {
+  return (
+    <View style={styles.stack}>
+      <Text>{DEFAULT_PANEL_PUBLIC_PORT}</Text>
+      <Text style={panelStyles.muted}>{SELF_HOSTED_PORT_HELP}</Text>
+    </View>
+  )
 }
 
 function TunnelPortCell({
