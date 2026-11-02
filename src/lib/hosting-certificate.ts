@@ -4,6 +4,7 @@
  */
 import type { HostingCertificate, HostingDnsReport } from '@/lib/instance-api'
 import { isForbiddenError } from '@/lib/fetch-error-detail'
+import { formatLocalDateTime } from '@/lib/format-datetime'
 import { userErrorMessage } from '@/lib/user-error'
 
 export type CertificateTone = 'neutral' | 'good' | 'warning' | 'bad' | 'pending'
@@ -76,11 +77,70 @@ function secureView(cert: HostingCertificate): CertificateView {
   }
 }
 
+type FormatTime = (iso: string) => string
+
+const formatTime: FormatTime = (iso) => formatLocalDateTime(iso)
+
+/** "Last tried … Next try …" for a waiting request; null when the server sent neither. */
+export function waitingTimingLine(
+  cert: HostingCertificate,
+  format: FormatTime = formatTime
+): string | null {
+  const parts = [
+    cert.lastTriedAt ? `Last tried ${format(cert.lastTriedAt)}.` : null,
+    cert.nextTryAt ? `Next try ${format(cert.nextTryAt)}.` : null,
+  ].filter((part): part is string => part !== null)
+  return parts.length === 0 ? null : parts.join(' ')
+}
+
+/** When a failing certificate was last tried, and who tries next. */
+export function failedTimingLine(
+  cert: HostingCertificate,
+  format: FormatTime = formatTime
+): string {
+  const retry = 'The server tries again by itself, waiting longer after each failure.'
+  return cert.lastTriedAt ? `Last tried ${format(cert.lastTriedAt)}. ${retry}` : retry
+}
+
+function withLine(lines: string[], line: string | null): string[] {
+  return line === null ? lines : [...lines, line]
+}
+
+/** What a waiting request still waits on. */
+export type WaitingCause = 'dns' | 'port80' | 'caa'
+
+/**
+ * DNS while any name does not point at the server yet; once every name does,
+ * the port 80 or CAA check that still stops it, so a closed port is never shown
+ * as a DNS problem.
+ */
+export function waitingCause(dns: HostingDnsReport | null): WaitingCause {
+  const names = dns?.hostnames ?? []
+  if (names.length === 0 || names.some((name) => !name.resolves)) return 'dns'
+  if (names.some((name) => name.port80 === 'closed')) return 'port80'
+  if (names.some((name) => name.caa === 'blocked')) return 'caa'
+  return 'dns'
+}
+
+const WAITING_LABELS: Readonly<Record<WaitingCause, string>> = {
+  dns: 'Waiting for DNS',
+  port80: 'Waiting for Port 80',
+  caa: 'Blocked by a CAA Record',
+}
+
+/** The status label of a waiting request, by what it waits on. */
+export function waitingLabel(dns: HostingDnsReport | null): string {
+  return WAITING_LABELS[waitingCause(dns)]
+}
+
 function waitingView(cert: HostingCertificate): CertificateView {
-  const lines = ['Let’s Encrypt starts as soon as this domain points at your server.']
+  let lines = [
+    'Let’s Encrypt starts as soon as this domain points at your server and answers on port 80.',
+  ]
   if (cert.dns && !cert.dns.ready) lines.push(...dnsSummaryLines(cert.dns))
+  lines = withLine(lines, waitingTimingLine(cert))
   return {
-    label: 'Waiting for DNS',
+    label: waitingLabel(cert.dns),
     tone: 'pending',
     lines,
     reason: null,
@@ -89,10 +149,25 @@ function waitingView(cert: HostingCertificate): CertificateView {
   }
 }
 
+function notReportedView(): CertificateView {
+  return {
+    label: 'Not on the server yet',
+    tone: 'warning',
+    lines: [
+      'The deploy finished, but no server has reported on this certificate since.',
+      'Check that the server is online and up to date, then deploy this environment again.',
+    ],
+    reason: null,
+    actions: ['deploy'],
+    spinner: false,
+  }
+}
+
 function issuingView(cert: HostingCertificate): CertificateView {
+  if (!cert.needsDeploy && cert.serverProgress === 'not_reported') return notReportedView()
   const lines = cert.needsDeploy
     ? ['Deploy this environment to start it. The certificate is requested during the deploy.']
-    : ['This usually takes a minute or two.']
+    : ['The server is working on it. This usually takes a minute or two.']
   return {
     label: 'Getting a certificate',
     tone: 'pending',
@@ -105,12 +180,15 @@ function issuingView(cert: HostingCertificate): CertificateView {
 
 function failedView(cert: HostingCertificate): CertificateView {
   const neverIssued = cert.lastIssuedAt === null
+  const lines = neverIssued
+    ? ['Let’s Encrypt could not issue this one.']
+    : ['Visitors will see a warning when the current certificate runs out.']
+  if (cert.dns && !cert.dns.ready) lines.push(...dnsSummaryLines(cert.dns))
+  lines.push(failedTimingLine(cert))
   return {
     label: neverIssued ? 'Couldn’t get a certificate' : 'Renewal failed',
     tone: 'bad',
-    lines: neverIssued
-      ? ['Let’s Encrypt could not issue this one.']
-      : ['Visitors will see a warning when the current certificate runs out.'],
+    lines,
     reason: cert.lastError,
     actions: ['check_dns', 'try_again'],
     spinner: false,
@@ -131,10 +209,10 @@ export function describeCertificate(cert: HostingCertificate): CertificateView {
   return BUILDERS[cert.state](cert)
 }
 
-/** Why Let's Encrypt was refused, in plain words, and whether Organization settings can fix it. */
+/** Why Let's Encrypt was refused, in plain words, and whether Organization Settings can fix it. */
 export type LetsEncryptRefusal = Readonly<{
   message: string
-  /** The organization has Let's Encrypt turned off: link to Domains & certificates. */
+  /** The organization has Let's Encrypt turned off: link to Domains & Certificates. */
   openSettings: boolean
 }>
 
@@ -198,26 +276,32 @@ export function withCertificateRefusal(
 }
 
 /**
- * One line per name that does not point here yet (including a www name the
- * hosting's www choice added), then where it should point.
+ * One line per name that is not ready (including a www name the hosting's www
+ * choice added): the server's own sentence when it sent one (a wrong AAAA
+ * record, port 80 not reachable, a CAA record), else where it points; then
+ * where the names with a wrong address should point.
  */
 export function dnsSummaryLines(dns: HostingDnsReport): string[] {
-  const lines = dns.hostnames
-    .filter((entry) => !entry.resolves)
-    .map((entry) =>
-      entry.addresses.length === 0
-        ? `${entry.hostname} doesn’t point at this server yet: no DNS record found.`
-        : `${entry.hostname} doesn’t point at this server yet: it points to ${entry.addresses.join(', ')}.`
-    )
-  if (lines.length > 0 && dns.expectedAddresses.length > 0) {
-    const them = lines.length === 1 ? 'it' : 'them'
+  const notReady = dns.hostnames.filter((entry) => !entry.resolves || entry.problem)
+  const lines = notReady.map((entry) => {
+    if (entry.problem) return entry.problem
+    return entry.addresses.length === 0
+      ? `${entry.hostname} doesn’t point at this server yet: no DNS record found.`
+      : `${entry.hostname} doesn’t point at this server yet: it points to ${entry.addresses.join(', ')}.`
+  })
+  const misaddressed = notReady.filter((entry) => !entry.resolves).length
+  if (misaddressed > 0 && dns.expectedAddresses.length > 0) {
+    const them = misaddressed === 1 ? 'it' : 'them'
     lines.push(`Point ${them} at ${dns.expectedAddresses.join(', ')}.`)
   }
   return lines
 }
 
 export function dnsResultHeadline(dns: HostingDnsReport): string {
-  return dns.ready ? 'Every name points at this server.' : 'DNS is not ready yet.'
+  if (dns.ready) return 'Every name is ready for a certificate.'
+  return dns.hostnames.some((entry) => entry.port80 === 'closed' || entry.caa === 'blocked')
+    ? 'Not ready for a certificate yet.'
+    : 'DNS is not ready yet.'
 }
 
 /** How often a certificate still being issued is checked again (it usually takes a minute or two). */
@@ -234,6 +318,9 @@ export const CERTIFICATE_DNS_POLL_MS = 30_000
 export function certificatePollInterval(
   cert: HostingCertificate | null | undefined
 ): number | false {
+  if (cert?.state === 'issuing' && cert.serverProgress === 'not_reported') {
+    return CERTIFICATE_DNS_POLL_MS
+  }
   if (cert?.state === 'issuing' && !cert.needsDeploy) return CERTIFICATE_ISSUING_POLL_MS
   if (cert?.state === 'waiting_for_dns') return CERTIFICATE_DNS_POLL_MS
   return false

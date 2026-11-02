@@ -9,15 +9,12 @@
  * which is why the lockfile precedence below mirrors the daemon's.
  */
 
-import {
-  NEWEST_NODE_SERIES,
-  type NodePackageManager,
-} from '@/lib/compose/service-kind'
+import { NEWEST_NODE_SERIES, type NodePackageManager } from '@/lib/compose/service-kind'
 import type { RepositoryInspection, RepositoryProbedFile } from '@/lib/instance-api'
 import { rootFromEntries } from '@/lib/compose/repository-lane'
 
 /** Builder card picked on the repository screen. */
-export type RepositoryBuilder = 'simple' | 'railpack' | 'compose' | 'site-php'
+export type RepositoryBuilder = 'simple' | 'image' | 'compose' | 'site-php'
 
 /** What a Simple application produces: a supervised process, or built files. */
 export type SimpleAppKind = 'web' | 'static'
@@ -63,7 +60,7 @@ const LOCKFILE_MANAGERS: readonly (readonly [string, NodePackageManager])[] = [
 
 function foundFile(
   files: readonly RepositoryProbedFile[],
-  path: string,
+  path: string
 ): RepositoryProbedFile | undefined {
   return files.find((file) => file.path === path && file.found)
 }
@@ -74,10 +71,7 @@ function foundFile(
  * routinely blow the probe's per-file cap, which is exactly the repository
  * that used to misreport npm here.
  */
-function presentFile(
-  files: readonly RepositoryProbedFile[],
-  path: string,
-): boolean {
+function presentFile(files: readonly RepositoryProbedFile[], path: string): boolean {
   const file = files.find((entry) => entry.path === path)
   if (!file) return false
   return file.found || file.reason === 'too_large' || file.reason === 'binary'
@@ -94,7 +88,7 @@ export function isNodeApp(files: readonly RepositoryProbedFile[]): boolean {
  * at build time, so when both exist the lockfile is what the build obeys.
  */
 function declaredPackageManager(
-  files: readonly RepositoryProbedFile[],
+  files: readonly RepositoryProbedFile[]
 ): NodePackageManager | undefined {
   const content = foundFile(files, 'package.json')?.content
   if (!content) return undefined
@@ -104,9 +98,7 @@ function declaredPackageManager(
     const pin = (parsed as { packageManager?: unknown }).packageManager
     if (typeof pin !== 'string') return undefined
     const name = pin.split('@')[0]
-    return name === 'npm' || name === 'yarn' || name === 'pnpm'
-      ? name
-      : undefined
+    return name === 'npm' || name === 'yarn' || name === 'pnpm' ? name : undefined
   } catch {
     return undefined
   }
@@ -119,7 +111,7 @@ function declaredPackageManager(
  * here is "nothing to show yet".
  */
 export function detectPackageManager(
-  files: readonly RepositoryProbedFile[],
+  files: readonly RepositoryProbedFile[]
 ): PackageManagerDetection | undefined {
   for (const [lockfile, manager] of LOCKFILE_MANAGERS) {
     if (presentFile(files, lockfile)) return { manager, evidence: lockfile }
@@ -137,7 +129,7 @@ export type PackageScripts = { build?: string; start?: string }
  * write, never an error.
  */
 export function readPackageScripts(
-  files: readonly RepositoryProbedFile[],
+  files: readonly RepositoryProbedFile[]
 ): PackageScripts | undefined {
   const content = foundFile(files, 'package.json')?.content
   if (!content) return undefined
@@ -193,9 +185,10 @@ const HINT_FILE_LABELS: Record<string, string> = {
  * concrete series is: pinned, so a later release of Node never moves the app.
  * `latest` is never a default.
  */
-export function suggestedNodeVersion(
-  inspection: RepositoryInspection | undefined,
-): { nodeVersion: string; notice?: string } {
+export function suggestedNodeVersion(inspection: RepositoryInspection | undefined): {
+  nodeVersion: string
+  notice?: string
+} {
   const info = inspection?.nodeVersion
   const newest = info?.newest ?? NEWEST_NODE_SERIES
   const hint = info?.hint
@@ -231,7 +224,7 @@ export function suggestedNodeVersion(
  * same reason.
  */
 export function suggestedSimpleAppConfig(
-  inspection: RepositoryInspection | undefined,
+  inspection: RepositoryInspection | undefined
 ): SimpleAppConfig {
   const files = inspection?.files ?? []
   const entries = inspection?.entries ?? []
@@ -243,9 +236,7 @@ export function suggestedSimpleAppConfig(
   // A repository whose only evidence is static files starts on the static
   // kind; a package.json means a process until the operator says otherwise.
   const kind: SimpleAppKind =
-    !isNodeApp(files) && (staticRoot !== undefined || hasIndexHtml)
-      ? 'static'
-      : 'web'
+    !isNodeApp(files) && (staticRoot !== undefined || hasIndexHtml) ? 'static' : 'web'
 
   return {
     kind,

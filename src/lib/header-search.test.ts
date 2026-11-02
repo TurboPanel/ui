@@ -16,15 +16,18 @@ describe('searchDestinations', () => {
       ['Projects', '/o1/projects'],
       ['Git Sources', '/o1/projects/git-sources'],
       ['Repositories', '/o1/projects/repositories'],
-      ['Project Settings', '/o1/projects/settings'],
+      ['Project Settings', '/o1/manage?tab=projects'],
       ['Activity', '/o1/activity'],
       ['Servers', '/o1/servers'],
       ['Managed Databases', '/o1/projects?type=managed'],
-      ['Network', '/o1/network'],
-      ['Access', '/o1/access'],
       ['Organization Settings', '/o1/manage'],
       ['Billing', '/o1/billing'],
     ])
+  })
+
+  it('files Project Settings under Organization Settings, where the page lives', () => {
+    const items = searchDestinations('o1', opts)
+    expect(items.find((i) => i.id === 'projects-settings')?.type).toBe('Organization Settings')
   })
 
   it('hides Billing when the install has none', () => {

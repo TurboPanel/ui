@@ -75,10 +75,7 @@ function describeTierNotice(notice: TierNoticeState): string {
   return `${reason} · last sent ${formatRelativeLocalDateTime(notice.lastNotifiedAt)}`
 }
 
-function freeAtTier(
-  placement: ServerDetailRecord['tierPlacement'],
-  tierId: string
-): number {
+function freeAtTier(placement: ServerDetailRecord['tierPlacement'], tierId: string): number {
   const row = placement?.tiersFree?.find((entry) => entry.tierId === tierId)
   return row?.free ?? 0
 }
@@ -375,7 +372,7 @@ function LicenseTierPanelBody({
       headerRight={
         <View style={styles.badges}>
           {notice ? (
-            <Badge label="Daily notice" tone={notice.kind === 'exceeds' ? 'pending' : 'info'} />
+            <Badge label="Daily Notice" tone={notice.kind === 'exceeds' ? 'pending' : 'info'} />
           ) : null}
           <Badge label={placement.licenseTier ?? 'Not covered'} tone={tierBadgeTone(state)} />
         </View>
@@ -391,7 +388,9 @@ function LicenseTierPanelBody({
           {placement.requiredTier}
         </Text>
         <Text style={panelStyles.detailLine}>
-          <Text style={panelStyles.detailLabel}>Recommended for monitored NICs and discovered drives and GPUs: </Text>
+          <Text style={panelStyles.detailLabel}>
+            Recommended for monitored NICs and discovered drives and GPUs:{' '}
+          </Text>
           {placement.recommendedTier}
         </Text>
         {placement.pickedTier ? (
@@ -434,7 +433,9 @@ function LicenseTierPanelBody({
       ) : null}
 
       {billingEnabled && showPicker && !canOwn ? (
-        <Text style={panelStyles.muted}>Only organization owners can pick a license tier for this server.</Text>
+        <Text style={panelStyles.muted}>
+          Only organization owners can pick a license tier for this server.
+        </Text>
       ) : null}
 
       {error ? <InlineNotice tone="warning" title={error} /> : null}
@@ -496,7 +497,11 @@ export function ServerTierPlacementPanel({
   const targetTier = state === 'unlicensed' ? placement.requiredTier : placement.recommendedTier
   const billingHref = billingEnabled ? orgBillingHref(orgId, { tier: targetTier }) : null
 
-  const catalogTiers = pickerCatalogTiers(catalogQuery.data?.tiers ?? [], placement.tiersFree, rankOf)
+  const catalogTiers = pickerCatalogTiers(
+    catalogQuery.data?.tiers ?? [],
+    placement.tiersFree,
+    rankOf
+  )
   const { choices, tooSmall, requiredRankUnknown } = eligibleTiersForPick(
     catalogTiers,
     placement.requiredTier,
@@ -523,10 +528,7 @@ export function ServerTierPlacementPanel({
     if (!outcome.ok) {
       setPending(null)
       setError(
-        licenseTierUserErrorMessage(
-          outcome.cause ?? outcome.error,
-          'Could not update license tier',
-        ),
+        licenseTierUserErrorMessage(outcome.cause ?? outcome.error, 'Could not update license tier')
       )
       return
     }

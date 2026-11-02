@@ -317,18 +317,24 @@ services:
   })
 })
 
-describe('railpack-built services', () => {
-  const railpackService = `services:
+describe('image-built services', () => {
+  const imageService = `services:
   api:
     x-turbopanel:
       serviceKind: container
       source:
         sourceId: 11111111-2222-3333-4444-555555555555
-        buildKind: railpack
+        buildKind: image
 `
 
   it('does not require image or build — the daemon mints the image', () => {
-    const issues = lintComposeYaml(railpackService)
+    const issues = lintComposeYaml(imageService)
+    expect(issues.some((issue) => issue.message.includes('must define "image"'))).toBe(false)
+    expect(blockingComposeLintIssues(issues)).toEqual([])
+  })
+
+  it('accepts the previous value too', () => {
+    const issues = lintComposeYaml(imageService.replace('buildKind: image', 'buildKind: railpack'))
     expect(issues.some((issue) => issue.message.includes('must define "image"'))).toBe(false)
     expect(blockingComposeLintIssues(issues)).toEqual([])
   })

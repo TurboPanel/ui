@@ -1,22 +1,23 @@
 # AGENTS.md
 
 Expo web UI for TurboPanel. Read the exact versioned docs at https://docs.expo.dev/versions/v57.0.0/ before writing any code.
+This is a short root. Nested `AGENTS.md` files hold the rules for the directory they sit in; the nearest one to the file you edit wins. Long runbooks live in `docs/`.
 
-## Project metadata / public naming
+## Project Metadata and Public Naming
 
-| Public name | GitHub | Internal term |
-| --- | --- | --- |
-| TurboPanel UI | [TurboPanel/ui](https://github.com/TurboPanel/ui) | `ui` |
+| Public name   | GitHub                                            | Internal term |
+| ------------- | ------------------------------------------------- | ------------- |
+| TurboPanel UI | [TurboPanel/ui](https://github.com/TurboPanel/ui) | `ui`          |
 
 Main product: [TurboPanel/turbopanel](https://github.com/TurboPanel/turbopanel) (TurboPanel Control Plane). **License:** AGPL-3.0-only with the [Apple App Store additional permission](./LICENSES/TurboPanel-Apple-App-Store-Additional-Permission.txt) (`LICENSE` stays unmodified AGPLv3; keep `package.json` `"license": "AGPL-3.0-only"` — do not invent an SPDX exception identifier). **Maturity:** **Private alpha**. README is product-facing; AGENTS.md is maintainer-facing. This repo is not deployed standalone — Caddy serves the control plane export.
 
-**Licensing operations:** contributions require the [CLA](https://github.com/TurboPanel/.github/blob/trunk/CLA.md). Trademarks are not granted by the software license ([`TRADEMARKS.md`](./TRADEMARKS.md)). Third-party components keep their own licenses ([`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md); `pnpm notices:generate` / `notices:check`). Third-party OS artwork in [`assets/os/`](./assets/os/) is recorded in [`assets/os/NOTICE.md`](./assets/os/NOTICE.md) and is not licensed under this repo's AGPL or the Apple App Store additional permission — that permission covers only material TurboPanel has authority to license ([`LICENSES/README.md`](./LICENSES/README.md)). Publish Corresponding Source for the exact revision of every store binary and production EAS Update before that artifact ships (not `trunk`). App Store Connect custom EULA must identify the AGPL source and additional permission before the first iOS release. Native **Settings → About** (`/about`, also in the account menu) names the license, version/build, and Corresponding Source URL for the exact git revision baked by `app.config.ts` — never `trunk`. Unsigned users may open `/about`. Production EAS Build, store build, and EAS Update **fail fast** in `app.config.ts` when a full git commit cannot be resolved — the source URL must be `/tree/<full-sha>`, never the repository root. `app.config.ts` imports `src/lib/source-release-node.mjs` (Node ESM); Expo compiles the config to `app.config.js` and cannot resolve an extensionless `./src/lib/source-release` TypeScript import. `pnpm eas:update` sets `EXPO_PUBLIC_GIT_COMMIT` so EAS Update records that revision. Product-facing README and `../website` `/open-source` plus `docs/getting-started/licensing.mdx` are the published story — keep them aligned when notices or provenance files change.
+Licensing, notices and store provenance: [docs/licensing-and-provenance.md](./docs/licensing-and-provenance.md).
 
 ## Releases
 
-How changes ship: squash-merge into `trunk`, then two bot-opened pull requests (`trunk` to `staging`, `staging` to `live`) that a maintainer merges with merge commits. Hotfixes land on `trunk` first, and the daemon ships before the control plane. See [How changes ship](https://github.com/TurboPanel/.github/blob/trunk/CONTRIBUTING.md#how-changes-ship) and [How to ship](https://turbopanel.io/docs/development/how-to-ship).
+How changes ship: squash-merge into `trunk`, then two bot-opened pull requests (`trunk` to `staging`, `staging` to `live`) that a maintainer merges with merge commits. Hotfixes land on `trunk` first, and the daemon ships before the control plane. See [How changes ship](https://github.com/TurboPanel/.github/blob/trunk/CONTRIBUTING.md#how-changes-ship) and [How to ship](https://turbopanel.io/docs/development/how-to-ship). The manual promotion form (`.github/workflows/promote.yml`) is the break-glass path, for when the automatic path cannot run ([docs/deployment-and-identifiers.md](./docs/deployment-and-identifiers.md)).
 
-## Documentation discipline
+## Documentation Discipline
 
 **Keep this file current.** When you learn something durable about the UI — instance API shapes, developer/diagnostic panels, fetch patterns, Expo constraints — add or update a note here alongside code changes.
 
@@ -26,103 +27,19 @@ How changes ship: squash-merge into `trunk`, then two bot-opened pull requests (
 - Do not record secrets or environment-specific URLs as if they were universal.
 - Remove or correct notes that prove wrong.
 
-### SonarQube (CI-based analysis)
+## Commands
 
-- Analysis runs in GitHub Actions (`.github/workflows/verify.yml`) with
-  `SONAR_TOKEN` and `sonar-project.properties`
-  (`sonar.projectKey=turbopanel_ui`, `sonar.organization=turbopanel`). The job
-  runs lint + `check:vocabulary` + typecheck + **`pnpm test:coverage`** (Vitest v8 LCOV at
-  `coverage/lcov.info`), then scans with
-  `sonar.javascript.lcov.reportPaths=coverage/lcov.info`. The scan waits on the
-  quality gate (`sonar.qualitygate.wait=true`); if the gate fails, the workflow
-  stops.
-- Vitest coverage `include` is `src/lib/**/*.ts` (`vitest.config.ts`).
-  `sonar.coverage.exclusions` must keep Expo routes (`src/app/**`), UI chrome
-  (`src/components/**`), and `**/*.tsx` out of the coverage denominator so
-  untested screens do not fail Sonar-way **Coverage on New Code ≥ 80%**.
-- **`sonar.sources` / `sonar.tests` / `sonar.test.inclusions`** must stay set in
-  `sonar-project.properties` (and mirrored in vestigial
-  `.sonarcloud.properties`). Tests are co-located (`**/*.test.ts` under `src`).
-- **Automatic Analysis must stay off** for `turbopanel_ui` (SonarCloud →
-  project **Administration → Analysis Method**). CI and Automatic Analysis
-  cannot run together — Automatic Analysis enabled makes the CI scanner fail.
-  There is no Sonar MCP `toggle_automatic_analysis` tool; change this only in
-  the SonarCloud UI.
-- Sonar-way **Coverage on New Code ≥ 80%** needs LCOV on CI. After switching
-  from Automatic Analysis, reset **New Code** (Administration → New Code) so the
-  baseline is not months of uncovered history, or the gate will fail even with
-  fresh coverage reports.
-
-### TypeScript style (SonarQube)
-
-- Prefer **`String#replaceAll()`** over **`String#replace()` with a global regex** when replacing every occurrence of a substring (`typescript:S7781`).
-- Use **`String.raw`** for string literals that contain backslashes so escapes stay readable and correct (`typescript:S7780`).
-- Prefer **optional chaining** (`obj?.prop`) over `!obj || obj.prop` (`typescript:S6582`).
-- Avoid **nested ternaries** — use `if`/`switch` or helpers (`typescript:S3358`).
-- Extract helpers when **cognitive complexity** exceeds 15 (`typescript:S3776`). Closures inside a component (async handlers, JSX callback props, `.map` bodies) are charged to the component at +1 nesting, so move logic into a custom hook, a module-level helper, or a child component rather than another inline arrow.
-- Sort strings with **`.sort((a, b) => a.localeCompare(b))`** (`typescript:S2871`).
-- Mark React component props **`Readonly<{…}>`** (`typescript:S6759`).
-- Do not leave **`TODO`** in code — use `Future:` in a normal comment (`typescript:S1135`).
-- Avoid widening unions with bare **`string`** when a literal union exists (`typescript:S6571`).
-- Web-only CSS (`position: 'sticky'`, `overflowX`, `backdropFilter`, …) is not in RN `ViewStyle` — cast via `as unknown as ViewStyle` (same pattern as `src/lib/glass.ts`). Do **not** use `as const` on those objects inside `StyleSheet.create` or `tsc` fails.
-
-## At a glance
-
-| Need | Go to |
-|------|--------|
-| **Any visual / UX work** | [Design system (ui-ux-pro-max)](#design-system-ui-ux-pro-max) — mandatory skill + MASTER/page workflow |
-| **Building / reusing a component** | [Component layer](#component-layer) — `src/components/ui` barrel; `ui/` never imports from `org/` |
-| **Agent skills** | [Agent skills](#agent-skills) — canonical `.agents/skills/` footprint |
-| Stack / fonts / Tamagui | [Stack](#stack) |
-| Auth, install, sign-up | [End-user auth & first-run install](#end-user-auth--first-run-install-self-hosted) |
-| Org routes & shell | [Organization console](#organization-console-organizationid) |
-| API helpers & contracts | `src/lib/instance-api.md` (helper → endpoint contract) + `src/lib/instance-api.ts` |
-| Server state / queries | [Server state (React Query)](#server-state-react-query) + `src/lib/query-keys.ts` + `src/lib/queries/` |
-| Admin surface | [Admin area](#admin-area-admin) |
-| Commands / polling | [Command Pipeline UI](#command-pipeline-ui) + `src/lib/queries/commands.ts` |
-| Deploy modes | [Build output & deployment](#build-output--deployment-dev-vs-prod) |
-| Pre-commit / typecheck | [Testing & pre-commit](#testing--pre-commit) |
-
-## Agent skills
-
-Canonical skill footprint is **only** under `.agents/skills/` (pinned in `skills-lock.json`).
-
-| Skill | Why retained |
-| --- | --- |
-| **ui-ux-pro-max** | Mandatory design workflow for console visuals — see [Design system (ui-ux-pro-max)](#design-system-ui-ux-pro-max) |
-| **building-native-ui** | Expo Router / native UI patterns for this Expo app |
-| **native-data-fetching** | Fetch / React Query / Expo Router loader guidance |
-| **expo-deployment** | Web / store / hosting deploy paths for the Expo export |
-| **expo-dev-client** | Development client builds when native modules are needed |
-| **expo-cicd-workflows** | EAS workflow YAML for CI/CD |
-| **eas-update-insights** | OTA update health when EAS Update is in play |
-| **expo-module** | Expo Modules API if native module work is required |
-| **upgrading-expo** | SDK upgrade guidance |
-| **use-dom** | Expo DOM components for web-in-native incremental migration |
-| **add-app-clip** | iOS App Clip target when that surface is needed |
-
-Authored Tamagui config lives in `babel.config.cjs`, `src/lib/tamagui.config.ts`, and `src/lib/theme.ts` — never commit `.tamagui/` generated cache.
-
-## Stack
-
-- **Expo SDK 57** (React Native 0.86, React 19.2) — keep Expo module versions aligned with `pnpm expo install --fix`. Native `ios/` / `android/` are not checked in (CNG).
-- **Tamagui** `^2.0.0-rc.26` — configured via `babel.config.cjs` (not `app.json` plugins); `reactCompiler` experiment is disabled to avoid conflicts with the Tamagui babel plugin.
-- **React Query** `^5.90.14` — see [Server state (React Query)](#server-state-react-query) below.
-- **Fonts** — `RootLayout` registers everything through `useFonts` and returns `null` until the fonts are ready. v4 type is Plus Jakarta Sans (700; 800 italic for page titles), Geist (400 / 500 / 600) and Geist Mono (400 / 500 / 600), packaged from `@expo-google-fonts/*` and bundled as same-origin assets: on the web `font-src 'self' data:` already covers them (`scripts/hosted-security-headers.test.ts` keeps it that way), and no font host is linked. Each weight is its own family name (`Geist_500Medium`); `src/lib/v4/typography.ts` maps roles to those names and never sets `fontWeight` beside them, because a phone applies it unreliably to a custom font. A test keeps the `useFonts` map and the role table equal. The old `@tamagui/font-inter` files stay loaded until no screen uses them. A new font weight needs the same three steps: `pnpm add`, a `useFonts` entry, a role in `typography.ts`; then `pnpm notices:generate`.
-
-## Testing & pre-commit
-
-| Command | Purpose |
-| --- | --- |
-| `pnpm typecheck` | `tsc --noEmit` — same gate as CI `verify.yml` and deploy |
-| (CI only) `ci-ok` | Aggregator job in `verify.yml`: needs `verify`, fails on any failure/cancel/skip — the one check the trunk ruleset requires. On a PR it always runs (a cancelled PR run is red); on a trunk push a cancelled run leaves it skipped (grey), so only a real failure is red |
-| `pnpm lint` | Expo ESLint |
-| `pnpm check:vocabulary` | Reject daemon-as-agent and Apple-associated chrome phrasing (`src/lib/vocabulary.ts` + `scripts/check-vocabulary.mjs`) |
-| `pnpm notices:generate` | Write `THIRD_PARTY_NOTICES.md` from the resolved pnpm graph plus committed bundled resources (fonts). After Expo prebuild / EAS, the same script collects CocoaPods, Gradle, and AAR/POM metadata (`--native`) |
-| `pnpm notices:check` | JS-only (`--js-only`): fail when notices are stale vs the lockfile, or a production dependency has an unreviewed license class. Clean-checkout CI uses this so a missing native tree is not a failure |
-| `pnpm notices:check:native` | Same check plus fail when a native build is expected but the CocoaPods / Gradle / AAR graph is absent. EAS `eas-build-post-install` generates with `--native` |
-| `pnpm test` | Vitest once |
-| `pnpm test:coverage` | Vitest + LCOV (`coverage/lcov.info`) — CI `verify.yml` runs this, then SonarCloud |
+| Command                     | Purpose                                                                                                                                                                                                                                                                  |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `pnpm typecheck`            | `tsc --noEmit` — same gate as CI `verify.yml` and deploy                                                                                                                                                                                                                 |
+| (CI only) `ci-ok`           | Aggregator job in `verify.yml`: needs `verify`, fails on any failure/cancel/skip — the one check the trunk ruleset requires. On a PR it always runs (a cancelled PR run is red); on a trunk push a cancelled run leaves it skipped (grey), so only a real failure is red |
+| `pnpm lint`                 | Expo ESLint                                                                                                                                                                                                                                                              |
+| `pnpm check:vocabulary`     | Reject daemon-as-agent and Apple-associated chrome phrasing (`src/lib/vocabulary.ts` + `scripts/check-vocabulary.mjs`)                                                                                                                                                   |
+| `pnpm notices:generate`     | Write `THIRD_PARTY_NOTICES.md` from the resolved pnpm graph plus committed bundled resources (fonts). After Expo prebuild / EAS, the same script collects CocoaPods, Gradle, and AAR/POM metadata (`--native`)                                                           |
+| `pnpm notices:check`        | JS-only (`--js-only`): fail when notices are stale vs the lockfile, or a production dependency has an unreviewed license class. Clean-checkout CI uses this so a missing native tree is not a failure                                                                    |
+| `pnpm notices:check:native` | Same check plus fail when a native build is expected but the CocoaPods / Gradle / AAR graph is absent. EAS `eas-build-post-install` generates with `--native`                                                                                                            |
+| `pnpm test`                 | Vitest once                                                                                                                                                                                                                                                              |
+| `pnpm test:coverage`        | Vitest + LCOV (`coverage/lcov.info`) — CI `verify.yml` runs this, then SonarCloud                                                                                                                                                                                        |
 
 **Where to run tests:** host VirtFS checkouts lack a usable Node/pnpm tree
 (`node_modules` is bind-mounted inside the guest). Run suites **inside the
@@ -135,430 +52,35 @@ vagrant ssh -c 'export PATH="/opt/turbopanel/vendor/node/current/bin:$PATH"; cd 
 vagrant ssh -c 'export PATH="/opt/turbopanel/vendor/node/current/bin:$PATH"; cd ~/ui && pnpm verify:ci'
 ```
 
-**No flaky tests:** a test must give the same result on every run. Do not use unseeded randomness (`crypto.randomUUID`, `Math.random`, random bytes) as input where an assertion or a fake keys on the content, prefix, order or collision of the value (a random hex string can contain any short letter run, and a base64 one can contain `+` or `/`); use a fixed value, or a seeded one. Do not rely on tight real-time margins (a `setTimeout` of a few ms, an elapsed-time `>=`): wait for the condition with a polling helper and a generous ceiling, or inject a clock. Do not make wall-clock expectations without a fixed clock (`Date.now()`, `new Date()`, midnight, month and DST edges). Do not depend on test order or on state shared between tests.
+Flaky-test rules, CI jobs and the `allowBuilds` note: [docs/testing-and-ci.md](./docs/testing-and-ci.md).
 
-**CI:** `.github/workflows/verify.yml` runs lint, `check:vocabulary`, `notices:check`, typecheck, `pnpm test:coverage`,
-then a SonarCloud scan with `sonar.qualitygate.wait=true` (`SONAR_TOKEN` required).
-Automatic Analysis must stay **off** for `turbopanel_ui`.
-`pnpm-workspace.yaml` `allowBuilds` must keep native postinstalls (`esbuild`,
-`workerd`, `sharp`, …) approved; pnpm 12 `strictDepBuilds` otherwise fails
-`pnpm install` with `ERR_PNPM_IGNORED_BUILDS`.
-
-**Pre-commit** (`.githooks/pre-commit`): secret scan only (never skippable). `scripts/scan-secrets.sh`, `scripts/scan-secrets.patterns` and `scripts/scan-secrets.selftest.sh` are byte-identical in turbopanel, turbopaneld, ui, website and dev: change all five together (each repo keeps a copy because the pre-commit hook runs it locally). The rules in the patterns file cover private key blocks, vendor tokens, JWTs, connection URLs with credentials, secret-looking assignments and forbidden file names (dotenv files, `*.pem`, `*.key`, daemon identity files, …); the scanner reports the rule id and location, never the matching text. `--all` scans the tree; `--range BASE..HEAD` scans every line the PR's commits added, so a secret added and removed inside a PR is still caught (CI runs it on PRs into trunk). Allowlist entries in `.secretscan-allowlist` are `path:full line text` (or `@path exact/file` for a forbidden file name), each needs a `# reason:` comment above it, and wildcards are rejected. The self-test builds its fixtures at run time from fragments; dev's `src/lib/scan-secrets.test.ts` runs it and, with the siblings checked out in dev CI, fails if any copy drifts.
-Lint/typecheck/tests are **temporarily disabled** in the hook until the
-toolchain can run inside the Vagrant guest. Requires `core.hooksPath=.githooks`
-(otherwise Git never runs the hook).
-
-- **`pnpm install`** runs `prepare` → `scripts/ensure-git-hooks.sh`, which sets `core.hooksPath=.githooks` locally.
-- Dev console `./console` / `ensureAllGitHooksPaths` also wires every co-located checkout.
-- After a fresh clone, run `pnpm install` (or `sh scripts/ensure-git-hooks.sh`) before committing; confirm with `git config --local --get core.hooksPath` → `.githooks`.
-- **Pull-to-refresh is opt-in and focus-scoped.** `OrgScreenScroll` mounts `RefreshControl` only while a screen has registered a handler via `usePullToRefresh` (native only). Registrations are keyed per screen and held **only while that screen is focused** (`useIsFocused`): a native stack keeps the screen underneath mounted when you push a new one, so a single-slot registry let the projects list keep the gesture alive on the pushed create wizard, which has nothing to refresh. Keying also makes blur/focus teardown order irrelevant — a screen can only clear its own entry. Screens that never call `usePullToRefresh` (forms, wizards) get no RefreshControl.
-- **`OrgScreenScroll` owns vertical scrolling for every org screen** (it is the org Stack's `screenLayout`, and each native tab-pager page) and applies the content `maxWidth` / `paddingHorizontal` / `paddingVertical` insets. Page-level sections must **not** nest their own vertical `ScrollView` — only horizontal ones for wide tables. A nested vertical scroll is unbounded on native, so `flexGrow: 1` + `justifyContent: 'center'` (a web-only way to vertically center a page) renders as large dead space above and below plus a second scroll surface on iOS.
 - Lint/typecheck/tests still belong in CI/deploy and can be run manually with `pnpm lint` / `pnpm check:vocabulary` / `pnpm notices:check` / `pnpm typecheck` / `pnpm test` / `pnpm test:coverage`.
 - **`pnpm lint` writes to the working tree.** `expo lint` applies ESLint autofixes, including `react-hooks/exhaustive-deps` on files you never touched — and widening a deps array changes when that effect re-runs. Check `git status` after linting and revert edits outside your change.
 
-## Server state (React Query)
-
-All instance/server state goes through React Query. Do **not** add new `useEffect` + `useState` fetch caches or hand-rolled `setInterval` poll loops.
-
-| Piece | Location |
-| --- | --- |
-| Query-key factory | `src/lib/query-keys.ts` (`queryKeys`) — hierarchical, org-scoped prefixes (`['org', orgId, …]`) so partial invalidation works |
-| QueryClient factory | `createAppQueryClient()` in `src/lib/query-client.ts`; module-level instance in `src/components/app-providers.tsx` |
-| Domain hooks | `src/lib/queries/*.ts` — one module per domain (servers, projects, environments, managed, …) |
-| Mutations | `useApiMutation` in `src/lib/query-client.ts` — `{ ok, error }` shape; mutations use `retry: false` |
-| 403 seam | `setForbiddenHandler` registered by `AuthProvider`; QueryCache/MutationCache `onError` routes `isForbiddenError` there. Prefer this over per-component `useForbiddenRecovery` |
-| Transport / types | `src/lib/instance-api.ts` — components import **hooks** from `src/lib/queries/*`, not `fetch*` helpers |
-
-**Conventions**
-
-- Screens use `useQuery` / `useQueries` / mutation hooks; invalidate the narrowest correct key prefix in `onSuccess` — never thread a caller `refresh()` callback for server data.
-- Sign-out calls `queryClient.clear()` so a second account never sees the previous cache.
-- Show-once secrets (managed root/user passwords, generated variable secrets) stay in component state from the mutation result — **never** `setQueryData` them.
-- Polling uses query `refetchInterval` (function form when conditional): environment deploy history every 5 s while its newest deploy runs (the environment Overview reads its services and containers at the same pace meanwhile; when it ends the org's hostings, the environment's services and the containers are refetched, since a deploy changes their state and certificates); a hosting's certificate while it is being issued (5 s) or waits for DNS (30 s); servers list 30 s, **2 s while any listed host is Initializing**; update-status while `status === 'updating'`; commands via `useCommandsBatch` (`COMMAND_POLL_MS` in `src/lib/queries/commands.ts`); managed status only while `provisioning` / `applying`; metrics cadence 5 m/10 m → 10 s **live-session** refetch (gated to individual-server metrics screens only), 30 m/1 h → 60 s, longer ranges → `false`. Live mode is driven by a start/stop lease mutation (not a bare interval), with a visible `LIVE · 10 second sampling` → `Live session ended` transition when the lease cap expires. An empty fleet is idle (30 s) — do not treat a self-hosted empty org as “waiting for the colocated host.”
-- Containers on Project Overview: `refetchInterval: false` — refresh only on explicit **Refresh** or after a tracked command reaches terminal status. **Exception:** inspect-only platform (system) projects poll with `observeUntilHostDeployed` until allocator pins gain a Docker id, because `system.reconcile` is not a user Deploy action.
-- O(1) fleet reads: one `useOrgServers` / one batch update-status query — never per-server queries or `fetchServerCell` with an interval on overview.
-- Read a failed `run()`'s message from its result (`failedRunMessage(result, fallback)` in `src/lib/user-error.ts`), never from `actionError`: that is render state and still empty inside the call that just failed, so `if (mutation.actionError) setError(...)` shows nothing on a first failure. Say the failure next to the control that caused it.
-- `useCan` remains a display hint; server 403s remain authoritative via the global forbidden seam.
-- Manage-gated reads that must not sign the user out (e.g. org default environment) catch `isForbiddenError` inside `queryFn` and return a fallback so the global handler is not invoked.
-
-## Design system (ui-ux-pro-max)
-
-This repo is the **signed-in product console** (org + admin + install/sign-in), not the public marketing site. Visual work must follow the installed **ui-ux-pro-max** skill and the persisted TurboPanel console design system. Do not invent a parallel look from generic SaaS defaults or from `~/website`.
-
-### This repo vs marketing site (`~/website`)
-
-| | **ui** (this repo) | **website** (`~/website`) |
-| --- | --- | --- |
-| Surface | Org console, admin, install/sign-in product UI | Marketing pages, landing/heroes, docs chrome, pricing/roadmap |
-| North star | Ops console in two first-class themes (Navy dark, Paper light), dense tables | Fast, trustworthy, **light-first** marketing + readable docs (dark mode supported) |
-| Design system | `design-system/turbopanel/` | `design-system/turbopanel-website/` |
-| Skill path | `.agents/skills/ui-ux-pro-max/` | `.agents/skills/ui-ux-pro-max/` |
-| Tokens | `src/lib/theme-palettes.ts` + `src/lib/theme.ts` (`colors`, `chrome`, `spacing`, `layout`) | `--tp-*` in `src/app/globals.css` |
-| Stack search | `--stack react-native` | `--stack nextjs` |
-
-Shared brand cues only: blue `#3366cc` (ours) and green `#3dd68c` (running). The console follows the v4 "Navy & Tee" system in its own `design-system/turbopanel/`, including Plus Jakarta Sans display type for titles (Geist for text, Geist Mono for code; see Stack › Fonts). Do **not** copy the website's light-first marketing layout or the website Master into the console — and do not apply console density / Tamagui patterns to the marketing site.
-
-### When to use (mandatory)
-
-Invoke the skill **before designing or changing visuals** when the task touches any of:
-
-- New pages, routes, or org/admin areas
-- Visual redesigns; layout / spacing / typography / color
-- New or refactored components with visible chrome (panels, tables, forms, empty states, wizards)
-- Charts / data visualization, navigation chrome, motion / transitions
-- UX / accessibility / consistency reviews of existing UI
-
-Skip the skill for pure non-visual work (API wiring with no UI change, types-only, fetch/query logic, copy-only string tweaks that do not affect layout) — unless the change alters how something looks, moves, or is interacted with. If you touch JSX layout or styles, use the skill.
-
-### Canonical paths
-
-| What | Path |
-| --- | --- |
-| Skill (read first) | [`.agents/skills/ui-ux-pro-max/SKILL.md`](.agents/skills/ui-ux-pro-max/SKILL.md) |
-| Search CLI | `.agents/skills/ui-ux-pro-max/scripts/search.py` |
-| Master (global SoT) | [`design-system/turbopanel/MASTER.md`](design-system/turbopanel/MASTER.md) |
-| Page overrides | `design-system/turbopanel/pages/<page>.md` (page **wins** over Master) |
-| Runtime tokens | `src/lib/theme.ts` over `src/lib/theme-palettes.ts` — no one-off hex in components |
-| Frosted chrome | `src/lib/glass.ts` + `src/components/glass/glass-surface.tsx` (frosted surface; iOS 26+ `expo-glass-effect`) |
-| Shared UI primitives | `src/components/ui/` — barrel `src/components/ui/index.ts` (see [Component layer](#component-layer)) |
-| Shared panel patterns | `src/components/ui/panel-styles.ts` (`panelStyles`) |
-
-**Page overrides that exist today** (do not invent others): `sign-in.md`, `about.md`, `overview.md`, `manage.md`, `organizations.md`, `servers.md`, `datacenters.md`, `server-detail.md`, `server-metrics.md`, `network.md`, `projects.md`, `project-create.md`, `managed-services.md`, `variables.md`, `service-settings.md`, `storage.md`, `tls.md`, `deploy-logs.md`, `container-logs.md`, `git-sources.md`, `billing.md`, `access.md`, `updates.md`. If no page file exists for a surface, follow Master only; add a page override when that surface needs durable exceptions.
-
-### Component layer
-
-The console ships to **three platforms** (web, iOS, Android) from one tree, so
-shared chrome lives in **one** place and each screen composes it. A widget
-hand-rolled per screen is a widget that renders three ways on three platforms
-and drifts the moment one copy is edited.
-
-**The layer:**
-
-| Layer | Path | Rule |
-| --- | --- | --- |
-| Primitives | `src/components/ui/*` | Reusable, screen-agnostic. Imported everywhere via the `@/components/ui` barrel. |
-| Shared panel styles | `src/components/ui/panel-styles.ts` | `panelStyles` — page titles, muted copy, detail cards, callouts, toolbar buttons. |
-| Tokens | `src/lib/theme.ts` | `colors`, `chrome`, `spacing`, `layout`, `webPointer`. No one-off hex in components. |
-| Features | `src/components/org/*`, `src/components/admin/*` | Screen-specific composition only. |
-
-**v4 primitives** live in `src/components/ui/v4/` (barrel `@/components/ui/v4`, one file and one test file each): status chip and triplet, source tag, "Runs as" chip, underline tabs, page title and section heading, card, list group and row, notice (with the raw error line), action button hierarchy (primary, secondary, quiet, danger; 36 px, 44 px on touch), sheet, empty panel, pending bar, Tee stripe, layer cards and choice cards. They paint through `usePalette()` (web: the CSS-variable `colors`, native: the live palette) and build styles with `themedStyles`, so both themes work without a re-render on the web. Words, status keys, glyph shapes, sizes and fonts live in pure `src/lib/v4/` files (`status-vocab.ts`, `ui-scale.ts`, `typography.ts`) that carry the coverage gate. Tests run each primitive three ways (web, phone Navy, phone Paper) over the DOM stand-ins in `rn-stub.tsx`. Screens built in later v4 slices compose these; do not restyle them per screen.
-
-**Dependency direction is one-way: `ui/` must never import from `org/` or
-`admin/`.** A primitive that needs a token takes it from `src/lib/theme.ts`.
-
-**What already exists — check the barrel before writing a component.** Reach for
-these instead of a local `StyleSheet`:
-
-| Need | Use |
-| --- | --- |
-| On/off setting | `Toggle` + `SettingRow` — the one switch: track and knob plus the state word ("On" / "Off", or the caller's), 44 pt tall on touch. Never React Native `Switch` (it renders as three unrelated controls across the platforms) |
-| Panel / card | `Section` from `ui/v4` (`note`, `action`, `collapsible`): the section heading over one card. Project screens use it; the older `SectionPanel` (glass header, accent stripe) remains on server, org and admin screens until they move |
-| Dense table | `DataTable` + `DataTableRow` / `DataTableCell` / `DataTableEmpty` — owns horizontal scroll, the web-only sticky header, hover, zebra, selection |
-| Blocking dialog | `ModalSheet` — centred dialog on desktop, bottom sheet on compact, backdrop dismiss, Android back |
-| Status indicator | `StatusDot` (`online` / `pending` / `offline` / `failed` / `neutral`); `ConnectionStatusDot` when a server's live pulse is wanted |
-| Buttons | `Button` (40 / 32 with a mouse, 44 at every size on a phone or coarse pointer), `ButtonRow`, `ConfirmButton`, `CopyButton` |
-| Text link | `TextLink` — link-blue words, as tall as the text with a mouse and a 44 x 44 pt tap area on touch, keyboard focus ring; `expanded` turns it into a show / hide disclosure. Never a bare `Pressable` + `Text` |
-| Inputs | `TextField`, `FormField`, `Checkbox`, `Select`, `SegmentedControl` |
-| States | `EmptyState`, `LoadingState`, `InlineNotice`, `Badge`, `StatTiles`, `WizardSteps` |
-
-**State on the web needs `aria-*`.** React Native Web 0.21 ignores `accessibilityState`, so a switch, checkbox or disclosure that only sets it reaches a browser screen reader with no checked or expanded state. Pass the `aria-checked` / `aria-expanded` / `aria-disabled` form too (React Native maps it on the phone). The `rn-stub.tsx` stand-ins translate `accessibilityState` for you, so they cannot catch this: `switch-state.web.test.tsx` renders through the real React Native Web.
-
-**Adding a widget:** if a second screen needs it, it belongs in
-`src/components/ui/` and the barrel — not copied. If only one screen will ever
-use it, keep it local. Extend an existing primitive with a prop before adding a
-near-duplicate component.
-
-**Platform-specific styling belongs inside the primitive**, never in a screen.
-Web-only CSS (`position: 'sticky'`, `overflowX`, `backdropFilter`) needs the
-`as unknown as ViewStyle` cast; keeping it in one primitive means one cast
-instead of one per screen (`DataTable` is the worked example).
-
-### Mandatory first steps
-
-From the **ui repo root**, before building or restyling UI:
-
-1. **Read** `.agents/skills/ui-ux-pro-max/SKILL.md` (workflow, domains, anti-pattern priorities).
-2. **Search** the skill DB (prefer `python3` if `python` is missing):
-
-```bash
-# Persisted console system — start here for page/chrome work
-python3 .agents/skills/ui-ux-pro-max/scripts/search.py \
-  "devops control plane dark dense dashboard" --design-system -p "TurboPanel"
-
-# Domain deep-dives as needed
-python3 .agents/skills/ui-ux-pro-max/scripts/search.py "<query>" --domain style
-python3 .agents/skills/ui-ux-pro-max/scripts/search.py "<query>" --domain color
-python3 .agents/skills/ui-ux-pro-max/scripts/search.py "<query>" --domain typography
-python3 .agents/skills/ui-ux-pro-max/scripts/search.py "<query>" --domain ux
-python3 .agents/skills/ui-ux-pro-max/scripts/search.py "<query>" --domain chart
-python3 .agents/skills/ui-ux-pro-max/scripts/search.py "<query>" --domain icons
-
-# Stack guidance for this repo (Expo / React Native web + native)
-python3 .agents/skills/ui-ux-pro-max/scripts/search.py "<query>" --stack react-native
-```
-
-3. **Read** `design-system/turbopanel/MASTER.md`, then `pages/<page>.md` if it exists (page overrides Master).
-4. **Reuse** existing org/admin patterns (`org-panel-styles.ts`, neighboring section components) before inventing new chrome.
-5. **Implement** with `theme.ts` tokens — no one-off hex in components. Match empty/loading/chart states already documented on that page when present (e.g. `server-metrics.md`).
-
-Do **not** regenerate Master with `--persist --force` unless an explicit redesign was requested. Master already exists and is curated.
-
-### Decision order
-
-Apply in this order (later steps only fill gaps; they do not override earlier project rules):
-
-1. **Product constraints** (below) + platform-copy rules — non-negotiable brand / palette / density
-2. Page override `design-system/turbopanel/pages/<page>.md` (if present)
-3. Master `design-system/turbopanel/MASTER.md`
-4. Skill guidance (`SKILL.md` + `search.py`) — required for a11y, interaction, UX, and `--stack react-native`; do **not** let generic skill palettes replace TurboPanel tokens
-5. Existing org/admin component patterns in this repo
-6. New code
-
-### Product constraints (keep)
-
-These are non-negotiable for the console (detail lives in Master):
-
-- Two first-class themes, **Navy** (dark) and **Paper** (light); the default follows the device, and the choice (Light / Dark / Match computer) is saved in the browser only. Every screen must work in both. See [Theme](#theme)
-- Dense ops tables
-- Interactive chrome (nav, CTAs, toolbar) is brand blue via `chrome.*` on both control-plane runtimes; **online / live status stays green** (`colors.ok`, alias `colors.green`); blue **text** uses `colors.link`
-- Soft elevation / hairline borders + restrained **frosted chrome** on shell chrome — **not** light SaaS, purple gradients, cyberpunk neon, or iridescent aberration
-- Design dials already chosen: variance ~4, motion ~4, density ~8 (dashboard)
-- Tokens only from `src/lib/theme.ts` (`colors` + `chrome`) and `src/lib/glass.ts` — no parallel hex systems
-- **Version entry beside the T mark** (`src/components/brand/high-availability-wordmark.tsx`, rules in `src/lib/control-plane-version.ts` + `src/lib/update-entry.ts`): the control plane's version from `/api/health` as plain `vX.Y.Z` on both editions (no `-canary.N` / `-rc.N` suffix, never the commit), a yellow word (`warn` tokens) when not live (hosted by `environment`: Testing / Staging; self-hosted by `channel`: Canary / RC, the old `trunk` name counts as Canary, anything else shows none), and for instance admins only an update icon when an update is waiting or updates are paused ("Update" beside it on live builds only; nothing until the version is known). Waiting: on self-hosted the control plane, web interface or co-located daemon is behind; `daemonsBehind` and `updatesPaused` on `GET /instance/updates` are reserved for the automatic update system and read only through `fleetUpdateSignals`. Clicking opens the versions popup (`versions-sheet.tsx`: control plane and web interface versions only), or Admin > Updates for an instance admin with the icon showing. Organization managers and members get no icon and always the popup. The "HIGH AVAILABILITY" pill is unchanged; self-hosted shows no edition text.
-- **Platform copy:** user-facing “Workers / Cloudflare / edge” → **TurboPanel High Availability** (`HA_PRODUCT_NAME` in `src/lib/platform-copy.ts`). Never bare “High Availability” or “HA” in UI copy. The org mesh product is **TurboFabric** (`TURBOFABRIC_PRODUCT_NAME`) — never “tp0 fabric”, “which WireGuard network should this container join?”, or “the WireGuard mesh”. Backend identifiers unchanged. User-facing copy says **Platform CA** or **Organization CA**, never bare “CA certificate” / “org CA”.
-
-### Anti-patterns / do-not
-
-- Skip the skill and freestyle a purple/indigo SaaS or cream+serif “AI default” look
-- Apply the `~/website` light-first marketing / docs chrome or its Master to the console
-- A screen that is only checked in one theme; colour maths on `colors.*` (web values are CSS variables)
-- Raw hex in components when a `theme.ts` token exists
-- Ignore a page override when one exists for the surface you’re editing
-- Silent `--persist --force` of Master (discards curated decisions)
-- Decorative card stacks, emoji-as-icons, status conveyed by color alone
-- Copy website search project name (`TurboPanel Website`) or `--stack nextjs` into this repo
-
-### Theme
-
-Two palettes (v4 "Navy & Tee"): **Navy** (dark) and **Paper** (light), defined once in `src/lib/theme-palettes.ts` with the spec's token names; the old `colors.*` keys (`bgPanel`, `textMuted`, ...) are aliases of those tokens, so older screens follow the theme untouched.
-
-- **Choice:** Light, Dark or Match computer (default). Stored in this browser only (`localStorage` key `turbopanel.theme`, never on the server), kept by `src/lib/theme-preference.ts` (`useThemeMode`, `useColorScheme`, `useColors`, `setThemeMode`). The switch is the Theme row of `UiSettings` (`src/components/ui-settings-panel.tsx`) in the profile menu.
-- **Web:** `colors.*` are CSS variable references (`var(--tp-bg, <navy>)`). The stylesheet that defines them is generated by `themeCss()` and shipped in `src/app/+html.tsx`; `public/theme-boot.js` (a file, not inline script, so the CSP hash list stays valid; a test keeps it equal to `themeBootScript()`) applies a saved Light or Dark choice before first paint. Any element with `data-theme="dark"` or `"light"` re-points the variables for its subtree (the auth screens pin Navy this way).
-- **Phone app:** `colors.*` are the Navy values and the resolved scheme is always dark; the switch is not drawn there. Native screens read fixed values at import time, so a native Light theme needs each screen moved to `useColors()` first (do that as each screen is rebuilt).
-- **Rules for code:** no raw hex; never do colour maths on `colors.*` (no `colors.x + '33'`, no hex parsing, no `Animated` colour ranges): use a `*Soft` token or `useColors()`, which returns real values. Libraries that parse colours themselves (`expo-linear-gradient`, `Animated.interpolate`) need `useColors()` or Navy hex. Blue text uses `colors.link`; `chrome.accent` is a fill and border colour. Tamagui follows the same scheme through `<Theme name={scheme}>` in `app-providers.tsx`.
-- **Checks:** `theme-palettes.test.ts` holds the contrast table (4.5:1 text, 3:1 field borders, every old key pair, both themes). Look at any changed screen in both themes before opening the PR.
-
-### Console surfaces and shared patterns (web)
-
-Plans and roadmaps live outside the repo, in the Master Sheet.
-
-**Compose parity (docker-compose projects):** service settings panel, variable deploy flags (`isLiteral` / build / runtime), hosting proxy toggles, optional health-check policy (`disabled` default — compose/`image` HEALTHCHECK is enough when present; `warn`/`required` are opt-in gates), storage registry UI, project principals, org/server resource limits API — see `design-system/turbopanel/pages/service-settings.md`.
-
-**Shared UI kit (`src/components/ui/`, barrel `index.ts`):** `Badge`, `Button` / `ButtonRow`, `Checkbox`, `ConfirmButton`, `CopyButton`, `FormField` / `TextField`, `MonoText`, `SegmentedControl`, `EmptyState` / `LoadingState`, plus:
-- `SectionNav` (`section-nav.tsx`) — a **short horizontal** strip of underline tabs for switching modes *within* a surface (the embedded Compose/Services toggle). Items take `icon` + optional `badge` and either `href` (routed, via `Link asChild`) or `onPress` (state-driven). There is deliberately **no rail variant**: a side list of destinations is what the project editor's layout exists to avoid, and a growing set of destinations belongs on the object it configures, not in a nav.
-- `InlineNotice` (`inline-notice.tsx`) — left-accent state strip (title, optional body, optional actions that sit inline on wide layouts and wrap beneath the copy on narrow ones), `tone` `info` (default, `colors.command`) or `warning` (`colors.pending`). Use it wherever a message explains the content it sits above — **never** a modal or a scrim for that, which hides the very thing the message is about.
-- `StatTiles` (`stat-tiles.tsx`) — icon-led count tiles **inside** a surface (fill-only, no border, auto-fit grid, zero values dimmed rather than hidden). Distinct from `StatusStatBoxes` (`org/status-stat-boxes.tsx`), which is the wider bordered label-first tile for page-level fleet numbers. Compose resource glyphs live in `src/components/icons/resource-icons.tsx`; compose nav glyphs in `org/compose-view-icons.tsx`.
-
-**Shell polish:** shared patterns in `org-panel-styles.ts` (`pageTitle`, `toolbarBtn*`, `expandedSection`, `commandCodeBlock`, `statePanel`, `webPointer`). Org/admin sidebar brand via `TurboPanelLogo` (T mark only; full wordmark is website-only) + sub-nav rail; header eyebrow + borderless hover-tile account controls (`HeaderMenuTrigger`: org, user, notifications — leading icons sit in a 16px `triggerGlyph` slot matching the label line-height; native org switcher shows the display name truncated to `HEADER_ORG_NAME_MAX_CHARS` (20) plus chevron; native profile is a circular avatar with the user icon and optional unread badge, no chevron). Servers: status dots, zebra rows, expand cards. Metrics: collapsible chart groups + coverage bar. See `design-system/turbopanel/pages/servers.md`.
-
-## End-user auth & first-run install (self-hosted)
-
-- **Install** — `/install` when `needsInstall`. Step 1: host root or sudo user → `POST /install/bootstrap` (no cookies; UI reveals superadmin fields). Step 2: same host creds + superadmin email/password → `POST /install` → superadmin session → `/<organizationId>/overview`. `useCompleteInstall` optimistically clears `needsInstall` / `isInstallMode` before navigation. The install screen must not redirect to `/sign-in` after a successful complete (that raced AuthGuard).
-- **AuthGuard** (`src/app/_layout.tsx`, logic in `src/lib/auth-guard.ts`) — always keep the root `<Stack />` mounted and render `<Redirect />` alongside it when a gate applies. Replacing Stack with Redirect alone leaves `useSegments()` empty so signed-in users loop on `/welcome` (`Maximum update depth exceeded`) right after install.
-- **Control-plane targeting** (`src/lib/control-plane.ts`) — user sessions stay **HttpOnly cookies** (`credentials: 'include'`). There is no user-session Bearer. **Same-origin web** (production, or `__DEV__` behind Caddy `:8443`) keeps relative `/api` and has no picker or account switcher. **Standalone Expo web** (`__DEV__` + Metro origin, typically `:8081`) must **not** call the API — `/connect` is a static “open via Caddy” interstitial so Metro does not retry-loop. **Native** (iOS/Android) prefixes `resolveApiUrl` with the active origin; cookies live in the platform jar (one session per host). `/connect` picks **TurboPanel High Availability** (`https://turbopanel.app`) or a self-hosted URL; `needsInstall` tells the operator to finish setup in a browser on the host (no PAM install from the phone). Android API 24+ does not trust a user-installed Platform CA unless the app says so: `app.config.ts` applies a network security config with both system and user trust anchors on development and shipped builds, and `/connect` lists the install steps. Account metadata (origin, email, runtime) is stored without tokens; the header menu switches origins and calls `queryClient.clear()`. `pnpm start` / `ios` / `android` may prompt for `EXPO_PUBLIC_CONTROL_PLANE_URL` (written to gitignored `.env.development.local`); `pnpm web` and the systemd Expo unit do not.
-- **Billing flag** — `GET /api/client/v1/status` also carries `billingEnabled` (both Stripe secrets; always `false` self-hosted or API-key-only). `AuthProvider` exposes it as `useAuth().billingEnabled`; the org sidebar drops the **Billing** area and `/[orgId]/billing` redirects to Overview when it is false. Never probe `/billing/*` to discover availability — every route 503s `billing_not_configured` there. Hooks: `src/lib/queries/billing.ts` (no polling; the projection is webhook-driven and invalidated on mutation success). Vocabulary: the admin buys **licenses** for **servers** — never "seat" in rendered copy; a license is hidden plumbing (minted by the Add server wizard, never shown as an object, no tier picker on it), and a server's tier is **derived** by the instance — the UI only shows the tier it landed on (or "Not covered — needs Sn") and links to billing with `?tier=`. Upgrade / downgrade are quantity moves between tiers (`{ fromTierId, toTierId }`). Admin → Tiers is one provider-product dropdown per ladder label (`src/components/admin/tiers-section.tsx`, `src/lib/tier-form.ts`); entitlements and list prices are read-only from the in-code ladder. Page override: `design-system/turbopanel/pages/billing.md`.
-- **Account > Security > Password** — `change-password-panel.tsx` (current, new, confirm) calls `POST /auth/change-password`; the control plane verifies the current password, applies the sign-up rules and the breach check, and signs out every other device.
-- **Sign-up** — `/sign-up` when `isSignupEnabled` (from `GET /install/status`). Calls `POST /auth/sign-up`; no session is returned — user is redirected to `/sign-in` on success. Route is guest-only (authenticated users are redirected to dashboard). Not available when `needsInstall` is true. `sign-up.tsx` inlines `validatePassword` and `checkPwnedPassword` (no shared validation package). Pwned-password check uses `crypto.subtle.digest('SHA-1', …)` against `https://api.pwnedpasswords.com/range/{prefix}` with `Add-Padding: true` and a 5000ms timeout; fails open on error. The control plane now enforces the same check server-side (`password_breached`, `src/lib/password-policy.ts` `breachedPasswordCopy` maps it), so this browser check is only an early hint. The "Learn more" link hardcodes `https://turbopanel.io/docs/security/password-safety` — no `DOCS_BASE_URL` env var.
-- **Sign-in** — `/sign-in` after install; superadmin **email** + password (body `{ email, password }`; host accounts cannot sign in), plus optional GitHub/Google footer links when `GET /status` `authProviders` is non-empty (`oauthStartUrl(provider, { redirectTo: currentRedirect })` is a top-level navigation, never `fetch`; `currentRedirect` is `signInOAuthRedirect` of the current `/sign-in` route plus leftover query; native / cross-origin shows `OAUTH_WEB_ONLY_NOTE`). When `POST /auth/sign-in` (or the OAuth callback) returns a pending challenge, the screen shows the two-factor code step (`TwoFactorStep`) with a **Use a backup code** toggle; OAuth lands on `/sign-in?challenge=`. A passkey button is shown when `isPasskeySupported()` is true (web same-origin only; native shows `PASSKEY_WEB_ONLY_NOTE`). Session has no `username` field — labels use `session.email`. Layout: centered column via `AuthScreenShell` (`src/components/auth/auth-screen-shell.tsx` + `auth-form-styles.ts`), form `maxWidth` 400 — **TurboPanel T mark** and **Sign In** title on one row above the form panel (mark left, title right-aligned; accent top edge on the **frosted chrome** panel via `GlassSurface`), `© {year} TurboPanel` copyright below. Shell backdrop (`AuthScreenBackground`): LinearGradient wash + tiled dashed SVG grid + vignette (`auth-grid-layer`) + 2×2 Reanimated accent streaks on random grid lines via shared values (skipped when reduced motion). Fields use floating labels (`AuthFloatingField`): resting label inside the field, shrinks to the top on focus/value; password toggle is eye / eye-slash icons (`auth-eye-icons.tsx`). **Accent** (`src/lib/auth-accent.ts`): brand blue `#3366cc` (Navy hex) on both runtimes; `GET /api/client/v1/status` `runtime` only picks the label (High Availability / Self-hosted). Bootstrap stores `controlPlaneRuntime` and persists it in `sessionStorage` (`rememberControlPlaneRuntime`). Auth screens always paint on Navy (`data-theme="dark"` pinned in `auth-screen-shell.tsx`). Online status stays `colors.ok`. Loading spinners use `authSpinnerColor()` (brand blue); never hardcode `colors.accent` on full-screen loaders. Sign In CTA spinner uses `onAccent`. Tokens in `src/lib/theme.ts` + `src/lib/glass.ts`; page override in `design-system/turbopanel/pages/sign-in.md`.
-- **Security screen** — `/account/security` (`src/app/account/security.tsx` → `src/components/account/security-section.tsx`), reached from `user-account-menu.tsx`. Three cards: two-factor, passkeys, linked accounts. Passkey register/assert splits `passkey-client.web.ts` / `passkey-client.native.ts`; native surfaces `PASSKEY_WEB_ONLY_NOTE` rather than a broken button. Sensitive mutations take an optional `password` for step-up; `resolveSecurityAction` maps a reauth **403** so it does not read as a mutation failure. `/account/*` is an authenticated route in `auth-guard.ts`.
-- **Notifications screen** — `/account/notifications` (`src/app/account/notifications.tsx` → `src/components/account/notification-channels-section.tsx`), reached from the account menu and from the bell's **Notification settings**. Two panels: the person's own channels and the organization's (manager-only, org in the header); each channel is a row with its rules matrix (every event at a severity floor, or chosen events), pause/resume, remove, and the last week's delivery outcome; the add form asks for kind, name, address (per-kind hint), an optional webhook signing secret and rules. An email channel is added through `POST /notification-channels/email`: the person's own or a member's address is active at once; any other address shows **Awaiting confirmation** (nothing is sent) with **Send again** (`POST /notification-channels/:id/verify`, one per minute) until the emailed link — which needs no session — is opened and redirects here with `?channelVerified=1|0` (an `InlineNotice` banner). The pure half — matrix ↔ rule rows, hints, refusal-code copy — is `src/lib/notification-channels.ts`. The bell (`notifications-panel-body.tsx`) is the inbox: `GET /notifications`, mark read, dismiss, a row that names a server opens it.
-- **Dashboard** — `/welcome` after install/session restore: last or only org opens Overview (`defaultOrgDashboardHref`); otherwise `/organizations`. The header **View all organizations** action goes straight to `/organizations` and does not auto-leave.
-- Session/install API shapes live in `src/lib/instance-api.ts` (`needsInstall`, `organizationId`).
-
-The developer console has been moved to the [TurboPanel/dev](https://github.com/TurboPanel/dev) terminal console (`src/` in that repo).
-
-## Project metadata
-
-GitHub repository: [TurboPanel/ui](https://github.com/TurboPanel/ui). Package name: `@turbopanel/ui` (`package.json`).
-
-Identifiers for Cloudflare and Expo deployments:
-
-- `app.json` `slug`: `ui` — Expo project slug for web/EAS builds (`@turbopanel/ui`).
-- `app.json` native IDs: iOS `ios.bundleIdentifier` and Android `android.package` are both **`app.turbopanel`** (required for GitHub-triggered EAS builds; reverse-DNS of [turbopanel.app](https://turbopanel.app)). Deep-link scheme is `turbopanel`. iOS `ITSAppUsesNonExemptEncryption` is `false` (HTTPS / standard APIs only). **GitHub iOS builds are non-interactive:** run one local `eas build -p ios --profile development` (or `eas credentials -p ios`) plus `eas device:create` so EAS has an Ad Hoc cert/profile before CI can sign `distribution: "internal"`.
-- **Development client → Metro HTTP (`:8081`):** Metro is plaintext HTTP. Caddy TLS is `:8443` — `https://studio.lan:8081` always fails (no TLS on that port). iOS App Transport Security then blocks `http://studio.lan:8081` because `.lan` is not a Bonjour `.local` name, so `NSAllowsLocalNetworking` alone is not enough. `app.config.ts` applies `src/lib/metro-cleartext-node.mjs` on the EAS **development** profile (and local prebuild): `NSAllowsArbitraryLoads` + `NSAllowsLocalNetworking` + insecure-HTTP exceptions for `localhost` / `.lan` / `.local`, plus Android `usesCleartextTraffic`. Preview and production profiles stay ATS-strict. Changing Info.plist requires a **new native development build** — EAS Update cannot change it. In the Expo Dev Client, enter `http://<lan-host>:8081` (not https).
-- `wrangler.jsonc` Worker names: top-level `dev-ui` (local `wrangler dev` only, never deployed), `env.testing` → `testing-ui` (testing.turbopanel.dev), `env.staging` → `staging-ui` (staging.turbopanel.dev), `env.live` → `ui` (turbopanel.app). No two share a name, and `scripts/wrangler-envs.test.ts` pins that. Deploy only through `pnpm deploy:testing` / `pnpm deploy:staging` / `pnpm deploy:live` — bare `pnpm deploy` refuses (`scripts/deploy-refuse.mjs`), because a bare `wrangler deploy` would otherwise be a silent production deploy. Cloudflare Workers Builds deploy commands: `testing-ui` → `pnpm deploy:testing`, `staging-ui` (branch `staging`) → `pnpm deploy:staging`, `ui` (branch `live`) → `pnpm deploy:live`.
-
-## Build output & deployment (dev vs prod)
-
-The UI is never installed as a standalone service tree — the **instance** repo's Caddy serves it, and the **daemon** installs its build output. Two modes (`TURBOPANEL_UI_MODE` on the instance):
-
-- **Development** (`dev`) — `turbopanel-ui.service` runs the Expo web dev server on `:8081` (installed by the daemon `instance-launch` role, running as the **dev user**). Caddy reverse-proxies non-`/api`/`/ws` traffic to **`127.0.0.1:8081`**. The unit sets `NODE_OPTIONS=--dns-result-order=ipv4first` so Node `listen("localhost")` binds IPv4 (default is `[::1]`, which Caddy and Vagrant tunnels never hit — spinner stays on “Starting Expo dev server…”). Dev logs go to **`/var/log/turbopanel/ui`** (dev-user-owned).
-  **Fast Refresh on Vagrant:** host saves on VirtioFS / 9p do not notify guest inotify, so Metro’s Linux `FallbackWatcher` never sees them (a full browser reload still works because Metro re-reads files). `metro.config.js` installs a poll watcher (`scripts/metro-virtfs-poll-watch.cjs`) when `/proc/mounts` shows those types. Override with `TURBOPANEL_METRO_POLL=1` (force) or `=0` (disable). Tamagui style extraction is off in development so Fast Refresh can apply. After changing Metro config, restart `turbopanel-ui`. Metro `blockList` / gitignore `/logs/` apply only to a **repo-root** dump — never `src/components/org/logs/` (that is `LogTranscriptView` source). Open the signed-in console via Caddy (`:8443`); Metro `:8081` is forwarded for native / Expo Go (same-origin cookies still will not work on the Metro origin). Web HMR is `/hot` on the Caddy origin.
-- **Production** (`static`) — `pnpm export` produces the static web bundle; the daemon `ui-build` role publishes it to the FHS path **`/opt/turbopanel/share/ui`** (instance `TURBOPANEL_UI_ROOT` default). Caddy serves those files directly with SPA fallback and `turbopanel-ui.service` is stopped/disabled. Production runs as `tpctrl:tp`.
-
-**Release manifest signing:** `release.yml` signs `release-assets/manifest.json` before upload with the offline release key (`TURBOPANEL_RELEASE_SIGNING_KEY`, an environment secret with the same value in the `canary` (trunk), `rc` (staging) and `release` (live, owner-approved) environments: the `build` job declares the one matching its channel). There is no repo-level fallback. Every caller of a reusable workflow that signs (`canary.yml` → `release.yml`; `promote.yml`, `publish-rc.yml` and `publish-release.yml` → dev's `gh-promote.yml`, `gh-release.yml`, `gh-promote-finalize.yml`) passes `secrets: inherit`, never an explicit secret pair, or the environment secret evaluates empty in the called workflow. It runs turbopaneld's `scripts/sign-manifest.ts` from a SHA-pinned checkout, so the UI, control plane and daemon share one signer and one canonicaliser. A missing key, or one that does not match the public key pinned in that turbopaneld commit, fails the publish. Bump that pin when the key rotates. `scripts/release-signing-workflow.test.ts` guards the step order, the SHA pin and the environment-secret wiring.
-
-**Automatic promotion (two PRs, the normal path):** `promote-prs.yml` keeps a trunk → staging PR "Release Candidate x.y.z-rc.N" open after every green `Canary` run (opened with the Release App token so `ci-ok` runs). Merging it (merge commit) fires `publish-rc.yml` on the push to `staging`: it finds the merged PR's head commit, waits for the canary manifest whose `.commit` is that commit, and promotes those exact bytes to `vx.y.z-rc.N` (no approval gate), then opens/refreshes the staging → live PR "Release x.y.z". Merging that fires `publish-release.yml`: newest rc.N → `vx.y.z` (`releases/latest`) behind the `release` environment approval (allowed branches: `trunk` and `live`). **The tags work out the version; the committed files must agree.** The base is the newest release tag's next patch, unless an unreleased rc or a `start/vX.Y.0` marker names a higher version; canaries are `<base>-canary.<N>` with N restarting at 1 per base; only the base is stamped into the build. TurboPanel/dev's Version From Tags action (`scripts/promote/version.sh`) works them out. The committed version lives in `package.json` `version`, `app.json` `expo.version` and `sonar.projectVersion`; `node scripts/set-version.mjs X.Y.Z` rewrites all three and `--check X.Y.Z` names each one that disagrees (`scripts/set-version.test.ts`). `release.yml` runs `--check` with the base right after Version From Tags on the canary path, so **a canary is refused until the committed version is the base**. Who bumps it: right after each release the TurboPanel Release App opens a PR "chore: start X.Y.Z" (the next patch, a commit GitHub signs) from `publish-release.yml`'s last job (`start-version-pr`, TurboPanel/dev's Start Version PR action with `auto-merge: "true"`), and it merges itself once its checks pass; until then canaries are refused. A minor or major is started with turbopaneld's **Start Next Version** workflow (`bump: minor|major`), which pushes the `start/` marker in all four repos and opens the same "chore: start X.Y.0" PR in each; canaries wait until it merges. A green Verify that tested the trunk commit itself (a push, or a manual run of trunk) is what a canary follows. **Repos release independently — no release waits on a release in another repo.** PRs into staging/live skip Sonar.
-
-**Promotion, break-glass (`.github/workflows/promote.yml`):** the same three jobs as a manual form, for when the automatic path cannot run: `to=rc` turns a canary build (`source` = build id, canary version or `manifest-<version>.json` from the rolling canary release) into the next `v<base>-rc.<N>` and fast-forwards `staging`; `to=release` turns the newest `v<base>-rc.<N>` into `v<base>` (`releases/latest`; the rolling `rc` pointer is re-pointed at it) and fast-forwards `live`. Same bytes: the source manifest's signature and every asset's sha256/size are verified first, the assets are renamed, the manifest rewritten and re-signed, and the tag is created at the source commit (an existing tag elsewhere = burned version, fails). The three jobs are `TurboPanel/dev`'s `gh-promote.yml` → `gh-release.yml` → `gh-promote-finalize.yml` pinned to ONE dev sha, passed again as `dev-ref`; `signer-ref` is the turbopaneld commit carrying `scripts/sign-manifest.ts` + the key pin — bump it together with the signer pin in `release.yml`. Approval = the `release` environment (prepare, then finalize). `to=release` needs the TurboPanel Release App secrets (`RELEASE_APP_ID` / `RELEASE_APP_PRIVATE_KEY`) and refuses to start without them. `release.yml` ignores tag pushes by `[bot]` actors so an App-created tag does not race the promotion with a from-source rebuild. Full contract: `../dev/AGENTS.md` → Release promotion.
-
-Both modes route through the single instance Caddy entrypoint; there is no separate `turbopaneld.service` or FHS tree owned by this repo. Canonical paths/units live in `../turbopanel/AGENTS.md` (Caddy + UI env vars) and `../turbopaneld/AGENTS.md` (Filesystem layout & path model).
-
-## Ask again before permanent actions (step-up)
-
-An organization owner can turn on "ask people to confirm it is them before permanent actions" (Manage Organization → Security, `ReauthSettingsSection`). `fetchWithStepUp` (`src/lib/step-up.ts`) wraps every request in `instance-api.ts`: a `403 reauth_required` opens the single app-wide `ReauthSheet` (mounted in `AppProviders`; password, or the authenticator code for people who use one), then the original request is sent once more. Do not add a new `fetch(controlPlaneUrl(...))` to `instance-api.ts` without going through `fetchWithStepUp`, or that action will show a bare 403 instead of the prompt. Logic, copy and the broker are in `src/lib/step-up.ts` (covered); the sheet is chrome.
-
-## Organization console (`/<organizationId>/*`)
-
-Moved to `src/app/[orgId]/AGENTS.md` — layout/chrome, area routes, instance
-API usage, servers/metrics pages, compose panels. Read it before editing
-anything under `src/app/[orgId]/`.
-
-## Project editor logic (`src/lib/v4/`)
-
-Framework-free logic for the Base + environment changes screens (no UI, no storage, no network):
-environment map layout (`map-layout.ts`), "Runs as" and Linux user rules (`linux-users.ts`), change labels
-(`change-labels.ts`), the Base-plus-changes comparison (`effective-config.ts`) and the derived
-"Follows the Base / Stands alone" rule (`follows-base.ts`).
-
-- Configurations are flat maps (`svc:{serviceId}:{row}`, `var:{NAME}`); the compose merge itself stays on the server
-  (config-view endpoint), so there is no third copy of the merge rules here.
-- "Stands alone" is never stored: it is derived from the saved environment compose (`services: !override`).
-- Linux user names follow the server limit (28 characters, 16 with the default name scheme), not just the design spec's 28. The control plane answers 400 `username_reserved` when a site owner's Linux user would collide with a host system user or group; the add form maps that (and `username_too_long` / `username_in_use`) to plain words and does not keep a second copy of those names.
-- **Environment Configuration tab** (`configuration/index.tsx` -> `components/org/project/configuration/`): reads
-  `GET /environments/:id/config-view` (`useEnvironmentConfigView`, key `environments.configView`) and shows
-  Apps, Domains, Variables, Linux users and Data with a source tag on every row; `config-view-model.ts` turns the answer into rows.
-  The config-view keys use the compose service **name** (`svc:web:command`), not the flat `svc:{serviceId}:{row}` keys above, so the
-  model reads the server's own labels. "Only changes from Base" swaps the page for one row per change. Variables show "Project" when
-  they come from the project, and secret values are never shown.
-- **Editing on that tab is staged, then saved.** Row editors and the change buttons (Go back to Base, Make this the Base) only stage edits
-  (`config-edits.ts`, one per row key); the pending bar says "N unsaved changes" and **Save changes** runs `saveEdits` (`config-save.ts`).
-  The one exception is **Add variable**: Add saves that one edit at once (`useStagedEdits().saveNow`), like every other Add in the console,
-  and keeps the editor open with the reason when it does not go through. While edits are unsaved or a save runs, the browser asks before
-  the page is left (`useLeaveWarning`). Save changes:
-  fresh project, environment and variable data first, then Base compose, environment compose, variables (writes before deletes), using
-  `PATCH /projects/:id`, `PATCH /environments/:id` and the variable routes. It never deploys; a saved change goes live on the next deploy.
-  The writers (`config-compose.ts`) delete the environment's entry to go back (never `!reset`, which removes the Base value) and restate
-  `serviceKind` and `source.sourceId` in the environment's layer for any `x-turbopanel` change, because the control plane checks a layer
-  alone (a Node.js app "requires source"; `principal` is only valid on a site or Node.js app). Scope: one environment in the project means
-  the Base; a stand-alone environment (the control plane's rule: `services: !override` or `!reset`) means that environment only.
-- Copy uses the v4 words (Base, "{env} change", Follows the Base, Stands alone, Runs as). `vocabulary.test.ts` fails on
-  banned words in module output and text literals.
-
-## Admin area (`/admin/*`)
-
-Moved to `src/app/admin/AGENTS.md`. **`/admin/updates`** is the automatic update status page (self-hosted vs TurboPanel High Availability layouts, Check Now, Pause All Updates / Resume Updates, run polling via `src/lib/upgrade-run-poll.ts`, full-screen restart overlay). Nobody starts an update by hand. Page override: `design-system/turbopanel/pages/updates.md`.
-
-## Command Pipeline UI
-
-Per-server command actions use `src/components/org/server-commands-panel.tsx` on the server detail **Control** tab. Commands follow a create-then-poll pattern: the UI enqueues via a mutation hook, receives a `commandId`, then polls with `useCommandsBatch` from `src/lib/queries/commands.ts` (`COMMAND_POLL_MS`, `isTerminalCommandStatus`) — a single React Query with `refetchInterval` while any tracked command is non-terminal. Each tick is **one** `POST /commands/status` request for every tracked id (via `fetchCommandStatuses`), not one `GET` per command; results are re-aligned to entry order so index-based consumers stay correct, and unreadable ids simply drop out. `useCommandRecordsBatch` is the per-id variant (one `fetchCommand` per entry, full `CommandRecord`) kept for the server-detail Control tab, which renders the ping latency breakdown. No hand-rolled `setInterval` per page or per server.
-
-**Failure text.** A failed command's error is a block of daemon output with the cause printed last. The control plane derives `errorLine` (on `CommandRecord`, `CommandStatusRecord` and `DeploymentHistoryRecord`; absent on an older control plane) and screens show that one line through `commandErrorLine` in `src/lib/command-error.ts` (it falls back to the last non-empty line of the text). The deploy history detail keeps the whole text one tap away (`commandErrorDetail`, "Show full error"). The failure shows in deploy history, the organization Activity list, the server Control tab, the environment deploy status and the project delete flow.
-
-**Deploy progress.** The batched `POST /commands/status` record (and `GET …/commands/:id`) carries `progress: CommandProgress | null`, the daemon's step plan and current step (optional; absent on an older control plane). `DeployProgressRail` (`src/components/org/project/deploy-progress-rail.tsx`) and the environment status chip read it from the poll's records via `commandStatusById`, **not** from the Overview's `TrackedCommand` meta: that meta only changes on a status or error change, so step updates would be dropped. The poll also drops a command the tick it turns terminal, so `useDeployLogProgress` holds the last plan per command id and, once terminal, reads the full record once (`useCommandRecordsBatch`; `GET …/commands/:id` carries the finalised plan) so the end state stays above the outcome banner until the log is closed. Derivations (step count, gerund labels, first-time caption, `mm:ss`) live in `src/lib/deploy-progress.ts` and count like the control plane does (total = steps not `ready`; position = `done` + 1 while running). The Environments tab has no command poll of its own, so it asks for status only for the commands of deploys still in flight (`inFlightDeployEntries`). Activity rows show `step` / `totalSteps` / `stepLabel` from `activity-query`.
-
-**Who pushed.** `DeploymentTriggerRecord.pushedBy` (activity and deployment history `trigger`) is the pusher's git login, optional because an older control plane omits it and `null` when the push named nobody. `gitPushLabel` (`src/lib/activity.ts`) is the one place that words a push: `octocat (Push to main)` with a login, else `Push to main` / `Git push`; the Activity list and the Overview deploy list both use it. The Activity Started By cell puts `GitNavIcon` beside the label only when `activityPushedBy` returns a login.
-
-### API helpers — `src/lib/instance-api.ts`
-
-- `pingDaemon(serverId)` → `POST /api/client/v1/servers/:id/commands/ping` — returns `CommandEnqueueResponse`: `{ ok: true, commandId, status }`.
-- `setServerHostname(serverId, hostname)` → `POST /api/client/v1/servers/:id/hostname` — returns the same `CommandEnqueueResponse` shape: `{ ok: true, commandId, status }`.
-- `rebootServer(serverId)` → `POST /api/client/v1/servers/:id/commands/reboot` — returns `CommandEnqueueResponse`.
-- `revokeServerDaemonKey(serverId)` → `POST /api/client/v1/servers/:id/daemon-key/revoke` — the compromised-host cutoff, surfaced as a two-step `ConfirmButton` panel above **Delete server** on the server detail page (hidden without manage; a muted note on the co-located control plane server, which the API refuses with 403). Returns `ServerDaemonKeyRevokeResult`: `{ ok: true, revokedAt, purged, purgeError? }` — `purged: false` means the durable revoke landed but the live daemon cell was unreachable; the host is still cut off at its next reconnect or session refresh. 409 `Server is not enrolled` when there is no key to revoke. Idempotent. Recovery is delete + fresh enroll; the API refuses re-enrollment of a revoked server.
-- `fetchCommand(serverId, commandId)` → `GET /api/client/v1/servers/:id/commands/:commandId` — returns `CommandRecord`; for `daemon.ping` commands the response includes optional `latency` (`PingLatencyBreakdown`).
-- `fetchCommandStatuses(ids)` → `POST /api/client/v1/commands/status` — one request for many tracked ids (max 100, deduped server-side); returns `CommandStatusRecord[]`. Ids the session cannot read are omitted from the response rather than failing the batch. This is the polling path; `fetchCommand` stays for the single-command detail view that needs `latency` / `result`.
-- Types: `CommandStatus` (string union of all statuses), `PingLatencyBreakdown`, `CommandRecord`, `CommandStatusRecord`, `CommandEnqueueResponse`.
-- `CommandStatusRecord` is the lean lifecycle projection — `{ id, serverId, status, type, queuedAt, startedAt, finishedAt, errorCode, errorMessage, hasLog }`. No `payload`, `result`, `attempts`, or `latency`; read `errorMessage` (not `error`) for the failure text.
-- The `CommandRecord` shape is flat (all lifecycle timestamps are top-level fields). The instance serializes it from **real `command` columns** — `status`, `attempts`, `error_code`, `error_message`, `result_summary`, and every granular lifecycle timestamp (`queued_at`…`finished_at`, `expires_at`) are columns, not a jsonb blob. `metadata` is **no longer** the source of those fields: it survives only as the follow-up-chain blob (`pendingStandbyApplies`, `followUpPromote`, `pendingTlsLeaf`, `desiredHash`) and never reaches the UI. `CommandRecord` still **excludes the dispatch payload** — that lives in the separate `dispatch` table and is never serialized to a client. See `turbopanel/src/features/commands/AGENTS.md` and `turbopanel/src/db/AGENTS.md`.
-
-**Latency breakdown shape** (`CommandRecord.latency` for `daemon.ping`):
-
-```
-PingLatencyBreakdown {
-  apiToConsumerMs: number | null       // queuedAt → dispatchStartedAt
-  consumerToCellMs: number | null      // dispatchStartedAt → sentAt
-  cellToDaemonMs: number | null        // sentAt → ackedAt
-  daemonProcessingMs: number | null    // daemonReceivedAt → daemonRespondedAt (from result)
-  daemonToRecordedMs: number | null    // daemonRespondedAt → finishedAt
-  totalRoundTripMs: number | null      // queuedAt → finishedAt
-}
-```
-
-Segment durations are computed server-side from the flat `CommandRecord` lifecycle fields (`queuedAt`, `dispatchStartedAt`, `sentAt`, `ackedAt`, `finishedAt`) before being exposed on `CommandRecord.latency`.
-
-### Execution logs (command transcripts)
-
-Command stdout/stderr is captured by the daemon, uploaded as redacted NDJSON
-`CommandOutputEvent` lines, and read back through
-`GET /api/client/v1/servers/:id/commands/:commandId/log?from=&max=`
-(`fetchCommandLog` → `CommandLogResponse`). `from` is a **chunk** sequence, not a
-byte offset; poll with the previous response's `nextSeq`. `exists: false` is the
-"not started" state — the route never 404s a poll loop, so "waiting for output"
-and "no transcript retained" stay distinguishable.
-
-- Hook: `useCommandLog(orgId, serverId, commandId)` in
-  `src/lib/queries/execution-logs.ts`. One React Query per open transcript;
-  `refetchInterval` is `COMMAND_LOG_POLL_MS` (1 s) only while the latest read is
-  not `sealed`, then `false`. Pass `poll: false` for an already-terminal command.
-  Chunks accumulate in a ref keyed by `(serverId, commandId)` and are deduped by
-  event sequence, because a read whose byte budget split a chunk replays it with
-  an unchanged `nextSeq`.
-- Parsing lives in `src/lib/execution-log-lines.ts`: NDJSON events become
-  `LogTranscriptLine[]`; plain-text lines (the store's truncation marker, legacy
-  output) degrade to `stdout` rows instead of being dropped. ANSI is **stripped**,
-  never interpreted.
-- A deploy's log lives on its own page under Deployments
-  (`deployments/[deploymentId].tsx` → `src/components/logs/deployment-log-screen.tsx`),
-  rendered by `LogViewer` (`src/components/logs/log-viewer.tsx`): steps from
-  each line's `phase`, step states from the plan (`CommandProgress`), closed by
-  default with the failed (or first) step open, search across steps, Live.
-  Its model is pure in `src/lib/log-viewer.ts`. History rows and the Overview
-  progress card's **Open full log** link there.
-  A service page (Services › service) has a **Runtime log** section with the
-  same viewer, ungrouped, over `useContainerLogTail` (last 200 lines, never
-  stored, Live off until switched on, off when the app goes to the background).
-- The older flat viewer, `src/components/org/logs/log-transcript-view.tsx`, still
-  renders the Overview progress card's output, the managed **Apply
-  transcript**, the managed **Engine logs** tail, and the per-container live
-  tail on the environment containers panel. Do not fork either per surface; see
-  `design-system/turbopanel/pages/deploy-logs.md`. Both are a fixed-height
-  nested scroll with a visible scrollbar; **Deployment history** caps its row
-  list the same way (`environment-deployment-history-panel.tsx`).
-
-### Container logs (live tail)
-
-Container stdout/stderr is **not retained**. There is no fleet-wide explorer,
-no org `containerLogsEnabled` switch, and no stored page. The console tails
-**one** running container on demand:
-
-- `GET /api/client/v1/containers/:id/logs` — correlated cell round trip; the
-  daemon runs `docker container logs` and returns the bytes. Nothing is stored.
-- Hook: `useContainerLogTail` in `src/lib/queries/containers.ts` (`enabled: false`
-  by default; optional Follow is a refetch cadence, not a host `--follow`).
-- Rendering: `LogTranscriptView` on the environment containers panel
-  (`src/components/org/logs/container-log-tail.tsx`). Do not fork a second viewer.
-
-Do not reintroduce a Logs org area, `/<orgId>/logs` routes, a presence-ack
-collector flag, or a fleet-wide `GET /organizations/:id/container-logs` scan.
-
-### Deploy history
-
-`GET /api/client/v1/environments/:id/deployments` (`fetchEnvironmentDeployments`)
-reads the append-only `command` table — `deployment` is upsert-per-(environment,
-server) current state and cannot list past deploys. A row's `id` **is** the
-command id, so the same id fetches the transcript. Multi-host deploys arrive as
-several rows sharing one `generation`; the UI groups them client-side
-(`src/lib/deployment-history.ts`) instead of fanning out to
-`/deployments/:deploymentId` per row. `useEnvironmentDeployments` never polls —
-it is invalidated by `invalidateEnvironmentSubtree` (deploy/lifecycle mutations)
-and when a tracked deploy command reaches a terminal status.
-
-### Ping / hostname / reboot
-
-- Surface on the server detail **Control** tab via `ServerCommandsPanel`.
-- Mutations: `usePingDaemon` / `useSetServerHostname` / `useRebootServer` from `src/lib/queries/servers.ts`.
-- In-flight command ids feed `useCommandsBatch`; terminal success invalidates the server detail key.
-- Hostname/reboot gated by `useCan(…, 'organization:manage')` as a display hint; disabled when `!server.connected`.
-- The hostname field is labelled **Change the server's own name (Linux hostname)** with a hint that it is not the DNS name clients use: it renames the Linux hostname only. The DNS name clients dial lives in the Network tab's **Addresses clients use** card.
-- Reboot uses two-step confirm. Do not add per-server background polling loops — O(1) shared batch query only.
+## Always and Never
+
+- Never commit `.tamagui/` cache, secrets or dotenv files; the pre-commit secret scan cannot be skipped ([docs/pre-commit-and-secret-scan.md](./docs/pre-commit-and-secret-scan.md)).
+- Never run `pnpm test` on the host; use the Vagrant guest.
+- Never use `fetch` plus `useEffect` caches or hand-rolled poll loops for server data; use React Query (`src/lib/queries/AGENTS.md`).
+- Never hard-code hex colors in components; use `src/lib/theme.ts` tokens (`design-system/AGENTS.md`).
+- Never import from `org/` inside `src/components/ui/` (`src/components/AGENTS.md`).
+- Never use the word "agent" for the daemon in product copy, and never use Apple-associated chrome phrasing (`pnpm check:vocabulary`).
+- Always read the nearest `AGENTS.md` and, for any visual work, the design-system guide before editing.
+
+## Where Rules Live
+
+| Working on                                        | Read                                                                       |
+| ------------------------------------------------- | -------------------------------------------------------------------------- |
+| Any visual or UX work, tokens, themes             | `design-system/AGENTS.md` (mandatory skill and Master/page workflow)       |
+| Shared components, `src/components/ui` barrel     | `src/components/AGENTS.md`                                                 |
+| Org chrome, pull-to-refresh, org scroll           | `src/components/org/AGENTS.md`                                             |
+| Stack, fonts, Tamagui, TypeScript style           | `src/AGENTS.md`                                                            |
+| API helpers, contracts, step-up, command pipeline | `src/lib/AGENTS.md`, `src/lib/instance-api.md`, `src/lib/instance-api.ts`  |
+| Server state, query keys, polling                 | `src/lib/queries/AGENTS.md`, `src/lib/query-keys.ts`                       |
+| Project editor logic                              | `src/lib/v4/AGENTS.md`                                                     |
+| Organization console routes                       | `src/app/[orgId]/AGENTS.md` (plus `projects/`, `servers/`)                 |
+| Admin area                                        | `src/app/admin/AGENTS.md`                                                  |
+| Sign-in, sign-up, first-run install               | [docs/auth-and-install.md](./docs/auth-and-install.md)                     |
+| Dev vs production build, promotion, identifiers   | [docs/deployment-and-identifiers.md](./docs/deployment-and-identifiers.md) |
+| Code analysis setup                               | [docs/sonarqube.md](./docs/sonarqube.md)                                   |
+| Skills footprint                                  | [docs/agent-skills.md](./docs/agent-skills.md)                             |

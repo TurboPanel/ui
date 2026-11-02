@@ -64,7 +64,7 @@ export function SearchScreen({ orgId }: Readonly<{ orgId: string }>) {
             />
           ) : (
             <Text style={styles.none}>
-              {`Nothing matches “${trimmed}”. Try a server name, or an action like “Add server”.`}
+              {`Nothing matches “${trimmed}”. Try a server name, or an action like “Add Server”.`}
             </Text>
           )}
         </>

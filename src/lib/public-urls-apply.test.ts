@@ -20,8 +20,24 @@ describe('publicUrlsApplyFeedback', () => {
     expect(publicUrlsApplyFeedback('unreachable')).toMatchObject({ tone: 'failed' })
   })
 
-  it('tells the operator to accept the new certificate once it is back', () => {
-    expect(publicUrlsApplyFeedback('reconnected')?.message).toContain('certificate')
+  it('never tells people to click through a browser certificate warning', () => {
+    const statuses: PublicUrlsApplyStatus[] = [
+      'applying',
+      'reconnecting',
+      'applied',
+      'reconnected',
+      'reconnected-trusted',
+      'reconnected-mixed',
+      'reconnected-kept',
+      'not-saved',
+      'unreachable',
+    ]
+    for (const status of statuses) {
+      expect(publicUrlsApplyFeedback(status)?.message).not.toMatch(/\baccept\b|came back|—/i)
+    }
+    expect(publicUrlsApplyFeedback('reconnected')?.message).toBe(
+      'Applied. The control plane now serves the new certificate. A self-signed certificate still triggers a browser warning on this address; use a hostname with a public certificate, or trust the Platform CA, to avoid it.'
+    )
   })
 
   it('carries the control plane message through a real failure', () => {
@@ -51,27 +67,19 @@ describe('publicUrlsApplyFeedback', () => {
 describe('certificate kind wording', () => {
   it('only mentions self-signed for Platform CA names', () => {
     expect(reconnectedStatus([{ source: 'platform-ca' }])).toBe('reconnected')
-    expect(reconnectedStatus([{ source: 'lets-encrypt' }])).toBe(
-      'reconnected-trusted',
+    expect(reconnectedStatus([{ source: 'lets-encrypt' }])).toBe('reconnected-trusted')
+    expect(reconnectedStatus([{ source: 'platform-ca' }, { source: 'lets-encrypt' }])).toBe(
+      'reconnected-mixed'
     )
-    expect(
-      reconnectedStatus([{ source: 'platform-ca' }, { source: 'lets-encrypt' }]),
-    ).toBe('reconnected-mixed')
     expect(applyCertificateKind([{ source: 'uploaded' }])).toBe('trusted')
-    expect(
-      publicUrlsApplyFeedback('reconnected-trusted')?.message,
-    ).not.toContain('self-signed')
-    expect(publicUrlsApplyFeedback('reconnected')?.message).toContain(
-      'self-signed',
-    )
+    expect(publicUrlsApplyFeedback('reconnected-trusted')?.message).not.toContain('self-signed')
+    expect(publicUrlsApplyFeedback('reconnected')?.message).toContain('self-signed')
   })
 
   it('is honest when an earlier certificate was kept', () => {
-    expect(reconnectedStatus([{ source: 'lets-encrypt' }], true)).toBe(
-      'reconnected-kept',
-    )
+    expect(reconnectedStatus([{ source: 'lets-encrypt' }], true)).toBe('reconnected-kept')
     expect(publicUrlsApplyFeedback('reconnected-kept')?.message).toContain(
-      'kept its existing certificate',
+      'kept its existing certificate'
     )
   })
 })

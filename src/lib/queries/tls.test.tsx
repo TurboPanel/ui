@@ -2,7 +2,7 @@
 import { QueryClientProvider } from '@tanstack/react-query'
 import { renderHook, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createAppQueryClient } from '@/lib/query-client'
+import { createAppQueryClient, queryKeys } from '@/lib/query-client'
 import {
   useCreateTlsCertificate,
   useDeleteOrganizationCaLeaf,
@@ -86,10 +86,9 @@ describe('tls query hooks', () => {
   })
 
   it('useTlsLibrary stays idle when disabled or org id is empty', () => {
-    const disabled = renderHook(
-      () => useTlsLibrary(orgId, { enabled: false }),
-      { wrapper: createWrapper() },
-    )
+    const disabled = renderHook(() => useTlsLibrary(orgId, { enabled: false }), {
+      wrapper: createWrapper(),
+    })
     const empty = renderHook(() => useTlsLibrary(''), {
       wrapper: createWrapper(),
     })
@@ -110,20 +109,25 @@ describe('tls query hooks', () => {
         source: 'self_signed',
         name: 'Dev cert',
         certificatePem: 'pem',
-      }),
+      })
     ).resolves.toMatchObject({ ok: true })
   })
 
-  it('useDeleteTlsCertificate deletes certificate', async () => {
+  it('useDeleteTlsCertificate deletes certificate and refreshes the library and the orders', async () => {
     deleteTlsCertificate.mockResolvedValueOnce({ ok: true })
+    const client = createAppQueryClient()
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
 
     const { result } = renderHook(() => useDeleteTlsCertificate(orgId), {
-      wrapper: createWrapper(),
+      wrapper: createWrapper(client),
     })
 
     await expect(result.current.run('tls-1')).resolves.toMatchObject({
       ok: true,
     })
+    const keys = invalidate.mock.calls.map(([filters]) => filters?.queryKey)
+    expect(keys).toContainEqual(queryKeys.org(orgId).tls)
+    expect(keys).toContainEqual(queryKeys.org(orgId).dnsCertificates)
   })
 
   it('useOrganizationCaRotation loads the rotation journal', async () => {

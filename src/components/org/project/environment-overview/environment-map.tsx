@@ -51,7 +51,12 @@ const styles = themedStyles((p) => ({
     paddingLeft: 10,
     paddingTop: 8,
   },
-  bandLabel: { ...typeStyle('bodySemibold', 'caption'), color: p.text3, textTransform: 'uppercase', letterSpacing: 0.6 },
+  bandLabel: {
+    ...typeStyle('bodySemibold', 'caption'),
+    color: p.text3,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
   bandNote: { ...typeStyle('body', 'caption'), color: p.text3, marginTop: 2 },
   line: { position: 'absolute' },
   head: { position: 'absolute' },
@@ -69,13 +74,27 @@ const styles = themedStyles((p) => ({
   nodeRemoved: { borderStyle: 'dashed', opacity: 0.5 },
   top: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   name: { ...typeStyle('bodySemibold', 'subhead'), color: p.text, flexShrink: 1 },
-  bottom: { flexDirection: 'row', flexWrap: 'nowrap', alignItems: 'center', gap: 8, overflow: 'hidden' },
+  bottom: {
+    flexDirection: 'row',
+    flexWrap: 'nowrap',
+    alignItems: 'center',
+    gap: 8,
+    overflow: 'hidden',
+  },
   sub: { ...typeStyle('mono', 'caption'), color: p.text3, flexShrink: 1 },
   // A Visitors box: fixed line heights, so the height the layout gives fits.
   nodeDomain: { overflow: 'hidden' },
   domainName: { lineHeight: 18 },
   domainLine: { ...typeStyle('body', 'caption'), color: p.text3, lineHeight: 15 },
   domainBadge: { flexDirection: 'row', minWidth: 0 },
+  domainTunnel: { ...typeStyle('bodySemibold', 'caption'), color: p.base, lineHeight: 15 },
+  domainOrigin: {
+    ...typeStyle('bodySemibold', 'caption'),
+    color: p.text3,
+    lineHeight: 15,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
   rowDomain: { flexDirection: 'column', alignItems: 'stretch', gap: 4 },
   runs: { ...typeStyle('body', 'caption'), color: p.text3, flexShrink: 1 },
   tag: { ...typeStyle('bodySemibold', 'caption'), color: p.base },
@@ -113,7 +132,13 @@ function Line({ segment }: Readonly<{ segment: MapSegment }>) {
       accessibilityElementsHidden
       style={[
         s.line,
-        { left: segment.x, top: segment.y, width: segment.w, height: segment.h, backgroundColor: p[LINE_COLOR[segment.kind]] },
+        {
+          left: segment.x,
+          top: segment.y,
+          width: segment.w,
+          height: segment.h,
+          backgroundColor: p[LINE_COLOR[segment.kind]],
+        },
       ]}
     />
   )
@@ -122,10 +147,7 @@ function Line({ segment }: Readonly<{ segment: MapSegment }>) {
 function Head({ head }: Readonly<{ head: MapHead }>) {
   const p = usePalette()
   return (
-    <View
-      accessibilityElementsHidden
-      style={[styles(p).head, { left: head.x, top: head.y }]}
-    >
+    <View accessibilityElementsHidden style={[styles(p).head, { left: head.x, top: head.y }]}>
       <Svg width={8} height={8} viewBox="0 0 8 8">
         <Path d="M0 0 8 4 0 8Z" fill={p[LINE_COLOR[head.kind]]} />
       </Svg>
@@ -137,7 +159,14 @@ function KindIcon({ kind }: Readonly<{ kind: MapNode['kind'] }>) {
   const p = usePalette()
   return (
     <Svg width={14} height={14} viewBox="0 0 24 24" accessibilityElementsHidden>
-      <Path d={ICON_PATHS[kind]} fill="none" stroke={p.text3} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+      <Path
+        d={ICON_PATHS[kind]}
+        fill="none"
+        stroke={p.text3}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </Svg>
   )
 }
@@ -155,10 +184,29 @@ function Tags({ node }: Readonly<{ node: MapNode }>) {
   )
 }
 
+/** How a tunnel reaches the site: an "Origin" heading, then one line each. */
+function TunnelOrigin({ lines }: Readonly<{ lines: readonly string[] }>) {
+  const s = styles(usePalette())
+  return (
+    <>
+      <Text numberOfLines={1} style={s.domainOrigin}>
+        Origin
+      </Text>
+      {lines.map((line) => (
+        <Text key={line} numberOfLines={1} style={s.domainLine}>
+          {line}
+        </Text>
+      ))}
+    </>
+  )
+}
+
 /**
- * A Visitors box, one item per line: the hostname, its other hostnames and
- * where it is served from, then the certificate badge on a line of its own.
- * Every line ends in an ellipsis rather than leave the box.
+ * A Visitors box, one item per line: the hostname, the tunnel visitors come
+ * through (a tunnel box only), its other hostnames and where it is served
+ * from, then the certificate badge on a line of its own, and last how the
+ * tunnel reaches the site. Every line ends in an ellipsis rather than leave
+ * the box.
  */
 function DomainBody({ node, after }: Readonly<{ node: MapNode; after?: ReactNode }>) {
   const s = styles(usePalette())
@@ -170,6 +218,11 @@ function DomainBody({ node, after }: Readonly<{ node: MapNode; after?: ReactNode
           {node.name}
         </Text>
       </View>
+      {node.tunnel ? (
+        <Text numberOfLines={1} style={s.domainTunnel}>
+          {node.tunnel.label}
+        </Text>
+      ) : null}
       {(node.lines ?? []).map((line) => (
         <Text key={line} numberOfLines={1} style={s.domainLine}>
           {line}
@@ -180,6 +233,7 @@ function DomainBody({ node, after }: Readonly<{ node: MapNode; after?: ReactNode
           <StatusChip status={node.status.key} label={node.status.label} size="sm" />
         </View>
       ) : null}
+      {node.tunnel ? <TunnelOrigin lines={node.tunnel.origin} /> : null}
       {after}
     </>
   )
@@ -195,7 +249,9 @@ function StationBody({ node }: Readonly<{ node: MapNode }>) {
         <Text numberOfLines={1} style={s.name}>
           {node.name}
         </Text>
-        {node.status ? <StatusChip status={node.status.key} label={node.status.label} size="sm" /> : null}
+        {node.status ? (
+          <StatusChip status={node.status.key} label={node.status.label} size="sm" />
+        ) : null}
       </View>
       <View style={s.bottom}>
         {node.sub === '' ? null : (
@@ -289,7 +345,9 @@ function StationRow({ node, href }: Readonly<{ node: MapNode; href: string | nul
       <Text numberOfLines={1} style={s.name}>
         {node.name}
       </Text>
-      {node.status ? <StatusChip status={node.status.key} label={node.status.label} size="sm" /> : null}
+      {node.status ? (
+        <StatusChip status={node.status.key} label={node.status.label} size="sm" />
+      ) : null}
       {node.runs === '' ? null : <Text style={s.runs}>{node.runs}</Text>}
       <Tags node={node} />
       {connections}

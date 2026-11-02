@@ -1,4 +1,9 @@
-import { DeployHealthCheckMissingError, DeployResourceLimitExceededError } from '@/lib/instance-api'
+import {
+  DeployHealthCheckMissingError,
+  DeployResourceLimitExceededError,
+  DeployTunnelRefusedError,
+} from '@/lib/instance-api'
+import { tunnelDeployRefusalMessage } from '@/lib/tunnels'
 import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
 
 /**
@@ -19,14 +24,28 @@ function serverSentence(message: string): string | null {
   return sentence.length > 0 ? sentence : null
 }
 
+/** The deploy was refused because an app has no Hosting Account to run as. */
+export function isHostingAccountRefusal(err: unknown): boolean {
+  return err instanceof Error && err.message.includes('principal_required_for_service_kind')
+}
+
 /** What to show when `POST /environments/:id/deploy` is refused. */
 export function deployErrorMessage(err: unknown): string {
+  if (err instanceof DeployTunnelRefusedError) {
+    return tunnelDeployRefusalMessage(err.code, err.hostnames) ?? err.message
+  }
   const message = err instanceof Error ? err.message : 'Failed to deploy environment'
   if (SERVER_SENTENCE_CODES.some((code) => message.includes(code))) {
     return (
       serverSentence(message) ??
       'This deploy uses host-level Compose features that this organization or your role does not allow.'
     )
+  }
+  for (const code of ['tunnel_name_public_certificate', 'tunnel_daemon_too_old']) {
+    if (message.includes(code)) return tunnelDeployRefusalMessage(code) ?? message
+  }
+  if (message.includes('principal_required_for_service_kind')) {
+    return 'Add a Hosting Account under Bindings first.'
   }
   if (message.includes('server_placement_mismatch')) {
     return "Deploy target does not match the project's pinned server placement."
@@ -40,7 +59,7 @@ export function deployErrorMessage(err: unknown): string {
   if (message.includes('acme_requires_org_opt_in')) {
     return (
       serverSentence(message) ??
-      "A domain asks for a Let's Encrypt certificate, but this organization does not allow Let's Encrypt certificates. An organization owner or manager can turn on \"Allow Let's Encrypt certificates\" under Organization settings \u203a Domains & certificates, or pick a different certificate."
+      "A domain asks for a Let's Encrypt certificate, but this organization does not allow Let's Encrypt certificates. An organization owner or manager can turn on \"Allow Let's Encrypt certificates\" under Organization Settings \u203a Domains & Certificates, or pick a different certificate."
     )
   }
   if (message.includes('letsencrypt_hostname_unsupported')) {
@@ -77,6 +96,9 @@ export function deployPreviewFailureMessage(err: unknown): string | null {
   }
   if (err instanceof DeployResourceLimitExceededError) {
     return 'This start would exceed a resource limit. Review the capacity of this environment and try again.'
+  }
+  if (err instanceof DeployTunnelRefusedError) {
+    return tunnelDeployRefusalMessage(err.code, err.hostnames)
   }
   return null
 }

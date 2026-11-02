@@ -34,9 +34,16 @@ const ACTION_LABELS: Readonly<Record<string, string>> = {
   'server.delete': 'delete this server',
   'server.daemon_key.revoke': "revoke this server's key",
   'license.revoke': 'revoke this license key',
+  'license.key.burn': 'reissue this key',
+  'server.reenroll_ticket.issue': 'issue a re-enroll token',
   'managed.delete': 'delete this managed database',
   'managed.database.delete': 'delete this database',
   'member.remove': 'remove this member',
+  'panel.identity_next.set': "change the control plane's next key",
+  'instance.tunnel_token.set': 'change the tunnel token',
+  'instance.ingress_account.added': 'connect a Cloudflare account',
+  'instance.ingress_account.removed': 'remove a Cloudflare account',
+  'instance.edge_gate.set': 'switch edge connection modes on or off',
 }
 
 export function stepUpActionLabel(action: string | null): string {

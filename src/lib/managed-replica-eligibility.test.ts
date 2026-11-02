@@ -48,15 +48,11 @@ const DATACENTERS = [
   { id: 'dc-3', privateCidrs: ['10.0.2.0/24'] },
 ]
 
-function eligibility(
-  partial: Partial<ReplicaEligibilityInput> = {},
-) {
+function eligibility(partial: Partial<ReplicaEligibilityInput> = {}) {
   return resolveReplicaEligibility({
     servers: [...BASE_SERVERS],
     datacenters: DATACENTERS,
-    members: [
-      { serverId: 'srv-primary', role: 'primary' },
-    ],
+    members: [{ serverId: 'srv-primary', role: 'primary' }],
     primaryServerId: 'srv-primary',
     fabricRelays: [],
     replicaClass: 'failover',
@@ -178,10 +174,7 @@ describe('resolveReplicaEligibility', () => {
           name: 'Linked remote',
         },
       ],
-      fabricRelays: [
-        { serverId: 'srv-primary' },
-        { serverId: 'srv-remote' },
-      ],
+      fabricRelays: [{ serverId: 'srv-primary' }, { serverId: 'srv-remote' }],
     })
     const remote = result.servers.find((s) => s.serverId === 'srv-remote')
     expect(remote).toEqual({
@@ -207,10 +200,7 @@ describe('resolveReplicaEligibility', () => {
           name: 'Unlinked remote',
         },
       ],
-      fabricRelays: [
-        { serverId: 'srv-primary' },
-        { serverId: 'srv-other' },
-      ],
+      fabricRelays: [{ serverId: 'srv-primary' }, { serverId: 'srv-other' }],
     })
     const unlinked = result.servers.find((s) => s.serverId === 'srv-unlinked')
     expect(unlinked).toEqual({
@@ -230,9 +220,7 @@ describe('resolveReplicaEligibility', () => {
         { serverId: 'srv-third', role: 'replica' },
       ],
     })
-    expect(result.servers.find((s) => s.serverId === 'srv-no-dc')?.reason).toBe(
-      'no-datacenter',
-    )
+    expect(result.servers.find((s) => s.serverId === 'srv-no-dc')?.reason).toBe('no-datacenter')
   })
 
   it('accepts read-only replicas on fabric, public, or missing datacenter', () => {
@@ -260,10 +248,7 @@ describe('resolveReplicaEligibility', () => {
           datacenters: [],
         },
       ],
-      fabricRelays: [
-        { serverId: 'srv-primary' },
-        { serverId: 'srv-fabric' },
-      ],
+      fabricRelays: [{ serverId: 'srv-primary' }, { serverId: 'srv-fabric' }],
     })
     expect(result.servers.find((s) => s.serverId === 'srv-fabric')).toEqual({
       serverId: 'srv-fabric',
@@ -287,12 +272,8 @@ describe('resolveReplicaEligibility', () => {
 
   it('still blocks offline and already-member for read-only', () => {
     const result = eligibility({ replicaClass: 'read' })
-    expect(result.servers.find((s) => s.serverId === 'srv-primary')?.reason).toBe(
-      'already-member',
-    )
-    expect(result.servers.find((s) => s.serverId === 'srv-offline')?.reason).toBe(
-      'offline',
-    )
+    expect(result.servers.find((s) => s.serverId === 'srv-primary')?.reason).toBe('already-member')
+    expect(result.servers.find((s) => s.serverId === 'srv-offline')?.reason).toBe('offline')
   })
 
   it('handles a primary server id that is missing from the fleet list', () => {
@@ -300,9 +281,7 @@ describe('resolveReplicaEligibility', () => {
       primaryServerId: 'srv-missing',
       members: [],
     })
-    expect(result.servers.find((s) => s.serverId === 'srv-no-dc')?.reason).toBe(
-      'no-datacenter',
-    )
+    expect(result.servers.find((s) => s.serverId === 'srv-no-dc')?.reason).toBe('no-datacenter')
   })
 
   it('treats a null primary as having no datacenter pins', () => {
@@ -310,9 +289,7 @@ describe('resolveReplicaEligibility', () => {
       primaryServerId: null,
       members: [],
     })
-    expect(result.servers.find((s) => s.serverId === 'srv-no-dc')?.reason).toBe(
-      'no-datacenter',
-    )
+    expect(result.servers.find((s) => s.serverId === 'srv-no-dc')?.reason).toBe('no-datacenter')
   })
 })
 
@@ -320,17 +297,13 @@ describe('replicaIneligibleReasonLabel', () => {
   it('labels every ineligible reason', () => {
     expect(replicaIneligibleReasonLabel('already-member')).toBe('Already a member')
     expect(replicaIneligibleReasonLabel('offline')).toBe('Offline')
-    expect(replicaIneligibleReasonLabel('no-datacenter')).toBe(
-      'Not assigned to a datacenter',
-    )
-    expect(replicaIneligibleReasonLabel('no-private-cidr')).toBe(
-      'Datacenter has no subnets yet',
-    )
+    expect(replicaIneligibleReasonLabel('no-datacenter')).toBe('Not assigned to a datacenter')
+    expect(replicaIneligibleReasonLabel('no-private-cidr')).toBe('Datacenter has no subnets yet')
     expect(replicaIneligibleReasonLabel('no-private-path')).toBe(
-      "Must share the primary's datacenter",
+      "Must share the primary's datacenter"
     )
     expect(replicaIneligibleReasonLabel('untrusted-datacenter')).toBe(
-      'Shared datacenter is untrusted — failover replicas need a trusted network',
+      'Shared datacenter is untrusted — needs a trusted network or TurboFabric'
     )
   })
 })
@@ -368,7 +341,32 @@ describe('datacenter routing policy', () => {
     })
   })
 
-  it('predicts fabric (then public) for read replicas over an untrusted datacenter', () => {
+  it('predicts fabric for failover over an untrusted datacenter when both servers are on the fabric', () => {
+    const result = eligibility({
+      servers: UNTRUSTED_SERVERS,
+      datacenters: UNTRUSTED_DATACENTERS,
+      replicaClass: 'failover',
+      fabricRelays: [{ serverId: 'srv-primary' }, { serverId: 'srv-candidate' }],
+    })
+    expect(result.servers[1]).toEqual({
+      serverId: 'srv-candidate',
+      eligible: true,
+      candidateDatacenterId: 'dc-shared',
+      predictedTransport: 'fabric',
+    })
+  })
+
+  it('stays ineligible for failover when only one server is on the fabric', () => {
+    const result = eligibility({
+      servers: UNTRUSTED_SERVERS,
+      datacenters: UNTRUSTED_DATACENTERS,
+      replicaClass: 'failover',
+      fabricRelays: [{ serverId: 'srv-primary' }],
+    })
+    expect(result.servers[1]?.reason).toBe('untrusted-datacenter')
+  })
+
+  it('predicts fabric for read replicas over an untrusted datacenter when both are on TurboFabric', () => {
     const withFabric = eligibility({
       servers: UNTRUSTED_SERVERS,
       datacenters: UNTRUSTED_DATACENTERS,
@@ -381,12 +379,35 @@ describe('datacenter routing policy', () => {
       candidateDatacenterId: 'dc-shared',
       predictedTransport: 'fabric',
     })
-    const withoutFabric = eligibility({
-      servers: UNTRUSTED_SERVERS,
-      datacenters: UNTRUSTED_DATACENTERS,
-      replicaClass: 'read',
+  })
+
+  it('refuses read replicas over an untrusted-only pair without TurboFabric on both servers', () => {
+    for (const fabricRelays of [
+      [],
+      [{ serverId: 'srv-primary' }],
+      [{ serverId: 'srv-candidate' }],
+    ]) {
+      const result = eligibility({
+        servers: UNTRUSTED_SERVERS,
+        datacenters: UNTRUSTED_DATACENTERS,
+        replicaClass: 'read',
+        fabricRelays,
+      })
+      expect(result.servers[1]).toEqual({
+        serverId: 'srv-candidate',
+        eligible: false,
+        reason: 'untrusted-datacenter',
+        candidateDatacenterId: 'dc-shared',
+      })
+    }
+  })
+
+  it('keeps read replicas public-eligible when the pair shares no datacenter', () => {
+    const result = eligibility({ replicaClass: 'read' })
+    expect(result.servers.find((s) => s.serverId === 'srv-no-dc')).toMatchObject({
+      eligible: true,
+      predictedTransport: 'public',
     })
-    expect(withoutFabric.servers[1]?.predictedTransport).toBe('public')
   })
 
   it('prefers a trusted shared datacenter over a lower-priority untrusted one', () => {
@@ -472,8 +493,8 @@ describe('datacenter routing policy', () => {
         new Map([
           ['dc-z', { priority: 5, trusted: true }],
           ['dc-u', { priority: 1, trusted: false }],
-        ]),
-      ),
+        ])
+      )
     ).toEqual({ trusted: ['dc-z', 'dc-a'], untrusted: ['dc-u'] })
   })
 
@@ -487,7 +508,7 @@ describe('datacenter routing policy', () => {
         primaryDatacenterIds: ['dc-shared'],
         fabricRelays: [],
         policyByDatacenter: policies,
-      }),
+      })
     ).toBe(false)
     expect(
       predictReplicaTransport({
@@ -497,7 +518,7 @@ describe('datacenter routing policy', () => {
         primaryDatacenterIds: ['dc-shared'],
         fabricRelays: [{ serverId: 'srv-p' }, { serverId: 'srv-a' }],
         policyByDatacenter: policies,
-      }),
+      })
     ).toBe('fabric')
   })
 })
@@ -511,7 +532,7 @@ describe('predictReplicaTransport', () => {
         primaryServerId: 'srv-p',
         primaryDatacenterIds: ['dc-1'],
         fabricRelays: [],
-      }),
+      })
     ).toBe('local')
     expect(
       predictReplicaTransport({
@@ -520,7 +541,7 @@ describe('predictReplicaTransport', () => {
         primaryServerId: 'srv-p',
         primaryDatacenterIds: ['dc-1'],
         fabricRelays: [],
-      }),
+      })
     ).toBe('datacenter')
     expect(
       predictReplicaTransport({
@@ -528,11 +549,8 @@ describe('predictReplicaTransport', () => {
         candidateDatacenterIds: ['dc-2'],
         primaryServerId: 'srv-p',
         primaryDatacenterIds: ['dc-1'],
-        fabricRelays: [
-          { serverId: 'srv-p' },
-          { serverId: 'srv-a' },
-        ],
-      }),
+        fabricRelays: [{ serverId: 'srv-p' }, { serverId: 'srv-a' }],
+      })
     ).toBe('fabric')
     expect(
       predictReplicaTransport({
@@ -541,7 +559,7 @@ describe('predictReplicaTransport', () => {
         primaryServerId: 'srv-p',
         primaryDatacenterIds: ['dc-1'],
         fabricRelays: [],
-      }),
+      })
     ).toBe('public')
   })
 })
@@ -555,7 +573,7 @@ describe('hasPrivatePathToPrimary', () => {
         primaryServerId: 'srv-p',
         primaryDatacenterIds: ['dc-1'],
         fabricRelays: [],
-      }),
+      })
     ).toBe(true)
   })
 
@@ -567,7 +585,7 @@ describe('hasPrivatePathToPrimary', () => {
         primaryServerId: 'srv-p',
         primaryDatacenterIds: ['dc-1'],
         fabricRelays: [],
-      }),
+      })
     ).toBe(true)
   })
 
@@ -578,11 +596,8 @@ describe('hasPrivatePathToPrimary', () => {
         candidateDatacenterIds: ['dc-2'],
         primaryServerId: 'srv-p',
         primaryDatacenterIds: ['dc-1'],
-        fabricRelays: [
-          { serverId: 'srv-p' },
-          { serverId: 'srv-a' },
-        ],
-      }),
+        fabricRelays: [{ serverId: 'srv-p' }, { serverId: 'srv-a' }],
+      })
     ).toBe(true)
   })
 
@@ -594,7 +609,7 @@ describe('hasPrivatePathToPrimary', () => {
         primaryServerId: 'srv-p',
         primaryDatacenterIds: ['dc-1'],
         fabricRelays: [{ serverId: 'srv-p' }],
-      }),
+      })
     ).toBe(false)
   })
 })

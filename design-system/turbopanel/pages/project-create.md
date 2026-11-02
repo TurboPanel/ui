@@ -167,7 +167,7 @@ override into an informed act rather than a guess between four blank options.
 **The compose lane seeds no `x-turbopanel` at all.** What the operator authored
 upstream must not silently acquire TurboPanel metadata on import. Every other
 lane is host-native (`site` / `node`) because a compose service needs `image` or
-`build` unless it is host-native or Railpack-built — a bare binding would be
+`build` unless it is host-native or image-built — a bare binding would be
 rejected on Create with `compose_invalid`.
 
 **A failed read is not a dead end.** The step shows an `InlineNotice` and drops

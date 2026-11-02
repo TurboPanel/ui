@@ -2,6 +2,8 @@ import { useRouter, type Href } from 'expo-router'
 import { useQuery } from '@tanstack/react-query'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { AddressFamilyBadge } from '@/components/org/address-family-badge'
+import { FabricPairPathList } from '@/components/org/network/fabric-pair-paths'
+import { FabricServerControls } from '@/components/org/network/fabric-server-controls'
 import { IpListRow } from '@/components/org/network/network-rows'
 import { ServerAddressesCard } from '@/components/org/server-addresses-card'
 import { ServerTrafficCard } from '@/components/org/server-traffic-card'
@@ -12,11 +14,13 @@ import {
   fetchIps,
   fetchNetworks,
   type IpRecord,
+  type OrgFabricServerRecord,
   type RelayRecord,
   type ServerDetailRecord,
   type ServerReportedIp,
 } from '@/lib/instance-api'
-import { datacenterHref, networkFabricHref } from '@/lib/org-navigation'
+import { fabricServerPairRows, type FabricPairRow } from '@/lib/fabric-mesh'
+import { datacenterHref, serversFabricHref } from '@/lib/org-navigation'
 import { useOrgFabric } from '@/lib/queries/fabric'
 import { queryKeys, useCan } from '@/lib/query-client'
 import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
@@ -65,7 +69,7 @@ function AddressPinLines({
     <View style={styles.pinLines}>
       {pins.map((pin) => {
         const label = pin.datacenterId
-          ? datacenterNameById.get(pin.datacenterId) ?? pin.datacenterId
+          ? (datacenterNameById.get(pin.datacenterId) ?? pin.datacenterId)
           : 'a datacenter'
         return (
           <View key={pin.id} style={styles.pinLine}>
@@ -142,17 +146,13 @@ function DatacenterPrivatePins({
     return <Text style={panelStyles.muted}>Loading private address…</Text>
   }
   if (ips.length === 0) {
-    return (
-      <Text style={panelStyles.muted}>No private address assigned</Text>
-    )
+    return <Text style={panelStyles.muted}>No private address assigned</Text>
   }
   return (
     <View style={styles.pinList}>
       {ips.map((ip) => {
         const family = addressFamilyLabel(ip.address)
-        const datacenterLabel = ip.datacenterId
-          ? datacenterNameById.get(ip.datacenterId)
-          : null
+        const datacenterLabel = ip.datacenterId ? datacenterNameById.get(ip.datacenterId) : null
         return (
           <View key={ip.id} style={styles.addressBlock}>
             <View style={styles.pinRow}>
@@ -160,9 +160,7 @@ function DatacenterPrivatePins({
                 {ip.address}
               </MonoText>
               <AddressFamilyBadge family={family} />
-              {datacenterLabel ? (
-                <Text style={panelStyles.muted}>{datacenterLabel}</Text>
-              ) : null}
+              {datacenterLabel ? <Text style={panelStyles.muted}>{datacenterLabel}</Text> : null}
             </View>
             <StalePinNote pin={ip} />
           </View>
@@ -172,14 +170,33 @@ function DatacenterPrivatePins({
   )
 }
 
+function ServerPairPaths({ rows }: Readonly<{ rows: readonly FabricPairRow[] }>) {
+  if (rows.length === 0) return null
+  return (
+    <View style={styles.pairPaths}>
+      <Text style={panelStyles.detailTitle}>How Traffic Reaches Other Servers</Text>
+      <Text style={panelStyles.muted}>
+        A server on a shared trusted network is reached over the LAN with no tunnel.{' '}
+        {TURBOFABRIC_PRODUCT_NAME} carries the rest, encrypted.
+      </Text>
+      <FabricPairPathList rows={rows} />
+    </View>
+  )
+}
+
 function ServerMeshMembershipPanel({
   orgId,
   relay,
+  fabricServer,
+  pairRows,
   loading,
   canManage,
 }: Readonly<{
   orgId: string
   relay: RelayRecord | null
+  /** This server's switch and role; null on an older control plane. */
+  fabricServer: OrgFabricServerRecord | null
+  pairRows: readonly FabricPairRow[]
   loading: boolean
   canManage: boolean
 }>) {
@@ -187,47 +204,44 @@ function ServerMeshMembershipPanel({
 
   return (
     <SectionPanel
-      title="Mesh"
-      hint={`${TURBOFABRIC_PRODUCT_NAME} membership for this host`}
+      title={TURBOFABRIC_PRODUCT_NAME}
+      hint={`${TURBOFABRIC_PRODUCT_NAME} membership and paths for this host`}
     >
       {!canManage ? (
         <Text style={panelStyles.muted}>
-          Organization manage permission is required to view{' '}
-          {TURBOFABRIC_PRODUCT_NAME} membership.
+          Organization manage permission is required to view {TURBOFABRIC_PRODUCT_NAME} membership.
         </Text>
       ) : null}
       {canManage && loading && !relay ? (
         <Text style={panelStyles.muted}>Loading mesh membership…</Text>
       ) : null}
+      {canManage && fabricServer ? (
+        <FabricServerControls orgId={orgId} server={fabricServer} canManage={canManage} />
+      ) : null}
       {canManage && !loading && !relay ? (
         <View style={panelStyles.statePanel}>
-          <Text style={panelStyles.muted}>
-            Not a {TURBOFABRIC_PRODUCT_NAME} relay.
-          </Text>
+          <Text style={panelStyles.muted}>Not a {TURBOFABRIC_PRODUCT_NAME} relay.</Text>
         </View>
       ) : null}
       {canManage && relay ? (
         <View style={panelStyles.detailCard}>
           <Pressable
             style={webPointer}
-            onPress={() => router.push(networkFabricHref(orgId) as Href)}
+            onPress={() => router.push(serversFabricHref(orgId) as Href)}
             accessibilityRole="link"
             accessibilityLabel={`Open ${TURBOFABRIC_PRODUCT_NAME}`}
           >
-            <Text style={panelStyles.detailTitle}>
-              {TURBOFABRIC_PRODUCT_NAME}
-            </Text>
+            <Text style={panelStyles.detailTitle}>{TURBOFABRIC_PRODUCT_NAME}</Text>
           </Pressable>
           <Text style={panelStyles.detailLine}>
-            <Text style={panelStyles.detailLabel}>
-              TurboFabric address:{' '}
-            </Text>
+            <Text style={panelStyles.detailLabel}>TurboFabric address: </Text>
             <MonoText style={styles.mono} selectable>
               {relay.address}
             </MonoText>
           </Text>
         </View>
       ) : null}
+      {canManage ? <ServerPairPaths rows={pairRows} /> : null}
     </SectionPanel>
   )
 }
@@ -269,29 +283,24 @@ export function ServerNetworkSection({
   const managedIps = serverManagedIpsQuery.data?.ips ?? []
   const datacenterPins = datacenterIpsQuery.data?.ips ?? []
   const pinsByAddress = indexPinsByAddress(datacenterPins)
-  const relay =
-    fabricQuery.data?.relays.find((row) => row.serverId === server.id) ?? null
+  const relay = fabricQuery.data?.relays.find((row) => row.serverId === server.id) ?? null
+  const fabricServer = fabricQuery.data?.servers.find((row) => row.serverId === server.id) ?? null
   const meshLoading = fabricQuery.isLoading
+  const pairRows = fabricServerPairRows(server.id, fabricQuery.data)
 
   const memberships = server.datacenters ?? []
-  const datacenterNameById = new Map(
-    memberships.map((row) => [row.id, row.name?.trim() || row.id]),
-  )
+  const datacenterNameById = new Map(memberships.map((row) => [row.id, row.name?.trim() || row.id]))
   for (const row of serverManagedIpsQuery.data?.datacenters ?? []) {
     if (!datacenterNameById.has(row.id)) {
       datacenterNameById.set(row.id, row.name?.trim() || row.id)
     }
   }
-  const serverTitle =
-    server.name?.trim() || server.hostname?.trim() || server.id
+  const serverTitle = server.name?.trim() || server.hostname?.trim() || server.id
   const networkById = new Map(
-    (serverManagedIpsQuery.data?.networks ?? []).map((network) => [
-      network.id,
-      network,
-    ]),
+    (serverManagedIpsQuery.data?.networks ?? []).map((network) => [network.id, network])
   )
   const datacenterById = new Map(
-    (serverManagedIpsQuery.data?.datacenters ?? []).map((row) => [row.id, row]),
+    (serverManagedIpsQuery.data?.datacenters ?? []).map((row) => [row.id, row])
   )
 
   return (
@@ -310,9 +319,7 @@ export function ServerNetworkSection({
         hint="Addresses the daemon reports, and the datacenter each is pinned into"
       >
         {interfaceGroups.length === 0 ? (
-          <Text style={panelStyles.muted}>
-            No interface addresses reported yet.
-          </Text>
+          <Text style={panelStyles.muted}>No interface addresses reported yet.</Text>
         ) : (
           interfaceGroups.map((group) => (
             <InterfaceGroup
@@ -325,15 +332,10 @@ export function ServerNetworkSection({
             />
           ))
         )}
-        {datacenterIpsQuery.isLoading ? (
-          <Text style={panelStyles.muted}>Loading pins…</Text>
-        ) : null}
+        {datacenterIpsQuery.isLoading ? <Text style={panelStyles.muted}>Loading pins…</Text> : null}
       </SectionPanel>
 
-      <SectionPanel
-        title="Datacenters"
-        hint="Membership pins for this host"
-      >
+      <SectionPanel title="Datacenters" hint="Membership pins for this host">
         {memberships.length === 0 ? (
           <Text style={panelStyles.detailLine}>
             <Text style={panelStyles.detailLabel}>Datacenters: </Text>
@@ -346,9 +348,7 @@ export function ServerNetworkSection({
               <Pressable
                 key={membership.id}
                 style={webPointer}
-                onPress={() =>
-                  router.push(datacenterHref(orgId, membership.id) as Href)
-                }
+                onPress={() => router.push(datacenterHref(orgId, membership.id) as Href)}
                 accessibilityRole="link"
                 accessibilityLabel={`Open datacenter ${label}`}
               >
@@ -370,6 +370,8 @@ export function ServerNetworkSection({
       <ServerMeshMembershipPanel
         orgId={orgId}
         relay={relay}
+        fabricServer={fabricServer}
+        pairRows={pairRows}
         loading={meshLoading}
         canManage={canManage}
       />
@@ -382,24 +384,18 @@ export function ServerNetworkSection({
           <Text style={panelStyles.muted}>Loading managed addresses…</Text>
         ) : null}
         {!serverManagedIpsQuery.isLoading && managedIps.length === 0 ? (
-          <Text style={panelStyles.muted}>
-            No managed addresses assigned to this server.
-          </Text>
+          <Text style={panelStyles.muted}>No managed addresses assigned to this server.</Text>
         ) : null}
         <View style={styles.list}>
           {managedIps.map((ip) => {
             const network = ip.networkId ? networkById.get(ip.networkId) : null
-            const datacenter = ip.datacenterId
-              ? datacenterById.get(ip.datacenterId)
-              : null
+            const datacenter = ip.datacenterId ? datacenterById.get(ip.datacenterId) : null
             return (
               <IpListRow
                 key={ip.id}
                 ip={ip}
                 serverLabel={serverTitle}
-                networkLabel={
-                  network?.name?.trim() || network?.cidr || null
-                }
+                networkLabel={network?.name?.trim() || network?.cidr || null}
                 datacenterLabel={datacenter?.name?.trim() || null}
                 showDelete={false}
               />
@@ -412,6 +408,9 @@ export function ServerNetworkSection({
 }
 
 const styles = StyleSheet.create({
+  pairPaths: {
+    gap: spacing.sm,
+  },
   root: {
     gap: spacing.lg,
   },

@@ -30,9 +30,15 @@ import {
   usePersistAccountWrites,
   usePersistProjectCompose,
 } from '@/components/org/compose-persistence'
+import { mergeComposeOverlay } from '@/lib/compose'
 import { PrincipalAccessPanel } from '@/components/org/principal-access-panel'
 import { nextPrincipalAlias } from '@/lib/compose/principals-document'
-import { knownAccountNames, planAccountDeclaration } from '@/lib/compose/principal-required'
+import {
+  declaredAccountsWithoutRows,
+  knownAccountNames,
+  planAccountDeclaration,
+  servicePrincipalAlias,
+} from '@/lib/compose/principal-required'
 import { unownedSitesAcrossDocuments } from '@/lib/compose/managed-directory-sites'
 import {
   type ComposeDocument,
@@ -71,6 +77,71 @@ import { userErrorMessage } from '@/lib/user-error'
 type ProjectServiceOption = {
   id: string
   label: string
+  /** Lowercase compose account alias the service names, if any. */
+  alias: string | null
+}
+
+/** What a service line shows, given the compose file's say over the link. */
+function serviceLinkView(linked: boolean, fileAlias: string | null, fileNamesThisAccount: boolean) {
+  if (fileNamesThisAccount) {
+    return {
+      showLinked: true,
+      showButton: false,
+      note: 'Linked by the compose file. Edit the file to change it.',
+    }
+  }
+  if (fileAlias === null) return { showLinked: linked, showButton: true, note: null }
+  return {
+    showLinked: false,
+    showButton: linked,
+    note: linked
+      ? `Linked, but the compose file uses ${fileAlias}.`
+      : `Set by the compose file for ${fileAlias}.`,
+  }
+}
+
+/** One service in a Hosting Account row: a Link button, or Linked with Unlink. */
+function ServiceLinkRow({
+  username,
+  label,
+  linked,
+  fileAlias,
+  fileNamesThisAccount,
+  disabled,
+  onToggle,
+}: Readonly<{
+  username: string
+  label: string
+  linked: boolean
+  /** The account the compose file names for this service, if any. */
+  fileAlias: string | null
+  /** The compose file names this account, so the row cannot undo the link here. */
+  fileNamesThisAccount: boolean
+  disabled: boolean
+  onToggle: () => void
+}>) {
+  const view = serviceLinkView(linked, fileAlias, fileNamesThisAccount)
+  return (
+    <View style={styles.serviceLinkRow}>
+      <Text style={styles.serviceLinkName} numberOfLines={1}>
+        {label}
+      </Text>
+      {view.showLinked ? <Text style={styles.serviceLinkedText}>Linked</Text> : null}
+      {view.showButton ? (
+        <Button
+          label={linked ? 'Unlink' : 'Link'}
+          size="sm"
+          variant={linked ? 'secondary' : 'primary'}
+          disabled={disabled}
+          accessibilityLabel={
+            linked ? `Unlink ${username} from ${label}` : `Link ${username} to ${label}`
+          }
+          onPress={onToggle}
+        />
+      ) : null}
+      {view.note ? <Text style={styles.serviceLinkNote}>{view.note}</Text> : null}
+    </View>
+  )
 }
 
 function formatServiceOptionLabel(environment: EnvironmentRecord, service: ServiceRecord): string {
@@ -80,7 +151,7 @@ function formatServiceOptionLabel(environment: EnvironmentRecord, service: Servi
 }
 
 /**
- * What "Add system user" would do while apps wait for an account: the plan for
+ * What "Add Hosting Account" would do while apps wait for an account: the plan for
  * a given name, whether any app is waiting, and the name suggested for it.
  */
 function useAccountPlan({
@@ -145,10 +216,49 @@ function WaitingForAccountNotice({ suggested }: Readonly<{ suggested: string }>)
   return (
     <InlineNotice
       tone="warning"
-      title="An app is waiting for a system user"
-      body={`Add one below (${suggested} if you leave it blank) and the app runs as it, so Deploy is ready. With more than one system user, pick which one each app runs as in Configuration.`}
+      title="An app is waiting for a Hosting Account"
+      body={`Add one below (${suggested} if you leave it blank) and the app runs as it, so Deploy is ready. With more than one Hosting Account, pick which one each app runs as in Configuration.`}
     />
   )
+}
+
+/**
+ * Whether an app in this project is waiting for a Hosting Account, read from
+ * the same documents and rows the Hosting Account list uses. Screens outside
+ * Bindings (Set Up Production) use it to offer the add form in place.
+ */
+export function useProjectAccountWaiting(orgId: string, projectId: string): boolean {
+  const principalsQuery = useProjectPrincipals(orgId, projectId)
+  const projectQuery = useProject(orgId, projectId)
+  const environmentsQuery = useEnvironments(orgId, projectId)
+  const environments = orEmptyArray(environmentsQuery.data?.environments)
+  const environmentIds = useMemo(() => environments.map((env) => env.id), [environments])
+  const servicesByEnvQuery = useServicesByEnvironments(orgId, environmentIds)
+  const principals = useMemo(() => principalsQuery.data?.principals ?? [], [principalsQuery.data])
+  const { waitingForAccount } = useAccountPlan({
+    project: projectQuery.data?.project,
+    environments,
+    servicesByEnv: servicesByEnvQuery.servicesByEnv,
+    principals,
+    loading:
+      principalsQuery.isLoading || environmentsQuery.isLoading || servicesByEnvQuery.isLoading,
+  })
+  return waitingForAccount
+}
+
+/**
+ * Accounts the compose declares that have no row yet: the panel creates each
+ * one on the next deploy, so the list shows them instead of looking empty.
+ */
+function DeclaredAccountRows({ names }: Readonly<{ names: readonly string[] }>) {
+  return names.map((name) => (
+    <View key={name} style={panelStyles.detailCard}>
+      <Text style={panelStyles.detailTitle}>{name}</Text>
+      <Text style={styles.principalSummary} numberOfLines={2}>
+        Declared in the configuration file. It is created on the server with the next deploy.
+      </Text>
+    </View>
+  ))
 }
 
 export function ProjectPrincipalsSection({
@@ -160,7 +270,7 @@ export function ProjectPrincipalsSection({
   orgId: string
   projectId: string
   canManage: boolean
-  /** Body only — no surrounding `SectionPanel` (Settings Add System user). */
+  /** Body only — no surrounding `SectionPanel` (Bindings, Set Up Production). */
   embedded?: boolean
 }>) {
   const principalsQuery = useProjectPrincipals(orgId, projectId)
@@ -184,16 +294,24 @@ export function ProjectPrincipalsSection({
     const flat: ProjectServiceOption[] = []
     for (const env of environments) {
       const services = servicesByEnvQuery.servicesByEnv[env.id] ?? []
+      const merged = mergeComposeOverlay(
+        projectQuery.data?.project?.options?.compose,
+        env.options?.compose
+      )
       for (const service of services) {
+        // The compose alias wins over serviceIds at deploy, so a service whose
+        // document names an account is linked to it whatever the row says.
+        const alias = servicePrincipalAlias(merged, service.composeServiceName)
         flat.push({
           id: service.id,
           label: formatServiceOptionLabel(env, service),
+          alias: alias?.toLowerCase() ?? null,
         })
       }
     }
     flat.sort((a, b) => a.label.localeCompare(b.label))
     return flat
-  }, [environments, servicesByEnvQuery.servicesByEnv])
+  }, [environments, servicesByEnvQuery.servicesByEnv, projectQuery.data])
 
   const [error, setError] = useState<string | null>(null)
   const [username, setUsername] = useState('')
@@ -236,6 +354,18 @@ export function ProjectPrincipalsSection({
         principals,
       }),
     [projectQuery.data, environments, servicesByEnvQuery.servicesByEnv, principals]
+  )
+
+  const declaredOnly = useMemo(
+    () =>
+      declaredAccountsWithoutRows(
+        [
+          projectQuery.data?.project?.options?.compose,
+          ...environments.map((env) => env.options?.compose),
+        ],
+        principals
+      ),
+    [projectQuery.data, environments, principals]
   )
 
   const loading =
@@ -304,7 +434,7 @@ export function ProjectPrincipalsSection({
   const saveDeclaredAccount = async (writes: Parameters<typeof persistAccount.run>[0]) => {
     const saved = await persistAccount.run(writes)
     if (saved.ok) setUsername('')
-    else setError(persistAccount.actionError ?? 'Could not add the system user.')
+    else setError(persistAccount.actionError ?? 'Could not add the Hosting Account.')
   }
 
   const handleAdd = async () => {
@@ -329,7 +459,7 @@ export function ProjectPrincipalsSection({
     if (!result.ok) {
       const raw = result.error ?? createPrincipal.actionError
       if (raw) {
-        setError(principalSchemeErrorMessage(raw))
+        setError(principalSchemeErrorMessage(raw, trimmed))
       }
       return
     }
@@ -364,15 +494,18 @@ export function ProjectPrincipalsSection({
               ? `"${unownedSites[0]}" has no account yet`
               : `${unownedSites.length} sites have no account yet`
           }
-          body={`An uploaded-directory site is a directory and an account — the webroot belongs to the account, and without one there is nobody to upload as. Add a system user below and assign it to ${
+          body={`An uploaded-directory site is a directory and an account — the webroot belongs to the account, and without one there is nobody to upload as. Add a Hosting Account below and assign it to ${
             unownedSites.length === 1 ? 'that service' : 'those services'
           }.`}
         />
       ) : null}
       {waitingForAccount ? <WaitingForAccountNotice suggested={suggestedUsername} /> : null}
       {loading && principals.length === 0 ? <LoadingState /> : null}
-      {!loading && principals.length === 0 ? <EmptyState title="No Hosting Accounts yet." /> : null}
+      {!loading && principals.length === 0 && declaredOnly.length === 0 ? (
+        <EmptyState title="No Hosting Accounts yet." />
+      ) : null}
       <View style={styles.principalList}>
+        <DeclaredAccountRows names={declaredOnly} />
         {principals.map((row) => {
           const expanded = expandedIds.has(row.id)
           const header = (
@@ -415,27 +548,29 @@ export function ProjectPrincipalsSection({
                   <Text style={panelStyles.detailLabel}>Services</Text>
                   <View style={styles.serviceChipRow}>
                     {serviceOptions.map((option) => {
-                      const assigned = row.serviceIds.includes(option.id)
+                      const rowAlias = (row.metadata?.composeAlias ?? row.username).toLowerCase()
+                      const fileNamesThisAccount = option.alias === rowAlias
+                      const linked = row.serviceIds.includes(option.id) || fileNamesThisAccount
                       const disabled = !canManage || savingAssignments.has(row.id)
                       return (
-                        <Pressable
+                        <ServiceLinkRow
                           key={option.id}
+                          username={row.username}
+                          label={option.label}
+                          linked={linked}
+                          fileAlias={
+                            principals.find(
+                              (p) =>
+                                (p.metadata?.composeAlias ?? p.username).toLowerCase() ===
+                                option.alias
+                            )?.username ?? option.alias
+                          }
+                          fileNamesThisAccount={fileNamesThisAccount}
                           disabled={disabled}
-                          style={[
-                            styles.serviceChip,
-                            assigned && styles.serviceChipOn,
-                            disabled && styles.buttonDisabled,
-                          ]}
-                          onPress={() => {
+                          onToggle={() => {
                             void toggleServiceAssignment(row.id, option.id)
                           }}
-                        >
-                          <Text
-                            style={[styles.serviceChipText, assigned && styles.serviceChipTextOn]}
-                          >
-                            {option.label}
-                          </Text>
-                        </Pressable>
+                        />
                       )
                     })}
                   </View>
@@ -481,7 +616,7 @@ export function ProjectPrincipalsSection({
         <View style={styles.principalForm}>
           <View style={styles.principalFormField}>
             <TextField
-              label="Add system user"
+              label="Add Hosting Account"
               value={username}
               onChangeText={setUsername}
               onBlur={() => setUsername((current) => current.trim())}
@@ -498,7 +633,7 @@ export function ProjectPrincipalsSection({
             variant="primary"
             size="sm"
             busy={adding}
-            accessibilityLabel="Add system user"
+            accessibilityLabel="Add Hosting Account"
             onPress={() => {
               void handleAdd()
             }}
@@ -515,7 +650,7 @@ export function ProjectPrincipalsSection({
   return (
     <SectionPanel
       title="Project Hosting Accounts"
-      hint="Linux system users for this project. Assign a service so deploy ensures the account on the host — sites use that Hosting Account for document-root ownership (and Apache php-fpm run-as); storage chown follows the same pin. Assign at most one Hosting Account per site service."
+      hint="The Linux accounts for this project. Assign a service so deploy ensures the account on the host — sites use that Hosting Account for document-root ownership (and Apache php-fpm run-as); storage chown follows the same pin. Assign at most one Hosting Account per site service."
     >
       {body}
     </SectionPanel>
@@ -1101,28 +1236,25 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   serviceChipRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: spacing.xs,
   },
-  serviceChip: {
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-    borderRadius: 6,
-    backgroundColor: colors.bgSecondary,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+  serviceLinkRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: spacing.sm,
   },
-  serviceChipOn: {
-    borderColor: chrome.accent,
-    backgroundColor: chrome.bgActive,
-  },
-  serviceChipText: {
+  serviceLinkName: {
     color: colors.textMuted,
     fontSize: 12,
   },
-  serviceChipTextOn: {
+  serviceLinkNote: {
+    color: colors.textMuted,
+    fontSize: 12,
+  },
+  serviceLinkedText: {
     color: colors.link,
+    fontSize: 12,
     fontWeight: '600',
   },
   principalForm: {

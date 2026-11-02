@@ -11,27 +11,27 @@
 
 - One job: **fleet inventory**, not a dashboard of widgets
 - Two layouts, toggled from the **title row** (icon-only; persisted in `localStorage` `turbopanel.serversLayout`; default Detail): **Detail** (full-width rows) and **Summary** (compact hairline tiles). Visible chrome is icons only — accessible names are **Detail view** / **Summary view**.
-- All actions sit on the **right** of the **Servers** title: **+ Server** / view toggle. No intro `pageCopy` blurb. There is no batch **Update** and no row selection: servers update on their own (Admin > Updates).
+- All actions sit on the **right** of the **Servers** title: **Add Server** / view toggle. No intro `pageCopy` blurb. There is no batch **Update** and no row selection: servers update on their own (Admin > Updates).
 - **Native (iOS/Android):** title and actions share one row. Detail stacks each host (name, status, country, usage, mesh) so the list **never scrolls sideways**. Summary tiles and native Detail rows sit on the page background — **not** inside the fleet glass.
 - Fleet capacity totals (Cores · RAM) and online count live on **Overview**, not here  
 - Row / card press navigates to `/[orgId]/servers/[serverId]` (control panel tabs)  
 - Toolbar sits **in the title row** — no toolbar hairline / HR separators  
-- **+ Server** opens a separate glass `SectionPanel` (Add server) between the title row and the fleet  
+- **Add Server** opens a separate glass `SectionPanel` (Add Server) between the title row and the fleet  
 - **Web Detail:** fleet hosts sit in their own glass `SectionPanel` (no nested second glass / bordered table card inside it). Table itself has **no outer border/radius box** — header + zebra rows only inside the panel.
 - **Summary:** CSS `auto-fill` grid (native: wrapping tiles). Hairline `bgArea` tiles — not glass, not a decorative bento.  
 - **Datacenters** sub-route (`/servers/datacenters`) for org location inventory (member counts, private CIDRs) — see `pages/datacenters.md`  
 - **Pending keys** sub-route (`/servers/keys`) for unused registration keys (not yet bound to a host). Owner-only list + two-press delete. Copy says **keys**, never “license”.  
 - **Settings** sub-route (`/servers/settings`) for org default timezone, host defaults (SSH port, NTP, TurboFabric preference), and seat capacity  
 - **TLS** sub-route (`/servers/tls`) for the organization certificate library  
-- Networking topology: **Datacenters** under Servers (private subnets + members); **Addresses**, **Docker networks**, and TurboFabric under the **Network** area — see `pages/datacenters.md` and `pages/network.md`  
+- Networking topology: all under Servers — **Datacenters** (private subnets + members), then the old Network pages **TurboFabric**, **Addresses**, **Docker Networks**, **Reserved Ranges**, **Cloudflare Accounts**, **Tunnels** and **Firewall** at `/servers/<page>` (`/network/<page>` redirects) — see `pages/datacenters.md` and `pages/network.md`  
 - Page title uses shared `orgPanelStyles.pageTitle`; route context lives in `OrgHeader` eyebrow  
 - No hero, no decorative bento above the table
 - No inventory KPI strip on this page — org Overview owns Servers / Online / Cores / RAM tiles
 
 ## Toolbar
 
-- Icon-only **Detail / Summary** segmented control (`segmentGroup` / `segmentChip`, no visible labels) plus **+ Server** (own-gated) — both **right-aligned** on the title row  
-- **+ Server** toggles a dedicated Add server glass panel between the title row and the fleet; open state shows **Close**  
+- Icon-only **Detail / Summary** segmented control (`segmentGroup` / `segmentChip`, no visible labels) plus **Add Server** (own-gated) — both **right-aligned** on the title row  
+- **Add Server** toggles a dedicated Add Server glass panel between the title row and the fleet; open state shows **Close**  
 - No horizontal rules under the toolbar
 - No “select hosts…” page blurb
 
@@ -44,7 +44,7 @@
 - Alternating row tint (`bgInset`) for scanability on the **web Detail** table  
 - OS mark beside name — licensed density-aware PNG when we ship one (Debian); otherwise the product name as plain text (e.g. Raspberry Pi OS). No UUID in the primary column  
 - Online badge: accent dot + label (country is its own table column on web; stacked under the name on native)  
-- Empty fleet: **Add your first server** (point at the toolbar **+ Server** control) — never “Waiting for this server” / colocated-registering copy. An empty list means this org has no hosts (including a new org on a self-hosted instance). The colocated host is a row (Initializing → Online), not an empty-state wait.
+- Empty fleet: **Add your first server** (point at the toolbar **Add Server** control) — never “Waiting for this server” / colocated-registering copy. An empty list means this org has no hosts (including a new org on a self-hosted instance). The colocated host is a row (Initializing → Online), not an empty-state wait.
 - Initializing badge: pending (amber) **pulsing** LED + label when `connected` is false and `statusChangedAt` is null — just-registered hosts (including the colocated host after `/install`) while the daemon is still connecting; not Offline. Fleet list refetches every **2 s** while a listed host is Initializing, then returns to 30 s. Honor reduced motion (static amber).  
 - Offline badge: hollow dot + muted label  
 - **Country:** flag emoji + English country name from geo (or em dash)  
@@ -59,9 +59,9 @@ Fleet capacity tiles moved to **Overview** (`pages/overview.md`). This page keep
 - Swap stays on per-host usage columns
 - Refresh cadence for usage follows fleet usage query (~60 s), not the 30 s servers list
 
-## Add server wizard
+## Add Server wizard
 
-- Own glass `SectionPanel` between the toolbar and the fleet table (title **Add server** only — no subtitle/hint) with **3-step indicator** (Name → Install → Connect)  
+- Own glass `SectionPanel` between the toolbar and the fleet table (title **Add Server** only — no subtitle/hint) with **3-step indicator** (Name → Install → Connect)  
 - Install command in `commandCodeBlock` (monospace, inset panel) + copy button  
 - Connect: wait for the host, or **Add another server** (resets to Name without closing the panel). Unused keys remain under **Pending keys**.  
 - Success state: accent dot + hostname — no emoji checkmark. **Done** closes; **Add another server** starts a new key.

@@ -1,3 +1,4 @@
+import { EnvironmentDeleteNameModal } from '@/components/org/environment-delete-name-modal'
 import { EnvironmentFoldersPanel } from '@/components/org/environment-folders-panel'
 import { EnvironmentSharesPanel } from '@/components/org/environment-shares-panel'
 import { useEffect, useRef, useState } from 'react'
@@ -22,7 +23,8 @@ import {
 import type { EnvironmentRecord } from '@/lib/instance-api'
 import {
   ENVIRONMENT_STOP_QUEUED_COPY,
-  environmentDeleteFailure,
+  environmentDeleteInput,
+  environmentDeleteOutcome,
   environmentDeletePrompt,
   type EnvironmentDeleteFailure,
 } from '@/lib/environment-delete'
@@ -40,7 +42,7 @@ function environmentLabel(environment: EnvironmentRecord): string {
 
 function resolveSelectedId(
   previous: string | null,
-  environments: EnvironmentRecord[],
+  environments: EnvironmentRecord[]
 ): string | null {
   if (previous && environments.some((env) => env.id === previous)) {
     return previous
@@ -210,12 +212,7 @@ function EnvironmentToolbar({
       {canOwn ? (
         <View style={styles.toolbarActions}>
           <Button label="Rename" variant="secondary" size="sm" onPress={onRename} />
-          <Button
-            label="New environment"
-            variant="secondary"
-            size="sm"
-            onPress={onAdd}
-          />
+          <Button label="New environment" variant="secondary" size="sm" onPress={onAdd} />
           {canDelete ? (
             <ConfirmButton
               key={activeEnvironment.id}
@@ -235,25 +232,34 @@ function EnvironmentToolbar({
 function useEnvironmentDeleteFlow(
   orgId: string,
   activeEnvironment: EnvironmentRecord | null,
-  setError: (message: string | null) => void,
+  setError: (message: string | null) => void
 ) {
   const deleteEnvironment = useDeleteEnvironment(orgId)
   const stopEnvironment = useStopEnvironmentMutation(orgId)
   const [failure, setFailure] = useState<EnvironmentDeleteFailure | null>(null)
+  const [nameStep, setNameStep] = useState<{ error: string | null } | null>(null)
 
-  const deleteActive = async () => {
+  const deleteActive = async (confirmName?: string) => {
     if (!activeEnvironment) return
     setError(null)
     setFailure(null)
-    const result = await deleteEnvironment.run(activeEnvironment.id)
-    if (!result.ok && deleteEnvironment.actionError) {
-      setFailure(
-        environmentDeleteFailure(
-          deleteEnvironment.actionError,
-          environmentLabel(activeEnvironment),
-        ),
-      )
+    const result = await deleteEnvironment.run(
+      environmentDeleteInput(activeEnvironment.id, confirmName)
+    )
+    if (result.ok) {
+      setNameStep(null)
+      return
     }
+    const message = result.error
+    if (!message) return
+    const outcome = environmentDeleteOutcome(
+      message,
+      environmentLabel(activeEnvironment),
+      confirmName
+    )
+    if (outcome.kind === 'ask-name') setNameStep({ error: null })
+    else if (outcome.kind === 'failure') setFailure(outcome.failure)
+    else setNameStep({ error: outcome.text })
   }
 
   const stopActive = async () => {
@@ -270,10 +276,31 @@ function useEnvironmentDeleteFlow(
     failure,
     clearFailure: () => setFailure(null),
     deleting: deleteEnvironment.isPending,
+    nameStep,
+    closeNameStep: () => setNameStep(null),
     stopping: stopEnvironment.isPending,
     deleteActive,
     stopActive,
   }
+}
+
+function EnvironmentDeleteNameStep({
+  name,
+  flow,
+}: Readonly<{
+  name: string
+  flow: ReturnType<typeof useEnvironmentDeleteFlow>
+}>) {
+  if (!flow.nameStep) return null
+  return (
+    <EnvironmentDeleteNameModal
+      name={name}
+      pending={flow.deleting}
+      error={flow.nameStep.error}
+      onCancel={flow.closeNameStep}
+      onConfirm={(typed) => void flow.deleteActive(typed)}
+    />
+  )
 }
 
 export function ProjectEnvironmentsSection({
@@ -287,10 +314,8 @@ export function ProjectEnvironmentsSection({
 }>) {
   const canOwn = useCan('organization', orgId, 'organization:own')
   const canManage = useCan('organization', orgId, 'organization:manage')
-  const {
-    defaultEnvironmentName,
-    isLoading: defaultNameLoading,
-  } = useOrgDefaultEnvironmentName(orgId)
+  const { defaultEnvironmentName, isLoading: defaultNameLoading } =
+    useOrgDefaultEnvironmentName(orgId)
 
   const environmentsQuery = useEnvironments(orgId, projectId)
   const createEnvironment = useCreateEnvironment(orgId)
@@ -307,13 +332,9 @@ export function ProjectEnvironmentsSection({
 
   const provisionAttemptedFor = useRef<string | null>(null)
 
-  const activeEnvironment =
-    environments.find((env) => env.id === selectedId) ?? null
+  const activeEnvironment = environments.find((env) => env.id === selectedId) ?? null
 
-  const updateEnvironment = useUpdateEnvironment(
-    orgId,
-    activeEnvironment?.id ?? '',
-  )
+  const updateEnvironment = useUpdateEnvironment(orgId, activeEnvironment?.id ?? '')
   const deleteFlow = useEnvironmentDeleteFlow(orgId, activeEnvironment, setError)
 
   useEffect(() => {
@@ -322,11 +343,7 @@ export function ProjectEnvironmentsSection({
 
   useEffect(() => {
     if (defaultNameLoading || environmentsQuery.isLoading) return
-    if (
-      environments.length === 0 &&
-      canOwn &&
-      provisionAttemptedFor.current !== projectId
-    ) {
+    if (environments.length === 0 && canOwn && provisionAttemptedFor.current !== projectId) {
       provisionAttemptedFor.current = projectId
       createEnvironment
         .run({
@@ -447,6 +464,7 @@ export function ProjectEnvironmentsSection({
             onConfirmDelete={() => void deleteFlow.deleteActive()}
           />
         )}
+        <EnvironmentDeleteNameStep name={environmentLabel(activeEnvironment)} flow={deleteFlow} />
         <EnvironmentDeleteNotice
           failure={deleteFlow.failure}
           stopping={deleteFlow.stopping}
@@ -495,9 +513,7 @@ export function ProjectEnvironmentsSection({
   return (
     <View style={styles.root}>
       <Text style={styles.heading}>Environments</Text>
-      {error ?? queryError ? (
-        <Text style={panelStyles.error}>{error ?? queryError}</Text>
-      ) : null}
+      {(error ?? queryError) ? <Text style={panelStyles.error}>{error ?? queryError}</Text> : null}
       {content}
     </View>
   )

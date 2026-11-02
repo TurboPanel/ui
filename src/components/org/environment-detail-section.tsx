@@ -101,6 +101,7 @@ import {
   type PinnedCertificateGap,
   coveringCertificates,
   pinnedCertificateGap,
+  stalePinReset,
 } from '@/lib/hosting-tls-picker'
 import {
   composeHostingEntryFromEditorFields,
@@ -2928,10 +2929,12 @@ export function EnvironmentDetailBody({
   /** Persist one panel-authored row straight to `/hostings`, as before. */
   const savePanelHostingRow = async (
     row: HostingPanelRowDescriptor,
-    editor: HostingEditorState = hostingEditors[row.editorKey] ?? row.seed,
+    typed: HostingEditorState = hostingEditors[row.editorKey] ?? row.seed,
     onError: (message: string) => void = (message) =>
       setRowError(row.editorKey, { field: 'save', message })
   ): Promise<boolean> => {
+    // New names must not keep the old name's certificate pinned.
+    const editor = { ...typed, ...stalePinReset(tlsLibrary, typed, row.seed.hostnames) }
     const service = resolvedServices.find(
       (item) => item.composeServiceName === row.composeServiceName
     )

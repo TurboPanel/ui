@@ -251,6 +251,21 @@ describe('ActivitySection links', () => {
     render(<ActivitySection orgId="o1" />)
     expect(screen.queryByText('View Log')).toBeNull()
     expect(screen.getAllByText('My App')).toHaveLength(2)
+    expect(screen.getByText('Deleted')).toBeTruthy()
+  })
+
+  it('says Deleted instead of a dash when the environment and its project are gone', () => {
+    state.items = [
+      item({
+        id: 'd3',
+        projectId: null,
+        projectName: null,
+        environmentId: null,
+        environmentName: null,
+      }),
+    ]
+    render(<ActivitySection orgId="o1" />)
+    expect(screen.getAllByText('Deleted')).toHaveLength(2)
   })
 })
 

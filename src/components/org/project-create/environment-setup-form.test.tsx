@@ -10,6 +10,7 @@ import { EnvironmentSetupForm } from './environment-setup-form'
 
 const state = vi.hoisted(() => ({
   acmeEnabled: null as boolean | null,
+  openEnvironmentSectionByDefault: false,
   push: vi.fn(),
 }))
 
@@ -17,6 +18,13 @@ vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub'))
 vi.mock('expo-router', () => ({ useRouter: () => ({ push: state.push }) }))
 vi.mock('@/lib/queries/org-tls-settings', () => ({
   useOrgAllowsLetsEncrypt: () => state.acmeEnabled,
+}))
+vi.mock('@/lib/org-project-settings', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/org-project-settings')>()),
+  useOrgProjectFormDefaults: () => ({
+    openEnvironmentSectionByDefault: state.openEnvironmentSectionByDefault,
+    openWorkspaceSectionByDefault: false,
+  }),
 }))
 vi.mock('react-native-svg', async () => (await import('@/components/ui/v4/rn-stub')).svgStub)
 vi.mock(
@@ -186,6 +194,7 @@ vi.mock('@/components/ui/v4', () => ({
 afterEach(() => {
   cleanup()
   state.acmeEnabled = null
+  state.openEnvironmentSectionByDefault = false
   state.push.mockReset()
 })
 
@@ -234,9 +243,9 @@ function lastResult(props: Props) {
 describe('EnvironmentSetupForm', () => {
   it('prefills the environment, the only server and the Hosting Account', () => {
     renderForm()
-    expect(screen.getByRole('heading', { name: 'Set up production' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Set Up production' })).toBeTruthy()
     expect(
-      screen.getByText("website's first environment. Add another environment any time later.")
+      screen.getByText("website's primary environment. Add another environment any time later.")
     ).toBeTruthy()
     expect(screen.getByLabelText('Server').textContent).toBe('s1')
     expect(screen.getByText('website')).toBeTruthy()
@@ -372,7 +381,7 @@ describe('EnvironmentSetupForm', () => {
     })
     expect(screen.getByText(/Let\u2019s Encrypt certificates are off/)).toBeTruthy()
     fireEvent.click(
-      screen.getByRole('button', { name: 'Open Organization settings, Domains & certificates' })
+      screen.getByRole('button', { name: 'Open Organization Settings, Domains & Certificates' })
     )
     expect(state.push).toHaveBeenCalledWith('/o/manage?tab=domains')
     fireEvent.click(screen.getByRole('button', { name: 'Deploy production' }))
@@ -392,12 +401,26 @@ describe('EnvironmentSetupForm', () => {
     expect(screen.getByText(/Enter a domain name/)).toBeTruthy()
   })
 
+  it('keeps the environment name in a closed section that says the name', () => {
+    renderForm()
+    expect(screen.queryByLabelText('Primary environment name')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Environment: production' }))
+    expect(screen.getByLabelText('Primary environment name')).toBeTruthy()
+  })
+
+  it('opens the environment section when the organization opens it by default', () => {
+    state.openEnvironmentSectionByDefault = true
+    renderForm()
+    expect(screen.getByLabelText('Primary environment name')).toBeTruthy()
+  })
+
   it('renames the environment in the title and the deploy button', () => {
     const props = renderForm()
+    fireEvent.click(screen.getByRole('button', { name: 'Environment: production' }))
     fireEvent.change(screen.getByLabelText('Primary environment name'), {
       target: { value: 'live' },
     })
-    expect(screen.getByRole('heading', { name: 'Set up live' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Set Up live' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Save without deploying' }))
     expect(lastResult(props)).toEqual([expect.objectContaining({ name: 'live' }), 'save'])
   })

@@ -100,6 +100,8 @@ export const TRACKED_COMMAND_WAIT_MS = {
   'Delete user': APPLY_WAIT_MS,
   'Change user permissions': APPLY_WAIT_MS,
   'Rotate user password': APPLY_WAIT_MS,
+  'Add backup login': APPLY_WAIT_MS,
+  'Delete backup login': APPLY_WAIT_MS,
   'Add app logins': APPLY_WAIT_MS,
   'Add replica': APPLY_WAIT_MS,
   'Update read eligibility': RECONCILE_WAIT_MS,

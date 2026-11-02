@@ -218,6 +218,10 @@ export function useUpdateDatacenter(orgId: string, datacenterId: string) {
         queryClient.invalidateQueries({
           queryKey: ['org', orgId, 'server'],
         }),
+        // Trust and subnet changes decide which server pairs use the LAN.
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.org(orgId).settings.fabric,
+        }),
       ]),
   })
 }

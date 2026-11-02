@@ -1,6 +1,6 @@
 /**
- * Operator-facing copy for the Save & Apply lifecycle in Networking → Public
- * URLs, kept out of the component so each state can be asserted directly.
+ * Operator-facing copy for the Save & Apply lifecycle in Admin › Access ›
+ * Hostnames, kept out of the component so each state can be asserted directly.
  *
  * Applying reloads Caddy with a freshly issued certificate, which routinely
  * kills the request that asked for it (`control-plane-recovery.ts`). Three of
@@ -38,31 +38,29 @@ const FEEDBACK: Record<
   applying: {
     tone: 'pending',
     message:
-      'Applying… the control plane reloads Caddy with a new certificate, so this page may go quiet for a few seconds.',
+      'Applying. The control plane reloads Caddy with a new certificate, so this page may stop responding for a few seconds.',
   },
   reconnecting: {
     tone: 'pending',
-    message:
-      'The control plane restarted mid-request — waiting for it to come back…',
+    message: 'The control plane restarted during the request. Waiting for it to respond again…',
   },
   applied: {
     tone: 'done',
-    message: 'Applied — certificate regenerated and Caddy reloaded.',
+    message: 'Applied. The certificate was regenerated and Caddy reloaded.',
   },
   reconnected: {
     tone: 'done',
     message:
-      'Applied — the control plane came back on the new certificate. If your browser warns about it, accept the new self-signed certificate.',
+      'Applied. The control plane now serves the new certificate. A self-signed certificate still triggers a browser warning on this address; use a hostname with a public certificate, or trust the Platform CA, to avoid it.',
   },
   'reconnected-trusted': {
     tone: 'done',
-    message:
-      'Applied — the control plane came back and its certificate is in place.',
+    message: 'Applied. The control plane is back and its certificate is in place.',
   },
   'reconnected-mixed': {
     tone: 'done',
     message:
-      'Applied — the control plane came back. If your browser warns about a name that uses the Platform CA, accept its self-signed certificate.',
+      'Applied. The control plane is back. Names that use the Platform CA still trigger a browser warning; trust the Platform CA, or use a public certificate, to avoid it.',
   },
   'reconnected-kept': {
     tone: 'done',
@@ -72,19 +70,19 @@ const FEEDBACK: Record<
   'not-saved': {
     tone: 'failed',
     message:
-      'The control plane came back, but the addresses it has do not match what you applied. Apply again.',
+      'The control plane is back, but the addresses it reports do not match what you applied. Apply again.',
   },
   unreachable: {
     tone: 'failed',
     message:
-      'The control plane has not answered yet. It may be listening on a different address now, or its new certificate needs accepting — reload this page to check.',
+      'The control plane has not answered yet. It may be listening on a different address now, or the browser may be blocking its new certificate. Reload this page to check.',
   },
 }
 
 /** The one line to show under the Save & Apply row, or nothing when idle. */
 export function publicUrlsApplyFeedback(
   status: PublicUrlsApplyStatus,
-  error?: string | null,
+  error?: string | null
 ): PublicUrlsApplyFeedback {
   if (status === 'idle') return null
   if (status === 'failed') {
@@ -95,11 +93,9 @@ export function publicUrlsApplyFeedback(
 
 /** Which kinds of certificate a hostname set asks for, in the words the banner needs. */
 export function applyCertificateKind(
-  hostnames: readonly { source: string }[],
+  hostnames: readonly { source: string }[]
 ): 'platform' | 'trusted' | 'mixed' {
-  const platform = hostnames.filter(
-    (entry) => entry.source === 'platform-ca',
-  ).length
+  const platform = hostnames.filter((entry) => entry.source === 'platform-ca').length
   if (platform === hostnames.length) return 'platform'
   return platform === 0 ? 'trusted' : 'mixed'
 }
@@ -113,7 +109,7 @@ const RECONNECTED_STATUS = {
 /** The banner state for an apply that finished by way of the reconnect wait. */
 export function reconnectedStatus(
   hostnames: readonly { source: string }[],
-  kept = false,
+  kept = false
 ): PublicUrlsApplyStatus {
   if (kept) return 'reconnected-kept'
   return RECONNECTED_STATUS[applyCertificateKind(hostnames)]

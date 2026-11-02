@@ -10,7 +10,7 @@ import {
 const revealed = {
   licenseId: 'license-id',
   licenseToken: 'token',
-  installCommand: 'curl -fsSL turbopanel.sh | TURBOPANEL_LICENSE=abc sh',
+  installCommand: 'curl -fsSL https://turbopanel.sh | TURBOPANEL_LICENSE=abc sh',
 }
 
 afterEach(() => {
@@ -37,8 +37,9 @@ describe('parseInstallBaseUrl', () => {
     expect(parseInstallBaseUrl('https://[2001:db8::1]:8443')).toBe('https://[2001:db8::1]:8443')
   })
 
-  it('accepts host-only values and strips a trailing slash', () => {
-    expect(parseInstallBaseUrl('panel.example.com')).toBe('https://panel.example.com')
+  it('dials 8443 for a host-only value and strips a trailing slash', () => {
+    expect(parseInstallBaseUrl('panel.example.com')).toBe('https://panel.example.com:8443')
+    expect(parseInstallBaseUrl('panel.example.com:9443')).toBe('https://panel.example.com:9443')
     expect(parseInstallBaseUrl('https://panel.example.com/')).toBe('https://panel.example.com')
   })
 

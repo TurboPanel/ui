@@ -383,7 +383,7 @@ function SearchPopover({
             </>
           ) : (
             <Text style={styles.none}>
-              {`Nothing matches “${trimmed}”. Try a server name, or an action like “Add server”.`}
+              {`Nothing matches “${trimmed}”. Try a server name, or an action like “Add Server”.`}
             </Text>
           )}
           <Text role="status" style={styles.srOnly}>

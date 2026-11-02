@@ -200,7 +200,7 @@ export function ProjectProvider({
     setError(queryError)
   }, [queryError])
 
-  // Opening a project puts it first in the sidebar's Recent projects (this
+  // Opening a project puts it first in the sidebar's Recent Projects (this
   // device only). A draft is not a project yet.
   const openedProjectId = !isDraft && project ? project.id : null
   useEffect(() => {

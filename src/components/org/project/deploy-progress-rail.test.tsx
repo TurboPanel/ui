@@ -4,7 +4,11 @@ import { createElement, type ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { applyScenario, env, SCENARIOS, styleOf, token } from '@/components/ui/v4/rn-stub'
 import { fontFamily } from '@/lib/v4/typography'
-import type { CommandProgress, CommandProgressStep, CommandProgressStepState } from '@/lib/instance-api'
+import type {
+  CommandProgress,
+  CommandProgressStep,
+  CommandProgressStepState,
+} from '@/lib/instance-api'
 import { DeployProgressRail } from './deploy-progress-rail'
 
 const motion = vi.hoisted(() => ({
@@ -15,11 +19,18 @@ const motion = vi.hoisted(() => ({
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
 vi.mock('react-native-svg', async () => (await import('@/components/ui/v4/rn-stub')).svgStub)
-vi.mock('@/lib/theme-preference', async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub)
+vi.mock(
+  '@/lib/theme-preference',
+  async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub
+)
 vi.mock('react-native-reanimated', async () => {
   const { flatten } = await import('@/components/ui/v4/rn-stub')
   const AnimatedView = (props: Readonly<{ children?: ReactNode; style?: unknown }>) =>
-    createElement('div', { 'data-animated': 'yes', 'data-style': JSON.stringify(flatten(props.style)) }, props.children)
+    createElement(
+      'div',
+      { 'data-animated': 'yes', 'data-style': JSON.stringify(flatten(props.style)) },
+      props.children
+    )
   return {
     default: { View: AnimatedView },
     Easing: { inOut: (fn: unknown) => fn, sin: 'sin', linear: 'linear', steps: () => 'steps' },
@@ -45,7 +56,7 @@ function step(
   id: string,
   label: string,
   state: CommandProgressStepState,
-  extra?: Partial<CommandProgressStep>,
+  extra?: Partial<CommandProgressStep>
 ): CommandProgressStep {
   return { id, label, state, ...extra }
 }
@@ -56,28 +67,34 @@ function progress(steps: CommandProgressStep[], current: string | null = null): 
 
 const EVERY_STATE = progress(
   [
-    step('install-gateway', 'Set up the web gateway', 'ready'),
+    step('install-gateway', 'Set Up the Web Gateway', 'ready'),
     step('install-docker', 'Install Docker', 'done'),
     step('install-runtime:node-22', 'Install Node 22', 'running', {
       startedAt: '2026-10-12T10:03:00.000Z',
       detail: 'Unpack the archive',
     }),
-    step('fetch', 'Fetch the code', 'pending'),
+    step('fetch', 'Fetch the Source Code', 'pending'),
     step('build', 'Build', 'failed'),
-    step('start', 'Start the app', 'skipped'),
+    step('start', 'Start the App', 'skipped'),
   ],
-  'install-runtime:node-22',
+  'install-runtime:node-22'
 )
 
 /** The drawn node inside a rail segment: the one box with a hairline border and a radius of 7. */
 function nodeOf(item: HTMLElement): HTMLElement {
-  const node = [...item.querySelectorAll('div')].find((el) => styleOf(el).borderRadius === 7 && styleOf(el).borderWidth === 1)
+  const node = [...item.querySelectorAll('div')].find(
+    (el) => styleOf(el).borderRadius === 7 && styleOf(el).borderWidth === 1
+  )
   if (!node) throw new Error('no node drawn')
   return node
 }
 
 /** Animated views by what they are: a halo is absolute and round, a fill is absolute with a width. */
-function animated(container: ParentNode): { halos: Element[]; fills: Element[]; sweeps: Element[] } {
+function animated(container: ParentNode): {
+  halos: Element[]
+  fills: Element[]
+  sweeps: Element[]
+} {
   const all = [...container.querySelectorAll('[data-animated]')]
   return {
     halos: all.filter((el) => styleOf(el).borderRadius === 7),
@@ -96,34 +113,41 @@ describe.each(SCENARIOS)('DeployProgressRail ($name)', (scenario) => {
     expect(container.textContent).toBe('')
     rerender(<DeployProgressRail progress={progress([])} />)
     expect(container.textContent).toBe('')
-    rerender(<DeployProgressRail progress={{ version: 1, steps: 'oops' as unknown as [], current: null, updatedAt: '' }} />)
+    rerender(
+      <DeployProgressRail
+        progress={{ version: 1, steps: 'oops' as unknown as [], current: null, updatedAt: '' }}
+      />
+    )
     expect(container.textContent).toBe('')
   })
 
   it.each([
-    ['Set up the web gateway, already on this server', 'path', 'ok', 'okLine'],
+    ['Set Up the Web Gateway, already on this server', 'path', 'ok', 'okLine'],
     ['Step 1 of 5, Install Docker, done', 'path', 'ok', 'ok'],
     ['Step 2 of 5, Install Node 22, in progress', 'path', 'busy', 'busyLine'],
-    ['Step 3 of 5, Fetch the code, not started', null, 'sepStrong', null],
+    ['Step 3 of 5, Fetch the Source Code, not started', null, 'sepStrong', null],
     ['Step 4 of 5, Build, failed', 'path', 'bad', 'bad'],
-    ['Step 5 of 5, Start the app, skipped', 'circle', 'sep', null],
-  ] as const)('reads %s to a screen reader, with its glyph, node tone and segment fill', (name, shape, border, fill) => {
-    render(<DeployProgressRail progress={EVERY_STATE} />)
-    const segment = screen.getByRole('listitem', { name })
-    const drawn = segment.querySelector('svg')
-    if (shape === null) {
-      expect(drawn).toBeNull()
-    } else {
-      expect(drawn?.querySelector(shape)).not.toBeNull()
+    ['Step 5 of 5, Start the App, skipped', 'circle', 'sep', null],
+  ] as const)(
+    'reads %s to a screen reader, with its glyph, node tone and segment fill',
+    (name, shape, border, fill) => {
+      render(<DeployProgressRail progress={EVERY_STATE} />)
+      const segment = screen.getByRole('listitem', { name })
+      const drawn = segment.querySelector('svg')
+      if (shape === null) {
+        expect(drawn).toBeNull()
+      } else {
+        expect(drawn?.querySelector(shape)).not.toBeNull()
+      }
+      expect(styleOf(nodeOf(segment)).borderColor).toBe(token(scenario, border))
+      const fills = animated(segment).fills
+      if (fill === null) {
+        expect(fills).toHaveLength(0)
+      } else {
+        expect(styleOf(fills[0]).backgroundColor).toBe(token(scenario, fill))
+      }
     }
-    expect(styleOf(nodeOf(segment)).borderColor).toBe(token(scenario, border))
-    const fills = animated(segment).fills
-    if (fill === null) {
-      expect(fills).toHaveLength(0)
-    } else {
-      expect(styleOf(fills[0]).backgroundColor).toBe(token(scenario, fill))
-    }
-  })
+  )
 
   it('is one full-width track of equal segments with an end cap', () => {
     render(<DeployProgressRail progress={EVERY_STATE} />)
@@ -157,14 +181,16 @@ describe.each(SCENARIOS)('DeployProgressRail ($name)', (scenario) => {
     expect(caret.getAttribute('data-animated')).toBe('yes')
     expect(styleOf(caret).backgroundColor).toBe(token(scenario, 'busy'))
     expect(
-      screen.getByText('First-time setup on this server. Installing what the app needs; this can take a few minutes.'),
+      screen.getByText(
+        'First-time setup on this server. Installing what the app needs; this can take a few minutes.'
+      )
     ).toBeTruthy()
   })
 
   it('labels every node under the track on a wide screen', () => {
     render(<DeployProgressRail progress={EVERY_STATE} />)
     expect(screen.getByText('Build · failed')).toBeTruthy()
-    expect(screen.getByText('Start the app · skipped')).toBeTruthy()
+    expect(screen.getByText('Start the App · skipped')).toBeTruthy()
     expect(screen.getByText('Install Docker')).toBeTruthy()
     expect(screen.queryByText('in progress')).toBeNull()
   })
@@ -201,7 +227,8 @@ describe.each(SCENARIOS)('DeployProgressRail ($name)', (scenario) => {
     const fills = animated(reduced.container).fills
     expect(fills.length).toBeGreaterThan(0)
     for (const fill of fills) expect(styleOf(fill).width).toBe('100%')
-    const runningFill = animated(screen.getByLabelText('Step 2 of 5, Install Node 22, in progress')).fills[0]
+    const runningFill = animated(screen.getByLabelText('Step 2 of 5, Install Node 22, in progress'))
+      .fills[0]
     expect(styleOf(runningFill).backgroundColor).toBe(token(scenario, 'busy'))
     const caret = screen.getByText('Unpack the archive').nextElementSibling as HTMLElement
     expect(styleOf(caret).opacity).toBe(1)
@@ -212,31 +239,41 @@ describe.each(SCENARIOS)('DeployProgressRail ($name)', (scenario) => {
     vi.setSystemTime(new Date('2026-10-12T10:03:07.000Z'))
     const { rerender } = render(<DeployProgressRail progress={EVERY_STATE} />)
     expect(screen.getByText('00:07')).toBeTruthy()
-    expect(styleOf(screen.getByText('00:07')).fontFamily).toBe(fontFamily('monoMedium', scenario.os === 'web'))
+    expect(styleOf(screen.getByText('00:07')).fontFamily).toBe(
+      fontFamily('monoMedium', scenario.os === 'web')
+    )
     act(() => {
       vi.advanceTimersByTime(60_000)
     })
     expect(screen.getByText('01:07')).toBeTruthy()
-    rerender(<DeployProgressRail progress={progress([step('build', 'Build', 'running')], 'build')} />)
+    rerender(
+      <DeployProgressRail progress={progress([step('build', 'Build', 'running')], 'build')} />
+    )
     expect(screen.queryByText(/^\d\d:\d\d$/)).toBeNull()
     rerender(
       <DeployProgressRail
-        progress={progress([step('build', 'Build', 'done'), step('start', 'Start the app', 'done')])}
-      />,
+        progress={progress([
+          step('build', 'Build', 'done'),
+          step('start', 'Start the App', 'done'),
+        ])}
+      />
     )
     expect(screen.queryByText(/^\d\d:\d\d$/)).toBeNull()
-    expect(screen.getByText('All 2 steps done')).toBeTruthy()
+    expect(screen.getByText('All 2 Steps Done')).toBeTruthy()
   })
 
   it('never counts step zero while the plan is getting ready', () => {
     render(
       <DeployProgressRail
-        progress={progress([step('fetch', 'Fetch the code', 'pending'), step('build', 'Build', 'pending')])}
-      />,
+        progress={progress([
+          step('fetch', 'Fetch the Source Code', 'pending'),
+          step('build', 'Build', 'pending'),
+        ])}
+      />
     )
     const counter = screen.getByText('Step -- / 02')
-    expect(counter.getAttribute('aria-label')).toBe('Getting ready, 2 steps')
-    expect(screen.getByText('Getting ready')).toBeTruthy()
+    expect(counter.getAttribute('aria-label')).toBe('Getting Ready, 2 steps')
+    expect(screen.getByText('Getting Ready')).toBeTruthy()
     expect(screen.queryByText(/00 \//)).toBeNull()
   })
 
@@ -244,14 +281,21 @@ describe.each(SCENARIOS)('DeployProgressRail ($name)', (scenario) => {
     const { container } = render(
       <DeployProgressRail
         progress={progress([
-          step('install-docker', 'Install Docker', 'done', { startedAt: '2026-10-12T10:00:00Z', finishedAt: '2026-10-12T10:02:00Z' }),
-          step('build', 'Build', 'done', { startedAt: '2026-10-12T10:02:00Z', finishedAt: '2026-10-12T10:03:12Z' }),
+          step('install-docker', 'Install Docker', 'done', {
+            startedAt: '2026-10-12T10:00:00Z',
+            finishedAt: '2026-10-12T10:02:00Z',
+          }),
+          step('build', 'Build', 'done', {
+            startedAt: '2026-10-12T10:02:00Z',
+            finishedAt: '2026-10-12T10:03:12Z',
+          }),
         ])}
-      />,
+      />
     )
-    expect(screen.getByText('All 2 steps done · 03:12')).toBeTruthy()
+    expect(screen.getByText('All 2 Steps Done · 03:12')).toBeTruthy()
     expect(styleOf(screen.getByText('Step 02 / 02')).color).toBe(token(scenario, 'ok'))
-    for (const fill of animated(container).fills) expect(styleOf(fill).backgroundColor).toBe(token(scenario, 'ok'))
+    for (const fill of animated(container).fills)
+      expect(styleOf(fill).backgroundColor).toBe(token(scenario, 'ok'))
     const cap = screen.getByRole('list').lastElementChild as HTMLElement
     expect(styleOf(cap).backgroundColor).toBe(token(scenario, 'ok'))
     expect(screen.queryByText(/First-time setup/)).toBeNull()
@@ -261,29 +305,68 @@ describe.each(SCENARIOS)('DeployProgressRail ($name)', (scenario) => {
     render(
       <DeployProgressRail
         progress={progress([
-          step('fetch', 'Fetch the code', 'done'),
+          step('fetch', 'Fetch the Source Code', 'done'),
           step('build', 'Build', 'failed'),
-          step('start', 'Start the app', 'skipped'),
+          step('start', 'Start the App', 'skipped'),
         ])}
-      />,
+      />
     )
-    expect(screen.getByText('Failed at step 2 of 3 · Build')).toBeTruthy()
+    expect(screen.getByText('Failed at Step 2 of 3 · Build')).toBeTruthy()
     expect(styleOf(screen.getByText('Step 02 / 03')).color).toBe(token(scenario, 'bad'))
     const failed = screen.getByLabelText('Step 2 of 3, Build, failed')
     expect(styleOf(nodeOf(failed)).borderColor).toBe(token(scenario, 'bad'))
     expect(styleOf(animated(failed).fills[0]).backgroundColor).toBe(token(scenario, 'bad'))
   })
+  describe('the health step', () => {
+    it('shows the result title and how long the service took once the step ended', () => {
+      render(
+        <DeployProgressRail
+          progress={progress(
+            [
+              step('build', 'Build', 'done'),
+              {
+                id: 'health',
+                label: 'Service Is Healthy',
+                state: 'done',
+                detail: 'Healthy after 12 s',
+              },
+            ],
+            null
+          )}
+        />
+      )
+      expect(screen.getByText('Healthy after 12 s')).toBeTruthy()
+      expect(screen.getAllByText('Service Is Healthy').length).toBeGreaterThan(0)
+    })
+
+    it("shows an older daemon's step wording in the current title case", () => {
+      render(
+        <DeployProgressRail
+          progress={progress([step('health', 'Check it answers', 'pending')], null)}
+        />
+      )
+      expect(screen.getAllByText('Check Service Health').length).toBeGreaterThan(0)
+      expect(screen.queryByText('Check it answers')).toBeNull()
+    })
+  })
+
   describe('checking with the server', () => {
     const LOST = '2026-10-12T10:05:00.000Z'
-    const withLost = (steps: CommandProgressStep[], contactLostAt?: string | null): CommandProgress => ({
+    const withLost = (
+      steps: CommandProgressStep[],
+      contactLostAt?: string | null
+    ): CommandProgress => ({
       ...progress(steps, 'build'),
       ...(contactLostAt === undefined ? {} : { contactLostAt }),
     })
-    const running = [step('fetch', 'Fetch the code', 'done'), step('build', 'Build', 'running')]
+    const running = [
+      step('fetch', 'Fetch the Source Code', 'done'),
+      step('build', 'Build', 'running'),
+    ]
 
     it('shows the label, the plain explanation and the last known step while contact is lost', () => {
       render(<DeployProgressRail progress={withLost(running, LOST)} />)
-      expect(screen.getByText('Checking with the server')).toBeTruthy()
+      expect(screen.getByText('Checking with the Server')).toBeTruthy()
       expect(screen.getByText(/The deploy has not failed\./)).toBeTruthy()
       expect(screen.getByText(/Lost contact with the server during the deploy\./)).toBeTruthy()
       expect(screen.getByText('Building')).toBeTruthy()
@@ -292,26 +375,32 @@ describe.each(SCENARIOS)('DeployProgressRail ($name)', (scenario) => {
 
     it('shows nothing extra when the field is absent or null', () => {
       render(<DeployProgressRail progress={withLost(running)} />)
-      expect(screen.queryByText('Checking with the server')).toBeNull()
+      expect(screen.queryByText('Checking with the Server')).toBeNull()
       cleanup()
       render(<DeployProgressRail progress={withLost(running, null)} />)
-      expect(screen.queryByText('Checking with the server')).toBeNull()
+      expect(screen.queryByText('Checking with the Server')).toBeNull()
     })
 
     it('shows nothing once the deploy has ended, even if the field is left over', () => {
       render(
         <DeployProgressRail
-          progress={withLost([step('fetch', 'Fetch the code', 'done'), step('build', 'Build', 'done')], LOST)}
-        />,
+          progress={withLost(
+            [step('fetch', 'Fetch the Source Code', 'done'), step('build', 'Build', 'done')],
+            LOST
+          )}
+        />
       )
-      expect(screen.queryByText('Checking with the server')).toBeNull()
+      expect(screen.queryByText('Checking with the Server')).toBeNull()
       cleanup()
       render(
         <DeployProgressRail
-          progress={withLost([step('fetch', 'Fetch the code', 'done'), step('build', 'Build', 'failed')], LOST)}
-        />,
+          progress={withLost(
+            [step('fetch', 'Fetch the Source Code', 'done'), step('build', 'Build', 'failed')],
+            LOST
+          )}
+        />
       )
-      expect(screen.queryByText('Checking with the server')).toBeNull()
+      expect(screen.queryByText('Checking with the Server')).toBeNull()
     })
   })
 })

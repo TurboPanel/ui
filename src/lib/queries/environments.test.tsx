@@ -337,6 +337,20 @@ describe('environments query hooks', () => {
     })
   })
 
+  it('useDeleteEnvironment sends confirmName when given', async () => {
+    deleteEnvironment.mockResolvedValueOnce({ ok: true })
+    const { result } = renderHook(() => useDeleteEnvironment(orgId), {
+      wrapper: createWrapper(createAppQueryClient()),
+    })
+
+    await expect(
+      result.current.run({ id: environmentId, confirmName: 'production' })
+    ).resolves.toMatchObject({ ok: true })
+    expect(deleteEnvironment).toHaveBeenLastCalledWith(environmentId, {
+      confirmName: 'production',
+    })
+  })
+
   it('useStopEnvironment enqueues destructive stop', async () => {
     stopEnvironment.mockResolvedValueOnce({
       ok: true,

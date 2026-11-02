@@ -90,7 +90,7 @@ const MORE_LABEL = 'More ways to start: upload files over SFTP, a template, or s
 describe('NewProjectScreen', () => {
   it('puts the name at the top and three main ways to start under it', () => {
     renderScreen()
-    expect(screen.getByRole('heading', { name: 'New project' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'New Project' })).toBeTruthy()
     expect(screen.getByLabelText('Project name')).toBeTruthy()
     for (const label of ['From a Git repository', 'Compose', 'Managed database']) {
       expect(screen.getByRole('button', { name: label })).toBeTruthy()

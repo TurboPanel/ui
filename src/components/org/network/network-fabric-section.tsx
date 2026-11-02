@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { panelStyles } from '@/components/ui/panel-styles'
@@ -20,19 +20,39 @@ import {
   fetchOrgHostDefaults,
   type CommandStatus,
   type FabricRelaySegment,
+  type OrgFabricSettings,
+  type OrgFabricServerRecord,
   type OrgServerRecord,
   type RelayRecord,
   type RelayRole,
 } from '@/lib/instance-api'
 import {
+  buildFabricPairRows,
   buildFabricPathMatrix,
+  FABRIC_PAUSED_HANDSHAKE_NOTE,
+  fabricHandshakeDisplay,
+  fabricReadingAgeLabel,
+  fabricInactiveServerIds,
+  fabricIsQuiet,
   fabricPathIsDegraded,
   fabricPathKindLabel,
   formatResolvedAdvertisedCidrs,
   relayRoleLabel,
+  type FabricPairRow,
   type FabricPathMatrixRow,
 } from '@/lib/fabric-mesh'
+import {
+  FABRIC_ROLE_HELP,
+  fabricReconcileLines,
+  type FabricServerOutcome,
+  fabricState,
+  fabricStateLabel,
+  type FabricState,
+} from '@/lib/fabric-servers'
 import { formatRelativeLocalDateTime } from '@/lib/format-datetime'
+import { FabricPairPathList } from '@/components/org/network/fabric-pair-paths'
+import { FabricLifecycleControls } from '@/components/org/network/fabric-lifecycle-controls'
+import { FabricServerControls } from '@/components/org/network/fabric-server-controls'
 import {
   isOrgFabricUnavailable,
   useApplyOrgFabric,
@@ -50,24 +70,18 @@ import {
 import { useOrgServers } from '@/lib/queries/servers'
 import { orEmptyArray } from '@/lib/or-empty-array'
 import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
-import { useCan, queryKeys } from '@/lib/query-client'
+import { useCanState, queryKeys } from '@/lib/query-client'
 import { colors, spacing, webPointer } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
 
-const HANDSHAKE_STALE_MS = 3 * 60 * 1000
-
-function fabricStatusLabel(enabled: boolean, status?: string): string {
-  if (!enabled) return 'Off'
+function fabricStatusLabel(state: FabricState, status?: string): string {
+  if (state !== 'on') return fabricStateLabel(state)
   const trimmed = status?.trim()
   if (trimmed) return trimmed
-  return 'On'
+  return fabricStateLabel(state)
 }
 
-function fabricLoadError(
-  isError: boolean,
-  unavailable: boolean,
-  error: unknown,
-): string | null {
+function fabricLoadError(isError: boolean, unavailable: boolean, error: unknown): string | null {
   if (!isError || unavailable) return null
   if (error instanceof Error) return userErrorMessage(error, '')
   return `Failed to load ${TURBOFABRIC_PRODUCT_NAME}`
@@ -101,18 +115,23 @@ function parseCidrList(raw: string): string[] {
     .filter((entry) => entry.length > 0)
 }
 
+/**
+ * The short line under a server after Apply. A failed apply says so only when
+ * no error text explains it; otherwise the error line below does.
+ */
 function relayApplyHint(
   applyPending: boolean,
   applyStatus: CommandStatus | null,
+  hasErrorText: boolean
 ): string | null {
   if (applyPending) return 'Applying…'
   if (!applyStatus || !isTerminalCommandStatus(applyStatus)) return null
   if (applyStatus === 'succeeded') return 'Applied'
-  return applyStatus
+  return hasErrorText ? null : 'Apply failed. The server did not say why.'
 }
 
 function failedApplyByServer(
-  results: readonly { serverId: string; status: string; error?: string }[],
+  results: readonly { serverId: string; status: string; error?: string }[]
 ): Record<string, string> {
   const failed: Record<string, string> = {}
   for (const row of results) {
@@ -124,7 +143,7 @@ function failedApplyByServer(
 }
 
 function parseKeepaliveDraft(
-  raw: string,
+  raw: string
 ): { ok: true; value: number | null } | { ok: false; message: string } {
   const trimmed = raw.trim()
   if (trimmed.length === 0) return { ok: true, value: null }
@@ -138,15 +157,8 @@ function parseKeepaliveDraft(
   return { ok: true, value: parsed }
 }
 
-function handshakeIsStale(lastHandshakeAt: string | null): boolean {
-  if (!lastHandshakeAt) return true
-  const then = Date.parse(lastHandshakeAt)
-  if (Number.isNaN(then)) return true
-  return Date.now() - then > HANDSHAKE_STALE_MS
-}
-
 function queuedApplyEntries(
-  results: readonly { serverId: string; commandId?: string }[],
+  results: readonly { serverId: string; commandId?: string }[]
 ): TrackedCommandEntry[] {
   const entries: TrackedCommandEntry[] = []
   for (const row of results) {
@@ -168,23 +180,28 @@ function formatRelaySegment(segment: FabricRelaySegment): string {
   return parts.join(' · ')
 }
 
+const NAT_CLIENT_ENDPOINT_TEXT =
+  'This server has no public address, so it connects out to a server that has one. That is normal for a server behind NAT.'
+
+const NO_PUBLIC_SERVER_TEXT =
+  'No server in this organization has a public address, so this server has nothing to connect out to. Give one server a public address or an endpoint override.'
+
 function RelayResolvedEndpoint({
   relay,
-}: Readonly<{ relay: RelayRecord }>) {
+  publicPeerExists,
+}: Readonly<{ relay: RelayRecord; publicPeerExists: boolean }>) {
   if (isAutoEndpointUnresolved(relay)) {
+    if (publicPeerExists) {
+      return <Text style={panelStyles.muted}>{NAT_CLIENT_ENDPOINT_TEXT}</Text>
+    }
     return (
       <View style={panelStyles.calloutWarning}>
-        <Text style={panelStyles.calloutWarningText}>
-          Endpoint unresolved — auto-derivation failed. Pin an override or
-          wait until this host has a public address.
-        </Text>
+        <Text style={panelStyles.calloutWarningText}>{NO_PUBLIC_SERVER_TEXT}</Text>
       </View>
     )
   }
   if (!relay.resolvedEndpoint) {
-    return (
-      <Text style={panelStyles.muted}>Resolved endpoint: unavailable</Text>
-    )
+    return <Text style={panelStyles.muted}>Resolved endpoint: unavailable</Text>
   }
   return (
     <Text style={panelStyles.detailLine}>
@@ -196,9 +213,9 @@ function RelayResolvedEndpoint({
   )
 }
 
-function RelaySegments({
-  segments,
-}: Readonly<{ segments: readonly FabricRelaySegment[] }>) {
+const ENDPOINT_OVERRIDE_HINT = 'An IP address only, without a port.'
+
+function RelaySegments({ segments }: Readonly<{ segments: readonly FabricRelaySegment[] }>) {
   return (
     <>
       <Text style={styles.fieldLabel}>Segments</Text>
@@ -206,10 +223,7 @@ function RelaySegments({
         <Text style={panelStyles.muted}>None on this host</Text>
       ) : (
         segments.map((segment) => (
-          <Text
-            key={`${segment.name}:${segment.subnet}`}
-            style={panelStyles.detailLine}
-          >
+          <Text key={`${segment.name}:${segment.subnet}`} style={panelStyles.detailLine}>
             <Text style={styles.mono} selectable>
               {formatRelaySegment(segment)}
             </Text>
@@ -221,17 +235,17 @@ function RelaySegments({
 }
 
 function FabricStatusBlock({
-  enabled,
+  state,
   cidr,
   status,
-}: Readonly<{ enabled: boolean; cidr?: string; status?: string }>) {
+}: Readonly<{ state: FabricState; cidr?: string; status?: string }>) {
   return (
     <View style={styles.statusBlock}>
       <Text style={panelStyles.detailLine}>
         <Text style={panelStyles.detailLabel}>Status: </Text>
-        {fabricStatusLabel(enabled, status)}
+        {fabricStatusLabel(state, status)}
       </Text>
-      {enabled && cidr ? (
+      {state !== 'off' && cidr ? (
         <Text style={panelStyles.detailLine}>
           <Text style={panelStyles.detailLabel}>CIDR: </Text>
           <Text style={styles.mono}>{cidr}</Text>
@@ -244,8 +258,7 @@ function FabricStatusBlock({
 function FabricUnavailableNotice() {
   return (
     <Text style={panelStyles.muted}>
-      {TURBOFABRIC_PRODUCT_NAME} is not available on this control plane
-      yet.
+      {TURBOFABRIC_PRODUCT_NAME} is not available on this control plane yet.
     </Text>
   )
 }
@@ -253,33 +266,8 @@ function FabricUnavailableNotice() {
 function FabricManageHint() {
   return (
     <Text style={panelStyles.muted}>
-      Organization manage permission is required to enable{' '}
-      {TURBOFABRIC_PRODUCT_NAME}.
+      Organization manage permission is required to enable {TURBOFABRIC_PRODUCT_NAME}.
     </Text>
-  )
-}
-
-function FabricEnableToggle({
-  enabled,
-  disabled,
-  pending,
-  onToggle,
-}: Readonly<{
-  enabled: boolean
-  disabled: boolean
-  pending: boolean
-  onToggle: () => void
-}>) {
-  return (
-    <SettingRow label={`Enable ${TURBOFABRIC_PRODUCT_NAME}`}>
-      <Toggle
-        value={enabled}
-        disabled={disabled}
-        busy={pending}
-        accessibilityLabel={`Enable ${TURBOFABRIC_PRODUCT_NAME}`}
-        onValueChange={onToggle}
-      />
-    </SettingRow>
   )
 }
 
@@ -306,8 +294,8 @@ function FabricAllowRelayToggle({
         />
       </SettingRow>
       <Text style={panelStyles.muted}>
-        Relay is a degraded fallback path and must be explicitly enabled. A
-        datacenter gateway is not the same as an unrelated relay.
+        Relay is a degraded fallback path and must be explicitly enabled. A datacenter gateway is
+        not the same as an unrelated relay.
       </Text>
     </View>
   )
@@ -352,9 +340,7 @@ function AllowRelayOverridePicker({
           }}
         />
       </FormField>
-      <Text style={panelStyles.muted}>
-        Effective: {effective ? 'On' : 'Off'}
-      </Text>
+      <Text style={panelStyles.muted}>Effective: {effective ? 'On' : 'Off'}</Text>
     </>
   )
 }
@@ -374,9 +360,7 @@ function PreferredGatewayPicker({
     return (
       <>
         <Text style={styles.fieldLabel}>Preferred gateways</Text>
-        <Text style={panelStyles.muted}>
-          Promote a gateway-role relay before preferring one.
-        </Text>
+        <Text style={panelStyles.muted}>Promote a gateway-role relay before preferring one.</Text>
       </>
     )
   }
@@ -404,10 +388,7 @@ function PreferredGatewayPicker({
               ]}
             >
               <Text
-                style={[
-                  panelStyles.segmentChipText,
-                  active && panelStyles.segmentChipTextActive,
-                ]}
+                style={[panelStyles.segmentChipText, active && panelStyles.segmentChipTextActive]}
               >
                 {gateway.label}
               </Text>
@@ -430,9 +411,20 @@ function pathRowLatency(row: FabricPathMatrixRow): string | null {
   return `${String(row.latencyMs)} ms`
 }
 
-function FabricPathMatrixPanel({
-  rows,
-}: Readonly<{ rows: readonly FabricPathMatrixRow[] }>) {
+const PAIR_PATHS_HELP = `Servers that share a trusted datacenter network talk over the LAN with no tunnel, even with ${TURBOFABRIC_PRODUCT_NAME} off. ${TURBOFABRIC_PRODUCT_NAME} carries traffic between datacenters and runs encrypted over a network marked untrusted.`
+
+/** Server pairs as the panel reports them (`pairs[]`), with tunnel readings folded in. */
+function FabricPairPathsPanel({ rows }: Readonly<{ rows: readonly FabricPairRow[] }>) {
+  return (
+    <SectionPanel title="Paths" hint={`${rows.length} pair(s)`}>
+      <Text style={panelStyles.muted}>{PAIR_PATHS_HELP}</Text>
+      <FabricPairPathList rows={rows} />
+    </SectionPanel>
+  )
+}
+
+/** Older control plane without `pairs[]`: the relay-observed tunnel paths. */
+function FabricPathMatrixPanel({ rows }: Readonly<{ rows: readonly FabricPathMatrixRow[] }>) {
   return (
     <SectionPanel title="Paths" hint={`${rows.length} pair(s)`}>
       {rows.length === 0 ? (
@@ -443,10 +435,7 @@ function FabricPathMatrixPanel({
             const warning = pathRowWarning(row)
             const latency = pathRowLatency(row)
             return (
-              <View
-                key={`${row.fromServerId}:${row.toServerId}`}
-                style={panelStyles.detailCard}
-              >
+              <View key={`${row.fromServerId}:${row.toServerId}`} style={panelStyles.detailCard}>
                 <Text style={panelStyles.detailTitle}>
                   {row.fromLabel} → {row.toLabel}
                 </Text>
@@ -463,9 +452,7 @@ function FabricPathMatrixPanel({
                 ) : null}
                 {warning ? (
                   <View style={panelStyles.calloutWarning}>
-                    <Text style={panelStyles.calloutWarningText}>
-                      {warning}
-                    </Text>
+                    <Text style={panelStyles.calloutWarningText}>{warning}</Text>
                   </View>
                 ) : null}
               </View>
@@ -494,7 +481,7 @@ function RolePicker({
       }))}
       value={role}
       disabled={disabled}
-      accessibilityLabel="Role"
+      accessibilityLabel="LAN Ranges"
       onChange={(value) => {
         if (value !== role) onChange(value)
       }}
@@ -502,42 +489,61 @@ function RolePicker({
   )
 }
 
+/** How often the screen re-reads the clock to judge how old a reading is. */
+const CLOCK_TICK_MS = 30_000
+
+/** The current time, refreshed on an interval, so an age judged against it keeps moving. */
+function useNowMs(intervalMs: number): number {
+  const [nowMs, setNowMs] = useState(() => Date.now())
+  useEffect(() => {
+    const timer = setInterval(() => setNowMs(Date.now()), intervalMs)
+    return () => clearInterval(timer)
+  }, [intervalMs])
+  return nowMs
+}
+
+/** True while the mesh is paused: no tunnel runs, so old readings are not shown. */
+const FabricPausedContext = createContext(false)
+
 function HandshakeLine({
   lastHandshakeAt,
-}: Readonly<{ lastHandshakeAt: string | null }>) {
-  const stale = handshakeIsStale(lastHandshakeAt)
+  observedAt,
+}: Readonly<{ lastHandshakeAt: string | null; observedAt?: string }>) {
+  const nowMs = useNowMs(CLOCK_TICK_MS)
+  const paused = useContext(FabricPausedContext)
+  const reading = fabricHandshakeDisplay(paused, lastHandshakeAt, observedAt, nowMs)
+  if (reading === 'paused') {
+    return <Text style={panelStyles.muted}>{FABRIC_PAUSED_HANDSHAKE_NOTE}</Text>
+  }
+  const readingAge = observedAt ? fabricReadingAgeLabel(observedAt, nowMs) : undefined
   const label = formatRelativeLocalDateTime(lastHandshakeAt, {
     neverLabel: 'Never',
   })
-  if (!stale) {
+  if (reading === 'fresh') {
     return (
       <Text style={panelStyles.detailLine}>
         <Text style={panelStyles.detailLabel}>Last handshake: </Text>
         {label}
+        {readingAge ? ` — reading as of ${readingAge}` : ''}
       </Text>
     )
   }
+  let warning = `Last handshake stale — ${label}`
+  if (!lastHandshakeAt) warning = 'Not converged yet — no handshake observed'
+  else if (reading === 'unreported') {
+    warning = `This server has not reported lately. Last handshake it saw: ${label}`
+  }
   return (
     <View style={panelStyles.calloutWarning}>
-      <Text style={panelStyles.calloutWarningText}>
-        {lastHandshakeAt
-          ? `Last handshake stale — ${label}`
-          : 'Not converged yet — no handshake observed'}
-      </Text>
+      <Text style={panelStyles.calloutWarningText}>{warning}</Text>
     </View>
   )
 }
 
-function RelayResolvedAdvertisedCidrs({
-  cidrs,
-}: Readonly<{ cidrs: readonly string[] }>) {
+function RelayResolvedAdvertisedCidrs({ cidrs }: Readonly<{ cidrs: readonly string[] }>) {
   const formatted = formatResolvedAdvertisedCidrs(cidrs)
   if (cidrs.length === 0) {
-    return (
-      <Text style={panelStyles.muted}>
-        Resolved advertised CIDRs: {formatted}
-      </Text>
-    )
+    return <Text style={panelStyles.muted}>Resolved advertised CIDRs: {formatted}</Text>
   }
   return (
     <Text style={panelStyles.detailLine}>
@@ -569,7 +575,7 @@ function AdvertisedCidrsField({
   if (role !== 'gateway') {
     return (
       <Text style={panelStyles.muted}>
-        Members do not advertise LAN CIDRs.
+        This server does not share its datacenter&apos;s LAN ranges.
       </Text>
     )
   }
@@ -577,11 +583,7 @@ function AdvertisedCidrsField({
     <>
       <TextField
         label="Advertised LAN CIDRs"
-        hint={
-          storedEmpty
-            ? 'Empty override uses derived IPv4 datacenter subnets.'
-            : undefined
-        }
+        hint={storedEmpty ? 'Empty override uses derived IPv4 datacenter subnets.' : undefined}
         value={draft}
         onChangeText={onChange}
         onBlur={onSave}
@@ -620,11 +622,7 @@ function RelayPresharedKeyField({
         autoCorrect={false}
         secureTextEntry
       />
-      <Button
-        label="Set key"
-        disabled={!draft.trim() || disabled}
-        onPress={onSave}
-      />
+      <Button label="Set key" disabled={!draft.trim() || disabled} onPress={onSave} />
     </>
   )
 }
@@ -649,6 +647,7 @@ function RelayConfiguredFields({
   onSaveEndpoint,
   onSaveKeepalive,
   onSavePresharedKey,
+  publicPeerExists,
 }: Readonly<{
   relay: RelayRecord
   canManage: boolean
@@ -658,6 +657,7 @@ function RelayConfiguredFields({
   keepaliveDraft: string
   pskDraft: string
   eligibleGateways: readonly { serverId: string; label: string }[]
+  publicPeerExists: boolean
   onAdvertisedChange: (value: string) => void
   onEndpointChange: (value: string) => void
   onKeepaliveChange: (value: string) => void
@@ -671,7 +671,7 @@ function RelayConfiguredFields({
   onSavePresharedKey: () => void
 }>) {
   const preferredGateways = eligibleGateways.filter(
-    (gateway) => gateway.serverId !== relay.serverId,
+    (gateway) => gateway.serverId !== relay.serverId
   )
   return (
     <>
@@ -681,13 +681,13 @@ function RelayConfiguredFields({
           {relay.address}
         </Text>
       </Text>
-      <FormField label="Role">
-        <RolePicker
-          role={relay.role}
-          disabled={disabled}
-          onChange={onRoleChange}
-        />
+      <FormField label="LAN Ranges">
+        <RolePicker role={relay.role} disabled={disabled} onChange={onRoleChange} />
       </FormField>
+      <Text style={panelStyles.muted}>
+        Shared: this server passes its datacenter&apos;s private ranges to the other servers on{' '}
+        {TURBOFABRIC_PRODUCT_NAME}.
+      </Text>
       <AdvertisedCidrsField
         role={relay.role}
         draft={advertisedDraft}
@@ -701,8 +701,8 @@ function RelayConfiguredFields({
         label="Endpoint override"
         hint={
           relay.endpointAddress
-            ? undefined
-            : 'Empty override uses auto-derivation.'
+            ? ENDPOINT_OVERRIDE_HINT
+            : `${ENDPOINT_OVERRIDE_HINT} Empty override uses auto-derivation.`
         }
         value={endpointDraft}
         onChangeText={onEndpointChange}
@@ -713,7 +713,7 @@ function RelayConfiguredFields({
         autoCorrect={false}
         mono
       />
-      <RelayResolvedEndpoint relay={relay} />
+      <RelayResolvedEndpoint relay={relay} publicPeerExists={publicPeerExists} />
       <RelaySegments segments={relay.segments} />
       <TextField
         label="Keepalive (seconds)"
@@ -744,7 +744,7 @@ function RelayConfiguredFields({
         <Text style={panelStyles.detailLabel}>Preshared key: </Text>
         {relay.hasPresharedKey ? 'Present' : 'Not set'}
       </Text>
-      <HandshakeLine lastHandshakeAt={relay.lastHandshakeAt} />
+      <HandshakeLine lastHandshakeAt={relay.lastHandshakeAt} observedAt={relay.observedAt} />
       {canManage ? (
         <RelayPresharedKeyField
           draft={pskDraft}
@@ -766,6 +766,7 @@ function RelayRow({
   applyStatus,
   applyError,
   eligibleGateways,
+  publicPeerExists,
 }: Readonly<{
   orgId: string
   server: OrgServerRecord
@@ -775,17 +776,14 @@ function RelayRow({
   applyStatus: CommandStatus | null
   applyError: string | null
   eligibleGateways: readonly { serverId: string; label: string }[]
+  publicPeerExists: boolean
 }>) {
   const patch = usePatchOrgFabricRelay(orgId, server.id)
   const [rowError, setRowError] = useState<string | null>(null)
-  const [advertisedDraft, setAdvertisedDraft] = useState(
-    relay?.advertisedCidrs.join(', ') ?? '',
-  )
-  const [endpointDraft, setEndpointDraft] = useState(
-    relay?.endpointAddress ?? '',
-  )
+  const [advertisedDraft, setAdvertisedDraft] = useState(relay?.advertisedCidrs.join(', ') ?? '')
+  const [endpointDraft, setEndpointDraft] = useState(relay?.endpointAddress ?? '')
   const [keepaliveDraft, setKeepaliveDraft] = useState(
-    relay?.keepalive != null ? String(relay.keepalive) : '',
+    relay?.keepalive != null ? String(relay.keepalive) : ''
   )
   const [pskDraft, setPskDraft] = useState('')
 
@@ -799,10 +797,7 @@ function RelayRow({
     if (!relay || disabled || relay.role !== 'gateway') return
     const next = parseCidrList(advertisedDraft)
     const current = relay.advertisedCidrs
-    if (
-      next.length === current.length &&
-      next.every((cidr, index) => cidr === current[index])
-    ) {
+    if (next.length === current.length && next.every((cidr, index) => cidr === current[index])) {
       return
     }
     setRowError(null)
@@ -840,7 +835,7 @@ function RelayRow({
       {
         onSuccess: () => setPskDraft(''),
         onError: handlePatchError,
-      },
+      }
     )
   }
 
@@ -861,8 +856,9 @@ function RelayRow({
     patch.mutate({ preferredGatewayIds: next }, { onError: handlePatchError })
   }
 
-  const displayError = rowError ?? patch.actionError ?? applyError
-  const applyHint = relayApplyHint(applyPending, applyStatus)
+  const reconcile = fabricReconcileLines(relay?.reconcile ?? null)
+  const displayError = rowError ?? patch.actionError ?? applyError ?? reconcile.error
+  const applyHint = relayApplyHint(applyPending, applyStatus, displayError !== null)
 
   return (
     <View style={panelStyles.detailCard}>
@@ -883,6 +879,7 @@ function RelayRow({
           keepaliveDraft={keepaliveDraft}
           pskDraft={pskDraft}
           eligibleGateways={eligibleGateways}
+          publicPeerExists={publicPeerExists}
           onAdvertisedChange={setAdvertisedDraft}
           onEndpointChange={setEndpointDraft}
           onKeepaliveChange={setKeepaliveDraft}
@@ -899,12 +896,13 @@ function RelayRow({
           onSavePresharedKey={savePresharedKey}
         />
       )}
-      {applyHint ? (
-        <Text style={panelStyles.muted}>{applyHint}</Text>
-      ) : null}
-      {displayError ? (
-        <Text style={panelStyles.error}>{displayError}</Text>
-      ) : null}
+      {applyHint ? <Text style={panelStyles.muted}>{applyHint}</Text> : null}
+      {reconcile.warnings.map((line) => (
+        <Text key={line} style={panelStyles.muted}>
+          {line}
+        </Text>
+      ))}
+      {displayError ? <Text style={panelStyles.error}>{displayError}</Text> : null}
     </View>
   )
 }
@@ -943,6 +941,7 @@ function FabricRelaysPanel({
   applyDisabled,
   applyBusy,
   eligibleGateways,
+  publicRelayIds,
   onApply,
 }: Readonly<{
   orgId: string
@@ -957,20 +956,16 @@ function FabricRelaysPanel({
   applyDisabled: boolean
   applyBusy: boolean
   eligibleGateways: readonly { serverId: string; label: string }[]
+  /** Servers with a public address (or override) others can connect out to. */
+  publicRelayIds: ReadonlySet<string>
   onApply: () => void
 }>) {
   return (
     <SectionPanel title="Relays" hint={`${relayCount} host(s)`}>
       {canManage ? (
-        <FabricApplyButton
-          disabled={applyDisabled}
-          busy={applyBusy}
-          onPress={onApply}
-        />
+        <FabricApplyButton disabled={applyDisabled} busy={applyBusy} onPress={onApply} />
       ) : null}
-      {serversLoading && servers.length === 0 ? (
-        <LoadingState label="Loading servers…" />
-      ) : null}
+      {serversLoading && servers.length === 0 ? <LoadingState label="Loading servers…" /> : null}
       {!serversLoading && servers.length === 0 ? (
         <EmptyState title="No servers enrolled yet." />
       ) : null}
@@ -986,6 +981,7 @@ function FabricRelaysPanel({
             applyStatus={commandByServerId.get(server.id) ?? null}
             applyError={applyErrors[server.id] ?? null}
             eligibleGateways={eligibleGateways}
+            publicPeerExists={[...publicRelayIds].some((id) => id !== server.id)}
           />
         ))}
       </View>
@@ -993,14 +989,130 @@ function FabricRelaysPanel({
   )
 }
 
+function FabricServersPanel({
+  orgId,
+  servers,
+  canManage,
+}: Readonly<{
+  orgId: string
+  servers: readonly OrgFabricServerRecord[]
+  canManage: boolean
+}>) {
+  return (
+    <SectionPanel title="Servers" hint={`${servers.length} server(s)`}>
+      <Text style={panelStyles.muted}>
+        Switch a server off to keep it out of {TURBOFABRIC_PRODUCT_NAME}. {FABRIC_ROLE_HELP}
+      </Text>
+      <View style={styles.list}>
+        {servers.map((server) => (
+          <View key={server.serverId} style={panelStyles.detailCard}>
+            <FabricServerControls
+              orgId={orgId}
+              server={server}
+              canManage={canManage}
+              showName
+              showRoleHelp={false}
+            />
+          </View>
+        ))}
+      </View>
+    </SectionPanel>
+  )
+}
+
+function eligibleGatewayRows(
+  relays: readonly RelayRecord[],
+  serverNameById: ReadonlyMap<string, string>
+): { serverId: string; label: string }[] {
+  const rows: { serverId: string; label: string }[] = []
+  for (const relay of relays) {
+    if (!relay.gatewayEligible) continue
+    rows.push({
+      serverId: relay.serverId,
+      label: serverNameById.get(relay.serverId) ?? relay.serverId,
+    })
+  }
+  return rows.sort((a, b) => a.label.localeCompare(b.label))
+}
+
+/** Which optional parts of the fabric section show, decided outside the component. */
+function fabricSectionView(
+  input: Readonly<{
+    canManage: boolean
+    unavailable: boolean
+    enabled: boolean
+    state: ReturnType<typeof fabricState>
+    loading: boolean
+    defaultFabricEnabled: boolean
+    serverCount: number
+    pairCount: number
+    /** Fabric settings and the manage permission have answered. */
+    loaded: boolean
+    permissionLoading: boolean
+  }>
+): {
+  showStatus: boolean
+  showManageHint: boolean
+  showLoading: boolean
+  showDefaultHint: boolean
+  showServers: boolean
+  showMesh: boolean
+  showPairs: boolean
+  showToggle: boolean
+  showAllowRelay: boolean
+} {
+  // Paused keeps the relays (and their endpoint overrides) editable.
+  const showMesh = (input.enabled || input.state === 'paused') && !input.unavailable
+  const showToggle = input.canManage && !input.unavailable
+  return {
+    // Nothing is claimed (status, missing permission) before the data arrives.
+    showStatus: input.loaded,
+    showManageHint: input.loaded && !input.permissionLoading && !input.canManage,
+    showToggle,
+    showAllowRelay: showToggle && input.enabled,
+    showLoading: input.loading,
+    showDefaultHint: input.canManage && input.state === 'off' && input.defaultFabricEnabled,
+    showServers: input.canManage && !input.unavailable && input.serverCount > 0,
+    showMesh,
+    // LAN pairs exist with TurboFabric off or paused, so the pair list does not wait for the mesh.
+    showPairs: !input.unavailable && input.pairCount > 0,
+  }
+}
+
+function isFabricToggleDisabled(
+  flags: Readonly<{ pending: boolean; unavailable: boolean; canManage: boolean; loaded: boolean }>
+): boolean {
+  return flags.pending || flags.unavailable || !flags.canManage || !flags.loaded
+}
+
+function isFabricApplyDisabled(
+  flags: Readonly<{ canManage: boolean; enabled: boolean; unavailable: boolean; busy: boolean }>
+): boolean {
+  return !flags.canManage || !flags.enabled || flags.unavailable || flags.busy
+}
+
+/** Server pairs from the panel's `pairs[]` (empty on an older panel), with tunnel readings folded in. */
+function useFabricPairRows(
+  fabric: OrgFabricSettings | undefined,
+  pathMatrix: Parameters<typeof buildFabricPairRows>[1],
+  serverNameById: Parameters<typeof buildFabricPairRows>[2]
+): FabricPairRow[] {
+  const nowMs = useNowMs(CLOCK_TICK_MS)
+  const quiet = fabric ? fabricIsQuiet(fabric) : false
+  const pairs = fabric?.pairs
+  return useMemo(
+    () => buildFabricPairRows(orEmptyArray(pairs), pathMatrix, serverNameById, { nowMs, quiet }),
+    [pairs, pathMatrix, serverNameById, nowMs, quiet]
+  )
+}
+
 /**
  * Org opt-in for TurboFabric. Default off. Enabling lets environments run
  * across servers; standalone Docker does not require it.
  */
-export function NetworkFabricSection({
-  orgId,
-}: Readonly<{ orgId: string }>) {
-  const canManage = useCan('organization', orgId, 'organization:manage')
+export function NetworkFabricSection({ orgId }: Readonly<{ orgId: string }>) {
+  const permission = useCanState('organization', orgId, 'organization:manage')
+  const canManage = permission.allowed
   const [error, setError] = useState<string | null>(null)
   const [tracked, setTracked] = useState<TrackedCommandEntry[]>([])
   const [applyErrors, setApplyErrors] = useState<Record<string, string>>({})
@@ -1017,15 +1129,20 @@ export function NetworkFabricSection({
 
   const unavailable = isOrgFabricUnavailable(query.error)
   const enabled = query.data?.enabled === true
+  const state = fabricState(query.data)
+  const fabricServers = orEmptyArray(query.data?.servers)
   const fabric = query.data?.fabric
   const relays = orEmptyArray(query.data?.relays)
   const servers = orEmptyArray(serversQuery.data?.servers)
   const pending = mutation.isPending || query.isLoading
   const queryError = fabricLoadError(query.isError, unavailable, query.error)
   const displayError = error ?? mutation.actionError ?? applyMutation.actionError ?? queryError
-  const toggleDisabled =
-    pending || unavailable || !canManage || query.data === undefined
-  const showToggle = canManage && !unavailable
+  const toggleDisabled = isFabricToggleDisabled({
+    pending,
+    unavailable,
+    canManage,
+    loaded: query.data !== undefined,
+  })
 
   const relayByServerId = useMemo(() => {
     const map = new Map<string, RelayRecord>()
@@ -1041,22 +1158,47 @@ export function NetworkFabricSection({
     return map
   }, [servers])
 
+  const fabricData = query.data
   const pathMatrix = useMemo(
-    () => buildFabricPathMatrix(relays, serverNameById),
-    [relays, serverNameById],
+    () =>
+      buildFabricPathMatrix(
+        relays,
+        serverNameById,
+        fabricData ? fabricInactiveServerIds(fabricData) : undefined
+      ),
+    [relays, serverNameById, fabricData]
   )
 
-  const eligibleGateways = useMemo(() => {
-    const rows: { serverId: string; label: string }[] = []
-    for (const relay of relays) {
-      if (!relay.gatewayEligible) continue
-      rows.push({
-        serverId: relay.serverId,
-        label: serverNameById.get(relay.serverId) ?? relay.serverId,
-      })
-    }
-    return rows.sort((a, b) => a.label.localeCompare(b.label))
-  }, [relays, serverNameById])
+  const pairRows = useFabricPairRows(fabricData, pathMatrix, serverNameById)
+  const serverOutcomes = useMemo<FabricServerOutcome[]>(
+    () =>
+      relays.map((relay) => ({
+        name: serverNameById.get(relay.serverId) ?? relay.serverId,
+        reconcile: relay.reconcile ?? null,
+      })),
+    [relays, serverNameById]
+  )
+  const publicRelayIds = useMemo(
+    () => new Set(relays.filter((relay) => relay.resolvedEndpoint).map((relay) => relay.serverId)),
+    [relays]
+  )
+  const view = fabricSectionView({
+    canManage,
+    unavailable,
+    enabled,
+    state,
+    loading: query.isLoading && !query.data,
+    defaultFabricEnabled: hostDefaultsQuery.data?.defaultFabricEnabled === true,
+    serverCount: fabricServers.length,
+    pairCount: pairRows.length,
+    loaded: query.data !== undefined,
+    permissionLoading: permission.loading,
+  })
+
+  const eligibleGateways = useMemo(
+    () => eligibleGatewayRows(relays, serverNameById),
+    [relays, serverNameById]
+  )
 
   const commandByServerId = useMemo(() => {
     const map = new Map<string, CommandStatus>()
@@ -1077,25 +1219,12 @@ export function NetworkFabricSection({
   }, [commandsQuery.data])
 
   const applyBusy = hasPendingTrackedCommands(tracked, commandsQuery.data)
-  const applyDisabled =
-    !canManage ||
-    !enabled ||
-    unavailable ||
-    applyMutation.isPending ||
-    applyBusy
-
-  function handleToggle() {
-    if (toggleDisabled) return
-    setError(null)
-    mutation.mutate(
-      { enabled: !enabled },
-      {
-        onError: (err) => {
-          setError(fabricMutationError(err))
-        },
-      },
-    )
-  }
+  const applyDisabled = isFabricApplyDisabled({
+    canManage,
+    enabled,
+    unavailable,
+    busy: applyMutation.isPending || applyBusy,
+  })
 
   function handleAllowRelayToggle() {
     if (toggleDisabled || !enabled) return
@@ -1106,20 +1235,18 @@ export function NetworkFabricSection({
         onError: (err) => {
           setError(fabricMutationError(err))
         },
-      },
+      }
     )
   }
 
   function handleApply() {
-    if (!canManage || !enabled || applyMutation.isPending || applyBusy) return
+    if (applyDisabled) return
     setError(null)
     setApplyErrors({})
     applyMutation.mutate(undefined, {
       onSuccess: (data) => {
         setApplyErrors(failedApplyByServer(data.results))
-        setTracked((prev) =>
-          mergeTrackedCommandEntries(prev, queuedApplyEntries(data.results)),
-        )
+        setTracked((prev) => mergeTrackedCommandEntries(prev, queuedApplyEntries(data.results)))
       },
       onError: (err) => {
         setError(fabricMutationError(err))
@@ -1131,38 +1258,32 @@ export function NetworkFabricSection({
     <View style={styles.root}>
       <Text style={panelStyles.pageTitle}>{TURBOFABRIC_PRODUCT_NAME}</Text>
       <Text style={panelStyles.pageCopy}>
-        Enabling {TURBOFABRIC_PRODUCT_NAME} lets environments run across
-        servers. It is not required for single-engine Docker.
+        Enabling {TURBOFABRIC_PRODUCT_NAME} lets environments run across servers. It is not required
+        for single-engine Docker.
       </Text>
 
       {unavailable ? <FabricUnavailableNotice /> : null}
 
-      {displayError ? (
-        <Text style={panelStyles.error}>{displayError}</Text>
-      ) : null}
+      {displayError ? <Text style={panelStyles.error}>{displayError}</Text> : null}
 
-      <SectionPanel
-        title={TURBOFABRIC_PRODUCT_NAME}
-        hint="Opt-in · default off"
-      >
-        {query.isLoading && !query.data ? <LoadingState /> : null}
+      <SectionPanel title={TURBOFABRIC_PRODUCT_NAME} hint="Opt-in · default off">
+        {view.showLoading ? <LoadingState /> : null}
 
-        <FabricStatusBlock
-          enabled={enabled}
-          cidr={fabric?.cidr}
-          status={fabric?.status}
-        />
+        {view.showStatus ? (
+          <FabricStatusBlock state={state} cidr={fabric?.cidr} status={fabric?.status} />
+        ) : null}
 
-        {showToggle ? (
-          <FabricEnableToggle
-            enabled={enabled}
+        {view.showToggle ? (
+          <FabricLifecycleControls
+            orgId={orgId}
+            state={state}
+            hasFabric={fabric !== undefined || state === 'paused'}
             disabled={toggleDisabled}
-            pending={mutation.isPending}
-            onToggle={handleToggle}
+            serverOutcomes={serverOutcomes}
           />
         ) : null}
 
-        {showToggle && enabled ? (
+        {view.showAllowRelay ? (
           <FabricAllowRelayToggle
             enabled={fabric?.allowRelay === true}
             disabled={toggleDisabled}
@@ -1171,38 +1292,45 @@ export function NetworkFabricSection({
           />
         ) : null}
 
-        {canManage &&
-        !enabled &&
-        hostDefaultsQuery.data?.defaultFabricEnabled === true ? (
+        {view.showDefaultHint ? (
           <Text style={panelStyles.muted}>
-            Host defaults prefer {TURBOFABRIC_PRODUCT_NAME} on. Enabling here
-            still creates the mesh.
+            Host defaults prefer {TURBOFABRIC_PRODUCT_NAME} on. Enabling here still creates the
+            mesh.
           </Text>
         ) : null}
 
-        {canManage ? null : <FabricManageHint />}
+        {view.showManageHint ? <FabricManageHint /> : null}
       </SectionPanel>
 
-      {enabled && !unavailable ? (
+      {view.showServers ? (
+        <FabricServersPanel orgId={orgId} servers={fabricServers} canManage={canManage} />
+      ) : null}
+
+      {view.showMesh ? (
         <>
-          <FabricRelaysPanel
-            orgId={orgId}
-            servers={servers}
-            serversLoading={serversQuery.isLoading}
-            relayCount={relays.length}
-            relayByServerId={relayByServerId}
-            commandByServerId={commandByServerId}
-            inFlightByServerId={inFlightByServerId}
-            applyErrors={applyErrors}
-            canManage={canManage}
-            applyDisabled={applyDisabled}
-            applyBusy={applyMutation.isPending || applyBusy}
-            eligibleGateways={eligibleGateways}
-            onApply={handleApply}
-          />
-          <FabricPathMatrixPanel rows={pathMatrix} />
+          <FabricPausedContext.Provider value={state === 'paused'}>
+            <FabricRelaysPanel
+              orgId={orgId}
+              servers={servers}
+              serversLoading={serversQuery.isLoading}
+              relayCount={relays.length}
+              relayByServerId={relayByServerId}
+              commandByServerId={commandByServerId}
+              inFlightByServerId={inFlightByServerId}
+              applyErrors={applyErrors}
+              canManage={canManage}
+              applyDisabled={applyDisabled}
+              applyBusy={applyMutation.isPending || applyBusy}
+              eligibleGateways={eligibleGateways}
+              publicRelayIds={publicRelayIds}
+              onApply={handleApply}
+            />
+          </FabricPausedContext.Provider>
+          {view.showPairs ? null : <FabricPathMatrixPanel rows={pathMatrix} />}
         </>
       ) : null}
+
+      {view.showPairs ? <FabricPairPathsPanel rows={pairRows} /> : null}
     </View>
   )
 }

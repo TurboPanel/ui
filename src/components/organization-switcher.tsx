@@ -237,7 +237,7 @@ export function OrganizationSwitcherSegment({
         />
         <MenuAction
           label="Settings"
-          accessibilityLabel="Organization settings"
+          accessibilityLabel="Organization Settings"
           onPress={openSettings}
           icon={<GearIcon size={14} color={colors.textDim} />}
         />

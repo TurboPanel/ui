@@ -78,7 +78,7 @@ function ReservedRangeAddPanel({ orgId }: Readonly<{ orgId: string }>) {
   }
 
   return (
-    <SectionPanel title="Reserve a range" hint="Manage-gated">
+    <SectionPanel title="Reserve a Range" hint="Owners and managers can change this">
       <NetworkErrorLine error={error} />
       <TextField
         label="Name"

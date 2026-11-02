@@ -14,6 +14,7 @@ import {
   collectServiceKindFieldIssues,
   type ComposeServiceKind,
   TURBOPANEL_SERVICE_EXTENSION_KEY,
+  isImageBuildKind,
 } from './service-kind'
 import {
   collectHostingExtensionValidationIssues,
@@ -329,19 +330,19 @@ function serviceIsNativeApp(valueNode: YAMLMap): boolean {
 }
 
 /**
- * True when `x-turbopanel.source.buildKind` is `railpack`.
+ * True when `x-turbopanel.source.buildKind` is `image` (or the previous value it replaced).
  *
  * Deliberately a sibling of {@link serviceIsHostNative} rather than another
- * entry in {@link HOST_NATIVE_SERVICE_KINDS}: a Railpack service *is* a Docker
+ * entry in {@link HOST_NATIVE_SERVICE_KINDS}: an image-built service *is* a Docker
  * service — it just gets its `image` minted by the daemon at deploy time from
  * the image it built, so there is nothing for the author to type here.
  */
-function serviceIsRailpackBuilt(valueNode: YAMLMap): boolean {
+function serviceIsImageBuilt(valueNode: YAMLMap): boolean {
   const sourceNode = serviceSourceEntry(valueNode)
   if (!isMap(sourceNode)) return false
   const buildKind = mapEntryValue(sourceNode, 'buildKind')
   if (buildKind === undefined) return false
-  return scalarString(buildKind)?.trim() === 'railpack'
+  return isImageBuildKind(scalarString(buildKind))
 }
 
 /** Locate `x-turbopanel.source.sourceId` so issues can carry the author's line. */
@@ -1198,7 +1199,7 @@ function lintService(
   if (
     options?.requireImageOrBuild !== false &&
     !isHostNativeForLint(name, valueNode, options) &&
-    !serviceIsRailpackBuilt(valueNode) &&
+    !serviceIsImageBuilt(valueNode) &&
     !hasImage &&
     !hasBuild
   ) {

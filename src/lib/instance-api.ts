@@ -80,7 +80,9 @@ export const ADDRESS_NOT_IN_ANY_SUBNET_ERROR = 'address_not_in_any_subnet'
 export const ADDRESS_IN_USE_ERROR = 'address_in_use'
 export const PRIVATE_FAMILY_MISMATCH_ERROR = 'private_family_mismatch'
 export const PRIVATE_PATH_UNAVAILABLE_ERROR = 'private_path_unavailable'
+/** Sent by control planes before the TurboFabric path existed. */
 export const FAILOVER_REQUIRES_TRUSTED_DATACENTER_ERROR = 'failover_requires_trusted_datacenter'
+export const UNTRUSTED_NETWORK_NEEDS_FABRIC_ERROR = 'untrusted_network_needs_fabric'
 /**
  * CIDR collision codes (**409**) from the instance's single collision
  * authority (`turbopanel/src/features/net/cidr-collisions.ts`). Every CIDR write —
@@ -944,6 +946,8 @@ export type OrgServerRecord = {
   /** Capacity totals from daemon hello (`server.metadata.resources`, including ips). */
   resources: ServerHostResources | null
   colocatedWithInstance?: boolean
+  /** How this server learned the control plane's key; absent from an older control plane. */
+  trustPinnedBy?: PinnedBy
   ips: ServerReportedIp[] | null
   timeSync: ServerTimeSync | null
   /**
@@ -1257,9 +1261,37 @@ export async function saveOrgTemperatureUnit(
   })
 }
 
+export type OrgDeployTimeout = {
+  /** Whole minutes a deploy may take before it is stopped (5 to 240; 30 when never set). */
+  deployTimeoutMinutes: number
+}
+
+export async function fetchOrgDeployTimeout(orgId: string): Promise<OrgDeployTimeout> {
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/deploy-timeout`)
+}
+
+/** The server cannot unset the option: send 30 to restore the default. */
+export async function saveOrgDeployTimeout(
+  orgId: string,
+  deployTimeoutMinutes: number
+): Promise<OrgDeployTimeout & { ok: true }> {
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/deploy-timeout`, {
+    method: 'PUT',
+    body: JSON.stringify({ deployTimeoutMinutes }),
+  })
+}
+
 export type OrgTlsSettings = {
   /** Opt-in gate for Let's Encrypt / ACME issuance. Off by default. */
   acmeEnabled: boolean
+  /** The one address on this organization's Let's Encrypt orders; null when none is set. */
+  acmeContactEmail: string | null
+}
+
+/** Either key, or both; a key left out keeps its stored value. null or '' clears the contact. */
+export type OrgTlsSettingsPatch = {
+  acmeEnabled?: boolean
+  acmeContactEmail?: string | null
 }
 
 export async function fetchOrgTlsSettings(orgId: string): Promise<OrgTlsSettings> {
@@ -1268,7 +1300,7 @@ export async function fetchOrgTlsSettings(orgId: string): Promise<OrgTlsSettings
 
 export async function saveOrgTlsSettings(
   orgId: string,
-  patch: OrgTlsSettings
+  patch: OrgTlsSettingsPatch
 ): Promise<OrgTlsSettings> {
   return await apiFetch(`${CLIENT_API}/organizations/${orgId}/tls-settings`, {
     method: 'PUT',
@@ -1683,6 +1715,27 @@ export async function saveOrgDefaultEnvironment(
   })
 }
 
+/** Whether the new-project form opens its Environment and Workspace sections without being asked. */
+export type OrgProjectSettings = {
+  openEnvironmentSectionByDefault: boolean
+  openWorkspaceSectionByDefault: boolean
+}
+
+export async function fetchOrgProjectSettings(orgId: string): Promise<OrgProjectSettings> {
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/project-settings`)
+}
+
+/** Send one switch or both; a switch left out keeps its stored value. */
+export async function saveOrgProjectSettings(
+  orgId: string,
+  patch: Partial<OrgProjectSettings>
+): Promise<OrgProjectSettings & { ok: true }> {
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/project-settings`, {
+    method: 'PUT',
+    body: JSON.stringify(patch),
+  })
+}
+
 /**
  * Organization-wide managed-database defaults. `sslMode` / `ports` are the
  * configured values (`null` = inheriting the platform value); the `effective*`
@@ -1992,6 +2045,8 @@ export type RelayRecord = {
    */
   segments: FabricRelaySegment[]
   lastHandshakeAt: string | null
+  /** When the server took the reading the handshake comes from; absent on an older control plane. */
+  observedAt?: string
   transferRxBytes?: number
   transferTxBytes?: number
   paths: FabricRelayPathState[]
@@ -1999,12 +2054,87 @@ export type RelayRecord = {
   effectiveAllowRelay: boolean
   preferredGatewayIds: string[]
   gatewayEligible: boolean
+  /** How the last reconcile sent to this server ended; null or absent on an older control plane. */
+  reconcile?: FabricReconcileOutcome | null
+}
+
+/**
+ * The last `server.fabric.reconcile` sent to one server (`relays[].reconcile`):
+ * `pending` until it answers, then `done` (with any `warnings`) or `failed`
+ * (with the server's own `error`).
+ */
+export type FabricReconcileOutcome = {
+  commandId: string
+  action: 'apply' | 'pause' | 'remove'
+  state: 'pending' | 'done' | 'failed'
+  at: string
+  error?: string
+  warnings?: string[]
+}
+
+/** TurboFabric role for one server: a gateway accepts connections, a client only connects out. */
+export type FabricServerRole = 'gateway' | 'client'
+
+/** One org server's TurboFabric switch and role (`GET …/fabric` `servers[]`). */
+export type OrgFabricServerRecord = {
+  serverId: string
+  name: string
+  /** The server switch; false keeps the server out of the mesh. */
+  enabled: boolean
+  /** Holds a TurboFabric address (`tp0`) right now. */
+  member: boolean
+  role: FabricServerRole
+  roleSource: 'automatic' | 'operator'
+  /** What the role resolves to when the operator has not picked one. */
+  automaticRole: FabricServerRole
+}
+
+/**
+ * How one pair of servers talks (`GET …/fabric` `pairs[].path`): `lan` shares a
+ * trusted datacenter network with no tunnel, `fabric` is a TurboFabric tunnel,
+ * `fabric_over_untrusted_lan` is the tunnel running over a shared untrusted
+ * network, `none` has no private path.
+ */
+export type FabricPairPath = 'lan' | 'fabric' | 'fabric_over_untrusted_lan' | 'none'
+
+/** One pair of org servers, listed once per pair; `reason` is one plain sentence from the panel. */
+export type OrgFabricPairRecord = {
+  fromServerId: string
+  toServerId: string
+  path: FabricPairPath
+  reason: string
+  /** For a pair a tunnel carries: each end's own latest peer report about the other end. Absent on an older control plane or before either end reports. */
+  tunnel?: { readings: OrgFabricPairReading[] }
+}
+
+/** One end's report about the other end of a pair. */
+export type OrgFabricPairReading = {
+  reporterServerId: string
+  observedAt: string
+  /** The other end's last handshake in that reading; absent when it never handshook. */
+  lastHandshakeAt?: string
 }
 
 export type OrgFabricSettings = {
+  /** True only while the mesh carries traffic. */
   enabled: boolean
+  /** Turned off but kept (keys, relays and container networks stay). An older control plane omits it. */
+  paused: boolean
   fabric?: OrgFabricRecord
   relays: RelayRecord[]
+  /** Every org server's switch and role; empty on an older control plane. */
+  servers: OrgFabricServerRecord[]
+  /** How each server pair talks; absent with fewer than two servers or on an older control plane. */
+  pairs?: OrgFabricPairRecord[]
+}
+
+type OrgFabricWireBody = {
+  enabled: boolean
+  paused?: boolean
+  fabric?: OrgFabricRecord
+  relays?: FabricRelayWireRow[]
+  servers?: OrgFabricServerRecord[]
+  pairs?: OrgFabricPairRecord[]
 }
 
 export const GATEWAY_DATACENTER_REQUIRED_ERROR = 'gateway_datacenter_required'
@@ -2029,6 +2159,8 @@ export type FabricRelayWireRow = {
   transferRxBytes?: number
   transferTxBytes?: number
   observed?: {
+    /** When the server took the reading. */
+    at?: string
     lastHandshakeAt?: string
     transferRx?: number
     transferTx?: number
@@ -2038,6 +2170,7 @@ export type FabricRelayWireRow = {
   effectiveAllowRelay?: boolean
   preferredGatewayIds?: string[]
   gatewayEligible?: boolean
+  reconcile?: FabricReconcileOutcome | null
 }
 
 export function toRelayRecord(row: FabricRelayWireRow): RelayRecord {
@@ -2059,6 +2192,7 @@ export function toRelayRecord(row: FabricRelayWireRow): RelayRecord {
     hasPresharedKey: row.hasPresharedKey === true,
     segments: row.segments ?? [],
     lastHandshakeAt,
+    ...(observed?.at ? { observedAt: observed.at } : {}),
     ...(transferRx !== undefined ? { transferRxBytes: transferRx } : {}),
     ...(transferTx !== undefined ? { transferTxBytes: transferTx } : {}),
     paths: row.paths ?? [],
@@ -2066,16 +2200,14 @@ export function toRelayRecord(row: FabricRelayWireRow): RelayRecord {
     effectiveAllowRelay: row.effectiveAllowRelay === true,
     preferredGatewayIds: row.preferredGatewayIds ?? [],
     gatewayEligible: row.gatewayEligible === true,
+    reconcile: row.reconcile ?? null,
   }
 }
 
-function toOrgFabricSettings(body: {
-  enabled: boolean
-  fabric?: OrgFabricRecord
-  relays?: FabricRelayWireRow[]
-}): OrgFabricSettings {
+function toOrgFabricSettings(body: OrgFabricWireBody): OrgFabricSettings {
   return {
     enabled: body.enabled,
+    paused: body.paused === true,
     ...(body.fabric
       ? {
           fabric: {
@@ -2085,16 +2217,48 @@ function toOrgFabricSettings(body: {
         }
       : {}),
     relays: (body.relays ?? []).map(toRelayRecord),
+    servers: body.servers ?? [],
+    ...(body.pairs ? { pairs: body.pairs } : {}),
   }
 }
 
 export async function fetchOrgFabric(orgId: string): Promise<OrgFabricSettings> {
-  const body = await apiFetch<{
-    enabled: boolean
-    fabric?: OrgFabricRecord
-    relays?: FabricRelayWireRow[]
-  }>(`${CLIENT_API}/organizations/${orgId}/fabric`)
+  const body = await apiFetch<OrgFabricWireBody>(`${CLIENT_API}/organizations/${orgId}/fabric`)
   return toOrgFabricSettings(body)
+}
+
+/**
+ * Removes TurboFabric completely: tunnels, keys and cross-server container
+ * networks are deleted. **503** `fabric_teardown_not_queued` (with `message`)
+ * keeps everything when a server could not be reached.
+ */
+export async function deleteOrgFabric(orgId: string): Promise<OrgFabricSettings> {
+  const body = await apiFetch<OrgFabricWireBody>(`${CLIENT_API}/organizations/${orgId}/fabric`, {
+    method: 'DELETE',
+  })
+  return toOrgFabricSettings(body)
+}
+
+export type PatchOrgFabricServerBody = {
+  enabled?: boolean
+  /** null = automatic. */
+  role?: FabricServerRole | null
+}
+
+/**
+ * One server's TurboFabric switch and role. **409** `fabric_server_in_use`
+ * (plain `message` naming what depends on the server) refuses switching it
+ * off; **503** `fabric_teardown_not_queued` when its tunnel could not be taken down.
+ */
+export async function patchOrgFabricServer(
+  orgId: string,
+  serverId: string,
+  body: PatchOrgFabricServerBody
+): Promise<{ ok: true; server: OrgFabricServerRecord }> {
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/fabric/servers/${serverId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  })
 }
 
 /**
@@ -2118,11 +2282,7 @@ export async function saveOrgFabric(
   if (extras?.containerPool !== undefined) {
     payload.containerPool = extras.containerPool
   }
-  const body = await apiFetch<{
-    enabled: boolean
-    fabric?: OrgFabricRecord
-    relays?: FabricRelayWireRow[]
-  }>(`${CLIENT_API}/organizations/${orgId}/fabric`, {
+  const body = await apiFetch<OrgFabricWireBody>(`${CLIENT_API}/organizations/${orgId}/fabric`, {
     method: 'PUT',
     body: JSON.stringify(payload),
   })
@@ -2744,6 +2904,12 @@ export type CreatedLicense = {
   licenseId: string
   licenseToken: string
   installCommand: string
+  /** The control plane's current key fingerprint; omitted by an older control plane or one with no identity key. */
+  panelFingerprint?: string
+  /** The key servers accept after a rotation; null when none is set. */
+  nextFingerprint?: string | null
+  /** The address the new server will dial. */
+  installUrl?: string
 }
 
 export class ServerCapacityExceededError extends Error {
@@ -2997,6 +3163,45 @@ export async function deleteLicense(id: string): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/licenses/${id}`, {
     method: 'DELETE',
   })
+}
+
+/**
+ * A one-hour, single-use install ticket. The secret is shown once and stored
+ * hashed, so it cannot be read again. `installCommand` is the whole command
+ * the control plane built; an older control plane returns only `licenseArg`.
+ */
+export type ReenrollTicket = {
+  ticketId: string
+  expiresAt: string
+  licenseToken: string
+  licenseArg: string
+  installCommand?: string
+}
+
+/** `POST /servers/:id/reenroll-ticket` (owner; step-up). Retires any earlier unused ticket. */
+export async function issueServerReenrollTicket(serverId: string): Promise<ReenrollTicket> {
+  return await apiFetch(`${CLIENT_API}/servers/${serverId}/reenroll-ticket`, { method: 'POST' })
+}
+
+/** `DELETE /servers/:id/reenroll-ticket`: revoke the unused tickets. */
+export async function revokeServerReenrollTickets(
+  serverId: string
+): Promise<{ ok: true; revoked: number }> {
+  return await apiFetch(`${CLIENT_API}/servers/${serverId}/reenroll-ticket`, { method: 'DELETE' })
+}
+
+export type ReissuedLicenseTicket = {
+  licenseId: string
+  joinId: string
+  joinExpiresAt: string
+  licenseToken: string
+  licenseArg: string
+  installCommand?: string
+}
+
+/** `POST /licenses/:id/ticket` (owner; step-up): burn an unused key's token and issue a fresh one-hour ticket. */
+export async function reissueLicenseTicket(id: string): Promise<ReissuedLicenseTicket> {
+  return await apiFetch(`${CLIENT_API}/licenses/${id}/ticket`, { method: 'POST' })
 }
 
 // ---------------------------------------------------------------------------
@@ -3780,18 +3985,56 @@ export type HostingRecord = {
   options?: Record<string, unknown> | null
   /** Derived by the server on GET responses; absent on older control planes. */
   certificate?: HostingCertificate | null
+  /** The names a tunnel carries, one entry per name; absent on older control planes. */
+  tunnels?: HostingTunnelPath[]
   createdAt: string
   updatedAt: string
+}
+
+/**
+ * One hostname visitors reach through a tunnel: the tunnel's edge ends TLS with
+ * a trusted certificate, then reaches the site on its server over HTTPS.
+ */
+export type HostingTunnelPath = {
+  hostname: string
+  tunnelId: string
+  tunnelName: string
+  /** `cloudflare` today. */
+  provider: string
+  /** True: only the tunnel reaches this name. False: it is also served directly. */
+  tunnelOnly: boolean
+  /** True: the tunnel checks the server's certificate. False: it accepts the server's own certificate on purpose. */
+  originVerified: boolean
+  /** `pending`, `live` or `attention`. */
+  status: string
 }
 
 export type HostingCertificateState =
   'test_certificate' | 'uploaded' | 'secure' | 'waiting_for_dns' | 'issuing' | 'renewal_failed'
 
+export type HostingDnsHostname = {
+  hostname: string
+  /** Has an address, and every address is a serving server's. */
+  resolves: boolean
+  addresses: string[]
+  /** Answers that are not a serving server's address (newer control planes). */
+  wrongAddresses?: string[]
+  /** Port 80 from the panel; absent when not checked. */
+  port80?: 'open' | 'closed'
+  /** Whether CAA lets Let’s Encrypt issue; absent when unknown. */
+  caa?: 'allowed' | 'blocked'
+  /** What stops this name, in plain words, written by the server. */
+  problem?: string
+}
+
 export type HostingDnsReport = {
   ready: boolean
   checkedAt: string
-  hostnames: { hostname: string; resolves: boolean; addresses: string[] }[]
+  hostnames: HostingDnsHostname[]
   expectedAddresses: string[]
+  /** When a waiting request is checked again. */
+  nextCheckAt?: string
+  checks?: number
 }
 
 /** What a hosting shows about its certificate; the server decides every field. */
@@ -3809,6 +4052,16 @@ export type HostingCertificate = {
   /** The hosting's www choice (`options.www`); Let’s Encrypt covers every name it adds. */
   www: 'off' | 'both' | 'www-to-root' | 'root-to-www'
   needsDeploy: boolean
+  /**
+   * While `issuing`: no deploy has carried it yet, a server has it (or the
+   * deploy just finished), or no server has reported since the deploy.
+   * Absent on older control planes.
+   */
+  serverProgress?: 'waiting_for_deploy' | 'working' | 'not_reported' | null
+  /** The last DNS check while waiting, or the last reported failure. */
+  lastTriedAt?: string | null
+  /** When the panel checks a waiting request again. */
+  nextTryAt?: string | null
 }
 
 export type UseLetsEncryptResult = {
@@ -3817,7 +4070,8 @@ export type UseLetsEncryptResult = {
   needsDeploy: boolean
 }
 
-export type TlsSource = 'upload' | 'lets_encrypt' | 'self_signed' | 'organization_ca'
+export type TlsSource =
+  'upload' | 'lets_encrypt' | 'self_signed' | 'organization_ca' | 'provider_origin'
 
 export type TlsStatus = 'ready' | 'pending' | 'expired' | 'failed' | 'revoked' | 'automatic'
 
@@ -3840,7 +4094,8 @@ export type TlsMetadata = {
     lastIssuedAt?: string
     /** Expiry of the certificate Caddy is serving, as the daemon's probe read it (ISO 8601). */
     notAfter?: string
-    managedBy?: 'caddy'
+    /** `panel`: TurboPanel orders it itself with a DNS challenge (the row's source stays `upload`). */
+    managedBy?: 'caddy' | 'panel'
   }
 }
 
@@ -4152,6 +4407,8 @@ export const PROJECT_HAS_CHILDREN_ERROR = 'Cannot delete while child resources e
 export const PROJECT_HAS_RUNNING_SERVICES_ERROR = 'project_has_running_services'
 export const MANAGED_RUNTIME_PRESENT_ERROR = 'managed_runtime_present'
 export const ENVIRONMENT_RUNNING_ERROR = 'environment_running'
+/** DELETE environment: 400 until `confirmName` is the name of an environment that serves a hostname. */
+export const ENVIRONMENT_CONFIRM_NAME_ERROR = 'confirm_name_required'
 
 export const UNKNOWN_SYSTEM_COMPONENT_ERROR = 'unknown_system_component'
 export const SYSTEM_COMPONENT_NOT_PROVISIONED_ERROR = 'system_component_not_provisioned'
@@ -4393,10 +4650,19 @@ export async function makeEnvironmentPrimary(
   return await apiFetch(`${CLIENT_API}/environments/${id}/primary`, { method: 'POST' })
 }
 
+/**
+ * `confirmName` must equal the environment's name when it serves a public
+ * hostname; the control plane answers 400 `confirm_name_required` otherwise.
+ */
 export async function deleteEnvironment(
-  id: string
+  id: string,
+  options?: { confirmName?: string }
 ): Promise<{ ok: true; cleanup?: DeleteCleanup }> {
-  return await apiFetch(`${CLIENT_API}/environments/${id}`, {
+  const suffix =
+    options?.confirmName === undefined
+      ? ''
+      : `?${new URLSearchParams({ confirmName: options.confirmName }).toString()}`
+  return await apiFetch(`${CLIENT_API}/environments/${id}${suffix}`, {
     method: 'DELETE',
   })
 }
@@ -5203,7 +5469,7 @@ export async function applyPublicUrls(
   })
 }
 
-export type InstanceHostnameSource = 'platform-ca' | 'uploaded' | 'lets-encrypt'
+export type InstanceHostnameSource = 'platform-ca' | 'uploaded' | 'lets-encrypt' | 'dns-01'
 
 export type InstanceHostnameStatus = 'ready' | 'pending' | 'failed' | 'expired'
 
@@ -5216,12 +5482,34 @@ export type InstanceHostnameRecord = {
   notAfter: string | null
   acmeLastAttemptAt: string | null
   acmeLastError: string | null
+  /** Port visitors use; 443 shows no port in links. Absent from older control planes (8443). */
+  publicPort?: number
+  /** Links, OAuth and webhook URLs follow the primary; without one, the oldest name. */
+  isPrimary?: boolean
+  /** How visitors reach this name. Absent from older control planes (`direct`). */
+  mode?: IngressMode
+  isDaemonDial?: boolean
+  /** The connected provider account (`/instance/ingress/accounts`) an edge mode uses. */
+  ingressId?: string | null
 }
 
 export type InstanceHostnameInput = {
   host: string
   source: InstanceHostnameSource
   uploadedCertId: string | null
+  /** Left out, the stored value stays. */
+  publicPort?: number
+  /** True makes this name the primary; the control plane demotes the rest. */
+  isPrimary?: boolean
+}
+
+/** Sent back by a save that moved the primary name's public address. */
+export type InstanceHostnamesSaveResult = {
+  ok: boolean
+  hostnames: InstanceHostnameRecord[]
+  warnings?: string[]
+  previousPrimaryOrigin?: string
+  primaryOrigin?: string | null
 }
 
 export type UploadedCertificateRecord = {
@@ -5299,7 +5587,7 @@ export async function fetchInstanceHostnames(options: { signal?: AbortSignal } =
 
 export async function saveInstanceHostnames(
   hostnames: InstanceHostnameInput[]
-): Promise<{ ok: boolean; hostnames: InstanceHostnameRecord[] }> {
+): Promise<InstanceHostnamesSaveResult> {
   return await adminJson(`${ADMIN_API}/instance/hostnames`, {
     method: 'PUT',
     body: JSON.stringify({ hostnames }),
@@ -5825,6 +6113,35 @@ export async function resumeUpdates(): Promise<UpdatesPauseResult> {
   return await apiFetch(`${ADMIN_API}/instance/updates/resume`, { method: 'POST' })
 }
 
+/** How a server learned the control plane's key. `none` means no pin is recorded. */
+export type PinnedBy = 'install' | 'upgrade' | 'unsafe' | 'none'
+
+/** The control plane's key fingerprints (public values) and each server's pinned-by state. */
+export type InstanceIdentity = {
+  ok: true
+  configured: boolean
+  current: { fingerprint: string; keyset: number } | null
+  next: { fingerprint: string } | null
+  seal: { fingerprint: string } | null
+  urls: string[]
+  installUrl: string | null
+  servers: { id: string; name: string | null; organizationId: string | null; pinnedBy: PinnedBy }[]
+}
+
+export async function fetchInstanceIdentity(): Promise<InstanceIdentity> {
+  return await apiFetch(`${ADMIN_API}/instance/identity`)
+}
+
+/** Superadmin, self-hosted. A stale session opens the re-authentication sheet. `null` clears the next key. */
+export async function saveInstanceIdentityNext(
+  fingerprint: string | null
+): Promise<{ ok: boolean; next: { fingerprint: string } | null }> {
+  return await apiFetch(`${ADMIN_API}/instance/identity/next`, {
+    method: 'PUT',
+    body: JSON.stringify({ fingerprint }),
+  })
+}
+
 export async function fetchPlatformCa(): Promise<PlatformCaInfo> {
   return await apiFetch(`${ADMIN_API}/instance/platform-ca`)
 }
@@ -5851,7 +6168,311 @@ export async function setInstanceTunnelToken(token: string): Promise<{ ok: boole
   })
 }
 
-async function adminJson<T>(path: string, init: RequestInit): Promise<T> {
+/**
+ * Connection modes for the control plane's own hostnames. Self-hosted only:
+ * on TurboPanel High Availability every `/instance/ingress/*` and
+ * `/instance/acme-dns/*` path answers 404, so the hooks never run there.
+ */
+export type IngressMode =
+  | 'direct'
+  | 'lan-only'
+  | 'cloudflare-tunnel'
+  | 'cloudflare-proxy'
+  | 'bunny-proxy'
+  | 'private-overlay'
+  | 'passthrough'
+
+export type IngressCapabilities = {
+  mode: IngressMode
+  implemented: boolean
+  originMustBePublic: boolean
+  visitorCertificateIssuer: string
+  originCertificate: string
+  visitorIpSource: string
+  defaultPublicPort: 443 | 8443
+  heartbeatSeconds: number | null
+  idleLimitSeconds: number | null
+  apiDriven: boolean
+  provider: 'cloudflare' | 'bunny' | null
+  allowedCertificateSources: string[]
+  isEdge: boolean
+}
+
+/** Edge modes stay closed until a superadmin confirms every server trusts this control plane. */
+export type EdgeGate = {
+  open: boolean
+  reason?: string
+  confirmedAt: string | null
+  confirmedBy: string | null
+  forcedClosed: boolean
+}
+
+export type IngressCapabilitiesResponse = {
+  ok: boolean
+  modes: IngressCapabilities[]
+  gate: EdgeGate
+}
+
+export type IngressCheck = { id: string; ok: boolean; detail: string }
+
+export type IngressApplyCause =
+  | 'not-available'
+  | 'invalid-hostname'
+  | 'gate-closed'
+  | 'account-missing'
+  | 'token-invalid'
+  | 'scope-missing'
+  | 'zone-not-found'
+  | 'dns-conflict'
+  | 'provider-error'
+  | 'provider-rate-limited'
+  | 'daemon-offline'
+  | 'edge-unreachable'
+
+export type IngressApplyResult =
+  { ok: true } | { ok: false; cause: IngressApplyCause; detail: string }
+
+export type IngressPhase =
+  'not-applied' | 'applying' | 'healthy' | 'degraded' | 'failed' | 'removed'
+
+export type IngressStatus = {
+  phase: IngressPhase
+  cause?: string
+  detail?: string
+  facts?: { tunnel?: string; connections?: number; selfCheck?: boolean }
+}
+
+export type HostnameIngressPatch = {
+  mode?: IngressMode
+  ingressId?: string | null
+  publicPort?: number
+}
+
+export type HostnameIngressPatchResult =
+  { ok: true; hostname: InstanceHostnameRecord } | { ok: false; error: string }
+
+export type CloudflarePreflight = {
+  ok: boolean
+  checks: IngressCheck[]
+  accountId: string | null
+  zones: { id: string; name: string }[]
+  expiresOn: string | null
+}
+
+export type IngressAccountRecord = {
+  id: string
+  provider: 'cloudflare' | 'bunny'
+  label: string
+  accountId: string | null
+  zoneIds: string[]
+  scopes: {
+    tunnels: boolean
+    dns: boolean
+    checkedAt: string
+    zones: { id: string; name: string }[]
+    expiresOn: string | null
+  } | null
+  lastVerifiedAt: string | null
+  lastError: string | null
+  createdAt: string
+}
+
+export type AddIngressAccountResult =
+  | { ok: true; id: string; preflight: CloudflarePreflight }
+  | { ok: false; error: string; preflight: CloudflarePreflight | null }
+
+export type RemoveIngressAccountResult =
+  { ok: true } | { ok: false; error: string; hostnames?: string[] }
+
+const INGRESS = `${ADMIN_API}/instance/ingress`
+
+export type TunnelConnectorStatus =
+  'not-installed' | 'connected' | 'connecting' | 'stopped' | 'failed'
+
+/**
+ * The control plane's own tunnel: the connector half (from the daemon) and the
+ * edge half (from Cloudflare, only when an account is connected). A note is a
+ * plain sentence to show when its half is empty.
+ */
+export type InstanceTunnelStatus = {
+  ok: boolean
+  connector: {
+    status: TunnelConnectorStatus
+    version: string | null
+    pinnedVersion: string | null
+    slot: string | null
+    lastUpdate: { outcome: string; at: string; reason?: string } | null
+    checkedAt: string | null
+  } | null
+  connectorNote: string | null
+  edge: {
+    tunnelId: string
+    tunnelName: string
+    status: string
+    connections: number
+    locations: string[]
+    hostnames: string[]
+    checkedAt: string | null
+  } | null
+  edgeNote: string | null
+  edgeError: string | null
+}
+
+export async function fetchInstanceTunnelStatus(): Promise<InstanceTunnelStatus> {
+  return await apiFetch(`${INGRESS}/tunnel`)
+}
+
+/** Asks the daemon again; answers the same shape. */
+export async function refreshInstanceTunnelStatus(): Promise<InstanceTunnelStatus> {
+  return await adminJson(`${INGRESS}/tunnel/refresh`, { method: 'POST' })
+}
+
+function hostnamePath(id: string, action: string): string {
+  return `${INGRESS}/hostnames/${encodeURIComponent(id)}${action}`
+}
+
+export async function fetchIngressCapabilities(): Promise<IngressCapabilitiesResponse> {
+  return await apiFetch(`${INGRESS}/capabilities`)
+}
+
+export async function setEdgeGate(confirmed: boolean): Promise<{ ok: boolean; gate: EdgeGate }> {
+  return await adminJson(`${INGRESS}/gate`, {
+    method: 'PUT',
+    body: JSON.stringify({ confirmed }),
+  })
+}
+
+/** Sets mode, account and public port. A 409 means the name is still connected. */
+export async function updateHostnameIngress(
+  id: string,
+  patch: HostnameIngressPatch
+): Promise<HostnameIngressPatchResult> {
+  return await adminAnswer(
+    hostnamePath(id, ''),
+    { method: 'PATCH', body: JSON.stringify(patch) },
+    [409, 422]
+  )
+}
+
+export async function preflightHostnameIngress(
+  id: string
+): Promise<{ ok: boolean; checks: IngressCheck[] }> {
+  return await adminJson(hostnamePath(id, '/preflight'), { method: 'POST' })
+}
+
+export async function applyHostnameIngress(
+  id: string,
+  options: { replaceExisting?: boolean } = {}
+): Promise<IngressApplyResult> {
+  return await adminAnswer(
+    hostnamePath(id, '/apply'),
+    { method: 'POST', body: JSON.stringify(options) },
+    [422]
+  )
+}
+
+export async function fetchHostnameIngressStatus(id: string): Promise<IngressStatus> {
+  return await apiFetch(hostnamePath(id, '/status'))
+}
+
+export async function removeHostnameIngress(id: string): Promise<{ ok: boolean }> {
+  return await adminJson(hostnamePath(id, '/remove'), { method: 'POST' })
+}
+
+export async function fetchIngressAccounts(): Promise<{
+  ok: boolean
+  accounts: IngressAccountRecord[]
+}> {
+  return await apiFetch(`${INGRESS}/accounts`)
+}
+
+/** The token is sent once and never returned. A 422 carries the failed checks. */
+export async function addIngressAccount(input: {
+  provider: 'cloudflare'
+  label: string
+  token: string
+}): Promise<AddIngressAccountResult> {
+  return await adminAnswer(
+    `${INGRESS}/accounts`,
+    { method: 'POST', body: JSON.stringify(input) },
+    [422]
+  )
+}
+
+export async function recheckIngressAccount(id: string): Promise<CloudflarePreflight> {
+  return await adminJson(`${INGRESS}/accounts/${encodeURIComponent(id)}/recheck`, {
+    method: 'POST',
+  })
+}
+
+/** A 409 `in-use` names the hostnames that still use the account. */
+export async function removeIngressAccount(id: string): Promise<RemoveIngressAccountResult> {
+  return await adminAnswer(
+    `${INGRESS}/accounts/${encodeURIComponent(id)}`,
+    { method: 'DELETE' },
+    [409]
+  )
+}
+
+export type PanelDnsStage =
+  | 'idle'
+  | 'preflight'
+  | 'ordering'
+  | 'publishing'
+  | 'waiting-dns'
+  | 'validating'
+  | 'finalizing'
+  | 'issued'
+  | 'failed'
+  | 'backoff'
+
+export type PanelDnsCause =
+  | 'zone-not-on-provider'
+  | 'scope-missing'
+  | 'txt-not-visible'
+  | 'caa-forbids'
+  | 'duplicate-limit'
+  | 'failed-authz-limit'
+  | 'provider-error'
+  | 'provider-rate-limited'
+  | 'acme-error'
+  | 'account-error'
+
+export type PanelDnsCertificate = {
+  ok: true
+  stage: PanelDnsStage
+  attempts: number
+  nextAttemptAt: string | null
+  stopUntil: string | null
+  lastError: { cause: PanelDnsCause; detail: string; at: string } | null
+  renewAt: string | null
+  notAfter: string | null
+  expiryAlerted: number[]
+}
+
+/** Order Now and Retry answer the new state, or `{ ok: false, error }` when paused or already open. */
+export type PanelDnsOrderResult = PanelDnsCertificate | { ok: false; error: string }
+
+function acmeDnsPath(id: string, action = ''): string {
+  return `${ADMIN_API}/instance/acme-dns/hostnames/${encodeURIComponent(id)}${action}`
+}
+
+export async function fetchPanelDnsCertificate(id: string): Promise<PanelDnsCertificate> {
+  return await apiFetch(acmeDnsPath(id))
+}
+
+export async function orderPanelDnsCertificate(
+  id: string,
+  retry: boolean
+): Promise<PanelDnsOrderResult> {
+  return await adminAnswer(
+    acmeDnsPath(id, retry ? '/retry' : '/order'),
+    { method: 'POST' },
+    [409, 422]
+  )
+}
+
+async function adminRequest(path: string, init: RequestInit): Promise<Response> {
   const headers: Record<string, string> = {
     'content-type': 'application/json',
     ...clientVersionHeaders(),
@@ -5865,6 +6486,27 @@ async function adminJson<T>(path: string, init: RequestInit): Promise<T> {
     headers,
   })
   recordInstanceVersion(response.headers)
+  return response
+}
+
+/**
+ * Like `adminJson`, but a refusal whose status is in `accepted` hands its body
+ * back instead of throwing: those answers carry data the screen shows (failed
+ * checks, the hostnames still using an account, an apply cause).
+ */
+async function adminAnswer<T>(
+  path: string,
+  init: RequestInit,
+  accepted: readonly number[]
+): Promise<T> {
+  const response = await adminRequest(path, init)
+  const body = (await response.json().catch(() => null)) as { error?: string } | null
+  if (response.ok || (accepted.includes(response.status) && body !== null)) return body as T
+  throw new Error(`${path} failed: ${formatFetchFailureDetail(response.status, body?.error)}`)
+}
+
+async function adminJson<T>(path: string, init: RequestInit): Promise<T> {
+  const response = await adminRequest(path, init)
   const body = (await response.json().catch(() => null)) as {
     error?: string
     invalid?: unknown
@@ -6782,8 +7424,7 @@ export type ContainerLogStream = 'stdout' | 'stderr'
  * Container output is an **analytics row** stamped with
  * `organization → server → environment → service → container`, not a keyed
  * blob like an execution-log transcript. The two are read completely
- * differently and are deliberately not unified — see the control plane's
- * `src/lib/container-logs/AGENTS.md`.
+ * differently and are deliberately not unified.
  */
 export type ContainerLogEventRecord = {
   /** ISO-8601 UTC timestamp of the line (millisecond precision). */
@@ -7390,16 +8031,21 @@ export type ReleaseRecord = {
   commitMessage?: string
   commitAuthor?: string
   /**
-   * Railpack lane only: the OCI image this release resolved to, and the pinned
+   * Image lane only: the OCI image this release resolved to, and the pinned
    * build inputs that produced it.
    *
-   * A Railpack release publishes no directory — the image tag *is* its identity,
+   * An image release publishes no directory — the image tag *is* its identity,
    * and rolling one back redeploys that tag rather than re-pointing `current`.
    * Absent on every native (directory) release, which is how the two lanes are
    * told apart in the list.
    */
   imageTag?: string
+  /** Build tool and plan versions; older instances send the `railpack*` names. */
+  builderFrontendVersion?: string
+  builderPlanVersion?: string
+  /** Previous name of {@link builderFrontendVersion}; still read from older instances. */
   railpackFrontendVersion?: string
+  /** Previous name of {@link builderPlanVersion}; still read from older instances. */
   railpackPlanVersion?: string
   /** Aggregate status across every host in {@link ReleaseRecord.attempts}. */
   status: CommandStatus
@@ -7488,11 +8134,31 @@ export class DeployResourceLimitExceededError extends Error {
   }
 }
 
+/**
+ * A deploy the panel refused because of a tunnel-only hostname: the server's
+ * daemon is too old to lock the name, or the site is pinned to a public
+ * certificate. The body names the site and the hostnames that are locked.
+ */
+export type DeployTunnelRefusalCode = 'tunnel_daemon_too_old' | 'tunnel_name_public_certificate'
+
+export class DeployTunnelRefusedError extends Error {
+  readonly code: DeployTunnelRefusalCode
+  readonly hostnames: string[]
+
+  constructor(code: DeployTunnelRefusalCode, hostnames: string[]) {
+    super(code)
+    this.name = 'DeployTunnelRefusedError'
+    this.code = code
+    this.hostnames = hostnames
+  }
+}
+
 type DeployConflictBody = {
   error?: string
   required?: boolean
   services?: string[]
   violations?: ResourceLimitViolation[]
+  hostnames?: unknown
 }
 
 async function throwIfDeployConflict(response: Response): Promise<void> {
@@ -7512,6 +8178,17 @@ async function throwIfDeployConflict(response: Response): Promise<void> {
         Array.isArray(errorBody.violations) ? errorBody.violations : []
       )
     }
+    if (
+      errorBody.error === 'tunnel_daemon_too_old' ||
+      errorBody.error === 'tunnel_name_public_certificate'
+    ) {
+      throw new DeployTunnelRefusedError(
+        errorBody.error,
+        Array.isArray(errorBody.hostnames)
+          ? errorBody.hostnames.filter((name): name is string => typeof name === 'string')
+          : []
+      )
+    }
     if (errorBody.error === 'fabric_reconcile_pending') {
       throw new Error(formatFetchFailureDetail(409, 'fabric_reconcile_pending'))
     }
@@ -7519,6 +8196,7 @@ async function throwIfDeployConflict(response: Response): Promise<void> {
     if (
       err instanceof DeployHealthCheckMissingError ||
       err instanceof DeployResourceLimitExceededError ||
+      err instanceof DeployTunnelRefusedError ||
       (err instanceof Error && err.message.includes('fabric_reconcile_pending'))
     ) {
       throw err
@@ -9823,6 +10501,50 @@ export async function deleteManagedUser(
   )
 }
 
+/** `GET …/managed/backup-login`: the cluster's one backup login, or `null`. */
+export async function fetchManagedBackupLogin(
+  environmentId: string
+): Promise<{ login: ManagedUserRecord | null }> {
+  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/managed/backup-login`)
+}
+
+/**
+ * Create the cluster's backup login: read-only rights a backup tool needs to
+ * copy every database, always routed to the primary. `allowedSources` is
+ * required and never `any` (400 `managed_backup_login_sources_required`); 409
+ * `managed_backup_login_exists` / `managed_backup_login_needs_daemon_update`.
+ * The returned `password` is **show-once**.
+ */
+export async function createManagedBackupLogin(
+  environmentId: string,
+  body: {
+    allowedSources: string[]
+    /** Omit for `backup`. */
+    username?: string
+    maxConnections?: number
+  }
+): Promise<{
+  ok: true
+  login: ManagedUserRecord
+  password: string
+  commandId: string
+  serverId: string
+}> {
+  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/managed/backup-login`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+/** Delete the cluster's backup login (the server drops the account through an apply). */
+export async function deleteManagedBackupLogin(
+  environmentId: string
+): Promise<ManagedCommandResponse> {
+  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/managed/backup-login`, {
+    method: 'DELETE',
+  })
+}
+
 export async function fetchManagedDatabases(
   environmentId: string
 ): Promise<{ databases: string[] }> {
@@ -10996,4 +11718,505 @@ export async function removeOrganizationMember(
     { method: 'DELETE' },
     orgId
   )
+}
+
+/** A Cloudflare API token as the panel shows it: label and last four, never the token. */
+export type TunnelBadge = {
+  id: string
+  carrierId: string
+  label: string
+  lastFour: string
+  capabilities: {
+    tunnels: boolean
+    dns: { id: string; name: string }[]
+    certificates: { id: string; name: string }[]
+  }
+  /** `account` or `user`: who owns the token at the provider, when known. */
+  kind: string | null
+  expiresAt: string | null
+  /** `active` or `attention`. */
+  status: string
+  lastCheckedAt: string | null
+  createdAt: string
+  /** Zones the person named for this token; every check probes them again. */
+  declaredZones: { id: string; name: string }[]
+  /** Plain-words things to look at: a token about to expire, a right Cloudflare refused. */
+  warnings: string[]
+}
+
+/** One connected Cloudflare account and the API tokens added to it. */
+export type TunnelCarrier = {
+  id: string
+  provider: string
+  name: string
+  externalAccountId: string | null
+  status: string
+  createdAt: string
+  badges: TunnelBadge[]
+}
+
+export type TunnelAccountChoice = { id: string; name: string }
+
+/** **409** `account_choice_needed`: the API token reaches several accounts; the person picks. */
+export class AccountChoiceNeededError extends Error {
+  readonly accounts: TunnelAccountChoice[]
+
+  constructor(path: string, accounts: TunnelAccountChoice[]) {
+    super(`${path} failed: ${formatFetchFailureDetail(409, 'account_choice_needed')}`)
+    this.name = 'AccountChoiceNeededError'
+    this.accounts = accounts
+  }
+}
+
+function carriersPath(orgId: string): string {
+  return `${CLIENT_API}/organizations/${orgId}/carriers`
+}
+
+export async function fetchTunnelCarriers(orgId: string): Promise<{ carriers: TunnelCarrier[] }> {
+  return await apiFetch(carriersPath(orgId))
+}
+
+export type ConnectTunnelCarrierBody = {
+  label: string
+  token: string
+  /** Only after an `AccountChoiceNeededError`: the accounts to connect. */
+  accountIds?: string[]
+}
+
+export type ConnectedTunnelCarrier = {
+  carrier: TunnelCarrier
+  badge: TunnelBadge
+  missing: string[]
+}
+
+/**
+ * Paste only the API token: the panel finds the accounts it reaches and
+ * connects the one (or the chosen ones). Several accounts and no choice yet is
+ * an {@link AccountChoiceNeededError} carrying the list.
+ */
+export async function connectTunnelCarrier(
+  orgId: string,
+  body: ConnectTunnelCarrierBody
+): Promise<{ connected: ConnectedTunnelCarrier[] }> {
+  const path = `${carriersPath(orgId)}/connect`
+  const response = await fetchWithStepUp(controlPlaneUrl(path), {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json', [ORG_ID_HEADER]: orgId },
+    body: JSON.stringify({ provider: 'cloudflare', ...body }),
+  })
+  const parsed = (await response.json().catch(() => null)) as Record<string, unknown> | null
+  if (response.ok) return parsed as { connected: ConnectedTunnelCarrier[] }
+  const code = typeof parsed?.error === 'string' ? parsed.error : undefined
+  if (response.status === 409 && code === 'account_choice_needed') {
+    throw new AccountChoiceNeededError(path, choiceAccounts(parsed?.accounts))
+  }
+  const explanation = errorExplanation(code, parsed?.message)
+  const detail = formatFetchFailureDetail(response.status, code)
+  const suffix = explanation ? ` — ${explanation}` : ''
+  throw new Error(`${path} failed: ${detail}${suffix}`)
+}
+
+function choiceAccounts(value: unknown): TunnelAccountChoice[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((a: { id?: unknown; name?: unknown }) =>
+    typeof a?.id === 'string' && typeof a.name === 'string' ? [{ id: a.id, name: a.name }] : []
+  )
+}
+
+/** A zone the person names for an API Token: its Cloudflare id, and its name when Cloudflare may not tell us. */
+export type TunnelZoneBody = { id: string; name?: string }
+
+export async function addTunnelBadge(
+  orgId: string,
+  carrierId: string,
+  body: { label: string; token: string; zones?: TunnelZoneBody[] }
+): Promise<{ badge: TunnelBadge; missing: string[] }> {
+  return await apiFetch(`${carriersPath(orgId)}/${carrierId}/badges`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function checkTunnelBadge(
+  orgId: string,
+  carrierId: string,
+  badgeId: string
+): Promise<{ badge: TunnelBadge; ok: boolean; missing: string[] }> {
+  return await apiFetch(`${carriersPath(orgId)}/${carrierId}/badges/${badgeId}/check`, {
+    method: 'POST',
+  })
+}
+
+/** Name a zone the API Token covers; Cloudflare is asked with the token before it is kept. */
+export async function addTunnelBadgeZone(
+  orgId: string,
+  carrierId: string,
+  badgeId: string,
+  body: TunnelZoneBody
+): Promise<{ badge: TunnelBadge; missing: string[] }> {
+  return await apiFetch(`${carriersPath(orgId)}/${carrierId}/badges/${badgeId}/zones`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+/** What still needs an API Token: a tunnel, or a hostname whose DNS name this token made. */
+export type TunnelBadgeDependent = {
+  kind: 'tunnel' | 'hostname' | 'certificate'
+  id: string
+  name: string
+  zone: string | null
+}
+
+/** **409** `badge_in_use`: no other API Token covers what this one does, and something depends on it. */
+export class BadgeInUseError extends Error {
+  readonly dependents: TunnelBadgeDependent[]
+  readonly total: number
+
+  constructor(path: string, dependents: TunnelBadgeDependent[], total: number) {
+    super(`${path} failed: ${formatFetchFailureDetail(409, 'badge_in_use')}`)
+    this.name = 'BadgeInUseError'
+    this.dependents = dependents
+    this.total = total
+  }
+}
+
+function badgeDependents(value: unknown): TunnelBadgeDependent[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((d: Record<string, unknown>) =>
+    (d?.kind === 'tunnel' || d?.kind === 'hostname') &&
+    typeof d.id === 'string' &&
+    typeof d.name === 'string'
+      ? [{ kind: d.kind, id: d.id, name: d.name, zone: typeof d.zone === 'string' ? d.zone : null }]
+      : []
+  )
+}
+
+/** A DELETE that can answer 409 `badge_in_use` with the list of what depends on the token. */
+async function deleteBadgeCall<T>(orgId: string, path: string): Promise<T> {
+  const response = await fetchWithStepUp(controlPlaneUrl(path), {
+    method: 'DELETE',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json', [ORG_ID_HEADER]: orgId },
+  })
+  const parsed = (await response.json().catch(() => null)) as Record<string, unknown> | null
+  if (response.ok) return parsed as T
+  const code = typeof parsed?.error === 'string' ? parsed.error : undefined
+  if (response.status === 409 && code === 'badge_in_use') {
+    const total = typeof parsed?.total === 'number' ? parsed.total : 0
+    throw new BadgeInUseError(path, badgeDependents(parsed?.dependents), total)
+  }
+  const explanation = errorExplanation(code, parsed?.message)
+  const detail = formatFetchFailureDetail(response.status, code)
+  const suffix = explanation ? ` — ${explanation}` : ''
+  throw new Error(`${path} failed: ${detail}${suffix}`)
+}
+
+export async function deleteTunnelBadge(
+  orgId: string,
+  carrierId: string,
+  badgeId: string
+): Promise<{ ok: true }> {
+  return await deleteBadgeCall(orgId, `${carriersPath(orgId)}/${carrierId}/badges/${badgeId}`)
+}
+
+/** Stop naming a zone for an API Token; **409** `badge_in_use` while hostnames depend on it. */
+export async function removeTunnelBadgeZone(
+  orgId: string,
+  carrierId: string,
+  badgeId: string,
+  zoneId: string
+): Promise<{ badge: TunnelBadge; missing: string[] }> {
+  return await deleteBadgeCall(
+    orgId,
+    `${carriersPath(orgId)}/${carrierId}/badges/${badgeId}/zones/${encodeURIComponent(zoneId)}`
+  )
+}
+
+/** **409** `carrier_in_use` while a tunnel still uses the account. */
+export async function deleteTunnelCarrier(orgId: string, carrierId: string): Promise<{ ok: true }> {
+  return await apiFetch(`${carriersPath(orgId)}/${carrierId}`, { method: 'DELETE' })
+}
+
+/** Where a tunnel runs: one server, the chosen servers, or every server of a datacenter. */
+export type TunnelPlacement = 'one' | 'chosen' | 'all'
+
+/** One server's connector for a tunnel: what is wanted and what it last reported. */
+export type TunnelPortal = {
+  serverId: string
+  /** `run` or `skip` (an all-servers tunnel leaves this server out). */
+  wanted: string
+  /** `unknown`, `connected`, `down` or `error`. */
+  reported: string
+  lastSeenAt: string | null
+  lastError: string | null
+  connectorVersion: string | null
+}
+
+export type TunnelRecord = {
+  id: string
+  name: string
+  provider: string
+  carrierId: string | null
+  placement: TunnelPlacement
+  datacenterId: string | null
+  /** `pending`, `active`, `attention` or `removing`. */
+  status: string
+  createdAt: string
+  portals: TunnelPortal[]
+  /** Servers that run a connector now, from the placement rules. */
+  carryingServerIds: string[]
+  warnings: string[]
+  doorwayCount: number
+  /** The verified connection to your web server (see `setTunnelVerifyOrigin`). Missing from an older panel, which means off. */
+  verifyOrigin?: VerifyOriginState
+}
+
+/** Asked for, in effect, and which names still wait for a site or a certificate. */
+export type VerifyOriginState = {
+  enabled: boolean
+  /** Every name is served with a covering origin certificate, so the connector verifies. */
+  active: boolean
+  pendingNames: string[]
+}
+
+/** An origin certificate TurboPanel issued. The key stays sealed on the panel and is never returned. */
+export type OriginCertificateRecord = {
+  id: string
+  carrierId: string
+  zone: string
+  names: string[]
+  /** `names` is a certificate for exact hostnames (the default); `wildcard` covers the zone and one label below it. */
+  scope: 'names' | 'wildcard'
+  /** No longer needed; it is revoked once no site uses it. */
+  retired: boolean
+  notAfter: string | null
+  status: string
+  createdAt: string
+  inUse: boolean
+  renewalDue: boolean
+}
+
+/** A certificate the provider holds for a zone, whoever made it. Only one TurboPanel issued can be installed. */
+export type ExistingOriginCertificateRecord = {
+  externalId: string
+  hostnames: string[]
+  notAfter: string | null
+  issuedHere: boolean
+  tlsId: string | null
+  retired: boolean
+  wildcard: boolean
+  note: string
+}
+
+/** A hostname a tunnel carries, and whether a DNS name was made for it. */
+export type TunnelHostnameRecord = {
+  id: string
+  tunnelId: string
+  hostname: string
+  hostingId: string | null
+  /** True: only the tunnel and peer servers answer this name, applied at the site's next deploy. False: also a public name, lock off. */
+  isLocalOnly: boolean
+  /** `pending`, `live`, `attention` or `removing`. */
+  status: string
+  /** `created` when a DNS name was made, `none` when no zone the token can edit holds it. */
+  dns: 'created' | 'none'
+  createdAt: string
+}
+
+export type TunnelPlacementBody = {
+  placement: TunnelPlacement
+  /** `one` (exactly one) and `chosen` (at least one). */
+  serverIds?: string[]
+  /** `all` only: servers of the datacenter left out. */
+  exceptServerIds?: string[]
+  /** `all` only: the datacenter whose servers run it. */
+  datacenterId?: string
+}
+
+export type CreateTunnelBody = TunnelPlacementBody & { carrierId: string; name: string }
+
+function tunnelsPath(orgId: string): string {
+  return `${CLIENT_API}/organizations/${orgId}/tunnels`
+}
+
+export async function fetchTunnels(orgId: string): Promise<{ tunnels: TunnelRecord[] }> {
+  return await apiFetch(tunnelsPath(orgId))
+}
+
+/** **409** `tunnel_exists`, `tunnel_limit`, `badge_cannot_tunnel`, `server_never_carries`. */
+export async function createTunnel(
+  orgId: string,
+  body: CreateTunnelBody
+): Promise<{ tunnel: TunnelRecord }> {
+  return await apiFetch(tunnelsPath(orgId), { method: 'POST', body: JSON.stringify(body) })
+}
+
+export async function updateTunnelPlacement(
+  orgId: string,
+  tunnelId: string,
+  body: TunnelPlacementBody
+): Promise<{ tunnel: TunnelRecord }> {
+  return await apiFetch(`${tunnelsPath(orgId)}/${tunnelId}/placement`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  })
+}
+
+export type TunnelVerifyOriginBody = { enabled: boolean; wildcard?: boolean }
+
+/**
+ * Turn the verified connection on or off for a tunnel. Safe to repeat. **409**
+ * `verify_origin_public_names`, `verify_origin_zones`, `verify_origin_names`,
+ * `badge_cannot_certify`, `badge_cannot_dns`, `badge_cannot_tunnel`.
+ */
+export async function setTunnelVerifyOrigin(
+  orgId: string,
+  tunnelId: string,
+  body: TunnelVerifyOriginBody
+): Promise<{
+  tunnel: TunnelRecord
+  verifyOrigin: VerifyOriginState
+  pinnedHostingIds: string[]
+  needsDeploy: boolean
+}> {
+  return await apiFetch(`${tunnelsPath(orgId)}/${tunnelId}/verify-origin`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  })
+}
+
+/** The origin certificates TurboPanel issued for a Cloudflare account. */
+export async function fetchOriginCertificates(
+  orgId: string,
+  carrierId: string
+): Promise<{ originCertificates: OriginCertificateRecord[] }> {
+  return await apiFetch(`${carriersPath(orgId)}/${carrierId}/origin-certificates`)
+}
+
+/** Every valid certificate the provider holds for a zone (read-only). **400** `badge_cannot_certify`. */
+export async function fetchExistingOriginCertificates(
+  orgId: string,
+  carrierId: string,
+  zone: string
+): Promise<{ zone: string; certificates: ExistingOriginCertificateRecord[] }> {
+  return await apiFetch(
+    `${carriersPath(orgId)}/${carrierId}/origin-certificates/existing?zone=${encodeURIComponent(zone)}`
+  )
+}
+
+/** **409** `tunnel_in_use` while the tunnel still carries hostnames. */
+export async function deleteTunnel(orgId: string, tunnelId: string): Promise<{ ok: true }> {
+  return await apiFetch(`${tunnelsPath(orgId)}/${tunnelId}`, { method: 'DELETE' })
+}
+
+export async function fetchTunnelHostnames(
+  orgId: string,
+  tunnelId: string
+): Promise<{ hostnames: TunnelHostnameRecord[] }> {
+  return await apiFetch(`${tunnelsPath(orgId)}/${tunnelId}/hostnames`)
+}
+
+/** **409** `hostname_in_use`, `doorway_limit`, `badge_cannot_dns`, `tunnel_not_ready`. */
+export async function addTunnelHostname(
+  orgId: string,
+  tunnelId: string,
+  body: { hostname: string; isLocalOnly?: boolean }
+): Promise<{ hostname: TunnelHostnameRecord }> {
+  return await apiFetch(`${tunnelsPath(orgId)}/${tunnelId}/hostnames`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function removeTunnelHostname(
+  orgId: string,
+  tunnelId: string,
+  hostnameId: string
+): Promise<{ ok: true }> {
+  return await apiFetch(`${tunnelsPath(orgId)}/${tunnelId}/hostnames/${hostnameId}`, {
+    method: 'DELETE',
+  })
+}
+
+/** "This server never runs tunnels": `carry: false` keeps it out of every placement. */
+export async function setServerTunnelCarrying(
+  orgId: string,
+  serverId: string,
+  carry: boolean
+): Promise<{ serverId: string; carry: boolean }> {
+  return await apiFetch(
+    `${CLIENT_API}/organizations/${orgId}/servers/${serverId}/tunnel-carrying`,
+    {
+      method: 'PUT',
+      body: JSON.stringify({ carry }),
+    }
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Certificates ordered through a DNS challenge
+
+/** One certificate TurboPanel orders itself, proven by a DNS record in the connected account. */
+export type DnsCertificate = {
+  id: string
+  names: string[]
+  wildcard: boolean
+  /** `pending` while ordering, `ready`, `failed` after three failed orders, or `expired`. */
+  status: string
+  /** `queued`, `presented`, `validating`, `finalizing`, `issued`, `backoff` or `failed`. */
+  stage: string
+  /** Ordered from the test directory: no browser trusts it. */
+  staging: boolean
+  lastError: string | null
+  /** Something that will stop the next renewal, in plain words. */
+  warning: string | null
+  attempts: number
+  nextAttemptAt: string | null
+  renewAt: string | null
+  notAfter: string | null
+  issuer: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type OrderDnsCertificateBody = {
+  carrierId: string
+  names: string[]
+  /** Tests only: the authority's test directory. */
+  staging?: boolean
+}
+
+function dnsCertificatesPath(orgId: string): string {
+  return `${CLIENT_API}/organizations/${orgId}/dns-certificates`
+}
+
+export async function fetchDnsCertificates(
+  orgId: string
+): Promise<{ certificates: DnsCertificate[] }> {
+  return await apiFetch(dnsCertificatesPath(orgId))
+}
+
+export async function orderDnsCertificate(
+  orgId: string,
+  body: OrderDnsCertificateBody
+): Promise<{ certificate: DnsCertificate; reused: boolean }> {
+  return await apiFetch(dnsCertificatesPath(orgId), { method: 'POST', body: JSON.stringify(body) })
+}
+
+/** Move an order on now. */
+export async function checkDnsCertificate(
+  orgId: string,
+  id: string
+): Promise<{ certificate: DnsCertificate; outcome: string }> {
+  return await apiFetch(`${dnsCertificatesPath(orgId)}/${id}/check`, { method: 'POST' })
+}
+
+/** Try again a certificate that gave up. */
+export async function retryDnsCertificate(
+  orgId: string,
+  id: string
+): Promise<{ certificate: DnsCertificate }> {
+  return await apiFetch(`${dnsCertificatesPath(orgId)}/${id}/retry`, { method: 'POST' })
 }

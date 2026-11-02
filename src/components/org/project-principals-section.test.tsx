@@ -12,6 +12,9 @@ const state = vi.hoisted(() => ({
   persist: vi.fn(),
   actionError: null as string | null,
   environments: [] as unknown[],
+  principals: [] as unknown[],
+  services: {} as Record<string, unknown[]>,
+  assign: vi.fn(),
 }))
 
 vi.mock('react-native', async () => {
@@ -19,7 +22,10 @@ vi.mock('react-native', async () => {
   return { ...stub, TextInput: stub.View }
 })
 vi.mock('react-native-svg', async () => (await import('@/components/ui/v4/rn-stub')).svgStub)
-vi.mock('@/lib/theme-preference', async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub)
+vi.mock(
+  '@/lib/theme-preference',
+  async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub
+)
 vi.mock('@/components/ui/panel-styles', () => ({
   panelStyles: { error: {}, detailTitle: {}, muted: {} },
 }))
@@ -84,7 +90,7 @@ vi.mock('@/components/org/principal-name-scheme-field', () => ({
 vi.mock('@/lib/queries/projects', () => ({
   useProjectPrincipals: () => ({
     isLoading: false,
-    data: { principals: [] },
+    data: { principals: state.principals },
     error: null,
   }),
   useProject: () => ({ data: { project: { options: {} } } }),
@@ -97,7 +103,7 @@ vi.mock('@/lib/queries/projects', () => ({
   }),
   useDeleteProjectPrincipal: () => ({ run: vi.fn(), isPending: false, actionError: null }),
   useUpdateProjectPrincipalAssignments: () => ({
-    run: vi.fn(),
+    run: state.assign,
     isPending: false,
     actionError: null,
   }),
@@ -112,18 +118,21 @@ vi.mock('@/lib/queries/environments', () => ({
   }),
 }))
 vi.mock('@/lib/queries/services', () => ({
-  useServicesByEnvironments: () => ({ isLoading: false, servicesByEnv: {} }),
+  useServicesByEnvironments: () => ({ isLoading: false, servicesByEnv: state.services }),
 }))
 vi.mock('@/lib/query-client', () => ({ useCan: () => true }))
 
 afterEach(cleanup)
 
-describe('ProjectPrincipalsSection add system user', () => {
+describe('ProjectPrincipalsSection add Hosting Account', () => {
   beforeEach(() => {
     state.run.mockReset()
     state.persist.mockReset()
     state.actionError = null
     state.environments = []
+    state.principals = []
+    state.services = {}
+    state.assign.mockReset()
   })
 
   it('declares the account where the waiting app lives instead of adding a loose row', async () => {
@@ -151,9 +160,9 @@ describe('ProjectPrincipalsSection add system user', () => {
       },
     ]
     render(<ProjectPrincipalsSection orgId="org-1" projectId="proj-1" canManage />)
-    expect(screen.getByText('An app is waiting for a system user')).toBeTruthy()
+    expect(screen.getByText('An app is waiting for a Hosting Account')).toBeTruthy()
     // Left blank, the account is named after the project (no name here: "app").
-    fireEvent.click(screen.getByRole('button', { name: 'Add system user' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add Hosting Account' }))
     await waitFor(() => expect(state.persist).toHaveBeenCalledTimes(1))
     expect(state.run).not.toHaveBeenCalled()
     const writes = state.persist.mock.calls[0][0]
@@ -162,22 +171,133 @@ describe('ProjectPrincipalsSection add system user', () => {
     expect(JSON.stringify(writes[0].document)).toContain('"principal":"app"')
   })
 
+  it('lists an account the file declares before the deploy creates it', () => {
+    state.environments = [
+      {
+        id: 'env-1',
+        name: 'production',
+        options: {
+          compose: {
+            version: 1,
+            data: {
+              services: { site: { 'x-turbopanel': { serviceKind: 'site', principal: 'website' } } },
+              'x-turbopanel': { principals: { website: {} } },
+            },
+            presentation: { keyOrder: ['services'], comments: {} },
+          },
+        },
+      },
+    ]
+    render(<ProjectPrincipalsSection orgId="org-1" projectId="proj-1" canManage />)
+    expect(screen.getByText('website')).toBeTruthy()
+    expect(screen.queryByText('No Hosting Accounts yet.')).toBeNull()
+  })
+
   it('shows plain words when the control plane refuses a reserved name', async () => {
     state.run.mockImplementation(async () => {
       state.actionError = 'HTTP 400: username_reserved'
       return { ok: false, error: 'HTTP 400: username_reserved' }
     })
-    render(
-      <ProjectPrincipalsSection orgId="org-1" projectId="proj-1" canManage />,
-    )
-    fireEvent.change(screen.getByRole('textbox', { name: 'Add system user' }), {
+    render(<ProjectPrincipalsSection orgId="org-1" projectId="proj-1" canManage />)
+    fireEvent.change(screen.getByRole('textbox', { name: 'Add Hosting Account' }), {
       target: { value: 'ftp' },
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Add system user' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add Hosting Account' }))
     await waitFor(() => {
       expect(screen.getByText(USERNAME_RESERVED_COPY)).toBeTruthy()
     })
     expect(screen.queryByText(/username_reserved/)).toBeNull()
     expect(state.run).toHaveBeenCalledWith({ username: 'ftp', nameScheme: undefined })
+  })
+
+  describe('linking a Hosting Account to a service', () => {
+    const row = (serviceIds: string[], metadata: unknown = null) => ({
+      id: 'p-1',
+      username: 'shop',
+      appliedUsername: 'shop',
+      serviceIds,
+      metadata,
+      access: {},
+    })
+    const web = { id: 'svc-1', composeServiceName: 'web', name: 'web' }
+    const compose = (principal?: string) => ({
+      version: 1,
+      data: {
+        services: { web: { 'x-turbopanel': principal ? { principal } : {} } },
+      },
+      presentation: { keyOrder: ['services'], comments: {} },
+    })
+    const open = () => {
+      render(<ProjectPrincipalsSection orgId="org-1" projectId="proj-1" canManage />)
+      fireEvent.click(screen.getByRole('button', { name: 'Expand shop' }))
+    }
+
+    it('shows a Link button that sends the service id', async () => {
+      state.assign.mockResolvedValue({ ok: true })
+      state.environments = [{ id: 'env-1', name: 'production', options: { compose: compose() } }]
+      state.services = { 'env-1': [web] }
+      state.principals = [row([])]
+      open()
+      fireEvent.click(screen.getByRole('button', { name: /^Link shop to / }))
+      await waitFor(() =>
+        expect(state.assign).toHaveBeenCalledWith({ principalId: 'p-1', serviceIds: ['svc-1'] })
+      )
+    })
+
+    it('shows Linked and an Unlink button when the row holds the service', () => {
+      state.environments = [{ id: 'env-1', name: 'production', options: { compose: compose() } }]
+      state.services = { 'env-1': [web] }
+      state.principals = [row(['svc-1'])]
+      open()
+      expect(screen.getByText('Linked')).toBeTruthy()
+      expect(screen.getByRole('button', { name: /^Unlink shop from / })).toBeTruthy()
+    })
+
+    it('shows Linked, with no Unlink, when the compose file names the account', () => {
+      state.environments = [
+        { id: 'env-1', name: 'production', options: { compose: compose('shop') } },
+      ]
+      state.services = { 'env-1': [web] }
+      state.principals = [row([])]
+      open()
+      expect(screen.getByText('Linked')).toBeTruthy()
+      expect(
+        screen.getByText('Linked by the compose file. Edit the file to change it.')
+      ).toBeTruthy()
+      expect(screen.queryByRole('button', { name: /^Link shop to / })).toBeNull()
+      expect(screen.queryByRole('button', { name: /^Unlink / })).toBeNull()
+    })
+
+    it('matches the compose alias of a row made from one', () => {
+      state.environments = [
+        { id: 'env-1', name: 'production', options: { compose: compose('site') } },
+      ]
+      state.services = { 'env-1': [web] }
+      state.principals = [row([], { composeAlias: 'site' })]
+      open()
+      expect(screen.getByText('Linked')).toBeTruthy()
+    })
+
+    it('offers no Link button when the compose file names another account', () => {
+      state.environments = [
+        { id: 'env-1', name: 'production', options: { compose: compose('other') } },
+      ]
+      state.services = { 'env-1': [web] }
+      state.principals = [row([])]
+      open()
+      expect(screen.getByText('Set by the compose file for other.')).toBeTruthy()
+      expect(screen.queryByRole('button', { name: /^Link shop to / })).toBeNull()
+    })
+
+    it('says so when the row holds a service the compose file gives to another account', () => {
+      state.environments = [
+        { id: 'env-1', name: 'production', options: { compose: compose('other') } },
+      ]
+      state.services = { 'env-1': [web] }
+      state.principals = [row(['svc-1'])]
+      open()
+      expect(screen.getByText('Linked, but the compose file uses other.')).toBeTruthy()
+      expect(screen.queryByText('Linked')).toBeNull()
+    })
   })
 })

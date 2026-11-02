@@ -289,7 +289,7 @@ describe('HighAvailabilityUpdates', () => {
     expect(screen.getByText('Updating…')).toBeTruthy()
     expect(
       screen.getByText(
-        /1 server is offline, so this update is waiting for it. It is skipped if it stays offline/
+        /1 server is offline, so this update is waiting for it. It updates as soon as it reconnects/
       )
     ).toBeTruthy()
   })

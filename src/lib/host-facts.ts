@@ -3,7 +3,7 @@
  * (OS, kernel, versions, drive and GPU details), labelled in plain words and in
  * a fixed order. Pure, so it can be tested without the screen component.
  */
-import type { HostFacts } from '@/lib/instance-api'
+import type { HostFacts, HostFactsResponse } from '@/lib/instance-api'
 
 /** Plain-words labels for the short text a host reports, in the order they are shown. */
 export const HOST_FACT_LABELS: readonly (readonly [string, string])[] = [
@@ -50,7 +50,8 @@ export function hostFactRows(facts: HostFacts): HostFactRow[] {
     const value = [drive.model, drive.smart ? `SMART ${drive.smart}` : undefined]
       .filter((part): part is string => Boolean(part))
       .join(' · ')
-    if (value) rows.push({ key: `drive:${drive.deviceId}`, label: `Drive ${drive.deviceId}`, value })
+    if (value)
+      rows.push({ key: `drive:${drive.deviceId}`, label: `Drive ${drive.deviceId}`, value })
   }
   for (const gpu of facts.gpus) {
     const value = [gpu.model, gpu.driver ? `driver ${gpu.driver}` : undefined]
@@ -61,3 +62,24 @@ export function hostFactRows(facts: HostFacts): HostFactRow[] {
   return rows
 }
 
+/**
+ * Whether the host last said it needs a restart (`/var/run/reboot-required`,
+ * left by automatic security updates such as a new kernel). Servers never
+ * restart on their own, so the server page says so until someone does.
+ */
+export function hostRestartNeeded(response: HostFactsResponse | null | undefined): boolean {
+  return Boolean(response?.available) && response?.facts.text.rebootRequired === 'yes'
+}
+
+/**
+ * The line under Restart Needed: managers are pointed at Reboot server on the
+ * Control tab, except on the Platform Server, which has no reboot control.
+ */
+export function restartNeededBody(
+  options: Readonly<{ canManage: boolean; colocated: boolean }>
+): string {
+  const lead = 'Restart needed to finish security updates. This server never restarts on its own;'
+  if (!options.canManage) return `${lead} ask an organization manager to restart it.`
+  if (options.colocated) return `${lead} restart the host yourself when it suits you.`
+  return `${lead} use Reboot server on the Control tab when it suits you.`
+}

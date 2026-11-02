@@ -85,7 +85,10 @@ function DatacenterLocationCell({ datacenter }: Readonly<{ datacenter: Datacente
   return (
     <DataTableCell column={DC_COL_LOCATION}>
       <GeoLocationLines
-        geo={locationDisplayGeo(datacenter.location, datacenterGeoFromMetadata(datacenter.metadata))}
+        geo={locationDisplayGeo(
+          datacenter.location,
+          datacenterGeoFromMetadata(datacenter.metadata)
+        )}
         custom={isCustomLocation(datacenter.location)}
       />
     </DataTableCell>
@@ -196,11 +199,7 @@ function DatacentersListBody({
 
 function DatacentersEmptyState({ reason }: Readonly<{ reason: string | null }>) {
   return (
-    <EmptyState
-      title="No datacenters yet"
-      hint={reason ?? 'Create one from a server IP.'}
-      panel
-    />
+    <EmptyState title="No datacenters yet" hint={reason ?? 'Create one from a server IP.'} panel />
   )
 }
 
@@ -239,10 +238,7 @@ export function DatacentersOverviewSection({ orgId }: Readonly<{ orgId: string }
   )
   const serverList = serversQuery.data?.servers
   const eligibleCount = listServersWithReportedPrivateNetworks(serverList ?? []).length
-  const serverCounts = useMemo(
-    () => countServersByDatacenterId(serverList ?? []),
-    [serverList],
-  )
+  const serverCounts = useMemo(() => countServersByDatacenterId(serverList ?? []), [serverList])
   const eligibility = resolveDatacenterAddEligibility({
     serversWithPrivateAddress: eligibleCount,
     serverCount: serverList?.length ?? 0,
@@ -259,9 +255,10 @@ export function DatacentersOverviewSection({ orgId }: Readonly<{ orgId: string }
     <View style={styles.root}>
       <Text style={panelStyles.pageTitle}>Datacenters</Text>
       <Text style={panelStyles.pageCopy}>
-        Logical routing domains, not buildings. A datacenter can hold several
-        routable subnets; a server may belong to more than one. Lower priority
-        wins; untrusted datacenters route through {TURBOFABRIC_PRODUCT_NAME}.
+        Logical routing domains, not buildings. A datacenter can hold several routable subnets; a
+        server may belong to more than one. Lower priority wins. Servers on a shared trusted network
+        talk over the LAN with no tunnel; over an untrusted one, {TURBOFABRIC_PRODUCT_NAME} runs
+        encrypted.
       </Text>
 
       {error && datacenters.length === 0 ? <Text style={panelStyles.error}>{error}</Text> : null}

@@ -23,11 +23,8 @@ import {
   type BindingRecord,
   type EnvironmentRecord,
 } from '@/lib/instance-api'
-import type {
-  ManagedServiceEngine,
-  ManagedUserRecord,
-} from '@/lib/managed-services'
-import { managedErrorMessage } from '@/lib/managed-services'
+import type { ManagedServiceEngine, ManagedUserRecord } from '@/lib/managed-services'
+import { bindingEnvironmentLabel, managedErrorMessage } from '@/lib/managed-services'
 import { projectServiceHref } from '@/lib/project-navigation'
 import { orEmptyArray } from '@/lib/or-empty-array'
 import {
@@ -36,6 +33,7 @@ import {
   useManagedEnvironmentBindings,
 } from '@/lib/queries/bindings'
 import { useEnvironments } from '@/lib/queries/environments'
+import { useProjects } from '@/lib/queries/projects'
 import { useServices } from '@/lib/queries/services'
 import { colors, spacing, webPointer } from '@/lib/theme'
 
@@ -54,9 +52,7 @@ type ConnectBindingFields = {
  * write is a footgun worth labeling wherever the credential is chosen or shown.
  */
 function managedUserPickerLabel(user: ManagedUserRecord): string {
-  return user.connectionRole === 'read-only'
-    ? `${user.username} (read-only)`
-    : user.username
+  return user.connectionRole === 'read-only' ? `${user.username} (read-only)` : user.username
 }
 
 /** Plain-words note on the two ways the organization CA is delivered. */
@@ -130,9 +126,7 @@ function BindingCard({
   onOpenService: (projectId: string, serviceId: string) => void
   onDisconnect: (binding: BindingRecord) => void
 }>) {
-  const endpoint = binding.endpoint
-    ? `${binding.endpoint.host}:${binding.endpoint.port}`
-    : '—'
+  const endpoint = binding.endpoint ? `${binding.endpoint.host}:${binding.endpoint.port}` : '—'
 
   return (
     <View style={styles.card}>
@@ -158,9 +152,7 @@ function BindingCard({
         {endpoint}
       </Text>
       <Text style={panelStyles.muted}>
-        {
-          "Points at this server's database ingress and does not move when the primary changes."
-        }
+        {"Points at this server's database ingress and does not move when the primary changes."}
       </Text>
       <Text style={panelStyles.muted}>{caNote(binding.keyPrefix)}</Text>
       <View style={styles.keyRow}>
@@ -233,6 +225,7 @@ function ConnectServiceForm({
   environmentId,
   engine,
   environments,
+  projectNameById,
   users,
   databases,
   disabled,
@@ -243,6 +236,7 @@ function ConnectServiceForm({
   environmentId: string
   engine: ManagedServiceEngine | null
   environments: EnvironmentRecord[]
+  projectNameById?: ReadonlyMap<string, string | null>
   users: ManagedUserRecord[]
   databases: string[]
   disabled: boolean
@@ -256,15 +250,11 @@ function ConnectServiceForm({
   const [keyPrefix, setKeyPrefix] = useState(DEFAULT_BINDING_KEY_PREFIX)
   const [emitEngineDefaults, setEmitEngineDefaults] = useState(true)
 
-  const servicesForEnvQuery = useServices(
-    orgId,
-    targetEnvironmentId || undefined,
-    { enabled: Boolean(targetEnvironmentId) },
-  )
+  const servicesForEnvQuery = useServices(orgId, targetEnvironmentId || undefined, {
+    enabled: Boolean(targetEnvironmentId),
+  })
   const envServices = servicesForEnvQuery.data?.services ?? []
-  const otherEnvironments = environments.filter(
-    (env) => env.id !== environmentId,
-  )
+  const otherEnvironments = environments.filter((env) => env.id !== environmentId)
 
   const prefixValidation = validateBindingKeyPrefix(keyPrefix)
   const previewKeys =
@@ -283,7 +273,7 @@ function ConnectServiceForm({
       <ChipSelectRow
         items={otherEnvironments}
         getId={(env) => env.id}
-        getLabel={(env) => env.name?.trim() || 'Environment'}
+        getLabel={(env) => bindingEnvironmentLabel(env.name, projectNameById?.get(env.projectId))}
         selectedId={targetEnvironmentId}
         accessibilityLabel="Environment"
         onSelect={(id) => {
@@ -298,11 +288,7 @@ function ConnectServiceForm({
           <ChipSelectRow
             items={envServices}
             getId={(service) => service.id}
-            getLabel={(service) =>
-              service.name?.trim() ||
-              service.composeServiceName ||
-              service.id
-            }
+            getLabel={(service) => service.name?.trim() || service.composeServiceName || service.id}
             selectedId={serviceId}
             accessibilityLabel="Service"
             onSelect={setServiceId}
@@ -391,10 +377,7 @@ function ConnectServiceSection({
   canManage: boolean
   showForm: boolean
   disabled: boolean
-  formProps: Omit<
-    Parameters<typeof ConnectServiceForm>[0],
-    'disabled'
-  >
+  formProps: Omit<Parameters<typeof ConnectServiceForm>[0], 'disabled'>
   onShowForm: () => void
 }>) {
   if (!canManage) return null
@@ -433,6 +416,7 @@ export function ManagedBindingsPanel({
   const router = useRouter()
   const bindingsQuery = useManagedEnvironmentBindings(orgId, environmentId)
   const environmentsQuery = useEnvironments(orgId)
+  const projectsQuery = useProjects(orgId)
   const allServicesQuery = useServices(orgId)
   const createBinding = useCreateBinding(orgId)
   const deleteBinding = useDeleteBinding(orgId)
@@ -452,24 +436,23 @@ export function ManagedBindingsPanel({
     return map
   }, [environments])
 
+  const projectNameById = useMemo(
+    () => new Map(orEmptyArray(projectsQuery.data?.projects).map((p) => [p.id, p.name])),
+    [projectsQuery.data]
+  )
+
   const serviceMetaById = useMemo(() => {
     const map = new Map<string, ServiceMeta>()
     for (const service of allServicesQuery.data?.services ?? []) {
       map.set(service.id, {
-        name:
-          service.name?.trim() ||
-          service.composeServiceName ||
-          service.id,
+        name: service.name?.trim() || service.composeServiceName || service.id,
         projectId: envProjectById.get(service.environmentId) ?? '',
       })
     }
     return map
   }, [allServicesQuery.data, envProjectById])
 
-  const userById = useMemo(
-    () => new Map(users.map((u) => [u.id, u])),
-    [users],
-  )
+  const userById = useMemo(() => new Map(users.map((u) => [u.id, u])), [users])
 
   const byService = useMemo(() => {
     const groups = new Map<string, BindingRecord[]>()
@@ -510,9 +493,7 @@ export function ManagedBindingsPanel({
       setShowForm(false)
     } catch (err) {
       setError(managedErrorMessage(err, 'Failed to connect service'))
-      setEndpointUnavailable(
-        extractErrorCode(err) === BINDING_ENDPOINT_UNAVAILABLE_ERROR,
-      )
+      setEndpointUnavailable(extractErrorCode(err) === BINDING_ENDPOINT_UNAVAILABLE_ERROR)
     } finally {
       setWorking(false)
     }
@@ -548,10 +529,7 @@ export function ManagedBindingsPanel({
     >
       {error ? <Text style={panelStyles.error}>{error}</Text> : null}
       {endpointUnavailable ? (
-        <Pressable
-          style={webPointer}
-          onPress={() => router.push(`/${orgId}/network` as Href)}
-        >
+        <Pressable style={webPointer} onPress={() => router.push(`/${orgId}/network` as Href)}>
           <Text style={styles.linkText}>Open Network</Text>
         </Pressable>
       ) : null}
@@ -588,6 +566,7 @@ export function ManagedBindingsPanel({
           environmentId,
           engine,
           environments,
+          projectNameById,
           users,
           databases,
           onSubmit: (fields) => {

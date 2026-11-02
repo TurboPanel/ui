@@ -6,6 +6,7 @@ import type { TlsRecord } from '@/lib/instance-api'
 const state = vi.hoisted(() => ({
   deleteRun: vi.fn(),
   createRun: vi.fn(),
+  rows: [] as TlsRecord[],
 }))
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
@@ -16,6 +17,8 @@ vi.mock(
 )
 vi.mock('@/components/ui/panel-styles', () => ({ panelStyles: {} }))
 vi.mock('@/components/org/organization-ca-panel', () => ({ OrganizationCaPanel: () => null }))
+vi.mock('@/components/org/tls-contact-email-field', () => ({ TlsContactEmailField: () => null }))
+vi.mock('@/components/org/dns-certificate-panel', () => ({ DnsCertificatePanel: () => null }))
 vi.mock('@/components/ui', () => ({
   Button: ({ label, onPress }: { label: string; onPress?: () => void }) => (
     <button onClick={onPress}>{label}</button>
@@ -43,17 +46,17 @@ vi.mock('@/lib/query-client', () => ({
 }))
 vi.mock('@/lib/tls-managed-dates', () => ({ tlsDateLines: () => [], tlsStoredCopyLines: () => [] }))
 
-const certificate = (id: string, name: string): TlsRecord =>
+const certificate = (id: string, name: string, source = 'lets_encrypt'): TlsRecord =>
   ({
     id,
     name,
-    source: 'lets_encrypt',
+    source,
     metadata: { status: 'automatic', dnsNames: [name] },
   }) as unknown as TlsRecord
 
 vi.mock('@/lib/queries/tls', () => ({
   useTlsLibrary: () => ({
-    data: { tls: [certificate('t1', 'one.example'), certificate('t2', 'two.example')] },
+    data: { tls: state.rows },
     isLoading: false,
     isError: false,
   }),
@@ -64,6 +67,7 @@ vi.mock('@/lib/queries/tls', () => ({
 import { TlsOverviewSection } from './tls-overview-section'
 
 beforeEach(() => {
+  state.rows = [certificate('t1', 'one.example'), certificate('t2', 'two.example')]
   state.deleteRun = vi.fn(() => Promise.resolve({ ok: true, value: {} }))
   state.createRun = vi.fn(() => Promise.resolve({ ok: true, value: {} }))
 })
@@ -81,6 +85,71 @@ describe('TlsOverviewSection delete', () => {
     expect(state.deleteRun).toHaveBeenCalledWith('t2')
     expect(message.parentElement?.textContent).toContain('two.example')
     expect(message.parentElement?.textContent).not.toContain('one.example')
+  })
+
+  it('offers no Delete on the Organization CA and points to Rotate instead', () => {
+    state.rows = [
+      certificate('ca', 'Company root', 'organization_ca'),
+      certificate('t2', 'two.example'),
+    ]
+    render(<TlsOverviewSection orgId="o1" />)
+    expect(screen.getAllByText('Delete certificate')).toHaveLength(1)
+    const hint = screen.getByText('Replace it with Rotate on the Organization CA panel.')
+    expect(hint.parentElement?.textContent).toContain('Company root')
+    expect(hint.parentElement?.textContent).not.toContain('two.example')
+  })
+
+  it("labels a certificate TurboPanel ordered by DNS challenge as Let's Encrypt", () => {
+    state.rows = [
+      {
+        ...certificate('d1', 'dns.example', 'upload'),
+        metadata: {
+          status: 'ready',
+          dnsNames: ['dns.example'],
+          acme: { managedBy: 'panel', challengeType: 'dns-01' },
+        },
+      } as unknown as TlsRecord,
+      certificate('u1', 'upload.example', 'upload'),
+    ]
+    render(<TlsOverviewSection orgId="o1" />)
+    expect(screen.getByText("Let's Encrypt · Ready")).toBeTruthy()
+    expect(screen.getByText('Uploaded · Issued and renewed by the serving host')).toBeTruthy()
+  })
+
+  it('shows who issued a DNS-ordered wildcard and from when it is valid', () => {
+    state.rows = [
+      {
+        ...certificate('w1', '*.example.net', 'upload'),
+        metadata: {
+          status: 'ready',
+          dnsNames: ['*.example.net', 'example.net'],
+          issuer: 'CN=R11,O=Let’s Encrypt,C=US',
+          notBefore: '2026-10-20T08:00:00.000Z',
+          acme: { managedBy: 'panel', challengeType: 'dns-01' },
+        },
+      } as unknown as TlsRecord,
+    ]
+    render(<TlsOverviewSection orgId="o1" />)
+    expect(screen.getByText('Issued by CN=R11,O=Let’s Encrypt,C=US')).toBeTruthy()
+    expect(screen.getByText(/^Valid from /)).toBeTruthy()
+  })
+
+  it('leaves out placeholder issuer and start dates of an order still running', () => {
+    state.rows = [
+      {
+        ...certificate('w2', 'queued.example', 'upload'),
+        metadata: {
+          status: 'pending',
+          dnsNames: ['queued.example'],
+          issuer: '',
+          notBefore: '1970-01-01T00:00:00.000Z',
+          acme: { managedBy: 'panel', challengeType: 'dns-01' },
+        },
+      } as unknown as TlsRecord,
+    ]
+    render(<TlsOverviewSection orgId="o1" />)
+    expect(screen.queryByText(/^Issued by /)).toBeNull()
+    expect(screen.queryByText(/^Valid from /)).toBeNull()
   })
 
   it('says why a new certificate was not added, under Add certificate', async () => {
