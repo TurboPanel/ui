@@ -391,6 +391,7 @@ describe('queryKeys.org(…) remaining factories', () => {
     expect(queryKeys.admin.instanceAcme).toEqual(['admin', 'instance-acme'])
     expect(queryKeys.admin.instanceDaemon).toEqual(['admin', 'instance-daemon'])
     expect(queryKeys.admin.instanceUpdates).toEqual(['admin', 'instance-updates'])
+    expect(queryKeys.admin.instanceIdentity).toEqual(['admin', 'instance-identity'])
     expect(queryKeys.admin.platformCa).toEqual(['admin', 'platform-ca'])
     expect(queryKeys.admin.trustedProxies).toEqual(['admin', 'trusted-proxies'])
     expect(queryKeys.org('org-1').all).toEqual(['org', 'org-1'])
@@ -457,7 +458,9 @@ describe('queryKeys.org(…) remaining factories', () => {
     expect(
       isServerMetricsQuery({ queryKey: org.servers.metricsConnection('srv-1', '1h') }, 'org-1')
     ).toBe(true)
-    expect(isServerMetricsQuery({ queryKey: org.servers.metricsFacts('srv-1') }, 'org-1')).toBe(true)
+    expect(isServerMetricsQuery({ queryKey: org.servers.metricsFacts('srv-1') }, 'org-1')).toBe(
+      true
+    )
     expect(isServerMetricsQuery({ queryKey: org.servers.metrics('srv-1') }, 'org-1')).toBe(true)
     expect(
       isServerMetricsQuery({ queryKey: org.servers.metricsSeries('srv-1', '1h') }, 'org-other')

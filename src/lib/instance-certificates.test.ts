@@ -61,6 +61,21 @@ describe('certificateSourceEligibility', () => {
     expect(refused['lets-encrypt']).toContain('too old')
   })
 
+  it('refuses DNS-01 for anything but one exact public DNS name', () => {
+    const ready = {
+      certificates: [],
+      capabilities: { 'instance-cert-sources-per-hostname': true },
+    }
+    for (const host of ['10.0.0.5', '[::1]', 'localhost', 'panel', '*.example.com']) {
+      expect(certificateSourceEligibility(host, ready)['dns-01'], host).toBeTruthy()
+    }
+    expect(certificateSourceEligibility('*.example.com', ready)['dns-01']).toContain('wildcard')
+    expect(certificateSourceEligibility('panel.example.com', ready)['dns-01']).toBeUndefined()
+    expect(
+      certificateSourceEligibility('panel.example.com', { ...ready, capabilities: {} })['dns-01']
+    ).toContain('too old')
+  })
+
   it('names why the daemon state blocks a source instead of calling it too old', () => {
     for (const [status, phrase] of [
       ['not-applicable', 'self-hosted'],

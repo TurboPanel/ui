@@ -2,6 +2,11 @@ import { useEffect, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { panelStyles } from '@/components/ui/panel-styles'
 import {
+  CoverageChips,
+  Dns01CertificatesPanel,
+} from '@/components/admin/access/dns01-certificates-panel'
+import { useAuth } from '@/lib/auth-context'
+import {
   Badge,
   Button,
   ButtonRow,
@@ -47,7 +52,7 @@ const CERT_COLUMNS: readonly DataTableColumn[] = [
   { key: 'label', header: 'Label', flex: 1.4, minWidth: 140 },
   { key: 'sans', header: 'Names', flex: 2, minWidth: 180 },
   { key: 'expires', header: 'Expires', minWidth: 110 },
-  { key: 'hosts', header: 'Hostnames', flex: 1.6, minWidth: 160 },
+  { key: 'hosts', header: 'Hostnames', flex: 1.6, minWidth: 220, gap: 6 },
 ]
 
 const EMAIL_KEY = 'TURBOPANEL_INSTANCE_ACME__CONTACT_EMAIL'
@@ -67,6 +72,7 @@ export function CertificatesSection() {
   const daemonQuery = useInstanceDaemon()
   const capable = daemonQuery.data?.capabilities?.[CAPABILITY_KEY] === true
   const capabilitiesKnown = daemonQuery.isSuccess || daemonQuery.isError
+  const selfHosted = useAuth().controlPlaneRuntime !== 'workers'
 
   if (certificatesQuery.data && 'applicable' in certificatesQuery.data) {
     return (
@@ -101,6 +107,10 @@ export function CertificatesSection() {
         hostnames={hostnamesQuery.data?.hostnames ?? []}
         sourcesEnabled={capable}
       />
+      <Dns01CertificatesPanel
+        hostnames={hostnamesQuery.data?.hostnames ?? []}
+        enabled={selfHosted}
+      />
       <LetsEncryptPanel
         loading={acmeQuery.isLoading}
         settings={acmeQuery.data?.settings}
@@ -132,7 +142,14 @@ function UploadedPanel({
       hint="The private key is sealed at rest and is never shown again"
     >
       {error ? <Text style={panelStyles.error}>{error}</Text> : null}
-      {loading ? <LoadingState /> : <CertificateTable certificates={certificates} />}
+      {loading ? (
+        <LoadingState />
+      ) : (
+        <CertificateTable
+          certificates={certificates}
+          hostnames={hostnames.map((row) => row.host)}
+        />
+      )}
       {wildcard ? (
         <InlineNotice title="Wildcard names" body={WILDCARD_COPY} />
       ) : (
@@ -157,7 +174,11 @@ function attachmentKey(certificate: UploadedCertificateRecord): string {
 
 function CertificateTable({
   certificates,
-}: Readonly<{ certificates: readonly UploadedCertificateRecord[] }>) {
+  hostnames,
+}: Readonly<{
+  certificates: readonly UploadedCertificateRecord[]
+  hostnames: readonly string[]
+}>) {
   if (certificates.length === 0) {
     return (
       <DataTable columns={CERT_COLUMNS} minWidth={640}>
@@ -171,6 +192,7 @@ function CertificateTable({
         <CertificateRow
           key={certificate.id}
           certificate={certificate}
+          hostnames={hostnames}
           alt={index % 2 === 1}
           last={index === certificates.length - 1}
         />
@@ -181,10 +203,12 @@ function CertificateTable({
 
 function CertificateRow({
   certificate,
+  hostnames,
   alt,
   last,
 }: Readonly<{
   certificate: UploadedCertificateRecord
+  hostnames: readonly string[]
   alt: boolean
   last: boolean
 }>) {
@@ -209,6 +233,7 @@ function CertificateRow({
       </DataTableCell>
       <DataTableCell column={CERT_COLUMNS[3]}>
         <Text style={styles.muted}>{attached}</Text>
+        <CoverageChips dnsNames={certificate.dnsNames} hostnames={hostnames} />
       </DataTableCell>
     </DataTableRow>
   )
@@ -411,6 +436,7 @@ function LetsEncryptPanel({
     >
       {error ? <Text style={panelStyles.error}>{error}</Text> : null}
       {loading ? <LoadingState /> : <AcmeSettingsForm settings={settings} />}
+      <Text style={panelStyles.muted}>DNS-01 orders use the same contact and terms.</Text>
       <ReachabilityList hostnames={hostnames} capabilities={capabilities} />
     </SectionPanel>
   )

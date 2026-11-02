@@ -13,10 +13,13 @@ export function ServerDangerZone({
   offline,
   revokeKeyPanel,
   deletePanel,
+  reenrollPanel = null,
 }: Readonly<{
   offline: boolean
   revokeKeyPanel: ReactNode
   deletePanel: ReactNode
+  /** Owner-only Re-Enroll Token and minted keys; renders its own panels. */
+  reenrollPanel?: ReactNode
 }>) {
   const remove = (
     <SectionPanel
@@ -37,6 +40,7 @@ export function ServerDangerZone({
       <Text style={panelStyles.detailTitle} accessibilityRole="header">
         Danger zone
       </Text>
+      {reenrollPanel}
       {offline ? [remove, revoke] : [revoke, remove]}
     </View>
   )

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useRouter } from 'expo-router'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { panelStyles } from '@/components/ui/panel-styles'
+import { PanelKeyLines } from '@/components/org/panel-key-lines'
 import {
   Button,
   ButtonRow,
@@ -216,48 +217,21 @@ function CreateStep({
 }
 
 type InstallStepProps = Readonly<{
+  panelFingerprint?: string
+  nextFingerprint?: string | null
   installBaseUrl: string
   managedUrls: string[]
   displayedInstallCommand: string
-  panelFingerprint?: string | null
-  nextFingerprint?: string | null
   onInstallBaseUrlChange: (url: string) => void
   onContinue: () => void
 }>
 
-function KeyFingerprints({
+function InstallStep({
   panelFingerprint,
   nextFingerprint,
-}: Readonly<{ panelFingerprint?: string | null; nextFingerprint?: string | null }>) {
-  if (!panelFingerprint) return null
-  return (
-    <View style={styles.revealed}>
-      <Text style={styles.secretLabel}>Control Plane Key Fingerprint</Text>
-      <Text selectable style={styles.secretValue}>
-        {panelFingerprint}
-      </Text>
-      {nextFingerprint ? (
-        <>
-          <Text style={styles.secretLabel}>Next Key Fingerprint</Text>
-          <Text selectable style={styles.secretValue}>
-            {nextFingerprint}
-          </Text>
-        </>
-      ) : null}
-      <Text style={panelStyles.muted}>
-        The installer checks this fingerprint against the key of the control plane before it sends
-        anything. Run the command only if the fingerprint matches what you expect.
-      </Text>
-    </View>
-  )
-}
-
-function InstallStep({
   installBaseUrl,
   managedUrls,
   displayedInstallCommand,
-  panelFingerprint,
-  nextFingerprint,
   onInstallBaseUrlChange,
   onContinue,
 }: InstallStepProps) {
@@ -289,7 +263,7 @@ function InstallStep({
         label="Copy install command"
         copiedLabel="Copied install command"
       />
-      <KeyFingerprints panelFingerprint={panelFingerprint} nextFingerprint={nextFingerprint} />
+      <PanelKeyLines panelFingerprint={panelFingerprint} nextFingerprint={nextFingerprint} />
       <Text style={panelStyles.muted}>
         Run this command on your new server, then click Continue.
       </Text>
@@ -626,11 +600,11 @@ export function AddServerWizard({ orgId, onComplete, onDismiss }: AddServerWizar
 
       {step === 'install' && revealed ? (
         <InstallStep
+          panelFingerprint={revealed.panelFingerprint}
+          nextFingerprint={revealed.nextFingerprint}
           installBaseUrl={installBaseUrl}
           managedUrls={managedUrls}
           displayedInstallCommand={displayedInstallCommand}
-          panelFingerprint={revealed.panelFingerprint}
-          nextFingerprint={revealed.nextFingerprint}
           onInstallBaseUrlChange={setInstallBaseUrl}
           onContinue={() => setStep('waiting')}
         />

@@ -25,6 +25,9 @@ import {
   fetchTimezones,
   formatEntityMetricId,
   isForbiddenError,
+  issueServerReenrollTicket,
+  reissueLicenseTicket,
+  revokeServerReenrollTickets,
   isHttpStatusError,
   MetricsBackendUnavailableError,
   MetricsRouteMissingError,
@@ -672,6 +675,33 @@ export function useRevokeServerDaemonKey(orgId: string, serverId: string) {
     onSuccess: async () => {
       await invalidateServerQueries(queryClient, orgId, serverId)
     },
+  })
+}
+
+/** Issue a Re-Enroll Token. The secret is show-once: keep it in component state, never in the cache. */
+export function useIssueServerReenrollTicket(serverId: string) {
+  return useApiMutation({
+    mutationFn: () => issueServerReenrollTicket(serverId),
+    fallbackError: 'Failed to issue a Re-Enroll Token',
+  })
+}
+
+export function useRevokeServerReenrollTickets(serverId: string) {
+  return useApiMutation({
+    mutationFn: () => revokeServerReenrollTickets(serverId),
+    fallbackError: 'Failed to revoke the Re-Enroll Token',
+  })
+}
+
+/** Reissue an unused key: the old token stops working. The new secret is show-once. */
+export function useReissueLicenseTicket(orgId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: reissueLicenseTicket,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.org(orgId).servers.licenses })
+    },
+    fallbackError: 'Failed to reissue the key',
   })
 }
 

@@ -946,6 +946,8 @@ export type OrgServerRecord = {
   /** Capacity totals from daemon hello (`server.metadata.resources`, including ips). */
   resources: ServerHostResources | null
   colocatedWithInstance?: boolean
+  /** How this server learned the control plane's key; absent from an older control plane. */
+  trustPinnedBy?: PinnedBy
   ips: ServerReportedIp[] | null
   timeSync: ServerTimeSync | null
   /**
@@ -2902,14 +2904,12 @@ export type CreatedLicense = {
   licenseId: string
   licenseToken: string
   installCommand: string
-  /**
-   * Fingerprint of the control plane's current identity key, which the signed
-   * install command names. Absent from an older control plane; null when the
-   * command is the older form.
-   */
-  panelFingerprint?: string | null
-  /** Fingerprint of the offline next key, when one is set. */
+  /** The control plane's current key fingerprint; omitted by an older control plane or one with no identity key. */
+  panelFingerprint?: string
+  /** The key servers accept after a rotation; null when none is set. */
   nextFingerprint?: string | null
+  /** The address the new server will dial. */
+  installUrl?: string
 }
 
 export class ServerCapacityExceededError extends Error {
@@ -3163,6 +3163,45 @@ export async function deleteLicense(id: string): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/licenses/${id}`, {
     method: 'DELETE',
   })
+}
+
+/**
+ * A one-hour, single-use install ticket. The secret is shown once and stored
+ * hashed, so it cannot be read again. `installCommand` is the whole command
+ * the control plane built; an older control plane returns only `licenseArg`.
+ */
+export type ReenrollTicket = {
+  ticketId: string
+  expiresAt: string
+  licenseToken: string
+  licenseArg: string
+  installCommand?: string
+}
+
+/** `POST /servers/:id/reenroll-ticket` (owner; step-up). Retires any earlier unused ticket. */
+export async function issueServerReenrollTicket(serverId: string): Promise<ReenrollTicket> {
+  return await apiFetch(`${CLIENT_API}/servers/${serverId}/reenroll-ticket`, { method: 'POST' })
+}
+
+/** `DELETE /servers/:id/reenroll-ticket`: revoke the unused tickets. */
+export async function revokeServerReenrollTickets(
+  serverId: string
+): Promise<{ ok: true; revoked: number }> {
+  return await apiFetch(`${CLIENT_API}/servers/${serverId}/reenroll-ticket`, { method: 'DELETE' })
+}
+
+export type ReissuedLicenseTicket = {
+  licenseId: string
+  joinId: string
+  joinExpiresAt: string
+  licenseToken: string
+  licenseArg: string
+  installCommand?: string
+}
+
+/** `POST /licenses/:id/ticket` (owner; step-up): burn an unused key's token and issue a fresh one-hour ticket. */
+export async function reissueLicenseTicket(id: string): Promise<ReissuedLicenseTicket> {
+  return await apiFetch(`${CLIENT_API}/licenses/${id}/ticket`, { method: 'POST' })
 }
 
 // ---------------------------------------------------------------------------
@@ -5419,7 +5458,7 @@ export async function applyPublicUrls(
   })
 }
 
-export type InstanceHostnameSource = 'platform-ca' | 'uploaded' | 'lets-encrypt'
+export type InstanceHostnameSource = 'platform-ca' | 'uploaded' | 'lets-encrypt' | 'dns-01'
 
 export type InstanceHostnameStatus = 'ready' | 'pending' | 'failed' | 'expired'
 
@@ -5432,12 +5471,34 @@ export type InstanceHostnameRecord = {
   notAfter: string | null
   acmeLastAttemptAt: string | null
   acmeLastError: string | null
+  /** Port visitors use; 443 shows no port in links. Absent from older control planes (8443). */
+  publicPort?: number
+  /** Links, OAuth and webhook URLs follow the primary; without one, the oldest name. */
+  isPrimary?: boolean
+  /** How visitors reach this name. Absent from older control planes (`direct`). */
+  mode?: IngressMode
+  isDaemonDial?: boolean
+  /** The connected provider account (`/instance/ingress/accounts`) an edge mode uses. */
+  ingressId?: string | null
 }
 
 export type InstanceHostnameInput = {
   host: string
   source: InstanceHostnameSource
   uploadedCertId: string | null
+  /** Left out, the stored value stays. */
+  publicPort?: number
+  /** True makes this name the primary; the control plane demotes the rest. */
+  isPrimary?: boolean
+}
+
+/** Sent back by a save that moved the primary name's public address. */
+export type InstanceHostnamesSaveResult = {
+  ok: boolean
+  hostnames: InstanceHostnameRecord[]
+  warnings?: string[]
+  previousPrimaryOrigin?: string
+  primaryOrigin?: string | null
 }
 
 export type UploadedCertificateRecord = {
@@ -5515,7 +5576,7 @@ export async function fetchInstanceHostnames(options: { signal?: AbortSignal } =
 
 export async function saveInstanceHostnames(
   hostnames: InstanceHostnameInput[]
-): Promise<{ ok: boolean; hostnames: InstanceHostnameRecord[] }> {
+): Promise<InstanceHostnamesSaveResult> {
   return await adminJson(`${ADMIN_API}/instance/hostnames`, {
     method: 'PUT',
     body: JSON.stringify({ hostnames }),
@@ -6041,6 +6102,35 @@ export async function resumeUpdates(): Promise<UpdatesPauseResult> {
   return await apiFetch(`${ADMIN_API}/instance/updates/resume`, { method: 'POST' })
 }
 
+/** How a server learned the control plane's key. `none` means no pin is recorded. */
+export type PinnedBy = 'install' | 'upgrade' | 'unsafe' | 'none'
+
+/** The control plane's key fingerprints (public values) and each server's pinned-by state. */
+export type InstanceIdentity = {
+  ok: true
+  configured: boolean
+  current: { fingerprint: string; keyset: number } | null
+  next: { fingerprint: string } | null
+  seal: { fingerprint: string } | null
+  urls: string[]
+  installUrl: string | null
+  servers: { id: string; name: string | null; organizationId: string | null; pinnedBy: PinnedBy }[]
+}
+
+export async function fetchInstanceIdentity(): Promise<InstanceIdentity> {
+  return await apiFetch(`${ADMIN_API}/instance/identity`)
+}
+
+/** Superadmin, self-hosted. A stale session opens the re-authentication sheet. `null` clears the next key. */
+export async function saveInstanceIdentityNext(
+  fingerprint: string | null
+): Promise<{ ok: boolean; next: { fingerprint: string } | null }> {
+  return await apiFetch(`${ADMIN_API}/instance/identity/next`, {
+    method: 'PUT',
+    body: JSON.stringify({ fingerprint }),
+  })
+}
+
 export async function fetchPlatformCa(): Promise<PlatformCaInfo> {
   return await apiFetch(`${ADMIN_API}/instance/platform-ca`)
 }
@@ -6067,7 +6157,311 @@ export async function setInstanceTunnelToken(token: string): Promise<{ ok: boole
   })
 }
 
-async function adminJson<T>(path: string, init: RequestInit): Promise<T> {
+/**
+ * Connection modes for the control plane's own hostnames. Self-hosted only:
+ * on TurboPanel High Availability every `/instance/ingress/*` and
+ * `/instance/acme-dns/*` path answers 404, so the hooks never run there.
+ */
+export type IngressMode =
+  | 'direct'
+  | 'lan-only'
+  | 'cloudflare-tunnel'
+  | 'cloudflare-proxy'
+  | 'bunny-proxy'
+  | 'private-overlay'
+  | 'passthrough'
+
+export type IngressCapabilities = {
+  mode: IngressMode
+  implemented: boolean
+  originMustBePublic: boolean
+  visitorCertificateIssuer: string
+  originCertificate: string
+  visitorIpSource: string
+  defaultPublicPort: 443 | 8443
+  heartbeatSeconds: number | null
+  idleLimitSeconds: number | null
+  apiDriven: boolean
+  provider: 'cloudflare' | 'bunny' | null
+  allowedCertificateSources: string[]
+  isEdge: boolean
+}
+
+/** Edge modes stay closed until a superadmin confirms every server trusts this control plane. */
+export type EdgeGate = {
+  open: boolean
+  reason?: string
+  confirmedAt: string | null
+  confirmedBy: string | null
+  forcedClosed: boolean
+}
+
+export type IngressCapabilitiesResponse = {
+  ok: boolean
+  modes: IngressCapabilities[]
+  gate: EdgeGate
+}
+
+export type IngressCheck = { id: string; ok: boolean; detail: string }
+
+export type IngressApplyCause =
+  | 'not-available'
+  | 'invalid-hostname'
+  | 'gate-closed'
+  | 'account-missing'
+  | 'token-invalid'
+  | 'scope-missing'
+  | 'zone-not-found'
+  | 'dns-conflict'
+  | 'provider-error'
+  | 'provider-rate-limited'
+  | 'daemon-offline'
+  | 'edge-unreachable'
+
+export type IngressApplyResult =
+  { ok: true } | { ok: false; cause: IngressApplyCause; detail: string }
+
+export type IngressPhase =
+  'not-applied' | 'applying' | 'healthy' | 'degraded' | 'failed' | 'removed'
+
+export type IngressStatus = {
+  phase: IngressPhase
+  cause?: string
+  detail?: string
+  facts?: { tunnel?: string; connections?: number; selfCheck?: boolean }
+}
+
+export type HostnameIngressPatch = {
+  mode?: IngressMode
+  ingressId?: string | null
+  publicPort?: number
+}
+
+export type HostnameIngressPatchResult =
+  { ok: true; hostname: InstanceHostnameRecord } | { ok: false; error: string }
+
+export type CloudflarePreflight = {
+  ok: boolean
+  checks: IngressCheck[]
+  accountId: string | null
+  zones: { id: string; name: string }[]
+  expiresOn: string | null
+}
+
+export type IngressAccountRecord = {
+  id: string
+  provider: 'cloudflare' | 'bunny'
+  label: string
+  accountId: string | null
+  zoneIds: string[]
+  scopes: {
+    tunnels: boolean
+    dns: boolean
+    checkedAt: string
+    zones: { id: string; name: string }[]
+    expiresOn: string | null
+  } | null
+  lastVerifiedAt: string | null
+  lastError: string | null
+  createdAt: string
+}
+
+export type AddIngressAccountResult =
+  | { ok: true; id: string; preflight: CloudflarePreflight }
+  | { ok: false; error: string; preflight: CloudflarePreflight | null }
+
+export type RemoveIngressAccountResult =
+  { ok: true } | { ok: false; error: string; hostnames?: string[] }
+
+const INGRESS = `${ADMIN_API}/instance/ingress`
+
+export type TunnelConnectorStatus =
+  'not-installed' | 'connected' | 'connecting' | 'stopped' | 'failed'
+
+/**
+ * The control plane's own tunnel: the connector half (from the daemon) and the
+ * edge half (from Cloudflare, only when an account is connected). A note is a
+ * plain sentence to show when its half is empty.
+ */
+export type InstanceTunnelStatus = {
+  ok: boolean
+  connector: {
+    status: TunnelConnectorStatus
+    version: string | null
+    pinnedVersion: string | null
+    slot: string | null
+    lastUpdate: { outcome: string; at: string; reason?: string } | null
+    checkedAt: string | null
+  } | null
+  connectorNote: string | null
+  edge: {
+    tunnelId: string
+    tunnelName: string
+    status: string
+    connections: number
+    locations: string[]
+    hostnames: string[]
+    checkedAt: string | null
+  } | null
+  edgeNote: string | null
+  edgeError: string | null
+}
+
+export async function fetchInstanceTunnelStatus(): Promise<InstanceTunnelStatus> {
+  return await apiFetch(`${INGRESS}/tunnel`)
+}
+
+/** Asks the daemon again; answers the same shape. */
+export async function refreshInstanceTunnelStatus(): Promise<InstanceTunnelStatus> {
+  return await adminJson(`${INGRESS}/tunnel/refresh`, { method: 'POST' })
+}
+
+function hostnamePath(id: string, action: string): string {
+  return `${INGRESS}/hostnames/${encodeURIComponent(id)}${action}`
+}
+
+export async function fetchIngressCapabilities(): Promise<IngressCapabilitiesResponse> {
+  return await apiFetch(`${INGRESS}/capabilities`)
+}
+
+export async function setEdgeGate(confirmed: boolean): Promise<{ ok: boolean; gate: EdgeGate }> {
+  return await adminJson(`${INGRESS}/gate`, {
+    method: 'PUT',
+    body: JSON.stringify({ confirmed }),
+  })
+}
+
+/** Sets mode, account and public port. A 409 means the name is still connected. */
+export async function updateHostnameIngress(
+  id: string,
+  patch: HostnameIngressPatch
+): Promise<HostnameIngressPatchResult> {
+  return await adminAnswer(
+    hostnamePath(id, ''),
+    { method: 'PATCH', body: JSON.stringify(patch) },
+    [409, 422]
+  )
+}
+
+export async function preflightHostnameIngress(
+  id: string
+): Promise<{ ok: boolean; checks: IngressCheck[] }> {
+  return await adminJson(hostnamePath(id, '/preflight'), { method: 'POST' })
+}
+
+export async function applyHostnameIngress(
+  id: string,
+  options: { replaceExisting?: boolean } = {}
+): Promise<IngressApplyResult> {
+  return await adminAnswer(
+    hostnamePath(id, '/apply'),
+    { method: 'POST', body: JSON.stringify(options) },
+    [422]
+  )
+}
+
+export async function fetchHostnameIngressStatus(id: string): Promise<IngressStatus> {
+  return await apiFetch(hostnamePath(id, '/status'))
+}
+
+export async function removeHostnameIngress(id: string): Promise<{ ok: boolean }> {
+  return await adminJson(hostnamePath(id, '/remove'), { method: 'POST' })
+}
+
+export async function fetchIngressAccounts(): Promise<{
+  ok: boolean
+  accounts: IngressAccountRecord[]
+}> {
+  return await apiFetch(`${INGRESS}/accounts`)
+}
+
+/** The token is sent once and never returned. A 422 carries the failed checks. */
+export async function addIngressAccount(input: {
+  provider: 'cloudflare'
+  label: string
+  token: string
+}): Promise<AddIngressAccountResult> {
+  return await adminAnswer(
+    `${INGRESS}/accounts`,
+    { method: 'POST', body: JSON.stringify(input) },
+    [422]
+  )
+}
+
+export async function recheckIngressAccount(id: string): Promise<CloudflarePreflight> {
+  return await adminJson(`${INGRESS}/accounts/${encodeURIComponent(id)}/recheck`, {
+    method: 'POST',
+  })
+}
+
+/** A 409 `in-use` names the hostnames that still use the account. */
+export async function removeIngressAccount(id: string): Promise<RemoveIngressAccountResult> {
+  return await adminAnswer(
+    `${INGRESS}/accounts/${encodeURIComponent(id)}`,
+    { method: 'DELETE' },
+    [409]
+  )
+}
+
+export type PanelDnsStage =
+  | 'idle'
+  | 'preflight'
+  | 'ordering'
+  | 'publishing'
+  | 'waiting-dns'
+  | 'validating'
+  | 'finalizing'
+  | 'issued'
+  | 'failed'
+  | 'backoff'
+
+export type PanelDnsCause =
+  | 'zone-not-on-provider'
+  | 'scope-missing'
+  | 'txt-not-visible'
+  | 'caa-forbids'
+  | 'duplicate-limit'
+  | 'failed-authz-limit'
+  | 'provider-error'
+  | 'provider-rate-limited'
+  | 'acme-error'
+  | 'account-error'
+
+export type PanelDnsCertificate = {
+  ok: true
+  stage: PanelDnsStage
+  attempts: number
+  nextAttemptAt: string | null
+  stopUntil: string | null
+  lastError: { cause: PanelDnsCause; detail: string; at: string } | null
+  renewAt: string | null
+  notAfter: string | null
+  expiryAlerted: number[]
+}
+
+/** Order Now and Retry answer the new state, or `{ ok: false, error }` when paused or already open. */
+export type PanelDnsOrderResult = PanelDnsCertificate | { ok: false; error: string }
+
+function acmeDnsPath(id: string, action = ''): string {
+  return `${ADMIN_API}/instance/acme-dns/hostnames/${encodeURIComponent(id)}${action}`
+}
+
+export async function fetchPanelDnsCertificate(id: string): Promise<PanelDnsCertificate> {
+  return await apiFetch(acmeDnsPath(id))
+}
+
+export async function orderPanelDnsCertificate(
+  id: string,
+  retry: boolean
+): Promise<PanelDnsOrderResult> {
+  return await adminAnswer(
+    acmeDnsPath(id, retry ? '/retry' : '/order'),
+    { method: 'POST' },
+    [409, 422]
+  )
+}
+
+async function adminRequest(path: string, init: RequestInit): Promise<Response> {
   const headers: Record<string, string> = {
     'content-type': 'application/json',
     ...clientVersionHeaders(),
@@ -6081,6 +6475,27 @@ async function adminJson<T>(path: string, init: RequestInit): Promise<T> {
     headers,
   })
   recordInstanceVersion(response.headers)
+  return response
+}
+
+/**
+ * Like `adminJson`, but a refusal whose status is in `accepted` hands its body
+ * back instead of throwing: those answers carry data the screen shows (failed
+ * checks, the hostnames still using an account, an apply cause).
+ */
+async function adminAnswer<T>(
+  path: string,
+  init: RequestInit,
+  accepted: readonly number[]
+): Promise<T> {
+  const response = await adminRequest(path, init)
+  const body = (await response.json().catch(() => null)) as { error?: string } | null
+  if (response.ok || (accepted.includes(response.status) && body !== null)) return body as T
+  throw new Error(`${path} failed: ${formatFetchFailureDetail(response.status, body?.error)}`)
+}
+
+async function adminJson<T>(path: string, init: RequestInit): Promise<T> {
+  const response = await adminRequest(path, init)
   const body = (await response.json().catch(() => null)) as {
     error?: string
     invalid?: unknown

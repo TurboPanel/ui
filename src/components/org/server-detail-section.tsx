@@ -1,4 +1,5 @@
 import { PhpModePolicyPanel } from '@/components/org/php-mode-policy-panel'
+import { PanelKeyBadge } from '@/components/org/panel-key-badge'
 import {
   useCallback,
   useEffect,
@@ -44,6 +45,7 @@ import {
   Button,
   ButtonRow,
   ConfirmButton,
+  InlineNotice,
   LoadingState,
   MonoText,
   SectionPanel,
@@ -52,6 +54,7 @@ import {
 import { channelLabel, daemonUnsupportedLabel, runningBuildLabel } from '@/lib/daemon-update-labels'
 import { SERVER_UPDATES_AUTOMATIC_COPY } from '@/lib/update-automation'
 import { formatLocalDateTime } from '@/lib/format-datetime'
+import { hostRestartNeeded, restartNeededBody } from '@/lib/host-facts'
 import { configuredSourceLabel } from '@/lib/host-defaults'
 import { formatMemoryPageSize, memoryPageSizeHint } from '@/lib/memory-page-size'
 import {
@@ -63,6 +66,7 @@ import {
 } from '@/lib/org-navigation'
 import { ServerDangerZone } from '@/components/org/server-danger-zone'
 import { ServerDeletePanel } from '@/components/org/server-delete-panel'
+import { ServerReenrollTokenPanel } from '@/components/org/server-reenroll-token-panel'
 import {
   formatServerDeleteBlockedError,
   isForbiddenError,
@@ -85,6 +89,7 @@ import {
   useResetServerUpdateStatus,
   useRevokeServerDaemonKey,
   useServerDetail,
+  useServerMetricsFacts,
   useServerUpdateStatus,
   useSetServerHostname,
   useUpdateServer,
@@ -506,6 +511,27 @@ function renderServerDeletePanel(
   )
 }
 
+/**
+ * Automatic security updates never restart a server; when one (a new kernel)
+ * needs a restart the host reports it, and this says so above every tab.
+ */
+function RestartNeededNotice({
+  orgId,
+  serverId,
+  canManage,
+  colocated,
+}: Readonly<{ orgId: string; serverId: string; canManage: boolean; colocated: boolean }>) {
+  const factsQuery = useServerMetricsFacts(orgId, serverId)
+  if (!hostRestartNeeded(factsQuery.data)) return null
+  return (
+    <InlineNotice
+      tone="warning"
+      title="Restart Needed"
+      body={restartNeededBody({ canManage, colocated })}
+    />
+  )
+}
+
 function ServerDetailLoading(): ReactNode {
   return <LoadingState label="Loading server…" />
 }
@@ -838,9 +864,17 @@ export function ServerDetailSection({
               </View>
             ) : null}
           </View>
+          <PanelKeyBadge pinnedBy={server.trustPinnedBy} withHelp />
           {connectedVia ? <MonoText style={styles.connectedVia}>{connectedVia}</MonoText> : null}
         </View>
       </View>
+
+      <RestartNeededNotice
+        orgId={orgId}
+        serverId={serverId}
+        canManage={canManage}
+        colocated={updateVm.colocated}
+      />
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         <SegmentedControl
@@ -892,6 +926,9 @@ export function ServerDetailSection({
         offline={!server.connected}
         revokeKeyPanel={revokeKeyPanel}
         deletePanel={deletePanel}
+        reenrollPanel={
+          updateVm.colocated ? null : <ServerReenrollTokenPanel orgId={orgId} serverId={serverId} />
+        }
       />
     </View>
   )

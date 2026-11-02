@@ -19,6 +19,9 @@ import {
   deleteLicense,
   deleteProject,
   isForbiddenError,
+  issueServerReenrollTicket,
+  reissueLicenseTicket,
+  revokeServerReenrollTickets,
   deleteVariable,
   deleteWorkspace,
   fetchAccessGrants,
@@ -37,6 +40,7 @@ import {
   fetchOrganization,
   fetchOrganizationCa,
   fetchOrganizationCaRotation,
+  fetchInstanceIdentity,
   fetchOrganizations,
   fetchPermissions,
   fetchProject,
@@ -55,6 +59,7 @@ import {
   pingDaemon,
   PROJECT_HAS_RUNNING_SERVICES_ERROR,
   rebootServer,
+  saveInstanceIdentityNext,
   resolveResourceId,
   retireOrganizationCa,
   rotateOrganizationCa,
@@ -449,6 +454,23 @@ describe('instance-api fetch wrappers', () => {
     await expect(deleteLicense('lic-1')).resolves.toEqual({ ok: true })
   })
 
+  it('re-enroll ticket wrappers call the ticket routes', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ ticketId: 't', expiresAt: 'x', licenseToken: 'a', licenseArg: 'b' })
+    )
+    await expect(issueServerReenrollTicket('srv-1')).resolves.toMatchObject({ ticketId: 't' })
+    expect(fetchMock.mock.calls.at(-1)?.[0]).toContain('/servers/srv-1/reenroll-ticket')
+    expect(fetchMock.mock.calls.at(-1)?.[1]).toMatchObject({ method: 'POST' })
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, revoked: 1 }))
+    await expect(revokeServerReenrollTickets('srv-1')).resolves.toMatchObject({ revoked: 1 })
+    expect(fetchMock.mock.calls.at(-1)?.[1]).toMatchObject({ method: 'DELETE' })
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ licenseId: 'k1', licenseArg: 'b' }))
+    await reissueLicenseTicket('k1')
+    expect(fetchMock.mock.calls.at(-1)?.[0]).toContain('/licenses/k1/ticket')
+  })
+
   it('server command wrappers enqueue and poll', async () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse({ ok: true, commandId: 'cmd-1', status: 'queued' })
@@ -798,6 +820,51 @@ describe('instance-api fetch wrappers', () => {
     expect(JSON.parse(String((init as RequestInit).body))).toEqual({
       name: 'Huey',
       installBaseUrl: 'https://panel.example/',
+    })
+  })
+
+  it('createLicense passes the control plane key fingerprints through when sent', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        licenseId: 'lic-3',
+        licenseToken: 'tok',
+        installCommand: 'curl | sh',
+        panelFingerprint: 'C'.repeat(43),
+        nextFingerprint: null,
+        installUrl: 'https://cp.example.com',
+      })
+    )
+    const created = await createLicense()
+    expect(created.panelFingerprint).toBe('C'.repeat(43))
+    expect(created.nextFingerprint).toBeNull()
+    expect(created.installUrl).toBe('https://cp.example.com')
+  })
+
+  it('createLicense tolerates an older control plane that sends no fingerprints', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ licenseId: 'lic-4', licenseToken: 'tok', installCommand: 'curl | sh' })
+    )
+    const created = await createLicense()
+    expect(created.panelFingerprint).toBeUndefined()
+  })
+
+  it('fetchInstanceIdentity reads the admin identity route', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, configured: false, servers: [] }))
+    await expect(fetchInstanceIdentity()).resolves.toMatchObject({ configured: false })
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/api/admin/v1/instance/identity')
+  })
+
+  it('saveInstanceIdentityNext puts the fingerprint, or null to clear it', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, next: null }))
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, next: null }))
+    await saveInstanceIdentityNext('N'.repeat(43))
+    await saveInstanceIdentityNext(null)
+    const [url, init] = fetchMock.mock.calls[0] ?? []
+    expect(String(url)).toContain('/api/admin/v1/instance/identity/next')
+    expect((init as RequestInit).method).toBe('PUT')
+    expect(JSON.parse(String((init as RequestInit).body))).toEqual({ fingerprint: 'N'.repeat(43) })
+    expect(JSON.parse(String((fetchMock.mock.calls[1]?.[1] as RequestInit).body))).toEqual({
+      fingerprint: null,
     })
   })
 

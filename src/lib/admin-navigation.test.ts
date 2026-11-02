@@ -26,6 +26,7 @@ describe('ADMIN_AREAS', () => {
           'trusted-proxies',
           'tunnel',
           'platform-ca',
+          'panel-identity',
         ])
       } else if (area.id === 'updates') {
         expect(area.subRoutes.map((sub) => sub.id)).toEqual(['history'])
