@@ -42,7 +42,7 @@ function environmentLabel(environment: EnvironmentRecord): string {
 
 function resolveSelectedId(
   previous: string | null,
-  environments: EnvironmentRecord[],
+  environments: EnvironmentRecord[]
 ): string | null {
   if (previous && environments.some((env) => env.id === previous)) {
     return previous
@@ -212,12 +212,7 @@ function EnvironmentToolbar({
       {canOwn ? (
         <View style={styles.toolbarActions}>
           <Button label="Rename" variant="secondary" size="sm" onPress={onRename} />
-          <Button
-            label="New environment"
-            variant="secondary"
-            size="sm"
-            onPress={onAdd}
-          />
+          <Button label="New environment" variant="secondary" size="sm" onPress={onAdd} />
           {canDelete ? (
             <ConfirmButton
               key={activeEnvironment.id}
@@ -237,7 +232,7 @@ function EnvironmentToolbar({
 function useEnvironmentDeleteFlow(
   orgId: string,
   activeEnvironment: EnvironmentRecord | null,
-  setError: (message: string | null) => void,
+  setError: (message: string | null) => void
 ) {
   const deleteEnvironment = useDeleteEnvironment(orgId)
   const stopEnvironment = useStopEnvironmentMutation(orgId)
@@ -249,9 +244,7 @@ function useEnvironmentDeleteFlow(
     setError(null)
     setFailure(null)
     const result = await deleteEnvironment.run(
-      confirmName === undefined
-        ? activeEnvironment.id
-        : { id: activeEnvironment.id, confirmName },
+      confirmName === undefined ? activeEnvironment.id : { id: activeEnvironment.id, confirmName }
     )
     if (result.ok) {
       setNameStep(null)
@@ -301,10 +294,8 @@ export function ProjectEnvironmentsSection({
 }>) {
   const canOwn = useCan('organization', orgId, 'organization:own')
   const canManage = useCan('organization', orgId, 'organization:manage')
-  const {
-    defaultEnvironmentName,
-    isLoading: defaultNameLoading,
-  } = useOrgDefaultEnvironmentName(orgId)
+  const { defaultEnvironmentName, isLoading: defaultNameLoading } =
+    useOrgDefaultEnvironmentName(orgId)
 
   const environmentsQuery = useEnvironments(orgId, projectId)
   const createEnvironment = useCreateEnvironment(orgId)
@@ -321,13 +312,9 @@ export function ProjectEnvironmentsSection({
 
   const provisionAttemptedFor = useRef<string | null>(null)
 
-  const activeEnvironment =
-    environments.find((env) => env.id === selectedId) ?? null
+  const activeEnvironment = environments.find((env) => env.id === selectedId) ?? null
 
-  const updateEnvironment = useUpdateEnvironment(
-    orgId,
-    activeEnvironment?.id ?? '',
-  )
+  const updateEnvironment = useUpdateEnvironment(orgId, activeEnvironment?.id ?? '')
   const deleteFlow = useEnvironmentDeleteFlow(orgId, activeEnvironment, setError)
 
   useEffect(() => {
@@ -336,11 +323,7 @@ export function ProjectEnvironmentsSection({
 
   useEffect(() => {
     if (defaultNameLoading || environmentsQuery.isLoading) return
-    if (
-      environments.length === 0 &&
-      canOwn &&
-      provisionAttemptedFor.current !== projectId
-    ) {
+    if (environments.length === 0 && canOwn && provisionAttemptedFor.current !== projectId) {
       provisionAttemptedFor.current = projectId
       createEnvironment
         .run({
@@ -518,9 +501,7 @@ export function ProjectEnvironmentsSection({
   return (
     <View style={styles.root}>
       <Text style={styles.heading}>Environments</Text>
-      {error ?? queryError ? (
-        <Text style={panelStyles.error}>{error ?? queryError}</Text>
-      ) : null}
+      {(error ?? queryError) ? <Text style={panelStyles.error}>{error ?? queryError}</Text> : null}
       {content}
     </View>
   )
