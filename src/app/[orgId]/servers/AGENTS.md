@@ -52,4 +52,6 @@ Console-wide rules: `../AGENTS.md`; API helper contract: `../../../lib/instance-
 - Durable Object billing, cell storage schema, and the "no DO polling / O(1) status reads" rationale are canonical in `../turbopanel/AGENTS.md` (Daemon Cell); UI must never introduce per-server DO/Redis reads.
 
 `useCan(entityKind, entityId, permissionKey)` (organization and team ids are looked up; a server or managed cluster is checked by its own id) in `src/lib/query-client.ts` is a **display hint only** — never a security boundary. On `403`, call `handleUnauthorized()` from `useAuth()` to clear the session and redirect.
+
 - Server delete asks per principal: `ServerDeletePanel` loads `GET /servers/:id/principal-removal-plan`; every row defaults to keeping the identity, and only rows set to delete outright go in `DELETE /servers/:id` as `principals`.
+- **Restart Needed** (`RestartNeededNotice` in `server-detail-section.tsx`): servers install Debian security updates on their own and never restart by themselves; when the host's last facts (`useServerMetricsFacts`, shared with the Metrics tab's About this host) carry `rebootRequired: 'yes'`, a warning `InlineNotice` sits above the tab rail on every tab and points at Reboot server on the Control tab. Predicate: `hostRestartNeeded` (`src/lib/host-facts.ts`). No facts route or no metrics backend means no notice.

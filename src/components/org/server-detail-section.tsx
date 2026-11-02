@@ -45,6 +45,7 @@ import {
   Button,
   ButtonRow,
   ConfirmButton,
+  InlineNotice,
   LoadingState,
   MonoText,
   SectionPanel,
@@ -53,6 +54,7 @@ import {
 import { channelLabel, daemonUnsupportedLabel, runningBuildLabel } from '@/lib/daemon-update-labels'
 import { SERVER_UPDATES_AUTOMATIC_COPY } from '@/lib/update-automation'
 import { formatLocalDateTime } from '@/lib/format-datetime'
+import { hostRestartNeeded } from '@/lib/host-facts'
 import { configuredSourceLabel } from '@/lib/host-defaults'
 import { formatMemoryPageSize, memoryPageSizeHint } from '@/lib/memory-page-size'
 import {
@@ -86,6 +88,7 @@ import {
   useResetServerUpdateStatus,
   useRevokeServerDaemonKey,
   useServerDetail,
+  useServerMetricsFacts,
   useServerUpdateStatus,
   useSetServerHostname,
   useUpdateServer,
@@ -507,6 +510,22 @@ function renderServerDeletePanel(
   )
 }
 
+/**
+ * Automatic security updates never restart a server; when one (a new kernel)
+ * needs a restart the host reports it, and this says so above every tab.
+ */
+function RestartNeededNotice({ orgId, serverId }: Readonly<{ orgId: string; serverId: string }>) {
+  const factsQuery = useServerMetricsFacts(orgId, serverId)
+  if (!hostRestartNeeded(factsQuery.data)) return null
+  return (
+    <InlineNotice
+      tone="warning"
+      title="Restart Needed"
+      body="Restart needed to finish security updates. This server never restarts on its own; use Reboot server on the Control tab when it suits you."
+    />
+  )
+}
+
 function ServerDetailLoading(): ReactNode {
   return <LoadingState label="Loading server…" />
 }
@@ -843,6 +862,8 @@ export function ServerDetailSection({
           {connectedVia ? <MonoText style={styles.connectedVia}>{connectedVia}</MonoText> : null}
         </View>
       </View>
+
+      <RestartNeededNotice orgId={orgId} serverId={serverId} />
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         <SegmentedControl

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { HOST_FACT_LABELS, hostFactRows } from './host-facts'
+import type { HostFactsResponse } from '@/lib/instance-api'
+import { HOST_FACT_LABELS, hostFactRows, hostRestartNeeded } from './host-facts'
 
 describe('hostFactRows', () => {
   it('shows only what the host reported, in the fixed order, in plain words', () => {
@@ -31,5 +32,28 @@ describe('hostFactRows', () => {
     expect(hostFactRows({ text: {}, blockDevices: [], gpus: [] })).toEqual([])
     const keys = HOST_FACT_LABELS.map(([key]) => key)
     expect(new Set(keys).size).toBe(keys.length)
+  })
+})
+
+describe('hostRestartNeeded', () => {
+  const response = (rebootRequired: string | undefined, available = true): HostFactsResponse => ({
+    ok: true,
+    serverId: 'srv-1',
+    backend: 'duckdb',
+    available,
+    sampledAt: null,
+    facts: { text: rebootRequired ? { rebootRequired } : {}, blockDevices: [], gpus: [] },
+  })
+
+  it('is true only when the host reported yes', () => {
+    expect(hostRestartNeeded(response('yes'))).toBe(true)
+    expect(hostRestartNeeded(response('no'))).toBe(false)
+    expect(hostRestartNeeded(response(undefined))).toBe(false)
+  })
+
+  it('is false with no facts or when the facts are not available', () => {
+    expect(hostRestartNeeded(null)).toBe(false)
+    expect(hostRestartNeeded(undefined)).toBe(false)
+    expect(hostRestartNeeded(response('yes', false))).toBe(false)
   })
 })
