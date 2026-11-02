@@ -2,9 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   environmentDeleteFailure,
   environmentDeleteInput,
-  environmentDeleteInput,
   environmentDeleteNeedsName,
-  environmentDeleteOutcome,
   environmentDeleteOutcome,
   environmentDeletePrompt,
 } from './environment-delete'
