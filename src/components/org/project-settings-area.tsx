@@ -1,11 +1,10 @@
-import { EnvironmentDeleteNameModal } from '@/components/org/environment-delete-name-modal'
-import { environmentDeleteInput, environmentDeleteOutcome } from '@/lib/environment-delete'
+import { environmentConfirmName } from '@/lib/environment-delete'
 import { useState, type ReactNode } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { usePathname, useRouter, type Href } from 'expo-router'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { useProjectContext } from '@/components/org/project/project-context'
-import { Button, ButtonRow, ConfirmButton, SectionPanel } from '@/components/ui'
+import { Button, ButtonRow, SectionPanel, TypeNameConfirmModal } from '@/components/ui'
 import { VariablesSection } from '@/components/org/variables-section'
 import type { EnvironmentRecord } from '@/lib/instance-api'
 import { parseProjectEnvironmentId, projectOverviewHref } from '@/lib/project-navigation'
@@ -102,11 +101,10 @@ function EnvironmentDeleteControl({
   const { orgId, projectId, environments, canOwn, setError, invalidateEnvironments } =
     useProjectContext()
   const deleteEnvironment = useDeleteEnvironment(orgId)
-  // Read when the button is armed, so the confirmation names what goes.
-  const [armed, setArmed] = useState(false)
+  // Read while the name dialog is open, so it says what goes.
   const [nameStep, setNameStep] = useState<{ error: string | null } | null>(null)
   const preview = useEnvironmentDeletePreview(orgId, selectedEnvironment.id, {
-    enabled: armed && canOwn && environments.length > 1,
+    enabled: nameStep !== null && canOwn && environments.length > 1,
   })
 
   if (!canOwn) {
@@ -117,7 +115,7 @@ function EnvironmentDeleteControl({
     return (
       <ButtonRow>
         <Button
-          label="Delete environment"
+          label="Delete Environment"
           variant="secondary"
           size="sm"
           disabled
@@ -141,27 +139,21 @@ function EnvironmentDeleteControl({
 
   const removing = deleteEnvironment.isPending
 
-  const handleDelete = (confirmName?: string) => {
+  const handleDelete = (confirmName: string) => {
     if (removing) return
     void (async () => {
       setError(null)
       const deletedId = selectedEnvironment.id
-      const result = await deleteEnvironment.run(environmentDeleteInput(deletedId, confirmName))
+      const result = await deleteEnvironment.run({ id: deletedId, confirmName })
       if (!result.ok) {
         // The result, not `actionError`: that one is read from this render and is stale here.
-        const outcome =
-          result.error === null ? null : environmentDeleteOutcome(result.error, '', confirmName)
-        if (outcome?.kind === 'ask-name') {
-          setNameStep({ error: null })
-        } else if (outcome?.kind === 'name-error') {
-          setNameStep({ error: outcome.text })
-        } else if (result.error !== null) {
-          setError(
-            deleteFailureMessage(
+        if (result.error !== null) {
+          setNameStep({
+            error: deleteFailureMessage(
               result.cause ?? result.error,
               'The environment could not be deleted. Try again.'
-            )
-          )
+            ),
+          })
         }
         return
       }
@@ -184,18 +176,18 @@ function EnvironmentDeleteControl({
 
   return (
     <>
-      <ConfirmButton
-        key={`${selectedEnvironment.id}:${environments.length}`}
-        label="Delete environment"
-        prompt={prompt}
-        confirmLabel="Delete environment"
+      <Button
+        label="Delete Environment"
+        variant="danger"
+        size="sm"
         busy={removing}
-        onArmedChange={setArmed}
-        onConfirm={() => handleDelete()}
+        onPress={() => setNameStep({ error: null })}
       />
       {nameStep ? (
-        <EnvironmentDeleteNameModal
-          name={selectedEnvironment.name ?? ''}
+        <TypeNameConfirmModal
+          thing="Environment"
+          name={environmentConfirmName(selectedEnvironment)}
+          description={prompt}
           pending={removing}
           error={nameStep.error}
           onCancel={() => setNameStep(null)}

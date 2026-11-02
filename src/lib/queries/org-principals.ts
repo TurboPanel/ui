@@ -16,7 +16,11 @@ export function useOrgPrincipals(orgId: string, options?: Readonly<{ enabled?: b
 export function useDeleteOrgPrincipal(orgId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (principalId: string) => deleteOrgPrincipal(orgId, principalId),
+    mutationFn: ({
+      principalId,
+      confirmName,
+    }: Readonly<{ principalId: string; confirmName: string }>) =>
+      deleteOrgPrincipal(orgId, principalId, confirmName),
     onSuccess: () => reloadPrincipalLists(queryClient, orgId),
     // A refused delete (still in use) means the list on screen is stale.
     onError: () => reloadPrincipalLists(queryClient, orgId),

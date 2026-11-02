@@ -6,12 +6,12 @@ import {
   Badge,
   Button,
   ButtonRow,
-  ConfirmButton,
   EmptyState,
   LoadingState,
   MonoText,
   SectionPanel,
   TextField,
+  TypeNameDeleteButton,
 } from '@/components/ui'
 import { isValidCidr, normalizeCidr } from '@/lib/cidr'
 import type { NetworkRecord } from '@/lib/instance-api'
@@ -24,6 +24,7 @@ import {
 } from '@/lib/queries/topology'
 import { useCan } from '@/lib/query-client'
 import { spacing } from '@/lib/theme'
+import { confirmationName } from '@/lib/confirm-name'
 
 /** Typical VPN allocation shown as a form hint — not a reachable host. */
 const PLACEHOLDER_RESERVED_CIDR = '10.8.0.0/16' // NOSONAR typescript:S1313 — RFC1918 form placeholder, not a reachable host
@@ -140,10 +141,12 @@ function ReservedRangeCard({
           <Badge label="Reserved" />
         </View>
         {canManage ? (
-          <ConfirmButton
+          <TypeNameDeleteButton
             label={deleting ? 'Deleting…' : 'Delete'}
-            confirmLabel="Delete reserved range"
-            prompt="Stop reserving this range? TurboPanel may then assign addresses inside it."
+            thing="Reserved Range"
+            name={confirmationName(network.cidr, storedName, network.id)}
+            description="TurboPanel may then assign addresses inside it."
+            undoable
             busy={deleting}
             disabled={pending}
             onConfirm={onDelete}

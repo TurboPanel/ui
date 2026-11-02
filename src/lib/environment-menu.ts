@@ -1,7 +1,7 @@
 /** Pure rules for the environment header "⋯" menu (no React). */
 
 export const DESTROY_EXPLANATION =
-  "Removes this environment's containers and their data volumes. The environment and its settings stay. Use Delete environment to remove the environment itself."
+  "Removes this environment's containers and their data volumes. The environment and its settings stay. Use Delete Environment to remove the environment itself."
 
 export const DESTROY_ARMED_HINT = `${DESTROY_EXPLANATION} Cannot be undone.`
 
@@ -126,7 +126,7 @@ export function environmentActionItems(
   }
   if (input.canOwn) {
     items.push(
-      item('delete', 'Delete environment…', {
+      item('delete', 'Delete Environment…', {
         tone: 'danger',
         disabledReason: deleteBlockReason(input),
       })

@@ -326,7 +326,9 @@ describe('environments query hooks', () => {
       wrapper: createWrapper(client),
     })
 
-    await expect(result.current.run(environmentId)).resolves.toMatchObject({
+    await expect(
+      result.current.run({ id: environmentId, confirmName: 'production' })
+    ).resolves.toMatchObject({
       ok: true,
     })
 

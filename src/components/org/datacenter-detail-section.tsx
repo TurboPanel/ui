@@ -11,7 +11,6 @@ import {
   Badge,
   Button,
   ButtonRow,
-  ConfirmButton,
   EmptyState,
   FormField,
   InlineNotice,
@@ -21,6 +20,7 @@ import {
   SettingRow,
   TextField,
   Toggle,
+  TypeNameDeleteButton,
 } from '@/components/ui'
 import type {
   DatacenterAddressPreference,
@@ -100,6 +100,7 @@ import {
 } from '@/lib/host-defaults'
 import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
 import { userErrorMessage } from '@/lib/user-error'
+import { confirmationName } from '@/lib/confirm-name'
 
 function serverTitle(server: OrgServerRecord): string {
   return server.name?.trim() || server.hostname?.trim() || server.id
@@ -306,10 +307,11 @@ function SubnetCard({
             <Text style={panelStyles.muted}>Unassign the pinned servers first.</Text>
           ) : null}
           {canManage ? (
-            <ConfirmButton
-              label="Delete subnet"
-              confirmLabel="Confirm delete"
-              prompt={`Delete subnet ${subnet.cidr}?`}
+            <TypeNameDeleteButton
+              label="Delete Subnet"
+              thing="Subnet"
+              name={subnet.cidr}
+              description="The subnet is removed from this datacenter."
               disabled={blocked || pending}
               onConfirm={onDelete}
             />
@@ -1123,11 +1125,14 @@ function DatacenterTimezonePanel({
 }
 
 function DatacenterDeletePanel({
+  name,
   memberCount,
   canManage,
   deleting,
   onConfirm,
 }: Readonly<{
+  /** The name typed to delete: the datacenter's name, else its id. */
+  name: string
   memberCount: number
   canManage: boolean
   deleting: boolean
@@ -1144,10 +1149,11 @@ function DatacenterDeletePanel({
       ) : (
         <Text style={panelStyles.muted}>Permanently remove this empty datacenter.</Text>
       )}
-      <ConfirmButton
-        label="Delete datacenter"
-        confirmLabel="Confirm delete"
-        prompt="Permanently delete this datacenter?"
+      <TypeNameDeleteButton
+        label="Delete Datacenter"
+        thing="Datacenter"
+        name={name}
+        description="The datacenter is removed for good."
         busy={deleting}
         disabled={blocked}
         onConfirm={onConfirm}
@@ -1593,6 +1599,7 @@ export function DatacenterDetailSection({
       />
 
       <DatacenterDeletePanel
+        name={confirmationName(datacenter?.name, datacenterId)}
         memberCount={members.length}
         canManage={canManage}
         deleting={deleteMutation.isPending}

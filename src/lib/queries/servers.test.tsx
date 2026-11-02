@@ -1385,18 +1385,24 @@ describe('servers query hooks', () => {
       wrapper: createWrapper(client),
     })
 
-    await result.current.run({ serverId })
-    expect(deleteServer).toHaveBeenCalledWith(serverId, orgId, undefined)
+    await result.current.run({ serverId, confirmName: 'web-1' })
+    expect(deleteServer).toHaveBeenCalledWith(serverId, orgId, { confirmName: 'web-1' })
 
     deleteServer.mockResolvedValueOnce({ ok: true })
-    await result.current.run({ serverId, forgetResources: true })
-    expect(deleteServer).toHaveBeenCalledWith(serverId, orgId, { forgetResources: true })
+    await result.current.run({ serverId, forgetResources: true, confirmName: 'web-1' })
+    expect(deleteServer).toHaveBeenCalledWith(serverId, orgId, {
+      confirmName: 'web-1',
+      forgetResources: true,
+    })
     expect(invalidateSpy).toHaveBeenCalled()
 
     deleteServer.mockResolvedValueOnce({ ok: true })
     const choices = [{ principalId: 'p1', action: 'delete' as const }]
-    await result.current.run({ serverId, principals: choices })
-    expect(deleteServer).toHaveBeenLastCalledWith(serverId, orgId, { principals: choices })
+    await result.current.run({ serverId, principals: choices, confirmName: 'web-1' })
+    expect(deleteServer).toHaveBeenLastCalledWith(serverId, orgId, {
+      confirmName: 'web-1',
+      principals: choices,
+    })
   })
 
   it('useServerPrincipals and useServerPrincipalRemovalPlan load the server principals', async () => {

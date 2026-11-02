@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { EnvironmentFoldersPanel } from './environment-folders-panel'
 
@@ -11,6 +11,7 @@ const state = vi.hoisted(() => ({
   mutate: vi.fn(),
 }))
 
+vi.mock('expo-clipboard', () => ({ setStringAsync: vi.fn(() => Promise.resolve()) }))
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
 vi.mock('react-native-svg', async () => (await import('@/components/ui/v4/rn-stub')).svgStub)
 vi.mock(
@@ -29,7 +30,8 @@ vi.mock('@/lib/queries/folders', () => ({
   }),
   useRemoveFolder: () => ({ mutate: state.mutate, isPending: false, isError: false }),
 }))
-vi.mock('@/components/ui', () => ({
+vi.mock('@/components/ui', async () => ({
+  TypeNameDeleteButton: (await import('@/components/ui/type-name-confirm')).TypeNameDeleteButton,
   Badge: ({ label }: { label: string }) => <span>{label}</span>,
   Button: ({ label, onPress }: { label: string; onPress: () => void }) => (
     <button onClick={onPress}>{label}</button>
@@ -55,6 +57,14 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
 })
+
+/** Opens the name dialog with `opener`, types `name` and presses the dialog's `action` button. */
+function confirmByName(opener: HTMLElement, name: string, action: string) {
+  fireEvent.click(opener)
+  const dialog = screen.getByRole('dialog')
+  fireEvent.change(within(dialog).getByRole('textbox'), { target: { value: name } })
+  fireEvent.click(within(dialog).getByRole('button', { name: action }))
+}
 
 describe('EnvironmentFoldersPanel', () => {
   it('says it is checking while the folders load', () => {
@@ -123,12 +133,12 @@ describe('EnvironmentFoldersPanel', () => {
       ],
     }
     const { unmount } = render(<EnvironmentFoldersPanel orgId="o" environmentId="e" />)
-    expect(screen.queryByText('Remove from server')).toBeNull()
+    expect(screen.queryByText('Remove From Server')).toBeNull()
     expect(screen.queryByText('Try again now')).toBeNull()
     unmount()
 
     render(<EnvironmentFoldersPanel orgId="o" environmentId="e" canManage />)
-    fireEvent.click(screen.getByText('Remove from server'))
+    confirmByName(screen.getByText('Remove From Server'), 'b', 'Remove Folder')
     expect(state.mutate).toHaveBeenCalledWith('f2')
     fireEvent.click(screen.getByText('Try again now'))
     expect(state.mutate).toHaveBeenCalledWith('f1')
@@ -152,8 +162,8 @@ describe('EnvironmentFoldersPanel', () => {
       ],
     }
     render(<EnvironmentFoldersPanel orgId="o" environmentId="e" canManage />)
-    expect(screen.getAllByText('Remove from server')).toHaveLength(1)
-    fireEvent.click(screen.getByText('Remove from server'))
+    expect(screen.getAllByText('Remove From Server')).toHaveLength(1)
+    confirmByName(screen.getByText('Remove From Server'), 'free', 'Remove Folder')
     expect(state.mutate).toHaveBeenCalledWith('f2')
   })
 })

@@ -7,16 +7,16 @@ import {
   Button,
   ButtonRow,
   Checkbox,
-  ConfirmButton,
   EmptyState,
   InlineNotice,
   LoadingState,
   SectionPanel,
-  Select,
   SegmentedControl,
-  type SegmentedOption,
+  Select,
   TextField,
   Toggle,
+  TypeNameDeleteButton,
+  type SegmentedOption,
 } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
 import {
@@ -352,12 +352,14 @@ function ChannelRow({
           onPress={() => void update.run({ id: channel.id, disabled: !disabled })}
           busy={update.isPending}
         />
-        <ConfirmButton
+        <TypeNameDeleteButton
           label="Remove"
-          confirmLabel="Remove channel"
-          prompt="Remove this channel? Its rules go with it."
+          thing="Channel"
+          verb="Remove"
+          name={channel.label}
+          description="Its rules go with it."
           busy={remove.isPending}
-          onConfirm={() => void remove.run(channel.id)}
+          onConfirm={() => remove.run(channel.id)}
         />
       </ButtonRow>
     </View>

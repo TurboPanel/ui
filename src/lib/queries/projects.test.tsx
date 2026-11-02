@@ -186,9 +186,12 @@ describe('projects query hooks', () => {
       wrapper: createWrapper(),
     })
 
-    await expect(result.current.run(projectId)).resolves.toMatchObject({
-      ok: true,
-    })
+    await expect(result.current.run({ id: projectId, confirmName: 'Shop' })).resolves.toMatchObject(
+      {
+        ok: true,
+      }
+    )
+    expect(deleteProject).toHaveBeenCalledWith(projectId, { confirmName: 'Shop' })
   })
 
   it('useProjectCatalog loads catalog entries', async () => {
@@ -323,11 +326,13 @@ describe('projects query hooks', () => {
       wrapper: createWrapper(client),
     })
 
-    await expect(result.current.run('pr-1')).resolves.toMatchObject({
+    await expect(
+      result.current.run({ principalId: 'pr-1', confirmName: 'shop' })
+    ).resolves.toMatchObject({
       ok: true,
     })
 
-    expect(deleteProjectPrincipal).toHaveBeenCalledWith(projectId, 'pr-1')
+    expect(deleteProjectPrincipal).toHaveBeenCalledWith(projectId, 'pr-1', 'shop')
     await waitFor(() => {
       expect(invalidate).toHaveBeenCalledWith({
         queryKey: queryKeys.org(orgId).projects.principals(projectId),

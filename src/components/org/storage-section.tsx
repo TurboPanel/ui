@@ -4,13 +4,13 @@ import { panelStyles } from '@/components/ui/panel-styles'
 import {
   Button,
   ButtonRow,
-  ConfirmButton,
   EmptyState,
   FormField,
   LoadingState,
   SectionPanel,
   SegmentedControl,
   TextField,
+  TypeNameDeleteButton,
 } from '@/components/ui'
 import type {
   OrgServerRecord,
@@ -27,7 +27,12 @@ import {
   useUpdateStorageMount,
 } from '@/lib/queries/storage'
 import { FolderNameFields } from '@/components/org/folder-name-fields'
-import { EMPTY_FOLDER_DRAFT, folderBodyFields, folderNameProblem, type FolderNameDraft } from '@/lib/directory-names'
+import {
+  EMPTY_FOLDER_DRAFT,
+  folderBodyFields,
+  folderNameProblem,
+  type FolderNameDraft,
+} from '@/lib/directory-names'
 import { useDirectoryNamesMode } from '@/lib/queries/folders'
 import { BackupSchedulesPanel } from '@/components/org/managed/managed-backup-schedules-panel'
 import { StorageBackupsPanel } from '@/components/org/storage-backups-panel'
@@ -561,10 +566,11 @@ function StorageRow({
         </>
       ) : null}
       {canManage ? (
-        <ConfirmButton
+        <TypeNameDeleteButton
           label={deleting ? 'Deleting…' : 'Delete'}
-          confirmLabel="Delete storage"
-          prompt="Remove this storage entry?"
+          thing="Storage"
+          name={row.name}
+          description="The storage entry is removed."
           busy={deleting}
           onConfirm={() => onDelete(row.id)}
         />

@@ -5,7 +5,7 @@ import { DirectoryDefaultsSettingsSection } from '@/components/org/directory-def
 import { OrgFoldersSection } from '@/components/org/org-folders-section'
 import {
   Badge,
-  ConfirmButton,
+  TypeNameDeleteButton,
   DataTable,
   DataTableCell,
   DataTableEmpty,
@@ -74,19 +74,19 @@ function PrincipalRow({
   alt: boolean
   canManage: boolean
   deleting: boolean
-  onDelete: (principalId: string) => void
+  onDelete: (principalId: string, confirmName: string) => void
 }>) {
   const blocked = principalDeleteBlockedReason(row)
   let actionCell: ReactNode = null
   if (canManage && row.canDelete) {
     actionCell = (
-      <ConfirmButton
+      <TypeNameDeleteButton
         label="Delete"
-        confirmLabel="Confirm delete"
-        prompt={deletePrompt(row)}
+        thing="Hosting Account"
+        name={row.name}
+        description={deletePrompt(row)}
         busy={deleting}
-        disabled={deleting}
-        onConfirm={() => onDelete(row.id)}
+        onConfirm={(typed) => onDelete(row.id, typed)}
       />
     )
   } else if (blocked) {
@@ -188,8 +188,12 @@ export function OrgPrincipalsTab({ orgId }: Readonly<{ orgId: string }>) {
                 alt={index % 2 === 1}
                 last={index === rows.length - 1}
                 canManage={canManage}
-                deleting={deleteMutation.isPending && deleteMutation.variables === row.id}
-                onDelete={(principalId) => deleteMutation.mutate(principalId)}
+                deleting={
+                  deleteMutation.isPending && deleteMutation.variables?.principalId === row.id
+                }
+                onDelete={(principalId, confirmName) =>
+                  deleteMutation.mutate({ principalId, confirmName })
+                }
               />
             ))}
           </DataTable>

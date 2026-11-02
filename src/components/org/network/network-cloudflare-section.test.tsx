@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { BadgeInUseError, type TunnelBadge, type TunnelCarrier } from '@/lib/instance-api'
@@ -15,9 +15,11 @@ const state = vi.hoisted(() => ({
   addBadge: vi.fn(),
 }))
 
+vi.mock('expo-clipboard', () => ({ setStringAsync: vi.fn(() => Promise.resolve()) }))
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
 vi.mock('@/components/ui/panel-styles', () => ({ panelStyles: {} }))
-vi.mock('@/components/ui', () => ({
+vi.mock('@/components/ui', async () => ({
+  TypeNameDeleteButton: (await import('@/components/ui/type-name-confirm')).TypeNameDeleteButton,
   Badge: ({ label }: Props) => <span>{label as string}</span>,
   Button: ({ label, onPress, disabled }: Props) => (
     <button type="button" disabled={Boolean(disabled)} onClick={onPress as () => void}>
@@ -94,6 +96,14 @@ const carrier = (badges: TunnelBadge[]): TunnelCarrier => ({
   badges,
 })
 
+/** Opens the name dialog with `opener`, types `name` and presses the dialog's `action` button. */
+function confirmByName(opener: HTMLElement, name: string, action: string) {
+  fireEvent.click(opener)
+  const dialog = screen.getByRole('dialog')
+  fireEvent.change(within(dialog).getByRole('textbox'), { target: { value: name } })
+  fireEvent.click(within(dialog).getByRole('button', { name: action }))
+}
+
 describe('NetworkCloudflareSection API Tokens', () => {
   beforeEach(() => {
     state.carriers = [carrier([badge()])]
@@ -157,7 +167,7 @@ describe('NetworkCloudflareSection API Tokens', () => {
       ),
     })
     render(<NetworkCloudflareSection orgId="o1" />)
-    fireEvent.click(screen.getByText('Remove'))
+    confirmByName(screen.getByText('Remove'), 'Shop DNS', 'Remove API Token')
     const alert = await screen.findByRole('alert')
     expect(alert.textContent).toContain('the tunnel web')
     expect(alert.textContent).toContain('the hostname blog.example.org (example.org)')

@@ -31,7 +31,7 @@ vi.mock('@/components/ui', () => ({
     </button>
   ),
   ButtonRow: ({ children }: { children?: unknown }) => <div>{children as never}</div>,
-  ConfirmButton: () => null,
+  TypeNameDeleteButton: () => null,
   CopyButton: ({
     label,
     value,

@@ -32,6 +32,7 @@ these instead of a local `StyleSheet`:
 | Blocking dialog | `ModalSheet` — centred dialog on desktop, bottom sheet on compact, backdrop dismiss, Android back |
 | Status indicator | `StatusDot` (`online` / `pending` / `offline` / `failed` / `neutral`); `ConnectionStatusDot` when a server's live pulse is wanted |
 | Buttons | `Button` (40 / 32 with a mouse, 44 at every size on a phone or coarse pointer), `ButtonRow`, `ConfirmButton`, `CopyButton` |
+| Deleting a named thing | `TypeNameDeleteButton` (or `TypeNameConfirmModal` when the screen owns the open state): **Delete <Thing>** dialog with the exact name, a **Copy** button and a field; the destructive button works only on an exact match. Owner rule: every delete of a named thing uses it. `ConfirmButton` stays for unnamed items (a backup, a grant, a token) and for revoke/unlink actions |
 | Text link | `TextLink` — link-blue words, as tall as the text with a mouse and a 44 x 44 pt tap area on touch, keyboard focus ring; `expanded` turns it into a show / hide disclosure. Never a bare `Pressable` + `Text` |
 | Inputs | `TextField`, `FormField`, `Checkbox`, `Select`, `SegmentedControl` |
 | States | `EmptyState`, `LoadingState`, `InlineNotice`, `Badge`, `StatTiles`, `WizardSteps` |

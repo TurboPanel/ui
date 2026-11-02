@@ -697,8 +697,8 @@ describe('managed query hooks', () => {
       wrapper: createWrapper(client),
     })
 
-    await expect(result.current.run()).resolves.toMatchObject({ ok: true })
-    expect(deleteEnvironmentManaged).toHaveBeenCalledWith(environmentId)
+    await expect(result.current.run('shop-db')).resolves.toMatchObject({ ok: true })
+    expect(deleteEnvironmentManaged).toHaveBeenCalledWith(environmentId, { confirmName: 'shop-db' })
     await waitFor(() => {
       expect(invalidate).toHaveBeenCalledWith({
         queryKey: queryKeys.org(orgId).managed.all,
@@ -718,10 +718,14 @@ describe('managed query hooks', () => {
       wrapper: createWrapper(client),
     })
 
-    await expect(result.current.run(environmentId)).resolves.toMatchObject({
+    await expect(
+      result.current.run({ environmentId, confirmName: 'shop-db' })
+    ).resolves.toMatchObject({
       ok: true,
     })
-    expect(deleteEnvironmentManaged).toHaveBeenCalledWith(environmentId)
+    expect(deleteEnvironmentManaged).toHaveBeenCalledWith(environmentId, {
+      confirmName: 'shop-db',
+    })
     await waitFor(() => {
       expect(invalidate).toHaveBeenCalledWith({
         queryKey: queryKeys.org(orgId).commands.all,
@@ -729,7 +733,7 @@ describe('managed query hooks', () => {
     })
   })
 
-  it('useDeleteEnvironmentManagedMutation accepts an object and omits force unless set', async () => {
+  it('useDeleteEnvironmentManagedMutation passes the typed name and omits force unless set', async () => {
     deleteEnvironmentManaged.mockResolvedValue({
       ok: true,
       deleted: true,
@@ -739,13 +743,20 @@ describe('managed query hooks', () => {
       wrapper: createWrapper(),
     })
 
-    await expect(result.current.run({ environmentId })).resolves.toMatchObject({ ok: true })
-    expect(deleteEnvironmentManaged).toHaveBeenCalledWith(environmentId, {})
+    await expect(
+      result.current.run({ environmentId, confirmName: 'shop-db' })
+    ).resolves.toMatchObject({ ok: true })
+    expect(deleteEnvironmentManaged).toHaveBeenCalledWith(environmentId, {
+      confirmName: 'shop-db',
+    })
 
-    await expect(result.current.run({ environmentId, force: true })).resolves.toMatchObject({
+    await expect(
+      result.current.run({ environmentId, confirmName: 'shop-db', force: true })
+    ).resolves.toMatchObject({
       ok: true,
     })
     expect(deleteEnvironmentManaged).toHaveBeenCalledWith(environmentId, {
+      confirmName: 'shop-db',
       force: true,
     })
   })
@@ -1074,8 +1085,10 @@ describe('managed query hooks', () => {
       wrapper: createWrapper(client),
     })
 
-    await expect(result.current.run('app')).resolves.toMatchObject({ ok: true })
-    expect(deleteManagedDatabase).toHaveBeenCalledWith(environmentId, 'app')
+    await expect(result.current.run({ name: 'app', confirmName: 'app' })).resolves.toMatchObject({
+      ok: true,
+    })
+    expect(deleteManagedDatabase).toHaveBeenCalledWith(environmentId, 'app', 'app')
     await waitFor(() => {
       expect(invalidate).toHaveBeenCalledWith({
         queryKey: queryKeys.org(orgId).managed.databases(environmentId),

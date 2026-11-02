@@ -1,12 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native'
 import { panelStyles } from '@/components/ui/panel-styles'
-import {
-  Badge,
-  Button,
-  ButtonRow,
-  ConfirmButton,
-  MonoText,
-} from '@/components/ui'
+import { Badge, Button, ButtonRow, MonoText, TypeNameDeleteButton } from '@/components/ui'
 import { dockerNetworkAddressingLines } from '@/lib/docker-addressing'
 import type { NetworkKind, NetworkRecord, IpRecord } from '@/lib/instance-api'
 import { spacing } from '@/lib/theme'
@@ -54,9 +48,8 @@ function DockerAddressingLines({ network }: Readonly<{ network: NetworkRecord }>
         </Text>
       ))}
       <Text style={panelStyles.muted}>
-        Applied when the daemon first creates this network. Docker cannot
-        re-range an existing network — a later change only applies to a
-        network the daemon has not created yet.
+        Applied when the daemon first creates this network. Docker cannot re-range an existing
+        network — a later change only applies to a network the daemon has not created yet.
       </Text>
     </View>
   )
@@ -89,10 +82,11 @@ export function NetworkListItem({
       <View style={styles.cardHeader}>
         <Text style={panelStyles.detailTitle}>{networkTitle(network)}</Text>
         {showDelete && onDelete && !isPlatformOwned ? (
-          <ConfirmButton
+          <TypeNameDeleteButton
             label={isDeleting ? 'Deleting…' : 'Delete'}
-            confirmLabel="Delete network"
-            prompt="Remove this network?"
+            thing="Network"
+            name={networkTitle(network)}
+            description="The network is removed."
             busy={isDeleting}
             onConfirm={() => onDelete(network.id)}
           />
@@ -101,9 +95,7 @@ export function NetworkListItem({
       <View style={styles.badgeRow}>
         <Badge label={kindLabel(network.kind)} />
         {dockerName ? <MonoText selectable>{dockerName}</MonoText> : null}
-        {isPlatformOwned ? (
-          <Text style={panelStyles.muted}>Platform-managed</Text>
-        ) : null}
+        {isPlatformOwned ? <Text style={panelStyles.muted}>Platform-managed</Text> : null}
         {renderCidr(network, isPlatformOwned)}
       </View>
       <DockerAddressingLines network={network} />
@@ -150,10 +142,11 @@ export function IpListRow({
             />
           ) : null}
           {showDelete && onDelete ? (
-            <ConfirmButton
+            <TypeNameDeleteButton
               label={isDeleting ? 'Deleting…' : 'Delete'}
-              confirmLabel="Delete address"
-              prompt="Remove this address?"
+              thing="Address"
+              name={ip.address}
+              description="The address is removed."
               busy={isDeleting}
               onConfirm={() => onDelete(ip.id)}
             />

@@ -1,4 +1,3 @@
-import { EnvironmentDeleteNameModal } from '@/components/org/environment-delete-name-modal'
 import { EnvironmentFoldersPanel } from '@/components/org/environment-folders-panel'
 import { EnvironmentSharesPanel } from '@/components/org/environment-shares-panel'
 import { useEffect, useRef, useState } from 'react'
@@ -8,7 +7,7 @@ import { panelStyles } from '@/components/ui/panel-styles'
 import {
   Button,
   ButtonRow,
-  ConfirmButton,
+  TypeNameConfirmModal,
   EmptyState,
   LoadingState,
   TextField,
@@ -23,7 +22,7 @@ import {
 import type { EnvironmentRecord } from '@/lib/instance-api'
 import {
   ENVIRONMENT_STOP_QUEUED_COPY,
-  environmentDeleteInput,
+  environmentConfirmName,
   environmentDeleteOutcome,
   environmentDeletePrompt,
   type EnvironmentDeleteFailure,
@@ -196,7 +195,7 @@ function EnvironmentToolbar({
   onRename,
   onAdd,
   deleting,
-  onConfirmDelete,
+  onStartDelete,
 }: Readonly<{
   activeEnvironment: EnvironmentRecord
   canOwn: boolean
@@ -204,7 +203,7 @@ function EnvironmentToolbar({
   onRename: () => void
   onAdd: () => void
   deleting: boolean
-  onConfirmDelete: () => void
+  onStartDelete: () => void
 }>) {
   return (
     <View style={styles.toolbar}>
@@ -214,13 +213,12 @@ function EnvironmentToolbar({
           <Button label="Rename" variant="secondary" size="sm" onPress={onRename} />
           <Button label="New environment" variant="secondary" size="sm" onPress={onAdd} />
           {canDelete ? (
-            <ConfirmButton
-              key={activeEnvironment.id}
+            <Button
               label={deleting ? 'Deleting…' : 'Delete'}
-              confirmLabel="Confirm delete"
-              prompt={environmentDeletePrompt(environmentLabel(activeEnvironment))}
+              variant="danger"
+              size="sm"
               busy={deleting}
-              onConfirm={onConfirmDelete}
+              onPress={onStartDelete}
             />
           ) : null}
         </View>
@@ -239,27 +237,22 @@ function useEnvironmentDeleteFlow(
   const [failure, setFailure] = useState<EnvironmentDeleteFailure | null>(null)
   const [nameStep, setNameStep] = useState<{ error: string | null } | null>(null)
 
-  const deleteActive = async (confirmName?: string) => {
+  const deleteActive = async (confirmName: string) => {
     if (!activeEnvironment) return
     setError(null)
     setFailure(null)
-    const result = await deleteEnvironment.run(
-      environmentDeleteInput(activeEnvironment.id, confirmName)
-    )
+    const result = await deleteEnvironment.run({ id: activeEnvironment.id, confirmName })
     if (result.ok) {
       setNameStep(null)
       return
     }
     const message = result.error
     if (!message) return
-    const outcome = environmentDeleteOutcome(
-      message,
-      environmentLabel(activeEnvironment),
-      confirmName
-    )
-    if (outcome.kind === 'ask-name') setNameStep({ error: null })
-    else if (outcome.kind === 'failure') setFailure(outcome.failure)
-    else setNameStep({ error: outcome.text })
+    const outcome = environmentDeleteOutcome(message, environmentLabel(activeEnvironment))
+    if (outcome.kind === 'failure') {
+      setNameStep(null)
+      setFailure(outcome.failure)
+    } else setNameStep({ error: outcome.text })
   }
 
   const stopActive = async () => {
@@ -277,6 +270,10 @@ function useEnvironmentDeleteFlow(
     clearFailure: () => setFailure(null),
     deleting: deleteEnvironment.isPending,
     nameStep,
+    openNameStep: () => {
+      setFailure(null)
+      setNameStep({ error: null })
+    },
     closeNameStep: () => setNameStep(null),
     stopping: stopEnvironment.isPending,
     deleteActive,
@@ -285,16 +282,18 @@ function useEnvironmentDeleteFlow(
 }
 
 function EnvironmentDeleteNameStep({
-  name,
+  environment,
   flow,
 }: Readonly<{
-  name: string
+  environment: EnvironmentRecord
   flow: ReturnType<typeof useEnvironmentDeleteFlow>
 }>) {
   if (!flow.nameStep) return null
   return (
-    <EnvironmentDeleteNameModal
-      name={name}
+    <TypeNameConfirmModal
+      thing="Environment"
+      name={environmentConfirmName(environment)}
+      description={environmentDeletePrompt(environmentLabel(environment))}
       pending={flow.deleting}
       error={flow.nameStep.error}
       onCancel={flow.closeNameStep}
@@ -461,10 +460,10 @@ export function ProjectEnvironmentsSection({
               setShowCreate(true)
             }}
             deleting={deleteFlow.deleting}
-            onConfirmDelete={() => void deleteFlow.deleteActive()}
+            onStartDelete={deleteFlow.openNameStep}
           />
         )}
-        <EnvironmentDeleteNameStep name={environmentLabel(activeEnvironment)} flow={deleteFlow} />
+        <EnvironmentDeleteNameStep environment={activeEnvironment} flow={deleteFlow} />
         <EnvironmentDeleteNotice
           failure={deleteFlow.failure}
           stopping={deleteFlow.stopping}

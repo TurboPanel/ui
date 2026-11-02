@@ -116,23 +116,23 @@ vi.mock('@/components/ui', () => ({
       {label}
     </button>
   ),
-  ConfirmButton: ({
+  // The dialog itself is covered by type-name-confirm.test.tsx: here a press types the name.
+  TypeNameDeleteButton: ({
     label,
-    confirmLabel,
+    name,
     onConfirm,
     disabled,
+    busy,
   }: {
     label: string
-    confirmLabel?: string
-    onConfirm: () => void
+    name: string
+    onConfirm: (typed: string) => void
     disabled?: boolean
+    busy?: boolean
   }) => (
-    <div>
-      <button disabled={disabled} onClick={onConfirm}>
-        {label}
-      </button>
-      <span>{confirmLabel}</span>
-    </div>
+    <button disabled={disabled || busy} onClick={() => onConfirm(name)}>
+      {label}
+    </button>
   ),
 }))
 
@@ -177,7 +177,7 @@ function renderPanel(
     deleting: boolean
     deleteError: string | null
     deleteBlocked: boolean
-    onConfirm: (forgetResources: boolean, principals: unknown[]) => void
+    onConfirm: (forgetResources: boolean, principals: unknown[], confirmName: string) => void
   }> = {},
   data: unknown = undefined
 ) {
@@ -186,6 +186,7 @@ function renderPanel(
     <ServerDeletePanel
       orgId="org-1"
       serverId="srv-1"
+      serverName="web-1"
       serverConnected={false}
       deleting={false}
       deleteError={null}
@@ -215,7 +216,7 @@ describe('ServerDeletePanel', () => {
       }
     )
     expect(screen.queryByText(SERVER_REMOVE_OFFLINE_LABEL)).toBeNull()
-    expect(screen.getByText('Delete server')).toBeTruthy()
+    expect(screen.getByText('Delete Server')).toBeTruthy()
   })
 
   it('shows blockers and hides forget when canForget is false', () => {
@@ -235,14 +236,14 @@ describe('ServerDeletePanel', () => {
       screen.getByText('1 other item still placed on this server — remove them first')
     ).toBeTruthy()
     expect(screen.queryByText(SERVER_REMOVE_OFFLINE_LABEL)).toBeNull()
-    expect(screen.getByText('Delete server')).toBeTruthy()
+    expect(screen.getByText('Delete Server')).toBeTruthy()
   })
 
   it('offers removal first for an offline server, with a plain explanation', () => {
     renderPanel({}, preview())
     expect(screen.getByText(SERVER_REMOVE_OFFLINE_LABEL)).toBeTruthy()
     expect(screen.getByText(SERVER_DELETE_FORGET_COPY)).toBeTruthy()
-    expect(screen.queryByText('Delete server')).toBeNull()
+    expect(screen.queryByText('Delete Server')).toBeNull()
   })
 
   it('lists what is forgotten before the confirm and removes in one step', () => {
@@ -270,7 +271,7 @@ describe('ServerDeletePanel', () => {
     expect(screen.getByText('10.0.0.5')).toBeTruthy()
     expect(onConfirm).not.toHaveBeenCalled()
     fireEvent.click(screen.getByText(SERVER_REMOVE_OFFLINE_LABEL))
-    expect(onConfirm).toHaveBeenCalledWith(true, [])
+    expect(onConfirm).toHaveBeenCalledWith(true, [], 'web-1')
   })
 
   it('links environments named on delete blockers', () => {
@@ -326,7 +327,7 @@ describe('ServerDeletePanel', () => {
       )
     ).toBeTruthy()
     expect(screen.queryByText(SERVER_REMOVE_OFFLINE_LABEL)).toBeNull()
-    expect(screen.getByText('Delete server')).toBeTruthy()
+    expect(screen.getByText('Delete Server')).toBeTruthy()
     expect(onConfirm).not.toHaveBeenCalled()
   })
 
@@ -347,7 +348,7 @@ describe('ServerDeletePanel', () => {
       )
     ).not.toThrow()
     expect(screen.queryByText(SERVER_REMOVE_OFFLINE_LABEL)).toBeNull()
-    expect(screen.getByText('Delete server')).toBeTruthy()
+    expect(screen.getByText('Delete Server')).toBeTruthy()
   })
 
   it('disables both confirms while a delete is in flight', () => {
@@ -368,8 +369,8 @@ describe('ServerDeletePanel', () => {
       error: null,
     })
     renderPanel({ onConfirm }, preview({ canForget: false }))
-    fireEvent.click(screen.getByText('Delete server'))
-    expect(onConfirm).toHaveBeenCalledWith(false, [])
+    fireEvent.click(screen.getByText('Delete Server'))
+    expect(onConfirm).toHaveBeenCalledWith(false, [], 'web-1')
   })
 
   it('hides the removal plan instead of erroring when the person may not see it', () => {
@@ -400,7 +401,11 @@ describe('ServerDeletePanel', () => {
     })
     renderPanel({ onConfirm }, preview({ canForget: false }))
     fireEvent.click(screen.getByText('delete alice_x'))
-    fireEvent.click(screen.getByText('Delete server'))
-    expect(onConfirm).toHaveBeenCalledWith(false, [{ principalId: 'p1', action: 'delete' }])
+    fireEvent.click(screen.getByText('Delete Server'))
+    expect(onConfirm).toHaveBeenCalledWith(
+      false,
+      [{ principalId: 'p1', action: 'delete' }],
+      'web-1'
+    )
   })
 })

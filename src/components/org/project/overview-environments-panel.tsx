@@ -12,14 +12,13 @@ import {
 import { Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
 import { useQueryClient } from '@tanstack/react-query'
 import { Link, useRouter, type Href } from 'expo-router'
-import { EnvironmentDeleteNameModal } from '@/components/org/environment-delete-name-modal'
 import { LogTranscriptView } from '@/components/org/logs/log-transcript-view'
 import { DeployProgressRail } from '@/components/org/project/deploy-progress-rail'
 import { useDeployLogProgress } from '@/components/org/project/use-deploy-log-progress'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { EnvironmentDeploymentHistoryPanel } from '@/components/org/project/environment-deployment-history-panel'
 import { EnvironmentGitSourcePanel } from '@/components/org/project/environment-git-source-panel'
-import { StatusDot } from '@/components/ui'
+import { StatusDot, TypeNameConfirmModal } from '@/components/ui'
 import { StatusChip } from '@/components/ui/v4/status-chip'
 import { useProjectContext } from '@/components/org/project/project-context'
 import {
@@ -54,7 +53,7 @@ import { mergeComposeOverlay } from '@/lib/compose'
 import { progressChipLabel } from '@/lib/deploy-progress'
 import { unownedPrincipalRequiredServices } from '@/lib/compose/principal-required'
 import {
-  environmentDeleteInput,
+  environmentConfirmName,
   environmentDeleteOutcome,
   environmentDeletePrompt,
   type EnvironmentDeleteFailure,
@@ -163,27 +162,28 @@ function useOverviewEnvironmentDelete(onStop: () => void) {
   const { orgId, projectId, selectedEnvironment, invalidateEnvironments, setError } =
     useProjectContext()
   const deleteEnvironment = useDeleteEnvironment(orgId)
+  // Armed = the name dialog is open; `dialogError` is a refusal shown inside it.
   const [armed, setArmed] = useState(false)
+  const [dialogError, setDialogError] = useState<string | null>(null)
   const [failure, setFailure] = useState<EnvironmentDeleteFailure | null>(null)
-  const [nameStep, setNameStep] = useState<{ error: string | null } | null>(null)
   const name = selectedEnvironment?.name?.trim() || 'environment'
+  const confirmName = selectedEnvironment ? environmentConfirmName(selectedEnvironment) : ''
 
-  const confirm = async (confirmName?: string) => {
+  const confirm = async (typed: string) => {
     if (!selectedEnvironment || deleteEnvironment.isPending) return
     setError(null)
     setFailure(null)
-    const result = await deleteEnvironment.run(
-      environmentDeleteInput(selectedEnvironment.id, confirmName)
-    )
+    setDialogError(null)
+    const result = await deleteEnvironment.run({ id: selectedEnvironment.id, confirmName: typed })
     if (!result.ok) {
       if (!result.error) return
-      const outcome = environmentDeleteOutcome(result.error, name, confirmName)
-      if (outcome.kind === 'ask-name') setNameStep({ error: null })
-      else if (outcome.kind === 'failure') setFailure(outcome.failure)
-      else setNameStep({ error: outcome.text })
+      const outcome = environmentDeleteOutcome(result.error, name)
+      if (outcome.kind === 'failure') {
+        setArmed(false)
+        setFailure(outcome.failure)
+      } else setDialogError(outcome.text)
       return
     }
-    setNameStep(null)
     setArmed(false)
     await invalidateEnvironments()
     router.replace(projectOverviewHref(orgId, projectId) as Href)
@@ -197,18 +197,19 @@ function useOverviewEnvironmentDelete(onStop: () => void) {
 
   return {
     armed,
+    dialogError,
     failure,
-    nameStep,
-    closeNameStep: () => setNameStep(null),
     name,
+    confirmName,
     pending: deleteEnvironment.isPending,
     arm: () => {
       setFailure(null)
+      setDialogError(null)
       setArmed(true)
     },
     cancel: () => {
       setArmed(false)
-      setFailure(null)
+      setDialogError(null)
     },
     confirm,
     stop,
@@ -353,27 +354,13 @@ function EnvironmentActionsMenu({ model }: Readonly<{ model: OverviewEnvironment
       </Modal>
 
       {remove.armed ? (
-        <View style={styles.deleteConfirm}>
-          <Text style={styles.hintInline}>{environmentDeletePrompt(remove.name)}</Text>
-          <View style={styles.inlineActions}>
-            <QuietButton
-              label={remove.pending ? 'Deleting…' : 'Delete environment'}
-              accessibilityLabel="Confirm delete environment"
-              tone="danger"
-              disabled={remove.pending}
-              onPress={() => ignorePromise(remove.confirm())}
-            />
-            <QuietButton label="Cancel" onPress={remove.cancel} />
-          </View>
-        </View>
-      ) : null}
-
-      {remove.nameStep ? (
-        <EnvironmentDeleteNameModal
-          name={remove.name}
+        <TypeNameConfirmModal
+          thing="Environment"
+          name={remove.confirmName}
+          description={environmentDeletePrompt(remove.name)}
           pending={remove.pending}
-          error={remove.nameStep.error}
-          onCancel={remove.closeNameStep}
+          error={remove.dialogError}
+          onCancel={remove.cancel}
           onConfirm={(typed) => ignorePromise(remove.confirm(typed))}
         />
       ) : null}
@@ -1579,11 +1566,6 @@ const styles = StyleSheet.create({
   inlineForm: {
     gap: spacing.xs,
     maxWidth: 360,
-  },
-  inlineActions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 4,
   },
   buttonDisabled: {
     opacity: 0.45,

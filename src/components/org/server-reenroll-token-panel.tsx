@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
-import { Button, ConfirmButton, SectionPanel } from '@/components/ui'
+import { Button, SectionPanel, TypeNameDeleteButton } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { ReenrollCommandBox } from '@/components/org/reenroll-command-box'
 import type { ReenrollTicket, ReissuedLicenseTicket } from '@/lib/instance-api'
@@ -125,12 +125,13 @@ function MintedKeysCard({ orgId }: Readonly<{ orgId: string }>) {
               onPress={() => void onReissue(row.id, pendingKeyDisplayName(row))}
             />
             {row.revocable ? (
-              <ConfirmButton
+              <TypeNameDeleteButton
                 label="Burn"
-                confirmLabel="Confirm Burn"
-                prompt="Delete this key? Its command stops working."
+                thing="Install Key"
+                name={pendingKeyDisplayName(row)}
+                description="Its command stops working."
                 busy={burn.isPending && burn.variables === row.id}
-                onConfirm={() => void onBurn(row.id)}
+                onConfirm={() => onBurn(row.id)}
               />
             ) : null}
           </View>
