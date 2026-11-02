@@ -39,8 +39,18 @@ vi.mock('@/components/ui', () => ({
   Button: ({ label, onPress }: { label: string; onPress: () => void }) => (
     <button onClick={onPress}>{label}</button>
   ),
-  ConfirmButton: ({ label, onConfirm }: { label: string; onConfirm: () => void }) => (
-    <button onClick={onConfirm}>{label}</button>
+  ConfirmButton: ({
+    label,
+    prompt,
+    onConfirm,
+  }: {
+    label: string
+    prompt?: string
+    onConfirm: () => void
+  }) => (
+    <button title={prompt} onClick={onConfirm}>
+      {label}
+    </button>
   ),
   CopyButton: ({ label }: { label: string }) => <button>{label}</button>,
   MonoText: ({ children }: { children: string }) => <code>{children}</code>,
@@ -125,7 +135,10 @@ describe('ServerReenrollTokenPanel', () => {
     await waitFor(() => expect(screen.getByText(/TURBOPANEL_LICENSE=arg sh/)).toBeTruthy())
     expect(screen.getByText('Expires in 59 minutes')).toBeTruthy()
     expect(screen.getByText('Copy Command')).toBeTruthy()
-    fireEvent.click(screen.getByText('Revoke'))
+    expect(screen.getByText('Revoke Token').getAttribute('title')).toBe(
+      'Revoke this re-enroll token? The command will stop working.'
+    )
+    fireEvent.click(screen.getByText('Revoke Token'))
     await waitFor(() => expect(screen.queryByText(/TURBOPANEL_LICENSE=arg sh/)).toBeNull())
     expect(hooks.revoke).toHaveBeenCalledTimes(1)
   })
@@ -135,7 +148,7 @@ describe('ServerReenrollTokenPanel', () => {
     render(<ServerReenrollTokenPanel orgId="o" serverId="s" />)
     fireEvent.click(screen.getByText('Issue Re-Enroll Token'))
     await waitFor(() => expect(screen.getByText('Not allowed')).toBeTruthy())
-    expect(screen.queryByText('Revoke')).toBeNull()
+    expect(screen.queryByText('Revoke Token')).toBeNull()
   })
 
   it('lists unused keys with Reissue and Burn, and shows a reissued command', async () => {
@@ -178,7 +191,7 @@ describe('ServerReenrollTokenPanel', () => {
       vi.advanceTimersByTime(MINUTE)
     })
     expect(screen.getByText('Expires in 58 minutes')).toBeTruthy()
-    expect(screen.getByText('Revoke')).toBeTruthy()
+    expect(screen.getByText('Revoke Token')).toBeTruthy()
     act(() => {
       vi.advanceTimersByTime(58 * MINUTE)
     })
@@ -187,7 +200,7 @@ describe('ServerReenrollTokenPanel', () => {
       vi.advanceTimersByTime(MINUTE)
     })
     expect(screen.getByText('Expired')).toBeTruthy()
-    expect(screen.queryByText('Revoke')).toBeNull()
+    expect(screen.queryByText('Revoke Token')).toBeNull()
   })
 
   it('shows a token that is already expired as Expired with no Revoke', async () => {
@@ -195,7 +208,7 @@ describe('ServerReenrollTokenPanel', () => {
     render(<ServerReenrollTokenPanel orgId="o" serverId="s" />)
     fireEvent.click(screen.getByText('Issue Re-Enroll Token'))
     await waitFor(() => expect(screen.getByText('Expired')).toBeTruthy())
-    expect(screen.queryByText('Revoke')).toBeNull()
+    expect(screen.queryByText('Revoke Token')).toBeNull()
     expect(screen.getByText('Copy Command')).toBeTruthy()
   })
 

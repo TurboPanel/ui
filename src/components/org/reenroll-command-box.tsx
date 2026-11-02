@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native'
-import { Button, CopyButton, MonoText } from '@/components/ui'
+import { ConfirmButton, CopyButton, MonoText } from '@/components/ui'
 import { useNow } from '@/components/org/project/use-now'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { reenrollExpiryLabel, reenrollTokenIsLive } from '@/lib/reenroll-token'
@@ -45,7 +45,13 @@ export function ReenrollCommandBox({
           accessibilityLabel="Copy install command"
         />
         {live && onRevoke ? (
-          <Button label="Revoke" busyLabel="Revoking…" busy={revoking} onPress={onRevoke} />
+          <ConfirmButton
+            label="Revoke Token"
+            confirmLabel="Confirm Revoke"
+            prompt="Revoke this re-enroll token? The command will stop working."
+            busy={revoking}
+            onConfirm={onRevoke}
+          />
         ) : null}
       </View>
     </View>
