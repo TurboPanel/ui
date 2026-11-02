@@ -66,6 +66,7 @@ import {
 } from '@/lib/org-navigation'
 import { ServerDangerZone } from '@/components/org/server-danger-zone'
 import { ServerDeletePanel } from '@/components/org/server-delete-panel'
+import { ServerReenrollTokenPanel } from '@/components/org/server-reenroll-token-panel'
 import {
   formatServerDeleteBlockedError,
   isForbiddenError,
@@ -925,6 +926,9 @@ export function ServerDetailSection({
         offline={!server.connected}
         revokeKeyPanel={revokeKeyPanel}
         deletePanel={deletePanel}
+        reenrollPanel={
+          updateVm.colocated ? null : <ServerReenrollTokenPanel orgId={orgId} serverId={serverId} />
+        }
       />
     </View>
   )

@@ -34,6 +34,8 @@ const ACTION_LABELS: Readonly<Record<string, string>> = {
   'server.delete': 'delete this server',
   'server.daemon_key.revoke': "revoke this server's key",
   'license.revoke': 'revoke this license key',
+  'license.key.burn': 'reissue this key',
+  'server.reenroll_ticket.issue': 'issue a re-enroll token',
   'managed.delete': 'delete this managed database',
   'managed.database.delete': 'delete this database',
   'member.remove': 'remove this member',

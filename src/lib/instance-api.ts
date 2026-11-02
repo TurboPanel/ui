@@ -3165,6 +3165,45 @@ export async function deleteLicense(id: string): Promise<{ ok: true }> {
   })
 }
 
+/**
+ * A one-hour, single-use install ticket. The secret is shown once and stored
+ * hashed, so it cannot be read again. `installCommand` is the whole command
+ * the control plane built; an older control plane returns only `licenseArg`.
+ */
+export type ReenrollTicket = {
+  ticketId: string
+  expiresAt: string
+  licenseToken: string
+  licenseArg: string
+  installCommand?: string
+}
+
+/** `POST /servers/:id/reenroll-ticket` (owner; step-up). Retires any earlier unused ticket. */
+export async function issueServerReenrollTicket(serverId: string): Promise<ReenrollTicket> {
+  return await apiFetch(`${CLIENT_API}/servers/${serverId}/reenroll-ticket`, { method: 'POST' })
+}
+
+/** `DELETE /servers/:id/reenroll-ticket`: revoke the unused tickets. */
+export async function revokeServerReenrollTickets(
+  serverId: string
+): Promise<{ ok: true; revoked: number }> {
+  return await apiFetch(`${CLIENT_API}/servers/${serverId}/reenroll-ticket`, { method: 'DELETE' })
+}
+
+export type ReissuedLicenseTicket = {
+  licenseId: string
+  joinId: string
+  joinExpiresAt: string
+  licenseToken: string
+  licenseArg: string
+  installCommand?: string
+}
+
+/** `POST /licenses/:id/ticket` (owner; step-up): burn an unused key's token and issue a fresh one-hour ticket. */
+export async function reissueLicenseTicket(id: string): Promise<ReissuedLicenseTicket> {
+  return await apiFetch(`${CLIENT_API}/licenses/${id}/ticket`, { method: 'POST' })
+}
+
 // ---------------------------------------------------------------------------
 // Billing — `/api/client/v1/billing/*` (hosted only). Owner-only; every route
 // answers 503 `billing_not_configured` on self-hosted, which is why the

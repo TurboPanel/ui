@@ -59,6 +59,8 @@ describe('step-up copy and input', () => {
     expect(stepUpActionLabel('project.delete')).toBe('delete this project')
     expect(stepUpActionLabel('panel.identity_next.set')).toBe("change the control plane's next key")
     expect(stepUpActionLabel('instance.tunnel_token.set')).toBe('change the tunnel token')
+    expect(stepUpActionLabel('server.reenroll_ticket.issue')).toBe('issue a re-enroll token')
+    expect(stepUpActionLabel('license.key.burn')).toBe('reissue this key')
     expect(stepUpActionLabel('nothing.known')).toBe('do this')
     expect(stepUpActionLabel(null)).toBe('do this')
   })

@@ -19,6 +19,9 @@ import {
   deleteLicense,
   deleteProject,
   isForbiddenError,
+  issueServerReenrollTicket,
+  reissueLicenseTicket,
+  revokeServerReenrollTickets,
   deleteVariable,
   deleteWorkspace,
   fetchAccessGrants,
@@ -449,6 +452,23 @@ describe('instance-api fetch wrappers', () => {
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
     await expect(deleteLicense('lic-1')).resolves.toEqual({ ok: true })
+  })
+
+  it('re-enroll ticket wrappers call the ticket routes', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ ticketId: 't', expiresAt: 'x', licenseToken: 'a', licenseArg: 'b' })
+    )
+    await expect(issueServerReenrollTicket('srv-1')).resolves.toMatchObject({ ticketId: 't' })
+    expect(fetchMock.mock.calls.at(-1)?.[0]).toContain('/servers/srv-1/reenroll-ticket')
+    expect(fetchMock.mock.calls.at(-1)?.[1]).toMatchObject({ method: 'POST' })
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, revoked: 1 }))
+    await expect(revokeServerReenrollTickets('srv-1')).resolves.toMatchObject({ revoked: 1 })
+    expect(fetchMock.mock.calls.at(-1)?.[1]).toMatchObject({ method: 'DELETE' })
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ licenseId: 'k1', licenseArg: 'b' }))
+    await reissueLicenseTicket('k1')
+    expect(fetchMock.mock.calls.at(-1)?.[0]).toContain('/licenses/k1/ticket')
   })
 
   it('server command wrappers enqueue and poll', async () => {
