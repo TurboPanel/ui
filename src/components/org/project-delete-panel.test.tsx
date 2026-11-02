@@ -81,7 +81,9 @@ describe('Destroy database in the project delete panel', () => {
     fireEvent.click(screen.getByText('Destroy Database', { selector: 'button' }))
     expect(onStop).not.toHaveBeenCalled()
     expect(screen.getByRole('heading').textContent).toBe('Destroy Database')
-    expect(screen.getByText(MANAGED_DESTROY_COPY.confirmPrompt)).toBeTruthy()
+    expect(
+      screen.getByText(`${MANAGED_DESTROY_COPY.confirmPrompt} Type the project name to confirm.`)
+    ).toBeTruthy()
     expect(screen.getByText('Copy')).toBeTruthy()
 
     const confirm = within(screen.getByRole('dialog')).getByText('Destroy Database', {

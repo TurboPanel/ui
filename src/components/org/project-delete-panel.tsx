@@ -162,7 +162,7 @@ export function StopStepSection({
                 thing="Database"
                 verb="Destroy"
                 name={confirmName}
-                description={copy.confirmPrompt}
+                description={`${copy.confirmPrompt} Type the project name to confirm.`}
                 busy={row.stopping}
                 onConfirm={(typed) => onStop(row.environment.id, typed)}
               />
@@ -172,7 +172,7 @@ export function StopStepSection({
                   thing="Database"
                   verb="Force Destroy"
                   name={confirmName}
-                  description="Removes the database records immediately and tears down what it can. Leftover containers on unreachable servers must be cleaned up manually."
+                  description="Removes the database records immediately and tears down what it can. Leftover containers on unreachable servers must be cleaned up manually. Type the project name to confirm."
                   onConfirm={(typed) => onForceDestroy(row.environment.id, typed)}
                 />
               ) : null}

@@ -7,6 +7,7 @@ import { ModalSheet } from '@/components/ui/modal-sheet'
 import { MonoText } from '@/components/ui/mono-text'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { typedNameMatches } from '@/lib/confirm-name'
+import { userErrorMessage } from '@/lib/user-error'
 import { spacing } from '@/lib/theme'
 
 const BUSY_LABELS: Readonly<Record<string, string>> = {
@@ -128,8 +129,10 @@ export function TypeNameDeleteButton({
 >) {
   const [open, setOpen] = useState(false)
   const [running, setRunning] = useState(false)
+  const [failure, setFailure] = useState<string | null>(null)
   const title = `${modal.verb ?? 'Delete'} ${modal.thing}`
   const confirm = (typed: string) => {
+    setFailure(null)
     const outcome = onConfirm(typed)
     if (!(outcome instanceof Promise)) {
       setOpen(false)
@@ -141,7 +144,10 @@ export function TypeNameDeleteButton({
         setRunning(false)
         if (value !== false) setOpen(false)
       },
-      () => setRunning(false)
+      (err: unknown) => {
+        setRunning(false)
+        setFailure(userErrorMessage(err, 'The action failed. Try again.'))
+      }
     )
   }
   return (
@@ -158,7 +164,7 @@ export function TypeNameDeleteButton({
         <TypeNameConfirmModal
           {...modal}
           pending={running || busy}
-          error={error}
+          error={error ?? failure}
           onCancel={() => setOpen(false)}
           onConfirm={confirm}
         />

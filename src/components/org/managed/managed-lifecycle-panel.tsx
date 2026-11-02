@@ -96,7 +96,7 @@ export function ManagedLifecyclePanel({
           thing="Database"
           verb="Destroy"
           name={projectName}
-          description="Destroys this database and its data for good. The environment stays."
+          description="Destroys this database and its data for good. The environment stays. Type the project name to confirm."
           pending={working}
           error={deleteError}
           onCancel={() => {

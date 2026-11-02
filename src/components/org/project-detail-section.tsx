@@ -20,6 +20,7 @@ import {
   Toggle,
   TypeNameDeleteButton,
 } from '@/components/ui'
+import { confirmationName } from '@/lib/confirm-name'
 import { HeaderChevron } from '@/components/header-chevron'
 import { ComposeBasePanel } from '@/components/org/compose-base-panel'
 import { ManagedProjectSection } from '@/components/org/managed/managed-project-section'
@@ -1075,7 +1076,7 @@ export function ProjectDetailSection({
                 orgId={orgId}
                 projectId={projectId}
                 engineCode={project.metadata?.code ?? null}
-                projectName={project.name?.trim() || 'Unnamed project'}
+                projectName={confirmationName(project.name, project.id)}
               />
               <WorkspaceMovePanel
                 canOwn={canOwn}

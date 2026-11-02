@@ -194,3 +194,18 @@ describe('TypeNameDeleteButton', () => {
     expect(screen.queryByRole('dialog')).toBeNull()
   })
 })
+
+describe('TypeNameDeleteButton failures', () => {
+  it('stays open and shows the reason when the delete rejects', async () => {
+    const onConfirm = vi.fn(() => Promise.reject(new Error('Server is busy.')))
+    render(<TypeNameDeleteButton thing="Project" name="Shop" onConfirm={onConfirm} />)
+    fireEvent.click(screen.getByText('Delete Project'))
+    fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Shop' } })
+    await act(async () => {
+      fireEvent.click(confirmButton('Delete Project'))
+      await Promise.resolve()
+    })
+    expect(screen.getByRole('dialog')).toBeTruthy()
+    expect(screen.getByText('Server is busy.')).toBeTruthy()
+  })
+})
