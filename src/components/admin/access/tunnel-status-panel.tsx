@@ -12,15 +12,18 @@ import {
 import { colors, spacing } from '@/lib/theme'
 import {
   connectorSummary,
+  edgeAccountNote,
   edgeSummary,
   lastHealthCheck,
+  routedHostnames,
   tunnelLastError,
 } from '@/lib/tunnel-status'
 
 /**
  * Tunnel status for either path (API token or pasted run token): connector and
- * version, edge locations and connections, routed hostnames, last check and
- * last error. Read every minute; Refresh asks the daemon again.
+ * version, edge connections (from the connector itself without an account;
+ * with locations when an account is connected), routed hostnames (same rule),
+ * last check and last error. Read every minute; Refresh asks the daemon again.
  */
 export function TunnelStatusPanel({
   hostnames,
@@ -32,7 +35,8 @@ export function TunnelStatusPanel({
   const statuses = useHostnameIngressStatuses(tunneled.map((row) => row.id))
   const status = query.data
   const connector = connectorSummary(status)
-  const routed = status?.edge?.hostnames ?? tunneled.map((row) => row.host)
+  const routed = routedHostnames(status)
+  const accountNote = edgeAccountNote(status)
   const lastError = tunnelLastError(
     status,
     statuses.map((item) => item.data?.detail)
@@ -68,11 +72,11 @@ export function TunnelStatusPanel({
         <Badge label={connector.label} tone={connector.tone} />
         {connector.detail ? <Text style={styles.value}>{connector.detail}</Text> : null}
       </Row>
-      <Row label="Edge">
+      <Row label="Edge Connections">
         <Text style={styles.value}>{edgeSummary(status)}</Text>
       </Row>
       <Row label="Hostnames Routed">
-        <Text style={styles.value}>{routed.length > 0 ? routed.join(', ') : 'None'}</Text>
+        <Text style={styles.value}>{routedText(routed)}</Text>
       </Row>
       <Row label="Last Health Check">
         <Text style={styles.value}>{formatLocalDateTime(checkedAt, { fallback: 'Not yet' })}</Text>
@@ -80,8 +84,14 @@ export function TunnelStatusPanel({
       <Row label="Last Error">
         <Text style={lastError ? styles.error : styles.value}>{lastError ?? 'None'}</Text>
       </Row>
+      {accountNote ? <Text style={panelStyles.muted}>{accountNote}</Text> : null}
     </SectionPanel>
   )
+}
+
+function routedText(routed: string[] | string): string {
+  if (typeof routed === 'string') return routed
+  return routed.length > 0 ? routed.join(', ') : 'None'
 }
 
 function Row({ label, children }: Readonly<{ label: string; children: React.ReactNode }>) {

@@ -3,12 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { IngressAccountRecord } from '@/lib/instance-api'
 import { CloudflareAccountCard } from './cloudflare-account-card'
-import {
-  AddAccountForm,
-  CloudflareTunnelSection,
-  EdgeGatePanel,
-  EDGE_GATE_WARNING,
-} from './cloudflare-tunnel-section'
+import { AddAccountForm, CloudflareTunnelSection } from './cloudflare-tunnel-section'
 
 const mocks = vi.hoisted(() => ({
   useAuth: vi.fn(),
@@ -35,7 +30,6 @@ vi.mock('@/lib/queries/ingress', () => ({
   useAddIngressAccount: () => mocks.add,
   useRemoveIngressAccount: () => mocks.remove,
   useRecheckIngressAccount: () => ({ run: vi.fn(), isPending: false }),
-  useSetEdgeGate: () => ({ run: vi.fn(), isPending: false }),
   useIngressAccounts: () => ({ data: { accounts: [] }, isLoading: false, isError: false }),
   useIngressCapabilities: () => ({ data: undefined, isLoading: true }),
 }))
@@ -162,19 +156,5 @@ describe('CloudflareAccountCard', () => {
       expect((screen.getByText('Remove') as HTMLButtonElement).disabled).toBe(true)
     )
     expect(screen.getByText(/Used by other\.example\.com/)).toBeTruthy()
-  })
-})
-
-describe('EdgeGatePanel', () => {
-  it('warns before confirming and is disabled when forced closed', () => {
-    render(
-      <EdgeGatePanel
-        loading={false}
-        gate={{ open: false, confirmedAt: null, confirmedBy: null, forcedClosed: true }}
-      />
-    )
-    expect(screen.getByText(new RegExp(EDGE_GATE_WARNING.slice(0, 40)))).toBeTruthy()
-    expect((screen.getByText('Confirm Edge Go-Live') as HTMLButtonElement).disabled).toBe(true)
-    expect(screen.getByText(/held off on this host/)).toBeTruthy()
   })
 })

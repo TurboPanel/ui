@@ -9,7 +9,6 @@ import { panelStyles } from '@/components/ui/panel-styles'
 import {
   Button,
   ButtonRow,
-  ConfirmButton,
   InlineNotice,
   LoadingState,
   SectionPanel,
@@ -17,23 +16,14 @@ import {
   TextLink,
 } from '@/components/ui'
 import { useAuth } from '@/lib/auth-context'
-import { formatLocalDateTime } from '@/lib/format-datetime'
-import type { EdgeGate, IngressCheck } from '@/lib/instance-api'
-import {
-  useAddIngressAccount,
-  useIngressAccounts,
-  useIngressCapabilities,
-  useSetEdgeGate,
-} from '@/lib/queries/ingress'
+import type { IngressCheck } from '@/lib/instance-api'
+import { useAddIngressAccount, useIngressAccounts } from '@/lib/queries/ingress'
 import { useInstanceHostnames } from '@/lib/queries/admin'
 import { colors, spacing } from '@/lib/theme'
 import { TUNNEL_PROVIDER_LABEL } from '@/lib/tunnel-status'
 
 export const CONNECTOR_NOTICE =
   'The tunnel connector runs on the control plane host only. Other servers never receive the tunnel token.'
-
-export const EDGE_GATE_WARNING =
-  'Confirm this only once every server trusts this control plane. A server that does not trust it loses its connection when an edge mode is applied.'
 
 export function CloudflareTunnelSection() {
   const { controlPlaneRuntime } = useAuth()
@@ -55,7 +45,6 @@ export const MANAGED_TUNNEL_COPY =
   "Enter one Cloudflare API token. The control plane creates the tunnel, or adopts the one your hostname already points at (its other routes are kept and it is never deleted), manages the DNS records, and issues and renews a DNS-01 Let's Encrypt certificate for each name."
 
 function CloudflareTunnelScreen() {
-  const capabilities = useIngressCapabilities()
   const accounts = useIngressAccounts()
   const hostnames = useInstanceHostnames()
   const [tokenOpen, setTokenOpen] = useState(false)
@@ -86,7 +75,6 @@ function CloudflareTunnelScreen() {
         ))}
         <AddAccountForm />
       </SectionPanel>
-      <EdgeGatePanel gate={capabilities.data?.gate ?? null} loading={capabilities.isLoading} />
       <TunnelHealthPanel hostnames={records} />
       <TextLink
         label="Paste a run token instead"
@@ -96,71 +84,6 @@ function CloudflareTunnelScreen() {
       />
       {tokenOpen ? <TunnelTokenPanel /> : null}
     </View>
-  )
-}
-
-function gateState(gate: EdgeGate): string {
-  if (gate.forcedClosed) {
-    return 'Edge modes are held off on this host by its configuration. They cannot be switched on here.'
-  }
-  if (gate.open && gate.confirmedAt) {
-    const by = gate.confirmedBy ? ` by ${gate.confirmedBy}` : ''
-    return `Edge modes are on. Confirmed ${formatLocalDateTime(gate.confirmedAt)}${by}.`
-  }
-  return gate.reason ?? 'Edge modes are off.'
-}
-
-export function EdgeGatePanel({
-  gate,
-  loading,
-}: Readonly<{ gate: EdgeGate | null; loading: boolean }>) {
-  const mutation = useSetEdgeGate()
-  const [error, setError] = useState<string | null>(null)
-
-  const setGate = async (confirmed: boolean) => {
-    setError(null)
-    const result = await mutation.run(confirmed)
-    if (!result.ok && result.error) setError(result.error)
-  }
-
-  return (
-    <SectionPanel title="Edge Go-Live" hint="Switches the edge connection modes on or off">
-      {loading || !gate ? (
-        <LoadingState />
-      ) : (
-        <>
-          <InlineNotice
-            tone="warning"
-            title="Every Server Must Trust This Control Plane"
-            body={EDGE_GATE_WARNING}
-          />
-          <Text style={styles.body}>{gateState(gate)}</Text>
-          {error ? <Text style={panelStyles.error}>{error}</Text> : null}
-          <ButtonRow>
-            {gate.open ? (
-              <ConfirmButton
-                label="Switch Edge Modes Off"
-                prompt="Hostnames already connected stay connected. New edge connections are refused."
-                busy={mutation.isPending}
-                disabled={gate.forcedClosed}
-                onConfirm={() => void setGate(false)}
-                stacked
-              />
-            ) : (
-              <ConfirmButton
-                label="Confirm Edge Go-Live"
-                prompt="Switch edge modes on for every hostname?"
-                variant="secondary"
-                busy={mutation.isPending}
-                disabled={gate.forcedClosed}
-                onConfirm={() => void setGate(true)}
-                stacked
-              />
-            )}
-          </ButtonRow>
-        </>
-      )}
-    </SectionPanel>
   )
 }
 

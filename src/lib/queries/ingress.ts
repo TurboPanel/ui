@@ -17,7 +17,6 @@ import {
   refreshInstanceTunnelStatus,
   removeHostnameIngress,
   removeIngressAccount,
-  setEdgeGate,
   updateHostnameIngress,
 } from '@/lib/instance-api'
 import { panelDnsInterval } from '@/lib/panel-certificate-causes'
@@ -104,16 +103,6 @@ export function usePanelDnsCertificate(id: string | null, options?: Enabled) {
   })
 }
 
-export function useSetEdgeGate() {
-  const queryClient = useQueryClient()
-  return useApiMutation({
-    mutationFn: setEdgeGate,
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.admin.ingressCapabilities })
-    },
-  })
-}
-
 function replaceHostname(queryClient: QueryClient, hostname: InstanceHostnameRecord) {
   queryClient.setQueryData<{ hostnames: InstanceHostnameRecord[] }>(
     queryKeys.admin.instanceHostnames,
@@ -131,8 +120,12 @@ export function useUpdateHostnameIngress() {
   return useApiMutation({
     mutationFn: (input: { id: string; patch: HostnameIngressPatch }) =>
       updateHostnameIngress(input.id, input.patch),
-    onSuccess: (result) => {
+    onSuccess: async (result) => {
       if (result.ok) replaceHostname(queryClient, result.hostname)
+      // The edge gate refused: its server list on the page may be older than this answer.
+      else if (result.waiting) {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.admin.ingressCapabilities })
+      }
     },
   })
 }

@@ -43,7 +43,6 @@ const ACTION_LABELS: Readonly<Record<string, string>> = {
   'instance.tunnel_token.set': 'change the tunnel token',
   'instance.ingress_account.added': 'connect a Cloudflare account',
   'instance.ingress_account.removed': 'remove a Cloudflare account',
-  'instance.edge_gate.set': 'switch edge connection modes on or off',
 }
 
 export function stepUpActionLabel(action: string | null): string {

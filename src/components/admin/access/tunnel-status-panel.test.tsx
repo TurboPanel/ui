@@ -27,6 +27,30 @@ const TUNNELED = {
 afterEach(cleanup)
 
 describe('TunnelStatusPanel', () => {
+  it('says plainly when an older daemon does not report the connector facts', () => {
+    mocks.status.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: {
+        ok: true,
+        connector: {
+          status: 'connected',
+          version: '2026.10.0',
+          pinnedVersion: null,
+          slot: null,
+          lastUpdate: null,
+          checkedAt: null,
+        },
+        connectorNote: null,
+        edge: null,
+        edgeNote: null,
+        edgeError: null,
+      },
+    })
+    render(<TunnelStatusPanel hostnames={[]} />)
+    expect(screen.getAllByText(/Update the daemon on the control plane host/)).toHaveLength(2)
+  })
+
   it('shows the pasted-token path: connector only, with the edge note and a hostname error', () => {
     const data: InstanceTunnelStatus = {
       ok: true,
@@ -37,6 +61,8 @@ describe('TunnelStatusPanel', () => {
         slot: null,
         lastUpdate: null,
         checkedAt: '2026-11-01T10:00:00Z',
+        edgeConnections: 4,
+        hostnames: ['cp.example.com'],
       },
       connectorNote: null,
       edge: null,
@@ -48,6 +74,8 @@ describe('TunnelStatusPanel', () => {
     expect(screen.getByText('Running')).toBeTruthy()
     expect(screen.getByText('Version 2026.10.0')).toBeTruthy()
     expect(screen.getByText('Connect a Cloudflare account to see edge locations.')).toBeTruthy()
+    // Without an account the connector's own facts fill the edge connections and routed names.
+    expect(screen.getByText('4 connections')).toBeTruthy()
     expect(screen.getByText('cp.example.com')).toBeTruthy()
     expect(screen.getByText('Self-check failed.')).toBeTruthy()
     expect(screen.getByText('Refresh')).toBeTruthy()

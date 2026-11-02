@@ -57,6 +57,7 @@ import { HA_CERT_APPLY_NOTE } from '@/lib/platform-copy'
 import { isProviderMode } from '@/lib/connection-modes'
 import { useAuth } from '@/lib/auth-context'
 import { useIngressAccounts, useIngressCapabilities } from '@/lib/queries/ingress'
+import { EdgeGateStatus } from '@/components/admin/access/edge-gate-status'
 import {
   addPublicUrlEntry,
   parsePublicUrlEntry,
@@ -386,6 +387,7 @@ export function HostnamesSection() {
         webhook endpoint a Git provider delivers to, and the origin baked into generated install
         commands.
       </Text>
+      {ingress.enabled ? <EdgeGateStatus gate={ingress.gate} /> : null}
 
       <SectionPanel
         title="Hostnames"

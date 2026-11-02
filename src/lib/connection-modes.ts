@@ -19,7 +19,8 @@ export const CONNECTION_MODE_LABELS: Readonly<Record<IngressMode, string>> = {
 }
 
 export const NOT_IMPLEMENTED_HINT = 'Not available yet'
-export const GATE_CLOSED_HINT = 'Edge modes open after every server trusts this control plane'
+export const GATE_CLOSED_HINT =
+  "Edge modes open once every server has re-learned this control plane's key"
 
 /** The two public ports a Cloudflare tunnel can publish on. */
 export const TUNNEL_PUBLIC_PORTS = [443, 8443] as const
@@ -51,11 +52,30 @@ export function connectionModeOptions(
       return { ...option, disabled: true, detail: NOT_IMPLEMENTED_HINT }
     }
     if (capability.isEdge && gate?.open !== true) {
-      const reason = gate?.reason ? `${GATE_CLOSED_HINT}. ${gate.reason}` : GATE_CLOSED_HINT
-      return { ...option, disabled: true, detail: reason }
+      return { ...option, disabled: true, detail: gate?.reason ?? GATE_CLOSED_HINT }
     }
     return { ...option, disabled: false, detail: null }
   })
+}
+
+/** The one line the Hostnames page shows about the edge gate. */
+export function edgeGateLine(gate: EdgeGate): string {
+  if (gate.forcedClosed) return 'Edge modes are held off on this host by its configuration.'
+  if (gate.open) return 'Edge modes are ready.'
+  const count = gate.waiting?.length ?? 0
+  if (count === 0) return gate.reason ?? 'Edge modes are not ready yet.'
+  return count === 1
+    ? "1 server still needs to re-learn this control plane's key."
+    : `${count} servers still need to re-learn this control plane's key.`
+}
+
+/** The server page that offers Issue Re-Enroll Token, or null for a server no organization owns. */
+export function reenrollServerHref(server: {
+  id: string
+  organizationId: string | null
+}): string | null {
+  if (!server.organizationId) return null
+  return `/${encodeURIComponent(server.organizationId)}/servers/${encodeURIComponent(server.id)}`
 }
 
 /** LAN Only is fixed on 8443; every other mode shows the Public Port field. */
@@ -128,7 +148,8 @@ export function ingressStatusInterval(status: IngressStatus | undefined): number
 export const APPLY_CAUSE_TEXT: Readonly<Record<IngressApplyCause, string>> = {
   'not-available': 'This connection mode is not available yet.',
   'invalid-hostname': 'This hostname cannot be used with this connection mode.',
-  'gate-closed': 'Edge modes are switched off. Confirm Edge Go-Live first.',
+  'gate-closed':
+    "Edge modes open once every server has re-learned this control plane's key. The Hostnames page lists the servers still waiting.",
   'account-missing': 'Choose a Cloudflare account for this hostname first.',
   'token-invalid': 'Cloudflare refused the saved token. Recheck or replace the account.',
   'scope-missing': 'The Cloudflare token is missing a permission this hostname needs.',

@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import type { InstanceTunnelStatus } from './instance-api'
-import { connectorSummary, edgeSummary, lastHealthCheck, tunnelLastError } from './tunnel-status'
+import {
+  connectorSummary,
+  edgeAccountNote,
+  edgeSummary,
+  lastHealthCheck,
+  NOT_REPORTED,
+  NOT_VISIBLE_WITHOUT_ACCOUNT,
+  routedHostnames,
+  tunnelLastError,
+} from './tunnel-status'
 
 function status(over: Partial<InstanceTunnelStatus> = {}): InstanceTunnelStatus {
   return {
@@ -53,10 +62,34 @@ describe('tunnel status words', () => {
     const one = status()
     one.edge = { ...one.edge!, connections: 1, locations: [] }
     expect(edgeSummary(one)).toBe('1 connection')
-    expect(edgeSummary(status({ edge: null, edgeNote: 'No account connected.' }))).toBe(
-      'No account connected.'
+    expect(
+      edgeSummary(status({ connector: null, edge: null, edgeNote: 'No account connected.' }))
+    ).toBe('No account connected.')
+    expect(edgeSummary(undefined)).toBe(NOT_VISIBLE_WITHOUT_ACCOUNT)
+  })
+
+  it('without an account, shows what the connector itself reports', () => {
+    const noAccount = status({ edge: null, edgeNote: 'Connect an account for DNS-01.' })
+    noAccount.connector = {
+      ...noAccount.connector!,
+      edgeConnections: 4,
+      hostnames: ['cp.example.com'],
+    }
+    expect(edgeSummary(noAccount)).toBe('4 connections')
+    expect(routedHostnames(noAccount)).toEqual(['cp.example.com'])
+    expect(edgeAccountNote(noAccount)).toBe('Connect an account for DNS-01.')
+    // An older daemon sends neither fact.
+    const older = status({ edge: null })
+    expect(edgeSummary(older)).toBe(NOT_REPORTED)
+    expect(routedHostnames(older)).toBe(NOT_REPORTED)
+    expect(routedHostnames(status({ edge: null, connector: null }))).toBe(
+      NOT_VISIBLE_WITHOUT_ACCOUNT
     )
-    expect(edgeSummary(undefined)).toMatch(/Connect a Cloudflare account/)
+  })
+
+  it('prefers the edge view when an account is connected', () => {
+    expect(routedHostnames(status())).toEqual(['cp.example.com'])
+    expect(edgeAccountNote(status())).toBeNull()
   })
 
   it('reports the newest health check', () => {

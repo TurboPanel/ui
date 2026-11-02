@@ -4,12 +4,14 @@ import {
   capabilityFor,
   checkLabel,
   connectionModeOptions,
+  edgeGateLine,
   GATE_CLOSED_HINT,
   INGRESS_PHASE_PRESENTATION,
   ingressStatusInterval,
   isProviderMode,
   NOT_IMPLEMENTED_HINT,
   portForModeChange,
+  reenrollServerHref,
   showsPublicPort,
   usesTunnelPorts,
   visitorIpSourceText,
@@ -53,8 +55,8 @@ const MODES = [
 const CLOSED: EdgeGate = {
   open: false,
   reason: 'Two servers are not pinned.',
-  confirmedAt: null,
-  confirmedBy: null,
+  waiting: [],
+  remoteServers: 2,
   forcedClosed: false,
 }
 
@@ -64,7 +66,7 @@ describe('connectionModeOptions', () => {
       (option) => option.value === 'cloudflare-tunnel'
     )
     expect(tunnel).toMatchObject({ disabled: true })
-    expect(tunnel?.detail).toBe(`${GATE_CLOSED_HINT}. Two servers are not pinned.`)
+    expect(tunnel?.detail).toBe('Two servers are not pinned.')
   })
 
   it('says only the hint when a closed gate gives no reason', () => {
@@ -147,5 +149,25 @@ describe('labels and intervals', () => {
     expect(visitorIpSourceText(capability('passthrough', { visitorIpSource: 'other' }))).toBe(
       'other'
     )
+  })
+})
+
+describe('edge gate words', () => {
+  it('reads ready, held off, or how many servers still need the key', () => {
+    expect(edgeGateLine({ ...CLOSED, open: true })).toBe('Edge modes are ready.')
+    expect(edgeGateLine({ ...CLOSED, forcedClosed: true })).toMatch(/held off on this host/)
+    const one = { id: 's1', name: 'kappa', organizationId: 'o1', pinnedBy: null }
+    expect(edgeGateLine({ ...CLOSED, waiting: [one] })).toBe(
+      "1 server still needs to re-learn this control plane's key."
+    )
+    expect(edgeGateLine({ ...CLOSED, waiting: [one, { ...one, id: 's2' }] })).toBe(
+      "2 servers still need to re-learn this control plane's key."
+    )
+    expect(edgeGateLine(CLOSED)).toBe('Two servers are not pinned.')
+  })
+
+  it('links a server to its page only when an organization owns it', () => {
+    expect(reenrollServerHref({ id: 's 1', organizationId: 'o1' })).toBe('/o1/servers/s%201')
+    expect(reenrollServerHref({ id: 's1', organizationId: null })).toBeNull()
   })
 })

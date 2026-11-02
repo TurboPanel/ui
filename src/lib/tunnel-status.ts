@@ -34,12 +34,48 @@ export function connectorSummary(status: InstanceTunnelStatus | undefined): {
   }
 }
 
-/** "4 connections in Tokyo, Osaka", or the note saying why the edge half is empty. */
+/** Shown for a fact only a connected account can give. */
+export const NOT_VISIBLE_WITHOUT_ACCOUNT = 'Not visible without an account'
+/** Shown when the daemon on the control plane host is too old to report a connector fact. */
+export const NOT_REPORTED = 'Not reported yet. Update the daemon on the control plane host.'
+
+function countConnections(count: number): string {
+  return count === 1 ? '1 connection' : `${count} connections`
+}
+
+/**
+ * "4 connections in nrt01, kix01" from the edge with an account; otherwise
+ * the count the connector itself reports; else the note for the empty half.
+ */
 export function edgeSummary(status: InstanceTunnelStatus | undefined): string {
   const edge = status?.edge
-  if (!edge) return status?.edgeNote ?? 'Connect a Cloudflare account to see the edge side.'
-  const count = edge.connections === 1 ? '1 connection' : `${edge.connections} connections`
-  return edge.locations.length > 0 ? `${count} in ${edge.locations.join(', ')}` : count
+  if (edge) {
+    const count = countConnections(edge.connections)
+    return edge.locations.length > 0 ? `${count} in ${edge.locations.join(', ')}` : count
+  }
+  const fromConnector = status?.connector?.edgeConnections
+  if (typeof fromConnector === 'number') return countConnections(fromConnector)
+  if (status?.connector) return NOT_REPORTED
+  return status?.edgeNote ?? NOT_VISIBLE_WITHOUT_ACCOUNT
+}
+
+/** Edge details only an account adds (locations, edge status), or null when there is nothing to say. */
+export function edgeAccountNote(status: InstanceTunnelStatus | undefined): string | null {
+  if (status?.edge || status?.edgeError) return null
+  return status?.edgeNote ?? null
+}
+
+/**
+ * The names this tunnel routes: from the edge with an account, else from the
+ * connector (which knows its routes, also for a pasted run token). A string
+ * when neither can say.
+ */
+export function routedHostnames(status: InstanceTunnelStatus | undefined): string[] | string {
+  if (status?.edge) return status.edge.hostnames
+  const fromConnector = status?.connector?.hostnames
+  if (Array.isArray(fromConnector)) return fromConnector
+  if (status?.connector) return NOT_REPORTED
+  return NOT_VISIBLE_WITHOUT_ACCOUNT
 }
 
 /** The newest health check either half reports, or null. */

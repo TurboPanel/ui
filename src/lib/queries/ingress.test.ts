@@ -21,7 +21,6 @@ import {
   useRecheckIngressAccount,
   useRemoveHostnameIngress,
   useRemoveIngressAccount,
-  useSetEdgeGate,
   useUpdateHostnameIngress,
 } from './ingress'
 
@@ -39,7 +38,6 @@ const api = vi.hoisted(() => ({
   recheckIngressAccount: vi.fn(),
   removeHostnameIngress: vi.fn(),
   removeIngressAccount: vi.fn(),
-  setEdgeGate: vi.fn(),
   updateHostnameIngress: vi.fn(),
 }))
 
@@ -169,7 +167,7 @@ describe('ingress queries', () => {
     const invalidate = vi.spyOn(client, 'invalidateQueries')
     const { result } = renderHook(
       () => ({
-        gate: useSetEdgeGate(),
+        update: useUpdateHostnameIngress(),
         preflight: usePreflightHostnameIngress(),
         apply: useApplyHostnameIngress(),
         remove: useRemoveHostnameIngress(),
@@ -181,7 +179,13 @@ describe('ingress queries', () => {
       { wrapper }
     )
     await act(async () => {
-      await result.current.gate.run(true)
+      // A 409 from the edge gate names servers, so the gate read is refreshed.
+      api.updateHostnameIngress.mockResolvedValueOnce({
+        ok: false,
+        error: 'held',
+        waiting: [{ id: 's1', name: 'kappa', organizationId: null, pinnedBy: null }],
+      })
+      await result.current.update.run({ id: 'h1', patch: { mode: 'cloudflare-tunnel' } })
       await result.current.preflight.run('h1')
       await result.current.apply.run({ id: 'h1', replaceExisting: true })
       await result.current.remove.run('h1')
