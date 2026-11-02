@@ -1,14 +1,70 @@
 import { useEffect, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { panelStyles } from '@/components/ui/panel-styles'
-import { Badge, Button, TextField } from '@/components/ui'
-import type { InstanceHostnameInput } from '@/lib/instance-api'
+import { Badge, Button, Select, TextField } from '@/components/ui'
+import { showsPublicPort, TUNNEL_PUBLIC_PORTS, usesTunnelPorts } from '@/lib/connection-modes'
+import type { IngressMode, InstanceHostnameInput } from '@/lib/instance-api'
 import {
   DEFAULT_PANEL_PUBLIC_PORT,
   parsePublicPort,
   publicOriginForRecord,
 } from '@/lib/public-url-entry'
 import { spacing } from '@/lib/theme'
+
+/**
+ * The Public Port for a row's connection mode: LAN Only is fixed on 8443 and
+ * shows no field, a Cloudflare tunnel picks 443 or 8443, and every other mode
+ * takes any port.
+ */
+export function ModePublicPortCell({
+  mode,
+  ...props
+}: Readonly<{
+  mode: IngressMode
+  row: InstanceHostnameInput
+  busy: boolean
+  onChange: (next: InstanceHostnameInput) => void
+  onValidityChange: (host: string, valid: boolean) => void
+}>) {
+  if (!showsPublicPort(mode)) {
+    return <Text style={panelStyles.muted}>8443, fixed for LAN Only</Text>
+  }
+  if (usesTunnelPorts(mode)) {
+    return <TunnelPortCell row={props.row} busy={props.busy} onChange={props.onChange} />
+  }
+  return <PublicPortCell {...props} />
+}
+
+function TunnelPortCell({
+  row,
+  busy,
+  onChange,
+}: Readonly<{
+  row: InstanceHostnameInput
+  busy: boolean
+  onChange: (next: InstanceHostnameInput) => void
+}>) {
+  const port = row.publicPort ?? DEFAULT_PANEL_PUBLIC_PORT
+  return (
+    <View style={styles.stack}>
+      <Select
+        value={String(port)}
+        disabled={busy}
+        accessibilityLabel={`Public port for ${row.host}`}
+        placeholder="Public Port"
+        options={TUNNEL_PUBLIC_PORTS.map((value) => ({
+          value: String(value),
+          label: String(value),
+        }))}
+        onChange={(value) => {
+          const next = Number(value)
+          if (next !== port) onChange({ ...row, publicPort: next })
+        }}
+      />
+      <Text style={panelStyles.muted}>{publicOriginForRecord({ ...row, publicPort: port })}</Text>
+    </View>
+  )
+}
 
 export function PublicPortCell({
   row,

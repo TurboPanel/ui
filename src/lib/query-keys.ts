@@ -482,6 +482,14 @@ export const queryKeys = {
       ['admin', 'instance-updates', 'servers', offset, limit, status] as const,
     upgradeSettings: ['admin', 'instance-updates', 'settings'] as const,
     instanceIdentity: ['admin', 'instance-identity'] as const,
+    /** Connection modes and the edge gate (self-hosted only). */
+    ingressCapabilities: ['admin', 'ingress', 'capabilities'] as const,
+    ingressAccounts: ['admin', 'ingress', 'accounts'] as const,
+    /** The control plane's own tunnel: connector and edge halves. */
+    instanceTunnel: ['admin', 'ingress', 'tunnel'] as const,
+    /** Live read of one hostname's connection, never cached across names. */
+    hostnameIngressStatus: (id: string) => ['admin', 'ingress', 'status', id] as const,
+    panelDnsCertificate: (id: string) => ['admin', 'acme-dns', id] as const,
     platformCa: ['admin', 'platform-ca'] as const,
     trustedProxies: ['admin', 'trusted-proxies'] as const,
     signup: ['admin', 'settings', 'signup'] as const,
