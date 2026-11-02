@@ -333,7 +333,8 @@ export function useRunManagedLifecycle(orgId: string, environmentId: string) {
 export function useDeleteEnvironmentManaged(orgId: string, environmentId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: () => deleteEnvironmentManaged(environmentId),
+    /** The project's name as typed; the control plane refuses without it. */
+    mutationFn: (confirmName: string) => deleteEnvironmentManaged(environmentId, { confirmName }),
     onSuccess: () =>
       queryClient.invalidateQueries({
         queryKey: queryKeys.org(orgId).managed.all,
@@ -344,12 +345,14 @@ export function useDeleteEnvironmentManaged(orgId: string, environmentId: string
 export function useDeleteEnvironmentManagedMutation(orgId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (input: string | { environmentId: string; force?: boolean }) =>
-      typeof input === 'string'
-        ? deleteEnvironmentManaged(input)
-        : deleteEnvironmentManaged(input.environmentId, {
-            ...(input.force ? { force: true } : {}),
-          }),
+    /** `confirmName` is the project's name as typed; the control plane refuses without it. */
+    mutationFn: (
+      input: Readonly<{ environmentId: string; confirmName: string; force?: boolean }>
+    ) =>
+      deleteEnvironmentManaged(input.environmentId, {
+        confirmName: input.confirmName,
+        ...(input.force ? { force: true } : {}),
+      }),
     onSuccess: () =>
       Promise.all([
         queryClient.invalidateQueries({
@@ -515,7 +518,9 @@ export function useCreateManagedDatabase(orgId: string, environmentId: string) {
 export function useDeleteManagedDatabase(orgId: string, environmentId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (name: string) => deleteManagedDatabase(environmentId, name),
+    /** `confirmName` is the database name as typed; the control plane refuses without it. */
+    mutationFn: ({ name, confirmName }: Readonly<{ name: string; confirmName: string }>) =>
+      deleteManagedDatabase(environmentId, name, confirmName),
     onSuccess: () =>
       Promise.all([
         queryClient.invalidateQueries({

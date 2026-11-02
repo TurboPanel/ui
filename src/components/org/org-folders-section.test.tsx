@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrgFoldersSection } from './org-folders-section'
 
@@ -15,6 +15,7 @@ const state = vi.hoisted(() => ({
   removeError: false,
 }))
 
+vi.mock('expo-clipboard', () => ({ setStringAsync: vi.fn(() => Promise.resolve()) }))
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
 vi.mock('react-native-svg', async () => (await import('@/components/ui/v4/rn-stub')).svgStub)
 vi.mock(
@@ -39,7 +40,8 @@ vi.mock('@/lib/queries/folders', () => ({
     error: new Error('folder_in_use'),
   }),
 }))
-vi.mock('@/components/ui', () => ({
+vi.mock('@/components/ui', async () => ({
+  TypeNameDeleteButton: (await import('@/components/ui/type-name-confirm')).TypeNameDeleteButton,
   Badge: ({ label }: { label: string }) => <span>{label}</span>,
   Button: ({ label, onPress }: { label: string; onPress: () => void }) => (
     <button onClick={onPress}>{label}</button>
@@ -123,6 +125,14 @@ afterEach(() => {
   cleanup()
 })
 
+/** Opens the name dialog with `opener`, types `name` and presses the dialog's `action` button. */
+function confirmByName(opener: HTMLElement, name: string, action: string) {
+  fireEvent.click(opener)
+  const dialog = screen.getByRole('dialog')
+  fireEvent.change(within(dialog).getByRole('textbox'), { target: { value: name } })
+  fireEvent.click(within(dialog).getByRole('button', { name: action }))
+}
+
 describe('OrgFoldersSection', () => {
   it('shows nothing to people who cannot manage the organization', () => {
     state.canManage = false
@@ -159,7 +169,7 @@ describe('OrgFoldersSection', () => {
     expect(screen.getByText('Not in TurboPanel')).toBeTruthy()
     expect(screen.getByText(/a container still has the folder open/)).toBeTruthy()
     expect(screen.getByText('Show more (2 not shown)')).toBeTruthy()
-    fireEvent.click(screen.getByText('Remove from server'))
+    confirmByName(screen.getByText('Remove From Server'), 'old.example.com', 'Remove Folder')
     expect(state.mutate).toHaveBeenCalledWith('f1')
     fireEvent.click(screen.getByText('Try again now'))
     expect(state.mutate).toHaveBeenCalledWith('f2')

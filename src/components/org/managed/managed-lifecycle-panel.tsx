@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { panelStyles } from '@/components/ui/panel-styles'
-import { Button, ButtonRow, TextField } from '@/components/ui'
+import { Button, ButtonRow, TypeNameConfirmModal } from '@/components/ui'
 import { SectionHeading } from '@/components/ui/v4'
 import type { ManagedStatus } from '@/lib/managed-services'
-import { colors, spacing } from '@/lib/theme'
+import { spacing } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
 
 export function ManagedLifecyclePanel({
@@ -20,16 +20,15 @@ export function ManagedLifecyclePanel({
   canManage: boolean
   busy: boolean
   onLifecycle: (action: 'start' | 'stop' | 'restart') => Promise<void>
-  onDelete: () => Promise<void>
+  /** Gets the name as typed; the control plane checks it again. */
+  onDelete: (typedName: string) => Promise<void>
 }>) {
-  const [confirmText, setConfirmText] = useState('')
   const [showDelete, setShowDelete] = useState(false)
   const [working, setWorking] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const applying = status === 'applying' || busy || working
-  const canConfirmDelete =
-    confirmText.trim() === projectName && !applying
 
   const run = async (action: () => Promise<void>) => {
     setWorking(true)
@@ -85,52 +84,34 @@ export function ManagedLifecyclePanel({
           }}
         />
         <Button
-          label="Destroy database"
+          label="Destroy Database"
           variant="danger"
           disabled={applying}
-          onPress={() => setShowDelete((current) => !current)}
+          onPress={() => setShowDelete(true)}
         />
       </ButtonRow>
 
       {showDelete ? (
-        <View style={styles.deleteBox}>
-          <Text style={styles.deleteCopy}>
-            Type <Text style={styles.confirmName}>{projectName}</Text> to destroy this database and
-            its data for good. The environment stays.
-          </Text>
-          <TextField
-            label="Confirmation"
-            value={confirmText}
-            onChangeText={setConfirmText}
-            placeholder={projectName}
-            autoCapitalize="none"
-            autoCorrect={false}
-            editable={!applying}
-          />
-          <ButtonRow>
-            <Button
-              label="Confirm delete"
-              busyLabel="Deleting…"
-              variant="danger"
-              busy={working}
-              disabled={!canConfirmDelete}
-              onPress={() => {
-                void run(async () => {
-                  await onDelete()
-                  setShowDelete(false)
-                  setConfirmText('')
-                })
-              }}
-            />
-            <Button
-              label="Cancel"
-              onPress={() => {
-                setShowDelete(false)
-                setConfirmText('')
-              }}
-            />
-          </ButtonRow>
-        </View>
+        <TypeNameConfirmModal
+          thing="Database"
+          verb="Destroy"
+          name={projectName}
+          description="Destroys this database and its data for good. The environment stays."
+          pending={working}
+          error={deleteError}
+          onCancel={() => {
+            setShowDelete(false)
+            setDeleteError(null)
+          }}
+          onConfirm={(typed) => {
+            setWorking(true)
+            setDeleteError(null)
+            void onDelete(typed)
+              .then(() => setShowDelete(false))
+              .catch((err: unknown) => setDeleteError(userErrorMessage(err, 'Action failed')))
+              .finally(() => setWorking(false))
+          }}
+        />
       ) : null}
     </View>
   )
@@ -139,23 +120,5 @@ export function ManagedLifecyclePanel({
 const styles = StyleSheet.create({
   root: {
     gap: spacing.sm,
-  },
-  deleteBox: {
-    marginTop: spacing.md,
-    gap: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: 8,
-    padding: spacing.md,
-    backgroundColor: colors.bgSecondary,
-  },
-  deleteCopy: {
-    color: colors.textMuted,
-    fontSize: 13,
-    lineHeight: 20,
-  },
-  confirmName: {
-    color: colors.text,
-    fontWeight: '700',
   },
 })

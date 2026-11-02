@@ -4,13 +4,13 @@ import { StepUpPasswordField } from '@/components/account/step-up-password-field
 import {
   Button,
   ButtonRow,
-  ConfirmButton,
   DataTable,
   DataTableCell,
   DataTableEmpty,
   DataTableRow,
   InlineNotice,
   TextField,
+  TypeNameDeleteButton,
   type DataTableColumn,
 } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
@@ -84,8 +84,8 @@ export function PasskeysPanel({
   return (
     <View style={styles.stack}>
       <Text style={panelStyles.muted}>
-        Sign in with the fingerprint, face, or screen lock you already use. A
-        passkey replaces both the password and the code.
+        Sign in with the fingerprint, face, or screen lock you already use. A passkey replaces both
+        the password and the code.
       </Text>
       <PasskeyList passkeys={passkeys} loading={loading} />
       <AddPasskey />
@@ -128,7 +128,7 @@ function PasskeyList({
           setPendingId(null)
         })
     },
-    [password, remove],
+    [password, remove]
   )
 
   let body = null
@@ -140,11 +140,7 @@ function PasskeyList({
     body = <DataTableEmpty>No passkeys registered.</DataTableEmpty>
   } else {
     body = passkeys.map((passkey, index) => (
-      <DataTableRow
-        key={passkey.id}
-        alt={index % 2 === 1}
-        last={index === passkeys.length - 1}
-      >
+      <DataTableRow key={passkey.id} alt={index % 2 === 1} last={index === passkeys.length - 1}>
         <DataTableCell column={COLUMNS[0]}>
           <Text style={styles.name} numberOfLines={1}>
             {passkeyDisplayName(passkey)}
@@ -158,10 +154,12 @@ function PasskeyList({
         </DataTableCell>
         <DataTableCell column={COLUMNS[3]}>
           {readOnly ? null : (
-            <ConfirmButton
+            <TypeNameDeleteButton
               label="Remove"
-              confirmLabel="Remove"
-              prompt="Remove?"
+              thing="Passkey"
+              verb="Remove"
+              name={passkeyDisplayName(passkey)}
+              description="This passkey can no longer be used to sign in."
               busy={remove.isPending && pendingId === passkey.id}
               onConfirm={() => onDelete(passkey.id)}
             />
@@ -228,9 +226,7 @@ function AddPasskey() {
         }
       })
       .catch((err: unknown) => {
-        setMessage(
-          userErrorMessage(err, 'Passkey registration failed'),
-        )
+        setMessage(userErrorMessage(err, 'Passkey registration failed'))
       })
       .finally(() => {
         setCeremonyBusy(false)

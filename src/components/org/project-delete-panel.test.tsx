@@ -1,35 +1,62 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { CONFIRM_GUARD_MS } from '@/components/ui/confirm-button'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { EnvironmentRecord } from '@/lib/instance-api'
 import { MANAGED_DESTROY_COPY, StopStepSection } from './project-delete-panel'
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
 vi.mock('@/components/ui/panel-styles', () => ({ panelStyles: {} }))
 vi.mock('@/components/ui/button', () => ({
-  Button: ({ label, onPress }: Readonly<{ label: string; onPress: () => void }>) => (
-    <button type="button" onClick={onPress}>
+  Button: ({
+    label,
+    onPress,
+    disabled,
+  }: Readonly<{ label: string; onPress: () => void; disabled?: boolean }>) => (
+    <button type="button" disabled={disabled} onClick={onPress}>
       {label}
     </button>
   ),
+  ButtonRow: ({ children }: Readonly<{ children: unknown }>) => <div>{children as never}</div>,
+}))
+vi.mock('@/components/ui/modal-sheet', () => ({
+  ModalSheet: ({
+    title,
+    description,
+    children,
+    footer,
+  }: Readonly<{ title: string; description?: string; children: unknown; footer: unknown }>) => (
+    <div role="dialog">
+      <h1>{title}</h1>
+      <p>{description}</p>
+      {children as never}
+      {footer as never}
+    </div>
+  ),
+}))
+vi.mock('@/components/ui/form-field', () => ({
+  TextField: ({
+    label,
+    value,
+    onChangeText,
+  }: Readonly<{ label: string; value: string; onChangeText: (v: string) => void }>) => (
+    <input aria-label={label} value={value} onChange={(e) => onChangeText(e.target.value)} />
+  ),
+}))
+vi.mock('@/components/ui/copy-button', () => ({
+  CopyButton: () => <button type="button">Copy</button>,
+}))
+vi.mock('@/components/ui/mono-text', () => ({
+  MonoText: ({ children }: Readonly<{ children: string }>) => <code>{children}</code>,
 }))
 vi.mock('@/components/ui', async () => ({
-  ConfirmButton: (await import('@/components/ui/confirm-button')).ConfirmButton,
+  ...(await import('@/components/ui/type-name-confirm')),
   Button: (await import('@/components/ui/button')).Button,
   LoadingState: () => null,
-  TextField: () => null,
 }))
 vi.mock('@/lib/queries', () => ({}))
 vi.mock('@/components/org/delete-plan-list', () => ({ DeletePlanList: () => null }))
 
-beforeEach(() => {
-  vi.useFakeTimers({ now: new Date('2026-01-01T00:00:00Z') })
-})
-afterEach(() => {
-  cleanup()
-  vi.useRealTimers()
-})
+afterEach(cleanup)
 
 const row = {
   environment: { id: 'env-1', name: 'production' } as EnvironmentRecord,
@@ -41,22 +68,34 @@ const row = {
 }
 
 describe('Destroy database in the project delete panel', () => {
-  it('asks a second time before it destroys anything', () => {
+  it('asks for the project name before it destroys anything', () => {
     const onStop = vi.fn()
-    render(<StopStepSection envRows={[row]} onStop={onStop} copy={MANAGED_DESTROY_COPY} />)
-    fireEvent.click(screen.getByText('Destroy database'))
+    render(
+      <StopStepSection
+        envRows={[row]}
+        onStop={onStop}
+        copy={MANAGED_DESTROY_COPY}
+        confirmName="Shop"
+      />
+    )
+    fireEvent.click(screen.getByText('Destroy Database', { selector: 'button' }))
     expect(onStop).not.toHaveBeenCalled()
+    expect(screen.getByRole('heading').textContent).toBe('Destroy Database')
     expect(screen.getByText(MANAGED_DESTROY_COPY.confirmPrompt)).toBeTruthy()
-    vi.setSystemTime(Date.now() + CONFIRM_GUARD_MS)
-    fireEvent.click(screen.getByText(MANAGED_DESTROY_COPY.confirmLabel))
-    expect(onStop).toHaveBeenCalledWith('env-1')
-  })
+    expect(screen.getByText('Copy')).toBeTruthy()
 
-  it('ignores a confirm press that comes right after the first one', () => {
-    const onStop = vi.fn()
-    render(<StopStepSection envRows={[row]} onStop={onStop} copy={MANAGED_DESTROY_COPY} />)
-    fireEvent.click(screen.getByText('Destroy database'))
-    fireEvent.click(screen.getByText(MANAGED_DESTROY_COPY.confirmLabel))
+    const confirm = within(screen.getByRole('dialog')).getByText('Destroy Database', {
+      selector: 'button',
+    }) as HTMLButtonElement
+    expect(confirm.disabled).toBe(true)
+    fireEvent.change(screen.getByLabelText('Database name'), { target: { value: 'shop' } })
+    expect(confirm.disabled).toBe(true)
+    fireEvent.click(confirm)
     expect(onStop).not.toHaveBeenCalled()
+
+    fireEvent.change(screen.getByLabelText('Database name'), { target: { value: 'Shop' } })
+    expect(confirm.disabled).toBe(false)
+    fireEvent.click(confirm)
+    expect(onStop).toHaveBeenCalledWith('env-1', 'Shop')
   })
 })

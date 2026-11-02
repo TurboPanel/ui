@@ -9,6 +9,7 @@ import {
   MonoText,
   SegmentedControl,
   TextField,
+  TypeNameDeleteButton,
   type SegmentedOption,
 } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
@@ -195,12 +196,7 @@ function PrincipalKeysSection({
           SSH keys{keys.length > 0 ? ` · ${keys.length}` : ''}
         </Text>
         {canManage && !formOpen ? (
-          <Button
-            label="Add key"
-            variant="secondary"
-            size="sm"
-            onPress={() => setFormOpen(true)}
-          />
+          <Button label="Add key" variant="secondary" size="sm" onPress={() => setFormOpen(true)} />
         ) : null}
       </View>
       {error ? <Text style={panelStyles.error}>{error}</Text> : null}
@@ -222,18 +218,15 @@ function PrincipalKeysSection({
             </Text>
           </View>
           {canManage ? (
-            <ConfirmButton
+            <TypeNameDeleteButton
               label="Remove"
-              // The armed prompt carries which key, so the confirmation names
-              // the thing being revoked rather than repeating "Are you sure?"
-              // once per row.
-              prompt={`Remove ${key.name}?`}
-              confirmLabel="Remove"
-              size="sm"
+              thing="SSH Key"
+              verb="Remove"
+              // A key added without a name goes by its fingerprint, as the row shows it.
+              name={key.name.trim() || key.fingerprint}
+              description="The key can no longer sign in as this Hosting Account."
               busy={removeKey.isPending}
-              onConfirm={() => {
-                void handleRemove(key.id)
-              }}
+              onConfirm={() => handleRemove(key.id)}
             />
           ) : null}
         </View>
@@ -258,10 +251,9 @@ function PrincipalKeysSection({
             multiline
           />
           <Text style={panelStyles.muted}>
-            Paste the contents of your <MonoText>.pub</MonoText> file — the
-            public half. Keys are managed here, not in the account&apos;s own{' '}
-            <MonoText>~/.ssh</MonoText>, so removing one here removes it on the
-            server.
+            Paste the contents of your <MonoText>.pub</MonoText> file — the public half. Keys are
+            managed here, not in the account&apos;s own <MonoText>~/.ssh</MonoText>, so removing one
+            here removes it on the server.
           </Text>
           <View style={styles.formActions}>
             <Button
@@ -314,17 +306,11 @@ function PrincipalPasswordSection({
   canManage: boolean
 }>) {
   const setPassword = useSetPrincipalPassword(orgId, projectId, principalId)
-  const disablePassword = useDisablePrincipalPassword(
-    orgId,
-    projectId,
-    principalId,
-  )
+  const disablePassword = useDisablePrincipalPassword(orgId, projectId, principalId)
 
   const [formOpen, setFormOpen] = useState(false)
   const [customPassword, setCustomPassword] = useState('')
-  const [generatedPassword, setGeneratedPassword] = useState<string | null>(
-    null,
-  )
+  const [generatedPassword, setGeneratedPassword] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const busy = setPassword.isPending || disablePassword.isPending
@@ -349,18 +335,14 @@ function PrincipalPasswordSection({
     setGeneratedPassword(null)
     const result = await disablePassword.run()
     if (!result.ok) {
-      setError(
-        disablePassword.actionError ?? 'Password sign-in could not be disabled.',
-      )
+      setError(disablePassword.actionError ?? 'Password sign-in could not be disabled.')
     }
   }
 
   return (
     <View style={styles.credentialBlock}>
       <View style={styles.credentialHeader}>
-        <Text style={panelStyles.detailLabel}>
-          Password sign-in{passwordAuth ? ' · on' : ''}
-        </Text>
+        <Text style={panelStyles.detailLabel}>Password sign-in{passwordAuth ? ' · on' : ''}</Text>
         {canManage && !formOpen ? (
           <View style={styles.formActions}>
             <Button
@@ -390,17 +372,13 @@ function PrincipalPasswordSection({
       </View>
       {error ? <Text style={panelStyles.error}>{error}</Text> : null}
       {!passwordAuth && !formOpen && generatedPassword === null ? (
-        <Text style={panelStyles.muted}>
-          Off — this account signs in with keys only.
-        </Text>
+        <Text style={panelStyles.muted}>Off — this account signs in with keys only.</Text>
       ) : null}
 
       {generatedPassword !== null ? (
         <>
           <View style={styles.generatedRow}>
-            <MonoText style={styles.generatedPassword}>
-              {generatedPassword}
-            </MonoText>
+            <MonoText style={styles.generatedPassword}>{generatedPassword}</MonoText>
             <CopyButton value={generatedPassword} />
             <Button
               label="Done"
@@ -410,8 +388,7 @@ function PrincipalPasswordSection({
             />
           </View>
           <Text style={panelStyles.muted}>
-            Shown once — only a hash is stored. Copy it now; later you can only
-            rotate it.
+            Shown once — only a hash is stored. Copy it now; later you can only rotate it.
           </Text>
         </>
       ) : null}

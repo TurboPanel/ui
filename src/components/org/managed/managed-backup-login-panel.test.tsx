@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { CONFIRM_GUARD_MS } from '@/components/ui/confirm-button'
 import type { ManagedUserRecord } from '@/lib/managed-services'
 import {
   BACKUP_LOGIN_HELP,
@@ -18,6 +17,7 @@ import {
   useManagedBackupLogin,
 } from '@/lib/queries/managed'
 
+vi.mock('expo-clipboard', () => ({ setStringAsync: vi.fn(() => Promise.resolve()) }))
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
 vi.mock('react-native-svg', async () => (await import('@/components/ui/v4/rn-stub')).svgStub)
 vi.mock(
@@ -39,6 +39,7 @@ vi.mock('@/components/org/managed/secret-reveal', () => ({
   ),
 }))
 vi.mock('@/components/ui/button', () => ({
+  ButtonRow: ({ children }: { children?: unknown }) => <div>{children as never}</div>,
   Button: ({
     label,
     disabled,
@@ -61,8 +62,8 @@ vi.mock('@/components/ui', async () => ({
     </section>
   ),
   Button: (await import('@/components/ui/button')).Button,
-  // The real two-step confirm: Delete arms it, Confirm delete (after the guard) fires.
-  ConfirmButton: (await import('@/components/ui/confirm-button')).ConfirmButton,
+  // The real name dialog: Delete opens it, the typed name enables Delete Backup Login.
+  TypeNameDeleteButton: (await import('@/components/ui/type-name-confirm')).TypeNameDeleteButton,
   TextField: ({
     label,
     value,
@@ -74,14 +75,15 @@ vi.mock('@/components/ui', async () => ({
   }) => <input aria-label={label} value={value} onChange={(e) => onChangeText(e.target.value)} />,
 }))
 
-/** Press Delete, wait out the double-press guard, then press Confirm delete. */
+/** Press Delete, type the login name, then press Delete Backup Login in the dialog. */
 function confirmDelete() {
   fireEvent.click(screen.getByText('Delete'))
-  expect(
-    screen.getByText('Delete the backup login? Backups that use it stop working.')
-  ).toBeTruthy()
-  vi.setSystemTime(Date.now() + CONFIRM_GUARD_MS)
-  fireEvent.click(screen.getByText('Confirm delete'))
+  const dialog = screen.getByRole('dialog')
+  expect(within(dialog).getByText('Backups that use it stop working.')).toBeTruthy()
+  const confirm = within(dialog).getByRole('button', { name: 'Delete Backup Login' })
+  expect((confirm as HTMLButtonElement).disabled).toBe(true)
+  fireEvent.change(within(dialog).getByRole('textbox'), { target: { value: 'backup' } })
+  fireEvent.click(confirm)
 }
 
 beforeEach(() => {
@@ -227,8 +229,8 @@ describe('managed backup login panel', () => {
       />
     )
     fireEvent.click(screen.getByText('Delete'))
-    fireEvent.click(screen.getByText('Cancel'))
-    expect(screen.queryByText('Confirm delete')).toBeNull()
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
     expect(onDelete).not.toHaveBeenCalled()
   })
 

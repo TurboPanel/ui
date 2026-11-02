@@ -638,11 +638,12 @@ function deleteServerOptions(
   input: Readonly<{
     forgetResources?: boolean
     principals?: readonly PrincipalRemovalChoice[]
+    confirmName: string
   }>
 ) {
   const principals = input.principals ?? []
-  if (!input.forgetResources && principals.length === 0) return undefined
   return {
+    confirmName: input.confirmName,
     ...(input.forgetResources ? { forgetResources: true } : {}),
     ...(principals.length > 0 ? { principals } : {}),
   }
@@ -656,6 +657,8 @@ export function useDeleteServer(orgId: string) {
         serverId: string
         forgetResources?: boolean
         principals?: readonly PrincipalRemovalChoice[]
+        /** The server's name as typed (name, else hostname, else id). */
+        confirmName: string
       }>
     ) => deleteServer(input.serverId, orgId, deleteServerOptions(input)),
     onSuccess: async () => {

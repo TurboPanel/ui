@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Text, View } from 'react-native'
 import { SecretReveal } from '@/components/org/managed/secret-reveal'
 import { panelStyles } from '@/components/ui/panel-styles'
-import { Button, ConfirmButton, SectionPanel, TextField } from '@/components/ui'
+import { Button, SectionPanel, TextField, TypeNameDeleteButton } from '@/components/ui'
 import { managedErrorMessage, type ManagedUserRecord } from '@/lib/managed-services'
 import type { TrackedCommandLabel } from '@/lib/queries/commands'
 import {
@@ -124,14 +124,14 @@ export function ManagedBackupLoginPanel({
               {describeBackupPlaces(login.allowedSources)}
             </Text>
             {canManage ? (
-              <ConfirmButton
+              <TypeNameDeleteButton
                 label="Delete"
-                confirmLabel="Confirm delete"
-                prompt="Delete the backup login? Backups that use it stop working."
+                thing="Backup Login"
+                name={login.appliedUsername ?? login.username}
+                description="Backups that use it stop working."
                 disabled={busy || saving}
-                onConfirm={() => {
-                  void remove()
-                }}
+                busy={saving}
+                onConfirm={() => remove()}
               />
             ) : null}
           </>

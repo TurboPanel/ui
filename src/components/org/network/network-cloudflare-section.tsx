@@ -13,6 +13,7 @@ import {
   MonoText,
   SectionPanel,
   TextField,
+  TypeNameDeleteButton,
 } from '@/components/ui'
 import { AccountChoiceNeededError, BadgeInUseError } from '@/lib/instance-api'
 import type { TunnelAccountChoice, TunnelBadge, TunnelCarrier } from '@/lib/instance-api'
@@ -265,14 +266,15 @@ function BadgeRow({
             onPress={() => void runCheck()}
             accessibilityLabel={`Check API Token ${badge.label}`}
           />
-          <ConfirmButton
+          <TypeNameDeleteButton
             label="Remove"
-            confirmLabel="Remove API Token"
-            prompt="Remove this API Token? The other tokens on this account take over. Removal is refused only if none of them covers something this one is needed for."
-            stacked
+            thing="API Token"
+            verb="Remove"
+            name={badge.label}
+            description="The other tokens on this account take over. Removal is refused only if none of them covers something this one is needed for."
             busy={remove.isPending}
             disabled={pending || busy}
-            onConfirm={() => void runRemove()}
+            onConfirm={() => runRemove()}
           />
         </ButtonRow>
       </View>
@@ -369,15 +371,29 @@ function ZoneRow({
     <View style={styles.titleRow}>
       <Text style={panelStyles.detailLine}>{zone.name || 'Zone'}</Text>
       <MonoText>{zone.id}</MonoText>
-      <ConfirmButton
-        label="Remove Zone"
-        confirmLabel="Remove Zone"
-        prompt="Stop naming this zone for the API Token? If the token can still reach it, nothing changes."
-        stacked
-        busy={remove.isPending}
-        disabled={disabled}
-        onConfirm={() => void run()}
-      />
+      {zone.name ? (
+        <TypeNameDeleteButton
+          label="Remove Zone"
+          thing="Zone"
+          verb="Remove"
+          name={zone.name}
+          description="Stops naming this zone for the API Token. If the token can still reach it, nothing changes."
+          undoable
+          busy={remove.isPending}
+          disabled={disabled}
+          onConfirm={() => run()}
+        />
+      ) : (
+        <ConfirmButton
+          label="Remove Zone"
+          confirmLabel="Remove Zone"
+          prompt="Stop naming this zone for the API Token? If the token can still reach it, nothing changes."
+          stacked
+          busy={remove.isPending}
+          disabled={disabled}
+          onConfirm={() => void run()}
+        />
+      )}
     </View>
   )
 }
@@ -637,13 +653,14 @@ function CarrierCard({ orgId, carrier }: Readonly<{ orgId: string; carrier: Tunn
         orgId={orgId}
         carrierId={carrier.id}
         trailing={
-          <ConfirmButton
+          <TypeNameDeleteButton
             label="Remove Account"
-            confirmLabel="Remove Account"
-            prompt="Remove this account and its API Tokens from TurboPanel? Nothing is deleted in Cloudflare."
-            stacked
+            thing="Account"
+            verb="Remove"
+            name={carrier.name}
+            description="Removes this account and its API Tokens from TurboPanel. Nothing is deleted in Cloudflare."
             busy={remove.isPending}
-            onConfirm={() => void runRemove()}
+            onConfirm={() => runRemove()}
           />
         }
       />

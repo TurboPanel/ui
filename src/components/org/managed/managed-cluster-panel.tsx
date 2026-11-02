@@ -12,6 +12,7 @@ import {
   SectionPanel,
   SegmentedControl,
   TextField,
+  TypeNameDeleteButton,
 } from '@/components/ui'
 import type {
   ManagedMemberRecord,
@@ -680,10 +681,12 @@ function ClusterMemberRow({
               disabled={disabled}
               onPress={onToggleReads}
             />
-            <ConfirmButton
-              label="Remove replica"
-              confirmLabel="Confirm remove"
-              prompt="Removes this replica and destroys its data volume."
+            <TypeNameDeleteButton
+              label="Remove Replica"
+              thing="Replica"
+              verb="Remove"
+              name={serverLabel}
+              description="Removes this replica and destroys its data volume."
               disabled={disabled}
               onConfirm={onConfirmRemove}
             />

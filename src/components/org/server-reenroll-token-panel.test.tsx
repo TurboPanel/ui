@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ServerReenrollTokenPanel } from './server-reenroll-token-panel'
 
@@ -18,6 +18,7 @@ const mutation = (run: ReturnType<typeof vi.fn>) => ({
   variables: undefined,
 })
 
+vi.mock('expo-clipboard', () => ({ setStringAsync: vi.fn(() => Promise.resolve()) }))
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
 vi.mock('react-native-svg', async () => (await import('@/components/ui/v4/rn-stub')).svgStub)
 vi.mock(
@@ -35,7 +36,8 @@ vi.mock('@/lib/queries/servers', () => ({
 vi.mock('@/components/ui/panel-styles', () => ({
   panelStyles: { muted: {}, error: {}, pageCopy: {}, detailTitle: {} },
 }))
-vi.mock('@/components/ui', () => ({
+vi.mock('@/components/ui', async () => ({
+  TypeNameDeleteButton: (await import('@/components/ui/type-name-confirm')).TypeNameDeleteButton,
   Button: ({ label, onPress }: { label: string; onPress: () => void }) => (
     <button onClick={onPress}>{label}</button>
   ),
@@ -102,6 +104,14 @@ afterEach(() => {
   hooks.can.mockReturnValue(true)
   hooks.licenses = []
 })
+
+/** Opens the name dialog with `opener`, types `name` and presses the dialog's `action` button. */
+function confirmByName(opener: HTMLElement, name: string, action: string) {
+  fireEvent.click(opener)
+  const dialog = screen.getByRole('dialog')
+  fireEvent.change(within(dialog).getByRole('textbox'), { target: { value: name } })
+  fireEvent.click(within(dialog).getByRole('button', { name: action }))
+}
 
 describe('ServerReenrollTokenPanel', () => {
   it('renders nothing for someone who is not an owner (the gate is the owner permission)', () => {
@@ -256,7 +266,7 @@ describe('ServerReenrollTokenPanel', () => {
     render(<ServerReenrollTokenPanel orgId="o" serverId="s" />)
     fireEvent.click(screen.getByText('Reissue'))
     await waitFor(() => expect(screen.getByText(/TURBOPANEL_LICENSE=newarg sh/)).toBeTruthy())
-    fireEvent.click(screen.getByText('Burn'))
+    confirmByName(screen.getByText('Burn'), 'edge-9', 'Delete Install Key')
     await waitFor(() => expect(screen.queryByText(/TURBOPANEL_LICENSE=newarg sh/)).toBeNull())
     expect(hooks.burn).toHaveBeenCalledWith('k1')
   })
@@ -265,7 +275,7 @@ describe('ServerReenrollTokenPanel', () => {
     hooks.licenses = [unusedKey()]
     hooks.burn.mockResolvedValue({ ok: false, error: 'Key is in use', cause: new Error('x') })
     render(<ServerReenrollTokenPanel orgId="o" serverId="s" />)
-    fireEvent.click(screen.getByText('Burn'))
+    confirmByName(screen.getByText('Burn'), 'edge-9', 'Delete Install Key')
     await waitFor(() => expect(screen.getByText('Key is in use')).toBeTruthy())
   })
 
