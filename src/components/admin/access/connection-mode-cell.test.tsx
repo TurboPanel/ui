@@ -205,6 +205,33 @@ describe('ConnectionModeCell', () => {
     expect(screen.queryByText('Connect')).toBeNull()
   })
 
+  it('a tunnel row offers the actions again once a Cloudflare account exists', () => {
+    render(
+      <ConnectionModeCell
+        record={{ ...RECORD, mode: 'cloudflare-tunnel' }}
+        modes={MODES}
+        gate={CLOSED}
+        accounts={[
+          {
+            id: 'a1',
+            provider: 'cloudflare',
+            label: 'Main',
+            accountId: 'acc',
+            zoneIds: [],
+            scopes: null,
+            lastVerifiedAt: null,
+            lastError: null,
+            createdAt: '2026-11-01T00:00:00Z',
+          },
+        ]}
+        lockedReason={null}
+        busy={false}
+      />
+    )
+    expect(screen.queryByText(PASTED_TOKEN_HINT)).toBeNull()
+    expect((screen.getByText('Preflight') as HTMLButtonElement).disabled).toBe(true)
+  })
+
   it('falls back to the generic hint when the gate gives no reason', () => {
     render(
       <ConnectionModeCell

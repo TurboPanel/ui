@@ -14,16 +14,9 @@ export const REENROLL_HINT =
  * Lists the servers still waiting, each linked to the page with Issue Re-Enroll
  * Token. Shown for the self-hosted runtime only.
  */
-export function EdgeGateStatus({
-  gate,
-  waiting,
-}: Readonly<{
-  gate: EdgeGate | null
-  /** The servers named by a refused mode change, when newer than the gate read. */
-  waiting?: readonly EdgeGateWaitingServer[]
-}>) {
+export function EdgeGateStatus({ gate }: Readonly<{ gate: EdgeGate | null }>) {
   if (!gate) return null
-  const servers = waiting ?? gate.waiting ?? []
+  const servers = gate.waiting ?? []
   const ready = gate.open && !gate.forcedClosed
   return (
     <View style={styles.root} accessibilityRole="summary">

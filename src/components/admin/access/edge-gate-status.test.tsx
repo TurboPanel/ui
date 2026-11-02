@@ -43,7 +43,8 @@ describe('EdgeGateStatus', () => {
     fireEvent.click(screen.getByText('kappa'))
     expect(mocks.push).toHaveBeenCalledWith('/o1/servers/s1')
     // A server no organization owns has no page: its name only.
-    expect(screen.getByText('omicron').tagName).not.toBe('BUTTON')
+    expect(screen.queryByRole('button', { name: 'omicron' })).toBeNull()
+    expect(screen.getByText('omicron')).toBeTruthy()
     expect(screen.getByText(REENROLL_HINT)).toBeTruthy()
   })
 
