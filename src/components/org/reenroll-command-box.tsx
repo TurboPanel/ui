@@ -1,8 +1,11 @@
 import { StyleSheet, Text, View } from 'react-native'
 import { Button, CopyButton, MonoText } from '@/components/ui'
+import { useNow } from '@/components/org/project/use-now'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { reenrollExpiryLabel, reenrollTokenIsLive } from '@/lib/reenroll-token'
 import { spacing } from '@/lib/theme'
+
+const MINUTE_MS = 60_000
 
 /**
  * A one-time install command with its expiry. The secret is shown once; leaving
@@ -23,11 +26,14 @@ export function ReenrollCommandBox({
   onRevoke?: () => void
   nowMs?: number
 }>) {
-  const live = reenrollTokenIsLive(expiresAt, nowMs)
+  // A minute clock moves the countdown and drops Revoke at expiry without a refetch.
+  const tick = useNow(MINUTE_MS)
+  const now = nowMs ?? tick
+  const live = reenrollTokenIsLive(expiresAt, now)
   return (
     <View style={styles.root}>
       <MonoText>{command}</MonoText>
-      <Text style={panelStyles.muted}>{reenrollExpiryLabel(expiresAt, nowMs)}</Text>
+      <Text style={panelStyles.muted}>{reenrollExpiryLabel(expiresAt, now)}</Text>
       <Text style={panelStyles.muted}>
         Copy it now. It is shown once and cannot be shown again.
       </Text>
