@@ -1,4 +1,8 @@
-import { ENVIRONMENT_RUNNING_ERROR, MANAGED_RUNTIME_PRESENT_ERROR } from '@/lib/instance-api'
+import {
+  ENVIRONMENT_CONFIRM_NAME_ERROR,
+  ENVIRONMENT_RUNNING_ERROR,
+  MANAGED_RUNTIME_PRESENT_ERROR,
+} from '@/lib/instance-api'
 
 export type EnvironmentDeleteFailure = Readonly<{
   text: string
@@ -12,6 +16,11 @@ export const ENVIRONMENT_STOP_QUEUED_COPY =
 /** What the confirm step says; names the environment so a wrong tab is obvious. */
 export function environmentDeletePrompt(name: string): string {
   return `Delete "${name}" permanently? Its services, domains, containers and variables are removed.`
+}
+
+/** True when the control plane wants the environment's name typed before it deletes. */
+export function environmentDeleteNeedsName(message: string): boolean {
+  return message.includes(ENVIRONMENT_CONFIRM_NAME_ERROR)
 }
 
 /** Turn a refused delete into plain words and say whether Stop is the way out. */

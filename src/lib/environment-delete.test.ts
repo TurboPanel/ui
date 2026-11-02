@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { environmentDeleteFailure, environmentDeletePrompt } from './environment-delete'
+import {
+  environmentDeleteFailure,
+  environmentDeleteNeedsName,
+  environmentDeletePrompt,
+} from './environment-delete'
 
 describe('environmentDeletePrompt', () => {
   it('names the environment', () => {
@@ -30,5 +34,12 @@ describe('environmentDeleteFailure', () => {
       text: 'Forbidden',
       needsStop: false,
     })
+  })
+})
+
+describe('environmentDeleteNeedsName', () => {
+  it('recognises the control plane asking for the name', () => {
+    expect(environmentDeleteNeedsName('confirm_name_required')).toBe(true)
+    expect(environmentDeleteNeedsName('environment_running')).toBe(false)
   })
 })
