@@ -514,14 +514,21 @@ function renderServerDeletePanel(
  * Automatic security updates never restart a server; when one (a new kernel)
  * needs a restart the host reports it, and this says so above every tab.
  */
-function RestartNeededNotice({ orgId, serverId }: Readonly<{ orgId: string; serverId: string }>) {
+function RestartNeededNotice({
+  orgId,
+  serverId,
+  canManage,
+}: Readonly<{ orgId: string; serverId: string; canManage: boolean }>) {
   const factsQuery = useServerMetricsFacts(orgId, serverId)
   if (!hostRestartNeeded(factsQuery.data)) return null
+  const how = canManage
+    ? ' use Reboot server on the Control tab when it suits you.'
+    : ' ask a server manager to restart it.'
   return (
     <InlineNotice
       tone="warning"
       title="Restart Needed"
-      body="Restart needed to finish security updates. This server never restarts on its own; use Reboot server on the Control tab when it suits you."
+      body={`Restart needed to finish security updates. This server never restarts on its own;${how}`}
     />
   )
 }
@@ -863,7 +870,7 @@ export function ServerDetailSection({
         </View>
       </View>
 
-      <RestartNeededNotice orgId={orgId} serverId={serverId} />
+      <RestartNeededNotice orgId={orgId} serverId={serverId} canManage={canManage} />
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         <SegmentedControl
