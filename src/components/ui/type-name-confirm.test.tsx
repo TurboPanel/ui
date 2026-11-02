@@ -208,4 +208,19 @@ describe('TypeNameDeleteButton failures', () => {
     expect(screen.getByRole('dialog')).toBeTruthy()
     expect(screen.getByText('Server is busy.')).toBeTruthy()
   })
+
+  it('shows no stale reason after Cancel and reopening', async () => {
+    const onConfirm = vi.fn(() => Promise.reject(new Error('Server is busy.')))
+    render(<TypeNameDeleteButton thing="Project" name="Shop" onConfirm={onConfirm} />)
+    fireEvent.click(screen.getByText('Delete Project'))
+    fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Shop' } })
+    await act(async () => {
+      fireEvent.click(confirmButton('Delete Project'))
+      await Promise.resolve()
+    })
+    expect(screen.getByText('Server is busy.')).toBeTruthy()
+    fireEvent.click(within(screen.getByRole('dialog')).getByText('Cancel'))
+    fireEvent.click(screen.getByText('Delete Project'))
+    expect(screen.queryByText('Server is busy.')).toBeNull()
+  })
 })

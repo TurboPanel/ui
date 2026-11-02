@@ -158,14 +158,20 @@ export function TypeNameDeleteButton({
         size={size}
         busy={busy}
         disabled={disabled || busy}
-        onPress={() => setOpen(true)}
+        onPress={() => {
+          setFailure(null)
+          setOpen(true)
+        }}
       />
       {open ? (
         <TypeNameConfirmModal
           {...modal}
           pending={running || busy}
           error={error ?? failure}
-          onCancel={() => setOpen(false)}
+          onCancel={() => {
+            setOpen(false)
+            setFailure(null)
+          }}
           onConfirm={confirm}
         />
       ) : null}
