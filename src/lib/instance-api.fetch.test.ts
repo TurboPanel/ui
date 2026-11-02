@@ -397,6 +397,12 @@ describe('instance-api fetch wrappers', () => {
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
     await expect(deleteEnvironment('env-1')).resolves.toEqual({ ok: true })
+    expect(String(fetchMock.mock.lastCall?.[0])).toMatch(/\/environments\/env-1$/)
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
+    await deleteEnvironment('env-1', { confirmName: 'my env' })
+    expect(String(fetchMock.mock.lastCall?.[0])).toContain('/environments/env-1?confirmName=my+env')
+    expect(fetchMock.mock.lastCall?.[1]).toMatchObject({ method: 'DELETE' })
   })
 
   it('variable CRUD wrappers encode parent filters', async () => {

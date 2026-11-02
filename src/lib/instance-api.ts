@@ -4407,6 +4407,8 @@ export const PROJECT_HAS_CHILDREN_ERROR = 'Cannot delete while child resources e
 export const PROJECT_HAS_RUNNING_SERVICES_ERROR = 'project_has_running_services'
 export const MANAGED_RUNTIME_PRESENT_ERROR = 'managed_runtime_present'
 export const ENVIRONMENT_RUNNING_ERROR = 'environment_running'
+/** DELETE environment: 400 until `confirmName` is the name of an environment that serves a hostname. */
+export const ENVIRONMENT_CONFIRM_NAME_ERROR = 'confirm_name_required'
 
 export const UNKNOWN_SYSTEM_COMPONENT_ERROR = 'unknown_system_component'
 export const SYSTEM_COMPONENT_NOT_PROVISIONED_ERROR = 'system_component_not_provisioned'
@@ -4648,10 +4650,19 @@ export async function makeEnvironmentPrimary(
   return await apiFetch(`${CLIENT_API}/environments/${id}/primary`, { method: 'POST' })
 }
 
+/**
+ * `confirmName` must equal the environment's name when it serves a public
+ * hostname; the control plane answers 400 `confirm_name_required` otherwise.
+ */
 export async function deleteEnvironment(
-  id: string
+  id: string,
+  options?: { confirmName?: string }
 ): Promise<{ ok: true; cleanup?: DeleteCleanup }> {
-  return await apiFetch(`${CLIENT_API}/environments/${id}`, {
+  const suffix =
+    options?.confirmName === undefined
+      ? ''
+      : `?${new URLSearchParams({ confirmName: options.confirmName }).toString()}`
+  return await apiFetch(`${CLIENT_API}/environments/${id}${suffix}`, {
     method: 'DELETE',
   })
 }

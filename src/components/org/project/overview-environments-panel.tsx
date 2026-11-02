@@ -12,6 +12,7 @@ import {
 import { Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
 import { useQueryClient } from '@tanstack/react-query'
 import { Link, useRouter, type Href } from 'expo-router'
+import { EnvironmentDeleteNameModal } from '@/components/org/environment-delete-name-modal'
 import { LogTranscriptView } from '@/components/org/logs/log-transcript-view'
 import { DeployProgressRail } from '@/components/org/project/deploy-progress-rail'
 import { useDeployLogProgress } from '@/components/org/project/use-deploy-log-progress'
@@ -53,7 +54,8 @@ import { mergeComposeOverlay } from '@/lib/compose'
 import { progressChipLabel } from '@/lib/deploy-progress'
 import { unownedPrincipalRequiredServices } from '@/lib/compose/principal-required'
 import {
-  environmentDeleteFailure,
+  environmentDeleteInput,
+  environmentDeleteOutcome,
   environmentDeletePrompt,
   type EnvironmentDeleteFailure,
 } from '@/lib/environment-delete'
@@ -163,19 +165,25 @@ function useOverviewEnvironmentDelete(onStop: () => void) {
   const deleteEnvironment = useDeleteEnvironment(orgId)
   const [armed, setArmed] = useState(false)
   const [failure, setFailure] = useState<EnvironmentDeleteFailure | null>(null)
+  const [nameStep, setNameStep] = useState<{ error: string | null } | null>(null)
   const name = selectedEnvironment?.name?.trim() || 'environment'
 
-  const confirm = async () => {
+  const confirm = async (confirmName?: string) => {
     if (!selectedEnvironment || deleteEnvironment.isPending) return
     setError(null)
     setFailure(null)
-    const result = await deleteEnvironment.run(selectedEnvironment.id)
+    const result = await deleteEnvironment.run(
+      environmentDeleteInput(selectedEnvironment.id, confirmName)
+    )
     if (!result.ok) {
-      if (deleteEnvironment.actionError) {
-        setFailure(environmentDeleteFailure(deleteEnvironment.actionError, name))
-      }
+      if (!result.error) return
+      const outcome = environmentDeleteOutcome(result.error, name, confirmName)
+      if (outcome.kind === 'ask-name') setNameStep({ error: null })
+      else if (outcome.kind === 'failure') setFailure(outcome.failure)
+      else setNameStep({ error: outcome.text })
       return
     }
+    setNameStep(null)
     setArmed(false)
     await invalidateEnvironments()
     router.replace(projectOverviewHref(orgId, projectId) as Href)
@@ -190,6 +198,8 @@ function useOverviewEnvironmentDelete(onStop: () => void) {
   return {
     armed,
     failure,
+    nameStep,
+    closeNameStep: () => setNameStep(null),
     name,
     pending: deleteEnvironment.isPending,
     arm: () => {
@@ -356,6 +366,16 @@ function EnvironmentActionsMenu({ model }: Readonly<{ model: OverviewEnvironment
             <QuietButton label="Cancel" onPress={remove.cancel} />
           </View>
         </View>
+      ) : null}
+
+      {remove.nameStep ? (
+        <EnvironmentDeleteNameModal
+          name={remove.name}
+          pending={remove.pending}
+          error={remove.nameStep.error}
+          onCancel={remove.closeNameStep}
+          onConfirm={(typed) => ignorePromise(remove.confirm(typed))}
+        />
       ) : null}
 
       {remove.failure ? (
