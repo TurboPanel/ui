@@ -74,10 +74,9 @@ export function usesTunnelPorts(mode: IngressMode): boolean {
  */
 export function portForModeChange(
   capability: IngressCapabilities | undefined,
-  currentPort: number | undefined
+  port = 8443
 ): number | undefined {
   if (!capability) return undefined
-  const port = currentPort ?? 8443
   if (!showsPublicPort(capability.mode)) {
     return port === capability.defaultPublicPort ? undefined : capability.defaultPublicPort
   }
