@@ -23,8 +23,8 @@ import {
 import type { EnvironmentRecord } from '@/lib/instance-api'
 import {
   ENVIRONMENT_STOP_QUEUED_COPY,
-  environmentDeleteFailure,
-  environmentDeleteNeedsName,
+  environmentDeleteInput,
+  environmentDeleteOutcome,
   environmentDeletePrompt,
   type EnvironmentDeleteFailure,
 } from '@/lib/environment-delete'
@@ -244,7 +244,7 @@ function useEnvironmentDeleteFlow(
     setError(null)
     setFailure(null)
     const result = await deleteEnvironment.run(
-      confirmName === undefined ? activeEnvironment.id : { id: activeEnvironment.id, confirmName }
+      environmentDeleteInput(activeEnvironment.id, confirmName)
     )
     if (result.ok) {
       setNameStep(null)
@@ -252,13 +252,14 @@ function useEnvironmentDeleteFlow(
     }
     const message = result.error
     if (!message) return
-    if (confirmName === undefined && environmentDeleteNeedsName(message)) {
-      setNameStep({ error: null })
-      return
-    }
-    const refused = environmentDeleteFailure(message, environmentLabel(activeEnvironment))
-    if (confirmName === undefined) setFailure(refused)
-    else setNameStep({ error: refused.text })
+    const outcome = environmentDeleteOutcome(
+      message,
+      environmentLabel(activeEnvironment),
+      confirmName
+    )
+    if (outcome.kind === 'ask-name') setNameStep({ error: null })
+    else if (outcome.kind === 'failure') setFailure(outcome.failure)
+    else setNameStep({ error: outcome.text })
   }
 
   const stopActive = async () => {

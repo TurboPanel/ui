@@ -39,3 +39,29 @@ export function environmentDeleteFailure(message: string, name: string): Environ
   }
   return { text: message, needsStop: false }
 }
+
+/** What `useDeleteEnvironment` takes: the bare id, or the id with the typed name. */
+export function environmentDeleteInput(
+  id: string,
+  confirmName?: string
+): string | { id: string; confirmName: string } {
+  return confirmName === undefined ? id : { id, confirmName }
+}
+
+/** What to do with a refused delete: ask for the name, show it, or show it inside the name dialog. */
+export type EnvironmentDeleteOutcome =
+  | Readonly<{ kind: 'ask-name' }>
+  | Readonly<{ kind: 'failure'; failure: EnvironmentDeleteFailure }>
+  | Readonly<{ kind: 'name-error'; text: string }>
+
+export function environmentDeleteOutcome(
+  message: string,
+  name: string,
+  confirmName?: string
+): EnvironmentDeleteOutcome {
+  if (confirmName === undefined && environmentDeleteNeedsName(message)) return { kind: 'ask-name' }
+  const failure = environmentDeleteFailure(message, name)
+  return confirmName === undefined
+    ? { kind: 'failure', failure }
+    : { kind: 'name-error', text: failure.text }
+}

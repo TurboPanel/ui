@@ -54,8 +54,8 @@ import { mergeComposeOverlay } from '@/lib/compose'
 import { progressChipLabel } from '@/lib/deploy-progress'
 import { unownedPrincipalRequiredServices } from '@/lib/compose/principal-required'
 import {
-  environmentDeleteFailure,
-  environmentDeleteNeedsName,
+  environmentDeleteInput,
+  environmentDeleteOutcome,
   environmentDeletePrompt,
   type EnvironmentDeleteFailure,
 } from '@/lib/environment-delete'
@@ -173,20 +173,14 @@ function useOverviewEnvironmentDelete(onStop: () => void) {
     setError(null)
     setFailure(null)
     const result = await deleteEnvironment.run(
-      confirmName === undefined
-        ? selectedEnvironment.id
-        : { id: selectedEnvironment.id, confirmName }
+      environmentDeleteInput(selectedEnvironment.id, confirmName)
     )
     if (!result.ok) {
-      const message = result.error
-      if (!message) return
-      if (confirmName === undefined && environmentDeleteNeedsName(message)) {
-        setNameStep({ error: null })
-        return
-      }
-      const refused = environmentDeleteFailure(message, name)
-      if (confirmName === undefined) setFailure(refused)
-      else setNameStep({ error: refused.text })
+      if (!result.error) return
+      const outcome = environmentDeleteOutcome(result.error, name, confirmName)
+      if (outcome.kind === 'ask-name') setNameStep({ error: null })
+      else if (outcome.kind === 'failure') setFailure(outcome.failure)
+      else setNameStep({ error: outcome.text })
       return
     }
     setNameStep(null)
