@@ -173,11 +173,13 @@ export function AddAccountForm() {
   const [added, setAdded] = useState(false)
 
   const submit = async () => {
-    const sent = token
+    const sent = token.trim()
     setToken('')
     setError(null)
     setAdded(false)
     const result = await mutation.run({ provider: 'cloudflare', label: label.trim(), token: sent })
+    // The sent token must not stay in the mutation cache.
+    mutation.reset()
     if (!result.ok) {
       setChecks([])
       setError(result.error ?? 'Failed to connect the account')

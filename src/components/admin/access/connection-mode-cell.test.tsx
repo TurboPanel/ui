@@ -226,6 +226,11 @@ describe('modeChangePatch', () => {
       mode: 'direct',
       ingressId: null,
     })
+    expect(modeChangePatch('lan-only', { publicPort: 443 }, MODES, [account])).toEqual({
+      mode: 'lan-only',
+      ingressId: null,
+      publicPort: 8443,
+    })
   })
 })
 

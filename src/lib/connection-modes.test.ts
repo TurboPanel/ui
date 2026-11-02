@@ -105,6 +105,13 @@ describe('ports per mode', () => {
     expect(portForModeChange(capabilityFor(MODES, 'direct'), 9000)).toBeUndefined()
     expect(portForModeChange(undefined, 9000)).toBeUndefined()
   })
+
+  it('moves a row switched to LAN Only back onto 8443', () => {
+    const lan = capabilityFor(MODES, 'lan-only')
+    expect(portForModeChange(lan, 443)).toBe(8443)
+    expect(portForModeChange(lan, 8443)).toBeUndefined()
+    expect(portForModeChange(lan, undefined)).toBeUndefined()
+  })
 })
 
 describe('labels and intervals', () => {

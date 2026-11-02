@@ -113,7 +113,11 @@ export function ConnectionModeCell({
       ) : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {capability?.provider && record ? (
-        <IngressActions hostnameId={record.id} accountChosen={Boolean(record.ingressId)} />
+        <IngressActions
+          key={record.ingressId ?? 'no-account'}
+          hostnameId={record.id}
+          accountChosen={Boolean(record.ingressId)}
+        />
       ) : null}
     </View>
   )
@@ -161,7 +165,10 @@ function AccountPicker({
 
 type ApplyFeedback = { text: string; conflict: boolean } | null
 
-/** Preflight, then Connect (disabled until the preflight passes), and Disconnect. */
+/**
+ * Preflight, then Connect (disabled until the preflight passes), and Disconnect.
+ * Mounted with the account as its key, so a new account needs a new preflight.
+ */
 export function IngressActions({
   hostnameId,
   accountChosen,
@@ -196,7 +203,10 @@ export function IngressActions({
   const runRemove = async () => {
     setFeedback(null)
     const result = await remove.run(hostnameId)
-    if (!result.ok) setFeedback({ text: result.error ?? 'Disconnect failed', conflict: false })
+    if (!result.ok) {
+      setFeedback({ text: result.error ?? 'Disconnect failed', conflict: false })
+      return
+    }
     setPassed(false)
     setChecks(null)
   }

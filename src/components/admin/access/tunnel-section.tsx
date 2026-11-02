@@ -8,7 +8,7 @@ import { colors } from '@/lib/theme'
 /**
  * The pasted run token for a tunnel made by hand. Write-only: the control
  * plane never returns the stored token. Lives at the bottom of the Cloudflare
- * Connection screen, behind a disclosure.
+ * Tunnel screen, behind a disclosure.
  */
 export function TunnelTokenPanel() {
   const mutation = useSetInstanceTunnelToken()

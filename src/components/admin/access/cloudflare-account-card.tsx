@@ -82,7 +82,8 @@ export function CloudflareAccountCard({
       {error ? <Text style={panelStyles.error}>{error}</Text> : null}
       {blockers.length > 0 ? (
         <Text style={styles.muted}>
-          Used by {blockers.join(', ')}. Disconnect those hostnames before removing this account.
+          Used by {blockers.join(', ')}. Change those hostnames&apos; connection mode or account
+          before removing it.
         </Text>
       ) : null}
       <ButtonRow>

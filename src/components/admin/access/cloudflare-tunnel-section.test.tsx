@@ -12,7 +12,7 @@ import {
 
 const mocks = vi.hoisted(() => ({
   useAuth: vi.fn(),
-  add: { run: vi.fn(), isPending: false },
+  add: { run: vi.fn(), reset: vi.fn(), isPending: false },
   remove: { run: vi.fn(), isPending: false },
 }))
 
@@ -60,7 +60,7 @@ const ACCOUNT: IngressAccountRecord = {
 
 function fillAndSubmit() {
   fireEvent.change(screen.getByLabelText('Label'), { target: { value: 'Main' } })
-  fireEvent.change(screen.getByLabelText('Token'), { target: { value: TOKEN } })
+  fireEvent.change(screen.getByLabelText('Token'), { target: { value: `  ${TOKEN}\n` } })
   fireEvent.click(screen.getByText('Connect Account'))
 }
 
@@ -102,6 +102,7 @@ describe('AddAccountForm', () => {
       label: 'Main',
       token: TOKEN,
     })
+    await waitFor(() => expect(mocks.add.reset).toHaveBeenCalled())
     expect(await screen.findByText('Account connected.')).toBeTruthy()
     expect((screen.getByLabelText('Token') as HTMLInputElement).value).toBe('')
     expect(document.body.innerHTML).not.toContain(TOKEN)

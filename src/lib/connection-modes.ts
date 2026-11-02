@@ -70,14 +70,18 @@ export function usesTunnelPorts(mode: IngressMode): boolean {
 
 /**
  * The port to send with a change to `mode`: kept when the new mode accepts it,
- * else the mode's default. `undefined` means leave it as stored.
+ * else the mode's default (LAN Only is always its fixed 8443). `undefined` means leave it as stored.
  */
 export function portForModeChange(
   capability: IngressCapabilities | undefined,
   currentPort: number | undefined
 ): number | undefined {
-  if (!capability || !usesTunnelPorts(capability.mode)) return undefined
+  if (!capability) return undefined
   const port = currentPort ?? 8443
+  if (!showsPublicPort(capability.mode)) {
+    return port === capability.defaultPublicPort ? undefined : capability.defaultPublicPort
+  }
+  if (!usesTunnelPorts(capability.mode)) return undefined
   return (TUNNEL_PUBLIC_PORTS as readonly number[]).includes(port)
     ? undefined
     : capability.defaultPublicPort
