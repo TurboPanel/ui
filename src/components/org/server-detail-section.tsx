@@ -54,7 +54,7 @@ import {
 import { channelLabel, daemonUnsupportedLabel, runningBuildLabel } from '@/lib/daemon-update-labels'
 import { SERVER_UPDATES_AUTOMATIC_COPY } from '@/lib/update-automation'
 import { formatLocalDateTime } from '@/lib/format-datetime'
-import { hostRestartNeeded } from '@/lib/host-facts'
+import { hostRestartNeeded, restartNeededBody } from '@/lib/host-facts'
 import { configuredSourceLabel } from '@/lib/host-defaults'
 import { formatMemoryPageSize, memoryPageSizeHint } from '@/lib/memory-page-size'
 import {
@@ -518,17 +518,15 @@ function RestartNeededNotice({
   orgId,
   serverId,
   canManage,
-}: Readonly<{ orgId: string; serverId: string; canManage: boolean }>) {
+  colocated,
+}: Readonly<{ orgId: string; serverId: string; canManage: boolean; colocated: boolean }>) {
   const factsQuery = useServerMetricsFacts(orgId, serverId)
   if (!hostRestartNeeded(factsQuery.data)) return null
-  const how = canManage
-    ? ' use Reboot server on the Control tab when it suits you.'
-    : ' ask a server manager to restart it.'
   return (
     <InlineNotice
       tone="warning"
       title="Restart Needed"
-      body={`Restart needed to finish security updates. This server never restarts on its own;${how}`}
+      body={restartNeededBody({ canManage, colocated })}
     />
   )
 }
@@ -870,7 +868,12 @@ export function ServerDetailSection({
         </View>
       </View>
 
-      <RestartNeededNotice orgId={orgId} serverId={serverId} canManage={canManage} />
+      <RestartNeededNotice
+        orgId={orgId}
+        serverId={serverId}
+        canManage={canManage}
+        colocated={updateVm.colocated}
+      />
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         <SegmentedControl

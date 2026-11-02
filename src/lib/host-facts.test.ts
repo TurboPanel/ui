@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { HostFactsResponse } from '@/lib/instance-api'
-import { HOST_FACT_LABELS, hostFactRows, hostRestartNeeded } from './host-facts'
+import { HOST_FACT_LABELS, hostFactRows, hostRestartNeeded, restartNeededBody } from './host-facts'
 
 describe('hostFactRows', () => {
   it('shows only what the host reported, in the fixed order, in plain words', () => {
@@ -55,5 +55,22 @@ describe('hostRestartNeeded', () => {
     expect(hostRestartNeeded(null)).toBe(false)
     expect(hostRestartNeeded(undefined)).toBe(false)
     expect(hostRestartNeeded(response('yes', false))).toBe(false)
+  })
+})
+
+describe('restartNeededBody', () => {
+  it('points managers at Reboot server, except on the Platform Server', () => {
+    expect(restartNeededBody({ canManage: true, colocated: false })).toContain(
+      'use Reboot server on the Control tab'
+    )
+    const platform = restartNeededBody({ canManage: true, colocated: true })
+    expect(platform).toContain('restart the host yourself')
+    expect(platform).not.toContain('Reboot server')
+  })
+
+  it('tells viewers to ask an organization manager', () => {
+    const body = restartNeededBody({ canManage: false, colocated: false })
+    expect(body).toContain('ask an organization manager')
+    expect(body.startsWith('Restart needed to finish security updates.')).toBe(true)
   })
 })
