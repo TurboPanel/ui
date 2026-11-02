@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TlsRecord } from '@/lib/instance-api'
 
@@ -16,10 +16,12 @@ vi.mock(
   async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub
 )
 vi.mock('@/components/ui/panel-styles', () => ({ panelStyles: {} }))
+vi.mock('expo-clipboard', () => ({ setStringAsync: vi.fn(() => Promise.resolve()) }))
 vi.mock('@/components/org/organization-ca-panel', () => ({ OrganizationCaPanel: () => null }))
 vi.mock('@/components/org/tls-contact-email-field', () => ({ TlsContactEmailField: () => null }))
 vi.mock('@/components/org/dns-certificate-panel', () => ({ DnsCertificatePanel: () => null }))
-vi.mock('@/components/ui', () => ({
+vi.mock('@/components/ui', async () => ({
+  TypeNameDeleteButton: (await import('@/components/ui/type-name-confirm')).TypeNameDeleteButton,
   Button: ({ label, onPress }: { label: string; onPress?: () => void }) => (
     <button onClick={onPress}>{label}</button>
   ),
@@ -79,8 +81,15 @@ describe('TlsOverviewSection delete', () => {
       Promise.resolve({ ok: false, error: 'This certificate is still pinned by a hosting.' })
     )
     render(<TlsOverviewSection orgId="o1" />)
-    const [, second] = screen.getAllByText('Delete certificate')
+    const [, second] = screen.getAllByText('Delete')
     fireEvent.click(second as HTMLElement)
+    const confirm = screen.getByRole('button', { name: 'Delete Certificate' }) as HTMLButtonElement
+    expect(confirm.disabled).toBe(true)
+    fireEvent.change(within(screen.getByRole('dialog')).getByRole('textbox'), {
+      target: { value: 'two.example' },
+    })
+    expect(confirm.disabled).toBe(false)
+    fireEvent.click(confirm)
     const message = await screen.findByText('This certificate is still pinned by a hosting.')
     expect(state.deleteRun).toHaveBeenCalledWith('t2')
     expect(message.parentElement?.textContent).toContain('two.example')
@@ -93,7 +102,7 @@ describe('TlsOverviewSection delete', () => {
       certificate('t2', 'two.example'),
     ]
     render(<TlsOverviewSection orgId="o1" />)
-    expect(screen.getAllByText('Delete certificate')).toHaveLength(1)
+    expect(screen.getAllByText('Delete')).toHaveLength(1)
     const hint = screen.getByText('Replace it with Rotate on the Organization CA panel.')
     expect(hint.parentElement?.textContent).toContain('Company root')
     expect(hint.parentElement?.textContent).not.toContain('two.example')

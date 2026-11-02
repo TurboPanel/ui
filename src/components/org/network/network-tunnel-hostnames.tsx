@@ -5,10 +5,10 @@ import {
   Badge,
   Button,
   ButtonRow,
-  ConfirmButton,
   LoadingState,
   MonoText,
   TextField,
+  TypeNameDeleteButton,
 } from '@/components/ui'
 import type { TunnelHostnameRecord } from '@/lib/instance-api'
 import {
@@ -55,13 +55,14 @@ function HostnameRow({
             tone={hostnameStatusTone(record.status)}
           />
         </View>
-        <ConfirmButton
+        <TypeNameDeleteButton
           label="Remove"
-          confirmLabel="Remove Hostname"
-          prompt="Remove this hostname from the tunnel? Its Cloudflare route is removed, and so is the DNS name TurboPanel made for it."
-          stacked
+          thing="Hostname"
+          verb="Remove"
+          name={record.hostname}
+          description="Its Cloudflare route is removed, and so is the DNS name TurboPanel made for it."
           busy={remove.isPending}
-          onConfirm={() => void runRemove()}
+          onConfirm={() => runRemove()}
         />
       </View>
       <Text style={panelStyles.muted}>{dnsOutcome(record.dns)}</Text>

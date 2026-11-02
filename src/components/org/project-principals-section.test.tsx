@@ -41,7 +41,7 @@ vi.mock('@/components/ui', () => ({
       {props.label as string}
     </button>
   ),
-  ConfirmButton: () => null,
+  TypeNameDeleteButton: () => null,
   EmptyState: ({ title }: { title?: string }) => <div>{title}</div>,
   InlineNotice: ({ title }: Props) => <div>{title as string}</div>,
   LoadingState: () => null,

@@ -7,7 +7,6 @@ import { OrganizationCaPanel } from '@/components/org/organization-ca-panel'
 import { TlsContactEmailField } from '@/components/org/tls-contact-email-field'
 import {
   Button,
-  ConfirmButton,
   EmptyState,
   LoadingState,
   SectionPanel,
@@ -15,6 +14,7 @@ import {
   SettingRow,
   TextField,
   Toggle,
+  TypeNameDeleteButton,
 } from '@/components/ui'
 import {
   fetchOrgTlsSettings,
@@ -142,13 +142,14 @@ function TlsCertificateList({
         <Text style={panelStyles.muted}>Replace it with Rotate on the Organization CA panel.</Text>
       ) : null}
       {canManage && row.source !== 'organization_ca' ? (
-        <ConfirmButton
+        <TypeNameDeleteButton
           label={deletingId === row.id ? 'Deleting…' : 'Delete'}
-          confirmLabel="Delete certificate"
-          prompt={
+          thing="Certificate"
+          name={tlsTitle(row)}
+          description={
             row.source === 'provider_origin'
-              ? 'Remove this certificate? It is also revoked at Cloudflare.'
-              : 'Remove this certificate?'
+              ? 'The certificate is removed and also revoked at Cloudflare.'
+              : 'The certificate is removed.'
           }
           busy={deletingId === row.id}
           disabled={deletePending && deletingId !== row.id}

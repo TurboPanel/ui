@@ -255,11 +255,13 @@ describe('instance-api managed-engine fetch wrappers', () => {
         serverId: 'srv-1',
       })
     )
-    await expect(deleteEnvironmentManaged('env-1', { force: true })).resolves.toMatchObject({
+    await expect(
+      deleteEnvironmentManaged('env-1', { force: true, confirmName: 'Shop DB' })
+    ).resolves.toMatchObject({
       deleted: true,
       commandId: 'cmd-force',
     })
-    expect(String(lastFetch().url)).toContain('force=true')
+    expect(String(lastFetch().url)).toContain('/managed?force=true&confirmName=Shop+DB')
   })
 
   it('runEnvironmentLifecycle posts start stop and restart', async () => {
@@ -534,12 +536,14 @@ describe('instance-api managed-engine fetch wrappers', () => {
         serverId: 'srv-1',
       })
     )
-    await expect(deleteManagedDatabase('env-1', 'app/db name')).resolves.toMatchObject({
+    await expect(
+      deleteManagedDatabase('env-1', 'app/db name', 'app/db name')
+    ).resolves.toMatchObject({
       ok: true,
     })
     expect(lastFetch().init.method).toBe('DELETE')
     expect(String(lastFetch().url)).toContain(
-      `/managed/databases/${encodeURIComponent('app/db name')}`
+      `/managed/databases/${encodeURIComponent('app/db name')}?confirmName=app%2Fdb+name`
     )
   })
 

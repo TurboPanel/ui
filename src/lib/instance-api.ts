@@ -24,6 +24,7 @@ import type {
 } from '@/lib/managed-services'
 import type { ManagedSslMode } from '@/lib/managed-ssl'
 import { getActiveOrganizationId, ORG_ID_HEADER } from '@/lib/org-context'
+import { confirmNameQuery } from '@/lib/confirm-name'
 import { fetchWithStepUp, reauthFailureMessage } from '@/lib/step-up'
 export {
   isForbiddenError,
@@ -2650,12 +2651,14 @@ export async function fetchOrgPrincipals(
   return await apiFetch(`${CLIENT_API}/organizations/${orgId}/principals`, undefined, orgId)
 }
 
+/** `confirmName` is the Hosting Account's username as typed (400 `confirm_name_required` without it). */
 export async function deleteOrgPrincipal(
   orgId: string,
-  principalId: string
+  principalId: string,
+  confirmName?: string
 ): Promise<{ ok: true; reconciled?: PrincipalsReconcileOutcome }> {
   return await apiFetch(
-    `${CLIENT_API}/organizations/${orgId}/principals/${principalId}`,
+    `${CLIENT_API}/organizations/${orgId}/principals/${principalId}${confirmNameQuery(confirmName)}`,
     { method: 'DELETE' },
     orgId
   )
@@ -2739,6 +2742,8 @@ export async function deleteServer(
     forgetResources?: boolean
     /** Only the principals to delete outright; any not named stay (the default). */
     principals?: readonly PrincipalRemovalChoice[]
+    /** The server's name as typed (name, else hostname, else id); the control plane refuses without it. */
+    confirmName?: string
   }>
 ): Promise<{ ok: true; serverId: string }> {
   const resolvedOrgId = organizationId ?? getActiveOrganizationId()
@@ -2749,7 +2754,7 @@ export async function deleteServer(
     headers[ORG_ID_HEADER] = resolvedOrgId
   }
 
-  const path = `${CLIENT_API}/servers/${serverId}`
+  const path = `${CLIENT_API}/servers/${serverId}${confirmNameQuery(options?.confirmName)}`
   const forgetResources = options?.forgetResources === true
   const requestBody = serverDeleteRequestBody(forgetResources, options?.principals ?? [])
   const response = await fetchWithStepUp(controlPlaneUrl(path), {
@@ -4407,8 +4412,6 @@ export const PROJECT_HAS_CHILDREN_ERROR = 'Cannot delete while child resources e
 export const PROJECT_HAS_RUNNING_SERVICES_ERROR = 'project_has_running_services'
 export const MANAGED_RUNTIME_PRESENT_ERROR = 'managed_runtime_present'
 export const ENVIRONMENT_RUNNING_ERROR = 'environment_running'
-/** DELETE environment: 400 until `confirmName` is the name of an environment that serves a hostname. */
-export const ENVIRONMENT_CONFIRM_NAME_ERROR = 'confirm_name_required'
 
 export const UNKNOWN_SYSTEM_COMPONENT_ERROR = 'unknown_system_component'
 export const SYSTEM_COMPONENT_NOT_PROVISIONED_ERROR = 'system_component_not_provisioned'
@@ -4572,8 +4575,12 @@ export async function fetchEnvironmentDeletePreview(environmentId: string): Prom
   return await apiFetch(`${CLIENT_API}/environments/${environmentId}/delete-preview`)
 }
 
-export async function deleteProject(id: string): Promise<{ ok: true; cleanup?: DeleteCleanup }> {
-  return await apiFetch(`${CLIENT_API}/projects/${id}`, {
+/** `confirmName` is the project's name as typed; the control plane answers 400 `confirm_name_required` without it. */
+export async function deleteProject(
+  id: string,
+  options?: { confirmName?: string }
+): Promise<{ ok: true; cleanup?: DeleteCleanup }> {
+  return await apiFetch(`${CLIENT_API}/projects/${id}${confirmNameQuery(options?.confirmName)}`, {
     method: 'DELETE',
   })
 }
@@ -4651,20 +4658,19 @@ export async function makeEnvironmentPrimary(
 }
 
 /**
- * `confirmName` must equal the environment's name when it serves a public
- * hostname; the control plane answers 400 `confirm_name_required` otherwise.
+ * `confirmName` must equal the environment's name (else its id); the control
+ * plane answers 400 `confirm_name_required` otherwise.
  */
 export async function deleteEnvironment(
   id: string,
   options?: { confirmName?: string }
 ): Promise<{ ok: true; cleanup?: DeleteCleanup }> {
-  const suffix =
-    options?.confirmName === undefined
-      ? ''
-      : `?${new URLSearchParams({ confirmName: options.confirmName }).toString()}`
-  return await apiFetch(`${CLIENT_API}/environments/${id}${suffix}`, {
-    method: 'DELETE',
-  })
+  return await apiFetch(
+    `${CLIENT_API}/environments/${id}${confirmNameQuery(options?.confirmName)}`,
+    {
+      method: 'DELETE',
+    }
+  )
 }
 
 export async function fetchVariables(
@@ -9090,10 +9096,18 @@ export async function disablePrincipalPassword(
   })
 }
 
-export async function deleteProjectPrincipal(projectId: string, id: string): Promise<{ ok: true }> {
-  return await apiFetch(`${CLIENT_API}/projects/${projectId}/principals/${id}`, {
-    method: 'DELETE',
-  })
+/** `confirmName` is the Hosting Account's username as typed (400 `confirm_name_required` without it). */
+export async function deleteProjectPrincipal(
+  projectId: string,
+  id: string,
+  confirmName?: string
+): Promise<{ ok: true }> {
+  return await apiFetch(
+    `${CLIENT_API}/projects/${projectId}/principals/${id}${confirmNameQuery(confirmName)}`,
+    {
+      method: 'DELETE',
+    }
+  )
 }
 
 export type ResourceLimits = {
@@ -10312,14 +10326,18 @@ export async function runEnvironmentLifecycle(
 
 export async function deleteEnvironmentManaged(
   environmentId: string,
-  options?: { force?: boolean }
+  /** `confirmName` is the project's name as typed; the control plane answers 400 `confirm_name_required` without it. */
+  options?: { force?: boolean; confirmName?: string }
 ): Promise<{
   ok: true
   deleted: boolean
   commandId?: string
   serverId?: string
 }> {
-  const suffix = options?.force ? '?force=true' : ''
+  const query = new URLSearchParams()
+  if (options?.force) query.set('force', 'true')
+  if (options?.confirmName !== undefined) query.set('confirmName', options.confirmName)
+  const suffix = query.size > 0 ? `?${query.toString()}` : ''
   return await apiFetch(`${CLIENT_API}/environments/${environmentId}/managed${suffix}`, {
     method: 'DELETE',
   })
@@ -10585,7 +10603,9 @@ export async function createManagedDatabase(
 
 export async function deleteManagedDatabase(
   environmentId: string,
-  name: string
+  name: string,
+  /** The database name as typed (400 `confirm_name_required` without it). */
+  confirmName?: string
 ): Promise<{
   ok: true
   databases: string[]
@@ -10593,7 +10613,7 @@ export async function deleteManagedDatabase(
   serverId: string
 }> {
   return await apiFetch(
-    `${CLIENT_API}/environments/${environmentId}/managed/databases/${encodeURIComponent(name)}`,
+    `${CLIENT_API}/environments/${environmentId}/managed/databases/${encodeURIComponent(name)}${confirmNameQuery(confirmName)}`,
     { method: 'DELETE' }
   )
 }

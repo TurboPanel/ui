@@ -181,6 +181,17 @@ export function buildInstallCommandWithBaseUrl(opts: {
 }
 
 /**
+ * The Add Server install step's notice. A signed `TOKEN` command gets copy
+ * that names the value; the older `TURBOPANEL_LICENSE` form (a control plane
+ * with no identity key) keeps the generic line.
+ */
+export function installCommandHelp(command: string): string {
+  return command.includes(' TOKEN=')
+    ? 'Run this install command on the new server. Its TOKEN value carries the registration key, the control plane address and its key fingerprint, and can only enroll one host.'
+    : 'Run this install command on the new server. The registration key is embedded and can only enroll one host.'
+}
+
+/**
  * The command `POST /licenses` already checked. An origin edited after
  * minting is not copied into it; the create step sends that origin, and
  * the control plane checks the Platform CA leaf before it returns this

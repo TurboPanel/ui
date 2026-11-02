@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ConfirmButton, InlineNotice, MonoText } from '@/components/ui'
+import { InlineNotice, MonoText, TypeNameDeleteButton } from '@/components/ui'
 import {
   deleteChoices,
   ServerRemovalPrincipals,
@@ -68,6 +68,7 @@ function ForgetWarningBody({ preview }: Readonly<{ preview: unknown }>) {
 export function ServerDeletePanel({
   orgId,
   serverId,
+  serverName,
   serverConnected,
   deleting,
   deleteError,
@@ -76,11 +77,17 @@ export function ServerDeletePanel({
 }: Readonly<{
   orgId: string
   serverId: string
+  /** The name typed to delete: the server's name, else its hostname, else its id. */
+  serverName: string
   serverConnected: boolean
   deleting: boolean
   deleteError: string | null
   deleteBlocked: boolean
-  onConfirm: (forgetResources: boolean, principals: PrincipalRemovalChoice[]) => void
+  onConfirm: (
+    forgetResources: boolean,
+    principals: PrincipalRemovalChoice[],
+    confirmName: string
+  ) => void
 }>) {
   const previewQuery = useServerDeletePreview(orgId, serverId)
   const planQuery = useServerPrincipalRemovalPlan(orgId, serverId)
@@ -136,22 +143,27 @@ export function ServerDeletePanel({
       />
       {showForget ? <ForgetWarningBody preview={preview} /> : null}
       {showForget ? (
-        <ConfirmButton
+        <TypeNameDeleteButton
           label={busy ? 'Removing…' : SERVER_REMOVE_OFFLINE_LABEL}
-          confirmLabel="Confirm remove"
-          prompt="Remove this server from the organization? The machine itself is not touched."
+          thing="Server"
+          verb="Remove"
+          name={serverName}
+          description="Removes this server from the organization. The machine itself is not touched."
           busy={busy}
-          disabled={busy}
-          onConfirm={() => onConfirm(true, deleteChoices(choices, planQuery.data?.principals))}
+          onConfirm={(typed) =>
+            onConfirm(true, deleteChoices(choices, planQuery.data?.principals), typed)
+          }
         />
       ) : (
-        <ConfirmButton
-          label={busy ? 'Deleting…' : 'Delete server'}
-          confirmLabel="Confirm delete"
-          prompt="Permanently remove this server from the organization?"
+        <TypeNameDeleteButton
+          label={busy ? 'Deleting…' : 'Delete Server'}
+          thing="Server"
+          name={serverName}
+          description="Permanently removes this server from the organization."
           busy={busy}
-          disabled={busy}
-          onConfirm={() => onConfirm(false, deleteChoices(choices, planQuery.data?.principals))}
+          onConfirm={(typed) =>
+            onConfirm(false, deleteChoices(choices, planQuery.data?.principals), typed)
+          }
         />
       )}
     </View>

@@ -1171,11 +1171,12 @@ describe('fetch wrappers (mocked fetch)', () => {
 
   it('deleteServer succeeds and forwards an explicit organization header', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, serverId: 'srv-1' }))
-    await expect(deleteServer('srv-1', 'org-del')).resolves.toEqual({
+    await expect(deleteServer('srv-1', 'org-del', { confirmName: 'web 1' })).resolves.toEqual({
       ok: true,
       serverId: 'srv-1',
     })
-    const [, init] = fetchMock.mock.calls[0] ?? []
+    const [url, init] = fetchMock.mock.calls[0] ?? []
+    expect(String(url)).toContain('/servers/srv-1?confirmName=web+1')
     expect((init as RequestInit).method).toBe('DELETE')
     expect((init as RequestInit).headers).toMatchObject({
       [ORG_ID_HEADER]: 'org-del',

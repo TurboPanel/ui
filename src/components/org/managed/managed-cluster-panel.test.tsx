@@ -7,7 +7,10 @@ import { ManagedClusterPanel } from './managed-cluster-panel'
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
 vi.mock('react-native-svg', async () => (await import('@/components/ui/v4/rn-stub')).svgStub)
-vi.mock('@/lib/theme-preference', async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub)
+vi.mock(
+  '@/lib/theme-preference',
+  async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub
+)
 vi.mock('@/components/ui/panel-styles', () => ({ panelStyles: {} }))
 vi.mock('expo-router', () => ({ useRouter: () => ({ push: vi.fn() }) }))
 vi.mock('@/components/ui', () => ({
@@ -27,6 +30,9 @@ vi.mock('@/components/ui', () => ({
     </button>
   ),
   ConfirmButton: ({ label, disabled }: { label: string; disabled?: boolean }) => (
+    <button disabled={disabled}>{label}</button>
+  ),
+  TypeNameDeleteButton: ({ label, disabled }: { label: string; disabled?: boolean }) => (
     <button disabled={disabled}>{label}</button>
   ),
   Checkbox: () => null,
@@ -59,8 +65,7 @@ vi.mock('@/lib/queries/managed', () => ({
 afterEach(cleanup)
 
 function member(
-  partial: Pick<ManagedMemberRecord, 'id' | 'serverId' | 'role'> &
-    Partial<ManagedMemberRecord>,
+  partial: Pick<ManagedMemberRecord, 'id' | 'serverId' | 'role'> & Partial<ManagedMemberRecord>
 ): ManagedMemberRecord {
   return {
     serverName: partial.serverId,
@@ -91,7 +96,7 @@ function renderPanel(engine: string, series: string) {
       canManage
       busy={false}
       onRegisterCommand={vi.fn()}
-    />,
+    />
   )
 }
 
@@ -102,7 +107,7 @@ describe('managed cluster failover capability', () => {
     expect(screen.getByRole('button', { name: 'Add replica' })).toHaveProperty('disabled', true)
     expect(screen.getByRole('button', { name: 'Convert to failover' })).toHaveProperty(
       'disabled',
-      true,
+      true
     )
   })
 
@@ -112,7 +117,7 @@ describe('managed cluster failover capability', () => {
     expect(screen.getByRole('button', { name: 'Add replica' })).toHaveProperty('disabled', false)
     expect(screen.getByRole('button', { name: 'Convert to failover' })).toHaveProperty(
       'disabled',
-      false,
+      false
     )
   })
 })

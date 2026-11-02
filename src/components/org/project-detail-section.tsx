@@ -11,7 +11,6 @@ import {
 import {
   Badge,
   Button,
-  ConfirmButton,
   EmptyState,
   InlineNotice,
   LoadingState,
@@ -19,7 +18,9 @@ import {
   SettingRow,
   TextField,
   Toggle,
+  TypeNameDeleteButton,
 } from '@/components/ui'
+import { confirmationName } from '@/lib/confirm-name'
 import { HeaderChevron } from '@/components/header-chevron'
 import { ComposeBasePanel } from '@/components/org/compose-base-panel'
 import { ManagedProjectSection } from '@/components/org/managed/managed-project-section'
@@ -467,12 +468,13 @@ export function ProjectPrincipalsSection({
     nameScheme.reset()
   }
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (id: string, confirmName: string) => {
     setDeleting((current) => new Set(current).add(id))
     setError(null)
-    const result = await deletePrincipal.run(id)
-    if (!result.ok && deletePrincipal.actionError) {
-      setError(deletePrincipal.actionError)
+    const result = await deletePrincipal.run({ principalId: id, confirmName })
+    // The result, not `actionError`: that one is read from this render and is stale here.
+    if (!result.ok && result.error) {
+      setError(result.error)
     }
     setDeleting((current) => {
       const next = new Set(current)
@@ -596,15 +598,13 @@ export function ProjectPrincipalsSection({
               </View>
               {canManage ? (
                 <View style={styles.principalDeleteRow}>
-                  <ConfirmButton
+                  <TypeNameDeleteButton
                     label="Delete"
-                    prompt={`Delete ${row.username}?`}
-                    confirmLabel="Delete"
-                    size="sm"
+                    thing="Hosting Account"
+                    name={row.username}
+                    description="The Linux user and its home folder are removed from every server it is on."
                     busy={deleting.has(row.id)}
-                    onConfirm={() => {
-                      void handleDelete(row.id)
-                    }}
+                    onConfirm={(typed) => handleDelete(row.id, typed)}
                   />
                 </View>
               ) : null}
@@ -1076,7 +1076,7 @@ export function ProjectDetailSection({
                 orgId={orgId}
                 projectId={projectId}
                 engineCode={project.metadata?.code ?? null}
-                projectName={project.name?.trim() || 'Unnamed project'}
+                projectName={confirmationName(project.name, project.id)}
               />
               <WorkspaceMovePanel
                 canOwn={canOwn}

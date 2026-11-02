@@ -343,7 +343,8 @@ describe('instance-api fetch wrappers', () => {
     })
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
-    await expect(deleteProject('p1')).resolves.toEqual({ ok: true })
+    await expect(deleteProject('p1', { confirmName: 'Shop' })).resolves.toEqual({ ok: true })
+    expect(String(fetchMock.mock.lastCall?.[0])).toContain('/projects/p1?confirmName=Shop')
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ environments: [{ id: 'env-1' }] }))
     await expect(fetchVisibleEnvironments('p1')).resolves.toMatchObject({

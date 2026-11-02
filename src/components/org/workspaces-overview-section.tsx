@@ -1,20 +1,15 @@
 import { useRouter } from 'expo-router'
 import { useMemo, useState } from 'react'
-import {
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { FirstRunWizard } from '@/components/org/first-run-wizard'
 import { PlatformBadge } from '@/components/org/platform-badge'
 import { panelStyles } from '@/components/ui/panel-styles'
 import {
   Button,
-  ConfirmButton,
   EmptyState,
   LoadingState,
   SectionPanel,
+  TypeNameDeleteButton,
 } from '@/components/ui'
 import { displayNameConflictMessage, isDisplayNameTaken } from '@/lib/display-name'
 import { WORKSPACE_HAS_CHILDREN_ERROR } from '@/lib/instance-api'
@@ -30,10 +25,11 @@ import { validateWorkspaceName } from '@/lib/workspace-validation'
 import { orEmptyArray } from '@/lib/or-empty-array'
 import { useOptionalWorkspaceScope } from '@/lib/workspace-scope-context'
 import { userErrorMessage } from '@/lib/user-error'
+import { confirmationName } from '@/lib/confirm-name'
 
 function workspaceDescriptionText(
   system: boolean,
-  description: string | null | undefined,
+  description: string | null | undefined
 ): string | null {
   if (system) {
     return TURBOPANEL_WORKSPACE_DESCRIPTION
@@ -53,10 +49,7 @@ export function WorkspacesOverviewSection({ orgId }: Readonly<{ orgId: string }>
   const deleteWorkspaceMutation = useDeleteWorkspace(orgId)
 
   const workspaces = orEmptyArray(workspacesQuery.data?.workspaces)
-  const userFacingWorkspaces = useMemo(
-    () => userWorkspaces(workspaces),
-    [workspaces],
-  )
+  const userFacingWorkspaces = useMemo(() => userWorkspaces(workspaces), [workspaces])
   const loading = workspacesQuery.isLoading
   const [error, setError] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<Set<string>>(() => new Set())
@@ -75,12 +68,10 @@ export function WorkspacesOverviewSection({ orgId }: Readonly<{ orgId: string }>
     if (
       isDisplayNameTaken(
         createName,
-        userFacingWorkspaces.map((workspace) => workspace.name),
+        userFacingWorkspaces.map((workspace) => workspace.name)
       )
     ) {
-      setCreateError(
-        'A workspace with this name already exists in the organization.',
-      )
+      setCreateError('A workspace with this name already exists in the organization.')
       return
     }
 
@@ -149,16 +140,15 @@ export function WorkspacesOverviewSection({ orgId }: Readonly<{ orgId: string }>
                       label="Edit"
                       variant="secondary"
                       size="sm"
-                      onPress={() =>
-                        router.push(`/${orgId}/workspaces/${ws.id}/edit`)
-                      }
+                      onPress={() => router.push(`/${orgId}/workspaces/${ws.id}/edit`)}
                     />
-                    <ConfirmButton
+                    <TypeNameDeleteButton
                       label={deleting.has(ws.id) ? 'Deleting…' : 'Delete'}
-                      confirmLabel="Delete workspace"
-                      prompt="Remove this workspace?"
+                      thing="Workspace"
+                      name={confirmationName(ws.name, ws.id)}
+                      description="The workspace is removed from this organization."
                       busy={deleting.has(ws.id)}
-                      onConfirm={() => void handleDelete(ws.id)}
+                      onConfirm={() => handleDelete(ws.id)}
                     />
                   </View>
                 ) : null}
@@ -200,7 +190,7 @@ export function WorkspacesOverviewSection({ orgId }: Readonly<{ orgId: string }>
       ) : null}
 
       <SectionPanel title="Workspaces" hint="Organization workspaces">
-        {error ?? queryError ? (
+        {(error ?? queryError) ? (
           <Text style={panelStyles.error}>{error ?? queryError}</Text>
         ) : null}
 

@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OrgServerRecord, TunnelPortal, TunnelRecord } from '@/lib/instance-api'
@@ -16,9 +16,11 @@ const state = vi.hoisted(() => ({
   deleteTunnel: vi.fn(async (_id: string) => ({ ok: true })),
 }))
 
+vi.mock('expo-clipboard', () => ({ setStringAsync: vi.fn(() => Promise.resolve()) }))
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
 vi.mock('@/components/ui/panel-styles', () => ({ panelStyles: {} }))
-vi.mock('@/components/ui', () => ({
+vi.mock('@/components/ui', async () => ({
+  TypeNameDeleteButton: (await import('@/components/ui/type-name-confirm')).TypeNameDeleteButton,
   Badge: ({ label }: Props) => <span data-testid="badge">{label as string}</span>,
   Button: ({ label, onPress }: Props) => (
     <button type="button" onClick={onPress as () => void}>
@@ -110,6 +112,14 @@ beforeEach(() => {
 })
 afterEach(cleanup)
 
+/** Opens the name dialog with `opener`, types `name` and presses the dialog's `action` button. */
+function confirmByName(opener: HTMLElement, name: string, action: string) {
+  fireEvent.click(opener)
+  const dialog = screen.getByRole('dialog')
+  fireEvent.change(within(dialog).getByRole('textbox'), { target: { value: name } })
+  fireEvent.click(within(dialog).getByRole('button', { name: action }))
+}
+
 describe('the role gate on the Tunnels screen', () => {
   it('shows a loading line, not the refusal, while the role is still loading', () => {
     state.can = { allowed: false, loading: true }
@@ -146,9 +156,9 @@ describe('a tunnel card', () => {
     const { rerender } = render(
       <NetworkTunnelCard orgId="o1" tunnel={tunnel()} servers={[server('s1')]} datacenters={[]} />
     )
-    const button = screen.getByText('Remove Tunnel') as HTMLButtonElement
+    const button = screen.getByRole('button', { name: 'Remove Tunnel' }) as HTMLButtonElement
     expect(button.disabled).toBe(false)
-    fireEvent.click(button)
+    confirmByName(button, 'edge', 'Remove Tunnel')
     expect(state.deleteTunnel).toHaveBeenCalledWith('t1')
     rerender(
       <NetworkTunnelCard
@@ -158,7 +168,9 @@ describe('a tunnel card', () => {
         datacenters={[]}
       />
     )
-    expect((screen.getByText('Remove Tunnel') as HTMLButtonElement).disabled).toBe(true)
+    // The first is the card's button; the open dialog has its own.
+    const [opener] = screen.getAllByRole('button', { name: 'Remove Tunnel' })
+    expect((opener as HTMLButtonElement).disabled).toBe(true)
   })
 })
 

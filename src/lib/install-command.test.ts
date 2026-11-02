@@ -3,6 +3,7 @@ import {
   buildInstallCommandWithBaseUrl,
   defaultDevCaddyHttpsBaseUrl,
   defaultDevInstallBaseUrl,
+  installCommandHelp,
   parseInstallBaseUrl,
   resolveDisplayedInstallCommand,
 } from './install-command'
@@ -216,6 +217,21 @@ describe('buildInstallCommandWithBaseUrl', () => {
 })
 
 describe('resolveDisplayedInstallCommand', () => {
+  it('shows a signed TOKEN command exactly as issued', () => {
+    const installCommand = `curl -fsSL https://turbopanel.sh | TOKEN=${'a'.repeat(400)}.${'b'.repeat(86)} sh`
+    expect(
+      resolveDisplayedInstallCommand({ ...revealed, installCommand }, 'https://other.example.com')
+    ).toBe(installCommand)
+  })
+
+  it('names the TOKEN value in the notice only when the command carries one', () => {
+    expect(installCommandHelp('curl -fsSL https://turbopanel.sh | TOKEN=abc.def sh')).toContain(
+      'TOKEN value'
+    )
+    expect(installCommandHelp(revealed.installCommand)).not.toContain('TOKEN')
+    expect(installCommandHelp(revealed.installCommand)).toContain('registration key is embedded')
+  })
+
   it('returns the server command when the edited URL is empty', () => {
     expect(resolveDisplayedInstallCommand(revealed, '  ')).toBe(revealed.installCommand)
   })

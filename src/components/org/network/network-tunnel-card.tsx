@@ -5,10 +5,10 @@ import {
   Badge,
   Button,
   ButtonRow,
-  ConfirmButton,
   InlineNotice,
   MonoText,
   SectionPanel,
+  TypeNameDeleteButton,
 } from '@/components/ui'
 import type {
   DatacenterRecord,
@@ -191,14 +191,15 @@ export function NetworkTunnelCard({
       <NetworkTunnelVerify orgId={orgId} tunnel={tunnel} />
       <NetworkTunnelHostnames orgId={orgId} tunnelId={tunnel.id} />
       <ButtonRow>
-        <ConfirmButton
+        <TypeNameDeleteButton
           label="Remove Tunnel"
-          confirmLabel="Remove Tunnel"
-          prompt="Remove this tunnel from TurboPanel and from Cloudflare? It has to carry no hostnames first."
-          stacked
+          thing="Tunnel"
+          verb="Remove"
+          name={tunnel.name}
+          description="Removes this tunnel from TurboPanel and from Cloudflare. It has to carry no hostnames first."
           busy={remove.isPending}
           disabled={tunnel.status === 'removing'}
-          onConfirm={() => void runRemove()}
+          onConfirm={() => runRemove()}
         />
       </ButtonRow>
     </SectionPanel>

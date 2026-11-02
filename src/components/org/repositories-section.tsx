@@ -3,16 +3,16 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
 import { panelStyles } from '@/components/ui/panel-styles'
 import {
   Badge,
-  type BadgeTone,
   Button,
-  ConfirmButton,
   DataTable,
   DataTableCell,
-  type DataTableColumn,
   DataTableRow,
   InlineNotice,
   MonoText,
   SectionPanel,
+  TypeNameDeleteButton,
+  type BadgeTone,
+  type DataTableColumn,
 } from '@/components/ui'
 import {
   REPOSITORY_AUTO_DEPLOY_OPTIONS,
@@ -20,10 +20,7 @@ import {
   type GitConnectionRecord,
   type RepositoryRecord,
 } from '@/lib/instance-api'
-import {
-  repositoryLabel,
-  repositoryProviderLabel,
-} from '@/lib/repository-label'
+import { repositoryLabel, repositoryProviderLabel } from '@/lib/repository-label'
 import {
   repositoryAuthLane,
   repositoryBranchDisplay,
@@ -50,15 +47,17 @@ const AUTH_LANE_TONES: Record<string, BadgeTone> = {
 
 function autoDeployLabel(row: RepositoryRecord): string {
   return (
-    REPOSITORY_AUTO_DEPLOY_OPTIONS.find((entry) => entry.value === row.autoDeploy)
-      ?.label ?? row.autoDeploy
+    REPOSITORY_AUTO_DEPLOY_OPTIONS.find((entry) => entry.value === row.autoDeploy)?.label ??
+    row.autoDeploy
   )
 }
 
 function deleteErrorMessage(code: string): string {
   if (code === REPOSITORY_REFERENCED_BY_COMPOSE_ERROR) {
-    return 'A service still builds from this repository — detach it from the ' +
+    return (
+      'A service still builds from this repository — detach it from the ' +
       'service (or delete the project) first.'
+    )
   }
   return code
 }
@@ -131,13 +130,11 @@ function RepositoryRow({
           <Text style={styles.branchText} numberOfLines={1}>
             {branch.branch ?? '—'}
           </Text>
-          {branch.detectedDiffers
-            ? (
-              <Text style={styles.branchDrift} numberOfLines={1}>
-                provider: {branch.detectedDiffers}
-              </Text>
-            )
-            : null}
+          {branch.detectedDiffers ? (
+            <Text style={styles.branchDrift} numberOfLines={1}>
+              provider: {branch.detectedDiffers}
+            </Text>
+          ) : null}
         </View>
       </DataTableCell>
       <DataTableCell column={autoDeployColumn}>
@@ -146,40 +143,37 @@ function RepositoryRow({
         </Text>
       </DataTableCell>
       <DataTableCell column={usedByColumn}>
-        <Text
-          style={used ? styles.usedByText : styles.mutedText}
-          numberOfLines={2}
-        >
+        <Text style={used ? styles.usedByText : styles.mutedText} numberOfLines={2}>
           {repositoryUsageLabel(usedBy)}
         </Text>
       </DataTableCell>
       <DataTableCell column={actionsColumn}>
         <View style={styles.actionsCell}>
-          {row.connectionId
-            ? (
-              <Button
-                label="Refresh"
-                busyLabel="Refreshing…"
-                variant="ghost"
-                size="sm"
-                busy={refreshing}
-                disabled={!canManage || deleting}
-                onPress={onRefresh}
-              />
-            )
-            : null}
-          {used
-            ? <Text style={panelStyles.muted}>In use</Text>
-            : (
-              <ConfirmButton
-                label="Delete"
-                confirmLabel="Confirm delete"
-                prompt="Disconnect this repository?"
-                busy={deleting}
-                disabled={!canManage || refreshing}
-                onConfirm={onDelete}
-              />
-            )}
+          {row.connectionId ? (
+            <Button
+              label="Refresh"
+              busyLabel="Refreshing…"
+              variant="ghost"
+              size="sm"
+              busy={refreshing}
+              disabled={!canManage || deleting}
+              onPress={onRefresh}
+            />
+          ) : null}
+          {used ? (
+            <Text style={panelStyles.muted}>In use</Text>
+          ) : (
+            <TypeNameDeleteButton
+              label="Delete"
+              thing="Repository"
+              name={row.repositoryUrl}
+              description="The repository is disconnected from this organization. Nothing changes on the Git host."
+              undoable
+              busy={deleting}
+              disabled={!canManage || refreshing}
+              onConfirm={onDelete}
+            />
+          )}
         </View>
       </DataTableCell>
     </DataTableRow>
@@ -227,7 +221,7 @@ export function RepositoriesSection({ orgId }: Readonly<{ orgId: string }>) {
   const connections = connectionsQuery.data?.connections ?? []
   const usage = useMemo(
     () => repositoryUsageIndex(projectsQuery.data?.projects ?? []),
-    [projectsQuery.data?.projects],
+    [projectsQuery.data?.projects]
   )
 
   usePullToRefresh(async () => {
@@ -235,19 +229,10 @@ export function RepositoriesSection({ orgId }: Readonly<{ orgId: string }>) {
   })
 
   const loading = repositoriesQuery.isLoading && rows.length === 0
-  const queryError = resolveQueryError(
-    repositoriesQuery.isError,
-    repositoriesQuery.error,
-  )
+  const queryError = resolveQueryError(repositoriesQuery.isError, repositoriesQuery.error)
 
-  const refreshingId = pendingRowId(
-    refreshMutation.isPending,
-    refreshMutation.variables,
-  )
-  const deletingId = pendingRowId(
-    deleteMutation.isPending,
-    deleteMutation.variables,
-  )
+  const refreshingId = pendingRowId(refreshMutation.isPending, refreshMutation.variables)
+  const deletingId = pendingRowId(deleteMutation.isPending, deleteMutation.variables)
 
   const onRefresh = async (row: RepositoryRecord) => {
     setActionError(null)
@@ -261,7 +246,7 @@ export function RepositoriesSection({ orgId }: Readonly<{ orgId: string }>) {
     setRefreshNote(
       `${repositoryLabel(refreshed)} — default branch ${
         refreshed.metadata?.detectedDefaultBranch ?? 'not reported'
-      }.`,
+      }.`
     )
   }
 
@@ -278,61 +263,53 @@ export function RepositoriesSection({ orgId }: Readonly<{ orgId: string }>) {
     <View style={styles.root}>
       <Text style={panelStyles.pageTitle}>Repositories</Text>
       <Text style={panelStyles.pageCopy}>
-        Git repositories connected to this organization — one row per
-        repository, however many projects build from it. Attach one while
-        creating or editing a project; delete rows nothing uses any more.
+        Git repositories connected to this organization — one row per repository, however many
+        projects build from it. Attach one while creating or editing a project; delete rows nothing
+        uses any more.
       </Text>
 
       {queryError ? <Text style={panelStyles.error}>{queryError}</Text> : null}
-      {actionError
-        ? <InlineNotice tone="warning" title="Action failed" body={actionError} />
-        : null}
-      {refreshNote
-        ? <InlineNotice title="Refreshed from the provider" body={refreshNote} />
-        : null}
+      {actionError ? (
+        <InlineNotice tone="warning" title="Action failed" body={actionError} />
+      ) : null}
+      {refreshNote ? <InlineNotice title="Refreshed from the provider" body={refreshNote} /> : null}
 
       <SectionPanel
         title="Connected repositories"
         hint={loading ? 'Loading…' : `${rows.length} connected`}
       >
-        {loading
-          ? (
-            <View style={styles.loadingRow}>
-              <ActivityIndicator size="small" color={colors.ok} />
-              <Text style={panelStyles.muted}>Loading repositories…</Text>
-            </View>
-          )
-          : null}
+        {loading ? (
+          <View style={styles.loadingRow}>
+            <ActivityIndicator size="small" color={colors.ok} />
+            <Text style={panelStyles.muted}>Loading repositories…</Text>
+          </View>
+        ) : null}
 
-        {!loading && rows.length === 0
-          ? (
-            <Text style={panelStyles.muted}>
-              No repositories yet. One appears here the first time a project
-              attaches a repository or you connect a clone URL.
-            </Text>
-          )
-          : null}
+        {!loading && rows.length === 0 ? (
+          <Text style={panelStyles.muted}>
+            No repositories yet. One appears here the first time a project attaches a repository or
+            you connect a clone URL.
+          </Text>
+        ) : null}
 
-        {rows.length > 0
-          ? (
-            <DataTable columns={REPOSITORY_COLUMNS} minWidth={1020}>
-              {rows.map((row, index) => (
-                <RepositoryRow
-                  key={row.id}
-                  row={row}
-                  rowIndex={index}
-                  connections={connections}
-                  usedBy={usage.get(row.id) ?? []}
-                  canManage={canManage}
-                  refreshing={refreshingId === row.id}
-                  deleting={deletingId === row.id}
-                  onRefresh={() => void onRefresh(row)}
-                  onDelete={() => void onDelete(row)}
-                />
-              ))}
-            </DataTable>
-          )
-          : null}
+        {rows.length > 0 ? (
+          <DataTable columns={REPOSITORY_COLUMNS} minWidth={1020}>
+            {rows.map((row, index) => (
+              <RepositoryRow
+                key={row.id}
+                row={row}
+                rowIndex={index}
+                connections={connections}
+                usedBy={usage.get(row.id) ?? []}
+                canManage={canManage}
+                refreshing={refreshingId === row.id}
+                deleting={deletingId === row.id}
+                onRefresh={() => void onRefresh(row)}
+                onDelete={() => void onDelete(row)}
+              />
+            ))}
+          </DataTable>
+        ) : null}
       </SectionPanel>
     </View>
   )

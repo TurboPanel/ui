@@ -25,6 +25,7 @@ import {
 import {
   defaultDevCaddyHttpsBaseUrl,
   defaultDevInstallBaseUrl,
+  installCommandHelp,
   parseInstallBaseUrl,
   resolveDisplayedInstallCommand,
 } from '@/lib/install-command'
@@ -198,7 +199,7 @@ function CreateStep({
             editable={!creating}
           />
           <Text style={panelStyles.muted}>
-            Used for TURBOPANEL_HOST and download URLs in the install command.
+            Used for the control plane address and download URLs in the install command.
           </Text>
         </>
       ) : null}
@@ -239,8 +240,7 @@ function InstallStep({
     <View style={styles.revealed}>
       <View style={panelStyles.calloutWarning}>
         <Text style={panelStyles.calloutWarningText}>
-          Run this install command on the new server. The registration key is embedded and can only
-          enroll one host.
+          {installCommandHelp(displayedInstallCommand)}
         </Text>
       </View>
       <Text style={styles.secretLabel}>Install command</Text>

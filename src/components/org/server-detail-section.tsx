@@ -485,11 +485,16 @@ function renderServerDeletePanel(
     colocated: boolean
     orgId: string
     serverId: string
+    serverName: string
     serverConnected: boolean
     deleting: boolean
     deleteError: string | null
     deleteBlocked: boolean
-    onConfirm: (forgetResources: boolean, principals: PrincipalRemovalChoice[]) => void
+    onConfirm: (
+      forgetResources: boolean,
+      principals: PrincipalRemovalChoice[],
+      confirmName: string
+    ) => void
   }>
 ): ReactNode {
   if (!input.canManage) return null
@@ -502,6 +507,7 @@ function renderServerDeletePanel(
     <ServerDeletePanel
       orgId={input.orgId}
       serverId={input.serverId}
+      serverName={input.serverName}
       serverConnected={input.serverConnected}
       deleting={input.deleting}
       deleteError={input.deleteError}
@@ -796,15 +802,16 @@ export function ServerDetailSection({
     colocated: updateVm.colocated,
     orgId,
     serverId,
+    serverName: title,
     serverConnected: server?.connected === true,
     deleting: deleteMutation.isPending,
     deleteError,
     deleteBlocked,
-    onConfirm: (forgetResources, principals) => {
+    onConfirm: (forgetResources, principals, confirmName) => {
       setDeleteError(null)
       setDeleteBlocked(false)
       deleteMutation.mutate(
-        { serverId, forgetResources, principals },
+        { serverId, forgetResources, principals, confirmName },
         {
           onSuccess: () => {
             router.replace(serversRemovedHref(orgId, title))

@@ -674,8 +674,13 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
     ).resolves.toMatchObject({ serviceIds: ['svc-1'] })
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
-    await expect(deleteProjectPrincipal('proj-1', 'principal-1')).resolves.toEqual({ ok: true })
+    await expect(deleteProjectPrincipal('proj-1', 'principal-1', 'shop')).resolves.toEqual({
+      ok: true,
+    })
     expect(fetchMock.mock.calls[7]?.[1]).toMatchObject({ method: 'DELETE' })
+    expect(String(fetchMock.mock.calls[7]?.[0])).toContain(
+      '/projects/proj-1/principals/principal-1?confirmName=shop'
+    )
 
     fetchMock.mockResolvedValueOnce(
       jsonResponse({
