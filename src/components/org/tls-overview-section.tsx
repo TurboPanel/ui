@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { DnsCertificatePanel } from '@/components/org/dns-certificate-panel'
 import { OrganizationCaPanel } from '@/components/org/organization-ca-panel'
-import { TlsAcmeOptIn } from '@/components/org/tls-acme-opt-in'
+import { LETS_ENCRYPT_TERMS_URL, TlsAcmeOptIn } from '@/components/org/tls-acme-opt-in'
 import { TlsContactEmailField } from '@/components/org/tls-contact-email-field'
 import {
   Button,
@@ -226,11 +226,11 @@ function TlsLetsEncryptPanel({
           />
         </>
       ) : null}
-      {!acmeEnabled && canManage && termsUrl ? (
+      {!acmeEnabled && canManage ? (
         <TlsAcmeOptIn
           orgId={orgId}
           savedEmail={contactEmail}
-          termsUrl={termsUrl}
+          termsUrl={termsUrl ?? LETS_ENCRYPT_TERMS_URL}
           termsAcceptedAt={termsAcceptedAt}
           disabled={settingsLoading || Boolean(settingsError)}
         />

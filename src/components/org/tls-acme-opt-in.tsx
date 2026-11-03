@@ -8,6 +8,9 @@ import { useSessionQuery } from '@/lib/queries/auth'
 import { queryKeys, useApiMutation } from '@/lib/query-client'
 import { userErrorMessage } from '@/lib/user-error'
 
+/** Where Let's Encrypt lists its current subscriber agreement (used when the panel does not say). */
+export const LETS_ENCRYPT_TERMS_URL = 'https://letsencrypt.org/repository/'
+
 /** A loose shape check; the server holds the address to its own stricter rule. */
 export function looksLikeEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
@@ -72,7 +75,7 @@ export function TlsAcmeOptIn({
       ) : null}
       <TextLink
         label="Read the Let's Encrypt Subscriber Agreement"
-        accessibilityLabel="Open the Let's Encrypt Subscriber Agreement in a new tab"
+        accessibilityLabel="Open the Let's Encrypt Subscriber Agreement"
         onPress={() => {
           void Linking.openURL(termsUrl)
         }}
