@@ -76,7 +76,7 @@ function StubTextField({
   return (
     <input
       aria-label={label}
-      aria-description={hint}
+      data-hint={hint}
       value={value ?? ''}
       onChange={(event) => onChangeText?.(event.target.value)}
     />

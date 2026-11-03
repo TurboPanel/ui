@@ -86,7 +86,7 @@ describe('Cloudflare Tunnel', () => {
 describe('AddAccountForm', () => {
   it('names the three token permissions, including the one for a user-owned token', () => {
     render(<AddAccountForm />)
-    expect(screen.getByLabelText('Token').getAttribute('aria-description')).toBe(
+    expect(screen.getByLabelText('Token').getAttribute('data-hint')).toBe(
       'An API token with Account › Cloudflare Tunnel › Edit, Account › Account API Tokens › Read (User › API Tokens › Read for a token under My Profile), and Zone › DNS › Edit on the zones this control plane uses.'
     )
   })
