@@ -274,7 +274,6 @@ const WAITING_KEYS: Readonly<Record<WaitingCause, string>> = {
   dns: 'waiting',
   port80: 'waiting_port80',
   caa: 'waiting_caa',
-  terms: 'waiting_terms',
 }
 
 /**
