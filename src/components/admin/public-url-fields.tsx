@@ -4,7 +4,7 @@ import {
   parsePublicUrlEntry,
   PUBLIC_URL_DEFAULT_PORT,
   PUBLIC_URL_ENTRY_HINT,
-  PUBLIC_URL_FIXED_PORT_HINT,
+  PUBLIC_URL_SELF_HOSTED_HINT,
   type PublicUrlDraft,
   type PublicUrlScheme,
 } from '@/lib/public-url-entry'
@@ -21,37 +21,40 @@ const SCHEME_OPTIONS = [
  * value has exactly these parts, so asking for them separately removes every
  * way to type something the control plane would reject. A whole address pasted
  * into the hostname box is still absorbed — `buildPublicUrlEntry` takes its
- * scheme and port and drops the path. With `fixedPort` (the self-hosted
- * control plane, only ever reached on 8443) there is no port box at all.
+ * scheme and port and drops the path. With `selfHosted` (the self-hosted
+ * control plane, only ever reached over https on 8443) there is no scheme
+ * picker and no port box: just the hostname.
  */
 export function AddPublicUrlRow({
   entry,
   entryError,
   busy,
-  fixedPort = false,
+  selfHosted = false,
   onEntryChange,
   onAddUrl,
 }: Readonly<{
   entry: PublicUrlDraft
   entryError: string | null
   busy: boolean
-  /** True when the port cannot be chosen: the Port box is not shown. */
-  fixedPort?: boolean
+  /** The self-hosted runtime: https on 8443 only, so neither picker nor Port box is shown. */
+  selfHosted?: boolean
   onEntryChange: (entry: PublicUrlDraft) => void
   onAddUrl: () => void
 }>) {
   return (
     <View style={styles.addBlock}>
       <View style={styles.addRow}>
-        <FormField label="Scheme">
-          <SegmentedControl
-            options={SCHEME_OPTIONS}
-            value={entry.scheme}
-            onChange={(scheme) => onEntryChange({ ...entry, scheme })}
-            disabled={busy}
-            accessibilityLabel="Address scheme"
-          />
-        </FormField>
+        {selfHosted ? null : (
+          <FormField label="Scheme">
+            <SegmentedControl
+              options={SCHEME_OPTIONS}
+              value={entry.scheme}
+              onChange={(scheme) => onEntryChange({ ...entry, scheme })}
+              disabled={busy}
+              accessibilityLabel="Address scheme"
+            />
+          </FormField>
+        )}
         <View style={styles.hostField}>
           <TextField
             label="Hostname"
@@ -64,7 +67,7 @@ export function AddPublicUrlRow({
             onSubmitEditing={onAddUrl}
           />
         </View>
-        {fixedPort ? null : (
+        {selfHosted ? null : (
           <View style={styles.portField}>
             <TextField
               label="Port"
@@ -82,7 +85,7 @@ export function AddPublicUrlRow({
         <Button label="Add" onPress={onAddUrl} disabled={busy} />
       </View>
       <Text style={entryError ? styles.addError : styles.addHint}>
-        {entryError ?? (fixedPort ? PUBLIC_URL_FIXED_PORT_HINT : PUBLIC_URL_ENTRY_HINT)}
+        {entryError ?? (selfHosted ? PUBLIC_URL_SELF_HOSTED_HINT : PUBLIC_URL_ENTRY_HINT)}
       </Text>
     </View>
   )

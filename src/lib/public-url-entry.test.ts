@@ -10,7 +10,6 @@ import {
   PUBLIC_URL_ENTRY_HINT,
   PUBLIC_URL_SCHEMES,
   samePublicUrlSet,
-  SELF_HOSTED_ENTRY_PORT,
 } from '@/lib/public-url-entry'
 
 describe('buildPublicUrlEntry', () => {
@@ -298,8 +297,8 @@ describe('parsePublicPort', () => {
   })
 })
 
-describe('buildPublicUrlEntry with a fixed port (self-hosted)', () => {
-  const fixed = { fixedPort: SELF_HOSTED_ENTRY_PORT }
+describe('buildPublicUrlEntry on the self-hosted runtime', () => {
+  const fixed = { selfHosted: true }
 
   it('always stores the fixed port and ignores the port box', () => {
     expect(
@@ -323,6 +322,51 @@ describe('buildPublicUrlEntry with a fixed port (self-hosted)', () => {
     expect(
       buildPublicUrlEntry({ scheme: 'https', host: 'studio.lan:9443', port: '' }, fixed)
     ).toEqual({ ok: false, error: 'Use port 8443 or leave the port off.' })
+  })
+
+  it('refuses an explicit default port instead of moving it to 8443', () => {
+    for (const host of [
+      'https://studio.lan:443',
+      'https://studio.lan:443/admin',
+      'studio.lan:443',
+      'studio.lan:80',
+      '[2001:db8::1]:443',
+      'https://user@studio.lan:0443',
+    ]) {
+      expect(buildPublicUrlEntry({ scheme: 'https', host, port: '' }, fixed)).toMatchObject({
+        ok: false,
+      })
+    }
+    expect(
+      buildPublicUrlEntry({ scheme: 'https', host: 'https://studio.lan:443', port: '' }, fixed)
+    ).toEqual({ ok: false, error: 'Use port 8443 or leave the port off.' })
+    expect(
+      buildPublicUrlEntry({ scheme: 'https', host: 'studio.lan:80', port: '' }, fixed)
+    ).toEqual({ ok: false, error: 'Use port 8443 or leave the port off.' })
+  })
+
+  it('refuses a pasted http address, default port or not', () => {
+    for (const host of ['http://studio.lan', 'http://studio.lan:80', 'http://studio.lan:8443']) {
+      expect(buildPublicUrlEntry({ scheme: 'https', host, port: '' }, fixed)).toEqual({
+        ok: false,
+        error: 'This control plane only accepts https addresses.',
+      })
+    }
+  })
+
+  it('stores https even when the draft still carries the http scheme', () => {
+    expect(
+      buildPublicUrlEntry({ scheme: 'http', host: 'studio.lan', port: '' }, fixed)
+    ).toMatchObject({ ok: true, value: 'https://studio.lan:8443' })
+  })
+
+  it('keeps a bare IPv6 address and a leading-zero 8443', () => {
+    expect(
+      buildPublicUrlEntry({ scheme: 'https', host: '2001:db8::1', port: '' }, fixed)
+    ).toMatchObject({ ok: true, value: 'https://[2001:db8::1]:8443' })
+    expect(
+      buildPublicUrlEntry({ scheme: 'https', host: 'studio.lan:08443', port: '' }, fixed)
+    ).toMatchObject({ ok: true, value: 'https://studio.lan:8443' })
   })
 
   it('treats a portless draft and a saved :8443 row as the same address', () => {

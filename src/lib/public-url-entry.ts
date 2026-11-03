@@ -24,7 +24,9 @@
  *   module **shortens** it, so what the panel adds is what the API would store.
  * - Plaintext `http:` is offered here and left to the API, which accepts it only
  *   on a development surface. The panel does not know which it is talking to,
- *   and guessing wrong would hide a legitimate dev entry.
+ *   and guessing wrong would hide a legitimate dev entry. The self-hosted
+ *   runtime is the exception: it never accepts `http:`, so `selfHosted` refuses
+ *   it here.
  *
  * Stored entries may also be **scheme-less** (`panel.lan`, `panel.lan:8443`) —
  * that is what the control plane persists for a bare host, and what a
@@ -68,9 +70,9 @@ export type PublicUrlAddResult =
 export const PUBLIC_URL_ENTRY_HINT =
   'Hostname or IP; leave the port blank for the scheme default. Paste a whole address and its scheme, port, and path are sorted out for you.'
 
-/** The add-row hint when the port is fixed and there is no port box. */
-export const PUBLIC_URL_FIXED_PORT_HINT =
-  'Hostname or IP. Paste a whole address and its scheme and path are sorted out for you.'
+/** The self-hosted add-row hint: no scheme picker and no port box. */
+export const PUBLIC_URL_SELF_HOSTED_HINT =
+  'Hostname or IP, served over https on port 8443. Paste a whole address and its path is dropped for you.'
 
 const HOST_REQUIRED_ERROR = 'Enter a hostname, for example panel.example.com'
 const HOST_INVALID_ERROR = 'That is not a valid hostname.'
@@ -81,12 +83,13 @@ const CREDENTIALS_ERROR = 'Remove the username and password from the address.'
 const PORT_ERROR = 'Port must be a number between 1 and 65535.'
 const DUPLICATE_ERROR = 'That address is already listed.'
 const FIXED_PORT_ERROR = 'Use port 8443 or leave the port off.'
+const HTTPS_ONLY_ERROR = 'This control plane only accepts https addresses.'
 
 /** HTTPS comparison uses the control-plane listener, not the scheme default. */
 const CONTROL_PLANE_HTTPS_PORT = '8443'
 
-/** The one port a self-hosted control plane is reached on, as the add row's `fixedPort`. */
-export const SELF_HOSTED_ENTRY_PORT = CONTROL_PLANE_HTTPS_PORT
+/** The one port a self-hosted control plane is reached on. */
+const SELF_HOSTED_ENTRY_PORT = CONTROL_PLANE_HTTPS_PORT
 
 function stripIpv6Brackets(host: string): string {
   return host.replace(/^\[/, '').replace(/\]$/, '')
@@ -157,8 +160,22 @@ function validatePort(port: string): { ok: true; value: string } | { ok: false }
 }
 
 type HostParse =
-  | { ok: true; url: URL; scheme: PublicUrlScheme; portFromHost: string }
+  | { ok: true; url: URL; scheme: PublicUrlScheme; portFromHost: string; typedPort: string }
   | { ok: false; error: string }
+
+/**
+ * The port written in the text itself, or `''` when there is none. `URL`
+ * forgets a port that is the scheme's default (`https://host:443` reads back
+ * with no port), so a rule about which ports may be typed has to look here.
+ */
+function typedPort(raw: string): string {
+  const schemeEnd = raw.indexOf('://')
+  const rest = schemeEnd === -1 ? bracketBareIpv6(raw) : raw.slice(schemeEnd + 3)
+  const authority = rest.split(/[/?#]/, 1)[0] ?? ''
+  const hostPort = authority.slice(authority.lastIndexOf('@') + 1)
+  const port = /^(?:\[[^\]]*\]|[^:]*):(\d+)$/.exec(hostPort)?.[1]
+  return port ?? ''
+}
 
 /**
  * Read the hostname box. It accepts a plain host, `host:port`, or a whole
@@ -183,34 +200,41 @@ function parseHostInput(input: string, fallbackScheme: PublicUrlScheme): HostPar
 
   let scheme = fallbackScheme
   if (hasScheme) scheme = url.protocol === 'http:' ? 'http' : 'https'
-  return { ok: true, url, scheme, portFromHost: url.port }
+  return { ok: true, url, scheme, portFromHost: url.port, typedPort: typedPort(raw) }
 }
 
 /**
- * How the add row treats the port. `fixedPort` is the self-hosted case: the
- * control plane is only ever reached on that port (it stores any https entry
- * as `:8443` whatever was typed), so there is no port box, the entry always
- * carries that port, and a pasted address naming another port is refused
- * rather than quietly moved.
+ * How the add row treats scheme and port. `selfHosted` is the self-hosted
+ * runtime: the control plane is only ever reached over https on 8443 (it
+ * stores any https entry as `:8443` whatever was typed and rejects plaintext
+ * http), so there is no scheme picker and no port box, the entry is always
+ * `https://host:8443`, and a pasted address that says otherwise is refused
+ * rather than quietly changed. That includes an explicit `:443` or `:80`,
+ * which `URL` would otherwise forget.
  */
-export type PublicUrlEntryOptions = { fixedPort?: string }
+export type PublicUrlEntryOptions = { selfHosted?: boolean }
+
+function buildSelfHostedEntry(input: string): PublicUrlEntryResult {
+  const host = parseHostInput(input, 'https')
+  if (!host.ok) return host
+  if (host.scheme !== 'https') return { ok: false, error: HTTPS_ONLY_ERROR }
+  if (host.typedPort && Number(host.typedPort) !== Number(SELF_HOSTED_ENTRY_PORT)) {
+    return { ok: false, error: FIXED_PORT_ERROR }
+  }
+  host.url.port = SELF_HOSTED_ENTRY_PORT
+  const parts = partsFromUrl(host.url, 'https')
+  return { ok: true, value: formatPublicUrlEntry(parts), parts }
+}
 
 /** Compose the three add-row controls into one stored entry. */
 export function buildPublicUrlEntry(
   draft: PublicUrlDraft,
   options: PublicUrlEntryOptions = {}
 ): PublicUrlEntryResult {
+  if (options.selfHosted) return buildSelfHostedEntry(draft.host)
+
   const host = parseHostInput(draft.host, draft.scheme)
   if (!host.ok) return host
-
-  if (options.fixedPort) {
-    if (host.portFromHost && host.portFromHost !== options.fixedPort) {
-      return { ok: false, error: FIXED_PORT_ERROR }
-    }
-    host.url.port = options.fixedPort
-    const fixed = partsFromUrl(host.url, host.scheme)
-    return { ok: true, value: formatPublicUrlEntry(fixed), parts: fixed }
-  }
 
   // A port pasted into the hostname box is part of the address the operator
   // meant; the port box only fills in when the paste carried none.
