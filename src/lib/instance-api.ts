@@ -6045,12 +6045,12 @@ export class UpdateNowRefusedError extends Error {
   }
 }
 
-const UPDATE_NOW_REFUSAL_CODES: readonly string[] = [
+const UPDATE_NOW_REFUSAL_CODES: ReadonlySet<string> = new Set<UpdateNowRefusalCode>([
   'run_active',
   'paused',
   'development',
   'update_blocked',
-]
+])
 
 /**
  * Update Now (superadmin): run the update check at once and, when something
@@ -6075,7 +6075,7 @@ export async function startUpdateNow(): Promise<UpdateNowResult> {
   }
   const code = typeof body?.error === 'string' ? body.error : undefined
   const detail = formatFetchFailureDetail(response.status, code)
-  if (code && UPDATE_NOW_REFUSAL_CODES.includes(code)) {
+  if (code && UPDATE_NOW_REFUSAL_CODES.has(code)) {
     throw new UpdateNowRefusedError(
       `${path} failed: ${detail}`,
       code as UpdateNowRefusalCode,
