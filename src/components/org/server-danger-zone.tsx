@@ -18,7 +18,7 @@ export function ServerDangerZone({
   offline: boolean
   revokeKeyPanel: ReactNode
   deletePanel: ReactNode
-  /** Owner-only Re-Enroll Token and minted keys; renders its own panels. */
+  /** Owner-only Re-Enroll Token and minted keys, or Repair Connection on the co-located server; renders its own panels. */
   reenrollPanel?: ReactNode
 }>) {
   const remove = (

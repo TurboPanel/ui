@@ -20,6 +20,7 @@ import {
   deleteProject,
   isForbiddenError,
   issueServerReenrollTicket,
+  repairColocatedServerConnection,
   reissueLicenseTicket,
   revokeServerReenrollTickets,
   deleteVariable,
@@ -476,6 +477,17 @@ describe('instance-api fetch wrappers', () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ licenseId: 'k1', licenseArg: 'b' }))
     await reissueLicenseTicket('k1')
     expect(fetchMock.mock.calls.at(-1)?.[0]).toContain('/licenses/k1/ticket')
+  })
+
+  it('repair connection posts to the co-located repair route', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ ok: true, serverId: 'srv-1', reasons: ['x'], clearedKey: true })
+    )
+    await expect(repairColocatedServerConnection('srv-1')).resolves.toMatchObject({
+      clearedKey: true,
+    })
+    expect(fetchMock.mock.calls.at(-1)?.[0]).toContain('/servers/srv-1/colocated-repair')
+    expect(fetchMock.mock.calls.at(-1)?.[1]).toMatchObject({ method: 'POST' })
   })
 
   it('server command wrappers enqueue and poll', async () => {
