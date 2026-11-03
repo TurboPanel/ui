@@ -4,6 +4,7 @@ import {
   configuredSourceLabel,
   formatNtpHostList,
   hideWebServerNamesSourceLabel,
+  sendViaHeaderSourceLabel,
   isEmptyNtpDraft,
   ntpDefaultsFromDrafts,
   parseNtpHostList,
@@ -25,6 +26,13 @@ describe('host-defaults helpers', () => {
     expect(hideWebServerNamesSourceLabel(null)).toBe('Platform default (on)')
     expect(hideWebServerNamesSourceLabel('organization')).toBe('Organization default')
     expect(hideWebServerNamesSourceLabel('server')).toBe('Server override')
+  })
+
+  it('labels where the Via header setting comes from', () => {
+    expect(sendViaHeaderSourceLabel(null)).toBe('Platform default (off)')
+    expect(sendViaHeaderSourceLabel(undefined)).toBe('Platform default (off)')
+    expect(sendViaHeaderSourceLabel('organization')).toBe('Organization default')
+    expect(sendViaHeaderSourceLabel('server')).toBe('Server override')
   })
 
   it('parses SSH port drafts', () => {

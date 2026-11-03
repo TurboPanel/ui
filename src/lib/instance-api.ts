@@ -808,6 +808,8 @@ export type OrgHostDefaults = {
   ntp: NtpDefaults | null
   /** Hide web server names and versions; on unless set to false. */
   hideWebServerNames: boolean
+  /** Add `Via: 1.1 Caddy` to site responses; off unless set to true. */
+  sendViaHeader: boolean
   defaultFabricEnabled: boolean
 }
 
@@ -967,6 +969,9 @@ export type OrgServerRecord = {
   /** Effective web server name hiding (server → org → on). */
   hideWebServerNames: boolean
   hideWebServerNamesSource: HostDefaultsSource | null
+  /** Effective Via header on site responses (server → org → off). */
+  sendViaHeader: boolean
+  sendViaHeaderSource: HostDefaultsSource | null
   /** Datacenter memberships (IP pins); a server may belong to many. */
   datacenters: ServerDatacenterRef[]
 }
@@ -1012,6 +1017,8 @@ function normalizeOrgServer<T extends OrgServerRecord>(server: T): T {
     ntpDefaultsSource: server.ntpDefaultsSource ?? null,
     hideWebServerNames: server.hideWebServerNames ?? true,
     hideWebServerNamesSource: server.hideWebServerNamesSource ?? null,
+    sendViaHeader: server.sendViaHeader ?? false,
+    sendViaHeaderSource: server.sendViaHeaderSource ?? null,
   }
 }
 
@@ -1190,6 +1197,8 @@ export async function updateServer(
       ntp?: NtpDefaults | null
       /** `null` follows the organization setting. */
       hideWebServerNames?: boolean | null
+      /** `null` follows the organization setting. */
+      sendViaHeader?: boolean | null
       hosting?: { enabled: boolean }
     }
     /** Location override; `null` resets every field to the detected value. */
