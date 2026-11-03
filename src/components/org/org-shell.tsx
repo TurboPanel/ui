@@ -1,3 +1,4 @@
+import { DevelopmentHostBar } from '@/components/admin/updates/development-host-bar'
 import { UpdateAvailableBanner } from '@/components/admin/updates/update-available-banner'
 import { useState, type ReactNode } from 'react'
 import {
@@ -65,6 +66,7 @@ export function OrgShell({
                 onMenuPress={isDesktop ? undefined : () => setDrawerOpen(true)}
               />
               <UpdateAvailableBanner />
+              <DevelopmentHostBar />
               <OrgShellContent
                 orgId={orgId}
                 maxWidth={contentMaxWidth}

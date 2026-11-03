@@ -1,3 +1,4 @@
+import { DevelopmentHostBar } from '@/components/admin/updates/development-host-bar'
 import { UpdateAvailableBanner } from '@/components/admin/updates/update-available-banner'
 import { Slot } from 'expo-router'
 import { useState } from 'react'
@@ -48,6 +49,7 @@ export function AdminShell() {
             onMenuPress={isDesktop ? undefined : () => setDrawerOpen(true)}
           />
           <UpdateAvailableBanner />
+          <DevelopmentHostBar />
           <ScrollView
             style={styles.contentScroll}
             contentContainerStyle={[
