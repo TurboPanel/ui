@@ -13,7 +13,7 @@ import { spacing } from '@/lib/theme'
 
 /**
  * The Public Port for a row's connection mode. A self-hosted control plane is
- * always reached on 8443, so the port is read-only text whatever the mode.
+ * always reached on 8443, so the port is plain read-only text whatever the mode.
  * Otherwise LAN Only is fixed on 8443 and shows no field, a Cloudflare tunnel
  * picks 443 or 8443, and every other mode takes any port.
  */
@@ -40,15 +40,8 @@ export function ModePublicPortCell({
   return <PublicPortCell {...props} />
 }
 
-export const SELF_HOSTED_PORT_HELP = 'Self-hosted control planes are always reached on port 8443.'
-
 function FixedPublicPortCell() {
-  return (
-    <View style={styles.stack}>
-      <Text>{DEFAULT_PANEL_PUBLIC_PORT}</Text>
-      <Text style={panelStyles.muted}>{SELF_HOSTED_PORT_HELP}</Text>
-    </View>
-  )
+  return <Text>{DEFAULT_PANEL_PUBLIC_PORT}</Text>
 }
 
 function TunnelPortCell({

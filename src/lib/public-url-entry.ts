@@ -68,6 +68,10 @@ export type PublicUrlAddResult =
 export const PUBLIC_URL_ENTRY_HINT =
   'Hostname or IP; leave the port blank for the scheme default. Paste a whole address and its scheme, port, and path are sorted out for you.'
 
+/** The add-row hint when the port is fixed and there is no port box. */
+export const PUBLIC_URL_FIXED_PORT_HINT =
+  'Hostname or IP. Paste a whole address and its scheme and path are sorted out for you.'
+
 const HOST_REQUIRED_ERROR = 'Enter a hostname, for example panel.example.com'
 const HOST_INVALID_ERROR = 'That is not a valid hostname.'
 const HOST_UNREACHABLE_ERROR =
@@ -76,9 +80,13 @@ const SCHEME_ERROR = 'Only http and https addresses can be used.'
 const CREDENTIALS_ERROR = 'Remove the username and password from the address.'
 const PORT_ERROR = 'Port must be a number between 1 and 65535.'
 const DUPLICATE_ERROR = 'That address is already listed.'
+const FIXED_PORT_ERROR = 'Use port 8443 or leave the port off.'
 
 /** HTTPS comparison uses the control-plane listener, not the scheme default. */
 const CONTROL_PLANE_HTTPS_PORT = '8443'
+
+/** The one port a self-hosted control plane is reached on, as the add row's `fixedPort`. */
+export const SELF_HOSTED_ENTRY_PORT = CONTROL_PLANE_HTTPS_PORT
 
 function stripIpv6Brackets(host: string): string {
   return host.replace(/^\[/, '').replace(/\]$/, '')
@@ -178,10 +186,31 @@ function parseHostInput(input: string, fallbackScheme: PublicUrlScheme): HostPar
   return { ok: true, url, scheme, portFromHost: url.port }
 }
 
+/**
+ * How the add row treats the port. `fixedPort` is the self-hosted case: the
+ * control plane is only ever reached on that port (it stores any https entry
+ * as `:8443` whatever was typed), so there is no port box, the entry always
+ * carries that port, and a pasted address naming another port is refused
+ * rather than quietly moved.
+ */
+export type PublicUrlEntryOptions = { fixedPort?: string }
+
 /** Compose the three add-row controls into one stored entry. */
-export function buildPublicUrlEntry(draft: PublicUrlDraft): PublicUrlEntryResult {
+export function buildPublicUrlEntry(
+  draft: PublicUrlDraft,
+  options: PublicUrlEntryOptions = {}
+): PublicUrlEntryResult {
   const host = parseHostInput(draft.host, draft.scheme)
   if (!host.ok) return host
+
+  if (options.fixedPort) {
+    if (host.portFromHost && host.portFromHost !== options.fixedPort) {
+      return { ok: false, error: FIXED_PORT_ERROR }
+    }
+    host.url.port = options.fixedPort
+    const fixed = partsFromUrl(host.url, host.scheme)
+    return { ok: true, value: formatPublicUrlEntry(fixed), parts: fixed }
+  }
 
   // A port pasted into the hostname box is part of the address the operator
   // meant; the port box only fills in when the paste carried none.
@@ -220,9 +249,10 @@ function comparableEntry(entry: string): string {
  */
 export function addPublicUrlEntry(
   current: readonly string[],
-  draft: PublicUrlDraft
+  draft: PublicUrlDraft,
+  options: PublicUrlEntryOptions = {}
 ): PublicUrlAddResult {
-  const built = buildPublicUrlEntry(draft)
+  const built = buildPublicUrlEntry(draft, options)
   if (!built.ok) return built
 
   if (new Set(current.map(comparableEntry)).has(comparableEntry(built.value))) {
