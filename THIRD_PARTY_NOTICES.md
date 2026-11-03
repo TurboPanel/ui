@@ -7,7 +7,7 @@ Third-party components remain under their own copyright and license terms and ar
 Third-party OS artwork under `assets/os/` is recorded separately in `assets/os/NOTICE.md` and is not licensed under this repository’s AGPL or the Apple App Store additional permission.
 
 <!-- lockfiles
-pnpm-lock.yaml sha256:1dfc09b9f0fca1522f43d43f5884abdcd5ff7f616d5a320a1fdbe60fcaba8cc1
+pnpm-lock.yaml sha256:8ecfc4e829a15a6d833395ce3d8416c69308f15f5a5b2cb0ab3fc67e94c6e30f
 -->
 
 ## Production dependencies
@@ -497,6 +497,11 @@ pnpm-lock.yaml sha256:1dfc09b9f0fca1522f43d43f5884abdcd5ff7f616d5a320a1fdbe60fca
 
 - License: MIT
 - Homepage: http://naver.github.io/egjs
+
+### @esbuild/linux-x64@0.28.1
+
+- License: MIT
+- Homepage: https://github.com/evanw/esbuild#readme
 
 ### @expo-google-fonts/geist@0.4.2
 
@@ -3010,6 +3015,11 @@ pnpm-lock.yaml sha256:1dfc09b9f0fca1522f43d43f5884abdcd5ff7f616d5a320a1fdbe60fca
 - License: MPL-2.0
 - Homepage: https://github.com/parcel-bundler/lightningcss#readme
 
+### lightningcss-linux-x64-gnu@1.32.0
+
+- License: MPL-2.0
+- Homepage: https://github.com/parcel-bundler/lightningcss#readme
+
 ### locate-path@5.0.0
 
 - License: MIT
@@ -4040,6 +4050,12 @@ pnpm-lock.yaml sha256:1dfc09b9f0fca1522f43d43f5884abdcd5ff7f616d5a320a1fdbe60fca
 - Copyright: Nicolas Gallagher
 - Homepage: https://github.com/necolas/styleq#readme
 
+### supports-color@10.2.2
+
+- License: MIT
+- Copyright: Sindre Sorhus
+- Homepage: https://github.com/chalk/supports-color#readme
+
 ### supports-color@5.5.0
 
 - License: MIT
@@ -4448,11 +4464,6 @@ These packages are used for development, test, or build tooling and are not bund
 
 - License: MIT
 - Homepage: https://github.com/cspotcode/node-source-map-support#readme
-
-### @esbuild/linux-x64@0.28.1
-
-- License: MIT
-- Homepage: https://github.com/evanw/esbuild#readme
 
 ### @eslint-community/eslint-utils@4.9.1
 
@@ -5544,11 +5555,6 @@ These packages are used for development, test, or build tooling and are not bund
 - Copyright: George Zahariev
 - Homepage: https://github.com/gkz/levn
 
-### lightningcss-linux-x64-gnu@1.32.0
-
-- License: MPL-2.0
-- Homepage: https://github.com/parcel-bundler/lightningcss#readme
-
 ### locate-path@6.0.0
 
 - License: MIT
@@ -5909,12 +5915,6 @@ These packages are used for development, test, or build tooling and are not bund
 - License: MIT
 - Copyright: Sindre Sorhus
 - Homepage: https://github.com/sindresorhus/strip-json-comments#readme
-
-### supports-color@10.2.2
-
-- License: MIT
-- Copyright: Sindre Sorhus
-- Homepage: https://github.com/chalk/supports-color#readme
 
 ### tinybench@2.9.0
 
