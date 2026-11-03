@@ -6,6 +6,7 @@ import {
   parseRulesetText,
   rulesetCategoryCounts,
   rulesetFamilyLabel,
+  rulesetPositionLabel,
   rulesetRows,
   tokenizeRuleLine,
 } from '@/lib/firewall-ruleset'
@@ -73,7 +74,7 @@ describe('parseRuleLine', () => {
       source: '10.0.0.0/8',
       action: 'reject',
       details: ['answers tcp-reset'],
-      position: 6,
+      positions: { v4: 6 },
     })
   })
 
@@ -135,10 +136,10 @@ describe('parseRulesetText', () => {
   it('numbers lines within each chain', () => {
     const rows = parseRulesetText(V4, 'v4')
     expect(rows).toHaveLength(10)
-    expect(rows.filter((row) => row.chain === 'host').map((row) => row.position)).toEqual([
+    expect(rows.filter((row) => row.chain === 'host').map((row) => row.positions.v4)).toEqual([
       1, 2, 3, 4, 5, 6, 7,
     ])
-    expect(rows.filter((row) => row.chain === 'published').map((row) => row.position)).toEqual([
+    expect(rows.filter((row) => row.chain === 'published').map((row) => row.positions.v4)).toEqual([
       1, 2, 3,
     ])
   })
@@ -153,7 +154,6 @@ describe('rulesetRows', () => {
     const icmpv6 = rows.find((row) => row.ruleId === 'icmpv6')
     expect(icmpv6?.protocol).toBe('ICMPv6')
     expect(icmpv6 && rulesetFamilyLabel(icmpv6.families)).toBe('IPv6')
-    expect(rows.at(-1)?.ruleId).toBe('icmpv6')
   })
 
   it('reads an IPv4-only ruleset', () => {
@@ -176,7 +176,7 @@ describe('filterRulesetRows', () => {
 
   it('filters by family, keeping lines rendered in both', () => {
     const v6 = filterRulesetRows(rows, { ...EMPTY_RULESET_FILTER, family: 'v6' })
-    expect(v6.map((row) => row.ruleId)).toEqual(['loopback', 'tcp-22', 'icmpv6'])
+    expect(v6.map((row) => row.ruleId)).toEqual(['loopback', 'icmpv6', 'tcp-22'])
   })
 
   it('matches every word of the search against any column and the raw line', () => {
@@ -210,5 +210,56 @@ describe('rulesetCategoryCounts', () => {
       user: 1,
       other: 0,
     })
+  })
+})
+
+describe('rulesetRows order', () => {
+  const v4 = `-A TP-INPUT -i lo -m comment --comment "tp:system:loopback" -j ACCEPT
+-A TP-INPUT -p icmp -m comment --comment "tp:system:icmp" -j ACCEPT
+-A TP-INPUT -p udp --sport 67 --dport 68 -m comment --comment "tp:system:dhcp" -j ACCEPT
+-A TP-INPUT -p tcp --dport 22 -m comment --comment "tp:system:tcp-22" -j ACCEPT
+-A TP-INPUT -s 10.0.0.1 -p tcp --dport 80 -m comment --comment "tp:user:u:a Web" -j ACCEPT
+-A TP-INPUT -m comment --comment "tp:system:default" -j DROP
+-A TP-FWD -i docker0 -m comment --comment "tp:system:container-egress" -j RETURN
+`
+  const v6 = `-A TP-INPUT -i lo -m comment --comment "tp:system:loopback" -j ACCEPT
+-A TP-INPUT -p ipv6-icmp -m comment --comment "tp:system:icmpv6" -j ACCEPT
+-A TP-INPUT -p udp --sport 547 --dport 546 -m comment --comment "tp:system:dhcpv6" -j ACCEPT
+-A TP-INPUT -p tcp --dport 22 -m comment --comment "tp:system:tcp-22" -j ACCEPT
+-A TP-INPUT -s 2001:db8::1 -p tcp --dport 80 -m comment --comment "tp:user:u:a Web" -j ACCEPT
+-A TP-INPUT -s 2001:db8::1 -p tcp --dport 80 -m comment --comment "tp:user:u:a Web" -j ACCEPT
+-A TP-INPUT -m comment --comment "tp:system:default" -j DROP
+-A TP-FWD -i docker0 -m comment --comment "tp:system:container-egress" -j RETURN
+`
+  const rows = rulesetRows({ v4, v6 })
+  const lines = (text: string) => text.trim().split('\n')
+
+  it('keeps each family in its own document order, chain by chain', () => {
+    const familyRaw = (family: 'v4' | 'v6') =>
+      rows.filter((row) => row.families.includes(family)).map((row) => row.raw)
+    expect(familyRaw('v4')).toEqual(lines(v4))
+    expect(familyRaw('v6')).toEqual(lines(v6))
+  })
+
+  it('puts IPv6-only lines above the default drop, not at the end', () => {
+    const ids = rows.map((row) => row.ruleId)
+    expect(ids.indexOf('icmpv6')).toBeLessThan(ids.indexOf('default'))
+    expect(ids.indexOf('dhcpv6')).toBeLessThan(ids.indexOf('tcp-22'))
+    expect(ids.at(-1)).toBe('container-egress')
+  })
+
+  it('keeps a repeated line as two rows', () => {
+    expect(rows.filter((row) => row.raw.includes('2001:db8::1'))).toHaveLength(2)
+  })
+
+  it('numbers rows per family and shows both numbers where they differ', () => {
+    const drop = rows.find((row) => row.ruleId === 'default')
+    expect(drop?.positions).toEqual({ v4: 6, v6: 7 })
+    expect(drop && rulesetPositionLabel(drop, 'all')).toBe('6 / 7')
+    expect(drop && rulesetPositionLabel(drop, 'v6')).toBe('7')
+    const lo = rows.find((row) => row.ruleId === 'loopback')
+    expect(lo && rulesetPositionLabel(lo, 'all')).toBe('1')
+    const icmpv6 = rows.find((row) => row.ruleId === 'icmpv6')
+    expect(icmpv6 && rulesetPositionLabel(icmpv6, 'all')).toBe('2')
   })
 })

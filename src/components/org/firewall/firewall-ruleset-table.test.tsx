@@ -58,7 +58,7 @@ describe('FirewallRulesetTable', () => {
       target: { value: '5432' },
     })
     expect(names()).toEqual(['Postgres from office, Allow. Show the rendered line.'])
-    expect(screen.getByText(/Showing 1 of 4 lines/)).toBeTruthy()
+    expect(screen.getByText(/Showing 1 of 4 rows/)).toBeTruthy()
 
     fireEvent.click(screen.getByRole('button', { name: 'Clear Filters' }))
     fireEvent.click(screen.getByRole('tab', { name: 'Built In (3)' }))
@@ -66,6 +66,15 @@ describe('FirewallRulesetTable', () => {
 
     fireEvent.click(screen.getByRole('tab', { name: 'IPv6' }))
     expect(names()).toHaveLength(2)
+  })
+
+  it('drops a stale IPv6 choice once the server stops sending an IPv6 ruleset', () => {
+    const view = render(<FirewallRulesetTable rendered={{ v4: V4, v6: V6 }} />)
+    fireEvent.click(screen.getByRole('tab', { name: 'IPv6' }))
+    expect(names()).toHaveLength(2)
+    view.rerender(<FirewallRulesetTable rendered={{ v4: V4, v6: null }} />)
+    expect(names()).toHaveLength(3)
+    expect(screen.queryByRole('button', { name: 'Clear Filters' })).toBeNull()
   })
 
   it('says so when nothing matches', () => {

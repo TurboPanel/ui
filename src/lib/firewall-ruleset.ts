@@ -18,8 +18,8 @@ export type RulesetAction = 'allow' | 'drop' | 'reject' | 'pass' | 'other'
 export type RulesetRow = {
   /** Stable React key: family, chain and position of the line's first appearance. */
   key: string
-  /** 1-based position within its chain in the first family it appears in. */
-  position: number
+  /** 1-based position within its chain in each family's document it appears in. */
+  positions: Partial<Record<RulesetFamily, number>>
   families: RulesetFamily[]
   category: RulesetCategory
   chain: RulesetChain
@@ -240,11 +240,20 @@ export function parseRuleLine(
 ): RulesetRow | null {
   const trimmed = line.trim()
   if (!trimmed.startsWith('-A ')) return null
-  const parsed = readTokens(tokenizeRuleLine(trimmed))
+  return rowFromTokens(trimmed, tokenizeRuleLine(trimmed), family, position)
+}
+
+function rowFromTokens(
+  trimmed: string,
+  tokens: string[],
+  family: RulesetFamily,
+  position: number
+): RulesetRow {
+  const parsed = readTokens(tokens)
   const comment = parseComment(parsed.comment)
   return {
     key: `${family}:${parsed.chainName}:${position}`,
-    position,
+    positions: { [family]: position },
     families: [family],
     category: comment.category,
     chain: chainOf(parsed.chainName),
@@ -267,35 +276,96 @@ export function parseRulesetText(text: string, family: RulesetFamily): RulesetRo
   for (const line of text.split('\n')) {
     const trimmed = line.trim()
     if (!trimmed.startsWith('-A ')) continue
-    const chain = tokenizeRuleLine(trimmed)[1] ?? ''
+    const tokens = tokenizeRuleLine(trimmed)
+    const chain = tokens[1] ?? ''
     const position = (positions.get(chain) ?? 0) + 1
     positions.set(chain, position)
-    const row = parseRuleLine(trimmed, family, position)
-    if (row) rows.push(row)
+    rows.push(rowFromTokens(trimmed, tokens, family, position))
   }
   return rows
 }
 
+function remainingCounts(rows: readonly RulesetRow[]): Map<string, number> {
+  const counts = new Map<string, number>()
+  for (const row of rows) counts.set(row.raw, (counts.get(row.raw) ?? 0) + 1)
+  return counts
+}
+
+function consume(counts: Map<string, number>, raw: string): void {
+  counts.set(raw, (counts.get(raw) ?? 1) - 1)
+}
+
 /**
- * Both families in one list. A line rendered the same in IPv4 and IPv6 is one
- * row marked for both; family-specific lines (ICMP vs ICMPv6, addresses of one
- * family) stay separate. Order: the IPv4 document, then IPv6-only lines.
+ * One chain's IPv4 and IPv6 lines woven into a single list that keeps each
+ * family's own order: reading only the IPv4 rows (or only the IPv6 rows) of
+ * the result gives exactly that family's document. A line at the head of both
+ * lists becomes one row for both families; a line the other family does not
+ * have (any more) goes in on its own. Repeated lines are matched by count, so
+ * every rendered line is a row.
  */
-export function rulesetRows(rendered: Readonly<{ v4: string; v6: string | null }>): RulesetRow[] {
-  const rows = parseRulesetText(rendered.v4, 'v4')
-  const byLine = new Map(rows.map((row) => [row.raw, row]))
-  if (rendered.v6 !== null) {
-    for (const row of parseRulesetText(rendered.v6, 'v6')) {
-      const same = byLine.get(row.raw)
-      if (same) {
-        if (!same.families.includes('v6')) same.families.push('v6')
-      } else {
-        byLine.set(row.raw, row)
-        rows.push(row)
-      }
+function weaveChain(v4: readonly RulesetRow[], v6: readonly RulesetRow[]): RulesetRow[] {
+  const out: RulesetRow[] = []
+  const left4 = remainingCounts(v4)
+  const left6 = remainingCounts(v6)
+  let i = 0
+  let j = 0
+  for (;;) {
+    const a = v4.at(i)
+    const b = v6.at(j)
+    // One side is used up: the rest of the other side follows in its order.
+    if (a === undefined) return [...out, ...v6.slice(j)]
+    if (b === undefined) return [...out, ...v4.slice(i)]
+    if (a.raw === b.raw) {
+      out.push({ ...a, families: ['v4', 'v6'], positions: { ...a.positions, ...b.positions } })
+      consume(left4, a.raw)
+      consume(left6, b.raw)
+      i++
+      j++
+    } else if ((left6.get(a.raw) ?? 0) === 0 || (left4.get(b.raw) ?? 0) > 0) {
+      // The IPv4 head is IPv4-only, or the IPv6 head still has a match further
+      // down the IPv4 list: IPv4 goes first and the IPv6 head waits.
+      out.push(a)
+      consume(left4, a.raw)
+      i++
+    } else {
+      out.push(b)
+      consume(left6, b.raw)
+      j++
     }
   }
-  return rows
+}
+
+function byChain(rows: readonly RulesetRow[]): Map<string, RulesetRow[]> {
+  const chains = new Map<string, RulesetRow[]>()
+  for (const row of rows) {
+    const list = chains.get(row.chainName)
+    if (list) list.push(row)
+    else chains.set(row.chainName, [row])
+  }
+  return chains
+}
+
+/**
+ * Both families in one list, chain by chain in document order. Within a chain
+ * each family keeps the order its server checks the lines in; a line rendered
+ * the same in IPv4 and IPv6 is one row marked for both.
+ */
+export function rulesetRows(rendered: Readonly<{ v4: string; v6: string | null }>): RulesetRow[] {
+  const v4 = byChain(parseRulesetText(rendered.v4, 'v4'))
+  const v6 = byChain(rendered.v6 === null ? [] : parseRulesetText(rendered.v6, 'v6'))
+  const chains = [...new Set([...v4.keys(), ...v6.keys()])]
+  return chains.flatMap((chain) => weaveChain(v4.get(chain) ?? [], v6.get(chain) ?? []))
+}
+
+/**
+ * The `#` to show: the row's place in the chosen family's document; with both
+ * families shown, one number when they agree and `IPv4 / IPv6` when not.
+ */
+export function rulesetPositionLabel(row: RulesetRow, family: RulesetFamily | 'all'): string {
+  if (family !== 'all') return String(row.positions[family] ?? '')
+  const { v4, v6 } = row.positions
+  if (v4 !== undefined && v6 !== undefined && v4 !== v6) return `${v4} / ${v6}`
+  return String(v4 ?? v6 ?? '')
 }
 
 export function rulesetFamilyLabel(families: readonly RulesetFamily[]): string {

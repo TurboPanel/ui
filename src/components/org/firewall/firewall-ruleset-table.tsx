@@ -23,6 +23,7 @@ import {
   filterRulesetRows,
   rulesetCategoryCounts,
   rulesetFamilyLabel,
+  rulesetPositionLabel,
   rulesetRows,
   type RulesetAction,
   type RulesetCategory,
@@ -85,18 +86,20 @@ function categoryOptions(rows: readonly RulesetRow[]): SegmentedOption<RulesetCa
 }
 
 function countText(shown: number, total: number, filtered: boolean): string {
-  if (filtered) return `Showing ${shown} of ${total} lines`
-  return total === 1 ? '1 line' : `${total} lines`
+  if (filtered) return `Showing ${shown} of ${total} rows`
+  return total === 1 ? '1 row' : `${total} rows`
 }
 
 function RulesetTableRow({
   row,
+  family,
   expanded,
   onToggle,
   last,
   alt,
 }: Readonly<{
   row: RulesetRow
+  family: RulesetFamily | 'all'
   expanded: boolean
   onToggle: () => void
   last: boolean
@@ -112,7 +115,7 @@ function RulesetTableRow({
         alt={alt}
       >
         <DataTableCell column={COLUMNS.position}>
-          <Text style={styles.dim}>{row.position}</Text>
+          <Text style={styles.dim}>{rulesetPositionLabel(row, family)}</Text>
         </DataTableCell>
         <DataTableCell column={COLUMNS.name}>
           <Text style={styles.name} numberOfLines={2}>
@@ -180,9 +183,11 @@ export function FirewallRulesetTable({
   const rows = useMemo(() => rulesetRows(rendered), [rendered])
   const [filter, setFilter] = useState<RulesetFilter>(EMPTY_RULESET_FILTER)
   const [open, setOpen] = useState<string | null>(null)
-  const visible = useMemo(() => filterRulesetRows(rows, filter), [rows, filter])
-  const filtered =
-    filter.query.trim() !== '' || filter.category !== 'all' || filter.family !== 'all'
+  // With no IPv6 ruleset the IP filter is hidden, so a stale IPv6 choice must not apply.
+  const family = rendered.v6 === null ? 'all' : filter.family
+  const effective = useMemo(() => ({ ...filter, family }), [filter, family])
+  const visible = useMemo(() => filterRulesetRows(rows, effective), [rows, effective])
+  const filtered = filter.query.trim() !== '' || filter.category !== 'all' || family !== 'all'
 
   return (
     <View style={styles.root}>
@@ -211,7 +216,7 @@ export function FirewallRulesetTable({
         {rendered.v6 === null ? null : (
           <SegmentedControl
             options={FAMILY_OPTIONS}
-            value={filter.family}
+            value={family}
             accessibilityLabel="Filter by IP version"
             onChange={(family) => setFilter((prev) => ({ ...prev, family }))}
           />
@@ -220,7 +225,9 @@ export function FirewallRulesetTable({
       <View style={styles.countRow}>
         <Text style={panelStyles.muted}>
           {countText(visible.length, rows.length, filtered)}
-          {' · checked top to bottom within each chain; the first match wins'}
+          {family === 'all' && rendered.v6 !== null
+            ? ' · checked top to bottom within each chain, first match wins; # reads IPv4 / IPv6 where they differ'
+            : ' · checked top to bottom within each chain; the first match wins'}
         </Text>
         {filtered ? (
           <Button label="Clear Filters" size="sm" onPress={() => setFilter(EMPTY_RULESET_FILTER)} />
@@ -238,6 +245,7 @@ export function FirewallRulesetTable({
             <RulesetTableRow
               key={row.key}
               row={row}
+              family={family}
               expanded={open === row.key}
               onToggle={() => setOpen((prev) => (prev === row.key ? null : row.key))}
               last={index === visible.length - 1}
