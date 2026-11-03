@@ -242,6 +242,46 @@ describe('Update Now', () => {
     expect(screen.getByText('Already up to date.')).toBeTruthy()
   })
 
+  it('drops "Already up to date." once a run starts', async () => {
+    updateNowRun.mockResolvedValueOnce({ ok: true, value: { ok: true, upToDate: true } })
+    const { rerender } = renderPanel()
+    await pressUpdateNow()
+    expect(screen.getByText('Already up to date.')).toBeTruthy()
+    rerender(
+      <UpdatesStatusPanel
+        data={{ ...DATA, activeRunId: 'run-3' }}
+        headline="updating"
+        waiting={null}
+      />
+    )
+    expect(screen.queryByText('Already up to date.')).toBeNull()
+  })
+
+  it('says when the release server could not be reached', async () => {
+    updateNowRun.mockResolvedValueOnce({
+      ok: false,
+      error: 'HTTP 503',
+      cause: new UpdateNowRefusedError('HTTP 503', 'release_unreachable', null, null),
+    })
+    renderPanel()
+    await pressUpdateNow()
+    expect(
+      screen.getByText('The release server could not be reached. Try again in a few minutes.')
+    ).toBeTruthy()
+    expect(screen.queryByText('Already up to date.')).toBeNull()
+  })
+
+  it('says how long to wait after a press too soon', async () => {
+    updateNowRun.mockResolvedValueOnce({
+      ok: false,
+      error: 'HTTP 429',
+      cause: new UpdateNowRefusedError('HTTP 429', 'check_too_soon', null, null, 20),
+    })
+    renderPanel()
+    await pressUpdateNow()
+    expect(screen.getByText('Wait 20 seconds before trying again.')).toBeTruthy()
+  })
+
   it('says why it was refused', async () => {
     updateNowRun.mockResolvedValueOnce({
       ok: false,

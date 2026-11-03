@@ -53,6 +53,25 @@ describe('startUpdateNow', () => {
     expect(refusal.activeRunId).toBe('run-9')
   })
 
+  it('reads the wait of a press too soon and an unreachable release server', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ ok: false, error: 'check_too_soon', retryAfterSeconds: 30 }, 429)
+    )
+    const soon = (await startUpdateNow().catch(
+      (caught: unknown) => caught
+    )) as UpdateNowRefusedError
+    expect(soon.code).toBe('check_too_soon')
+    expect(soon.retryAfterSeconds).toBe(30)
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: false, error: 'release_unreachable' }, 503))
+    const down = (await startUpdateNow().catch(
+      (caught: unknown) => caught
+    )) as UpdateNowRefusedError
+    expect(down).toBeInstanceOf(UpdateNowRefusedError)
+    expect(down.code).toBe('release_unreachable')
+    expect(down.retryAfterSeconds).toBeNull()
+  })
+
   it('leaves out a sentence or run id the control plane did not send', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: false, error: 'paused' }, 409))
     const err = (await startUpdateNow().catch((caught: unknown) => caught)) as UpdateNowRefusedError

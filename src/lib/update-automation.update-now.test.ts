@@ -7,11 +7,16 @@ import {
   UPDATE_NOW_DEVELOPMENT,
   UPDATE_NOW_PAUSED_HINT,
   UPDATE_NOW_RUN_ACTIVE,
+  UPDATE_NOW_UNREACHABLE,
   updateNowRefusal,
 } from './update-automation'
 
-function refused(code: UpdateNowRefusedError['code'], message: string | null = null) {
-  return new UpdateNowRefusedError('POST failed', code, message, null)
+function refused(
+  code: UpdateNowRefusedError['code'],
+  message: string | null = null,
+  retryAfterSeconds: number | null = null
+) {
+  return new UpdateNowRefusedError('POST failed', code, message, null, retryAfterSeconds)
 }
 
 describe('Update Now words', () => {
@@ -36,6 +41,23 @@ describe('Update Now words', () => {
       updateNowRefusal(refused('update_blocked', 'The channel target could not be resolved.'))
     ).toBe('The channel target could not be resolved.')
     expect(updateNowRefusal(refused('update_blocked'))).toBe('The update could not start.')
+  })
+
+  it('says the release server could not be reached, never up to date', () => {
+    expect(updateNowRefusal(refused('release_unreachable'))).toBe(UPDATE_NOW_UNREACHABLE)
+    expect(UPDATE_NOW_UNREACHABLE).toBe(
+      'The release server could not be reached. Try again in a few minutes.'
+    )
+  })
+
+  it('says how long to wait after a press too soon', () => {
+    expect(updateNowRefusal(refused('check_too_soon', null, 42))).toBe(
+      'Wait 42 seconds before trying again.'
+    )
+    expect(updateNowRefusal(refused('check_too_soon', null, 0.3))).toBe(
+      'Wait 1 second before trying again.'
+    )
+    expect(updateNowRefusal(refused('check_too_soon'))).toBe('Wait a minute before trying again.')
   })
 
   it('falls back to the plain error for anything else', () => {

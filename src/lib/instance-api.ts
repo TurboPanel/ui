@@ -6019,29 +6019,39 @@ export async function checkForUpdates(consoleCommit?: string): Promise<InstanceU
 export type UpdateNowResult = { ok: true; runId: string } | { ok: true; upToDate: true }
 
 /** Machine codes Update Now refuses with; branch on these, never the sentence. */
-export type UpdateNowRefusalCode = 'run_active' | 'paused' | 'development' | 'update_blocked'
+export type UpdateNowRefusalCode =
+  | 'run_active'
+  | 'paused'
+  | 'development'
+  | 'update_blocked'
+  | 'release_unreachable'
+  | 'check_too_soon'
 
 /**
  * Update Now refused (409 `run_active`, `paused`, `update_blocked`; 403
- * `development`). `message` is the control plane's sentence; `activeRunId`
- * names the run already going.
+ * `development`; 429 `check_too_soon` with `retryAfterSeconds`; 503
+ * `release_unreachable`). `serverMessage` is the control plane's sentence;
+ * `activeRunId` names the run already going.
  */
 export class UpdateNowRefusedError extends Error {
   readonly code: UpdateNowRefusalCode
   readonly serverMessage: string | null
   readonly activeRunId: string | null
+  readonly retryAfterSeconds: number | null
 
   constructor(
     message: string,
     code: UpdateNowRefusalCode,
     serverMessage: string | null,
-    activeRunId: string | null
+    activeRunId: string | null,
+    retryAfterSeconds: number | null = null
   ) {
     super(message)
     this.name = 'UpdateNowRefusedError'
     this.code = code
     this.serverMessage = serverMessage
     this.activeRunId = activeRunId
+    this.retryAfterSeconds = retryAfterSeconds
   }
 }
 
@@ -6050,6 +6060,8 @@ const UPDATE_NOW_REFUSAL_CODES: ReadonlySet<string> = new Set<UpdateNowRefusalCo
   'paused',
   'development',
   'update_blocked',
+  'release_unreachable',
+  'check_too_soon',
 ])
 
 /**
@@ -6066,6 +6078,7 @@ export async function startUpdateNow(): Promise<UpdateNowResult> {
     error?: unknown
     message?: unknown
     activeRunId?: unknown
+    retryAfterSeconds?: unknown
     runId?: unknown
     upToDate?: unknown
   } | null
@@ -6080,7 +6093,8 @@ export async function startUpdateNow(): Promise<UpdateNowResult> {
       `${path} failed: ${detail}`,
       code as UpdateNowRefusalCode,
       typeof body?.message === 'string' ? body.message : null,
-      typeof body?.activeRunId === 'string' ? body.activeRunId : null
+      typeof body?.activeRunId === 'string' ? body.activeRunId : null,
+      typeof body?.retryAfterSeconds === 'number' ? body.retryAfterSeconds : null
     )
   }
   throw new Error(`${path} failed: ${detail}`)

@@ -90,6 +90,17 @@ export const UPDATE_NOW_UP_TO_DATE = 'Already up to date.'
 /** Update Now refused because an update is already going. */
 export const UPDATE_NOW_RUN_ACTIVE = 'An update is already running.'
 
+/** Update Now could not reach the release server. */
+export const UPDATE_NOW_UNREACHABLE =
+  'The release server could not be reached. Try again in a few minutes.'
+
+/** Update Now pressed again within a minute: how long to wait. */
+export function updateNowTooSoonText(retryAfterSeconds: number | null): string {
+  if (retryAfterSeconds == null) return 'Wait a minute before trying again.'
+  const seconds = Math.max(1, Math.ceil(retryAfterSeconds))
+  return `Wait ${seconds} second${seconds === 1 ? '' : 's'} before trying again.`
+}
+
 /** Update Now on a development install, which updates by Build and Push Daemon. */
 export const UPDATE_NOW_DEVELOPMENT = 'A development install updates with Build and Push Daemon.'
 
@@ -103,6 +114,10 @@ export function updateNowRefusal(err: unknown): string {
         return UPDATE_NOW_PAUSED_HINT
       case 'development':
         return UPDATE_NOW_DEVELOPMENT
+      case 'release_unreachable':
+        return UPDATE_NOW_UNREACHABLE
+      case 'check_too_soon':
+        return updateNowTooSoonText(err.retryAfterSeconds)
       default:
         return err.serverMessage ?? 'The update could not start.'
     }

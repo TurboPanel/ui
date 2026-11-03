@@ -69,10 +69,15 @@ function useCheckNow() {
  * A started run shows through the status and the run view, which the hook
  * reads again; "Already up to date." or a refusal is said in the card.
  */
-function useUpdateNowControl() {
+function useUpdateNowControl(activeRunId: string | null | undefined) {
   const updateNow = useUpdateNow()
   const [note, setNote] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // A run that starts (on its own or from another tab) makes "Already up to
+  // date." stale: drop it.
+  useEffect(() => {
+    if (activeRunId) setNote(null)
+  }, [activeRunId])
   const run = async () => {
     setNote(null)
     setError(null)
@@ -185,7 +190,7 @@ export function UpdatesStatusPanel({
   const check = useCheckNow()
   const { session } = useAuth()
   const canUpdateNow = data.development !== true && isSuperadminSession(session)
-  const updateNow = useUpdateNowControl()
+  const updateNow = useUpdateNowControl(data.activeRunId)
   const isPaused = data.updatesPaused === true
   const pause = usePauseControl(isPaused)
   const paused = pausedSinceText(data)
