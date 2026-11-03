@@ -32,7 +32,12 @@ function useSaveTlsSettings(orgId: string, onSaved: () => void, failure: string)
       onSaved()
       queryClient.setQueryData(queryKeys.org(orgId).settings.tlsSettings, data)
     },
-    onError: (err) => setError(userErrorMessage(err, failure)),
+    onError: (err) => {
+      setError(userErrorMessage(err, failure))
+      // A refusal can mean Let's Encrypt published newer terms since the
+      // screen loaded: read the settings again so the current link shows.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.org(orgId).settings.tlsSettings })
+    },
   })
   return { mutation, error, setError }
 }

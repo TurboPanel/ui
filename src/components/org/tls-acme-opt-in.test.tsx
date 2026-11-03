@@ -1,11 +1,13 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const state = vi.hoisted(() => ({
   mutate: vi.fn(),
   openURL: vi.fn(() => Promise.resolve()),
   sessionEmail: 'me@example.com' as string | undefined,
+  invalidate: vi.fn(() => Promise.resolve()),
+  onError: null as ((err: unknown) => void) | null,
 }))
 
 vi.mock('react-native', async () => ({
@@ -69,12 +71,17 @@ vi.mock('@/components/ui', () => ({
     </>
   ),
 }))
-vi.mock('@tanstack/react-query', () => ({ useQueryClient: () => ({ setQueryData: vi.fn() }) }))
+vi.mock('@tanstack/react-query', () => ({
+  useQueryClient: () => ({ setQueryData: vi.fn(), invalidateQueries: state.invalidate }),
+}))
 vi.mock('@/lib/queries/auth', () => ({
   useSessionQuery: () => ({ data: state.sessionEmail ? { email: state.sessionEmail } : null }),
 }))
 vi.mock('@/lib/query-client', () => ({
-  useApiMutation: () => ({ mutate: state.mutate, isPending: false }),
+  useApiMutation: (options: { onError: (err: unknown) => void }) => {
+    state.onError = options.onError
+    return { mutate: state.mutate, isPending: false }
+  },
   queryKeys: { org: () => ({ settings: { tlsSettings: ['tls-settings'] } }) },
 }))
 vi.mock('@/lib/instance-api', () => ({ saveOrgTlsSettings: vi.fn() }))
@@ -159,6 +166,12 @@ describe('TlsAcmeOptIn', () => {
       )
     ).toBeTruthy()
     expect(turnOn().disabled).toBe(true)
+  })
+
+  it('reads the settings again after a refused save, so newer terms show', () => {
+    optIn()
+    act(() => state.onError?.(new Error("The Let's Encrypt terms changed.")))
+    expect(state.invalidate).toHaveBeenCalledWith({ queryKey: ['tls-settings'] })
   })
 
   it('stays off while the settings are not loaded', () => {

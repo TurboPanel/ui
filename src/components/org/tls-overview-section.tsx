@@ -238,7 +238,7 @@ function TlsLetsEncryptPanel({
           />
         </>
       ) : null}
-      {!acmeEnabled && canManage && !settingsLoading ? (
+      {!acmeEnabled && canManage && !settingsLoading && !settingsError ? (
         <TlsAcmeOptIn
           orgId={orgId}
           savedEmail={contactEmail}
