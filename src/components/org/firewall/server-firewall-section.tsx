@@ -12,6 +12,7 @@ import {
   SegmentedControl,
 } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
+import { FirewallRulesetTable } from '@/components/org/firewall/firewall-ruleset-table'
 import { formatLocalDateTime } from '@/lib/format-datetime'
 import {
   FIREWALL_MODE_OPTIONS,
@@ -162,12 +163,37 @@ function RenderedRuleset({
       </Text>
     )
   }
+  return <RulesetViews rendered={facts.rendered} />
+}
+
+type RulesetView = 'table' | 'text'
+
+const RULESET_VIEW_OPTIONS: readonly { value: RulesetView; label: string }[] = [
+  { value: 'table', label: 'Table' },
+  { value: 'text', label: 'Text' },
+]
+
+function RulesetViews({ rendered }: Readonly<{ rendered: { v4: string; v6: string | null } }>) {
+  const [view, setView] = useState<RulesetView>('table')
   return (
     <View style={styles.block}>
-      <CodeBlock title="Rendered ruleset (IPv4)" text={facts.rendered.v4} />
-      {facts.rendered.v6 ? (
-        <CodeBlock title="Rendered ruleset (IPv6)" text={facts.rendered.v6} />
-      ) : null}
+      <View style={styles.viewHeader}>
+        <Text style={styles.label}>Rendered Ruleset</Text>
+        <SegmentedControl
+          options={RULESET_VIEW_OPTIONS}
+          value={view}
+          accessibilityLabel="Show the ruleset as a table or as text"
+          onChange={setView}
+        />
+      </View>
+      {view === 'table' ? (
+        <FirewallRulesetTable rendered={rendered} />
+      ) : (
+        <>
+          <CodeBlock title="Rendered ruleset (IPv4)" text={rendered.v4} />
+          {rendered.v6 ? <CodeBlock title="Rendered ruleset (IPv6)" text={rendered.v6} /> : null}
+        </>
+      )}
     </View>
   )
 }
@@ -266,6 +292,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexWrap: 'wrap',
     gap: spacing.sm,
+  },
+  viewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
   },
   label: {
     fontSize: 13,
