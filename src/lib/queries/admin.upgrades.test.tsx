@@ -4,6 +4,7 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { renderHook, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { createAppQueryClient, queryKeys } from '../query-client'
+import { developmentViewPollInterval } from '../development-host'
 import {
   useCheckForUpdates,
   useDevelopmentHostAction,
@@ -316,6 +317,57 @@ describe('development host queries', () => {
     await waitFor(() => {
       expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.admin.instanceUpdates })
     })
+  })
+
+  it('keeps polling the running job through a restart that answers without host, then notices it finished', async () => {
+    const client = createAppQueryClient()
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
+    api.fetchDevelopmentUpdates.mockReset()
+    api.fetchDevelopmentUpdates.mockResolvedValueOnce(view(hostJob('h1', 'running')))
+    api.fetchDevelopmentUpdates.mockResolvedValueOnce({ ...view(null), host: null })
+    api.fetchDevelopmentUpdates.mockResolvedValue(view(hostJob('h1', 'done')))
+    const hook = renderHook(() => useDevelopmentUpdates(), { wrapper: createWrapper(client) })
+    await waitFor(() => {
+      expect(hook.result.current.data?.host?.job?.state).toBe('running')
+    })
+    await hook.result.current.refetch()
+    await waitFor(() => {
+      expect(hook.result.current.data?.hostCarry?.reason).toBe('host-missing')
+    })
+    expect(hook.result.current.data?.host?.job?.state).toBe('running')
+    expect(developmentViewPollInterval(hook.result.current.data)).toBe(2000)
+    expect(invalidate).not.toHaveBeenCalled()
+    await hook.result.current.refetch()
+    await waitFor(() => {
+      expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.admin.instanceUpdates })
+    })
+    expect(hook.result.current.data?.hostCarry).toBeUndefined()
+  })
+
+  it('keeps a started job until an answer names it', async () => {
+    const client = createAppQueryClient()
+    client.setQueryData(queryKeys.admin.developmentUpdates, view(hostJob('old', 'done')))
+    api.startDevelopmentHostAction.mockResolvedValueOnce({
+      ok: true,
+      job: { id: 'h5', action: 'update' },
+    })
+    api.fetchDevelopmentUpdates.mockReset()
+    api.fetchDevelopmentUpdates.mockResolvedValueOnce(view(hostJob('old', 'done')))
+    api.fetchDevelopmentUpdates.mockResolvedValue(view(hostJob('h5', 'running')))
+    const wrapper = createWrapper(client)
+    const action = renderHook(() => useDevelopmentHostAction(), { wrapper })
+    const hook = renderHook(() => useDevelopmentUpdates({ enabled: false }), { wrapper })
+    await action.result.current.run('update')
+    await hook.result.current.refetch()
+    await waitFor(() => {
+      expect(hook.result.current.data?.hostCarry?.reason).toBe('job-missing')
+    })
+    expect(hook.result.current.data?.host?.job).toMatchObject({ id: 'h5', state: 'running' })
+    await hook.result.current.refetch()
+    await waitFor(() => {
+      expect(hook.result.current.data?.hostCarry).toBeUndefined()
+    })
+    expect(hook.result.current.data?.host?.job).toMatchObject({ id: 'h5', step: 'pull' })
   })
 
   it('a started action goes into the cache as running; a refusal reads the view again', async () => {

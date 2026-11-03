@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DevHostJob, DevHostPart, DevHostView } from '@/lib/instance-api'
 import { DevelopmentHostBar } from './development-host-bar'
@@ -28,6 +28,8 @@ const state = vi.hoisted(() => ({
   view: undefined as Record<string, unknown> | undefined,
   isError: false,
   failureCount: 0,
+  errorUpdatedAt: 0,
+  dataUpdatedAt: 0,
   developmentEnabled: undefined as boolean | undefined,
   run: vi.fn(),
   isPending: false,
@@ -49,7 +51,8 @@ vi.mock('@/lib/queries/admin', () => ({
       data: options.enabled ? state.view : undefined,
       isError: state.isError,
       failureCount: state.failureCount,
-      dataUpdatedAt: Date.now(),
+      dataUpdatedAt: state.dataUpdatedAt || Date.now(),
+      errorUpdatedAt: state.errorUpdatedAt,
     }
   },
   useDevelopmentHostAction: () => ({ run: state.run, isPending: state.isPending }),
@@ -89,8 +92,13 @@ function job(overrides: Partial<DevHostJob> = {}): DevHostJob {
   }
 }
 
-function setHost(host: Partial<DevHostView> | null, pushState: string | null = null) {
+function setHost(
+  host: Partial<DevHostView> | null,
+  pushState: string | null = null,
+  extra: Record<string, unknown> = {}
+) {
   state.view = {
+    ...extra,
     ok: true,
     job: pushState ? { id: 'p1', state: pushState, servers: [] } : null,
     host: host ? { parts: [], lastFetchAt: null, job: null, migrate: null, ...host } : null,
@@ -103,6 +111,8 @@ beforeEach(() => {
   state.development = true
   state.isError = false
   state.failureCount = 0
+  state.errorUpdatedAt = 0
+  state.dataUpdatedAt = 0
   state.isPending = false
   state.developmentEnabled = undefined
   state.run.mockReset()
@@ -118,6 +128,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  vi.useRealTimers()
 })
 
 describe('when the bar shows', () => {
@@ -274,5 +285,48 @@ describe('job progress', () => {
     render(<DevelopmentHostBar />)
     expect(screen.queryByText('Updated')).toBeNull()
     expect(screen.getByText('Daemon: restart needed')).toBeTruthy()
+  })
+
+  it('waits for the daemon to reconnect while the restarted control plane has no host', () => {
+    setHost({ parts: [part()], job: job({ step: 'restart-control-plane' }) }, null, {
+      hostCarry: { jobId: 'h1', since: 0, reason: 'host-missing', expired: false },
+    })
+    render(<DevelopmentHostBar />)
+    expect(screen.getByText('Waiting for the daemon to reconnect…')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Restart Only' })).toHaveProperty('disabled', true)
+  })
+
+  it('points at the Developer Console after the wait expired, and unlocks the buttons', () => {
+    setHost({ parts: [part()], job: job() }, null, {
+      hostCarry: { jobId: 'h1', since: 0, reason: 'host-missing', expired: true },
+    })
+    render(<DevelopmentHostBar />)
+    expect(screen.getByText(/Check the services in the Developer Console/)).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Restart Only' })).toHaveProperty('disabled', false)
+  })
+
+  it('points at the Developer Console when reads fail for more than 3 minutes', () => {
+    setHost({ parts: [part()], job: job() })
+    state.isError = true
+    state.dataUpdatedAt = 1_000
+    state.errorUpdatedAt = 1_000 + 3 * 60_000 + 1
+    render(<DevelopmentHostBar />)
+    expect(screen.getByText(/Check the services in the Developer Console/)).toBeTruthy()
+  })
+
+  it('keeps the bar up for a minute after a finished job, then hides it', () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+    vi.setSystemTime(Date.parse('2026-11-03T12:00:00Z'))
+    setHost({
+      parts: [part()],
+      job: job({ state: 'done', endedAt: '2026-11-03T12:00:00Z' }),
+    })
+    render(<DevelopmentHostBar />)
+    expect(screen.getByText('Updated')).toBeTruthy()
+    act(() => {
+      vi.advanceTimersByTime(61_000)
+    })
+    expect(screen.queryByText('Updated')).toBeNull()
+    expect(screen.queryByText('Development Host')).toBeNull()
   })
 })

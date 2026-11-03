@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { readConsoleBuild } from '@/components/admin/updates/console-build'
 import { Button } from '@/components/ui'
@@ -9,12 +9,14 @@ import {
   devHostActionError,
   devHostActionsLocked,
   devHostBarVisible,
+  devHostDoneHidesInMs,
   devHostFailure,
   devHostJobJustDone,
   devHostJobRunning,
   devHostLines,
   devHostProgressLine,
-  devHostRestarting,
+  devHostWait,
+  type DevHostWait,
 } from '@/lib/development-host'
 import { isDevelopmentInstall } from '@/lib/development-updates'
 import type { DevHostAction, DevHostJob } from '@/lib/instance-api'
@@ -31,14 +33,17 @@ import { colors, spacing } from '@/lib/theme'
 /** Running, failed or just finished: the line under the parts. */
 function JobLine({
   job,
-  restarting,
+  wait,
   now,
-}: Readonly<{ job: DevHostJob | null; restarting: boolean; now: number }>) {
+}: Readonly<{ job: DevHostJob | null; wait: DevHostWait; now: number }>) {
   if (!job) return null
   if (devHostJobRunning(job)) {
     return (
-      <Text style={styles.progress} accessibilityLiveRegion="polite">
-        {devHostProgressLine(job, restarting)}
+      <Text
+        style={wait === 'lost' ? styles.failureTitle : styles.progress}
+        accessibilityLiveRegion="polite"
+      >
+        {devHostProgressLine(job, wait)}
       </Text>
     )
   }
@@ -91,21 +96,35 @@ export function DevelopmentHostBar() {
   const [error, setError] = useState<string | null>(null)
   const data = query.data
   const host = data?.host ?? null
-  // Recency is measured at the last good read, so rendering stays pure.
-  const now = query.dataUpdatedAt
+  // Recency is measured at the last good read (rendering stays pure), moved
+  // on by a timer when a finished job's minute of "Updated" runs out.
+  const [clock, setClock] = useState(0)
+  const now = Math.max(clock, query.dataUpdatedAt)
+  const doneEndedAt = host?.job?.state === 'done' ? host.job.endedAt : null
+  useEffect(() => {
+    const hidesIn = devHostDoneHidesInMs({ state: 'done', endedAt: doneEndedAt }, Date.now())
+    if (hidesIn === null) return undefined
+    const timer = setTimeout(() => {
+      setClock(Date.now())
+    }, hidesIn + 50)
+    return () => {
+      clearTimeout(timer)
+    }
+  }, [doneEndedAt])
   if (!devHostBarVisible({ development, superadmin, host, now }) || !host) return null
 
-  const restarting = devHostRestarting(host.job, query.isError || query.failureCount > 0)
-  const locked = devHostActionsLocked(data) || action.isPending
+  const failingForMs = query.isError ? Math.max(0, query.errorUpdatedAt - query.dataUpdatedAt) : 0
+  const wait = devHostWait(data, query.isError || query.failureCount > 0, failingForMs)
+  const locked = (devHostActionsLocked(data) && wait !== 'lost') || action.isPending
   const lines = devHostLines(host)
   const run = async (which: DevHostAction) => {
     setError(null)
     const result = await action.run(which)
     if (!result.ok) {
       setError(failedRunMessage(result, 'The action could not start.'))
-      return
+    } else if (!result.value.ok) {
+      setError(devHostActionError(result.value))
     }
-    setError(devHostActionError(result.value))
   }
 
   return (
@@ -118,11 +137,11 @@ export function DevelopmentHostBar() {
         <View style={styles.copy}>
           <Text style={styles.title}>Development Host</Text>
           {lines.map((line) => (
-            <Text key={line} style={styles.line}>
-              {line}
+            <Text key={line.name} style={styles.line}>
+              {line.text}
             </Text>
           ))}
-          <JobLine job={host.job} restarting={restarting} now={now} />
+          <JobLine job={host.job} wait={wait} now={now} />
           {error ? <Text style={styles.error}>{error}</Text> : null}
         </View>
         <View style={styles.actions}>

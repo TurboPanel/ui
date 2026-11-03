@@ -91,11 +91,16 @@ export function devHostPartLine(part: PartInput, migrate?: DevHostView['migrate'
   return `${devHostPartLabel(part.name)}: ${fragments.join(', ')}`
 }
 
-/** Every part's line, in the order the daemon sent them. */
-export function devHostLines(host: Pick<DevHostView, 'parts' | 'migrate'>): string[] {
-  return host.parts
-    .map((part) => devHostPartLine(part, host.migrate))
-    .filter((line): line is string => line !== null)
+/** Every part's line with its part name (the list key), in the order the daemon sent them. */
+export function devHostLines(
+  host: Pick<DevHostView, 'parts' | 'migrate'>
+): { name: string; text: string }[] {
+  const lines: { name: string; text: string }[] = []
+  for (const part of host.parts) {
+    const text = devHostPartLine(part, host.migrate)
+    if (text !== null) lines.push({ name: part.name, text })
+  }
+  return lines
 }
 
 /** A host job is still working. An unknown state is not. */
@@ -106,8 +111,8 @@ export function devHostJobRunning(job: Pick<DevHostJob, 'state'> | null | undefi
 /** How long a failed job keeps the bar on screen after it ended. */
 export const DEV_HOST_FAILED_SHOWN_MS = 30 * 60_000
 
-/** How long a finished job reads "Updated" after it ended. */
-export const DEV_HOST_DONE_SHOWN_MS = 5 * 60_000
+/** How long a finished job keeps the bar on screen, reading "Updated", after it ended. */
+export const DEV_HOST_DONE_SHOWN_MS = 60_000
 
 /** The job ended within `windowMs` of `now`. A job with no readable end time is not recent. */
 export function devHostJobEndedWithin(
@@ -138,9 +143,23 @@ export function devHostJobJustDone(
 }
 
 /**
+ * When a job that finished `done` stops keeping the bar up: milliseconds from
+ * `now`, never below 0. Null for any other job or an unreadable end time.
+ */
+export function devHostDoneHidesInMs(
+  job: Pick<DevHostJob, 'state' | 'endedAt'> | null | undefined,
+  now: number
+): number | null {
+  if (job?.state !== 'done' || !job.endedAt) return null
+  const ended = Date.parse(job.endedAt)
+  if (Number.isNaN(ended)) return null
+  return Math.max(0, ended + DEV_HOST_DONE_SHOWN_MS - now)
+}
+
+/**
  * The bar shows on a development install for a superadmin, when the daemon
- * reported the host and some part needs something, or a job runs or just
- * failed. A finished job alone does not keep it on screen.
+ * reported the host and some part needs something, or a job runs, just
+ * failed or just finished (it reads "Updated" for a minute).
  */
 export function devHostBarVisible(
   input: Readonly<{
@@ -152,7 +171,13 @@ export function devHostBarVisible(
 ): boolean {
   const { host } = input
   if (!input.development || !input.superadmin || !host) return false
-  if (devHostJobRunning(host.job) || devHostJobJustFailed(host.job, input.now)) return true
+  if (
+    devHostJobRunning(host.job) ||
+    devHostJobJustFailed(host.job, input.now) ||
+    devHostJobJustDone(host.job, input.now)
+  ) {
+    return true
+  }
   return host.parts.some((part) => devHostPartNeedsWork(part, host.migrate))
 }
 
@@ -176,17 +201,26 @@ export function devHostStepLabel(name: string): string {
 
 export const DEV_HOST_RESTARTING = 'Control plane restarting…'
 
+export const DEV_HOST_RECONNECTING = 'Waiting for the daemon to reconnect…'
+
+export const DEV_HOST_LOST =
+  'No answer from the control plane or the daemon for 3 minutes. Check the services in the Developer Console on this server.'
+
 export const DEV_HOST_UPDATED = 'Updated'
 
 /**
- * The progress line while a job runs: "Pulling… (step 2 of 7)", or
- * "Control plane restarting…" while the control plane does not answer.
+ * The progress line while a job runs: "Pulling… (step 2 of 7)"; "Control
+ * plane restarting…" while reads fail; "Waiting for the daemon to
+ * reconnect…" while the restarted control plane has no word from the daemon
+ * yet; and a pointer to the Developer Console after the ceiling.
  */
 export function devHostProgressLine(
   job: Pick<DevHostJob, 'step' | 'steps'>,
-  restarting: boolean
+  wait: DevHostWait
 ): string {
-  if (restarting) return DEV_HOST_RESTARTING
+  if (wait === 'restarting') return DEV_HOST_RESTARTING
+  if (wait === 'reconnecting') return DEV_HOST_RECONNECTING
+  if (wait === 'lost') return DEV_HOST_LOST
   const label = `${devHostStepLabel(job.step)}…`
   const index = job.steps.findIndex((step) => step.name === job.step)
   if (index < 0) return label
@@ -223,32 +257,115 @@ export function devHostFailure(
 }
 
 /**
- * The control plane is restarting: a host job was running at the last answer
- * and the reads fail now. The bar says so instead of showing an error.
+ * How long the bar keeps waiting for a running job to show up again while
+ * the control plane restarts (reads fail, then answer with no `host` until
+ * the daemon reconnects with a growing backoff).
  */
-export function devHostRestarting(
-  job: Pick<DevHostJob, 'state'> | null | undefined,
-  readFailing: boolean
-): boolean {
-  return readFailing && devHostJobRunning(job)
+export const DEV_HOST_RECONNECT_CEILING_MS = 3 * 60_000
+
+/** How long a just-started job is kept while the daemon has not reported it yet. */
+export const DEV_HOST_START_CEILING_MS = 30_000
+
+/**
+ * The console's wait for a running host job that the last answer did not
+ * name: `host-missing` (the restarted control plane has no word from the
+ * daemon yet) or `job-missing` (the daemon has not reported a just-started
+ * job). `since` is when the wait began; `expired` once it passed its ceiling.
+ */
+export type DevHostCarry = {
+  jobId: string
+  since: number
+  reason: 'host-missing' | 'job-missing'
+  expired: boolean
+}
+
+/** The development view as the console keeps it: the answer plus the wait, when there is one. */
+export type DevelopmentView = DevelopmentUpdates & { hostCarry?: DevHostCarry }
+
+/**
+ * Merge a fresh answer with the cached one. While the cached host job runs
+ * and the answer has no `host`, or a host whose job is neither that one nor
+ * another running job, the cached host and job are kept so polling and the
+ * bar go on: up to 3 minutes for a missing host (then `expired`, which the
+ * bar shows as a pointer to the Developer Console and which stays while the
+ * host is missing), up to 30 s for a job the daemon has not reported (then
+ * the answer wins). An answer naming the job ends the wait.
+ */
+export function carryDevHostJob(
+  previous: DevelopmentView | null | undefined,
+  fresh: DevelopmentUpdates | null,
+  now: number
+): DevelopmentView | null {
+  const prevJob = previous?.host?.job
+  if (!fresh || !previous?.host || !prevJob) return fresh
+  const prevCarry = previous.hostCarry?.jobId === prevJob.id ? previous.hostCarry : undefined
+  if (!devHostJobRunning(prevJob)) return fresh
+  const freshJob = fresh.host?.job ?? null
+  if (freshJob && (freshJob.id === prevJob.id || devHostJobRunning(freshJob))) return fresh
+  const reason = fresh.host ? 'job-missing' : 'host-missing'
+  if (prevCarry?.expired) {
+    return reason === 'host-missing'
+      ? { ...fresh, host: previous.host, hostCarry: prevCarry }
+      : fresh
+  }
+  const since = prevCarry?.reason === reason ? prevCarry.since : now
+  const ceiling =
+    reason === 'host-missing' ? DEV_HOST_RECONNECT_CEILING_MS : DEV_HOST_START_CEILING_MS
+  const expired = now - since > ceiling
+  if (expired && reason === 'job-missing') return fresh
+  return {
+    ...fresh,
+    host: { ...(fresh.host ?? previous.host), job: prevJob },
+    hostCarry: { jobId: prevJob.id, since, reason, expired },
+  }
+}
+
+type LockInput = Pick<DevelopmentView, 'job' | 'host' | 'hostCarry'>
+
+/** A host job runs, as far as the console knows (an expired wait no longer counts). */
+function hostJobActive(data: LockInput | null | undefined): boolean {
+  return devHostJobRunning(data?.host?.job) && data?.hostCarry?.expired !== true
 }
 
 /** The two buttons wait while a host job or a build and push runs. */
-export function devHostActionsLocked(
-  data: Pick<DevelopmentUpdates, 'job' | 'host'> | null | undefined
-): boolean {
-  return devHostJobRunning(data?.host?.job) || developmentJobRunning(data?.job)
+export function devHostActionsLocked(data: LockInput | null | undefined): boolean {
+  return hostJobActive(data) || developmentJobRunning(data?.job)
 }
 
 /**
  * The development view is read every 2 s while a build and push or a host
- * job runs. The last good answer stays in the cache when a read fails, so
- * polling keeps going through the control plane's own restart.
+ * job runs. A failed read keeps the last answer, so polling goes on through
+ * the control plane's restart, but not past 3 minutes without a good read.
  */
 export function developmentViewPollInterval(
-  data: Pick<DevelopmentUpdates, 'job' | 'host'> | null | undefined
+  data: LockInput | null | undefined,
+  lastGoodReadAt = 0,
+  now = 0
 ): number | false {
-  return devHostActionsLocked(data) ? DEVELOPMENT_JOB_POLL_MS : false
+  if (!devHostActionsLocked(data)) return false
+  if (lastGoodReadAt > 0 && now - lastGoodReadAt > DEV_HOST_RECONNECT_CEILING_MS) return false
+  return DEVELOPMENT_JOB_POLL_MS
+}
+
+/** Why a running job's progress is not on screen right now, or null when it is. */
+export type DevHostWait = 'restarting' | 'reconnecting' | 'lost' | null
+
+/**
+ * - `lost`: the wait for a missing host expired, or reads have failed for
+ *   more than 3 minutes during a job.
+ * - `restarting`: reads fail while a host job runs.
+ * - `reconnecting`: the control plane answers but has no word from the daemon.
+ */
+export function devHostWait(
+  data: LockInput | null | undefined,
+  readFailing: boolean,
+  failingForMs: number
+): DevHostWait {
+  if (!devHostJobRunning(data?.host?.job)) return null
+  if (data?.hostCarry?.expired) return 'lost'
+  if (readFailing) return failingForMs > DEV_HOST_RECONNECT_CEILING_MS ? 'lost' : 'restarting'
+  if (data?.hostCarry?.reason === 'host-missing') return 'reconnecting'
+  return null
 }
 
 /** A host job that was running at the last read has finished: the update reads go stale. */

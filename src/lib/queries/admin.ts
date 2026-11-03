@@ -87,9 +87,11 @@ import {
   waitForControlPlaneRecovery,
 } from '@/lib/control-plane-recovery'
 import {
+  carryDevHostJob,
   devHostJobJustFinished,
   devHostStartedJob,
   developmentViewPollInterval,
+  type DevelopmentView,
 } from '@/lib/development-host'
 import { developmentJobJustFinished } from '@/lib/development-updates'
 import { getActiveOrganizationId } from '@/lib/org-context'
@@ -614,18 +616,28 @@ export function useResumeUpdates() {
  * The development build-and-push view, with the development host (`host`).
  * Read only on a development install (`enabled` follows
  * `InstanceUpdates.development`); a 404 reads as null. Polls every 2 s while
- * a build and push or a host job (Update and Restart, Restart Only) runs. A
- * failed read keeps the last answer, so polling goes on while the control
- * plane restarts in a host job. When either job finishes the whole
- * `instance-updates` prefix is read again once.
+ * a build and push or a host job (Update and Restart, Restart Only) runs.
+ * During a host job the control plane restarts: failed reads keep the last
+ * answer, and answers that lack the running job (no `host` until the daemon
+ * reconnects, or a just-started job the daemon has not reported) keep the
+ * cached job (`carryDevHostJob`), so polling goes on for up to 3 minutes
+ * without the job. When either job finishes the whole `instance-updates`
+ * prefix is read again once.
  */
 export function useDevelopmentUpdates(options?: Readonly<{ enabled?: boolean }>) {
   const queryClient = useQueryClient()
-  const query = useQuery({
+  const query = useQuery<DevelopmentView | null>({
     queryKey: queryKeys.admin.developmentUpdates,
-    queryFn: fetchDevelopmentUpdates,
+    queryFn: async () => {
+      const fresh = await fetchDevelopmentUpdates()
+      const previous = queryClient.getQueryData<DevelopmentView | null>(
+        queryKeys.admin.developmentUpdates
+      )
+      return carryDevHostJob(previous, fresh, Date.now())
+    },
     enabled: options?.enabled ?? true,
-    refetchInterval: (state) => developmentViewPollInterval(state.state.data),
+    refetchInterval: (state) =>
+      developmentViewPollInterval(state.state.data, state.state.dataUpdatedAt, Date.now()),
   })
   const job = query.data?.job ?? null
   const hostJob = query.data?.host?.job ?? null
@@ -659,13 +671,15 @@ export function useDevelopmentHostAction() {
     onSuccess: async (answer) => {
       if (answer.ok) {
         const started = devHostStartedJob(answer.job, new Date().toISOString())
-        queryClient.setQueryData<DevelopmentUpdates | null>(
+        // Kept by id until an answer names it (at most 30 s; `carryDevHostJob`),
+        // so an answer from before the daemon reported it cannot unlock the buttons.
+        queryClient.setQueryData<DevelopmentView | null>(
           queryKeys.admin.developmentUpdates,
           (current) =>
-            current?.host ? { ...current, host: { ...current.host, job: started } } : current
+            current?.host
+              ? { ...current, host: { ...current.host, job: started }, hostCarry: undefined }
+              : current
         )
-        // No read now: the daemon may not have reported the new job yet, and an
-        // older answer would stop the polling the running job just started.
         return
       }
       await queryClient.invalidateQueries({ queryKey: queryKeys.admin.developmentUpdates })

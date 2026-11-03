@@ -20,7 +20,14 @@ import {
   devHostPartLine,
   devHostPartNeedsWork,
   devHostProgressLine,
-  devHostRestarting,
+  devHostWait,
+  carryDevHostJob,
+  devHostDoneHidesInMs,
+  DEV_HOST_RECONNECT_CEILING_MS,
+  DEV_HOST_START_CEILING_MS,
+  DEV_HOST_RECONNECTING,
+  DEV_HOST_LOST,
+  type DevelopmentView,
   devHostStartedJob,
   devHostStepLabel,
   developmentViewPollInterval,
@@ -154,8 +161,8 @@ describe('devHostPartNeedsWork and devHostPartLine', () => {
       ],
     })
     expect(devHostLines(view)).toEqual([
-      'Control Plane: 1 new commit on trunk',
-      'Daemon: restart needed',
+      { name: 'control-plane', text: 'Control Plane: 1 new commit on trunk' },
+      { name: 'daemon', text: 'Daemon: restart needed' },
     ])
   })
 })
@@ -200,10 +207,25 @@ describe('devHostBarVisible', () => {
     expect(devHostBarVisible({ ...base, host: null })).toBe(false)
   })
 
-  it('is hidden when nothing needs doing, even right after a finished job', () => {
+  it('is hidden when nothing needs doing, except for a minute after a finished job', () => {
     expect(devHostBarVisible({ ...base, host: host() })).toBe(false)
     const done = job({ state: 'done', endedAt: ago(1000) })
-    expect(devHostBarVisible({ ...base, host: host({ job: done }) })).toBe(false)
+    expect(devHostBarVisible({ ...base, host: host({ job: done }) })).toBe(true)
+    const old = job({ state: 'done', endedAt: ago(DEV_HOST_DONE_SHOWN_MS + 1) })
+    expect(devHostBarVisible({ ...base, host: host({ job: old }) })).toBe(false)
+  })
+
+  it('says when a finished job stops keeping the bar up', () => {
+    expect(devHostDoneHidesInMs(job({ state: 'done', endedAt: ago(1000) }), NOW)).toBe(
+      DEV_HOST_DONE_SHOWN_MS - 1000
+    )
+    expect(
+      devHostDoneHidesInMs(job({ state: 'done', endedAt: ago(DEV_HOST_DONE_SHOWN_MS * 2) }), NOW)
+    ).toBe(0)
+    expect(devHostDoneHidesInMs(job({ state: 'done', endedAt: 'soon' }), NOW)).toBeNull()
+    expect(devHostDoneHidesInMs(job({ state: 'done', endedAt: null }), NOW)).toBeNull()
+    expect(devHostDoneHidesInMs(job(), NOW)).toBeNull()
+    expect(devHostDoneHidesInMs(null, NOW)).toBeNull()
   })
 
   it('shows when a part needs something, a job runs or one just failed', () => {
@@ -233,17 +255,28 @@ describe('steps and progress', () => {
     expect(devHostStepLabel('')).toBe('Working')
   })
 
-  it('shows the step and its place, or the restart while the control plane is away', () => {
-    expect(devHostProgressLine(job(), false)).toBe('Pulling… (step 2 of 3)')
-    expect(devHostProgressLine(job({ step: '', steps: [] }), false)).toBe('Working…')
-    expect(devHostProgressLine(job(), true)).toBe(DEV_HOST_RESTARTING)
+  it('shows the step and its place, or why the progress is away', () => {
+    expect(devHostProgressLine(job(), null)).toBe('Pulling… (step 2 of 3)')
+    expect(devHostProgressLine(job({ step: '', steps: [] }), null)).toBe('Working…')
+    expect(devHostProgressLine(job(), 'restarting')).toBe(DEV_HOST_RESTARTING)
+    expect(devHostProgressLine(job(), 'reconnecting')).toBe(DEV_HOST_RECONNECTING)
+    expect(devHostProgressLine(job(), 'lost')).toBe(DEV_HOST_LOST)
   })
 
-  it('the restart gap is a failing read while a host job runs', () => {
-    expect(devHostRestarting(job(), true)).toBe(true)
-    expect(devHostRestarting(job(), false)).toBe(false)
-    expect(devHostRestarting(job({ state: 'failed' }), true)).toBe(false)
-    expect(devHostRestarting(null, true)).toBe(false)
+  it('names the wait during a running job only', () => {
+    const running = { job: null, host: host({ job: job() }) }
+    expect(devHostWait(running, false, 0)).toBeNull()
+    expect(devHostWait(running, true, 1000)).toBe('restarting')
+    expect(devHostWait(running, true, DEV_HOST_RECONNECT_CEILING_MS + 1)).toBe('lost')
+    const carry = { jobId: 'h1', since: NOW, reason: 'host-missing' as const, expired: false }
+    expect(devHostWait({ ...running, hostCarry: carry }, false, 0)).toBe('reconnecting')
+    expect(devHostWait({ ...running, hostCarry: { ...carry, expired: true } }, false, 0)).toBe(
+      'lost'
+    )
+    expect(
+      devHostWait({ job: null, host: host({ job: job({ state: 'failed' }) }) }, true, 0)
+    ).toBeNull()
+    expect(devHostWait(null, true, 0)).toBeNull()
   })
 })
 
@@ -293,6 +326,17 @@ describe('locks and polling', () => {
     expect(developmentViewPollInterval(null)).toBe(false)
   })
 
+  it('stops polling 3 minutes after the last good read, and once a wait expired', () => {
+    const running = { job: null, host: host({ job: job() }) }
+    expect(developmentViewPollInterval(running, NOW - 1000, NOW)).toBe(2000)
+    expect(developmentViewPollInterval(running, NOW - DEV_HOST_RECONNECT_CEILING_MS - 1, NOW)).toBe(
+      false
+    )
+    const expired = { jobId: 'h1', since: NOW, reason: 'host-missing' as const, expired: true }
+    expect(developmentViewPollInterval({ ...running, hostCarry: expired })).toBe(false)
+    expect(devHostActionsLocked({ ...running, hostCarry: expired })).toBe(false)
+  })
+
   it('a running host job that finishes is noticed once', () => {
     expect(devHostJobJustFinished(job(), job({ state: 'done' }))).toBe(true)
     expect(devHostJobJustFinished(job(), job({ state: 'failed' }))).toBe(true)
@@ -337,5 +381,69 @@ describe('devHostActionError', () => {
     expect(devHostActionError({ ok: false, error: 'Database unavailable' })).toBe(
       'The action could not start.'
     )
+  })
+})
+
+describe('carryDevHostJob', () => {
+  function view(h: DevHostView | null, extra: Partial<DevelopmentView> = {}): DevelopmentView {
+    return {
+      ok: true,
+      daemonBuild: { built: null, sourceFingerprint: 'fp', sourceChanged: false },
+      servers: [],
+      job: null,
+      pendingDaemonChanges: false,
+      host: h,
+      ...extra,
+    }
+  }
+  const running = view(host({ job: job() }))
+
+  it('passes the answer through when nothing was running', () => {
+    const fresh = view(null)
+    expect(carryDevHostJob(undefined, fresh, NOW)).toBe(fresh)
+    expect(carryDevHostJob(view(host()), fresh, NOW)).toBe(fresh)
+    expect(carryDevHostJob(view(host({ job: job({ state: 'done' }) })), fresh, NOW)).toBe(fresh)
+    expect(carryDevHostJob(running, null, NOW)).toBeNull()
+  })
+
+  it('an answer naming the job, or another running job, ends the wait', () => {
+    const same = view(host({ job: job({ state: 'done' }) }))
+    expect(carryDevHostJob(running, same, NOW)).toBe(same)
+    const other = view(host({ job: job({ id: 'h2' }) }))
+    expect(carryDevHostJob(running, other, NOW)).toBe(other)
+  })
+
+  it('keeps the running job while the restarted control plane has no host, up to 3 minutes', () => {
+    const first = carryDevHostJob(running, view(null), NOW)
+    expect(first?.host?.job).toEqual(job())
+    expect(first?.hostCarry).toEqual({
+      jobId: 'h1',
+      since: NOW,
+      reason: 'host-missing',
+      expired: false,
+    })
+    const later = carryDevHostJob(first, view(null), NOW + DEV_HOST_RECONNECT_CEILING_MS)
+    expect(later?.hostCarry).toMatchObject({ since: NOW, expired: false })
+    const expired = carryDevHostJob(later, view(null), NOW + DEV_HOST_RECONNECT_CEILING_MS + 1)
+    expect(expired?.hostCarry).toMatchObject({ expired: true })
+    expect(expired?.host?.job?.state).toBe('running')
+    const still = carryDevHostJob(expired, view(null), NOW + DEV_HOST_RECONNECT_CEILING_MS * 2)
+    expect(still?.hostCarry).toMatchObject({ expired: true })
+    const back = view(host())
+    expect(carryDevHostJob(still, back, NOW + DEV_HOST_RECONNECT_CEILING_MS * 3)).toBe(back)
+  })
+
+  it('keeps a job the daemon has not reported for up to 30 s, on the fresh parts', () => {
+    const stale = view(
+      host({ parts: [part({ behindBy: 2 })], job: job({ id: 'old', state: 'done' }) })
+    )
+    const kept = carryDevHostJob(running, stale, NOW)
+    expect(kept?.host?.job?.id).toBe('h1')
+    expect(kept?.host?.parts[0]?.behindBy).toBe(2)
+    expect(kept?.hostCarry).toMatchObject({ reason: 'job-missing', since: NOW })
+    const swap = carryDevHostJob(kept, view(null), NOW + 1000)
+    expect(swap?.hostCarry).toMatchObject({ reason: 'host-missing', since: NOW + 1000 })
+    const keptAgain = carryDevHostJob(running, stale, NOW)
+    expect(carryDevHostJob(keptAgain, stale, NOW + DEV_HOST_START_CEILING_MS + 1)).toBe(stale)
   })
 })
