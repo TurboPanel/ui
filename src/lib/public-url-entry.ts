@@ -26,6 +26,10 @@
  *   on a development surface. The panel does not know which it is talking to,
  *   and guessing wrong would hide a legitimate dev entry.
  *
+ * The self-hosted runtime (`selfHosted`) is stricter on both counts: its
+ * hostname box takes a bare hostname or IP only, so there is nothing to absorb
+ * and no scheme to choose.
+ *
  * Stored entries may also be **scheme-less** (`panel.lan`, `panel.lan:8443`) —
  * that is what the control plane persists for a bare host, and what a
  * `TURBOPANEL_PUBLIC_URLS` env value looks like. Those are parsed for display
@@ -68,9 +72,9 @@ export type PublicUrlAddResult =
 export const PUBLIC_URL_ENTRY_HINT =
   'Hostname or IP; leave the port blank for the scheme default. Paste a whole address and its scheme, port, and path are sorted out for you.'
 
-/** The add-row hint when the port is fixed and there is no port box. */
-export const PUBLIC_URL_FIXED_PORT_HINT =
-  'Hostname or IP. Paste a whole address and its scheme and path are sorted out for you.'
+/** The self-hosted add-row hint: no scheme picker and no port box. */
+export const PUBLIC_URL_SELF_HOSTED_HINT =
+  'Hostname or IP address only, like panel.example.com. It is served over https on port 8443.'
 
 const HOST_REQUIRED_ERROR = 'Enter a hostname, for example panel.example.com'
 const HOST_INVALID_ERROR = 'That is not a valid hostname.'
@@ -80,13 +84,13 @@ const SCHEME_ERROR = 'Only http and https addresses can be used.'
 const CREDENTIALS_ERROR = 'Remove the username and password from the address.'
 const PORT_ERROR = 'Port must be a number between 1 and 65535.'
 const DUPLICATE_ERROR = 'That address is already listed.'
-const FIXED_PORT_ERROR = 'Use port 8443 or leave the port off.'
+const HOST_ONLY_ERROR = 'Enter a hostname or IP address only, like panel.example.com.'
 
 /** HTTPS comparison uses the control-plane listener, not the scheme default. */
 const CONTROL_PLANE_HTTPS_PORT = '8443'
 
-/** The one port a self-hosted control plane is reached on, as the add row's `fixedPort`. */
-export const SELF_HOSTED_ENTRY_PORT = CONTROL_PLANE_HTTPS_PORT
+/** The one port a self-hosted control plane is reached on. */
+const SELF_HOSTED_ENTRY_PORT = CONTROL_PLANE_HTTPS_PORT
 
 function stripIpv6Brackets(host: string): string {
   return host.replace(/^\[/, '').replace(/\]$/, '')
@@ -187,30 +191,83 @@ function parseHostInput(input: string, fallbackScheme: PublicUrlScheme): HostPar
 }
 
 /**
- * How the add row treats the port. `fixedPort` is the self-hosted case: the
- * control plane is only ever reached on that port (it stores any https entry
- * as `:8443` whatever was typed), so there is no port box, the entry always
- * carries that port, and a pasted address naming another port is refused
- * rather than quietly moved.
+ * How the add row treats scheme and port. `selfHosted` is the self-hosted
+ * runtime: the control plane is only ever reached over https on 8443 (it
+ * stores any https entry as `:8443` whatever was typed and rejects plaintext
+ * http), so there is no scheme picker and no port box, and the entry is always
+ * `https://host:8443`. The hostname box takes a hostname or IP and nothing
+ * else: no scheme, port, path, user name or other characters, so there is no
+ * pasted address to reinterpret. The port is always 8443, so none is typed.
  */
-export type PublicUrlEntryOptions = { fixedPort?: string }
+export type PublicUrlEntryOptions = { selfHosted?: boolean }
+
+const DNS_LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/
+const IPV4_OCTET = /^(?:0|[1-9]\d{0,2})$/
+const MAX_DNS_NAME = 253
+
+/** The hostname box read as a host; `null` when it cannot be one (a port included). */
+type SelfHostedInput = { host: string; ipv6: boolean }
+
+function splitSelfHostedInput(raw: string): SelfHostedInput | null {
+  const bracketed = /^\[([^\]]*)\]$/.exec(raw)
+  if (bracketed) return { host: bracketed[1] ?? '', ipv6: true }
+  if (raw.startsWith('[')) return null
+  // Two or more colons can only be a bare IPv6 address; one colon means a port.
+  const colons = raw.split(':').length - 1
+  if (colons === 1) return null
+  if (colons > 1) return { host: raw, ipv6: true }
+  // A single trailing dot (the DNS root) is dropped: it names the same host.
+  return { host: raw.endsWith('.') ? raw.slice(0, -1) : raw, ipv6: false }
+}
+
+/**
+ * Letters, digits and hyphens in dot-separated labels, or a dotted IPv4
+ * address. A name whose last label is all digits is read as IPv4, as `URL`
+ * would, so it needs four decimal octets with no leading zeros.
+ */
+function isHostnameOrIpv4(host: string): boolean {
+  if (host.length > MAX_DNS_NAME) return false
+  const labels = host.split('.')
+  if (/^\d+$/.test(labels.at(-1) ?? '')) {
+    return (
+      labels.length === 4 && labels.every((octet) => IPV4_OCTET.test(octet) && Number(octet) <= 255)
+    )
+  }
+  return labels.every((label) => DNS_LABEL.test(label))
+}
+
+/** The host as it will be stored, or `null` when it is not a hostname or IP. */
+function normalizeSelfHostedHost(input: SelfHostedInput): string | null {
+  if (input.ipv6) {
+    if (!/^[0-9a-f:.]+$/.test(input.host)) return null
+    const url = parseUrl(`https://[${input.host}]`)
+    return url ? stripIpv6Brackets(url.hostname) : null
+  }
+  if (!isHostnameOrIpv4(input.host)) return null
+  // `URL` must read it back unchanged, or it would store a different host.
+  return parseUrl(`https://${input.host}`)?.hostname === input.host ? input.host : null
+}
+
+function buildSelfHostedEntry(text: string): PublicUrlEntryResult {
+  const raw = text.trim().toLowerCase()
+  if (!raw) return { ok: false, error: HOST_REQUIRED_ERROR }
+  const input = splitSelfHostedInput(raw)
+  const host = input ? normalizeSelfHostedHost(input) : null
+  if (!input || !host) return { ok: false, error: HOST_ONLY_ERROR }
+  if (host === 'localhost') return { ok: false, error: HOST_UNREACHABLE_ERROR }
+  const parts: PublicUrlParts = { scheme: 'https', host, port: SELF_HOSTED_ENTRY_PORT }
+  return { ok: true, value: formatPublicUrlEntry(parts), parts }
+}
 
 /** Compose the three add-row controls into one stored entry. */
 export function buildPublicUrlEntry(
   draft: PublicUrlDraft,
   options: PublicUrlEntryOptions = {}
 ): PublicUrlEntryResult {
+  if (options.selfHosted) return buildSelfHostedEntry(draft.host)
+
   const host = parseHostInput(draft.host, draft.scheme)
   if (!host.ok) return host
-
-  if (options.fixedPort) {
-    if (host.portFromHost && host.portFromHost !== options.fixedPort) {
-      return { ok: false, error: FIXED_PORT_ERROR }
-    }
-    host.url.port = options.fixedPort
-    const fixed = partsFromUrl(host.url, host.scheme)
-    return { ok: true, value: formatPublicUrlEntry(fixed), parts: fixed }
-  }
 
   // A port pasted into the hostname box is part of the address the operator
   // meant; the port box only fills in when the paste carried none.
