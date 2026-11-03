@@ -164,6 +164,7 @@ export const APPLY_CAUSE_TEXT: Readonly<Record<IngressApplyCause, string>> = {
 const ACCOUNT_CHECK_LABELS: Readonly<Record<string, string>> = {
   'token-shape': 'Token Format',
   'token-verify': 'Token Valid',
+  'token-policies': 'Token Permissions',
   'scope-tunnels': 'Tunnel Scope',
   'scope-dns': 'DNS Scope',
   'token-expiry': 'Token Expiry',

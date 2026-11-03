@@ -129,7 +129,7 @@ export function AddAccountForm() {
       />
       <TextField
         label="Token"
-        hint="An API token with Cloudflare Tunnel edit and DNS edit on the zones this control plane uses."
+        hint="An API token with these permissions: Account › Cloudflare Tunnel › Edit; Account › Account API Tokens › Read; Zone (or Account) › DNS › Edit."
         value={token}
         onChangeText={(value) => {
           setToken(value)
