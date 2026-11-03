@@ -98,12 +98,15 @@ export function TlsAcmeOptIn({
 }>) {
   const session = useSessionQuery()
   const [draftEmail, setDraftEmail] = useState<string | null>(null)
-  const [accepted, setAccepted] = useState(false)
+  // The tick counts only for the exact agreement it was given on: when a
+  // refresh brings a newer one, the box is clear again.
+  const [acceptedFor, setAcceptedFor] = useState<string | null>(null)
+  const accepted = termsUrl !== null && acceptedFor === termsUrl
   const { mutation, error, setError } = useSaveTlsSettings(
     orgId,
     () => {
       setDraftEmail(null)
-      setAccepted(false)
+      setAcceptedFor(null)
     },
     "Could not turn on Let's Encrypt"
   )
@@ -133,7 +136,7 @@ export function TlsAcmeOptIn({
           accepted={accepted}
           disabled={disabled || mutation.isPending}
           onToggle={() => {
-            setAccepted((current) => !current)
+            setAcceptedFor(accepted ? null : termsUrl)
             setError(null)
           }}
         />
@@ -194,10 +197,11 @@ export function TlsAcmeTermsRenewal({
   changed: boolean
   disabled: boolean
 }>) {
-  const [accepted, setAccepted] = useState(false)
+  const [acceptedFor, setAcceptedFor] = useState<string | null>(null)
+  const accepted = acceptedFor === termsUrl
   const { mutation, error, setError } = useSaveTlsSettings(
     orgId,
-    () => setAccepted(false),
+    () => setAcceptedFor(null),
     'Could not record the acceptance'
   )
   return (
@@ -215,7 +219,7 @@ export function TlsAcmeTermsRenewal({
         accepted={accepted}
         disabled={disabled || mutation.isPending}
         onToggle={() => {
-          setAccepted((current) => !current)
+          setAcceptedFor(accepted ? null : termsUrl)
           setError(null)
         }}
       />

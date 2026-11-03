@@ -372,7 +372,10 @@ export function TlsOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
         termsChanged={tlsSettingsQuery.data?.acmeTermsChanged ?? false}
         acmeEnabled={acmeEnabled}
         acmeError={acmeError}
-        settingsError={tlsSettingsQuery.isError ? tlsSettingsQuery.error : null}
+        // A failed refresh with settings already shown keeps the form (and what was typed).
+        settingsError={
+          tlsSettingsQuery.isError && !tlsSettingsQuery.data ? tlsSettingsQuery.error : null
+        }
         settingsLoading={tlsSettingsQuery.isLoading}
         pending={acmeMutation.isPending}
         onToggle={onToggleAcme}

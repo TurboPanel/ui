@@ -174,6 +174,22 @@ describe('TlsAcmeOptIn', () => {
     expect(state.invalidate).toHaveBeenCalledWith({ queryKey: ['tls-settings'] })
   })
 
+  it('clears the tick when a newer agreement replaces the one ticked', () => {
+    const view = optIn()
+    accept()
+    expect(turnOn().disabled).toBe(false)
+    view.rerender(
+      <TlsAcmeOptIn
+        orgId="o1"
+        savedEmail={null}
+        termsUrl="https://letsencrypt.org/documents/LE-SA-v1.6.pdf"
+        termsAcceptedAt={null}
+        disabled={false}
+      />
+    )
+    expect(turnOn().disabled).toBe(true)
+  })
+
   it('stays off while the settings are not loaded', () => {
     optIn({ disabled: true })
     accept()
