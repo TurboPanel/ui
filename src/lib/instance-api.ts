@@ -6015,6 +6015,77 @@ export async function checkForUpdates(consoleCommit?: string): Promise<InstanceU
   return await adminJson(`${ADMIN_API}/instance/updates/check${query}`, { method: 'POST' })
 }
 
+/** What Update Now answers when it went through: a started run, or nothing to do. */
+export type UpdateNowResult = { ok: true; runId: string } | { ok: true; upToDate: true }
+
+/** Machine codes Update Now refuses with; branch on these, never the sentence. */
+export type UpdateNowRefusalCode = 'run_active' | 'paused' | 'development' | 'update_blocked'
+
+/**
+ * Update Now refused (409 `run_active`, `paused`, `update_blocked`; 403
+ * `development`). `message` is the control plane's sentence; `activeRunId`
+ * names the run already going.
+ */
+export class UpdateNowRefusedError extends Error {
+  readonly code: UpdateNowRefusalCode
+  readonly serverMessage: string | null
+  readonly activeRunId: string | null
+
+  constructor(
+    message: string,
+    code: UpdateNowRefusalCode,
+    serverMessage: string | null,
+    activeRunId: string | null
+  ) {
+    super(message)
+    this.name = 'UpdateNowRefusedError'
+    this.code = code
+    this.serverMessage = serverMessage
+    this.activeRunId = activeRunId
+  }
+}
+
+const UPDATE_NOW_REFUSAL_CODES: readonly string[] = [
+  'run_active',
+  'paused',
+  'development',
+  'update_blocked',
+]
+
+/**
+ * Update Now (superadmin): run the update check at once and, when something
+ * is behind, start the update right away in the usual order. 202
+ * `{ ok, runId }` or 200 `{ ok, upToDate: true }`; a refusal with a known code
+ * throws `UpdateNowRefusedError`, anything else a plain error.
+ */
+export async function startUpdateNow(): Promise<UpdateNowResult> {
+  const path = `${ADMIN_API}/instance/updates/now`
+  const response = await adminRequest(path, { method: 'POST' })
+  const body = (await response.json().catch(() => null)) as {
+    ok?: boolean
+    error?: unknown
+    message?: unknown
+    activeRunId?: unknown
+    runId?: unknown
+    upToDate?: unknown
+  } | null
+  if (response.ok && body?.ok === true) {
+    if (typeof body.runId === 'string') return { ok: true, runId: body.runId }
+    return { ok: true, upToDate: true }
+  }
+  const code = typeof body?.error === 'string' ? body.error : undefined
+  const detail = formatFetchFailureDetail(response.status, code)
+  if (code && UPDATE_NOW_REFUSAL_CODES.includes(code)) {
+    throw new UpdateNowRefusedError(
+      `${path} failed: ${detail}`,
+      code as UpdateNowRefusalCode,
+      typeof body?.message === 'string' ? body.message : null,
+      typeof body?.activeRunId === 'string' ? body.activeRunId : null
+    )
+  }
+  throw new Error(`${path} failed: ${detail}`)
+}
+
 export async function fetchUpgradeActiveRun(): Promise<UpgradeActiveRunResponse> {
   return await apiFetch(`${ADMIN_API}/instance/updates/run`)
 }

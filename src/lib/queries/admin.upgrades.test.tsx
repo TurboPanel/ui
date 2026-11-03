@@ -16,6 +16,7 @@ import {
   useUpgradeRunServers,
   useUpgradeServersPage,
   useUpgradeSettings,
+  useUpdateNow,
 } from './admin'
 
 const api = vi.hoisted(() => ({
@@ -28,6 +29,7 @@ const api = vi.hoisted(() => ({
   checkForUpdates: vi.fn(),
   pauseUpdates: vi.fn(),
   resumeUpdates: vi.fn(),
+  startUpdateNow: vi.fn(),
   fetchDevelopmentUpdates: vi.fn(),
   pushDevelopmentDaemon: vi.fn(),
 }))
@@ -194,6 +196,24 @@ describe('managed upgrade admin queries', () => {
       value: { updatesPaused: false },
     })
     expect(api.resumeUpdates).toHaveBeenCalledTimes(1)
+    expect(invalidate).toHaveBeenLastCalledWith({ queryKey: queryKeys.admin.instanceUpdates })
+  })
+
+  it('Update Now reads the update status and run again, started or refused', async () => {
+    const client = createAppQueryClient()
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
+    api.startUpdateNow.mockResolvedValueOnce({ ok: true, runId: 'run-7' })
+    const now = renderHook(() => useUpdateNow(), { wrapper: createWrapper(client) })
+    await expect(now.result.current.run(undefined)).resolves.toEqual({
+      ok: true,
+      value: { ok: true, runId: 'run-7' },
+    })
+    expect(invalidate).toHaveBeenLastCalledWith({ queryKey: queryKeys.admin.instanceUpdates })
+
+    invalidate.mockClear()
+    // A refusal (an update already going) still refreshes, so the run shows.
+    api.startUpdateNow.mockRejectedValueOnce(new Error('HTTP 409: run_active'))
+    await expect(now.result.current.run(undefined)).resolves.toMatchObject({ ok: false })
     expect(invalidate).toHaveBeenLastCalledWith({ queryKey: queryKeys.admin.instanceUpdates })
   })
 

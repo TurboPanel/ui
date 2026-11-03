@@ -86,8 +86,14 @@ const queries = vi.hoisted(() => ({
   usePauseUpdates: vi.fn(),
   useResumeUpdates: vi.fn(),
   useCheckForUpdates: vi.fn(),
+  useUpdateNow: vi.fn(),
 }))
 vi.mock('@/lib/queries/admin', () => queries)
+const auth = vi.hoisted(() => ({ superadmin: false }))
+vi.mock('@/lib/auth-context', () => ({
+  useAuth: () => ({ session: { superadmin: auth.superadmin } }),
+  isSuperadminSession: (session: { superadmin: boolean } | null) => session?.superadmin === true,
+}))
 
 const TARGET = {
   commit: 'cp-new',
@@ -131,6 +137,8 @@ beforeEach(() => {
   queries.usePauseUpdates.mockReturnValue({ run: vi.fn(), isPending: false })
   queries.useResumeUpdates.mockReturnValue({ run: vi.fn(), isPending: false })
   queries.useCheckForUpdates.mockReturnValue({ run: vi.fn(), isPending: false })
+  queries.useUpdateNow.mockReturnValue({ run: vi.fn(), isPending: false })
+  auth.superadmin = false
 })
 
 afterEach(() => {
@@ -139,7 +147,14 @@ afterEach(() => {
 })
 
 describe('SelfHostedUpdates', () => {
-  it('has no Update TurboPanel, Update Now or Cancel button; only Check Now and Pause All Updates', () => {
+  it('offers Update Now beside Check Now to a superadmin', () => {
+    auth.superadmin = true
+    render(<SelfHostedUpdates data={DATA} />)
+    expect(screen.getByRole('button', { name: 'Update Now' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Check Now' })).toBeTruthy()
+  })
+
+  it('has no Update TurboPanel, Update Now or Cancel button for a plain administrator; only Check Now and Pause All Updates', () => {
     render(<SelfHostedUpdates data={DATA} />)
     for (const name of ['Update TurboPanel', 'Update now', 'Update Now', 'Cancel update']) {
       expect(screen.queryByRole('button', { name })).toBeNull()

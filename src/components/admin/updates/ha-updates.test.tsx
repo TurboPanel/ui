@@ -85,10 +85,14 @@ const {
   usePauseUpdates,
   useResumeUpdates,
   useCheckForUpdates,
+  useUpdateNow,
+  auth,
   pauseRun,
   resumeRun,
   checkRun,
 } = vi.hoisted(() => ({
+  useUpdateNow: vi.fn(),
+  auth: { superadmin: false },
   useUpgradeActiveRun: vi.fn(),
   useUpgradeHistory: vi.fn(),
   useUpgradeServersPage: vi.fn(),
@@ -111,6 +115,11 @@ vi.mock('@/lib/queries/admin', () => ({
   usePauseUpdates,
   useResumeUpdates,
   useCheckForUpdates,
+  useUpdateNow,
+}))
+vi.mock('@/lib/auth-context', () => ({
+  useAuth: () => ({ session: { superadmin: auth.superadmin } }),
+  isSuperadminSession: (session: { superadmin: boolean } | null) => session?.superadmin === true,
 }))
 
 const DATA: InstanceUpdates = {
@@ -157,6 +166,8 @@ function idleQueries() {
   useResumeUpdates.mockReturnValue({ run: resumeRun, isPending: false })
   checkRun.mockResolvedValue({ ok: true, value: DATA })
   useCheckForUpdates.mockReturnValue({ run: checkRun, isPending: false })
+  useUpdateNow.mockReturnValue({ run: vi.fn(), isPending: false })
+  auth.superadmin = false
 }
 
 afterEach(() => {
@@ -183,6 +194,17 @@ describe('HighAvailabilityUpdates', () => {
     }
     expect(screen.queryByText(/Auto-update/)).toBeNull()
     expect(screen.getByTestId('settings-card')).toBeTruthy()
+  })
+
+  it('offers Update Now to a superadmin, disabled while a run is going', () => {
+    auth.superadmin = true
+    const { rerender } = render(<HighAvailabilityUpdates data={DATA} />)
+    const button = screen.getByRole('button', { name: 'Update Now' }) as HTMLButtonElement
+    expect(button.disabled).toBe(false)
+    rerender(<HighAvailabilityUpdates data={{ ...DATA, activeRunId: 'run-1' }} />)
+    expect((screen.getByRole('button', { name: 'Update Now' }) as HTMLButtonElement).disabled).toBe(
+      true
+    )
   })
 
   it('says updates run on their own and when the next check is', () => {
