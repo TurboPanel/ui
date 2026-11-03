@@ -16,7 +16,7 @@ import {
   PASTED_TOKEN_HINT,
   SAVE_FIRST_HINT,
 } from './connection-mode-cell'
-import { ModePublicPortCell, SELF_HOSTED_PORT_HELP } from './hostname-ingress-cells'
+import { ModePublicPortCell } from './hostname-ingress-cells'
 
 const update = vi.hoisted(() => ({ run: vi.fn(), isPending: false }))
 
@@ -359,7 +359,7 @@ describe('ModePublicPortCell', () => {
         />
       )
       expect(screen.getByText('8443')).toBeTruthy()
-      expect(screen.getByText(SELF_HOSTED_PORT_HELP)).toBeTruthy()
+      expect(screen.queryByText(/always reached on port/)).toBeNull()
       expect(screen.queryByLabelText('Public Port')).toBeNull()
       expect(screen.queryAllByRole('option')).toHaveLength(0)
       cleanup()

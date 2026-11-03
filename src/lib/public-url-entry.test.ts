@@ -10,6 +10,7 @@ import {
   PUBLIC_URL_ENTRY_HINT,
   PUBLIC_URL_SCHEMES,
   samePublicUrlSet,
+  SELF_HOSTED_ENTRY_PORT,
 } from '@/lib/public-url-entry'
 
 describe('buildPublicUrlEntry', () => {
@@ -294,5 +295,43 @@ describe('parsePublicPort', () => {
     for (const bad of ['', '0', '65536', '12.5', 'abc', '-1']) {
       expect(parsePublicPort(bad)).toBeNull()
     }
+  })
+})
+
+describe('buildPublicUrlEntry with a fixed port (self-hosted)', () => {
+  const fixed = { fixedPort: SELF_HOSTED_ENTRY_PORT }
+
+  it('always stores the fixed port and ignores the port box', () => {
+    expect(
+      buildPublicUrlEntry({ scheme: 'https', host: 'turbopanel.dev', port: '' }, fixed)
+    ).toMatchObject({ ok: true, value: 'https://turbopanel.dev:8443' })
+    expect(
+      buildPublicUrlEntry({ scheme: 'https', host: 'turbopanel.dev', port: '9000' }, fixed)
+    ).toMatchObject({ ok: true, value: 'https://turbopanel.dev:8443' })
+  })
+
+  it('accepts a pasted address that already names the fixed port, and drops its path', () => {
+    expect(
+      buildPublicUrlEntry(
+        { scheme: 'https', host: 'https://studio.lan:8443/admin/access', port: '' },
+        fixed
+      )
+    ).toMatchObject({ ok: true, value: 'https://studio.lan:8443' })
+  })
+
+  it('refuses a pasted address that names another port', () => {
+    expect(
+      buildPublicUrlEntry({ scheme: 'https', host: 'studio.lan:9443', port: '' }, fixed)
+    ).toEqual({ ok: false, error: 'Use port 8443 or leave the port off.' })
+  })
+
+  it('treats a portless draft and a saved :8443 row as the same address', () => {
+    expect(
+      addPublicUrlEntry(
+        ['https://turbopanel.dev:8443'],
+        { scheme: 'https', host: 'turbopanel.dev', port: '' },
+        fixed
+      )
+    ).toEqual({ ok: false, error: 'That address is already listed.' })
   })
 })
