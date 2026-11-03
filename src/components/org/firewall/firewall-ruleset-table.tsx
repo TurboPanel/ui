@@ -226,7 +226,7 @@ export function FirewallRulesetTable({
           <Button label="Clear Filters" size="sm" onPress={() => setFilter(EMPTY_RULESET_FILTER)} />
         ) : null}
       </View>
-      <DataTable columns={COLUMN_LIST} minWidth={TABLE_MIN_WIDTH} bordered>
+      <DataTable columns={COLUMN_LIST} minWidth={TABLE_MIN_WIDTH}>
         {visible.length === 0 ? (
           <DataTableEmpty>
             {rows.length === 0

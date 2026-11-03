@@ -190,8 +190,8 @@ function RulesetViews({ rendered }: Readonly<{ rendered: { v4: string; v6: strin
         <FirewallRulesetTable rendered={rendered} />
       ) : (
         <>
-          <CodeBlock title="Rendered ruleset (IPv4)" text={rendered.v4} />
-          {rendered.v6 ? <CodeBlock title="Rendered ruleset (IPv6)" text={rendered.v6} /> : null}
+          <CodeBlock title="IPv4" text={rendered.v4} />
+          {rendered.v6 ? <CodeBlock title="IPv6" text={rendered.v6} /> : null}
         </>
       )}
     </View>
