@@ -5699,6 +5699,14 @@ export type InstanceUpdates = {
   runtime?: 'deno' | 'workers'
   /** When true (Workers), fleet updates are platform-managed — no local Upgrade control. */
   updatesManaged?: boolean
+  /**
+   * A development install: the control plane, the web interface and the
+   * co-located daemon run from the developer's checkouts. Nothing updates on
+   * its own; Admin > Updates shows the build-and-push view instead
+   * (`GET …/updates/development`). Missing on a release install or an older
+   * control plane, which reads as false.
+   */
+  development?: boolean
   /** Present once the managed upgrade coordinator is mounted. */
   managedUpgrade?: boolean
   /**
@@ -6108,6 +6116,89 @@ export async function saveUpgradeSettings(
     method: 'PUT',
     body: JSON.stringify(settings),
   })
+}
+
+/** The daemon build made from the developer's checkout, as the control plane last made it. */
+export type DevelopmentDaemonBuilt = {
+  commit: string | null
+  buildId: string | null
+  builtAt: string | null
+  source: string | null
+}
+
+/** One remote server (not the one the control plane runs on) in a development install. */
+export type DevelopmentServer = {
+  id: string
+  name: string | null
+  connected: boolean
+  daemonVersion: string | null
+  daemonCommit: string | null
+  /** The server runs the last daemon build pushed from the checkout. */
+  onLatestBuild: boolean
+}
+
+export type DevelopmentJobState = 'building' | 'pushing' | 'done' | 'failed'
+
+/** One build-and-push job: the build from the checkout, then the push to each server. */
+export type DevelopmentJob = {
+  id: string
+  state: DevelopmentJobState
+  startedAt: string | null
+  endedAt: string | null
+  message: string | null
+  servers: {
+    id: string
+    name: string | null
+    ok: boolean
+    skipped: boolean
+    error: string | null
+  }[]
+}
+
+/**
+ * `GET /api/admin/v1/instance/updates/development`, which exists only on a
+ * development install (404 elsewhere).
+ */
+export type DevelopmentUpdates = {
+  ok: true
+  daemonBuild: {
+    built: DevelopmentDaemonBuilt | null
+    /** A fingerprint of the daemon checkout as it is now. */
+    sourceFingerprint: string
+    /** The checkout changed since the last build. */
+    sourceChanged: boolean
+  }
+  servers: DevelopmentServer[]
+  job: DevelopmentJob | null
+  /** Some connected server does not have the daemon changes in the checkout yet. */
+  pendingDaemonChanges: boolean
+}
+
+/** The development build-and-push view, or null when this is not a development install (404). */
+export async function fetchDevelopmentUpdates(): Promise<DevelopmentUpdates | null> {
+  try {
+    return await apiFetch(`${ADMIN_API}/instance/updates/development`)
+  } catch (err) {
+    if (isHttpStatusError(err, 404)) return null
+    throw err
+  }
+}
+
+/** What a push answers: the job it started (202), or the 409 `job_running` refusal while one runs. */
+export type DevelopmentPushResult = { ok: true; job: DevelopmentJob } | { ok: false; error: string }
+
+/**
+ * Build the daemon from the checkout when it changed (or always with
+ * `force`), then push it to every connected server.
+ */
+export async function pushDevelopmentDaemon(
+  body: Readonly<{ force?: boolean }> = {}
+): Promise<DevelopmentPushResult> {
+  return await adminAnswer(
+    `${ADMIN_API}/instance/updates/development/push`,
+    { method: 'POST', body: JSON.stringify(body) },
+    [409]
+  )
 }
 
 /** What pause and resume answer: the paused state after the change. */

@@ -1,4 +1,5 @@
 import { adminAreaHref } from '@/lib/admin-navigation'
+import { isDevelopmentInstall } from '@/lib/development-updates'
 import type { InstanceUpdates } from '@/lib/instance-api'
 import type { ConsoleBuild } from '@/lib/instance-updates'
 import { updateOffered } from '@/lib/update-status'
@@ -16,11 +17,13 @@ import { updateOffered } from '@/lib/update-status'
  * update system: a connected daemon is behind its channel build, and updates
  * are paused by an admin. No control plane sends them yet (the fields are
  * optional on `InstanceUpdates`); this is the one place that reads them, so
- * the panel work only has to fill these fields.
+ * the panel work only has to fill these fields. A development install never
+ * updates on its own, so neither signal lights there.
  */
 export function fleetUpdateSignals(
   updates: InstanceUpdates | null | undefined
 ): Readonly<{ daemonsBehind: boolean; paused: boolean }> {
+  if (isDevelopmentInstall(updates)) return { daemonsBehind: false, paused: false }
   return {
     daemonsBehind: updates?.daemonsBehind === true,
     paused: updates?.updatesPaused === true,
@@ -34,15 +37,21 @@ export function fleetUpdateSignals(
  * same offer the update banner makes), or, on both editions, any connected
  * daemon is behind ({@link fleetUpdateSignals}). A waiting update does not
  * count while an update run is already going.
+ *
+ * On a development install none of that applies: only `developmentPending`
+ * (some server lacks the checkout's daemon changes) counts.
  */
 export function instanceAdminUpdatePending(
   input: Readonly<{
     updates: InstanceUpdates | null | undefined
     activeRun: boolean
     consoleBuild: ConsoleBuild | null
+    /** Development installs only: `pendingDaemonChanges` from the development view. */
+    developmentPending?: boolean
   }>
 ): boolean {
   if (!input.updates) return false
+  if (isDevelopmentInstall(input.updates)) return input.developmentPending === true
   const signals = fleetUpdateSignals(input.updates)
   if (signals.paused) return true
   if (input.activeRun) return false

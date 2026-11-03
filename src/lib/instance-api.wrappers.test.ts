@@ -16,6 +16,8 @@ import {
   fetchUpgradeServersPage,
   fetchUpgradeSettings,
   checkForUpdates,
+  fetchDevelopmentUpdates,
+  pushDevelopmentDaemon,
   markNotificationsRead,
   pauseUpdates,
   resumeUpdates,
@@ -139,6 +141,34 @@ describe('instance-api upgrade, notification and compose-gated-field wrappers', 
     await resumeUpdates()
     expect(urlOf(3)).toMatch(/\/instance\/updates\/resume$/)
     for (const i of [2, 3]) expect(initOf(i)).toMatchObject({ method: 'POST' })
+  })
+
+  it('the development view is read from its route, and a 404 means not a development install', async () => {
+    const view = { ok: true, servers: [], job: null, pendingDaemonChanges: false }
+    fetchMock.mockResolvedValueOnce(jsonResponse(view))
+    await expect(fetchDevelopmentUpdates()).resolves.toEqual(view)
+    expect(urlOf(0)).toMatch(/\/instance\/updates\/development$/)
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'not_found' }, 404))
+    await expect(fetchDevelopmentUpdates()).resolves.toBeNull()
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'broken' }, 500))
+    await expect(fetchDevelopmentUpdates()).rejects.toThrow()
+  })
+
+  it('a push posts its body and hands back a running-job refusal', async () => {
+    const job = { id: 'j1', state: 'building' }
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, job }, 202))
+    await expect(pushDevelopmentDaemon({ force: true })).resolves.toEqual({ ok: true, job })
+    expect(urlOf(0)).toMatch(/\/instance\/updates\/development\/push$/)
+    expect(initOf(0)).toMatchObject({ method: 'POST', body: JSON.stringify({ force: true }) })
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: false, error: 'job_running' }, 409))
+    await expect(pushDevelopmentDaemon()).resolves.toEqual({ ok: false, error: 'job_running' })
+    expect(initOf(1)).toMatchObject({ body: '{}' })
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'broken' }, 500))
+    await expect(pushDevelopmentDaemon()).rejects.toThrow()
   })
 
   it('Check Now posts only to the check route and answers the status body', async () => {

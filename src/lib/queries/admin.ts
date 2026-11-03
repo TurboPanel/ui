@@ -15,6 +15,9 @@ import {
   fetchUpgradeServersPage,
   fetchUpgradeSettings,
   checkForUpdates,
+  fetchDevelopmentUpdates,
+  pushDevelopmentDaemon,
+  type DevelopmentUpdates,
   pauseUpdates,
   resumeUpdates,
   saveUpgradeSettings,
@@ -81,6 +84,7 @@ import {
   isControlPlaneRestartError,
   waitForControlPlaneRecovery,
 } from '@/lib/control-plane-recovery'
+import { developmentJobJustFinished, developmentPollInterval } from '@/lib/development-updates'
 import { getActiveOrganizationId } from '@/lib/org-context'
 import { isManagedUpgradeApiMissing } from '@/lib/upgrade-api'
 import { isUpgradeRunActive, UPGRADE_RUN_POLL_MS } from '@/lib/upgrade-run-poll'
@@ -597,6 +601,54 @@ export function usePauseUpdates() {
 
 export function useResumeUpdates() {
   return usePauseToggle(resumeUpdates)
+}
+
+/**
+ * The development build-and-push view. Read only on a development install
+ * (`enabled` follows `InstanceUpdates.development`); a 404 reads as null.
+ * Polls every 2 s while a job builds or pushes, and when that job finishes
+ * the whole `instance-updates` prefix is read again once.
+ */
+export function useDevelopmentUpdates(options?: Readonly<{ enabled?: boolean }>) {
+  const queryClient = useQueryClient()
+  const query = useQuery({
+    queryKey: queryKeys.admin.developmentUpdates,
+    queryFn: fetchDevelopmentUpdates,
+    enabled: options?.enabled ?? true,
+    refetchInterval: (state) => developmentPollInterval(state.state.data),
+  })
+  const job = query.data?.job ?? null
+  const lastJob = useRef<DevelopmentUpdates['job']>(null)
+  useEffect(() => {
+    const previous = lastJob.current
+    lastJob.current = job
+    if (developmentJobJustFinished(previous, job)) {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.admin.instanceUpdates })
+    }
+  }, [job, queryClient])
+  return query
+}
+
+/**
+ * Build the daemon from the checkout and push it to the connected servers.
+ * The started job goes into the development cache so polling starts at once;
+ * a 409 `job_running` answers `{ ok: false }` and just reads the view again.
+ */
+export function usePushDevelopmentDaemon() {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (body: Readonly<{ force?: boolean }> | undefined) =>
+      pushDevelopmentDaemon(body ?? {}),
+    onSuccess: async (answer) => {
+      if (answer.ok) {
+        queryClient.setQueryData<DevelopmentUpdates | null>(
+          queryKeys.admin.developmentUpdates,
+          (current) => (current ? { ...current, job: answer.job } : current)
+        )
+      }
+      await queryClient.invalidateQueries({ queryKey: queryKeys.admin.developmentUpdates })
+    },
+  })
 }
 
 /** Capability gate. `staleTime` and no interval — this must not be polled. */
