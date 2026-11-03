@@ -6294,6 +6294,85 @@ export type DevelopmentUpdates = {
   job: DevelopmentJob | null
   /** Some connected server does not have the daemon changes in the checkout yet. */
   pendingDaemonChanges: boolean
+  /**
+   * The checkouts on this server as the co-located daemon sees them, plus the
+   * control plane's pending migration count. Null when that daemon is offline
+   * or too old to report it; missing on an older control plane.
+   */
+  host?: DevHostView | null
+}
+
+/** Which development checkout a {@link DevHostPart} describes. A newer daemon may send others. */
+export type DevHostPartName = 'daemon' | 'control-plane' | 'web-interface' | 'website'
+
+/** How one changed path is classed. Only `content` blocks a pull. */
+export type DevHostDirtyKind = 'content' | 'mode' | 'generated' | 'untracked' | 'runtime'
+
+/** Local changes in one checkout (`kinds` is capped by the daemon). */
+export type DevHostDirty = {
+  files: number
+  blocking: boolean
+  kinds: { path: string; kind: DevHostDirtyKind }[]
+}
+
+/** What one checkout still needs before its new code runs. */
+export type DevHostSetupNeeded = {
+  /** The lockfile is newer than the installed packages. */
+  install?: boolean
+  /** Shipped migrations not yet applied (filled by the control plane). */
+  migrate?: { pending: number }
+}
+
+/** One development checkout and the system unit that runs it. */
+export type DevHostPart = {
+  name: DevHostPartName
+  unit: string
+  branch: string
+  onTrunk: boolean
+  headCommit: string
+  /** The commit the running process started from; null when it hot reloads. */
+  runningCommit: string | null
+  /** Commits on `origin/trunk` the checkout does not have yet. */
+  behindBy: number
+  dirty: DevHostDirty
+  restartNeeded: boolean
+  setupNeeded: DevHostSetupNeeded
+  active: boolean
+  /** Why the last pull skipped this checkout, when it did. */
+  blockedReason?: string
+}
+
+export type DevHostAction = 'update' | 'restart'
+
+/** One step of a {@link DevHostJob}. Names: fetch, pull, install, migrate, restart-*. */
+export type DevHostJobStep = {
+  name: string
+  state: 'pending' | 'running' | 'done' | 'failed' | 'skipped'
+  detail?: string
+}
+
+/** The current or last Update and Restart / Restart Only job, as the daemon keeps it. */
+export type DevHostJob = {
+  id: string
+  action: DevHostAction
+  state: 'running' | 'done' | 'failed'
+  /** The step running now, or the last one that ran. */
+  step: string
+  steps: DevHostJobStep[]
+  startedAt: string
+  endedAt: string | null
+  /** Last output lines of a failed step. */
+  logTail: string[]
+}
+
+/** The `host` block of `GET …/updates/development`. */
+export type DevHostView = {
+  parts: DevHostPart[]
+  /** Last fetch of `origin/trunk`; null before the first one. */
+  lastFetchAt: string | null
+  job: DevHostJob | null
+  /** Shipped migrations the database has not applied; null when it cannot be read. */
+  migrate: { pending: number } | null
 }
 
 /** The development build-and-push view, or null when this is not a development install (404). */
@@ -6320,6 +6399,30 @@ export async function pushDevelopmentDaemon(
     `${ADMIN_API}/instance/updates/development/push`,
     { method: 'POST', body: JSON.stringify(body) },
     [409]
+  )
+}
+
+/**
+ * What a host action answers: the started job (202), 409 `job_running` while
+ * a host job or a build and push runs, or 503 `daemon_unavailable` (with an
+ * optional `reason`, such as `timeout` or `not_development`).
+ */
+export type DevHostActionResult =
+  | { ok: true; job: { id: string; action: DevHostAction } }
+  | { ok: false; error: string; reason?: string }
+
+/**
+ * Update and Restart (`update`: pull trunk where it is safe, install,
+ * migrate with a backup first, restart) or Restart Only (`restart`), run by
+ * the daemon on this server. Superadmin only.
+ */
+export async function startDevelopmentHostAction(
+  action: DevHostAction
+): Promise<DevHostActionResult> {
+  return await adminAnswer(
+    `${ADMIN_API}/instance/updates/development/host/${action}`,
+    { method: 'POST', body: JSON.stringify({}) },
+    [409, 503]
   )
 }
 

@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DevelopmentUpdates as DevelopmentView, InstanceUpdates } from '@/lib/instance-api'
@@ -9,6 +9,7 @@ type MockProps = {
   label?: string
   title?: string
   disabled?: boolean
+  onPress?: () => void
   children?: ReactNode
 }
 
@@ -21,7 +22,7 @@ vi.mock(
 vi.mock('@/components/ui', () => ({
   Badge: (props: MockProps) => <span>{props.label}</span>,
   Button: (props: MockProps) => (
-    <button type="button" disabled={props.disabled}>
+    <button type="button" disabled={props.disabled} onClick={props.onPress}>
       {props.label}
     </button>
   ),
@@ -154,6 +155,43 @@ describe('DevelopmentUpdates', () => {
     expect(button.disabled).toBe(true)
     expect(screen.getByText('Pushing…')).toBeTruthy()
     expect(screen.getByText('timed out')).toBeTruthy()
+  })
+
+  it('disables the push while an update and restart runs on this server', () => {
+    queries.useDevelopmentUpdates.mockReturnValue({
+      data: view({
+        host: {
+          parts: [],
+          lastFetchAt: null,
+          migrate: null,
+          job: {
+            id: 'h1',
+            action: 'update',
+            state: 'running',
+            step: 'pull',
+            steps: [],
+            startedAt: '2026-11-03T12:00:00Z',
+            endedAt: null,
+            logTail: [],
+          },
+        },
+      }),
+      isLoading: false,
+    })
+    render(<DevelopmentUpdates data={DATA} />)
+    const button = screen.getByRole('button', { name: 'Push Daemon' }) as HTMLButtonElement
+    expect(button.disabled).toBe(true)
+  })
+
+  it('says either job may hold a refused push back', async () => {
+    const run = vi.fn().mockResolvedValue({ ok: true, value: { ok: false, error: 'job_running' } })
+    queries.usePushDevelopmentDaemon.mockReturnValue({ run, isPending: false })
+    queries.useDevelopmentUpdates.mockReturnValue({ data: view(), isLoading: false })
+    render(<DevelopmentUpdates data={DATA} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Push Daemon' }))
+    expect(
+      await screen.findByText('A build and push or an update and restart is already running.')
+    ).toBeTruthy()
   })
 
   it('shows a plain admin the versions but not the build and push card', () => {

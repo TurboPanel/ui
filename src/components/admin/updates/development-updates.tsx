@@ -20,7 +20,6 @@ import {
   DEVELOPMENT_SUPERADMIN_ONLY,
   RUNNING_FROM_CHECKOUT,
   developmentDaemonLabel,
-  developmentJobRunning,
   developmentJobServerResult,
   developmentJobView,
   developmentPushLabel,
@@ -28,6 +27,7 @@ import {
   runningFromCheckoutLine,
 } from '@/lib/development-updates'
 import { isSuperadminSession, useAuth } from '@/lib/auth-context'
+import { devHostActionsLocked } from '@/lib/development-host'
 import type { DevelopmentJob, DevelopmentServer, InstanceUpdates } from '@/lib/instance-api'
 import { getInstanceRevision } from '@/lib/instance-version'
 import { useDevelopmentUpdates, usePushDevelopmentDaemon } from '@/lib/queries/admin'
@@ -135,14 +135,16 @@ function YourServers() {
       />
     )
   }
-  const running = developmentJobRunning(data.job)
+  // A host job (Update and Restart, Restart Only) also holds the push back.
+  const locked = devHostActionsLocked(data)
   const onPush = async () => {
     setError(null)
     const result = await push.run(undefined)
     if (!result.ok) {
       setError(failedRunMessage(result, 'The push could not start.'))
     } else if (!result.value.ok) {
-      setError('A build and push is already running.')
+      // 409 job_running: either job holds the push back; the answer does not say which.
+      setError('A build and push or an update and restart is already running.')
     }
   }
   return (
@@ -151,7 +153,7 @@ function YourServers() {
         <Button
           label={developmentPushLabel(data.daemonBuild)}
           variant="primary"
-          disabled={running}
+          disabled={locked}
           busy={push.isPending}
           onPress={() => {
             void onPush()
