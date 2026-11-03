@@ -67,6 +67,7 @@ import {
 import { ServerDangerZone } from '@/components/org/server-danger-zone'
 import { ServerDeletePanel } from '@/components/org/server-delete-panel'
 import { ServerReenrollTokenPanel } from '@/components/org/server-reenroll-token-panel'
+import { ServerColocatedRepairPanel } from '@/components/org/server-colocated-repair-panel'
 import {
   formatServerDeleteBlockedError,
   isForbiddenError,
@@ -934,7 +935,11 @@ export function ServerDetailSection({
         revokeKeyPanel={revokeKeyPanel}
         deletePanel={deletePanel}
         reenrollPanel={
-          updateVm.colocated ? null : <ServerReenrollTokenPanel orgId={orgId} serverId={serverId} />
+          updateVm.colocated ? (
+            <ServerColocatedRepairPanel orgId={orgId} serverId={serverId} />
+          ) : (
+            <ServerReenrollTokenPanel orgId={orgId} serverId={serverId} />
+          )
         }
       />
     </View>

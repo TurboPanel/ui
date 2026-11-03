@@ -3222,6 +3222,26 @@ export async function issueServerReenrollTicket(serverId: string): Promise<Reenr
   return await apiFetch(`${CLIENT_API}/servers/${serverId}/reenroll-ticket`, { method: 'POST' })
 }
 
+/** Answer of `POST /servers/:id/colocated-repair`. Never carries a token. */
+export type ColocatedRepairResult = {
+  ok: true
+  serverId: string
+  /** What was wrong with the daemon's files, in plain words. */
+  reasons: string[]
+  /** Whether the stored daemon key was cleared so the daemon could enroll again. */
+  clearedKey: boolean
+}
+
+/**
+ * `POST /servers/:id/colocated-repair` (owner; step-up `server.colocated_repair`;
+ * self-hosted only): new credentials for the co-located server's daemon.
+ */
+export async function repairColocatedServerConnection(
+  serverId: string
+): Promise<ColocatedRepairResult> {
+  return await apiFetch(`${CLIENT_API}/servers/${serverId}/colocated-repair`, { method: 'POST' })
+}
+
 /** `DELETE /servers/:id/reenroll-ticket`: revoke the unused tickets. */
 export async function revokeServerReenrollTickets(
   serverId: string

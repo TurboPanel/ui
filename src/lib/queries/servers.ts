@@ -26,6 +26,7 @@ import {
   formatEntityMetricId,
   isForbiddenError,
   issueServerReenrollTicket,
+  repairColocatedServerConnection,
   reissueLicenseTicket,
   revokeServerReenrollTickets,
   isHttpStatusError,
@@ -686,6 +687,18 @@ export function useIssueServerReenrollTicket(serverId: string) {
   return useApiMutation({
     mutationFn: () => issueServerReenrollTicket(serverId),
     fallbackError: 'Failed to issue a Re-Enroll Token',
+  })
+}
+
+/** Repair Connection on the co-located server: new credentials for its daemon. */
+export function useRepairColocatedConnection(orgId: string, serverId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: () => repairColocatedServerConnection(serverId),
+    onSuccess: async () => {
+      await invalidateServerQueries(queryClient, orgId, serverId)
+    },
+    fallbackError: 'Failed to repair the connection',
   })
 }
 

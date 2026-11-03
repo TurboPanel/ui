@@ -26,6 +26,7 @@ import {
   useRebootServer,
   useResetServerUpdateStatus,
   useRevokeServerDaemonKey,
+  useRepairColocatedConnection,
   useServerDeletePreview,
   useServerPrincipals,
   useServerPrincipalRemovalPlan,
@@ -76,6 +77,7 @@ const {
   fetchOrgServerCapacity,
   resetServerUpdateStatus,
   revokeServerDaemonKey,
+  repairColocatedServerConnection,
   rebootServer,
   setServerHostname,
   setServerNtp,
@@ -113,6 +115,7 @@ const {
   fetchOrgServerCapacity: vi.fn(),
   resetServerUpdateStatus: vi.fn(),
   revokeServerDaemonKey: vi.fn(),
+  repairColocatedServerConnection: vi.fn(),
   rebootServer: vi.fn(),
   setServerHostname: vi.fn(),
   setServerNtp: vi.fn(),
@@ -155,6 +158,7 @@ vi.mock('@/lib/instance-api', async (importOriginal) => {
     fetchOrgServerCapacity,
     resetServerUpdateStatus,
     revokeServerDaemonKey,
+    repairColocatedServerConnection,
     rebootServer,
     setServerHostname,
     setServerNtp,
@@ -981,6 +985,27 @@ describe('servers query hooks', () => {
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: queryKeys.org(orgId).servers.list,
     })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.org(orgId).servers.detail(serverId),
+    })
+  })
+
+  it('useRepairColocatedConnection repairs and invalidates server queries', async () => {
+    repairColocatedServerConnection.mockResolvedValueOnce({
+      ok: true,
+      serverId,
+      reasons: [],
+      clearedKey: false,
+    })
+    const client = createAppQueryClient()
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
+
+    const { result } = renderHook(() => useRepairColocatedConnection(orgId, serverId), {
+      wrapper: createWrapper(client),
+    })
+
+    await expect(result.current.run()).resolves.toMatchObject({ ok: true })
+    expect(repairColocatedServerConnection).toHaveBeenCalledWith(serverId)
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: queryKeys.org(orgId).servers.detail(serverId),
     })
