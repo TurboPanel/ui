@@ -298,75 +298,96 @@ describe('parsePublicPort', () => {
 })
 
 describe('buildPublicUrlEntry on the self-hosted runtime', () => {
-  const fixed = { selfHosted: true }
+  const selfHosted = { selfHosted: true }
+  const HOST_ONLY = 'Enter a hostname or IP address only, like panel.example.com.'
 
-  it('always stores the fixed port and ignores the port box', () => {
-    expect(
-      buildPublicUrlEntry({ scheme: 'https', host: 'turbopanel.dev', port: '' }, fixed)
-    ).toMatchObject({ ok: true, value: 'https://turbopanel.dev:8443' })
-    expect(
-      buildPublicUrlEntry({ scheme: 'https', host: 'turbopanel.dev', port: '9000' }, fixed)
-    ).toMatchObject({ ok: true, value: 'https://turbopanel.dev:8443' })
+  function build(host: string, scheme: 'https' | 'http' = 'https', port = '') {
+    return buildPublicUrlEntry({ scheme, host, port }, selfHosted)
+  }
+
+  it.each([
+    ['turbopanel.dev', 'https://turbopanel.dev:8443'],
+    ['  Panel.Example.COM  ', 'https://panel.example.com:8443'],
+    ['panel', 'https://panel:8443'],
+    ['my-panel.lan', 'https://my-panel.lan:8443'],
+    ['panel.example.com.', 'https://panel.example.com:8443'],
+    ['192.168.1.20', 'https://192.168.1.20:8443'],
+    ['2001:db8::1', 'https://[2001:db8::1]:8443'],
+    ['2001:DB8:0:0:0:0:0:1', 'https://[2001:db8::1]:8443'],
+    ['[2001:db8::1]', 'https://[2001:db8::1]:8443'],
+    [`${'a'.repeat(63)}.lan`, `https://${'a'.repeat(63)}.lan:8443`],
+  ])('accepts %s', (host, value) => {
+    expect(build(host)).toMatchObject({ ok: true, value })
   })
 
-  it('accepts a pasted address that already names the fixed port, and drops its path', () => {
-    expect(
-      buildPublicUrlEntry(
-        { scheme: 'https', host: 'https://studio.lan:8443/admin/access', port: '' },
-        fixed
-      )
-    ).toMatchObject({ ok: true, value: 'https://studio.lan:8443' })
+  it('always stores https on 8443, whatever the hidden scheme and port controls hold', () => {
+    expect(build('studio.lan', 'http', '9000')).toMatchObject({
+      ok: true,
+      value: 'https://studio.lan:8443',
+    })
   })
 
-  it('refuses a pasted address that names another port', () => {
-    expect(
-      buildPublicUrlEntry({ scheme: 'https', host: 'studio.lan:9443', port: '' }, fixed)
-    ).toEqual({ ok: false, error: 'Use port 8443 or leave the port off.' })
+  it.each([
+    'https://studio.lan',
+    'http://studio.lan',
+    'https://studio.lan:8443/admin/access',
+    'studio.lan/admin',
+    'studio.lan?x=1',
+    'studio.lan#top',
+    '//studio.lan:80',
+    '///studio.lan:443',
+    String.raw`studio.lan\admin`,
+    String.raw`\\studio.lan`,
+    'user@studio.lan',
+    'user:pass@studio.lan:8443',
+    'studio lan',
+    'studio_lan',
+    'stüdio.lan',
+    '-studio.lan',
+    'studio-.lan',
+    'studio..lan',
+    '.studio.lan',
+    'studio.lan..',
+    `${'a'.repeat(64)}.lan`,
+    `${'a.'.repeat(126)}ab`,
+    'studio.lan:',
+    'studio.lan:8443',
+    'studio.lan:08443',
+    'studio.lan:443',
+    'studio.lan:80',
+    'studio.lan:9443',
+    '192.168.1.20:8443',
+    '[2001:db8::1]:8443',
+    '[::1]:8443',
+    '[2001:db8::1]:443',
+    '10.0.0.1:0',
+    'studio.lan:port',
+    'studio.lan:-1',
+    '256.1.1.1',
+    '010.0.0.1',
+    '1.2.3',
+    'host.123',
+    '[2001:db8::1',
+    '[studio.lan]',
+    '[2001:db8::1]:',
+    '2001:db8::zz',
+  ])('refuses %s as not a hostname or IP', (host) => {
+    expect(build(host)).toEqual({ ok: false, error: HOST_ONLY })
   })
 
-  it('refuses an explicit default port instead of moving it to 8443', () => {
-    for (const host of [
-      'https://studio.lan:443',
-      'https://studio.lan:443/admin',
-      'studio.lan:443',
-      'studio.lan:80',
-      '[2001:db8::1]:443',
-      'https://user@studio.lan:0443',
-    ]) {
-      expect(buildPublicUrlEntry({ scheme: 'https', host, port: '' }, fixed)).toMatchObject({
-        ok: false,
-      })
-    }
-    expect(
-      buildPublicUrlEntry({ scheme: 'https', host: 'https://studio.lan:443', port: '' }, fixed)
-    ).toEqual({ ok: false, error: 'Use port 8443 or leave the port off.' })
-    expect(
-      buildPublicUrlEntry({ scheme: 'https', host: 'studio.lan:80', port: '' }, fixed)
-    ).toEqual({ ok: false, error: 'Use port 8443 or leave the port off.' })
-  })
-
-  it('refuses a pasted http address, default port or not', () => {
-    for (const host of ['http://studio.lan', 'http://studio.lan:80', 'http://studio.lan:8443']) {
-      expect(buildPublicUrlEntry({ scheme: 'https', host, port: '' }, fixed)).toEqual({
-        ok: false,
-        error: 'This control plane only accepts https addresses.',
-      })
-    }
-  })
-
-  it('stores https even when the draft still carries the http scheme', () => {
-    expect(
-      buildPublicUrlEntry({ scheme: 'http', host: 'studio.lan', port: '' }, fixed)
-    ).toMatchObject({ ok: true, value: 'https://studio.lan:8443' })
-  })
-
-  it('keeps a bare IPv6 address and a leading-zero 8443', () => {
-    expect(
-      buildPublicUrlEntry({ scheme: 'https', host: '2001:db8::1', port: '' }, fixed)
-    ).toMatchObject({ ok: true, value: 'https://[2001:db8::1]:8443' })
-    expect(
-      buildPublicUrlEntry({ scheme: 'https', host: 'studio.lan:08443', port: '' }, fixed)
-    ).toMatchObject({ ok: true, value: 'https://studio.lan:8443' })
+  it('refuses an empty box and localhost with their own messages', () => {
+    expect(build('   ')).toEqual({
+      ok: false,
+      error: 'Enter a hostname, for example panel.example.com',
+    })
+    expect(build('localhost')).toMatchObject({
+      ok: false,
+      error: expect.stringContaining('localhost'),
+    })
+    expect(build('LOCALHOST.')).toMatchObject({
+      ok: false,
+      error: expect.stringContaining('localhost'),
+    })
   })
 
   it('treats a portless draft and a saved :8443 row as the same address', () => {
@@ -374,8 +395,29 @@ describe('buildPublicUrlEntry on the self-hosted runtime', () => {
       addPublicUrlEntry(
         ['https://turbopanel.dev:8443'],
         { scheme: 'https', host: 'turbopanel.dev', port: '' },
-        fixed
+        selfHosted
       )
     ).toEqual({ ok: false, error: 'That address is already listed.' })
+  })
+})
+
+describe('buildPublicUrlEntry on High Availability (no selfHosted)', () => {
+  it.each([
+    ['https://studio.lan:8443/admin/access', 'https://studio.lan:8443'],
+    ['http://studio.lan:8080/x?y=1', 'http://studio.lan:8080'],
+    ['https://studio.lan:443', 'https://studio.lan'],
+    ['studio.lan:9443', 'https://studio.lan:9443'],
+  ])('still absorbs %s as before', (host, value) => {
+    expect(buildPublicUrlEntry({ scheme: 'https', host, port: '' })).toMatchObject({
+      ok: true,
+      value,
+    })
+  })
+
+  it('still offers http and the port box', () => {
+    expect(buildPublicUrlEntry({ scheme: 'http', host: 'panel.lan', port: '8080' })).toMatchObject({
+      ok: true,
+      value: 'http://panel.lan:8080',
+    })
   })
 })

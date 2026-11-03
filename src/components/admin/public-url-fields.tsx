@@ -23,7 +23,8 @@ const SCHEME_OPTIONS = [
  * into the hostname box is still absorbed — `buildPublicUrlEntry` takes its
  * scheme and port and drops the path. With `selfHosted` (the self-hosted
  * control plane, only ever reached over https on 8443) there is no scheme
- * picker and no port box: just the hostname.
+ * picker and no port box: just the hostname, which then takes a bare hostname
+ * or IP only, with no pasted address to absorb.
  */
 export function AddPublicUrlRow({
   entry,
