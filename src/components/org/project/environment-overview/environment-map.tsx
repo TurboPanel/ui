@@ -158,7 +158,7 @@ function Head({ head }: Readonly<{ head: MapHead }>) {
 function KindIcon({ kind }: Readonly<{ kind: MapNode['kind'] }>) {
   const p = usePalette()
   return (
-    <Svg width={14} height={14} viewBox="0 0 24 24" accessibilityElementsHidden>
+    <Svg width={14} height={14} viewBox="0 0 24 24" aria-hidden>
       <Path
         d={ICON_PATHS[kind]}
         fill="none"
