@@ -18,6 +18,7 @@ import {
   checkForUpdates,
   fetchDevelopmentUpdates,
   pushDevelopmentDaemon,
+  startDevelopmentHostAction,
   markNotificationsRead,
   pauseUpdates,
   resumeUpdates,
@@ -169,6 +170,28 @@ describe('instance-api upgrade, notification and compose-gated-field wrappers', 
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'broken' }, 500))
     await expect(pushDevelopmentDaemon()).rejects.toThrow()
+  })
+
+  it('host actions post to their routes and hand back 409 and 503 refusals', async () => {
+    const job = { id: 'h1', action: 'update' }
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, job }, 202))
+    await expect(startDevelopmentHostAction('update')).resolves.toEqual({ ok: true, job })
+    expect(urlOf(0)).toMatch(/\/instance\/updates\/development\/host\/update$/)
+    expect(initOf(0)).toMatchObject({ method: 'POST' })
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: false, error: 'job_running' }, 409))
+    await expect(startDevelopmentHostAction('restart')).resolves.toEqual({
+      ok: false,
+      error: 'job_running',
+    })
+    expect(urlOf(1)).toMatch(/\/instance\/updates\/development\/host\/restart$/)
+
+    const refused = { ok: false, error: 'daemon_unavailable', reason: 'timeout' }
+    fetchMock.mockResolvedValueOnce(jsonResponse(refused, 503))
+    await expect(startDevelopmentHostAction('update')).resolves.toEqual(refused)
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'broken' }, 500))
+    await expect(startDevelopmentHostAction('update')).rejects.toThrow()
   })
 
   it('Check Now posts only to the check route and answers the status body', async () => {
