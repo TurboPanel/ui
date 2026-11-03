@@ -96,9 +96,9 @@ describe('OrganizationSwitcherSegment menu', () => {
     expect(screen.queryByText('Current')).toBeNull()
   })
 
-  it('always offers a New organization action and Settings', () => {
+  it('always offers a New Organization action and Settings', () => {
     openMenu(2)
-    expect(screen.getByText('New organization')).toBeTruthy()
+    expect(screen.getByText('New Organization')).toBeTruthy()
     expect(screen.getByLabelText('Create organization')).toBeTruthy()
     expect(screen.getByLabelText('Organization Settings')).toBeTruthy()
     expect(screen.queryByLabelText('Organization billing and licenses')).toBeNull()
