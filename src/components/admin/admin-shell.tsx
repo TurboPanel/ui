@@ -2,13 +2,7 @@ import { DevelopmentHostBar } from '@/components/admin/updates/development-host-
 import { UpdateAvailableBanner } from '@/components/admin/updates/update-available-banner'
 import { Slot } from 'expo-router'
 import { useState } from 'react'
-import {
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  useWindowDimensions,
-  View,
-} from 'react-native'
+import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { AdminHeader } from '@/components/admin/admin-header'
 import { AdminSidebar } from '@/components/admin/admin-sidebar'
@@ -24,7 +18,7 @@ export function AdminShell() {
   const contentMaxWidth = contentMaxWidthFor(
     pageWidth,
     width - (isDesktop ? layout.sidebarWidth : 0),
-    layout.contentMaxWidth,
+    layout.contentMaxWidth
   )
 
   return (
@@ -34,10 +28,7 @@ export function AdminShell() {
 
         {!isDesktop && drawerOpen ? (
           <>
-            <Pressable
-              style={styles.backdrop}
-              onPress={() => setDrawerOpen(false)}
-            />
+            <Pressable style={styles.backdrop} onPress={() => setDrawerOpen(false)} />
             <View style={styles.drawer}>
               <AdminSidebar onNavigate={() => setDrawerOpen(false)} />
             </View>
@@ -45,9 +36,7 @@ export function AdminShell() {
         ) : null}
 
         <View style={styles.main}>
-          <AdminHeader
-            onMenuPress={isDesktop ? undefined : () => setDrawerOpen(true)}
-          />
+          <AdminHeader onMenuPress={isDesktop ? undefined : () => setDrawerOpen(true)} />
           <UpdateAvailableBanner />
           <DevelopmentHostBar />
           <ScrollView

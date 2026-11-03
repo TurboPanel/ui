@@ -1,12 +1,7 @@
 import { DevelopmentHostBar } from '@/components/admin/updates/development-host-bar'
 import { UpdateAvailableBanner } from '@/components/admin/updates/update-available-banner'
 import { useState, type ReactNode } from 'react'
-import {
-  Pressable,
-  StyleSheet,
-  useWindowDimensions,
-  View,
-} from 'react-native'
+import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { OrgHeader } from '@/components/org/org-header'
 import { OrgShellContent } from '@/components/org/org-shell-content'
@@ -17,10 +12,7 @@ import { glass } from '@/lib/glass'
 import { contentAlignFor, contentMaxWidthFor, usePageWidth } from '@/lib/page-width'
 import { colors, layout } from '@/lib/theme'
 
-export function OrgShell({
-  orgId,
-  children,
-}: Readonly<{ orgId: string; children?: ReactNode }>) {
+export function OrgShell({ orgId, children }: Readonly<{ orgId: string; children?: ReactNode }>) {
   const { width } = useWindowDimensions()
   const isDesktop = width >= layout.desktopBreakpoint
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -29,7 +21,7 @@ export function OrgShell({
   const contentMaxWidth = contentMaxWidthFor(
     pageWidth,
     width - (isDesktop ? layout.sidebarWidth : 0),
-    layout.contentMaxWidth,
+    layout.contentMaxWidth
   )
 
   return (
@@ -52,10 +44,7 @@ export function OrgShell({
                   accessibilityLabel="Close navigation menu"
                 />
                 <View style={styles.drawer}>
-                  <OrgSidebar
-                    orgId={orgId}
-                    onNavigate={() => setDrawerOpen(false)}
-                  />
+                  <OrgSidebar orgId={orgId} onNavigate={() => setDrawerOpen(false)} />
                 </View>
               </>
             ) : null}
