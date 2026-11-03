@@ -56,7 +56,6 @@ import {
   patchAdminTier,
   saveAuthProviderSettings,
   saveEmailSettings,
-  savePublicUrls,
   saveServerMetricsLiveSettings,
   saveSignupSettings,
   type GithubManifestStartInput,
@@ -128,21 +127,6 @@ const WEBHOOK_ORIGINS_SEGMENT = 'webhook-origins'
 function invalidateForgeWebhookOrigins(queryClient: ReturnType<typeof useQueryClient>) {
   return queryClient.invalidateQueries({
     predicate: (query) => query.queryKey.at(-1) === WEBHOOK_ORIGINS_SEGMENT,
-  })
-}
-
-export function useSavePublicUrls() {
-  const queryClient = useQueryClient()
-  return useApiMutation({
-    mutationFn: savePublicUrls,
-    onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.admin.publicUrls,
-        }),
-        invalidateForgeWebhookOrigins(queryClient),
-      ])
-    },
   })
 }
 
