@@ -64,12 +64,19 @@ function StubSelect({
 
 function StubTextField({
   label,
+  hint,
   value,
   onChangeText,
-}: Readonly<{ label: string; value?: string; onChangeText?: (value: string) => void }>) {
+}: Readonly<{
+  label: string
+  hint?: string
+  value?: string
+  onChangeText?: (value: string) => void
+}>) {
   return (
     <input
       aria-label={label}
+      aria-description={hint}
       value={value ?? ''}
       onChange={(event) => onChangeText?.(event.target.value)}
     />
