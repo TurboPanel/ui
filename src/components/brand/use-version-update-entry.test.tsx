@@ -16,6 +16,7 @@ const { session, useInstanceUpdates, useUpgradeActiveRun, useDevelopmentUpdates 
 vi.mock('@/lib/auth-context', () => ({
   useAuth: () => ({ session: session.current }),
   isAdminSession: (s: { role: string } | null) => s?.role === 'admin' || s?.role === 'superadmin',
+  isSuperadminSession: (s: { role: string } | null) => s?.role === 'superadmin',
 }))
 vi.mock('@/lib/queries/admin', () => ({
   useInstanceUpdates,
@@ -49,7 +50,7 @@ describe('useVersionUpdateEntry', () => {
   })
 
   it('a development install reads the development view and lights only for daemon changes', () => {
-    session.current = { role: 'admin' }
+    session.current = { role: 'superadmin' }
     const development = { ...paused, development: true }
     useInstanceUpdates.mockReturnValue({ data: development })
     useDevelopmentUpdates.mockReturnValue({ data: { pendingDaemonChanges: false } })
@@ -60,6 +61,14 @@ describe('useVersionUpdateEntry', () => {
     useDevelopmentUpdates.mockReturnValue({ data: { pendingDaemonChanges: true } })
     const lit = renderHook(() => useVersionUpdateEntry())
     expect(lit.result.current.pending).toBe(true)
+  })
+
+  it('a plain admin on a development install never reads the superadmin-only view', () => {
+    session.current = { role: 'admin' }
+    useInstanceUpdates.mockReturnValue({ data: { ...paused, development: true } })
+    const { result } = renderHook(() => useVersionUpdateEntry())
+    expect(useDevelopmentUpdates).toHaveBeenCalledWith({ enabled: false })
+    expect(result.current.pending).toBe(false)
   })
 
   it('a release install never reads the development view', () => {

@@ -4,7 +4,7 @@ import { StyleSheet, Text, useWindowDimensions, View } from 'react-native'
 import { readConsoleBuild } from '@/components/admin/updates/console-build'
 import { adminAreaHref } from '@/lib/admin-navigation'
 import { Button, InlineNotice, TextLink } from '@/components/ui'
-import { isAdminSession, useAuth } from '@/lib/auth-context'
+import { isAdminSession, isSuperadminSession, useAuth } from '@/lib/auth-context'
 import { useInstallStatusQuery } from '@/lib/queries/auth'
 import { useDevelopmentUpdates, useInstanceUpdates, useUpgradeActiveRun } from '@/lib/queries/admin'
 import {
@@ -54,7 +54,10 @@ export function useUpdateAvailable(): Readonly<{
   const updates = useInstanceUpdates({ enabled: eligible, consoleCommit: consoleBuild?.commit })
   const active = useUpgradeActiveRun({ enabled: eligible })
   const development = eligible && isDevelopmentInstall(updates.data)
-  const developmentQuery = useDevelopmentUpdates({ enabled: development })
+  const developmentQuery = useDevelopmentUpdates({
+    // The development route is superadmin only; a plain admin would get a 403.
+    enabled: development && isSuperadminSession(session),
+  })
   const [dismissedKey, setDismissedKey] = useState(() => readDismissedUpdateBanner(webStorage()))
   const offer = { updates: updates.data, activeRun: Boolean(active.data?.run), consoleBuild }
   let banner: UpdateBanner | null = null

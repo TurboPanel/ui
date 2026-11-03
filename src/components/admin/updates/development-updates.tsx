@@ -17,6 +17,7 @@ import { panelStyles } from '@/components/ui/panel-styles'
 import {
   DEVELOPMENT_NO_SERVERS,
   DEVELOPMENT_NOTE,
+  DEVELOPMENT_SUPERADMIN_ONLY,
   RUNNING_FROM_CHECKOUT,
   developmentDaemonLabel,
   developmentJobRunning,
@@ -26,6 +27,7 @@ import {
   developmentServerStatus,
   runningFromCheckoutLine,
 } from '@/lib/development-updates'
+import { isSuperadminSession, useAuth } from '@/lib/auth-context'
 import type { DevelopmentJob, DevelopmentServer, InstanceUpdates } from '@/lib/instance-api'
 import { getInstanceRevision } from '@/lib/instance-version'
 import { useDevelopmentUpdates, usePushDevelopmentDaemon } from '@/lib/queries/admin'
@@ -169,11 +171,16 @@ function YourServers() {
  * the daemon from the checkout and pushes it to the other connected servers.
  */
 export function DevelopmentUpdates({ data }: Readonly<{ data: InstanceUpdates }>) {
+  const { session } = useAuth()
   return (
     <View style={styles.root}>
       <InlineNotice title={DEVELOPMENT_NOTE} />
       <CheckoutVersions units={data.units} />
-      <YourServers />
+      {isSuperadminSession(session) ? (
+        <YourServers />
+      ) : (
+        <InlineNotice title={DEVELOPMENT_SUPERADMIN_ONLY} />
+      )}
     </View>
   )
 }

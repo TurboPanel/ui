@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { readConsoleBuild } from '@/components/admin/updates/console-build'
-import { isAdminSession, useAuth } from '@/lib/auth-context'
+import { isAdminSession, isSuperadminSession, useAuth } from '@/lib/auth-context'
 import { developmentChangesPending, isDevelopmentInstall } from '@/lib/development-updates'
 import { useDevelopmentUpdates, useInstanceUpdates, useUpgradeActiveRun } from '@/lib/queries/admin'
 import { instanceAdminUpdatePending } from '@/lib/update-entry'
@@ -21,7 +21,8 @@ export function useVersionUpdateEntry(): Readonly<{ isInstanceAdmin: boolean; pe
   })
   const active = useUpgradeActiveRun({ enabled: isInstanceAdmin })
   const development = useDevelopmentUpdates({
-    enabled: isInstanceAdmin && isDevelopmentInstall(updates.data),
+    // The development route is superadmin only; a plain admin would get a 403.
+    enabled: isSuperadminSession(session) && isDevelopmentInstall(updates.data),
   })
   const pending =
     isInstanceAdmin &&

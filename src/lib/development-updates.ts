@@ -125,6 +125,9 @@ export const RUNNING_FROM_CHECKOUT = 'Running From Your Checkout'
 export const DEVELOPMENT_NOTE =
   "Development installs never update on their own. Build the daemon from your checkout and push it to your servers when you're ready."
 
+/** A plain admin sees the versions but not the build and push card (superadmin only). */
+export const DEVELOPMENT_SUPERADMIN_ONLY = 'Only a superadmin can build and push the daemon.'
+
 export const DEVELOPMENT_BANNER_TITLE = 'Daemon changes are not on your servers yet.'
 
 export const DEVELOPMENT_NO_SERVERS = 'No other servers are connected.'

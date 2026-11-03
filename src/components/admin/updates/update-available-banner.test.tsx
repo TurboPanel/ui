@@ -27,6 +27,7 @@ vi.mock('@/components/admin/updates/console-build', () => ({ readConsoleBuild: (
 vi.mock('@/lib/auth-context', () => ({
   useAuth: () => ({ session: {} }),
   isAdminSession: () => true,
+  isSuperadminSession: () => true,
 }))
 vi.mock('@/lib/queries/auth', () => ({
   useInstallStatusQuery: () => ({ data: { runtime: 'deno' } }),

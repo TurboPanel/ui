@@ -49,6 +49,12 @@ const queries = vi.hoisted(() => ({
 }))
 vi.mock('@/lib/queries/admin', () => queries)
 
+const auth = vi.hoisted(() => ({ role: 'superadmin' }))
+vi.mock('@/lib/auth-context', () => ({
+  useAuth: () => ({ session: { role: auth.role } }),
+  isSuperadminSession: (s: { role: string } | null) => s?.role === 'superadmin',
+}))
+
 const DATA = {
   ok: true,
   channel: 'canary',
@@ -94,6 +100,8 @@ function view(overrides: Partial<DevelopmentView> = {}): DevelopmentView {
 
 describe('DevelopmentUpdates', () => {
   beforeEach(() => {
+    auth.role = 'superadmin'
+    queries.useDevelopmentUpdates.mockClear()
     queries.usePushDevelopmentDaemon.mockReturnValue({ run: vi.fn(), isPending: false })
   })
   afterEach(() => {
@@ -146,6 +154,16 @@ describe('DevelopmentUpdates', () => {
     expect(button.disabled).toBe(true)
     expect(screen.getByText('Pushing…')).toBeTruthy()
     expect(screen.getByText('timed out')).toBeTruthy()
+  })
+
+  it('shows a plain admin the versions but not the build and push card', () => {
+    auth.role = 'admin'
+    queries.useDevelopmentUpdates.mockReturnValue({ data: view(), isLoading: false })
+    render(<DevelopmentUpdates data={DATA} />)
+    expect(screen.getAllByText('Running From Your Checkout')).toHaveLength(3)
+    expect(screen.getByText('Only a superadmin can build and push the daemon.')).toBeTruthy()
+    expect(screen.queryByText('Your Servers')).toBeNull()
+    expect(queries.useDevelopmentUpdates).not.toHaveBeenCalled()
   })
 
   it('says so when no other server is connected', () => {
