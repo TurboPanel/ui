@@ -2,7 +2,11 @@ import { useState } from 'react'
 import { Text } from 'react-native'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { Button, ButtonRow, ModalSheet, TextField } from '@/components/ui'
-import { foldDisplayNameApostrophes, DISPLAY_NAME_MAX_LENGTH, validateDisplayName } from '@/lib/display-name'
+import {
+  foldDisplayNameApostrophes,
+  DISPLAY_NAME_MAX_LENGTH,
+  validateDisplayName,
+} from '@/lib/display-name'
 
 type CreateOrganizationModalProps = Readonly<{
   visible: boolean
@@ -15,15 +19,19 @@ export function CreateOrganizationModal({
   onClose,
   onCreate,
 }: CreateOrganizationModalProps) {
-  const [name, setName] = useState('New Organization')
+  const [name, setName] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
   const reset = () => {
-    setName('New Organization')
+    setName('')
     setError(null)
     setSubmitting(false)
   }
+
+  // The field starts empty (placeholder only) so nobody creates an
+  // organization with a default name by just pressing Create.
+  const canCreate = foldDisplayNameApostrophes(name).trim().length > 0
 
   const handleClose = () => {
     if (submitting) {
@@ -57,7 +65,7 @@ export function CreateOrganizationModal({
     <ModalSheet
       visible={visible}
       onRequestClose={handleClose}
-      title="Create organization"
+      title="Create New Organization"
       description="You will be the owner of the new organization and can invite others later."
       dismissLabel="Close create organization dialog"
       footer={
@@ -68,6 +76,7 @@ export function CreateOrganizationModal({
             variant="primary"
             busy={submitting}
             busyLabel="Creating…"
+            disabled={!canCreate}
             onPress={() => {
               handleCreate().catch(() => {
                 setSubmitting(false)
@@ -81,6 +90,7 @@ export function CreateOrganizationModal({
       <TextField
         label="Organization name"
         value={name}
+        placeholder="e.g. Acme Hosting"
         onChangeText={(value) => {
           setName(value)
           if (error) {
@@ -97,4 +107,3 @@ export function CreateOrganizationModal({
     </ModalSheet>
   )
 }
-

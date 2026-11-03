@@ -229,7 +229,7 @@ export function OrganizationSwitcherSegment({
         <View style={headerMenuGroupStyles.menuDivider} />
 
         <MenuAction
-          label="New organization"
+          label="New Organization"
           accessibilityLabel="Create organization"
           onPress={openCreate}
           strong
