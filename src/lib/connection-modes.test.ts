@@ -138,6 +138,7 @@ describe('labels and intervals', () => {
   it('names checks in title case and passes unknown ids through', () => {
     expect(checkLabel('scope-tunnels')).toBe('Tunnel Scope')
     expect(checkLabel('scope-dns')).toBe('DNS Scope')
+    expect(checkLabel('token-policies')).toBe('Token Permissions')
     expect(checkLabel('something-new')).toBe('something-new')
   })
 
