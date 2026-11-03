@@ -19,7 +19,6 @@ import {
   usePublicUrlsOptional,
   useSaveAuthProviderSettings,
   useSaveEmailSettings,
-  useSavePublicUrls,
   useSaveServerMetricsLiveSettings,
   useSaveSignupSettings,
   useServerMetricsLiveSettings,
@@ -34,7 +33,6 @@ const {
   fetchInstanceHostnames,
   fetchSignupSettings,
   saveSignupSettings,
-  savePublicUrls,
   applyPublicUrls,
   fetchAuthProviderSettings,
   fetchEmailSettings,
@@ -55,7 +53,6 @@ const {
   fetchInstanceHostnames: vi.fn(),
   fetchSignupSettings: vi.fn(),
   saveSignupSettings: vi.fn(),
-  savePublicUrls: vi.fn(),
   applyPublicUrls: vi.fn(),
   fetchAuthProviderSettings: vi.fn(),
   fetchEmailSettings: vi.fn(),
@@ -81,7 +78,6 @@ vi.mock('../instance-api', async (importOriginal) => {
     fetchInstanceHostnames,
     fetchSignupSettings,
     saveSignupSettings,
-    savePublicUrls,
     applyPublicUrls,
     fetchAuthProviderSettings,
     fetchEmailSettings,
@@ -232,10 +228,9 @@ describe('admin query hooks', () => {
   })
 
   it('usePublicUrlsOptional stays idle when enabled is false', () => {
-    const { result } = renderHook(
-      () => usePublicUrlsOptional({ enabled: false }),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => usePublicUrlsOptional({ enabled: false }), {
+      wrapper: createWrapper(),
+    })
     expect(result.current.fetchStatus).toBe('idle')
     expect(fetchPublicUrls).not.toHaveBeenCalled()
   })
@@ -243,10 +238,9 @@ describe('admin query hooks', () => {
   it('usePublicUrlsOptional fetches when enabled is true', async () => {
     fetchPublicUrls.mockResolvedValueOnce({ urls: ['https://panel.example.com'] })
 
-    const { result } = renderHook(
-      () => usePublicUrlsOptional({ enabled: true }),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => usePublicUrlsOptional({ enabled: true }), {
+      wrapper: createWrapper(),
+    })
 
     await waitFor(() => {
       expect(result.current.isSuccess).toBe(true)
@@ -275,7 +269,7 @@ describe('admin query hooks', () => {
     expect(fetchSignupSettings).toHaveBeenCalled()
   })
 
-  it('public URL save and apply refresh every webhook-origins read', async () => {
+  it('public URL apply refreshes every webhook-origins read', async () => {
     // Those reads live under the forges keys, so without naming them the
     // wizard keeps an empty list after "add a public URL, then come back".
     const keys = [
@@ -284,25 +278,16 @@ describe('admin query hooks', () => {
     ]
     const empty = { origins: [], platformManaged: false }
 
-    savePublicUrls.mockResolvedValueOnce({ ok: true })
-    const saveClient = createAppQueryClient()
-    for (const key of keys) saveClient.setQueryData(key, empty)
-    const save = renderHook(() => useSavePublicUrls(), { wrapper: createWrapper(saveClient) })
-    await expect(save.result.current.run(['https://panel.example.com'])).resolves.toMatchObject({
-      ok: true,
-    })
-    await waitFor(() => {
-      for (const key of keys) expect(saveClient.getQueryState(key)?.isInvalidated).toBe(true)
-    })
-
     applyPublicUrls.mockResolvedValueOnce({ ok: true, applied: true })
     const applyClient = createAppQueryClient()
     for (const key of keys) applyClient.setQueryData(key, empty)
     const apply = renderHook(() => useApplyPublicUrls(), { wrapper: createWrapper(applyClient) })
     await expect(
       apply.result.current.run({
-        hostnames: [{ host: 'https://panel.example.com', source: 'platform-ca', uploadedCertId: null }],
-      }),
+        hostnames: [
+          { host: 'https://panel.example.com', source: 'platform-ca', uploadedCertId: null },
+        ],
+      })
     ).resolves.toMatchObject({ ok: true })
     await waitFor(() => {
       for (const key of keys) expect(applyClient.getQueryState(key)?.isInvalidated).toBe(true)
@@ -325,26 +310,6 @@ describe('admin query hooks', () => {
     })
   })
 
-  it('useSavePublicUrls invalidates public URL cache', async () => {
-    savePublicUrls.mockResolvedValueOnce({ ok: true })
-    const client = createAppQueryClient()
-    const invalidate = vi.spyOn(client, 'invalidateQueries')
-
-    const { result } = renderHook(() => useSavePublicUrls(), {
-      wrapper: createWrapper(client),
-    })
-
-    await expect(
-      result.current.run(['https://panel.example.com']),
-    ).resolves.toMatchObject({ ok: true })
-
-    await waitFor(() => {
-      expect(invalidate).toHaveBeenCalledWith({
-        queryKey: queryKeys.admin.publicUrls,
-      })
-    })
-  })
-
   it('useApplyPublicUrls invalidates public URL cache', async () => {
     applyPublicUrls.mockResolvedValueOnce({ ok: true, applied: true })
     const client = createAppQueryClient()
@@ -363,7 +328,7 @@ describe('admin query hooks', () => {
             uploadedCertId: null,
           },
         ],
-      }),
+      })
     ).resolves.toMatchObject({ ok: true, value: { kind: 'applied' } })
 
     await waitFor(() => {
@@ -380,7 +345,7 @@ describe('admin query hooks', () => {
   // for it commonly dies in transit even though the work succeeded.
   it('useApplyPublicUrls confirms the change after the control plane restarts', async () => {
     applyPublicUrls.mockRejectedValueOnce(
-      new Error('/api/admin/v1/instance/public-urls/apply failed: HTTP 502'),
+      new Error('/api/admin/v1/instance/public-urls/apply failed: HTTP 502')
     )
     fetchInstanceHostnames
       .mockRejectedValueOnce(new TypeError('Failed to fetch'))
@@ -414,7 +379,7 @@ describe('admin query hooks', () => {
     expect(onReconnecting).toHaveBeenCalledTimes(1)
   })
 
-  describe('after a dropped apply on a Let\'s Encrypt name', () => {
+  describe("after a dropped apply on a Let's Encrypt name", () => {
     const oldCert = '2026-11-01T00:00:00.000Z'
     const newCert = '2027-01-30T00:00:00.000Z'
     const letsEncrypt = (overrides: Record<string, unknown> = {}) => ({
@@ -426,7 +391,7 @@ describe('admin query hooks', () => {
     /** The first read is the baseline before the apply, the second the reconnect probe. */
     function dropApply(...reads: unknown[][]) {
       applyPublicUrls.mockRejectedValueOnce(
-        new Error('/api/admin/v1/instance/public-urls/apply failed: HTTP 502'),
+        new Error('/api/admin/v1/instance/public-urls/apply failed: HTTP 502')
       )
       for (const hostnames of reads) {
         fetchInstanceHostnames.mockResolvedValueOnce({ ok: true, hostnames })
@@ -461,7 +426,7 @@ describe('admin query hooks', () => {
       const outcome = await runDropped(
         [letsEncrypt()],
         [letsEncrypt()],
-        [letsEncrypt({ notAfter: newCert })],
+        [letsEncrypt({ notAfter: newCert })]
       )
       expect(outcome).toMatchObject({ ok: true, value: { kind: 'reconnected' } })
     })
@@ -486,7 +451,7 @@ describe('admin query hooks', () => {
         acmeLastAttemptAt: '2026-10-03T10:00:00.000Z',
       })
       applyPublicUrls.mockRejectedValueOnce(
-        new Error('/api/admin/v1/instance/public-urls/apply failed: HTTP 502'),
+        new Error('/api/admin/v1/instance/public-urls/apply failed: HTTP 502')
       )
       fetchInstanceHostnames.mockRejectedValueOnce(new Error('boom'))
       fetchInstanceHostnames.mockResolvedValue({ ok: true, hostnames: [old] })
@@ -509,7 +474,7 @@ describe('admin query hooks', () => {
     it('does not let a hung baseline read hold the apply back', async () => {
       const old = letsEncrypt({ notAfter: oldCert })
       applyPublicUrls.mockRejectedValueOnce(
-        new Error('/api/admin/v1/instance/public-urls/apply failed: HTTP 502'),
+        new Error('/api/admin/v1/instance/public-urls/apply failed: HTTP 502')
       )
       fetchInstanceHostnames.mockImplementationOnce(() => new Promise(() => {}))
       fetchInstanceHostnames.mockResolvedValue({ ok: true, hostnames: [old] })
@@ -539,7 +504,7 @@ describe('admin query hooks', () => {
             acmeLastError: 'rate limited',
             acmeLastAttemptAt: '2026-10-04T10:00:00.000Z',
           }),
-        ],
+        ]
       )
       expect(outcome).toMatchObject({
         ok: true,
@@ -590,7 +555,7 @@ describe('admin query hooks', () => {
             return
           }
           signal?.addEventListener('abort', onAbort, { once: true })
-        }),
+        })
     )
     fetchInstanceHostnames.mockResolvedValueOnce({
       ok: true,
@@ -622,7 +587,7 @@ describe('admin query hooks', () => {
 
   it('useApplyPublicUrls reports unreachable when the control plane never returns', async () => {
     applyPublicUrls.mockRejectedValueOnce(
-      new Error('/api/admin/v1/instance/public-urls/apply failed: HTTP 502'),
+      new Error('/api/admin/v1/instance/public-urls/apply failed: HTTP 502')
     )
     fetchInstanceHostnames.mockRejectedValue(new TypeError('Failed to fetch'))
 
@@ -671,8 +636,8 @@ describe('admin query hooks', () => {
   it('useApplyPublicUrls still surfaces a failure the control plane answered', async () => {
     applyPublicUrls.mockRejectedValueOnce(
       new Error(
-        '/api/admin/v1/instance/public-urls/apply failed: HTTP 503: no co-located daemon connected',
-      ),
+        '/api/admin/v1/instance/public-urls/apply failed: HTTP 503: no co-located daemon connected'
+      )
     )
 
     const { result } = renderHook(() => useApplyPublicUrls(), {
@@ -682,7 +647,7 @@ describe('admin query hooks', () => {
     await expect(
       result.current.run({
         hostnames: [hostnameInput('https://panel.example.com')],
-      }),
+      })
     ).resolves.toMatchObject({
       ok: false,
       error: expect.stringContaining('no co-located daemon connected'),
@@ -733,9 +698,7 @@ describe('admin query hooks', () => {
       wrapper: createWrapper(client),
     })
 
-    await expect(
-      result.current.run({ provider: 'mailgun' }),
-    ).resolves.toMatchObject({ ok: true })
+    await expect(result.current.run({ provider: 'mailgun' })).resolves.toMatchObject({ ok: true })
 
     await waitFor(() => {
       expect(client.getQueryData(queryKeys.admin.email)).toEqual(payload)
@@ -756,10 +719,9 @@ describe('admin query hooks', () => {
   })
 
   it('useAuthProviderSettings stays idle when enabled is false', () => {
-    const { result } = renderHook(
-      () => useAuthProviderSettings({ enabled: false }),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useAuthProviderSettings({ enabled: false }), {
+      wrapper: createWrapper(),
+    })
     expect(result.current.fetchStatus).toBe('idle')
     expect(fetchAuthProviderSettings).not.toHaveBeenCalled()
   })
@@ -776,7 +738,7 @@ describe('admin query hooks', () => {
     await expect(
       result.current.run({
         TURBOPANEL_AUTH_PROVIDERS__GITHUB_CLIENT_ID: 'Iv1.example',
-      }),
+      })
     ).resolves.toMatchObject({ ok: true })
 
     await waitFor(() => {
@@ -816,10 +778,9 @@ describe('admin query hooks', () => {
   })
 
   it('useForges stays idle when enabled is false', () => {
-    const { result } = renderHook(
-      () => useForges('admin', { enabled: false }),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useForges('admin', { enabled: false }), {
+      wrapper: createWrapper(),
+    })
     expect(result.current.fetchStatus).toBe('idle')
     expect(fetchForges).not.toHaveBeenCalled()
   })
@@ -827,10 +788,9 @@ describe('admin query hooks', () => {
   it('useForges fetches when enabled is true', async () => {
     fetchForges.mockResolvedValueOnce([])
 
-    const { result } = renderHook(
-      () => useForges('admin', { enabled: true }),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useForges('admin', { enabled: true }), {
+      wrapper: createWrapper(),
+    })
 
     await waitFor(() => {
       expect(result.current.isSuccess).toBe(true)
@@ -852,9 +812,7 @@ describe('admin query hooks', () => {
       expect(client.getQueryData(queryKeys.admin.forges)).toBeDefined()
     })
     expect(queryKeys.admin.forges).not.toEqual(queryKeys.org('org-1').forges)
-    expect(queryKeys.org('org-1').forges).not.toEqual(
-      queryKeys.org('org-2').forges,
-    )
+    expect(queryKeys.org('org-1').forges).not.toEqual(queryKeys.org('org-2').forges)
   })
 
   it('useForgeWebhookOrigins reads the scope route', async () => {
@@ -929,10 +887,9 @@ describe('admin query hooks', () => {
   })
 
   it('useForgeWebhookOrigins stays idle when enabled is false', () => {
-    const { result } = renderHook(
-      () => useForgeWebhookOrigins('org', { enabled: false }),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useForgeWebhookOrigins('org', { enabled: false }), {
+      wrapper: createWrapper(),
+    })
     expect(result.current.fetchStatus).toBe('idle')
     expect(fetchForgeWebhookOrigins).not.toHaveBeenCalled()
   })
@@ -951,7 +908,7 @@ describe('admin query hooks', () => {
         provider: 'github',
         name: 'TurboPanel',
         externalAppId: '123',
-      }),
+      })
     ).resolves.toMatchObject({ ok: true })
 
     await waitFor(() => {
@@ -1074,10 +1031,9 @@ describe('admin query hooks', () => {
   })
 
   it('useServerMetricsLiveSettings stays idle when disabled', () => {
-    const { result } = renderHook(
-      () => useServerMetricsLiveSettings({ enabled: false }),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useServerMetricsLiveSettings({ enabled: false }), {
+      wrapper: createWrapper(),
+    })
 
     expect(result.current.fetchStatus).toBe('idle')
     expect(fetchServerMetricsLiveSettings).not.toHaveBeenCalled()
@@ -1098,8 +1054,6 @@ describe('admin query hooks', () => {
     }
 
     expect(saveServerMetricsLiveSettings.mock.calls[0]?.[0]).toBe(15)
-    expect(
-      client.getQueryData(queryKeys.admin.metricsLiveSettings),
-    ).toEqual(saved)
+    expect(client.getQueryData(queryKeys.admin.metricsLiveSettings)).toEqual(saved)
   })
 })

@@ -390,6 +390,17 @@ describe('buildPublicUrlEntry on the self-hosted runtime', () => {
     })
   })
 
+  it.each(['null', 'NULL', 'null.'])(
+    'refuses %s like any host the general parser refuses',
+    (host) => {
+      const unreachable = build('localhost')
+      expect(build(host)).toEqual(unreachable)
+      expect(addPublicUrlEntry([], { scheme: 'https', host, port: '' }, selfHosted)).toEqual(
+        unreachable
+      )
+    }
+  )
+
   it('treats a portless draft and a saved :8443 row as the same address', () => {
     expect(
       addPublicUrlEntry(

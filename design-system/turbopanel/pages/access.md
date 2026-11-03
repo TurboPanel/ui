@@ -10,7 +10,7 @@
 - Tunnel (screen title Cloudflare Tunnel) → `cloudflare-tunnel-section.tsx` at `/admin/access/tunnel`
 - Platform CA → `platform-ca-section.tsx` at `/admin/access/platform-ca`
 
-`/admin` redirects to `/admin/access`. `/admin/networking` stays as a bookmark redirect to `/admin/access` and is not a sidebar area. Do not mount `control-plane-urls-section.tsx` here.
+`/admin` redirects to `/admin/access`. `/admin/networking` stays as a bookmark redirect to `/admin/access` and is not a sidebar area.
 
 **Job:** How people and machines reach this control plane: its own hostnames, certificate sources, trusted proxies, the co-located tunnel token, and the Platform CA. Organization TLS and an organization's Let's Encrypt opt-in stay on the org TLS surface.
 
@@ -26,6 +26,7 @@
 ## Hostnames
 
 - Title **Hostnames**. One line: these addresses are the Platform CA leaf SANs, the Git webhook origin, and the install-command origin.
+- Pick the view from the control plane runtime (`useAuth().controlPlaneRuntime`), never from the hostnames response. TurboPanel High Availability gets the read-only address only, also while the read loads or after it fails. An unknown runtime shows a loading state. Never show the editor until the runtime is known to be self-hosted.
 - Compose each new entry (scheme, host, optional port) via `src/lib/public-url-entry.ts`. Scheme-less stored entries stay byte-for-byte. The hostname table shows `https://<host>:8443` for every row, and the copy button copies that URL.
 - `PUT /instance/hostnames` is **replace-all**. A 422 names `invalid` hosts beside the row.
 - Each row picks `platform-ca` / `uploaded` / `lets-encrypt`. Disable a source the daemon cannot render or that Let's Encrypt / the uploaded pair refuses, and show the sentence from `certificateSourceEligibility`.
