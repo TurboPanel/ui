@@ -19,6 +19,7 @@ import {
 } from '@/components/ui'
 import {
   fetchOrgTlsSettings,
+  type OrgTlsSettings,
   saveOrgTlsSettings,
   type TlsRecord,
   type TlsSource,
@@ -256,6 +257,25 @@ function TlsLetsEncryptPanel({
   )
 }
 
+/**
+ * What the Let's Encrypt panel reads from the settings query. A failed refresh
+ * with settings already shown is not an error here, so the form (and what was
+ * typed) stays.
+ */
+function letsEncryptSettingsProps(
+  query: Readonly<{ data?: OrgTlsSettings; isError: boolean; error: unknown }>
+) {
+  const data = query.data
+  return {
+    contactEmail: data?.acmeContactEmail ?? null,
+    termsUrl: data?.acmeTermsUrl ?? null,
+    termsAcceptedAt: data?.acmeTermsAcceptedAt ?? null,
+    acceptedTermsUrl: data?.acmeAcceptedTermsUrl ?? null,
+    termsChanged: data?.acmeTermsChanged ?? false,
+    settingsError: query.isError && !data ? query.error : null,
+  }
+}
+
 export function TlsOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
   const canManage = useCan('organization', orgId, 'organization:manage')
   const tlsQuery = useTlsLibrary(orgId)
@@ -365,17 +385,9 @@ export function TlsOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
       <TlsLetsEncryptPanel
         canManage={canManage}
         orgId={orgId}
-        contactEmail={tlsSettingsQuery.data?.acmeContactEmail ?? null}
-        termsUrl={tlsSettingsQuery.data?.acmeTermsUrl ?? null}
-        termsAcceptedAt={tlsSettingsQuery.data?.acmeTermsAcceptedAt ?? null}
-        acceptedTermsUrl={tlsSettingsQuery.data?.acmeAcceptedTermsUrl ?? null}
-        termsChanged={tlsSettingsQuery.data?.acmeTermsChanged ?? false}
+        {...letsEncryptSettingsProps(tlsSettingsQuery)}
         acmeEnabled={acmeEnabled}
         acmeError={acmeError}
-        // A failed refresh with settings already shown keeps the form (and what was typed).
-        settingsError={
-          tlsSettingsQuery.isError && !tlsSettingsQuery.data ? tlsSettingsQuery.error : null
-        }
         settingsLoading={tlsSettingsQuery.isLoading}
         pending={acmeMutation.isPending}
         onToggle={onToggleAcme}
