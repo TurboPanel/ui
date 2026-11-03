@@ -3,12 +3,13 @@ import { useQueryClient } from '@tanstack/react-query'
 import { Button, InlineNotice, TextField } from '@/components/ui'
 import { saveOrgTlsSettings } from '@/lib/instance-api'
 import { queryKeys, useApiMutation } from '@/lib/query-client'
+import { userErrorMessage } from '@/lib/user-error'
 
 /**
  * The contact address for the organization's Let's Encrypt account (Let's
- * Encrypt no longer sends expiry reminders).
- * Shown to managers only: the setting is manager-readable on the server.
- * It is its own setting: nothing is taken from a member's account.
+ * Encrypt no longer sends expiry reminders), changed while Let's Encrypt is
+ * on. Shown to managers only: the setting is manager-readable on the server.
+ * The server refuses to clear it while Let's Encrypt is on.
  */
 export function TlsContactEmailField({
   orgId,
@@ -33,7 +34,10 @@ export function TlsContactEmailField({
       setDraft(null)
       queryClient.setQueryData(key, data)
     },
-    onError: () => setError('Could not save. Enter one email address, such as ops@example.com.'),
+    onError: (err) =>
+      setError(
+        userErrorMessage(err, 'Could not save. Enter one email address, such as ops@example.com.')
+      ),
   })
   if (!canManage) return null
   const value = draft ?? savedEmail ?? ''
@@ -44,7 +48,7 @@ export function TlsContactEmailField({
     <>
       <TextField
         label="Certificate Contact Email"
-        hint="The contact address for this organization's Let's Encrypt account. Let's Encrypt no longer sends expiry reminders. It will be used for certificates ordered once and shared across servers."
+        hint="The contact address for this organization's Let's Encrypt account. Let's Encrypt no longer sends expiry reminders. It is sent with every Let's Encrypt order for this organization."
         value={value}
         onChangeText={(text) => {
           setDraft(text)
@@ -60,7 +64,7 @@ export function TlsContactEmailField({
       {loaded && savedEmail === null ? (
         <InlineNotice
           title="Add a contact email"
-          body="This organization will need one for certificates ordered once and shared across servers."
+          body="Let's Encrypt needs one for this organization; it cannot stay on without it."
         />
       ) : null}
       <Button

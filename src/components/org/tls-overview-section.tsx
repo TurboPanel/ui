@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { DnsCertificatePanel } from '@/components/org/dns-certificate-panel'
 import { OrganizationCaPanel } from '@/components/org/organization-ca-panel'
+import { TlsAcmeOptIn, TlsAcmeTermsRenewal } from '@/components/org/tls-acme-opt-in'
 import { TlsContactEmailField } from '@/components/org/tls-contact-email-field'
 import {
   Button,
@@ -18,6 +19,7 @@ import {
 } from '@/components/ui'
 import {
   fetchOrgTlsSettings,
+  type OrgTlsSettings,
   saveOrgTlsSettings,
   type TlsRecord,
   type TlsSource,
@@ -173,9 +175,17 @@ function TlsLetsEncryptPanel({
   onToggle,
   orgId,
   contactEmail,
+  termsUrl,
+  termsAcceptedAt,
+  acceptedTermsUrl,
+  termsChanged,
 }: Readonly<{
   orgId: string
   contactEmail: string | null
+  termsUrl: string | null
+  termsAcceptedAt: string | null
+  acceptedTermsUrl: string | null
+  termsChanged: boolean
   canManage: boolean
   acmeEnabled: boolean
   acmeError: string | null
@@ -187,7 +197,7 @@ function TlsLetsEncryptPanel({
   return (
     <SectionPanel
       title="Let's Encrypt"
-      hint="On for new organizations — turn it off to stop any Let's Encrypt certificate being requested"
+      hint="Off until your organization accepts the Let's Encrypt terms and turns it on"
     >
       {acmeError ? <Text style={panelStyles.error}>{acmeError}</Text> : null}
       {settingsError && !acmeError ? (
@@ -195,25 +205,75 @@ function TlsLetsEncryptPanel({
           {errorMessage(settingsError, "Failed to load the Let's Encrypt setting")}
         </Text>
       ) : null}
-      <SettingRow
-        label="Allow Let's Encrypt certificates"
-        description="When off, no new Let's Encrypt / ACME certificate can be requested for this organization, and a deploy that still pins a Let's Encrypt certificate (or whose compose asks for tls.mode automatic) is refused until it is turned back on or the choice is changed. Certificates already issued are not revoked by turning this off, but the encrypted copies of their keys that the panel stores are erased."
-      >
-        <Toggle
-          value={acmeEnabled}
-          onValueChange={onToggle}
-          disabled={!canManage || pending || settingsLoading}
-          accessibilityLabel="Allow Let's Encrypt certificates"
+      {acmeEnabled ? (
+        <>
+          <SettingRow
+            label="Allow Let's Encrypt certificates"
+            description="When off, no new Let's Encrypt / ACME certificate can be requested for this organization, and a deploy that still pins a Let's Encrypt certificate (or whose compose asks for tls.mode automatic) is refused until it is turned back on or the choice is changed. Certificates already issued are not revoked by turning this off, but the encrypted copies of their keys that the panel stores are erased."
+          >
+            <Toggle
+              value={acmeEnabled}
+              onValueChange={onToggle}
+              disabled={!canManage || pending || settingsLoading}
+              accessibilityLabel="Allow Let's Encrypt certificates"
+            />
+          </SettingRow>
+          {termsAcceptedAt ? (
+            <Text style={panelStyles.muted}>
+              Let&apos;s Encrypt terms accepted {new Date(termsAcceptedAt).toLocaleString()}.
+            </Text>
+          ) : null}
+          {canManage && termsUrl !== null && (termsChanged || acceptedTermsUrl === null) ? (
+            <TlsAcmeTermsRenewal
+              orgId={orgId}
+              termsUrl={termsUrl}
+              changed={termsChanged}
+              disabled={settingsLoading || Boolean(settingsError)}
+            />
+          ) : null}
+          <TlsContactEmailField
+            orgId={orgId}
+            canManage={canManage}
+            savedEmail={contactEmail}
+            loaded={!settingsLoading && !settingsError}
+          />
+        </>
+      ) : null}
+      {!acmeEnabled && canManage && !settingsLoading && !settingsError ? (
+        <TlsAcmeOptIn
+          orgId={orgId}
+          savedEmail={contactEmail}
+          termsUrl={termsUrl}
+          termsAcceptedAt={termsAcceptedAt}
+          disabled={settingsLoading || Boolean(settingsError)}
         />
-      </SettingRow>
-      <TlsContactEmailField
-        orgId={orgId}
-        canManage={canManage}
-        savedEmail={contactEmail}
-        loaded={!settingsLoading && !settingsError}
-      />
+      ) : null}
+      {!acmeEnabled && !canManage ? (
+        <Text style={panelStyles.muted}>
+          Off. An organization manager can accept the Let&apos;s Encrypt terms and turn it on.
+        </Text>
+      ) : null}
     </SectionPanel>
   )
+}
+
+/**
+ * What the Let's Encrypt panel reads from the settings query. A failed refresh
+ * with settings already shown is not an error here, so the form (and what was
+ * typed) stays.
+ */
+function letsEncryptSettingsProps(
+  query: Readonly<{ data?: OrgTlsSettings; isError: boolean; error: unknown }>
+) {
+  const data = query.data
+  return {
+    contactEmail: data?.acmeContactEmail ?? null,
+    termsUrl: data?.acmeTermsUrl ?? null,
+    termsAcceptedAt: data?.acmeTermsAcceptedAt ?? null,
+    acceptedTermsUrl: data?.acmeAcceptedTermsUrl ?? null,
+    termsChanged: data?.acmeTermsChanged ?? false,
+    settingsError: query.isError && !data ? query.error : null,
+  }
 }
 
 export function TlsOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
@@ -325,10 +385,9 @@ export function TlsOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
       <TlsLetsEncryptPanel
         canManage={canManage}
         orgId={orgId}
-        contactEmail={tlsSettingsQuery.data?.acmeContactEmail ?? null}
+        {...letsEncryptSettingsProps(tlsSettingsQuery)}
         acmeEnabled={acmeEnabled}
         acmeError={acmeError}
-        settingsError={tlsSettingsQuery.isError ? tlsSettingsQuery.error : null}
         settingsLoading={tlsSettingsQuery.isLoading}
         pending={acmeMutation.isPending}
         onToggle={onToggleAcme}
