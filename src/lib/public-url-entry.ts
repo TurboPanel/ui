@@ -254,7 +254,7 @@ function buildSelfHostedEntry(text: string): PublicUrlEntryResult {
   const input = splitSelfHostedInput(raw)
   const host = input ? normalizeSelfHostedHost(input) : null
   if (!input || !host) return { ok: false, error: HOST_ONLY_ERROR }
-  if (host === 'localhost') return { ok: false, error: HOST_UNREACHABLE_ERROR }
+  if (!isUsableHost(host)) return { ok: false, error: HOST_UNREACHABLE_ERROR }
   const parts: PublicUrlParts = { scheme: 'https', host, port: SELF_HOSTED_ENTRY_PORT }
   return { ok: true, value: formatPublicUrlEntry(parts), parts }
 }

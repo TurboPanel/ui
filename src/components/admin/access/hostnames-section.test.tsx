@@ -1,24 +1,21 @@
 // @vitest-environment happy-dom
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ControlPlaneUrlsSection } from '../control-plane-urls-section'
 import { HostnamesSection } from './hostnames-section'
 
 const mocks = vi.hoisted(() => ({
   useAuth: vi.fn(),
   hostnames: vi.fn(),
   addRow: vi.fn(),
+  editorRead: vi.fn(),
 }))
 
 const idle = { run: vi.fn(), mutate: vi.fn(), isPending: false, actionError: null }
-// One stable object: a fresh `data` each render would re-run the section's sync effect forever.
-const publicUrls = { data: { urls: [] }, isLoading: false, isError: false }
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
 vi.mock('@/components/ui', async () => ({
   ...(await import('./access-ui-stub')).accessUiStub,
   CopyButton: () => null,
-  EmptyState: ({ title }: Readonly<{ title: string }>) => <p>{title}</p>,
   ModalSheet: () => null,
   StatusDot: () => null,
 }))
@@ -32,7 +29,6 @@ vi.mock('@/components/admin/public-url-fields', () => ({
     mocks.addRow(props)
     return <p>Add Row</p>
   },
-  PublicUrlParts: ({ url }: Readonly<{ url: string }>) => <p>{url}</p>,
   PublicUrlsApplyFeedback: () => null,
 }))
 vi.mock('./connection-mode-cell', () => ({
@@ -53,17 +49,28 @@ vi.mock('@/lib/queries/ingress', () => ({
 vi.mock('@/lib/queries/admin', () => ({
   useInstanceHostnames: mocks.hostnames,
   useLetsEncryptTermsGuard: () => () => null,
-  useInstanceCertificates: () => ({ data: { certificates: [] } }),
+  useInstanceCertificates: () => {
+    mocks.editorRead()
+    return { data: { certificates: [] } }
+  },
   useInstanceDaemon: () => ({ data: undefined, isLoading: false, isError: false }),
   useSaveInstanceHostnames: () => idle,
   useApplyPublicUrls: () => idle,
-  usePublicUrls: () => publicUrls,
-  useSavePublicUrls: () => idle,
 }))
 
-function lastAddRowProps(): { selfHosted?: boolean } {
-  const calls = mocks.addRow.mock.calls
-  return calls[calls.length - 1]?.[0] ?? {}
+// The editor's panel; the page title is plain text, the High Availability panel is "Address".
+const editorPanel = () => screen.queryByRole('heading', { name: 'Hostnames' })
+
+function renderOn(runtime: string | undefined, query: Record<string, unknown>) {
+  mocks.useAuth.mockReturnValue({ controlPlaneRuntime: runtime })
+  mocks.hostnames.mockReturnValue({ data: undefined, isLoading: false, isError: false, ...query })
+  render(<HostnamesSection />)
+}
+
+function expectNoEditor() {
+  expect(editorPanel()).toBeNull()
+  expect(mocks.addRow).not.toHaveBeenCalled()
+  expect(mocks.editorRead).not.toHaveBeenCalled()
 }
 
 afterEach(() => {
@@ -71,37 +78,49 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-describe('add row runtime flag', () => {
-  it('passes selfHosted to the add row on the self-hosted runtime', () => {
-    mocks.useAuth.mockReturnValue({ controlPlaneRuntime: 'deno' })
-    mocks.hostnames.mockReturnValue({ data: { hostnames: [] }, isLoading: false })
-    render(<HostnamesSection />)
+describe('HostnamesSection view by runtime', () => {
+  it('shows the editor with the self-hosted add row on the self-hosted runtime', () => {
+    renderOn('deno', { data: { hostnames: [] } })
+    expect(editorPanel()).toBeTruthy()
     expect(screen.getByText('Add Row')).toBeTruthy()
-    expect(lastAddRowProps().selfHosted).toBe(true)
+    const calls = mocks.addRow.mock.calls
+    expect(calls[calls.length - 1]?.[0]?.selfHosted).toBe(true)
   })
 
-  it('does not pass selfHosted on High Availability', () => {
-    mocks.useAuth.mockReturnValue({ controlPlaneRuntime: 'workers' })
-    mocks.hostnames.mockReturnValue({ data: { hostnames: [] }, isLoading: false })
-    render(<HostnamesSection />)
-    expect(screen.getByText('Add Row')).toBeTruthy()
-    expect(lastAddRowProps().selfHosted).toBe(false)
+  it('shows a neutral loading state while the runtime is unknown', () => {
+    renderOn(undefined, { isLoading: true })
+    expect(screen.getByText('Loading')).toBeTruthy()
+    expect(screen.queryByText(/Platform-managed/)).toBeNull()
+    expect(mocks.hostnames).not.toHaveBeenCalled()
+    expectNoEditor()
   })
 
-  it('shows no add row for a platform-managed High Availability address', () => {
-    mocks.useAuth.mockReturnValue({ controlPlaneRuntime: 'workers' })
-    mocks.hostnames.mockReturnValue({
+  it('keeps the read-only view on High Availability while hostnames load', () => {
+    renderOn('workers', { isLoading: true })
+    expect(screen.getByText(/Platform-managed/)).toBeTruthy()
+    expect(screen.getByText('Loading')).toBeTruthy()
+    expectNoEditor()
+  })
+
+  it('keeps the read-only view on High Availability when the read fails', () => {
+    renderOn('workers', { isError: true, error: new Error('Service unavailable') })
+    expect(screen.getByText(/Platform-managed/)).toBeTruthy()
+    expect(screen.getByText('Service unavailable')).toBeTruthy()
+    expect(screen.queryByText('No fixed address configured')).toBeNull()
+    expectNoEditor()
+  })
+
+  it('shows the fixed address on High Availability', () => {
+    renderOn('workers', {
       data: { hostnames: [], platformManagedOrigin: 'https://panel.example.com' },
-      isLoading: false,
     })
-    render(<HostnamesSection />)
     expect(screen.getByText('https://panel.example.com')).toBeTruthy()
-    expect(mocks.addRow).not.toHaveBeenCalled()
+    expectNoEditor()
   })
 
-  it('leaves the control plane URL list without the flag', () => {
-    render(<ControlPlaneUrlsSection />)
-    expect(screen.getByText('Add Row')).toBeTruthy()
-    expect(lastAddRowProps().selfHosted).toBeUndefined()
+  it('never shows the editor on High Availability, even without a fixed address', () => {
+    renderOn('workers', { data: { hostnames: [] } })
+    expect(screen.getByText('No fixed address configured')).toBeTruthy()
+    expectNoEditor()
   })
 })

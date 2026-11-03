@@ -170,7 +170,31 @@ function invalidFrom(cause: unknown): string[] {
   return []
 }
 
-function PlatformManagedHostnames({ origin }: Readonly<{ origin: string | null }>) {
+/** High Availability: one read-only address from the platform's environment, never the editor. */
+function PlatformManagedHostnames() {
+  const hostnamesQuery = useInstanceHostnames()
+  const data = hostnamesQuery.data
+  const origin =
+    data && 'platformManagedOrigin' in data ? (data.platformManagedOrigin ?? null) : null
+  let body = (
+    <DataTable columns={ADDRESS_ONLY_COLUMNS} minWidth={280}>
+      {origin ? (
+        <DataTableRow last>
+          <DataTableCell column={ADDRESS_ONLY_COLUMNS[0]!}>{origin}</DataTableCell>
+        </DataTableRow>
+      ) : (
+        <DataTableEmpty>No fixed address configured</DataTableEmpty>
+      )}
+    </DataTable>
+  )
+  if (hostnamesQuery.isLoading) body = <LoadingState />
+  else if (hostnamesQuery.isError) {
+    body = (
+      <Text style={panelStyles.error}>
+        {userErrorMessage(hostnamesQuery.error, 'Failed to load hostnames')}
+      </Text>
+    )
+  }
   return (
     <View style={styles.root}>
       <Text style={panelStyles.pageTitle}>Hostnames</Text>
@@ -185,21 +209,31 @@ function PlatformManagedHostnames({ origin }: Readonly<{ origin: string | null }
         body="TurboPanel High Availability answers on one fixed address per environment. Cloudflare terminates TLS for it at the edge, so there is nothing to add or configure here."
       />
       <SectionPanel title="Address" hint="Fixed by this deployment's environment">
-        <DataTable columns={ADDRESS_ONLY_COLUMNS} minWidth={280}>
-          {origin ? (
-            <DataTableRow last>
-              <DataTableCell column={ADDRESS_ONLY_COLUMNS[0]!}>{origin}</DataTableCell>
-            </DataTableRow>
-          ) : (
-            <DataTableEmpty>No fixed address configured</DataTableEmpty>
-          )}
-        </DataTable>
+        {body}
       </SectionPanel>
     </View>
   )
 }
 
+/**
+ * The view follows the runtime, not the hostnames response, so High
+ * Availability never shows the editor while that read loads or after it fails.
+ */
 export function HostnamesSection() {
+  const { controlPlaneRuntime } = useAuth()
+  if (controlPlaneRuntime === undefined) {
+    return (
+      <View style={styles.root}>
+        <Text style={panelStyles.pageTitle}>Hostnames</Text>
+        <LoadingState />
+      </View>
+    )
+  }
+  if (controlPlaneRuntime === 'workers') return <PlatformManagedHostnames />
+  return <SelfHostedHostnames />
+}
+
+function SelfHostedHostnames() {
   const hostnamesQuery = useInstanceHostnames()
   const termsBlock = useLetsEncryptTermsGuard()
   const certificatesQuery = useInstanceCertificates()
@@ -373,10 +407,6 @@ export function HostnamesSection() {
       return
     }
     void runApply()
-  }
-
-  if (hostnamesQuery.data && 'platformManagedOrigin' in hostnamesQuery.data) {
-    return <PlatformManagedHostnames origin={hostnamesQuery.data.platformManagedOrigin ?? null} />
   }
 
   return (
