@@ -42,7 +42,9 @@ function Shape({
 /**
  * The shape half of a status: a small drawn mark in the tone colour. It is
  * decoration (the word beside it carries the meaning), so it is hidden from
- * screen readers.
+ * screen readers. Use `aria-hidden`, as the other Svg marks do: on web the
+ * Svg hands unknown props straight to the DOM, so the native-only hiding
+ * props leak there as invalid attributes.
  */
 export function StatusGlyph({
   glyph,
@@ -50,13 +52,7 @@ export function StatusGlyph({
   size = 10,
 }: Readonly<{ glyph: GlyphKey; color: string; size?: number }>) {
   return (
-    <Svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      accessibilityElementsHidden
-      importantForAccessibility="no-hide-descendants"
-    >
+    <Svg width={size} height={size} viewBox="0 0 24 24" aria-hidden>
       {GLYPHS[glyph].map((shape) => (
         <Shape key={shapeKey(shape)} shape={shape} glyph={glyph} color={color} />
       ))}

@@ -160,15 +160,21 @@ export const reactNativeStub = {
   useWindowDimensions: () => ({ width: env.width, height: 800 }),
 }
 
+const NATIVE_ONLY_SVG_PROPS = new Set(['accessibilityElementsHidden', 'importantForAccessibility'])
+
 function svgDom(tag: string) {
   return function SvgStub(props: Props) {
     const { children, ...rest } = props
     const attrs: Record<string, unknown> = {}
     for (const [key, value] of Object.entries(rest)) {
-      if (key === 'importantForAccessibility') continue
+      // react-native-svg on web hands these to the DOM element untranslated,
+      // where React rejects them; fail here so a test catches it.
+      if (NATIVE_ONLY_SVG_PROPS.has(key)) {
+        throw new TypeError(`${key} leaks to the DOM on web; use aria-hidden on <${tag}>`)
+      }
       if (typeof value === 'string' || typeof value === 'number') attrs[key] = value
     }
-    attrs['aria-hidden'] = props.accessibilityElementsHidden ? true : undefined
+    attrs['aria-hidden'] = props['aria-hidden'] === true ? true : undefined
     return createElement(tag, attrs, children)
   }
 }
