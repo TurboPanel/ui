@@ -60,7 +60,6 @@ import { useIngressAccounts, useIngressCapabilities } from '@/lib/queries/ingres
 import { EdgeGateStatus } from '@/components/admin/access/edge-gate-status'
 import {
   addPublicUrlEntry,
-  SELF_HOSTED_ENTRY_PORT,
   parsePublicUrlEntry,
   publicOriginForRecord,
   type PublicUrlDraft,
@@ -257,7 +256,7 @@ export function HostnamesSection() {
     const result = addPublicUrlEntry(
       draft.map((row) => row.host),
       entry,
-      ingress.enabled ? { fixedPort: SELF_HOSTED_ENTRY_PORT } : {}
+      { selfHosted: ingress.enabled }
     )
     if (!result.ok) {
       setEntryError(result.error)
@@ -535,7 +534,7 @@ function HostnamesEditor({
         entry={entry}
         entryError={entryError}
         busy={busy}
-        fixedPort={ingress.enabled}
+        selfHosted={ingress.enabled}
         onEntryChange={onEntryChange}
         onAddUrl={onAddUrl}
       />
