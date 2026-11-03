@@ -20,8 +20,8 @@ vi.mock('expo-clipboard', () => ({ setStringAsync: vi.fn(() => Promise.resolve()
 vi.mock('@/components/org/organization-ca-panel', () => ({ OrganizationCaPanel: () => null }))
 vi.mock('@/components/org/tls-contact-email-field', () => ({ TlsContactEmailField: () => null }))
 vi.mock('@/components/org/tls-acme-opt-in', () => ({
-  LETS_ENCRYPT_TERMS_URL: 'https://letsencrypt.org/repository/',
   TlsAcmeOptIn: () => null,
+  TlsAcmeTermsRenewal: () => null,
 }))
 vi.mock('@/components/org/dns-certificate-panel', () => ({ DnsCertificatePanel: () => null }))
 vi.mock('@/components/ui', async () => ({

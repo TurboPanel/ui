@@ -19,6 +19,7 @@ vi.mock(
 )
 vi.mock('@/components/ui/panel-styles', () => ({ panelStyles: {} }))
 vi.mock('@/components/ui', () => ({
+  InlineNotice: ({ title }: { title: string }) => <p>{title}</p>,
   Button: ({
     label,
     onPress,
@@ -78,9 +79,9 @@ vi.mock('@/lib/query-client', () => ({
 }))
 vi.mock('@/lib/instance-api', () => ({ saveOrgTlsSettings: vi.fn() }))
 
-import { looksLikeEmail, TlsAcmeOptIn } from './tls-acme-opt-in'
+import { looksLikeEmail, TlsAcmeOptIn, TlsAcmeTermsRenewal } from './tls-acme-opt-in'
 
-const TERMS = 'https://letsencrypt.org/repository/'
+const TERMS = 'https://letsencrypt.org/documents/LE-SA-v1.5.pdf'
 const optIn = (props: Partial<Parameters<typeof TlsAcmeOptIn>[0]> = {}) =>
   render(
     <TlsAcmeOptIn
@@ -115,7 +116,12 @@ describe('TlsAcmeOptIn', () => {
     accept()
     expect(turnOn().disabled).toBe(false)
     fireEvent.click(turnOn())
-    expect(state.mutate).toHaveBeenCalledWith('me@example.com')
+    expect(state.mutate).toHaveBeenCalledWith({
+      acmeEnabled: true,
+      acmeContactEmail: 'me@example.com',
+      acmeTermsAccepted: true,
+      acmeTermsUrl: TERMS,
+    })
   })
 
   it('prefers the address the organization already saved', () => {
@@ -134,13 +140,25 @@ describe('TlsAcmeOptIn', () => {
     expect(screen.getByText('Enter one email address, such as ops@example.com.')).toBeTruthy()
     fireEvent.change(field, { target: { value: ' team@example.org ' } })
     fireEvent.click(turnOn())
-    expect(state.mutate).toHaveBeenCalledWith('team@example.org')
+    expect(state.mutate).toHaveBeenCalledWith(
+      expect.objectContaining({ acmeContactEmail: 'team@example.org', acmeTermsUrl: TERMS })
+    )
   })
 
   it('opens the agreement', () => {
     optIn()
     fireEvent.click(screen.getByText("Read the Let's Encrypt Subscriber Agreement"))
     expect(state.openURL).toHaveBeenCalledWith(TERMS)
+  })
+
+  it('says so and stays off when the current terms could not be read', () => {
+    optIn({ termsUrl: null })
+    expect(
+      screen.getByText(
+        "Let's Encrypt could not be reached to read its current terms. Try again in a moment."
+      )
+    ).toBeTruthy()
+    expect(turnOn().disabled).toBe(true)
   })
 
   it('stays off while the settings are not loaded', () => {
@@ -156,5 +174,25 @@ describe('looksLikeEmail', () => {
     for (const bad of ['', 'ops', 'ops@', '@example.com', 'ops@example', 'a b@example.com']) {
       expect(looksLikeEmail(bad)).toBe(false)
     }
+  })
+})
+
+describe('TlsAcmeTermsRenewal', () => {
+  beforeEach(() => state.mutate.mockReset())
+  afterEach(cleanup)
+
+  it('asks again for newer terms and records the exact agreement', () => {
+    render(<TlsAcmeTermsRenewal orgId="o1" termsUrl={TERMS} changed disabled={false} />)
+    expect(screen.getByText("Let's Encrypt Has New Terms")).toBeTruthy()
+    const button = screen.getByText('Accept Terms') as HTMLButtonElement
+    expect(button.disabled).toBe(true)
+    accept()
+    fireEvent.click(button)
+    expect(state.mutate).toHaveBeenCalledWith({ acmeTermsAccepted: true, acmeTermsUrl: TERMS })
+  })
+
+  it('asks for a first acceptance when none was recorded', () => {
+    render(<TlsAcmeTermsRenewal orgId="o1" termsUrl={TERMS} changed={false} disabled={false} />)
+    expect(screen.getByText("Accept the Let's Encrypt Terms")).toBeTruthy()
   })
 })

@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { DnsCertificatePanel } from '@/components/org/dns-certificate-panel'
 import { OrganizationCaPanel } from '@/components/org/organization-ca-panel'
-import { LETS_ENCRYPT_TERMS_URL, TlsAcmeOptIn } from '@/components/org/tls-acme-opt-in'
+import { TlsAcmeOptIn, TlsAcmeTermsRenewal } from '@/components/org/tls-acme-opt-in'
 import { TlsContactEmailField } from '@/components/org/tls-contact-email-field'
 import {
   Button,
@@ -176,11 +176,15 @@ function TlsLetsEncryptPanel({
   contactEmail,
   termsUrl,
   termsAcceptedAt,
+  acceptedTermsUrl,
+  termsChanged,
 }: Readonly<{
   orgId: string
   contactEmail: string | null
   termsUrl: string | null
   termsAcceptedAt: string | null
+  acceptedTermsUrl: string | null
+  termsChanged: boolean
   canManage: boolean
   acmeEnabled: boolean
   acmeError: string | null
@@ -218,6 +222,14 @@ function TlsLetsEncryptPanel({
               Let&apos;s Encrypt terms accepted {new Date(termsAcceptedAt).toLocaleString()}.
             </Text>
           ) : null}
+          {canManage && termsUrl !== null && (termsChanged || acceptedTermsUrl === null) ? (
+            <TlsAcmeTermsRenewal
+              orgId={orgId}
+              termsUrl={termsUrl}
+              changed={termsChanged}
+              disabled={settingsLoading || Boolean(settingsError)}
+            />
+          ) : null}
           <TlsContactEmailField
             orgId={orgId}
             canManage={canManage}
@@ -226,11 +238,11 @@ function TlsLetsEncryptPanel({
           />
         </>
       ) : null}
-      {!acmeEnabled && canManage ? (
+      {!acmeEnabled && canManage && !settingsLoading ? (
         <TlsAcmeOptIn
           orgId={orgId}
           savedEmail={contactEmail}
-          termsUrl={termsUrl ?? LETS_ENCRYPT_TERMS_URL}
+          termsUrl={termsUrl}
           termsAcceptedAt={termsAcceptedAt}
           disabled={settingsLoading || Boolean(settingsError)}
         />
@@ -356,6 +368,8 @@ export function TlsOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
         contactEmail={tlsSettingsQuery.data?.acmeContactEmail ?? null}
         termsUrl={tlsSettingsQuery.data?.acmeTermsUrl ?? null}
         termsAcceptedAt={tlsSettingsQuery.data?.acmeTermsAcceptedAt ?? null}
+        acceptedTermsUrl={tlsSettingsQuery.data?.acmeAcceptedTermsUrl ?? null}
+        termsChanged={tlsSettingsQuery.data?.acmeTermsChanged ?? false}
         acmeEnabled={acmeEnabled}
         acmeError={acmeError}
         settingsError={tlsSettingsQuery.isError ? tlsSettingsQuery.error : null}

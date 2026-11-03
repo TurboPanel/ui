@@ -1292,8 +1292,12 @@ export type OrgTlsSettings = {
   acmeContactEmail: string | null
   /** When the organization last accepted the Let's Encrypt terms; null when it never has. */
   acmeTermsAcceptedAt: string | null
-  /** Page listing the current Let's Encrypt subscriber agreement. */
-  acmeTermsUrl: string
+  /** The exact agreement the organization accepted; null when it never has. */
+  acmeAcceptedTermsUrl: string | null
+  /** The agreement Let's Encrypt names now; null when it could not be read. */
+  acmeTermsUrl: string | null
+  /** True when an older agreement was accepted than the current one: ask again. */
+  acmeTermsChanged: boolean
 }
 
 /**
@@ -1306,8 +1310,14 @@ export type OrgTlsSettings = {
 export type OrgTlsSettingsPatch = {
   acmeEnabled?: boolean
   acmeContactEmail?: string | null
-  /** Records that the organization accepts the Let's Encrypt terms now. */
+  /** Records that the organization accepts the agreement in `acmeTermsUrl` now. */
   acmeTermsAccepted?: true
+  /**
+   * The exact agreement shown (the GET's `acmeTermsUrl`), sent with
+   * `acmeTermsAccepted`. 409 `acme_terms_changed` when Let's Encrypt names a
+   * newer one; 503 `acme_terms_unavailable` when it cannot be read.
+   */
+  acmeTermsUrl?: string
 }
 
 export async function fetchOrgTlsSettings(orgId: string): Promise<OrgTlsSettings> {
