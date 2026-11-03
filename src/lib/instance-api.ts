@@ -5535,7 +5535,7 @@ export async function applyPublicUrls(
   })
 }
 
-export type InstanceHostnameSource = 'platform-ca' | 'uploaded' | 'lets-encrypt' | 'dns-01'
+export type InstanceHostnameSource = 'platform-ca' | 'uploaded' | 'acme-http-01' | 'acme-dns-01'
 
 export type InstanceHostnameStatus = 'ready' | 'pending' | 'failed' | 'expired'
 

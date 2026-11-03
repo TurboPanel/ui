@@ -130,7 +130,12 @@ function toInput(record: InstanceHostnameRecord): InstanceHostnameInput {
   }
 }
 
-const SOURCES: ReadonlySet<string> = new Set(['platform-ca', 'uploaded', 'lets-encrypt', 'dns-01'])
+const SOURCES: ReadonlySet<string> = new Set([
+  'platform-ca',
+  'uploaded',
+  'acme-http-01',
+  'acme-dns-01',
+])
 
 function isSource(value: string | null): value is InstanceHostnameSource {
   return value !== null && SOURCES.has(value)
@@ -799,16 +804,16 @@ function CertificatePicker({
             detail: refused.uploaded ?? null,
           },
           {
-            value: 'lets-encrypt',
-            label: INSTANCE_HOSTNAME_SOURCE_LABELS['lets-encrypt'],
-            disabled: Boolean(refused['lets-encrypt']),
-            detail: refused['lets-encrypt'] ?? null,
+            value: 'acme-http-01',
+            label: INSTANCE_HOSTNAME_SOURCE_LABELS['acme-http-01'],
+            disabled: Boolean(refused['acme-http-01']),
+            detail: refused['acme-http-01'] ?? null,
           },
           {
-            value: 'dns-01',
-            label: INSTANCE_HOSTNAME_SOURCE_LABELS['dns-01'],
-            disabled: Boolean(refused['dns-01']),
-            detail: refused['dns-01'] ?? null,
+            value: 'acme-dns-01',
+            label: INSTANCE_HOSTNAME_SOURCE_LABELS['acme-dns-01'],
+            disabled: Boolean(refused['acme-dns-01']),
+            detail: refused['acme-dns-01'] ?? null,
           },
         ]}
         onChange={(value) => {

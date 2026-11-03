@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   certificateSourceEligibility,
   daemonCapabilitiesStatus,
+  draftUsesLetsEncryptSource,
   hostnameStatusPresentation,
   http01PreflightPresentation,
   INSTANCE_ACME_HTTP01_ISSUER_UNREACHABLE,
@@ -18,10 +19,11 @@ import {
 const CAPABLE = { 'instance-cert-sources-per-hostname': true }
 
 describe('INSTANCE_HOSTNAME_SOURCE_LABELS', () => {
-  it("names Platform CA, Uploaded, and Let's Encrypt", () => {
+  it("names Platform CA, Uploaded, and both Let's Encrypt sources", () => {
     expect(INSTANCE_HOSTNAME_SOURCE_LABELS['platform-ca']).toBe('Platform CA')
     expect(INSTANCE_HOSTNAME_SOURCE_LABELS.uploaded).toBe('Uploaded')
-    expect(INSTANCE_HOSTNAME_SOURCE_LABELS['lets-encrypt']).toBe("Let's Encrypt")
+    expect(INSTANCE_HOSTNAME_SOURCE_LABELS['acme-http-01']).toBe("Let's Encrypt (HTTP)")
+    expect(INSTANCE_HOSTNAME_SOURCE_LABELS['acme-dns-01']).toBe("Let's Encrypt (DNS)")
   })
 })
 
@@ -58,7 +60,7 @@ describe('certificateSourceEligibility', () => {
       capabilities: { 'instance-cert-sources-per-hostname': false },
     })
     expect(refused.uploaded).toContain('too old')
-    expect(refused['lets-encrypt']).toContain('too old')
+    expect(refused['acme-http-01']).toContain('too old')
   })
 
   it('refuses DNS-01 for anything but one exact public DNS name', () => {
@@ -67,12 +69,16 @@ describe('certificateSourceEligibility', () => {
       capabilities: { 'instance-cert-sources-per-hostname': true },
     }
     for (const host of ['10.0.0.5', '[::1]', 'localhost', 'panel', '*.example.com']) {
-      expect(certificateSourceEligibility(host, ready)['dns-01'], host).toBeTruthy()
+      expect(certificateSourceEligibility(host, ready)['acme-dns-01'], host).toBeTruthy()
     }
-    expect(certificateSourceEligibility('*.example.com', ready)['dns-01']).toContain('wildcard')
-    expect(certificateSourceEligibility('panel.example.com', ready)['dns-01']).toBeUndefined()
+    expect(certificateSourceEligibility('*.example.com', ready)['acme-dns-01']).toContain(
+      'wildcard'
+    )
+    expect(certificateSourceEligibility('panel.example.com', ready)['acme-dns-01']).toBeUndefined()
     expect(
-      certificateSourceEligibility('panel.example.com', { ...ready, capabilities: {} })['dns-01']
+      certificateSourceEligibility('panel.example.com', { ...ready, capabilities: {} })[
+        'acme-dns-01'
+      ]
     ).toContain('too old')
   })
 
@@ -86,8 +92,8 @@ describe('certificateSourceEligibility', () => {
         capabilities: undefined,
         capabilitiesStatus: status,
       })
-      expect(refused['lets-encrypt']).toContain(phrase)
-      expect(refused['lets-encrypt']).not.toContain('too old')
+      expect(refused['acme-http-01']).toContain(phrase)
+      expect(refused['acme-http-01']).not.toContain('too old')
     }
   })
 
@@ -111,8 +117,8 @@ describe('certificateSourceEligibility', () => {
       capabilities: null,
       capabilitiesStatus: 'loading',
     })
-    expect(loading['lets-encrypt']).toContain('Checking')
-    expect(loading['lets-encrypt']).not.toContain('too old')
+    expect(loading['acme-http-01']).toContain('Checking')
+    expect(loading['acme-http-01']).not.toContain('too old')
     const failed = certificateSourceEligibility('panel.example.com', {
       certificates: [],
       capabilities: null,
@@ -127,12 +133,12 @@ describe('certificateSourceEligibility', () => {
       certificates: [],
       capabilities: CAPABLE,
     })
-    expect(privateName['lets-encrypt']).toContain('private')
+    expect(privateName['acme-http-01']).toContain('private')
     const wildcard = certificateSourceEligibility('*.example.com', {
       certificates: [{ dnsNames: ['*.example.com'] }],
       capabilities: CAPABLE,
     })
-    expect(wildcard['lets-encrypt']).toContain('wildcard')
+    expect(wildcard['acme-http-01']).toContain('wildcard')
     expect(wildcard.uploaded).toBeUndefined()
   })
 
@@ -142,7 +148,7 @@ describe('certificateSourceEligibility', () => {
       capabilities: CAPABLE,
     })
     expect(refused.uploaded).toContain('No uploaded certificate')
-    expect(refused['lets-encrypt']).toBeUndefined()
+    expect(refused['acme-http-01']).toBeUndefined()
   })
 })
 
@@ -154,7 +160,7 @@ describe('lockoutWarning', () => {
   })
 
   it('names the Platform CA recovery address on :8443', () => {
-    const warning = lockoutWarning(current, [{ host: 'panel.example.com', source: 'lets-encrypt' }])
+    const warning = lockoutWarning(current, [{ host: 'panel.example.com', source: 'acme-http-01' }])
     expect(warning).toContain('https://panel.example.com:8443')
     expect(warning).toContain('Platform CA')
   })
@@ -176,7 +182,7 @@ describe('requiresPlatformCaConfirm', () => {
         ],
         [
           { host: 'panel.lan', source: 'platform-ca' },
-          { host: 'panel.example.com', source: 'lets-encrypt' },
+          { host: 'panel.example.com', source: 'acme-http-01' },
         ]
       )
     ).toBe(true)
@@ -214,7 +220,7 @@ describe('panelHostnameHttpsUrl', () => {
 describe('http01PreflightPresentation', () => {
   it('reports a failed nonce check separately from later issuance', () => {
     const failed = http01PreflightPresentation({
-      source: 'lets-encrypt',
+      source: 'acme-http-01',
       acmeLastError:
         "Let's Encrypt HTTP-01 preflight failed for panel.example.com: http://panel.example.com/.well-known/acme-challenge/abc did not reach the instance ACME issuer (HTTP 404)",
       acmeLastAttemptAt: '2026-09-22T00:00:00.000Z',
@@ -223,7 +229,7 @@ describe('http01PreflightPresentation', () => {
     expect(failed?.text.includes(INSTANCE_ACME_HTTP01_ISSUER_UNREACHABLE)).toBe(true)
 
     const issued = http01PreflightPresentation({
-      source: 'lets-encrypt',
+      source: 'acme-http-01',
       acmeLastError: 'rate limited',
       acmeLastAttemptAt: '2026-09-22T00:00:00.000Z',
     })
@@ -236,7 +242,7 @@ describe('http01PreflightPresentation', () => {
   it('stays unrecorded until an attempt exists and ignores other sources', () => {
     expect(
       http01PreflightPresentation({
-        source: 'lets-encrypt',
+        source: 'acme-http-01',
         acmeLastError: null,
         acmeLastAttemptAt: null,
       })?.kind
@@ -347,5 +353,22 @@ describe('letsEncryptSaveBlockedMessage', () => {
         acme: notAccepted('env'),
       })
     ).toContain('TURBOPANEL_INSTANCE_ACME__TOS_ACCEPTED=true')
+  })
+})
+
+describe('draftUsesLetsEncryptSource', () => {
+  it("counts both Let's Encrypt sources and nothing else", () => {
+    expect(draftUsesLetsEncryptSource([{ host: 'a.example.com', source: 'acme-http-01' }])).toBe(
+      true
+    )
+    expect(draftUsesLetsEncryptSource([{ host: 'a.example.com', source: 'acme-dns-01' }])).toBe(
+      true
+    )
+    expect(
+      draftUsesLetsEncryptSource([
+        { host: 'a.example.com', source: 'platform-ca' },
+        { host: 'b.example.com', source: 'uploaded' },
+      ])
+    ).toBe(false)
   })
 })
