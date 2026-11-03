@@ -123,6 +123,15 @@ describe('describeCertificate', () => {
     expect(waitingLabel(null)).toBe('Waiting for DNS')
   })
 
+  it('says a new certificate waits for the organization to accept newer terms', () => {
+    const held = describeCertificate(
+      cert({ state: 'waiting_for_dns', dns: { ...DNS_NOT_READY, ready: true, termsHeld: true } })
+    )
+    expect(held.label).toBe('Waiting for New Terms')
+    expect(held.actions).toEqual([])
+    expect(held.lines.join(' ')).toContain('Organization Settings › Domains & Certificates')
+  })
+
   it('issuing spins, or asks for a redeploy when one is due', () => {
     const working = describeCertificate(cert({ state: 'issuing' }))
     expect(working.spinner).toBe(true)
@@ -247,6 +256,13 @@ describe('letsEncryptRefusal', () => {
         'Let’s Encrypt is turned off for this organization. An owner can turn it on in Organization Settings › Domains & Certificates.',
       openSettings: true,
     })
+  })
+
+  it('offers the settings when newer Let’s Encrypt terms are waiting', () => {
+    expect(
+      letsEncryptRefusal(refused(409, 'acme_terms_changed', "Let's Encrypt has new terms."))
+        .openSettings
+    ).toBe(true)
   })
 
   it.each([

@@ -4074,6 +4074,12 @@ export type HostingDnsReport = {
   /** When a waiting request is checked again. */
   nextCheckAt?: string
   checks?: number
+  /**
+   * DNS is ready, but the certificate would be a new one and the organization
+   * has not accepted Let's Encrypt's newer terms yet; it goes ahead once they
+   * are accepted.
+   */
+  termsHeld?: boolean
 }
 
 /** What a hosting shows about its certificate; the server decides every field. */
