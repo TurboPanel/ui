@@ -154,7 +154,7 @@ function PillDot({ tone }: Readonly<{ tone: PillTone }>) {
 function PinGlyph() {
   const p = usePalette()
   return (
-    <Svg width={10} height={10} viewBox="0 0 24 24" accessibilityElementsHidden>
+    <Svg width={10} height={10} viewBox="0 0 24 24" aria-hidden>
       <Path d={PIN} fill={p.text3} />
     </Svg>
   )
@@ -220,7 +220,7 @@ function ProjectIcon({ kind, small }: Readonly<{ kind: HomeProject['kind']; smal
         managed && s.iconManaged,
       ]}
     >
-      <Svg width={16} height={16} viewBox="0 0 24 24" accessibilityElementsHidden>
+      <Svg width={16} height={16} viewBox="0 0 24 24" aria-hidden>
         {paths.map((d) => (
           <Path
             key={d}
