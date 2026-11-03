@@ -29,7 +29,9 @@ vi.mock('@/lib/instance-api', () => ({
   fetchOrgHostDefaults: vi.fn(),
   saveOrgHostDefaults: vi.fn(),
 }))
-vi.mock('@/lib/user-error', () => ({ userErrorMessage: (_e: unknown, fallback: string) => fallback }))
+vi.mock('@/lib/user-error', () => ({
+  userErrorMessage: (_e: unknown, fallback: string) => fallback,
+}))
 vi.mock('@/components/ui', () => ({
   Button: ({ label, onPress }: { label: string; onPress: () => void }) => (
     <button onClick={onPress}>{label}</button>
@@ -90,6 +92,7 @@ beforeEach(() => {
 afterEach(() => cleanup())
 
 const LABEL = 'Hide web server names and versions'
+const VIA_LABEL = 'Send Via Header'
 
 describe('ServerWebServerSettingsSection', () => {
   it('shows nothing to people who cannot manage the organization', () => {
@@ -105,13 +108,33 @@ describe('ServerWebServerSettingsSection', () => {
     const toggle = screen.getByLabelText<HTMLButtonElement>(LABEL)
     expect(toggle.getAttribute('aria-pressed')).toBe('true')
     fireEvent.click(toggle)
-    expect(state.mutate).toHaveBeenCalledWith(false)
+    expect(state.mutate).toHaveBeenCalledWith({ hideWebServerNames: false })
   })
 
   it('turns hiding back on', () => {
     state.data = { hideWebServerNames: false }
     render(<ServerWebServerSettingsSection orgId="o" />)
     fireEvent.click(screen.getByLabelText(LABEL))
-    expect(state.mutate).toHaveBeenCalledWith(true)
+    expect(state.mutate).toHaveBeenCalledWith({ hideWebServerNames: true })
+  })
+
+  it('leaves the Via header off by default and turns it on', () => {
+    state.data = { hideWebServerNames: true, sendViaHeader: false }
+    render(<ServerWebServerSettingsSection orgId="o" />)
+    const toggle = screen.getByLabelText<HTMLButtonElement>(VIA_LABEL)
+    expect(toggle.getAttribute('aria-pressed')).toBe('false')
+    fireEvent.click(toggle)
+    expect(state.mutate).toHaveBeenCalledWith({ sendViaHeader: true })
+  })
+
+  it('reads a missing Via value as off and turns the header back off', () => {
+    state.data = { hideWebServerNames: true }
+    const { unmount } = render(<ServerWebServerSettingsSection orgId="o" />)
+    expect(screen.getByLabelText(VIA_LABEL).getAttribute('aria-pressed')).toBe('false')
+    unmount()
+    state.data = { hideWebServerNames: true, sendViaHeader: true }
+    render(<ServerWebServerSettingsSection orgId="o" />)
+    fireEvent.click(screen.getByLabelText(VIA_LABEL))
+    expect(state.mutate).toHaveBeenCalledWith({ sendViaHeader: false })
   })
 })

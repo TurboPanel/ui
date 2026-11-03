@@ -10,12 +10,20 @@ import { userErrorMessage } from '@/lib/user-error'
 export const HIDE_WEB_SERVER_NAMES_LABEL = 'Hide web server names and versions'
 
 export const HIDE_WEB_SERVER_NAMES_HINT =
-  'Removes the Server, Via and X-Powered-By headers and the version in default error pages and directory listings, for Apache, nginx, OpenLiteSpeed and the front proxy. It reaches a site on its next deploy.'
+  'Removes the Server and X-Powered-By headers and the version in default error pages and directory listings, for Apache, nginx, OpenLiteSpeed and the front proxy. It reaches a site on its next deploy.'
+
+export const SEND_VIA_HEADER_LABEL = 'Send Via Header'
+
+export const SEND_VIA_HEADER_HINT =
+  "Adds 'Via: 1.1 Caddy' to responses from your sites. It reaches a site on its next deploy."
+
+type WebServerSettingsPatch = {
+  hideWebServerNames?: boolean
+  sendViaHeader?: boolean
+}
 
 /** Organization default for the web server settings; servers can override it. */
-export function ServerWebServerSettingsSection({
-  orgId,
-}: Readonly<{ orgId: string }>) {
+export function ServerWebServerSettingsSection({ orgId }: Readonly<{ orgId: string }>) {
   const queryClient = useQueryClient()
   const canManage = useCan('organization', orgId, 'organization:manage')
   const [error, setError] = useState<string | null>(null)
@@ -28,8 +36,7 @@ export function ServerWebServerSettingsSection({
   })
 
   const mutation = useApiMutation({
-    mutationFn: (hideWebServerNames: boolean) =>
-      saveOrgHostDefaults(orgId, { hideWebServerNames }),
+    mutationFn: (patch: WebServerSettingsPatch) => saveOrgHostDefaults(orgId, patch),
     onSuccess: (data) => {
       setError(null)
       queryClient.setQueryData(settingsKey, data)
@@ -49,6 +56,7 @@ export function ServerWebServerSettingsSection({
 
   const settings = query.data
   const hidden = settings?.hideWebServerNames !== false
+  const sendVia = settings?.sendViaHeader === true
 
   return (
     <SectionPanel
@@ -61,15 +69,20 @@ export function ServerWebServerSettingsSection({
           {userErrorMessage(query.error, 'Failed to load web server settings')}
         </Text>
       ) : null}
-      <SettingRow
-        label={HIDE_WEB_SERVER_NAMES_LABEL}
-        description={HIDE_WEB_SERVER_NAMES_HINT}
-      >
+      <SettingRow label={HIDE_WEB_SERVER_NAMES_LABEL} description={HIDE_WEB_SERVER_NAMES_HINT}>
         <Toggle
           value={hidden}
           disabled={mutation.isPending || !settings}
           accessibilityLabel={HIDE_WEB_SERVER_NAMES_LABEL}
-          onValueChange={() => mutation.mutate(!hidden)}
+          onValueChange={() => mutation.mutate({ hideWebServerNames: !hidden })}
+        />
+      </SettingRow>
+      <SettingRow label={SEND_VIA_HEADER_LABEL} description={SEND_VIA_HEADER_HINT}>
+        <Toggle
+          value={sendVia}
+          disabled={mutation.isPending || !settings}
+          accessibilityLabel={SEND_VIA_HEADER_LABEL}
+          onValueChange={() => mutation.mutate({ sendViaHeader: !sendVia })}
         />
       </SettingRow>
     </SectionPanel>
