@@ -481,6 +481,8 @@ export const queryKeys = {
     upgradeServers: (offset: number, limit: number, status: string) =>
       ['admin', 'instance-updates', 'servers', offset, limit, status] as const,
     upgradeSettings: ['admin', 'instance-updates', 'settings'] as const,
+    /** The development build-and-push view (development installs only). */
+    developmentUpdates: ['admin', 'instance-updates', 'development'] as const,
     instanceIdentity: ['admin', 'instance-identity'] as const,
     /** Connection modes and the edge gate (self-hosted only). */
     ingressCapabilities: ['admin', 'ingress', 'capabilities'] as const,

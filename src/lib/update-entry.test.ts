@@ -51,6 +51,37 @@ describe('fleetUpdateSignals', () => {
   })
 })
 
+describe('fleetUpdateSignals on a development install', () => {
+  it('never lights the paused or daemons-behind signals', () => {
+    expect(
+      fleetUpdateSignals(updates({ development: true, daemonsBehind: true, updatesPaused: true }))
+    ).toEqual({ daemonsBehind: false, paused: false })
+  })
+})
+
+describe('instanceAdminUpdatePending on a development install', () => {
+  const none = { activeRun: false, consoleBuild: null }
+
+  it('ignores every release signal and follows only the daemon changes', () => {
+    const lit = updates({ development: true, daemonsBehind: true, updatesPaused: true })
+    lit.units.instance.updateAvailable = true
+    lit.units.daemon.updateAvailable = true
+    expect(instanceAdminUpdatePending({ updates: lit, ...none })).toBe(false)
+    expect(instanceAdminUpdatePending({ updates: lit, ...none, developmentPending: false })).toBe(
+      false
+    )
+    expect(instanceAdminUpdatePending({ updates: lit, ...none, developmentPending: true })).toBe(
+      true
+    )
+  })
+
+  it('a release install ignores developmentPending', () => {
+    expect(
+      instanceAdminUpdatePending({ updates: updates(), ...none, developmentPending: true })
+    ).toBe(false)
+  })
+})
+
 describe('instanceAdminUpdatePending', () => {
   const none = { activeRun: false, consoleBuild: null }
 

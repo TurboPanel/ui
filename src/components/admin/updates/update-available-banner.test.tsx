@@ -4,7 +4,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { applyScenario, env, SCENARIOS, styleOf } from '@/components/ui/v4/rn-stub'
 import { UpdateAvailableBanner } from './update-available-banner'
 
-const { push, writeDismissed } = vi.hoisted(() => ({ push: vi.fn(), writeDismissed: vi.fn() }))
+const { push, writeDismissed, instanceUpdates, developmentUpdates } = vi.hoisted(() => ({
+  push: vi.fn(),
+  writeDismissed: vi.fn(),
+  instanceUpdates: { data: {} as Record<string, unknown> },
+  developmentUpdates: { data: undefined as Record<string, unknown> | undefined },
+}))
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
 vi.mock('react-native-svg', async () => (await import('@/components/ui/v4/rn-stub')).svgStub)
@@ -27,8 +32,9 @@ vi.mock('@/lib/queries/auth', () => ({
   useInstallStatusQuery: () => ({ data: { runtime: 'deno' } }),
 }))
 vi.mock('@/lib/queries/admin', () => ({
-  useInstanceUpdates: () => ({ data: {} }),
+  useInstanceUpdates: () => instanceUpdates,
   useUpgradeActiveRun: () => ({ data: null }),
+  useDevelopmentUpdates: () => developmentUpdates,
 }))
 vi.mock('@/lib/update-status', () => ({
   readDismissedUpdateBanner: () => null,
@@ -44,6 +50,8 @@ vi.mock('@/lib/update-status', () => ({
 
 afterEach(() => {
   cleanup()
+  instanceUpdates.data = {}
+  developmentUpdates.data = undefined
   vi.unstubAllGlobals()
   push.mockClear()
   writeDismissed.mockClear()
@@ -105,6 +113,33 @@ describe('update banner on a wide window', () => {
     render(<UpdateAvailableBanner />)
     expect(screen.queryByRole('button', { name: 'Update' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'See Updates' }))
+    expect(push).toHaveBeenCalledWith('/admin/updates')
+  })
+})
+
+describe('update banner on a development install', () => {
+  beforeEach(() => {
+    applyScenario(SCENARIOS[0])
+    coarsePointer(false)
+    env.width = 1200
+    instanceUpdates.data = { development: true }
+  })
+
+  const daemonBuild = { built: null, sourceFingerprint: 'fp-1', sourceChanged: true }
+
+  it('shows nothing from the release channel while every server has the daemon changes', () => {
+    developmentUpdates.data = { pendingDaemonChanges: false, daemonBuild }
+    render(<UpdateAvailableBanner />)
+    expect(screen.queryByText(/TurboPanel update available/)).toBeNull()
+    expect(screen.queryByText(/Daemon changes/)).toBeNull()
+  })
+
+  it('says daemon changes wait and opens Admin > Updates, never "installs on its own"', () => {
+    developmentUpdates.data = { pendingDaemonChanges: true, daemonBuild }
+    render(<UpdateAvailableBanner />)
+    expect(screen.getByText('Daemon changes are not on your servers yet.')).toBeTruthy()
+    expect(screen.queryByText(/on its own/)).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Open Updates' }))
     expect(push).toHaveBeenCalledWith('/admin/updates')
   })
 })

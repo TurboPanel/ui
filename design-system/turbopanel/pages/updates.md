@@ -38,6 +38,15 @@ Polling uses `refetchInterval` only while a run is `pending` / `running` (`useUp
 - Status card, rollout summary, connected daemons `DataTable` with filter chips, history, and **Servers Updated at Once**.
 - Copy uses `HA_PRODUCT_NAME` from `src/lib/platform-copy.ts`.
 
+## Development installs
+
+When `GET …/updates` says `development: true` (`development-updates.tsx`): no Status card, Check Now, Pause / Resume, check times, history or batch setting.
+
+- `InlineNotice`: "Development installs never update on their own. Build the daemon from your checkout and push it to your servers when you're ready."
+- **Versions** (`SectionPanel`): Control Plane, Web Interface, This Server's Daemon, each **Running From Your Checkout** and "Commit <short>" when known; no status badges.
+- **Your Servers** (`SectionPanel`): primary **Build and Push Daemon** (**Push Daemon** when the checkout has not changed since the last build), disabled while a job runs; the last job (`Badge` Building… / Pushing… / Done / Failed, its message, each server's result); `DataTable` Server / Daemon / Status (**On Latest Build**, **Behind**, **Not Connected**); empty "No other servers are connected."
+- The banner reads "Daemon changes are not on your servers yet." with **Open Updates**, only while servers lack the checkout's daemon changes.
+
 ## Org console
 
 - Server detail **Daemon Update** panel: running / channel build, status badge, "Updates automatically" and **Clear Stuck Update** for managers. No per-server **Update**, no fleet batch **Update**, no row selection on the servers list.
