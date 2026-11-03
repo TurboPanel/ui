@@ -1283,16 +1283,31 @@ export async function saveOrgDeployTimeout(
 }
 
 export type OrgTlsSettings = {
-  /** Opt-in gate for Let's Encrypt / ACME issuance. Off by default. */
+  /**
+   * Opt-in gate for Let's Encrypt / ACME issuance. Off until the organization
+   * turns it on, which needs a contact address and accepted terms.
+   */
   acmeEnabled: boolean
   /** The one address on this organization's Let's Encrypt orders; null when none is set. */
   acmeContactEmail: string | null
+  /** When the organization last accepted the Let's Encrypt terms; null when it never has. */
+  acmeTermsAcceptedAt: string | null
+  /** Page listing the current Let's Encrypt subscriber agreement. */
+  acmeTermsUrl: string
 }
 
-/** Either key, or both; a key left out keeps its stored value. null or '' clears the contact. */
+/**
+ * Any of the keys; a key left out keeps its stored value. null or '' clears
+ * the contact (refused while Let's Encrypt is on). `acmeEnabled: true` is
+ * refused (`acme_contact_email_required`, `acme_terms_not_accepted`) unless a
+ * contact is stored or sent and the terms were accepted before or are
+ * accepted in the same request.
+ */
 export type OrgTlsSettingsPatch = {
   acmeEnabled?: boolean
   acmeContactEmail?: string | null
+  /** Records that the organization accepts the Let's Encrypt terms now. */
+  acmeTermsAccepted?: true
 }
 
 export async function fetchOrgTlsSettings(orgId: string): Promise<OrgTlsSettings> {

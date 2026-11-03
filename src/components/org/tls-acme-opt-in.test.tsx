@@ -1,0 +1,160 @@
+// @vitest-environment happy-dom
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+const state = vi.hoisted(() => ({
+  mutate: vi.fn(),
+  openURL: vi.fn(() => Promise.resolve()),
+  sessionEmail: 'me@example.com' as string | undefined,
+}))
+
+vi.mock('react-native', async () => ({
+  ...(await import('@/components/ui/v4/rn-stub')).reactNativeStub,
+  Linking: { openURL: state.openURL },
+}))
+vi.mock('react-native-svg', async () => (await import('@/components/ui/v4/rn-stub')).svgStub)
+vi.mock(
+  '@/lib/theme-preference',
+  async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub
+)
+vi.mock('@/components/ui/panel-styles', () => ({ panelStyles: {} }))
+vi.mock('@/components/ui', () => ({
+  Button: ({
+    label,
+    onPress,
+    disabled,
+  }: {
+    label: string
+    onPress: () => void
+    disabled?: boolean
+  }) => (
+    <button onClick={onPress} disabled={disabled}>
+      {label}
+    </button>
+  ),
+  Checkbox: ({
+    label,
+    checked,
+    onPress,
+  }: {
+    label: string
+    checked: boolean
+    onPress: () => void
+  }) => (
+    <label>
+      <input type="checkbox" checked={checked} onChange={onPress} />
+      {label}
+    </label>
+  ),
+  TextLink: ({ label, onPress }: { label: string; onPress: () => void }) => (
+    <a href="#terms" onClick={onPress}>
+      {label}
+    </a>
+  ),
+  TextField: ({
+    label,
+    value,
+    onChangeText,
+    error,
+  }: {
+    label: string
+    value: string
+    onChangeText: (text: string) => void
+    error?: string | null
+  }) => (
+    <>
+      <input aria-label={label} value={value} onChange={(e) => onChangeText(e.target.value)} />
+      {error ? <p>{error}</p> : null}
+    </>
+  ),
+}))
+vi.mock('@tanstack/react-query', () => ({ useQueryClient: () => ({ setQueryData: vi.fn() }) }))
+vi.mock('@/lib/queries/auth', () => ({
+  useSessionQuery: () => ({ data: state.sessionEmail ? { email: state.sessionEmail } : null }),
+}))
+vi.mock('@/lib/query-client', () => ({
+  useApiMutation: () => ({ mutate: state.mutate, isPending: false }),
+  queryKeys: { org: () => ({ settings: { tlsSettings: ['tls-settings'] } }) },
+}))
+vi.mock('@/lib/instance-api', () => ({ saveOrgTlsSettings: vi.fn() }))
+
+import { looksLikeEmail, TlsAcmeOptIn } from './tls-acme-opt-in'
+
+const TERMS = 'https://letsencrypt.org/repository/'
+const optIn = (props: Partial<Parameters<typeof TlsAcmeOptIn>[0]> = {}) =>
+  render(
+    <TlsAcmeOptIn
+      orgId="o1"
+      savedEmail={null}
+      termsUrl={TERMS}
+      termsAcceptedAt={null}
+      disabled={false}
+      {...props}
+    />
+  )
+const turnOn = () => screen.getByText("Turn On Let's Encrypt") as HTMLButtonElement
+const accept = () =>
+  fireEvent.click(
+    screen.getByLabelText("I accept the Let's Encrypt Subscriber Agreement for this organization")
+  )
+
+describe('TlsAcmeOptIn', () => {
+  beforeEach(() => {
+    state.mutate.mockReset()
+    state.openURL.mockClear()
+    state.sessionEmail = 'me@example.com'
+  })
+  afterEach(cleanup)
+
+  it('starts the contact as the signed-in address and waits for the terms', () => {
+    optIn()
+    expect((screen.getByLabelText('Certificate Contact Email') as HTMLInputElement).value).toBe(
+      'me@example.com'
+    )
+    expect(turnOn().disabled).toBe(true)
+    accept()
+    expect(turnOn().disabled).toBe(false)
+    fireEvent.click(turnOn())
+    expect(state.mutate).toHaveBeenCalledWith('me@example.com')
+  })
+
+  it('prefers the address the organization already saved', () => {
+    optIn({ savedEmail: 'ops@example.com' })
+    expect((screen.getByLabelText('Certificate Contact Email') as HTMLInputElement).value).toBe(
+      'ops@example.com'
+    )
+  })
+
+  it('takes any address typed in, and holds the button for one that is not an address', () => {
+    optIn()
+    accept()
+    const field = screen.getByLabelText('Certificate Contact Email')
+    fireEvent.change(field, { target: { value: 'not an address' } })
+    expect(turnOn().disabled).toBe(true)
+    expect(screen.getByText('Enter one email address, such as ops@example.com.')).toBeTruthy()
+    fireEvent.change(field, { target: { value: ' team@example.org ' } })
+    fireEvent.click(turnOn())
+    expect(state.mutate).toHaveBeenCalledWith('team@example.org')
+  })
+
+  it('opens the agreement', () => {
+    optIn()
+    fireEvent.click(screen.getByText("Read the Let's Encrypt Subscriber Agreement"))
+    expect(state.openURL).toHaveBeenCalledWith(TERMS)
+  })
+
+  it('stays off while the settings are not loaded', () => {
+    optIn({ disabled: true })
+    accept()
+    expect(turnOn().disabled).toBe(true)
+  })
+})
+
+describe('looksLikeEmail', () => {
+  it('accepts an address and refuses the rest', () => {
+    expect(looksLikeEmail('ops@example.com')).toBe(true)
+    for (const bad of ['', 'ops', 'ops@', '@example.com', 'ops@example', 'a b@example.com']) {
+      expect(looksLikeEmail(bad)).toBe(false)
+    }
+  })
+})

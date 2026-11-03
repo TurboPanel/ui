@@ -19,6 +19,7 @@ vi.mock('@/components/ui/panel-styles', () => ({ panelStyles: {} }))
 vi.mock('expo-clipboard', () => ({ setStringAsync: vi.fn(() => Promise.resolve()) }))
 vi.mock('@/components/org/organization-ca-panel', () => ({ OrganizationCaPanel: () => null }))
 vi.mock('@/components/org/tls-contact-email-field', () => ({ TlsContactEmailField: () => null }))
+vi.mock('@/components/org/tls-acme-opt-in', () => ({ TlsAcmeOptIn: () => null }))
 vi.mock('@/components/org/dns-certificate-panel', () => ({ DnsCertificatePanel: () => null }))
 vi.mock('@/components/ui', async () => ({
   TypeNameDeleteButton: (await import('@/components/ui/type-name-confirm')).TypeNameDeleteButton,

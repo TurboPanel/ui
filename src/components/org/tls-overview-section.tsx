@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { DnsCertificatePanel } from '@/components/org/dns-certificate-panel'
 import { OrganizationCaPanel } from '@/components/org/organization-ca-panel'
+import { TlsAcmeOptIn } from '@/components/org/tls-acme-opt-in'
 import { TlsContactEmailField } from '@/components/org/tls-contact-email-field'
 import {
   Button,
@@ -173,9 +174,13 @@ function TlsLetsEncryptPanel({
   onToggle,
   orgId,
   contactEmail,
+  termsUrl,
+  termsAcceptedAt,
 }: Readonly<{
   orgId: string
   contactEmail: string | null
+  termsUrl: string | null
+  termsAcceptedAt: string | null
   canManage: boolean
   acmeEnabled: boolean
   acmeError: string | null
@@ -187,7 +192,7 @@ function TlsLetsEncryptPanel({
   return (
     <SectionPanel
       title="Let's Encrypt"
-      hint="On for new organizations — turn it off to stop any Let's Encrypt certificate being requested"
+      hint="Off until your organization accepts the Let's Encrypt terms and turns it on"
     >
       {acmeError ? <Text style={panelStyles.error}>{acmeError}</Text> : null}
       {settingsError && !acmeError ? (
@@ -195,23 +200,46 @@ function TlsLetsEncryptPanel({
           {errorMessage(settingsError, "Failed to load the Let's Encrypt setting")}
         </Text>
       ) : null}
-      <SettingRow
-        label="Allow Let's Encrypt certificates"
-        description="When off, no new Let's Encrypt / ACME certificate can be requested for this organization, and a deploy that still pins a Let's Encrypt certificate (or whose compose asks for tls.mode automatic) is refused until it is turned back on or the choice is changed. Certificates already issued are not revoked by turning this off, but the encrypted copies of their keys that the panel stores are erased."
-      >
-        <Toggle
-          value={acmeEnabled}
-          onValueChange={onToggle}
-          disabled={!canManage || pending || settingsLoading}
-          accessibilityLabel="Allow Let's Encrypt certificates"
+      {acmeEnabled ? (
+        <>
+          <SettingRow
+            label="Allow Let's Encrypt certificates"
+            description="When off, no new Let's Encrypt / ACME certificate can be requested for this organization, and a deploy that still pins a Let's Encrypt certificate (or whose compose asks for tls.mode automatic) is refused until it is turned back on or the choice is changed. Certificates already issued are not revoked by turning this off, but the encrypted copies of their keys that the panel stores are erased."
+          >
+            <Toggle
+              value={acmeEnabled}
+              onValueChange={onToggle}
+              disabled={!canManage || pending || settingsLoading}
+              accessibilityLabel="Allow Let's Encrypt certificates"
+            />
+          </SettingRow>
+          {termsAcceptedAt ? (
+            <Text style={panelStyles.muted}>
+              Let&apos;s Encrypt terms accepted {new Date(termsAcceptedAt).toLocaleString()}.
+            </Text>
+          ) : null}
+          <TlsContactEmailField
+            orgId={orgId}
+            canManage={canManage}
+            savedEmail={contactEmail}
+            loaded={!settingsLoading && !settingsError}
+          />
+        </>
+      ) : null}
+      {!acmeEnabled && canManage && termsUrl ? (
+        <TlsAcmeOptIn
+          orgId={orgId}
+          savedEmail={contactEmail}
+          termsUrl={termsUrl}
+          termsAcceptedAt={termsAcceptedAt}
+          disabled={settingsLoading || Boolean(settingsError)}
         />
-      </SettingRow>
-      <TlsContactEmailField
-        orgId={orgId}
-        canManage={canManage}
-        savedEmail={contactEmail}
-        loaded={!settingsLoading && !settingsError}
-      />
+      ) : null}
+      {!acmeEnabled && !canManage ? (
+        <Text style={panelStyles.muted}>
+          Off. An organization manager can accept the Let&apos;s Encrypt terms and turn it on.
+        </Text>
+      ) : null}
     </SectionPanel>
   )
 }
@@ -326,6 +354,8 @@ export function TlsOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
         canManage={canManage}
         orgId={orgId}
         contactEmail={tlsSettingsQuery.data?.acmeContactEmail ?? null}
+        termsUrl={tlsSettingsQuery.data?.acmeTermsUrl ?? null}
+        termsAcceptedAt={tlsSettingsQuery.data?.acmeTermsAcceptedAt ?? null}
         acmeEnabled={acmeEnabled}
         acmeError={acmeError}
         settingsError={tlsSettingsQuery.isError ? tlsSettingsQuery.error : null}
