@@ -63,6 +63,7 @@
 
 - Connection Mode, Cloudflare Account, Preflight / Connect / Disconnect live in the row (expand in place, no modal). Disabled options carry their reason as the option detail.
 - The DNS-01 ladder on Certificates is a row of step chips; the current step is the one in the info tone and announced as the current step.
+- A DNS-01 hostname's Status cell adds one short block under the badge: the running step as muted text, or (failed or back-off) the Failed / Back-off badge, the cause and detail in the error tone, Last Failure and Next Attempt in muted text, and a small **Retry** button. Nothing shows once issued.
 
 ## Platform CA
 

@@ -58,6 +58,7 @@ import { isProviderMode } from '@/lib/connection-modes'
 import { useAuth } from '@/lib/auth-context'
 import { useIngressAccounts, useIngressCapabilities } from '@/lib/queries/ingress'
 import { EdgeGateStatus } from '@/components/admin/access/edge-gate-status'
+import { Dns01HostnameStatus } from '@/components/admin/access/dns01-certificates-panel'
 import {
   addPublicUrlEntry,
   parsePublicUrlEntry,
@@ -749,6 +750,9 @@ function HostnameRow({
         )}
         {edge && record ? (
           <IngressPhaseChip hostnameId={record.id} enabled={ingress.enabled} />
+        ) : null}
+        {record?.source === 'acme-dns-01' ? (
+          <Dns01HostnameStatus hostnameId={record.id} enabled={ingress.enabled} />
         ) : null}
       </DataTableCell>
       <DataTableCell column={COLUMNS[6]}>

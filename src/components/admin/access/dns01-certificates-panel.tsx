@@ -8,6 +8,7 @@ import type { InstanceHostnameRecord, PanelDnsCertificate, PanelDnsStage } from 
 import {
   dns01Ladder,
   DNS01_STOPPED_LABELS,
+  dns01WorkingLabel,
   type LadderStep,
   panelDnsCauseLabel,
   retryPausedUntil,
@@ -64,6 +65,45 @@ function Dns01Row({
   )
 }
 
+/** Order Now / Retry for one name, with the refusal or request error to show beside the buttons. */
+function useDns01Order(id: string) {
+  const order = useOrderPanelDnsCertificate()
+  const [error, setError] = useState<string | null>(null)
+  const run = async (retry: boolean) => {
+    setError(null)
+    const result = await order.run({ id, retry })
+    if (!result.ok) setError(result.error ?? 'Request failed')
+    else if (!result.value.ok) setError(result.value.error)
+  }
+  return { order, error, run }
+}
+
+function RetryButton({
+  order,
+  disabled,
+  onPress,
+}: Readonly<{
+  order: ReturnType<typeof useOrderPanelDnsCertificate>
+  disabled: boolean
+  onPress: () => void
+}>) {
+  return (
+    <Button
+      label="Retry"
+      busyLabel="Retrying…"
+      size="sm"
+      busy={order.isPending && order.variables?.retry === true}
+      disabled={order.isPending || disabled}
+      onPress={onPress}
+    />
+  )
+}
+
+function PausedNote({ until }: Readonly<{ until: string | null }>) {
+  if (!until) return null
+  return <Text style={styles.muted}>Retry is paused until {formatLocalDateTime(until)}.</Text>
+}
+
 export function Dns01State({
   id,
   state,
@@ -74,16 +114,8 @@ export function Dns01State({
   /** When the state was read; a pause is judged against it. */
   now: number
 }>) {
-  const order = useOrderPanelDnsCertificate()
-  const [error, setError] = useState<string | null>(null)
+  const { order, error, run } = useDns01Order(id)
   const pausedUntil = retryPausedUntil(state, now)
-
-  const run = async (retry: boolean) => {
-    setError(null)
-    const result = await order.run({ id, retry })
-    if (!result.ok) setError(result.error ?? 'Request failed')
-    else if (!result.value.ok) setError(result.value.error)
-  }
 
   return (
     <View style={styles.state}>
@@ -101,9 +133,7 @@ export function Dns01State({
         </Text>
       </View>
       {error ? <Text style={panelStyles.error}>{error}</Text> : null}
-      {pausedUntil ? (
-        <Text style={styles.muted}>Retry is paused until {formatLocalDateTime(pausedUntil)}.</Text>
-      ) : null}
+      <PausedNote until={pausedUntil} />
       <ButtonRow>
         <Button
           label="Order Now"
@@ -114,15 +144,50 @@ export function Dns01State({
           disabled={order.isPending || pausedUntil !== null}
           onPress={() => void run(false)}
         />
-        <Button
-          label="Retry"
-          busyLabel="Retrying…"
-          size="sm"
-          busy={order.isPending && order.variables?.retry === true}
-          disabled={order.isPending || pausedUntil !== null}
-          onPress={() => void run(true)}
-        />
+        <RetryButton order={order} disabled={pausedUntil !== null} onPress={() => void run(true)} />
       </ButtonRow>
+    </View>
+  )
+}
+
+/**
+ * The DNS-01 line under a hostname's status on the Hostnames screen: while an
+ * order runs, the step it is on; once it failed or backs off, the cause, the
+ * detail, when it happened and a Retry button.
+ */
+export function Dns01HostnameStatus({
+  hostnameId,
+  enabled,
+}: Readonly<{ hostnameId: string; enabled: boolean }>) {
+  const query = usePanelDnsCertificate(hostnameId, { enabled })
+  if (!query.data) return null
+  return <Dns01RowNote id={hostnameId} state={query.data} now={query.dataUpdatedAt} />
+}
+
+export function Dns01RowNote({
+  id,
+  state,
+  now,
+}: Readonly<{ id: string; state: PanelDnsCertificate; now: number }>) {
+  const { order, error, run } = useDns01Order(id)
+  const working = dns01WorkingLabel(state.stage)
+  const stopped = state.stage === 'failed' || state.stage === 'backoff'
+  const pausedUntil = retryPausedUntil(state, now)
+  if (!working && !stopped && !error) return null
+  return (
+    <View style={styles.rowNote}>
+      {working ? <Text style={styles.muted}>DNS-01: {working}…</Text> : null}
+      {stopped ? <StoppedLine state={state} /> : null}
+      {stopped && state.stage === 'backoff' ? (
+        <Text style={styles.fact}>
+          Next Attempt: {formatLocalDateTime(state.nextAttemptAt, { fallback: 'None' })}
+        </Text>
+      ) : null}
+      {error ? <Text style={panelStyles.error}>{error}</Text> : null}
+      <PausedNote until={stopped ? pausedUntil : null} />
+      {stopped ? (
+        <RetryButton order={order} disabled={pausedUntil !== null} onPress={() => void run(true)} />
+      ) : null}
     </View>
   )
 }
@@ -139,6 +204,9 @@ function StoppedLine({ state }: Readonly<{ state: PanelDnsCertificate }>) {
         <Text style={styles.cause}>
           {panelDnsCauseLabel(state.lastError.cause)}: {state.lastError.detail}
         </Text>
+      ) : null}
+      {state.lastError?.at ? (
+        <Text style={styles.fact}>Last Failure: {formatLocalDateTime(state.lastError.at)}</Text>
       ) : null}
     </View>
   )
@@ -195,6 +263,7 @@ const styles = StyleSheet.create({
   },
   host: { color: colors.stdout, fontFamily: 'monospace', fontSize: 13 },
   state: { gap: spacing.sm },
+  rowNote: { gap: spacing.xs, alignItems: 'flex-start', marginTop: spacing.xs },
   ladder: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   stopped: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.sm },
   cause: { color: colors.errorText, fontSize: 12, lineHeight: 17, flexShrink: 1 },

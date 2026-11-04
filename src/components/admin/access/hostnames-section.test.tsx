@@ -42,6 +42,11 @@ vi.mock('./hostname-ingress-cells', () => ({
   PrimaryCell: () => null,
 }))
 vi.mock('./edge-gate-status', () => ({ EdgeGateStatus: () => null }))
+vi.mock('./dns01-certificates-panel', () => ({
+  Dns01HostnameStatus: ({ hostnameId }: Readonly<{ hostnameId: string }>) => (
+    <p>DNS-01 status for {hostnameId}</p>
+  ),
+}))
 vi.mock('@/lib/queries/ingress', () => ({
   useIngressAccounts: () => ({ data: { accounts: [] } }),
   useIngressCapabilities: () => ({ data: undefined }),
@@ -122,5 +127,26 @@ describe('HostnamesSection view by runtime', () => {
     renderOn('workers', { data: { hostnames: [] } })
     expect(screen.getByText('No fixed address configured')).toBeTruthy()
     expectNoEditor()
+  })
+})
+
+describe('HostnamesSection DNS-01 rows', () => {
+  const record = (id: string, source: string) => ({
+    id,
+    host: `${id}.example.com`,
+    source,
+    uploadedCertId: null,
+    status: 'failed',
+    notAfter: null,
+    acmeLastAttemptAt: null,
+    acmeLastError: null,
+  })
+
+  it('shows the DNS-01 status (cause, time, Retry) only under a DNS-01 name', () => {
+    renderOn('deno', {
+      data: { hostnames: [record('dns', 'acme-dns-01'), record('plain', 'platform-ca')] },
+    })
+    expect(screen.getByText('DNS-01 status for dns')).toBeTruthy()
+    expect(screen.queryByText('DNS-01 status for plain')).toBeNull()
   })
 })
