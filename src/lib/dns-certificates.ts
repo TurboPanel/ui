@@ -1,14 +1,27 @@
 /**
- * Certificates TurboPanel orders itself through a DNS challenge: the rules for
- * the order form, and the words for where an order stands. Pure; the transport
- * lives in `instance-api.ts`.
+ * Certificates TurboPanel ordered itself through a DNS challenge: the rules for
+ * the order form, and the words for where a certificate stands. The control
+ * plane no longer orders or renews them; those already issued keep working
+ * until they expire. Pure; the transport lives in `instance-api.ts`.
  */
 import type { BadgeTone } from '@/components/ui/badge'
 import type { DnsCertificate, TunnelCarrier } from '@/lib/instance-api'
 import { parseFailure } from '@/lib/tunnels'
 import { realDate } from '@/lib/tls-managed-dates'
 
+// The order-form rules below (names, wildcard choice, accounts) have no screen
+// while ordering is turned off. They stay, with their tests, for the form that
+// comes back when the server that runs the site orders these certificates.
+
 export const MAX_NAMES = 10
+
+/** Why Order A Certificate is turned off; the panel answers `certificate_ordering_off` with it. */
+export const ORDERING_OFF_MESSAGE =
+  'Ordering certificates from the control plane is turned off. Certificates will be ordered by the server that runs the site in a coming release.'
+
+/** Said on every certificate the control plane ordered earlier. */
+export const NO_RENEWAL_MESSAGE =
+  'This certificate will not renew from the control plane. It keeps working until it expires.'
 
 /** How the names are chosen: exact ones, or one wildcard that has to be asked for. */
 export type OrderMode = 'exact' | 'wildcard'
@@ -86,47 +99,35 @@ export function dnsCapableCarriers(carriers: readonly TunnelCarrier[]): TunnelCa
   )
 }
 
-const STAGE_STEP: Readonly<Record<string, number>> = {
-  queued: 1,
-  presented: 2,
-  validating: 3,
-  finalizing: 4,
-}
-const STEPS = 4
+/** What the wording of a certificate's state depends on. */
+type CertificateState = Pick<DnsCertificate, 'status' | 'renewAt' | 'nextAttemptAt'>
 
-/** Where an order stands, in a few words. */
-export function stageLabel(c: Pick<DnsCertificate, 'status' | 'stage'>): string {
+/**
+ * True when the panel still orders and renews these certificates: an older
+ * control plane sends a renewal or retry time, a current one never does.
+ */
+export function stillOrdered(c: Pick<DnsCertificate, 'renewAt' | 'nextAttemptAt'>): boolean {
+  return c.renewAt !== null || c.nextAttemptAt !== null
+}
+
+/** The no-renewal line, only for a certificate in use that the control plane will not renew. */
+export function noRenewalNote(c: CertificateState): string | null {
+  return c.status === 'ready' && !stillOrdered(c) ? NO_RENEWAL_MESSAGE : null
+}
+
+/** Where a certificate stands, in a few words. An order left open never finishes now. */
+export function stageLabel(c: CertificateState): string {
   if (c.status === 'failed') return 'Gave up after several tries.'
   if (c.status === 'ready' || c.status === 'expired') return 'Issued.'
-  switch (c.stage) {
-    case 'queued':
-      return 'Starting the order.'
-    case 'presented':
-      return 'Validation records published. Giving them a moment to spread.'
-    case 'validating':
-      return 'Waiting for Let’s Encrypt to check the records.'
-    case 'finalizing':
-      return 'Collecting the certificate.'
-    case 'backoff':
-      return 'The last try did not work. Waiting before trying again.'
-    default:
-      return 'Working.'
-  }
+  return stillOrdered(c) ? 'Ordering.' : 'This order was stopped and will not finish.'
 }
 
-/** "Step 2 of 4" while an order runs; null otherwise. */
-export function progressLabel(c: Pick<DnsCertificate, 'status' | 'stage'>): string | null {
-  if (c.status !== 'pending') return null
-  const step = STAGE_STEP[c.stage]
-  return step ? `Step ${step} of ${STEPS}` : null
-}
-
-export function statusLabel(c: Pick<DnsCertificate, 'status'>): string {
+export function statusLabel(c: CertificateState): string {
   switch (c.status) {
     case 'ready':
       return 'Ready'
     case 'pending':
-      return 'Ordering'
+      return stillOrdered(c) ? 'Ordering' : 'Stopped'
     case 'failed':
       return 'Gave Up'
     case 'expired':
@@ -138,20 +139,8 @@ export function statusLabel(c: Pick<DnsCertificate, 'status'>): string {
 
 export function statusTone(c: Pick<DnsCertificate, 'status'>): BadgeTone {
   if (c.status === 'ready') return 'ok'
-  if (c.status === 'pending') return 'pending'
+  if (c.status === 'pending') return 'muted'
   return 'danger'
-}
-
-/** An order still running (the screen refreshes while any is). */
-export function isOrdering(c: Pick<DnsCertificate, 'status'>): boolean {
-  return c.status === 'pending'
-}
-
-/** "Renews around 3 Dec 2026", when a time is known. */
-export function renewalLabel(c: Pick<DnsCertificate, 'status' | 'renewAt'>): string | null {
-  if (c.status !== 'ready' || !c.renewAt) return null
-  const when = new Date(c.renewAt)
-  return Number.isNaN(when.getTime()) ? null : `Renews around ${when.toLocaleDateString()}`
 }
 
 export function expiryLabel(c: Pick<DnsCertificate, 'notAfter'>): string | null {
@@ -159,14 +148,9 @@ export function expiryLabel(c: Pick<DnsCertificate, 'notAfter'>): string | null 
   return when ? `Expires ${when.toLocaleDateString()}` : null
 }
 
-/** When a failed order will be tried again by itself, if it will. */
-export function nextTryLabel(c: Pick<DnsCertificate, 'status' | 'nextAttemptAt'>): string | null {
-  if (c.status !== 'pending' || !c.nextAttemptAt) return null
-  const when = new Date(c.nextAttemptAt)
-  return Number.isNaN(when.getTime()) ? null : `Next try ${when.toLocaleString()}`
-}
-
+/** The codes after the first can only come from an older control plane that still orders. */
 const ERROR_COPY: Readonly<Record<string, string>> = {
+  certificate_ordering_off: ORDERING_OFF_MESSAGE,
   names_invalid: 'Check the names. Each one needs to look like app.example.com.',
   carrier_invalid: 'Choose the Cloudflare account that hosts the DNS.',
   provider_unsupported: 'That account cannot be used to prove a name yet.',

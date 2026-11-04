@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from 'react-native'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { DnsCertificatePanel } from '@/components/org/dns-certificate-panel'
+import { NO_RENEWAL_MESSAGE } from '@/lib/dns-certificates'
 import { OrganizationCaPanel } from '@/components/org/organization-ca-panel'
 import { TlsAcmeOptIn, TlsAcmeTermsRenewal } from '@/components/org/tls-acme-opt-in'
 import { TlsContactEmailField } from '@/components/org/tls-contact-email-field'
@@ -139,6 +140,9 @@ function TlsCertificateList({
       ))}
       {row.metadata.acme?.lastError ? (
         <Text style={panelStyles.error}>Issuance failing: {row.metadata.acme.lastError}</Text>
+      ) : null}
+      {row.metadata.acme?.managedBy === 'panel' && row.metadata.status === 'ready' ? (
+        <Text style={panelStyles.muted}>{NO_RENEWAL_MESSAGE}</Text>
       ) : null}
       {canManage && row.source === 'organization_ca' ? (
         <Text style={panelStyles.muted}>Replace it with Rotate on the Organization CA panel.</Text>
@@ -410,7 +414,7 @@ export function TlsOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
         {queryError ? <Text style={panelStyles.error}>{queryError}</Text> : null}
       </SectionPanel>
 
-      {canManage ? <DnsCertificatePanel orgId={orgId} acmeEnabled={acmeEnabled} /> : null}
+      {canManage ? <DnsCertificatePanel orgId={orgId} /> : null}
 
       {canManage ? (
         <SectionPanel

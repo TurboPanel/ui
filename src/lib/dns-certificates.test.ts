@@ -4,13 +4,12 @@ import {
   dnsCapableCarriers,
   dnsCertificateErrorMessage,
   EMPTY_ORDER_DRAFT,
-  isOrdering,
-  nextTryLabel,
+  NO_RENEWAL_MESSAGE,
+  noRenewalNote,
+  ORDERING_OFF_MESSAGE,
   orderNames,
   orderProblem,
   parseNames,
-  progressLabel,
-  renewalLabel,
   stageLabel,
   statusLabel,
   statusTone,
@@ -105,17 +104,25 @@ describe('accounts', () => {
   })
 })
 
-describe('where an order stands', () => {
-  it('says the stage in words and counts the steps while ordering', () => {
-    expect(stageLabel(cert({ stage: 'validating' }))).toMatch(/Waiting for Let’s Encrypt/)
-    expect(progressLabel(cert({ stage: 'validating' }))).toBe('Step 3 of 4')
-    expect(progressLabel(cert({ status: 'ready', stage: 'issued' }))).toBeNull()
+describe('where a certificate stands', () => {
+  it('says an open order was stopped, and plain words once issued or given up', () => {
+    expect(stageLabel(cert({ stage: 'validating' }))).toBe(
+      'This order was stopped and will not finish.'
+    )
+    expect(stageLabel(cert({ status: 'ready', stage: 'issued' }))).toBe('Issued.')
     expect(stageLabel(cert({ status: 'failed', stage: 'failed' }))).toMatch(/Gave up/)
-    expect(isOrdering(cert())).toBe(true)
-    expect(isOrdering(cert({ status: 'ready' }))).toBe(false)
+    // An older panel still steps its orders.
+    expect(stageLabel(cert({ nextAttemptAt: '2026-11-05T00:00:00Z' }))).toBe('Ordering.')
+  })
+  it('says it will not renew only for a certificate in use', () => {
+    expect(noRenewalNote(cert({ status: 'ready' }))).toBe(NO_RENEWAL_MESSAGE)
+    expect(noRenewalNote(cert())).toBeNull()
+    expect(noRenewalNote(cert({ status: 'expired' }))).toBeNull()
+    expect(noRenewalNote(cert({ status: 'ready', renewAt: '2026-12-01T00:00:00Z' }))).toBeNull()
   })
   it('labels and tones follow the status', () => {
-    expect([statusLabel(cert()), statusTone(cert())]).toEqual(['Ordering', 'pending'])
+    expect([statusLabel(cert()), statusTone(cert())]).toEqual(['Stopped', 'muted'])
+    expect(statusLabel(cert({ nextAttemptAt: '2026-11-05T00:00:00Z' }))).toBe('Ordering')
     expect([statusLabel(cert({ status: 'ready' })), statusTone(cert({ status: 'ready' }))]).toEqual(
       ['Ready', 'ok']
     )
@@ -124,21 +131,17 @@ describe('where an order stands', () => {
       statusTone(cert({ status: 'failed' })),
     ]).toEqual(['Gave Up', 'danger'])
   })
-  it('shows renewal and next-try times only when they apply', () => {
-    expect(renewalLabel(cert({ status: 'ready', renewAt: '2026-12-01T00:00:00Z' }))).toMatch(
-      /Renews around/
-    )
-    expect(renewalLabel(cert({ renewAt: '2026-12-01T00:00:00Z' }))).toBeNull()
-    expect(nextTryLabel(cert({ nextAttemptAt: '2026-10-29T10:00:00Z' }))).toMatch(/Next try/)
-    expect(
-      nextTryLabel(cert({ status: 'ready', nextAttemptAt: '2026-10-29T10:00:00Z' }))
-    ).toBeNull()
-  })
 })
 
 describe('dnsCertificateErrorMessage', () => {
   const failed = (code: string) => new Error(`/x failed: HTTP 400: ${code}`)
   it('speaks plainly about the codes the panel returns', () => {
+    expect(
+      dnsCertificateErrorMessage(
+        new Error('/x failed: HTTP 422: certificate_ordering_off — Ordering is off.'),
+        'x'
+      )
+    ).toBe(ORDERING_OFF_MESSAGE)
     expect(dnsCertificateErrorMessage(failed('no_dns_token'), 'x')).toMatch(/Cloudflare Accounts/)
     expect(dnsCertificateErrorMessage(failed('zone_not_found'), 'x')).toMatch(
       /could not find the zone/

@@ -12546,9 +12546,12 @@ export async function setServerTunnelCarrying(
 }
 
 // ---------------------------------------------------------------------------
-// Certificates ordered through a DNS challenge
+// Certificates ordered through a DNS challenge. The control plane no longer
+// orders or renews them: order, check and retry answer 422
+// `certificate_ordering_off`; the list stays. The three calls have no screen
+// now and stay as the mirror of the routes, which are still mounted.
 
-/** One certificate TurboPanel orders itself, proven by a DNS record in the connected account. */
+/** One certificate TurboPanel ordered itself, proven by a DNS record in the connected account. */
 export type DnsCertificate = {
   id: string
   names: string[]
@@ -12560,10 +12563,12 @@ export type DnsCertificate = {
   /** Ordered from the test directory: no browser trusts it. */
   staging: boolean
   lastError: string | null
-  /** Something that will stop the next renewal, in plain words. */
+  /** In plain words: something wrong with it, or that it will not renew from the control plane. */
   warning: string | null
   attempts: number
+  /** Always null now: nothing is tried again from the control plane. */
   nextAttemptAt: string | null
+  /** Always null now: the control plane does not renew it. */
   renewAt: string | null
   notAfter: string | null
   issuer: string | null
@@ -12588,6 +12593,7 @@ export async function fetchDnsCertificates(
   return await apiFetch(dnsCertificatesPath(orgId))
 }
 
+/** Refused: 422 `certificate_ordering_off`. */
 export async function orderDnsCertificate(
   orgId: string,
   body: OrderDnsCertificateBody
@@ -12595,7 +12601,7 @@ export async function orderDnsCertificate(
   return await apiFetch(dnsCertificatesPath(orgId), { method: 'POST', body: JSON.stringify(body) })
 }
 
-/** Move an order on now. */
+/** Move an order on now. Refused: 422 `certificate_ordering_off`. */
 export async function checkDnsCertificate(
   orgId: string,
   id: string
@@ -12603,7 +12609,7 @@ export async function checkDnsCertificate(
   return await apiFetch(`${dnsCertificatesPath(orgId)}/${id}/check`, { method: 'POST' })
 }
 
-/** Try again a certificate that gave up. */
+/** Try again a certificate that gave up. Refused: 422 `certificate_ordering_off`. */
 export async function retryDnsCertificate(
   orgId: string,
   id: string

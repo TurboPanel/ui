@@ -127,6 +127,12 @@ describe('TlsOverviewSection delete', () => {
     render(<TlsOverviewSection orgId="o1" />)
     expect(screen.getByText("Let's Encrypt · Ready")).toBeTruthy()
     expect(screen.getByText('Uploaded · Issued and renewed by the serving host')).toBeTruthy()
+    // Only the DNS-ordered row says the control plane will not renew it.
+    const note = screen.getAllByText(
+      'This certificate will not renew from the control plane. It keeps working until it expires.'
+    )
+    expect(note).toHaveLength(1)
+    expect(note[0]?.parentElement?.textContent).toContain('dns.example')
   })
 
   it('shows who issued a DNS-ordered wildcard and from when it is valid', () => {
