@@ -135,6 +135,10 @@ describe('labels and intervals', () => {
     for (const text of Object.values(APPLY_CAUSE_TEXT)) expect(text).toMatch(/\.$/)
   })
 
+  it('never tells people to try again for a tunnel the control plane cannot manage', () => {
+    expect(APPLY_CAUSE_TEXT['tunnel-locally-managed']).not.toMatch(/try again/i)
+  })
+
   it('names checks in title case and passes unknown ids through', () => {
     expect(checkLabel('scope-tunnels')).toBe('Tunnel Scope')
     expect(checkLabel('scope-dns')).toBe('DNS Scope')

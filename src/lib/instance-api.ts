@@ -6581,6 +6581,8 @@ export type IngressApplyCause =
   | 'provider-rate-limited'
   | 'daemon-offline'
   | 'edge-unreachable'
+  /** The tunnel takes its routes from a file on its connector; retrying never helps. */
+  | 'tunnel-locally-managed'
 
 export type IngressApplyResult =
   { ok: true } | { ok: false; cause: IngressApplyCause; detail: string }

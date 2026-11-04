@@ -159,6 +159,7 @@ export const APPLY_CAUSE_TEXT: Readonly<Record<IngressApplyCause, string>> = {
   'provider-rate-limited': 'Cloudflare is limiting requests. Try again in a few minutes.',
   'daemon-offline': 'The daemon on the control plane host is offline.',
   'edge-unreachable': 'The edge could not reach this control plane.',
+  'tunnel-locally-managed': 'The control plane cannot manage this tunnel.',
 }
 
 const ACCOUNT_CHECK_LABELS: Readonly<Record<string, string>> = {
