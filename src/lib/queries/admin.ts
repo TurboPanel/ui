@@ -22,6 +22,7 @@ import {
   type DevelopmentUpdates,
   pauseUpdates,
   resumeUpdates,
+  startUpdateNow,
   saveUpgradeSettings,
   type UpdatesPauseResult,
   type UpgradeSettings,
@@ -599,6 +600,22 @@ export function useCheckForUpdates(consoleCommit?: string) {
     mutationFn: () => checkForUpdates(consoleCommit),
     onSuccess: async (fresh) => {
       queryClient.setQueryData(queryKeys.admin.instanceUpdates, fresh)
+      await queryClient.invalidateQueries({ queryKey: queryKeys.admin.instanceUpdates })
+    },
+  })
+}
+
+/**
+ * Update Now: start the update right away. Whatever it answers (a started
+ * run, already up to date, or a refusal such as a run already going), read
+ * the whole `instance-updates` prefix again, so the status and the active
+ * run show what is happening and the run view starts polling.
+ */
+export function useUpdateNow() {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: () => startUpdateNow(),
+    onSettled: async () => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.admin.instanceUpdates })
     },
   })

@@ -1,6 +1,7 @@
 import { formatLocalDateTime } from '@/lib/format-datetime'
 import {
   UpdateCheckTooSoonError,
+  UpdateNowRefusedError,
   type InstanceUpdates,
   type UpdatesPausedBy,
 } from '@/lib/instance-api'
@@ -10,8 +11,9 @@ import { userErrorMessage } from '@/lib/user-error'
 /**
  * Words for automatic updates on Admin > Updates. Updates of the control
  * plane, the web interface and every daemon start on their own at the hourly
- * check; the controls are Pause All Updates / Resume Updates and Check Now,
- * which only looks for new builds.
+ * check, or at once with Update Now (superadmins, release installs); the
+ * other controls are Pause All Updates / Resume Updates and Check Now, which
+ * only looks for new builds.
  */
 
 /** Formats an ISO instant for a sentence; the screens use local time. */
@@ -70,8 +72,57 @@ export const CHECK_NOW_HELP =
 export const CHECK_NOW_PAUSED_HELP =
   'Check Now only looks for new builds. Nothing starts until updates are resumed.'
 
-export function checkNowHelp(paused: boolean): string {
-  return paused ? CHECK_NOW_PAUSED_HELP : CHECK_NOW_HELP
+/** What Check Now and Update Now do, where the person can press Update Now. */
+export const CHECK_NOW_UPDATE_NOW_HELP =
+  'Check Now only looks for new builds. Update Now installs a newer build right away; otherwise the next scheduled check starts it.'
+
+export function checkNowHelp(paused: boolean, canUpdateNow = false): string {
+  if (paused) return CHECK_NOW_PAUSED_HELP
+  return canUpdateNow ? CHECK_NOW_UPDATE_NOW_HELP : CHECK_NOW_HELP
+}
+
+/** Under a disabled Update Now while updates are paused. */
+export const UPDATE_NOW_PAUSED_HINT = 'Resume updates to update now.'
+
+/** Update Now found nothing newer to install. */
+export const UPDATE_NOW_UP_TO_DATE = 'Already up to date.'
+
+/** Update Now refused because an update is already going. */
+export const UPDATE_NOW_RUN_ACTIVE = 'An update is already running.'
+
+/** Update Now could not reach the release server. */
+export const UPDATE_NOW_UNREACHABLE =
+  'The release server could not be reached. Try again in a few minutes.'
+
+/** Update Now pressed again within a minute: how long to wait. */
+export function updateNowTooSoonText(retryAfterSeconds: number | null): string {
+  if (retryAfterSeconds == null) return 'Wait a minute before trying again.'
+  const seconds = Math.max(1, Math.ceil(retryAfterSeconds))
+  return `Wait ${seconds} second${seconds === 1 ? '' : 's'} before trying again.`
+}
+
+/** Update Now on a development install, which updates by Build and Push Daemon. */
+export const UPDATE_NOW_DEVELOPMENT = 'A development install updates with Build and Push Daemon.'
+
+/** Why Update Now did not start an update, in plain words. */
+export function updateNowRefusal(err: unknown): string {
+  if (err instanceof UpdateNowRefusedError) {
+    switch (err.code) {
+      case 'run_active':
+        return UPDATE_NOW_RUN_ACTIVE
+      case 'paused':
+        return UPDATE_NOW_PAUSED_HINT
+      case 'development':
+        return UPDATE_NOW_DEVELOPMENT
+      case 'release_unreachable':
+        return UPDATE_NOW_UNREACHABLE
+      case 'check_too_soon':
+        return updateNowTooSoonText(err.retryAfterSeconds)
+      default:
+        return err.serverMessage ?? 'The update could not start.'
+    }
+  }
+  return userErrorMessage(err, 'Could not start the update')
 }
 
 /**

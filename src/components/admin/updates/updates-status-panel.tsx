@@ -3,8 +3,14 @@ import { StyleSheet, Text, View } from 'react-native'
 import { readConsoleBuild } from '@/components/admin/updates/console-build'
 import { Button, ConfirmButton, SectionPanel, StatusDot } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
+import { isSuperadminSession, useAuth } from '@/lib/auth-context'
 import type { InstanceUpdates } from '@/lib/instance-api'
-import { useCheckForUpdates, usePauseUpdates, useResumeUpdates } from '@/lib/queries/admin'
+import {
+  useCheckForUpdates,
+  usePauseUpdates,
+  useResumeUpdates,
+  useUpdateNow,
+} from '@/lib/queries/admin'
 import {
   checkNowHelp,
   checkNowRefusal,
@@ -14,6 +20,9 @@ import {
   pausedSinceText,
   resumeUpdatesPrompt,
   updatesCadenceText,
+  UPDATE_NOW_PAUSED_HINT,
+  UPDATE_NOW_UP_TO_DATE,
+  updateNowRefusal,
 } from '@/lib/update-automation'
 import { platformUpgradeHeadlineCopy, type PlatformUpgradeHeadline } from '@/lib/upgrade-display'
 import { failedRunMessage } from '@/lib/user-error'
@@ -56,6 +65,33 @@ function useCheckNow() {
 }
 
 /**
+ * Update Now: start the update right away (superadmins, release installs).
+ * A started run shows through the status and the run view, which the hook
+ * reads again; "Already up to date." or a refusal is said in the card.
+ */
+function useUpdateNowControl(activeRunId: string | null | undefined) {
+  const updateNow = useUpdateNow()
+  const [note, setNote] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  // A run that starts (on its own or from another tab) makes "Already up to
+  // date." stale: drop it.
+  useEffect(() => {
+    if (activeRunId) setNote(null)
+  }, [activeRunId])
+  const run = async () => {
+    setNote(null)
+    setError(null)
+    const result = await updateNow.run(undefined)
+    if (!result.ok) {
+      setError(updateNowRefusal(result.cause ?? new Error(result.error ?? '')))
+    } else if ('upToDate' in result.value) {
+      setNote(UPDATE_NOW_UP_TO_DATE)
+    }
+  }
+  return { busy: updateNow.isPending, note, error, run }
+}
+
+/**
  * Pause All Updates / Resume Updates. Both refetch the update status on success
  * (`usePauseUpdates` / `useResumeUpdates`); a refusal is said in the card.
  */
@@ -79,22 +115,39 @@ function StatusControls({
   data,
   check,
   pause,
+  updateNow,
 }: Readonly<{
   data: InstanceUpdates
   check: ReturnType<typeof useCheckNow>
   pause: ReturnType<typeof usePauseControl>
+  /** Null where Update Now is not offered (not a superadmin, or a development install). */
+  updateNow: ReturnType<typeof useUpdateNowControl> | null
 }>) {
   const paused = data.updatesPaused === true
   return (
     <View style={styles.controls}>
-      <Button
-        label="Check Now"
-        variant="secondary"
-        busy={check.busy}
-        onPress={() => {
-          void check.run()
-        }}
-      />
+      <View style={styles.buttonRow}>
+        {updateNow ? (
+          <Button
+            label="Update Now"
+            variant="primary"
+            busy={updateNow.busy}
+            disabled={paused || Boolean(data.activeRunId)}
+            onPress={() => {
+              void updateNow.run()
+            }}
+          />
+        ) : null}
+        <Button
+          label="Check Now"
+          variant="secondary"
+          busy={check.busy}
+          onPress={() => {
+            void check.run()
+          }}
+        />
+      </View>
+      {updateNow && paused ? <Text style={panelStyles.muted}>{UPDATE_NOW_PAUSED_HINT}</Text> : null}
       <ConfirmButton
         label={paused ? 'Resume Updates' : 'Pause All Updates'}
         confirmLabel={paused ? 'Yes, Resume' : 'Yes, Pause'}
@@ -114,8 +167,9 @@ function StatusControls({
 /**
  * The Status card of Admin > Updates, on both editions: where updates stand
  * (up to date, waiting, updating, paused), what waits, the last and next
- * check, and the controls: Check Now (a refresh only) and Pause All Updates /
- * Resume Updates. The controls sit in the card body under the text at every
+ * check, and the controls: Update Now (superadmins on a release install:
+ * start the update right away; disabled while one runs or updates are
+ * paused), Check Now (a refresh only) and Pause All Updates / Resume Updates. The controls sit in the card body under the text at every
  * width, never in the header slot, which does not shrink: the confirmation
  * gets the card's full width with its question on its own line, and resizing
  * the window never moves (and so never closes) an open confirmation.
@@ -134,6 +188,9 @@ export function UpdatesStatusPanel({
   children?: ReactNode
 }>) {
   const check = useCheckNow()
+  const { session } = useAuth()
+  const canUpdateNow = data.development !== true && isSuperadminSession(session)
+  const updateNow = useUpdateNowControl(data.activeRunId)
   const isPaused = data.updatesPaused === true
   const pause = usePauseControl(isPaused)
   const paused = pausedSinceText(data)
@@ -151,9 +208,16 @@ export function UpdatesStatusPanel({
         <Text style={panelStyles.muted}>{updatesCadenceText(data)}</Text>
         {lastChecked ? <Text style={panelStyles.muted}>{lastChecked}</Text> : null}
         {nextCheck ? <Text style={panelStyles.muted}>{nextCheck}</Text> : null}
-        <Text style={panelStyles.muted}>{checkNowHelp(isPaused)}</Text>
+        <Text style={panelStyles.muted}>{checkNowHelp(isPaused, canUpdateNow)}</Text>
         {children}
-        <StatusControls data={data} check={check} pause={pause} />
+        <StatusControls
+          data={data}
+          check={check}
+          pause={pause}
+          updateNow={canUpdateNow ? updateNow : null}
+        />
+        {updateNow.note ? <Text style={panelStyles.muted}>{updateNow.note}</Text> : null}
+        {updateNow.error ? <Text style={panelStyles.error}>{updateNow.error}</Text> : null}
         {check.error ? <Text style={panelStyles.error}>{check.error}</Text> : null}
         {pause.error ? <Text style={panelStyles.error}>{pause.error}</Text> : null}
       </View>
@@ -162,6 +226,11 @@ export function UpdatesStatusPanel({
 }
 
 const styles = StyleSheet.create({
+  buttonRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
   controls: {
     alignSelf: 'stretch',
     alignItems: 'flex-start',

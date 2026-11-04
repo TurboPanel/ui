@@ -4,7 +4,7 @@
 
 **Route:** `/admin/updates` → `updates-section.tsx` (self-hosted: `self-hosted-updates.tsx`; High Availability: `ha-updates.tsx`).
 
-**Job:** Show where automatic updates stand. Updates of the control plane, the web interface and every daemon start on their own (hourly check, daemons in groups, failed servers retried with backoff). Nobody starts one by hand; the controls are instance-admin **Check Now** (looks for new builds only) and **Pause All Updates** / **Resume Updates**. Titles, labels and named things use book title case; sentences stay sentence case. Status, readable build names, phased progress (co-located daemon → control plane → fleet), fleet table, history, and the one setting (servers updated at once). High Availability is read-only for the control plane.
+**Job:** Show where automatic updates stand. Updates of the control plane, the web interface and every daemon start on their own (hourly check, daemons in groups, failed servers retried with backoff). A superadmin on a release install can start one right away with the primary **Update Now** beside Check Now (disabled while an update runs, while paused with "Resume updates to update now.", and while the request is in flight); the other controls are instance-admin **Check Now** (looks for new builds only) and **Pause All Updates** / **Resume Updates**. Titles, labels and named things use book title case; sentences stay sentence case. Status, readable build names, phased progress (co-located daemon → control plane → fleet), fleet table, history, and the one setting (servers updated at once). High Availability is read-only for the control plane.
 
 ---
 
@@ -54,4 +54,4 @@ When `GET …/updates` says `development: true` (`development-updates.tsx`): no 
 
 ## API (admin)
 
-Documented in `src/lib/instance-api.md` — reads under `/api/admin/v1/instance/updates/*`, `POST …/check` (Check Now), `POST …/pause` / `…/resume`, and `GET` / `PUT …/settings` (batch only). Every manual start route answers 410 `updates_automatic`.
+Documented in `src/lib/instance-api.md` — reads under `/api/admin/v1/instance/updates/*`, `POST …/check` (Check Now), `POST …/now` (Update Now), `POST …/pause` / `…/resume`, and `GET` / `PUT …/settings` (batch only). Every old manual start, retry and cancel route answers 410 `updates_automatic`.
