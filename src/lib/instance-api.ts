@@ -7260,15 +7260,31 @@ export type EmailSettingSource = 'env' | 'db' | 'default'
 
 export type EmailSettingEntry = { value: string | null; source: EmailSettingSource }
 
-export type EmailSettingsResponse = { ok: boolean; settings: Record<string, EmailSettingEntry> }
+/** Whether system mail is going out (email settings read; absent on older control planes). */
+export type EmailDeliveryStatus = {
+  state: 'ok' | 'not_configured' | 'queue_unavailable'
+  /** Mail that gave up after every retry; `null` when the count cannot be read. */
+  deadLetters: number | null
+}
+
+export type EmailSettingsResponse = {
+  ok: boolean
+  settings: Record<string, EmailSettingEntry>
+  delivery?: EmailDeliveryStatus
+}
 
 const ADMIN_EMAIL_SETTINGS_URL = `${ADMIN_API}/settings/email`
 
 export async function fetchEmailSettings(): Promise<EmailSettingsResponse> {
-  const raw = await apiFetch<{ settings: Record<string, EmailSettingEntry> }>(
-    ADMIN_EMAIL_SETTINGS_URL
-  )
-  return { ok: true, settings: raw.settings ?? {} }
+  const raw = await apiFetch<{
+    settings: Record<string, EmailSettingEntry>
+    delivery?: EmailDeliveryStatus
+  }>(ADMIN_EMAIL_SETTINGS_URL)
+  return {
+    ok: true,
+    settings: raw.settings ?? {},
+    ...(raw.delivery ? { delivery: raw.delivery } : {}),
+  }
 }
 
 export async function saveEmailSettings(
