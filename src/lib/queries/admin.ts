@@ -64,6 +64,7 @@ import {
   saveEmailSettings,
   saveServerMetricsLiveSettings,
   saveSignupSettings,
+  type EmailSettingsResponse,
   type GithubManifestStartInput,
   startGithubAppManifest,
   syncForge,
@@ -843,7 +844,13 @@ export function useSaveEmailSettings() {
   return useApiMutation({
     mutationFn: saveEmailSettings,
     onSuccess: (data) => {
-      queryClient.setQueryData(queryKeys.admin.email, data)
+      // The save answers with settings only; keep the delivery notice until the
+      // read below says whether the new settings fixed it.
+      queryClient.setQueryData<EmailSettingsResponse>(queryKeys.admin.email, (previous) => ({
+        ...data,
+        delivery: previous?.delivery,
+      }))
+      void queryClient.invalidateQueries({ queryKey: queryKeys.admin.email })
     },
   })
 }

@@ -2,9 +2,20 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { StyleSheet, Text, TextInput, View } from 'react-native'
 import Svg, { Path, Rect } from 'react-native-svg'
 import { panelStyles } from '@/components/ui/panel-styles'
-import { Badge, Button, LoadingState, SectionPanel, SegmentedControl } from '@/components/ui'
+import {
+  Badge,
+  Button,
+  InlineNotice,
+  LoadingState,
+  SectionPanel,
+  SegmentedControl,
+} from '@/components/ui'
 import type { EmailSettingSource, EmailSettingsResponse } from '@/lib/instance-api'
-import { effectiveEmailProvider, emailProviderSegmentValue } from '@/lib/email-settings-view'
+import {
+  effectiveEmailProvider,
+  emailDeliveryNotice,
+  emailProviderSegmentValue,
+} from '@/lib/email-settings-view'
 import { useEmailSettings, useSaveEmailSettings } from '@/lib/queries/admin'
 import { useInstallStatusQuery } from '@/lib/queries/auth'
 import { colors, spacing } from '@/lib/theme'
@@ -142,6 +153,17 @@ function lockedDisplayText(key: FullKey, value: string): string {
   return displayValue || ''
 }
 
+const EMAIL_SETTINGS_PANEL_ID = 'email-settings-panel'
+
+/** "Set Up Email": bring the settings form into view (web; a no-op elsewhere). */
+function scrollToSettings() {
+  if (globalThis.document === undefined) return
+  globalThis.document.getElementById(EMAIL_SETTINGS_PANEL_ID)?.scrollIntoView?.({
+    behavior: 'smooth',
+    block: 'start',
+  })
+}
+
 export function EmailSettingsSection() {
   const emailQuery = useEmailSettings()
   const saveMutation = useSaveEmailSettings()
@@ -223,6 +245,8 @@ export function EmailSettingsSection() {
       applyServerResponse(emailQuery.data)
     }
   }, [emailQuery.data])
+
+  const deliveryNotice = emailDeliveryNotice(emailQuery.data?.delivery)
 
   const onChange = (key: FullKey, text: string) => {
     setDraft((prev) => ({ ...prev, [key]: text }))
@@ -374,39 +398,54 @@ export function EmailSettingsSection() {
         can be edited here. Environment variables take precedence and appear read-only.
       </Text>
 
-      <SectionPanel
-        title="Email settings"
-        hint="Provider selection and credentials for SMTP or Mailgun API"
-      >
-        {emailQuery.isError ? (
-          <Text style={panelStyles.error}>
-            {userErrorMessage(emailQuery.error, 'Failed to load email settings')}
-          </Text>
-        ) : null}
-        {saveError ? <Text style={panelStyles.error}>{saveError}</Text> : null}
-        {success ? <Text style={styles.success}>{success}</Text> : null}
+      {deliveryNotice ? (
+        <InlineNotice
+          tone="warning"
+          title={deliveryNotice.title}
+          body={deliveryNotice.body}
+          actions={
+            deliveryNotice.setUp ? (
+              <Button label="Set Up Email" size="sm" onPress={scrollToSettings} />
+            ) : null
+          }
+        />
+      ) : null}
 
-        {emailQuery.isLoading ? (
-          <LoadingState />
-        ) : (
-          <>
-            {visibleKeysForProvider(provider).map((k) => renderField(k))}
-
-            <Button
-              label="Save"
-              busyLabel="Saving..."
-              variant="primary"
-              busy={saveMutation.isPending}
-              onPress={() => onSave()}
-            />
-
-            <Text style={panelStyles.muted}>
-              Only fields not overridden by environment variables are sent on save. Clear a field to
-              remove its stored value and fall back to defaults.
+      <View nativeID={EMAIL_SETTINGS_PANEL_ID}>
+        <SectionPanel
+          title="Email settings"
+          hint="Provider selection and credentials for SMTP or Mailgun API"
+        >
+          {emailQuery.isError ? (
+            <Text style={panelStyles.error}>
+              {userErrorMessage(emailQuery.error, 'Failed to load email settings')}
             </Text>
-          </>
-        )}
-      </SectionPanel>
+          ) : null}
+          {saveError ? <Text style={panelStyles.error}>{saveError}</Text> : null}
+          {success ? <Text style={styles.success}>{success}</Text> : null}
+
+          {emailQuery.isLoading ? (
+            <LoadingState />
+          ) : (
+            <>
+              {visibleKeysForProvider(provider).map((k) => renderField(k))}
+
+              <Button
+                label="Save"
+                busyLabel="Saving..."
+                variant="primary"
+                busy={saveMutation.isPending}
+                onPress={() => onSave()}
+              />
+
+              <Text style={panelStyles.muted}>
+                Only fields not overridden by environment variables are sent on save. Clear a field
+                to remove its stored value and fall back to defaults.
+              </Text>
+            </>
+          )}
+        </SectionPanel>
+      </View>
     </View>
   )
 }
