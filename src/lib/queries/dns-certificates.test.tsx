@@ -43,7 +43,7 @@ describe('certificate order queries', () => {
       await act(async () => {
         await vi.advanceTimersByTimeAsync(20_000)
       })
-      expect(api.fetchDnsCertificates.mock.calls.length).toBe(loads)
+      expect(api.fetchDnsCertificates.mock.calls).toHaveLength(loads)
       await act(async () => {
         await vi.advanceTimersByTimeAsync(45_000)
       })

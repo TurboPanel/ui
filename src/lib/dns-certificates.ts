@@ -99,6 +99,9 @@ export function dnsCapableCarriers(carriers: readonly TunnelCarrier[]): TunnelCa
   )
 }
 
+/** What the wording of a certificate's state depends on. */
+type CertificateState = Pick<DnsCertificate, 'status' | 'renewAt' | 'nextAttemptAt'>
+
 /**
  * True when the panel still orders and renews these certificates: an older
  * control plane sends a renewal or retry time, a current one never does.
@@ -108,24 +111,18 @@ export function stillOrdered(c: Pick<DnsCertificate, 'renewAt' | 'nextAttemptAt'
 }
 
 /** The no-renewal line, only for a certificate in use that the control plane will not renew. */
-export function noRenewalNote(
-  c: Pick<DnsCertificate, 'status' | 'renewAt' | 'nextAttemptAt'>
-): string | null {
+export function noRenewalNote(c: CertificateState): string | null {
   return c.status === 'ready' && !stillOrdered(c) ? NO_RENEWAL_MESSAGE : null
 }
 
 /** Where a certificate stands, in a few words. An order left open never finishes now. */
-export function stageLabel(
-  c: Pick<DnsCertificate, 'status' | 'renewAt' | 'nextAttemptAt'>
-): string {
+export function stageLabel(c: CertificateState): string {
   if (c.status === 'failed') return 'Gave up after several tries.'
   if (c.status === 'ready' || c.status === 'expired') return 'Issued.'
   return stillOrdered(c) ? 'Ordering.' : 'This order was stopped and will not finish.'
 }
 
-export function statusLabel(
-  c: Pick<DnsCertificate, 'status' | 'renewAt' | 'nextAttemptAt'>
-): string {
+export function statusLabel(c: CertificateState): string {
   switch (c.status) {
     case 'ready':
       return 'Ready'
