@@ -84,7 +84,7 @@ describe('Cloudflare Tunnel', () => {
 })
 
 describe('AddAccountForm', () => {
-  it('names the three token permissions, including the one for a user-owned token', () => {
+  it('names the two required token permissions and the optional permission read', () => {
     render(<AddAccountForm />)
     expect(screen.getByLabelText('Token').getAttribute('data-hint')).toBe(
       'An API token with Account › Cloudflare Tunnel › Edit and Zone › DNS › Edit on the zones this control plane uses. Optional: Account › Account API Tokens › Read (User › API Tokens › Read for a token under My Profile) lets the check confirm the permissions exactly.'

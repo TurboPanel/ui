@@ -1,10 +1,10 @@
 // @vitest-environment happy-dom
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { HostnamesSection } from './hostnames-section'
 
 const mocks = vi.hoisted(() => ({
-  useAuth: vi.fn(),
+  runtime: vi.fn(),
   hostnames: vi.fn(),
   addRow: vi.fn(),
   editorRead: vi.fn(),
@@ -23,7 +23,7 @@ vi.mock(
   '@/components/ui/panel-styles',
   async () => (await import('./access-ui-stub')).panelStylesStub
 )
-vi.mock('@/lib/auth-context', () => ({ useAuth: mocks.useAuth }))
+vi.mock('@/lib/queries/auth', () => ({ useControlPlaneRuntime: mocks.runtime }))
 vi.mock('@/components/admin/public-url-fields', () => ({
   AddPublicUrlRow: (props: Readonly<{ selfHosted?: boolean }>) => {
     mocks.addRow(props)
@@ -66,8 +66,21 @@ vi.mock('@/lib/queries/admin', () => ({
 // The editor's panel; the page title is plain text, the High Availability panel is "Address".
 const editorPanel = () => screen.queryByRole('heading', { name: 'Hostnames' })
 
-function renderOn(runtime: string | undefined, query: Record<string, unknown>) {
-  mocks.useAuth.mockReturnValue({ controlPlaneRuntime: runtime })
+const retry = vi.fn()
+
+function renderOn(
+  runtime: string | undefined,
+  query: Record<string, unknown>,
+  status: Record<string, unknown> = {}
+) {
+  mocks.runtime.mockReturnValue({
+    runtime,
+    failed: false,
+    error: null,
+    retrying: false,
+    retry,
+    ...status,
+  })
   mocks.hostnames.mockReturnValue({ data: undefined, isLoading: false, isError: false, ...query })
   render(<HostnamesSection />)
 }
@@ -96,6 +109,16 @@ describe('HostnamesSection view by runtime', () => {
     renderOn(undefined, { isLoading: true })
     expect(screen.getByText('Loading')).toBeTruthy()
     expect(screen.queryByText(/Platform-managed/)).toBeNull()
+    expect(mocks.hostnames).not.toHaveBeenCalled()
+    expectNoEditor()
+  })
+
+  it('shows why the runtime is unknown and offers Retry when the status read fails', () => {
+    renderOn(undefined, {}, { failed: true, error: new Error('Service unavailable') })
+    expect(screen.getByText('Service unavailable')).toBeTruthy()
+    expect(screen.queryByText('Loading')).toBeNull()
+    fireEvent.click(screen.getByText('Retry'))
+    expect(retry).toHaveBeenCalledTimes(1)
     expect(mocks.hostnames).not.toHaveBeenCalled()
     expectNoEditor()
   })
