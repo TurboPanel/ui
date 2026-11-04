@@ -590,7 +590,7 @@ function ReachabilityRow({
   const refused = certificateSourceEligibility(record.host, {
     certificates: [],
     capabilities,
-  })['lets-encrypt']
+  })['acme-http-01']
   const preflight = http01PreflightPresentation(record)
   const preflightStyle = preflight?.kind === 'failed' ? styles.rowError : styles.rowHint
   return (

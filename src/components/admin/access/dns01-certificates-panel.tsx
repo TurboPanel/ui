@@ -18,12 +18,12 @@ import { colors, spacing } from '@/lib/theme'
 export const TRANSPARENCY_NOTE =
   'Every issued name is listed in public certificate transparency logs.'
 
-/** One row per `dns-01` hostname: the ladder, the times, Order Now and Retry. */
+/** One row per `acme-dns-01` hostname: the ladder, the times, Order Now and Retry. */
 export function Dns01CertificatesPanel({
   hostnames,
   enabled,
 }: Readonly<{ hostnames: readonly InstanceHostnameRecord[]; enabled: boolean }>) {
-  const rows = hostnames.filter((row) => row.source === 'dns-01')
+  const rows = hostnames.filter((row) => row.source === 'acme-dns-01')
   return (
     <SectionPanel
       title="DNS-01 Certificates"

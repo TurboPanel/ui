@@ -6,8 +6,8 @@ import { realDate } from '@/lib/tls-managed-dates'
 export const INSTANCE_HOSTNAME_SOURCE_LABELS = {
   'platform-ca': 'Platform CA',
   uploaded: 'Uploaded',
-  'lets-encrypt': "Let's Encrypt",
-  'dns-01': 'DNS-01',
+  'acme-http-01': "Let's Encrypt (HTTP)",
+  'acme-dns-01': "Let's Encrypt (DNS)",
 } as const
 
 export type InstanceHostnameSource = keyof typeof INSTANCE_HOSTNAME_SOURCE_LABELS
@@ -128,7 +128,7 @@ export function http01PreflightPresentation(
     acmeLastAttemptAt: string | null
   }>
 ): { kind: Http01PreflightKind; text: string } | null {
-  if (record.source !== 'lets-encrypt') return null
+  if (record.source !== 'acme-http-01') return null
   const error = record.acmeLastError?.trim() ?? ''
   if (error.includes(INSTANCE_ACME_HTTP01_ISSUER_UNREACHABLE)) {
     return { kind: 'failed', text: error }
@@ -250,18 +250,18 @@ export function certificateSourceEligibility(
   if (daemonRefusal) {
     return {
       uploaded: daemonRefusal,
-      'lets-encrypt': daemonRefusal,
-      'dns-01': daemonRefusal,
+      'acme-http-01': daemonRefusal,
+      'acme-dns-01': daemonRefusal,
     }
   }
   const refused: Partial<Record<RefusableSource, string>> = {}
   const hostname = hostnameOf(host)
   const dns01 = dns01Refusal(hostname)
-  if (dns01) refused['dns-01'] = dns01
+  if (dns01) refused['acme-dns-01'] = dns01
   if (hostname.startsWith('*.')) {
-    refused['lets-encrypt'] = "Let's Encrypt cannot issue a certificate for a wildcard name."
+    refused['acme-http-01'] = "Let's Encrypt cannot issue a certificate for a wildcard name."
   } else if (isLoopbackOrPrivateHostname(hostname)) {
-    refused['lets-encrypt'] =
+    refused['acme-http-01'] =
       "Let's Encrypt cannot issue a certificate for a loopback or private name."
   }
   const covered = options.certificates.some((certificate) =>
@@ -278,8 +278,9 @@ export type HostnameSourceDraft = Readonly<{
   source: InstanceHostnameSource
 }>
 
+/** True when the draft stores a Let's Encrypt row, over HTTP-01 or DNS-01; both need accepted terms. */
 export function draftUsesLetsEncryptSource(draft: readonly HostnameSourceDraft[]): boolean {
-  return draft.some((row) => row.source === 'lets-encrypt')
+  return draft.some((row) => row.source === 'acme-http-01' || row.source === 'acme-dns-01')
 }
 
 /**

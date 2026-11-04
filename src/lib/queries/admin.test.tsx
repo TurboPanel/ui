@@ -384,7 +384,7 @@ describe('admin query hooks', () => {
     const newCert = '2027-01-30T00:00:00.000Z'
     const letsEncrypt = (overrides: Record<string, unknown> = {}) => ({
       ...savedHostname('https://panel.example.com'),
-      source: 'lets-encrypt' as const,
+      source: 'acme-http-01' as const,
       ...overrides,
     })
 

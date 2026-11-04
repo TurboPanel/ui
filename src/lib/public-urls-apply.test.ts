@@ -67,8 +67,8 @@ describe('publicUrlsApplyFeedback', () => {
 describe('certificate kind wording', () => {
   it('only mentions self-signed for Platform CA names', () => {
     expect(reconnectedStatus([{ source: 'platform-ca' }])).toBe('reconnected')
-    expect(reconnectedStatus([{ source: 'lets-encrypt' }])).toBe('reconnected-trusted')
-    expect(reconnectedStatus([{ source: 'platform-ca' }, { source: 'lets-encrypt' }])).toBe(
+    expect(reconnectedStatus([{ source: 'acme-http-01' }])).toBe('reconnected-trusted')
+    expect(reconnectedStatus([{ source: 'platform-ca' }, { source: 'acme-http-01' }])).toBe(
       'reconnected-mixed'
     )
     expect(applyCertificateKind([{ source: 'uploaded' }])).toBe('trusted')
@@ -77,7 +77,7 @@ describe('certificate kind wording', () => {
   })
 
   it('is honest when an earlier certificate was kept', () => {
-    expect(reconnectedStatus([{ source: 'lets-encrypt' }], true)).toBe('reconnected-kept')
+    expect(reconnectedStatus([{ source: 'acme-http-01' }], true)).toBe('reconnected-kept')
     expect(publicUrlsApplyFeedback('reconnected-kept')?.message).toContain(
       'kept its existing certificate'
     )

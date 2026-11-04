@@ -206,7 +206,7 @@ async function issuanceBaselineBeforeApply(
   hostnames: readonly InstanceHostnameInput[] | undefined,
   signal: AbortSignal
 ): Promise<IssuanceBaseline> {
-  if (hostnames && !hostnames.some((entry) => entry.source === 'lets-encrypt')) {
+  if (hostnames && !hostnames.some((entry) => entry.source === 'acme-http-01')) {
     return new Map()
   }
   try {
