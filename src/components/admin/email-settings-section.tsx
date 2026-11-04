@@ -240,11 +240,14 @@ export function EmailSettingsSection() {
     setSecretTouched(nextTouched)
   }
 
+  // Keyed on the settings only: a read that changes just the delivery report
+  // (the refetch after a save) keeps the same reference and leaves the form alone.
+  const loadedSettings = emailQuery.data?.settings
   useEffect(() => {
-    if (emailQuery.data) {
-      applyServerResponse(emailQuery.data)
+    if (loadedSettings) {
+      applyServerResponse({ ok: true, settings: loadedSettings })
     }
-  }, [emailQuery.data])
+  }, [loadedSettings])
 
   const deliveryNotice = emailDeliveryNotice(emailQuery.data?.delivery)
 
