@@ -107,7 +107,7 @@ function withLine(lines: string[], line: string | null): string[] {
 }
 
 /** What a waiting request still waits on. */
-export type WaitingCause = 'dns' | 'port80' | 'caa' | 'terms'
+export type WaitingCause = 'dns' | 'port80' | 'caa'
 
 /**
  * DNS while any name does not point at the server yet; once every name does,
@@ -115,7 +115,6 @@ export type WaitingCause = 'dns' | 'port80' | 'caa' | 'terms'
  * as a DNS problem.
  */
 export function waitingCause(dns: HostingDnsReport | null): WaitingCause {
-  if (dns?.termsHeld === true) return 'terms'
   const names = dns?.hostnames ?? []
   if (names.length === 0 || names.some((name) => !name.resolves)) return 'dns'
   if (names.some((name) => name.port80 === 'closed')) return 'port80'
@@ -127,7 +126,6 @@ const WAITING_LABELS: Readonly<Record<WaitingCause, string>> = {
   dns: 'Waiting for DNS',
   port80: 'Waiting for Port 80',
   caa: 'Blocked by a CAA Record',
-  terms: 'Waiting for New Terms',
 }
 
 /** The status label of a waiting request, by what it waits on. */
@@ -135,21 +133,7 @@ export function waitingLabel(dns: HostingDnsReport | null): string {
   return WAITING_LABELS[waitingCause(dns)]
 }
 
-function termsHeldView(cert: HostingCertificate): CertificateView {
-  return {
-    label: WAITING_LABELS.terms,
-    tone: 'pending',
-    lines: [
-      'Let’s Encrypt has new terms. Accept them under Organization Settings › Domains & Certificates; this certificate is ordered once they are accepted.',
-    ],
-    reason: null,
-    actions: [],
-    spinner: false,
-  }
-}
-
 function waitingView(cert: HostingCertificate): CertificateView {
-  if (waitingCause(cert.dns) === 'terms') return termsHeldView(cert)
   let lines = [
     'Let’s Encrypt starts as soon as this domain points at your server and answers on port 80.',
   ]
@@ -228,10 +212,7 @@ export function describeCertificate(cert: HostingCertificate): CertificateView {
 /** Why Let's Encrypt was refused, in plain words, and whether Organization Settings can fix it. */
 export type LetsEncryptRefusal = Readonly<{
   message: string
-  /**
-   * The organization has Let's Encrypt turned off, or has newer terms to
-   * accept: link to Domains & Certificates.
-   */
+  /** The organization has Let's Encrypt turned off: link to Domains & Certificates. */
   openSettings: boolean
 }>
 
@@ -259,10 +240,7 @@ export function letsEncryptRefusal(err: unknown): LetsEncryptRefusal {
   const fallback = 'Could not start Let\u2019s Encrypt.'
   return {
     message: www ?? (isForbiddenError(err) ? fallback : userErrorMessage(err, fallback)),
-    openSettings:
-      err instanceof Error &&
-      (err.message.includes('lets_encrypt_not_enabled') ||
-        err.message.includes('acme_terms_changed')),
+    openSettings: err instanceof Error && err.message.includes('lets_encrypt_not_enabled'),
   }
 }
 
