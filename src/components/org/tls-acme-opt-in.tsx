@@ -22,7 +22,7 @@ const TERMS_UNAVAILABLE =
   "Let's Encrypt could not be reached to read its current terms. Try again in a moment."
 
 /** Saves a TLS settings change and puts the answer in the cache. */
-function useSaveTlsSettings(orgId: string, onSaved: () => void, failure: string) {
+export function useSaveTlsSettings(orgId: string, onSaved: () => void, failure: string) {
   const queryClient = useQueryClient()
   const [error, setError] = useState<string | null>(null)
   const mutation = useApiMutation({
@@ -43,7 +43,7 @@ function useSaveTlsSettings(orgId: string, onSaved: () => void, failure: string)
 }
 
 /** The agreement link and the accept checkbox, the same wherever terms are accepted. */
-function TermsAgreement({
+export function TermsAgreement({
   termsUrl,
   accepted,
   disabled,
