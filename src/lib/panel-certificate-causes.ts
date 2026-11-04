@@ -13,6 +13,8 @@ export const PANEL_DNS_CAUSE_LABELS: Readonly<Record<PanelDnsCause, string>> = {
   'acme-error': 'Certificate Authority Error',
   'account-error': 'Certificate Account Error',
   'dns-lookup': 'Nameserver Lookup Failed',
+  'no-nameservers': 'No Nameservers Found',
+  'order-cap': 'Daily Order Limit',
 }
 
 export function panelDnsCauseLabel(cause: string): string {

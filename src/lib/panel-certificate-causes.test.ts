@@ -21,6 +21,8 @@ const CAUSES: readonly PanelDnsCause[] = [
   'acme-error',
   'account-error',
   'dns-lookup',
+  'no-nameservers',
+  'order-cap',
 ]
 
 /** Book title case: every word capitalized except short joining words after the first. */

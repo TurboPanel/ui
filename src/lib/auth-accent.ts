@@ -1,7 +1,8 @@
 import { Platform } from 'react-native'
+import type { ControlPlaneRuntime } from '@/lib/control-plane-runtime'
 import { navyPalette } from '@/lib/theme-palettes'
 
-export type ControlPlaneRuntime = 'deno' | 'workers'
+export { type ControlPlaneRuntime, resolveControlPlaneRuntime } from '@/lib/control-plane-runtime'
 
 export type AuthAccentTheme = {
   /** Brand accent for stripe, CTA, links */
@@ -65,31 +66,4 @@ export function authAccentForRuntime(runtime: ControlPlaneRuntime | undefined): 
 /** Spinner colour for loading screens: brand blue, readable in both themes. */
 export function authSpinnerColor(): string {
   return navyPalette.brand
-}
-
-/**
- * Prefer explicit `runtime` from `GET /api/client/v1/status`.
- * Fallback: install fields are Deno-only; bare payloads default to Workers.
- */
-export function resolveControlPlaneRuntime(
-  status:
-    | {
-        runtime?: ControlPlaneRuntime
-        needsInstall?: boolean
-        isInstallMode?: boolean
-      }
-    | null
-    | undefined
-): ControlPlaneRuntime | undefined {
-  if (status?.runtime === 'deno' || status?.runtime === 'workers') {
-    return status.runtime
-  }
-  // Deno self-hosted always includes these keys; Workers omits them.
-  if (status?.needsInstall !== undefined || status?.isInstallMode !== undefined) {
-    return 'deno'
-  }
-  if (status != null) {
-    return 'workers'
-  }
-  return undefined
 }

@@ -55,7 +55,7 @@ import {
 } from '@/lib/hostname-ingress'
 import { HA_CERT_APPLY_NOTE } from '@/lib/platform-copy'
 import { isProviderMode } from '@/lib/connection-modes'
-import { useAuth } from '@/lib/auth-context'
+import { useControlPlaneRuntime } from '@/lib/queries/auth'
 import { useIngressAccounts, useIngressCapabilities } from '@/lib/queries/ingress'
 import { EdgeGateStatus } from '@/components/admin/access/edge-gate-status'
 import { Dns01HostnameStatus } from '@/components/admin/access/dns01-certificates-panel'
@@ -154,8 +154,8 @@ function useIngressContext(
   stored: readonly InstanceHostnameRecord[],
   draft: readonly InstanceHostnameInput[]
 ): IngressContext {
-  const { controlPlaneRuntime } = useAuth()
-  const enabled = controlPlaneRuntime !== 'workers'
+  const { runtime } = useControlPlaneRuntime()
+  const enabled = runtime !== 'workers'
   const capabilities = useIngressCapabilities({ enabled })
   const accounts = useIngressAccounts({ enabled })
   return {
@@ -224,18 +224,37 @@ function PlatformManagedHostnames() {
 /**
  * The view follows the runtime, not the hostnames response, so High
  * Availability never shows the editor while that read loads or after it fails.
+ * The runtime comes from the shared status query; when that read fails the
+ * screen says so and offers Retry instead of loading for ever.
  */
 export function HostnamesSection() {
-  const { controlPlaneRuntime } = useAuth()
-  if (controlPlaneRuntime === undefined) {
+  const status = useControlPlaneRuntime()
+  if (status.runtime === undefined) {
     return (
       <View style={styles.root}>
         <Text style={panelStyles.pageTitle}>Hostnames</Text>
-        <LoadingState />
+        {status.failed ? (
+          <View style={styles.runtimeError}>
+            <Text style={panelStyles.error}>
+              {userErrorMessage(status.error, 'Could not reach the control plane')}
+            </Text>
+            <ButtonRow>
+              <Button
+                label="Retry"
+                size="sm"
+                busy={status.retrying}
+                accessibilityLabel="Ask the control plane again"
+                onPress={status.retry}
+              />
+            </ButtonRow>
+          </View>
+        ) : (
+          <LoadingState />
+        )}
       </View>
     )
   }
-  if (controlPlaneRuntime === 'workers') return <PlatformManagedHostnames />
+  if (status.runtime === 'workers') return <PlatformManagedHostnames />
   return <SelfHostedHostnames />
 }
 
@@ -872,6 +891,9 @@ const styles = StyleSheet.create({
   root: {
     width: '100%',
     gap: spacing.lg,
+  },
+  runtimeError: {
+    gap: spacing.sm,
   },
   status: {
     flexDirection: 'row',

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { QueryClientProvider } from '@tanstack/react-query'
-import { renderHook, waitFor } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ControlPlaneAccount } from '@/lib/control-plane-accounts'
 import { createAppQueryClient } from '@/lib/query-client'
@@ -16,6 +16,7 @@ import {
   usePasskeyRegisterOptions,
   usePasskeyRegisterVerify,
   useChangePassword,
+  useControlPlaneRuntime,
   useRegenerateBackupCodes,
   useSessionQuery,
   useSignIn,
@@ -140,6 +141,7 @@ vi.mock('@/lib/passkey-client', () => ({
 }))
 
 vi.mock('@/lib/control-plane-accounts', () => ({
+  canQueryControlPlane: () => true,
   getActiveControlPlaneAccount,
   rememberSignedInAccount,
   removeActiveControlPlaneAccount,
@@ -206,6 +208,33 @@ describe('auth query hooks', () => {
       expect(result.current.isSuccess).toBe(true)
     })
     expect(result.current.data?.runtime).toBe('deno')
+  })
+
+  it('useControlPlaneRuntime reads the runtime from the shared status query', async () => {
+    fetchInstallStatus.mockResolvedValueOnce({ runtime: 'workers' })
+    const { result } = renderHook(() => useControlPlaneRuntime(), { wrapper: createWrapper() })
+    expect(result.current.runtime).toBeUndefined()
+    expect(result.current.failed).toBe(false)
+    await waitFor(() => {
+      expect(result.current.runtime).toBe('workers')
+    })
+  })
+
+  it('useControlPlaneRuntime reports a failed status read and retries it', async () => {
+    fetchInstallStatus.mockRejectedValueOnce(new Error('offline'))
+    const { result } = renderHook(() => useControlPlaneRuntime(), { wrapper: createWrapper() })
+    await waitFor(() => {
+      expect(result.current.failed).toBe(true)
+    })
+    expect(result.current.runtime).toBeUndefined()
+    fetchInstallStatus.mockResolvedValueOnce({ runtime: 'deno', needsInstall: false })
+    act(() => {
+      result.current.retry()
+    })
+    await waitFor(() => {
+      expect(result.current.runtime).toBe('deno')
+    })
+    expect(result.current.failed).toBe(false)
   })
 
   it('useInstallStatusQuery stays idle when enabled is false', () => {

@@ -34,7 +34,9 @@ import {
   type SessionInfo,
   type TwoFactorCodeKind,
 } from '@/lib/instance-api'
+import { type ControlPlaneRuntime, resolveControlPlaneRuntime } from '@/lib/control-plane-runtime'
 import {
+  canQueryControlPlane,
   getActiveControlPlaneAccount,
   rememberSignedInAccount,
   removeActiveControlPlaneAccount,
@@ -63,6 +65,36 @@ export function useInstallStatusQuery(options?: Readonly<{ enabled?: boolean }>)
     staleTime: 30_000,
     retry: false,
   })
+}
+
+export type ControlPlaneRuntimeRead = {
+  /** Undefined until `GET /status` answers, and when it failed. */
+  runtime: ControlPlaneRuntime | undefined
+  /** The read failed and nothing answered before it. */
+  failed: boolean
+  error: unknown
+  retrying: boolean
+  retry: () => void
+}
+
+/**
+ * The control plane runtime from the shared `GET /status` query (the one
+ * `AuthProvider` reads, same key), never from per-tab storage. A screen that
+ * picks its view by runtime can tell "still asking" from "the read failed"
+ * and offer Retry instead of a spinner that never ends.
+ */
+export function useControlPlaneRuntime(): ControlPlaneRuntimeRead {
+  const status = useInstallStatusQuery({ enabled: canQueryControlPlane() })
+  const runtime = status.data ? resolveControlPlaneRuntime(status.data) : undefined
+  return {
+    runtime,
+    failed: runtime === undefined && status.isError,
+    error: status.error,
+    retrying: status.isFetching,
+    retry: () => {
+      void status.refetch()
+    },
+  }
 }
 
 export function useOrganizationsQuery(options?: Readonly<{ enabled?: boolean }>) {

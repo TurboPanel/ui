@@ -6797,6 +6797,10 @@ export type PanelDnsCause =
   | 'account-error'
   /** This host could not look up the zone's nameservers; retried on its own schedule, never stops. */
   | 'dns-lookup'
+  /** The DNS provider and the resolver both say the zone lists no nameservers. Older control planes never send it. */
+  | 'no-nameservers'
+  /** Too many orders were given up in the last day; no new one opens until one ages out or Retry. Older control planes never send it. */
+  | 'order-cap'
 
 export type PanelDnsCertificate = {
   ok: true
