@@ -12,6 +12,7 @@ export const PANEL_DNS_CAUSE_LABELS: Readonly<Record<PanelDnsCause, string>> = {
   'provider-rate-limited': 'DNS Provider Rate Limit',
   'acme-error': 'Certificate Authority Error',
   'account-error': 'Certificate Account Error',
+  'dns-lookup': 'Nameserver Lookup Failed',
 }
 
 export function panelDnsCauseLabel(cause: string): string {
@@ -46,6 +47,12 @@ export function dns01Ladder(stage: PanelDnsStage): LadderStep[] {
     else if (i === index) state = stage === 'issued' ? 'done' : 'current'
     return { ...step, state }
   })
+}
+
+/** The step an open order is on, for a one-line progress note; null when nothing is running. */
+export function dns01WorkingLabel(stage: PanelDnsStage): string | null {
+  if (stage === 'idle' || stage === 'issued') return null
+  return DNS01_LADDER.find((step) => step.stage === stage)?.label ?? null
 }
 
 export const DNS01_STOPPED_LABELS: Readonly<Partial<Record<PanelDnsStage, string>>> = {

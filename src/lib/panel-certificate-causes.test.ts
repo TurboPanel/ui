@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { PanelDnsCause } from './instance-api'
 import {
   dns01Ladder,
+  dns01WorkingLabel,
   PANEL_DNS_CAUSE_LABELS,
   panelDnsCauseLabel,
   panelDnsInterval,
@@ -19,6 +20,7 @@ const CAUSES: readonly PanelDnsCause[] = [
   'provider-rate-limited',
   'acme-error',
   'account-error',
+  'dns-lookup',
 ]
 
 /** Book title case: every word capitalized except short joining words after the first. */
@@ -66,6 +68,16 @@ describe('dns01Ladder', () => {
   it('marks every step done once issued, and none current when stopped', () => {
     expect(dns01Ladder('issued').every((step) => step.state === 'done')).toBe(true)
     expect(dns01Ladder('failed').every((step) => step.state === 'todo')).toBe(true)
+  })
+})
+
+describe('dns01WorkingLabel', () => {
+  it('names the step an open order is on, and nothing when idle, issued or stopped', () => {
+    expect(dns01WorkingLabel('waiting-dns')).toBe('Waiting for DNS')
+    expect(dns01WorkingLabel('preflight')).toBe('Preflight')
+    for (const stage of ['idle', 'issued', 'failed', 'backoff'] as const) {
+      expect(dns01WorkingLabel(stage), stage).toBeNull()
+    }
   })
 })
 

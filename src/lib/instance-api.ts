@@ -6795,6 +6795,8 @@ export type PanelDnsCause =
   | 'provider-rate-limited'
   | 'acme-error'
   | 'account-error'
+  /** This host could not look up the zone's nameservers; retried on its own schedule, never stops. */
+  | 'dns-lookup'
 
 export type PanelDnsCertificate = {
   ok: true
