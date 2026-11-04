@@ -118,6 +118,17 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
     expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({ method: 'POST' })
   })
 
+  it('the email settings read passes on whether mail is going out', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ settings: {}, delivery: { state: 'not_configured', deadLetters: 2 } })
+    )
+    await expect(fetchEmailSettings()).resolves.toEqual({
+      ok: true,
+      settings: {},
+      delivery: { state: 'not_configured', deadLetters: 2 },
+    })
+  })
+
   it('admin email and signup settings use admin routes', async () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse({
