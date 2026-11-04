@@ -12548,7 +12548,8 @@ export async function setServerTunnelCarrying(
 // ---------------------------------------------------------------------------
 // Certificates ordered through a DNS challenge. The control plane no longer
 // orders or renews them: order, check and retry answer 422
-// `certificate_ordering_off`; the list stays.
+// `certificate_ordering_off`; the list stays. The three calls have no screen
+// now and stay as the mirror of the routes, which are still mounted.
 
 /** One certificate TurboPanel ordered itself, proven by a DNS record in the connected account. */
 export type DnsCertificate = {

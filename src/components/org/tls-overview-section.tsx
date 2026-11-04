@@ -141,7 +141,7 @@ function TlsCertificateList({
       {row.metadata.acme?.lastError ? (
         <Text style={panelStyles.error}>Issuance failing: {row.metadata.acme.lastError}</Text>
       ) : null}
-      {row.metadata.acme?.managedBy === 'panel' ? (
+      {row.metadata.acme?.managedBy === 'panel' && row.metadata.status === 'ready' ? (
         <Text style={panelStyles.muted}>{NO_RENEWAL_MESSAGE}</Text>
       ) : null}
       {canManage && row.source === 'organization_ca' ? (

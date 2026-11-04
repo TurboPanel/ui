@@ -9,6 +9,10 @@ import type { DnsCertificate, TunnelCarrier } from '@/lib/instance-api'
 import { parseFailure } from '@/lib/tunnels'
 import { realDate } from '@/lib/tls-managed-dates'
 
+// The order-form rules below (names, wildcard choice, accounts) have no screen
+// while ordering is turned off. They stay, with their tests, for the form that
+// comes back when the server that runs the site orders these certificates.
+
 export const MAX_NAMES = 10
 
 /** Why Order A Certificate is turned off; the panel answers `certificate_ordering_off` with it. */
@@ -95,19 +99,38 @@ export function dnsCapableCarriers(carriers: readonly TunnelCarrier[]): TunnelCa
   )
 }
 
-/** Where a certificate stands, in a few words. An order left open never finishes now. */
-export function stageLabel(c: Pick<DnsCertificate, 'status'>): string {
-  if (c.status === 'failed') return 'Gave up after several tries.'
-  if (c.status === 'ready' || c.status === 'expired') return 'Issued.'
-  return 'This order was stopped and will not finish.'
+/**
+ * True when the panel still orders and renews these certificates: an older
+ * control plane sends a renewal or retry time, a current one never does.
+ */
+export function stillOrdered(c: Pick<DnsCertificate, 'renewAt' | 'nextAttemptAt'>): boolean {
+  return c.renewAt !== null || c.nextAttemptAt !== null
 }
 
-export function statusLabel(c: Pick<DnsCertificate, 'status'>): string {
+/** The no-renewal line, only for a certificate in use that the control plane will not renew. */
+export function noRenewalNote(
+  c: Pick<DnsCertificate, 'status' | 'renewAt' | 'nextAttemptAt'>
+): string | null {
+  return c.status === 'ready' && !stillOrdered(c) ? NO_RENEWAL_MESSAGE : null
+}
+
+/** Where a certificate stands, in a few words. An order left open never finishes now. */
+export function stageLabel(
+  c: Pick<DnsCertificate, 'status' | 'renewAt' | 'nextAttemptAt'>
+): string {
+  if (c.status === 'failed') return 'Gave up after several tries.'
+  if (c.status === 'ready' || c.status === 'expired') return 'Issued.'
+  return stillOrdered(c) ? 'Ordering.' : 'This order was stopped and will not finish.'
+}
+
+export function statusLabel(
+  c: Pick<DnsCertificate, 'status' | 'renewAt' | 'nextAttemptAt'>
+): string {
   switch (c.status) {
     case 'ready':
       return 'Ready'
     case 'pending':
-      return 'Stopped'
+      return stillOrdered(c) ? 'Ordering' : 'Stopped'
     case 'failed':
       return 'Gave Up'
     case 'expired':
@@ -128,6 +151,7 @@ export function expiryLabel(c: Pick<DnsCertificate, 'notAfter'>): string | null 
   return when ? `Expires ${when.toLocaleDateString()}` : null
 }
 
+/** The codes after the first can only come from an older control plane that still orders. */
 const ERROR_COPY: Readonly<Record<string, string>> = {
   certificate_ordering_off: ORDERING_OFF_MESSAGE,
   names_invalid: 'Check the names. Each one needs to look like app.example.com.',

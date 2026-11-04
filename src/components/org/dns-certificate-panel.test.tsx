@@ -77,15 +77,48 @@ describe('the certificates already ordered', () => {
     expect(screen.getAllByText(NO_RENEWAL_MESSAGE)).toHaveLength(1)
   })
 
-  it('says it will not renew even when an older panel sends no note', () => {
+  it('says it will not renew even when the panel sends no note', () => {
     state.certificates = [cert({ warning: null })]
     render(<DnsCertificatePanel orgId="o1" />)
     expect(screen.getAllByText(NO_RENEWAL_MESSAGE)).toHaveLength(1)
   })
 
+  it('does not say it keeps working on a certificate that is not in use', () => {
+    state.certificates = [
+      cert({ status: 'pending', stage: 'queued', notAfter: null }),
+      cert({ id: 'c2', status: 'expired' }),
+      cert({ id: 'c3', status: 'failed', stage: 'failed' }),
+    ]
+    render(<DnsCertificatePanel orgId="o1" />)
+    expect(screen.queryByText(NO_RENEWAL_MESSAGE)).toBeNull()
+  })
+
+  it('an older panel that still renews is not described as stopped', () => {
+    state.certificates = [
+      cert({ warning: null, renewAt: '2026-12-01T00:00:00Z' }),
+      cert({
+        id: 'c2',
+        status: 'pending',
+        stage: 'backoff',
+        warning: null,
+        nextAttemptAt: '2026-11-05T00:00:00Z',
+      }),
+    ]
+    render(<DnsCertificatePanel orgId="o1" />)
+    expect(screen.queryByText(NO_RENEWAL_MESSAGE)).toBeNull()
+    expect(screen.queryByText('Stopped')).toBeNull()
+    expect(screen.getByText('Ordering.')).toBeTruthy()
+  })
+
   it('marks an order left open as stopped, with no Check Now or Try Again', () => {
     state.certificates = [
-      cert({ status: 'pending', stage: 'validating', staging: true, notAfter: null }),
+      cert({
+        status: 'pending',
+        stage: 'validating',
+        staging: true,
+        notAfter: null,
+        warning: null,
+      }),
       cert({ id: 'c2', status: 'failed', stage: 'failed', lastError: 'No matching record.' }),
     ]
     render(<DnsCertificatePanel orgId="o1" />)

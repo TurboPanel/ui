@@ -1,15 +1,13 @@
 // @vitest-environment happy-dom
 import { QueryClientProvider } from '@tanstack/react-query'
-import { renderHook, waitFor } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useDnsCertificates } from '@/lib/queries/dns-certificates'
 import { createAppQueryClient } from '@/lib/query-client'
 
 const api = vi.hoisted(() => ({
   fetchDnsCertificates: vi.fn(),
-  orderDnsCertificate: vi.fn(),
   checkDnsCertificate: vi.fn(),
-  retryDnsCertificate: vi.fn(),
   isForbiddenError: vi.fn(),
 }))
 
@@ -31,15 +29,32 @@ afterEach(() => {
 })
 
 describe('certificate order queries', () => {
-  it('loads the list and never asks an open order to move on', async () => {
-    api.fetchDnsCertificates.mockResolvedValue({ certificates: [{ id: 'c1', status: 'pending' }] })
-    const { result } = renderHook(() => useDnsCertificates(orgId), { wrapper: createWrapper() })
-    await waitFor(() => expect(result.current.isSuccess).toBe(true))
-    expect(api.fetchDnsCertificates).toHaveBeenCalledWith(orgId)
-    expect(api.checkDnsCertificate).not.toHaveBeenCalled()
+  it('loads the list, looks again once a minute, and never asks an open order to move on', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      api.fetchDnsCertificates.mockResolvedValue({
+        certificates: [{ id: 'c1', status: 'pending' }],
+      })
+      const { result } = renderHook(() => useDnsCertificates(orgId), { wrapper: createWrapper() })
+      await waitFor(() => expect(result.current.isSuccess).toBe(true))
+      expect(api.fetchDnsCertificates).toHaveBeenCalledWith(orgId)
+      const loads = api.fetchDnsCertificates.mock.calls.length
+      // Past the old 5 s refresh and 15 s check: nothing yet.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(20_000)
+      })
+      expect(api.fetchDnsCertificates.mock.calls.length).toBe(loads)
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(45_000)
+      })
+      expect(api.fetchDnsCertificates.mock.calls.length).toBeGreaterThan(loads)
+      expect(api.checkDnsCertificate).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
-  it('waits when idle and when disabled', async () => {
+  it('does not load while disabled', async () => {
     api.fetchDnsCertificates.mockResolvedValue({ certificates: [] })
     const { result } = renderHook(() => useDnsCertificates(orgId), { wrapper: createWrapper() })
     await waitFor(() => expect(result.current.isSuccess).toBe(true))

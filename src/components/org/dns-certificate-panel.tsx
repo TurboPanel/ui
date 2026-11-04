@@ -6,6 +6,7 @@ import {
   dnsCertificateErrorMessage,
   expiryLabel,
   NO_RENEWAL_MESSAGE,
+  noRenewalNote,
   ORDERING_OFF_MESSAGE,
   stageLabel,
   statusLabel,
@@ -28,7 +29,8 @@ function OrderingOff() {
 
 function CertificateCard({ certificate }: Readonly<{ certificate: DnsCertificate }>) {
   const expiry = expiryLabel(certificate)
-  // An older panel sends no note of its own, so the line is always shown here.
+  const note = noRenewalNote(certificate)
+  // The panel sends the same sentence as a warning; it is shown once, as a plain note.
   const warning = certificate.warning === NO_RENEWAL_MESSAGE ? null : certificate.warning
   return (
     <View style={panelStyles.detailCard}>
@@ -40,7 +42,7 @@ function CertificateCard({ certificate }: Readonly<{ certificate: DnsCertificate
       </View>
       <Text style={panelStyles.muted}>{stageLabel(certificate)}</Text>
       {expiry ? <Text style={panelStyles.muted}>{expiry}</Text> : null}
-      <Text style={panelStyles.muted}>{NO_RENEWAL_MESSAGE}</Text>
+      {note ? <Text style={panelStyles.muted}>{note}</Text> : null}
       {certificate.staging ? (
         <Text style={panelStyles.muted}>
           Test certificates are only for trying out ordering. Browsers show a security warning for

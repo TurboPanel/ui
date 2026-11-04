@@ -4,6 +4,8 @@ import {
   dnsCapableCarriers,
   dnsCertificateErrorMessage,
   EMPTY_ORDER_DRAFT,
+  NO_RENEWAL_MESSAGE,
+  noRenewalNote,
   ORDERING_OFF_MESSAGE,
   orderNames,
   orderProblem,
@@ -109,9 +111,18 @@ describe('where a certificate stands', () => {
     )
     expect(stageLabel(cert({ status: 'ready', stage: 'issued' }))).toBe('Issued.')
     expect(stageLabel(cert({ status: 'failed', stage: 'failed' }))).toMatch(/Gave up/)
+    // An older panel still steps its orders.
+    expect(stageLabel(cert({ nextAttemptAt: '2026-11-05T00:00:00Z' }))).toBe('Ordering.')
+  })
+  it('says it will not renew only for a certificate in use', () => {
+    expect(noRenewalNote(cert({ status: 'ready' }))).toBe(NO_RENEWAL_MESSAGE)
+    expect(noRenewalNote(cert())).toBeNull()
+    expect(noRenewalNote(cert({ status: 'expired' }))).toBeNull()
+    expect(noRenewalNote(cert({ status: 'ready', renewAt: '2026-12-01T00:00:00Z' }))).toBeNull()
   })
   it('labels and tones follow the status', () => {
     expect([statusLabel(cert()), statusTone(cert())]).toEqual(['Stopped', 'muted'])
+    expect(statusLabel(cert({ nextAttemptAt: '2026-11-05T00:00:00Z' }))).toBe('Ordering')
     expect([statusLabel(cert({ status: 'ready' })), statusTone(cert({ status: 'ready' }))]).toEqual(
       ['Ready', 'ok']
     )
