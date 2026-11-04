@@ -72,12 +72,13 @@ export function AcmeTermsPrompt({ orgId }: Readonly<{ orgId: string }>) {
   return (
     <ModalSheet
       visible
-      onRequestClose={later}
+      // While Accept is saving, a backdrop tap does nothing, so a failure is seen.
+      onRequestClose={mutation.isPending ? () => undefined : later}
       dismissLabel="Decide later"
       title={
         data.acmeTermsChanged ? "Let's Encrypt Has New Terms" : "Accept the Let's Encrypt Terms"
       }
-      description="Your organization is the Let’s Encrypt subscriber for its own servers. Certificates keep working meanwhile."
+      description="Your organization is the Let's Encrypt subscriber for its own servers. Certificates keep working meanwhile."
       footer={
         <ButtonRow align="end">
           <Button label="Later" onPress={later} disabled={mutation.isPending} />
