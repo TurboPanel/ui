@@ -6,28 +6,16 @@ import { AcmeTermsPrompt } from '@/components/org/acme-terms-prompt'
 import { OrgShell } from '@/components/org/org-shell'
 import { authSpinnerColor } from '@/lib/auth-accent'
 import { useAuth } from '@/lib/auth-context'
-import {
-  getActiveOrganizationId,
-  setActiveOrganizationId,
-} from '@/lib/org-context'
-import {
-  isOrgTabOverviewRouteName,
-  organizationsHref,
-} from '@/lib/org-navigation'
+import { getActiveOrganizationId, setActiveOrganizationId } from '@/lib/org-context'
+import { isOrgTabOverviewRouteName, organizationsHref } from '@/lib/org-navigation'
 import { useOrganizationsQuery } from '@/lib/queries/auth'
 import { colors } from '@/lib/theme'
 
-function OrgStackScreenLayout({
-  children,
-}: Readonly<{ children: ReactNode }>) {
+function OrgStackScreenLayout({ children }: Readonly<{ children: ReactNode }>) {
   return <OrgScreenScroll>{children}</OrgScreenScroll>
 }
 
-function orgNestedStackScreenOptions({
-  route,
-}: {
-  route: { name: string }
-}) {
+function orgNestedStackScreenOptions({ route }: { route: { name: string } }) {
   const tabOverview = isOrgTabOverviewRouteName(route.name)
   if (tabOverview) {
     return {
@@ -67,11 +55,15 @@ export default function OrganizationLayout() {
 
   if (isLoading || (session && orgId && orgAllowed === null)) {
     return (
-      <View style={{ flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator
-          size="large"
-          color={authSpinnerColor()}
-        />
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: colors.bg,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <ActivityIndicator size="large" color={authSpinnerColor()} />
       </View>
     )
   }
@@ -90,10 +82,7 @@ export default function OrganizationLayout() {
 
   return (
     <OrgShell orgId={orgId} key={orgId}>
-      <Stack
-        screenLayout={OrgStackScreenLayout}
-        screenOptions={orgNestedStackScreenOptions}
-      />
+      <Stack screenLayout={OrgStackScreenLayout} screenOptions={orgNestedStackScreenOptions} />
       <AcmeTermsPrompt orgId={orgId} />
     </OrgShell>
   )
