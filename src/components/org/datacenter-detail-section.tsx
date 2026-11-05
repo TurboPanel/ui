@@ -52,8 +52,8 @@ import {
   priorityRivals,
   PRIORITY_TIE_ADVICE,
   priorityTies,
+  priorityToSave,
   sharedServerNetworks,
-  parseDatacenterPriorityDraft,
 } from '@/lib/datacenter-routing'
 import {
   useAddDatacenterMembers,
@@ -1582,7 +1582,11 @@ export function DatacenterDetailSection({
         onSave={() => {
           // The instance drops an out-of-range priority instead of clamping,
           // so an unvalidated save would look like a no-op. Reject here.
-          const parsed = parseDatacenterPriorityDraft(priorityText)
+          const parsed = priorityToSave(
+            priorityView !== null,
+            priorityText,
+            datacenter?.priority ?? DEFAULT_DATACENTER_PRIORITY
+          )
           if (!parsed.ok) {
             setPriorityError(parsed.reason)
             return

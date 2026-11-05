@@ -15,6 +15,7 @@ import {
   priorityMatters,
   priorityRivals,
   priorityTies,
+  priorityToSave,
   sharedServerNetworks,
   winningDatacenterId,
 } from './datacenter-routing'
@@ -255,6 +256,12 @@ describe('priority shows only when it matters', () => {
     expect(
       formatPriorityRivals(['backhaul', 'office'], new Map([['backhaul', 'Backhaul']]), policies)
     ).toBe('Backhaul (priority 10) and office (priority 100)')
+  })
+
+  it('saves the stored priority while the field is hidden', () => {
+    expect(priorityToSave(false, 'not a number', 40)).toEqual({ ok: true, priority: 40 })
+    expect(priorityToSave(true, '7', 40)).toEqual({ ok: true, priority: 7 })
+    expect(priorityToSave(true, 'x', 40).ok).toBe(false)
   })
 
   it('joins names in plain words', () => {
