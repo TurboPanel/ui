@@ -98,7 +98,7 @@ export const FIREWALL_SCOPE_OPTIONS: readonly { value: FirewallRuleScope; label:
 export const FIREWALL_SOURCE_OPTIONS: readonly { value: FirewallSourceKind; label: string }[] = [
   { value: 'any', label: 'Anyone' },
   { value: 'servers', label: 'My other TurboPanel servers' },
-  { value: 'datacenter', label: 'This datacenter' },
+  { value: 'datacenter', label: 'This datacenter network' },
   { value: 'fabric', label: `${TURBOFABRIC_PRODUCT_NAME} only` },
   { value: 'addresses', label: 'These addresses' },
 ]
@@ -109,7 +109,7 @@ function sourcePhrase(kind: FirewallSourceKind, addresses: readonly string[]): s
   const phrases: Record<Exclude<FirewallSourceKind, 'addresses'>, string> = {
     any: 'anyone',
     servers: 'my other TurboPanel servers',
-    datacenter: 'this server’s datacenter',
+    datacenter: 'this server’s datacenter network',
     fabric: `${TURBOFABRIC_PRODUCT_NAME} only`,
   }
   if (kind !== 'addresses') return phrases[kind]

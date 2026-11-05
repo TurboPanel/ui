@@ -77,7 +77,7 @@ export function deployErrorMessage(err: unknown): string {
   if (message.includes('acme_requires_public_bind')) {
     return (
       serverSentence(message) ??
-      "A hosting pinned to a Let's Encrypt certificate is bound to a local or datacenter-only address — ACME issuance needs a public bind scope."
+      "A hosting pinned to a Let's Encrypt certificate is bound to a local or datacenter-network-only address — ACME issuance needs a public bind scope."
     )
   }
   return message

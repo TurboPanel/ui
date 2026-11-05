@@ -2,7 +2,7 @@
 
 > Overrides `design-system/turbopanel/MASTER.md` for the network pages, which live under Servers (`/[orgId]/servers/<page>`). The old `/network` hub is gone: `/network` redirects to the Servers list and `/network/<page>` to `/servers/<page>`.
 
-**Routes** (Servers sub-pages, after Datacenters, Pending Keys, Settings and TLS):
+**Routes** (Servers sub-pages, after Datacenter Networks, Pending Keys, Settings and TLS):
 - TurboFabric → `network-fabric-section.tsx` at `/servers/fabric`
 - Addresses → `network-addresses-section.tsx` at `/servers/addresses`
 - Docker Networks → `network-docker-section.tsx` at `/servers/docker`
@@ -11,7 +11,7 @@
 - Tunnels → `network-tunnels-section.tsx` at `/servers/tunnels`
 - Firewall → `network-firewall-section.tsx` at `/servers/firewall` (policy panel + rules panel from `components/org/firewall/`; owners/managers)
 
-**Job:** Mesh, address pool, Docker registry + host addressing, and reserved ranges. **Private subnets live on Datacenters** (`/servers/datacenters`) — a datacenter is a logical routing domain, not a building, and a server may belong to several — do not duplicate that CRUD here.
+**Job:** Mesh, address pool, Docker registry + host addressing, and reserved ranges. **Private subnets live on Datacenter Networks** (`/servers/datacenters`) — a datacenter network is a network inside a datacenter, not the building, and a server may be on several — do not duplicate that CRUD here.
 
 ---
 
@@ -25,7 +25,7 @@ Every network surface maps instance codes through **`src/lib/network-error-copy.
 | `cidr_overlaps_fabric_pool` | That range overlaps the TurboFabric container pool. |
 | `cidr_overlaps_reserved` | That range overlaps a reserved range — something outside TurboPanel routes it. |
 | `cidr_overlaps_docker_network` | That range overlaps a registered Docker network or a Docker address pool. |
-| `cidr_overlaps_gateway_advertised` | A gateway in another datacenter already advertises that range across the mesh. |
+| `cidr_overlaps_gateway_advertised` | A gateway on another datacenter network already advertises that range across the mesh. |
 | `subnet_overlaps` | That range overlaps an existing subnet in this organization. (unchanged) |
 | `failover_requires_trusted_datacenter` | `FAILOVER_REQUIRES_TRUSTED_DATACENTER_COPY` from `managed-services.ts` — never forked |
 | `network_cidr_required`, `docker_network_*`, `address_pool*`, `default_bridge_cidr_invalid` | Field-level sentences (see the module) |
@@ -48,7 +48,7 @@ Product name from `TURBOFABRIC_PRODUCT_NAME` — never “tp0 fabric” or “th
 - 404/503: muted “not available on this control plane yet” — do not treat as a form error.
 - Manage-gated enable toggle (`organization:manage` display hint). Status + CIDR when the API returns `fabric`.
 - **Relay table** — one row per org server: tp0 address, role chip (gateway/member) with inline promote/demote (`PATCH /organizations/:id/fabric/relays/:serverId`), advertised LAN CIDRs (editable override, gateway-only) separate from **resolved advertised CIDRs** (`resolvedAdvertisedCidrs` — effective IPv4 list when the override is empty), **endpoint override** (operator pin) separate from **resolved endpoint**, `calloutWarning` when auto-derivation failed (`endpointAddress` and `resolvedEndpoint` both null), host **segments** (`name` + `subnet`), keepalive, **allow relay** inherit/on/off chips plus read-only **Effective: On/Off**, **preferred gateways** chips restricted to `gatewayEligible` relays, public-key-present boolean (`publicKey !== null`), preshared-key presence (`hasPresharedKey`, never the key), last handshake with staleness (`calloutWarning` when null or older than the threshold).
-- Org **Allow relay path** toggle sits next to enable (manage-gated). Copy: relay is a degraded fallback and must be explicitly enabled; a datacenter gateway is not the same as an unrelated relay.
+- Org **Allow relay path** toggle sits next to enable (manage-gated). Copy: relay is a degraded fallback and must be explicitly enabled; a datacenter network gateway is not the same as an unrelated relay.
 - **Path matrix** (`FabricPathMatrixPanel`) below Relays — one `detailCard` per `buildFabricPathMatrix` row (`Server A → Server B`, path kind, latency, optional via, `calloutWarning` for DEGRADED / Unreachable). No new colors. Reuse Apply / `useCommandsBatch` — no extra polling.
 - Preshared key is **write-only**: optional “Set preshared key” input, empty by default, submitted only when typed — never populate from `RelayRecord`.
 - **Apply** (`POST /organizations/:id/fabric/apply`) feeds returned `{serverId, commandId}` pairs into `useCommandsBatch` / `COMMAND_POLL_MS`. Disable Apply while the POST is pending **or** any tracked command is non-terminal; merge later queued ids into the polling set. In-flight rows show pending until terminal. No DO polling.
@@ -84,7 +84,7 @@ Everything below it is display-only. One `InlineNotice` (`info`) at the top: **T
 
 - **Interfaces** is the centre: `groupReportedAddresses` groups the daemon's `ips[]` by `interface` (default-route interface first; fallback to public/private × v4/v6 when no interface name is reported); each address shows its reported CIDR, family badge, scope, the `default route` marker, and **Pinned into: <datacenter>** lines joined on address from the already-fetched `scope: 'datacenter'` rows (`indexPinsByAddress`). No per-interface fetch.
 - **Stale** `Badge` (`pending`) on any pin whose `IpRecord.stale` is true, with `staleSince` and `stalePinReasonLabel(staleReason)` (`address_gone_no_candidate` → “no replacement address was reported”; `address_gone_ambiguous` → “more than one candidate address, so nothing was guessed”). Never colour-only.
-- Datacenters panel: each membership links to datacenter detail; list **every** `scope: 'datacenter'` pin for this host (IPv4/IPv6 badge + datacenter label + stale note — dual-stack / multi-subnet hosts are not truncated to one address). Mesh membership via `networkFabricHref` (**manage-gated** `useOrgFabric` — permission copy when the viewer cannot manage). No duplicate assignment UI.
+- **Datacenter Networks** panel: each membership links to datacenter network detail; list **every** `scope: 'datacenter'` pin for this host (IPv4/IPv6 badge + datacenter label + stale note — dual-stack / multi-subnet hosts are not truncated to one address). Mesh membership via `networkFabricHref` (**manage-gated** `useOrgFabric` — permission copy when the viewer cannot manage). No duplicate assignment UI.
 - Queries stay `datacenterIpsQuery` + `serverManagedIpsQuery`, plus the card's single `useServerAddresses` read.
 
 ## Anti-patterns

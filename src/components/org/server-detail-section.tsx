@@ -1062,7 +1062,7 @@ function ServerOverviewTab({
             <Text style={panelStyles.muted}>Source: {timezoneSource}</Text>
             {server.datacenterEnforceServerTimezone ? (
               <Text style={panelStyles.muted}>
-                Datacenter enforces {server.datacenterDefaultTimezone ?? 'its default'}.
+                Datacenter network enforces {server.datacenterDefaultTimezone ?? 'its default'}.
               </Text>
             ) : null}
             {!server.datacenterEnforceServerTimezone && server.enforceServerTimezone ? (

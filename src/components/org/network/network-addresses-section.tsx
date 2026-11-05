@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { IpListRow } from '@/components/org/network/network-rows'
+import { ipScopeLabel } from '@/lib/server-services'
 import { panelStyles } from '@/components/ui/panel-styles'
 import {
   Button,
@@ -41,7 +42,7 @@ const ALLOCATIONS: IpAllocation[] = ['dedicated', 'shared']
 
 const SCOPE_OPTIONS: readonly SegmentedOption<IpScope>[] = SCOPES.map((value) => ({
   value,
-  label: value,
+  label: ipScopeLabel(value),
 }))
 const ALLOCATION_OPTIONS: readonly SegmentedOption<IpAllocation>[] = ALLOCATIONS.map((value) => ({
   value,
@@ -271,10 +272,10 @@ function CreateIpScopeFields({
   const networkRows = requireSiteSubnet
     ? siteSubnetsForDatacenter(networks, createDatacenterId)
     : networks
-  let datacenterLabel = 'Datacenter (optional)'
+  let datacenterLabel = 'Datacenter Network (optional)'
   let networkLabel = 'Network (optional)'
-  if (scope === 'datacenter') datacenterLabel = 'Datacenter'
-  if (requireSiteSubnet) networkLabel = 'Site subnet'
+  if (scope === 'datacenter') datacenterLabel = 'Datacenter Network'
+  if (requireSiteSubnet) networkLabel = 'Datacenter Network Subnet'
 
   const networkOptions: SegmentedOption<string>[] = [
     ...(requireSiteSubnet ? [] : [{ value: '', label: 'None' }]),
@@ -369,7 +370,7 @@ function IpEditPanel({
       <Text style={styles.fieldLabel}>Allocation</Text>
       <Text style={panelStyles.detailLine}>{allocation}</Text>
       <Text style={styles.fieldLabel}>Scope</Text>
-      <Text style={panelStyles.detailLine}>{scope}</Text>
+      <Text style={panelStyles.detailLine}>{ipScopeLabel(scope)}</Text>
       <TextField
         label="Description"
         value={description}
@@ -438,12 +439,12 @@ function AddressFiltersPanel({
           accessibilityLabel="Allocation filter"
         />
       </FormField>
-      <FormField label="Site">
+      <FormField label="Datacenter Network">
         <SegmentedControl
           options={datacenterOptions(datacenters, 'All')}
           value={datacenterFilter}
           onChange={onDatacenterFilterChange}
-          accessibilityLabel="Site filter"
+          accessibilityLabel="Datacenter network filter"
         />
       </FormField>
     </SectionPanel>

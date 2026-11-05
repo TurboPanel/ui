@@ -53,7 +53,14 @@ const datacenter = entry({
   scope: 'datacenter',
   datacenterId: DC,
   label: 'Ashburn',
-  effective: { v4: '10.0.0.5', v4Source: 'pin', v6: null, v6Source: null, host: '10.0.0.5', hostSource: 'address' },
+  effective: {
+    v4: '10.0.0.5',
+    v4Source: 'pin',
+    v6: null,
+    v6Source: null,
+    host: '10.0.0.5',
+    hostSource: 'address',
+  },
 })
 
 function view(addresses: ServerAddressEntry[]): ServerAddressesView {
@@ -79,8 +86,8 @@ function saveError(status: number, body: Record<string, unknown> | null) {
 describe('row display', () => {
   it('titles Public and datacenter rows', () => {
     expect(addressRowTitle(entry())).toBe('Public')
-    expect(addressRowTitle(datacenter)).toBe('Datacenter Ashburn')
-    expect(addressSideLabel('datacenter', ' ')).toBe('Datacenter')
+    expect(addressRowTitle(datacenter)).toBe('Datacenter Network Ashburn')
+    expect(addressSideLabel('datacenter', ' ')).toBe('Datacenter Network')
     expect(addressSideLabel(null, null)).toBe('Public')
   })
 
@@ -91,22 +98,38 @@ describe('row display', () => {
 
   it("names the server's own address with where it came from", () => {
     expect(addressLine(entry())).toBe("This server's own: 192.0.2.77 (reported by the server)")
-    expect(addressLine(datacenter)).toBe("This server's own: 10.0.0.5 (its address in this datacenter)")
+    expect(addressLine(datacenter)).toBe(
+      "This server's own: 10.0.0.5 (its address in this datacenter network)"
+    )
     const both = entry({
-      effective: { v4: '192.0.2.77', v4Source: 'ip', v6: '2001:db8::4', v6Source: null, host: null, hostSource: null },
+      effective: {
+        v4: '192.0.2.77',
+        v4Source: 'ip',
+        v6: '2001:db8::4',
+        v6Source: null,
+        host: null,
+        hostSource: null,
+      },
     })
     expect(addressLine(both)).toBe(
-      "This server's own: 192.0.2.77 (from the organization's address list), 2001:db8::4",
+      "This server's own: 192.0.2.77 (from the organization's address list), 2001:db8::4"
     )
     const none = entry({
-      effective: { v4: null, v4Source: null, v6: null, v6Source: null, host: null, hostSource: null },
+      effective: {
+        v4: null,
+        v4Source: null,
+        v6: null,
+        v6Source: null,
+        host: null,
+        hostSource: null,
+      },
     })
     expect(addressLine(none)).toBe("This server's own: not known yet")
   })
 
   it('says "Through a router" when an address is saved', () => {
     expect(addressLine(entry({ addressV4: '203.0.113.7', addressV6: '2001:db8::7' }))).toBe(
-      'Through a router: 203.0.113.7, 2001:db8::7',
+      'Through a router: 203.0.113.7, 2001:db8::7'
     )
   })
 
@@ -114,10 +137,10 @@ describe('row display', () => {
     expect(mainConnectionLine({ main: false })).toBeNull()
     expect(mainConnectionLine({ main: true })).toBe('Fills the main connection string')
     expect(mainConnectionLine({ main: true, mainFor: ['postgres'] })).toBe(
-      'Fills the main connection string for Postgres',
+      'Fills the main connection string for Postgres'
     )
     expect(mainConnectionLine({ main: true, mainFor: ['postgres', 'mysql'] })).toBe(
-      'Fills the main connection string for Postgres and MySQL',
+      'Fills the main connection string for Postgres and MySQL'
     )
     expect(mainConnectionLine({ main: false, mainFor: [] })).toBeNull()
   })
@@ -126,7 +149,7 @@ describe('row display', () => {
     expect(portOverridesLine({})).toBeNull()
     expect(portOverridesLine(undefined)).toBeNull()
     expect(portOverridesLine({ postgres: 25432, mysql: null, https: 8443 })).toBe(
-      'Postgres 25432, MySQL not forwarded, Web (https) 8443',
+      'Postgres 25432, MySQL not forwarded, Web (https) 8443'
     )
   })
 })
@@ -148,7 +171,7 @@ describe('form', () => {
         addressV4: '203.0.113.7',
         ports: { postgres: '25432', mysql: '', http: '', https: '' },
         primary: true,
-      }),
+      })
     )
   })
 
@@ -167,23 +190,27 @@ describe('form', () => {
           addressV4: '203.0.113.7',
           addressV6: '2001:db8::7',
           ports: { postgres: '25432', mysql: '', http: '8080', https: '8443' },
-        }),
-      ),
+        })
+      )
     ).toEqual({})
   })
 
   it('refuses bad names, addresses and ports in plain words', () => {
     expect(validateAddressForm(form({ hostname: 'omega' })).hostname).toMatch(/with a dot/)
     expect(validateAddressForm(form({ hostname: 'bad_name.example.com' })).hostname).toMatch(
-      /letters, numbers/,
+      /letters, numbers/
     )
-    expect(validateAddressForm(form({ hostname: '10.0.0.1' })).hostname).toMatch(/looks like an address/)
+    expect(validateAddressForm(form({ hostname: '10.0.0.1' })).hostname).toMatch(
+      /looks like an address/
+    )
     expect(validateAddressForm(form({ mode: 'different' })).address).toMatch(/IPv4 or IPv6/)
-    const bad = validateAddressForm(form({ mode: 'different', addressV4: '2001:db8::1', addressV6: '10.0.0.1' }))
+    const bad = validateAddressForm(
+      form({ mode: 'different', addressV4: '2001:db8::1', addressV6: '10.0.0.1' })
+    )
     expect(bad.addressV4).toMatch(/Not an IPv4/)
     expect(bad.addressV6).toMatch(/Not an IPv6/)
     const ports = validateAddressForm(
-      form({ ports: { postgres: '0', mysql: '70000', http: 'abc', https: '1.5' } }),
+      form({ ports: { postgres: '0', mysql: '70000', http: 'abc', https: '1.5' } })
     )
     expect(Object.keys(ports).sort((a, b) => a.localeCompare(b))).toEqual([
       'http',
@@ -203,7 +230,10 @@ describe('buildAddressesPayload', () => {
     const payload = buildAddressesPayload(
       view([entry(), datacenter]),
       entry(),
-      form({ hostname: ' Omega.Example.com ', ports: { postgres: '25432', mysql: '', http: '', https: '' } }),
+      form({
+        hostname: ' Omega.Example.com ',
+        ports: { postgres: '25432', mysql: '', http: '', https: '' },
+      })
     )
     expect(payload.addresses).toEqual([
       {
@@ -224,7 +254,7 @@ describe('buildAddressesPayload', () => {
     const payload = buildAddressesPayload(
       view([savedPublic, datacenter]),
       datacenter,
-      form({ mode: 'different', addressV4: '198.51.100.9', primary: true }),
+      form({ mode: 'different', addressV4: '198.51.100.9', primary: true })
     )
     expect(payload.addresses).toEqual([
       {
@@ -245,7 +275,7 @@ describe('buildAddressesPayload', () => {
         primary: true,
       },
     ])
-    expect(payload.titles).toEqual(['Public', 'Datacenter Ashburn'])
+    expect(payload.titles).toEqual(['Public', 'Datacenter Network Ashburn'])
     expect(payload.editedIndex).toBe(1)
   })
 
@@ -265,7 +295,7 @@ describe('buildAddressesPayload', () => {
 })
 
 describe('addressSaveErrorMessage', () => {
-  const payload = { titles: ['Public', 'Datacenter Ashburn'], editedIndex: 0 }
+  const payload = { titles: ['Public', 'Datacenter Network Ashburn'], editedIndex: 0 }
 
   it('maps every refusal code to a plain message', () => {
     for (const code of [
@@ -288,30 +318,38 @@ describe('addressSaveErrorMessage', () => {
 
   it('names the other row a refusal points at', () => {
     expect(
-      addressSaveErrorMessage(saveError(400, { error: 'address_v4_invalid', index: 1 }), payload),
-    ).toMatch(/\(in the Datacenter Ashburn row\)$/)
+      addressSaveErrorMessage(saveError(400, { error: 'address_v4_invalid', index: 1 }), payload)
+    ).toMatch(/\(in the Datacenter Network Ashburn row\)$/)
     expect(
-      addressSaveErrorMessage(saveError(400, { error: 'address_v4_invalid', index: 0 }), payload),
+      addressSaveErrorMessage(saveError(400, { error: 'address_v4_invalid', index: 0 }), payload)
     ).not.toMatch(/in the/)
   })
 
   it('says nothing was saved when the server is not ready for the change (422)', () => {
-    const message = addressSaveErrorMessage(saveError(422, { error: 'daemon_key_unavailable' }), payload)
+    const message = addressSaveErrorMessage(
+      saveError(422, { error: 'daemon_key_unavailable' }),
+      payload
+    )
     expect(message).toMatch(/isn't ready to take this yet/)
     expect(message).toMatch(/^Nothing was saved/)
-    expect(addressSaveErrorMessage(saveError(422, { error: 'other' }), payload)).toBe(ADDRESSES_SAVE_FALLBACK)
+    expect(addressSaveErrorMessage(saveError(422, { error: 'other' }), payload)).toBe(
+      ADDRESSES_SAVE_FALLBACK
+    )
   })
 
   it('explains 503 and 404, and falls back for unknown codes and errors', () => {
     expect(addressSaveErrorMessage(saveError(503, null), payload)).toBe(
-      "Nothing was saved: the panel can't send changes right now. Try again in a minute.",
+      "Nothing was saved: the panel can't send changes right now. Try again in a minute."
     )
-    expect(addressSaveErrorMessage(saveError(400, { error: 'new_code', message: 'Server words.' }), payload)).toBe(
-      'Server words.',
-    )
+    expect(
+      addressSaveErrorMessage(
+        saveError(400, { error: 'new_code', message: 'Server words.' }),
+        payload
+      )
+    ).toBe('Server words.')
     expect(addressSaveErrorMessage(saveError(404, null), payload)).toMatch(/not found/)
     expect(addressSaveErrorMessage(saveError(400, { error: 'new_code' }), null)).toBe(
-      ADDRESSES_SAVE_FALLBACK,
+      ADDRESSES_SAVE_FALLBACK
     )
     expect(addressSaveErrorMessage(new Error('offline'), payload)).toBe('offline')
     expect(addressSaveErrorMessage('nope', payload)).toBe(ADDRESSES_SAVE_FALLBACK)
@@ -320,13 +358,15 @@ describe('addressSaveErrorMessage', () => {
 
 describe('certificatePendingMessage', () => {
   it('explains a saved list the certificate has not picked up yet, by reason', () => {
-    expect(certificatePendingMessage('enqueue_failed')).toMatch(/Saved.*Save again to update the certificate/)
+    expect(certificatePendingMessage('enqueue_failed')).toMatch(
+      /Saved.*Save again to update the certificate/
+    )
     expect(certificatePendingMessage('prepare_failed')).toMatch(
-      /Saved, but the server's database listener can't be updated until its database problem is fixed/,
+      /Saved, but the server's database listener can't be updated until its database problem is fixed/
     )
     expect(certificatePendingMessage(null)).toBe(ADDRESSES_CERTIFICATE_PENDING)
     expect(certificatePendingMessage(null, 'Saved, but omega could not be told yet.')).toBe(
-      'Saved, but omega could not be told yet.',
+      'Saved, but omega could not be told yet.'
     )
     expect(certificatePendingMessage('prepare_failed', 'server words')).not.toBe('server words')
   })
@@ -334,12 +374,16 @@ describe('certificatePendingMessage', () => {
 
 describe('connectionStringLabel', () => {
   it('labels each connection string by its side and host', () => {
-    expect(connectionStringLabel({ scope: 'public', label: 'Public', host: 'omega.example.com' })).toBe(
-      'Public: omega.example.com',
-    )
     expect(
-      connectionStringLabel({ scope: 'datacenter', label: 'Ashburn', host: 'omega.dc1.example.com' }),
-    ).toBe('Datacenter Ashburn: omega.dc1.example.com')
+      connectionStringLabel({ scope: 'public', label: 'Public', host: 'omega.example.com' })
+    ).toBe('Public: omega.example.com')
+    expect(
+      connectionStringLabel({
+        scope: 'datacenter',
+        label: 'Ashburn',
+        host: 'omega.dc1.example.com',
+      })
+    ).toBe('Datacenter Network Ashburn: omega.dc1.example.com')
     expect(connectionStringLabel({ host: '192.0.2.77' })).toBe('Public: 192.0.2.77')
   })
 })

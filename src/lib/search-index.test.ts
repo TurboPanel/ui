@@ -121,10 +121,10 @@ describe('buildSearchItems', () => {
     expect(find(list, 'database-m2')).toMatchObject({ name: 'Managed database', status: 'failed' })
     expect(find(list, 'datacenter-d1')).toMatchObject({
       name: 'Wichita',
-      group: 'Datacenters',
+      group: 'Datacenter Networks',
       href: '/o1/servers/datacenters/d1',
     })
-    expect(find(list, 'datacenter-d2')?.name).toBe('Datacenter')
+    expect(find(list, 'datacenter-d2')?.name).toBe('Datacenter Network')
   })
 
   it('lists the sub-pages that exist, not just the top areas', () => {
@@ -132,7 +132,7 @@ describe('buildSearchItems', () => {
     const hrefs = Object.fromEntries(
       list.filter((i) => i.group === 'Pages').map((i) => [i.name, i.href])
     )
-    expect(hrefs['Datacenters']).toBe('/o1/servers/datacenters')
+    expect(hrefs['Datacenter Networks']).toBe('/o1/servers/datacenters')
     expect(hrefs['Pending Keys']).toBe('/o1/servers/keys')
     expect(hrefs['TLS Certificates']).toBe('/o1/servers/tls')
     expect(hrefs['Server Settings']).toBe('/o1/servers/settings')
@@ -306,7 +306,7 @@ describe('rankSearchItems', () => {
       'Servers',
       'Projects',
       'Databases',
-      'Datacenters',
+      'Datacenter Networks',
       'Pages',
     ])
   })

@@ -81,10 +81,10 @@
 
 ## Network tab
 
-- **Addresses clients use** sits above everything: Public plus one row per datacenter, an edit dialog with plain questions, saved as one replace-all list. It only says what clients dial and never configures the host. Details: `network.md` → Server detail Network tab.
+- **Addresses clients use** sits above everything: Public plus one row per datacenter network, an edit dialog with plain questions, saved as one replace-all list. It only says what clients dial and never configures the host. Details: `network.md` → Server detail Network tab.
 - **Read-only contract** (everything below that card): TurboPanel observes host interfaces, it does not configure them. An `InlineNotice` (`info`) at the top says so — addresses are expected to change; membership pins follow the host automatically when exactly one unambiguous replacement is reported, otherwise they go stale rather than guess. Nothing on the tab may imply bringing an interface up, assigning an address, or writing a route.
 - **Interfaces** panel first: daemon-reported addresses grouped by `interface` (default-route interface first, fallback to public/private × v4/v6), reported CIDR in mono, family badge, scope, `default route` marker, and **Pinned into: <datacenter>** joined on address from the `scope: 'datacenter'` rows already fetched. **Stale** `Badge` (`pending`) + `staleSince` + plain `staleReason` on stale pins.
-- Then Datacenters (memberships link to datacenter detail; every pin listed), Mesh (manage-gated), Managed addresses. Details and copy rules: `network.md` → Server detail Network tab.
+- Then Datacenter Networks (memberships link to datacenter network detail; every pin listed), Mesh (manage-gated), Managed addresses. Details and copy rules: `network.md` → Server detail Network tab.
 
 ## Server proxy (Control tab)
 

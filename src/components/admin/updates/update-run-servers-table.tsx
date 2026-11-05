@@ -47,7 +47,7 @@ const SORTABLE: Readonly<Record<string, UpgradeRunServerSort>> = {
 const LEAD_COLUMNS: readonly DataTableColumn[] = [
   { key: 'organization', header: 'Organization', flex: 1.2, minWidth: 170, gap: 2 },
   { key: 'server', header: 'Server', flex: 1.2, minWidth: 170, gap: 2 },
-  { key: 'datacenter', header: 'Datacenter', width: 130 },
+  { key: 'datacenter', header: 'Datacenter Network', width: 170 },
   { key: 'from', header: 'From', width: 130 },
   { key: 'to', header: 'To', width: 130 },
   { key: 'status', header: 'Status', width: 160 },

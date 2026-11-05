@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type {
-  DatacenterRecord,
-  DatacenterSubnetRecord,
-  ServerReportedIp,
-} from './instance-api'
+import type { DatacenterRecord, DatacenterSubnetRecord, ServerReportedIp } from './instance-api'
 import {
   buildCreateDatacenterFromSeed,
   buildCreateDatacenterRequest,
@@ -39,7 +35,7 @@ import {
 import { addressInCidr, isValidCidr } from './cidr'
 
 function datacenter(
-  overrides: Partial<DatacenterRecord> & Pick<DatacenterRecord, 'id'>,
+  overrides: Partial<DatacenterRecord> & Pick<DatacenterRecord, 'id'>
 ): DatacenterRecord {
   return {
     name: null,
@@ -60,10 +56,7 @@ function ips(rows: ServerReportedIp[]): ServerReportedIp[] {
   return rows
 }
 
-function privateIp(
-  address: string,
-  cidr?: string,
-): ServerReportedIp {
+function privateIp(address: string, cidr?: string): ServerReportedIp {
   const row: ServerReportedIp = {
     address,
     version: address.includes(':') ? 6 : 4,
@@ -75,7 +68,7 @@ function privateIp(
 
 function subnet(
   overrides: Partial<DatacenterSubnetRecord> &
-    Pick<DatacenterSubnetRecord, 'id' | 'cidr' | 'version'>,
+    Pick<DatacenterSubnetRecord, 'id' | 'cidr' | 'version'>
 ): DatacenterSubnetRecord {
   return {
     name: null,
@@ -88,52 +81,40 @@ function subnet(
 describe('datacenterDisplayName', () => {
   it('uses a trimmed display name and falls back when blank', () => {
     expect(datacenterDisplayName({ name: '  AMS-1  ' })).toBe('AMS-1')
-    expect(datacenterDisplayName({ name: '  ' })).toBe(
-      'Unnamed datacenter',
-    )
-    expect(datacenterDisplayName({ name: null })).toBe(
-      'Unnamed datacenter',
-    )
+    expect(datacenterDisplayName({ name: '  ' })).toBe('Unnamed datacenter network')
+    expect(datacenterDisplayName({ name: null })).toBe('Unnamed datacenter network')
   })
 })
 
 describe('formatServerDatacenterNames', () => {
   it('joins names and abbreviates when many', () => {
     expect(formatServerDatacenterNames([])).toBeNull()
-    expect(
-      formatServerDatacenterNames([{ id: 'dc-1', name: 'AMS' }]),
-    ).toBe('AMS')
+    expect(formatServerDatacenterNames([{ id: 'dc-1', name: 'AMS' }])).toBe('AMS')
     expect(
       formatServerDatacenterNames([
         { id: 'dc-1', name: 'AMS' },
         { id: 'dc-2', name: 'FRA' },
-      ]),
+      ])
     ).toBe('AMS +1')
   })
 })
 
 describe('serverIsDatacenterMember', () => {
   it('matches by membership id', () => {
-    expect(
-      serverIsDatacenterMember(
-        { datacenters: [{ id: 'dc-1', name: 'A' }] },
-        'dc-1',
-      ),
-    ).toBe(true)
-    expect(
-      serverIsDatacenterMember(
-        { datacenters: [{ id: 'dc-1', name: 'A' }] },
-        'dc-2',
-      ),
-    ).toBe(false)
+    expect(serverIsDatacenterMember({ datacenters: [{ id: 'dc-1', name: 'A' }] }, 'dc-1')).toBe(
+      true
+    )
+    expect(serverIsDatacenterMember({ datacenters: [{ id: 'dc-1', name: 'A' }] }, 'dc-2')).toBe(
+      false
+    )
   })
 })
 
 describe('datacenterTimezoneLabel', () => {
   it('returns the default timezone or an em dash', () => {
-    expect(
-      datacenterTimezoneLabel({ defaultServerTimezone: 'Europe/Amsterdam' }),
-    ).toBe('Europe/Amsterdam')
+    expect(datacenterTimezoneLabel({ defaultServerTimezone: 'Europe/Amsterdam' })).toBe(
+      'Europe/Amsterdam'
+    )
     expect(datacenterTimezoneLabel({ defaultServerTimezone: '  ' })).toBe('—')
     expect(datacenterTimezoneLabel(null)).toBe('—')
   })
@@ -141,9 +122,7 @@ describe('datacenterTimezoneLabel', () => {
 
 describe('formatDatacenterCidrs', () => {
   it('joins trimmed CIDRs and falls back when none remain', () => {
-    expect(formatDatacenterCidrs([' 10.0.0.0/24 ', '10.0.1.0/24'])).toBe(
-      '10.0.0.0/24, 10.0.1.0/24',
-    )
+    expect(formatDatacenterCidrs([' 10.0.0.0/24 ', '10.0.1.0/24'])).toBe('10.0.0.0/24, 10.0.1.0/24')
     expect(formatDatacenterCidrs(['  ', ''])).toBe('—')
     expect(formatDatacenterCidrs([])).toBe('—')
   })
@@ -162,7 +141,7 @@ describe('datacenterGeoFromMetadata', () => {
     expect(
       datacenterGeoFromMetadata({
         geo: { country: 'NL', city: 'Amsterdam', region: 'North Holland' },
-      }),
+      })
     ).toEqual({
       country: 'NL',
       city: 'Amsterdam',
@@ -177,7 +156,7 @@ describe('datacenterGeoFromMetadata', () => {
           asn: 7922,
           asOrganization: ' Comcast ',
         },
-      }),
+      })
     ).toEqual({
       country: 'US',
       city: 'Wichita',
@@ -243,13 +222,13 @@ describe('resolveDatacenterAddEligibility', () => {
       resolveDatacenterAddEligibility({
         serversWithPrivateAddress: 2,
         serverCount: 2,
-      }),
+      })
     ).toEqual({ canAdd: true, reason: null })
     expect(
       resolveDatacenterAddEligibility({
         serversWithPrivateAddress: 0,
         serverCount: 0,
-      }),
+      })
     ).toEqual({
       canAdd: false,
       reason: 'Add a server first.',
@@ -258,7 +237,7 @@ describe('resolveDatacenterAddEligibility', () => {
       resolveDatacenterAddEligibility({
         serversWithPrivateAddress: 0,
         serverCount: 3,
-      }),
+      })
     ).toEqual({
       canAdd: false,
       reason: 'No private IPs reported yet.',
@@ -269,10 +248,7 @@ describe('resolveDatacenterAddEligibility', () => {
 describe('reportedPrivateNetworks and reportedCidrForAddress', () => {
   it('keeps reported interface CIDRs and looks up by address', () => {
     const server = {
-      ips: ips([
-        privateIp('10.0.0.5', '10.0.0.0/24'),
-        privateIp('10.0.0.5', '10.0.0.0/16'),
-      ]),
+      ips: ips([privateIp('10.0.0.5', '10.0.0.0/24'), privateIp('10.0.0.5', '10.0.0.0/16')]),
     }
     expect(reportedPrivateNetworks(server)).toEqual([
       { address: '10.0.0.5', cidr: '10.0.0.0/24', cidrSource: 'reported' },
@@ -283,12 +259,12 @@ describe('reportedPrivateNetworks and reportedCidrForAddress', () => {
   })
 
   it('assumes a typical LAN when the daemon omitted the prefix', () => {
-    expect(reportedPrivateNetworks({ ips: ips([privateIp('10.0.0.5')]) })).toEqual(
-      [{ address: '10.0.0.5', cidr: '10.0.0.0/24', cidrSource: 'assumed' }],
+    expect(reportedPrivateNetworks({ ips: ips([privateIp('10.0.0.5')]) })).toEqual([
+      { address: '10.0.0.5', cidr: '10.0.0.0/24', cidrSource: 'assumed' },
+    ])
+    expect(reportedCidrForAddress({ ips: ips([privateIp('10.0.0.5')]) }, '10.0.0.5')).toBe(
+      '10.0.0.0/24'
     )
-    expect(
-      reportedCidrForAddress({ ips: ips([privateIp('10.0.0.5')]) }, '10.0.0.5'),
-    ).toBe('10.0.0.0/24')
   })
 })
 
@@ -304,7 +280,7 @@ describe('listServersWithReportedPrivateNetworks', () => {
           id: 'b',
           ips: ips([privateIp('10.0.0.2')]),
         },
-      ]).map((row) => row.id),
+      ]).map((row) => row.id)
     ).toEqual(['a', 'b'])
   })
 })
@@ -319,7 +295,7 @@ describe('reportedPrivateAddresses', () => {
           privateIp('10.0.1.9'),
           { address: 'fd00::1', version: 6, scope: 'private' },
         ]),
-      }),
+      })
     ).toEqual(['10.0.0.5', '10.0.1.9', 'fd00::1'])
     expect(reportedPrivateAddresses({ ips: null })).toEqual([])
   })
@@ -335,7 +311,7 @@ describe('listServersWithReportedPrivateAddresses', () => {
         },
         { id: 'b', ips: ips([]) },
         { id: 'c', ips: null },
-      ]).map((row) => row.id),
+      ]).map((row) => row.id)
     ).toEqual(['a'])
   })
 })
@@ -347,11 +323,7 @@ describe('sortDatacenterSubnets', () => {
       subnet({ id: 'v4-b', cidr: '203.0.113.0/24', version: 4 }),
       subnet({ id: 'v4-a', cidr: '10.0.0.0/24', version: 4 }),
     ]
-    expect(sortDatacenterSubnets(rows).map((row) => row.id)).toEqual([
-      'v4-a',
-      'v4-b',
-      'v6',
-    ])
+    expect(sortDatacenterSubnets(rows).map((row) => row.id)).toEqual(['v4-a', 'v4-b', 'v6'])
   })
 })
 
@@ -359,13 +331,11 @@ describe('formatDatacenterSubnetSummary', () => {
   it('renders an em dash, a single CIDR, or a +N remainder', () => {
     expect(formatDatacenterSubnetSummary([])).toBe('—')
     expect(formatDatacenterSubnetSummary(['10.0.0.0/24'])).toBe('10.0.0.0/24')
+    expect(formatDatacenterSubnetSummary(['10.0.0.0/24', '10.0.1.0/24', '2001:db8::/64'])).toBe(
+      '10.0.0.0/24 +2'
+    )
     expect(
-      formatDatacenterSubnetSummary(['10.0.0.0/24', '10.0.1.0/24', '2001:db8::/64']),
-    ).toBe('10.0.0.0/24 +2')
-    expect(
-      formatDatacenterSubnetSummary([
-        subnet({ id: 'a', cidr: '203.0.113.0/24', version: 4 }),
-      ]),
+      formatDatacenterSubnetSummary([subnet({ id: 'a', cidr: '203.0.113.0/24', version: 4 })])
     ).toBe('203.0.113.0/24')
   })
 })
@@ -391,10 +361,7 @@ describe('candidateMemberNetworks and listServersWithCandidateAddresses', () => 
   it('excludes already-pinned addresses and offers both families in site CIDRs', () => {
     const server = {
       id: 'a',
-      ips: ips([
-        privateIp('10.0.0.5', '10.0.0.0/24'),
-        privateIp('2001:db8::5', '2001:db8::/64'),
-      ]),
+      ips: ips([privateIp('10.0.0.5', '10.0.0.0/24'), privateIp('2001:db8::5', '2001:db8::/64')]),
     }
     expect(candidateMemberNetworks(server, ['10.0.0.5'], siteSubnets)).toEqual([
       {
@@ -403,9 +370,10 @@ describe('candidateMemberNetworks and listServersWithCandidateAddresses', () => 
         cidrSource: 'reported',
       },
     ])
-    expect(
-      candidateMemberNetworks(server, [], siteSubnets).map((row) => row.address),
-    ).toEqual(['10.0.0.5', '2001:db8::5'])
+    expect(candidateMemberNetworks(server, [], siteSubnets).map((row) => row.address)).toEqual([
+      '10.0.0.5',
+      '2001:db8::5',
+    ])
     expect(
       listServersWithCandidateAddresses(
         [
@@ -414,8 +382,8 @@ describe('candidateMemberNetworks and listServersWithCandidateAddresses', () => 
           { id: 'c', ips: ips([privateIp('10.0.0.5', '10.0.0.0/24')]) },
         ],
         ['10.0.0.5'],
-        siteSubnets,
-      ).map((row) => row.id),
+        siteSubnets
+      ).map((row) => row.id)
     ).toEqual(['a'])
   })
 
@@ -429,23 +397,23 @@ describe('candidateMemberNetworks and listServersWithCandidateAddresses', () => 
       ]),
     }
     expect(
-      candidateMemberNetworks(server, [], [
-        subnet({ id: 'v4', cidr: '10.0.0.0/24', version: 4 }),
-      ]).map((row) => row.address),
+      candidateMemberNetworks(
+        server,
+        [],
+        [subnet({ id: 'v4', cidr: '10.0.0.0/24', version: 4 })]
+      ).map((row) => row.address)
     ).toEqual(['10.0.0.5'])
-    expect(
-      candidateMemberNetworks(server, [], []).map((row) => row.address),
-    ).toEqual([])
+    expect(candidateMemberNetworks(server, [], []).map((row) => row.address)).toEqual([])
   })
 })
 
 describe('memberAssignEmptyCopy', () => {
   it('tells operators to add a subnet before pinning when none exist', () => {
     expect(memberAssignEmptyCopy(0)).toBe(
-      "Add a subnet first. Member IPs must fall inside this datacenter's ranges.",
+      "Add a subnet first. Member IPs must fall inside this datacenter network's ranges."
     )
     expect(memberAssignEmptyCopy(2)).toBe(
-      "No unpinned private IPs fall inside this datacenter's subnets.",
+      "No unpinned private IPs fall inside this datacenter network's subnets."
     )
   })
 })
@@ -462,8 +430,8 @@ describe('mergeDatacenterOptions', () => {
         {
           defaultServerTimezone: 'Europe/Amsterdam',
           enforceServerTimezone: true,
-        },
-      ),
+        }
+      )
     ).toEqual({
       addressPreference: 'ipv4',
       defaultServerTimezone: 'Europe/Amsterdam',
@@ -479,8 +447,8 @@ describe('mergeDatacenterOptions', () => {
           ntp: { enabled: true, servers: ['time.cloudflare.com'] },
           addressPreference: 'ipv6',
         },
-        { addressPreference: 'ipv4' },
-      ),
+        { addressPreference: 'ipv4' }
+      )
     ).toEqual({
       sshPort: 22022,
       ntp: { enabled: true, servers: ['time.cloudflare.com'] },
@@ -496,7 +464,7 @@ describe('listServersWithoutMembership', () => {
         { id: 'a', datacenters: [{ id: 'dc-1', name: 'A' }] },
         { id: 'b', datacenters: [] },
         { id: 'c' },
-      ]).map((row) => row.id),
+      ]).map((row) => row.id)
     ).toEqual(['b', 'c'])
   })
 })
@@ -505,11 +473,10 @@ describe('pruneSelectedIds and toggleSelectedId', () => {
   it('drops ids that are no longer allowed and toggles membership', () => {
     const pruned = pruneSelectedIds(new Set(['a', 'b']), new Set(['b', 'c']))
     expect([...pruned]).toEqual(['b'])
-    expect(
-      [...toggleSelectedId(new Set(['a']), 'b')].sort((x, y) =>
-        x.localeCompare(y),
-      ),
-    ).toEqual(['a', 'b'])
+    expect([...toggleSelectedId(new Set(['a']), 'b')].sort((x, y) => x.localeCompare(y))).toEqual([
+      'a',
+      'b',
+    ])
     expect([...toggleSelectedId(new Set(['a', 'b']), 'a')]).toEqual(['b'])
   })
 })
@@ -522,8 +489,8 @@ describe('buildMemberPins', () => {
           ['a', '10.0.0.1'],
           ['b', '  '],
           ['c', '10.0.0.3'],
-        ]),
-      ),
+        ])
+      )
     ).toEqual([
       { serverId: 'a', address: '10.0.0.1' },
       { serverId: 'c', address: '10.0.0.3' },
@@ -538,7 +505,7 @@ describe('buildCreateDatacenterRequest', () => {
         name: '  ',
         description: '',
         members: [],
-      }),
+      })
     ).toBeNull()
     expect(
       buildCreateDatacenterRequest({
@@ -549,7 +516,7 @@ describe('buildCreateDatacenterRequest', () => {
           { serverId: 'a', address: '10.0.0.1' },
           { serverId: 'a', address: '10.0.0.9' },
         ],
-      }),
+      })
     ).toEqual({
       name: 'AMS-1',
       description: 'core',
@@ -570,7 +537,7 @@ describe('buildCreateDatacenterFromSeed', () => {
         description: '',
         serverId: 'srv-1',
         address: '10.0.0.5',
-      }),
+      })
     ).toEqual({
       name: 'AMS-1',
       members: [{ serverId: 'srv-1', address: '10.0.0.5' }],
@@ -585,7 +552,7 @@ describe('buildCreateDatacenterFromSeed', () => {
         description: '',
         serverId: 'srv-1',
         address: '  ',
-      }),
+      })
     ).toBeNull()
   })
 })
@@ -603,15 +570,13 @@ describe('addressInCidr', () => {
 describe('stalePinReasonLabel', () => {
   it('reads each repin reason in plain words and never guesses', () => {
     expect(stalePinReasonLabel('address_gone_no_candidate')).toBe(
-      'no replacement address was reported',
+      'no replacement address was reported'
     )
     expect(stalePinReasonLabel('address_gone_ambiguous')).toBe(
-      'more than one candidate address, so nothing was guessed',
+      'more than one candidate address, so nothing was guessed'
     )
     expect(stalePinReasonLabel(null)).toBe('the daemon no longer reports this address')
-    expect(stalePinReasonLabel('something_new')).toBe(
-      'the daemon no longer reports this address',
-    )
+    expect(stalePinReasonLabel('something_new')).toBe('the daemon no longer reports this address')
     expect(STALE_PIN_COPY).toContain('last known address')
     expect(STALE_PIN_COPY).toContain('unassigning and re-adding')
   })

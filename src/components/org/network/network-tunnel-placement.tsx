@@ -84,13 +84,13 @@ export function NetworkTunnelPlacement({
       </FormField>
       {explanation ? <Text style={panelStyles.muted}>{explanation}</Text> : null}
       {draft.placement === 'all' ? (
-        <FormField label="Datacenter">
+        <FormField label="Datacenter Network">
           <Select
             value={draft.datacenterId}
             options={datacenterOptions}
-            placeholder="Choose a datacenter"
+            placeholder="Choose a datacenter network"
             disabled={disabled}
-            accessibilityLabel="Datacenter whose servers run the tunnel"
+            accessibilityLabel="Datacenter network whose servers run the tunnel"
             onChange={(datacenterId) => onChange({ ...draft, datacenterId, exceptServerIds: [] })}
           />
         </FormField>
@@ -99,7 +99,7 @@ export function NetworkTunnelPlacement({
         <View style={styles.list}>
           <Text style={panelStyles.muted}>
             {draft.placement === 'all'
-              ? 'Untick a server to leave it out. A server you add to this datacenter later runs the tunnel by itself.'
+              ? 'Untick a server to leave it out. A server you add to this datacenter network later runs the tunnel by itself.'
               : 'Pick the servers.'}
           </Text>
           {choices.length === 0 ? (

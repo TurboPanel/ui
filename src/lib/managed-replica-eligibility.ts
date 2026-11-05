@@ -454,12 +454,12 @@ export function replicaIneligibleReasonLabel(reason: ReplicaIneligibleReason): s
     case 'offline':
       return 'Offline'
     case 'no-datacenter':
-      return 'Not assigned to a datacenter'
+      return 'Not on a datacenter network'
     case 'no-private-cidr':
-      return 'Datacenter has no subnets yet'
+      return 'Datacenter network has no subnets yet'
     case 'no-private-path':
-      return "Must share the primary's datacenter"
+      return "Must share the primary's datacenter network"
     case 'untrusted-datacenter':
-      return 'Shared datacenter is untrusted — needs a trusted network or TurboFabric'
+      return 'Shared datacenter network is untrusted — needs a trusted network or TurboFabric'
   }
 }

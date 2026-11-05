@@ -3,6 +3,7 @@ import { panelStyles } from '@/components/ui/panel-styles'
 import { Badge, Button, ButtonRow, MonoText, TypeNameDeleteButton } from '@/components/ui'
 import { dockerNetworkAddressingLines } from '@/lib/docker-addressing'
 import type { NetworkKind, NetworkRecord, IpRecord } from '@/lib/instance-api'
+import { ipScopeLabel } from '@/lib/server-services'
 import { spacing } from '@/lib/theme'
 
 function networkTitle(network: NetworkRecord): string {
@@ -24,7 +25,7 @@ export function readDockerNetworkName(network: NetworkRecord): string | null {
 }
 
 export function kindLabel(kind: NetworkKind): string {
-  if (kind === 'datacenter') return 'Datacenter'
+  if (kind === 'datacenter') return 'Datacenter Network'
   if (kind === 'managed') return 'Managed'
   if (kind === 'reserved') return 'Reserved'
   return 'Docker'
@@ -161,7 +162,7 @@ export function IpListRow({
       ) : null}
       <View style={styles.badgeRow}>
         <Badge label={`v${ip.version}`} />
-        <Badge label={ip.scope} />
+        <Badge label={ipScopeLabel(ip.scope)} />
         <Badge label={ip.allocation} />
       </View>
       <Text style={panelStyles.detailLine}>
@@ -173,7 +174,7 @@ export function IpListRow({
         {networkLabel ?? '—'}
       </Text>
       <Text style={panelStyles.detailLine}>
-        <Text style={panelStyles.detailLabel}>Site: </Text>
+        <Text style={panelStyles.detailLabel}>Datacenter Network: </Text>
         {datacenterLabel ?? '—'}
       </Text>
     </View>

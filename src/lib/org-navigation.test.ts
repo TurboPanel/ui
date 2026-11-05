@@ -287,7 +287,7 @@ describe('sidebar areas', () => {
   it('puts the old Network pages under Servers, after its own pages', () => {
     const servers = ORG_AREAS.find((area) => area.id === 'servers')
     expect(servers?.subRoutes.map((sub) => sub.label)).toEqual([
-      'Datacenters',
+      'Datacenter Networks',
       'Pending Keys',
       'Settings',
       'TLS',

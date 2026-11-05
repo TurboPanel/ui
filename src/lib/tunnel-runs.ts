@@ -38,7 +38,7 @@ export const PLACEMENT_OPTIONS: readonly Readonly<{
     value: 'all',
     label: 'All Servers',
     explanation:
-      'The tunnel runs on every server of one datacenter, and on any server added to it later. You can leave some out.',
+      'The tunnel runs on every server of one datacenter network, and on any server added to it later. You can leave some out.',
   },
 ]
 
@@ -177,7 +177,7 @@ export function placementBody(
     if (draft.serverIds.length === 0) return { ok: false, problem: 'Choose at least one server.' }
     return { ok: true, body: { placement: 'chosen', serverIds: draft.serverIds } }
   }
-  if (!draft.datacenterId) return { ok: false, problem: 'Choose the datacenter.' }
+  if (!draft.datacenterId) return { ok: false, problem: 'Choose the datacenter network.' }
   // Servers that left the datacenter since the page loaded are not sent as exceptions.
   const inside = new Set(
     servers.filter((s) => serverInDatacenter(s, draft.datacenterId)).map((s) => s.id)

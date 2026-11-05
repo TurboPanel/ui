@@ -878,7 +878,7 @@ function tlsPickerPatch(value: string): Pick<HostingEditorState, 'tlsId' | 'tlsA
 
 const HOSTING_BIND_LABELS: Record<HostingBind, string> = {
   public: 'Public',
-  datacenter: 'Datacenter',
+  datacenter: 'Datacenter Network',
   local: 'Local',
 }
 
@@ -1120,14 +1120,14 @@ function HostingBindPicker({
     <>
       <Text style={styles.tlsLabel}>Bind</Text>
       <Text style={styles.tlsHint}>
-        Public — reachable on the internet. Datacenter — private network only. Local — this server
-        only (127.x).
+        Public — reachable on the internet. Datacenter Network — reachable only on that network.
+        Local — this server only (127.x).
       </Text>
       <SegmentedControl
         accessibilityLabel="Bind"
         options={[
           { value: 'public', label: 'Public' },
-          { value: 'datacenter', label: 'Datacenter' },
+          { value: 'datacenter', label: 'Datacenter Network' },
           { value: 'local', label: 'Local' },
         ]}
         value={editor.bind}

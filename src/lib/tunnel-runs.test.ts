@@ -207,7 +207,10 @@ describe('placementBody', () => {
   })
   it('needs a datacenter for all and drops left-out servers that moved away', () => {
     const all = { ...EMPTY_PLACEMENT_DRAFT, placement: 'all' as const }
-    expect(placementBody(all, servers)).toEqual({ ok: false, problem: 'Choose the datacenter.' })
+    expect(placementBody(all, servers)).toEqual({
+      ok: false,
+      problem: 'Choose the datacenter network.',
+    })
     expect(
       placementBody({ ...all, datacenterId: 'd1', exceptServerIds: ['a', 'gone'] }, servers)
     ).toEqual({

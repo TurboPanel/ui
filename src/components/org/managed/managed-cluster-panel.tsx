@@ -434,7 +434,7 @@ export function ManagedClusterPanel({
   return (
     <SectionPanel
       title="Cluster"
-      hint={`Failover stays on the datacenter LAN · remote/read replicas may use ${TURBOFABRIC_PRODUCT_NAME} or public TLS, except across an untrusted network, where ${TURBOFABRIC_PRODUCT_NAME} is required`}
+      hint={`Failover stays on the datacenter network · remote/read replicas may use ${TURBOFABRIC_PRODUCT_NAME} or public TLS, except across an untrusted network, where ${TURBOFABRIC_PRODUCT_NAME} is required`}
       accent
     >
       {error ? <Text style={panelStyles.error}>{error}</Text> : null}
@@ -702,7 +702,7 @@ function ClusterMemberRow({
                 <ConfirmButton
                   label="Convert to failover"
                   confirmLabel="Confirm convert"
-                  prompt="Converts this replica to failover. It must share the primary's datacenter LAN."
+                  prompt="Converts this replica to failover. It must share the primary's datacenter network."
                   disabled={disabled || failoverUnsupportedReason !== null}
                   onConfirm={onConfirmConvert}
                 />
@@ -830,8 +830,8 @@ function DisasterRecoveryDialog({
       <View style={panelStyles.calloutWarning}>
         <Text style={panelStyles.calloutWarningText}>
           This accepts possible data loss. Unreplicated commits on the old primary will not be
-          recovered. Remaining failover replicas outside the new primary datacenter become remote
-          read replicas.
+          recovered. Remaining failover replicas outside the new primary&apos;s datacenter network
+          become remote read replicas.
         </Text>
       </View>
       <Text style={panelStyles.muted}>Type {confirmName} to confirm.</Text>

@@ -67,7 +67,7 @@ export const NETWORK_ERROR_COPY: Readonly<Record<string, string>> = {
   [CIDR_OVERLAPS_DOCKER_NETWORK_ERROR]:
     'That range overlaps a registered Docker network or a Docker address pool.',
   [CIDR_OVERLAPS_GATEWAY_ADVERTISED_ERROR]:
-    'A gateway in another datacenter already advertises that range across the mesh.',
+    'A gateway on another datacenter network already advertises that range across the mesh.',
   [SUBNET_OVERLAPS_ERROR]: SUBNET_OVERLAPS_COPY,
 
   // --- Managed placement (422) -----------------------------------------------
@@ -101,7 +101,8 @@ export const NETWORK_ERROR_COPY: Readonly<Record<string, string>> = {
 
   // --- Datacenter pins / subnets --------------------------------------------
   [ADDRESS_IN_USE_ERROR]: 'That address is already pinned.',
-  [ADDRESS_NOT_IN_ANY_SUBNET_ERROR]: 'That address is not in any subnet of this datacenter.',
+  [ADDRESS_NOT_IN_ANY_SUBNET_ERROR]:
+    'That address is not in any subnet of this datacenter network.',
   [SUBNET_HAS_MEMBERS_ERROR]: 'Unassign the pinned servers first.',
   address_cidr_unreported: 'That server has not reported a private IP.',
   address_not_reported: 'Pick a private IP reported on that server.',

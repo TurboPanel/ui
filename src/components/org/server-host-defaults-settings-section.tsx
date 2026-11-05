@@ -2,18 +2,8 @@ import { useState } from 'react'
 import { Text } from 'react-native'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { panelStyles } from '@/components/ui/panel-styles'
-import {
-  Button,
-  SectionPanel,
-  SettingRow,
-  TextField,
-  Toggle,
-} from '@/components/ui'
-import {
-  fetchOrgHostDefaults,
-  saveOrgHostDefaults,
-  type OrgHostDefaults,
-} from '@/lib/instance-api'
+import { Button, SectionPanel, SettingRow, TextField, Toggle } from '@/components/ui'
+import { fetchOrgHostDefaults, saveOrgHostDefaults, type OrgHostDefaults } from '@/lib/instance-api'
 import {
   DEFAULT_SSH_PORT,
   formatNtpHostList,
@@ -40,21 +30,12 @@ function hostDefaultsPatchFromDrafts(input: {
   if (input.sshText.trim().length > 0 && sshPort == null) {
     return {
       ok: false,
-      error:
-        'SSH port must be a whole number from 1 to 65535, or empty to inherit 22.',
+      error: 'SSH port must be a whole number from 1 to 65535, or empty to inherit 22.',
     }
   }
-  const ntp = isEmptyNtpDraft(
-    input.ntpEnabled,
-    input.ntpServersText,
-    input.ntpFallbackText,
-  )
+  const ntp = isEmptyNtpDraft(input.ntpEnabled, input.ntpServersText, input.ntpFallbackText)
     ? null
-    : ntpDefaultsFromDrafts(
-        input.ntpEnabled,
-        input.ntpServersText,
-        input.ntpFallbackText,
-      )
+    : ntpDefaultsFromDrafts(input.ntpEnabled, input.ntpServersText, input.ntpFallbackText)
   return {
     ok: true,
     patch: {
@@ -65,9 +46,7 @@ function hostDefaultsPatchFromDrafts(input: {
   }
 }
 
-export function ServerHostDefaultsSettingsSection({
-  orgId,
-}: Readonly<{ orgId: string }>) {
+export function ServerHostDefaultsSettingsSection({ orgId }: Readonly<{ orgId: string }>) {
   const queryClient = useQueryClient()
   const canManage = useCan('organization', orgId, 'organization:manage')
   const [error, setError] = useState<string | null>(null)
@@ -85,8 +64,7 @@ export function ServerHostDefaultsSettingsSection({
   })
 
   const mutation = useApiMutation({
-    mutationFn: (patch: Partial<OrgHostDefaults>) =>
-      saveOrgHostDefaults(orgId, patch),
+    mutationFn: (patch: Partial<OrgHostDefaults>) => saveOrgHostDefaults(orgId, patch),
     onSuccess: (data) => {
       setError(null)
       setDraftSsh(null)
@@ -108,13 +86,10 @@ export function ServerHostDefaultsSettingsSection({
   })
 
   const settings = query.data
-  const sshText =
-    draftSsh ?? (settings?.sshPort != null ? String(settings.sshPort) : '')
+  const sshText = draftSsh ?? (settings?.sshPort != null ? String(settings.sshPort) : '')
   const ntpEnabled = draftNtpEnabled ?? settings?.ntp?.enabled === true
-  const ntpServersText =
-    draftNtpServers ?? formatNtpHostList(settings?.ntp?.servers)
-  const ntpFallbackText =
-    draftNtpFallback ?? formatNtpHostList(settings?.ntp?.fallbackServers)
+  const ntpServersText = draftNtpServers ?? formatNtpHostList(settings?.ntp?.servers)
+  const ntpFallbackText = draftNtpFallback ?? formatNtpHostList(settings?.ntp?.fallbackServers)
   const fabricEnabled = draftFabric ?? settings?.defaultFabricEnabled === true
   const pending = mutation.isPending || query.isLoading
   const readOnly = !canManage
@@ -145,7 +120,7 @@ export function ServerHostDefaultsSettingsSection({
   return (
     <SectionPanel
       title="Host defaults"
-      hint="Org → datacenter → server · most specific wins"
+      hint="Org → datacenter network → server · most specific wins"
     >
       {error ? <Text style={panelStyles.error}>{error}</Text> : null}
       {query.isError && !error ? (
@@ -214,9 +189,9 @@ function HostDefaultsFields({
   return (
     <>
       <Text style={panelStyles.muted}>
-        SSH port, NTP, and a {TURBOFABRIC_PRODUCT_NAME} preference for this
-        organization. Datacenters and individual servers can override SSH and
-        NTP. Saving here does not change sshd or push NTP to hosts.
+        SSH port, NTP, and a {TURBOFABRIC_PRODUCT_NAME} preference for this organization. Datacenter
+        networks and individual servers can override SSH and NTP. Saving here does not change sshd
+        or push NTP to hosts.
       </Text>
 
       <TextField
@@ -291,4 +266,3 @@ function HostDefaultsFields({
     </>
   )
 }
-

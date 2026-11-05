@@ -105,10 +105,10 @@ const ERROR_COPY: Readonly<Record<string, string>> = {
     'The hostname was not added. Its zone is in this Cloudflare account, but no API Token on it can edit DNS there. Add an API Token that can edit DNS for that zone, then try again.',
   carrier_missing:
     'The Cloudflare account for this tunnel was removed. Connect it again under Cloudflare Accounts.',
-  datacenter_required: 'Choose the datacenter whose servers should run this tunnel.',
-  datacenter_invalid: 'Choose a datacenter of this organization.',
+  datacenter_required: 'Choose the datacenter network whose servers should run this tunnel.',
+  datacenter_invalid: 'Choose a datacenter network of this organization.',
   server_invalid: 'Choose servers of this organization.',
-  server_not_in_datacenter: 'Every server has to be in the datacenter you chose.',
+  server_not_in_datacenter: 'Every server has to be on the datacenter network you chose.',
   server_never_carries:
     'One of these servers is set to never run tunnels. Turn that off for it, or leave it out.',
   hostname_invalid: 'That does not look like a hostname, for example app.example.com.',
