@@ -84,6 +84,14 @@ describe('apiErrorCopy', () => {
     expect(apiErrorCopy(new Error('HTTP 429: too_soon'))).toBeNull()
   })
 
+  it('says a repository must be on a public git host', () => {
+    const err = new Error(
+      '/api/client/v1/repositories failed: HTTP 400: source_repository_host_not_public'
+    )
+    expect(apiErrorCopy(err)).toMatch(/^Repositories must be on a public git host\./)
+    expect(userErrorMessage(err, 'fallback')).toMatch(/public git host/)
+  })
+
   it('is null for other errors', () => {
     expect(apiErrorCopy(new Error('HTTP 500'))).toBeNull()
     expect(apiErrorCopy(null)).toBeNull()

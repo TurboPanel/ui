@@ -34,6 +34,8 @@ const API_ERROR_COPY: Readonly<Record<string, string>> = {
   tls_organization_ca:
     'The Organization CA can\u2019t be deleted. Replace it with Rotate on the Organization CA panel.',
   server_offline: 'The server is offline. Try again when it is back.',
+  source_repository_host_not_public:
+    'Repositories must be on a public git host. Private and local network addresses, localhost and single-label names (such as gitea) are not supported.',
   server_placement_required: 'Put this storage on a server first.',
   backup_target_unsupported: 'This kind of storage cannot be backed up yet.',
   backup_not_found: 'That backup no longer exists.',

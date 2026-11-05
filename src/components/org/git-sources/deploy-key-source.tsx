@@ -13,6 +13,7 @@ import {
 import type { RepositoryRecord } from '@/lib/instance-api'
 import { useCreateGitlabDeployKey, useCreateRepository } from '@/lib/queries/releases'
 import { spacing } from '@/lib/theme'
+import { userErrorMessage } from '@/lib/user-error'
 
 /** `git@host:owner/repo.git` — the scp-like form git accepts. */
 const SCP_LIKE_SSH_RE = /^[A-Za-z0-9._-]+@[A-Za-z0-9.-]+:[^\s]+$/
@@ -98,8 +99,7 @@ export function DeployKeySource({
   // the API will reject with `source_ssh_requires_credential`.
   const sshOnly = isSshCloneUrl(trimmedUrl)
   const effectiveAccess: RepositoryAccess = sshOnly ? 'private' : access
-  const busy = disabled || createDeployKeyMutation.isPending ||
-    createRepositoryMutation.isPending
+  const busy = disabled || createDeployKeyMutation.isPending || createRepositoryMutation.isPending
 
   const generate = async () => {
     if (trimmedUrl.length === 0) return
@@ -146,9 +146,11 @@ export function DeployKeySource({
 
       <FormField
         label="Access"
-        hint={effectiveAccess === 'public'
-          ? 'Cloned anonymously — nothing to add on the provider.'
-          : 'A read-only deploy key is generated below and added to the repository.'}
+        hint={
+          effectiveAccess === 'public'
+            ? 'Cloned anonymously — nothing to add on the provider.'
+            : 'A read-only deploy key is generated below and added to the repository.'
+        }
       >
         <SegmentedControl
           options={[
@@ -162,32 +164,28 @@ export function DeployKeySource({
         />
       </FormField>
 
-      {sshOnly && access === 'public'
-        ? (
-          <InlineNotice
-            title="ssh needs a key"
-            body="An ssh remote has no anonymous clone, so this one uses a deploy key. Paste the https URL instead to clone a public repository without one."
-          />
-        )
-        : null}
+      {sshOnly && access === 'public' ? (
+        <InlineNotice
+          title="ssh needs a key"
+          body="An ssh remote has no anonymous clone, so this one uses a deploy key. Paste the https URL instead to clone a public repository without one."
+        />
+      ) : null}
 
-      {effectiveAccess === 'private'
-        ? (
-          <FormField label="Provider">
-            <FormSelect
-              value={provider}
-              options={[
-                { value: 'git', label: 'Generic Git' },
-                { value: 'gitlab', label: 'GitLab' },
-              ]}
-              placeholder="Select a provider…"
-              disabled={busy || deployKey !== null}
-              accessibilityLabel="Provider"
-              onChange={(value) => setProvider(value === 'gitlab' ? 'gitlab' : 'git')}
-            />
-          </FormField>
-        )
-        : null}
+      {effectiveAccess === 'private' ? (
+        <FormField label="Provider">
+          <FormSelect
+            value={provider}
+            options={[
+              { value: 'git', label: 'Generic Git' },
+              { value: 'gitlab', label: 'GitLab' },
+            ]}
+            placeholder="Select a provider…"
+            disabled={busy || deployKey !== null}
+            accessibilityLabel="Provider"
+            onChange={(value) => setProvider(value === 'gitlab' ? 'gitlab' : 'git')}
+          />
+        </FormField>
+      ) : null}
 
       <DeployKeyConnectAction
         access={effectiveAccess}
@@ -200,28 +198,18 @@ export function DeployKeySource({
         onConnect={() => void connect()}
       />
 
-      {onCancel
-        ? (
-          <Button
-            label="Back"
-            variant="ghost"
-            size="sm"
-            disabled={busy}
-            onPress={onCancel}
-          />
-        )
-        : null}
+      {onCancel ? (
+        <Button label="Back" variant="ghost" size="sm" disabled={busy} onPress={onCancel} />
+      ) : null}
 
-      {createDeployKeyMutation.actionError
-        ? (
-          <Text style={panelStyles.error}>
-            {createDeployKeyMutation.actionError}
-          </Text>
-        )
-        : null}
-      {createRepositoryMutation.actionError
-        ? <Text style={panelStyles.error}>{createRepositoryMutation.actionError}</Text>
-        : null}
+      {createDeployKeyMutation.actionError ? (
+        <Text style={panelStyles.error}>{createDeployKeyMutation.actionError}</Text>
+      ) : null}
+      {createRepositoryMutation.actionError ? (
+        <Text style={panelStyles.error}>
+          {userErrorMessage(createRepositoryMutation.actionError, 'Could not save the repository.')}
+        </Text>
+      ) : null}
     </View>
   )
 }
