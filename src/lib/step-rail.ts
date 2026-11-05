@@ -64,7 +64,6 @@ export function stepRailSpoken(
 /** True once every step has ended well: the rail's finished state. */
 export function stepRailComplete(steps: readonly Pick<StepRailItem, 'state'>[]): boolean {
   return (
-    steps.length > 0 &&
     steps.some((step) => step.state === 'done') &&
     steps.every(
       (step) => step.state === 'done' || step.state === 'ready' || step.state === 'skipped'
@@ -85,7 +84,8 @@ export function stepRailFocus<T extends Pick<StepRailItem, 'state'>>(
     const index = steps.findIndex((step) => step.state === state)
     if (index >= 0) return { step: steps[index], index }
   }
-  return { step: steps[steps.length - 1], index: steps.length - 1 }
+  const last = steps.length - 1
+  return { step: steps[last], index: last }
 }
 
 /**

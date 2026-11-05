@@ -436,7 +436,6 @@ function labelStyle(s: Sheet, state: StepRailState): TextStyle {
 }
 
 function labelCellStyle(s: Sheet, index: number, total: number): ViewStyle[] {
-  if (total === 1) return [s.labelCell, s.labelFirst]
   if (index === 0) return [s.labelCell, s.labelFirst]
   if (index === total - 1) return [s.labelCell, s.labelLast]
   return [s.labelCell]

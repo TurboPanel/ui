@@ -136,7 +136,7 @@ export function mapStepStatusToPipeline(
   status: UpgradeStepStatus | null | undefined
 ): UpgradeStepPipelineId {
   if (!status) return 'preparing'
-  if (status === 'done') return 'done'
+  if (status === 'done' || status === 'skipped') return 'done'
   if (status === 'failed' || status === 'rolled_back' || status === 'needs_attention') {
     return 'verifying'
   }
