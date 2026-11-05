@@ -13,6 +13,22 @@ export const COMPARE_KEY_HELP =
 export const NO_PANEL_KEY_HELP =
   'This server was installed without a control plane key and cannot tell this control plane from an impostor. Reinstall it with a fresh command.'
 
+export const OTHER_KEY_HELP =
+  'These servers report a control plane key that is not this one. Either they were pointed at another control plane or something is impersonating this one. If you did not expect this, reinstall them with a fresh command.'
+
+/** "name (fingerprint)" for each server whose signed pin names another key. */
+export function serversPinnedToAnotherKey(
+  servers: readonly {
+    id: string
+    name: string | null
+    pinReport?: { fingerprint: string; matches: boolean } | null
+  }[]
+): string[] {
+  return servers
+    .filter((server) => server.pinReport?.matches === false)
+    .map((server) => `${server.name ?? server.id} (${server.pinReport?.fingerprint || 'no key'})`)
+}
+
 export function isPanelFingerprint(value: string): boolean {
   return PANEL_FINGERPRINT_PATTERN.test(value)
 }

@@ -126,6 +126,43 @@ describe('PanelIdentitySection', () => {
     expect(screen.getByText(CURRENT)).toBeTruthy()
   })
 
+  it('warns about servers whose signed pin names another key, and only those', () => {
+    setup(
+      identity({
+        servers: [
+          {
+            id: 's1',
+            name: 'kappa',
+            organizationId: 'o1',
+            pinnedBy: 'upgrade',
+            pinReport: { fingerprint: 'X'.repeat(43), keyset: 1, reportedAt: null, matches: false },
+          },
+          {
+            id: 's2',
+            name: 'omicron',
+            organizationId: 'o1',
+            pinnedBy: 'install',
+            pinReport: { fingerprint: CURRENT, keyset: 3, reportedAt: null, matches: true },
+          },
+          { id: 's3', name: 'lambda', organizationId: null, pinnedBy: 'none' },
+        ],
+      })
+    )
+    const notice = screen.getByText(/Servers Pinned to Another Key/)
+    expect(notice.textContent).toContain(`kappa (${'X'.repeat(43)})`)
+    expect(notice.textContent).not.toContain('omicron')
+    expect(notice.textContent).not.toContain('lambda')
+  })
+
+  it('shows no warning when every report matches or none has arrived', () => {
+    setup(
+      identity({
+        servers: [{ id: 's1', name: 'kappa', organizationId: 'o1', pinnedBy: 'install' }],
+      })
+    )
+    expect(screen.queryByText(/Servers Pinned to Another Key/)).toBeNull()
+  })
+
   it('shows the sealed-secrets list to a superadmin on both runtimes', () => {
     setup(identity(), 'superadmin', 'workers')
     expect(screen.getByText('Sealed Secrets')).toBeTruthy()
