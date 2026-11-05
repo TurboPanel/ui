@@ -54,6 +54,7 @@ vi.mock('@/lib/queries/auth', () => ({ useOrganizationRecord: () => undefined })
 vi.mock('@/lib/queries', () => ({
   useProjects: () => state.projects,
   useWorkspaces: () => state.workspaces,
+  useUpdateProjectIcon: () => ({ run: vi.fn(), isPending: false }),
 }))
 vi.mock('@/lib/queries/environments', () => ({ useEnvironments: () => state.environments }))
 vi.mock('@/lib/queries/servers', () => ({

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   COMMON_EMOJI,
+  createIconField,
   EMOJI_ICON_MAX_LENGTH,
   filterEmoji,
   ICON_KEY_LABELS,
@@ -165,5 +166,14 @@ describe('picker helpers', () => {
     expect(iconValueLabel('🚀')).toBe('🚀')
     expect(iconValueLabel(null)).toBe('Default')
     expect(iconValueLabel('nope')).toBe('Default')
+  })
+})
+
+describe('createIconField', () => {
+  it('sends the chosen icon, nothing for the default or a managed database', () => {
+    expect(createIconField('rocket', 'docker-compose')).toEqual({ icon: 'rocket' })
+    expect(createIconField('🚀', 'template')).toEqual({ icon: '🚀' })
+    expect(createIconField(null, 'empty')).toEqual({})
+    expect(createIconField('rocket', 'managed')).toEqual({})
   })
 })

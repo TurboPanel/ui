@@ -274,3 +274,11 @@ export function resolvedIconValue(
   if (resolved.type === 'emoji') return resolved.emoji
   return null
 }
+
+/**
+ * The `icon` part of a create request: the chosen icon, or nothing for the
+ * default and for a managed database (which always shows the managed icon).
+ */
+export function createIconField(icon: string | null, type: string): Readonly<{ icon?: string }> {
+  return icon && type !== 'managed' ? { icon } : {}
+}

@@ -86,6 +86,64 @@ describe.each(SCENARIOS)('Project tile ($name)', (scenario) => {
     expect(off.container.querySelectorAll('path')).toHaveLength(1)
   })
 
+  it('puts the change-icon button beside the tile button, never inside it', () => {
+    const onOpen = vi.fn()
+    const onChangeIcon = vi.fn()
+    for (const layout of ['grid', 'list', 'listStacked'] as const) {
+      const { container, unmount } = render(
+        <ProjectTile
+          project={project({ icon: 'mail' })}
+          layout={layout}
+          onOpen={onOpen}
+          onChangeIcon={onChangeIcon}
+        />
+      )
+      const buttons = Array.from(container.querySelectorAll('button'))
+      expect(buttons).toHaveLength(2)
+      for (const button of buttons) expect(button.querySelector('button')).toBeNull()
+      const icon = screen.getByRole('button', { name: 'Change icon for Shop' })
+      const tile = screen.getByRole('button', { name: /^Open Shop/ })
+      expect(icon.parentElement).toBe(tile.parentElement)
+      expect(styleOf(icon)).toMatchObject({ position: 'absolute' })
+      fireEvent.click(icon)
+      unmount()
+    }
+    expect(onChangeIcon).toHaveBeenCalledTimes(3)
+    expect(onOpen).not.toHaveBeenCalled()
+  })
+
+  it('still opens the project from the tile itself', () => {
+    const onOpen = vi.fn()
+    const onChangeIcon = vi.fn()
+    render(
+      <ProjectTile
+        project={project({})}
+        layout="grid"
+        onOpen={onOpen}
+        onChangeIcon={onChangeIcon}
+      />
+    )
+    fireEvent.click(screen.getByRole('button', { name: /^Open Shop/ }))
+    expect(onOpen).toHaveBeenCalledTimes(1)
+    expect(onChangeIcon).not.toHaveBeenCalled()
+  })
+
+  it('keeps the icon plain without the action, and for managed and platform tiles', () => {
+    for (const over of [{}, { kind: 'managed' as const }, { kind: 'platform' as const }]) {
+      const onChangeIcon = Object.keys(over).length > 0 ? vi.fn() : undefined
+      const { unmount } = render(
+        <ProjectTile
+          project={project(over)}
+          layout="grid"
+          onOpen={vi.fn()}
+          onChangeIcon={onChangeIcon}
+        />
+      )
+      expect(screen.queryByRole('button', { name: 'Change icon for Shop' })).toBeNull()
+      unmount()
+    }
+  })
+
   it('keeps the cube for a platform project, whatever is stored', () => {
     const { container, queryByText } = render(
       <ProjectTile

@@ -5,6 +5,7 @@ import {
   Pressable,
   Text,
   View,
+  type LayoutChangeEvent,
   type StyleProp,
   type ViewStyle,
 } from 'react-native'
@@ -24,6 +25,7 @@ import {
   type PillTone,
 } from '@/lib/v4/projects-home'
 import { statusInfo } from '@/lib/v4/status-vocab'
+import { tileIconActionProps } from '@/lib/tile-icon-action'
 
 export type TileLayout = 'grid' | 'list' | 'listStacked'
 
@@ -77,6 +79,9 @@ const styles = themedStyles((p) => ({
   iconSmall: { width: 28, height: 28, borderRadius: 8 },
   iconSetup: { borderStyle: 'dashed' },
   iconManaged: { backgroundColor: p.accentSoft, borderColor: p.baseLine },
+  wrap: { position: 'relative', minWidth: 0 },
+  overlay: { position: 'absolute', borderWidth: 1, borderColor: 'transparent' },
+  overlayHover: { borderColor: p.accent },
   names: { flexShrink: 1, minWidth: 0 },
   namesRow: { flexDirection: 'row', alignItems: 'baseline', gap: 10 },
   name: { ...typeStyle('bodySemibold', 'body'), color: p.text },
@@ -207,29 +212,20 @@ function ProjectPills({ project }: Readonly<{ project: HomeProject }>) {
   )
 }
 
-function ProjectIcon({
-  kind,
-  icon,
-  isEmojiIconAllowed,
-  small,
-}: Readonly<{
-  kind: HomeProject['kind']
-  icon: string | null
-  isEmojiIconAllowed: boolean
-  small: boolean
-}>) {
-  const p = usePalette()
-  const s = styles(p)
-  const managed = kind === 'managed'
-  const paths = managed ? CYLINDER : [CUBE]
-  const typeGlyph = (
-    <Svg width={16} height={16} viewBox="0 0 24 24" aria-hidden>
-      {paths.map((d) => (
+/** The tile's own default glyph: the cube, or the cylinder for a managed database. */
+export function ProjectDefaultGlyph({
+  managed = false,
+  size = 16,
+  color,
+}: Readonly<{ managed?: boolean; size?: number; color: string }>) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" aria-hidden>
+      {(managed ? CYLINDER : [CUBE]).map((d) => (
         <Path
           key={d}
           d={d}
           fill="none"
-          stroke={managed ? p.link : p.text3}
+          stroke={color}
           strokeWidth={1.6}
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -237,8 +233,33 @@ function ProjectIcon({
       ))}
     </Svg>
   )
+}
+
+/** A managed database and a platform project keep their own icon, so it never changes from the tile. */
+function iconChangeable(kind: HomeProject['kind']): boolean {
+  return kind !== 'managed' && kind !== 'platform'
+}
+
+function ProjectIcon({
+  kind,
+  icon,
+  isEmojiIconAllowed,
+  small,
+  onLayout,
+}: Readonly<{
+  kind: HomeProject['kind']
+  icon: string | null
+  isEmojiIconAllowed: boolean
+  small: boolean
+  onLayout?: (event: LayoutChangeEvent) => void
+}>) {
+  const p = usePalette()
+  const s = styles(p)
+  const managed = kind === 'managed'
+  const typeGlyph = <ProjectDefaultGlyph managed={managed} color={managed ? p.link : p.text3} />
   return (
     <View
+      onLayout={onLayout}
       style={[
         s.icon,
         small && s.iconSmall,
@@ -246,10 +267,7 @@ function ProjectIcon({
         managed && s.iconManaged,
       ]}
     >
-      {/* A managed database and a platform project keep their own icon. */}
-      {managed || kind === 'platform' ? (
-        typeGlyph
-      ) : (
+      {iconChangeable(kind) ? (
         <ResourceIcon
           icon={icon}
           isEmojiIconAllowed={isEmojiIconAllowed}
@@ -257,8 +275,71 @@ function ProjectIcon({
           color={p.text3}
           fallback={typeGlyph}
         />
+      ) : (
+        typeGlyph
       )}
     </View>
+  )
+}
+
+type Point = Readonly<{ x: number; y: number }>
+
+/** Where the icon sits before its layout is measured (padding plus border, or the row's middle). */
+function defaultIconAt(layout: TileLayout): Point {
+  if (layout === 'grid') return { x: 15, y: 15 }
+  return { x: 16, y: layout === 'list' ? 12 : 14 }
+}
+
+type Measure = ((event: LayoutChangeEvent) => void) | undefined
+
+/**
+ * Where to lay the change-icon button: the icon's place in the tile, from the
+ * top row's layout plus the icon's layout in that row (measured only while the
+ * button is shown), or a default until both are known.
+ */
+function useIconOverlayAt(
+  layout: TileLayout,
+  enabled: boolean
+): Readonly<{ at: Point; onRowLayout: Measure; onSlotLayout: Measure }> {
+  const [rowAt, setRowAt] = useState<Point | null>(null)
+  const [slotAt, setSlotAt] = useState<Point | null>(null)
+  if (!enabled)
+    return { at: defaultIconAt(layout), onRowLayout: undefined, onSlotLayout: undefined }
+  const measure = (set: (at: Point) => void) => (event: LayoutChangeEvent) =>
+    set({ x: event.nativeEvent.layout.x, y: event.nativeEvent.layout.y })
+  const at =
+    rowAt && slotAt ? { x: rowAt.x + slotAt.x, y: rowAt.y + slotAt.y } : defaultIconAt(layout)
+  return { at, onRowLayout: measure(setRowAt), onSlotLayout: measure(setSlotAt) }
+}
+
+/**
+ * The change-icon button, laid over the tile's icon as the tile's sibling: a
+ * button never sits inside the tile's own button, so each is its own control
+ * for the keyboard and the screen reader, and pressing it never opens the
+ * project. The press area is 44 points.
+ */
+function IconOverlay({
+  name,
+  small,
+  at,
+  onPress,
+}: Readonly<{ name: string; small: boolean; at: Point; onPress: () => void }>) {
+  const s = styles(usePalette())
+  const size = small ? 28 : 32
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Change icon for ${name}`}
+      onPress={onPress}
+      hitSlop={(44 - size) / 2}
+      {...({ title: 'Change icon' } as object)}
+      style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [
+        s.overlay,
+        { left: at.x, top: at.y, width: size, height: size, borderRadius: small ? 8 : 9 },
+        (pressed || hovered) && s.overlayHover,
+        webPointer,
+      ]}
+    />
   )
 }
 
@@ -297,6 +378,7 @@ export function ProjectTile({
   layout,
   first = false,
   isEmojiIconAllowed = true,
+  onChangeIcon,
   onOpen,
 }: Readonly<{
   project: HomeProject
@@ -307,17 +389,26 @@ export function ProjectTile({
   first?: boolean
   /** False draws the default icon for a stored emoji (the organization turned emoji off). */
   isEmojiIconAllowed?: boolean
+  /**
+   * Opens the icon picker from a button over the tile's icon, and from the
+   * tile's "Change Icon" accessibility action (people who can edit the
+   * project). Ignored for a managed database and a platform project.
+   */
+  onChangeIcon?: () => void
   onOpen: () => void
 }>) {
   const s = styles(usePalette())
   const list = layout !== 'grid'
   const stacked = layout === 'listStacked'
   const sub = tileSub(project.detail, workspace)
-  return (
+  const changeIcon = iconChangeable(project.kind) ? onChangeIcon : undefined
+  const overlay = useIconOverlayAt(layout, changeIcon !== undefined)
+  const tile = (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={tileLabel(project)}
       onPress={onOpen}
+      {...tileIconActionProps(changeIcon)}
       style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [
         s.tile,
         list && s.list,
@@ -327,12 +418,16 @@ export function ProjectTile({
         webPointer,
       ]}
     >
-      <View style={[s.top, list && s.topList, stacked && s.topStacked]}>
+      <View
+        style={[s.top, list && s.topList, stacked && s.topStacked]}
+        onLayout={overlay.onRowLayout}
+      >
         <ProjectIcon
           kind={project.kind}
           icon={project.icon}
           isEmojiIconAllowed={isEmojiIconAllowed}
           small={list}
+          onLayout={overlay.onSlotLayout}
         />
         <View style={[s.names, list && !stacked && s.namesRow]}>
           <Text style={s.name} numberOfLines={1}>
@@ -361,5 +456,12 @@ export function ProjectTile({
         </Text>
       ) : null}
     </Pressable>
+  )
+  if (!changeIcon) return tile
+  return (
+    <View style={s.wrap}>
+      {tile}
+      <IconOverlay name={project.name} small={list} at={overlay.at} onPress={changeIcon} />
+    </View>
   )
 }
