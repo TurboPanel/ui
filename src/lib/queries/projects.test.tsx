@@ -18,6 +18,7 @@ import {
   useProjects,
   useSetPrincipalPassword,
   useUpdateProject,
+  useUpdateProjectIcon,
   useUpdateProjectPrincipalAssignments,
 } from '@/lib/queries/projects'
 
@@ -176,6 +177,28 @@ describe('projects query hooks', () => {
       expect(cached).toEqual({
         project: { id: projectId, name: 'Renamed' },
       })
+    })
+  })
+
+  it('useUpdateProjectIcon sends only the icon and marks the project and list stale', async () => {
+    updateProject.mockResolvedValueOnce({ ok: true })
+    const client = createAppQueryClient()
+    client.setQueryData(queryKeys.org(orgId).projects.detail(projectId), { project: {} })
+    client.setQueryData(queryKeys.org(orgId).projects.list(), { projects: [] })
+
+    const { result } = renderHook(() => useUpdateProjectIcon(orgId), {
+      wrapper: createWrapper(client),
+    })
+
+    await expect(result.current.run({ projectId, icon: '🚀' })).resolves.toMatchObject({
+      ok: true,
+    })
+    expect(updateProject).toHaveBeenLastCalledWith(projectId, { icon: '🚀' })
+    await waitFor(() => {
+      expect(
+        client.getQueryState(queryKeys.org(orgId).projects.detail(projectId))?.isInvalidated
+      ).toBe(true)
+      expect(client.getQueryState(queryKeys.org(orgId).projects.list())?.isInvalidated).toBe(true)
     })
   })
 

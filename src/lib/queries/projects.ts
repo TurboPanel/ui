@@ -123,6 +123,26 @@ export function useUpdateProject(orgId: string, projectId: string) {
   })
 }
 
+/**
+ * Sets one project's icon from a list (the Projects tiles), where the project
+ * is not fixed when the hook is called. Refreshes that project and the list.
+ */
+export function useUpdateProjectIcon(orgId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: ({ projectId, icon }: Readonly<{ projectId: string; icon: string | null }>) =>
+      updateProject(projectId, { icon }),
+    onSuccess: async (_data, { projectId }) => {
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.org(orgId).projects.detail(projectId),
+      })
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.org(orgId).projects.all,
+      })
+    },
+  })
+}
+
 export function useDeleteProject(orgId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({

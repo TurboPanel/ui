@@ -1,11 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import {
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-  type TextInputProps,
-} from 'react-native'
+import { StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native'
 import { chrome, colors, spacing } from '@/lib/theme'
 
 /**
@@ -62,6 +56,7 @@ export function TextField({
   hint,
   footer,
   adornment,
+  leading,
   error,
   mono = false,
   style,
@@ -74,46 +69,45 @@ export function TextField({
     footer?: ReactNode
     /** Non-interactive element drawn inside the input at the right. */
     adornment?: ReactNode
+    /** A control beside the input on its left, centred on it (e.g. an icon button). */
+    leading?: ReactNode
     error?: string | null
     mono?: boolean
   } & Omit<TextInputProps, 'placeholderTextColor'>
 >) {
   const [focused, setFocused] = useState(false)
   return (
-    <FormField
-      label={label}
-      labelRight={labelRight}
-      hint={hint}
-      footer={footer}
-      error={error}
-    >
-      <View>
-        <TextInput
-          {...inputProps}
-          placeholderTextColor={colors.textDim}
-          onFocus={(e) => {
-            setFocused(true)
-            inputProps.onFocus?.(e)
-          }}
-          onBlur={(e) => {
-            setFocused(false)
-            inputProps.onBlur?.(e)
-          }}
-          style={[
-            styles.input,
-            mono && styles.mono,
-            inputProps.multiline && styles.multiline,
-            focused && styles.inputFocused,
-            error ? styles.inputInvalid : null,
-            inputProps.editable === false && styles.inputDisabled,
-            style,
-          ]}
-        />
-        {adornment ? (
-          <View style={styles.adornment} pointerEvents="none">
-            {adornment}
-          </View>
-        ) : null}
+    <FormField label={label} labelRight={labelRight} hint={hint} footer={footer} error={error}>
+      <View style={leading ? styles.leadingRow : undefined}>
+        {leading}
+        <View style={leading ? styles.leadingInput : undefined}>
+          <TextInput
+            {...inputProps}
+            placeholderTextColor={colors.textDim}
+            onFocus={(e) => {
+              setFocused(true)
+              inputProps.onFocus?.(e)
+            }}
+            onBlur={(e) => {
+              setFocused(false)
+              inputProps.onBlur?.(e)
+            }}
+            style={[
+              styles.input,
+              mono && styles.mono,
+              inputProps.multiline && styles.multiline,
+              focused && styles.inputFocused,
+              error ? styles.inputInvalid : null,
+              inputProps.editable === false && styles.inputDisabled,
+              style,
+            ]}
+          />
+          {adornment ? (
+            <View style={styles.adornment} pointerEvents="none">
+              {adornment}
+            </View>
+          ) : null}
+        </View>
       </View>
     </FormField>
   )
@@ -163,6 +157,15 @@ const styles = StyleSheet.create({
   },
   inputDisabled: {
     opacity: 0.5,
+  },
+  leadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  leadingInput: {
+    flex: 1,
+    minWidth: 0,
   },
   adornment: {
     position: 'absolute',

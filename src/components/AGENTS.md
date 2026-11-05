@@ -34,7 +34,7 @@ these instead of a local `StyleSheet`:
 | Buttons | `Button` (40 / 32 with a mouse, 44 at every size on a phone or coarse pointer), `ButtonRow`, `ConfirmButton`, `CopyButton` |
 | Deleting a named thing | `TypeNameDeleteButton` (or `TypeNameConfirmModal` when the screen owns the open state): **Delete <Thing>** dialog with the exact name, a **Copy** button and a field; the destructive button works only on an exact match. Owner rule: every delete of a named thing uses it. `ConfirmButton` stays for unnamed items (a backup, a grant, a token) and for revoke/unlink actions |
 | Text link | `TextLink` — link-blue words, as tall as the text with a mouse and a 44 x 44 pt tap area on touch, keyboard focus ring; `expanded` turns it into a show / hide disclosure. Never a bare `Pressable` + `Text` |
-| Inputs | `TextField`, `FormField`, `Checkbox`, `Select`, `SegmentedControl` |
+| Inputs | `TextField` (`leading` puts a control such as an icon button left of the input, centred on it), `FormField`, `Checkbox`, `Select`, `SegmentedControl` |
 | States | `EmptyState`, `LoadingState`, `InlineNotice`, `Badge`, `StatTiles`, `WizardSteps` |
 | Project or organization icon | `ResourceIcon` (`icons/picked-icon.tsx`): a key's glyph (`icons/icon-key-glyphs.tsx`), an emoji as text, or the caller's `fallback`; a stored emoji draws the fallback while the organization has emoji off. Pick with `IconPickerSheet` (`org/icon-picker-sheet.tsx`), mounted only while open; its Emoji tab shows only when `emojiIconsOffered(org)` (the control plane serves the fields and emoji are on). Its radio cells set `aria-checked` and keep one tab stop per group |
 

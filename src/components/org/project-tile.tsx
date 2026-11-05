@@ -77,6 +77,7 @@ const styles = themedStyles((p) => ({
   iconSmall: { width: 28, height: 28, borderRadius: 8 },
   iconSetup: { borderStyle: 'dashed' },
   iconManaged: { backgroundColor: p.accentSoft, borderColor: p.baseLine },
+  iconHover: { borderColor: p.accent, backgroundColor: p.accentSoft },
   names: { flexShrink: 1, minWidth: 0 },
   namesRow: { flexDirection: 'row', alignItems: 'baseline', gap: 10 },
   name: { ...typeStyle('bodySemibold', 'body'), color: p.text },
@@ -209,14 +210,19 @@ function ProjectPills({ project }: Readonly<{ project: HomeProject }>) {
 
 function ProjectIcon({
   kind,
+  name,
   icon,
   isEmojiIconAllowed,
   small,
+  onChangeIcon,
 }: Readonly<{
   kind: HomeProject['kind']
+  name: string
   icon: string | null
   isEmojiIconAllowed: boolean
   small: boolean
+  /** Makes the icon its own button that opens the icon picker; absent keeps it plain. */
+  onChangeIcon?: () => void
 }>) {
   const p = usePalette()
   const s = styles(p)
@@ -237,28 +243,40 @@ function ProjectIcon({
       ))}
     </Svg>
   )
+  const box = [s.icon, small && s.iconSmall, kind === 'setup' && s.iconSetup]
+  // A managed database and a platform project keep their own icon and stay plain.
+  if (managed || kind === 'platform') {
+    return <View style={[...box, managed && s.iconManaged]}>{typeGlyph}</View>
+  }
+  const glyph = (
+    <ResourceIcon
+      icon={icon}
+      isEmojiIconAllowed={isEmojiIconAllowed}
+      size={16}
+      color={p.text3}
+      fallback={typeGlyph}
+    />
+  )
+  if (!onChangeIcon) return <View style={box}>{glyph}</View>
   return (
-    <View
-      style={[
-        s.icon,
-        small && s.iconSmall,
-        kind === 'setup' && s.iconSetup,
-        managed && s.iconManaged,
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Change icon for ${name}`}
+      onPress={(event) => {
+        // The tile under it opens the project; this press only changes the icon.
+        event?.stopPropagation?.()
+        onChangeIcon()
+      }}
+      hitSlop={6}
+      {...({ title: 'Change icon' } as object)}
+      style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [
+        ...box,
+        (pressed || hovered) && s.iconHover,
+        webPointer,
       ]}
     >
-      {/* A managed database and a platform project keep their own icon. */}
-      {managed || kind === 'platform' ? (
-        typeGlyph
-      ) : (
-        <ResourceIcon
-          icon={icon}
-          isEmojiIconAllowed={isEmojiIconAllowed}
-          size={16}
-          color={p.text3}
-          fallback={typeGlyph}
-        />
-      )}
-    </View>
+      {glyph}
+    </Pressable>
   )
 }
 
@@ -297,6 +315,7 @@ export function ProjectTile({
   layout,
   first = false,
   isEmojiIconAllowed = true,
+  onChangeIcon,
   onOpen,
 }: Readonly<{
   project: HomeProject
@@ -307,6 +326,11 @@ export function ProjectTile({
   first?: boolean
   /** False draws the default icon for a stored emoji (the organization turned emoji off). */
   isEmojiIconAllowed?: boolean
+  /**
+   * Opens the icon picker from the tile's icon (people who can edit the
+   * project). Ignored for a managed database and a platform project.
+   */
+  onChangeIcon?: () => void
   onOpen: () => void
 }>) {
   const s = styles(usePalette())
@@ -330,9 +354,11 @@ export function ProjectTile({
       <View style={[s.top, list && s.topList, stacked && s.topStacked]}>
         <ProjectIcon
           kind={project.kind}
+          name={project.name}
           icon={project.icon}
           isEmojiIconAllowed={isEmojiIconAllowed}
           small={list}
+          onChangeIcon={onChangeIcon}
         />
         <View style={[s.names, list && !stacked && s.namesRow]}>
           <Text style={s.name} numberOfLines={1}>

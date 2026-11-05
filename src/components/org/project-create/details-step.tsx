@@ -3,6 +3,8 @@ import { useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { showsDefaultPill } from '@/components/org/project-create/environment-name'
 import { FormDisclosure } from '@/components/org/project-create/form-disclosure'
+import type { NewProjectIconField } from '@/components/org/project-create/new-project-icon'
+import { IconButton } from '@/components/org/icon-picker-sheet'
 import { panelStyles } from '@/components/ui/panel-styles'
 import type { FieldErrors, WorkspaceMode } from '@/components/org/project-create/validation'
 import {
@@ -254,6 +256,7 @@ export function DetailsStep({
   onPickedWorkspaceIdChange,
   onNewWorkspaceNameChange,
   openWorkspaceByDefault,
+  icon,
 }: Readonly<{
   displayName: string
   description: string
@@ -270,6 +273,8 @@ export function DetailsStep({
   onNewWorkspaceNameChange: (name: string) => void
   /** Organization Settings › Project Settings: open the Workspace section without being asked. */
   openWorkspaceByDefault: boolean
+  /** The icon button left of the name (the approved layout); absent draws no button. */
+  icon?: NewProjectIconField
 }>) {
   // Open from the start when there is something to show (an error, or text kept from before).
   const [descriptionOpen, setDescriptionOpen] = useState(
@@ -288,6 +293,17 @@ export function DetailsStep({
         accessibilityLabel="Project name"
         maxLength={DISPLAY_NAME_MAX_LENGTH}
         error={fieldErrors.name}
+        leading={
+          icon ? (
+            <IconButton
+              icon={icon.value}
+              isEmojiIconAllowed={icon.isEmojiIconAllowed}
+              fallback={icon.fallback}
+              onPress={icon.onChoose}
+              accessibilityLabel="Choose an icon"
+            />
+          ) : undefined
+        }
       />
 
       {showDescription ? (

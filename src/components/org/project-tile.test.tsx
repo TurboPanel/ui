@@ -5,7 +5,19 @@ import { applyScenario, SCENARIOS, styleOf } from '@/components/ui/v4/rn-stub'
 import type { HomeEnvironment, HomeProject } from '@/lib/v4/projects-home'
 import { pillLabel, ProjectTile, tileSub } from './project-tile'
 
-vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
+// The stub's Pressable drops the press event; the real one hands it over, and the
+// tile's icon stops it so the tile under it does not open too.
+vi.mock('react-native', async () => {
+  const { reactNativeStub } = await import('@/components/ui/v4/rn-stub')
+  const { cloneElement } = await import('react')
+  return {
+    ...reactNativeStub,
+    Pressable: (props: Record<string, unknown>) =>
+      cloneElement(reactNativeStub.Pressable({ ...props, onPress: undefined }), {
+        onClick: (event: unknown) => (props.onPress as ((e: unknown) => void) | undefined)?.(event),
+      }),
+  }
+})
 vi.mock('react-native-svg', async () => (await import('@/components/ui/v4/rn-stub')).svgStub)
 vi.mock(
   '@/lib/theme-preference',
@@ -84,6 +96,40 @@ describe.each(SCENARIOS)('Project tile ($name)', (scenario) => {
     )
     expect(off.queryByText('🚀')).toBeNull()
     expect(off.container.querySelectorAll('path')).toHaveLength(1)
+  })
+
+  it('makes the icon its own button that changes the icon without opening the project', () => {
+    const onOpen = vi.fn()
+    const onChangeIcon = vi.fn()
+    render(
+      <ProjectTile
+        project={project({ icon: 'mail' })}
+        layout="grid"
+        onOpen={onOpen}
+        onChangeIcon={onChangeIcon}
+      />
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Change icon for Shop' }))
+    expect(onChangeIcon).toHaveBeenCalledTimes(1)
+    expect(onOpen).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: /^Open Shop/ }))
+    expect(onOpen).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the icon plain without the action, and for managed and platform tiles', () => {
+    for (const over of [{}, { kind: 'managed' as const }, { kind: 'platform' as const }]) {
+      const onChangeIcon = Object.keys(over).length > 0 ? vi.fn() : undefined
+      const { unmount } = render(
+        <ProjectTile
+          project={project(over)}
+          layout="grid"
+          onOpen={vi.fn()}
+          onChangeIcon={onChangeIcon}
+        />
+      )
+      expect(screen.queryByRole('button', { name: 'Change icon for Shop' })).toBeNull()
+      unmount()
+    }
   })
 
   it('keeps the cube for a platform project, whatever is stored', () => {
