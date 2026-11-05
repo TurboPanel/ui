@@ -739,9 +739,15 @@ describe('instance-api fetch wrappers', () => {
     })
   })
 
+  it('passes the datacenter list warnings through', async () => {
+    const tie = { code: 'equal_priority', priority: 100, datacenterIds: ['dc-a', 'dc-b'] }
+    fetchMock.mockResolvedValueOnce(jsonResponse({ datacenters: [], warnings: [tie] }))
+    await expect(fetchDatacenters()).resolves.toEqual({ datacenters: [], warnings: [tie] })
+  })
+
   it('datacenter and IP helpers build query strings and remap ip_in_use', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ datacenters: [] }))
-    await expect(fetchDatacenters()).resolves.toEqual({ datacenters: [] })
+    await expect(fetchDatacenters()).resolves.toEqual({ datacenters: [], warnings: [] })
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ suggestions: [] }))
     await expect(
