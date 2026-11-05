@@ -104,6 +104,7 @@ afterEach(cleanup)
 
 describe('ProjectSettingsScreen', () => {
   it('opens the icon picker and saves the chosen icon through the project update', async () => {
+    h.org = { isEmojiIconAllowed: true }
     setup({ project: { ...(h.ctx.project as object), icon: 'rocket' } })
     const { queryByTestId } = render(<ProjectSettingsScreen />)
     expect(h.view.icon?.label).toBe('Rocket')
@@ -146,6 +147,22 @@ describe('ProjectSettingsScreen', () => {
     expect(h.view.icon?.label).toBe('Default')
     await press(() => h.view.icon?.onChoose?.())
     expect(h.picker?.isEmojiIconAllowed).toBe(false)
+  })
+
+  it('offers no emoji against a control plane without the organization icon fields', async () => {
+    h.org = {}
+    setup({ project: { ...(h.ctx.project as object), icon: '🚀' } })
+    render(<ProjectSettingsScreen />)
+    // An emoji stored elsewhere still draws, but the picker offers none.
+    expect(h.view.icon?.label).toBe('🚀')
+    await press(() => h.view.icon?.onChoose?.())
+    expect(h.picker?.isEmojiIconAllowed).toBe(false)
+  })
+
+  it('gives a platform project no icon row, since it keeps its shield', () => {
+    setup({ isSystemProject: true })
+    render(<ProjectSettingsScreen />)
+    expect(h.view.icon).toBeUndefined()
   })
 
   it('offers no icon change to someone who cannot edit', () => {

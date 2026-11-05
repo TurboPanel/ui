@@ -86,6 +86,18 @@ describe.each(SCENARIOS)('Project tile ($name)', (scenario) => {
     expect(off.container.querySelectorAll('path')).toHaveLength(1)
   })
 
+  it('keeps the cube for a platform project, whatever is stored', () => {
+    const { container, queryByText } = render(
+      <ProjectTile
+        project={project({ kind: 'platform', icon: '🚀' })}
+        layout="grid"
+        onOpen={vi.fn()}
+      />
+    )
+    expect(queryByText('🚀')).toBeNull()
+    expect(container.querySelectorAll('path')).toHaveLength(1)
+  })
+
   it('keeps the managed icon for a managed database, whatever is stored', () => {
     const { container, queryByText } = render(
       <ProjectTile

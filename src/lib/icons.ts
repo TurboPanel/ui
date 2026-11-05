@@ -47,15 +47,30 @@ export function isIconKey(value: unknown): value is IconKey {
   return typeof value === 'string' && (ICON_KEYS as readonly string[]).includes(value)
 }
 
-const ASCII = /\p{ASCII}/u
-const PICTOGRAPHIC = /\p{Extended_Pictographic}/u
-const FLAG = /^\p{Regional_Indicator}{2}$/u
-/**
- * One emoji written out, for a runtime without `Intl.Segmenter`: a flag pair,
- * or pictographs with skin tones and variation selectors joined by ZWJ.
- */
-const ONE_EMOJI_SEQUENCE =
-  /^(?:\p{Regional_Indicator}{2}|\p{Extended_Pictographic}[\u{FE0F}\p{Emoji_Modifier}]*(?:\u{200D}\p{Extended_Pictographic}[\u{FE0F}\p{Emoji_Modifier}]*)*)$/u
+type EmojiPatterns = Readonly<{
+  ascii: RegExp
+  pictographic: RegExp
+  flag: RegExp
+  /**
+   * One emoji written out, for a runtime without `Intl.Segmenter`: a flag
+   * pair, or pictographs with skin tones and variation selectors joined by ZWJ.
+   */
+  oneEmojiSequence: RegExp
+}>
+
+let patterns: EmojiPatterns | undefined
+
+/** The Unicode property patterns, built on first use so screens that never check an emoji never compile them. */
+function emojiPatterns(): EmojiPatterns {
+  patterns ??= {
+    ascii: /\p{ASCII}/u,
+    pictographic: /\p{Extended_Pictographic}/u,
+    flag: /^\p{Regional_Indicator}{2}$/u,
+    oneEmojiSequence:
+      /^(?:\p{Regional_Indicator}{2}|\p{Extended_Pictographic}[\u{FE0F}\p{Emoji_Modifier}]*(?:\u{200D}\p{Extended_Pictographic}[\u{FE0F}\p{Emoji_Modifier}]*)*)$/u,
+  }
+  return patterns
+}
 
 /** Counts graphemes; `null` when the runtime cannot (the caller then uses the sequence rule). */
 export type GraphemeCounter = ((value: string) => number) | null
@@ -77,14 +92,15 @@ let cachedCounter: GraphemeCounter | undefined
 export function isEmojiIcon(value: unknown, counter?: GraphemeCounter): value is string {
   if (typeof value !== 'string') return false
   if (value.length === 0 || value.length > EMOJI_ICON_MAX_LENGTH) return false
-  if (ASCII.test(value)) return false
+  const { ascii, pictographic, flag, oneEmojiSequence } = emojiPatterns()
+  if (ascii.test(value)) return false
   if (counter === undefined) {
     cachedCounter ??= defaultGraphemeCounter()
     counter = cachedCounter
   }
-  if (counter === null) return ONE_EMOJI_SEQUENCE.test(value)
+  if (counter === null) return oneEmojiSequence.test(value)
   if (counter(value) !== 1) return false
-  return PICTOGRAPHIC.test(value) || FLAG.test(value)
+  return pictographic.test(value) || flag.test(value)
 }
 
 /** What a stored icon draws as, given the organization's emoji setting. */
@@ -125,9 +141,14 @@ export function supportsOrganizationIcons(org: OrganizationIconFields | null | u
   return Boolean(org) && typeof org?.isEmojiIconAllowed === 'boolean'
 }
 
-/** Customer text for the 422 `emoji_icons_off` refusal. */
-export const EMOJI_ICONS_OFF_COPY =
-  'This organization has emoji icons turned off. Pick one of the regular icons.'
+/**
+ * Whether a picker may offer emoji: only when the control plane serves the
+ * organization icon fields (an older one refuses emoji with a plain 400) and
+ * the organization allows them.
+ */
+export function emojiIconsOffered(org: OrganizationIconFields | null | undefined): boolean {
+  return supportsOrganizationIcons(org) && isEmojiIconAllowedOf(org)
+}
 
 /** One emoji the picker offers, with the words its search matches. */
 export type EmojiChoice = Readonly<{ emoji: string; name: string }>

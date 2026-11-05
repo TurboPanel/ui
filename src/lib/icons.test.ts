@@ -7,6 +7,7 @@ import {
   ICON_KEYS,
   iconValueLabel,
   isEmojiIcon,
+  emojiIconsOffered,
   isEmojiIconAllowedOf,
   isIconKey,
   pastedEmojiProblem,
@@ -126,6 +127,13 @@ describe('organization icon fields', () => {
     expect(isEmojiIconAllowedOf({})).toBe(true)
     expect(isEmojiIconAllowedOf({ isEmojiIconAllowed: true })).toBe(true)
     expect(isEmojiIconAllowedOf({ isEmojiIconAllowed: false })).toBe(false)
+  })
+
+  it('offers emoji in a picker only when the fields are served and emoji are allowed', () => {
+    expect(emojiIconsOffered(undefined)).toBe(false)
+    expect(emojiIconsOffered({})).toBe(false)
+    expect(emojiIconsOffered({ isEmojiIconAllowed: false })).toBe(false)
+    expect(emojiIconsOffered({ isEmojiIconAllowed: true })).toBe(true)
   })
 
   it('shows the icon controls only when the control plane serves the fields', () => {

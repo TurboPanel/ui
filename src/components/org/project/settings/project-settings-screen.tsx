@@ -18,7 +18,12 @@ import {
   projectComposeHref,
   projectEnvironmentSettingsHref,
 } from '@/lib/project-navigation'
-import { iconValueLabel, isEmojiIconAllowedOf, resolvedIconValue } from '@/lib/icons'
+import {
+  emojiIconsOffered,
+  iconValueLabel,
+  isEmojiIconAllowedOf,
+  resolvedIconValue,
+} from '@/lib/icons'
 import type { ProjectRecord } from '@/lib/instance-api'
 import { useUpdateProject } from '@/lib/queries'
 import { useOrganizationRecord } from '@/lib/queries/auth'
@@ -63,12 +68,15 @@ function useProjectIcon(
   orgId: string,
   projectId: string,
   project: ProjectRecord | null | undefined,
-  canEdit: boolean
+  canEdit: boolean,
+  /** A platform project keeps its shield, so it gets no icon row. */
+  isSystemProject: boolean
 ): { row: ProjectIconRow | undefined; sheet: ReactNode } {
   const update = useUpdateProject(orgId, projectId)
   const [open, setOpen] = useState(false)
-  const isEmojiIconAllowed = isEmojiIconAllowedOf(useOrganizationRecord(orgId))
-  if (!project) return { row: undefined, sheet: null }
+  const organization = useOrganizationRecord(orgId)
+  const isEmojiIconAllowed = isEmojiIconAllowedOf(organization)
+  if (!project || isSystemProject) return { row: undefined, sheet: null }
   const saveIcon = async (icon: string | null): Promise<string | null> => {
     const result = await update.run({ icon })
     return result.ok ? null : failedRunMessage(result, 'Could not save the icon.')
@@ -81,7 +89,8 @@ function useProjectIcon(
   const sheet = open ? (
     <IconPickerSheet
       value={project.icon}
-      isEmojiIconAllowed={isEmojiIconAllowed}
+      // An older control plane refuses emoji outright, so its picker offers none.
+      isEmojiIconAllowed={emojiIconsOffered(organization)}
       fallback={<ProjectTitleIcon project={{ ...project, icon: null }} compact />}
       onClose={() => setOpen(false)}
       onSave={saveIcon}
@@ -106,6 +115,7 @@ export function ProjectSettingsScreen() {
     canOwn,
     canManage,
     projectAllowsMutations,
+    isSystemProject,
     setError,
   } = useProjectContext()
   const router = useRouter()
@@ -128,7 +138,7 @@ export function ProjectSettingsScreen() {
     [project, environments, repositories.data]
   )
   const canEdit = canManage && projectAllowsMutations
-  const icon = useProjectIcon(orgId, projectId, project, canEdit)
+  const icon = useProjectIcon(orgId, projectId, project, canEdit, isSystemProject)
   if (!project) return <LoadingState />
 
   const draft = edit ?? projectGeneralFromRecord(project)

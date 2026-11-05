@@ -4,6 +4,7 @@ import { OrganizationIcon } from '@/components/icons/nav-icons'
 import { IconButton, IconPickerSheet } from '@/components/org/icon-picker-sheet'
 import { SectionPanel, SettingRow, Toggle } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
+import { typeStyle } from '@/components/ui/v4/type-styles'
 import {
   iconValueLabel,
   isEmojiIconAllowedOf,
@@ -105,6 +106,6 @@ export function OrganizationIconSection({ orgId }: Readonly<{ orgId: string }>) 
 const styles = StyleSheet.create({
   iconRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   iconCopy: { flex: 1, minWidth: 0, gap: spacing.xs },
-  iconTitle: { color: colors.text, fontSize: 15, fontWeight: '600' },
-  iconSub: { color: colors.textDim, fontSize: 13, lineHeight: 18 },
+  iconTitle: { ...typeStyle('bodySemibold', 'body'), color: colors.text },
+  iconSub: { ...typeStyle('body', 'footnote'), color: colors.textDim },
 })

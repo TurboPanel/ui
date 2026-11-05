@@ -246,8 +246,8 @@ function ProjectIcon({
         managed && s.iconManaged,
       ]}
     >
-      {/* A managed database always shows the managed icon. */}
-      {managed ? (
+      {/* A managed database and a platform project keep their own icon. */}
+      {managed || kind === 'platform' ? (
         typeGlyph
       ) : (
         <ResourceIcon

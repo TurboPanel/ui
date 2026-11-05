@@ -1,10 +1,50 @@
 // @vitest-environment happy-dom
+import { createElement, type ReactNode } from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { applyScenario, SCENARIOS } from '@/components/ui/v4/rn-stub'
 import { IconButton, IconPickerSheet } from './icon-picker-sheet'
 
-vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
+type Props = { children?: ReactNode } & Record<string, unknown>
+
+// Pressable and View pass on only what the component sets itself: aria-checked
+// must be its own prop (React Native Web ignores accessibilityState), and the
+// tab stop and arrow keys are web props.
+vi.mock('react-native', async () => {
+  const { reactNativeStub } = await import('@/components/ui/v4/rn-stub')
+  return {
+    ...reactNativeStub,
+    Pressable: (props: Props) => {
+      const state = (props.accessibilityState ?? {}) as Record<string, boolean>
+      const child =
+        typeof props.children === 'function'
+          ? (props.children as (s: { pressed: boolean }) => ReactNode)({ pressed: false })
+          : props.children
+      return createElement(
+        'button',
+        {
+          type: 'button',
+          role: props.accessibilityRole as string,
+          'aria-label': props.accessibilityLabel as string,
+          'aria-checked': props['aria-checked'] as boolean | undefined,
+          'aria-selected': state.selected,
+          tabIndex: props.tabIndex as number | undefined,
+          title: props.title as string | undefined,
+          'data-hitslop': props.hitSlop as number | undefined,
+          disabled: Boolean(props.disabled),
+          onClick: () => (props.onPress as (() => void) | undefined)?.(),
+        },
+        child
+      )
+    },
+    View: (props: Props) =>
+      createElement(
+        'div',
+        { onKeyDown: props.onKeyDown as never, 'data-wrap': '' },
+        createElement(reactNativeStub.View, props)
+      ),
+  }
+})
 vi.mock('react-native-svg', async () => (await import('@/components/ui/v4/rn-stub')).svgStub)
 vi.mock(
   '@/lib/theme-preference',
@@ -71,6 +111,53 @@ describe.each(SCENARIOS)('Icon picker ($name)', (scenario) => {
     expect(onClose).toHaveBeenCalled()
   })
 
+  it('marks the picked cell with aria-checked and keeps one tab stop per group', async () => {
+    open({ value: 'globe' })
+    const radios = screen.getAllByRole('radio')
+    expect(radios.filter((radio) => radio.getAttribute('aria-checked') === 'true')).toHaveLength(1)
+    expect(screen.getByRole('radio', { name: 'Globe' }).getAttribute('aria-checked')).toBe('true')
+    expect(screen.getByRole('radio', { name: 'Cube' }).getAttribute('aria-checked')).toBe('false')
+    expect(radios.filter((radio) => radio.getAttribute('tabindex') === '0')).toEqual([
+      screen.getByRole('radio', { name: 'Globe' }),
+    ])
+  })
+
+  it('puts the tab stop on the first cell when none is picked', () => {
+    open()
+    const stops = screen.getAllByRole('radio').filter((r) => r.getAttribute('tabindex') === '0')
+    expect(stops).toEqual([screen.getByRole('radio', { name: 'Cube' })])
+  })
+
+  it('moves and picks with the arrow keys, Home and End', async () => {
+    open({ value: 'cube' })
+    const group = screen.getByRole('radiogroup', { name: 'Icons' }).parentElement as HTMLElement
+    const at = (name: string) => screen.getByRole('radio', { name })
+    await act(async () => {
+      fireEvent.keyDown(at('Cube'), { key: 'ArrowRight' })
+    })
+    expect(at('Globe').getAttribute('aria-checked')).toBe('true')
+    await act(async () => {
+      fireEvent.keyDown(at('Globe'), { key: 'ArrowLeft' })
+    })
+    expect(at('Cube').getAttribute('aria-checked')).toBe('true')
+    await act(async () => {
+      fireEvent.keyDown(at('Cube'), { key: 'End' })
+    })
+    expect(at('Image').getAttribute('aria-checked')).toBe('true')
+    await act(async () => {
+      fireEvent.keyDown(at('Image'), { key: 'Home' })
+    })
+    expect(at('Cube').getAttribute('aria-checked')).toBe('true')
+    await act(async () => {
+      fireEvent.keyDown(at('Cube'), { key: 'Enter' })
+    })
+    expect(at('Cube').getAttribute('aria-checked')).toBe('true')
+    await act(async () => {
+      fireEvent.keyDown(group, { key: 'ArrowDown' })
+    })
+    expect(at('Cube').getAttribute('aria-checked')).toBe('true')
+  })
+
   it('hides the Emoji tab entirely when the organization turned emoji off', () => {
     open({ isEmojiIconAllowed: false })
     expect(screen.queryByRole('tab', { name: 'Emoji' })).toBeNull()
@@ -129,6 +216,19 @@ describe.each(SCENARIOS)('Icon picker ($name)', (scenario) => {
     expect(onSave).toHaveBeenCalledWith('🦖')
   })
 
+  it('empties the paste field when a cell is picked', async () => {
+    open()
+    await click(screen.getByRole('tab', { name: 'Emoji' }))
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Paste an emoji'), { target: { value: 'nope' } })
+    })
+    expect(screen.getByRole('button', { name: 'Use Icon' }).hasAttribute('disabled')).toBe(true)
+    await click(screen.getByRole('radio', { name: 'rocket launch' }))
+    expect((screen.getByLabelText('Paste an emoji') as HTMLInputElement).value).toBe('')
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Use Icon' }).hasAttribute('disabled')).toBe(false)
+  })
+
   it('resets to the default', async () => {
     const { onSave } = open({ value: 'globe' })
     await click(screen.getByRole('button', { name: 'Reset to Default' }))
@@ -174,7 +274,9 @@ describe('IconButton', () => {
         accessibilityLabel="Change the organization icon"
       />
     )
-    await click(screen.getByRole('button', { name: 'Change the organization icon' }))
+    const button = screen.getByRole('button', { name: 'Change the organization icon' })
+    expect(button.getAttribute('data-hitslop')).toBe('2')
+    await click(button)
     expect(onPress).toHaveBeenCalled()
     rerender(
       <IconButton
@@ -186,6 +288,7 @@ describe('IconButton', () => {
       />
     )
     expect(screen.queryByRole('button')).toBeNull()
+    expect(screen.getByRole('img', { name: 'Organization icon' })).toBeTruthy()
     expect(screen.getByTestId('default')).toBeTruthy()
   })
 })

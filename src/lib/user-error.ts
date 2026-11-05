@@ -6,7 +6,7 @@
  * match on them.
  */
 
-import { EMOJI_ICONS_OFF_COPY } from '@/lib/icons'
+import { EMOJI_ICONS_OFF_COPY } from '@/lib/icon-copy'
 
 export const CONTROL_PLANE_UNREACHABLE_COPY =
   'Could not reach the control plane. Check your connection and try again.'

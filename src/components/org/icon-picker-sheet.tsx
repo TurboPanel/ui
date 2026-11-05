@@ -14,6 +14,7 @@ import {
   isEmojiIcon,
   pastedEmojiProblem,
 } from '@/lib/icons'
+import { moveInRadioGroup, type RadioGroupKeyEvent } from '@/lib/radio-group-keys'
 import { webPointer } from '@/lib/theme'
 
 const CELL = 52
@@ -82,7 +83,11 @@ export function IconButton({
   )
   if (!onPress) {
     return (
-      <View style={[s.button, s.buttonDisabled]} accessibilityLabel={accessibilityLabel}>
+      <View
+        style={[s.button, s.buttonDisabled]}
+        accessibilityRole="image"
+        accessibilityLabel={accessibilityLabel}
+      >
         {glyph}
       </View>
     )
@@ -92,6 +97,8 @@ export function IconButton({
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       onPress={onPress}
+      // The box is 40 x 40; the press area reaches 44 x 44.
+      hitSlop={2}
       style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [
         s.button,
         (pressed || hovered) && s.buttonHover,
@@ -108,16 +115,27 @@ type Tab = 'icons' | 'emoji'
 function Cell({
   label,
   checked,
+  focusable,
   onPress,
   children,
-}: Readonly<{ label: string; checked: boolean; onPress: () => void; children: ReactNode }>) {
+}: Readonly<{
+  label: string
+  checked: boolean
+  /** The group's one tab stop: the checked cell, else the first. */
+  focusable: boolean
+  onPress: () => void
+  children: ReactNode
+}>) {
   const s = styles(usePalette())
   return (
     <Pressable
       accessibilityRole="radio"
       accessibilityState={{ checked }}
+      // React Native Web ignores accessibilityState, so the web needs aria-checked.
+      aria-checked={checked}
       accessibilityLabel={label}
       onPress={onPress}
+      {...({ title: label, tabIndex: focusable ? 0 : -1 } as object)}
       style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [
         s.cell,
         (pressed || hovered) && s.cellHover,
@@ -130,41 +148,93 @@ function Cell({
   )
 }
 
+/** One radio group of cells with a single tab stop. */
+function RadioGrid<T extends string>({
+  label,
+  values,
+  draft,
+  onPick,
+  cell,
+}: Readonly<{
+  label: string
+  values: readonly T[]
+  draft: string | null
+  onPick: (value: T) => void
+  cell: (value: T) => Readonly<{ name: string; glyph: ReactNode }>
+}>) {
+  const s = styles(usePalette())
+  const checkedAt = draft === null ? -1 : (values as readonly string[]).indexOf(draft)
+  const stop = Math.max(checkedAt, 0)
+  // Arrow keys, Home and End move between the cells and pick the one reached (web).
+  const onKeyDown = (event: RadioGroupKeyEvent) => {
+    const next = moveInRadioGroup(event)
+    const value = next === null ? undefined : values[next]
+    if (value !== undefined) onPick(value)
+  }
+  return (
+    <View
+      style={s.grid}
+      accessibilityRole="radiogroup"
+      accessibilityLabel={label}
+      {...({ onKeyDown } as object)}
+    >
+      {values.map((value, index) => {
+        const { name, glyph } = cell(value)
+        return (
+          <Cell
+            key={value}
+            label={name}
+            checked={value === draft}
+            focusable={index === stop}
+            onPress={() => onPick(value)}
+          >
+            {glyph}
+          </Cell>
+        )
+      })}
+    </View>
+  )
+}
+
 function IconGrid({
   draft,
   onPick,
 }: Readonly<{ draft: string | null; onPick: (icon: string) => void }>) {
   const p = usePalette()
-  const s = styles(p)
   return (
-    <View style={s.grid} accessibilityRole="radiogroup" accessibilityLabel="Icons">
-      {ICON_KEYS.map((key) => (
-        <Cell
-          key={key}
-          label={ICON_KEY_LABELS[key]}
-          checked={draft === key}
-          onPress={() => onPick(key)}
-        >
-          <IconKeyGlyph iconKey={key} size={22} color={draft === key ? p.link : p.text2} />
-        </Cell>
-      ))}
-    </View>
+    <RadioGrid
+      label="Icons"
+      values={ICON_KEYS}
+      draft={draft}
+      onPick={onPick}
+      cell={(key) => ({
+        name: ICON_KEY_LABELS[key],
+        glyph: <IconKeyGlyph iconKey={key} size={22} color={draft === key ? p.link : p.text2} />,
+      })}
+    />
   )
 }
 
 function EmojiPane({
   draft,
+  pasted,
   onPick,
-}: Readonly<{ draft: string | null; onPick: (icon: string) => void }>) {
+  onPaste,
+}: Readonly<{
+  draft: string | null
+  /** The paste field's text; the sheet owns it so a bad paste can hold Use Icon. */
+  pasted: string
+  onPick: (icon: string) => void
+  onPaste: (text: string) => void
+}>) {
   const s = styles(usePalette())
   const [query, setQuery] = useState('')
-  const [pasted, setPasted] = useState('')
   const shown = filterEmoji(query)
-  const pasteProblem = pastedEmojiProblem(pasted)
+  const names = new Map(shown.map((choice) => [choice.emoji, choice.name]))
   return (
     <>
       <TextField
-        label="Filter Emoji"
+        label="Filter emoji"
         value={query}
         onChangeText={setQuery}
         placeholder="Search by name, like rocket or heart"
@@ -172,31 +242,26 @@ function EmojiPane({
         autoCorrect={false}
         accessibilityLabel="Filter emoji"
       />
-      <View style={s.grid} accessibilityRole="radiogroup" accessibilityLabel="Emoji">
-        {shown.map((choice) => (
-          <Cell
-            key={choice.emoji}
-            label={choice.name}
-            checked={draft === choice.emoji}
-            onPress={() => onPick(choice.emoji)}
-          >
-            <Text style={s.emoji}>{choice.emoji}</Text>
-          </Cell>
-        ))}
-        {shown.length === 0 ? (
-          <Text style={s.none}>No emoji match. Paste one below instead.</Text>
-        ) : null}
-      </View>
+      {shown.length > 0 ? (
+        <RadioGrid
+          label="Emoji"
+          values={shown.map((choice) => choice.emoji)}
+          draft={draft}
+          onPick={onPick}
+          cell={(emoji) => ({
+            name: names.get(emoji) ?? emoji,
+            glyph: <Text style={s.emoji}>{emoji}</Text>,
+          })}
+        />
+      ) : (
+        <Text style={s.none}>No emoji match. Paste one below instead.</Text>
+      )}
       <TextField
-        label="Paste an Emoji"
+        label="Paste an emoji"
         value={pasted}
-        onChangeText={(value) => {
-          setPasted(value)
-          const trimmed = value.trim()
-          if (isEmojiIcon(trimmed)) onPick(trimmed)
-        }}
+        onChangeText={onPaste}
         hint="Any single emoji works, including ones not shown above."
-        error={pasteProblem}
+        error={pastedEmojiProblem(pasted)}
         autoCapitalize="none"
         autoCorrect={false}
         accessibilityLabel="Paste an emoji"
@@ -242,11 +307,22 @@ export function IconPickerSheet({
   const [tab, setTab] = useState<Tab>(isEmojiIconAllowed && isEmojiIcon(start) ? 'emoji' : 'icons')
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [pasted, setPasted] = useState('')
   const showEmoji = isEmojiIconAllowed && tab === 'emoji'
+  const pasteInvalid = pastedEmojiProblem(pasted) !== null
 
+  // Picking a cell or Reset to Default empties the paste field.
   const pick = (icon: string | null) => {
     setDraft(icon)
+    setPasted('')
     setError(null)
+  }
+
+  const paste = (text: string) => {
+    setPasted(text)
+    setError(null)
+    const trimmed = text.trim()
+    if (isEmojiIcon(trimmed)) setDraft(trimmed)
   }
 
   const save = async () => {
@@ -280,7 +356,7 @@ export function IconPickerSheet({
             variant="primary"
             busy={saving}
             busyLabel="Saving…"
-            disabled={draft === value}
+            disabled={draft === value || pasteInvalid}
             onPress={() => {
               void save()
             }}
@@ -300,7 +376,7 @@ export function IconPickerSheet({
         />
       ) : null}
       {showEmoji ? (
-        <EmojiPane draft={draft} onPick={pick} />
+        <EmojiPane draft={draft} pasted={pasted} onPick={pick} onPaste={paste} />
       ) : (
         <IconGrid draft={draft} onPick={pick} />
       )}
