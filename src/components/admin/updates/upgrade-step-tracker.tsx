@@ -1,9 +1,11 @@
 import { Text, View } from 'react-native'
-import { WizardSteps, type WizardStepItem } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
+import { WizardSteps, type WizardStepItem } from '@/components/ui/wizard-steps'
 import {
   mapStepStatusToPipeline,
   stepHasStarted,
+  upgradeRailState,
+  upgradeRailStates,
   upgradePhaseLabel,
   upgradeStepLabel,
   upgradeStepOutcome,
@@ -35,13 +37,22 @@ export function UpgradeStepTracker({
   const current = stepHasStarted(status) ? mapStepStatusToPipeline(status) : null
   const heading = title ?? upgradePhaseLabel(phase)
   const outcome = upgradeStepOutcome({ status, errorCode })
+  // A skipped server says why (offline, paused) under a bar of skipped stages.
   const ended =
-    outcome.tone === 'danger' || outcome.tone === 'pending' || !stepHasStarted(status)
+    outcome.tone === 'danger' ||
+    outcome.tone === 'pending' ||
+    status === 'skipped' ||
+    !stepHasStarted(status)
 
   return (
     <View style={{ gap: spacing.xs }}>
       <Text style={panelStyles.detailLabel}>{heading}</Text>
-      <WizardSteps steps={PIPELINE_STEPS} current={current} />
+      <WizardSteps
+        steps={PIPELINE_STEPS}
+        current={current}
+        currentState={upgradeRailState(status)}
+        states={upgradeRailStates(status)}
+      />
       {note ? <Text style={panelStyles.muted}>{note}</Text> : null}
       {ended ? (
         <Text style={outcome.tone === 'danger' ? panelStyles.error : panelStyles.muted}>

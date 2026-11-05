@@ -13,9 +13,8 @@ import {
   SectionPanel,
   SegmentedControl,
   TextField,
-  type WizardStepItem,
-  WizardSteps,
 } from '@/components/ui'
+import { WizardSteps, type WizardStepItem } from '@/components/ui/wizard-steps'
 import {
   gitWebhookHint,
   noWebhookOriginCopy,

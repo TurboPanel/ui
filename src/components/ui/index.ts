@@ -24,7 +24,6 @@ export { Toggle } from '@/components/ui/toggle'
 export { StatusDot, type StatusTone } from '@/components/ui/status-dot'
 export { StatTiles, type StatTileIcon, type StatTileItem } from '@/components/ui/stat-tiles'
 export { EmptyState, LoadingState } from '@/components/ui/state-views'
-export { WizardSteps, type WizardStepItem } from '@/components/ui/wizard-steps'
 export {
   TypeNameConfirmModal,
   TypeNameDeleteButton,
