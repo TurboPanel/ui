@@ -6478,7 +6478,26 @@ export type InstanceIdentity = {
   seal: { fingerprint: string } | null
   urls: string[]
   installUrl: string | null
-  servers: { id: string; name: string | null; organizationId: string | null; pinnedBy: PinnedBy }[]
+  servers: {
+    id: string
+    name: string | null
+    organizationId: string | null
+    pinnedBy: PinnedBy
+    /**
+     * The server's last signed pin report, or null before one arrives (and from
+     * a control plane that predates it, which omits the field). `matches` false
+     * means the server pinned a key that is not this control plane's.
+     */
+    pinReport?: PinReport | null
+  }[]
+}
+
+/** What a server's pin file holds, as the server signed it. */
+export type PinReport = {
+  fingerprint: string
+  keyset: number | null
+  reportedAt: string | null
+  matches: boolean
 }
 
 export async function fetchInstanceIdentity(): Promise<InstanceIdentity> {

@@ -13,7 +13,13 @@ import { FingerprintLine } from '@/components/ui/fingerprint-line'
 import { SuperadminOnly } from '@/components/admin/access/superadmin-only'
 import { useAuth } from '@/lib/auth-context'
 import type { InstanceIdentity } from '@/lib/instance-api'
-import { COMPARE_KEY_HELP, NEXT_KEY_HELP, isPanelFingerprint } from '@/lib/panel-identity'
+import {
+  COMPARE_KEY_HELP,
+  NEXT_KEY_HELP,
+  OTHER_KEY_HELP,
+  isPanelFingerprint,
+  serversPinnedToAnotherKey,
+} from '@/lib/panel-identity'
 import { useInstanceIdentity, useSaveInstanceIdentityNext } from '@/lib/queries/admin'
 import { colors, spacing } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
@@ -109,6 +115,7 @@ export function PanelIdentitySection() {
   const { controlPlaneRuntime } = useAuth()
   const query = useInstanceIdentity()
   const identity = query.data
+  const otherKey = identity ? serversPinnedToAnotherKey(identity.servers ?? []) : []
 
   return (
     <View style={styles.root}>
@@ -126,6 +133,13 @@ export function PanelIdentitySection() {
         <InlineNotice
           title="Control plane identity is off"
           body="Set the TURBOPANEL_IDENTITY_KEYS secret (High Availability) or start the control plane once (self-hosted) to create it."
+        />
+      ) : null}
+      {identity?.configured && otherKey.length > 0 ? (
+        <InlineNotice
+          tone="warning"
+          title="Servers Pinned to Another Key"
+          body={`${otherKey.join(', ')}. ${OTHER_KEY_HELP}`}
         />
       ) : null}
       {identity?.configured ? (
