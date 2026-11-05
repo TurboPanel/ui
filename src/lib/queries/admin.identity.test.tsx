@@ -5,16 +5,34 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { createAppQueryClient } from '../query-client'
 import { queryKeys } from '../query-keys'
-import { useInstanceIdentity, useSaveInstanceIdentityNext } from './admin'
+import {
+  useClearServerSealingKey,
+  useInstanceIdentity,
+  useSaveInstanceIdentityNext,
+  useSealedSecrets,
+} from './admin'
 
-const { fetchInstanceIdentity, saveInstanceIdentityNext } = vi.hoisted(() => ({
+const {
+  fetchInstanceIdentity,
+  saveInstanceIdentityNext,
+  fetchSealedSecrets,
+  clearServerSealingKey,
+} = vi.hoisted(() => ({
   fetchInstanceIdentity: vi.fn(),
   saveInstanceIdentityNext: vi.fn(),
+  fetchSealedSecrets: vi.fn(),
+  clearServerSealingKey: vi.fn(),
 }))
 
 vi.mock('../instance-api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../instance-api')>()
-  return { ...actual, fetchInstanceIdentity, saveInstanceIdentityNext }
+  return {
+    ...actual,
+    fetchInstanceIdentity,
+    saveInstanceIdentityNext,
+    fetchSealedSecrets,
+    clearServerSealingKey,
+  }
 })
 
 function setup() {
@@ -54,5 +72,32 @@ describe('control plane identity hooks', () => {
     })
     expect(saveInstanceIdentityNext.mock.calls[0]?.[0]).toBeNull()
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.admin.instanceIdentity })
+  })
+
+  it('useSealedSecrets reads the list under its key, and stays idle when disabled', async () => {
+    fetchSealedSecrets.mockResolvedValue({ ok: true, receivingPlaintext: 0, servers: [] })
+    const { queryClient, wrapper } = setup()
+    const { result } = renderHook(() => useSealedSecrets(), { wrapper })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(queryClient.getQueryData(queryKeys.admin.sealedSecrets)).toEqual({
+      ok: true,
+      receivingPlaintext: 0,
+      servers: [],
+    })
+    fetchSealedSecrets.mockClear()
+    renderHook(() => useSealedSecrets({ enabled: false }), { wrapper: setup().wrapper })
+    expect(fetchSealedSecrets).not.toHaveBeenCalled()
+  })
+
+  it('clearing a sealing key sends the typed name and refreshes the list', async () => {
+    clearServerSealingKey.mockResolvedValue({ ok: true, cleared: true })
+    const { queryClient, wrapper } = setup()
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
+    const { result } = renderHook(() => useClearServerSealingKey(), { wrapper })
+    await act(async () => {
+      await result.current.run({ serverId: 'srv-1', confirmName: 'web-1' })
+    })
+    expect(clearServerSealingKey).toHaveBeenCalledWith('srv-1', 'web-1')
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.admin.sealedSecrets })
   })
 })

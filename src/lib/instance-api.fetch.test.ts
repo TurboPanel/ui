@@ -61,6 +61,8 @@ import {
   PROJECT_HAS_RUNNING_SERVICES_ERROR,
   rebootServer,
   saveInstanceIdentityNext,
+  fetchSealedSecrets,
+  clearServerSealingKey,
   resolveResourceId,
   retireOrganizationCa,
   rotateOrganizationCa,
@@ -891,6 +893,27 @@ describe('instance-api fetch wrappers', () => {
     expect(JSON.parse(String((fetchMock.mock.calls[1]?.[1] as RequestInit).body))).toEqual({
       fingerprint: null,
     })
+  })
+
+  it('fetchSealedSecrets reads the sealed-secrets route', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, receivingPlaintext: 0, servers: [] }))
+    await expect(fetchSealedSecrets()).resolves.toMatchObject({ receivingPlaintext: 0 })
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
+      '/api/admin/v1/instance/identity/sealed-secrets'
+    )
+  })
+
+  it('clearServerSealingKey deletes the key with the typed server name', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, cleared: true }))
+    await expect(clearServerSealingKey('srv/1', 'web 1')).resolves.toEqual({
+      ok: true,
+      cleared: true,
+    })
+    const [url, init] = fetchMock.mock.calls[0] ?? []
+    expect(String(url)).toContain(
+      '/api/admin/v1/instance/identity/sealed-secrets/srv%2F1/key?confirmName=web+1'
+    )
+    expect((init as RequestInit).method).toBe('DELETE')
   })
 
   it('createLicense sends the license tier chosen in Add Server', async () => {

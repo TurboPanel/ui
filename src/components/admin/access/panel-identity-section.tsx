@@ -10,8 +10,9 @@ import {
   TextField,
 } from '@/components/ui'
 import { FingerprintLine } from '@/components/ui/fingerprint-line'
+import { SealedSecretsPanel } from '@/components/admin/access/sealed-secrets-panel'
 import { SuperadminOnly } from '@/components/admin/access/superadmin-only'
-import { useAuth } from '@/lib/auth-context'
+import { isSuperadminSession, useAuth } from '@/lib/auth-context'
 import type { InstanceIdentity } from '@/lib/instance-api'
 import { COMPARE_KEY_HELP, NEXT_KEY_HELP, isPanelFingerprint } from '@/lib/panel-identity'
 import { useInstanceIdentity, useSaveInstanceIdentityNext } from '@/lib/queries/admin'
@@ -106,7 +107,7 @@ function NextKeyEditor({ current }: Readonly<{ current: InstanceIdentity['next']
 }
 
 export function PanelIdentitySection() {
-  const { controlPlaneRuntime } = useAuth()
+  const { controlPlaneRuntime, session } = useAuth()
   const query = useInstanceIdentity()
   const identity = query.data
 
@@ -138,6 +139,7 @@ export function PanelIdentitySection() {
               <NextKeyEditor current={identity.next} />
             </SuperadminOnly>
           )}
+          {isSuperadminSession(session) ? <SealedSecretsPanel /> : null}
         </>
       ) : null}
     </View>

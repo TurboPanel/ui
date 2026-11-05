@@ -484,6 +484,8 @@ export const queryKeys = {
     /** The development build-and-push view (development installs only). */
     developmentUpdates: ['admin', 'instance-updates', 'development'] as const,
     instanceIdentity: ['admin', 'instance-identity'] as const,
+    /** Superadmin sealed-secrets read (Clear Sealing Key lives beside it). */
+    sealedSecrets: ['admin', 'instance-identity', 'sealed-secrets'] as const,
     /** Connection modes and the edge gate (self-hosted only). */
     ingressCapabilities: ['admin', 'ingress', 'capabilities'] as const,
     ingressAccounts: ['admin', 'ingress', 'accounts'] as const,

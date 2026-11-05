@@ -6513,6 +6513,49 @@ export async function saveInstanceIdentityNext(
   })
 }
 
+/** One server's row in the sealed-secrets read (public values only). */
+export type SealedSecretsServer = {
+  id: string
+  name: string | null
+  /** Omitted by an older control plane. */
+  hostname?: string | null
+  organizationId: string | null
+  isConnected: boolean
+  /** The stored hello lists `daemon-sealed-secrets-v1`. */
+  advertisesSealedSecrets: boolean
+  sealingKey: { kid: string; reportedAt: string | null } | null
+  plaintextSecretsAt: string | null
+  /** True while no sealing key is on file, so decrypt answers go in plaintext. */
+  receivesPlaintext: boolean
+}
+
+export type SealedSecretsState = {
+  ok: true
+  receivingPlaintext: number
+  servers: SealedSecretsServer[]
+}
+
+/** Superadmin. Which servers still receive secrets in plaintext. */
+export async function fetchSealedSecrets(): Promise<SealedSecretsState> {
+  return await apiFetch(`${ADMIN_API}/instance/identity/sealed-secrets`)
+}
+
+/**
+ * Clear Sealing Key (superadmin): `confirmName` is the server name as typed
+ * (name, else hostname, else id). A stale session opens the re-authentication
+ * sheet. Refusals throw: 400 `confirm_name_required`, 409
+ * `daemon_seals_secrets` while a connected daemon opens sealed secrets.
+ */
+export async function clearServerSealingKey(
+  serverId: string,
+  confirmName: string
+): Promise<{ ok: true; cleared: boolean }> {
+  return await apiFetch(
+    `${ADMIN_API}/instance/identity/sealed-secrets/${encodeURIComponent(serverId)}/key${confirmNameQuery(confirmName)}`,
+    { method: 'DELETE' }
+  )
+}
+
 export async function fetchPlatformCa(): Promise<PlatformCaInfo> {
   return await apiFetch(`${ADMIN_API}/instance/platform-ca`)
 }

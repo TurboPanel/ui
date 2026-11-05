@@ -41,6 +41,7 @@ const ACTION_LABELS: Readonly<Record<string, string>> = {
   'managed.database.delete': 'delete this database',
   'member.remove': 'remove this member',
   'panel.identity_next.set': "change the control plane's next key",
+  'server.sealing_key.clear': "clear this server's sealing key",
   'instance.tunnel_token.set': 'change the tunnel token',
   'instance.ingress_account.added': 'connect a Cloudflare account',
   'instance.ingress_account.removed': 'remove a Cloudflare account',

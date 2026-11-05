@@ -11,6 +11,7 @@ import { userErrorMessage } from '@/lib/user-error'
 import { spacing } from '@/lib/theme'
 
 const BUSY_LABELS: Readonly<Record<string, string>> = {
+  Clear: 'Clearing…',
   Delete: 'Deleting…',
   Destroy: 'Destroying…',
   Remove: 'Removing…',
@@ -30,6 +31,11 @@ export type TypeNameConfirmProps = Readonly<{
   thing: string
   /** The exact name to type. */
   name: string
+  /**
+   * Whose name is typed, in book title case, when it is not `thing`'s own:
+   * clearing a "Sealing Key" asks for the "Server" name.
+   */
+  nameOf?: string
   /** Verb for the title and button; "Delete" unless the action is a "Remove". */
   verb?: string
   /** One sentence about what goes with it, shown above the name. */
@@ -50,6 +56,7 @@ export type TypeNameConfirmProps = Readonly<{
 export function TypeNameConfirmModal({
   thing,
   name,
+  nameOf = thing,
   verb = 'Delete',
   description,
   undoable = false,
@@ -88,10 +95,10 @@ export function TypeNameConfirmModal({
     >
       <View style={styles.nameRow}>
         <MonoText>{name}</MonoText>
-        <CopyButton value={name} accessibilityLabel={`Copy ${thing.toLowerCase()} name`} />
+        <CopyButton value={name} accessibilityLabel={`Copy ${nameOf.toLowerCase()} name`} />
       </View>
       <TextField
-        label={`${thing} name`}
+        label={`${nameOf} name`}
         value={typed}
         onChangeText={setTyped}
         autoCapitalize="none"
