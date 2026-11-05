@@ -4,6 +4,7 @@ import {
   applyPublicUrls,
   applyReencryptSecrets,
   attachInstanceCertificate,
+  clearServerSealingKey,
   fetchInstanceAcmeSettings,
   fetchInstanceCertificates,
   fetchInstanceDaemon,
@@ -30,6 +31,7 @@ import {
   type UpgradeRunServersQuery,
   fetchPlatformCa,
   fetchInstanceIdentity,
+  fetchSealedSecrets,
   saveInstanceIdentityNext,
   fetchTrustedProxies,
   type InstanceHostnameInput,
@@ -753,6 +755,26 @@ export function useSaveInstanceIdentityNext() {
     mutationFn: saveInstanceIdentityNext,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.admin.instanceIdentity })
+    },
+  })
+}
+
+export function useSealedSecrets(options?: Readonly<{ enabled?: boolean }>) {
+  return useQuery({
+    queryKey: queryKeys.admin.sealedSecrets,
+    queryFn: fetchSealedSecrets,
+    enabled: options?.enabled ?? true,
+    staleTime: 60 * 1000,
+  })
+}
+
+export function useClearServerSealingKey() {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: ({ serverId, confirmName }: { serverId: string; confirmName: string }) =>
+      clearServerSealingKey(serverId, confirmName),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.admin.sealedSecrets })
     },
   })
 }

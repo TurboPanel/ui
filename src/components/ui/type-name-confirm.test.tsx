@@ -76,6 +76,26 @@ describe('typeNameHelp', () => {
 })
 
 describe('TypeNameConfirmModal', () => {
+  it('asks for the owner name when the thing is not what is named', () => {
+    const onConfirm = vi.fn()
+    render(
+      <TypeNameConfirmModal
+        thing="Sealing Key"
+        nameOf="Server"
+        name="web-1"
+        verb="Clear"
+        undoable
+        pending
+        onCancel={vi.fn()}
+        onConfirm={onConfirm}
+      />
+    )
+    expect(screen.getByRole('heading').textContent).toBe('Clear Sealing Key')
+    expect(screen.getByText('Type the name to confirm.')).toBeTruthy()
+    fireEvent.change(screen.getByLabelText('Server name'), { target: { value: 'web-1' } })
+    expect(confirmButton('Clearing…')).toBeTruthy()
+  })
+
   it('shows the name with a Copy button and enables the delete only on an exact match', () => {
     const onConfirm = vi.fn()
     render(
