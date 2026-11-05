@@ -141,7 +141,7 @@ export function DeployKeySource({
         autoCorrect={false}
         placeholder="https://github.com/acme/app.git"
         mono
-        hint="An https or ssh URL. An ssh URL always needs a deploy key."
+        hint="An https or ssh URL on a public git host. An ssh URL always needs a deploy key."
       />
 
       <FormField
