@@ -9,6 +9,7 @@ import {
   type ViewStyle,
 } from 'react-native'
 import Svg, { Path } from 'react-native-svg'
+import { ResourceIcon } from '@/components/icons/picked-icon'
 import { PlatformBadge } from '@/components/org/platform-badge'
 import { typeStyle } from '@/components/ui/v4/type-styles'
 import { themedStyles, usePalette } from '@/components/ui/v4/use-palette'
@@ -206,11 +207,36 @@ function ProjectPills({ project }: Readonly<{ project: HomeProject }>) {
   )
 }
 
-function ProjectIcon({ kind, small }: Readonly<{ kind: HomeProject['kind']; small: boolean }>) {
+function ProjectIcon({
+  kind,
+  icon,
+  isEmojiIconAllowed,
+  small,
+}: Readonly<{
+  kind: HomeProject['kind']
+  icon: string | null
+  isEmojiIconAllowed: boolean
+  small: boolean
+}>) {
   const p = usePalette()
   const s = styles(p)
   const managed = kind === 'managed'
   const paths = managed ? CYLINDER : [CUBE]
+  const typeGlyph = (
+    <Svg width={16} height={16} viewBox="0 0 24 24" aria-hidden>
+      {paths.map((d) => (
+        <Path
+          key={d}
+          d={d}
+          fill="none"
+          stroke={managed ? p.link : p.text3}
+          strokeWidth={1.6}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      ))}
+    </Svg>
+  )
   return (
     <View
       style={[
@@ -220,19 +246,18 @@ function ProjectIcon({ kind, small }: Readonly<{ kind: HomeProject['kind']; smal
         managed && s.iconManaged,
       ]}
     >
-      <Svg width={16} height={16} viewBox="0 0 24 24" aria-hidden>
-        {paths.map((d) => (
-          <Path
-            key={d}
-            d={d}
-            fill="none"
-            stroke={managed ? p.link : p.text3}
-            strokeWidth={1.6}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        ))}
-      </Svg>
+      {/* A managed database and a platform project keep their own icon. */}
+      {managed || kind === 'platform' ? (
+        typeGlyph
+      ) : (
+        <ResourceIcon
+          icon={icon}
+          isEmojiIconAllowed={isEmojiIconAllowed}
+          size={16}
+          color={p.text3}
+          fallback={typeGlyph}
+        />
+      )}
     </View>
   )
 }
@@ -271,6 +296,7 @@ export function ProjectTile({
   workspace,
   layout,
   first = false,
+  isEmojiIconAllowed = true,
   onOpen,
 }: Readonly<{
   project: HomeProject
@@ -279,6 +305,8 @@ export function ProjectTile({
   layout: TileLayout
   /** The first row of a list has no rule above it. */
   first?: boolean
+  /** False draws the default icon for a stored emoji (the organization turned emoji off). */
+  isEmojiIconAllowed?: boolean
   onOpen: () => void
 }>) {
   const s = styles(usePalette())
@@ -300,7 +328,12 @@ export function ProjectTile({
       ]}
     >
       <View style={[s.top, list && s.topList, stacked && s.topStacked]}>
-        <ProjectIcon kind={project.kind} small={list} />
+        <ProjectIcon
+          kind={project.kind}
+          icon={project.icon}
+          isEmojiIconAllowed={isEmojiIconAllowed}
+          small={list}
+        />
         <View style={[s.names, list && !stacked && s.namesRow]}>
           <Text style={s.name} numberOfLines={1}>
             {project.name}

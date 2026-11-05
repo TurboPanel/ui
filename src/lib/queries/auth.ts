@@ -30,6 +30,7 @@ import {
   type InstallCompleteResult,
   type InstallStatus,
   type OrganizationRecord,
+  type OrganizationUpdateBody,
   type OAuthProvider,
   type SessionInfo,
   type TwoFactorCodeKind,
@@ -105,6 +106,15 @@ export function useOrganizationsQuery(options?: Readonly<{ enabled?: boolean }>)
   })
 }
 
+/**
+ * One organization from the cached organizations list (the same read the
+ * switcher uses), or undefined while it loads or when it is not listed.
+ */
+export function useOrganizationRecord(organizationId: string): OrganizationRecord | undefined {
+  const { data } = useOrganizationsQuery()
+  return data?.organizations.find((org) => org.id === organizationId)
+}
+
 export function useCreateOrganization() {
   const queryClient = useQueryClient()
   return useApiMutation({
@@ -120,8 +130,11 @@ export function useCreateOrganization() {
 export function useUpdateOrganization() {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: ({ organizationId, name }: { organizationId: string; name: string }) =>
-      updateOrganization(organizationId, { name }),
+    mutationFn: ({
+      organizationId,
+      ...body
+    }: { organizationId: string } & OrganizationUpdateBody) =>
+      updateOrganization(organizationId, body),
     onSuccess: (data) => {
       queryClient.setQueryData<{ organizations: OrganizationRecord[] }>(
         queryKeys.auth.organizations,

@@ -91,6 +91,19 @@ describe('apiErrorCopy', () => {
 })
 
 describe('userErrorMessage', () => {
+  it('says in plain words that the organization has emoji icons turned off', () => {
+    const refused = new Error(
+      '/api/client/v1/organizations/o failed: HTTP 422: emoji_icons_off — This organization has emoji icons turned off. Pick one of the regular icons.'
+    )
+    expect(userErrorMessage(refused, 'x')).toBe(
+      'This organization has emoji icons turned off. Pick one of the regular icons.'
+    )
+    // An answer without the sentence still reads as plain words.
+    expect(userErrorMessage(new Error('/p failed: HTTP 422: emoji_icons_off'), 'x')).toBe(
+      'This organization has emoji icons turned off. Pick one of the regular icons.'
+    )
+  })
+
   it('maps network failures, known codes, messages and the fallback', () => {
     expect(userErrorMessage(new TypeError('Failed to fetch'), 'f')).toBe(
       CONTROL_PLANE_UNREACHABLE_COPY

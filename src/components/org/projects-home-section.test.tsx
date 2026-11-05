@@ -50,6 +50,7 @@ vi.mock('@/components/org/workspace-switcher', () => ({
 vi.mock('@/components/org/platform-badge', () => ({ PlatformBadge: () => <span /> }))
 vi.mock('@/components/ui', () => ({ LoadingState: () => <div role="progressbar" /> }))
 vi.mock('@/lib/query-client', () => ({ useCan: () => state.canOwn }))
+vi.mock('@/lib/queries/auth', () => ({ useOrganizationRecord: () => undefined }))
 vi.mock('@/lib/queries', () => ({
   useProjects: () => state.projects,
   useWorkspaces: () => state.workspaces,

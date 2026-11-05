@@ -1,5 +1,6 @@
 import { StyleSheet, View } from 'react-native'
 import Svg, { Path } from 'react-native-svg'
+import { ResourceIcon } from '@/components/icons/picked-icon'
 import { PlatformShieldIcon } from '@/components/org/platform-badge'
 import type { ProjectRecord } from '@/lib/instance-api'
 import { projectDisplayType, type ProjectDisplayType } from '@/lib/project-navigation'
@@ -42,11 +43,7 @@ function ManagedProjectGlyph({ size = 18, color }: IconProps) {
         stroke={color}
         strokeWidth={1.75}
       />
-      <Path
-        d="M4.5 12c0 1.657 3.358 3 7.5 3s7.5-1.343 7.5-3"
-        stroke={color}
-        strokeWidth={1.75}
-      />
+      <Path d="M4.5 12c0 1.657 3.358 3 7.5 3s7.5-1.343 7.5-3" stroke={color} strokeWidth={1.75} />
     </Svg>
   )
 }
@@ -95,29 +92,42 @@ function ProjectTypeGlyph({
 }
 
 /**
- * Bare type glyph beside the project title — cube (compose), DB (managed),
- * shield (platform), or folder (setup). Layers are reserved for environments.
- * Never emoji.
+ * Bare glyph beside the project title: the project's chosen icon (a key or an
+ * emoji), else its type glyph — cube (compose), folder (setup). A managed
+ * database keeps the DB glyph and a platform project the shield, whatever is
+ * stored. A stored emoji shows the type glyph while the organization has emoji
+ * icons turned off. Layers are reserved for environments.
  */
 export function ProjectTitleIcon({
   project,
   compact = false,
+  isEmojiIconAllowed = true,
 }: Readonly<{
   project: ProjectRecord
   /** Slightly smaller glyph for breadcrumb title rows. */
   compact?: boolean
+  /** The organization's emoji icon setting (missing on older control planes means allowed). */
+  isEmojiIconAllowed?: boolean
 }>) {
   const type = projectDisplayType(project)
   const label = accessibilityLabelForType(type)
   const glyphSize = compact ? 18 : 22
+  const typeGlyph = <ProjectTypeGlyph type={type} size={glyphSize} color={colors.link} />
+  const choosable = type !== 'managed' && type !== 'system'
 
   return (
-    <View
-      style={styles.icon}
-      accessibilityRole="image"
-      accessibilityLabel={label}
-    >
-      <ProjectTypeGlyph type={type} size={glyphSize} color={colors.link} />
+    <View style={styles.icon} accessibilityRole="image" accessibilityLabel={label}>
+      {choosable ? (
+        <ResourceIcon
+          icon={project.icon}
+          isEmojiIconAllowed={isEmojiIconAllowed}
+          size={glyphSize}
+          color={colors.link}
+          fallback={typeGlyph}
+        />
+      ) : (
+        typeGlyph
+      )}
     </View>
   )
 }

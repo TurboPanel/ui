@@ -20,9 +20,11 @@ import { HeaderMenuOverlay } from '@/components/header-menu-overlay'
 import { HeaderMenuTrigger } from '@/components/header-menu-trigger'
 import { breadcrumbStyles, CRUMB_PADDING } from '@/components/org/breadcrumb-styles'
 import { BillingNavIcon, GearIcon, OrganizationIcon, PlusIcon } from '@/components/icons/nav-icons'
+import { ResourceIcon } from '@/components/icons/picked-icon'
 import { OrganizationSwitcherList } from '@/components/org/organization-switcher-list'
 import { dropdownLeft, headerLayoutFor } from '@/lib/header-layout'
 import { truncateDisplayName } from '@/lib/display-name'
+import { isEmojiIconAllowedOf } from '@/lib/icons'
 import {
   organizationLabel,
   shouldShowOrgSwitcherSearch,
@@ -137,6 +139,18 @@ export function OrganizationSwitcherSegment({
     label = 'Loading…'
   }
   const triggerLabel = isNative ? truncateDisplayName(label) : label
+  const buildingGlyph = <OrganizationIcon size={HEADER_TRIGGER_ICON_SIZE} color={colors.textDim} />
+  const triggerGlyph = currentOrg ? (
+    <ResourceIcon
+      icon={currentOrg.icon}
+      isEmojiIconAllowed={isEmojiIconAllowedOf(currentOrg)}
+      size={HEADER_TRIGGER_ICON_SIZE}
+      color={colors.textDim}
+      fallback={buildingGlyph}
+    />
+  ) : (
+    buildingGlyph
+  )
   const showSearch = shouldShowOrgSwitcherSearch(organizations.length)
   const showViewAll = shouldShowViewAllOrganizations(organizations.length)
   const listMaxHeight = compactListMaxHeight(
@@ -271,7 +285,7 @@ export function OrganizationSwitcherSegment({
           label={triggerLabel}
           accessibilityName={label}
           open={menuOpen}
-          showGlyph={header.showOrgGlyph}
+          glyph={header.showOrgGlyph ? triggerGlyph : null}
           variant={variant}
           current={current}
           onPress={() => setMenuOpen((wasOpen) => !wasOpen)}
@@ -311,7 +325,7 @@ function OrgTrigger({
   label,
   accessibilityName,
   open,
-  showGlyph,
+  glyph,
   variant,
   current,
   onPress,
@@ -319,7 +333,8 @@ function OrgTrigger({
   label: string
   accessibilityName: string
   open: boolean
-  showGlyph: boolean
+  /** The organization's icon (or the building); null hides it. */
+  glyph: ReactNode
   variant: OrganizationSwitcherVariant
   current: boolean
   onPress: () => void
@@ -337,11 +352,7 @@ function OrgTrigger({
       accessibilityState={{ expanded: open }}
       style={crumb ? styles.crumbTrigger : undefined}
     >
-      {showGlyph ? (
-        <View style={headerMenuGroupStyles.triggerGlyph}>
-          <OrganizationIcon size={HEADER_TRIGGER_ICON_SIZE} color={colors.textDim} />
-        </View>
-      ) : null}
+      {glyph ? <View style={headerMenuGroupStyles.triggerGlyph}>{glyph}</View> : null}
       <View style={headerMenuGroupStyles.triggerCopy}>
         <Text style={labelStyle} numberOfLines={1} ellipsizeMode="tail">
           {label}

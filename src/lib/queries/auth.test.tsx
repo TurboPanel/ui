@@ -12,6 +12,7 @@ import {
   useDisableTwoFactor,
   useEnrollTotp,
   useInstallStatusQuery,
+  useOrganizationRecord,
   useOrganizationsQuery,
   usePasskeyRegisterOptions,
   usePasskeyRegisterVerify,
@@ -446,6 +447,42 @@ describe('auth query hooks', () => {
         createdAt: 't',
       })
     })
+  })
+
+  it('useUpdateOrganization sends only the icon fields it is given', async () => {
+    updateOrganization.mockResolvedValueOnce({
+      ok: true,
+      organization: {
+        id: 'org-1',
+        name: 'Acme',
+        createdAt: 't',
+        icon: '🚀',
+        isEmojiIconAllowed: true,
+      },
+    })
+    const client = createAppQueryClient()
+    const { result } = renderHook(() => useUpdateOrganization(), {
+      wrapper: createWrapper(client),
+    })
+
+    await expect(
+      result.current.run({ organizationId: 'org-1', icon: '🚀' })
+    ).resolves.toMatchObject({ ok: true })
+    expect(updateOrganization).toHaveBeenLastCalledWith('org-1', { icon: '🚀' })
+  })
+
+  it('useOrganizationRecord finds one organization in the cached list', async () => {
+    fetchOrganizations.mockResolvedValueOnce({
+      organizations: [
+        { id: 'org-1', name: 'Acme', createdAt: 't', icon: 'globe', isEmojiIconAllowed: false },
+      ],
+    })
+    const client = createAppQueryClient()
+    const { result } = renderHook(() => useOrganizationRecord('org-1'), {
+      wrapper: createWrapper(client),
+    })
+    await waitFor(() => expect(result.current?.icon).toBe('globe'))
+    expect(result.current?.isEmojiIconAllowed).toBe(false)
   })
 
   it('useUpdateOrganization leaves cache alone when organizations are unset', async () => {

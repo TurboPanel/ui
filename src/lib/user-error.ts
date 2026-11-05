@@ -6,6 +6,8 @@
  * match on them.
  */
 
+import { EMOJI_ICONS_OFF_COPY } from '@/lib/icon-copy'
+
 export const CONTROL_PLANE_UNREACHABLE_COPY =
   'Could not reach the control plane. Check your connection and try again.'
 
@@ -106,6 +108,7 @@ const API_ERROR_COPY: Readonly<Record<string, string>> = {
   asset_not_common: 'Only items shared across environments can be used by other environments.',
   asset_in_this_environment: 'This item already belongs to this environment.',
   asset_has_no_owner: 'A shared item needs a Hosting Account before other environments can use it.',
+  emoji_icons_off: EMOJI_ICONS_OFF_COPY,
 }
 
 const LICENSE_TIER_FORBIDDEN = /HTTP 403:\s*Forbidden\b/
