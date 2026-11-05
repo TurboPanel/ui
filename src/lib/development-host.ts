@@ -73,11 +73,13 @@ function plural(count: number, one: string, many: string): string {
  * Null when it gave none.
  */
 function blockedFragment(reason: string | undefined): string | null {
-  const text =
-    reason
-      ?.trim()
-      .replace(/;\s*not pulled$/, '')
-      .replace(/\.+$/, '') ?? ''
+  let text = reason?.trim() ?? ''
+  const suffix = 'not pulled'
+  if (text.endsWith(suffix)) {
+    const head = text.slice(0, -suffix.length).trimEnd()
+    if (head.endsWith(';')) text = head.slice(0, -1)
+  }
+  while (text.endsWith('.')) text = text.slice(0, -1)
   return text === '' ? null : `${text}, will not pull`
 }
 
