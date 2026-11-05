@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import type { ReactElement } from 'react'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { applyScenario, SCENARIOS, styleOf } from '@/components/ui/v4/rn-stub'
@@ -10,12 +11,17 @@ import { pillLabel, ProjectTile, tileSub } from './project-tile'
 vi.mock('react-native', async () => {
   const { reactNativeStub } = await import('@/components/ui/v4/rn-stub')
   const { cloneElement } = await import('react')
+  type ClickProps = { onClick?: (event: unknown) => void }
   return {
     ...reactNativeStub,
     Pressable: (props: Record<string, unknown>) =>
-      cloneElement(reactNativeStub.Pressable({ ...props, onPress: undefined }), {
-        onClick: (event: unknown) => (props.onPress as ((e: unknown) => void) | undefined)?.(event),
-      }),
+      cloneElement(
+        reactNativeStub.Pressable({ ...props, onPress: undefined }) as ReactElement<ClickProps>,
+        {
+          onClick: (event: unknown) =>
+            (props.onPress as ((e: unknown) => void) | undefined)?.(event),
+        }
+      ),
   }
 })
 vi.mock('react-native-svg', async () => (await import('@/components/ui/v4/rn-stub')).svgStub)
