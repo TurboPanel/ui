@@ -49,7 +49,8 @@ export function devHostMigratePending(
 type PartInput = Pick<
   DevHostPart,
   'name' | 'branch' | 'onTrunk' | 'behindBy' | 'dirty' | 'restartNeeded' | 'setupNeeded'
->
+> &
+  Partial<Pick<DevHostPart, 'blockedReason'>>
 
 /** The part needs something: new commits, packages, migrations, a restart, or it holds content changes. */
 export function devHostPartNeedsWork(part: PartInput, migrate?: DevHostView['migrate']): boolean {
@@ -67,9 +68,27 @@ function plural(count: number, one: string, many: string): string {
 }
 
 /**
+ * Why the daemon left a part alone, in its own exact words ("detached at
+ * 4f7b5ed, 19 behind trunk", "local changes in a.ts"), ending "will not pull".
+ * Null when it gave none.
+ */
+function blockedFragment(reason: string | undefined): string | null {
+  let text = reason?.trim() ?? ''
+  const suffix = 'not pulled'
+  if (text.endsWith(suffix)) {
+    const head = text.slice(0, -suffix.length).trimEnd()
+    if (head.endsWith(';')) text = head.slice(0, -1)
+  }
+  while (text.endsWith('.')) text = text.slice(0, -1)
+  return text === '' ? null : `${text}, will not pull`
+}
+
+/**
  * One short line for a part that needs something, e.g. "Control Plane: 3 new
- * commits on trunk, 1 migration pending", "Website: local changes, will not
- * pull", "Web Interface: on branch fix/x, will not pull". Null when it needs
+ * commits on trunk, 1 migration pending", "Control Plane: detached at
+ * 4f7b5ed, 19 behind trunk, will not pull", "Website: local changes in a.ts,
+ * will not pull". The daemon's reason is used when it sent one; an older
+ * daemon's part reads "local changes" or "on branch fix/x". Null when it needs
  * nothing. Changes that never block a pull (mode-only, generated, untracked)
  * are not mentioned.
  */
@@ -77,7 +96,13 @@ export function devHostPartLine(part: PartInput, migrate?: DevHostView['migrate'
   if (!devHostPartNeedsWork(part, migrate)) return null
   const fragments: string[] = []
   const behind = part.behindBy > 0
-  if (behind && !part.onTrunk) {
+  const blocked = blockedFragment(part.blockedReason)
+  if (blocked !== null) {
+    fragments.push(blocked)
+    if (behind && !blocked.includes('behind trunk')) {
+      fragments.push(`${plural(part.behindBy, 'new commit', 'new commits')} on trunk`)
+    }
+  } else if (behind && !part.onTrunk) {
     fragments.push(`on branch ${part.branch || 'unknown'}, will not pull`)
   } else if (part.dirty.blocking) {
     fragments.push(behind ? 'local changes, will not pull' : 'local changes')
@@ -91,7 +116,21 @@ export function devHostPartLine(part: PartInput, migrate?: DevHostView['migrate'
   return `${devHostPartLabel(part.name)}: ${fragments.join(', ')}`
 }
 
-/** Every part's line with its part name (the list key), in the order the daemon sent them. */
+/**
+ * "Database: 23 of 25 migrations applied" (the total is what trunk ships).
+ * Null when the control plane did not send both counts.
+ */
+export function devHostDatabaseLine(migrate: DevHostView['migrate'] | undefined): string | null {
+  const applied = migrate?.applied
+  const total = migrate?.total
+  if (typeof applied !== 'number' || typeof total !== 'number') return null
+  return `Database: ${applied} of ${plural(total, 'migration', 'migrations')} applied`
+}
+
+/**
+ * Every part's line with its part name (the list key), in the order the
+ * daemon sent them, then the database line when the counts are known.
+ */
 export function devHostLines(
   host: Pick<DevHostView, 'parts' | 'migrate'>
 ): { name: string; text: string }[] {
@@ -100,6 +139,8 @@ export function devHostLines(
     const text = devHostPartLine(part, host.migrate)
     if (text !== null) lines.push({ name: part.name, text })
   }
+  const database = devHostDatabaseLine(host.migrate)
+  if (database !== null) lines.push({ name: 'database', text: database })
   return lines
 }
 

@@ -6411,8 +6411,12 @@ export type DevHostView = {
   /** Last fetch of `origin/trunk`; null before the first one. */
   lastFetchAt: string | null
   job: DevHostJob | null
-  /** Shipped migrations the database has not applied; null when it cannot be read. */
-  migrate: { pending: number } | null
+  /**
+   * Shipped migrations the database has not applied, how many it has
+   * applied and how many trunk ships (`applied` and `total` are missing on an
+   * older control plane); null when it cannot be read.
+   */
+  migrate: { pending: number; applied?: number; total?: number } | null
 }
 
 /** The development build-and-push view, or null when this is not a development install (404). */
