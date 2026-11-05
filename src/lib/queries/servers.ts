@@ -916,9 +916,14 @@ export function useCreateLicense(orgId: string) {
 
 /**
  * Owner-only registration keys. Manage-gated 403 is swallowed so non-owners
- * are not signed out by the global forbidden handler.
+ * are not signed out by the global forbidden handler. `pollMs` asks faster
+ * while a screen watches one key (the Add Server wizard following its new
+ * server's enrolment); otherwise the list refreshes only while a key is unused.
  */
-export function useOrgLicenses(orgId: string, options?: Readonly<{ enabled?: boolean }>) {
+export function useOrgLicenses(
+  orgId: string,
+  options?: Readonly<{ enabled?: boolean; pollMs?: number | false }>
+) {
   return useQuery({
     queryKey: queryKeys.org(orgId).servers.licenses,
     queryFn: async () => {
@@ -934,6 +939,7 @@ export function useOrgLicenses(orgId: string, options?: Readonly<{ enabled?: boo
     enabled: (options?.enabled ?? true) && orgId.length > 0,
     retry: false,
     refetchInterval: (query) => {
+      if (options?.pollMs) return options.pollMs
       const pending = unboundPendingKeys(query.state.data?.licenses ?? [])
       return pending.length > 0 ? SERVERS_REFRESH_MS : false
     },

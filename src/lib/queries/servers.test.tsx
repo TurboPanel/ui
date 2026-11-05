@@ -330,6 +330,20 @@ describe('servers query hooks', () => {
     ).toBe(false)
   })
 
+  it('useOrgLicenses polls at the asked pace while a screen follows one key', async () => {
+    const client = createAppQueryClient()
+    fetchLicenses.mockResolvedValue({ licenses: [] })
+
+    renderHook(() => useOrgLicenses(orgId, { pollMs: 1000 }), {
+      wrapper: createWrapper(client),
+    })
+
+    const key = queryKeys.org(orgId).servers.licenses
+    await waitFor(() => {
+      expect(resolveRefetchInterval(client, key, { licenses: [] })).toBe(1000)
+    })
+  })
+
   it('useFleetServerUsage returns null when metrics backend is unavailable', async () => {
     fetchFleetMetricsLatest.mockRejectedValueOnce(new MetricsBackendUnavailableError('duckdb'))
 

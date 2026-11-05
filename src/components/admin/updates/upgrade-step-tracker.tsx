@@ -1,9 +1,10 @@
 import { Text, View } from 'react-native'
-import { WizardSteps, type WizardStepItem } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
+import { WizardSteps, type WizardStepItem } from '@/components/ui/wizard-steps'
 import {
   mapStepStatusToPipeline,
   stepHasStarted,
+  upgradeRailState,
   upgradePhaseLabel,
   upgradeStepLabel,
   upgradeStepOutcome,
@@ -35,13 +36,16 @@ export function UpgradeStepTracker({
   const current = stepHasStarted(status) ? mapStepStatusToPipeline(status) : null
   const heading = title ?? upgradePhaseLabel(phase)
   const outcome = upgradeStepOutcome({ status, errorCode })
-  const ended =
-    outcome.tone === 'danger' || outcome.tone === 'pending' || !stepHasStarted(status)
+  const ended = outcome.tone === 'danger' || outcome.tone === 'pending' || !stepHasStarted(status)
 
   return (
     <View style={{ gap: spacing.xs }}>
       <Text style={panelStyles.detailLabel}>{heading}</Text>
-      <WizardSteps steps={PIPELINE_STEPS} current={current} />
+      <WizardSteps
+        steps={PIPELINE_STEPS}
+        current={current}
+        currentState={upgradeRailState(status)}
+      />
       {note ? <Text style={panelStyles.muted}>{note}</Text> : null}
       {ended ? (
         <Text style={outcome.tone === 'danger' ? panelStyles.error : panelStyles.muted}>

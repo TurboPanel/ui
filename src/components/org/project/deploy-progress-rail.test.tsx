@@ -33,7 +33,15 @@ vi.mock('react-native-reanimated', async () => {
     )
   return {
     default: { View: AnimatedView },
-    Easing: { inOut: (fn: unknown) => fn, sin: 'sin', linear: 'linear', steps: () => 'steps' },
+    Easing: {
+      inOut: (fn: unknown) => fn,
+      out: (fn: unknown) => fn,
+      back: () => 'back',
+      cubic: 'cubic',
+      sin: 'sin',
+      linear: 'linear',
+      steps: () => 'steps',
+    },
     cancelAnimation: () => {},
     interpolate: (value: number) => value,
     useAnimatedStyle: (factory: () => Record<string, unknown>) => factory(),
@@ -149,19 +157,19 @@ describe.each(SCENARIOS)('DeployProgressRail ($name)', (scenario) => {
     }
   )
 
-  it('is one full-width track of equal segments with an end cap', () => {
+  it('is one full-width track: the first node on the left edge, the last on the right', () => {
     render(<DeployProgressRail progress={EVERY_STATE} />)
     const track = screen.getByRole('list')
     expect(styleOf(track).width).toBe('100%')
     const segments = screen.getAllByRole('listitem')
     expect(segments).toHaveLength(6)
     expect(segments[1]?.getAttribute('aria-label')).toBe('Step 1 of 5, Install Docker, done')
-    for (const segment of segments) {
-      expect(segment.parentElement).toBe(track)
-      expect(styleOf(segment).flex).toBe(1)
-    }
-    const cap = track.lastElementChild as HTMLElement
-    expect(styleOf(cap).borderColor).toBe(token(scenario, 'sepStrong'))
+    for (const segment of segments) expect(segment.parentElement).toBe(track)
+    for (const segment of segments.slice(0, -1)) expect(styleOf(segment).flex).toBe(1)
+    const last = segments.at(-1) as HTMLElement
+    expect(styleOf(last).flex).toBeUndefined()
+    expect(track.lastElementChild).toBe(last)
+    expect(animated(last).fills).toHaveLength(0)
   })
 
   it('shows the counter in mono small caps, the step name in the body face and the task in mono with a caret', () => {
@@ -213,7 +221,7 @@ describe.each(SCENARIOS)('DeployProgressRail ($name)', (scenario) => {
     expect(styleOf(animated(container).halos[0]).backgroundColor).toBe(token(scenario, 'busy'))
     expect(animated(container).sweeps).toHaveLength(1)
     expect(motion.repeat).toHaveBeenCalled()
-    expect(motion.timing).toHaveBeenCalledWith(100, { duration: 200 })
+    expect(motion.timing).toHaveBeenCalledWith(100, { duration: 450, easing: 'cubic' })
     unmount()
     motion.timing.mockClear()
     motion.repeat.mockClear()
@@ -296,8 +304,8 @@ describe.each(SCENARIOS)('DeployProgressRail ($name)', (scenario) => {
     expect(styleOf(screen.getByText('Step 02 / 02')).color).toBe(token(scenario, 'ok'))
     for (const fill of animated(container).fills)
       expect(styleOf(fill).backgroundColor).toBe(token(scenario, 'ok'))
-    const cap = screen.getByRole('list').lastElementChild as HTMLElement
-    expect(styleOf(cap).backgroundColor).toBe(token(scenario, 'ok'))
+    const last = screen.getByRole('list').lastElementChild as HTMLElement
+    expect(styleOf(nodeOf(last)).backgroundColor).toBe(token(scenario, 'ok'))
     expect(screen.queryByText(/First-time setup/)).toBeNull()
   })
 

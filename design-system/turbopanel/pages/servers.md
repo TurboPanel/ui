@@ -61,7 +61,7 @@ Fleet capacity tiles moved to **Overview** (`pages/overview.md`). This page keep
 
 ## Add Server wizard
 
-- Own glass `SectionPanel` between the toolbar and the fleet table (title **Add Server** only — no subtitle/hint) with **3-step indicator** (Name → Install → Connect)  
+- Own glass `SectionPanel` between the toolbar and the fleet table (title **Add Server** only — no subtitle/hint) with the shared six-step `StepRail` (Name → Install Command → Run the Installer → Enroll → Connect → Ready), each step moved by state the control plane reports (`src/lib/add-server-steps.ts`)  
 - Install command in `commandCodeBlock` (monospace, inset panel) + copy button  
 - Connect: wait for the host, or **Add another server** (resets to Name without closing the panel). Unused keys remain under **Pending keys**.  
 - Success state: accent dot + hostname — no emoji checkmark. **Done** closes; **Add another server** starts a new key.

@@ -5,6 +5,7 @@ import type {
   UpgradeStepPipelineId,
   UpgradeStepStatus,
 } from '@/lib/upgrade-vocabulary'
+import type { StepRailState } from '@/lib/step-rail'
 import { UPGRADE_STEP_PIPELINE } from '@/lib/upgrade-vocabulary'
 import { formatLocalDateTime } from '@/lib/format-datetime'
 import { plainStepFailureMessage } from '@/lib/user-error'
@@ -135,7 +136,7 @@ export function mapStepStatusToPipeline(
   status: UpgradeStepStatus | null | undefined
 ): UpgradeStepPipelineId {
   if (!status) return 'preparing'
-  if (status === 'done' || status === 'skipped') return 'done'
+  if (status === 'done') return 'done'
   if (status === 'failed' || status === 'rolled_back' || status === 'needs_attention') {
     return 'verifying'
   }
@@ -703,4 +704,17 @@ export function platformUpgradeHeadlineCopy(headline: PlatformUpgradeHeadline): 
     case 'paused':
       return 'Updates Paused'
   }
+}
+
+/**
+ * How the step bar draws the stage a server's update reached: turning while
+ * it is under way, red where it failed or rolled back, green once done, and
+ * still (no spinner) when it stopped for attention or was skipped.
+ */
+export function upgradeRailState(status: UpgradeStepStatus | null | undefined): StepRailState {
+  const tone = upgradeStepOutcome({ status }).tone
+  if (tone === 'danger') return 'failed'
+  if (status === 'done') return 'done'
+  if (tone === 'active') return 'running'
+  return 'active'
 }

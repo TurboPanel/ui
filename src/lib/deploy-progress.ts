@@ -1,5 +1,5 @@
-import type { CommandProgressStep, CommandProgressStepState } from '@/lib/instance-api'
-import type { GlyphKey, StatusTone } from '@/lib/v4/status-vocab'
+import type { CommandProgressStep } from '@/lib/instance-api'
+import { stepRailInfo, type StepRailInfo } from '@/lib/step-rail'
 
 /**
  * Words and numbers derived from a deploy's step plan (`CommandProgress`),
@@ -340,27 +340,11 @@ export function healthStepNote(
   return `${detail} (at ${at.toLocaleTimeString()})`
 }
 
-export type StepNodeInfo = Readonly<{
-  /** The state in a word, read beside the label ("Install Docker: done"). */
-  word: string
-  glyph: GlyphKey | null
-  tone: StatusTone
-}>
-
-const STEP_NODES: Readonly<Record<CommandProgressStepState, StepNodeInfo>> = {
-  ready: { word: 'already on this server', glyph: 'check', tone: 'ok' },
-  done: { word: 'done', glyph: 'check', tone: 'ok' },
-  running: { word: 'in progress', glyph: 'spinner', tone: 'busy' },
-  pending: { word: 'not started', glyph: null, tone: 'idle' },
-  failed: { word: 'failed', glyph: 'diamond', tone: 'bad' },
-  skipped: { word: 'skipped', glyph: 'dashed', tone: 'idle' },
-}
+export type StepNodeInfo = StepRailInfo
 
 /** Word, glyph and tone for a step state; an unknown state reads as not started. */
 export function stepNodeInfo(state: string): StepNodeInfo {
-  return Object.hasOwn(STEP_NODES, state)
-    ? STEP_NODES[state as CommandProgressStepState]
-    : STEP_NODES.pending
+  return stepRailInfo(state)
 }
 
 /**
