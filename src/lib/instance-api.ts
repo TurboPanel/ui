@@ -174,6 +174,25 @@ export type OrganizationRecord = {
   id: string
   name: string | null
   createdAt: string
+  /**
+   * A key from `ICON_KEYS` (`src/lib/icons.ts`), one emoji, or `null` for the
+   * default icon. Missing on a control plane older than organization icons.
+   */
+  icon?: string | null
+  /**
+   * False when the organization has emoji icons turned off: an emoji icon is
+   * refused (422 `emoji_icons_off`) and a stored one draws as the default.
+   * Missing on an older control plane, which means allowed.
+   */
+  isEmojiIconAllowed?: boolean
+}
+
+/** `PATCH /organizations/:id`: at least one field; a field left out keeps its value. */
+export type OrganizationUpdateBody = {
+  name?: string
+  /** A key, one emoji, or `null` for the default. */
+  icon?: string | null
+  isEmojiIconAllowed?: boolean
 }
 
 export type OAuthProvider = 'github' | 'google'
@@ -2826,7 +2845,7 @@ export async function createOrganization(body: {
 
 export async function updateOrganization(
   organizationId: string,
-  body: { name: string }
+  body: OrganizationUpdateBody
 ): Promise<{ ok: true; organization: OrganizationRecord }> {
   return await apiFetch(`${CLIENT_API}/organizations/${organizationId}`, {
     method: 'PATCH',
@@ -3733,23 +3752,8 @@ export type EnvironmentRecord = {
 
 export type ProjectKind = 'compose' | 'managed' | 'system'
 
-/** The fixed list of project icon keys the instance accepts. */
-export const PROJECT_ICON_KEYS = [
-  'cube',
-  'globe',
-  'cart',
-  'bolt',
-  'chat',
-  'chart',
-  'code',
-  'book',
-  'layers',
-  'mail',
-  'rocket',
-  'image',
-] as const
-
-export type ProjectIconKey = (typeof PROJECT_ICON_KEYS)[number]
+/** The fixed list of project icon keys the instance accepts (the same list organizations use). */
+export { ICON_KEYS as PROJECT_ICON_KEYS, type IconKey as ProjectIconKey } from '@/lib/icons'
 
 export type ProjectRecord = {
   id: string
@@ -3777,10 +3781,12 @@ export type ProjectRecord = {
    */
   kind: ProjectKind | null
   /**
-   * Icon key from the fixed `PROJECT_ICON_KEYS` list, or `null` for the
-   * default. A managed project ignores it and always shows the managed icon.
+   * Icon key from the fixed `PROJECT_ICON_KEYS` list, one emoji, or `null`
+   * for the default. A managed project ignores it and always shows the
+   * managed icon. A stored emoji draws as the default while the organization
+   * has emoji icons turned off.
    */
-  icon: ProjectIconKey | null
+  icon: string | null
   metadata: {
     /** Catalog code of a template or managed engine project (`postgres`, …). */
     code?: string
@@ -3910,6 +3916,8 @@ export type CreateProjectBody = {
   workspaceId: string
   name?: string
   description?: string
+  /** A key or one emoji; an emoji is refused (422 `emoji_icons_off`) while the organization has them off. */
+  icon?: string
   /**
    * Required. `empty` creates an untyped project with one environment named
    * from the org default (`defaultEnvironmentName`, falling back to
@@ -4549,6 +4557,11 @@ export async function updateProject(
   body: {
     name?: string
     description?: string
+    /**
+     * A key, one emoji, or `null` for the default. An emoji is refused (422
+     * `emoji_icons_off`) while the organization has emoji icons turned off.
+     */
+    icon?: string | null
     options?: {
       compose?: ComposeDocument
       containerNaming?: 'uuid' | 'custom'

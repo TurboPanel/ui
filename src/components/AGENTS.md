@@ -36,6 +36,7 @@ these instead of a local `StyleSheet`:
 | Text link | `TextLink` — link-blue words, as tall as the text with a mouse and a 44 x 44 pt tap area on touch, keyboard focus ring; `expanded` turns it into a show / hide disclosure. Never a bare `Pressable` + `Text` |
 | Inputs | `TextField`, `FormField`, `Checkbox`, `Select`, `SegmentedControl` |
 | States | `EmptyState`, `LoadingState`, `InlineNotice`, `Badge`, `StatTiles`, `WizardSteps` |
+| Project or organization icon | `ResourceIcon` (`icons/picked-icon.tsx`): a key's glyph (`icons/icon-key-glyphs.tsx`), an emoji as text, or the caller's `fallback`; a stored emoji draws the fallback while the organization has emoji off. Pick with `IconPickerSheet` (`org/icon-picker-sheet.tsx`), mounted only while open; its Emoji tab is hidden when emoji are off |
 
 **State on the web needs `aria-*`.** React Native Web 0.21 ignores `accessibilityState`, so a switch, checkbox or disclosure that only sets it reaches a browser screen reader with no checked or expanded state. Pass the `aria-checked` / `aria-expanded` / `aria-disabled` form too (React Native maps it on the phone). The `rn-stub.tsx` stand-ins translate `accessibilityState` for you, so they cannot catch this: `switch-state.web.test.tsx` renders through the real React Native Web.
 

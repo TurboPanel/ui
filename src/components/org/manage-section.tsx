@@ -5,6 +5,7 @@ import { ComposeSettingsSection } from '@/components/org/compose-settings-sectio
 import { DeployTimeLimitSettingsSection } from '@/components/org/deploy-time-limit-settings-section'
 import { PhpModePolicyPanel } from '@/components/org/php-mode-policy-panel'
 import { OrganizationFormSection } from '@/components/org/organization-form-section'
+import { OrganizationIconSection } from '@/components/org/organization-icon-section'
 import { ReauthSettingsSection } from '@/components/org/reauth-settings-section'
 import { OrganizationChannelsSection } from '@/components/account/notification-channels-section'
 import { AccessOverviewSection } from '@/components/org/access-overview-section'
@@ -53,6 +54,7 @@ function GeneralTab({ orgId }: Readonly<{ orgId: string }>) {
   return (
     <View style={styles.tab}>
       <OrganizationFormSection orgId={orgId} />
+      <OrganizationIconSection orgId={orgId} />
       {billingEnabled ? <BillingLinkSection orgId={orgId} /> : null}
       <ReauthSettingsSection orgId={orgId} />
       <ComposeSettingsSection orgId={orgId} />

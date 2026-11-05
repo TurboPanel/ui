@@ -14,6 +14,13 @@ const h = vi.hoisted(() => ({
   setError: vi.fn(),
   actionError: null as string | null,
   repositories: { data: undefined as unknown, enabled: undefined as unknown },
+  org: undefined as { isEmojiIconAllowed?: boolean } | undefined,
+  picker: null as null | {
+    value: string | null
+    isEmojiIconAllowed: boolean
+    onSave: (icon: string | null) => Promise<string | null>
+    onClose: () => void
+  },
 }))
 
 vi.mock('expo-router', () => ({ useRouter: () => ({ push: h.push, replace: h.replace }) }))
@@ -25,6 +32,14 @@ vi.mock('@/components/org/project/settings/project-settings-view', () => ({
   },
 }))
 vi.mock('@/components/org/project-delete-panel', () => ({ ProjectDeletePanel: () => null }))
+vi.mock('@/components/org/project/project-title-icon', () => ({ ProjectTitleIcon: () => null }))
+vi.mock('@/components/org/icon-picker-sheet', () => ({
+  IconPickerSheet: (props: NonNullable<typeof h.picker>) => {
+    h.picker = props
+    return <div data-testid="picker" />
+  },
+}))
+vi.mock('@/lib/queries/auth', () => ({ useOrganizationRecord: () => h.org }))
 vi.mock('@/components/ui', () => ({ LoadingState: () => <div data-testid="loading" /> }))
 vi.mock('@/lib/queries', () => ({
   useUpdateProject: () => ({
@@ -81,11 +96,64 @@ beforeEach(() => {
   h.setError.mockReset()
   h.actionError = null
   h.repositories.data = undefined
+  h.org = undefined
+  h.picker = null
   setup()
 })
 afterEach(cleanup)
 
 describe('ProjectSettingsScreen', () => {
+  it('opens the icon picker and saves the chosen icon through the project update', async () => {
+    setup({ project: { ...(h.ctx.project as object), icon: 'rocket' } })
+    const { queryByTestId } = render(<ProjectSettingsScreen />)
+    expect(h.view.icon?.label).toBe('Rocket')
+    expect(queryByTestId('picker')).toBeNull()
+    await press(() => h.view.icon?.onChoose?.())
+    expect(h.picker).toMatchObject({ value: 'rocket', isEmojiIconAllowed: true })
+    let result: string | null = 'unset'
+    await act(async () => {
+      result = await h.picker!.onSave('🚀')
+    })
+    expect(h.run).toHaveBeenCalledWith({ icon: '🚀' })
+    expect(result).toBeNull()
+    await press(() => h.picker!.onClose())
+    expect(queryByTestId('picker')).toBeNull()
+  })
+
+  it('says in plain words when the organization has emoji icons turned off', async () => {
+    h.run.mockResolvedValue({
+      ok: false,
+      error: 'raw',
+      cause: new Error(
+        '/api/client/v1/projects/p failed: HTTP 422: emoji_icons_off — This organization has emoji icons turned off. Pick one of the regular icons.'
+      ),
+    })
+    render(<ProjectSettingsScreen />)
+    await press(() => h.view.icon?.onChoose?.())
+    let result: string | null = null
+    await act(async () => {
+      result = await h.picker!.onSave('🚀')
+    })
+    expect(result).toBe(
+      'This organization has emoji icons turned off. Pick one of the regular icons.'
+    )
+  })
+
+  it('shows a stored emoji as the default while emoji are off, and passes the setting on', async () => {
+    h.org = { isEmojiIconAllowed: false }
+    setup({ project: { ...(h.ctx.project as object), icon: '🚀' } })
+    render(<ProjectSettingsScreen />)
+    expect(h.view.icon?.label).toBe('Default')
+    await press(() => h.view.icon?.onChoose?.())
+    expect(h.picker?.isEmojiIconAllowed).toBe(false)
+  })
+
+  it('offers no icon change to someone who cannot edit', () => {
+    setup({ canManage: false })
+    render(<ProjectSettingsScreen />)
+    expect(h.view.icon?.onChoose).toBeNull()
+  })
+
   it('shows a loading state until the project is known', () => {
     setup({ project: null })
     const { getByTestId } = render(<ProjectSettingsScreen />)

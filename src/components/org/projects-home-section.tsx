@@ -25,6 +25,7 @@ import type {
   ManagedListRecord,
   ProjectRecord,
 } from '@/lib/instance-api'
+import { isEmojiIconAllowedOf } from '@/lib/icons'
 import { orEmptyArray } from '@/lib/or-empty-array'
 import {
   environmentPageTabHref,
@@ -36,6 +37,7 @@ import { managedSettingsHref, orgAreaHref } from '@/lib/org-navigation'
 import { usePullToRefresh } from '@/lib/pull-to-refresh'
 import { useCan } from '@/lib/query-client'
 import { useProjects, useWorkspaces } from '@/lib/queries'
+import { useOrganizationRecord } from '@/lib/queries/auth'
 import { useContainers } from '@/lib/queries/containers'
 import { useLatestDeployments } from '@/lib/queries/environment-cards'
 import { useEnvironments } from '@/lib/queries/environments'
@@ -375,6 +377,7 @@ function ProjectGrid({
   const router = useRouter()
   const phone = useWindowDimensions().width <= PHONE_MAX_WIDTH
   const grid = view === 'grid'
+  const isEmojiIconAllowed = isEmojiIconAllowedOf(useOrganizationRecord(orgId))
   const tiles = cards.map((card, index) => (
     <View key={card.id} style={grid ? s.gridCell : undefined}>
       <ProjectTile
@@ -382,6 +385,7 @@ function ProjectGrid({
         workspace={showWorkspaceLabels ? workspaceNameById.get(card.workspaceId ?? '') : undefined}
         layout={grid ? 'grid' : listLayout(phone)}
         first={index === 0}
+        isEmojiIconAllowed={isEmojiIconAllowed}
         onOpen={() => router.push(projectHref(orgId, card.id) as Href)}
       />
     </View>

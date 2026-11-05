@@ -1,4 +1,4 @@
-import { memo } from 'react'
+import { memo, type ReactNode } from 'react'
 import {
   Platform,
   Pressable,
@@ -12,8 +12,14 @@ import {
 } from 'react-native'
 import { HeaderCheck } from '@/components/header-check'
 import { headerMenuGroupStyles } from '@/components/header-menu-group-styles'
-import { GearIcon, SearchIcon } from '@/components/icons/nav-icons'
+import {
+  GearIcon,
+  OrganizationIcon,
+  SearchIcon,
+} from '@/components/icons/nav-icons'
+import { ResourceIcon } from '@/components/icons/picked-icon'
 import { EmptyState } from '@/components/ui'
+import { isEmojiIconAllowedOf, resolvedIconValue } from '@/lib/icons'
 import type { OrganizationRecord } from '@/lib/instance-api'
 import {
   organizationLabel,
@@ -91,12 +97,15 @@ const OrganizationSwitcherRow = memo(function OrganizationSwitcherRow({
   name,
   active,
   density,
+  icon,
   onPress,
   onManage,
 }: Readonly<{
   name: string
   active: boolean
   density: OrganizationSwitcherDensity
+  /** The organization's icon; only drawn when some listed organization has one. */
+  icon?: ReactNode
   onPress: () => void
   onManage?: () => void
 }>) {
@@ -120,6 +129,7 @@ const OrganizationSwitcherRow = memo(function OrganizationSwitcherRow({
         <View style={headerMenuGroupStyles.menuItemMark}>
           {active ? <HeaderCheck color={colors.link} /> : null}
         </View>
+        {icon ? <View style={styles.rowIcon}>{icon}</View> : null}
         <Text
           style={rowLabelStyle(compactWeb, active)}
           numberOfLines={1}
@@ -146,6 +156,20 @@ const OrganizationSwitcherRow = memo(function OrganizationSwitcherRow({
   )
 })
 
+function OrganizationRowIcon({
+  org,
+}: Readonly<{ org: OrganizationRecord }>) {
+  return (
+    <ResourceIcon
+      icon={org.icon}
+      isEmojiIconAllowed={isEmojiIconAllowedOf(org)}
+      size={16}
+      color={colors.textDim}
+      fallback={<OrganizationIcon size={16} color={colors.textDim} />}
+    />
+  )
+}
+
 export function OrganizationSwitcherList({
   organizations,
   query,
@@ -171,6 +195,11 @@ export function OrganizationSwitcherList({
       </View>
     )
   } else {
+    // Rows get an icon slot only when some listed organization picked an
+    // icon, so a list of defaults stays as it was and names stay aligned.
+    const withIcons = visible.some(
+      (org) => resolvedIconValue(org.icon, isEmojiIconAllowedOf(org)) !== null,
+    )
     listBody = visible.map((org) => {
       const name = organizationLabel(org)
       return (
@@ -179,6 +208,7 @@ export function OrganizationSwitcherList({
           name={name}
           active={org.id === currentOrgId}
           density={density}
+          icon={withIcons ? <OrganizationRowIcon org={org} /> : undefined}
           onPress={() => onSelect(org.id)}
           onManage={onManage ? () => onManage(org.id) : undefined}
         />
@@ -278,6 +308,13 @@ const styles = StyleSheet.create({
   pageRowLabelActive: {
     color: colors.text,
     fontWeight: '600',
+  },
+  rowIcon: {
+    width: 16,
+    height: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
   },
   gearBtn: {
     width: 44,

@@ -30,6 +30,8 @@ import {
 } from '@/lib/project-navigation'
 import { managedProjectTabs } from '@/lib/managed-navigation'
 import { useUpdateProject } from '@/lib/queries'
+import { useOrganizationRecord } from '@/lib/queries/auth'
+import { isEmojiIconAllowedOf } from '@/lib/icons'
 import { showsBreadcrumb } from '@/lib/header-breadcrumb'
 import { colors, spacing, webPointer } from '@/lib/theme'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
@@ -87,6 +89,7 @@ function ProjectHeader() {
     setError,
   } = useProjectContext()
   const updateProject = useUpdateProject(orgId, projectId)
+  const isEmojiIconAllowed = isEmojiIconAllowedOf(useOrganizationRecord(orgId))
   const [editName, setEditName] = useState('')
 
   useEffect(() => {
@@ -130,7 +133,11 @@ function ProjectHeader() {
         >
           <ProjectHeaderLead />
           <View style={styles.currentCrumb}>
-            <ProjectTitleIcon project={project} compact />
+            <ProjectTitleIcon
+              project={project}
+              compact
+              isEmojiIconAllowed={isEmojiIconAllowed}
+            />
             {showMutableChrome ? (
               <TextInput
                 value={editName}

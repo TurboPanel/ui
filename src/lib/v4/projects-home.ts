@@ -54,6 +54,8 @@ export type HomeProject = Readonly<{
   id: string
   name: string
   kind: HomeKind
+  /** The chosen icon (a key, one emoji, or null); a managed tile ignores it. */
+  icon: string | null
   workspaceId: string | null
   /**
    * What the project is, for the tile's second line ("Managed database ·
@@ -234,6 +236,7 @@ export function homeProject(
     id: project.id,
     name: project.name?.trim() || 'Unnamed project',
     kind,
+    icon: project.icon ?? null,
     workspaceId: project.workspaceId ?? null,
     detail: projectDetail(project, kind, input.facts),
     // A platform project has one environment per server, all named alike: its

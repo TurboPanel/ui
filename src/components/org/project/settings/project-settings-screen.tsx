@@ -1,7 +1,9 @@
 import { useRouter, type Href } from 'expo-router'
 import { useMemo, useState } from 'react'
+import { IconPickerSheet } from '@/components/org/icon-picker-sheet'
 import { ProjectDeletePanel } from '@/components/org/project-delete-panel'
 import { useProjectContext } from '@/components/org/project/project-context'
+import { ProjectTitleIcon } from '@/components/org/project/project-title-icon'
 import { ProjectSettingsView } from '@/components/org/project/settings/project-settings-view'
 import { LoadingState } from '@/components/ui'
 import { projectRepositoriesHref } from '@/lib/org-navigation'
@@ -13,9 +15,12 @@ import {
   projectComposeHref,
   projectEnvironmentSettingsHref,
 } from '@/lib/project-navigation'
+import { iconValueLabel, isEmojiIconAllowedOf, resolvedIconValue } from '@/lib/icons'
 import { useUpdateProject } from '@/lib/queries'
+import { useOrganizationRecord } from '@/lib/queries/auth'
 import { useRepositories, useUpdateRepository } from '@/lib/queries/releases'
 import { userWorkspaces } from '@/lib/system-inventory'
+import { failedRunMessage } from '@/lib/user-error'
 import {
   buildProjectGeneralPatch,
   projectDescriptionProblem,
@@ -69,6 +74,8 @@ export function ProjectSettingsScreen() {
   const [edit, setEdit] = useState<{ name: string; description: string } | null>(null)
   const [busy, setBusy] = useState<'general' | 'move' | 'names' | null>(null)
   const [dangerOpen, setDangerOpen] = useState(false)
+  const [iconPickerOpen, setIconPickerOpen] = useState(false)
+  const isEmojiIconAllowed = isEmojiIconAllowedOf(useOrganizationRecord(orgId))
   const turnOnAutoDeploy = useTurnOnAutoDeploy(orgId, project?.repositoryId ?? null, setError)
 
   const git = useMemo(
@@ -101,74 +108,99 @@ export function ProjectSettingsScreen() {
     return result.ok
   }
 
+  const saveIcon = async (icon: string | null): Promise<string | null> => {
+    const result = await update.run({ icon })
+    return result.ok ? null : failedRunMessage(result, 'Could not save the icon.')
+  }
+
   return (
-    <ProjectSettingsView
-      projectId={project.id}
-      canEdit={canEdit}
-      general={{
-        name: draft.name,
-        description: draft.description,
-        onName: (name) => setEdit({ ...draft, name }),
-        onDescription: (description) => setEdit({ ...draft, description }),
-        nameError: edit ? projectNameProblem(draft.name.trim()) : null,
-        descriptionError: edit ? projectDescriptionProblem(draft.description.trim()) : null,
-        dirty: projectGeneralDirty(project, draft),
-        canSave: patch !== null,
-        saving: busy === 'general',
-        onSave: () => {
-          if (!patch) return
-          void run('general', patch).then((ok) => {
-            if (ok) setEdit(null)
+    <>
+      <ProjectSettingsView
+        projectId={project.id}
+        canEdit={canEdit}
+        icon={{
+          glyph: (
+            <ProjectTitleIcon project={project} compact isEmojiIconAllowed={isEmojiIconAllowed} />
+          ),
+          label: iconValueLabel(resolvedIconValue(project.icon, isEmojiIconAllowed)),
+          onChoose: canEdit ? () => setIconPickerOpen(true) : null,
+        }}
+        general={{
+          name: draft.name,
+          description: draft.description,
+          onName: (name) => setEdit({ ...draft, name }),
+          onDescription: (description) => setEdit({ ...draft, description }),
+          nameError: edit ? projectNameProblem(draft.name.trim()) : null,
+          descriptionError: edit ? projectDescriptionProblem(draft.description.trim()) : null,
+          dirty: projectGeneralDirty(project, draft),
+          canSave: patch !== null,
+          saving: busy === 'general',
+          onSave: () => {
+            if (!patch) return
+            void run('general', patch).then((ok) => {
+              if (ok) setEdit(null)
+            })
+          },
+          onReset: () => setEdit(null),
+        }}
+        workspaces={workspaceMoveChoices(project, userWorkspaces(workspaces))}
+        canMove={canOwn && projectAllowsMutations}
+        moving={busy === 'move'}
+        onMove={(workspaceId) => {
+          void run('move', { workspaceId })
+        }}
+        onOpenBase={() => router.push(projectBaseHref(orgId, projectId) as Href)}
+        keepOriginalNames={(project.options?.containerNaming ?? 'uuid') === 'custom'}
+        savingNames={busy === 'names'}
+        onKeepOriginalNames={(keep) => {
+          void run('names', {
+            options: buildProjectOptionsPatch(project, {
+              containerNaming: keep ? 'custom' : 'uuid',
+            }),
+            // The patch carries the Base compose along, so it names the Base.
+            target: 'base',
           })
-        },
-        onReset: () => setEdit(null),
-      }}
-      workspaces={workspaceMoveChoices(project, userWorkspaces(workspaces))}
-      canMove={canOwn && projectAllowsMutations}
-      moving={busy === 'move'}
-      onMove={(workspaceId) => {
-        void run('move', { workspaceId })
-      }}
-      onOpenBase={() => router.push(projectBaseHref(orgId, projectId) as Href)}
-      keepOriginalNames={(project.options?.containerNaming ?? 'uuid') === 'custom'}
-      savingNames={busy === 'names'}
-      onKeepOriginalNames={(keep) => {
-        void run('names', {
-          options: buildProjectOptionsPatch(project, { containerNaming: keep ? 'custom' : 'uuid' }),
-          // The patch carries the Base compose along, so it names the Base.
-          target: 'base',
-        })
-      }}
-      git={git}
-      pushDeploy={pushDeploy}
-      onTurnOnAutoDeploy={canEdit ? turnOnAutoDeploy.run : null}
-      turningOnAutoDeploy={turnOnAutoDeploy.pending}
-      onOpenEnvironmentSettings={(environmentId) =>
-        router.push(projectEnvironmentSettingsHref(orgId, projectId, environmentId) as Href)
-      }
-      onOpenRepositories={() => router.push(projectRepositoriesHref(orgId) as Href)}
-      onOpenBaseCompose={() => router.push(projectComposeHref(orgId, projectId) as Href)}
-      managed={
-        isManagedProject(project)
-          ? {
-              onOpenDatabaseSettings: databaseSettings
-                ? () => router.push(databaseSettings as Href)
-                : null,
-            }
-          : undefined
-      }
-      danger={
-        canOwn && projectAllowsMutations ? (
-          <ProjectDeletePanel
-            orgId={orgId}
-            project={project}
-            onCancel={() => setDangerOpen(false)}
-            onDeleted={() => router.replace(`/${orgId}/projects` as Href)}
-          />
-        ) : null
-      }
-      dangerOpen={dangerOpen}
-      onToggleDanger={() => setDangerOpen((open) => !open)}
-    />
+        }}
+        git={git}
+        pushDeploy={pushDeploy}
+        onTurnOnAutoDeploy={canEdit ? turnOnAutoDeploy.run : null}
+        turningOnAutoDeploy={turnOnAutoDeploy.pending}
+        onOpenEnvironmentSettings={(environmentId) =>
+          router.push(projectEnvironmentSettingsHref(orgId, projectId, environmentId) as Href)
+        }
+        onOpenRepositories={() => router.push(projectRepositoriesHref(orgId) as Href)}
+        onOpenBaseCompose={() => router.push(projectComposeHref(orgId, projectId) as Href)}
+        managed={
+          isManagedProject(project)
+            ? {
+                onOpenDatabaseSettings: databaseSettings
+                  ? () => router.push(databaseSettings as Href)
+                  : null,
+              }
+            : undefined
+        }
+        danger={
+          canOwn && projectAllowsMutations ? (
+            <ProjectDeletePanel
+              orgId={orgId}
+              project={project}
+              onCancel={() => setDangerOpen(false)}
+              onDeleted={() => router.replace(`/${orgId}/projects` as Href)}
+            />
+          ) : null
+        }
+        dangerOpen={dangerOpen}
+        onToggleDanger={() => setDangerOpen((open) => !open)}
+      />
+      {iconPickerOpen ? (
+        <IconPickerSheet
+          value={project.icon}
+          isEmojiIconAllowed={isEmojiIconAllowed}
+          fallback={<ProjectTitleIcon project={{ ...project, icon: null }} compact />}
+          onClose={() => setIconPickerOpen(false)}
+          onSave={saveIcon}
+        />
+      ) : null}
+    </>
   )
 }

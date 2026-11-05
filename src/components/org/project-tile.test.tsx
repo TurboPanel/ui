@@ -24,6 +24,7 @@ function project(partial: Partial<HomeProject>): HomeProject {
     id: 'p1',
     name: 'Shop',
     kind: 'compose',
+    icon: null,
     workspaceId: 'w1',
     detail: null,
     environments: [],
@@ -60,6 +61,41 @@ describe.each(SCENARIOS)('Project tile ($name)', (scenario) => {
     expect(tile.textContent).toBe('ShopAcmeProductionStaging+2')
     fireEvent.click(tile)
     expect(onOpen).toHaveBeenCalledTimes(1)
+  })
+
+  it('draws the chosen icon, an emoji only while emoji are allowed', () => {
+    const { container, unmount } = render(
+      <ProjectTile project={project({ icon: 'mail' })} layout="grid" onOpen={vi.fn()} />
+    )
+    expect(container.querySelector('rect')).not.toBeNull()
+    unmount()
+    const emoji = render(
+      <ProjectTile project={project({ icon: '🚀' })} layout="grid" onOpen={vi.fn()} />
+    )
+    expect(emoji.getByText('🚀')).toBeTruthy()
+    emoji.unmount()
+    const off = render(
+      <ProjectTile
+        project={project({ icon: '🚀' })}
+        layout="grid"
+        isEmojiIconAllowed={false}
+        onOpen={vi.fn()}
+      />
+    )
+    expect(off.queryByText('🚀')).toBeNull()
+    expect(off.container.querySelectorAll('path')).toHaveLength(1)
+  })
+
+  it('keeps the managed icon for a managed database, whatever is stored', () => {
+    const { container, queryByText } = render(
+      <ProjectTile
+        project={project({ kind: 'managed', icon: '🚀' })}
+        layout="grid"
+        onOpen={vi.fn()}
+      />
+    )
+    expect(queryByText('🚀')).toBeNull()
+    expect(container.querySelectorAll('path')).toHaveLength(3)
   })
 
   it('speaks the whole tile in its own label, with each status word', () => {
