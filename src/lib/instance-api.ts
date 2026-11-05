@@ -4558,8 +4558,9 @@ export async function updateProject(
     name?: string
     description?: string
     /**
-     * A key, one emoji, or `null` for the default. An emoji is refused (422
-     * `emoji_icons_off`) while the organization has emoji icons turned off.
+     * A key, one emoji, or `null` for the default. A new emoji is refused
+     * (422 `emoji_icons_off`) while the organization has emoji icons turned
+     * off; re-sending the stored one is accepted.
      */
     icon?: string | null
     options?: {
