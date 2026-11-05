@@ -69,7 +69,7 @@ function plural(count: number, one: string, many: string): string {
 
 /**
  * Why the daemon left a part alone, in its own exact words ("detached at
- * 4f7b5ed, 19 behind trunk", "changed files: a.ts"), ending "will not pull".
+ * 4f7b5ed, 19 behind trunk", "local changes in a.ts"), ending "will not pull".
  * Null when it gave none.
  */
 function blockedFragment(reason: string | undefined): string | null {
@@ -84,7 +84,7 @@ function blockedFragment(reason: string | undefined): string | null {
 /**
  * One short line for a part that needs something, e.g. "Control Plane: 3 new
  * commits on trunk, 1 migration pending", "Control Plane: detached at
- * 4f7b5ed, 19 behind trunk, will not pull", "Website: changed files: a.ts,
+ * 4f7b5ed, 19 behind trunk, will not pull", "Website: local changes in a.ts,
  * will not pull". The daemon's reason is used when it sent one; an older
  * daemon's part reads "local changes" or "on branch fix/x". Null when it needs
  * nothing. Changes that never block a pull (mode-only, generated, untracked)
