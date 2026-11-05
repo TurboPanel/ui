@@ -166,13 +166,16 @@ describe.each(SCENARIOS)('Icon picker ($name)', (scenario) => {
     expect(screen.getByRole('radiogroup', { name: 'Icons' })).toBeTruthy()
   })
 
-  it('starts a stored emoji as the default while emoji are off', async () => {
+  it('keeps a stored emoji as the current choice when emoji are not offered', async () => {
     const { onSave } = open({ value: '🚀', isEmojiIconAllowed: false })
+    expect(screen.queryByRole('tab', { name: 'Emoji' })).toBeNull()
+    expect(screen.getByText('Current emoji (kept until you pick another)')).toBeTruthy()
+    expect(screen.queryByText('Default')).toBeNull()
+    // Nothing would change, so Use Icon cannot clear the stored emoji.
+    expect(screen.getByRole('button', { name: 'Use Icon' }).hasAttribute('disabled')).toBe(true)
+    // Resetting to the default on purpose still works.
+    await click(screen.getByRole('button', { name: 'Reset to Default' }))
     expect(screen.getByText('Default')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Reset to Default' }).hasAttribute('disabled')).toBe(
-      true
-    )
-    // Saving the default replaces the stored emoji, on purpose.
     await click(screen.getByRole('button', { name: 'Use Icon' }))
     expect(onSave).toHaveBeenCalledWith(null)
   })

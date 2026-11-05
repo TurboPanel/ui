@@ -122,6 +122,7 @@ describe('ProjectSettingsScreen', () => {
   })
 
   it('says in plain words when the organization has emoji icons turned off', async () => {
+    h.org = { isEmojiIconAllowed: true }
     h.run.mockResolvedValue({
       ok: false,
       error: 'raw',
@@ -163,6 +164,14 @@ describe('ProjectSettingsScreen', () => {
     setup({ isSystemProject: true })
     render(<ProjectSettingsScreen />)
     expect(h.view.icon).toBeUndefined()
+  })
+
+  it('does not open the picker before the organization is known', () => {
+    h.org = undefined
+    setup({ project: { ...(h.ctx.project as object), icon: '🚀' } })
+    render(<ProjectSettingsScreen />)
+    expect(h.view.icon?.label).toBe('🚀')
+    expect(h.view.icon?.onChoose).toBeNull()
   })
 
   it('offers no icon change to someone who cannot edit', () => {

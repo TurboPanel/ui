@@ -270,6 +270,13 @@ function EmojiPane({
   )
 }
 
+/** The preview's words: a stored emoji that cannot be offered is named as kept, not as the default. */
+function previewLabel(draft: string | null, isEmojiIconAllowed: boolean): string {
+  if (!isEmojiIconAllowed && isEmojiIcon(draft))
+    return 'Current emoji (kept until you pick another)'
+  return iconValueLabel(draft)
+}
+
 export type IconPickerSheetProps = Readonly<{
   /** The stored icon: a key, an emoji or null. */
   value: string | null
@@ -301,10 +308,10 @@ export function IconPickerSheet({
 }: IconPickerSheetProps) {
   const p = usePalette()
   const s = styles(p)
-  // A stored emoji while emoji are off draws as the default, so it starts as one.
-  const start = isEmojiIconAllowed || !isEmojiIcon(value) ? value : null
-  const [draft, setDraft] = useState<string | null>(start)
-  const [tab, setTab] = useState<Tab>(isEmojiIconAllowed && isEmojiIcon(start) ? 'emoji' : 'icons')
+  // The stored value stays the current choice even when emoji are not offered,
+  // so Use Icon never replaces a stored emoji until the person picks something.
+  const [draft, setDraft] = useState<string | null>(value)
+  const [tab, setTab] = useState<Tab>(isEmojiIconAllowed && isEmojiIcon(value) ? 'emoji' : 'icons')
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [pasted, setPasted] = useState('')
@@ -388,7 +395,7 @@ export function IconPickerSheet({
           color={p.link}
           fallback={fallback}
         />
-        <Text style={s.previewText}>{iconValueLabel(draft)}</Text>
+        <Text style={s.previewText}>{previewLabel(draft, isEmojiIconAllowed)}</Text>
       </View>
       {error ? (
         <Text style={s.error} accessibilityRole="alert">

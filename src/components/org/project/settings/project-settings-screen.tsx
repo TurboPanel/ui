@@ -84,7 +84,8 @@ function useProjectIcon(
   const row: ProjectIconRow = {
     glyph: <ProjectTitleIcon project={project} compact isEmojiIconAllowed={isEmojiIconAllowed} />,
     label: iconValueLabel(resolvedIconValue(project.icon, isEmojiIconAllowed)),
-    onChoose: canEdit ? () => setOpen(true) : null,
+    // Not before the organization is known: its emoji setting decides what the picker offers.
+    onChoose: canEdit && organization ? () => setOpen(true) : null,
   }
   const sheet = open ? (
     <IconPickerSheet
