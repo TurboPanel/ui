@@ -43,11 +43,7 @@ function ManagedProjectGlyph({ size = 18, color }: IconProps) {
         stroke={color}
         strokeWidth={1.75}
       />
-      <Path
-        d="M4.5 12c0 1.657 3.358 3 7.5 3s7.5-1.343 7.5-3"
-        stroke={color}
-        strokeWidth={1.75}
-      />
+      <Path d="M4.5 12c0 1.657 3.358 3 7.5 3s7.5-1.343 7.5-3" stroke={color} strokeWidth={1.75} />
     </Svg>
   )
 }
@@ -116,17 +112,11 @@ export function ProjectTitleIcon({
   const type = projectDisplayType(project)
   const label = accessibilityLabelForType(type)
   const glyphSize = compact ? 18 : 22
-  const typeGlyph = (
-    <ProjectTypeGlyph type={type} size={glyphSize} color={colors.link} />
-  )
+  const typeGlyph = <ProjectTypeGlyph type={type} size={glyphSize} color={colors.link} />
   const choosable = type !== 'managed' && type !== 'system'
 
   return (
-    <View
-      style={styles.icon}
-      accessibilityRole="image"
-      accessibilityLabel={label}
-    >
+    <View style={styles.icon} accessibilityRole="image" accessibilityLabel={label}>
       {choosable ? (
         <ResourceIcon
           icon={project.icon}

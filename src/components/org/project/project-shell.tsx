@@ -122,22 +122,11 @@ function ProjectHeader() {
 
   return (
     <View style={styles.header}>
-      <View
-        style={styles.headerRow}
-        accessibilityRole="header"
-        accessibilityLabel="Project"
-      >
-        <View
-          style={styles.breadcrumb}
-          accessibilityLabel="Breadcrumb"
-        >
+      <View style={styles.headerRow} accessibilityRole="header" accessibilityLabel="Project">
+        <View style={styles.breadcrumb} accessibilityLabel="Breadcrumb">
           <ProjectHeaderLead />
           <View style={styles.currentCrumb}>
-            <ProjectTitleIcon
-              project={project}
-              compact
-              isEmojiIconAllowed={isEmojiIconAllowed}
-            />
+            <ProjectTitleIcon project={project} compact isEmojiIconAllowed={isEmojiIconAllowed} />
             {showMutableChrome ? (
               <TextInput
                 value={editName}
@@ -151,25 +140,18 @@ function ProjectHeader() {
                 placeholder="Project name"
                 placeholderTextColor={colors.textMuted}
                 accessibilityLabel="Project name"
-                style={[
-                  styles.titleInput,
-                  Platform.OS === 'web' ? titleInputWebStyle : null,
-                ]}
+                style={[styles.titleInput, Platform.OS === 'web' ? titleInputWebStyle : null]}
               />
             ) : (
               <View style={styles.titleReadOnly}>
-                <Text style={styles.titleText}>
-                  {project.name?.trim() || 'Unnamed project'}
-                </Text>
+                <Text style={styles.titleText}>{project.name?.trim() || 'Unnamed project'}</Text>
                 {isSystemProject ? <PlatformBadge /> : null}
               </View>
             )}
           </View>
         </View>
       </View>
-      {isSystemProject ? (
-        <Text style={styles.platformEyebrow}>Platform managed</Text>
-      ) : null}
+      {isSystemProject ? <Text style={styles.platformEyebrow}>Platform managed</Text> : null}
       {saving ? <Text style={panelStyles.muted}>Saving…</Text> : null}
     </View>
   )

@@ -12,19 +12,12 @@ import {
 } from 'react-native'
 import { HeaderCheck } from '@/components/header-check'
 import { headerMenuGroupStyles } from '@/components/header-menu-group-styles'
-import {
-  GearIcon,
-  OrganizationIcon,
-  SearchIcon,
-} from '@/components/icons/nav-icons'
+import { GearIcon, OrganizationIcon, SearchIcon } from '@/components/icons/nav-icons'
 import { ResourceIcon } from '@/components/icons/picked-icon'
 import { EmptyState } from '@/components/ui'
 import { isEmojiIconAllowedOf, resolvedIconValue } from '@/lib/icons'
 import type { OrganizationRecord } from '@/lib/instance-api'
-import {
-  organizationLabel,
-  visibleOrganizations,
-} from '@/lib/organization-switcher'
+import { organizationLabel, visibleOrganizations } from '@/lib/organization-switcher'
 import { chrome, colors, spacing, webPointer } from '@/lib/theme'
 
 export type OrganizationSwitcherDensity = 'compact' | 'page'
@@ -121,19 +114,14 @@ const OrganizationSwitcherRow = memo(function OrganizationSwitcherRow({
         ]}
         onPress={onPress}
         accessibilityRole="button"
-        accessibilityLabel={
-          active ? `${name}, current organization` : `Switch to ${name}`
-        }
+        accessibilityLabel={active ? `${name}, current organization` : `Switch to ${name}`}
         accessibilityState={{ selected: active }}
       >
         <View style={headerMenuGroupStyles.menuItemMark}>
           {active ? <HeaderCheck color={colors.link} /> : null}
         </View>
         {icon ? <View style={styles.rowIcon}>{icon}</View> : null}
-        <Text
-          style={rowLabelStyle(compactWeb, active)}
-          numberOfLines={1}
-        >
+        <Text style={rowLabelStyle(compactWeb, active)} numberOfLines={1}>
           {name}
         </Text>
       </Pressable>
@@ -156,9 +144,7 @@ const OrganizationSwitcherRow = memo(function OrganizationSwitcherRow({
   )
 })
 
-function OrganizationRowIcon({
-  org,
-}: Readonly<{ org: OrganizationRecord }>) {
+function OrganizationRowIcon({ org }: Readonly<{ org: OrganizationRecord }>) {
   return (
     <ResourceIcon
       icon={org.icon}
@@ -198,7 +184,7 @@ export function OrganizationSwitcherList({
     // Rows get an icon slot only when some listed organization picked an
     // icon, so a list of defaults stays as it was and names stay aligned.
     const withIcons = visible.some(
-      (org) => resolvedIconValue(org.icon, isEmojiIconAllowedOf(org)) !== null,
+      (org) => resolvedIconValue(org.icon, isEmojiIconAllowedOf(org)) !== null
     )
     listBody = visible.map((org) => {
       const name = organizationLabel(org)
@@ -217,24 +203,12 @@ export function OrganizationSwitcherList({
   }
 
   return (
-    <View
-      style={[
-        styles.root,
-        density === 'page' ? styles.rootFill : null,
-        style,
-      ]}
-    >
+    <View style={[styles.root, density === 'page' ? styles.rootFill : null, style]}>
       {showSearch ? (
-        <OrganizationSearchField
-          value={query}
-          onChange={onQueryChange}
-          autoFocus={autoFocus}
-        />
+        <OrganizationSearchField value={query} onChange={onQueryChange} autoFocus={autoFocus} />
       ) : null}
       <ScrollView
-        style={
-          listMaxHeight == null ? styles.flexList : { maxHeight: listMaxHeight }
-        }
+        style={listMaxHeight == null ? styles.flexList : { maxHeight: listMaxHeight }}
         keyboardShouldPersistTaps="handled"
         nestedScrollEnabled
       >
