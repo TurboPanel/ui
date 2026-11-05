@@ -1,10 +1,13 @@
 import { useRouter, type Href } from 'expo-router'
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { IconPickerSheet } from '@/components/org/icon-picker-sheet'
 import { ProjectDeletePanel } from '@/components/org/project-delete-panel'
 import { useProjectContext } from '@/components/org/project/project-context'
 import { ProjectTitleIcon } from '@/components/org/project/project-title-icon'
-import { ProjectSettingsView } from '@/components/org/project/settings/project-settings-view'
+import {
+  ProjectSettingsView,
+  type ProjectIconRow,
+} from '@/components/org/project/settings/project-settings-view'
 import { LoadingState } from '@/components/ui'
 import { projectRepositoriesHref } from '@/lib/org-navigation'
 import { buildProjectOptionsPatch } from '@/lib/project-options'
@@ -16,6 +19,7 @@ import {
   projectEnvironmentSettingsHref,
 } from '@/lib/project-navigation'
 import { iconValueLabel, isEmojiIconAllowedOf, resolvedIconValue } from '@/lib/icons'
+import type { ProjectRecord } from '@/lib/instance-api'
 import { useUpdateProject } from '@/lib/queries'
 import { useOrganizationRecord } from '@/lib/queries/auth'
 import { useRepositories, useUpdateRepository } from '@/lib/queries/releases'
@@ -51,6 +55,42 @@ function useTurnOnAutoDeploy(
 }
 
 /**
+ * The project's icon row and its picker: the icon as it draws (a stored emoji
+ * draws the type glyph while the organization has emoji off), and a sheet
+ * that saves through the project update. `sheet` is null while closed.
+ */
+function useProjectIcon(
+  orgId: string,
+  projectId: string,
+  project: ProjectRecord | null | undefined,
+  canEdit: boolean
+): { row: ProjectIconRow | undefined; sheet: ReactNode } {
+  const update = useUpdateProject(orgId, projectId)
+  const [open, setOpen] = useState(false)
+  const isEmojiIconAllowed = isEmojiIconAllowedOf(useOrganizationRecord(orgId))
+  if (!project) return { row: undefined, sheet: null }
+  const saveIcon = async (icon: string | null): Promise<string | null> => {
+    const result = await update.run({ icon })
+    return result.ok ? null : failedRunMessage(result, 'Could not save the icon.')
+  }
+  const row: ProjectIconRow = {
+    glyph: <ProjectTitleIcon project={project} compact isEmojiIconAllowed={isEmojiIconAllowed} />,
+    label: iconValueLabel(resolvedIconValue(project.icon, isEmojiIconAllowed)),
+    onChoose: canEdit ? () => setOpen(true) : null,
+  }
+  const sheet = open ? (
+    <IconPickerSheet
+      value={project.icon}
+      isEmojiIconAllowed={isEmojiIconAllowed}
+      fallback={<ProjectTitleIcon project={{ ...project, icon: null }} compact />}
+      onClose={() => setOpen(false)}
+      onSave={saveIcon}
+    />
+  ) : null
+  return { row, sheet }
+}
+
+/**
  * Project Settings tab for a Compose project, and for a managed database
  * (name, workspace and delete; its engine settings are per environment). Everything saves through the
  * one project record (`PATCH /projects/:id`), so each control reports its own
@@ -74,8 +114,6 @@ export function ProjectSettingsScreen() {
   const [edit, setEdit] = useState<{ name: string; description: string } | null>(null)
   const [busy, setBusy] = useState<'general' | 'move' | 'names' | null>(null)
   const [dangerOpen, setDangerOpen] = useState(false)
-  const [iconPickerOpen, setIconPickerOpen] = useState(false)
-  const isEmojiIconAllowed = isEmojiIconAllowedOf(useOrganizationRecord(orgId))
   const turnOnAutoDeploy = useTurnOnAutoDeploy(orgId, project?.repositoryId ?? null, setError)
 
   const git = useMemo(
@@ -89,6 +127,8 @@ export function ProjectSettingsScreen() {
         : [],
     [project, environments, repositories.data]
   )
+  const canEdit = canManage && projectAllowsMutations
+  const icon = useProjectIcon(orgId, projectId, project, canEdit)
   if (!project) return <LoadingState />
 
   const draft = edit ?? projectGeneralFromRecord(project)
@@ -96,7 +136,6 @@ export function ProjectSettingsScreen() {
   const databaseSettings = primary
     ? environmentPageTabHref(orgId, projectId, primary.id, 'settings')
     : null
-  const canEdit = canManage && projectAllowsMutations
   const patch = buildProjectGeneralPatch(project, draft)
 
   const run = async (kind: NonNullable<typeof busy>, body: Parameters<typeof update.run>[0]) => {
@@ -108,23 +147,12 @@ export function ProjectSettingsScreen() {
     return result.ok
   }
 
-  const saveIcon = async (icon: string | null): Promise<string | null> => {
-    const result = await update.run({ icon })
-    return result.ok ? null : failedRunMessage(result, 'Could not save the icon.')
-  }
-
   return (
     <>
       <ProjectSettingsView
         projectId={project.id}
         canEdit={canEdit}
-        icon={{
-          glyph: (
-            <ProjectTitleIcon project={project} compact isEmojiIconAllowed={isEmojiIconAllowed} />
-          ),
-          label: iconValueLabel(resolvedIconValue(project.icon, isEmojiIconAllowed)),
-          onChoose: canEdit ? () => setIconPickerOpen(true) : null,
-        }}
+        icon={icon.row}
         general={{
           name: draft.name,
           description: draft.description,
@@ -192,15 +220,7 @@ export function ProjectSettingsScreen() {
         dangerOpen={dangerOpen}
         onToggleDanger={() => setDangerOpen((open) => !open)}
       />
-      {iconPickerOpen ? (
-        <IconPickerSheet
-          value={project.icon}
-          isEmojiIconAllowed={isEmojiIconAllowed}
-          fallback={<ProjectTitleIcon project={{ ...project, icon: null }} compact />}
-          onClose={() => setIconPickerOpen(false)}
-          onSave={saveIcon}
-        />
-      ) : null}
+      {icon.sheet}
     </>
   )
 }
