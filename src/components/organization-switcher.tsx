@@ -18,7 +18,7 @@ import {
 } from '@/components/header-menu-group-styles'
 import { HeaderMenuOverlay } from '@/components/header-menu-overlay'
 import { HeaderMenuTrigger } from '@/components/header-menu-trigger'
-import { breadcrumbStyles, CRUMB_BOX, CRUMB_PADDING } from '@/components/org/breadcrumb-styles'
+import { breadcrumbStyles, CRUMB_PADDING } from '@/components/org/breadcrumb-styles'
 import { BillingNavIcon, GearIcon, OrganizationIcon, PlusIcon } from '@/components/icons/nav-icons'
 import { OrganizationSwitcherList } from '@/components/org/organization-switcher-list'
 import { dropdownLeft, headerLayoutFor } from '@/lib/header-layout'
@@ -38,7 +38,7 @@ import {
   replaceOrganization,
 } from '@/lib/org-navigation'
 import { useCreateOrganization, useOrganizationsQuery } from '@/lib/queries/auth'
-import { colors, spacing, webPointer } from '@/lib/theme'
+import { colors, webPointer } from '@/lib/theme'
 
 const isNative = Platform.OS !== 'web'
 /** Desktop dropdown width; phones use the full-width top panel instead. */
@@ -298,11 +298,14 @@ export function OrganizationSwitcherSegment({
   )
 }
 
-/** The org crumb's icon, sized to its 13px text rather than the 16px menu icon. */
-const CRUMB_GLYPH_SIZE = 14
-const CRUMB_CHEVRON_SIZE = 10
 /** The menu trigger's height: the crumb keeps it as its anchor so the menu opens where it always has. */
 const MENU_ANCHOR_HEIGHT = 40
+/**
+ * The 12px chevron is drawn with about 2.5px of empty space on its right, so
+ * the crumb's right padding is that much smaller than the trail's: the gap
+ * before the first separator then matches the gap after it.
+ */
+const CRUMB_CHEVRON_INSET = 2
 
 function OrgTrigger({
   label,
@@ -335,11 +338,8 @@ function OrgTrigger({
       style={crumb ? styles.crumbTrigger : undefined}
     >
       {showGlyph ? (
-        <View style={[headerMenuGroupStyles.triggerGlyph, crumb && styles.crumbGlyph]}>
-          <OrganizationIcon
-            size={crumb ? CRUMB_GLYPH_SIZE : HEADER_TRIGGER_ICON_SIZE}
-            color={colors.textDim}
-          />
+        <View style={headerMenuGroupStyles.triggerGlyph}>
+          <OrganizationIcon size={HEADER_TRIGGER_ICON_SIZE} color={colors.textDim} />
         </View>
       ) : null}
       <View style={headerMenuGroupStyles.triggerCopy}>
@@ -347,11 +347,7 @@ function OrgTrigger({
           {label}
         </Text>
       </View>
-      <HeaderChevron
-        size={crumb ? CRUMB_CHEVRON_SIZE : undefined}
-        color={open ? colors.text : colors.textDim}
-        open={open}
-      />
+      <HeaderChevron color={open ? colors.text : colors.textDim} open={open} />
     </HeaderMenuTrigger>
   )
 }
@@ -414,20 +410,12 @@ const styles = StyleSheet.create({
     minHeight: MENU_ANCHOR_HEIGHT,
     justifyContent: 'center',
   },
-  // The menu button as a crumb: the same box as a breadcrumb link, so the
-  // organization and the trail read as one bar.
+  // The menu button as a crumb keeps the header button's height, icon size
+  // and icon spacing (the same as the profile button beside it); only the
+  // right side is trimmed so the gap before the first separator matches the
+  // gaps along the trail.
   crumbTrigger: {
-    ...CRUMB_BOX,
-    // The menu trigger sets the sides one by one, which beats paddingHorizontal.
-    paddingLeft: CRUMB_PADDING,
-    paddingRight: CRUMB_PADDING,
-    minHeight: 0,
-    gap: spacing.xs,
-  },
-  crumbGlyph: {
-    width: CRUMB_GLYPH_SIZE,
-    height: CRUMB_GLYPH_SIZE,
-    marginRight: 0,
+    paddingRight: CRUMB_PADDING - CRUMB_CHEVRON_INSET,
   },
   crumbCurrentLabel: {
     color: colors.text,
