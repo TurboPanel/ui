@@ -379,6 +379,60 @@ function WaitingStep({
   )
 }
 
+/**
+ * How far the new server has come, from the key list (polled every second
+ * from the install command on) and the server list the wait already polls.
+ * When a daemon starts enrolling with the key, the installer has run, so the
+ * wizard moves to the wait by itself, even before Continue.
+ */
+function useAddServerProgress({
+  orgId,
+  step,
+  setStep,
+  creating,
+  revealed,
+  connectedServer,
+  servers,
+  checkStopped,
+}: Readonly<{
+  orgId: string
+  step: WizardStep
+  setStep: (step: WizardStep) => void
+  creating: boolean
+  revealed: CreatedLicense | null
+  connectedServer: OrgServerRecord | null
+  servers: readonly OrgServerRecord[] | null | undefined
+  checkStopped: boolean
+}>) {
+  const followingKey = revealed != null && step !== 'create' && connectedServer == null
+  const licensesQuery = useOrgLicenses(orgId, {
+    enabled: followingKey,
+    pollMs: followingKey ? WAITING_POLL_MS : false,
+  })
+  const licenseId = revealed?.licenseId ?? null
+  const licenses = revealed ? licensesQuery.data?.licenses : null
+  const progress = addServerProgress({
+    screen: step,
+    creating,
+    licenseId,
+    licenses,
+    servers,
+    checkStopped,
+  })
+  const key = licenses?.find((license) => license.id === licenseId)
+  const enrollingHost = key?.provisioning?.hostname ?? null
+  const daemonSeen = DAEMON_SEEN.has(progress.reached)
+
+  useEffect(() => {
+    if (step === 'install' && daemonSeen) setStep('waiting')
+  }, [step, daemonSeen, setStep])
+
+  return { progress, enrollingHost }
+}
+
+/** Steps that mean a daemon already presented the key: the installer has run. */
+const DAEMON_SEEN: ReadonlySet<AddServerStepId> = new Set(['enroll', 'connect', 'ready'])
+
 export function AddServerWizard({ orgId, onComplete, onDismiss }: AddServerWizardProps) {
   const publicUrlsQuery = usePublicUrlsOptional({ enabled: __DEV__ })
   const managedUrls = orEmptyArray(publicUrlsQuery.data?.urls)
@@ -407,31 +461,16 @@ export function AddServerWizard({ orgId, onComplete, onDismiss }: AddServerWizar
     refetchInterval: waitingForConnection ? WAITING_POLL_MS : false,
     retry: false,
   })
-  // The key list says when a daemon starts enrolling with this key, so the
-  // steps can move on even before the person presses Continue.
-  const followingKey = revealed != null && step !== 'create' && connectedServer == null
-  const licensesQuery = useOrgLicenses(orgId, {
-    enabled: followingKey,
-    pollMs: followingKey ? WAITING_POLL_MS : false,
-  })
-  const progress = addServerProgress({
-    screen: step,
+  const { progress, enrollingHost } = useAddServerProgress({
+    orgId,
+    step,
+    setStep,
     creating,
-    licenseId: revealed?.licenseId ?? null,
-    licenses: revealed ? licensesQuery.data?.licenses : null,
+    revealed,
+    connectedServer,
     servers: waitingForConnection ? serversQuery.data?.servers : null,
     checkStopped: pollError != null,
   })
-  const enrollingHost =
-    licensesQuery.data?.licenses.find((license) => license.id === revealed?.licenseId)?.provisioning
-      ?.hostname ?? null
-  const daemonSeen =
-    progress.reached === 'enroll' || progress.reached === 'connect' || progress.reached === 'ready'
-
-  useEffect(() => {
-    // A daemon is already enrolling with the key: the installer has run.
-    if (step === 'install' && daemonSeen) setStep('waiting')
-  }, [step, daemonSeen])
 
   useEffect(() => {
     if (!__DEV__ || managedUrls.length === 0) return
