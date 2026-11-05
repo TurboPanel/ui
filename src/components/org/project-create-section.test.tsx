@@ -252,14 +252,21 @@ describe('ProjectCreateSection', () => {
     expect(body).toMatchObject({ type: 'docker-compose', icon: '🚀' })
   })
 
-  it('offers no emoji when the organization record lacks the icon fields', async () => {
+  it('shows no icon button on a control plane without organization icons', () => {
     mocks.org = {}
+    render(<ProjectCreateSection orgId="o" />)
+    expect(screen.queryByRole('button', { name: 'Choose an icon' })).toBeNull()
+  })
+
+  it('offers emoji in the picker only when the organization allows them', async () => {
+    mocks.org = { isEmojiIconAllowed: false }
     render(<ProjectCreateSection orgId="o" />)
     await press('Choose an icon')
     expect(mocks.picker?.isEmojiIconAllowed).toBe(false)
   })
 
-  it('sends no icon with a managed database, which keeps the managed icon', async () => {
+  it('hides the icon button for a managed database and sends no icon with it', async () => {
+    mocks.org = { isEmojiIconAllowed: true }
     render(<ProjectCreateSection orgId="o" />)
     name('Data')
     await press('Choose an icon')
@@ -268,6 +275,7 @@ describe('ProjectCreateSection', () => {
       mocks.picker!.onClose()
     })
     await press('Managed database')
+    expect(screen.queryByRole('button', { name: 'Choose an icon' })).toBeNull()
     await press('PostgreSQL')
     await press('Create project')
     expect(mocks.createProject).toHaveBeenCalledWith({

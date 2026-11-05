@@ -1,29 +1,11 @@
 // @vitest-environment happy-dom
-import type { ReactElement } from 'react'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { applyScenario, SCENARIOS, styleOf } from '@/components/ui/v4/rn-stub'
 import type { HomeEnvironment, HomeProject } from '@/lib/v4/projects-home'
 import { pillLabel, ProjectTile, tileSub } from './project-tile'
 
-// The stub's Pressable drops the press event; the real one hands it over, and the
-// tile's icon stops it so the tile under it does not open too.
-vi.mock('react-native', async () => {
-  const { reactNativeStub } = await import('@/components/ui/v4/rn-stub')
-  const { cloneElement } = await import('react')
-  type ClickProps = { onClick?: (event: unknown) => void }
-  return {
-    ...reactNativeStub,
-    Pressable: (props: Record<string, unknown>) =>
-      cloneElement(
-        reactNativeStub.Pressable({ ...props, onPress: undefined }) as ReactElement<ClickProps>,
-        {
-          onClick: (event: unknown) =>
-            (props.onPress as ((e: unknown) => void) | undefined)?.(event),
-        }
-      ),
-  }
-})
+vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
 vi.mock('react-native-svg', async () => (await import('@/components/ui/v4/rn-stub')).svgStub)
 vi.mock(
   '@/lib/theme-preference',
@@ -104,22 +86,46 @@ describe.each(SCENARIOS)('Project tile ($name)', (scenario) => {
     expect(off.container.querySelectorAll('path')).toHaveLength(1)
   })
 
-  it('makes the icon its own button that changes the icon without opening the project', () => {
+  it('puts the change-icon button beside the tile button, never inside it', () => {
+    const onOpen = vi.fn()
+    const onChangeIcon = vi.fn()
+    for (const layout of ['grid', 'list', 'listStacked'] as const) {
+      const { container, unmount } = render(
+        <ProjectTile
+          project={project({ icon: 'mail' })}
+          layout={layout}
+          onOpen={onOpen}
+          onChangeIcon={onChangeIcon}
+        />
+      )
+      const buttons = Array.from(container.querySelectorAll('button'))
+      expect(buttons).toHaveLength(2)
+      for (const button of buttons) expect(button.querySelector('button')).toBeNull()
+      const icon = screen.getByRole('button', { name: 'Change icon for Shop' })
+      const tile = screen.getByRole('button', { name: /^Open Shop/ })
+      expect(icon.parentElement).toBe(tile.parentElement)
+      expect(styleOf(icon)).toMatchObject({ position: 'absolute' })
+      fireEvent.click(icon)
+      unmount()
+    }
+    expect(onChangeIcon).toHaveBeenCalledTimes(3)
+    expect(onOpen).not.toHaveBeenCalled()
+  })
+
+  it('still opens the project from the tile itself', () => {
     const onOpen = vi.fn()
     const onChangeIcon = vi.fn()
     render(
       <ProjectTile
-        project={project({ icon: 'mail' })}
+        project={project({})}
         layout="grid"
         onOpen={onOpen}
         onChangeIcon={onChangeIcon}
       />
     )
-    fireEvent.click(screen.getByRole('button', { name: 'Change icon for Shop' }))
-    expect(onChangeIcon).toHaveBeenCalledTimes(1)
-    expect(onOpen).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: /^Open Shop/ }))
     expect(onOpen).toHaveBeenCalledTimes(1)
+    expect(onChangeIcon).not.toHaveBeenCalled()
   })
 
   it('keeps the icon plain without the action, and for managed and platform tiles', () => {

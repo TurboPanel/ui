@@ -748,7 +748,7 @@ function ProjectCreateWizard({ orgId }: Readonly<{ orgId: string }>) {
             onPickedWorkspaceIdChange={setPickedWorkspaceId}
             onNewWorkspaceNameChange={handleNewWorkspaceNameChange}
             openWorkspaceByDefault={openWorkspaceSectionByDefault}
-            icon={projectIcon.field}
+            icon={projectIcon.fieldFor(selectedOption?.type)}
           />
           {projectIcon.sheet}
         </>

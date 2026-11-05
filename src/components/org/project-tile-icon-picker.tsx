@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react'
-import { ProjectsNavIcon } from '@/components/icons/nav-icons'
 import { IconPickerSheet } from '@/components/org/icon-picker-sheet'
+import { ProjectDefaultGlyph } from '@/components/org/project-tile'
 import { emojiIconsOffered, isEmojiIconAllowedOf } from '@/lib/icons'
 import { useCan } from '@/lib/query-client'
 import { useUpdateProjectIcon } from '@/lib/queries'
@@ -48,7 +48,7 @@ export function useTileIconPicker(orgId: string): Readonly<{
     <IconPickerSheet
       value={target.icon}
       isEmojiIconAllowed={emojiIconsOffered(organization)}
-      fallback={<ProjectsNavIcon size={20} color={colors.link} />}
+      fallback={<ProjectDefaultGlyph size={20} color={colors.link} />}
       onClose={() => setTarget(null)}
       onSave={saveIcon}
     />
