@@ -401,6 +401,7 @@ function useAddServerProgress({
   creating: boolean
   revealed: CreatedLicense | null
   connectedServer: OrgServerRecord | null
+  /** The server list (shared with the servers page), matched by this run's key. */
   servers: readonly OrgServerRecord[] | null | undefined
   checkStopped: boolean
 }>) {
@@ -468,7 +469,7 @@ export function AddServerWizard({ orgId, onComplete, onDismiss }: AddServerWizar
     creating,
     revealed,
     connectedServer,
-    servers: waitingForConnection ? serversQuery.data?.servers : null,
+    servers: serversQuery.data?.servers,
     checkStopped: pollError != null,
   })
 
