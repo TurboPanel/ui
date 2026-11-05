@@ -334,16 +334,17 @@ export function overlappingPriorityTies(
 }
 
 /**
- * The priority a Routing save sends. A hidden field (priority changes nothing
- * for this network) keeps the stored number, so a stale draft cannot block or
- * change the save; a shown field is validated like any typed value.
+ * The priority a Routing save sends. `shownText` is the field's text, or
+ * `null` while the field is hidden (priority changes nothing for this
+ * network): then the stored number is kept, so a stale draft cannot block or
+ * change the save. Shown text is validated like any typed value.
  */
 export function priorityToSave(
-  shown: boolean,
-  draftText: string,
+  shownText: string | null,
   stored: number
 ): ReturnType<typeof parseDatacenterPriorityDraft> {
-  return shown ? parseDatacenterPriorityDraft(draftText) : { ok: true, priority: stored }
+  if (shownText === null) return { ok: true, priority: stored }
+  return parseDatacenterPriorityDraft(shownText)
 }
 
 /** Ids of the networks whose priority can change anything (see {@link priorityMatters}). */

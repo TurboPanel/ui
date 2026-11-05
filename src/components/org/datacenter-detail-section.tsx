@@ -1583,8 +1583,7 @@ export function DatacenterDetailSection({
           // The instance drops an out-of-range priority instead of clamping,
           // so an unvalidated save would look like a no-op. Reject here.
           const parsed = priorityToSave(
-            priorityView !== null,
-            priorityText,
+            priorityView ? priorityText : null,
             datacenter?.priority ?? DEFAULT_DATACENTER_PRIORITY
           )
           if (!parsed.ok) {

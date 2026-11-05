@@ -259,9 +259,9 @@ describe('priority shows only when it matters', () => {
   })
 
   it('saves the stored priority while the field is hidden', () => {
-    expect(priorityToSave(false, 'not a number', 40)).toEqual({ ok: true, priority: 40 })
-    expect(priorityToSave(true, '7', 40)).toEqual({ ok: true, priority: 7 })
-    expect(priorityToSave(true, 'x', 40).ok).toBe(false)
+    expect(priorityToSave(null, 40)).toEqual({ ok: true, priority: 40 })
+    expect(priorityToSave('7', 40)).toEqual({ ok: true, priority: 7 })
+    expect(priorityToSave('x', 40).ok).toBe(false)
   })
 
   it('joins names in plain words', () => {
