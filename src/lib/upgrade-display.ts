@@ -131,7 +131,7 @@ export function upgradeBuildDetailLines(
   return { version, commit, manifestUrl }
 }
 
-/** Map a step status to the pipeline id used by `WizardSteps`. */
+/** Map a step status to the pipeline id the step bar (`WizardSteps`) marks as current. */
 export function mapStepStatusToPipeline(
   status: UpgradeStepStatus | null | undefined
 ): UpgradeStepPipelineId {
@@ -708,13 +708,27 @@ export function platformUpgradeHeadlineCopy(headline: PlatformUpgradeHeadline): 
 
 /**
  * How the step bar draws the stage a server's update reached: turning while
- * it is under way, red where it failed or rolled back, green once done, and
- * still (no spinner) when it stopped for attention or was skipped.
+ * it is under way, green once done, every stage skipped for a skipped server,
+ * and still (no spinner) otherwise. A failed or rolled-back step stays still
+ * rather than red: its status does not say which stage it stopped at (the
+ * pipeline id falls back to Verifying), and the red outcome line says it failed.
  */
 export function upgradeRailState(status: UpgradeStepStatus | null | undefined): StepRailState {
-  const tone = upgradeStepOutcome({ status }).tone
-  if (tone === 'danger') return 'failed'
   if (status === 'done') return 'done'
-  if (tone === 'active') return 'running'
-  return 'active'
+  if (status === 'skipped') return 'skipped'
+  return upgradeStepOutcome({ status }).tone === 'active' ? 'running' : 'active'
+}
+
+/**
+ * Every stage's state when one status decides them all: a skipped server
+ * never ran any stage. Undefined otherwise (the bar follows the current stage).
+ */
+export function upgradeRailStates(
+  status: UpgradeStepStatus | null | undefined
+): Record<UpgradeStepPipelineId, StepRailState> | undefined {
+  if (status !== 'skipped') return undefined
+  return Object.fromEntries(UPGRADE_STEP_PIPELINE.map((id) => [id, 'skipped'])) as Record<
+    UpgradeStepPipelineId,
+    StepRailState
+  >
 }

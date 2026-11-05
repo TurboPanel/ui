@@ -116,7 +116,7 @@ describe('addServerProgress', () => {
     ])
   })
 
-  it('spins on Ready while a connected server has not reported its host, then finishes', () => {
+  it('spins on Ready while only the key list says connected, then finishes with the server list', () => {
     const bare = addServerProgress({
       ...WAITING,
       licenses: [license({ boundServer: { id: 'srv-1', name: null, connected: true } })],
@@ -127,7 +127,7 @@ describe('addServerProgress', () => {
 
     const done = addServerProgress({
       ...WAITING,
-      servers: [server({ connected: true, osDisplay: 'Debian 13 (Trixie)' })],
+      servers: [server({ connected: true })],
     })
     expect(done.complete).toBe(true)
     expect(Object.values(done.states).every((state) => state === 'done')).toBe(true)

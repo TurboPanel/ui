@@ -5,6 +5,7 @@ import {
   mapStepStatusToPipeline,
   stepHasStarted,
   upgradeRailState,
+  upgradeRailStates,
   upgradePhaseLabel,
   upgradeStepLabel,
   upgradeStepOutcome,
@@ -36,7 +37,12 @@ export function UpgradeStepTracker({
   const current = stepHasStarted(status) ? mapStepStatusToPipeline(status) : null
   const heading = title ?? upgradePhaseLabel(phase)
   const outcome = upgradeStepOutcome({ status, errorCode })
-  const ended = outcome.tone === 'danger' || outcome.tone === 'pending' || !stepHasStarted(status)
+  // A skipped server says why (offline, paused) under a bar of skipped stages.
+  const ended =
+    outcome.tone === 'danger' ||
+    outcome.tone === 'pending' ||
+    status === 'skipped' ||
+    !stepHasStarted(status)
 
   return (
     <View style={{ gap: spacing.xs }}>
@@ -45,6 +51,7 @@ export function UpgradeStepTracker({
         steps={PIPELINE_STEPS}
         current={current}
         currentState={upgradeRailState(status)}
+        states={upgradeRailStates(status)}
       />
       {note ? <Text style={panelStyles.muted}>{note}</Text> : null}
       {ended ? (

@@ -15,8 +15,8 @@ import type { StepRailState } from '@/lib/step-rail'
  *    key with a valid signature and its enrolment is under way).
  * 5. Connect: the key is bound to a server (`boundServer`, or a server row
  *    carries the key) that has not connected yet.
- * 6. Ready: the server is connected; done once it has reported its host
- *    (operating system, resources or hostname).
+ * 6. Ready: the key list says the server connected; done once the server
+ *    list shows it connected (when the wizard says so and offers Done).
  */
 export type AddServerStepId = 'name' | 'command' | 'install' | 'enroll' | 'connect' | 'ready'
 
@@ -49,15 +49,10 @@ export type AddServerProgressInput = Readonly<{
 export type AddServerProgress = Readonly<{
   /** The step reached: every step before it is done. */
   reached: AddServerStepId
-  /** True once the server is connected and has reported its host. */
+  /** True once the server list shows the server connected. */
   complete: boolean
   states: Readonly<Record<AddServerStepId, StepRailState>>
 }>
-
-function serverReportedHost(server: OrgServerRecord | undefined): boolean {
-  if (!server) return false
-  return Boolean(server.os || server.osDisplay || server.resources || server.hostname?.trim())
-}
 
 /** How far the new server has come, from the wizard's screen and the polled lists. */
 export function addServerProgress(input: AddServerProgressInput): AddServerProgress {
@@ -77,7 +72,9 @@ export function addServerProgress(input: AddServerProgressInput): AddServerProgr
   if (enrolling) reached = 'enroll'
   if (bound) reached = 'connect'
   if (connected) reached = 'ready'
-  const complete = connected && serverReportedHost(server)
+  // Done when the server list itself shows the server connected: the moment
+  // the wizard says "Server connected" and offers Done.
+  const complete = server?.connected === true
 
   const order = ADD_SERVER_STEPS.map((step) => step.id)
   const at = order.indexOf(reached)

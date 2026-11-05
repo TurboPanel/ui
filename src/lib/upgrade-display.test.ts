@@ -7,6 +7,7 @@ import {
   installedBuildLabel,
   mapStepStatusToPipeline,
   upgradeRailState,
+  upgradeRailStates,
   offlineWaitingNotice,
   pieceIdentityLines,
   stepInFlight,
@@ -805,13 +806,28 @@ describe('upgradeRailState', () => {
     ['downloading', 'running'],
     ['installing', 'running'],
     ['done', 'done'],
-    ['failed', 'failed'],
-    ['rolled_back', 'failed'],
+    ['failed', 'active'],
+    ['rolled_back', 'active'],
     ['needs_attention', 'active'],
-    ['skipped', 'active'],
+    ['skipped', 'skipped'],
     ['pending', 'active'],
     [null, 'active'],
   ] as const)('draws %s as %s', (status, state) => {
     expect(upgradeRailState(status)).toBe(state)
+  })
+})
+
+describe('upgradeRailStates', () => {
+  it('skips every stage for a skipped server and leaves the rest to the current stage', () => {
+    expect(Object.values(upgradeRailStates('skipped') ?? {})).toEqual([
+      'skipped',
+      'skipped',
+      'skipped',
+      'skipped',
+      'skipped',
+      'skipped',
+    ])
+    expect(upgradeRailStates('installing')).toBeUndefined()
+    expect(upgradeRailStates(null)).toBeUndefined()
   })
 })
