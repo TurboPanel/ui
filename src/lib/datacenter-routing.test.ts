@@ -86,8 +86,8 @@ describe('winningDatacenterId', () => {
       winningDatacenterId(
         ['dc-lan', 'dc-backhaul', 'dc-retail'],
         ['dc-retail', 'dc-backhaul', 'dc-lan'],
-        policies,
-      ),
+        policies
+      )
     ).toBe('dc-backhaul')
     expect(winningDatacenterId(['dc-retail'], ['dc-retail'], policies)).toBeNull()
     expect(winningDatacenterId(['dc-lan'], ['dc-backhaul'], policies)).toBeNull()
@@ -106,7 +106,7 @@ describe('findDatacenterWinnerHint', () => {
       serverB: 'db-2',
     })
     expect(formatDatacenterWinnerHint(hint!, NAMES, policies)).toBe(
-      'Backhaul (priority 10) currently wins over Primary LAN (100) for db-1 ↔ db-2.',
+      'Backhaul (priority 10) currently wins over Primary LAN (100) for db-1 ↔ db-2.'
     )
   })
 
@@ -142,7 +142,7 @@ describe('findDatacenterWinnerHint', () => {
           ],
         },
       ],
-      buildDatacenterPolicyMap([{ id: 'dc-lan', priority: 50 }]),
+      buildDatacenterPolicyMap([{ id: 'dc-lan', priority: 50 }])
     )
     expect(hint).toEqual({
       winnerId: 'dc-lan',
@@ -151,7 +151,7 @@ describe('findDatacenterWinnerHint', () => {
       serverB: 'b',
     })
     expect(formatDatacenterWinnerHint(hint!, new Map(), buildDatacenterPolicyMap([]))).toBe(
-      'dc-lan (priority 100) currently wins over dc-x (100) for a.host ↔ b.',
+      'dc-lan (priority 100) currently wins over dc-x (100) for a.host ↔ b.'
     )
   })
 })
@@ -162,24 +162,24 @@ describe('describeDatacenterTransport', () => {
   it('appends the winning datacenter and its priority', () => {
     expect(
       describeDatacenterTransport({
-        baseLabel: 'Datacenter LAN',
+        baseLabel: 'Datacenter network',
         memberDatacenterIds: ['dc-lan', 'dc-backhaul'],
         primaryDatacenterIds: ['dc-backhaul', 'dc-lan'],
         policies,
         nameById: NAMES,
-      }),
-    ).toBe('Datacenter LAN · Backhaul (priority 10)')
+      })
+    ).toBe('Datacenter network · Backhaul (priority 10)')
   })
 
   it('keeps the base label when no trusted datacenter is shared', () => {
     expect(
       describeDatacenterTransport({
-        baseLabel: 'Datacenter LAN',
+        baseLabel: 'Datacenter network',
         memberDatacenterIds: ['dc-retail'],
         primaryDatacenterIds: ['dc-retail'],
         policies,
         nameById: NAMES,
-      }),
-    ).toBe('Datacenter LAN')
+      })
+    ).toBe('Datacenter network')
   })
 })

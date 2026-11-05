@@ -37,18 +37,18 @@ import { userErrorMessage } from '@/lib/user-error'
 
 function datacentersListHint(loading: boolean, count: number): string {
   if (loading) return 'Loading…'
-  if (count === 1) return '1 datacenter'
-  return `${count} datacenters`
+  if (count === 1) return '1 datacenter network'
+  return `${count} datacenter networks`
 }
 
 function datacentersErrorMessage(error: unknown): string | null {
   if (!error) return null
   if (error instanceof Error) return userErrorMessage(error, '')
-  return 'Failed to load datacenters'
+  return 'Failed to load datacenter networks'
 }
 
 const DATACENTER_COLUMNS = [
-  { key: 'name', header: 'Datacenter', flex: 2.2, minWidth: 180 },
+  { key: 'name', header: 'Datacenter Network', flex: 2.2, minWidth: 180 },
   { key: 'location', header: 'Location', flex: 1.8, minWidth: 170 },
   { key: 'servers', header: 'Servers', flex: 0.9, minWidth: 90 },
   { key: 'cidrs', header: 'Subnets', flex: 1.6, minWidth: 140 },
@@ -183,7 +183,7 @@ function DatacentersListBody({
   serverCountByDatacenter: ReadonlyMap<string, number>
 }>) {
   if (loading) {
-    return <LoadingState label="Loading datacenters…" />
+    return <LoadingState label="Loading datacenter networks…" />
   }
   if (datacenters.length === 0) {
     return <DatacentersEmptyState reason={eligibilityReason} />
@@ -199,7 +199,11 @@ function DatacentersListBody({
 
 function DatacentersEmptyState({ reason }: Readonly<{ reason: string | null }>) {
   return (
-    <EmptyState title="No datacenters yet" hint={reason ?? 'Create one from a server IP.'} panel />
+    <EmptyState
+      title="No datacenter networks yet"
+      hint={reason ?? 'Create one from a server IP.'}
+      panel
+    />
   )
 }
 
@@ -216,11 +220,11 @@ function DatacentersToolbar({
   return (
     <View style={styles.toolbarRow}>
       <Button
-        label="+ Datacenter"
+        label="+ Datacenter Network"
         variant="primary"
         disabled={!canAdd}
         onPress={onAdd}
-        accessibilityLabel="Add datacenter"
+        accessibilityLabel="Add datacenter network"
       />
     </View>
   )
@@ -253,17 +257,17 @@ export function DatacentersOverviewSection({ orgId }: Readonly<{ orgId: string }
 
   return (
     <View style={styles.root}>
-      <Text style={panelStyles.pageTitle}>Datacenters</Text>
+      <Text style={panelStyles.pageTitle}>Datacenter Networks</Text>
       <Text style={panelStyles.pageCopy}>
-        Logical routing domains, not buildings. A datacenter can hold several routable subnets; a
-        server may belong to more than one. Lower priority wins. Servers on a shared trusted network
-        talk over the LAN with no tunnel; over an untrusted one, {TURBOFABRIC_PRODUCT_NAME} runs
-        encrypted.
+        A datacenter network is a network inside a datacenter, not the building: a routing domain of
+        private subnets that can all reach each other. A server can be on more than one. Lower
+        priority wins. Servers on a shared trusted network talk over the LAN with no tunnel; over an
+        untrusted one, {TURBOFABRIC_PRODUCT_NAME} runs encrypted.
       </Text>
 
       {error && datacenters.length === 0 ? <Text style={panelStyles.error}>{error}</Text> : null}
 
-      <SectionPanel title="Datacenters" hint={listHint}>
+      <SectionPanel title="Datacenter Networks" hint={listHint}>
         <DatacentersToolbar
           canManage={canManage}
           canAdd={canAdd}

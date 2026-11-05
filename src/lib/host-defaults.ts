@@ -12,7 +12,7 @@ export type NtpDefaults = {
 
 export function configuredSourceLabel(source: HostDefaultsSource | null | undefined): string {
   if (source === 'server') return 'Server override'
-  if (source === 'datacenter') return 'Datacenter default'
+  if (source === 'datacenter') return 'Datacenter network default'
   if (source === 'organization') return 'Organization default'
   return 'Not set'
 }

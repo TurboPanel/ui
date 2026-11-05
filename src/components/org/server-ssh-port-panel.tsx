@@ -1,19 +1,9 @@
 import { useState } from 'react'
 import { Text } from 'react-native'
 import { panelStyles } from '@/components/ui/panel-styles'
-import {
-  Button,
-  ButtonRow,
-  MonoText,
-  SectionPanel,
-  TextField,
-} from '@/components/ui'
+import { Button, ButtonRow, MonoText, SectionPanel, TextField } from '@/components/ui'
 import type { ServerDetailRecord } from '@/lib/instance-api'
-import {
-  DEFAULT_SSH_PORT,
-  parseSshPortDraft,
-  sshPortSourceLabel,
-} from '@/lib/host-defaults'
+import { DEFAULT_SSH_PORT, parseSshPortDraft, sshPortSourceLabel } from '@/lib/host-defaults'
 import { useUpdateServer } from '@/lib/queries/servers'
 import { userErrorMessage } from '@/lib/user-error'
 
@@ -53,7 +43,7 @@ export function ServerSshPortPanel({
         onError: (err) => {
           setError(errorMessage(err, 'Failed to save SSH port'))
         },
-      },
+      }
     )
   }
 
@@ -81,9 +71,7 @@ export function ServerSshPortPanel({
         <Text style={panelStyles.detailLabel}>Effective: </Text>
         <MonoText>{String(server.sshPort)}</MonoText>
       </Text>
-      <Text style={panelStyles.muted}>
-        Source: {sshPortSourceLabel(server.sshPortSource)}
-      </Text>
+      <Text style={panelStyles.muted}>Source: {sshPortSourceLabel(server.sshPortSource)}</Text>
       {error ? <Text style={panelStyles.error}>{error}</Text> : null}
 
       <TextField
@@ -94,7 +82,9 @@ export function ServerSshPortPanel({
         keyboardType="number-pad"
         placeholder={String(server.sshPort || DEFAULT_SSH_PORT)}
         accessibilityLabel="Server SSH port override"
-        hint={`Empty inherits the datacenter, then organization, then ${String(DEFAULT_SSH_PORT)}.`}
+        hint={`Empty inherits the datacenter network, then organization, then ${String(
+          DEFAULT_SSH_PORT
+        )}.`}
       />
 
       {readOnly ? (

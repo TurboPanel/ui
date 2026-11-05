@@ -36,16 +36,16 @@ const SOURCE_WORDS: Readonly<Record<ClientAddressSource, string>> = {
   entry: 'entered here',
   ip: "from the organization's address list",
   reported: 'reported by the server',
-  pin: 'its address in this datacenter',
+  pin: 'its address in this datacenter network',
 }
 
-/** `Public`, or `Datacenter <name>`. */
+/** `Public`, or `Datacenter network <name>`. */
 export function addressSideLabel(
   scope: ServerAddressScope | null | undefined,
-  label: string | null | undefined,
+  label: string | null | undefined
 ): string {
   const name = label?.trim()
-  if (scope === 'datacenter') return name ? `Datacenter ${name}` : 'Datacenter'
+  if (scope === 'datacenter') return name ? `Datacenter network ${name}` : 'Datacenter network'
   return name || 'Public'
 }
 
@@ -68,14 +68,14 @@ function withSource(address: string | null, source: ClientAddressSource | null):
 
 /** "Through a router: …" when an address is saved, else "This server's own: …" with where it came from. */
 export function addressLine(
-  entry: Pick<ServerAddressEntry, 'addressV4' | 'addressV6' | 'effective'>,
+  entry: Pick<ServerAddressEntry, 'addressV4' | 'addressV6' | 'effective'>
 ): string {
   if (entry.addressV4 || entry.addressV6) {
     return `Through a router: ${joinAddresses(entry.addressV4, entry.addressV6)}`
   }
   const own = joinAddresses(
     withSource(entry.effective.v4, entry.effective.v4Source),
-    withSource(entry.effective.v6, entry.effective.v6Source),
+    withSource(entry.effective.v6, entry.effective.v6Source)
   )
   return `This server's own: ${own || 'not known yet'}`
 }
@@ -91,11 +91,13 @@ const ENGINE_LABELS: Readonly<Record<ServerAddressEngine, string>> = {
  * `null` when the row fills it for nothing.
  */
 export function mainConnectionLine(
-  entry: Pick<ServerAddressEntry, 'main' | 'mainFor'>,
+  entry: Pick<ServerAddressEntry, 'main' | 'mainFor'>
 ): string | null {
   if (entry.mainFor) {
     const engines = entry.mainFor.map((engine) => ENGINE_LABELS[engine] ?? engine)
-    return engines.length > 0 ? `Fills the main connection string for ${engines.join(' and ')}` : null
+    return engines.length > 0
+      ? `Fills the main connection string for ${engines.join(' and ')}`
+      : null
   }
   return entry.main ? 'Fills the main connection string' : null
 }
@@ -126,7 +128,8 @@ export type ServerAddressForm = {
   primary: boolean
 }
 
-export type ServerAddressFormField = 'hostname' | 'address' | 'addressV4' | 'addressV6' | AddressPortKey
+export type ServerAddressFormField =
+  'hostname' | 'address' | 'addressV4' | 'addressV6' | AddressPortKey
 
 export type ServerAddressFormErrors = Partial<Record<ServerAddressFormField, string>>
 
@@ -190,9 +193,13 @@ function differentAddressErrors(form: ServerAddressForm): ServerAddressFormError
   const errors: ServerAddressFormErrors = {}
   const v4 = form.addressV4.trim()
   const v6 = form.addressV6.trim()
-  if (!v4 && !v6) errors.address = 'Enter the IPv4 or IPv6 address clients reach, or pick this server\'s own address.'
-  if (v4 && ipVersionOf(v4) !== 4) errors.addressV4 = 'Not an IPv4 address, for example 203.0.113.7.'
-  if (v6 && ipVersionOf(v6) !== 6) errors.addressV6 = 'Not an IPv6 address, for example 2001:db8::7.'
+  if (!v4 && !v6)
+    errors.address =
+      "Enter the IPv4 or IPv6 address clients reach, or pick this server's own address."
+  if (v4 && ipVersionOf(v4) !== 4)
+    errors.addressV4 = 'Not an IPv4 address, for example 203.0.113.7.'
+  if (v6 && ipVersionOf(v6) !== 6)
+    errors.addressV6 = 'Not an IPv6 address, for example 2001:db8::7.'
   return errors
 }
 
@@ -268,7 +275,10 @@ export type ServerAddressesPayload = {
   editedIndex: number | null
 }
 
-function sameSide(a: ServerAddressEntry, b: Pick<ServerAddressEntry, 'scope' | 'datacenterId'>): boolean {
+function sameSide(
+  a: ServerAddressEntry,
+  b: Pick<ServerAddressEntry, 'scope' | 'datacenterId'>
+): boolean {
   return a.scope === b.scope && (a.scope === 'public' || a.datacenterId === b.datacenterId)
 }
 
@@ -281,7 +291,7 @@ function sameSide(a: ServerAddressEntry, b: Pick<ServerAddressEntry, 'scope' | '
 export function buildAddressesPayload(
   view: ServerAddressesView,
   edited: Pick<ServerAddressEntry, 'scope' | 'datacenterId'>,
-  form: ServerAddressForm,
+  form: ServerAddressForm
 ): ServerAddressesPayload {
   const payload: ServerAddressesPayload = { addresses: [], titles: [], editedIndex: null }
   for (const entry of view.addresses) {
@@ -303,11 +313,15 @@ export function buildAddressesPayload(
 
 const SAVE_ERROR_MESSAGES: Readonly<Record<string, string>> = {
   invalid_addresses: 'The panel could not read what was sent. Refresh the page and try again.',
-  address_scope_invalid: 'That row is not Public or one of this server\'s datacenters. Refresh the page and try again.',
-  address_datacenter_not_member: 'This server is no longer in that datacenter. The rows have been reloaded; close this and check them again.',
+  address_scope_invalid:
+    "That row is not Public or one of this server's datacenter networks. Refresh the page and try again.",
+  address_datacenter_not_member:
+    'This server is no longer on that datacenter network. The rows have been reloaded; close this and check them again.',
   address_duplicate: 'That row was sent twice. Refresh the page and try again.',
-  address_hostname_invalid: 'The DNS name is not valid. Use letters, numbers, dashes and dots, like db.example.com.',
-  address_hostname_single_label: 'Use the full DNS name with a dot, like db.example.com. A one-word name only works inside its own network.',
+  address_hostname_invalid:
+    'The DNS name is not valid. Use letters, numbers, dashes and dots, like db.example.com.',
+  address_hostname_single_label:
+    'Use the full DNS name with a dot, like db.example.com. A one-word name only works inside its own network.',
   address_v4_invalid: 'The IPv4 address is not one clients can reach, for example 203.0.113.7.',
   address_v6_invalid: 'The IPv6 address is not one clients can reach, for example 2001:db8::7.',
   address_ports_invalid: 'Ports are whole numbers from 1 to 65535, or empty for the usual port.',
@@ -333,16 +347,21 @@ const CERTIFICATE_REASON_MESSAGES: Readonly<Record<ServerAddressesCertificateRea
  */
 export function certificatePendingMessage(
   reason: ServerAddressesCertificateReason | null,
-  serverMessage: string | null = null,
+  serverMessage: string | null = null
 ): string {
-  return (reason && CERTIFICATE_REASON_MESSAGES[reason]) || serverMessage || ADDRESSES_CERTIFICATE_PENDING
+  return (
+    (reason && CERTIFICATE_REASON_MESSAGES[reason]) ||
+    serverMessage ||
+    ADDRESSES_CERTIFICATE_PENDING
+  )
 }
 
 function statusMessage(status: number, code: string | null): string | null {
   if (status === 422 && code === 'daemon_key_unavailable') {
     return "Nothing was saved: the server isn't ready to take this yet, so the panel can't send changes to it right now. Try again once it has finished connecting."
   }
-  if (status === 503) return "Nothing was saved: the panel can't send changes right now. Try again in a minute."
+  if (status === 503)
+    return "Nothing was saved: the panel can't send changes right now. Try again in a minute."
   if (status === 404) return 'This server was not found. Refresh the page.'
   return null
 }
@@ -350,7 +369,7 @@ function statusMessage(status: number, code: string | null): string | null {
 /** A refused save in plain words, naming the row when the refusal points at another one. */
 export function addressSaveErrorMessage(
   err: unknown,
-  payload: Pick<ServerAddressesPayload, 'titles' | 'editedIndex'> | null,
+  payload: Pick<ServerAddressesPayload, 'titles' | 'editedIndex'> | null
 ): string {
   if (!(err instanceof ServerAddressesSaveError)) {
     return err instanceof Error ? err.message : ADDRESSES_SAVE_FALLBACK
@@ -360,7 +379,8 @@ export function addressSaveErrorMessage(
   const message =
     (err.code && SAVE_ERROR_MESSAGES[err.code]) || err.serverMessage || ADDRESSES_SAVE_FALLBACK
   const index = err.index
-  const other = index !== null && index !== payload?.editedIndex ? payload?.titles[index] : undefined
+  const other =
+    index !== null && index !== payload?.editedIndex ? payload?.titles[index] : undefined
   return other ? `${message} (in the ${other} row)` : message
 }
 
@@ -368,9 +388,9 @@ export function addressSaveErrorMessage(
 // Managed Connect panel
 // ---------------------------------------------------------------------------
 
-/** "Public: omega.example.com", "Datacenter Ashburn: omega.dc1.example.com". */
+/** "Public: omega.example.com", "Datacenter network Ashburn: omega.dc1.example.com". */
 export function connectionStringLabel(
-  entry: Readonly<{ scope?: ServerAddressScope | null; label?: string | null; host: string }>,
+  entry: Readonly<{ scope?: ServerAddressScope | null; label?: string | null; host: string }>
 ): string {
   return `${addressSideLabel(entry.scope, entry.label)}: ${entry.host}`
 }

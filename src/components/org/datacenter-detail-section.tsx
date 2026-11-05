@@ -161,14 +161,14 @@ function DatacenterIdentityPanel({
   if (!canManage) return null
 
   return (
-    <SectionPanel title="Datacenter">
+    <SectionPanel title="Datacenter Network">
       <TextField
         label="Display name"
         value={name}
         onChangeText={onDisplayNameChange}
         placeholder="e.g. AMS-1"
         editable={!pending}
-        accessibilityLabel="Datacenter display name"
+        accessibilityLabel="Datacenter network display name"
       />
       <TextField
         label="Description"
@@ -176,14 +176,14 @@ function DatacenterIdentityPanel({
         onChangeText={onDescriptionChange}
         placeholder="Optional notes"
         editable={!pending}
-        accessibilityLabel="Datacenter description"
+        accessibilityLabel="Datacenter network description"
       />
       <Button
         label="Save"
         variant="primary"
         busy={pending}
         onPress={onSave}
-        accessibilityLabel="Save datacenter"
+        accessibilityLabel="Save datacenter network"
       />
     </SectionPanel>
   )
@@ -311,7 +311,7 @@ function SubnetCard({
               label="Delete Subnet"
               thing="Subnet"
               name={subnet.cidr}
-              description="The subnet is removed from this datacenter."
+              description="The subnet is removed from this datacenter network."
               disabled={blocked || pending}
               onConfirm={onDelete}
             />
@@ -417,9 +417,9 @@ function SubnetsPanel({
 }
 
 function priorityHint(winnerHint: string | null): string {
-  const base = `Integer ${DATACENTER_PRIORITY_MIN}–${DATACENTER_PRIORITY_MAX}, lower wins; default ${DEFAULT_DATACENTER_PRIORITY}. When two servers share more than one trusted datacenter, the lowest priority carries their traffic.`
+  const base = `Integer ${DATACENTER_PRIORITY_MIN}–${DATACENTER_PRIORITY_MAX}, lower wins; default ${DEFAULT_DATACENTER_PRIORITY}. When two servers share more than one trusted datacenter network, the lowest priority carries their traffic.`
   if (!winnerHint) {
-    return `${base} No server pair currently shares this datacenter with another, so priority changes nothing yet.`
+    return `${base} No server pair currently shares this datacenter network with another, so priority changes nothing yet.`
   }
   return `${base} ${winnerHint}`
 }
@@ -486,7 +486,8 @@ function RoutingPanel({
         disabled={controlsDisabled}
       />
       <Text style={panelStyles.muted}>
-        Only applies when both servers have an address in the same datacenter in both families.
+        Only applies when both servers have an address on the same datacenter network in both
+        families.
       </Text>
 
       <TextField
@@ -498,7 +499,7 @@ function RoutingPanel({
         error={priorityError}
         editable={!controlsDisabled}
         keyboardType="number-pad"
-        accessibilityLabel="Datacenter routing priority"
+        accessibilityLabel="Datacenter network routing priority"
         mono
       />
 
@@ -512,7 +513,7 @@ function RoutingPanel({
           disabled={controlsDisabled}
           onLabel="Trusted"
           offLabel="Untrusted"
-          accessibilityLabel="Datacenter trusted"
+          accessibilityLabel="Datacenter network trusted"
           onValueChange={onChangeTrusted}
         />
       </SettingRow>
@@ -520,7 +521,7 @@ function RoutingPanel({
         <InlineNotice
           tone="warning"
           title="Saving recomputes managed transports."
-          body={`Servers in this datacenter host managed database members. Stored replication transports and ProxySQL backends will be recomputed on save — pairs that only share this datacenter move to the encrypted ${TURBOFABRIC_PRODUCT_NAME} tunnel over this network, or to public TLS when ${TURBOFABRIC_PRODUCT_NAME} is off, and failover replicas that depended on it stop being eligible.`}
+          body={`Servers on this datacenter network host managed database members. Stored replication transports and ProxySQL backends will be recomputed on save — pairs that only share this datacenter network move to the encrypted ${TURBOFABRIC_PRODUCT_NAME} tunnel over this network, or to public TLS when ${TURBOFABRIC_PRODUCT_NAME} is off, and failover replicas that depended on it stop being eligible.`}
         />
       ) : null}
 
@@ -551,7 +552,7 @@ function memberPanelHint(pinCount: number, serverCount: number): string {
 
 function pinUnassignAccessibilityLabel(pinCount: number, serverLabel: string): string {
   if (pinCount > 1) {
-    return `Unassign all pins for ${serverLabel} in this datacenter`
+    return `Unassign all pins for ${serverLabel} on this datacenter network`
   }
   return 'Unassign'
 }
@@ -736,7 +737,7 @@ function MemberServersPanel({
                   options={serverOptions}
                   placeholder="Select a server…"
                   disabled={pending}
-                  accessibilityLabel="Server to add to this datacenter"
+                  accessibilityLabel="Server to add to this datacenter network"
                   onChange={selectAssignServer}
                 />
               </FormField>
@@ -837,17 +838,17 @@ function buildMeshRows({
 function datacenterLoadError(isError: boolean, error: unknown): string | null {
   if (!isError) return null
   if (error instanceof Error) return userErrorMessage(error, '')
-  return 'Failed to load datacenter'
+  return 'Failed to load datacenter network'
 }
 
 function deleteDatacenterErrorMessage(error: unknown): string {
   if (errorIncludes(error, DATACENTER_HAS_MEMBERS_ERROR)) {
-    return 'Unassign every server from this datacenter before deleting it.'
+    return 'Unassign every server from this datacenter network before deleting it.'
   }
   if (errorIncludes(error, DATACENTER_HAS_NETWORKS_ERROR)) {
-    return 'This datacenter still has extra networks. Remove those first.'
+    return 'This datacenter network still has extra networks. Remove those first.'
   }
-  return mutationErrorMessage(error, 'Failed to delete datacenter')
+  return mutationErrorMessage(error, 'Failed to delete datacenter network')
 }
 
 function MeshFromDatacenterPanel({
@@ -876,7 +877,7 @@ function MeshFromDatacenterPanel({
       {canManage && missingCidr ? (
         <View style={panelStyles.calloutWarning}>
           <Text style={panelStyles.calloutWarningText}>
-            This datacenter has no subnets — apply will fail until a prefix is added.
+            This datacenter network has no subnets — apply will fail until a prefix is added.
           </Text>
         </View>
       ) : null}
@@ -898,7 +899,7 @@ function MeshFromDatacenterPanel({
                 {relayRoleLabel(row.role)}
               </Text>
               <Text style={panelStyles.detailLine}>
-                <Text style={panelStyles.detailLabel}>Other datacenters: </Text>
+                <Text style={panelStyles.detailLabel}>Other Datacenter Networks: </Text>
                 {row.otherDatacenterLabel}
               </Text>
               {row.viaLabel ? (
@@ -960,7 +961,7 @@ function DatacenterSshPortPanel({
         keyboardType="number-pad"
         placeholder={String(DEFAULT_SSH_PORT)}
         error={localError}
-        accessibilityLabel="Datacenter SSH port"
+        accessibilityLabel="Datacenter network SSH port"
       />
       <Text style={panelStyles.muted}>
         Empty inherits the organization default (then {String(DEFAULT_SSH_PORT)}
@@ -1027,7 +1028,7 @@ function DatacenterNtpPanel({
         onChangeText={setDraftServers}
         editable={!readOnly && !pending && Boolean(datacenter)}
         placeholder="time.cloudflare.com, pool.ntp.org"
-        accessibilityLabel="Datacenter NTP servers"
+        accessibilityLabel="Datacenter network NTP servers"
       />
       <TextField
         label="Fallback NTP servers"
@@ -1035,7 +1036,7 @@ function DatacenterNtpPanel({
         onChangeText={setDraftFallback}
         editable={!readOnly && !pending && Boolean(datacenter)}
         placeholder="Optional fallback hosts"
-        accessibilityLabel="Datacenter fallback NTP servers"
+        accessibilityLabel="Datacenter network fallback NTP servers"
       />
       <Text style={panelStyles.muted}>
         Empty + off inherits the organization NTP default. Apply still happens on each server Time
@@ -1147,13 +1148,13 @@ function DatacenterDeletePanel({
       {blocked ? (
         <Text style={panelStyles.muted}>Unassign every server first.</Text>
       ) : (
-        <Text style={panelStyles.muted}>Permanently remove this empty datacenter.</Text>
+        <Text style={panelStyles.muted}>Permanently remove this empty datacenter network.</Text>
       )}
       <TypeNameDeleteButton
-        label="Delete Datacenter"
-        thing="Datacenter"
+        label="Delete Datacenter Network"
+        thing="Datacenter Network"
         name={name}
-        description="The datacenter is removed for good."
+        description="The datacenter network is removed for good."
         busy={deleting}
         disabled={blocked}
         onConfirm={onConfirm}
@@ -1330,7 +1331,8 @@ export function DatacenterDetailSection({
     queryError
 
   const title =
-    datacenter?.name?.trim() || (datacenterQuery.isLoading ? 'Datacenter' : 'Unnamed datacenter')
+    datacenter?.name?.trim() ||
+    (datacenterQuery.isLoading ? 'Datacenter Network' : 'Unnamed datacenter network')
 
   const saveMergedOptions = (
     patch: Parameters<typeof mergeDatacenterOptions>[1],
@@ -1384,7 +1386,7 @@ export function DatacenterDetailSection({
                 setDraftDescription(null)
               },
               onError: (err) => {
-                setError(mutationErrorMessage(err, 'Failed to save datacenter'))
+                setError(mutationErrorMessage(err, 'Failed to save datacenter network'))
               },
             }
           )
@@ -1575,7 +1577,7 @@ export function DatacenterDetailSection({
               setDraftTimezone(undefined)
               setDraftEnforce(null)
             },
-            'Failed to save datacenter timezone'
+            'Failed to save datacenter network timezone'
           )
         }
       />

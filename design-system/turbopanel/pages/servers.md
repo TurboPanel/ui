@@ -19,11 +19,11 @@
 - **Add Server** opens a separate glass `SectionPanel` (Add Server) between the title row and the fleet  
 - **Web Detail:** fleet hosts sit in their own glass `SectionPanel` (no nested second glass / bordered table card inside it). Table itself has **no outer border/radius box** — header + zebra rows only inside the panel.
 - **Summary:** CSS `auto-fill` grid (native: wrapping tiles). Hairline `bgArea` tiles — not glass, not a decorative bento.  
-- **Datacenters** sub-route (`/servers/datacenters`) for org location inventory (member counts, private CIDRs) — see `pages/datacenters.md`  
+- **Datacenter Networks** sub-route (`/servers/datacenters`) for the org's datacenter networks (member counts, private CIDRs) — see `pages/datacenters.md`  
 - **Pending keys** sub-route (`/servers/keys`) for unused registration keys (not yet bound to a host). Owner-only list + two-press delete. Copy says **keys**, never “license”.  
 - **Settings** sub-route (`/servers/settings`) for org default timezone, host defaults (SSH port, NTP, TurboFabric preference), and seat capacity  
 - **TLS** sub-route (`/servers/tls`) for the organization certificate library  
-- Networking topology: all under Servers — **Datacenters** (private subnets + members), then the old Network pages **TurboFabric**, **Addresses**, **Docker Networks**, **Reserved Ranges**, **Cloudflare Accounts**, **Tunnels** and **Firewall** at `/servers/<page>` (`/network/<page>` redirects) — see `pages/datacenters.md` and `pages/network.md`  
+- Networking topology: all under Servers — **Datacenter Networks** (private subnets + members), then the old Network pages **TurboFabric**, **Addresses**, **Docker Networks**, **Reserved Ranges**, **Cloudflare Accounts**, **Tunnels** and **Firewall** at `/servers/<page>` (`/network/<page>` redirects) — see `pages/datacenters.md` and `pages/network.md`  
 - Page title uses shared `orgPanelStyles.pageTitle`; route context lives in `OrgHeader` eyebrow  
 - No hero, no decorative bento above the table
 - No inventory KPI strip on this page — org Overview owns Servers / Online / Cores / RAM tiles

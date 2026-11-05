@@ -18,16 +18,9 @@ import {
   type ServerDetailRecord,
 } from '@/lib/instance-api'
 import { formatLocalDateTime } from '@/lib/format-datetime'
-import {
-  configuredSourceLabel,
-  formatNtpHostList,
-} from '@/lib/host-defaults'
+import { configuredSourceLabel, formatNtpHostList } from '@/lib/host-defaults'
 import { datacenterHref, orgRouteHref } from '@/lib/org-navigation'
-import {
-  useSetServerNtp,
-  useSetServerTimezone,
-  useTimezones,
-} from '@/lib/queries/servers'
+import { useSetServerNtp, useSetServerTimezone, useTimezones } from '@/lib/queries/servers'
 import { colors, spacing, webPointer } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
 
@@ -44,12 +37,12 @@ function timezoneDisabledReason(
   canManage: boolean,
   connected: boolean,
   enforceServerTimezone: boolean,
-  datacenterEnforceServerTimezone: boolean,
+  datacenterEnforceServerTimezone: boolean
 ): string | null {
   if (!canManage) return 'Organization manage permission required.'
   if (!connected) return 'Daemon must be online to change timezone.'
   if (datacenterEnforceServerTimezone) {
-    return 'Datacenter enforces its default timezone for member servers.'
+    return 'Datacenter network enforces its default timezone for member servers.'
   }
   if (enforceServerTimezone) {
     return 'Organization enforces its default timezone for all servers.'
@@ -68,10 +61,7 @@ function initialNtpEnabled(server: ServerDetailRecord): boolean {
   return server.ntpDefaults?.enabled === true
 }
 
-function initialNtpHosts(
-  observed: string[] | undefined,
-  inherited: string[] | undefined,
-): string {
+function initialNtpHosts(observed: string[] | undefined, inherited: string[] | undefined): string {
   if (observed && observed.length > 0) return observed.join(', ')
   return formatNtpHostList(inherited)
 }
@@ -86,7 +76,7 @@ function buildNtpPayload(
   ntpEnabled: boolean,
   ntpServersText: string,
   fallbackText: string,
-  timeSync: TimeSyncMaybe,
+  timeSync: TimeSyncMaybe
 ): NtpSetInput | null {
   const payload: NtpSetInput = {}
   if (ntpEnabled !== (timeSync?.ntpEnabled === true)) {
@@ -112,10 +102,7 @@ function buildNtpPayload(
   return payload
 }
 
-function HostListLine({
-  label,
-  hosts,
-}: Readonly<{ label: string; hosts: string[] | undefined }>) {
+function HostListLine({ label, hosts }: Readonly<{ label: string; hosts: string[] | undefined }>) {
   if (!hosts || hosts.length === 0) return null
   return (
     <Text style={panelStyles.detailLine}>
@@ -125,15 +112,11 @@ function HostListLine({
   )
 }
 
-function TimeSyncStatusPanel({
-  timeSync,
-}: Readonly<{ timeSync: TimeSyncMaybe }>) {
+function TimeSyncStatusPanel({ timeSync }: Readonly<{ timeSync: TimeSyncMaybe }>) {
   if (!timeSync) {
     return (
       <SectionPanel title="Time sync status" hint="Facts from the last daemon heartbeat">
-        <Text style={panelStyles.muted}>
-          No time facts reported yet — waiting for the daemon.
-        </Text>
+        <Text style={panelStyles.muted}>No time facts reported yet — waiting for the daemon.</Text>
       </SectionPanel>
     )
   }
@@ -149,9 +132,7 @@ function TimeSyncStatusPanel({
         </View>
         <View style={styles.statusPair}>
           <StatusDot tone={timeSync.ntpSynced ? 'online' : 'pending'} />
-          <Text style={styles.statusText}>
-            {ntpSyncLabel(timeSync.ntpSynced)}
-          </Text>
+          <Text style={styles.statusText}>{ntpSyncLabel(timeSync.ntpSynced)}</Text>
         </View>
       </View>
       <HostListLine label="Servers" hosts={timeSync.ntpServers} />
@@ -205,26 +186,19 @@ function TimezoneSettingsPanel({
         <Text style={panelStyles.detailLabel}>Effective: </Text>
         <MonoText>{server.timezone ?? 'Not set'}</MonoText>
       </Text>
-      <Text style={panelStyles.muted}>
-        Source: {configuredSourceLabel(server.timezoneSource)}
-      </Text>
+      <Text style={panelStyles.muted}>Source: {configuredSourceLabel(server.timezoneSource)}</Text>
 
-      {disabledReason ? (
-        <Text style={panelStyles.muted}>{disabledReason}</Text>
-      ) : null}
+      {disabledReason ? <Text style={panelStyles.muted}>{disabledReason}</Text> : null}
       {server.datacenterEnforceServerTimezone && datacenterId ? (
         <Pressable
-          onPress={() =>
-            router.push(datacenterHref(orgId, datacenterId))
-          }
+          onPress={() => router.push(datacenterHref(orgId, datacenterId))}
           style={webPointer}
           accessibilityRole="link"
         >
-          <Text style={styles.linkText}>Open datacenter timezone settings</Text>
+          <Text style={styles.linkText}>Open datacenter network timezone settings</Text>
         </Pressable>
       ) : null}
-      {!server.datacenterEnforceServerTimezone &&
-      server.enforceServerTimezone ? (
+      {!server.datacenterEnforceServerTimezone && server.enforceServerTimezone ? (
         <Pressable
           onPress={() =>
             router.push(orgRouteHref(orgId, 'servers', 'settings') as `/${string}/servers/settings`)
@@ -295,9 +269,7 @@ function NtpSettingsPanel({
   return (
     <SectionPanel title="NTP configuration" hint="Pushed to the daemon via command">
       <Text style={panelStyles.muted}>{defaultsHint}</Text>
-      {disabledReason ? (
-        <Text style={panelStyles.muted}>{disabledReason}</Text>
-      ) : null}
+      {disabledReason ? <Text style={panelStyles.muted}>{disabledReason}</Text> : null}
       {localError ? <Text style={panelStyles.error}>{localError}</Text> : null}
       {pollError ? <Text style={panelStyles.error}>{pollError}</Text> : null}
 
@@ -366,21 +338,16 @@ export function ServerTimeSection({
   const timezoneMutation = useSetServerTimezone(orgId, server.id)
   const ntpMutation = useSetServerNtp(orgId, server.id)
 
-  const [pickedTimezone, setPickedTimezone] = useState<string | null>(
-    server.timezone,
-  )
+  const [pickedTimezone, setPickedTimezone] = useState<string | null>(server.timezone)
   const [timezoneError, setTimezoneError] = useState<string | null>(null)
   const [timezoneSubmitting, setTimezoneSubmitting] = useState(false)
 
   const [ntpEnabled, setNtpEnabled] = useState(() => initialNtpEnabled(server))
   const [ntpServersText, setNtpServersText] = useState(() =>
-    initialNtpHosts(timeSync?.ntpServers, server.ntpDefaults?.servers),
+    initialNtpHosts(timeSync?.ntpServers, server.ntpDefaults?.servers)
   )
   const [fallbackText, setFallbackText] = useState(() =>
-    initialNtpHosts(
-      timeSync?.fallbackNtpServers,
-      server.ntpDefaults?.fallbackServers,
-    ),
+    initialNtpHosts(timeSync?.fallbackNtpServers, server.ntpDefaults?.fallbackServers)
   )
   const [ntpError, setNtpError] = useState<string | null>(null)
   const [ntpSubmitting, setNtpSubmitting] = useState(false)
@@ -391,25 +358,22 @@ export function ServerTimeSection({
         canManage,
         server.connected,
         Boolean(server.enforceServerTimezone),
-        Boolean(server.datacenterEnforceServerTimezone),
+        Boolean(server.datacenterEnforceServerTimezone)
       ),
     [
       canManage,
       server.connected,
       server.enforceServerTimezone,
       server.datacenterEnforceServerTimezone,
-    ],
+    ]
   )
 
   const timezoneFormsDisabled =
-    timezoneCommandInFlight ||
-    timezoneSubmitting ||
-    ntpSubmitting ||
-    Boolean(tzDisabledReason)
+    timezoneCommandInFlight || timezoneSubmitting || ntpSubmitting || Boolean(tzDisabledReason)
 
   const ntpReason = useMemo(
     () => ntpDisabledReason(canManage, server.connected),
-    [canManage, server.connected],
+    [canManage, server.connected]
   )
 
   const ntpDefaultsHint = server.ntpDefaultsSource
@@ -417,10 +381,7 @@ export function ServerTimeSection({
     : 'No inherited NTP default.'
 
   const ntpFormsDisabled =
-    ntpCommandInFlight ||
-    ntpSubmitting ||
-    timezoneSubmitting ||
-    Boolean(ntpReason)
+    ntpCommandInFlight || ntpSubmitting || timezoneSubmitting || Boolean(ntpReason)
 
   const applyTimezone = () => {
     if (!pickedTimezone || timezoneFormsDisabled) return
@@ -431,9 +392,7 @@ export function ServerTimeSection({
         onEnqueueCommand(result, 'timezone')
       },
       onError: (err) => {
-        setTimezoneError(
-          userErrorMessage(err, 'Failed to apply timezone'),
-        )
+        setTimezoneError(userErrorMessage(err, 'Failed to apply timezone'))
       },
       onSettled: () => {
         setTimezoneSubmitting(false)
@@ -443,12 +402,7 @@ export function ServerTimeSection({
 
   const applyNtp = () => {
     if (ntpFormsDisabled) return
-    const payload = buildNtpPayload(
-      ntpEnabled,
-      ntpServersText,
-      fallbackText,
-      timeSync,
-    )
+    const payload = buildNtpPayload(ntpEnabled, ntpServersText, fallbackText, timeSync)
     if (!payload) {
       setNtpError('Change at least one NTP setting before applying.')
       return
@@ -460,9 +414,7 @@ export function ServerTimeSection({
         onEnqueueCommand(result, 'ntp')
       },
       onError: (err) => {
-        setNtpError(
-          userErrorMessage(err, 'Failed to apply NTP settings'),
-        )
+        setNtpError(userErrorMessage(err, 'Failed to apply NTP settings'))
       },
       onSettled: () => {
         setNtpSubmitting(false)

@@ -24,7 +24,7 @@ export function readDockerNetworkName(network: NetworkRecord): string | null {
 }
 
 export function kindLabel(kind: NetworkKind): string {
-  if (kind === 'datacenter') return 'Datacenter'
+  if (kind === 'datacenter') return 'Datacenter Network'
   if (kind === 'managed') return 'Managed'
   if (kind === 'reserved') return 'Reserved'
   return 'Docker'
@@ -173,7 +173,7 @@ export function IpListRow({
         {networkLabel ?? '—'}
       </Text>
       <Text style={panelStyles.detailLine}>
-        <Text style={panelStyles.detailLabel}>Site: </Text>
+        <Text style={panelStyles.detailLabel}>Datacenter Network: </Text>
         {datacenterLabel ?? '—'}
       </Text>
     </View>

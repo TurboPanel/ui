@@ -14,7 +14,10 @@ const { useServerAddresses, useSaveServerAddresses, useCan, run } = vi.hoisted((
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
 vi.mock('react-native-svg', async () => (await import('@/components/ui/v4/rn-stub')).svgStub)
-vi.mock('@/lib/theme-preference', async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub)
+vi.mock(
+  '@/lib/theme-preference',
+  async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub
+)
 vi.mock('@/lib/queries/servers', () => ({ useServerAddresses, useSaveServerAddresses }))
 vi.mock('@/lib/query-client', () => ({ useCan }))
 vi.mock('@/components/ui/panel-styles', () => ({ panelStyles: {} }))
@@ -35,7 +38,12 @@ vi.mock('@/components/ui', () => ({
   ),
   ButtonRow: ({ children }: Props) => <div>{children as never}</div>,
   Checkbox: ({ label, checked, onPress }: Props) => (
-    <button type="button" role="checkbox" aria-checked={checked as boolean} onClick={onPress as () => void}>
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={checked as boolean}
+      onClick={onPress as () => void}
+    >
       {label as string}
     </button>
   ),
@@ -69,7 +77,11 @@ vi.mock('@/components/ui', () => ({
   SegmentedControl: ({ options, onChange }: Props) => (
     <div>
       {(options as { value: string; label: string }[]).map((option) => (
-        <button key={option.value} type="button" onClick={() => (onChange as (v: string) => void)(option.value)}>
+        <button
+          key={option.value}
+          type="button"
+          onClick={() => (onChange as (v: string) => void)(option.value)}
+        >
           {option.label}
         </button>
       ))}
@@ -106,7 +118,14 @@ const view: ServerAddressesView = {
       primary: false,
       main: true,
       mainFor: ['postgres', 'mysql'],
-      effective: { v4: '203.0.113.7', v4Source: 'entry', v6: null, v6Source: null, host: 'omega.example.com', hostSource: 'hostname' },
+      effective: {
+        v4: '203.0.113.7',
+        v4Source: 'entry',
+        v6: null,
+        v6Source: null,
+        host: 'omega.example.com',
+        hostSource: 'hostname',
+      },
     },
     {
       scope: 'datacenter',
@@ -119,7 +138,14 @@ const view: ServerAddressesView = {
       ports: {},
       primary: false,
       main: false,
-      effective: { v4: '10.0.0.5', v4Source: 'pin', v6: null, v6Source: null, host: '10.0.0.5', hostSource: 'address' },
+      effective: {
+        v4: '10.0.0.5',
+        v4Source: 'pin',
+        v6: null,
+        v6Source: null,
+        host: '10.0.0.5',
+        hostSource: 'address',
+      },
     },
   ],
 }
@@ -162,18 +188,20 @@ describe('ServerAddressesCard', () => {
   it('keeps showing the last good list when a background re-read fails', () => {
     showCard(view, true, true)
     expect(screen.queryByText('Could not load the addresses clients use.')).toBeNull()
-    expect(screen.getByText('Datacenter Ashburn')).toBeTruthy()
+    expect(screen.getByText('Datacenter network Ashburn')).toBeTruthy()
   })
 
   it('shows one row per side with name, address, overridden ports and the main string', () => {
     showCard(view)
     expect(screen.getByText('Addresses clients use')).toBeTruthy()
     expect(screen.getByText('Public')).toBeTruthy()
-    expect(screen.getByText('Datacenter Ashburn')).toBeTruthy()
+    expect(screen.getByText('Datacenter network Ashburn')).toBeTruthy()
     expect(screen.getByText('omega.example.com')).toBeTruthy()
     expect(screen.getByText('No DNS name yet')).toBeTruthy()
     expect(screen.getByText('Through a router: 203.0.113.7')).toBeTruthy()
-    expect(screen.getByText("This server's own: 10.0.0.5 (its address in this datacenter)")).toBeTruthy()
+    expect(
+      screen.getByText("This server's own: 10.0.0.5 (its address in this datacenter network)")
+    ).toBeTruthy()
     expect(screen.getByText('Postgres 25432, MySQL not forwarded')).toBeTruthy()
     expect(screen.getAllByText(/^Fills the main connection string/)).toHaveLength(1)
     expect(screen.getByText('Fills the main connection string for Postgres and MySQL')).toBeTruthy()
@@ -191,8 +219,8 @@ describe('ServerAddressesCard', () => {
 
   it('validates in plain words before sending anything', () => {
     showCard(view)
-    fireEvent.click(screen.getByLabelText('Edit Datacenter Ashburn'))
-    expect(screen.getByText('Edit Datacenter Ashburn address')).toBeTruthy()
+    fireEvent.click(screen.getByLabelText('Edit Datacenter network Ashburn'))
+    expect(screen.getByText('Edit Datacenter network Ashburn address')).toBeTruthy()
     type('DNS name clients use (optional)', 'omega')
     fireEvent.click(screen.getByText('A different address'))
     type('Postgres', '99999')
@@ -206,7 +234,7 @@ describe('ServerAddressesCard', () => {
   it('saves every saved side plus the edited one and closes', async () => {
     run.mockResolvedValue({ ok: true, value: { ...view, certificateUpdatePending: false } })
     showCard(view)
-    fireEvent.click(screen.getByLabelText('Edit Datacenter Ashburn'))
+    fireEvent.click(screen.getByLabelText('Edit Datacenter network Ashburn'))
     type('DNS name clients use (optional)', 'Omega.DC1.example.com')
     fireEvent.click(screen.getByText('Use in the main connection string'))
     fireEvent.click(screen.getByText('Save'))
@@ -245,7 +273,9 @@ describe('ServerAddressesCard', () => {
     showCard(view)
     fireEvent.click(screen.getByLabelText('Edit Public'))
     fireEvent.click(screen.getByText('Save'))
-    await waitFor(() => expect(screen.getByText('Saved, but omega could not be told yet.')).toBeTruthy())
+    await waitFor(() =>
+      expect(screen.getByText('Saved, but omega could not be told yet.')).toBeTruthy()
+    )
   })
 
   it('names the 502 reason in plain words', async () => {
@@ -256,7 +286,9 @@ describe('ServerAddressesCard', () => {
     showCard(view)
     fireEvent.click(screen.getByLabelText('Edit Public'))
     fireEvent.click(screen.getByText('Save'))
-    await waitFor(() => expect(screen.getByText(certificatePendingMessage('prepare_failed'))).toBeTruthy())
+    await waitFor(() =>
+      expect(screen.getByText(certificatePendingMessage('prepare_failed'))).toBeTruthy()
+    )
   })
 
   it('maps the not-ready refusal (422) and keeps the dialog open', async () => {
@@ -268,7 +300,11 @@ describe('ServerAddressesCard', () => {
     showCard(view)
     fireEvent.click(screen.getByLabelText('Edit Public'))
     fireEvent.click(screen.getByText('Save'))
-    await waitFor(() => expect(screen.getByText(/Nothing was saved: the server isn't ready to take this yet/)).toBeTruthy())
+    await waitFor(() =>
+      expect(
+        screen.getByText(/Nothing was saved: the server isn't ready to take this yet/)
+      ).toBeTruthy()
+    )
     expect(screen.getByTestId('dialog')).toBeTruthy()
   })
 
@@ -279,11 +315,13 @@ describe('ServerAddressesCard', () => {
       cause: new ServerAddressesSaveError('/x', 400, { error: 'address_v4_invalid', index: 0 }),
     })
     showCard(view)
-    fireEvent.click(screen.getByLabelText('Edit Datacenter Ashburn'))
+    fireEvent.click(screen.getByLabelText('Edit Datacenter network Ashburn'))
     type('DNS name clients use (optional)', 'omega.dc1.example.com')
     fireEvent.click(screen.getByText('Save'))
     await waitFor(() =>
-      expect(screen.getByText(/IPv4 address is not one clients can reach.*\(in the Public row\)/)).toBeTruthy(),
+      expect(
+        screen.getByText(/IPv4 address is not one clients can reach.*\(in the Public row\)/)
+      ).toBeTruthy()
     )
     expect(screen.getByTestId('dialog')).toBeTruthy()
     fireEvent.click(screen.getByText('Cancel'))

@@ -70,7 +70,7 @@ function AddressPinLines({
       {pins.map((pin) => {
         const label = pin.datacenterId
           ? (datacenterNameById.get(pin.datacenterId) ?? pin.datacenterId)
-          : 'a datacenter'
+          : 'a datacenter network'
         return (
           <View key={pin.id} style={styles.pinLine}>
             <Text style={panelStyles.detailLine}>
@@ -316,7 +316,7 @@ export function ServerNetworkSection({
 
       <SectionPanel
         title="Interfaces"
-        hint="Addresses the daemon reports, and the datacenter each is pinned into"
+        hint="Addresses the daemon reports, and the datacenter network each is pinned into"
       >
         {interfaceGroups.length === 0 ? (
           <Text style={panelStyles.muted}>No interface addresses reported yet.</Text>
@@ -335,10 +335,10 @@ export function ServerNetworkSection({
         {datacenterIpsQuery.isLoading ? <Text style={panelStyles.muted}>Loading pins…</Text> : null}
       </SectionPanel>
 
-      <SectionPanel title="Datacenters" hint="Membership pins for this host">
+      <SectionPanel title="Datacenter Networks" hint="Membership pins for this host">
         {memberships.length === 0 ? (
           <Text style={panelStyles.detailLine}>
-            <Text style={panelStyles.detailLabel}>Datacenters: </Text>
+            <Text style={panelStyles.detailLabel}>Datacenter Networks: </Text>
             Not assigned
           </Text>
         ) : (
@@ -350,10 +350,10 @@ export function ServerNetworkSection({
                 style={webPointer}
                 onPress={() => router.push(datacenterHref(orgId, membership.id) as Href)}
                 accessibilityRole="link"
-                accessibilityLabel={`Open datacenter ${label}`}
+                accessibilityLabel={`Open datacenter network ${label}`}
               >
                 <Text style={panelStyles.detailLine}>
-                  <Text style={panelStyles.detailLabel}>Datacenter: </Text>
+                  <Text style={panelStyles.detailLabel}>Datacenter Network: </Text>
                   {label}
                 </Text>
               </Pressable>

@@ -297,13 +297,15 @@ describe('replicaIneligibleReasonLabel', () => {
   it('labels every ineligible reason', () => {
     expect(replicaIneligibleReasonLabel('already-member')).toBe('Already a member')
     expect(replicaIneligibleReasonLabel('offline')).toBe('Offline')
-    expect(replicaIneligibleReasonLabel('no-datacenter')).toBe('Not assigned to a datacenter')
-    expect(replicaIneligibleReasonLabel('no-private-cidr')).toBe('Datacenter has no subnets yet')
+    expect(replicaIneligibleReasonLabel('no-datacenter')).toBe('Not on a datacenter network')
+    expect(replicaIneligibleReasonLabel('no-private-cidr')).toBe(
+      'Datacenter network has no subnets yet'
+    )
     expect(replicaIneligibleReasonLabel('no-private-path')).toBe(
-      "Must share the primary's datacenter"
+      "Must share the primary's datacenter network"
     )
     expect(replicaIneligibleReasonLabel('untrusted-datacenter')).toBe(
-      'Shared datacenter is untrusted — needs a trusted network or TurboFabric'
+      'Shared datacenter network is untrusted — needs a trusted network or TurboFabric'
     )
   })
 })

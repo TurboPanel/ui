@@ -314,9 +314,9 @@ describe('managedErrorMessage', () => {
         new Error('HTTP 422: failover_replica_requires_datacenter_transport'),
         'fallback'
       )
-    ).toContain('share a datacenter LAN')
+    ).toContain('share a datacenter network')
     expect(managedErrorMessage(new Error('HTTP 422: datacenter_required'), 'fallback')).toBe(
-      'That server is not assigned to a datacenter.'
+      'That server is not on a datacenter network.'
     )
     expect(
       managedErrorMessage(new Error('HTTP 422: private_family_mismatch'), 'fallback')
@@ -346,7 +346,7 @@ describe('managedErrorMessage', () => {
       ['managed_member_exists', 'already hosts a member'],
       ['managed_member_is_primary', 'Promote another member'],
       ['managed_no_read_targets', 'no replica serving read traffic'],
-      ['datacenter_cidr_required', 'no private network'],
+      ['datacenter_cidr_required', 'no private subnet'],
       ['datacenter_ip_required', 'no private address'],
       ['private_path_unavailable', 'No private path'],
       ['managed_private_port_exhausted', 'No free private listener'],
@@ -385,7 +385,7 @@ describe('member labels', () => {
     expect(memberReplicaClassLabel(null)).toBeNull()
     expect(memberReplicaClassLabel(undefined)).toBeNull()
     expect(memberTransportLabel('local')).toBe('Local')
-    expect(memberTransportLabel('datacenter')).toBe('Datacenter LAN')
+    expect(memberTransportLabel('datacenter')).toBe('Datacenter network')
     expect(memberTransportLabel('fabric')).toBe(`${TURBOFABRIC_PRODUCT_NAME} direct`)
     expect(memberTransportLabel('public')).toBe('Public Internet + TLS')
     expect(memberTransportLabel(null)).toBe('—')

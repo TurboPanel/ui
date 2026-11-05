@@ -62,7 +62,7 @@ export const ORG_AREAS = [
     subRoutes: [
       {
         id: 'datacenters',
-        label: 'Datacenters',
+        label: 'Datacenter Networks',
         pathSegment: 'datacenters',
         hint: 'Private CIDR locations that group servers',
       },
@@ -574,16 +574,16 @@ const SERVER_METRICS_SUB_ROUTE = {
 
 const DATACENTER_DETAIL_SUB_ROUTE = {
   id: 'datacenter-detail',
-  label: 'Datacenter',
+  label: 'Datacenter Network',
   pathSegment: 'datacenters',
   hint: 'Private CIDR, members, and timezone',
 } as const
 
 const DATACENTER_NEW_SUB_ROUTE = {
   id: 'datacenter-new',
-  label: 'New Datacenter',
+  label: 'New Datacenter Network',
   pathSegment: 'datacenters',
-  hint: 'Create a datacenter from a server IP',
+  hint: 'Create a datacenter network from a server IP',
 } as const
 
 function resolveServersExtraSubRoute(parts: readonly string[]) {

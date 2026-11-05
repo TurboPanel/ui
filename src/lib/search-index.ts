@@ -23,7 +23,7 @@ export const SEARCH_GROUP_ORDER = [
   'Servers',
   'Projects',
   'Databases',
-  'Datacenters',
+  'Datacenter Networks',
   'Pages',
 ] as const
 
@@ -159,7 +159,7 @@ function pageItems(orgId: string, data: SearchData): SearchItem[] {
   )
   return [
     ...pages,
-    ...sub('servers', 'datacenters', 'Datacenters'),
+    ...sub('servers', 'datacenters', 'Datacenter Networks'),
     ...sub('servers', 'keys', 'Pending Keys', 'registration keys unused'),
     ...sub('servers', 'tls', 'TLS Certificates', 'tls ssl server certificates'),
     ...sub('servers', 'settings', 'Server Settings', 'defaults timezone'),
@@ -324,9 +324,9 @@ function objectItems(orgId: string, data: SearchData): SearchItem[] {
   }))
   const datacenters = data.datacenters.map((datacenter): SearchItem => ({
     id: `datacenter-${datacenter.id}`,
-    name: datacenter.name?.trim() || 'Datacenter',
-    type: 'Datacenter',
-    group: 'Datacenters',
+    name: datacenter.name?.trim() || 'Datacenter Network',
+    type: 'Datacenter Network',
+    group: 'Datacenter Networks',
     href: datacenterHref(orgId, datacenter.id),
     icon: 'servers',
     keywords: '',

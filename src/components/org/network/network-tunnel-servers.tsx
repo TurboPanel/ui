@@ -50,7 +50,7 @@ export function NetworkTunnelServers({
     <SectionPanel title="Servers" hint="Which servers may run tunnels">
       <Text style={panelStyles.muted}>
         Every server may run tunnels unless you switch it off here. A server switched off is never
-        used, even by a tunnel that runs on all servers of its datacenter.
+        used, even by a tunnel that runs on all servers of its datacenter network.
       </Text>
       {error ? (
         <Text style={panelStyles.error} accessibilityRole="alert">

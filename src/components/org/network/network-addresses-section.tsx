@@ -271,10 +271,10 @@ function CreateIpScopeFields({
   const networkRows = requireSiteSubnet
     ? siteSubnetsForDatacenter(networks, createDatacenterId)
     : networks
-  let datacenterLabel = 'Datacenter (optional)'
+  let datacenterLabel = 'Datacenter Network (optional)'
   let networkLabel = 'Network (optional)'
-  if (scope === 'datacenter') datacenterLabel = 'Datacenter'
-  if (requireSiteSubnet) networkLabel = 'Site subnet'
+  if (scope === 'datacenter') datacenterLabel = 'Datacenter Network'
+  if (requireSiteSubnet) networkLabel = 'Datacenter Network Subnet'
 
   const networkOptions: SegmentedOption<string>[] = [
     ...(requireSiteSubnet ? [] : [{ value: '', label: 'None' }]),
@@ -438,12 +438,12 @@ function AddressFiltersPanel({
           accessibilityLabel="Allocation filter"
         />
       </FormField>
-      <FormField label="Site">
+      <FormField label="Datacenter Network">
         <SegmentedControl
           options={datacenterOptions(datacenters, 'All')}
           value={datacenterFilter}
           onChange={onDatacenterFilterChange}
-          accessibilityLabel="Site filter"
+          accessibilityLabel="Datacenter network filter"
         />
       </FormField>
     </SectionPanel>

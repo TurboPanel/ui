@@ -93,10 +93,10 @@ function fabricMutationError(err: unknown): string {
   }
   const raw = err.message
   if (raw.includes(GATEWAY_DATACENTER_REQUIRED_ERROR)) {
-    return 'Assign this server to a datacenter before promoting it to gateway.'
+    return 'Assign this server to a datacenter network before promoting it to gateway.'
   }
   if (raw.includes(GATEWAY_DATACENTER_CIDR_REQUIRED_ERROR)) {
-    return 'This datacenter has no private CIDR. Recreate it from a server IP before promoting a gateway.'
+    return 'This datacenter network has no private CIDR. Recreate it from a server IP before promoting a gateway.'
   }
   if (raw.includes(PREFERRED_GATEWAY_INVALID_ERROR)) {
     return 'Preferred gateways must be gateway-role relays in this mesh.'
@@ -294,8 +294,8 @@ function FabricAllowRelayToggle({
         />
       </SettingRow>
       <Text style={panelStyles.muted}>
-        Relay is a degraded fallback path and must be explicitly enabled. A datacenter gateway is
-        not the same as an unrelated relay.
+        Relay is a degraded fallback path and must be explicitly enabled. A datacenter network
+        gateway is not the same as an unrelated relay.
       </Text>
     </View>
   )
@@ -411,7 +411,7 @@ function pathRowLatency(row: FabricPathMatrixRow): string | null {
   return `${String(row.latencyMs)} ms`
 }
 
-const PAIR_PATHS_HELP = `Servers that share a trusted datacenter network talk over the LAN with no tunnel, even with ${TURBOFABRIC_PRODUCT_NAME} off. ${TURBOFABRIC_PRODUCT_NAME} carries traffic between datacenters and runs encrypted over a network marked untrusted.`
+const PAIR_PATHS_HELP = `Servers that share a trusted datacenter network talk over the LAN with no tunnel, even with ${TURBOFABRIC_PRODUCT_NAME} off. ${TURBOFABRIC_PRODUCT_NAME} carries traffic between datacenter networks and runs encrypted over a network marked untrusted.`
 
 /** Server pairs as the panel reports them (`pairs[]`), with tunnel readings folded in. */
 function FabricPairPathsPanel({ rows }: Readonly<{ rows: readonly FabricPairRow[] }>) {
@@ -575,7 +575,7 @@ function AdvertisedCidrsField({
   if (role !== 'gateway') {
     return (
       <Text style={panelStyles.muted}>
-        This server does not share its datacenter&apos;s LAN ranges.
+        This server does not share its datacenter network&apos;s LAN ranges.
       </Text>
     )
   }
@@ -583,12 +583,14 @@ function AdvertisedCidrsField({
     <>
       <TextField
         label="Advertised LAN CIDRs"
-        hint={storedEmpty ? 'Empty override uses derived IPv4 datacenter subnets.' : undefined}
+        hint={
+          storedEmpty ? 'Empty override uses derived IPv4 datacenter network subnets.' : undefined
+        }
         value={draft}
         onChangeText={onChange}
         onBlur={onSave}
         editable={!disabled}
-        placeholder="(derived IPv4 datacenter subnets)"
+        placeholder="(derived IPv4 datacenter network subnets)"
         autoCapitalize="none"
         autoCorrect={false}
         mono
@@ -685,8 +687,8 @@ function RelayConfiguredFields({
         <RolePicker role={relay.role} disabled={disabled} onChange={onRoleChange} />
       </FormField>
       <Text style={panelStyles.muted}>
-        Shared: this server passes its datacenter&apos;s private ranges to the other servers on{' '}
-        {TURBOFABRIC_PRODUCT_NAME}.
+        Shared: this server passes its datacenter network&apos;s private ranges to the other servers
+        on {TURBOFABRIC_PRODUCT_NAME}.
       </Text>
       <AdvertisedCidrsField
         role={relay.role}
