@@ -8,6 +8,7 @@ import {
   devHostActionError,
   devHostActionsLocked,
   devHostBarVisible,
+  devHostDatabaseLine,
   devHostFailure,
   devHostJobEndedWithin,
   devHostJobJustDone,
@@ -122,6 +123,55 @@ describe('devHostPartNeedsWork and devHostPartLine', () => {
     expect(devHostPartLine(part({ behindBy: 1 }), { pending: 2 })).toBe(
       'Control Plane: 1 new commit on trunk, 2 migrations pending'
     )
+  })
+
+  it("uses the daemon's exact reason when it sent one", () => {
+    expect(
+      devHostPartLine(
+        part({
+          onTrunk: false,
+          branch: '',
+          behindBy: 19,
+          blockedReason: 'detached at 4f7b5ed, 19 behind trunk; not pulled',
+        })
+      )
+    ).toBe('Control Plane: detached at 4f7b5ed, 19 behind trunk, will not pull')
+    expect(
+      devHostPartLine(
+        part({
+          name: 'website',
+          dirty: { files: 1, blocking: true, kinds: [{ path: 'a.ts', kind: 'content' }] },
+          blockedReason: 'local changes in a.ts; not pulled',
+        })
+      )
+    ).toBe('Website: local changes in a.ts, will not pull')
+    // A refused fast-forward names git's line; the count of new commits stays.
+    expect(
+      devHostPartLine(
+        part({ behindBy: 2, blockedReason: 'fatal: Not possible to fast-forward, aborting.' })
+      )
+    ).toBe(
+      'Control Plane: fatal: Not possible to fast-forward, aborting, will not pull, 2 new commits on trunk'
+    )
+  })
+
+  it('reads the database line from the counts', () => {
+    expect(devHostDatabaseLine({ pending: 2, applied: 23, total: 25 })).toBe(
+      'Database: 23 of 25 migrations applied'
+    )
+    expect(devHostDatabaseLine({ pending: 0, applied: 1, total: 1 })).toBe(
+      'Database: 1 of 1 migration applied'
+    )
+    expect(devHostDatabaseLine({ pending: 0 })).toBeNull()
+    expect(devHostDatabaseLine(null)).toBeNull()
+    expect(
+      devHostLines(
+        host({ parts: [part({ behindBy: 1 })], migrate: { pending: 0, applied: 25, total: 26 } })
+      )
+    ).toEqual([
+      { name: 'control-plane', text: 'Control Plane: 1 new commit on trunk' },
+      { name: 'database', text: 'Database: 25 of 26 migrations applied' },
+    ])
   })
 
   it('says a restart or packages are needed', () => {
