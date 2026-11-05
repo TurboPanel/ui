@@ -47,6 +47,12 @@ import {
   DATACENTER_PRIORITY_MIN,
   findDatacenterWinnerHint,
   formatDatacenterWinnerHint,
+  formatPriorityRivals,
+  priorityMatters,
+  priorityRivals,
+  PRIORITY_TIE_ADVICE,
+  priorityTies,
+  sharedServerNetworks,
   parseDatacenterPriorityDraft,
 } from '@/lib/datacenter-routing'
 import {
@@ -416,12 +422,24 @@ function SubnetsPanel({
   )
 }
 
-function priorityHint(winnerHint: string | null): string {
-  const base = `Integer ${DATACENTER_PRIORITY_MIN}–${DATACENTER_PRIORITY_MAX}, lower wins; default ${DEFAULT_DATACENTER_PRIORITY}. When two servers share more than one trusted datacenter network, the lowest priority carries their traffic.`
-  if (!winnerHint) {
-    return `${base} No server pair currently shares this datacenter network with another, so priority changes nothing yet.`
-  }
-  return `${base} ${winnerHint}`
+/** What the Routing panel says about priority; `null` hides the field. */
+export type PriorityView = Readonly<{
+  /** "Backhaul (priority 10) and Office LAN (priority 200)". */
+  rivals: string
+  /** Ladder reading for one server pair; omitted while tied. */
+  winnerHint: string | null
+  /** Rivals with the same number, or `null` when there is no tie. */
+  tiedWith: string | null
+}>
+
+function priorityHint(view: PriorityView): string {
+  const base = `Integer ${DATACENTER_PRIORITY_MIN}–${DATACENTER_PRIORITY_MAX}, lower wins; default ${DEFAULT_DATACENTER_PRIORITY}. Servers on this network are also on ${view.rivals}; the lowest number carries traffic between them.`
+  return view.winnerHint ? `${base} ${view.winnerHint}` : base
+}
+
+function routingPanelHint(trusted: boolean, priority: string | null): string {
+  const trust = trusted ? 'Trusted' : 'Untrusted'
+  return priority === null ? trust : `Priority ${priority} · ${trust}`
 }
 
 /**
@@ -437,7 +455,7 @@ function RoutingPanel({
   priorityError,
   trusted,
   hasManagedMembers,
-  winnerHint,
+  priorityView,
   canManage,
   pending,
   loaded,
@@ -452,7 +470,8 @@ function RoutingPanel({
   trusted: boolean
   /** Toggling trust off recomputes stored transports for these members. */
   hasManagedMembers: boolean
-  winnerHint: string | null
+  /** `null` when priority cannot change anything for this network (field hidden). */
+  priorityView: PriorityView | null
   canManage: boolean
   pending: boolean
   loaded: boolean
@@ -467,11 +486,10 @@ function RoutingPanel({
   return (
     <SectionPanel
       title="Routing"
-      hint={
-        trusted
-          ? `Priority ${priorityText || DEFAULT_DATACENTER_PRIORITY} · Trusted`
-          : `Priority ${priorityText || DEFAULT_DATACENTER_PRIORITY} · Untrusted`
-      }
+      hint={routingPanelHint(
+        trusted,
+        priorityView ? priorityText || String(DEFAULT_DATACENTER_PRIORITY) : null
+      )}
       collapsible
       defaultCollapsed
     >
@@ -490,18 +508,29 @@ function RoutingPanel({
         families.
       </Text>
 
-      <TextField
-        label="Priority"
-        value={priorityText}
-        onChangeText={onChangePriority}
-        placeholder={String(DEFAULT_DATACENTER_PRIORITY)}
-        hint={priorityHint(winnerHint)}
-        error={priorityError}
-        editable={!controlsDisabled}
-        keyboardType="number-pad"
-        accessibilityLabel="Datacenter network routing priority"
-        mono
-      />
+      {priorityView ? (
+        <>
+          <TextField
+            label="Priority"
+            value={priorityText}
+            onChangeText={onChangePriority}
+            placeholder={String(DEFAULT_DATACENTER_PRIORITY)}
+            hint={priorityHint(priorityView)}
+            error={priorityError}
+            editable={!controlsDisabled}
+            keyboardType="number-pad"
+            accessibilityLabel="Datacenter network routing priority"
+            mono
+          />
+          {priorityView.tiedWith ? (
+            <InlineNotice
+              tone="warning"
+              title={`Same priority as ${priorityView.tiedWith}.`}
+              body={PRIORITY_TIE_ADVICE}
+            />
+          ) : null}
+        </>
+      ) : null}
 
       <SettingRow
         label={trusted ? 'Trusted' : 'Untrusted'}
@@ -1299,10 +1328,23 @@ export function DatacenterDetailSection({
       ),
     [allDatacenters, datacenter, datacenterId]
   )
-  const winnerHint = useMemo(() => {
+  const priorityView = useMemo((): PriorityView | null => {
+    const shared = sharedServerNetworks(servers)
+    if (!priorityMatters(datacenterId, trusted, shared, policies)) return null
+    const ownPriority = policies.get(datacenterId)?.priority ?? DEFAULT_DATACENTER_PRIORITY
+    const ties = priorityTies(datacenterId, ownPriority, shared, policies)
     const hint = findDatacenterWinnerHint(datacenterId, servers, policies)
-    return hint ? formatDatacenterWinnerHint(hint, nameById, policies) : null
-  }, [datacenterId, servers, policies, nameById])
+    return {
+      rivals: formatPriorityRivals(
+        priorityRivals(datacenterId, shared, policies),
+        nameById,
+        policies
+      ),
+      winnerHint:
+        hint && ties.length === 0 ? formatDatacenterWinnerHint(hint, nameById, policies) : null,
+      tiedWith: ties.length > 0 ? formatPriorityRivals(ties, nameById, policies) : null,
+    }
+  }, [datacenterId, trusted, servers, policies, nameById])
   const memberServerIds = useMemo(() => new Set(members.map((pin) => pin.serverId)), [members])
   const hasManagedMembers = orEmptyArray(managedQuery.data?.managed).some((cluster) =>
     cluster.members.some((m) => memberServerIds.has(m.serverId))
@@ -1527,7 +1569,7 @@ export function DatacenterDetailSection({
         priorityError={priorityError}
         trusted={trusted}
         hasManagedMembers={hasManagedMembers}
-        winnerHint={winnerHint}
+        priorityView={priorityView}
         canManage={canManage}
         pending={pending}
         loaded={Boolean(datacenter)}

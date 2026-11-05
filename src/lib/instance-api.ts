@@ -5025,11 +5025,29 @@ export async function fetchDatacenterNameSuggestions(options?: {
   return await apiFetch(`${CLIENT_API}/datacenters/name-suggestions${suffix}`)
 }
 
+/**
+ * One entry of the list GET's `warnings` (`equal_priority`, `chosen_network_down`,
+ * and any code a newer control plane adds). Only the fields the UI reads are typed.
+ */
+export type DatacenterListWarning = {
+  code: string
+  priority?: number
+  datacenterIds?: string[]
+}
+
 export async function fetchDatacenters(): Promise<{
   datacenters: DatacenterRecord[]
+  /** Absent on older control planes: `[]`. */
+  warnings: DatacenterListWarning[]
 }> {
-  const body = await apiFetch<{ datacenters?: DatacenterRecord[] }>(`${CLIENT_API}/datacenters`)
-  return { datacenters: (body.datacenters ?? []).map(normalizeDatacenterRecord) }
+  const body = await apiFetch<{
+    datacenters?: DatacenterRecord[]
+    warnings?: DatacenterListWarning[]
+  }>(`${CLIENT_API}/datacenters`)
+  return {
+    datacenters: (body.datacenters ?? []).map(normalizeDatacenterRecord),
+    warnings: Array.isArray(body.warnings) ? body.warnings : [],
+  }
 }
 
 /** Older instances omit the effective policy fields; apply the documented defaults. */

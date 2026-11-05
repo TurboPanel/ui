@@ -7,7 +7,15 @@ import {
   describeDatacenterTransport,
   findDatacenterWinnerHint,
   formatDatacenterWinnerHint,
+  formatPriorityRivals,
+  joinWithAnd,
+  networksWherePriorityMatters,
+  overlappingPriorityTies,
   parseDatacenterPriorityDraft,
+  priorityMatters,
+  priorityRivals,
+  priorityTies,
+  sharedServerNetworks,
   winningDatacenterId,
 } from './datacenter-routing'
 
@@ -181,5 +189,91 @@ describe('describeDatacenterTransport', () => {
         nameById: NAMES,
       })
     ).toBe('Datacenter network')
+  })
+})
+
+describe('priority shows only when it matters', () => {
+  const on = (...ids: string[]) => ({ datacenters: ids.map((id) => ({ id, name: id })) })
+  const policies = buildDatacenterPolicyMap([
+    { id: 'lan', priority: 100, trusted: true },
+    { id: 'backhaul', priority: 10, trusted: true },
+    { id: 'office', priority: 100, trusted: true },
+    { id: 'wifi', priority: 5, trusted: false },
+  ])
+
+  it('pairs networks only when two servers are on both', () => {
+    const shared = sharedServerNetworks([
+      on('lan', 'backhaul'),
+      on('lan', 'backhaul'),
+      on('lan', 'office'),
+    ])
+    expect([...(shared.get('lan') ?? [])]).toEqual(['backhaul'])
+    expect([...(shared.get('backhaul') ?? [])]).toEqual(['lan'])
+    expect(shared.has('office')).toBe(false)
+  })
+
+  it('shows priority on a trusted network that shares servers with another trusted one', () => {
+    const shared = sharedServerNetworks([on('lan', 'backhaul'), on('lan', 'backhaul')])
+    expect(priorityMatters('lan', true, shared, policies)).toBe(true)
+    expect(priorityRivals('lan', shared, policies)).toEqual(['backhaul'])
+  })
+
+  it('hides priority with no overlap, on untrusted networks, and against untrusted rivals', () => {
+    const lone = sharedServerNetworks([on('lan', 'backhaul'), on('lan')])
+    expect(priorityMatters('lan', true, lone, policies)).toBe(false)
+    const withWifi = sharedServerNetworks([on('lan', 'wifi'), on('lan', 'wifi')])
+    expect(priorityMatters('lan', true, withWifi, policies)).toBe(false)
+    expect(priorityMatters('wifi', false, withWifi, policies)).toBe(false)
+    const both = sharedServerNetworks([on('lan', 'backhaul'), on('lan', 'backhaul')])
+    expect(priorityMatters('lan', false, both, policies)).toBe(false)
+  })
+
+  it('lists the networks where priority matters', () => {
+    const shared = sharedServerNetworks([
+      on('lan', 'backhaul', 'wifi'),
+      on('lan', 'backhaul', 'wifi'),
+    ])
+    const shown = networksWherePriorityMatters(
+      [
+        { id: 'lan', priority: 100, trusted: true },
+        { id: 'backhaul', priority: 10, trusted: true },
+        { id: 'office', priority: 100, trusted: true },
+        { id: 'wifi', priority: 5, trusted: false },
+      ],
+      shared
+    )
+    expect([...shown].sort((a, b) => a.localeCompare(b))).toEqual(['backhaul', 'lan'])
+  })
+
+  it('finds ties only among networks that share servers', () => {
+    const shared = sharedServerNetworks([
+      on('lan', 'office', 'backhaul'),
+      on('lan', 'office', 'backhaul'),
+    ])
+    expect(priorityTies('lan', 100, shared, policies)).toEqual(['office'])
+    expect(priorityTies('backhaul', 10, shared, policies)).toEqual([])
+    expect(
+      formatPriorityRivals(['backhaul', 'office'], new Map([['backhaul', 'Backhaul']]), policies)
+    ).toBe('Backhaul (priority 10) and office (priority 100)')
+  })
+
+  it('joins names in plain words', () => {
+    expect(joinWithAnd([])).toBe('')
+    expect(joinWithAnd(['A'])).toBe('A')
+    expect(joinWithAnd(['A', 'B', 'C'])).toBe('A, B and C')
+  })
+
+  it('keeps an equal-priority warning only for networks that share servers', () => {
+    const warnings = [
+      { code: 'equal_priority', priority: 100, datacenterIds: ['lan', 'office', 'spare'] },
+      { code: 'chosen_network_down', datacenterIds: ['lan'] },
+    ]
+    const overlapping = sharedServerNetworks([on('lan', 'office'), on('lan', 'office')])
+    expect(overlappingPriorityTies(warnings, overlapping)).toEqual([
+      { code: 'equal_priority', priority: 100, datacenterIds: ['lan', 'office'] },
+    ])
+    expect(
+      overlappingPriorityTies(warnings, sharedServerNetworks([on('lan'), on('office')]))
+    ).toEqual([])
   })
 })
