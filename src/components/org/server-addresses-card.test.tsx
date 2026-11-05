@@ -188,14 +188,14 @@ describe('ServerAddressesCard', () => {
   it('keeps showing the last good list when a background re-read fails', () => {
     showCard(view, true, true)
     expect(screen.queryByText('Could not load the addresses clients use.')).toBeNull()
-    expect(screen.getByText('Datacenter network Ashburn')).toBeTruthy()
+    expect(screen.getByText('Datacenter Network Ashburn')).toBeTruthy()
   })
 
   it('shows one row per side with name, address, overridden ports and the main string', () => {
     showCard(view)
     expect(screen.getByText('Addresses clients use')).toBeTruthy()
     expect(screen.getByText('Public')).toBeTruthy()
-    expect(screen.getByText('Datacenter network Ashburn')).toBeTruthy()
+    expect(screen.getByText('Datacenter Network Ashburn')).toBeTruthy()
     expect(screen.getByText('omega.example.com')).toBeTruthy()
     expect(screen.getByText('No DNS name yet')).toBeTruthy()
     expect(screen.getByText('Through a router: 203.0.113.7')).toBeTruthy()
@@ -219,8 +219,8 @@ describe('ServerAddressesCard', () => {
 
   it('validates in plain words before sending anything', () => {
     showCard(view)
-    fireEvent.click(screen.getByLabelText('Edit Datacenter network Ashburn'))
-    expect(screen.getByText('Edit Datacenter network Ashburn address')).toBeTruthy()
+    fireEvent.click(screen.getByLabelText('Edit Datacenter Network Ashburn'))
+    expect(screen.getByText('Edit Datacenter Network Ashburn address')).toBeTruthy()
     type('DNS name clients use (optional)', 'omega')
     fireEvent.click(screen.getByText('A different address'))
     type('Postgres', '99999')
@@ -234,7 +234,7 @@ describe('ServerAddressesCard', () => {
   it('saves every saved side plus the edited one and closes', async () => {
     run.mockResolvedValue({ ok: true, value: { ...view, certificateUpdatePending: false } })
     showCard(view)
-    fireEvent.click(screen.getByLabelText('Edit Datacenter network Ashburn'))
+    fireEvent.click(screen.getByLabelText('Edit Datacenter Network Ashburn'))
     type('DNS name clients use (optional)', 'Omega.DC1.example.com')
     fireEvent.click(screen.getByText('Use in the main connection string'))
     fireEvent.click(screen.getByText('Save'))
@@ -315,7 +315,7 @@ describe('ServerAddressesCard', () => {
       cause: new ServerAddressesSaveError('/x', 400, { error: 'address_v4_invalid', index: 0 }),
     })
     showCard(view)
-    fireEvent.click(screen.getByLabelText('Edit Datacenter network Ashburn'))
+    fireEvent.click(screen.getByLabelText('Edit Datacenter Network Ashburn'))
     type('DNS name clients use (optional)', 'omega.dc1.example.com')
     fireEvent.click(screen.getByText('Save'))
     await waitFor(() =>

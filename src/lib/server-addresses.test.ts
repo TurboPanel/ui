@@ -86,8 +86,8 @@ function saveError(status: number, body: Record<string, unknown> | null) {
 describe('row display', () => {
   it('titles Public and datacenter rows', () => {
     expect(addressRowTitle(entry())).toBe('Public')
-    expect(addressRowTitle(datacenter)).toBe('Datacenter network Ashburn')
-    expect(addressSideLabel('datacenter', ' ')).toBe('Datacenter network')
+    expect(addressRowTitle(datacenter)).toBe('Datacenter Network Ashburn')
+    expect(addressSideLabel('datacenter', ' ')).toBe('Datacenter Network')
     expect(addressSideLabel(null, null)).toBe('Public')
   })
 
@@ -275,7 +275,7 @@ describe('buildAddressesPayload', () => {
         primary: true,
       },
     ])
-    expect(payload.titles).toEqual(['Public', 'Datacenter network Ashburn'])
+    expect(payload.titles).toEqual(['Public', 'Datacenter Network Ashburn'])
     expect(payload.editedIndex).toBe(1)
   })
 
@@ -295,7 +295,7 @@ describe('buildAddressesPayload', () => {
 })
 
 describe('addressSaveErrorMessage', () => {
-  const payload = { titles: ['Public', 'Datacenter network Ashburn'], editedIndex: 0 }
+  const payload = { titles: ['Public', 'Datacenter Network Ashburn'], editedIndex: 0 }
 
   it('maps every refusal code to a plain message', () => {
     for (const code of [
@@ -319,7 +319,7 @@ describe('addressSaveErrorMessage', () => {
   it('names the other row a refusal points at', () => {
     expect(
       addressSaveErrorMessage(saveError(400, { error: 'address_v4_invalid', index: 1 }), payload)
-    ).toMatch(/\(in the Datacenter network Ashburn row\)$/)
+    ).toMatch(/\(in the Datacenter Network Ashburn row\)$/)
     expect(
       addressSaveErrorMessage(saveError(400, { error: 'address_v4_invalid', index: 0 }), payload)
     ).not.toMatch(/in the/)
@@ -383,7 +383,7 @@ describe('connectionStringLabel', () => {
         label: 'Ashburn',
         host: 'omega.dc1.example.com',
       })
-    ).toBe('Datacenter network Ashburn: omega.dc1.example.com')
+    ).toBe('Datacenter Network Ashburn: omega.dc1.example.com')
     expect(connectionStringLabel({ host: '192.0.2.77' })).toBe('Public: 192.0.2.77')
   })
 })

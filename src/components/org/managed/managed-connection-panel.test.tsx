@@ -136,7 +136,7 @@ describe('managed connection panel connection strings', () => {
     )
     const labels = [
       screen.getByText('Public: omega.example.com (main)'),
-      screen.getByText('Datacenter network Ashburn: omega.dc1.example.com'),
+      screen.getByText('Datacenter Network Ashburn: omega.dc1.example.com'),
     ]
     expect(
       labels[0].compareDocumentPosition(labels[1]) & Node.DOCUMENT_POSITION_FOLLOWING
@@ -144,9 +144,9 @@ describe('managed connection panel connection strings', () => {
     const copies = screen.getAllByText('Copy DSN').map((el) => el.dataset.copy)
     expect(copies).toEqual([connection.dsn, dc.dsn])
     expect(
-      screen.getByLabelText('Copy DSN for Datacenter network Ashburn: omega.dc1.example.com')
+      screen.getByLabelText('Copy DSN for Datacenter Network Ashburn: omega.dc1.example.com')
     ).toBeTruthy()
-    expect(screen.getByText(/From outside the server \(Datacenter network Ashburn\)/)).toBeTruthy()
+    expect(screen.getByText(/From outside the server \(Datacenter Network Ashburn\)/)).toBeTruthy()
     expect(screen.queryByText(/^DSN$/)).toBeNull()
   })
 
@@ -176,7 +176,7 @@ describe('managed connection panel connection strings', () => {
       />
     )
     expect(screen.getByText('Public: a.example.com')).toBeTruthy()
-    expect(screen.getByText('Datacenter network Ashburn: b.example.com (main)')).toBeTruthy()
+    expect(screen.getByText('Datacenter Network Ashburn: b.example.com (main)')).toBeTruthy()
   })
 
   it('prompts to set the address clients use with a link to the Network tab', () => {

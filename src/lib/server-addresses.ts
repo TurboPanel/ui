@@ -39,13 +39,13 @@ const SOURCE_WORDS: Readonly<Record<ClientAddressSource, string>> = {
   pin: 'its address in this datacenter network',
 }
 
-/** `Public`, or `Datacenter network <name>`. */
+/** `Public`, or `Datacenter Network <name>`. */
 export function addressSideLabel(
   scope: ServerAddressScope | null | undefined,
   label: string | null | undefined
 ): string {
   const name = label?.trim()
-  if (scope === 'datacenter') return name ? `Datacenter network ${name}` : 'Datacenter network'
+  if (scope === 'datacenter') return name ? `Datacenter Network ${name}` : 'Datacenter Network'
   return name || 'Public'
 }
 
@@ -388,7 +388,7 @@ export function addressSaveErrorMessage(
 // Managed Connect panel
 // ---------------------------------------------------------------------------
 
-/** "Public: omega.example.com", "Datacenter network Ashburn: omega.dc1.example.com". */
+/** "Public: omega.example.com", "Datacenter Network Ashburn: omega.dc1.example.com". */
 export function connectionStringLabel(
   entry: Readonly<{ scope?: ServerAddressScope | null; label?: string | null; host: string }>
 ): string {

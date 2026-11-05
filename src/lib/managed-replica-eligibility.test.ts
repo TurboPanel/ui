@@ -113,7 +113,7 @@ describe('resolveReplicaEligibility', () => {
     })
   })
 
-  it('marks same-site failover servers eligible on Datacenter LAN', () => {
+  it('marks same-site failover servers eligible on a datacenter network', () => {
     const row = eligibility().servers.find((s) => s.serverId === 'srv-ok')
     expect(row).toEqual({
       serverId: 'srv-ok',

@@ -1395,7 +1395,7 @@ export function DatacenterDetailSection({
 
       {datacenter ? (
         <LocationEditorPanel
-          subject="datacenter"
+          subject="datacenter network"
           location={datacenter.location}
           detectedGeo={datacenterGeoFromMetadata(datacenter.metadata)}
           canManage={canManage}

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { IpListRow } from '@/components/org/network/network-rows'
+import { ipScopeLabel } from '@/lib/server-services'
 import { panelStyles } from '@/components/ui/panel-styles'
 import {
   Button,
@@ -41,7 +42,7 @@ const ALLOCATIONS: IpAllocation[] = ['dedicated', 'shared']
 
 const SCOPE_OPTIONS: readonly SegmentedOption<IpScope>[] = SCOPES.map((value) => ({
   value,
-  label: value,
+  label: ipScopeLabel(value),
 }))
 const ALLOCATION_OPTIONS: readonly SegmentedOption<IpAllocation>[] = ALLOCATIONS.map((value) => ({
   value,
@@ -369,7 +370,7 @@ function IpEditPanel({
       <Text style={styles.fieldLabel}>Allocation</Text>
       <Text style={panelStyles.detailLine}>{allocation}</Text>
       <Text style={styles.fieldLabel}>Scope</Text>
-      <Text style={panelStyles.detailLine}>{scope}</Text>
+      <Text style={panelStyles.detailLine}>{ipScopeLabel(scope)}</Text>
       <TextField
         label="Description"
         value={description}

@@ -3,6 +3,7 @@ import { panelStyles } from '@/components/ui/panel-styles'
 import { Badge, Button, ButtonRow, MonoText, TypeNameDeleteButton } from '@/components/ui'
 import { dockerNetworkAddressingLines } from '@/lib/docker-addressing'
 import type { NetworkKind, NetworkRecord, IpRecord } from '@/lib/instance-api'
+import { ipScopeLabel } from '@/lib/server-services'
 import { spacing } from '@/lib/theme'
 
 function networkTitle(network: NetworkRecord): string {
@@ -161,7 +162,7 @@ export function IpListRow({
       ) : null}
       <View style={styles.badgeRow}>
         <Badge label={`v${ip.version}`} />
-        <Badge label={ip.scope} />
+        <Badge label={ipScopeLabel(ip.scope)} />
         <Badge label={ip.allocation} />
       </View>
       <Text style={panelStyles.detailLine}>

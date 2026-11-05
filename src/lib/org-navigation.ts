@@ -64,7 +64,7 @@ export const ORG_AREAS = [
         id: 'datacenters',
         label: 'Datacenter Networks',
         pathSegment: 'datacenters',
-        hint: 'Private CIDR locations that group servers',
+        hint: 'Private subnets that group servers',
       },
       {
         id: 'keys',
