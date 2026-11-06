@@ -165,7 +165,7 @@ describe('buildSearchItems', () => {
       'Add project': '/o1/projects/new',
       'Add database': '/o1/projects/new?type=managed',
       'Invite member': '/o1/manage?tab=access',
-      'Pause or Resume Updates': '/admin/updates',
+      'Pause All Updates': '/admin/updates',
     })
   })
 
@@ -174,7 +174,7 @@ describe('buildSearchItems', () => {
     const actionNames = names(list.filter((i) => i.group === 'Actions'))
     expect(actionNames).not.toContain('Add Server')
     expect(actionNames).not.toContain('Invite member')
-    expect(actionNames).not.toContain('Pause or Resume Updates')
+    expect(actionNames).not.toContain('Pause All Updates')
     expect(actionNames).not.toContain('Remove server derp')
     expect(actionNames).not.toContain('Reboot server derp')
     expect(actionNames).toContain('Add project')
@@ -282,6 +282,11 @@ describe('rankSearchItems', () => {
       'activity'
     )
     expect(tie.map((i) => i.group)).toEqual(['Projects', 'Pages'])
+  })
+
+  it('finds the update pause by "pause" or "resume"', () => {
+    expect(names(rankSearchItems(list, 'pause'))).toContain('Pause All Updates')
+    expect(names(rankSearchItems(list, 'resume updates'))).toContain('Pause All Updates')
   })
 
   it('returns nothing for text that matches nothing', () => {

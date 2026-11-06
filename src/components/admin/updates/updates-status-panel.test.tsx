@@ -2,7 +2,7 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { applyScenario, env, SCENARIOS, styleOf } from '@/components/ui/v4/rn-stub'
+import { applyScenario, env, SCENARIOS } from '@/components/ui/v4/rn-stub'
 import {
   UpdateCheckTooSoonError,
   UpdateNowRefusedError,
@@ -18,11 +18,14 @@ vi.mock(
   '@/lib/theme-preference',
   async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub
 )
-// The real buttons and confirmation; only the card frame is a stand-in, so a
-// test can tell the header slot (it does not shrink) from the card body.
+// The real buttons, switch and dialog; only the card frame is a stand-in, so
+// a test can tell the header slot (it does not shrink) from the card body.
 vi.mock('@/components/ui', async () => ({
   Button: (await import('@/components/ui/button')).Button,
-  ConfirmButton: (await import('@/components/ui/confirm-button')).ConfirmButton,
+  ButtonRow: (await import('@/components/ui/button')).ButtonRow,
+  ModalSheet: (await import('@/components/ui/modal-sheet')).ModalSheet,
+  SettingRow: (await import('@/components/ui/setting-row')).SettingRow,
+  Toggle: (await import('@/components/ui/toggle')).Toggle,
   SectionPanel: (props: MockProps) => (
     <section>
       <header data-testid="panel-header">
@@ -39,10 +42,12 @@ vi.mock('@/lib/format-datetime', () => ({
   formatLocalDateTime: (iso: string) => `<${iso}>`,
 }))
 
-const { checkRun, updateNowRun, updateNowState, auth } = vi.hoisted(() => ({
+const { checkRun, updateNowRun, updateNowState, pauseRun, resumeRun, auth } = vi.hoisted(() => ({
   checkRun: vi.fn(),
   updateNowRun: vi.fn(),
   updateNowState: { isPending: false },
+  pauseRun: vi.fn(),
+  resumeRun: vi.fn(),
   auth: { superadmin: true },
 }))
 vi.mock('@/lib/auth-context', () => ({
@@ -52,8 +57,8 @@ vi.mock('@/lib/auth-context', () => ({
 vi.mock('@/lib/queries/admin', () => ({
   useCheckForUpdates: () => ({ run: checkRun, isPending: false }),
   useUpdateNow: () => ({ run: updateNowRun, isPending: updateNowState.isPending }),
-  usePauseUpdates: () => ({ run: vi.fn(), isPending: false }),
-  useResumeUpdates: () => ({ run: vi.fn(), isPending: false }),
+  usePauseUpdates: () => ({ run: pauseRun, isPending: false }),
+  useResumeUpdates: () => ({ run: resumeRun, isPending: false }),
 }))
 
 const DATA = {
@@ -66,20 +71,21 @@ const DATA = {
   units: {},
 } as unknown as InstanceUpdates
 
-const PAUSE_PROMPT = /^Pause all updates\? Nothing new starts until you resume/
+const PAUSE_DIALOG_LINE = /^An update already in progress is not stopped\./
 
 function renderPanel(data: InstanceUpdates = DATA) {
   return render(<UpdatesStatusPanel data={data} headline="up_to_date" waiting={null} />)
 }
 
-/** Arm the confirmation, past the press guard, the way a person would. */
-function armPause() {
-  fireEvent.click(screen.getByRole('button', { name: 'Pause All Updates' }))
+function pauseSwitch(): HTMLElement {
+  return screen.getByRole('switch', { name: 'Pause All Updates' })
 }
 
 beforeEach(() => {
   checkRun.mockResolvedValue({ ok: true, value: DATA })
   updateNowRun.mockResolvedValue({ ok: true, value: { ok: true, runId: 'run-1' } })
+  pauseRun.mockResolvedValue({ ok: true, value: { updatesPaused: true } })
+  resumeRun.mockResolvedValue({ ok: true, value: { updatesPaused: false } })
   updateNowState.isPending = false
   auth.superadmin = true
 })
@@ -98,42 +104,77 @@ describe.each(SCENARIOS)('Status card layout ($name)', (scenario) => {
       env.width = width
     })
 
-    it('keeps the controls and the open confirmation out of the header slot', () => {
+    it('keeps the controls out of the header slot', () => {
       renderPanel()
       const header = screen.getByTestId('panel-header')
       const body = screen.getByTestId('panel-body')
       expect(header.textContent).toBe('Status')
       expect(body.contains(screen.getByRole('button', { name: 'Check Now' }))).toBe(true)
-      armPause()
-      const prompt = screen.getByText(PAUSE_PROMPT)
-      expect(body.contains(prompt)).toBe(true)
-      expect(header.textContent).toBe('Status')
-    })
-
-    it('gives the question its own full-width line under the buttons', () => {
-      renderPanel()
-      armPause()
-      const prompt = screen.getByText(PAUSE_PROMPT)
-      const stack = prompt.parentElement as HTMLElement
-      expect(styleOf(stack).flexDirection).toBe('column-reverse')
-      expect(styleOf(stack).alignSelf).toBe('stretch')
-      expect(styleOf(stack.parentElement).alignSelf).toBe('stretch')
-      expect(stack.contains(screen.getByRole('button', { name: 'Yes, Pause' }))).toBe(true)
+      expect(body.contains(pauseSwitch())).toBe(true)
     })
   })
 })
 
-describe('Status card when the window is resized', () => {
-  it('keeps an open confirmation open', () => {
-    env.width = 1024
-    const { rerender } = renderPanel()
-    armPause()
-    env.width = 360
-    rerender(<UpdatesStatusPanel data={DATA} headline="up_to_date" waiting={null} />)
-    expect(screen.getByText(PAUSE_PROMPT)).toBeTruthy()
-    env.width = 1400
-    rerender(<UpdatesStatusPanel data={{ ...DATA }} headline="up_to_date" waiting={null} />)
-    expect(screen.getByText(PAUSE_PROMPT)).toBeTruthy()
+describe('Pause All Updates switch', () => {
+  it('is a switch, off while updates run, with a note saying so', () => {
+    renderPanel()
+    expect(pauseSwitch().getAttribute('aria-checked')).toBe('false')
+    expect(screen.queryByRole('button', { name: 'Pause All Updates' })).toBeNull()
+    expect(screen.getByText('Updates start on their own.')).toBeTruthy()
+  })
+
+  it('asks first when turned on, explaining what a pause does and does not do', async () => {
+    renderPanel()
+    fireEvent.click(pauseSwitch())
+    expect(pauseRun).not.toHaveBeenCalled()
+    expect(screen.getByText('Pause All Updates?')).toBeTruthy()
+    expect(screen.getByText(PAUSE_DIALOG_LINE)).toBeTruthy()
+    expect(screen.getByText(/not at the scheduled check, and not with Update Now/)).toBeTruthy()
+    expect(screen.getByText(/^Turning this off starts nothing right away\./)).toBeTruthy()
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Pause Updates' }))
+      await Promise.resolve()
+    })
+    expect(pauseRun).toHaveBeenCalledTimes(1)
+    expect(resumeRun).not.toHaveBeenCalled()
+    expect(screen.queryByText(PAUSE_DIALOG_LINE)).toBeNull()
+  })
+
+  it('pauses nothing when the dialog is cancelled', () => {
+    renderPanel()
+    fireEvent.click(pauseSwitch())
+    fireEvent.click(screen.getAllByRole('button', { name: 'Cancel' }).at(-1) as HTMLElement)
+    expect(screen.queryByText(PAUSE_DIALOG_LINE)).toBeNull()
+    expect(pauseRun).not.toHaveBeenCalled()
+    expect(pauseSwitch().getAttribute('aria-checked')).toBe('false')
+  })
+
+  it('says a refused pause in the card', async () => {
+    pauseRun.mockResolvedValueOnce({ ok: false, error: 'HTTP 500: broken' })
+    renderPanel()
+    fireEvent.click(pauseSwitch())
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Pause Updates' }))
+      await Promise.resolve()
+    })
+    expect(screen.getByText(/HTTP 500|Could not pause updates/)).toBeTruthy()
+  })
+
+  it('turns off at once while paused, with no dialog', async () => {
+    renderPanel({ ...DATA, updatesPaused: true })
+    expect(pauseSwitch().getAttribute('aria-checked')).toBe('true')
+    expect(
+      screen.getByText(
+        'No update starts. Turning this off starts nothing right away; the next check does.'
+      )
+    ).toBeTruthy()
+    await act(async () => {
+      fireEvent.click(pauseSwitch())
+      await Promise.resolve()
+    })
+    expect(resumeRun).toHaveBeenCalledTimes(1)
+    expect(pauseRun).not.toHaveBeenCalled()
+    expect(screen.queryByText(PAUSE_DIALOG_LINE)).toBeNull()
   })
 })
 
@@ -150,11 +191,13 @@ describe('Status card words', () => {
   it('while paused says nothing new starts, not that updates install on their own', () => {
     renderPanel({ ...DATA, updatesPaused: true })
     expect(
-      screen.getByText('Updates are paused. Nothing new starts until they are resumed.')
+      screen.getByText(
+        'Updates are paused. Nothing new starts until Pause All Updates is turned off.'
+      )
     ).toBeTruthy()
     expect(screen.queryByText(/install on their own/)).toBeNull()
     expect(screen.queryByText(/^Next Check/)).toBeNull()
-    expect(screen.getByText(/Nothing starts until updates are resumed/)).toBeTruthy()
+    expect(screen.getByText('Check Now only looks for new builds.')).toBeTruthy()
   })
 })
 
@@ -199,7 +242,7 @@ describe('Update Now', () => {
     expect(button.parentElement?.contains(screen.getByRole('button', { name: 'Check Now' }))).toBe(
       true
     )
-    expect(screen.getByText(/Update Now installs a newer build right away/)).toBeTruthy()
+    expect(screen.getByText(/Update Now installs a waiting build right away/)).toBeTruthy()
     await pressUpdateNow()
     expect(updateNowRun).toHaveBeenCalledTimes(1)
     // A started run shows through the status and the run view, not a note.
@@ -217,16 +260,30 @@ describe('Update Now', () => {
     expect(screen.queryByRole('button', { name: 'Update Now' })).toBeNull()
   })
 
-  it('is disabled while an update runs', () => {
-    renderPanel({ ...DATA, activeRunId: 'run-1' })
-    expect(updateNowButton().disabled).toBe(true)
-    expect(screen.queryByText('Resume updates to update now.')).toBeNull()
+  it('is usable when something waits to install', () => {
+    renderPanel({ ...DATA, updateWaiting: true })
+    expect(updateNowButton().disabled).toBe(false)
+    expect(screen.queryByText(/Everything is up to date/)).toBeNull()
   })
 
-  it('is disabled while paused, with a hint to resume', () => {
-    renderPanel({ ...DATA, updatesPaused: true })
+  it('is disabled when nothing waits to install, and says so', () => {
+    renderPanel({ ...DATA, updateWaiting: false })
     expect(updateNowButton().disabled).toBe(true)
-    expect(screen.getByText('Resume updates to update now.')).toBeTruthy()
+    expect(
+      screen.getByText('Everything is up to date. Check Now looks for newer builds.')
+    ).toBeTruthy()
+  })
+
+  it('is disabled while an update runs, even with something waiting', () => {
+    renderPanel({ ...DATA, updateWaiting: true, activeRunId: 'run-1' })
+    expect(updateNowButton().disabled).toBe(true)
+    expect(screen.getByText('An update is in progress.')).toBeTruthy()
+  })
+
+  it('is disabled while paused, with a hint to turn the pause off', () => {
+    renderPanel({ ...DATA, updateWaiting: true, updatesPaused: true })
+    expect(updateNowButton().disabled).toBe(true)
+    expect(screen.getByText('Turn off Pause All Updates to update now.')).toBeTruthy()
   })
 
   it('is disabled while the request is in flight', () => {
