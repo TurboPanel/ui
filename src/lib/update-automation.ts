@@ -12,8 +12,8 @@ import { userErrorMessage } from '@/lib/user-error'
  * Words for automatic updates on Admin > Updates. Updates of the control
  * plane, the web interface and every daemon start on their own at the hourly
  * check, or at once with Update Now (superadmins, release installs); the
- * other controls are Pause All Updates / Resume Updates and Check Now, which
- * only looks for new builds.
+ * other controls are the Pause All Updates switch and Check Now, which only
+ * looks for new builds.
  */
 
 /** Formats an ISO instant for a sentence; the screens use local time. */
@@ -68,13 +68,12 @@ export function checkCadence(checkIntervalMinutes: number | null | undefined): s
 export const CHECK_NOW_HELP =
   'Check Now only looks for new builds. The next scheduled check starts the update.'
 
-/** What Check Now does while paused: nothing starts until updates are resumed. */
-export const CHECK_NOW_PAUSED_HELP =
-  'Check Now only looks for new builds. Nothing starts until updates are resumed.'
+/** What Check Now does while paused (the card already says nothing starts). */
+export const CHECK_NOW_PAUSED_HELP = 'Check Now only looks for new builds.'
 
 /** What Check Now and Update Now do, where the person can press Update Now. */
 export const CHECK_NOW_UPDATE_NOW_HELP =
-  'Check Now only looks for new builds. Update Now installs a newer build right away; otherwise the next scheduled check starts it.'
+  'Check Now only looks for new builds. Update Now installs a waiting build right away; otherwise the next scheduled check starts it.'
 
 export function checkNowHelp(paused: boolean, canUpdateNow = false): string {
   if (paused) return CHECK_NOW_PAUSED_HELP
@@ -82,7 +81,33 @@ export function checkNowHelp(paused: boolean, canUpdateNow = false): string {
 }
 
 /** Under a disabled Update Now while updates are paused. */
-export const UPDATE_NOW_PAUSED_HINT = 'Resume updates to update now.'
+export const UPDATE_NOW_PAUSED_HINT = 'Turn off Pause All Updates to update now.'
+
+/** Under a disabled Update Now while an update runs. */
+export const UPDATE_NOW_RUNNING_HINT = 'An update is in progress.'
+
+/** Under a disabled Update Now when nothing waits to install. */
+export const UPDATE_NOW_NOTHING_WAITING =
+  'Everything is up to date. Check Now looks for newer builds.'
+
+/**
+ * Whether Update Now can be pressed, and the one line that says why not.
+ * It needs something waiting to install (`updateWaiting`: a daemon behind, or
+ * a control plane or web interface build a run would install), no update in
+ * progress and updates not paused. An older control plane without
+ * `updateWaiting` keeps the button usable; the press then answers "Already up
+ * to date." when nothing is newer.
+ */
+export function updateNowAvailability(
+  updates: Pick<InstanceUpdates, 'updatesPaused' | 'activeRunId' | 'updateWaiting'>
+): Readonly<{ enabled: boolean; reason: string | null }> {
+  if (updates.activeRunId) return { enabled: false, reason: UPDATE_NOW_RUNNING_HINT }
+  if (updates.updatesPaused === true) return { enabled: false, reason: UPDATE_NOW_PAUSED_HINT }
+  if (updates.updateWaiting === false) {
+    return { enabled: false, reason: UPDATE_NOW_NOTHING_WAITING }
+  }
+  return { enabled: true, reason: null }
+}
 
 /** Update Now found nothing newer to install. */
 export const UPDATE_NOW_UP_TO_DATE = 'Already up to date.'
@@ -128,14 +153,14 @@ export function updateNowRefusal(err: unknown): string {
 /**
  * How updates run, for the Status card and the High Availability notice:
  * "Updates install on their own: TurboPanel checks every 5 minutes." Paused:
- * updates are paused and nothing new starts until they are resumed.
+ * updates are paused and nothing new starts until the pause is turned off.
  */
 export function updatesCadenceText(
   updates: Pick<InstanceUpdates, 'updatesPaused' | 'checkIntervalMinutes'>,
   what = 'Updates install on their own'
 ): string {
   if (updates.updatesPaused === true) {
-    return 'Updates are paused. Nothing new starts until they are resumed.'
+    return 'Updates are paused. Nothing new starts until Pause All Updates is turned off.'
   }
   return `${what}: TurboPanel checks ${checkCadence(updates.checkIntervalMinutes)}.`
 }
@@ -158,17 +183,29 @@ export function checkNowRefusal(
   return { text: userErrorMessage(err, 'Could not check for updates'), clearAfterMs: null }
 }
 
-/** What the Pause confirmation says before anything stops. */
-export const PAUSE_UPDATES_PROMPT =
-  'Pause all updates? Nothing new starts until you resume. An update in progress finishes the servers it is updating, then stops.'
+/** Title of the confirmation shown when Pause All Updates is turned on. */
+export const PAUSE_UPDATES_TITLE = 'Pause All Updates?'
 
-/** What the Resume confirmation says: updates start again at the next check. */
-export function resumeUpdatesPrompt(
-  nextCheckAt: string | null | undefined,
-  format: FormatInstant = formatUpdateTime
-): string {
-  const when = nextCheckAt ? ` (${format(nextCheckAt)})` : ''
-  return `Resume updates? They start again at the next check${when}.`
+/**
+ * What the confirmation says before updates are paused, one paragraph each.
+ * It follows what the control plane does: no new update starts (scheduled
+ * check or Update Now); an update in progress is not cut off, so servers it
+ * already started finish (with their retries) and servers it has not reached
+ * are skipped; checks for new builds go on; turning the pause off starts
+ * nothing by itself.
+ */
+export const PAUSE_UPDATES_EXPLAINED: readonly string[] = [
+  'No new update starts while updates are paused: not at the scheduled check, and not with Update Now.',
+  'An update already in progress is not stopped. Servers it has already started updating finish, and are tried again if they fail. Servers it has not reached yet are skipped, and the update ends there.',
+  'Check Now still looks for new builds.',
+  'Turning this off starts nothing right away. The next scheduled check, or Update Now, updates whatever is still behind, including skipped servers.',
+]
+
+/** The note under the Pause All Updates switch: what its state means. */
+export function pauseSwitchNote(paused: boolean): string {
+  return paused
+    ? 'No update starts. Turning this off starts nothing right away; the next check does.'
+    : 'Updates start on their own.'
 }
 
 /**

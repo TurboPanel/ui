@@ -9,11 +9,14 @@ type MockProps = {
   label?: string
   title?: string
   body?: string
-  prompt?: string
-  confirmLabel?: string
-  onConfirm?: () => void
   headerRight?: ReactNode
   children?: ReactNode
+}
+
+type SwitchProps = {
+  value: boolean
+  onValueChange: (next: boolean) => void
+  accessibilityLabel?: string
 }
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
@@ -26,12 +29,31 @@ vi.mock(
 vi.mock('@/components/ui', () => ({
   Badge: (props: MockProps) => <span>{props.label}</span>,
   Button: (props: MockProps) => <button type="button">{props.label}</button>,
-  ConfirmButton: (props: MockProps) => (
+  Toggle: (props: SwitchProps) => (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={props.value}
+      aria-label={props.accessibilityLabel}
+      onClick={() => props.onValueChange(!props.value)}
+    />
+  ),
+  SettingRow: (props: MockProps & { description?: string }) => (
     <div>
-      <button type="button">{props.label}</button>
-      <span>{props.prompt}</span>
+      <span>{props.label}</span>
+      <span>{props.description}</span>
+      {props.children}
     </div>
   ),
+  ModalSheet: (props: MockProps & { visible: boolean; footer?: ReactNode }) =>
+    props.visible ? (
+      <div role="dialog">
+        <h3>{props.title}</h3>
+        {props.children}
+        {props.footer}
+      </div>
+    ) : null,
+  ButtonRow: (props: MockProps) => <div>{props.children}</div>,
   InlineNotice: (props: MockProps) => (
     <p>
       {props.title} {props.body}
@@ -160,7 +182,7 @@ describe('SelfHostedUpdates', () => {
       expect(screen.queryByRole('button', { name })).toBeNull()
     }
     expect(screen.getByRole('button', { name: 'Check Now' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Pause All Updates' })).toBeTruthy()
+    expect(screen.getByRole('switch', { name: 'Pause All Updates' })).toBeTruthy()
     for (const title of ['Control Plane', 'Web Interface', 'Co-located Daemon']) {
       expect(screen.getByText(title)).toBeTruthy()
     }
@@ -197,7 +219,9 @@ describe('SelfHostedUpdates', () => {
     )
     expect(screen.getByText('Updates Paused')).toBeTruthy()
     expect(screen.getByText('Updates paused since <2026-10-27T09:30:00.000Z> by Sam')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Resume Updates' })).toBeTruthy()
+    expect(
+      screen.getByRole('switch', { name: 'Pause All Updates' }).getAttribute('aria-checked')
+    ).toBe('true')
   })
 
   it('shows the backup and rollback command while a control plane install waits', () => {
