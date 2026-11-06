@@ -1,8 +1,11 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { headerMenuGroupStyles } from '@/components/header-menu-group-styles'
-import { StatusDot, type StatusTone } from '@/components/ui'
+import { StatusDot, TextLink, type StatusTone } from '@/components/ui'
 import { formatRelativeLocalDateTime } from '@/lib/format-datetime'
+import { unreadBadgeLabel } from '@/lib/notification-preferences'
+import { getActiveOrganizationId } from '@/lib/org-context'
+import { useNotificationPreferencesQuery } from '@/lib/queries/notification-preferences'
 import type { NotificationRecord, NotificationSeverity } from '@/lib/instance-api'
 import {
   useDismissNotification,
@@ -17,8 +20,13 @@ const SEVERITY_TONE: Record<NotificationSeverity, StatusTone> = {
   critical: 'offline',
 }
 
-/** Where a row leads when it names something the console can show. */
+/**
+ * Where a row leads when it names something the web interface can show. A row
+ * whose server, project or backup target was deleted leads nowhere: no dead
+ * link.
+ */
 export function notificationHref(row: NotificationRecord): string | null {
+  if (row.targetDeleted === true) return null
   if (row.organizationId && row.targetType === 'server' && row.targetId) {
     return `/${row.organizationId}/servers/${row.targetId}`
   }
@@ -26,16 +34,34 @@ export function notificationHref(row: NotificationRecord): string | null {
   return null
 }
 
+/** The empty bell's words: nothing yet, or nothing turned on at all. */
+export function emptyInboxCopy(nothingOn: boolean): { title: string; body: string } {
+  if (nothingOn) {
+    return {
+      title: 'Nothing is turned on',
+      body: 'You will not hear anything here until you choose what to hear in your notification settings.',
+    }
+  }
+  return {
+    title: 'No notifications yet',
+    body: 'Alerts and updates for this account will show up here.',
+  }
+}
+
 function NotificationInboxRows({
   isLoading,
+  nothingOn,
   rows,
   onOpen,
   onDismiss,
+  onOpenSettings,
 }: Readonly<{
   isLoading: boolean
+  nothingOn: boolean
   rows: readonly NotificationRecord[]
   onOpen: (row: NotificationRecord) => void
   onDismiss: (id: string) => void
+  onOpenSettings: () => void
 }>) {
   if (isLoading) {
     return (
@@ -45,12 +71,14 @@ function NotificationInboxRows({
     )
   }
   if (rows.length === 0) {
+    const copy = emptyInboxCopy(nothingOn)
     return (
       <View style={styles.empty}>
-        <Text style={styles.emptyTitle}>No notifications yet</Text>
-        <Text style={styles.emptyCopy}>
-          Alerts and updates for this account will show up here.
-        </Text>
+        <Text style={styles.emptyTitle}>{copy.title}</Text>
+        <Text style={styles.emptyCopy}>{copy.body}</Text>
+        {nothingOn ? (
+          <TextLink label="Turn On Notifications" size="sm" onPress={onOpenSettings} />
+        ) : null}
       </View>
     )
   }
@@ -69,8 +97,8 @@ function NotificationInboxRows({
             webPointer,
           ]}
           onPress={() => onOpen(row)}
-          accessibilityRole="button"
-          accessibilityLabel={row.title}
+          accessibilityRole={notificationHref(row) ? 'link' : 'button'}
+          accessibilityLabel={row.targetDeleted ? `${row.title}, deleted` : row.title}
         >
           <View style={styles.rowDot}>
             <StatusDot tone={SEVERITY_TONE[row.severity]} />
@@ -89,6 +117,7 @@ function NotificationInboxRows({
             ) : null}
             <Text style={styles.rowMeta}>
               {formatRelativeLocalDateTime(row.createdAt)}
+              {row.targetDeleted ? ' · This item was deleted' : ''}
             </Text>
           </View>
         </Pressable>
@@ -122,6 +151,12 @@ export function NotificationsPanelBody({
   const dismiss = useDismissNotification()
   const rows = query.data?.notifications ?? []
   const unread = query.data?.unread ?? 0
+  // An empty bell asks whether anything is turned on at all (nothing is by
+  // default), for the organization in view plus the person's global rows.
+  const preferences = useNotificationPreferencesQuery(getActiveOrganizationId(), {
+    enabled: query.isSuccess && rows.length === 0,
+  })
+  const nothingOn = preferences.data?.effective.inbox.level === 'none'
 
   const go = (href: string) => {
     onNavigate?.()
@@ -131,7 +166,9 @@ export function NotificationsPanelBody({
   return (
     <View style={styles.body}>
       <View style={styles.headingRow}>
-        <Text style={headerMenuGroupStyles.menuHeading}>Notifications</Text>
+        <Text style={headerMenuGroupStyles.menuHeading}>
+          {unread > 0 ? `Notifications · ${unreadBadgeLabel(unread)} unread` : 'Notifications'}
+        </Text>
         {unread > 0 ? (
           <Pressable
             onPress={() => void markRead.run([])}
@@ -139,14 +176,16 @@ export function NotificationsPanelBody({
             accessibilityLabel="Mark all read"
             style={webPointer}
           >
-            <Text style={styles.headingAction}>Mark all read</Text>
+            <Text style={styles.headingAction}>Mark All Read</Text>
           </Pressable>
         ) : null}
       </View>
 
       <NotificationInboxRows
         isLoading={query.isLoading}
+        nothingOn={nothingOn}
         rows={rows}
+        onOpenSettings={() => go('/account/notifications')}
         onOpen={(row) => {
           if (row.readAt === null) void markRead.run([row.id])
           const href = notificationHref(row)
@@ -168,7 +207,7 @@ export function NotificationsPanelBody({
         accessibilityRole="menuitem"
         accessibilityLabel="Notification settings"
       >
-        <Text style={headerMenuGroupStyles.menuActionLabel}>Notification settings</Text>
+        <Text style={headerMenuGroupStyles.menuActionLabel}>Notification Settings</Text>
       </Pressable>
     </View>
   )

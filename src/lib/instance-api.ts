@@ -11898,6 +11898,7 @@ export async function importDockerRunCommand(body: {
 // ---------------------------------------------------------------------------
 
 export type NotificationSeverity = 'info' | 'warning' | 'critical'
+export type NotificationAudience = 'members' | 'managers' | 'admins'
 
 export type NotificationRecord = {
   id: string
@@ -11909,6 +11910,14 @@ export type NotificationRecord = {
   body: string | null
   targetType: string | null
   targetId: string | null
+  /** Where the event happened; absent from a control plane that predates preferences. */
+  projectId?: string | null
+  environmentId?: string | null
+  serviceId?: string | null
+  serverId?: string | null
+  destinationId?: string | null
+  /** The server, project or backup target the row names is gone: show the row, never a link. */
+  targetDeleted?: boolean
   readAt: string | null
 }
 
@@ -11919,6 +11928,10 @@ export type NotificationEventInfo = {
   /** The plain name a person picks the event by; absent from a control plane that predates it. */
   label?: string
   example: string
+  /** Who may hear it; absent from a control plane that predates preferences. */
+  audience?: NotificationAudience
+  /** The category code a preference row can name. */
+  category?: string
 }
 
 export const NOTIFICATION_CHANNEL_KINDS = [
@@ -11955,6 +11968,8 @@ export type NotificationChannel = {
   verifiedAt: string | null
   disabledAt: string | null
   createdAt: string
+  /** The built-in Account Email channel: follows the sign-in address and cannot be deleted. */
+  isPrimary?: boolean
   /** Email only: one summary per window instead of one message per event; null sends each as it happens. */
   digestCadence: NotificationDigestCadence | null
   /** Email only: events wait until this local window ends (24-hour `HH:MM`, may cross midnight); null = none. */
@@ -12032,7 +12047,8 @@ export type CreateNotificationChannelBody = {
   label: string
   address: string
   signingSecret?: string
-  rules: NotificationRule[]
+  /** Organization channels only; a personal channel follows the person's preferences. */
+  rules?: NotificationRule[]
 }
 
 /**
@@ -12096,6 +12112,230 @@ export async function deleteNotificationChannel(
     { method: 'DELETE' },
     organizationId
   )
+}
+
+// ---------------------------------------------------------------------------
+// Notification preferences — what a person hears, per scope and channel kind
+// (`/notification-preferences`, `/notification-settings`,
+// `/notification-unsubscribe`). Nothing arrives until a row turns it on.
+// ---------------------------------------------------------------------------
+
+/** A severity floor: `warning` lets warnings and critical through; `none` turns it off. */
+export type NotificationLevel = 'all' | 'warning' | 'critical' | 'none'
+/** `inbox` is the bell; `chat` covers personal Slack, Discord and Telegram channels. */
+export type NotificationPreferenceKind = 'inbox' | 'email' | 'push' | 'chat' | 'webhook'
+/** The kinds a person sets on the web. */
+export type SettableNotificationKind = 'inbox' | 'email' | 'chat' | 'webhook'
+/** Where a deciding row sits; `default` = no row, so nothing arrives. */
+export type NotificationPreferenceSource =
+  | 'default'
+  | 'global'
+  | 'organization'
+  | 'project'
+  | 'environment'
+  | 'server'
+  | 'service'
+  | 'destination'
+export type NotificationPresetId = 'everything' | 'recommended' | 'critical' | 'nothing'
+
+export type NotificationPreferenceRow = {
+  id: string
+  userId: string
+  organizationId: string | null
+  projectId: string | null
+  environmentId: string | null
+  serviceId: string | null
+  serverId: string | null
+  destinationId: string | null
+  channelId: string | null
+  categoryCode: string | null
+  topicCode: string | null
+  kind: NotificationPreferenceKind | null
+  level: NotificationLevel
+  endsAt: string | null
+  scope: NotificationPreferenceSource
+}
+
+export type NotificationEffectiveLevel = {
+  level: NotificationLevel
+  sourceId: string | null
+  source: NotificationPreferenceSource
+}
+
+export type NotificationEffectiveLevels = Record<
+  SettableNotificationKind,
+  NotificationEffectiveLevel
+>
+
+export type NotificationPersonalChannelSummary = {
+  id: string
+  kind: NotificationChannelKind | 'push'
+  label: string
+  isPrimary: boolean
+  verified: boolean
+  disabled: boolean
+  address: string
+}
+
+export type NotificationCatalog = {
+  categories: { code: string; name: string }[]
+  topics: {
+    code: string
+    name: string
+    categoryCode: string
+    severity: NotificationSeverity
+    audience: NotificationAudience
+    scope: 'organization' | 'instance'
+    urgent: boolean
+  }[]
+}
+
+export type NotificationPreferences = {
+  rows: NotificationPreferenceRow[]
+  channels: NotificationPersonalChannelSummary[]
+  catalog: NotificationCatalog
+  presets: Record<NotificationPresetId, { inbox: NotificationLevel; email: NotificationLevel }>
+  effective: NotificationEffectiveLevels
+  administrator: boolean
+  allOrganizations: boolean
+}
+
+/** The scope a preference names; ids left out are not part of it. */
+export type NotificationPreferenceScope = {
+  organizationId?: string | null
+  projectId?: string | null
+  environmentId?: string | null
+  serviceId?: string | null
+  serverId?: string | null
+  destinationId?: string | null
+}
+
+export type NotificationPreferenceWrite = NotificationPreferenceScope & {
+  categoryCode?: string | null
+  topicCode?: string | null
+  kind?: SettableNotificationKind | null
+  channelId?: string | null
+  level: NotificationLevel
+  endsAt?: string | null
+}
+
+const PREFERENCE_SCOPE_KEYS = [
+  'organizationId',
+  'projectId',
+  'environmentId',
+  'serviceId',
+  'serverId',
+  'destinationId',
+] as const
+
+function preferenceScopeQuery(
+  scope: NotificationPreferenceScope,
+  extra: Record<string, string | null | undefined> = {}
+): string {
+  const params = new URLSearchParams()
+  for (const key of PREFERENCE_SCOPE_KEYS) {
+    const value = scope[key]
+    if (value) params.set(key, value)
+  }
+  for (const [key, value] of Object.entries(extra)) {
+    if (value) params.set(key, value)
+  }
+  const query = params.toString()
+  return query ? `?${query}` : ''
+}
+
+/**
+ * The person's rows (the global ones, plus one organization's when it is
+ * named), their personal channels, the catalog, the presets and the
+ * effective level per kind at the named scope. The organization is named in
+ * the query (these routes ignore the organization header), so a read without
+ * one is the global one.
+ */
+export async function fetchNotificationPreferences(
+  scope: NotificationPreferenceScope = {}
+): Promise<NotificationPreferences> {
+  return await apiFetch<NotificationPreferences>(
+    `${CLIENT_API}/notification-preferences${preferenceScopeQuery(scope)}`
+  )
+}
+
+/** Effective level per kind at any scope, and the row it came from ("effective from"). */
+export async function fetchEffectiveNotificationLevels(
+  scope: NotificationPreferenceScope,
+  subject: { categoryCode?: string | null; topicCode?: string | null } = {}
+): Promise<NotificationEffectiveLevels> {
+  const body = await apiFetch<{ effective: NotificationEffectiveLevels }>(
+    `${CLIENT_API}/notification-preferences/effective${preferenceScopeQuery(scope, subject)}`
+  )
+  return body.effective
+}
+
+/** Write one row (an upsert by its scope tuple). */
+export async function putNotificationPreference(
+  body: NotificationPreferenceWrite
+): Promise<{ ok: true; id: string }> {
+  return await apiFetch(`${CLIENT_API}/notification-preferences`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  })
+}
+
+/** Remove one of the person's rows: that scope inherits again. */
+export async function deleteNotificationPreference(id: string): Promise<void> {
+  await apiFetch(`${CLIENT_API}/notification-preferences/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  })
+}
+
+/** Quick preset for the bell and email at one organization, or every organization (`null`). */
+export async function applyNotificationPreset(
+  organizationId: string | null,
+  preset: NotificationPresetId
+): Promise<void> {
+  await apiFetch(`${CLIENT_API}/notification-preferences/preset`, {
+    method: 'POST',
+    body: JSON.stringify({ organizationId, preset }),
+  })
+}
+
+/** Administrators only: hear every organization, not just the ones they belong to. */
+export async function updateNotificationSettings(
+  allOrganizations: boolean
+): Promise<{ ok: true; allOrganizations: boolean }> {
+  return await apiFetch(`${CLIENT_API}/notification-settings`, {
+    method: 'PUT',
+    body: JSON.stringify({ allOrganizations }),
+  })
+}
+
+export type NotificationUnsubscribeResult =
+  | { ok: true; organizationId: string | null; categoryCode: string | null }
+  | { ok: false; reason: 'invalid_or_expired' | 'not_applied' }
+
+/**
+ * The one-click unsubscribe the email link opens. No session needed: the
+ * token is the authority. A 400 (unknown or expired token) is an answer, not
+ * an error, so the page can say so in words.
+ */
+export async function postNotificationUnsubscribe(
+  token: string
+): Promise<NotificationUnsubscribeResult> {
+  try {
+    const body = await apiFetch<{
+      ok?: boolean
+      organizationId?: string | null
+      categoryCode?: string | null
+    }>(`${CLIENT_API}/notification-unsubscribe/${encodeURIComponent(token)}`, { method: 'POST' })
+    if (body.ok !== true) return { ok: false, reason: 'not_applied' }
+    return {
+      ok: true,
+      organizationId: body.organizationId ?? null,
+      categoryCode: body.categoryCode ?? null,
+    }
+  } catch (err) {
+    if (isHttpStatusError(err, 400)) return { ok: false, reason: 'invalid_or_expired' }
+    throw err
+  }
 }
 
 /** `deploying` is everything still in progress (queued or being worked on). */

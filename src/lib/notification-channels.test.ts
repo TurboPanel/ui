@@ -5,6 +5,7 @@ import {
   channelErrorCopy,
   channelHasTiming,
   draftFromRules,
+  organizationChannelEvents,
   QUIET_TIME_OPTIONS,
   quietWindowValid,
   rulesFromDraft,
@@ -30,6 +31,27 @@ describe('notification channel rules matrix', () => {
       { event: 'access.grant_revoked', minSeverity: 'info' },
       { event: 'server.offline', minSeverity: 'info' },
     ])
+  })
+
+  it('chosen events keep the chosen floor instead of dropping to info', () => {
+    const draft = draftFromRules([
+      { event: 'server.offline', minSeverity: 'critical' },
+      { event: 'access.grant_revoked', minSeverity: 'critical' },
+    ])
+    expect(draft.floor).toBe('critical')
+    expect(rulesFromDraft({ ...draft, floor: 'warning' })).toEqual([
+      { event: 'access.grant_revoked', minSeverity: 'warning' },
+      { event: 'server.offline', minSeverity: 'warning' },
+    ])
+  })
+
+  it('an organization channel is offered organization events only', () => {
+    expect(
+      organizationChannelEvents([
+        { event: 'server.offline', scope: 'organization' },
+        { event: 'instance.update_failed', scope: 'instance' },
+      ]).map((e) => e.event)
+    ).toEqual(['server.offline'])
   })
 
   it('an address hint exists for every kind, and a refusal code becomes a sentence', () => {

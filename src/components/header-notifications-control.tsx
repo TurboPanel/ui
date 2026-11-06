@@ -9,6 +9,7 @@ import { HeaderMenuOverlay } from '@/components/header-menu-overlay'
 import { HeaderMenuTrigger } from '@/components/header-menu-trigger'
 import { NotificationsBellIcon } from '@/components/icons/nav-icons'
 import { NotificationsPanelBody } from '@/components/notifications-panel-body'
+import { unreadBadgeLabel } from '@/lib/notification-preferences'
 import { useUnreadNotificationCount } from '@/lib/notifications'
 import { chrome, colors, layout } from '@/lib/theme'
 
@@ -40,7 +41,7 @@ export function HeaderNotificationsSegment() {
   const close = () => setOpen(false)
 
   const a11yLabel = hasUnread
-    ? `Notifications, ${unreadCount} unread`
+    ? `Notifications, ${unreadBadgeLabel(unreadCount)} unread`
     : 'Notifications'
 
   return (

@@ -50,16 +50,38 @@ export function addressFieldLabel(kind: NotificationChannelKind): string {
   return 'URL'
 }
 
-/** The rules the matrix saves: `*` at a floor, or one row per chosen event. */
+/**
+ * The rules the matrix saves: `*` at a floor, or one row per chosen event at
+ * that same floor (the chosen floor is kept, never dropped to info).
+ */
 export function rulesFromDraft(draft: Readonly<RulesDraft>): NotificationRule[] {
   if (draft.everything) return [{ event: '*', minSeverity: draft.floor }]
-  return [...draft.events].sort((a, b) => a.localeCompare(b)).map((event) => ({ event, minSeverity: 'info' }))
+  return [...draft.events]
+    .sort((a, b) => a.localeCompare(b))
+    .map((event) => ({ event, minSeverity: draft.floor }))
 }
+
+const SEVERITY_RANK: Record<NotificationSeverity, number> = { info: 0, warning: 1, critical: 2 }
 
 export function draftFromRules(rules: readonly NotificationRule[]): RulesDraft {
   const all = rules.find((r) => r.event === '*')
   if (all) return { everything: true, floor: all.minSeverity, events: new Set() }
-  return { everything: false, floor: 'info', events: new Set(rules.map((r) => r.event)) }
+  // Chosen events share one floor in the editor; the lowest saved one is shown.
+  const floor = rules.reduce<NotificationSeverity | null>(
+    (low, r) =>
+      low === null || SEVERITY_RANK[r.minSeverity] < SEVERITY_RANK[low] ? r.minSeverity : low,
+    null
+  )
+  return { everything: false, floor: floor ?? 'info', events: new Set(rules.map((r) => r.event)) }
+}
+
+/**
+ * The events an organization channel's rules can choose: organization events
+ * only. Control plane events go to administrators, never to an
+ * organization's channels.
+ */
+export function organizationChannelEvents<T extends { scope: string }>(events: readonly T[]): T[] {
+  return events.filter((e) => e.scope === 'organization')
 }
 
 /** The delivery-timing controls on an email channel's row, as the person has set them so far. */
@@ -199,7 +221,7 @@ export function channelVerifiedBanner(
     return {
       tone: 'info',
       title: 'Address confirmed',
-      body: 'That email channel is active and will receive the events its rules choose.',
+      body: 'That email channel is active and will receive what your notification settings send it.',
     }
   }
   if (value === '0') {

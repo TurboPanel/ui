@@ -92,6 +92,7 @@ function AuthGuard() {
   const segments = useSegments()
   const params = useLocalSearchParams<{ redirectTo?: string | string[] }>()
   const topSegment = (segments as readonly string[])[0]
+  const subSegment = (segments as readonly string[])[1]
 
   if (isLoading) {
     return (
@@ -108,6 +109,7 @@ function AuthGuard() {
     session,
     needsInstall,
     topSegment,
+    subSegment,
     developerDevBypass: __DEV__ && topSegment === 'developer',
     needsControlPlane,
     blockNativeInstall: isRemoteCookieClient() && needsInstall,
