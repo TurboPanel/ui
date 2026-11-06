@@ -41,7 +41,8 @@ export function token(scenario: Scenario, key: PaletteKey): string {
 export function flatten(style: unknown): Record<string, unknown> {
   if (!style) return {}
   if (Array.isArray(style)) return Object.assign({}, ...style.map(flatten))
-  if (typeof style === 'function') return flatten((style as (s: { pressed: boolean }) => unknown)({ pressed: false }))
+  if (typeof style === 'function')
+    return flatten((style as (s: { pressed: boolean }) => unknown)({ pressed: false }))
   return style as Record<string, unknown>
 }
 
@@ -93,9 +94,27 @@ export const reactNativeStub = {
   StyleSheet: { create: (s: unknown) => s, absoluteFill: { position: 'absolute' }, flatten },
   View: dom('div'),
   Text: ({ children, selectable, numberOfLines, ...rest }: Props) =>
-    createElement('span', { ...aria(rest as Props), 'data-selectable': selectable ? 'yes' : undefined, 'data-lines': numberOfLines as number }, children),
+    createElement(
+      'span',
+      {
+        ...aria(rest as Props),
+        'data-selectable': selectable ? 'yes' : undefined,
+        'data-lines': numberOfLines as number,
+      },
+      children
+    ),
   ScrollView: dom('div'),
-  ActivityIndicator: (props: Props) => createElement('span', { role: 'progressbar', 'data-color': props.color as string }),
+  TextInput: (props: Props) =>
+    createElement('input', {
+      ...aria(props),
+      value: props.value as string | undefined,
+      placeholder: props.placeholder as string | undefined,
+      disabled: props.editable === false,
+      onChange: (event: { target: { value: string } }) =>
+        (props.onChangeText as ((text: string) => void) | undefined)?.(event.target.value),
+    }),
+  ActivityIndicator: (props: Props) =>
+    createElement('span', { role: 'progressbar', 'data-color': props.color as string }),
   Pressable: (props: Props) => {
     const press = props.onPress as (() => void) | undefined
     const child =
@@ -110,15 +129,19 @@ export const reactNativeStub = {
         disabled: Boolean(props.disabled),
         onClick: () => press?.(),
       },
-      child,
+      child
     )
   },
   Modal: ({ visible, children, animationType, onRequestClose }: Props) =>
     visible
       ? createElement(
           'div',
-          { role: 'dialog', 'data-animation': animationType as string, onKeyDown: () => (onRequestClose as () => void)?.() },
-          children,
+          {
+            role: 'dialog',
+            'data-animation': animationType as string,
+            onKeyDown: () => (onRequestClose as () => void)?.(),
+          },
+          children
         )
       : null,
   Animated: {
@@ -137,15 +160,21 @@ export const reactNativeStub = {
   useWindowDimensions: () => ({ width: env.width, height: 800 }),
 }
 
+const NATIVE_ONLY_SVG_PROPS = new Set(['accessibilityElementsHidden', 'importantForAccessibility'])
+
 function svgDom(tag: string) {
   return function SvgStub(props: Props) {
     const { children, ...rest } = props
     const attrs: Record<string, unknown> = {}
     for (const [key, value] of Object.entries(rest)) {
-      if (key === 'importantForAccessibility') continue
+      // react-native-svg on web hands these to the DOM element untranslated,
+      // where React rejects them; fail here so a test catches it.
+      if (NATIVE_ONLY_SVG_PROPS.has(key)) {
+        throw new TypeError(`${key} leaks to the DOM on web; use aria-hidden on <${tag}>`)
+      }
       if (typeof value === 'string' || typeof value === 'number') attrs[key] = value
     }
-    attrs['aria-hidden'] = props.accessibilityElementsHidden ? true : undefined
+    attrs['aria-hidden'] = props['aria-hidden'] === true ? true : undefined
     return createElement(tag, attrs, children)
   }
 }

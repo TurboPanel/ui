@@ -556,7 +556,7 @@ function ComposeDocumentBody({
       <View style={styles.documentPrincipals}>
         <ComposePrincipalsFields
           principals={principals}
-          disabled={saving || hideSave}
+          disabled={saving}
           onChange={onPrincipalsChange}
           onRename={onPrincipalRename}
         />
@@ -1240,7 +1240,7 @@ export function ComposeEditorSection({
         />
         <ComposePrincipalsFields
           principals={principals}
-          disabled={saving || hideSave}
+          disabled={saving}
           onChange={setPrincipals}
           onRename={renamePrincipal}
         />

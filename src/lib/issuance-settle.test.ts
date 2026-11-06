@@ -6,7 +6,7 @@ function row(overrides: Partial<InstanceHostnameRecord> = {}): InstanceHostnameR
   return {
     id: 'h1',
     host: 'panel.example.com',
-    source: 'lets-encrypt',
+    source: 'acme-http-01',
     uploadedCertId: null,
     status: 'ready',
     notAfter: null,

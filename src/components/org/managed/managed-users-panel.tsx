@@ -14,10 +14,10 @@ import { panelStyles } from '@/components/ui/panel-styles'
 import {
   Button,
   ButtonRow,
-  ConfirmButton,
   EmptyState,
   SectionPanel,
   TextField,
+  TypeNameDeleteButton,
 } from '@/components/ui'
 import {
   LoginStraightThroughEditor,
@@ -253,7 +253,8 @@ export function ManagedUsersPanel({
   canManage: boolean
   busy: boolean
   onCreateDatabase: (name: string) => Promise<void>
-  onDeleteDatabase: (name: string) => Promise<void>
+  /** `confirmName` is the database name as typed. */
+  onDeleteDatabase: (name: string, confirmName: string) => Promise<void>
   onCreateUser: (input: {
     username: string
     databases: string[]
@@ -370,11 +371,11 @@ export function ManagedUsersPanel({
     }
   }
 
-  const deleteDatabase = async (name: string) => {
+  const deleteDatabase = async (name: string, confirmName: string) => {
     setWorking(true)
     setError(null)
     try {
-      await onDeleteDatabase(name)
+      await onDeleteDatabase(name, confirmName)
       await onReload()
     } catch (err) {
       setError(managedErrorMessage(err, 'Failed to delete database'))
@@ -536,14 +537,13 @@ export function ManagedUsersPanel({
                   <Text style={panelStyles.muted}>Remove connections first ({bindingCount})</Text>
                 ) : null}
                 {canManage && !deleteBlocked ? (
-                  <ConfirmButton
+                  <TypeNameDeleteButton
                     label="Delete"
-                    confirmLabel="Confirm delete"
-                    prompt="Delete this database?"
+                    thing="Database"
+                    name={name}
+                    description="The database and its data are removed from the server."
                     disabled={disabled}
-                    onConfirm={() => {
-                      void deleteDatabase(name)
-                    }}
+                    onConfirm={(typed) => deleteDatabase(name, typed)}
                   />
                 ) : null}
                 <AppLoginsButton
@@ -696,14 +696,12 @@ export function ManagedUsersPanel({
                   {deleteBlocked ? (
                     <Text style={panelStyles.muted}>Remove connections first ({bindingCount})</Text>
                   ) : (
-                    <ConfirmButton
+                    <TypeNameDeleteButton
                       label="Delete"
-                      confirmLabel="Confirm delete"
-                      prompt="Delete this user?"
+                      thing="Database Login"
+                      name={user.username}
                       disabled={disabled}
-                      onConfirm={() => {
-                        void deleteUser(user.id)
-                      }}
+                      onConfirm={() => deleteUser(user.id)}
                     />
                   )}
                 </ButtonRow>
@@ -744,7 +742,14 @@ export function ManagedUsersPanel({
                   accessibilityState={{ checked: selected, disabled }}
                   accessibilityLabel={name}
                 >
-                  <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{name}</Text>
+                  <View style={styles.chipInner}>
+                    <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
+                      {selected ? '✓' : '+'}
+                    </Text>
+                    <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
+                      {name}
+                    </Text>
+                  </View>
                 </Pressable>
               )
             })}
@@ -862,6 +867,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgInput,
     paddingHorizontal: 10,
     paddingVertical: 4,
+  },
+  chipInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   chipSelected: {
     borderColor: chrome.accent,

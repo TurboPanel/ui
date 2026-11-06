@@ -140,6 +140,15 @@ describe('ci-ok', () => {
     expect(ciOk.name).toBe('ci-ok')
   })
 
+  it('tells a fork pull request why the code scan was skipped', () => {
+    type Step = { name?: string; if?: string; run?: string }
+    const { steps } = workflow('verify.yml').jobs.verify as Job & { steps: Step[] }
+    const note = steps.find((step) => step.name === 'Note a skipped code scan')
+    expect(note?.if).toBe("github.event_name == 'pull_request' && env.SONAR_TOKEN == ''")
+    expect(note?.run).toContain('::notice title=Code scan skipped::')
+    expect(note?.run).toContain('>> "$GITHUB_STEP_SUMMARY"')
+  })
+
   it('always reports on a PR, and stays grey on a cancelled push run', () => {
     const gate = (ciOk.if ?? '').replace(/\s+/g, ' ')
     expect(gate).toContain("(github.event_name == 'pull_request' && always())")
@@ -182,10 +191,13 @@ describe('versions from tags', () => {
     /--title "Start /,
   ]
 
-  it.each(files)('%s has none of the old Start PR or minor gate steps and reads no version out of package.json', (f) => {
-    for (const gone of GONE) expect(text(f)).not.toMatch(gone)
-    expect(text(f)).not.toMatch(/contents\/package\.json|version-file:|GITHUB_RUN_NUMBER/)
-  })
+  it.each(files)(
+    '%s has none of the old Start PR or minor gate steps and reads no version out of package.json',
+    (f) => {
+      for (const gone of GONE) expect(text(f)).not.toMatch(gone)
+      expect(text(f)).not.toMatch(/contents\/package\.json|version-file:|GITHUB_RUN_NUMBER/)
+    }
+  )
 
   it('works out the canary version from the tags and stamps the base before the export', () => {
     const release = text('release.yml')
@@ -239,7 +251,8 @@ describe('versions from tags', () => {
       )) {
         pins.add(m[1])
       }
-      for (const m of promote.matchAll(/^ +(?:dev-)?ref: ([0-9a-f]{40})(?: #.*)?$/gm)) pins.add(m[1])
+      for (const m of promote.matchAll(/^ +(?:dev-)?ref: ([0-9a-f]{40})(?: #.*)?$/gm))
+        pins.add(m[1])
     }
     expect([...pins]).toHaveLength(1)
   })
@@ -263,20 +276,30 @@ describe('versions from tags', () => {
     const job = release.split(START_JOB)[1] ?? ''
     expect(job).toMatch(/^ {4}needs: \[prepare, finalize\]$/m)
     expect(job).toMatch(/^ {6}contents: read/m)
-    expect(job).toContain('uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0')
+    expect(job).toContain(
+      'uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0'
+    )
     expect(job).toContain('repositories: ${{ github.event.repository.name }}')
     expect(job).toMatch(
       /uses: TurboPanel\/dev\/\.github\/actions\/version@[0-9a-f]{40} # dev#\d+\n {8}with:\n {10}mode: base\n/
     )
     expect(job).toContain('NEWEST: ${{ steps.next.outputs.release }}')
     expect(job).toContain('RELEASED: ${{ needs.prepare.outputs.version }}')
-    expect(job).toMatch(/uses: TurboPanel\/dev\/\.github\/actions\/start-version-pr@[0-9a-f]{40} # dev#\d+\n/)
+    expect(job).toMatch(
+      /uses: TurboPanel\/dev\/\.github\/actions\/start-version-pr@[0-9a-f]{40} # dev#\d+\n/
+    )
     expect(job).toContain('version: ${{ steps.next.outputs.base }}')
     expect(job).toContain('github-token: ${{ steps.app.outputs.token }}')
-    expect(job).toContain('reason: It was opened after v${{ needs.prepare.outputs.version }} was released.')
+    expect(job).toContain(
+      'reason: It was opened after v${{ needs.prepare.outputs.version }} was released.'
+    )
     expect(job).toContain('auto-merge: "true"')
     // One dev commit for both of the job's actions.
-    const pins = new Set([...job.matchAll(/TurboPanel\/dev\/\.github\/actions\/[\w-]+@([0-9a-f]{40})/g)].map((m) => m[1]))
+    const pins = new Set(
+      [...job.matchAll(/TurboPanel\/dev\/\.github\/actions\/[\w-]+@([0-9a-f]{40})/g)].map(
+        (m) => m[1]
+      )
+    )
     expect([...pins]).toHaveLength(1)
     expect(release).not.toContain('Nothing opens a "Start <next>" PR')
   })

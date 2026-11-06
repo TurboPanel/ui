@@ -10,27 +10,29 @@ export type NtpDefaults = {
   fallbackServers?: string[]
 }
 
-export function configuredSourceLabel(
-  source: HostDefaultsSource | null | undefined,
-): string {
+export function configuredSourceLabel(source: HostDefaultsSource | null | undefined): string {
   if (source === 'server') return 'Server override'
-  if (source === 'datacenter') return 'Datacenter default'
+  if (source === 'datacenter') return 'Datacenter network default'
   if (source === 'organization') return 'Organization default'
   return 'Not set'
 }
 
-export function sshPortSourceLabel(
-  source: HostDefaultsSource | null | undefined,
-): string {
+export function sshPortSourceLabel(source: HostDefaultsSource | null | undefined): string {
   if (source == null) return `Platform default (${String(DEFAULT_SSH_PORT)})`
   return configuredSourceLabel(source)
 }
 
 /** Where a server's web server name hiding comes from; unset everywhere means on. */
 export function hideWebServerNamesSourceLabel(
-  source: HostDefaultsSource | null | undefined,
+  source: HostDefaultsSource | null | undefined
 ): string {
   if (source == null) return 'Platform default (on)'
+  return configuredSourceLabel(source)
+}
+
+/** Where a server's Via header setting comes from; unset everywhere means off. */
+export function sendViaHeaderSourceLabel(source: HostDefaultsSource | null | undefined): string {
+  if (source == null) return 'Platform default (off)'
   return configuredSourceLabel(source)
 }
 
@@ -57,7 +59,7 @@ export function parseNtpHostList(raw: string): string[] {
 export function ntpDefaultsFromDrafts(
   enabled: boolean,
   serversText: string,
-  fallbackText: string,
+  fallbackText: string
 ): NtpDefaults {
   const ntp: NtpDefaults = { enabled }
   const servers = parseNtpHostList(serversText)
@@ -71,7 +73,7 @@ export function ntpDefaultsFromDrafts(
 export function isEmptyNtpDraft(
   enabled: boolean,
   serversText: string,
-  fallbackText: string,
+  fallbackText: string
 ): boolean {
   return (
     !enabled &&

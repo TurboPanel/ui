@@ -9,14 +9,17 @@ type MockProps = {
   label?: string
   title?: string
   body?: string
-  prompt?: string
-  confirmLabel?: string
   disabled?: boolean
   busy?: boolean
   onPress?: () => void
-  onConfirm?: () => void
   headerRight?: ReactNode
   children?: ReactNode
+}
+
+type SwitchProps = {
+  value: boolean
+  onValueChange: (next: boolean) => void
+  accessibilityLabel?: string
 }
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
@@ -33,17 +36,31 @@ vi.mock('@/components/ui', () => ({
       {props.label}
     </button>
   ),
-  ConfirmButton: (props: MockProps) => (
+  Toggle: (props: SwitchProps) => (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={props.value}
+      aria-label={props.accessibilityLabel}
+      onClick={() => props.onValueChange(!props.value)}
+    />
+  ),
+  SettingRow: (props: MockProps & { description?: string }) => (
     <div>
-      <button type="button" disabled={Boolean(props.busy)}>
-        {props.label}
-      </button>
-      <span>{props.prompt}</span>
-      <button type="button" onClick={props.onConfirm}>
-        {props.confirmLabel}
-      </button>
+      <span>{props.label}</span>
+      <span>{props.description}</span>
+      {props.children}
     </div>
   ),
+  ModalSheet: (props: MockProps & { visible: boolean; footer?: ReactNode }) =>
+    props.visible ? (
+      <div role="dialog">
+        <h3>{props.title}</h3>
+        {props.children}
+        {props.footer}
+      </div>
+    ) : null,
+  ButtonRow: (props: MockProps) => <div>{props.children}</div>,
   InlineNotice: (props: MockProps) => (
     <p>
       {props.title} {props.body}
@@ -85,10 +102,14 @@ const {
   usePauseUpdates,
   useResumeUpdates,
   useCheckForUpdates,
+  useUpdateNow,
+  auth,
   pauseRun,
   resumeRun,
   checkRun,
 } = vi.hoisted(() => ({
+  useUpdateNow: vi.fn(),
+  auth: { superadmin: false },
   useUpgradeActiveRun: vi.fn(),
   useUpgradeHistory: vi.fn(),
   useUpgradeServersPage: vi.fn(),
@@ -111,6 +132,11 @@ vi.mock('@/lib/queries/admin', () => ({
   usePauseUpdates,
   useResumeUpdates,
   useCheckForUpdates,
+  useUpdateNow,
+}))
+vi.mock('@/lib/auth-context', () => ({
+  useAuth: () => ({ session: { superadmin: auth.superadmin } }),
+  isSuperadminSession: (session: { superadmin: boolean } | null) => session?.superadmin === true,
 }))
 
 const DATA: InstanceUpdates = {
@@ -157,6 +183,8 @@ function idleQueries() {
   useResumeUpdates.mockReturnValue({ run: resumeRun, isPending: false })
   checkRun.mockResolvedValue({ ok: true, value: DATA })
   useCheckForUpdates.mockReturnValue({ run: checkRun, isPending: false })
+  useUpdateNow.mockReturnValue({ run: vi.fn(), isPending: false })
+  auth.superadmin = false
 }
 
 afterEach(() => {
@@ -183,6 +211,25 @@ describe('HighAvailabilityUpdates', () => {
     }
     expect(screen.queryByText(/Auto-update/)).toBeNull()
     expect(screen.getByTestId('settings-card')).toBeTruthy()
+  })
+
+  it('offers Update Now to a superadmin while daemons wait, disabled while a run is going', () => {
+    auth.superadmin = true
+    const waiting = { ...DATA, daemonsBehind: true, updateWaiting: true }
+    const { rerender } = render(<HighAvailabilityUpdates data={waiting} />)
+    const button = screen.getByRole('button', { name: 'Update Now' }) as HTMLButtonElement
+    expect(button.disabled).toBe(false)
+    rerender(<HighAvailabilityUpdates data={{ ...waiting, activeRunId: 'run-1' }} />)
+    expect((screen.getByRole('button', { name: 'Update Now' }) as HTMLButtonElement).disabled).toBe(
+      true
+    )
+    rerender(<HighAvailabilityUpdates data={{ ...DATA, updateWaiting: false }} />)
+    expect((screen.getByRole('button', { name: 'Update Now' }) as HTMLButtonElement).disabled).toBe(
+      true
+    )
+    expect(
+      screen.getByText('Everything is up to date. Check Now looks for newer builds.')
+    ).toBeTruthy()
   })
 
   it('says updates run on their own and when the next check is', () => {
@@ -216,20 +263,19 @@ describe('HighAvailabilityUpdates', () => {
     ).toBeTruthy()
   })
 
-  it('pauses after the confirmation that a run in progress finishes its servers', async () => {
+  it('pauses after the confirmation that a run in progress is not stopped', async () => {
     render(<HighAvailabilityUpdates data={DATA} />)
-    expect(screen.getByRole('button', { name: 'Pause All Updates' })).toBeTruthy()
-    expect(
-      screen.getByText(/An update in progress finishes the servers it is updating, then stops/)
-    ).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Yes, Pause' }))
+    fireEvent.click(screen.getByRole('switch', { name: 'Pause All Updates' }))
+    expect(screen.getByText(/^An update already in progress is not stopped\./)).toBeTruthy()
+    expect(pauseRun).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Pause Updates' }))
     await waitFor(() => {
       expect(pauseRun).toHaveBeenCalledTimes(1)
     })
     expect(resumeRun).not.toHaveBeenCalled()
   })
 
-  it('shows who paused updates and since when, and resumes at the next check', async () => {
+  it('shows who paused updates and since when, and turns the pause off with no dialog', async () => {
     render(<HighAvailabilityUpdates data={PAUSED} />)
     expect(screen.getByText('Updates Paused')).toBeTruthy()
     expect(
@@ -238,10 +284,10 @@ describe('HighAvailabilityUpdates', () => {
     expect(screen.queryByText(/^Next Check:/)).toBeNull()
     expect(
       screen.getByText(
-        'Resume updates? They start again at the next check (<2026-10-27T11:17:00.000Z>).'
+        'No update starts. Turning this off starts nothing right away; the next check does.'
       )
     ).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Yes, Resume' }))
+    fireEvent.click(screen.getByRole('switch', { name: 'Pause All Updates' }))
     await waitFor(() => {
       expect(resumeRun).toHaveBeenCalledTimes(1)
     })
@@ -250,7 +296,9 @@ describe('HighAvailabilityUpdates', () => {
 
   it('says updates are paused once, in the card, not again in the notice', () => {
     render(<HighAvailabilityUpdates data={PAUSED} />)
-    expect(screen.getAllByText(/Nothing new starts until they are resumed/)).toHaveLength(1)
+    expect(
+      screen.getAllByText(/Nothing new starts until Pause All Updates is turned off/)
+    ).toHaveLength(1)
     expect(
       screen.getByText(/Connected daemons update on their own\. A server that fails/)
     ).toBeTruthy()
@@ -268,10 +316,11 @@ describe('HighAvailabilityUpdates', () => {
     expect(screen.getByText(/by an administrator$/)).toBeTruthy()
   })
 
-  it('says a refused pause beside the button', async () => {
+  it('says a refused pause beside the switch', async () => {
     pauseRun.mockResolvedValueOnce({ ok: false, error: 'Only instance admins can pause updates' })
     render(<HighAvailabilityUpdates data={DATA} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Yes, Pause' }))
+    fireEvent.click(screen.getByRole('switch', { name: 'Pause All Updates' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Pause Updates' }))
     expect(await screen.findByText('Only instance admins can pause updates')).toBeTruthy()
   })
 
@@ -289,7 +338,7 @@ describe('HighAvailabilityUpdates', () => {
     expect(screen.getByText('Updating…')).toBeTruthy()
     expect(
       screen.getByText(
-        /1 server is offline, so this update is waiting for it. It is skipped if it stays offline/
+        /1 server is offline, so this update is waiting for it. It updates as soon as it reconnects/
       )
     ).toBeTruthy()
   })

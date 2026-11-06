@@ -507,6 +507,18 @@ describe('updateOffered (the admin sidebar badge)', () => {
   })
 })
 
+describe('updateOffered and updateBanner on a development install', () => {
+  it('never offers a release build, whatever the channel says', () => {
+    const development = allThree()
+    development.development = true
+    expect(updateOffered({ updates: development, activeRun: false })).toBe(false)
+    expect(
+      updateOffered({ updates: development, activeRun: false, consoleBuild: OLD_CONSOLE })
+    ).toBe(false)
+    expect(updateBanner({ updates: development, activeRun: false, dismissedKey: null })).toBeNull()
+  })
+})
+
 describe('showsUpdateBanner', () => {
   it('shows only to instance admins on a self-hosted control plane', () => {
     expect(showsUpdateBanner({ isInstanceAdmin: true, runtime: 'deno' })).toBe(true)
@@ -554,7 +566,7 @@ describe('installer host per channel', () => {
     expect(installerHostForChannel('release')).toBe('turbopanel.sh')
     expect(installerHostForChannel(null)).toBe('turbopanel.sh')
     expect(daemonReinstallCommand('rc')).toBe(
-      'curl -fsSL staging.turbopanel.sh | TURBOPANEL_DAEMON_ONLY=1 sh'
+      'curl -fsSL https://staging.turbopanel.sh | TURBOPANEL_DAEMON_ONLY=1 sh'
     )
   })
 })

@@ -37,7 +37,7 @@ function suggestionKey(suggestion: DatacenterNameSuggestion): string {
 
 function createBlockedCopy(canManage: boolean, reason: string | null): string {
   if (!canManage) {
-    return 'You need manage permission to create a datacenter.'
+    return 'You need manage permission to create a datacenter network.'
   }
   return reason ?? 'No server has reported a private IP yet.'
 }
@@ -57,14 +57,14 @@ function createDatacenterErrorMessage(error: unknown): string {
       return 'Pick a private IP reported on that server.'
     }
     if (error.message.includes(ADDRESS_NOT_IN_ANY_SUBNET_ERROR)) {
-      return 'That address is not in any subnet of this datacenter.'
+      return 'That address is not in any subnet of this datacenter network.'
     }
     if (error.message.includes(ADDRESS_IN_USE_ERROR)) {
       return 'That address is already pinned.'
     }
     return userErrorMessage(error, '')
   }
-  return 'Failed to create datacenter'
+  return 'Failed to create datacenter network'
 }
 
 function firstAddressForServer(server: OrgServerRecord | undefined): string | null {
@@ -186,7 +186,7 @@ function CreateDatacenterFields({
           }}
           placeholder="AMS-1"
           editable={!submitting}
-          accessibilityLabel="Datacenter name"
+          accessibilityLabel="Datacenter network name"
         />
         <NameSuggestionChips
           suggestions={suggestionsQuery.data?.suggestions ?? []}
@@ -200,7 +200,7 @@ function CreateDatacenterFields({
         onChangeText={setDescription}
         placeholder="Optional"
         editable={!submitting}
-        accessibilityLabel="Datacenter description"
+        accessibilityLabel="Datacenter network description"
       />
       <FormField label="Server">
         <FormSelect
@@ -247,12 +247,12 @@ function CreateDatacenterFields({
           disabled={createDisabled}
           busy={submitting}
           onPress={submitCreate}
-          accessibilityLabel="Create datacenter"
+          accessibilityLabel="Create datacenter network"
         />
         <Button
           label="Cancel"
           onPress={() => router.replace(listHref)}
-          accessibilityLabel="Cancel new datacenter"
+          accessibilityLabel="Cancel new datacenter network"
         />
       </ButtonRow>
     </View>
@@ -280,7 +280,7 @@ export function DatacenterFormSection({ orgId }: Readonly<{ orgId: string }>) {
 
   return (
     <View style={styles.root}>
-      <Text style={panelStyles.pageTitle}>New Datacenter</Text>
+      <Text style={panelStyles.pageTitle}>New Datacenter Network</Text>
 
       {queryError ? <Text style={panelStyles.error}>{queryError}</Text> : null}
 
@@ -295,7 +295,7 @@ export function DatacenterFormSection({ orgId }: Readonly<{ orgId: string }>) {
               <Button
                 label="Back"
                 onPress={() => router.replace(listHref)}
-                accessibilityLabel="Back to datacenters"
+                accessibilityLabel="Back to datacenter networks"
               />
             </View>
           ) : null}

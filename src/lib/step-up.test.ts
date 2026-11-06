@@ -57,6 +57,12 @@ describe('parseStepUpChallenge', () => {
 describe('step-up copy and input', () => {
   it('names the action in app vocabulary and has a fallback', () => {
     expect(stepUpActionLabel('project.delete')).toBe('delete this project')
+    expect(stepUpActionLabel('panel.identity_next.set')).toBe("change the control plane's next key")
+    expect(stepUpActionLabel('server.sealing_key.clear')).toBe("clear this server's sealing key")
+    expect(stepUpActionLabel('instance.tunnel_token.set')).toBe('change the tunnel token')
+    expect(stepUpActionLabel('server.reenroll_ticket.issue')).toBe('issue a re-enroll token')
+    expect(stepUpActionLabel('server.colocated_repair')).toBe("repair this server's connection")
+    expect(stepUpActionLabel('license.key.burn')).toBe('reissue this key')
     expect(stepUpActionLabel('nothing.known')).toBe('do this')
     expect(stepUpActionLabel(null)).toBe('do this')
   })

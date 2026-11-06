@@ -31,11 +31,29 @@ describe('isNetworkFetchError', () => {
 })
 
 describe('apiErrorCopy', () => {
+  it('says what to do when a deploy needs a Hosting Account', () => {
+    expect(userErrorMessage(new Error('HTTP 422: principal_required_for_service_kind'), 'x')).toBe(
+      'Add a Hosting Account under Bindings first.'
+    )
+  })
+
   it('maps upgrade_run_active and environment_running', () => {
     expect(apiErrorCopy(new Error('x failed: HTTP 409: upgrade_run_active'))).toBe(
       UPDATE_ALREADY_ACTIVE_COPY
     )
     expect(apiErrorCopy(new Error('HTTP 409: environment_running'))).toBe(ENVIRONMENT_RUNNING_COPY)
+  })
+
+  it('explains a certificate a Tunnel manages or a site still uses', () => {
+    expect(apiErrorCopy(new Error('x failed: HTTP 409: provider_origin_managed'))).toContain(
+      'Turn off Verified Connection'
+    )
+    expect(apiErrorCopy(new Error('x failed: HTTP 409: tls_in_use'))).toContain(
+      'A site still uses this certificate'
+    )
+    expect(apiErrorCopy(new Error('x failed: HTTP 409: tls_organization_ca'))).toContain(
+      'Replace it with Rotate on the Organization CA panel.'
+    )
   })
 
   it('maps a Make primary conflict to a retry message', () => {
@@ -66,6 +84,14 @@ describe('apiErrorCopy', () => {
     expect(apiErrorCopy(new Error('HTTP 429: too_soon'))).toBeNull()
   })
 
+  it('says a repository must be on a public git host', () => {
+    const err = new Error(
+      '/api/client/v1/repositories failed: HTTP 400: source_repository_host_not_public'
+    )
+    expect(apiErrorCopy(err)).toMatch(/^Repositories must be on a public git host\./)
+    expect(userErrorMessage(err, 'fallback')).toMatch(/public git host/)
+  })
+
   it('is null for other errors', () => {
     expect(apiErrorCopy(new Error('HTTP 500'))).toBeNull()
     expect(apiErrorCopy(null)).toBeNull()
@@ -73,6 +99,19 @@ describe('apiErrorCopy', () => {
 })
 
 describe('userErrorMessage', () => {
+  it('says in plain words that the organization has emoji icons turned off', () => {
+    const refused = new Error(
+      '/api/client/v1/organizations/o failed: HTTP 422: emoji_icons_off — This organization has emoji icons turned off. Pick one of the regular icons.'
+    )
+    expect(userErrorMessage(refused, 'x')).toBe(
+      'This organization has emoji icons turned off. Pick one of the regular icons.'
+    )
+    // An answer without the sentence still reads as plain words.
+    expect(userErrorMessage(new Error('/p failed: HTTP 422: emoji_icons_off'), 'x')).toBe(
+      'This organization has emoji icons turned off. Pick one of the regular icons.'
+    )
+  })
+
   it('maps network failures, known codes, messages and the fallback', () => {
     expect(userErrorMessage(new TypeError('Failed to fetch'), 'f')).toBe(
       CONTROL_PLANE_UNREACHABLE_COPY

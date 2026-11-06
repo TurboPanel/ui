@@ -34,10 +34,7 @@ function errorMessage(err: unknown, fallback: string): string {
   return managedNamedErrorMessage(err) ?? userErrorMessage(err, fallback)
 }
 
-function useManagedDefaults(
-  orgId: string,
-  enabled: boolean,
-): UseQueryResult<OrgManagedDefaults> {
+function useManagedDefaults(orgId: string, enabled: boolean): UseQueryResult<OrgManagedDefaults> {
   return useQuery({
     queryKey: queryKeys.org(orgId).settings.managedDefaults,
     queryFn: () => fetchOrgManagedDefaults(orgId),
@@ -55,9 +52,7 @@ function useManagedDefaults(
  * listener. The two panels write the same endpoint with disjoint patches so
  * saving one never rewrites the other.
  */
-export function ManagedDefaultsSettingsSection({
-  orgId,
-}: Readonly<{ orgId: string }>) {
+export function ManagedDefaultsSettingsSection({ orgId }: Readonly<{ orgId: string }>) {
   const canManage = useCan('organization', orgId, 'organization:manage')
   const query = useManagedDefaults(orgId, canManage)
 
@@ -74,13 +69,12 @@ export function ManagedDefaultsSettingsSection({
 function useSaveManagedDefaults(
   orgId: string,
   onFailure: (message: string) => void,
-  fallbackMessage: string,
+  fallbackMessage: string
 ) {
   const queryClient = useQueryClient()
   const queryKey = queryKeys.org(orgId).settings.managedDefaults
   return useApiMutation({
-    mutationFn: (patch: OrgManagedDefaultsPatch) =>
-      saveOrgManagedDefaults(orgId, patch),
+    mutationFn: (patch: OrgManagedDefaultsPatch) => saveOrgManagedDefaults(orgId, patch),
     onSuccess: (data) => {
       queryClient.setQueryData<OrgManagedDefaults>(queryKey, {
         sslMode: data.sslMode,
@@ -108,7 +102,7 @@ function ManagedTlsDefaultsPanel({
   const mutation = useSaveManagedDefaults(
     orgId,
     setError,
-    'Failed to save managed database defaults',
+    'Failed to save managed database defaults'
   )
 
   const stored = query.data?.sslMode ?? null
@@ -118,8 +112,8 @@ function ManagedTlsDefaultsPanel({
 
   return (
     <SectionPanel
-      title="Managed database TLS"
-      hint="Manage-gated · inherited by services with no explicit mode"
+      title="Managed Database TLS"
+      hint="Used by every database that has not picked its own mode"
       collapsible
       defaultCollapsed
     >
@@ -131,22 +125,19 @@ function ManagedTlsDefaultsPanel({
       ) : null}
 
       <Text style={panelStyles.muted}>
-        Sets how managed SQL clients must connect through the shared listener.
-        Traffic between the listener and the database engine is always encrypted;
-        this decides whether a plaintext client session is refused, and what
-        verification the generated connection strings ask for. Services that set
-        their own mode keep it.
+        Sets how managed SQL clients must connect through the shared listener. Traffic between the
+        listener and the database engine is always encrypted; this decides whether a plaintext
+        client session is refused, and what verification the generated connection strings ask for.
+        Services that set their own mode keep it.
       </Text>
       <Text style={panelStyles.muted}>
-        Verify CA and Verify Full need the Organization CA, which is downloadable
-        from a managed service&apos;s Connect tab.
+        Verify CA and Verify Full need the Organization CA, which is downloadable from a managed
+        service&apos;s Connect tab.
       </Text>
 
       <ManagedSslModePicker
         value={selected}
-        inheritLabel={`Platform default (${
-          managedSslModeLabel(DEFAULT_MANAGED_SSL_MODE)
-        })`}
+        inheritLabel={`Platform default (${managedSslModeLabel(DEFAULT_MANAGED_SSL_MODE)})`}
         inheritHint="No organization default stored; new services resolve to Require."
         disabled={pending}
         onSelect={(mode) => {
@@ -163,12 +154,15 @@ function ManagedTlsDefaultsPanel({
         disabled={pending || !dirty}
         onPress={() => {
           setError(null)
-          mutation.mutate({ sslMode: selected }, {
-            onSuccess: () => {
-              setTouched(false)
-              setDraft(null)
-            },
-          })
+          mutation.mutate(
+            { sslMode: selected },
+            {
+              onSuccess: () => {
+                setTouched(false)
+                setDraft(null)
+              },
+            }
+          )
         }}
       />
     </SectionPanel>
@@ -178,7 +172,7 @@ function ManagedTlsDefaultsPanel({
 type PortDrafts = Record<ManagedIngressPortField, string>
 
 function portsPatchFromDrafts(
-  drafts: PortDrafts,
+  drafts: PortDrafts
 ):
   | { ok: true; ports: { postgres: number | null; mysqlFamily: number | null } }
   | { ok: false; field: ManagedIngressPortField; message: string } {
@@ -199,9 +193,7 @@ function portsPatchFromDrafts(
   }
   // Collision has to be checked on the resolved pair: overriding one family onto
   // the other's inherited default is still two protocol modules on one port.
-  const collision = validateManagedIngressPorts(
-    resolveManagedIngressPorts(parsed),
-  )
+  const collision = validateManagedIngressPorts(resolveManagedIngressPorts(parsed))
   if (!collision.ok) {
     return {
       ok: false,
@@ -217,25 +209,18 @@ function ManagedListenerPortsPanel({
   query,
 }: Readonly<{ orgId: string; query: UseQueryResult<OrgManagedDefaults> }>) {
   const [error, setError] = useState<string | null>(null)
-  const [invalidField, setInvalidField] = useState<
-    ManagedIngressPortField | null
-  >(null)
+  const [invalidField, setInvalidField] = useState<ManagedIngressPortField | null>(null)
   const [drafts, setDrafts] = useState<Partial<PortDrafts>>({})
-  const mutation = useSaveManagedDefaults(
-    orgId,
-    setError,
-    'Failed to save managed listener ports',
-  )
+  const mutation = useSaveManagedDefaults(orgId, setError, 'Failed to save managed listener ports')
 
   const stored = query.data?.ports
   const storedText = (field: ManagedIngressPortField): string => {
     const value = stored?.[field]
     return value == null ? '' : String(value)
   }
-  const text = (field: ManagedIngressPortField): string =>
-    drafts[field] ?? storedText(field)
+  const text = (field: ManagedIngressPortField): string => drafts[field] ?? storedText(field)
   const dirty = (['postgres', 'mysqlFamily'] as const).some(
-    (field) => text(field) !== storedText(field),
+    (field) => text(field) !== storedText(field)
   )
   const pending = mutation.isPending || query.isLoading
 
@@ -251,30 +236,31 @@ function ManagedListenerPortsPanel({
     }
     setInvalidField(null)
     setError(null)
-    mutation.mutate({ ports: result.ports }, {
-      onSuccess: () => setDrafts({}),
-    })
+    mutation.mutate(
+      { ports: result.ports },
+      {
+        onSuccess: () => setDrafts({}),
+      }
+    )
   }
 
   return (
     <SectionPanel
-      title="Managed database listener ports"
-      hint="Manage-gated · applies to every shared listener in this organization"
+      title="Managed Database Listener Ports"
+      hint="Applies to every shared listener in this organization"
       collapsible
       defaultCollapsed
     >
       {error ? <Text style={panelStyles.error}>{error}</Text> : null}
 
       <Text style={panelStyles.muted}>
-        Ports clients dial on the shared listener. They are organization-wide
-        because one listener fronts every managed database on a server. Engine
-        backend ports are untouched, so a host already running its own PostgreSQL
-        on 5432 or MySQL on 3306 never conflicts with these.
+        Ports clients dial on the shared listener. They are organization-wide because one listener
+        fronts every managed database on a server. Engine backend ports are untouched, so a host
+        already running its own PostgreSQL on 5432 or MySQL on 3306 never conflicts with these.
       </Text>
       <Text style={panelStyles.muted}>
-        Saving reconciles the listener on every affected server. A port another
-        process on the host already holds is refused before the current listener
-        is disturbed.
+        Saving reconciles the listener on every affected server. A port another process on the host
+        already holds is refused before the current listener is disturbed.
       </Text>
 
       {(['postgres', 'mysqlFamily'] as const).map((field) => (
@@ -293,9 +279,7 @@ function ManagedListenerPortsPanel({
           editable={!pending}
           keyboardType="number-pad"
           placeholder={String(DEFAULT_MANAGED_INGRESS_PORTS[field])}
-          accessibilityLabel={`${
-            MANAGED_INGRESS_PORT_LABELS[field]
-          } listener port`}
+          accessibilityLabel={`${MANAGED_INGRESS_PORT_LABELS[field]} listener port`}
           style={invalidField === field ? styles.inputInvalid : undefined}
         />
       ))}

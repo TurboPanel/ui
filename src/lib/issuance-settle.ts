@@ -26,7 +26,7 @@ export function takeIssuanceBaseline(
 ): ReadonlyMap<string, RowState> {
   return new Map(
     rows
-      .filter((row) => row.source === 'lets-encrypt')
+      .filter((row) => row.source === 'acme-http-01')
       .map((row) => [
         row.id,
         {
@@ -92,7 +92,7 @@ export function judgeIssuance(
   /** The wait is over: a certificate that was already there and is still valid stands. */
   final = false
 ): Verdict {
-  const names = rows.filter((row) => row.source === 'lets-encrypt')
+  const names = rows.filter((row) => row.source === 'acme-http-01')
   const failed = names.find((row) => isNewError(row, baseline.get(row.id)))
   if (failed) {
     return {

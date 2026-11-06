@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useRouter } from 'expo-router'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { panelStyles } from '@/components/ui/panel-styles'
+import { PanelKeyLines } from '@/components/org/panel-key-lines'
 import {
   Button,
   ButtonRow,
@@ -9,8 +10,8 @@ import {
   LoadingState,
   SectionPanel,
   TextField,
-  WizardSteps,
 } from '@/components/ui'
+import { WizardSteps } from '@/components/ui/wizard-steps'
 import { AddServerTierSection } from '@/components/org/add-server-tier-section'
 import { useAuth } from '@/lib/auth-context'
 import { validateDisplayName } from '@/lib/display-name'
@@ -24,16 +25,24 @@ import {
 import {
   defaultDevCaddyHttpsBaseUrl,
   defaultDevInstallBaseUrl,
+  installCommandHelp,
   parseInstallBaseUrl,
   resolveDisplayedInstallCommand,
 } from '@/lib/install-command'
 import { installTlsHint } from '@/lib/install-tls'
 import { WAITING_POLL_MS, waitingHostNote } from '@/lib/add-server-waiting'
+import {
+  ADD_SERVER_STEPS,
+  addServerProgress,
+  addServerWaitingLabel,
+  type AddServerScreen,
+  type AddServerStepId,
+} from '@/lib/add-server-steps'
 import { orEmptyArray } from '@/lib/or-empty-array'
 import { addServerCreateErrorMessage, addServerTierChoiceError } from '@/lib/billing-display'
 import { orgBillingHref } from '@/lib/org-navigation'
 import { usePublicUrlsOptional } from '@/lib/queries/admin'
-import { useCreateLicense, useOrgServers } from '@/lib/queries/servers'
+import { useCreateLicense, useOrgLicenses, useOrgServers } from '@/lib/queries/servers'
 import { chrome, colors, spacing } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
 
@@ -43,13 +52,7 @@ function isAuthorizationError(err: unknown): boolean {
   return isForbiddenError(err) || (err instanceof Error && err.message.includes('HTTP 401'))
 }
 
-type WizardStep = 'create' | 'install' | 'waiting'
-
-const WIZARD_STEPS: readonly { id: WizardStep; label: string }[] = [
-  { id: 'create', label: 'Name' },
-  { id: 'install', label: 'Install' },
-  { id: 'waiting', label: 'Connect' },
-]
+type WizardStep = AddServerScreen
 
 type AddServerWizardProps = Readonly<{
   orgId: string
@@ -197,7 +200,7 @@ function CreateStep({
             editable={!creating}
           />
           <Text style={panelStyles.muted}>
-            Used for TURBOPANEL_HOST and download URLs in the install command.
+            Used for the control plane address and download URLs in the install command.
           </Text>
         </>
       ) : null}
@@ -216,6 +219,8 @@ function CreateStep({
 }
 
 type InstallStepProps = Readonly<{
+  panelFingerprint?: string
+  nextFingerprint?: string | null
   installBaseUrl: string
   managedUrls: string[]
   displayedInstallCommand: string
@@ -224,6 +229,8 @@ type InstallStepProps = Readonly<{
 }>
 
 function InstallStep({
+  panelFingerprint,
+  nextFingerprint,
   installBaseUrl,
   managedUrls,
   displayedInstallCommand,
@@ -234,8 +241,7 @@ function InstallStep({
     <View style={styles.revealed}>
       <View style={panelStyles.calloutWarning}>
         <Text style={panelStyles.calloutWarningText}>
-          Run this install command on the new server. The registration key is embedded and can only
-          enroll one host.
+          {installCommandHelp(displayedInstallCommand)}
         </Text>
       </View>
       <Text style={styles.secretLabel}>Install command</Text>
@@ -258,6 +264,7 @@ function InstallStep({
         label="Copy install command"
         copiedLabel="Copied install command"
       />
+      <PanelKeyLines panelFingerprint={panelFingerprint} nextFingerprint={nextFingerprint} />
       <Text style={panelStyles.muted}>
         Run this command on your new server, then click Continue.
       </Text>
@@ -267,6 +274,10 @@ function InstallStep({
 }
 
 type WaitingStepProps = Readonly<{
+  /** How far the new server has come; picks the line under the spinner. */
+  reached: AddServerStepId
+  /** The hostname the daemon reported while enrolling, once known. */
+  enrollingHost: string | null
   pollError: string | null
   connectedServer: OrgServerRecord | null
   elapsedSeconds: number
@@ -303,6 +314,8 @@ function WaitingActions({
 }
 
 function WaitingStep({
+  reached,
+  enrollingHost,
   pollError,
   connectedServer,
   elapsedSeconds,
@@ -330,7 +343,7 @@ function WaitingStep({
   if (connectedServer == null) {
     return (
       <View style={styles.waiting}>
-        <LoadingState label={`Waiting for this host to connect (${elapsedSeconds}s)`} />
+        <LoadingState label={addServerWaitingLabel(reached, elapsedSeconds, enrollingHost)} />
         <Text style={panelStyles.muted}>{waitingHostNote(elapsedSeconds)}</Text>
         <Text style={panelStyles.muted}>
           This key stays under Pending Keys until a host enrolls. You can add another server now.
@@ -366,6 +379,61 @@ function WaitingStep({
   )
 }
 
+/**
+ * How far the new server has come, from the key list (polled every second
+ * from the install command on) and the server list the wait already polls.
+ * When a daemon starts enrolling with the key, the installer has run, so the
+ * wizard moves to the wait by itself, even before Continue.
+ */
+function useAddServerProgress({
+  orgId,
+  step,
+  setStep,
+  creating,
+  revealed,
+  connectedServer,
+  servers,
+  checkStopped,
+}: Readonly<{
+  orgId: string
+  step: WizardStep
+  setStep: (step: WizardStep) => void
+  creating: boolean
+  revealed: CreatedLicense | null
+  connectedServer: OrgServerRecord | null
+  /** The server list (shared with the servers page), matched by this run's key. */
+  servers: readonly OrgServerRecord[] | null | undefined
+  checkStopped: boolean
+}>) {
+  const followingKey = revealed != null && step !== 'create' && connectedServer == null
+  const licensesQuery = useOrgLicenses(orgId, {
+    enabled: followingKey,
+    pollMs: followingKey ? WAITING_POLL_MS : false,
+  })
+  const licenseId = revealed?.licenseId ?? null
+  const licenses = revealed ? licensesQuery.data?.licenses : null
+  const progress = addServerProgress({
+    screen: step,
+    creating,
+    licenseId,
+    licenses,
+    servers,
+    checkStopped,
+  })
+  const key = licenses?.find((license) => license.id === licenseId)
+  const enrollingHost = key?.provisioning?.hostname ?? null
+  const daemonSeen = DAEMON_SEEN.has(progress.reached)
+
+  useEffect(() => {
+    if (step === 'install' && daemonSeen) setStep('waiting')
+  }, [step, daemonSeen, setStep])
+
+  return { progress, enrollingHost }
+}
+
+/** Steps that mean a daemon already presented the key: the installer has run. */
+const DAEMON_SEEN: ReadonlySet<AddServerStepId> = new Set(['enroll', 'connect', 'ready'])
+
 export function AddServerWizard({ orgId, onComplete, onDismiss }: AddServerWizardProps) {
   const publicUrlsQuery = usePublicUrlsOptional({ enabled: __DEV__ })
   const managedUrls = orEmptyArray(publicUrlsQuery.data?.urls)
@@ -393,6 +461,16 @@ export function AddServerWizard({ orgId, onComplete, onDismiss }: AddServerWizar
     enabled: waitingForConnection,
     refetchInterval: waitingForConnection ? WAITING_POLL_MS : false,
     retry: false,
+  })
+  const { progress, enrollingHost } = useAddServerProgress({
+    orgId,
+    step,
+    setStep,
+    creating,
+    revealed,
+    connectedServer,
+    servers: serversQuery.data?.servers,
+    checkStopped: pollError != null,
   })
 
   useEffect(() => {
@@ -553,7 +631,7 @@ export function AddServerWizard({ orgId, onComplete, onDismiss }: AddServerWizar
 
   const body = (
     <>
-      <WizardSteps steps={WIZARD_STEPS} current={step} />
+      <WizardSteps steps={ADD_SERVER_STEPS} states={progress.states} />
       {step === 'create' ? (
         <CreateStep
           name={displayName}
@@ -594,6 +672,8 @@ export function AddServerWizard({ orgId, onComplete, onDismiss }: AddServerWizar
 
       {step === 'install' && revealed ? (
         <InstallStep
+          panelFingerprint={revealed.panelFingerprint}
+          nextFingerprint={revealed.nextFingerprint}
           installBaseUrl={installBaseUrl}
           managedUrls={managedUrls}
           displayedInstallCommand={displayedInstallCommand}
@@ -604,6 +684,8 @@ export function AddServerWizard({ orgId, onComplete, onDismiss }: AddServerWizar
 
       {step === 'waiting' && revealed ? (
         <WaitingStep
+          reached={progress.reached}
+          enrollingHost={enrollingHost}
           pollError={pollError}
           connectedServer={connectedServer}
           elapsedSeconds={elapsedSeconds}
@@ -617,7 +699,7 @@ export function AddServerWizard({ orgId, onComplete, onDismiss }: AddServerWizar
   )
 
   return (
-    <SectionPanel title="Add server" accent>
+    <SectionPanel title="Add Server" accent>
       {body}
     </SectionPanel>
   )

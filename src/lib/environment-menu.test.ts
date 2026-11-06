@@ -118,6 +118,6 @@ describe('environmentActionItems', () => {
 describe('destroy copy', () => {
   it('says what destroy keeps and what removes it', () => {
     expect(DESTROY_EXPLANATION).toContain('The environment and its settings stay')
-    expect(DESTROY_EXPLANATION).toContain('Delete environment')
+    expect(DESTROY_EXPLANATION).toContain('Delete Environment')
   })
 })

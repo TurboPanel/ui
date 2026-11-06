@@ -56,6 +56,7 @@ function FolderRow({
       {folder.reason ? <Text style={panelStyles.muted}>{folder.reason}</Text> : null}
       <FolderActionButton
         action={folder.action}
+        name={folder.slug}
         busy={busy}
         disabled={disabled}
         onRun={() => onRun(folder.id)}

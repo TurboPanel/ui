@@ -118,6 +118,17 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
     expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({ method: 'POST' })
   })
 
+  it('the email settings read passes on whether mail is going out', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ settings: {}, delivery: { state: 'not_configured', deadLetters: 2 } })
+    )
+    await expect(fetchEmailSettings()).resolves.toEqual({
+      ok: true,
+      settings: {},
+      delivery: { state: 'not_configured', deadLetters: 2 },
+    })
+  })
+
   it('admin email and signup settings use admin routes', async () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse({
@@ -674,8 +685,13 @@ describe('instance-api ops/admin/repository/storage/principal fetch wrappers', (
     ).resolves.toMatchObject({ serviceIds: ['svc-1'] })
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
-    await expect(deleteProjectPrincipal('proj-1', 'principal-1')).resolves.toEqual({ ok: true })
+    await expect(deleteProjectPrincipal('proj-1', 'principal-1', 'shop')).resolves.toEqual({
+      ok: true,
+    })
     expect(fetchMock.mock.calls[7]?.[1]).toMatchObject({ method: 'DELETE' })
+    expect(String(fetchMock.mock.calls[7]?.[0])).toContain(
+      '/projects/proj-1/principals/principal-1?confirmName=shop'
+    )
 
     fetchMock.mockResolvedValueOnce(
       jsonResponse({

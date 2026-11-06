@@ -156,7 +156,9 @@ export function useEnvironmentDeletePreview(
 export function useDeleteEnvironment(orgId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: deleteEnvironment,
+    /** `confirmName` is the environment's name as typed; the control plane refuses without it. */
+    mutationFn: ({ id, confirmName }: Readonly<{ id: string; confirmName: string }>) =>
+      deleteEnvironment(id, { confirmName }),
     onSuccess: async () => {
       await invalidateEnvironmentSubtree(queryClient, orgId)
     },

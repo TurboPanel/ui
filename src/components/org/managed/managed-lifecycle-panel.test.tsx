@@ -6,19 +6,42 @@ import { ManagedLifecyclePanel } from './managed-lifecycle-panel'
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
 vi.mock('react-native-svg', async () => (await import('@/components/ui/v4/rn-stub')).svgStub)
-vi.mock('@/lib/theme-preference', async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub)
+vi.mock(
+  '@/lib/theme-preference',
+  async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub
+)
 
 vi.mock('@/components/ui/panel-styles', () => ({ panelStyles: {} }))
 vi.mock('@/components/ui', () => ({
   SectionPanel: ({ children }: { children?: unknown }) => <div>{children as never}</div>,
   ButtonRow: ({ children }: { children?: unknown }) => <div>{children as never}</div>,
-  Button: ({ label, disabled, onPress }: { label: string; disabled?: boolean; onPress?: () => void }) => (
+  Button: ({
+    label,
+    disabled,
+    onPress,
+  }: {
+    label: string
+    disabled?: boolean
+    onPress?: () => void
+  }) => (
     <button disabled={disabled} onClick={onPress}>
       {label}
     </button>
   ),
-  TextField: ({ placeholder, onChangeText }: { placeholder?: string; onChangeText: (v: string) => void }) => (
-    <input placeholder={placeholder} onChange={(e) => onChangeText(e.target.value)} />
+  // The dialog is covered by type-name-confirm.test.tsx: here Confirm types the name.
+  TypeNameConfirmModal: ({
+    name,
+    error,
+    onConfirm,
+  }: {
+    name: string
+    error?: string | null
+    onConfirm: (typed: string) => void
+  }) => (
+    <div role="dialog">
+      <button onClick={() => onConfirm(name)}>Confirm</button>
+      {error ? <p>{error}</p> : null}
+    </div>
   ),
 }))
 
@@ -35,14 +58,16 @@ describe('managed lifecycle panel destroy refusal', () => {
         busy={false}
         onLifecycle={vi.fn()}
         onDelete={onDelete}
-      />,
+      />
     )
     // Apply changes lives in the environment header, once.
     expect(screen.queryByText('Apply changes')).toBeNull()
-    fireEvent.click(screen.getByText('Destroy database'))
-    fireEvent.change(screen.getByPlaceholderText('shop'), { target: { value: 'shop' } })
-    fireEvent.click(screen.getByText('Confirm delete'))
+    fireEvent.click(screen.getByText('Destroy Database'))
+    fireEvent.click(screen.getByText('Confirm'))
+    expect(onDelete).toHaveBeenCalledWith('shop')
+    // The refusal stays inside the dialog, in plain words.
     await waitFor(() => expect(screen.getByText(MANAGED_HAS_BINDINGS_COPY)).toBeTruthy())
+    expect(screen.getByRole('dialog')).toBeTruthy()
     expect(screen.queryByText(/managed_has_bindings/)).toBeNull()
   })
 })

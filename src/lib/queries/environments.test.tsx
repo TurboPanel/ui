@@ -326,7 +326,9 @@ describe('environments query hooks', () => {
       wrapper: createWrapper(client),
     })
 
-    await expect(result.current.run(environmentId)).resolves.toMatchObject({
+    await expect(
+      result.current.run({ id: environmentId, confirmName: 'production' })
+    ).resolves.toMatchObject({
       ok: true,
     })
 
@@ -334,6 +336,20 @@ describe('environments query hooks', () => {
       expect(invalidate).toHaveBeenCalledWith({
         queryKey: queryKeys.org(orgId).environments.all,
       })
+    })
+  })
+
+  it('useDeleteEnvironment sends confirmName when given', async () => {
+    deleteEnvironment.mockResolvedValueOnce({ ok: true })
+    const { result } = renderHook(() => useDeleteEnvironment(orgId), {
+      wrapper: createWrapper(createAppQueryClient()),
+    })
+
+    await expect(
+      result.current.run({ id: environmentId, confirmName: 'production' })
+    ).resolves.toMatchObject({ ok: true })
+    expect(deleteEnvironment).toHaveBeenLastCalledWith(environmentId, {
+      confirmName: 'production',
     })
   })
 

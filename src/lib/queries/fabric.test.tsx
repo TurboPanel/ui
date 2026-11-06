@@ -2,13 +2,19 @@
 import { QueryClientProvider } from '@tanstack/react-query'
 import { renderHook, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { OrgFabricSettings } from '@/lib/instance-api'
 import { createAppQueryClient } from '@/lib/query-client'
 import { queryKeys } from '@/lib/query-keys'
 import {
+  FABRIC_PENDING_GIVE_UP_MS,
+  FABRIC_PENDING_POLL_MS,
+  fabricPollInterval,
   isOrgFabricUnavailable,
   useApplyOrgFabric,
   useOrgFabric,
   usePatchOrgFabricRelay,
+  usePatchOrgFabricServer,
+  useRemoveOrgFabric,
   useSaveOrgFabric,
 } from '@/lib/queries/fabric'
 
@@ -17,11 +23,15 @@ const {
   saveOrgFabric,
   applyOrgFabric,
   patchOrgFabricRelay,
+  deleteOrgFabric,
+  patchOrgFabricServer,
 } = vi.hoisted(() => ({
   fetchOrgFabric: vi.fn(),
   saveOrgFabric: vi.fn(),
   applyOrgFabric: vi.fn(),
   patchOrgFabricRelay: vi.fn(),
+  deleteOrgFabric: vi.fn(),
+  patchOrgFabricServer: vi.fn(),
 }))
 
 vi.mock('@/lib/instance-api', async (importOriginal) => {
@@ -32,6 +42,8 @@ vi.mock('@/lib/instance-api', async (importOriginal) => {
     saveOrgFabric,
     applyOrgFabric,
     patchOrgFabricRelay,
+    deleteOrgFabric,
+    patchOrgFabricServer,
   }
 })
 
@@ -43,6 +55,59 @@ function createWrapper(client = createAppQueryClient()) {
 
 afterEach(() => {
   vi.clearAllMocks()
+})
+
+function relayRow(state: 'pending' | 'done', at = '2026-10-31T01:00:00.000Z') {
+  return { serverId: 's1', reconcile: { commandId: 'c1', action: 'pause', state, at } }
+}
+
+function asQuery(relays: ReturnType<typeof relayRow>[], status = 'success') {
+  return { state: { data: { relays } as unknown as OrgFabricSettings, status } }
+}
+
+describe('fabric polling while servers answer', () => {
+  const now = Date.parse('2026-10-31T01:01:00.000Z')
+
+  it('polls only while some server has not answered', () => {
+    expect(fabricPollInterval({ state: { data: undefined, status: 'pending' } }, now)).toBe(false)
+    expect(fabricPollInterval(asQuery([]), now)).toBe(false)
+    expect(fabricPollInterval(asQuery([relayRow('done')]), now)).toBe(false)
+    expect(fabricPollInterval(asQuery([relayRow('done'), relayRow('pending')]), now)).toBe(
+      FABRIC_PENDING_POLL_MS
+    )
+  })
+
+  it('gives up on a request nobody answered for minutes', () => {
+    const late = now + FABRIC_PENDING_GIVE_UP_MS + 1000
+    expect(fabricPollInterval(asQuery([relayRow('pending')]), late)).toBe(false)
+  })
+
+  it('stops while the last read failed, even with pending rows from the last good read', () => {
+    expect(fabricPollInterval(asQuery([relayRow('pending')], 'error'), now)).toBe(false)
+  })
+
+  it('reads again until every server has answered, with no reload', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const fresh = new Date().toISOString()
+    try {
+      fetchOrgFabric
+        .mockResolvedValueOnce({
+          enabled: false,
+          paused: true,
+          relays: [relayRow('pending', fresh)],
+        })
+        .mockResolvedValue({ enabled: false, paused: true, relays: [relayRow('done', fresh)] })
+      const { result } = renderHook(() => useOrgFabric('org-1'), { wrapper: createWrapper() })
+      await waitFor(() => expect(result.current.data?.relays[0]?.reconcile?.state).toBe('pending'))
+      await vi.advanceTimersByTimeAsync(FABRIC_PENDING_POLL_MS + 100)
+      await waitFor(() => expect(result.current.data?.relays[0]?.reconcile?.state).toBe('done'))
+      const reads = fetchOrgFabric.mock.calls.length
+      await vi.advanceTimersByTimeAsync(FABRIC_PENDING_POLL_MS * 3)
+      expect(fetchOrgFabric.mock.calls).toHaveLength(reads)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })
 
 describe('fabric query hooks', () => {
@@ -62,16 +127,15 @@ describe('fabric query hooks', () => {
       () => {
         expect(result.current.isSuccess).toBe(true)
       },
-      { timeout: 3000 },
+      { timeout: 3000 }
     )
     expect(fetchOrgFabric).toHaveBeenCalledWith(orgId)
   })
 
   it('useOrgFabric stays idle when disabled or org id is empty', () => {
-    const disabled = renderHook(
-      () => useOrgFabric(orgId, { enabled: false }),
-      { wrapper: createWrapper() },
-    )
+    const disabled = renderHook(() => useOrgFabric(orgId, { enabled: false }), {
+      wrapper: createWrapper(),
+    })
     const empty = renderHook(() => useOrgFabric(''), {
       wrapper: createWrapper(),
     })
@@ -139,17 +203,15 @@ describe('fabric query hooks', () => {
       wrapper: createWrapper(client),
     })
 
-    await expect(
-      result.current.run({ enabled: true, allowRelay: false }),
-    ).resolves.toMatchObject({ ok: true })
+    await expect(result.current.run({ enabled: true, allowRelay: false })).resolves.toMatchObject({
+      ok: true,
+    })
 
     expect(saveOrgFabric).toHaveBeenCalledWith(orgId, true, {
       allowRelay: false,
     })
     await waitFor(() => {
-      expect(client.getQueryData(queryKeys.org(orgId).settings.fabric)).toEqual(
-        fabric,
-      )
+      expect(client.getQueryData(queryKeys.org(orgId).settings.fabric)).toEqual(fabric)
     })
   })
 
@@ -160,9 +222,7 @@ describe('fabric query hooks', () => {
       wrapper: createWrapper(),
     })
 
-    await expect(
-      result.current.run({ enabled: false }),
-    ).resolves.toMatchObject({ ok: true })
+    await expect(result.current.run({ enabled: false })).resolves.toMatchObject({ ok: true })
     expect(saveOrgFabric).toHaveBeenCalledWith(orgId, false)
   })
 
@@ -188,14 +248,11 @@ describe('fabric query hooks', () => {
       relays: [],
     })
 
-    const { result } = renderHook(
-      () => usePatchOrgFabricRelay(orgId, 'srv-1'),
-      { wrapper: createWrapper(client) },
-    )
+    const { result } = renderHook(() => usePatchOrgFabricRelay(orgId, 'srv-1'), {
+      wrapper: createWrapper(client),
+    })
 
-    await expect(
-      result.current.run({ role: 'gateway' }),
-    ).resolves.toMatchObject({ ok: true })
+    await expect(result.current.run({ role: 'gateway' })).resolves.toMatchObject({ ok: true })
     expect(patchOrgFabricRelay).toHaveBeenCalledWith(orgId, 'srv-1', {
       role: 'gateway',
     })
@@ -228,6 +285,54 @@ describe('fabric query hooks', () => {
       ok: false,
       error: 'Failed to apply TurboFabric',
       cause: expect.anything(),
+    })
+  })
+
+  it('useRemoveOrgFabric deletes and writes the cleared settings', async () => {
+    const cleared = { enabled: false, paused: false, relays: [], servers: [] }
+    deleteOrgFabric.mockResolvedValueOnce(cleared)
+    const client = createAppQueryClient()
+
+    const { result } = renderHook(() => useRemoveOrgFabric(orgId), {
+      wrapper: createWrapper(client),
+    })
+
+    await expect(result.current.run()).resolves.toMatchObject({ ok: true })
+    expect(deleteOrgFabric).toHaveBeenCalledWith(orgId)
+    await waitFor(() => {
+      expect(client.getQueryData(queryKeys.org(orgId).settings.fabric)).toEqual(cleared)
+    })
+  })
+
+  it('useRemoveOrgFabric surfaces fallback error message', async () => {
+    deleteOrgFabric.mockRejectedValueOnce('offline')
+
+    const { result } = renderHook(() => useRemoveOrgFabric(orgId), {
+      wrapper: createWrapper(),
+    })
+
+    await expect(result.current.run()).resolves.toEqual({
+      ok: false,
+      error: 'Failed to remove TurboFabric',
+      cause: expect.anything(),
+    })
+  })
+
+  it('usePatchOrgFabricServer patches one server and invalidates fabric cache', async () => {
+    patchOrgFabricServer.mockResolvedValueOnce({ ok: true, server: {} })
+    const client = createAppQueryClient()
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
+
+    const { result } = renderHook(() => usePatchOrgFabricServer(orgId, 'srv-1'), {
+      wrapper: createWrapper(client),
+    })
+
+    await expect(result.current.run({ role: null })).resolves.toMatchObject({ ok: true })
+    expect(patchOrgFabricServer).toHaveBeenCalledWith(orgId, 'srv-1', {
+      role: null,
+    })
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: queryKeys.org(orgId).settings.fabric,
     })
   })
 })

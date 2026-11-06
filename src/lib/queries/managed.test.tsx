@@ -10,6 +10,9 @@ import {
   useCreateManagedBackup,
   useCreateManagedDatabase,
   useCreateManagedAppLogins,
+  useCreateManagedBackupLogin,
+  useDeleteManagedBackupLogin,
+  useManagedBackupLogin,
   useCreateManagedUser,
   useDeleteEnvironmentManaged,
   useDeleteEnvironmentManagedMutation,
@@ -62,6 +65,9 @@ const {
   rotateManagedRootPassword,
   rotateManagedUserPassword,
   createManagedAppLogins,
+  createManagedBackupLogin,
+  deleteManagedBackupLogin,
+  fetchManagedBackupLogin,
   createManagedUser,
   deleteManagedUser,
   updateManagedUser,
@@ -97,6 +103,9 @@ const {
   rotateManagedRootPassword: vi.fn(),
   rotateManagedUserPassword: vi.fn(),
   createManagedAppLogins: vi.fn(),
+  createManagedBackupLogin: vi.fn(),
+  deleteManagedBackupLogin: vi.fn(),
+  fetchManagedBackupLogin: vi.fn(),
   createManagedUser: vi.fn(),
   deleteManagedUser: vi.fn(),
   updateManagedUser: vi.fn(),
@@ -137,6 +146,9 @@ vi.mock('@/lib/instance-api', async (importOriginal) => {
     rotateManagedRootPassword,
     rotateManagedUserPassword,
     createManagedAppLogins,
+    createManagedBackupLogin,
+    deleteManagedBackupLogin,
+    fetchManagedBackupLogin,
     createManagedUser,
     deleteManagedUser,
     updateManagedUser,
@@ -685,8 +697,8 @@ describe('managed query hooks', () => {
       wrapper: createWrapper(client),
     })
 
-    await expect(result.current.run()).resolves.toMatchObject({ ok: true })
-    expect(deleteEnvironmentManaged).toHaveBeenCalledWith(environmentId)
+    await expect(result.current.run('shop-db')).resolves.toMatchObject({ ok: true })
+    expect(deleteEnvironmentManaged).toHaveBeenCalledWith(environmentId, { confirmName: 'shop-db' })
     await waitFor(() => {
       expect(invalidate).toHaveBeenCalledWith({
         queryKey: queryKeys.org(orgId).managed.all,
@@ -706,10 +718,14 @@ describe('managed query hooks', () => {
       wrapper: createWrapper(client),
     })
 
-    await expect(result.current.run(environmentId)).resolves.toMatchObject({
+    await expect(
+      result.current.run({ environmentId, confirmName: 'shop-db' })
+    ).resolves.toMatchObject({
       ok: true,
     })
-    expect(deleteEnvironmentManaged).toHaveBeenCalledWith(environmentId)
+    expect(deleteEnvironmentManaged).toHaveBeenCalledWith(environmentId, {
+      confirmName: 'shop-db',
+    })
     await waitFor(() => {
       expect(invalidate).toHaveBeenCalledWith({
         queryKey: queryKeys.org(orgId).commands.all,
@@ -717,7 +733,7 @@ describe('managed query hooks', () => {
     })
   })
 
-  it('useDeleteEnvironmentManagedMutation accepts an object and omits force unless set', async () => {
+  it('useDeleteEnvironmentManagedMutation passes the typed name and omits force unless set', async () => {
     deleteEnvironmentManaged.mockResolvedValue({
       ok: true,
       deleted: true,
@@ -727,13 +743,20 @@ describe('managed query hooks', () => {
       wrapper: createWrapper(),
     })
 
-    await expect(result.current.run({ environmentId })).resolves.toMatchObject({ ok: true })
-    expect(deleteEnvironmentManaged).toHaveBeenCalledWith(environmentId, {})
+    await expect(
+      result.current.run({ environmentId, confirmName: 'shop-db' })
+    ).resolves.toMatchObject({ ok: true })
+    expect(deleteEnvironmentManaged).toHaveBeenCalledWith(environmentId, {
+      confirmName: 'shop-db',
+    })
 
-    await expect(result.current.run({ environmentId, force: true })).resolves.toMatchObject({
+    await expect(
+      result.current.run({ environmentId, confirmName: 'shop-db', force: true })
+    ).resolves.toMatchObject({
       ok: true,
     })
     expect(deleteEnvironmentManaged).toHaveBeenCalledWith(environmentId, {
+      confirmName: 'shop-db',
       force: true,
     })
   })
@@ -895,6 +918,93 @@ describe('managed query hooks', () => {
     })
   })
 
+  it('useManagedBackupLogin reads the backup login and stays idle without ids', async () => {
+    fetchManagedBackupLogin.mockResolvedValueOnce({ login: null })
+    const { result } = renderHook(() => useManagedBackupLogin(orgId, environmentId), {
+      wrapper: createWrapper(),
+    })
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+    expect(fetchManagedBackupLogin).toHaveBeenCalledWith(environmentId)
+    expect(result.current.data).toEqual({ login: null })
+    const idle = renderHook(() => useManagedBackupLogin(orgId, environmentId, { enabled: false }), {
+      wrapper: createWrapper(),
+    })
+    expect(idle.result.current.fetchStatus).toBe('idle')
+  })
+
+  it('useManagedBackupLogin answers null, without retrying, on 404 and 403', async () => {
+    for (const status of [404, 403]) {
+      fetchManagedBackupLogin.mockReset()
+      fetchManagedBackupLogin.mockRejectedValue(new Error(`HTTP ${status}: refused`))
+      const { result } = renderHook(() => useManagedBackupLogin(orgId, environmentId), {
+        wrapper: createWrapper(),
+      })
+      await waitFor(() => {
+        expect(result.current.isSuccess).toBe(true)
+      })
+      expect(result.current.data).toBeNull()
+      expect(fetchManagedBackupLogin).toHaveBeenCalledTimes(1)
+    }
+  })
+
+  it('useManagedBackupLogin passes other failures through', async () => {
+    fetchManagedBackupLogin.mockReset()
+    fetchManagedBackupLogin.mockRejectedValue(new Error('HTTP 500: boom'))
+    const client = createAppQueryClient()
+    client.setDefaultOptions({ queries: { retry: false } })
+    const { result } = renderHook(() => useManagedBackupLogin(orgId, environmentId), {
+      wrapper: createWrapper(client),
+    })
+    await waitFor(() => {
+      expect(result.current.isError).toBe(true)
+    })
+  })
+
+  it('useCreateManagedBackupLogin keeps no password and refreshes the logins', async () => {
+    createManagedBackupLogin.mockResolvedValueOnce({
+      ok: true,
+      login: { id: 'b-1', appliedUsername: 'backup' },
+      password: 'once',
+      commandId: 'cmd-1',
+      serverId: 'srv-1',
+    })
+    const client = createAppQueryClient()
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
+    const { result } = renderHook(() => useCreateManagedBackupLogin(orgId, environmentId), {
+      wrapper: createWrapper(client),
+    })
+    await expect(result.current.run({ allowedSources: ['internal'] })).resolves.toMatchObject({
+      ok: true,
+    })
+    expect(createManagedBackupLogin).toHaveBeenCalledWith(environmentId, {
+      allowedSources: ['internal'],
+    })
+    expect(result.current.data).toBeUndefined()
+    await waitFor(() => {
+      expect(invalidate).toHaveBeenCalledWith({
+        queryKey: queryKeys.org(orgId).managed.users(environmentId),
+      })
+    })
+  })
+
+  it('useDeleteManagedBackupLogin deletes and refreshes the logins', async () => {
+    deleteManagedBackupLogin.mockResolvedValueOnce(commandResponse)
+    const client = createAppQueryClient()
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
+    const { result } = renderHook(() => useDeleteManagedBackupLogin(orgId, environmentId), {
+      wrapper: createWrapper(client),
+    })
+    await expect(result.current.run()).resolves.toMatchObject({ ok: true })
+    expect(deleteManagedBackupLogin).toHaveBeenCalledWith(environmentId)
+    await waitFor(() => {
+      expect(invalidate).toHaveBeenCalledWith({
+        queryKey: queryKeys.org(orgId).managed.users(environmentId),
+      })
+    })
+  })
+
   it('useDeleteManagedUser deletes and invalidates users', async () => {
     deleteManagedUser.mockResolvedValueOnce(commandResponse)
     const client = createAppQueryClient()
@@ -975,8 +1085,10 @@ describe('managed query hooks', () => {
       wrapper: createWrapper(client),
     })
 
-    await expect(result.current.run('app')).resolves.toMatchObject({ ok: true })
-    expect(deleteManagedDatabase).toHaveBeenCalledWith(environmentId, 'app')
+    await expect(result.current.run({ name: 'app', confirmName: 'app' })).resolves.toMatchObject({
+      ok: true,
+    })
+    expect(deleteManagedDatabase).toHaveBeenCalledWith(environmentId, 'app', 'app')
     await waitFor(() => {
       expect(invalidate).toHaveBeenCalledWith({
         queryKey: queryKeys.org(orgId).managed.databases(environmentId),

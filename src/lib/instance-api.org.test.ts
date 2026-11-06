@@ -7,6 +7,7 @@ import {
   fetchOrgManagedDefaults,
   fetchOrgPrincipalDefaults,
   fetchOrgServerCapacity,
+  fetchOrgDeployTimeout,
   fetchOrgTemperatureUnit,
   fetchServerLabels,
   fetchServerServices,
@@ -16,6 +17,7 @@ import {
   saveOrgManagedDefaults,
   saveOrgPrincipalDefaults,
   saveOrgServerCapacity,
+  saveOrgDeployTimeout,
   saveOrgTemperatureUnit,
   saveServerLabels,
 } from './instance-api'
@@ -46,22 +48,16 @@ describe('instance-api org wrappers', () => {
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, labels }))
     await expect(fetchServerLabels('srv-1')).resolves.toEqual(labels)
-    expect(String(fetchMock.mock.calls[0]?.[0])).toBe(
-      '/api/client/v1/servers/srv-1/labels',
-    )
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe('/api/client/v1/servers/srv-1/labels')
     expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
       credentials: 'include',
     })
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, labels }))
-    await expect(
-      saveServerLabels('srv-1', { role: 'database' }),
-    ).resolves.toEqual(labels)
+    await expect(saveServerLabels('srv-1', { role: 'database' })).resolves.toEqual(labels)
     const [, saveInit] = fetchMock.mock.calls[1] ?? []
     expect((saveInit as RequestInit).method).toBe('PUT')
-    expect(String(fetchMock.mock.calls[1]?.[0])).toBe(
-      '/api/client/v1/servers/srv-1/labels',
-    )
+    expect(String(fetchMock.mock.calls[1]?.[0])).toBe('/api/client/v1/servers/srv-1/labels')
     expect(JSON.parse(String((saveInit as RequestInit).body))).toEqual({
       labels: { role: 'database' },
     })
@@ -82,9 +78,7 @@ describe('instance-api org wrappers', () => {
 
     fetchMock.mockResolvedValueOnce(jsonResponse(payload))
     await expect(fetchServerServices('srv-1')).resolves.toEqual(payload)
-    expect(String(fetchMock.mock.calls[0]?.[0])).toBe(
-      '/api/client/v1/servers/srv-1/services',
-    )
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe('/api/client/v1/servers/srv-1/services')
     expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
       credentials: 'include',
     })
@@ -99,12 +93,12 @@ describe('instance-api org wrappers', () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(settings))
     await expect(fetchOrgDefaultTimezone('org-1')).resolves.toEqual(settings)
     expect(String(fetchMock.mock.calls[0]?.[0])).toBe(
-      '/api/client/v1/organizations/org-1/default-timezone',
+      '/api/client/v1/organizations/org-1/default-timezone'
     )
 
     fetchMock.mockResolvedValueOnce(jsonResponse(settings))
     await expect(
-      saveOrgDefaultTimezone('org-1', { enforceServerTimezone: false }),
+      saveOrgDefaultTimezone('org-1', { enforceServerTimezone: false })
     ).resolves.toEqual(settings)
     const [, saveInit] = fetchMock.mock.calls[1] ?? []
     expect((saveInit as RequestInit).method).toBe('PUT')
@@ -125,7 +119,7 @@ describe('instance-api org wrappers', () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(capacity))
     await expect(fetchOrgServerCapacity('org-1')).resolves.toEqual(capacity)
     expect(String(fetchMock.mock.calls[0]?.[0])).toBe(
-      '/api/client/v1/organizations/org-1/server-capacity',
+      '/api/client/v1/organizations/org-1/server-capacity'
     )
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, ...capacity, maxServers: null }))
@@ -147,19 +141,37 @@ describe('instance-api org wrappers', () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(settings))
     await expect(fetchOrgDefaultEnvironment('org-1')).resolves.toEqual(settings)
     expect(String(fetchMock.mock.calls[0]?.[0])).toBe(
-      '/api/client/v1/organizations/org-1/default-environment',
+      '/api/client/v1/organizations/org-1/default-environment'
     )
 
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({ ok: true, defaultEnvironmentName: 'Staging' }),
-    )
-    await expect(
-      saveOrgDefaultEnvironment('org-1', 'Staging'),
-    ).resolves.toEqual({ ok: true, defaultEnvironmentName: 'Staging' })
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, defaultEnvironmentName: 'Staging' }))
+    await expect(saveOrgDefaultEnvironment('org-1', 'Staging')).resolves.toEqual({
+      ok: true,
+      defaultEnvironmentName: 'Staging',
+    })
     const [, saveInit] = fetchMock.mock.calls[1] ?? []
     expect((saveInit as RequestInit).method).toBe('PUT')
     expect(JSON.parse(String((saveInit as RequestInit).body))).toEqual({
       defaultEnvironmentName: 'Staging',
+    })
+  })
+
+  it('fetchOrgDeployTimeout and saveOrgDeployTimeout proxy the deploy-timeout route', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ deployTimeoutMinutes: 30 }))
+    await expect(fetchOrgDeployTimeout('org-1')).resolves.toEqual({ deployTimeoutMinutes: 30 })
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe(
+      '/api/client/v1/organizations/org-1/deploy-timeout'
+    )
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, deployTimeoutMinutes: 60 }))
+    await expect(saveOrgDeployTimeout('org-1', 60)).resolves.toEqual({
+      ok: true,
+      deployTimeoutMinutes: 60,
+    })
+    const [, saveInit] = fetchMock.mock.calls[1] ?? []
+    expect((saveInit as RequestInit).method).toBe('PUT')
+    expect(JSON.parse(String((saveInit as RequestInit).body))).toEqual({
+      deployTimeoutMinutes: 60,
     })
   })
 
@@ -169,13 +181,13 @@ describe('instance-api org wrappers', () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(settings))
     await expect(fetchOrgTemperatureUnit('org-1')).resolves.toEqual(settings)
     expect(String(fetchMock.mock.calls[0]?.[0])).toBe(
-      '/api/client/v1/organizations/org-1/temperature-unit',
+      '/api/client/v1/organizations/org-1/temperature-unit'
     )
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ temperatureUnit: 'celsius' }))
-    await expect(
-      saveOrgTemperatureUnit('org-1', { temperatureUnit: 'celsius' }),
-    ).resolves.toEqual({ temperatureUnit: 'celsius' })
+    await expect(saveOrgTemperatureUnit('org-1', { temperatureUnit: 'celsius' })).resolves.toEqual({
+      temperatureUnit: 'celsius',
+    })
     const [, saveInit] = fetchMock.mock.calls[1] ?? []
     expect((saveInit as RequestInit).method).toBe('PUT')
     expect(JSON.parse(String((saveInit as RequestInit).body))).toEqual({
@@ -195,7 +207,7 @@ describe('instance-api org wrappers', () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(defaults))
     await expect(fetchOrgPrincipalDefaults('org-1')).resolves.toEqual(defaults)
     expect(String(fetchMock.mock.calls[0]?.[0])).toBe(
-      '/api/client/v1/organizations/org-1/principal-defaults',
+      '/api/client/v1/organizations/org-1/principal-defaults'
     )
 
     fetchMock.mockResolvedValueOnce(
@@ -205,10 +217,10 @@ describe('instance-api org wrappers', () => {
         nameScheme: 'random',
         effectiveNameScheme: 'random',
         schemeLocked: true,
-      }),
+      })
     )
     await expect(
-      saveOrgPrincipalDefaults('org-1', { nameScheme: 'random', schemeLocked: true }),
+      saveOrgPrincipalDefaults('org-1', { nameScheme: 'random', schemeLocked: true })
     ).resolves.toMatchObject({
       ok: true,
       nameScheme: 'random',
@@ -233,7 +245,7 @@ describe('instance-api org wrappers', () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(defaults))
     await expect(fetchOrgManagedDefaults('org-1')).resolves.toEqual(defaults)
     expect(String(fetchMock.mock.calls[0]?.[0])).toBe(
-      '/api/client/v1/organizations/org-1/managed-defaults',
+      '/api/client/v1/organizations/org-1/managed-defaults'
     )
 
     fetchMock.mockResolvedValueOnce(
@@ -242,10 +254,10 @@ describe('instance-api org wrappers', () => {
         ...defaults,
         sslMode: 'verify-full',
         effectiveSslMode: 'verify-full',
-      }),
+      })
     )
     await expect(
-      saveOrgManagedDefaults('org-1', { sslMode: 'verify-full' }),
+      saveOrgManagedDefaults('org-1', { sslMode: 'verify-full' })
     ).resolves.toMatchObject({
       ok: true,
       sslMode: 'verify-full',
@@ -275,15 +287,13 @@ describe('instance-api org wrappers', () => {
   })
 
   it('configureProject posts project setup to the configure route', async () => {
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({ ok: true, alreadyConfigured: false }),
-    )
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, alreadyConfigured: false }))
     await expect(
       configureProject('proj-1', {
         type: 'docker-compose',
         code: 'wordpress',
         serverId: 'srv-203-0-113-1',
-      }),
+      })
     ).resolves.toEqual({ ok: true, alreadyConfigured: false })
 
     const [url, init] = fetchMock.mock.calls[0] ?? []

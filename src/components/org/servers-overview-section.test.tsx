@@ -189,3 +189,12 @@ describe('ServersOverviewSection updates', () => {
     expect(screen.queryByText(/selected$/)).toBeNull()
   })
 })
+
+describe('ServersOverviewSection Add Server button', () => {
+  it('is a named button that reports whether the form is open', () => {
+    useCan.mockReturnValue(true)
+    renderList(false)
+    const button = screen.getByRole('button', { name: 'Add Server' })
+    expect(button.getAttribute('aria-expanded')).toBe('false')
+  })
+})

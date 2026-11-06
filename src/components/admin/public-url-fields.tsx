@@ -4,13 +4,11 @@ import {
   parsePublicUrlEntry,
   PUBLIC_URL_DEFAULT_PORT,
   PUBLIC_URL_ENTRY_HINT,
+  PUBLIC_URL_SELF_HOSTED_HINT,
   type PublicUrlDraft,
   type PublicUrlScheme,
 } from '@/lib/public-url-entry'
-import {
-  publicUrlsApplyFeedback,
-  type PublicUrlsApplyStatus,
-} from '@/lib/public-urls-apply'
+import { publicUrlsApplyFeedback, type PublicUrlsApplyStatus } from '@/lib/public-urls-apply'
 import { colors, spacing } from '@/lib/theme'
 
 const SCHEME_OPTIONS = [
@@ -23,33 +21,41 @@ const SCHEME_OPTIONS = [
  * value has exactly these parts, so asking for them separately removes every
  * way to type something the control plane would reject. A whole address pasted
  * into the hostname box is still absorbed — `buildPublicUrlEntry` takes its
- * scheme and port and drops the path.
+ * scheme and port and drops the path. With `selfHosted` (the self-hosted
+ * control plane, only ever reached over https on 8443) there is no scheme
+ * picker and no port box: just the hostname, which then takes a bare hostname
+ * or IP only, with no pasted address to absorb.
  */
 export function AddPublicUrlRow({
   entry,
   entryError,
   busy,
+  selfHosted = false,
   onEntryChange,
   onAddUrl,
 }: Readonly<{
   entry: PublicUrlDraft
   entryError: string | null
   busy: boolean
+  /** The self-hosted runtime: https on 8443 only, so neither picker nor Port box is shown. */
+  selfHosted?: boolean
   onEntryChange: (entry: PublicUrlDraft) => void
   onAddUrl: () => void
 }>) {
   return (
     <View style={styles.addBlock}>
       <View style={styles.addRow}>
-        <FormField label="Scheme">
-          <SegmentedControl
-            options={SCHEME_OPTIONS}
-            value={entry.scheme}
-            onChange={(scheme) => onEntryChange({ ...entry, scheme })}
-            disabled={busy}
-            accessibilityLabel="Address scheme"
-          />
-        </FormField>
+        {selfHosted ? null : (
+          <FormField label="Scheme">
+            <SegmentedControl
+              options={SCHEME_OPTIONS}
+              value={entry.scheme}
+              onChange={(scheme) => onEntryChange({ ...entry, scheme })}
+              disabled={busy}
+              accessibilityLabel="Address scheme"
+            />
+          </FormField>
+        )}
         <View style={styles.hostField}>
           <TextField
             label="Hostname"
@@ -62,23 +68,25 @@ export function AddPublicUrlRow({
             onSubmitEditing={onAddUrl}
           />
         </View>
-        <View style={styles.portField}>
-          <TextField
-            label="Port"
-            value={entry.port}
-            onChangeText={(port) => onEntryChange({ ...entry, port })}
-            placeholder="8443"
-            inputMode="numeric"
-            autoCapitalize="none"
-            autoCorrect={false}
-            editable={!busy}
-            onSubmitEditing={onAddUrl}
-          />
-        </View>
+        {selfHosted ? null : (
+          <View style={styles.portField}>
+            <TextField
+              label="Port"
+              value={entry.port}
+              onChangeText={(port) => onEntryChange({ ...entry, port })}
+              placeholder="8443"
+              inputMode="numeric"
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!busy}
+              onSubmitEditing={onAddUrl}
+            />
+          </View>
+        )}
         <Button label="Add" onPress={onAddUrl} disabled={busy} />
       </View>
       <Text style={entryError ? styles.addError : styles.addHint}>
-        {entryError ?? PUBLIC_URL_ENTRY_HINT}
+        {entryError ?? (selfHosted ? PUBLIC_URL_SELF_HOSTED_HINT : PUBLIC_URL_ENTRY_HINT)}
       </Text>
     </View>
   )
@@ -90,10 +98,7 @@ export function AddPublicUrlRow({
  * than hidden, so the operator can see what to remove. `fill` lets the parts
  * take the leftover width of a row that also has actions.
  */
-export function PublicUrlParts({
-  url,
-  fill = false,
-}: Readonly<{ url: string; fill?: boolean }>) {
+export function PublicUrlParts({ url, fill = false }: Readonly<{ url: string; fill?: boolean }>) {
   const parts = parsePublicUrlEntry(url)
   const textStyle = fill ? [styles.urlText, styles.fill] : styles.urlText
   if (!parts) {
@@ -106,10 +111,7 @@ export function PublicUrlParts({
 
   const port = parts.port ?? PUBLIC_URL_DEFAULT_PORT[parts.scheme]
   return (
-    <View
-      style={fill ? [styles.parts, styles.fill] : styles.parts}
-      accessibilityLabel={url}
-    >
+    <View style={fill ? [styles.parts, styles.fill] : styles.parts} accessibilityLabel={url}>
       <Badge label={parts.scheme} tone={parts.scheme === 'https' ? 'ok' : 'pending'} />
       <Text selectable style={styles.hostText}>
         {parts.host}

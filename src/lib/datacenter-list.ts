@@ -7,12 +7,7 @@ import type {
   ServerGeo,
   ServerReportedIp,
 } from '@/lib/instance-api'
-import {
-  addressInCidr,
-  formatCidr,
-  inferSiteCidrFromAddress,
-  parseCidr,
-} from '@/lib/cidr'
+import { addressInCidr, formatCidr, inferSiteCidrFromAddress, parseCidr } from '@/lib/cidr'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -22,27 +17,25 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export function serverDatacenterMemberships(
   server: Readonly<{
     datacenters?: readonly ServerDatacenterRef[] | null
-  }>,
+  }>
 ): readonly ServerDatacenterRef[] {
   return server.datacenters ?? []
 }
 
 export function datacenterDisplayName(
-  datacenter: Readonly<Pick<DatacenterRecord, 'name'>>,
+  datacenter: Readonly<Pick<DatacenterRecord, 'name'>>
 ): string {
   const name = datacenter.name?.trim()
-  return name && name.length > 0 ? name : 'Unnamed datacenter'
+  return name && name.length > 0 ? name : 'Unnamed datacenter network'
 }
 
 /** Join membership display names; first + count when many. */
 export function formatServerDatacenterNames(
-  datacenters: readonly ServerDatacenterRef[] | null | undefined,
+  datacenters: readonly ServerDatacenterRef[] | null | undefined
 ): string | null {
   const rows = datacenters ?? []
   if (rows.length === 0) return null
-  const names = rows
-    .map((row) => row.name?.trim() || row.id)
-    .filter((name) => name.length > 0)
+  const names = rows.map((row) => row.name?.trim() || row.id).filter((name) => name.length > 0)
   if (names.length === 0) return null
   if (names.length === 1) return names[0] ?? null
   return `${names[0]} +${names.length - 1}`
@@ -52,22 +45,18 @@ export function serverIsDatacenterMember(
   server: Readonly<{
     datacenters?: readonly ServerDatacenterRef[] | null
   }>,
-  datacenterId: string,
+  datacenterId: string
 ): boolean {
   return serverDatacenterMemberships(server).some((row) => row.id === datacenterId)
 }
 
-export function datacenterTimezoneLabel(
-  options: DatacenterOptions | null,
-): string {
+export function datacenterTimezoneLabel(options: DatacenterOptions | null): string {
   const timezone = options?.defaultServerTimezone?.trim()
   return timezone && timezone.length > 0 ? timezone : '—'
 }
 
 export function formatDatacenterCidrs(cidrs: readonly string[]): string {
-  const cleaned = cidrs
-    .map((cidr) => cidr.trim())
-    .filter((cidr) => cidr.length > 0)
+  const cleaned = cidrs.map((cidr) => cidr.trim()).filter((cidr) => cidr.length > 0)
   if (cleaned.length === 0) return '—'
   return cleaned.join(', ')
 }
@@ -79,7 +68,7 @@ export function formatDatacenterServerCount(count: number): string {
 
 /** Geo snapshot from `datacenter.metadata.geo` when a site was seeded from a server. */
 export function datacenterGeoFromMetadata(
-  metadata: Record<string, unknown> | null,
+  metadata: Record<string, unknown> | null
 ): ServerGeo | null {
   if (!isRecord(metadata) || !isRecord(metadata.geo)) return null
   const source = metadata.geo
@@ -117,7 +106,7 @@ export type DatacenterMembershipCounts = {
 export function countServersByDatacenterId(
   servers: readonly Readonly<{
     datacenters?: readonly ServerDatacenterRef[] | null
-  }>[],
+  }>[]
 ): DatacenterMembershipCounts {
   const byDatacenter = new Map<string, number>()
   let unassigned = 0
@@ -132,20 +121,17 @@ export function countServersByDatacenterId(
     uniqueMembers += 1
     for (const membership of memberships) {
       membershipPins += 1
-      byDatacenter.set(
-        membership.id,
-        (byDatacenter.get(membership.id) ?? 0) + 1,
-      )
+      byDatacenter.set(membership.id, (byDatacenter.get(membership.id) ?? 0) + 1)
     }
   }
   return { byDatacenter, unassigned, membershipPins, uniqueMembers }
 }
 
 export function sortDatacentersByName(
-  datacenters: readonly DatacenterRecord[],
+  datacenters: readonly DatacenterRecord[]
 ): DatacenterRecord[] {
   return [...datacenters].sort((a, b) =>
-    datacenterDisplayName(a).localeCompare(datacenterDisplayName(b)),
+    datacenterDisplayName(a).localeCompare(datacenterDisplayName(b))
   )
 }
 
@@ -163,7 +149,7 @@ export function resolveDatacenterAddEligibility(
   input: Readonly<{
     serversWithPrivateAddress: number
     serverCount: number
-  }>,
+  }>
 ): DatacenterAddEligibility {
   if (input.serversWithPrivateAddress > 0) {
     return { canAdd: true, reason: null }
@@ -190,7 +176,7 @@ type ServerWithIps = Readonly<{ ips: ServerReportedIp[] | null }>
 
 function resolvedPrivateNetwork(
   address: string,
-  cidr: string | undefined,
+  cidr: string | undefined
 ): ReportedPrivateNetwork | null {
   const parsed = cidr ? parseCidr(cidr) : null
   if (parsed) {
@@ -202,9 +188,7 @@ function resolvedPrivateNetwork(
 }
 
 /** Daemon-reported private IPs, with interface CIDR or a typical LAN fallback. */
-export function reportedPrivateNetworks(
-  server: ServerWithIps,
-): ReportedPrivateNetwork[] {
+export function reportedPrivateNetworks(server: ServerWithIps): ReportedPrivateNetwork[] {
   const ips = server.ips
   if (!ips) return []
   const out: ReportedPrivateNetwork[] = []
@@ -221,14 +205,9 @@ export function reportedPrivateNetworks(
   return out
 }
 
-export function reportedCidrForAddress(
-  server: ServerWithIps,
-  address: string,
-): string | null {
+export function reportedCidrForAddress(server: ServerWithIps, address: string): string | null {
   const normalized = address.trim()
-  const match = reportedPrivateNetworks(server).find(
-    (row) => row.address === normalized,
-  )
+  const match = reportedPrivateNetworks(server).find((row) => row.address === normalized)
   return match?.cidr ?? null
 }
 
@@ -248,20 +227,20 @@ export function reportedPrivateAddresses(server: ServerWithIps): string[] {
   return out
 }
 
-export function listServersWithReportedPrivateAddresses<
-  T extends ServerWithIps,
->(servers: readonly T[]): T[] {
+export function listServersWithReportedPrivateAddresses<T extends ServerWithIps>(
+  servers: readonly T[]
+): T[] {
   return servers.filter((server) => reportedPrivateAddresses(server).length > 0)
 }
 
-export function listServersWithReportedPrivateNetworks<
-  T extends ServerWithIps,
->(servers: readonly T[]): T[] {
+export function listServersWithReportedPrivateNetworks<T extends ServerWithIps>(
+  servers: readonly T[]
+): T[] {
   return servers.filter((server) => reportedPrivateNetworks(server).length > 0)
 }
 
 export function sortDatacenterSubnets(
-  subnets: readonly DatacenterSubnetRecord[],
+  subnets: readonly DatacenterSubnetRecord[]
 ): DatacenterSubnetRecord[] {
   return [...subnets].sort((a, b) => {
     if (a.version !== b.version) return a.version - b.version
@@ -270,9 +249,7 @@ export function sortDatacenterSubnets(
 }
 
 function cidrsFromSubnetsOrCidrs(
-  subnetsOrCidrs:
-    | readonly DatacenterSubnetRecord[]
-    | readonly string[],
+  subnetsOrCidrs: readonly DatacenterSubnetRecord[] | readonly string[]
 ): string[] {
   const cleaned: string[] = []
   for (const entry of subnetsOrCidrs) {
@@ -283,9 +260,7 @@ function cidrsFromSubnetsOrCidrs(
 }
 
 export function formatDatacenterSubnetSummary(
-  subnetsOrCidrs:
-    | readonly DatacenterSubnetRecord[]
-    | readonly string[],
+  subnetsOrCidrs: readonly DatacenterSubnetRecord[] | readonly string[]
 ): string {
   const cidrs = cidrsFromSubnetsOrCidrs(subnetsOrCidrs)
   const first = cidrs[0]
@@ -296,11 +271,9 @@ export function formatDatacenterSubnetSummary(
 
 export function subnetForAddress(
   subnets: readonly DatacenterSubnetRecord[],
-  address: string,
+  address: string
 ): DatacenterSubnetRecord | null {
-  return (
-    subnets.find((subnet) => addressInCidr(address, subnet.cidr)) ?? null
-  )
+  return subnets.find((subnet) => addressInCidr(address, subnet.cidr)) ?? null
 }
 
 /**
@@ -311,7 +284,7 @@ export function subnetForAddress(
 export function candidateMemberNetworks(
   server: ServerWithIps,
   pinnedAddresses: readonly string[],
-  subnets: readonly DatacenterSubnetRecord[],
+  subnets: readonly DatacenterSubnetRecord[]
 ): ReportedPrivateNetwork[] {
   const pinned = new Set(pinnedAddresses)
   return reportedPrivateNetworks(server).filter((network) => {
@@ -320,29 +293,26 @@ export function candidateMemberNetworks(
   })
 }
 
-export function listServersWithCandidateAddresses<
-  T extends ServerWithIps,
->(
+export function listServersWithCandidateAddresses<T extends ServerWithIps>(
   servers: readonly T[],
   pinnedAddresses: readonly string[],
-  subnets: readonly DatacenterSubnetRecord[],
+  subnets: readonly DatacenterSubnetRecord[]
 ): T[] {
   return servers.filter(
-    (server) =>
-      candidateMemberNetworks(server, pinnedAddresses, subnets).length > 0,
+    (server) => candidateMemberNetworks(server, pinnedAddresses, subnets).length > 0
   )
 }
 
 export function memberAssignEmptyCopy(subnetCount: number): string {
   if (subnetCount === 0) {
-    return "Add a subnet first. Member IPs must fall inside this datacenter's ranges."
+    return "Add a subnet first. Member IPs must fall inside this datacenter network's ranges."
   }
-  return "No unpinned private IPs fall inside this datacenter's subnets."
+  return "No unpinned private IPs fall inside this datacenter network's subnets."
 }
 
 export function mergeDatacenterOptions(
   current: DatacenterOptions | null | undefined,
-  patch: DatacenterOptions,
+  patch: DatacenterOptions
 ): DatacenterOptions {
   return {
     ...current,
@@ -356,14 +326,12 @@ export function listServersWithoutMembership<
     datacenters?: readonly ServerDatacenterRef[] | null
   }>,
 >(servers: readonly T[]): T[] {
-  return servers.filter(
-    (server) => serverDatacenterMemberships(server).length === 0,
-  )
+  return servers.filter((server) => serverDatacenterMemberships(server).length === 0)
 }
 
 export function pruneSelectedIds(
   selected: ReadonlySet<string>,
-  allowedIds: ReadonlySet<string>,
+  allowedIds: ReadonlySet<string>
 ): Set<string> {
   const next = new Set<string>()
   for (const id of selected) {
@@ -372,10 +340,7 @@ export function pruneSelectedIds(
   return next
 }
 
-export function toggleSelectedId(
-  selected: ReadonlySet<string>,
-  id: string,
-): Set<string> {
+export function toggleSelectedId(selected: ReadonlySet<string>, id: string): Set<string> {
   const next = new Set(selected)
   if (next.has(id)) next.delete(id)
   else next.add(id)
@@ -392,12 +357,9 @@ export type DatacenterMemberPin = {
  * or duplicate server ids; keeps first address per server.
  */
 export function buildMemberPins(
-  selections: ReadonlyMap<string, string> | Readonly<Record<string, string>>,
+  selections: ReadonlyMap<string, string> | Readonly<Record<string, string>>
 ): DatacenterMemberPin[] {
-  const entries =
-    selections instanceof Map
-      ? [...selections.entries()]
-      : Object.entries(selections)
+  const entries = selections instanceof Map ? [...selections.entries()] : Object.entries(selections)
   const pins: DatacenterMemberPin[] = []
   const seen = new Set<string>()
   for (const [serverId, rawAddress] of entries) {
@@ -423,7 +385,7 @@ export function buildCreateDatacenterRequest(
     description: string
     members: readonly DatacenterMemberPin[]
     sourceServerId?: string
-  }>,
+  }>
 ): CreateDatacenterRequest | null {
   const members: DatacenterMemberPin[] = []
   const seen = new Set<string>()
@@ -457,7 +419,7 @@ export function buildCreateDatacenterFromSeed(
     description: string
     serverId: string
     address: string
-  }>,
+  }>
 ): CreateDatacenterRequest | null {
   const address = input.address.trim()
   if (!input.serverId || !address) return null

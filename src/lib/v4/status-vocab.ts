@@ -64,11 +64,19 @@ export const STATUS = {
   changes: { label: 'Not deployed', glyph: 'half', tone: 'warn' },
   // Domains and certificates
   waiting: { label: 'Waiting for DNS', glyph: 'dotted', tone: 'busy' },
+  waiting_port80: { label: 'Waiting for Port 80', glyph: 'dotted', tone: 'busy' },
+  waiting_caa: { label: 'Blocked by a CAA Record', glyph: 'dotted', tone: 'busy' },
   issuing: { label: 'Getting certificate', glyph: 'spinner', tone: 'busy' },
   ok: { label: 'Secure', glyph: 'lock', tone: 'ok' },
   expiring: { label: 'Expires soon', glyph: 'clock', tone: 'warn' },
   renewal_failed: { label: 'Renewal failed', glyph: 'diamond', tone: 'bad' },
+  issue_failed: { label: 'Couldn’t get a certificate', glyph: 'diamond', tone: 'bad' },
+  cert_expired: { label: 'Certificate expired', glyph: 'diamond', tone: 'bad' },
+  cert_not_deployed: { label: 'Not deployed yet', glyph: 'half', tone: 'warn' },
+  cert_not_reported: { label: 'Not on the server yet', glyph: 'triangle', tone: 'warn' },
   test: { label: 'Self-signed certificate (browsers warn)', glyph: 'unlock', tone: 'warn' },
+  // A tunnel's edge ends TLS with a trusted certificate, whatever the server holds.
+  edge: { label: 'Trusted at the Edge', glyph: 'lock', tone: 'ok' },
   // Servers and databases
   online: { label: 'Online', glyph: 'dot', tone: 'ok' },
   offline: { label: 'Offline', glyph: 'diamond', tone: 'bad' },
@@ -148,7 +156,9 @@ export const GLYPHS: Readonly<Record<GlyphKey, readonly GlyphShape[]>> = {
   thin: [{ kind: 'circle', r: 7.5, paint: 'stroke', width: 2 }],
   dashed: [{ kind: 'circle', r: 8, paint: 'stroke', width: 2.6, dash: '4 3' }],
   dotted: [{ kind: 'circle', r: 8, paint: 'stroke', width: 3.2, round: true, dash: '0.1 5' }],
-  spinner: [{ kind: 'path', d: 'M12 3.5a8.5 8.5 0 1 1-8.5 8.5', paint: 'stroke', width: 3.2, round: true }],
+  spinner: [
+    { kind: 'path', d: 'M12 3.5a8.5 8.5 0 1 1-8.5 8.5', paint: 'stroke', width: 3.2, round: true },
+  ],
   triangle: [{ kind: 'path', d: 'M12 2.5 22.5 20.5h-21Z', paint: 'fill' }],
   diamond: [{ kind: 'path', d: 'M12 2 22 12 12 22 2 12Z', paint: 'fill' }],
   octagon: [{ kind: 'path', d: 'M8 2h8l6 6v8l-6 6H8l-6-6V8Z', paint: 'fill' }],
@@ -188,8 +198,8 @@ export const GLYPH_CENTER = CIRCLE_R
  * Where a rect shape sits. The square is a plain 14 x 14 block; the lock and
  * the unlock body is a 16 x 12 block under the shackle.
  */
-export function rectGeometry(glyph: GlyphKey): Readonly<{ x: number; y: number; w: number; h: number }> {
-  return glyph === 'square'
-    ? { x: 5, y: 5, w: 14, h: 14 }
-    : { x: 4, y: 10, w: 16, h: 12 }
+export function rectGeometry(
+  glyph: GlyphKey
+): Readonly<{ x: number; y: number; w: number; h: number }> {
+  return glyph === 'square' ? { x: 5, y: 5, w: 14, h: 14 } : { x: 4, y: 10, w: 16, h: 12 }
 }

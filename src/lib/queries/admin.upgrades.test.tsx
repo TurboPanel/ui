@@ -4,8 +4,12 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { renderHook, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { createAppQueryClient, queryKeys } from '../query-client'
+import { developmentViewPollInterval } from '../development-host'
 import {
   useCheckForUpdates,
+  useDevelopmentHostAction,
+  useDevelopmentUpdates,
+  usePushDevelopmentDaemon,
   usePauseUpdates,
   useResumeUpdates,
   useSaveUpgradeSettings,
@@ -14,6 +18,7 @@ import {
   useUpgradeRunServers,
   useUpgradeServersPage,
   useUpgradeSettings,
+  useUpdateNow,
 } from './admin'
 
 const api = vi.hoisted(() => ({
@@ -26,6 +31,10 @@ const api = vi.hoisted(() => ({
   checkForUpdates: vi.fn(),
   pauseUpdates: vi.fn(),
   resumeUpdates: vi.fn(),
+  startUpdateNow: vi.fn(),
+  fetchDevelopmentUpdates: vi.fn(),
+  pushDevelopmentDaemon: vi.fn(),
+  startDevelopmentHostAction: vi.fn(),
 }))
 
 vi.mock('../instance-api', async (importOriginal) => {
@@ -193,6 +202,24 @@ describe('managed upgrade admin queries', () => {
     expect(invalidate).toHaveBeenLastCalledWith({ queryKey: queryKeys.admin.instanceUpdates })
   })
 
+  it('Update Now reads the update status and run again, started or refused', async () => {
+    const client = createAppQueryClient()
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
+    api.startUpdateNow.mockResolvedValueOnce({ ok: true, runId: 'run-7' })
+    const now = renderHook(() => useUpdateNow(), { wrapper: createWrapper(client) })
+    await expect(now.result.current.run(undefined)).resolves.toEqual({
+      ok: true,
+      value: { ok: true, runId: 'run-7' },
+    })
+    expect(invalidate).toHaveBeenLastCalledWith({ queryKey: queryKeys.admin.instanceUpdates })
+
+    invalidate.mockClear()
+    // A refusal (an update already going) still refreshes, so the run shows.
+    api.startUpdateNow.mockRejectedValueOnce(new Error('HTTP 409: run_active'))
+    await expect(now.result.current.run(undefined)).resolves.toMatchObject({ ok: false })
+    expect(invalidate).toHaveBeenLastCalledWith({ queryKey: queryKeys.admin.instanceUpdates })
+  })
+
   it('says a refused pause and reads nothing again', async () => {
     const client = createAppQueryClient()
     const invalidate = vi.spyOn(client, 'invalidateQueries')
@@ -216,5 +243,184 @@ describe('managed upgrade admin queries', () => {
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.admin.instanceUpdates })
     expect(api.pauseUpdates).not.toHaveBeenCalled()
     expect(api.resumeUpdates).not.toHaveBeenCalled()
+  })
+})
+
+describe('development build-and-push queries', () => {
+  const view = (job: { id: string; state: string } | null) => ({
+    ok: true,
+    daemonBuild: { built: null, sourceFingerprint: 'fp', sourceChanged: true },
+    servers: [],
+    job,
+    pendingDaemonChanges: true,
+  })
+
+  it('reads nothing until enabled', () => {
+    const wrapper = createWrapper()
+    const idle = renderHook(() => useDevelopmentUpdates({ enabled: false }), { wrapper })
+    expect(idle.result.current.fetchStatus).toBe('idle')
+    expect(api.fetchDevelopmentUpdates).not.toHaveBeenCalled()
+  })
+
+  it('reads the update status again once a running job finishes', async () => {
+    const client = createAppQueryClient()
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
+    api.fetchDevelopmentUpdates.mockReset()
+    api.fetchDevelopmentUpdates.mockResolvedValueOnce(view({ id: 'j1', state: 'pushing' }))
+    api.fetchDevelopmentUpdates.mockResolvedValue(view({ id: 'j1', state: 'done' }))
+    const hook = renderHook(() => useDevelopmentUpdates(), { wrapper: createWrapper(client) })
+    await waitFor(() => {
+      expect(hook.result.current.data?.job?.state).toBe('pushing')
+    })
+    expect(invalidate).not.toHaveBeenCalled()
+    await hook.result.current.refetch()
+    await waitFor(() => {
+      expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.admin.instanceUpdates })
+    })
+  })
+
+  it('a push puts the started job into the cache, and a refusal leaves it alone', async () => {
+    const client = createAppQueryClient()
+    client.setQueryData(queryKeys.admin.developmentUpdates, view(null))
+    const invalidate = vi.spyOn(client, 'invalidateQueries').mockResolvedValue()
+    const job = { id: 'j2', state: 'building' }
+    api.pushDevelopmentDaemon.mockResolvedValueOnce({ ok: true, job })
+    const push = renderHook(() => usePushDevelopmentDaemon(), { wrapper: createWrapper(client) })
+    await expect(push.result.current.run(undefined)).resolves.toMatchObject({ ok: true })
+    expect(api.pushDevelopmentDaemon).toHaveBeenCalledWith({})
+    expect(client.getQueryData(queryKeys.admin.developmentUpdates)).toMatchObject({ job })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.admin.developmentUpdates })
+
+    client.setQueryData(queryKeys.admin.developmentUpdates, null)
+    api.pushDevelopmentDaemon.mockResolvedValueOnce({ ok: false, error: 'job_running' })
+    await expect(push.result.current.run({ force: true })).resolves.toMatchObject({
+      ok: true,
+      value: { ok: false },
+    })
+    expect(api.pushDevelopmentDaemon).toHaveBeenLastCalledWith({ force: true })
+    expect(client.getQueryData(queryKeys.admin.developmentUpdates)).toBeNull()
+  })
+})
+
+describe('development host queries', () => {
+  const hostJob = (id: string, state: string) => ({
+    id,
+    action: 'update',
+    state,
+    step: 'pull',
+    steps: [],
+    startedAt: '2026-11-03T10:00:00Z',
+    endedAt: null,
+    logTail: [],
+  })
+  const view = (job: ReturnType<typeof hostJob> | null) => ({
+    ok: true,
+    daemonBuild: { built: null, sourceFingerprint: 'fp', sourceChanged: false },
+    servers: [],
+    job: null,
+    pendingDaemonChanges: false,
+    host: { parts: [], lastFetchAt: null, job, migrate: null },
+  })
+
+  it('reads the update status again once a running host job finishes', async () => {
+    const client = createAppQueryClient()
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
+    api.fetchDevelopmentUpdates.mockReset()
+    api.fetchDevelopmentUpdates.mockResolvedValueOnce(view(hostJob('h1', 'running')))
+    api.fetchDevelopmentUpdates.mockResolvedValue(view(hostJob('h1', 'done')))
+    const hook = renderHook(() => useDevelopmentUpdates(), { wrapper: createWrapper(client) })
+    await waitFor(() => {
+      expect(hook.result.current.data?.host?.job?.state).toBe('running')
+    })
+    expect(invalidate).not.toHaveBeenCalled()
+    await hook.result.current.refetch()
+    await waitFor(() => {
+      expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.admin.instanceUpdates })
+    })
+  })
+
+  it('keeps polling the running job through a restart that answers without host, then notices it finished', async () => {
+    const client = createAppQueryClient()
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
+    api.fetchDevelopmentUpdates.mockReset()
+    api.fetchDevelopmentUpdates.mockResolvedValueOnce(view(hostJob('h1', 'running')))
+    api.fetchDevelopmentUpdates.mockResolvedValueOnce({ ...view(null), host: null })
+    api.fetchDevelopmentUpdates.mockResolvedValue(view(hostJob('h1', 'done')))
+    const hook = renderHook(() => useDevelopmentUpdates(), { wrapper: createWrapper(client) })
+    await waitFor(() => {
+      expect(hook.result.current.data?.host?.job?.state).toBe('running')
+    })
+    await hook.result.current.refetch()
+    await waitFor(() => {
+      expect(hook.result.current.data?.hostCarry?.reason).toBe('host-missing')
+    })
+    expect(hook.result.current.data?.host?.job?.state).toBe('running')
+    expect(developmentViewPollInterval(hook.result.current.data)).toBe(2000)
+    expect(invalidate).not.toHaveBeenCalled()
+    await hook.result.current.refetch()
+    await waitFor(() => {
+      expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.admin.instanceUpdates })
+    })
+    expect(hook.result.current.data?.hostCarry).toBeUndefined()
+  })
+
+  it('keeps a started job until an answer names it', async () => {
+    const client = createAppQueryClient()
+    client.setQueryData(queryKeys.admin.developmentUpdates, view(hostJob('old', 'done')))
+    api.startDevelopmentHostAction.mockResolvedValueOnce({
+      ok: true,
+      job: { id: 'h5', action: 'update' },
+    })
+    api.fetchDevelopmentUpdates.mockReset()
+    api.fetchDevelopmentUpdates.mockResolvedValueOnce(view(hostJob('old', 'done')))
+    api.fetchDevelopmentUpdates.mockResolvedValue(view(hostJob('h5', 'running')))
+    const wrapper = createWrapper(client)
+    const action = renderHook(() => useDevelopmentHostAction(), { wrapper })
+    const hook = renderHook(() => useDevelopmentUpdates({ enabled: false }), { wrapper })
+    await action.result.current.run('update')
+    await hook.result.current.refetch()
+    await waitFor(() => {
+      expect(hook.result.current.data?.hostCarry?.reason).toBe('job-missing')
+    })
+    expect(hook.result.current.data?.host?.job).toMatchObject({ id: 'h5', state: 'running' })
+    await hook.result.current.refetch()
+    await waitFor(() => {
+      expect(hook.result.current.data?.hostCarry).toBeUndefined()
+    })
+    expect(hook.result.current.data?.host?.job).toMatchObject({ id: 'h5', step: 'pull' })
+  })
+
+  it('a started action goes into the cache as running; a refusal reads the view again', async () => {
+    const client = createAppQueryClient()
+    client.setQueryData(queryKeys.admin.developmentUpdates, view(null))
+    const invalidate = vi.spyOn(client, 'invalidateQueries').mockResolvedValue()
+    api.startDevelopmentHostAction.mockResolvedValueOnce({
+      ok: true,
+      job: { id: 'h2', action: 'restart' },
+    })
+    const action = renderHook(() => useDevelopmentHostAction(), {
+      wrapper: createWrapper(client),
+    })
+    await expect(action.result.current.run('restart')).resolves.toMatchObject({ ok: true })
+    expect(api.startDevelopmentHostAction).toHaveBeenCalledWith('restart')
+    expect(client.getQueryData(queryKeys.admin.developmentUpdates)).toMatchObject({
+      host: { job: { id: 'h2', action: 'restart', state: 'running' } },
+    })
+    expect(invalidate).not.toHaveBeenCalled()
+
+    client.setQueryData(queryKeys.admin.developmentUpdates, null)
+    api.startDevelopmentHostAction.mockResolvedValueOnce({
+      ok: true,
+      job: { id: 'h3', action: 'update' },
+    })
+    await action.result.current.run('update')
+    expect(client.getQueryData(queryKeys.admin.developmentUpdates)).toBeNull()
+
+    api.startDevelopmentHostAction.mockResolvedValueOnce({ ok: false, error: 'job_running' })
+    await expect(action.result.current.run('update')).resolves.toMatchObject({
+      ok: true,
+      value: { ok: false },
+    })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.admin.developmentUpdates })
   })
 })

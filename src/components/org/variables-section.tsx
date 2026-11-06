@@ -10,6 +10,7 @@ import {
   useVariables,
 } from '@/lib/queries/variables'
 import { useCan } from '@/lib/query-client'
+import { looksLikeSecretVariable, SECRET_LOOKING_VARIABLE_HINT } from '@/lib/variable-secret-hint'
 import { chrome, colors, spacing } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
 
@@ -619,6 +620,9 @@ function NewVariableRow({
           onToggle={onToggleLiteral}
         />
         {addFieldError ? <Text style={styles.fieldError}>{addFieldError}</Text> : null}
+        {!newIsSecret && looksLikeSecretVariable(newKey, newValue) ? (
+          <Text style={styles.secretHint}>{SECRET_LOOKING_VARIABLE_HINT}</Text>
+        ) : null}
       </View>
       <View style={styles.colValue}>
         <TextInput
@@ -1408,6 +1412,10 @@ const styles = StyleSheet.create({
   },
   fieldError: {
     color: colors.errorText,
+    fontSize: 11,
+  },
+  secretHint: {
+    color: colors.warn,
     fontSize: 11,
   },
   table: {

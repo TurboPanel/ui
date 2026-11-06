@@ -2,6 +2,9 @@ import { Link, type Href } from 'expo-router'
 import { useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { showsDefaultPill } from '@/components/org/project-create/environment-name'
+import { FormDisclosure } from '@/components/org/project-create/form-disclosure'
+import type { NewProjectIconField } from '@/components/org/project-create/new-project-icon'
+import { IconButton } from '@/components/org/icon-picker-sheet'
 import { panelStyles } from '@/components/ui/panel-styles'
 import type { FieldErrors, WorkspaceMode } from '@/components/org/project-create/validation'
 import {
@@ -13,6 +16,7 @@ import {
   TextLink,
 } from '@/components/ui'
 import { DESCRIPTION_MAX_LENGTH, DISPLAY_NAME_MAX_LENGTH } from '@/lib/display-name'
+import { orgProjectSettingsHref } from '@/lib/org-navigation'
 import type { WorkspaceRecord } from '@/lib/instance-api'
 import { chrome, colors, spacing, webPointer } from '@/lib/theme'
 
@@ -100,6 +104,21 @@ function WorkspacePicker({
       {error ? <Text style={panelStyles.error}>{error}</Text> : null}
     </View>
   )
+}
+
+/** One line for the closed Workspace section: where the project will land. */
+export function workspaceSummary(
+  workspaceMode: WorkspaceMode,
+  workspaces: readonly WorkspaceRecord[],
+  pickedWorkspaceId: string,
+  newWorkspaceName: string
+): string {
+  if (workspaceMode === 'new') {
+    const name = newWorkspaceName.trim()
+    return name ? `New: ${name}` : 'New workspace'
+  }
+  const picked = workspaces.find((ws) => ws.id === pickedWorkspaceId)
+  return picked ? workspaceLabel(picked) : 'Choose a workspace'
 }
 
 function ProjectWorkspaceFields({
@@ -199,7 +218,7 @@ export function EnvironmentNameField({
         ) : null
       }
       footer={
-        <Link href={`/${orgId}/projects/settings` as Href} asChild>
+        <Link href={orgProjectSettingsHref(orgId) as Href} asChild>
           <Pressable
             style={StyleSheet.flatten([styles.hintLink, webPointer])}
             accessibilityRole="link"
@@ -219,7 +238,8 @@ export function EnvironmentNameField({
 /**
  * Top of the new-project screen: the name, the workspace it lands in
  * (prefilled when there is one to pick), and an optional description behind
- * a link. The first environment is named later, on "Set up production".
+ * a link, with the workspace in a closed section. The first environment is
+ * named later, on "Set up production".
  */
 export function DetailsStep({
   displayName,
@@ -235,6 +255,8 @@ export function DetailsStep({
   onWorkspaceModeChange,
   onPickedWorkspaceIdChange,
   onNewWorkspaceNameChange,
+  openWorkspaceByDefault,
+  icon,
 }: Readonly<{
   displayName: string
   description: string
@@ -249,6 +271,10 @@ export function DetailsStep({
   onWorkspaceModeChange: (mode: WorkspaceMode) => void
   onPickedWorkspaceIdChange: (id: string) => void
   onNewWorkspaceNameChange: (name: string) => void
+  /** Organization Settings › Project Settings: open the Workspace section without being asked. */
+  openWorkspaceByDefault: boolean
+  /** The icon button left of the name (the approved layout); absent draws no button. */
+  icon?: NewProjectIconField
 }>) {
   // Open from the start when there is something to show (an error, or text kept from before).
   const [descriptionOpen, setDescriptionOpen] = useState(
@@ -267,6 +293,17 @@ export function DetailsStep({
         accessibilityLabel="Project name"
         maxLength={DISPLAY_NAME_MAX_LENGTH}
         error={fieldErrors.name}
+        leading={
+          icon ? (
+            <IconButton
+              icon={icon.value}
+              isEmojiIconAllowed={icon.isEmojiIconAllowed}
+              fallback={icon.fallback}
+              onPress={icon.onChoose}
+              accessibilityLabel="Choose an icon"
+            />
+          ) : undefined
+        }
       />
 
       {showDescription ? (
@@ -293,17 +330,29 @@ export function DetailsStep({
         />
       )}
 
-      <ProjectWorkspaceFields
-        workspaceMode={workspaceMode}
-        workspaces={workspaces}
-        loadingWorkspaces={loadingWorkspaces}
-        pickedWorkspaceId={pickedWorkspaceId}
-        fieldErrors={fieldErrors}
-        newWorkspaceNameValue={newWorkspaceNameValue}
-        onWorkspaceModeChange={onWorkspaceModeChange}
-        onPickedWorkspaceIdChange={onPickedWorkspaceIdChange}
-        onNewWorkspaceNameChange={onNewWorkspaceNameChange}
-      />
+      <FormDisclosure
+        title="Workspace"
+        summary={workspaceSummary(
+          workspaceMode,
+          workspaces,
+          pickedWorkspaceId,
+          newWorkspaceNameValue
+        )}
+        openByDefault={openWorkspaceByDefault}
+        hasError={fieldErrors.workspaceId !== undefined || fieldErrors.workspaceName !== undefined}
+      >
+        <ProjectWorkspaceFields
+          workspaceMode={workspaceMode}
+          workspaces={workspaces}
+          loadingWorkspaces={loadingWorkspaces}
+          pickedWorkspaceId={pickedWorkspaceId}
+          fieldErrors={fieldErrors}
+          newWorkspaceNameValue={newWorkspaceNameValue}
+          onWorkspaceModeChange={onWorkspaceModeChange}
+          onPickedWorkspaceIdChange={onPickedWorkspaceIdChange}
+          onNewWorkspaceNameChange={onNewWorkspaceNameChange}
+        />
+      </FormDisclosure>
     </>
   )
 }

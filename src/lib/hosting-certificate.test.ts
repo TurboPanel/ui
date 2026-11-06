@@ -5,11 +5,14 @@ import {
   certificatePollInterval,
   hostingSaveNote,
   describeCertificate,
+  waitingLabel,
   dnsResultHeadline,
   dnsSummaryLines,
   formatDaysLeft,
   certificateAfterSave,
+  failedTimingLine,
   letsEncryptRefusal,
+  waitingTimingLine,
   withCertificateRefusal,
 } from './hosting-certificate'
 import type { HostingCertificate, HostingDnsReport } from './instance-api'
@@ -105,6 +108,21 @@ describe('describeCertificate', () => {
     expect(view.lines.join(' ')).not.toContain('ok.example.com')
   })
 
+  it('names the port 80 or CAA check when DNS is right and only that stops it', () => {
+    const name = { hostname: 'a.example.com', resolves: true, addresses: ['203.0.113.7'] }
+    const report = (extra: Partial<typeof name> & Record<string, unknown>): HostingDnsReport => ({
+      ...DNS_NOT_READY,
+      hostnames: [{ ...name, ...extra }],
+    })
+    const closed = describeCertificate(
+      cert({ state: 'waiting_for_dns', dns: report({ port80: 'closed' }) })
+    )
+    expect(closed.label).toBe('Waiting for Port 80')
+    expect(waitingLabel(report({ caa: 'blocked' }))).toBe('Blocked by a CAA Record')
+    expect(waitingLabel(DNS_NOT_READY)).toBe('Waiting for DNS')
+    expect(waitingLabel(null)).toBe('Waiting for DNS')
+  })
+
   it('issuing spins, or asks for a redeploy when one is due', () => {
     const working = describeCertificate(cert({ state: 'issuing' }))
     expect(working.spinner).toBe(true)
@@ -134,11 +152,83 @@ describe('describeCertificate', () => {
   })
 })
 
+describe('server progress and timing', () => {
+  const at = (iso: string) => `[${iso}]`
+
+  it('says plainly when no server has reported since the deploy, and offers a deploy', () => {
+    const view = describeCertificate(cert({ state: 'issuing', serverProgress: 'not_reported' }))
+    expect(view.label).toBe('Not on the server yet')
+    expect(view.tone).toBe('warning')
+    expect(view.spinner).toBe(false)
+    expect(view.actions).toEqual(['deploy'])
+    expect(
+      certificatePollInterval(cert({ state: 'issuing', serverProgress: 'not_reported' }))
+    ).toBe(CERTIFICATE_DNS_POLL_MS)
+    const working = describeCertificate(cert({ state: 'issuing', serverProgress: 'working' }))
+    expect(working.lines[0]).toContain('The server is working on it.')
+  })
+
+  it('shows when a waiting request was last tried and when it is tried next', () => {
+    const waiting = cert({
+      state: 'waiting_for_dns',
+      lastTriedAt: '2026-10-04T12:00:00.000Z',
+      nextTryAt: '2026-10-04T12:10:00.000Z',
+    })
+    expect(waitingTimingLine(waiting, at)).toBe(
+      'Last tried [2026-10-04T12:00:00.000Z]. Next try [2026-10-04T12:10:00.000Z].'
+    )
+    expect(waitingTimingLine(cert({ state: 'waiting_for_dns' }), at)).toBeNull()
+  })
+
+  it('a failure says when it was last tried and that the server retries by itself', () => {
+    expect(failedTimingLine(cert({ lastTriedAt: '2026-10-04T12:00:00.000Z' }), at)).toBe(
+      'Last tried [2026-10-04T12:00:00.000Z]. The server tries again by itself, waiting longer after each failure.'
+    )
+    expect(failedTimingLine(cert({}), at)).toBe(
+      'The server tries again by itself, waiting longer after each failure.'
+    )
+  })
+
+  it('a failing certificate also lists what the pre-check found', () => {
+    const view = describeCertificate(
+      cert({
+        state: 'renewal_failed',
+        lastError: 'fetch failed: Connection refused (os error 111)',
+        dns: {
+          ready: false,
+          checkedAt: '2026-10-04T12:00:00.000Z',
+          hostnames: [
+            {
+              hostname: 'w.example.com',
+              resolves: true,
+              addresses: ['198.203.204.120'],
+              port80: 'closed',
+              problem:
+                "w.example.com points at 198.203.204.120, but port 80 there isn't reachable from the internet.",
+            },
+          ],
+          expectedAddresses: [],
+        },
+      })
+    )
+    expect(view.lines).toContain(
+      "w.example.com points at 198.203.204.120, but port 80 there isn't reachable from the internet."
+    )
+  })
+})
+
 describe('dns wording', () => {
   it('headline and a clean report', () => {
     expect(dnsResultHeadline(DNS_NOT_READY)).toBe('DNS is not ready yet.')
     const ready = { ...DNS_NOT_READY, ready: true, hostnames: [DNS_NOT_READY.hostnames[2]!] }
-    expect(dnsResultHeadline(ready)).toBe('Every name points at this server.')
+    expect(dnsResultHeadline(ready)).toBe('Every name is ready for a certificate.')
+    expect(
+      dnsResultHeadline({
+        ...ready,
+        ready: false,
+        hostnames: [{ hostname: 'a.example.com', resolves: true, addresses: [], port80: 'closed' }],
+      })
+    ).toBe('Not ready for a certificate yet.')
     expect(dnsSummaryLines(ready)).toEqual([])
     const oneWrong = { ...DNS_NOT_READY, hostnames: [DNS_NOT_READY.hostnames[0]!] }
     expect(dnsSummaryLines(oneWrong).at(-1)).toBe('Point it at 203.0.113.7.')
@@ -154,7 +244,7 @@ describe('letsEncryptRefusal', () => {
   it('says Let’s Encrypt is off for the organization and offers its settings', () => {
     expect(letsEncryptRefusal(refused(403, 'lets_encrypt_not_enabled'))).toEqual({
       message:
-        'Let’s Encrypt is turned off for this organization. An owner can turn it on in Organization settings › Domains & certificates.',
+        'Let’s Encrypt is turned off for this organization. An owner can turn it on in Organization Settings › Domains & Certificates.',
       openSettings: true,
     })
   })

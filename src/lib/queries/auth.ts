@@ -30,11 +30,14 @@ import {
   type InstallCompleteResult,
   type InstallStatus,
   type OrganizationRecord,
+  type OrganizationUpdateBody,
   type OAuthProvider,
   type SessionInfo,
   type TwoFactorCodeKind,
 } from '@/lib/instance-api'
+import { type ControlPlaneRuntime, resolveControlPlaneRuntime } from '@/lib/control-plane-runtime'
 import {
+  canQueryControlPlane,
   getActiveControlPlaneAccount,
   rememberSignedInAccount,
   removeActiveControlPlaneAccount,
@@ -65,12 +68,51 @@ export function useInstallStatusQuery(options?: Readonly<{ enabled?: boolean }>)
   })
 }
 
+export type ControlPlaneRuntimeRead = {
+  /** Undefined until `GET /status` answers, and when it failed. */
+  runtime: ControlPlaneRuntime | undefined
+  /** The read failed and nothing answered before it. */
+  failed: boolean
+  error: unknown
+  retrying: boolean
+  retry: () => void
+}
+
+/**
+ * The control plane runtime from the shared `GET /status` query (the one
+ * `AuthProvider` reads, same key), never from per-tab storage. A screen that
+ * picks its view by runtime can tell "still asking" from "the read failed"
+ * and offer Retry instead of a spinner that never ends.
+ */
+export function useControlPlaneRuntime(): ControlPlaneRuntimeRead {
+  const status = useInstallStatusQuery({ enabled: canQueryControlPlane() })
+  const runtime = status.data ? resolveControlPlaneRuntime(status.data) : undefined
+  return {
+    runtime,
+    failed: runtime === undefined && status.isError,
+    error: status.error,
+    retrying: status.isFetching,
+    retry: () => {
+      void status.refetch()
+    },
+  }
+}
+
 export function useOrganizationsQuery(options?: Readonly<{ enabled?: boolean }>) {
   return useQuery({
     queryKey: queryKeys.auth.organizations,
     queryFn: fetchOrganizations,
     enabled: options?.enabled ?? true,
   })
+}
+
+/**
+ * One organization from the cached organizations list (the same read the
+ * switcher uses), or undefined while it loads or when it is not listed.
+ */
+export function useOrganizationRecord(organizationId: string): OrganizationRecord | undefined {
+  const { data } = useOrganizationsQuery()
+  return data?.organizations.find((org) => org.id === organizationId)
 }
 
 export function useCreateOrganization() {
@@ -88,8 +130,11 @@ export function useCreateOrganization() {
 export function useUpdateOrganization() {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: ({ organizationId, name }: { organizationId: string; name: string }) =>
-      updateOrganization(organizationId, { name }),
+    mutationFn: ({
+      organizationId,
+      ...body
+    }: { organizationId: string } & OrganizationUpdateBody) =>
+      updateOrganization(organizationId, body),
     onSuccess: (data) => {
       queryClient.setQueryData<{ organizations: OrganizationRecord[] }>(
         queryKeys.auth.organizations,

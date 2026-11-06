@@ -4,9 +4,10 @@ import { panelStyles } from '@/components/ui/panel-styles'
 import {
   DataTable,
   DataTableCell,
-  type DataTableColumn,
   DataTableRow,
   SectionPanel,
+  TypeNameConfirmModal,
+  type DataTableColumn,
 } from '@/components/ui'
 import { formatLocalDateTime } from '@/lib/format-datetime'
 import type { LicenseRecord } from '@/lib/instance-api'
@@ -60,38 +61,7 @@ function PendingKeyDeleteControl({
     )
   }
 
-  if (confirming) {
-    return (
-      <View style={styles.deleteActions}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Confirm delete ${title}`}
-          style={({ pressed }) => [
-            panelStyles.toolbarBtnPrimary,
-            pressed && styles.pressed,
-            webPointer,
-          ]}
-          onPress={onConfirm}
-        >
-          <Text style={panelStyles.toolbarBtnTextPrimary}>Confirm delete</Text>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Cancel delete"
-          style={({ pressed }) => [
-            panelStyles.toolbarBtnSecondary,
-            pressed && styles.pressed,
-            webPointer,
-          ]}
-          onPress={onCancel}
-        >
-          <Text style={panelStyles.toolbarBtnTextSecondary}>Cancel</Text>
-        </Pressable>
-      </View>
-    )
-  }
-
-  return (
+  const trigger = (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`Delete ${title}`}
@@ -104,6 +74,21 @@ function PendingKeyDeleteControl({
     >
       <Text style={panelStyles.toolbarBtnTextSecondary}>Delete</Text>
     </Pressable>
+  )
+  return (
+    <>
+      {trigger}
+      {confirming ? (
+        <TypeNameConfirmModal
+          thing="Registration Key"
+          name={title}
+          description="Its command stops working."
+          pending={false}
+          onCancel={onCancel}
+          onConfirm={onConfirm}
+        />
+      ) : null}
+    </>
   )
 }
 
@@ -240,6 +225,7 @@ export function PendingKeysSection({ orgId }: Readonly<{ orgId: string }>) {
         setConfirmingId(null)
       },
       onError: (err) => {
+        setConfirmingId(null)
         setDeleteError(userErrorMessage(err, 'Failed to delete registration key'))
       },
     })
@@ -262,7 +248,7 @@ export function PendingKeysSection({ orgId }: Readonly<{ orgId: string }>) {
       <Text style={panelStyles.pageCopy}>
         Servers still waiting to connect. Each row is an install command that has not enrolled a
         host yet; delete one if you no longer need it — the command cannot be recovered after you
-        leave Add server.
+        leave Add Server.
       </Text>
 
       {displayError ? <Text style={panelStyles.error}>{displayError}</Text> : null}
@@ -319,12 +305,6 @@ const styles = StyleSheet.create({
   createdText: {
     color: colors.textMuted,
     fontSize: 13,
-  },
-  deleteActions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'flex-end',
-    gap: spacing.sm,
   },
   deleteBusy: {
     flexDirection: 'row',

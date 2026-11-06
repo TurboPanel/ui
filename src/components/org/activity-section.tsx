@@ -77,6 +77,9 @@ function activityProblemText(item: OrganizationActivityItem): string | null {
   return plainStepFailureMessage(item.errorMessage)
 }
 
+/** Project and environment cells of a row whose environment no longer exists. */
+const DELETED_PLACE_LABEL = 'Deleted'
+
 function NameLink({
   name,
   href,
@@ -160,6 +163,9 @@ function ActivityRow({
 }: Readonly<{ orgId: string; item: OrganizationActivityItem; rowIndex: number }>) {
   const [state, project, environment, action, change, by, started, duration, log] = COLUMNS
   const hrefs = itemHrefs(orgId, item)
+  // Every row is an environment's deploy, start or stop; the panel leaves the
+  // environment out only when it has since been deleted (with its project).
+  const placeFallback = item.environmentId === null ? DELETED_PLACE_LABEL : '—'
   return (
     <DataTableRow alt={rowIndex % 2 === 1}>
       <DataTableCell column={state}>
@@ -169,10 +175,10 @@ function ActivityRow({
         />
       </DataTableCell>
       <DataTableCell column={project}>
-        <NameLink name={item.projectName} href={hrefs.project} fallback="—" />
+        <NameLink name={item.projectName} href={hrefs.project} fallback={placeFallback} />
       </DataTableCell>
       <DataTableCell column={environment}>
-        <NameLink name={item.environmentName} href={hrefs.environment} fallback="—" />
+        <NameLink name={item.environmentName} href={hrefs.environment} fallback={placeFallback} />
       </DataTableCell>
       <DataTableCell column={action}>
         <Text style={styles.mutedText}>{activityActionLabel(item.action)}</Text>

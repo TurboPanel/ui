@@ -1,12 +1,14 @@
+import { ManagedBackupLoginSection } from '@/components/org/managed/managed-backup-login-panel'
 import {
   Button,
   ButtonRow,
-  ConfirmButton,
   EmptyState,
   LoadingState,
   SegmentedControl,
   TextField,
+  TypeNameDeleteButton,
 } from '@/components/ui'
+import { environmentConfirmName } from '@/lib/environment-delete'
 import { ManagedBackupsPanel } from '@/components/org/managed/managed-backups-panel'
 import { ManagedBackupSchedulesPanel } from '@/components/org/managed/managed-backup-schedules-panel'
 import { ManagedBindingsPanel } from '@/components/org/managed/managed-bindings-panel'
@@ -687,8 +689,8 @@ export function ManagedEnvironmentReadyPanels({
             }
             registerCommand(result.value.commandId, action, result.value.serverId)
           }}
-          onDelete={async () => {
-            const result = await deleteManagedMutation.mutateAsync()
+          onDelete={async (typedName) => {
+            const result = await deleteManagedMutation.mutateAsync(typedName)
             if (result.deleted) {
               invalidateManagedData()
               ignorePromise(managedQuery.refetch())
@@ -795,8 +797,8 @@ function ManagedDataPanels({
           }
           registerCommand(result.value.commandId, 'Create database')
         }}
-        onDeleteDatabase={async (name) => {
-          const result = await deleteDatabaseMutation.run(name)
+        onDeleteDatabase={async (name, confirmName) => {
+          const result = await deleteDatabaseMutation.run({ name, confirmName })
           if (!result.ok) {
             throw new Error(result.error ?? 'Failed to delete database')
           }
@@ -849,6 +851,13 @@ function ManagedDataPanels({
           return { logins: result.value.logins, notes: result.value.notes }
         }}
       />
+      <ManagedBackupLoginSection
+        orgId={orgId}
+        environmentId={environmentId}
+        canManage={canManage}
+        busy={inFlight}
+        registerCommand={registerCommand}
+      />
     </>
   )
 }
@@ -869,6 +878,7 @@ function EnvironmentToolbarActions({
   deleting,
   onRename,
   onNewEnvironment,
+  environmentName,
   onDeleteConfirm,
 }: Readonly<{
   canOwn: boolean
@@ -876,7 +886,9 @@ function EnvironmentToolbarActions({
   deleting: boolean
   onRename: () => void
   onNewEnvironment: () => void
-  onDeleteConfirm: () => void
+  /** The name typed to delete the environment. */
+  environmentName: string
+  onDeleteConfirm: (typedName: string) => Promise<unknown>
 }>) {
   if (!canOwn) {
     return null
@@ -886,10 +898,11 @@ function EnvironmentToolbarActions({
       <Button label="Rename" size="sm" onPress={onRename} />
       <Button label="New environment" size="sm" onPress={onNewEnvironment} />
       {showDelete ? (
-        <ConfirmButton
+        <TypeNameDeleteButton
           label="Delete"
-          confirmLabel={deleting ? 'Deleting…' : 'Confirm delete'}
-          prompt="Delete this environment?"
+          thing="Environment"
+          name={environmentName}
+          description="Its services, domains, containers and variables are removed."
           busy={deleting}
           onConfirm={onDeleteConfirm}
         />
@@ -1020,9 +1033,9 @@ function ActiveEnvironmentPanel({
     setShowCreate(false)
   }
 
-  const deleteActive = async () => {
+  const deleteActive = async (confirmName: string) => {
     onError(null)
-    const result = await deleteEnvironmentMutation.run(activeEnvironment.id)
+    const result = await deleteEnvironmentMutation.run({ id: activeEnvironment.id, confirmName })
     if (!result.ok) {
       onError(failedRunMessage(result, 'Failed to delete the environment'))
     }
@@ -1059,9 +1072,8 @@ function ActiveEnvironmentPanel({
           onNewEnvironment={() => {
             setShowCreate(true)
           }}
-          onDeleteConfirm={() => {
-            ignorePromise(deleteActive())
-          }}
+          environmentName={environmentConfirmName(activeEnvironment)}
+          onDeleteConfirm={deleteActive}
         />
       </View>
 

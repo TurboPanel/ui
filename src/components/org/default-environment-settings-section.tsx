@@ -61,10 +61,7 @@ export function DefaultEnvironmentSettingsSection({ orgId }: Readonly<{ orgId: s
   if (!canManage) return null
 
   return (
-    <SectionPanel
-      title="Primary environment name"
-      hint="Manage-gated · applies to newly created projects"
-    >
+    <SectionPanel title="Primary Environment Name" hint="Applies to projects created from now on">
       {error ? <Text style={panelStyles.error}>{error}</Text> : null}
       {query.isError && !error ? (
         <Text style={panelStyles.error}>

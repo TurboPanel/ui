@@ -89,10 +89,10 @@ describe('readEnvironmentSourceBindings', () => {
     expect(binding?.blockedReason).toContain('plain image')
   })
 
-  it('lets a Railpack-built service be overridden', () => {
+  it('lets a image-built service be overridden', () => {
     const project = doc({
       api: {
-        'x-turbopanel': { source: { sourceId: SOURCE_ID, buildKind: 'railpack' } },
+        'x-turbopanel': { source: { sourceId: SOURCE_ID, buildKind: 'image' } },
       },
     })
     expect(bindingsOf(project, null)[0]?.editable).toBe(true)
@@ -218,14 +218,14 @@ describe('patchEnvironmentSourceBinding', () => {
     expect(different.data.services).toEqual({ web: { 'x-turbopanel': { serviceKind: 'site' } } })
   })
 
-  it('adds the Railpack marker for a Railpack service instead of a kind', () => {
-    const railpack = doc({
+  it('adds the image marker for an image service instead of a kind', () => {
+    const imageDoc = doc({
       api: {
-        'x-turbopanel': { source: { sourceId: SOURCE_ID, branch: 'main', buildKind: 'railpack' } },
+        'x-turbopanel': { source: { sourceId: SOURCE_ID, branch: 'main', buildKind: 'image' } },
       },
     })
     const next = patchEnvironmentSourceBinding({
-      projectCompose: railpack,
+      projectCompose: imageDoc,
       environmentCompose: null,
       serviceName: 'api',
       patch: { branch: 'staging' },
@@ -233,7 +233,7 @@ describe('patchEnvironmentSourceBinding', () => {
     expect(next.data.services).toEqual({
       api: {
         'x-turbopanel': {
-          source: { sourceId: SOURCE_ID, branch: 'staging', buildKind: 'railpack' },
+          source: { sourceId: SOURCE_ID, branch: 'staging', buildKind: 'image' },
         },
       },
     })

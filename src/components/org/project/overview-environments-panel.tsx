@@ -18,7 +18,7 @@ import { useDeployLogProgress } from '@/components/org/project/use-deploy-log-pr
 import { panelStyles } from '@/components/ui/panel-styles'
 import { EnvironmentDeploymentHistoryPanel } from '@/components/org/project/environment-deployment-history-panel'
 import { EnvironmentGitSourcePanel } from '@/components/org/project/environment-git-source-panel'
-import { StatusDot } from '@/components/ui'
+import { StatusDot, TypeNameConfirmModal } from '@/components/ui'
 import { StatusChip } from '@/components/ui/v4/status-chip'
 import { useProjectContext } from '@/components/org/project/project-context'
 import {
@@ -27,7 +27,7 @@ import {
   type PreviewDeploymentPurpose,
 } from '@/components/org/project/preview-deployment-modal'
 import { environmentStatusTone, hasHostDeployedContainers } from '@/lib/container-status'
-import { deployPreviewFailureMessage } from '@/lib/deploy-error-message'
+import { deployPreviewFailureMessage, deployRefusalMessage } from '@/lib/deploy-error-message'
 import {
   type CommandProgress,
   type CommandStatus,
@@ -53,7 +53,8 @@ import { mergeComposeOverlay } from '@/lib/compose'
 import { progressChipLabel } from '@/lib/deploy-progress'
 import { unownedPrincipalRequiredServices } from '@/lib/compose/principal-required'
 import {
-  environmentDeleteFailure,
+  environmentConfirmName,
+  environmentDeleteOutcome,
   environmentDeletePrompt,
   type EnvironmentDeleteFailure,
 } from '@/lib/environment-delete'
@@ -161,19 +162,26 @@ function useOverviewEnvironmentDelete(onStop: () => void) {
   const { orgId, projectId, selectedEnvironment, invalidateEnvironments, setError } =
     useProjectContext()
   const deleteEnvironment = useDeleteEnvironment(orgId)
+  // Armed = the name dialog is open; `dialogError` is a refusal shown inside it.
   const [armed, setArmed] = useState(false)
+  const [dialogError, setDialogError] = useState<string | null>(null)
   const [failure, setFailure] = useState<EnvironmentDeleteFailure | null>(null)
   const name = selectedEnvironment?.name?.trim() || 'environment'
+  const confirmName = selectedEnvironment ? environmentConfirmName(selectedEnvironment) : ''
 
-  const confirm = async () => {
+  const confirm = async (typed: string) => {
     if (!selectedEnvironment || deleteEnvironment.isPending) return
     setError(null)
     setFailure(null)
-    const result = await deleteEnvironment.run(selectedEnvironment.id)
+    setDialogError(null)
+    const result = await deleteEnvironment.run({ id: selectedEnvironment.id, confirmName: typed })
     if (!result.ok) {
-      if (deleteEnvironment.actionError) {
-        setFailure(environmentDeleteFailure(deleteEnvironment.actionError, name))
-      }
+      if (!result.error) return
+      const outcome = environmentDeleteOutcome(result.error, name)
+      if (outcome.kind === 'failure') {
+        setArmed(false)
+        setFailure(outcome.failure)
+      } else setDialogError(outcome.text)
       return
     }
     setArmed(false)
@@ -189,16 +197,19 @@ function useOverviewEnvironmentDelete(onStop: () => void) {
 
   return {
     armed,
+    dialogError,
     failure,
     name,
+    confirmName,
     pending: deleteEnvironment.isPending,
     arm: () => {
       setFailure(null)
+      setDialogError(null)
       setArmed(true)
     },
     cancel: () => {
       setArmed(false)
-      setFailure(null)
+      setDialogError(null)
     },
     confirm,
     stop,
@@ -343,19 +354,15 @@ function EnvironmentActionsMenu({ model }: Readonly<{ model: OverviewEnvironment
       </Modal>
 
       {remove.armed ? (
-        <View style={styles.deleteConfirm}>
-          <Text style={styles.hintInline}>{environmentDeletePrompt(remove.name)}</Text>
-          <View style={styles.inlineActions}>
-            <QuietButton
-              label={remove.pending ? 'Deleting…' : 'Delete environment'}
-              accessibilityLabel="Confirm delete environment"
-              tone="danger"
-              disabled={remove.pending}
-              onPress={() => ignorePromise(remove.confirm())}
-            />
-            <QuietButton label="Cancel" onPress={remove.cancel} />
-          </View>
-        </View>
+        <TypeNameConfirmModal
+          thing="Environment"
+          name={remove.confirmName}
+          description={environmentDeletePrompt(remove.name)}
+          pending={remove.pending}
+          error={remove.dialogError}
+          onCancel={remove.cancel}
+          onConfirm={(typed) => ignorePromise(remove.confirm(typed))}
+        />
       ) : null}
 
       {remove.failure ? (
@@ -472,11 +479,11 @@ function MissingPrincipalBindingsLink({ environmentId }: Readonly<{ environmentI
     <Link href={projectEnvironmentBindingsHref(orgId, projectId, environmentId) as Href} asChild>
       <Pressable
         accessibilityRole="link"
-        accessibilityLabel="Assign a system user on the Bindings tab"
+        accessibilityLabel="Assign a Hosting Account on the Bindings tab"
         style={webPointer}
       >
         <Text style={styles.statusText}>
-          No system user — <Text style={styles.hostingLink}>assign one in Bindings</Text>
+          No Hosting Account — <Text style={styles.hostingLink}>assign one in Bindings</Text>
         </Text>
       </Pressable>
     </Link>
@@ -991,7 +998,10 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
         confirmMode === 'cacheless' ? { noCache: true } : undefined
       )
       if (!result.ok) {
-        setActionError(deployEnvironmentMutation.actionError ?? 'Failed to deploy')
+        // `actionError` still holds the previous render's value here; the refusal itself is `cause`.
+        setActionError(
+          result.cause ? deployRefusalMessage(result.cause) : (result.error ?? 'Failed to deploy')
+        )
         return
       }
       setPreviewOpen(null)
@@ -1556,11 +1566,6 @@ const styles = StyleSheet.create({
   inlineForm: {
     gap: spacing.xs,
     maxWidth: 360,
-  },
-  inlineActions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 4,
   },
   buttonDisabled: {
     opacity: 0.45,

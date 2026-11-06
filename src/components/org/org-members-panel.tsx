@@ -3,7 +3,14 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useState, type ReactNode } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { panelStyles } from '@/components/ui/panel-styles'
-import { Badge, ConfirmButton, EmptyState, LoadingState, SectionPanel } from '@/components/ui'
+import {
+  Badge,
+  ConfirmButton,
+  EmptyState,
+  LoadingState,
+  SectionPanel,
+  TypeNameDeleteButton,
+} from '@/components/ui'
 import { useAuth } from '@/lib/auth-context'
 import type { OrganizationMember } from '@/lib/instance-api'
 import {
@@ -32,12 +39,26 @@ type RowProps = Readonly<{
 
 function MemberActionButton({ member, action, busy, onConfirm }: Omit<RowProps, 'isYou'>) {
   if (action === null) return null
-  const copy = action === 'leave' ? LEAVE_CONFIRM_COPY : removeConfirmCopy(member)
+  if (action === 'leave') {
+    return (
+      <ConfirmButton
+        label="Leave organization"
+        confirmLabel={LEAVE_CONFIRM_COPY.confirmLabel}
+        prompt={LEAVE_CONFIRM_COPY.prompt}
+        busy={busy}
+        onConfirm={() => onConfirm(member)}
+      />
+    )
+  }
+  // Typed by email: every member has one, and two people can share a display name.
   return (
-    <ConfirmButton
-      label={action === 'leave' ? 'Leave organization' : 'Remove'}
-      confirmLabel={copy.confirmLabel}
-      prompt={copy.prompt}
+    <TypeNameDeleteButton
+      label="Remove"
+      thing="Member"
+      verb="Remove"
+      name={member.email}
+      description={removeConfirmCopy(member).prompt}
+      undoable
       busy={busy}
       onConfirm={() => onConfirm(member)}
     />

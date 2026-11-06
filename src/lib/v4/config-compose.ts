@@ -31,6 +31,7 @@ import {
   unwrapComposeTag,
   type ComposeTagName,
 } from '@/lib/compose/tags'
+import { isImageBuildKind } from '@/lib/compose/service-kind'
 import { EXTENSION_KEY, LINUX_USER_PATH, linuxUserAccessPath } from './compose-syntax'
 
 type Mapping = Record<string, unknown>
@@ -182,8 +183,8 @@ function addMarkers(body: Mapping, path: ComposePath, merged: Markers): Mapping 
   }
   if (merged.sourceId !== undefined) {
     next = setAt(next, [EXTENSION, 'source', 'sourceId'], merged.sourceId)
-    if (merged.buildKind === 'railpack') {
-      next = setAt(next, [EXTENSION, 'source', 'buildKind'], 'railpack')
+    if (isImageBuildKind(merged.buildKind)) {
+      next = setAt(next, [EXTENSION, 'source', 'buildKind'], 'image')
     }
   }
   return next
@@ -201,7 +202,9 @@ function stripMarkers(body: Mapping, project: Markers): Mapping {
     const onlyMarkers = Object.keys(source).every((key) => SOURCE_MARKER_KEYS.has(key))
     const same =
       source.sourceId === project.sourceId &&
-      (source.buildKind === undefined || source.buildKind === project.buildKind)
+      (source.buildKind === undefined ||
+        source.buildKind === project.buildKind ||
+        (isImageBuildKind(source.buildKind) && isImageBuildKind(project.buildKind)))
     if (onlyMarkers && same) delete next.source
   }
   const kindOnly = Object.keys(next).length === 1 && 'serviceKind' in next

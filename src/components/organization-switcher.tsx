@@ -18,11 +18,13 @@ import {
 } from '@/components/header-menu-group-styles'
 import { HeaderMenuOverlay } from '@/components/header-menu-overlay'
 import { HeaderMenuTrigger } from '@/components/header-menu-trigger'
-import { breadcrumbStyles, CRUMB_BOX, CRUMB_PADDING } from '@/components/org/breadcrumb-styles'
+import { breadcrumbStyles, CRUMB_PADDING } from '@/components/org/breadcrumb-styles'
 import { BillingNavIcon, GearIcon, OrganizationIcon, PlusIcon } from '@/components/icons/nav-icons'
+import { ResourceIcon } from '@/components/icons/picked-icon'
 import { OrganizationSwitcherList } from '@/components/org/organization-switcher-list'
 import { dropdownLeft, headerLayoutFor } from '@/lib/header-layout'
 import { truncateDisplayName } from '@/lib/display-name'
+import { isEmojiIconAllowedOf } from '@/lib/icons'
 import {
   organizationLabel,
   shouldShowOrgSwitcherSearch,
@@ -38,7 +40,7 @@ import {
   replaceOrganization,
 } from '@/lib/org-navigation'
 import { useCreateOrganization, useOrganizationsQuery } from '@/lib/queries/auth'
-import { colors, spacing, webPointer } from '@/lib/theme'
+import { colors, webPointer } from '@/lib/theme'
 
 const isNative = Platform.OS !== 'web'
 /** Desktop dropdown width; phones use the full-width top panel instead. */
@@ -137,6 +139,18 @@ export function OrganizationSwitcherSegment({
     label = 'Loading…'
   }
   const triggerLabel = isNative ? truncateDisplayName(label) : label
+  const buildingGlyph = <OrganizationIcon size={HEADER_TRIGGER_ICON_SIZE} color={colors.textDim} />
+  const triggerGlyph = currentOrg ? (
+    <ResourceIcon
+      icon={currentOrg.icon}
+      isEmojiIconAllowed={isEmojiIconAllowedOf(currentOrg)}
+      size={HEADER_TRIGGER_ICON_SIZE}
+      color={colors.textDim}
+      fallback={buildingGlyph}
+    />
+  ) : (
+    buildingGlyph
+  )
   const showSearch = shouldShowOrgSwitcherSearch(organizations.length)
   const showViewAll = shouldShowViewAllOrganizations(organizations.length)
   const listMaxHeight = compactListMaxHeight(
@@ -229,7 +243,7 @@ export function OrganizationSwitcherSegment({
         <View style={headerMenuGroupStyles.menuDivider} />
 
         <MenuAction
-          label="New organization"
+          label="New Organization"
           accessibilityLabel="Create organization"
           onPress={openCreate}
           strong
@@ -237,7 +251,7 @@ export function OrganizationSwitcherSegment({
         />
         <MenuAction
           label="Settings"
-          accessibilityLabel="Organization settings"
+          accessibilityLabel="Organization Settings"
           onPress={openSettings}
           icon={<GearIcon size={14} color={colors.textDim} />}
         />
@@ -271,7 +285,7 @@ export function OrganizationSwitcherSegment({
           label={triggerLabel}
           accessibilityName={label}
           open={menuOpen}
-          showGlyph={header.showOrgGlyph}
+          glyph={header.showOrgGlyph ? triggerGlyph : null}
           variant={variant}
           current={current}
           onPress={() => setMenuOpen((wasOpen) => !wasOpen)}
@@ -298,17 +312,20 @@ export function OrganizationSwitcherSegment({
   )
 }
 
-/** The org crumb's icon, sized to its 13px text rather than the 16px menu icon. */
-const CRUMB_GLYPH_SIZE = 14
-const CRUMB_CHEVRON_SIZE = 10
 /** The menu trigger's height: the crumb keeps it as its anchor so the menu opens where it always has. */
 const MENU_ANCHOR_HEIGHT = 40
+/**
+ * The 12px chevron is drawn with about 2.5px of empty space on its right, so
+ * the crumb's right padding is that much smaller than the trail's: the gap
+ * before the first separator then matches the gap after it.
+ */
+const CRUMB_CHEVRON_INSET = 2
 
 function OrgTrigger({
   label,
   accessibilityName,
   open,
-  showGlyph,
+  glyph,
   variant,
   current,
   onPress,
@@ -316,7 +333,8 @@ function OrgTrigger({
   label: string
   accessibilityName: string
   open: boolean
-  showGlyph: boolean
+  /** The organization's icon (or the building); null hides it. */
+  glyph: ReactNode
   variant: OrganizationSwitcherVariant
   current: boolean
   onPress: () => void
@@ -334,24 +352,13 @@ function OrgTrigger({
       accessibilityState={{ expanded: open }}
       style={crumb ? styles.crumbTrigger : undefined}
     >
-      {showGlyph ? (
-        <View style={[headerMenuGroupStyles.triggerGlyph, crumb && styles.crumbGlyph]}>
-          <OrganizationIcon
-            size={crumb ? CRUMB_GLYPH_SIZE : HEADER_TRIGGER_ICON_SIZE}
-            color={colors.textDim}
-          />
-        </View>
-      ) : null}
+      {glyph ? <View style={headerMenuGroupStyles.triggerGlyph}>{glyph}</View> : null}
       <View style={headerMenuGroupStyles.triggerCopy}>
         <Text style={labelStyle} numberOfLines={1} ellipsizeMode="tail">
           {label}
         </Text>
       </View>
-      <HeaderChevron
-        size={crumb ? CRUMB_CHEVRON_SIZE : undefined}
-        color={open ? colors.text : colors.textDim}
-        open={open}
-      />
+      <HeaderChevron color={open ? colors.text : colors.textDim} open={open} />
     </HeaderMenuTrigger>
   )
 }
@@ -414,20 +421,12 @@ const styles = StyleSheet.create({
     minHeight: MENU_ANCHOR_HEIGHT,
     justifyContent: 'center',
   },
-  // The menu button as a crumb: the same box as a breadcrumb link, so the
-  // organization and the trail read as one bar.
+  // The menu button as a crumb keeps the header button's height, icon size
+  // and icon spacing (the same as the profile button beside it); only the
+  // right side is trimmed so the gap before the first separator matches the
+  // gaps along the trail.
   crumbTrigger: {
-    ...CRUMB_BOX,
-    // The menu trigger sets the sides one by one, which beats paddingHorizontal.
-    paddingLeft: CRUMB_PADDING,
-    paddingRight: CRUMB_PADDING,
-    minHeight: 0,
-    gap: spacing.xs,
-  },
-  crumbGlyph: {
-    width: CRUMB_GLYPH_SIZE,
-    height: CRUMB_GLYPH_SIZE,
-    marginRight: 0,
+    paddingRight: CRUMB_PADDING - CRUMB_CHEVRON_INSET,
   },
   crumbCurrentLabel: {
     color: colors.text,

@@ -18,6 +18,8 @@ import type {
   ServerTrafficMapPeer,
 } from '@/lib/instance-api'
 import { useCan } from '@/lib/query-client'
+import { useOrgServers } from '@/lib/queries/servers'
+import { resolveServerLabel } from '@/lib/resource-labels'
 import {
   useChooseServerTrafficNetwork,
   useDatacenters,
@@ -228,10 +230,10 @@ function PeerNetworkLine({ net }: Readonly<{ net: ServerTrafficMapNetwork }>) {
   )
 }
 
-function PeerRow({ peer }: Readonly<{ peer: ServerTrafficMapPeer }>) {
+function PeerRow({ peer, label }: Readonly<{ peer: ServerTrafficMapPeer; label: string }>) {
   return (
     <View style={styles.row}>
-      <Text style={panelStyles.detailTitle}>{peer.name ?? 'Unnamed server'}</Text>
+      <Text style={panelStyles.detailTitle}>{label}</Text>
       <Text style={panelStyles.muted}>
         {peerSummary(peer.chosenDatacenterId, peer.sharedNetworks)}
       </Text>
@@ -301,6 +303,8 @@ export function ServerTrafficCard({
   const canManage = useCan('organization', orgId, 'organization:manage')
   const datacenters = useDatacenters(orgId)
   const map = useServerTrafficMap(orgId, serverId)
+  // A server without a display name goes by its hostname, as everywhere else.
+  const servers = useOrgServers(orgId).data?.servers
   const networks = datacenters.data?.datacenters ?? []
   const peers = map.data?.peers ?? []
   const nics = map.data?.nics ?? []
@@ -344,7 +348,13 @@ export function ServerTrafficCard({
       ) : (
         <View style={styles.list}>
           {peers.map((peer) => (
-            <PeerRow key={peer.serverId} peer={peer} />
+            <PeerRow
+              key={peer.serverId}
+              peer={peer}
+              label={
+                peer.name?.trim() || resolveServerLabel(peer.serverId, servers) || peer.serverId
+              }
+            />
           ))}
         </View>
       )}

@@ -9,7 +9,7 @@
  *
  * "Still saves" is the constraint that shapes the writer. The instance refuses
  * an overlay service that defines neither `image` nor `build` unless the service
- * is host-native (`serviceKind: site | node`) or built by Railpack, so the
+ * is host-native (`serviceKind: site | node`) or built into an image, so the
  * overlay carries exactly those markers from the merged service and nothing else.
  * A plain image service cannot be overridden this way and is reported as such.
  *
@@ -58,7 +58,7 @@ export type EnvironmentSourceBinding = Readonly<{
 
 type ServiceView = Readonly<{
   kind: ComposeServiceKind | undefined
-  railpack: boolean
+  image: boolean
   branch: string | null
   deployOnPush: boolean
   sourceId: string | null
@@ -68,7 +68,7 @@ function serviceView(service: unknown): ServiceView {
   const extension = isMapping(service) ? readServiceTurbopanelExtension(service) : undefined
   return {
     kind: extension?.serviceKind,
-    railpack: extension?.source?.buildKind === 'railpack',
+    image: extension?.source?.buildKind === 'image',
     branch: normalizeBranch(extension?.source?.branch),
     deployOnPush: extension?.source?.deployOnPush !== false,
     sourceId: extension?.source?.sourceId ?? null,
@@ -99,7 +99,7 @@ function blockedReasonFor(merged: ServiceView, overlayService: OverlayService): 
   if (overlayService === 'tagged') {
     return 'This environment replaces or resets the service in its own compose. Edit it in the compose editor.'
   }
-  const carriesItsOwnKind = isHostNativeServiceKind(merged.kind) || merged.railpack
+  const carriesItsOwnKind = isHostNativeServiceKind(merged.kind) || merged.image
   if (carriesItsOwnKind || overlayDefinesImageOrBuild(overlayService)) return null
   return 'This service runs a plain image, so an environment cannot override only its branch. Change it in the compose editor.'
 }
@@ -230,7 +230,7 @@ export function patchEnvironmentSourceBinding(params: {
     source.sourceId = mergedView.sourceId
     // The markers that let an overlay service save without an image.
     if (isHostNativeServiceKind(mergedView.kind)) extension.serviceKind = mergedView.kind
-    else if (mergedView.railpack) source.buildKind = 'railpack'
+    else if (mergedView.image) source.buildKind = 'image'
     extension.source = source
     service[TURBOPANEL_SERVICE_EXTENSION_KEY] = extension
     services[serviceName] = service
