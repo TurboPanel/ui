@@ -47,9 +47,7 @@ export function passkeyCreatedLabel(passkey: Readonly<PasskeyRecord>): string {
   })
 }
 
-export function twoFactorStatusLabel(
-  status: Readonly<TwoFactorStatus> | undefined,
-): string {
+export function twoFactorStatusLabel(status: Readonly<TwoFactorStatus> | undefined): string {
   if (!status?.enabled) return 'Not enabled'
   return status.method === 'totp' ? 'Authenticator app' : 'Enabled'
 }
@@ -85,3 +83,7 @@ export function resolvePasskeyName(input: string, now?: Date): string {
   const trimmed = input.trim()
   return trimmed.length > 0 ? trimmed : defaultPasskeyName(now)
 }
+
+/** Shown instead of Remove on a passkey that approves control plane key changes. */
+export const ROTATION_PASSKEY_DELETE_HELP =
+  'Approves key changes. Unmark it on Control Plane Identity first.'

@@ -32,7 +32,11 @@ import {
   fetchPlatformCa,
   fetchInstanceIdentity,
   fetchSealedSecrets,
-  saveInstanceIdentityNext,
+  approveKeysetStatement,
+  fetchKeyRotation,
+  prepareKeysetStatement,
+  type KeysetApprovalPayload,
+  type PreparedKeysetStatement,
   fetchTrustedProxies,
   type InstanceHostnameInput,
   type InstanceHostnameRecord,
@@ -81,6 +85,9 @@ import {
   type IssuanceBaseline,
 } from '@/lib/issuance-settle'
 import { useApiMutation, queryKeys } from '@/lib/query-client'
+import { approvalFromAssertion, assertionRequestOptions, assertionSteps } from '@/lib/key-rotation'
+import { loginWithPasskey } from '@/lib/passkey-client'
+import { PASSKEY_WEB_ONLY_NOTE } from '@/lib/passkey-client-types'
 import {
   draftUsesLetsEncryptSource,
   type HostnameSourceDraft,
@@ -749,12 +756,58 @@ export function useInstanceIdentity(options?: Readonly<{ enabled?: boolean }>) {
   })
 }
 
-export function useSaveInstanceIdentityNext() {
+export function useKeyRotation(options?: Readonly<{ enabled?: boolean }>) {
+  return useQuery({
+    queryKey: queryKeys.admin.keyRotation,
+    queryFn: fetchKeyRotation,
+    enabled: options?.enabled ?? true,
+    staleTime: 60 * 1000,
+  })
+}
+
+/** Step one of a key change: the exact statement and the fingerprints to check. */
+export function usePrepareKeysetStatement() {
+  return useApiMutation({
+    mutationFn: prepareKeysetStatement,
+    fallbackError: 'Failed to prepare the change',
+  })
+}
+
+/**
+ * One ceremony after another (the browser shows one passkey prompt at a
+ * time), each answer turned into an approval.
+ */
+function collectKeysetApprovals(
+  prepared: PreparedKeysetStatement
+): Promise<KeysetApprovalPayload[]> {
+  return assertionSteps(prepared).reduce<Promise<KeysetApprovalPayload[]>>(
+    async (earlier, step) => {
+      const approvals = await earlier
+      const result = await loginWithPasskey(assertionRequestOptions(prepared, step))
+      if (!result.supported) throw new Error(PASSKEY_WEB_ONLY_NOTE)
+      return [...approvals, approvalFromAssertion(result.credential)]
+    },
+    Promise.resolve([])
+  )
+}
+
+/**
+ * Step two: run each passkey ceremony the statement needs (`assertionSteps`)
+ * in this browser, then send the approvals.
+ */
+export function useApproveKeysetStatement() {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: saveInstanceIdentityNext,
+    mutationFn: async (prepared: PreparedKeysetStatement) => {
+      const approvals = await collectKeysetApprovals(prepared)
+      return await approveKeysetStatement({ statement: prepared.statement, approvals })
+    },
+    fallbackError: 'The change was not approved',
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.admin.instanceIdentity })
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.admin.instanceIdentity }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.auth.twoFactor }),
+      ])
     },
   })
 }
