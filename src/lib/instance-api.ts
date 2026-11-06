@@ -435,6 +435,8 @@ export type PasskeyRecord = {
   createdAt: string
   deviceType: string | null
   isBackedUp: boolean
+  /** Marked as a rotation passkey: it cannot be removed until it is unmarked. */
+  isRotation: boolean
 }
 
 export type TwoFactorStatus = {
@@ -465,6 +467,7 @@ function toPasskeyRecords(value: unknown): PasskeyRecord[] {
       createdAt: typeof row.createdAt === 'string' ? row.createdAt : '',
       deviceType: typeof row.deviceType === 'string' ? row.deviceType : null,
       isBackedUp: row.isBackedUp === true,
+      isRotation: row.isRotation === true,
     }
   })
 }
@@ -6511,6 +6514,8 @@ export type InstanceIdentity = {
      * means the server pinned a key that is not this control plane's.
      */
     pinReport?: PinReport | null
+    /** Hash of the rotation passkeys the server pinned: "" none yet, null or absent when not reported. */
+    pinPasskeys?: string | null
   }[]
 }
 
@@ -6526,14 +6531,110 @@ export async function fetchInstanceIdentity(): Promise<InstanceIdentity> {
   return await apiFetch(`${ADMIN_API}/instance/identity`)
 }
 
-/** Superadmin, self-hosted. A stale session opens the re-authentication sheet. `null` clears the next key. */
-export async function saveInstanceIdentityNext(
-  fingerprint: string | null
-): Promise<{ ok: boolean; next: { fingerprint: string } | null }> {
-  return await apiFetch(`${ADMIN_API}/instance/identity/next`, {
-    method: 'PUT',
-    body: JSON.stringify({ fingerprint }),
+/** One superadmin sign-in passkey as the rotation read lists it (public values only). */
+export type RotationPasskey = {
+  passkeyId: string
+  name: string | null
+  ownerEmail: string
+  /** The signed-in superadmin's own passkey: only those can be marked here. */
+  isOwn: boolean
+  /** Created without sync (a security key); otherwise synced through an account. */
+  isDeviceBound: boolean
+  /** ES256 or EdDSA: the kinds servers can verify. */
+  canApprove: boolean
+  isMarked: boolean
+  /** The id servers pin; null for a kind that cannot approve. */
+  rotationId: string | null
+}
+
+export type KeysetStatementKind = 'rotate' | 'revoke' | 'passkeys'
+
+export type KeysetStatementSummary = {
+  keyset: number
+  kind: KeysetStatementKind
+  state: 'awaiting_key' | 'live'
+  oldFingerprint: string
+  newFingerprint: string
+  createdAt: string
+}
+
+/** `GET …/instance/identity/rotation` (superadmin). */
+export type KeyRotationState = {
+  ok: true
+  runtime: 'deno' | 'workers'
+  rpId: string
+  keyset: number
+  fingerprint: string
+  markedCount: number
+  canRotate: boolean
+  hasDeviceBound: boolean
+  passkeys: RotationPasskey[]
+  awaitingKey: { keyset: number; newFingerprint: string } | null
+  statements: KeysetStatementSummary[]
+}
+
+export async function fetchKeyRotation(): Promise<KeyRotationState> {
+  return await apiFetch(`${ADMIN_API}/instance/identity/rotation`)
+}
+
+/** What a key change asks for: rotate or revoke the key, or mark and unmark passkeys. */
+export type KeysetChangeRequest = {
+  kind: KeysetStatementKind
+  /** Sign-in passkey ids to mark (your own). */
+  mark?: string[]
+  /** Rotation ids to unmark. */
+  unmark?: string[]
+  /** High Availability: the public key the rotation command printed. */
+  newKey?: string
+}
+
+/** The exact statement to approve and what the browser must sign. */
+export type PreparedKeysetStatement = {
+  ok: true
+  statement: string
+  challenge: string
+  rpId: string
+  keyset: number
+  kind: KeysetStatementKind
+  oldFingerprint: string
+  newFingerprint: string
+  /** Credential ids of the marked passkeys (any one approves). */
+  approverCredentialIds: string[]
+  /** Credential ids of passkeys being marked: each must prove possession. */
+  possessionCredentialIds: string[]
+}
+
+/** Superadmin, step-up. Builds the statement bytes and the WebAuthn challenge. */
+export async function prepareKeysetStatement(
+  request: KeysetChangeRequest
+): Promise<PreparedKeysetStatement> {
+  return await apiFetch(`${ADMIN_API}/instance/identity/statements/prepare`, {
+    method: 'POST',
+    body: JSON.stringify(request),
   })
+}
+
+export type KeysetApprovalPayload = {
+  credentialId: string
+  authenticatorData: string
+  clientDataJSON: string
+  signature: string
+}
+
+/** Superadmin, step-up. Stores the statement once its approvals verify. */
+export async function approveKeysetStatement(body: {
+  statement: string
+  approvals: KeysetApprovalPayload[]
+}): Promise<{ ok: true; keyset: number; kind: KeysetStatementKind; state: string }> {
+  return await apiFetch(`${ADMIN_API}/instance/identity/statements`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+/** Download one statement (root on a cut-off server can hand-apply it). */
+export async function fetchKeysetStatement(keyset: number): Promise<unknown> {
+  return await apiFetch(`${ADMIN_API}/instance/identity/statements/${keyset}`)
 }
 
 /** One server's row in the sealed-secrets read (public values only). */

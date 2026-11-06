@@ -8,28 +8,32 @@ import { queryKeys } from '../query-keys'
 import {
   useClearServerSealingKey,
   useInstanceIdentity,
-  useSaveInstanceIdentityNext,
+  useApproveKeysetStatement,
   useSealedSecrets,
 } from './admin'
 
 const {
   fetchInstanceIdentity,
-  saveInstanceIdentityNext,
+  approveKeysetStatement,
   fetchSealedSecrets,
   clearServerSealingKey,
+  loginWithPasskey,
 } = vi.hoisted(() => ({
   fetchInstanceIdentity: vi.fn(),
-  saveInstanceIdentityNext: vi.fn(),
+  approveKeysetStatement: vi.fn(),
   fetchSealedSecrets: vi.fn(),
   clearServerSealingKey: vi.fn(),
+  loginWithPasskey: vi.fn(),
 }))
+
+vi.mock('../passkey-client', () => ({ loginWithPasskey }))
 
 vi.mock('../instance-api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../instance-api')>()
   return {
     ...actual,
     fetchInstanceIdentity,
-    saveInstanceIdentityNext,
+    approveKeysetStatement,
     fetchSealedSecrets,
     clearServerSealingKey,
   }
@@ -62,15 +66,55 @@ describe('control plane identity hooks', () => {
     expect(fetchInstanceIdentity).not.toHaveBeenCalled()
   })
 
-  it('saving the next key refreshes the identity', async () => {
-    saveInstanceIdentityNext.mockResolvedValue({ ok: true, next: null })
+  it('approving runs one passkey ceremony per step, then sends the approvals', async () => {
+    const assertion = (rawId: string) => ({
+      supported: true,
+      credential: {
+        rawId,
+        response: { authenticatorData: 'AD', clientDataJSON: 'CD', signature: 'SG' },
+      },
+    })
+    loginWithPasskey.mockResolvedValueOnce(assertion('approver'))
+    loginWithPasskey.mockResolvedValueOnce(assertion('new-one'))
+    approveKeysetStatement.mockResolvedValue({
+      ok: true,
+      keyset: 4,
+      kind: 'passkeys',
+      state: 'live',
+    })
     const { queryClient, wrapper } = setup()
     const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
-    const { result } = renderHook(() => useSaveInstanceIdentityNext(), { wrapper })
+    const { result } = renderHook(() => useApproveKeysetStatement(), { wrapper })
     await act(async () => {
-      await result.current.run(null)
+      await result.current.run({
+        ok: true,
+        statement: 'ST',
+        challenge: 'CH',
+        rpId: 'cp.example.com',
+        keyset: 4,
+        kind: 'passkeys',
+        oldFingerprint: 'O'.repeat(43),
+        newFingerprint: 'O'.repeat(43),
+        approverCredentialIds: ['approver'],
+        possessionCredentialIds: ['new-one'],
+      })
     })
-    expect(saveInstanceIdentityNext.mock.calls[0]?.[0]).toBeNull()
+    expect(loginWithPasskey.mock.calls.map(([options]) => options.allowCredentials)).toEqual([
+      [{ id: 'approver', type: 'public-key' }],
+      [{ id: 'new-one', type: 'public-key' }],
+    ])
+    expect(approveKeysetStatement.mock.calls[0]?.[0]).toEqual({
+      statement: 'ST',
+      approvals: [
+        {
+          credentialId: 'approver',
+          authenticatorData: 'AD',
+          clientDataJSON: 'CD',
+          signature: 'SG',
+        },
+        { credentialId: 'new-one', authenticatorData: 'AD', clientDataJSON: 'CD', signature: 'SG' },
+      ],
+    })
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.admin.instanceIdentity })
   })
 

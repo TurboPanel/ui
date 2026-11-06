@@ -63,7 +63,7 @@ describe('signIn', () => {
         email: 'ops@example.com',
         role: 'admin',
         is2faEnabled: false,
-      }),
+      })
     )
     const result = await signIn('ops@example.com', 'secret')
     expect(isTwoFactorChallenge(result)).toBe(false)
@@ -77,7 +77,7 @@ describe('signIn', () => {
 
   it('omits is2faEnabled when the control plane does not report it', async () => {
     fetchMock.mockResolvedValueOnce(
-      jsonResponse({ ok: true, userId: 'u1', email: null, role: null }),
+      jsonResponse({ ok: true, userId: 'u1', email: null, role: null })
     )
     const result = await signIn('ops@example.com', 'secret')
     expect('is2faEnabled' in result).toBe(false)
@@ -85,7 +85,7 @@ describe('signIn', () => {
 
   it('returns the challenge when a second factor is required', async () => {
     fetchMock.mockResolvedValueOnce(
-      jsonResponse({ ok: true, requires2fa: true, challenge: 'chal-1' }),
+      jsonResponse({ ok: true, requires2fa: true, challenge: 'chal-1' })
     )
     const result = await signIn('ops@example.com', 'secret')
     if (!isTwoFactorChallenge(result)) {
@@ -95,9 +95,7 @@ describe('signIn', () => {
   })
 
   it('does not treat a session payload as a challenge without a challenge id', async () => {
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({ ok: true, requires2fa: true, userId: 'u1' }),
-    )
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, requires2fa: true, userId: 'u1' }))
     const result = await signIn('ops@example.com', 'secret')
     expect(isTwoFactorChallenge(result)).toBe(false)
   })
@@ -114,7 +112,7 @@ describe('signUp', () => {
   it('includes invitationId when provided', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
     await expect(
-      signUp('new@example.com', 'secret', '11111111-1111-4111-8111-111111111111'),
+      signUp('new@example.com', 'secret', '11111111-1111-4111-8111-111111111111')
     ).resolves.toEqual({ ok: true })
     expect(bodyAt()).toEqual({
       email: 'new@example.com',
@@ -133,7 +131,7 @@ describe('signInTwoFactor', () => {
         email: 'ops@example.com',
         role: 'admin',
         is2faEnabled: true,
-      }),
+      })
     )
     await expect(signInTwoFactor('chal-1', '123456')).resolves.toEqual({
       userId: 'u1',
@@ -168,10 +166,11 @@ describe('fetchTwoFactorStatus', () => {
             createdAt: '2026-03-04T10:00:00.000Z',
             deviceType: 'multiDevice',
             isBackedUp: true,
+            isRotation: true,
           },
         ],
         linkedProviders: ['github', 'unknown'],
-      }),
+      })
     )
     await expect(fetchTwoFactorStatus()).resolves.toEqual({
       enabled: true,
@@ -184,6 +183,7 @@ describe('fetchTwoFactorStatus', () => {
           createdAt: '2026-03-04T10:00:00.000Z',
           deviceType: 'multiDevice',
           isBackedUp: true,
+          isRotation: true,
         },
       ],
       linkedProviders: ['github'],
@@ -197,7 +197,7 @@ describe('fetchTwoFactorStatus', () => {
         ok: true,
         enabled: true,
         passkeys: [{ id: 'pk-1', createdAt: '2026-03-04T10:00:00.000Z' }],
-      }),
+      })
     )
     await expect(fetchTwoFactorStatus()).resolves.toEqual({
       enabled: true,
@@ -210,6 +210,7 @@ describe('fetchTwoFactorStatus', () => {
           createdAt: '2026-03-04T10:00:00.000Z',
           deviceType: null,
           isBackedUp: false,
+          isRotation: false,
         },
       ],
       linkedProviders: [],
@@ -229,7 +230,7 @@ describe('fetchTwoFactorStatus', () => {
 
   it('survives a malformed passkey row rather than throwing', async () => {
     fetchMock.mockResolvedValueOnce(
-      jsonResponse({ ok: true, enabled: true, method: 'sms', passkeys: [null] }),
+      jsonResponse({ ok: true, enabled: true, method: 'sms', passkeys: [null] })
     )
     const status = await fetchTwoFactorStatus()
     expect(status.method).toBeNull()
@@ -240,6 +241,7 @@ describe('fetchTwoFactorStatus', () => {
         createdAt: '',
         deviceType: null,
         isBackedUp: false,
+        isRotation: false,
       },
     ])
   })
@@ -248,7 +250,7 @@ describe('fetchTwoFactorStatus', () => {
 describe('totp enrollment', () => {
   it('starts enrollment without a password', async () => {
     fetchMock.mockResolvedValueOnce(
-      jsonResponse({ ok: true, secret: 'JBSWY3DP', otpauthUri: 'otpauth://x' }),
+      jsonResponse({ ok: true, secret: 'JBSWY3DP', otpauthUri: 'otpauth://x' })
     )
     await expect(enrollTotp()).resolves.toEqual({
       ok: true,
@@ -266,9 +268,7 @@ describe('totp enrollment', () => {
   })
 
   it('verifies the first code and returns backup codes', async () => {
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({ ok: true, backupCodes: ['aaaa-bbbb'] }),
-    )
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, backupCodes: ['aaaa-bbbb'] }))
     const result = await verifyTotp('123456')
     expect(result.backupCodes).toEqual(['aaaa-bbbb'])
     expect(callAt().url).toContain('/api/client/v1/auth/2fa/totp/verify')
@@ -278,13 +278,9 @@ describe('totp enrollment', () => {
 
 describe('backup codes and disable', () => {
   it('regenerates backup codes', async () => {
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({ ok: true, backupCodes: ['cccc-dddd'] }),
-    )
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, backupCodes: ['cccc-dddd'] }))
     await regenerateBackupCodes('hunter2')
-    expect(callAt().url).toContain(
-      '/api/client/v1/auth/2fa/backup-codes/regenerate',
-    )
+    expect(callAt().url).toContain('/api/client/v1/auth/2fa/backup-codes/regenerate')
     expect(bodyAt()).toEqual({ password: 'hunter2' })
   })
 
@@ -311,32 +307,27 @@ describe('backup codes and disable', () => {
 describe('passkey registration', () => {
   it('requests ceremony options', async () => {
     fetchMock.mockResolvedValueOnce(
-      jsonResponse({ ok: true, challenge: 'chal-1', options: { rpId: 'x' } }),
+      jsonResponse({ ok: true, challenge: 'chal-1', options: { rpId: 'x' } })
     )
     const result = await passkeyRegisterOptions('hunter2')
     expect(result.challenge).toBe('chal-1')
-    expect(callAt().url).toContain(
-      '/api/client/v1/auth/passkeys/register/options',
-    )
+    expect(callAt().url).toContain('/api/client/v1/auth/passkeys/register/options')
     expect(bodyAt()).toEqual({ password: 'hunter2' })
   })
 
   it('requests ceremony options without a password', async () => {
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({ ok: true, challenge: 'chal-1', options: {} }),
-    )
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, challenge: 'chal-1', options: {} }))
     await passkeyRegisterOptions()
     expect(bodyAt()).toEqual({})
   })
 
   it('verifies the attestation with its name', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, id: 'pk-1' }))
-    await expect(
-      passkeyRegisterVerify('chal-1', 'Laptop', { id: 'cred' }),
-    ).resolves.toEqual({ ok: true, id: 'pk-1' })
-    expect(callAt().url).toContain(
-      '/api/client/v1/auth/passkeys/register/verify',
-    )
+    await expect(passkeyRegisterVerify('chal-1', 'Laptop', { id: 'cred' })).resolves.toEqual({
+      ok: true,
+      id: 'pk-1',
+    })
+    expect(callAt().url).toContain('/api/client/v1/auth/passkeys/register/verify')
     expect(bodyAt()).toEqual({
       challenge: 'chal-1',
       name: 'Laptop',
@@ -347,42 +338,32 @@ describe('passkey registration', () => {
 
 describe('oauth helpers', () => {
   it('oauthStartUrl builds a start path without fetching', () => {
-    expect(oauthStartUrl('github')).toContain(
-      '/api/client/v1/auth/oauth/github/start',
-    )
+    expect(oauthStartUrl('github')).toContain('/api/client/v1/auth/oauth/github/start')
     expect(oauthStartUrl('google', { link: true, redirectTo: '/account/security' })).toContain(
-      'link=1',
+      'link=1'
     )
     expect(
-      startQuery(oauthStartUrl('google', { redirectTo: '/account/security' })).get(
-        'redirectTo',
-      ),
+      startQuery(oauthStartUrl('google', { redirectTo: '/account/security' })).get('redirectTo')
     ).toBe('/account/security')
     expect(
-      startQuery(
-        oauthStartUrl('github', { redirectTo: '/sign-in?next=/welcome' }),
-      ).get('redirectTo'),
+      startQuery(oauthStartUrl('github', { redirectTo: '/sign-in?next=/welcome' })).get(
+        'redirectTo'
+      )
     ).toBe('/sign-in?next=/welcome')
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('signInOAuthRedirect keeps the current sign-in route and leftover query', () => {
     expect(signInOAuthRedirect('/sign-in')).toBe('/sign-in')
-    expect(signInOAuthRedirect('sign-in', { error: 'oauth_state_invalid' })).toBe(
-      '/sign-in',
-    )
-    expect(signInOAuthRedirect('/sign-in', { challenge: 'chal-1' })).toBe(
-      '/sign-in',
-    )
+    expect(signInOAuthRedirect('sign-in', { error: 'oauth_state_invalid' })).toBe('/sign-in')
+    expect(signInOAuthRedirect('/sign-in', { challenge: 'chal-1' })).toBe('/sign-in')
     const currentRedirect = signInOAuthRedirect('/sign-in', {
       next: '/welcome',
       error: 'oauth_exchange_failed',
     })
     expect(currentRedirect).toBe('/sign-in?next=%2Fwelcome')
     expect(
-      startQuery(oauthStartUrl('google', { redirectTo: currentRedirect })).get(
-        'redirectTo',
-      ),
+      startQuery(oauthStartUrl('google', { redirectTo: currentRedirect })).get('redirectTo')
     ).toBe(currentRedirect)
   })
 
@@ -413,9 +394,7 @@ describe('deletePasskey', () => {
 
 describe('passkey login', () => {
   it('starts the public ceremony', async () => {
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({ ok: true, challenge: 'chal-1', options: {} }),
-    )
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, challenge: 'chal-1', options: {} }))
     await passkeyLoginOptions()
     expect(callAt().url).toContain('/api/client/v1/auth/passkeys/login/options')
     expect(callAt().init.method).toBe('POST')
@@ -430,11 +409,9 @@ describe('passkey login', () => {
         email: 'ops@example.com',
         role: 'admin',
         is2faEnabled: true,
-      }),
+      })
     )
-    await expect(
-      passkeyLoginVerify('chal-1', { id: 'cred' }),
-    ).resolves.toEqual({
+    await expect(passkeyLoginVerify('chal-1', { id: 'cred' })).resolves.toEqual({
       userId: 'u1',
       email: 'ops@example.com',
       role: 'admin',
