@@ -31,7 +31,7 @@ export type RulesDraft = {
 export function addressHint(kind: NotificationChannelKind): string {
   switch (kind) {
     case 'email':
-      return 'Any address. Your own, or a member\'s account email, works at once; any other address gets a confirmation link and receives nothing until it is confirmed. Each event arrives as its own message.'
+      return "Any address. Your own, or a member's account email, works at once; any other address gets a confirmation link and receives nothing until it is confirmed. Each event arrives as its own message."
     case 'webhook':
       return 'An https URL that accepts a JSON POST. Add a signing secret to get an X-TurboPanel-Signature header.'
     case 'slack':
@@ -50,16 +50,38 @@ export function addressFieldLabel(kind: NotificationChannelKind): string {
   return 'URL'
 }
 
-/** The rules the matrix saves: `*` at a floor, or one row per chosen event. */
+/**
+ * The rules the matrix saves: `*` at a floor, or one row per chosen event at
+ * that same floor (the chosen floor is kept, never dropped to info).
+ */
 export function rulesFromDraft(draft: Readonly<RulesDraft>): NotificationRule[] {
   if (draft.everything) return [{ event: '*', minSeverity: draft.floor }]
-  return [...draft.events].sort((a, b) => a.localeCompare(b)).map((event) => ({ event, minSeverity: 'info' }))
+  return [...draft.events]
+    .sort((a, b) => a.localeCompare(b))
+    .map((event) => ({ event, minSeverity: draft.floor }))
 }
+
+const SEVERITY_RANK: Record<NotificationSeverity, number> = { info: 0, warning: 1, critical: 2 }
 
 export function draftFromRules(rules: readonly NotificationRule[]): RulesDraft {
   const all = rules.find((r) => r.event === '*')
   if (all) return { everything: true, floor: all.minSeverity, events: new Set() }
-  return { everything: false, floor: 'info', events: new Set(rules.map((r) => r.event)) }
+  // Chosen events share one floor in the editor; the lowest saved one is shown.
+  const floor = rules.reduce<NotificationSeverity | null>(
+    (low, r) =>
+      low === null || SEVERITY_RANK[r.minSeverity] < SEVERITY_RANK[low] ? r.minSeverity : low,
+    null
+  )
+  return { everything: false, floor: floor ?? 'info', events: new Set(rules.map((r) => r.event)) }
+}
+
+/**
+ * The events an organization channel's rules can choose: organization events
+ * only. Control plane events go to administrators, never to an
+ * organization's channels.
+ */
+export function organizationChannelEvents<T extends { scope: string }>(events: readonly T[]): T[] {
+  return events.filter((e) => e.scope === 'organization')
 }
 
 /** The delivery-timing controls on an email channel's row, as the person has set them so far. */
@@ -82,7 +104,7 @@ export const QUIET_TIME_OPTIONS: readonly { value: string; label: string }[] = A
     const hh = String(Math.floor(i / 2)).padStart(2, '0')
     const label = `${hh}:${i % 2 === 0 ? '00' : '30'}`
     return { value: label, label }
-  },
+  }
 )
 
 export const DIGEST_OPTIONS: readonly { value: TimingDraft['digest']; label: string }[] = [
@@ -92,7 +114,7 @@ export const DIGEST_OPTIONS: readonly { value: TimingDraft['digest']; label: str
 ]
 
 export function timingDraftFromChannel(
-  channel: Readonly<Pick<NotificationChannel, 'digestCadence' | 'quietHours' | 'timeZone'>>,
+  channel: Readonly<Pick<NotificationChannel, 'digestCadence' | 'quietHours' | 'timeZone'>>
 ): TimingDraft {
   return {
     digest: channel.digestCadence ?? 'off',
@@ -104,7 +126,9 @@ export function timingDraftFromChannel(
 }
 
 /** True when the quiet window is usable: both ends set and not the same time. */
-export function quietWindowValid(draft: Readonly<Pick<TimingDraft, 'quietOn' | 'start' | 'end'>>): boolean {
+export function quietWindowValid(
+  draft: Readonly<Pick<TimingDraft, 'quietOn' | 'start' | 'end'>>
+): boolean {
   return !draft.quietOn || draft.start !== draft.end
 }
 
@@ -114,12 +138,18 @@ export function quietWindowValid(draft: Readonly<Pick<TimingDraft, 'quietOn' | '
  */
 export function timingPatch(
   draft: Readonly<TimingDraft>,
-  channel: Readonly<Pick<NotificationChannel, 'digestCadence' | 'quietHours' | 'timeZone' | 'scope'>>,
+  channel: Readonly<
+    Pick<NotificationChannel, 'digestCadence' | 'quietHours' | 'timeZone' | 'scope'>
+  >
 ): NotificationChannelTiming {
   const saved = timingDraftFromChannel(channel)
   const patch: NotificationChannelTiming = {}
-  if (draft.digest !== saved.digest) patch.digestCadence = draft.digest === 'off' ? null : draft.digest
-  if (draft.quietOn !== saved.quietOn || (draft.quietOn && (draft.start !== saved.start || draft.end !== saved.end))) {
+  if (draft.digest !== saved.digest)
+    patch.digestCadence = draft.digest === 'off' ? null : draft.digest
+  if (
+    draft.quietOn !== saved.quietOn ||
+    (draft.quietOn && (draft.start !== saved.start || draft.end !== saved.end))
+  ) {
     patch.quietHours = draft.quietOn ? { start: draft.start, end: draft.end } : null
   }
   if (channel.scope === 'user' && draft.timeZone !== saved.timeZone) patch.timeZone = draft.timeZone
@@ -133,10 +163,11 @@ export function channelHasTiming(channel: { kind: string }): boolean {
 
 /** One line under the channel name: "Hourly digest · quiet 22:00–07:00 (America/New_York)". */
 export function timingSummary(
-  channel: Readonly<Pick<NotificationChannel, 'digestCadence' | 'quietHours' | 'timeZone'>>,
+  channel: Readonly<Pick<NotificationChannel, 'digestCadence' | 'quietHours' | 'timeZone'>>
 ): string | null {
   const parts: string[] = []
-  if (channel.digestCadence) parts.push(channel.digestCadence === 'hourly' ? 'Hourly digest' : 'Daily digest')
+  if (channel.digestCadence)
+    parts.push(channel.digestCadence === 'hourly' ? 'Hourly digest' : 'Daily digest')
   if (channel.quietHours) parts.push(`quiet ${channel.quietHours.start}–${channel.quietHours.end}`)
   if (parts.length === 0) return null
   return `${parts.join(' · ')} (${channel.timeZone})`
@@ -147,11 +178,15 @@ const CHANNEL_ERROR_COPY: Record<string, string> = {
   digest_cadence_invalid: 'Choose every event, an hourly digest or a daily digest.',
   quiet_hours_invalid: 'Quiet hours need a start and an end, and they cannot be the same time.',
   time_zone_invalid: 'That is not a time zone the app knows. Pick one from the list.',
-  time_zone_user_channels_only: 'A time zone is set on your own profile, from one of your personal channels. An organization channel uses the organization time zone.',
-  address_rejected: 'That address is refused: it must be https, carry no credentials, and name a public host (a LAN address is allowed on a self-hosted control plane).',
+  time_zone_user_channels_only:
+    'A time zone is set on your own profile, from one of your personal channels. An organization channel uses the organization time zone.',
+  address_rejected:
+    'That address is refused: it must be https, carry no credentials, and name a public host (a LAN address is allowed on a self-hosted control plane).',
   address_invalid: 'That address does not look right for this kind of channel.',
-  email_unavailable: 'This control plane cannot send email right now, so a new address cannot be confirmed. Ask an administrator to set up email.',
-  email_send_failed: 'The confirmation email could not be sent, so the channel was not added. Try again.',
+  email_unavailable:
+    'This control plane cannot send email right now, so a new address cannot be confirmed. Ask an administrator to set up email.',
+  email_send_failed:
+    'The confirmation email could not be sent, so the channel was not added. Try again.',
   too_soon: 'A confirmation link was sent a moment ago. Wait a minute before sending another.',
   already_verified: 'This address is already confirmed.',
   address_required: 'Enter an address.',
@@ -199,7 +234,7 @@ export function channelVerifiedBanner(
     return {
       tone: 'info',
       title: 'Address confirmed',
-      body: 'That email channel is active and will receive the events its rules choose.',
+      body: 'That email channel is active and will receive what your notification settings send it.',
     }
   }
   if (value === '0') {

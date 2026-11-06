@@ -13,19 +13,23 @@ vi.mock('react-native', () => ({
 }))
 vi.mock('expo-router', () => ({ useRouter: () => ({ push: vi.fn() }) }))
 vi.mock('@/components/header-menu-group-styles', () => ({ headerMenuGroupStyles: {} }))
-vi.mock('@/components/ui', () => ({ StatusDot: 'StatusDot' }))
+vi.mock('@/components/ui', () => ({ StatusDot: 'StatusDot', TextLink: 'TextLink' }))
 vi.mock('@/lib/theme', () => ({
   colors: new Proxy({}, { get: () => '#000' }),
   spacing: new Proxy({}, { get: () => 0 }),
   webPointer: {},
 }))
+vi.mock('@/lib/queries/notification-preferences', () => ({
+  useNotificationPreferencesQuery: vi.fn(),
+}))
+vi.mock('@/lib/org-context', () => ({ getActiveOrganizationId: () => null }))
 vi.mock('@/lib/queries/notifications', () => ({
   useDismissNotification: vi.fn(),
   useMarkNotificationsRead: vi.fn(),
   useNotificationsQuery: vi.fn(),
 }))
 
-const { notificationHref } = await import('@/components/notifications-panel-body')
+const { emptyInboxCopy, notificationHref } = await import('@/components/notifications-panel-body')
 
 function row(patch: Partial<NotificationRecord>): NotificationRecord {
   return {
@@ -56,5 +60,19 @@ describe('the bell inbox: where a row leads', () => {
     expect(
       notificationHref(row({ organizationId: null, targetType: null, targetId: null }))
     ).toBeNull()
+  })
+
+  it('a row whose target was deleted has no link, not even the overview', () => {
+    expect(notificationHref(row({ targetDeleted: true }))).toBeNull()
+    expect(
+      notificationHref(row({ targetType: null, targetId: null, targetDeleted: true }))
+    ).toBeNull()
+  })
+})
+
+describe('the empty bell', () => {
+  it('says nothing is turned on when that is why it is empty', () => {
+    expect(emptyInboxCopy(true).title).toBe('Nothing is turned on')
+    expect(emptyInboxCopy(false).title).toBe('No notifications yet')
   })
 })

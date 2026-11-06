@@ -64,6 +64,14 @@ export const queryKeys = {
     unread: ['notifications', 'unread'] as const,
     events: ['notifications', 'events'] as const,
     channels: (scope: 'user' | 'organization') => ['notifications', 'channels', scope] as const,
+    /** Every preference read; a write invalidates all of it (a global row moves every organization). */
+    preferencesAll: ['notifications', 'preferences'] as const,
+    /** One organization's rows plus the global ones; `null` = the global rows only. */
+    preferences: (organizationId: string | null) =>
+      ['notifications', 'preferences', organizationId ?? 'global'] as const,
+    /** Effective levels at one scope below an organization (project, environment, server). */
+    effective: (organizationId: string, scopeKey: string) =>
+      ['notifications', 'preferences', organizationId, 'effective', scopeKey] as const,
   },
   auth: {
     all: ['auth'] as const,
