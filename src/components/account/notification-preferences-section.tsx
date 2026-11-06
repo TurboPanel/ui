@@ -34,6 +34,7 @@ import {
   LEVEL_OPTIONS,
   nothingTurnedOn,
   overrideScopes,
+  overrideSummary,
   preferenceErrorCopy,
   PREFERENCE_KIND_LABEL,
   PRESET_OPTIONS,
@@ -263,16 +264,7 @@ function ScopeOverrideCard({
   const remove = useDeleteNotificationPreference()
   const effective = useEffectiveNotificationLevels(target.scope, { enabled: open })
   const own = rows.filter((r) => rowIsAtScope(r, target.scope))
-  const summary =
-    own.length === 0
-      ? 'Inherits the organization levels'
-      : own
-          .filter((r) => r.kind !== null && r.categoryCode === null && r.topicCode === null)
-          .map(
-            (r) =>
-              `${PREFERENCE_KIND_LABEL[r.kind as SettableNotificationKind] ?? r.kind}: ${LEVEL_LABEL[r.level]}`
-          )
-          .join(' · ') || `${own.length} setting${own.length === 1 ? '' : 's'}`
+  const summary = overrideSummary(own)
   return (
     <View style={styles.card}>
       <View style={styles.kindHead}>
@@ -571,6 +563,9 @@ export function NotificationOverridesList() {
     channels: new Map((globalQuery.data?.channels ?? []).map((c) => [c.id, c.label])),
   }
   const loading = globalQuery.isLoading || orgQueries.some((q) => q.isLoading)
+  const openOrganization = (organizationId: string | null) => {
+    if (organizationId) router.push(orgSettingsTabHref(organizationId, 'notifications') as Href)
+  }
 
   let body: ReactNode
   if (loading) body = <LoadingState label="Loading your overrides…" />
@@ -586,11 +581,7 @@ export function NotificationOverridesList() {
               label="Open Settings"
               size="sm"
               accessibilityLabel={`Open the notification settings of ${group.title}`}
-              onPress={() =>
-                router.push(
-                  orgSettingsTabHref(group.organizationId as string, 'notifications') as Href
-                )
-              }
+              onPress={() => openOrganization(group.organizationId)}
             />
           ) : null}
         </View>

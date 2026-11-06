@@ -234,6 +234,43 @@ function LastDelivery({
   )
 }
 
+/** A channel's name, badges, address, timing summary and last delivery. */
+function ChannelHead({ channel }: Readonly<{ channel: NotificationChannel }>) {
+  const primary = channel.isPrimary === true
+  const disabled = channel.disabledAt !== null
+  const awaitingConfirmation = channelAwaitsConfirmation(channel)
+  const summary = channelHasTiming(channel) ? timingSummary(channel) : null
+  const lastDelivery = channel.recentDeliveries[0]
+  return (
+    <View style={styles.channelHead}>
+      <View style={styles.channelTitle}>
+        <Text style={styles.channelLabel}>{channel.label}</Text>
+        {primary ? <Badge tone="info" label="Account Email" /> : null}
+        <Badge
+          tone={disabled ? 'muted' : 'ok'}
+          label={KIND_LABEL[channel.kind as NotificationChannelKind] ?? channel.kind}
+        />
+        {channel.signed ? <Badge tone="info" label="Signed" /> : null}
+        {disabled ? <Badge tone="pending" label="Paused" /> : null}
+        {awaitingConfirmation ? <Badge tone="pending" label="Awaiting confirmation" /> : null}
+      </View>
+      <Text style={panelStyles.muted}>{channel.address}</Text>
+      {summary ? <Text style={panelStyles.muted}>{summary}</Text> : null}
+      {awaitingConfirmation ? (
+        <Text style={panelStyles.muted}>
+          Nothing is sent to this address until the confirmation link in the email is opened.
+        </Text>
+      ) : null}
+      {primary ? (
+        <Text style={panelStyles.muted}>
+          Built in: it follows your sign-in address and cannot be removed.
+        </Text>
+      ) : null}
+      <LastDelivery delivery={lastDelivery} />
+    </View>
+  )
+}
+
 function ChannelRow({
   channel,
   events,
@@ -260,9 +297,7 @@ function ChannelRow({
   const [message, setMessage] = useState<string | null>(null)
   const [sentNote, setSentNote] = useState<string | null>(null)
   const disabled = channel.disabledAt !== null
-  const lastDelivery = channel.recentDeliveries[0]
   const hasTiming = channelHasTiming(channel)
-  const summary = hasTiming ? timingSummary(channel) : null
 
   const onTiming = useCallback((next: TimingDraft) => {
     setTiming(next)
@@ -301,32 +336,7 @@ function ChannelRow({
 
   return (
     <View style={styles.channel}>
-      <View style={styles.channelHead}>
-        <View style={styles.channelTitle}>
-          <Text style={styles.channelLabel}>{channel.label}</Text>
-          {primary ? <Badge tone="info" label="Account Email" /> : null}
-          <Badge
-            tone={disabled ? 'muted' : 'ok'}
-            label={KIND_LABEL[channel.kind as NotificationChannelKind] ?? channel.kind}
-          />
-          {channel.signed ? <Badge tone="info" label="Signed" /> : null}
-          {disabled ? <Badge tone="pending" label="Paused" /> : null}
-          {awaitingConfirmation ? <Badge tone="pending" label="Awaiting confirmation" /> : null}
-        </View>
-        <Text style={panelStyles.muted}>{channel.address}</Text>
-        {summary ? <Text style={panelStyles.muted}>{summary}</Text> : null}
-        {awaitingConfirmation ? (
-          <Text style={panelStyles.muted}>
-            Nothing is sent to this address until the confirmation link in the email is opened.
-          </Text>
-        ) : null}
-        {primary ? (
-          <Text style={panelStyles.muted}>
-            Built in: it follows your sign-in address and cannot be removed.
-          </Text>
-        ) : null}
-        <LastDelivery delivery={lastDelivery} />
-      </View>
+      <ChannelHead channel={channel} />
       {hasRules ? (
         <RulesEditor events={events} draft={draft} onChange={onDraft} disabled={update.isPending} />
       ) : null}

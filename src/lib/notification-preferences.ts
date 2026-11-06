@@ -249,6 +249,20 @@ export function overrideScopes(
   return [...seen.values()].sort((a, b) => SCOPE_DEPTH[a.source] - SCOPE_DEPTH[b.source])
 }
 
+/** One line for a closed override card: "Bell: All · Email: Off", or a count, or that it inherits. */
+export function overrideSummary(own: readonly NotificationPreferenceRow[]): string {
+  if (own.length === 0) return 'Inherits the organization levels'
+  const levels = own
+    .filter(
+      (r) => r.kind !== null && r.kind !== 'push' && r.categoryCode === null && r.topicCode === null
+    )
+    .map(
+      (r) => `${PREFERENCE_KIND_LABEL[r.kind as SettableNotificationKind]}: ${LEVEL_LABEL[r.level]}`
+    )
+  if (levels.length > 0) return levels.join(' · ')
+  return own.length === 1 ? '1 setting' : `${own.length} settings`
+}
+
 /** Names the override list can put beside a scope word; missing names fall back to the word. */
 export type PreferenceNames = {
   organizations?: ReadonlyMap<string, string>
@@ -318,7 +332,11 @@ export function groupOverrides(
     groups.set(row.organizationId, list)
   }
   const depth = (r: NotificationPreferenceRow) => SCOPE_DEPTH[scopeSource(rowScope(r))]
-  const subjectRank = (r: NotificationPreferenceRow) => (r.topicCode ? 2 : r.categoryCode ? 1 : 0)
+  const subjectRank = (r: NotificationPreferenceRow) => {
+    if (r.topicCode) return 2
+    if (r.categoryCode) return 1
+    return 0
+  }
   const out: OverrideGroup[] = []
   for (const [organizationId, rows] of groups) {
     rows.sort(
@@ -360,7 +378,9 @@ const PREFERENCE_ERROR_COPY: Record<string, string> = {
 
 /** A preference write's refusal in words. */
 export function preferenceErrorCopy(err: unknown): string {
-  const message = err instanceof Error ? err.message : typeof err === 'string' ? err : ''
+  let message = ''
+  if (err instanceof Error) message = err.message
+  else if (typeof err === 'string') message = err
   const code = /HTTP \d+:\s*([a-z_]+)/i.exec(message)?.[1]
   if (code && PREFERENCE_ERROR_COPY[code]) return PREFERENCE_ERROR_COPY[code]
   if (/HTTP 404/.test(message))

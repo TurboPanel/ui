@@ -10,6 +10,7 @@ import {
   kindRowAt,
   nothingTurnedOn,
   overrideScopes,
+  overrideSummary,
   preferenceErrorCopy,
   rowScopeWords,
   rowSubjectWords,
@@ -164,6 +165,18 @@ describe('override list', () => {
     expect(groups.map((g) => g.title)).toEqual(['Global', 'Alpha', 'Zeta'])
     expect(groups[0].rows).toEqual([global])
     expect(groups[2].rows).toEqual([orgWide, inOrg])
+  })
+
+  it('sums up a closed override card', () => {
+    expect(overrideSummary([])).toBe('Inherits the organization levels')
+    expect(
+      overrideSummary([
+        row({ organizationId: ORG, projectId: PROJECT, kind: 'inbox', level: 'all' }),
+        row({ organizationId: ORG, projectId: PROJECT, kind: 'email', level: 'none' }),
+      ])
+    ).toBe('Bell: All · Email: Off')
+    expect(overrideSummary([row({ categoryCode: 'servers' })])).toBe('1 setting')
+    expect(overrideSummary([row({ topicCode: 'a' }), row({ topicCode: 'b' })])).toBe('2 settings')
   })
 
   it('puts a row into words', () => {
