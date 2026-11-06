@@ -86,10 +86,7 @@ function NotificationInboxRows({
     // Two siblings, not a button inside a button: the row opens the
     // target, the × beside it dismisses.
     return (
-      <View
-        key={row.id}
-        style={[styles.row, row.readAt === null && styles.rowUnread]}
-      >
+      <View key={row.id} style={[styles.row, row.readAt === null && styles.rowUnread]}>
         <Pressable
           style={({ pressed }) => [
             styles.rowMain,
@@ -142,9 +139,7 @@ function NotificationInboxRows({
  * sheet. Rows come from `GET /notifications`; a row that names a server
  * opens that server.
  */
-export function NotificationsPanelBody({
-  onNavigate,
-}: Readonly<{ onNavigate?: () => void }> = {}) {
+export function NotificationsPanelBody({ onNavigate }: Readonly<{ onNavigate?: () => void }> = {}) {
   const router = useRouter()
   const query = useNotificationsQuery({ limit: 20 })
   const markRead = useMarkNotificationsRead()

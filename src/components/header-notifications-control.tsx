@@ -1,10 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { StyleSheet, View, useWindowDimensions } from 'react-native'
 import { GlassSurface } from '@/components/glass/glass-surface'
-import {
-  HEADER_MENU_WIDTH,
-  headerMenuGroupStyles,
-} from '@/components/header-menu-group-styles'
+import { HEADER_MENU_WIDTH, headerMenuGroupStyles } from '@/components/header-menu-group-styles'
 import { HeaderMenuOverlay } from '@/components/header-menu-overlay'
 import { HeaderMenuTrigger } from '@/components/header-menu-trigger'
 import { NotificationsBellIcon } from '@/components/icons/nav-icons'

@@ -83,10 +83,13 @@ export function useNotificationEventsQuery(options?: Readonly<{ enabled?: boolea
  */
 export function useNotificationChannelsQuery(
   scope: 'user' | 'organization',
-  options?: Readonly<{ enabled?: boolean; organizationId?: string | null }>,
+  options?: Readonly<{ enabled?: boolean; organizationId?: string | null }>
 ) {
   return useQuery({
-    queryKey: [...queryKeys.notifications.channels(scope), options?.organizationId ?? null] as const,
+    queryKey: [
+      ...queryKeys.notifications.channels(scope),
+      options?.organizationId ?? null,
+    ] as const,
     // Organization channels are manager-only: a 403 is an answer ("not yours
     // to manage", data `null`), never a lost session for the global handler.
     queryFn: async (): Promise<NotificationChannel[] | null> => {
@@ -102,11 +105,17 @@ export function useNotificationChannelsQuery(
   })
 }
 
-async function invalidateChannels(queryClient: QueryClient, scope: 'user' | 'organization'): Promise<void> {
+async function invalidateChannels(
+  queryClient: QueryClient,
+  scope: 'user' | 'organization'
+): Promise<void> {
   await queryClient.invalidateQueries({ queryKey: queryKeys.notifications.channels(scope) })
 }
 
-export function useCreateNotificationChannel(scope: 'user' | 'organization', organizationId?: string | null) {
+export function useCreateNotificationChannel(
+  scope: 'user' | 'organization',
+  organizationId?: string | null
+) {
   const queryClient = useQueryClient()
   return useApiMutation({
     mutationFn: (body: Omit<CreateNotificationChannelBody, 'scope'>) =>
@@ -117,21 +126,31 @@ export function useCreateNotificationChannel(scope: 'user' | 'organization', org
   })
 }
 
-export function useUpdateNotificationChannel(scope: 'user' | 'organization', organizationId?: string | null) {
+export function useUpdateNotificationChannel(
+  scope: 'user' | 'organization',
+  organizationId?: string | null
+) {
   const queryClient = useQueryClient()
   return useApiMutation({
     mutationFn: ({
       id,
       ...patch
-    }: { id: string; label?: string; disabled?: boolean; rules?: NotificationRule[] } & NotificationChannelTiming) =>
-      updateNotificationChannel(id, patch, organizationId),
+    }: {
+      id: string
+      label?: string
+      disabled?: boolean
+      rules?: NotificationRule[]
+    } & NotificationChannelTiming) => updateNotificationChannel(id, patch, organizationId),
     onSuccess: async () => {
       await invalidateChannels(queryClient, scope)
     },
   })
 }
 
-export function useDeleteNotificationChannel(scope: 'user' | 'organization', organizationId?: string | null) {
+export function useDeleteNotificationChannel(
+  scope: 'user' | 'organization',
+  organizationId?: string | null
+) {
   const queryClient = useQueryClient()
   return useApiMutation({
     mutationFn: (id: string) => deleteNotificationChannel(id, organizationId),

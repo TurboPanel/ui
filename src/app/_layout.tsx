@@ -2,13 +2,7 @@ import Constants from 'expo-constants'
 import { Redirect, Stack, useLocalSearchParams, useSegments } from 'expo-router'
 import { useFonts } from 'expo-font'
 import { useEffect } from 'react'
-import {
-  ActivityIndicator,
-  AppState,
-  Platform,
-  StyleSheet,
-  View,
-} from 'react-native'
+import { ActivityIndicator, AppState, Platform, StyleSheet, View } from 'react-native'
 import type { AppStateStatus } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { focusManager } from '@tanstack/react-query'
@@ -75,20 +69,13 @@ export default function RootLayout() {
   )
 }
 
-function firstSearchParam(
-  value: string | string[] | undefined,
-): string | undefined {
+function firstSearchParam(value: string | string[] | undefined): string | undefined {
   if (Array.isArray(value)) return value[0]
   return value
 }
 
 function AuthGuard() {
-  const {
-    session,
-    needsInstall,
-    isLoading,
-    needsControlPlane,
-  } = useAuth()
+  const { session, needsInstall, isLoading, needsControlPlane } = useAuth()
   const segments = useSegments()
   const params = useLocalSearchParams<{ redirectTo?: string | string[] }>()
   const topSegment = (segments as readonly string[])[0]
@@ -97,10 +84,7 @@ function AuthGuard() {
   if (isLoading) {
     return (
       <View style={styles.loading}>
-        <ActivityIndicator
-          size="large"
-          color={authSpinnerColor()}
-        />
+        <ActivityIndicator size="large" color={authSpinnerColor()} />
       </View>
     )
   }
