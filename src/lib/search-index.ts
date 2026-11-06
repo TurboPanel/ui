@@ -226,9 +226,9 @@ function generalActions(orgId: string, data: SearchData): SearchItem[] {
       ? [
           action(
             'update-panel',
-            'Pause or Resume Updates',
+            'Pause All Updates',
             adminAreaHref('updates'),
-            'update upgrade version release automatic'
+            'update upgrade version release automatic pause resume'
           ),
         ]
       : []),
