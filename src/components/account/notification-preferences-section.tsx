@@ -314,8 +314,11 @@ function ScopeOverrides({
 
   const targets = useMemo(() => {
     const map = new Map<string, OverrideTarget>()
-    const projectNames = new Map(
-      (projects.data?.projects ?? []).map((p) => [p.id, p.name ?? 'Untitled project'])
+    const projectNames = new Map<string, string>(
+      (projects.data?.projects ?? []).map((p): [string, string] => [
+        p.id,
+        p.name ?? 'Untitled project',
+      ])
     )
     for (const p of projects.data?.projects ?? []) {
       const scope = { organizationId, projectId: p.id }
