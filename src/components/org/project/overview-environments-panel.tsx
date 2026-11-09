@@ -839,7 +839,8 @@ function useDestroyDataState(
     deleteVolumes: wanted,
     typedName,
     expectedName,
-    volumesLoaded: query.isSuccess,
+    // Never confirm against a list that is still being refreshed.
+    volumesLoaded: query.isSuccess && !query.isFetching,
     outdatedServerCount: query.data?.outdatedServers.length ?? 0,
   })
   return {
