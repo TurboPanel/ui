@@ -84,7 +84,7 @@ describe('next check and the confirmations', () => {
 
   it('says under the switch what its state means', () => {
     expect(pauseSwitchNote(true)).toBe(
-      'No update starts. Turning this off starts nothing right away; the next check does.'
+      'No update starts. Turning this off starts nothing right away; the next check or Update Now does.'
     )
     expect(pauseSwitchNote(false)).toBe('Updates start on their own.')
   })
@@ -118,7 +118,10 @@ describe('what waits', () => {
   })
 
   it('says a server updates on its own', () => {
-    expect(SERVER_UPDATES_AUTOMATIC_COPY).toMatch(/^Updates automatically\./)
+    expect(SERVER_UPDATES_AUTOMATIC_COPY).toBe(
+      'Updates automatically. An administrator can use Pause All Updates in Admin > Updates.'
+    )
+    expect(SERVER_UPDATES_AUTOMATIC_COPY).not.toMatch(/instance/i)
   })
 })
 

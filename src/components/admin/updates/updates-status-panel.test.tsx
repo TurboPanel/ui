@@ -165,7 +165,7 @@ describe('Pause All Updates switch', () => {
     expect(pauseSwitch().getAttribute('aria-checked')).toBe('true')
     expect(
       screen.getByText(
-        'No update starts. Turning this off starts nothing right away; the next check does.'
+        'No update starts. Turning this off starts nothing right away; the next check or Update Now does.'
       )
     ).toBeTruthy()
     await act(async () => {
@@ -175,6 +175,32 @@ describe('Pause All Updates switch', () => {
     expect(resumeRun).toHaveBeenCalledTimes(1)
     expect(pauseRun).not.toHaveBeenCalled()
     expect(screen.queryByText(PAUSE_DIALOG_LINE)).toBeNull()
+  })
+
+  it('sends resume once when the switch is tapped twice before it shows busy', async () => {
+    let finish: (value: unknown) => void = () => undefined
+    resumeRun.mockReturnValue(
+      new Promise((resolve) => {
+        finish = resolve
+      })
+    )
+    renderPanel({ ...DATA, updatesPaused: true })
+    await act(async () => {
+      fireEvent.click(pauseSwitch())
+      fireEvent.click(pauseSwitch())
+      await Promise.resolve()
+    })
+    expect(resumeRun).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      finish({ ok: true, value: { updatesPaused: false } })
+      await Promise.resolve()
+    })
+    // Once the first request has settled, the switch works again.
+    await act(async () => {
+      fireEvent.click(pauseSwitch())
+      await Promise.resolve()
+    })
+    expect(resumeRun).toHaveBeenCalledTimes(2)
   })
 })
 
