@@ -204,7 +204,7 @@ export const PAUSE_UPDATES_EXPLAINED: readonly string[] = [
 /** The note under the Pause All Updates switch: what its state means. */
 export function pauseSwitchNote(paused: boolean): string {
   return paused
-    ? 'No update starts. Turning this off starts nothing right away; the next check does.'
+    ? 'No update starts. Turning this off starts nothing right away; the next check or Update Now does.'
     : 'Updates start on their own.'
 }
 
@@ -240,4 +240,4 @@ export function isUpdateWaiting(
 
 /** Plain status of updates on a server page: nobody starts a server update by hand. */
 export const SERVER_UPDATES_AUTOMATIC_COPY =
-  'Updates automatically. An instance administrator can use Pause All Updates in Admin > Updates.'
+  'Updates automatically. An administrator can use Pause All Updates in Admin > Updates.'
