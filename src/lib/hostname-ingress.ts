@@ -55,7 +55,7 @@ export function applyConfirm(
     return {
       title: 'Keep a Platform CA Address',
       body: PLATFORM_CA_CONFIRM,
-      confirmLabel: 'Apply anyway',
+      confirmLabel: 'Apply Anyway',
     }
   }
   return null
