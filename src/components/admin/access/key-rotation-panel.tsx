@@ -344,7 +344,7 @@ export function KeyRotationPanel({
       {state ? (
         <View style={styles.details}>
           <Text style={panelStyles.muted}>{ROTATION_PASSKEYS_HELP}</Text>
-          <FingerprintLine label="Approves on" value={state.rpId} copy={false} />
+          <FingerprintLine label="Approves On" value={state.rpId} copy={false} />
           <PasskeyWarnings
             showNoSecurityKey={state.markedCount > 0 && !state.hasDeviceBound}
             notRotatable={notRotatable}

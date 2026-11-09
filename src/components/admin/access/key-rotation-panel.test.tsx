@@ -114,7 +114,7 @@ describe('KeyRotationPanel', () => {
   it('shows no waiting change and no cancel when nothing waits', () => {
     show({})
     expect(screen.queryByText('Cancel Waiting Change')).toBeNull()
-    expect(screen.getByText('Approves on: cp.example.com')).toBeTruthy()
+    expect(screen.getByText('Approves On: cp.example.com')).toBeTruthy()
   })
 
   it('a waiting change can be cancelled, with a plain warning first', async () => {
