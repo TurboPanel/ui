@@ -201,7 +201,12 @@ function TlsLetsEncryptPanel({
   return (
     <SectionPanel
       title="Let's Encrypt"
-      hint="Off until your organization accepts the Let's Encrypt terms and turns it on"
+      // Only while it is off: once it is on, the hint would contradict the switch.
+      hint={
+        acmeEnabled || settingsLoading
+          ? undefined
+          : "Off until your organization accepts the Let's Encrypt terms and turns it on"
+      }
     >
       {acmeError ? <Text style={panelStyles.error}>{acmeError}</Text> : null}
       {settingsError && !acmeError ? (
