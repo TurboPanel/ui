@@ -124,11 +124,15 @@ describe('Verify concurrency', () => {
     )
   })
 
-  it('never cancels a promotion PR run (head trunk or staging): its group ends in the run id', () => {
+  it('runs one Promote OK evaluation per PR head: a superseded head is never cancelled', () => {
     expect(text('promote-ok.yml')).toContain(
-      "cancel-in-progress: ${{ github.head_ref != 'trunk' && github.head_ref != 'staging' }}"
+      [
+        'concurrency:',
+        '  group: promote-ok-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}',
+        '  cancel-in-progress: true',
+        '',
+      ].join('\n')
     )
-    expect(text('promote-ok.yml')).toContain("format('-{0}', github.run_id)")
     expect(text('promote-prs.yml')).toContain('  cancel-in-progress: false\n  queue: max\n')
   })
 })
@@ -174,13 +178,15 @@ function jobText(source: string, name: string): string {
 }
 
 /**
- * The jobs that call gh-promote-ok.yml. The Promote OK check pins its own dev
- * commit, so its fixes can ship without moving the rest of the promotion chain.
+ * The jobs that call gh-promote-ok.yml or gh-promote-ok-recheck.yml. The
+ * Promote OK check and its recheck pin their own dev commit, so their fixes
+ * ship together without moving the rest of the promotion chain.
  */
-const PROMOTE_OK_JOBS: Record<string, string> = {
-  'promote-ok.yml': 'evaluate',
-  'promote-ok-recheck.yml': 'dry-run',
-}
+const PROMOTE_OK_JOBS: [file: string, job: string][] = [
+  ['promote-ok.yml', 'evaluate'],
+  ['promote-ok-recheck.yml', 'dry-run'],
+  ['promote-ok-recheck.yml', 'recheck'],
+]
 
 describe('versions from tags', () => {
   const GONE = [
@@ -243,9 +249,11 @@ describe('versions from tags', () => {
       // The start-version-pr job's dev actions and the Promote OK jobs are
       // pinned on their own.
       let promote = text(f).split(START_JOB)[0]
-      const ok = jobText(promote, PROMOTE_OK_JOBS[f] ?? '')
-      if (ok) promote = promote.replace(ok, '')
-      expect(promote).not.toContain('gh-promote-ok.yml@')
+      for (const [okFile, name] of PROMOTE_OK_JOBS) {
+        const ok = okFile === f ? jobText(promote, name) : ''
+        if (ok) promote = promote.replace(ok, '')
+      }
+      expect(promote).not.toMatch(/gh-promote-ok(?:-recheck)?\.yml@/)
       for (const m of promote.matchAll(
         /TurboPanel\/dev\/\.github\/(?:workflows\/[\w.-]+|actions\/version)@([0-9a-f]{40})/g
       )) {
@@ -259,9 +267,9 @@ describe('versions from tags', () => {
 
   it('pins the Promote OK jobs to one TurboPanel/dev commit, handed on as dev-ref', () => {
     const pins = new Set<string>()
-    for (const [file, name] of Object.entries(PROMOTE_OK_JOBS)) {
+    for (const [file, name] of PROMOTE_OK_JOBS) {
       const job = jobText(text(file), name)
-      const uses = [...job.matchAll(/gh-promote-ok\.yml@([0-9a-f]{40}) # dev#\d+$/gm)]
+      const uses = [...job.matchAll(/gh-promote-ok(?:-recheck)?\.yml@([0-9a-f]{40}) # dev#\d+$/gm)]
       const refs = [...job.matchAll(/^ +dev-ref: ([0-9a-f]{40})(?: #.*)?$/gm)]
       expect(uses, `${file} ${name}`).toHaveLength(1)
       expect(refs, `${file} ${name}`).toHaveLength(1)
