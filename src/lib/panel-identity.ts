@@ -7,8 +7,12 @@ export const PANEL_FINGERPRINT_PATTERN = /^[A-Za-z0-9_-]{43}$/
 export const NEXT_KEY_HELP =
   'The next key is the one servers will accept after a rotation. Only the fingerprint is stored here; the private key stays offline with you.'
 
+/**
+ * Nothing is printed beside an install command to compare by eye: the command
+ * carries the key inside it and the installer does the comparing.
+ */
 export const COMPARE_KEY_HELP =
-  "Compare the current key with the one printed on a server's install command before you run it. If they differ, do not run the command."
+  'The install command from Add Server carries the current key inside it. The installer checks that key against this control plane before it installs anything, and stops if they differ.'
 
 export const NO_PANEL_KEY_HELP =
   'This server was installed without a control plane key and cannot tell this control plane from an impostor. Reinstall it with a fresh command.'
