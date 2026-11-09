@@ -18,7 +18,9 @@ import type {
   RotationPasskey,
 } from '@/lib/instance-api'
 import { fetchKeysetStatement } from '@/lib/instance-api'
+import { formatLocalDateTime } from '@/lib/format-datetime'
 import {
+  CANCEL_WAITING_HELP,
   HA_ROTATE_HELP,
   MARK_ONLY_OWN_HELP,
   NO_DEVICE_BOUND_WARNING,
@@ -31,11 +33,12 @@ import {
 } from '@/lib/key-rotation'
 import {
   useApproveKeysetStatement,
+  useCancelWaitingKeyChange,
   useKeyRotation,
   usePrepareKeysetStatement,
 } from '@/lib/queries/admin'
 import { colors, spacing } from '@/lib/theme'
-import { userErrorMessage } from '@/lib/user-error'
+import { failedRunMessage, userErrorMessage } from '@/lib/user-error'
 
 /** Save a statement as a file (web only; the control plane UI is a browser page). */
 async function downloadStatement(keyset: number): Promise<void> {
@@ -53,14 +56,17 @@ async function downloadStatement(keyset: number): Promise<void> {
 function PasskeyRow({
   passkey,
   busy,
+  canUnmark,
   onChange,
 }: Readonly<{
   passkey: RotationPasskey
   busy: boolean
+  /** False for the last marked passkey: one must always stay. */
+  canUnmark: boolean
   onChange: (request: KeysetChangeRequest) => void
 }>) {
   let action = null
-  if (passkey.isMarked && passkey.rotationId) {
+  if (passkey.isMarked && passkey.rotationId && canUnmark) {
     const rotationId = passkey.rotationId
     action = (
       <Button
@@ -119,7 +125,7 @@ function PreparedChange({
       </Text>
       <ButtonRow>
         <Button
-          label="Approve With Passkey"
+          label="Approve with Passkey"
           variant="primary"
           busy={busy}
           disabled={busy}
@@ -198,7 +204,7 @@ function StatementList({ state }: Readonly<{ state: KeyRotationState }>) {
               Key Set {statement.keyset}: {statementKindLabel(statement.kind)}
             </Text>
             <Text style={panelStyles.muted}>
-              {statement.createdAt}
+              {formatLocalDateTime(statement.createdAt, { includeSeconds: false })}
               {statement.state === 'awaiting_key' ? ' · Waiting for the new key' : ''}
             </Text>
           </View>
@@ -214,6 +220,48 @@ function StatementList({ state }: Readonly<{ state: KeyRotationState }>) {
           />
         </View>
       ))}
+    </View>
+  )
+}
+
+/**
+ * High Availability: an approved key change that waits for the rotation
+ * command to store its key, with the way out when the command stopped.
+ */
+function WaitingChange({
+  waiting,
+  onCancelled,
+}: Readonly<{
+  waiting: NonNullable<KeyRotationState['awaitingKey']>
+  onCancelled: (keyset: number) => void
+}>) {
+  const cancel = useCancelWaitingKeyChange()
+  const [error, setError] = useState<string | null>(null)
+  return (
+    <View style={styles.details}>
+      <InlineNotice
+        tone="warning"
+        title="Key Change Waiting"
+        body={`Key set ${waiting.keyset} is approved and waits for the rotation command in your terminal to store the new key. No other change can be made until it finishes or is cancelled.`}
+      />
+      <FingerprintLine label="New Key" value={waiting.newFingerprint} />
+      {error ? <Text style={panelStyles.error}>{error}</Text> : null}
+      <ConfirmButton
+        stacked
+        label="Cancel Waiting Change"
+        confirmLabel="Cancel Change"
+        dismissLabel="Keep Waiting"
+        prompt={CANCEL_WAITING_HELP}
+        busy={cancel.isPending}
+        disabled={cancel.isPending}
+        onConfirm={() => {
+          setError(null)
+          void cancel.run(waiting.keyset).then((result) => {
+            if (result.ok) onCancelled(waiting.keyset)
+            else setError(failedRunMessage(result, 'The waiting change was not cancelled'))
+          })
+        }}
+      />
     </View>
   )
 }
@@ -276,7 +324,7 @@ export function KeyRotationPanel({
       {state ? (
         <View style={styles.details}>
           <Text style={panelStyles.muted}>{ROTATION_PASSKEYS_HELP}</Text>
-          <FingerprintLine label="Approves On" value={state.rpId} copy={false} />
+          <FingerprintLine label="Approves on" value={state.rpId} copy={false} />
           {state.markedCount > 0 && !state.hasDeviceBound ? (
             <InlineNotice tone="warning" title="No Security Key" body={NO_DEVICE_BOUND_WARNING} />
           ) : null}
@@ -292,10 +340,20 @@ export function KeyRotationPanel({
               key={passkey.passkeyId}
               passkey={passkey}
               busy={busy || prepared !== null}
+              canUnmark={state.markedCount > 1}
               onChange={onChange}
             />
           ))}
           <Text style={panelStyles.muted}>{MARK_ONLY_OWN_HELP}</Text>
+          {state.awaitingKey ? (
+            <WaitingChange
+              waiting={state.awaitingKey}
+              onCancelled={(keyset) => {
+                setError(null)
+                setNotice(`Key set ${keyset} was cancelled. Nothing changed on any server.`)
+              }}
+            />
+          ) : null}
           {prepared ? (
             <PreparedChange
               prepared={prepared}

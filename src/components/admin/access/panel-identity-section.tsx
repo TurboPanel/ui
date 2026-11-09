@@ -7,7 +7,12 @@ import { SuperadminOnly } from '@/components/admin/access/superadmin-only'
 import { isSuperadminSession, useAuth } from '@/lib/auth-context'
 import { KeyRotationPanel } from '@/components/admin/access/key-rotation-panel'
 import type { InstanceIdentity, KeysetChangeRequest } from '@/lib/instance-api'
-import { COMPARE_KEY_HELP, OTHER_KEY_HELP, serversPinnedToAnotherKey } from '@/lib/panel-identity'
+import {
+  COMPARE_KEY_HELP,
+  OTHER_KEY_HELP,
+  serversNotRotatable,
+  serversPinnedToAnotherKey,
+} from '@/lib/panel-identity'
 import { useInstanceIdentity } from '@/lib/queries/admin'
 import { spacing } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
@@ -26,13 +31,6 @@ function IdentityDetails({ identity }: Readonly<{ identity: InstanceIdentity }>)
       <Text style={panelStyles.muted}>{COMPARE_KEY_HELP}</Text>
     </View>
   )
-}
-
-/** Servers that report a pin with no rotation passkeys: they cannot follow a key change yet. */
-function serversNotRotatable(servers: InstanceIdentity['servers']): string[] {
-  return (servers ?? [])
-    .filter((server) => server.pinPasskeys === '')
-    .map((server) => server.name ?? server.id)
 }
 
 export function PanelIdentitySection({
@@ -76,7 +74,7 @@ export function PanelIdentitySection({
           <SuperadminOnly title="Rotation Passkeys">
             <KeyRotationPanel
               linkRequest={linkRequest}
-              notRotatable={serversNotRotatable(identity.servers)}
+              notRotatable={serversNotRotatable(identity.servers ?? [])}
             />
           </SuperadminOnly>
           {isSuperadminSession(session) ? <SealedSecretsPanel /> : null}

@@ -9,16 +9,22 @@ import {
   useClearServerSealingKey,
   useInstanceIdentity,
   useApproveKeysetStatement,
+  useCancelWaitingKeyChange,
+  usePrepareKeysetStatement,
   useSealedSecrets,
 } from './admin'
 
 const {
   fetchInstanceIdentity,
   approveKeysetStatement,
+  prepareKeysetStatement,
+  cancelWaitingKeyChange,
   fetchSealedSecrets,
   clearServerSealingKey,
   loginWithPasskey,
 } = vi.hoisted(() => ({
+  prepareKeysetStatement: vi.fn(),
+  cancelWaitingKeyChange: vi.fn(),
   fetchInstanceIdentity: vi.fn(),
   approveKeysetStatement: vi.fn(),
   fetchSealedSecrets: vi.fn(),
@@ -34,6 +40,8 @@ vi.mock('../instance-api', async (importOriginal) => {
     ...actual,
     fetchInstanceIdentity,
     approveKeysetStatement,
+    prepareKeysetStatement,
+    cancelWaitingKeyChange,
     fetchSealedSecrets,
     clearServerSealingKey,
   }
@@ -64,6 +72,64 @@ describe('control plane identity hooks', () => {
     const { wrapper } = setup()
     renderHook(() => useInstanceIdentity({ enabled: false }), { wrapper })
     expect(fetchInstanceIdentity).not.toHaveBeenCalled()
+  })
+
+  it('preparing refuses a statement whose bytes are not what the control plane described', async () => {
+    const pub = new Uint8Array(32).fill(2)
+    const b64 = (bytes: ArrayBuffer | Uint8Array) =>
+      btoa(String.fromCodePoint(...new Uint8Array(bytes)))
+        .replaceAll('+', '-')
+        .replaceAll('/', '_')
+        .replaceAll('=', '')
+    const hash = async (bytes: Uint8Array) =>
+      b64(await crypto.subtle.digest('SHA-256', bytes as BufferSource))
+    const newFingerprint = await hash(pub)
+    const oldFingerprint = 'O'.repeat(43)
+    const bytes = new TextEncoder().encode(
+      JSON.stringify({
+        keyset: 5,
+        prev: oldFingerprint,
+        kind: 'rotate',
+        current: { kid: newFingerprint, pub: b64(pub) },
+      })
+    )
+    const honest = {
+      ok: true,
+      statement: b64(bytes),
+      challenge: await hash(bytes),
+      rpId: 'cp.example.com',
+      keyset: 5,
+      kind: 'rotate',
+      oldFingerprint,
+      newFingerprint,
+      approverCredentialIds: ['m1'],
+      possessionCredentialIds: [],
+    }
+    const { wrapper } = setup()
+    const { result } = renderHook(() => usePrepareKeysetStatement(), { wrapper })
+
+    prepareKeysetStatement.mockResolvedValueOnce(honest)
+    let outcome = await act(async () => await result.current.run({ kind: 'rotate' }))
+    expect(outcome.ok).toBe(true)
+
+    // The summary names another new key than the bytes the passkey would sign.
+    prepareKeysetStatement.mockResolvedValueOnce({ ...honest, newFingerprint: 'F'.repeat(43) })
+    outcome = await act(async () => await result.current.run({ kind: 'rotate' }))
+    expect(outcome).toMatchObject({ ok: false, error: expect.stringMatching(/Do not approve it/) })
+  })
+
+  it('cancelling a waiting change refreshes the rotation and identity reads', async () => {
+    cancelWaitingKeyChange.mockResolvedValue({ ok: true, keyset: 3, cancelled: true })
+    const { queryClient, wrapper } = setup()
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
+    const { result } = renderHook(() => useCancelWaitingKeyChange(), { wrapper })
+    const outcome = await act(async () => await result.current.run(3))
+    expect(outcome.ok).toBe(true)
+    expect(cancelWaitingKeyChange.mock.calls[0]?.[0]).toBe(3)
+    expect(invalidate.mock.calls.map(([filters]) => filters?.queryKey)).toEqual([
+      queryKeys.admin.keyRotation,
+      queryKeys.admin.instanceIdentity,
+    ])
   })
 
   it('approving runs one passkey ceremony per step, then sends the approvals', async () => {

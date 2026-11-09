@@ -134,10 +134,11 @@ describe('PanelIdentitySection', () => {
             pinPasskeys: 'H'.repeat(43),
           },
           { id: 's3', name: 'lambda', organizationId: 'o1', pinnedBy: 'install' },
+          { id: 's4', name: 'sigma', organizationId: 'o1', pinnedBy: 'upgrade', pinPasskeys: null },
         ],
       })
     )
-    expect(screen.getByText(/Not Rotatable Yet: kappa$/)).toBeTruthy()
+    expect(screen.getByText(/Not Rotatable Yet: kappa, sigma$/)).toBeTruthy()
   })
 
   it('warns about servers whose signed pin names another key, and only those', () => {

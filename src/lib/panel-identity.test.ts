@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { isPanelFingerprint, pinnedByDisplay, serversPinnedToAnotherKey } from './panel-identity'
+import {
+  isPanelFingerprint,
+  pinnedByDisplay,
+  serversNotRotatable,
+  serversPinnedToAnotherKey,
+} from './panel-identity'
 
 const FINGERPRINT = 'A'.repeat(43)
 
@@ -43,5 +48,25 @@ describe('serversPinnedToAnotherKey', () => {
         { id: 's5', name: 'mu' },
       ])
     ).toEqual([`kappa (${fp})`, 's2 (no key)'])
+  })
+})
+
+describe('serversNotRotatable', () => {
+  it('lists pinned servers with no rotation passkeys, reported or never reported', () => {
+    expect(
+      serversNotRotatable([
+        // Reported a pin with no passkeys.
+        { id: 's1', name: 'kappa', pinnedBy: 'install', pinPasskeys: '' },
+        // Pinned, never reported them (an older daemon).
+        { id: 's2', name: null, pinnedBy: 'upgrade', pinPasskeys: null },
+        // Holds the passkeys.
+        { id: 's3', name: 'omicron', pinnedBy: 'install', pinPasskeys: 'H'.repeat(43) },
+        // Not pinned at all: it has its own warning.
+        { id: 's4', name: 'sigma', pinnedBy: 'unsafe', pinPasskeys: null },
+        { id: 's5', name: 'tau', pinnedBy: 'none', pinPasskeys: null },
+        // An older control plane sends no such field.
+        { id: 's6', name: 'lambda', pinnedBy: 'install' },
+      ])
+    ).toEqual(['kappa', 's2'])
   })
 })

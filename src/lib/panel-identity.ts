@@ -26,6 +26,30 @@ export function serversPinnedToAnotherKey(
     .map((server) => `${server.name ?? server.id} (${server.pinReport?.fingerprint || 'no key'})`)
 }
 
+/**
+ * Pinned servers that cannot follow a key change yet: their pin report shows
+ * no rotation passkeys (""), or they are pinned and never reported them
+ * (null: an older daemon). A control plane from before rotation passkeys
+ * sends no such field at all, and nothing is listed.
+ */
+export function serversNotRotatable(
+  servers: readonly {
+    id: string
+    name: string | null
+    pinnedBy?: PinnedBy
+    pinPasskeys?: string | null
+  }[]
+): string[] {
+  const pinned = (pinnedBy: PinnedBy | undefined) =>
+    pinnedBy === 'install' || pinnedBy === 'upgrade'
+  return servers
+    .filter(
+      (server) =>
+        server.pinPasskeys === '' || (server.pinPasskeys === null && pinned(server.pinnedBy))
+    )
+    .map((server) => server.name ?? server.id)
+}
+
 export function isPanelFingerprint(value: string): boolean {
   return PANEL_FINGERPRINT_PATTERN.test(value)
 }

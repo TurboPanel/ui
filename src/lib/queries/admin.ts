@@ -33,9 +33,11 @@ import {
   fetchInstanceIdentity,
   fetchSealedSecrets,
   approveKeysetStatement,
+  cancelWaitingKeyChange,
   fetchKeyRotation,
   prepareKeysetStatement,
   type KeysetApprovalPayload,
+  type KeysetChangeRequest,
   type PreparedKeysetStatement,
   fetchTrustedProxies,
   type InstanceHostnameInput,
@@ -85,7 +87,12 @@ import {
   type IssuanceBaseline,
 } from '@/lib/issuance-settle'
 import { useApiMutation, queryKeys } from '@/lib/query-client'
-import { approvalFromAssertion, assertionRequestOptions, assertionSteps } from '@/lib/key-rotation'
+import {
+  approvalFromAssertion,
+  assertionRequestOptions,
+  assertionSteps,
+  checkPreparedStatement,
+} from '@/lib/key-rotation'
 import { loginWithPasskey } from '@/lib/passkey-client'
 import { PASSKEY_WEB_ONLY_NOTE } from '@/lib/passkey-client-types'
 import {
@@ -768,8 +775,26 @@ export function useKeyRotation(options?: Readonly<{ enabled?: boolean }>) {
 /** Step one of a key change: the exact statement and the fingerprints to check. */
 export function usePrepareKeysetStatement() {
   return useApiMutation({
-    mutationFn: prepareKeysetStatement,
+    // What the screen shows and the passkey signs comes from the statement's
+    // own bytes, read in this browser, not from the control plane's summary.
+    mutationFn: async (request: KeysetChangeRequest) =>
+      await checkPreparedStatement(await prepareKeysetStatement(request), request),
     fallbackError: 'Failed to prepare the change',
+  })
+}
+
+/** High Availability: cancel an approved key change that still waits for its key. */
+export function useCancelWaitingKeyChange() {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: cancelWaitingKeyChange,
+    fallbackError: 'The waiting change was not cancelled',
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.admin.keyRotation }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.admin.instanceIdentity }),
+      ])
+    },
   })
 }
 

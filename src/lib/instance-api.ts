@@ -6569,7 +6569,8 @@ export type KeyRotationState = {
   canRotate: boolean
   hasDeviceBound: boolean
   passkeys: RotationPasskey[]
-  awaitingKey: { keyset: number; newFingerprint: string } | null
+  /** High Availability: an approved change that waits for the rotation command to store its key. */
+  awaitingKey: { keyset: number; newFingerprint: string; kind?: KeysetStatementKind } | null
   statements: KeysetStatementSummary[]
 }
 
@@ -6629,6 +6630,19 @@ export async function approveKeysetStatement(body: {
   return await apiFetch(`${ADMIN_API}/instance/identity/statements`, {
     method: 'POST',
     body: JSON.stringify(body),
+  })
+}
+
+/**
+ * Superadmin, step-up. High Availability: cancel an approved key change that
+ * still waits for its key (the rotation command stopped before storing it).
+ * 409 `not_waiting` once the control plane uses that key.
+ */
+export async function cancelWaitingKeyChange(
+  keyset: number
+): Promise<{ ok: true; keyset: number; cancelled: true }> {
+  return await apiFetch(`${ADMIN_API}/instance/identity/statements/${keyset}`, {
+    method: 'DELETE',
   })
 }
 

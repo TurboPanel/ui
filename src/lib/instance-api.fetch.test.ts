@@ -62,6 +62,7 @@ import {
   rebootServer,
   approveKeysetStatement,
   fetchKeyRotation,
+  cancelWaitingKeyChange,
   fetchKeysetStatement,
   prepareKeysetStatement,
   fetchSealedSecrets,
@@ -884,17 +885,19 @@ describe('instance-api fetch wrappers', () => {
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/api/admin/v1/instance/identity')
   })
 
-  it('a key change is prepared, approved and downloaded on the identity routes', async () => {
+  it('a key change is prepared, approved, downloaded and cancelled on the identity routes', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, statement: 'AA', challenge: 'BB' }))
     fetchMock.mockResolvedValueOnce(
       jsonResponse({ ok: true, keyset: 3, kind: 'rotate', state: 'live' })
     )
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, runtime: 'deno', statements: [] }))
     fetchMock.mockResolvedValueOnce(jsonResponse({ statement: 'AA', approvals: [] }))
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, keyset: 3, cancelled: true }))
     await prepareKeysetStatement({ kind: 'passkeys', mark: ['pk-1'] })
     await approveKeysetStatement({ statement: 'AA', approvals: [] })
     await fetchKeyRotation()
     await fetchKeysetStatement(3)
+    await cancelWaitingKeyChange(3)
     const calls = fetchMock.mock.calls.map(([url, init]) => [
       String(url).replace(/^.*\/api\/admin\/v1/, ''),
       (init as RequestInit | undefined)?.method ?? 'GET',
@@ -904,6 +907,7 @@ describe('instance-api fetch wrappers', () => {
       ['/instance/identity/statements', 'POST'],
       ['/instance/identity/rotation', 'GET'],
       ['/instance/identity/statements/3', 'GET'],
+      ['/instance/identity/statements/3', 'DELETE'],
     ])
     expect(JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body))).toEqual({
       kind: 'passkeys',
