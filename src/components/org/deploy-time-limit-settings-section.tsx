@@ -87,7 +87,8 @@ export function DeployTimeLimitSettingsSection({ orgId }: Readonly<{ orgId: stri
         />
         <Button
           label="Restore Default"
-          disabled={!loaded || pending || saved === DEPLOY_TIME_LIMIT_DEFAULT}
+          // Also on while a typed value is unsaved, so it puts the default back in the field.
+          disabled={!loaded || pending || (saved === DEPLOY_TIME_LIMIT_DEFAULT && draft === null)}
           onPress={() => save(String(DEPLOY_TIME_LIMIT_DEFAULT))}
         />
       </ButtonRow>

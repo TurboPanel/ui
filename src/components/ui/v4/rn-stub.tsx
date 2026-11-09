@@ -68,7 +68,9 @@ function aria(props: Props) {
     'aria-label': props.accessibilityLabel as string | undefined,
     // An explicit `aria-*` prop wins, as it does in React Native and React Native Web.
     'aria-selected': (props['aria-selected'] as boolean | undefined) ?? state.selected,
-    'aria-checked': (props['aria-checked'] as boolean | undefined) ?? state.checked,
+    // React Native Web 0.21 ignores `accessibilityState`, so `checked` is not
+    // read from it here either: a control must set `aria-checked` itself.
+    'aria-checked': props['aria-checked'] as boolean | 'mixed' | undefined,
     'aria-disabled': (props['aria-disabled'] as boolean | undefined) ?? state.disabled,
     'aria-busy': (props['aria-busy'] as boolean | undefined) ?? state.busy,
     'aria-expanded': (props['aria-expanded'] as boolean | undefined) ?? state.expanded,

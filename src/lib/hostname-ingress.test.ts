@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  PRIMARY_HOST_CONFIRM,
+  applyConfirm,
+  PLATFORM_CA_CONFIRM,
   isEffectivePrimary,
   primaryChangeNotice,
   primaryHostWouldChange,
@@ -68,5 +71,32 @@ describe('primaryHostWouldChange', () => {
     const portOnly = [{ ...rows[0], publicPort: 443 }, rows[1]]
     expect(primaryHostWouldChange(rows, portOnly)).toBe(false)
     expect(primaryHostWouldChange([], rows)).toBe(false)
+  })
+})
+
+describe('applyConfirm', () => {
+  it('asks nothing when neither change applies', () => {
+    expect(applyConfirm(false, false)).toBeNull()
+  })
+
+  it('asks about the primary host alone', () => {
+    expect(applyConfirm(true, false)).toEqual({
+      title: 'Change the Primary Host',
+      body: PRIMARY_HOST_CONFIRM,
+      confirmLabel: 'Change Primary Host',
+    })
+  })
+
+  it('asks about the Platform CA address alone', () => {
+    expect(applyConfirm(false, true)?.title).toBe('Keep a Platform CA Address')
+    expect(applyConfirm(false, true)?.body).toBe(PLATFORM_CA_CONFIRM)
+  })
+
+  it('lists both consequences in one dialog when both apply', () => {
+    const confirm = applyConfirm(true, true)
+    expect(confirm?.title).toBe('Change the Primary Host and Apply')
+    expect(confirm?.body).toContain(PRIMARY_HOST_CONFIRM)
+    expect(confirm?.body).toContain(PLATFORM_CA_CONFIRM)
+    expect(confirm?.confirmLabel).toBe('Change and Apply')
   })
 })

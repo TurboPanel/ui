@@ -160,6 +160,39 @@ describe('Pause All Updates switch', () => {
     expect(screen.getByText(/HTTP 500|Could not pause updates/)).toBeTruthy()
   })
 
+  it('says a refused turn off in the card', async () => {
+    resumeRun.mockResolvedValueOnce({ ok: false, error: 'HTTP 500: broken' })
+    renderPanel({ ...DATA, updatesPaused: true })
+    await act(async () => {
+      fireEvent.click(pauseSwitch())
+      await Promise.resolve()
+    })
+    expect(screen.getByText(/HTTP 500|Could not turn off Pause All Updates/)).toBeTruthy()
+  })
+
+  it('sends pause once when the dialog button is tapped twice before it shows busy', async () => {
+    let finish: (value: unknown) => void = () => undefined
+    pauseRun.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finish = resolve
+      })
+    )
+    renderPanel()
+    fireEvent.click(pauseSwitch())
+    await act(async () => {
+      const button = screen.getByRole('button', { name: 'Pause Updates' })
+      fireEvent.click(button)
+      fireEvent.click(button)
+      await Promise.resolve()
+    })
+    expect(pauseRun).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      finish({ ok: true, value: { updatesPaused: true } })
+      await Promise.resolve()
+    })
+    expect(pauseRun).toHaveBeenCalledTimes(1)
+  })
+
   it('turns off at once while paused, with no dialog', async () => {
     renderPanel({ ...DATA, updatesPaused: true })
     expect(pauseSwitch().getAttribute('aria-checked')).toBe('true')

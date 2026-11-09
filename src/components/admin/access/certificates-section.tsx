@@ -494,7 +494,8 @@ function AcmeSettingsForm({ settings }: Readonly<{ settings: InstanceAcmeSetting
       <TextField
         label="Directory URL"
         labelRight={directoryLocked ? <Badge label="Environment" tone="muted" /> : null}
-        hint="Leave this on the production Let's Encrypt directory unless you run another ACME server."
+        hint="Leave it empty to use the production Let's Encrypt directory. Enter a URL only if you run another ACME server."
+        placeholder="Production Let's Encrypt directory"
         value={draft.directory}
         onChangeText={(directory) => {
           setDraft((current) => ({ ...current, directory }))

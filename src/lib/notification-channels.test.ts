@@ -5,6 +5,7 @@ import {
   channelErrorCopy,
   channelHasTiming,
   draftFromRules,
+  organizationChannelEvents,
   QUIET_TIME_OPTIONS,
   quietWindowValid,
   rulesFromDraft,
@@ -32,11 +33,34 @@ describe('notification channel rules matrix', () => {
     ])
   })
 
+  it('chosen events keep the chosen floor instead of dropping to info', () => {
+    const draft = draftFromRules([
+      { event: 'server.offline', minSeverity: 'critical' },
+      { event: 'access.grant_revoked', minSeverity: 'critical' },
+    ])
+    expect(draft.floor).toBe('critical')
+    expect(rulesFromDraft({ ...draft, floor: 'warning' })).toEqual([
+      { event: 'access.grant_revoked', minSeverity: 'warning' },
+      { event: 'server.offline', minSeverity: 'warning' },
+    ])
+  })
+
+  it('an organization channel is offered organization events only', () => {
+    expect(
+      organizationChannelEvents([
+        { event: 'server.offline', scope: 'organization' },
+        { event: 'instance.update_failed', scope: 'instance' },
+      ]).map((e) => e.event)
+    ).toEqual(['server.offline'])
+  })
+
   it('an address hint exists for every kind, and a refusal code becomes a sentence', () => {
     for (const kind of ['email', 'webhook', 'slack', 'discord', 'telegram'] as const) {
       expect(addressHint(kind).length).toBeGreaterThan(10)
     }
-    expect(channelErrorCopy(new Error('Request failed: HTTP 422: address_rejected'))).toMatch(/refused/)
+    expect(channelErrorCopy(new Error('Request failed: HTTP 422: address_rejected'))).toMatch(
+      /refused/
+    )
     expect(channelErrorCopy(new Error('boom'))).toBe('boom')
   })
 
@@ -88,7 +112,9 @@ describe('digest and quiet hours on a channel row', () => {
     expect(timingPatch({ ...draft, digest: 'off' }, timed)).toEqual({ digestCadence: null })
     expect(timingPatch({ ...draft, digest: 'daily' }, timed)).toEqual({ digestCadence: 'daily' })
     expect(timingPatch({ ...draft, quietOn: false }, timed)).toEqual({ quietHours: null })
-    expect(timingPatch({ ...draft, end: '08:30' }, timed)).toEqual({ quietHours: { start: '22:00', end: '08:30' } })
+    expect(timingPatch({ ...draft, end: '08:30' }, timed)).toEqual({
+      quietHours: { start: '22:00', end: '08:30' },
+    })
     expect(timingPatch({ ...draft, timeZone: null }, timed)).toEqual({ timeZone: null })
   })
 
@@ -112,8 +138,12 @@ describe('digest and quiet hours on a channel row', () => {
   })
 
   it('the new refusal codes become sentences', () => {
-    expect(channelErrorCopy(new Error('HTTP 422: timing_push_unsupported'))).toContain('push channels')
-    expect(channelErrorCopy(new Error('HTTP 400: quiet_hours_invalid'))).toContain('cannot be the same time')
+    expect(channelErrorCopy(new Error('HTTP 422: timing_push_unsupported'))).toContain(
+      'push channels'
+    )
+    expect(channelErrorCopy(new Error('HTTP 400: quiet_hours_invalid'))).toContain(
+      'cannot be the same time'
+    )
   })
 })
 

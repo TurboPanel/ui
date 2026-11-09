@@ -297,6 +297,7 @@ export function ManagedSetupPanel({
               onPress={() => setServerId(server.id)}
               accessibilityRole="radio"
               accessibilityState={{ selected, disabled: offline || submitting }}
+              aria-checked={selected}
               accessibilityLabel={server.name?.trim() || server.hostname || server.id}
             >
               <Text style={styles.serverLabel}>

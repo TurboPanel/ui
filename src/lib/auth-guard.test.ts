@@ -304,6 +304,27 @@ describe('resolveAuthGuardHref', () => {
     ).toBeNull()
   })
 
+  it('allows the email unsubscribe page without a session, but no other account page', () => {
+    expect(
+      resolveAuthGuardHref({
+        session: null,
+        needsInstall: false,
+        topSegment: 'account',
+        subSegment: 'unsubscribe',
+        developerDevBypass: false,
+      })
+    ).toBeNull()
+    expect(
+      resolveAuthGuardHref({
+        session: null,
+        needsInstall: false,
+        topSegment: 'account',
+        subSegment: 'notifications',
+        developerDevBypass: false,
+      })
+    ).toBe('/sign-in')
+  })
+
   it.each(['forgot-password', 'reset-password'])(
     'allows %s as a public auth route without a session',
     (topSegment) => {
@@ -450,6 +471,18 @@ describe('resolveAuthGuardHref', () => {
         session,
         needsInstall: false,
         topSegment: 'accept-invitation',
+        developerDevBypass: false,
+      })
+    ).toBeNull()
+  })
+
+  it('keeps signed-in users on the email unsubscribe page', () => {
+    expect(
+      resolveAuthGuardHref({
+        session,
+        needsInstall: false,
+        topSegment: 'account',
+        subSegment: 'unsubscribe',
         developerDevBypass: false,
       })
     ).toBeNull()
