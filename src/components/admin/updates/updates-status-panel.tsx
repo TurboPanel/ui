@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { readConsoleBuild } from '@/components/admin/updates/console-build'
 import {
@@ -113,10 +113,18 @@ function usePauseControl() {
   const [error, setError] = useState<string | null>(null)
   const [confirming, setConfirming] = useState(false)
   const busy = pause.isPending || resume.isPending
+  const resuming = useRef(false)
   const resumeNow = async () => {
+    // A second tap before the switch shows busy must not send resume twice.
+    if (resuming.current || resume.isPending) return
+    resuming.current = true
     setError(null)
-    const result = await resume.run(undefined)
-    if (!result.ok) setError(failedRunMessage(result, 'Could not resume updates'))
+    try {
+      const result = await resume.run(undefined)
+      if (!result.ok) setError(failedRunMessage(result, 'Could not resume updates'))
+    } finally {
+      resuming.current = false
+    }
   }
   const confirmPause = async () => {
     setError(null)

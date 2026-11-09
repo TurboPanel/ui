@@ -284,7 +284,7 @@ describe('HighAvailabilityUpdates', () => {
     expect(screen.queryByText(/^Next Check:/)).toBeNull()
     expect(
       screen.getByText(
-        'No update starts. Turning this off starts nothing right away; the next check does.'
+        'No update starts. Turning this off starts nothing right away; the next check or Update Now does.'
       )
     ).toBeTruthy()
     fireEvent.click(screen.getByRole('switch', { name: 'Pause All Updates' }))
