@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  COMPARE_KEY_HELP,
   isPanelFingerprint,
   pinnedByDisplay,
   serversNotRotatable,
@@ -14,6 +15,15 @@ describe('isPanelFingerprint', () => {
     expect(isPanelFingerprint('A'.repeat(42))).toBe(false)
     expect(isPanelFingerprint('A'.repeat(44))).toBe(false)
     expect(isPanelFingerprint(`${'A'.repeat(42)}+`)).toBe(false)
+  })
+})
+
+describe('COMPARE_KEY_HELP', () => {
+  it('says the installer checks the key, and asks nobody to compare by eye', () => {
+    expect(COMPARE_KEY_HELP).toBe(
+      'The install command from Add Server carries the current key inside it. The installer checks that key against this control plane before it installs anything, and stops if they differ.'
+    )
+    expect(COMPARE_KEY_HELP).not.toMatch(/printed|compare/i)
   })
 })
 

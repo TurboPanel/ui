@@ -2,7 +2,6 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useRouter } from 'expo-router'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { panelStyles } from '@/components/ui/panel-styles'
-import { PanelKeyLines } from '@/components/org/panel-key-lines'
 import {
   Button,
   ButtonRow,
@@ -219,8 +218,6 @@ function CreateStep({
 }
 
 type InstallStepProps = Readonly<{
-  panelFingerprint?: string
-  nextFingerprint?: string | null
   installBaseUrl: string
   managedUrls: string[]
   displayedInstallCommand: string
@@ -228,9 +225,7 @@ type InstallStepProps = Readonly<{
   onContinue: () => void
 }>
 
-function InstallStep({
-  panelFingerprint,
-  nextFingerprint,
+export function InstallStep({
   installBaseUrl,
   managedUrls,
   displayedInstallCommand,
@@ -264,7 +259,6 @@ function InstallStep({
         label="Copy install command"
         copiedLabel="Copied install command"
       />
-      <PanelKeyLines panelFingerprint={panelFingerprint} nextFingerprint={nextFingerprint} />
       <Text style={panelStyles.muted}>
         Run this command on your new server, then click Continue.
       </Text>
@@ -672,8 +666,6 @@ export function AddServerWizard({ orgId, onComplete, onDismiss }: AddServerWizar
 
       {step === 'install' && revealed ? (
         <InstallStep
-          panelFingerprint={revealed.panelFingerprint}
-          nextFingerprint={revealed.nextFingerprint}
           installBaseUrl={installBaseUrl}
           managedUrls={managedUrls}
           displayedInstallCommand={displayedInstallCommand}

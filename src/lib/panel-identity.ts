@@ -4,8 +4,12 @@ import type { PinnedBy } from '@/lib/instance-api'
 /** A control plane key fingerprint is 43 base64url characters (SHA-256, no padding). */
 export const PANEL_FINGERPRINT_PATTERN = /^[A-Za-z0-9_-]{43}$/
 
+/**
+ * Nothing is printed beside an install command to compare by eye: the command
+ * carries the key inside it and the installer does the comparing.
+ */
 export const COMPARE_KEY_HELP =
-  "Compare the current key with the one printed on a server's install command before you run it. If they differ, do not run the command."
+  'The install command from Add Server carries the current key inside it. The installer checks that key against this control plane before it installs anything, and stops if they differ.'
 
 export const NO_PANEL_KEY_HELP =
   'This server was installed without a control plane key and cannot tell this control plane from an impostor. Reinstall it with a fresh command.'
