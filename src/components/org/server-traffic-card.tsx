@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import {
   Badge,
@@ -270,7 +270,8 @@ function NetworksList({
   canManage: boolean
 }>) {
   const { used, unused } = orderedNetworks(datacenters)
-  const tied = tiedNetworkIds(used, sharedServerNetworks(servers))
+  const shared = useMemo(() => sharedServerNetworks(servers), [servers])
+  const tied = tiedNetworkIds(used, shared)
   const names = new Map(datacenters.map((dc) => [dc.id, dc.name ?? 'Unnamed network']))
   const rows = [
     ...used.map((dc, index) => ({ dc, position: index + 1 })),
