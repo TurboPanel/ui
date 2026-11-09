@@ -10,9 +10,10 @@ import {
   TextField,
 } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
-import { parseDatacenterPriorityDraft } from '@/lib/datacenter-routing'
+import { parseDatacenterPriorityDraft, sharedServerNetworks } from '@/lib/datacenter-routing'
 import type {
   DatacenterRecord,
+  OrgServerRecord,
   ServerTrafficMapNetwork,
   ServerTrafficMapNic,
   ServerTrafficMapPeer,
@@ -259,15 +260,17 @@ function NetworksList({
   orgId,
   datacenters,
   peers,
+  servers,
   canManage,
 }: Readonly<{
   orgId: string
   datacenters: readonly DatacenterRecord[]
   peers: readonly ServerTrafficMapPeer[]
+  servers: readonly OrgServerRecord[]
   canManage: boolean
 }>) {
   const { used, unused } = orderedNetworks(datacenters)
-  const tied = tiedNetworkIds(used)
+  const tied = tiedNetworkIds(used, sharedServerNetworks(servers))
   const names = new Map(datacenters.map((dc) => [dc.id, dc.name ?? 'Unnamed network']))
   const rows = [
     ...used.map((dc, index) => ({ dc, position: index + 1 })),
@@ -339,7 +342,13 @@ export function ServerTrafficCard({
   return (
     <SectionPanel title="Server traffic" hint={EXPLANATION}>
       <Text style={panelStyles.detailTitle}>Networks, in the order they are used</Text>
-      <NetworksList orgId={orgId} datacenters={networks} peers={peers} canManage={canManage} />
+      <NetworksList
+        orgId={orgId}
+        datacenters={networks}
+        peers={peers}
+        servers={servers ?? []}
+        canManage={canManage}
+      />
       <Text style={panelStyles.detailTitle}>Other servers reached from here</Text>
       {peers.length === 0 ? (
         <Text style={panelStyles.muted}>

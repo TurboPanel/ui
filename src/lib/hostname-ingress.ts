@@ -22,6 +22,45 @@ export function primaryChangeNotice(result: InstanceHostnamesSaveResult): string
 export const PRIMARY_HOST_CONFIRM =
   'Passkeys registered for the old address will stop working. Make sure you can sign in another way first.'
 
+/** Shown before an apply that leaves no reachable Platform CA name. */
+export const PLATFORM_CA_CONFIRM =
+  'This apply removes the last Platform CA hostname, or moves the only reachable name off it. https://<host>:8443 with the Platform CA leaf stays bound as the recovery address.'
+
+export type ApplyConfirm = Readonly<{ title: string; body: string; confirmLabel: string }>
+
+/**
+ * The one confirm Save and Apply shows first, or null when nothing needs
+ * confirming. When the primary host changes and the Platform CA name goes,
+ * both consequences are listed in a single dialog rather than two in a row.
+ */
+export function applyConfirm(
+  primaryHostChanges: boolean,
+  platformCaConfirm: boolean
+): ApplyConfirm | null {
+  if (primaryHostChanges && platformCaConfirm) {
+    return {
+      title: 'Change the Primary Host and Apply',
+      body: `${PRIMARY_HOST_CONFIRM}\n\n${PLATFORM_CA_CONFIRM}`,
+      confirmLabel: 'Change and Apply',
+    }
+  }
+  if (primaryHostChanges) {
+    return {
+      title: 'Change the Primary Host',
+      body: PRIMARY_HOST_CONFIRM,
+      confirmLabel: 'Change Primary Host',
+    }
+  }
+  if (platformCaConfirm) {
+    return {
+      title: 'Keep a Platform CA Address',
+      body: PLATFORM_CA_CONFIRM,
+      confirmLabel: 'Apply anyway',
+    }
+  }
+  return null
+}
+
 type PrimaryRow = { host: string; isPrimary?: boolean }
 
 function effectivePrimaryHost(rows: readonly PrimaryRow[]): string | null {

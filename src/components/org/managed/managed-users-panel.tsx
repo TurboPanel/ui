@@ -740,6 +740,7 @@ export function ManagedUsersPanel({
                   disabled={disabled}
                   accessibilityRole="checkbox"
                   accessibilityState={{ checked: selected, disabled }}
+                  aria-checked={selected}
                   accessibilityLabel={name}
                 >
                   <View style={styles.chipInner}>

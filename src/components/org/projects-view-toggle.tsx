@@ -95,6 +95,7 @@ export function ProjectsViewToggle({
             accessibilityRole="radio"
             accessibilityLabel={LABEL[view]}
             accessibilityState={{ checked: on }}
+            aria-checked={on}
             tabIndex={on ? 0 : -1}
             {...({ onKeyDown: onKey } as object)}
             onPress={() => onChange(view)}

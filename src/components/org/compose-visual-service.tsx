@@ -337,6 +337,7 @@ function PhpFields({
                   disabled={disabled}
                   accessibilityRole="checkbox"
                   accessibilityState={{ checked: on, disabled }}
+                  aria-checked={on}
                   accessibilityLabel={name}
                   style={[styles.extensionChip, on && styles.extensionChipOn]}
                 >

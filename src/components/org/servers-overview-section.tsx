@@ -129,6 +129,7 @@ function LayoutToggleChip({
       ]}
       accessibilityRole="radio"
       accessibilityState={{ selected: active }}
+      aria-checked={active}
       accessibilityLabel={label}
     >
       {icon(color)}

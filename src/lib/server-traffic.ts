@@ -49,11 +49,22 @@ export function orderedNetworks(datacenters: readonly DatacenterRecord[]): {
   }
 }
 
-/** Ids of trusted networks that share their priority number with another trusted network. */
-export function tiedNetworkIds(used: readonly DatacenterRecord[]): Set<string> {
-  const counts = new Map<number, number>()
-  for (const dc of used) counts.set(dc.priority, (counts.get(dc.priority) ?? 0) + 1)
-  return new Set(used.filter((dc) => (counts.get(dc.priority) ?? 0) > 1).map((dc) => dc.id))
+/**
+ * Ids of trusted networks that share their priority number with another
+ * trusted network they also share servers with (`shared`, from
+ * `sharedServerNetworks`). The same rule as the datacenter network pages: a
+ * tie between networks that never share a server pair decides nothing.
+ */
+export function tiedNetworkIds(
+  used: readonly DatacenterRecord[],
+  shared: ReadonlyMap<string, ReadonlySet<string>>
+): Set<string> {
+  const tiedWithOverlap = (dc: DatacenterRecord) =>
+    used.some(
+      (other) =>
+        other.id !== dc.id && other.priority === dc.priority && shared.get(dc.id)?.has(other.id)
+    )
+  return new Set(used.filter(tiedWithOverlap).map((dc) => dc.id))
 }
 
 /** One line for a peer: which network carries traffic to it right now. */

@@ -67,6 +67,7 @@ export function OptionSwitch<T extends string>({
             key={option.value}
             accessibilityRole="radio"
             accessibilityState={{ checked: on }}
+            aria-checked={on}
             onPress={() => onChange(option.value)}
             style={[s.option, on && s.optionOn, webPointer]}
           >
