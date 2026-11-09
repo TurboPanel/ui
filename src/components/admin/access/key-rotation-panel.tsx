@@ -266,6 +266,26 @@ function WaitingChange({
   )
 }
 
+function PasskeyWarnings({
+  showNoSecurityKey,
+  notRotatable,
+}: Readonly<{ showNoSecurityKey: boolean; notRotatable: readonly string[] }>) {
+  return (
+    <>
+      {showNoSecurityKey ? (
+        <InlineNotice tone="warning" title="No Security Key" body={NO_DEVICE_BOUND_WARNING} />
+      ) : null}
+      {notRotatable.length > 0 ? (
+        <InlineNotice
+          tone="warning"
+          title="Not Rotatable Yet"
+          body={`${notRotatable.join(', ')}. ${NOT_ROTATABLE_HELP}`}
+        />
+      ) : null}
+    </>
+  )
+}
+
 /**
  * Rotation passkeys, Rotate Key and Emergency Revoke (superadmin). Every
  * change is prepared by the control plane, shown with its fingerprints, then
@@ -325,16 +345,10 @@ export function KeyRotationPanel({
         <View style={styles.details}>
           <Text style={panelStyles.muted}>{ROTATION_PASSKEYS_HELP}</Text>
           <FingerprintLine label="Approves on" value={state.rpId} copy={false} />
-          {state.markedCount > 0 && !state.hasDeviceBound ? (
-            <InlineNotice tone="warning" title="No Security Key" body={NO_DEVICE_BOUND_WARNING} />
-          ) : null}
-          {notRotatable.length > 0 ? (
-            <InlineNotice
-              tone="warning"
-              title="Not Rotatable Yet"
-              body={`${notRotatable.join(', ')}. ${NOT_ROTATABLE_HELP}`}
-            />
-          ) : null}
+          <PasskeyWarnings
+            showNoSecurityKey={state.markedCount > 0 && !state.hasDeviceBound}
+            notRotatable={notRotatable}
+          />
           {state.passkeys.map((passkey) => (
             <PasskeyRow
               key={passkey.passkeyId}
