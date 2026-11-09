@@ -6,6 +6,8 @@ export type AuthGuardContext = Readonly<{
   session: SessionInfo | null
   needsInstall: boolean
   topSegment: string | undefined
+  /** The route segment under the top one (`unsubscribe` in `/account/unsubscribe`). */
+  subSegment?: string
   developerDevBypass: boolean
   /** Metro web, or native with no origin — send to /connect. */
   needsControlPlane?: boolean
@@ -70,7 +72,8 @@ function resolveNeedsInstallHref(
 function resolveSessionRouteHref(ctx: AuthGuardContext): Href | null {
   const { session, needsInstall, topSegment, developerDevBypass } = ctx
   const signedIn = hasUserSession(session)
-  const onAuthRoute = isPublicAuthRoute(topSegment)
+  const onAuthRoute =
+    isPublicAuthRoute(topSegment) || isPublicAccountRoute(topSegment, ctx.subSegment)
   const dash = dashboardHref(session, needsInstall) as Href
 
   if (!signedIn && !onAuthRoute && !developerDevBypass) {
@@ -104,6 +107,15 @@ function isPublicAuthRoute(topSegment: string | undefined): boolean {
     topSegment === 'about' ||
     topSegment === 'recovering'
   )
+}
+
+/**
+ * The email unsubscribe page (`/account/unsubscribe?token=`) works signed out:
+ * the token is the authority, and a person reading mail on another device is
+ * not signed in there. The rest of `/account` needs a session.
+ */
+function isPublicAccountRoute(topSegment: string | undefined, subSegment: string | undefined) {
+  return topSegment === 'account' && subSegment === 'unsubscribe'
 }
 
 function shouldLeaveUnknownSignedInRoute(ctx: AuthGuardContext): boolean {

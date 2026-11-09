@@ -64,6 +64,21 @@ export const queryKeys = {
     unread: ['notifications', 'unread'] as const,
     events: ['notifications', 'events'] as const,
     channels: (scope: 'user' | 'organization') => ['notifications', 'channels', scope] as const,
+    /** Every preference read. A write for every organization invalidates all of it, since each organization's read repeats those rows. */
+    preferencesAll: ['notifications', 'preferences'] as const,
+    /**
+     * One organization's rows plus the ones for every organization; `null` =
+     * those alone. A write inside one organization invalidates this prefix
+     * only, which also covers that organization's `effective` reads.
+     */
+    preferences: (organizationId: string | null) =>
+      ['notifications', 'preferences', organizationId ?? 'global'] as const,
+    /** Effective levels at one scope below an organization (project, environment, server). */
+    effective: (organizationId: string, scopeKey: string) =>
+      ['notifications', 'preferences', organizationId, 'effective', scopeKey] as const,
+    /** Project, environment and server names of one organization, for the account page's override list. */
+    scopeNames: (organizationId: string) =>
+      ['notifications', 'scope-names', organizationId] as const,
   },
   auth: {
     all: ['auth'] as const,
