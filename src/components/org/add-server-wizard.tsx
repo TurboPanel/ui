@@ -225,7 +225,7 @@ type InstallStepProps = Readonly<{
   onContinue: () => void
 }>
 
-function InstallStep({
+export function InstallStep({
   installBaseUrl,
   managedUrls,
   displayedInstallCommand,
