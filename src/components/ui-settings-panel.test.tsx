@@ -14,7 +14,9 @@ vi.mock('react-native', () => ({
   Platform: {
     get OS() {
       return platformOS
-    }, select: (o: Record<string, unknown>) => o.web ?? o.default },
+    },
+    select: (o: Record<string, unknown>) => o.web ?? o.default,
+  },
   StyleSheet: { create: (styles: unknown) => styles },
   View: ({ children, accessibilityRole, accessibilityLabel, onKeyDown }: Props) => (
     <div
@@ -33,6 +35,7 @@ vi.mock('react-native', () => ({
     accessibilityRole,
     accessibilityLabel,
     accessibilityState,
+    'aria-checked': ariaChecked,
     title,
     tabIndex,
   }: Props) => (
@@ -40,7 +43,7 @@ vi.mock('react-native', () => ({
       type="button"
       role={accessibilityRole as string}
       aria-label={accessibilityLabel as string}
-      aria-checked={(accessibilityState as { checked?: boolean }).checked}
+      aria-checked={ariaChecked as boolean | undefined}
       aria-expanded={(accessibilityState as { expanded?: boolean }).expanded}
       tabIndex={tabIndex as number}
       title={title as string}

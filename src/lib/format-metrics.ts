@@ -279,3 +279,30 @@ export function formatQueueDepth(value: number | null | undefined): string {
   if (value >= 1) return value.toFixed(2)
   return value.toFixed(3)
 }
+
+/**
+ * The Processes overview tile: the process count when known, else running /
+ * blocked. `null` when none of the three is known, so the tile is left out
+ * rather than showing a dash (the stored history does not keep them).
+ */
+export function processesTile(
+  processCount: number | null,
+  procsRunning: number | null,
+  procsBlocked: number | null
+): { value: string; label: string; accessibilityLabel: string } | null {
+  if (processCount != null) {
+    const value = formatCount(processCount)
+    return {
+      value,
+      label: 'PROCESSES',
+      accessibilityLabel: `${value} processes, ${formatCount(procsRunning)} runnable, ${formatCount(procsBlocked ?? 0)} blocked`,
+    }
+  }
+  if (procsRunning == null && procsBlocked == null) return null
+  const value = `${formatCount(procsRunning)} / ${formatCount(procsBlocked ?? 0)}`
+  return {
+    value,
+    label: 'RUNNING / BLOCKED',
+    accessibilityLabel: `${value} running / blocked processes`,
+  }
+}

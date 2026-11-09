@@ -91,11 +91,10 @@ function ModeRow({
       onPress={onPress}
       accessibilityRole="radio"
       accessibilityState={{ selected, disabled }}
+      aria-checked={selected}
       accessibilityLabel={label}
     >
-      <Text style={[styles.label, selected && styles.labelSelected]}>
-        {label}
-      </Text>
+      <Text style={[styles.label, selected && styles.labelSelected]}>{label}</Text>
       <Text style={panelStyles.muted}>{hint}</Text>
       {reason ? <Text style={panelStyles.muted}>{reason}</Text> : null}
     </Pressable>

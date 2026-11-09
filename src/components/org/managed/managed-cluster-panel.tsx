@@ -895,6 +895,7 @@ function ServerOptionRow({
       }}
       accessibilityRole="radio"
       accessibilityState={{ selected, disabled: disabled || !eligible }}
+      aria-checked={selected}
       accessibilityLabel={label}
     >
       <Text style={[styles.pickerLabel, !eligible && styles.pickerDisabled]}>{label}</Text>

@@ -53,8 +53,28 @@ describe('orderedNetworks', () => {
 })
 
 describe('tiedNetworkIds', () => {
-  it('flags networks that share a number', () => {
-    expect([...tiedNetworkIds([dc('a', 10), dc('b', 10), dc('c', 20)])].sort()).toEqual(['a', 'b'])
+  const overlap = (pairs: readonly [string, string][]) => {
+    const out = new Map<string, Set<string>>()
+    for (const [a, b] of pairs) {
+      out.set(a, (out.get(a) ?? new Set()).add(b))
+      out.set(b, (out.get(b) ?? new Set()).add(a))
+    }
+    return out
+  }
+
+  it('flags networks that share a number and share servers', () => {
+    const used = [dc('a', 10), dc('b', 10), dc('c', 20)]
+    expect([...tiedNetworkIds(used, overlap([['a', 'b']]))].sort()).toEqual(['a', 'b'])
+  })
+
+  it('ignores a tie between networks that share no servers', () => {
+    const used = [dc('a', 10), dc('b', 10), dc('c', 10)]
+    expect([...tiedNetworkIds(used, new Map())]).toEqual([])
+    expect([...tiedNetworkIds(used, overlap([['a', 'c']]))].sort()).toEqual(['a', 'c'])
+  })
+
+  it('ignores networks that share servers but not the number', () => {
+    expect([...tiedNetworkIds([dc('a', 10), dc('b', 20)], overlap([['a', 'b']]))]).toEqual([])
   })
 })
 

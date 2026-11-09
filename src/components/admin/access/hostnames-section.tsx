@@ -47,6 +47,8 @@ import {
   type UploadedCertificateRecord,
 } from '@/lib/instance-api'
 import {
+  applyConfirm,
+  type ApplyConfirm,
   isEffectivePrimary,
   PRIMARY_HOST_CONFIRM,
   primaryChangeNotice,
@@ -276,8 +278,10 @@ function SelfHostedHostnames() {
   const [entry, setEntry] = useState<PublicUrlDraft>(EMPTY_ENTRY)
   const [entryError, setEntryError] = useState<string | null>(null)
   const [applyNotAvailable, setApplyNotAvailable] = useState(false)
-  const [confirmOpen, setConfirmOpen] = useState(false)
-  const [passkeyConfirm, setPasskeyConfirm] = useState<'save' | 'apply' | null>(null)
+  // Kept after closing so the dialog does not go blank while it fades out.
+  const [applyConfirmShown, setApplyConfirmShown] = useState<ApplyConfirm | null>(null)
+  const [applyConfirmOpen, setApplyConfirmOpen] = useState(false)
+  const [passkeyConfirm, setPasskeyConfirm] = useState(false)
   const [badPorts, setBadPorts] = useState<string[]>([])
 
   const onPortValidity = useCallback((host: string, valid: boolean) => {
@@ -352,7 +356,7 @@ function SelfHostedHostnames() {
   }
 
   const runApply = async () => {
-    setConfirmOpen(false)
+    setApplyConfirmOpen(false)
     setError(null)
     setInvalidHosts([])
     setApplyError(null)
@@ -410,25 +414,23 @@ function SelfHostedHostnames() {
     setApplyError(message)
   }
 
-  const askPasskeys = (action: 'save' | 'apply'): boolean => {
-    if (!primaryHostWouldChange(stored, draft)) return false
-    setPasskeyConfirm(action)
-    return true
-  }
-
   const onSaveClick = () => {
-    if (askPasskeys('save')) return
+    if (primaryHostWouldChange(stored, draft)) {
+      setPasskeyConfirm(true)
+      return
+    }
     void onSave()
   }
 
+  // One dialog for everything the apply would change, never two in a row.
   const onSaveAndApply = () => {
-    if (askPasskeys('apply')) return
-    continueApply()
-  }
-
-  const continueApply = () => {
-    if (requiresPlatformCaConfirm(stored, draft)) {
-      setConfirmOpen(true)
+    const confirm = applyConfirm(
+      primaryHostWouldChange(stored, draft),
+      requiresPlatformCaConfirm(stored, draft)
+    )
+    if (confirm) {
+      setApplyConfirmShown(confirm)
+      setApplyConfirmOpen(true)
       return
     }
     void runApply()
@@ -484,21 +486,19 @@ function SelfHostedHostnames() {
       </SectionPanel>
 
       <ModalSheet
-        visible={passkeyConfirm !== null}
+        visible={passkeyConfirm}
         title="Change the Primary Host"
         description={PRIMARY_HOST_CONFIRM}
-        onRequestClose={() => setPasskeyConfirm(null)}
+        onRequestClose={() => setPasskeyConfirm(false)}
         footer={
           <ButtonRow>
-            <Button label="Cancel" onPress={() => setPasskeyConfirm(null)} />
+            <Button label="Cancel" onPress={() => setPasskeyConfirm(false)} />
             <Button
               label="Change Primary Host"
               variant="primary"
               onPress={() => {
-                const action = passkeyConfirm
-                setPasskeyConfirm(null)
-                if (action === 'save') void onSave()
-                else continueApply()
+                setPasskeyConfirm(false)
+                void onSave()
               }}
             />
           </ButtonRow>
@@ -506,14 +506,18 @@ function SelfHostedHostnames() {
       />
 
       <ModalSheet
-        visible={confirmOpen}
-        title="Keep a Platform CA address"
-        description="This apply removes the last Platform CA hostname, or moves the only reachable name off it. https://<host>:8443 with the Platform CA leaf stays bound as the recovery address."
-        onRequestClose={() => setConfirmOpen(false)}
+        visible={applyConfirmOpen}
+        title={applyConfirmShown?.title ?? ''}
+        description={applyConfirmShown?.body}
+        onRequestClose={() => setApplyConfirmOpen(false)}
         footer={
           <ButtonRow>
-            <Button label="Cancel" onPress={() => setConfirmOpen(false)} />
-            <Button label="Apply anyway" variant="primary" onPress={() => void runApply()} />
+            <Button label="Cancel" onPress={() => setApplyConfirmOpen(false)} />
+            <Button
+              label={applyConfirmShown?.confirmLabel ?? ''}
+              variant="primary"
+              onPress={() => void runApply()}
+            />
           </ButtonRow>
         }
       />

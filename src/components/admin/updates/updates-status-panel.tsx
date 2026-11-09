@@ -121,16 +121,24 @@ function usePauseControl() {
     setError(null)
     try {
       const result = await resume.run(undefined)
-      if (!result.ok) setError(failedRunMessage(result, 'Could not resume updates'))
+      if (!result.ok) setError(failedRunMessage(result, 'Could not turn off Pause All Updates'))
     } finally {
       resuming.current = false
     }
   }
+  const pausingNow = useRef(false)
   const confirmPause = async () => {
+    // A second tap before the dialog shows busy must not send pause twice.
+    if (pausingNow.current || pause.isPending) return
+    pausingNow.current = true
     setError(null)
-    const result = await pause.run(undefined)
-    setConfirming(false)
-    if (!result.ok) setError(failedRunMessage(result, 'Could not pause updates'))
+    try {
+      const result = await pause.run(undefined)
+      setConfirming(false)
+      if (!result.ok) setError(failedRunMessage(result, 'Could not pause updates'))
+    } finally {
+      pausingNow.current = false
+    }
   }
   /** The switch turned on: ask first, pause nothing yet. */
   const askToPause = () => {

@@ -145,6 +145,24 @@ describe('DeployTimeLimitSettingsSection', () => {
     await waitFor(() => expect(state.save).toHaveBeenCalledWith('org-1', 30))
   })
 
+  it('turns Restore Default on for a typed value when the saved value is the default', async () => {
+    state.query = {
+      data: { deployTimeoutMinutes: 30 },
+      isLoading: false,
+      isError: false,
+      error: null,
+    }
+    state.save.mockResolvedValue({ ok: true, deployTimeoutMinutes: 30 })
+    render(<DeployTimeLimitSettingsSection orgId="org-1" />)
+    const restore = screen.getByText('Restore Default') as HTMLButtonElement
+    expect(restore.disabled).toBe(true)
+    fireEvent.change(screen.getByDisplayValue('30'), { target: { value: '90' } })
+    expect(restore.disabled).toBe(false)
+    fireEvent.click(restore)
+    await waitFor(() => expect(state.save).toHaveBeenCalledWith('org-1', 30))
+    await waitFor(() => expect(screen.getByDisplayValue('30')).toBeTruthy())
+  })
+
   it('shows a plain error when the load fails', () => {
     state.query = { data: undefined, isLoading: false, isError: true, error: new Error('x') }
     render(<DeployTimeLimitSettingsSection orgId="org-1" />)

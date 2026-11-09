@@ -7,6 +7,8 @@ const state = vi.hoisted(() => ({
   deleteRun: vi.fn(),
   createRun: vi.fn(),
   rows: [] as TlsRecord[],
+  acmeEnabled: true,
+  settingsFailed: false,
 }))
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
@@ -35,14 +37,22 @@ vi.mock('@/components/ui', async () => ({
   ),
   EmptyState: () => null,
   LoadingState: () => null,
-  SectionPanel: ({ children }: { children?: unknown }) => <div>{children as never}</div>,
+  SectionPanel: ({ hint, children }: { hint?: string; children?: unknown }) => (
+    <div>
+      {hint ? <p>{hint}</p> : null}
+      {children as never}
+    </div>
+  ),
   SegmentedControl: () => null,
   SettingRow: ({ children }: { children?: unknown }) => <div>{children as never}</div>,
   TextField: () => null,
   Toggle: () => null,
 }))
 vi.mock('@tanstack/react-query', () => ({
-  useQuery: () => ({ data: { acmeEnabled: true }, isLoading: false, isError: false }),
+  useQuery: () =>
+    state.settingsFailed
+      ? { data: undefined, isLoading: false, isError: true, error: new Error('Network down') }
+      : { data: { acmeEnabled: state.acmeEnabled }, isLoading: false, isError: false },
   useQueryClient: () => ({ setQueryData: vi.fn() }),
 }))
 vi.mock('@/lib/query-client', () => ({
@@ -74,10 +84,34 @@ import { TlsOverviewSection } from './tls-overview-section'
 
 beforeEach(() => {
   state.rows = [certificate('t1', 'one.example'), certificate('t2', 'two.example')]
+  state.acmeEnabled = true
+  state.settingsFailed = false
   state.deleteRun = vi.fn(() => Promise.resolve({ ok: true, value: {} }))
   state.createRun = vi.fn(() => Promise.resolve({ ok: true, value: {} }))
 })
 afterEach(cleanup)
+
+describe("TlsOverviewSection Let's Encrypt hint", () => {
+  const offHint = "Off until your organization accepts the Let's Encrypt terms and turns it on"
+
+  it('does not say it is off while the switch is on', () => {
+    render(<TlsOverviewSection orgId="o1" />)
+    expect(screen.queryByText(offHint)).toBeNull()
+  })
+
+  it('explains how to turn it on while it is off', () => {
+    state.acmeEnabled = false
+    render(<TlsOverviewSection orgId="o1" />)
+    expect(screen.getByText(offHint)).toBeTruthy()
+  })
+
+  it('does not say it is off when the setting could not be read', () => {
+    state.settingsFailed = true
+    render(<TlsOverviewSection orgId="o1" />)
+    expect(screen.queryByText(offHint)).toBeNull()
+    expect(screen.getByText('Network down')).toBeTruthy()
+  })
+})
 
 describe('TlsOverviewSection delete', () => {
   it('says why a delete failed on that certificate, even on the first failure', async () => {
